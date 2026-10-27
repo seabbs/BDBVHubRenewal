@@ -468,11 +468,13 @@ def model_args(
     )
     if use_imports:
         obs["import_kernel"] = jnp.asarray(data.import_kernel)
-    if not forecast:
-        known, imputed = data.known.copy(), data.imputed.copy()
-        if data.fit_mask is not None:
-            known[:, ~data.fit_mask] = np.nan
-            imputed[:, ~data.fit_mask] = np.nan
+    known, imputed = data.known.copy(), data.imputed.copy()
+    if data.fit_mask is not None:
+        known[:, ~data.fit_mask] = np.nan
+        imputed[:, ~data.fit_mask] = np.nan
+    if forecast:
+        obs["vintage"] = jnp.stack([pad(known), pad(imputed)])
+    else:
         obs |= {
             "known": pad(known),
             "imputed": pad(imputed),

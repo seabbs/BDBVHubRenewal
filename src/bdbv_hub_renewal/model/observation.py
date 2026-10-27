@@ -56,6 +56,13 @@ def backsample(missing: ArrayLike, pmf: ArrayLike) -> ArrayLike:
     return jnp.convolve(missing[::-1], pmf, mode="full")[:n][::-1]
 
 
+def _nowcast(draws: ArrayLike, vintage: ArrayLike | None) -> ArrayLike:
+    """Add the draw of later reports to the vintage counts, or their draw."""
+    if vintage is None:
+        return draws[0] + draws[1]
+    return jnp.where(jnp.isnan(vintage), draws[0], vintage) + draws[1]
+
+
 def skew(x: ArrayLike, width: int) -> ArrayLike:
     r"""Shift row $s$ of `x` right by $s$: `out[s, s + d] = x[s, d]`.
 
@@ -180,9 +187,16 @@ class OnsetStreams(BaseObservationProcess):
     which is the conditional part of the Poisson reporting triangle, so
     it does not double count the known stream.
     Each stream's site, `{name}_known_obs` and `{name}_imputed_obs`, has
-    two rows: the vintage counts and the final (fully reported) counts,
-    which are never observed and so are drawn by `Predictive`. With
-    `forecast=True` their sum is recorded as `{name}_final_total`.
+    two rows: the vintage counts and the counts still to be reported
+    after the cut-off, which are never observed and so are drawn by
+    `Predictive`. With `forecast=True` the final counts are recorded as
+    `{name}_final_total`: the vintage counts where known (`vintage`),
+    else the row 0 draw, plus the row 1 draw of the rest, as in
+    epinowcast. Draws are then never below the counts already reported.
+    The imputed stream is anchored the same way. The hub re-imputes each
+    vintage, but the missing-onset cases reported by the cut-off are
+    spread with the same delay pmf in expectation, so their current
+    imputed count is kept and only cases reported later are drawn.
 
     Parameters
     ----------
@@ -286,6 +300,7 @@ class OnsetStreams(BaseObservationProcess):
         inactive: ArrayLike | None = None,
         import_kernel: ArrayLike | None = None,
         forecast: bool = False,
+        vintage: ArrayLike | None = None,
     ) -> ObservationSample:
         """Score or sample the two onset streams.
 
@@ -312,6 +327,10 @@ class OnsetStreams(BaseObservationProcess):
             cases, `(P, Q)`. Needed with `import_scale_rv`.
         forecast : bool, optional
             Record the sum of the final draws of both streams.
+        vintage : ArrayLike, optional
+            Known and imputed vintage counts, `(2, n_weeks, P)`, NaN
+            where unobserved or held out. With `forecast`, the final
+            draws add the cases still to be reported to these.
 
         Returns
         -------
@@ -348,7 +367,7 @@ class OnsetStreams(BaseObservationProcess):
                 weekly["known_final"],
                 total,
             )
-            final = draws[1]
+            final = _nowcast(draws, None if vintage is None else vintage.sum(0))
         else:
             draws = self._score(
                 "known",
@@ -364,7 +383,8 @@ class OnsetStreams(BaseObservationProcess):
                 weekly["imputed_final"],
                 imputed,
             )
-            final = draws[1] + imputed_draws[1]
+            seen = (None, None) if vintage is None else vintage
+            final = _nowcast(draws, seen[0]) + _nowcast(imputed_draws, seen[1])
             if delay_counts is not None:
                 self._score_delays(
                     weekly["triangle"], jnp.asarray(delay_counts)
@@ -410,10 +430,11 @@ class OnsetStreams(BaseObservationProcess):
         """Score the vintage counts and draw the final counts in one site.
 
         Row 0 of the site is the vintage (scored where `obs` is not NaN),
-        row 1 the final count once all reports are in, which is never
+        row 1 the count reported after the cut-off, which is never
         observed. One site keeps one concentration draw per stream.
         """
-        predicted = jnp.maximum(jnp.stack([by_cutoff, final]), _FLOOR)
+        rest = final - by_cutoff
+        predicted = jnp.maximum(jnp.stack([by_cutoff, rest]), _FLOOR)
         if obs is None:
             return noise.sample(
                 self._sample_site_name(f"{stream}_obs"), predicted
