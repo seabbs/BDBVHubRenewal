@@ -77,3 +77,25 @@ def test_save_light_dark(tmp_path: Path, target: pd.DataFrame) -> None:
     )
     assert [p.name for p in paths] == ["rev.svg", "rev-dark.svg"]
     assert all(p.stat().st_size > 0 for p in paths)
+
+
+def test_forecast_draws_trajectories_ribbons_and_median() -> None:
+    import matplotlib.pyplot as plt
+
+    weeks = ["2026-10-03", "2026-10-10", "2026-10-17"]
+    samples = pd.DataFrame(
+        {
+            "target_end_date": weeks * 100,
+            "sample": [s for s in range(1, 101) for _ in weeks],
+            "value": [float(s + i) for s in range(100) for i in range(3)],
+        }
+    )
+    fig, ax = plt.subplots()
+    plots._draw_forecast(ax, samples, "C0", "persistence")
+    # One faint line per sample, plus the median.
+    faint = [ln for ln in ax.lines if (ln.get_alpha() or 1) < 0.5]
+    assert len(faint) == 100
+    assert sum(ln.get_label() == "persistence" for ln in ax.lines) == 1
+    # 50% and 90% ribbons.
+    assert len(ax.collections) == 2
+    plt.close(fig)
