@@ -1,10 +1,11 @@
 """Write the body and title of the hub pull request.
 
-The body leads with what a reviewer needs: that this is an automated
-submission, which step of the fallback chain produced it and why, a
-short status table and the nowcast plot. Details (diagnostics, checks,
-the chain) follow in collapsed sections, and the body ends by
-mentioning @seabbs.
+The hub's organisers read the body, so it is short enough to scan: one
+line on what was submitted, one plain status line, the nowcast plot, a
+link to the round's page in our docs and the bot footer. Everything else
+(the checks, the fallback chain, diagnostics, provenance and a national
+summary) sits in short collapsed sections. The full reports stay in the
+job summary and the run's artefacts.
 """
 
 from __future__ import annotations
@@ -24,16 +25,20 @@ from .common import (
     markdown_table,
     read_json,
     run_url,
-    worst,
     write_text,
 )
 from .hubdata import quantile, read_samples
-from .select_candidate import stand_in_line
 
 MAX_BODY = 60000  # GitHub's limit is 65536 characters
 SOURCE_REPO = "seabbs/bdbv-hub-baseline-forecasts"
 HUB = "InsightNet-US/BDBV-Modeling-Hub"
 FOOTER = "This was opened by a bot. Please ping @seabbs for any questions."
+DOCS = "https://seabbs.github.io/bdbv-hub-baseline-forecasts"
+
+
+def round_url(reference_date: str, docs: str = DOCS) -> str:
+    """Stable docs page of a round's submitted nowcast."""
+    return f"{docs.rstrip('/')}/nowcast/rounds/{reference_date}/"
 
 
 def marker(model_id: str, reference_date: str) -> str:
@@ -44,20 +49,6 @@ def marker(model_id: str, reference_date: str) -> str:
 def title(model_id: str, reference_date: str) -> str:
     """PR title, in the form other teams use on this hub."""
     return f"{model_id} submission for {reference_date}"
-
-
-def _strip_marker(md: str) -> str:
-    return "\n".join(
-        line for line in md.splitlines() if not line.startswith("<!--")
-    ).strip()
-
-
-def _demote(md: str) -> str:
-    """Push headings down two levels so they sit inside a section."""
-    return "\n".join(
-        "##" + line if line.startswith("#") else line
-        for line in md.splitlines()
-    )
 
 
 def _fit_cell(fit: Mapping[str, Any] | None) -> str:
@@ -125,6 +116,228 @@ def national_table(
     return markdown_table(["week ending", "median", "90% interval"], rows)
 
 
+def _warning_names(warnings: Sequence[str]) -> list[str]:
+    """Check names from `name: message` warnings, in order, once each."""
+    names: list[str] = []
+    for w in warnings:
+        name = w.split(":", 1)[0].strip()
+        if name and name not in names:
+            names.append(name)
+    return names
+
+
+def _first_reason(provenance: Mapping[str, Any]) -> str:
+    for a in provenance.get("attempts", []):
+        if a.get("id") != provenance.get("selected") and a.get("reasons"):
+            return f"{a['label']} was ruled out ({a['reasons'][0]})"
+    return ""
+
+
+def status_line(
+    provenance: Mapping[str, Any],
+    coherence: Coherence | None = None,
+    dry_run: bool = False,
+) -> str:
+    """One plain sentence (or three) on how the submission came about."""
+    kind = provenance.get("kind")
+    names = _warning_names(provenance.get("warnings") or [])
+    if coherence is not None and coherence.status == "warn":
+        names.append("data coherence")
+    why = _first_reason(provenance)
+    if kind == "retry":
+        head = (
+            "Main model refitted with more conservative sampler settings"
+            + (f": {why[0].lower()}{why[1:]}" if why else "")
+            + "."
+        )
+    elif kind in ("fallback", "persistence"):
+        head = (
+            f"Fallback model used ({provenance['produced_by']})"
+            + (f": {why[0].lower()}{why[1:]}" if why else "")
+            + "."
+        )
+    else:
+        head = "All checks passed."
+    if names:
+        head = head[:-1] + f", with warnings on {', '.join(names)}."
+    run = provenance.get("run") or {}
+    if provenance.get("stand_in"):
+        head += (
+            f" Stand-in: {run.get('model', 'persistence')} runs as the "
+            f"`{run.get('config', 'main')}` model."
+        )
+    if dry_run:
+        head += " Dry run: nothing was pushed."
+    return head
+
+
+def _section(label: str, body: str) -> str:
+    return (
+        f"<details><summary>{label}</summary>\n\n{body.strip()}\n\n</details>\n"
+    )
+
+
+def _checks_section(
+    fit: Mapping[str, Any] | None,
+    ppc: Mapping[str, Any] | None,
+    checks: Mapping[str, Any],
+    validation: str,
+    coherence: Coherence | None,
+    warnings: Sequence[str],
+) -> str:
+    table = markdown_table(
+        ["check", "status"],
+        [
+            ["Convergence", _fit_cell(fit)],
+            ["Posterior predictive checks", _ppc_cell(ppc, fit)],
+            ["Forecast checks", _checks_cell(checks)],
+            ["Hub validation", STATUS_LABEL.get(validation, validation)],
+            ["Data coherence", _coherence_cell(coherence)],
+        ],
+    )
+    notes = "".join(f"\n- {w}" for w in warnings)
+    return _section(
+        "Checks", table + ("\nWarnings:\n" + notes if notes else "")
+    )
+
+
+def _chain_section(provenance: Mapping[str, Any]) -> str:
+    ran = [
+        a
+        for a in provenance.get("attempts", [])
+        if a.get("status") not in ("not needed", "not run")
+    ]
+    if len(ran) < 2:
+        return ""
+    rows = [
+        [
+            a["label"],
+            "submitted"
+            if a["id"] == provenance.get("selected")
+            else STATUS_LABEL.get(a["status"], a["status"]),
+            a["reasons"][0] if a.get("reasons") else "",
+        ]
+        for a in ran
+    ]
+    return _section(
+        "Fallback chain", markdown_table(["step", "outcome", "why"], rows)
+    )
+
+
+def _convergence_section(fit: Mapping[str, Any] | None) -> str:
+    if fit is None or fit.get("status") == "skip":
+        return ""
+    lines = [f"{_fit_cell(fit)}."]
+    lines += [f"- {m}" for m in (fit.get("failures") or [])]
+    lines += [f"- {m}" for m in (fit.get("warnings") or [])]
+    return _section("Convergence", "\n".join(lines))
+
+
+def _ppc_section(ppc: Mapping[str, Any] | None) -> str:
+    if ppc is None or not ppc.get("available"):
+        return ""
+    levels = list(ppc.get("levels") or [])
+    weeks = len(ppc.get("recent_weeks") or [])
+    stream = ppc.get("stream", "total")
+    overall = ppc.get("streams", {}).get(stream, {})
+    rows = [
+        [
+            "all provinces",
+            *(fmt(overall.get(f"cov{p}"), 2) for p in levels),
+            *(fmt(overall.get(f"recent_cov{p}"), 2) for p in levels),
+        ]
+    ] + [
+        [
+            str(r["location"]),
+            *(fmt(r.get(f"cov{p}"), 2) for p in levels),
+            *(fmt(r.get(f"recent_cov{p}"), 2) for p in levels),
+        ]
+        for r in ppc.get("locations", [])
+    ]
+    table = markdown_table(
+        [
+            "",
+            *(f"{p}%" for p in levels),
+            *(f"{p}%, last {weeks} weeks" for p in levels),
+        ],
+        rows,
+    )
+    pit = ppc.get("pit") or {}
+    note = (
+        f"\nPIT: KS distance {fmt(pit.get('ks'), 2)} from uniform"
+        + (f"; {pit['shape']}" if pit.get("shape") else "")
+        + "."
+        if pit.get("n")
+        else ""
+    )
+    return _section(
+        "Posterior predictive checks",
+        f"Share of observed weekly {stream} counts inside the in-sample "
+        f"predictive intervals.\n\n{table}{note}",
+    )
+
+
+def _forecast_section(checks: Mapping[str, Any]) -> str:
+    flagged = [
+        c for c in checks["checks"] if c["status"] not in ("pass", "skip")
+    ]
+    passed = [c["name"] for c in checks["checks"] if c["status"] == "pass"]
+    lines = [
+        f"- {STATUS_LABEL[c['status']]} {c['name']}: {c['summary']}"
+        for c in flagged
+    ]
+    if passed:
+        lines.append(f"- Passed: {', '.join(passed)}.")
+    return _section("Forecast checks", "\n".join(lines))
+
+
+def _provenance_section(
+    *,
+    run: Mapping[str, Any],
+    model_id: str,
+    sub: Path,
+    samples: Any,
+    as_of: str,
+    hub: str,
+    hub_ref: str,
+    data_commit: str,
+    source_repo: str,
+    source_sha: str,
+    stamp: str,
+    link: str,
+) -> str:
+    code = (
+        f"[`{source_sha[:10]}`](https://github.com/{source_repo}/commit/"
+        f"{source_sha})"
+        if source_sha
+        else "n/a"
+    )
+    rows = [
+        ["File", f"`model-output/{model_id}/{sub.name}`"],
+        [
+            "Contents",
+            f"{len(samples.locations)} locations, {samples.rows} rows",
+        ],
+        [
+            "Model",
+            f"{run.get('model', 'n/a')} (`{run.get('config', 'n/a')}`), "
+            f"version {run.get('package_version', 'n/a')}, code {code}",
+        ],
+        ["Data vintage (`as_of`)", as_of or "n/a"],
+        [
+            "Hub data commit",
+            f"[`{data_commit[:10]}`](https://github.com/{hub}/commit/"
+            f"{data_commit})",
+        ],
+        [
+            "Hub config",
+            f"[`{hub_ref[:10]}`](https://github.com/{hub}/tree/{hub_ref})",
+        ],
+        ["Built", stamp + (f", [workflow run]({link})" if link else "")],
+    ]
+    return _section("Provenance", markdown_table(["", ""], rows))
+
+
 def build(
     *,
     provenance: Mapping[str, Any],
@@ -140,6 +353,7 @@ def build(
     source_repo: str = SOURCE_REPO,
     source_sha: str = "",
     hub: str = HUB,
+    docs: str = DOCS,
     now: dt.datetime | None = None,
 ) -> str:
     """Return the PR body markdown."""
@@ -149,138 +363,60 @@ def build(
     ppc_path = selected_dir / "ppc-summary.json"
     ppc = read_json(ppc_path) if ppc_path.exists() else None
     checks = read_json(selected_dir / "checks.json")
-    subs = sorted((selected_dir / "submission").glob("**/*.csv"))
-    sub = subs[0]
+    sub = sorted((selected_dir / "submission").glob("**/*.csv"))[0]
     samples = read_samples(sub)
     coherence = _read_coherence(selected_dir)
-    # The data check only warns, and is reported once here rather than
-    # with each candidate's warnings, but it still colours the overall.
-    status = worst(
-        [provenance["status"]]
-        + (
-            [coherence.status]
-            if coherence and coherence.status == "warn"
-            else []
-        )
-    )
     link = run_url()
     stamp = (now or dt.datetime.now(dt.UTC)).strftime("%Y-%m-%d %H:%M UTC")
+    warnings = list(provenance.get("warnings") or [])
+    if coherence is not None and coherence.status == "warn":
+        warnings.append(f"data coherence: {coherence.summary}")
 
     out = [marker(model_id, reference_date)]
-    out.append(f"## {title(model_id, reference_date)}\n")
-    note = (
-        "> [!NOTE]\n"
-        "> **Automated submission.** A scheduled GitHub Actions workflow in "
-        f"[{source_repo}](https://github.com/{source_repo}) fitted the model,"
-        " ran the checks below and opened this pull request. No person "
-        "reviewed it before it was opened. If the hub data change before "
-        "the window closes, the workflow updates this pull request in place."
-    )
-    if dry_run:
-        note += "\n>\n> This is a **dry run**: nothing was pushed or opened."
-    out.append(note + "\n")
-    out.append(f"**Produced by: {provenance['produced_by']}.** ")
-    out.append(provenance["reason"] + "\n")
-    if provenance.get("stand_in"):
-        out.append(stand_in_line(provenance["stand_in"]) + "\n")
     out.append(
-        markdown_table(
-            ["check", "status"],
-            [
-                [
-                    "Overall",
-                    STATUS_LABEL[status]
-                    + (" (stand-in)" if provenance.get("stand_in") else ""),
-                ],
-                ["Convergence", _fit_cell(fit)],
-                ["Posterior predictive checks", _ppc_cell(ppc, fit)],
-                ["Forecast checks", _checks_cell(checks)],
-                ["Hub validation", STATUS_LABEL.get(validation, validation)],
-                ["Data coherence", _coherence_cell(coherence)],
-            ],
-        )
-        + "\n"
+        f"Automated submission of `{model_id}` for {reference_date}, from "
+        f"data as of {as_of or 'n/a'}, for {len(samples.locations)} "
+        f"locations.\n"
     )
-    warnings = provenance.get("warnings") or []
-    if warnings:
-        out.append("> [!WARNING]\n> Submitted with warnings:")
-        out.extend(f"> - {w}" for w in warnings)
-        out.append("")
-
-    out.append("### Nowcast and forecast\n")
-    out.append(
-        f"![Nowcast and forecast for {reference_date}]({plot_url})\n\n"
-        "Observed cases by onset week in the data vintage used, with the "
-        "submitted median and 50% and 90% intervals. Weeks up to the "
-        "reference date are a nowcast; later weeks are a forecast.\n"
-    )
-    if (selected_dir / "ppc.png").exists():
-        out.append(
-            "The posterior predictive check plot (`ppc.png`, predictive "
-            "intervals against the observed counts by province) is in the "
-            "run's candidate artefact.\n"
+    out.append(status_line(provenance, coherence, dry_run) + "\n")
+    out.append(f"![Nowcast and forecast for {reference_date}]({plot_url})\n")
+    out.append(f"This round in our docs: {round_url(reference_date, docs)}\n")
+    sections = [
+        _checks_section(fit, ppc, checks, validation, coherence, warnings),
+        _chain_section(provenance),
+        _convergence_section(fit),
+        _ppc_section(ppc),
+        _forecast_section(checks),
+        _section(
+            "Data coherence",
+            f"National against the sum of the provinces in the data.\n\n"
+            f"{coherence_details(coherence)}",
         )
+        if coherence is not None and coherence.status == "warn"
+        else "",
+    ]
     nat = national_table(sub)
     if nat:
-        out.append("National (`CD`) summary of the submitted samples:\n")
-        out.append(nat + "\n")
-
-    out.append("### Submission\n")
-    hub_link = f"https://github.com/{hub}/tree/{hub_ref}"
-    data_link = f"https://github.com/{hub}/commit/{data_commit}"
-    code = (
-        f"[`{source_sha[:10]}`](https://github.com/{source_repo}/commit/"
-        f"{source_sha})"
-        if source_sha
-        else "n/a"
-    )
-    out.append(
-        markdown_table(
-            ["", ""],
-            [
-                ["Model", f"`{model_id}`"],
-                [
-                    "Model and config",
-                    f"{run.get('model', 'n/a')} (`{run.get('config', 'n/a')}`)",
-                ],
-                [
-                    "Version",
-                    f"{run.get('package_version', 'n/a')}, code {code}",
-                ],
-                ["Reference date", reference_date],
-                ["Data vintage (`as_of`)", as_of or "n/a"],
-                ["Hub data commit", f"[`{data_commit[:10]}`]({data_link})"],
-                ["Hub checkout", f"[`{hub_ref[:10]}`]({hub_link})"],
-                ["File", f"`model-output/{model_id}/{sub.name}`"],
-                [
-                    "Contents",
-                    f"{len(samples.locations)} locations, {samples.rows} rows",
-                ],
-                ["Built", stamp],
-            ],
+        sections.append(
+            _section("National summary", f"Submitted `CD` samples.\n\n{nat}")
         )
-        + "\n"
-    )
-    details = [
-        ("Fallback chain", (selected_dir.parent / "provenance.md")),
-        ("Convergence diagnostics", selected_dir / "fit-summary.md"),
-        ("Posterior predictive checks", selected_dir / "ppc-summary.md"),
-        ("Forecast checks", selected_dir / "checks.md"),
-    ]
-    for label, path in details:
-        if path.exists():
-            body = _demote(_strip_marker(path.read_text()))
-            out.append(
-                f"<details><summary>{label}</summary>\n\n{body}\n\n</details>\n"
-            )
-    if coherence is not None and coherence.status != "skip":
-        out.append(
-            "<details><summary>Data coherence</summary>\n\n"
-            f"National against the sum of the provinces in the data vintage "
-            f"used.\n\n{coherence_details(coherence)}\n</details>\n"
+    sections.append(
+        _provenance_section(
+            run=run,
+            model_id=model_id,
+            sub=sub,
+            samples=samples,
+            as_of=as_of,
+            hub=hub,
+            hub_ref=hub_ref,
+            data_commit=data_commit,
+            source_repo=source_repo,
+            source_sha=source_sha,
+            stamp=stamp,
+            link=link,
         )
-    if link:
-        out.append(f"Workflow run and artefacts: {link}\n")
+    )
+    out.extend(x for x in sections if x)
     out.append(FOOTER)
     text = "\n".join(out) + "\n"
     if len(text) > MAX_BODY:
@@ -324,6 +460,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--source-sha", default="")
     p.add_argument("--source-repo", default=SOURCE_REPO)
+    p.add_argument("--docs", default=DOCS, help="base URL of the docs site")
     p.add_argument("--out", type=Path, required=True)
     args = p.parse_args(argv)
     prov = read_json(args.gate / "provenance.json")
@@ -341,6 +478,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         dry_run=args.dry_run,
         source_repo=args.source_repo,
         source_sha=args.source_sha,
+        docs=args.docs,
     )
     write_text(args.out / "pr-body.md", body)
     write_text(

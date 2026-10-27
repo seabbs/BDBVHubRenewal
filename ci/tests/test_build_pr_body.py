@@ -10,7 +10,14 @@ from test_check_coherence import GAP, coherence
 from test_check_ppc import ppc
 from test_select_candidate import STAND_IN
 
-from submission_ci.build_pr_body import FOOTER, MAX_BODY, build, main, marker
+from submission_ci.build_pr_body import (
+    FOOTER,
+    MAX_BODY,
+    build,
+    main,
+    marker,
+    round_url,
+)
 from submission_ci.check_coherence import assess
 from submission_ci.check_ppc import summarise
 from submission_ci.common import read_json
@@ -91,6 +98,18 @@ def body(g: Path, **kw: Any) -> str:
     return build(**args)
 
 
+def visible(text: str) -> list[str]:
+    """Non-blank lines outside the collapsed sections, bar the marker."""
+    lines, depth = [], 0
+    for line in text.splitlines():
+        depth += line.count("<details>") - line.count("</details>")
+        if line.count("<details>") or line.count("</details>"):
+            continue
+        if depth == 0 and line.strip() and not line.startswith("<!--"):
+            lines.append(line)
+    return lines
+
+
 def test_body_has_required_parts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -98,16 +117,25 @@ def test_body_has_required_parts(
     monkeypatch.setenv("GITHUB_RUN_ID", "42")
     text = body(gate(tmp_path))
     assert text.startswith(marker("epiforecasts-renewal", REF))
-    assert "Automated submission" in text and "No person reviewed it" in text
-    assert "**Produced by: main model.**" in text
-    assert "![Nowcast and forecast" in text and "p.png" in text
+    shown = visible(text)
+    assert len(shown) <= 6, shown
+    assert shown[0] == (
+        f"Automated submission of `epiforecasts-renewal` for {REF}, from "
+        "data as of 2026-10-31, for 4 locations."
+    )
+    assert shown[1] == "All checks passed."
+    assert shown[2].startswith("![Nowcast and forecast") and "p.png" in text
+    assert shown[3] == f"This round in our docs: {round_url(REF)}"
+    assert shown[-1] == FOOTER
     assert "| Convergence | PASS (max R-hat 1.004" in text
     assert "| Hub validation | PASS |" in text
-    assert "renewal (`main`)" in text and "0.2.0" in text
-    assert "2026-10-31" in text and "bbbbbbbbbb" in text
-    assert "National (`CD`)" in text
-    assert "actions/runs/42" in text
-    assert text.rstrip().endswith(FOOTER) and "@seabbs" in text.splitlines()[-1]
+    assert "renewal (`main`), version 0.2.0" in text
+    assert "bbbbbbbbbb" in text and "actions/runs/42" in text
+    assert "<summary>National summary</summary>" in text
+    assert "<summary>Provenance</summary>" in text
+    # One sampled fit converged: no chain section, but convergence.
+    assert "<summary>Fallback chain</summary>" not in text
+    assert "<summary>Convergence</summary>" in text
 
 
 def test_warnings_are_stated(tmp_path: Path) -> None:
@@ -116,18 +144,61 @@ def test_warnings_are_stated(tmp_path: Path) -> None:
             tmp_path, status="warn", warnings=["growth: CD-IT grows 2.5 times"]
         )
     )
-    assert "| Overall | WARN |" in text
-    assert "[!WARNING]" in text and "CD-IT grows 2.5 times" in text
+    assert visible(text)[1] == "All checks passed, with warnings on growth."
+    assert "- growth: CD-IT grows 2.5 times" in text
     assert "(growth flagged)" in text
+    assert "- WARN growth: x" in text
 
 
-def test_fallback_provenance_is_named(tmp_path: Path) -> None:
-    text = body(gate(tmp_path, produced_by="persistence baseline"))
-    assert "**Produced by: persistence baseline.**" in text
+def test_fallback_is_named_with_why(tmp_path: Path) -> None:
+    g = gate(tmp_path, produced_by="persistence baseline")
+    prov = read_json(g / "provenance.json")
+    prov.update(
+        kind="persistence",
+        selected="persistence",
+        attempts=[
+            {
+                "id": "main",
+                "label": "main model",
+                "status": "fail",
+                "reasons": ["convergence: max R-hat is 1.4"],
+            },
+            {
+                "id": "persistence",
+                "label": "persistence baseline",
+                "status": "pass",
+                "validation": "pass",
+                "reasons": [],
+            },
+        ],
+    )
+    write_json(g / "provenance.json", prov)
+    text = body(g)
+    assert visible(text)[1] == (
+        "Fallback model used (persistence baseline): main model was ruled "
+        "out (convergence: max R-hat is 1.4)."
+    )
+    assert "<summary>Fallback chain</summary>" in text
+    assert "| persistence baseline | submitted |  |" in text
+
+
+def test_retry_is_named(tmp_path: Path) -> None:
+    g = gate(tmp_path, produced_by="main model, retry 1")
+    prov = read_json(g / "provenance.json")
+    prov.update(kind="retry", selected="retry-1", attempts=[
+        {"id": "main", "label": "main model", "status": "fail",
+         "reasons": ["convergence: max R-hat is 1.4"]},
+    ])  # fmt: skip
+    write_json(g / "provenance.json", prov)
+    assert visible(body(g))[1].startswith(
+        "Main model refitted with more conservative sampler settings: main "
+        "model was ruled out"
+    )
 
 
 def test_dry_run_note(tmp_path: Path) -> None:
-    assert "**dry run**" in body(gate(tmp_path), dry_run=True)
+    line = visible(body(gate(tmp_path), dry_run=True))[1]
+    assert line == "All checks passed. Dry run: nothing was pushed."
 
 
 def test_long_body_is_truncated(tmp_path: Path) -> None:
@@ -154,6 +225,8 @@ def test_cli(tmp_path: Path) -> None:
                 "b",
                 "--plot-url",
                 "p.png",
+                "--docs",
+                "https://example.org/docs/",
                 "--out",
                 str(tmp_path / "o"),
             ]
@@ -163,10 +236,9 @@ def test_cli(tmp_path: Path) -> None:
     assert (
         tmp_path / "o" / "pr-title.txt"
     ).read_text() == f"m submission for {REF}"
-    assert (
-        "| Hub validation | PASS |"
-        in (tmp_path / "o" / "pr-body.md").read_text()
-    )
+    out = (tmp_path / "o" / "pr-body.md").read_text()
+    assert "| Hub validation | PASS |" in out
+    assert f"https://example.org/docs/nowcast/rounds/{REF}/" in out
 
 
 def test_data_coherence_reported_once(tmp_path: Path) -> None:
@@ -176,7 +248,9 @@ def test_data_coherence_reported_once(tmp_path: Path) -> None:
         asdict(assess(coherence([GAP]))),
     )
     text = body(g)
-    assert "| Overall | WARN |" in text
+    assert visible(text)[1] == (
+        "All checks passed, with warnings on data coherence."
+    )
     assert text.count("| Data coherence | WARN (national (CD) differs") == 1
     assert text.count("<summary>Data coherence</summary>") == 1
     assert "| 2026-10-24 | total | 50 | 48 | 2 |" in text
@@ -186,7 +260,6 @@ def test_data_coherence_reported_once(tmp_path: Path) -> None:
 def test_data_coherence_na_without_file(tmp_path: Path) -> None:
     text = body(gate(tmp_path))
     assert "| Data coherence | N/A (not checked) |" in text
-    assert "| Overall | PASS |" in text
     assert "<summary>Data coherence</summary>" not in text
 
 
@@ -195,15 +268,14 @@ def test_ppc_row_and_province_details(tmp_path: Path) -> None:
     sel = g / "selected"
     write_json(tmp_path / "ppc.json", ppc("ppcwarn"))
     summarise("main", tmp_path / "ppc.json", sel, sampled=True)
-    (sel / "ppc.png").write_bytes(b"png")
     text = body(g)
     assert (
         "| Posterior predictive checks | WARN (90% coverage 0.57 overall, "
         "0.67 last 4 weeks; 50% coverage" in text
     )
     assert "<summary>Posterior predictive checks</summary>" in text
-    assert "<summary>Coverage of total by province</summary>" in text
-    assert "`ppc.png`" in text
+    assert "| all provinces | " in text
+    assert "| CD-IT |" in text
 
 
 def test_ppc_row_without_posterior(tmp_path: Path) -> None:
@@ -223,9 +295,9 @@ def test_ppc_row_without_posterior(tmp_path: Path) -> None:
 def test_stand_in_is_stated(tmp_path: Path) -> None:
     g = gate(tmp_path, produced_by="main model (stand-in)")
     prov = read_json(g / "provenance.json")
+    prov["run"]["model"] = "persistence"
     write_json(g / "provenance.json", {**prov, "stand_in": STAND_IN})
-    text = body(g)
-    assert "**Produced by: main model (stand-in).**" in text
-    assert f"**Stand-in:** {STAND_IN}." in text
-    assert "| Overall | PASS (stand-in) |" in text
-    assert "**Stand-in:**" not in body(gate(tmp_path / "real"))
+    assert visible(body(g))[1] == (
+        "All checks passed. Stand-in: persistence runs as the `main` model."
+    )
+    assert "Stand-in" not in body(gate(tmp_path / "real"))

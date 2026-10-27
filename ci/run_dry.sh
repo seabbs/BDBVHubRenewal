@@ -28,13 +28,13 @@ SCENARIOS=(
   "main|main=pass|main||| Data coherence | PASS"
   "coherence|main=pass|main|FAKE_COHERENCE_GAP=2026-10-24:2|| Data coherence | WARN (national (CD) differs"
   "warn|main=warn|main"
-  "standin|main=standin|main||**Stand-in:** the \`main\` config runs the persistence baseline"
-  "ppcwarn|main=ppcwarn|main||| Posterior predictive checks | WARN (90% coverage"
-  "ppcfail|main=ppcfail,retry-1=pass|retry-1||Main model was ruled out (ppc: 90% interval coverage"
-  "noppc|main=noppc,retry-1=pass|retry-1||Main model was ruled out (ppc: no ppc.json"
+  "standin|main=standin|main||Stand-in: "
+  "ppcwarn|main=ppcwarn|main||All checks passed, with warnings on ppc."
+  "ppcfail|main=ppcfail,retry-1=pass|retry-1||Main model refitted with more conservative sampler settings: main model was ruled out (ppc: 90% interval coverage"
+  "noppc|main=noppc,retry-1=pass|retry-1||main model was ruled out (ppc: no ppc.json"
   "retry|main=fail,retry-1=pass|retry-1"
   "retry2|main=crash,retry-1=fail,retry-2=pass|retry-2"
-  "fallback|main=fail,retry-1=fail,retry-2=fail|fallback"
+  "fallback|main=fail,retry-1=fail,retry-2=fail|fallback||Fallback model used ("
   "persistence|main=fail,retry-1=implausible,retry-2=crash,fallback=fail|persistence"
   "skip|main=fail,retry-1=fail,retry-2=fail,fallback=implausible,persistence=negative|skip"
 )
@@ -142,7 +142,24 @@ EOF
   if grep -v '^pr list' "$WORK/gh.log" 2> /dev/null; then
     echo "FAIL: dry run made gh calls other than a PR lookup"; return 1
   fi
-  grep -q "Produced by: " "$WORK/gate/pr-body.md"
+  # Short enough to scan: at most six visible lines outside <details>,
+  # the docs link for the round, and the footer last.
+  local shown
+  shown=$(python3 - "$WORK/gate/pr-body.md" << 'EOF'
+import sys
+depth = n = 0
+for line in open(sys.argv[1]):
+    depth += line.count("<details>") - line.count("</details>")
+    if "<details>" in line or "</details>" in line:
+        continue
+    if depth == 0 and line.strip() and not line.startswith("<!--"):
+        n += 1
+print(n)
+EOF
+)
+  [ "$shown" -le 6 ] || { echo "FAIL: $name PR body shows $shown lines"; return 1; }
+  grep -q "^This round in our docs: .*/nowcast/rounds/$REFERENCE_DATE/" \
+    "$WORK/gate/pr-body.md" || { echo "FAIL: $name has no docs link"; return 1; }
   tail -n 1 "$WORK/gate/pr-body.md" | grep -q "@seabbs"
   # A posterior predictive plot whenever the checks were available.
   if python3 -c "import json, sys; sys.exit(not json.load(open(sys.argv[1])).get('available'))" \
