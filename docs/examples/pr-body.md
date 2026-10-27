@@ -26,7 +26,7 @@ The main model (stand-in) cleared every check, with warnings.
 
 ### Nowcast and forecast
 
-![Nowcast and forecast for 2026-10-31](assets/example-submission-nowcast.png)
+![Nowcast and forecast for 2026-10-31](../assets/example-submission-nowcast.png)
 
 Observed cases by onset week in the data vintage used, with the submitted median and 50% and 90% intervals. Weeks up to the reference date are a nowcast; later weeks are a forecast.
 
