@@ -173,6 +173,9 @@ def _fake_draws(data: Any, n: int, rng: np.random.Generator) -> dict[str, Any]:
 
 
 def test_samples_table_is_coherent(task: ForecastTask) -> None:
+    # Every province, so some have no cases and get importation draws.
+    rows = task.target.loc[task.target["location"] != NATIONAL]
+    task = replace(task, locations=tuple(sorted(set(rows["location"]))))
     config = rn.model_config(rn.VARIANTS["hubrenewal"])
     data = rn.vintage_inputs(task, config)
     draws = _fake_draws(data, task.n_samples, np.random.default_rng(1))

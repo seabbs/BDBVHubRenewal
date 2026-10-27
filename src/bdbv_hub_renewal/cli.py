@@ -401,7 +401,9 @@ def _write_national_sidecar(
     record = {
         "schema_version": 1,
         "national": NATIONAL,
-        "modelled_provinces": list(task.locations),
+        "modelled_provinces": list(
+            task.locations if result.modelled is None else result.modelled
+        ),
         "unassigned": unassigned,
     }
     path.write_text(json.dumps(record, indent=2) + "\n")

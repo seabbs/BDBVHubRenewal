@@ -144,12 +144,16 @@ class ModelSpec:
         One line for tables and docs.
     baseline : bool
         Whether this is the reference model for relative scores.
+    fitted : bool
+        Whether the model is fitted by MCMC for each task, so is slow.
+        The docs report and the smoke tests run only models that are not.
     """
 
     name: str
     factory: Callable[[], ForecastModel]
     description: str
     baseline: bool = False
+    fitted: bool = False
 
 
 _REGISTRY: dict[str, ModelSpec] = {}
@@ -161,6 +165,7 @@ def register_model(
     description: str,
     *,
     baseline: bool = False,
+    fitted: bool = False,
     replace: bool = False,
 ) -> ModelSpec:
     """Add a model to the registry used by the backtest, CLI and docs.
@@ -175,6 +180,8 @@ def register_model(
         One line describing the model.
     baseline : bool
         Mark the model as the baseline for relative skill.
+    fitted : bool
+        Mark the model as fitted by MCMC for each task.
     replace : bool
         Allow replacing an existing entry.
 
@@ -190,7 +197,7 @@ def register_model(
     """
     if name in _REGISTRY and not replace:
         raise ValueError(f"Model {name!r} is already registered.")
-    spec = ModelSpec(name, factory, description, baseline)
+    spec = ModelSpec(name, factory, description, baseline, fitted)
     _REGISTRY[name] = spec
     return spec
 

@@ -19,14 +19,17 @@ from .base import (
     register_model,
 )
 from .persistence import Persistence, completeness_lag, last_complete_week
+from .renewal import VARIANTS, RenewalModel
 
 __all__ = [
     "NATIONAL",
     "SAMPLE_COLUMNS",
+    "VARIANTS",
     "ForecastModel",
     "ForecastTask",
     "ModelSpec",
     "Persistence",
+    "RenewalModel",
     "add_national",
     "check_samples",
     "completeness_lag",

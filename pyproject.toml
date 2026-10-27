@@ -123,7 +123,8 @@ convention = "numpy"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = ["-ra", "--strict-markers", "--strict-config"]
+# Model fits are slow; `task test-slow` runs them.
+addopts = ["-ra", "--strict-markers", "--strict-config", "-m", "not slow"]
 xfail_strict = true
 filterwarnings = [
   # Raised inside pandas by `pd.Timedelta(days=...)` with NumPy 2.4.

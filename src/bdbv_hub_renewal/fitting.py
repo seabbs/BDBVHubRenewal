@@ -6,20 +6,11 @@ its fallback chain with `bdbv-hub-renewal fit --config <name>` and then
 forecasts from the saved fit with `bdbv-hub-renewal nowcast --config <name>
 --fit <dir>`. A fit configuration says how to do both.
 
-The chain names two configurations, `main` (the full model) and
-`fallback` (the simplified variant). Until the PyRenew renewal model is
-integrated, both are **stand-ins** that run the persistence baseline, so
-the workflow runs end to end. The model integration replaces them::
-
-    register_config(
-        FitConfig(
-            name="main",
-            description="Renewal model, full configuration",
-            fit=fit_renewal_main,
-            forecast=forecast_renewal,
-        ),
-        replace=True,
-    )
+The chain names two configurations, `main` (the full model, the
+`hubrenewal` variant) and `fallback` (delays and missingness from data,
+no coupling). Both run the PyRenew renewal model through
+`bdbv_hub_renewal.models.renewal.fit_renewal`, which samples, draws the
+trajectories and writes `ppc.json`. `persistence` needs no fit.
 
 A fit function gets the forecast task, the sampler settings from
 `ci/policy.toml` and the fit directory. It writes whatever the forecast
@@ -36,6 +27,7 @@ import json
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from typing import Any, Final
 
@@ -76,10 +68,14 @@ class Forecast:
     unassigned : pandas.DataFrame or None
         A modelled national component not assigned to any province, with
         columns `target_end_date`, `sample` and `value`, or None.
+    modelled : tuple of str or None
+        The provinces the model reports, for `national.json`. None means
+        every province of the task.
     """
 
     samples: pd.DataFrame
     unassigned: pd.DataFrame | None = None
+    modelled: tuple[str, ...] | None = None
 
 
 FitFn = Callable[[ForecastTask, Mapping[str, Any], Path], dict[str, Any]]
@@ -422,13 +418,24 @@ def run_forecast(
 
 
 register_config(persistence_config("persistence"))
-for _name in ("main", "fallback"):
-    register_config(
-        persistence_config(
-            _name,
-            stand_in=(
-                f"the `{_name}` config runs the persistence baseline until "
-                "the PyRenew renewal model is integrated"
-            ),
-        )
+
+
+def _renewal_config(name: str) -> FitConfig:
+    from .models.renewal import (
+        FIT_VARIANTS,
+        VARIANTS,
+        fit_renewal,
+        forecast_renewal,
     )
+
+    variant = FIT_VARIANTS[name]
+    return FitConfig(
+        name=name,
+        description=VARIANTS[variant].description,
+        fit=partial(fit_renewal, variant=variant, config_name=name),
+        forecast=forecast_renewal,
+    )
+
+
+for _name in ("main", "fallback"):
+    register_config(_renewal_config(_name))

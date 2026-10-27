@@ -15,6 +15,11 @@ tasks:
     cmds:
       - uv run pytest -q --cov=bdbv_hub_renewal
 
+  test-slow:
+    desc: Run the model fit tests (tiny real fits)
+    cmds:
+      - uv run pytest -q -m slow
+
   lint:
     desc: Lint, check formatting and type-check
     cmds:
