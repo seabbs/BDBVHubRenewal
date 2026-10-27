@@ -76,7 +76,8 @@ $$
 - $g$ is a Gamma generation interval with mean 15 and SD 9 days, on lags 1 to 42.
 - $W = (1 - \varepsilon) I + \varepsilon\, \mathrm{diag}(1/N) K^\top \mathrm{diag}(N)$ mixes transmission between provinces, with $\varepsilon \sim \text{Beta}(1, 100)$.
 - $K$ is a row-normalised gravity kernel, $K_{qp} \propto N_p e^{-D_{qp}/300\,\text{km}}$, with $D$ the great-circle distance between population-weighted province centres and $N_p$ the province population.
-- $\nu \sim \text{LogNormal}(\log 0.05, 0.75^2)$ is the share of each province at risk. $S_p$ starts at $\nu$, so cumulative infections never exceed $\nu N_p$.
+- $\nu \sim \text{LogNormal}(\log 0.05, 0.75^2)$ is the share of each province at risk.
+  $S_p$ starts at $\nu$, so cumulative infections never exceed $\nu N_p$.
 
 The exponential form agrees with linear depletion, $x = S y$, to first order, and cannot overshoot the pool.
 It is computed with `expm1` and on $\log S$, which keeps the log density smooth in single precision.
@@ -113,8 +114,10 @@ f_s(d) = h_s(d) \prod_{j < d}\{1 - h_s(j)\},
 \qquad h_s(60) = 1.
 $$
 
-- $\beta$ is a random walk over delay with $\beta(0) \sim \mathcal{N}(-2, 1)$ and step SD $\mathcal{N}^+(0, 0.1^2)$. This makes the shape smooth but not parametric.
-- $\gamma$ is a weekly random walk over onset day from zero, with step SD $\mathcal{N}^+(0, 0.15^2)$. It shifts all hazards together.
+- $\beta$ is a random walk over delay with $\beta(0) \sim \mathcal{N}(-2, 1)$ and step SD $\mathcal{N}^+(0, 0.1^2)$.
+  This makes the shape smooth but not parametric.
+- $\gamma$ is a weekly random walk over onset day from zero, with step SD $\mathcal{N}^+(0, 0.15^2)$.
+  It shifts all hazards together.
 
 The delay is pooled over provinces.
 
@@ -172,9 +175,13 @@ The non-monotone revisions in imputed counts suggest it re-imputes each time.
 ### Likelihood
 
 - Weekly sums of $\mathrm{known}_{p,T}$ and $\mathrm{imputed}_{p,T}$ are negative binomial, each stream with its own dispersion, $\phi \sim \text{LogNormal}(\log 20, 1)$.
-- The delays of known-onset cases in the hub's delay file are tabulated by onset week and delay, pooled over provinces. Given each week's total they are multinomial, with probabilities from $\lambda$, $f$ and $\pi$ truncated at $T$. This is the conditional part of the reporting triangle, so the known stream is not counted twice.
-- Provinces with no cases have expected onsets $\mu_q(s) = \kappa \sum_p K_{pq}\, \lambda_p(s)$, with one scale $\kappa \sim \text{LogNormal}(\log 10^{-3}, 2^2)$. Their weekly zeros are Poisson.
-- Leaving a province out switches off its terms in the first two. It stays in the latent process, so it still transmits and is still forecast.
+- The delays of known-onset cases in the hub's delay file are tabulated by onset week and delay, pooled over provinces.
+  Given each week's total they are multinomial, with probabilities from $\lambda$, $f$ and $\pi$ truncated at $T$.
+  This is the conditional part of the reporting triangle, so the known stream is not counted twice.
+- Provinces with no cases have expected onsets $\mu_q(s) = \kappa \sum_p K_{pq}\, \lambda_p(s)$, with one scale $\kappa \sim \text{LogNormal}(\log 10^{-3}, 2^2)$.
+  Their weekly zeros are Poisson.
+- Leaving a province out switches off its terms in the first two.
+  It stays in the latent process, so it still transmits and is still forecast.
 
 ### Forecasts
 

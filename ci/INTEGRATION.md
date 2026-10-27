@@ -37,7 +37,8 @@ bdbv-hub-renewal fit --model hubrenewal --config main|fallback --vintage <as_of>
   `main` is the full model.
   `fallback` is the same code with the delays and missingness plugged in from data, and no spatial coupling.
   Each matrix leg passes its own config.
-- `--sampler-json` is the candidate's `sampler` table from `ci/policy.toml`. The retries differ only in it.
+- `--sampler-json` is the candidate's `sampler` table from `ci/policy.toml`.
+  The retries differ only in it.
 - `--vintage` is a real `as_of`, or `latest`.
 - Write `<fit dir>/diagnostics.json` (below) whether or not the fit converged.
   Exit non-zero only if the fit could not run.
@@ -61,7 +62,8 @@ bdbv-hub-renewal nowcast --model hubrenewal --config main --fit <fit dir> \
   The PR always files it as `model-output/$HUB_MODEL_ID/<reference_date>-$HUB_MODEL_ID.csv`, so persistence can stand in for the main model.
 - Include the national row `CD`, as the sum of the province trajectories by sample index, plus any national cases the model does not assign to a province.
   Use the same sample ids across locations.
-  National sample k must equal the sum of province sample k plus that sample's unassigned cases, for every week. `to_hub_table` writes it that way, and the gate rebuilds the national rows the same way if they differ, and notes it.
+  National sample k must equal the sum of province sample k plus that sample's unassigned cases, for every week.
+  `to_hub_table` writes it that way, and the gate rebuilds the national rows the same way if they differ, and notes it.
 - Write `national.json` at the root of `--out` (`<candidate>/submission/national.json`), which `candidate.sh` passes to `check-forecast --national-sidecar`:
 
   ```json
@@ -72,7 +74,8 @@ bdbv-hub-renewal nowcast --model hubrenewal --config main --fit <fit dir> \
   A modelled province missing from the hub file warns.
   `unassigned` holds the national cases not assigned to a province, by week and sample; leave it empty when there are none.
   Without the file the gate takes the unassigned part from the gap between the national data and the provinces (`coherence.json`), and says so.
-- Write `handled.json` at the root of `--out`: a JSON list of short notes on anything handled on the way, such as a data stream taken from an earlier vintage. They go on the PR's `Handled:` line.
+- Write `handled.json` at the root of `--out`: a JSON list of short notes on anything handled on the way, such as a data stream taken from an earlier vintage.
+  They go on the PR's `Handled:` line.
 - Submit at least 7 back weeks (to `reference_date − 6 weeks`) as well as the 3 forecast weeks.
   The `observed` check compares the median of the last two complete weeks (4 or more weeks before `as_of`) with the data.
   With fewer back weeks it has nothing to compare, and skips.
@@ -228,7 +231,8 @@ diagnostics = {
 - One row per province, stream and in-sample onset week.
   `stream` is `observed` (known onsets), `imputed` (the hub's imputed onsets) or `total`.
 - `median`, `lower_<pct>` and `upper_<pct>` summarise the posterior predictive draws of the count as observed in the data vintage, with one central interval per level in `intervals`.
-- `pit` is the **randomised** PIT for counts, `F(y − 1) + v (F(y) − F(y − 1))` with `v ~ Uniform(0, 1)` from a seeded generator and `F` the empirical predictive distribution function. It is uniform on (0, 1) under a calibrated model even though counts are discrete.
+- `pit` is the **randomised** PIT for counts, `F(y − 1) + v (F(y) − F(y − 1))` with `v ~ Uniform(0, 1)` from a seeded generator and `F` the empirical predictive distribution function.
+  It is uniform on (0, 1) under a calibrated model even though counts are discrete.
 - `complete` is true for weeks ending at least the completeness lag (4 weeks) before the data vintage.
 - `bdbv_hub_renewal.ppc.summarise_draws(observed, draws, as_of=..., model=..., config=...)` builds all of this from a table of observations (`location`, `stream`, `target_end_date`, `observed`) and an array of draws of shape `(n_draws, n_rows)`; `write_ppc` writes it.
 - A model with no posterior writes `{"schema_version": 1, "available": false, "reason": "<text>"}` (`ppc.not_available(reason)`), which the gate reports as `n/a`.

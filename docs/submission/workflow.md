@@ -74,8 +74,12 @@ A candidate is ruled out only when its fit is clearly broken, or its file would 
 The chain is set in `ci/policy.toml`.
 
 1. `main`: the main model.
-2. `retry-1`: one refit of the main model with a longer warm-up, 8 chains and jittered inits (`init = "jitter"` in its sampler table). It runs only when `main` is past the retry thresholds below, or was ruled out. The refit is submitted unless it is clearly broken. Otherwise the original fit is kept, if it is not broken.
-3. `fallback`: the simplified variant (no spatial coupling, delays and missingness fixed from the data). It is fitted alongside `main`, so a broken main model does not leave too little of the window.
+2. `retry-1`: one refit of the main model with a longer warm-up, 8 chains and jittered inits (`init = "jitter"` in its sampler table).
+   It runs only when `main` is past the retry thresholds below, or was ruled out.
+   The refit is submitted unless it is clearly broken.
+   Otherwise the original fit is kept, if it is not broken.
+3. `fallback`: the simplified variant (no spatial coupling, delays and missingness fixed from the data).
+   It is fitted alongside `main`, so a broken main model does not leave too little of the window.
 4. `persistence`: the persistence baseline.
 
 There is at most one refit, and fits are cached under a content hash, so a re-run in the same window reuses them.

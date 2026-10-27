@@ -65,8 +65,11 @@ There are only four real vintages.
 Reconstructed vintages rebuild, for any past Saturday $A$, what the hub would roughly have shown, from the latest real vintage.
 Cases reach a vintage some days after report, so the cut-off is $A' = A - 3$ days.
 
-- **Known onsets.** Each delay row is a case with onset week $W$ and delay $d$. Its onset day is uniform in the week, so it counts as reported by $A'$ with probability $\frac{1}{7}\sum_{u=0}^{6} \mathbb{1}\{W - u + d \le A'\}$.
-- **Imputed onsets.** Their report dates are not public. The hub imputed each onset by subtracting a delay drawn from the pooled delays. So a case imputed to week $W$ counts as reported by $A'$ with probability $\frac{1}{7}\sum_{u} \hat G(A' - W + u)$, with $\hat G$ the pooled delay cdf.
+- **Known onsets.** Each delay row is a case with onset week $W$ and delay $d$.
+  Its onset day is uniform in the week, so it counts as reported by $A'$ with probability $\frac{1}{7}\sum_{u=0}^{6} \mathbb{1}\{W - u + d \le A'\}$.
+- **Imputed onsets.** Their report dates are not public.
+  The hub imputed each onset by subtracting a delay drawn from the pooled delays.
+  So a case imputed to week $W$ counts as reported by $A'$ with probability $\frac{1}{7}\sum_{u} \hat G(A' - W + u)$, with $\hat G$ the pooled delay cdf.
 - **Delay data.** Rows whose report (taking the onset mid-week) falls by $A'$.
 
 The 3-day lag gives the smallest net difference from the real 2026-08-18, 2026-10-09 and 2026-10-17 vintages over their last four weeks (see [Data](../data.md#reconstructed-vintages)).
