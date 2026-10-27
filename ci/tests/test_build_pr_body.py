@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
 import pytest
 from conftest import REF, make_samples, write_json, write_samples
+from test_check_coherence import GAP, coherence
 
 from submission_ci.build_pr_body import FOOTER, MAX_BODY, build, main, marker
+from submission_ci.check_coherence import assess
 
 
 def gate(
@@ -160,3 +163,24 @@ def test_cli(tmp_path: Path) -> None:
         "| Hub validation | PASS |"
         in (tmp_path / "o" / "pr-body.md").read_text()
     )
+
+
+def test_data_coherence_reported_once(tmp_path: Path) -> None:
+    g = gate(tmp_path)
+    write_json(
+        g / "selected" / "coherence-summary.json",
+        asdict(assess(coherence([GAP]))),
+    )
+    text = body(g)
+    assert "| Overall | WARN |" in text
+    assert text.count("| Data coherence | WARN (national (CD) differs") == 1
+    assert text.count("<summary>Data coherence</summary>") == 1
+    assert "| 2026-10-24 | total | 50 | 48 | 2 |" in text
+    assert "unassigned national component" in text
+
+
+def test_data_coherence_na_without_file(tmp_path: Path) -> None:
+    text = body(gate(tmp_path))
+    assert "| Data coherence | N/A (not checked) |" in text
+    assert "| Overall | PASS |" in text
+    assert "<summary>Data coherence</summary>" not in text

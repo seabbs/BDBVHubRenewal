@@ -15,6 +15,8 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from .check_coherence import Coherence
+from .check_coherence import details as coherence_details
 from .common import (
     STATUS_LABEL,
     fmt,
@@ -22,6 +24,7 @@ from .common import (
     markdown_table,
     read_json,
     run_url,
+    worst,
     write_text,
 )
 from .hubdata import quantile, read_samples
@@ -78,6 +81,17 @@ def _checks_cell(checks: Mapping[str, Any]) -> str:
     return f"{STATUS_LABEL[checks['status']]}{extra}"
 
 
+def _read_coherence(selected_dir: Path) -> Coherence | None:
+    path = selected_dir / "coherence-summary.json"
+    return Coherence(**read_json(path)) if path.exists() else None
+
+
+def _coherence_cell(c: Coherence | None) -> str:
+    if c is None:
+        return "N/A (not checked)"
+    return f"{STATUS_LABEL[c.status]} ({c.summary})"
+
+
 def national_table(
     submission: Path, location: str = "CD", last: int = 7
 ) -> str:
@@ -123,7 +137,17 @@ def build(
     subs = sorted((selected_dir / "submission").glob("**/*.csv"))
     sub = subs[0]
     samples = read_samples(sub)
-    status = provenance["status"]
+    coherence = _read_coherence(selected_dir)
+    # The data check only warns, and is reported once here rather than
+    # with each candidate's warnings, but it still colours the overall.
+    status = worst(
+        [provenance["status"]]
+        + (
+            [coherence.status]
+            if coherence and coherence.status == "warn"
+            else []
+        )
+    )
     link = run_url()
     stamp = (now or dt.datetime.now(dt.UTC)).strftime("%Y-%m-%d %H:%M UTC")
 
@@ -150,6 +174,7 @@ def build(
                 ["Convergence", _fit_cell(fit)],
                 ["Forecast checks", _checks_cell(checks)],
                 ["Hub validation", STATUS_LABEL.get(validation, validation)],
+                ["Data coherence", _coherence_cell(coherence)],
             ],
         )
         + "\n"
@@ -219,6 +244,12 @@ def build(
             out.append(
                 f"<details><summary>{label}</summary>\n\n{body}\n\n</details>\n"
             )
+    if coherence is not None and coherence.status != "skip":
+        out.append(
+            "<details><summary>Data coherence</summary>\n\n"
+            f"National against the sum of the provinces in the data vintage "
+            f"used.\n\n{coherence_details(coherence)}\n</details>\n"
+        )
     if link:
         out.append(f"Workflow run and artefacts: {link}\n")
     out.append(FOOTER)

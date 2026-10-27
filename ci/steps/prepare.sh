@@ -56,6 +56,14 @@ cat > "$inputs/context.json" << EOF
  "model_id": "$MODEL_ID"}
 EOF
 
+# Whether the national data add up to the provinces. A data check that
+# only warns: it is reported once, in the job summary and the PR body.
+if ! cli coherence --vintage "$AS_OF" --out "$inputs/coherence.json"; then
+  echo "::warning::bdbv-forecasts coherence failed; data coherence is n/a"
+  rm -f "$inputs/coherence.json"
+fi
+sci check-coherence --coherence "$inputs/coherence.json" --out "$inputs"
+
 CAND_ID=persistence CAND_KIND=persistence CAND_CONFIG=persistence \
   CAND_LABEL="persistence baseline" CAND_SAMPLER='{}' \
   "$(dirname "$0")/candidate.sh"

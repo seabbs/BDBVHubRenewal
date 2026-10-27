@@ -181,6 +181,65 @@ def cmd_nowcast(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_coherence(args: argparse.Namespace) -> int:
+    """National against the sum of provinces, per stream and week.
+
+    The fixture has confirmed onsets only, so `observed` is the fixture,
+    `imputed` is zero and `total` is their sum. Its national row is the
+    sum of the provinces; `FAKE_COHERENCE_GAP=<week>:<gap>[,...]` adds
+    `gap` to the national observed (and so total) count of a week.
+    """
+    obs = observed(args.vintage)
+    gaps = {
+        w: float(g)
+        for item in os.environ.get("FAKE_COHERENCE_GAP", "").split(",")
+        if ":" in item
+        for w, g in [item.split(":", 1)]
+    }
+    provinces = [loc for loc in obs if loc != "CD"]
+    rows = []
+    streams = {}
+    for stream in ("observed", "imputed", "total"):
+        found = []
+        for week in sorted(obs["CD"]):
+            known = obs["CD"][week] + gaps.get(week, 0.0)
+            nat = 0.0 if stream == "imputed" else known
+            prov = (
+                0.0
+                if stream == "imputed"
+                else sum(obs[p].get(week, 0.0) for p in provinces)
+            )
+            if nat != prov:
+                found.append(
+                    {
+                        "target_end_date": week,
+                        "stream": stream,
+                        "national": nat,
+                        "provinces": prov,
+                        "gap": nat - prov,
+                    }
+                )
+        rows += found
+        streams[stream] = {
+            "weeks_with_gap": len(found),
+            "max_abs_gap": max((abs(r["gap"]) for r in found), default=0),
+            "total_gap": sum(r["gap"] for r in found),
+        }
+    data = {
+        "schema_version": 1,
+        "as_of": args.vintage,
+        "national": "CD",
+        "coherent": not rows,
+        "streams": streams,
+        "rows": rows,
+        "handling": "The fixture model fits the provinces and adds the gap "
+        "as an unassigned national component.",
+    }
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(json.dumps(data, indent=2))
+    return 0
+
+
 def png(width: int = 64, height: int = 32) -> bytes:
     """A small valid PNG: a grey band, so the file opens anywhere."""
     raw = b"".join(
@@ -232,6 +291,9 @@ def main() -> int:
     pl.add_argument("--submission", required=True)
     pl.add_argument("--vintage", required=True)
     pl.add_argument("--out", required=True)
+    co = sub.add_parser("coherence")
+    co.add_argument("--vintage", required=True)
+    co.add_argument("--out", required=True)
     args = p.parse_args()
     if args.version:
         print("0.1.0+fixture")
@@ -241,6 +303,7 @@ def main() -> int:
         "fit": cmd_fit,
         "nowcast": cmd_nowcast,
         "plot-submission": cmd_plot,
+        "coherence": cmd_coherence,
     }[args.command](args)
 
 

@@ -18,6 +18,7 @@ It is the reference for the interface, and `ci/run_dry.sh` runs the whole workfl
 | `nowcast --config <c> --fit <dir>` | **new options** | `fit`, `retry` |
 | `bdbv-forecasts plot-submission ...` | **new**, a thin wrapper on `plots.plot_nowcast` | every candidate |
 | `bdbv-forecasts --version` | **new** | `run.json`, the PR body |
+| `bdbv-forecasts coherence --vintage <as_of> --out <json>` | **new** | `prepare` (data coherence check) |
 
 ### `bdbv-forecasts fit`
 
@@ -94,6 +95,31 @@ def plot_submission(submission: Path, vintage: str) -> Figure:
 
 Use one PNG at about 1600×1000 px, light mode, under 1 MB.
 It renders inline in the PR body from a raw URL pinned to a commit.
+
+### `coherence`
+
+```sh
+bdbv-forecasts coherence --vintage <as_of> --out <inputs>/coherence.json
+```
+
+Compare the national count with the sum of the provinces in the data vintage, for each stream and week:
+
+```json
+{"schema_version": 1, "as_of": "2026-10-31", "national": "CD", "coherent": false,
+ "streams": {"observed": {"weeks_with_gap": 1, "max_abs_gap": 2, "total_gap": 2},
+             "imputed": {"weeks_with_gap": 0, "max_abs_gap": 0, "total_gap": 0},
+             "total": {"weeks_with_gap": 1, "max_abs_gap": 2, "total_gap": 2}},
+ "rows": [{"target_end_date": "2026-10-24", "stream": "total",
+           "national": 50, "provinces": 48, "gap": 2}],
+ "handling": "<one or two sentences on how the model handles the gap>"}
+```
+
+- `stream` is `observed` (known onsets), `imputed` (the hub's imputed onsets) or `total`.
+- `rows` lists only weeks with a non-zero gap, where `gap` is national minus the sum of the provinces.
+- `prepare.sh` runs it once per round and then `check-coherence`, which writes `coherence-summary.{md,json}` to `inputs/`.
+  The check warns when any week has a gap (or the file is unreadable), passes otherwise, and is `n/a` when the command fails or writes nothing.
+  It never blocks a candidate.
+  The PR body reports it once, as a status line and a collapsed table of the gaps with the `handling` text.
 
 ### `--version`
 
@@ -173,7 +199,8 @@ Everything goes under `$WORK` (`output/ci`):
 
 ```
 output/ci/
-  inputs/            time-series.csv, tasks.json, previous.csv, context.json
+  inputs/            time-series.csv, tasks.json, previous.csv, context.json,
+                     coherence.json, coherence-summary.{md,json}
   fits/<id>/         diagnostics.json, progress.log, draws (cached)
   candidates/<id>/   submission/…csv, nowcast.png, run.json,
                      fit-summary.{md,json}, checks.{md,json}, hub-validation.log
@@ -231,3 +258,4 @@ A **warn** lets it through and is stated in the PR body.
 | forecast weeks against the persistence baseline | | off by > 3× |
 | shared weeks against last week's submission | | off by > 2× |
 | hubValidations (`validate_submission` and `validate_model_metadata`) | any error | |
+| data coherence: national against the sum of provinces in the data (once per round, not per candidate) | | any week with a gap |

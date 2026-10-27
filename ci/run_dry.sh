@@ -23,8 +23,10 @@ export HEARTBEAT_SECONDS=1
 NOW=${NOW:-2026-11-02T10:00:00+00:00}
 
 # name | FAKE_SCENARIOS | expected selection ("skip" for a skipped round)
+#   | extra environment (optional) | text the PR body must hold (optional)
 SCENARIOS=(
-  "main|main=pass|main"
+  "main|main=pass|main||| Data coherence | PASS"
+  "coherence|main=pass|main|FAKE_COHERENCE_GAP=2026-10-24:2|| Data coherence | WARN (national (CD) differs"
   "warn|main=warn|main"
   "retry|main=fail,retry-1=pass|retry-1"
   "retry2|main=crash,retry-1=fail,retry-2=pass|retry-2"
@@ -52,9 +54,12 @@ echo "x = 1" > "$SRC_ROOT/config/model.toml"
 touch "$SRC_ROOT/pyproject.toml" "$SRC_ROOT/uv.lock"
 
 run_scenario() {
-  local name=$1 scenarios=$2 expect=$3
+  local name=$1 scenarios=$2 expect=$3 extra=${4:-} want=${5:-}
   export WORK="$ROOT/$name"
   export FAKE_SCENARIOS=$scenarios
+  export FAKE_COHERENCE_GAP=""
+  local kv
+  for kv in $extra; do export "${kv?}"; done
   export GH_LOG="$WORK/gh.log"
   export GITHUB_OUTPUT="$WORK/github-output" GITHUB_STEP_SUMMARY="$WORK/summary.md"
   rm -rf "$WORK" && mkdir -p "$WORK"
@@ -135,6 +140,9 @@ EOF
   fi
   grep -q "Produced by: " "$WORK/gate/pr-body.md"
   tail -n 1 "$WORK/gate/pr-body.md" | grep -q "@seabbs"
+  if [ -n "$want" ] && ! grep -qF -- "$want" "$WORK/gate/pr-body.md"; then
+    echo "FAIL: $name PR body lacks: $want"; return 1
+  fi
   echo "ok: selected $got; body $WORK/gate/pr-body.md"
 }
 
@@ -178,17 +186,17 @@ no_new_data() {
 failed=0
 if [ $# -gt 0 ]; then
   for s in "${SCENARIOS[@]}"; do
-    IFS='|' read -r name sc expect <<< "$s"
+    IFS='|' read -r name sc expect extra want <<< "$s"
     if [ "$name" = "$1" ]; then
-      run_scenario "$name" "$sc" "$expect" || failed=1
+      run_scenario "$name" "$sc" "$expect" "$extra" "$want" || failed=1
       [ -f "$ROOT/$name/gate/pr-body.md" ] && cat "$ROOT/$name/gate/pr-body.md"
     fi
   done
   exit $failed
 fi
 for s in "${SCENARIOS[@]}"; do
-  IFS='|' read -r name sc expect <<< "$s"
-  run_scenario "$name" "$sc" "$expect" || failed=1
+  IFS='|' read -r name sc expect extra want <<< "$s"
+  run_scenario "$name" "$sc" "$expect" "$extra" "$want" || failed=1
 done
 no_new_data || failed=1
 ledger || failed=1

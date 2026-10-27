@@ -23,6 +23,9 @@ out="$WORK/candidates/$CAND_ID"
 fit="$WORK/fits/$CAND_ID"
 mkdir -p "$out" "$fit"
 export CAND_ID  # read by the fixture CLI to pick a scenario
+# The data check from prepare, carried with each candidate so the PR
+# body can report it.
+cp "$inputs/coherence-summary.json" "$out/" 2> /dev/null || true
 
 note "### Candidate \`$CAND_ID\`: $CAND_LABEL"
 
