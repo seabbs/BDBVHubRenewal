@@ -119,7 +119,9 @@ convention = "numpy"
 "src/bdbv_hub_renewal/hub_validate.py" = ["D101", "D102", "D103"]
 # Synced from the prototype (scripts/sync_pyrenew.py). Method signatures
 # follow PyRenew's, and maths names keep their capitals.
-"src/bdbv_hub_renewal/pyrenew/**" = ["ARG002", "N803", "N806"]
+"src/bdbv_hub_renewal/pyrenew/**" = ["ARG002", "N803", "N806", "PTH123"]
+# The prototype's tests, synced with the model.
+"tests/pyrenew_model/**" = ["D", "PT018", "PD008", "N806", "ARG001"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

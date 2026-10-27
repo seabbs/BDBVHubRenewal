@@ -1,15 +1,24 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""The province renewal model on PyRenew (JAX).
+# Synced from the prototype by scripts/sync_pyrenew.py. Edit there.
+"""Province-level BDBV onset forecasting model built on PyRenew."""
 
-The modules here are synced from the prototype by
-`scripts/sync_pyrenew.py`, so the final model drops in by re-running it.
-The repository's adapter is `bdbv_hub_renewal.models.renewal`, which
-imports this subpackage lazily: `import bdbv_hub_renewal` works without
-the `model` extra.
-"""
-
-from .latent import adjacency_kernel
+from .delays import (
+    FixedTimeVarying,
+    HazardDelay,
+    ParametricDelay,
+    censored_pmf,
+    empirical_delay_matrix,
+    empirical_missing_fraction,
+    hazard_to_pmf,
+)
+from .latent import (
+    MetapopulationInfections,
+    adjacency_kernel,
+    coupled_renewal,
+    mixing_matrix,
+)
 from .model import (
+    BVD,
     FALLBACK,
     MAIN,
     ModelConfig,
@@ -17,15 +26,44 @@ from .model import (
     build_model,
     fit,
     forecast_trajectories,
+    generation_interval,
+    model_args,
+)
+from .observation import OnsetStreams, RtPseudoObservation, onset_expectations
+from .processes import (
+    MissingOnsetFraction,
+    NonCentredRandomWalk,
+    PooledInitialValue,
+    pooled_walk,
 )
 
 __all__ = [
+    "BVD",
     "FALLBACK",
     "MAIN",
+    "FixedTimeVarying",
+    "HazardDelay",
+    "MetapopulationInfections",
+    "MissingOnsetFraction",
     "ModelConfig",
+    "NonCentredRandomWalk",
+    "OnsetStreams",
+    "ParametricDelay",
+    "PooledInitialValue",
+    "RtPseudoObservation",
     "Vintage",
     "adjacency_kernel",
     "build_model",
+    "censored_pmf",
+    "coupled_renewal",
+    "empirical_delay_matrix",
+    "empirical_missing_fraction",
     "fit",
     "forecast_trajectories",
+    "generation_interval",
+    "hazard_to_pmf",
+    "mixing_matrix",
+    "model_args",
+    "onset_expectations",
+    "pooled_walk",
 ]

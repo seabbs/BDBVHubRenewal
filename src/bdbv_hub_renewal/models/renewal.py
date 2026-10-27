@@ -16,9 +16,9 @@ This module owns everything around it:
 - `fit_renewal` and `forecast_renewal`: the `fit` and `forecast` of the
   `main` and `fallback` fit configurations (`bdbv_hub_renewal.fitting`).
 
-The model reads only `ModelConfig`, `MAIN`, `FALLBACK`, `Vintage`,
-`build_model`, `fit` and `forecast_trajectories` from the subpackage, so a
-new model version drops in if it keeps those.
+This module reads only `ModelConfig`, `MAIN`, `FALLBACK`, `build_model`,
+`fit`, `forecast_trajectories` and `adapter.vintage_from_tables` from the
+subpackage, so a new model version drops in if it keeps those.
 """
 
 from __future__ import annotations
@@ -33,14 +33,12 @@ from dataclasses import dataclass, field, replace
 from functools import partial
 from pathlib import Path
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Final, cast
+from typing import TYPE_CHECKING, Any, Final
 
 import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from ..data import PROVINCE_POPULATIONS
-from ..observation import hub_delay_pmf
 from .base import NATIONAL, SAMPLE_COLUMNS, ForecastTask, register_model
 
 if TYPE_CHECKING:
@@ -52,7 +50,6 @@ __all__ = [
     "HUB_MODEL",
     "SAMPLER_ENV",
     "SHARE_PRIOR",
-    "START_COUNT",
     "VARIANTS",
     "RenewalModel",
     "RenewalRun",
@@ -75,10 +72,6 @@ __all__ = [
 
 HUB_MODEL: Final = "hubrenewal"
 """The model every fit configuration reports, as `epiforecasts-hubrenewal`."""
-
-START_COUNT: Final = 5
-"""The week grid starts one week before national weekly onsets first
-reach this count. Earlier weeks are returned as observed."""
 
 SAMPLER_ENV: Final = "BDBV_RENEWAL_SAMPLER"
 """Environment variable with JSON sampler settings for registered models."""
@@ -242,15 +235,18 @@ def _weeks(first: dt.date, n: int) -> list[str]:
     return [(first + dt.timedelta(weeks=i)).isoformat() for i in range(n)]
 
 
-def vintage_inputs(task: ForecastTask, config: Any) -> Any:
+def vintage_inputs(
+    task: ForecastTask,
+    config: Any,
+    table: pd.DataFrame | None = None,
+) -> Any:
     """Turn a forecast task into the model's `Vintage`.
 
-    The active set is the task's provinces with any case in this vintage
-    (every province if `config.active == "all"`). The week grid starts
-    one week before national weekly onsets first reach `START_COUNT` and
-    ends with the week holding the vintage date. Provinces in `task.mask`
-    have their likelihood switched off and their delays left out. They
-    stay in the latent process, so they are still forecast.
+    A thin call to the model's own `vintage_from_tables`, which chooses
+    the active set (the provinces with cases) and the week grid. Provinces
+    in `task.mask` have their likelihood switched off and their delays
+    left out. They stay in the latent process, so they are still
+    forecast.
 
     Parameters
     ----------
@@ -258,103 +254,27 @@ def vintage_inputs(task: ForecastTask, config: Any) -> Any:
         The task.
     config : bdbv_hub_renewal.pyrenew.ModelConfig
         The model configuration.
+    table : pandas.DataFrame, optional
+        The locations table (populations). Defaults to
+        `bdbv_hub_renewal.data.load_locations()`.
 
     Returns
     -------
     bdbv_hub_renewal.pyrenew.Vintage
         The model inputs.
     """
-    from ..simulate import gravity_kernel
+    from ..data import load_locations
+    from ..pyrenew.adapter import vintage_from_tables
 
-    pr = engine()
-    locations = tuple(task.locations)
-    rows = task.target.loc[
-        (task.target["vintage"] == task.vintage)
-        & task.target["location"].isin(locations)
-    ]
-    wide = rows.pivot_table(
-        index="target_end_date",
-        columns="location",
-        values=["observed", "imputed", "total"],
-        aggfunc="sum",
-    ).fillna(0)
-    totals = cast(pd.DataFrame, wide["total"])
-    cases = totals.sum(axis=0)
-    if config.active == "all":
-        active = locations
-    else:
-        active = tuple(p for p in locations if cases.get(p, 0) > 0)
-    idle = tuple(p for p in locations if p not in active)
-    national = totals.reindex(columns=list(active)).fillna(0).sum(axis=1)
-    big = int(np.argmax(national.to_numpy() >= START_COUNT))
-    first = _saturday(str(national.index[max(0, big - 1)]))
-    start = first - dt.timedelta(days=6)
-    cutoff = (pd.Timestamp(task.vintage).date() - start).days
-    n_weeks = cutoff // 7 + 1
-    weeks = _weeks(first, n_weeks)
-
-    def grid(column: str, locs: tuple[str, ...]) -> NDArray[np.float64]:
-        out = cast(pd.DataFrame, wide[column]).reindex(
-            index=weeks, columns=list(locs)
-        )
-        return out.fillna(0).to_numpy(dtype=float)
-
-    dmax = int(config.dmax)
-    counts = np.zeros((n_weeks, dmax + 1))
-    pmf = np.full(dmax + 1, 1 / (dmax + 1))
-    delays = task.delays
-    if delays is not None and len(delays):
-        pmf = hub_delay_pmf(delays, dmax)
-        keep = delays.loc[
-            (delays["delay"] >= 0)
-            & (delays["delay"] <= dmax)
-            & delays["location"].isin(active)
-            & ~delays["location"].isin(task.mask)
-        ]
-        week = np.array(
-            [
-                (pd.Timestamp(w).date() - first).days // 7
-                for w in keep["onset_week"]
-            ],
-            dtype=int,
-        )
-        ok = (week >= 0) & (week < n_weeks)
-        np.add.at(counts, (week[ok], keep["delay"].to_numpy()[ok]), 1)
-
-    known, imputed = grid("observed", active), grid("imputed", active)
-    pops = np.array([PROVINCE_POPULATIONS[p] for p in active], dtype=float)
-    names = list(active)
-    if config.national:
-        known = known.sum(axis=1, keepdims=True)
-        imputed = imputed.sum(axis=1, keepdims=True)
-        pops = np.array([pops.sum()])
-        names = [NATIONAL]
-    kernel = None
-    if len(names) > 1 and config.coupling == "adjacency":
-        kernel = pr.adjacency_kernel(np.ones((len(names), len(names))))
-    elif len(names) > 1 and config.coupling == "gravity":
-        kernel = gravity_kernel(active)
-    import_kernel, inactive = None, None
-    if idle and not config.national and config.inactive == "imports":
-        import_kernel = gravity_kernel(active + idle)[
-            : len(active), len(active) :
-        ]
-        inactive = grid("total", idle)
-    return pr.Vintage(
-        start_date=start,
-        cutoff=cutoff,
-        known=known,
-        imputed=imputed,
-        delay_counts=counts,
-        hub_delay_pmf=pmf,
-        populations=pops,
-        kernel=kernel,
-        horizon_weeks=horizon_weeks(task),
-        names=names,
-        inactive=inactive,
-        inactive_names=[] if config.national else list(idle),
-        import_kernel=import_kernel,
-        fit_mask=np.array([p not in task.mask for p in names]),
+    return vintage_from_tables(
+        task.target,
+        task.delays,
+        task.vintage,
+        tuple(task.locations),
+        load_locations() if table is None else table,
+        config,
+        horizon_weeks(task),
+        tuple(task.mask),
     )
 
 

@@ -30,7 +30,7 @@ from .delays import (
     empirical_missing_fraction,
 )
 from .latent import MetapopulationInfections
-from .observation import OnsetStreams
+from .observation import OnsetStreams, RtPseudoObservation
 from .processes import (
     MissingOnsetFraction,
     NonCentredRandomWalk,
@@ -97,8 +97,16 @@ class ModelConfig:
         Share $\nu$ of each province at risk, which depletion uses.
         `None` (default) estimates it with a log-normal prior; a number
         fixes it.
-    walk : {"noncentred", "centred"}
-        Sample the Rt walks' standardised steps or their paths.
+    walk : {"knots", "noncentred", "centred"}
+        Parameterisation of the national Rt walk: weekly knots of total
+        log Rt (`KnotWalk`, default), standardised steps, or the path
+        relative to its start. Province deviations, $\pi$, delays and
+        ascertainment always use standardised steps.
+    bvd : bool
+        Add BVDOutbreakSize Rt as a tempered pseudo-observation
+        (`RtPseudoObservation`), when the vintage carries it.
+    bvd_alpha : float
+        Its tempering. 0 gives the model without it, exactly.
     dmax : int
         Maximum onset-to-report delay in days.
     """
@@ -116,11 +124,15 @@ class ModelConfig:
     inactive: Literal["imports", "none"] = "imports"
     report_inactive: bool = True
     effective_population: float | None = None
-    walk: Literal["noncentred", "centred"] = "noncentred"
+    walk: Literal["knots", "noncentred", "centred"] = "knots"
+    bvd: bool = False
+    bvd_alpha: float = 0.5
     dmax: int = 60
 
 
 MAIN = ModelConfig()
+BVD = ModelConfig(bvd=True)
+"""Main model informed by BVDOutbreakSize Rt (`hubrenewalbvd`)."""
 FALLBACK = ModelConfig(
     coupling="none", delay="fixed", missing="fixed", rt_cadence="weekly"
 )
@@ -180,6 +192,9 @@ class Vintage:
     fit_mask : numpy.ndarray or None
         Boolean `(P,)`. False switches a province's likelihood off (it
         stays in the latent process and is still predicted).
+    bvd : dict or None
+        External Rt summaries: `day` (index of $s_b$ from the first data
+        day), `groups` `(G, P)`, `values`, `scales` and `kinds` `(G,)`.
     """
 
     start_date: dt.date
@@ -196,6 +211,7 @@ class Vintage:
     inactive_names: list[str] = field(default_factory=list)
     import_kernel: np.ndarray | None = None
     fit_mask: np.ndarray | None = None
+    bvd: dict | None = None
 
     @property
     def n_weeks(self) -> int:
@@ -214,6 +230,7 @@ def _named_walk(
     cadence: str = "weekly",
     ar: bool = False,
     centred: bool = False,
+    knots: tuple[float, float] | None = None,
 ):
     """Weekly (or daily) random walk, frozen over the seeding period."""
     sd_rv = DistributionalVariable(name, dist.HalfNormal(sd))
@@ -221,7 +238,9 @@ def _named_walk(
     inner = (
         AR1(DeterministicVariable(f"{name}_ar", 0.9), sd_rv)
         if ar
-        else NonCentredRandomWalk(sd_rv, frozen=frozen, centred=centred)
+        else NonCentredRandomWalk(
+            sd_rv, frozen=frozen, centred=centred, knots=knots
+        )
     )
     if cadence == "weekly":
         return WeeklyTemporalProcess(inner, start_dow=SUNDAY)
@@ -246,6 +265,7 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     n_prov = data.n_provinces
     daily = config.rt_cadence == "daily"
     centred = config.walk == "centred"
+    knots = config.walk == "knots"
     rt_scale = 1 / np.sqrt(7) if daily else 1.0
     single = n_prov == 1
     kernel = None if config.coupling == "none" or single else data.kernel
@@ -268,20 +288,28 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             ),
             AffineTransform(0.0, 1 / (ALPHA0 * data.populations)),
         ),
-        log_rt_time_0_rv=PooledInitialValue("log_rt0", n_prov, 0.0, 0.5, 0.3),
+        log_rt_time_0_rv=PooledInitialValue(
+            "log_rt0", n_prov, 0.0, 0.5, 0.3, fixed_mean=knots
+        ),
         baseline_rt_process=_named_walk(
-            "rt_sd", 0.4 * rt_scale, config.rt_cadence, centred=centred
+            "rt_sd",
+            0.4 * rt_scale,
+            config.rt_cadence,
+            centred=centred,
+            knots=(0.0, 0.5) if knots else None,
         ),
         subpop_rt_deviation_process=_named_walk(
             "rt_dev_sd",
             0.3 * rt_scale,
             config.rt_cadence,
             ar=config.rt_deviation == "ar1",
-            centred=centred,
         ),
         kernel=kernel,
         importation_rv=importation,
         deplete=config.depletion,
+        rt_observation=RtPseudoObservation(alpha=config.bvd_alpha, **data.bvd)
+        if config.bvd and data.bvd is not None
+        else None,
         effective_population_rv=DeterministicVariable(
             "effective_population", config.effective_population
         )

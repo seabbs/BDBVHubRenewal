@@ -60,11 +60,11 @@ BDBV_RENEWAL_SAMPLER='{"num_chains": 2, "num_warmup": 300, "num_samples": 300}' 
 A run with `--models` replaces only those models' rows in `results/`.
 `BDBV_RENEWAL_SAMPLER` sets the NUTS settings of every registered variant.
 
-The PyRenew model code in `bdbv_hub_renewal.pyrenew` is synced from the prototype:
+The PyRenew model code in `bdbv_hub_renewal.pyrenew` and its tests in `tests/pyrenew_model/` are synced from the prototype:
 
 ```bash
 uv run python scripts/sync_pyrenew.py <prototype dir>
 task format
 ```
 
-The adapter reads only `ModelConfig`, `MAIN`, `FALLBACK`, `Vintage`, `build_model`, `fit` and `forecast_trajectories` from it, so a new model version drops in if it keeps those.
+The adapter reads only `ModelConfig`, `MAIN`, `FALLBACK`, `build_model`, `fit`, `forecast_trajectories` and `adapter.vintage_from_tables` from it, so a new model version drops in if it keeps those.

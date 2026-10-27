@@ -434,3 +434,76 @@ class OnsetStreams(BaseObservationProcess):
                 dist.Multinomial(total_count=totals, probs=probs),
                 obs=counts,
             )
+
+
+class RtPseudoObservation:
+    r"""External Rt estimates as a tempered pseudo-observation.
+
+    For groups $G$ of provinces (the nation, or BVDOutbreakSize patches)
+    and the day $s_b$ of the external estimate, the model's group Rt is
+    onset weighted over the week of $s_b$,
+
+    $$R_G(s_b) = \frac{\sum_{p \in G} I_p R_p(s_b)}{\sum_{p \in G} I_p},$$
+
+    and the summaries enter as
+
+    $$\mu_N \sim N(\log R_N(s_b), \sigma_N / \sqrt{\alpha}), \qquad
+    d_k \sim N(\log R_k(s_b) - \log R_N(s_b), \tau_k / \sqrt{\alpha}).$$
+
+    This is a power prior on the external summary with tempering
+    $\alpha$. With $\alpha = 0$ nothing is added, so the model is
+    unchanged. PyRenew has no observation process on a latent Rt, hence
+    this small class; it is called from the latent process, which holds
+    both Rt and infections.
+
+    Parameters
+    ----------
+    alpha : float
+        Tempering, in [0, 1].
+    day : int
+        $s_b$ as a day index from the first data day.
+    groups : array_like
+        Boolean membership, `(G, P)`.
+    values, scales : array_like
+        Log-scale summaries and their SDs, `(G,)`.
+    kinds : array_like
+        0 for the national level, 1 for a deviation from it, `(G,)`.
+    """
+
+    def __init__(self, alpha, day, groups, values, scales, kinds) -> None:
+        self.alpha = float(alpha)
+        self.day = int(day)
+        self.groups = jnp.asarray(groups, dtype=float)
+        self.values = jnp.asarray(values, dtype=float)
+        self.scales = jnp.asarray(scales, dtype=float)
+        self.kinds = jnp.asarray(kinds, dtype=int)
+
+    def log_group_rt(self, rt: ArrayLike, infections: ArrayLike, n_init: int):
+        """Return log $R_G(s_b)$ for each group and for the nation.
+
+        Returns
+        -------
+        tuple of ArrayLike
+            `(G,)` group values and the national scalar.
+        """
+        week = n_init + 7 * (self.day // 7)
+        w = infections[week : week + 7].sum(axis=0)
+        r = rt[n_init + self.day]
+
+        def log_rt(member):
+            return jnp.log((member * w * r).sum(-1) / (member * w).sum(-1))
+
+        return log_rt(self.groups), log_rt(jnp.ones_like(w))
+
+    def sample(self, rt: ArrayLike, infections: ArrayLike, n_init: int):
+        """Add the pseudo-likelihood and record its diagnostics."""
+        group, national = self.log_group_rt(rt, infections, n_init)
+        model = jnp.where(self.kinds == 0, group, group - national)
+        numpyro.deterministic("bvd_log_rt_model", model)
+        numpyro.deterministic("bvd_z", (self.values - model) / self.scales)
+        if self.alpha > 0:
+            numpyro.sample(
+                "bvd_rt_obs",
+                dist.Normal(model, self.scales / jnp.sqrt(self.alpha)),
+                obs=self.values,
+            )

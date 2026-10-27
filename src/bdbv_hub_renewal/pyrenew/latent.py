@@ -191,6 +191,8 @@ class MetapopulationInfections(SubpopulationInfections):
         Apply susceptible depletion.
     effective_population_rv : RandomVariable, optional
         $\nu$. Needed with depletion.
+    rt_observation : RtPseudoObservation, optional
+        External Rt estimates as a tempered pseudo-observation.
     **kwargs
         Passed to `SubpopulationInfections` (without infection feedback).
     """
@@ -202,9 +204,11 @@ class MetapopulationInfections(SubpopulationInfections):
         importation_rv: RandomVariable | None = None,
         deplete: bool = True,
         effective_population_rv: RandomVariable | None = None,
+        rt_observation=None,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
+        self.rt_observation = rt_observation
         if deplete and effective_population_rv is None:
             raise ValueError("Depletion needs effective_population_rv.")
         self.effective_population_rv = effective_population_rv
@@ -281,4 +285,6 @@ class MetapopulationInfections(SubpopulationInfections):
             numpyro.deterministic(
                 "rt_subpop_adjusted", jnp.vstack([rt[:n_init], r_eff])
             )
+        if self.rt_observation is not None:
+            self.rt_observation.sample(rt, infections, n_init)
         return LatentSample(aggregate=aggregate, all_subpops=infections)
