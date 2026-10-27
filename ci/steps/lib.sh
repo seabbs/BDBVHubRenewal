@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Shared settings for the step scripts. Sourced, not run.
 #
 # The workflow and run_dry.sh call the same steps, so the dry run
