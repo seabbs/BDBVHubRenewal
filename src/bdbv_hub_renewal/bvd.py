@@ -31,7 +31,7 @@ import json
 import re
 import tomllib
 import urllib.request
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Final
@@ -56,9 +56,11 @@ __all__ = [
     "fetch_release",
     "list_releases",
     "load_release",
+    "load_releases",
     "model_rows",
     "parse_releases",
     "release_as_of",
+    "save_releases",
     "select_release",
 ]
 
@@ -111,7 +113,7 @@ def _download(url: str) -> bytes:  # pragma: no cover - network
     return data
 
 
-def parse_releases(payload: list[Mapping[str, Any]]) -> pd.DataFrame:
+def parse_releases(payload: Sequence[Mapping[str, Any]]) -> pd.DataFrame:
     """Tidy the GitHub release list of BVDOutbreakSize.
 
     Parameters
@@ -180,6 +182,87 @@ def list_releases(
             break
         payload.extend(batch)
         page += 1
+    return parse_releases(payload)
+
+
+RELEASES_FILE: Final = "releases.json"
+"""The release list in the cache, so a backtest needs no network."""
+
+
+def save_releases(releases: pd.DataFrame, cache_dir: Path | str) -> Path:
+    """Write a release list to the cache.
+
+    Parameters
+    ----------
+    releases : pandas.DataFrame
+        From `parse_releases`.
+    cache_dir : pathlib.Path or str
+        The cache.
+
+    Returns
+    -------
+    pathlib.Path
+        The file written.
+    """
+    rows = [
+        {
+            "tag": str(tag),
+            "published_at": pd.Timestamp(pub).isoformat(),
+            "assets": {
+                name: {
+                    "url": str(a["url"]),
+                    "updated_at": pd.Timestamp(a["updated_at"]).isoformat(),
+                }
+                for name, a in assets.items()
+                if name in ASSETS
+            },
+        }
+        for tag, pub, assets in zip(
+            releases["tag"],
+            releases["published_at"],
+            releases["assets"],
+            strict=True,
+        )
+    ]
+    path = Path(cache_dir) / RELEASES_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(rows, indent=1) + "\n")
+    return path
+
+
+def load_releases(cache_dir: Path | str) -> pd.DataFrame | None:
+    """Read the cached release list.
+
+    Parameters
+    ----------
+    cache_dir : pathlib.Path or str
+        The cache.
+
+    Returns
+    -------
+    pandas.DataFrame or None
+        As `parse_releases`, keeping only the assets in `ASSETS`, or None
+        if there is no cached list.
+    """
+    path = Path(cache_dir) / RELEASES_FILE
+    if not path.exists():
+        return None
+    rows = json.loads(path.read_text())
+    payload = [
+        {
+            "tag_name": r["tag"],
+            "published_at": r["published_at"],
+            "assets": [
+                {
+                    "name": name,
+                    "browser_download_url": a["url"],
+                    "updated_at": a["updated_at"],
+                }
+                for name, a in r["assets"].items()
+            ],
+        }
+        for r in rows
+    ]
     return parse_releases(payload)
 
 
@@ -510,7 +593,8 @@ def bvd_for_vintage(
     cache_dir : pathlib.Path or str
         The release cache.
     releases : pandas.DataFrame, optional
-        From `parse_releases`. Listed from GitHub if not given.
+        From `parse_releases`. Read from the cache (`load_releases`) if
+        not given, or listed from GitHub if the cache has none.
     download : callable
         Returns the bytes at a URL.
 
@@ -519,6 +603,8 @@ def bvd_for_vintage(
     BvdRelease or None
         The estimates, or None if no release qualifies.
     """
+    if releases is None:
+        releases = load_releases(cache_dir)
     if releases is None:  # pragma: no cover - network
         releases = list_releases()
     assets = dict(zip(releases["tag"], releases["assets"], strict=True))

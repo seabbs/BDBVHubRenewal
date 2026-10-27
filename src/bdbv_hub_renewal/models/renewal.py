@@ -58,6 +58,7 @@ __all__ = [
     "RenewalRun",
     "Variant",
     "apportion_shares",
+    "bvd_rows",
     "chain_diagnostics",
     "data_gap",
     "ebfmi",
@@ -159,6 +160,12 @@ VARIANTS: Final[dict[str, Variant]] = {
                 "coupling": "none",
                 "inactive": "none",
             },
+        ),
+        Variant(
+            "hubrenewalbvd",
+            "Province renewal informed by BVDOutbreakSize Rt, as a tempered "
+            "pseudo-observation.",
+            base="BVD",
         ),
         Variant(
             "fallback",
@@ -345,10 +352,40 @@ def _weeks(first: dt.date, n: int) -> list[str]:
     return [(first + dt.timedelta(weeks=i)).isoformat() for i in range(n)]
 
 
+def bvd_rows(
+    task: ForecastTask, cache_dir: Path | str | None = None
+) -> pd.DataFrame | None:
+    """BVDOutbreakSize rows for a task's vintage, from the release cache.
+
+    Parameters
+    ----------
+    task : ForecastTask
+        The task.
+    cache_dir : pathlib.Path or str, optional
+        The release cache. Defaults to `bvd/` in the data directory
+        (`$BDBV_DATA_DIR` or `data/`), filled by `bdbv-hub-renewal bvd`.
+
+    Returns
+    -------
+    pandas.DataFrame or None
+        `bdbv_hub_renewal.bvd.model_rows` of the release chosen for the
+        vintage, or None if none qualifies.
+    """
+    from .. import bvd
+    from ..data import _data_dir
+
+    cache = (
+        Path(cache_dir) if cache_dir is not None else _data_dir(None) / "bvd"
+    )
+    release = bvd.bvd_for_vintage(task.vintage, cache)
+    return None if release is None else bvd.model_rows(release)
+
+
 def vintage_inputs(
     task: ForecastTask,
     config: Any,
     table: pd.DataFrame | None = None,
+    bvd: pd.DataFrame | None = None,
 ) -> Any:
     """Turn a forecast task into the model's `Vintage`.
 
@@ -367,6 +404,9 @@ def vintage_inputs(
     table : pandas.DataFrame, optional
         The locations table (populations). Defaults to
         `bdbv_hub_renewal.data.load_locations()`.
+    bvd : pandas.DataFrame, optional
+        BVDOutbreakSize rows (`bvd_rows`), for a variant with the BVD
+        term. Without them that variant is the main model.
 
     Returns
     -------
@@ -385,6 +425,7 @@ def vintage_inputs(
         config,
         horizon_weeks(task),
         tuple(task.mask),
+        bvd=bvd,
     )
 
 
@@ -843,7 +884,11 @@ class RenewalModel:
         """
         pr = engine()
         config = model_config(self.variant)
-        data = vintage_inputs(task, config)
+        rows = bvd_rows(task) if config.bvd else None
+        if config.bvd:
+            tag = "none" if rows is None else rows["as_of"].iloc[0]
+            self._log(f"variant={self.name} bvd_as_of={tag}")
+        data = vintage_inputs(task, config, bvd=rows)
         model = pr.build_model(data, config)
         s = self.sampler
         self._log(f"variant={self.name} sampling start")
