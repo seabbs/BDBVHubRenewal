@@ -9,6 +9,8 @@ The public API of `bdbv_hub_renewal`, generated from the numpy-style docstrings.
 
 ::: bdbv_hub_renewal.vintages
 
+::: bdbv_hub_renewal.bvd
+
 ::: bdbv_hub_renewal.simulate
 
 ::: bdbv_hub_renewal.models.base
