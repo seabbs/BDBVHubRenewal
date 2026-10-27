@@ -19,42 +19,48 @@
 
 Weekly nowcasts and forecasts of confirmed Bundibugyo virus disease cases for the [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub).
 The hub's target is weekly confirmed cases by symptom-onset week, by province and nationally, as 100 joint sample trajectories per location.
+The model submits as `epiforecasts-hubrenewal`.
 
-The plan is in [EpidemicDates issue #3](https://github.com/seabbs/EpidemicDates/issues/3).
+The model is a province renewal process built on [PyRenew](https://github.com/CDCgov/PyRenew).
+Provinces share a pooled reproduction number, import cases from each other through a gravity kernel, and deplete their susceptibles.
+It fits the hub's known and imputed onsets together, with time-varying delays, missingness and ascertainment, and models the hub's imputation as the hub makes it.
+National forecasts are the sum of the province trajectories.
+
 This repository holds:
 
-- a data layer for every hub data stream and vintage (`data/`, `bdbv_hub_renewal.data`);
-- reconstructed and simulated vintages to extend testing;
-- a persistence baseline and a model registry;
+- the model and its variants: `hubrenewal` (spatial, pooled), `hubrenewalsp` (single patch) and a fallback, with persistence as the baseline;
+- a data layer for every hub data stream and vintage, plus reconstructed and simulated vintages;
+- a backtest against persistence, a rolling held-out evaluation and a leave-one-province-out check, scored by WIS, coverage and bias;
 - a writer and checks for the hub's submission files and model metadata;
-- a backtest harness with a development and held-out split, scored by WIS, coverage and bias;
-- figures and a docs site, with the maths of the planned renewal model;
-- an automated, gated submission workflow, in dry-run mode, with persistence standing in for the model until it is integrated ([Submissions](https://seabbs.github.io/BDBVHubRenewal/submission/workflow/)).
+- an automated, gated submission workflow with a fallback chain from the main model to persistence ([Submissions](https://seabbs.github.io/BDBVHubRenewal/submission/workflow/));
+- a docs site with the methods, results and the latest nowcast.
 
 Docs: <https://seabbs.github.io/BDBVHubRenewal/>
 
 ## Run it
 
-You need Python 3.11 or later, [uv](https://docs.astral.sh/uv/) and [Task](https://taskfile.dev).
+You need Python 3.13 or later, [uv](https://docs.astral.sh/uv/) and [Task](https://taskfile.dev).
 `task validate-hub` also needs R with `hubValidations`.
 
 ```bash
-task setup             # install the package and dev tools
-task test              # run the tests
+task setup             # install the package, PyRenew and the dev tools
+task test              # run the tests (task test-slow runs small model fits)
 task lint              # ruff and mypy
 task data              # download every hub vintage and rebuild data/
 task backtest          # development backtest and recovery check
+task backtest-lopo     # leave one province out
 task backtest-heldout  # score held-out vintages under the chosen model
 task nowcast           # forecast from the latest vintage and write a hub file
+task ci-fit            # fit and forecast one config as a CI candidate does
 task metadata          # write the model metadata YAML
 task validate-hub      # check both with hub_validate and hubValidations (R)
 task ci-test           # test the submission CI scripts in ci/
 task ci-dry            # dry run of the submission workflow on fixtures
-task ci-fit            # fit and forecast one config as a CI candidate does
 task docs              # build the docs site into _site/
 ```
 
-The tidy data in `data/` are committed, so `task backtest` and `task nowcast` work from a clean clone.
+The tidy data in `data/` and the backtest results in `results/` are committed, so the docs build from a clean clone without refitting.
+The [Getting started](https://seabbs.github.io/BDBVHubRenewal/getting-started/) page walks through a small fit.
 
 ## Layout
 
@@ -63,16 +69,19 @@ The tidy data in `data/` are committed, so `task backtest` and `task nowcast` wo
 ci/              submission CI: fallback chain, gate checks, PR body
 config/          backtest and hub comparison settings
 data/            tidy hub data (committed); data/raw/ is not
-docs/            MkDocs site; figures are built at docs build time
+docs/            MkDocs site; figures are built at docs build time,
+                 the model diagram by scripts/build_diagrams.sh
 hub/             model metadata YAML
 results/         score tables and the model choice record
-scripts/         hubValidations runner and gate (R)
+scripts/         hubValidations runner (R), model sync, diagram build
 src/bdbv_hub_renewal/
   data.py        download, tidy and load the hub data
   dates.py       epi weeks, reference dates and submission windows
   vintages.py    reconstructed vintages
   simulate.py    simulated outbreaks published as vintages
-  models/        model interface, registry and persistence
+  models/        model interface, registry, persistence and the renewal
+                 variants (renewal.py)
+  pyrenew/       the PyRenew model (JAX), synced by scripts/sync_pyrenew.py
   delays.py      delay interface and the empirical estimator
   latent.py      renewal with importation and depletion (reference)
   observation.py known onsets and the hub's imputation (reference)
