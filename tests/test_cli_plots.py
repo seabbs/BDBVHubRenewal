@@ -106,3 +106,30 @@ def test_plot_scores_by_truth() -> None:
     fig = plots.plot_scores_by_truth(scores, models=["persistence"])
     assert len(fig.axes) == 1
     assert len(fig.axes[0].lines) == scores["vintage"].nunique()
+
+
+@pytest.mark.usefixtures("in_root")
+def test_cli_lopo_writes_scores_for_mask_aware_models(tmp_path: Path) -> None:
+    from test_backtest import _MaskAware
+
+    from bdbv_hub_renewal.models.base import _REGISTRY, register_model
+
+    register_model("mask_aware", _MaskAware, "Test model.", replace=True)
+    try:
+        args = [
+            "backtest",
+            "--lopo",
+            "--no-reconstructed",
+            "--results",
+            str(tmp_path / "res"),
+            "--output",
+            str(tmp_path / "out"),
+        ]
+        assert main([*args, "--models", "persistence", "mask_aware"]) == 0
+    finally:
+        _REGISTRY.pop("mask_aware")
+    scores = pd.read_csv(tmp_path / "res" / "lopo-scores.csv")
+    assert set(scores["model"]) == {"mask_aware"}
+    assert (tmp_path / "out" / "lopo-forecasts.csv.gz").exists()
+    # The development backtest is not rerun.
+    assert not (tmp_path / "res" / "backtest-scores.csv").exists()
