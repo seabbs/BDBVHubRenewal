@@ -133,3 +133,31 @@ def test_cli_lopo_writes_scores_for_mask_aware_models(tmp_path: Path) -> None:
     assert (tmp_path / "out" / "lopo-forecasts.csv.gz").exists()
     # The development backtest is not rerun.
     assert not (tmp_path / "res" / "backtest-scores.csv").exists()
+
+
+@pytest.mark.usefixtures("in_root")
+def test_cli_backtest_keeps_other_models_results(tmp_path: Path) -> None:
+    res, out = tmp_path / "res", tmp_path / "out"
+    args = ["backtest", "--no-reconstructed", "--results", str(res),
+            "--output", str(out), "--models", "persistence"]  # fmt: skip
+    assert main(args) == 0
+    names = ("backtest-scores.csv", "backtest-scores-by-truth.csv",
+             "recovery-scores.csv")  # fmt: skip
+    # Another model's results, as a fit on archie would leave them.
+    for name in names:
+        table = pd.read_csv(res / name)
+        pd.concat([table, table.assign(model="other")]).to_csv(
+            res / name, index=False
+        )
+    fc = pd.read_csv(out / "forecasts.csv.gz")
+    pd.concat([fc, fc.assign(model="other")]).to_csv(
+        out / "forecasts.csv.gz", index=False
+    )
+    assert main(args) == 0
+    for name in names:
+        table = pd.read_csv(res / name)
+        assert set(table["model"]) == {"persistence", "other"}
+        assert not table.duplicated().any()
+    fc = pd.read_csv(out / "forecasts.csv.gz")
+    assert set(fc["model"]) == {"persistence", "other"}
+    assert len(fc) == 2 * (fc["model"] == "other").sum()
