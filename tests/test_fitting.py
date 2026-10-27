@@ -236,9 +236,36 @@ def test_nowcast_notes_what_it_handled(tmp_path: Path) -> None:
 
 
 @pytest.mark.usefixtures("in_root")
-def test_hubrenewal_metadata_draft_validates(tmp_path: Path) -> None:
+def test_submission_id_is_one_config_value(tmp_path: Path) -> None:
+    from bdbv_hub_renewal.hub import submission_model_abbr
+
+    assert (
+        submission_model_abbr(ROOT / "config" / "hub.toml") == "seabbsrenewal"
+    )
+    cfg = tmp_path / "hub.toml"
+    cfg.write_text('[submission]\nmodel_abbr = "other"\n')
+    assert submission_model_abbr(cfg) == "other"
+
+
+@pytest.mark.usefixtures("in_root")
+def test_cli_hub_id_and_chosen_model(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert main(["hub-id"]) == 0
+    assert capsys.readouterr().out.strip() == "epiforecasts-seabbsrenewal"
+    assert main(["chosen-model"]) == 0
+    # The latest entry of results/model-choice.yml.
+    assert capsys.readouterr().out.strip() == "persistence"
+
+
+@pytest.mark.usefixtures("in_root")
+def test_renewal_metadata_uses_the_submission_abbr(tmp_path: Path) -> None:
     assert main(["metadata", "--model", "hubrenewal", "--out",
                  str(tmp_path)]) == 0  # fmt: skip
-    text = (tmp_path / "epiforecasts-hubrenewal.yml").read_text()
-    assert "model_abbr: hubrenewal" in text
-    assert "renewal" in text.lower()
+    text = (tmp_path / "epiforecasts-seabbsrenewal.yml").read_text()
+    assert "model_abbr: seabbsrenewal" in text
+    # Any model can be written under the submission id explicitly.
+    out = str(tmp_path / "p")
+    args = ["--model", "persistence", "--abbr", "seabbsrenewal"]
+    assert main(["metadata", *args, "--out", out]) == 0
+    assert (tmp_path / "p" / "epiforecasts-seabbsrenewal.yml").exists()
