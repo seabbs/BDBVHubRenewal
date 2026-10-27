@@ -17,7 +17,6 @@
 
 /* Wordmark as the home page H1. */
 .md-typeset h1 .title-logo {
-  display: inline-block;
   height: 44px;
   width: auto;
   max-width: 100%;
