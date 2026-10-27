@@ -320,3 +320,22 @@ def test_apportion_shares_smooth_recent_zeros(task: ForecastTask) -> None:
     recent = wide.tail(rn.RECENT_WEEKS).fillna(0).sum()
     expected = (recent + rn.SHARE_PRIOR) / (recent + rn.SHARE_PRIOR).sum()
     pd.testing.assert_series_equal(shares, expected, check_names=False)
+
+
+def test_init_strategy_follows_the_sampler_table() -> None:
+    from numpyro.infer import NUTS
+
+    median = rn.init_strategy({})
+    jitter = rn.init_strategy({"init": "jitter"})
+    assert median.func.__name__ == "init_to_median"
+    assert jitter.func.__name__ == "init_to_uniform"
+    assert jitter.keywords["radius"] == rn.JITTER_RADIUS
+    with pytest.raises(ValueError, match="init"):
+        rn.init_strategy({"init": "nope"})
+    kernel = rn.nuts_kernel(
+        lambda: None, {**rn.DEFAULT_SAMPLER, "init": "jitter"}
+    )
+    assert isinstance(kernel, NUTS)
+    assert kernel._init_strategy is jitter or (
+        kernel._init_strategy.func is jitter.func
+    )
