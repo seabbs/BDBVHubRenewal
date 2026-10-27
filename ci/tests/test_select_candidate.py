@@ -20,9 +20,23 @@ def candidate(
     fit: str | None = "pass",
     checks: str = "pass",
     submission: bool = True,
+    ppc: str | None = "pass",
 ) -> None:
     d = root / cid
     d.mkdir(parents=True)
+    if fit is not None and ppc is not None:
+        write_json(
+            d / "ppc-summary.json",
+            {
+                "status": ppc,
+                "failures": ["90% interval coverage of total overall is 0.3"]
+                if ppc in ("fail", "error")
+                else [],
+                "warnings": ["90% interval coverage of total overall is 0.6"]
+                if ppc == "warn"
+                else [],
+            },
+        )
     if fit is not None:
         write_json(
             d / "fit-summary.json",

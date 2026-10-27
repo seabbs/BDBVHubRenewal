@@ -17,6 +17,7 @@ It is the reference for the interface, and `ci/run_dry.sh` runs the whole workfl
 | `bdbv-forecasts fit ...` | **new** | `fit`, `retry` |
 | `nowcast --config <c> --fit <dir>` | **new options** | `fit`, `retry` |
 | `bdbv-forecasts plot-submission ...` | **new**, a thin wrapper on `plots.plot_nowcast` | every candidate |
+| `bdbv-forecasts plot-ppc --ppc <ppc.json> --out <png>` | **new**, a thin wrapper on `ppc.plot_ppc` | candidates whose `ppc.json` is available |
 | `bdbv-forecasts --version` | **new** | `run.json`, the PR body |
 | `bdbv-forecasts coherence --vintage <as_of> --out <json>` | **new** | `prepare` (data coherence check) |
 
@@ -37,6 +38,7 @@ bdbv-forecasts fit --model renewal --config main|fallback --vintage <as_of> \
 - `--vintage` is a real `as_of`, or `latest`.
 - Write `<fit dir>/diagnostics.json` (below) whether or not the fit converged.
   Exit non-zero only if the fit could not run.
+- Write `<fit dir>/ppc.json` (below) beside it, from the posterior predictive draws of the in-sample data.
 - Append progress lines to `<fit dir>/progress.log` as you go, for example `iteration=500 divergences=0` every few hundred iterations.
   The job prints the newest line once a minute, as BVDOutbreakSize does, so a stalled fit is visible.
 - Everything the forecast needs from the fit stays in `<fit dir>`, for example posterior draws as NetCDF or `.npz`.
@@ -121,6 +123,16 @@ Compare the national count with the sum of the provinces in the data vintage, fo
   It never blocks a candidate.
   The PR body reports it once, as a status line and a collapsed table of the gaps with the `handling` text.
 
+### `plot-ppc`
+
+```sh
+bdbv-forecasts plot-ppc --ppc <candidate>/ppc.json --out <candidate>/ppc.png
+```
+
+`candidate.sh` calls it only when `ppc.json` has `available: true`.
+It is `plot_ppc(read_ppc(path))` from `bdbv_forecasts.ppc`, saved with `fig.savefig(out, dpi=...)`: small multiples by province of the predictive median and intervals against the observed counts, light mode, under 1 MB.
+The PNG travels in the `candidate-<id>` artefact; the PR body points to it.
+
 ### `--version`
 
 Print the package version, for example `0.2.0`.
@@ -193,6 +205,30 @@ diagnostics = {
 }
 ```
 
+## `ppc.json`
+
+```json
+{"schema_version": 1, "available": true, "model": "renewal", "config": "main",
+ "intervals": [0.5, 0.9],
+ "rows": [{"location": "CD-IT", "stream": "total", "target_end_date": "2026-10-03",
+           "observed": 12, "median": 10.0, "lower_50": 7.0, "upper_50": 13.0,
+           "lower_90": 4.0, "upper_90": 19.0, "pit": 0.43, "complete": true}]}
+```
+
+- One row per province, stream and in-sample onset week.
+  `stream` is `observed` (known onsets), `imputed` (the hub's imputed onsets) or `total`.
+- `median`, `lower_<pct>` and `upper_<pct>` summarise the posterior predictive draws of the count as observed in the data vintage, with one central interval per level in `intervals`.
+- `pit` is the **randomised** PIT for counts, `F(y − 1) + v (F(y) − F(y − 1))` with `v ~ Uniform(0, 1)` from a seeded generator and `F` the empirical predictive distribution function. It is uniform on (0, 1) under a calibrated model even though counts are discrete.
+- `complete` is true for weeks ending at least the completeness lag (4 weeks) before the data vintage.
+- `bdbv_forecasts.ppc.summarise_draws(observed, draws, as_of=..., model=..., config=...)` builds all of this from a table of observations (`location`, `stream`, `target_end_date`, `observed`) and an array of draws of shape `(n_draws, n_rows)`; `write_ppc` writes it.
+- A model with no posterior writes `{"schema_version": 1, "available": false, "reason": "<text>"}` (`ppc.not_available(reason)`), which the gate reports as `n/a`.
+- A sampled fit (`sampler` other than `none` in `diagnostics.json`) with a missing or unreadable `ppc.json` is an `error`, and gates as a failure, as a missing diagnostics file does.
+  A fit with no sampler and no `ppc.json` is `n/a`.
+
+`check-ppc` (run by `candidate.sh` after `summarise-fit`) writes `ppc-summary.{md,json}` to the candidate directory and the job summary.
+It reports the 50% and 90% coverage of each stream overall, by province and over the last 4 complete weeks, and a PIT summary: the Kolmogorov-Smirnov distance from uniform, the share in the outer deciles (0.2 when calibrated; above 0.3 reads as intervals too narrow, below 0.1 too wide) and the mean PIT (away from 0.5 reads as bias).
+The PR body adds the coverage to its status table and the per-province table in a collapsed section.
+
 ## Output layout
 
 Everything goes under `$WORK` (`output/ci`):
@@ -201,9 +237,11 @@ Everything goes under `$WORK` (`output/ci`):
 output/ci/
   inputs/            time-series.csv, tasks.json, previous.csv, context.json,
                      coherence.json, coherence-summary.{md,json}
-  fits/<id>/         diagnostics.json, progress.log, draws (cached)
-  candidates/<id>/   submission/…csv, nowcast.png, run.json,
-                     fit-summary.{md,json}, checks.{md,json}, hub-validation.log
+  fits/<id>/         diagnostics.json, ppc.json, progress.log, draws (cached)
+  candidates/<id>/   submission/…csv, submission/national.json, nowcast.png,
+                     run.json, fit-summary.{md,json}, ppc.json, ppc.png,
+                     ppc-summary.{md,json}, coherence-summary.json,
+                     checks.{md,json}, hub-validation.log
   metadata/          <model_id>.yml
   gate/              provenance.{md,json}, selected/ (copy of the chosen
                      candidate), pr-body.md, pr-title.txt, pr-outcome.txt
@@ -247,6 +285,9 @@ A **warn** lets it through and is stated in the PR body.
 | convergence, max R-hat | > 1.1 | > 1.05 |
 | convergence, min bulk and tail ESS | < 25 | < 100 |
 | convergence, divergent fraction of draws | > 5% | > 1% |
+| posterior predictive, 90% coverage of `total`, overall and last 4 complete weeks | < 0.50 | < 0.70 |
+| posterior predictive, KS distance of the randomised PIT from uniform (20+ rows) | | > 0.2 |
+| posterior predictive, sampled fit with no readable `ppc.json` | error | |
 | schema (columns, `sample`, target, reference date, Saturdays, `tasks.json` options) | any | |
 | values (negative, NaN, infinite, unparsable) | any | |
 | samples (exactly 100, each a full trajectory) | any | |

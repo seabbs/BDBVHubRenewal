@@ -71,6 +71,23 @@ ess_bulk = 100
 ess_tail = 100
 divergent_fraction = 0.01
 
+# Posterior predictive checks on the fit's ppc.json (check_ppc.py).
+# Coverage is the share of observed counts inside the predictive
+# interval of `level`, for `stream`, over every in-sample week and over
+# the last `recent_weeks` complete weeks. A model with no posterior is
+# n/a. Each value can be overridden by an environment variable or repo
+# variable BDBV_PPC_<KEY>, for example BDBV_PPC_COVERAGE_WARN.
+[ppc]
+stream = "total"
+level = 0.9
+coverage_warn = 0.70
+coverage_fail = 0.50
+recent_weeks = 4
+# Kolmogorov-Smirnov distance of the randomised PIT from uniform. It
+# only warns, and only with enough rows to say anything.
+pit_ks_warn = 0.2
+pit_min_rows = 20
+
 # Plausibility and consistency checks on the forecast file. Ratios are
 # symmetric: a ratio r is breached when the value is above r times or
 # below 1/r times the reference. A threshold of 0 turns a level off.

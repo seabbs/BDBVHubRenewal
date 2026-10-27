@@ -58,6 +58,7 @@ class Policy:
     cache_inputs: list[str]
     convergence: dict[str, dict[str, float]]
     checks: dict[str, Any]
+    ppc: dict[str, Any] = field(default_factory=dict)
 
     def chain(self) -> list[Candidate]:
         """Candidates in submission order, with retries cut to budget."""
@@ -113,6 +114,7 @@ def load_policy(path: Path | str) -> Policy:
         cache_inputs=list(raw.get("cache", {}).get("inputs", [])),
         convergence=raw.get("convergence", {}),
         checks=raw.get("checks", {}),
+        ppc=raw.get("ppc", {}),
     )
 
 

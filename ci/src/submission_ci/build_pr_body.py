@@ -73,6 +73,18 @@ def _fit_cell(fit: Mapping[str, Any] | None) -> str:
     )
 
 
+def _ppc_cell(
+    ppc: Mapping[str, Any] | None, fit: Mapping[str, Any] | None
+) -> str:
+    if ppc is None:
+        return "N/A (no posterior)" if fit is None else "not run"
+    status = STATUS_LABEL[ppc["status"]]
+    if ppc["status"] == "skip":
+        return f"{status} ({ppc.get('reason') or 'no posterior'})"
+    detail = ppc.get("headline") or "; ".join(ppc.get("failures") or [])
+    return f"{status} ({detail})" if detail else status
+
+
 def _checks_cell(checks: Mapping[str, Any]) -> str:
     flagged = [
         c["name"] for c in checks["checks"] if c["status"] in ("warn", "fail")
@@ -133,6 +145,8 @@ def build(
     run = dict(provenance.get("run") or {})
     fit_path = selected_dir / "fit-summary.json"
     fit = read_json(fit_path) if fit_path.exists() else None
+    ppc_path = selected_dir / "ppc-summary.json"
+    ppc = read_json(ppc_path) if ppc_path.exists() else None
     checks = read_json(selected_dir / "checks.json")
     subs = sorted((selected_dir / "submission").glob("**/*.csv"))
     sub = subs[0]
@@ -172,6 +186,7 @@ def build(
             [
                 ["Overall", STATUS_LABEL[status]],
                 ["Convergence", _fit_cell(fit)],
+                ["Posterior predictive checks", _ppc_cell(ppc, fit)],
                 ["Forecast checks", _checks_cell(checks)],
                 ["Hub validation", STATUS_LABEL.get(validation, validation)],
                 ["Data coherence", _coherence_cell(coherence)],
@@ -192,6 +207,12 @@ def build(
         "submitted median and 50% and 90% intervals. Weeks up to the "
         "reference date are a nowcast; later weeks are a forecast.\n"
     )
+    if (selected_dir / "ppc.png").exists():
+        out.append(
+            "The posterior predictive check plot (`ppc.png`, predictive "
+            "intervals against the observed counts by province) is in the "
+            "run's candidate artefact.\n"
+        )
     nat = national_table(sub)
     if nat:
         out.append("National (`CD`) summary of the submitted samples:\n")
@@ -236,6 +257,7 @@ def build(
     details = [
         ("Fallback chain", (selected_dir.parent / "provenance.md")),
         ("Convergence diagnostics", selected_dir / "fit-summary.md"),
+        ("Posterior predictive checks", selected_dir / "ppc-summary.md"),
         ("Forecast checks", selected_dir / "checks.md"),
     ]
     for label, path in details:

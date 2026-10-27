@@ -13,6 +13,7 @@ fit-key = "submission_ci.fit_key:main"
 summarise-fit = "submission_ci.summarise_fit:main"
 check-forecast = "submission_ci.check_forecast:main"
 check-coherence = "submission_ci.check_coherence:main"
+check-ppc = "submission_ci.check_ppc:main"
 build-pr-body = "submission_ci.build_pr_body:main"
 open-or-update-pr = "submission_ci.open_or_update_pr:main"
 

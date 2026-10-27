@@ -75,6 +75,25 @@ if [ "$CAND_KIND" != "persistence" ]; then
     --out "$out" --policy "$POLICY" --no-fail
 fi
 
+# Posterior predictive checks, from the ppc.json the fit wrote beside its
+# diagnostics. n/a for a model with no posterior; an error for a sampled
+# fit that wrote none.
+ppc_args=(--id "$CAND_ID" --kind "$CAND_KIND" --ppc "$out/ppc.json"
+  --out "$out" --policy "$POLICY" --no-fail)
+if [ "$CAND_KIND" != "persistence" ]; then
+  cp "$fit/ppc.json" "$out/" 2> /dev/null || true
+  ppc_args+=(--diagnostics "$out/diagnostics.json")
+fi
+sci check-ppc "${ppc_args[@]}"
+if python3 -c "import json, sys; sys.exit(not json.load(open(sys.argv[1])).get('available'))" \
+    "$out/ppc.json" 2> /dev/null; then
+  if cli plot-ppc --ppc "$out/ppc.json" --out "$out/ppc.png"; then
+    note "Posterior predictive plot: \`ppc.png\` in the \`candidate-$CAND_ID\` artefact."
+  else
+    echo "::warning::posterior predictive plot for $CAND_ID failed"
+  fi
+fi
+
 baseline=$(find "$WORK/candidates/persistence/submission" -name '*.csv' \
   2> /dev/null | sort | head -n 1)
 checks=(--id "$CAND_ID" --kind "$CAND_KIND"

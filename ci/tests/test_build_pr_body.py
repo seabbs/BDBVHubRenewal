@@ -7,9 +7,11 @@ from typing import Any
 import pytest
 from conftest import REF, make_samples, write_json, write_samples
 from test_check_coherence import GAP, coherence
+from test_check_ppc import ppc
 
 from submission_ci.build_pr_body import FOOTER, MAX_BODY, build, main, marker
 from submission_ci.check_coherence import assess
+from submission_ci.check_ppc import summarise
 
 
 def gate(
@@ -184,3 +186,33 @@ def test_data_coherence_na_without_file(tmp_path: Path) -> None:
     assert "| Data coherence | N/A (not checked) |" in text
     assert "| Overall | PASS |" in text
     assert "<summary>Data coherence</summary>" not in text
+
+
+def test_ppc_row_and_province_details(tmp_path: Path) -> None:
+    g = gate(tmp_path)
+    sel = g / "selected"
+    write_json(tmp_path / "ppc.json", ppc("ppcwarn"))
+    summarise("main", tmp_path / "ppc.json", sel, sampled=True)
+    (sel / "ppc.png").write_bytes(b"png")
+    text = body(g)
+    assert (
+        "| Posterior predictive checks | WARN (90% coverage 0.57 overall, "
+        "0.67 last 4 weeks; 50% coverage" in text
+    )
+    assert "<summary>Posterior predictive checks</summary>" in text
+    assert "<summary>Coverage of total by province</summary>" in text
+    assert "`ppc.png`" in text
+
+
+def test_ppc_row_without_posterior(tmp_path: Path) -> None:
+    g = gate(tmp_path)
+    (g / "selected" / "fit-summary.json").unlink()
+    assert "| Posterior predictive checks | N/A (no posterior) |" in body(g)
+    write_json(
+        g / "selected" / "ppc-summary.json",
+        {"status": "skip", "reason": "the model has no sampler"},
+    )
+    assert (
+        "| Posterior predictive checks | N/A (the model has no sampler) |"
+        in body(g)
+    )

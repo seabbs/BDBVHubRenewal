@@ -11,6 +11,10 @@ candidate id the step script exports as `CAND_ID`. Scenarios:
   implausible  converged, but the forecast explodes
   crash        the fit command fails
   negative     the nowcast writes a negative value (format check)
+  ppcwarn      converged, but the predictive intervals cover about 60%
+               of the observations (PPC warns)
+  ppcfail      converged, but they cover about 30% (PPC fails)
+  noppc        converged, but the fit writes no ppc.json (PPC error)
 
 Unknown candidates default to `pass`. `persistence=implausible` breaks
 the persistence baseline too, which is how the dry run reaches a skip.
@@ -30,6 +34,7 @@ import sys
 import zlib
 from collections import defaultdict
 from pathlib import Path
+from statistics import NormalDist
 
 HERE = Path(__file__).parent
 OBSERVED = Path(
@@ -67,6 +72,63 @@ def reference_date(as_of: str) -> dt.date:
     while ref - dt.timedelta(days=4) < day:
         ref += dt.timedelta(days=7)
     return ref
+
+
+def fake_ppc(as_of: str, sc: str, config: str) -> dict:
+    """A `ppc.json` whose PIT values, and so coverage, the scenario sets.
+
+    Rows are ordered by week then province and row `i` is given a PIT.
+    For `pass` the PITs are a low-discrepancy sequence, close to uniform.
+    For `ppcwarn` (`ppcfail`) 4 (7) rows in 10 sit in the outer 1% and
+    the rest inside the 90% interval. The median and intervals are then
+    placed around the observed count to match: a normal predictive
+    distribution with a scale of 15% of the count (at least 2).
+    """
+    obs = observed(as_of)
+    cutoff = (dt.date.fromisoformat(as_of) - dt.timedelta(weeks=4)).isoformat()
+    tails = {"ppcwarn": 4, "ppcfail": 7}.get(sc, 0)
+    z = NormalDist().inv_cdf
+    rows = []
+    for stream in ("total", "observed"):
+        keys = [
+            (w, loc)
+            for w in sorted({w for loc in obs for w in obs[loc]})
+            for loc in sorted(obs)
+            if loc != "CD" and w in obs[loc]
+        ]
+        for i, (week, loc) in enumerate(keys):
+            golden = (0.5 + i * 0.6180339887) % 1
+            if i % 10 < tails:
+                pit = 0.005 if i % 2 else 0.995
+            elif tails:
+                pit = 0.1 + 0.8 * golden
+            else:
+                pit = min(max(golden, 0.005), 0.995)
+            y = obs[loc][week]
+            scale = max(2.0, 0.15 * y)
+            med = y - z(pit) * scale
+            row = {
+                "location": loc,
+                "stream": stream,
+                "target_end_date": week,
+                "observed": round(y),
+                "median": med,
+            }
+            for level in (50, 90):
+                half = z(0.5 + level / 200) * scale
+                row[f"lower_{level}"] = med - half
+                row[f"upper_{level}"] = med + half
+            row["pit"] = pit
+            row["complete"] = week <= cutoff
+            rows.append(row)
+    return {
+        "schema_version": 1,
+        "available": True,
+        "model": "renewal",
+        "config": config,
+        "intervals": [0.5, 0.9],
+        "rows": rows,
+    }
 
 
 def cmd_fit(args: argparse.Namespace) -> int:
@@ -120,6 +182,9 @@ def cmd_fit(args: argparse.Namespace) -> int:
         ],
     }
     (out / "diagnostics.json").write_text(json.dumps(diag, indent=2))
+    if sc != "noppc":
+        ppc = fake_ppc(args.vintage, sc, args.config)
+        (out / "ppc.json").write_text(json.dumps(ppc, indent=1))
     return 0
 
 
@@ -291,6 +356,9 @@ def main() -> int:
     pl.add_argument("--submission", required=True)
     pl.add_argument("--vintage", required=True)
     pl.add_argument("--out", required=True)
+    pp = sub.add_parser("plot-ppc")
+    pp.add_argument("--ppc", required=True)
+    pp.add_argument("--out", required=True)
     co = sub.add_parser("coherence")
     co.add_argument("--vintage", required=True)
     co.add_argument("--out", required=True)
@@ -303,6 +371,7 @@ def main() -> int:
         "fit": cmd_fit,
         "nowcast": cmd_nowcast,
         "plot-submission": cmd_plot,
+        "plot-ppc": cmd_plot,
         "coherence": cmd_coherence,
     }[args.command](args)
 

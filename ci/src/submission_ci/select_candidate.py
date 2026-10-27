@@ -1,11 +1,12 @@
 """Walk the fallback chain and pick the candidate to submit.
 
 Each candidate directory (`<candidates>/<id>/`) holds what its matrix
-job produced: `fit-summary.json` (none for persistence), `checks.json`,
-`run.json` and the hub file under `submission/`. A candidate is
-eligible when neither its convergence gate nor its forecast checks
-fail. The first eligible candidate in chain order is then validated with
-the hub's own rules (the `--validate-cmd` hook, hubValidations in CI).
+job produced: `fit-summary.json` and `ppc-summary.json` (none for
+persistence), `checks.json`, `run.json` and the hub file under
+`submission/`. A candidate is eligible when none of its convergence
+gate, posterior predictive checks and forecast checks fail. The first
+eligible candidate in chain order is then validated with the hub's own
+rules (the `--validate-cmd` hook, hubValidations in CI).
 If that fails too, the chain moves on. If nothing is left the round is
 skipped.
 
@@ -49,6 +50,7 @@ class Attempt:
     kind: str
     label: str
     fit: str = "n/a"
+    ppc: str = "n/a"
     checks: str = "n/a"
     validation: str = "not run"
     status: str = "not run"
@@ -81,6 +83,18 @@ def assess(c: Candidate, cdir: Path) -> Attempt:
         a.fit = "error"
         a.reasons.append("convergence: no diagnostics were written")
     statuses.append(a.fit)
+    ppc_path = cdir / "ppc-summary.json"
+    if ppc_path.exists():
+        ppc = read_json(ppc_path)
+        a.ppc = ppc["status"]
+        a.reasons += [f"ppc: {m}" for m in ppc.get("failures", [])]
+        a.warnings += [f"ppc: {m}" for m in ppc.get("warnings", [])]
+    elif c.kind == "persistence" or a.fit == "skip":
+        a.ppc = "skip"
+    else:
+        a.ppc = "error"
+        a.reasons.append("ppc: no posterior predictive check was written")
+    statuses.append(a.ppc)
     checks_path = cdir / "checks.json"
     if checks_path.exists():
         checks = read_json(checks_path)
@@ -190,6 +204,7 @@ def provenance_markdown(prov: dict[str, Any]) -> str:
             f"`{a['id']}`",
             a["label"],
             STATUS_LABEL.get(a["fit"], a["fit"]),
+            STATUS_LABEL.get(a.get("ppc", "n/a"), a.get("ppc", "n/a")),
             STATUS_LABEL.get(a["checks"], a["checks"]),
             STATUS_LABEL.get(a["validation"], a["validation"]),
             STATUS_LABEL.get(a["status"], a["status"]),
@@ -201,6 +216,7 @@ def provenance_markdown(prov: dict[str, Any]) -> str:
             "step",
             "candidate",
             "convergence",
+            "predictive checks",
             "forecast checks",
             "hub validation",
             "outcome",

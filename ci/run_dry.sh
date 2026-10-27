@@ -28,6 +28,9 @@ SCENARIOS=(
   "main|main=pass|main||| Data coherence | PASS"
   "coherence|main=pass|main|FAKE_COHERENCE_GAP=2026-10-24:2|| Data coherence | WARN (national (CD) differs"
   "warn|main=warn|main"
+  "ppcwarn|main=ppcwarn|main||| Posterior predictive checks | WARN (90% coverage"
+  "ppcfail|main=ppcfail,retry-1=pass|retry-1||Main model was ruled out (ppc: 90% interval coverage"
+  "noppc|main=noppc,retry-1=pass|retry-1||Main model was ruled out (ppc: no ppc.json"
   "retry|main=fail,retry-1=pass|retry-1"
   "retry2|main=crash,retry-1=fail,retry-2=pass|retry-2"
   "fallback|main=fail,retry-1=fail,retry-2=fail|fallback"
@@ -140,6 +143,9 @@ EOF
   fi
   grep -q "Produced by: " "$WORK/gate/pr-body.md"
   tail -n 1 "$WORK/gate/pr-body.md" | grep -q "@seabbs"
+  if [ "$got" != persistence ] && [ ! -f "$WORK/gate/selected/ppc.png" ]; then
+    echo "FAIL: $name has no ppc.png"; return 1
+  fi
   if [ -n "$want" ] && ! grep -qF -- "$want" "$WORK/gate/pr-body.md"; then
     echo "FAIL: $name PR body lacks: $want"; return 1
   fi

@@ -68,6 +68,7 @@ Settings → Secrets and variables → Actions → **Variables**:
 | `HUB_VALIDATIONS` | on | `false` skips the R hubValidations step and keeps the Python checks. |
 | `FIT_RUNNER` | `ubuntu-latest` | Runner label for the fit jobs (see Runtimes). |
 | `BDBV_CONVERGENCE_{FAIL,WARN}_{RHAT,ESS_BULK,ESS_TAIL,DIVERGENT}` | `ci/policy.toml` | Override a convergence threshold. |
+| `BDBV_PPC_{COVERAGE_WARN,COVERAGE_FAIL,LEVEL,RECENT_WEEKS,PIT_KS_WARN,PIT_MIN_ROWS}` | `ci/policy.toml` `[ppc]` | Override a posterior predictive check threshold. |
 
 ### 4. Repository settings
 
