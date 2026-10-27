@@ -36,6 +36,7 @@ import os
 import re
 import urllib.request
 from collections.abc import Mapping
+from importlib.resources import files
 from pathlib import Path
 from typing import Any, Final
 
@@ -61,6 +62,7 @@ __all__ = [
     "load_delays",
     "load_health_zones",
     "load_locations",
+    "load_province_centres",
     "load_target",
     "national_coherence",
     "newly_missing",
@@ -153,23 +155,42 @@ POPULATION_SOURCE: Final = (
 )
 """Citation for `PROVINCE_POPULATIONS`."""
 
-PROVINCE_CENTRES: Final[dict[str, tuple[float, float]]] = {
-    "CD-IT": (2.0929, 30.3385),
-    "CD-NK": (-0.5754, 29.1574),
-    "CD-SK": (-2.869, 28.6843),
-    "CD-HU": (2.915, 28.5755),
-    "CD-TO": (0.6072, 24.8468),
-    "CD-BU": (3.3937, 25.1094),
-    "CD-SU": (3.0653, 19.4528),
-    "CD-NU": (3.8889, 20.9641),
-}
-"""Population-weighted centres (latitude, longitude) of affected provinces.
 
-Taken from epiforecasts/BVDOutbreakSize (`PROVINCE_SOURCE_CENTRES`): the
-mean of health zone centroids weighted by WorldPop 2025 counts, with
-zone boundaries from the Ministry of Health shapefile on the
-Humanitarian Data Exchange.
-Only provinces with cases by October 2026 are included.
+def load_province_centres() -> pd.DataFrame:
+    """Load the population-weighted centres of all 26 provinces.
+
+    The mean of health zone centroids weighted by WorldPop 2025 counts,
+    with zone boundaries from the Ministry of Health shapefile on the
+    Humanitarian Data Exchange, via INRB-UMIE/BDBV2026-Data
+    (`build/drc_health_zones.geojson` at `f7d3907`, CC BY 4.0).
+    This is the source and method of epiforecasts/BVDOutbreakSize. The
+    file ships with the package, so it does not depend on the data
+    directory.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `location`, `latitude`, `longitude`, `worldpop` and
+        `zones`.
+    """
+    path = files("bdbv_hub_renewal").joinpath("province_centres.csv")
+    with path.open() as fh:
+        return pd.read_csv(fh, comment="#")
+
+
+_CENTRES = load_province_centres()
+PROVINCE_CENTRES: Final[dict[str, tuple[float, float]]] = {
+    str(loc): (float(lat), float(lon))
+    for loc, lat, lon in zip(
+        _CENTRES["location"],
+        _CENTRES["latitude"].to_numpy(dtype=float),
+        _CENTRES["longitude"].to_numpy(dtype=float),
+        strict=True,
+    )
+}
+"""Population-weighted centres (latitude, longitude) of all provinces.
+
+See `load_province_centres`.
 """
 
 

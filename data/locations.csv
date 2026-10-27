@@ -1,28 +1,28 @@
 location,location_name,location_type,population,latitude,longitude
 CD,DRC,country,98370000,,
 CD-BU,Bas Uele,province,1250000,3.3937,25.1094
-CD-EQ,Equateur,province,1712000,,
-CD-HK,Haut Katanga,province,5378000,,
-CD-HL,Haut Lomami,province,3444000,,
+CD-EQ,Equateur,province,1712000,0.1011,18.7038
+CD-HK,Haut Katanga,province,5378000,-11.1513,27.5685
+CD-HL,Haut Lomami,province,3444000,-8.1134,25.7893
 CD-HU,Haut Uele,province,2046000,2.915,28.5755
 CD-IT,Ituri,province,4008000,2.0929,30.3385
-CD-KS,Kasai,province,3165000,,
-CD-KC,Kasai Central,province,3743000,,
-CD-KE,Kasai Oriental,province,3601000,,
-CD-KN,Kinshasa,province,13916000,,
-CD-BC,Kongo Central,province,6365000,,
-CD-KG,Kwango,province,2416000,,
-CD-KL,Kwilu,province,6169000,,
-CD-LO,Lomami,province,2801000,,
-CD-LU,Lualaba,province,2993000,,
-CD-MN,Mai Ndombe,province,2082000,,
-CD-MA,Maniema,province,2654000,,
-CD-MO,Mongala,province,1950000,,
+CD-KS,Kasai,province,3165000,-5.6751,21.0327
+CD-KC,Kasai Central,province,3743000,-6.2106,22.4357
+CD-KE,Kasai Oriental,province,3601000,-6.1695,23.5676
+CD-KN,Kinshasa,province,13916000,-4.4028,15.3695
+CD-BC,Kongo Central,province,6365000,-5.3697,13.9339
+CD-KG,Kwango,province,2416000,-6.083,17.5876
+CD-KL,Kwilu,province,6169000,-4.7697,18.7178
+CD-LO,Lomami,province,2801000,-6.6419,24.1358
+CD-LU,Lualaba,province,2993000,-10.2831,24.6745
+CD-MN,Mai Ndombe,province,2082000,-2.5919,17.9919
+CD-MA,Maniema,province,2654000,-3.3675,26.5409
+CD-MO,Mongala,province,1950000,2.2827,21.7613
 CD-NK,Nord Kivu,province,7574000,-0.5754,29.1574
 CD-NU,Nord Ubangi,province,1425000,3.8889,20.9641
-CD-SA,Sankuru,province,2417000,,
+CD-SA,Sankuru,province,2417000,-3.7197,23.6847
 CD-SK,Sud Kivu,province,6565000,-2.869,28.6843
 CD-SU,Sud Ubangi,province,2755000,3.0653,19.4528
-CD-TA,Tanganyika,province,3570000,,
+CD-TA,Tanganyika,province,3570000,-6.4379,28.0615
 CD-TO,Tshopo,province,2582000,0.6072,24.8468
-CD-TU,Tshuapa,province,1789000,,
+CD-TU,Tshuapa,province,1789000,-0.3532,21.9664
