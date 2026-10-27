@@ -55,14 +55,15 @@ jobs:
           if git fetch -q --depth 1 origin submission-ledger; then
             git archive FETCH_HEAD | tar -x -C output/ledger
           fi
-      # Only the models with no fit run here. The fitted renewal variants
-      # are run apart (on archie) and their forecasts and scores committed
-      # in results/. These runs keep those rows, and the held-out run
-      # scores them again against the latest vintage.
+      # Pages never fits a model. The fitted renewal variants are run apart
+      # (on archie) and their forecasts and scores committed in results/.
+      # `--no-fit` runs only the models with no fit, keeps those rows, and
+      # scores the committed held-out forecasts again against the latest
+      # vintage, even for a chosen fitted model.
       - name: Backtest, then the docs figures and tables
         run: |
-          uv run bdbv-hub-renewal backtest --models persistence
-          uv run bdbv-hub-renewal backtest --evaluate-holdout --models persistence
+          uv run bdbv-hub-renewal backtest --no-fit
+          uv run bdbv-hub-renewal backtest --evaluate-holdout --no-fit
           uv run bdbv-hub-renewal report --ledger output/ledger
       - name: Build the site into _site
         run: uv run mkdocs build --strict

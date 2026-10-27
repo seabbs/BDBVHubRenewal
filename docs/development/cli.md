@@ -11,6 +11,7 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 | `data` | Download the hub data and write the tidy tables to `data/`. |
 | `backtest` | Run the development backtest and the recovery check. With `--models`, only those models run and the others' rows in `results/` are kept. |
 | `backtest --evaluate-holdout` | Score every held-out vintage under the model chosen at the time, with the other models alongside. |
+| `backtest --no-fit` | Run only the models with no fit. Fitted models' rows in `results/` are kept, and their held-out forecasts are scored again. The docs build uses this, so it never fits a model. |
 | `backtest --lopo` | Leave one province out: forecast each province with its counts masked, for the variants that take a mask. |
 | `compare-hub [--fetch]` | Score our retrospective forecasts and the hub's submitted ones on the same truth and weeks. |
 | `nowcast` | Forecast from a real vintage, write the hub file and check it. With `--config` and `--fit`, forecast from a fit configuration. |

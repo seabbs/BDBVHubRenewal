@@ -164,6 +164,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     back.add_argument("--no-reconstructed", action="store_true")
     back.add_argument(
+        "--no-fit",
+        action="store_true",
+        help="Never run fitted models. Their rows in results/ are kept and "
+        "the held-out forecasts are scored again. The docs build uses this.",
+    )
+    back.add_argument(
         "--lopo",
         action="store_true",
         help="Run the leave-one-province-out check instead.",
@@ -342,6 +348,9 @@ def _backtest(args: argparse.Namespace) -> int:
     config = bt.load_config(args.config)
     target, delays = load_target(args.data), load_delays(args.data)
     names = _models(args.models)
+    if args.no_fit:
+        fitted = {s.name for s in list_models() if s.fitted}
+        names = [n for n in names if n not in fitted]
     results, output = Path(args.results), Path(args.output)
     results.mkdir(parents=True, exist_ok=True)
     output.mkdir(parents=True, exist_ok=True)
@@ -355,6 +364,7 @@ def _backtest(args: argparse.Namespace) -> int:
                 evaluate_holdout=True,
                 out_dir=results,
                 models=names,
+                fit=not args.no_fit,
             )
         except HeldOutError as err:
             print(f"ERROR: {err}", file=sys.stderr)

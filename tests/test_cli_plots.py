@@ -161,3 +161,22 @@ def test_cli_backtest_keeps_other_models_results(tmp_path: Path) -> None:
     fc = pd.read_csv(out / "forecasts.csv.gz")
     assert set(fc["model"]) == {"persistence", "other"}
     assert len(fc) == 2 * (fc["model"] == "other").sum()
+
+
+@pytest.mark.usefixtures("in_root")
+def test_cli_backtest_no_fit_skips_fitted_models(tmp_path: Path) -> None:
+    from bdbv_hub_renewal.models import list_models
+
+    assert any(s.fitted for s in list_models())
+    args = [
+        "backtest",
+        "--no-fit",
+        "--no-reconstructed",
+        "--results",
+        str(tmp_path / "res"),
+        "--output",
+        str(tmp_path / "out"),
+    ]
+    assert main(args) == 0  # would take minutes if it fitted anything
+    scores = pd.read_csv(tmp_path / "res" / "backtest-scores.csv")
+    assert set(scores["model"]) == {"persistence"}

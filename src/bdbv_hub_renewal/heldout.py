@@ -197,6 +197,7 @@ def run_heldout(
     evaluate_holdout: bool = False,
     out_dir: Path | str = "results",
     models: Sequence[str] = (),
+    fit: bool = True,
 ) -> pd.DataFrame:
     """Forecast and score every held-out vintage under its chosen model.
 
@@ -220,6 +221,10 @@ def run_heldout(
         Other registered models to forecast and score alongside, such as
         the variants not chosen. Their scores keep `chosen_model`, so
         they compare with the choice but are not mistaken for it.
+    fit : bool
+        Run fitted models. If False, as in the docs build, fitted models
+        are not run, even when chosen: their forecasts come only from the
+        existing `heldout-forecasts.csv.gz`, and are scored again.
 
     Returns
     -------
@@ -250,9 +255,12 @@ def run_heldout(
         ", ".join(pairs["vintage"]),
     )
     baseline = _baseline()
+    fitted = {s.name for s in list_models() if s.fitted}
     frames = []
     for row in pairs.itertuples(index=False):
         names = list(dict.fromkeys([str(row.model), baseline, *models]))
+        if not fit:
+            names = [n for n in names if n not in fitted]
         rows = real.loc[real["vintage"] == row.vintage]
         fc = run_forecasts(
             [get_model(n) for n in names], make_tasks(rows, delays, config)
