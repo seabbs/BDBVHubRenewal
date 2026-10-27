@@ -14,7 +14,7 @@ So far it has:
 - a persistence baseline and a model registry;
 - a writer and checks for the hub's submission format and model metadata;
 - a backtest scored like [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize), a rolling held-out evaluation and a comparison with hub forecasts;
-- the maths of the planned renewal model.
+- a province renewal model on PyRenew, with a single-patch variant and a fallback, and its maths.
 
 ## Pages
 

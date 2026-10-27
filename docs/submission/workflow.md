@@ -3,11 +3,11 @@
 How each week's forecast reaches the BDBV Modeling Hub.
 { .page-subtitle }
 
-!!! warning "Dry run, with stand-in models"
+!!! warning "Dry run"
     The workflow runs in dry-run mode until Sam switches it on (see [Setup](setup.md)).
     It builds everything and prints the pull request it would open, but pushes nothing.
-    The PyRenew renewal model is not integrated yet.
-    Until it is, the `main` and `fallback` fit configs are **stand-ins** that run the persistence baseline, and submissions go in as `epiforecasts-persistence`.
+    The `main` and `fallback` fit configs run the PyRenew renewal model, and submissions go in as `epiforecasts-hubrenewal`.
+    Its model metadata is a draft until Sam has reviewed the held-out results.
 
 ## How the pipeline works
 
