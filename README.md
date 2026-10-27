@@ -7,11 +7,21 @@
 
 **BDBV hub baseline forecasts.**
 
-Foundations for weekly nowcasts and forecasts of confirmed Bundibugyo virus disease cases for the [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub).
+[![Docs](https://img.shields.io/badge/docs-online-blue.svg)](https://seabbs.github.io/bdbv-hub-baseline-forecasts/)
+[![Pages](https://github.com/seabbs/bdbv-hub-baseline-forecasts/actions/workflows/pages.yml/badge.svg)](https://github.com/seabbs/bdbv-hub-baseline-forecasts/actions/workflows/pages.yml)
+[![codecov](https://codecov.io/gh/seabbs/bdbv-hub-baseline-forecasts/branch/main/graph/badge.svg)](https://codecov.io/gh/seabbs/bdbv-hub-baseline-forecasts)
+[![licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+
+| Component | Tests | Lint | Coverage |
+| --- | --- | --- | --- |
+| Package (`src/`) | [![Tests](https://github.com/seabbs/bdbv-hub-baseline-forecasts/actions/workflows/test.yml/badge.svg)](https://github.com/seabbs/bdbv-hub-baseline-forecasts/actions/workflows/test.yml) | [![Lint](https://github.com/seabbs/bdbv-hub-baseline-forecasts/actions/workflows/lint.yml/badge.svg)](https://github.com/seabbs/bdbv-hub-baseline-forecasts/actions/workflows/lint.yml) | [![package coverage](https://codecov.io/gh/seabbs/bdbv-hub-baseline-forecasts/branch/main/graph/badge.svg?flag=package)](https://codecov.io/gh/seabbs/bdbv-hub-baseline-forecasts?flags%5B0%5D=package) |
+| Submission CI (`ci/`) | [![Submission CI tests](https://github.com/seabbs/bdbv-hub-baseline-forecasts/actions/workflows/submission-ci-tests.yml/badge.svg)](https://github.com/seabbs/bdbv-hub-baseline-forecasts/actions/workflows/submission-ci-tests.yml) | [![Submission CI tests](https://github.com/seabbs/bdbv-hub-baseline-forecasts/actions/workflows/submission-ci-tests.yml/badge.svg)](https://github.com/seabbs/bdbv-hub-baseline-forecasts/actions/workflows/submission-ci-tests.yml) | [![ci coverage](https://codecov.io/gh/seabbs/bdbv-hub-baseline-forecasts/branch/main/graph/badge.svg?flag=ci)](https://codecov.io/gh/seabbs/bdbv-hub-baseline-forecasts?flags%5B0%5D=ci) |
+
+Weekly nowcasts and forecasts of confirmed Bundibugyo virus disease cases for the [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub).
 The hub's target is weekly confirmed cases by symptom-onset week, by province and nationally, as 100 joint sample trajectories per location.
 
 The plan is in [EpidemicDates issue #3](https://github.com/seabbs/EpidemicDates/issues/3).
-This repository holds its first phase:
+This repository holds:
 
 - a data layer for every hub data stream and vintage (`data/`, `bdbv_forecasts.data`);
 - reconstructed and simulated vintages to extend testing;
@@ -85,6 +95,7 @@ tests/
 Surveillance data: Institut National de Santé Publique (INSP) and the Incident Management Support Team (IMST), Democratic Republic of the Congo.
 Processed by the Atlantic Coast Center for Infectious Disease Dynamics and Analytics (ACCIDDA) and the Kinshasa School of Public Health, University of Kinshasa, and distributed through the BDBV Modeling Hub, <https://github.com/InsightNet-US/BDBV-Modeling-Hub>, accessed 2026-10-27.
 
-## Licence
+## Citation and licence
 
-Code: MIT, see [LICENSE](LICENSE).
+To cite this software, use [CITATION.cff](CITATION.cff), or the "Cite this repository" button on GitHub.
+The code is under the MIT licence, see [LICENSE](LICENSE).
