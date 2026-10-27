@@ -75,7 +75,7 @@ def make_report(
     generated: Path | str = "docs/generated",
     data_dir: Path | str = "data",
     results: Path | str = "results",
-    output: Path | str = "output/backtest",
+    output: Path | str = "results",
     config_path: Path | str = "config/backtest.toml",
     hub_comparison: Path | str = "output/hub-comparison",
     comparison_config: Path | str = "config/hub-comparison.toml",

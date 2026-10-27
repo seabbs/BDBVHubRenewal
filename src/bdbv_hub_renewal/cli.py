@@ -156,7 +156,12 @@ def build_parser() -> argparse.ArgumentParser:
     back.add_argument("--data", default="data")
     back.add_argument("--models", nargs="*", default=None)
     back.add_argument("--results", default="results")
-    back.add_argument("--output", default="output/backtest")
+    back.add_argument(
+        "--output",
+        default="results",
+        help="Where the forecasts go. They are committed in results/, so "
+        "the docs can show fitted variants without refitting them.",
+    )
     back.add_argument("--no-reconstructed", action="store_true")
     back.add_argument(
         "--lopo",
