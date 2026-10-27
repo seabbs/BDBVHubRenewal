@@ -18,7 +18,8 @@ This repository holds its first phase:
 - a persistence baseline and a model registry;
 - a writer and checks for the hub's submission files and model metadata;
 - a backtest harness with a development and held-out split, scored by WIS, coverage and bias;
-- figures and a docs site, with the maths of the planned renewal model.
+- figures and a docs site, with the maths of the planned renewal model;
+- an automated, gated submission workflow, in dry-run mode, with persistence standing in for the model until it is integrated ([Submissions](https://seabbs.github.io/bdbv-hub-baseline-forecasts/submissions/)).
 
 Docs: <https://seabbs.github.io/bdbv-hub-baseline-forecasts/>
 
@@ -35,7 +36,10 @@ task data              # download every hub vintage and rebuild data/
 task backtest          # development backtest and recovery check
 task nowcast           # forecast from the latest vintage and write a hub file
 task metadata          # write the model metadata YAML
-task validate-hub      # check both with the hub's hubValidations (R)
+task validate-hub      # check both with hub_validate and hubValidations (R)
+task ci-test           # test the submission CI scripts in ci/
+task ci-dry            # dry run of the submission workflow on fixtures
+task ci-fit            # fit and forecast one config as a CI candidate does
 task docs              # build the docs site into _site/
 ```
 
@@ -44,12 +48,14 @@ The tidy data in `data/` are committed, so `task backtest` and `task nowcast` wo
 ## Layout
 
 ```
+.github/         CI, docs and the submission workflow (submit.yml)
+ci/              submission CI: fallback chain, gate checks, PR body
 config/          backtest settings and the model choice template
 data/            tidy hub data (committed); data/raw/ is not
 docs/            MkDocs site; figures are built at docs build time
 hub/             model metadata YAML
 results/         development and recovery score tables
-scripts/         hubValidations runner (R)
+scripts/         hubValidations runner and gate (R)
 src/bdbv_forecasts/
   data.py        download, tidy and load the hub data
   dates.py       epi weeks, reference dates and submission windows
@@ -60,6 +66,9 @@ src/bdbv_forecasts/
   latent.py      renewal with importation and depletion (reference)
   observation.py known onsets and the hub's imputation (reference)
   hub.py         submission writer, checks and metadata
+  hub_validate.py the hub's checks in Python (hub validation bundle)
+  fitting.py     fit configs for the submission workflow
+  ppc.py         posterior predictive check summaries and plot
   scoring.py     WIS, coverage, bias and relative skill
   backtest.py    rolling-origin backtest with a held-out split
   plots.py       figures, including plot_nowcast
