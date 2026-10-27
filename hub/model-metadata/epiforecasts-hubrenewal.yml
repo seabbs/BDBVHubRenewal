@@ -1,0 +1,17 @@
+team_name: EpiForecasts
+team_abbr: epiforecasts
+model_name: Province renewal model (PyRenew)
+model_abbr: hubrenewal
+model_contributors:
+- name: Sam Abbott
+  affiliation: London School of Hygiene & Tropical Medicine
+  orcid: 0000-0001-8057-8037
+  email: sam.abbott@lshtm.ac.uk
+license: CC-BY-4.0
+model_details:
+  data_inputs: Hub target data (weekly confirmed cases by onset week, observed plus imputed), the hub's published onset-to-report delays, province populations and population-weighted province centres.
+  methods: Province renewal model in PyRenew with pooled Rt, gravity importation and depletion, fitted to known and imputed onsets with modelled delays; national is the sum of provinces.
+  methods_long: A renewal process for each province with cases, with a national weekly random walk on log Rt plus partially pooled province deviations, importation between provinces through a gravity kernel, and susceptible depletion. Provinces with no cases get importations that can seed local spread. Confirmed onsets follow a time-varying ascertainment. Known onsets are right truncated by a time-varying onset-to-report delay, and the hub's imputed onsets are modelled as the hub makes them, from cases missing an onset date by report day, back-sampled with the hub's delay. Both streams are negative binomial. Fitted by NUTS (NumPyro) to each data vintage. Each sample is one joint posterior trajectory and the national value is the sum of province samples. See https://seabbs.github.io/BDBVHubRenewal/methods/model/. Model code was drafted with the assistance of a language model and is under review by the named authors.
+website_url: https://seabbs.github.io/BDBVHubRenewal/
+repo_url: https://github.com/seabbs/BDBVHubRenewal
+ensemble_of_hub_models: false

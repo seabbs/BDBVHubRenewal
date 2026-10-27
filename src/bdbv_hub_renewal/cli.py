@@ -93,7 +93,37 @@ MODEL_METADATA = {
             "Hub target data (weekly confirmed cases by onset week, observed "
             "plus imputed) and the hub's published onset-to-report delays."
         ),
-    }
+    },
+    # Draft for the PyRenew model. Not submitted until Sam has reviewed
+    # the held-out results.
+    "hubrenewal": {
+        "model_name": "Province renewal model (PyRenew)",
+        "methods": (
+            "Province renewal model in PyRenew with pooled Rt, gravity "
+            "importation and depletion, fitted to known and imputed onsets "
+            "with modelled delays; national is the sum of provinces."
+        ),
+        "methods_long": (
+            "A renewal process for each province with cases, with a national "
+            "weekly random walk on log Rt plus partially pooled province "
+            "deviations, importation between provinces through a gravity "
+            "kernel, and susceptible depletion. Provinces with no cases get "
+            "importations that can seed local spread. Confirmed onsets follow "
+            "a time-varying ascertainment. Known onsets are right truncated "
+            "by a time-varying onset-to-report delay, and the hub's imputed "
+            "onsets are modelled as the hub makes them, from cases missing "
+            "an onset date by report day, back-sampled with the hub's delay. "
+            "Both streams are negative binomial. Fitted by NUTS (NumPyro) to "
+            "each data vintage. Each sample is one joint posterior "
+            "trajectory and the national value is the sum of province "
+            "samples. See https://seabbs.github.io/BDBVHubRenewal/methods/model/."
+        ),
+        "data_inputs": (
+            "Hub target data (weekly confirmed cases by onset week, observed "
+            "plus imputed), the hub's published onset-to-report delays, "
+            "province populations and population-weighted province centres."
+        ),
+    },
 }
 """Metadata text for each model that may be submitted."""
 
