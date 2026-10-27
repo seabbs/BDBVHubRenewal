@@ -170,6 +170,13 @@ def cmd_nowcast(args: argparse.Namespace) -> int:
         )
         for loc, s, week, v in rows:
             w.writerow([ref.isoformat(), TARGET, week, loc, "sample", s, v])
+    sidecar = {
+        "schema_version": 1,
+        "national": "CD",
+        "modelled_provinces": provinces,
+        "unassigned": [],
+    }
+    (Path(args.out) / "national.json").write_text(json.dumps(sidecar))
     print(f"Wrote {path}")
     return 0
 

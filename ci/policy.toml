@@ -79,7 +79,9 @@ samples = 100
 horizon_weeks = 3          # target end dates required after the reference date
 nowcast_weeks = 4          # back weeks required up to the reference date
 national = "CD"
-sum_tolerance = 1e-6       # relative, national minus sum of provinces
+# National must equal the sum of the provinces (plus any unassigned
+# component in national.json) exactly: only float noise is allowed.
+sum_tolerance = 1e-9       # absolute (or 1e-12 relative)
 # Upper bound on any trajectory: the 95th centile of a week, relative to
 # the largest weekly count the location has ever had (floored).
 bound_floor = 20

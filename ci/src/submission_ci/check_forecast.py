@@ -11,7 +11,10 @@ Format (fail):
   `samples`      exactly 100 samples per location, each a full trajectory.
   `coverage`     every expected location, with every nowcast and
                  forecast week.
-  `national_sum` national equals the sum of the provinces, per sample.
+  `national_sum` national equals the sum of the provinces (plus any
+                 modelled unassigned cases, from `national.json`),
+                 per sample and week, up to float noise; every
+                 modelled province is in the file.
 
 Plausibility (warn or fail):
   `bounds`       the 95th centile of each week is not far above the
@@ -64,7 +67,7 @@ DEFAULTS: dict[str, Any] = {
     "horizon_weeks": 3,
     "nowcast_weeks": 4,
     "national": "CD",
-    "sum_tolerance": 1e-6,
+    "sum_tolerance": 1e-9,
     "bound_floor": 20,
     "bound_warn": 5,
     "bound_fail": 20,
@@ -252,14 +255,57 @@ def check_coverage(
     )
 
 
-def check_national_sum(s: Samples, national: str, tol: float) -> Check:
-    """National equals the sum of provinces, per sample and week."""
+def _unassigned(
+    sidecar: Mapping[str, Any] | None,
+) -> dict[tuple[str, str], float]:
+    """Unassigned national cases by (sample id, week) from `national.json`."""
+    out: dict[tuple[str, str], float] = {}
+    for row in (sidecar or {}).get("unassigned") or []:
+        key = (str(int(row["sample"])), str(row["target_end_date"]))
+        out[key] = out.get(key, 0.0) + float(row["value"])
+    return out
+
+
+def check_national_sum(
+    s: Samples,
+    national: str,
+    tol: float,
+    sidecar: Mapping[str, Any] | None = None,
+    sidecar_error: str = "",
+) -> Check:
+    """National equals the sum of provinces exactly, per sample and week.
+
+    National sample k must equal the sum of province sample k plus the
+    sample's modelled unassigned component (`national.json`), for every
+    week, up to float noise (`tol` absolute, or 1e-12 relative). Every
+    modelled province must be in the file. Without `national.json` the
+    provinces are those in the file and there is no unassigned part.
+    """
+    if sidecar_error:
+        return Check("national_sum", "fail", sidecar_error)
+    if sidecar:
+        national = str(sidecar.get("national", national))
     provs = [loc for loc in s.locations if is_province(loc)]
-    if national not in s.values or not provs:
+    modelled = sorted((sidecar or {}).get("modelled_provinces") or provs)
+    unassigned = _unassigned(sidecar)
+    if sidecar is None:
+        basis = (
+            f"no national.json, so the {len(provs)} provinces in the file "
+            "and no unassigned component"
+        )
+    else:
+        basis = f"national.json: {len(modelled)} modelled provinces" + (
+            " plus the unassigned component" if unassigned else ""
+        )
+    if sidecar is None and (national not in s.values or not provs):
         return Check("national_sum", "skip", "no national and province pair")
     found: list[tuple[str, str]] = []
-    nat = s.values[national]
-    for sid, traj in nat.items():
+    missing = sorted(set(modelled) - set(s.locations))
+    if missing:
+        found.append(("fail", f"modelled provinces missing: {missing}"))
+    if national not in s.values:
+        found.append(("fail", f"{national} is not in the file"))
+    for sid, traj in s.values.get(national, {}).items():
         for week, value in traj.items():
             parts = [s.values[p].get(sid, {}).get(week) for p in provs]
             if any(v is None for v in parts):
@@ -267,20 +313,23 @@ def check_national_sum(s: Samples, national: str, tol: float) -> Check:
                     ("fail", f"sample {sid}, {week}: a province lacks it")
                 )
                 continue
-            total = math.fsum(v for v in parts if v is not None)
-            if abs(total - value) > tol * max(1.0, abs(value)):
+            extra = unassigned.get((sid, week), 0.0)
+            total = math.fsum([*(v for v in parts if v is not None), extra])
+            if not math.isclose(total, value, rel_tol=1e-12, abs_tol=tol):
                 found.append(
                     (
                         "fail",
-                        f"sample {sid}, {week}: national {fmt(value)} "
-                        f"but provinces sum to {fmt(total)}",
+                        f"sample {sid}, {week}: national {fmt(value, 12)} "
+                        f"but provinces{' and unassigned' if extra else ''} "
+                        f"sum to {fmt(total, 12)}",
                     )
                 )
-    return _result(
-        "national_sum",
-        found,
-        f"{national} is the sum of {len(provs)} provinces",
+    out = _result(
+        "national_sum", found, f"{national} is the exact sum ({basis})"
     )
+    if out.status != "pass":
+        out.summary = f"{out.summary} ({basis})"
+    return out
 
 
 def check_bounds(
@@ -438,6 +487,8 @@ def run_checks(
     previous: Path | None = None,
     kind: str = "main",
     settings: Mapping[str, Any] | None = None,
+    national_sidecar: Mapping[str, Any] | None = None,
+    sidecar_error: str = "",
 ) -> list[Check]:
     """Run every check on one candidate file."""
     c = {**DEFAULTS, **(settings or {})}
@@ -453,7 +504,13 @@ def run_checks(
         check_coverage(
             s, ref, expected_locations, horizon, int(c["nowcast_weeks"])
         ),
-        check_national_sum(s, str(c["national"]), float(c["sum_tolerance"])),
+        check_national_sum(
+            s,
+            str(c["national"]),
+            float(c["sum_tolerance"]),
+            national_sidecar,
+            sidecar_error,
+        ),
         check_bounds(
             s,
             observed,
@@ -548,6 +605,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--tasks", type=Path, default=None)
     p.add_argument("--baseline", type=Path, default=None)
     p.add_argument("--previous", type=Path, default=None)
+    p.add_argument(
+        "--national-sidecar",
+        type=Path,
+        default=None,
+        help="national.json written beside the nowcast (optional)",
+    )
     p.add_argument("--policy", type=Path, default=None)
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--no-fail", action="store_true")
@@ -557,6 +620,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         from .policy import load_policy
 
         settings = load_policy(args.policy).checks
+    sidecar, sidecar_error = None, ""
+    if args.national_sidecar and args.national_sidecar.exists():
+        try:
+            sidecar = read_json(args.national_sidecar)
+        except ValueError as err:
+            sidecar_error = f"{args.national_sidecar.name} unreadable: {err}"
     if not args.submission.exists():
         checks = [
             Check("schema", "error", f"{args.submission} was not written")
@@ -572,6 +641,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             previous=args.previous,
             kind=args.kind,
             settings=settings,
+            national_sidecar=sidecar,
+            sidecar_error=sidecar_error,
         )
     status = worst(c.status for c in checks)
     md = markdown(args.id, checks)

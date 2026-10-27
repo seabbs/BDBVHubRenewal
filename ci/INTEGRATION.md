@@ -53,9 +53,19 @@ bdbv-forecasts nowcast --model renewal --config main --fit <fit dir> \
 - Write one hub file anywhere under `--out`.
   The existing layout, `model-output/<model_id>/<reference_date>-<model_id>.csv`, is fine.
   The PR always files it as `model-output/$HUB_MODEL_ID/<reference_date>-$HUB_MODEL_ID.csv`, so persistence can stand in for the main model.
-- Include the national row `CD`, as the sum of the province trajectories by sample index.
-  The `national_sum` check fails otherwise.
+- Include the national row `CD`, as the sum of the province trajectories by sample index, plus any national cases the model does not assign to a province.
   Use the same sample ids across locations.
+  The `national_sum` check fails unless national sample k equals the sum of province sample k plus that sample's unassigned cases exactly, for every week (only float noise, 1e-9, is allowed).
+- Write `national.json` at the root of `--out` (`<candidate>/submission/national.json`), which `candidate.sh` passes to `check-forecast --national-sidecar`:
+
+  ```json
+  {"schema_version": 1, "national": "CD", "modelled_provinces": ["CD-IT", "CD-NK"],
+   "unassigned": [{"target_end_date": "2026-10-31", "sample": 1, "value": 0.0}]}
+  ```
+
+  `modelled_provinces` must all be in the hub file, or the check fails.
+  `unassigned` holds the national cases not assigned to a province, by week and sample; leave it empty when there are none.
+  Without the file the check uses the provinces in the hub file and no unassigned component, and says so in its summary.
 - Submit at least 7 back weeks (to `reference_date − 6 weeks`) as well as the 3 forecast weeks.
   The `observed` check compares the median of the last two complete weeks (4 or more weeks before `as_of`) with the data.
   With fewer back weeks it has nothing to compare, and skips.
@@ -214,7 +224,7 @@ A **warn** lets it through and is stated in the PR body.
 | values (negative, NaN, infinite, unparsable) | any | |
 | samples (exactly 100, each a full trajectory) | any | |
 | coverage (expected locations, nowcast and horizon weeks) | any | |
-| national equals the sum of provinces, per sample and week | any | |
+| national equals the sum of provinces plus unassigned cases, per sample and week, exactly; every modelled province present | any | |
 | bounds: 95th centile against max(largest observed week, 20) | > 20× | > 5× |
 | growth of the median, week on week, over the forecast (offset 5) | > 4× | > 2× |
 | last complete weeks against observed (offset 5) | off by > 5× | off by > 2× |

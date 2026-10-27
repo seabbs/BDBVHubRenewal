@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -86,6 +87,123 @@ def test_national_not_sum_fails(tmp_path: Path) -> None:
                 break
 
     assert statuses(sub(tmp_path, mutate=mutate))["national_sum"] == "fail"
+
+
+def _checks(path: Path, **kwargs: Any) -> dict[str, Any]:
+    checks = run_checks(
+        path,
+        reference_date=REF,
+        observed=OBS,
+        expected_locations=LOCS,
+        tasks=TASKS,
+        **kwargs,
+    )
+    return {c.name: c for c in checks}
+
+
+def _sidecar(**kw: Any) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "national": "CD",
+        "modelled_provinces": ["CD-HU", "CD-IT", "CD-NK"],
+        "unassigned": [],
+        **kw,
+    }
+
+
+def _bump_national(week: str, sample: int, by: float) -> Any:
+    def mutate(rows: list[list[Any]]) -> None:
+        for r in rows:
+            if r[3] == "CD" and r[2] == week and r[5] == sample:
+                r[6] += by
+
+    return mutate
+
+
+def test_national_without_sidecar_says_so(tmp_path: Path) -> None:
+    c = _checks(sub(tmp_path))["national_sum"]
+    assert c.status == "pass"
+    assert "no national.json" in c.summary
+
+
+def test_national_exact_with_sidecar(tmp_path: Path) -> None:
+    c = _checks(sub(tmp_path), national_sidecar=_sidecar())["national_sum"]
+    assert c.status == "pass"
+    assert "3 modelled provinces" in c.summary
+
+
+def test_national_allows_only_float_noise(tmp_path: Path) -> None:
+    w = weeks()[-1]
+    noisy = sub(tmp_path, mutate=_bump_national(w, 1, 1e-12))
+    assert statuses(noisy)["national_sum"] == "pass"
+    off = sub(tmp_path, mutate=_bump_national(w, 1, 1e-6))
+    assert statuses(off)["national_sum"] == "fail"
+
+
+def test_national_off_by_one_fails(tmp_path: Path) -> None:
+    path = sub(tmp_path, mutate=_bump_national(weeks()[0], 7, 1.0))
+    c = _checks(path, national_sidecar=_sidecar())["national_sum"]
+    assert c.status == "fail"
+    assert "sample 7" in c.summary
+
+
+def test_national_missing_modelled_province_fails(tmp_path: Path) -> None:
+    side = _sidecar(modelled_provinces=["CD-HU", "CD-IT", "CD-NK", "CD-TO"])
+    c = _checks(sub(tmp_path), national_sidecar=side)["national_sum"]
+    assert c.status == "fail"
+    assert "CD-TO" in c.summary
+
+
+def test_national_unassigned_component_adds_up(tmp_path: Path) -> None:
+    w = weeks()[-1]
+    path = sub(tmp_path, mutate=_bump_national(w, 3, 4.0))
+    assert statuses(path)["national_sum"] == "fail"
+    side = _sidecar(
+        unassigned=[{"target_end_date": w, "sample": 3, "value": 4.0}]
+    )
+    c = _checks(path, national_sidecar=side)["national_sum"]
+    assert c.status == "pass"
+    assert "unassigned" in c.summary
+    short = _sidecar(
+        unassigned=[{"target_end_date": w, "sample": 3, "value": 3.0}]
+    )
+    assert (
+        _checks(path, national_sidecar=short)["national_sum"].status == "fail"
+    )
+
+
+def test_cli_reads_national_sidecar(tmp_path: Path) -> None:
+    w = weeks()[-1]
+    path = sub(tmp_path, mutate=_bump_national(w, 3, 4.0))
+    side = tmp_path / "national.json"
+    side.write_text(
+        json.dumps(
+            _sidecar(
+                unassigned=[{"target_end_date": w, "sample": 3, "value": 4.0}]
+            )
+        )
+    )
+    args = [
+        "--id",
+        "main",
+        "--submission",
+        str(path),
+        "--reference-date",
+        REF,
+        "--observed",
+        str(HUB / "time-series.csv"),
+        "--out",
+        str(tmp_path / "o"),
+        "--national-sidecar",
+    ]
+    main([*args, str(side), "--no-fail"])
+    got = read_json(tmp_path / "o" / "checks.json")["checks"]
+    assert {c["name"]: c["status"] for c in got}["national_sum"] == "pass"
+    main([*args, str(tmp_path / "absent.json"), "--no-fail"])
+    got = read_json(tmp_path / "o" / "checks.json")["checks"]
+    nat = {c["name"]: c for c in got}["national_sum"]
+    assert nat["status"] == "fail"
+    assert "no national.json" in nat["summary"]
 
 
 def test_schema_failures(tmp_path: Path) -> None:

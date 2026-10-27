@@ -86,6 +86,9 @@ fi
 if [ -f "$inputs/previous.csv" ]; then
   checks+=(--previous "$inputs/previous.csv")
 fi
+# Written by the nowcast beside the hub file. Without it the check
+# uses the provinces in the file and no unassigned component.
+checks+=(--national-sidecar "$out/submission/national.json")
 sci check-forecast "${checks[@]}"
 
 if [ -n "$sub" ]; then
