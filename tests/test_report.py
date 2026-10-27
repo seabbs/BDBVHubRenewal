@@ -96,3 +96,60 @@ def test_comparison_page(
     assert (
         "BDBV Modeling Hub" in (gen / "comparison-attribution.md").read_text()
     )
+
+
+def test_make_report_writes_every_page(
+    tmp_path: Path, target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    import os
+
+    from bdbv_forecasts.backtest import run_development
+    from bdbv_forecasts.models import get_model
+
+    config = load_config(ROOT / "config" / "backtest.toml")
+    config = BacktestConfig(
+        n_samples=20,
+        seed=1,
+        development_until=config.development_until,
+        model_choice=ROOT / config.model_choice,
+        reconstructed_dates=("2026-09-26", "2026-10-03"),
+        simulated_dates=("2026-08-01",),
+    )
+    models = [get_model("persistence")]
+    out = tmp_path / "output"
+    out.mkdir()
+    forecasts, _ = run_development(models, target, delays, config)
+    forecasts.to_csv(out / "forecasts.csv.gz", index=False)
+    old = Path.cwd()
+    os.chdir(ROOT)
+    try:
+        report.make_report(
+            figures=tmp_path / "fig",
+            generated=tmp_path / "gen",
+            output=out,
+            hub_comparison=tmp_path / "none",
+        )
+    finally:
+        os.chdir(old)
+    gen = tmp_path / "gen"
+    for name in (
+        "vintages.md",
+        "scores-overall.md",
+        "relative-section.md",
+        "persistence-bias.md",
+        "truth-changes.md",
+        "heldout-status.md",
+        "comparison-scores.md",
+        "nowcast-tabs.md",
+    ):
+        assert (gen / name).exists(), name
+    fig = tmp_path / "fig"
+    for name in (
+        "target.svg",
+        "scores-wis-horizon.svg",
+        "scores-by-truth-dark.svg",
+        "forecasts-real-cd.svg",
+        "recovery-wis-horizon.svg",
+        "nowcast-cd.svg",
+    ):
+        assert (fig / name).exists(), name
