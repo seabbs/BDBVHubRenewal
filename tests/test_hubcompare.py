@@ -233,6 +233,8 @@ def test_cli_compare_hub(tmp_path: Path) -> None:
                 str(tmp_path / "hub"),
                 "--out",
                 str(tmp_path / "out"),
+                "--models",
+                "persistence",
             ]
         )
     finally:

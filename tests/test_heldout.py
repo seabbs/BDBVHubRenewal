@@ -108,3 +108,31 @@ def test_heldout_scores_each_forecast_under_its_model(
     ]
     forecasts = pd.read_csv(out / "heldout-forecasts.csv.gz")
     assert set(forecasts["vintage"]) == {"2026-10-17", "2026-10-24"}
+
+
+def test_heldout_also_runs_the_other_variants(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    config: BacktestConfig,
+    tmp_path: Path,
+) -> None:
+    from bdbv_hub_renewal.models import Persistence, register_model
+
+    class Shadow(Persistence):
+        name = "shadow"
+
+    register_model("shadow", Shadow, "A second cheap model.", replace=True)
+    config.model_choice.write_text(
+        "choices:\n  - {date: 2026-10-10, model: persistence}\n"
+    )
+    scores = run_heldout(
+        target,
+        delays,
+        config,
+        evaluate_holdout=True,
+        out_dir=tmp_path,
+        models=("shadow",),
+    )
+    assert set(scores["model"]) == {"persistence", "shadow"}
+    # Each score still records the model chosen at the time.
+    assert set(scores["chosen_model"]) == {"persistence"}
