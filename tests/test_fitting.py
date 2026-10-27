@@ -28,12 +28,19 @@ def in_root() -> Iterator[None]:
     os.chdir(old)
 
 
-def test_main_and_fallback_are_persistence_stand_ins() -> None:
+@pytest.fixture
+def stand_in() -> Iterator[str]:
+    register_config(
+        persistence_config("standin", stand_in="a test stand-in"), replace=True
+    )
+    yield "standin"
+
+
+def test_main_and_fallback_run_the_renewal_model() -> None:
     names = {c.name for c in list_configs()}
     assert {"main", "fallback", "persistence"} <= names
-    for name in ("main", "fallback"):
-        assert get_config(name).stand_in
-    assert get_config("persistence").stand_in is None
+    for name in ("main", "fallback", "persistence"):
+        assert get_config(name).stand_in is None
 
 
 def test_register_config_needs_replace() -> None:
@@ -53,17 +60,17 @@ def test_version(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 @pytest.mark.usefixtures("in_root")
-def test_fit_then_nowcast_from_the_fit(tmp_path: Path) -> None:
+def test_fit_then_nowcast_from_the_fit(tmp_path: Path, stand_in: str) -> None:
     fit = tmp_path / "fit"
     sampler = '{"num_chains": 4, "seed": 1}'
-    args = ["--model", "persistence", "--config", "main", "--vintage"]
+    args = ["--model", "persistence", "--config", stand_in, "--vintage"]
     assert main(["fit", *args, "2026-10-17", "--sampler-json", sampler,
                  "--out", str(fit)]) == 0  # fmt: skip
     diag = json.loads((fit / "diagnostics.json").read_text())
     assert diag["sampler"] == "none"
     assert diag["status"] == "not-applicable"
-    assert diag["config"] == "main"
-    assert diag["stand_in"].startswith("the `main` config runs the persistence")
+    assert diag["config"] == stand_in
+    assert diag["stand_in"] == "a test stand-in"
     assert json.loads((fit / "ppc.json").read_text())["available"] is False
     assert json.loads((fit / "fit.json").read_text())["sampler"]["seed"] == 1
     assert (fit / "progress.log").read_text()
@@ -99,7 +106,7 @@ def test_fit_then_nowcast_from_the_fit(tmp_path: Path) -> None:
 @pytest.mark.usefixtures("in_root")
 def test_nowcast_refuses_a_fit_of_another_config(tmp_path: Path) -> None:
     fit = tmp_path / "fit"
-    assert main(["fit", "--config", "fallback", "--out", str(fit)]) == 0
+    assert main(["fit", "--config", "persistence", "--out", str(fit)]) == 0
     code = main(
         ["nowcast", "--config", "main", "--fit", str(fit), "--out",
          str(tmp_path / "s")]
