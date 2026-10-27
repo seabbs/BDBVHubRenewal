@@ -1,4 +1,4 @@
-# ![BDBVHubRenewal](assets/logo.svg#only-light){ .title-logo width="248" height="44" } ![](assets/logo-dark.svg#only-dark){ .title-logo width="248" height="44" }
+# ![BDBVHubRenewal](assets/logo.svg#only-light){ .title-logo width="275" height="44" } ![](assets/logo-dark.svg#only-dark){ .title-logo width="275" height="44" }
 
 Nowcasts and forecasts of confirmed Bundibugyo virus disease cases for the BDBV Modeling Hub.
 { .page-subtitle }

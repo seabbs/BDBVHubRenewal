@@ -1,7 +1,7 @@
 <h1>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
-    <img src="assets/logo.svg" alt="BDBVForecasts" height="44">
+    <img src="assets/logo.svg" alt="BDBVHubRenewal" width="275" height="44">
   </picture>
 </h1>
 

@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 32" role="img">
-  <title>BDBVForecasts</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 32" role="img">
+  <title>BDBVHubRenewal</title>
   <!-- Forecast fan: 90% band and median after the forecast date -->
   <path d="M17 12L30 2V22.5Z" fill="#2a78d6" fill-opacity="0.3"/>
   <path d="M17 12L29.5 10.5" fill="none" stroke="#2a78d6"
@@ -15,6 +15,6 @@
   <text x="40" y="22.5" fill="#0b0b0b"
         font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif"
         font-size="19" font-weight="600" letter-spacing="-0.3"
-        textLength="136" lengthAdjust="spacingAndGlyphs">BDBV<tspan
-        fill="#2a78d6">Forecasts</tspan></text>
+        textLength="156" lengthAdjust="spacingAndGlyphs">BDBV<tspan
+        fill="#2a78d6">HubRenewal</tspan></text>
 </svg>
