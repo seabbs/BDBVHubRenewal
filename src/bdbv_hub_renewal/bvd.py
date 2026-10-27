@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """Reproduction number estimates published by BVDOutbreakSize.
 
-The `hubrenewalbvd` variant uses the latest posterior estimates of the
+The `renewalbvd` variant uses the latest posterior estimates of the
 main [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize)
 model. They come from its public `results-<run>` GitHub releases, one per
 docs build.

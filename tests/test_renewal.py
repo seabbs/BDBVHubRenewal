@@ -32,14 +32,14 @@ def task(target: pd.DataFrame, delays: pd.DataFrame) -> ForecastTask:
 
 def test_variants_are_registered_as_fitted_models() -> None:
     specs = {s.name: s for s in list_models()}
-    for name in ("hubrenewal", "hubrenewalsp"):
+    for name in ("renewal", "renewalsp"):
         assert specs[name].fitted
         model = get_model(name)
         assert isinstance(model, ForecastModel)
         assert model.name == name
     # The single patch fits the national sum, so cannot mask a province.
-    assert get_model("hubrenewal").supports_mask
-    assert not get_model("hubrenewalsp").supports_mask
+    assert get_model("renewal").supports_mask
+    assert not get_model("renewalsp").supports_mask
     assert not specs["persistence"].fitted
     # Hub model abbreviations: letters, digits and underscores, under 16.
     for name in specs:
@@ -49,19 +49,19 @@ def test_variants_are_registered_as_fitted_models() -> None:
 def test_fit_configs_run_the_renewal_model() -> None:
     assert get_config("main").stand_in is None
     assert get_config("fallback").stand_in is None
-    assert rn.VARIANTS["hubrenewal"].base == "MAIN"
+    assert rn.VARIANTS["renewal"].base == "MAIN"
     assert rn.FIT_VARIANTS == {
-        "main": "hubrenewal",
+        "main": "renewal",
         "fallback": "fallback",
-        "bvd": "hubrenewalbvd",
+        "bvd": "renewalbvd",
     }
     assert get_config("bvd").stand_in is None
 
 
 def test_model_config_applies_overrides() -> None:
-    single = rn.model_config(rn.VARIANTS["hubrenewalsp"])
+    single = rn.model_config(rn.VARIANTS["renewalsp"])
     assert single.national
-    assert rn.model_config(rn.VARIANTS["hubrenewal"]) == rn.engine().MAIN
+    assert rn.model_config(rn.VARIANTS["renewal"]) == rn.engine().MAIN
 
 
 def test_sampler_settings_read_the_environment(
@@ -128,7 +128,7 @@ def test_parameter_diagnostics_and_worst_rhat() -> None:
 
 
 def test_vintage_inputs_choose_the_active_set(task: ForecastTask) -> None:
-    config = rn.model_config(rn.VARIANTS["hubrenewal"])
+    config = rn.model_config(rn.VARIANTS["renewal"])
     data = rn.vintage_inputs(task, config)
     rows = task.target.loc[task.target["location"].isin(task.locations)]
     with_cases = set(
@@ -144,7 +144,7 @@ def test_vintage_inputs_choose_the_active_set(task: ForecastTask) -> None:
 
 
 def test_vintage_inputs_apply_the_mask(task: ForecastTask) -> None:
-    config = rn.model_config(rn.VARIANTS["hubrenewal"])
+    config = rn.model_config(rn.VARIANTS["renewal"])
     full = rn.vintage_inputs(task, config)
     masked = rn.vintage_inputs(replace(task, mask=("CD-NK",)), config)
     j = masked.names.index("CD-NK")
@@ -157,7 +157,7 @@ def test_vintage_inputs_apply_the_mask(task: ForecastTask) -> None:
 
 
 def test_single_patch_inputs_are_national(task: ForecastTask) -> None:
-    config = rn.model_config(rn.VARIANTS["hubrenewalsp"])
+    config = rn.model_config(rn.VARIANTS["renewalsp"])
     data = rn.vintage_inputs(task, config)
     assert data.names == [NATIONAL]
     assert data.known.shape[1] == 1
@@ -183,7 +183,7 @@ def test_samples_table_is_coherent(task: ForecastTask) -> None:
     # Every province, so some have no cases and get importation draws.
     rows = task.target.loc[task.target["location"] != NATIONAL]
     task = replace(task, locations=tuple(sorted(set(rows["location"]))))
-    config = rn.model_config(rn.VARIANTS["hubrenewal"])
+    config = rn.model_config(rn.VARIANTS["renewal"])
     data = rn.vintage_inputs(task, config)
     draws = _fake_draws(data, task.n_samples, np.random.default_rng(1))
     samples, unassigned = rn.samples_table(task, data, draws, report_all=True)
@@ -204,7 +204,7 @@ def test_samples_table_is_coherent(task: ForecastTask) -> None:
 
 
 def test_single_patch_apportions_national_draws(task: ForecastTask) -> None:
-    config = rn.model_config(rn.VARIANTS["hubrenewalsp"])
+    config = rn.model_config(rn.VARIANTS["renewalsp"])
     data = rn.vintage_inputs(task, config)
     draws = _fake_draws(data, task.n_samples, np.random.default_rng(2))
     samples, unassigned = rn.samples_table(task, data, draws, report_all=True)
@@ -219,7 +219,7 @@ def test_single_patch_apportions_national_draws(task: ForecastTask) -> None:
 
 
 def test_ppc_rows_add_national(task: ForecastTask) -> None:
-    config = rn.model_config(rn.VARIANTS["hubrenewal"])
+    config = rn.model_config(rn.VARIANTS["renewal"])
     data = rn.vintage_inputs(task, config)
     draws = _fake_draws(data, 30, np.random.default_rng(3))
     observed, ppc = rn.ppc_rows(data, draws["insample"])
@@ -266,11 +266,11 @@ def test_fit_renewal_writes_the_ci_contract(
     monkeypatch.setattr(rn.RenewalModel, "run", fake)
     sampler = {"num_chains": 2, "num_samples": 50, "seed": 7}
     record = rn.fit_renewal(
-        task, sampler, tmp_path, variant="hubrenewal", config_name="main"
+        task, sampler, tmp_path, variant="renewal", config_name="main"
     )
     assert calls[0]["num_chains"] == 2
     assert record["sampler"] == "nuts"
-    assert record["model"] == "hubrenewal"
+    assert record["model"] == "renewal"
     assert record["config"] == "main"
     assert record["num_chains"] == 2
     assert {c["chain"] for c in record["chains"]} == {0, 1}
@@ -282,7 +282,7 @@ def test_fit_renewal_writes_the_ci_contract(
     ppc = json.loads((tmp_path / "ppc.json").read_text())
     assert ppc["available"] is True
     assert ppc["config"] == "main"
-    assert ppc["model"] == "hubrenewal"
+    assert ppc["model"] == "renewal"
 
     result = rn.forecast_renewal(task, tmp_path)
     assert isinstance(result, Forecast)
@@ -297,7 +297,7 @@ def test_renewal_model_forecast_uses_the_run(
     monkeypatch.setattr(
         rn.RenewalModel, "run", lambda self, t: _fake_run(t, self.variant)
     )
-    samples = get_model("hubrenewal").forecast(task)
+    samples = get_model("renewal").forecast(task)
     assert set(samples["location"]) == set(task.locations)
 
 
@@ -305,7 +305,7 @@ def test_renewal_model_forecast_uses_the_run(
 def test_tiny_fit_end_to_end(task: ForecastTask, tmp_path: Path) -> None:
     sampler = {"num_chains": 1, "num_warmup": 20, "num_samples": 20}
     record = rn.fit_renewal(
-        task, sampler, tmp_path, variant="hubrenewal", config_name="main"
+        task, sampler, tmp_path, variant="renewal", config_name="main"
     )
     assert record["chains"][0]["draws"] == 20
     result = rn.forecast_renewal(task, tmp_path)
@@ -347,7 +347,7 @@ def test_init_strategy_follows_the_sampler_table() -> None:
 
 
 def test_unassigned_adds_the_national_data_gap(task: ForecastTask) -> None:
-    config = rn.model_config(rn.VARIANTS["hubrenewal"])
+    config = rn.model_config(rn.VARIANTS["renewal"])
     data = rn.vintage_inputs(task, config)
     draws = _fake_draws(data, task.n_samples, np.random.default_rng(6))
     samples, _ = rn.samples_table(task, data, draws, report_all=True)
@@ -392,12 +392,12 @@ def test_bvd_variant_reads_the_release_for_its_vintage(
     )
     for tag in ("results-3151", "results-3086"):
         shutil.copytree(fixtures / tag, tmp_path / tag)
-    assert rn.VARIANTS["hubrenewalbvd"].register
+    assert rn.VARIANTS["renewalbvd"].register
     rows = rn.bvd_rows(task, tmp_path)
     assert rows is not None
     assert rows["as_of"].iloc[0] == "2026-10-15"  # results-3086 for 17 Oct
-    config = rn.model_config(rn.VARIANTS["hubrenewalbvd"])
+    config = rn.model_config(rn.VARIANTS["renewalbvd"])
     data = rn.vintage_inputs(task, config, bvd=rows)
     assert data.bvd is not None
     assert rn.vintage_inputs(task, config).bvd is None
-    assert "hubrenewalbvd" in {s.name for s in list_models()}
+    assert "renewalbvd" in {s.name for s in list_models()}

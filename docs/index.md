@@ -15,9 +15,9 @@ National forecasts are the sum of the province trajectories.
 
 | Model | What it is |
 |---|---|
-| `hubrenewal` | Spatial and partially pooled. Each province with cases has its own renewal process. The reproduction numbers share a national trend with pooled province deviations. Provinces import cases from each other through a gravity kernel and deplete their susceptibles. |
-| `hubrenewalsp` | Single patch. One national renewal process, with each national trajectory split across provinces by their recent share of onsets. |
-| `hubrenewalbvd` | The spatial model informed by the latest posterior estimates of the [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model. |
+| `renewal` | Spatial and partially pooled. Each province with cases has its own renewal process. The reproduction numbers share a national trend with pooled province deviations. Provinces import cases from each other through a gravity kernel and deplete their susceptibles. |
+| `renewalsp` | Single patch. One national renewal process, with each national trajectory split across provinces by their recent share of onsets. |
+| `renewalbvd` | The spatial model informed by the latest posterior estimates of the [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model. |
 | `persistence` | The baseline: the last complete week carried forward. |
 
 ## Contents

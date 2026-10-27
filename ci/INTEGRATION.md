@@ -24,7 +24,7 @@ It is the reference for the interface, and `ci/run_dry.sh` runs the whole workfl
 ### `bdbv-hub-renewal fit`
 
 ```sh
-bdbv-hub-renewal fit --model hubrenewal --config main|fallback --vintage <as_of> \
+bdbv-hub-renewal fit --model renewal --config main|fallback --vintage <as_of> \
   --sampler-json '{"num_chains": 4, "num_warmup": 1000, "num_samples": 1000,
                    "target_accept": 0.8, "max_tree_depth": 10, "seed": 1}' \
   --out <fit dir>
@@ -53,7 +53,7 @@ bdbv-hub-renewal fit --model hubrenewal --config main|fallback --vintage <as_of>
 ### `nowcast` with a fit
 
 ```sh
-bdbv-hub-renewal nowcast --model hubrenewal --config main --fit <fit dir> \
+bdbv-hub-renewal nowcast --model renewal --config main --fit <fit dir> \
   --vintage <as_of> --out <candidate dir>/submission
 ```
 
@@ -150,7 +150,7 @@ The PR body adds the commit SHA itself.
 ```json
 {
   "schema_version": 1,
-  "model": "hubrenewal",
+  "model": "renewal",
   "config": "main",
   "sampler": "nuts",
   "num_chains": 4,
@@ -221,7 +221,7 @@ diagnostics = {
 ## `ppc.json`
 
 ```json
-{"schema_version": 1, "available": true, "model": "hubrenewal", "config": "main",
+{"schema_version": 1, "available": true, "model": "renewal", "config": "main",
  "intervals": [0.5, 0.9],
  "rows": [{"location": "CD-IT", "stream": "total", "target_end_date": "2026-10-03",
            "observed": 12, "median": 10.0, "lower_50": 7.0, "upper_50": 13.0,

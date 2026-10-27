@@ -132,7 +132,7 @@ class ModelConfig:
 
 MAIN = ModelConfig()
 BVD = ModelConfig(bvd=True)
-"""Main model informed by BVDOutbreakSize Rt (`hubrenewalbvd`)."""
+"""Main model informed by BVDOutbreakSize Rt (`renewalbvd`)."""
 FALLBACK = ModelConfig(
     coupling="none", delay="fixed", missing="fixed", rt_cadence="weekly"
 )

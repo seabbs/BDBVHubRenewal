@@ -2,7 +2,7 @@
 \documentclass[tikz,border=6pt]{standalone}
 \input{style.tex}
 
-% The province renewal model (hubrenewal) as a generative chain:
+% The province renewal model (renewal) as a generative chain:
 % parameters, the coupled renewal, confirmed onsets, the onset-to-report
 % delay and missingness, and the hub's observation streams. Maths follows
 % docs/methods/model.md.
@@ -28,10 +28,10 @@
   {\textbf{Generation interval}\\[1pt] $g(\tau)$, Gamma with\\ mean 15 and SD 9 days;\\
    share at risk $\nu$,\\ seeds $c_p$};
 
-% The BVDOutbreakSize term of hubrenewalbvd only.
+% The BVDOutbreakSize term of renewalbvd only.
 \node[joint, dashed, text width=3.6cm] (bvd) at (-4.6,2.4)
   {BVDOutbreakSize $\hat R$ at $s_b$\\
-   {\footnotesize tempered, hubrenewalbvd only}};
+   {\footnotesize tempered, renewalbvd only}};
 \draw[jointflow, dashed] (bvd.south) -- (rt.north);
 
 % ---- Infections ----------------------------------------------------------

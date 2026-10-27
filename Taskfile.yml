@@ -39,7 +39,7 @@ tasks:
       - uv run bdbv-hub-renewal data
 
   data-bvd:
-    desc: Cache the BVDOutbreakSize releases each backtest vintage may use in data/bvd/ (for hubrenewalbvd)
+    desc: Cache the BVDOutbreakSize releases each backtest vintage may use in data/bvd/ (for renewalbvd)
     cmds:
       - uv run bdbv-hub-renewal bvd {{.CLI_ARGS}}
 

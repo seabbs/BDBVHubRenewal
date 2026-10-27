@@ -75,7 +75,7 @@ jobs:
       - name: Fit and forecast as the submission CI does (a tiny fit)
         run: |
           uv run bdbv-hub-renewal --version
-          uv run bdbv-hub-renewal fit --model hubrenewal --config main \
+          uv run bdbv-hub-renewal fit --model renewal --config main \
             --sampler-json '{"num_chains": 1, "num_warmup": 50, "num_samples": 50}' \
             --out output/fits/main
           uv run bdbv-hub-renewal plot-ppc --ppc output/fits/main/ppc.json \

@@ -70,7 +70,7 @@ def gate(
             "warnings": warnings or [],
             "attempts": [{"id": "main", "validation": "pass"}],
             "run": {
-                "model": "hubrenewal",
+                "model": "renewal",
                 "config": "main",
                 "package_version": "0.2.0",
             },
@@ -129,7 +129,7 @@ def test_body_has_required_parts(
     assert shown[-1] == FOOTER
     assert "| Convergence | PASS (max R-hat 1.004" in text
     assert "| Hub validation | PASS |" in text
-    assert "hubrenewal (`main`), version 0.2.0" in text
+    assert "renewal (`main`), version 0.2.0" in text
     assert "bbbbbbbbbb" in text and "actions/runs/42" in text
     assert "<summary>National summary</summary>" in text
     assert "<summary>Provenance</summary>" in text

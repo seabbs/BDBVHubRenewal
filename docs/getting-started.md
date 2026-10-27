@@ -20,12 +20,12 @@ The tidy data in `data/` are committed, so nothing needs downloading to start.
 
 ## Fit the model
 
-This is a small fit of the main variant, `hubrenewal`, to the latest vintage.
+This is a small fit of the main variant, `renewal`, to the latest vintage.
 It uses 2 chains of 200 warm-up and 200 draws, so it runs in about 4 minutes on a laptop.
 The submission workflow uses 4 chains of 1000 each.
 
 ```console
-$ uv run bdbv-hub-renewal fit --model hubrenewal --config main \
+$ uv run bdbv-hub-renewal fit --model renewal --config main \
     --sampler-json '{"num_chains": 2, "num_warmup": 200, "num_samples": 200}' \
     --out output/fits/main
 Fitted config 'main' on vintage 2026-10-24 (sampler nuts); wrote output/fits/main.
@@ -56,7 +56,7 @@ A run this short is for checking the pipeline, not for submission.
 ## Forecast from the fit
 
 ```console
-$ uv run bdbv-hub-renewal nowcast --model hubrenewal --config main \
+$ uv run bdbv-hub-renewal nowcast --model renewal --config main \
     --fit output/fits/main --out output/candidates/main
 Wrote output/candidates/main/model-output/epiforecasts-seabbsrenewal/2026-10-31-epiforecasts-seabbsrenewal.csv (9000 rows, locations incl. CD).
 ```

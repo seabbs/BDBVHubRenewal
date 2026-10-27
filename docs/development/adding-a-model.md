@@ -54,7 +54,7 @@ Run the fitted variants apart, for example on a bigger machine, and commit what 
 
 ```bash
 BDBV_RENEWAL_SAMPLER='{"num_chains": 2, "num_warmup": 300, "num_samples": 300}' \
-  task backtest -- --models hubrenewal
+  task backtest -- --models renewal
 ```
 
 A run with `--models` replaces only those models' rows in `results/`.

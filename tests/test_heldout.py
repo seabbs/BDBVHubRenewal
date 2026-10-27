@@ -19,7 +19,7 @@ from bdbv_hub_renewal.heldout import (
 
 CHOICES = (
     ModelChoice(date="2026-10-10", model="persistence"),
-    ModelChoice(date="2026-10-20", model="hubrenewal"),
+    ModelChoice(date="2026-10-20", model="renewal"),
 )
 
 
@@ -29,7 +29,7 @@ def test_load_model_choices(tmp_path: Path) -> None:
         yaml.safe_dump(
             {
                 "choices": [
-                    {"date": "2026-10-20", "model": "hubrenewal"},
+                    {"date": "2026-10-20", "model": "renewal"},
                     {
                         "date": "2026-10-10",
                         "model": "persistence",
@@ -40,7 +40,7 @@ def test_load_model_choices(tmp_path: Path) -> None:
         )
     )
     choices = load_model_choices(path)
-    assert [c.model for c in choices] == ["persistence", "hubrenewal"]
+    assert [c.model for c in choices] == ["persistence", "renewal"]
     assert choices[0].summary == "Baseline only."
     assert load_model_choices(tmp_path / "missing.yml") == ()
 
@@ -60,7 +60,7 @@ def test_model_for_vintage() -> None:
     assert model_for_vintage(CHOICES, "2026-10-09") is None
     assert model_for_vintage(CHOICES, "2026-10-10") is None
     assert model_for_vintage(CHOICES, "2026-10-17") == "persistence"
-    assert model_for_vintage(CHOICES, "2026-10-24") == "hubrenewal"
+    assert model_for_vintage(CHOICES, "2026-10-24") == "renewal"
 
 
 def test_heldout_pairs() -> None:

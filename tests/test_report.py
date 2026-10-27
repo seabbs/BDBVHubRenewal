@@ -161,11 +161,11 @@ def test_lopo_section_hidden_without_results(tmp_path: Path) -> None:
     assert report._lopo_section(tmp_path / "missing.csv") == ""
     scores = pd.read_csv(ROOT / "results" / "backtest-scores.csv")
     lopo = scores.loc[scores["location"] != "CD"].assign(
-        model="hubrenewal", masked=lambda d: d["location"]
+        model="renewal", masked=lambda d: d["location"]
     )
     path = tmp_path / "lopo-scores.csv"
     lopo.to_csv(path, index=False)
     text = report._lopo_section(path)
     assert text.startswith("## Leave one province out")
-    assert "hubrenewal" in text
+    assert "renewal" in text
     assert "CD-IT" in text

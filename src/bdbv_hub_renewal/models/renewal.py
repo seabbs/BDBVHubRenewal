@@ -78,7 +78,7 @@ __all__ = [
     "worst_rhat",
 ]
 
-HUB_MODEL: Final = "hubrenewal"
+HUB_MODEL: Final = "renewal"
 """The model every fit configuration reports in its records.
 
 It is the internal key. The hub id is set apart, in `config/hub.toml`."""
@@ -148,12 +148,12 @@ VARIANTS: Final[dict[str, Variant]] = {
     v.name: v
     for v in (
         Variant(
-            "hubrenewal",
+            "renewal",
             "Province renewal (PyRenew): pooled Rt, gravity importation, "
             "depletion, modelled delays and imputation.",
         ),
         Variant(
-            "hubrenewalsp",
+            "renewalsp",
             "Single patch: one national renewal, apportioned to provinces.",
             overrides={
                 "national": True,
@@ -162,7 +162,7 @@ VARIANTS: Final[dict[str, Variant]] = {
             },
         ),
         Variant(
-            "hubrenewalbvd",
+            "renewalbvd",
             "Province renewal informed by BVDOutbreakSize Rt, as a tempered "
             "pseudo-observation.",
             base="BVD",
@@ -179,9 +179,9 @@ VARIANTS: Final[dict[str, Variant]] = {
 """Model variants, by name."""
 
 FIT_VARIANTS: Final[dict[str, str]] = {
-    "main": "hubrenewal",
+    "main": "renewal",
     "fallback": "fallback",
-    "bvd": "hubrenewalbvd",
+    "bvd": "renewalbvd",
 }
 """The variant each fit configuration of the CI runs. `bvd` is a shadow
 candidate: fitted weekly, never submitted until it is chosen."""

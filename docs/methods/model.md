@@ -11,10 +11,10 @@ Submissions go to the hub as `epiforecasts-seabbsrenewal`, whichever model produ
 
 ![The province renewal model as a generative chain, from the reproduction number to the hub's data streams.](../assets/diagrams/model_dag.svg)
 
-The figure shows the main variant, `hubrenewal`.
+The figure shows the main variant, `renewal`.
 Grey boxes are parameters, blue boxes latent quantities and orange boxes the data with their likelihoods.
 The hub's pooled delay $\hat f$ is taken from the data of each vintage, not estimated.
-The dashed box is the BVDOutbreakSize term, in `hubrenewalbvd` only.
+The dashed box is the BVDOutbreakSize term, in `renewalbvd` only.
 The source is `docs/diagrams/model_dag.tex`, built by `scripts/build_diagrams.sh`.
 
 ## Components
@@ -229,16 +229,16 @@ The renewal variants run in the backtest, the held-out evaluation and the plots,
 
 | Variant | What it is |
 |---|---|
-| `hubrenewal` | The model in the figure: provinces with pooled $R_p(t)$, gravity importation and depletion. |
-| `hubrenewalsp` | Single patch: one national renewal with the same delays and imputation, split across provinces as below. |
-| `hubrenewalbvd` | The spatial model informed by the latest posterior estimates of the main [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model, taken from the newest release published before the data cut-off. |
+| `renewal` | The model in the figure: provinces with pooled $R_p(t)$, gravity importation and depletion. |
+| `renewalsp` | Single patch: one national renewal with the same delays and imputation, split across provinces as below. |
+| `renewalbvd` | The spatial model informed by the latest posterior estimates of the main [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model, taken from the newest release published before the data cut-off. |
 | `fallback` | The CI's fallback: no coupling, with the delays and $\pi$ fixed from the data. It is a fit configuration, not a backtest variant. |
 
 The model code is in `bdbv_hub_renewal.pyrenew` and the variants in [`models.renewal`][bdbv_hub_renewal.models.renewal].
 
 ### Single patch
 
-`hubrenewalsp` fits one renewal process to the national counts.
+`renewalsp` fits one renewal process to the national counts.
 Each national trajectory $\tilde y(w)$ is split across the provinces $p$ of the task by a multinomial draw:
 
 $$
@@ -253,7 +253,7 @@ The single patch has no province likelihood, so it does not take part in the lea
 
 ### BVDOutbreakSize-informed
 
-`hubrenewalbvd` adds the latest reproduction number estimates of the main [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model as a tempered pseudo-observation on $R_p$.
+`renewalbvd` adds the latest reproduction number estimates of the main [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model as a tempered pseudo-observation on $R_p$.
 They come from its public `results-<run>` releases (`bdbv_hub_renewal.bvd`).
 A forecast uses the newest release published by the forecast's cut-off whose data end on or before the vintage.
 The cut-off is the end of the Sunday that opens the submission window, in Kinshasa time.
@@ -279,7 +279,7 @@ m_k - m_N \sim \mathcal{N}\big(\log R_k(s_b) - \log R_N(s_b),\, \tau_k^2/\alpha\
 $$
 
 This is a power prior on the published summaries, and adds no parameters.
-With $\alpha = 0$ the model is `hubrenewal`.
+With $\alpha = 0$ the model is `renewal`.
 Releases before 23 October have no patch estimates, so only the national term enters.
 Early releases publish the growth rate $r$ only, and $R = (1 + r\theta)^k$ with BVDOutbreakSize's Gamma generation interval prior (mean 15.3, SD 9.3 days).
 Leaving a province out drops the national term and that province's patch, since both carry its data.

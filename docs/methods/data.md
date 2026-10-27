@@ -91,7 +91,7 @@ Recovery checks run on these vintages.
 
 ## BVDOutbreakSize estimates
 
-`hubrenewalbvd` also reads the reproduction number estimates of the main [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model.
+`renewalbvd` also reads the reproduction number estimates of the main [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model.
 They are its public `results-<run>` GitHub releases, one per docs build, under the MIT licence ([Zenodo 10.5281/zenodo.20312758](https://doi.org/10.5281/zenodo.20312758)).
 Each vintage uses the newest release published, with its assets last updated, by the forecast's cut-off and with data ending on or before the vintage.
 `task data-bvd` caches those releases in `data/bvd/`, with the release list, so the backtest needs no network.

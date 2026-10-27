@@ -127,7 +127,7 @@ def fake_ppc(as_of: str, sc: str, config: str) -> dict:
     return {
         "schema_version": 1,
         "available": True,
-        "model": "hubrenewal",
+        "model": "renewal",
         "config": config,
         "intervals": [0.5, 0.9],
         "rows": rows,
@@ -184,7 +184,7 @@ def cmd_fit(args: argparse.Namespace) -> int:
     ]
     diag = {
         "schema_version": 1,
-        "model": "hubrenewal",
+        "model": "renewal",
         "config": args.config,
         "sampler": "nuts",
         "num_chains": chains,
@@ -413,7 +413,7 @@ def main() -> int:
         "plot-submission": cmd_plot,
         "plot-ppc": cmd_plot,
         "coherence": cmd_coherence,
-        "chosen-model": lambda _a: print("hubrenewal") or 0,
+        "chosen-model": lambda _a: print("renewal") or 0,
         "bvd": lambda _a: 0,
         "hub-id": lambda _a: print("epiforecasts-seabbsrenewal") or 0,
     }[args.command](args)

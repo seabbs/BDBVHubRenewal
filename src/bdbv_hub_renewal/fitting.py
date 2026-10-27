@@ -7,7 +7,7 @@ forecasts from the saved fit with `bdbv-hub-renewal nowcast --config <name>
 --fit <dir>`. A fit configuration says how to do both.
 
 The chain names two configurations, `main` (the full model, the
-`hubrenewal` variant) and `fallback` (delays and missingness from data,
+`renewal` variant) and `fallback` (delays and missingness from data,
 no coupling). Both run the PyRenew renewal model through
 `bdbv_hub_renewal.models.renewal.fit_renewal`, which samples, draws the
 trajectories and writes `ppc.json`. `persistence` needs no fit.

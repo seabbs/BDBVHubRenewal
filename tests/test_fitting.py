@@ -260,7 +260,7 @@ def test_cli_hub_id_and_chosen_model(
 
 @pytest.mark.usefixtures("in_root")
 def test_renewal_metadata_uses_the_submission_abbr(tmp_path: Path) -> None:
-    assert main(["metadata", "--model", "hubrenewal", "--out",
+    assert main(["metadata", "--model", "renewal", "--out",
                  str(tmp_path)]) == 0  # fmt: skip
     text = (tmp_path / "epiforecasts-seabbsrenewal.yml").read_text()
     assert "model_abbr: seabbsrenewal" in text

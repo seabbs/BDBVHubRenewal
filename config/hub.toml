@@ -1,6 +1,6 @@
 # The hub model id every submission uses: <team_abbr>-<model_abbr>.
-# It does not follow the internal model keys (hubrenewal, hubrenewalsp,
-# hubrenewalbvd): whichever model the chain submits, the hub sees this id.
+# It does not follow the internal model keys (renewal, renewalsp,
+# renewalbvd): whichever model the chain submits, the hub sees this id.
 # Read by `bdbv_hub_renewal.hub.submission_model_abbr`.
 
 [submission]

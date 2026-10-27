@@ -99,7 +99,7 @@ MODEL_METADATA = {
     },
     # Draft for the PyRenew model. Not submitted until Sam has reviewed
     # the held-out results.
-    "hubrenewal": {
+    "renewal": {
         "model_name": "Province renewal model (PyRenew)",
         "methods": (
             "Province renewal model in PyRenew with pooled Rt, gravity "

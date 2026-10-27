@@ -72,7 +72,7 @@ Its onsets are then predicted and scored against the latest real vintage.
 It runs on development vintages only, over the provinces with cases, and compares variants such as coupling on or off and pooling strength.
 The harness is [`run_lopo`][bdbv_hub_renewal.backtest.run_lopo].
 It passes the province in `ForecastTask.mask` to models that set `supports_mask = True` and skips the rest, so persistence is not run.
-`hubrenewal` honours the mask.
+`renewal` honours the mask.
 The single patch fits the national total, so it cannot.
 The results are on the Backtest page.
 

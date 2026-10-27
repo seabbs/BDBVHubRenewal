@@ -136,7 +136,7 @@ def previous() -> None:
             str(HERE / "fake_bdbv_hub_renewal.py"),
             "nowcast",
             "--model",
-            "hubrenewal",
+            "renewal",
             "--vintage",
             "2026-10-24",
             "--out",
