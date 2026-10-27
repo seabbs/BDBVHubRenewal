@@ -6,9 +6,11 @@ import pandas as pd
 import pytest
 
 from bdbv_hub_renewal.data import (
+    PROVINCE_CENTRES,
     PROVINCE_POPULATIONS,
     imputed_share,
     load_health_zones,
+    load_province_centres,
     load_locations,
     newly_missing,
     revision_table,
@@ -224,3 +226,29 @@ def test_revision_table_latest_is_one(target: pd.DataFrame) -> None:
     latest = rev.loc[rev["vintage"] == rev["vintage"].max()]
     assert latest["fraction"].dropna().eq(1).all()
     assert (latest["weeks_before"] >= 0).all()
+
+
+def test_province_centres_cover_every_province() -> None:
+    centres = load_province_centres()
+    assert set(centres["location"]) == set(PROVINCE_POPULATIONS)
+    assert set(PROVINCE_CENTRES) == set(PROVINCE_POPULATIONS)
+    # The eight provinces with cases match BVDOutbreakSize's centres.
+    old = {
+        "CD-IT": (2.0929, 30.3385),
+        "CD-NK": (-0.5754, 29.1574),
+        "CD-SK": (-2.869, 28.6843),
+        "CD-HU": (2.915, 28.5755),
+        "CD-TO": (0.6072, 24.8468),
+        "CD-BU": (3.3937, 25.1094),
+        "CD-SU": (3.0653, 19.4528),
+        "CD-NU": (3.8889, 20.9641),
+    }
+    for loc, (lat, lon) in old.items():
+        assert PROVINCE_CENTRES[loc] == pytest.approx((lat, lon), abs=1e-3)
+
+
+def test_tidy_locations_has_a_centre_for_every_province() -> None:
+    table = load_locations(DATA)
+    provinces = table.loc[table["location_type"] == "province"]
+    assert len(provinces) == 26
+    assert provinces[["latitude", "longitude"]].notna().all().all()
