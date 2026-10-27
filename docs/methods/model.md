@@ -181,11 +181,26 @@ The renewal variants run in the backtest, the held-out evaluation and the plots,
 | Variant | What it is |
 |---|---|
 | `hubrenewal` | The model in the figure: provinces with pooled $R_p(t)$, gravity importation and depletion. |
-| `hubrenewalsp` | Single patch: one national renewal with the same delays and imputation. Each national draw is split across provinces by a multinomial on their share of onsets in the last 4 data weeks. |
+| `hubrenewalsp` | Single patch: one national renewal with the same delays and imputation, split across provinces as below. |
 | `hubrenewalbvd` | The spatial model informed by the latest posterior estimates of the main [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model, taken from the newest release published before the data cut-off. |
 | `fallback` | The CI's fallback: delays and $\pi$ fixed from the data, no coupling, weekly $R(t)$. It is a fit configuration, not a backtest variant. |
 
 The model code is in `bdbv_hub_renewal.pyrenew` and the variants in [`models.renewal`][bdbv_hub_renewal.models.renewal].
+
+### Single patch
+
+`hubrenewalsp` fits one renewal process to the national counts.
+Each national trajectory $\tilde y(w)$ is split across the provinces $p$ of the task by a multinomial draw:
+
+$$
+\big(\tilde y_p(w)\big)_p \sim \text{Multinomial}\big(\tilde y(w),\, \theta\big),
+\qquad
+\theta_p = \frac{c_p + a}{\sum_q (c_q + a)},
+$$
+
+with $c_p$ the province's onsets over the last 4 data weeks and $a = 1/2$, the Jeffreys pseudo-count.
+So a province with no recent onsets keeps a small share, and the provinces sum to the national count in every sample and week.
+The single patch has no province likelihood, so it does not take part in the leave-one-province-out check.
 
 ### Persistence baseline
 

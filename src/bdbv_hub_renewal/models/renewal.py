@@ -51,11 +51,13 @@ __all__ = [
     "FIT_VARIANTS",
     "HUB_MODEL",
     "SAMPLER_ENV",
+    "SHARE_PRIOR",
     "START_COUNT",
     "VARIANTS",
     "RenewalModel",
     "RenewalRun",
     "Variant",
+    "apportion_shares",
     "chain_diagnostics",
     "ebfmi",
     "engine",
@@ -93,6 +95,12 @@ DEFAULT_SAMPLER: Final[Mapping[str, Any]] = {
 
 RECENT_WEEKS: Final = 4
 """Data weeks used to apportion single-patch draws to provinces."""
+
+SHARE_PRIOR: Final = 0.5
+"""Pseudo-count added to each province's recent onsets before sharing.
+
+The Jeffreys prior for a multinomial, so a province with no recent onsets
+keeps a small share and can still be given cases."""
 
 
 def engine() -> ModuleType:
@@ -350,14 +358,21 @@ def vintage_inputs(task: ForecastTask, config: Any) -> Any:
     )
 
 
-def _apportion(
-    task: ForecastTask, national: NDArray[np.float64]
-) -> dict[str, NDArray[np.float64]]:
-    """Split national draws across provinces by their recent shares.
+def apportion_shares(task: ForecastTask) -> pd.Series:
+    r"""Each province's share of national onsets, for the single patch.
 
-    Each national count is split by a multinomial draw on each province's
-    share of total onsets over the last `RECENT_WEEKS` data weeks, so the
-    provinces sum to the national count in every sample and week.
+    $\theta_p = (c_p + a) / \sum_q (c_q + a)$, with $c_p$ the province's
+    onsets in the last `RECENT_WEEKS` data weeks and $a$ `SHARE_PRIOR`.
+
+    Parameters
+    ----------
+    task : ForecastTask
+        The task.
+
+    Returns
+    -------
+    pandas.Series
+        Shares indexed by the task's provinces, summing to one.
     """
     rows = task.target.loc[
         (task.target["vintage"] == task.vintage)
@@ -366,12 +381,19 @@ def _apportion(
     by_week = rows.pivot_table(
         index="target_end_date", columns="location", values="total"
     ).reindex(columns=list(task.locations))
-    weights = by_week.tail(RECENT_WEEKS).fillna(0).sum()
-    if weights.sum() <= 0:
-        weights = by_week.fillna(0).sum()
-    if weights.sum() <= 0:
-        weights = pd.Series(1.0, index=list(task.locations))
-    p = (weights / weights.sum()).to_numpy(dtype=float)
+    weights = by_week.tail(RECENT_WEEKS).fillna(0).sum() + SHARE_PRIOR
+    return weights / weights.sum()
+
+
+def _apportion(
+    task: ForecastTask, national: NDArray[np.float64]
+) -> dict[str, NDArray[np.float64]]:
+    """Split national draws across provinces by `apportion_shares`.
+
+    Each national count is split by a multinomial draw, so the provinces
+    sum to the national count in every sample and week.
+    """
+    p = apportion_shares(task).to_numpy(dtype=float)
     n = np.rint(np.maximum(national, 0)).astype(np.int64)
     split = task.rng().multinomial(n, p)
     return {
