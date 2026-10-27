@@ -42,7 +42,7 @@ It checks the file with `validate_submission`, which mirrors the hub's checks:
 The persistence file for 2026-10-31 passes every check.
 
 `bdbv-hub-renewal metadata` writes `hub/model-metadata/epiforecasts-<model>.yml` and checks it against the hub's schema.
-The contributor list, licence and model names are placeholders until Sam confirms them.
+Sam confirms the contributor list, licence and model name before a model is first submitted.
 
 !!! note "Sample ids"
     Sample ids run from 1 to 100 within each location and are shared across locations.

@@ -3,24 +3,39 @@
 Nowcasts and forecasts of confirmed Bundibugyo virus disease cases for the BDBV Modeling Hub.
 { .page-subtitle }
 
-This repository produces weekly forecasts for the [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub).
-The hub collects nowcasts and forecasts of weekly confirmed cases by onset week, by province and nationally, for the 2026 outbreak in the Democratic Republic of the Congo.
-The plan is in [EpidemicDates issue #3](https://github.com/seabbs/EpidemicDates/issues/3).
+Weekly nowcasts and forecasts of confirmed Bundibugyo virus disease cases for the [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub).
+The hub's target is weekly confirmed cases by symptom-onset week, by province and nationally, as 100 joint sample trajectories per location.
+Forecasts are submitted as `epiforecasts-hubrenewal`.
 
-So far it has:
+## Models
 
-- a data layer that downloads and tidies every stream the hub publishes, with every vintage;
-- reconstructed and simulated vintages to extend testing;
-- a persistence baseline and a model registry;
-- a writer and checks for the hub's submission format and model metadata;
-- a backtest scored like [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize), a rolling held-out evaluation and a comparison with hub forecasts;
-- a province renewal model on PyRenew, with a single-patch variant and a fallback, and its maths.
+All models are renewal processes built on [PyRenew](https://github.com/CDCgov/PyRenew) and fitted to each data vintage ([Model](methods/model.md)).
+Each fits the hub's known and imputed onsets together, with time-varying delays, missingness and ascertainment, and models the hub's imputation as the hub makes it.
+National forecasts are the sum of the province trajectories.
+
+| Model | What it is |
+|---|---|
+| `hubrenewal` | Spatial and partially pooled. Each province with cases has its own renewal process. The reproduction numbers share a national trend with pooled province deviations. Provinces import cases from each other through a gravity kernel and deplete their susceptibles. |
+| `hubrenewalsp` | Single patch. One national renewal process, with each national trajectory split across provinces by their recent share of onsets. |
+| `hubrenewalbvd` | The spatial model informed by the latest posterior estimates of the [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model. |
+| `persistence` | The baseline: the last complete week carried forward. |
+
+## What the repository does
+
+- Downloads and tidies every data stream the hub publishes, with every vintage, and builds reconstructed and simulated vintages for testing ([Data](methods/data.md)).
+- Scores every model against persistence on past vintages, then on every vintage after the model choice as a rolling held-out evaluation, re-scored as later data arrive ([Evaluation](methods/evaluation.md), [Backtest](backtest.md), [Held-out evaluation](heldout.md)).
+- Checks how well each province is predicted from the others by leaving one province out.
+- Writes and checks the hub's submission files and model metadata.
+- Submits each week through a gated workflow ([How submissions work](submission/workflow.md)).
+  It fits the main model, refits it once if it has not converged, and falls back to a simpler variant and then to persistence.
+  Each candidate is checked for convergence, posterior predictive fit and file validity, and the result is opened as a pull request.
+- Publishes the latest nowcast and forecast ([Nowcast](nowcast.md)).
 
 ## Pages
 
 | Section | What it holds |
 |---|---|
-| [Getting started](getting-started.md) | Install, run and build the site. |
+| [Getting started](getting-started.md) | Install, fit the model and write a hub file. |
 | Methods | [Data](methods/data.md), [Model](methods/model.md) and [Evaluation](methods/evaluation.md), written as the methods of a paper. |
 | [Data](data.md) | What the hub data show, vintage by vintage. |
 | [Backtest](backtest.md) | Development scores against later data. |

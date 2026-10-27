@@ -75,7 +75,7 @@ So they are cleaner than real vintages, and scores on them are somewhat optimist
 
 ## Simulated vintages
 
-A simulator generates province outbreaks from the planned model's own structure with known parameters:
+A simulator generates province outbreaks from the renewal model's own structure with known parameters:
 
 - a renewal process with a national Rt that turns from 1.6 to 0.85 around day 120, fixed province offsets, gravity-kernel importation ($\varepsilon = 0.01$) and susceptible depletion;
 - ascertainment rising from 0.5 to 0.75;

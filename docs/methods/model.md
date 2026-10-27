@@ -4,7 +4,7 @@ The renewal model and the persistence baseline, with the maths of each.
 { .page-subtitle }
 
 The data and notation are on the [Data methods page](data.md#target-and-notation).
-The renewal model will submit to the hub as `epiforecasts-hubrenewal`.
+The renewal model submits to the hub as `epiforecasts-hubrenewal`.
 `epiforecasts-renewal` is a different hub model, from [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize).
 
 ## Structure
@@ -176,15 +176,15 @@ Every later vintage is then held out (see [Evaluation](evaluation.md#rolling-hel
 
 ### Renewal variants
 
-Three renewal variants run in the backtest, the held-out evaluation and the plots, next to persistence.
+The renewal variants run in the backtest, the held-out evaluation and the plots, next to persistence.
 
 | Variant | What it is |
 |---|---|
 | `hubrenewal` | The model in the figure: provinces with pooled $R_p(t)$, gravity importation and depletion. |
 | `hubrenewalsp` | Single patch: one national renewal with the same delays and imputation. Each national draw is split across provinces by a multinomial on their share of onsets in the last 4 data weeks. |
+| `hubrenewalbvd` | The spatial model informed by the latest posterior estimates of the main [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model, taken from the newest release published before the data cut-off. |
 | `fallback` | The CI's fallback: delays and $\pi$ fixed from the data, no coupling, weekly $R(t)$. It is a fit configuration, not a backtest variant. |
 
-A third variant that takes the latest posterior of the main [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model is being scoped.
 The model code is in `bdbv_hub_renewal.pyrenew` and the variants in [`models.renewal`][bdbv_hub_renewal.models.renewal].
 
 ### Persistence baseline
