@@ -34,6 +34,21 @@ Centres of affected provinces are the WorldPop-weighted centres used by BVDOutbr
 The 2026-08-18 vintage has no delay data.
 The 2026-10-09 delay file exists only in the hub's git history.
 
+## National against the provinces
+
+The national (`CD`) row should equal the sum of the provinces.
+`bdbv-forecasts data` checks this for every vintage, week and stream (observed, imputed and total), writes `data/national-coherence.csv` and prints the result for the latest vintage.
+`bdbv-forecasts coherence --vintage <as_of>` gives the same check for one vintage as JSON, which the [submission workflow](submissions.md#checks-and-thresholds) reports in each pull request.
+The table counts the weeks where the two differ.
+
+--8<-- "national-coherence.md"
+
+**How it informs the model.**
+The submitted national value is the sum of the province values for each sample.
+A gap would mean cases counted nationally but in no province.
+A model would then need an unassigned national component, which the writer adds to the sum (`to_hub_table(..., unassigned=...)`).
+The current models have none.
+
 ## Target by vintage
 
 <figure class="doc-figure" markdown="span">

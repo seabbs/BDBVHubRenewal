@@ -16,7 +16,13 @@ from pathlib import Path
 import pandas as pd
 
 from .backtest import load_config, make_tasks, run_forecasts
-from .data import load_delays, load_target, newly_missing
+from .data import (
+    COHERENCE_STREAMS,
+    load_delays,
+    load_target,
+    national_coherence,
+    newly_missing,
+)
 from .delays import delay_summary
 from .models.base import NATIONAL, get_model, list_models
 from .plots import (
@@ -155,6 +161,19 @@ def make_report(
         delays.groupby("vintage").size()
     )
     _write(gen / "vintages.md", _table(summary))
+    coherence = national_coherence(real)
+    by_vintage = (
+        coherence.assign(with_gap=coherence["gap"] != 0)
+        .pivot_table(
+            index="vintage",
+            columns="stream",
+            values="with_gap",
+            aggfunc="sum",
+        )[list(COHERENCE_STREAMS)]
+        .rename(columns=lambda s: f"{s} weeks with a gap")
+        .reset_index()
+    )
+    _write(gen / "national-coherence.md", _table(by_vintage))
     dsum = delay_summary(latest_delays, by=("location_name",))
     _write(gen / "delays.md", _table(dsum.sort_values("n", ascending=False)))
     new = newly_missing(real)
