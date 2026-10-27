@@ -40,3 +40,6 @@ The [held-out evaluation](../heldout.md) then scores it on every later vintage.
 
 The harness adds the national total, the horizons and the vintage kind.
 Model colours follow registry order, so a model keeps its colour as others are added.
+
+To take part in the leave-one-province-out check, set `supports_mask = True` on the class.
+The model must then drop the counts of the provinces in `task.mask` from its likelihood, while still forecasting them.

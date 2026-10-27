@@ -30,7 +30,7 @@ import datetime as dt
 import logging
 import tomllib
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pandas as pd
@@ -50,6 +50,7 @@ from .vintages import reconstruct_delays, reconstruct_vintages
 
 __all__ = [
     "BacktestConfig",
+    "development_tasks",
     "forecast_locations",
     "forecast_weeks",
     "load_config",
@@ -57,6 +58,7 @@ __all__ = [
     "real_vintages",
     "run_development",
     "run_forecasts",
+    "run_lopo",
     "run_recovery",
     "saturdays",
     "score_by_truth_vintage",
@@ -441,6 +443,56 @@ def truth_changes(
     ).reset_index(drop=True)
 
 
+def development_tasks(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    config: BacktestConfig,
+    *,
+    include_reconstructed: bool = True,
+) -> list[ForecastTask]:
+    """Build the development tasks: real and reconstructed, not held out.
+
+    Parameters
+    ----------
+    target : pandas.DataFrame
+        The tidy target table.
+    delays : pandas.DataFrame
+        The tidy delay table.
+    config : BacktestConfig
+        Settings.
+    include_reconstructed : bool
+        Whether to add reconstructed vintages.
+
+    Returns
+    -------
+    list of ForecastTask
+        Tasks for vintages up to `config.development_until` and before the
+        latest real vintage.
+    """
+    real = target.loc[target["kind"] == "real"]
+    latest = real_vintages(real)[-1]
+    parts = [real]
+    dly_parts = [delays.assign(kind="real")]
+    if include_reconstructed:
+        dates = [
+            d for d in config.reconstructed_dates if not config.is_heldout(d)
+        ]
+        if dates:
+            parts.append(reconstruct_vintages(real, delays, dates, latest))
+            src = delays.loc[delays["vintage"] == latest]
+            dly_parts.extend(
+                reconstruct_delays(src, d).assign(kind="reconstructed")
+                for d in dates
+            )
+    data = pd.concat(parts, ignore_index=True)
+    all_delays = pd.concat(dly_parts, ignore_index=True)
+    return [
+        t
+        for t in make_tasks(data, all_delays, config)
+        if not config.is_heldout(t.vintage) and t.vintage < latest
+    ]
+
+
 def run_development(
     models: Sequence[ForecastModel],
     target: pd.DataFrame,
@@ -475,29 +527,87 @@ def run_development(
     """
     real = target.loc[target["kind"] == "real"]
     latest = real_vintages(real)[-1]
-    parts = [real]
-    dly_parts = [delays.assign(kind="real")]
-    if include_reconstructed:
-        dates = [
-            d for d in config.reconstructed_dates if not config.is_heldout(d)
-        ]
-        if dates:
-            parts.append(reconstruct_vintages(real, delays, dates, latest))
-            src = delays.loc[delays["vintage"] == latest]
-            dly_parts.extend(
-                reconstruct_delays(src, d).assign(kind="reconstructed")
-                for d in dates
-            )
-    data = pd.concat(parts, ignore_index=True)
-    all_delays = pd.concat(dly_parts, ignore_index=True)
-    tasks = [
-        t
-        for t in make_tasks(data, all_delays, config)
-        if not config.is_heldout(t.vintage) and t.vintage < latest
-    ]
+    tasks = development_tasks(
+        target, delays, config, include_reconstructed=include_reconstructed
+    )
     forecasts = run_forecasts(models, tasks)
     truth = truth_from_vintage(real, latest)
     scores = score_tasks(forecasts, truth, latest)
+    return forecasts, scores
+
+
+def run_lopo(
+    models: Sequence[ForecastModel],
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    config: BacktestConfig,
+    *,
+    provinces: Sequence[str] | None = None,
+    include_reconstructed: bool = True,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Leave one province out: forecast it with its counts masked.
+
+    For each development task and each province with cases, the model
+    gets the task with that province in `ForecastTask.mask`.
+    Only the masked province's forecast is kept and scored, against the
+    latest real vintage.
+    Models without `supports_mask = True` cannot honour a mask and are
+    skipped.
+
+    Parameters
+    ----------
+    models : sequence of ForecastModel
+        Models to check.
+    target : pandas.DataFrame
+        The tidy target table.
+    delays : pandas.DataFrame
+        The tidy delay table.
+    config : BacktestConfig
+        Settings.
+    provinces : sequence of str, optional
+        Provinces to mask, one at a time. Defaults to every province with
+        cases in each task.
+    include_reconstructed : bool
+        Whether to add reconstructed vintages.
+
+    Returns
+    -------
+    tuple of pandas.DataFrame
+        The forecasts, with a `masked` column, and the scores. Both empty
+        if no model supports a mask.
+    """
+    able = [m for m in models if getattr(m, "supports_mask", False)]
+    for m in models:
+        if m not in able:
+            log.info("Skipping %s in leave-one-province-out: no mask.", m.name)
+    if not able:
+        return pd.DataFrame(), pd.DataFrame()
+    real = target.loc[target["kind"] == "real"]
+    latest = real_vintages(real)[-1]
+    frames = []
+    for task in development_tasks(
+        target, delays, config, include_reconstructed=include_reconstructed
+    ):
+        for prov in task.locations:
+            if provinces is not None and prov not in provinces:
+                continue
+            masked = replace(task, mask=(prov,))
+            for model in able:
+                samples = model.forecast(masked)
+                check_samples(samples, masked)
+                kept = samples.loc[samples["location"] == prov].copy()
+                ref = pd.Timestamp(task.reference_date)
+                kept["horizon"] = (
+                    pd.to_datetime(kept["target_end_date"]) - ref
+                ).dt.days // 7
+                kept.insert(0, "model", model.name)
+                kept.insert(1, "kind", task.kind)
+                kept.insert(2, "vintage", task.vintage)
+                kept.insert(3, "reference_date", ref.date().isoformat())
+                kept.insert(4, "masked", prov)
+                frames.append(kept)
+    forecasts = pd.concat(frames, ignore_index=True)
+    scores = score_tasks(forecasts, truth_from_vintage(real, latest), latest)
     return forecasts, scores
 
 

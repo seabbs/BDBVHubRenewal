@@ -66,6 +66,13 @@ class ForecastTask:
         Number of sample trajectories.
     seed : int
         Seed for the model's random numbers.
+    mask : tuple of str
+        Provinces whose counts the model must not fit to, for the
+        leave-one-province-out check. They stay in `locations`, so they
+        are still forecast, and in `target`, so a model can keep them in
+        its latent process (for spatial coupling) while dropping them from
+        its likelihood. Only models with `supports_mask = True` are given
+        a non-empty mask.
     """
 
     vintage: str
@@ -77,6 +84,7 @@ class ForecastTask:
     target_end_dates: tuple[str, ...]
     n_samples: int = 100
     seed: int = 0
+    mask: tuple[str, ...] = ()
 
     def rng(self) -> np.random.Generator:
         """Return a random generator seeded from the task.
