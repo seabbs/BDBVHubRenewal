@@ -8,13 +8,16 @@
 # same order: detect -> prepare (persistence) -> primary candidates ->
 # triage -> retries -> select -> submit (DRY_RUN=true). The model is the
 # fixture CLI (fixtures/fake_bdbv_hub_renewal.py) and `gh`/`git` are never
-# called for writing. Outputs go to $TMPDIR/submission-ci-dry/<scenario>/.
+# called for writing. Outputs go to a new $TMPDIR/submission-ci-dry.XXXXXX/
+# <scenario>/ for each run, so concurrent dry runs never share files.
 set -euo pipefail
 
 CI_DIR=$(cd "$(dirname "$0")" && pwd)
 export CI_DIR
 FIX="$CI_DIR/fixtures"
-ROOT="${TMPDIR:-/tmp}/submission-ci-dry"
+tmp=${TMPDIR:-/tmp}
+ROOT=$(mktemp -d "${tmp%/}/submission-ci-dry.XXXXXX")
+echo "Dry-run outputs: $ROOT"
 export UV_CACHE_DIR=${UV_CACHE_DIR:-${TMPDIR:-/tmp}/uvcache}
 export FORECAST_CLI="python3 $FIX/fake_bdbv_hub_renewal.py"
 export MODEL=hubrenewal MODEL_ID=epiforecasts-hubrenewal
