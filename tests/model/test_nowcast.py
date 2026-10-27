@@ -2,12 +2,14 @@
 
 import dataclasses
 
+import jax.numpy as jnp
 import numpy as np
 from jax import random
 from numpyro.infer import Predictive
 
-from bdbv_hub_renewal.model import build_model, model_args
+from bdbv_hub_renewal.model import FALLBACK, MAIN, build_model, model_args
 from bdbv_hub_renewal.model.model import forecast_trajectories
+from bdbv_hub_renewal.model.observation import onset_expectations
 
 
 def prior_latent(model, data, n=20):
@@ -45,3 +47,34 @@ def test_masked_provinces_do_not_see_their_counts(sim_vintage, config):
     a = forecast_trajectories(model, data, 20, posterior=latent)
     b = forecast_trajectories(model, shifted, 20, posterior=latent)
     np.testing.assert_array_equal(a["province"], b["province"])
+
+
+def test_publication_lag_mixes_cut_offs():
+    rng = np.random.default_rng(4)
+    n, dmax, cutoff = 70, 20, 60
+    args = (
+        jnp.asarray(rng.gamma(5, 4, (n, 2))),
+        jnp.asarray(rng.dirichlet(np.ones(dmax + 1), n)),
+        jnp.asarray(rng.uniform(0.05, 0.3, (n, 2))),
+        jnp.asarray(rng.dirichlet(np.ones(dmax + 1))),
+    )
+    lag = np.array([0.1, 0.2, 0.3, 0.4])
+    out = onset_expectations(*args, cutoff, publication_lag=jnp.asarray(lag))
+    # Reports are published by T with probability F(T - t), so the
+    # expectations mix those at cut-offs T - l with weights p(l).
+    parts = [onset_expectations(*args, cutoff - k) for k in range(4)]
+    for key in ("known", "imputed", "triangle", "known_final"):
+        mixed = sum(q * p[key] for q, p in zip(lag, parts, strict=True))
+        np.testing.assert_allclose(out[key], mixed, rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(
+        onset_expectations(*args, cutoff, publication_lag=jnp.ones(1))["known"],
+        parts[0]["known"],
+    )
+
+
+def test_model_estimates_the_publication_lag(sim_vintage):
+    model = build_model(sim_vintage, MAIN)
+    prior = prior_latent(model, sim_vintage, n=5)
+    assert prior["onsets_publication_lag"].shape == (5, 4)
+    fixed = build_model(sim_vintage, FALLBACK)
+    assert "onsets_publication_lag" not in prior_latent(fixed, sim_vintage, 2)
