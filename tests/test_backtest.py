@@ -9,7 +9,9 @@ from bdbv_forecasts.backtest import (
     BacktestConfig,
     forecast_weeks,
     load_config,
+    make_tasks,
     run_development,
+    run_lopo,
     run_recovery,
     saturdays,
     score_by_truth_vintage,
@@ -106,3 +108,72 @@ def test_recovery_on_simulated_vintages(config: BacktestConfig) -> None:
     _, scores = run_recovery([get_model("persistence")], config)
     assert set(scores["kind"]) == {"simulated"}
     assert len(scores) > 0
+
+
+class _MaskAware:
+    """Persistence that forecasts masked provinces from the others."""
+
+    name = "mask_aware"
+    supports_mask = True
+
+    def forecast(self, task):  # type: ignore[no-untyped-def]
+        from dataclasses import replace
+
+        seen = task.target.loc[~task.target["location"].isin(task.mask)]
+        # Fill masked provinces with the mean of the visible ones.
+        mean = (
+            seen.loc[seen["location"] != "CD"]
+            .groupby("target_end_date", as_index=False)["total"]
+            .mean()
+        )
+        filled = pd.concat(
+            [seen]
+            + [mean.assign(location=p, location_name=p) for p in task.mask],
+            ignore_index=True,
+        )
+        return get_model("persistence").forecast(replace(task, target=filled))
+
+
+def test_tasks_carry_an_empty_mask(
+    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
+) -> None:
+    tasks = make_tasks(
+        target.loc[target["vintage"] == "2026-10-09"], delays, config
+    )
+    assert tasks[0].mask == ()
+
+
+def test_lopo_masks_one_province_at_a_time(
+    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
+) -> None:
+    models = [get_model("persistence"), _MaskAware()]
+    forecasts, scores = run_lopo(
+        models,
+        target,
+        delays,
+        config,
+        provinces=("CD-IT", "CD-NK"),
+        include_reconstructed=False,
+    )
+    # Persistence cannot honour a mask, so it is skipped.
+    assert set(forecasts["model"]) == {"mask_aware"}
+    # Only the masked province is kept, from development vintages only.
+    assert (forecasts["location"] == forecasts["masked"]).all()
+    assert set(forecasts["masked"]) == {"CD-IT", "CD-NK"}
+    assert set(forecasts["vintage"]) == {"2026-08-18", "2026-10-09"}
+    assert set(scores["location"]) == {"CD-IT", "CD-NK"}
+    assert set(scores["truth_vintage"]) == {"2026-10-24"}
+
+
+def test_lopo_without_mask_aware_models_is_empty(
+    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
+) -> None:
+    forecasts, scores = run_lopo(
+        [get_model("persistence")],
+        target,
+        delays,
+        config,
+        include_reconstructed=False,
+    )
+    assert forecasts.empty
+    assert scores.empty
