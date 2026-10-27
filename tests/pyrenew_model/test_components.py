@@ -46,7 +46,7 @@ def test_hazard_to_pmf_is_a_pmf_and_geometric_for_constant_hazard():
 
 @pytest.mark.parametrize("family", ["gamma", "lognormal"])
 def test_censored_pmf_matches_reference(family):
-    ours = np.asarray(censored_pmf(family, 8.0, 0.8, 60, n_grid=200))
+    ours = np.asarray(censored_pmf(family, 8.0, 0.8, 60))
     ref = ParametricDelay(family, 8.0, 6.4).pmf(60)
     np.testing.assert_allclose(ours, ref, atol=2e-4)
 
@@ -82,7 +82,11 @@ def test_onset_expectations_match_reference():
     # Eventually every case is either known or imputed somewhere.
     total = out["known_final"].sum() + out["imputed_final"].sum()
     assert float(total) <= onsets.sum() + 1e-6
-    assert np.all(np.asarray(out["known_final"]) >= np.asarray(out["known"]))
+    known = np.asarray(out["known"])
+    # Equal up to float32 round-off where everything is reported.
+    assert np.all(
+        np.asarray(out["known_final"]) >= known - 1e-5 * np.abs(known) - 1e-6
+    )
 
 
 def test_mixing_conserves_transmission():
@@ -253,3 +257,42 @@ def test_province_centres_cover_all_provinces_and_match_reference():
     for loc, (lat, lon) in PROVINCE_CENTRES.items():
         assert c.loc[loc, "latitude"] == pytest.approx(lat, abs=1e-3)
         assert c.loc[loc, "longitude"] == pytest.approx(lon, abs=1e-3)
+
+
+# R: primarycensored::dpcens(0:42, pgamma, shape = (15/9)^2, rate = 15/81,
+#    pwindow = 1, swindow = 1, D = 43), primarycensored 1.x, R 4.6.
+DPCENS_GI = np.array(
+    [0.0004862021, 0.0050286802, 0.0135041309, 0.0229102532, 0.0317137783,
+     0.0391890828, 0.0450491334, 0.0492578353, 0.0519197765, 0.0532123394,
+     0.0533434874, 0.0525258716, 0.0509615373, 0.0488335504, 0.0463021113,
+     0.0435035255, 0.0405509272, 0.0375360192, 0.0345313317, 0.0315926802,
+     0.0287616150, 0.0260677387, 0.0235308224, 0.0211626864, 0.0189688388,
+     0.0169498778, 0.0151026721, 0.0134213432, 0.0118980692, 0.0105237347,
+     0.0092884482, 0.0081819476, 0.0071939120, 0.0063141955, 0.0055329985,
+     0.0048409869, 0.0042293714, 0.0036899538, 0.0032151488, 0.0027979866,
+     0.0024321017, 0.0021117111, 0.0018315857]
+)  # fmt: skip
+# R: dpcens(0:60, pgamma, shape = 1/0.64, rate = 1/(8*0.64), 1, 1, D = 61)
+# and dpcens(0:60, plnorm, meanlog = log(8) - log1p(0.64)/2,
+#    sdlog = sqrt(log1p(0.64)), 1, 1, D = 61), first 12 values.
+DPCENS_DELAY = {
+    "gamma": [0.0201013592, 0.0691281551, 0.0865284119, 0.0899649926,
+              0.0872268498, 0.0814602581, 0.0743087386, 0.0667008352,
+              0.0591717391, 0.0520241311, 0.0454182071, 0.0394255981],
+    "lognormal": [0.0008402915, 0.0229248670, 0.0741250861, 0.1075417400,
+                  0.1148966476, 0.1075311290, 0.0943743233, 0.0801201601,
+                  0.0668394085, 0.0552668086, 0.0455189862, 0.0374546304],
+}  # fmt: skip
+
+
+def test_generation_interval_is_double_censored():
+    # Lags 1..42: the double-censored pmf on 0..42 with lag 0 dropped and
+    # the rest renormalised (as BVDOutbreakSize left-truncates at a day).
+    expected = DPCENS_GI[1:] / DPCENS_GI[1:].sum()
+    np.testing.assert_allclose(generation_interval(), expected, rtol=1e-6)
+
+
+@pytest.mark.parametrize("family", ["gamma", "lognormal"])
+def test_censored_pmf_matches_primarycensored(family):
+    ours = np.asarray(censored_pmf(family, 8.0, 0.8, 60))
+    np.testing.assert_allclose(ours[:12], DPCENS_DELAY[family], rtol=2e-4)

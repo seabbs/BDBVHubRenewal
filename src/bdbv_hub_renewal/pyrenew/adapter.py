@@ -43,6 +43,33 @@ def province_centres() -> pd.DataFrame:
     return pd.read_csv(CENTRES, comment="#")
 
 
+def province_distances(locations: tuple[str, ...]) -> np.ndarray:
+    """Great-circle distances in km between province centres.
+
+    Returns
+    -------
+    numpy.ndarray
+        Symmetric, zero diagonal.
+
+    Raises
+    ------
+    ValueError
+        If a province has no centre.
+    """
+    centres = province_centres().set_index("location").reindex(list(locations))
+    if centres[["latitude", "longitude"]].isna().any().any():
+        raise ValueError("Missing province centre.")
+    lat = np.radians(centres["latitude"].to_numpy(float))
+    lon = np.radians(centres["longitude"].to_numpy(float))
+    a = (
+        np.sin((lat[:, None] - lat[None, :]) / 2) ** 2
+        + np.cos(lat[:, None])
+        * np.cos(lat[None, :])
+        * np.sin((lon[:, None] - lon[None, :]) / 2) ** 2
+    )
+    return 2 * 6371 * np.arcsin(np.sqrt(a))
+
+
 def gravity_kernel(
     locations: tuple[str, ...], table: pd.DataFrame, decay_km: float = 300.0
 ) -> np.ndarray:
@@ -295,7 +322,9 @@ def vintage_from_tables(
         active = tuple(p for p in locations if cases.get(p, 0) > 0)
     idle = tuple(p for p in locations if p not in active)
     national = wide["total"].reindex(columns=list(active)).fillna(0).sum(1)
-    big = int(np.argmax(national.to_numpy() >= START_COUNT))
+    counts_by_week = national.to_numpy()
+    threshold = min(START_COUNT, counts_by_week.max())
+    big = int(np.argmax(counts_by_week >= threshold))
     first = _saturday(national.index[max(0, big - 1)])
     start = first - dt.timedelta(days=6)
     cutoff = (pd.Timestamp(vintage).date() - start).days
@@ -315,7 +344,11 @@ def vintage_from_tables(
         keep = delays.loc[
             (delays["delay"] >= 0)
             & (delays["delay"] <= config.dmax)
-            & delays["location"].isin(active)
+            & (
+                delays["location"].isin(active)
+                if active != (NATIONAL,)
+                else delays["location"].ne("")
+            )
             & ~delays["location"].isin(masked)
         ]
         week = np.array(
@@ -335,7 +368,7 @@ def vintage_from_tables(
         known = known.sum(axis=1, keepdims=True)
         imputed = imputed.sum(axis=1, keepdims=True)
         pops = pd.Series([pops.sum()])
-        names = [NATIONAL]
+        names = [active[0] if len(active) == 1 else NATIONAL]
     if len(names) == 1:
         kernel = None
     elif config.coupling == "adjacency":
@@ -366,4 +399,37 @@ def vintage_from_tables(
         bvd=None
         if bvd is None or config.national
         else bvd_inputs(bvd, names, start, masked),
+        distances=None
+        if config.national
+        else province_distances(active + idle),
+        all_populations=None
+        if config.national
+        else table.set_index("location")
+        .loc[list(active + idle), "population"]
+        .to_numpy(float),
     )
+
+
+RENEWALSP = ModelConfig(
+    national=True, coupling="none", inactive="none", report_inactive=True
+)
+"""Single patch: the renewal model fitted to one location's series."""
+
+
+def idle_draws(
+    counts: np.ndarray, n_weeks: int, n: int, rng: np.random.Generator
+) -> np.ndarray:
+    r"""Standalone importation-only draws for a province with no cases.
+
+    Weekly counts are Poisson with rate $\lambda \sim
+    \text{Gamma}(1/2 + \sum y, w)$ over the $w$ weeks seen (Jeffreys
+    prior), so each trajectory has one rate.
+
+    Returns
+    -------
+    numpy.ndarray
+        Draws, `(n, n_weeks)`.
+    """
+    shape = 0.5 + np.nansum(counts)
+    rate = rng.gamma(shape, 1.0 / max(len(counts), 1), size=n)
+    return rng.poisson(rate[:, None] * np.ones((1, n_weeks))).astype(float)

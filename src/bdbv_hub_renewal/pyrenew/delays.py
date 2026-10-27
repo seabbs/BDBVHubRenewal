@@ -127,14 +127,23 @@ class HazardDelay(RandomVariable):
 
 
 def censored_pmf(
-    family: str, mean: ArrayLike, cv: ArrayLike, dmax: int, n_grid: int = 20
+    family: str, mean: ArrayLike, cv: ArrayLike, dmax: int, n_nodes: int = 16
 ) -> ArrayLike:
     r"""Daily double interval censored pmf of a continuous delay.
 
-    With the onset uniform within its day and the report censored to its
-    day, $P(d) = \int_0^1 \{F(d + 1 - u) - F(d - u)\}\,du$, integrated
-    on a grid of `n_grid` points, truncated at `dmax` and renormalised.
-    This is `bdbv_hub_renewal.delays.ParametricDelay.pmf` in JAX.
+    With the primary event uniform over a day and the secondary censored
+    to its day (primarycensored with `pwindow = swindow = 1`),
+
+    $$f(d) = F_{pc}(d + 1) - F_{pc}(d), \qquad
+    F_{pc}(t) = \int_0^1 F(t - u)\, du,$$
+
+    computed as $\int_0^1 \{F(d + 1 - u) - F(d - u)\} du$ by
+    Gauss-Legendre quadrature, which keeps each term on the scale of the
+    pmf (the closed form differences cumulative integrals and loses digits
+    in float32). Truncated at `dmax` and renormalised, as
+    `primarycensored::dpcens(..., D = dmax + 1)`; matches it to 2e-4.
+    Gamma and log-normal families, parameterised by mean and coefficient
+    of variation.
 
     Parameters
     ----------
@@ -144,27 +153,33 @@ def censored_pmf(
         Mean (days) and coefficient of variation.
     dmax : int
         Maximum delay.
-    n_grid : int, optional
-        Grid points for the onset position.
+    n_nodes : int, optional
+        Quadrature nodes.
 
     Returns
     -------
     ArrayLike
         Pmf on 0..dmax.
     """
-    u = (jnp.arange(n_grid) + 0.5) / n_grid
+    nodes, weights = np.polynomial.legendre.leggauss(n_nodes)
+    u = jnp.asarray((nodes + 1) / 2)
+    w = jnp.asarray(weights / 2)
     d = jnp.arange(dmax + 1)[:, None]
 
     def cdf(x):
-        x = jnp.maximum(x, 1e-10)
+        pos = x > 0
+        x = jnp.where(pos, x, 1.0)
         if family == "gamma":
             shape = 1 / cv**2
-            return jax.scipy.special.gammainc(shape, x * shape / mean)
-        sdlog = jnp.sqrt(jnp.log1p(cv**2))
-        mu = jnp.log(mean) - sdlog**2 / 2
-        return jax.scipy.stats.norm.cdf((jnp.log(x) - mu) / sdlog)
+            value = jax.scipy.special.gammainc(shape, x * shape / mean)
+        else:
+            sdlog = jnp.sqrt(jnp.log1p(cv**2))
+            mu = jnp.log(mean) - sdlog**2 / 2
+            value = jax.scipy.stats.norm.cdf((jnp.log(x) - mu) / sdlog)
+        return jnp.where(pos, value, 0.0)
 
-    pmf = jnp.maximum(jnp.mean(cdf(d + 1 - u) - cdf(d - u), axis=1), 1e-12)
+    pmf = (cdf(d + 1 - u) - cdf(d - u)) @ w
+    pmf = jnp.maximum(pmf, 1e-12)
     return pmf / pmf.sum()
 
 

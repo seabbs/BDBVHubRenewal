@@ -12,6 +12,7 @@ from .delays import (
     hazard_to_pmf,
 )
 from .latent import (
+    LearntKernel,
     MetapopulationInfections,
     adjacency_kernel,
     coupled_renewal,
@@ -43,6 +44,7 @@ __all__ = [
     "MAIN",
     "FixedTimeVarying",
     "HazardDelay",
+    "LearntKernel",
     "MetapopulationInfections",
     "MissingOnsetFraction",
     "ModelConfig",

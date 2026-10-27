@@ -29,7 +29,7 @@ from .delays import (
     empirical_delay_matrix,
     empirical_missing_fraction,
 )
-from .latent import MetapopulationInfections
+from .latent import LearntKernel, MetapopulationInfections
 from .observation import OnsetStreams, RtPseudoObservation
 from .processes import (
     MissingOnsetFraction,
@@ -45,16 +45,34 @@ ALPHA0 = 0.6
 def generation_interval(
     mean: float = 15.0, sd: float = 9.0, length: int = GEN_INT_LENGTH
 ) -> np.ndarray:
-    """Daily Gamma generation interval on lags 1..length (PyRenew order).
+    r"""Double interval censored Gamma generation interval on lags 1..length.
+
+    The daily pmf on $0..L$ is primarycensored's with a uniform primary
+    over a day and daily secondary censoring,
+    $f(d) = G(d + 1) - 2 G(d) + G(d - 1)$ with
+    $G(x) = x F(x; k, \theta) - k \theta F(x; k + 1, \theta)$ for
+    $x > 0$ (the analytic Gamma form), truncated at $L$. The renewal
+    uses lags 1 to $L$, so lag 0 (about 0.05% of the mass) is dropped and
+    the rest renormalised, as BVDOutbreakSize left-truncates its
+    generation interval at one day. Computed once, in float64.
+    Matches `primarycensored::dpcens(..., D = L + 1)`.
 
     Returns
     -------
     numpy.ndarray
-        Pmf of shape `(length,)`.
+        Pmf on lags 1..length (PyRenew order, element 0 at lag 1).
     """
     shape, scale = (mean / sd) ** 2, sd**2 / mean
-    cdf = stats.gamma.cdf(np.arange(length + 1) + 0.5, shape, scale=scale)
-    pmf = np.diff(cdf)
+
+    def integrated_cdf(x: np.ndarray) -> np.ndarray:
+        x = np.maximum(x, 0.0)
+        return x * stats.gamma.cdf(x, shape, scale=scale) - (
+            shape * scale * stats.gamma.cdf(x, shape + 1, scale=scale)
+        )
+
+    d = np.arange(length + 1, dtype=float)
+    pmf = integrated_cdf(d + 1) - 2 * integrated_cdf(d) + integrated_cdf(d - 1)
+    pmf = np.maximum(pmf, 0.0)[1:]
     return pmf / pmf.sum()
 
 
@@ -72,8 +90,10 @@ class ModelConfig:
     truncation : bool
         Right truncation by vintage. For the total stream it uses the
         hub's delay pmf as a fixed reporting delay.
-    coupling : {"gravity", "adjacency", "none"}
-        Importation kernel between modelled provinces, or none.
+    coupling : {"gravity", "learnt", "adjacency", "none"}
+        Importation kernel between modelled provinces: fixed gravity,
+        gravity with a learnt decay and destination weights
+        (`LearntKernel`), adjacency, or none.
     delay : {"hazard", "gamma", "lognormal", "fixed"}
         Nonparametric hazard delay, a censored parametric family, or a
         smoothed empirical delay fixed from the hub's delay file.
@@ -114,7 +134,7 @@ class ModelConfig:
     national: bool = False
     streams: Literal["split", "total"] = "split"
     truncation: bool = True
-    coupling: Literal["gravity", "adjacency", "none"] = "gravity"
+    coupling: Literal["gravity", "learnt", "adjacency", "none"] = "gravity"
     delay: Literal["hazard", "gamma", "lognormal", "fixed"] = "hazard"
     missing: Literal["estimated", "fixed"] = "estimated"
     depletion: bool = True
@@ -132,7 +152,7 @@ class ModelConfig:
 
 MAIN = ModelConfig()
 BVD = ModelConfig(bvd=True)
-"""Main model informed by BVDOutbreakSize Rt (`renewalbvd`)."""
+"""Main model informed by BVDOutbreakSize Rt (`hubrenewalbvd`)."""
 FALLBACK = ModelConfig(
     coupling="none", delay="fixed", missing="fixed", rt_cadence="weekly"
 )
@@ -143,6 +163,8 @@ _SIMPLE = {
     "depletion": False,
     "inactive": "none",
 }
+LEARNT = ModelConfig(coupling="learnt")
+"""Main model with a learnt gravity kernel."""
 LADDER: dict[str, ModelConfig] = {
     "S0 national renewal": ModelConfig(national=True, **_SIMPLE),
     "S1 + provinces (pooled Rt)": ModelConfig(**_SIMPLE),
@@ -192,6 +214,9 @@ class Vintage:
     fit_mask : numpy.ndarray or None
         Boolean `(P,)`. False switches a province's likelihood off (it
         stays in the latent process and is still predicted).
+    distances, all_populations : numpy.ndarray or None
+        Distances (km) and populations of modelled then idle provinces,
+        for the learnt kernel.
     bvd : dict or None
         External Rt summaries: `day` (index of $s_b$ from the first data
         day), `groups` `(G, P)`, `values`, `scales` and `kinds` `(G,)`.
@@ -212,6 +237,8 @@ class Vintage:
     import_kernel: np.ndarray | None = None
     fit_mask: np.ndarray | None = None
     bvd: dict | None = None
+    distances: np.ndarray | None = None
+    all_populations: np.ndarray | None = None
 
     @property
     def n_weeks(self) -> int:
@@ -269,6 +296,10 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     rt_scale = 1 / np.sqrt(7) if daily else 1.0
     single = n_prov == 1
     kernel = None if config.coupling == "none" or single else data.kernel
+    if kernel is not None and config.coupling == "learnt":
+        kernel = LearntKernel(
+            "kernel", data.distances, data.all_populations, n_prov
+        )
     if kernel is None:
         importation = None
     else:
@@ -392,6 +423,7 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
                 )
             ),
             import_scale_rv=imports,
+            kernel_rv=kernel if isinstance(kernel, LearntKernel) else None,
             start_dow=SUNDAY,
         )
     )

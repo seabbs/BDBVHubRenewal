@@ -160,6 +160,99 @@ def coupled_renewal(
     return x, r_eff
 
 
+class LearntKernel(RandomVariable):
+    r"""Gravity importation kernel with a learnt decay and destination weights.
+
+    $$\log K_{qp} = \log N_p - D_{qp} / (300\,\text{km} \cdot e^{\kappa})
+    + w_p + c_q, \qquad \kappa \sim N(0, 1),$$
+
+    with $w = \sigma_w Q z$ on the sum-to-zero basis (destinations
+    among the modelled provinces only), $z \sim N(0, 1)$,
+    $\sigma_w \sim N^+(0, 0.5)$, and $c_q$ normalising each origin's
+    row to one, which holds its export total, so the importation scale
+    stays with $\varepsilon$ (BVDOutbreakSize #1030, decay and
+    destination weights). With $\kappa = 0$ and $w = 0$ it is the gravity
+    kernel. All on the log scale (`log_softmax`).
+
+    `sample` returns the kernel between modelled provinces. The kernel
+    from them to provinces with no cases (gravity with the learnt decay,
+    no weights) is kept as `import_kernel` for `OnsetStreams` in the
+    same model run.
+
+    Parameters
+    ----------
+    name : str
+        Prefix for the sample sites.
+    distances : array_like
+        Distances in km between all provinces, modelled first, `(P+Q, P+Q)`.
+    populations : array_like
+        Populations, `(P + Q,)`.
+    n_active : int
+        Number of modelled provinces $P$.
+    decay_km : float, optional
+        Prior median of the decay.
+    weight_sd : float, optional
+        Scale of the half-normal prior on $\sigma_w$.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        distances: ArrayLike,
+        populations: ArrayLike,
+        n_active: int,
+        decay_km: float = 300.0,
+        weight_sd: float = 0.5,
+    ) -> None:
+        super().__init__(name=name)
+        self.distances = jnp.asarray(distances)
+        self.log_pop = jnp.log(jnp.asarray(populations))
+        self.n_active = n_active
+        self.decay_km = decay_km
+        self.weight_sd = weight_sd
+        self.import_kernel = None
+
+    def sample(self, **kwargs: object) -> ArrayLike:
+        """Sample the kernel between modelled provinces.
+
+        Returns
+        -------
+        ArrayLike
+            Row-normalised, zero diagonal, `(P, P)`.
+        """
+        import numpyro.distributions as dist
+
+        from .processes import sum_to_zero_basis
+
+        p = self.n_active
+        log_decay = numpyro.sample(
+            f"{self.name}_log_decay", dist.Normal(0.0, 1.0)
+        )
+        base = self.log_pop[None, :] - self.distances / (
+            self.decay_km * jnp.exp(log_decay)
+        )
+        self_flow = jnp.eye(base.shape[0], dtype=bool)
+        base = jnp.where(self_flow, -jnp.inf, base)
+        if p > 1:
+            sd = numpyro.sample(
+                f"{self.name}_weight_sd", dist.HalfNormal(self.weight_sd)
+            )
+            z = numpyro.sample(
+                f"{self.name}_weight_z", dist.Normal(0.0, 1.0).expand([p - 1])
+            )
+            w = sd * (jnp.asarray(sum_to_zero_basis(p)) @ z)
+        else:
+            w = jnp.zeros(1)
+        active = jax.nn.log_softmax(base[:p, :p] + w[None, :], axis=1)
+        kernel = jnp.exp(active)
+        numpyro.deterministic(f"{self.name}_kernel", kernel)
+        if base.shape[0] > p:
+            self.import_kernel = jnp.exp(jax.nn.log_softmax(base[:p], axis=1))[
+                :, p:
+            ]
+        return kernel
+
+
 class MetapopulationInfections(SubpopulationInfections):
     r"""Province renewal with importation and susceptible depletion.
 
@@ -182,9 +275,9 @@ class MetapopulationInfections(SubpopulationInfections):
 
     Parameters
     ----------
-    kernel : ArrayLike or None
-        Row-normalised importation kernel (rows are origins). `None`
-        turns coupling off.
+    kernel : ArrayLike, LearntKernel or None
+        Row-normalised importation kernel (rows are origins), fixed or
+        learnt. `None` turns coupling off.
     importation_rv : RandomVariable or None
         Importation share $\varepsilon$. Needed when `kernel` is given.
     deplete : bool
@@ -214,7 +307,9 @@ class MetapopulationInfections(SubpopulationInfections):
         self.effective_population_rv = effective_population_rv
         if (kernel is None) != (importation_rv is None):
             raise ValueError("kernel and importation_rv go together.")
-        self.kernel = None if kernel is None else jnp.asarray(kernel)
+        if kernel is not None and not isinstance(kernel, RandomVariable):
+            kernel = jnp.asarray(kernel)
+        self.kernel = kernel
         self.importation_rv = importation_rv
         self.deplete = deplete
 
@@ -262,9 +357,12 @@ class MetapopulationInfections(SubpopulationInfections):
         if self.kernel is None:
             mixing = jnp.eye(pop.n_subpops)
         else:
-            mixing = mixing_matrix(
-                self.kernel, self.importation_rv(), pop.fractions
+            kernel = (
+                self.kernel()
+                if isinstance(self.kernel, RandomVariable)
+                else self.kernel
             )
+            mixing = mixing_matrix(kernel, self.importation_rv(), pop.fractions)
         pool = self.effective_population_rv() if self.deplete else 1.0
         susceptible0 = jnp.clip(pool - I0_all.sum(axis=0), 0.0, pool)
         post, r_eff = coupled_renewal(

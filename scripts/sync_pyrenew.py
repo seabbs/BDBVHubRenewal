@@ -47,6 +47,7 @@ ADAPTER_DROP = (
     "PyRenewProvinceModel",
     "fit_renewal",
     "forecast_renewal",
+    "SinglePatchModel",
 )
 """The prototype adapter's own fit path. This repository's adapter,
 `models/renewal.py`, does that work, so only the input builders are kept."""

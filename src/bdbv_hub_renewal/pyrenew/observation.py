@@ -200,6 +200,8 @@ class OnsetStreams(BaseObservationProcess):
     known_noise, imputed_noise : CountNoise
         PyRenew noise models for the two streams (`known_noise` for the
         single stream).
+    kernel_rv : LearntKernel, optional
+        Learnt kernel whose `import_kernel` replaces the fixed one.
     import_scale_rv : RandomVariable, optional
         Scale $\kappa$ of importations into provinces with no cases,
         $\mu_q(s) = \kappa \sum_p K_{pq} \lambda_p(s)$, scored with a
@@ -218,6 +220,7 @@ class OnsetStreams(BaseObservationProcess):
         imputed_noise: CountNoise | None = None,
         import_scale_rv: RandomVariable | None = None,
         start_dow: int = 6,
+        kernel_rv: RandomVariable | None = None,
     ) -> None:
         super().__init__(
             name, DeterministicPMF(f"{name}_identity", jnp.ones(1))
@@ -228,6 +231,7 @@ class OnsetStreams(BaseObservationProcess):
         self.known_noise = known_noise
         self.imputed_noise = imputed_noise
         self.import_scale_rv = import_scale_rv
+        self.kernel_rv = kernel_rv
         self.start_dow = start_dow
 
     def lookback_days(self) -> int:
@@ -366,6 +370,9 @@ class OnsetStreams(BaseObservationProcess):
                 self._score_delays(
                     weekly["triangle"], jnp.asarray(delay_counts)
                 )
+        if self.kernel_rv is not None and import_kernel is not None:
+            # Gravity flows to idle provinces with the learnt decay.
+            import_kernel = self.kernel_rv.import_kernel
         if self.import_scale_rv is not None and import_kernel is not None:
             self._score_imports(
                 onsets, jnp.asarray(import_kernel), inactive, first_day_dow

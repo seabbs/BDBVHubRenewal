@@ -60,6 +60,8 @@ def test_active_set_follows_the_data(outbreak, sim_tables, table):
         ModelConfig(delay="lognormal", coupling="adjacency"),
         ModelConfig(rt_deviation="ar1"),
         ModelConfig(rt_cadence="daily"),
+        ModelConfig(coupling="learnt"),
+        ModelConfig(walk="noncentred"),
     ],
 )
 def test_model_sites_and_shapes(outbreak, sim_tables, table, cfg):
@@ -191,3 +193,59 @@ def test_real_data_kernels_and_log_density_are_finite(table):
             model.sample, (), model_args(model, data), sampled
         )[0]
         assert np.isfinite(float(ld))
+
+
+def test_learnt_kernel_is_gravity_at_prior_centre(sim_vintage):
+    from bdbv_hub_renewal.pyrenew import LearntKernel
+
+    data = sim_vintage
+    k = LearntKernel("k", data.distances, data.all_populations, 4)
+    sub = numpyro.handlers.substitute(
+        k.sample,
+        data={
+            "k_log_decay": 0.0,
+            "k_weight_z": np.zeros(3),
+            "k_weight_sd": 0.3,
+        },
+    )
+    kernel = np.asarray(sub())
+    np.testing.assert_allclose(kernel, data.kernel, rtol=1e-4, atol=1e-6)
+    np.testing.assert_allclose(kernel.sum(axis=1), 1.0, rtol=1e-5)
+    assert k.import_kernel.shape == (4, 2)
+
+
+def test_single_patch_locations_are_independent(outbreak, sim_tables, table):
+    from bdbv_hub_renewal.pyrenew.adapter import RENEWALSP
+
+    day = VINTAGE_DAYS[-1]
+    target, delays = sim_tables[day]
+    vintage = vintage_date(outbreak, day)
+
+    def one(target):
+        return vintage_from_tables(
+            target, delays, vintage, ("CD-IT",), table, RENEWALSP
+        )
+
+    changed = target.copy()
+    changed.loc[changed["location"] == "CD-NK", "observed"] *= 5
+    a, b = one(target), one(changed)
+    assert a.names == ["CD-IT"]
+    np.testing.assert_array_equal(a.known, b.known)
+    np.testing.assert_array_equal(a.imputed, b.imputed)
+    np.testing.assert_array_equal(a.delay_counts, b.delay_counts)
+    model_a, model_b = build_model(a, RENEWALSP), build_model(b, RENEWALSP)
+    tr = trace(model_a, a)
+    params = {
+        k: v["value"]
+        for k, v in tr.items()
+        if v["type"] == "sample" and not v["is_observed"]
+    }
+    lds = [
+        float(
+            numpyro.infer.util.log_density(
+                m.sample, (), model_args(m, d), params
+            )[0]
+        )
+        for m, d in ((model_a, a), (model_b, b))
+    ]
+    assert lds[0] == lds[1]
