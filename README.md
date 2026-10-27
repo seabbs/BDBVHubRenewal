@@ -34,6 +34,7 @@ task test              # run the tests
 task lint              # ruff and mypy
 task data              # download every hub vintage and rebuild data/
 task backtest          # development backtest and recovery check
+task backtest-heldout  # score held-out vintages under the chosen model
 task nowcast           # forecast from the latest vintage and write a hub file
 task metadata          # write the model metadata YAML
 task validate-hub      # check both with hub_validate and hubValidations (R)
@@ -70,7 +71,9 @@ src/bdbv_forecasts/
   fitting.py     fit configs for the submission workflow
   ppc.py         posterior predictive check summaries and plot
   scoring.py     WIS, coverage, bias and relative skill
-  backtest.py    rolling-origin backtest with a held-out split
+  backtest.py    rolling-origin backtest, scored against each later vintage
+  heldout.py     model choice record and rolling held-out evaluation
+  hubcompare.py  comparison with the forecasts submitted to the hub
   plots.py       figures, including plot_nowcast
   report.py      docs figures and tables
   cli.py         the bdbv-forecasts command
