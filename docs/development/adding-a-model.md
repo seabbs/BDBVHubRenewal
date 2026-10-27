@@ -43,3 +43,28 @@ Model colours follow registry order, so a model keeps its colour as others are a
 
 To take part in the leave-one-province-out check, set `supports_mask = True` on the class.
 The model must then drop the counts of the provinces in `task.mask` from its likelihood, while still forecasting them.
+
+## Renewal variants
+
+A new renewal variant is one entry in `VARIANTS` in [`models.renewal`][bdbv_hub_renewal.models.renewal].
+It names a base configuration (`MAIN` or `FALLBACK`) and the `ModelConfig` fields it changes.
+Registered variants are marked `fitted`, because each forecast is an MCMC fit.
+So the docs build and the smoke tests run only the models with no fit.
+Run the fitted variants apart, for example on a bigger machine, and commit what they write to `results/`:
+
+```bash
+BDBV_RENEWAL_SAMPLER='{"num_chains": 2, "num_warmup": 300, "num_samples": 300}' \
+  task backtest -- --models hubrenewal
+```
+
+A run with `--models` replaces only those models' rows in `results/`.
+`BDBV_RENEWAL_SAMPLER` sets the NUTS settings of every registered variant.
+
+The PyRenew model code in `bdbv_hub_renewal.pyrenew` is synced from the prototype:
+
+```bash
+uv run python scripts/sync_pyrenew.py <prototype dir>
+task format
+```
+
+The adapter reads only `ModelConfig`, `MAIN`, `FALLBACK`, `Vintage`, `build_model`, `fit` and `forecast_trajectories` from it, so a new model version drops in if it keeps those.
