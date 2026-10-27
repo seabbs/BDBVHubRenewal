@@ -1,10 +1,10 @@
-# Submissions
+# How submissions work
 
 How each week's forecast reaches the BDBV Modeling Hub.
 { .page-subtitle }
 
 !!! warning "Dry run, with stand-in models"
-    The workflow runs in dry-run mode until Sam switches it on (see [Setup](#setup)).
+    The workflow runs in dry-run mode until Sam switches it on (see [Setup](setup.md)).
     It builds everything and prints the pull request it would open, but pushes nothing.
     The PyRenew renewal model is not integrated yet.
     Until it is, the `main` and `fallback` fit configs are **stand-ins** that run the persistence baseline, and submissions go in as `epiforecasts-persistence`.
@@ -148,7 +148,7 @@ A gap is reported with how the model handles it (see [Data](../data.md#national-
 
 Hub validation runs both validators from the hub validation bundle against the hub at the data commit, as the hub's own CI would.
 The submission is staged as `<model_id>/<reference_date>-<model_id>.csv` with its metadata.
-The checks it runs, and where the hub's README and config disagree, are in the [hub specification](../hub-spec.md).
+The checks it runs, and where the hub's README and config disagree, are in the [hub specification](hub-spec.md).
 `HUB_VALIDATIONS=false` skips only the R step.
 
 ## Dry-run mode
@@ -179,9 +179,9 @@ The visible part is one line on what was submitted, one plain status line (all c
 The checks, fallback chain, convergence, predictive checks, forecast checks, data coherence, a national summary and the provenance sit in collapsed sections, each shown only when it has something to say.
 The full reports stay in the job summary and the run's artefacts.
 
-The round's page, `/nowcast/rounds/<reference_date>/`, is built by the Pages workflow from the `submission-ledger` branch.
+The round's page, `/submission/rounds/<reference_date>/`, is built by the Pages workflow from the `submission-ledger` branch.
 The `record` job rebuilds the docs after a live round, so the page appears a few minutes after the pull request opens.
-The [Nowcast](../nowcast.md) page links to the latest submitted round.
+The [Nowcast](../nowcast.md) page links to the latest submitted round, and [Rounds](rounds/index.md) lists them all.
 
 Below is the body for the GitHub dry run [run 40556037584](https://github.com/seabbs/BDBVHubRenewal/actions/runs/40556037584), rebuilt with the current layout, with the plot it would publish.
 
@@ -190,24 +190,3 @@ Below is the body for the GitHub dry run [run 40556037584](https://github.com/se
 --8<-- "pr-body.md"
 
 </div>
-
-## Setup
-
-What Sam needs to do before the first live run (from `ci/SETUP.md`).
-
-- [ ] As `seabbs-bot`, fork the hub once: `gh repo fork InsightNet-US/BDBV-Modeling-Hub --clone=false`.
-- [ ] In the fork's Settings → Actions → General, disable Actions.
-- [ ] Create a **classic** personal access token on `seabbs-bot` with the scopes `public_repo` and `workflow`, with an expiry (for example 90 days), and put a renewal reminder in the calendar.
-- [ ] In this repository, Settings → Environments → New environment `hub-submission`: deployment branches **Selected branches**, `main` only; no required reviewers; environment secret `HUB_SUBMIT_TOKEN` set to the token.
-- [ ] Settings → Actions → General → Workflow permissions: **Read repository contents**. If a ruleset covers all branches, exclude `submission-ledger`.
-- [ ] Optionally set repository variables: `HUB_MODEL` (default `persistence`, set `hubrenewal` once the model and its metadata exist), `HUB_MODEL_ID`, `HUB_FORK`, `EXPECTED_LOCATIONS` (for example `CD,CD-IT,CD-NK,CD-HU,CD-TO`), `HUB_VALIDATIONS`, `FIT_RUNNER`, and the `BDBV_CONVERGENCE_*` and `BDBV_PPC_*` overrides.
-- [ ] Make the last edit to the `cron` lines in `submit.yml` yourself (`/commit --as-me`), so GitHub sends scheduled-run failures to you, not the bot. Set Settings → Notifications → Actions to "Notify me on failed workflows only".
-- [ ] Ask the hub organisers (Justin Lessler or Claire Smith) to approve the first run of the hub's validation workflow on the bot's pull request, and say weekly bot pull requests will follow.
-- [ ] Run a dry run from the Actions tab and read the body in the `submit` job summary.
-- [ ] Time a real fit with a dry run on a past vintage (`force`, `ignore_window`, `reference_date`) once the model is integrated.
-- [ ] Inside a window, with you watching, run once with `dry_run: false` and check the pull request on the hub.
-- [ ] Set the repository variable `DRY_RUN` to `false`. Set it back to `true`, or disable the workflow, to pause.
-
-Scheduled workflows in a public repository stop after 60 days without activity, so commit to `main` now and then.
-GitHub-hosted runners cap a job at 6 hours; the fit jobs time out at 350 minutes.
-`ci/SETUP.md` covers runtimes, larger runners and where each part of the approach comes from (BVDOutbreakSize, cityforecasts and ecdc-weekly-growth-forecasts).

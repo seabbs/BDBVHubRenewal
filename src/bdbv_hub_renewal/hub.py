@@ -77,7 +77,8 @@ TEAM_ABBR: Final = "epiforecasts"
 """Team abbreviation, shared with earlier epiforecasts hub models."""
 
 # The schema allows 16 characters and the README says "less than 15" or
-# "less than 16", so keep to 14 to satisfy all three (docs/hub-spec.md).
+# "less than 16", so keep to 14 to satisfy all three
+# (docs/submission/hub-spec.md).
 _ID_PART = re.compile(r"^[A-Za-z0-9_]{1,14}$")
 
 NATIONAL: Final = "CD"
@@ -236,8 +237,8 @@ def to_hub_table(
 ) -> pd.DataFrame:
     """Turn forecast samples into the hub's submission table.
 
-    The table meets every guarantee in `docs/hub-spec.md`: sample ids
-    `1..n_samples` reused in every location, one row per id for every
+    The table meets every guarantee in `docs/submission/hub-spec.md`:
+    sample ids `1..n_samples` reused in every location, one row per id for every
     week, the same weeks for every location, whole non-negative counts
     and the national value as the sum of the provinces for each sample.
     Any national rows in `samples` are replaced by that sum.
@@ -400,7 +401,8 @@ def _check_id_scheme(df: pd.DataFrame) -> list[str]:
     hubValidations treats all rows sharing an `output_type_id` as one
     sample. With ids reused across locations, every location must use the
     same ids. With ids unique to a location, every location must cover the
-    same weeks. Mixing the two fails either way (docs/hub-spec.md, s. 4).
+    same weeks. Mixing the two fails either way
+    (docs/submission/hub-spec.md, s. 4).
     """
     ids = df.groupby("location")["output_type_id"].apply(frozenset)
     if len(ids) < 2:

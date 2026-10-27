@@ -26,7 +26,8 @@ So far it has:
 | [Backtest](backtest.md) | Development scores against later data. |
 | [Held-out evaluation](heldout.md) | Forecasts after the model choice, scored as later data arrive. |
 | [Nowcast](nowcast.md) | The current nowcast and forecast from the latest vintage. |
-| Development | [Adding a model](development/adding-a-model.md), the [CLI](development/cli.md), [CI and submissions](development/submissions.md) and the [hub specification](hub-spec.md). |
+| Submission | [How submissions work](submission/workflow.md), the [hub specification](submission/hub-spec.md), [Setup](submission/setup.md) and the [submitted rounds](submission/rounds/index.md). |
+| Development | [Adding a model](development/adding-a-model.md) and the [CLI](development/cli.md). |
 | [API reference](reference.md) | The Python package. |
 
 ## Data credit

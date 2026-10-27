@@ -31,11 +31,14 @@ nav:
   - Backtest: backtest.md
   - Held-out evaluation: heldout.md
   - Nowcast: nowcast.md
+  - Submission:
+      - How submissions work: submission/workflow.md
+      - Hub specification: submission/hub-spec.md
+      - Setup: submission/setup.md
+      - Rounds: submission/rounds/index.md
   - Development:
       - Adding a model: development/adding-a-model.md
       - CLI: development/cli.md
-      - CI and submissions: development/submissions.md
-      - Hub specification: hub-spec.md
   - API reference: reference.md
   - Citation and licence: citation.md
 
