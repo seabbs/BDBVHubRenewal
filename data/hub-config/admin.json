@@ -1,0 +1,24 @@
+{
+    "schema_version": "https://raw.githubusercontent.com/hubverse-org/schemas/main/v6.0.0/admin-schema.json",
+    "name": "BVBD Modeling Hub",
+    "maintainer": "Insight Net",
+    "contact": {
+        "name": "Justin Lessler",
+        "email": "jlessler@unc.edu"
+    },
+    "repository": {
+        "host": "github",
+        "owner": "InsightNet-US",
+        "name": "BDBV-Modeling-Hub"
+    },
+    "file_format": ["csv"],
+    "timezone": "Africa/Kinshasa",
+    "cloud": {
+        "enabled": true,
+        "host": {
+            "name": "aws",
+            "storage_service": "s3",
+            "storage_location": "bdbv-modeling-hub"
+        }
+    }
+}

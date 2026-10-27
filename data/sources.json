@@ -1,0 +1,20 @@
+{
+  "repo": "InsightNet-US/BDBV-Modeling-Hub",
+  "ref": "main",
+  "commit": "139351e7628c5188afa794ce1235872639271715",
+  "downloaded": "2026-10-27T16:32:09+00:00",
+  "delay_vintages": {
+    "2026-10-09": {
+      "commit": "e40fccde8e733e3759b95919dcbc1f29ad626f5b",
+      "path": "auxiliary-data/weekly-reporting-delays-by-province.csv"
+    },
+    "2026-10-17": {
+      "commit": "187015937fc7c0fc28cc769fb938ed89c9e18ae8",
+      "path": "auxiliary-data/archived-delay-data/weekly-reporting-delays-by-province-2026-10-17.csv"
+    },
+    "2026-10-24": {
+      "commit": "187015937fc7c0fc28cc769fb938ed89c9e18ae8",
+      "path": "auxiliary-data/weekly-reporting-delays-by-province.csv"
+    }
+  }
+}

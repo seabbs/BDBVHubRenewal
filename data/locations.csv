@@ -1,0 +1,28 @@
+location,location_name,location_type,population,latitude,longitude
+CD,DRC,country,98370000,,
+CD-BU,Bas Uele,province,1250000,3.3937,25.1094
+CD-EQ,Equateur,province,1712000,,
+CD-HK,Haut Katanga,province,5378000,,
+CD-HL,Haut Lomami,province,3444000,,
+CD-HU,Haut Uele,province,2046000,2.915,28.5755
+CD-IT,Ituri,province,4008000,2.0929,30.3385
+CD-KS,Kasai,province,3165000,,
+CD-KC,Kasai Central,province,3743000,,
+CD-KE,Kasai Oriental,province,3601000,,
+CD-KN,Kinshasa,province,13916000,,
+CD-BC,Kongo Central,province,6365000,,
+CD-KG,Kwango,province,2416000,,
+CD-KL,Kwilu,province,6169000,,
+CD-LO,Lomami,province,2801000,,
+CD-LU,Lualaba,province,2993000,,
+CD-MN,Mai Ndombe,province,2082000,,
+CD-MA,Maniema,province,2654000,,
+CD-MO,Mongala,province,1950000,,
+CD-NK,Nord Kivu,province,7574000,-0.5754,29.1574
+CD-NU,Nord Ubangi,province,1425000,3.8889,20.9641
+CD-SA,Sankuru,province,2417000,,
+CD-SK,Sud Kivu,province,6565000,-2.869,28.6843
+CD-SU,Sud Ubangi,province,2755000,3.0653,19.4528
+CD-TA,Tanganyika,province,3570000,,
+CD-TO,Tshopo,province,2582000,0.6072,24.8468
+CD-TU,Tshuapa,province,1789000,,
