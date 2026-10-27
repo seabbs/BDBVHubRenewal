@@ -365,3 +365,17 @@ def test_cli_missing_file_is_error(tmp_path: Path) -> None:
         == 1
     )
     assert read_json(tmp_path / "checks.json")["status"] == "error"
+
+
+def test_fitted_national_is_reported_not_rebuilt(tmp_path: Path) -> None:
+    # renewalsp fits the nation on its own, so national need not be the sum.
+    w = weeks()[-1]
+    path = sub(tmp_path, mutate=_bump_national(w, 3, -4.0))
+    side = _sidecar(national_source="fitted")
+    before = _national(path)
+    assert repair_national(path, "CD", side) == ""
+    assert _national(path) == before
+    c = _checks(path, national_sidecar=side)["national_sum"]
+    assert c.status == "pass"
+    assert "own fit" in c.summary
+    assert "report only" in c.summary
