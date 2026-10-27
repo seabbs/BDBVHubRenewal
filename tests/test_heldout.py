@@ -142,3 +142,24 @@ def test_heldout_also_runs_the_other_variants(
         assert set(scores["chosen_model"]) == {"persistence"}
     finally:
         _REGISTRY.pop("shadow")
+
+
+def test_heldout_keeps_and_rescores_other_models_forecasts(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    config: BacktestConfig,
+    tmp_path: Path,
+) -> None:
+    config.model_choice.write_text(
+        "choices:\n  - {date: 2026-10-10, model: persistence}\n"
+    )
+    run_heldout(target, delays, config, evaluate_holdout=True, out_dir=tmp_path)
+    path = tmp_path / "heldout-forecasts.csv.gz"
+    fc = pd.read_csv(path)
+    # A fitted variant's forecasts, as a run on archie would leave them.
+    pd.concat([fc, fc.assign(model="other")]).to_csv(path, index=False)
+    scores = run_heldout(
+        target, delays, config, evaluate_holdout=True, out_dir=tmp_path
+    )
+    assert set(scores["model"]) == {"persistence", "other"}
+    assert set(pd.read_csv(path)["model"]) == {"persistence", "other"}
