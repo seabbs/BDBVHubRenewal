@@ -10,7 +10,9 @@ repos:
         exclude: &generated ^(data|results|docs/(generated|figures|examples)|tests/hub_validation/fixtures|ci/fixtures)/
       - id: trailing-whitespace
         exclude: *generated
+      # mkdocs.yml uses !!python/name tags for pymdownx.
       - id: check-yaml
+        args: [--unsafe]
       - id: check-toml
   - repo: local
     hooks:
