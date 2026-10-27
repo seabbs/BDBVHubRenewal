@@ -233,3 +233,12 @@ def test_nowcast_notes_what_it_handled(tmp_path: Path) -> None:
     assert main(["nowcast", "--vintage", "2026-08-18", "--out", str(old)]) == 0
     (note,) = json.loads((old / "handled.json").read_text())
     assert note.startswith("delays: none published by 2026-08-18")
+
+
+@pytest.mark.usefixtures("in_root")
+def test_hubrenewal_metadata_draft_validates(tmp_path: Path) -> None:
+    assert main(["metadata", "--model", "hubrenewal", "--out",
+                 str(tmp_path)]) == 0  # fmt: skip
+    text = (tmp_path / "epiforecasts-hubrenewal.yml").read_text()
+    assert "model_abbr: hubrenewal" in text
+    assert "renewal" in text.lower()
