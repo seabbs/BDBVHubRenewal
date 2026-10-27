@@ -25,18 +25,22 @@ NOW=${NOW:-2026-11-02T10:00:00+00:00}
 # name | FAKE_SCENARIOS | expected selection ("skip" for a skipped round)
 #   | extra environment (optional) | text the PR body must hold (optional)
 SCENARIOS=(
-  "main|main=pass|main||| Data coherence | PASS"
-  "coherence|main=pass|main|FAKE_COHERENCE_GAP=2026-10-24:2|| Data coherence | WARN (national (CD) differs"
+  "main|main=pass|main||All checks passed."
+  "coherence|main=pass|main|FAKE_COHERENCE_GAP=2026-10-24:2|Handled: national (CD) differs from the sum of the provinces"
   "warn|main=warn|main"
   "standin|main=standin|main||Stand-in: "
   "ppcwarn|main=ppcwarn|main||All checks passed, with warnings on ppc."
-  "ppcfail|main=ppcfail,retry-1=pass|retry-1||Main model refitted with more conservative sampler settings: main model was ruled out (ppc: 90% interval coverage"
-  "noppc|main=noppc,retry-1=pass|retry-1||main model was ruled out (ppc: no ppc.json"
-  "retry|main=fail,retry-1=pass|retry-1"
-  "retry2|main=crash,retry-1=fail,retry-2=pass|retry-2"
-  "fallback|main=fail,retry-1=fail,retry-2=fail|fallback||Fallback model used ("
-  "persistence|main=fail,retry-1=implausible,retry-2=crash,fallback=fail|persistence"
-  "skip|main=fail,retry-1=fail,retry-2=fail,fallback=implausible,persistence=negative|skip"
+  "ppcfail|main=ppcfail|main||All checks passed, with warnings on ppc."
+  "noppc|main=noppc|main||All checks passed, with warnings on ppc."
+  "implausible|main=implausible|main||with warnings on"
+  "national|main=badnational|main||Handled: national (CD) rebuilt as the sum of the provinces"
+  "latestream|main=latestream|main||Handled: delays: no delay data for this vintage"
+  "loose|main=loose,retry-1=pass|retry-1||Handled: main model refitted once (max R-hat is 1.2"
+  "loosekept|main=loose,retry-1=fail|main||Handled: main model kept after one refit did not help"
+  "retry|main=fail,retry-1=pass|retry-1||Main model refitted once: main model was ruled out"
+  "fallback|main=fail,retry-1=fail|fallback||Fallback model used ("
+  "persistence|main=fail,retry-1=crash,fallback=fail|persistence"
+  "skip|main=fail,retry-1=fail,fallback=fail,persistence=negative|skip"
 )
 
 sci() { uv run --quiet --project "$CI_DIR" "$@"; }

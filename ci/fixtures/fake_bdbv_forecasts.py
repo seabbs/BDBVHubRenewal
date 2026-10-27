@@ -7,7 +7,8 @@ candidate id the step script exports as `CAND_ID`. Scenarios:
 
   pass         converged fit, plausible forecast
   warn         converged but past the warning thresholds
-  fail         not converged (R-hat 1.4, divergences)
+  loose        past the retry thresholds (R-hat 1.2), not broken
+  fail         clearly broken (bulk ESS 8, R-hat 1.4, divergences)
   implausible  converged, but the forecast explodes
   crash        the fit command fails
   negative     the nowcast writes a negative value (format check)
@@ -165,6 +166,9 @@ def cmd_fit(args: argparse.Namespace) -> int:
     draws = int(sampler.get("num_samples", 1000))
     rhat, ess, div = {
         "warn": (1.07, 80.0, 15),
+        # Past the retry thresholds (refit once), not clearly broken.
+        "loose": (1.2, 40.0, 80),
+        # Clearly broken: almost no effective draws.
         "fail": (1.4, 8.0, 400),
     }.get(sc, (1.004, 900.0, 0))
     params = [
@@ -236,7 +240,9 @@ def cmd_nowcast(args: argparse.Namespace) -> int:
                 totals[(s, w)] += v
                 rows.append([loc, s, w, v])
     for (s, w), v in totals.items():
-        rows.append(["CD", s, w, v])
+        # `badnational`: the national rows do not add up, and there is no
+        # national.json, so the gate rebuilds them.
+        rows.append(["CD", s, w, v + (3 if sc == "badnational" else 0)])
     mid = f"epiforecasts-{args.model}"
     path = Path(args.out) / "model-output" / mid / f"{ref}-{mid}.csv"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -261,7 +267,17 @@ def cmd_nowcast(args: argparse.Namespace) -> int:
         "modelled_provinces": provinces,
         "unassigned": [],
     }
-    (Path(args.out) / "national.json").write_text(json.dumps(sidecar))
+    if sc != "badnational":
+        (Path(args.out) / "national.json").write_text(json.dumps(sidecar))
+    if sc == "latestream":
+        (Path(args.out) / "handled.json").write_text(
+            json.dumps(
+                [
+                    "delays: no delay data for this vintage, so used the "
+                    "2026-10-24 vintage, the latest available"
+                ]
+            )
+        )
     print(f"Wrote {path}")
     return 0
 
