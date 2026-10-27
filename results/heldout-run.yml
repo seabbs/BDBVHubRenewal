@@ -1,6 +1,6 @@
-run_at: '2026-10-27T17:57:33+00:00'
+run_at: '2026-10-27T19:29:47+00:00'
 model_choice: results/model-choice.yml
-model_choice_sha256: 169acb8d4f6d75c8f2d2136221fe2ec12a3179254e280feff8ef484cda1a5390
+model_choice_sha256: a9f8e24bb4b7d97b830a4897d648fd7d16fde63f578416a9cde321f2e64b9dca
 choices:
 - date: '2026-10-10'
   model: persistence
