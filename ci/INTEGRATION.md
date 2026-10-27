@@ -14,12 +14,12 @@ It is the reference for the interface, and `ci/run_dry.sh` runs the whole workfl
 | `bdbv-forecasts nowcast --model persistence --vintage <as_of> --out <dir>` | exists | `prepare` (persistence candidate and baseline) |
 | `bdbv-forecasts metadata --model <model> --out <dir>` | exists | `gate` |
 | `scripts/validate-hub.R <hub> <csv> <yml>`, with `CHECK_WINDOW=true` | exists | `gate`, through `ci/steps/validate_hub.sh` |
-| `bdbv-forecasts fit ...` | **new** | `fit`, `retry` |
-| `nowcast --config <c> --fit <dir>` | **new options** | `fit`, `retry` |
-| `bdbv-forecasts plot-submission ...` | **new**, a thin wrapper on `plots.plot_nowcast` | every candidate |
-| `bdbv-forecasts plot-ppc --ppc <ppc.json> --out <png>` | **new**, a thin wrapper on `ppc.plot_ppc` | candidates whose `ppc.json` is available |
-| `bdbv-forecasts --version` | **new** | `run.json`, the PR body |
-| `bdbv-forecasts coherence --vintage <as_of> --out <json>` | **new** | `prepare` (data coherence check) |
+| `bdbv-forecasts fit ...` | done (`bdbv_forecasts.fitting`; `main` and `fallback` are persistence stand-ins) | `fit`, `retry` |
+| `nowcast --config <c> --fit <dir>` | done | `fit`, `retry` |
+| `bdbv-forecasts plot-submission ...` | done, `plots.plot_submission` | every candidate |
+| `bdbv-forecasts plot-ppc --ppc <ppc.json> --out <png>` | done, a thin wrapper on `ppc.plot_ppc` | candidates whose `ppc.json` is available |
+| `bdbv-forecasts --version` | done | `run.json`, the PR body |
+| `bdbv-forecasts coherence --vintage <as_of> --out <json>` | done | `prepare` (data coherence check) |
 
 ### `bdbv-forecasts fit`
 
