@@ -32,6 +32,7 @@ import json
 import math
 import os
 import random
+import re
 import struct
 import sys
 import zlib
@@ -163,6 +164,21 @@ def cmd_fit(args: argparse.Namespace) -> int:
     rng = random.Random(1)
     sampler = json.loads(args.sampler_json or "{}")
     chains = int(sampler.get("num_chains", 4))
+    # As NumPyro: with fewer XLA host devices than chains, the chains run
+    # one after another, which the CI must never do. JAX on CPU has one
+    # device unless XLA_FLAGS says otherwise.
+    flag = re.search(
+        r"--xla_force_host_platform_device_count=(\d+)",
+        os.environ.get("XLA_FLAGS", ""),
+    )
+    devices = int(flag.group(1)) if flag else 1
+    if devices < chains:
+        print(
+            f"fake fit: {chains} chains on {devices} XLA devices would run "
+            "sequentially",
+            file=sys.stderr,
+        )
+        return 1
     draws = int(sampler.get("num_samples", 1000))
     rhat, ess, div = {
         "warn": (1.07, 80.0, 15),
