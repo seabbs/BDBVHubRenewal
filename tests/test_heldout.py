@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pandas as pd
@@ -163,3 +164,58 @@ def test_heldout_keeps_and_rescores_other_models_forecasts(
     )
     assert set(scores["model"]) == {"persistence", "other"}
     assert set(pd.read_csv(path)["model"]) == {"persistence", "other"}
+
+
+def test_heldout_without_fits_reads_committed_forecasts(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    config: BacktestConfig,
+    tmp_path: Path,
+) -> None:
+    from bdbv_hub_renewal.models import Persistence, register_model
+    from bdbv_hub_renewal.models.base import _REGISTRY
+
+    class Slow(Persistence):
+        def forecast(self, task):  # type: ignore[no-untyped-def]
+            raise AssertionError("a fitted model was refitted")
+
+    register_model(
+        "slowfit", lambda: Slow(name="slowfit"), "Fitted.", fitted=True
+    )
+    try:
+        config.model_choice.write_text(
+            "choices:\n  - {date: 2026-10-10, model: slowfit}\n"
+        )
+        # Committed forecasts of the fitted model, as archie leaves them.
+        fc = run_heldout(
+            target,
+            delays,
+            replace(config, model_choice=_persistence_choice(tmp_path)),
+            evaluate_holdout=True,
+            out_dir=tmp_path / "seed",
+        )
+        seeded = pd.read_csv(tmp_path / "seed" / "heldout-forecasts.csv.gz")
+        out = tmp_path / "out"
+        out.mkdir()
+        seeded.assign(model="slowfit", chosen_model="slowfit").to_csv(
+            out / "heldout-forecasts.csv.gz", index=False
+        )
+        scores = run_heldout(
+            target,
+            delays,
+            config,
+            evaluate_holdout=True,
+            out_dir=out,
+            fit=False,
+        )
+    finally:
+        _REGISTRY.pop("slowfit")
+    assert not fc.empty
+    assert set(scores["model"]) == {"persistence", "slowfit"}
+    assert set(scores["chosen_model"]) == {"slowfit"}
+
+
+def _persistence_choice(tmp_path: Path) -> Path:
+    path = tmp_path / "persistence-choice.yml"
+    path.write_text("choices:\n  - {date: 2026-10-10, model: persistence}\n")
+    return path
