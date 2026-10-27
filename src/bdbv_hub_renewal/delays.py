@@ -371,6 +371,6 @@ class ParametricDelay:
         d = np.arange(max_delay + 1)[:, None]
         upper = np.clip(d + 1 - u, 0, None)
         lower = np.clip(d - u, 0, None)
-        probs = (dist.cdf(upper) - dist.cdf(lower)).mean(axis=1)
-        probs = np.asarray(probs, dtype=np.float64)
-        return probs / probs.sum()
+        raw = (dist.cdf(upper) - dist.cdf(lower)).mean(axis=1)
+        probs = np.asarray(raw, dtype=np.float64)
+        return np.asarray(probs / probs.sum(), dtype=np.float64)
