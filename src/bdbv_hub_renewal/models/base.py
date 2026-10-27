@@ -242,7 +242,8 @@ def check_samples(samples: pd.DataFrame, task: ForecastTask) -> None:
     Parameters
     ----------
     samples : pandas.DataFrame
-        Output of `ForecastModel.forecast`.
+        Output of `ForecastModel.forecast`. It may include national
+        rows, for a model that fits the nation on its own.
     task : ForecastTask
         The task it answers.
 
@@ -254,14 +255,15 @@ def check_samples(samples: pd.DataFrame, task: ForecastTask) -> None:
     """
     if tuple(samples.columns) != SAMPLE_COLUMNS:
         raise ValueError(f"Columns must be {SAMPLE_COLUMNS}.")
-    if set(samples["location"]) != set(task.locations):
+    locs = set(samples["location"])
+    if locs not in (set(task.locations), {*task.locations, NATIONAL}):
         raise ValueError("Locations do not match the task.")
     if set(samples["target_end_date"]) != set(task.target_end_dates):
         raise ValueError("Weeks do not match the task.")
     want = set(range(1, task.n_samples + 1))
     if set(samples["sample"]) != want:
         raise ValueError(f"Samples must be numbered 1 to {task.n_samples}.")
-    expected = len(task.locations) * len(task.target_end_dates) * len(want)
+    expected = len(locs) * len(task.target_end_dates) * len(want)
     if len(samples) != expected:
         raise ValueError(f"Expected {expected} rows, got {len(samples)}.")
     if samples["value"].isna().any() or (samples["value"] < 0).any():
@@ -270,6 +272,9 @@ def check_samples(samples: pd.DataFrame, task: ForecastTask) -> None:
 
 def add_national(samples: pd.DataFrame) -> pd.DataFrame:
     """Add the national total as the sum of provinces by sample.
+
+    A model that fits the nation on its own gives national rows, which
+    are kept as they are.
 
     Parameters
     ----------
@@ -281,6 +286,8 @@ def add_national(samples: pd.DataFrame) -> pd.DataFrame:
     pandas.DataFrame
         The input with `CD` rows appended.
     """
+    if (samples["location"] == NATIONAL).any():
+        return samples.reset_index(drop=True)
     provinces = samples.loc[samples["location"] != NATIONAL]
     national = provinces.groupby(["target_end_date", "sample"], as_index=False)[
         "value"

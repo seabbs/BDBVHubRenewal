@@ -52,12 +52,10 @@ __all__ = [
     "HUB_MODEL",
     "JITTER_RADIUS",
     "SAMPLER_ENV",
-    "SHARE_PRIOR",
     "VARIANTS",
     "RenewalModel",
     "RenewalRun",
     "Variant",
-    "apportion_shares",
     "bvd_rows",
     "chain_diagnostics",
     "data_gap",
@@ -97,13 +95,7 @@ DEFAULT_SAMPLER: Final[Mapping[str, Any]] = {
 """NUTS settings when neither the CI nor `SAMPLER_ENV` gives them."""
 
 RECENT_WEEKS: Final = 4
-"""Data weeks used to apportion single-patch draws to provinces."""
-
-SHARE_PRIOR: Final = 0.5
-"""Pseudo-count added to each province's recent onsets before sharing.
-
-The Jeffreys prior for a multinomial, so a province with no recent onsets
-keeps a small share and can still be given cases."""
+"""Data weeks behind the share that carries the national data gap forward."""
 
 
 def engine() -> ModuleType:
@@ -135,6 +127,9 @@ class Variant:
         `ModelConfig` fields to change.
     register : bool
         Register it as a model for the backtest.
+    per_location : bool
+        Fit each location, the nation included, on its own series, with no
+        pooling or coupling. National is then its own fit.
     """
 
     name: str
@@ -142,6 +137,7 @@ class Variant:
     base: str = "MAIN"
     overrides: Mapping[str, Any] = field(default_factory=dict)
     register: bool = True
+    per_location: bool = False
 
 
 VARIANTS: Final[dict[str, Variant]] = {
@@ -154,12 +150,15 @@ VARIANTS: Final[dict[str, Variant]] = {
         ),
         Variant(
             "renewalsp",
-            "Single patch: one national renewal, apportioned to provinces.",
+            "Single patch: one renewal fitted to each location's series on "
+            "its own, the nation included, with no pooling or coupling.",
             overrides={
                 "national": True,
                 "coupling": "none",
                 "inactive": "none",
+                "report_inactive": True,
             },
+            per_location=True,
         ),
         Variant(
             "renewalbvd",
@@ -431,49 +430,6 @@ def vintage_inputs(
     )
 
 
-def apportion_shares(task: ForecastTask) -> pd.Series:
-    r"""Each province's share of national onsets, for the single patch.
-
-    $\theta_p = (c_p + a) / \sum_q (c_q + a)$, with $c_p$ the province's
-    onsets in the last `RECENT_WEEKS` data weeks and $a$ `SHARE_PRIOR`.
-
-    Parameters
-    ----------
-    task : ForecastTask
-        The task.
-
-    Returns
-    -------
-    pandas.Series
-        Shares indexed by the task's provinces, summing to one.
-    """
-    rows = task.target.loc[
-        (task.target["vintage"] == task.vintage)
-        & task.target["location"].isin(task.locations)
-    ]
-    by_week = rows.pivot_table(
-        index="target_end_date", columns="location", values="total"
-    ).reindex(columns=list(task.locations))
-    weights = by_week.tail(RECENT_WEEKS).fillna(0).sum() + SHARE_PRIOR
-    return weights / weights.sum()
-
-
-def _apportion(
-    task: ForecastTask, national: NDArray[np.float64]
-) -> dict[str, NDArray[np.float64]]:
-    """Split national draws across provinces by `apportion_shares`.
-
-    Each national count is split by a multinomial draw, so the provinces
-    sum to the national count in every sample and week.
-    """
-    p = apportion_shares(task).to_numpy(dtype=float)
-    n = np.rint(np.maximum(national, 0)).astype(np.int64)
-    split = task.rng().multinomial(n, p)
-    return {
-        loc: split[..., j].astype(float) for j, loc in enumerate(task.locations)
-    }
-
-
 def samples_table(
     task: ForecastTask,
     data: Any,
@@ -485,10 +441,9 @@ def samples_table(
 
     Modelled provinces take their trajectories, provinces with no cases
     take their importation draws, and weeks before the model grid take
-    the data in every sample. A single-patch fit is apportioned to
-    provinces. With `report_all` false, provinces the model did not fit
-    go to the unassigned component, so national sample k is always the
-    sum of everything in sample k.
+    the data in every sample. With `report_all` false, provinces the
+    model did not fit go to the unassigned component, so national sample
+    k is always the sum of everything in sample k.
 
     Parameters
     ----------
@@ -513,19 +468,15 @@ def samples_table(
     observed = rows.pivot_table(
         index="target_end_date", columns="location", values="total"
     )
-    if list(data.names) == [NATIONAL]:
-        series = _apportion(task, np.asarray(draws["national"], dtype=float))
-        report = list(task.locations)
-    else:
-        series = {
-            loc: np.asarray(draws["province"])[:, :, j]
-            for j, loc in enumerate(data.names)
-        }
-        for j, loc in enumerate(data.inactive_names):
-            series[loc] = np.asarray(draws["inactive"])[:, :, j]
-        report = list(task.locations)
-        if not report_all:
-            report = [p for p in task.locations if p in data.names]
+    series = {
+        loc: np.asarray(draws["province"])[:, :, j]
+        for j, loc in enumerate(data.names)
+    }
+    for j, loc in enumerate(data.inactive_names):
+        series[loc] = np.asarray(draws["inactive"])[:, :, j]
+    report = list(task.locations)
+    if not report_all:
+        report = [p for p in task.locations if p in data.names]
     n = task.n_samples
     out: list[pd.DataFrame] = []
     unassigned: list[pd.DataFrame] = []
@@ -616,7 +567,7 @@ def _add_unassigned(
 
 
 def ppc_rows(
-    data: Any, insample: Mapping[str, Any]
+    data: Any, insample: Mapping[str, Any], *, add_national: bool = True
 ) -> tuple[pd.DataFrame, NDArray[np.float64]]:
     """Observed rows and the matching in-sample predictive draws.
 
@@ -632,6 +583,9 @@ def ppc_rows(
     insample : mapping
         Draws of the vintage counts by stream (`known`, `imputed` or
         `total`), each `(n_draws, n_weeks + horizon, P)`.
+    add_national : bool
+        Add national rows as the sum of the province draws. A
+        single-location fit has none.
 
     Returns
     -------
@@ -656,7 +610,7 @@ def ppc_rows(
             for i, week in enumerate(weeks):
                 rows.append((loc, hub_name[stream], week, float(obs[i, j])))
                 cols.append(draws[:, i, j])
-        if list(data.names) != [NATIONAL]:
+        if add_national and list(data.names) != [NATIONAL]:
             for i, week in enumerate(weeks):
                 rows.append(
                     (NATIONAL, hub_name[stream], week, float(obs[i].sum()))
@@ -836,6 +790,29 @@ class RenewalRun:
     seconds: float
 
 
+@dataclass(frozen=True)
+class RenewalFit:
+    """The fits of a variant to a task and the samples they give.
+
+    Attributes
+    ----------
+    runs : dict
+        `RenewalRun` by location for a per-location variant, or one run,
+        `"all"`.
+    samples : pandas.DataFrame
+        Province samples (`SAMPLE_COLUMNS`).
+    unassigned : pandas.DataFrame or None
+        National cases in no reported province.
+    national : pandas.DataFrame or None
+        The national fit's samples, for a per-location variant.
+    """
+
+    runs: Mapping[str, RenewalRun]
+    samples: pd.DataFrame
+    unassigned: pd.DataFrame | None = None
+    national: pd.DataFrame | None = None
+
+
 @dataclass
 class RenewalModel:
     """A renewal variant as a `ForecastModel`.
@@ -864,7 +841,10 @@ class RenewalModel:
     def __post_init__(self) -> None:
         """Name the model after its variant and say if it takes a mask."""
         self.name = self.variant.name
-        self.supports_mask = not self.variant.overrides.get("national", False)
+        self.supports_mask = not (
+            self.variant.per_location
+            or self.variant.overrides.get("national", False)
+        )
 
     def _log(self, line: str) -> None:
         if self.progress is not None:
@@ -915,10 +895,14 @@ class RenewalModel:
         }
         return RenewalRun(self.variant, data, draws, trace, extra, seconds)
 
-    def forecast_run(
-        self, task: ForecastTask
-    ) -> tuple[RenewalRun, pd.DataFrame, pd.DataFrame | None]:
-        """Fit and return the run, the samples and the unassigned part.
+    def forecast_fit(self, task: ForecastTask) -> RenewalFit:
+        """Fit the variant to a task and return its samples.
+
+        A per-location variant fits each location with cases, the nation
+        included, on its own. Its national samples are that fit, and
+        there is no unassigned part. Otherwise the provinces are fitted
+        together and the unassigned part holds the provinces not reported
+        and the data's national gap (`data_gap`).
 
         Parameters
         ----------
@@ -927,17 +911,39 @@ class RenewalModel:
 
         Returns
         -------
-        tuple
-            The run, the province samples and the unassigned frame.
+        RenewalFit
+            The runs, province samples and national or unassigned parts.
         """
-        run = self.run(task)
         report_all = bool(model_config(self.variant).report_inactive)
-        samples, unassigned = samples_table(
-            task, run.data, run.draws, report_all=report_all
+        if not self.variant.per_location:
+            run = self.run(task)
+            samples, unassigned = samples_table(
+                task, run.data, run.draws, report_all=report_all
+            )
+            unassigned = _add_unassigned(unassigned, data_gap(task, samples))
+            return RenewalFit({"all": run}, samples, unassigned)
+        rows = task.target.loc[task.target["vintage"] == task.vintage]
+        cases = rows.groupby("location")["total"].sum()
+        runs: dict[str, RenewalRun] = {}
+        frames: list[pd.DataFrame] = []
+        for loc in (*task.locations, NATIONAL):
+            if cases.get(loc, 0) <= 0:
+                continue
+            sub = replace(task, locations=(loc,), mask=())
+            runs[loc] = self.run(sub)
+            part, _ = samples_table(
+                sub, runs[loc].data, runs[loc].draws, report_all=True
+            )
+            frames.append(part)
+        both = pd.concat(frames, ignore_index=True)
+        nat = both["location"] == NATIONAL
+        national = both.loc[nat, ["target_end_date", "sample", "value"]]
+        return RenewalFit(
+            runs,
+            both.loc[~nat].reset_index(drop=True),
+            None,
+            national.reset_index(drop=True) if nat.any() else None,
         )
-        # Unassigned: provinces not reported plus the data's national gap.
-        unassigned = _add_unassigned(unassigned, data_gap(task, samples))
-        return run, samples, unassigned
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return joint sample trajectories for a task.
@@ -950,13 +956,21 @@ class RenewalModel:
         Returns
         -------
         pandas.DataFrame
-            Columns `SAMPLE_COLUMNS`.
+            Columns `SAMPLE_COLUMNS`, with national rows for a
+            per-location variant, whose national is its own fit.
         """
-        return self.forecast_run(task)[1]
+        fit = self.forecast_fit(task)
+        if fit.national is None:
+            return fit.samples
+        national = fit.national.assign(location=NATIONAL)
+        return pd.concat(
+            [fit.samples, national[list(SAMPLE_COLUMNS)]], ignore_index=True
+        )
 
 
 SAMPLES_FILE: Final = "samples.csv.gz"
 UNASSIGNED_FILE: Final = "unassigned.csv.gz"
+NATIONAL_FILE: Final = "national.csv.gz"
 TRAJECTORIES_FILE: Final = "trajectories.json"
 
 
@@ -1000,28 +1014,44 @@ def fit_renewal(
     settings = sampler_settings(sampler)
     task = replace(task, seed=int(settings.get("seed", task.seed)))
     model = RenewalModel(VARIANTS[variant], settings, out / "progress.log")
-    run, samples, unassigned = model.forecast_run(task)
-    samples.to_csv(out / SAMPLES_FILE, index=False)
-    if unassigned is not None:
-        unassigned.to_csv(out / UNASSIGNED_FILE, index=False)
-    modelled = sorted(set(samples["location"]))
+    fit = model.forecast_fit(task)
+    fit.samples.to_csv(out / SAMPLES_FILE, index=False)
+    if fit.unassigned is not None:
+        fit.unassigned.to_csv(out / UNASSIGNED_FILE, index=False)
+    if fit.national is not None:
+        fit.national.to_csv(out / NATIONAL_FILE, index=False)
+    modelled = sorted(set(fit.samples["location"]))
     (out / TRAJECTORIES_FILE).write_text(
         json.dumps({"variant": variant, "modelled": modelled}, indent=1) + "\n"
     )
-    observed, draws = ppc_rows(run.data, run.draws["insample"])
+    per_location = VARIANTS[variant].per_location
+    observed, draws = [], []
+    for run in fit.runs.values():
+        obs, dr = ppc_rows(
+            run.data, run.draws["insample"], add_national=not per_location
+        )
+        observed.append(obs)
+        draws.append(dr)
     write_ppc(
         summarise_draws(
-            observed,
-            draws,
+            pd.concat(observed, ignore_index=True),
+            np.column_stack(draws),
             as_of=task.vintage,
             model=HUB_MODEL,
             config=config_name,
         ),
         out / "ppc.json",
     )
-    params = parameter_diagnostics(run.trace)
     depth = int(settings["max_tree_depth"])
-    chains = chain_diagnostics(run.extra, depth)
+    params: list[dict[str, Any]] = []
+    chains: list[dict[str, Any]] = []
+    for loc, run in fit.runs.items():
+        prefix = f"{loc}:" if per_location else ""
+        for row in parameter_diagnostics(run.trace):
+            params.append({**row, "name": prefix + row["name"]})
+        for row in chain_diagnostics(run.extra, depth):
+            extra = {"location": loc} if per_location else {}
+            chains.append({**row, **extra, "chain": len(chains)})
     return {
         "schema_version": 1,
         "model": HUB_MODEL,
@@ -1031,7 +1061,7 @@ def fit_renewal(
         "num_chains": len(chains),
         "num_samples": chains[0]["draws"] if chains else 0,
         "max_tree_depth": depth,
-        "sampling_seconds": round(run.seconds, 1),
+        "sampling_seconds": round(sum(r.seconds for r in fit.runs.values()), 1),
         "parameters": params,
         "chains": chains,
         "worst_rhat": worst_rhat(params),
@@ -1069,8 +1099,17 @@ def forecast_renewal(task: ForecastTask, fit_dir: Path | str) -> Forecast:
         unassigned = unassigned.loc[
             unassigned["target_end_date"].isin(task.target_end_dates)
         ].reset_index(drop=True)
+    national = None
+    if (path / NATIONAL_FILE).exists():
+        national = pd.read_csv(
+            path / NATIONAL_FILE, dtype={"target_end_date": str}
+        )
+        national = national.loc[
+            national["target_end_date"].isin(task.target_end_dates)
+        ].reset_index(drop=True)
     meta = json.loads((path / TRAJECTORIES_FILE).read_text())
     return Forecast(
+        national=national,
         samples=samples.reset_index(drop=True),
         unassigned=unassigned,
         modelled=tuple(meta["modelled"]),

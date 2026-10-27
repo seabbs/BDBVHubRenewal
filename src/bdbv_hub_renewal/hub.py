@@ -261,6 +261,7 @@ def to_hub_table(
     target: str = "wk inc confirmed cases",
     *,
     unassigned: pd.DataFrame | None = None,
+    national: pd.DataFrame | None = None,
     n_samples: int = 100,
 ) -> pd.DataFrame:
     """Turn forecast samples into the hub's submission table.
@@ -268,8 +269,9 @@ def to_hub_table(
     The table meets every guarantee in `docs/submission/hub-spec.md`:
     sample ids `1..n_samples` reused in every location, one row per id for every
     week, the same weeks for every location, whole non-negative counts
-    and the national value as the sum of the provinces for each sample.
-    Any national rows in `samples` are replaced by that sum.
+    and the national value as the sum of the provinces for each sample,
+    unless `national` gives the model's own national samples.
+    Any national rows in `samples` are replaced.
 
     Parameters
     ----------
@@ -284,6 +286,10 @@ def to_hub_table(
         A modelled component of the national count not assigned to any
         province, with columns `target_end_date`, `sample` and `value`.
         It is added to the national sum. Missing rows count as zero.
+    national : pandas.DataFrame, optional
+        National samples from a model that fits the nation on its own
+        (columns `target_end_date`, `sample`, `value`). They are written
+        as they are, in place of the sum, and `unassigned` is ignored.
     n_samples : int
         Number of samples each location must have.
 
@@ -325,10 +331,20 @@ def to_hub_table(
             raise ValueError(
                 f"{loc}: every sample needs exactly one row for each week."
             )
-    national = (
-        prov.groupby(["target_end_date", "sample"])["value"].sum().reset_index()
-    )
-    if unassigned is not None and not unassigned.empty:
+    fitted = national is not None
+    if national is not None:
+        national = national.assign(
+            target_end_date=national["target_end_date"].astype(str),
+            sample=national["sample"].astype("int64"),
+            value=national["value"].clip(lower=0).round(),
+        )[["target_end_date", "sample", "value"]]
+    else:
+        national = (
+            prov.groupby(["target_end_date", "sample"])["value"]
+            .sum()
+            .reset_index()
+        )
+    if not fitted and unassigned is not None and not unassigned.empty:
         extra = (
             unassigned.assign(
                 target_end_date=unassigned["target_end_date"].astype(str),
