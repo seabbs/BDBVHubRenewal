@@ -18,80 +18,128 @@ The source is `docs/diagrams/model_dag.tex`, built by `scripts/build_diagrams.sh
 
 ## Components
 
-The model is judged by its nowcast and forecast scores against persistence and simpler variants.
-It should be a small extension of [PyRenew](https://github.com/CDCgov/PyRenew), pinned to a commit.
-Its core components are required.
-Their time variation uses pooling and smoothness priors, so each reduces to near constant when the data show no change and stays stable when data are sparse.
-The backtest chooses the settings marked as such.
+The model extends [PyRenew](https://github.com/CDCgov/PyRenew), pinned to a commit.
+Its code is in `bdbv_hub_renewal.pyrenew`.
+Every time-varying part has a smoothness prior, so it stays near constant when the data show no change and stays stable when data are sparse.
 
-| Component | Status | PyRenew piece | Chosen by backtest |
-|---|---|---|---|
-| Renewal with pooled time-varying $R_p(t)$ | Core | `SubpopulationInfections`, `RandomWalk` | Smoothness prior, form of pooling |
-| Susceptible depletion | Core, meant to keep forecasts sensible | Extend the latent process | Effective population prior; on or off |
-| Spatial importation | Core | New latent class | Strength $\varepsilon$, kernel |
-| Time-varying ascertainment $\alpha_p(t)$ | Required | `AscertainmentModel` with a temporal process | Smoothness prior |
-| Time-varying delay $f_{p,s}$ | Required | New, with censoring and truncation | Family, pooling |
-| Time-varying missing onsets $\pi_p(t)$ | Required | New | Smoothness prior |
-| Known-onset observation, right truncated | Required | `SubpopulationCounts` with `right_truncation_rv` | Overdispersion prior |
-| Hub imputation observation | Required | New, wraps the allocation below | None |
+| Component | PyRenew piece | Built here, and why |
+|---|---|---|
+| Pooled $R_p(t)$ | `SubpopulationInfections`, `WeeklyTemporalProcess` | `KnotWalk` and `NonCentredRandomWalk`: PyRenew's `RandomWalk` samples its steps one site at a time, a funnel. |
+| Renewal with importation and depletion | `SubpopulationInfections`, subclassed | `coupled_renewal`: PyRenew runs each province on its own and cannot carry cumulative depletion. |
+| Ascertainment $\alpha(s)$ | `IndependentAscertainment` with a temporal process | None. |
+| Onset-to-report delay $f_s(d)$ | None | `HazardDelay`: PyRenew has no time-varying or nonparametric delay. |
+| Missing onsets $\pi_p(t)$ | None | `MissingOnsetFraction`, built from the same pooled walk as $R_p$. |
+| Known and imputed onsets | `BaseObservationProcess`, `NegativeBinomialNoise` | `OnsetStreams`: PyRenew's count observation takes one fixed delay and no back-sampled imputation. |
+| Provinces with no cases | None | An importation-only component. |
+
+Fitting uses PyRenew's `PyrenewBuilder`, `MultiSignalModel` and NumPyro's NUTS.
 
 ## Transmission
 
-Symptom onsets $\lambda_p(t)$ in province $p$ on day $t$ follow a renewal process on onsets, with generation interval $g$ (Gamma, mean about 15 days, SD about 9):
+Days $s$ and $t$ lie on one daily axis, with epi weeks from Sunday to Saturday.
+Provinces $p$ with cases in the vintage have a full renewal process.
+Provinces $q$ with none have the importation-only component below.
+
+### Reproduction number
 
 $$
-\lambda_p(t) = R_p(t)\, \frac{S_p(t)}{N_p} \sum_{s \ge 1} g(s) \Big[(1 - \varepsilon)\, \lambda_p(t - s) + \varepsilon \sum_{q \ne p} K_{qp}\, \lambda_q(t - s)\Big].
+\log R_p(t) = \log R(t) + \delta_p(t).
 $$
 
-- $\log R_p(t) = \log R(t) + \delta_p(t)$: a national weekly random walk plus province random walks with a sum-to-zero constraint and a partially pooled scale, as in PyRenew's `SubpopulationInfections`.
-- $K$ is a fixed gravity kernel, $K_{qp} \propto N_p e^{-D_{qp}/\ell}$, with $\varepsilon \sim \text{Beta}(1, 100)$.
-- Seeding: each province starts in its first week with cases, or by importation only.
-
-A NumPy reference is in [`latent.renewal`][bdbv_hub_renewal.latent.renewal].
-
-### Susceptible depletion
-
-$S_p(t) = N_p - \sum_{u < t} \lambda_p(u) / \phi$, where $\phi$ is the symptomatic share of infections, so depletion counts all infections, not only confirmed cases.
-With full province populations (1 to 14 million) and about 10,000 cases, depletion is negligible.
-It only protects against wild forecasts if the effective population is much smaller than the resident population.
-So $N_p = \kappa_p N_p^{\text{res}}$ with a prior on $\kappa_p$ (for example log-normal centred on 1% with wide spread), pooled across provinces.
-
-Depletion interacts with ascertainment.
-Confirmed cases are $\alpha_p(t)\lambda_p(t)$, so the depleted fraction is $\sum C_p / (\alpha_p \phi \kappa_p N_p^{\text{res}})$.
-Only the product $\alpha_p \phi \kappa_p$ is informed by the curvature of growth, and weakly.
-The prior on $\kappa_p$ carries the weight.
-The backtest compares variants with and without depletion.
-
-## Delays
-
-Reports by report day are $\rho_p(t) = \sum_s C_p(s) f_{p,s}(t - s)$.
-The delay $f_{p,s}$ varies with onset day $s$ and province, with a flexible shape: a discretised log-normal, Gamma or Weibull, or a nonparametric pmf with a smoothness penalty.
-Its parameters $\theta_{p,s}$ follow a weekly random walk with province deviations pooled towards the national value.
-Each delay in the line data is double interval censored at daily resolution.
-Only the onset week is published, so right truncation at $T_v$ averages over the onset day:
+The national $\log R(t)$ is a weekly random walk sampled as its weekly values (knots) $k_j$:
 
 $$
-\mathcal{L}_v = \prod_{\text{cases}} \frac{p_{\theta}(d)}{\frac{1}{7}\sum_{u=0}^{6} F_{\theta}(T_v - W + u)}.
+k_0 \sim \mathcal{N}(0, 0.5^2), \qquad k_j - k_{j-1} \sim \mathcal{N}(0, \sigma_R^2), \qquad \sigma_R \sim \mathcal{N}^+(0, 0.4^2).
 $$
 
-The delay data inform $f$ well in the large provinces and in weeks with enough cases.
-Small provinces and the latest weeks borrow from the pooled value.
-[`EmpiricalDelayModel`][bdbv_hub_renewal.delays.EmpiricalDelayModel] is the simple estimator in place now: a rolling window of onset weeks shrunk towards the pooled pmf.
+Sampling the knots rather than a level and its steps removes the direction in which the level and every step move together.
+The prior is the same.
 
-## Missingness and imputation
+The province deviations sum to zero.
+They are $\delta_p(t) = \sum_j Q_{pj}\, \eta_j(t)$, with $Q$ an orthonormal basis of the sum-to-zero subspace and $P - 1$ weekly random walks $\eta_j$.
+The walks share one step SD $\sigma_\delta \sim \mathcal{N}^+(0, 0.3^2)$, which pools the provinces.
+Their starting values are $Q$ times standard normal draws scaled by $\mathcal{N}^+(0, 0.3^2)$.
+All walks are flat over the 6 seeding weeks before the data start.
+
+### Renewal with importation and depletion
+
+The renewal runs on infections per resident, dated by onset:
+
+$$
+y_p(t) = R_p(t) \sum_q W_{pq} \sum_{\tau \ge 1} x_q(t - \tau)\, g(\tau),
+\qquad
+x_p(t) = S_p(t)\big\{1 - e^{-y_p(t)/\nu}\big\},
+\qquad
+S_p(t + 1) = S_p(t)\, e^{-y_p(t)/\nu}.
+$$
+
+- $g$ is a Gamma generation interval with mean 15 and SD 9 days, on lags 1 to 42.
+- $W = (1 - \varepsilon) I + \varepsilon\, \mathrm{diag}(1/N) K^\top \mathrm{diag}(N)$ mixes transmission between provinces, with $\varepsilon \sim \text{Beta}(1, 100)$.
+- $K$ is a row-normalised gravity kernel, $K_{qp} \propto N_p e^{-D_{qp}/300\,\text{km}}$, with $D$ the great-circle distance between population-weighted province centres and $N_p$ the province population.
+- $\nu \sim \text{LogNormal}(\log 0.05, 0.75^2)$ is the share of each province at risk. $S_p$ starts at $\nu$, so cumulative infections never exceed $\nu N_p$.
+
+The exponential form agrees with linear depletion, $x = S y$, to first order, and cannot overshoot the pool.
+It is computed with `expm1` and on $\log S$, which keeps the log density smooth in single precision.
+
+Seeding is set on the scale of confirmed onsets.
+Each province's expected confirmed onsets per day at the start are $c_p \sim \text{LogNormal}(0, 1.5^2)$.
+They become $x_p = c_p / (\alpha_0 N_p)$ and grow back over the seeding weeks at the initial growth rate implied by $R_p$ and $g$.
+
+A NumPy reference with linear depletion is in [`latent.renewal`][bdbv_hub_renewal.latent.renewal].
+
+## Observation
+
+### Ascertainment
+
+Expected confirmed onsets are
+
+$$
+\lambda_p(s) = \alpha(s)\, N_p\, x_p(s),
+\qquad
+\operatorname{logit} \alpha(s) = \operatorname{logit} \alpha_0 + a(s),
+$$
+
+with $\alpha_0 = 0.6$ fixed and $a$ a national weekly random walk from zero with step SD $\mathcal{N}^+(0, 0.03^2)$.
+The level is fixed because the data only identify ascertainment together with $\nu$ and the seeds.
+
+### Delays
+
+The onset-to-report delay $f_s(d)$, on days $d$ from 0 to 60, comes from a discrete hazard:
+
+$$
+\operatorname{logit} h_s(d) = \beta(d) + \gamma(s),
+\qquad
+f_s(d) = h_s(d) \prod_{j < d}\{1 - h_s(j)\},
+\qquad h_s(60) = 1.
+$$
+
+- $\beta$ is a random walk over delay with $\beta(0) \sim \mathcal{N}(-2, 1)$ and step SD $\mathcal{N}^+(0, 0.1^2)$. This makes the shape smooth but not parametric.
+- $\gamma$ is a weekly random walk over onset day from zero, with step SD $\mathcal{N}^+(0, 0.15^2)$. It shifts all hazards together.
+
+The delay is pooled over provinces.
 
 ### Missing onsets
 
-Let $\pi_p(t)$ be the share of cases reported on day $t$ without an onset.
-The hub publishes, at every vintage, known and imputed counts by province and onset week, so $\pi_p(t)$ is informed directly:
+Cases reported on day $t$ without an onset are a share $\pi_p(t)$ of reports, with
 
 $$
-I_{p,v}(w) \mid Y_{p,v}(w) \sim \text{BetaBinomial}\left(Y_{p,v}(w),\, \bar\pi_{p,v}(w),\, \nu\right),
+\operatorname{logit} \pi_p(t) = b(t) + \eta_p(t),
 $$
 
-with $\bar\pi_{p,v}(w)$ the expected imputed share implied by the model below, $\operatorname{logit}\pi_p(t)$ a smooth weekly random walk with province deviations pooled across provinces.
-The change in imputed totals between vintages approximates missing cases by report week and adds information on timing.
-$\pi_p(t)$ is well identified, unlike ascertainment.
+built as $\log R_p$ is: a national weekly random walk $b$ plus sum-to-zero province deviations $\eta_p$.
+The starting national value is $\mathcal{N}(-2, 1)$ with province spread $\mathcal{N}^+(0, 0.5^2)$.
+The step SDs are $\mathcal{N}^+(0, 0.6^2)$ for $b$ and $\mathcal{N}^+(0, 0.2^2)$ for $\eta$.
+$\pi_p$ is informed by the ratio of imputed to known onsets, through the imputation below.
+
+### Known onsets
+
+With $T$ the vintage cut-off, the cases with onset $s$ reported by $T$ with an onset recorded are expected to be
+
+$$
+\mathrm{known}_{p,T}(s) = \lambda_p(s) \sum_{d \le T - s} f_s(d)\, \{1 - \pi_p(s + d)\}.
+$$
+
+This is right truncation by vintage.
 
 ### Modelling the hub's imputation
 
@@ -99,15 +147,19 @@ The hub's imputed counts are a deterministic function of latent quantities, plus
 It gives each case reported without an onset an onset by subtracting a delay drawn from "the full delay distribution as available from the data on the site", from a defined vintage ([hub issue 61](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/61)).
 We model that procedure, including its bias, rather than correcting it.
 
-1. **Missing cases by report day** are latent: $M_p(t) = \pi_p(t)\, \rho_p(t)$, from our time-varying delay.
-2. **The hub's delay** at vintage $v$ is $\hat g_v$, the empirical pmf of all published delays of that vintage, pooled over provinces and onset weeks. It is not corrected for truncation.
-3. **Expected imputed onsets** on day $s$:
 $$
-\mathbb{E}[I_{p,v}(s)] = \sum_{t \le T_v} M_p(t)\, \hat g_v(t - s),
+M_p(t) = \pi_p(t) \sum_s \lambda_p(s)\, f_s(t - s),
+\qquad
+\mathrm{imputed}_{p,T}(s) = \sum_{t = s}^{T} \hat f_T(t - s)\, M_p(t).
 $$
-summed to onset weeks, with a negative binomial likelihood. This is the expected back-sampling allocation (for example `backsampling_allocate` from EpidemicDates, or a few lines of JAX).
 
-The forecast of the target $y_p(w)$ is the eventual known plus imputed onsets, with future imputation using the latest $\hat g_v$.
+$M_p(t)$ are the cases reported on day $t$ without an onset.
+$\hat f_T$ is the hub's delay at vintage $T$.
+It is the empirical pmf of all published delays of that vintage, pooled over provinces and onset weeks, with negative delays and delays over 60 days dropped.
+It is data, not a parameter, and it is not corrected for truncation.
+Both sums are written as banded matrix products.
+
+The forecast target is the eventual known plus imputed onsets, with future imputation using the latest $\hat f_T$.
 So the forecast carries the imputation's bias at turning points, which is what the hub scores.
 A NumPy reference is in [`observation`][bdbv_hub_renewal.observation].
 
@@ -117,52 +169,40 @@ We assume it pools over provinces and onset weeks, draws from the vintage being 
 How it treats negative and very long delays, and whether it re-imputes earlier cases at each vintage, are not stated.
 The non-monotone revisions in imputed counts suggest it re-imputes each time.
 
-## Observation
+### Likelihood
 
-### Ascertainment
+- Weekly sums of $\mathrm{known}_{p,T}$ and $\mathrm{imputed}_{p,T}$ are negative binomial, each stream with its own dispersion, $\phi \sim \text{LogNormal}(\log 20, 1)$.
+- The delays of known-onset cases in the hub's delay file are tabulated by onset week and delay, pooled over provinces. Given each week's total they are multinomial, with probabilities from $\lambda$, $f$ and $\pi$ truncated at $T$. This is the conditional part of the reporting triangle, so the known stream is not counted twice.
+- Provinces with no cases have expected onsets $\mu_q(s) = \kappa \sum_p K_{pq}\, \lambda_p(s)$, with one scale $\kappa \sim \text{LogNormal}(\log 10^{-3}, 2^2)$. Their weekly zeros are Poisson.
+- Leaving a province out switches off its terms in the first two. It stays in the latent process, so it still transmits and is still forecast.
 
-Confirmed onsets are $C_p(t) = \alpha_p(t)\, \lambda_p(t)$, with
+### Forecasts
 
-$$
-\operatorname{logit} \alpha_p(t) = \alpha_0 + a(t) + a_p(t),
-$$
-
-a national weekly random walk $a(t)$ and province deviations $a_p(t)$ with a pooled scale.
-Without testing or serology data, the level $\alpha_0$ is not identified from case counts: it trades off against the level of $\lambda$ and against $N_p$.
-It needs an informative prior.
-Its changes over time are only weakly identified, against changes in $R_p(t)$.
-The smoothness prior keeps them near zero unless the data demand otherwise.
-
-### Known onsets
-
-Cases with onset $s$ reported by $T_v$ with an onset recorded:
-
-$$
-\mathbb{E}[K_{p,v}(s)] = \sum_{t \le T_v} C_p(s)\, f_{p,s}(t - s)\, (1 - \pi_p(t)),
-$$
-
-summed to weeks, with a negative binomial likelihood.
-This handles right truncation through $f$.
-The weekly reporting triangle across vintages checks it.
+The model axis runs to the end of the forecast horizon, so the random walks carry $R_p$, $\alpha$, $f$ and $\pi$ forward.
+Each of the 100 trajectories uses one posterior draw for every province and week.
+It is the final known plus final imputed counts, drawn from the two negative binomials once every report is in.
+In provinces with no cases, importations are drawn and, from the cut-off, seed local spread at the national $R(t)$.
+The national trajectory is the sum of the province trajectories.
 
 ### What the data identify
 
 | Quantity | Informed by | Identified? |
 |---|---|---|
-| $\pi_p(t)$ | Imputed and known counts per week and vintage | Well |
-| $f_{p,s}$ | Delay line data; the reporting triangle | Well in large provinces and older weeks; pooled elsewhere |
-| $\hat g_v$ | Published delays | Known |
-| $R_p(t)$ times $\alpha_p(t)$ | Case counts | Well, as their product's growth |
-| $\alpha_p(t)$ level | Nothing in the hub data | Needs a prior |
-| $\alpha_p(t)$ change | Trades off against $R_p(t)$ | Weakly; smoothness prior |
-| $\kappa_p N_p$ | Curvature of growth | Weakly; prior |
-| $\varepsilon$ | Timing of spread between provinces | Weakly; Beta prior |
+| $R_p(t)$ | Growth of onsets in each province | Well where cases are many; pooled where few |
+| $\pi_p(t)$ | Imputed against known onsets | Well in recent weeks; prior-driven in early weeks with few cases |
+| $f_s(d)$ | The delay file and the shape of right truncation | Well |
+| $\hat f_T$ | Published delays | Known |
+| $\alpha(s)$ level | Only with $\nu$ and the seeds | Fixed at $\alpha_0$ |
+| $\alpha(s)$ change | Trades off against $R_p(t)$ | Weakly; its small step SD keeps it near constant |
+| $\nu$ | Depletion only | Mostly prior; it bounds forecasts rather than explaining the data |
+| $\varepsilon$ | Timing of spread between provinces, against the seeds | Weakly; Beta prior |
+| $\kappa$ | Zeros in provinces with no cases | Bounded above only; it does not affect provinces with cases |
 
 ### Sparse settings
 
-Provinces with a handful of cases borrow strength through the pooled scales of $\delta_p$, $a_p$, the logit $\pi$ deviations and the delay deviations.
-Recent weeks lean on the random walk priors and on the pooled delay.
-Provinces with no cases are not forecast.
+Provinces with a handful of cases borrow strength through the pooled walks of $\delta_p$ and $\eta_p$, and share the delay and ascertainment.
+Recent weeks lean on the random walk priors.
+Provinces with no cases get the importation-only component, so their forecasts allow for introductions.
 
 ## Variants
 

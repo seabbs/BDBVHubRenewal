@@ -18,8 +18,8 @@
 % ---- Parameters ----------------------------------------------------------
 \node[param, text width=3.6cm, minimum height=27mm] (rt) at (-4.6,0)
   {\textbf{Reproduction number}\\[1pt]
-   $\log R_p(t) = \log R(t)$\\ $+\, \delta_p(t) - \bar\delta(t)$\\[1pt]
-   {\footnotesize weekly walks, one pooled}\\ {\footnotesize step SD for $\delta_p$}};
+   $\log R_p(t) = \log R(t) + \delta_p(t)$\\[1pt]
+   {\footnotesize weekly knots for $\log R$,}\\ {\footnotesize $\sum_p \delta_p = 0$, one pooled}\\ {\footnotesize step SD for $\delta_p$}};
 \node[param, text width=3.6cm, minimum height=27mm] (imp) at (-0.3,0)
   {\textbf{Importation}\\[1pt]
    $W = (1 - \varepsilon) I$\\ $+\, \varepsilon\, \mathrm{diag}(1/N) K^\top \mathrm{diag}(N)$\\[1pt]
@@ -59,7 +59,7 @@
 \def\yc{-15.3}
 \def\yd{-17.2}
 
-\node[note, anchor=south] at ({\xl-1.4},{\ya+0.55}) {expected series, data vintage $T$};
+\node[note, anchor=south] at ({\xl+0.2},{\ya+0.55}) {expected series, data vintage $T$};
 \node[note, anchor=south] at (\xr,{\ya+0.55}) {observed data and likelihood};
 
 \node[latent, text width=\wl] (known) at (\xl,\ya)
