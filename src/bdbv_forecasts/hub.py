@@ -20,7 +20,7 @@ import datetime as dt
 import json
 import math
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
@@ -51,6 +51,7 @@ __all__ = [
     "validate_model_id",
     "validate_model_metadata",
     "validate_submission",
+    "validate_submission_file",
     "write_model_metadata",
     "write_submission",
 ]
@@ -75,7 +76,12 @@ OUTPUT_TYPE: Final = "sample"
 TEAM_ABBR: Final = "epiforecasts"
 """Team abbreviation, shared with earlier epiforecasts hub models."""
 
-_ID_PART = re.compile(r"^[A-Za-z0-9_]{1,15}$")
+# The schema allows 16 characters and the README says "less than 15" or
+# "less than 16", so keep to 14 to satisfy all three (docs/hub-spec.md).
+_ID_PART = re.compile(r"^[A-Za-z0-9_]{1,14}$")
+
+NATIONAL: Final = "CD"
+"""Location code of the whole country."""
 
 
 @dataclass(frozen=True)
@@ -187,12 +193,12 @@ def model_id(model_abbr: str, team_abbr: str = TEAM_ABBR) -> str:
     Raises
     ------
     ValueError
-        If either part is not 1 to 15 letters, digits or underscores.
+        If either part is not 1 to 14 letters, digits or underscores.
     """
     for part in (team_abbr, model_abbr):
         if not _ID_PART.match(part):
             raise ValueError(
-                f"{part!r} must be 1 to 15 letters, digits or underscores."
+                f"{part!r} must be 1 to 14 letters, digits or underscores."
             )
     return f"{team_abbr}-{model_abbr}"
 
@@ -214,7 +220,7 @@ def validate_model_id(value: str) -> list[str]:
     if len(parts) != 2:
         return [f"Model id {value!r} must be `team-model` with one hyphen."]
     return [
-        f"{part!r} in {value!r} must be 1 to 15 letters, digits or underscores."
+        f"{part!r} in {value!r} must be 1 to 14 letters, digits or underscores."
         for part in parts
         if not _ID_PART.match(part)
     ]
@@ -224,35 +230,99 @@ def to_hub_table(
     samples: pd.DataFrame,
     reference_date: dt.date | str,
     target: str = "wk inc confirmed cases",
+    *,
+    unassigned: pd.DataFrame | None = None,
+    n_samples: int = 100,
 ) -> pd.DataFrame:
     """Turn forecast samples into the hub's submission table.
+
+    The table meets every guarantee in `docs/hub-spec.md`: sample ids
+    `1..n_samples` reused in every location, one row per id for every
+    week, the same weeks for every location, whole non-negative counts
+    and the national value as the sum of the provinces for each sample.
+    Any national rows in `samples` are replaced by that sum.
 
     Parameters
     ----------
     samples : pandas.DataFrame
         Columns `location`, `target_end_date`, `sample` (an integer
-        index, shared across weeks within a location) and `value`.
+        index, one joint draw across weeks and provinces) and `value`.
     reference_date : datetime.date or str
         The round's reference date.
     target : str
         The target name.
+    unassigned : pandas.DataFrame, optional
+        A modelled component of the national count not assigned to any
+        province, with columns `target_end_date`, `sample` and `value`.
+        It is added to the national sum. Missing rows count as zero.
+    n_samples : int
+        Number of samples each location must have.
 
     Returns
     -------
     pandas.DataFrame
         Columns `HUB_COLUMNS`, sorted by location, sample and week.
-        Values are rounded to whole cases because the target is a count.
+        Values are rounded to whole cases before the national sum, so the
+        national value is exactly the sum of the written province values.
+
+    Raises
+    ------
+    ValueError
+        If a province does not have sample ids `1..n_samples`, a sample
+        lacks a week, or provinces cover different weeks.
     """
     ref = as_date(reference_date).isoformat()
+    prov = samples.loc[samples["location"] != NATIONAL].copy()
+    if prov.empty:
+        raise ValueError("No province samples to write.")
+    prov["target_end_date"] = prov["target_end_date"].astype(str)
+    prov["location"] = prov["location"].astype(str)
+    prov["sample"] = prov["sample"].astype("int64")
+    prov["value"] = prov["value"].clip(lower=0).round()
+    ids = set(range(1, n_samples + 1))
+    weeks = sorted(set(prov["target_end_date"]))
+    for loc, rows in prov.groupby("location"):
+        if set(rows["sample"]) != ids:
+            raise ValueError(
+                f"{loc}: sample ids must be 1 to {n_samples}, the same in "
+                "every location."
+            )
+        if sorted(set(rows["target_end_date"])) != weeks:
+            raise ValueError(f"{loc}: every location needs the same weeks.")
+        if (
+            len(rows) != n_samples * len(weeks)
+            or rows.duplicated(["sample", "target_end_date"]).any()
+        ):
+            raise ValueError(
+                f"{loc}: every sample needs exactly one row for each week."
+            )
+    national = prov.groupby(["target_end_date", "sample"], as_index=False)[
+        "value"
+    ].sum()
+    if unassigned is not None and not unassigned.empty:
+        extra = (
+            unassigned.assign(
+                target_end_date=unassigned["target_end_date"].astype(str),
+                sample=unassigned["sample"].astype("int64"),
+                value=unassigned["value"].clip(lower=0).round(),
+            )
+            .groupby(["target_end_date", "sample"])["value"]
+            .sum()
+        )
+        national = national.set_index(["target_end_date", "sample"])
+        national["value"] = national["value"].add(extra, fill_value=0)
+        national = national.reset_index()
+    national["location"] = NATIONAL
+    both = pd.concat([prov, national], ignore_index=True)
     out = pd.DataFrame(
         {
             "reference_date": ref,
             "target": target,
-            "target_end_date": samples["target_end_date"].astype(str),
-            "location": samples["location"].astype(str),
+            "target_end_date": both["target_end_date"],
+            "location": both["location"],
             "output_type": OUTPUT_TYPE,
-            "output_type_id": samples["sample"].astype("int64"),
-            "value": samples["value"].clip(lower=0).round().astype("int64"),
+            "output_type_id": both["sample"].astype("int64"),
+            "value": both["value"].astype("int64"),
         }
     )
     return out.sort_values(
@@ -319,6 +389,44 @@ def _check_file_name(file_name: str, mid: str | None) -> list[str]:
     return errors
 
 
+def _file_model_id(file_name: str) -> str | None:
+    match = re.match(r"^\d{4}-\d{2}-\d{2}-(.+)\.csv$", file_name)
+    return match.group(1) if match else None
+
+
+def _check_id_scheme(df: pd.DataFrame) -> list[str]:
+    """Check sample ids the way hubValidations reads them.
+
+    hubValidations treats all rows sharing an `output_type_id` as one
+    sample. With ids reused across locations, every location must use the
+    same ids. With ids unique to a location, every location must cover the
+    same weeks. Mixing the two fails either way (docs/hub-spec.md, s. 4).
+    """
+    ids = df.groupby("location")["output_type_id"].apply(frozenset)
+    if len(ids) < 2:
+        return []
+    shared = frozenset.intersection(*ids)
+    if shared:
+        if len(set(ids)) > 1:
+            return [
+                "Sample ids are reused across locations, so every location "
+                "must use the same sample ids."
+            ]
+        return []
+    if any(a & b for a in ids for b in ids if a is not b):
+        return [
+            "Sample ids are partly shared between locations; use the same "
+            "sample ids in every location."
+        ]
+    weeks = df.groupby("location")["target_end_date"].apply(frozenset)
+    if len(set(weeks)) > 1:
+        return [
+            "Sample ids are unique to each location, so hubValidations "
+            "needs the same weeks in every location."
+        ]
+    return []
+
+
 def validate_submission(
     table: pd.DataFrame,
     hub_round: HubRound,
@@ -327,6 +435,9 @@ def validate_submission(
     mid: str | None = None,
     check_round: bool = True,
     submitted_at: dt.datetime | None = None,
+    dir_name: str | None = None,
+    metadata_dir: Path | str | None = None,
+    metadata_dirs: Sequence[Path | str] = (),
 ) -> list[str]:
     """Check a submission table against the round's rules.
 
@@ -351,6 +462,11 @@ def validate_submission(
         hub never opened.
     submitted_at : datetime.datetime, optional
         If given, check that this time is inside the submission window.
+    dir_name : str, optional
+        Name of the directory holding the file, which must equal the
+        model id in the file name.
+    metadata_dir, metadata_dirs : pathlib.Path or str, optional
+        If given, `<model_id>.yml` (or `.yaml`) must exist in one of them.
 
     Returns
     -------
@@ -379,6 +495,21 @@ def validate_submission(
         errors.extend(_check_file_name(file_name, mid))
         if not file_name.startswith(ref):
             errors.append(f"File name {file_name} does not match {ref}.")
+    file_mid = _file_model_id(file_name) if file_name else mid
+    if dir_name is not None and file_mid is not None and dir_name != file_mid:
+        errors.append(
+            f"The directory {dir_name!r} must be named after the model id "
+            f"{file_mid!r}."
+        )
+    dirs = [*metadata_dirs, *([metadata_dir] if metadata_dir else [])]
+    if dirs and file_mid is not None:
+        found = any(
+            (Path(d) / f"{file_mid}.{ext}").exists()
+            for d in dirs
+            for ext in ("yml", "yaml")
+        )
+        if not found:
+            errors.append(f"No model metadata file {file_mid}.yml found.")
 
     bad_targets = sorted(set(df["target"]) - set(hub_round.targets))
     if bad_targets:
@@ -435,6 +566,7 @@ def validate_submission(
         errors.append(
             "Within a location, every sample must cover the same weeks."
         )
+    errors.extend(_check_id_scheme(df))
 
     if submitted_at is not None:
         start, end = submission_window(ref)
@@ -445,6 +577,59 @@ def validate_submission(
                 f"{start.isoformat()} to {end.isoformat()}."
             )
     return errors
+
+
+def validate_submission_file(
+    path: Path | str,
+    hub_round: HubRound,
+    *,
+    metadata_dirs: Sequence[Path | str] = (),
+    check_round: bool = True,
+    submitted_at: dt.datetime | None = None,
+) -> list[str]:
+    """Check a submission file where it sits.
+
+    Reads the CSV and runs `validate_submission` with its file name, the
+    name of its directory and, if `metadata_dirs` is given, a check that
+    the model's metadata exists.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        The submission, at `.../<model_id>/<reference_date>-<model_id>.csv`.
+    hub_round : HubRound
+        The round's configuration.
+    metadata_dirs : sequence of pathlib.Path or str
+        Directories searched for `<model_id>.yml`.
+    check_round : bool
+        As for `validate_submission`.
+    submitted_at : datetime.datetime, optional
+        As for `validate_submission`.
+
+    Returns
+    -------
+    list of str
+        Problems found. Empty if the file is valid.
+    """
+    p = Path(path)
+    try:
+        table = pd.read_csv(p, dtype={"output_type_id": str})
+    except (OSError, ValueError, pd.errors.ParserError) as err:
+        return [f"Could not read {p}: {err}"]
+    if "output_type_id" in table.columns:
+        ids = table["output_type_id"].astype(str)
+        if not ids.str.fullmatch(r"-?\d+").all():
+            return ["Sample ids (`output_type_id`) must be integers."]
+        table["output_type_id"] = ids.astype("int64")
+    return validate_submission(
+        table,
+        hub_round,
+        file_name=p.name,
+        dir_name=p.parent.name,
+        metadata_dirs=metadata_dirs,
+        check_round=check_round,
+        submitted_at=submitted_at,
+    )
 
 
 # --------------------------------------------------------------------------

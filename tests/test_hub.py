@@ -292,7 +292,7 @@ def test_writer_adds_an_unassigned_component() -> None:
     ids=["missing-sample", "missing-week", "ids-not-1-to-100"],
 )
 def test_writer_refuses_inconsistent_samples(change) -> None:  # type: ignore[no-untyped-def]
-    with pytest.raises(ValueError, match="sample|week"):
+    with pytest.raises(ValueError, match=r"sample|week"):
         to_hub_table(change(_provinces()), "2026-10-31")
 
 
