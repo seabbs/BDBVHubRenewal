@@ -122,8 +122,8 @@ if [ -n "$sub" ]; then
     --out "$out/nowcast.png" || echo "::warning::plot for $CAND_ID failed"
 fi
 
-# A config that runs a stand-in model (for example persistence until the
-# renewal model is integrated) says so in its diagnostics or fit.json.
+# A config that runs a stand-in model (for example persistence in place
+# of the model) says so in its diagnostics or fit.json.
 stand_in=$(python3 - "$out/diagnostics.json" "$fit/fit.json" << 'PY'
 import json, sys
 for path in sys.argv[1:]:

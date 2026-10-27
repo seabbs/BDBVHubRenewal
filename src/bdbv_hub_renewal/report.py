@@ -306,9 +306,8 @@ def _persistence_bias(scores: pd.DataFrame) -> str:
 def _relative_section(scores: pd.DataFrame) -> str:
     if scores["model"].nunique() < 2:
         return (
-            "Only persistence exists so far, so there is nothing to compare "
-            "it with.\n"
-            "Relative scores appear here once another model is registered.\n"
+            "The scores hold no model other than persistence, so there are "
+            "no relative scores.\n"
         )
     rel = relative_skill(scores, by=("kind",))
     tabs = []

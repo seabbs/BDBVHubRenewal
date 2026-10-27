@@ -144,8 +144,8 @@ def cmd_fit(args: argparse.Namespace) -> int:
         return 1
     if sc == "standin":
         text = (
-            f"the `{args.config}` config runs the persistence baseline "
-            "until the PyRenew renewal model is integrated"
+            f"the `{args.config}` config runs the persistence baseline in "
+            "place of the model"
         )
         diag = {"schema_version": 1, "sampler": "none", "stand_in": text}
         ppc = {

@@ -1198,7 +1198,7 @@ def plot_relative_skill(
             ax.text(
                 0.5,
                 0.5,
-                f"Only {baseline} so far",
+                f"No model other than {baseline}",
                 transform=ax.transAxes,
                 ha="center",
                 color=THEMES[mode]["muted"],

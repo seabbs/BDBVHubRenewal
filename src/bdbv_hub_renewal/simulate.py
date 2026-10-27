@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 r"""Simulate province outbreaks and publish them as hub-style vintages.
 
-The simulator follows the planned model's structure, with known
+The simulator follows the renewal model's structure, with known
 parameters, so recovery can be checked.
 Daily symptom onsets in province $p$ follow a renewal process with
 spatial importation and susceptible depletion,

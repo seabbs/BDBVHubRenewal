@@ -328,8 +328,7 @@ def test_cli_exit_code_on_skip(
 
 
 STAND_IN = (
-    "the `main` config runs the persistence baseline until the PyRenew "
-    "renewal model is integrated"
+    "the `main` config runs the persistence baseline in place of the model"
 )
 
 
