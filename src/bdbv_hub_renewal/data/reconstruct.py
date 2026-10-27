@@ -48,7 +48,7 @@ import pandas as pd
 
 from bdbv_hub_renewal.data.dates import as_date, epiweek_end
 from bdbv_hub_renewal.data.delays import DEFAULT_MAX_DELAY, empirical_pmf
-from bdbv_hub_renewal.models.base import NATIONAL
+from bdbv_hub_renewal.forecasters.base import NATIONAL
 
 __all__ = [
     "PUBLICATION_LAG_DAYS",

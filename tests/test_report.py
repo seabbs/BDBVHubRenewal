@@ -106,7 +106,7 @@ def test_make_report_writes_every_page(
     import os
 
     from bdbv_hub_renewal.backtest import run_development
-    from bdbv_hub_renewal.models import get_model
+    from bdbv_hub_renewal.forecasters import get_model
 
     config = load_config(ROOT / "config" / "backtest.toml")
     config = BacktestConfig(

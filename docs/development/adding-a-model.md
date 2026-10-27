@@ -4,7 +4,7 @@ Adding a model to the registry, so every evaluation includes it.
 { .page-subtitle }
 
 A model is a class with a `name` and a `forecast(task)` method.
-`task` is a [`ForecastTask`][bdbv_hub_renewal.models.base.ForecastTask]: the target rows and delay data of one vintage, the provinces and weeks to forecast, the number of samples and a seed.
+`task` is a [`ForecastTask`][bdbv_hub_renewal.forecasters.base.ForecastTask]: the target rows and delay data of one vintage, the provinces and weeks to forecast, the number of samples and a seed.
 `forecast` returns one row per province, week and sample, with columns `location`, `target_end_date`, `sample` and `value`.
 
 ```python
@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from bdbv_hub_renewal.models import ForecastTask, register_model
+from bdbv_hub_renewal.forecasters import ForecastTask, register_model
 
 
 @dataclass
@@ -26,7 +26,7 @@ class MyModel:
 register_model("my_model", MyModel, "One line describing it.")
 ```
 
-Import the module in `bdbv_hub_renewal/models/__init__.py`.
+Import the module in `bdbv_hub_renewal/forecasters/__init__.py`.
 Then:
 
 - `task backtest` scores it on every development vintage;
@@ -46,7 +46,7 @@ The model must then drop the counts of the provinces in `task.mask` from its lik
 
 ## Renewal variants
 
-A new renewal variant is one entry in `VARIANTS` in [`models.renewal`][bdbv_hub_renewal.models.renewal].
+A new renewal variant is one entry in `VARIANTS` in [`forecasters.renewal`][bdbv_hub_renewal.forecasters.renewal].
 It names a base configuration (`MAIN` or `FALLBACK`) and the `ModelConfig` fields it changes.
 Registered variants are marked `fitted`, because each forecast is an MCMC fit.
 So the docs build and the smoke tests run only the models with no fit.

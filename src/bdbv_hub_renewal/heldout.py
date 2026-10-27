@@ -47,7 +47,7 @@ from bdbv_hub_renewal.backtest import (
     score_by_truth_vintage,
 )
 from bdbv_hub_renewal.data.dates import as_date
-from bdbv_hub_renewal.models import get_model, list_models
+from bdbv_hub_renewal.forecasters import get_model, list_models
 
 __all__ = [
     "HeldOutError",

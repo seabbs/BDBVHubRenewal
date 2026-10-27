@@ -11,14 +11,14 @@ import pytest
 
 from bdbv_hub_renewal.backtest import BacktestConfig, make_tasks
 from bdbv_hub_renewal.fitting import Forecast, get_config
-from bdbv_hub_renewal.models import (
+from bdbv_hub_renewal.forecasters import (
     NATIONAL,
     ForecastModel,
     ForecastTask,
     get_model,
     list_models,
 )
-from bdbv_hub_renewal.models import renewal as rn
+from bdbv_hub_renewal.forecasters import renewal as rn
 
 pytest.importorskip("pyrenew")
 
@@ -351,7 +351,7 @@ def test_bvd_variant_reads_the_release_for_its_vintage(
 
     from bdbv_hub_renewal.data import bvd
 
-    fixtures = Path(__file__).resolve().parent / "data" / "bvd"
+    fixtures = Path(__file__).resolve().parents[1] / "data" / "bvd"
     releases = bvd.parse_releases(
         json.loads((fixtures / "releases.json").read_text())
     )

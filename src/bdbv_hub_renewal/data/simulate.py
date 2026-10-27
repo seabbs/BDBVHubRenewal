@@ -40,7 +40,7 @@ from numpy.typing import NDArray
 from bdbv_hub_renewal.data import PROVINCE_CENTRES, PROVINCE_POPULATIONS
 from bdbv_hub_renewal.data.dates import as_date, epiweek_end
 from bdbv_hub_renewal.data.delays import ParametricDelay
-from bdbv_hub_renewal.models.base import NATIONAL
+from bdbv_hub_renewal.forecasters.base import NATIONAL
 
 __all__ = [
     "SimulatedOutbreak",

@@ -49,6 +49,13 @@ from bdbv_hub_renewal.data import (
     load_target,
 )
 from bdbv_hub_renewal.fitting import Forecast, get_config, run_fit, run_forecast
+from bdbv_hub_renewal.forecasters.base import (
+    NATIONAL,
+    ForecastTask,
+    check_samples,
+    get_model,
+    list_models,
+)
 from bdbv_hub_renewal.heldout import HeldOutError, run_heldout
 from bdbv_hub_renewal.hub import (
     SUBMISSION_CONFIG,
@@ -61,13 +68,6 @@ from bdbv_hub_renewal.hub import (
     validate_submission_file,
     write_model_metadata,
     write_submission,
-)
-from bdbv_hub_renewal.models.base import (
-    NATIONAL,
-    ForecastTask,
-    check_samples,
-    get_model,
-    list_models,
 )
 
 __all__ = ["build_parser", "main"]

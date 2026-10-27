@@ -14,7 +14,7 @@ It is the reference for the interface, and `ci/run_dry.sh` runs the whole workfl
 | `bdbv-hub-renewal nowcast --model persistence --vintage <as_of> --out <dir>` | exists | `prepare` (persistence candidate and baseline) |
 | `bdbv-hub-renewal metadata --model <model> --out <dir>` | exists | `gate` |
 | `scripts/validate-hub.R <hub> <csv> <yml>`, with `CHECK_WINDOW=true` | exists | `gate`, through `ci/steps/validate_hub.sh` |
-| `bdbv-hub-renewal fit ...` | done (`bdbv_hub_renewal.fitting`; `main` and `fallback` run the renewal model, `bdbv_hub_renewal.models.renewal`) | `fit`, `retry` |
+| `bdbv-hub-renewal fit ...` | done (`bdbv_hub_renewal.fitting`; `main` and `fallback` run the renewal model, `bdbv_hub_renewal.forecasters.renewal`) | `fit`, `retry` |
 | `nowcast --config <c> --fit <dir>` | done | `fit`, `retry` |
 | `bdbv-hub-renewal plot-submission ...` | done, `plots.plot_submission` | every candidate |
 | `bdbv-hub-renewal plot-ppc --ppc <ppc.json> --out <png>` | done, a thin wrapper on `ppc.plot_ppc` | candidates whose `ppc.json` is available |

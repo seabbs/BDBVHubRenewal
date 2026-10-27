@@ -9,7 +9,7 @@ forecasts from the saved fit with `bdbv-hub-renewal nowcast --config <name>
 The chain names two configurations, `main` (the full model, the
 `renewal` variant) and `fallback` (delays and missingness from data,
 no coupling). Both run the PyRenew renewal model through
-`bdbv_hub_renewal.models.renewal.fit_renewal`, which samples, draws the
+`bdbv_hub_renewal.forecasters.renewal.fit_renewal`, which samples, draws the
 trajectories and writes `ppc.json`. `persistence` needs no fit.
 
 A fit function gets the forecast task, the sampler settings from
@@ -33,7 +33,11 @@ from typing import Any, Final
 
 import pandas as pd
 
-from bdbv_hub_renewal.models.base import ForecastTask, check_samples, get_model
+from bdbv_hub_renewal.forecasters.base import (
+    ForecastTask,
+    check_samples,
+    get_model,
+)
 
 __all__ = [
     "DIAGNOSTICS_SCHEMA_VERSION",
@@ -426,7 +430,7 @@ register_config(persistence_config("persistence"))
 
 
 def _renewal_config(name: str) -> FitConfig:
-    from bdbv_hub_renewal.models.renewal import (
+    from bdbv_hub_renewal.forecasters.renewal import (
         FIT_VARIANTS,
         VARIANTS,
         fit_renewal,

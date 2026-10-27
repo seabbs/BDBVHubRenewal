@@ -41,7 +41,7 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from bdbv_hub_renewal.models.base import (
+from bdbv_hub_renewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
     ForecastTask,

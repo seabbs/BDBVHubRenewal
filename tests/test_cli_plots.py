@@ -112,7 +112,7 @@ def test_plot_scores_by_truth() -> None:
 def test_cli_lopo_writes_scores_for_mask_aware_models(tmp_path: Path) -> None:
     from test_backtest import _MaskAware
 
-    from bdbv_hub_renewal.models.base import _REGISTRY, register_model
+    from bdbv_hub_renewal.forecasters.base import _REGISTRY, register_model
 
     register_model("mask_aware", _MaskAware, "Test model.", replace=True)
     try:
@@ -165,7 +165,7 @@ def test_cli_backtest_keeps_other_models_results(tmp_path: Path) -> None:
 
 @pytest.mark.usefixtures("in_root")
 def test_cli_backtest_no_fit_skips_fitted_models(tmp_path: Path) -> None:
-    from bdbv_hub_renewal.models import list_models
+    from bdbv_hub_renewal.forecasters import list_models
 
     assert any(s.fitted for s in list_models())
     args = [

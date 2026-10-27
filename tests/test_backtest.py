@@ -17,7 +17,7 @@ from bdbv_hub_renewal.backtest import (
     score_by_truth_vintage,
     truth_changes,
 )
-from bdbv_hub_renewal.models import get_model
+from bdbv_hub_renewal.forecasters import get_model
 
 ROOT = Path(__file__).resolve().parents[1]
 

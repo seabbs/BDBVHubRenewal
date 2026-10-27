@@ -46,7 +46,7 @@ from bdbv_hub_renewal.data.reconstruct import (
     reconstruct_vintages,
 )
 from bdbv_hub_renewal.data.simulate import SimulationSettings, simulate_outbreak
-from bdbv_hub_renewal.models.base import (
+from bdbv_hub_renewal.forecasters.base import (
     NATIONAL,
     ForecastModel,
     ForecastTask,

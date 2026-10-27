@@ -36,7 +36,7 @@ import pandas as pd
 
 from bdbv_hub_renewal.data.dates import as_date
 from bdbv_hub_renewal.data.delays import EmpiricalDelayModel
-from bdbv_hub_renewal.models.base import (
+from bdbv_hub_renewal.forecasters.base import (
     SAMPLE_COLUMNS,
     ForecastTask,
     register_model,

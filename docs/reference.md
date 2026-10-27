@@ -15,11 +15,11 @@ The public API of `bdbv_hub_renewal`, generated from the numpy-style docstrings.
 
 ::: bdbv_hub_renewal.data.simulate
 
-::: bdbv_hub_renewal.models.base
+::: bdbv_hub_renewal.forecasters.base
 
-::: bdbv_hub_renewal.models.persistence
+::: bdbv_hub_renewal.forecasters.persistence
 
-::: bdbv_hub_renewal.models.renewal
+::: bdbv_hub_renewal.forecasters.renewal
 
 ::: bdbv_hub_renewal.model
 

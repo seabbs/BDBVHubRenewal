@@ -760,7 +760,7 @@ def plot_nowcast(
     """
     from bdbv_hub_renewal.backtest import load_config, make_tasks, run_forecasts
     from bdbv_hub_renewal.data import load_delays, load_target
-    from bdbv_hub_renewal.models.base import get_model
+    from bdbv_hub_renewal.forecasters.base import get_model
 
     target = load_target(data_dir) if target is None else target
     real = target.loc[target["kind"] == "real"]

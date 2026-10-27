@@ -117,8 +117,8 @@ def test_heldout_also_runs_the_other_variants(
     config: BacktestConfig,
     tmp_path: Path,
 ) -> None:
-    from bdbv_hub_renewal.models import Persistence, register_model
-    from bdbv_hub_renewal.models.base import _REGISTRY
+    from bdbv_hub_renewal.forecasters import Persistence, register_model
+    from bdbv_hub_renewal.forecasters.base import _REGISTRY
 
     register_model(
         "shadow",
@@ -172,8 +172,8 @@ def test_heldout_without_fits_reads_committed_forecasts(
     config: BacktestConfig,
     tmp_path: Path,
 ) -> None:
-    from bdbv_hub_renewal.models import Persistence, register_model
-    from bdbv_hub_renewal.models.base import _REGISTRY
+    from bdbv_hub_renewal.forecasters import Persistence, register_model
+    from bdbv_hub_renewal.forecasters.base import _REGISTRY
 
     class Slow(Persistence):
         def forecast(self, task):  # type: ignore[no-untyped-def]

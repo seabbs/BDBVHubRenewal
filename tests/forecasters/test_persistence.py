@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from bdbv_hub_renewal.backtest import BacktestConfig, make_tasks
-from bdbv_hub_renewal.models import (
+from bdbv_hub_renewal.forecasters import (
     ForecastModel,
     Persistence,
     add_national,
@@ -17,7 +17,7 @@ from bdbv_hub_renewal.models import (
     list_models,
     register_model,
 )
-from bdbv_hub_renewal.models.persistence import completeness_lag
+from bdbv_hub_renewal.forecasters.persistence import completeness_lag
 
 
 @pytest.fixture

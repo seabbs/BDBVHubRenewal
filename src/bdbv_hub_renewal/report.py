@@ -39,17 +39,17 @@ from bdbv_hub_renewal.data.reconstruct import (
 )
 from bdbv_hub_renewal.data.simulate import simulate_outbreak
 from bdbv_hub_renewal.data.tidy import COHERENCE_STREAMS
+from bdbv_hub_renewal.forecasters.base import (
+    NATIONAL,
+    ForecastTask,
+    get_model,
+    list_models,
+)
 from bdbv_hub_renewal.heldout import load_model_choices
 from bdbv_hub_renewal.hubcompare import (
     attribution,
     display_names,
     load_comparison_config,
-)
-from bdbv_hub_renewal.models.base import (
-    NATIONAL,
-    ForecastTask,
-    get_model,
-    list_models,
 )
 from bdbv_hub_renewal.plots import (
     plot_comparison,

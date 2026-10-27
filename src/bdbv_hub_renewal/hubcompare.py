@@ -48,7 +48,7 @@ from bdbv_hub_renewal.data.reconstruct import (
     reconstruct_delays,
     reconstruct_vintages,
 )
-from bdbv_hub_renewal.models import get_model
+from bdbv_hub_renewal.forecasters import get_model
 from bdbv_hub_renewal.scoring import score_forecasts
 
 __all__ = [
