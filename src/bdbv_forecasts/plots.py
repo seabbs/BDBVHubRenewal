@@ -603,6 +603,13 @@ def _bands(samples: pd.DataFrame) -> pd.DataFrame:
 def _draw_forecast(
     ax: Axes, samples: pd.DataFrame, colour: str, label: str
 ) -> None:
+    """Draw sample trajectories, 50% and 90% ribbons and the median."""
+    paths = samples.pivot_table(
+        index="target_end_date", columns="sample", values="value"
+    ).sort_index()
+    x = pd.to_datetime(paths.index)
+    for s in paths.columns:
+        ax.plot(x, paths[s], color=colour, lw=0.4, alpha=0.08, zorder=1)
     q = _bands(samples)
     ax.fill_between(q.index, q[0.05], q[0.95], color=colour, alpha=0.18, lw=0)
     ax.fill_between(q.index, q[0.25], q[0.75], color=colour, alpha=0.35, lw=0)
@@ -645,7 +652,8 @@ def plot_forecasts(
     -------
     matplotlib.figure.Figure
         One panel per reference date: data at the time (dashed), later
-        data (solid) and each model's median with 50% and 90% intervals.
+        data (solid) and each model's sample trajectories, 50% and 90%
+        intervals and median.
     """
     fc = forecasts.loc[
         (forecasts["location"] == location) & (forecasts["kind"] == kind)
@@ -746,7 +754,7 @@ def plot_nowcast(
     -------
     matplotlib.figure.Figure
         Observed, imputed and total cases by onset week, and each model's
-        median with 50% and 90% intervals.
+        sample trajectories, 50% and 90% intervals and median.
     """
     from .backtest import load_config, make_tasks, run_forecasts
     from .data import load_delays, load_target

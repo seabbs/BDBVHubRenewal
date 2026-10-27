@@ -27,7 +27,7 @@ The [relative WIS](#relative-to-persistence) plots fill in as models are registe
 ## Forecasts against later data
 
 Each panel is one reference date.
-The dashed line is the data at the time, the solid line the latest data, and the bands are 50% and 90% intervals.
+The dashed line is the data at the time, the solid line the latest data, the faint lines are the 100 sample trajectories, and the bands are 50% and 90% intervals around the median.
 
 === "National, real"
 
