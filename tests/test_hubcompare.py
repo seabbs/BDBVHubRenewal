@@ -14,9 +14,9 @@ from bdbv_forecasts.hubcompare import (
     load_team_metadata,
     match_vintage,
     our_forecasts,
-    plot_comparison,
     score_comparison,
 )
+from bdbv_forecasts.plots import plot_comparison
 
 WEEKS = ["2026-09-19", "2026-09-26", "2026-10-03", "2026-10-10"]
 
@@ -208,3 +208,37 @@ def test_plot_comparison(
         names={"teamA-weekly": "Team A"},
     )
     assert len(fig.axes) == 1
+
+
+def test_cli_compare_hub(tmp_path: Path) -> None:
+    import os
+
+    from bdbv_forecasts.cli import main
+
+    _write_hub(tmp_path / "hub")
+    root = Path(__file__).resolve().parents[1]
+    cfg = tmp_path / "cmp.toml"
+    cfg.write_text(
+        '[comparison]\nmodels = ["teamA-weekly", "epiforecasts-renewal"]\n'
+    )
+    old = Path.cwd()
+    os.chdir(root)
+    try:
+        code = main(
+            [
+                "compare-hub",
+                "--config",
+                str(cfg),
+                "--hub-dir",
+                str(tmp_path / "hub"),
+                "--out",
+                str(tmp_path / "out"),
+            ]
+        )
+    finally:
+        os.chdir(old)
+    assert code == 0
+    scores = pd.read_csv(tmp_path / "out" / "scores.csv")
+    assert set(scores["model"]) == {"teamA-weekly", "epiforecasts-persistence"}
+    teams = pd.read_csv(tmp_path / "out" / "teams.csv")
+    assert set(teams["license"]) == {"CC0-1.0", "CC-BY-4.0"}

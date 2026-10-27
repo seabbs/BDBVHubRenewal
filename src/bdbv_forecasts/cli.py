@@ -15,6 +15,7 @@ Commands:
 - `coherence`: compare the national data with the sum of the provinces.
 - `validate`: run the hub's checks on files (`hub_validate`).
 - `metadata`: write and check a model's metadata YAML.
+- `compare-hub`: score our forecasts against the hub's submitted ones.
 - `report`: make the docs figures and tables.
 
 `--version` prints the package version.
@@ -34,6 +35,8 @@ import sys
 from collections.abc import Sequence
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+
+import pandas as pd
 
 from . import backtest as bt
 from .data import (
@@ -193,6 +196,21 @@ def build_parser() -> argparse.ArgumentParser:
     meta.add_argument("--out", default="hub/model-metadata")
     meta.add_argument(
         "--schema", default=f"{data_dir}/hub-config/model-metadata-schema.json"
+    )
+
+    cmp = sub.add_parser(
+        "compare-hub", help="Compare our forecasts with hub submissions."
+    )
+    cmp.add_argument("--config", default="config/hub-comparison.toml")
+    cmp.add_argument("--backtest-config", default="config/backtest.toml")
+    cmp.add_argument("--data", default=data_dir)
+    cmp.add_argument("--hub-dir", default=f"{data_dir}/raw/hub-submissions")
+    cmp.add_argument("--out", default="output/hub-comparison")
+    cmp.add_argument("--models", nargs="*", default=None)
+    cmp.add_argument(
+        "--fetch",
+        action="store_true",
+        help="Download the hub files first.",
     )
 
     rep = sub.add_parser("report", help="Make the docs figures and tables.")
@@ -461,6 +479,51 @@ def _metadata(args: argparse.Namespace) -> int:
     return 1 if errors else 0
 
 
+def _compare_hub(args: argparse.Namespace) -> int:
+    from . import hubcompare as hc
+
+    cfg = hc.load_comparison_config(args.config)
+    hub_dir = Path(args.hub_dir)
+    if args.fetch:  # pragma: no cover - network
+        hc.fetch_hub_submissions(hub_dir, cfg.models, ref=cfg.ref)
+    weekly, other = hc.load_hub_submissions(hub_dir)
+    weekly = weekly.loc[weekly["model"].isin(cfg.models)]
+    other = other.loc[other["model"].isin(cfg.models)]
+    target, delays = load_target(args.data), load_delays(args.data)
+    config = bt.load_config(args.backtest_config)
+    ours = hc.our_forecasts(
+        sorted(set(weekly["reference_date"])),
+        target,
+        delays,
+        config,
+        _models(args.models),
+    )
+    scores, pending = hc.score_comparison(weekly, ours, target)
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    forecasts = pd.concat(
+        [weekly.drop(columns="output_type").assign(source="hub"), ours],
+        ignore_index=True,
+    )
+    forecasts.to_csv(out / "forecasts.csv.gz", index=False)
+    scores.to_csv(out / "scores.csv", index=False)
+    pending.to_csv(out / "pending.csv", index=False)
+    other.to_csv(out / "other-rounds.csv", index=False)
+    teams = hc.load_team_metadata(hub_dir)
+    teams.loc[teams["model"].isin(cfg.models)].to_csv(
+        out / "teams.csv", index=False
+    )
+    manifest = hub_dir / "manifest.json"
+    if manifest.exists():
+        (out / "manifest.json").write_text(manifest.read_text())
+    print(
+        f"Hub comparison: {len(scores)} scored forecasts, "
+        f"{len(pending)} rounds pending, {len(other)} files from other "
+        f"rounds. Written to {out}."
+    )
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command line interface.
 
@@ -509,6 +572,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _nowcast(args)
     if args.command == "metadata":
         return _metadata(args)
+    if args.command == "compare-hub":
+        return _compare_hub(args)
     from .report import make_report
 
     make_report(figures=args.figures, generated=args.generated)

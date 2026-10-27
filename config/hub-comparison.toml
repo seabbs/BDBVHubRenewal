@@ -1,0 +1,24 @@
+# Comparison with hub forecasts. Read by
+# `bdbv_forecasts.hubcompare.load_comparison_config`.
+# `bdbv-forecasts compare-hub --fetch` downloads these models' files to
+# data/raw/hub-submissions/ and writes output/hub-comparison/.
+# Neither is committed.
+#
+# The page (docs/comparison.md) and its figures are excluded from the site
+# in mkdocs.yml (`exclude_docs`) until publication is decided. To publish,
+# choose `display`, remove those lines from `exclude_docs` and add the
+# page to the nav.
+
+[comparison]
+models = [
+  "MOBS-GLEAM_BDBV",
+  "OHTJHU-BM",
+  "epiforecasts-integral",
+  "epiforecasts-renewal",
+  "mccabe-backcalc",
+  "mccabe-geospread",
+]
+# How other teams are shown: "named" (hub model ids), "anonymised"
+# (Team A, Team B, ...) or "epiforecasts" (epiforecasts models only).
+display = "anonymised"
+ref = "main"

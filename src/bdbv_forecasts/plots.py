@@ -13,7 +13,7 @@ for the figure it embeds in the hub pull request.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Final, cast
@@ -36,6 +36,7 @@ __all__ = [
     "MODEL_COLOURS",
     "THEMES",
     "model_colour",
+    "plot_comparison",
     "plot_delay_distribution",
     "plot_delays_over_time",
     "plot_forecasts",
@@ -809,6 +810,94 @@ def plot_nowcast(
     ax.set_ylabel("Confirmed cases by onset week")
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
     ax.legend(fontsize=7, loc="upper left")
+    return fig
+
+
+def _label(model: str, source: str, names: Mapping[str, str]) -> str:
+    name = names.get(model, model)
+    if source == "hub":
+        return name
+    return f"{name} (retrospective, {source} vintage)"
+
+
+def plot_comparison(
+    forecasts: pd.DataFrame,
+    target: pd.DataFrame,
+    location: str,
+    names: Mapping[str, str] | None = None,
+    weeks_before: int = 10,
+    mode: str = "light",
+) -> Figure:
+    """Plot hub and our forecasts side by side, one panel per round.
+
+    Parameters
+    ----------
+    forecasts : pandas.DataFrame
+        Hub and our samples, with `model`, `source`, `reference_date`,
+        `location`, `target_end_date`, `sample` and `value`.
+    target : pandas.DataFrame
+        Target rows; the latest real vintage is drawn as data.
+    location : str
+        Location to show.
+    names : mapping, optional
+        Labels from `display_names`. Hub models not in it are left out,
+        and our models keep their id.
+    weeks_before : int
+        Weeks of data shown before each reference date.
+    mode : str
+        `"light"` or `"dark"`.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Each model's sample trajectories, 50% and 90% intervals and
+        median, over the latest data.
+    """
+    names = dict(names or {})
+    fc = forecasts.loc[forecasts["location"] == location]
+    fc = fc.loc[(fc["source"] != "hub") | fc["model"].isin(list(names))].assign(
+        label=lambda d: [
+            _label(m, s, names)
+            for m, s in zip(d["model"], d["source"], strict=True)
+        ]
+    )
+    labels = sorted(set(fc["label"]))
+    real = target.loc[target["kind"] == "real"]
+    data = real.loc[
+        (real["vintage"] == real["vintage"].max())
+        & (real["location"] == location)
+    ]
+    refs = sorted(set(fc["reference_date"]))
+    ink = THEMES[mode]
+    fig, axes = _grid(max(len(refs), 1), 3, width=3.6, height=2.6)
+    for ax, ref in zip(axes, refs, strict=False):
+        f_ref = fc.loc[fc["reference_date"] == ref]
+        start = pd.Timestamp(ref) - pd.Timedelta(weeks=weeks_before)
+        end = pd.Timestamp(f_ref["target_end_date"].max())
+        x = pd.to_datetime(data["target_end_date"])
+        sel = (x >= start) & (x <= end)
+        ax.plot(
+            x[sel],
+            data["total"][sel],
+            color=ink["data"],
+            lw=1.2,
+            label=f"Data {real['vintage'].max()}",
+        )
+        for lab in labels:
+            s = f_ref.loc[f_ref["label"] == lab]
+            if not s.empty:
+                _draw_forecast(ax, s, model_colour(lab, labels, mode), lab)
+        ax.axvline(
+            mdates.date2num(pd.Timestamp(ref)),
+            color=ink["muted"],
+            lw=0.8,
+            ls=":",
+        )
+        ax.set_title(str(ref))
+        ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=4))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
+    axes[0].set_ylabel(f"Cases by onset week ({location})")
+    axes[0].legend(fontsize=7)
     return fig
 
 
