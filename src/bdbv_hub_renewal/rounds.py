@@ -7,8 +7,8 @@ The submission workflow records every live round on the
 file, the plot, the provenance and the pull request body).
 
 `make_round_pages` turns that into one page per round at
-`docs/nowcast/rounds/<reference_date>.md`, served at
-`/nowcast/rounds/<reference_date>/`, which the hub pull request links to,
+`docs/submission/rounds/<reference_date>.md`, served at
+`/submission/rounds/<reference_date>/`, which the hub pull request links to,
 an index of rounds, and a snippet on the latest submission for the
 Nowcast page. The pages are built with the docs and not committed.
 """
@@ -181,7 +181,7 @@ def make_round_pages(
         A checkout of the `submission-ledger` branch. None, or a folder
         without `state.json`, means no round has been submitted yet.
     docs : pathlib.Path or str
-        The docs folder. Pages go to `nowcast/rounds/` inside it.
+        The docs folder. Pages go to `submission/rounds/` inside it.
     generated : pathlib.Path or str
         Where the `latest-submission.md` snippet goes.
 
@@ -190,7 +190,7 @@ def make_round_pages(
     list of str
         The reference dates with a page, newest first.
     """
-    out = Path(docs) / "nowcast" / "rounds"
+    out = Path(docs) / "submission" / "rounds"
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
@@ -224,10 +224,11 @@ def make_round_pages(
         ref = done[0]
         entry = rounds[ref]
         text = (
-            f"**Latest submission:** [round {ref}](nowcast/rounds/{ref}.md), "
+            f"**Latest submission:** "
+            f"[round {ref}](submission/rounds/{ref}.md), "
             f"{entry.get('status', '')}, produced by "
             f"{entry.get('produced_by') or 'n/a'}. "
-            "[All submitted rounds](nowcast/rounds/index.md)."
+            "[All submitted rounds](submission/rounds/index.md)."
         )
     else:
         text = (

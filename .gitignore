@@ -15,4 +15,4 @@ docs/figures/*.svg
 docs/figures/comparison/
 docs/generated/
 # Pages of submitted rounds: built from the submission-ledger branch.
-docs/nowcast/rounds/
+docs/submission/rounds/

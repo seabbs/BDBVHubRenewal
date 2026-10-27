@@ -364,7 +364,7 @@ jobs:
     permissions:
       contents: write
       # To rebuild the docs, so the round's page that the PR links to
-      # (/nowcast/rounds/<reference_date>/) appears.
+      # (/submission/rounds/<reference_date>/) appears.
       actions: write
     env:
       REFERENCE_DATE: ${{ needs.detect.outputs.reference_date }}

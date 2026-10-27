@@ -39,7 +39,7 @@ DOCS = "https://seabbs.github.io/BDBVHubRenewal"
 
 def round_url(reference_date: str, docs: str = DOCS) -> str:
     """Stable docs page of a round's submitted nowcast."""
-    return f"{docs.rstrip('/')}/nowcast/rounds/{reference_date}/"
+    return f"{docs.rstrip('/')}/submission/rounds/{reference_date}/"
 
 
 def marker(model_id: str, reference_date: str) -> str:

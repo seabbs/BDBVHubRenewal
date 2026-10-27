@@ -162,7 +162,7 @@ print(n)
 EOF
 )
   [ "$shown" -le 6 ] || { echo "FAIL: $name PR body shows $shown lines"; return 1; }
-  grep -q "^This round in our docs: .*/nowcast/rounds/$REFERENCE_DATE/" \
+  grep -q "^This round in our docs: .*/submission/rounds/$REFERENCE_DATE/" \
     "$WORK/gate/pr-body.md" || { echo "FAIL: $name has no docs link"; return 1; }
   tail -n 1 "$WORK/gate/pr-body.md" | grep -q "@seabbs"
   # A posterior predictive plot whenever the checks were available.

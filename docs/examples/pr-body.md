@@ -5,7 +5,7 @@ All checks passed, with warnings on bounds. Stand-in: persistence runs as the `m
 
 ![Nowcast and forecast for 2026-10-31](../assets/example-submission-nowcast.png)
 
-This round in our docs: https://seabbs.github.io/BDBVHubRenewal/nowcast/rounds/2026-10-31/
+This round in our docs: https://seabbs.github.io/BDBVHubRenewal/submission/rounds/2026-10-31/
 
 <details><summary>Checks</summary>
 

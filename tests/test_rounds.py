@@ -68,7 +68,7 @@ def test_round_pages(tmp_path: Path) -> None:
     docs, gen = tmp_path / "docs", tmp_path / "gen"
     done = make_round_pages(_ledger(tmp_path), docs, gen)
     assert done == [REF, "2026-10-24"]
-    rounds = docs / "nowcast" / "rounds"
+    rounds = docs / "submission" / "rounds"
     page = (rounds / f"{REF}.md").read_text()
     assert page.startswith(f"# Round {REF}")
     assert f"![Nowcast and forecast submitted for {REF}]({REF}.png)" in page
@@ -84,12 +84,12 @@ def test_round_pages(tmp_path: Path) -> None:
     index = (rounds / "index.md").read_text()
     assert f"[{REF}]({REF}.md)" in index
     snippet = (gen / "latest-submission.md").read_text()
-    assert f"(nowcast/rounds/{REF}.md)" in snippet
+    assert f"(submission/rounds/{REF}.md)" in snippet
 
 
 def test_no_ledger_yet(tmp_path: Path) -> None:
     docs, gen = tmp_path / "docs", tmp_path / "gen"
     assert make_round_pages(None, docs, gen) == []
     assert "none yet" in (gen / "latest-submission.md").read_text()
-    assert "No round" in (docs / "nowcast/rounds/index.md").read_text()
+    assert "No round" in (docs / "submission/rounds/index.md").read_text()
     assert make_round_pages(tmp_path / "missing", docs, gen) == []

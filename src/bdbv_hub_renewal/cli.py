@@ -221,7 +221,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--ledger",
         default=None,
         help="Checkout of the submission-ledger branch, for the pages of "
-        "submitted rounds (docs/nowcast/rounds/).",
+        "submitted rounds (docs/submission/rounds/).",
     )
     return parser
 

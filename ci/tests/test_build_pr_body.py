@@ -257,7 +257,7 @@ def test_cli(tmp_path: Path) -> None:
     ).read_text() == f"m submission for {REF}"
     out = (tmp_path / "o" / "pr-body.md").read_text()
     assert "| Hub validation | PASS |" in out
-    assert f"https://example.org/docs/nowcast/rounds/{REF}/" in out
+    assert f"https://example.org/docs/submission/rounds/{REF}/" in out
 
 
 def test_data_coherence_reported_once(tmp_path: Path) -> None:
