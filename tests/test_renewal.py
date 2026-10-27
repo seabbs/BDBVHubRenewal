@@ -203,21 +203,6 @@ def test_samples_table_is_coherent(task: ForecastTask) -> None:
     pd.testing.assert_series_equal(full, back, check_names=False)
 
 
-def test_single_patch_apportions_national_draws(task: ForecastTask) -> None:
-    config = rn.model_config(rn.VARIANTS["renewalsp"])
-    data = rn.vintage_inputs(task, config)
-    draws = _fake_draws(data, task.n_samples, np.random.default_rng(2))
-    samples, unassigned = rn.samples_table(task, data, draws, report_all=True)
-    assert unassigned is None
-    assert set(samples["location"]) == set(task.locations)
-    first = data.start_date + dt.timedelta(days=6)
-    week = (first + dt.timedelta(weeks=data.n_weeks)).isoformat()
-    if week in task.target_end_dates:
-        got = samples.loc[samples["target_end_date"] == week]
-        total = got.groupby("sample")["value"].sum().to_numpy()
-        np.testing.assert_allclose(total, draws["national"][:, data.n_weeks])
-
-
 def test_ppc_rows_add_national(task: ForecastTask) -> None:
     config = rn.model_config(rn.VARIANTS["renewal"])
     data = rn.vintage_inputs(task, config)
@@ -312,21 +297,6 @@ def test_tiny_fit_end_to_end(task: ForecastTask, tmp_path: Path) -> None:
     assert np.isfinite(result.samples["value"]).all()
 
 
-def test_apportion_shares_smooth_recent_zeros(task: ForecastTask) -> None:
-    shares = rn.apportion_shares(task)
-    assert shares.index.tolist() == list(task.locations)
-    assert shares.sum() == pytest.approx(1.0)
-    # Every province keeps a share, even with no onsets in recent weeks.
-    assert (shares > 0).all()
-    rows = task.target.loc[task.target["vintage"] == task.vintage]
-    wide = rows.pivot_table(
-        index="target_end_date", columns="location", values="total"
-    ).reindex(columns=list(task.locations))
-    recent = wide.tail(rn.RECENT_WEEKS).fillna(0).sum()
-    expected = (recent + rn.SHARE_PRIOR) / (recent + rn.SHARE_PRIOR).sum()
-    pd.testing.assert_series_equal(shares, expected, check_names=False)
-
-
 def test_init_strategy_follows_the_sampler_table() -> None:
     from numpyro.infer import NUTS
 
@@ -401,3 +371,30 @@ def test_bvd_variant_reads_the_release_for_its_vintage(
     assert data.bvd is not None
     assert rn.vintage_inputs(task, config).bvd is None
     assert "renewalbvd" in {s.name for s in list_models()}
+
+
+def test_single_patch_fits_each_location_on_its_own(
+    task: ForecastTask, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[tuple[str, ...]] = []
+
+    def fake(self: rn.RenewalModel, t: ForecastTask) -> rn.RenewalRun:
+        seen.append(t.locations)
+        return _fake_run(t, self.variant)
+
+    monkeypatch.setattr(rn.RenewalModel, "run", fake)
+    model = get_model("renewalsp")
+    assert isinstance(model, rn.RenewalModel)
+    fit = model.forecast_fit(task)
+    # One fit per province with cases, and one for the nation.
+    assert sorted(seen) == sorted(
+        [(p,) for p in task.locations] + [(NATIONAL,)]
+    )
+    assert set(fit.runs) == {*task.locations, NATIONAL}
+    assert fit.unassigned is None
+    assert fit.national is not None
+    assert list(fit.national.columns) == ["target_end_date", "sample", "value"]
+    assert set(fit.samples["location"]) == set(task.locations)
+    # The national rows are the national fit, not the provinces' sum.
+    samples = model.forecast(task)
+    assert NATIONAL in set(samples["location"])

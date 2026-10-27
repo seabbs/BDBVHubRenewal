@@ -109,3 +109,18 @@ def test_check_samples_rejects_bad_output(task) -> None:  # type: ignore[no-unty
         check_samples(samples.assign(sample=samples["sample"] + 1), task)
     with pytest.raises(ValueError, match="non-negative"):
         check_samples(samples.assign(value=-1.0), task)
+
+
+def test_a_model_may_give_its_own_national(task) -> None:  # type: ignore[no-untyped-def]
+    samples = Persistence().forecast(task)
+    own = (
+        samples.groupby(["target_end_date", "sample"], as_index=False)["value"]
+        .sum()
+        .assign(location="CD", value=lambda d: d["value"] + 7.0)
+    )[list(samples.columns)]
+    both = pd.concat([samples, own], ignore_index=True)
+    check_samples(both, task)
+    out = add_national(both)
+    nat = out.loc[out["location"] == "CD"]
+    assert len(nat) == len(own)
+    assert (nat["value"].to_numpy() == own["value"].to_numpy()).all()
