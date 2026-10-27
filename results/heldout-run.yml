@@ -1,0 +1,17 @@
+run_at: '2026-10-27T17:57:33+00:00'
+model_choice: results/model-choice.yml
+model_choice_sha256: 169acb8d4f6d75c8f2d2136221fe2ec12a3179254e280feff8ef484cda1a5390
+choices:
+- date: '2026-10-10'
+  model: persistence
+  summary: Only the persistence baseline exists. The split was fixed before any held-out
+    scoring, after the 2026-10-09 vintage and the reconstructed vintage of 2026-10-10.
+    So the 2026-10-17 and 2026-10-24 vintages and every later one are held out.
+baseline: persistence
+latest_vintage: '2026-10-24'
+scored:
+- vintage: '2026-10-17'
+  model: persistence
+pending:
+- vintage: '2026-10-24'
+  model: persistence
