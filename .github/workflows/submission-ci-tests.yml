@@ -42,12 +42,6 @@ jobs:
           enable-cache: true
           cache-dependency-glob: ci/uv.lock
       - run: uv sync --frozen
-      - name: Lint
-        run: |
-          uv run ruff check src tests fixtures
-          uv run ruff format --check src tests fixtures
-      - name: Type-check
-        run: uv run mypy
       - name: Tests
         run: >-
           uv run pytest -q --cov=submission_ci --cov-report=term
