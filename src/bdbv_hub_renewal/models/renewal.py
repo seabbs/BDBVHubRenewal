@@ -1,9 +1,9 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """The PyRenew renewal model behind the repository's interfaces.
 
-The model itself (JAX, NumPyro, PyRenew) is in `bdbv_hub_renewal.pyrenew`,
-synced from the prototype by `scripts/sync_pyrenew.py`. It is imported
-lazily, so this module and the registry work without the `model` extra.
+The model itself (JAX, NumPyro, PyRenew) is in `bdbv_hub_renewal.model`.
+It is imported lazily, so this module and the registry work without the
+`model` extra.
 This module owns everything around it:
 
 - the variants (`VARIANTS`), registered as models for the backtest;
@@ -104,11 +104,11 @@ def engine() -> ModuleType:
     Returns
     -------
     module
-        `bdbv_hub_renewal.pyrenew`.
+        `bdbv_hub_renewal.model`.
     """
-    from .. import pyrenew
+    from .. import model
 
-    return pyrenew
+    return model
 
 
 @dataclass(frozen=True)
@@ -122,7 +122,7 @@ class Variant:
     description : str
         One line for tables and docs.
     base : str
-        `MAIN` or `FALLBACK`, the configuration in `bdbv_hub_renewal.pyrenew`.
+        `MAIN` or `FALLBACK`, the configuration in `bdbv_hub_renewal.model`.
     overrides : mapping
         `ModelConfig` fields to change.
     register : bool
@@ -196,7 +196,7 @@ def model_config(variant: Variant) -> Any:
 
     Returns
     -------
-    bdbv_hub_renewal.pyrenew.ModelConfig
+    bdbv_hub_renewal.model.ModelConfig
         Its base configuration with the overrides applied.
     """
     return dataclasses.replace(
@@ -294,7 +294,7 @@ def run_nuts(model: Any, data: Any, sampler: Mapping[str, Any]) -> Any:
     ----------
     model : pyrenew.model.MultiSignalModel
         From `build_model`.
-    data : bdbv_hub_renewal.pyrenew.Vintage
+    data : bdbv_hub_renewal.model.Vintage
         The inputs.
     sampler : mapping
         The full sampler table (`sampler_settings`).
@@ -400,7 +400,7 @@ def vintage_inputs(
     ----------
     task : ForecastTask
         The task.
-    config : bdbv_hub_renewal.pyrenew.ModelConfig
+    config : bdbv_hub_renewal.model.ModelConfig
         The model configuration.
     table : pandas.DataFrame, optional
         The locations table (populations). Defaults to
@@ -411,11 +411,11 @@ def vintage_inputs(
 
     Returns
     -------
-    bdbv_hub_renewal.pyrenew.Vintage
+    bdbv_hub_renewal.model.Vintage
         The model inputs.
     """
     from ..data import load_locations
-    from ..pyrenew.adapter import vintage_from_tables
+    from ..model.inputs import vintage_from_tables
 
     return vintage_from_tables(
         task.target,
@@ -449,7 +449,7 @@ def samples_table(
     ----------
     task : ForecastTask
         The task.
-    data : bdbv_hub_renewal.pyrenew.Vintage
+    data : bdbv_hub_renewal.model.Vintage
         The fitted inputs.
     draws : mapping
         `forecast_trajectories` output: `province`, `inactive`,
@@ -578,7 +578,7 @@ def ppc_rows(
 
     Parameters
     ----------
-    data : bdbv_hub_renewal.pyrenew.Vintage
+    data : bdbv_hub_renewal.model.Vintage
         The fitted inputs.
     insample : mapping
         Draws of the vintage counts by stream (`known`, `imputed` or
@@ -770,7 +770,7 @@ class RenewalRun:
     ----------
     variant : Variant
         The variant.
-    data : bdbv_hub_renewal.pyrenew.Vintage
+    data : bdbv_hub_renewal.model.Vintage
         The model inputs.
     draws : dict
         `forecast_trajectories` output.

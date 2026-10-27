@@ -10,13 +10,13 @@ import pandas as pd
 import pytest
 from jax.scipy.stats import norm
 
-from bdbv_hub_renewal.pyrenew import BVD, MAIN, build_model, model_args
-from bdbv_hub_renewal.pyrenew.adapter import (
+from bdbv_hub_renewal.model import BVD, MAIN, build_model, model_args
+from bdbv_hub_renewal.model.inputs import (
     bvd_inputs,
     bvd_rows,
     vintage_from_tables,
 )
-from bdbv_hub_renewal.pyrenew.observation import RtPseudoObservation
+from bdbv_hub_renewal.model.observation import RtPseudoObservation
 
 from .conftest import SIM_LOCATIONS, VINTAGE_DAYS, vintage_date
 from .test_model import trace

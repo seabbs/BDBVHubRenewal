@@ -12,8 +12,8 @@ from bdbv_hub_renewal.data import (  # noqa: E402
     PROVINCE_CENTRES,
     PROVINCE_POPULATIONS,
 )
-from bdbv_hub_renewal.pyrenew import FALLBACK, MAIN  # noqa: E402
-from bdbv_hub_renewal.pyrenew.adapter import vintage_from_tables  # noqa: E402
+from bdbv_hub_renewal.model import FALLBACK, MAIN  # noqa: E402
+from bdbv_hub_renewal.model.inputs import vintage_from_tables  # noqa: E402
 from bdbv_hub_renewal.simulate import simulate_outbreak  # noqa: E402
 
 # Vintage dates as days after the simulation start (each a Saturday).

@@ -1,5 +1,4 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-# Synced from the prototype by scripts/sync_pyrenew.py. Edit there.
 r"""Time-varying onset-to-report delay pmfs, pooled across provinces.
 
 Each class returns a matrix $f_s(d)$ of shape `(n_timepoints, dmax + 1)`,
@@ -18,7 +17,7 @@ from pyrenew.latent.temporal_processes import TemporalProcess
 from pyrenew.metaclass import RandomVariable
 from pyrenew.randomvariable import DistributionalVariable
 
-from .processes import NonCentredRandomWalk
+from .rt import NonCentredRandomWalk
 
 
 def hazard_to_pmf(logit_hazard: ArrayLike) -> ArrayLike:

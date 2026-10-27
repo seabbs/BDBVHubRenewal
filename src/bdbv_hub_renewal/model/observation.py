@@ -1,5 +1,4 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-# Synced from the prototype by scripts/sync_pyrenew.py. Edit there.
 r"""Known and hub-imputed onsets by province, with right truncation.
 
 Let $\lambda_p(s)$ be expected confirmed cases with onset on day $s$,

@@ -1,5 +1,4 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-# Synced from the prototype by scripts/sync_pyrenew.py. Edit there.
 """Assemble, fit and forecast the province model with `PyrenewBuilder`."""
 
 from __future__ import annotations
@@ -29,9 +28,9 @@ from .delays import (
     empirical_delay_matrix,
     empirical_missing_fraction,
 )
-from .latent import LearntKernel, MetapopulationInfections
 from .observation import OnsetStreams, RtPseudoObservation
-from .processes import (
+from .renewal import LearntKernel, MetapopulationInfections
+from .rt import (
     MissingOnsetFraction,
     NonCentredRandomWalk,
     PooledInitialValue,

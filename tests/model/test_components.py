@@ -7,12 +7,7 @@ from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
 
 from bdbv_hub_renewal.delays import ParametricDelay
 from bdbv_hub_renewal.latent import renewal
-from bdbv_hub_renewal.observation import (
-    expected_imputed_onsets,
-    expected_known_onsets,
-    expected_missing_by_report,
-)
-from bdbv_hub_renewal.pyrenew import (
+from bdbv_hub_renewal.model import (
     FixedTimeVarying,
     HazardDelay,
     MissingOnsetFraction,
@@ -29,7 +24,12 @@ from bdbv_hub_renewal.pyrenew import (
     onset_expectations,
     pooled_walk,
 )
-from bdbv_hub_renewal.pyrenew.observation import backsample
+from bdbv_hub_renewal.model.observation import backsample
+from bdbv_hub_renewal.observation import (
+    expected_imputed_onsets,
+    expected_known_onsets,
+    expected_missing_by_report,
+)
 
 
 def seeded(fn, seed=0):
@@ -250,7 +250,7 @@ def test_fast_kernels_match_reference_values_and_gradients():
 
 def test_province_centres_cover_all_provinces_and_match_reference():
     from bdbv_hub_renewal.data import PROVINCE_CENTRES
-    from bdbv_hub_renewal.pyrenew.adapter import province_centres
+    from bdbv_hub_renewal.model.inputs import province_centres
 
     c = province_centres().set_index("location")
     assert len(c) == 26 and not c.isna().any().any()

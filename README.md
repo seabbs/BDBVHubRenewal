@@ -84,7 +84,7 @@ docs/            MkDocs site; figures are built at docs build time,
                  the model diagram by scripts/build_diagrams.sh
 hub/             model metadata YAML
 results/         score tables and the model choice record
-scripts/         hubValidations runner (R), model sync, diagram build
+scripts/         hubValidations runner (R), diagram build
 src/bdbv_hub_renewal/
   data.py        download, tidy and load the hub data
   dates.py       epi weeks, reference dates and submission windows
@@ -92,7 +92,7 @@ src/bdbv_hub_renewal/
   simulate.py    simulated outbreaks published as vintages
   models/        model interface, registry, persistence and the renewal
                  variants (renewal.py)
-  pyrenew/       the PyRenew model (JAX), synced by scripts/sync_pyrenew.py
+  model/         the PyRenew renewal model (JAX)
   delays.py      delay interface and the empirical estimator
   latent.py      renewal with importation and depletion (reference)
   observation.py known onsets and the hub's imputation (reference)

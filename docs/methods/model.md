@@ -20,7 +20,7 @@ The source is `docs/diagrams/model_dag.tex`, built by `scripts/build_diagrams.sh
 ## Components
 
 The model extends [PyRenew](https://github.com/CDCgov/PyRenew), pinned to a commit.
-Its code is in `bdbv_hub_renewal.pyrenew`.
+Its code is in `bdbv_hub_renewal.model`.
 Every time-varying part has a smoothness prior, so it stays near constant when the data show no change and stays stable when data are sparse.
 
 | Component | PyRenew piece | Built here, and why |
@@ -238,7 +238,7 @@ The renewal variants run in the backtest, the held-out evaluation and the plots,
 | `renewalbvd` | The spatial model informed by the latest posterior estimates of the main [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model, taken from the newest release published before the data cut-off. |
 | `fallback` | The CI's fallback: no coupling, with the delays and $\pi$ fixed from the data. It is a fit configuration, not a backtest variant. |
 
-The model code is in `bdbv_hub_renewal.pyrenew` and the variants in [`models.renewal`][bdbv_hub_renewal.models.renewal].
+The model code is in `bdbv_hub_renewal.model` and the variants in [`models.renewal`][bdbv_hub_renewal.models.renewal].
 
 ### Single patch
 

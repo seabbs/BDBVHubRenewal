@@ -1,6 +1,18 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-# Synced from the prototype by scripts/sync_pyrenew.py. Edit there.
-"""Province-level BDBV onset forecasting model built on PyRenew."""
+"""The province renewal model, built on PyRenew (JAX, NumPyro).
+
+- `rt`: random walks on knots, pooled initial values and sum-to-zero
+  province deviations.
+- `renewal`: the coupled renewal with importation, seeding and depletion.
+- `delays`: the generation interval and the onset-to-report delay.
+- `observation`: the known and imputed onset streams, the hub's
+  imputation, importation-only zeros and the BVDOutbreakSize term.
+- `model`: `ModelConfig`, the configurations, building, fitting and
+  forecasting.
+- `inputs`: model inputs (`Vintage`) from the tidy hub tables.
+
+The package imports without JAX until this subpackage is imported.
+"""
 
 from .delays import (
     FixedTimeVarying,
@@ -10,13 +22,6 @@ from .delays import (
     empirical_delay_matrix,
     empirical_missing_fraction,
     hazard_to_pmf,
-)
-from .latent import (
-    LearntKernel,
-    MetapopulationInfections,
-    adjacency_kernel,
-    coupled_renewal,
-    mixing_matrix,
 )
 from .model import (
     BVD,
@@ -31,7 +36,14 @@ from .model import (
     model_args,
 )
 from .observation import OnsetStreams, RtPseudoObservation, onset_expectations
-from .processes import (
+from .renewal import (
+    LearntKernel,
+    MetapopulationInfections,
+    adjacency_kernel,
+    coupled_renewal,
+    mixing_matrix,
+)
+from .rt import (
     MissingOnsetFraction,
     NonCentredRandomWalk,
     PooledInitialValue,

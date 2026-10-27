@@ -13,8 +13,8 @@ import numpyro
 import pytest
 from jax import enable_x64
 
-from bdbv_hub_renewal.pyrenew import FALLBACK, MAIN, build_model, model_args
-from bdbv_hub_renewal.pyrenew.adapter import vintage_from_tables
+from bdbv_hub_renewal.model import FALLBACK, MAIN, build_model, model_args
+from bdbv_hub_renewal.model.inputs import vintage_from_tables
 
 from .conftest import MAIN_REPO_DATA
 

@@ -1,5 +1,4 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-# Synced from the prototype by scripts/sync_pyrenew.py. Edit there.
 """Plug the model into the `bdbv_hub_renewal` interfaces.
 
 - `PyRenewProvinceModel(config).forecast(task)` is a `ForecastModel`.
@@ -19,8 +18,8 @@ import pandas as pd
 
 from bdbv_hub_renewal.observation import hub_delay_pmf
 
-from .latent import adjacency_kernel
 from .model import MAIN, ModelConfig, Vintage
+from .renewal import adjacency_kernel
 
 NATIONAL = "CD"
 START_COUNT = 5

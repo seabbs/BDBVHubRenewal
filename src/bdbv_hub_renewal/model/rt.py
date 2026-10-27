@@ -1,5 +1,4 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-# Synced from the prototype by scripts/sync_pyrenew.py. Edit there.
 r"""Pooled time-varying effects shared by the latent and observation parts.
 
 Rt and the missing-onset fraction use the same structure as PyRenew's

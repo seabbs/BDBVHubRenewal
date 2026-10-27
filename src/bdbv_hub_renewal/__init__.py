@@ -7,7 +7,7 @@ The package has these parts:
 - `vintages` and `simulate`: reconstructed and simulated vintages.
 - `models`: the model interface, registry, persistence and the renewal
   variants (`models.renewal`).
-- `pyrenew`: the PyRenew renewal model (JAX), imported lazily.
+- `model`: the PyRenew renewal model (JAX), imported lazily.
 - `bvd`: BVDOutbreakSize estimates as of a forecast's cut-off.
 - `delays`, `latent` and `observation`: NumPy references for the model's
   delay, renewal and observation layers.

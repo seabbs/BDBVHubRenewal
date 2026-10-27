@@ -4,15 +4,15 @@ import pytest
 from jax import random
 from numpyro.infer import Predictive, init_to_median
 
-from bdbv_hub_renewal.pyrenew import (
+from bdbv_hub_renewal.model import (
     FALLBACK,
     MAIN,
     ModelConfig,
     build_model,
     model_args,
 )
-from bdbv_hub_renewal.pyrenew.adapter import vintage_from_tables
-from bdbv_hub_renewal.pyrenew.model import LADDER
+from bdbv_hub_renewal.model.inputs import vintage_from_tables
+from bdbv_hub_renewal.model.model import LADDER
 
 from .conftest import SIM_LOCATIONS, VINTAGE_DAYS, vintage_date
 
@@ -196,7 +196,7 @@ def test_real_data_kernels_and_log_density_are_finite(table):
 
 
 def test_learnt_kernel_is_gravity_at_prior_centre(sim_vintage):
-    from bdbv_hub_renewal.pyrenew import LearntKernel
+    from bdbv_hub_renewal.model import LearntKernel
 
     data = sim_vintage
     k = LearntKernel("k", data.distances, data.all_populations, 4)
@@ -215,7 +215,7 @@ def test_learnt_kernel_is_gravity_at_prior_centre(sim_vintage):
 
 
 def test_single_patch_locations_are_independent(outbreak, sim_tables, table):
-    from bdbv_hub_renewal.pyrenew.adapter import RENEWALSP
+    from bdbv_hub_renewal.model.inputs import RENEWALSP
 
     day = VINTAGE_DAYS[-1]
     target, delays = sim_tables[day]

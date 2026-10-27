@@ -1,5 +1,4 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-# Synced from the prototype by scripts/sync_pyrenew.py. Edit there.
 r"""Province renewal with importation and susceptible depletion.
 
 `MetapopulationInfections` is PyRenew's `SubpopulationInfections` with a
@@ -18,7 +17,7 @@ from pyrenew.latent.base import LatentSample
 from pyrenew.math import r_approx_from_R
 from pyrenew.metaclass import RandomVariable
 
-from .processes import pooled_walk
+from .rt import pooled_walk
 
 
 def adjacency_kernel(adjacency: ArrayLike) -> np.ndarray:
@@ -222,7 +221,7 @@ class LearntKernel(RandomVariable):
         """
         import numpyro.distributions as dist
 
-        from .processes import sum_to_zero_basis
+        from .rt import sum_to_zero_basis
 
         p = self.n_active
         log_decay = numpyro.sample(
