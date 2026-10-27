@@ -36,6 +36,26 @@ cli() {
   env -u VIRTUAL_ENV $FORECAST_CLI "$@"
 }
 
+# The number of chains in the sampler settings $1 (JSON; default 4).
+sampler_chains() {
+  python3 -c 'import json, sys
+print(int(json.loads(sys.argv[1] or "{}").get("num_chains", 4)))' "${1:-}"
+}
+
+# XLA_FLAGS for a fit with the sampler settings $1: one XLA host device
+# per chain, and at least one per CPU (CPUS overrides the count). NumPyro runs chains in parallel
+# only when there are as many devices as chains; otherwise it runs them
+# one after another. Other flags in XLA_FLAGS are kept.
+xla_flags_for() {
+  local chains cpus n rest
+  chains=$(sampler_chains "${1:-}")
+  cpus=${CPUS:-$(nproc 2> /dev/null || sysctl -n hw.ncpu 2> /dev/null || echo 1)}
+  n=$(( chains > cpus ? chains : cpus ))
+  rest=$(printf '%s' "${XLA_FLAGS:-}" \
+    | sed -E 's/--xla_force_host_platform_device_count=[0-9]+//g; s/^ +//; s/ +$//')
+  echo "${rest:+$rest }--xla_force_host_platform_device_count=$n"
+}
+
 note() {
   echo "$*"
   if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then

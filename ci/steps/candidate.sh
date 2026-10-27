@@ -50,6 +50,11 @@ else
   ) &
   heartbeat=$!
   trap 'kill "$heartbeat" 2> /dev/null || true' EXIT
+  # Read when JAX starts, so set per candidate: the retry runs 8 chains
+  # on a 4-vCPU runner.
+  XLA_FLAGS=$(xla_flags_for "$CAND_SAMPLER")
+  export XLA_FLAGS
+  note "XLA host devices: ${XLA_FLAGS##*=}, for $(sampler_chains "$CAND_SAMPLER") chains."
   if ! cli fit --model "$MODEL" --config "$CAND_CONFIG" --vintage "$AS_OF" \
       --sampler-json "$CAND_SAMPLER" --out "$fit"; then
     fit_ok=false
