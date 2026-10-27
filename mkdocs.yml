@@ -37,6 +37,7 @@ nav:
       - CI and submissions: development/submissions.md
       - Hub specification: hub-spec.md
   - API reference: reference.md
+  - Citation and licence: citation.md
 
 theme:
   name: material
