@@ -2,7 +2,7 @@
 
 ## Citing this software
 
-The citation metadata are in [CITATION.cff](https://github.com/seabbs/bdbv-hub-baseline-forecasts/blob/main/CITATION.cff).
+The citation metadata are in [CITATION.cff](https://github.com/seabbs/BDBVHubRenewal/blob/main/CITATION.cff).
 GitHub turns it into the "Cite this repository" button on the repository page.
 
 ```bibtex
@@ -11,7 +11,7 @@ GitHub turns it into the "Cite this repository" button on the repository page.
   title = {BDBV hub baseline forecasts},
   year = {2026},
   version = {0.1.0},
-  url = {https://github.com/seabbs/bdbv-hub-baseline-forecasts}
+  url = {https://github.com/seabbs/BDBVHubRenewal}
 }
 ```
 
@@ -25,4 +25,4 @@ They are processed by the Atlantic Coast Center for Infectious Disease Dynamics 
 ## Licence
 
 The code is under the MIT licence.
-See [LICENSE](https://github.com/seabbs/bdbv-hub-baseline-forecasts/blob/main/LICENSE).
+See [LICENSE](https://github.com/seabbs/BDBVHubRenewal/blob/main/LICENSE).

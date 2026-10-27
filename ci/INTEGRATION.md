@@ -1,6 +1,6 @@
 # Plugging the submission CI into the main repo
 
-The bundle drops into `seabbs/bdbv-hub-baseline-forecasts` as `ci/` plus `.github/`.
+The bundle drops into `seabbs/BDBVHubRenewal` as `ci/` plus `.github/`.
 `ci/` is its own small uv project with only the standard library.
 The workflows call the main repo only through the `bdbv-hub-renewal` CLI, whose command is set by `FORECAST_CLI` (default `uv run bdbv-hub-renewal`), and through `scripts/validate-hub.R`.
 `ci/fixtures/fake_bdbv_hub_renewal.py` implements everything below on fixture data.

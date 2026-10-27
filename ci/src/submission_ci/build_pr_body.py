@@ -31,10 +31,10 @@ from .common import (
 from .hubdata import quantile, read_samples
 
 MAX_BODY = 60000  # GitHub's limit is 65536 characters
-SOURCE_REPO = "seabbs/bdbv-hub-baseline-forecasts"
+SOURCE_REPO = "seabbs/BDBVHubRenewal"
 HUB = "InsightNet-US/BDBV-Modeling-Hub"
 FOOTER = "This was opened by a bot. Please ping @seabbs for any questions."
-DOCS = "https://seabbs.github.io/bdbv-hub-baseline-forecasts"
+DOCS = "https://seabbs.github.io/BDBVHubRenewal"
 
 
 def round_url(reference_date: str, docs: str = DOCS) -> str:

@@ -648,8 +648,8 @@ METADATA_DEFAULTS: Final[dict[str, Any]] = {
         }
     ],
     "license": "CC-BY-4.0",
-    "repo_url": "https://github.com/seabbs/bdbv-hub-baseline-forecasts",
-    "website_url": "https://seabbs.github.io/bdbv-hub-baseline-forecasts/",
+    "repo_url": "https://github.com/seabbs/BDBVHubRenewal",
+    "website_url": "https://seabbs.github.io/BDBVHubRenewal/",
     "ensemble_of_hub_models": False,
 }
 """Fields shared by every model's metadata. Contributors are to confirm."""

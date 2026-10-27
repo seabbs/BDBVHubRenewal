@@ -46,10 +46,10 @@ classifiers = [
 model = []
 
 [project.urls]
-Homepage = "https://seabbs.github.io/bdbv-hub-baseline-forecasts/"
-Documentation = "https://seabbs.github.io/bdbv-hub-baseline-forecasts/"
-Repository = "https://github.com/seabbs/bdbv-hub-baseline-forecasts"
-Issues = "https://github.com/seabbs/bdbv-hub-baseline-forecasts/issues"
+Homepage = "https://seabbs.github.io/BDBVHubRenewal/"
+Documentation = "https://seabbs.github.io/BDBVHubRenewal/"
+Repository = "https://github.com/seabbs/BDBVHubRenewal"
+Issues = "https://github.com/seabbs/BDBVHubRenewal/issues"
 
 [project.scripts]
 bdbv-hub-renewal = "bdbv_hub_renewal.cli:main"

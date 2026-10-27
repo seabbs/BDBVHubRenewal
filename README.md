@@ -7,15 +7,15 @@
 
 **BDBV hub baseline forecasts.**
 
-[![Docs](https://img.shields.io/badge/docs-online-blue.svg)](https://seabbs.github.io/bdbv-hub-baseline-forecasts/)
-[![Pages](https://github.com/seabbs/bdbv-hub-baseline-forecasts/actions/workflows/pages.yml/badge.svg)](https://github.com/seabbs/bdbv-hub-baseline-forecasts/actions/workflows/pages.yml)
-[![codecov](https://codecov.io/gh/seabbs/bdbv-hub-baseline-forecasts/branch/main/graph/badge.svg)](https://codecov.io/gh/seabbs/bdbv-hub-baseline-forecasts)
+[![Docs](https://img.shields.io/badge/docs-online-blue.svg)](https://seabbs.github.io/BDBVHubRenewal/)
+[![Pages](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/pages.yml/badge.svg)](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/pages.yml)
+[![codecov](https://codecov.io/gh/seabbs/BDBVHubRenewal/branch/main/graph/badge.svg)](https://codecov.io/gh/seabbs/BDBVHubRenewal)
 [![licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 
 | Component | Tests | Lint | Coverage |
 | --- | --- | --- | --- |
-| Package (`src/`) | [![Tests](https://github.com/seabbs/bdbv-hub-baseline-forecasts/actions/workflows/test.yml/badge.svg)](https://github.com/seabbs/bdbv-hub-baseline-forecasts/actions/workflows/test.yml) | [![Lint](https://github.com/seabbs/bdbv-hub-baseline-forecasts/actions/workflows/lint.yml/badge.svg)](https://github.com/seabbs/bdbv-hub-baseline-forecasts/actions/workflows/lint.yml) | [![package coverage](https://codecov.io/gh/seabbs/bdbv-hub-baseline-forecasts/branch/main/graph/badge.svg?flag=package)](https://codecov.io/gh/seabbs/bdbv-hub-baseline-forecasts?flags%5B0%5D=package) |
-| Submission CI (`ci/`) | [![Submission CI tests](https://github.com/seabbs/bdbv-hub-baseline-forecasts/actions/workflows/submission-ci-tests.yml/badge.svg)](https://github.com/seabbs/bdbv-hub-baseline-forecasts/actions/workflows/submission-ci-tests.yml) | [![Submission CI tests](https://github.com/seabbs/bdbv-hub-baseline-forecasts/actions/workflows/submission-ci-tests.yml/badge.svg)](https://github.com/seabbs/bdbv-hub-baseline-forecasts/actions/workflows/submission-ci-tests.yml) | [![ci coverage](https://codecov.io/gh/seabbs/bdbv-hub-baseline-forecasts/branch/main/graph/badge.svg?flag=ci)](https://codecov.io/gh/seabbs/bdbv-hub-baseline-forecasts?flags%5B0%5D=ci) |
+| Package (`src/`) | [![Tests](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/test.yml/badge.svg)](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/test.yml) | [![Lint](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/lint.yml/badge.svg)](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/lint.yml) | [![package coverage](https://codecov.io/gh/seabbs/BDBVHubRenewal/branch/main/graph/badge.svg?flag=package)](https://codecov.io/gh/seabbs/BDBVHubRenewal?flags%5B0%5D=package) |
+| Submission CI (`ci/`) | [![Submission CI tests](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/submission-ci-tests.yml/badge.svg)](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/submission-ci-tests.yml) | [![Submission CI tests](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/submission-ci-tests.yml/badge.svg)](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/submission-ci-tests.yml) | [![ci coverage](https://codecov.io/gh/seabbs/BDBVHubRenewal/branch/main/graph/badge.svg?flag=ci)](https://codecov.io/gh/seabbs/BDBVHubRenewal?flags%5B0%5D=ci) |
 
 Weekly nowcasts and forecasts of confirmed Bundibugyo virus disease cases for the [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub).
 The hub's target is weekly confirmed cases by symptom-onset week, by province and nationally, as 100 joint sample trajectories per location.
@@ -29,9 +29,9 @@ This repository holds:
 - a writer and checks for the hub's submission files and model metadata;
 - a backtest harness with a development and held-out split, scored by WIS, coverage and bias;
 - figures and a docs site, with the maths of the planned renewal model;
-- an automated, gated submission workflow, in dry-run mode, with persistence standing in for the model until it is integrated ([Submissions](https://seabbs.github.io/bdbv-hub-baseline-forecasts/development/submissions/)).
+- an automated, gated submission workflow, in dry-run mode, with persistence standing in for the model until it is integrated ([Submissions](https://seabbs.github.io/BDBVHubRenewal/development/submissions/)).
 
-Docs: <https://seabbs.github.io/bdbv-hub-baseline-forecasts/>
+Docs: <https://seabbs.github.io/BDBVHubRenewal/>
 
 ## Run it
 

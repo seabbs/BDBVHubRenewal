@@ -5,7 +5,7 @@ All checks passed, with warnings on bounds. Stand-in: persistence runs as the `m
 
 ![Nowcast and forecast for 2026-10-31](../assets/example-submission-nowcast.png)
 
-This round in our docs: https://seabbs.github.io/bdbv-hub-baseline-forecasts/nowcast/rounds/2026-10-31/
+This round in our docs: https://seabbs.github.io/BDBVHubRenewal/nowcast/rounds/2026-10-31/
 
 <details><summary>Checks</summary>
 
@@ -48,11 +48,11 @@ Submitted `CD` samples.
 | --- | --- |
 | File | `model-output/epiforecasts-persistence/2026-10-31-epiforecasts-persistence.csv` |
 | Contents | 9 locations, 9000 rows |
-| Model | persistence (`main`), version 0.1.0, code [`fd9d26eaed`](https://github.com/seabbs/bdbv-hub-baseline-forecasts/commit/fd9d26eaedecf543c851271d365d52db09fff85c) |
+| Model | persistence (`main`), version 0.1.0, code [`fd9d26eaed`](https://github.com/seabbs/BDBVHubRenewal/commit/fd9d26eaedecf543c851271d365d52db09fff85c) |
 | Data vintage (`as_of`) | 2026-10-24 |
 | Hub data commit | [`187015937f`](https://github.com/InsightNet-US/BDBV-Modeling-Hub/commit/187015937fc7c0fc28cc769fb938ed89c9e18ae8) |
 | Hub config | [`88478a33b6`](https://github.com/InsightNet-US/BDBV-Modeling-Hub/tree/88478a33b6f81dc717eec16d3ec0417c8f0d5588) |
-| Built | 2026-10-27 18:36 UTC, [workflow run](https://github.com/seabbs/bdbv-hub-baseline-forecasts/actions/runs/40556037584) |
+| Built | 2026-10-27 18:36 UTC, [workflow run](https://github.com/seabbs/BDBVHubRenewal/actions/runs/40556037584) |
 
 </details>
 

@@ -18,7 +18,7 @@ The package has these parts:
   development and held-out split.
 - `plots` and `report`: figures and docs tables.
 
-- Repository: <https://github.com/seabbs/bdbv-hub-baseline-forecasts>
+- Repository: <https://github.com/seabbs/BDBVHubRenewal>
 - Plan: <https://github.com/seabbs/EpidemicDates/issues/3>
 """
 

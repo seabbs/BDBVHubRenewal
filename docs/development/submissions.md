@@ -161,7 +161,7 @@ It needs no secrets: it looks up any existing pull request with the workflow's o
 To try it, run **Actions → Submit to the BDBV hub → Run workflow**, or:
 
 ```sh
-gh workflow run submit.yml -R seabbs/bdbv-hub-baseline-forecasts -f dry_run=true -f force=true
+gh workflow run submit.yml -R seabbs/BDBVHubRenewal -f dry_run=true -f force=true
 ```
 
 Outside the window, add `-f ignore_window=true` and a `reference_date`.
@@ -183,7 +183,7 @@ The round's page, `/nowcast/rounds/<reference_date>/`, is built by the Pages wor
 The `record` job rebuilds the docs after a live round, so the page appears a few minutes after the pull request opens.
 The [Nowcast](../nowcast.md) page links to the latest submitted round.
 
-Below is the body for the GitHub dry run [run 40556037584](https://github.com/seabbs/bdbv-hub-baseline-forecasts/actions/runs/40556037584), rebuilt with the current layout, with the plot it would publish.
+Below is the body for the GitHub dry run [run 40556037584](https://github.com/seabbs/BDBVHubRenewal/actions/runs/40556037584), rebuilt with the current layout, with the plot it would publish.
 
 <div class="pr-body-example" markdown>
 
