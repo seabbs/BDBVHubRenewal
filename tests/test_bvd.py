@@ -226,3 +226,23 @@ def test_bvd_for_vintage_reads_the_cached_release_list(
     rel = bvd.bvd_for_vintage("2026-10-24", tmp_path, download=offline)
     assert rel is not None
     assert rel.tag == "results-3151"
+
+
+def test_refresh_cache_fetches_the_release_of_each_vintage(
+    releases: pd.DataFrame, tmp_path: Path
+) -> None:
+    def download(url: str) -> bytes:
+        tag, name = url.rsplit("/", 2)[1:]
+        return (FIXTURES / tag / name).read_bytes()
+
+    have = releases.loc[releases["tag"].isin(["results-3151", "results-3086"])]
+    chosen = bvd.refresh_cache(
+        tmp_path, ["2026-10-24", "2026-10-17", "2026-10-01"], have, download
+    )
+    assert chosen == {
+        "2026-10-24": "results-3151",
+        "2026-10-17": "results-3086",
+        "2026-10-01": None,
+    }
+    assert bvd.load_releases(tmp_path) is not None
+    assert (tmp_path / "results-3151" / "posterior_draws.csv").exists()
