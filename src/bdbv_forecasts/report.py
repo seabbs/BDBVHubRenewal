@@ -34,6 +34,7 @@ from .data import (
 )
 from .dates import reference_date_for_vintage
 from .delays import delay_summary
+from .heldout import load_model_choices
 from .hubcompare import attribution, display_names, load_comparison_config
 from .models.base import NATIONAL, get_model, list_models
 from .plots import (
@@ -207,7 +208,7 @@ def make_report(
     # Backtest, held-out and comparison pages.
     names = [s.name for s in list_models()]
     _backtest_page(fig, gen, res, out, config, target, delays, names)
-    _heldout_page(fig, gen, res, target, names)
+    _heldout_page(fig, gen, res, target, names, config)
     _comparison_page(
         fig / "comparison",
         gen,
@@ -427,7 +428,33 @@ def _heldout_page(
     res: Path,
     target: pd.DataFrame,
     names: list[str],
+    config: BacktestConfig,
 ) -> None:
+    choices = load_model_choices(config.model_choice)
+    if choices:
+        table = pd.DataFrame(
+            {
+                "date": [c.date for c in choices],
+                "model": [f"`{c.model}`" for c in choices],
+                "why": [c.summary for c in choices],
+            }
+        )
+        held = [
+            v
+            for v in sorted(
+                set(target.loc[target["kind"] == "real", "vintage"])
+            )
+            if v > choices[0].date
+        ]
+        _write(
+            gen / "heldout-choices.md",
+            _table(table)
+            + f"\nVintages after {choices[0].date} are held out: "
+            + (", ".join(held) or "none yet")
+            + ".\n",
+        )
+    else:
+        _write(gen / "heldout-choices.md", "No model has been chosen yet.\n")
     run_path = res / "heldout-run.yml"
     if not run_path.exists():
         for name in ("heldout-status.md", "heldout-scores.md"):
@@ -536,6 +563,7 @@ def _comparison_page(
     if manifest.exists():
         accessed = str(json.loads(manifest.read_text())["accessed"])
     _write(gen / "comparison-attribution.md", f"> {attribution(accessed)}\n")
+    _write(gen / "comparison-display.md", f"Display mode: **{display}**.\n")
     if not (cmp_dir / "scores.csv").exists():
         for name in names_out:
             _write(
@@ -547,10 +575,6 @@ def _comparison_page(
     forecasts = pd.read_csv(cmp_dir / "forecasts.csv.gz")
     models = sorted(set(teams["model"]) | set(forecasts["model"]))
     names = display_names(models, display)
-    _write(
-        gen / "comparison-display.md",
-        f"Display mode: **{display}**.\n",
-    )
     shown = teams.loc[teams["model"].isin(list(names))].assign(
         model=lambda d: d["model"].map(names)
     )
