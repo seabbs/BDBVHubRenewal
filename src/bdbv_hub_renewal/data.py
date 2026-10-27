@@ -632,10 +632,11 @@ COHERENCE_STREAMS: Final = ("observed", "imputed", "total")
 """Streams compared between the national row and the provinces."""
 
 COHERENCE_HANDLING: Final = (
-    "The submitted national value is the sum of the province values for "
-    "each sample. Cases the hub counts nationally but in no province would "
-    "need a modelled unassigned component added to that sum; the current "
-    "models have none, so such a gap is left out of the national forecast."
+    "The submitted national value is the sum of the province values plus an "
+    "unassigned component, for each sample. The unassigned component holds "
+    "provinces the model does not report and the cases the hub counts "
+    "nationally but in no province: the data's gap in weeks with data, and "
+    "its recent share of the province total in later weeks."
 )
 """How the models handle a gap between the national data and the provinces."""
 

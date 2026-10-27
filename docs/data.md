@@ -21,11 +21,10 @@ The table counts the weeks where the two differ.
 
 --8<-- "national-coherence.md"
 
-**How it informs the model.**
-The submitted national value is the sum of the province values for each sample.
-A gap would mean cases counted nationally but in no province.
-A model would then need an unassigned national component, which the writer adds to the sum (`to_hub_table(..., unassigned=...)`).
-The current models have none.
+**Use in the model.**
+The submitted national value is the sum of the province values plus an unassigned component, for each sample.
+A gap means cases counted nationally but in no province.
+The renewal model adds it to the unassigned component (see [Forecasts](methods/model.md#forecasts)).
 
 ## Target by vintage
 

@@ -59,6 +59,7 @@ __all__ = [
     "Variant",
     "apportion_shares",
     "chain_diagnostics",
+    "data_gap",
     "ebfmi",
     "engine",
     "fit_renewal",
@@ -515,6 +516,62 @@ def samples_table(
     return samples, extra
 
 
+def data_gap(task: ForecastTask, samples: pd.DataFrame) -> pd.DataFrame | None:
+    r"""National cases in the data that no province has, by week and sample.
+
+    In weeks with data, the gap is $g(w) = \max\{0, Y_{CD}(w) - \sum_p
+    Y_p(w)\}$ from the vintage, the same in every sample. Later weeks carry
+    the recent share forward: $g_k(w) = \rho \sum_p \tilde y_{p,k}(w)$, with
+    $\rho$ the gap over the provinces' total in the last `RECENT_WEEKS`
+    data weeks and $\tilde y_{p,k}$ sample $k$ of province $p$.
+
+    Parameters
+    ----------
+    task : ForecastTask
+        The task.
+    samples : pandas.DataFrame
+        Province samples (`SAMPLE_COLUMNS`).
+
+    Returns
+    -------
+    pandas.DataFrame or None
+        Columns `target_end_date`, `sample` and `value`, or None if the
+        national data equal the sum of the provinces.
+    """
+    rows = task.target.loc[task.target["vintage"] == task.vintage]
+    wide = rows.pivot_table(
+        index="target_end_date", columns="location", values="total"
+    ).fillna(0)
+    if NATIONAL not in wide:
+        return None
+    provinces = wide.drop(columns=NATIONAL).sum(axis=1)
+    gap = (wide[NATIONAL] - provinces).clip(lower=0)
+    if not (gap > 0).any():
+        return None
+    recent = gap.index[-RECENT_WEEKS:]
+    total = float(provinces.loc[recent].sum())
+    share = float(gap.loc[recent].sum()) / total if total > 0 else 0.0
+    by = samples.groupby(["target_end_date", "sample"], as_index=False).agg(
+        value=("value", "sum")
+    )
+    last = str(gap.index.max())
+    later = by["target_end_date"].astype(str) > last
+    known = by["target_end_date"].astype(str).map(gap).fillna(0.0)
+    by["value"] = np.where(later, share * by["value"], known)
+    return by.reset_index(drop=True)
+
+
+def _add_unassigned(
+    a: pd.DataFrame | None, b: pd.DataFrame | None
+) -> pd.DataFrame | None:
+    if a is None or b is None:
+        return b if a is None else a
+    both = pd.concat([a, b], ignore_index=True)
+    return both.groupby(["target_end_date", "sample"], as_index=False).agg(
+        value=("value", "sum")
+    )
+
+
 def ppc_rows(
     data: Any, insample: Mapping[str, Any]
 ) -> tuple[pd.DataFrame, NDArray[np.float64]]:
@@ -831,6 +888,8 @@ class RenewalModel:
         samples, unassigned = samples_table(
             task, run.data, run.draws, report_all=report_all
         )
+        # Unassigned: provinces not reported plus the data's national gap.
+        unassigned = _add_unassigned(unassigned, data_gap(task, samples))
         return run, samples, unassigned
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:

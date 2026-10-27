@@ -182,7 +182,10 @@ The model axis runs to the end of the forecast horizon, so the random walks carr
 Each of the 100 trajectories uses one posterior draw for every province and week.
 It is the final known plus final imputed counts, drawn from the two negative binomials once every report is in.
 In provinces with no cases, importations are drawn and, from the cut-off, seed local spread at the national $R(t)$.
-The national trajectory is the sum of the province trajectories.
+The national trajectory is the sum of the province trajectories plus an unassigned component.
+The unassigned component holds any provinces the model does not report, and the national cases in the data that no province has.
+In weeks with data, that gap is the vintage's $g(w) = \max\{0, Y_{CD}(w) - \sum_p Y_p(w)\}$ in every trajectory.
+In later weeks it is $g_k(w) = \rho \sum_p \tilde y_{p,k}(w)$, with $\rho$ the gap over the provinces' total in the last 4 data weeks and $\tilde y_{p,k}$ trajectory $k$ of province $p$.
 
 ### Identifiability
 
