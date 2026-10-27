@@ -209,6 +209,18 @@ def _checks_section(
     return _section("Checks", table)
 
 
+def _why(a: Mapping[str, Any]) -> str:
+    """Why an attempt was passed over: its first reason, or its refit."""
+    if a.get("reasons"):
+        return str(a["reasons"][0])
+    if a.get("retry"):
+        return next(
+            (str(w) for w in a.get("warnings", []) if "retry threshold" in w),
+            "refitted once",
+        )
+    return ""
+
+
 def _chain_section(provenance: Mapping[str, Any]) -> str:
     ran = [
         a
@@ -223,7 +235,7 @@ def _chain_section(provenance: Mapping[str, Any]) -> str:
             "submitted"
             if a["id"] == provenance.get("selected")
             else STATUS_LABEL.get(a["status"], a["status"]),
-            a["reasons"][0] if a.get("reasons") else "",
+            _why(a),
         ]
         for a in ran
     ]
@@ -272,7 +284,7 @@ def _ppc_section(ppc: Mapping[str, Any] | None) -> str:
     )
     pit = ppc.get("pit") or {}
     note = (
-        f"\nPIT: KS distance {fmt(pit.get('ks'), 2)} from uniform"
+        f"\n\nPIT: KS distance {fmt(pit.get('ks'), 2)} from uniform"
         + (f"; {pit['shape']}" if pit.get("shape") else "")
         + "."
         if pit.get("n")

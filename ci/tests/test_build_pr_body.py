@@ -300,6 +300,7 @@ def test_ppc_row_and_province_details(tmp_path: Path) -> None:
     assert "<summary>Posterior predictive checks</summary>" in text
     assert "| all provinces | " in text
     assert "| CD-IT |" in text
+    assert "\n\nPIT: KS distance" in text
 
 
 def test_ppc_row_without_posterior(tmp_path: Path) -> None:
