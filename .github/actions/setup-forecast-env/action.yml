@@ -1,0 +1,39 @@
+name: Set up the forecast environment
+description: >-
+  Install uv and the main repo's locked environment, and restore JAX's
+  persistent compilation cache so a refit does not recompile the model.
+
+inputs:
+  sync:
+    description: Run `uv sync --frozen` for the main repo
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@v6
+      with:
+        enable-cache: true
+    # JAX caches compiled XLA programs on disk. Keyed on the lock file
+    # and model source, so a change to either compiles afresh, while a
+    # retry or a re-run in the same week reuses the compiled model.
+    - name: Restore the JAX compilation cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/jax
+        key: jax-${{ runner.os }}-${{ hashFiles('uv.lock', 'src/**') }}
+        restore-keys: jax-${{ runner.os }}-
+    - name: Configure JAX and matplotlib
+      shell: bash
+      run: |
+        {
+          echo "JAX_COMPILATION_CACHE_DIR=$HOME/.cache/jax"
+          # One XLA host device per vCPU, so NumPyro runs its 4 chains in
+          # parallel (`numpyro.set_host_device_count` reads this).
+          echo "XLA_FLAGS=--xla_force_host_platform_device_count=$(nproc)"
+          echo "MPLCONFIGDIR=$RUNNER_TEMP/mplconfig"
+        } >> "$GITHUB_ENV"
+    - name: Install the main repo
+      if: inputs.sync == 'true'
+      shell: bash
+      run: uv sync --frozen

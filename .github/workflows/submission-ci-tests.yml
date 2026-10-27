@@ -1,0 +1,43 @@
+name: Submission CI tests
+
+# Lint, type-check and test the submission scripts, then run the dry-run
+# harness end to end on fixture data. Needs no secrets and never writes
+# to GitHub.
+
+on:
+  pull_request:
+    paths:
+      - 'ci/**'
+      - '.github/workflows/submit.yml'
+      - '.github/workflows/fit-candidates.yml'
+      - '.github/workflows/submission-ci-tests.yml'
+      - '.github/actions/setup-forecast-env/**'
+  push:
+    branches: [main]
+    paths:
+      - 'ci/**'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync
+      - name: Lint
+        run: |
+          uv run ruff check src tests fixtures
+          uv run ruff format --check src tests fixtures
+      - name: Type-check
+        run: uv run mypy
+      - name: Tests
+        run: uv run pytest -q
+      - name: Dry run of the submission workflow on fixtures
+        run: ./run_dry.sh

@@ -1,0 +1,112 @@
+name: Fit candidates
+
+# Reusable: fit and check one stage of the fallback chain, one matrix
+# leg per candidate, as BVDOutbreakSize's docs.yml fits one model per
+# matrix job. Called by submit.yml for the primary stage (main model and
+# fallback variant, in parallel) and, only if the main model failed, for
+# the retry stage.
+#
+# Each fit is content-addressed: the cache key hashes the model source,
+# the hub data commit and the candidate's config and sampler settings
+# (ci/policy.toml, `[cache] inputs`), so a re-run in the same window
+# with nothing changed loads the fit rather than refitting.
+
+on:
+  workflow_call:
+    inputs:
+      matrix:
+        description: Matrix JSON from `submission_ci.policy` (an `include` list)
+        type: string
+        required: true
+      stage:
+        type: string
+        required: true
+      reference_date:
+        type: string
+        required: true
+      expected_locations:
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+env:
+  CI_DIR: ci
+  WORK: output/ci
+  MODEL: ${{ vars.HUB_MODEL || 'renewal' }}
+  MODEL_ID: ${{ vars.HUB_MODEL_ID || format('epiforecasts-{0}', vars.HUB_MODEL || 'renewal') }}
+  # Convergence thresholds: ci/policy.toml unless a repo variable is set,
+  # so tightening the gate is a variable, not a code change.
+  BDBV_CONVERGENCE_FAIL_RHAT: ${{ vars.BDBV_CONVERGENCE_FAIL_RHAT }}
+  BDBV_CONVERGENCE_FAIL_ESS_BULK: ${{ vars.BDBV_CONVERGENCE_FAIL_ESS_BULK }}
+  BDBV_CONVERGENCE_FAIL_ESS_TAIL: ${{ vars.BDBV_CONVERGENCE_FAIL_ESS_TAIL }}
+  BDBV_CONVERGENCE_FAIL_DIVERGENT: ${{ vars.BDBV_CONVERGENCE_FAIL_DIVERGENT }}
+  BDBV_CONVERGENCE_WARN_RHAT: ${{ vars.BDBV_CONVERGENCE_WARN_RHAT }}
+  BDBV_CONVERGENCE_WARN_ESS_BULK: ${{ vars.BDBV_CONVERGENCE_WARN_ESS_BULK }}
+  BDBV_CONVERGENCE_WARN_ESS_TAIL: ${{ vars.BDBV_CONVERGENCE_WARN_ESS_TAIL }}
+  BDBV_CONVERGENCE_WARN_DIVERGENT: ${{ vars.BDBV_CONVERGENCE_WARN_DIVERGENT }}
+
+jobs:
+  fit:
+    name: Fit ${{ matrix.id }}
+    runs-on: ${{ vars.FIT_RUNNER || 'ubuntu-latest' }}
+    # Under GitHub's 360-minute cap for a hosted job. A fit that needs
+    # longer belongs on a larger or self-hosted runner (FIT_RUNNER); see
+    # SETUP.md.
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(inputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-forecast-env
+      - name: Collect the shared inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: inputs
+          path: ${{ env.WORK }}
+      # Restore and save are separate, as in BVDOutbreakSize, so the fit
+      # is saved as soon as it ends even if a later step fails.
+      - name: Restore the fit cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.WORK }}/fits/${{ matrix.id }}
+          key: fit-${{ matrix.id }}-${{ matrix.key }}
+      - name: Fit, forecast and check ${{ matrix.id }}
+        env:
+          CAND_ID: ${{ matrix.id }}
+          CAND_KIND: ${{ matrix.kind }}
+          CAND_CONFIG: ${{ matrix.config }}
+          CAND_LABEL: ${{ matrix.label }}
+          CAND_SAMPLER: ${{ matrix.sampler }}
+          FIT_CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+          EXPECTED_LOCATIONS: ${{ inputs.expected_locations }}
+        run: ci/steps/candidate.sh
+      - name: Save the fit cache
+        if: >-
+          ${{ always() && steps.cache.outputs.cache-hit != 'true' &&
+          hashFiles(format('{0}/fits/{1}/diagnostics.json', env.WORK, matrix.id)) != '' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.WORK }}/fits/${{ matrix.id }}
+          key: fit-${{ matrix.id }}-${{ matrix.key }}
+      # The candidate's verdicts, file and plot: small, read by the gate.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: candidate-${{ matrix.id }}
+          path: ${{ env.WORK }}/candidates/${{ matrix.id }}
+          if-no-files-found: warn
+          retention-days: 7
+      # The posterior itself, kept a few days for diagnosis, as
+      # BVDOutbreakSize keeps its fit artefacts for three days. The
+      # durable copy is the content-addressed cache above.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fit-${{ matrix.id }}
+          path: ${{ env.WORK }}/fits/${{ matrix.id }}
+          if-no-files-found: ignore
+          retention-days: 3

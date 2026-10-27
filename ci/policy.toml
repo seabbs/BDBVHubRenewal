@@ -1,0 +1,106 @@
+# Fallback chain and gate thresholds for automated hub submissions.
+# The first candidate, in file order, that clears every check is
+# submitted. See src/submission_ci/policy.py.
+
+[policy]
+# Retries of the main model run only when `main` does not clear the
+# checks. They run in parallel, so the budget is also the extra runner
+# count.
+retry_budget = 2
+
+[cache]
+# Everything a fit depends on in the main repo, listed once. The fit
+# cache key hashes these with the hub data commit and the candidate's
+# config and sampler settings.
+inputs = ["src", "config", "pyproject.toml", "uv.lock"]
+
+[[candidates]]
+id = "main"
+kind = "main"
+config = "main"
+stage = "primary"
+label = "main model"
+sampler = { num_chains = 4, num_warmup = 1000, num_samples = 1000, target_accept = 0.8, max_tree_depth = 10, seed = 1 }
+
+[[candidates]]
+id = "retry-1"
+kind = "retry"
+config = "main"
+stage = "retry"
+label = "main model, retry 1 (longer warm-up, new seed, target acceptance 0.95)"
+sampler = { num_chains = 4, num_warmup = 2000, num_samples = 1000, target_accept = 0.95, max_tree_depth = 10, seed = 2 }
+
+[[candidates]]
+id = "retry-2"
+kind = "retry"
+config = "main"
+stage = "retry"
+label = "main model, retry 2 (target acceptance 0.99, tree depth 12)"
+sampler = { num_chains = 4, num_warmup = 2000, num_samples = 1000, target_accept = 0.99, max_tree_depth = 12, seed = 3 }
+
+[[candidates]]
+id = "fallback"
+kind = "fallback"
+config = "fallback"
+# Fitted alongside `main`, not after it, so that a failed main model
+# does not leave too little of the window to fit the fallback.
+stage = "primary"
+label = "fallback variant (data-driven delays and missingness, no spatial coupling, weekly Rt)"
+sampler = { num_chains = 4, num_warmup = 1000, num_samples = 1000, target_accept = 0.9, max_tree_depth = 10, seed = 1 }
+
+[[candidates]]
+id = "persistence"
+kind = "persistence"
+config = "persistence"
+stage = "baseline"
+label = "persistence baseline"
+
+# Convergence thresholds, the defaults of BVDOutbreakSize's gate
+# (docs/fits/convergence.jl). Each can be overridden by an environment
+# variable or repo variable: BDBV_CONVERGENCE_{FAIL,WARN}_{RHAT,ESS_BULK,
+# ESS_TAIL,DIVERGENT}.
+[convergence.fail]
+rhat = 1.1
+ess_bulk = 25
+ess_tail = 25
+divergent_fraction = 0.05
+
+[convergence.warn]
+rhat = 1.05
+ess_bulk = 100
+ess_tail = 100
+divergent_fraction = 0.01
+
+# Plausibility and consistency checks on the forecast file. Ratios are
+# symmetric: a ratio r is breached when the value is above r times or
+# below 1/r times the reference. A threshold of 0 turns a level off.
+[checks]
+samples = 100
+horizon_weeks = 3          # target end dates required after the reference date
+nowcast_weeks = 4          # back weeks required up to the reference date
+national = "CD"
+sum_tolerance = 1e-6       # relative, national minus sum of provinces
+# Upper bound on any trajectory: the 95th centile of a week, relative to
+# the largest weekly count the location has ever had (floored).
+bound_floor = 20
+bound_warn = 5
+bound_fail = 20
+# Week-on-week growth of the median trajectory over the forecast weeks.
+growth_warn = 2.0
+growth_fail = 4.0
+# Median of the submitted back weeks against the observed counts in the
+# last complete weeks (weeks ending at least `complete_lag_weeks` before
+# the data vintage). Counts are offset by `ratio_offset` first.
+complete_lag_weeks = 4
+complete_weeks = 2
+ratio_offset = 5
+observed_warn = 2.0
+observed_fail = 5.0
+# Median of the forecast weeks against the persistence baseline. A
+# departure is flagged, never failed.
+baseline_warn = 3.0
+baseline_fail = 0
+# Median of the weeks shared with last week's submission. Revisions are
+# expected, so this only warns.
+previous_warn = 2.0
+previous_fail = 0

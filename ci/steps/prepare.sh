@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Pin the inputs every candidate shares, then build the persistence
+# candidate, which needs no fit and is also the baseline the other
+# candidates are checked against.
+#
+#   HUB_REF         hub commit to read the data at (from the data check)
+#   AS_OF           data vintage
+#   REFERENCE_DATE  round
+#   OBSERVED        optional local time-series.csv (skips the download)
+#   TASKS           optional local tasks.json (skips the download)
+#   PREVIOUS        optional last week's submission file
+#   SKIP_DATA=true  do not run `bdbv-forecasts data` (fixtures)
+# shellcheck source=ci/steps/lib.sh
+source "$(dirname "$0")/lib.sh"
+
+: "${HUB_REF:?}" "${AS_OF:?}" "${REFERENCE_DATE:?}"
+inputs="$WORK/inputs"
+mkdir -p "$inputs"
+raw="https://raw.githubusercontent.com/$HUB/$HUB_REF"
+
+if [ "${SKIP_DATA:-false}" != "true" ]; then
+  cli data --ref "$HUB_REF"
+fi
+if [ -n "${OBSERVED:-}" ]; then
+  cp "$OBSERVED" "$inputs/time-series.csv"
+else
+  curl -fsSL --retry 3 "$raw/target-data/time-series.csv" \
+    -o "$inputs/time-series.csv"
+fi
+if [ -n "${TASKS:-}" ]; then
+  cp "$TASKS" "$inputs/tasks.json"
+else
+  curl -fsSL --retry 3 "$raw/hub-config/tasks.json" -o "$inputs/tasks.json"
+fi
+
+# Last week's submission, for the consistency check: the newest file of
+# this model on the hub before this round. A round whose PR has not been
+# merged yet is not on the hub; the check then compares with the one
+# before it, or skips.
+if [ -n "${PREVIOUS:-}" ]; then
+  cp "$PREVIOUS" "$inputs/previous.csv"
+elif command -v gh > /dev/null; then
+  prev=$(gh api "repos/$HUB/contents/model-output/$MODEL_ID?ref=$HUB_REF" \
+    --jq "[.[] | select(.name | endswith(\".csv\")) |
+      select(.name < \"$REFERENCE_DATE\") | .name] | sort | last // empty" \
+    2> /dev/null || true)
+  if [ -n "$prev" ]; then
+    curl -fsSL --retry 3 "$raw/model-output/$MODEL_ID/$prev" \
+      -o "$inputs/previous.csv"
+  fi
+fi
+
+cat > "$inputs/context.json" << EOF
+{"hub_ref": "$HUB_REF", "as_of": "$AS_OF",
+ "reference_date": "$REFERENCE_DATE", "model": "$MODEL",
+ "model_id": "$MODEL_ID"}
+EOF
+
+CAND_ID=persistence CAND_KIND=persistence CAND_CONFIG=persistence \
+  CAND_LABEL="persistence baseline" CAND_SAMPLER='{}' \
+  "$(dirname "$0")/candidate.sh"

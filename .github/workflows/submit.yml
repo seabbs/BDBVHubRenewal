@@ -1,0 +1,422 @@
+name: Submit to the BDBV hub
+
+# Fit, check and submit the week's forecast to the BDBV Modeling Hub as
+# an automated pull request from the bot's fork. Nobody approves it in
+# CI: the gate below decides, and the PR body says what was submitted
+# and why. See ci/SETUP.md and ci/INTEGRATION.md.
+#
+#   detect -> prepare -> fit (main, fallback) -> triage -> [retry] ->
+#   gate (select + hubValidations) -> submit -> record -> outcome
+#
+# DRY_RUN is true unless the repo variable DRY_RUN is `false` or a manual
+# run says so. A dry run does everything except push and open the PR,
+# and prints the PR body to the log and the job summary.
+
+on:
+  # The hub's window is Sunday 00:00 to Tuesday 23:59 Kinshasa time
+  # (UTC+1, no daylight saving), which is Saturday 23:00 to Tuesday 22:59
+  # UTC. Runs are cheap when there is no new data: `detect` stops them.
+  schedule:
+    - cron: '0 23 * * 6'       # Saturday 23:00 UTC, as the window opens
+    - cron: '0 2-23/3 * * 0,1' # every 3 hours on Sunday and Monday
+    # Tuesday until 14:00 UTC, so a full 350-minute fit still lands
+    # before the window closes at 22:59 UTC.
+    - cron: '0 2-14/3 * * 2'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Dry run (`default` follows the DRY_RUN repo variable)
+        type: choice
+        options: [default, 'true', 'false']
+        default: default
+      force:
+        description: Run even if the hub data are unchanged
+        type: boolean
+        default: false
+      reference_date:
+        description: Round to target (a Saturday; blank for the open round)
+        type: string
+        default: ''
+      ignore_window:
+        description: Ignore the submission window (dry runs only)
+        type: boolean
+        default: false
+
+# One submission at a time, never cancelled part way: a second trigger
+# queues behind the first and then finds the data already used.
+concurrency:
+  group: hub-submission
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CI_DIR: ci
+  WORK: output/ci
+  MODEL: ${{ vars.HUB_MODEL || 'renewal' }}
+  MODEL_ID: ${{ vars.HUB_MODEL_ID || format('epiforecasts-{0}', vars.HUB_MODEL || 'renewal') }}
+  FORK: ${{ vars.HUB_FORK || 'seabbs-bot/BDBV-Modeling-Hub' }}
+  HUB: InsightNet-US/BDBV-Modeling-Hub
+  LEDGER_BRANCH: submission-ledger
+
+jobs:
+  detect:
+    name: Check for new hub data
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      should_run: ${{ steps.detect.outputs.should_run }}
+      reason: ${{ steps.detect.outputs.reason }}
+      reference_date: ${{ steps.detect.outputs.reference_date }}
+      hub_ref: ${{ steps.detect.outputs.hub_ref }}
+      data_commit: ${{ steps.detect.outputs.data_commit }}
+      as_of: ${{ steps.detect.outputs.as_of }}
+      dry_run: ${{ steps.mode.outputs.dry_run }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Decide dry run or live
+        id: mode
+        env:
+          INPUT: ${{ inputs.dry_run }}
+          VARIABLE: ${{ vars.DRY_RUN }}
+          IGNORE_WINDOW: ${{ inputs.ignore_window }}
+        run: |
+          if [ -z "$INPUT" ] || [ "$INPUT" = default ]; then
+            # Live only when the variable is exactly `false`.
+            if [ "$VARIABLE" = false ]; then dry=false; else dry=true; fi
+          else
+            dry=$INPUT
+          fi
+          if [ "$IGNORE_WINDOW" = true ] && [ "$dry" = false ]; then
+            echo "::error::ignore_window is for dry runs only"
+            exit 1
+          fi
+          echo "dry_run=$dry" >> "$GITHUB_OUTPUT"
+          echo "Mode: $([ "$dry" = true ] && echo dry run || echo live)" \
+            >> "$GITHUB_STEP_SUMMARY"
+      - name: Read the ledger
+        run: |
+          if git fetch -q --depth 1 origin "$LEDGER_BRANCH" 2> /dev/null; then
+            git show FETCH_HEAD:state.json > state.json
+          else
+            echo '{"schema_version": 1, "rounds": {}}' > state.json
+          fi
+      - name: Detect a new data vintage
+        id: detect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ inputs.force }}
+          IGNORE_WINDOW: ${{ inputs.ignore_window }}
+          REFERENCE_DATE: ${{ inputs.reference_date }}
+        run: |
+          args=(detect --state state.json --hub "$HUB")
+          [ "$FORCE" = true ] && args+=(--force)
+          [ "$IGNORE_WINDOW" = true ] && args+=(--ignore-window)
+          [ -n "$REFERENCE_DATE" ] && args+=(--reference-date "$REFERENCE_DATE")
+          uv run --project "$CI_DIR" detect-new-vintage "${args[@]}"
+
+  prepare:
+    name: Pin inputs and build the persistence candidate
+    needs: detect
+    if: needs.detect.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    env:
+      HUB_REF: ${{ needs.detect.outputs.hub_ref }}
+      AS_OF: ${{ needs.detect.outputs.as_of }}
+      REFERENCE_DATE: ${{ needs.detect.outputs.reference_date }}
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-forecast-env
+      - name: Download data and build the persistence baseline
+        env:
+          EXPECTED_LOCATIONS: ${{ vars.EXPECTED_LOCATIONS }}
+        run: ci/steps/prepare.sh
+      - name: List the primary fits
+        id: matrix
+        run: |
+          uv run --project "$CI_DIR" python -m submission_ci.policy \
+            --policy "$CI_DIR/policy.toml" --stage primary --hub-ref "$HUB_REF"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inputs
+          path: |
+            ${{ env.WORK }}/inputs
+            ${{ env.WORK }}/candidates/persistence
+          retention-days: 7
+
+  fit:
+    name: Fit primary
+    needs: [detect, prepare]
+    uses: ./.github/workflows/fit-candidates.yml
+    with:
+      matrix: ${{ needs.prepare.outputs.matrix }}
+      stage: primary
+      reference_date: ${{ needs.detect.outputs.reference_date }}
+      expected_locations: ${{ vars.EXPECTED_LOCATIONS }}
+
+  triage:
+    name: Decide on retries
+    needs: [detect, prepare, fit]
+    if: ${{ !cancelled() && needs.prepare.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      need_retry: ${{ steps.triage.outputs.need_retry }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: candidate-*
+          path: ${{ env.WORK }}/candidates
+      # download-artifact puts each artefact in a directory named after
+      # it; the candidate id is the name without the prefix.
+      - name: Lay out the candidates
+        run: ci/steps/unpack_candidates.sh
+      - name: Triage
+        id: triage
+        run: |
+          uv run --project "$CI_DIR" python -m submission_ci.select_candidate \
+            triage --policy "$CI_DIR/policy.toml" --candidates "$WORK/candidates"
+      - name: List the retries
+        id: matrix
+        if: steps.triage.outputs.need_retry == 'true'
+        env:
+          HUB_REF: ${{ needs.detect.outputs.hub_ref }}
+        run: |
+          uv run --project "$CI_DIR" python -m submission_ci.policy \
+            --policy "$CI_DIR/policy.toml" --stage retry --hub-ref "$HUB_REF"
+
+  retry:
+    name: Fit retries
+    needs: [detect, triage]
+    if: ${{ !cancelled() && needs.triage.outputs.need_retry == 'true' }}
+    uses: ./.github/workflows/fit-candidates.yml
+    with:
+      matrix: ${{ needs.triage.outputs.matrix }}
+      stage: retry
+      reference_date: ${{ needs.detect.outputs.reference_date }}
+      expected_locations: ${{ vars.EXPECTED_LOCATIONS }}
+
+  gate:
+    name: Select and validate
+    needs: [detect, triage, retry]
+    if: ${{ !cancelled() && needs.triage.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      selected: ${{ steps.select.outputs.selected }}
+      status: ${{ steps.select.outputs.status }}
+      produced_by: ${{ steps.select.outputs.produced_by }}
+      skipped: ${{ steps.select.outputs.skipped }}
+    env:
+      HUB_REF: ${{ needs.detect.outputs.hub_ref }}
+      AS_OF: ${{ needs.detect.outputs.as_of }}
+      REFERENCE_DATE: ${{ needs.detect.outputs.reference_date }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-forecast-env
+      - uses: actions/download-artifact@v4
+        with:
+          name: inputs
+          path: ${{ env.WORK }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: candidate-*
+          path: ${{ env.WORK }}/candidates
+      - name: Lay out the candidates
+        run: ci/steps/unpack_candidates.sh
+      # The hub at the commit the data came from, for hubValidations.
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.HUB }}
+          ref: ${{ env.HUB_REF }}
+          path: hub
+          sparse-checkout: |
+            hub-config
+            model-metadata
+      - uses: r-lib/actions/setup-r@v2
+        if: vars.HUB_VALIDATIONS != 'false'
+        with:
+          use-public-rspm: true
+          extra-repositories: https://hubverse-org.r-universe.dev
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        if: vars.HUB_VALIDATIONS != 'false'
+        with:
+          packages: any::hubValidations
+          dependencies: '"hard"'
+      - name: Write the model metadata
+        run: uv run bdbv-forecasts metadata --model "$MODEL" --out "$WORK/metadata"
+      # Exit 3 means every candidate was ruled out: the round is skipped.
+      # The verdict is uploaded first; the `outcome` job fails the run.
+      - name: Walk the fallback chain
+        id: select
+        continue-on-error: true
+        env:
+          RETRIED: ${{ needs.triage.outputs.need_retry }}
+          VALIDATE: ${{ vars.HUB_VALIDATIONS != 'false' }}
+          HUB_PATH: hub
+          METADATA: ${{ env.WORK }}/metadata/${{ env.MODEL_ID }}.yml
+          CHECK_WINDOW: ${{ needs.detect.outputs.dry_run == 'false' }}
+        run: ci/steps/select.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gate
+          path: |
+            ${{ env.WORK }}/gate
+            ${{ env.WORK }}/metadata
+          retention-days: 90
+
+  submit:
+    name: Open or update the hub PR
+    needs: [detect, gate]
+    if: ${{ !cancelled() && needs.gate.outputs.selected != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # The environment holds the bot's token. It has no required
+    # reviewers: the gate is the approval. Restrict it to `main`.
+    environment: hub-submission
+    outputs:
+      action: ${{ steps.pr.outputs.action }}
+      pr_url: ${{ steps.pr.outputs.pr_url }}
+    env:
+      HUB_REF: ${{ needs.detect.outputs.hub_ref }}
+      AS_OF: ${{ needs.detect.outputs.as_of }}
+      DATA_COMMIT: ${{ needs.detect.outputs.data_commit }}
+      REFERENCE_DATE: ${{ needs.detect.outputs.reference_date }}
+      DRY_RUN: ${{ needs.detect.outputs.dry_run }}
+      SOURCE_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/download-artifact@v4
+        with:
+          name: gate
+          path: ${{ env.WORK }}
+      - name: Authenticate as the bot
+        if: env.DRY_RUN == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.HUB_SUBMIT_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::HUB_SUBMIT_TOKEN is not set in the hub-submission environment"
+            exit 1
+          fi
+          gh auth setup-git
+          git config --global user.name "seabbs-bot"
+          git config --global user.email "signin@samabbott.co.uk"
+      - name: Open or update the PR
+        id: pr
+        env:
+          # The bot's token for a live run; the read-only workflow token
+          # for a dry run, which only looks up an existing PR.
+          GH_TOKEN: ${{ needs.detect.outputs.dry_run == 'false' && secrets.HUB_SUBMIT_TOKEN || github.token }}
+          METADATA: ${{ env.WORK }}/metadata/${{ env.MODEL_ID }}.yml
+        run: ci/steps/submit.sh
+      - name: Show the PR body
+        if: always()
+        run: |
+          {
+            echo "<details><summary>PR body</summary>"
+            echo
+            cat "$WORK/gate/pr-body.md"
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr
+          path: |
+            ${{ env.WORK }}/gate/pr-body.md
+            ${{ env.WORK }}/gate/pr-title.txt
+            ${{ env.WORK }}/gate/pr-outcome.txt
+          retention-days: 90
+
+  record:
+    name: Record the round in the ledger
+    needs: [detect, gate, submit]
+    if: >-
+      ${{ always() && needs.detect.outputs.should_run == 'true' &&
+      needs.detect.outputs.dry_run == 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      REFERENCE_DATE: ${{ needs.detect.outputs.reference_date }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: gate
+          path: ${{ env.WORK }}
+      - name: Update the ledger and archive the round
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DATA_COMMIT: ${{ needs.detect.outputs.data_commit }}
+          AS_OF: ${{ needs.detect.outputs.as_of }}
+          ACTION: ${{ needs.submit.outputs.action }}
+          PR_URL: ${{ needs.submit.outputs.pr_url }}
+          PRODUCED_BY: ${{ needs.gate.outputs.produced_by }}
+          SKIPPED: ${{ needs.gate.outputs.skipped }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: ci/steps/record.sh
+
+  outcome:
+    name: Submission outcome
+    needs: [detect, prepare, fit, triage, retry, gate, submit, record]
+    if: ${{ always() && needs.detect.outputs.should_run == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # A skipped round or a broken job fails the run, so GitHub's
+      # failed-workflow notification reaches Sam (see SETUP.md). No issue
+      # is opened anywhere.
+      - name: Report
+        env:
+          SELECTED: ${{ needs.gate.outputs.selected }}
+          PRODUCED_BY: ${{ needs.gate.outputs.produced_by }}
+          STATUS: ${{ needs.gate.outputs.status }}
+          ACTION: ${{ needs.submit.outputs.action }}
+          PR_URL: ${{ needs.submit.outputs.pr_url }}
+          REF: ${{ needs.detect.outputs.reference_date }}
+          DRY_RUN: ${{ needs.detect.outputs.dry_run }}
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          failed=$(echo "$RESULTS" | jq -r \
+            'to_entries[] | select(.value.result == "failure") | .key' | xargs)
+          {
+            echo "## Round $REF"
+            echo
+            if [ -z "$SELECTED" ]; then
+              echo "**Round skipped.** No candidate cleared the checks; the"
+              echo "gate job's summary and the \`gate\` artefact say why."
+            else
+              echo "Produced by: **$PRODUCED_BY** (status $STATUS)."
+              echo "PR: ${ACTION:-not attempted} ${PR_URL}"
+              [ "$DRY_RUN" = true ] && echo "Dry run: nothing was pushed."
+            fi
+            [ -n "$failed" ] && echo "Failed jobs: $failed"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -z "$SELECTED" ]; then
+            echo "::error::round $REF skipped: every candidate was ruled out"
+            exit 1
+          fi
+          if [ -n "$failed" ]; then
+            echo "::error::jobs failed: $failed"
+            exit 1
+          fi
+          case "$ACTION" in
+            skipped-*) echo "::error::PR not submitted: $ACTION"; exit 1 ;;
+          esac

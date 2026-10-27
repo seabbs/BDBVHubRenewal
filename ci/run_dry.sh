@@ -1,0 +1,196 @@
+#!/usr/bin/env bash
+# Local dry run of the submission workflow, end to end, on fixture data.
+#
+#   ci/run_dry.sh              every scenario, with assertions
+#   ci/run_dry.sh retry        one scenario, printing its PR body
+#
+# It runs the same step scripts as .github/workflows/submit.yml, in the
+# same order: detect -> prepare (persistence) -> primary candidates ->
+# triage -> retries -> select -> submit (DRY_RUN=true). The model is the
+# fixture CLI (fixtures/fake_bdbv_forecasts.py) and `gh`/`git` are never
+# called for writing. Outputs go to $TMPDIR/submission-ci-dry/<scenario>/.
+set -euo pipefail
+
+CI_DIR=$(cd "$(dirname "$0")" && pwd)
+export CI_DIR
+FIX="$CI_DIR/fixtures"
+ROOT="${TMPDIR:-/tmp}/submission-ci-dry"
+export UV_CACHE_DIR=${UV_CACHE_DIR:-${TMPDIR:-/tmp}/uvcache}
+export FORECAST_CLI="python3 $FIX/fake_bdbv_forecasts.py"
+export MODEL=renewal MODEL_ID=epiforecasts-renewal
+export HEARTBEAT_SECONDS=1
+# Monday 2 November 2026, 10:00 UTC: inside the window for 2026-11-07.
+NOW=${NOW:-2026-11-02T10:00:00+00:00}
+
+# name | FAKE_SCENARIOS | expected selection ("skip" for a skipped round)
+SCENARIOS=(
+  "main|main=pass|main"
+  "warn|main=warn|main"
+  "retry|main=fail,retry-1=pass|retry-1"
+  "retry2|main=crash,retry-1=fail,retry-2=pass|retry-2"
+  "fallback|main=fail,retry-1=fail,retry-2=fail|fallback"
+  "persistence|main=fail,retry-1=implausible,retry-2=crash,fallback=fail|persistence"
+  "skip|main=fail,retry-1=fail,retry-2=fail,fallback=implausible,persistence=negative|skip"
+)
+
+sci() { uv run --quiet --project "$CI_DIR" "$@"; }
+
+# A stand-in `gh` that records calls and answers nothing, so the dry run
+# never touches GitHub. The submit step must only have looked up PRs.
+mkdir -p "$ROOT/bin"
+# shellcheck disable=SC2016  # expanded when the stub runs
+printf '#!/usr/bin/env bash\necho "$*" >> "${GH_LOG:?}"\nexit 1\n' \
+  > "$ROOT/bin/gh"
+chmod +x "$ROOT/bin/gh"
+export PATH="$ROOT/bin:$PATH"
+
+# A stand-in main repo tree for the fit cache key (policy [cache] inputs).
+SRC_ROOT="$ROOT/main-repo"
+mkdir -p "$SRC_ROOT/src" "$SRC_ROOT/config"
+echo "model = 1" > "$SRC_ROOT/src/model.py"
+echo "x = 1" > "$SRC_ROOT/config/model.toml"
+touch "$SRC_ROOT/pyproject.toml" "$SRC_ROOT/uv.lock"
+
+run_scenario() {
+  local name=$1 scenarios=$2 expect=$3
+  export WORK="$ROOT/$name"
+  export FAKE_SCENARIOS=$scenarios
+  export GH_LOG="$WORK/gh.log"
+  export GITHUB_OUTPUT="$WORK/github-output" GITHUB_STEP_SUMMARY="$WORK/summary.md"
+  rm -rf "$WORK" && mkdir -p "$WORK"
+  echo "=== $name ($scenarios) ==="
+
+  # 1. Data check, as in the `detect` job.
+  sci detect-new-vintage detect --state "$FIX/hub/state.json" \
+    --fixture "$FIX/hub" --now "$NOW" --out "$WORK/decision.json" > /dev/null
+  get() { python3 -c "import json;print(json.load(open('$WORK/decision.json'))['$1'])"; }
+  [ "$(get should_run)" = "True" ] || { echo "detect said no: $(get reason)"; return 1; }
+  HUB_REF=$(get hub_ref) DATA_COMMIT=$(get data_commit) AS_OF=$(get as_of)
+  REFERENCE_DATE=$(get reference_date)
+  export HUB_REF DATA_COMMIT AS_OF REFERENCE_DATE
+
+  # 2. Shared inputs and the persistence candidate (`prepare` job).
+  SKIP_DATA=true OBSERVED="$FIX/hub/time-series.csv" TASKS="$FIX/hub/tasks.json" \
+    PREVIOUS="$FIX/hub/previous.csv" EXPECTED_LOCATIONS="CD,CD-IT,CD-NK,CD-HU" \
+    "$CI_DIR/steps/prepare.sh" > "$WORK/prepare.log"
+
+  # 3. Primary matrix legs (`fit` job), one after another here.
+  run_stage() {
+    sci python -m submission_ci.policy --policy "$CI_DIR/policy.toml" \
+      --stage "$1" --hub-ref "$HUB_REF" --root "$SRC_ROOT" > "$WORK/matrix-$1.json"
+    python3 - "$WORK/matrix-$1.json" << 'EOF' > "$WORK/legs-$1.txt"
+import json, sys
+for e in json.load(open(sys.argv[1]))["include"]:
+    print("\t".join([e["id"], e["kind"], e["config"], e["label"], e["sampler"]]))
+EOF
+    while IFS=$'\t' read -r id kind config label sampler; do
+      CAND_ID=$id CAND_KIND=$kind CAND_CONFIG=$config CAND_LABEL=$label \
+        CAND_SAMPLER=$sampler EXPECTED_LOCATIONS="CD,CD-IT,CD-NK,CD-HU" \
+        "$CI_DIR/steps/candidate.sh" > "$WORK/candidate-$id.log" 2>&1
+    done < "$WORK/legs-$1.txt"
+  }
+  run_stage primary
+
+  # 4. Triage, then the retry matrix only if `main` was ruled out.
+  local retried=false
+  if sci python -m submission_ci.select_candidate triage \
+      --policy "$CI_DIR/policy.toml" --candidates "$WORK/candidates" \
+      | grep -q need_retry=true; then
+    run_stage retry
+    retried=true
+  fi
+
+  # As downloaded by actions/download-artifact: one `candidate-<id>`
+  # directory per artefact, laid out again by unpack_candidates.sh.
+  for d in "$WORK"/candidates/*; do
+    [ "${d##*/}" = persistence ] || mv "$d" "$WORK/candidates/candidate-${d##*/}"
+  done
+  "$CI_DIR/steps/unpack_candidates.sh" > /dev/null
+
+  # 5. Select, with a stand-in for hubValidations (`gate` job).
+  local status=0
+  RETRIED=$retried HUB_PATH="$FIX/hub" METADATA="$FIX/hub/$MODEL_ID.yml" \
+    HUB_VALIDATOR="true" "$CI_DIR/steps/select.sh" > "$WORK/select.log" \
+    || status=$?
+  local got
+  got=$(python3 -c "import json;print(json.load(open('$WORK/gate/provenance.json'))['selected'] or 'skip')")
+  if [ "$got" != "$expect" ]; then
+    echo "FAIL: $name selected $got, expected $expect"; cat "$WORK/select.log"
+    return 1
+  fi
+  if [ "$expect" = "skip" ]; then
+    [ "$status" = 3 ] || { echo "FAIL: skip should exit 3, got $status"; return 1; }
+    echo "ok: round skipped (exit 3); reason in $WORK/gate/provenance.md"
+    return 0
+  fi
+
+  # 6. Submit, dry run: build the body and print the planned PR.
+  DRY_RUN=true FORK=seabbs-bot/BDBV-Modeling-Hub METADATA="$FIX/hub/$MODEL_ID.yml" \
+    "$CI_DIR/steps/submit.sh" > "$WORK/submit.log" 2>&1 \
+    || { echo "FAIL: submit"; cat "$WORK/submit.log"; return 1; }
+  grep -q '"action": "dry-run"' "$WORK/submit.log" \
+    || { echo "FAIL: no dry-run outcome"; cat "$WORK/submit.log"; return 1; }
+  if grep -v '^pr list' "$WORK/gh.log" 2> /dev/null; then
+    echo "FAIL: dry run made gh calls other than a PR lookup"; return 1
+  fi
+  grep -q "Produced by: " "$WORK/gate/pr-body.md"
+  tail -n 1 "$WORK/gate/pr-body.md" | grep -q "@seabbs"
+  echo "ok: selected $got; body $WORK/gate/pr-body.md"
+}
+
+ledger() {
+  # record.sh against a throwaway repo with a local `origin`: the round
+  # from the `retry` scenario is written to the ledger branch, twice.
+  local repo="$ROOT/ledger-repo" origin="$ROOT/ledger-origin.git"
+  rm -rf "$repo" "$origin"
+  git init -q --bare "$origin"
+  git init -q -b main "$repo"
+  git -C "$repo" remote add origin "$origin"
+  for run in 101 102; do
+    (cd "$repo" && WORK="$ROOT/retry" GITHUB_RUN_ID=$run \
+      REFERENCE_DATE=2026-11-07 DATA_COMMIT=dddd AS_OF=2026-10-31 \
+      ACTION=created PR_URL=https://example/pr/1 PRODUCED_BY="retry 1" \
+      "$CI_DIR/steps/record.sh" > /dev/null)
+  done
+  local files
+  files=$(git -C "$origin" ls-tree -r --name-only submission-ledger)
+  echo "$files" | grep -q "archive/2026-11-07/102/provenance.json" \
+    || { echo "FAIL: ledger archive"; echo "$files"; return 1; }
+  git -C "$origin" show submission-ledger:state.json \
+    | python3 -c "import json,sys; r=json.load(sys.stdin)['rounds']['2026-11-07']; assert r['status']=='submitted' and len(r['history'])==2"
+  echo "=== ledger ===" && echo "ok: state.json and archive/2026-11-07/{101,102} on submission-ledger"
+}
+
+no_new_data() {
+  # A round that already ran on today's data must not run again.
+  export WORK="$ROOT/no-new-data"
+  rm -rf "$WORK" && mkdir -p "$WORK"
+  sci detect-new-vintage record --state "$WORK/state.json" \
+    --reference-date 2026-11-07 --data-commit "$(printf 'd%.0s' {1..40})" \
+    --as-of 2026-10-31 --status submitted
+  GITHUB_OUTPUT="$WORK/out" sci detect-new-vintage detect \
+    --state "$WORK/state.json" --fixture "$FIX/hub" --now "$NOW" > /dev/null
+  grep -q "should_run=false" "$WORK/out" \
+    || { echo "FAIL: no-new-data ran"; return 1; }
+  echo "=== no-new-data ===" && echo "ok: $(grep '^reason=' "$WORK/out")"
+}
+
+failed=0
+if [ $# -gt 0 ]; then
+  for s in "${SCENARIOS[@]}"; do
+    IFS='|' read -r name sc expect <<< "$s"
+    if [ "$name" = "$1" ]; then
+      run_scenario "$name" "$sc" "$expect" || failed=1
+      [ -f "$ROOT/$name/gate/pr-body.md" ] && cat "$ROOT/$name/gate/pr-body.md"
+    fi
+  done
+  exit $failed
+fi
+for s in "${SCENARIOS[@]}"; do
+  IFS='|' read -r name sc expect <<< "$s"
+  run_scenario "$name" "$sc" "$expect" || failed=1
+done
+no_new_data || failed=1
+ledger || failed=1
+[ $failed = 0 ] && echo "All dry-run scenarios passed." || echo "Some scenarios FAILED."
+exit $failed

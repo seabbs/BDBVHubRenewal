@@ -1,0 +1,109 @@
+as_of,target_end_date,target,location,location_name,location_type,observation
+2026-10-24,2026-08-01,wk inc confirmed cases,CD-IT,Ituri,province,200
+2026-10-24,2026-08-08,wk inc confirmed cases,CD-IT,Ituri,province,204
+2026-10-24,2026-08-15,wk inc confirmed cases,CD-IT,Ituri,province,208
+2026-10-24,2026-08-22,wk inc confirmed cases,CD-IT,Ituri,province,212
+2026-10-24,2026-08-29,wk inc confirmed cases,CD-IT,Ituri,province,216
+2026-10-24,2026-09-05,wk inc confirmed cases,CD-IT,Ituri,province,220
+2026-10-24,2026-09-12,wk inc confirmed cases,CD-IT,Ituri,province,224
+2026-10-24,2026-09-19,wk inc confirmed cases,CD-IT,Ituri,province,228
+2026-10-24,2026-09-26,wk inc confirmed cases,CD-IT,Ituri,province,232
+2026-10-24,2026-10-03,wk inc confirmed cases,CD-IT,Ituri,province,236
+2026-10-24,2026-10-10,wk inc confirmed cases,CD-IT,Ituri,province,192
+2026-10-24,2026-10-17,wk inc confirmed cases,CD-IT,Ituri,province,122
+2026-10-24,2026-10-24,wk inc confirmed cases,CD-IT,Ituri,province,50
+2026-10-24,2026-08-01,wk inc confirmed cases,CD-NK,Nord Kivu,province,80
+2026-10-24,2026-08-08,wk inc confirmed cases,CD-NK,Nord Kivu,province,82
+2026-10-24,2026-08-15,wk inc confirmed cases,CD-NK,Nord Kivu,province,83
+2026-10-24,2026-08-22,wk inc confirmed cases,CD-NK,Nord Kivu,province,85
+2026-10-24,2026-08-29,wk inc confirmed cases,CD-NK,Nord Kivu,province,86
+2026-10-24,2026-09-05,wk inc confirmed cases,CD-NK,Nord Kivu,province,88
+2026-10-24,2026-09-12,wk inc confirmed cases,CD-NK,Nord Kivu,province,90
+2026-10-24,2026-09-19,wk inc confirmed cases,CD-NK,Nord Kivu,province,91
+2026-10-24,2026-09-26,wk inc confirmed cases,CD-NK,Nord Kivu,province,93
+2026-10-24,2026-10-03,wk inc confirmed cases,CD-NK,Nord Kivu,province,94
+2026-10-24,2026-10-10,wk inc confirmed cases,CD-NK,Nord Kivu,province,77
+2026-10-24,2026-10-17,wk inc confirmed cases,CD-NK,Nord Kivu,province,49
+2026-10-24,2026-10-24,wk inc confirmed cases,CD-NK,Nord Kivu,province,20
+2026-10-24,2026-08-01,wk inc confirmed cases,CD-HU,Haut Uele,province,15
+2026-10-24,2026-08-08,wk inc confirmed cases,CD-HU,Haut Uele,province,15
+2026-10-24,2026-08-15,wk inc confirmed cases,CD-HU,Haut Uele,province,16
+2026-10-24,2026-08-22,wk inc confirmed cases,CD-HU,Haut Uele,province,16
+2026-10-24,2026-08-29,wk inc confirmed cases,CD-HU,Haut Uele,province,16
+2026-10-24,2026-09-05,wk inc confirmed cases,CD-HU,Haut Uele,province,16
+2026-10-24,2026-09-12,wk inc confirmed cases,CD-HU,Haut Uele,province,17
+2026-10-24,2026-09-19,wk inc confirmed cases,CD-HU,Haut Uele,province,17
+2026-10-24,2026-09-26,wk inc confirmed cases,CD-HU,Haut Uele,province,17
+2026-10-24,2026-10-03,wk inc confirmed cases,CD-HU,Haut Uele,province,18
+2026-10-24,2026-10-10,wk inc confirmed cases,CD-HU,Haut Uele,province,14
+2026-10-24,2026-10-17,wk inc confirmed cases,CD-HU,Haut Uele,province,9
+2026-10-24,2026-10-24,wk inc confirmed cases,CD-HU,Haut Uele,province,4
+2026-10-24,2026-08-01,wk inc confirmed cases,CD,DRC,country,295
+2026-10-24,2026-08-08,wk inc confirmed cases,CD,DRC,country,301
+2026-10-24,2026-08-15,wk inc confirmed cases,CD,DRC,country,307
+2026-10-24,2026-08-22,wk inc confirmed cases,CD,DRC,country,313
+2026-10-24,2026-08-29,wk inc confirmed cases,CD,DRC,country,318
+2026-10-24,2026-09-05,wk inc confirmed cases,CD,DRC,country,324
+2026-10-24,2026-09-12,wk inc confirmed cases,CD,DRC,country,331
+2026-10-24,2026-09-19,wk inc confirmed cases,CD,DRC,country,336
+2026-10-24,2026-09-26,wk inc confirmed cases,CD,DRC,country,342
+2026-10-24,2026-10-03,wk inc confirmed cases,CD,DRC,country,348
+2026-10-24,2026-10-10,wk inc confirmed cases,CD,DRC,country,283
+2026-10-24,2026-10-17,wk inc confirmed cases,CD,DRC,country,180
+2026-10-24,2026-10-24,wk inc confirmed cases,CD,DRC,country,74
+2026-10-31,2026-08-01,wk inc confirmed cases,CD-IT,Ituri,province,200
+2026-10-31,2026-08-08,wk inc confirmed cases,CD-IT,Ituri,province,204
+2026-10-31,2026-08-15,wk inc confirmed cases,CD-IT,Ituri,province,208
+2026-10-31,2026-08-22,wk inc confirmed cases,CD-IT,Ituri,province,212
+2026-10-31,2026-08-29,wk inc confirmed cases,CD-IT,Ituri,province,216
+2026-10-31,2026-09-05,wk inc confirmed cases,CD-IT,Ituri,province,220
+2026-10-31,2026-09-12,wk inc confirmed cases,CD-IT,Ituri,province,224
+2026-10-31,2026-09-19,wk inc confirmed cases,CD-IT,Ituri,province,228
+2026-10-31,2026-09-26,wk inc confirmed cases,CD-IT,Ituri,province,232
+2026-10-31,2026-10-03,wk inc confirmed cases,CD-IT,Ituri,province,236
+2026-10-31,2026-10-10,wk inc confirmed cases,CD-IT,Ituri,province,240
+2026-10-31,2026-10-17,wk inc confirmed cases,CD-IT,Ituri,province,195
+2026-10-31,2026-10-24,wk inc confirmed cases,CD-IT,Ituri,province,124
+2026-10-31,2026-10-31,wk inc confirmed cases,CD-IT,Ituri,province,50
+2026-10-31,2026-08-01,wk inc confirmed cases,CD-NK,Nord Kivu,province,80
+2026-10-31,2026-08-08,wk inc confirmed cases,CD-NK,Nord Kivu,province,82
+2026-10-31,2026-08-15,wk inc confirmed cases,CD-NK,Nord Kivu,province,83
+2026-10-31,2026-08-22,wk inc confirmed cases,CD-NK,Nord Kivu,province,85
+2026-10-31,2026-08-29,wk inc confirmed cases,CD-NK,Nord Kivu,province,86
+2026-10-31,2026-09-05,wk inc confirmed cases,CD-NK,Nord Kivu,province,88
+2026-10-31,2026-09-12,wk inc confirmed cases,CD-NK,Nord Kivu,province,90
+2026-10-31,2026-09-19,wk inc confirmed cases,CD-NK,Nord Kivu,province,91
+2026-10-31,2026-09-26,wk inc confirmed cases,CD-NK,Nord Kivu,province,93
+2026-10-31,2026-10-03,wk inc confirmed cases,CD-NK,Nord Kivu,province,94
+2026-10-31,2026-10-10,wk inc confirmed cases,CD-NK,Nord Kivu,province,96
+2026-10-31,2026-10-17,wk inc confirmed cases,CD-NK,Nord Kivu,province,78
+2026-10-31,2026-10-24,wk inc confirmed cases,CD-NK,Nord Kivu,province,50
+2026-10-31,2026-10-31,wk inc confirmed cases,CD-NK,Nord Kivu,province,20
+2026-10-31,2026-08-01,wk inc confirmed cases,CD-HU,Haut Uele,province,15
+2026-10-31,2026-08-08,wk inc confirmed cases,CD-HU,Haut Uele,province,15
+2026-10-31,2026-08-15,wk inc confirmed cases,CD-HU,Haut Uele,province,16
+2026-10-31,2026-08-22,wk inc confirmed cases,CD-HU,Haut Uele,province,16
+2026-10-31,2026-08-29,wk inc confirmed cases,CD-HU,Haut Uele,province,16
+2026-10-31,2026-09-05,wk inc confirmed cases,CD-HU,Haut Uele,province,16
+2026-10-31,2026-09-12,wk inc confirmed cases,CD-HU,Haut Uele,province,17
+2026-10-31,2026-09-19,wk inc confirmed cases,CD-HU,Haut Uele,province,17
+2026-10-31,2026-09-26,wk inc confirmed cases,CD-HU,Haut Uele,province,17
+2026-10-31,2026-10-03,wk inc confirmed cases,CD-HU,Haut Uele,province,18
+2026-10-31,2026-10-10,wk inc confirmed cases,CD-HU,Haut Uele,province,18
+2026-10-31,2026-10-17,wk inc confirmed cases,CD-HU,Haut Uele,province,15
+2026-10-31,2026-10-24,wk inc confirmed cases,CD-HU,Haut Uele,province,9
+2026-10-31,2026-10-31,wk inc confirmed cases,CD-HU,Haut Uele,province,4
+2026-10-31,2026-08-01,wk inc confirmed cases,CD,DRC,country,295
+2026-10-31,2026-08-08,wk inc confirmed cases,CD,DRC,country,301
+2026-10-31,2026-08-15,wk inc confirmed cases,CD,DRC,country,307
+2026-10-31,2026-08-22,wk inc confirmed cases,CD,DRC,country,313
+2026-10-31,2026-08-29,wk inc confirmed cases,CD,DRC,country,318
+2026-10-31,2026-09-05,wk inc confirmed cases,CD,DRC,country,324
+2026-10-31,2026-09-12,wk inc confirmed cases,CD,DRC,country,331
+2026-10-31,2026-09-19,wk inc confirmed cases,CD,DRC,country,336
+2026-10-31,2026-09-26,wk inc confirmed cases,CD,DRC,country,342
+2026-10-31,2026-10-03,wk inc confirmed cases,CD,DRC,country,348
+2026-10-31,2026-10-10,wk inc confirmed cases,CD,DRC,country,354
+2026-10-31,2026-10-17,wk inc confirmed cases,CD,DRC,country,288
+2026-10-31,2026-10-24,wk inc confirmed cases,CD,DRC,country,183
+2026-10-31,2026-10-31,wk inc confirmed cases,CD,DRC,country,74
