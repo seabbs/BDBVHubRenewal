@@ -169,6 +169,7 @@ Outside the window, add `-f ignore_window=true` and a `reference_date`.
 
 Locally, `task ci-dry` runs the same step scripts on fixture data with a stand-in command line, through every branch of the fallback chain.
 `task ci-test` runs the tests of the CI scripts, and `task ci-fit` fits and forecasts one config as a candidate does.
+`task submission-preflight` reads the repository's settings and lists what a live run still needs (see [Setup](setup.md)).
 
 ## Pull request
 

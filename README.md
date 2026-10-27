@@ -66,6 +66,7 @@ task metadata          # write the model metadata YAML
 task validate-hub      # check both with hub_validate and hubValidations (R)
 task ci-test           # test the submission CI scripts in ci/
 task ci-dry            # dry run of the submission workflow on fixtures
+task submission-preflight  # list what a live submission still needs
 task docs              # build the docs site into _site/
 ```
 
