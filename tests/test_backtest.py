@@ -8,13 +8,13 @@ import yaml
 
 from bdbv_forecasts.backtest import (
     BacktestConfig,
-    HeldOutError,
     forecast_weeks,
     load_config,
     run_development,
-    run_heldout,
     run_recovery,
     saturdays,
+    score_by_truth_vintage,
+    truth_changes,
 )
 from bdbv_forecasts.models import get_model
 
@@ -24,7 +24,10 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_load_config() -> None:
     cfg = load_config(ROOT / "config" / "backtest.toml")
     assert cfg.n_samples == 100
-    assert cfg.heldout_reference_dates == ("2026-10-24",)
+    # The development set ends at the latest model choice date.
+    assert cfg.development_until == "2026-10-10"
+    assert cfg.is_heldout("2026-10-17")
+    assert not cfg.is_heldout("2026-10-10")
     assert cfg.reconstructed_dates[0] == "2026-06-06"
     assert all(pd.Timestamp(d).dayofweek == 5 for d in cfg.simulated_dates)
 
@@ -44,49 +47,60 @@ def test_saturdays() -> None:
     )
 
 
-def test_development_never_scores_heldout(
+def test_development_never_uses_heldout_vintages(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
     forecasts, scores = run_development(
         [get_model("persistence")], target, delays, config
     )
-    assert "2026-10-24" not in set(forecasts["reference_date"])
-    assert "2026-10-24" not in set(scores["reference_date"])
-    # Reconstructed vintages with a reference date on or after the
-    # held-out date are not built.
+    # Vintages after the model choice date are held out.
+    assert (forecasts["vintage"] <= "2026-10-10").all()
+    real = forecasts.loc[forecasts["kind"] == "real"]
+    assert set(real["vintage"]) == {"2026-08-18", "2026-10-09"}
     rec = forecasts.loc[forecasts["kind"] == "reconstructed"]
     assert set(rec["vintage"]) == {"2026-08-29", "2026-10-10"}
     assert set(scores["kind"]) == {"real", "reconstructed"}
-    # Only weeks at least two weeks before the truth's epi week are scored.
-    assert scores["target_end_date"].max() <= "2026-10-10"
-    assert (scores["vintage"] < "2026-10-24").all()
+    # Every week is scored, up to the last week of the truth vintage.
+    assert scores["target_end_date"].max() == "2026-10-24"
+    assert set(scores["truth_vintage"]) == {"2026-10-24"}
     assert (scores["n_samples"] == 100).all()
 
 
-def test_heldout_needs_flag_and_choice_record(
-    target: pd.DataFrame,
-    delays: pd.DataFrame,
-    config: BacktestConfig,
-    tmp_path: Path,
+def test_score_by_truth_vintage(
+    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
-    models = [get_model("persistence")]
-    with pytest.raises(HeldOutError, match="evaluate_holdout"):
-        run_heldout(models, target, delays, config)
-    with pytest.raises(HeldOutError, match="model choice"):
-        run_heldout(models, target, delays, config, evaluate_holdout=True)
-    config.model_choice.write_text("proposed_model: persistence\n")
-    scores = run_heldout(
-        models,
-        target,
-        delays,
-        config,
-        evaluate_holdout=True,
-        out_dir=tmp_path / "out",
+    forecasts, latest = run_development(
+        [get_model("persistence")], target, delays, config
     )
-    assert set(scores["reference_date"]) == {"2026-10-24"}
+    scores = score_by_truth_vintage(forecasts, target)
+    # Real forecasts only, each against every later real vintage.
     assert set(scores["kind"]) == {"real"}
-    record = yaml.safe_load((tmp_path / "out" / "heldout-run.yml").read_text())
-    assert len(record["model_choice_sha256"]) == 64
+    pairs = set(zip(scores["vintage"], scores["truth_vintage"], strict=True))
+    assert pairs == {
+        ("2026-08-18", "2026-10-09"),
+        ("2026-08-18", "2026-10-17"),
+        ("2026-08-18", "2026-10-24"),
+        ("2026-10-09", "2026-10-17"),
+        ("2026-10-09", "2026-10-24"),
+    }
+    # Against the latest vintage it matches the development scores.
+    at_latest = scores.loc[scores["truth_vintage"] == "2026-10-24"]
+    real = latest.loc[latest["kind"] == "real"]
+    assert len(at_latest) == len(real)
+    assert at_latest["wis"].sum() == pytest.approx(real["wis"].sum())
+
+
+def test_truth_changes(target: pd.DataFrame) -> None:
+    changes = truth_changes(target, locations=("CD",))
+    week = changes.loc[changes["target_end_date"] == "2026-10-10"]
+    assert list(week["truth_vintage"]) == [
+        "2026-10-09",
+        "2026-10-17",
+        "2026-10-24",
+    ]
+    last = week.iloc[-1]
+    assert last["change"] == 0
+    assert (week["change"] == week["truth"] - last["truth"]).all()
 
 
 def test_recovery_on_simulated_vintages(config: BacktestConfig) -> None:
