@@ -162,8 +162,8 @@ VARIANTS: Final[dict[str, Variant]] = {
         ),
         Variant(
             "fallback",
-            "Province renewal with delays and missingness from data, no "
-            "coupling, weekly Rt.",
+            "Province renewal with no coupling, and delays and missingness "
+            "fixed from the data.",
             base="FALLBACK",
             register=False,
         ),

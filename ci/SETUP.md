@@ -142,7 +142,7 @@ A round is skipped only if even persistence fails hub validation.
 
 A suggested general line for the model metadata's `methods_long`:
 
-> Submissions are produced automatically each week. If the main model's fit does not converge, we refit it once with more conservative sampler settings and, only if both are clearly broken, submit a simplified variant of the same model (data-driven delays and missingness, no spatial coupling, weekly Rt) or a persistence baseline. Each submission's pull request states which was used and why.
+> Submissions are produced automatically each week. If the main model's fit does not converge, we refit it once with more conservative sampler settings and, only if both are clearly broken, submit a simplified variant of the same model (no spatial coupling, delays and missingness fixed from the data) or a persistence baseline. Each submission's pull request states which was used and why.
 
 ## Where this approach comes from
 

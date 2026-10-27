@@ -7,8 +7,8 @@ clears every check is submitted:
 2. `retry-1`: one refit of the main model with a longer warm-up, more
    chains and jittered inits, only when `main` is past the convergence
    retry thresholds or was ruled out (`retry_budget`, 1 by default).
-3. `fallback`: the same model code with `--config fallback` (data-driven
-   delays and missingness, no spatial coupling, weekly Rt).
+3. `fallback`: the same model code with `--config fallback` (no spatial
+   coupling, delays and missingness fixed from the data).
 4. `persistence`: the persistence baseline, built from the data alone.
 
 Stage `primary` candidates fit in parallel straight away. Stage `retry`

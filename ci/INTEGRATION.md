@@ -35,7 +35,7 @@ bdbv-hub-renewal fit --model hubrenewal --config main|fallback --vintage <as_of>
   `epiforecasts-renewal` is already a different hub model.
 - `--config` selects the model configuration.
   `main` is the full model.
-  `fallback` is the same code with the delays and missingness plugged in from data, no spatial coupling, and a weekly Rt random walk.
+  `fallback` is the same code with the delays and missingness plugged in from data, and no spatial coupling.
   Each matrix leg passes its own config.
 - `--sampler-json` is the candidate's `sampler` table from `ci/policy.toml`. The retries differ only in it.
 - `--vintage` is a real `as_of`, or `latest`.
