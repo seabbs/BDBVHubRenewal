@@ -376,13 +376,18 @@ def _backtest(args: argparse.Namespace) -> int:
         config,
         include_reconstructed=not args.no_reconstructed,
     )
-    forecasts.to_csv(output / "forecasts.csv.gz", index=False)
-    scores.to_csv(results / "backtest-scores.csv", index=False)
     by_truth = bt.score_by_truth_vintage(forecasts, target)
-    by_truth.to_csv(results / "backtest-scores-by-truth.csv", index=False)
     rforecasts, rscores = bt.run_recovery(models, config)
-    rforecasts.to_csv(output / "recovery-forecasts.csv.gz", index=False)
-    rscores.to_csv(results / "recovery-scores.csv", index=False)
+    # Rows of models not run here are kept, so the fitted variants can be
+    # run apart from the others.
+    for table, path in (
+        (forecasts, output / "forecasts.csv.gz"),
+        (scores, results / "backtest-scores.csv"),
+        (by_truth, results / "backtest-scores-by-truth.csv"),
+        (rforecasts, output / "recovery-forecasts.csv.gz"),
+        (rscores, results / "recovery-scores.csv"),
+    ):
+        bt.merge_by_model(path, table).to_csv(path, index=False)
     print(
         f"Development: {len(scores)} scored forecasts; recovery: "
         f"{len(rscores)}. Written to {results}."

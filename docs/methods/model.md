@@ -1,6 +1,6 @@
 # Model
 
-The planned renewal model and the persistence baseline, with the maths of each.
+The renewal model and the persistence baseline, with the maths of each.
 { .page-subtitle }
 
 The data and notation are on the [Data methods page](data.md#target-and-notation).
@@ -9,33 +9,12 @@ The renewal model will submit to the hub as `epiforecasts-hubrenewal`.
 
 ## Structure
 
-Arrows show what generates what.
-Grey boxes are published data.
+![The province renewal model as a generative chain, from the reproduction number to the hub's data streams.](../assets/diagrams/model_dag.svg)
 
-```mermaid
-flowchart TD
-  R["R_p(t): pooled reproduction number"] --> L
-  S["S_p(t): susceptibles"] --> L
-  K["Importation kernel K, ε"] --> L
-  L["λ_p(t): symptom onsets"] --> C
-  L --> S
-  A["α_p(t): ascertainment"] --> C
-  C["C_p(t): confirmed onsets"] --> RHO
-  F["f_p,s: onset-to-report delay"] --> RHO
-  RHO["ρ_p(t): reports by day"] --> KN
-  RHO --> M
-  PI["π_p(t): share without onset"] --> KN
-  PI --> M
-  M["M_p(t): reported without onset"] --> IMP
-  G["ĝ_v: hub's pooled delay"] --> IMP
-  F --> DL
-  KN["K_p,v(w): known onsets"]:::data
-  IMP["I_p,v(w): imputed onsets"]:::data
-  DL["Delay line data"]:::data
-  KN --> Y["Y_p,v(w): target"]:::data
-  IMP --> Y
-  classDef data fill:#e8e8e8,stroke:#888,color:#222
-```
+The figure shows the main variant, `hubrenewal`.
+Grey boxes are parameters, blue boxes latent quantities and orange boxes the data with their likelihoods.
+The hub's pooled delay $\hat f$ is taken from the data of each vintage, not estimated.
+The source is `docs/diagrams/model_dag.tex`, built by `scripts/build_diagrams.sh`.
 
 ## Components
 
@@ -194,6 +173,19 @@ The development backtest compares them by relative WIS and log WIS against persi
 It chooses the strength of spatial coupling, the form of pooling, the smoothness priors, the delay family, the depletion settings and the variant to submit.
 The choice is logged with its date in `results/model-choice.yml`.
 Every later vintage is then held out (see [Evaluation](evaluation.md#rolling-held-out-evaluation)).
+
+### Renewal variants
+
+Three renewal variants run in the backtest, the held-out evaluation and the plots, next to persistence.
+
+| Variant | What it is |
+|---|---|
+| `hubrenewal` | The model in the figure: provinces with pooled $R_p(t)$, gravity importation and depletion. |
+| `hubrenewalsp` | Single patch: one national renewal with the same delays and imputation. Each national draw is split across provinces by a multinomial on their share of onsets in the last 4 data weeks. |
+| `fallback` | The CI's fallback: delays and $\pi$ fixed from the data, no coupling, weekly $R(t)$. It is a fit configuration, not a backtest variant. |
+
+A third variant that takes the latest posterior of the main [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model is being scoped.
+The model code is in `bdbv_hub_renewal.pyrenew` and the variants in [`models.renewal`][bdbv_hub_renewal.models.renewal].
 
 ### Persistence baseline
 

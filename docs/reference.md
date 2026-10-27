@@ -15,6 +15,8 @@ The public API of `bdbv_hub_renewal`, generated from the numpy-style docstrings.
 
 ::: bdbv_hub_renewal.models.persistence
 
+::: bdbv_hub_renewal.models.renewal
+
 ::: bdbv_hub_renewal.delays
 
 ::: bdbv_hub_renewal.latent

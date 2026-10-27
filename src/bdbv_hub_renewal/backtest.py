@@ -55,6 +55,7 @@ __all__ = [
     "forecast_weeks",
     "load_config",
     "make_tasks",
+    "merge_by_model",
     "real_vintages",
     "run_development",
     "run_forecasts",
@@ -303,6 +304,37 @@ def run_forecasts(
             samples.insert(3, "reference_date", task.reference_date.isoformat())
             frames.append(samples)
     return pd.concat(frames, ignore_index=True)
+
+
+def merge_by_model(path: Path | str, new: pd.DataFrame) -> pd.DataFrame:
+    """Merge a run's rows into a results file, keeping other models' rows.
+
+    The fitted variants are slow, so they are run apart from the others,
+    for example on a bigger machine. A run replaces the rows of the
+    models it ran and keeps the rest.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        A results file with a `model` column. It need not exist.
+    new : pandas.DataFrame
+        The run's rows.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The kept rows of other models, then `new`.
+    """
+    path = Path(path)
+    if not path.exists() or path.stat().st_size <= 1 or "model" not in new:
+        return new
+    old = pd.read_csv(path)
+    if "model" not in old:
+        return new
+    kept = old.loc[~old["model"].isin(set(new["model"]))]
+    if kept.empty:
+        return new
+    return pd.concat([kept, new], ignore_index=True)
 
 
 def truth_from_vintage(target: pd.DataFrame, vintage: str) -> pd.DataFrame:
