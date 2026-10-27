@@ -20,7 +20,7 @@ How scoring works is on the [Evaluation methods page](methods/evaluation.md).
 
 --8<-- "scores-overall.md"
 
-## Persistence underpredicts
+## Persistence bias
 
 --8<-- "persistence-bias.md"
 
@@ -119,11 +119,11 @@ Its intervals cover better beyond the reference week, because the random walk sp
 
     --8<-- "scores-location.md"
 
-## Relative to persistence
+## Relative skill
 
 --8<-- "relative-section.md"
 
-## Scores as the truth is revised
+## Scores by truth vintage
 
 Forecasts from real vintages are scored against every later real vintage, as reported at each.
 The national truth for the weeks they cover:

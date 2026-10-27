@@ -1,6 +1,6 @@
 # Data
 
-How the hub data are extracted, how vintages work, and the synthetic vintages that extend testing.
+Extraction of the hub data, its vintages, and the synthetic vintages used in testing.
 { .page-subtitle }
 
 What the data show is on the [Data results page](../data.md).
@@ -57,7 +57,7 @@ The 2026-08-18 vintage has none.
 The target data split each week's cases into known onsets and imputed onsets.
 The hub imputes an onset for each case reported without one, by subtracting a delay drawn from the pooled published delays ([hub issue 61](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/61)).
 So the share of cases without an onset is measured at every vintage.
-The [Model page](model.md#missingness-and-imputation) uses both.
+The [Model page](model.md#missing-onsets) uses both.
 
 ## Reconstructed vintages
 

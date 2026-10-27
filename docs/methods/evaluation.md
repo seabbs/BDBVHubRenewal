@@ -1,6 +1,6 @@
 # Evaluation
 
-How forecasts are scored, and the four ways they are evaluated.
+Scoring, and the four evaluations.
 { .page-subtitle }
 
 ## Scoring
@@ -9,7 +9,7 @@ Every week of a forecast is scored against a later real vintage, as reported at 
 No week is left out for being recent.
 Each score records the vintage it was scored against (`truth_vintage`), and the results pages label scores "as reported" at that date.
 Recent weeks are still incomplete in the truth vintage, so their scores move as later vintages arrive.
-So forecasts from real vintages are re-scored against each newer real vintage (`score_by_truth_vintage`), and the [Backtest page](../backtest.md#scores-as-the-truth-is-revised) shows how much the truth and the scores have changed.
+So forecasts from real vintages are re-scored against each newer real vintage (`score_by_truth_vintage`), and the [Backtest page](../backtest.md#scores-by-truth-vintage) shows how much the truth and the scores have changed.
 Simulated forecasts are scored against the simulated final counts.
 Scores follow [scoringutils](https://epiforecasts.io/scoringutils/) and [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize).
 

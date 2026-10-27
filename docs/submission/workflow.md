@@ -1,6 +1,6 @@
-# How submissions work
+# Submission workflow
 
-How each week's forecast reaches the BDBV Modeling Hub.
+The weekly path from new hub data to a submission.
 { .page-subtitle }
 
 !!! warning "Dry run"
@@ -9,13 +9,13 @@ How each week's forecast reaches the BDBV Modeling Hub.
     The `main` and `fallback` fit configs run the PyRenew renewal model, and submissions go in as `epiforecasts-hubrenewal`.
     Its model metadata is a draft until Sam has reviewed the held-out results.
 
-## How the pipeline works
+## Pipeline
 
 The workflow is `.github/workflows/submit.yml`.
 It runs on a schedule while the hub's submission window is open, and on demand.
 The window is Sunday 00:00 to Tuesday 23:59:59 Kinshasa time (UTC+1), so the schedule runs from Saturday 23:00 UTC, every three hours on Sunday and Monday, and on Tuesday until 14:00 UTC.
 Nobody approves the pull request in CI.
-The gate decides, and the pull request body says what was submitted and why.
+The gate's checks choose the candidate, and the pull request body says what was submitted and why.
 
 | job | what it does |
 | --- | --- |
@@ -50,13 +50,13 @@ The formats are specified in `ci/INTEGRATION.md`.
 
 A fit config is registered in [`bdbv_hub_renewal.fitting`][bdbv_hub_renewal.fitting].
 
-### Plugging in the model
+### Model interface
 
 The model integration plugs PyRenew in by registering `main` and `fallback` with `register_config(..., replace=True)`.
 Each [`FitConfig`][bdbv_hub_renewal.fitting.FitConfig] has two functions.
 
 - `fit(task, sampler, fit_dir)` fits the model to the [`ForecastTask`][bdbv_hub_renewal.models.base.ForecastTask], with the candidate's `sampler` table from `ci/policy.toml` (`num_chains`, `num_warmup`, `num_samples`, `target_accept`, `max_tree_depth`, `seed`).
-  It saves what the forecast needs (posterior draws) in `fit_dir`, appends progress lines to `fit_dir/progress.log`, and returns the `diagnostics.json` record (one row per sampled scalar with R-hat and bulk and tail ESS, and one row per chain with draws and divergences; see `ci/INTEGRATION.md`).
+  It saves what the forecast needs (posterior draws) in `fit_dir`, appends progress lines to `fit_dir/progress.log`, and returns the `diagnostics.json` record (one row per sampled scalar with R-hat and bulk and tail ESS, and one row per chain with draws and divergences, as in `ci/INTEGRATION.md`).
   It must also write `fit_dir/ppc.json` from the in-sample posterior predictive draws, with [`summarise_draws`][bdbv_hub_renewal.ppc.summarise_draws] and [`write_ppc`][bdbv_hub_renewal.ppc.write_ppc].
   `run_fit` writes the record, `fit.json` and the run time.
 - `forecast(task, fit_dir)` returns a [`Forecast`][bdbv_hub_renewal.fitting.Forecast]: province samples numbered 1 to 100, each one joint posterior draw across weeks and provinces, and optionally an `unassigned` national component by week and sample.
@@ -71,7 +71,7 @@ A candidate is ruled out only when its fit is clearly broken, or its file would 
 The chain is set in `ci/policy.toml`.
 
 1. `main`: the main model.
-2. `retry-1`: one refit of the main model with a longer warm-up, 8 chains and jittered inits (`init = "jitter"` in its sampler table). It runs only when `main` is past the retry thresholds below, or was ruled out. The refit is submitted unless it is clearly broken; otherwise the original fit is kept if it is not.
+2. `retry-1`: one refit of the main model with a longer warm-up, 8 chains and jittered inits (`init = "jitter"` in its sampler table). It runs only when `main` is past the retry thresholds below, or was ruled out. The refit is submitted unless it is clearly broken. Otherwise the original fit is kept, if it is not broken.
 3. `fallback`: the simplified variant (data-driven delays and missingness, no spatial coupling, weekly Rt). It is fitted alongside `main`, so a broken main model does not leave too little of the window.
 4. `persistence`: the persistence baseline.
 
@@ -106,7 +106,7 @@ They never fail a candidate or trigger a fallback, because model choice comes fr
 `fit` writes `ppc.json` beside `diagnostics.json`: one row per province, stream (known onsets, the hub's imputed onsets and totals) and in-sample onset week.
 Each row has the observed count, the predictive median, the 50% and 90% intervals, the randomised PIT and whether the week is complete.
 The gate reports, for each stream, the 50% and 90% interval coverage overall, by province and over the last 4 complete weeks.
-It also summarises the PIT: the Kolmogorov-Smirnov distance from uniform, the share in the outer deciles (0.2 when calibrated; above 0.3 reads as intervals too narrow, below 0.1 too wide) and the mean PIT (away from 0.5 reads as bias).
+It also summarises the PIT: the Kolmogorov-Smirnov distance from uniform, the share in the outer deciles (0.2 when calibrated, above 0.3 for intervals too narrow, below 0.1 for too wide) and the mean PIT (away from 0.5 reads as bias).
 The candidate's `ppc.png` artefact plots the predictive intervals against the observed counts, one panel per province.
 Thresholds apply to the `total` stream and can be overridden by repository variables `BDBV_PPC_{COVERAGE_WARN,COVERAGE_FAIL,LEVEL,RECENT_WEEKS,PIT_KS_WARN,PIT_MIN_ROWS}`.
 
@@ -144,7 +144,7 @@ The national rows are correct by construction.
 `nowcast` writes them as the sum of the provinces plus the model's unassigned component, and writes `national.json` beside the hub file with the modelled provinces and that component.
 Before the checks, the gate rebuilds the national rows the same way if they differ, using `national.json` or, without it, the gap between the hub's national data and its provinces for each week.
 The data coherence check reads the output of `bdbv-hub-renewal coherence`.
-A gap is reported with how the model handles it (see [Data](../data.md#national-against-the-provinces)).
+A gap is reported with how the model handles it (see [Data](../data.md#national-coherence)).
 
 Hub validation runs both validators from the hub validation bundle against the hub at the data commit, as the hub's own CI would.
 The submission is staged as `<model_id>/<reference_date>-<model_id>.csv` with its metadata.
@@ -170,7 +170,7 @@ Outside the window, add `-f ignore_window=true` and a `reference_date`.
 Locally, `task ci-dry` runs the same step scripts on fixture data with a stand-in command line, through every branch of the fallback chain.
 `task ci-test` runs the tests of the CI scripts, and `task ci-fit` fits and forecasts one config as a candidate does.
 
-## What a submission pull request looks like
+## Pull request
 
 The pull request goes from `seabbs-bot/BDBV-Modeling-Hub`, branch `<model_id>-<reference_date>`, into the hub's `main`.
 It adds `model-output/<model_id>/<reference_date>-<model_id>.csv` and, the first time, `model-metadata/<model_id>.yml`.

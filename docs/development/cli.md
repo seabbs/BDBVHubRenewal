@@ -25,7 +25,7 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 
 `--version` prints the package version.
 
-## Writing and checking a hub file
+## Hub files
 
 `bdbv-hub-renewal nowcast` writes `model-output/<model_id>/<reference_date>-<model_id>.csv` under `output/submission/`.
 The model id is `epiforecasts-<model>`.

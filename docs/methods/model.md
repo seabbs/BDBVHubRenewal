@@ -141,7 +141,7 @@ $$
 
 This is right truncation by vintage.
 
-### Modelling the hub's imputation
+### Hub imputation
 
 The hub's imputed counts are a deterministic function of latent quantities, plus the noise of its draws.
 It gives each case reported without an onset an onset by subtracting a delay drawn from "the full delay distribution as available from the data on the site", from a defined vintage ([hub issue 61](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/61)).
@@ -184,7 +184,7 @@ It is the final known plus final imputed counts, drawn from the two negative bin
 In provinces with no cases, importations are drawn and, from the cut-off, seed local spread at the national $R(t)$.
 The national trajectory is the sum of the province trajectories.
 
-### What the data identify
+### Identifiability
 
 | Quantity | Informed by | Identified? |
 |---|---|---|
@@ -198,7 +198,7 @@ The national trajectory is the sum of the province trajectories.
 | $\varepsilon$ | Timing of spread between provinces, against the seeds | Weakly; Beta prior |
 | $\kappa$ | Zeros in provinces with no cases | Bounded above only; it does not affect provinces with cases |
 
-### Sparse settings
+### Sparse data
 
 Provinces with a handful of cases borrow strength through the pooled walks of $\delta_p$ and $\eta_p$, and share the delay and ascertainment.
 Recent weeks lean on the random walk priors.
@@ -206,13 +206,11 @@ Provinces with no cases get the importation-only component, so their forecasts a
 
 ## Variants
 
-### What the backtest decides
+### Model choice
 
-Each candidate is a registered model variant.
-The development backtest compares them by relative WIS and log WIS against persistence, by horizon and province, on real and reconstructed vintages.
-It chooses the strength of spatial coupling, the form of pooling, the smoothness priors, the delay family, the depletion settings and the variant to submit.
-The choice is logged with its date in `results/model-choice.yml`.
-Every later vintage is then held out (see [Evaluation](evaluation.md#rolling-held-out-evaluation)).
+The variant to submit is chosen on the development backtest, by WIS and log WIS relative to persistence, by horizon and province.
+The choice and its date are logged in `results/model-choice.yml`.
+Every later vintage is held out (see [Evaluation](evaluation.md#rolling-held-out-evaluation)).
 
 ### Renewal variants
 
@@ -275,4 +273,4 @@ The national value is the sum of the province samples, sample by sample.
 Two things follow.
 The median of $\lambda_p$ stays at $Y_{p,v}(c)$, so it has no growth.
 And weeks up to $c$ are point masses at counts that are still revised upwards after the vintage.
-So persistence underpredicts while the epidemic grows and recent weeks fill in (see [Backtest](../backtest.md#persistence-underpredicts)).
+So persistence underpredicts while the epidemic grows and recent weeks fill in (see [Backtest](../backtest.md#persistence-bias)).

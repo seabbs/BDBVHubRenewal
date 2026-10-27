@@ -103,7 +103,7 @@ Config (T L207–221):
   Non-integer values pass (tested, `valid_noninteger_values`).
 - No duplicate `(task ids, output_type, output_type_id)` rows (`rows_unique`).
 
-### How hubValidations reads sample indices (tested)
+### Sample indices in hubValidations (tested)
 
 The README says ids may be reused across locations (`1` to `100` in each) or unique across the file (MO L138).
 hubValidations 3.0.0 treats all rows sharing an `output_type_id` as one sample and infers the compound task id set from the data.

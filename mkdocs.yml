@@ -32,7 +32,7 @@ nav:
   - Held-out evaluation: heldout.md
   - Nowcast: nowcast.md
   - Submission:
-      - How submissions work: submission/workflow.md
+      - Workflow: submission/workflow.md
       - Hub specification: submission/hub-spec.md
       - Setup: submission/setup.md
       - Rounds: submission/rounds/index.md

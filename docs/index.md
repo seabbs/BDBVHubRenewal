@@ -20,13 +20,13 @@ National forecasts are the sum of the province trajectories.
 | `hubrenewalbvd` | The spatial model informed by the latest posterior estimates of the [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model. |
 | `persistence` | The baseline: the last complete week carried forward. |
 
-## What the repository does
+## Contents
 
 - Downloads and tidies every data stream the hub publishes, with every vintage, and builds reconstructed and simulated vintages for testing ([Data](methods/data.md)).
 - Scores every model against persistence on past vintages, then on every vintage after the model choice as a rolling held-out evaluation, re-scored as later data arrive ([Evaluation](methods/evaluation.md), [Backtest](backtest.md), [Held-out evaluation](heldout.md)).
 - Checks how well each province is predicted from the others by leaving one province out.
 - Writes and checks the hub's submission files and model metadata.
-- Submits each week through a gated workflow ([How submissions work](submission/workflow.md)).
+- Submits each week through a gated workflow ([Submission workflow](submission/workflow.md)).
   It fits the main model, refits it once if it has not converged, and falls back to a simpler variant and then to persistence.
   Each candidate is checked for convergence, posterior predictive fit and file validity, and the result is opened as a pull request.
 - Publishes the latest nowcast and forecast ([Nowcast](nowcast.md)).
@@ -41,7 +41,7 @@ National forecasts are the sum of the province trajectories.
 | [Backtest](backtest.md) | Development scores against later data. |
 | [Held-out evaluation](heldout.md) | Forecasts after the model choice, scored as later data arrive. |
 | [Nowcast](nowcast.md) | The current nowcast and forecast from the latest vintage. |
-| Submission | [How submissions work](submission/workflow.md), the [hub specification](submission/hub-spec.md), [Setup](submission/setup.md) and the [submitted rounds](submission/rounds/index.md). |
+| Submission | The [workflow](submission/workflow.md), the [hub specification](submission/hub-spec.md), [Setup](submission/setup.md) and the [submitted rounds](submission/rounds/index.md). |
 | Development | [Adding a model](development/adding-a-model.md) and the [CLI](development/cli.md). |
 | [API reference](reference.md) | The Python package. |
 

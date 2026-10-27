@@ -34,13 +34,13 @@ National forecasts are the sum of the province trajectories.
 | `hubrenewalbvd` | The spatial model informed by the latest posterior estimates of the [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model. |
 | `persistence` | The baseline: the last complete week carried forward. |
 
-## What the repository does
+## Contents
 
 - Downloads and tidies every data stream the hub publishes, with every vintage, and builds reconstructed and simulated vintages for testing ([Data](https://seabbs.github.io/BDBVHubRenewal/methods/data/)).
 - Scores every model against persistence on past vintages, then on every vintage after the model choice as a rolling held-out evaluation, re-scored as later data arrive ([Evaluation](https://seabbs.github.io/BDBVHubRenewal/methods/evaluation/), [Backtest](https://seabbs.github.io/BDBVHubRenewal/backtest/), [Held-out evaluation](https://seabbs.github.io/BDBVHubRenewal/heldout/)).
 - Checks how well each province is predicted from the others by leaving one province out.
 - Writes and checks the hub's submission files and model metadata.
-- Submits each week through a gated workflow ([How submissions work](https://seabbs.github.io/BDBVHubRenewal/submission/workflow/)).
+- Submits each week through a gated workflow ([Submission workflow](https://seabbs.github.io/BDBVHubRenewal/submission/workflow/)).
   It fits the main model, refits it once if it has not converged, and falls back to a simpler variant and then to persistence.
   Each candidate is checked for convergence, posterior predictive fit and file validity, and the result is opened as a pull request.
 - Publishes the latest nowcast and forecast ([Nowcast](https://seabbs.github.io/BDBVHubRenewal/nowcast/)).

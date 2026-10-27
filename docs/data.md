@@ -1,6 +1,6 @@
 # Data
 
-What the hub data show, with all their vintages.
+The hub data, with all their vintages.
 { .page-subtitle }
 
 How they are extracted and the synthetic vintages are on the [Data methods page](methods/data.md).
@@ -12,7 +12,7 @@ How they are extracted and the synthetic vintages are on the [Data methods page]
 The 2026-08-18 vintage has no delay data.
 The 2026-10-09 delay file exists only in the hub's git history.
 
-## National against the provinces
+## National coherence
 
 The national (`CD`) row should equal the sum of the provinces.
 `bdbv-hub-renewal data` checks this for every vintage, week and stream (observed, imputed and total), writes `data/national-coherence.csv` and prints the result for the latest vintage.
@@ -42,7 +42,7 @@ The current models have none.
 The total is the target.
 Each vintage is a partial view of it.
 
-## How recent weeks fill in
+## Revisions of recent weeks
 
 <figure class="doc-figure" markdown="span">
   ![Share of the latest national count reported in each earlier vintage, by weeks before the vintage.](figures/revisions.svg#only-light)
@@ -116,7 +116,7 @@ It is well identified.
 
 **How it informs the model.**
 The delay data estimate a delay that changes over time, pooled over provinces.
-They also give the hub's own back-sampling distribution $\hat g_v$ at each vintage (see [Modelling the hub's imputation](methods/model.md#modelling-the-hubs-imputation)).
+They also give the hub's own back-sampling distribution $\hat g_v$ at each vintage (see [Hub imputation](methods/model.md#hub-imputation)).
 A few delays are negative (down to −31 days) and a few are very long (up to 193 days).
 
 ## Reconstructed vintages

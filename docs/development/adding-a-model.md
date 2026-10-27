@@ -1,6 +1,6 @@
 # Adding a model
 
-How to add a model to the registry, so every evaluation picks it up.
+Adding a model to the registry, so every evaluation includes it.
 { .page-subtitle }
 
 A model is a class with a `name` and a `forecast(task)` method.

@@ -1,10 +1,10 @@
 # Setup
 
-What Sam needs to do before the first live run.
+Steps before the first live run.
 { .page-subtitle }
 
 This is the checklist from `ci/SETUP.md`.
-[How submissions work](workflow.md) explains each part.
+The [Workflow](workflow.md) page explains each part.
 
 - [ ] As `seabbs-bot`, fork the hub once: `gh repo fork InsightNet-US/BDBV-Modeling-Hub --clone=false`.
 - [ ] In the fork's Settings → Actions → General, disable Actions.
@@ -20,5 +20,6 @@ This is the checklist from `ci/SETUP.md`.
 - [ ] Set the repository variable `DRY_RUN` to `false`. Set it back to `true`, or disable the workflow, to pause.
 
 Scheduled workflows in a public repository stop after 60 days without activity, so commit to `main` now and then.
-GitHub-hosted runners cap a job at 6 hours; the fit jobs time out at 350 minutes.
+GitHub-hosted runners cap a job at 6 hours.
+The fit jobs time out at 350 minutes.
 `ci/SETUP.md` covers runtimes, larger runners and where each part of the approach comes from (BVDOutbreakSize, cityforecasts and ecdc-weekly-growth-forecasts).
