@@ -18,7 +18,7 @@ from bdbv_hub_renewal.heldout import (
 
 CHOICES = (
     ModelChoice(date="2026-10-10", model="persistence"),
-    ModelChoice(date="2026-10-20", model="renewal"),
+    ModelChoice(date="2026-10-20", model="hubrenewal"),
 )
 
 

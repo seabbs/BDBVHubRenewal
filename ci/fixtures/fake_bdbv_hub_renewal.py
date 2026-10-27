@@ -127,7 +127,7 @@ def fake_ppc(as_of: str, sc: str, config: str) -> dict:
     return {
         "schema_version": 1,
         "available": True,
-        "model": "renewal",
+        "model": "hubrenewal",
         "config": config,
         "intervals": [0.5, 0.9],
         "rows": rows,
@@ -184,7 +184,7 @@ def cmd_fit(args: argparse.Namespace) -> int:
     ]
     diag = {
         "schema_version": 1,
-        "model": "renewal",
+        "model": "hubrenewal",
         "config": args.config,
         "sampler": "nuts",
         "num_chains": chains,

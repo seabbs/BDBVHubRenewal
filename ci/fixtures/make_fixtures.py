@@ -136,7 +136,7 @@ def previous() -> None:
             str(HERE / "fake_bdbv_hub_renewal.py"),
             "nowcast",
             "--model",
-            "renewal",
+            "hubrenewal",
             "--vintage",
             "2026-10-24",
             "--out",
@@ -190,6 +190,6 @@ if __name__ == "__main__":
         )
         + "\n"
     )
-    (HUB / "epiforecasts-renewal.yml").write_text(
-        "team_abbr: epiforecasts\nmodel_abbr: renewal\n"
+    (HUB / "epiforecasts-hubrenewal.yml").write_text(
+        "team_abbr: epiforecasts\nmodel_abbr: hubrenewal\n"
     )

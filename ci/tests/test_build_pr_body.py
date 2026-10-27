@@ -70,7 +70,7 @@ def gate(
             "warnings": warnings or [],
             "attempts": [{"id": "main", "validation": "pass"}],
             "run": {
-                "model": "renewal",
+                "model": "hubrenewal",
                 "config": "main",
                 "package_version": "0.2.0",
             },
@@ -86,7 +86,7 @@ def body(g: Path, **kw: Any) -> str:
         "provenance": read_json(g / "provenance.json"),
         "selected_dir": g / "selected",
         "reference_date": REF,
-        "model_id": "epiforecasts-renewal",
+        "model_id": "epiforecasts-hubrenewal",
         "hub_ref": "a" * 40,
         "data_commit": "b" * 40,
         "as_of": "2026-10-31",
@@ -116,11 +116,11 @@ def test_body_has_required_parts(
     monkeypatch.setenv("GITHUB_REPOSITORY", "seabbs/x")
     monkeypatch.setenv("GITHUB_RUN_ID", "42")
     text = body(gate(tmp_path))
-    assert text.startswith(marker("epiforecasts-renewal", REF))
+    assert text.startswith(marker("epiforecasts-hubrenewal", REF))
     shown = visible(text)
     assert len(shown) <= 6, shown
     assert shown[0] == (
-        f"Automated submission of `epiforecasts-renewal` for {REF}, from "
+        f"Automated submission of `epiforecasts-hubrenewal` for {REF}, from "
         "data as of 2026-10-31, for 4 locations."
     )
     assert shown[1] == "All checks passed."
@@ -129,7 +129,7 @@ def test_body_has_required_parts(
     assert shown[-1] == FOOTER
     assert "| Convergence | PASS (max R-hat 1.004" in text
     assert "| Hub validation | PASS |" in text
-    assert "renewal (`main`), version 0.2.0" in text
+    assert "hubrenewal (`main`), version 0.2.0" in text
     assert "bbbbbbbbbb" in text and "actions/runs/42" in text
     assert "<summary>National summary</summary>" in text
     assert "<summary>Provenance</summary>" in text

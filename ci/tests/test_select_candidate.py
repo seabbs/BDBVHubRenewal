@@ -71,7 +71,7 @@ def candidate(
             ],
         },
     )
-    write_json(d / "run.json", {"model": "renewal", "config": cid})
+    write_json(d / "run.json", {"model": "hubrenewal", "config": cid})
     if submission:
         write_samples(
             d / "submission" / "model-output" / "m" / "f.csv", make_samples()
@@ -337,7 +337,8 @@ def test_stand_in_is_named(tmp_path: Path) -> None:
     root = tmp_path / "candidates"
     chain(root, main=("skip", "pass"))
     write_json(
-        root / "main" / "run.json", {"model": "renewal", "stand_in": STAND_IN}
+        root / "main" / "run.json",
+        {"model": "hubrenewal", "stand_in": STAND_IN},
     )
     prov = run_select(POLICY, root, tmp_path / "gate", None, retried=False)
     assert prov["stand_in"] == STAND_IN

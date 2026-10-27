@@ -17,7 +17,7 @@ from submission_ci.open_or_update_pr import (
     submit,
 )
 
-MID = "epiforecasts-renewal"
+MID = "epiforecasts-hubrenewal"
 MONDAY = dt.datetime(2026, 11, 2, 10, tzinfo=dt.UTC)
 FRIDAY = dt.datetime(2026, 11, 6, 10, tzinfo=dt.UTC)
 

@@ -57,7 +57,8 @@ env:
   # Persistence until the PyRenew renewal model is integrated. The main
   # and fallback fit configs are persistence stand-ins until then, so
   # submissions go in as epiforecasts-persistence. Set HUB_MODEL to
-  # `renewal` once that model and its metadata exist.
+  # `hubrenewal` (hub id epiforecasts-hubrenewal) once that model and its
+  # metadata exist.
   MODEL: ${{ vars.HUB_MODEL || 'persistence' }}
   MODEL_ID: ${{ vars.HUB_MODEL_ID || format('epiforecasts-{0}', vars.HUB_MODEL || 'persistence') }}
   # Every bdbv-hub-renewal command reads the tidy data the prepare job

@@ -17,7 +17,7 @@ FIX="$CI_DIR/fixtures"
 ROOT="${TMPDIR:-/tmp}/submission-ci-dry"
 export UV_CACHE_DIR=${UV_CACHE_DIR:-${TMPDIR:-/tmp}/uvcache}
 export FORECAST_CLI="python3 $FIX/fake_bdbv_hub_renewal.py"
-export MODEL=renewal MODEL_ID=epiforecasts-renewal
+export MODEL=hubrenewal MODEL_ID=epiforecasts-hubrenewal
 export HEARTBEAT_SECONDS=1
 # Monday 2 November 2026, 10:00 UTC: inside the window for 2026-11-07.
 NOW=${NOW:-2026-11-02T10:00:00+00:00}

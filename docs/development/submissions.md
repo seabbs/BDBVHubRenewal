@@ -62,7 +62,7 @@ Each [`FitConfig`][bdbv_hub_renewal.fitting.FitConfig] has two functions.
 - `forecast(task, fit_dir)` returns a [`Forecast`][bdbv_hub_renewal.fitting.Forecast]: province samples numbered 1 to 100, each one joint posterior draw across weeks and provinces, and optionally an `unassigned` national component by week and sample.
 
 `nowcast` then writes the hub file with [`to_hub_table`][bdbv_hub_renewal.hub.to_hub_table], which makes the national value the exact sum of the province samples plus the unassigned component, and writes `national.json` beside it with the modelled provinces and that component.
-Set the repository variable `HUB_MODEL` to `renewal` once its metadata text is in `bdbv_hub_renewal.cli.MODEL_METADATA`.
+Set the repository variable `HUB_MODEL` to `hubrenewal`, which submits as `epiforecasts-hubrenewal`, once its metadata text is in `bdbv_hub_renewal.cli.MODEL_METADATA`.
 
 ## The fallback chain
 
@@ -200,7 +200,7 @@ What Sam needs to do before the first live run (from `ci/SETUP.md`).
 - [ ] Create a **classic** personal access token on `seabbs-bot` with the scopes `public_repo` and `workflow`, with an expiry (for example 90 days), and put a renewal reminder in the calendar.
 - [ ] In this repository, Settings → Environments → New environment `hub-submission`: deployment branches **Selected branches**, `main` only; no required reviewers; environment secret `HUB_SUBMIT_TOKEN` set to the token.
 - [ ] Settings → Actions → General → Workflow permissions: **Read repository contents**. If a ruleset covers all branches, exclude `submission-ledger`.
-- [ ] Optionally set repository variables: `HUB_MODEL` (default `persistence`, set `renewal` once the model and its metadata exist), `HUB_MODEL_ID`, `HUB_FORK`, `EXPECTED_LOCATIONS` (for example `CD,CD-IT,CD-NK,CD-HU,CD-TO`), `HUB_VALIDATIONS`, `FIT_RUNNER`, and the `BDBV_CONVERGENCE_*` and `BDBV_PPC_*` overrides.
+- [ ] Optionally set repository variables: `HUB_MODEL` (default `persistence`, set `hubrenewal` once the model and its metadata exist), `HUB_MODEL_ID`, `HUB_FORK`, `EXPECTED_LOCATIONS` (for example `CD,CD-IT,CD-NK,CD-HU,CD-TO`), `HUB_VALIDATIONS`, `FIT_RUNNER`, and the `BDBV_CONVERGENCE_*` and `BDBV_PPC_*` overrides.
 - [ ] Make the last edit to the `cron` lines in `submit.yml` yourself (`/commit --as-me`), so GitHub sends scheduled-run failures to you, not the bot. Set Settings → Notifications → Actions to "Notify me on failed workflows only".
 - [ ] Ask the hub organisers (Justin Lessler or Claire Smith) to approve the first run of the hub's validation workflow on the bot's pull request, and say weekly bot pull requests will follow.
 - [ ] Run a dry run from the Actions tab and read the body in the `submit` job summary.
