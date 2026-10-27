@@ -102,8 +102,9 @@ class FitConfig:
         `forecast(task, fit_dir) -> Forecast`.
     stand_in : str or None
         If set, this configuration stands in for one not built yet, and
-        the text says so. It is recorded in `fit.json` and in the
-        diagnostics, and printed by the CLI.
+        the text says so, as a fragment that reads after "Stand-in:".
+        It is recorded in `fit.json` and in the diagnostics, and printed
+        by the CLI.
     """
 
     name: str
@@ -426,8 +427,8 @@ for _name in ("main", "fallback"):
         persistence_config(
             _name,
             stand_in=(
-                f"Stand-in: the `{_name}` config runs the persistence "
-                "baseline until the PyRenew renewal model is integrated."
+                f"the `{_name}` config runs the persistence baseline until "
+                "the PyRenew renewal model is integrated"
             ),
         )
     )

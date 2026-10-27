@@ -11,6 +11,7 @@ Commands:
 - `fit`: fit a configuration and write the fit directory and its
   `diagnostics.json`, for the submission CI.
 - `plot-submission`: plot a submitted hub file.
+- `plot-ppc`: plot a fit's posterior predictive checks (`ppc.json`).
 - `coherence`: compare the national data with the sum of the provinces.
 - `validate`: run the hub's checks on files (`hub_validate`).
 - `metadata`: write and check a model's metadata YAML.
@@ -165,6 +166,13 @@ def build_parser() -> argparse.ArgumentParser:
     plot.add_argument("--data", default=data_dir)
     plot.add_argument("--out", required=True)
 
+    ppc = sub.add_parser(
+        "plot-ppc", help="Plot a fit's posterior predictive checks."
+    )
+    ppc.add_argument("--ppc", required=True, help="A ppc.json file.")
+    ppc.add_argument("--out", required=True)
+    ppc.add_argument("--stream", default="total")
+
     coh = sub.add_parser(
         "coherence",
         help="Compare the national data with the sum of the provinces.",
@@ -248,7 +256,7 @@ def _fit(args: argparse.Namespace) -> int:
         print(f"ERROR: {err}", file=sys.stderr)
         return 1
     if config.stand_in:
-        print(config.stand_in)
+        print(f"Stand-in: {config.stand_in}.")
     diag = result.diagnostics
     print(
         f"Fitted config {config.name!r} on vintage {task.vintage} "
@@ -308,7 +316,7 @@ def _nowcast(args: argparse.Namespace) -> int:
         if args.config:
             config = get_config(args.config)
             if config.stand_in:
-                print(config.stand_in)
+                print(f"Stand-in: {config.stand_in}.")
             result = run_forecast(config, task, args.fit)
         else:
             samples = get_model(args.model).forecast(task)
@@ -373,6 +381,24 @@ def _plot_submission(args: argparse.Namespace) -> int:
     real = target.loc[target["kind"] == "real"]
     vintage = _vintage([str(v) for v in real["vintage"].unique()], args.vintage)
     fig = plot_submission(args.submission, vintage, target=target)
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=100)
+    print(f"Wrote {out}.")
+    return 0
+
+
+def _plot_ppc(args: argparse.Namespace) -> int:
+    from .ppc import plot_ppc, read_ppc
+
+    ppc = read_ppc(args.ppc)
+    if not ppc.get("available"):
+        print(
+            f"No posterior predictive checks to plot: {ppc.get('reason')}.",
+            file=sys.stderr,
+        )
+        return 1
+    fig = plot_ppc(ppc, stream=args.stream)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=100)
@@ -472,6 +498,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _plot_submission(args)
     if args.command == "coherence":
         return _coherence(args)
+    if args.command == "plot-ppc":
+        return _plot_ppc(args)
     if args.command == "backtest":
         return _backtest(args)
     if args.command == "nowcast":

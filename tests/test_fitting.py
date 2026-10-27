@@ -63,7 +63,7 @@ def test_fit_then_nowcast_from_the_fit(tmp_path: Path) -> None:
     assert diag["sampler"] == "none"
     assert diag["status"] == "not-applicable"
     assert diag["config"] == "main"
-    assert "Stand-in" in diag["stand_in"]
+    assert diag["stand_in"].startswith("the `main` config runs the persistence")
     assert json.loads((fit / "ppc.json").read_text())["available"] is False
     assert json.loads((fit / "fit.json").read_text())["sampler"]["seed"] == 1
     assert (fit / "progress.log").read_text()
@@ -168,3 +168,33 @@ def test_cli_coherence(
     assert main(["coherence", "--out", str(out)]) == 0
     assert json.loads(out.read_text())["coherent"] is True
     assert "equal the sum" in capsys.readouterr().out
+
+
+def test_cli_plot_ppc(tmp_path: Path) -> None:
+    import numpy as np
+
+    from bdbv_forecasts.ppc import not_available, summarise_draws, write_ppc
+
+    weeks = pd.date_range("2026-08-01", periods=10, freq="7D").strftime(
+        "%Y-%m-%d"
+    )
+    obs = pd.DataFrame(
+        {
+            "location": "CD-IT",
+            "stream": "total",
+            "target_end_date": weeks,
+            "observed": np.arange(10) + 5,
+        }
+    )
+    draws = np.random.default_rng(1).poisson(obs["observed"], (200, 10))
+    ppc = write_ppc(
+        summarise_draws(obs, draws, as_of="2026-10-24"), tmp_path / "p.json"
+    )
+    png = tmp_path / "ppc.png"
+    assert main(["plot-ppc", "--ppc", str(ppc), "--out", str(png)]) == 0
+    assert 0 < png.stat().st_size < 1_000_000
+    na = write_ppc(
+        not_available("no posterior", model="persistence", config="main"),
+        tmp_path / "na.json",
+    )
+    assert main(["plot-ppc", "--ppc", str(na), "--out", str(png)]) == 1
