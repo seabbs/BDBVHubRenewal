@@ -97,7 +97,6 @@ def settings(tmp_path: Path) -> Settings:
         repo=REPO,
         hub=HUB,
         fork_default=FORK,
-        model_default="renewal",
         model_id_default=MID,
         metadata_dir=meta,
         model_choice=choice,
@@ -283,7 +282,14 @@ def test_metadata_abbr_too_long_is_missing(settings: Settings) -> None:
     assert "16" in check.detail
 
 
-def test_model_choice_mismatch_warns(settings: Settings) -> None:
+def test_chosen_model_is_ok(settings: Settings) -> None:
+    check = {c.name: c for c in run_checks(ready_runner(), settings)}[
+        "model choice"
+    ]
+    assert check.detail == "submits `renewal`, as last chosen"
+
+
+def test_persistence_chosen_warns(settings: Settings) -> None:
     settings.model_choice.write_text(
         "choices:\n  - date: 2026-10-10\n    model: persistence\n"
     )
@@ -341,7 +347,11 @@ def test_main_exits_1_on_gaps(
 ) -> None:
     runner = ready_runner(**{f"repos/{FORK}": None})
     monkeypatch.setattr("submission_ci.preflight.subprocess_runner", runner)
+    hub_toml = settings.metadata_dir / "hub.toml"
+    hub_toml.write_text('[submission]\nmodel_abbr = "seabbsrenewal"\n')
     args = [
+        "--hub-config",
+        str(hub_toml),
         "--repo",
         REPO,
         "--metadata-dir",

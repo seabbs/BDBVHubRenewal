@@ -12,7 +12,8 @@ the bot's first pull request. `render` lists them at the end.
 
 The model and hub id follow the same rule as `submit.yml`: the
 repository variables `HUB_MODEL` and `HUB_MODEL_ID` when set, otherwise
-the workflow's defaults.
+the latest entry of `results/model-choice.yml` and the id from
+`config/hub.toml`.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ import datetime as dt
 import json
 import re
 import sys
+import tomllib
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,6 +40,8 @@ TOKEN_WARN_DAYS = 80
 # The schema allows 16 characters; the hub READMEs ask for fewer than 16.
 ABBR = re.compile(r"^[a-zA-Z0-9_+]{1,15}$")
 BOT = "seabbs-bot"
+TEAM = "epiforecasts"
+ABBR_DEFAULT = "seabbsrenewal"
 
 LABEL = {
     "ok": "OK",
@@ -71,7 +75,6 @@ class Settings:
     repo: str
     hub: str
     fork_default: str
-    model_default: str
     model_id_default: str
     metadata_dir: Path
     model_choice: Path
@@ -424,8 +427,8 @@ def latest_choice(path: Path) -> str | None:
     return max(entries)[1] if entries else None
 
 
-def check_model_choice(path: Path, model: str) -> Check:
-    """The model the workflow submits is the one last chosen."""
+def check_model_choice(path: Path, override: str = "") -> Check:
+    """The model the workflow submits: the latest choice unless overridden."""
     chosen = latest_choice(path)
     if chosen is None:
         return Check(
@@ -435,15 +438,27 @@ def check_model_choice(path: Path, model: str) -> Check:
             "Commit the choice to results/model-choice.yml before held-out "
             "scoring.",
         )
-    if chosen == model:
-        return Check("model choice", "ok", f"`{model}`, as last chosen")
-    return Check(
-        "model choice",
-        "warn",
-        f"the workflow submits `{model}` but {path.name} last chose `{chosen}`",
+    fix = (
         "Review the held-out results, then add a dated entry to "
-        "results/model-choice.yml, or set HUB_MODEL to the chosen model.",
+        "results/model-choice.yml."
     )
+    if override and override != chosen:
+        return Check(
+            "model choice",
+            "warn",
+            f"HUB_MODEL submits `{override}` but {path.name} last chose "
+            f"`{chosen}`",
+            f"Delete the repository variable HUB_MODEL, or {fix[0].lower()}"
+            f"{fix[1:]}",
+        )
+    if chosen == "persistence":
+        return Check(
+            "model choice",
+            "warn",
+            f"submits `persistence`, the latest entry of {path.name}",
+            fix,
+        )
+    return Check("model choice", "ok", f"submits `{chosen}`, as last chosen")
 
 
 def check_registered(runner: Runner, hub: str, model_id: str) -> Check:
@@ -498,12 +513,20 @@ def check_cron_owner(runner: Runner, workflow_file: Path) -> Check:
     return Check("cron owner", "ok", f"{name} gets scheduled-run failures")
 
 
+def hub_model_id(path: Path) -> str:
+    """`<team>-<model_abbr>` from `config/hub.toml`, as the CLI's `hub-id`."""
+    if not path.exists():
+        return f"{TEAM}-{ABBR_DEFAULT}"
+    with path.open("rb") as fh:
+        abbr = tomllib.load(fh)["submission"]["model_abbr"]
+    return f"{TEAM}-{abbr}"
+
+
 def run_checks(runner: Runner, s: Settings) -> list[Check]:
     """Every check, in the order of the setup checklist."""
     checks = [check_gh(runner), check_hub(runner, s.hub)]
     values, mode = read_variables(runner, s.repo)
     fork = values.get("HUB_FORK") or s.fork_default
-    model = values.get("HUB_MODEL") or s.model_default
     model_id = values.get("HUB_MODEL_ID") or s.model_id_default
     checks += check_fork(runner, fork, s.hub)
     checks.append(check_environment(runner, s.repo))
@@ -514,7 +537,9 @@ def run_checks(runner: Runner, s: Settings) -> list[Check]:
     checks.append(check_locations(values))
     checks.append(check_metadata(s.metadata_dir, model_id))
     checks.append(check_registered(runner, s.hub, model_id))
-    checks.append(check_model_choice(s.model_choice, model))
+    checks.append(
+        check_model_choice(s.model_choice, values.get("HUB_MODEL", ""))
+    )
     checks.append(mode)
     return checks
 
@@ -546,8 +571,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--repo", default="seabbs/BDBVHubRenewal")
     p.add_argument("--hub", default="InsightNet-US/BDBV-Modeling-Hub")
     p.add_argument("--fork", default="seabbs-bot/BDBV-Modeling-Hub")
-    p.add_argument("--model", default="renewal")
-    p.add_argument("--model-id", default="epiforecasts-seabbsrenewal")
+    p.add_argument(
+        "--hub-config",
+        type=Path,
+        default=Path("config/hub.toml"),
+        help="Where the hub id is set ([submission] model_abbr).",
+    )
     p.add_argument(
         "--metadata-dir", type=Path, default=Path("hub/model-metadata")
     )
@@ -570,8 +599,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         repo=args.repo,
         hub=args.hub,
         fork_default=args.fork,
-        model_default=args.model,
-        model_id_default=args.model_id,
+        model_id_default=hub_model_id(args.hub_config),
         metadata_dir=args.metadata_dir,
         model_choice=args.model_choice,
         workflow_file=args.workflow_file,
