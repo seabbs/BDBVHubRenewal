@@ -698,7 +698,8 @@ class RenewalModel:
     progress : pathlib.Path or None
         File to append progress lines to.
     supports_mask : bool
-        The model honours `ForecastTask.mask`.
+        The model honours `ForecastTask.mask`. A single-patch variant fits
+        the national sum, so it cannot.
     name : str
         The variant name.
     """
@@ -706,12 +707,13 @@ class RenewalModel:
     variant: Variant
     sampler: dict[str, Any] = field(default_factory=sampler_settings)
     progress: Path | None = None
-    supports_mask: bool = True
+    supports_mask: bool = field(init=False)
     name: str = field(init=False)
 
     def __post_init__(self) -> None:
-        """Name the model after its variant."""
+        """Name the model after its variant and say if it takes a mask."""
         self.name = self.variant.name
+        self.supports_mask = not self.variant.overrides.get("national", False)
 
     def _log(self, line: str) -> None:
         if self.progress is not None:
