@@ -142,6 +142,8 @@ The national truth for the weeks they cover:
 
     --8<-- "scores-by-truth.md"
 
+--8<-- "lopo-section.md"
+
 ## Recovery on simulated vintages
 
 Forecasts from vintages of a [simulated outbreak](methods/data.md#simulated-vintages) with a turning point, scored against the known final counts.

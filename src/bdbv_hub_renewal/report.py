@@ -303,6 +303,25 @@ def _persistence_bias(scores: pd.DataFrame) -> str:
     )
 
 
+def _lopo_section(path: Path) -> str:
+    """Return the leave-one-province-out section, or nothing without results."""
+    if not path.exists() or path.stat().st_size <= 1:
+        return ""
+    scores = pd.read_csv(path)
+    if scores.empty:
+        return ""
+    table = summarise_scores(scores, by=("model", "masked"))
+    cols = ["n", "wis", "log_wis", "coverage_50", "coverage_90", "bias"]
+    return (
+        "## Leave one province out\n\n"
+        "Each province with cases is forecast with its own counts left out "
+        "of the likelihood (see "
+        "[Evaluation](methods/evaluation.md#leave-one-province-out)).\n"
+        "The scores are for the left-out province only, against the latest "
+        "real vintage.\n\n" + _table(table[["model", "masked", *cols]])
+    )
+
+
 def _relative_section(scores: pd.DataFrame) -> str:
     if scores["model"].nunique() < 2:
         return (
@@ -439,6 +458,7 @@ def _backtest_page(
                     ),
                     fig / f"forecasts-{kind}-{slug}.svg",
                 )
+    _write(gen / "lopo-section.md", _lopo_section(res / "lopo-scores.csv"))
     rec_path = res / "recovery-scores.csv"
     if rec_path.exists():
         rscores = pd.read_csv(rec_path)
