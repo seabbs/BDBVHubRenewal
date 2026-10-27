@@ -27,8 +27,8 @@ nav:
 theme:
   name: material
   language: en
+  logo: assets/logo-mark.svg
   icon:
-    logo: material/chart-bell-curve-cumulative
     repo: fontawesome/brands/github
     edit: material/pencil
   favicon: assets/favicon.svg

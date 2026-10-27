@@ -15,6 +15,15 @@
   color: var(--md-default-fg-color--light);
 }
 
+/* Wordmark as the home page H1. */
+.md-typeset h1 .title-logo {
+  display: inline-block;
+  height: 44px;
+  width: auto;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
 /* Figures: full width, with a muted caption. */
 .md-typeset figure.doc-figure {
   margin: 1.5em 0;
