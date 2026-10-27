@@ -88,3 +88,14 @@ A simulator generates province outbreaks from the renewal model's own structure 
 It then publishes vintages as the hub does: known onsets by onset week, missing onsets given an onset by a delay drawn from the known delays reported so far, their total, and the delay line data.
 The truth is every confirmed case by its true onset week.
 Recovery checks run on these vintages.
+
+## BVDOutbreakSize estimates
+
+`hubrenewalbvd` also reads the reproduction number estimates of the main [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model.
+They are its public `results-<run>` GitHub releases, one per docs build, under the MIT licence ([Zenodo 10.5281/zenodo.20312758](https://doi.org/10.5281/zenodo.20312758)).
+Each vintage uses the newest release published, with its assets last updated, by the forecast's cut-off and with data ending on or before the vintage.
+`task data-bvd` caches those releases in `data/bvd/`, with the release list, so the backtest needs no network.
+From each release it keeps the national $R_T$ draws (`posterior_draws.csv`), the patch summaries (`province_estimates.csv`), the national row they are relative to (`province_timeseries.csv`) and the data cut-off.
+Patch summaries are published from 23 October, so earlier vintages use the national estimate only.
+See [the variant](model.md#bvdoutbreaksize-informed) for how they enter the model.
+

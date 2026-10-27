@@ -14,6 +14,7 @@ Submissions go to the hub as `epiforecasts-seabbsrenewal`, whichever model produ
 The figure shows the main variant, `hubrenewal`.
 Grey boxes are parameters, blue boxes latent quantities and orange boxes the data with their likelihoods.
 The hub's pooled delay $\hat f$ is taken from the data of each vintage, not estimated.
+The dashed box is the BVDOutbreakSize term, in `hubrenewalbvd` only.
 The source is `docs/diagrams/model_dag.tex`, built by `scripts/build_diagrams.sh`.
 
 ## Components
@@ -249,6 +250,41 @@ $$
 with $c_p$ the province's onsets over the last 4 data weeks and $a = 1/2$, the Jeffreys pseudo-count.
 So a province with no recent onsets keeps a small share, and the provinces sum to the national count in every sample and week.
 The single patch has no province likelihood, so it does not take part in the leave-one-province-out check.
+
+### BVDOutbreakSize-informed
+
+`hubrenewalbvd` adds the latest reproduction number estimates of the main [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model as a tempered pseudo-observation on $R_p$.
+They come from its public `results-<run>` releases (`bdbv_hub_renewal.bvd`).
+A forecast uses the newest release published by the forecast's cut-off whose data end on or before the vintage.
+The cut-off is the end of the Sunday that opens the submission window, in Kinshasa time.
+So a release republished later on old data is never used, and the backtest sees each release as it was published.
+
+Let $a_b$ be the release's data cut-off and $s_b = a_b + 6$ days, since BVDOutbreakSize's Rt is on infection time and ours on onset time (incubation mean about 6 days).
+For a group $G$ of provinces, the nation or one BVDOutbreakSize patch, the model's Rt is onset weighted over the week of $s_b$:
+
+$$
+R_G(s_b) = \frac{\sum_{p \in G} I_p\, R_p(s_b)}{\sum_{p \in G} I_p}.
+$$
+
+The release gives the national log Rt mean $\mu_N$ and SD $\sigma_N$ from its posterior draws.
+Each patch $k$ gives a log median $m_k$ and SD $\sigma_k$ from its 90% interval, against the national row $m_N$, $\sigma_N'$ of the same table.
+With tempering $\alpha = 0.5$,
+
+$$
+\mu_N \sim \mathcal{N}\big(\log R_N(s_b),\, \sigma_N^2/\alpha\big),
+\qquad
+m_k - m_N \sim \mathcal{N}\big(\log R_k(s_b) - \log R_N(s_b),\, \tau_k^2/\alpha\big),
+\qquad
+\tau_k^2 = \max(\sigma_k^2 - \sigma_N'^2,\, 0.05^2).
+$$
+
+This is a power prior on the published summaries, and adds no parameters.
+With $\alpha = 0$ the model is `hubrenewal`.
+Releases before 23 October have no patch estimates, so only the national term enters.
+Early releases publish the growth rate $r$ only, and $R = (1 + r\theta)^k$ with BVDOutbreakSize's Gamma generation interval prior (mean 15.3, SD 9.3 days).
+Leaving a province out drops the national term and that province's patch, since both carry its data.
+BVDOutbreakSize and the hub count the same confirmed cases, so the two Rt estimates are not independent, which is why the term is tempered.
+The variant is fitted weekly as a shadow candidate and is not submitted unless it is chosen.
 
 ### Persistence baseline
 

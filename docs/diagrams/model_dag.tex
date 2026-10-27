@@ -28,6 +28,12 @@
   {\textbf{Generation interval}\\[1pt] $g(\tau)$, Gamma with\\ mean 15 and SD 9 days;\\
    share at risk $\nu$,\\ seeds $c_p$};
 
+% The BVDOutbreakSize term of hubrenewalbvd only.
+\node[joint, dashed, text width=3.6cm] (bvd) at (-4.6,2.4)
+  {BVDOutbreakSize $\hat R$ at $s_b$\\
+   {\footnotesize tempered, hubrenewalbvd only}};
+\draw[jointflow, dashed] (bvd.south) -- (rt.north);
+
 % ---- Infections ----------------------------------------------------------
 \node[latent, text width=12.2cm, inner sep=7pt] (inf) at (-0.3,-3.1)
   {\textbf{Infections per resident in each province} $p$ with cases\\[3pt]
