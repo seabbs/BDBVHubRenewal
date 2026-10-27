@@ -177,6 +177,7 @@ def test_heldout_without_fits_reads_committed_forecasts(
 
     class Slow(Persistence):
         def forecast(self, task):  # type: ignore[no-untyped-def]
+            del task
             raise AssertionError("a fitted model was refitted")
 
     register_model(
