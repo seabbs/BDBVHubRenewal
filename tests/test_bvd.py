@@ -168,3 +168,32 @@ def test_bvd_for_vintage_end_to_end(
     assert rel is not None
     assert rel.tag == "results-3086"
     assert bvd.bvd_for_vintage("2026-10-01", tmp_path, have, download) is None
+
+
+def test_model_rows_use_one_table_for_patch_deviations() -> None:
+    rel = bvd.load_release(FIXTURES / "results-3151")
+    rows = bvd.model_rows(rel)
+    assert list(rows.columns) == [
+        "group",
+        "members",
+        "as_of",
+        "log_mean",
+        "log_sd",
+        "ref_log_mean",
+        "ref_log_sd",
+    ]
+    nat = rows.iloc[0]
+    assert nat["group"] == "national"
+    assert nat["log_mean"] == pytest.approx(rel.national_log_rt.mean())
+    ituri = rows.set_index("group").loc["Ituri"]
+    assert ituri["members"] == "CD-IT"
+    # The reference is the time series' own national row at as_of.
+    assert ituri["ref_log_mean"] == pytest.approx(np.log(1.109))
+    width = np.log(1.459 / 0.78) / (2 * 1.6448536)
+    assert ituri["ref_log_sd"] == pytest.approx(width, rel=1e-6)
+
+
+def test_model_rows_national_only() -> None:
+    rows = bvd.model_rows(bvd.load_release(FIXTURES / "results-3086"))
+    assert list(rows["group"]) == ["national"]
+    assert rows["as_of"].iloc[0] == "2026-10-15"
