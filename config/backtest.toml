@@ -9,24 +9,17 @@ max_horizon = 3
 n_samples = 100
 seed = 20261027
 
-[scoring]
-# Only score weeks at least this many weeks before the epi week of the
-# truth vintage, so the truth has mostly filled in.
-min_truth_age_weeks = 2
-
 [split]
-# Held-out reference dates. Development runs never score these, and the
-# harness refuses to unless `--evaluate-holdout` is passed. The held-out
-# evaluation uses real vintages only.
-# 2026-10-24 is the latest reference date that can be scored at all:
-# its vintage is 2026-10-17 and the truth is the 2026-10-24 vintage.
-heldout_reference_dates = ["2026-10-24"]
-# The model choice record that must exist before a held-out run.
+# The model choice record. It logs the chosen model and every change, with
+# dates. Development runs use vintages up to the latest choice date only.
+# Every real vintage after the first choice date is held out and scored by
+# `--evaluate-holdout` under the model chosen at the time.
+# Every week is scored, against each later real vintage as reported then.
 model_choice = "results/model-choice.yml"
 
 [reconstructed]
-# Saturdays to reconstruct pseudo-vintages for. Any whose reference date
-# is on or after the first held-out date are dropped.
+# Saturdays to reconstruct pseudo-vintages for. Any after the latest model
+# choice date are dropped.
 first_vintage = "2026-06-06"
 last_vintage = "2026-10-10"
 

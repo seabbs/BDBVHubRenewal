@@ -75,7 +75,6 @@ def test_heldout_needs_flag_and_choice(
     target: pd.DataFrame,
     delays: pd.DataFrame,
     config: BacktestConfig,
-    tmp_path: Path,
 ) -> None:
     with pytest.raises(HeldOutError, match="evaluate_holdout"):
         run_heldout(target, delays, config)

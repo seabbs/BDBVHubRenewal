@@ -5,7 +5,8 @@ Each vintage becomes a `ForecastTask`: the data as of that vintage, the
 reference date it serves (`reference_date_for_vintage`) and the weeks
 from `min_horizon` to `max_horizon`.
 Every registered model forecasts every task.
-Forecasts are scored against a later truth.
+Forecasts are scored on every week against a later truth vintage, as
+reported then, and each score records that `truth_vintage`.
 
 There are three kinds of vintage:
 
@@ -15,17 +16,17 @@ There are three kinds of vintage:
 - **simulated**: from a simulated outbreak with known parameters
   (`bdbv_forecasts.simulate`). Truth is the final simulated count.
 
-Reference dates are split into development and held-out sets in
-`config/backtest.toml`.
-Development runs never score held-out dates.
-`run_heldout` refuses to run unless asked explicitly, needs the model
-choice record to exist first, uses real vintages only, and logs the run.
+Vintages are split by the model choice record (`results/model-choice.yml`,
+see `bdbv_forecasts.heldout`).
+Development runs use vintages up to the latest choice date only.
+Every later vintage is held out and scored by `bdbv_forecasts.heldout`.
+`score_by_truth_vintage` re-scores real forecasts against every later real
+vintage, and `truth_changes` shows how much the truth moved meanwhile.
 """
 
 from __future__ import annotations
 
 import datetime as dt
-import hashlib
 import logging
 import tomllib
 from collections.abc import Iterable, Sequence
@@ -49,25 +50,22 @@ from .vintages import reconstruct_delays, reconstruct_vintages
 
 __all__ = [
     "BacktestConfig",
-    "HeldOutError",
     "forecast_locations",
     "forecast_weeks",
     "load_config",
     "make_tasks",
+    "real_vintages",
     "run_development",
     "run_forecasts",
-    "run_heldout",
     "run_recovery",
     "saturdays",
+    "score_by_truth_vintage",
     "score_tasks",
+    "truth_changes",
     "truth_from_vintage",
 ]
 
 log = logging.getLogger(__name__)
-
-
-class HeldOutError(RuntimeError):
-    """Raised when held-out dates would be scored without permission."""
 
 
 @dataclass(frozen=True)
@@ -82,13 +80,11 @@ class BacktestConfig:
         Samples per forecast.
     seed : int
         Random seed shared by all tasks.
-    min_truth_age_weeks : int
-        Only weeks at least this many weeks older than the truth
-        vintage's epi week are scored.
-    heldout_reference_dates : tuple of str
-        Reference dates kept for the held-out evaluation.
+    development_until : str or None
+        The latest model choice date. Vintages after it are held out.
+        None if no model has been chosen, so every vintage is development.
     model_choice : pathlib.Path
-        The model choice record that must exist before a held-out run.
+        The model choice record (`bdbv_forecasts.heldout`).
     reconstructed_dates : tuple of str
         Vintage dates to reconstruct.
     simulated_dates : tuple of str
@@ -99,33 +95,27 @@ class BacktestConfig:
     max_horizon: int = 3
     n_samples: int = 100
     seed: int = 0
-    min_truth_age_weeks: int = 2
-    heldout_reference_dates: tuple[str, ...] = ()
+    development_until: str | None = None
     model_choice: Path = Path("results/model-choice.yml")
     reconstructed_dates: tuple[str, ...] = ()
     simulated_dates: tuple[str, ...] = ()
 
-    @property
-    def first_heldout(self) -> str | None:
-        """The earliest held-out reference date, if any."""
-        return min(self.heldout_reference_dates, default=None)
-
-    def is_heldout(self, reference_date: dt.date | str) -> bool:
-        """Whether a reference date is held out.
+    def is_heldout(self, vintage: dt.date | str) -> bool:
+        """Whether a vintage is held out from development.
 
         Parameters
         ----------
-        reference_date : datetime.date or str
-            The reference date.
+        vintage : datetime.date or str
+            The vintage date.
 
         Returns
         -------
         bool
-            True if it is listed in `heldout_reference_dates`.
+            True if it is after `development_until`.
         """
-        return as_date(reference_date).isoformat() in set(
-            self.heldout_reference_dates
-        )
+        if self.development_until is None:
+            return False
+        return as_date(vintage) > as_date(self.development_until)
 
 
 def saturdays(first: str, last: str) -> tuple[str, ...]:
@@ -149,6 +139,9 @@ def saturdays(first: str, last: str) -> tuple[str, ...]:
 def load_config(path: Path | str = "config/backtest.toml") -> BacktestConfig:
     """Read the backtest settings.
 
+    `development_until` is the latest date in the model choice record, if
+    the record exists.
+
     Parameters
     ----------
     path : pathlib.Path or str
@@ -160,16 +153,20 @@ def load_config(path: Path | str = "config/backtest.toml") -> BacktestConfig:
         The settings.
     """
     raw = tomllib.loads(Path(path).read_text())
-    fc, sc, sp = raw["forecast"], raw["scoring"], raw["split"]
+    fc, sp = raw["forecast"], raw["split"]
     rec, sim = raw.get("reconstructed", {}), raw.get("simulated", {})
+    choice = Path(sp["model_choice"])
+    dates: list[str] = []
+    if choice.exists():
+        record = yaml.safe_load(choice.read_text()) or {}
+        dates = [str(c["date"]) for c in record.get("choices", [])]
     return BacktestConfig(
         min_horizon=int(fc["min_horizon"]),
         max_horizon=int(fc["max_horizon"]),
         n_samples=int(fc["n_samples"]),
         seed=int(fc["seed"]),
-        min_truth_age_weeks=int(sc["min_truth_age_weeks"]),
-        heldout_reference_dates=tuple(sp["heldout_reference_dates"]),
-        model_choice=Path(sp["model_choice"]),
+        development_until=max(dates, default=None),
+        model_choice=choice,
         reconstructed_dates=(
             saturdays(rec["first_vintage"], rec["last_vintage"]) if rec else ()
         ),
@@ -331,15 +328,11 @@ def score_tasks(
     forecasts: pd.DataFrame,
     truth: pd.DataFrame,
     truth_date: str,
-    config: BacktestConfig,
-    *,
-    allow_heldout: bool = False,
 ) -> pd.DataFrame:
-    """Score forecasts on weeks the truth has had time to fill in.
+    """Score forecasts on every week against one truth vintage.
 
-    Forecasts made at or after `truth_date` are dropped, as are weeks
-    less than `min_truth_age_weeks` before the truth's epi week.
-    Held-out reference dates are dropped unless `allow_heldout` is True.
+    Forecasts made at or after `truth_date` are dropped.
+    Every week the truth covers is scored, as reported at `truth_date`.
 
     Parameters
     ----------
@@ -349,10 +342,6 @@ def score_tasks(
         Columns `location`, `target_end_date` and `truth`.
     truth_date : str
         The date of the truth data.
-    config : BacktestConfig
-        Settings.
-    allow_heldout : bool
-        Whether held-out reference dates may be scored.
 
     Returns
     -------
@@ -360,23 +349,96 @@ def score_tasks(
         Output of `bdbv_forecasts.scoring.score_forecasts`, with a
         `truth_vintage` column.
     """
-    held = forecasts["reference_date"].map(config.is_heldout)
-    if held.any() and not allow_heldout:
-        log.info("Dropping %d held-out forecast rows.", int(held.sum()))
-        forecasts = forecasts.loc[~held]
-    cutoff = epiweek_end(truth_date) - dt.timedelta(
-        weeks=config.min_truth_age_weeks
-    )
-    keep = (forecasts["vintage"] < truth_date) & (
-        forecasts["target_end_date"] <= cutoff.isoformat()
-    )
+    keep = forecasts["vintage"] < truth_date
     scores = score_forecasts(forecasts.loc[keep], truth)
     scores["truth_vintage"] = truth_date
     return scores
 
 
-def _real_vintages(target: pd.DataFrame) -> list[str]:
+def real_vintages(target: pd.DataFrame) -> list[str]:
+    """List the real vintages in a target table, oldest first.
+
+    Parameters
+    ----------
+    target : pandas.DataFrame
+        Target rows.
+
+    Returns
+    -------
+    list of str
+        The vintage dates.
+    """
     return sorted(set(target.loc[target["kind"] == "real", "vintage"]))
+
+
+def score_by_truth_vintage(
+    forecasts: pd.DataFrame, target: pd.DataFrame
+) -> pd.DataFrame:
+    """Score real forecasts against every later real vintage.
+
+    Reconstructed vintages are built from the latest data, so only real
+    forecasts are re-scored.
+
+    Parameters
+    ----------
+    forecasts : pandas.DataFrame
+        Output of `run_forecasts`.
+    target : pandas.DataFrame
+        Target rows with every real vintage.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Scores as from `score_tasks`, one set per `truth_vintage`. Empty
+        if no real vintage is later than a forecast.
+    """
+    real = forecasts.loc[forecasts["kind"] == "real"]
+    frames = [
+        score_tasks(real, truth_from_vintage(target, v), v)
+        for v in real_vintages(target)
+        if (real["vintage"] < v).any()
+    ]
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True)
+
+
+def truth_changes(
+    target: pd.DataFrame, locations: Sequence[str] | None = None
+) -> pd.DataFrame:
+    """Show each week's truth in every real vintage and its change since.
+
+    Parameters
+    ----------
+    target : pandas.DataFrame
+        Target rows with every real vintage.
+    locations : sequence of str, optional
+        Locations to keep. All if None.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `location`, `target_end_date`, `truth_vintage`, `truth`
+        and `change`, this vintage's value minus the latest one. A
+        negative change means the week has been revised upwards since.
+        Sorted by location, week and vintage.
+    """
+    real = target.loc[target["kind"] == "real"]
+    if locations is not None:
+        real = real.loc[real["location"].isin(list(locations))]
+    out = real[["location", "target_end_date", "vintage", "total"]].rename(
+        columns={"vintage": "truth_vintage", "total": "truth"}
+    )
+    latest = out.loc[out["truth_vintage"] == out["truth_vintage"].max()]
+    out = out.merge(
+        latest[["location", "target_end_date", "truth"]],
+        on=["location", "target_end_date"],
+        suffixes=("", "_latest"),
+    )
+    out["change"] = out["truth"] - out.pop("truth_latest")
+    return out.sort_values(
+        ["location", "target_end_date", "truth_vintage"]
+    ).reset_index(drop=True)
 
 
 def run_development(
@@ -389,9 +451,9 @@ def run_development(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Run the development backtest on real and reconstructed vintages.
 
-    Held-out reference dates are excluded throughout, and reconstructed
-    vintages whose reference date is on or after the first held-out date
-    are not built.
+    Vintages after `config.development_until` are held out: they are not
+    forecast from, and reconstructed vintages after it are not built.
+    The truth is the latest real vintage, and every week is scored.
 
     Parameters
     ----------
@@ -412,16 +474,12 @@ def run_development(
         The forecasts and the scores.
     """
     real = target.loc[target["kind"] == "real"]
-    latest = _real_vintages(real)[-1]
+    latest = real_vintages(real)[-1]
     parts = [real]
     dly_parts = [delays.assign(kind="real")]
     if include_reconstructed:
-        first_held = config.first_heldout
         dates = [
-            d
-            for d in config.reconstructed_dates
-            if first_held is None
-            or reference_date_for_vintage(d).isoformat() < first_held
+            d for d in config.reconstructed_dates if not config.is_heldout(d)
         ]
         if dates:
             parts.append(reconstruct_vintages(real, delays, dates, latest))
@@ -435,11 +493,11 @@ def run_development(
     tasks = [
         t
         for t in make_tasks(data, all_delays, config)
-        if not config.is_heldout(t.reference_date) and t.vintage < latest
+        if not config.is_heldout(t.vintage) and t.vintage < latest
     ]
     forecasts = run_forecasts(models, tasks)
     truth = truth_from_vintage(real, latest)
-    scores = score_tasks(forecasts, truth, latest, config)
+    scores = score_tasks(forecasts, truth, latest)
     return forecasts, scores
 
 
@@ -469,92 +527,6 @@ def run_recovery(
     tasks = make_tasks(target, delays, config)
     forecasts = run_forecasts(models, tasks)
     end = outbreak.settings.start + dt.timedelta(days=outbreak.settings.n_days)
-    no_split = BacktestConfig(
-        min_horizon=config.min_horizon,
-        max_horizon=config.max_horizon,
-        n_samples=config.n_samples,
-        seed=config.seed,
-        min_truth_age_weeks=config.min_truth_age_weeks,
-    )
-    scores = score_tasks(forecasts, outbreak.truth(), end.isoformat(), no_split)
+    scores = score_tasks(forecasts, outbreak.truth(), end.isoformat())
     scores["truth_vintage"] = "simulated"
     return forecasts, scores
-
-
-def run_heldout(
-    models: Sequence[ForecastModel],
-    target: pd.DataFrame,
-    delays: pd.DataFrame,
-    config: BacktestConfig,
-    *,
-    evaluate_holdout: bool = False,
-    out_dir: Path | str = "results",
-) -> pd.DataFrame:
-    """Score the held-out reference dates, once, on real vintages only.
-
-    Parameters
-    ----------
-    models : sequence of ForecastModel
-        The chosen model and the baseline.
-    target : pandas.DataFrame
-        The tidy target table.
-    delays : pandas.DataFrame
-        The tidy delay table.
-    config : BacktestConfig
-        Settings.
-    evaluate_holdout : bool
-        Must be True. Guards against scoring held-out dates by accident.
-    out_dir : pathlib.Path or str
-        Where to write `heldout-scores.csv` and `heldout-run.yml`.
-
-    Returns
-    -------
-    pandas.DataFrame
-        The held-out scores.
-
-    Raises
-    ------
-    HeldOutError
-        If `evaluate_holdout` is False or the model choice record is
-        missing.
-    """
-    if not evaluate_holdout:
-        raise HeldOutError(
-            "Held-out dates are only scored with evaluate_holdout=True "
-            "(`--evaluate-holdout`)."
-        )
-    if not config.model_choice.exists():
-        raise HeldOutError(
-            f"Write and commit the model choice record {config.model_choice} "
-            "before the held-out evaluation."
-        )
-    log.warning(
-        "Running the held-out evaluation for %s.",
-        ", ".join(config.heldout_reference_dates),
-    )
-    real = target.loc[target["kind"] == "real"]
-    latest = _real_vintages(real)[-1]
-    tasks = [
-        t
-        for t in make_tasks(real, delays, config)
-        if config.is_heldout(t.reference_date) and t.vintage < latest
-    ]
-    forecasts = run_forecasts(models, tasks)
-    truth = truth_from_vintage(real, latest)
-    scores = score_tasks(forecasts, truth, latest, config, allow_heldout=True)
-    out = Path(out_dir)
-    out.mkdir(parents=True, exist_ok=True)
-    scores.to_csv(out / "heldout-scores.csv", index=False)
-    choice = config.model_choice.read_bytes()
-    record = {
-        "run_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
-        "heldout_reference_dates": list(config.heldout_reference_dates),
-        "truth_vintage": latest,
-        "models": [m.name for m in models],
-        "model_choice": str(config.model_choice),
-        "model_choice_sha256": hashlib.sha256(choice).hexdigest(),
-    }
-    (out / "heldout-run.yml").write_text(
-        yaml.safe_dump(record, sort_keys=False)
-    )
-    return scores

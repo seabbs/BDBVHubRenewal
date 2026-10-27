@@ -1,0 +1,14 @@
+# Model choice record. Read by `bdbv_forecasts.heldout`.
+# Each entry is the model chosen for submission from its date on.
+# Add an entry, never edit an old one, when the choice changes.
+# Every real vintage after the first date is held out and scored under the
+# model chosen at the time (`task backtest-heldout`).
+# Development runs use vintages up to the latest date only.
+choices:
+  - date: 2026-10-10
+    model: persistence
+    summary: >-
+      Only the persistence baseline exists. The split was fixed before any
+      held-out scoring, after the 2026-10-09 vintage and the reconstructed
+      vintage of 2026-10-10. So the 2026-10-17 and 2026-10-24 vintages and
+      every later one are held out.

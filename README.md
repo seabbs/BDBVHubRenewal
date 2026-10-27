@@ -50,11 +50,11 @@ The tidy data in `data/` are committed, so `task backtest` and `task nowcast` wo
 ```
 .github/         CI, docs and the submission workflow (submit.yml)
 ci/              submission CI: fallback chain, gate checks, PR body
-config/          backtest settings and the model choice template
+config/          backtest and hub comparison settings
 data/            tidy hub data (committed); data/raw/ is not
 docs/            MkDocs site; figures are built at docs build time
 hub/             model metadata YAML
-results/         development and recovery score tables
+results/         score tables and the model choice record
 scripts/         hubValidations runner and gate (R)
 src/bdbv_forecasts/
   data.py        download, tidy and load the hub data

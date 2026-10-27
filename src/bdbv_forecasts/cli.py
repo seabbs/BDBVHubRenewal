@@ -5,7 +5,7 @@ Commands:
 
 - `data`: download the hub data and write the tidy tables.
 - `backtest`: run the development backtest and the recovery check, or
-  with `--evaluate-holdout` the one-off held-out evaluation.
+  with `--evaluate-holdout` the rolling held-out evaluation.
 - `nowcast`: forecast from a real vintage, write the hub file and check it.
   With `--config` (and `--fit`), forecast from a fit configuration.
 - `fit`: fit a configuration and write the fit directory and its
@@ -44,6 +44,7 @@ from .data import (
     load_target,
 )
 from .fitting import Forecast, get_config, run_fit, run_forecast
+from .heldout import HeldOutError, run_heldout
 from .hub import (
     load_hub_round,
     model_id,
@@ -125,7 +126,7 @@ def build_parser() -> argparse.ArgumentParser:
     back.add_argument(
         "--evaluate-holdout",
         action="store_true",
-        help="Run the one-off held-out evaluation instead.",
+        help="Run the rolling held-out evaluation instead.",
     )
 
     now = sub.add_parser("nowcast", help="Forecast and write a hub file.")
@@ -277,16 +278,16 @@ def _backtest(args: argparse.Namespace) -> int:
     results.mkdir(parents=True, exist_ok=True)
     output.mkdir(parents=True, exist_ok=True)
     if args.evaluate_holdout:
+        # The held-out run uses the models in the model choice record.
         try:
-            scores = bt.run_heldout(
-                models,
+            scores = run_heldout(
                 target,
                 delays,
                 config,
                 evaluate_holdout=True,
                 out_dir=results,
             )
-        except bt.HeldOutError as err:
+        except HeldOutError as err:
             print(f"ERROR: {err}", file=sys.stderr)
             return 1
         print(f"Held-out scores: {len(scores)} rows in {results}.")
@@ -300,6 +301,8 @@ def _backtest(args: argparse.Namespace) -> int:
     )
     forecasts.to_csv(output / "forecasts.csv.gz", index=False)
     scores.to_csv(results / "backtest-scores.csv", index=False)
+    by_truth = bt.score_by_truth_vintage(forecasts, target)
+    by_truth.to_csv(results / "backtest-scores-by-truth.csv", index=False)
     rforecasts, rscores = bt.run_recovery(models, config)
     rforecasts.to_csv(output / "recovery-forecasts.csv.gz", index=False)
     rscores.to_csv(results / "recovery-scores.csv", index=False)

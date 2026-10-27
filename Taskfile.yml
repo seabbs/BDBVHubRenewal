@@ -39,7 +39,7 @@ tasks:
       - uv run bdbv-forecasts backtest {{.CLI_ARGS}}
 
   backtest-heldout:
-    desc: Run the one-off held-out evaluation (needs results/model-choice.yml committed)
+    desc: Score every held-out vintage under the model chosen at the time (needs results/model-choice.yml)
     cmds:
       - uv run bdbv-forecasts backtest --evaluate-holdout
 
