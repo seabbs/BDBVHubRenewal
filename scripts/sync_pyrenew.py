@@ -5,7 +5,9 @@ Usage: `uv run python scripts/sync_pyrenew.py <prototype dir>`.
 
 Copies the prototype's package (`src/province_forecast/`) into
 `src/bdbv_hub_renewal/pyrenew/` and its tests (`tests/`) into
-`tests/pyrenew_model/`. References to the prototype's package and to the
+`tests/pyrenew_model/`. The prototype adapter's own fit path is dropped
+(`ADAPTER_DROP`), with its tests, since `models/renewal.py` does that
+work. References to the prototype's package and to the
 old name of this one (`bdbv_forecasts`) are rewritten. The province
 centres stay in `src/bdbv_hub_renewal/province_centres.csv`, where
 `bdbv_hub_renewal.data.load_province_centres` reads them. The repository's
@@ -15,6 +17,7 @@ adapter (`src/bdbv_hub_renewal/models/renewal.py`) is not synced. Run
 
 from __future__ import annotations
 
+import ast
 import re
 import shutil
 import sys
@@ -35,6 +38,26 @@ REPLACE = (
         'Path(__file__).parent.parent / "province_centres.csv"',
     ),
 )
+ADAPTER_DROP = (
+    "ppc_rows",
+    "diagnostics",
+    "check_fit",
+    "_horizon",
+    "samples_table",
+    "PyRenewProvinceModel",
+    "fit_renewal",
+    "forecast_renewal",
+)
+"""The prototype adapter's own fit path. This repository's adapter,
+`models/renewal.py`, does that work, so only the input builders are kept."""
+TEST_SKIP = ("test_adapter.py",)
+"""Prototype tests of the dropped fit path."""
+TEST_REPLACE = (
+    (
+        "from bdbv_hub_renewal.pyrenew.adapter import ppc_rows",
+        "from bdbv_hub_renewal.models.renewal import ppc_rows",
+    ),
+)
 DATA_PATH = re.compile(r'"/[^"\n]*/data"')
 """An absolute path to the main repository's data in the prototype's tests."""
 
@@ -47,6 +70,20 @@ def _rewrite(text: str) -> str:
     )
 
 
+def drop_definitions(text: str, names: tuple[str, ...]) -> str:
+    """Remove top-level functions and classes by name from module source."""
+    tree = ast.parse(text)
+    lines = text.splitlines(keepends=True)
+    spans = [
+        (min([n.lineno, *(d.lineno for d in n.decorator_list)]), n.end_lineno)
+        for n in tree.body
+        if isinstance(n, ast.FunctionDef | ast.ClassDef) and n.name in names
+    ]
+    for start, end in sorted(spans, reverse=True):
+        del lines[start - 1 : end]
+    return "".join(lines)
+
+
 def _copy_tree(src: Path, dest: Path, header: bool) -> list[str]:
     if dest.exists():
         shutil.rmtree(dest)
@@ -57,10 +94,17 @@ def _copy_tree(src: Path, dest: Path, header: bool) -> list[str]:
         rel = path.relative_to(src)
         if rel.parts[0] == "data" and path.name == "province_centres.csv":
             continue
+        if not header and path.name in TEST_SKIP:
+            continue
         out = dest / rel
         out.parent.mkdir(parents=True, exist_ok=True)
         if path.suffix == ".py":
             text = _rewrite(path.read_text())
+            if header and path.name == "adapter.py":
+                text = drop_definitions(text, ADAPTER_DROP)
+            if not header:
+                for old, new in TEST_REPLACE:
+                    text = text.replace(old, new)
             out.write_text((HEADER if header else "") + text)
         else:
             shutil.copy(path, out)
@@ -77,7 +121,9 @@ def main(prototype: str) -> None:
     )
     code = _copy_tree(proto / "src" / "province_forecast", DEST, header=True)
     tests = _copy_tree(proto / "tests", TESTS, header=False)
-    print(f"Synced {len(code)} files into {DEST} and {len(tests)} into {TESTS}.")
+    print(
+        f"Synced {len(code)} files into {DEST} and {len(tests)} into {TESTS}."
+    )
 
 
 if __name__ == "__main__":

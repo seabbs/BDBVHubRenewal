@@ -15,9 +15,9 @@ import jax
 import numpy as np
 import pytest
 
+from bdbv_hub_renewal.models.renewal import ppc_rows
 from bdbv_hub_renewal.ppc import summarise_draws
 from bdbv_hub_renewal.pyrenew import FALLBACK, MAIN, build_model, fit
-from bdbv_hub_renewal.pyrenew.adapter import ppc_rows
 from bdbv_hub_renewal.pyrenew.model import forecast_trajectories
 
 from .conftest import VINTAGE_DAYS, vintage_date
