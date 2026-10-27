@@ -1,0 +1,638 @@
+{
+  "hub_snapshot": {
+    "repo": "InsightNet-US/BDBV-Modeling-Hub",
+    "commit": "88478a33b6f81dc717eec16d3ec0417c8f0d5588",
+    "files": [
+      "hub-config/tasks.json",
+      "hub-config/admin.json",
+      "hub-config/model-metadata-schema.json"
+    ]
+  },
+  "hubValidations_version": "3.0.0",
+  "fixtures": [
+    {
+      "path": "fixtures/constructed/invalid_bad_file_name/testteam-testmodel/2026-10-31_testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "file_name"
+      ],
+      "r_failures": [
+        "file_name"
+      ],
+      "case": "invalid_bad_file_name",
+      "description": "Underscore after the date in the file name.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed/invalid_bad_location/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "valid_vals"
+      ],
+      "r_failures": [
+        "valid_vals"
+      ],
+      "case": "invalid_bad_location",
+      "description": "Location CD-XX.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed/invalid_bad_target/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "valid_vals"
+      ],
+      "r_failures": [
+        "valid_vals"
+      ],
+      "case": "invalid_bad_target",
+      "description": "target 'wk inc cases'.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed/invalid_dir_mismatch/otherteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "file_location"
+      ],
+      "r_failures": [
+        "file_location"
+      ],
+      "case": "invalid_dir_mismatch",
+      "description": "File for testteam-testmodel in directory otherteam-testmodel.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed/invalid_duplicate_row/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "rows_unique",
+        "spl_non_compound_tid"
+      ],
+      "r_failures": [
+        "rows_unique",
+        "spl_non_compound_tid"
+      ],
+      "case": "invalid_duplicate_row",
+      "description": "First row duplicated.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed/invalid_extra_column/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "colnames"
+      ],
+      "r_failures": [
+        "colnames"
+      ],
+      "case": "invalid_extra_column",
+      "description": "Extra column 'horizon'.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed/invalid_missing_column/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "colnames"
+      ],
+      "r_failures": [
+        "colnames"
+      ],
+      "case": "invalid_missing_column",
+      "description": "No target_end_date column.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed/invalid_missing_value/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "value_col_valid"
+      ],
+      "r_failures": [
+        "value_col_valid"
+      ],
+      "case": "invalid_missing_value",
+      "description": "One value is empty.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed/invalid_mixed_ref_dates/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "unique_round_id"
+      ],
+      "r_failures": [
+        "unique_round_id"
+      ],
+      "case": "invalid_mixed_ref_dates",
+      "description": "One row has reference_date 2026-10-24.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed/invalid_negative_value/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "value_col_valid"
+      ],
+      "r_failures": [
+        "value_col_valid"
+      ],
+      "case": "invalid_negative_value",
+      "description": "One value is -3.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed/invalid_no_metadata/nometa-testmodel/2026-10-31-nometa-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "metadata_exists"
+      ],
+      "r_failures": [
+        "metadata_exists"
+      ],
+      "case": "invalid_no_metadata",
+      "description": "No metadata file for nometa-testmodel.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed/invalid_non_numeric_value/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "file_read"
+      ],
+      "r_failures": [
+        "file_read"
+      ],
+      "case": "invalid_non_numeric_value",
+      "description": "One value is 'many'.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed/invalid_noninteger_sample_id/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "spl_id_type"
+      ],
+      "r_failures": [],
+      "case": "invalid_noninteger_sample_id",
+      "description": "Sample id 100.5. Config says integer ids but hubValidations 3.0.0 accepts it (hub-wide output_type_id column is double). Python-only failure.",
+      "valid_py": false,
+      "valid_r": true
+    },
+    {
+      "path": "fixtures/constructed/invalid_ragged_trajectory/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "spl_non_compound_tid"
+      ],
+      "r_failures": [
+        "spl_non_compound_tid"
+      ],
+      "case": "invalid_ragged_trajectory",
+      "description": "Sample 7 of CD-IT lacks week 2026-10-10.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed/invalid_ref_date_mismatch/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "match_round_id"
+      ],
+      "r_failures": [
+        "match_round_id"
+      ],
+      "case": "invalid_ref_date_mismatch",
+      "description": "File name 2026-10-31, reference_date column 2026-10-24.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed/invalid_samples_101/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "spl_compound_taskid_set"
+      ],
+      "r_failures": [
+        "spl_compound_taskid_set"
+      ],
+      "case": "invalid_samples_101",
+      "description": "CD-NK has an extra sample id 101.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed/invalid_samples_99/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "spl_non_compound_tid"
+      ],
+      "r_failures": [
+        "spl_non_compound_tid"
+      ],
+      "case": "invalid_samples_99",
+      "description": "CD-NK has 99 samples (id 100 dropped).",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed/invalid_ted_before_start/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "valid_vals"
+      ],
+      "r_failures": [
+        "valid_vals"
+      ],
+      "case": "invalid_ted_before_start",
+      "description": "Adds 2026-02-07, before the first accepted week 2026-02-14.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed/invalid_ted_beyond_horizon/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "valid_vals"
+      ],
+      "r_failures": [
+        "valid_vals"
+      ],
+      "case": "invalid_ted_beyond_horizon",
+      "description": "Adds 2026-11-28, four weeks after the reference date.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed/invalid_ted_not_saturday/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "valid_vals"
+      ],
+      "r_failures": [
+        "valid_vals"
+      ],
+      "case": "invalid_ted_not_saturday",
+      "description": "target_end_date 2026-10-30 (Friday) instead of 2026-10-31.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed/invalid_unknown_round/testteam-testmodel/2026-11-07-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "round_id_valid"
+      ],
+      "r_failures": [
+        "round_id_valid"
+      ],
+      "case": "invalid_unknown_round",
+      "description": "reference_date 2026-11-07, not yet in the pinned tasks.json snapshot.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed/invalid_wrong_output_type/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "valid_vals"
+      ],
+      "r_failures": [
+        "valid_vals"
+      ],
+      "case": "invalid_wrong_output_type",
+      "description": "output_type 'quantile'.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed/location_week_sets_differ_unique_ids/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "spl_non_compound_tid"
+      ],
+      "r_failures": [
+        "spl_non_compound_tid"
+      ],
+      "case": "location_week_sets_differ_unique_ids",
+      "description": "Same weeks as location_week_sets_differ but ids unique per location. Rejected by hubValidations: with unique ids every sample must cover the same target_end_dates.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed/location_week_sets_differ/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [],
+      "r_failures": [],
+      "case": "location_week_sets_differ",
+      "description": "CD-IT covers 2026-02-14 to 2026-11-21 and CD-NK 2026-10-24 to 2026-11-21, ids 1-100 reused. Accepted by hubValidations.",
+      "valid_py": true,
+      "valid_r": true
+    },
+    {
+      "path": "fixtures/constructed/valid_basic/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [],
+      "r_failures": [],
+      "case": "valid_basic",
+      "description": "CD, CD-IT, CD-NK; weeks 2026-10-03 to 2026-11-21; ids 1-100 reused per location; CD is the sum of the provinces by sample.",
+      "valid_py": true,
+      "valid_r": true
+    },
+    {
+      "path": "fixtures/constructed/valid_forecast_weeks_only/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [],
+      "r_failures": [],
+      "case": "valid_forecast_weeks_only",
+      "description": "Only target_end_date >= reference_date.",
+      "valid_py": true,
+      "valid_r": true
+    },
+    {
+      "path": "fixtures/constructed/valid_health_zone/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [],
+      "r_failures": [],
+      "case": "valid_health_zone",
+      "description": "Adds health zone CD-IT-22.",
+      "valid_py": true,
+      "valid_r": true
+    },
+    {
+      "path": "fixtures/constructed/valid_noninteger_values/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [],
+      "r_failures": [],
+      "case": "valid_noninteger_values",
+      "description": "Non-integer sample values (x.5); value type is double.",
+      "valid_py": true,
+      "valid_r": true
+    },
+    {
+      "path": "fixtures/constructed/valid_reordered_columns/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [],
+      "r_failures": [],
+      "case": "valid_reordered_columns",
+      "description": "Columns in reverse order.",
+      "valid_py": true,
+      "valid_r": true
+    },
+    {
+      "path": "fixtures/constructed/valid_unique_ids/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [],
+      "r_failures": [],
+      "case": "valid_unique_ids",
+      "description": "As valid_basic but sample ids unique across the file (1-300).",
+      "valid_py": true,
+      "valid_r": true
+    },
+    {
+      "path": "fixtures/constructed/valid_zero_values/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [],
+      "r_failures": [],
+      "case": "valid_zero_values",
+      "description": "All values 0.",
+      "valid_py": true,
+      "valid_r": true
+    },
+    {
+      "path": "fixtures/real/model-output/epiforecasts-renewal/2026-10-12-epiforecasts-renewal.csv",
+      "kind": "submission",
+      "py_failures": [],
+      "r_failures": [],
+      "case": "2026-10-12-epiforecasts-renewal.csv",
+      "source": {
+        "repo": "InsightNet-US/BDBV-Modeling-Hub",
+        "path": "model-output/epiforecasts-renewal/2026-10-12-epiforecasts-renewal.csv",
+        "commit": "6b9254ab859757e17bd206d27494218f4133f980"
+      },
+      "description": "Round 1 (closed) quantile/mean/median file.",
+      "valid_py": true,
+      "valid_r": true
+    },
+    {
+      "path": "fixtures/real/model-output/MOBS-GLEAM_BDBV/2026-06-28-MOBS-GLEAM_BDBV.csv",
+      "kind": "submission",
+      "py_failures": [],
+      "r_failures": [],
+      "case": "2026-06-28-MOBS-GLEAM_BDBV.csv",
+      "source": {
+        "repo": "InsightNet-US/BDBV-Modeling-Hub",
+        "path": "model-output/MOBS-GLEAM_BDBV/2026-06-28-MOBS-GLEAM_BDBV.csv",
+        "commit": "01f8a718285b40709f399fd6fb1747fdddd42f3e"
+      },
+      "description": "Round 1 file with columns in a non-standard order.",
+      "valid_py": true,
+      "valid_r": true
+    },
+    {
+      "path": "fixtures/real/model-output/OHTJHU-BM/2026-10-31-OHTJHU-BM.csv",
+      "kind": "submission",
+      "py_failures": [],
+      "r_failures": [],
+      "case": "2026-10-31-OHTJHU-BM.csv",
+      "source": {
+        "repo": "InsightNet-US/BDBV-Modeling-Hub",
+        "path": "model-output/OHTJHU-BM/2026-10-31-OHTJHU-BM.csv",
+        "commit": "d1ddf9d70a04dd969ea42aba7aab3b7bbe7a3890"
+      },
+      "description": "Only round-2 (sample) submission so far; passed hub CI on PR #64. 62 locations, 9 weeks, ids 1-100 reused per location.",
+      "valid_py": true,
+      "valid_r": true
+    },
+    {
+      "path": "fixtures/constructed-metadata/invalid_bad_email/testteam-testmodel.yml",
+      "kind": "metadata",
+      "py_failures": [
+        "metadata_matches_schema"
+      ],
+      "r_failures": [
+        "metadata_matches_schema"
+      ],
+      "case": "invalid_bad_email",
+      "description": "Contributor email 'not-an-email'.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed-metadata/invalid_bad_orcid/testteam-testmodel.yml",
+      "kind": "metadata",
+      "py_failures": [
+        "metadata_matches_schema"
+      ],
+      "r_failures": [
+        "metadata_matches_schema"
+      ],
+      "case": "invalid_bad_orcid",
+      "description": "Truncated ORCID.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed-metadata/invalid_license_lowercase/testteam-testmodel.yml",
+      "kind": "metadata",
+      "py_failures": [
+        "metadata_matches_schema"
+      ],
+      "r_failures": [
+        "metadata_matches_schema"
+      ],
+      "case": "invalid_license_lowercase",
+      "description": "license 'cc-by-4.0' (lower case, as the README suggests).",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed-metadata/invalid_methods_too_long/testteam-testmodel.yml",
+      "kind": "metadata",
+      "py_failures": [
+        "metadata_matches_schema"
+      ],
+      "r_failures": [
+        "metadata_matches_schema"
+      ],
+      "case": "invalid_methods_too_long",
+      "description": "model_details.methods is 201 characters.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed-metadata/invalid_missing_contributors/testteam-testmodel.yml",
+      "kind": "metadata",
+      "py_failures": [
+        "metadata_matches_schema"
+      ],
+      "r_failures": [
+        "metadata_matches_schema"
+      ],
+      "case": "invalid_missing_contributors",
+      "description": "No model_contributors.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed-metadata/invalid_missing_methods/testteam-testmodel.yml",
+      "kind": "metadata",
+      "py_failures": [
+        "metadata_matches_schema"
+      ],
+      "r_failures": [
+        "metadata_matches_schema"
+      ],
+      "case": "invalid_missing_methods",
+      "description": "model_details.methods missing.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed-metadata/invalid_model_abbr_too_long/testteam-abcdefghijklmnopq.yml",
+      "kind": "metadata",
+      "py_failures": [
+        "metadata_matches_schema"
+      ],
+      "r_failures": [
+        "metadata_matches_schema"
+      ],
+      "case": "invalid_model_abbr_too_long",
+      "description": "model_abbr is 17 characters.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed-metadata/invalid_name_mismatch/testteam-othermodel.yml",
+      "kind": "metadata",
+      "py_failures": [
+        "metadata_file_name"
+      ],
+      "r_failures": [
+        "metadata_file_name"
+      ],
+      "case": "invalid_name_mismatch",
+      "description": "File testteam-othermodel.yml holds model_abbr testmodel.",
+      "valid_py": false,
+      "valid_r": false
+    },
+    {
+      "path": "fixtures/constructed-metadata/valid_no_email/testteam-testmodel.yml",
+      "kind": "metadata",
+      "py_failures": [],
+      "r_failures": [],
+      "case": "valid_no_email",
+      "description": "Contributor without email: schema allows it although the README says email is required.",
+      "valid_py": true,
+      "valid_r": true
+    },
+    {
+      "path": "fixtures/constructed-metadata/valid/testteam-testmodel.yml",
+      "kind": "metadata",
+      "py_failures": [],
+      "r_failures": [],
+      "case": "valid",
+      "description": "Valid metadata with all optional fields.",
+      "valid_py": true,
+      "valid_r": true
+    },
+    {
+      "path": "fixtures/real/model-metadata/epiforecasts-renewal.yml",
+      "kind": "metadata",
+      "py_failures": [],
+      "r_failures": [],
+      "case": "epiforecasts-renewal.yml",
+      "source": {
+        "repo": "InsightNet-US/BDBV-Modeling-Hub",
+        "path": "model-metadata/epiforecasts-renewal.yml",
+        "commit": "4174b5121a9599e4ccee55299c7987c268ea9256"
+      },
+      "description": "Contributors without email.",
+      "valid_py": true,
+      "valid_r": true
+    },
+    {
+      "path": "fixtures/real/model-metadata/MOBS-GLEAM_BDBV.yml",
+      "kind": "metadata",
+      "py_failures": [],
+      "r_failures": [],
+      "case": "MOBS-GLEAM_BDBV.yml",
+      "source": {
+        "repo": "InsightNet-US/BDBV-Modeling-Hub",
+        "path": "model-metadata/MOBS-GLEAM_BDBV.yml",
+        "commit": "ae5ffd8cbb90b15e04a6e68a02e6c01af63ec4a5"
+      },
+      "description": "Block-style contributor list.",
+      "valid_py": true,
+      "valid_r": true
+    },
+    {
+      "path": "fixtures/real/model-metadata/OHTJHU-BM.yml",
+      "kind": "metadata",
+      "py_failures": [],
+      "r_failures": [],
+      "case": "OHTJHU-BM.yml",
+      "source": {
+        "repo": "InsightNet-US/BDBV-Modeling-Hub",
+        "path": "model-metadata/OHTJHU-BM.yml",
+        "commit": "d1ddf9d70a04dd969ea42aba7aab3b7bbe7a3890"
+      },
+      "description": "Metadata for the round-2 submission.",
+      "valid_py": true,
+      "valid_r": true
+    }
+  ]
+}

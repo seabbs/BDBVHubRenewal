@@ -1,34 +1,41 @@
-# Validate a submission and its model metadata with hubValidations.
+# Gate: validate a submission and its model metadata with hubValidations.
 #
 # Usage: Rscript scripts/validate-hub.R <hub_path> <submission.csv> <metadata.yml>
 #
-# Copies both files into a checkout of the hub and runs the checks the
-# hub runs on pull requests. The submission window check is skipped
-# unless CHECK_WINDOW=true, so files can be checked outside the window.
+# Runs scripts/validate_with_hubvalidations.R, which copies the hub's
+# `hub-config/` into a temporary hub, places each file there and runs
+# `validate_submission` and `validate_model_metadata`. The hub checkout is
+# never modified. The submission must sit in a directory named after its
+# model id, as it will in the hub (`model-output/<model_id>/`); the
+# metadata file's directory is searched for `<model_id>.yml`.
+#
+# The submission window check is skipped unless CHECK_WINDOW=true, so
+# files can be checked outside the window. Set VALIDATION_JSON to write
+# per-check results as JSON. Exits 1 if any check fails.
 args <- commandArgs(trailingOnly = TRUE)
 if (length(args) != 3) {
   stop("Usage: validate-hub.R <hub_path> <submission.csv> <metadata.yml>")
 }
-hub_path <- normalizePath(args[[1]])
-submission <- args[[2]]
-metadata <- args[[3]]
-model_id <- sub("\\.ya?ml$", "", basename(metadata))
-out_dir <- file.path(hub_path, "model-output", model_id)
-dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
-file.copy(submission, out_dir, overwrite = TRUE)
-file.copy(metadata, file.path(hub_path, "model-metadata"), overwrite = TRUE)
-
-meta <- hubValidations::validate_model_metadata(
-  hub_path = hub_path,
-  file_path = basename(metadata)
+script_dir <- dirname(normalizePath(sub(
+  "^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE)[1]
+)))
+validator <- file.path(script_dir, "validate_with_hubvalidations.R")
+metadata <- normalizePath(args[[3]])
+opts <- c(
+  validator,
+  "--hub", normalizePath(args[[1]]),
+  "--metadata-dir", dirname(metadata)
 )
-print(meta)
-check_window <- identical(Sys.getenv("CHECK_WINDOW"), "true")
-v <- hubValidations::validate_submission(
-  hub_path = hub_path,
-  file_path = file.path(model_id, basename(submission)),
-  skip_submit_window_check = !check_window
+if (!identical(Sys.getenv("CHECK_WINDOW"), "true")) {
+  opts <- c(opts, "--skip-window")
+}
+json <- Sys.getenv("VALIDATION_JSON")
+if (nzchar(json)) {
+  opts <- c(opts, "--json", json)
+}
+cat("hubValidations", format(packageVersion("hubValidations")), "\n")
+status <- system2(
+  file.path(R.home("bin"), "Rscript"),
+  c(shQuote(opts), shQuote(normalizePath(args[[2]])), shQuote(metadata))
 )
-print(v)
-hubValidations::check_for_errors(meta)
-hubValidations::check_for_errors(v, verbose = TRUE)
+quit(status = status)

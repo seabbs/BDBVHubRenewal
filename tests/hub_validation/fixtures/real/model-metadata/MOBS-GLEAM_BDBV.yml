@@ -1,0 +1,18 @@
+team_name: "MOBS Lab at Northeastern University"
+team_abbr: "MOBS"
+model_name: "Bundibugyo (Ebola) Gleam"
+model_abbr: "GLEAM_BDBV"
+model_contributors:
+  - {name: "Jessica T. Davis", affiliation: "MOBS Lab, Northeastern University", email: "jes.davis@northeastern.edu"}
+  - {name: "Alessandro Vespignani", affiliation: "MOBS Lab, Northeastern University", email: "alexves@gmail.com"}
+  - {name: "Alessandra Urbinati", affiliation: "MOBS Lab, Northeastern University", email: "a.urbinati@northeastern.edu"}
+license: "CC-BY-4.0"
+model_details:
+  data_inputs: "DRC INSP situation reports; cases and deaths exported to Uganda from WHO situation reports and Disease Outbreak News; IATA / OAG origin–destination passenger flows."
+  methods: "Stochastic metapopulation SEIHFR model (GLEAM metapopulation framework) calibrated via Approximate Bayesian Computation."
+  methods_long: "Stochastic metapopulation SEIHFR model (Legrand-type, as in Gomes et al. 2014) calibrated via Approximate Bayesian Computation (ABC) rejection sampling within the GLEAM (Global Epidemic and Mobility Model) framework (Balcan et al. 2009). Within each basin, transmission occurs across community, hospital, and funeral settings (R₀ partitioned community : hospital : funeral ≈ 0.44 : 0.22 : 0.33); natural history parameters follow Legrand et al. (2007) and Gomes et al. (2014). The epidemic is seeded with 5 infectious individuals in Bunia (Ituri, DRC) on a sampled start date; all other basins begin fully susceptible and are reached only through mobility (daily commuting matrices + IATA/OAG passenger flows). ABC calibration targets two cross-border importation conditions from WHO situation reports: 1 exportation from Ituri to Uganda before 14 May 2026, and 1 exportation between 14–18 May 2026. Priors: R₀ ~ U(1.2, 5.0); incubation period ~ U(5, 10) days; start date ~ U(15 Feb – 15 Mar 2026). Posterior R₀ median 2.44 (90% CrI 1.66–3.48); doubling time ≈ 11 days (90% CrI 7.8–19.7 days). IMPORTANT UNCERTAINTY CAVEAT: the reported intervals capture sampling uncertainty in the exported cases in the calibration window, the epidemic start date, and variations in the incubation period. Variations in containment effort are explored through sensitivity analysis not reported here."
+model_version: "v1"
+website_url: "https://epistorm.github.io/EBV2026/"
+repo_url: "https://github.com/epistorm/EBV2026"
+citation: ""
+ensemble_of_hub_models: false

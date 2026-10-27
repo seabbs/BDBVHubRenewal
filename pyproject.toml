@@ -114,6 +114,10 @@ convention = "numpy"
 [tool.ruff.lint.per-file-ignores]
 # Test functions are named for what they check; docstrings would repeat it.
 "tests/**" = ["D", "PD101"]
+# Ported from the hub validation bundle, whose checks are named after
+# hubValidations' and are documented in docs/hub-spec.md. The small
+# config classes and helpers carry no docstrings.
+"src/bdbv_forecasts/hub_validate.py" = ["D101", "D102", "D103"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
