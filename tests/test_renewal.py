@@ -368,3 +368,31 @@ def test_unassigned_adds_the_national_data_gap(task: ForecastTask) -> None:
     ratio = ahead.set_index(["target_end_date", "sample"])["value"] / by
     assert ratio.dropna().between(0, 1).all()
     assert ratio.dropna().std() < 1e-9
+
+
+def test_bvd_variant_reads_the_release_for_its_vintage(
+    task: ForecastTask, tmp_path: Path
+) -> None:
+    import shutil
+
+    from bdbv_hub_renewal import bvd
+
+    fixtures = Path(__file__).resolve().parent / "data" / "bvd"
+    releases = bvd.parse_releases(
+        json.loads((fixtures / "releases.json").read_text())
+    )
+    bvd.save_releases(
+        releases.loc[releases["tag"].isin(["results-3151", "results-3086"])],
+        tmp_path,
+    )
+    for tag in ("results-3151", "results-3086"):
+        shutil.copytree(fixtures / tag, tmp_path / tag)
+    assert rn.VARIANTS["hubrenewalbvd"].register
+    rows = rn.bvd_rows(task, tmp_path)
+    assert rows is not None
+    assert rows["as_of"].iloc[0] == "2026-10-15"  # results-3086 for 17 Oct
+    config = rn.model_config(rn.VARIANTS["hubrenewalbvd"])
+    data = rn.vintage_inputs(task, config, bvd=rows)
+    assert data.bvd is not None
+    assert rn.vintage_inputs(task, config).bvd is None
+    assert "hubrenewalbvd" in {s.name for s in list_models()}

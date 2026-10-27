@@ -197,3 +197,32 @@ def test_model_rows_national_only() -> None:
     rows = bvd.model_rows(bvd.load_release(FIXTURES / "results-3086"))
     assert list(rows["group"]) == ["national"]
     assert rows["as_of"].iloc[0] == "2026-10-15"
+
+
+def test_releases_round_trip_through_the_cache(
+    releases: pd.DataFrame, tmp_path: Path
+) -> None:
+    bvd.save_releases(releases, tmp_path)
+    back = bvd.load_releases(tmp_path)
+    assert back is not None
+    pd.testing.assert_frame_equal(
+        back.drop(columns="assets"), releases.drop(columns="assets")
+    )
+    assert back["assets"].tolist() == releases["assets"].tolist()
+    assert bvd.load_releases(tmp_path / "empty") is None
+
+
+def test_bvd_for_vintage_reads_the_cached_release_list(
+    releases: pd.DataFrame, tmp_path: Path
+) -> None:
+    have = releases.loc[releases["tag"].isin(["results-3151", "results-3086"])]
+    bvd.save_releases(have, tmp_path)
+    for tag in ("results-3151", "results-3086"):
+        shutil.copytree(FIXTURES / tag, tmp_path / tag)
+
+    def offline(url: str) -> bytes:
+        raise AssertionError(f"downloaded {url}")
+
+    rel = bvd.bvd_for_vintage("2026-10-24", tmp_path, download=offline)
+    assert rel is not None
+    assert rel.tag == "results-3151"
