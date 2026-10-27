@@ -29,10 +29,11 @@ sci() {
   uv run --quiet --project "$CI_DIR" "$@"
 }
 
-# Run the main repo's CLI (word-split on purpose).
+# Run the main repo's CLI (word-split on purpose), outside the
+# submission-ci environment that `sci` may have activated.
 cli() {
   # shellcheck disable=SC2086
-  $FORECAST_CLI "$@"
+  env -u VIRTUAL_ENV $FORECAST_CLI "$@"
 }
 
 note() {
