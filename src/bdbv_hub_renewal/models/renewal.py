@@ -17,8 +17,10 @@ This module owns everything around it:
   `main` and `fallback` fit configurations (`bdbv_hub_renewal.fitting`).
 
 This module reads only `ModelConfig`, `MAIN`, `FALLBACK`, `build_model`,
-`fit`, `forecast_trajectories` and `adapter.vintage_from_tables` from the
-subpackage, so a new model version drops in if it keeps those.
+`model_args`, `model.EXTRA_FIELDS`, `forecast_trajectories` and
+`adapter.vintage_from_tables` from the subpackage, so a new model version
+drops in if it keeps those. Sampling is here (`run_nuts`), so the CI's
+sampler table, including jittered inits, applies in full.
 """
 
 from __future__ import annotations
@@ -48,6 +50,7 @@ __all__ = [
     "DEFAULT_SAMPLER",
     "FIT_VARIANTS",
     "HUB_MODEL",
+    "JITTER_RADIUS",
     "SAMPLER_ENV",
     "SHARE_PRIOR",
     "VARIANTS",
@@ -61,9 +64,12 @@ __all__ = [
     "fit_renewal",
     "forecast_renewal",
     "horizon_weeks",
+    "init_strategy",
     "model_config",
+    "nuts_kernel",
     "parameter_diagnostics",
     "ppc_rows",
+    "run_nuts",
     "sampler_settings",
     "samples_table",
     "vintage_inputs",
@@ -209,6 +215,107 @@ def sampler_settings(
     """
     env = json.loads(os.environ.get(SAMPLER_ENV) or "{}")
     return {**DEFAULT_SAMPLER, **env, **dict(overrides or {})}
+
+
+JITTER_RADIUS: Final = 1.0
+"""Half-width of the uniform jittered inits, on the unconstrained scale."""
+
+
+def init_strategy(sampler: Mapping[str, Any]) -> Any:
+    """Return NumPyro's init strategy for a sampler table.
+
+    `init = "jitter"` (the CI's retry) starts each chain at its own
+    uniform draw within `JITTER_RADIUS` of zero on the unconstrained
+    scale. Otherwise chains start at the prior median, as in BVDOutbreakSize.
+
+    Parameters
+    ----------
+    sampler : mapping
+        The sampler table.
+
+    Returns
+    -------
+    callable
+        A NumPyro init strategy.
+
+    Raises
+    ------
+    ValueError
+        On an unknown `init`.
+    """
+    from numpyro.infer import init_to_median, init_to_uniform
+
+    init = sampler.get("init", "median")
+    if init == "jitter":
+        return init_to_uniform(radius=JITTER_RADIUS)
+    if init == "median":
+        return init_to_median(num_samples=15)
+    raise ValueError(f"Unknown init {init!r}: use 'median' or 'jitter'.")
+
+
+def nuts_kernel(model_fn: Any, sampler: Mapping[str, Any]) -> Any:
+    """Build the NUTS kernel for a sampler table.
+
+    Parameters
+    ----------
+    model_fn : callable
+        The NumPyro model.
+    sampler : mapping
+        `target_accept`, `max_tree_depth` and optionally `init`.
+
+    Returns
+    -------
+    numpyro.infer.NUTS
+        The kernel.
+    """
+    from numpyro.infer import NUTS
+
+    return NUTS(
+        model_fn,
+        target_accept_prob=float(sampler["target_accept"]),
+        max_tree_depth=int(sampler["max_tree_depth"]),
+        init_strategy=init_strategy(sampler),
+    )
+
+
+def run_nuts(model: Any, data: Any, sampler: Mapping[str, Any]) -> Any:
+    """Fit a built model by NUTS, keeping the fields the diagnostics need.
+
+    Parameters
+    ----------
+    model : pyrenew.model.MultiSignalModel
+        From `build_model`.
+    data : bdbv_hub_renewal.pyrenew.Vintage
+        The inputs.
+    sampler : mapping
+        The full sampler table (`sampler_settings`).
+
+    Returns
+    -------
+    pyrenew.model.MultiSignalModel
+        The model, with `model.mcmc` holding the posterior.
+    """
+    from jax import random
+    from numpyro.infer import MCMC
+
+    pr = engine()
+    args = pr.model_args(model, data)
+    model.validate_data(
+        **{k: v for k, v in args.items() if k != "population_size"}
+    )
+    model.mcmc = MCMC(
+        nuts_kernel(model.sample, sampler),
+        num_warmup=int(sampler["num_warmup"]),
+        num_samples=int(sampler["num_samples"]),
+        num_chains=int(sampler["num_chains"]),
+        progress_bar=False,
+    )
+    model.mcmc.run(
+        random.key(int(sampler["seed"])),
+        extra_fields=pr.model.EXTRA_FIELDS,
+        **args,
+    )
+    return model
 
 
 def _saturday(day: str | dt.date) -> dt.date:
@@ -684,16 +791,7 @@ class RenewalModel:
         s = self.sampler
         self._log(f"variant={self.name} sampling start")
         start = time.perf_counter()
-        pr.fit(
-            model,
-            data,
-            num_warmup=int(s["num_warmup"]),
-            num_samples=int(s["num_samples"]),
-            num_chains=int(s["num_chains"]),
-            seed=int(s.get("seed", task.seed)),
-            target_accept=float(s["target_accept"]),
-            max_tree_depth=int(s["max_tree_depth"]),
-        )
+        run_nuts(model, data, {"seed": task.seed, **s})
         # Pulling the draws to the host waits for the sampler.
         np.asarray(next(iter(model.mcmc.get_samples().values())))
         seconds = time.perf_counter() - start
