@@ -1,0 +1,149 @@
+[project]
+name = "bdbv-forecasts"
+version = "0.1.0"
+description = "Baseline nowcasts and forecasts for the BDBV Modeling Hub, with data tools and a backtest harness"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Sam Abbott", email = "sam.abbott@lshtm.ac.uk" }]
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=1.26,<3",
+  "pandas>=2.1,<3",
+  "scipy>=1.11,<2",
+  "matplotlib>=3.8,<4",
+  "pyyaml>=6",
+  "jsonschema>=4.20",
+  "tabulate>=0.9",
+  "tzdata>=2024.1",
+]
+keywords = [
+  "epidemiology",
+  "forecasting",
+  "nowcasting",
+  "hubverse",
+  "Ebola",
+  "Bundibugyo virus disease",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Medical Science Apps.",
+  "Typing :: Typed",
+]
+
+[project.optional-dependencies]
+# Reserved for the model phase. It will add, pinned by commit SHA:
+#   "pyrenew @ git+https://github.com/CDCgov/PyRenew@<sha>",
+# and, only if it helps, for example for the back-sampling allocation:
+#   "epidemic-dates[jax] @ git+https://github.com/seabbs/EpidemicDates@<sha>",
+model = []
+
+[project.urls]
+Homepage = "https://seabbs.github.io/bdbv-hub-baseline-forecasts/"
+Documentation = "https://seabbs.github.io/bdbv-hub-baseline-forecasts/"
+Repository = "https://github.com/seabbs/bdbv-hub-baseline-forecasts"
+Issues = "https://github.com/seabbs/bdbv-hub-baseline-forecasts/issues"
+
+[project.scripts]
+bdbv-forecasts = "bdbv_forecasts.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.8,<0.14"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+  "mypy>=1.11",
+  "pandas-stubs>=2.1",
+  "pytest>=8",
+  "pytest-cov>=5",
+  "ruff>=0.6",
+  "scoringrules>=0.7",
+  "types-jsonschema",
+  "types-PyYAML",
+]
+docs = [
+  "mkdocs-material>=9.5",
+  "mkdocstrings[python]>=0.26",
+]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.uv.build-backend]
+module-name = "bdbv_forecasts"
+
+[tool.ruff]
+line-length = 80
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+  "E",   # pycodestyle errors
+  "W",   # pycodestyle warnings
+  "F",   # pyflakes
+  "I",   # isort
+  "B",   # flake8-bugbear
+  "UP",  # pyupgrade
+  "N",   # pep8-naming
+  "D",   # pydocstyle
+  "SIM", # flake8-simplify
+  "RUF", # ruff-specific
+  "C4",  # flake8-comprehensions
+  "PT",  # flake8-pytest-style
+  "PTH", # flake8-use-pathlib
+  "NPY", # numpy-specific
+  "PD",  # pandas-vet
+  "RET", # flake8-return
+  "ARG", # unused arguments
+]
+ignore = [
+  "PD010", # `unstack` reads more clearly than `pivot_table` here
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.per-file-ignores]
+# Test functions are named for what they check; docstrings would repeat it.
+"tests/**" = ["D", "PD101"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers", "--strict-config"]
+xfail_strict = true
+filterwarnings = [
+  # Raised inside pandas by `pd.Timedelta(days=...)` with NumPy 2.4.
+  "ignore:The 'generic' unit for NumPy timedelta:DeprecationWarning",
+]
+markers = ["network: tests that download from GitHub (deselect with '-m \"not network\"')"]
+
+[tool.coverage.run]
+source = ["bdbv_forecasts"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+files = ["src"]
+
+[[tool.mypy.overrides]]
+# matplotlib's date locators and formatters are untyped.
+module = ["bdbv_forecasts.plots"]
+disallow_untyped_calls = false
+
+[[tool.mypy.overrides]]
+module = ["scipy", "scipy.*", "matplotlib", "matplotlib.*"]
+ignore_missing_imports = true

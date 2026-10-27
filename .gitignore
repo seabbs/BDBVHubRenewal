@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+.DS_Store
+.coverage
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+_site/
+# Raw hub downloads: re-created by `task data`.
+data/raw/
+# Backtest forecasts and other run output: re-created by `task backtest`.
+output/
+# Docs figures and generated snippets: built at docs build time.
+docs/figures/*.svg
+docs/generated/

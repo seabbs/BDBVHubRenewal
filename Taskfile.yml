@@ -1,0 +1,84 @@
+version: "3"
+
+env:
+  UV_CACHE_DIR: '{{.UV_CACHE_DIR | default (printf "%s/uvcache" (env "TMPDIR" | default "/tmp"))}}'
+  MPLCONFIGDIR: '{{.MPLCONFIGDIR | default (printf "%s/mplconfig" (env "TMPDIR" | default "/tmp"))}}'
+
+tasks:
+  setup:
+    desc: Install the package with the dev and docs groups
+    cmds:
+      - uv sync --all-groups
+
+  test:
+    desc: Run the tests with coverage
+    cmds:
+      - uv run pytest -q --cov=bdbv_forecasts
+
+  lint:
+    desc: Lint, check formatting and type-check
+    cmds:
+      - uv run ruff check src tests
+      - uv run ruff format --check src tests
+      - uv run mypy src
+
+  format:
+    desc: Format and fix lint where safe
+    cmds:
+      - uv run ruff format src tests
+      - uv run ruff check --fix src tests
+
+  data:
+    desc: Download every hub data vintage and rebuild the tidy tables in data/
+    cmds:
+      - uv run bdbv-forecasts data
+
+  backtest:
+    desc: Run the development backtest (real and reconstructed) and the recovery check (simulated)
+    cmds:
+      - uv run bdbv-forecasts backtest {{.CLI_ARGS}}
+
+  backtest-heldout:
+    desc: Run the one-off held-out evaluation (needs results/model-choice.yml committed)
+    cmds:
+      - uv run bdbv-forecasts backtest --evaluate-holdout
+
+  nowcast:
+    desc: Forecast from the latest vintage and write a checked hub file to output/submission/
+    cmds:
+      - uv run bdbv-forecasts nowcast {{.CLI_ARGS}}
+
+  metadata:
+    desc: Write and check the model metadata YAML in hub/model-metadata/
+    cmds:
+      - uv run bdbv-forecasts metadata {{.CLI_ARGS}}
+
+  validate-hub:
+    desc: Check the nowcast file and metadata with the hub's hubValidations (R)
+    deps: [nowcast, metadata]
+    vars:
+      MODEL: '{{.MODEL | default "persistence"}}'
+    cmds:
+      - rm -rf output/hub
+      - git clone --depth 1 -q https://github.com/InsightNet-US/BDBV-Modeling-Hub.git output/hub
+      - >-
+        Rscript scripts/validate-hub.R output/hub
+        $(ls output/submission/model-output/epiforecasts-{{.MODEL}}/*.csv | tail -n 1)
+        hub/model-metadata/epiforecasts-{{.MODEL}}.yml
+
+  plots:
+    desc: Make the docs figures and tables from the backtest results
+    cmds:
+      - uv run bdbv-forecasts report
+
+  docs:
+    desc: Build the docs site into _site/
+    cmds:
+      - task: plots
+      - uv run mkdocs build --strict
+
+  serve:
+    desc: Serve the docs locally
+    cmds:
+      - task: plots
+      - uv run mkdocs serve
