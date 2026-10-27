@@ -166,7 +166,16 @@ Locally, `task ci-dry` runs the same step scripts on fixture data with a stand-i
 
 The pull request goes from `seabbs-bot/BDBV-Modeling-Hub`, branch `<model_id>-<reference_date>`, into the hub's `main`.
 It adds `model-output/<model_id>/<reference_date>-<model_id>.csv` and, the first time, `model-metadata/<model_id>.yml`.
-Below is the body printed by a dry run of the workflow on GitHub ([run 40556037584](https://github.com/seabbs/bdbv-hub-baseline-forecasts/actions/runs/40556037584)), with the plot it would publish.
+The hub's organisers read the body, so it is short.
+The visible part is one line on what was submitted, one plain status line (all checks passed, a refit, or the fallback used and why, with any stand-in), the plot, a link to the round's page in our docs and the bot footer.
+The checks, fallback chain, convergence, predictive checks, forecast checks, data coherence, a national summary and the provenance sit in collapsed sections, each shown only when it has something to say.
+The full reports stay in the job summary and the run's artefacts.
+
+The round's page, `/nowcast/rounds/<reference_date>/`, is built by the Pages workflow from the `submission-ledger` branch.
+The `record` job rebuilds the docs after a live round, so the page appears a few minutes after the pull request opens.
+The [Nowcast](../nowcast.md) page links to the latest submitted round.
+
+Below is the body for the GitHub dry run [run 40556037584](https://github.com/seabbs/bdbv-hub-baseline-forecasts/actions/runs/40556037584), rebuilt with the current layout, with the plot it would publish.
 
 <div class="pr-body-example" markdown>
 
