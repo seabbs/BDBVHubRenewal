@@ -555,6 +555,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         Exit status.
     """
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    # JAX logs its backend search at INFO, which is noise here.
+    logging.getLogger("jax").setLevel(logging.WARNING)
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv[:1] == ["validate"]:
         from .hub_validate import main as validate_main
