@@ -305,3 +305,18 @@ def test_tiny_fit_end_to_end(task: ForecastTask, tmp_path: Path) -> None:
     assert record["chains"][0]["draws"] == 20
     result = rn.forecast_renewal(task, tmp_path)
     assert np.isfinite(result.samples["value"]).all()
+
+
+def test_apportion_shares_smooth_recent_zeros(task: ForecastTask) -> None:
+    shares = rn.apportion_shares(task)
+    assert shares.index.tolist() == list(task.locations)
+    assert shares.sum() == pytest.approx(1.0)
+    # Every province keeps a share, even with no onsets in recent weeks.
+    assert (shares > 0).all()
+    rows = task.target.loc[task.target["vintage"] == task.vintage]
+    wide = rows.pivot_table(
+        index="target_end_date", columns="location", values="total"
+    ).reindex(columns=list(task.locations))
+    recent = wide.tail(rn.RECENT_WEEKS).fillna(0).sum()
+    expected = (recent + rn.SHARE_PRIOR) / (recent + rn.SHARE_PRIOR).sum()
+    pd.testing.assert_series_equal(shares, expected, check_names=False)
