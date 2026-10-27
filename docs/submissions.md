@@ -166,7 +166,7 @@ Locally, `task ci-dry` runs the same step scripts on fixture data with a stand-i
 
 The pull request goes from `seabbs-bot/BDBV-Modeling-Hub`, branch `<model_id>-<reference_date>`, into the hub's `main`.
 It adds `model-output/<model_id>/<reference_date>-<model_id>.csv` and, the first time, `model-metadata/<model_id>.yml`.
-Below is the body printed by a dry run of the workflow on GitHub.
+Below is the body printed by a dry run of the workflow on GitHub ([run 40556037584](https://github.com/seabbs/bdbv-hub-baseline-forecasts/actions/runs/40556037584)), with the plot it would publish.
 
 <div class="pr-body-example" markdown>
 
