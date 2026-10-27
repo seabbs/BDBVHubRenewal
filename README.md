@@ -19,7 +19,7 @@ This repository holds its first phase:
 - a writer and checks for the hub's submission files and model metadata;
 - a backtest harness with a development and held-out split, scored by WIS, coverage and bias;
 - figures and a docs site, with the maths of the planned renewal model;
-- an automated, gated submission workflow, in dry-run mode, with persistence standing in for the model until it is integrated ([Submissions](https://seabbs.github.io/bdbv-hub-baseline-forecasts/submissions/)).
+- an automated, gated submission workflow, in dry-run mode, with persistence standing in for the model until it is integrated ([Submissions](https://seabbs.github.io/bdbv-hub-baseline-forecasts/development/submissions/)).
 
 Docs: <https://seabbs.github.io/bdbv-hub-baseline-forecasts/>
 

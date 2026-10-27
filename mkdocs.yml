@@ -34,7 +34,7 @@ nav:
   - Development:
       - Adding a model: development/adding-a-model.md
       - CLI: development/cli.md
-      - CI and submissions: submissions.md
+      - CI and submissions: development/submissions.md
       - Hub specification: hub-spec.md
   - API reference: reference.md
 

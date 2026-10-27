@@ -136,11 +136,11 @@ The coverage numbers go in the pull request's status table, with a collapsed tab
 The national check reads `national.json`, which `nowcast` writes beside the hub file.
 It lists the modelled provinces and any unassigned national component by sample.
 The data coherence check reads the output of `bdbv-forecasts coherence`.
-A gap is reported with how the model handles it (see [Data](data.md#national-against-the-provinces)).
+A gap is reported with how the model handles it (see [Data](../data.md#national-against-the-provinces)).
 
 Hub validation runs both validators from the hub validation bundle against the hub at the data commit, as the hub's own CI would.
 The submission is staged as `<model_id>/<reference_date>-<model_id>.csv` with its metadata.
-The checks it runs, and where the hub's README and config disagree, are in the [hub specification](hub-spec.md).
+The checks it runs, and where the hub's README and config disagree, are in the [hub specification](../hub-spec.md).
 `HUB_VALIDATIONS=false` skips only the R step.
 
 ## Dry-run mode
