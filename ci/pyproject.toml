@@ -16,6 +16,7 @@ check-coherence = "submission_ci.check_coherence:main"
 check-ppc = "submission_ci.check_ppc:main"
 build-pr-body = "submission_ci.build_pr_body:main"
 open-or-update-pr = "submission_ci.open_or_update_pr:main"
+submission-preflight = "submission_ci.preflight:main"
 
 [build-system]
 requires = ["uv_build>=0.8,<0.14"]

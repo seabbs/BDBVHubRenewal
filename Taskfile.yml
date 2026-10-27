@@ -101,6 +101,19 @@ tasks:
       - uv run mypy
       - uv run pytest -q
 
+  submission-preflight:
+    desc: Check every prerequisite of a live submission that can be read, and print what is missing (needs gh as a repo admin)
+    vars:
+      MODEL_ID: '{{.MODEL_ID | default "epiforecasts-seabbsrenewal"}}'
+    cmds:
+      - rm -rf output/hub
+      - git clone --depth 1 -q https://github.com/InsightNet-US/BDBV-Modeling-Hub.git output/hub
+      - >-
+        if [ -f hub/model-metadata/{{.MODEL_ID}}.yml ]; then
+        uv run bdbv-hub-renewal validate --hub output/hub
+        hub/model-metadata/{{.MODEL_ID}}.yml; fi
+      - uv run --quiet --project ci submission-preflight {{.CLI_ARGS}}
+
   ci-dry:
     desc: "Dry run of the submission workflow on fixture data (all scenarios, or one: task ci-dry -- retry)"
     cmds:
