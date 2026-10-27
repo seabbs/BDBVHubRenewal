@@ -159,6 +159,6 @@ Forecasts from vintages of a [simulated outbreak](methods/data.md#simulated-vint
   ![Mean WIS by horizon on simulated vintages.](figures/recovery-wis-horizon-dark.svg#only-dark)
   <figcaption markdown="1">
     Mean WIS by horizon on simulated vintages.
-    The model phase adds parameter recovery checks against the true values above.
+    Parameter recovery against the true values above is not checked here yet.
   </figcaption>
 </figure>

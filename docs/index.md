@@ -3,7 +3,7 @@
 Nowcasts and forecasts of confirmed Bundibugyo virus disease cases for the BDBV Modeling Hub.
 { .page-subtitle }
 
-This repository builds the foundations for weekly submissions to the [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub).
+This repository produces weekly forecasts for the [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub).
 The hub collects nowcasts and forecasts of weekly confirmed cases by onset week, by province and nationally, for the 2026 outbreak in the Democratic Republic of the Congo.
 The plan is in [EpidemicDates issue #3](https://github.com/seabbs/EpidemicDates/issues/3).
 
