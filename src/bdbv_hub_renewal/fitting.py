@@ -437,5 +437,5 @@ def _renewal_config(name: str) -> FitConfig:
     )
 
 
-for _name in ("main", "fallback"):
+for _name in ("main", "fallback", "bvd"):
     register_config(_renewal_config(_name))

@@ -98,7 +98,11 @@ def test_chain_order_and_budget() -> None:
         "fallback",
         "persistence",
     ]
-    assert [c.id for c in POLICY.stage("primary")] == ["main", "fallback"]
+    assert [c.id for c in POLICY.stage("primary")] == [
+        "main",
+        "fallback",
+        "bvd",
+    ]
     assert [c.id for c in POLICY.stage("retry")] == ["retry-1"]
 
 

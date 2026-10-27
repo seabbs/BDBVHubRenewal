@@ -42,6 +42,16 @@ stage = "primary"
 label = "fallback variant (no spatial coupling, delays and missingness fixed from the data)"
 sampler = { num_chains = 4, num_warmup = 1000, num_samples = 1000, target_accept = 0.9, max_tree_depth = 10, seed = 1 }
 
+# A shadow: fitted and checked weekly with the primary stage, never
+# submitted, until the model choice picks it.
+[[candidates]]
+id = "bvd"
+kind = "shadow"
+config = "bvd"
+stage = "primary"
+label = "BVDOutbreakSize-informed variant (shadow, not submitted)"
+sampler = { num_chains = 4, num_warmup = 1000, num_samples = 1000, target_accept = 0.9, max_tree_depth = 10, seed = 1 }
+
 [[candidates]]
 id = "persistence"
 kind = "persistence"

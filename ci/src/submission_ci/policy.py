@@ -29,7 +29,10 @@ from typing import Any
 from .common import set_outputs
 from .fit_key import fit_key, source_hash
 
-KINDS = ("main", "retry", "fallback", "persistence")
+KINDS = ("main", "retry", "fallback", "persistence", "shadow")
+"""A `shadow` candidate is fitted and checked with its stage but is never
+part of the chain, so it is never submitted. It lets a variant run weekly
+before it is chosen."""
 STAGES = ("primary", "retry", "baseline")
 
 
@@ -65,6 +68,8 @@ class Policy:
         out: list[Candidate] = []
         retries = 0
         for c in self.candidates:
+            if c.kind == "shadow":
+                continue
             if c.kind == "retry":
                 retries += 1
                 if retries > self.retry_budget:
@@ -73,8 +78,9 @@ class Policy:
         return out
 
     def stage(self, name: str) -> list[Candidate]:
-        """Candidates fitted in one stage."""
-        return [c for c in self.chain() if c.stage == name]
+        """Candidates fitted in one stage, shadows included."""
+        shadows = [c for c in self.candidates if c.kind == "shadow"]
+        return [c for c in [*self.chain(), *shadows] if c.stage == name]
 
     def get(self, cid: str) -> Candidate:
         """Look up a candidate by id."""

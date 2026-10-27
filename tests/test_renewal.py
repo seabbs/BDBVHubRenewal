@@ -50,7 +50,12 @@ def test_fit_configs_run_the_renewal_model() -> None:
     assert get_config("main").stand_in is None
     assert get_config("fallback").stand_in is None
     assert rn.VARIANTS["hubrenewal"].base == "MAIN"
-    assert rn.FIT_VARIANTS == {"main": "hubrenewal", "fallback": "fallback"}
+    assert rn.FIT_VARIANTS == {
+        "main": "hubrenewal",
+        "fallback": "fallback",
+        "bvd": "hubrenewalbvd",
+    }
+    assert get_config("bvd").stand_in is None
 
 
 def test_model_config_applies_overrides() -> None:

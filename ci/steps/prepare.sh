@@ -56,6 +56,12 @@ elif command -v gh > /dev/null; then
   fi
 fi
 
+# The BVDOutbreakSize release this vintage may use, cached in the data
+# directory so it travels with the inputs. Only the shadow `bvd` candidate
+# reads it; a failure leaves that variant as the main model.
+cli bvd --vintages "$AS_OF" \
+  || echo "::warning::could not cache the BVDOutbreakSize release"
+
 cat > "$inputs/context.json" << EOF
 {"hub_ref": "$HUB_REF", "as_of": "$AS_OF",
  "reference_date": "$REFERENCE_DATE", "model": "$MODEL",

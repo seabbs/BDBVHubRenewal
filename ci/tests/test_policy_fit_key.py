@@ -59,7 +59,8 @@ def test_matrix_has_distinct_keys(tmp_path: Path) -> None:
     entries = matrix(pol, "retry", root, "hub")
     assert [e["id"] for e in entries] == ["retry-1"]
     main = matrix(pol, "primary", root, "hub")
-    assert len({e["key"] for e in [*entries, *main]}) == 3
+    keys = [e["key"] for e in [*entries, *main]]
+    assert len(set(keys)) == len(keys)
     sampler = json.loads(entries[0]["sampler"])
     assert sampler["target_accept"] == 0.95
     assert sampler["num_chains"] == 8 and sampler["init"] == "jitter"

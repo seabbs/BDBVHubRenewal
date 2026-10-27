@@ -396,6 +396,8 @@ def main() -> int:
     pp.add_argument("--ppc", required=True)
     pp.add_argument("--out", required=True)
     sub.add_parser("chosen-model")
+    b = sub.add_parser("bvd")
+    b.add_argument("--vintages", nargs="*", default=None)
     sub.add_parser("hub-id")
     co = sub.add_parser("coherence")
     co.add_argument("--vintage", required=True)
@@ -412,6 +414,7 @@ def main() -> int:
         "plot-ppc": cmd_plot,
         "coherence": cmd_coherence,
         "chosen-model": lambda _a: print("hubrenewal") or 0,
+        "bvd": lambda _a: 0,
         "hub-id": lambda _a: print("epiforecasts-seabbsrenewal") or 0,
     }[args.command](args)
 
