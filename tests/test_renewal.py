@@ -37,7 +37,9 @@ def test_variants_are_registered_as_fitted_models() -> None:
         model = get_model(name)
         assert isinstance(model, ForecastModel)
         assert model.name == name
-        assert getattr(model, "supports_mask", False)
+    # The single patch fits the national sum, so cannot mask a province.
+    assert get_model("hubrenewal").supports_mask
+    assert not get_model("hubrenewalsp").supports_mask
     assert not specs["persistence"].fitted
     # Hub model abbreviations: letters, digits and underscores, under 16.
     for name in specs:
