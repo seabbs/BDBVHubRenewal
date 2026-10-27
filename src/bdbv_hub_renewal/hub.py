@@ -20,6 +20,7 @@ import datetime as dt
 import json
 import math
 import re
+import tomllib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -41,11 +42,13 @@ __all__ = [
     "METADATA_DEFAULTS",
     "OUTPUT_TYPE",
     "ROUND_NAME",
+    "SUBMISSION_CONFIG",
     "TEAM_ABBR",
     "HubRound",
     "load_hub_round",
     "model_id",
     "render_model_metadata",
+    "submission_model_abbr",
     "submission_path",
     "to_hub_table",
     "validate_model_id",
@@ -174,6 +177,31 @@ def load_hub_round(
             window_end=int(due["end"]),
         )
     raise ValueError(f"Round {round_name!r} not found in {tasks_json}.")
+
+
+SUBMISSION_CONFIG: Final = Path("config/hub.toml")
+"""Where the submitted model abbreviation is set."""
+
+
+def submission_model_abbr(path: Path | str = SUBMISSION_CONFIG) -> str:
+    """Return the model abbreviation every submission uses.
+
+    It is one value in `config/hub.toml`, not derived from a model key,
+    so every renewal variant and every fallback submits under one id.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        The configuration file.
+
+    Returns
+    -------
+    str
+        The abbreviation, such as `"seabbsrenewal"`.
+    """
+    with Path(path).open("rb") as fh:
+        config = tomllib.load(fh)
+    return str(config["submission"]["model_abbr"])
 
 
 def model_id(model_abbr: str, team_abbr: str = TEAM_ABBR) -> str:

@@ -1,7 +1,7 @@
 team_name: EpiForecasts
 team_abbr: epiforecasts
 model_name: Province renewal model (PyRenew)
-model_abbr: hubrenewal
+model_abbr: seabbsrenewal
 model_contributors:
 - name: Sam Abbott
   affiliation: London School of Hygiene & Tropical Medicine

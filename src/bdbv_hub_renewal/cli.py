@@ -51,9 +51,11 @@ from .data import (
 from .fitting import Forecast, get_config, run_fit, run_forecast
 from .heldout import HeldOutError, run_heldout
 from .hub import (
+    SUBMISSION_CONFIG,
     load_hub_round,
     model_id,
     render_model_metadata,
+    submission_model_abbr,
     to_hub_table,
     validate_model_metadata,
     validate_submission_file,
@@ -129,6 +131,25 @@ MODEL_METADATA = {
 """Metadata text for each model that may be submitted."""
 
 
+_ABBR_HELP = (
+    "Hub model abbreviation. Defaults to `persistence` for persistence and "
+    "otherwise to the submission abbreviation in config/hub.toml."
+)
+
+
+def _abbr(args: argparse.Namespace) -> str:
+    if args.abbr:
+        return str(args.abbr)
+    if args.model == "persistence":
+        return "persistence"
+    return submission_model_abbr(args.hub_toml)
+
+
+def _abbr_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--abbr", default=None, help=_ABBR_HELP)
+    p.add_argument("--hub-toml", default=str(SUBMISSION_CONFIG))
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the argument parser.
 
@@ -184,9 +205,9 @@ def build_parser() -> argparse.ArgumentParser:
     now.add_argument(
         "--model",
         default="persistence",
-        help="Model name: the hub model id is `epiforecasts-<model>`. "
-        "Without --config, the registered model to run.",
+        help="Model name. Without --config, the registered model to run.",
     )
+    _abbr_args(now)
     _task_args(now, data_dir)
     now.add_argument(
         "--config",
@@ -241,10 +262,21 @@ def build_parser() -> argparse.ArgumentParser:
 
     meta = sub.add_parser("metadata", help="Write model metadata YAML.")
     meta.add_argument("--model", default="persistence")
+    _abbr_args(meta)
     meta.add_argument("--out", default="hub/model-metadata")
     meta.add_argument(
         "--schema", default=f"{data_dir}/hub-config/model-metadata-schema.json"
     )
+
+    hid = sub.add_parser(
+        "hub-id", help="Print the hub model id that submissions use."
+    )
+    hid.add_argument("--hub-toml", default=str(SUBMISSION_CONFIG))
+    cho = sub.add_parser(
+        "chosen-model",
+        help="Print the model chosen in the model choice record.",
+    )
+    cho.add_argument("--backtest-config", default="config/backtest.toml")
 
     cmp = sub.add_parser(
         "compare-hub", help="Compare our forecasts with hub submissions."
@@ -428,7 +460,7 @@ def _nowcast(args: argparse.Namespace) -> int:
     except (KeyError, ValueError, OSError) as err:
         print(f"ERROR: {err}", file=sys.stderr)
         return 1
-    mid = model_id(args.model)
+    mid = model_id(_abbr(args))
     path = write_submission(table, args.out, mid)
     _write_national_sidecar(Path(args.out), task, result)
     # Problems handled on the way, for the PR's `Handled:` line.
@@ -548,9 +580,12 @@ def _print_coherence(summary: dict[str, object]) -> None:
 
 
 def _metadata(args: argparse.Namespace) -> int:
+    if args.model not in MODEL_METADATA:
+        print(f"ERROR: no metadata text for {args.model!r}.", file=sys.stderr)
+        return 1
     text = MODEL_METADATA[args.model]
     record = render_model_metadata(
-        args.model,
+        _abbr(args),
         model_name=text["model_name"],
         methods=text["methods"],
         methods_long=text["methods_long"],
@@ -562,6 +597,19 @@ def _metadata(args: argparse.Namespace) -> int:
     for e in errors:
         print(f"ERROR: {e}", file=sys.stderr)
     return 1 if errors else 0
+
+
+def _chosen_model(args: argparse.Namespace) -> int:
+    from .heldout import load_model_choices
+
+    choices = load_model_choices(
+        bt.load_config(args.backtest_config).model_choice
+    )
+    if not choices:
+        print("ERROR: no model has been chosen.", file=sys.stderr)
+        return 1
+    print(choices[-1].model)
+    return 0
 
 
 def _compare_hub(args: argparse.Namespace) -> int:
@@ -659,6 +707,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _nowcast(args)
     if args.command == "metadata":
         return _metadata(args)
+    if args.command == "hub-id":
+        print(model_id(submission_model_abbr(args.hub_toml)))
+        return 0
+    if args.command == "chosen-model":
+        return _chosen_model(args)
     if args.command == "compare-hub":
         return _compare_hub(args)
     from .report import make_report

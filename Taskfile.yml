@@ -68,6 +68,10 @@ tasks:
     deps: [nowcast, metadata]
     vars:
       MODEL: '{{.MODEL | default "persistence"}}'
+      ID:
+        sh: >-
+          [ "{{.MODEL}}" = persistence ] && echo epiforecasts-persistence
+          || uv run --quiet bdbv-hub-renewal hub-id
     env:
       R_CACHE_ROOTPATH: '{{.R_CACHE_ROOTPATH | default (printf "%s/rcache" (env "TMPDIR" | default "/tmp"))}}'
     cmds:
@@ -76,12 +80,12 @@ tasks:
       - >-
         uv run bdbv-hub-renewal validate --hub output/hub --skip-window
         --metadata-dir hub/model-metadata
-        $(ls output/submission/model-output/epiforecasts-{{.MODEL}}/*.csv | tail -n 1)
-        hub/model-metadata/epiforecasts-{{.MODEL}}.yml
+        $(ls output/submission/model-output/{{.ID}}/*.csv | tail -n 1)
+        hub/model-metadata/{{.ID}}.yml
       - >-
         Rscript scripts/validate-hub.R output/hub
-        $(ls output/submission/model-output/epiforecasts-{{.MODEL}}/*.csv | tail -n 1)
-        hub/model-metadata/epiforecasts-{{.MODEL}}.yml
+        $(ls output/submission/model-output/{{.ID}}/*.csv | tail -n 1)
+        hub/model-metadata/{{.ID}}.yml
 
   ci-test:
     desc: Lint, type-check and test the submission CI scripts in ci/

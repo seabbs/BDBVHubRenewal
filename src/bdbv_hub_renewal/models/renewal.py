@@ -71,7 +71,9 @@ __all__ = [
 ]
 
 HUB_MODEL: Final = "hubrenewal"
-"""The model every fit configuration reports, as `epiforecasts-hubrenewal`."""
+"""The model every fit configuration reports in its records.
+
+It is the internal key. The hub id is set apart, in `config/hub.toml`."""
 
 SAMPLER_ENV: Final = "BDBV_RENEWAL_SAMPLER"
 """Environment variable with JSON sampler settings for registered models."""
