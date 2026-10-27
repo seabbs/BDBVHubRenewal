@@ -47,6 +47,7 @@ __all__ = [
     "plot_relative_skill",
     "plot_revisions",
     "plot_scores",
+    "plot_scores_by_truth",
     "plot_simulation",
     "plot_target",
     "save_light_dark",
@@ -1077,6 +1078,58 @@ def plot_scores(
         ax.set_xlabel(by.capitalize())
     axes[0].set_ylabel(_METRIC_LABELS.get(metric, metric))
     axes[0].legend()
+    return fig
+
+
+def plot_scores_by_truth(
+    scores: pd.DataFrame,
+    metric: str = "wis",
+    models: Sequence[str] | None = None,
+    mode: str = "light",
+) -> Figure:
+    """Plot how each forecast's mean score moves as the truth is revised.
+
+    Parameters
+    ----------
+    scores : pandas.DataFrame
+        Output of `bdbv_forecasts.backtest.score_by_truth_vintage`.
+    metric : str
+        A score column.
+    models : sequence of str, optional
+        Models in registry order, one panel each.
+    mode : str
+        `"light"` or `"dark"`.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Mean score against the truth vintage, one line per forecast
+        vintage.
+    """
+    models = list(models or scores["model"].unique())
+    models = [m for m in models if m in set(scores["model"])]
+    fig, axes = _grid(len(models), 3, width=3.6, height=2.6)
+    vintages = sorted(set(scores["vintage"]))
+    for ax, m in zip(axes, models, strict=True):
+        s = scores.loc[scores["model"] == m]
+        mean = s.groupby(["vintage", "truth_vintage"])[metric].mean()
+        for v in vintages:
+            if v not in mean.index.get_level_values(0):
+                continue
+            line = mean.loc[v]
+            ax.plot(
+                pd.to_datetime(line.index),
+                line.to_numpy(),
+                color=model_colour(v, vintages, mode),
+                marker="o",
+                ms=5,
+                label=f"Forecast from {v}",
+            )
+        ax.set_title(m)
+        ax.set_xlabel("Truth vintage")
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
+    axes[0].set_ylabel(_METRIC_LABELS.get(metric, metric))
+    axes[0].legend(fontsize=7)
     return fig
 
 

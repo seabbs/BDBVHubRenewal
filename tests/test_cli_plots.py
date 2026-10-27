@@ -99,3 +99,10 @@ def test_forecast_draws_trajectories_ribbons_and_median() -> None:
     # 50% and 90% ribbons.
     assert len(ax.collections) == 2
     plt.close(fig)
+
+
+def test_plot_scores_by_truth() -> None:
+    scores = pd.read_csv(ROOT / "results" / "backtest-scores-by-truth.csv")
+    fig = plots.plot_scores_by_truth(scores, models=["persistence"])
+    assert len(fig.axes) == 1
+    assert len(fig.axes[0].lines) == scores["vintage"].nunique()

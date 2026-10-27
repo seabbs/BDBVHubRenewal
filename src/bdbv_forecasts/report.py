@@ -10,12 +10,21 @@ Backtest and Nowcast pages without changes here.
 
 from __future__ import annotations
 
+import datetime as dt
+import json
 from functools import partial
 from pathlib import Path
 
 import pandas as pd
+import yaml
 
-from .backtest import load_config, make_tasks, run_forecasts
+from .backtest import (
+    BacktestConfig,
+    load_config,
+    make_tasks,
+    run_forecasts,
+    truth_changes,
+)
 from .data import (
     COHERENCE_STREAMS,
     load_delays,
@@ -23,9 +32,12 @@ from .data import (
     national_coherence,
     newly_missing,
 )
+from .dates import reference_date_for_vintage
 from .delays import delay_summary
+from .hubcompare import attribution, display_names, load_comparison_config
 from .models.base import NATIONAL, get_model, list_models
 from .plots import (
+    plot_comparison,
     plot_delay_distribution,
     plot_delays_over_time,
     plot_forecasts,
@@ -36,6 +48,7 @@ from .plots import (
     plot_relative_skill,
     plot_revisions,
     plot_scores,
+    plot_scores_by_truth,
     plot_simulation,
     plot_target,
     save_light_dark,
@@ -63,6 +76,8 @@ def make_report(
     results: Path | str = "results",
     output: Path | str = "output/backtest",
     config_path: Path | str = "config/backtest.toml",
+    hub_comparison: Path | str = "output/hub-comparison",
+    comparison_config: Path | str = "config/hub-comparison.toml",
 ) -> None:
     """Write every docs figure and table.
 
@@ -80,6 +95,10 @@ def make_report(
         Where the backtest forecasts are.
     config_path : pathlib.Path or str
         Backtest settings.
+    hub_comparison : pathlib.Path or str
+        Output of `bdbv-forecasts compare-hub`, if it has been run.
+    comparison_config : pathlib.Path or str
+        Hub comparison settings, for the display mode.
     """
     fig, gen = Path(figures), Path(generated)
     res, out = Path(results), Path(output)
@@ -185,95 +204,17 @@ def make_report(
         fig / "simulation.svg",
     )
 
-    # Backtest page.
+    # Backtest, held-out and comparison pages.
     names = [s.name for s in list_models()]
-    dev_path = res / "backtest-scores.csv"
-    if dev_path.exists():
-        scores = pd.read_csv(dev_path)
-        for by in ("horizon", "location"):
-            for metric in ("wis", "log_wis", "coverage_90", "bias"):
-                save_light_dark(
-                    partial(
-                        plot_scores, scores, by=by, metric=metric, models=names
-                    ),
-                    fig / f"scores-{metric.replace('_', '-')}-{by}.svg",
-                )
-            save_light_dark(
-                partial(plot_relative_skill, scores, by=by, models=names),
-                fig / f"relative-wis-{by}.svg",
-            )
-        overall = summarise_scores(scores, by=("model", "kind"))
-        _write(gen / "scores-overall.md", _table(overall))
-        rel = relative_skill(scores, by=("kind",))
-        _write(gen / "relative-skill.md", _table(rel))
-        by_loc = summarise_scores(scores, by=("model", "kind", "location"))
-        _write(
-            gen / "scores-location.md",
-            _table(
-                by_loc[
-                    [
-                        "model",
-                        "kind",
-                        "location",
-                        "n",
-                        "wis",
-                        "log_wis",
-                        "coverage_50",
-                        "coverage_90",
-                        "bias",
-                    ]
-                ]
-            ),
-        )
-    fc_path = out / "forecasts.csv.gz"
-    if fc_path.exists():
-        forecasts = pd.read_csv(fc_path)
-        rec_all = reconstruct_vintages(
-            real, delays, list(config.reconstructed_dates)
-        )
-        both = pd.concat([target, rec_all], ignore_index=True)
-        for loc in (NATIONAL, "CD-IT", "CD-NK"):
-            slug = loc.lower()
-            save_light_dark(
-                partial(
-                    plot_forecasts,
-                    forecasts,
-                    both,
-                    loc,
-                    models=names,
-                    kind="real",
-                ),
-                fig / f"forecasts-real-{slug}.svg",
-            )
-            save_light_dark(
-                partial(
-                    plot_forecasts,
-                    forecasts,
-                    both,
-                    loc,
-                    models=names,
-                    kind="reconstructed",
-                ),
-                fig / f"forecasts-reconstructed-{slug}.svg",
-            )
-    rec_path = res / "recovery-scores.csv"
-    if rec_path.exists():
-        rscores = pd.read_csv(rec_path)
-        save_light_dark(
-            lambda mode: plot_scores(
-                rscores, by="horizon", models=names, mode=mode
-            ),
-            fig / "recovery-wis-horizon.svg",
-        )
-    heldout = res / "heldout-scores.csv"
-    if heldout.exists():
-        hscores = pd.read_csv(heldout)
-        _write(
-            gen / "heldout.md",
-            _table(summarise_scores(hscores, by=("model", "horizon"))),
-        )
-    else:
-        _write(gen / "heldout.md", "No held-out evaluation has been run yet.\n")
+    _backtest_page(fig, gen, res, out, config, target, delays, names)
+    _heldout_page(fig, gen, res, target, names)
+    _comparison_page(
+        fig / "comparison",
+        gen,
+        Path(hub_comparison),
+        load_comparison_config(comparison_config).display,
+        target,
+    )
 
     # Nowcast page: latest real vintage, every registered model.
     rows = real.loc[real["vintage"] == latest]
@@ -311,3 +252,383 @@ def make_report(
         f"Vintage **{latest}**, reference date **{ref}**, models "
         f"{', '.join(f'`{n}`' for n in names)}.\n",
     )
+
+
+def _persistence_bias(scores: pd.DataFrame) -> str:
+    real = scores.loc[
+        (scores["kind"] == "real") & (scores["model"] == "persistence")
+    ]
+    if real.empty:
+        return ""
+    by_h = real.groupby("horizon")[["bias", "coverage_90"]].mean()
+    worst = by_h.sort_values("bias").head(3)
+    hs = sorted(int(h) for h in worst.index)
+    lo, hi = worst["coverage_90"].min(), worst["coverage_90"].max()
+    return (
+        f"On real vintages persistence has a mean bias of "
+        f"{real['bias'].mean():.2f}.\n"
+        f"It is most negative at horizons "
+        f"{', '.join(str(h) for h in hs[:-1])} and {hs[-1]}, where 90% "
+        f"coverage is {lo:.2f} to {hi:.2f}.\n"
+    )
+
+
+def _relative_section(scores: pd.DataFrame) -> str:
+    if scores["model"].nunique() < 2:
+        return (
+            "Only persistence exists so far, so there is nothing to compare "
+            "it with.\n"
+            "Relative scores appear here once another model is registered.\n"
+        )
+    rel = relative_skill(scores, by=("kind",))
+    tabs = []
+    for by, label in (("horizon", "By horizon"), ("location", "By province")):
+        alt = f"WIS relative to persistence {label.lower()}."
+        tabs.append(
+            f'=== "{label}"\n\n'
+            f"    ![{alt}](figures/relative-wis-{by}.svg#only-light)\n"
+            f"    ![{alt}](figures/relative-wis-{by}-dark.svg#only-dark)\n"
+        )
+    return (
+        "Mean scores divided by those of persistence over the forecasts "
+        "both made.\nValues below 1 beat persistence.\n\n"
+        + _table(rel)
+        + "\n"
+        + "\n".join(tabs)
+    )
+
+
+def _backtest_page(
+    fig: Path,
+    gen: Path,
+    res: Path,
+    out: Path,
+    config: BacktestConfig,
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    names: list[str],
+) -> None:
+    real = target.loc[target["kind"] == "real"]
+    dev_path = res / "backtest-scores.csv"
+    if dev_path.exists():
+        scores = pd.read_csv(dev_path)
+        for by in ("horizon", "location"):
+            for metric in ("wis", "log_wis", "coverage_90", "bias"):
+                save_light_dark(
+                    partial(
+                        plot_scores, scores, by=by, metric=metric, models=names
+                    ),
+                    fig / f"scores-{metric.replace('_', '-')}-{by}.svg",
+                )
+            save_light_dark(
+                partial(plot_relative_skill, scores, by=by, models=names),
+                fig / f"relative-wis-{by}.svg",
+            )
+        truth_v = ", ".join(sorted(set(scores["truth_vintage"].astype(str))))
+        _write(
+            gen / "backtest-truth.md",
+            f"Scores are against the **{truth_v}** vintage, as reported "
+            "then.\n",
+        )
+        overall = summarise_scores(scores, by=("model", "kind"))
+        _write(gen / "scores-overall.md", _table(overall))
+        _write(gen / "relative-section.md", _relative_section(scores))
+        _write(gen / "persistence-bias.md", _persistence_bias(scores))
+        by_loc = summarise_scores(scores, by=("model", "kind", "location"))
+        _write(
+            gen / "scores-location.md",
+            _table(
+                by_loc[
+                    [
+                        "model",
+                        "kind",
+                        "location",
+                        "n",
+                        "wis",
+                        "log_wis",
+                        "coverage_50",
+                        "coverage_90",
+                        "bias",
+                    ]
+                ]
+            ),
+        )
+    by_truth_path = res / "backtest-scores-by-truth.csv"
+    if by_truth_path.exists():
+        by_truth = pd.read_csv(by_truth_path)
+        save_light_dark(
+            partial(plot_scores_by_truth, by_truth, models=names),
+            fig / "scores-by-truth.svg",
+        )
+        table = summarise_scores(
+            by_truth, by=("model", "vintage", "truth_vintage")
+        )
+        _write(
+            gen / "scores-by-truth.md",
+            _table(
+                table[
+                    [
+                        "model",
+                        "vintage",
+                        "truth_vintage",
+                        "n",
+                        "wis",
+                        "log_wis",
+                        "coverage_90",
+                        "bias",
+                    ]
+                ]
+            ),
+        )
+        weeks = sorted(set(by_truth["target_end_date"].astype(str)))
+        changes = truth_changes(target, locations=(NATIONAL,))
+        changes = changes.loc[changes["target_end_date"].isin(weeks)]
+        wide = changes.pivot_table(
+            index="target_end_date", columns="truth_vintage", values="truth"
+        )
+        wide.columns = [f"as reported {c}" for c in wide.columns]
+        wide = wide.astype("Int64").astype(str).replace("<NA>", "")
+        _write(gen / "truth-changes.md", _table(wide.reset_index()))
+    fc_path = out / "forecasts.csv.gz"
+    if fc_path.exists():
+        forecasts = pd.read_csv(fc_path)
+        rec_all = reconstruct_vintages(
+            real, delays, list(config.reconstructed_dates)
+        )
+        both = pd.concat([target, rec_all], ignore_index=True)
+        for loc in (NATIONAL, "CD-IT", "CD-NK"):
+            slug = loc.lower()
+            for kind in ("real", "reconstructed"):
+                save_light_dark(
+                    partial(
+                        plot_forecasts,
+                        forecasts,
+                        both,
+                        loc,
+                        models=names,
+                        kind=kind,
+                    ),
+                    fig / f"forecasts-{kind}-{slug}.svg",
+                )
+    rec_path = res / "recovery-scores.csv"
+    if rec_path.exists():
+        rscores = pd.read_csv(rec_path)
+        save_light_dark(
+            lambda mode: plot_scores(
+                rscores, by="horizon", models=names, mode=mode
+            ),
+            fig / "recovery-wis-horizon.svg",
+        )
+
+
+def _heldout_page(
+    fig: Path,
+    gen: Path,
+    res: Path,
+    target: pd.DataFrame,
+    names: list[str],
+) -> None:
+    run_path = res / "heldout-run.yml"
+    if not run_path.exists():
+        for name in ("heldout-status.md", "heldout-scores.md"):
+            _write(gen / name, "No held-out evaluation has been run yet.\n")
+        _write(gen / "heldout-forecasts.md", "")
+        return
+    run = yaml.safe_load(run_path.read_text())
+    scores_path = res / "heldout-scores.csv"
+    scores = (
+        pd.read_csv(scores_path)
+        if scores_path.stat().st_size > 1
+        else pd.DataFrame()
+    )
+    rows = []
+    for entry in [*run["scored"], *run["pending"]]:
+        v = str(entry["vintage"])
+        truths = (
+            sorted(set(scores.loc[scores["vintage"] == v, "truth_vintage"]))
+            if not scores.empty
+            else []
+        )
+        rows.append(
+            {
+                "vintage": v,
+                "reference_date": reference_date_for_vintage(v).isoformat(),
+                "model chosen": entry["model"],
+                "scored against": ", ".join(map(str, truths))
+                or "pending: first score with the next vintage",
+            }
+        )
+    status = pd.DataFrame(rows).sort_values("vintage")
+    _write(
+        gen / "heldout-status.md",
+        f"Last run {run['run_at']} on vintages up to "
+        f"**{run['latest_vintage']}**.\n\n" + _table(status),
+    )
+    if scores.empty:
+        _write(
+            gen / "heldout-scores.md", "No held-out forecast has a score yet.\n"
+        )
+    else:
+        overall = summarise_scores(
+            scores, by=("chosen_model", "model", "vintage", "truth_vintage")
+        )
+        horizon = summarise_scores(
+            scores, by=("model", "vintage", "truth_vintage", "horizon")
+        )
+        cols = ["n", "wis", "log_wis", "coverage_50", "coverage_90", "bias"]
+        _write(
+            gen / "heldout-scores.md",
+            _table(
+                overall[
+                    ["chosen_model", "model", "vintage", "truth_vintage", *cols]
+                ]
+            )
+            + "\nBy horizon, over provinces and the national total:\n\n"
+            + _table(
+                horizon[["model", "vintage", "truth_vintage", "horizon", *cols]]
+            ),
+        )
+    fc_path = res / "heldout-forecasts.csv.gz"
+    if not fc_path.exists():
+        _write(gen / "heldout-forecasts.md", "")
+        return
+    forecasts = pd.read_csv(fc_path)
+    models = [n for n in names if n in set(forecasts["model"])]
+    tabs = []
+    loc_names = _location_names(target)
+    for loc in (NATIONAL, "CD-IT", "CD-NK"):
+        slug = loc.lower()
+        save_light_dark(
+            partial(plot_forecasts, forecasts, target, loc, models=models),
+            fig / f"heldout-{slug}.svg",
+        )
+        label = f"{loc_names.get(loc, loc)} ({loc})"
+        alt = f"Held-out forecasts against later data, {label}."
+        tabs.append(
+            f'=== "{label}"\n\n'
+            f"    ![{alt}](figures/heldout-{slug}.svg#only-light)\n"
+            f"    ![{alt}](figures/heldout-{slug}-dark.svg#only-dark)\n"
+        )
+    _write(gen / "heldout-forecasts.md", "\n".join(tabs))
+
+
+def _location_names(target: pd.DataFrame) -> dict[str, str]:
+    pairs = target[["location", "location_name"]].drop_duplicates()
+    return dict(zip(pairs["location"], pairs["location_name"], strict=False))
+
+
+def _comparison_page(
+    fig: Path,
+    gen: Path,
+    cmp_dir: Path,
+    display: str,
+    target: pd.DataFrame,
+) -> None:
+    names_out = (
+        "comparison-teams.md",
+        "comparison-scores.md",
+        "comparison-pending.md",
+        "comparison-other.md",
+        "comparison-figures.md",
+    )
+    accessed = dt.date.today().isoformat()
+    manifest = cmp_dir / "manifest.json"
+    if manifest.exists():
+        accessed = str(json.loads(manifest.read_text())["accessed"])
+    _write(gen / "comparison-attribution.md", f"> {attribution(accessed)}\n")
+    if not (cmp_dir / "scores.csv").exists():
+        for name in names_out:
+            _write(
+                gen / name,
+                "Not run yet: `bdbv-forecasts compare-hub --fetch`.\n",
+            )
+        return
+    teams = pd.read_csv(cmp_dir / "teams.csv")
+    forecasts = pd.read_csv(cmp_dir / "forecasts.csv.gz")
+    models = sorted(set(teams["model"]) | set(forecasts["model"]))
+    names = display_names(models, display)
+    _write(
+        gen / "comparison-display.md",
+        f"Display mode: **{display}**.\n",
+    )
+    shown = teams.loc[teams["model"].isin(list(names))].assign(
+        model=lambda d: d["model"].map(names)
+    )
+    if display != "named":
+        shown = shown.drop(columns=["team_name", "model_name", "website_url"])
+    _write(gen / "comparison-teams.md", _table(shown.sort_values("model")))
+
+    def _relabel(df: pd.DataFrame) -> pd.DataFrame:
+        df = df.loc[df["model"].isin(list(names))].copy()
+        df["model"] = df["model"].map(names)
+        return df
+
+    scores = (
+        pd.read_csv(cmp_dir / "scores.csv")
+        if (cmp_dir / "scores.csv").stat().st_size > 1
+        else pd.DataFrame()
+    )
+    if scores.empty:
+        _write(
+            gen / "comparison-scores.md",
+            "No hub forecast can be scored yet.\n",
+        )
+    else:
+        scores = _relabel(scores)
+        _write(
+            gen / "comparison-scores.md",
+            _table(
+                summarise_scores(
+                    scores, by=("reference_date", "model", "source")
+                )[
+                    [
+                        "reference_date",
+                        "model",
+                        "source",
+                        "n",
+                        "wis",
+                        "log_wis",
+                        "coverage_50",
+                        "coverage_90",
+                        "bias",
+                    ]
+                ]
+            ),
+        )
+    pending = pd.read_csv(cmp_dir / "pending.csv")
+    pending["models"] = pending["models"].map(
+        lambda ms: ", ".join(
+            names[m] for m in str(ms).split(", ") if m in names
+        )
+    )
+    _write(
+        gen / "comparison-pending.md",
+        _table(pending) if not pending.empty else "None.\n",
+    )
+    other = _relabel(pd.read_csv(cmp_dir / "other-rounds.csv"))
+    summary = other.groupby(["model", "target"], as_index=False).agg(
+        files=("reference_date", "size"),
+        first=("reference_date", "min"),
+        last=("reference_date", "max"),
+    )
+    _write(
+        gen / "comparison-other.md",
+        _table(summary) if not summary.empty else "None.\n",
+    )
+    tabs = []
+    for loc in (NATIONAL, "CD-IT", "CD-NK"):
+        if loc not in set(forecasts["location"]):
+            continue
+        slug = loc.lower()
+        save_light_dark(
+            partial(plot_comparison, forecasts, target, loc, names=names),
+            fig / f"comparison-{slug}.svg",
+        )
+        alt = f"Hub and our forecasts for {loc}."
+        src = f"figures/comparison/comparison-{slug}"
+        tabs.append(
+            f'=== "{loc}"\n\n'
+            f"    ![{alt}]({src}.svg#only-light)\n"
+            f"    ![{alt}]({src}-dark.svg#only-dark)\n"
+        )
+    _write(gen / "comparison-figures.md", "\n".join(tabs))
