@@ -246,3 +246,13 @@ def test_refresh_cache_fetches_the_release_of_each_vintage(
     }
     assert bvd.load_releases(tmp_path) is not None
     assert (tmp_path / "results-3151" / "posterior_draws.csv").exists()
+
+
+def test_early_releases_give_rt_from_the_growth_rate() -> None:
+    # Early builds publish the growth rate r but not R_T.
+    rel = bvd.load_release(FIXTURES / "results-657")
+    draws = pd.read_csv(FIXTURES / "results-657" / "posterior_draws.csv")
+    k = (bvd.BVD_GI_MEAN / bvd.BVD_GI_SD) ** 2
+    theta = bvd.BVD_GI_SD**2 / bvd.BVD_GI_MEAN
+    expected = k * np.log1p(draws["r"].to_numpy() * theta)
+    np.testing.assert_allclose(rel.national_log_rt, expected)
