@@ -40,7 +40,11 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from .dates import HUB_TIMEZONE, reference_date_for_vintage, submission_window
+from bdbv_hub_renewal.dates import (
+    HUB_TIMEZONE,
+    reference_date_for_vintage,
+    submission_window,
+)
 
 __all__ = [
     "ASSETS",

@@ -43,7 +43,7 @@ from typing import Any, Final
 import numpy as np
 import pandas as pd
 
-from .dates import epiweek_end
+from bdbv_hub_renewal.dates import epiweek_end
 
 __all__ = [
     "COHERENCE_HANDLING",

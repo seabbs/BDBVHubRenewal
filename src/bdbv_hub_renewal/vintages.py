@@ -46,9 +46,9 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 
-from .dates import as_date, epiweek_end
-from .delays import DEFAULT_MAX_DELAY, empirical_pmf
-from .models.base import NATIONAL
+from bdbv_hub_renewal.dates import as_date, epiweek_end
+from bdbv_hub_renewal.delays import DEFAULT_MAX_DELAY, empirical_pmf
+from bdbv_hub_renewal.models.base import NATIONAL
 
 __all__ = [
     "PUBLICATION_LAG_DAYS",

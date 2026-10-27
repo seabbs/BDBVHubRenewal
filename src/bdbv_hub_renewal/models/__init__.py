@@ -6,7 +6,7 @@ To add a variant, write a class with `name` and `forecast(task)` and call
 `register_model` in its module, then import that module here.
 """
 
-from .base import (
+from bdbv_hub_renewal.models.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
     ForecastModel,
@@ -18,8 +18,12 @@ from .base import (
     list_models,
     register_model,
 )
-from .persistence import Persistence, completeness_lag, last_complete_week
-from .renewal import VARIANTS, RenewalModel
+from bdbv_hub_renewal.models.persistence import (
+    Persistence,
+    completeness_lag,
+    last_complete_week,
+)
+from bdbv_hub_renewal.models.renewal import VARIANTS, RenewalModel
 
 __all__ = [
     "NATIONAL",

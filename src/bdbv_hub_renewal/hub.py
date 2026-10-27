@@ -30,7 +30,7 @@ import jsonschema
 import pandas as pd
 import yaml
 
-from .dates import (
+from bdbv_hub_renewal.dates import (
     HUB_TIMEZONE,
     as_date,
     is_saturday,

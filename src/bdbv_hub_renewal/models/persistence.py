@@ -34,9 +34,13 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from ..dates import as_date
-from ..delays import EmpiricalDelayModel
-from .base import SAMPLE_COLUMNS, ForecastTask, register_model
+from bdbv_hub_renewal.dates import as_date
+from bdbv_hub_renewal.delays import EmpiricalDelayModel
+from bdbv_hub_renewal.models.base import (
+    SAMPLE_COLUMNS,
+    ForecastTask,
+    register_model,
+)
 
 __all__ = ["Persistence", "completeness_lag", "last_complete_week"]
 

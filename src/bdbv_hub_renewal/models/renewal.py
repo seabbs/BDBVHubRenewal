@@ -41,10 +41,15 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from .base import NATIONAL, SAMPLE_COLUMNS, ForecastTask, register_model
+from bdbv_hub_renewal.models.base import (
+    NATIONAL,
+    SAMPLE_COLUMNS,
+    ForecastTask,
+    register_model,
+)
 
 if TYPE_CHECKING:
-    from ..fitting import Forecast
+    from bdbv_hub_renewal.fitting import Forecast
 
 __all__ = [
     "DEFAULT_SAMPLER",
@@ -106,7 +111,7 @@ def engine() -> ModuleType:
     module
         `bdbv_hub_renewal.model`.
     """
-    from .. import model
+    from bdbv_hub_renewal import model
 
     return model
 
@@ -372,8 +377,8 @@ def bvd_rows(
         `bdbv_hub_renewal.bvd.model_rows` of the release chosen for the
         vintage, or None if none qualifies.
     """
-    from .. import bvd
-    from ..data import _data_dir
+    from bdbv_hub_renewal import bvd
+    from bdbv_hub_renewal.data import _data_dir
 
     cache = (
         Path(cache_dir) if cache_dir is not None else _data_dir(None) / "bvd"
@@ -414,8 +419,8 @@ def vintage_inputs(
     bdbv_hub_renewal.model.Vintage
         The model inputs.
     """
-    from ..data import load_locations
-    from ..model.inputs import vintage_from_tables
+    from bdbv_hub_renewal.data import load_locations
+    from bdbv_hub_renewal.model.inputs import vintage_from_tables
 
     return vintage_from_tables(
         task.target,
@@ -1007,7 +1012,7 @@ def fit_renewal(
     dict
         The `diagnostics.json` record (schema 1, with `worst_rhat`).
     """
-    from ..ppc import summarise_draws, write_ppc
+    from bdbv_hub_renewal.ppc import summarise_draws, write_ppc
 
     out = Path(fit_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -1084,7 +1089,7 @@ def forecast_renewal(task: ForecastTask, fit_dir: Path | str) -> Forecast:
         Province samples, the unassigned component and the reported
         provinces.
     """
-    from ..fitting import Forecast
+    from bdbv_hub_renewal.fitting import Forecast
 
     path = Path(fit_dir)
     samples = pd.read_csv(path / SAMPLES_FILE, dtype={"target_end_date": str})

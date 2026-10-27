@@ -37,11 +37,11 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from .data import PROVINCE_CENTRES, PROVINCE_POPULATIONS
-from .dates import as_date, epiweek_end
-from .delays import ParametricDelay
-from .latent import renewal
-from .models.base import NATIONAL
+from bdbv_hub_renewal.data import PROVINCE_CENTRES, PROVINCE_POPULATIONS
+from bdbv_hub_renewal.dates import as_date, epiweek_end
+from bdbv_hub_renewal.delays import ParametricDelay
+from bdbv_hub_renewal.latent import renewal
+from bdbv_hub_renewal.models.base import NATIONAL
 
 __all__ = [
     "SimulatedOutbreak",

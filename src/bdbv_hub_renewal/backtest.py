@@ -36,17 +36,21 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-from .dates import as_date, epiweek_end, reference_date_for_vintage
-from .models.base import (
+from bdbv_hub_renewal.dates import (
+    as_date,
+    epiweek_end,
+    reference_date_for_vintage,
+)
+from bdbv_hub_renewal.models.base import (
     NATIONAL,
     ForecastModel,
     ForecastTask,
     add_national,
     check_samples,
 )
-from .scoring import score_forecasts
-from .simulate import SimulationSettings, simulate_outbreak
-from .vintages import reconstruct_delays, reconstruct_vintages
+from bdbv_hub_renewal.scoring import score_forecasts
+from bdbv_hub_renewal.simulate import SimulationSettings, simulate_outbreak
+from bdbv_hub_renewal.vintages import reconstruct_delays, reconstruct_vintages
 
 __all__ = [
     "BacktestConfig",

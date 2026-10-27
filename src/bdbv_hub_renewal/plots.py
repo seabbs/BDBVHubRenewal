@@ -29,8 +29,8 @@ import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
-from .data import imputed_share, newly_missing, revision_table
-from .delays import delay_summary
+from bdbv_hub_renewal.data import imputed_share, newly_missing, revision_table
+from bdbv_hub_renewal.delays import delay_summary
 
 __all__ = [
     "MODEL_COLOURS",
@@ -758,9 +758,9 @@ def plot_nowcast(
         Observed, imputed and total cases by onset week, and each model's
         sample trajectories, 50% and 90% intervals and median.
     """
-    from .backtest import load_config, make_tasks, run_forecasts
-    from .data import load_delays, load_target
-    from .models.base import get_model
+    from bdbv_hub_renewal.backtest import load_config, make_tasks, run_forecasts
+    from bdbv_hub_renewal.data import load_delays, load_target
+    from bdbv_hub_renewal.models.base import get_model
 
     target = load_target(data_dir) if target is None else target
     real = target.loc[target["kind"] == "real"]
@@ -963,7 +963,7 @@ def plot_submission(
     matplotlib.figure.Figure
         A grid with one panel per location.
     """
-    from .data import load_target
+    from bdbv_hub_renewal.data import load_target
 
     target = load_target(data_dir) if target is None else target
     fc = read_submission(submission, vintage)
@@ -1175,7 +1175,7 @@ def plot_relative_skill(
         Relative score by `by`, one panel per vintage kind, with a line at
         1. With only the baseline, the panels say so.
     """
-    from .scoring import relative_skill
+    from bdbv_hub_renewal.scoring import relative_skill
 
     models = list(models or scores["model"].unique())
     kinds = [

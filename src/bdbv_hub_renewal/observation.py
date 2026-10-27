@@ -40,7 +40,7 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from .delays import DEFAULT_MAX_DELAY, empirical_pmf
+from bdbv_hub_renewal.delays import DEFAULT_MAX_DELAY, empirical_pmf
 
 __all__ = [
     "delay_matrix",

@@ -38,7 +38,7 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-from .backtest import (
+from bdbv_hub_renewal.backtest import (
     BacktestConfig,
     make_tasks,
     merge_by_model,
@@ -46,8 +46,8 @@ from .backtest import (
     run_forecasts,
     score_by_truth_vintage,
 )
-from .dates import as_date
-from .models import get_model, list_models
+from bdbv_hub_renewal.dates import as_date
+from bdbv_hub_renewal.models import get_model, list_models
 
 __all__ = [
     "HeldOutError",

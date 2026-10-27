@@ -20,7 +20,7 @@ The package has these parts:
 - Docs: <https://seabbs.github.io/BDBVHubRenewal/>
 """
 
-from . import (
+from bdbv_hub_renewal import (
     backtest,
     data,
     dates,
@@ -34,12 +34,21 @@ from . import (
     simulate,
     vintages,
 )
-from .backtest import BacktestConfig, load_config, run_development
-from .data import load_delays, load_target
-from .hub import to_hub_table, validate_submission
-from .models import ForecastModel, ForecastTask, get_model, register_model
-from .plots import plot_nowcast
-from .scoring import relative_skill, score_forecasts
+from bdbv_hub_renewal.backtest import (
+    BacktestConfig,
+    load_config,
+    run_development,
+)
+from bdbv_hub_renewal.data import load_delays, load_target
+from bdbv_hub_renewal.hub import to_hub_table, validate_submission
+from bdbv_hub_renewal.models import (
+    ForecastModel,
+    ForecastTask,
+    get_model,
+    register_model,
+)
+from bdbv_hub_renewal.plots import plot_nowcast
+from bdbv_hub_renewal.scoring import relative_skill, score_forecasts
 
 __all__ = [
     "BacktestConfig",

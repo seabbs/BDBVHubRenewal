@@ -33,7 +33,7 @@ from typing import Any, Final
 
 import pandas as pd
 
-from .models.base import ForecastTask, check_samples, get_model
+from bdbv_hub_renewal.models.base import ForecastTask, check_samples, get_model
 
 __all__ = [
     "DIAGNOSTICS_SCHEMA_VERSION",
@@ -426,7 +426,7 @@ register_config(persistence_config("persistence"))
 
 
 def _renewal_config(name: str) -> FitConfig:
-    from .models.renewal import (
+    from bdbv_hub_renewal.models.renewal import (
         FIT_VARIANTS,
         VARIANTS,
         fit_renewal,
