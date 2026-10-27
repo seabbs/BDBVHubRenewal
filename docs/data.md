@@ -109,7 +109,7 @@ It is well identified.
   <figcaption markdown="1">
     Mean (line) and median (points) delay by onset week, with cases per week below on a log scale.
     Delays were long early on and shortened by June.
-    The fall in the last weeks is right truncation: only short delays have been reported yet.
+    The fall in the last weeks is right truncation, since only short delays have been reported yet.
   </figcaption>
 </figure>
 

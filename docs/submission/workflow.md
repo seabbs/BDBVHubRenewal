@@ -163,7 +163,8 @@ The checks it runs, and where the hub's README and config disagree, are in the [
 `DRY_RUN` is on unless the repository variable `DRY_RUN` is exactly `false`, or a manual run sets `dry_run: false`.
 A dry run does everything except push and open the pull request.
 It prints the pull request body to the log and the job summary, and uploads it in the `pr` artefact.
-It needs no secrets: it looks up any existing pull request with the workflow's own read-only token.
+It needs no secrets.
+It looks up any existing pull request with the workflow's own read-only token.
 
 To try it, run **Actions → Submit to the BDBV hub → Run workflow**, or:
 

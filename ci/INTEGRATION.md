@@ -89,7 +89,7 @@ bdbv-hub-renewal nowcast --model hubrenewal --config main --fit <fit dir> \
 bdbv-hub-renewal plot-submission --submission <csv> --vintage <as_of> --out <png>
 ```
 
-Draw what was **submitted**: the samples in `<csv>`, not a re-run of the model.
+Draw what was **submitted**, the samples in `<csv>`, not a re-run of the model.
 `plots.plot_nowcast` already takes them:
 
 ```python

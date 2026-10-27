@@ -47,4 +47,5 @@ Sam confirms the contributor list, licence and model name before a model is firs
 
 !!! note "Sample ids"
     Sample ids run from 1 to 100 within each location and are shared across locations.
-    `hubValidations` reads this as samples that are joint across locations, which they are: the national sample is the sum of the province samples with the same id.
+    `hubValidations` reads this as samples that are joint across locations, which they are.
+    The national sample is the sum of the province samples with the same id.

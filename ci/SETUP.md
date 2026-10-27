@@ -3,7 +3,7 @@
 This bundle submits each week's forecast to the [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub) as an automated pull request from `seabbs-bot`'s fork.
 Nobody approves the PR in CI.
 The gate decides, and the PR body states what was submitted and why.
-It is safe to install as is: `DRY_RUN` is on until you turn it off.
+It is safe to install as is, because `DRY_RUN` is on until you turn it off.
 
 ## What it does
 
@@ -162,7 +162,8 @@ If fits come close to the cap:
 ## The fallback chain
 
 The chain is set in `ci/policy.toml`.
-It should rarely move past the main model: problems are handled where they can be, and the PR body leads with a `Handled:` line saying what was handled and how.
+It should rarely move past the main model.
+Problems are handled where they can be, and the PR body leads with a `Handled:` line saying what was handled and how.
 For example: "Handled: main model refitted once (max R-hat is 1.2, past the retry threshold 1.1)."
 When a fallback is used, the status line names it and why, for example "Fallback model used (persistence baseline): main model was ruled out (convergence: min bulk ESS is 8, past the failure threshold 10)."
 The same text goes to `provenance.json` in the `gate` artefact, to the job summary and to the ledger.
