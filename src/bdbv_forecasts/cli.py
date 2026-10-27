@@ -216,6 +216,12 @@ def build_parser() -> argparse.ArgumentParser:
     rep = sub.add_parser("report", help="Make the docs figures and tables.")
     rep.add_argument("--figures", default="docs/figures")
     rep.add_argument("--generated", default="docs/generated")
+    rep.add_argument(
+        "--ledger",
+        default=None,
+        help="Checkout of the submission-ledger branch, for the pages of "
+        "submitted rounds (docs/nowcast/rounds/).",
+    )
     return parser
 
 
@@ -577,6 +583,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     from .report import make_report
 
     make_report(figures=args.figures, generated=args.generated)
+    from .rounds import make_round_pages
+
+    done = make_round_pages(args.ledger, generated=args.generated)
+    print(f"Round pages: {len(done)} submitted rounds.")
     return 0
 
 

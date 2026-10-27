@@ -47,11 +47,19 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --frozen --all-groups
+      # Pages for the submitted rounds come from the ledger branch that
+      # the submission workflow's record job writes.
+      - name: Fetch the submission ledger
+        run: |
+          mkdir -p output/ledger
+          if git fetch -q --depth 1 origin submission-ledger; then
+            git archive FETCH_HEAD | tar -x -C output/ledger
+          fi
       - name: Backtest, then the docs figures and tables
         run: |
           uv run bdbv-forecasts backtest
           uv run bdbv-forecasts backtest --evaluate-holdout
-          uv run bdbv-forecasts report
+          uv run bdbv-forecasts report --ledger output/ledger
       - name: Build the site into _site
         run: uv run mkdocs build --strict
       - uses: actions/upload-pages-artifact@v3

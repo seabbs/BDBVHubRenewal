@@ -5,6 +5,8 @@ The current nowcast and forecast from the latest vintage.
 
 --8<-- "nowcast-meta.md"
 
+--8<-- "latest-submission.md"
+
 Bars are the published counts by onset week: known onsets below and imputed onsets above.
 Faint lines are each model's 100 sample trajectories.
 Bands are its 50% and 90% intervals and the solid line its median.

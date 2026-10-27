@@ -362,6 +362,9 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
+      # To rebuild the docs, so the round's page that the PR links to
+      # (/nowcast/rounds/<reference_date>/) appears.
+      actions: write
     env:
       REFERENCE_DATE: ${{ needs.detect.outputs.reference_date }}
     steps:
@@ -383,6 +386,10 @@ jobs:
           SKIPPED: ${{ needs.gate.outputs.skipped }}
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: ci/steps/record.sh
+      - name: Rebuild the docs with this round's page
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --ref main -R "$GITHUB_REPOSITORY"
 
   outcome:
     name: Submission outcome
