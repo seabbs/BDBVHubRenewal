@@ -82,3 +82,16 @@ def test_retry_budget_caps_retries(tmp_path: Path) -> None:
     p = tmp_path / "p.toml"
     p.write_text(text)
     assert [c.id for c in load_policy(p).stage("retry")] == ["retry-1"]
+
+
+def test_shadow_candidates_are_fitted_but_never_in_the_chain(
+    tmp_path: Path,
+) -> None:
+    pol = load_policy(POLICY_PATH)
+    shadows = [c for c in pol.candidates if c.kind == "shadow"]
+    assert [c.id for c in shadows] == ["bvd"]
+    assert all(c.id != "bvd" for c in pol.chain())
+    root = repo(tmp_path)
+    primary = [e["id"] for e in matrix(pol, "primary", root, "hub")]
+    assert "bvd" in primary
+    assert primary[0] == "main"
