@@ -41,6 +41,7 @@ import yaml
 from .backtest import (
     BacktestConfig,
     make_tasks,
+    merge_by_model,
     real_vintages,
     run_forecasts,
     score_by_truth_vintage,
@@ -258,12 +259,16 @@ def run_heldout(
         )
         fc.insert(1, "chosen_model", row.model)
         frames.append(fc)
-    forecasts = pd.concat(frames, ignore_index=True)
+    out = Path(out_dir)
+    # Forecasts of models not run here, such as fitted variants run on a
+    # bigger machine, are kept and scored again against the latest data.
+    forecasts = merge_by_model(
+        out / "heldout-forecasts.csv.gz", pd.concat(frames, ignore_index=True)
+    )
     chosen = dict(zip(pairs["vintage"], pairs["model"], strict=True))
     scores = score_by_truth_vintage(forecasts, real)
     if not scores.empty:
         scores.insert(1, "chosen_model", scores["vintage"].map(chosen))
-    out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     forecasts.to_csv(out / "heldout-forecasts.csv.gz", index=False)
     scores.to_csv(out / "heldout-scores.csv", index=False)
