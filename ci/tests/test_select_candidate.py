@@ -255,3 +255,37 @@ def test_cli_exit_code_on_skip(
     assert read_json(tmp_path / "g" / "provenance.json")["selected"] is None
     rc = main(["triage", "--policy", policy, "--candidates", str(c)])
     assert rc == 0 and "need_retry=true" in out.read_text()
+
+
+STAND_IN = (
+    "the `main` config runs the persistence baseline until the PyRenew "
+    "renewal model is integrated"
+)
+
+
+def test_stand_in_is_named(tmp_path: Path) -> None:
+    root = tmp_path / "candidates"
+    chain(root, main=("skip", "pass"))
+    write_json(
+        root / "main" / "run.json", {"model": "renewal", "stand_in": STAND_IN}
+    )
+    prov = run_select(POLICY, root, tmp_path / "gate", None, retried=False)
+    assert prov["stand_in"] == STAND_IN
+    assert prov["produced_by"] == "main model (stand-in)"
+    assert prov["reason"] == "The main model (stand-in) cleared every check."
+    md = (tmp_path / "gate" / "provenance.md").read_text()
+    assert f"**Stand-in:** {STAND_IN}." in md
+    assert "| `main` | main model (stand-in) |" in md
+
+
+def test_stand_in_from_diagnostics_in_chain_table(tmp_path: Path) -> None:
+    root = tmp_path / "candidates"
+    chain(root, main=("fail", "pass"), retry_1=("pass", "pass"))
+    write_json(
+        root / "main" / "diagnostics.json",
+        {"sampler": "none", "stand_in": STAND_IN},
+    )
+    prov = run_select(POLICY, root, tmp_path / "gate", None, retried=True)
+    assert prov["selected"] == "retry-1"
+    assert prov["stand_in"] == ""
+    assert prov["reason"].startswith("Main model (stand-in) was ruled out")

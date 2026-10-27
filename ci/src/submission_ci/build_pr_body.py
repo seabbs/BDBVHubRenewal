@@ -28,6 +28,7 @@ from .common import (
     write_text,
 )
 from .hubdata import quantile, read_samples
+from .select_candidate import stand_in_line
 
 MAX_BODY = 60000  # GitHub's limit is 65536 characters
 SOURCE_REPO = "seabbs/bdbv-hub-baseline-forecasts"
@@ -180,11 +181,17 @@ def build(
     out.append(note + "\n")
     out.append(f"**Produced by: {provenance['produced_by']}.** ")
     out.append(provenance["reason"] + "\n")
+    if provenance.get("stand_in"):
+        out.append(stand_in_line(provenance["stand_in"]) + "\n")
     out.append(
         markdown_table(
             ["check", "status"],
             [
-                ["Overall", STATUS_LABEL[status]],
+                [
+                    "Overall",
+                    STATUS_LABEL[status]
+                    + (" (stand-in)" if provenance.get("stand_in") else ""),
+                ],
                 ["Convergence", _fit_cell(fit)],
                 ["Posterior predictive checks", _ppc_cell(ppc, fit)],
                 ["Forecast checks", _checks_cell(checks)],

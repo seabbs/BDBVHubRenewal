@@ -170,6 +170,10 @@ The PR body adds the commit SHA itself.
   `divergences` and `draws` give the divergent fraction.
   The other fields are reported, not gated.
 - A model with no sampler, such as persistence, writes `{"schema_version": 1, "sampler": "none"}`.
+- A config that runs a stand-in model, such as `main` running persistence until the renewal model is integrated, adds `"stand_in": "<text>"`, for example `"the `main` config runs the persistence baseline until the PyRenew renewal model is integrated"`.
+  It can also go in `<fit dir>/fit.json`.
+  `candidate.sh` copies it into `run.json`.
+  The chain table, the job summary and the PR body then mark the candidate "(stand-in)", and the PR body states the text in a bold **Stand-in:** line under "Produced by".
 - A missing or unreadable file is an `error`, and gates as a failure.
 
 With NumPyro and ArviZ:

@@ -118,10 +118,31 @@ if [ -n "$sub" ]; then
     --out "$out/nowcast.png" || echo "::warning::plot for $CAND_ID failed"
 fi
 
+# A config that runs a stand-in model (for example persistence until the
+# renewal model is integrated) says so in its diagnostics or fit.json.
+stand_in=$(python3 - "$out/diagnostics.json" "$fit/fit.json" << 'PY'
+import json, sys
+for path in sys.argv[1:]:
+    try:
+        value = json.load(open(path)).get("stand_in")
+    except Exception:
+        continue
+    if value:
+        print(json.dumps(value))
+        break
+else:
+    print("null")
+PY
+)
+if [ "$stand_in" != null ]; then
+  note "**Stand-in:** $(python3 -c 'import json, sys; print(json.loads(sys.argv[1]))' "$stand_in")"
+fi
+
 cat > "$out/run.json" << EOF
 {"candidate": "$CAND_ID", "kind": "$CAND_KIND", "label": "$CAND_LABEL",
  "model": "$( [ "$CAND_KIND" = persistence ] && echo persistence || echo "$MODEL")",
  "config": "$CAND_CONFIG", "sampler": $CAND_SAMPLER,
  "package_version": "$(cli --version 2> /dev/null || echo unknown)",
- "as_of": "$AS_OF", "reference_date": "$REFERENCE_DATE"}
+ "as_of": "$AS_OF", "reference_date": "$REFERENCE_DATE",
+ "stand_in": $stand_in}
 EOF
