@@ -1,0 +1,36 @@
+# Backtest settings. Read by `bdbv_forecasts.backtest.load_config`.
+
+[forecast]
+# Weeks in each forecast, as horizons in weeks from the reference date.
+# -4 to -1 are nowcasts of past weeks, 0 is the reference week and 1 to 3
+# are forecasts. The hub accepts up to +3.
+min_horizon = -4
+max_horizon = 3
+n_samples = 100
+seed = 20261027
+
+[scoring]
+# Only score weeks at least this many weeks before the epi week of the
+# truth vintage, so the truth has mostly filled in.
+min_truth_age_weeks = 2
+
+[split]
+# Held-out reference dates. Development runs never score these, and the
+# harness refuses to unless `--evaluate-holdout` is passed. The held-out
+# evaluation uses real vintages only.
+# 2026-10-24 is the latest reference date that can be scored at all:
+# its vintage is 2026-10-17 and the truth is the 2026-10-24 vintage.
+heldout_reference_dates = ["2026-10-24"]
+# The model choice record that must exist before a held-out run.
+model_choice = "results/model-choice.yml"
+
+[reconstructed]
+# Saturdays to reconstruct pseudo-vintages for. Any whose reference date
+# is on or after the first held-out date are dropped.
+first_vintage = "2026-06-06"
+last_vintage = "2026-10-10"
+
+[simulated]
+# Vintage dates for the simulated outbreak (Saturdays).
+first_vintage = "2026-06-27"
+last_vintage = "2026-10-03"

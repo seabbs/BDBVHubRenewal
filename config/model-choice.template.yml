@@ -1,0 +1,14 @@
+# Model choice record. Copy to results/model-choice.yml, fill in and commit
+# it BEFORE running the held-out evaluation (`task backtest-heldout`).
+# The held-out run records the SHA-256 of the committed file.
+date: YYYY-MM-DD
+proposed_model: <registered model name>
+variants_considered:
+  - name: persistence
+    description: Baseline.
+development_scores: results/backtest-scores.csv
+development_commit: <git SHA of the development run>
+summary: >-
+  Why this variant: relative WIS and log WIS against persistence by
+  horizon and province on real and reconstructed development vintages.
+heldout_reference_dates: ["2026-10-24"]
