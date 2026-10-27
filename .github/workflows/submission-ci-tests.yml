@@ -8,6 +8,7 @@ on:
   pull_request:
     paths:
       - 'ci/**'
+      - 'codecov.yml'
       - '.github/workflows/submit.yml'
       - '.github/workflows/fit-candidates.yml'
       - '.github/workflows/submission-ci-tests.yml'
@@ -16,9 +17,16 @@ on:
     branches: [main]
     paths:
       - 'ci/**'
+      - 'codecov.yml'
+      - '.github/workflows/submission-ci-tests.yml'
 
 permissions:
   contents: read
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
@@ -30,7 +38,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: uv sync
+        with:
+          enable-cache: true
+          cache-dependency-glob: ci/uv.lock
+      - run: uv sync --frozen
       - name: Lint
         run: |
           uv run ruff check src tests fixtures
@@ -38,6 +49,15 @@ jobs:
       - name: Type-check
         run: uv run mypy
       - name: Tests
-        run: uv run pytest -q
+        run: >-
+          uv run pytest -q --cov=submission_ci --cov-report=term
+          --cov-report=xml
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ci/coverage.xml
+          flags: ci
+          use_oidc: true
+          fail_ci_if_error: false
       - name: Dry run of the submission workflow on fixtures
         run: ./run_dry.sh

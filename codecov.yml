@@ -1,0 +1,34 @@
+# Coverage for the package (src/) and the submission CI (ci/), one flag
+# each. Each workflow uploads only its own flag and runs only when its
+# files change, so carryforward keeps the last result for the other.
+codecov:
+  require_ci_to_pass: false
+
+coverage:
+  precision: 1
+  round: down
+  status:
+    project:
+      default:
+        target: 85%
+        threshold: 1%
+    patch:
+      default:
+        target: 80%
+        threshold: 5%
+
+flags:
+  package:
+    paths:
+      - src/
+    carryforward: true
+  ci:
+    paths:
+      - ci/src/
+    carryforward: true
+
+comment:
+  layout: "header, diff, flags, files"
+  behavior: default
+  require_changes: false
+  require_head: true

@@ -3,7 +3,38 @@ name: Tests
 on:
   push:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'data/**'
+      - 'config/**'
+      - 'results/**'
+      - 'hub/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'codecov.yml'
+      - '.github/workflows/test.yml'
   pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'data/**'
+      - 'config/**'
+      - 'results/**'
+      - 'hub/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'codecov.yml'
+      - '.github/workflows/test.yml'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Cancel superseded pull request runs; let runs on main finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
@@ -11,9 +42,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: uv sync
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
       - name: Tests
-        run: uv run pytest -q --cov=bdbv_forecasts --cov-report=term-missing
+        run: >-
+          uv run pytest -q --cov=bdbv_forecasts --cov-report=term-missing
+          --cov-report=xml
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.xml
+          flags: package
+          use_oidc: true
+          fail_ci_if_error: false
       - name: Backtest and nowcast smoke test
         run: |
           uv run bdbv-forecasts backtest --output output/backtest --results output/results
