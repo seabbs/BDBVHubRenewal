@@ -256,18 +256,23 @@ def make_report(
 
 
 def _persistence_bias(scores: pd.DataFrame) -> str:
-    real = scores.loc[
-        (scores["kind"] == "real") & (scores["model"] == "persistence")
-    ]
+    pers = scores.loc[scores["model"] == "persistence"]
+    real = pers.loc[pers["kind"] == "real"]
     if real.empty:
         return ""
+    rec = pers.loc[pers["kind"] == "reconstructed"]
     by_h = real.groupby("horizon")[["bias", "coverage_90"]].mean()
     worst = by_h.sort_values("bias").head(3)
     hs = sorted(int(h) for h in worst.index)
     lo, hi = worst["coverage_90"].min(), worst["coverage_90"].max()
+    rec_text = (
+        f" ({rec['bias'].mean():.2f} on reconstructed vintages)"
+        if not rec.empty
+        else ""
+    )
     return (
         f"On real vintages persistence has a mean bias of "
-        f"{real['bias'].mean():.2f}.\n"
+        f"{real['bias'].mean():.2f}{rec_text}.\n"
         f"It is most negative at horizons "
         f"{', '.join(str(h) for h in hs[:-1])} and {hs[-1]}, where 90% "
         f"coverage is {lo:.2f} to {hi:.2f}.\n"
