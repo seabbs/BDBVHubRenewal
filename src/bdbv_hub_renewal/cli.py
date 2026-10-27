@@ -268,6 +268,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--schema", default=f"{data_dir}/hub-config/model-metadata-schema.json"
     )
 
+    bvd = sub.add_parser(
+        "bvd",
+        help="Cache the BVDOutbreakSize releases each vintage may use.",
+    )
+    bvd.add_argument("--data", default=data_dir)
+    bvd.add_argument("--backtest-config", default="config/backtest.toml")
+    bvd.add_argument(
+        "--vintages",
+        nargs="*",
+        default=None,
+        help="Defaults to every real and reconstructed backtest vintage.",
+    )
+
     hid = sub.add_parser(
         "hub-id", help="Print the hub model id that submissions use."
     )
@@ -599,6 +612,24 @@ def _metadata(args: argparse.Namespace) -> int:
     return 1 if errors else 0
 
 
+def _bvd(args: argparse.Namespace) -> int:  # pragma: no cover - network
+    from . import bvd
+
+    vintages = args.vintages
+    if not vintages:
+        target = load_target(args.data)
+        real = target.loc[target["kind"] == "real", "vintage"].astype(str)
+        config = bt.load_config(args.backtest_config)
+        vintages = sorted({*real, *config.reconstructed_dates})
+    token = os.environ.get("GITHUB_TOKEN")
+    chosen = bvd.refresh_cache(
+        Path(args.data) / "bvd", vintages, bvd.list_releases(token)
+    )
+    for vintage, tag in chosen.items():
+        print(f"{vintage}: {tag or 'no release'}")
+    return 0
+
+
 def _chosen_model(args: argparse.Namespace) -> int:
     from .heldout import load_model_choices
 
@@ -707,6 +738,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _nowcast(args)
     if args.command == "metadata":
         return _metadata(args)
+    if args.command == "bvd":  # pragma: no cover - network
+        return _bvd(args)
     if args.command == "hub-id":
         print(model_id(submission_model_abbr(args.hub_toml)))
         return 0

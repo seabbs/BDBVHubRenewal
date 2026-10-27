@@ -45,6 +45,8 @@ from .dates import HUB_TIMEZONE, reference_date_for_vintage, submission_window
 __all__ = [
     "ASSETS",
     "BVD_CITATION",
+    "BVD_GI_MEAN",
+    "BVD_GI_SD",
     "BVD_PROVINCES",
     "BVD_REPO",
     "HUB_TIMEZONE",
@@ -59,6 +61,7 @@ __all__ = [
     "load_releases",
     "model_rows",
     "parse_releases",
+    "refresh_cache",
     "release_as_of",
     "save_releases",
     "select_release",
@@ -94,6 +97,12 @@ ASSETS: Final = (
 """Release assets used: national draws, patch summaries, the national Rt
 row the patch summaries are relative to, and the data cut-off
 (`as_of_date`) for releases with no patch summaries."""
+
+BVD_GI_MEAN: Final = 15.3
+"""Prior mean of BVDOutbreakSize's Gamma generation interval, in days."""
+
+BVD_GI_SD: Final = 9.3
+"""Prior SD of BVDOutbreakSize's Gamma generation interval, in days."""
 
 Z90: Final = 1.6448536269514722
 """The standard normal 95th centile, for SDs from 90% intervals."""
@@ -356,7 +365,8 @@ def fetch_release(
         Asset name to its `url`, as in `parse_releases`. Only `ASSETS`
         are fetched, and only those the release has.
     cache_dir : pathlib.Path or str
-        The cache. A file already there is not downloaded again.
+        The cache. A file already there is not downloaded again. Of
+        `observations.toml` only `as_of_date` is kept.
     download : callable
         Returns the bytes at a URL.
 
@@ -370,7 +380,12 @@ def fetch_release(
     for name in ASSETS:
         path = out / name
         if name in assets and not path.exists():
-            path.write_bytes(download(str(assets[name]["url"])))
+            content = download(str(assets[name]["url"]))
+            if name == "observations.toml":
+                # The input data are large; only the cut-off is used.
+                found = _find_key(tomllib.loads(content.decode()), "as_of_date")
+                content = f'as_of_date = "{found}"\n'.encode()
+            path.write_bytes(content)
     return out
 
 
@@ -502,12 +517,20 @@ def load_release(path: Path | str) -> BvdRelease:
     if as_of is None:
         raise ValueError(f"No data cut-off in BVDOutbreakSize release {path}.")
     draws = pd.read_csv(path / "posterior_draws.csv")
+    if "R_T" in draws:
+        log_rt = np.log(draws["R_T"].to_numpy(dtype=float))
+    else:
+        # Early builds publish the growth rate only. With a Gamma
+        # generation interval, R = (1 + r theta)^k (Wallinga and Lipsitch).
+        k = (BVD_GI_MEAN / BVD_GI_SD) ** 2
+        theta = BVD_GI_SD**2 / BVD_GI_MEAN
+        log_rt = k * np.log1p(draws["r"].to_numpy(dtype=float) * theta)
     est = path / "province_estimates.csv"
     patches = _patches(pd.read_csv(est)) if est.exists() else {}
     return BvdRelease(
         tag=path.name,
         as_of=as_of,
-        national_log_rt=np.log(draws["R_T"].to_numpy(dtype=float)),
+        national_log_rt=log_rt,
         patches=patches,
         reference=_reference(path / "province_timeseries.csv", as_of),
     )
@@ -618,3 +641,39 @@ def bvd_for_vintage(
     if tag is None:
         return None
     return load_release(Path(cache_dir) / tag)
+
+
+def refresh_cache(
+    cache_dir: Path | str,
+    vintages: Sequence[dt.date | str],
+    releases: pd.DataFrame | None = None,
+    download: Downloader = _download,
+) -> dict[str, str | None]:
+    """Cache the release list and the release each vintage may use.
+
+    Parameters
+    ----------
+    cache_dir : pathlib.Path or str
+        The cache, usually `data/bvd/`.
+    vintages : sequence of datetime.date or str
+        The data vintages.
+    releases : pandas.DataFrame, optional
+        From `parse_releases`. Listed from GitHub if not given.
+    download : callable
+        Returns the bytes at a URL.
+
+    Returns
+    -------
+    dict
+        The tag chosen for each vintage, or None.
+    """
+    if releases is None:  # pragma: no cover - network
+        releases = list_releases()
+    save_releases(releases, cache_dir)
+    chosen: dict[str, str | None] = {}
+    for vintage in vintages:
+        rel = bvd_for_vintage(vintage, cache_dir, releases, download)
+        chosen[pd.Timestamp(vintage).date().isoformat()] = (
+            None if rel is None else rel.tag
+        )
+    return chosen

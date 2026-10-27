@@ -150,6 +150,9 @@ def test_fetch_release_caches_by_tag(
     n = len(got)
     bvd.fetch_release("results-3151", row["assets"], tmp_path, download)
     assert len(got) == n
+    # Only the data cut-off is kept from the (large) observations file.
+    kept = (out / "observations.toml").read_text()
+    assert kept == 'as_of_date = "2026-10-20"\n'
 
 
 def test_bvd_for_vintage_end_to_end(
