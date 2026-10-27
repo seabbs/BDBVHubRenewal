@@ -145,7 +145,6 @@ def test_warnings_are_stated(tmp_path: Path) -> None:
         )
     )
     assert visible(text)[1] == "All checks passed, with warnings on growth."
-    assert "- growth: CD-IT grows 2.5 times" in text
     assert "(growth flagged)" in text
     assert "- WARN growth: x" in text
 

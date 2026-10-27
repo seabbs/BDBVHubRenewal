@@ -183,7 +183,6 @@ def _checks_section(
     checks: Mapping[str, Any],
     validation: str,
     coherence: Coherence | None,
-    warnings: Sequence[str],
 ) -> str:
     table = markdown_table(
         ["check", "status"],
@@ -195,10 +194,7 @@ def _checks_section(
             ["Data coherence", _coherence_cell(coherence)],
         ],
     )
-    notes = "".join(f"\n- {w}" for w in warnings)
-    return _section(
-        "Checks", table + ("\nWarnings:\n" + notes if notes else "")
-    )
+    return _section("Checks", table)
 
 
 def _chain_section(provenance: Mapping[str, Any]) -> str:
@@ -368,10 +364,6 @@ def build(
     coherence = _read_coherence(selected_dir)
     link = run_url()
     stamp = (now or dt.datetime.now(dt.UTC)).strftime("%Y-%m-%d %H:%M UTC")
-    warnings = list(provenance.get("warnings") or [])
-    if coherence is not None and coherence.status == "warn":
-        warnings.append(f"data coherence: {coherence.summary}")
-
     out = [marker(model_id, reference_date)]
     out.append(
         f"Automated submission of `{model_id}` for {reference_date}, from "
@@ -382,7 +374,7 @@ def build(
     out.append(f"![Nowcast and forecast for {reference_date}]({plot_url})\n")
     out.append(f"This round in our docs: {round_url(reference_date, docs)}\n")
     sections = [
-        _checks_section(fit, ppc, checks, validation, coherence, warnings),
+        _checks_section(fit, ppc, checks, validation, coherence),
         _chain_section(provenance),
         _convergence_section(fit),
         _ppc_section(ppc),
