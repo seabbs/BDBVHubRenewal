@@ -339,3 +339,32 @@ def test_init_strategy_follows_the_sampler_table() -> None:
     assert kernel._init_strategy is jitter or (
         kernel._init_strategy.func is jitter.func
     )
+
+
+def test_unassigned_adds_the_national_data_gap(task: ForecastTask) -> None:
+    config = rn.model_config(rn.VARIANTS["hubrenewal"])
+    data = rn.vintage_inputs(task, config)
+    draws = _fake_draws(data, task.n_samples, np.random.default_rng(6))
+    samples, _ = rn.samples_table(task, data, draws, report_all=True)
+    assert rn.data_gap(task, samples) is None
+    # Two national cases a week with no province, in the last data weeks.
+    target = task.target.copy()
+    nat = target["location"] == NATIONAL
+    weeks = sorted(set(target.loc[nat, "target_end_date"]))[-4:]
+    hit = nat & target["target_end_date"].isin(weeks)
+    target.loc[hit, "total"] += 2
+    gapped = replace(task, target=target)
+    gap = rn.data_gap(gapped, samples)
+    assert gap is not None
+    assert list(gap.columns) == ["target_end_date", "sample", "value"]
+    seen = gap.loc[gap["target_end_date"].isin(weeks)]
+    assert (seen["value"] == 2).all()
+    # Later weeks carry the recent share of the provinces forward.
+    later = [w for w in task.target_end_dates if w > max(weeks)]
+    ahead = gap.loc[gap["target_end_date"].isin(later)]
+    assert len(ahead) == len(later) * task.n_samples
+    prov = samples.loc[samples["target_end_date"].isin(later)]
+    by = prov.groupby(["target_end_date", "sample"])["value"].sum()
+    ratio = ahead.set_index(["target_end_date", "sample"])["value"] / by
+    assert ratio.dropna().between(0, 1).all()
+    assert ratio.dropna().std() < 1e-9
