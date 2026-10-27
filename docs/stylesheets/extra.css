@@ -1,0 +1,46 @@
+/* Wider content for score tables. */
+.md-grid {
+  max-width: 1280px;
+}
+
+/* Keep long display equations scrollable on small screens. */
+.md-typeset div.arithmatex {
+  overflow-x: auto;
+}
+
+/* Short subtitle line under a page's H1. */
+.md-typeset .page-subtitle {
+  margin-top: -0.6em;
+  font-size: 1.05rem;
+  color: var(--md-default-fg-color--light);
+}
+
+/* Figures: full width, with a muted caption. */
+.md-typeset figure.doc-figure {
+  margin: 1.5em 0;
+}
+
+.md-typeset figure.doc-figure img {
+  width: 100%;
+  max-width: 100%;
+}
+
+.md-typeset figure.doc-figure figcaption {
+  max-width: 100%;
+  font-style: normal;
+  color: var(--md-default-fg-color--light);
+}
+
+.md-typeset figure.doc-figure > br {
+  display: none;
+}
+
+/* Images inside content tabs fill the tab. */
+.md-typeset .tabbed-block img {
+  width: 100%;
+}
+
+/* Wide tables scroll rather than squash. */
+.md-typeset table:not([class]) {
+  font-size: 0.7rem;
+}
