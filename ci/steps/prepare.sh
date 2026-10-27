@@ -12,6 +12,7 @@
 #   SKIP_DATA=true  do not run `bdbv-hub-renewal data` (fixtures)
 # shellcheck source=ci/steps/lib.sh
 source "$(dirname "$0")/lib.sh"
+resolve_model
 
 : "${HUB_REF:?}" "${AS_OF:?}" "${REFERENCE_DATE:?}"
 inputs="$WORK/inputs"

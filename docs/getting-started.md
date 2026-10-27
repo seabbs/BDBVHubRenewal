@@ -58,7 +58,7 @@ A run this short is for checking the pipeline, not for submission.
 ```console
 $ uv run bdbv-hub-renewal nowcast --model hubrenewal --config main \
     --fit output/fits/main --out output/candidates/main
-Wrote output/candidates/main/model-output/epiforecasts-hubrenewal/2026-10-31-epiforecasts-hubrenewal.csv (9000 rows, locations incl. CD).
+Wrote output/candidates/main/model-output/epiforecasts-seabbsrenewal/2026-10-31-epiforecasts-seabbsrenewal.csv (9000 rows, locations incl. CD).
 ```
 
 The hub file has 100 samples for the 8 provinces with cases and the national total, over 10 weeks.
@@ -67,7 +67,7 @@ National sample $k$ is the sum of province sample $k$.
 
 ```console
 $ uv run bdbv-hub-renewal plot-submission \
-    --submission output/candidates/main/model-output/epiforecasts-hubrenewal/2026-10-31-epiforecasts-hubrenewal.csv \
+    --submission output/candidates/main/model-output/epiforecasts-seabbsrenewal/2026-10-31-epiforecasts-seabbsrenewal.csv \
     --out nowcast.png
 ```
 

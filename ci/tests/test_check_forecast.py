@@ -30,7 +30,8 @@ def statuses(path: Path, **kwargs: Any) -> dict[str, str]:
 
 def sub(tmp_path: Path, **kwargs: Any) -> Path:
     return write_samples(
-        tmp_path / f"{REF}-epiforecasts-hubrenewal.csv", make_samples(**kwargs)
+        tmp_path / f"{REF}-epiforecasts-seabbsrenewal.csv",
+        make_samples(**kwargs),
     )
 
 

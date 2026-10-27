@@ -30,7 +30,9 @@ bdbv-hub-renewal fit --model hubrenewal --config main|fallback --vintage <as_of>
   --out <fit dir>
 ```
 
-- `--model hubrenewal` is the PyRenew model. Its hub id is `epiforecasts-hubrenewal`, because `epiforecasts-renewal` is already a different hub model.
+- `--model` is the model chosen in `results/model-choice.yml` (`bdbv-hub-renewal chosen-model`).
+  The hub id is set apart in `config/hub.toml` (`bdbv-hub-renewal hub-id`), `epiforecasts-seabbsrenewal`.
+  `epiforecasts-renewal` is already a different hub model.
 - `--config` selects the model configuration.
   `main` is the full model.
   `fallback` is the same code with the delays and missingness plugged in from data, no spatial coupling, and a weekly Rt random walk.

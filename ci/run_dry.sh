@@ -17,7 +17,9 @@ FIX="$CI_DIR/fixtures"
 ROOT="${TMPDIR:-/tmp}/submission-ci-dry"
 export UV_CACHE_DIR=${UV_CACHE_DIR:-${TMPDIR:-/tmp}/uvcache}
 export FORECAST_CLI="python3 $FIX/fake_bdbv_hub_renewal.py"
-export MODEL=hubrenewal MODEL_ID=epiforecasts-hubrenewal
+# MODEL and MODEL_ID are left unset, so `prepare` resolves them from the
+# fixture CLI (`chosen-model`, `hub-id`) as the workflow does.
+unset MODEL MODEL_ID
 export HEARTBEAT_SECONDS=1
 # Monday 2 November 2026, 10:00 UTC: inside the window for 2026-11-07.
 NOW=${NOW:-2026-11-02T10:00:00+00:00}
@@ -120,9 +122,13 @@ EOF
   done
   "$CI_DIR/steps/unpack_candidates.sh" > /dev/null
 
+  # The hub id `prepare` resolved, as the gate's metadata step reads it.
+  model_id=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1]))['model_id'])" \
+    "$WORK/inputs/context.json")
+
   # 5. Select, with a stand-in for hubValidations (`gate` job).
   local status=0
-  RETRIED=$retried HUB_PATH="$FIX/hub" METADATA="$FIX/hub/$MODEL_ID.yml" \
+  RETRIED=$retried HUB_PATH="$FIX/hub" METADATA="$FIX/hub/$model_id.yml" \
     HUB_VALIDATOR="true" "$CI_DIR/steps/select.sh" > "$WORK/select.log" \
     || status=$?
   local got
@@ -138,7 +144,7 @@ EOF
   fi
 
   # 6. Submit, dry run: build the body and print the planned PR.
-  DRY_RUN=true FORK=seabbs-bot/BDBV-Modeling-Hub METADATA="$FIX/hub/$MODEL_ID.yml" \
+  DRY_RUN=true FORK=seabbs-bot/BDBV-Modeling-Hub METADATA="$FIX/hub/$model_id.yml" MODEL_ID="$model_id" \
     "$CI_DIR/steps/submit.sh" > "$WORK/submit.log" 2>&1 \
     || { echo "FAIL: submit"; cat "$WORK/submit.log"; return 1; }
   grep -q '"action": "dry-run"' "$WORK/submit.log" \

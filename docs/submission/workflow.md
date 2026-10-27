@@ -6,7 +6,7 @@ The weekly path from new hub data to a submission.
 !!! warning "Dry run"
     The workflow runs in dry-run mode until Sam switches it on (see [Setup](setup.md)).
     It builds everything and prints the pull request it would open, but pushes nothing.
-    The `main` and `fallback` fit configs run the PyRenew renewal model, and submissions go in as `epiforecasts-hubrenewal`.
+    The `main` and `fallback` fit configs run the PyRenew renewal model, and submissions go in as `epiforecasts-seabbsrenewal`.
     Its model metadata is a draft until Sam has reviewed the held-out results.
 
 ## Pipeline
@@ -62,7 +62,10 @@ Each [`FitConfig`][bdbv_hub_renewal.fitting.FitConfig] has two functions.
 - `forecast(task, fit_dir)` returns a [`Forecast`][bdbv_hub_renewal.fitting.Forecast]: province samples numbered 1 to 100, each one joint posterior draw across weeks and provinces, and optionally an `unassigned` national component by week and sample.
 
 `nowcast` then writes the hub file with [`to_hub_table`][bdbv_hub_renewal.hub.to_hub_table], which makes the national value the exact sum of the province samples plus the unassigned component, and writes `national.json` beside it with the modelled provinces and that component.
-Set the repository variable `HUB_MODEL` to `hubrenewal`, which submits as `epiforecasts-hubrenewal`, once its metadata text is in `bdbv_hub_renewal.cli.MODEL_METADATA`.
+The model is the latest entry of `results/model-choice.yml`, and the hub id is `config/hub.toml`.
+Every candidate, fallbacks included, is submitted under that one id, `epiforecasts-seabbsrenewal`.
+The metadata is written for the chosen model under that id.
+The repository variables `HUB_MODEL` and `HUB_MODEL_ID` override both.
 
 ## The fallback chain
 

@@ -4,7 +4,7 @@ The renewal model and the persistence baseline, with the maths of each.
 { .page-subtitle }
 
 The data and notation are on the [Data methods page](data.md#target-and-notation).
-The renewal model submits to the hub as `epiforecasts-hubrenewal`.
+Submissions go to the hub as `epiforecasts-seabbsrenewal`, whichever model produced them.
 `epiforecasts-renewal` is a different hub model, from [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize).
 
 ## Structure

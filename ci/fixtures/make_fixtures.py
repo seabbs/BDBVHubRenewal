@@ -190,6 +190,6 @@ if __name__ == "__main__":
         )
         + "\n"
     )
-    (HUB / "epiforecasts-hubrenewal.yml").write_text(
-        "team_abbr: epiforecasts\nmodel_abbr: hubrenewal\n"
+    (HUB / "epiforecasts-seabbsrenewal.yml").write_text(
+        "team_abbr: epiforecasts\nmodel_abbr: seabbsrenewal\n"
     )
