@@ -296,9 +296,9 @@ def to_hub_table(
             raise ValueError(
                 f"{loc}: every sample needs exactly one row for each week."
             )
-    national = prov.groupby(["target_end_date", "sample"], as_index=False)[
-        "value"
-    ].sum()
+    national = (
+        prov.groupby(["target_end_date", "sample"])["value"].sum().reset_index()
+    )
     if unassigned is not None and not unassigned.empty:
         extra = (
             unassigned.assign(
