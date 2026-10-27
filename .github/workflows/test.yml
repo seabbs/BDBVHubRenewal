@@ -1,0 +1,21 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync
+      - name: Tests
+        run: uv run pytest -q --cov=bdbv_forecasts --cov-report=term-missing
+      - name: Backtest and nowcast smoke test
+        run: |
+          uv run bdbv-forecasts backtest --output output/backtest --results output/results
+          uv run bdbv-forecasts nowcast
+          uv run bdbv-forecasts metadata --out output/metadata
