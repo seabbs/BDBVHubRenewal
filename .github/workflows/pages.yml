@@ -1,18 +1,42 @@
 name: Pages
 
+# Builds the site on pull requests as a check, and builds and deploys it
+# from main.
 on:
   push:
     branches: [main]
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - 'assets/**'
+      - 'src/**'
+      - 'data/**'
+      - 'config/**'
+      - 'results/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/pages.yml'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - 'assets/**'
+      - 'src/**'
+      - 'data/**'
+      - 'config/**'
+      - 'results/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: pages-${{ github.ref }}
+  # Cancel superseded pull request builds; let deploys from main finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -20,7 +44,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: uv sync --all-groups
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --all-groups
       - name: Backtest, then the docs figures and tables
         run: |
           uv run bdbv-forecasts backtest
@@ -29,6 +55,7 @@ jobs:
       - name: Build the site into _site
         run: uv run mkdocs build --strict
       - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
         with:
           path: _site
 
@@ -36,6 +63,9 @@ jobs:
     needs: build
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
