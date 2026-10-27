@@ -54,17 +54,47 @@ tasks:
       - uv run bdbv-forecasts metadata {{.CLI_ARGS}}
 
   validate-hub:
-    desc: Check the nowcast file and metadata with the hub's hubValidations (R)
+    desc: Check the nowcast file and metadata with hub_validate (Python) and hubValidations (R)
     deps: [nowcast, metadata]
     vars:
       MODEL: '{{.MODEL | default "persistence"}}'
+    env:
+      R_CACHE_ROOTPATH: '{{.R_CACHE_ROOTPATH | default (printf "%s/rcache" (env "TMPDIR" | default "/tmp"))}}'
     cmds:
       - rm -rf output/hub
       - git clone --depth 1 -q https://github.com/InsightNet-US/BDBV-Modeling-Hub.git output/hub
       - >-
+        uv run bdbv-forecasts validate --hub output/hub --skip-window
+        --metadata-dir hub/model-metadata
+        $(ls output/submission/model-output/epiforecasts-{{.MODEL}}/*.csv | tail -n 1)
+        hub/model-metadata/epiforecasts-{{.MODEL}}.yml
+      - >-
         Rscript scripts/validate-hub.R output/hub
         $(ls output/submission/model-output/epiforecasts-{{.MODEL}}/*.csv | tail -n 1)
         hub/model-metadata/epiforecasts-{{.MODEL}}.yml
+
+  ci-test:
+    desc: Lint, type-check and test the submission CI scripts in ci/
+    dir: ci
+    cmds:
+      - uv run ruff check src tests fixtures
+      - uv run ruff format --check src tests fixtures
+      - uv run mypy
+      - uv run pytest -q
+
+  ci-dry:
+    desc: "Dry run of the submission workflow on fixture data (all scenarios, or one: task ci-dry -- retry)"
+    cmds:
+      - ci/run_dry.sh {{.CLI_ARGS}}
+
+  ci-fit:
+    desc: "Fit one fit config and forecast from it, as a CI candidate does (CONFIG=main by default)"
+    vars:
+      CONFIG: '{{.CONFIG | default "main"}}'
+    cmds:
+      - rm -rf output/fits/{{.CONFIG}}
+      - uv run bdbv-forecasts fit --config {{.CONFIG}} --out output/fits/{{.CONFIG}} {{.CLI_ARGS}}
+      - uv run bdbv-forecasts nowcast --config {{.CONFIG}} --fit output/fits/{{.CONFIG}} --out output/candidates/{{.CONFIG}}
 
   plots:
     desc: Make the docs figures and tables from the backtest results

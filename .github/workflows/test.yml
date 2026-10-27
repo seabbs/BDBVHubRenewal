@@ -19,3 +19,12 @@ jobs:
           uv run bdbv-forecasts backtest --output output/backtest --results output/results
           uv run bdbv-forecasts nowcast
           uv run bdbv-forecasts metadata --out output/metadata
+      - name: Fit and forecast as the submission CI does (stand-in configs)
+        run: |
+          uv run bdbv-forecasts --version
+          uv run bdbv-forecasts fit --config main --out output/fits/main
+          uv run bdbv-forecasts nowcast --config main --fit output/fits/main \
+            --out output/candidates/main
+          uv run bdbv-forecasts plot-submission --out output/candidates/main.png \
+            --submission "$(ls output/candidates/main/model-output/*/*.csv)"
+          uv run bdbv-forecasts coherence
