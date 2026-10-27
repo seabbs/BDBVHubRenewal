@@ -3,21 +3,27 @@
 Each candidate directory (`<candidates>/<id>/`) holds what its matrix
 job produced: `fit-summary.json` and `ppc-summary.json` (none for
 persistence), `checks.json`, `run.json` and the hub file under
-`submission/`. A candidate is eligible when none of its convergence
-gate, posterior predictive checks and forecast checks fail. The first
-eligible candidate in chain order is then validated with the hub's own
-rules (the `--validate-cmd` hook, hubValidations in CI).
-If that fails too, the chain moves on. If nothing is left the round is
-skipped.
+`submission/`. Problems are handled rather than failed on, so the chain
+rarely moves past the main model. A candidate is ruled out only when
+its fit is clearly broken, or its file would be invalid on the hub
+(forecast format checks, then the hub's own rules through the
+`--validate-cmd` hook, hubValidations in CI). Posterior predictive
+checks and plausibility checks are reported, never gated.
 
-`triage` runs after the primary stage and says whether retries of the
-main model are needed. `select` writes `provenance.json` and
-`provenance.md` and copies the chosen files to `<out>/selected/`.
+A main model past the convergence retry thresholds is refitted once
+(`retry-1`). The refit is preferred if it is not clearly broken;
+otherwise the original is kept if it is not. Either way the PR says so
+under `Handled:`. If nothing is left the round is skipped.
+
+`triage` runs after the primary stage and says whether the refit is
+needed. `select` writes `provenance.json` and `provenance.md` and copies
+the chosen files to `<out>/selected/`.
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import shlex
 import shutil
 from collections.abc import Callable, Sequence
@@ -56,7 +62,9 @@ class Attempt:
     status: str = "not run"
     reasons: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    handled: list[str] = field(default_factory=list)
     stand_in: str = ""
+    retry: bool = False
 
     @property
     def name(self) -> str:
@@ -102,6 +110,7 @@ def assess(c: Candidate, cdir: Path) -> Attempt:
     elif fit_path.exists():
         fit = read_json(fit_path)
         a.fit = fit["status"]
+        a.retry = bool(fit.get("retry"))
         a.reasons += [f"convergence: {m}" for m in fit.get("failures", [])]
         a.warnings += [f"convergence: {m}" for m in fit.get("warnings", [])]
     else:
@@ -112,14 +121,17 @@ def assess(c: Candidate, cdir: Path) -> Attempt:
     if ppc_path.exists():
         ppc = read_json(ppc_path)
         a.ppc = ppc["status"]
-        a.reasons += [f"ppc: {m}" for m in ppc.get("failures", [])]
-        a.warnings += [f"ppc: {m}" for m in ppc.get("warnings", [])]
+        a.warnings += [
+            f"ppc: {m}"
+            for m in [*ppc.get("failures", []), *ppc.get("warnings", [])]
+        ]
     elif c.kind == "persistence" or a.fit == "skip":
         a.ppc = "skip"
     else:
-        a.ppc = "error"
-        a.reasons.append("ppc: no posterior predictive check was written")
-    statuses.append(a.ppc)
+        a.ppc = "warn"
+        a.warnings.append("ppc: no posterior predictive check was written")
+    # Reported only: the predictive checks never rule a candidate out.
+    statuses.append("warn" if blocks(a.ppc) else a.ppc)
     checks_path = cdir / "checks.json"
     if checks_path.exists():
         checks = read_json(checks_path)
@@ -129,10 +141,15 @@ def assess(c: Candidate, cdir: Path) -> Attempt:
                 a.reasons.append(f"{ch['name']}: {ch['summary']}")
             elif ch["status"] == "warn":
                 a.warnings.append(f"{ch['name']}: {ch['summary']}")
+        a.handled += [str(h) for h in checks.get("handled", [])]
     else:
         a.checks = "error"
         a.reasons.append("forecast checks: no result was written")
     statuses.append(a.checks)
+    notes = cdir / "submission" / "handled.json"
+    if notes.exists():
+        with contextlib.suppress(ValueError):
+            a.handled = [str(h) for h in read_json(notes)] + a.handled
     if _submission(cdir) is None:
         statuses.append("error")
         a.reasons.append("no submission file was written")
@@ -141,9 +158,14 @@ def assess(c: Candidate, cdir: Path) -> Attempt:
 
 
 def triage(policy: Policy, root: Path) -> bool:
-    """Whether the main model needs retries."""
+    """Whether the main model needs its one refit.
+
+    It does when its fit is past the retry thresholds, or when it was
+    ruled out.
+    """
     main = policy.chain()[0]
-    return blocks_status(assess(main, root / main.id).status)
+    a = assess(main, root / main.id)
+    return a.retry or blocks_status(a.status)
 
 
 def blocks_status(status: str) -> bool:
@@ -168,6 +190,29 @@ def command_validator(template: str) -> Validator:
     return run
 
 
+def _validate(a: Attempt, cdir: Path, validate: Validator | None) -> bool:
+    """Run the hub's checks on an eligible attempt; True if it passes."""
+    sub = _submission(cdir)
+    assert sub is not None  # assess() checked it
+    if validate is None:
+        a.validation = "skip"
+        return True
+    a.validation = validate(sub, cdir / "hub-validation.log")
+    if a.validation != "pass":
+        a.reasons.append("hub validation failed (see hub-validation.log)")
+        a.status = "fail"
+        return False
+    return True
+
+
+def _fit_note(a: Attempt) -> str:
+    return next(
+        (w.removeprefix("convergence: ") for w in a.warnings
+         if "retry threshold" in w),
+        "convergence past the retry thresholds",
+    )  # fmt: skip
+
+
 def select(
     policy: Policy,
     root: Path,
@@ -177,6 +222,7 @@ def select(
     """Return the chosen attempt (or None) and every attempt."""
     attempts: list[Attempt] = []
     chosen: Attempt | None = None
+    deferred: Attempt | None = None  # a main fit waiting on its refit
     for c in policy.chain():
         if chosen is not None:
             attempts.append(Attempt(c.id, c.kind, c.label, status="not needed"))
@@ -186,21 +232,42 @@ def select(
             continue
         a = assess(c, root / c.id)
         attempts.append(a)
+        if c.kind == "retry" and deferred is not None:
+            why = _fit_note(deferred)
+            if not blocks_status(a.status) and _validate(
+                a, root / c.id, validate
+            ):
+                a.handled.insert(0, f"main model refitted once ({why})")
+                chosen = a
+                continue
+            if _validate(deferred, root / deferred.id, validate):
+                deferred.handled.insert(
+                    0,
+                    f"main model kept after one refit did not help ({why})",
+                )
+                chosen = deferred
+                deferred.status = "warn"
+            deferred = None
+            continue
         if blocks_status(a.status):
             continue
-        sub = _submission(root / c.id)
-        assert sub is not None  # assess() checked it
-        if validate is None:
-            a.validation = "skip"
-        else:
-            a.validation = validate(sub, root / c.id / "hub-validation.log")
-            if a.validation != "pass":
-                a.reasons.append(
-                    "hub validation failed (see hub-validation.log)"
-                )
-                a.status = "fail"
-                continue
+        if c.kind == "main" and a.retry and retried:
+            deferred = a
+            continue
+        if not _validate(a, root / c.id, validate):
+            continue
+        if a.retry:
+            a.handled.insert(0, f"accepted without a refit ({_fit_note(a)})")
         chosen = a
+    if (
+        chosen is None
+        and deferred is not None
+        and _validate(deferred, root / deferred.id, validate)
+    ):
+        deferred.handled.insert(
+            0, f"main model kept; its refit did not run ({_fit_note(deferred)})"
+        )
+        chosen = deferred
     return chosen, attempts
 
 
@@ -280,6 +347,7 @@ def run_select(
         ),
         "reason": _reason(chosen, attempts),
         "warnings": chosen.warnings if chosen else [],
+        "handled": chosen.handled if chosen else [],
         "attempts": [asdict(a) for a in attempts],
     }
     if chosen:

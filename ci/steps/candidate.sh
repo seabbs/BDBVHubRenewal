@@ -108,9 +108,13 @@ fi
 if [ -f "$inputs/previous.csv" ]; then
   checks+=(--previous "$inputs/previous.csv")
 fi
-# Written by the nowcast beside the hub file. Without it the check
-# uses the provinces in the file and no unassigned component.
+# Written by the nowcast beside the hub file. The gate rebuilds the
+# national rows as the sum of the provinces plus its unassigned part, or,
+# without it, plus the data's national gap from coherence.json.
 checks+=(--national-sidecar "$out/submission/national.json")
+if [ -f "$inputs/coherence.json" ]; then
+  checks+=(--coherence "$inputs/coherence.json")
+fi
 sci check-forecast "${checks[@]}"
 
 if [ -n "$sub" ]; then

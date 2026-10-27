@@ -55,10 +55,14 @@ def test_key_changes_with_data_and_settings() -> None:
 
 def test_matrix_has_distinct_keys(tmp_path: Path) -> None:
     pol = load_policy(POLICY_PATH)
-    entries = matrix(pol, "retry", repo(tmp_path), "hub")
-    assert [e["id"] for e in entries] == ["retry-1", "retry-2"]
-    assert len({e["key"] for e in entries}) == 2
-    assert json.loads(entries[0]["sampler"])["target_accept"] == 0.95
+    root = repo(tmp_path)
+    entries = matrix(pol, "retry", root, "hub")
+    assert [e["id"] for e in entries] == ["retry-1"]
+    main = matrix(pol, "primary", root, "hub")
+    assert len({e["key"] for e in [*entries, *main]}) == 3
+    sampler = json.loads(entries[0]["sampler"])
+    assert sampler["target_accept"] == 0.95
+    assert sampler["num_chains"] == 8 and sampler["init"] == "jitter"
 
 
 def test_policy_validation(tmp_path: Path) -> None:

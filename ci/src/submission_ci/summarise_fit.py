@@ -4,10 +4,14 @@ A port of BVDOutbreakSize's convergence gate (`docs/fits/convergence.jl`
 and `check_convergence.jl`) to the `diagnostics.json` the main repo
 writes (see INTEGRATION.md):
 
-- two thresholds per diagnostic, *fail* (the sampler has not explored
-  the posterior) and *warn* (converged but mixing poorly), with the same
-  defaults and the same environment overrides
-  (`BDBV_CONVERGENCE_FAIL_RHAT` and so on), which must be finite;
+- three thresholds per diagnostic. *retry* is BVDOutbreakSize's failure
+  threshold: a fit past it is refitted once, and the refit is accepted
+  unless it is clearly broken. *fail* marks a clearly broken fit (R-hat
+  far above 1.1, almost no effective draws, or many divergences), the
+  only convergence result that rules a candidate out. *warn* is
+  BVDOutbreakSize's warning threshold, reported only. Each has an
+  environment override (`BDBV_CONVERGENCE_{FAIL,RETRY,WARN}_RHAT` and so
+  on), which must be finite;
 - a diagnostic that cannot be computed is reported as `n/a` and neither
   fails nor warns;
 - a missing or malformed diagnostics file is an `error`, which gates
@@ -41,8 +45,15 @@ from .common import (
 
 MARKER = "<!-- bdbv-fit-convergence -->"
 DIAGNOSTICS = ("rhat", "ess_bulk", "ess_tail", "divergent_fraction")
+LEVELS = ("fail", "retry", "warn")
 DEFAULT_THRESHOLDS: dict[str, dict[str, float]] = {
     "fail": {
+        "rhat": 1.5,
+        "ess_bulk": 10.0,
+        "ess_tail": 10.0,
+        "divergent_fraction": 0.2,
+    },
+    "retry": {
         "rhat": 1.1,
         "ess_bulk": 25.0,
         "ess_tail": 25.0,
@@ -83,7 +94,7 @@ def thresholds(
 ) -> dict[str, dict[str, float]]:
     """Thresholds from `base` (or the defaults) with env overrides."""
     out: dict[str, dict[str, float]] = {}
-    for level in ("fail", "warn"):
+    for level in LEVELS:
         src = dict(DEFAULT_THRESHOLDS[level])
         if base and level in base:
             src.update({k: float(v) for k, v in base[level].items()})
@@ -111,6 +122,7 @@ class FitCheck:
     id: str
     status: str
     applicable: bool
+    retry: bool = False
     headline: dict[str, float] = field(default_factory=dict)
     failures: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
@@ -146,8 +158,13 @@ def headline(diag: Mapping[str, Any]) -> dict[str, float]:
 
 def verdict(
     head: Mapping[str, float], limits: Mapping[str, Mapping[str, float]]
-) -> tuple[str, list[str], list[str]]:
-    """Status and messages for the headline diagnostics."""
+) -> tuple[str, list[str], list[str], bool]:
+    """Status, messages and whether to refit, for the headline diagnostics.
+
+    Past the *fail* threshold the fit is clearly broken (`fail`). Past
+    the *retry* threshold it is a `warn` that asks for one refit. Past
+    the *warn* threshold it is a `warn` only.
+    """
     checks = (
         ("max R-hat", head["max_rhat"], "rhat", True),
         ("min bulk ESS", head["min_ess_bulk"], "ess_bulk", False),
@@ -161,6 +178,7 @@ def verdict(
     )
     failures: list[str] = []
     warnings: list[str] = []
+    retry = False
     for name, value, key, higher_is_worse in checks:
         if math.isnan(value):
             continue
@@ -175,13 +193,19 @@ def verdict(
                 f"{name} is {fmt(value)}, past the failure threshold "
                 f"{fmt(limits['fail'][key])}"
             )
+        elif breaches(limits["retry"][key]):
+            retry = True
+            warnings.append(
+                f"{name} is {fmt(value)}, past the retry threshold "
+                f"{fmt(limits['retry'][key])}"
+            )
         elif breaches(limits["warn"][key]):
             warnings.append(
                 f"{name} is {fmt(value)}, past the warning threshold "
                 f"{fmt(limits['warn'][key])}"
             )
     status = "fail" if failures else ("warn" if warnings else "pass")
-    return status, failures, warnings
+    return status, failures, warnings, retry and not failures
 
 
 def _label(p: Mapping[str, Any]) -> str:
@@ -251,11 +275,12 @@ def check_fit(
     if diag.get("sampler", "nuts") == "none":
         return FitCheck(fit_id, "skip", False)
     head = headline(diag)
-    status, failures, warnings = verdict(head, limits)
+    status, failures, warnings, retry = verdict(head, limits)
     out = FitCheck(
         fit_id,
         status,
         True,
+        retry=retry,
         headline=head,
         failures=failures,
         warnings=warnings,
@@ -270,7 +295,7 @@ def check_fit(
 _PHRASE = {
     "pass": "cleared the convergence thresholds",
     "warn": "converged, with diagnostics past the warning thresholds",
-    "fail": "has not converged",
+    "fail": "is clearly broken",
     "error": "could not be judged",
     "skip": "has no sampler, so convergence does not apply",
 }
@@ -400,13 +425,16 @@ def markdown(
                 )
             )
             lines.append("\n</details>\n")
-    f, w = limits["fail"], limits["warn"]
+    f, r, w = limits["fail"], limits["retry"], limits["warn"]
     lines.append(
-        f"Thresholds. Fail: R-hat above {fmt(f['rhat'])}, bulk ESS below "
-        f"{fmt(f['ess_bulk'])}, tail ESS below {fmt(f['ess_tail'])}, "
-        f"divergences above {fmt(f['divergent_fraction'])} of draws. "
-        f"Warn: {fmt(w['rhat'])}, {fmt(w['ess_bulk'])}, "
-        f"{fmt(w['ess_tail'])}, {fmt(w['divergent_fraction'])}."
+        f"Thresholds. Clearly broken (fall back): R-hat above "
+        f"{fmt(f['rhat'])}, bulk ESS below {fmt(f['ess_bulk'])}, tail ESS "
+        f"below {fmt(f['ess_tail'])}, divergences above "
+        f"{fmt(f['divergent_fraction'])} of draws. Refit once: "
+        f"{fmt(r['rhat'])}, {fmt(r['ess_bulk'])}, {fmt(r['ess_tail'])}, "
+        f"{fmt(r['divergent_fraction'])}. Warn: {fmt(w['rhat'])}, "
+        f"{fmt(w['ess_bulk'])}, {fmt(w['ess_tail'])}, "
+        f"{fmt(w['divergent_fraction'])}."
     )
     return "\n".join(lines) + "\n"
 

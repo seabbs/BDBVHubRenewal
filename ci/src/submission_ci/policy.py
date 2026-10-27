@@ -4,9 +4,9 @@ The chain is an ordered list of candidates. The first candidate that
 clears every check is submitted:
 
 1. `main`: the main model with the default sampler settings.
-2. `retry-N`: the main model again with more warm-up, a new seed, a
-   higher target acceptance or deeper trees. At most `retry_budget` run,
-   and only when `main` did not clear the checks.
+2. `retry-1`: one refit of the main model with a longer warm-up, more
+   chains and jittered inits, only when `main` is past the convergence
+   retry thresholds or was ruled out (`retry_budget`, 1 by default).
 3. `fallback`: the same model code with `--config fallback` (data-driven
    delays and missingness, no spatial coupling, weekly Rt).
 4. `persistence`: the persistence baseline, built from the data alone.
@@ -110,7 +110,7 @@ def load_policy(path: Path | str) -> Policy:
     pol = raw.get("policy", {})
     return Policy(
         candidates=cands,
-        retry_budget=int(pol.get("retry_budget", 2)),
+        retry_budget=int(pol.get("retry_budget", 1)),
         cache_inputs=list(raw.get("cache", {}).get("inputs", [])),
         convergence=raw.get("convergence", {}),
         checks=raw.get("checks", {}),

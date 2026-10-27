@@ -10,7 +10,7 @@ from typing import Any
 
 from conftest import AS_OF, FIXTURES, write_json
 
-from submission_ci.check_coherence import assess, main
+from submission_ci.check_coherence import assess, gap_by_week, main
 from submission_ci.common import read_json
 
 FAKE = FIXTURES / "fake_bdbv_forecasts.py"
@@ -55,10 +55,14 @@ def test_coherent_data_pass() -> None:
     assert "every week" in c.summary
 
 
-def test_gap_warns() -> None:
+def test_gap_is_handled_and_noted() -> None:
     c = assess(coherence([GAP]))
-    assert c.status == "warn"
+    assert c.status == "pass"
+    assert c.gap
     assert "1 week" in c.summary and "largest gap 2" in c.summary
+    assert c.handled().endswith("modelled as an unassigned national component")
+    assert gap_by_week(c) == {"2026-10-24": 2.0}
+    assert not assess(coherence([])).handled()
 
 
 def test_missing_file_is_na(tmp_path: Path) -> None:
@@ -77,9 +81,10 @@ def test_cli_writes_report_with_gap_table(tmp_path: Path) -> None:
     out = tmp_path / "o"
     assert main(["--coherence", str(src), "--out", str(out)]) == 0
     data = read_json(out / "coherence-summary.json")
-    assert data["status"] == "warn"
+    assert data["status"] == "pass"
+    assert data["gap"] is True
     md = (out / "coherence-summary.md").read_text()
-    assert "## Data coherence: WARN" in md
+    assert "## Data coherence: PASS" in md
     assert "<details>" in md and "| 2026-10-24 | total | 50 | 48 | 2 |" in md
     assert "unassigned national component" in md
 
@@ -112,4 +117,4 @@ def test_fake_cli_coherence(tmp_path: Path) -> None:
     assert not gapped["coherent"]
     assert {r["stream"] for r in gapped["rows"]} == {"observed", "total"}
     assert gapped["streams"]["total"]["max_abs_gap"] == 2
-    assert assess(gapped).status == "warn"
+    assert assess(gapped).gap

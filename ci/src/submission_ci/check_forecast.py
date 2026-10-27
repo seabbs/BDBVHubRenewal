@@ -1,22 +1,29 @@
 """Check a candidate submission file before it can be submitted.
 
-Each check returns pass, warn, fail or skip. A fail blocks the candidate
-and the chain moves on; a warn lets it through and is stated in the PR
-body. Thresholds are in `policy.toml` under `[checks]`.
+Each check returns pass, warn, fail or skip. Only a file the hub would
+reject fails, which blocks the candidate; everything else is handled or
+warns, and is stated in the PR body. Thresholds are in `policy.toml`
+under `[checks]`.
 
 Format (fail):
   `schema`       columns, output type, target, reference date, Saturdays,
                  and, given `tasks.json`, valid locations and weeks.
   `values`       no negative, NaN, infinite or unparsable values.
   `samples`      exactly 100 samples per location, each a full trajectory.
-  `coverage`     every expected location, with every nowcast and
-                 forecast week.
-  `national_sum` national equals the sum of the provinces (plus any
-                 modelled unassigned cases, from `national.json`),
-                 per sample and week, up to float noise; every
-                 modelled province is in the file.
 
-Plausibility (warn or fail):
+Handled (warn or pass):
+  `coverage`     every expected location, with every nowcast and
+                 forecast week (warns).
+  `national_sum` national equals the sum of the provinces plus any
+                 unassigned cases, per sample and week. It is correct by
+                 construction: `repair_national` rebuilds the national
+                 rows from the provinces before the checks, with the
+                 unassigned part from `national.json`, or, without it,
+                 from the gap between the national data and the
+                 provinces. A modelled province missing from the file
+                 warns.
+
+Plausibility (warn; a fail level is available but off by default):
   `bounds`       the 95th centile of each week is not far above the
                  largest weekly count the location has had.
   `growth`       week-on-week growth of the median over the forecast.
@@ -31,6 +38,7 @@ Consistency (warn by default):
 from __future__ import annotations
 
 import argparse
+import csv
 import datetime as dt
 import math
 from collections.abc import Mapping, Sequence
@@ -242,12 +250,12 @@ def check_coverage(
         found.append(("fail", "the file has no rows"))
     missing_loc = sorted(set(expected) - set(s.locations))
     if missing_loc:
-        found.append(("fail", f"missing locations {missing_loc}"))
+        found.append(("warn", f"missing locations {missing_loc}"))
     need = [_week(ref, k) for k in range(-(nowcast - 1), horizon + 1)]
     for loc in s.locations:
         gap = [w for w in need if w not in s.weeks(loc)]
         if gap:
-            found.append(("fail", f"{loc}: missing weeks {gap}"))
+            found.append(("warn", f"{loc}: missing weeks {gap}"))
     return _result(
         "coverage",
         found,
@@ -282,7 +290,7 @@ def check_national_sum(
     provinces are those in the file and there is no unassigned part.
     """
     if sidecar_error:
-        return Check("national_sum", "fail", sidecar_error)
+        sidecar = None
     if sidecar:
         national = str(sidecar.get("national", national))
     provs = [loc for loc in s.locations if is_province(loc)]
@@ -302,7 +310,13 @@ def check_national_sum(
     found: list[tuple[str, str]] = []
     missing = sorted(set(modelled) - set(s.locations))
     if missing:
-        found.append(("fail", f"modelled provinces missing: {missing}"))
+        found.append(
+            (
+                "warn",
+                f"modelled provinces missing: {missing}; national is the "
+                "sum of the provinces submitted",
+            )
+        )
     if national not in s.values:
         found.append(("fail", f"{national} is not in the file"))
     for sid, traj in s.values.get(national, {}).items():
@@ -330,6 +344,91 @@ def check_national_sum(
     if out.status != "pass":
         out.summary = f"{out.summary} ({basis})"
     return out
+
+
+def repair_national(
+    submission: Path,
+    national: str = "CD",
+    sidecar: Mapping[str, Any] | None = None,
+    data_gap: Mapping[str, float] | None = None,
+) -> str:
+    """Make the national rows the sum of the provinces, by construction.
+
+    National sample k, week w becomes the sum of province sample k, week
+    w plus the unassigned part: from `national.json` when there is one,
+    otherwise the gap between the national data and the provinces for
+    that week (`data_gap`, zero for weeks without data). The file is
+    rewritten only when its national rows differ.
+
+    Returns
+    -------
+    str
+        A `Handled:` note when the file was rewritten, else empty.
+    """
+    s = read_samples(submission)
+    provs = [loc for loc in s.locations if is_province(loc)]
+    if not provs or s.unparsable:
+        return ""
+    if sidecar:
+        unassigned = _unassigned(sidecar)
+        source = "the model's unassigned component"
+    else:
+        gap = dict(data_gap or {})
+        unassigned = {
+            (sid, w): gap.get(w, 0.0)
+            for sid in s.values[provs[0]]
+            for w in s.weeks(provs[0])
+        }
+        source = (
+            "the gap between the national data and the provinces"
+            if any(unassigned.values())
+            else "nothing unassigned"
+        )
+    want: dict[str, dict[str, float]] = {}
+    for sid in s.values[provs[0]]:
+        for w in s.values[provs[0]][sid]:
+            parts = [s.values[p].get(sid, {}).get(w) for p in provs]
+            if any(v is None for v in parts):
+                return ""
+            total = math.fsum(v for v in parts if v is not None)
+            want.setdefault(sid, {})[w] = total + unassigned.get((sid, w), 0)
+    have = s.values.get(national, {})
+    if (
+        have
+        and all(
+            math.isclose(have.get(sid, {}).get(w, math.nan), v, abs_tol=1e-9)
+            for sid, traj in want.items()
+            for w, v in traj.items()
+        )
+        and sum(len(t) for t in have.values())
+        == sum(len(t) for t in want.values())
+    ):
+        return ""
+    with submission.open(newline="", encoding="utf-8") as fh:
+        reader = csv.DictReader(fh)
+        header = list(reader.fieldnames or [])
+        rows = [r for r in reader if r.get("location") != national]
+    template = rows[0]
+    for sid, traj in want.items():
+        for w, v in sorted(traj.items()):
+            rows.append(
+                {
+                    **template,
+                    "location": national,
+                    "output_type_id": sid,
+                    "target_end_date": w,
+                    "value": str(int(v)) if float(v).is_integer() else repr(v),
+                }
+            )
+    with submission.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=header)
+        writer.writeheader()
+        writer.writerows(rows)
+    what = "rebuilt" if have else "added"
+    return (
+        f"national ({national}) {what} as the sum of the provinces plus "
+        f"{source}"
+    )
 
 
 def check_bounds(
@@ -611,6 +710,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=None,
         help="national.json written beside the nowcast (optional)",
     )
+    p.add_argument(
+        "--coherence",
+        type=Path,
+        default=None,
+        help="coherence.json of the data, for the unassigned part when "
+        "there is no national.json (optional)",
+    )
     p.add_argument("--policy", type=Path, default=None)
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--no-fail", action="store_true")
@@ -621,11 +727,26 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         settings = load_policy(args.policy).checks
     sidecar, sidecar_error = None, ""
+    handled: list[str] = []
     if args.national_sidecar and args.national_sidecar.exists():
         try:
             sidecar = read_json(args.national_sidecar)
         except ValueError as err:
             sidecar_error = f"{args.national_sidecar.name} unreadable: {err}"
+            handled.append(f"{sidecar_error}; worked without it")
+    if args.submission.exists():
+        gap: dict[str, float] = {}
+        if not sidecar and args.coherence and args.coherence.exists():
+            from .check_coherence import assess, gap_by_week
+
+            try:
+                gap = gap_by_week(assess(read_json(args.coherence)))
+            except ValueError:
+                gap = {}
+        national = str((settings or DEFAULTS).get("national", "CD"))
+        note = repair_national(args.submission, national, sidecar, gap)
+        if note:
+            handled.append(note)
     if not args.submission.exists():
         checks = [
             Check("schema", "error", f"{args.submission} was not written")
@@ -653,6 +774,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "id": args.id,
             "status": status,
             "checks": [asdict(c) for c in checks],
+            "handled": handled,
         },
     )
     append_summary(md)

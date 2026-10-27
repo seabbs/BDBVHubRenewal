@@ -38,15 +38,20 @@ def candidate(
             },
         )
     if fit is not None:
+        loose = fit == "loose"
+        fit = "warn" if loose else fit
         write_json(
             d / "fit-summary.json",
             {
                 "status": fit,
+                "retry": loose,
                 "failures": ["max R-hat is 1.4, past the failure threshold 1.1"]
                 if fit == "fail"
                 else [],
                 "warnings": [
-                    "min bulk ESS is 80, past the warning threshold 100"
+                    "max R-hat is 1.2, past the retry threshold 1.1"
+                    if loose
+                    else "min bulk ESS is 80, past the warning threshold 100"
                 ]
                 if fit == "warn"
                 else [],
@@ -90,12 +95,11 @@ def test_chain_order_and_budget() -> None:
     assert [c.id for c in POLICY.chain()] == [
         "main",
         "retry-1",
-        "retry-2",
         "fallback",
         "persistence",
     ]
     assert [c.id for c in POLICY.stage("primary")] == ["main", "fallback"]
-    assert [c.id for c in POLICY.stage("retry")] == ["retry-1", "retry-2"]
+    assert [c.id for c in POLICY.stage("retry")] == ["retry-1"]
 
 
 def test_main_passes(tmp_path: Path) -> None:
@@ -132,18 +136,87 @@ def test_retry_passes(tmp_path: Path) -> None:
         c,
         main=("fail", "pass"),
         retry_1=("pass", "pass"),
-        retry_2=("pass", "pass"),
         fallback=("pass", "pass"),
         persistence=(None, "pass"),
     )
     assert triage(POLICY, c)
     prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=True)
     assert prov["selected"] == "retry-1"
-    assert prov["produced_by"].startswith("main model, retry 1")
+    assert prov["produced_by"].startswith("main model, refitted")
     assert (
         "Main model was ruled out (convergence: max R-hat is 1.4"
         in prov["reason"]
     )
+
+
+def test_loose_main_is_refitted_once(tmp_path: Path) -> None:
+    c = tmp_path / "c"
+    chain(
+        c,
+        main=("loose", "pass"),
+        retry_1=("pass", "pass"),
+        fallback=("pass", "pass"),
+        persistence=(None, "pass"),
+    )
+    assert triage(POLICY, c)
+    prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=True)
+    assert prov["selected"] == "retry-1"
+    assert prov["handled"][0] == (
+        "main model refitted once (max R-hat is 1.2, past the retry "
+        "threshold 1.1)"
+    )
+
+
+def test_loose_main_is_kept_when_the_refit_is_broken(tmp_path: Path) -> None:
+    c = tmp_path / "c"
+    chain(
+        c,
+        main=("loose", "pass"),
+        retry_1=("fail", "pass"),
+        fallback=("pass", "pass"),
+        persistence=(None, "pass"),
+    )
+    prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=True)
+    assert prov["selected"] == "main"
+    assert prov["handled"][0].startswith(
+        "main model kept after one refit did not help"
+    )
+
+
+def test_loose_main_without_a_refit_is_accepted(tmp_path: Path) -> None:
+    c = tmp_path / "c"
+    chain(c, main=("loose", "pass"), persistence=(None, "pass"))
+    prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=False)
+    assert prov["selected"] == "main"
+    assert prov["handled"][0].startswith("accepted without a refit")
+
+
+def test_predictive_and_plausibility_never_rule_out(tmp_path: Path) -> None:
+    c = tmp_path / "c"
+    candidate(c, "main", checks="warn", ppc="fail")
+    candidate(c, "persistence", fit=None)
+    prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=False)
+    assert prov["selected"] == "main"
+    assert any(w.startswith("ppc:") for w in prov["warnings"])
+
+
+def test_handled_notes_are_collected(tmp_path: Path) -> None:
+    c = tmp_path / "c"
+    candidate(c, "main")
+    write_json(
+        c / "main" / "submission" / "handled.json",
+        ["delays: used the 2026-10-17 vintage, the latest available"],
+    )
+    checks = read_json(c / "main" / "checks.json")
+    write_json(
+        c / "main" / "checks.json",
+        {**checks, "handled": ["national (CD) rebuilt as the sum"]},
+    )
+    prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=False)
+    assert prov["handled"] == [
+        "delays: used the 2026-10-17 vintage, the latest available",
+        "national (CD) rebuilt as the sum",
+    ]
 
 
 def test_main_crash_triggers_retry(tmp_path: Path) -> None:
@@ -160,7 +233,6 @@ def test_fallback_is_used(tmp_path: Path) -> None:
         c,
         main=("fail", "pass"),
         retry_1=("pass", "fail"),
-        retry_2=("error", "pass"),
         fallback=("pass", "pass"),
         persistence=(None, "pass"),
     )
@@ -175,7 +247,6 @@ def test_persistence_is_the_last_resort(tmp_path: Path) -> None:
         c,
         main=("fail", "pass"),
         retry_1=("fail", "pass"),
-        retry_2=("fail", "pass"),
         fallback=("pass", "fail"),
         persistence=(None, "pass"),
     )
@@ -190,7 +261,6 @@ def test_everything_fails_round_skipped(tmp_path: Path) -> None:
         c,
         main=("fail", "pass"),
         retry_1=("fail", "pass"),
-        retry_2=("fail", "pass"),
         fallback=("pass", "fail"),
         persistence=(None, "fail"),
     )

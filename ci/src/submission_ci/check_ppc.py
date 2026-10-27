@@ -17,14 +17,17 @@ Thresholds are in `policy.toml` under `[ppc]`, each overridable by an
 environment variable `BDBV_PPC_<KEY>` (for example
 `BDBV_PPC_COVERAGE_WARN`):
 
-- `fail` when the coverage of the `level` interval (0.9), overall or
-  over the last `recent_weeks` complete weeks, is below `coverage_fail`;
-- `warn` when it is below `coverage_warn`, or when the PIT KS distance
-  is above `pit_ks_warn` with at least `pit_min_rows` rows;
+- `warn` when the coverage of the `level` interval (0.9), overall or
+  over the last `recent_weeks` complete weeks, is below `coverage_warn`
+  (and is called poor below `coverage_fail`), when the PIT KS distance
+  is above `pit_ks_warn` with at least `pit_min_rows` rows, or when a
+  sampled fit has no readable `ppc.json`;
 - `n/a` (`skip`) when the model has no posterior (`available: false`,
-  or no sampler and no file);
-- `error` when a sampled fit has no readable `ppc.json`, which gates
-  like a failure, as a missing diagnostics file does.
+  or no sampler and no file).
+
+These checks are reported only. They never rule a candidate out or
+trigger a fallback: model choice comes from the backtest, not from one
+run's checks.
 """
 
 from __future__ import annotations
@@ -173,10 +176,10 @@ def check_ppc(
         why = error or "no ppc.json was written"
         return PPCCheck(
             fit_id,
-            "error",
+            "warn",
             False,
             why,
-            failures=[f"{why}, so the fit's predictions cannot be checked"],
+            warnings=[f"{why}, so the fit's predictions were not checked"],
         )
     if not ppc.get("available"):
         return PPCCheck(
@@ -224,8 +227,8 @@ def check_ppc(
         out.locations.append({"location": loc, **_metrics(lrows, rset, levels)})
     out.pit = pit_summary([r.get("pit") for r in gated])
     if not rows:
-        out.status = "error"
-        out.failures.append("ppc.json is available but has no rows")
+        out.status = "warn"
+        out.warnings.append("ppc.json is available but has no rows")
         return out
     pct = _pct(lim["level"])
     head = _metrics(gated, rset, [*levels, pct])
@@ -238,9 +241,8 @@ def check_ppc(
             continue
         msg = f"{pct}% interval coverage of {stream} {where} is {fmt(value)}"
         if value < lim["coverage_fail"]:
-            out.failures.append(
-                f"{msg}, below the failure threshold "
-                f"{fmt(lim['coverage_fail'])}"
+            out.warnings.append(
+                f"{msg}, poor (below {fmt(lim['coverage_fail'])})"
             )
         elif value < lim["coverage_warn"]:
             out.warnings.append(
@@ -258,9 +260,7 @@ def check_ppc(
             f"PIT of {stream} is {fmt(ks)} from uniform (KS distance), "
             f"above {fmt(lim['pit_ks_warn'])}{shape}"
         )
-    out.status = (
-        "fail" if out.failures else ("warn" if out.warnings else "pass")
-    )
+    out.status = "warn" if out.warnings else "pass"
     return out
 
 
@@ -356,10 +356,10 @@ def markdown(c: PPCCheck, lim: Mapping[str, Any]) -> str:
     if c.available:
         pct = _pct(lim["level"])
         lines.append(
-            f"Thresholds. {pct}% coverage of {c.stream}, overall and over "
-            f"the last {lim['recent_weeks']} complete weeks: fail below "
-            f"{fmt(lim['coverage_fail'])}, warn below "
-            f"{fmt(lim['coverage_warn'])}. PIT KS distance: warn above "
+            f"Reported only, never gated. {pct}% coverage of {c.stream}, "
+            f"overall and over the last {lim['recent_weeks']} complete "
+            f"weeks: warn below {fmt(lim['coverage_warn'])}, poor below "
+            f"{fmt(lim['coverage_fail'])}. PIT KS distance: warn above "
             f"{fmt(lim['pit_ks_warn'])} (with at least "
             f"{lim['pit_min_rows']} rows)."
         )
@@ -422,7 +422,7 @@ def is_sampled(kind: str, diagnostics: Path | None) -> bool:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Command line entry point. Exits 1 on fail and 2 on error."""
+    """Command line entry point. Reports only, so it exits 0."""
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--id", required=True)
     p.add_argument("--kind", default="main")

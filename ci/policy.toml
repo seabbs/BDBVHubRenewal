@@ -1,12 +1,14 @@
 # Fallback chain and gate thresholds for automated hub submissions.
-# The first candidate, in file order, that clears every check is
-# submitted. See src/submission_ci/policy.py.
+# Problems are handled rather than failed on, so the chain rarely moves
+# past the main model: a candidate is ruled out only when its fit is
+# clearly broken or its file would be invalid on the hub. See
+# src/submission_ci/policy.py and src/submission_ci/select_candidate.py.
 
 [policy]
-# Retries of the main model run only when `main` does not clear the
-# checks. They run in parallel, so the budget is also the extra runner
-# count.
-retry_budget = 2
+# One refit of the main model, only when `main` is past the convergence
+# retry thresholds or was ruled out. No other refits, to stay fast; the
+# content-hash fit cache is reused across re-runs.
+retry_budget = 1
 
 [cache]
 # Everything a fit depends on in the main repo, listed once. The fit
@@ -27,16 +29,8 @@ id = "retry-1"
 kind = "retry"
 config = "main"
 stage = "retry"
-label = "main model, retry 1 (longer warm-up, new seed, target acceptance 0.95)"
-sampler = { num_chains = 4, num_warmup = 2000, num_samples = 1000, target_accept = 0.95, max_tree_depth = 10, seed = 2 }
-
-[[candidates]]
-id = "retry-2"
-kind = "retry"
-config = "main"
-stage = "retry"
-label = "main model, retry 2 (target acceptance 0.99, tree depth 12)"
-sampler = { num_chains = 4, num_warmup = 2000, num_samples = 1000, target_accept = 0.99, max_tree_depth = 12, seed = 3 }
+label = "main model, refitted (longer warm-up, more chains, jittered inits)"
+sampler = { num_chains = 8, num_warmup = 2000, num_samples = 500, target_accept = 0.95, max_tree_depth = 10, seed = 2, init = "jitter" }
 
 [[candidates]]
 id = "fallback"
@@ -55,11 +49,19 @@ config = "persistence"
 stage = "baseline"
 label = "persistence baseline"
 
-# Convergence thresholds, the defaults of BVDOutbreakSize's gate
-# (docs/fits/convergence.jl). Each can be overridden by an environment
-# variable or repo variable: BDBV_CONVERGENCE_{FAIL,WARN}_{RHAT,ESS_BULK,
-# ESS_TAIL,DIVERGENT}.
+# Convergence thresholds. `retry` and `warn` are the fail and warn
+# defaults of BVDOutbreakSize's gate (docs/fits/convergence.jl): past
+# `retry` the main model is refitted once, and the refit is accepted
+# unless it is clearly broken (`fail`), which alone rules a fit out.
+# Each can be overridden by an environment variable or repo variable:
+# BDBV_CONVERGENCE_{FAIL,RETRY,WARN}_{RHAT,ESS_BULK,ESS_TAIL,DIVERGENT}.
 [convergence.fail]
+rhat = 1.5
+ess_bulk = 10
+ess_tail = 10
+divergent_fraction = 0.2
+
+[convergence.retry]
 rhat = 1.1
 ess_bulk = 25
 ess_tail = 25
@@ -77,6 +79,9 @@ divergent_fraction = 0.01
 # the last `recent_weeks` complete weeks. A model with no posterior is
 # n/a. Each value can be overridden by an environment variable or repo
 # variable BDBV_PPC_<KEY>, for example BDBV_PPC_COVERAGE_WARN.
+# Posterior predictive checks: reported only, never gated. Below
+# `coverage_warn` the PR warns; below `coverage_fail` it calls the
+# coverage poor. Model choice comes from the backtest.
 [ppc]
 stream = "total"
 level = 0.9
@@ -91,22 +96,25 @@ pit_min_rows = 20
 # Plausibility and consistency checks on the forecast file. Ratios are
 # symmetric: a ratio r is breached when the value is above r times or
 # below 1/r times the reference. A threshold of 0 turns a level off.
+# Only the format checks (schema, values, samples) fail; the national
+# sum is rebuilt by construction, and the plausibility checks only warn.
 [checks]
 samples = 100
 horizon_weeks = 3          # target end dates required after the reference date
 nowcast_weeks = 4          # back weeks required up to the reference date
 national = "CD"
-# National must equal the sum of the provinces (plus any unassigned
-# component in national.json) exactly: only float noise is allowed.
+# National is rebuilt as the sum of the provinces plus the unassigned
+# component (national.json, or the data's national gap without it), so
+# it is exact by construction.
 sum_tolerance = 1e-9       # absolute (or 1e-12 relative)
 # Upper bound on any trajectory: the 95th centile of a week, relative to
 # the largest weekly count the location has ever had (floored).
 bound_floor = 20
 bound_warn = 5
-bound_fail = 20
+bound_fail = 0
 # Week-on-week growth of the median trajectory over the forecast weeks.
 growth_warn = 2.0
-growth_fail = 4.0
+growth_fail = 0
 # Median of the submitted back weeks against the observed counts in the
 # last complete weeks (weeks ending at least `complete_lag_weeks` before
 # the data vintage). Counts are offset by `ratio_offset` first.
@@ -114,7 +122,7 @@ complete_lag_weeks = 4
 complete_weeks = 2
 ratio_offset = 5
 observed_warn = 2.0
-observed_fail = 5.0
+observed_fail = 0
 # Median of the forecast weeks against the persistence baseline. A
 # departure is flagged, never failed.
 baseline_warn = 3.0

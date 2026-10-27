@@ -7,9 +7,9 @@ from typing import Any
 import pytest
 from conftest import AS_OF, HUB, REF, make_samples, weeks, write_samples
 
-from submission_ci.check_forecast import main, run_checks
+from submission_ci.check_forecast import main, repair_national, run_checks
 from submission_ci.common import read_json
-from submission_ci.hubdata import read_observed
+from submission_ci.hubdata import read_observed, read_samples
 
 OBS = read_observed(HUB / "time-series.csv", AS_OF)
 TASKS = read_json(HUB / "tasks.json")
@@ -67,7 +67,7 @@ def test_ragged_trajectory_fails(tmp_path: Path) -> None:
     assert s["samples"] == "fail"
 
 
-def test_missing_location_and_horizon_fail(tmp_path: Path) -> None:
+def test_missing_location_and_horizon_warn(tmp_path: Path) -> None:
     last = weeks()[-1]
 
     def mutate(rows: list[list[Any]]) -> None:
@@ -76,7 +76,7 @@ def test_missing_location_and_horizon_fail(tmp_path: Path) -> None:
     s = statuses(
         sub(tmp_path, levels={"CD-IT": 200.0, "CD-NK": 80.0}, mutate=mutate)
     )
-    assert s["coverage"] == "fail"
+    assert s["coverage"] == "warn"
 
 
 def test_national_not_sum_fails(tmp_path: Path) -> None:
@@ -147,10 +147,10 @@ def test_national_off_by_one_fails(tmp_path: Path) -> None:
     assert "sample 7" in c.summary
 
 
-def test_national_missing_modelled_province_fails(tmp_path: Path) -> None:
+def test_national_missing_modelled_province_warns(tmp_path: Path) -> None:
     side = _sidecar(modelled_provinces=["CD-HU", "CD-IT", "CD-NK", "CD-TO"])
     c = _checks(sub(tmp_path), national_sidecar=side)["national_sum"]
-    assert c.status == "fail"
+    assert c.status == "warn"
     assert "CD-TO" in c.summary
 
 
@@ -199,11 +199,56 @@ def test_cli_reads_national_sidecar(tmp_path: Path) -> None:
     main([*args, str(side), "--no-fail"])
     got = read_json(tmp_path / "o" / "checks.json")["checks"]
     assert {c["name"]: c["status"] for c in got}["national_sum"] == "pass"
+    assert not read_json(tmp_path / "o" / "checks.json")["handled"]
+    # Without the sidecar the national rows are rebuilt from the
+    # provinces (no data gap given), so the check passes and says so.
     main([*args, str(tmp_path / "absent.json"), "--no-fail"])
-    got = read_json(tmp_path / "o" / "checks.json")["checks"]
-    nat = {c["name"]: c for c in got}["national_sum"]
-    assert nat["status"] == "fail"
+    out = read_json(tmp_path / "o" / "checks.json")
+    nat = {c["name"]: c for c in out["checks"]}["national_sum"]
+    assert nat["status"] == "pass"
     assert "no national.json" in nat["summary"]
+    assert out["handled"] == [
+        "national (CD) rebuilt as the sum of the provinces plus nothing "
+        "unassigned"
+    ]
+
+
+def _national(path: Path) -> dict[tuple[str, str], float]:
+    s = read_samples(path)
+    return {
+        (sid, w): v for sid, t in s.values["CD"].items() for w, v in t.items()
+    }
+
+
+def test_repair_national_by_construction(tmp_path: Path) -> None:
+    w = weeks()[-1]
+    clean = sub(tmp_path)
+    assert repair_national(clean, "CD") == ""
+    before = _national(clean)
+    path = sub(tmp_path, mutate=_bump_national(w, 3, 4.0))
+    note = repair_national(path, "CD")
+    assert note.startswith("national (CD) rebuilt")
+    assert _national(path) == before
+    assert statuses(path)["national_sum"] == "pass"
+    # The model's unassigned component is kept.
+    path = sub(tmp_path, mutate=_bump_national(w, 3, 4.0))
+    side = _sidecar(
+        unassigned=[{"target_end_date": w, "sample": 3, "value": 4.0}]
+    )
+    assert repair_national(path, "CD", side) == ""
+    # Without national.json the data's gap is the unassigned part.
+    path = sub(tmp_path)
+    note = repair_national(path, "CD", None, {w: 2.0})
+    assert "gap between the national data" in note
+    after = _national(path)
+    assert after[("1", w)] == before[("1", w)] + 2.0
+    assert after[("1", weeks()[0])] == before[("1", weeks()[0])]
+
+
+def test_repair_national_adds_a_missing_national(tmp_path: Path) -> None:
+    path = sub(tmp_path, national=False)
+    assert "added" in repair_national(path, "CD")
+    assert statuses(path)["national_sum"] == "pass"
 
 
 def test_schema_failures(tmp_path: Path) -> None:

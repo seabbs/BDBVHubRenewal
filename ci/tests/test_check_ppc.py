@@ -78,10 +78,11 @@ def test_low_coverage_warns() -> None:
     assert "too narrow" in c.pit["shape"]
 
 
-def test_very_low_coverage_fails() -> None:
+def test_very_low_coverage_only_warns() -> None:
     c = check_ppc("main", ppc("ppcfail"), LIMITS)
-    assert c.status == "fail"
-    assert any("below the failure threshold 0.5" in m for m in c.failures)
+    assert c.status == "warn"
+    assert not c.failures
+    assert any("poor (below 0.5)" in m for m in c.warnings)
 
 
 def test_env_overrides_thresholds(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -112,31 +113,32 @@ def test_no_sampler_without_file_is_na(tmp_path: Path) -> None:
     assert data["status"] == "skip"
 
 
-def test_sampled_fit_without_file_is_error(tmp_path: Path) -> None:
+def test_sampled_fit_without_file_warns(tmp_path: Path) -> None:
     diag = write_json(tmp_path / "d.json", diagnostics())
     data = run(tmp_path, None, "--diagnostics", str(diag))
-    assert data["status"] == "error"
-    assert "no ppc.json" in data["failures"][0]
+    assert data["status"] == "warn"
+    assert "no ppc.json" in data["warnings"][0]
     assert is_sampled("main", None)  # a fit that wrote nothing
 
 
-def test_unreadable_file_is_error(tmp_path: Path) -> None:
-    assert run(tmp_path, "{not json")["status"] == "error"
-    assert run(tmp_path, {"schema_version": 1})["status"] == "error"
+def test_unreadable_file_warns(tmp_path: Path) -> None:
+    assert run(tmp_path, "{not json")["status"] == "warn"
+    assert run(tmp_path, {"schema_version": 1})["status"] == "warn"
 
 
 def test_cli_report_and_exit_codes(tmp_path: Path) -> None:
     path = write_json(tmp_path / "ppc.json", ppc("ppcfail"))
     args = ["--id", "main", "--ppc", str(path), "--out", str(tmp_path / "o")]
-    assert main(args) == 1
+    assert main(args) == 0
     assert main([*args, "--no-fail"]) == 0
     md = (tmp_path / "o" / "ppc-summary.md").read_text()
-    assert "## Posterior predictive checks for `main`: FAIL" in md
+    assert "## Posterior predictive checks for `main`: WARN" in md
+    assert "Reported only, never gated" in md
     assert "<summary>Coverage of total by province</summary>" in md
     data = read_json(tmp_path / "o" / "ppc-summary.json")
     assert data["headline"].startswith("90% coverage")
     missing = ["--id", "m", "--ppc", str(tmp_path / "none.json")]
-    assert main([*missing, "--out", str(tmp_path / "e")]) == 2
+    assert main([*missing, "--out", str(tmp_path / "e")]) == 0
 
 
 def test_pit_summary_shapes() -> None:
@@ -167,11 +169,13 @@ def test_assess_folds_ppc(tmp_path: Path, status: str, blocks: bool) -> None:
     )
     a = assess(POLICY.get("main"), d)
     assert a.ppc == status
-    assert a.status == status
+    # Reported only: an old fail or error summary still only warns.
+    assert a.status == ("warn" if blocks or status == "warn" else status)
+    assert not a.reasons
     if status == "warn":
         assert a.warnings == ["ppc: coverage 0.6"]
     if blocks:
-        assert a.reasons == ["ppc: coverage 0.3"]
+        assert a.warnings == ["ppc: coverage 0.3"]
 
 
 def test_assess_without_ppc_summary(tmp_path: Path) -> None:
@@ -180,8 +184,8 @@ def test_assess_without_ppc_summary(tmp_path: Path) -> None:
     write_json(d / "checks.json", {"status": "pass", "checks": []})
     write_json(d / "submission" / "x.csv", {})
     a = assess(POLICY.get("main"), d)
-    assert a.ppc == "error"
-    assert a.status == "error"
+    assert a.ppc == "warn"
+    assert a.status == "warn"
     p = tmp_path / "persistence"
     write_json(p / "checks.json", {"status": "pass", "checks": []})
     write_json(p / "submission" / "x.csv", {})

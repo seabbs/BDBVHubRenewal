@@ -190,9 +190,29 @@ def test_retry_is_named(tmp_path: Path) -> None:
     ])  # fmt: skip
     write_json(g / "provenance.json", prov)
     assert visible(body(g))[1].startswith(
-        "Main model refitted with more conservative sampler settings: main "
-        "model was ruled out"
+        "Main model refitted once: main model was ruled out"
     )
+
+
+def test_handled_line_leads(tmp_path: Path) -> None:
+    g = gate(tmp_path)
+    prov = read_json(g / "provenance.json")
+    prov["handled"] = [
+        "main model refitted once (max R-hat is 1.2, past the retry "
+        "threshold 1.1)",
+        "delays: used the 2026-10-17 vintage, the latest available",
+    ]
+    write_json(g / "provenance.json", prov)
+    shown = visible(body(g))
+    assert shown[1] == "All checks passed."
+    assert shown[2] == (
+        "Handled: main model refitted once (max R-hat is 1.2, past the "
+        "retry threshold 1.1); delays: used the 2026-10-17 vintage, the "
+        "latest available."
+    )
+    assert shown[3].startswith("![Nowcast")
+    assert len(shown) == 6
+    assert "Handled:" not in body(gate(tmp_path / "plain"))
 
 
 def test_dry_run_note(tmp_path: Path) -> None:
@@ -247,10 +267,15 @@ def test_data_coherence_reported_once(tmp_path: Path) -> None:
         asdict(assess(coherence([GAP]))),
     )
     text = body(g)
-    assert visible(text)[1] == (
-        "All checks passed, with warnings on data coherence."
+    shown = visible(text)
+    assert shown[1] == "All checks passed."
+    assert shown[2] == (
+        "Handled: national (CD) differs from the sum of the provinces in 1 "
+        "week (total stream, largest gap 2); modelled as an unassigned "
+        "national component."
     )
-    assert text.count("| Data coherence | WARN (national (CD) differs") == 1
+    assert len(shown) <= 6
+    assert text.count("| Data coherence | Handled (national (CD) differs") == 1
     assert text.count("<summary>Data coherence</summary>") == 1
     assert "| 2026-10-24 | total | 50 | 48 | 2 |" in text
     assert "unassigned national component" in text

@@ -4,10 +4,12 @@
 (see INTEGRATION.md): for each stream (`observed`, `imputed`, `total`)
 the weeks where the national count is not the sum of the provinces.
 This is a check on the data, not on a candidate, so it runs once, in
-`prepare`, and never blocks:
+`prepare`. A gap is handled in the model, through an unassigned national
+component, and noted, so it never warns or blocks:
 
-- `pass` when national equals the sum of provinces in every week;
-- `warn` when any week has a gap, or the file cannot be read;
+- `pass` when national equals the sum of provinces in every week, and
+  also when it does not, with `gap` set and a note of how it is handled;
+- `warn` only when the file cannot be read;
 - `n/a` (`skip`) when there is no file.
 
 It writes `coherence-summary.{md,json}`, which `candidate.sh` copies to
@@ -48,6 +50,13 @@ class Coherence:
     streams: dict[str, dict[str, Any]] = field(default_factory=dict)
     rows: list[dict[str, Any]] = field(default_factory=list)
     handling: str = ""
+    gap: bool = False
+
+    def handled(self) -> str:
+        """A `Handled:` note on the gap, or empty when there is none."""
+        if not self.gap:
+            return ""
+        return f"{self.summary}; modelled as an unassigned national component"
 
 
 def assess(data: Mapping[str, Any] | None, error: str = "") -> Coherence:
@@ -73,7 +82,7 @@ def assess(data: Mapping[str, Any] | None, error: str = "") -> Coherence:
     gapped = {st: v for st, v in streams.items() if v.get("weeks_with_gap", 0)}
     if not (rows or gapped or data.get("coherent") is False):
         return out
-    out.status = "warn"
+    out.gap = True
     st = "total" if "total" in gapped else next(iter(gapped), "")
     if st:
         v = gapped[st]
@@ -88,6 +97,15 @@ def assess(data: Mapping[str, Any] | None, error: str = "") -> Coherence:
             f"national ({national}) differs from the sum of the provinces"
         )
     return out
+
+
+def gap_by_week(c: Coherence, stream: str = "total") -> dict[str, float]:
+    """National minus the provinces, by week, for one stream."""
+    return {
+        str(r["target_end_date"]): float(r.get("gap") or 0.0)
+        for r in c.rows
+        if r.get("stream") == stream
+    }
 
 
 def details(c: Coherence) -> str:

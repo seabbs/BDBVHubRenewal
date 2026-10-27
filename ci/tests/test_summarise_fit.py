@@ -19,8 +19,9 @@ LIMITS = thresholds()
 
 
 def test_defaults_match_bvdoutbreaksize() -> None:
-    # docs/fits/convergence.jl in BVDOutbreakSize
-    assert DEFAULT_THRESHOLDS["fail"] == {
+    # docs/fits/convergence.jl in BVDOutbreakSize: its fail level is the
+    # retry level here, and only a clearly broken fit fails.
+    assert DEFAULT_THRESHOLDS["retry"] == {
         "rhat": 1.1,
         "ess_bulk": 25.0,
         "ess_tail": 25.0,
@@ -32,6 +33,8 @@ def test_defaults_match_bvdoutbreaksize() -> None:
         "ess_tail": 100.0,
         "divergent_fraction": 0.01,
     }
+    fail = DEFAULT_THRESHOLDS["fail"]
+    assert fail["rhat"] > 1.1 and fail["ess_bulk"] < 25
 
 
 def test_headline_skips_undefined_entries() -> None:
@@ -48,13 +51,19 @@ def test_headline_skips_undefined_entries() -> None:
         ({"rhat": 1.07}, "warn"),
         ({"ess": 60}, "warn"),
         ({"div": 80}, "warn"),  # 2% of draws
-        ({"rhat": 1.3}, "fail"),
-        ({"ess": 10}, "fail"),
-        ({"div": 400}, "fail"),  # 10% of draws
+        ({"rhat": 1.3}, "warn-retry"),
+        ({"ess": 20}, "warn-retry"),
+        ({"div": 400}, "warn-retry"),  # 10% of draws
+        ({"rhat": 1.6}, "fail"),
+        ({"ess": 5}, "fail"),
+        ({"div": 1000}, "fail"),  # 25% of draws
     ],
 )
 def test_verdict_levels(kwargs: dict[str, float], status: str) -> None:
-    assert check_fit("main", diagnostics(**kwargs), LIMITS).status == status  # type: ignore[arg-type]
+    c = check_fit("main", diagnostics(**kwargs), LIMITS)  # type: ignore[arg-type]
+    want, _, retry = status.partition("-")
+    assert c.status == want
+    assert c.retry is bool(retry)
 
 
 def test_missing_diagnostics_is_an_error() -> None:
@@ -68,11 +77,12 @@ def test_no_sampler_is_not_applicable() -> None:
 
 
 def test_failure_lists_culprits() -> None:
-    c = check_fit("main", diagnostics(rhat=1.3), LIMITS)
+    c = check_fit("main", diagnostics(rhat=1.8), LIMITS)
     assert c.worst and c.families
     md = markdown([c], LIMITS)
     assert "Worst-mixing parameters" in md and "**fail**" in md
-    assert "1.300" in md  # R-hat to three decimals
+    assert "1.800" in md  # R-hat to three decimals
+    assert "Refit once" in md
 
 
 def test_env_overrides_and_rejects_nonfinite(
@@ -155,6 +165,6 @@ def test_cli_exit_codes_and_outputs(
     )
     data = read_json(tmp_path / "b" / "fit-summary.json")
     assert (
-        data["status"] == "fail" and data["thresholds"]["fail"]["rhat"] == 1.1
+        data["status"] == "fail" and data["thresholds"]["retry"]["rhat"] == 1.1
     )
     assert "Fit convergence" in summary.read_text()

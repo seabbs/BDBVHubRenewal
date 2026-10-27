@@ -1,8 +1,9 @@
 """Write the body and title of the hub pull request.
 
 The hub's organisers read the body, so it is short enough to scan: one
-line on what was submitted, one plain status line, the nowcast plot, a
-link to the round's page in our docs and the bot footer. Everything else
+line on what was submitted, one plain status line, one `Handled:` line
+on any problem the workflow dealt with and how, the nowcast plot, a link
+to the round's page in our docs and the bot footer. Everything else
 (the checks, the fallback chain, diagnostics, provenance and a national
 summary) sits in short collapsed sections. The full reports stay in the
 job summary and the run's artefacts.
@@ -93,6 +94,8 @@ def _read_coherence(selected_dir: Path) -> Coherence | None:
 def _coherence_cell(c: Coherence | None) -> str:
     if c is None:
         return "N/A (not checked)"
+    if c.gap:
+        return f"Handled ({c.summary})"
     return f"{STATUS_LABEL[c.status]} ({c.summary})"
 
 
@@ -144,12 +147,8 @@ def status_line(
     if coherence is not None and coherence.status == "warn":
         names.append("data coherence")
     why = _first_reason(provenance)
-    if kind == "retry":
-        head = (
-            "Main model refitted with more conservative sampler settings"
-            + (f": {why[0].lower()}{why[1:]}" if why else "")
-            + "."
-        )
+    if kind == "retry" and why:
+        head = f"Main model refitted once: {why[0].lower()}{why[1:]}."
     elif kind in ("fallback", "persistence"):
         head = (
             f"Fallback model used ({provenance['produced_by']})"
@@ -169,6 +168,19 @@ def status_line(
     if dry_run:
         head += " Dry run: nothing was pushed."
     return head
+
+
+def handled_line(
+    provenance: Mapping[str, Any], coherence: Coherence | None = None
+) -> str:
+    """One `Handled:` line on the problems dealt with, or empty."""
+    notes = [str(h) for h in provenance.get("handled") or []]
+    if coherence is not None and coherence.handled():
+        notes.append(coherence.handled())
+    if not notes:
+        return ""
+    text = "; ".join(notes)
+    return f"Handled: {text}{'' if text.endswith('.') else '.'}"
 
 
 def _section(label: str, body: str) -> str:
@@ -371,6 +383,9 @@ def build(
         f"locations.\n"
     )
     out.append(status_line(provenance, coherence, dry_run) + "\n")
+    handled = handled_line(provenance, coherence)
+    if handled:
+        out.append(handled + "\n")
     out.append(f"![Nowcast and forecast for {reference_date}]({plot_url})\n")
     out.append(f"This round in our docs: {round_url(reference_date, docs)}\n")
     sections = [
@@ -384,7 +399,8 @@ def build(
             f"National against the sum of the provinces in the data.\n\n"
             f"{coherence_details(coherence)}",
         )
-        if coherence is not None and coherence.status == "warn"
+        if coherence is not None
+        and (coherence.gap or coherence.status == "warn")
         else "",
     ]
     nat = national_table(sub)
