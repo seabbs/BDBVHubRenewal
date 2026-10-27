@@ -40,11 +40,16 @@ fi
 if [ -n "${PREVIOUS:-}" ]; then
   cp "$PREVIOUS" "$inputs/previous.csv"
 elif command -v gh > /dev/null; then
-  prev=$(gh api "repos/$HUB/contents/model-output/$MODEL_ID?ref=$HUB_REF" \
+  # gh prints the error body on stdout when the model has no folder yet
+  # (a 404), so keep the answer only if the call worked and it is a file.
+  prev=""
+  if out=$(gh api "repos/$HUB/contents/model-output/$MODEL_ID?ref=$HUB_REF" \
     --jq "[.[] | select(.name | endswith(\".csv\")) |
       select(.name < \"$REFERENCE_DATE\") | .name] | sort | last // empty" \
-    2> /dev/null || true)
-  if [ -n "$prev" ]; then
+    2> /dev/null); then
+    prev=$out
+  fi
+  if [[ "$prev" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}-.*\.csv$ ]]; then
     curl -fsSL --retry 3 "$raw/model-output/$MODEL_ID/$prev" \
       -o "$inputs/previous.csv"
   fi
