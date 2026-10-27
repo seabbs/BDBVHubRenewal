@@ -78,6 +78,8 @@ def test_comparison_page(
                 str(ROOT / "data"),
                 "--backtest-config",
                 str(ROOT / "config" / "backtest.toml"),
+                "--models",
+                "persistence",
             ]
         )
         == 0

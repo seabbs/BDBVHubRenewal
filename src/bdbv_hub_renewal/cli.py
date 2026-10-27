@@ -300,7 +300,7 @@ def _models(names: Sequence[str] | None) -> list[str]:
 def _backtest(args: argparse.Namespace) -> int:
     config = bt.load_config(args.config)
     target, delays = load_target(args.data), load_delays(args.data)
-    models = [get_model(n) for n in _models(args.models)]
+    names = _models(args.models)
     results, output = Path(args.results), Path(args.output)
     results.mkdir(parents=True, exist_ok=True)
     output.mkdir(parents=True, exist_ok=True)
@@ -313,12 +313,14 @@ def _backtest(args: argparse.Namespace) -> int:
                 config,
                 evaluate_holdout=True,
                 out_dir=results,
+                models=names,
             )
         except HeldOutError as err:
             print(f"ERROR: {err}", file=sys.stderr)
             return 1
         print(f"Held-out scores: {len(scores)} rows in {results}.")
         return 0
+    models = [get_model(n) for n in names]
     forecasts, scores = bt.run_development(
         models,
         target,

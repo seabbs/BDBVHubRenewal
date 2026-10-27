@@ -36,7 +36,7 @@ from .dates import reference_date_for_vintage
 from .delays import delay_summary
 from .heldout import load_model_choices
 from .hubcompare import attribution, display_names, load_comparison_config
-from .models.base import NATIONAL, get_model, list_models
+from .models.base import NATIONAL, ForecastTask, get_model, list_models
 from .plots import (
     plot_comparison,
     plot_delay_distribution,
@@ -220,7 +220,8 @@ def make_report(
     # Nowcast page: latest real vintage, every registered model.
     rows = real.loc[real["vintage"] == latest]
     tasks = make_tasks(rows, delays, config)
-    forecasts_now = run_forecasts([get_model(n) for n in names], tasks)
+    forecasts_now = _nowcast_forecasts(tasks, latest, res)
+    shown = [n for n in names if n in set(forecasts_now["model"])]
     locs = [NATIONAL, *tasks[0].locations]
     for loc in locs:
         save_light_dark(
@@ -228,7 +229,7 @@ def make_report(
                 plot_nowcast,
                 loc,
                 vintage=latest,
-                models=names,
+                models=shown,
                 target=target,
                 forecasts=forecasts_now,
             ),
@@ -251,8 +252,31 @@ def make_report(
     _write(
         gen / "nowcast-meta.md",
         f"Vintage **{latest}**, reference date **{ref}**, models "
-        f"{', '.join(f'`{n}`' for n in names)}.\n",
+        f"{', '.join(f'`{n}`' for n in shown)}.\n",
     )
+
+
+def _nowcast_forecasts(
+    tasks: list[ForecastTask], latest: str, res: Path
+) -> pd.DataFrame:
+    """Forecasts from the latest vintage for the Nowcast page.
+
+    Models that need no fit are run here. Fitted models are slow, so
+    their forecasts are taken from the held-out run, which forecasts the
+    latest vintage with every model, when it has them.
+    """
+    specs = list_models()
+    quick = [get_model(s.name) for s in specs if not s.fitted]
+    frames = [run_forecasts(quick, tasks)]
+    path = res / "heldout-forecasts.csv.gz"
+    if path.exists():
+        held = pd.read_csv(path)
+        fitted = {s.name for s in specs if s.fitted}
+        keep = held.loc[
+            (held["vintage"] == latest) & held["model"].isin(fitted)
+        ].drop(columns="chosen_model", errors="ignore")
+        frames.append(keep)
+    return pd.concat(frames, ignore_index=True)
 
 
 def _persistence_bias(scores: pd.DataFrame) -> str:

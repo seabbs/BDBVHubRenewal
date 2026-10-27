@@ -117,11 +117,14 @@ def test_heldout_also_runs_the_other_variants(
     tmp_path: Path,
 ) -> None:
     from bdbv_hub_renewal.models import Persistence, register_model
+    from bdbv_hub_renewal.models.base import _REGISTRY
 
-    class Shadow(Persistence):
-        name = "shadow"
-
-    register_model("shadow", Shadow, "A second cheap model.", replace=True)
+    register_model(
+        "shadow",
+        lambda: Persistence(name="shadow"),
+        "A second cheap model.",
+        replace=True,
+    )
     config.model_choice.write_text(
         "choices:\n  - {date: 2026-10-10, model: persistence}\n"
     )
@@ -133,6 +136,9 @@ def test_heldout_also_runs_the_other_variants(
         out_dir=tmp_path,
         models=("shadow",),
     )
-    assert set(scores["model"]) == {"persistence", "shadow"}
-    # Each score still records the model chosen at the time.
-    assert set(scores["chosen_model"]) == {"persistence"}
+    try:
+        assert set(scores["model"]) == {"persistence", "shadow"}
+        # Each score still records the model chosen at the time.
+        assert set(scores["chosen_model"]) == {"persistence"}
+    finally:
+        _REGISTRY.pop("shadow")

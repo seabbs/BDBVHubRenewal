@@ -195,11 +195,12 @@ def run_heldout(
     *,
     evaluate_holdout: bool = False,
     out_dir: Path | str = "results",
+    models: Sequence[str] = (),
 ) -> pd.DataFrame:
     """Forecast and score every held-out vintage under its chosen model.
 
-    Each held-out vintage is forecast by its chosen model and by the
-    baseline, and scored against every later real vintage.
+    Each held-out vintage is forecast by its chosen model, the baseline
+    and any other `models`, and scored against every later real vintage.
 
     Parameters
     ----------
@@ -214,6 +215,10 @@ def run_heldout(
     out_dir : pathlib.Path or str
         Where to write `heldout-forecasts.csv.gz`, `heldout-scores.csv`
         and `heldout-run.yml`.
+    models : sequence of str
+        Other registered models to forecast and score alongside, such as
+        the variants not chosen. Their scores keep `chosen_model`, so
+        they compare with the choice but are not mistaken for it.
 
     Returns
     -------
@@ -246,7 +251,7 @@ def run_heldout(
     baseline = _baseline()
     frames = []
     for row in pairs.itertuples(index=False):
-        names = list(dict.fromkeys([str(row.model), baseline]))
+        names = list(dict.fromkeys([str(row.model), baseline, *models]))
         rows = real.loc[real["vintage"] == row.vintage]
         fc = run_forecasts(
             [get_model(n) for n in names], make_tasks(rows, delays, config)
