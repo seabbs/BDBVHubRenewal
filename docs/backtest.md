@@ -5,24 +5,30 @@ Forecasts made at past vintages, scored against later data.
 
 !!! info "A thin backtest"
     There are four real vintages, and only two give scorable forecasts in development: 2026-08-18 (reference date 2026-08-22) and 2026-10-09 (2026-10-17).
-    The 2026-10-24 vintage is the truth, and 2026-10-17 (2026-10-24) is held out.
+    Vintages after the model choice date, 2026-10-10, are held out and scored on the [Held-out evaluation](heldout.md) page.
     Weekly reconstructed vintages from 2026-06-06 to 2026-10-10 add more forecast dates, but they are built from the same latest data.
     Read these results as a check of the harness, not as evidence about models.
 
 This page shows development results only.
-Held-out reference dates are listed in `config/backtest.toml` and never scored here.
-`task backtest` writes `results/backtest-scores.csv` (development) and `results/recovery-scores.csv` (simulated).
+Every week is scored, including recent weeks that are still incomplete in the truth.
+How scoring works is on the [Evaluation methods page](methods/evaluation.md).
+`task backtest` writes `results/backtest-scores.csv` (development, against the latest vintage), `results/backtest-scores-by-truth.csv` (real forecasts against every later vintage) and `results/recovery-scores.csv` (simulated).
 
 ## Overall
 
+--8<-- "backtest-truth.md"
+
 --8<-- "scores-overall.md"
 
-Relative to persistence:
+## Persistence underpredicts
 
---8<-- "relative-skill.md"
+--8<-- "persistence-bias.md"
 
-Only persistence exists so far, so every ratio is 1.
-The [relative WIS](#relative-to-persistence) plots fill in as models are registered.
+This is what a flat baseline should do here.
+Persistence copies the weeks it judges complete as published, and those weeks are still revised upwards after the vintage.
+It also holds the last complete week flat, while the epidemic was growing for most of the period.
+Both push its forecasts below the truth.
+The maths is on the [Model page](methods/model.md#persistence-baseline).
 
 ## Forecasts against later data
 
@@ -84,9 +90,8 @@ Panels split by vintage kind.
     ![Mean bias by horizon and vintage kind.](figures/scores-bias-horizon.svg#only-light)
     ![Mean bias by horizon and vintage kind.](figures/scores-bias-horizon-dark.svg#only-dark)
 
-Persistence underpredicts the weeks it treats as complete (horizons −4 and −3).
-Those weeks are still revised upwards after the vintage.
-Its intervals cover well beyond the reference week, because the random walk spread grows quickly.
+Persistence underpredicts the weeks it treats as complete, about horizons −4 to −2.
+Its intervals cover better beyond the reference week, because the random walk spread grows quickly.
 
 ## By province
 
@@ -116,19 +121,30 @@ Its intervals cover well beyond the reference week, because the random walk spre
 
 ## Relative to persistence
 
-=== "By horizon"
+--8<-- "relative-section.md"
 
-    ![WIS relative to persistence by horizon.](figures/relative-wis-horizon.svg#only-light)
-    ![WIS relative to persistence by horizon.](figures/relative-wis-horizon-dark.svg#only-dark)
+## Scores as the truth is revised
 
-=== "By province"
+Forecasts from real vintages are scored against every later real vintage, as reported at each.
+The national truth for the weeks they cover:
 
-    ![WIS relative to persistence by province.](figures/relative-wis-location.svg#only-light)
-    ![WIS relative to persistence by province.](figures/relative-wis-location-dark.svg#only-dark)
+--8<-- "truth-changes.md"
+
+<figure class="doc-figure" markdown="span">
+  ![Mean WIS of each real forecast vintage against each later truth vintage.](figures/scores-by-truth.svg#only-light)
+  ![Mean WIS of each real forecast vintage against each later truth vintage.](figures/scores-by-truth-dark.svg#only-dark)
+  <figcaption markdown="1">
+    Mean WIS of the forecasts from each real vintage, scored against each later real vintage as reported.
+  </figcaption>
+</figure>
+
+??? note "Scores by truth vintage"
+
+    --8<-- "scores-by-truth.md"
 
 ## Recovery on simulated vintages
 
-Forecasts from vintages of a [simulated outbreak](methods.md#simulated-vintages) with a turning point, scored against the known final counts.
+Forecasts from vintages of a [simulated outbreak](methods/data.md#simulated-vintages) with a turning point, scored against the known final counts.
 
 <figure class="doc-figure" markdown="span">
   ![True parameters of the simulated outbreak.](figures/simulation.svg#only-light)
@@ -146,19 +162,3 @@ Forecasts from vintages of a [simulated outbreak](methods.md#simulated-vintages)
     The model phase adds parameter recovery checks against the true values above.
   </figcaption>
 </figure>
-
-## Held-out evaluation
-
-The held-out reference date is **2026-10-24** (vintage 2026-10-17).
-It is the latest reference date that can be scored at all.
-With one date and only weeks up to 2026-10-10 scorable, the held-out set is very thin.
-
-The procedure:
-
-1. Develop and compare variants on the development set only.
-2. Write the model choice record `results/model-choice.yml` (template in `config/model-choice.template.yml`) and commit it.
-3. Run `task backtest-heldout` once. It refuses without the record, uses real vintages only and logs the run.
-4. Results go to `results/heldout-scores.csv` and `results/heldout-run.yml`, with the run date and the hash of the choice record.
-5. Sam reviews them before any submission decision.
-
---8<-- "heldout.md"

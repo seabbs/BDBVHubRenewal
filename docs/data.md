@@ -1,31 +1,9 @@
 # Data
 
-Every stream the hub publishes, tidied with all its vintages.
+What the hub data show, with all their vintages.
 { .page-subtitle }
 
-`task data` downloads the hub files and writes the tidy tables to `data/`.
-The tidy tables are small and committed.
-Raw downloads go to `data/raw/` and are not.
-`data/sources.json` records the hub commit and where each delay vintage came from.
-
-## Inventory
-
-| Hub file | Tidy table | What it holds | Vintages |
-|---|---|---|---|
-| `target-data/time-series.csv` | `target.csv` | Weekly confirmed cases by onset week for the country and provinces: observed, imputed and total. | All, in one file |
-| `auxiliary-data/daily-confirmed-case.csv` | `daily.csv` | Daily cases by onset day, split into observed and imputed onsets. | All, in one file |
-| `auxiliary-data/weekly-reporting-delays-by-province.csv` | `delays.csv.gz` | One row per known-onset case: province, onset week and onset-to-report delay. | Latest only; earlier ones from the archive folder and the git history |
-| `target-data/time-series.csv` (health zones) | `health_zones.csv.gz` | Weekly totals by health zone. Not modelled yet. | All |
-| `auxiliary-data/locations.csv` | `locations.csv` | Codes, names and parents, plus populations and centres added here. | Static |
-| `hub-config/*.json` | `hub-config/` | Rounds, tasks, output types and the metadata schema. | Copied at download |
-
-The split into observed and imputed in `target.csv` comes from the daily file summed into epi weeks.
-It matches the published weekly total in every row.
-The delay rows match the observed (known-onset) totals of their vintage exactly.
-
-**Not published by the hub:** deaths, suspected cases, counts by report date, cases without an onset by report date, the imputation code and populations.
-Province populations come from the Institut National de la Statistique, *Annuaire statistique RDC 2020* (2019 figures), via [Wikipedia](https://en.wikipedia.org/wiki/Provinces_of_the_Democratic_Republic_of_the_Congo), as in BVDOutbreakSize.
-Centres of affected provinces are the WorldPop-weighted centres used by BVDOutbreakSize.
+How they are extracted and the synthetic vintages are on the [Data methods page](methods/data.md).
 
 ## Vintages
 
@@ -111,7 +89,7 @@ It is net of cases that gain an onset later, so it can be negative.
 --8<-- "newly-missing.md"
 
 **How it informs the model.**
-The missing fraction $\pi_p(t)$ is fitted directly to these counts (see [Methods](methods.md#missing-onsets)).
+The missing fraction $\pi_p(t)$ is fitted directly to these counts (see [Model](methods/model.md#missing-onsets)).
 It is well identified.
 
 ## Delays
@@ -138,12 +116,12 @@ It is well identified.
 
 **How it informs the model.**
 The delay data estimate a delay that changes over time, pooled over provinces.
-They also give the hub's own back-sampling distribution $\hat g_v$ at each vintage (see [Modelling the hub's imputation](methods.md#modelling-the-hubs-imputation)).
+They also give the hub's own back-sampling distribution $\hat g_v$ at each vintage (see [Modelling the hub's imputation](methods/model.md#modelling-the-hubs-imputation)).
 A few delays are negative (down to −31 days) and a few are very long (up to 193 days).
 
 ## Reconstructed vintages
 
-[Reconstructed vintages](methods.md#testing-with-synthetic-vintages) rebuild what the data would have shown at past dates from the latest data.
+[Reconstructed vintages](methods/data.md#reconstructed-vintages) rebuild what the data would have shown at past dates from the latest data.
 Here they are checked against the real vintages of the same date.
 
 <figure class="doc-figure" markdown="span">

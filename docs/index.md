@@ -11,36 +11,23 @@ So far it has:
 
 - a data layer that downloads and tidies every stream the hub publishes, with every vintage;
 - reconstructed and simulated vintages to extend testing;
-- a persistence baseline;
+- a persistence baseline and a model registry;
 - a writer and checks for the hub's submission format and model metadata;
-- a backtest harness with a development and held-out split, scored like [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize);
-- interfaces and maths for the planned renewal model.
+- a backtest scored like [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize), a rolling held-out evaluation and a comparison with hub forecasts;
+- the maths of the planned renewal model.
 
 ## Pages
 
-| Page | What it shows |
+| Section | What it holds |
 |---|---|
-| [Data](data.md) | Every hub data stream, its vintages and how it could inform the model. |
-| [Methods](methods.md) | The maths of the baseline, the scores, the synthetic vintages and the planned model. |
-| [Models](models.md) | The models in the registry and how to add one. |
-| [Backtest](backtest.md) | Scores against later data, overall, by horizon and by province. |
+| [Getting started](getting-started.md) | Install, run and build the site. |
+| Methods | [Data](methods/data.md), [Model](methods/model.md) and [Evaluation](methods/evaluation.md), written as the methods of a paper. |
+| [Data](data.md) | What the hub data show, vintage by vintage. |
+| [Backtest](backtest.md) | Development scores against later data. |
+| [Held-out evaluation](heldout.md) | Forecasts after the model choice, scored as later data arrive. |
 | [Nowcast](nowcast.md) | The current nowcast and forecast from the latest vintage. |
+| Development | [Adding a model](development/adding-a-model.md), the [CLI](development/cli.md), [CI and submissions](submissions.md) and the [hub specification](hub-spec.md). |
 | [API reference](reference.md) | The Python package. |
-
-## Run it
-
-The package needs Python 3.11 or later, [uv](https://docs.astral.sh/uv/) and [Task](https://taskfile.dev).
-
-```bash
-task setup      # install
-task test       # run the tests
-task data       # download the hub data and rebuild data/
-task backtest   # development backtest and recovery check
-task nowcast    # forecast from the latest vintage and write a hub file
-task docs       # build this site into _site/
-```
-
-The tidy data are committed, so `task backtest` works from a clean clone without downloading.
 
 ## Data credit
 

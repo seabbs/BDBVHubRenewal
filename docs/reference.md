@@ -31,6 +31,10 @@ The public API of `bdbv_forecasts`, generated from the numpy-style docstrings.
 
 ::: bdbv_forecasts.backtest
 
+::: bdbv_forecasts.heldout
+
+::: bdbv_forecasts.hubcompare
+
 ::: bdbv_forecasts.plots
 
 ::: bdbv_forecasts.report

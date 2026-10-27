@@ -15,16 +15,27 @@ site_dir: _site
 exclude_docs: |
   generated/*
   examples/*
+  # The comparison with hub forecasts stays off the site until its
+  # publication is decided (see config/hub-comparison.toml).
+  comparison.md
+  figures/comparison/
 
 nav:
   - Home: index.md
+  - Getting started: getting-started.md
+  - Methods:
+      - Data: methods/data.md
+      - Model: methods/model.md
+      - Evaluation: methods/evaluation.md
   - Data: data.md
-  - Methods: methods.md
-  - Models: models.md
   - Backtest: backtest.md
+  - Held-out evaluation: heldout.md
   - Nowcast: nowcast.md
-  - Submissions: submissions.md
-  - Hub specification: hub-spec.md
+  - Development:
+      - Adding a model: development/adding-a-model.md
+      - CLI: development/cli.md
+      - CI and submissions: submissions.md
+      - Hub specification: hub-spec.md
   - API reference: reference.md
 
 theme:
@@ -97,7 +108,11 @@ markdown_extensions:
   - pymdownx.snippets:
       base_path: [docs/generated, docs/examples]
       check_paths: true
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
 

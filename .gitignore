@@ -12,4 +12,5 @@ data/raw/
 output/
 # Docs figures and generated snippets: built at docs build time.
 docs/figures/*.svg
+docs/figures/comparison/
 docs/generated/
