@@ -1,0 +1,55 @@
+# Lint, format and type-check on commit.
+# Install the hooks once with `uvx pre-commit install`.
+# Ruff and mypy run from the locked uv environments, so they match CI.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      # Downloaded, generated and fixture files are left as they are.
+      - id: end-of-file-fixer
+        exclude: &generated ^(data|results|docs/(generated|figures|examples)|tests/hub_validation/fixtures|ci/fixtures)/
+      - id: trailing-whitespace
+        exclude: *generated
+      - id: check-yaml
+      - id: check-toml
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff
+        entry: uv run ruff check --fix
+        language: system
+        types: [python]
+        files: ^(src|tests)/
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types: [python]
+        files: ^(src|tests)/
+      - id: mypy
+        name: mypy
+        entry: uv run mypy src
+        language: system
+        types: [python]
+        files: ^src/
+        pass_filenames: false
+      - id: ruff-ci
+        name: ruff (ci/)
+        entry: bash -c 'cd ci && uv run ruff check --fix src tests fixtures && uv run ruff format src tests fixtures'
+        language: system
+        types: [python]
+        files: ^ci/
+        pass_filenames: false
+      - id: mypy-ci
+        name: mypy (ci/)
+        entry: bash -c 'cd ci && uv run mypy'
+        language: system
+        types: [python]
+        files: ^ci/
+        pass_filenames: false
+      - id: actionlint
+        name: actionlint
+        entry: uvx --from actionlint-py actionlint
+        language: system
+        files: ^\.github/workflows/
+        pass_filenames: false
