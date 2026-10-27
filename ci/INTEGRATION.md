@@ -58,7 +58,7 @@ bdbv-forecasts nowcast --model renewal --config main --fit <fit dir> \
   The PR always files it as `model-output/$HUB_MODEL_ID/<reference_date>-$HUB_MODEL_ID.csv`, so persistence can stand in for the main model.
 - Include the national row `CD`, as the sum of the province trajectories by sample index, plus any national cases the model does not assign to a province.
   Use the same sample ids across locations.
-  The `national_sum` check fails unless national sample k equals the sum of province sample k plus that sample's unassigned cases exactly, for every week (only float noise, 1e-9, is allowed).
+  National sample k must equal the sum of province sample k plus that sample's unassigned cases, for every week. `to_hub_table` writes it that way, and the gate rebuilds the national rows the same way if they differ, and notes it.
 - Write `national.json` at the root of `--out` (`<candidate>/submission/national.json`), which `candidate.sh` passes to `check-forecast --national-sidecar`:
 
   ```json
@@ -66,9 +66,10 @@ bdbv-forecasts nowcast --model renewal --config main --fit <fit dir> \
    "unassigned": [{"target_end_date": "2026-10-31", "sample": 1, "value": 0.0}]}
   ```
 
-  `modelled_provinces` must all be in the hub file, or the check fails.
+  A modelled province missing from the hub file warns.
   `unassigned` holds the national cases not assigned to a province, by week and sample; leave it empty when there are none.
-  Without the file the check uses the provinces in the hub file and no unassigned component, and says so in its summary.
+  Without the file the gate takes the unassigned part from the gap between the national data and the provinces (`coherence.json`), and says so.
+- Write `handled.json` at the root of `--out`: a JSON list of short notes on anything handled on the way, such as a data stream taken from an earlier vintage. They go on the PR's `Handled:` line.
 - Submit at least 7 back weeks (to `reference_date − 6 weeks`) as well as the 3 forecast weeks.
   The `observed` check compares the median of the last two complete weeks (4 or more weeks before `as_of`) with the data.
   With fewer back weeks it has nothing to compare, and skips.
@@ -280,27 +281,10 @@ Suggested additions:
 
 ## Checks and thresholds
 
-Thresholds are in `ci/policy.toml`.
-A **fail** rules the candidate out and the chain moves on.
-A **warn** lets it through and is stated in the PR body.
+Thresholds are in `ci/policy.toml`, and the policy is described on the docs' Submissions page.
+In short, problems are handled rather than failed on:
 
-| check | fail | warn |
-| --- | --- | --- |
-| convergence, max R-hat | > 1.1 | > 1.05 |
-| convergence, min bulk and tail ESS | < 25 | < 100 |
-| convergence, divergent fraction of draws | > 5% | > 1% |
-| posterior predictive, 90% coverage of `total`, overall and last 4 complete weeks | < 0.50 | < 0.70 |
-| posterior predictive, KS distance of the randomised PIT from uniform (20+ rows) | | > 0.2 |
-| posterior predictive, sampled fit with no readable `ppc.json` | error | |
-| schema (columns, `sample`, target, reference date, Saturdays, `tasks.json` options) | any | |
-| values (negative, NaN, infinite, unparsable) | any | |
-| samples (exactly 100, each a full trajectory) | any | |
-| coverage (expected locations, nowcast and horizon weeks) | any | |
-| national equals the sum of provinces plus unassigned cases, per sample and week, exactly; every modelled province present | any | |
-| bounds: 95th centile against max(largest observed week, 20) | > 20× | > 5× |
-| growth of the median, week on week, over the forecast (offset 5) | > 4× | > 2× |
-| last complete weeks against observed (offset 5) | off by > 5× | off by > 2× |
-| forecast weeks against the persistence baseline | | off by > 3× |
-| shared weeks against last week's submission | | off by > 2× |
-| hubValidations (`validate_submission` and `validate_model_metadata`) | any error | |
-| data coherence: national against the sum of provinces in the data (once per round, not per candidate) | | any week with a gap |
+- **fail** (rules a candidate out): a file the hub would reject (schema, values, samples, hubValidations) or a clearly broken fit (R-hat above 1.5, ESS below 10, divergent draws above 20%), or no diagnostics from a sampled fit;
+- **refit once**: the main model past BVDOutbreakSize's fail thresholds (R-hat 1.1, ESS 25, divergent draws 5%), with the refit preferred unless it is clearly broken;
+- **handled** (on the PR's `Handled:` line): the national rows rebuilt as the sum of the provinces plus the unassigned component; a gap between the national data and the provinces; a data stream taken from an earlier vintage (`handled.json` beside the hub file);
+- **warn** (reported only): posterior predictive checks, plausibility checks, missing locations or weeks, and BVDOutbreakSize's warn thresholds.

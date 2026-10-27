@@ -22,8 +22,8 @@ The gate decides, and the pull request body says what was submitted and why.
 | `detect` | Compares the hub's newest data commit and `as_of` with the ledger. Stops unless there is new data for the open round. |
 | `prepare` | Pins the hub data at one commit (`bdbv-forecasts data --ref <sha>`), checks national coherence and builds the persistence candidate, which is also the baseline for the checks. |
 | `fit` | One matrix job per primary candidate (`main` and `fallback`), in parallel. Each runs `bdbv-forecasts fit`, then `nowcast --fit`, the checks and the plots. Fits are cached under a hash of the model source, the hub commit and the sampler settings. |
-| `triage` | Says whether `main` cleared its checks. |
-| `retry` | Only if `main` failed: refits with more conservative sampler settings. |
+| `triage` | Says whether `main` needs its one refit. |
+| `retry` | Only if `main` needs it: one refit with a longer warm-up, more chains and jittered inits. |
 | `gate` | Walks the fallback chain and submits the first candidate that clears convergence, the posterior predictive checks, the forecast checks and hub validation. |
 | `submit` | Publishes the plot, builds the pull request body, and opens or updates the pull request from `seabbs-bot`'s fork. A dry run prints the body instead. |
 | `record` | Live runs only. Writes the outcome to `state.json` on the `submission-ledger` branch and archives the round's files there. |
@@ -66,40 +66,43 @@ Set the repository variable `HUB_MODEL` to `renewal` once its metadata text is i
 
 ## The fallback chain
 
+The workflow handles problems rather than failing on them, so the chain rarely moves past the main model.
+A candidate is ruled out only when its fit is clearly broken, or its file would be invalid on the hub.
 The chain is set in `ci/policy.toml`.
-The first candidate, in order, that clears every check is submitted.
 
 1. `main`: the main model.
-2. `retry-1`: the main model with a longer warm-up, a new seed and target acceptance 0.95.
-3. `retry-2`: the main model with target acceptance 0.99 and tree depth 12.
-4. `fallback`: the simplified variant (data-driven delays and missingness, no spatial coupling, weekly Rt). It is fitted alongside `main`, so a failed main model does not leave too little of the window.
-5. `persistence`: the persistence baseline.
+2. `retry-1`: one refit of the main model with a longer warm-up, 8 chains and jittered inits (`init = "jitter"` in its sampler table). It runs only when `main` is past the retry thresholds below, or was ruled out. The refit is submitted unless it is clearly broken; otherwise the original fit is kept if it is not.
+3. `fallback`: the simplified variant (data-driven delays and missingness, no spatial coupling, weekly Rt). It is fitted alongside `main`, so a broken main model does not leave too little of the window.
+4. `persistence`: the persistence baseline.
 
-The retries run only if `main` fails.
-A round is skipped only if even persistence fails its checks or hub validation.
+There is at most one refit, and fits are cached under a content hash, so a re-run in the same window reuses them.
+A round is skipped only if even persistence fails hub validation.
 Every candidate is filed under the same hub model id, so a fallback stands in for the main model.
-The pull request body names the step that produced the submission and why the steps before it were ruled out.
+The pull request body leads with what was handled and how, on one `Handled:` line, and names the fallback and why if one was used.
 
 ## Checks and thresholds
 
-A **fail** rules the candidate out and the chain moves on.
-A **warn** lets it through and is stated in the pull request body.
+Only an invalid submission or a clearly broken fit **fails**, which rules the candidate out.
+Everything else is **handled** (and stated on the `Handled:` line) or **warns** (and is named on the status line).
 Thresholds are in `ci/policy.toml`.
 
 ### Convergence
 
-These are BVDOutbreakSize's thresholds (`docs/fits/convergence.jl`).
-A fit that cannot be judged (no or unreadable `diagnostics.json`) fails.
-Each threshold can be overridden by a repository variable `BDBV_CONVERGENCE_{FAIL,WARN}_{RHAT,ESS_BULK,ESS_TAIL,DIVERGENT}`.
+BVDOutbreakSize's thresholds (`docs/fits/convergence.jl`) are the retry and warn levels.
+Past the retry level the main model is refitted once, and the refit is accepted unless it is clearly broken.
+A fit with no or unreadable `diagnostics.json` cannot be judged and fails.
+Each threshold can be overridden by a repository variable `BDBV_CONVERGENCE_{FAIL,RETRY,WARN}_{RHAT,ESS_BULK,ESS_TAIL,DIVERGENT}`.
 
-| check | fail | warn |
-| --- | --- | --- |
-| max R-hat | > 1.1 | > 1.05 |
-| min bulk and tail ESS | < 25 | < 100 |
-| divergent fraction of draws | > 5% | > 1% |
+| check | clearly broken (fail) | refit once | warn |
+| --- | --- | --- | --- |
+| max R-hat | > 1.5 | > 1.1 | > 1.05 |
+| min bulk and tail ESS | < 10 | < 25 | < 100 |
+| divergent fraction of draws | > 20% | > 5% | > 1% |
 
 ### Posterior predictive checks
 
+These are reported only.
+They never fail a candidate or trigger a fallback, because model choice comes from the backtest, not from one run's checks.
 `fit` writes `ppc.json` beside `diagnostics.json`: one row per province, stream (known onsets, the hub's imputed onsets and totals) and in-sample onset week.
 Each row has the observed count, the predictive median, the 50% and 90% intervals, the randomised PIT and whether the week is complete.
 The gate reports, for each stream, the 50% and 90% interval coverage overall, by province and over the last 4 complete weeks.
@@ -107,34 +110,39 @@ It also summarises the PIT: the Kolmogorov-Smirnov distance from uniform, the sh
 The candidate's `ppc.png` artefact plots the predictive intervals against the observed counts, one panel per province.
 Thresholds apply to the `total` stream and can be overridden by repository variables `BDBV_PPC_{COVERAGE_WARN,COVERAGE_FAIL,LEVEL,RECENT_WEEKS,PIT_KS_WARN,PIT_MIN_ROWS}`.
 
-| check | fail | warn |
-| --- | --- | --- |
-| 90% interval coverage of the observed counts, overall or over the last 4 complete weeks | < 0.50 | < 0.70 |
-| Kolmogorov-Smirnov distance of the PIT from uniform (20 or more rows) | | > 0.2 |
-| sampled fit with no readable `ppc.json` | error | |
+| check | warn |
+| --- | --- |
+| 90% interval coverage of the observed counts, overall or over the last 4 complete weeks | < 0.70 (called poor below 0.50) |
+| Kolmogorov-Smirnov distance of the PIT from uniform (20 or more rows) | > 0.2 |
+| sampled fit with no readable `ppc.json` | always |
 
-Persistence and any other model without a posterior report n/a, which neither passes nor blocks.
-The coverage numbers go in the pull request's status table, with a collapsed table by province.
+Persistence and any other model without a posterior report n/a.
+The coverage numbers go in the pull request's collapsed checks, with a table by province.
 
 ### Forecast and hub checks
 
-| check | fail | warn |
+| check | fail | handled or warn |
 | --- | --- | --- |
 | schema (columns, `sample`, target, reference date, Saturdays, `tasks.json` options) | any | |
 | values (negative, NaN, infinite, unparsable) | any | |
 | samples (exactly 100, each a full trajectory) | any | |
-| coverage (expected locations, 4 nowcast weeks and 3 horizon weeks) | any | |
-| national: sample *k* of `CD` equals the sum of sample *k* of the provinces, plus any modelled unassigned component, in every week; every modelled province present | any | |
-| bounds: 95th centile against max(largest observed week, 20) | > 20× | > 5× |
-| growth of the median, week on week, over the forecast (offset 5) | > 4× | > 2× |
-| last complete weeks against observed (offset 5) | off by > 5× | off by > 2× |
+| hub validation: `hub_validate` (Python) and `hubValidations` (R) | any error | |
+| national: sample *k* of `CD` equals the sum of sample *k* of the provinces plus the unassigned component, in every week | | handled: rebuilt by construction |
+| a modelled province missing from the file | | warn |
+| coverage (expected locations, 4 nowcast weeks and 3 horizon weeks) | | warn |
+| bounds: 95th centile against max(largest observed week, 20) | | > 5× |
+| growth of the median, week on week, over the forecast (offset 5) | | > 2× |
+| last complete weeks against observed (offset 5) | | off by > 2× |
 | forecast weeks against the persistence baseline | | off by > 3× |
 | shared weeks against last week's submission | | off by > 2× |
-| hub validation: `hub_validate` (Python) and `hubValidations` (R) | any error | |
-| data coherence: the hub's national data against the sum of its provinces (observed, imputed, total) | | any gap |
+| data coherence: the hub's national data against the sum of its provinces (observed, imputed, total) | | handled: noted, modelled as an unassigned component |
+| a data stream missing or late for the vintage (the delays) | | handled: the latest available vintage of that stream is used, and noted |
 
-The national check reads `national.json`, which `nowcast` writes beside the hub file.
-It lists the modelled provinces and any unassigned national component by sample.
+The plausibility checks keep a fail level in `policy.toml` (`bound_fail`, `growth_fail`, `observed_fail`), off by default.
+
+The national rows are correct by construction.
+`nowcast` writes them as the sum of the provinces plus the model's unassigned component, and writes `national.json` beside the hub file with the modelled provinces and that component.
+Before the checks, the gate rebuilds the national rows the same way if they differ, using `national.json` or, without it, the gap between the hub's national data and its provinces for each week.
 The data coherence check reads the output of `bdbv-forecasts coherence`.
 A gap is reported with how the model handles it (see [Data](../data.md#national-against-the-provinces)).
 

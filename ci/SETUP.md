@@ -12,9 +12,9 @@ It is safe to install as is: `DRY_RUN` is on until you turn it off.
 | `detect` | Runs on schedule from Saturday 23:00 UTC (Sunday 00:00 Kinshasa) to Tuesday. It compares the hub's newest data commit and `as_of` with the ledger and stops unless there is new data for the open round. |
 | `prepare` | Pins the hub data at one commit and builds the persistence candidate, which is also the baseline for the checks. |
 | `fit` | A matrix over the primary candidates (`main` and `fallback`), fitted in parallel. Each fit is cached under a content hash of the model source, the hub commit and its sampler settings. |
-| `triage` | Says whether `main` cleared its checks. |
-| `retry` | Only if `main` failed: a matrix of refits with more warm-up, new seeds, higher target acceptance or deeper trees. |
-| `gate` | Walks the chain `main` → `retry-1` → `retry-2` → `fallback` → `persistence`. It submits the first candidate that clears convergence, the forecast checks and hubValidations. |
+| `triage` | Says whether `main` needs its one refit (past the convergence retry thresholds, or ruled out). |
+| `retry` | Only if `main` needs it: one refit with a longer warm-up, more chains and jittered inits. |
+| `gate` | Walks the chain `main` → `retry-1` → `fallback` → `persistence`, handling problems rather than failing on them. A candidate is ruled out only if its fit is clearly broken or its file is invalid (format checks or hubValidations). |
 | `submit` | Publishes the plot, builds the PR body, and opens or updates the PR. A dry run prints the body instead. |
 | `record` | Live runs only. Writes the outcome to `state.json` on the `submission-ledger` branch and archives the round's files there. |
 | `outcome` | Fails the run if the round was skipped or a job broke, so you are notified. |
@@ -67,7 +67,7 @@ Settings → Secrets and variables → Actions → **Variables**:
 | `EXPECTED_LOCATIONS` | none | For example `CD,CD-IT,CD-NK,CD-HU,CD-TO`. The coverage check fails if any is missing. |
 | `HUB_VALIDATIONS` | on | `false` skips the R hubValidations step and keeps the Python checks. |
 | `FIT_RUNNER` | `ubuntu-latest` | Runner label for the fit jobs (see Runtimes). |
-| `BDBV_CONVERGENCE_{FAIL,WARN}_{RHAT,ESS_BULK,ESS_TAIL,DIVERGENT}` | `ci/policy.toml` | Override a convergence threshold. |
+| `BDBV_CONVERGENCE_{FAIL,RETRY,WARN}_{RHAT,ESS_BULK,ESS_TAIL,DIVERGENT}` | `ci/policy.toml` | Override a convergence threshold. |
 | `BDBV_PPC_{COVERAGE_WARN,COVERAGE_FAIL,LEVEL,RECENT_WEEKS,PIT_KS_WARN,PIT_MIN_ROWS}` | `ci/policy.toml` `[ppc]` | Override a posterior predictive check threshold. |
 
 ### 4. Repository settings
@@ -134,14 +134,15 @@ If fits come close to the cap:
 ## The fallback chain
 
 The chain is set in `ci/policy.toml`.
-The PR body always names the step that produced the submission and gives the reason.
-For example: "Produced by: main model, retry 1 (longer warm-up, new seed, target acceptance 0.95). Main model was ruled out (convergence: max R-hat is 1.4, past the failure threshold 1.1)."
+It should rarely move past the main model: problems are handled where they can be, and the PR body leads with a `Handled:` line saying what was handled and how.
+For example: "Handled: main model refitted once (max R-hat is 1.2, past the retry threshold 1.1)."
+When a fallback is used, the status line names it and why, for example "Fallback model used (persistence baseline): main model was ruled out (convergence: min bulk ESS is 8, past the failure threshold 10)."
 The same text goes to `provenance.json` in the `gate` artefact, to the job summary and to the ledger.
-A round is skipped only if even persistence fails its checks or hub validation.
+A round is skipped only if even persistence fails hub validation.
 
 A suggested general line for the model metadata's `methods_long`:
 
-> Submissions are produced automatically each week. If the main model fails our convergence or plausibility checks, we submit, in order, a refit with more conservative sampler settings, a simplified variant of the same model (data-driven delays and missingness, no spatial coupling, weekly Rt) or a persistence baseline. Each submission's pull request states which was used and why.
+> Submissions are produced automatically each week. If the main model's fit does not converge, we refit it once with more conservative sampler settings and, only if both are clearly broken, submit a simplified variant of the same model (data-driven delays and missingness, no spatial coupling, weekly Rt) or a persistence baseline. Each submission's pull request states which was used and why.
 
 ## Where this approach comes from
 
