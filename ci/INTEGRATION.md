@@ -14,7 +14,7 @@ It is the reference for the interface, and `ci/run_dry.sh` runs the whole workfl
 | `bdbv-hub-renewal nowcast --model persistence --vintage <as_of> --out <dir>` | exists | `prepare` (persistence candidate and baseline) |
 | `bdbv-hub-renewal metadata --model <model> --out <dir>` | exists | `gate` |
 | `scripts/validate-hub.R <hub> <csv> <yml>`, with `CHECK_WINDOW=true` | exists | `gate`, through `ci/steps/validate_hub.sh` |
-| `bdbv-hub-renewal fit ...` | done (`bdbv_hub_renewal.fitting`; `main` and `fallback` are persistence stand-ins) | `fit`, `retry` |
+| `bdbv-hub-renewal fit ...` | done (`bdbv_hub_renewal.fitting`; `main` and `fallback` run the renewal model, `bdbv_hub_renewal.models.renewal`) | `fit`, `retry` |
 | `nowcast --config <c> --fit <dir>` | done | `fit`, `retry` |
 | `bdbv-hub-renewal plot-submission ...` | done, `plots.plot_submission` | every candidate |
 | `bdbv-hub-renewal plot-ppc --ppc <ppc.json> --out <png>` | done, a thin wrapper on `ppc.plot_ppc` | candidates whose `ppc.json` is available |
@@ -170,9 +170,11 @@ The PR body adds the commit SHA itself.
   Leave out the latent trajectories and other deterministic sites, as BVDOutbreakSize's `_DIAGNOSTIC_EXCLUDE` does.
 - `chains` has one row per chain.
   `divergences` and `draws` give the divergent fraction.
+  The renewal model also reports `tree_depth_share`, the share of draws at the depth cap.
   The other fields are reported, not gated.
+- `worst_rhat` lists the ten parameter elements with the highest R-hat, as BVDOutbreakSize does.
 - A model with no sampler, such as persistence, writes `{"schema_version": 1, "sampler": "none"}`.
-- A config that runs a stand-in model, such as `main` running persistence until the renewal model is integrated, adds `"stand_in": "<text>"`, for example `"the `main` config runs the persistence baseline until the PyRenew renewal model is integrated"`.
+- A config that runs a stand-in model, such as a config running persistence in place of a model not yet built, adds `"stand_in": "<text>"`.
   It can also go in `<fit dir>/fit.json`.
   `candidate.sh` copies it into `run.json`.
   The chain table, the job summary and the PR body then mark the candidate "(stand-in)", and the PR body states the text in a bold **Stand-in:** line under "Produced by".
