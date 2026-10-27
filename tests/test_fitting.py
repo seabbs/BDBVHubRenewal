@@ -29,11 +29,11 @@ def in_root() -> Iterator[None]:
 
 
 @pytest.fixture
-def stand_in() -> Iterator[str]:
+def stand_in() -> str:
     register_config(
         persistence_config("standin", stand_in="a test stand-in"), replace=True
     )
-    yield "standin"
+    return "standin"
 
 
 def test_main_and_fallback_run_the_renewal_model() -> None:
