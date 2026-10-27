@@ -54,6 +54,7 @@ __all__ = [
     "TARGET",
     "build_tidy_data",
     "coherence_summary",
+    "delays_for_vintage",
     "fetch_hub_data",
     "imputed_share",
     "load_daily",
@@ -659,6 +660,45 @@ def national_coherence(
     )
     long["gap"] = long["national"] - long["provinces"]
     return long.sort_values([*keys, "stream"]).reset_index(drop=True)
+
+
+def delays_for_vintage(
+    delays: pd.DataFrame, vintage: str
+) -> tuple[pd.DataFrame, str]:
+    """Delay rows for a vintage, using the latest earlier one if it has none.
+
+    The hub does not publish delays with every vintage (2026-08-18 has
+    none) and can publish them late. Rather than fail, the latest delay
+    vintage on or before `vintage` stands in, relabelled to `vintage`.
+
+    Parameters
+    ----------
+    delays : pandas.DataFrame
+        Tidy delay rows with a `vintage` column.
+    vintage : str
+        The data vintage being forecast from.
+
+    Returns
+    -------
+    tuple of pandas.DataFrame and str
+        The delay table with rows for `vintage`, and a note of what was
+        used instead (empty when the vintage had its own delays).
+    """
+    if delays.empty or (delays["vintage"] == vintage).any():
+        return delays, ""
+    earlier = sorted(str(v) for v in delays["vintage"].unique() if v <= vintage)
+    if not earlier:
+        return delays, (
+            f"delays: none published by {vintage}, so the model's default "
+            "completeness lag was used"
+        )
+    use = earlier[-1]
+    extra = delays.loc[delays["vintage"] == use].assign(vintage=vintage)
+    note = (
+        f"delays: none published for {vintage}, so used the {use} delays, "
+        "the latest available"
+    )
+    return pd.concat([delays, extra], ignore_index=True), note
 
 
 def coherence_summary(

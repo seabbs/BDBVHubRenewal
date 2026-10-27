@@ -42,6 +42,7 @@ from . import backtest as bt
 from .data import (
     build_tidy_data,
     coherence_summary,
+    delays_for_vintage,
     fetch_hub_data,
     load_delays,
     load_target,
@@ -260,7 +261,8 @@ def _vintage(target_vintages: Sequence[str], vintage: str | None) -> str:
     return vintage
 
 
-def _task(args: argparse.Namespace) -> ForecastTask:
+def _task(args: argparse.Namespace) -> tuple[ForecastTask, list[str]]:
+    """Build the forecast task, and notes on any stream that stood in."""
     config = dataclasses.replace(
         bt.load_config(args.backtest_config), min_horizon=args.min_horizon
     )
@@ -268,14 +270,15 @@ def _task(args: argparse.Namespace) -> ForecastTask:
     real = target.loc[target["kind"] == "real"]
     vintage = _vintage([str(v) for v in real["vintage"].unique()], args.vintage)
     rows = real.loc[real["vintage"] == vintage]
-    return bt.make_tasks(rows, delays, config)[0]
+    delays, note = delays_for_vintage(delays, vintage)
+    return bt.make_tasks(rows, delays, config)[0], [note] if note else []
 
 
 def _fit(args: argparse.Namespace) -> int:
     try:
         config = get_config(args.config)
         sampler = json.loads(args.sampler_json or "{}")
-        task = _task(args)
+        task, _ = _task(args)
         result = run_fit(config, task, sampler, args.out, model=args.model)
     except (KeyError, ValueError, OSError) as err:
         print(f"ERROR: {err}", file=sys.stderr)
@@ -339,7 +342,7 @@ def _backtest(args: argparse.Namespace) -> int:
 
 def _nowcast(args: argparse.Namespace) -> int:
     try:
-        task = _task(args)
+        task, handled = _task(args)
         if args.config:
             config = get_config(args.config)
             if config.stand_in:
@@ -358,6 +361,10 @@ def _nowcast(args: argparse.Namespace) -> int:
     mid = model_id(args.model)
     path = write_submission(table, args.out, mid)
     _write_national_sidecar(Path(args.out), task, result)
+    # Problems handled on the way, for the PR's `Handled:` line.
+    (Path(args.out) / "handled.json").write_text(json.dumps(handled) + "\n")
+    for note in handled:
+        print(f"Handled: {note}")
     hub_config = args.hub_config or str(
         Path(args.data) / "hub-config" / "tasks.json"
     )

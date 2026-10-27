@@ -198,3 +198,31 @@ def test_cli_plot_ppc(tmp_path: Path) -> None:
         tmp_path / "na.json",
     )
     assert main(["plot-ppc", "--ppc", str(na), "--out", str(png)]) == 1
+
+
+def test_delays_for_vintage_uses_the_latest_available(
+    delays: pd.DataFrame,
+) -> None:
+    from bdbv_forecasts.data import delays_for_vintage
+
+    have = str(delays["vintage"].max())
+    same, note = delays_for_vintage(delays, have)
+    assert note == ""
+    assert same is delays
+    later, note = delays_for_vintage(delays, "2099-01-03")
+    assert f"so used the {have} delays" in note
+    n = (delays["vintage"] == have).sum()
+    assert (later["vintage"] == "2099-01-03").sum() == n
+    _, note = delays_for_vintage(delays, "2000-01-01")
+    assert "default completeness lag" in note
+
+
+@pytest.mark.usefixtures("in_root")
+def test_nowcast_notes_what_it_handled(tmp_path: Path) -> None:
+    out = tmp_path / "sub"
+    assert main(["nowcast", "--vintage", "2026-10-17", "--out", str(out)]) == 0
+    assert json.loads((out / "handled.json").read_text()) == []
+    old = tmp_path / "old"
+    assert main(["nowcast", "--vintage", "2026-08-18", "--out", str(old)]) == 0
+    (note,) = json.loads((old / "handled.json").read_text())
+    assert note.startswith("delays: none published by 2026-08-18")
