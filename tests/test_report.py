@@ -5,8 +5,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbv_forecasts import report
-from bdbv_forecasts.backtest import BacktestConfig, load_config
+from bdbv_hub_renewal import report
+from bdbv_hub_renewal.backtest import BacktestConfig, load_config
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -54,7 +54,7 @@ def test_comparison_page(
 ) -> None:
     from test_hubcompare import _write_hub
 
-    from bdbv_forecasts.cli import main
+    from bdbv_hub_renewal.cli import main
 
     gen, fig = tmp_path / "gen", tmp_path / "fig"
     report._comparison_page(fig, gen, tmp_path / "missing", display, target)
@@ -103,8 +103,8 @@ def test_make_report_writes_every_page(
 ) -> None:
     import os
 
-    from bdbv_forecasts.backtest import run_development
-    from bdbv_forecasts.models import get_model
+    from bdbv_hub_renewal.backtest import run_development
+    from bdbv_hub_renewal.models import get_model
 
     config = load_config(ROOT / "config" / "backtest.toml")
     config = BacktestConfig(

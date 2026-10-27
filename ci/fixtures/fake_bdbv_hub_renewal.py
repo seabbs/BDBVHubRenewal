@@ -1,4 +1,4 @@
-"""Stand-in for the main repo's `bdbv-forecasts` CLI, for the dry run.
+"""Stand-in for the main repo's `bdbv-hub-renewal` CLI, for the dry run.
 
 It implements the interface in INTEGRATION.md on fixture data, so the
 step scripts run end to end without the model. Behaviour per candidate
@@ -371,7 +371,7 @@ def cmd_plot(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(prog="bdbv-forecasts")
+    p = argparse.ArgumentParser(prog="bdbv-hub-renewal")
     p.add_argument("--version", action="store_true")
     sub = p.add_subparsers(dest="command")
     d = sub.add_parser("data")

@@ -7,7 +7,7 @@
 # It runs the same step scripts as .github/workflows/submit.yml, in the
 # same order: detect -> prepare (persistence) -> primary candidates ->
 # triage -> retries -> select -> submit (DRY_RUN=true). The model is the
-# fixture CLI (fixtures/fake_bdbv_forecasts.py) and `gh`/`git` are never
+# fixture CLI (fixtures/fake_bdbv_hub_renewal.py) and `gh`/`git` are never
 # called for writing. Outputs go to $TMPDIR/submission-ci-dry/<scenario>/.
 set -euo pipefail
 
@@ -16,7 +16,7 @@ export CI_DIR
 FIX="$CI_DIR/fixtures"
 ROOT="${TMPDIR:-/tmp}/submission-ci-dry"
 export UV_CACHE_DIR=${UV_CACHE_DIR:-${TMPDIR:-/tmp}/uvcache}
-export FORECAST_CLI="python3 $FIX/fake_bdbv_forecasts.py"
+export FORECAST_CLI="python3 $FIX/fake_bdbv_hub_renewal.py"
 export MODEL=renewal MODEL_ID=epiforecasts-renewal
 export HEARTBEAT_SECONDS=1
 # Monday 2 November 2026, 10:00 UTC: inside the window for 2026-11-07.

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from bdbv_forecasts.rounds import latest_run, make_round_pages
+from bdbv_hub_renewal.rounds import latest_run, make_round_pages
 
 REF = "2026-10-31"
 

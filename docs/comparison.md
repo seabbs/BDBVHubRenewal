@@ -10,7 +10,7 @@ Our forecasts and those submitted to the hub, scored on the same truth and weeks
 
 --8<-- "comparison-display.md"
 
-`bdbv-forecasts compare-hub --fetch` downloads the hub's `model-output/` and `model-metadata/` files for the models in `config/hub-comparison.toml`.
+`bdbv-hub-renewal compare-hub --fetch` downloads the hub's `model-output/` and `model-metadata/` files for the models in `config/hub-comparison.toml`.
 For each hub round, our registered models forecast from the matching vintage.
 That is a real vintage where one serves the round, and otherwise a reconstructed one.
 Our forecasts are labelled "retrospective" with the kind of vintage they used.

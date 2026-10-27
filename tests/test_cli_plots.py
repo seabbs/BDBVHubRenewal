@@ -8,8 +8,8 @@ import pandas as pd
 import pytest
 from matplotlib.figure import Figure
 
-from bdbv_forecasts import plots
-from bdbv_forecasts.cli import main
+from bdbv_hub_renewal import plots
+from bdbv_hub_renewal.cli import main
 
 ROOT = Path(__file__).resolve().parents[1]
 

@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """Posterior predictive checks: the `ppc.json` a fit writes, and its plot.
 
-`bdbv-forecasts fit` writes `<fit dir>/ppc.json` beside
+`bdbv-hub-renewal fit` writes `<fit dir>/ppc.json` beside
 `diagnostics.json`, and the submission gate (`ci/`) reads it to check
 interval coverage and calibration in sample.
 The schema (version 1) is documented in `ci/INTEGRATION.md`.

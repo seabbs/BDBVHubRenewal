@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbv_forecasts.backtest import (
+from bdbv_hub_renewal.backtest import (
     BacktestConfig,
     forecast_weeks,
     load_config,
@@ -17,7 +17,7 @@ from bdbv_forecasts.backtest import (
     score_by_truth_vintage,
     truth_changes,
 )
-from bdbv_forecasts.models import get_model
+from bdbv_hub_renewal.models import get_model
 
 ROOT = Path(__file__).resolve().parents[1]
 

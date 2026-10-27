@@ -97,7 +97,7 @@ def make_report(
     config_path : pathlib.Path or str
         Backtest settings.
     hub_comparison : pathlib.Path or str
-        Output of `bdbv-forecasts compare-hub`, if it has been run.
+        Output of `bdbv-hub-renewal compare-hub`, if it has been run.
     comparison_config : pathlib.Path or str
         Hub comparison settings, for the display mode.
     """
@@ -573,7 +573,7 @@ def _comparison_page(
         for name in names_out:
             _write(
                 gen / name,
-                "Not run yet: `bdbv-forecasts compare-hub --fetch`.\n",
+                "Not run yet: `bdbv-hub-renewal compare-hub --fetch`.\n",
             )
         return
     teams = pd.read_csv(cmp_dir / "teams.csv")

@@ -6,7 +6,7 @@
 #
 #   CI_DIR         this ci/ directory (the submission-ci uv project)
 #   WORK           where every output of the run goes (default output/ci)
-#   FORECAST_CLI   the main repo's CLI (default `uv run bdbv-forecasts`)
+#   FORECAST_CLI   the main repo's CLI (default `uv run bdbv-hub-renewal`)
 #   MODEL          main repo model name (default persistence until the
 #                  PyRenew renewal model is integrated)
 #   MODEL_ID       hub model id (default epiforecasts-$MODEL)
@@ -15,7 +15,7 @@ set -euo pipefail
 
 CI_DIR=${CI_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
 WORK=${WORK:-output/ci}
-FORECAST_CLI=${FORECAST_CLI:-uv run bdbv-forecasts}
+FORECAST_CLI=${FORECAST_CLI:-uv run bdbv-hub-renewal}
 MODEL=${MODEL:-persistence}
 # The main repo's CLI reads and writes the tidy data here, so the data
 # the prepare job pins travel with the `inputs` artefact.

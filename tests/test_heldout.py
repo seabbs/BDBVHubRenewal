@@ -6,8 +6,8 @@ import pandas as pd
 import pytest
 import yaml
 
-from bdbv_forecasts.backtest import BacktestConfig
-from bdbv_forecasts.heldout import (
+from bdbv_hub_renewal.backtest import BacktestConfig
+from bdbv_hub_renewal.heldout import (
     HeldOutError,
     ModelChoice,
     heldout_pairs,

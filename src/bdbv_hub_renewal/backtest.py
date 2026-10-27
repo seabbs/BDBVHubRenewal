@@ -12,14 +12,14 @@ There are three kinds of vintage:
 
 - **real**: published by the hub. Truth is the latest real vintage.
 - **reconstructed**: rebuilt from the latest real data for past dates
-  (`bdbv_forecasts.vintages`). Truth is the latest real vintage.
+  (`bdbv_hub_renewal.vintages`). Truth is the latest real vintage.
 - **simulated**: from a simulated outbreak with known parameters
-  (`bdbv_forecasts.simulate`). Truth is the final simulated count.
+  (`bdbv_hub_renewal.simulate`). Truth is the final simulated count.
 
 Vintages are split by the model choice record (`results/model-choice.yml`,
-see `bdbv_forecasts.heldout`).
+see `bdbv_hub_renewal.heldout`).
 Development runs use vintages up to the latest choice date only.
-Every later vintage is held out and scored by `bdbv_forecasts.heldout`.
+Every later vintage is held out and scored by `bdbv_hub_renewal.heldout`.
 `score_by_truth_vintage` re-scores real forecasts against every later real
 vintage, and `truth_changes` shows how much the truth moved meanwhile.
 """
@@ -86,7 +86,7 @@ class BacktestConfig:
         The latest model choice date. Vintages after it are held out.
         None if no model has been chosen, so every vintage is development.
     model_choice : pathlib.Path
-        The model choice record (`bdbv_forecasts.heldout`).
+        The model choice record (`bdbv_hub_renewal.heldout`).
     reconstructed_dates : tuple of str
         Vintage dates to reconstruct.
     simulated_dates : tuple of str
@@ -348,7 +348,7 @@ def score_tasks(
     Returns
     -------
     pandas.DataFrame
-        Output of `bdbv_forecasts.scoring.score_forecasts`, with a
+        Output of `bdbv_hub_renewal.scoring.score_forecasts`, with a
         `truth_vintage` column.
     """
     keep = forecasts["vintage"] < truth_date

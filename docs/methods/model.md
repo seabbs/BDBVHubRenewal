@@ -66,7 +66,7 @@ $$
 - $K$ is a fixed gravity kernel, $K_{qp} \propto N_p e^{-D_{qp}/\ell}$, with $\varepsilon \sim \text{Beta}(1, 100)$.
 - Seeding: each province starts in its first week with cases, or by importation only.
 
-A NumPy reference is in [`latent.renewal`][bdbv_forecasts.latent.renewal].
+A NumPy reference is in [`latent.renewal`][bdbv_hub_renewal.latent.renewal].
 
 ### Susceptible depletion
 
@@ -95,7 +95,7 @@ $$
 
 The delay data inform $f$ well in the large provinces and in weeks with enough cases.
 Small provinces and the latest weeks borrow from the pooled value.
-[`EmpiricalDelayModel`][bdbv_forecasts.delays.EmpiricalDelayModel] is the simple estimator in place now: a rolling window of onset weeks shrunk towards the pooled pmf.
+[`EmpiricalDelayModel`][bdbv_hub_renewal.delays.EmpiricalDelayModel] is the simple estimator in place now: a rolling window of onset weeks shrunk towards the pooled pmf.
 
 ## Missingness and imputation
 
@@ -128,7 +128,7 @@ summed to onset weeks, with a negative binomial likelihood. This is the expected
 
 The forecast of the target $y_p(w)$ is the eventual known plus imputed onsets, with future imputation using the latest $\hat g_v$.
 So the forecast carries the imputation's bias at turning points, which is what the hub scores.
-A NumPy reference is in [`observation`][bdbv_forecasts.observation].
+A NumPy reference is in [`observation`][bdbv_hub_renewal.observation].
 
 **Uncertain.**
 The hub has not published its code.

@@ -1,10 +1,10 @@
 # CLI
 
-The `bdbv-forecasts` command.
+The `bdbv-hub-renewal` command.
 { .page-subtitle }
 
 Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
-`bdbv-forecasts <command> --help` lists each command's options.
+`bdbv-hub-renewal <command> --help` lists each command's options.
 
 | Command | What it does |
 |---|---|
@@ -25,7 +25,7 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 
 ## Writing and checking a hub file
 
-`bdbv-forecasts nowcast` writes `model-output/<model_id>/<reference_date>-<model_id>.csv` under `output/submission/`.
+`bdbv-hub-renewal nowcast` writes `model-output/<model_id>/<reference_date>-<model_id>.csv` under `output/submission/`.
 The model id is `epiforecasts-<model>`.
 It checks the file with `validate_submission`, which mirrors the hub's checks:
 
@@ -40,7 +40,7 @@ It checks the file with `validate_submission`, which mirrors the hub's checks:
 `task validate-hub` then runs the hub's own `hubValidations::validate_submission()` in R against a fresh clone of the hub.
 The persistence file for 2026-10-31 passes every check.
 
-`bdbv-forecasts metadata` writes `hub/model-metadata/epiforecasts-<model>.yml` and checks it against the hub's schema.
+`bdbv-hub-renewal metadata` writes `hub/model-metadata/epiforecasts-<model>.yml` and checks it against the hub's schema.
 The contributor list, licence and model names are placeholders until Sam confirms them.
 
 !!! note "Sample ids"

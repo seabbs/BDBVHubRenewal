@@ -2,29 +2,29 @@
 
 The bundle drops into `seabbs/bdbv-hub-baseline-forecasts` as `ci/` plus `.github/`.
 `ci/` is its own small uv project with only the standard library.
-The workflows call the main repo only through the `bdbv-forecasts` CLI, whose command is set by `FORECAST_CLI` (default `uv run bdbv-forecasts`), and through `scripts/validate-hub.R`.
-`ci/fixtures/fake_bdbv_forecasts.py` implements everything below on fixture data.
+The workflows call the main repo only through the `bdbv-hub-renewal` CLI, whose command is set by `FORECAST_CLI` (default `uv run bdbv-hub-renewal`), and through `scripts/validate-hub.R`.
+`ci/fixtures/fake_bdbv_hub_renewal.py` implements everything below on fixture data.
 It is the reference for the interface, and `ci/run_dry.sh` runs the whole workflow against it.
 
 ## What exists and what is needed
 
 | command | status in the main repo | used by |
 | --- | --- | --- |
-| `bdbv-forecasts data --ref <hub sha>` | exists. Reads `GITHUB_TOKEN`. | `prepare` |
-| `bdbv-forecasts nowcast --model persistence --vintage <as_of> --out <dir>` | exists | `prepare` (persistence candidate and baseline) |
-| `bdbv-forecasts metadata --model <model> --out <dir>` | exists | `gate` |
+| `bdbv-hub-renewal data --ref <hub sha>` | exists. Reads `GITHUB_TOKEN`. | `prepare` |
+| `bdbv-hub-renewal nowcast --model persistence --vintage <as_of> --out <dir>` | exists | `prepare` (persistence candidate and baseline) |
+| `bdbv-hub-renewal metadata --model <model> --out <dir>` | exists | `gate` |
 | `scripts/validate-hub.R <hub> <csv> <yml>`, with `CHECK_WINDOW=true` | exists | `gate`, through `ci/steps/validate_hub.sh` |
-| `bdbv-forecasts fit ...` | done (`bdbv_forecasts.fitting`; `main` and `fallback` are persistence stand-ins) | `fit`, `retry` |
+| `bdbv-hub-renewal fit ...` | done (`bdbv_hub_renewal.fitting`; `main` and `fallback` are persistence stand-ins) | `fit`, `retry` |
 | `nowcast --config <c> --fit <dir>` | done | `fit`, `retry` |
-| `bdbv-forecasts plot-submission ...` | done, `plots.plot_submission` | every candidate |
-| `bdbv-forecasts plot-ppc --ppc <ppc.json> --out <png>` | done, a thin wrapper on `ppc.plot_ppc` | candidates whose `ppc.json` is available |
-| `bdbv-forecasts --version` | done | `run.json`, the PR body |
-| `bdbv-forecasts coherence --vintage <as_of> --out <json>` | done | `prepare` (data coherence check) |
+| `bdbv-hub-renewal plot-submission ...` | done, `plots.plot_submission` | every candidate |
+| `bdbv-hub-renewal plot-ppc --ppc <ppc.json> --out <png>` | done, a thin wrapper on `ppc.plot_ppc` | candidates whose `ppc.json` is available |
+| `bdbv-hub-renewal --version` | done | `run.json`, the PR body |
+| `bdbv-hub-renewal coherence --vintage <as_of> --out <json>` | done | `prepare` (data coherence check) |
 
-### `bdbv-forecasts fit`
+### `bdbv-hub-renewal fit`
 
 ```sh
-bdbv-forecasts fit --model renewal --config main|fallback --vintage <as_of> \
+bdbv-hub-renewal fit --model renewal --config main|fallback --vintage <as_of> \
   --sampler-json '{"num_chains": 4, "num_warmup": 1000, "num_samples": 1000,
                    "target_accept": 0.8, "max_tree_depth": 10, "seed": 1}' \
   --out <fit dir>
@@ -49,7 +49,7 @@ bdbv-forecasts fit --model renewal --config main|fallback --vintage <as_of> \
 ### `nowcast` with a fit
 
 ```sh
-bdbv-forecasts nowcast --model renewal --config main --fit <fit dir> \
+bdbv-hub-renewal nowcast --model renewal --config main --fit <fit dir> \
   --vintage <as_of> --out <candidate dir>/submission
 ```
 
@@ -80,7 +80,7 @@ bdbv-forecasts nowcast --model renewal --config main --fit <fit dir> \
 ### `plot-submission`
 
 ```sh
-bdbv-forecasts plot-submission --submission <csv> --vintage <as_of> --out <png>
+bdbv-hub-renewal plot-submission --submission <csv> --vintage <as_of> --out <png>
 ```
 
 Draw what was **submitted**: the samples in `<csv>`, not a re-run of the model.
@@ -102,7 +102,7 @@ It renders inline in the PR body from a raw URL pinned to a commit.
 ### `coherence`
 
 ```sh
-bdbv-forecasts coherence --vintage <as_of> --out <inputs>/coherence.json
+bdbv-hub-renewal coherence --vintage <as_of> --out <inputs>/coherence.json
 ```
 
 Compare the national count with the sum of the provinces in the data vintage, for each stream and week:
@@ -127,11 +127,11 @@ Compare the national count with the sum of the provinces in the data vintage, fo
 ### `plot-ppc`
 
 ```sh
-bdbv-forecasts plot-ppc --ppc <candidate>/ppc.json --out <candidate>/ppc.png
+bdbv-hub-renewal plot-ppc --ppc <candidate>/ppc.json --out <candidate>/ppc.png
 ```
 
 `candidate.sh` calls it only when `ppc.json` has `available: true`.
-It is `plot_ppc(read_ppc(path))` from `bdbv_forecasts.ppc`, saved with `fig.savefig(out, dpi=...)`: small multiples by province of the predictive median and intervals against the observed counts, light mode, under 1 MB.
+It is `plot_ppc(read_ppc(path))` from `bdbv_hub_renewal.ppc`, saved with `fig.savefig(out, dpi=...)`: small multiples by province of the predictive median and intervals against the observed counts, light mode, under 1 MB.
 The PNG travels in the `candidate-<id>` artefact; the PR body points to it.
 
 ### `--version`
@@ -225,7 +225,7 @@ diagnostics = {
 - `median`, `lower_<pct>` and `upper_<pct>` summarise the posterior predictive draws of the count as observed in the data vintage, with one central interval per level in `intervals`.
 - `pit` is the **randomised** PIT for counts, `F(y − 1) + v (F(y) − F(y − 1))` with `v ~ Uniform(0, 1)` from a seeded generator and `F` the empirical predictive distribution function. It is uniform on (0, 1) under a calibrated model even though counts are discrete.
 - `complete` is true for weeks ending at least the completeness lag (4 weeks) before the data vintage.
-- `bdbv_forecasts.ppc.summarise_draws(observed, draws, as_of=..., model=..., config=...)` builds all of this from a table of observations (`location`, `stream`, `target_end_date`, `observed`) and an array of draws of shape `(n_draws, n_rows)`; `write_ppc` writes it.
+- `bdbv_hub_renewal.ppc.summarise_draws(observed, draws, as_of=..., model=..., config=...)` builds all of this from a table of observations (`location`, `stream`, `target_end_date`, `observed`) and an array of draws of shape `(n_draws, n_rows)`; `write_ppc` writes it.
 - A model with no posterior writes `{"schema_version": 1, "available": false, "reason": "<text>"}` (`ppc.not_available(reason)`), which the gate reports as `n/a`.
 - A sampled fit (`sampler` other than `none` in `diagnostics.json`) with a missing or unreadable `ppc.json` is an `error`, and gates as a failure, as a missing diagnostics file does.
   A fit with no sampler and no `ppc.json` is `n/a`.

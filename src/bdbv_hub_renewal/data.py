@@ -179,7 +179,7 @@ Only provinces with cases by October 2026 are included.
 
 
 def _request(url: str, token: str | None) -> bytes:
-    headers = {"User-Agent": "bdbv-forecasts"}
+    headers = {"User-Agent": "bdbv-hub-renewal"}
     if token and url.startswith("https://api.github.com"):
         headers["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(url, headers=headers)

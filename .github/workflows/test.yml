@@ -47,7 +47,7 @@ jobs:
       - run: uv sync --frozen
       - name: Tests
         run: >-
-          uv run pytest -q --cov=bdbv_forecasts --cov-report=term-missing
+          uv run pytest -q --cov=bdbv_hub_renewal --cov-report=term-missing
           --cov-report=xml
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -58,15 +58,15 @@ jobs:
           fail_ci_if_error: false
       - name: Backtest and nowcast smoke test
         run: |
-          uv run bdbv-forecasts backtest --output output/backtest --results output/results
-          uv run bdbv-forecasts nowcast
-          uv run bdbv-forecasts metadata --out output/metadata
+          uv run bdbv-hub-renewal backtest --output output/backtest --results output/results
+          uv run bdbv-hub-renewal nowcast
+          uv run bdbv-hub-renewal metadata --out output/metadata
       - name: Fit and forecast as the submission CI does (stand-in configs)
         run: |
-          uv run bdbv-forecasts --version
-          uv run bdbv-forecasts fit --config main --out output/fits/main
-          uv run bdbv-forecasts nowcast --config main --fit output/fits/main \
+          uv run bdbv-hub-renewal --version
+          uv run bdbv-hub-renewal fit --config main --out output/fits/main
+          uv run bdbv-hub-renewal nowcast --config main --fit output/fits/main \
             --out output/candidates/main
-          uv run bdbv-forecasts plot-submission --out output/candidates/main.png \
+          uv run bdbv-hub-renewal plot-submission --out output/candidates/main.png \
             --submission "$(ls output/candidates/main/model-output/*/*.csv)"
-          uv run bdbv-forecasts coherence
+          uv run bdbv-hub-renewal coherence

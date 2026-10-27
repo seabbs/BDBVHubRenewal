@@ -1,4 +1,4 @@
-# Model choice record. Read by `bdbv_forecasts.heldout`.
+# Model choice record. Read by `bdbv_hub_renewal.heldout`.
 # Each entry is the model chosen for submission from its date on.
 # Add an entry, never edit an old one, when the choice changes.
 # Every real vintage after the first date is held out and scored under the

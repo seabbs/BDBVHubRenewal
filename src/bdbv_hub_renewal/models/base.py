@@ -53,11 +53,11 @@ class ForecastTask:
         `"real"`, `"reconstructed"` or `"simulated"`.
     target : pandas.DataFrame
         The target table rows of this vintage only (columns as in
-        `bdbv_forecasts.data.tidy_target`), for the country and
+        `bdbv_hub_renewal.data.tidy_target`), for the country and
         provinces.
     delays : pandas.DataFrame or None
         Delay line data available at this vintage (see
-        `bdbv_forecasts.data.tidy_delays`), or None if none was published.
+        `bdbv_hub_renewal.data.tidy_delays`), or None if none was published.
     locations : tuple of str
         Provinces to forecast.
     target_end_dates : tuple of str

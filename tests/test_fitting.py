@@ -8,9 +8,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbv_forecasts.cli import main
-from bdbv_forecasts.data import coherence_summary, national_coherence
-from bdbv_forecasts.fitting import (
+from bdbv_hub_renewal.cli import main
+from bdbv_hub_renewal.data import coherence_summary, national_coherence
+from bdbv_hub_renewal.fitting import (
     get_config,
     list_configs,
     persistence_config,
@@ -173,7 +173,7 @@ def test_cli_coherence(
 def test_cli_plot_ppc(tmp_path: Path) -> None:
     import numpy as np
 
-    from bdbv_forecasts.ppc import not_available, summarise_draws, write_ppc
+    from bdbv_hub_renewal.ppc import not_available, summarise_draws, write_ppc
 
     weeks = pd.date_range("2026-08-01", periods=10, freq="7D").strftime(
         "%Y-%m-%d"
@@ -203,7 +203,7 @@ def test_cli_plot_ppc(tmp_path: Path) -> None:
 def test_delays_for_vintage_uses_the_latest_available(
     delays: pd.DataFrame,
 ) -> None:
-    from bdbv_forecasts.data import delays_for_vintage
+    from bdbv_hub_renewal.data import delays_for_vintage
 
     have = str(delays["vintage"].max())
     same, note = delays_for_vintage(delays, have)

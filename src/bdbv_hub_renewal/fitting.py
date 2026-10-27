@@ -2,8 +2,8 @@
 """Fit configurations for the automated submission workflow.
 
 The submission CI (`ci/`, see `ci/INTEGRATION.md`) fits each candidate of
-its fallback chain with `bdbv-forecasts fit --config <name>` and then
-forecasts from the saved fit with `bdbv-forecasts nowcast --config <name>
+its fallback chain with `bdbv-hub-renewal fit --config <name>` and then
+forecasts from the saved fit with `bdbv-hub-renewal nowcast --config <name>
 --fit <dir>`. A fit configuration says how to do both.
 
 The chain names two configurations, `main` (the full model) and

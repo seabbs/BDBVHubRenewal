@@ -1,4 +1,4 @@
-# Backtest settings. Read by `bdbv_forecasts.backtest.load_config`.
+# Backtest settings. Read by `bdbv_hub_renewal.backtest.load_config`.
 
 [forecast]
 # Weeks in each forecast, as horizons in weeks from the reference date.

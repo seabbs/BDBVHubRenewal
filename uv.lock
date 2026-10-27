@@ -104,7 +104,7 @@ wheels = [
 ]
 
 [[package]]
-name = "bdbv-forecasts"
+name = "bdbv-hub-renewal"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

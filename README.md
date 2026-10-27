@@ -23,7 +23,7 @@ The hub's target is weekly confirmed cases by symptom-onset week, by province an
 The plan is in [EpidemicDates issue #3](https://github.com/seabbs/EpidemicDates/issues/3).
 This repository holds:
 
-- a data layer for every hub data stream and vintage (`data/`, `bdbv_forecasts.data`);
+- a data layer for every hub data stream and vintage (`data/`, `bdbv_hub_renewal.data`);
 - reconstructed and simulated vintages to extend testing;
 - a persistence baseline and a model registry;
 - a writer and checks for the hub's submission files and model metadata;
@@ -67,7 +67,7 @@ docs/            MkDocs site; figures are built at docs build time
 hub/             model metadata YAML
 results/         score tables and the model choice record
 scripts/         hubValidations runner and gate (R)
-src/bdbv_forecasts/
+src/bdbv_hub_renewal/
   data.py        download, tidy and load the hub data
   dates.py       epi weeks, reference dates and submission windows
   vintages.py    reconstructed vintages
@@ -86,7 +86,7 @@ src/bdbv_forecasts/
   hubcompare.py  comparison with the forecasts submitted to the hub
   plots.py       figures, including plot_nowcast
   report.py      docs figures and tables
-  cli.py         the bdbv-forecasts command
+  cli.py         the bdbv-hub-renewal command
 tests/
 ```
 

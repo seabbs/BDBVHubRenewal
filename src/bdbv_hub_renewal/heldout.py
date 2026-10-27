@@ -18,7 +18,7 @@ Each forecast is scored against every later real vintage, as reported
 then, so a forecast gets its first score when the next vintage is
 published and is re-scored as each newer one arrives.
 The development backtest only uses vintages up to the latest choice date
-(`bdbv_forecasts.backtest.BacktestConfig.development_until`).
+(`bdbv_hub_renewal.backtest.BacktestConfig.development_until`).
 
 `run_heldout` refuses to run unless asked explicitly and needs the record
 to exist first.

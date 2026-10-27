@@ -1,7 +1,7 @@
 [project]
-name = "bdbv-forecasts"
+name = "bdbv-hub-renewal"
 version = "0.1.0"
-description = "Baseline nowcasts and forecasts for the BDBV Modeling Hub, with data tools and a backtest harness"
+description = "Renewal-model nowcasts and forecasts for the BDBV Modeling Hub, with data tools and a backtest harness"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -52,7 +52,7 @@ Repository = "https://github.com/seabbs/bdbv-hub-baseline-forecasts"
 Issues = "https://github.com/seabbs/bdbv-hub-baseline-forecasts/issues"
 
 [project.scripts]
-bdbv-forecasts = "bdbv_forecasts.cli:main"
+bdbv-hub-renewal = "bdbv_hub_renewal.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.8,<0.14"]
@@ -78,7 +78,7 @@ docs = [
 default-groups = ["dev"]
 
 [tool.uv.build-backend]
-module-name = "bdbv_forecasts"
+module-name = "bdbv_hub_renewal"
 
 [tool.ruff]
 line-length = 80
@@ -117,7 +117,7 @@ convention = "numpy"
 # Ported from the hub validation bundle, whose checks are named after
 # hubValidations' and are documented in docs/hub-spec.md. The small
 # config classes and helpers carry no docstrings.
-"src/bdbv_forecasts/hub_validate.py" = ["D101", "D102", "D103"]
+"src/bdbv_hub_renewal/hub_validate.py" = ["D101", "D102", "D103"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -130,7 +130,7 @@ filterwarnings = [
 markers = ["network: tests that download from GitHub (deselect with '-m \"not network\"')"]
 
 [tool.coverage.run]
-source = ["bdbv_forecasts"]
+source = ["bdbv_hub_renewal"]
 branch = true
 
 [tool.coverage.report]
@@ -145,7 +145,7 @@ files = ["src"]
 
 [[tool.mypy.overrides]]
 # matplotlib's date locators and formatters are untyped.
-module = ["bdbv_forecasts.plots"]
+module = ["bdbv_hub_renewal.plots"]
 disallow_untyped_calls = false
 
 [[tool.mypy.overrides]]

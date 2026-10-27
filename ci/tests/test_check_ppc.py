@@ -21,7 +21,7 @@ from submission_ci.policy import load_policy
 from submission_ci.select_candidate import assess
 
 _spec = importlib.util.spec_from_file_location(
-    "fake_cli", FIXTURES / "fake_bdbv_forecasts.py"
+    "fake_cli", FIXTURES / "fake_bdbv_hub_renewal.py"
 )
 assert _spec is not None and _spec.loader is not None
 fake = importlib.util.module_from_spec(_spec)

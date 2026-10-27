@@ -4,13 +4,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbv_forecasts.delays import (
+from bdbv_hub_renewal.delays import (
     EmpiricalDelayModel,
     ParametricDelay,
     delay_summary,
     empirical_pmf,
 )
-from bdbv_forecasts.observation import (
+from bdbv_hub_renewal.observation import (
     delay_matrix,
     expected_imputed_onsets,
     expected_known_onsets,

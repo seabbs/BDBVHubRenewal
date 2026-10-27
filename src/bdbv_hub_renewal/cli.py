@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""Command line interface: `bdbv-forecasts <command>`.
+"""Command line interface: `bdbv-hub-renewal <command>`.
 
 Commands:
 
@@ -106,7 +106,7 @@ def build_parser() -> argparse.ArgumentParser:
     argparse.ArgumentParser
         The parser.
     """
-    parser = argparse.ArgumentParser(prog="bdbv-forecasts")
+    parser = argparse.ArgumentParser(prog="bdbv-hub-renewal")
     parser.add_argument(
         "--version", action="store_true", help="Print the version and exit."
     )
@@ -244,7 +244,7 @@ def _task_args(p: argparse.ArgumentParser, data_dir: str) -> None:
 
 def _version() -> str:
     try:
-        return version("bdbv-forecasts")
+        return version("bdbv-hub-renewal")
     except PackageNotFoundError:  # pragma: no cover
         return "unknown"
 
@@ -256,7 +256,7 @@ def _vintage(target_vintages: Sequence[str], vintage: str | None) -> str:
     if vintage not in target_vintages:
         raise ValueError(
             f"No real data for vintage {vintage}; latest is "
-            f"{max(target_vintages)}. Run `bdbv-forecasts data` first."
+            f"{max(target_vintages)}. Run `bdbv-hub-renewal data` first."
         )
     return vintage
 

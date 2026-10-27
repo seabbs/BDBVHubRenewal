@@ -31,7 +31,7 @@ The tidy data are committed, so `task backtest` works from a clean clone without
 The comparison with hub forecasts downloads other teams' files, so it is run on its own:
 
 ```bash
-uv run bdbv-forecasts compare-hub --fetch
+uv run bdbv-hub-renewal compare-hub --fetch
 ```
 
 Every command is listed on the [CLI page](development/cli.md).

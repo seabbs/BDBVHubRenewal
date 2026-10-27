@@ -119,7 +119,7 @@ def reconstruct_vintage(
     Returns
     -------
     pandas.DataFrame
-        Target rows like `bdbv_forecasts.data.tidy_target` with
+        Target rows like `bdbv_hub_renewal.data.tidy_target` with
         `kind = "reconstructed"`, for weeks up to the epi week holding
         `as_of`. The country row is the sum of provinces.
     """

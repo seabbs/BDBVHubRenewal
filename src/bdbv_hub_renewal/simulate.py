@@ -194,7 +194,7 @@ class SimulatedOutbreak:
         Returns
         -------
         tuple of pandas.DataFrame
-            The target rows (as `bdbv_forecasts.data.tidy_target`, with
+            The target rows (as `bdbv_hub_renewal.data.tidy_target`, with
             `kind = "simulated"`) and the delay line data.
         """
         day = as_date(as_of)

@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbv_forecasts.backtest import BacktestConfig, make_tasks
-from bdbv_forecasts.models import (
+from bdbv_hub_renewal.backtest import BacktestConfig, make_tasks
+from bdbv_hub_renewal.models import (
     ForecastModel,
     Persistence,
     add_national,
@@ -17,7 +17,7 @@ from bdbv_forecasts.models import (
     list_models,
     register_model,
 )
-from bdbv_forecasts.models.persistence import completeness_lag
+from bdbv_hub_renewal.models.persistence import completeness_lag
 
 
 @pytest.fixture

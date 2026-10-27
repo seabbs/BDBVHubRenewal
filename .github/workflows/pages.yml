@@ -57,9 +57,9 @@ jobs:
           fi
       - name: Backtest, then the docs figures and tables
         run: |
-          uv run bdbv-forecasts backtest
-          uv run bdbv-forecasts backtest --evaluate-holdout
-          uv run bdbv-forecasts report --ledger output/ledger
+          uv run bdbv-hub-renewal backtest
+          uv run bdbv-hub-renewal backtest --evaluate-holdout
+          uv run bdbv-hub-renewal report --ledger output/ledger
       - name: Build the site into _site
         run: uv run mkdocs build --strict
       - uses: actions/upload-pages-artifact@v3

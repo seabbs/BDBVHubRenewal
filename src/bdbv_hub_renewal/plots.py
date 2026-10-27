@@ -518,7 +518,7 @@ def plot_reconstruction(
     Parameters
     ----------
     comparison : pandas.DataFrame
-        Output of `bdbv_forecasts.vintages.compare_reconstruction`.
+        Output of `bdbv_hub_renewal.vintages.compare_reconstruction`.
     location : str
         Location to show.
     mode : str
@@ -633,7 +633,7 @@ def plot_forecasts(
     Parameters
     ----------
     forecasts : pandas.DataFrame
-        Output of `bdbv_forecasts.backtest.run_forecasts`.
+        Output of `bdbv_hub_renewal.backtest.run_forecasts`.
     target : pandas.DataFrame
         Target rows holding each forecast's vintage and the truth vintage.
         For reconstructed forecasts, pass the reconstructed rows too.
@@ -1092,7 +1092,7 @@ def plot_scores_by_truth(
     Parameters
     ----------
     scores : pandas.DataFrame
-        Output of `bdbv_forecasts.backtest.score_by_truth_vintage`.
+        Output of `bdbv_hub_renewal.backtest.score_by_truth_vintage`.
     metric : str
         A score column.
     models : sequence of str, optional

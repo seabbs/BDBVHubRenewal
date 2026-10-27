@@ -6,14 +6,14 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbv_forecasts.delays import ParametricDelay
-from bdbv_forecasts.latent import renewal
-from bdbv_forecasts.simulate import (
+from bdbv_hub_renewal.delays import ParametricDelay
+from bdbv_hub_renewal.latent import renewal
+from bdbv_hub_renewal.simulate import (
     SimulationSettings,
     gravity_kernel,
     simulate_outbreak,
 )
-from bdbv_forecasts.vintages import (
+from bdbv_hub_renewal.vintages import (
     compare_reconstruction,
     reconstruct_delays,
     reconstruct_vintage,
