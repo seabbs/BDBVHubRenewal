@@ -45,6 +45,7 @@ import pandas as pd
 from .dates import epiweek_end
 
 __all__ = [
+    "COHERENCE_HANDLING",
     "DATA_STREAMS",
     "HUB_REPO",
     "POPULATION_SOURCE",
@@ -52,6 +53,7 @@ __all__ = [
     "PROVINCE_POPULATIONS",
     "TARGET",
     "build_tidy_data",
+    "coherence_summary",
     "fetch_hub_data",
     "imputed_share",
     "load_daily",
@@ -59,6 +61,7 @@ __all__ = [
     "load_health_zones",
     "load_locations",
     "load_target",
+    "national_coherence",
     "newly_missing",
     "revision_table",
     "tidy_daily",
@@ -554,8 +557,9 @@ def build_tidy_data(
 ) -> dict[str, pd.DataFrame]:
     """Tidy the raw downloads and write the tables to `out_dir`.
 
-    Writes `locations.csv`, `target.csv`, `daily.csv`, `delays.csv.gz`
-    and `health_zones.csv.gz`, and copies the hub configuration to
+    Writes `locations.csv`, `target.csv`, `daily.csv`, `delays.csv.gz`,
+    `health_zones.csv.gz` and `national-coherence.csv` (see
+    `national_coherence`), and copies the hub configuration to
     `hub-config/` and the download manifest to `sources.json`.
 
     Parameters
@@ -589,6 +593,9 @@ def build_tidy_data(
     daily.to_csv(out / "daily.csv", index=False)
     delays.to_csv(out / "delays.csv.gz", index=False)
     zones.to_csv(out / "health_zones.csv.gz", index=False)
+    national_coherence(target).to_csv(
+        out / "national-coherence.csv", index=False
+    )
     config = out / "hub-config"
     config.mkdir(exist_ok=True)
     for path in (raw / "hub-config").glob("*.json"):
@@ -597,6 +604,124 @@ def build_tidy_data(
     if manifest.exists():
         (out / "sources.json").write_text(manifest.read_text())
     return tables
+
+
+COHERENCE_STREAMS: Final = ("observed", "imputed", "total")
+"""Streams compared between the national row and the provinces."""
+
+COHERENCE_HANDLING: Final = (
+    "The submitted national value is the sum of the province values for "
+    "each sample. Cases the hub counts nationally but in no province would "
+    "need a modelled unassigned component added to that sum; the current "
+    "models have none, so such a gap is left out of the national forecast."
+)
+"""How the models handle a gap between the national data and the provinces."""
+
+
+def national_coherence(
+    target: pd.DataFrame, national: str = "CD"
+) -> pd.DataFrame:
+    """Compare the national counts with the sum of the provinces.
+
+    Parameters
+    ----------
+    target : pandas.DataFrame
+        Tidy target table (`tidy_target` or `load_target`).
+    national : str
+        Location code of the country.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per kind, vintage, onset week and stream (`observed`,
+        `imputed`, `total`), with the national count, the sum of the
+        provinces and `gap` (national minus provinces). A week missing on
+        one side counts as zero there.
+    """
+    keys = ["kind", "vintage", "target_end_date"]
+    streams = list(COHERENCE_STREAMS)
+    nat = (
+        target.loc[target["location"] == national].groupby(keys)[streams].sum()
+    )
+    prov = (
+        target.loc[target["location"] != national].groupby(keys)[streams].sum()
+    )
+    nat, prov = nat.align(prov, join="outer", fill_value=0)
+    long = nat.reset_index().melt(
+        id_vars=keys, var_name="stream", value_name="national"
+    )
+    long["provinces"] = (
+        prov.reset_index()
+        .melt(id_vars=keys, var_name="stream", value_name="provinces")[
+            "provinces"
+        ]
+        .to_numpy()
+    )
+    long["gap"] = long["national"] - long["provinces"]
+    return long.sort_values([*keys, "stream"]).reset_index(drop=True)
+
+
+def coherence_summary(
+    target: pd.DataFrame, vintage: str, national: str = "CD"
+) -> dict[str, Any]:
+    """Summarise national coherence for one real vintage.
+
+    This is the `coherence.json` record the submission CI reads (see
+    `ci/INTEGRATION.md`).
+
+    Parameters
+    ----------
+    target : pandas.DataFrame
+        Tidy target table.
+    vintage : str
+        The real vintage to check.
+    national : str
+        Location code of the country.
+
+    Returns
+    -------
+    dict
+        `as_of`, `coherent`, per-stream summaries, the rows with a gap and
+        how the models handle a gap.
+
+    Raises
+    ------
+    ValueError
+        If the vintage has no real data.
+    """
+    rows = target.loc[
+        (target["kind"] == "real") & (target["vintage"] == vintage)
+    ]
+    if rows.empty:
+        raise ValueError(f"No real data for vintage {vintage}.")
+    table = national_coherence(rows, national)
+    gaps = table.loc[table["gap"] != 0]
+    streams = {
+        s: {
+            "weeks_with_gap": int((g["gap"] != 0).sum()),
+            "max_abs_gap": int(g["gap"].abs().max()) if len(g) else 0,
+            "total_gap": int(g["gap"].sum()),
+        }
+        for s, g in table.groupby("stream")
+    }
+    return {
+        "schema_version": 1,
+        "as_of": vintage,
+        "national": national,
+        "coherent": gaps.empty,
+        "streams": streams,
+        "rows": [
+            {
+                "target_end_date": str(r["target_end_date"]),
+                "stream": str(r["stream"]),
+                "national": int(r["national"]),
+                "provinces": int(r["provinces"]),
+                "gap": int(r["gap"]),
+            }
+            for r in gaps.to_dict("records")
+        ],
+        "handling": COHERENCE_HANDLING,
+    }
 
 
 # --------------------------------------------------------------------------
