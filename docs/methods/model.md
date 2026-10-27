@@ -47,7 +47,9 @@ $$
 \log R_p(t) = \log R(t) + \delta_p(t).
 $$
 
-The national $\log R(t)$ is a weekly random walk sampled as its weekly values (knots) $k_j$:
+The pooled trend $\log R(t)$ is the unweighted mean of $\log R_p(t)$ over the provinces with cases.
+It is not the national Rt, which would weight provinces by their infections.
+It is a weekly random walk, sampled as its weekly values (knots) $k_j$:
 
 $$
 k_0 \sim \mathcal{N}(0, 0.5^2), \qquad k_j - k_{j-1} \sim \mathcal{N}(0, \sigma_R^2), \qquad \sigma_R \sim \mathcal{N}^+(0, 0.4^2).
@@ -74,9 +76,10 @@ x_p(t) = S_p(t)\big\{1 - e^{-y_p(t)/\nu}\big\},
 S_p(t + 1) = S_p(t)\, e^{-y_p(t)/\nu}.
 $$
 
-- $g$ is a Gamma generation interval with mean 15 and SD 9 days, on lags 1 to 42.
+- $g$ is a Gamma generation interval with mean 15 and SD 9 days, double interval censored on lags 1 to 42. Each infection day is uniform within its day and the pmf is $G(d + 1) - 2G(d) + G(d - 1)$, with $G$ the Gamma's integrated cdf, as in the R package primarycensored. Lag 0 is dropped and the rest renormalised.
 - $W = (1 - \varepsilon) I + \varepsilon\, \mathrm{diag}(1/N) K^\top \mathrm{diag}(N)$ mixes transmission between provinces, with $\varepsilon \sim \text{Beta}(1, 100)$.
 - $K$ is a row-normalised gravity kernel, $K_{qp} \propto N_p e^{-D_{qp}/300\,\text{km}}$, with $D$ the great-circle distance between population-weighted province centres and $N_p$ the province population.
+- With `coupling="learnt"` the kernel's decay and destination weights are estimated, $\log K_{qp} = \log N_p - D_{qp}/(300\,\text{km} \cdot e^{\kappa_K}) + w_p + c_q$, with $\kappa_K \sim \mathcal{N}(0, 1)$, sum-to-zero weights $w$ with scale $\mathcal{N}^+(0, 0.5^2)$, and $c_q$ normalising each row. With $\kappa_K = 0$ and $w = 0$ it is the fixed gravity kernel.
 - $\nu \sim \text{LogNormal}(\log 0.05, 0.75^2)$ is the share of each province at risk.
   $S_p$ starts at $\nu$, so cumulative infections never exceed $\nu N_p$.
 
@@ -86,6 +89,7 @@ It is computed with `expm1` and on $\log S$, which keeps the log density smooth 
 Seeding is set on the scale of confirmed onsets.
 Each province's expected confirmed onsets per day at the start are $c_p \sim \text{LogNormal}(0, 1.5^2)$.
 They become $x_p = c_p / (\alpha_0 N_p)$ and grow back over the seeding weeks at the initial growth rate implied by $R_p$ and $g$.
+That rate is clipped to $[-0.05, 0.3]$ per day, so a steep early decline cannot project an implausibly large seed.
 
 A NumPy reference with linear depletion is in [`latent.renewal`][bdbv_hub_renewal.latent.renewal].
 
@@ -130,7 +134,7 @@ $$
 \operatorname{logit} \pi_p(t) = b(t) + \eta_p(t),
 $$
 
-built as $\log R_p$ is: a national weekly random walk $b$ plus sum-to-zero province deviations $\eta_p$.
+built as $\log R_p$ is: a pooled weekly random walk $b$ plus sum-to-zero province deviations $\eta_p$.
 The starting national value is $\mathcal{N}(-2, 1)$ with province spread $\mathcal{N}^+(0, 0.5^2)$.
 The step SDs are $\mathcal{N}^+(0, 0.6^2)$ for $b$ and $\mathcal{N}^+(0, 0.2^2)$ for $\eta$.
 $\pi_p$ is informed by the ratio of imputed to known onsets, through the imputation below.
@@ -189,8 +193,8 @@ The non-monotone revisions in imputed counts suggest it re-imputes each time.
 The model axis runs to the end of the forecast horizon, so the random walks carry $R_p$, $\alpha$, $f$ and $\pi$ forward.
 Each of the 100 trajectories uses one posterior draw for every province and week.
 It is the final known plus final imputed counts, drawn from the two negative binomials once every report is in.
-In provinces with no cases, importations are drawn and, from the cut-off, seed local spread at the national $R(t)$.
-The national trajectory is the sum of the province trajectories plus an unassigned component.
+In provinces with no cases, importations are drawn and, from the cut-off, seed local spread at the pooled trend $R(t)$.
+For `renewal` and `renewalbvd`, the national trajectory is the sum of the province trajectories plus an unassigned component.
 The unassigned component holds any provinces the model does not report, and the national cases in the data that no province has.
 In weeks with data, that gap is the vintage's $g(w) = \max\{0, Y_{CD}(w) - \sum_p Y_p(w)\}$ in every trajectory.
 In later weeks it is $g_k(w) = \rho \sum_p \tilde y_{p,k}(w)$, with $\rho$ the gap over the provinces' total in the last 4 data weeks and $\tilde y_{p,k}$ trajectory $k$ of province $p$.
@@ -230,7 +234,7 @@ The renewal variants run in the backtest, the held-out evaluation and the plots,
 | Variant | What it is |
 |---|---|
 | `renewal` | The model in the figure: provinces with pooled $R_p(t)$, gravity importation and depletion. |
-| `renewalsp` | Single patch: one national renewal with the same delays and imputation, split across provinces as below. |
+| `renewalsp` | Single patch: the renewal model fitted to each location's series on its own, the nation included. |
 | `renewalbvd` | The spatial model informed by the latest posterior estimates of the main [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model, taken from the newest release published before the data cut-off. |
 | `fallback` | The CI's fallback: no coupling, with the delays and $\pi$ fixed from the data. It is a fit configuration, not a backtest variant. |
 
@@ -238,18 +242,12 @@ The model code is in `bdbv_hub_renewal.pyrenew` and the variants in [`models.ren
 
 ### Single patch
 
-`renewalsp` fits one renewal process to the national counts.
-Each national trajectory $\tilde y(w)$ is split across the provinces $p$ of the task by a multinomial draw:
-
-$$
-\big(\tilde y_p(w)\big)_p \sim \text{Multinomial}\big(\tilde y(w),\, \theta\big),
-\qquad
-\theta_p = \frac{c_p + a}{\sum_q (c_q + a)},
-$$
-
-with $c_p$ the province's onsets over the last 4 data weeks and $a = 1/2$, the Jeffreys pseudo-count.
-So a province with no recent onsets keeps a small share, and the provinces sum to the national count in every sample and week.
-The single patch has no province likelihood, so it does not take part in the leave-one-province-out check.
+`renewalsp` fits the renewal model to each location's series on its own, the nation included, with no pooling and no coupling.
+Each province with cases and the nation get the same single-patch model: one $R(t)$ walk, ascertainment, the delays and the missing-onset share, all fitted to that location's known and imputed onsets alone.
+The national forecast is the national fit, not the sum of the province forecasts.
+So the hub file's national value need not equal the sum of its provinces.
+The submission's national check reports that difference, sample by sample, and does not fail or change it.
+The single patch has no shared likelihood, so it does not take part in the leave-one-province-out check.
 
 ### BVDOutbreakSize-informed
 

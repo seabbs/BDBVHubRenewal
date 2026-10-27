@@ -25,6 +25,7 @@ The table counts the weeks where the two differ.
 The submitted national value is the sum of the province values plus an unassigned component, for each sample.
 A gap means cases counted nationally but in no province.
 The renewal model adds it to the unassigned component (see [Forecasts](methods/model.md#forecasts)).
+`renewalsp` fits the nation on its own instead, so its national value is not the sum and the difference is reported, not corrected.
 
 ## Target by vintage
 

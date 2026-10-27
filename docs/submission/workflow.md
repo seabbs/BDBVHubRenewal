@@ -134,7 +134,7 @@ The coverage numbers go in the pull request's collapsed checks, with a table by 
 | values (negative, NaN, infinite, unparsable) | any | |
 | samples (exactly 100, each a full trajectory) | any | |
 | hub validation: `hub_validate` (Python) and `hubValidations` (R) | any error | |
-| national: sample *k* of `CD` equals the sum of sample *k* of the provinces plus the unassigned component, in every week | | handled: rebuilt by construction |
+| national: sample *k* of `CD` equals the sum of sample *k* of the provinces plus the unassigned component, in every week | | handled: rebuilt by construction; for a model whose national is its own fit (`renewalsp`), the difference is reported only |
 | a modelled province missing from the file | | warn |
 | coverage (expected locations, 4 nowcast weeks and 3 horizon weeks) | | warn |
 | bounds: 95th centile against max(largest observed week, 20) | | > 5× |

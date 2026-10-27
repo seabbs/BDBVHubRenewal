@@ -25,7 +25,7 @@
    $W = (1 - \varepsilon) I$\\ $+\, \varepsilon\, \mathrm{diag}(1/N) K^\top \mathrm{diag}(N)$\\[1pt]
    {\footnotesize gravity kernel $K$,}\\ {\footnotesize $\varepsilon \sim \mathrm{Beta}(1, 100)$}};
 \node[param, text width=3.6cm, minimum height=27mm] (gi) at (4.0,0)
-  {\textbf{Generation interval}\\[1pt] $g(\tau)$, Gamma with\\ mean 15 and SD 9 days;\\
+  {\textbf{Generation interval}\\[1pt] $g(\tau)$, double censored\\ Gamma, mean 15, SD 9 days;\\
    share at risk $\nu$,\\ seeds $c_p$};
 
 % The BVDOutbreakSize term of renewalbvd only.
@@ -115,7 +115,7 @@
 % ---- Forecast ------------------------------------------------------------
 \node[latent, text width=12.2cm] (fc) at (-0.3,{\yd-2.1})
   {\textbf{Forecast target} $y_p(w)$: final known plus final imputed onsets,\\
-   one posterior draw per trajectory; national is the sum over provinces};
+   one posterior draw per trajectory; national is the sum over provinces\\ {\footnotesize (renewalsp fits the nation on its own)}};
 \draw[flow] (idle.south) -- (idle.south |- fc.north);
 
 % ---- Key -------------------------------------------------------------------
