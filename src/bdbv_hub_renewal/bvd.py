@@ -48,6 +48,7 @@ __all__ = [
     "BVD_PROVINCES",
     "BVD_REPO",
     "HUB_TIMEZONE",
+    "MODEL_ROW_COLUMNS",
     "BvdPatch",
     "BvdRelease",
     "bvd_cutoff",
@@ -55,6 +56,7 @@ __all__ = [
     "fetch_release",
     "list_releases",
     "load_release",
+    "model_rows",
     "parse_releases",
     "release_as_of",
     "select_release",
@@ -84,10 +86,12 @@ BVD_PROVINCES: Final[dict[str, str]] = {
 ASSETS: Final = (
     "posterior_draws.csv",
     "province_estimates.csv",
+    "province_timeseries.csv",
     "observations.toml",
 )
-"""Release assets used: national draws, patch summaries and the data
-cut-off (`as_of_date`) for releases with no patch summaries."""
+"""Release assets used: national draws, patch summaries, the national Rt
+row the patch summaries are relative to, and the data cut-off
+(`as_of_date`) for releases with no patch summaries."""
 
 Z90: Final = 1.6448536269514722
 """The standard normal 95th centile, for SDs from 90% intervals."""
@@ -323,12 +327,17 @@ class BvdRelease:
         Posterior draws of the national `log R_T`.
     patches : dict
         Patch name to `BvdPatch`. Empty for a national-only release.
+    reference : tuple of float or None
+        Log median and log-scale SD of the national Rt at `as_of` in the
+        same table as the patches (`province_timeseries.csv`), so patch
+        deviations use one source. None if the release has no such row.
     """
 
     tag: str
     as_of: dt.date
     national_log_rt: NDArray[np.float64]
     patches: dict[str, BvdPatch] = field(default_factory=dict)
+    reference: tuple[float, float] | None = None
 
 
 def release_as_of(path: Path | str) -> dt.date | None:
@@ -417,7 +426,73 @@ def load_release(path: Path | str) -> BvdRelease:
         as_of=as_of,
         national_log_rt=np.log(draws["R_T"].to_numpy(dtype=float)),
         patches=patches,
+        reference=_reference(path / "province_timeseries.csv", as_of),
     )
+
+
+def _reference(path: Path, as_of: dt.date) -> tuple[float, float] | None:
+    if not path.exists():
+        return None
+    ts = pd.read_csv(path)
+    row = ts.loc[
+        (ts["area"] == "National")
+        & (ts["series"] == "rt")
+        & (pd.to_datetime(ts["date"]).dt.date == as_of)
+    ]
+    if row.empty:
+        return None
+    r = row.iloc[0]
+    width = np.log(float(r["upper_90"]) / float(r["lower_90"]))
+    return float(np.log(float(r["median"]))), float(width / (2 * Z90))
+
+
+MODEL_ROW_COLUMNS: Final = (
+    "group",
+    "members",
+    "as_of",
+    "log_mean",
+    "log_sd",
+    "ref_log_mean",
+    "ref_log_sd",
+)
+"""Columns of `model_rows`, as `bdbv_hub_renewal.pyrenew.adapter.bvd_rows`."""
+
+
+def model_rows(release: BvdRelease) -> pd.DataFrame:
+    """Turn a release into the rows the model's BVD term reads.
+
+    The national row is the mean and SD of the national log `R_T` draws.
+    Each patch row is its log median and log-scale SD, with the national
+    row of the same table as its reference, so the deviation uses one
+    source. Without that table, the national draws are the reference.
+
+    Parameters
+    ----------
+    release : BvdRelease
+        From `load_release`.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `MODEL_ROW_COLUMNS`, the national row first.
+    """
+    as_of = release.as_of.isoformat()
+    log_rt = release.national_log_rt
+    nat = (float(log_rt.mean()), float(log_rt.std(ddof=1)))
+    ref = release.reference or nat
+    rows = [("national", "", as_of, *nat, *nat)]
+    for name, patch in release.patches.items():
+        rows.append(
+            (
+                name,
+                ";".join(patch.members),
+                as_of,
+                patch.log_median,
+                patch.log_sd,
+                *ref,
+            )
+        )
+    return pd.DataFrame(rows, columns=list(MODEL_ROW_COLUMNS))
 
 
 def bvd_for_vintage(
