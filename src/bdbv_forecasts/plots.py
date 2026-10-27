@@ -16,7 +16,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, cast
 
 import matplotlib as mpl
 
@@ -712,6 +712,7 @@ def plot_nowcast(
     mode: str = "light",
     data_dir: Path | str | None = None,
     config_path: Path | str = "config/backtest.toml",
+    ax: Axes | None = None,
 ) -> Figure:
     """Plot the nowcast and forecast for one location from one vintage.
 
@@ -738,6 +739,8 @@ def plot_nowcast(
         Directory of the tidy tables.
     config_path : pathlib.Path or str
         Backtest settings, for horizons and samples.
+    ax : matplotlib.axes.Axes, optional
+        Axes to draw on, for a grid of locations. A new figure if None.
 
     Returns
     -------
@@ -767,7 +770,10 @@ def plot_nowcast(
     start = ref - pd.Timedelta(days=7 * weeks_before)
     data = data.loc[data["date"] >= start]
     ink = THEMES[mode]
-    fig, ax = plt.subplots(figsize=(7.2, 3.6), layout="constrained")
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(7.2, 3.6), layout="constrained")
+    else:
+        fig = cast(Figure, ax.get_figure())
     ax.bar(
         data["date"],
         data["observed"],
@@ -795,6 +801,103 @@ def plot_nowcast(
     ax.set_ylabel("Confirmed cases by onset week")
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
     ax.legend(fontsize=7, loc="upper left")
+    return fig
+
+
+def read_submission(path: Path | str, vintage: str) -> pd.DataFrame:
+    """Read a hub submission file as forecasts for `plot_nowcast`.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        A hub file with sample output.
+    vintage : str
+        The data vintage it was made from.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `model` (`"submission"`), `vintage`, `reference_date`,
+        `location`, `target_end_date`, `sample` and `value`.
+    """
+    table = pd.read_csv(path)
+    return pd.DataFrame(
+        {
+            "model": "submission",
+            "vintage": vintage,
+            "reference_date": table["reference_date"].astype(str),
+            "location": table["location"].astype(str),
+            "target_end_date": table["target_end_date"].astype(str),
+            "sample": table["output_type_id"].astype("int64"),
+            "value": table["value"].astype(float),
+        }
+    )
+
+
+def plot_submission(
+    submission: Path | str,
+    vintage: str,
+    target: pd.DataFrame | None = None,
+    n_provinces: int = 3,
+    data_dir: Path | str | None = None,
+) -> Figure:
+    """Plot what was submitted: the national total and the largest provinces.
+
+    Draws the samples in the file, not a re-run of the model, with the
+    data of the vintage behind them. Light mode, about 1600 by 1000 pixels
+    at 100 dpi, for the submission pull request.
+
+    Parameters
+    ----------
+    submission : pathlib.Path or str
+        The hub file.
+    vintage : str
+        The data vintage the file was made from.
+    target : pandas.DataFrame, optional
+        Tidy target table. Loaded from `data_dir` if not given.
+    n_provinces : int
+        Provinces shown beside the national total, largest median first.
+    data_dir : pathlib.Path or str, optional
+        Directory of the tidy tables.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        A grid with one panel per location.
+    """
+    from .data import load_target
+
+    target = load_target(data_dir) if target is None else target
+    fc = read_submission(submission, vintage)
+    sizes = (
+        fc.loc[fc["location"] != "CD"]
+        .groupby("location")["value"]
+        .median()
+        .sort_values(ascending=False)
+    )
+    locations = [
+        loc
+        for loc in ["CD", *sizes.index[:n_provinces]]
+        if loc in set(fc["location"])
+    ]
+    ncol = 2
+    nrow = max(1, -(-len(locations) // ncol))
+    with theme("light"):
+        fig, axes = plt.subplots(
+            nrow, ncol, figsize=(16, 5 * nrow), layout="constrained"
+        )
+        flat = list(np.atleast_1d(axes).ravel())
+        for loc, ax in zip(locations, flat, strict=False):
+            plot_nowcast(
+                loc,
+                vintage=vintage,
+                models=("submission",),
+                target=target,
+                forecasts=fc,
+                ax=ax,
+            )
+        for ax in flat[len(locations) :]:
+            ax.set_visible(False)
     return fig
 
 

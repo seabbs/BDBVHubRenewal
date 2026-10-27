@@ -7,32 +7,59 @@ Commands:
 - `backtest`: run the development backtest and the recovery check, or
   with `--evaluate-holdout` the one-off held-out evaluation.
 - `nowcast`: forecast from a real vintage, write the hub file and check it.
+  With `--config` (and `--fit`), forecast from a fit configuration.
+- `fit`: fit a configuration and write the fit directory and its
+  `diagnostics.json`, for the submission CI.
+- `plot-submission`: plot a submitted hub file.
+- `coherence`: compare the national data with the sum of the provinces.
+- `validate`: run the hub's checks on files (`hub_validate`).
 - `metadata`: write and check a model's metadata YAML.
 - `report`: make the docs figures and tables.
+
+`--version` prints the package version.
+Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`, so the
+submission CI can point every command at the data it pinned.
 """
 
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import datetime as dt
+import json
 import logging
+import os
 import sys
 from collections.abc import Sequence
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 from . import backtest as bt
-from .data import build_tidy_data, fetch_hub_data, load_delays, load_target
+from .data import (
+    build_tidy_data,
+    coherence_summary,
+    fetch_hub_data,
+    load_delays,
+    load_target,
+)
+from .fitting import Forecast, get_config, run_fit, run_forecast
 from .hub import (
     load_hub_round,
     model_id,
     render_model_metadata,
     to_hub_table,
     validate_model_metadata,
-    validate_submission,
+    validate_submission_file,
     write_model_metadata,
     write_submission,
 )
-from .models.base import NATIONAL, get_model, list_models
+from .models.base import (
+    NATIONAL,
+    ForecastTask,
+    check_samples,
+    get_model,
+    list_models,
+)
 
 __all__ = ["build_parser", "main"]
 
@@ -74,11 +101,17 @@ def build_parser() -> argparse.ArgumentParser:
         The parser.
     """
     parser = argparse.ArgumentParser(prog="bdbv-forecasts")
-    sub = parser.add_subparsers(dest="command", required=True)
+    parser.add_argument(
+        "--version", action="store_true", help="Print the version and exit."
+    )
+    sub = parser.add_subparsers(dest="command")
+    data_dir = os.environ.get("BDBV_DATA_DIR", "data")
 
     data = sub.add_parser("data", help="Download and tidy the hub data.")
-    data.add_argument("--raw", default="data/raw")
-    data.add_argument("--out", default="data")
+    data.add_argument(
+        "--raw", default=os.environ.get("BDBV_RAW_DIR", f"{data_dir}/raw")
+    )
+    data.add_argument("--out", default=data_dir)
     data.add_argument("--ref", default="main")
 
     back = sub.add_parser("backtest", help="Run the backtest.")
@@ -95,24 +128,133 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     now = sub.add_parser("nowcast", help="Forecast and write a hub file.")
-    now.add_argument("--model", default="persistence")
-    now.add_argument("--vintage", default=None)
-    now.add_argument("--data", default="data")
-    now.add_argument("--config", default="config/backtest.toml")
+    now.add_argument(
+        "--model",
+        default="persistence",
+        help="Model name: the hub model id is `epiforecasts-<model>`. "
+        "Without --config, the registered model to run.",
+    )
+    _task_args(now, data_dir)
+    now.add_argument(
+        "--config",
+        default=None,
+        help="Fit configuration to forecast from, such as `main`.",
+    )
+    now.add_argument(
+        "--fit", default=None, help="Fit directory written by `fit`."
+    )
     now.add_argument("--out", default="output/submission")
-    now.add_argument("--hub-config", default="data/hub-config/tasks.json")
+    now.add_argument("--hub-config", default=None)
+
+    fit = sub.add_parser(
+        "fit", help="Fit a configuration and write its diagnostics."
+    )
+    fit.add_argument("--model", default="persistence")
+    fit.add_argument("--config", required=True)
+    _task_args(fit, data_dir)
+    fit.add_argument(
+        "--sampler-json",
+        default="{}",
+        help="Sampler settings as JSON (a candidate's `sampler` table).",
+    )
+    fit.add_argument("--out", required=True, help="Fit directory.")
+
+    plot = sub.add_parser("plot-submission", help="Plot a submitted hub file.")
+    plot.add_argument("--submission", required=True)
+    plot.add_argument("--vintage", default="latest")
+    plot.add_argument("--data", default=data_dir)
+    plot.add_argument("--out", required=True)
+
+    coh = sub.add_parser(
+        "coherence",
+        help="Compare the national data with the sum of the provinces.",
+    )
+    coh.add_argument("--vintage", default="latest")
+    coh.add_argument("--data", default=data_dir)
+    coh.add_argument("--out", default=None)
+
+    sub.add_parser(
+        "validate",
+        help="Check hub files with hub_validate (see `validate --help`).",
+        add_help=False,
+    )
 
     meta = sub.add_parser("metadata", help="Write model metadata YAML.")
     meta.add_argument("--model", default="persistence")
     meta.add_argument("--out", default="hub/model-metadata")
     meta.add_argument(
-        "--schema", default="data/hub-config/model-metadata-schema.json"
+        "--schema", default=f"{data_dir}/hub-config/model-metadata-schema.json"
     )
 
     rep = sub.add_parser("report", help="Make the docs figures and tables.")
     rep.add_argument("--figures", default="docs/figures")
     rep.add_argument("--generated", default="docs/generated")
     return parser
+
+
+def _task_args(p: argparse.ArgumentParser, data_dir: str) -> None:
+    p.add_argument(
+        "--vintage", default="latest", help="Real vintage, or `latest`."
+    )
+    p.add_argument("--data", default=data_dir)
+    p.add_argument("--backtest-config", default="config/backtest.toml")
+    p.add_argument(
+        "--min-horizon",
+        type=int,
+        default=-6,
+        help="First week, in weeks from the reference date. The default "
+        "submits 7 weeks up to the reference date, which the CI's "
+        "`observed` and `coverage` checks need.",
+    )
+
+
+def _version() -> str:
+    try:
+        return version("bdbv-forecasts")
+    except PackageNotFoundError:  # pragma: no cover
+        return "unknown"
+
+
+def _vintage(target_vintages: Sequence[str], vintage: str | None) -> str:
+    if vintage in (None, "", "latest"):
+        return max(target_vintages)
+    assert vintage is not None
+    if vintage not in target_vintages:
+        raise ValueError(
+            f"No real data for vintage {vintage}; latest is "
+            f"{max(target_vintages)}. Run `bdbv-forecasts data` first."
+        )
+    return vintage
+
+
+def _task(args: argparse.Namespace) -> ForecastTask:
+    config = dataclasses.replace(
+        bt.load_config(args.backtest_config), min_horizon=args.min_horizon
+    )
+    target, delays = load_target(args.data), load_delays(args.data)
+    real = target.loc[target["kind"] == "real"]
+    vintage = _vintage([str(v) for v in real["vintage"].unique()], args.vintage)
+    rows = real.loc[real["vintage"] == vintage]
+    return bt.make_tasks(rows, delays, config)[0]
+
+
+def _fit(args: argparse.Namespace) -> int:
+    try:
+        config = get_config(args.config)
+        sampler = json.loads(args.sampler_json or "{}")
+        task = _task(args)
+        result = run_fit(config, task, sampler, args.out, model=args.model)
+    except (KeyError, ValueError, OSError) as err:
+        print(f"ERROR: {err}", file=sys.stderr)
+        return 1
+    if config.stand_in:
+        print(config.stand_in)
+    diag = result.diagnostics
+    print(
+        f"Fitted config {config.name!r} on vintage {task.vintage} "
+        f"(sampler {diag.get('sampler')}); wrote {result.fit_dir}."
+    )
+    return 0
 
 
 def _models(names: Sequence[str] | None) -> list[str]:
@@ -161,27 +303,32 @@ def _backtest(args: argparse.Namespace) -> int:
 
 
 def _nowcast(args: argparse.Namespace) -> int:
-    config = bt.load_config(args.config)
-    target, delays = load_target(args.data), load_delays(args.data)
-    real = target.loc[target["kind"] == "real"]
-    vintage = args.vintage or str(real["vintage"].max())
-    rows = real.loc[real["vintage"] == vintage]
-    tasks = bt.make_tasks(rows, delays, config)
-    forecasts = bt.run_forecasts([get_model(args.model)], tasks)
-    task = tasks[0]
-    samples = forecasts[["location", "target_end_date", "sample", "value"]]
-    table = to_hub_table(samples, task.reference_date)
+    try:
+        task = _task(args)
+        if args.config:
+            config = get_config(args.config)
+            if config.stand_in:
+                print(config.stand_in)
+            result = run_forecast(config, task, args.fit)
+        else:
+            samples = get_model(args.model).forecast(task)
+            check_samples(samples, task)
+            result = Forecast(samples)
+        table = to_hub_table(
+            result.samples, task.reference_date, unassigned=result.unassigned
+        )
+    except (KeyError, ValueError, OSError) as err:
+        print(f"ERROR: {err}", file=sys.stderr)
+        return 1
     mid = model_id(args.model)
     path = write_submission(table, args.out, mid)
-    hub_round = load_hub_round(args.hub_config)
-    open_round = task.reference_date.isoformat() in hub_round.reference_dates
-    errors = validate_submission(
-        table,
-        hub_round,
-        file_name=path.name,
-        mid=mid,
-        check_round=open_round,
+    _write_national_sidecar(Path(args.out), task, result)
+    hub_config = args.hub_config or str(
+        Path(args.data) / "hub-config" / "tasks.json"
     )
+    hub_round = load_hub_round(hub_config)
+    open_round = task.reference_date.isoformat() in hub_round.reference_dates
+    errors = validate_submission_file(path, hub_round, check_round=open_round)
     print(f"Wrote {path} ({len(table)} rows, locations incl. {NATIONAL}).")
     if not open_round:
         print(
@@ -191,6 +338,81 @@ def _nowcast(args: argparse.Namespace) -> int:
     for e in errors:
         print(f"ERROR: {e}", file=sys.stderr)
     return 1 if errors else 0
+
+
+def _write_national_sidecar(
+    out: Path, task: ForecastTask, result: Forecast
+) -> Path:
+    """Write `national.json`, which the CI's national check reads."""
+    unassigned = []
+    if result.unassigned is not None:
+        unassigned = [
+            {
+                "target_end_date": str(r["target_end_date"]),
+                "sample": int(r["sample"]),
+                "value": float(round(float(r["value"]))),
+            }
+            for r in result.unassigned.to_dict("records")
+        ]
+    path = out / "national.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "schema_version": 1,
+        "national": NATIONAL,
+        "modelled_provinces": list(task.locations),
+        "unassigned": unassigned,
+    }
+    path.write_text(json.dumps(record, indent=2) + "\n")
+    return path
+
+
+def _plot_submission(args: argparse.Namespace) -> int:
+    from .plots import plot_submission
+
+    target = load_target(args.data)
+    real = target.loc[target["kind"] == "real"]
+    vintage = _vintage([str(v) for v in real["vintage"].unique()], args.vintage)
+    fig = plot_submission(args.submission, vintage, target=target)
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=100)
+    print(f"Wrote {out}.")
+    return 0
+
+
+def _coherence(args: argparse.Namespace) -> int:
+    target = load_target(args.data)
+    real = target.loc[target["kind"] == "real"]
+    vintage = _vintage([str(v) for v in real["vintage"].unique()], args.vintage)
+    summary = coherence_summary(target, vintage)
+    _print_coherence(summary)
+    if args.out:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(summary, indent=2) + "\n")
+    return 0
+
+
+def _print_coherence(summary: dict[str, object]) -> None:
+    if summary["coherent"]:
+        print(
+            f"National coherence ({summary['as_of']}): the national counts "
+            "equal the sum of the provinces in every week and stream."
+        )
+        return
+    print(
+        f"WARNING: national coherence ({summary['as_of']}): the national "
+        "counts differ from the sum of the provinces.",
+        file=sys.stderr,
+    )
+    streams = summary["streams"]
+    assert isinstance(streams, dict)
+    for name, s in streams.items():
+        print(
+            f"  {name}: {s['weeks_with_gap']} weeks with a gap, largest "
+            f"{s['max_abs_gap']}, net {s['total_gap']}",
+            file=sys.stderr,
+        )
 
 
 def _metadata(args: argparse.Namespace) -> int:
@@ -224,12 +446,32 @@ def main(argv: Sequence[str] | None = None) -> int:
         Exit status.
     """
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    args = build_parser().parse_args(argv)
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ["validate"]:
+        from .hub_validate import main as validate_main
+
+        return validate_main(argv[1:])
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.version:
+        print(_version())
+        return 0
+    if args.command is None:
+        parser.error("a command is required")
     if args.command == "data":
         fetch_hub_data(args.raw, ref=args.ref)
-        build_tidy_data(args.raw, args.out)
+        tables = build_tidy_data(args.raw, args.out)
         print(f"Tidy data written to {args.out} on {dt.date.today()}.")
+        target = tables["target"]
+        latest = str(target.loc[target["kind"] == "real", "vintage"].max())
+        _print_coherence(coherence_summary(target, latest))
         return 0
+    if args.command == "fit":
+        return _fit(args)
+    if args.command == "plot-submission":
+        return _plot_submission(args)
+    if args.command == "coherence":
+        return _coherence(args)
     if args.command == "backtest":
         return _backtest(args)
     if args.command == "nowcast":
