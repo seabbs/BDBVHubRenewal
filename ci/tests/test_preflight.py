@@ -15,16 +15,20 @@ REPO = "seabbs/BDBVHubRenewal"
 FORK = "seabbs-bot/BDBV-Modeling-Hub"
 HUB = "InsightNet-US/BDBV-Modeling-Hub"
 MID = "epiforecasts-seabbsrenewal"
+ENV = f"repos/{REPO}/environments/hub-submission"
 NOW = dt.datetime(2026, 10, 27, 12, tzinfo=dt.UTC)
 
 
 def api(runner: FakeRunner, path: str, data: object, code: int = 0) -> None:
-    runner.on(["gh", "api", path], json.dumps(data), code)
+    prefix = ["gh", "api", path] if path else ["gh", "api"]
+    runner.on(prefix, json.dumps(data), code)
 
 
 def ready_runner(**overrides: object) -> FakeRunner:
     """A runner whose answers describe a fully set-up repository."""
     r = FakeRunner(real_git=False)
+    # Anything not answered below does not exist.
+    api(r, "", {"message": "Not Found"}, code=1)
     r.on(["gh", "auth", "status"], "Logged in")
     r.on(["git", "ls-remote"], "abc123\tHEAD\n")
     r.on(["git", "log"], "Sam Abbott\tsam.abbott@lshtm.ac.uk\n")
@@ -39,12 +43,15 @@ def ready_runner(**overrides: object) -> FakeRunner:
                 "custom_branch_policies": True,
             },
         },
-        f"repos/{REPO}/environments/hub-submission/deployment-branch-policies": {
+        f"{ENV}/deployment-branch-policies": {
             "branch_policies": [{"name": "main", "type": "branch"}]
         },
         f"repos/{REPO}/environments/hub-submission/secrets": {
             "secrets": [
-                {"name": "HUB_SUBMIT_TOKEN", "updated_at": "2026-10-20T00:00:00Z"}
+                {
+                    "name": "HUB_SUBMIT_TOKEN",
+                    "updated_at": "2026-10-20T00:00:00Z",
+                }
             ]
         },
         f"repos/{REPO}/actions/secrets": {"secrets": []},
@@ -58,7 +65,9 @@ def ready_runner(**overrides: object) -> FakeRunner:
             ]
         },
         f"repos/{REPO}/actions/workflows/submit.yml": {"state": "active"},
-        f"repos/{HUB}/contents/model-metadata/{MID}.yml": {"name": f"{MID}.yml"},
+        f"repos/{HUB}/contents/model-metadata/{MID}.yml": {
+            "name": f"{MID}.yml"
+        },
     }
     answers.update(overrides)
     for path, data in answers.items():
@@ -115,7 +124,7 @@ def test_nothing_set_up_lists_every_gap(settings: Settings) -> None:
             f"repos/{FORK}": None,
             f"repos/{FORK}/actions/permissions": None,
             f"repos/{REPO}/environments/hub-submission": None,
-            f"repos/{REPO}/environments/hub-submission/deployment-branch-policies": None,
+            f"{ENV}/deployment-branch-policies": None,
             f"repos/{REPO}/environments/hub-submission/secrets": None,
             f"repos/{REPO}/actions/permissions/workflow": {
                 "default_workflow_permissions": "write"
