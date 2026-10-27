@@ -5,7 +5,7 @@
   </picture>
 </h1>
 
-**BDBV hub baseline forecasts.**
+**Renewal-model nowcasts and forecasts for the BDBV Modeling Hub.**
 
 [![Docs](https://img.shields.io/badge/docs-online-blue.svg)](https://seabbs.github.io/BDBVHubRenewal/)
 [![Pages](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/pages.yml/badge.svg)](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/pages.yml)
