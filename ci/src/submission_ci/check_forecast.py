@@ -294,6 +294,8 @@ def check_national_sum(
     if sidecar:
         national = str(sidecar.get("national", national))
     provs = [loc for loc in s.locations if is_province(loc)]
+    if (sidecar or {}).get("national_source") == "fitted":
+        return _fitted_national(s, national, provs)
     modelled = sorted((sidecar or {}).get("modelled_provinces") or provs)
     unassigned = _unassigned(sidecar)
     if sidecar is None:
@@ -346,6 +348,34 @@ def check_national_sum(
     return out
 
 
+def _fitted_national(s: Samples, national: str, provs: list[str]) -> Check:
+    """Report how a fitted national differs from the sum of the provinces.
+
+    A model that fits the nation on its own (`national_source: fitted` in
+    `national.json`) need not add up, so this only reports.
+    """
+    if national not in s.values:
+        return Check("national_sum", "fail", f"{national} is not in the file")
+    gaps = []
+    for sid, traj in s.values[national].items():
+        for week, value in traj.items():
+            parts = [s.values[p].get(sid, {}).get(week) for p in provs]
+            if all(v is not None for v in parts):
+                gaps.append(
+                    value - math.fsum(v for v in parts if v is not None)
+                )
+    gaps.sort()
+    mid = gaps[len(gaps) // 2] if gaps else 0.0
+    return Check(
+        "national_sum",
+        "pass",
+        f"{national} is the model's own fit, not the sum of the provinces; "
+        f"national minus provinces has median {fmt(mid)} "
+        f"(range {fmt(gaps[0] if gaps else 0.0)} to "
+        f"{fmt(gaps[-1] if gaps else 0.0)}), report only",
+    )
+
+
 def repair_national(
     submission: Path,
     national: str = "CD",
@@ -358,13 +388,16 @@ def repair_national(
     w plus the unassigned part: from `national.json` when there is one,
     otherwise the gap between the national data and the provinces for
     that week (`data_gap`, zero for weeks without data). The file is
-    rewritten only when its national rows differ.
+    rewritten only when its national rows differ, and never when
+    `national.json` says the national is the model's own fit.
 
     Returns
     -------
     str
         A `Handled:` note when the file was rewritten, else empty.
     """
+    if (sidecar or {}).get("national_source") == "fitted":
+        return ""
     s = read_samples(submission)
     provs = [loc for loc in s.locations if is_province(loc)]
     if not provs or s.unparsable:
