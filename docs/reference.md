@@ -23,6 +23,10 @@ The public API of `bdbv_forecasts`, generated from the numpy-style docstrings.
 
 ::: bdbv_forecasts.hub
 
+::: bdbv_forecasts.fitting
+
+::: bdbv_forecasts.ppc
+
 ::: bdbv_forecasts.scoring
 
 ::: bdbv_forecasts.backtest

@@ -22,6 +22,8 @@ nav:
   - Models: models.md
   - Backtest: backtest.md
   - Nowcast: nowcast.md
+  - Submissions: submissions.md
+  - Hub specification: hub-spec.md
   - API reference: reference.md
 
 theme:
@@ -92,7 +94,7 @@ markdown_extensions:
       anchor_linenums: true
   - pymdownx.inlinehilite
   - pymdownx.snippets:
-      base_path: [docs/generated]
+      base_path: [docs/generated, docs/examples]
       check_paths: true
   - pymdownx.superfences
   - pymdownx.tabbed:
