@@ -4,8 +4,9 @@
 Commands:
 
 - `data`: download the hub data and write the tidy tables.
-- `backtest`: run the development backtest and the recovery check, or
-  with `--evaluate-holdout` the rolling held-out evaluation.
+- `backtest`: run the development backtest and the recovery check, with
+  `--evaluate-holdout` the rolling held-out evaluation, or with `--lopo`
+  the leave-one-province-out check.
 - `nowcast`: forecast from a real vintage, write the hub file and check it.
   With `--config` (and `--fit`), forecast from a fit configuration.
 - `fit`: fit a configuration and write the fit directory and its
@@ -157,6 +158,11 @@ def build_parser() -> argparse.ArgumentParser:
     back.add_argument("--results", default="results")
     back.add_argument("--output", default="output/backtest")
     back.add_argument("--no-reconstructed", action="store_true")
+    back.add_argument(
+        "--lopo",
+        action="store_true",
+        help="Run the leave-one-province-out check instead.",
+    )
     back.add_argument(
         "--evaluate-holdout",
         action="store_true",
@@ -351,6 +357,18 @@ def _backtest(args: argparse.Namespace) -> int:
         print(f"Held-out scores: {len(scores)} rows in {results}.")
         return 0
     models = [get_model(n) for n in names]
+    if args.lopo:
+        lopo_fc, lopo_scores = bt.run_lopo(
+            models,
+            target,
+            delays,
+            config,
+            include_reconstructed=not args.no_reconstructed,
+        )
+        lopo_fc.to_csv(output / "lopo-forecasts.csv.gz", index=False)
+        lopo_scores.to_csv(results / "lopo-scores.csv", index=False)
+        print(f"Leave one province out: {len(lopo_scores)} scored forecasts.")
+        return 0
     forecasts, scores = bt.run_development(
         models,
         target,

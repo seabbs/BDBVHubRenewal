@@ -43,6 +43,11 @@ tasks:
     cmds:
       - uv run bdbv-hub-renewal backtest {{.CLI_ARGS}}
 
+  backtest-lopo:
+    desc: Leave one province out on the development vintages, for the variants that take a mask
+    cmds:
+      - uv run bdbv-hub-renewal backtest --lopo {{.CLI_ARGS}}
+
   backtest-heldout:
     desc: Score every held-out vintage under the model chosen at the time (needs results/model-choice.yml)
     cmds:
