@@ -43,7 +43,7 @@ from typing import Any, Final
 import numpy as np
 import pandas as pd
 
-from bdbv_hub_renewal.dates import epiweek_end
+from bdbv_hub_renewal.data.dates import epiweek_end
 
 __all__ = [
     "COHERENCE_HANDLING",
@@ -173,7 +173,7 @@ def load_province_centres() -> pd.DataFrame:
         Columns `location`, `latitude`, `longitude`, `worldpop` and
         `zones`.
     """
-    path = files("bdbv_hub_renewal").joinpath("province_centres.csv")
+    path = files("bdbv_hub_renewal.data").joinpath("province_centres.csv")
     with path.open() as fh:
         return pd.read_csv(fh, comment="#")
 

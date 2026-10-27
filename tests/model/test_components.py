@@ -5,8 +5,8 @@ import pytest
 from pyrenew.deterministic import DeterministicVariable
 from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
 
-from bdbv_hub_renewal.delays import ParametricDelay
-from bdbv_hub_renewal.latent import renewal
+from bdbv_hub_renewal.data.delays import ParametricDelay
+from bdbv_hub_renewal.data.simulate import renewal
 from bdbv_hub_renewal.model import (
     FixedTimeVarying,
     HazardDelay,
@@ -25,7 +25,8 @@ from bdbv_hub_renewal.model import (
     pooled_walk,
 )
 from bdbv_hub_renewal.model.observation import backsample
-from bdbv_hub_renewal.observation import (
+
+from .numpy_reference import (
     expected_imputed_onsets,
     expected_known_onsets,
     expected_missing_by_report,

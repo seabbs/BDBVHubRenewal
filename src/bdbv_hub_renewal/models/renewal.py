@@ -374,15 +374,13 @@ def bvd_rows(
     Returns
     -------
     pandas.DataFrame or None
-        `bdbv_hub_renewal.bvd.model_rows` of the release chosen for the
+        `bdbv_hub_renewal.data.bvd.model_rows` of the release chosen for the
         vintage, or None if none qualifies.
     """
-    from bdbv_hub_renewal import bvd
-    from bdbv_hub_renewal.data import _data_dir
+    from bdbv_hub_renewal.data import bvd
 
-    cache = (
-        Path(cache_dir) if cache_dir is not None else _data_dir(None) / "bvd"
-    )
+    data_dir = Path(os.environ.get("BDBV_DATA_DIR") or "data")
+    cache = Path(cache_dir) if cache_dir is not None else data_dir / "bvd"
     release = bvd.bvd_for_vintage(task.vintage, cache)
     return None if release is None else bvd.model_rows(release)
 

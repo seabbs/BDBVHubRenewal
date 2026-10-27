@@ -2,8 +2,8 @@
 r"""Expected values of the two observed streams, including the hub's imputation.
 
 A NumPy reference for the model's observation layer, for one province.
-The model phase writes the same maths as PyRenew observation processes
-in JAX and checks them against these functions.
+The tests check the JAX observation process (`bdbv_hub_renewal.model`)
+against these functions.
 
 Notation, all by day:
 
@@ -40,14 +40,11 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from bdbv_hub_renewal.delays import DEFAULT_MAX_DELAY, empirical_pmf
-
 __all__ = [
     "delay_matrix",
     "expected_imputed_onsets",
     "expected_known_onsets",
     "expected_missing_by_report",
-    "hub_delay_pmf",
     "to_onset_weeks",
 ]
 
@@ -134,34 +131,6 @@ def expected_missing_by_report(
     p = delay_matrix(delays, confirmed.size)
     reports = confirmed @ p
     return np.asarray(missing * reports, dtype=np.float64)
-
-
-def hub_delay_pmf(
-    delays: pd.DataFrame,
-    max_delay: int = DEFAULT_MAX_DELAY,
-) -> NDArray[np.float64]:
-    r"""Return the hub's back-sampling delay pmf for one vintage.
-
-    The hub draws from "the full delay distribution" of the published
-    delay data of a defined vintage (hub issue 61), so this pools over
-    provinces and onset weeks.
-    How the hub treats negative delays, very long delays and which
-    vintage it draws from are not published; here negative delays and
-    delays above `max_delay` are dropped.
-
-    Parameters
-    ----------
-    delays : pandas.DataFrame
-        Delay line data of one vintage.
-    max_delay : int
-        Longest delay kept.
-
-    Returns
-    -------
-    numpy.ndarray
-        $\hat g_T$ on days 0 to `max_delay`.
-    """
-    return empirical_pmf(delays["delay"], max_delay)
 
 
 def expected_imputed_onsets(

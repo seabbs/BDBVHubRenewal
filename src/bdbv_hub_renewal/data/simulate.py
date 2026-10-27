@@ -38,17 +38,71 @@ import pandas as pd
 from numpy.typing import NDArray
 
 from bdbv_hub_renewal.data import PROVINCE_CENTRES, PROVINCE_POPULATIONS
-from bdbv_hub_renewal.dates import as_date, epiweek_end
-from bdbv_hub_renewal.delays import ParametricDelay
-from bdbv_hub_renewal.latent import renewal
+from bdbv_hub_renewal.data.dates import as_date, epiweek_end
+from bdbv_hub_renewal.data.delays import ParametricDelay
 from bdbv_hub_renewal.models.base import NATIONAL
 
 __all__ = [
     "SimulatedOutbreak",
     "SimulationSettings",
     "gravity_kernel",
+    "renewal",
     "simulate_outbreak",
 ]
+
+
+def renewal(
+    rt: NDArray[np.float64],
+    generation_pmf: NDArray[np.float64],
+    seeding: NDArray[np.float64],
+    population: NDArray[np.float64],
+    kernel: NDArray[np.float64] | None = None,
+    importation: float = 0.0,
+    rng: np.random.Generator | None = None,
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Run the renewal process forward.
+
+    Parameters
+    ----------
+    rt : numpy.ndarray
+        Reproduction numbers, shape (provinces, days).
+    generation_pmf : numpy.ndarray
+        Generation interval pmf on days 0, 1, ...; day 0 is ignored.
+    seeding : numpy.ndarray
+        Seeded infections, shape (provinces, days).
+    population : numpy.ndarray
+        Effective population of each province.
+    kernel : numpy.ndarray, optional
+        Importation kernel, rows summing to one. Needed if
+        `importation > 0`.
+    importation : float
+        Share of transmission sent to other provinces.
+    rng : numpy.random.Generator, optional
+        If given, draw Poisson infections; otherwise use expected values.
+
+    Returns
+    -------
+    tuple of numpy.ndarray
+        Infections and the susceptible fraction, both (provinces, days).
+    """
+    n_loc, n_days = rt.shape
+    g = np.asarray(generation_pmf, dtype=np.float64).copy()
+    g[0] = 0.0
+    g = g / g.sum()
+    k = np.zeros((n_loc, n_loc)) if kernel is None else kernel
+    infections = np.zeros((n_loc, n_days))
+    susceptible = np.ones((n_loc, n_days))
+    cumulative = np.zeros(n_loc)
+    for t in range(n_days):
+        lo = max(0, t - g.size + 1)
+        past = infections[:, lo:t][:, ::-1]
+        force = past @ g[1 : t - lo + 1] if t > lo else np.zeros(n_loc)
+        mixed = (1 - importation) * force + importation * (k.T @ force)
+        susceptible[:, t] = np.clip(1 - cumulative / population, 0, 1)
+        lam = rt[:, t] * susceptible[:, t] * mixed + seeding[:, t]
+        infections[:, t] = rng.poisson(lam) if rng is not None else lam
+        cumulative += infections[:, t]
+    return infections, susceptible
 
 
 def _logistic(x: NDArray[np.float64]) -> NDArray[np.float64]:

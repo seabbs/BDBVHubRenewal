@@ -349,7 +349,7 @@ def test_bvd_variant_reads_the_release_for_its_vintage(
 ) -> None:
     import shutil
 
-    from bdbv_hub_renewal import bvd
+    from bdbv_hub_renewal.data import bvd
 
     fixtures = Path(__file__).resolve().parent / "data" / "bvd"
     releases = bvd.parse_releases(

@@ -12,9 +12,9 @@ There are three kinds of vintage:
 
 - **real**: published by the hub. Truth is the latest real vintage.
 - **reconstructed**: rebuilt from the latest real data for past dates
-  (`bdbv_hub_renewal.vintages`). Truth is the latest real vintage.
+  (`bdbv_hub_renewal.data.reconstruct`). Truth is the latest real vintage.
 - **simulated**: from a simulated outbreak with known parameters
-  (`bdbv_hub_renewal.simulate`). Truth is the final simulated count.
+  (`bdbv_hub_renewal.data.simulate`). Truth is the final simulated count.
 
 Vintages are split by the model choice record (`results/model-choice.yml`,
 see `bdbv_hub_renewal.heldout`).
@@ -36,11 +36,16 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-from bdbv_hub_renewal.dates import (
+from bdbv_hub_renewal.data.dates import (
     as_date,
     epiweek_end,
     reference_date_for_vintage,
 )
+from bdbv_hub_renewal.data.reconstruct import (
+    reconstruct_delays,
+    reconstruct_vintages,
+)
+from bdbv_hub_renewal.data.simulate import SimulationSettings, simulate_outbreak
 from bdbv_hub_renewal.models.base import (
     NATIONAL,
     ForecastModel,
@@ -49,8 +54,6 @@ from bdbv_hub_renewal.models.base import (
     check_samples,
 )
 from bdbv_hub_renewal.scoring import score_forecasts
-from bdbv_hub_renewal.simulate import SimulationSettings, simulate_outbreak
-from bdbv_hub_renewal.vintages import reconstruct_delays, reconstruct_vintages
 
 __all__ = [
     "BacktestConfig",

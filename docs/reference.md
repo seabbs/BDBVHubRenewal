@@ -5,13 +5,15 @@ The public API of `bdbv_hub_renewal`, generated from the numpy-style docstrings.
 
 ::: bdbv_hub_renewal.data
 
-::: bdbv_hub_renewal.dates
+::: bdbv_hub_renewal.data.tidy
 
-::: bdbv_hub_renewal.vintages
+::: bdbv_hub_renewal.data.dates
 
-::: bdbv_hub_renewal.bvd
+::: bdbv_hub_renewal.data.reconstruct
 
-::: bdbv_hub_renewal.simulate
+::: bdbv_hub_renewal.data.bvd
+
+::: bdbv_hub_renewal.data.simulate
 
 ::: bdbv_hub_renewal.models.base
 
@@ -21,11 +23,7 @@ The public API of `bdbv_hub_renewal`, generated from the numpy-style docstrings.
 
 ::: bdbv_hub_renewal.model
 
-::: bdbv_hub_renewal.delays
-
-::: bdbv_hub_renewal.latent
-
-::: bdbv_hub_renewal.observation
+::: bdbv_hub_renewal.data.delays
 
 ::: bdbv_hub_renewal.hub
 

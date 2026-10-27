@@ -9,9 +9,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbv_hub_renewal import bvd
+from bdbv_hub_renewal.data import bvd
 
-FIXTURES = Path(__file__).resolve().parent / "data" / "bvd"
+FIXTURES = Path(__file__).resolve().parent / "bvd"
 
 AS_OF = {
     "results-3169": "2026-10-20",

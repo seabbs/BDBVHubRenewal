@@ -46,8 +46,8 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 
-from bdbv_hub_renewal.dates import as_date, epiweek_end
-from bdbv_hub_renewal.delays import DEFAULT_MAX_DELAY, empirical_pmf
+from bdbv_hub_renewal.data.dates import as_date, epiweek_end
+from bdbv_hub_renewal.data.delays import DEFAULT_MAX_DELAY, empirical_pmf
 from bdbv_hub_renewal.models.base import NATIONAL
 
 __all__ = [

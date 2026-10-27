@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from bdbv_hub_renewal.observation import hub_delay_pmf
+from bdbv_hub_renewal.data.delays import hub_delay_pmf
 
 from .model import MAIN, ModelConfig, Vintage
 from .renewal import adjacency_kernel
@@ -27,7 +27,7 @@ START_COUNT = 5
 reach this count. Earlier weeks are returned as observed."""
 
 
-CENTRES = Path(__file__).parent.parent / "province_centres.csv"
+CENTRES = Path(__file__).parent.parent / "data" / "province_centres.csv"
 """Population-weighted centres of all 26 provinces (see the file header)."""
 
 
@@ -75,7 +75,7 @@ def gravity_kernel(
     r"""Row-normalised gravity kernel between provinces.
 
     $K_{qp} \propto N_p \exp(-D_{qp} / \text{decay})$ for $q \ne p$, as
-    `bdbv_hub_renewal.simulate.gravity_kernel`, with populations $N$ from
+    `bdbv_hub_renewal.data.simulate.gravity_kernel`, with populations $N$ from
     `table` and great-circle distances $D$ between the centres in
     `province_centres()`, which cover all 26 provinces.
 

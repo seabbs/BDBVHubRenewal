@@ -46,7 +46,7 @@ from bdbv_hub_renewal.backtest import (
     run_forecasts,
     score_by_truth_vintage,
 )
-from bdbv_hub_renewal.dates import as_date
+from bdbv_hub_renewal.data.dates import as_date
 from bdbv_hub_renewal.models import get_model, list_models
 
 __all__ = [

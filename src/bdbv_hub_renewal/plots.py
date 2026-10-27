@@ -30,7 +30,7 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
 from bdbv_hub_renewal.data import imputed_share, newly_missing, revision_table
-from bdbv_hub_renewal.delays import delay_summary
+from bdbv_hub_renewal.data.delays import delay_summary
 
 __all__ = [
     "MODEL_COLOURS",
@@ -518,7 +518,7 @@ def plot_reconstruction(
     Parameters
     ----------
     comparison : pandas.DataFrame
-        Output of `bdbv_hub_renewal.vintages.compare_reconstruction`.
+        Output of `bdbv_hub_renewal.data.reconstruct.compare_reconstruction`.
     location : str
         Location to show.
     mode : str

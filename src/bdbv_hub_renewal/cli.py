@@ -625,7 +625,7 @@ def _metadata(args: argparse.Namespace) -> int:
 
 
 def _bvd(args: argparse.Namespace) -> int:  # pragma: no cover - network
-    from bdbv_hub_renewal import bvd
+    from bdbv_hub_renewal.data import bvd
 
     vintages = args.vintages
     if not vintages:

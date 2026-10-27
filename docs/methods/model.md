@@ -91,7 +91,7 @@ Each province's expected confirmed onsets per day at the start are $c_p \sim \te
 They become $x_p = c_p / (\alpha_0 N_p)$ and grow back over the seeding weeks at the initial growth rate implied by $R_p$ and $g$.
 That rate is clipped to $[-0.05, 0.3]$ per day, so a steep early decline cannot project an implausibly large seed.
 
-A NumPy reference with linear depletion is in [`latent.renewal`][bdbv_hub_renewal.latent.renewal].
+The simulator's NumPy renewal, with linear depletion, is [`simulate.renewal`][bdbv_hub_renewal.data.simulate.renewal].
 
 ## Observation
 
@@ -169,7 +169,7 @@ Both sums are written as banded matrix products.
 
 The forecast target is the eventual known plus imputed onsets, with future imputation using the latest $\hat f_T$.
 So the forecast carries the imputation's bias at turning points, which is what the hub scores.
-A NumPy reference is in [`observation`][bdbv_hub_renewal.observation].
+The tests check it against a NumPy reference (`tests/model/numpy_reference.py`).
 
 **Uncertain.**
 The hub has not published its code.
@@ -252,7 +252,7 @@ The single patch has no shared likelihood, so it does not take part in the leave
 ### BVDOutbreakSize-informed
 
 `renewalbvd` adds the latest reproduction number estimates of the main [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model as a tempered pseudo-observation on $R_p$.
-They come from its public `results-<run>` releases (`bdbv_hub_renewal.bvd`).
+They come from its public `results-<run>` releases (`bdbv_hub_renewal.data.bvd`).
 A forecast uses the newest release published by the forecast's cut-off whose data end on or before the vintage.
 The cut-off is the end of the Sunday that opens the submission window, in Kinshasa time.
 So a release republished later on old data is never used, and the backtest sees each release as it was published.

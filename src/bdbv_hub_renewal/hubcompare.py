@@ -43,10 +43,13 @@ import pandas as pd
 import yaml
 
 from bdbv_hub_renewal.backtest import BacktestConfig, make_tasks, run_forecasts
-from bdbv_hub_renewal.dates import as_date, reference_date_for_vintage
+from bdbv_hub_renewal.data.dates import as_date, reference_date_for_vintage
+from bdbv_hub_renewal.data.reconstruct import (
+    reconstruct_delays,
+    reconstruct_vintages,
+)
 from bdbv_hub_renewal.models import get_model
 from bdbv_hub_renewal.scoring import score_forecasts
-from bdbv_hub_renewal.vintages import reconstruct_delays, reconstruct_vintages
 
 __all__ = [
     "ATTRIBUTION",
@@ -175,7 +178,7 @@ def fetch_hub_submissions(  # pragma: no cover - network
         A manifest with the commit and access date, also written to
         `dest/manifest.json`.
     """
-    from bdbv_hub_renewal.data import HUB_REPO, _api, _raw
+    from bdbv_hub_renewal.data.tidy import HUB_REPO, _api, _raw
 
     token = token or os.environ.get("GITHUB_TOKEN")
     root = Path(dest)

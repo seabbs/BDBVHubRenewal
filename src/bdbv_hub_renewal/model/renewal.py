@@ -23,7 +23,7 @@ from .rt import pooled_walk
 def adjacency_kernel(adjacency: ArrayLike) -> np.ndarray:
     """Build a row-normalised importation kernel from a 0/1 adjacency matrix.
 
-    Rows are origins, as in `bdbv_hub_renewal.simulate.gravity_kernel`:
+    Rows are origins, as in `bdbv_hub_renewal.data.simulate.gravity_kernel`:
     `K[q, p]` is the share of province `q`'s exported transmission that
     lands in `p`.
 
@@ -101,7 +101,7 @@ def coupled_renewal(
     eq. 6) with population $\nu$, written with `expm1`: PyRenew's
     `1 - exp(-y)` loses most of its digits in float32 at per-capita
     rates near 1e-6, which makes the gradient noisy and stalls NUTS.
-    To first order in $y$ it is `bdbv_hub_renewal.latent.renewal` per
+    To first order in $y$ it is `bdbv_hub_renewal.data.simulate.renewal` per
     capita, $x = S y / \nu$. Without
     depletion $x_p(t) = y_p(t)$.
 

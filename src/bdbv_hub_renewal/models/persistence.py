@@ -34,8 +34,8 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from bdbv_hub_renewal.dates import as_date
-from bdbv_hub_renewal.delays import EmpiricalDelayModel
+from bdbv_hub_renewal.data.dates import as_date
+from bdbv_hub_renewal.data.delays import EmpiricalDelayModel
 from bdbv_hub_renewal.models.base import (
     SAMPLE_COLUMNS,
     ForecastTask,

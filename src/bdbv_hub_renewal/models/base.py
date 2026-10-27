@@ -17,7 +17,7 @@ from typing import Protocol, runtime_checkable
 import numpy as np
 import pandas as pd
 
-from bdbv_hub_renewal.dates import as_date
+from bdbv_hub_renewal.data.dates import as_date
 
 __all__ = [
     "NATIONAL",

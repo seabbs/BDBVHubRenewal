@@ -26,14 +26,19 @@ from bdbv_hub_renewal.backtest import (
     truth_changes,
 )
 from bdbv_hub_renewal.data import (
-    COHERENCE_STREAMS,
     load_delays,
     load_target,
     national_coherence,
     newly_missing,
 )
-from bdbv_hub_renewal.dates import reference_date_for_vintage
-from bdbv_hub_renewal.delays import delay_summary
+from bdbv_hub_renewal.data.dates import reference_date_for_vintage
+from bdbv_hub_renewal.data.delays import delay_summary
+from bdbv_hub_renewal.data.reconstruct import (
+    compare_reconstruction,
+    reconstruct_vintages,
+)
+from bdbv_hub_renewal.data.simulate import simulate_outbreak
+from bdbv_hub_renewal.data.tidy import COHERENCE_STREAMS
 from bdbv_hub_renewal.heldout import load_model_choices
 from bdbv_hub_renewal.hubcompare import (
     attribution,
@@ -64,11 +69,6 @@ from bdbv_hub_renewal.plots import (
     save_light_dark,
 )
 from bdbv_hub_renewal.scoring import relative_skill, summarise_scores
-from bdbv_hub_renewal.simulate import simulate_outbreak
-from bdbv_hub_renewal.vintages import (
-    compare_reconstruction,
-    reconstruct_vintages,
-)
 
 __all__ = ["make_report"]
 

@@ -40,7 +40,7 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from bdbv_hub_renewal.dates import (
+from bdbv_hub_renewal.data.dates import (
     HUB_TIMEZONE,
     reference_date_for_vintage,
     submission_window,

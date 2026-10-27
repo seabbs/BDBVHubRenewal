@@ -54,6 +54,7 @@ __all__ = [
     "ParametricDelay",
     "delay_summary",
     "empirical_pmf",
+    "hub_delay_pmf",
 ]
 
 DEFAULT_MAX_DELAY: Final = 60
@@ -374,3 +375,31 @@ class ParametricDelay:
         raw = (dist.cdf(upper) - dist.cdf(lower)).mean(axis=1)
         probs = np.asarray(raw, dtype=np.float64)
         return np.asarray(probs / probs.sum(), dtype=np.float64)
+
+
+def hub_delay_pmf(
+    delays: pd.DataFrame,
+    max_delay: int = DEFAULT_MAX_DELAY,
+) -> NDArray[np.float64]:
+    r"""Return the hub's back-sampling delay pmf for one vintage.
+
+    The hub draws from "the full delay distribution" of the published
+    delay data of a defined vintage (hub issue 61), so this pools over
+    provinces and onset weeks.
+    How the hub treats negative delays, very long delays and which
+    vintage it draws from are not published; here negative delays and
+    delays above `max_delay` are dropped.
+
+    Parameters
+    ----------
+    delays : pandas.DataFrame
+        Delay line data of one vintage.
+    max_delay : int
+        Longest delay kept.
+
+    Returns
+    -------
+    numpy.ndarray
+        $\hat g_T$ on days 0 to `max_delay`.
+    """
+    return empirical_pmf(delays["delay"], max_delay)

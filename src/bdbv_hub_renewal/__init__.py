@@ -3,14 +3,11 @@
 
 The package has these parts:
 
-- `data`: download, tidy and load every stream the hub publishes.
-- `vintages` and `simulate`: reconstructed and simulated vintages.
+- `data`: the hub data, dates, reconstructed and simulated vintages,
+  empirical delays and BVDOutbreakSize releases.
 - `models`: the model interface, registry, persistence and the renewal
   variants (`models.renewal`).
 - `model`: the PyRenew renewal model (JAX), imported lazily.
-- `bvd`: BVDOutbreakSize estimates as of a forecast's cut-off.
-- `delays`, `latent` and `observation`: NumPy references for the model's
-  delay, renewal and observation layers.
 - `hub`: write and check submission files and model metadata.
 - `scoring` and `backtest`: score forecasts over vintages, with a
   development and held-out split.
@@ -23,16 +20,10 @@ The package has these parts:
 from bdbv_hub_renewal import (
     backtest,
     data,
-    dates,
-    delays,
     hub,
-    latent,
     models,
-    observation,
     plots,
     scoring,
-    simulate,
-    vintages,
 )
 from bdbv_hub_renewal.backtest import (
     BacktestConfig,
@@ -56,16 +47,12 @@ __all__ = [
     "ForecastTask",
     "backtest",
     "data",
-    "dates",
-    "delays",
     "get_model",
     "hub",
-    "latent",
     "load_config",
     "load_delays",
     "load_target",
     "models",
-    "observation",
     "plot_nowcast",
     "plots",
     "register_model",
@@ -73,9 +60,7 @@ __all__ = [
     "run_development",
     "score_forecasts",
     "scoring",
-    "simulate",
     "to_hub_table",
     "validate_submission",
-    "vintages",
 ]
 __version__ = "0.1.0"

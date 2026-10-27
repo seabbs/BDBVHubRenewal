@@ -4,7 +4,7 @@ import datetime as dt
 
 import pytest
 
-from bdbv_hub_renewal.dates import (
+from bdbv_hub_renewal.data.dates import (
     HUB_TIMEZONE,
     epiweek_end,
     horizon_weeks,

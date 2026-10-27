@@ -21,7 +21,7 @@ from bdbv_hub_renewal.data import (
     vintages,
 )
 
-DATA = Path(__file__).resolve().parents[1] / "data"
+DATA = Path(__file__).resolve().parents[2] / "data"
 
 
 def _write(path: Path, rows: list[dict[str, object]]) -> Path:

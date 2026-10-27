@@ -37,7 +37,7 @@ def backsample(missing: ArrayLike, pmf: ArrayLike) -> ArrayLike:
     r"""Spread missing-onset cases back from report day with a delay pmf.
 
     $a(s) = \sum_d m(s + d) \hat f(d)$, the hub's back-sampling in
-    expectation (`bdbv_hub_renewal.observation.expected_imputed_onsets`).
+    expectation (`bdbv_hub_renewal.data.delays.expected_imputed_onsets`).
     Mass that would fall before day 0 is lost.
 
     Parameters
