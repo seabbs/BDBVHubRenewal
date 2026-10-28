@@ -173,5 +173,12 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 # The model code came from the prototype and is not yet strict-mypy clean.
 # `forecasters/renewal.py`, which wraps it, is checked in full.
-module = ["bdbv_hub_renewal.model", "bdbv_hub_renewal.model.*"]
+module = [
+  "bdbv_hub_renewal.model",
+  "bdbv_hub_renewal.model.delays",
+  "bdbv_hub_renewal.model.inputs",
+  "bdbv_hub_renewal.model.model",
+  "bdbv_hub_renewal.model.renewal",
+  "bdbv_hub_renewal.model.rt",
+]
 ignore_errors = true
