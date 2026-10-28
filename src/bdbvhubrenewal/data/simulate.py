@@ -306,25 +306,28 @@ class SimulatedOutbreak:
         pandas.DataFrame
             Rows as `bdbvhubrenewal.data.load_health_zones`: `vintage`,
             `location`, `location_name`, `province`, `target_end_date`,
-            `total`.
+            with `observed` (known onsets) and `imputed` beside `total`.
         """
         day = as_date(as_of)
         known, missing, imputed_onset = self._published(day, rng)
         onset = pd.concat([known["onset_date"], imputed_onset])
         both = pd.concat([known, missing])
         week = onset.map(lambda x: epiweek_end(x.date()).isoformat())
-        out = (
-            pd.DataFrame(
-                {
-                    "location": both["zone"].to_numpy(),
-                    "province": both["location"].to_numpy(),
-                    "target_end_date": week.to_numpy(),
-                }
-            )
-            .value_counts()
-            .rename("total")
-            .reset_index()
+        cases = pd.DataFrame(
+            {
+                "location": both["zone"].to_numpy(),
+                "province": both["location"].to_numpy(),
+                "target_end_date": week.to_numpy(),
+                "observed": np.r_[
+                    np.ones(len(known), int), np.zeros(len(missing), int)
+                ],
+            }
         )
+        cases["imputed"] = 1 - cases["observed"]
+        out = cases.groupby(
+            ["location", "province", "target_end_date"], as_index=False
+        )[["observed", "imputed"]].sum()
+        out["total"] = out["observed"] + out["imputed"]
         out = out.loc[out["location"] != ""]
         out["location_name"] = out["location"]
         out["vintage"] = day.isoformat()
@@ -334,6 +337,8 @@ class SimulatedOutbreak:
             "location_name",
             "province",
             "target_end_date",
+            "observed",
+            "imputed",
             "total",
         ]
         return out[cols].reset_index(drop=True)
