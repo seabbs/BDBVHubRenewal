@@ -163,7 +163,7 @@ Forecasts from vintages of a [simulated outbreak](methods/data.md#simulated-vint
   ![Mean WIS by horizon on simulated vintages.](figures/recovery-wis-horizon-dark.svg#only-dark)
   <figcaption markdown="1">
     Mean WIS by horizon on simulated vintages.
-    Rt recovery against the true values is on the [Model building](development/model-building.md) page.
+    Rt recovery against the true values is on the [Model building](model-development/model-building.md) page.
   </figcaption>
 </figure>
 
