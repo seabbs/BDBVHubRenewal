@@ -315,6 +315,75 @@ def _persistence_bias(scores: pd.DataFrame) -> str:
     )
 
 
+_LADDER_SECTIONS = (
+    (
+        "Rungs",
+        "What each rung adds, and what was decided.",
+        ("step", "rung", "description", "decision"),
+    ),
+    (
+        "Sampler",
+        "Sampler diagnostics of the fit to the real vintage.",
+        (
+            "real_seconds",
+            "real_max_rhat",
+            "real_min_ess",
+            "real_min_ess_per_s",
+            "real_divergent",
+            "real_depth_hits",
+        ),
+    ),
+    (
+        "Recovery",
+        "Fits to a simulated outbreak with known parameters.",
+        (
+            "sim_max_rhat",
+            "sim_rt_mae",
+            "sim_turn_error",
+            "sim_ppc90",
+            "sim_crps_national",
+            "sim_crps_province",
+            "sim_cov90_national_ahead",
+            "sim_cov90_province_ahead",
+        ),
+    ),
+    (
+        "Scores",
+        "Forecasts from the real vintage, scored against a later one.",
+        (
+            "real_ppc90",
+            "real_crps_national",
+            "real_crps_province",
+            "real_cov90_national_now",
+            "real_cov90_national_ahead",
+            "real_cov90_province_now",
+            "real_cov90_province_ahead",
+            "prior_wild",
+        ),
+    ),
+)
+"""Sections of the Model building page, with the ladder columns each shows."""
+
+
+def _ladder_page(path: Path) -> str:
+    """Return the Model building tables from the ladder results."""
+    if not path.exists() or path.stat().st_size <= 1:
+        return "The ladder has not been run yet.\n"
+    ladder = pd.read_csv(path)
+    if "step" in ladder:
+        ladder = ladder.sort_values("step")
+    parts = []
+    for title, lead, columns in _LADDER_SECTIONS:
+        cols = [c for c in columns if c in ladder]
+        if not cols:
+            continue
+        if "rung" not in cols:
+            cols = ["rung", *cols]
+        table = ladder[cols].round(3).to_markdown(index=False, missingval="")
+        parts.append(f"## {title}\n\n{lead}\n\n{table}\n")
+    return "\n".join(parts)
+
+
 def _lopo_section(path: Path) -> str:
     """Return the leave-one-province-out section, or nothing without results."""
     if not path.exists() or path.stat().st_size <= 1:
@@ -471,6 +540,7 @@ def _backtest_page(
                     fig / f"forecasts-{kind}-{slug}.svg",
                 )
     _write(gen / "lopo-section.md", _lopo_section(res / "lopo-scores.csv"))
+    _write(gen / "ladder.md", _ladder_page(res / "ladder.csv"))
     rec_path = res / "recovery-scores.csv"
     if rec_path.exists():
         rscores = pd.read_csv(rec_path)

@@ -37,6 +37,7 @@ nav:
       - Setup: submission/setup.md
       - Rounds: submission/rounds/index.md
   - Development:
+      - Model building: development/model-building.md
       - Adding a model: development/adding-a-model.md
       - CLI: development/cli.md
   - API reference:
