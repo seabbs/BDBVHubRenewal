@@ -418,3 +418,15 @@ def test_baseline_track_falls_back_to_persistence(tmp_path: Path) -> None:
     chain(c, persistencenow=(None, "fail"), persistence=(None, "pass"))
     prov = run_select(pol, c, tmp_path / "g", always("pass"), retried=False)
     assert prov["selected"] == "persistence"
+
+
+def test_baseline_track_lists_no_shadows(tmp_path: Path) -> None:
+    # The seabbs-baseline track fits no renewal candidates, so its pull
+    # request has no shadow section.
+    pol = POLICY.for_model("persistencenow")
+    c = tmp_path / "c"
+    chain(c, persistencenow=(None, "pass"), persistence=(None, "pass"))
+    prov = run_select(
+        pol, c, tmp_path / "g", always("pass"), retried=False, shadows=False
+    )
+    assert prov["shadows"] == []
