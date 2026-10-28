@@ -21,7 +21,8 @@ The tidy data in `data/` are committed, so nothing needs downloading to start.
 ## Fit the model
 
 This is a small fit of the main variant, `renewal`, to the latest vintage.
-It uses 2 chains of 200 warm-up and 200 draws, so it runs in about 4 minutes on a laptop.
+It uses 2 chains of 200 warm-up and 200 draws.
+On 2 cores it took 18 minutes and peaked at 2 GB of memory.
 The submission workflow uses 4 chains of 1000 each.
 
 ```console
@@ -47,10 +48,10 @@ From this run:
 
 | Chain | Draws | Divergences | Share at depth cap | Mean acceptance | E-BFMI | Step size |
 |---|---|---|---|---|---|---|
-| 0 | 200 | 0 | 1.00 | 0.95 | 0.78 | 0.0023 |
-| 1 | 200 | 2 | 0.99 | 0.97 | 0.81 | 0.0020 |
+| 0 | 200 | 0 | 1.00 | 0.93 | 0.64 | 0.0061 |
+| 1 | 200 | 1 | 0.99 | 0.93 | 0.67 | 0.0056 |
 
-The worst R-hat is 1.15, for a step of the national $R(t)$ walk.
+The worst R-hat is 1.68, for a province offset of the starting imputed share $\pi$.
 A run this short is for checking the pipeline, not for submission.
 
 ## Forecast from the fit
@@ -81,7 +82,7 @@ $ uv run bdbv-hub-renewal plot-ppc --ppc output/fits/main/ppc.json --out ppc.png
 
 ![Posterior predictive intervals of the known and imputed onsets in the data vintage, by province, against the data.](assets/getting-started/ppc.png)
 
-In this run, 26 of 27 national weeks of known onsets fall in the 90% predictive interval, and all 27 weeks of imputed onsets.
+In this run, all 27 national weeks of known onsets and all 27 weeks of imputed onsets fall in the 90% predictive interval.
 
 ## Run the evaluation
 
