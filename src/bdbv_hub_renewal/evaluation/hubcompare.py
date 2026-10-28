@@ -24,7 +24,7 @@ vintage exists.
 `display_names` maps model ids to the labels shown: `named` keeps them,
 `anonymised` replaces other teams with Team A, Team B and so on, and
 `epiforecasts` keeps epiforecasts models only.
-`bdbv_hub_renewal.plots.plot_comparison` draws them side by side.
+`bdbv_hub_renewal.reporting.plots.plot_comparison` draws them side by side.
 """
 
 from __future__ import annotations

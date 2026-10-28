@@ -543,7 +543,7 @@ def _write_national_sidecar(
 
 
 def _plot_submission(args: argparse.Namespace) -> int:
-    from bdbv_hub_renewal.plots import plot_submission
+    from bdbv_hub_renewal.reporting.plots import plot_submission
 
     target = load_target(args.data)
     real = target.loc[target["kind"] == "real"]
@@ -764,7 +764,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _chosen_model(args)
     if args.command == "compare-hub":
         return _compare_hub(args)
-    from bdbv_hub_renewal.report import make_report
+    from bdbv_hub_renewal.reporting.report import make_report
 
     make_report(figures=args.figures, generated=args.generated)
     from bdbv_hub_renewal.submission.rounds import make_round_pages

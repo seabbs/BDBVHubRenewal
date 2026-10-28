@@ -52,7 +52,7 @@ from bdbv_hub_renewal.forecasters.base import (
     get_model,
     list_models,
 )
-from bdbv_hub_renewal.plots import (
+from bdbv_hub_renewal.reporting.plots import (
     plot_comparison,
     plot_delay_distribution,
     plot_delays_over_time,

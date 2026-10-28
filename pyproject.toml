@@ -152,7 +152,7 @@ files = ["src"]
 
 [[tool.mypy.overrides]]
 # matplotlib's date locators and formatters are untyped.
-module = ["bdbv_hub_renewal.plots"]
+module = ["bdbv_hub_renewal.reporting.plots"]
 disallow_untyped_calls = false
 
 [[tool.mypy.overrides]]

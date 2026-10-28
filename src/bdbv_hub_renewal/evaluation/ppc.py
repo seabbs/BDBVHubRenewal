@@ -31,7 +31,7 @@ from matplotlib.dates import DateFormatter
 from matplotlib.figure import Figure
 from numpy.typing import ArrayLike
 
-from bdbv_hub_renewal.plots import _grid, model_colour, theme
+from bdbv_hub_renewal.reporting.plots import _grid, model_colour, theme
 
 __all__ = [
     "SCHEMA_VERSION",

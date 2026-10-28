@@ -86,28 +86,16 @@ hub/             model metadata YAML
 results/         score tables and the model choice record
 scripts/         hubValidations runner (R), diagram build
 src/bdbv_hub_renewal/
-  data.py        download, tidy and load the hub data
-  dates.py       epi weeks, reference dates and submission windows
-  vintages.py    reconstructed vintages
-  simulate.py    simulated outbreaks published as vintages
-  models/        model interface, registry, persistence and the renewal
-                 variants (renewal.py)
+  data/          hub data, dates, reconstructed and simulated vintages,
+                 delays and BVDOutbreakSize releases
   model/         the PyRenew renewal model (JAX)
-  delays.py      delay interface and the empirical estimator
-  latent.py      renewal with importation and depletion (reference)
-  observation.py known onsets and the hub's imputation (reference)
-  hub.py         submission writer, checks and metadata
-  hub_validate.py the hub's checks in Python (hub validation bundle)
-  fitting.py     fit configs for the submission workflow
-  ppc.py         posterior predictive check summaries and plot
-  scoring.py     WIS, coverage, bias and relative skill
-  backtest.py    rolling-origin backtest, scored against each later vintage
-  heldout.py     model choice record and rolling held-out evaluation
-  hubcompare.py  comparison with the forecasts submitted to the hub
-  plots.py       figures, including plot_nowcast
-  report.py      docs figures and tables
+  forecasters/   the forecaster interface, registry, persistence and the
+                 renewal variants
+  evaluation/    scoring, backtest, held-out evaluation, PPC, hub comparison
+  submission/    hub file writer and checks, metadata, CI fit configs, rounds
+  reporting/     figures and docs tables
   cli.py         the bdbv-hub-renewal command
-tests/
+tests/           mirrors src/
 ```
 
 ## Data credit

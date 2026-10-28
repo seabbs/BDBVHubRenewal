@@ -39,7 +39,15 @@ nav:
   - Development:
       - Adding a model: development/adding-a-model.md
       - CLI: development/cli.md
-  - API reference: reference.md
+  - API reference:
+      - reference/index.md
+      - Data: reference/data.md
+      - Model: reference/model.md
+      - Forecasters: reference/forecasters.md
+      - Evaluation: reference/evaluation.md
+      - Submission: reference/submission.md
+      - Reporting: reference/reporting.md
+      - CLI: reference/cli.md
   - Citation and licence: citation.md
 
 theme:

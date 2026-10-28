@@ -16,7 +16,7 @@ from bdbv_hub_renewal.evaluation.hubcompare import (
     our_forecasts,
     score_comparison,
 )
-from bdbv_hub_renewal.plots import plot_comparison
+from bdbv_hub_renewal.reporting.plots import plot_comparison
 
 WEEKS = ["2026-09-19", "2026-09-26", "2026-10-03", "2026-10-10"]
 

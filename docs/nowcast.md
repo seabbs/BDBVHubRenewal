@@ -19,10 +19,10 @@ Weeks before the band are treated as complete by persistence.
 
 --8<-- "nowcast-tabs.md"
 
-The figure comes from [`plot_nowcast`][bdbv_hub_renewal.plots.plot_nowcast], which the submission pull request will also embed:
+The figure comes from [`plot_nowcast`][bdbv_hub_renewal.reporting.plots.plot_nowcast], which the submission pull request will also embed:
 
 ```python
-from bdbv_hub_renewal.plots import plot_nowcast
+from bdbv_hub_renewal.reporting.plots import plot_nowcast
 
 fig = plot_nowcast(location="CD-IT", vintage="2026-10-24")
 fig.savefig("nowcast-cd-it.png")

@@ -12,7 +12,8 @@ The package has these parts:
   fit configurations and the submitted rounds.
 - `evaluation`: scoring, the backtest, held-out evaluation, posterior
   predictive checks and the comparison with hub forecasts.
-- `plots` and `report`: figures and docs tables.
+- `reporting`: figures and docs tables.
+- `cli`: the `bdbv-hub-renewal` command.
 
 - Repository: <https://github.com/seabbs/BDBVHubRenewal>
 - Docs: <https://seabbs.github.io/BDBVHubRenewal/>
@@ -22,7 +23,7 @@ from bdbv_hub_renewal import (
     data,
     evaluation,
     forecasters,
-    plots,
+    reporting,
     submission,
 )
 from bdbv_hub_renewal.data import load_delays, load_target
@@ -38,7 +39,7 @@ from bdbv_hub_renewal.forecasters import (
     get_model,
     register_model,
 )
-from bdbv_hub_renewal.plots import plot_nowcast
+from bdbv_hub_renewal.reporting.plots import plot_nowcast
 from bdbv_hub_renewal.submission.hub import to_hub_table, validate_submission
 
 __all__ = [
@@ -53,9 +54,9 @@ __all__ = [
     "load_delays",
     "load_target",
     "plot_nowcast",
-    "plots",
     "register_model",
     "relative_skill",
+    "reporting",
     "run_development",
     "score_forecasts",
     "submission",

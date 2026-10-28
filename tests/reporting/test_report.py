@@ -5,10 +5,10 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbv_hub_renewal import report
 from bdbv_hub_renewal.evaluation.backtest import BacktestConfig, load_config
+from bdbv_hub_renewal.reporting import report
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_relative_section_hidden_with_one_model() -> None:
