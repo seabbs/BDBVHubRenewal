@@ -14,6 +14,7 @@ output/
 docs/figures/*.svg
 docs/figures/comparison/
 docs/generated/
-# Pages of submitted rounds: built from the submission-ledger branch.
+# Pages of submitted rounds: copied (frozen) or built from the
+# submission-ledger branch at each docs build.
 docs/submission/rounds/
 tests/results/

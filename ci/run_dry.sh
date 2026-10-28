@@ -238,6 +238,26 @@ ledger() {
   git -C "$origin" show submission-ledger:state.json \
     | python3 -c "import json,sys; r=json.load(sys.stdin)['rounds']['2026-11-07']; assert r['status']=='submitted' and len(r['history'])==2"
   echo "=== ledger ===" && echo "ok: state.json and archive/2026-11-07/{101,102} on submission-ledger"
+
+  # freeze.sh, with a `gh` that says the round's pull request merged:
+  # the page is frozen once, and a second run leaves it alone.
+  mkdir -p "$ROOT/merged-bin"
+  printf '#!/usr/bin/env bash\necho MERGED\n' > "$ROOT/merged-bin/gh"
+  chmod +x "$ROOT/merged-bin/gh"
+  local before
+  for pass in 1 2; do
+    (cd "$repo" && PATH="$ROOT/merged-bin:$PATH" WORK="$ROOT/freeze" \
+      "$CI_DIR/steps/freeze.sh" > "$ROOT/freeze-$pass.log" 2>&1) \
+      || { echo "FAIL: freeze pass $pass"; cat "$ROOT/freeze-$pass.log"; return 1; }
+    [ "$pass" = 1 ] && before=$(git -C "$origin" rev-parse submission-ledger)
+  done
+  git -C "$origin" show submission-ledger:pages/2026-11-07.md | grep -q "# Round" \
+    || { echo "FAIL: no frozen page"; return 1; }
+  [ "$(git -C "$origin" rev-parse submission-ledger)" = "$before" ] \
+    || { echo "FAIL: the second freeze changed the ledger"; return 1; }
+  grep -q "Froze 0" "$ROOT/freeze-2.log" \
+    || { echo "FAIL: second freeze"; cat "$ROOT/freeze-2.log"; return 1; }
+  echo "ok: pages/2026-11-07.md frozen once on submission-ledger"
 }
 
 no_new_data() {

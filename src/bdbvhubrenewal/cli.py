@@ -329,6 +329,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Download the hub files first.",
     )
 
+    frz = sub.add_parser(
+        "freeze-round",
+        help="Write a round's docs page to the ledger once, after its PR "
+        "merged.",
+    )
+    frz.add_argument("--ledger", required=True)
+    frz.add_argument("--round", required=True)
+
     rep = sub.add_parser("report", help="Make the docs figures and tables.")
     rep.add_argument("--figures", default="docs/figures")
     rep.add_argument("--generated", default="docs/generated")
@@ -856,6 +864,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _chosen_model(args)
     if args.command == "compare-hub":
         return _compare_hub(args)
+    if args.command == "freeze-round":
+        from bdbvhubrenewal.submission.rounds import freeze_round
+
+        wrote = freeze_round(args.ledger, args.round)
+        print(
+            f"Round {args.round}: "
+            + ("page frozen." if wrote else "already frozen.")
+        )
+        return 0
     from bdbvhubrenewal.reporting.report import make_report
 
     make_report(figures=args.figures, generated=args.generated)

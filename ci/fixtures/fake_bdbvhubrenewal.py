@@ -386,6 +386,15 @@ def cmd_plot(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_freeze(args: argparse.Namespace) -> int:
+    """Write the round's page once, as the real `freeze-round` does."""
+    page = Path(args.ledger) / "pages" / f"{args.round}.md"
+    if not page.exists():
+        page.parent.mkdir(parents=True, exist_ok=True)
+        page.write_text(f"# Round {args.round}\n")
+    return 0
+
+
 def main() -> int:
     p = argparse.ArgumentParser(prog="bdbvhubrenewal")
     p.add_argument("--version", action="store_true")
@@ -415,6 +424,9 @@ def main() -> int:
     b = sub.add_parser("bvd")
     b.add_argument("--vintages", nargs="*", default=None)
     sub.add_parser("hub-id")
+    fr = sub.add_parser("freeze-round")
+    fr.add_argument("--ledger", required=True)
+    fr.add_argument("--round", required=True)
     co = sub.add_parser("coherence")
     co.add_argument("--vintage", required=True)
     co.add_argument("--out", required=True)
@@ -434,6 +446,7 @@ def main() -> int:
         ),
         "bvd": lambda _a: 0,
         "hub-id": lambda _a: print("epiforecasts-seabbsrenewal") or 0,
+        "freeze-round": cmd_freeze,
     }[args.command](args)
 
 

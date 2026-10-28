@@ -26,6 +26,8 @@ on:
     # if it can finish in time (ci/policy.toml [timing]), so even a late
     # failure reaches the fallback or persistence before the close.
     - cron: '0 2-14/3 * * 2'
+    # Outside the window, only to freeze the pages of merged rounds.
+    - cron: '0 6 * * 3-5'
   workflow_dispatch:
     inputs:
       dry_run:
@@ -127,6 +129,30 @@ jobs:
           [ "$IGNORE_WINDOW" = true ] && args+=(--ignore-window)
           [ -n "$REFERENCE_DATE" ] && args+=(--reference-date "$REFERENCE_DATE")
           uv run --project "$CI_DIR" detect-new-vintage "${args[@]}"
+
+  # Whatever the data: a round whose hub pull request has merged gets its
+  # docs page written once to the ledger, and is never rebuilt after.
+  freeze:
+    name: Freeze merged rounds' pages
+    needs: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-forecast-env
+      - name: Freeze
+        id: freeze
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ci/steps/freeze.sh
+      - name: Rebuild the docs with the frozen pages
+        if: steps.freeze.outputs.frozen != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --ref main -R "$GITHUB_REPOSITORY"
 
   prepare:
     name: Pin inputs and build the persistence candidate
