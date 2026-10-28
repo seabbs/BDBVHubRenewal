@@ -15,7 +15,7 @@ task ci-dry     # the submission workflow dry runs
 task docs       # the site, built in strict mode
 ```
 
-`task test` leaves out the model fit tests (marked `slow`), which take several minutes.
+`task test` leaves out the model fit tests (marked `slow`).
 The CI runs them on every push to main.
 Any change to `src/bdbv_hub_renewal/model/`, the simulator or the renewal forecaster needs `task test-all` to pass first.
 

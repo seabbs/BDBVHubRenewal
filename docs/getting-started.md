@@ -20,14 +20,10 @@ The tidy data in `data/` are committed, so nothing needs downloading to start.
 
 ## Fit the model
 
-This is a small fit of the main variant, `renewal`, to the latest vintage.
-It uses 2 chains of 200 warm-up and 200 draws.
-On 2 cores it took 18 minutes and peaked at 2 GB of memory.
-The submission workflow uses 2 chains of 500 warm-up and 500 draws.
+This fits the main variant, `renewal`, to the latest vintage, with the sampler settings the submission workflow uses.
 
 ```console
 $ uv run bdbv-hub-renewal fit --model renewal --config main \
-    --sampler-json '{"num_chains": 2, "num_warmup": 200, "num_samples": 200}' \
     --out output/fits/main
 Fitted config 'main' on vintage 2026-10-24 (sampler nuts); wrote output/fits/main.
 ```
@@ -44,15 +40,6 @@ The fit directory holds what the submission workflow reads:
 
 Each chain in `diagnostics.json` reports divergences, the share of draws at the tree depth cap, the mean acceptance, E-BFMI and the step size.
 `worst_rhat` lists the ten parameters with the highest R-hat.
-From this run:
-
-| Chain | Draws | Divergences | Share at depth cap | Mean acceptance | E-BFMI | Step size |
-|---|---|---|---|---|---|---|
-| 0 | 200 | 0 | 1.00 | 0.93 | 0.64 | 0.0061 |
-| 1 | 200 | 1 | 0.99 | 0.93 | 0.67 | 0.0056 |
-
-The worst R-hat is 1.68, for a province offset of the starting imputed share $\pi$.
-A run this short is for checking the pipeline, not for submission.
 
 ## Forecast from the fit
 
@@ -82,27 +69,4 @@ $ uv run bdbv-hub-renewal plot-ppc --ppc output/fits/main/ppc.json --out ppc.png
 
 ![Posterior predictive intervals of the known and imputed onsets in the data vintage, by province, against the data.](assets/getting-started/ppc.png)
 
-In this run, all 27 national weeks of known onsets and all 27 weeks of imputed onsets fall in the 90% predictive interval.
-
-## Run the evaluation
-
-```bash
-task backtest           # development backtest and recovery check
-task backtest-lopo      # leave one province out
-task backtest-heldout   # score the held-out vintages
-task docs               # build this site into _site/
-```
-
-The backtest fits use the `[sampler]` settings in `config/backtest.toml`, 2 chains of 500 warm-up and 500 draws.
-`BDBV_RENEWAL_SAMPLER` overrides them, for example `'{"num_chains": 2, "num_warmup": 300, "num_samples": 300}'`.
-Each forecast of a renewal variant is a fit, so a full backtest takes hours.
-`--models` runs some models and keeps the others' rows in `results/`, which is committed.
-The docs build runs only persistence and reads the variants from there.
-
-The comparison with hub forecasts downloads other teams' files, so it is run on its own:
-
-```bash
-uv run bdbv-hub-renewal compare-hub --fetch
-```
-
-Every command is listed on the [CLI page](development/cli.md).
+The [CLI page](development/cli.md) lists every command, including the backtest and the other evaluations.
