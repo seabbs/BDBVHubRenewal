@@ -22,10 +22,14 @@ $$\iota_p(s) = \sum_{t = s}^{T} \hat f(t - s) c(t) M_p(t).$$
 
 from __future__ import annotations
 
+from functools import reduce
+from typing import cast
+
 import jax
 import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
+from jax import Array
 from jax.typing import ArrayLike
 from pyrenew.deterministic import DeterministicPMF
 from pyrenew.metaclass import RandomVariable
@@ -37,7 +41,7 @@ from pyrenew.time import daily_to_weekly
 _FLOOR = 1e-6
 
 
-def backsample(missing: ArrayLike, pmf: ArrayLike) -> ArrayLike:
+def backsample(missing: Array, pmf: Array) -> Array:
     r"""Spread missing-onset cases back from report day with a delay pmf.
 
     $a(s) = \sum_d m(s + d) \hat f(d)$, the hub's back-sampling in
@@ -46,35 +50,35 @@ def backsample(missing: ArrayLike, pmf: ArrayLike) -> ArrayLike:
 
     Parameters
     ----------
-    missing : ArrayLike
+    missing : Array
         Missing-onset cases by report day, shape `(n,)`.
-    pmf : ArrayLike
+    pmf : Array
         Delay pmf on 0..D.
 
     Returns
     -------
-    ArrayLike
+    Array
         Expected cases by onset day, shape `(n,)`.
     """
     n = missing.shape[0]
     return jnp.convolve(missing[::-1], pmf, mode="full")[:n][::-1]
 
 
-def _nowcast(draws: ArrayLike, vintage: ArrayLike | None) -> ArrayLike:
+def _nowcast(draws: Array, vintage: Array | None) -> Array:
     """Add the draw of later reports to the vintage counts, or their draw."""
     if vintage is None:
         return draws[0] + draws[1]
     return jnp.where(jnp.isnan(vintage), draws[0], vintage) + draws[1]
 
 
-def _recentred(draws: ArrayLike, vintage: ArrayLike | None) -> ArrayLike:
+def _recentred(draws: Array, vintage: Array | None) -> Array:
     """Take the final draw where it was centred on the vintage count."""
     if vintage is None:
         return draws[0] + draws[1]
     return jnp.where(jnp.isnan(vintage), draws[0] + draws[1], draws[1])
 
 
-def skew(x: ArrayLike, width: int) -> ArrayLike:
+def skew(x: Array, width: int) -> Array:
     r"""Shift row $s$ of `x` right by $s$: `out[s, s + d] = x[s, d]`.
 
     Pad, flatten and reshape, so the adjoint is also a reshape and needs
@@ -82,7 +86,7 @@ def skew(x: ArrayLike, width: int) -> ArrayLike:
 
     Returns
     -------
-    ArrayLike
+    Array
         Shape `(n, width)`.
     """
     n, k = x.shape
@@ -90,12 +94,12 @@ def skew(x: ArrayLike, width: int) -> ArrayLike:
     return padded.reshape(-1)[: n * width].reshape(n, width)
 
 
-def unskew(b: ArrayLike, k: int) -> ArrayLike:
+def unskew(b: Array, k: int) -> Array:
     """Inverse of `skew`: `out[s, d] = b[s, s + d]` for `d < k`.
 
     Returns
     -------
-    ArrayLike
+    Array
         Shape `(n, k)`.
     """
     n, width = b.shape
@@ -103,7 +107,7 @@ def unskew(b: ArrayLike, k: int) -> ArrayLike:
     return flat.reshape(n, width + 1)[:, :k]
 
 
-def published_by(n: int, lag_pmf: ArrayLike | None) -> ArrayLike:
+def published_by(n: int, lag_pmf: Array | None) -> Array:
     r"""Probability that a report on day $t$ is published by day $n - 1$.
 
     $c(t) = F_\ell(n - 1 - t)$, with $F_\ell$ the cdf of the report to
@@ -114,12 +118,12 @@ def published_by(n: int, lag_pmf: ArrayLike | None) -> ArrayLike:
     ----------
     n : int
         Number of report days, the last being the cut-off. Static.
-    lag_pmf : ArrayLike or None
+    lag_pmf : Array or None
         Lag pmf on $0..L$. `None` is no lag.
 
     Returns
     -------
-    ArrayLike
+    Array
         Shape `(n,)`.
     """
     if lag_pmf is None:
@@ -132,15 +136,15 @@ def published_by(n: int, lag_pmf: ArrayLike | None) -> ArrayLike:
 
 
 def onset_expectations(
-    onsets: ArrayLike,
-    delay: ArrayLike,
-    missing: ArrayLike,
-    hub_delay: ArrayLike,
+    onsets: Array,
+    delay: Array,
+    missing: Array,
+    hub_delay: Array,
     cutoff: int,
     final: bool = True,
-    publication_lag: ArrayLike | None = None,
+    publication_lag: Array | None = None,
     weekly: bool = False,
-) -> dict[str, ArrayLike]:
+) -> dict[str, Array]:
     r"""Compute expected known and imputed onsets by the cut-off and eventually.
 
     With $A_{st} = f_s(t - s)$ the onset-by-report-day delay matrix and
@@ -158,20 +162,20 @@ def onset_expectations(
 
     Parameters
     ----------
-    onsets : ArrayLike
+    onsets : Array
         $\lambda_p(s)$, shape `(n, P)`.
-    delay : ArrayLike
+    delay : Array
         $f_s(d)$, shape `(n, D + 1)`.
-    missing : ArrayLike
+    missing : Array
         $\pi_p(t)$ by report day, shape `(n, P)`.
-    hub_delay : ArrayLike
+    hub_delay : Array
         The hub's empirical pmf $\hat f$.
     cutoff : int
         Cut-off day $T$ on the same axis. Static.
     final : bool, optional
         Also compute the final counts. Fitting does not need them, and
         skipping them saves about a fifth of the gradient cost.
-    publication_lag : ArrayLike, optional
+    publication_lag : Array, optional
         Pmf of the report to publication lag on $0..L$. `None` publishes
         every report on its report day.
     weekly : bool, optional
@@ -224,12 +228,12 @@ def onset_expectations(
     }
 
 
-def _windows(x: ArrayLike, n_w: int, k: int) -> ArrayLike:
+def _windows(x: Array, n_w: int, k: int) -> Array:
     """`out[w, i] = x[7w + i]` for `i < 7k`, from stacked reshapes.
 
     Returns
     -------
-    ArrayLike
+    Array
         Shape `(n_w, 7 k, P)` for `x` of shape `(m, P)`.
     """
     pad = 7 * (n_w + k) - x.shape[0]
@@ -238,30 +242,31 @@ def _windows(x: ArrayLike, n_w: int, k: int) -> ArrayLike:
     return out.reshape(n_w, 7 * k, -1)
 
 
-def _overlap_add(r: ArrayLike, n_w: int, k: int, width: int) -> ArrayLike:
+def _overlap_add(r: Array, n_w: int, k: int, width: int) -> Array:
     """Sum windows back onto the day axis, the adjoint of `_windows`.
 
     Returns
     -------
-    ArrayLike
+    Array
         Shape `(width, P)`.
     """
     r = r.reshape(n_w, k, 7, -1)
-    total = sum(
-        jnp.pad(r[:, j], ((j, k - j), (0, 0), (0, 0))) for j in range(k)
+    total = reduce(
+        jnp.add,
+        [jnp.pad(r[:, j], ((j, k - j), (0, 0), (0, 0))) for j in range(k)],
     )
     return total.reshape(7 * (n_w + k), -1)[:width]
 
 
 def _weekly_blocks(
-    onsets: ArrayLike,
-    delay: ArrayLike,
-    missing: ArrayLike,
-    hub_delay: ArrayLike,
+    onsets: Array,
+    delay: Array,
+    missing: Array,
+    hub_delay: Array,
     cutoff: int,
     final: bool,
-    publication_lag: ArrayLike | None,
-) -> dict[str, ArrayLike]:
+    publication_lag: Array | None,
+) -> dict[str, Array]:
     r"""`onset_expectations` for a delay that changes only weekly.
 
     Onsets in week $w$ reach report days $7w$ to $7w + 6 + D$ only, so
@@ -296,7 +301,7 @@ def _weekly_blocks(
         [published_by(t1, publication_lag), jnp.zeros(width - t1)]
     )[:, None]
 
-    def ahead(blocks: ArrayLike, x: ArrayLike) -> ArrayLike:
+    def ahead(blocks: Array, x: Array) -> Array:
         # sum_d f_w(d) x(s + d) for every onset day s.
         out = jnp.einsum("wji,wip->wjp", blocks, _windows(x, n_w, k))
         return out.reshape(n, -1)
@@ -322,7 +327,7 @@ def _weekly_blocks(
     }
 
 
-class OnsetStreams(BaseObservationProcess):
+class OnsetStreams(BaseObservationProcess):  # type: ignore[misc]
     r"""Known and hub-imputed weekly onsets for each province.
 
     Expected confirmed onsets are $\lambda_p(s) = \alpha(s) I_p(s)$,
@@ -402,7 +407,7 @@ class OnsetStreams(BaseObservationProcess):
         import_scale_rv: RandomVariable | None = None,
         start_dow: int = 6,
         kernel_rv: RandomVariable | None = None,
-        publication_lag: RandomVariable | ArrayLike | None = None,
+        publication_lag: RandomVariable | Array | None = None,
         delay_overdispersion_rv: RandomVariable | None = None,
         weekly_delay: bool = False,
     ) -> None:
@@ -429,7 +434,7 @@ class OnsetStreams(BaseObservationProcess):
         """Return `"subpop"`."""
         return "subpop"
 
-    def _predicted_obs(self, infections: ArrayLike) -> ArrayLike:
+    def _predicted_obs(self, infections: Array) -> Array:
         """Return infections unchanged; see `onset_expectations`."""
         return infections
 
@@ -438,8 +443,8 @@ class OnsetStreams(BaseObservationProcess):
         n_total: int,
         n_subpops: int,
         cutoff: int | None = None,
-        known: ArrayLike | None = None,
-        imputed: ArrayLike | None = None,
+        known: Array | None = None,
+        imputed: Array | None = None,
         **kwargs: object,
     ) -> None:
         """Check the cut-off and the shapes of the weekly data.
@@ -459,49 +464,49 @@ class OnsetStreams(BaseObservationProcess):
                     f"{(n_total // 7, n_subpops)}."
                 )
 
-    def _weekly(self, x: ArrayLike, first_day_dow: int) -> ArrayLike:
-        return daily_to_weekly(x, first_day_dow, self.start_dow)
+    def _weekly(self, x: Array, first_day_dow: int) -> Array:
+        return jnp.asarray(daily_to_weekly(x, first_day_dow, self.start_dow))
 
     def sample(
         self,
-        infections: ArrayLike,
+        infections: Array,
         first_day_dow: int,
         cutoff: int,
-        hub_delay_pmf: ArrayLike,
-        known: ArrayLike | None = None,
-        imputed: ArrayLike | None = None,
-        delay_counts: ArrayLike | None = None,
-        inactive: ArrayLike | None = None,
-        import_kernel: ArrayLike | None = None,
+        hub_delay_pmf: Array,
+        known: Array | None = None,
+        imputed: Array | None = None,
+        delay_counts: Array | None = None,
+        inactive: Array | None = None,
+        import_kernel: Array | None = None,
         forecast: bool = False,
-        vintage: ArrayLike | None = None,
+        vintage: Array | None = None,
     ) -> ObservationSample:
         """Score or sample the two onset streams.
 
         Parameters
         ----------
-        infections : ArrayLike
+        infections : Array
             Infections by province, `(n_total, P)`.
         first_day_dow : int
             Day of week of element 0 of the model axis.
         cutoff : int
             Vintage cut-off $T$ as an index on the model axis.
-        hub_delay_pmf : ArrayLike
+        hub_delay_pmf : Array
             The hub's empirical delay pmf for this vintage.
-        known, imputed : ArrayLike, optional
+        known, imputed : Array, optional
             Weekly counts on the model's week grid, `(n_weeks, P)`, NaN
             where unobserved.
-        delay_counts : ArrayLike, optional
+        delay_counts : Array, optional
             Known-onset cases by onset week and delay, pooled over
             provinces, `(n_weeks, D + 1)`.
-        inactive : ArrayLike, optional
+        inactive : Array, optional
             Weekly total counts in provinces with no cases, `(n_weeks, Q)`.
-        import_kernel : ArrayLike, optional
+        import_kernel : Array, optional
             Kernel rows from the modelled provinces to those with no
             cases, `(P, Q)`. Needed with `import_scale_rv`.
         forecast : bool, optional
             Record the sum of the final draws of both streams.
-        vintage : ArrayLike, optional
+        vintage : Array, optional
             Known and imputed vintage counts, `(2, n_weeks, P)`, NaN
             where unobserved or held out. With `forecast`, the final
             draws add the cases still to be reported to these.
@@ -544,7 +549,7 @@ class OnsetStreams(BaseObservationProcess):
 
         if self.missing_fraction_rv is None:
             total = None
-            if known is not None:
+            if known is not None and imputed is not None:
                 total = known + imputed
             draws = self._score(
                 "total",
@@ -591,32 +596,39 @@ class OnsetStreams(BaseObservationProcess):
 
     def _score_imports(
         self,
-        onsets: ArrayLike,
-        kernel: ArrayLike,
-        counts: ArrayLike | None,
+        onsets: Array,
+        kernel: Array,
+        counts: Array | None,
         first_day_dow: int,
     ) -> None:
         """Importation-only expectation and likelihood for idle provinces."""
+        if self.import_scale_rv is None:
+            raise ValueError("Importations need `import_scale_rv`.")
         daily = self.import_scale_rv() * onsets @ kernel
         self._deterministic("expected_imports_daily", daily)
         weekly = jnp.maximum(self._weekly(daily, first_day_dow), _FLOOR)
-        mask = None if counts is None else ~jnp.isnan(counts)
-        with numpyro.handlers.mask(mask=True if mask is None else mask):
+        if counts is None:
+            numpyro.sample(
+                self._sample_site_name("inactive_obs"), dist.Poisson(weekly)
+            )
+            return
+        mask = ~jnp.isnan(counts)
+        with numpyro.handlers.mask(mask=mask):
             numpyro.sample(
                 self._sample_site_name("inactive_obs"),
                 dist.Poisson(weekly),
-                obs=None if counts is None else jnp.where(mask, counts, 0.0),
+                obs=jnp.where(mask, counts, 0.0),
             )
 
     def _score(
         self,
         stream: str,
         noise: CountNoise,
-        by_cutoff: ArrayLike,
-        final: ArrayLike,
-        obs: ArrayLike | None,
-        centre: ArrayLike | None = None,
-    ) -> ArrayLike:
+        by_cutoff: Array,
+        final: Array,
+        obs: Array | None,
+        centre: Array | None = None,
+    ) -> Array:
         """Score the vintage counts and draw the final counts in one site.
 
         Row 0 of the site is the vintage (scored where `obs` is not NaN),
@@ -630,19 +642,25 @@ class OnsetStreams(BaseObservationProcess):
             rest = jnp.where(jnp.isnan(centre), rest, centre + rest)
         predicted = jnp.maximum(jnp.stack([by_cutoff, rest]), _FLOOR)
         if obs is None:
-            return noise.sample(
-                self._sample_site_name(f"{stream}_obs"), predicted
+            return cast(
+                Array,
+                noise.sample(
+                    self._sample_site_name(f"{stream}_obs"), predicted
+                ),
             )
         obs = jnp.stack([obs, jnp.full_like(obs, jnp.nan)])
         mask = ~jnp.isnan(obs)
-        return noise.sample(
-            self._sample_site_name(f"{stream}_obs"),
-            predicted,
-            obs=jnp.where(mask, obs, 0.0),
-            mask=mask,
+        return cast(
+            Array,
+            noise.sample(
+                self._sample_site_name(f"{stream}_obs"),
+                predicted,
+                obs=jnp.where(mask, obs, 0.0),
+                mask=mask,
+            ),
         )
 
-    def _score_delays(self, triangle: ArrayLike, counts: ArrayLike) -> None:
+    def _score_delays(self, triangle: Array, counts: Array) -> None:
         totals = counts.sum(axis=1)
         probs = triangle / jnp.maximum(
             triangle.sum(axis=1, keepdims=True), 1e-12
@@ -698,7 +716,15 @@ class RtPseudoObservation:
         0 for the national level, 1 for a deviation from it, `(G,)`.
     """
 
-    def __init__(self, alpha, day, groups, values, scales, kinds) -> None:
+    def __init__(
+        self,
+        alpha: float,
+        day: int,
+        groups: ArrayLike,
+        values: ArrayLike,
+        scales: ArrayLike,
+        kinds: ArrayLike,
+    ) -> None:
         self.alpha = float(alpha)
         self.day = int(day)
         self.groups = jnp.asarray(groups, dtype=float)
@@ -708,11 +734,11 @@ class RtPseudoObservation:
 
     def log_group_rt(
         self,
-        rt: ArrayLike,
-        infections: ArrayLike,
+        rt: Array,
+        infections: Array,
         n_init: int,
-        fractions: ArrayLike | None = None,
-    ):
+        fractions: Array | None = None,
+    ) -> tuple[Array, Array]:
         """Return log $R_G(s_b)$ for each group and for the nation.
 
         Infections are per resident, so the weights are scaled by the
@@ -720,7 +746,7 @@ class RtPseudoObservation:
 
         Returns
         -------
-        tuple of ArrayLike
+        tuple of Array
             `(G,)` group values and the national scalar.
         """
         week = n_init + 7 * (self.day // 7)
@@ -729,18 +755,18 @@ class RtPseudoObservation:
             w = w * fractions
         r = rt[n_init + self.day]
 
-        def log_rt(member):
+        def log_rt(member: Array) -> Array:
             return jnp.log((member * w * r).sum(-1) / (member * w).sum(-1))
 
         return log_rt(self.groups), log_rt(jnp.ones_like(w))
 
     def sample(
         self,
-        rt: ArrayLike,
-        infections: ArrayLike,
+        rt: Array,
+        infections: Array,
         n_init: int,
-        fractions: ArrayLike | None = None,
-    ):
+        fractions: Array | None = None,
+    ) -> None:
         """Add the pseudo-likelihood and record its diagnostics."""
         group, national = self.log_group_rt(rt, infections, n_init, fractions)
         model = jnp.where(self.kinds == 0, group, group - national)
