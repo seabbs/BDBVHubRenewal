@@ -1,25 +1,18 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 r"""Simulate province outbreaks and publish them as hub-style vintages.
 
-The simulator follows the renewal model's structure, with known
-parameters, so recovery can be checked.
-Daily symptom onsets in province $p$ follow a renewal process with
-spatial importation and susceptible depletion,
-
-$$
-\lambda_p(t) = R_p(t)\,\frac{S_p(t)}{N_p}\sum_{s \ge 1} g(s)
-\Big[(1 - \varepsilon)\,I_p(t - s) + \varepsilon\sum_{q \ne p}
-K_{qp}\,I_q(t - s)\Big],
-\quad I_p(t) \sim \text{Poisson}(\lambda_p(t)),
-$$
-
-with $\log R_p(t) = \log R(t) + \delta_p$, a national $R(t)$ with a
-turning point, fixed province offsets $\delta_p$, a gravity kernel $K$
-and an effective population $N_p$.
-Each onset is confirmed with probability $\alpha(t)$ (ascertainment),
-reported after a delay with a Gamma distribution whose mean $\mu(t)$
-changes over time, and has its onset recorded with probability
-$1 - \pi(t)$.
+The simulator draws from the model's own components with known
+parameters, so recovery can be checked and there is one implementation
+of the maths. Expected daily onsets come from the model's renewal
+(`bdbv_hub_renewal.model.renewal.coupled_renewal`), with its generation
+interval, gravity kernel, importation and depletion of the effective
+population, for $\log R_p(t) = \log R(t) + \delta_p$ with a national
+$R(t)$ that turns and fixed province offsets $\delta_p$.
+Confirmed cases are Poisson with mean $\alpha(t)$ times expected onsets.
+Each is reported after a double censored Gamma delay
+(`bdbv_hub_renewal.model.delays.censored_pmf`) whose mean $\mu(t)$
+changes over time, has no onset with probability $\pi$ at its report
+day, and is published after a lag of 0 to 3 days.
 
 `SimulatedOutbreak.vintage` publishes what the hub would show at a date:
 known onsets by onset week, missing onsets given an onset by subtracting
@@ -33,115 +26,34 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass, field
 
+import jax
+import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from bdbv_hub_renewal.data import PROVINCE_CENTRES, PROVINCE_POPULATIONS
+from bdbv_hub_renewal.data import PROVINCE_POPULATIONS
 from bdbv_hub_renewal.data.dates import as_date, epiweek_end
-from bdbv_hub_renewal.data.delays import ParametricDelay
 from bdbv_hub_renewal.forecasters.base import NATIONAL
+from bdbv_hub_renewal.model.delays import censored_pmf
+from bdbv_hub_renewal.model.inputs import (
+    gravity_kernel as model_gravity_kernel,
+)
+from bdbv_hub_renewal.model.model import generation_interval
+from bdbv_hub_renewal.model.renewal import coupled_renewal, mixing_matrix
 
 __all__ = [
     "SimulatedOutbreak",
     "SimulationSettings",
-    "gravity_kernel",
-    "renewal",
     "simulate_outbreak",
 ]
 
-
-def renewal(
-    rt: NDArray[np.float64],
-    generation_pmf: NDArray[np.float64],
-    seeding: NDArray[np.float64],
-    population: NDArray[np.float64],
-    kernel: NDArray[np.float64] | None = None,
-    importation: float = 0.0,
-    rng: np.random.Generator | None = None,
-) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-    """Run the renewal process forward.
-
-    Parameters
-    ----------
-    rt : numpy.ndarray
-        Reproduction numbers, shape (provinces, days).
-    generation_pmf : numpy.ndarray
-        Generation interval pmf on days 0, 1, ...; day 0 is ignored.
-    seeding : numpy.ndarray
-        Seeded infections, shape (provinces, days).
-    population : numpy.ndarray
-        Effective population of each province.
-    kernel : numpy.ndarray, optional
-        Importation kernel, rows summing to one. Needed if
-        `importation > 0`.
-    importation : float
-        Share of transmission sent to other provinces.
-    rng : numpy.random.Generator, optional
-        If given, draw Poisson infections; otherwise use expected values.
-
-    Returns
-    -------
-    tuple of numpy.ndarray
-        Infections and the susceptible fraction, both (provinces, days).
-    """
-    n_loc, n_days = rt.shape
-    g = np.asarray(generation_pmf, dtype=np.float64).copy()
-    g[0] = 0.0
-    g = g / g.sum()
-    k = np.zeros((n_loc, n_loc)) if kernel is None else kernel
-    infections = np.zeros((n_loc, n_days))
-    susceptible = np.ones((n_loc, n_days))
-    cumulative = np.zeros(n_loc)
-    for t in range(n_days):
-        lo = max(0, t - g.size + 1)
-        past = infections[:, lo:t][:, ::-1]
-        force = past @ g[1 : t - lo + 1] if t > lo else np.zeros(n_loc)
-        mixed = (1 - importation) * force + importation * (k.T @ force)
-        susceptible[:, t] = np.clip(1 - cumulative / population, 0, 1)
-        lam = rt[:, t] * susceptible[:, t] * mixed + seeding[:, t]
-        infections[:, t] = rng.poisson(lam) if rng is not None else lam
-        cumulative += infections[:, t]
-    return infections, susceptible
+MAX_SIM_DELAY = 120
+"""Longest simulated onset-to-report delay in days."""
 
 
 def _logistic(x: NDArray[np.float64]) -> NDArray[np.float64]:
     return np.asarray(1 / (1 + np.exp(-x)), dtype=np.float64)
-
-
-def gravity_kernel(
-    locations: tuple[str, ...], decay_km: float = 300.0
-) -> NDArray[np.float64]:
-    r"""Return a row-normalised gravity kernel between provinces.
-
-    $K_{qp} \propto N_p \exp(-D_{qp} / \text{decay})$ for $q \ne p$,
-    with great-circle distance $D$ between province centres.
-
-    Parameters
-    ----------
-    locations : tuple of str
-        Province codes with known centres.
-    decay_km : float
-        Distance scale in kilometres.
-
-    Returns
-    -------
-    numpy.ndarray
-        Matrix with rows summing to one and a zero diagonal.
-    """
-    lat = np.radians([PROVINCE_CENTRES[p][0] for p in locations])
-    lon = np.radians([PROVINCE_CENTRES[p][1] for p in locations])
-    dlat = lat[:, None] - lat[None, :]
-    dlon = lon[:, None] - lon[None, :]
-    a = (
-        np.sin(dlat / 2) ** 2
-        + np.cos(lat[:, None]) * np.cos(lat[None, :]) * np.sin(dlon / 2) ** 2
-    )
-    dist = 2 * 6371 * np.arcsin(np.sqrt(a))
-    pop = np.array([PROVINCE_POPULATIONS[p] for p in locations], dtype=float)
-    k = pop[None, :] * np.exp(-dist / decay_km)
-    np.fill_diagonal(k, 0.0)
-    return np.asarray(k / k.sum(axis=1, keepdims=True), dtype=np.float64)
 
 
 @dataclass(frozen=True)
@@ -391,26 +303,35 @@ def simulate_outbreak(
     rng = np.random.default_rng(s.seed)
     n_loc, n_days = len(s.locations), s.n_days
     t = np.arange(n_days, dtype=float)
-    gi = ParametricDelay("gamma", s.gi_mean, s.gi_sd).pmf(60)
+    gi = generation_interval(s.gi_mean, s.gi_sd)
     turn = _logistic((t - s.turn_day) / s.turn_width)
     log_r = np.log(s.r_start) + turn * (np.log(s.r_end) - np.log(s.r_start))
     rt = np.exp(log_r[None, :] + np.array(s.log_r_offset)[:, None])
-    pop = np.array(
-        [PROVINCE_POPULATIONS[p] * s.effective_fraction for p in s.locations]
-    )
-    seeding = np.zeros((n_loc, n_days))
+    # Expected onsets from the model's own renewal, per resident with
+    # the effective share at risk as the pool, as in `build_model`.
+    pop = np.array([PROVINCE_POPULATIONS[p] for p in s.locations], float)
+    seeding = np.zeros((n_days, n_loc))
     for i, day in enumerate(s.seed_day):
         if day >= 0:
-            seeding[i, day] = s.seed_size
-    onsets, sus = renewal(
-        rt,
-        gi,
-        seeding,
-        pop,
-        kernel=gravity_kernel(s.locations),
-        importation=s.importation,
-        rng=rng,
+            seeding[day, i] = s.seed_size / pop[i]
+    table = pd.DataFrame({"location": s.locations, "population": pop})
+    mixing = mixing_matrix(
+        jnp.asarray(model_gravity_kernel(s.locations, table)),
+        s.importation,
+        jnp.asarray(pop / pop.sum()),
     )
+    nu = s.effective_fraction
+    x, r_eff = coupled_renewal(
+        jnp.zeros((gi.size, n_loc)),
+        jnp.asarray(rt.T),
+        jnp.asarray(gi),
+        mixing,
+        jnp.full(n_loc, nu),
+        pool=nu,
+        seeding=jnp.asarray(seeding),
+    )
+    onsets = (np.asarray(x, float) * pop).T
+    sus = (np.asarray(r_eff, float) / rt.T).T
 
     frac = _logistic((t - n_days / 2) / 14)
     asc = s.ascertainment[0] + frac * (s.ascertainment[1] - s.ascertainment[0])
@@ -422,15 +343,25 @@ def simulate_outbreak(
         pi_peak + (pi_end - pi_peak) * (t - peak) / (n_days - peak),
     )
     mu = s.delay_mean[0] + (s.delay_mean[1] - s.delay_mean[0]) * t / n_days
+    # Daily double censored Gamma delays, as the model's `censored_pmf`,
+    # long enough that truncation is negligible.
+    delay_cdf = np.cumsum(
+        np.asarray(
+            jax.vmap(
+                lambda m: censored_pmf("gamma", m, s.delay_cv, MAX_SIM_DELAY)
+            )(jnp.asarray(mu))
+        ),
+        axis=1,
+    )
 
     lag_pmf = np.asarray(s.publication_lag) / np.sum(s.publication_lag)
     rows = []
     for i, loc in enumerate(s.locations):
-        confirmed = rng.binomial(onsets[i].astype(int), asc)
+        confirmed = rng.poisson(asc * onsets[i])
         days = np.repeat(np.arange(n_days), confirmed)
-        shape = 1 / s.delay_cv**2
-        delay = rng.gamma(shape, mu[days] / shape)
-        report = days + np.floor(delay + rng.uniform(size=days.size))
+        u = rng.uniform(size=days.size) * delay_cdf[days, -1]
+        delay = (delay_cdf[days] < u[:, None]).sum(axis=1)
+        report = days + delay
         report_day = np.minimum(report.astype(int), n_days - 1)
         known = rng.uniform(size=days.size) >= miss[report_day]
         lag = rng.choice(len(s.publication_lag), days.size, p=lag_pmf)

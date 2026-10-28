@@ -39,13 +39,13 @@ def test_heldout_page(tmp_path: Path, target: pd.DataFrame) -> None:
     )
     assert "2026-10-17" in (gen / "heldout-choices.md").read_text()
     status = (gen / "heldout-status.md").read_text()
-    assert "pending" in status
+    assert "next vintage" in status
     assert (fig / "heldout-cd.svg").exists()
     # Without a run or a record.
     empty = BacktestConfig(model_choice=tmp_path / "none.yml")
     report._heldout_page(fig, gen, tmp_path, target, ["persistence"], empty)
-    assert "No model" in (gen / "heldout-choices.md").read_text()
-    assert "No held-out" in (gen / "heldout-status.md").read_text()
+    assert (gen / "heldout-choices.md").read_text() == ""
+    assert (gen / "heldout-status.md").read_text() == ""
 
 
 @pytest.mark.parametrize("display", ["named", "anonymised", "epiforecasts"])
@@ -58,7 +58,7 @@ def test_comparison_page(
 
     gen, fig = tmp_path / "gen", tmp_path / "fig"
     report._comparison_page(fig, gen, tmp_path / "missing", display, target)
-    assert "Not run yet" in (gen / "comparison-scores.md").read_text()
+    assert (gen / "comparison-scores.md").read_text() == ""
     _write_hub(tmp_path / "hub")
     cfg = tmp_path / "cmp.toml"
     cfg.write_text(
@@ -169,3 +169,31 @@ def test_lopo_section_hidden_without_results(tmp_path: Path) -> None:
     assert text.startswith("## Leave one province out")
     assert "renewal" in text
     assert "CD-IT" in text
+
+
+def test_ladder_page(tmp_path: Path) -> None:
+    # Nothing is shown without results, and no progress wording.
+    assert report._ladder_page(tmp_path / "missing.csv") == ""
+    ladder = pd.DataFrame(
+        {
+            "step": [0, 1],
+            "rung": ["persistence", "S0 national renewal"],
+            "description": ["The baseline.", "One national renewal."],
+            "decision": ["Reference.", "Kept as the starting point."],
+            "real_max_rhat": [None, 1.01],
+            "real_min_ess": [None, 400.0],
+            "real_divergent": [None, 0],
+            "sim_rt_mae": [None, 0.12],
+            "real_crps_national": [30.0, 25.0],
+            "real_cov90_national_ahead": [0.5, 0.8],
+        }
+    )
+    path = tmp_path / "ladder.csv"
+    ladder.to_csv(path, index=False)
+    text = report._ladder_page(path)
+    for heading in ("## Rungs", "## Sampler", "## Recovery", "## Scores"):
+        assert heading in text
+    assert "S0 national renewal" in text
+    assert "Kept as the starting point." in text
+    # Rows run in build order.
+    assert text.index("persistence") < text.index("S0 national renewal")

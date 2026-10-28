@@ -103,7 +103,7 @@ Their seed is projected back over the seeding weeks at the growth rate implied b
 Later provinces start at $10^{-6}$ of that level and take $I_{0,p}$ as a constant daily addition to $y_p(t)$ in the week before their first case week.
 Importation adds to it.
 
-The simulator's NumPy renewal, with linear depletion, is [`simulate.renewal`][bdbv_hub_renewal.data.simulate.renewal].
+The simulator ([simulated vintages](data.md#simulated-vintages)) uses this renewal too.
 
 ## Observation
 
@@ -153,10 +153,12 @@ $\pi_p$ is informed by the ratio of imputed to known onsets, through the imputat
 
 ### Known onsets
 
-With $T$ the vintage cut-off, the cases with onset $s$ reported by $T$ with an onset recorded are expected to be
+A case reported on day $t$ is in the vintage published at $T$ with probability $c(t) = F_\ell(T - t)$, with $F_\ell$ the cdf of the lag $\ell$ from report to publication.
+The lag is a pmf on 0 to 3 days with a $\text{Dirichlet}(1, 1, 1, 1)$ prior, so only the last 3 days before $T$ are partly in.
+The cases with onset $s$ in the vintage with an onset recorded are expected to be
 
 $$
-\mathrm{known}_{p,T}(s) = \lambda_p(s) \sum_{d \le T - s} f_s(d)\, \{1 - \pi_p(s + d)\}.
+\mathrm{known}_{p,T}(s) = \lambda_p(s) \sum_{d} f_s(d)\, \{1 - \pi_p(s + d)\}\, c(s + d).
 $$
 
 This is right truncation by vintage.
@@ -170,14 +172,14 @@ We model that procedure, including its bias, rather than correcting it.
 $$
 M_p(t) = \pi_p(t) \sum_s \lambda_p(s)\, f_s(t - s),
 \qquad
-\mathrm{imputed}_{p,T}(s) = \sum_{t = s}^{T} \hat f_T(t - s)\, M_p(t).
+\mathrm{imputed}_{p,T}(s) = \sum_{t = s}^{T} \hat f_T(t - s)\, c(t)\, M_p(t).
 $$
 
 $M_p(t)$ are the cases reported on day $t$ without an onset.
 $\hat f_T$ is the hub's delay at vintage $T$.
 It is the empirical pmf of all published delays of that vintage, pooled over provinces and onset weeks, with negative delays and delays over 60 days dropped.
 It is data, not a parameter, and it is not corrected for truncation.
-Both sums are written as banded matrix products.
+Both sums are computed by week, as products of banded $7 \times 7k$ blocks for each onset week, so the cost grows with the number of weeks and not its square.
 
 The forecast target is the eventual known plus imputed onsets, with future imputation using the latest $\hat f_T$.
 So the forecast carries the imputation's bias at turning points, which is what the hub scores.
@@ -193,7 +195,9 @@ The non-monotone revisions in imputed counts suggest it re-imputes each time.
 
 - Weekly sums of $\mathrm{known}_{p,T}$ and $\mathrm{imputed}_{p,T}$ are negative binomial, each stream with its own dispersion, $1/\sqrt{\phi} \sim \text{HalfNormal}(0.25)$, as in EpiNow2.
 - The delays of known-onset cases in the hub's delay file are tabulated by onset week and delay, pooled over provinces.
-  Given each week's total they are multinomial, with probabilities from $\lambda$, $f$ and $\pi$ truncated at $T$.
+  Delays are clipped to 0 to 60 days.
+  Given each week's total they are multinomial, with probabilities from $\lambda$, $f$, $\pi$ and $c$.
+  With `delay_counts="dirichlet-multinomial"` they are Dirichlet-multinomial instead, with $1/\sqrt{\psi} \sim \text{HalfNormal}(0.1)$.
   This is the conditional part of the reporting triangle, so the known stream is not counted twice.
 - Provinces with no cases have expected onsets $\mu_q(s) = \kappa \sum_p K_{pq}\, \lambda_p(s)$, with one scale $\kappa \sim \text{LogNormal}(\log 10^{-3}, 2^2)$.
   Their weekly zeros are Poisson.
@@ -205,9 +209,11 @@ The non-monotone revisions in imputed counts suggest it re-imputes each time.
 The model axis runs to the end of the forecast horizon, so the random walks carry $R_p$, $\alpha$, $f$ and $\pi$ forward.
 Each of the 100 trajectories uses one posterior draw for every province and week.
 It is the final known plus final imputed counts.
-For each stream, this is the count already reported by the cut-off plus a negative binomial draw of the expected cases reported after it, as in epinowcast.
-So a trajectory is never below the counts already reported.
-The hub re-imputes missing onsets at each vintage, but the cases reported by the cut-off are spread with the same delay in expectation, so their imputed count is kept too.
+For known onsets, this is the count already reported by the cut-off plus a negative binomial draw of the expected cases reported after it, as in epinowcast.
+So a trajectory is never below the known onsets already reported.
+The hub re-imputes missing onsets at each vintage, so a week's imputed count can fall as well as rise.
+The final imputed count is a negative binomial draw centred on the current imputed count plus the count expected from cases reported later.
+In recovery fits, keeping the current imputed count fixed instead under-covered the final counts.
 A province left out uses a draw of its vintage count instead of the data.
 Provinces with no cases are zero up to the cut-off.
 After it they draw Poisson importations, $\mu_q = \kappa \sum_p K_{pq} \lambda_p$, which spread locally at the national Rt, $\sum_p R_p I_p / \sum_p I_p$, weighted by infections.

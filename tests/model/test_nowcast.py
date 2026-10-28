@@ -24,19 +24,25 @@ def prior_latent(model, data, n=20):
     return {k: v for k, v in prior.items() if not k.endswith("_obs")}
 
 
-def test_nowcast_is_never_below_the_reported_counts(sim_vintage, config):
+def test_nowcast_keeps_known_and_recentres_imputed(sim_vintage, config):
     model = build_model(sim_vintage, config)
     draws = forecast_trajectories(
         model,
         sim_vintage,
-        n_trajectories=20,
-        posterior=prior_latent(model, sim_vintage),
+        n_trajectories=50,
+        posterior=prior_latent(model, sim_vintage, n=50),
     )
-    reported = sim_vintage.known + sim_vintage.imputed
     province = draws["province"][:, : sim_vintage.n_weeks]
-    assert np.all(province >= reported[None])
-    # Weeks reported in full keep their counts in every draw.
-    assert np.any(np.all(province == reported[None], axis=0))
+    # Known onsets only accumulate, so no draw is below them.
+    assert np.all(province >= sim_vintage.known[None])
+    # The hub re-imputes missing onsets at each vintage, so the imputed
+    # count is drawn around its current value and can fall below it.
+    reported = sim_vintage.known + sim_vintage.imputed
+    assert np.any(province < reported[None])
+    imputed = province - sim_vintage.known[None]
+    big = sim_vintage.imputed >= 5
+    centre = np.median(imputed, axis=0)[big] / sim_vintage.imputed[big]
+    assert 0.5 < np.median(centre) < 2.0
 
 
 def test_masked_provinces_do_not_see_their_counts(sim_vintage, config):
@@ -174,7 +180,7 @@ def test_negative_and_long_delays_are_clipped_not_dropped(
 
     day = VINTAGE_DAYS[-1]
     target, delays = sim_tables[day]
-    odd = delays.iloc[:2].copy()
+    odd = delays.sort_values("onset_week").iloc[-2:].copy()
     odd["delay"] = [-3, 90]
     both = vintage_from_tables(
         target,

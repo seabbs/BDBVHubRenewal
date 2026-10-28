@@ -65,16 +65,17 @@
 \def\yc{-15.3}
 \def\yd{-17.2}
 
-\node[note, anchor=south] at ({\xl+0.2},{\ya+0.55}) {expected series, data vintage $T$};
-\node[note, anchor=south] at (\xr,{\ya+0.55}) {observed data and likelihood};
+\node[note, anchor=south] at ({\xl+0.2},{\ya+1.05}) {expected series, data vintage $T$};
+\node[note, anchor=south] at (\xr,{\ya+1.05}) {observed data and likelihood};
 
 \node[latent, text width=\wl] (known) at (\xl,\ya)
   {\textbf{Known onsets}\\[1pt]
-   $\mathrm{known}_T(s) = \lambda(s) \sum_{d \le T - s} f_s(d)\{1 - \pi(s + d)\}$};
+   $\mathrm{known}_T(s) =$\\ $\lambda(s) \sum_{d} f_s(d)\{1 - \pi(s + d)\}\, c(s + d)$\\[1pt]
+   {\footnotesize $c$: published by $T$, lag 0 to 3 days}};
 \node[latent, text width=\wl] (imput) at (\xl,\yb)
   {\textbf{Imputed onsets}, as the hub makes them\\[1pt]
    $M(t) = \pi(t) \sum_s \lambda(s) f_s(t - s)$\\[1pt]
-   $\mathrm{imputed}_T(s) = \sum_{t = s}^{T} \hat f(t - s)\, M(t)$};
+   $\mathrm{imputed}_T(s) = \sum_{t = s}^{T} \hat f(t - s)\, c(t)\, M(t)$};
 \node[latent, text width=\wl] (dl) at (\xl,\yc)
   {known onsets by onset week and delay, $f_s(d)$};
 \node[latent, text width=\wl] (idle) at (\xl,\yd)

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import datetime as dt
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -66,7 +67,7 @@ def province_distances(locations: tuple[str, ...]) -> np.ndarray:
         * np.cos(lat[None, :])
         * np.sin((lon[:, None] - lon[None, :]) / 2) ** 2
     )
-    return 2 * 6371 * np.arcsin(np.sqrt(a))
+    return np.asarray(2 * 6371 * np.arcsin(np.sqrt(a)), dtype=float)
 
 
 def gravity_kernel(
@@ -74,8 +75,8 @@ def gravity_kernel(
 ) -> np.ndarray:
     r"""Row-normalised gravity kernel between provinces.
 
-    $K_{qp} \propto N_p \exp(-D_{qp} / \text{decay})$ for $q \ne p$, as
-    `bdbv_hub_renewal.data.simulate.gravity_kernel`, with populations $N$ from
+    $K_{qp} \propto N_p \exp(-D_{qp} / \text{decay})$ for $q \ne p$,
+    with populations $N$ from
     `table` and great-circle distances $D$ between the centres in
     `province_centres()`, which cover all 26 provinces.
 
@@ -111,7 +112,7 @@ def gravity_kernel(
     k = k / k.sum(axis=1, keepdims=True)
     if not np.all(np.isfinite(k)):
         raise ValueError("Importation kernel is not finite.")
-    return k
+    return np.asarray(k, dtype=float)
 
 
 BVD_PROVINCES = {
@@ -208,7 +209,7 @@ def bvd_inputs(
     names: list[str],
     start: dt.date,
     masked: tuple[str, ...] = (),
-) -> dict | None:
+) -> dict[str, Any] | None:
     """Map tidy BVD rows onto the modelled provinces.
 
     Groups with no modelled member are dropped. Leaving a province out
@@ -222,21 +223,24 @@ def bvd_inputs(
     """
     day = (pd.Timestamp(rows["as_of"].iloc[0]).date() - start).days + BVD_SHIFT
     groups, values, scales, kinds = [], [], [], []
-    for row in rows.itertuples():
-        if row.group == "national":
+    for row in rows.to_dict("records"):
+        log_mean, log_sd = float(row["log_mean"]), float(row["log_sd"])
+        if row["group"] == "national":
             if masked:
                 continue
             member = np.ones(len(names), bool)
-            value, scale, kind = row.log_mean, row.log_sd, 0
+            value, scale, kind = log_mean, log_sd, 0
         else:
-            codes = row.members.split(";")
+            codes = str(row["members"]).split(";")
             if set(codes) & set(masked):
                 continue
-            member = np.array([p in codes for p in names])
-            value = row.log_mean - row.ref_log_mean
-            scale = np.sqrt(
-                max(row.log_sd**2 - row.ref_log_sd**2, BVD_TAU_MIN**2)
+            ref_mean, ref_sd = (
+                float(row["ref_log_mean"]),
+                float(row["ref_log_sd"]),
             )
+            member = np.array([p in codes for p in names])
+            value = log_mean - ref_mean
+            scale = float(np.sqrt(max(log_sd**2 - ref_sd**2, BVD_TAU_MIN**2)))
             kind = 1
         if member.any():
             groups.append(member)
@@ -314,17 +318,18 @@ def vintage_from_tables(
         values=["observed", "imputed", "total"],
         aggfunc="sum",
     ).fillna(0)
-    cases = wide["total"].sum(axis=0)
+    totals_wide = cast(pd.DataFrame, wide["total"])
+    cases = totals_wide.sum(axis=0)
     if config.active == "all":
         active = tuple(locations)
     else:
         active = tuple(p for p in locations if cases.get(p, 0) > 0)
     idle = tuple(p for p in locations if p not in active)
-    national = wide["total"].reindex(columns=list(active)).fillna(0).sum(1)
+    national = totals_wide.reindex(columns=list(active)).fillna(0).sum(axis=1)
     counts_by_week = national.to_numpy()
     threshold = min(START_COUNT, counts_by_week.max())
     big = int(np.argmax(counts_by_week >= threshold))
-    first = _saturday(national.index[max(0, big - 1)])
+    first = _saturday(str(national.index[max(0, big - 1)]))
     start = first - dt.timedelta(days=6)
     cutoff = (pd.Timestamp(vintage).date() - start).days
     n_weeks = cutoff // 7 + 1
@@ -333,7 +338,9 @@ def vintage_from_tables(
     ]
 
     def grid(column: str, locs: tuple[str, ...]) -> np.ndarray:
-        out = wide[column].reindex(index=weeks, columns=list(locs))
+        out = cast(pd.DataFrame, wide[column]).reindex(
+            index=weeks, columns=list(locs)
+        )
         return out.fillna(0).to_numpy(dtype=float)
 
     counts = np.zeros((n_weeks, config.dmax + 1))
