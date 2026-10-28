@@ -37,8 +37,8 @@ There are no such rows when the vintage has no delay data.
 
 `PersistenceNow` (`persistencenow`) first nowcasts the recent weeks.
 With $s(t)$ the share of a week's final total reported $t$ days after it
-ends (`reported_share`), each week $w$ published $t_w$ days before the
-vintage with total $Y(w)$ gets
+ends, each week $w$ published $t_w$ days before the vintage with total
+$Y(w)$ gets
 
 $$
 C(w) = Y(w) + U(w), \quad
@@ -47,14 +47,19 @@ $$
 
 the number of failures before $Y(w)$ successes, with mean
 $Y(w)\{1 - s(t_w)\}/s(t_w)$, as in the EpidemicDates nowcast.
-Each sample redraws $s$ from a bootstrap of the settled delays.
+$s$ comes from the delays of onset weeks in the last `delay_window` days,
+corrected for right truncation
+(`bdbvhubrenewal.data.completeness.truncated_delay_cdf`), so it follows
+delays that change over time.
+Each sample redraws $s$ from a bootstrap of those delays.
 The last week with $s(t_w) \ge$ `min_share` takes the place of the last
 complete week, and each sample carries its own nowcast forward as above.
 Later weeks are at least the published total.
 $s$ uses the delays of known onsets and a 3-day publication lag only.
 Late rows in the delay files are mostly onsets recorded later for cases
 already counted as imputed, which leave the total unchanged.
-If the vintage has no delay data, it is `Persistence`.
+If the vintage has fewer than `min_delays` delays in the window, it is
+`Persistence`.
 """
 
 from __future__ import annotations
@@ -65,7 +70,11 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.completeness import reported_share
+from bdbvhubrenewal.data.completeness import (
+    reported_share,
+    share_from_cdf,
+    truncated_delay_cdf,
+)
 from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.delays import EmpiricalDelayModel
 from bdbvhubrenewal.forecasters.base import (
@@ -306,18 +315,20 @@ def nowcast_totals(
 
 
 def _bootstrap_shares(
-    delays: pd.DataFrame,
+    rows: pd.DataFrame,
     vintage: str,
     days: np.ndarray,
     n: int,
     rng: np.random.Generator,
+    window: int,
 ) -> np.ndarray:
-    """Return `reported_share` for each sample, over resampled delay rows."""
-    rows = delays.loc[delays["vintage"] == vintage]
+    """Return the share reported for each sample, over resampled delays."""
     out = np.empty((n, days.size))
     for b in range(n):
         pick = rows.iloc[rng.integers(0, len(rows), len(rows))]
-        out[b] = reported_share(pick, vintage, days)
+        cdf = truncated_delay_cdf(pick, vintage, window)
+        assert cdf is not None
+        out[b] = share_from_cdf(cdf, days)
     return out
 
 
@@ -332,12 +343,18 @@ class PersistenceNow(Persistence):
     min_share : float
         Smallest share reported, $s(t_w)$, for a week to be nowcast. The
         last such week is carried forward.
+    delay_window : int
+        Days of onset weeks whose delays give $s$.
+    min_delays : int
+        Fewest delays in the window to nowcast.
 
     See `Persistence` for the other attributes.
     """
 
     name: str = "persistencenow"
     min_share: float = 0.5
+    delay_window: int = 84
+    min_delays: int = 50
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return persistence trajectories from a nowcast for a task.
@@ -356,6 +373,12 @@ class PersistenceNow(Persistence):
         if task.delays is None or task.delays.empty:
             return super().forecast(task)
         delay_vintage = str(task.delays["vintage"].max())
+        rows = task.delays.loc[task.delays["vintage"] == delay_vintage]
+        age = pd.Timestamp(delay_vintage) - pd.to_datetime(rows["onset_week"])
+        recent = rows.loc[(age.dt.days < self.delay_window).to_numpy()]
+        cdf = truncated_delay_cdf(recent, delay_vintage, self.delay_window)
+        if cdf is None or len(recent) < self.min_delays:
+            return super().forecast(task)
         weeks = list(task.target_end_dates)
         ends = pd.date_range(
             min(task.target["target_end_date"].min(), weeks[0]),
@@ -367,21 +390,23 @@ class PersistenceNow(Persistence):
         days = np.concatenate(
             [(pd.Timestamp(d) - ends).days.to_numpy() for d in dates]
         ).astype(np.int64)
-        point = reported_share(task.delays, delay_vintage, days[: len(grid)])
+        point = share_from_cdf(cdf, days[: len(grid)])
         nowcast = np.flatnonzero(point >= self.min_share)
         if nowcast.size == 0:
             return super().forecast(task)
         last = int(nowcast[-1])
         rng = task.rng()
         n = task.n_samples
-        shares = _bootstrap_shares(task.delays, delay_vintage, days, n, rng)
+        shares = _bootstrap_shares(
+            recent, delay_vintage, days, n, rng, self.delay_window
+        )
         s_v = shares[:, : len(grid)]
         cols = [grid.index(w) for w in weeks]
         final, reported = [], []
         for loc in task.locations:
-            rows = task.target.loc[task.target["location"] == loc]
             seen = (
-                rows.set_index("target_end_date")["total"]
+                task.target.loc[task.target["location"] == loc]
+                .set_index("target_end_date")["total"]
                 .reindex(grid, fill_value=0)
                 .to_numpy(dtype=float)
             )

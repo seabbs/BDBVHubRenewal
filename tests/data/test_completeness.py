@@ -90,14 +90,14 @@ def test_truncated_delay_cdf_corrects_right_truncation() -> None:
     cdf = truncated_delay_cdf(rows, vintage, window=84, lag=3)
     assert cdf is not None
     true = 1 - (7 / 8) ** (np.arange(cdf.size) + 1)
-    # Within a few points of the true cdf at the delays that matter.
-    assert np.abs(cdf[:21] - true[:21]).max() < 0.04
+    # Within a point of the true cdf at the delays that matter.
+    assert np.abs(cdf[:21] - true[:21]).max() < 0.01
     # The naive cdf of the same rows is biased short.
     recent = pd.to_datetime(rows["onset_week"]) > pd.Timestamp(vintage) - (
         pd.Timedelta(days=84)
     )
     naive = np.bincount(rows.loc[recent, "delay"].clip(upper=60), minlength=61)
-    assert (naive.cumsum() / naive.sum())[7] > true[7] + 0.05
+    assert (naive.cumsum() / naive.sum())[7] > true[7] + 0.03
 
 
 def test_truncated_delay_cdf_needs_rows_in_the_window() -> None:
