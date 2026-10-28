@@ -179,8 +179,6 @@ disallow_subclassing_any = false
 # The model code came from the prototype and is not yet strict-mypy clean.
 # `forecasters/renewal.py`, which wraps it, is checked in full.
 module = [
-  "bdbv_hub_renewal.model",
   "bdbv_hub_renewal.model.delays",
-  "bdbv_hub_renewal.model.model",
 ]
 ignore_errors = true

@@ -5,12 +5,12 @@ from __future__ import annotations
 
 import datetime as dt
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal
 
 import jax.numpy as jnp
 import numpy as np
 import numpyro.distributions as dist
-from jax import random
+from jax import Array, random
 from numpyro.distributions.transforms import (
     AffineTransform,
     ComposeTransform,
@@ -19,7 +19,10 @@ from numpyro.distributions.transforms import (
 from numpyro.infer import MCMC, NUTS, Predictive, init_to_median
 from pyrenew.ascertainment import IndependentAscertainment
 from pyrenew.deterministic import DeterministicPMF, DeterministicVariable
-from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
+from pyrenew.latent.temporal_processes import (
+    TemporalProcess,
+    WeeklyTemporalProcess,
+)
 from pyrenew.model import MultiSignalModel, PyrenewBuilder
 from pyrenew.observation import NegativeBinomialNoise
 from pyrenew.randomvariable import DistributionalVariable, TransformedVariable
@@ -73,14 +76,16 @@ def generation_interval(
 
     def integrated_cdf(x: np.ndarray) -> np.ndarray:
         x = np.maximum(x, 0.0)
-        return x * stats.gamma.cdf(x, shape, scale=scale) - (
-            shape * scale * stats.gamma.cdf(x, shape + 1, scale=scale)
+        return np.asarray(
+            x * stats.gamma.cdf(x, shape, scale=scale)
+            - shape * scale * stats.gamma.cdf(x, shape + 1, scale=scale),
+            dtype=float,
         )
 
     d = np.arange(length + 1, dtype=float)
     pmf = integrated_cdf(d + 1) - 2 * integrated_cdf(d) + integrated_cdf(d - 1)
     pmf = np.maximum(pmf, 0.0)[1:]
-    return pmf / pmf.sum()
+    return np.asarray(pmf / pmf.sum(), dtype=float)
 
 
 @dataclass(frozen=True)
@@ -195,7 +200,7 @@ FALLBACK = ModelConfig(
     rt_cadence="weekly",
     publication_lag="fixed",
 )
-_SIMPLE = {
+_SIMPLE: dict[str, Any] = {
     "streams": "total",
     "truncation": False,
     "coupling": "none",
@@ -277,7 +282,7 @@ class Vintage:
     inactive_names: list[str] = field(default_factory=list)
     import_kernel: np.ndarray | None = None
     fit_mask: np.ndarray | None = None
-    bvd: dict | None = None
+    bvd: dict[str, Any] | None = None
     distances: np.ndarray | None = None
     all_populations: np.ndarray | None = None
     seed_days: np.ndarray | None = None
@@ -285,12 +290,12 @@ class Vintage:
     @property
     def n_weeks(self) -> int:
         """Number of data weeks."""
-        return self.known.shape[0]
+        return int(self.known.shape[0])
 
     @property
     def n_provinces(self) -> int:
         """Number of provinces."""
-        return self.known.shape[1]
+        return int(self.known.shape[1])
 
 
 def _named_walk(
@@ -302,7 +307,7 @@ def _named_walk(
     centred: bool = False,
     knots: tuple[float, float] | None = None,
     future: str = "walk",
-):
+) -> TemporalProcess:
     """Walk frozen over the seeding period, fitted on the data weeks only.
 
     `n_weeks` data weeks set the fit axis; later steps are drawn in the
@@ -348,7 +353,7 @@ def fit_weeks(data: Vintage, config: ModelConfig) -> int:
         Number of weeks.
     """
     if config.bvd and data.bvd is not None:
-        return max(data.n_weeks, data.bvd["day"] // 7 + 1)
+        return max(data.n_weeks, int(data.bvd["day"]) // 7 + 1)
     return data.n_weeks
 
 
@@ -400,6 +405,8 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     single = n_prov == 1
     kernel = None if config.coupling == "none" or single else data.kernel
     if kernel is not None and config.coupling == "learnt":
+        if data.distances is None or data.all_populations is None:
+            raise ValueError("A learnt kernel needs distances and populations.")
         kernel = LearntKernel(
             "kernel", data.distances, data.all_populations, n_prov
         )
@@ -567,7 +574,7 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
 
 def model_args(
     model: MultiSignalModel, data: Vintage, forecast: bool = False
-) -> dict:
+) -> dict[str, Any]:
     """Arguments for `model.run` and `Predictive` for one vintage.
 
     The model axis runs from `n_init` days before `start_date` to the end
@@ -588,12 +595,12 @@ def model_args(
     horizon = max(data.horizon_weeks, extra) if forecast else extra
     n_weeks = data.n_weeks + horizon
 
-    def pad(x):
+    def pad(x: np.ndarray) -> Array:
         lead = np.full((n_init // 7, x.shape[1]), np.nan)
         tail = np.full((horizon, x.shape[1]), np.nan)
         return jnp.asarray(np.vstack([lead, x, tail]))
 
-    obs = {
+    obs: dict[str, Any] = {
         "cutoff": n_init + data.cutoff,
         "hub_delay_pmf": jnp.asarray(data.hub_delay_pmf),
         "forecast": forecast,
@@ -615,7 +622,7 @@ def model_args(
             "imputed": pad(imputed),
             "delay_counts": jnp.nan_to_num(pad(data.delay_counts)),
         }
-        if use_imports:
+        if use_imports and data.inactive is not None:
             obs["inactive"] = pad(data.inactive)
     pops = np.asarray(data.populations, dtype=float)
     return {
@@ -722,7 +729,7 @@ def seed_from_imports(
         lags = y[max(0, t - g.size) : t][::-1]
         force = g[: lags.shape[0]] @ lags
         y[t] += rng.poisson(rt[t] * force)
-    return y
+    return np.asarray(y, dtype=float)
 
 
 def forecast_trajectories(
@@ -730,8 +737,8 @@ def forecast_trajectories(
     data: Vintage,
     n_trajectories: int = 100,
     seed: int = 1,
-    posterior: dict | None = None,
-) -> dict[str, np.ndarray]:
+    posterior: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Draw joint trajectories of final weekly onsets (known plus imputed).
 
     Each trajectory uses one posterior draw for every province and week,

@@ -214,8 +214,8 @@ class LearntKernel(RandomVariable):
     def __init__(
         self,
         name: str,
-        distances: Array,
-        populations: Array,
+        distances: ArrayLike,
+        populations: ArrayLike,
         n_active: int,
         decay_km: float = 300.0,
         weight_sd: float = 0.5,
