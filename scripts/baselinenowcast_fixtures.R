@@ -35,6 +35,9 @@ triangles <- read.csv(file.path(dir, "triangles.csv"))
 settings <- read.csv(file.path(dir, "settings.csv"))
 
 fmt <- function(x) sprintf("%.12g", x)
+# Sizes come from a 1-d optimiser whose last digits differ across
+# platforms, so they are written to 6 significant figures.
+fmt_size <- function(x) sprintf("%.6g", x)
 
 write_csv <- function(df, name) {
   # Quote nothing: all fields are plain identifiers or numbers.
@@ -85,7 +88,7 @@ for (i in seq_len(nrow(settings))) {
   size_out[[name]] <- data.frame(
     triangle = name,
     horizon = seq_along(sizes),
-    nb_size = fmt(as.numeric(sizes))
+    nb_size = fmt_size(as.numeric(sizes))
   )
 }
 
