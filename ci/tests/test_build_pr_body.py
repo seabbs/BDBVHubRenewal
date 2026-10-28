@@ -346,3 +346,65 @@ def test_body_reports_shadow_candidates(tmp_path: Path) -> None:
     assert "BVDOutbreakSize-informed variant" in text
     # Collapsed, so not on the visible lines.
     assert not any("BVDOutbreakSize" in line for line in visible(text))
+
+
+def test_body_reports_the_bvd_release(tmp_path: Path) -> None:
+    from submission_ci.common import read_json
+
+    g = gate(tmp_path)
+    prov = read_json(g / "provenance.json")
+    release = {
+        "tag": "results-3180",
+        "as_of": "2026-10-23",
+        "joint_max_rhat": 1.041,
+        "max_rhat": 1.1,
+        "skipped": [
+            {"tag": "results-3190", "reason": "joint R-hat 1.230 is above 1.1"}
+        ],
+    }
+    prov["shadows"] = [
+        {
+            "id": "bvd",
+            "label": "BVDOutbreakSize-informed variant",
+            "fit": {
+                "status": "pass",
+                "headline": {"max_rhat": 1.01},
+                "bvd": release,
+            },
+            "ppc": None,
+        }
+    ]
+    text = body(g, provenance=prov)
+    assert (
+        "BVDOutbreakSize-informed variant used BVDOutbreakSize release "
+        "`results-3180` (data to 2026-10-23, joint R-hat 1.041, limit 1.1)."
+    ) in text
+    assert "Skipped `results-3190`: joint R-hat 1.230 is above 1.1." in text
+    assert not any("results-3180" in line for line in visible(text))
+    prov["shadows"][0]["fit"]["bvd"] = {"tag": None}
+    text = body(g, provenance=prov)
+    assert (
+        "BVDOutbreakSize-informed variant used no BVDOutbreakSize release: "
+        "none qualified, so it ran as the main model."
+    ) in text
+
+
+def test_convergence_section_reports_the_bvd_release(tmp_path: Path) -> None:
+    from submission_ci.common import read_json
+
+    g = gate(tmp_path)
+    fit = read_json(g / "selected" / "fit-summary.json")
+    fit["bvd"] = {
+        "tag": "results-3180",
+        "as_of": "2026-10-23",
+        "joint_max_rhat": 1.041,
+        "max_rhat": 1.1,
+        "skipped": [],
+    }
+    write_json(g / "selected" / "fit-summary.json", fit)
+    text = body(g)
+    assert (
+        "The model used BVDOutbreakSize release `results-3180` (data to "
+        "2026-10-23, joint R-hat 1.041, limit 1.1)."
+    ) in text
+    assert "Skipped" not in text
