@@ -67,6 +67,13 @@ def _nowcast(draws: ArrayLike, vintage: ArrayLike | None) -> ArrayLike:
     return jnp.where(jnp.isnan(vintage), draws[0], vintage) + draws[1]
 
 
+def _recentred(draws: ArrayLike, vintage: ArrayLike | None) -> ArrayLike:
+    """Take the final draw where it was centred on the vintage count."""
+    if vintage is None:
+        return draws[0] + draws[1]
+    return jnp.where(jnp.isnan(vintage), draws[0] + draws[1], draws[1])
+
+
 def skew(x: ArrayLike, width: int) -> ArrayLike:
     r"""Shift row $s$ of `x` right by $s$: `out[s, s + d] = x[s, d]`.
 
@@ -340,11 +347,11 @@ class OnsetStreams(BaseObservationProcess):
     `Predictive`. With `forecast=True` the final counts are recorded as
     `{name}_final_total`: the vintage counts where known (`vintage`),
     else the row 0 draw, plus the row 1 draw of the rest, as in
-    epinowcast. Draws are then never below the counts already reported.
-    The imputed stream is anchored the same way. The hub re-imputes each
-    vintage, but the missing-onset cases reported by the cut-off are
-    spread with the same delay pmf in expectation, so their current
-    imputed count is kept and only cases reported later are drawn.
+    epinowcast, so draws are never below the known onsets reported.
+    The hub re-imputes missing onsets at each vintage, so a week's imputed
+    count can fall as well as rise. Its final count is drawn from the
+    imputed stream's negative binomial centred on the current imputed
+    count plus the count expected from cases reported later.
 
     Parameters
     ----------
@@ -561,9 +568,12 @@ class OnsetStreams(BaseObservationProcess):
                 weekly["imputed"],
                 weekly["imputed_final"],
                 imputed,
+                centre=None if vintage is None else vintage[1],
             )
             seen = (None, None) if vintage is None else vintage
-            final = _nowcast(draws, seen[0]) + _nowcast(imputed_draws, seen[1])
+            final = _nowcast(draws, seen[0]) + _recentred(
+                imputed_draws, seen[1]
+            )
             if delay_counts is not None:
                 self._score_delays(
                     weekly["triangle"], jnp.asarray(delay_counts)
@@ -605,14 +615,19 @@ class OnsetStreams(BaseObservationProcess):
         by_cutoff: ArrayLike,
         final: ArrayLike,
         obs: ArrayLike | None,
+        centre: ArrayLike | None = None,
     ) -> ArrayLike:
         """Score the vintage counts and draw the final counts in one site.
 
         Row 0 of the site is the vintage (scored where `obs` is not NaN),
         row 1 the count reported after the cut-off, which is never
         observed. One site keeps one concentration draw per stream.
+        Where `centre` is not NaN, row 1 is instead the final count,
+        centred on `centre` plus the count expected after the cut-off.
         """
         rest = final - by_cutoff
+        if centre is not None:
+            rest = jnp.where(jnp.isnan(centre), rest, centre + rest)
         predicted = jnp.maximum(jnp.stack([by_cutoff, rest]), _FLOOR)
         if obs is None:
             return noise.sample(

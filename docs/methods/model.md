@@ -193,9 +193,11 @@ The non-monotone revisions in imputed counts suggest it re-imputes each time.
 The model axis runs to the end of the forecast horizon, so the random walks carry $R_p$, $\alpha$, $f$ and $\pi$ forward.
 Each of the 100 trajectories uses one posterior draw for every province and week.
 It is the final known plus final imputed counts.
-For each stream, this is the count already reported by the cut-off plus a negative binomial draw of the expected cases reported after it, as in epinowcast.
-So a trajectory is never below the counts already reported.
-The hub re-imputes missing onsets at each vintage, but the cases reported by the cut-off are spread with the same delay in expectation, so their imputed count is kept too.
+For known onsets, this is the count already reported by the cut-off plus a negative binomial draw of the expected cases reported after it, as in epinowcast.
+So a trajectory is never below the known onsets already reported.
+The hub re-imputes missing onsets at each vintage, so a week's imputed count can fall as well as rise.
+The final imputed count is a negative binomial draw centred on the current imputed count plus the count expected from cases reported later.
+In recovery fits, keeping the current imputed count fixed instead under-covered the final counts.
 A province left out uses a draw of its vintage count instead of the data.
 In provinces with no cases, importations are drawn and, from the cut-off, seed local spread at the pooled trend $R(t)$.
 For `renewal` and `renewalbvd`, the national trajectory is the sum of the province trajectories plus an unassigned component.
