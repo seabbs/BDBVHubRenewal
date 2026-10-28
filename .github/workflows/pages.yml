@@ -62,9 +62,12 @@ jobs:
       # scores the committed held-out forecasts again against the latest
       # vintage, even for a chosen fitted model.
       - name: Backtest, then the docs figures and tables
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           uv run bdbvhubrenewal backtest --no-fit
           uv run bdbvhubrenewal backtest --evaluate-holdout --no-fit
+          uv run bdbvhubrenewal compare-hub --fetch
           uv run bdbvhubrenewal report --ledger output/ledger
       - name: Build the site into _site
         run: uv run mkdocs build --strict

@@ -12,9 +12,10 @@ data/raw/
 output/
 # Docs figures and generated snippets: built at docs build time.
 docs/figures/*.svg
-docs/figures/comparison/
 docs/generated/
 # Pages of submitted rounds: copied (frozen) or built from the
 # submission-ledger branch at each docs build.
 docs/submission/rounds/
 tests/results/
+# mkdocs-jupyter execution cache.
+.cache/

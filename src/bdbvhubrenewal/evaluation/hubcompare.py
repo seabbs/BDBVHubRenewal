@@ -1,44 +1,42 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """Compare our forecasts with the forecasts submitted to the hub.
 
-`fetch_hub_submissions` downloads the hub's `model-output/` files and
-`model-metadata/` records for a list of models.
-`load_hub_submissions` keeps the sample forecasts of the current round
-(`wk inc confirmed cases`) and lists files from other rounds, such as the
-archived cumulative outbreak size round, which target a different
-quantity and are not scored.
+`fetch_hub_submissions` downloads every team's metadata and its sample
+forecasts for the weekly round (`wk inc confirmed cases`).
+Files whose licence allows redistribution (`OPEN_LICENCES`) are kept
+gzipped in a committed directory; the rest go to an uncommitted cache.
+Files from the archived cumulative outbreak size round are skipped.
 
-For each hub reference date, `our_forecasts` runs our registered models
-from the matching vintage: the latest real vintage that serves that round
-if there is one, otherwise a vintage reconstructed for the Saturday before
-it.
-The `source` column says which (`real`, `reconstructed`, or `hub` for a
-submitted file).
+For each hub round, `our_forecasts` runs our unfitted models from the
+matching vintage: the latest real vintage that serves the round if there
+is one, otherwise a vintage reconstructed for the Saturday before it.
+Fitted models are slow, so `stored_forecasts` takes theirs from backtest
+and held-out forecast files for the same round.
+The `source` column says which (`real`, `reconstructed`, or `hub`).
 
-`score_comparison` scores every forecast for a reference date on the same
-truth (the latest real vintage, as reported then) and the same locations
-and weeks: those every model covered and the truth has.
-A reference date is pending until a real vintage later than its matching
-vintage exists.
-
-`display_names` maps model ids to the labels shown: `named` keeps them,
-`anonymised` replaces other teams with Team A, Team B and so on, and
-`epiforecasts` keeps epiforecasts models only.
-`bdbvhubrenewal.reporting.plots.plot_comparison` draws them side by side.
+`score_comparison` scores every model on every week it forecast, against
+the latest real vintage as reported then, and flags complete weeks: those
+ending at least $K$ weeks before the truth vintage.
+A round is pending until a real vintage later than its matching vintage
+exists, as before then the truth is the data the forecasts were made from.
+`summarise_comparison` reports complete weeks only, with WIS relative to
+a baseline on the weeks both forecast.
 """
 
 from __future__ import annotations
 
 import datetime as dt
+import gzip
+import io
 import json
 import os
-import string
 import tomllib
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Final
 
+import numpy as np
 import pandas as pd
 import yaml
 
@@ -52,33 +50,59 @@ from bdbvhubrenewal.evaluation.backtest import (
     make_tasks,
     run_forecasts,
 )
-from bdbvhubrenewal.evaluation.scoring import score_forecasts
-from bdbvhubrenewal.forecasters import get_model
+from bdbvhubrenewal.evaluation.scoring import (
+    relative_skill,
+    score_forecasts,
+    summarise_scores,
+)
+from bdbvhubrenewal.forecasters import get_model, list_models
 
 __all__ = [
     "ATTRIBUTION",
-    "DISPLAY_MODES",
+    "OPEN_LICENCES",
+    "QUANTILES",
     "WEEKLY_TARGET",
     "ComparisonConfig",
     "attribution",
-    "display_names",
     "fetch_hub_submissions",
+    "forecast_quantiles",
     "load_comparison_config",
     "load_hub_submissions",
     "load_team_metadata",
     "match_vintage",
     "our_forecasts",
+    "own_hub_ids",
+    "resolve_baseline",
     "score_comparison",
+    "stored_forecasts",
+    "submission_dir",
+    "summarise_comparison",
 ]
 
 WEEKLY_TARGET: Final = "wk inc confirmed cases"
 """The target of the hub's current round."""
 
-DISPLAY_MODES: Final = ("named", "anonymised", "epiforecasts")
-"""How teams are shown in the comparison."""
+OPEN_LICENCES: Final = ("CC0-1.0", "CC-BY-4.0")
+"""Licences under which a team's files may be committed here."""
 
-OWN_TEAM: Final = "epiforecasts"
-"""Our team abbreviation on the hub."""
+QUANTILES: Final = {
+    "q05": 0.05,
+    "q25": 0.25,
+    "q50": 0.5,
+    "q75": 0.75,
+    "q95": 0.95,
+}
+"""Quantiles kept for the plots."""
+
+SAMPLE_COLUMNS: Final = (
+    "model",
+    "source",
+    "reference_date",
+    "location",
+    "target_end_date",
+    "sample",
+    "value",
+)
 
 ATTRIBUTION: Final = (
     "Surveillance data: Institut National de Santé Publique (INSP) and the "
@@ -98,16 +122,20 @@ class ComparisonConfig:
 
     Attributes
     ----------
-    models : tuple of str
-        Hub model ids to fetch.
-    display : str
-        One of `DISPLAY_MODES`.
+    baseline : str
+        Model that WIS is relative to, if registered
+        (`resolve_baseline`).
+    stored : tuple of str
+        Forecast files to take fitted models' forecasts from.
+    locations : tuple of str
+        Locations shown in the plots.
     ref : str
         Git ref of the hub to fetch from.
     """
 
-    models: tuple[str, ...]
-    display: str = "anonymised"
+    baseline: str = "persistencenow"
+    stored: tuple[str, ...] = ()
+    locations: tuple[str, ...] = ("CD",)
     ref: str = "main"
 
 
@@ -125,20 +153,58 @@ def load_comparison_config(
     -------
     ComparisonConfig
         The settings.
-
-    Raises
-    ------
-    ValueError
-        If the display mode is unknown.
     """
-    raw = tomllib.loads(Path(path).read_text())["comparison"]
-    cfg = ComparisonConfig(
-        models=tuple(raw["models"]),
-        display=str(raw.get("display", "anonymised")),
-        ref=str(raw.get("ref", "main")),
+    raw = tomllib.loads(Path(path).read_text()).get("comparison", {})
+    default = ComparisonConfig()
+    return ComparisonConfig(
+        baseline=str(raw.get("baseline", default.baseline)),
+        stored=tuple(raw.get("stored", default.stored)),
+        locations=tuple(raw.get("locations", default.locations)),
+        ref=str(raw.get("ref", default.ref)),
     )
-    display_names([], cfg.display)
-    return cfg
+
+
+def resolve_baseline(preferred: str) -> str:
+    """Return the baseline for relative scores.
+
+    Parameters
+    ----------
+    preferred : str
+        The configured baseline.
+
+    Returns
+    -------
+    str
+        `preferred` if it is registered, else the registry baseline.
+    """
+    specs = list_models()
+    if any(s.name == preferred for s in specs):
+        return preferred
+    return next(s.name for s in specs if s.baseline)
+
+
+def own_hub_ids(path: Path | str = "config/hub.toml") -> dict[str, str]:
+    """Return the hub ids of our models that submit under their own id.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        The hub submission settings, with a `[models.<name>]` table per
+        model that has its own id.
+
+    Returns
+    -------
+    dict
+        Model name to hub model id, such as
+        `{"persistencenow": "epiforecasts-seabbsbaseline"}`.
+    """
+    from bdbvhubrenewal.submission.hub import model_abbr_for, model_id
+
+    raw = tomllib.loads(Path(path).read_text())
+    return {
+        name: model_id(model_abbr_for(name, path))
+        for name in raw.get("models", {})
+    }
 
 
 def attribution(accessed: str) -> str:
@@ -157,20 +223,40 @@ def attribution(accessed: str) -> str:
     return ATTRIBUTION.format(accessed=accessed)
 
 
+def submission_dir(licence: str, keep: Path, cache: Path) -> Path:
+    """Return where a team's files go, by their licence.
+
+    Parameters
+    ----------
+    licence : str
+        The licence in the team's metadata.
+    keep : pathlib.Path
+        The committed directory.
+    cache : pathlib.Path
+        The uncommitted cache.
+
+    Returns
+    -------
+    pathlib.Path
+        `keep` for `OPEN_LICENCES`, else `cache`.
+    """
+    return keep if licence in OPEN_LICENCES else cache
+
+
 def fetch_hub_submissions(  # pragma: no cover - network
     dest: Path | str,
-    models: Sequence[str],
+    cache: Path | str,
     ref: str = "main",
     token: str | None = None,
 ) -> dict[str, object]:
-    """Download the hub's model output and metadata for some models.
+    """Download every team's metadata and weekly-round forecasts.
 
     Parameters
     ----------
     dest : pathlib.Path or str
-        Directory to write `model-output/` and `model-metadata/` into.
-    models : sequence of str
-        Model ids.
+        Committed directory, for metadata and openly licensed files.
+    cache : pathlib.Path or str
+        Uncommitted directory, for other files.
     ref : str
         Git ref of the hub.
     token : str, optional
@@ -179,82 +265,92 @@ def fetch_hub_submissions(  # pragma: no cover - network
     Returns
     -------
     dict
-        A manifest with the commit and access date, also written to
-        `dest/manifest.json`.
+        A manifest with the commit, the access date and each kept file,
+        also written to `dest/manifest.json`.
     """
     from bdbvhubrenewal.data.tidy import HUB_REPO, _api, _raw
 
     token = token or os.environ.get("GITHUB_TOKEN")
-    root = Path(dest)
+    keep, other = Path(dest), Path(cache)
     head = _api(f"repos/{HUB_REPO}/commits/{ref}", token)["sha"]
     tree = _api(f"repos/{HUB_REPO}/git/trees/{head}?recursive=1", token)
-    wanted = set(models)
-    paths = []
-    for item in tree["tree"]:
-        parts = item["path"].split("/")
-        output = (
-            len(parts) == 3
-            and parts[0] == "model-output"
-            and parts[1] in wanted
-            and parts[2].endswith(".csv")
-        )
-        meta = (
-            len(parts) == 2
-            and parts[0] == "model-metadata"
-            and parts[1].removesuffix(".yml") in wanted
-        )
-        if item["type"] == "blob" and (output or meta):
-            paths.append(item["path"])
+    paths = [item["path"] for item in tree["tree"] if item["type"] == "blob"]
+    licences = {}
     for path in paths:
-        out = root / path
+        parts = path.split("/")
+        if parts[0] == "model-metadata" and path.endswith(".yml"):
+            text = _raw(head, path, token)
+            out = keep / path
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(text)
+            meta = yaml.safe_load(text) or {}
+            licences[parts[1].removesuffix(".yml")] = str(
+                meta.get("license", "")
+            )
+    files = []
+    for path in paths:
+        parts = path.split("/")
+        if parts[0] != "model-output" or len(parts) != 3:
+            continue
+        if not parts[2].endswith(".csv"):
+            continue
+        content = _raw(head, path, token)
+        head_rows = pd.read_csv(io.BytesIO(content), nrows=5)
+        if (
+            "target" not in head_rows
+            or not (head_rows["target"] == WEEKLY_TARGET).all()
+        ):
+            continue
+        root = submission_dir(licences.get(parts[1], ""), keep, other)
+        out = root / f"{path}.gz"
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_bytes(_raw(head, path, token))
+        out.write_bytes(gzip.compress(content, mtime=0))
+        files.append({"path": path, "committed": root == keep})
     manifest: dict[str, object] = {
         "repo": HUB_REPO,
         "ref": ref,
         "commit": head,
         "accessed": dt.date.today().isoformat(),
-        "files": sorted(paths),
+        "files": files,
     }
-    (root / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    keep.mkdir(parents=True, exist_ok=True)
+    (keep / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     return manifest
 
 
-def load_hub_submissions(
-    root: Path | str,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Read downloaded hub files.
+def load_hub_submissions(*roots: Path | str) -> pd.DataFrame:
+    """Read the weekly-round sample forecasts in some directories.
 
     Parameters
     ----------
-    root : pathlib.Path or str
-        Directory holding `model-output/<model>/*.csv`.
+    *roots : pathlib.Path or str
+        Directories holding `model-output/<model>/*.csv` or `*.csv.gz`.
+        Missing ones are skipped.
 
     Returns
     -------
-    tuple of pandas.DataFrame
-        The sample forecasts of the current round, with columns `model`,
-        `reference_date`, `location`, `target_end_date`, `output_type`,
-        `sample` and `value`; and one row per other file, with `model`,
-        `reference_date`, `target`, `output_types` and `rows`.
+    pandas.DataFrame
+        Columns `model`, `source` (`hub`), `reference_date`, `location`,
+        `target_end_date`, `sample` and `value`.
     """
-    weekly, other = [], []
-    for path in sorted(Path(root).glob("model-output/*/*.csv")):
-        model = path.parent.name
-        table = pd.read_csv(path, dtype={"output_type_id": str})
-        keep = (table["target"] == WEEKLY_TARGET) & (
-            table["output_type"] == "sample"
-        )
-        if keep.any():
-            rows = table.loc[keep]
-            weekly.append(
+    frames = []
+    for root in roots:
+        for path in sorted(Path(root).glob("model-output/*/*.csv*")):
+            table = pd.read_csv(path, dtype={"output_type_id": str})
+            rows = table.loc[
+                (table["target"] == WEEKLY_TARGET)
+                & (table["output_type"] == "sample")
+            ]
+            if rows.empty:
+                continue
+            frames.append(
                 pd.DataFrame(
                     {
-                        "model": model,
+                        "model": path.parent.name,
+                        "source": "hub",
                         "reference_date": rows["reference_date"].astype(str),
                         "location": rows["location"].astype(str),
                         "target_end_date": rows["target_end_date"].astype(str),
-                        "output_type": "sample",
                         "sample": pd.to_numeric(rows["output_type_id"]).astype(
                             "int64"
                         ),
@@ -262,39 +358,9 @@ def load_hub_submissions(
                     }
                 )
             )
-        rest = table.loc[~keep]
-        for (ref, target), grp in rest.groupby(["reference_date", "target"]):
-            other.append(
-                {
-                    "model": model,
-                    "reference_date": str(ref),
-                    "target": str(target),
-                    "output_types": ", ".join(
-                        sorted(set(grp["output_type"].astype(str)))
-                    ),
-                    "rows": len(grp),
-                }
-            )
-    weekly_df = (
-        pd.concat(weekly, ignore_index=True)
-        if weekly
-        else pd.DataFrame(
-            columns=[
-                "model",
-                "reference_date",
-                "location",
-                "target_end_date",
-                "output_type",
-                "sample",
-                "value",
-            ]
-        )
-    )
-    other_df = pd.DataFrame(
-        other,
-        columns=["model", "reference_date", "target", "output_types", "rows"],
-    )
-    return weekly_df, other_df
+    if not frames:
+        return pd.DataFrame(columns=list(SAMPLE_COLUMNS))
+    return pd.concat(frames, ignore_index=True)
 
 
 def load_team_metadata(root: Path | str) -> pd.DataFrame:
@@ -365,6 +431,7 @@ def our_forecasts(
     delays: pd.DataFrame,
     config: BacktestConfig,
     models: Sequence[str],
+    min_horizon: int | None = None,
 ) -> pd.DataFrame:
     """Run our models for hub rounds from the matching vintages.
 
@@ -378,21 +445,25 @@ def our_forecasts(
         Horizons, samples and seed.
     models : sequence of str
         Registered model names.
+    min_horizon : int, optional
+        First week, in weeks from the reference date, to cover the weeks
+        the hub forecasts did. Defaults to `config.min_horizon`.
 
     Returns
     -------
     pandas.DataFrame
-        Output of `run_forecasts`, with `model` as the hub id
-        `epiforecasts-<name>` and a `source` column (`real` or
+        Output of `run_forecasts` with a `source` column (`real` or
         `reconstructed`). Rounds with no matching vintage are skipped.
     """
+    if min_horizon is not None:
+        config = replace(config, min_horizon=min_horizon)
     real = target.loc[target["kind"] == "real"]
     vintages = sorted(set(real["vintage"]))
     built = [get_model(n) for n in models]
     frames = []
     for ref in sorted(set(reference_dates)):
         match = match_vintage(ref, vintages)
-        if match is None:
+        if match is None or not built:
             continue
         vintage, source = match
         if source == "real":
@@ -402,35 +473,81 @@ def our_forecasts(
             rows = reconstruct_vintages(real, delays, [vintage])
             src = delays.loc[delays["vintage"] == delays["vintage"].max()]
             dly = reconstruct_delays(src, vintage).assign(kind="reconstructed")
-        tasks = make_tasks(rows, dly, config)
-        fc = run_forecasts(built, tasks)
+        fc = run_forecasts(built, make_tasks(rows, dly, config))
         fc["source"] = source
         frames.append(fc)
-    out = pd.concat(frames, ignore_index=True)
-    out["model"] = f"{OWN_TEAM}-" + out["model"]
-    return out
+    if not frames:
+        return pd.DataFrame(columns=[*SAMPLE_COLUMNS, "horizon"])
+    return pd.concat(frames, ignore_index=True)
 
 
-def score_comparison(
-    hub: pd.DataFrame, ours: pd.DataFrame, target: pd.DataFrame
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Score hub and our forecasts on the same truth, places and weeks.
+def stored_forecasts(
+    paths: Sequence[Path | str],
+    reference_dates: Sequence[str],
+    exclude: Sequence[str] = (),
+) -> pd.DataFrame:
+    """Take forecasts for hub rounds from stored forecast files.
 
     Parameters
     ----------
-    hub : pandas.DataFrame
-        Weekly samples from `load_hub_submissions`.
-    ours : pandas.DataFrame
-        Output of `our_forecasts`.
+    paths : sequence of pathlib.Path or str
+        Outputs of `run_forecasts`, such as the backtest and held-out
+        forecasts. Missing files are skipped.
+    reference_dates : sequence of str
+        Hub reference dates.
+    exclude : sequence of str
+        Models not to take, such as those run live.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `SAMPLE_COLUMNS`, with `source` the vintage kind. For each
+        model and round, real vintages win over reconstructed ones.
+    """
+    frames = []
+    for path in paths:
+        if not Path(path).exists():
+            continue
+        fc = pd.read_csv(path)
+        fc = fc.loc[
+            fc["reference_date"].astype(str).isin(list(reference_dates))
+            & ~fc["model"].isin(list(exclude))
+            & fc["kind"].isin(["real", "reconstructed"])
+        ]
+        frames.append(fc)
+    if not frames:
+        return pd.DataFrame(columns=list(SAMPLE_COLUMNS))
+    fc = pd.concat(frames, ignore_index=True).drop_duplicates()
+    best = fc.groupby(["model", "reference_date"])["kind"].transform(
+        lambda k: "real" if (k == "real").any() else "reconstructed"
+    )
+    fc = fc.loc[fc["kind"] == best]
+    return fc.rename(columns={"kind": "source"})[list(SAMPLE_COLUMNS)]
+
+
+def score_comparison(
+    forecasts: pd.DataFrame,
+    target: pd.DataFrame,
+    complete_after_weeks: int = 0,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Score every model on the weeks it forecast, against the latest data.
+
+    Parameters
+    ----------
+    forecasts : pandas.DataFrame
+        Hub and our samples with `SAMPLE_COLUMNS`.
     target : pandas.DataFrame
         Target rows with every real vintage.
+    complete_after_weeks : int
+        $K$: a week is complete if it ended at least this many weeks
+        before the truth vintage.
 
     Returns
     -------
     tuple of pandas.DataFrame
-        The scores (`score_forecasts` output with `source` and
-        `truth_vintage`), and the pending rounds with columns
-        `reference_date`, `vintage` and `models`.
+        The scores (`score_forecasts` output with `source`, `vintage`,
+        `truth_vintage` and `complete`), and the pending rounds with
+        columns `reference_date`, `vintage` and `models`.
     """
     real = target.loc[target["kind"] == "real"]
     vintages = sorted(set(real["vintage"]))
@@ -438,20 +555,9 @@ def score_comparison(
     truth = real.loc[
         real["vintage"] == latest, ["location", "target_end_date", "total"]
     ].rename(columns={"total": "truth"})
-    cols = [
-        "model",
-        "source",
-        "reference_date",
-        "location",
-        "target_end_date",
-        "sample",
-        "value",
-    ]
-    both = pd.concat(
-        [hub.assign(source="hub")[cols], ours[cols]], ignore_index=True
-    )
+    cutoff = as_date(latest) - dt.timedelta(weeks=complete_after_weeks)
     scored, pending = [], []
-    for ref, grp in both.groupby("reference_date"):
+    for ref, grp in forecasts[list(SAMPLE_COLUMNS)].groupby("reference_date"):
         match = match_vintage(str(ref), vintages)
         if match is None or match[0] >= latest:
             pending.append(
@@ -462,22 +568,14 @@ def score_comparison(
                 }
             )
             continue
-        cells = grp[["model", "source", "location", "target_end_date"]]
-        cover = cells.drop_duplicates().groupby(["location", "target_end_date"])
-        n_models = grp[["model", "source"]].drop_duplicates().shape[0]
-        n_cover = cover.size()
-        common = n_cover[n_cover == n_models].reset_index()[
-            ["location", "target_end_date"]
-        ]
-        sel = grp.merge(common, on=["location", "target_end_date"])
-        sel = sel.assign(
+        grp = grp.assign(
             horizon=(
-                pd.to_datetime(sel["target_end_date"]) - pd.Timestamp(str(ref))
+                pd.to_datetime(grp["target_end_date"]) - pd.Timestamp(str(ref))
             ).dt.days
             // 7
         )
         s = score_forecasts(
-            sel,
+            grp,
             truth,
             keys=(
                 "model",
@@ -489,6 +587,9 @@ def score_comparison(
         )
         s["vintage"] = match[0]
         s["truth_vintage"] = latest
+        s["complete"] = pd.to_datetime(s["target_end_date"]) <= pd.Timestamp(
+            cutoff
+        )
         scored.append(s)
     scores = pd.concat(scored, ignore_index=True) if scored else pd.DataFrame()
     return scores, pd.DataFrame(
@@ -496,39 +597,71 @@ def score_comparison(
     )
 
 
-def display_names(models: Sequence[str], mode: str) -> dict[str, str]:
-    """Map model ids to the labels shown under a display mode.
+def summarise_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
+    """Summarise complete-week scores by round and model.
 
     Parameters
     ----------
-    models : sequence of str
-        Hub model ids, including ours (`epiforecasts-*`).
-    mode : str
-        One of `DISPLAY_MODES`.
+    scores : pandas.DataFrame
+        Output of `score_comparison`.
+    baseline : str
+        Model that WIS is relative to.
 
     Returns
     -------
-    dict
-        Model id to label. Models left out are not shown.
-
-    Raises
-    ------
-    ValueError
-        If `mode` is unknown.
+    pandas.DataFrame
+        Columns `reference_date`, `model`, `source`, `n`, `wis`,
+        `relative_wis` (on the weeks shared with the baseline; missing if
+        none), `coverage_50`, `coverage_90` and `bias`.
     """
-    if mode not in DISPLAY_MODES:
-        raise ValueError(
-            f"Unknown display mode {mode!r}; use one of {DISPLAY_MODES}."
-        )
-    own = [m for m in models if m.startswith(f"{OWN_TEAM}-")]
-    others = sorted(m for m in models if m not in own)
-    names = {m: m for m in own}
-    if mode == "named":
-        names |= {m: m for m in others}
-    elif mode == "anonymised":
-        letters = string.ascii_uppercase
-        names |= {
-            m: f"Team {letters[i % 26]}{'' if i < 26 else i // 26}"
-            for i, m in enumerate(others)
-        }
-    return {m: names[m] for m in models if m in names}
+    done = scores.loc[scores["complete"]]
+    cols = [
+        "reference_date",
+        "model",
+        "source",
+        "n",
+        "wis",
+        "relative_wis",
+        "coverage_50",
+        "coverage_90",
+        "bias",
+    ]
+    if done.empty:
+        return pd.DataFrame(columns=cols)
+    out = summarise_scores(done, by=("reference_date", "model", "source"))
+    rel = relative_skill(
+        done,
+        baseline=baseline,
+        by=("reference_date",),
+        metrics=("wis",),
+        match_on=("reference_date", "location", "target_end_date"),
+    )
+    out = out.merge(
+        rel[["model", "reference_date", "relative_wis"]],
+        on=["model", "reference_date"],
+        how="left",
+    )
+    return (
+        out[cols].sort_values(["reference_date", "wis"]).reset_index(drop=True)
+    )
+
+
+def forecast_quantiles(forecasts: pd.DataFrame) -> pd.DataFrame:
+    """Return the plotted quantiles of each forecast.
+
+    Parameters
+    ----------
+    forecasts : pandas.DataFrame
+        Samples with `SAMPLE_COLUMNS`.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per model, source, round, location and week, with the
+        `QUANTILES` columns.
+    """
+    keys = ["model", "source", "reference_date", "location", "target_end_date"]
+    grp = forecasts.groupby(keys)["value"]
+    out = grp.quantile(np.array(list(QUANTILES.values()))).unstack()
+    out.columns = list(QUANTILES)
+    return out.reset_index()

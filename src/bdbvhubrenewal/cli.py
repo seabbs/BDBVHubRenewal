@@ -9,6 +9,9 @@ Commands:
   the leave-one-province-out check.
 - `nowcast`: forecast from a real vintage, write the hub file and check it.
   With `--config` (and `--fit`), forecast from a fit configuration.
+  The province samples are split across the health zones unless
+  `--no-zones` is given.
+- `zone-backtest`: score zone forecasts against zone persistence.
 - `fit`: fit a configuration and write the fit directory and its
   `diagnostics.json`, for the submission CI.
 - `plot-submission`: plot a submitted hub file.
@@ -44,11 +47,17 @@ from bdbvhubrenewal.data import (
     coherence_summary,
     delays_for_vintage,
     fetch_hub_data,
+    load_daily_zones,
     load_delays,
     load_target,
 )
+from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
 from bdbvhubrenewal.evaluation import backtest as bt
-from bdbvhubrenewal.evaluation.heldout import HeldOutError, run_heldout
+from bdbvhubrenewal.evaluation.heldout import (
+    HeldOutError,
+    load_model_choices,
+    run_heldout,
+)
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastTask,
@@ -56,6 +65,7 @@ from bdbvhubrenewal.forecasters.base import (
     get_model,
     list_models,
 )
+from bdbvhubrenewal.forecasters.zones import ZoneAllocator
 from bdbvhubrenewal.submission.fitting import (
     Forecast,
     get_config,
@@ -272,6 +282,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     now.add_argument("--out", default="output/submission")
     now.add_argument("--hub-config", default=None)
+    now.add_argument(
+        "--no-zones",
+        dest="zones",
+        action="store_false",
+        help="Leave the health zones out of the hub file.",
+    )
+
+    zb = sub.add_parser(
+        "zone-backtest", help="Score zone forecasts against zone persistence."
+    )
+    zb.add_argument("--data", default=data_dir)
+    zb.add_argument(
+        "--models", nargs="*", default=["persistence", "persistencenow"]
+    )
+    zb.add_argument("--hub-config", default=None)
+    zb.add_argument("--out", default="results/zone-scores.csv")
 
     fit = sub.add_parser(
         "fit", help="Fit a configuration and write its diagnostics."
@@ -355,9 +381,29 @@ def build_parser() -> argparse.ArgumentParser:
     cmp.add_argument("--config", default="config/hub-comparison.toml")
     cmp.add_argument("--backtest-config", default="config/backtest.toml")
     cmp.add_argument("--data", default=data_dir)
-    cmp.add_argument("--hub-dir", default=f"{data_dir}/raw/hub-submissions")
-    cmp.add_argument("--out", default="output/hub-comparison")
-    cmp.add_argument("--models", nargs="*", default=None)
+    cmp.add_argument(
+        "--hub-dir",
+        default="data/hub-submissions",
+        help="Committed hub files: metadata and openly licensed forecasts.",
+    )
+    cmp.add_argument(
+        "--cache-dir",
+        default=f"{data_dir}/raw/hub-submissions",
+        help="Uncommitted hub files, for other licences.",
+    )
+    cmp.add_argument("--out", default="results/hub-comparison")
+    cmp.add_argument(
+        "--models",
+        nargs="*",
+        default=None,
+        help="Models to run live. Defaults to the unfitted ones.",
+    )
+    cmp.add_argument(
+        "--stored",
+        nargs="*",
+        default=None,
+        help="Forecast files for the other models. Defaults to the config.",
+    )
     cmp.add_argument(
         "--fetch",
         action="store_true",
@@ -429,7 +475,8 @@ def _task(args: argparse.Namespace) -> tuple[ForecastTask, list[str]]:
     vintage = _vintage([str(v) for v in real["vintage"].unique()], args.vintage)
     rows = real.loc[real["vintage"] == vintage]
     delays, note = delays_for_vintage(delays, vintage)
-    return bt.make_tasks(rows, delays, config)[0], [note] if note else []
+    task = bt.make_tasks(rows, delays, config, history=real)[0]
+    return task, [note] if note else []
 
 
 def host_devices(n: int) -> None:
@@ -495,6 +542,10 @@ def _backtest(args: argparse.Namespace) -> int:
     output.mkdir(parents=True, exist_ok=True)
     if args.evaluate_holdout:
         # The held-out run uses the models in the model choice record.
+        record = Path(config.model_choice)
+        if record.exists() and not load_model_choices(record):
+            print("No model choice recorded, so no vintage is held out.")
+            return 0
         try:
             scores = run_heldout(
                 target,
@@ -609,7 +660,30 @@ def _write_fits(fits: list[pd.DataFrame], path: Path) -> None:
         bt.merge_by_model(path, table).to_csv(path, index=False)
 
 
+def _zones(
+    args: argparse.Namespace,
+    task: ForecastTask,
+    samples: pd.DataFrame,
+    hub_config: str,
+) -> tuple[pd.DataFrame | None, str]:
+    """Split province samples across zones, or say why not."""
+    if not args.zones:
+        return None, ""
+    try:
+        daily = load_daily_zones(args.data)
+    except OSError:
+        return None, "no zone data, so the file has no health zones"
+    counts = weekly_zone_counts(daily, task.vintage)
+    if counts.empty:
+        return None, f"no zone data for {task.vintage}, so no health zones"
+    zones = hub_zones(hub_config)
+    return ZoneAllocator().allocate(samples, task, counts, zones), ""
+
+
 def _nowcast(args: argparse.Namespace) -> int:
+    hub_config = args.hub_config or str(
+        Path(args.data) / "hub-config" / "tasks.json"
+    )
     try:
         task, handled = _task(args)
         if args.config:
@@ -627,11 +701,15 @@ def _nowcast(args: argparse.Namespace) -> int:
                     nat, ["target_end_date", "sample", "value"]
                 ]
             result = Forecast(samples.loc[~nat], national=national)
+        zones, zone_note = _zones(args, task, result.samples, hub_config)
+        if zone_note:
+            handled.append(zone_note)
         table = to_hub_table(
             result.samples,
             task.reference_date,
             unassigned=result.unassigned,
             national=result.national,
+            zones=zones,
         )
     except (KeyError, ValueError, OSError) as err:
         print(f"ERROR: {err}", file=sys.stderr)
@@ -641,11 +719,12 @@ def _nowcast(args: argparse.Namespace) -> int:
     _write_national_sidecar(Path(args.out), task, result)
     # Problems handled on the way, for the PR's `Handled:` line.
     (Path(args.out) / "handled.json").write_text(json.dumps(handled) + "\n")
+    # Whether the file has health zones, for the CI's zone check.
+    n_zones = 0 if zones is None else int(zones["location"].nunique())
+    zone_record = {"zones": n_zones > 0, "n_zones": n_zones, "note": zone_note}
+    (Path(args.out) / "zones.json").write_text(json.dumps(zone_record) + "\n")
     for note in handled:
         print(f"Handled: {note}")
-    hub_config = args.hub_config or str(
-        Path(args.data) / "hub-config" / "tasks.json"
-    )
     hub_round = load_hub_round(hub_config)
     open_round = task.reference_date.isoformat() in hub_round.reference_dates
     errors = validate_submission_file(path, hub_round, check_round=open_round)
@@ -658,6 +737,31 @@ def _nowcast(args: argparse.Namespace) -> int:
     for e in errors:
         print(f"ERROR: {e}", file=sys.stderr)
     return 1 if errors else 0
+
+
+def _zone_backtest(args: argparse.Namespace) -> int:
+    from bdbvhubrenewal.evaluation.zones import (
+        zone_backtest,
+        zone_relative_skill,
+    )
+
+    hub_config = args.hub_config or str(
+        Path(args.data) / "hub-config" / "tasks.json"
+    )
+    scores = zone_backtest(
+        load_target(args.data),
+        load_delays(args.data),
+        load_daily_zones(args.data),
+        hub_zones(hub_config),
+        models=args.models,
+    )
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    scores.to_csv(out, index=False)
+    rel = zone_relative_skill(scores, by=("horizon",))
+    print(rel.round(3).to_string(index=False))
+    print(f"Wrote {out} ({len(scores)} scores).")
+    return 0
 
 
 def _write_national_sidecar(
@@ -824,43 +928,68 @@ def _compare_hub(args: argparse.Namespace) -> int:
     from bdbvhubrenewal.evaluation import hubcompare as hc
 
     cfg = hc.load_comparison_config(args.config)
-    hub_dir = Path(args.hub_dir)
+    hub_dir, cache = Path(args.hub_dir), Path(args.cache_dir)
     if args.fetch:  # pragma: no cover - network
-        hc.fetch_hub_submissions(hub_dir, cfg.models, ref=cfg.ref)
-    weekly, other = hc.load_hub_submissions(hub_dir)
-    weekly = weekly.loc[weekly["model"].isin(cfg.models)]
-    other = other.loc[other["model"].isin(cfg.models)]
+        hc.fetch_hub_submissions(hub_dir, cache, ref=cfg.ref)
+    hub = hc.load_hub_submissions(hub_dir, cache)
     target, delays = load_target(args.data), load_delays(args.data)
     config = bt.load_config(args.backtest_config)
+    rounds = sorted(set(hub["reference_date"]))
+    live = args.models or [s.name for s in list_models() if not s.fitted]
+    horizons = (
+        pd.to_datetime(hub["target_end_date"])
+        - pd.to_datetime(hub["reference_date"])
+    ).dt.days // 7
     ours = hc.our_forecasts(
-        sorted(set(weekly["reference_date"])),
+        rounds,
         target,
         delays,
         config,
-        _models(args.models),
+        live,
+        min_horizon=min(int(horizons.min()), config.min_horizon)
+        if len(hub)
+        else None,
     )
-    scores, pending = hc.score_comparison(weekly, ours, target)
+    stored = hc.stored_forecasts(
+        cfg.stored if args.stored is None else args.stored,
+        rounds,
+        exclude=live,
+    )
+    forecasts = pd.concat(
+        [f for f in (hub, ours, stored) if not f.empty], ignore_index=True
+    )
+    scores, pending = hc.score_comparison(
+        forecasts, target, config.complete_after_weeks
+    )
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    forecasts = pd.concat(
-        [weekly.drop(columns="output_type").assign(source="hub"), ours],
-        ignore_index=True,
-    )
-    forecasts.to_csv(out / "forecasts.csv.gz", index=False)
     scores.to_csv(out / "scores.csv", index=False)
     pending.to_csv(out / "pending.csv", index=False)
-    other.to_csv(out / "other-rounds.csv", index=False)
+    hc.forecast_quantiles(forecasts).to_csv(
+        out / "quantiles.csv.gz", index=False
+    )
     teams = hc.load_team_metadata(hub_dir)
-    teams.loc[teams["model"].isin(cfg.models)].to_csv(
+    teams.loc[teams["model"].isin(set(hub["model"]))].to_csv(
         out / "teams.csv", index=False
     )
     manifest = hub_dir / "manifest.json"
+    accessed = dt.date.today().isoformat()
     if manifest.exists():
-        (out / "manifest.json").write_text(manifest.read_text())
+        accessed = str(json.loads(manifest.read_text())["accessed"])
+    real = target.loc[target["kind"] == "real"]
+    summary = {
+        "truth_vintage": str(real["vintage"].max()),
+        "complete_after_weeks": config.complete_after_weeks,
+        "baseline": hc.resolve_baseline(cfg.baseline),
+        "preferred_baseline": cfg.baseline,
+        "locations": list(cfg.locations),
+        "hub_ids": hc.own_hub_ids(),
+        "accessed": accessed,
+    }
+    (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(
         f"Hub comparison: {len(scores)} scored forecasts, "
-        f"{len(pending)} rounds pending, {len(other)} files from other "
-        f"rounds. Written to {out}."
+        f"{len(pending)} rounds pending. Written to {out}."
     )
     return 0
 
@@ -913,6 +1042,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _backtest(args)
     if args.command == "nowcast":
         return _nowcast(args)
+    if args.command == "zone-backtest":
+        return _zone_backtest(args)
     if args.command == "metadata":
         return _metadata(args)
     if args.command == "bvd":  # pragma: no cover - network

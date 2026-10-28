@@ -94,7 +94,9 @@ Draw what was **submitted**, the samples in `<csv>`, not a re-run of the model.
 
 ```python
 def plot_submission(submission: Path, vintage: str) -> Figure:
-    samples = read_hub_file(submission)  # location, target_end_date, sample, value
+    samples = read_hub_file(
+        submission
+    )  # location, target_end_date, sample, value
     locations = ["CD", *largest_provinces(samples, n=3)]
     return grid_of(
         plot_nowcast(location=loc, vintage=vintage, forecasts=samples)
@@ -197,22 +199,34 @@ extra = mcmc.get_extra_fields(group_by_chain=True)  # needs extra_fields=(
 #   "diverging", "num_steps", "adapt_state.step_size", "accept_prob", "energy")
 depth = np.log2(extra["num_steps"] + 1)
 diagnostics = {
-    "schema_version": 1, "model": model, "config": config, "sampler": "nuts",
-    "num_chains": n_chains, "num_samples": n_samples,
-    "max_tree_depth": max_tree_depth, "runtime_seconds": runtime,
+    "schema_version": 1,
+    "model": model,
+    "config": config,
+    "sampler": "nuts",
+    "num_chains": n_chains,
+    "num_samples": n_samples,
+    "max_tree_depth": max_tree_depth,
+    "runtime_seconds": runtime,
     "parameters": [
-        {"name": name.split("[")[0], "index": index_of(name),
-         "rhat": none_if_nan(row.r_hat), "ess_bulk": none_if_nan(row.ess_bulk),
-         "ess_tail": none_if_nan(row.ess_tail)}
+        {
+            "name": name.split("[")[0],
+            "index": index_of(name),
+            "rhat": none_if_nan(row.r_hat),
+            "ess_bulk": none_if_nan(row.ess_bulk),
+            "ess_tail": none_if_nan(row.ess_tail),
+        }
         for name, row in summ.iterrows()
     ],
     "chains": [
-        {"chain": c, "draws": n_samples,
-         "divergences": int(extra["diverging"][c].sum()),
-         "step_size": float(extra["adapt_state.step_size"][c].mean()),
-         "tree_depth_hits": int((depth[c] >= max_tree_depth).sum()),
-         "mean_accept": float(extra["accept_prob"][c].mean()),
-         "ebfmi": float(az.bfmi(extra["energy"][c][None, :])[0])}
+        {
+            "chain": c,
+            "draws": n_samples,
+            "divergences": int(extra["diverging"][c].sum()),
+            "step_size": float(extra["adapt_state.step_size"][c].mean()),
+            "tree_depth_hits": int((depth[c] >= max_tree_depth).sum()),
+            "mean_accept": float(extra["accept_prob"][c].mean()),
+            "ebfmi": float(az.bfmi(extra["energy"][c][None, :])[0]),
+        }
         for c in range(n_chains)
     ],
 }

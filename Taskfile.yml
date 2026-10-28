@@ -134,10 +134,23 @@ tasks:
       - uv run bdbvhubrenewal fit --config {{.CONFIG}} --out output/fits/{{.CONFIG}} {{.CLI_ARGS}}
       - uv run bdbvhubrenewal nowcast --config {{.CONFIG}} --fit output/fits/{{.CONFIG}} --out output/candidates/{{.CONFIG}}
 
+  compare-hub:
+    desc: Fetch the hub's weekly-round forecasts and score them with ours
+    cmds:
+      - uv run bdbvhubrenewal compare-hub --fetch
+
   plots:
     desc: Make the docs figures and tables from the backtest results
     cmds:
+      - uv run bdbvhubrenewal compare-hub
       - uv run bdbvhubrenewal report
+
+  getting-started:
+    desc: Run the Getting started notebook again and save its outputs
+    cmds:
+      - >-
+        uv run --group docs jupytext --to ipynb --execute --run-path .
+        docs/getting-started.py
 
   docs:
     desc: Build the docs site into _site/

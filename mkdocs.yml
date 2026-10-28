@@ -15,14 +15,10 @@ site_dir: _site
 exclude_docs: |
   generated/*
   examples/*
-  # The comparison with hub forecasts stays off the site until its
-  # publication is decided (see config/hub-comparison.toml).
-  comparison.md
-  figures/comparison/
 
 nav:
   - Home: index.md
-  - Getting started: getting-started.md
+  - Getting started: getting-started.ipynb
   - Methods:
       - Data: methods/data.md
       - Model: methods/model.md
@@ -31,6 +27,7 @@ nav:
   - Data: data.md
   - Backtest: backtest.md
   - Held-out evaluation: heldout.md
+  - Comparison with hub forecasts: comparison.md
   - Nowcast: nowcast.md
   - Submission:
       - Rounds: submission/rounds/index.md
@@ -134,6 +131,10 @@ markdown_extensions:
 
 plugins:
   - search
+  - mkdocs-jupyter:
+      execute: false
+      include_source: true
+      ignore_h1_titles: false
   - mkdocstrings:
       default_handler: python
       handlers:

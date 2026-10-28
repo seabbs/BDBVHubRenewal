@@ -16,7 +16,11 @@ from bdbvhubrenewal.forecasters import (
     get_model,
     list_models,
 )
-from bdbvhubrenewal.forecasters.persistence import nowcast_draws
+from bdbvhubrenewal.forecasters.persistence import (
+    horizon_scales,
+    nowcast_draws,
+    revision_variance,
+)
 
 
 def _task(
@@ -51,22 +55,95 @@ def test_registry_has_persistencenow_and_not_the_lag_variant() -> None:
     assert isinstance(get_model("persistencenow"), PersistenceNow)
 
 
-def test_nowcast_draws_add_negative_binomial_counts() -> None:
+def test_nowcast_draws_add_negative_binomial_counts_per_place() -> None:
     rng = np.random.default_rng(1)
-    observed = np.array([0.0, 40.0, 40.0, 40.0])
-    ratio = np.array([1.0, 0.0, 0.25, 1.5])
-    size = np.array([5.0, 5.0, np.inf, 5.0])
+    # Two places, four weeks, each with its own ratio and size.
+    observed = np.array([[0.0, 40.0, 40.0, 40.0], [0.0, 0.0, 10.0, 10.0]])
+    ratio = np.array([[1.0, 0.0, 0.25, 1.5], [1.0, 1.0, 1.0, 1.0]])
+    size = np.array([[5.0, 5.0, np.inf, 5.0], [5.0, 5.0, 5.0, 5.0]])
     draws = nowcast_draws(observed, ratio, size, 20000, rng)
-    assert draws.shape == (20000, 4)
-    # Never below the published count; nothing added without a ratio.
+    assert draws.shape == (20000, 2, 4)
+    # Without revision noise, never below the published count.
     assert (draws >= observed).all()
-    assert (draws[:, :2] == observed[:2]).all()
-    added = draws[:, 2:] - observed[2:]
-    # The point nowcast is the mean of what is added.
+    assert (draws[:, 0, :2] == observed[0, :2]).all()
+    added = (draws - observed)[:, 0, 2:]
+    # The point nowcast is the mean of what is added: Poisson with an
+    # infinite size, overdispersed otherwise.
     assert np.allclose(added.mean(axis=0), [10, 60], rtol=0.05)
-    # Poisson with an infinite size, overdispersed otherwise.
     assert added[:, 0].var() == pytest.approx(10, rel=0.1)
     assert added[:, 1].var() == pytest.approx(60 + 60**2 / 5, rel=0.1)
+    # Places are drawn independently.
+    other = (draws - observed)[:, 1, 3]
+    assert abs(np.corrcoef(added[:, 1], other)[0, 1]) < 0.05
+
+
+def test_high_count_places_use_their_own_delay(task: ForecastTask) -> None:
+    sources = PersistenceNow().delay_sources(task)
+    assert sources["CD-IT"] == "own"
+    assert sources["CD-NK"] == "own"
+    assert sources["CD-BU"] == "pooled"
+
+
+def test_the_delay_window_sets_the_longest_delay() -> None:
+    assert PersistenceNow(n_history=4).max_delay == 21
+    assert PersistenceNow(n_history=14).max_delay == 60
+
+
+def test_nowcast_draws_can_fall_below_the_published_total() -> None:
+    rng = np.random.default_rng(2)
+    observed = np.array([[100.0]])
+    known = np.array([[80.0]])
+    draws = nowcast_draws(
+        observed, np.zeros((1, 1)), np.full((1, 1), np.inf), 20000, rng,
+        known=known, revision=0.5,
+    )  # fmt: skip
+    # Re-imputation moves the total both ways, with variance
+    # revision * imputed, and never below the known onsets.
+    assert (draws < observed).mean() > 0.3
+    assert draws.mean() == pytest.approx(100, abs=0.5)
+    assert draws.var() == pytest.approx(0.5 * 20, rel=0.15)
+    assert (draws >= known).all()
+
+
+def test_revision_variance_from_past_vintages(target: pd.DataFrame) -> None:
+    real = target.loc[target["kind"] == "real"]
+    kappa = revision_variance(real, "2026-10-24")
+    assert 0 < kappa < 5
+    # One vintage has no revisions to learn from.
+    one = real.loc[real["vintage"] == "2026-10-24"]
+    assert revision_variance(one, "2026-10-24") == 0.0
+
+
+def test_horizon_scales_shrink_to_one() -> None:
+    rng = np.random.default_rng(3)
+    wide = [rng.normal(0, 2.0, 400), rng.normal(0, 2.0, 400), np.array([])]
+    scales = horizon_scales(wide, prior=10)
+    assert scales[0] == pytest.approx(2.0, rel=0.1)
+    assert scales[2] == pytest.approx(scales[1], rel=0.01)
+    assert horizon_scales([np.array([])], prior=10)[0] == 1.0
+    few = horizon_scales([np.array([5.0])], prior=10)[0]
+    assert 1.0 < few < 2.0
+
+
+def test_persistencenow_calibrates_the_walk_on_reconstructed_vintages(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    from bdbvhubrenewal.evaluation.backtest import (
+        development_tasks,
+        load_config,
+    )
+
+    config = load_config()
+    tasks = development_tasks(target, delays, config)
+    task = next(
+        t for t in tasks
+        if t.kind == "reconstructed" and t.vintage == "2026-10-03"
+    )  # fmt: skip
+    model = PersistenceNow()
+    errors = model.walk_errors(task)
+    assert len(errors) >= 3
+    assert sum(e.size for e in errors) > 50
+    check_samples(model.forecast(task), task)
 
 
 def test_persistencenow_output(task: ForecastTask) -> None:
@@ -169,8 +246,9 @@ def test_persistencenow_predicts_counts_as_reported_later(
     assert published < by_sample["value"].median()
     assert by_sample["value"].median() < by_sample["value_final"].median()
     assert task.delays is not None
-    _, tri = reporting_triangle(task.delays, "2026-10-09")
-    cdf = np.cumsum(delay_pmf(tri[-14:]))
+    model = PersistenceNow()
+    _, tri = reporting_triangle(task.delays, "2026-10-09", model.max_delay)
+    cdf = np.cumsum(delay_pmf(tri[-model.n_history :]))
     s_v, s_t = cdf[6], cdf[21]
     expected = published + (by_sample["value_final"].median() - published) * (
         (s_t - s_v) / (1 - s_v)

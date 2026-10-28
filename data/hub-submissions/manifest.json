@@ -1,0 +1,24 @@
+{
+  "repo": "InsightNet-US/BDBV-Modeling-Hub",
+  "ref": "main",
+  "commit": "5be7b9a3f3cd7946bc152b365f164277bd6aace6",
+  "accessed": "2026-10-28",
+  "files": [
+    {
+      "path": "model-output/ACCIDDA-Chromantis/2026-10-31-ACCIDDA-Chromantis.csv",
+      "committed": true
+    },
+    {
+      "path": "model-output/CEPH-Rtrend_BDBV/2026-10-31-CEPH-Rtrend_BDBV.csv",
+      "committed": true
+    },
+    {
+      "path": "model-output/MOBS-GLEAM_BDBV/2026-10-31-MOBS-GLEAM_BDBV.csv",
+      "committed": true
+    },
+    {
+      "path": "model-output/OHTJHU-BM/2026-10-31-OHTJHU-BM.csv",
+      "committed": true
+    }
+  ]
+}
