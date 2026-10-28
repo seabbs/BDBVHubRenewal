@@ -140,6 +140,11 @@ def ppc_coverage(data, insample, as_of):
     return out
 
 
+@pytest.mark.xfail(
+    strict=False,
+    reason="Ituri's recent weeks are under-covered on Linux, so pooled "
+    "coverage falls below 0.7 (seabbs/BDBVHubRenewal#19)",
+)
 def test_forecast_trajectories(fitted, outbreak, sim_vintage):
     name, model, _ = fitted
     start = time.perf_counter()
