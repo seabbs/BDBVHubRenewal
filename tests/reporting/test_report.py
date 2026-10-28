@@ -485,3 +485,55 @@ def test_recovery_section(tmp_path: Path) -> None:
     text = report._recovery_section(path)
     assert text.startswith("## Recovery on simulated vintages")
     assert "recovery-wis-horizon.svg" in text
+
+
+def _scenario_scores() -> pd.DataFrame:
+    rows = []
+    for model in ("persistence", "persistencenow"):
+        for scenario in ("calibrated_falling", "calibrated_rising"):
+            for location in ("CD", "CD-IT"):
+                for horizon in (0, 1):
+                    for view in ("final", "later"):
+                        rows.append(
+                            {
+                                "model": model,
+                                "scenario": scenario,
+                                "vintage": "2026-10-24",
+                                "location": location,
+                                "horizon": horizon,
+                                "wis": 10.0 + horizon,
+                                "coverage_50": 0.5,
+                                "coverage_90": 0.9,
+                                "bias": 0.123,
+                                "complete": view == "final",
+                                "truth_view": view,
+                            }
+                        )
+    return pd.DataFrame(rows)
+
+
+def test_scenario_scores_hidden_without_results(tmp_path: Path) -> None:
+    assert report._scenario_scores(tmp_path / "missing.csv") == ""
+
+
+def test_scenario_scores_table(tmp_path: Path) -> None:
+    path = tmp_path / "scenario-scores.csv"
+    _scenario_scores().to_csv(path, index=False)
+    text = report._scenario_scores(path)
+    assert "final data, complete weeks" in text
+    assert "as of 2 weeks later" in text
+    assert "calibrated_falling" in text
+    assert "national" in text
+    assert "province" in text
+    assert "persistencenow" in text
+    assert "10.5" in text  # mean WIS over horizons 0 and 1
+    assert "0.12" in text  # bias to 2 dp
+
+
+def test_plot_scenarios() -> None:
+    from bdbvhubrenewal.reporting.plots import plot_scenarios
+
+    fig = plot_scenarios(
+        _scenario_scores(), models=["persistence", "persistencenow"]
+    )
+    assert len(fig.axes) == 2  # one panel per scenario

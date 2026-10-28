@@ -1202,6 +1202,66 @@ def plot_scores(
     return fig
 
 
+def plot_scenarios(
+    scores: pd.DataFrame,
+    models: Sequence[str] | None = None,
+    mode: str = "light",
+) -> Figure:
+    """Plot mean WIS by horizon on the simulated scenarios.
+
+    Parameters
+    ----------
+    scores : pandas.DataFrame
+        Scenario scores with `scenario`, `location`, `model`, `horizon`,
+        `wis`, `truth_view` and `complete`.
+    models : sequence of str, optional
+        Models in registry order.
+    mode : str
+        `"light"` or `"dark"`.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        One panel per scenario, scored against the final data on complete
+        weeks. National is solid, provinces dashed and zones dotted.
+    """
+    models = list(models or scores["model"].unique())
+    final = scores.loc[(scores["truth_view"] == "final") & scores["complete"]]
+    scenarios = list(final["scenario"].unique())
+    fig, axes = _grid(len(scenarios), 3, width=3.6, height=2.6)
+    for ax, scenario in zip(axes, scenarios, strict=True):
+        s = final.loc[final["scenario"] == scenario]
+        levels = (
+            s["level"]
+            if "level" in s
+            else np.where(s["location"] == "CD", "national", "province")
+        )
+        for level, style in (
+            ("national", "-"),
+            ("province", "--"),
+            ("zone", ":"),
+        ):
+            part = s.loc[levels == level]
+            mean = part.groupby(["model", "horizon"])["wis"].mean().unstack(0)
+            for m in models:
+                if m not in mean.columns:
+                    continue
+                ax.plot(
+                    mean.index,
+                    mean[m],
+                    color=model_colour(m, models, mode),
+                    ls=style,
+                    marker="o",
+                    ms=4,
+                    label=f"{m}, {level}",
+                )
+        ax.set_title(scenario.removeprefix("calibrated_"))
+        ax.set_xlabel("Horizon")
+    axes[0].set_ylabel(_METRIC_LABELS.get("wis", "wis"))
+    axes[0].legend(fontsize=7)
+    return fig
+
+
 def plot_scores_by_truth(
     scores: pd.DataFrame,
     metric: str = "wis",

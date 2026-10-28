@@ -67,6 +67,7 @@ from bdbvhubrenewal.reporting.plots import (
     plot_reconstruction,
     plot_relative_skill,
     plot_revisions,
+    plot_scenarios,
     plot_scores,
     plot_scores_by_truth,
     plot_simulation,
@@ -499,7 +500,7 @@ def _lopo_section(path: Path) -> str:
     """Return the leave-one-province-out section, or nothing without results."""
     if not path.exists() or path.stat().st_size <= 1:
         return ""
-    scores = pd.read_csv(path)
+    scores = pd.read_csv(path, low_memory=False)
     if scores.empty:
         return ""
     table = summarise_scores(scores, by=("model", "masked"))
@@ -714,6 +715,58 @@ def _without_baseline(
 ) -> pd.DataFrame:
     """Drop the baseline's own rows, whose relative scores are all 1."""
     return rel.loc[rel["model"] != baseline].reset_index(drop=True)
+
+
+def _scenario_scores(path: Path) -> str:
+    """Return mean scores on the simulated scenarios, or nothing."""
+    if not path.exists() or path.stat().st_size <= 1:
+        return ""
+    scores = pd.read_csv(path, low_memory=False)
+    if scores.empty:
+        return ""
+    if "level" not in scores:
+        scores["level"] = scores["location"].map(
+            lambda x: "national" if x == "CD" else "province"
+        )
+    views = {
+        "final data, complete weeks": (scores["truth_view"] == "final")
+        & scores["complete"],
+        "as of 2 weeks later": scores["truth_view"] != "final",
+    }
+    tables = []
+    for label, keep in views.items():
+        table = (
+            scores.loc[keep]
+            .groupby(["scenario", "level", "model"], sort=False)
+            .agg(
+                wis=("wis", "mean"),
+                coverage_50=("coverage_50", "mean"),
+                coverage_90=("coverage_90", "mean"),
+                bias=("bias", "mean"),
+            )
+            .reset_index()
+            .rename(
+                columns={
+                    "wis": "mean WIS",
+                    "coverage_50": "50% coverage",
+                    "coverage_90": "90% coverage",
+                    "bias": "mean bias",
+                }
+            )
+        )
+        tables.append(f"**Scored against {label}**\n\n" + _table(table))
+    return "\n".join(tables)
+
+
+def _scenario_figure(path: Path) -> str:
+    """Return the scenario figure links, or nothing without results."""
+    if not _scenario_scores(path):
+        return ""
+    alt = "Mean WIS by horizon on the simulated scenarios."
+    return (
+        f"![{alt}](figures/scenario-wis-horizon.svg#only-light)\n"
+        f"![{alt}](figures/scenario-wis-horizon-dark.svg#only-dark)\n"
+    )
 
 
 def _relative_section(scores: pd.DataFrame) -> str:
@@ -972,6 +1025,27 @@ def _backtest_page(
             ),
             fig / "recovery-wis-horizon.svg",
         )
+    scen_path = res / "scenario-scores.csv.gz"
+    _write(gen / "scenario-scores.md", _scenario_scores(scen_path))
+    _write(gen / "scenario-figure.md", _scenario_figure(scen_path))
+    if scen_path.exists() and scen_path.stat().st_size > 1:
+        sscores = pd.read_csv(scen_path, low_memory=False)
+        if not sscores.empty:
+            save_light_dark(
+                partial(
+                    plot_scenarios,
+                    sscores,
+                    models=[
+                        *names,
+                        *(
+                            m
+                            for m in sscores["model"].unique()
+                            if m not in names
+                        ),
+                    ],
+                ),
+                fig / "scenario-wis-horizon.svg",
+            )
 
 
 _HELDOUT_SECTIONS = (
