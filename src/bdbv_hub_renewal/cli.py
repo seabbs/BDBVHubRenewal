@@ -14,7 +14,7 @@ Commands:
 - `plot-submission`: plot a submitted hub file.
 - `plot-ppc`: plot a fit's posterior predictive checks (`ppc.json`).
 - `coherence`: compare the national data with the sum of the provinces.
-- `validate`: run the hub's checks on files (`hub_validate`).
+- `validate`: run the hub's checks on files (`submission.validate`).
 - `metadata`: write and check a model's metadata YAML.
 - `compare-hub`: score our forecasts against the hub's submitted ones.
 - `report`: make the docs figures and tables.
@@ -49,7 +49,6 @@ from bdbv_hub_renewal.data import (
 )
 from bdbv_hub_renewal.evaluation import backtest as bt
 from bdbv_hub_renewal.evaluation.heldout import HeldOutError, run_heldout
-from bdbv_hub_renewal.fitting import Forecast, get_config, run_fit, run_forecast
 from bdbv_hub_renewal.forecasters.base import (
     NATIONAL,
     ForecastTask,
@@ -57,7 +56,13 @@ from bdbv_hub_renewal.forecasters.base import (
     get_model,
     list_models,
 )
-from bdbv_hub_renewal.hub import (
+from bdbv_hub_renewal.submission.fitting import (
+    Forecast,
+    get_config,
+    run_fit,
+    run_forecast,
+)
+from bdbv_hub_renewal.submission.hub import (
     SUBMISSION_CONFIG,
     load_hub_round,
     model_id,
@@ -718,7 +723,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     logging.getLogger("jax").setLevel(logging.WARNING)
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv[:1] == ["validate"]:
-        from bdbv_hub_renewal.hub_validate import main as validate_main
+        from bdbv_hub_renewal.submission.validate import main as validate_main
 
         return validate_main(argv[1:])
     parser = build_parser()
@@ -762,7 +767,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     from bdbv_hub_renewal.report import make_report
 
     make_report(figures=args.figures, generated=args.generated)
-    from bdbv_hub_renewal.rounds import make_round_pages
+    from bdbv_hub_renewal.submission.rounds import make_round_pages
 
     done = make_round_pages(args.ledger, generated=args.generated)
     print(f"Round pages: {len(done)} submitted rounds.")

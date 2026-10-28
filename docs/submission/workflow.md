@@ -48,20 +48,20 @@ A model without a sampler, such as persistence, writes diagnostics with `"sample
 The gate reads both as not applicable.
 The formats are specified in `ci/INTEGRATION.md`.
 
-A fit config is registered in [`bdbv_hub_renewal.fitting`][bdbv_hub_renewal.fitting].
+A fit config is registered in [`bdbv_hub_renewal.submission.fitting`][bdbv_hub_renewal.submission.fitting].
 
 ### Model interface
 
 The model integration plugs PyRenew in by registering `main` and `fallback` with `register_config(..., replace=True)`.
-Each [`FitConfig`][bdbv_hub_renewal.fitting.FitConfig] has two functions.
+Each [`FitConfig`][bdbv_hub_renewal.submission.fitting.FitConfig] has two functions.
 
 - `fit(task, sampler, fit_dir)` fits the model to the [`ForecastTask`][bdbv_hub_renewal.forecasters.base.ForecastTask], with the candidate's `sampler` table from `ci/policy.toml` (`num_chains`, `num_warmup`, `num_samples`, `target_accept`, `max_tree_depth`, `seed`).
   It saves what the forecast needs (posterior draws) in `fit_dir`, appends progress lines to `fit_dir/progress.log`, and returns the `diagnostics.json` record (one row per sampled scalar with R-hat and bulk and tail ESS, and one row per chain with draws and divergences, as in `ci/INTEGRATION.md`).
   It must also write `fit_dir/ppc.json` from the in-sample posterior predictive draws, with [`summarise_draws`][bdbv_hub_renewal.evaluation.ppc.summarise_draws] and [`write_ppc`][bdbv_hub_renewal.evaluation.ppc.write_ppc].
   `run_fit` writes the record, `fit.json` and the run time.
-- `forecast(task, fit_dir)` returns a [`Forecast`][bdbv_hub_renewal.fitting.Forecast]: province samples numbered 1 to 100, each one joint posterior draw across weeks and provinces, and optionally an `unassigned` national component by week and sample.
+- `forecast(task, fit_dir)` returns a [`Forecast`][bdbv_hub_renewal.submission.fitting.Forecast]: province samples numbered 1 to 100, each one joint posterior draw across weeks and provinces, and optionally an `unassigned` national component by week and sample.
 
-`nowcast` then writes the hub file with [`to_hub_table`][bdbv_hub_renewal.hub.to_hub_table], which makes the national value the exact sum of the province samples plus the unassigned component, and writes `national.json` beside it with the modelled provinces and that component.
+`nowcast` then writes the hub file with [`to_hub_table`][bdbv_hub_renewal.submission.hub.to_hub_table], which makes the national value the exact sum of the province samples plus the unassigned component, and writes `national.json` beside it with the modelled provinces and that component.
 The model is the latest entry of `results/model-choice.yml`, and the hub id is `config/hub.toml`.
 Every candidate, fallbacks included, is submitted under that one id, `epiforecasts-seabbsrenewal`.
 The metadata is written for the chosen model under that id.

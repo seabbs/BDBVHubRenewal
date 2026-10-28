@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 import yaml
 
-from bdbv_hub_renewal.hub import (
+from bdbv_hub_renewal.submission.hub import (
     HUB_COLUMNS,
     load_hub_round,
     model_id,

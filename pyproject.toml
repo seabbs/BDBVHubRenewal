@@ -116,7 +116,7 @@ convention = "numpy"
 # Ported from the hub validation bundle, whose checks are named after
 # hubValidations' and are documented in docs/submission/hub-spec.md.
 # The small config classes and helpers carry no docstrings.
-"src/bdbv_hub_renewal/hub_validate.py" = ["D101", "D102", "D103"]
+"src/bdbv_hub_renewal/submission/validate.py" = ["D101", "D102", "D103"]
 # Method signatures follow PyRenew's, and maths names keep their capitals.
 "src/bdbv_hub_renewal/model/**" = ["ARG002", "N803", "N806", "PTH123"]
 # The model's tests, from the prototype.

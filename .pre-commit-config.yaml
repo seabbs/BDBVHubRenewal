@@ -7,7 +7,7 @@ repos:
     hooks:
       # Downloaded, generated and fixture files are left as they are.
       - id: end-of-file-fixer
-        exclude: &generated ^(data|results|docs/(generated|figures|examples)|tests/hub_validation/fixtures|ci/fixtures)/
+        exclude: &generated ^(data|results|docs/(generated|figures|examples)|tests/submission/hub_validation/fixtures|ci/fixtures)/
       - id: trailing-whitespace
         exclude: *generated
       # mkdocs.yml uses !!python/name tags for pymdownx.

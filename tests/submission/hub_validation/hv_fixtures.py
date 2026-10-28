@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 BUNDLE = Path(__file__).resolve().parent
-REPO = BUNDLE.parents[1]
+REPO = BUNDLE.parents[2]
 R_VALIDATOR = REPO / "scripts" / "validate_with_hubvalidations.R"
 MANIFEST: dict[str, Any] = json.loads(
     (BUNDLE / "fixtures" / "manifest.json").read_text()

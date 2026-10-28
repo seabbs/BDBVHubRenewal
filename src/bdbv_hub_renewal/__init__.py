@@ -8,7 +8,8 @@ The package has these parts:
 - `forecasters`: the forecaster interface, registry, persistence and the
   renewal variants (`forecasters.renewal`).
 - `model`: the PyRenew renewal model (JAX), imported lazily.
-- `hub`: write and check submission files and model metadata.
+- `submission`: the hub file writer and checks, model metadata, the CI
+  fit configurations and the submitted rounds.
 - `evaluation`: scoring, the backtest, held-out evaluation, posterior
   predictive checks and the comparison with hub forecasts.
 - `plots` and `report`: figures and docs tables.
@@ -21,8 +22,8 @@ from bdbv_hub_renewal import (
     data,
     evaluation,
     forecasters,
-    hub,
     plots,
+    submission,
 )
 from bdbv_hub_renewal.data import load_delays, load_target
 from bdbv_hub_renewal.evaluation.backtest import (
@@ -37,8 +38,8 @@ from bdbv_hub_renewal.forecasters import (
     get_model,
     register_model,
 )
-from bdbv_hub_renewal.hub import to_hub_table, validate_submission
 from bdbv_hub_renewal.plots import plot_nowcast
+from bdbv_hub_renewal.submission.hub import to_hub_table, validate_submission
 
 __all__ = [
     "BacktestConfig",
@@ -48,7 +49,6 @@ __all__ = [
     "evaluation",
     "forecasters",
     "get_model",
-    "hub",
     "load_config",
     "load_delays",
     "load_target",
@@ -58,6 +58,7 @@ __all__ = [
     "relative_skill",
     "run_development",
     "score_forecasts",
+    "submission",
     "to_hub_table",
     "validate_submission",
 ]

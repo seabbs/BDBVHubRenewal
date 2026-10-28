@@ -14,7 +14,8 @@ This module owns everything around it:
 - `ppc_rows`, `parameter_diagnostics`, `chain_diagnostics`: the CI's
   `ppc.json` and `diagnostics.json`;
 - `fit_renewal` and `forecast_renewal`: the `fit` and `forecast` of the
-  `main` and `fallback` fit configurations (`bdbv_hub_renewal.fitting`).
+  `main`, `fallback` and `bvd` fit configurations
+  (`bdbv_hub_renewal.submission.fitting`).
 
 This module reads only `ModelConfig`, `MAIN`, `FALLBACK`, `build_model`,
 `model_args`, `model.EXTRA_FIELDS`, `forecast_trajectories` and
@@ -49,7 +50,7 @@ from bdbv_hub_renewal.forecasters.base import (
 )
 
 if TYPE_CHECKING:
-    from bdbv_hub_renewal.fitting import Forecast
+    from bdbv_hub_renewal.submission.fitting import Forecast
 
 __all__ = [
     "DEFAULT_SAMPLER",
@@ -1084,11 +1085,11 @@ def forecast_renewal(task: ForecastTask, fit_dir: Path | str) -> Forecast:
 
     Returns
     -------
-    bdbv_hub_renewal.fitting.Forecast
+    bdbv_hub_renewal.submission.fitting.Forecast
         Province samples, the unassigned component and the reported
         provinces.
     """
-    from bdbv_hub_renewal.fitting import Forecast
+    from bdbv_hub_renewal.submission.fitting import Forecast
 
     path = Path(fit_dir)
     samples = pd.read_csv(path / SAMPLES_FILE, dtype={"target_end_date": str})

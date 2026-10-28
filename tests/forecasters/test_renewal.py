@@ -10,7 +10,6 @@ import pandas as pd
 import pytest
 
 from bdbv_hub_renewal.evaluation.backtest import BacktestConfig, make_tasks
-from bdbv_hub_renewal.fitting import Forecast, get_config
 from bdbv_hub_renewal.forecasters import (
     NATIONAL,
     ForecastModel,
@@ -19,6 +18,7 @@ from bdbv_hub_renewal.forecasters import (
     list_models,
 )
 from bdbv_hub_renewal.forecasters import renewal as rn
+from bdbv_hub_renewal.submission.fitting import Forecast, get_config
 
 pytest.importorskip("pyrenew")
 

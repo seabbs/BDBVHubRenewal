@@ -25,9 +25,9 @@ The public API of `bdbv_hub_renewal`, generated from the numpy-style docstrings.
 
 ::: bdbv_hub_renewal.data.delays
 
-::: bdbv_hub_renewal.hub
+::: bdbv_hub_renewal.submission.hub
 
-::: bdbv_hub_renewal.fitting
+::: bdbv_hub_renewal.submission.fitting
 
 ::: bdbv_hub_renewal.evaluation.ppc
 

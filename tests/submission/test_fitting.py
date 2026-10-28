@@ -10,14 +10,14 @@ import pytest
 
 from bdbv_hub_renewal.cli import main
 from bdbv_hub_renewal.data import coherence_summary, national_coherence
-from bdbv_hub_renewal.fitting import (
+from bdbv_hub_renewal.submission.fitting import (
     get_config,
     list_configs,
     persistence_config,
     register_config,
 )
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture
@@ -131,7 +131,7 @@ def test_plot_submission_and_validate(tmp_path: Path) -> None:
     assert main(["plot-submission", "--submission", str(csv), "--out",
                  str(png)]) == 0  # fmt: skip
     assert 0 < png.stat().st_size < 1_000_000
-    snapshot = ROOT / "tests/hub_validation/fixtures/hub-snapshot"
+    snapshot = ROOT / "tests/submission/hub_validation/fixtures/hub-snapshot"
     code = main(["validate", "--hub", str(snapshot), "--skip-window",
                  "--metadata-dir", "hub/model-metadata", str(csv)])  # fmt: skip
     assert code == 0
@@ -241,7 +241,7 @@ def test_nowcast_notes_what_it_handled(tmp_path: Path) -> None:
 
 @pytest.mark.usefixtures("in_root")
 def test_submission_id_is_one_config_value(tmp_path: Path) -> None:
-    from bdbv_hub_renewal.hub import submission_model_abbr
+    from bdbv_hub_renewal.submission.hub import submission_model_abbr
 
     assert (
         submission_model_abbr(ROOT / "config" / "hub.toml") == "seabbsrenewal"

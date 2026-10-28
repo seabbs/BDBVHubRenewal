@@ -178,11 +178,11 @@ hubValidations enforces `format: email` (tested, `invalid_bad_email`).
    Nothing says whether the hub will use cross-location joint structure (for example to aggregate health zones).
 3. **Sample id type is not enforced.**
    The config says `integer`, but `100.5` passes hubValidations 3.0.0 because the hub-wide `output_type_id` column is typed `double` (round 1 has quantile levels).
-   `hub_validate.py` fails it as `spl_id_type`.
+   `submission/validate.py` fails it as `spl_id_type`.
 4. **Horizon rule is README-only.**
    "Up to three weeks after the reference date" is enforced only by the length of the `target_end_date` list.
    If the list ever runs ahead of the reference dates, later weeks would pass.
-   `hub_validate.py` warns (`readme_horizon`) but does not fail.
+   `submission/validate.py` warns (`readme_horizon`) but does not fail.
 5. **Values need not be integers.**
    The target is a count, but `value` is `double`.
 6. **Target wording.**
