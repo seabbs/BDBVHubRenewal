@@ -6,7 +6,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.triangle import delay_pmf, reporting_triangle
+from bdbvhubrenewal.data.triangle import (
+    apply_delay,
+    delay_pmf,
+    reporting_triangle,
+)
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import (
     ForecastTask,
@@ -17,8 +21,9 @@ from bdbvhubrenewal.forecasters import (
     list_models,
 )
 from bdbvhubrenewal.forecasters.persistence import (
-    horizon_scales,
+    baseline_walk,
     nowcast_draws,
+    nowcast_means,
     revision_variance,
 )
 
@@ -61,7 +66,7 @@ def test_nowcast_draws_add_negative_binomial_counts_per_place() -> None:
     observed = np.array([[0.0, 40.0, 40.0, 40.0], [0.0, 0.0, 10.0, 10.0]])
     ratio = np.array([[1.0, 0.0, 0.25, 1.5], [1.0, 1.0, 1.0, 1.0]])
     size = np.array([[5.0, 5.0, np.inf, 5.0], [5.0, 5.0, 5.0, 5.0]])
-    draws = nowcast_draws(observed, ratio, size, 20000, rng)
+    draws = nowcast_draws(observed, observed * ratio, size, 20000, rng)
     assert draws.shape == (20000, 2, 4)
     # Without revision noise, never below the published count.
     assert (draws >= observed).all()
@@ -112,38 +117,6 @@ def test_revision_variance_from_past_vintages(target: pd.DataFrame) -> None:
     # One vintage has no revisions to learn from.
     one = real.loc[real["vintage"] == "2026-10-24"]
     assert revision_variance(one, "2026-10-24") == 0.0
-
-
-def test_horizon_scales_shrink_to_one() -> None:
-    rng = np.random.default_rng(3)
-    wide = [rng.normal(0, 2.0, 400), rng.normal(0, 2.0, 400), np.array([])]
-    scales = horizon_scales(wide, prior=10)
-    assert scales[0] == pytest.approx(2.0, rel=0.1)
-    assert scales[2] == pytest.approx(scales[1], rel=0.01)
-    assert horizon_scales([np.array([])], prior=10)[0] == 1.0
-    few = horizon_scales([np.array([5.0])], prior=10)[0]
-    assert 1.0 < few < 2.0
-
-
-def test_persistencenow_calibrates_the_walk_on_reconstructed_vintages(
-    target: pd.DataFrame, delays: pd.DataFrame
-) -> None:
-    from bdbvhubrenewal.evaluation.backtest import (
-        development_tasks,
-        load_config,
-    )
-
-    config = load_config()
-    tasks = development_tasks(target, delays, config)
-    task = next(
-        t for t in tasks
-        if t.kind == "reconstructed" and t.vintage == "2026-10-03"
-    )  # fmt: skip
-    model = PersistenceNow()
-    errors = model.walk_errors(task)
-    assert len(errors) >= 3
-    assert sum(e.size for e in errors) > 50
-    check_samples(model.forecast(task), task)
 
 
 def test_persistencenow_output(task: ForecastTask) -> None:
@@ -254,3 +227,46 @@ def test_persistencenow_predicts_counts_as_reported_later(
         (s_t - s_v) / (1 - s_v)
     )
     assert by_sample["value"].median() == pytest.approx(expected, rel=0.1)
+
+
+def test_nowcast_means_follow_baselinenowcast_for_empty_rows() -> None:
+    pmf = np.array([0.5, 0.3, 0.2])
+    # Own triangle of one place: a full row, a row with nothing yet and a
+    # row with cases at delay 0 only.
+    tri = np.array([[6.0, 3.0, 1.0], [0.0, 0.0, np.nan], [4.0, np.nan, np.nan]])
+    totals = np.array([12.0, 0.0, 5.0])
+    added = nowcast_means(tri, totals, pmf)
+    assert added[0] == 0.0
+    # An empty row still gets baselinenowcast's expectation (x + 1 - F) / F.
+    assert added[1] == pytest.approx((0 + 1 - 0.8) / 0.8 * 0.2)
+    # Otherwise the total is scaled by what the row expects to gain.
+    filled = apply_delay(tri, pmf)
+    assert added[2] == pytest.approx(5.0 * (filled[2].sum() / 4.0 - 1))
+
+
+def test_baseline_walk_is_a_symmetrised_empirical_random_walk() -> None:
+    rng = np.random.default_rng(5)
+    centre = np.full(4000, np.log1p(100.0))
+    steps = np.array([0.1, 0.3, -0.2, 0.05])
+    draws = baseline_walk(centre, steps, 3, rng)
+    assert draws.shape == (4000, 3)
+    # The median stays at the centre and the spread grows with the horizon.
+    assert np.allclose(np.median(draws, axis=0), 100, rtol=0.05)
+    iqr = np.subtract(*np.percentile(draws, [75, 25], axis=0))
+    assert iqr[2] > iqr[0]
+    # Every one-week change is one of the past changes or its negative.
+    first = np.log1p(draws[:, 0]) - centre
+    pool = np.r_[steps, -steps]
+    assert np.isin(np.round(first, 9), np.round(pool, 9)).all()
+    # Fewer than three past changes: Poisson around the centre.
+    flat = baseline_walk(centre, np.array([0.2]), 2, rng)
+    assert flat.var(axis=0) == pytest.approx([100, 100], rel=0.15)
+
+
+def test_persistencenow_nowcasts_the_latest_week(task: ForecastTask) -> None:
+    # The week ending on the vintage is nowcast, not skipped.
+    nat = _national(PersistenceNow().forecast(task))
+    seen = task.target.loc[task.target["location"] == "CD"].set_index(
+        "target_end_date"
+    )["total"]
+    assert nat.loc["2026-10-17"].median() > 2 * seen["2026-10-17"]
