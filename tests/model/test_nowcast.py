@@ -112,7 +112,8 @@ def test_dirichlet_multinomial_delays(sim_vintage):
     }
     _, mn = delay_site(MAIN, latent)
     # Same expected delay probabilities, with concentration psi.
-    psi = 1 / latent["delay_overdispersion"] ** 2
+    # Capped at 1e4, as the negative binomial concentrations are.
+    psi = 1 / (latent["delay_overdispersion"] ** 2 + 1e-4)
     conc = np.asarray(dm.concentration)
     np.testing.assert_allclose(conc.sum(-1), psi, rtol=1e-4)
     np.testing.assert_allclose(conc / psi, mn.probs, rtol=1e-4, atol=1e-9)
