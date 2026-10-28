@@ -327,7 +327,7 @@ def _weekly_blocks(
     }
 
 
-class OnsetStreams(BaseObservationProcess):  # type: ignore[misc]
+class OnsetStreams(BaseObservationProcess):
     r"""Known and hub-imputed weekly onsets for each province.
 
     Expected confirmed onsets are $\lambda_p(s) = \alpha(s) I_p(s)$,

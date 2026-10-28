@@ -171,6 +171,11 @@ module = [
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
+# The model subclasses PyRenew's and NumPyro's classes, which are untyped.
+module = ["bdbv_hub_renewal.model.*"]
+disallow_subclassing_any = false
+
+[[tool.mypy.overrides]]
 # The model code came from the prototype and is not yet strict-mypy clean.
 # `forecasters/renewal.py`, which wraps it, is checked in full.
 module = [
@@ -178,6 +183,5 @@ module = [
   "bdbv_hub_renewal.model.delays",
   "bdbv_hub_renewal.model.model",
   "bdbv_hub_renewal.model.renewal",
-  "bdbv_hub_renewal.model.rt",
 ]
 ignore_errors = true

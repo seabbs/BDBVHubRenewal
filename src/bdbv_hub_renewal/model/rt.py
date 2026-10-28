@@ -8,7 +8,7 @@ deviations with a sum-to-zero constraint.
 
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import jax
 import jax.numpy as jnp
@@ -16,6 +16,7 @@ import numpy as np
 import numpyro
 import numpyro.distributions as dist
 import numpyro.distributions.util
+from jax import Array
 from jax.typing import ArrayLike
 from pyrenew.latent.temporal_processes import TemporalProcess
 from pyrenew.metaclass import RandomVariable
@@ -32,7 +33,7 @@ class KnotWalk(dist.Distribution):
     Batch shape is that of `loc`; the event is the `num_knots` knots.
     """
 
-    arg_constraints: ClassVar[dict] = {
+    arg_constraints: ClassVar[dict[str, Any]] = {
         "loc": dist.constraints.real,
         "scale": dist.constraints.positive,
         "step_sd": dist.constraints.positive,
@@ -40,7 +41,15 @@ class KnotWalk(dist.Distribution):
     support = dist.constraints.real_vector
     reparametrized_params: ClassVar[list[str]] = ["loc", "scale", "step_sd"]
 
-    def __init__(self, loc, scale, step_sd, num_knots, *, validate_args=None):
+    def __init__(
+        self,
+        loc: ArrayLike,
+        scale: ArrayLike,
+        step_sd: ArrayLike,
+        num_knots: int,
+        *,
+        validate_args: bool | None = None,
+    ) -> None:
         self.loc, self.scale, self.step_sd = dist.util.promote_shapes(
             loc, scale, step_sd
         )
@@ -50,7 +59,7 @@ class KnotWalk(dist.Distribution):
         )
         super().__init__(batch, (num_knots,), validate_args=validate_args)
 
-    def sample(self, key, sample_shape=()):
+    def sample(self, key: Array, sample_shape: tuple[int, ...] = ()) -> Array:
         """Draw knots: a start and cumulative steps."""
         shape = sample_shape + self.batch_shape + (self.num_knots,)
         eps = jax.random.normal(key, shape)
@@ -60,16 +69,16 @@ class KnotWalk(dist.Distribution):
             [start, start + jnp.cumsum(steps, axis=-1)], axis=-1
         )
 
-    def log_prob(self, value):
+    def log_prob(self, value: Array) -> Array:
         """Return the log density: normal start plus normal increments."""
         start = dist.Normal(self.loc, self.scale).log_prob(value[..., 0])
         steps = dist.Normal(0.0, self.step_sd[..., None]).log_prob(
             jnp.diff(value, axis=-1)
         )
-        return start + steps.sum(-1)
+        return jnp.asarray(start + steps.sum(-1))
 
 
-def _damped_sum(phi: ArrayLike, steps: ArrayLike) -> ArrayLike:
+def _damped_sum(phi: ArrayLike, steps: Array) -> Array:
     r"""Return $y_j = \sum_{i \le j} \phi^{j - i} s_i$ by a matrix product.
 
     Lower-triangular with powers of $\phi$ (all ones for a random walk),
@@ -151,7 +160,7 @@ class NonCentredRandomWalk:
         name_prefix: str = "rw",
         *,
         first_day_dow: int | None = None,
-    ) -> ArrayLike:
+    ) -> Array:
         """Sample trajectories.
 
         Returns
@@ -269,7 +278,7 @@ class PooledInitialValue(RandomVariable):
         self.scale = scale
         self.pooling_sd = pooling_sd
 
-    def sample(self, **kwargs: object) -> ArrayLike:
+    def sample(self, **kwargs: object) -> Array:
         """Sample one starting value per province.
 
         Returns
@@ -293,12 +302,12 @@ class PooledInitialValue(RandomVariable):
                 f"{self.name}_offsets",
                 dist.Normal(0.0, sd).expand([self.n_groups - 1]),
             )
-            return mu + basis @ offsets
+            return jnp.asarray(mu + basis @ offsets)
         z = numpyro.sample(
             f"{self.name}_z",
             dist.Normal(0.0, 1.0).expand([self.n_groups - 1]),
         )
-        return mu + sd * (basis @ z)
+        return jnp.asarray(mu + sd * (basis @ z))
 
 
 def split_initial_value(
@@ -438,7 +447,7 @@ class MissingOnsetFraction(RandomVariable):
         n_groups: int,
         first_day_dow: int | None = None,
         **kwargs: object,
-    ) -> ArrayLike:
+    ) -> Array:
         r"""Sample $\pi_p(t)$.
 
         Returns
@@ -476,7 +485,7 @@ class LinearWeeklyProcess:
 
     step_size: int = 7
 
-    def __init__(self, inner) -> None:
+    def __init__(self, inner: TemporalProcess) -> None:
         self.inner = inner
 
     def sample(
@@ -487,7 +496,7 @@ class LinearWeeklyProcess:
         name_prefix: str = "linear",
         *,
         first_day_dow: int | None = None,
-    ) -> ArrayLike:
+    ) -> Array:
         """Sample knots and interpolate to days.
 
         Returns
@@ -531,7 +540,7 @@ class PerOriginShare(RandomVariable):
         super().__init__(name=name)
         self.n_groups = n_groups
 
-    def sample(self, **kwargs: object) -> ArrayLike:
+    def sample(self, **kwargs: object) -> Array:
         """Sample one share per origin.
 
         Returns
