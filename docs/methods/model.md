@@ -138,15 +138,14 @@ $\pi_p$ is informed by the ratio of imputed to known onsets, through the imputat
 ### Known onsets
 
 A case reported on day $t$ is in the vintage published at $T$ with probability $c(t) = F_\ell(T - t)$, with $F_\ell$ the cdf of the lag $\ell$ from report to publication.
-The lag pmf is estimated from the data on 0 to 180 days.
-Rows in a delay file beyond those of the previous file were first published between the two dates.
-Each such row's lag is spread over its onset day within the week and its publication day between the files, over feasible lags only.
-Between the real files 8-9% of new rows were more than 60 days late and none more than 180.
-Only pairs of files dated on or before the forecast date are used, so backtests do not see later files.
-Between 2026-10-17 and 2026-10-24, 23% of new rows had report dates more than 41 days old, so late entries matter for the nowcast weeks.
-A vintage with no earlier pair (2026-10-09 and before) uses a fixed prior pmf instead: 85% uniform on 0 to 3 days and 15% uniform on 4 to 60 days.
-That prior is shaped by the later files (29% of rows new between 10-09 and 10-17 were more than 6 days late), so the 2026-10-09 backtest uses a little later information.
-Without a tail, the 2026-10-09 fit treated weeks 4 to 5 weeks old as complete and its national 90% intervals fell below the counts reported by 10-24 for three of the four nowcast weeks.
+By default the lag is uniform on 0 to 3 days.
+With `publication_lag="empirical"` the lag pmf is instead estimated on 0 to 180 days from rows new in each later delay file, using only files dated on or before the forecast date.
+A vintage with no earlier pair of files then uses a fixed prior: 85% uniform on 0 to 3 days and 15% uniform on 4 to 60 days.
+That prior is shaped by later files, so the 2026-10-09 backtest would use a little later information.
+The empirical lag is not the default.
+Most rows that appear late in a delay file are cases already counted as imputed whose onset was recorded later, not new cases.
+Totals of weeks more than 5 weeks old barely change between vintages while their imputed counts fall (week ending 09-05: total 540, 542, 547; imputed 99, 98, 75).
+Applied to the total, the empirical lag made the model expect old weeks to grow: in recovery and on the real 2026-10-09 vintage the nowcast misses moved from below to above the later counts.
 The cases with onset $s$ in the vintage with an onset recorded are expected to be
 
 $$
