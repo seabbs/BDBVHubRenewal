@@ -537,3 +537,30 @@ def test_plot_scenarios() -> None:
         _scenario_scores(), models=["persistence", "persistencenow"]
     )
     assert len(fig.axes) == 2  # one panel per scenario
+
+
+def test_heldout_page_before_any_held_out_vintage(
+    tmp_path: Path, target: pd.DataFrame
+) -> None:
+    record = tmp_path / "model-choice.yml"
+    record.write_text(
+        "choices:\n  - {date: 2026-12-31, model: persistencenow}\n"
+    )
+    res = tmp_path / "res"
+    res.mkdir()
+    (res / "heldout-run.yml").write_text(
+        "run_at: '2026-12-31T00:00:00+00:00'\nscored: []\npending: []\n"
+        "latest_vintage: '2026-10-24'\n"
+    )
+    (res / "heldout-scores.csv").write_text("\n")
+    (res / "heldout-forecasts.csv.gz").write_text("\n")
+    config = BacktestConfig(model_choice=record, development_until="2026-12-31")
+    gen, fig = tmp_path / "gen", tmp_path / "fig"
+    report._heldout_page(fig, gen, res, target, ["persistence"], config)
+    assert "persistencenow" in (gen / "heldout-choices.md").read_text()
+    for name in (
+        "heldout-status.md",
+        "heldout-scores.md",
+        "heldout-forecasts.md",
+    ):
+        assert (gen / name).read_text() == ""
