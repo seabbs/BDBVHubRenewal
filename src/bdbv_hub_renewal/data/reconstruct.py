@@ -42,6 +42,7 @@ somewhat better.
 from __future__ import annotations
 
 import datetime as dt
+import itertools
 
 import numpy as np
 import pandas as pd
@@ -307,7 +308,7 @@ def publication_lag_pmf(
     vintages = sorted(str(v) for v in delays["vintage"].unique() if v <= day)
     key = ["location", "onset_week", "delay"]
     mass = np.zeros(max_lag + 1)
-    for a, b in zip(vintages, vintages[1:], strict=False):
+    for a, b in itertools.pairwise(vintages):
         before = delays.loc[delays["vintage"] == a].groupby(key).size()
         after = delays.loc[delays["vintage"] == b].groupby(key).size()
         added = after.sub(before, fill_value=0).clip(lower=0)
