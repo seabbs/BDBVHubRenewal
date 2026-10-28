@@ -1,0 +1,5 @@
+triangle,n_history_delay,n_retrospective_nowcasts,description
+real_pooled,6,8,"pooled delay file, vintage 2026-10-17, delays 0-35"
+real_ituri,6,8,"Ituri, vintage 2026-10-17, delays 0-35"
+sparse_haut_uele,6,8,"Haut-Uele, vintage 2026-10-17, delays 0-35, sparse"
+synthetic,4,5,"seeded synthetic, geometric delay, delays 0-14"
