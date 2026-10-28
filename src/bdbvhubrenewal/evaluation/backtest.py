@@ -301,6 +301,7 @@ def make_tasks(
     delays: pd.DataFrame | None,
     config: BacktestConfig,
     report_by: Sequence[str] = (),
+    history: pd.DataFrame | None = None,
 ) -> list[ForecastTask]:
     """Build one task per vintage in a target table.
 
@@ -318,6 +319,9 @@ def make_tasks(
     report_by : sequence of str
         Truth vintage dates. Each real or reconstructed task asks for the
         counts as reported by those after its own vintage.
+    history : pandas.DataFrame, optional
+        Target rows to take each task's `target_history` from. Defaults
+        to `target`.
 
     Returns
     -------
@@ -325,7 +329,12 @@ def make_tasks(
         Tasks ordered by kind and vintage.
     """
     tasks = []
+    source = target if history is None else history
     for (kind, vintage), rows in target.groupby(["kind", "vintage"]):
+        same = source["vintage"] <= vintage
+        if "kind" in source.columns:
+            same &= source["kind"] == kind
+        past_target = source.loc[same]
         ref = reference_date_for_vintage(str(vintage))
         dly, history = None, None
         if delays is not None:
@@ -349,6 +358,7 @@ def make_tasks(
                 target=rows.reset_index(drop=True),
                 delays=dly,
                 delay_history=history,
+                target_history=past_target if not past_target.empty else None,
                 locations=forecast_locations(rows),
                 target_end_dates=forecast_weeks(ref, config),
                 n_samples=config.n_samples,

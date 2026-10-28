@@ -235,7 +235,7 @@ def make_report(
 
     # Nowcast page: latest real vintage, every registered model.
     rows = real.loc[real["vintage"] == latest]
-    tasks = make_tasks(rows, delays, config)
+    tasks = make_tasks(rows, delays, config, history=real)
     forecasts_now = _nowcast_forecasts(tasks, latest, res)
     shown = [n for n in names if n in set(forecasts_now["model"])]
     locs = [NATIONAL, *tasks[0].locations]

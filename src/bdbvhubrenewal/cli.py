@@ -386,7 +386,8 @@ def _task(args: argparse.Namespace) -> tuple[ForecastTask, list[str]]:
     vintage = _vintage([str(v) for v in real["vintage"].unique()], args.vintage)
     rows = real.loc[real["vintage"] == vintage]
     delays, note = delays_for_vintage(delays, vintage)
-    return bt.make_tasks(rows, delays, config)[0], [note] if note else []
+    task = bt.make_tasks(rows, delays, config, history=real)[0]
+    return task, [note] if note else []
 
 
 def host_devices(n: int) -> None:

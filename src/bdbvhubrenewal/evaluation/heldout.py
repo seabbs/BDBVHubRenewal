@@ -264,7 +264,7 @@ def run_heldout(
         rows = real.loc[real["vintage"] == row.vintage]
         fc = run_forecasts(
             [get_model(n) for n in names],
-            make_tasks(rows, delays, config, real_vintages(real)),
+            make_tasks(rows, delays, config, real_vintages(real), real),
         )
         fc.insert(1, "chosen_model", row.model)
         frames.append(fc)
