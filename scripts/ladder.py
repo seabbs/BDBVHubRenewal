@@ -72,6 +72,12 @@ RUNGS: dict[str, pr.ModelConfig | str] = {
     "renewal fallback": pr.FALLBACK,
     "renewal learnt kernel": dataclasses.replace(pr.MAIN, coupling="learnt"),
     "renewal future Rt held": dataclasses.replace(pr.MAIN, future_rt="hold"),
+    "renewal per-origin importation": dataclasses.replace(
+        pr.MAIN, importation="per_origin"
+    ),
+    "renewal linear Rt knots": dataclasses.replace(
+        pr.MAIN, rt_cadence="linear"
+    ),
     "renewalbvd": pr.BVD,
     "renewalsp": "renewalsp",
 }
