@@ -259,3 +259,22 @@ def test_plot_hub_round(
         q, target, "2026-10-17", locations=("CD", "CD-IT"), complete_by=None
     )
     assert len([ax for ax in fig.axes if ax.get_visible()]) == 2
+
+
+def test_comparison_label_names_our_hub_models() -> None:
+    from bdbvhubrenewal.reporting.plots import comparison_label
+
+    ids = {"persistencenow": "epiforecasts-seabbsbaseline"}
+    assert (
+        comparison_label("persistencenow", "real", ids)
+        == "persistencenow (epiforecasts-seabbsbaseline)"
+    )
+    assert comparison_label("persistence", "real", ids) == "persistence (ours)"
+    assert comparison_label("OHTJHU-BM", "hub", ids) == "OHTJHU-BM"
+
+
+def test_own_hub_ids() -> None:
+    from bdbvhubrenewal.evaluation.hubcompare import own_hub_ids
+
+    ids = own_hub_ids(ROOT / "config" / "hub.toml")
+    assert ids["persistencenow"] == "epiforecasts-seabbsbaseline"

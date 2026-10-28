@@ -267,26 +267,31 @@ ledger() {
 
 baseline_track() {
   # track.sh on the `main` scenario's inputs: seabbsbaseline submits
-  # persistence on a nowcast under its own id, and falls back to plain
-  # persistence when the nowcast is ruled out.
-  local src="$ROOT/main" case want selected
-  for case in nowcast fallback; do
+  # persistence on a nowcast with health zones under its own id, falls
+  # back to plain persistence, and skips the round without zones.
+  local src="$ROOT/main" case want selected status
+  get() { python3 -c "import json;print(json.load(open('$src/decision.json'))['$1'])"; }
+  for case in nowcast fallback nozones; do
     export WORK="$ROOT/baseline-$case"
     rm -rf "$WORK" && mkdir -p "$WORK"
     cp -R "$src/inputs" "$WORK/inputs"
-    mkdir -p "$WORK/candidates"
-    cp -R "$src/candidates/persistence" "$src/candidates/persistencenow" \
-      "$WORK/candidates/"
-    [ "$case" = fallback ] && rm -rf "$WORK/candidates/persistencenow/submission"
     export GH_LOG="$WORK/gh.log" GITHUB_OUTPUT="$WORK/github-output"
-    export GITHUB_STEP_SUMMARY="$WORK/summary.md"
-    get() { python3 -c "import json;print(json.load(open('$src/decision.json'))['$1'])"; }
+    export GITHUB_STEP_SUMMARY="$WORK/summary.md" FAKE_ZONES="" FAKE_SCENARIOS=""
+    [ "$case" = fallback ] && export FAKE_SCENARIOS="persistencenow=negative"
+    [ "$case" = nozones ] && export FAKE_ZONES=none
+    status=0
     HUB_REF=$(get hub_ref) DATA_COMMIT=$(get data_commit) AS_OF=$(get as_of) \
       REFERENCE_DATE=$(get reference_date) DRY_RUN=true HUB_PATH="$FIX/hub" \
       HUB_VALIDATOR=true MODEL="" MODEL_ID="" \
-      "$CI_DIR/steps/track.sh" > "$WORK/track.log" 2>&1 \
-      || { echo "FAIL: baseline $case"; cat "$WORK/track.log"; return 1; }
+      "$CI_DIR/steps/track.sh" > "$WORK/track.log" 2>&1 || status=$?
     local gate="$WORK/track-persistencenow/gate"
+    if [ "$case" = nozones ]; then
+      [ "$status" = 3 ] || { echo "FAIL: baseline without zones exited $status"; cat "$WORK/track.log"; return 1; }
+      grep -q "no health zone rows" "$gate/provenance.md" \
+        || { echo "FAIL: zones reason"; cat "$gate/provenance.md"; return 1; }
+      continue
+    fi
+    [ "$status" = 0 ] || { echo "FAIL: baseline $case"; cat "$WORK/track.log"; return 1; }
     selected=$(python3 -c "import json;print(json.load(open('$gate/provenance.json'))['selected'])")
     if [ "$case" = nowcast ]; then
       want=persistencenow
@@ -299,6 +304,8 @@ baseline_track() {
     fi
     [ "$selected" = "$want" ] \
       || { echo "FAIL: baseline $case selected $selected"; return 1; }
+    grep -q "CD-IT-01" "$(find "$gate/selected/submission" -name '*.csv' | head -n 1)" \
+      || { echo "FAIL: baseline file has no zones"; return 1; }
     grep -q "bdbv-submission:epiforecasts-seabbsbaseline:" "$gate/pr-body.md" \
       || { echo "FAIL: baseline id"; return 1; }
     grep -q '"branch": "epiforecasts-seabbsbaseline-' "$WORK/track.log" \
@@ -307,7 +314,8 @@ baseline_track() {
       echo "FAIL: baseline dry run wrote to GitHub"; return 1
     fi
   done
-  echo "=== baseline ===" && echo "ok: seabbsbaseline submits persistencenow, else persistence"
+  export FAKE_ZONES="" FAKE_SCENARIOS=""
+  echo "=== baseline ===" && echo "ok: seabbsbaseline submits persistencenow with zones, else persistence; no zones skips"
 }
 
 no_new_data() {

@@ -56,6 +56,7 @@ from bdbvhubrenewal.forecasters.base import (
     list_models,
 )
 from bdbvhubrenewal.reporting.plots import (
+    comparison_label,
     plot_delay_distribution,
     plot_delays_over_time,
     plot_forecasts,
@@ -1102,6 +1103,7 @@ def _comparison_page(
     )
     truth, k = summary["truth_vintage"], summary["complete_after_weeks"]
     baseline = summary["baseline"]
+    hub_ids = summary.get("hub_ids", {})
     complete_by = (
         (pd.Timestamp(truth) - pd.Timedelta(weeks=k)).date().isoformat()
     )
@@ -1125,6 +1127,10 @@ def _comparison_page(
     parts = []
     if not scores.empty:
         table = summarise_comparison(scores, baseline)
+        table["model"] = [
+            comparison_label(m, s, hub_ids)
+            for m, s in zip(table["model"], table["source"], strict=True)
+        ]
         parts.append(_table(table) if not table.empty else "")
     for row in pending.itertuples(index=False):
         parts.append(
@@ -1153,6 +1159,7 @@ def _comparison_page(
                 ref,
                 locations=tuple(summary["locations"]),
                 complete_by=complete_by,
+                hub_ids=hub_ids,
             ),
             fig / f"{stem}.svg",
         )

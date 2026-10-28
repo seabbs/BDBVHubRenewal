@@ -270,6 +270,19 @@ def cmd_nowcast(args: argparse.Namespace) -> int:
         # `badnational`: the national rows do not add up, and there is no
         # national.json, so the gate rebuilds them.
         rows.append(["CD", s, w, v + (3 if sc == "badnational" else 0)])
+    # Health zones, as the baselines write them: each province split
+    # evenly over two zones. `nozones` (or FAKE_ZONES=none) leaves them out.
+    if (
+        args.model in ("persistence", "persistencenow")
+        and sc != "nozones"
+        and os.environ.get("FAKE_ZONES") != "none"
+    ):
+        rows += [
+            [f"{loc}-0{k}", s, w, v / 2]
+            for loc, s, w, v in list(rows)
+            if loc != "CD"
+            for k in (1, 2)
+        ]
     mid = f"epiforecasts-{args.model}"
     path = Path(args.out) / "model-output" / mid / f"{ref}-{mid}.csv"
     path.parent.mkdir(parents=True, exist_ok=True)

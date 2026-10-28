@@ -5,6 +5,7 @@
 - `persistence`: the persistence baseline, and persistence on a nowcast.
 - `renewal`: the renewal variants, the adapter from a `ForecastTask` to
   the PyRenew model in `bdbvhubrenewal.model`.
+- `zones`: health-zone forecasts split from any model's province samples.
 
 Importing this package registers the built-in models.
 To add a variant, write a class with `name` and `forecast(task)` and call

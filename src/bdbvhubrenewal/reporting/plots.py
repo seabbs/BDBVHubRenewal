@@ -13,7 +13,7 @@ for the figure it embeds in the hub pull request.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Final, cast
@@ -819,7 +819,9 @@ def plot_nowcast(
     return fig
 
 
-def comparison_label(model: str, source: str) -> str:
+def comparison_label(
+    model: str, source: str, hub_ids: Mapping[str, str] | None = None
+) -> str:
     """Label a model in the hub comparison.
 
     Parameters
@@ -828,18 +830,22 @@ def comparison_label(model: str, source: str) -> str:
         Hub model id or our registry name.
     source : str
         `hub`, or the kind of vintage our forecast used.
+    hub_ids : mapping, optional
+        Hub ids of our models that submit under their own id.
 
     Returns
     -------
     str
-        The hub id for submitted forecasts, else `<model> (ours)`, with
+        The hub id for submitted forecasts. Ours are `<model> (<hub id>)`
+        if they have their own hub id, else `<model> (ours)`, with
         `reconstructed` added when the vintage was reconstructed.
     """
     if source == "hub":
         return model
+    tag = (hub_ids or {}).get(model, "ours")
     if source == "reconstructed":
-        return f"{model} (ours, reconstructed)"
-    return f"{model} (ours)"
+        return f"{model} ({tag}, reconstructed)"
+    return f"{model} ({tag})"
 
 
 def plot_hub_round(
@@ -850,6 +856,7 @@ def plot_hub_round(
     complete_by: str | None = None,
     weeks_before: int = 8,
     mode: str = "light",
+    hub_ids: Mapping[str, str] | None = None,
 ) -> Figure:
     """Plot every model's intervals for one hub round against the data.
 
@@ -869,6 +876,8 @@ def plot_hub_round(
         Weeks of data shown before the reference date.
     mode : str
         `"light"` or `"dark"`.
+    hub_ids : mapping, optional
+        Hub ids of our models, for their labels (`comparison_label`).
 
     Returns
     -------
@@ -879,11 +888,12 @@ def plot_hub_round(
     q = quantiles.loc[quantiles["reference_date"].astype(str) == reference_date]
     q = q.assign(
         label=[
-            comparison_label(m, s)
+            comparison_label(m, s, hub_ids)
             for m, s in zip(q["model"], q["source"], strict=True)
         ]
     )
-    labels = sorted(set(q["label"]), key=lambda lab: (" (ours" in lab, lab))
+    ours = set(q.loc[q["source"] != "hub", "label"])
+    labels = sorted(set(q["label"]), key=lambda lab: (lab in ours, lab))
     locs = [loc for loc in locations if loc in set(q["location"])]
     real = target.loc[target["kind"] == "real"]
     latest = real["vintage"].max()

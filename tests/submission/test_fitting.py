@@ -90,7 +90,8 @@ def test_fit_then_nowcast_from_the_fit(tmp_path: Path, stand_in: str) -> None:
         columns="location",
         values="value",
     )
-    provinces = [c for c in wide.columns if c != "CD"]
+    # Provinces are `CD-XX`; health zones (`CD-XX-NN`) are not in the sum.
+    provinces = [c for c in wide.columns if c.count("-") == 1]
     assert (wide["CD"] == wide[provinces].sum(axis=1)).all()
     side = json.loads((out / "national.json").read_text())
     assert sorted(side["modelled_provinces"]) == sorted(provinces)
