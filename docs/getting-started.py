@@ -163,4 +163,4 @@ table.round(2)
 # They fetch the data, run the backtest, forecast from the latest vintage and write the hub file.
 #
 # The renewal model is not fitted here.
-# It needs a sampler and is described on the [Model page](../methods/model/).
+# It needs a sampler and is described on the [Renewal models page](../methods/model/).
