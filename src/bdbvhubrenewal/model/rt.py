@@ -258,6 +258,8 @@ class PooledInitialValue(RandomVariable):
     centred : bool, optional
         Sample the $P - 1$ offsets on the basis directly (centred, the
         default, as BVDOutbreakSize #1083), rather than standardised.
+    active : array_like, optional
+        Provinces with their own offset; the others start at $\mu$.
     """
 
     def __init__(
@@ -269,8 +271,10 @@ class PooledInitialValue(RandomVariable):
         pooling_sd: float,
         fixed_mean: bool = False,
         centred: bool = True,
+        active: ArrayLike | None = None,
     ) -> None:
         super().__init__(name=name)
+        self.active = None if active is None else np.asarray(active, bool)
         self.fixed_mean = fixed_mean
         self.centred = centred
         self.n_groups = n_groups
@@ -293,25 +297,33 @@ class PooledInitialValue(RandomVariable):
                 f"{self.name}_mean", dist.Normal(self.loc, self.scale)
             )
         )
-        if self.n_groups == 1:
-            return jnp.full((1,), mu)
+        n_active = (
+            self.n_groups if self.active is None else int(self.active.sum())
+        )
+        if n_active <= 1:
+            return jnp.full((self.n_groups,), mu)
         sd = numpyro.sample(f"{self.name}_sd", dist.HalfNormal(self.pooling_sd))
-        basis = jnp.asarray(sum_to_zero_basis(self.n_groups))
+        basis = jnp.asarray(
+            sum_to_zero_basis(self.n_groups, active=self.active)
+        )
         if self.centred:
             offsets = numpyro.sample(
                 f"{self.name}_offsets",
-                dist.Normal(0.0, sd).expand([self.n_groups - 1]),
+                dist.Normal(0.0, sd).expand([n_active - 1]),
             )
             return jnp.asarray(mu + basis @ offsets)
         z = numpyro.sample(
             f"{self.name}_z",
-            dist.Normal(0.0, 1.0).expand([self.n_groups - 1]),
+            dist.Normal(0.0, 1.0).expand([n_active - 1]),
         )
         return jnp.asarray(mu + sd * (basis @ z))
 
 
 def split_initial_value(
-    initial: ArrayLike, n_groups: int, weights: ArrayLike | None = None
+    initial: ArrayLike,
+    n_groups: int,
+    weights: ArrayLike | None = None,
+    active: ArrayLike | None = None,
 ) -> tuple[ArrayLike, ArrayLike]:
     """Split starting values into a national value and province deviations.
 
@@ -333,15 +345,21 @@ def split_initial_value(
     initial = jnp.asarray(initial)
     if initial.ndim == 0:
         return initial, jnp.zeros(n_groups)
-    if weights is None:
+    if weights is None and active is None:
         start = jnp.mean(initial)
     else:
-        w = jnp.asarray(weights, dtype=float)
+        w = jnp.ones(n_groups) if weights is None else jnp.asarray(weights)
+        if active is not None:
+            w = w * jnp.asarray(active, dtype=float)
         start = (w @ initial) / w.sum()
     return start, initial - start
 
 
-def sum_to_zero_basis(n: int, weights: ArrayLike | None = None) -> np.ndarray:
+def sum_to_zero_basis(
+    n: int,
+    weights: ArrayLike | None = None,
+    active: ArrayLike | None = None,
+) -> np.ndarray:
     r"""Orthonormal basis of $\{\delta \in R^n : w^\top \delta = 0\}$.
 
     With no weights, $w = 1$ and the columns sum to zero. With weights
@@ -349,14 +367,22 @@ def sum_to_zero_basis(n: int, weights: ArrayLike | None = None) -> np.ndarray:
     average to zero weighted by cases, so the national value is the
     case-weighted one.
 
+    With `active`, the basis spans only the active (outbreak) provinces:
+    inactive rows are zero, so those provinces take the national value,
+    and the constraint uses the active weights only.
+
     Returns
     -------
     numpy.ndarray
-        Shape `(n, n - 1)`, orthonormal columns orthogonal to `w`.
+        Shape `(n, k - 1)`, with `k` active provinces (all by default),
+        orthonormal columns orthogonal to `w`.
     """
     w = np.ones(n) if weights is None else np.asarray(weights, dtype=float)
-    _, _, vt = np.linalg.svd(w[None, :])
-    return np.asarray(vt[1:].T, dtype=float)
+    on = np.ones(n, bool) if active is None else np.asarray(active, bool)
+    _, _, vt = np.linalg.svd(w[on][None, :])
+    out = np.zeros((n, int(on.sum()) - 1))
+    out[on] = vt[1:].T
+    return out
 
 
 def pooled_walk(
@@ -368,6 +394,7 @@ def pooled_walk(
     name_prefix: str,
     first_day_dow: int | None = None,
     weights: ArrayLike | None = None,
+    active: ArrayLike | None = None,
 ) -> tuple[ArrayLike, ArrayLike]:
     r"""Sample a national process plus sum-to-zero province deviations.
 
@@ -396,6 +423,14 @@ def pooled_walk(
         Day of week of element 0, needed by calendar-aligned processes.
     weights : ArrayLike, optional
         Province weights; deviations then satisfy $w^\top \delta = 0$.
+    active : ArrayLike, optional
+        Provinces with their own deviation, `(n_groups,)`, or by time,
+        `(n_timepoints, n_groups)`. The others follow the national process
+        exactly. The basis spans the provinces ever active. With a mask by
+        time, inactive deviations are set to zero and the rest re-centred
+        so the weighted constraint holds over the active ones at each
+        time; a province that goes quiet drops back to the national value
+        and picks its deviation up again when it returns.
 
     Returns
     -------
@@ -403,7 +438,11 @@ def pooled_walk(
         National trajectory `(n_timepoints, 1)` and province trajectories
         `(n_timepoints, n_groups)`.
     """
-    base_start, dev_start = split_initial_value(initial, n_groups, weights)
+    mask = None if active is None else np.asarray(active, bool)
+    ever = None if mask is None else (mask if mask.ndim == 1 else mask.any(0))
+    base_start, dev_start = split_initial_value(
+        initial, n_groups, weights, ever
+    )
     baseline = baseline_process.sample(
         n_timepoints=n_timepoints,
         initial_value=base_start,
@@ -412,15 +451,30 @@ def pooled_walk(
     )
     if n_groups == 1:
         return baseline, baseline
-    basis = jnp.asarray(sum_to_zero_basis(n_groups, weights))
+    n_active = n_groups if ever is None else int(ever.sum())
+    if n_active <= 1:
+        return baseline, jnp.repeat(baseline, n_groups, axis=1)
+    basis = jnp.asarray(sum_to_zero_basis(n_groups, weights, ever))
     coords = deviation_process.sample(
         n_timepoints=n_timepoints,
-        n_processes=n_groups - 1,
+        n_processes=n_active - 1,
         initial_value=basis.T @ dev_start,
         name_prefix=f"{name_prefix}_deviations",
         first_day_dow=first_day_dow,
     )
-    return baseline, baseline + coords @ basis.T
+    dev = coords @ basis.T
+    if mask is not None and mask.ndim == 2:
+        if mask.shape != (n_timepoints, n_groups):
+            raise ValueError(
+                "The active mask must be (n_timepoints, n_groups)."
+            )
+        on = jnp.asarray(mask, dtype=dev.dtype)
+        w = jnp.ones(n_groups) if weights is None else jnp.asarray(weights)
+        dev = on * dev
+        total = on @ w
+        shift = (dev @ w) / jnp.where(total > 0, total, 1.0)
+        dev = dev - shift[:, None] * on
+    return baseline, baseline + dev
 
 
 class MissingOnsetFraction(RandomVariable):

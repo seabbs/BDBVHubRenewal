@@ -340,7 +340,7 @@ def simulate_outbreak(
         jnp.asarray(pop / pop.sum()),
     )
     nu = s.effective_fraction
-    x, r_eff = coupled_renewal(
+    x, r_eff, _ = coupled_renewal(
         jnp.zeros((gi.size, n_loc)),
         jnp.asarray(rt.T),
         jnp.asarray(gi),

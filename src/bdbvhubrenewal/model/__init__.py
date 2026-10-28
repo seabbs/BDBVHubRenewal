@@ -34,10 +34,13 @@ from .model import (
 )
 from .observation import OnsetStreams, RtPseudoObservation, onset_expectations
 from .renewal import (
+    GravityFlowKernel,
     LearntKernel,
     MetapopulationInfections,
     adjacency_kernel,
     coupled_renewal,
+    flow_pair_basis,
+    importation_flow_factor,
     mixing_matrix,
 )
 from .rt import (
@@ -51,6 +54,7 @@ __all__ = [
     "BVD",
     "MAIN",
     "FixedTimeVarying",
+    "GravityFlowKernel",
     "HazardDelay",
     "LearntKernel",
     "MetapopulationInfections",
@@ -67,9 +71,11 @@ __all__ = [
     "censored_pmf",
     "coupled_renewal",
     "fit",
+    "flow_pair_basis",
     "forecast_trajectories",
     "generation_interval",
     "hazard_to_pmf",
+    "importation_flow_factor",
     "mixing_matrix",
     "model_args",
     "onset_expectations",
