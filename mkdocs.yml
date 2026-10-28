@@ -27,6 +27,7 @@ nav:
       - Data: methods/data.md
       - Model: methods/model.md
       - Evaluation: methods/evaluation.md
+      - Implementation: methods/implementation.md
   - Data: data.md
   - Backtest: backtest.md
   - Held-out evaluation: heldout.md
@@ -38,7 +39,6 @@ nav:
       - Rounds: submission/rounds/index.md
   - Development:
       - Model building: development/model-building.md
-      - Implementation: development/implementation.md
       - Adding a model: development/adding-a-model.md
       - CLI: development/cli.md
   - API reference:
