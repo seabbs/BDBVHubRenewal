@@ -112,13 +112,29 @@ def test_every_zone_of_a_forecast_province_is_covered(
 def test_published_zone_counts_are_kept(
     task: ForecastTask, counts: pd.DataFrame, zones: tuple[str, ...]
 ) -> None:
-    _, alloc = _alloc(task, counts, zones)
+    prov, alloc = _alloc(task, counts, zones)
     seen = counts.set_index(["location", "target_end_date"])["total"]
     both = alloc.join(seen, on=["location", "target_end_date"]).fillna(0)
     # Persistence copies complete weeks, so the zones copy theirs too.
     old = both.loc[both["target_end_date"] == "2026-09-13"]
     assert (old["value"] == old["total"]).all()
-    # Later weeks never fall below what each zone has published.
+    # A zone never falls below what it has published, unless its
+    # province sample is below the province's published total.
+    published = (
+        counts.assign(location=counts["location"].map(province_of))
+        .groupby(["location", "target_end_date"])["total"]
+        .sum()
+        .rename("published")
+    )
+    keys = ["location", "target_end_date"]
+    prov = prov.join(published, on=keys).fillna({"published": 0})
+    covered = prov.loc[prov["value"] >= prov["published"]]
+    both["province"] = both["location"].map(province_of)
+    both = both.merge(
+        covered[[*keys, "sample"]].rename(columns={"location": "province"}),
+        on=["province", "target_end_date", "sample"],
+    )
+    assert len(both) > 0.5 * len(alloc)
     assert (both["value"] >= both["total"]).all()
 
 
@@ -148,7 +164,9 @@ def test_shares_shrink_recent_towards_longer_run() -> None:
             ("CD-XX-01", w, 0 if recent else 20),
             ("CD-XX-02", w, 10 if recent else 0),
         ]
-    counts = pd.DataFrame(rows, columns=["location", "target_end_date", "total"])
+    counts = pd.DataFrame(
+        rows, columns=["location", "target_end_date", "total"]
+    )
     counts["target_end_date"] = counts["target_end_date"].dt.date.astype(str)
     zones = ("CD-XX-01", "CD-XX-02", "CD-XX-03")
     shares = ZoneAllocator().shares(counts, zones, "2026-10-17")
