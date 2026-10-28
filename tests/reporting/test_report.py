@@ -22,7 +22,11 @@ def test_relative_section_hidden_with_one_model() -> None:
     assert "relative-wis-horizon.svg" in text
 
 
-def test_heldout_page(tmp_path: Path, target: pd.DataFrame) -> None:
+def test_heldout_page(
+    tmp_path: Path, target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    from bdbvhubrenewal.evaluation.heldout import run_heldout
+
     record = tmp_path / "model-choice.yml"
     record.write_text(
         "choices:\n"
@@ -31,10 +35,10 @@ def test_heldout_page(tmp_path: Path, target: pd.DataFrame) -> None:
         "    summary: A test choice.\n"
     )
     config = BacktestConfig(model_choice=record, development_until="2026-10-10")
+    res = tmp_path / "res"
+    run_heldout(target, delays, config, evaluate_holdout=True, out_dir=res)
     gen, fig = tmp_path / "gen", tmp_path / "fig"
-    report._heldout_page(
-        fig, gen, ROOT / "results", target, ["persistence"], config
-    )
+    report._heldout_page(fig, gen, res, target, ["persistence"], config)
     choices = (gen / "heldout-choices.md").read_text()
     assert choices.startswith("## Model choices")
     assert "2026-10-17" in choices

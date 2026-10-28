@@ -278,8 +278,11 @@ def _nowcast_forecasts(
     quick = [get_model(s.name) for s in specs if not s.fitted]
     frames = [run_forecasts(quick, tasks)]
     path = res / "heldout-forecasts.csv.gz"
-    if path.exists():
+    try:
         held = pd.read_csv(path)
+    except (FileNotFoundError, pd.errors.EmptyDataError):
+        held = pd.DataFrame()
+    if not held.empty:
         fitted = {s.name for s in specs if s.fitted}
         keep = held.loc[
             (held["vintage"] == latest) & held["model"].isin(fitted)
@@ -1116,6 +1119,12 @@ def _heldout_snippets(
         _write(gen / "heldout-forecasts.md", "")
         return
     run = yaml.safe_load(run_path.read_text())
+    if not [*run.get("scored", []), *run.get("pending", [])]:
+        # No vintage after the choice yet: nothing is held out.
+        for name in ("heldout-status.md", "heldout-scores.md"):
+            _write(gen / name, "")
+        _write(gen / "heldout-forecasts.md", "")
+        return
     scores_path = res / "heldout-scores.csv"
     scores = (
         pd.read_csv(scores_path)

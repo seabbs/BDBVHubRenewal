@@ -1,17 +1,12 @@
-run_at: '2026-10-27T19:29:47+00:00'
+run_at: '2026-10-28T19:23:37+00:00'
 model_choice: results/model-choice.yml
-model_choice_sha256: a9f8e24bb4b7d97b830a4897d648fd7d16fde63f578416a9cde321f2e64b9dca
+model_choice_sha256: b4dc1ba3ec59887a4d3420970023bc257dfc7f208005f1e67ad05844334d7489
 choices:
-- date: '2026-10-10'
-  model: persistence
-  summary: Only the persistence baseline exists. The split was fixed before any held-out
-    scoring, after the 2026-10-09 vintage and the reconstructed vintage of 2026-10-10.
-    So the 2026-10-17 and 2026-10-24 vintages and every later one are held out.
+- date: '2026-10-28'
+  model: persistencenow
+  summary: 'persistencenow is the first model submitted (as seabbsbaseline): it scores
+    best on complete weeks of the development backtest.'
 baseline: persistence
 latest_vintage: '2026-10-24'
-scored:
-- vintage: '2026-10-17'
-  model: persistence
-pending:
-- vintage: '2026-10-24'
-  model: persistence
+scored: []
+pending: []

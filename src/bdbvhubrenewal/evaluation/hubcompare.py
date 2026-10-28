@@ -506,9 +506,10 @@ def stored_forecasts(
     """
     frames = []
     for path in paths:
-        if not Path(path).exists():
+        try:
+            fc = pd.read_csv(path)
+        except (FileNotFoundError, pd.errors.EmptyDataError):
             continue
-        fc = pd.read_csv(path)
         fc = fc.loc[
             fc["reference_date"].astype(str).isin(list(reference_dates))
             & ~fc["model"].isin(list(exclude))
