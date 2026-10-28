@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
-import pytest
 
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, load_config
 from bdbvhubrenewal.reporting import report

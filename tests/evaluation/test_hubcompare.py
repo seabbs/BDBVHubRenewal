@@ -212,9 +212,7 @@ def test_score_comparison_flags_complete_weeks(
     assert done.max() == "2026-10-03"
 
 
-def test_score_comparison_waits_for_later_data(
-    target: pd.DataFrame, delays: pd.DataFrame
-) -> None:
+def test_score_comparison_waits_for_later_data(target: pd.DataFrame) -> None:
     hub = _hub_rows(ref="2026-10-31").assign(model="teamA-weekly")
     hub = hub.rename(columns={"output_type_id": "sample"}).assign(source="hub")
     scores, pending = score_comparison(hub, target, 3)
@@ -240,9 +238,7 @@ def test_summarise_comparison(
     assert {"coverage_50", "coverage_90", "bias", "wis"} <= set(table.columns)
 
 
-def test_forecast_quantiles(
-    tmp_path: Path, target: pd.DataFrame, delays: pd.DataFrame
-) -> None:
+def test_forecast_quantiles(tmp_path: Path) -> None:
     _write_hub(tmp_path)
     q = forecast_quantiles(load_hub_submissions(tmp_path))
     assert {"q05", "q25", "q50", "q75", "q95"} <= set(q.columns)

@@ -12,7 +12,6 @@ data/raw/
 output/
 # Docs figures and generated snippets: built at docs build time.
 docs/figures/*.svg
-docs/figures/comparison/
 docs/generated/
 # Pages of submitted rounds: built from the submission-ledger branch.
 docs/submission/rounds/
