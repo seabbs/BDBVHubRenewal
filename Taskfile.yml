@@ -145,6 +145,13 @@ tasks:
       - uv run bdbvhubrenewal compare-hub
       - uv run bdbvhubrenewal report
 
+  getting-started:
+    desc: Run the Getting started notebook again and save its outputs
+    cmds:
+      - >-
+        uv run --group docs jupytext --to ipynb --execute --run-path .
+        docs/getting-started.py
+
   docs:
     desc: Build the docs site into _site/
     cmds:

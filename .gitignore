@@ -17,3 +17,5 @@ docs/generated/
 # submission-ledger branch at each docs build.
 docs/submission/rounds/
 tests/results/
+# mkdocs-jupyter execution cache.
+.cache/
