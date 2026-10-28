@@ -37,14 +37,16 @@ There are no such rows when the vintage has no delay data.
 
 `PersistenceNow` (`persistencenow`) first nowcasts the recent weeks, with
 the baselinenowcast method (`bdbvhubrenewal.data.triangle`).
-A chain ladder on the reporting triangle of the hub's delay file, pooled
-over provinces, gives for each open onset week $w$ the ratio $r(w)$ of
-the cases still to come to those reported.
+A chain ladder on the reporting triangle of the hub's delay file, over
+the last `n_history` onset weeks, gives for each open onset week $w$ the
+ratio $r_p(w)$ of the cases still to come to those reported.
+Places with at least `own_per_week` delays a week use their own triangle,
+the rest the triangle pooled over places.
 Past nowcasts of the same triangle give a negative binomial size
-$\phi_h$ for each horizon $h$.
-The national cases still to come, $U(w) \sim \text{NegBin}$ with mean
-$r(w) \sum_p Y_p(w)$ and size $\phi_h$, are split over places in
-proportion to their published totals $Y_p(w)$, known plus imputed.
+$\phi_{p,h}$ for each horizon $h$.
+Each place's cases still to come, $U_p(w) \sim \text{NegBin}$ with mean
+$r_p(w) Y_p(w)$ and size $\phi_{p,h}$, are drawn on their own, with
+$Y_p(w)$ its published total, known plus imputed.
 The hub re-imputes missing onsets at each vintage, so totals also move
 both ways. Each place adds $E_p(w) = A - B$, with $A, B \sim
 \text{Poisson}(\kappa I_p(w) / 2)$ and $I_p(w)$ its imputed count, so
