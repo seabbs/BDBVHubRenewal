@@ -48,12 +48,12 @@ SCENARIOS=(
   "loose|main=loose,retry-1=pass|retry-1||Handled: main model refitted once (max R-hat is 1.2"
   "loosekept|main=loose,retry-1=fail|main||Handled: main model kept after one refit did not help"
   "retry|main=fail,retry-1=pass|retry-1||Main model refitted once: main model was ruled out"
-  "fallback|main=fail,retry-1=fail|fallback||Fallback model used ("
+  "fallback|main=fail,retry-1=fail|renewalsp||Fallback model used (single-patch model"
   # Tuesday 21:00 UTC, two hours before the close: no time to refit, so
-  # a failed main model goes straight to the fallback.
-  "late|main=fail,retry-1=pass|fallback|NOW=2026-11-03T21:00:00+00:00|Fallback model used ("
-  "persistence|main=fail,retry-1=crash,fallback=fail|persistence"
-  "skip|main=fail,retry-1=fail,fallback=fail,persistence=negative|skip"
+  # a failed main model goes straight to the single-patch fallback.
+  "late|main=fail,retry-1=pass|renewalsp|NOW=2026-11-03T21:00:00+00:00|Fallback model used ("
+  "persistence|main=fail,retry-1=crash,renewalsp=fail|persistence"
+  "skip|main=fail,retry-1=fail,renewalsp=fail,persistence=negative|skip"
 )
 
 sci() { uv run --quiet --project "$CI_DIR" "$@"; }
@@ -115,11 +115,14 @@ run_scenario() {
     python3 - "$WORK/matrix-$1.json" << 'EOF' > "$WORK/legs-$1.txt"
 import json, sys
 for e in json.load(open(sys.argv[1]))["include"]:
-    print("\t".join([e["id"], e["kind"], e["config"], e["label"], e["sampler"]]))
+    print("\t".join([e["id"], e["kind"], e["config"], e["label"], e["sampler"],
+                     e["model"] or "-"]))
 EOF
-    while IFS=$'\t' read -r id kind config label sampler; do
+    while IFS=$'\t' read -r id kind config label sampler cmodel; do
+      [ "$cmodel" = - ] && cmodel=""
       CAND_ID=$id CAND_KIND=$kind CAND_CONFIG=$config CAND_LABEL=$label \
-        CAND_SAMPLER=$sampler EXPECTED_LOCATIONS="CD,CD-IT,CD-NK,CD-HU" \
+        CAND_SAMPLER=$sampler CAND_MODEL=$cmodel \
+        EXPECTED_LOCATIONS="CD,CD-IT,CD-NK,CD-HU" \
         "$CI_DIR/steps/candidate.sh" > "$WORK/candidate-$id.log" 2>&1
     done < "$WORK/legs-$1.txt"
   }

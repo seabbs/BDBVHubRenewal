@@ -14,7 +14,7 @@ It is the reference for the interface, and `ci/run_dry.sh` runs the whole workfl
 | `bdbv-hub-renewal nowcast --model persistence --vintage <as_of> --out <dir>` | exists | `prepare` (persistence candidate and baseline) |
 | `bdbv-hub-renewal metadata --model <model> --out <dir>` | exists | `gate` |
 | `scripts/validate-hub.R <hub> <csv> <yml>`, with `CHECK_WINDOW=true` | exists | `gate`, through `ci/steps/validate_hub.sh` |
-| `bdbv-hub-renewal fit ...` | done (`bdbv_hub_renewal.submission.fitting`; `main` and `fallback` run the renewal model, `bdbv_hub_renewal.forecasters.renewal`) | `fit`, `retry` |
+| `bdbv-hub-renewal fit ...` | done (`bdbv_hub_renewal.submission.fitting`; `main` runs the chosen renewal model and `renewalsp` the single-patch model, `bdbv_hub_renewal.forecasters.renewal`) | `fit`, `retry` |
 | `nowcast --config <c> --fit <dir>` | done | `fit`, `retry` |
 | `bdbv-hub-renewal plot-submission ...` | done, `plots.plot_submission` | every candidate |
 | `bdbv-hub-renewal plot-ppc --ppc <ppc.json> --out <png>` | done, a thin wrapper on `ppc.plot_ppc` | candidates whose `ppc.json` is available |
@@ -24,18 +24,18 @@ It is the reference for the interface, and `ci/run_dry.sh` runs the whole workfl
 ### `bdbv-hub-renewal fit`
 
 ```sh
-bdbv-hub-renewal fit --model renewal --config main|fallback --vintage <as_of> \
+bdbv-hub-renewal fit --model renewal|renewalsp --config main|renewalsp --vintage <as_of> \
   --sampler-json '{"num_chains": 4, "num_warmup": 1000, "num_samples": 1000,
                    "target_accept": 0.8, "max_tree_depth": 10, "seed": 1}' \
   --out <fit dir>
 ```
 
-- `--model` is the model chosen in `results/model-choice.yml` (`bdbv-hub-renewal chosen-model`).
+- `--model` is the model chosen in `results/model-choice.yml` (`bdbv-hub-renewal chosen-model`), unless the candidate names its own in `ci/policy.toml` (`model`), as the single-patch fallback and the `bvd` shadow do.
   The hub id is set apart in `config/hub.toml` (`bdbv-hub-renewal hub-id`), `epiforecasts-seabbsrenewal`.
   `epiforecasts-renewal` is already a different hub model.
 - `--config` selects the model configuration.
   `main` is the full model.
-  `fallback` is the same code with the delays and missingness plugged in from data, and no spatial coupling.
+  `renewalsp` is the single-patch model: an independent renewal fit for each province with cases and for the country, with no pooling or coupling.
   Each matrix leg passes its own config.
 - `--sampler-json` is the candidate's `sampler` table from `ci/policy.toml`.
   The retries differ only in it.

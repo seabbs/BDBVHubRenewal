@@ -11,10 +11,10 @@ It is safe to install as is, because `DRY_RUN` is on until you turn it off.
 | --- | --- |
 | `detect` | Runs on schedule from Saturday 23:00 UTC (Sunday 00:00 Kinshasa) to Tuesday. It compares the hub's newest data commit and `as_of` with the ledger and stops unless there is new data for the open round. |
 | `prepare` | Pins the hub data at one commit and builds the persistence candidate, which is also the baseline for the checks. |
-| `fit` | A matrix over the primary candidates (`main` and `fallback`), fitted in parallel. Each fit is cached under a content hash of the model source, the hub commit and its sampler settings. |
+| `fit` | A matrix over the primary candidates (`main`, the single-patch fallback `renewalsp` and the `bvd` shadow), fitted in parallel. Each fit is cached under a content hash of the model source, the hub commit and its sampler settings. |
 | `triage` | Says whether `main` needs its one refit (past the convergence retry thresholds, or ruled out). |
 | `retry` | Only if `main` needs it: one refit with smaller steps and jittered inits, costing about as much as `main`, and only with time left for it before the window closes. |
-| `gate` | Walks the chain `main` → `retry-1` → `fallback` → `persistence`, handling problems rather than failing on them. A candidate is ruled out only if its fit is clearly broken or its file is invalid (format checks or hubValidations). |
+| `gate` | Walks the chain `main` → `retry-1` → `renewalsp` → `persistence`, handling problems rather than failing on them. A candidate is ruled out only if its fit is clearly broken or its file is invalid (format checks or hubValidations). |
 | `submit` | Publishes the plot, builds the PR body, and opens or updates the PR. A dry run prints the body instead. |
 | `record` | Live runs only. Writes the outcome to `state.json` on the `submission-ledger` branch and archives the round's files there. |
 | `outcome` | Fails the run if the round was skipped or a job broke, so you are notified. |
@@ -142,12 +142,12 @@ The 3-hourly schedule covers that.
 Every fit runs 2 chains of 500 warm-up and 500 draws (`ci/policy.toml`).
 On the 2026-10-24 vintage, with vectorised chains on 2 cores of archie, 4 chains of 1000 warm-up and 1000 draws took 130 minutes of sampling for the main fit and 134 for the retry.
 Nearly every draw reaches the maximum tree depth, so cost follows the number of NUTS iterations, and the current settings take about a quarter of that, 35 to 45 minutes.
-The fallback takes about 0.7 times the main fit.
+The single-patch fallback (`renewalsp`) converges on real data without reaching the maximum tree depth and fits faster than the main fit.
 Hosted runners are 1.2 to 1.5 times slower, so each fit job takes about 1 to 1.5 hours with setup.
 These times are to be re-measured on the current model.
 Time a real fit with a dry run on a past vintage (see above), and read the `Fit took N s` line in the job summary.
 
-The whole chain runs in sequence: prepare (persistence), then main with the fallback beside it, then at most one retry, then the gate.
+The whole chain runs in sequence: prepare (persistence), then main with the single-patch fallback beside it, then at most one retry, then the gate.
 From the last Tuesday start at 14:00 UTC there are 540 minutes to the close.
 A main fit of normal length leaves time for the retry.
 Two rules keep the chain inside the window when a fit runs late:
@@ -163,7 +163,7 @@ If fits come close to the cap:
 1. Make each fit cheaper.
    Use fewer warm-up iterations or draws, start from last week's posterior, and keep the JAX compilation cache warm (`setup-forecast-env` restores it).
 2. Split the matrix further where the model allows.
-   The fallback variant has independent provinces, so it can fit per province group as separate legs.
+   The single-patch fallback fits each province on its own, so it can fit per province group as separate legs.
    The coupled main model cannot.
 3. Start earlier.
    Data usually land on Friday or Saturday, and the window opens Sunday.
@@ -186,7 +186,7 @@ A round is skipped only if even persistence fails hub validation.
 A suggested general line for the model metadata's `methods_long`:
 
 > Submissions are produced automatically each week.
-> If the main model's fit does not converge, we refit it once with more conservative sampler settings and, only if both are clearly broken, submit a simplified variant of the same model (no spatial coupling, delays and missingness fixed from the data) or a persistence baseline.
+> If the main model's fit does not converge, we refit it once with more conservative sampler settings and, only if both are clearly broken, submit independent single-patch renewal fits for each province and the country, or a persistence baseline.
 > Each submission's pull request states which was used and why.
 
 ## Where this approach comes from
