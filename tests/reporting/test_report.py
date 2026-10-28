@@ -313,3 +313,16 @@ def test_completeness_note(delays: pd.DataFrame) -> None:
     assert "at least 3 weeks before the truth vintage" in text
     assert "2026-10-24 delay data" in text
     assert "96%" in text
+
+
+def test_score_views_without_lag_prior_origins() -> None:
+    scores = _scores().assign(lag_prior=[False, False])
+    other = _scores().assign(vintage="2026-08-18", lag_prior=[True, True])
+    views = report._score_views(pd.concat([scores, other]), 3)
+    own = views["complete weeks, own lag estimate"]
+    assert set(own["vintage"]) == {"2026-10-09"}
+    assert len(views["complete weeks"]) == 2
+    note = report._lag_prior_note(pd.concat([scores, other]))
+    assert "2026-08-18" in note
+    assert "2026-10-09" not in note
+    assert report._lag_prior_note(scores) == ""
