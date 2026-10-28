@@ -73,6 +73,10 @@ class ForecastTask:
         its latent process (for spatial coupling) while dropping them from
         its likelihood. Only models with `supports_mask = True` are given
         a non-empty mask.
+    delay_history : pandas.DataFrame or None
+        Delay rows of every vintage of this kind on or before `vintage`,
+        from which `data.reconstruct.publication_lag_pmf` estimates the
+        report to publication lag. None if there are none.
     """
 
     vintage: str
@@ -85,6 +89,7 @@ class ForecastTask:
     n_samples: int = 100
     seed: int = 0
     mask: tuple[str, ...] = ()
+    delay_history: pd.DataFrame | None = None
 
     def rng(self) -> np.random.Generator:
         """Return a random generator seeded from the task.
