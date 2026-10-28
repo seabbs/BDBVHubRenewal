@@ -556,3 +556,10 @@ def test_scenarios_are_scored_final_and_as_of(
     final = scores.loc[scores["truth_view"] == "final"]
     assert final["complete"].any()
     assert set(forecasts["kind"]) == {"simulated"}
+    # Zones: the model's province samples split across zones, and zone
+    # persistence, scored on the simulated zone counts.
+    zone = scores.loc[scores["level"] == "zone"]
+    assert set(zone["model"]) == {"persistence", "zonepersistence"}
+    assert zone["location"].str.count("-").eq(2).all()
+    assert set(zone["truth_view"]) == {"final", "as of 2 weeks later"}
+    assert set(scores["level"]) == {"national", "province", "zone"}
