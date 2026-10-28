@@ -136,17 +136,14 @@ def test_delay_pmf_needs_cases() -> None:
 
 
 def test_first_publication_delays_count_late_batches_as_long_delays() -> None:
-    def rows(vintage: str, week: str, delays: list[int]) -> pd.DataFrame:
-        return _rows(vintage, week, delays)
-
     history = pd.concat(
         [
-            rows("2026-10-09", "2026-09-26", [2, 3]),
+            _rows("2026-10-09", "2026-09-26", [2, 3]),
             # The same two rows, plus a batch of three with delay 4 that
             # first appear in the next file, and one case for a week too
             # old to keep (backfill).
-            rows("2026-10-17", "2026-09-26", [2, 3, 4, 4, 4]),
-            rows("2026-10-17", "2026-07-04", [5]),
+            _rows("2026-10-17", "2026-09-26", [2, 3, 4, 4, 4]),
+            _rows("2026-10-17", "2026-07-04", [5]),
         ]
     )
     out = first_publication_delays(history, "2026-10-17", max_delay=35)
