@@ -163,7 +163,7 @@ def test_simulated_onsets_follow_the_model_renewal(outbreak) -> None:  # type: i
             seeding[day, i] = s.seed_size / pop[i]
     g = generation_interval(s.gi_mean, s.gi_sd)
     nu = s.effective_fraction
-    x, _ = coupled_renewal(
+    x, _, _ = coupled_renewal(
         jnp.zeros((g.size, len(pop))),
         jnp.asarray(rt),
         jnp.asarray(g),

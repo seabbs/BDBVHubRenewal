@@ -66,7 +66,8 @@ def test_active_set_follows_the_data(outbreak, sim_tables, table):
         ModelConfig(rt_cadence="linear"),
         ModelConfig(seeding="start"),
         ModelConfig(outbreak_threshold=20, import_rt="origin"),
-        ModelConfig(outbreak_threshold=20, coupling="learnt"),
+        ModelConfig(coupling="mvn"),
+        ModelConfig(seeding="primary"),
     ],
 )
 def test_model_sites_and_shapes(outbreak, sim_tables, table, cfg):
@@ -334,44 +335,107 @@ def test_as_reported_draws_match_the_vintage_at_its_own_cutoff(sim_vintage):
     )
 
 
-def test_sporadic_provinces_take_national_rt_and_no_seed(sim_vintage):
-    data = sim_vintage
-    totals = np.nansum(data.known + data.imputed, axis=0)
-    threshold = float(np.sort(totals)[1])
-    sporadic = totals < threshold
-    assert sporadic.sum() == 1
-    cfg = ModelConfig(
-        outbreak_threshold=threshold, rt_weighting="cases", import_rt="origin"
-    )
-    model = build_model(data, cfg)
-    tr = trace(model, data, forecast=True)
-    log_rt = np.log(np.asarray(tr["latent::rt_subpop"]["value"]))
-    base = np.log(np.asarray(tr["latent::rt_baseline"]["value"]))
-    np.testing.assert_allclose(log_rt[:, sporadic], base, atol=1e-5)
-    # Case weights over the outbreak provinces only.
-    w = totals[~sporadic] + 1.0
-    np.testing.assert_allclose(
-        (log_rt[:, ~sporadic] - base) @ w / w.sum(), 0.0, atol=1e-4
-    )
-    # No own seed: the sporadic province starts empty.
-    x = np.asarray(tr["latent_infections_by_subpop"]["value"])
-    n_init = model.latent.n_initialization_points
-    assert x[:n_init, sporadic].max() < 1e-9
-    imported = np.asarray(tr["latent::infections_imported"]["value"])
-    assert imported.shape == x.shape
-    assert np.all(imported <= x + 1e-12)
+def _log_density(model, data):
     tr = trace(model, data)
     sampled = {
         k: v["value"]
         for k, v in tr.items()
         if v["type"] == "sample" and not v["is_observed"]
     }
-    log_density = numpyro.infer.util.log_density(
-        model.sample, (), model_args(model, data), sampled
-    )[0]
-    assert np.isfinite(float(log_density))
+    return float(
+        numpyro.infer.util.log_density(
+            model.sample, (), model_args(model, data), sampled
+        )[0]
+    )
 
 
-def test_default_has_no_sporadic_class(sim_vintage):
+def test_outbreak_classes_use_recent_cases():
+    from bdbvhubrenewal.model.model import outbreak_classes
+
+    weekly = np.array(
+        [[30, 0], [5, 1], [0, np.nan], [0, 25], [0, 0], [40, 0]], dtype=float
+    )
+    got = outbreak_classes(weekly, 2, 20)
+    expected = np.array(
+        [[1, 0], [1, 0], [0, 0], [0, 1], [0, 1], [1, 0]], dtype=bool
+    )
+    np.testing.assert_array_equal(got, expected)
+    assert outbreak_classes(weekly, 2, None) is None
+
+
+def test_sporadic_weeks_take_national_rt(sim_vintage):
+    from bdbvhubrenewal.model.model import outbreak_classes
+
+    data = sim_vintage
+    cfg = ModelConfig(
+        outbreak_threshold=20,
+        outbreak_window=6,
+        rt_weighting="cases",
+        import_rt="origin",
+    )
+    classes = outbreak_classes(data.known + data.imputed, 6, 20)
+    assert classes.any() and not classes.all()
+    model = build_model(data, cfg)
+    tr = trace(model, data)
+    n_init = model.latent.n_initialization_points
+    log_rt = np.log(np.asarray(tr["latent::rt_subpop"]["value"]))[n_init:]
+    base = np.log(np.asarray(tr["latent::rt_baseline"]["value"]))[n_init:]
+    daily = np.repeat(classes, 7, axis=0)[: log_rt.shape[0]]
+    dev = log_rt - base
+    np.testing.assert_allclose(dev[~daily], 0.0, atol=1e-5)
+    assert np.abs(dev[daily]).max() > 1e-4
+    # Case weights over the outbreak provinces at each time.
+    w = np.nansum(data.known + data.imputed, axis=0) + 1.0
+    np.testing.assert_allclose((dev * daily) @ w, 0.0, atol=1e-2)
+    imported = np.asarray(tr["latent::infections_imported"]["value"])
+    x = np.asarray(tr["latent_infections_by_subpop"]["value"])
+    f = np.asarray(data.populations) / np.sum(data.populations)
+    assert imported.shape == x.shape
+    assert np.all(imported * f * np.sum(data.populations) <= x + 1e-6)
+    assert np.isfinite(_log_density(model, data))
+
+
+def test_primary_seeding_leaves_other_provinces_to_importation(sim_vintage):
+    data = sim_vintage
+    model = build_model(data, ModelConfig(seeding="primary", coupling="none"))
+    tr = trace(model, data)
+    assert tr["initial_onsets"]["value"].shape == (1,)
+    x = np.asarray(tr["latent_infections_by_subpop"]["value"])
+    primary = int(np.argmin(data.seed_days))
+    others = np.arange(x.shape[1]) != primary
+    # Without coupling nothing reaches the other provinces.
+    assert x[:, others].max() < 1e-3
+    assert x[:, primary].max() > 1.0
+    coupled = build_model(data, ModelConfig(seeding="primary"))
+    xc = np.asarray(
+        trace(coupled, data)["latent_infections_by_subpop"]["value"]
+    )
+    assert xc[:, others].max(axis=0).min() > 1e-3
+    assert np.isfinite(_log_density(coupled, data))
+
+
+def test_gravity_flow_kernel_is_gravity_at_zero(sim_vintage):
+    from bdbvhubrenewal.model import GravityFlowKernel
+
+    k = GravityFlowKernel("kernel", sim_vintage.kernel)
+    zero = {
+        "kernel_destination_z": np.zeros(k.dest_basis.shape[1]),
+        "kernel_flow_z": np.zeros(
+            k.symmetric.shape[1] + k.antisymmetric.shape[1]
+        ),
+    }
+    with (
+        numpyro.handlers.seed(rng_seed=0),
+        numpyro.handlers.substitute(data=zero),
+    ):
+        got = np.asarray(k())
+    np.testing.assert_allclose(got, sim_vintage.kernel, rtol=1e-5, atol=1e-7)
+    with numpyro.handlers.seed(rng_seed=1):
+        draw = np.asarray(k())
+    np.testing.assert_allclose(draw.sum(axis=1), 1.0, rtol=1e-5)
+    np.testing.assert_allclose(np.diag(draw), 0.0, atol=1e-12)
+
+
+def test_default_has_no_sporadic_class():
     cfg = ModelConfig()
     assert cfg.outbreak_threshold is None and cfg.import_rt == "destination"
