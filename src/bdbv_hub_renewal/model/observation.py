@@ -264,6 +264,11 @@ class OnsetStreams(BaseObservationProcess):
         Pmf of the lag from report to publication in a vintage, on
         $0..L$: a random variable to estimate it, or a fixed pmf.
         `None` is no lag.
+    delay_overdispersion_rv : RandomVariable, optional
+        $1 / \sqrt{\psi}$. If given, the delay counts are
+        Dirichlet-multinomial with concentration $\psi P(d \mid w)$
+        instead of multinomial, so that the pooled delays of thousands of
+        cases do not make the delay overconfident.
     """
 
     def __init__(
@@ -278,6 +283,7 @@ class OnsetStreams(BaseObservationProcess):
         start_dow: int = 6,
         kernel_rv: RandomVariable | None = None,
         publication_lag: RandomVariable | ArrayLike | None = None,
+        delay_overdispersion_rv: RandomVariable | None = None,
     ) -> None:
         super().__init__(
             name, DeterministicPMF(f"{name}_identity", jnp.ones(1))
@@ -291,6 +297,7 @@ class OnsetStreams(BaseObservationProcess):
         self.kernel_rv = kernel_rv
         self.start_dow = start_dow
         self.publication_lag = publication_lag
+        self.delay_overdispersion_rv = delay_overdispersion_rv
 
     def lookback_days(self) -> int:
         """Return 0: the latent process is already dated by onset."""
@@ -509,11 +516,16 @@ class OnsetStreams(BaseObservationProcess):
         )
         probs = jnp.maximum(probs, 1e-12)
         probs = probs / probs.sum(axis=1, keepdims=True)
+        if self.delay_overdispersion_rv is None:
+            counts_dist = dist.Multinomial(total_count=totals, probs=probs)
+        else:
+            psi = 1 / jnp.square(self.delay_overdispersion_rv())
+            counts_dist = dist.DirichletMultinomial(
+                concentration=psi * probs, total_count=totals
+            )
         with numpyro.handlers.mask(mask=totals > 0):
             numpyro.sample(
-                self._sample_site_name("delays"),
-                dist.Multinomial(total_count=totals, probs=probs),
-                obs=counts,
+                self._sample_site_name("delays"), counts_dist, obs=counts
             )
 
 

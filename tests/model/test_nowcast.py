@@ -6,7 +6,6 @@ import jax.numpy as jnp
 import numpy as np
 import numpyro
 import numpyro.distributions as dist
-import pytest
 from jax import random
 from numpyro.infer import Predictive
 
@@ -85,24 +84,27 @@ def test_model_estimates_the_publication_lag(sim_vintage):
 
 def test_dirichlet_multinomial_delays(sim_vintage):
     cfg = dataclasses.replace(MAIN, delay_counts="dirichlet-multinomial")
-    model = build_model(sim_vintage, cfg)
-    args = model_args(model, sim_vintage)
-    with numpyro.handlers.trace() as tr:
-        numpyro.handlers.seed(model.sample, rng_seed=0)(**args)
-    site = tr["onsets_delays"]
-    assert isinstance(site["fn"], dist.DirichletMultinomial)
-    assert "delay_overdispersion" in tr
-    # A very large concentration gives back the multinomial.
-    fixed = {"delay_overdispersion": jnp.asarray(1e-5)}
-    with numpyro.handlers.trace() as dm:
-        numpyro.handlers.substitute(
-            numpyro.handlers.seed(model.sample, rng_seed=0), fixed
-        )(**args)
-    fn, value = dm["onsets_delays"]["fn"], dm["onsets_delays"]["value"]
-    conc = fn.concentration
-    mn = dist.Multinomial(
-        total_count=fn.total_count, probs=conc / conc.sum(-1, keepdims=True)
-    )
-    assert float(fn.log_prob(value).sum()) == pytest.approx(
-        float(mn.log_prob(value).sum()), rel=1e-3
-    )
+    args = model_args(build_model(sim_vintage, MAIN), sim_vintage)
+
+    def delay_site(config, values=None):
+        model = build_model(sim_vintage, config)
+        run = numpyro.handlers.seed(model.sample, rng_seed=0)
+        if values is not None:
+            run = numpyro.handlers.substitute(run, values)
+        with numpyro.handlers.trace() as tr:
+            run(**args)
+        return tr, tr["onsets_delays"]["fn"].base_dist
+
+    tr, dm = delay_site(cfg)
+    assert isinstance(dm, dist.DirichletMultinomial)
+    latent = {
+        k: v["value"]
+        for k, v in tr.items()
+        if v["type"] == "sample" and not v["is_observed"]
+    }
+    _, mn = delay_site(MAIN, latent)
+    # Same expected delay probabilities, with concentration psi.
+    psi = 1 / latent["delay_overdispersion"] ** 2
+    conc = np.asarray(dm.concentration)
+    np.testing.assert_allclose(conc.sum(-1), psi, rtol=1e-4)
+    np.testing.assert_allclose(conc / psi, mn.probs, rtol=1e-4, atol=1e-9)

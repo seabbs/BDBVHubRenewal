@@ -140,6 +140,10 @@ class ModelConfig:
         on $0..L$, fixed at its prior mean (uniform), or none.
     max_publication_lag : int
         $L$, in days (`vintages.PUBLICATION_LAG_DAYS`).
+    delay_counts : {"multinomial", "dirichlet-multinomial"}
+        Likelihood of the delay file's counts given the weekly totals.
+        The Dirichlet-multinomial has $1/\sqrt{\psi} \sim
+        \text{HalfNormal}(0.1)$.
     """
 
     national: bool = False
@@ -163,6 +167,9 @@ class ModelConfig:
     dmax: int = 60
     publication_lag: Literal["estimated", "fixed", "none"] = "estimated"
     max_publication_lag: int = 3
+    delay_counts: Literal["multinomial", "dirichlet-multinomial"] = (
+        "multinomial"
+    )
 
 
 MAIN = ModelConfig()
@@ -488,6 +495,11 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             kernel_rv=kernel if isinstance(kernel, LearntKernel) else None,
             start_dow=SUNDAY,
             publication_lag=lag,
+            delay_overdispersion_rv=DistributionalVariable(
+                "delay_overdispersion", dist.HalfNormal(0.1)
+            )
+            if config.delay_counts == "dirichlet-multinomial"
+            else None,
         )
     )
     model = builder.build()
