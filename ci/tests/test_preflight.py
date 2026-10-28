@@ -14,8 +14,8 @@ from submission_ci.preflight import Settings, main, render, run_checks
 REPO = "seabbs/BDBVHubRenewal"
 FORK = "seabbs-bot/BDBV-Modeling-Hub"
 HUB = "InsightNet-US/BDBV-Modeling-Hub"
-MID = "epiforecasts-seabbsrenewal"
-MID2 = "epiforecasts-seabbsbaseline"
+MID = "seabbs-renewal"
+MID2 = "seabbs-baseline"
 ENV = f"repos/{REPO}/environments/hub-submission"
 NOW = dt.datetime(2026, 10, 27, 12, tzinfo=dt.UTC)
 
@@ -84,11 +84,11 @@ def settings(tmp_path: Path) -> Settings:
     meta = tmp_path / "meta"
     meta.mkdir()
     (meta / f"{MID}.yml").write_text(
-        "team_name: EpiForecasts\nteam_abbr: epiforecasts\n"
-        "model_name: Renewal\nmodel_abbr: seabbsrenewal\n"
+        "team_name: EpiForecasts\nteam_abbr: seabbs\n"
+        "model_name: Renewal\nmodel_abbr: renewal\n"
     )
     (meta / f"{MID2}.yml").write_text(
-        "team_abbr: epiforecasts\nmodel_abbr: seabbsbaseline\n"
+        "team_abbr: seabbs\nmodel_abbr: baseline\n"
     )
     choice = tmp_path / "model-choice.yml"
     choice.write_text(
@@ -248,33 +248,33 @@ def test_variables_override_model_and_id(settings: Settings) -> None:
             f"repos/{REPO}/actions/variables": {
                 "variables": [
                     {"name": "HUB_MODEL", "value": "persistence"},
-                    {"name": "HUB_MODEL_ID", "value": "epiforecasts-other"},
+                    {"name": "HUB_MODEL_ID", "value": "seabbs-other"},
                     {"name": "EXPECTED_LOCATIONS", "value": "CD"},
                 ]
             }
         }
     )
     checks = {c.name: c for c in run_checks(runner, settings)}
-    assert "epiforecasts-other" in checks["metadata"].detail
+    assert "seabbs-other" in checks["metadata"].detail
     assert checks["metadata"].status == "missing"
     assert checks["model choice"].status == "warn"
 
 
 def test_metadata_name_mismatch_is_missing(settings: Settings) -> None:
     (settings.metadata_dir / f"{MID}.yml").write_text(
-        "team_abbr: epiforecasts\nmodel_abbr: hubrenewal\n"
+        "team_abbr: seabbs\nmodel_abbr: hubrenewal\n"
     )
     check = {c.name: c for c in run_checks(ready_runner(), settings)}[
         "metadata"
     ]
     assert check.status == "missing"
-    assert "epiforecasts-hubrenewal" in check.detail
+    assert "seabbs-hubrenewal" in check.detail
 
 
 def test_metadata_abbr_too_long_is_missing(settings: Settings) -> None:
-    mid = "epiforecasts-abcdefghijklmnop"
+    mid = "seabbs-abcdefghijklmnop"
     (settings.metadata_dir / f"{mid}.yml").write_text(
-        "team_abbr: epiforecasts\nmodel_abbr: abcdefghijklmnop\n"
+        "team_abbr: seabbs\nmodel_abbr: abcdefghijklmnop\n"
     )
     runner = ready_runner(
         **{
@@ -354,7 +354,7 @@ def test_main_exits_1_on_gaps(
     runner = ready_runner(**{f"repos/{FORK}": None})
     monkeypatch.setattr("submission_ci.preflight.subprocess_runner", runner)
     hub_toml = settings.metadata_dir / "hub.toml"
-    hub_toml.write_text('[submission]\nmodel_abbr = "seabbsrenewal"\n')
+    hub_toml.write_text('[submission]\nmodel_abbr = "renewal"\n')
     args = [
         "--hub-config",
         str(hub_toml),

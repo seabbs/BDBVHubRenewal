@@ -110,7 +110,7 @@ tasks:
   submission-preflight:
     desc: Check every prerequisite of a live submission that can be read, and print what is missing (needs gh as a repo admin)
     vars:
-      MODEL_ID: '{{.MODEL_ID | default "epiforecasts-seabbsrenewal"}}'
+      MODEL_ID: '{{.MODEL_ID | default "seabbs-renewal"}}'
     cmds:
       - rm -rf output/hub
       - git clone --depth 1 -q https://github.com/InsightNet-US/BDBV-Modeling-Hub.git output/hub

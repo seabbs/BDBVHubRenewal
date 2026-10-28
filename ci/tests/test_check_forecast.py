@@ -30,7 +30,7 @@ def statuses(path: Path, **kwargs: Any) -> dict[str, str]:
 
 def sub(tmp_path: Path, **kwargs: Any) -> Path:
     return write_samples(
-        tmp_path / f"{REF}-epiforecasts-seabbsrenewal.csv",
+        tmp_path / f"{REF}-seabbs-renewal.csv",
         make_samples(**kwargs),
     )
 
@@ -38,7 +38,7 @@ def sub(tmp_path: Path, **kwargs: Any) -> Path:
 def test_plausible_file_passes(tmp_path: Path) -> None:
     s = statuses(sub(tmp_path))
     assert s.pop("baseline") == "skip" and s.pop("previous") == "skip"
-    # Zones are required only for seabbsbaseline.
+    # Zones are required only for baseline.
     assert s.pop("zones") == "skip"
     assert set(s.values()) == {"pass"}, s
 

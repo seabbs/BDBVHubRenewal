@@ -31,7 +31,7 @@ bdbvhubrenewal fit --model renewal|renewalsp --config main|renewalsp --vintage <
 ```
 
 - `--model` is the model chosen in `results/model-choice.yml` (`bdbvhubrenewal chosen-model`), unless the candidate names its own in `ci/policy.toml` (`model`), as the single-patch fallback and the `bvd` shadow do.
-  The hub id is set apart in `config/hub.toml` (`bdbvhubrenewal hub-id`), `epiforecasts-seabbsrenewal`.
+  The hub id is set apart in `config/hub.toml` (`bdbvhubrenewal hub-id`), `seabbs-renewal`.
   `epiforecasts-renewal` is already a different hub model.
 - `--config` selects the model configuration.
   `main` is the full model.
