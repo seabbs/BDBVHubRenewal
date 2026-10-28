@@ -59,6 +59,34 @@ def test_cli_refuses_heldout_without_choice(tmp_path: Path) -> None:
     assert not (tmp_path / "res" / "heldout-scores.csv").exists()
 
 
+def test_cli_heldout_with_no_choices_scores_nothing(tmp_path: Path) -> None:
+    record = tmp_path / "choices.yml"
+    record.write_text("choices: []\n")
+    cfg = (
+        (ROOT / "config" / "backtest.toml")
+        .read_text()
+        .replace(
+            'model_choice = "results/model-choice.yml"',
+            f'model_choice = "{record}"',
+        )
+    )
+    path = tmp_path / "backtest.toml"
+    path.write_text(cfg)
+    code = main(
+        [
+            "backtest",
+            "--evaluate-holdout",
+            "--config",
+            str(path),
+            "--results",
+            str(tmp_path / "res"),
+        ]
+    )
+    # With no choice yet, every vintage is development: nothing is held out.
+    assert code == 0
+    assert not (tmp_path / "res" / "heldout-scores.csv").exists()
+
+
 @pytest.mark.usefixtures("in_root")
 def test_plot_nowcast_returns_figure(
     target: pd.DataFrame, delays: pd.DataFrame
@@ -252,4 +280,6 @@ def test_cli_fit_task_carries_the_delay_files_for_the_lag() -> None:
     task, _ = _task(args)
     assert task.delay_history is not None
     assert task.delay_history["vintage"].nunique() >= 2
+    assert task.target_history is not None
+    assert task.target_history["vintage"].nunique() >= 3
     assert vintage_inputs(task, MAIN).publication_lag_pmf is not None

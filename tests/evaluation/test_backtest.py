@@ -372,6 +372,21 @@ def test_tasks_carry_earlier_delay_files_for_the_publication_lag(
     assert tasks["2026-08-18"].delay_history is None
 
 
+def test_tasks_carry_earlier_target_vintages(
+    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
+) -> None:
+    real = target.loc[target["kind"] == "real"]
+    tasks = {t.vintage: t for t in make_tasks(real, delays, config)}
+    history = tasks["2026-10-17"].target_history
+    assert history is not None
+    assert set(history["vintage"]) == {"2026-08-18", "2026-10-09", "2026-10-17"}
+    # One vintage's rows can take their history from a fuller table.
+    rows = real.loc[real["vintage"] == "2026-10-09"]
+    (task,) = make_tasks(rows, delays, config, history=real)
+    assert task.target_history is not None
+    assert set(task.target_history["vintage"]) == {"2026-08-18", "2026-10-09"}
+
+
 class _Counting:
     name = "persistence"
 

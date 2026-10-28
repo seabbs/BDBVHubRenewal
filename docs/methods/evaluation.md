@@ -79,6 +79,8 @@ It runs on development vintages, for models that support the mask, so not `renew
 
 ## Comparison with hub forecasts
 
-For each hub reference date, our models forecast from the latest real vintage serving the round, or else a vintage reconstructed for the Saturday before.
-All sample forecasts of the current target are scored against the latest real vintage, on the locations and weeks every model covered.
+For each hub reference date, our unfitted models forecast from the latest real vintage serving the round, or else a vintage reconstructed for the Saturday before.
+Fitted models use their stored backtest or held-out forecasts for the same round.
+Every model is scored on the weeks it forecast, against the latest real vintage, and the [comparison page](../comparison.md) reports complete weeks.
+WIS is relative to `persistencenow` on the weeks both forecast.
 A round is pending until a later real vintage exists.

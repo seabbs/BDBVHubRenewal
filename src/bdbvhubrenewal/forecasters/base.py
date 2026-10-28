@@ -82,6 +82,10 @@ class ForecastTask:
         Delay rows of every vintage of this kind on or before `vintage`,
         from which `data.reconstruct.publication_lag_pmf` estimates the
         report to publication lag. None if there are none.
+    target_history : pandas.DataFrame or None
+        Target rows of every vintage of this kind on or before `vintage`,
+        from which a model can learn how totals are revised. None if there
+        are none.
     """
 
     vintage: str
@@ -96,6 +100,7 @@ class ForecastTask:
     mask: tuple[str, ...] = ()
     report_by: tuple[str, ...] = ()
     delay_history: pd.DataFrame | None = None
+    target_history: pd.DataFrame | None = None
 
     def rng(self) -> np.random.Generator:
         """Return a random generator seeded from the task.

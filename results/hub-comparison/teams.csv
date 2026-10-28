@@ -1,0 +1,5 @@
+model,team_name,model_name,license,website_url
+ACCIDDA-Chromantis,Atlantic Coast Center for Infectious Disease Dynamics and Analytics,Chromantis,CC-BY-4.0,https://github.com/ACCIDDA/chromantis
+CEPH-Rtrend_BDBV,CEPH Lab at Indiana University,Rtrend Bundibugyo (Ebola),CC-BY-4.0,https://ceph-lab.github.io/
+MOBS-GLEAM_BDBV,MOBS Lab at Northeastern University,Bundibugyo (Ebola) Gleam,CC-BY-4.0,https://epistorm.github.io/EBV2026/
+OHTJHU-BM,One Health Trust - Johns Hopkins University,Timeseries Foundation Model Ensemble with Delay Nowcast (bare minimum),CC0-1.0,https://github.com/CDDEP-DC/bdbv-fm
