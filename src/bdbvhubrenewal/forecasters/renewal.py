@@ -1264,23 +1264,30 @@ def fit_renewal(
         "parameters": params,
         "chains": chains,
         "worst_rhat": worst_rhat(params),
-        "warnings": lag_warnings([run.data for run in fit.runs.values()]),
+        "warnings": lag_warnings(
+            [run.data for run in fit.runs.values()],
+            model_config(VARIANTS[variant]),
+        ),
     }
 
 
-def lag_warnings(inputs: Sequence[Any]) -> list[str]:
+def lag_warnings(inputs: Sequence[Any], config: Any = None) -> list[str]:
     """Warn when a fit used the prior publication lag, not an estimate.
 
     Parameters
     ----------
     inputs : sequence of bdbvhubrenewal.model.Vintage
         The model inputs of each run.
+    config : bdbvhubrenewal.model.ModelConfig, optional
+        The configuration. Only `publication_lag="empirical"` can warn.
 
     Returns
     -------
     list of str
         One `name: message` warning, or none.
     """
+    if config is not None and config.publication_lag != "empirical":
+        return []
     if any(getattr(v, "publication_lag_pmf", None) is None for v in inputs):
         return [
             "publication_lag: no earlier pair of delay files, so the fit "

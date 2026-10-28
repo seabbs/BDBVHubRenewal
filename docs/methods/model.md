@@ -115,8 +115,7 @@ The start is $\mathcal{N}(-2, 1)$ with province spread $\mathcal{N}^+(0, 0.5^2)$
 ### Known onsets
 
 A case reported on day $t$ is in the vintage published at $T$ with probability $c(t) = F_\ell(T - t)$, with $F_\ell$ the cdf of the report-to-publication lag.
-The lag pmf, on 0 to 180 days, is estimated from the rows new between consecutive delay files dated on or before the forecast date.
-A vintage with no earlier pair uses a prior, 85% uniform on 0 to 3 days and 15% on 4 to 60 days.
+The lag is uniform on 0 to 3 days.
 Expected known onsets, right truncated by vintage, are
 
 $$
