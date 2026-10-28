@@ -14,6 +14,7 @@ from bdbv_hub_renewal.evaluation.backtest import (
     run_lopo,
     run_recovery,
     saturdays,
+    score_tasks,
     score_by_truth_vintage,
     truth_changes,
 )
@@ -112,6 +113,75 @@ def test_scores_cover_only_weeks_in_the_truth(
         strict=True,
     )
     assert list(scores["truth"]) == [truth[k] for k in keys]
+
+
+def _forecast_rows(as_of: str | None) -> pd.DataFrame:
+    weeks = ["2026-09-26", "2026-10-03", "2026-10-10"]
+    return pd.DataFrame(
+        {
+            "model": "m",
+            "kind": "real",
+            "vintage": "2026-10-09",
+            "reference_date": "2026-10-17",
+            "location": "CD",
+            "target_end_date": weeks * 2,
+            "horizon": [-3, -2, -1] * 2,
+            "sample": [1, 1, 1, 2, 2, 2],
+            "value": [10.0, 20.0, 30.0, 12.0, 22.0, 32.0],
+            "as_of": as_of,
+        }
+    )
+
+
+def test_score_tasks_marks_complete_weeks() -> None:
+    truth = pd.DataFrame(
+        {
+            "location": "CD",
+            "target_end_date": ["2026-09-26", "2026-10-03", "2026-10-10"],
+            "truth": [11.0, 21.0, 25.0],
+        }
+    )
+    forecasts = _forecast_rows(None)
+    scores = score_tasks(forecasts, truth, "2026-10-24", complete_after_weeks=3)
+    # Weeks that ended at least 3 weeks before the truth vintage.
+    done = dict(zip(scores["target_end_date"], scores["complete"], strict=True))
+    assert done == {"2026-09-26": True, "2026-10-03": True, "2026-10-10": False}
+    assert set(scores["scoring"]) == {"as reported"}
+
+
+def test_score_tasks_scores_vintage_matched_rows() -> None:
+    truth = pd.DataFrame(
+        {
+            "location": "CD",
+            "target_end_date": ["2026-09-26", "2026-10-03", "2026-10-10"],
+            "truth": [11.0, 21.0, 25.0],
+        }
+    )
+    forecasts = pd.concat(
+        [
+            _forecast_rows(None),
+            _forecast_rows("2026-10-17").assign(value=0.0),
+            _forecast_rows("2026-10-24").assign(value=25.0),
+        ],
+        ignore_index=True,
+    )
+    scores = score_tasks(forecasts, truth, "2026-10-24", complete_after_weeks=3)
+    # Final rows against the truth as reported, and the rows predicting
+    # this truth vintage against it. Rows for other vintages are left out.
+    assert sorted(scores["scoring"].unique()) == [
+        "as reported",
+        "vintage-matched",
+    ]
+    matched = scores.loc[scores["scoring"] == "vintage-matched"]
+    assert len(matched) == 3
+    week = matched.loc[matched["target_end_date"] == "2026-10-10"]
+    assert week["ae_median"].iloc[0] == 0.0
+    # Forecasts without an as_of column are all final counts.
+    plain = score_tasks(
+        _forecast_rows(None).drop(columns="as_of"), truth, "2026-10-24"
+    )
+    assert set(plain["scoring"]) == {"as reported"}
+    assert plain["complete"].all()
 
 
 def test_truth_changes(target: pd.DataFrame) -> None:
