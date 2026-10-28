@@ -13,10 +13,13 @@
 #   pmf.csv        triangle, delay, pmf
 #   point.csv      triangle, row, point_final
 #   nb_size.csv    triangle, horizon, nb_size (1 = most recent open row)
-#   VERSION        package version and commit
+#   VERSION        package version and the CRAN snapshot it came from
+#
+# baselinenowcast is installed from CRAN, pinned through a Posit Package
+# Manager snapshot (the date below and in the workflow).
 
-pinned_version <- "0.2.2"
-pinned_commit <- "1d29e5deab60906f4aee2d5134d9d0f1802a0f1b"
+pinned_version <- "0.2.0"
+snapshot <- "2026-10-27"
 
 suppressPackageStartupMessages(library(baselinenowcast))
 
@@ -90,11 +93,10 @@ write_csv(do.call(rbind, pmf_out), "pmf.csv")
 write_csv(do.call(rbind, point_out), "point.csv")
 write_csv(do.call(rbind, size_out), "nb_size.csv")
 
-commit <- packageDescription("baselinenowcast")$RemoteSha
-if (is.null(commit) || is.na(commit) || !nzchar(commit)) {
-  commit <- pinned_commit
-}
 writeLines(
-  c(paste0("baselinenowcast ", pinned_version), paste0("commit ", commit)),
+  c(
+    paste0("baselinenowcast ", pinned_version),
+    paste0("CRAN snapshot https://packagemanager.posit.co/cran/", snapshot)
+  ),
   file.path(dir, "VERSION")
 )

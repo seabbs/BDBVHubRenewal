@@ -299,7 +299,7 @@ The median has no growth and weeks up to $c$ are still revised upwards, so persi
 ### Persistence on a nowcast
 
 `persistencenow` nowcasts the recent weeks with a Python port of [baselinenowcast](https://github.com/epinowcast/baselinenowcast), then runs the hub baseline forward from each nowcast draw.
-Tests check the port's delay, point nowcast and negative binomial sizes against baselinenowcast 0.2.2 on fixed triangles, and a CI job regenerates those fixtures with the R package (`scripts/baselinenowcast_fixtures.R`).
+Tests check the port's delay, point nowcast and negative binomial sizes against baselinenowcast 0.2.0 from CRAN on fixed triangles, and a CI job regenerates those fixtures with the R package (`scripts/baselinenowcast_fixtures.R`).
 
 **Nowcast.**
 The reporting triangle $n(W, d)$ counts the cases in the vintage's delay file by onset week $W$ and delay $d$ in days, up to 35 days.
