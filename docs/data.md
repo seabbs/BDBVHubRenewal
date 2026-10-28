@@ -119,4 +119,4 @@ The last, partial week is understated.
 
 Health zone onsets are in `daily_zones.csv.gz`, and their weekly totals in `health_zones.csv.gz`.
 Zone totals sum to the province totals in every vintage.
-They set the zone shares that split the province forecasts (see [Model](methods/model.md#health-zones)).
+They set the zone shares that split the province forecasts (see [Health zones](methods/model.md#health-zones)).
