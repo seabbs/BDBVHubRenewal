@@ -66,10 +66,11 @@ def test_model_for_vintage() -> None:
 def test_heldout_pairs() -> None:
     vintages = ["2026-08-18", "2026-10-09", "2026-10-17", "2026-10-24"]
     pairs = heldout_pairs(CHOICES[:1], vintages)
-    assert list(pairs.itertuples(index=False, name=None)) == [
-        ("2026-10-17", "persistence", "2026-10-24"),
-        ("2026-10-24", "persistence", None),
-    ]
+    assert pairs["vintage"].tolist() == ["2026-10-17", "2026-10-24"]
+    assert pairs["model"].tolist() == ["persistence", "persistence"]
+    # Missing is None or NaN depending on the pandas string dtype.
+    assert pairs["truth_vintage"].iloc[0] == "2026-10-24"
+    assert pd.isna(pairs["truth_vintage"].iloc[1])
 
 
 def test_heldout_needs_flag_and_choice(
