@@ -47,7 +47,7 @@ The model must then drop the counts of the provinces in `task.mask` from its lik
 ## Renewal variants
 
 A new renewal variant is one entry in `VARIANTS` in [`forecasters.renewal`][bdbv_hub_renewal.forecasters.renewal].
-It names a base configuration (`MAIN` or `FALLBACK`) and the `ModelConfig` fields it changes.
+It names a base configuration (`MAIN` or `BVD`) and the `ModelConfig` fields it changes.
 Registered variants are marked `fitted`, because each forecast is an MCMC fit.
 So the docs build and the smoke tests run only the models with no fit.
 Run the fitted variants apart, for example on a bigger machine, and commit what they write to `results/`:

@@ -13,7 +13,7 @@ from bdbv_hub_renewal.data import (  # noqa: E402
     PROVINCE_POPULATIONS,
 )
 from bdbv_hub_renewal.data.simulate import simulate_outbreak  # noqa: E402
-from bdbv_hub_renewal.model import FALLBACK, MAIN  # noqa: E402
+from bdbv_hub_renewal.model import MAIN  # noqa: E402
 from bdbv_hub_renewal.model.inputs import vintage_from_tables  # noqa: E402
 
 # Vintage dates as days after the simulation start (each a Saturday).
@@ -67,6 +67,6 @@ def sim_vintage(outbreak, sim_tables, table):
     )
 
 
-@pytest.fixture(params=["main", "fallback"])
+@pytest.fixture(params=["main"])
 def config(request):
-    return {"main": MAIN, "fallback": FALLBACK}[request.param]
+    return {"main": MAIN}[request.param]

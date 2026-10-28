@@ -13,7 +13,7 @@ import numpyro
 import pytest
 from jax import enable_x64
 
-from bdbv_hub_renewal.model import FALLBACK, MAIN, build_model, model_args
+from bdbv_hub_renewal.model import MAIN, build_model, model_args
 from bdbv_hub_renewal.model.inputs import vintage_from_tables
 
 from .conftest import MAIN_REPO_DATA
@@ -47,7 +47,7 @@ def log_density_curve(model, data, params, site, steps, dtype):
 
 
 @pytest.mark.skipif(not MAIN_REPO_DATA.exists(), reason="main repo data absent")
-@pytest.mark.parametrize("config", [MAIN, FALLBACK], ids=["main", "fallback"])
+@pytest.mark.parametrize("config", [MAIN], ids=["main"])
 def test_float32_log_density_matches_float64(table, config):
     data = real_vintage(table, config)
     model = build_model(data, config)
@@ -76,8 +76,8 @@ def test_float32_log_density_matches_float64(table, config):
 def test_float32_density_stays_smooth_near_poisson(table, x):
     # As 1/sqrt(phi) goes to zero the negative binomial approaches Poisson;
     # the concentration cap keeps its float32 density smooth there.
-    data = real_vintage(table, FALLBACK)
-    model = build_model(data, FALLBACK)
+    data = real_vintage(table, MAIN)
+    model = build_model(data, MAIN)
     with numpyro.handlers.seed(rng_seed=3), numpyro.handlers.trace() as tr:
         model.sample(**model_args(model, data))
     params = {

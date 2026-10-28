@@ -33,8 +33,6 @@ from .delays import (
     FixedTimeVarying,
     HazardDelay,
     ParametricDelay,
-    empirical_delay_matrix,
-    empirical_missing_fraction,
 )
 from .observation import OnsetStreams, RtPseudoObservation
 from .renewal import LearntKernel, MetapopulationInfections
@@ -124,11 +122,8 @@ class ModelConfig:
         Importation kernel between modelled provinces: fixed gravity,
         gravity with a learnt decay and destination weights
         (`LearntKernel`), adjacency, or none.
-    delay : {"hazard", "gamma", "lognormal", "fixed"}
-        Nonparametric hazard delay, a censored parametric family, or a
-        smoothed empirical delay fixed from the hub's delay file.
-    missing : {"estimated", "fixed"}
-        Estimate $\pi_p(t)$ or fix it at the smoothed observed share.
+    delay : {"hazard", "gamma", "lognormal"}
+        Nonparametric hazard delay or a censored parametric family.
     depletion : bool
         Susceptible depletion in the renewal.
     rt_cadence : {"daily", "weekly", "linear"}
@@ -197,8 +192,7 @@ class ModelConfig:
     streams: Literal["split", "total"] = "split"
     truncation: bool = True
     coupling: Literal["gravity", "learnt", "adjacency", "none"] = "gravity"
-    delay: Literal["hazard", "gamma", "lognormal", "fixed"] = "hazard"
-    missing: Literal["estimated", "fixed"] = "estimated"
+    delay: Literal["hazard", "gamma", "lognormal"] = "hazard"
     depletion: bool = True
     rt_cadence: Literal["daily", "weekly", "linear"] = "weekly"
     rt_deviation: Literal["rw", "ar1"] = "ar1"
@@ -227,12 +221,6 @@ class ModelConfig:
 MAIN = ModelConfig()
 BVD = ModelConfig(bvd=True)
 """Main model informed by BVDOutbreakSize Rt (`hubrenewalbvd`)."""
-FALLBACK = ModelConfig(
-    coupling="none",
-    delay="fixed",
-    missing="fixed",
-    rt_cadence="weekly",
-)
 _SIMPLE: dict[str, Any] = {
     "streams": "total",
     "truncation": False,
@@ -425,7 +413,7 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     Parameters
     ----------
     data : Vintage
-        The vintage. Fixed inputs of the fallback are estimated from it.
+        The vintage.
     config : ModelConfig
         Structural choices.
 
@@ -537,12 +525,6 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         missing = None
     elif not config.truncation:
         raise ValueError("Split streams always use right truncation.")
-    elif config.missing == "fixed":
-        mean_delay = data.hub_delay_pmf @ np.arange(data.hub_delay_pmf.size)
-        pi = empirical_missing_fraction(
-            data.known, data.imputed, shift=round(float(mean_delay))
-        )
-        missing = fixed("missing_fraction", pi)
     else:
         missing = MissingOnsetFraction(
             "missing_fraction",
@@ -557,14 +539,7 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
 
     if missing is not None:
         delay_time = _named_walk("delay_sd", 0.15, fit_weeks(data, config))
-        if config.delay == "fixed":
-            # Delays near the cut-off are part published, so treat the
-            # last L days as truncated.
-            f = empirical_delay_matrix(
-                data.delay_counts, data.cutoff - config.max_publication_lag
-            )
-            delay = fixed("delay", f)
-        elif config.delay in ("gamma", "lognormal"):
+        if config.delay in ("gamma", "lognormal"):
             delay = ParametricDelay(
                 "delay", config.dmax, delay_time, config.delay
             )

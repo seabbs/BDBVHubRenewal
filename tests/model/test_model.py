@@ -5,7 +5,6 @@ from jax import random
 from numpyro.infer import Predictive, init_to_median
 
 from bdbv_hub_renewal.model import (
-    FALLBACK,
     MAIN,
     ModelConfig,
     build_model,
@@ -55,7 +54,6 @@ def test_active_set_follows_the_data(outbreak, sim_tables, table):
     "cfg",
     [
         *LADDER.values(),
-        FALLBACK,
         ModelConfig(delay="gamma"),
         ModelConfig(delay="lognormal", coupling="adjacency"),
         ModelConfig(rt_deviation="ar1"),
@@ -296,7 +294,7 @@ def test_missingness_offsets_are_non_centred(sim_vintage):
 def test_as_reported_draws_match_the_vintage_at_its_own_cutoff(sim_vintage):
     from bdbv_hub_renewal.model import forecast_trajectories
 
-    model = build_model(sim_vintage, FALLBACK)
+    model = build_model(sim_vintage)
     prior = Predictive(model.sample, num_samples=20)(
         random.key(1), **model_args(model, sim_vintage)
     )

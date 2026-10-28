@@ -117,7 +117,6 @@ RUNGS: dict[str, pr.ModelConfig | str] = {
     "renewal case-weighted Rt": dataclasses.replace(
         pr.MAIN, rt_weighting="cases"
     ),
-    "renewal fallback": pr.FALLBACK,
     "renewal learnt kernel": dataclasses.replace(pr.MAIN, coupling="learnt"),
     "renewal future Rt held": dataclasses.replace(pr.MAIN, future_rt="hold"),
     "renewal per-origin importation": dataclasses.replace(
@@ -148,8 +147,6 @@ DESCRIPTIONS = {
     "on the delay hazard.",
     "renewal case-weighted Rt": "Province Rt deviations sum to zero "
     "weighted by cases, so the national walk is the case-weighted Rt.",
-    "renewal fallback": "Delays and missingness fixed from the data, no "
-    "coupling.",
     "renewal learnt kernel": "Gravity decay and destination weights learnt.",
     "renewal future Rt held": "Rt held at its last value past the data.",
     "renewal per-origin importation": "One importation share per origin, "
@@ -178,8 +175,6 @@ DECISIONS: dict[str, str] = {
     "draws (0.44 to 0.32) and the best province scores of the build.",
     "S6 + report day-of-week": "An option, not the default: no score gain, "
     "slower and with a higher R-hat.",
-    "renewal fallback": "Kept as the fallback: best real-vintage scores and "
-    "fastest full model, but worse on simulated data with changing delays.",
     "renewal learnt kernel": "An option for the backtest: scores slightly "
     "worse than gravity and it mixes no better.",
     "renewal future Rt held": "An option for the backtest: level with the "

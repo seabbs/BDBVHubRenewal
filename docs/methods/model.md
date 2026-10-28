@@ -270,7 +270,6 @@ The renewal variants run in the backtest, the held-out evaluation and the plots,
 | `renewal` | The model in the figure: provinces with pooled $R_p(t)$, gravity importation and depletion. |
 | `renewalsp` | Single patch: the renewal model fitted to each location's series on its own, the nation included. |
 | `renewalbvd` | The spatial model informed by the latest posterior estimates of the main [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model, taken from the newest release published before the data cut-off. |
-| `fallback` | The CI's fallback: no coupling, with the delays and $\pi$ fixed from the data. $\pi$ is the imputed share by onset week, moved later by the mean delay to date it by report day. It is a fit configuration, not a backtest variant. |
 
 The model code is in `bdbv_hub_renewal.model` and the variants in [`forecasters.renewal`][bdbv_hub_renewal.forecasters.renewal].
 
