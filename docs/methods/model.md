@@ -156,7 +156,12 @@ $\pi_p$ is informed by the ratio of imputed to known onsets, through the imputat
 ### Known onsets
 
 A case reported on day $t$ is in the vintage published at $T$ with probability $c(t) = F_\ell(T - t)$, with $F_\ell$ the cdf of the lag $\ell$ from report to publication.
-The lag is a pmf on 0 to 3 days with a $\text{Dirichlet}(1, 1, 1, 1)$ prior, so only the last 3 days before $T$ are partly in.
+The lag pmf is estimated from the data on 0 to 60 days.
+Rows in a delay file beyond those of the previous file were first published between the two dates.
+Each such row's lag is spread over its onset day within the week and its publication day between the files, over feasible lags only, and lags past 60 days go to the last cell.
+Only pairs of files dated on or before the forecast date are used, so backtests do not see later files.
+Between 2026-10-17 and 2026-10-24, 23% of new rows had report dates more than 41 days old, so late entries matter for the nowcast weeks.
+A vintage with no earlier pair (2026-10-09 and before) uses a uniform pmf on 0 to 3 days instead.
 The cases with onset $s$ in the vintage with an onset recorded are expected to be
 
 $$
@@ -261,7 +266,7 @@ The renewal variants run in the backtest, the held-out evaluation and the plots,
 | `renewal` | The model in the figure: provinces with pooled $R_p(t)$, gravity importation and depletion. |
 | `renewalsp` | Single patch: the renewal model fitted to each location's series on its own, the nation included. |
 | `renewalbvd` | The spatial model informed by the latest posterior estimates of the main [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model, taken from the newest release published before the data cut-off. |
-| `fallback` | The CI's fallback: no coupling, with the delays, $\pi$ and a uniform publication lag fixed from the data. $\pi$ is the imputed share by onset week, moved later by the mean delay to date it by report day. It is a fit configuration, not a backtest variant. |
+| `fallback` | The CI's fallback: no coupling, with the delays and $\pi$ fixed from the data. $\pi$ is the imputed share by onset week, moved later by the mean delay to date it by report day. It is a fit configuration, not a backtest variant. |
 
 The model code is in `bdbv_hub_renewal.model` and the variants in [`forecasters.renewal`][bdbv_hub_renewal.forecasters.renewal].
 
