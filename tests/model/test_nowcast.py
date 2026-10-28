@@ -11,9 +11,9 @@ import pytest
 from jax import random
 from numpyro.infer import Predictive
 
-from bdbv_hub_renewal.model import FALLBACK, MAIN, build_model, model_args
-from bdbv_hub_renewal.model.model import forecast_trajectories
-from bdbv_hub_renewal.model.observation import onset_expectations
+from bdbvhubrenewal.model import FALLBACK, MAIN, build_model, model_args
+from bdbvhubrenewal.model.model import forecast_trajectories
+from bdbvhubrenewal.model.observation import onset_expectations
 
 
 def prior_latent(model, data, n=20):
@@ -198,7 +198,7 @@ def test_dispersion_prior_is_half_normal_on_inverse_root_phi(sim_vintage):
 def test_negative_and_long_delays_are_clipped_not_dropped(
     outbreak, sim_tables, table
 ):
-    from bdbv_hub_renewal.model.inputs import vintage_from_tables
+    from bdbvhubrenewal.model.inputs import vintage_from_tables
 
     from .conftest import SIM_LOCATIONS, VINTAGE_DAYS, vintage_date
 

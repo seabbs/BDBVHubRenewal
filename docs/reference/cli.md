@@ -1,6 +1,6 @@
 # CLI
 
-The `bdbv-hub-renewal` command.
+The `bdbvhubrenewal` command.
 { .page-subtitle }
 
-::: bdbv_hub_renewal.cli
+::: bdbvhubrenewal.cli

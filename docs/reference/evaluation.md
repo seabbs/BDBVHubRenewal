@@ -3,16 +3,16 @@
 Scoring, the backtest, held-out evaluation, posterior predictive checks and the hub comparison.
 { .page-subtitle }
 
-::: bdbv_hub_renewal.evaluation
+::: bdbvhubrenewal.evaluation
     options:
       members: false
 
-::: bdbv_hub_renewal.evaluation.scoring
+::: bdbvhubrenewal.evaluation.scoring
 
-::: bdbv_hub_renewal.evaluation.backtest
+::: bdbvhubrenewal.evaluation.backtest
 
-::: bdbv_hub_renewal.evaluation.heldout
+::: bdbvhubrenewal.evaluation.heldout
 
-::: bdbv_hub_renewal.evaluation.ppc
+::: bdbvhubrenewal.evaluation.ppc
 
-::: bdbv_hub_renewal.evaluation.hubcompare
+::: bdbvhubrenewal.evaluation.hubcompare

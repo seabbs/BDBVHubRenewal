@@ -26,7 +26,7 @@ On 2 cores it took 18 minutes and peaked at 2 GB of memory.
 The submission workflow uses 4 chains of 1000 each.
 
 ```console
-$ uv run bdbv-hub-renewal fit --model renewal --config main \
+$ uv run bdbvhubrenewal fit --model renewal --config main \
     --sampler-json '{"num_chains": 2, "num_warmup": 200, "num_samples": 200}' \
     --out output/fits/main
 Fitted config 'main' on vintage 2026-10-24 (sampler nuts); wrote output/fits/main.
@@ -57,7 +57,7 @@ A run this short is for checking the pipeline, not for submission.
 ## Forecast from the fit
 
 ```console
-$ uv run bdbv-hub-renewal nowcast --model renewal --config main \
+$ uv run bdbvhubrenewal nowcast --model renewal --config main \
     --fit output/fits/main --out output/candidates/main
 Wrote output/candidates/main/model-output/epiforecasts-seabbsrenewal/2026-10-31-epiforecasts-seabbsrenewal.csv (9000 rows, locations incl. CD).
 ```
@@ -67,7 +67,7 @@ National sample $k$ is the sum of province sample $k$.
 `national.json` beside it lists the modelled provinces and any national cases not assigned to a province.
 
 ```console
-$ uv run bdbv-hub-renewal plot-submission \
+$ uv run bdbvhubrenewal plot-submission \
     --submission output/candidates/main/model-output/epiforecasts-seabbsrenewal/2026-10-31-epiforecasts-seabbsrenewal.csv \
     --out nowcast.png
 ```
@@ -77,7 +77,7 @@ $ uv run bdbv-hub-renewal plot-submission \
 ## Check the fit
 
 ```console
-$ uv run bdbv-hub-renewal plot-ppc --ppc output/fits/main/ppc.json --out ppc.png
+$ uv run bdbvhubrenewal plot-ppc --ppc output/fits/main/ppc.json --out ppc.png
 ```
 
 ![Posterior predictive intervals of the known and imputed onsets in the data vintage, by province, against the data.](assets/getting-started/ppc.png)
@@ -101,7 +101,7 @@ The docs build runs only persistence and reads the variants from there.
 The comparison with hub forecasts downloads other teams' files, so it is run on its own:
 
 ```bash
-uv run bdbv-hub-renewal compare-hub --fetch
+uv run bdbvhubrenewal compare-hub --fetch
 ```
 
 Every command is listed on the [CLI page](development/cli.md).

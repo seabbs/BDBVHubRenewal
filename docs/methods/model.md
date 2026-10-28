@@ -20,7 +20,7 @@ The source is `docs/diagrams/model_dag.tex`, built by `scripts/build_diagrams.sh
 ## Components
 
 The model extends [PyRenew](https://github.com/CDCgov/PyRenew), pinned to a commit.
-Its code is in `bdbv_hub_renewal.model`.
+Its code is in `bdbvhubrenewal.model`.
 Every time-varying part has a smoothness prior, so it stays near constant when the data show no change and stays stable when data are sparse.
 
 | Component | PyRenew piece | Built here, and why |
@@ -272,7 +272,7 @@ The renewal variants run in the backtest, the held-out evaluation and the plots,
 | `renewalbvd` | The spatial model informed by the latest posterior estimates of the main [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model, taken from the newest release published before the data cut-off. |
 | `fallback` | The CI's fallback: no coupling, with the delays and $\pi$ fixed from the data. $\pi$ is the imputed share by onset week, moved later by the mean delay to date it by report day. It is a fit configuration, not a backtest variant. |
 
-The model code is in `bdbv_hub_renewal.model` and the variants in [`forecasters.renewal`][bdbv_hub_renewal.forecasters.renewal].
+The model code is in `bdbvhubrenewal.model` and the variants in [`forecasters.renewal`][bdbvhubrenewal.forecasters.renewal].
 
 ### Single patch
 
@@ -288,7 +288,7 @@ The single patch has no shared likelihood, so it does not take part in the leave
 ### BVDOutbreakSize-informed
 
 `renewalbvd` adds the latest reproduction number estimates of the main [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model as a tempered pseudo-observation on $R_p$.
-They come from its public `results-<run>` releases (`bdbv_hub_renewal.data.bvd`).
+They come from its public `results-<run>` releases (`bdbvhubrenewal.data.bvd`).
 A forecast uses the newest release published by the forecast's cut-off whose data end on or before the vintage.
 The cut-off is the end of the Sunday that opens the submission window, in Kinshasa time.
 So a release republished later on old data is never used, and the backtest sees each release as it was published.

@@ -20,8 +20,8 @@ The gate's checks choose the candidate, and the pull request body says what was 
 | job | what it does |
 | --- | --- |
 | `detect` | Compares the hub's newest data commit and `as_of` with the ledger. Stops unless there is new data for the open round. |
-| `prepare` | Pins the hub data at one commit (`bdbv-hub-renewal data --ref <sha>`), checks national coherence and builds the persistence candidate, which is also the baseline for the checks. |
-| `fit` | One matrix job per primary candidate (`main` and `fallback`), in parallel. Each runs `bdbv-hub-renewal fit`, then `nowcast --fit`, the checks and the plots. Fits are cached under a hash of the model source, the hub commit and the sampler settings. |
+| `prepare` | Pins the hub data at one commit (`bdbvhubrenewal data --ref <sha>`), checks national coherence and builds the persistence candidate, which is also the baseline for the checks. |
+| `fit` | One matrix job per primary candidate (`main` and `fallback`), in parallel. Each runs `bdbvhubrenewal fit`, then `nowcast --fit`, the checks and the plots. Fits are cached under a hash of the model source, the hub commit and the sampler settings. |
 | `triage` | Says whether `main` needs its one refit. |
 | `retry` | Only if `main` needs it: one refit with a longer warm-up, smaller steps and jittered inits, costing about as much as `main`, and only with time left for it before the window closes. |
 | `gate` | Walks the fallback chain and submits the first candidate that clears convergence, the posterior predictive checks, the forecast checks and hub validation. |
@@ -29,39 +29,39 @@ The gate's checks choose the candidate, and the pull request body says what was 
 | `record` | Live runs only. Writes the outcome to `state.json` on the `submission-ledger` branch and archives the round's files there. |
 | `outcome` | Fails the run if the round was skipped or a job broke, so GitHub sends a failure notice. |
 
-The workflow calls this repository only through the `bdbv-hub-renewal` command line.
+The workflow calls this repository only through the `bdbvhubrenewal` command line.
 
 | command | used by |
 | --- | --- |
-| `bdbv-hub-renewal data --ref <sha>` | `prepare` |
-| `bdbv-hub-renewal coherence --vintage <as_of> --out <json>` | `prepare` |
-| `bdbv-hub-renewal fit --model <m> --config <c> --vintage <as_of> --sampler-json <json> --out <dir>` | `fit`, `retry` |
-| `bdbv-hub-renewal nowcast --model <m> --config <c> --fit <dir> --vintage <as_of> --out <dir>` | `fit`, `retry`, `prepare` (persistence, without `--config`) |
-| `bdbv-hub-renewal plot-submission --submission <csv> --vintage <as_of> --out <png>` | every candidate |
-| `bdbv-hub-renewal plot-ppc --ppc <json> --out <png>` | candidates with a posterior |
-| `bdbv-hub-renewal metadata --model <m> --out <dir>` | `gate` |
-| `bdbv-hub-renewal validate` and `scripts/validate-hub.R` | `gate`, through `ci/steps/validate_hub.sh` |
-| `bdbv-hub-renewal --version` | the pull request body |
+| `bdbvhubrenewal data --ref <sha>` | `prepare` |
+| `bdbvhubrenewal coherence --vintage <as_of> --out <json>` | `prepare` |
+| `bdbvhubrenewal fit --model <m> --config <c> --vintage <as_of> --sampler-json <json> --out <dir>` | `fit`, `retry` |
+| `bdbvhubrenewal nowcast --model <m> --config <c> --fit <dir> --vintage <as_of> --out <dir>` | `fit`, `retry`, `prepare` (persistence, without `--config`) |
+| `bdbvhubrenewal plot-submission --submission <csv> --vintage <as_of> --out <png>` | every candidate |
+| `bdbvhubrenewal plot-ppc --ppc <json> --out <png>` | candidates with a posterior |
+| `bdbvhubrenewal metadata --model <m> --out <dir>` | `gate` |
+| `bdbvhubrenewal validate` and `scripts/validate-hub.R` | `gate`, through `ci/steps/validate_hub.sh` |
+| `bdbvhubrenewal --version` | the pull request body |
 
 `fit` writes the fit directory: `fit.json`, `diagnostics.json`, `ppc.json`, `progress.log` and whatever the forecast needs.
 A model without a sampler, such as persistence, writes diagnostics with `"sampler": "none"` and `"status": "not-applicable"`, and a `ppc.json` with `"available": false`.
 The gate reads both as not applicable.
 The formats are specified in `ci/INTEGRATION.md`.
 
-A fit config is registered in [`bdbv_hub_renewal.submission.fitting`][bdbv_hub_renewal.submission.fitting].
+A fit config is registered in [`bdbvhubrenewal.submission.fitting`][bdbvhubrenewal.submission.fitting].
 
 ### Model interface
 
 The model integration plugs PyRenew in by registering `main` and `fallback` with `register_config(..., replace=True)`.
-Each [`FitConfig`][bdbv_hub_renewal.submission.fitting.FitConfig] has two functions.
+Each [`FitConfig`][bdbvhubrenewal.submission.fitting.FitConfig] has two functions.
 
-- `fit(task, sampler, fit_dir)` fits the model to the [`ForecastTask`][bdbv_hub_renewal.forecasters.base.ForecastTask], with the candidate's `sampler` table from `ci/policy.toml` (`num_chains`, `num_warmup`, `num_samples`, `target_accept`, `max_tree_depth`, `seed`).
+- `fit(task, sampler, fit_dir)` fits the model to the [`ForecastTask`][bdbvhubrenewal.forecasters.base.ForecastTask], with the candidate's `sampler` table from `ci/policy.toml` (`num_chains`, `num_warmup`, `num_samples`, `target_accept`, `max_tree_depth`, `seed`).
   It saves what the forecast needs (posterior draws) in `fit_dir`, appends progress lines to `fit_dir/progress.log`, and returns the `diagnostics.json` record (one row per sampled scalar with R-hat and bulk and tail ESS, and one row per chain with draws and divergences, as in `ci/INTEGRATION.md`).
-  It must also write `fit_dir/ppc.json` from the in-sample posterior predictive draws, with [`summarise_draws`][bdbv_hub_renewal.evaluation.ppc.summarise_draws] and [`write_ppc`][bdbv_hub_renewal.evaluation.ppc.write_ppc].
+  It must also write `fit_dir/ppc.json` from the in-sample posterior predictive draws, with [`summarise_draws`][bdbvhubrenewal.evaluation.ppc.summarise_draws] and [`write_ppc`][bdbvhubrenewal.evaluation.ppc.write_ppc].
   `run_fit` writes the record, `fit.json` and the run time.
-- `forecast(task, fit_dir)` returns a [`Forecast`][bdbv_hub_renewal.submission.fitting.Forecast]: province samples numbered 1 to 100, each one joint posterior draw across weeks and provinces, and optionally an `unassigned` national component by week and sample.
+- `forecast(task, fit_dir)` returns a [`Forecast`][bdbvhubrenewal.submission.fitting.Forecast]: province samples numbered 1 to 100, each one joint posterior draw across weeks and provinces, and optionally an `unassigned` national component by week and sample.
 
-`nowcast` then writes the hub file with [`to_hub_table`][bdbv_hub_renewal.submission.hub.to_hub_table], which makes the national value the exact sum of the province samples plus the unassigned component, and writes `national.json` beside it with the modelled provinces and that component.
+`nowcast` then writes the hub file with [`to_hub_table`][bdbvhubrenewal.submission.hub.to_hub_table], which makes the national value the exact sum of the province samples plus the unassigned component, and writes `national.json` beside it with the modelled provinces and that component.
 The model is the latest entry of `results/model-choice.yml`, and the hub id is `config/hub.toml`.
 Every candidate, fallbacks included, is submitted under that one id, `epiforecasts-seabbsrenewal`.
 The metadata is written for the chosen model under that id.
@@ -157,7 +157,7 @@ The plausibility checks keep a fail level in `policy.toml` (`bound_fail`, `growt
 The national rows are correct by construction.
 `nowcast` writes them as the sum of the provinces plus the model's unassigned component, and writes `national.json` beside the hub file with the modelled provinces and that component.
 Before the checks, the gate rebuilds the national rows the same way if they differ, using `national.json` or, without it, the gap between the hub's national data and its provinces for each week.
-The data coherence check reads the output of `bdbv-hub-renewal coherence`.
+The data coherence check reads the output of `bdbvhubrenewal coherence`.
 A gap is reported with how the model handles it (see [Data](../data.md#national-coherence)).
 
 Hub validation runs both validators from the hub validation bundle against the hub at the data commit, as the hub's own CI would.
