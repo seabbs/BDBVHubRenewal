@@ -397,3 +397,22 @@ def test_single_patch_fits_each_location_on_its_own(
     # The national rows are the national fit, not the provinces' sum.
     samples = model.forecast(task)
     assert NATIONAL in set(samples["location"])
+
+
+def test_fit_records_the_posterior_draw_behind_each_trajectory(
+    task: ForecastTask, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fake(self: rn.RenewalModel, t: ForecastTask) -> rn.RenewalRun:
+        run = _fake_run(t, self.variant)
+        draws = {**run.draws, "draw": np.arange(t.n_samples)[::-1]}
+        return replace(run, draws=draws)
+
+    monkeypatch.setattr(rn.RenewalModel, "run", fake)
+    rn.fit_renewal(
+        task, {"num_chains": 2}, tmp_path, variant="renewal", config_name="main"
+    )
+    saved = pd.read_csv(tmp_path / rn.TRAJECTORY_DRAW_FILE)
+    assert list(saved.columns) == ["location", "sample", "draw"]
+    assert set(saved["location"]) == {"all"}
+    assert saved["sample"].tolist() == list(range(1, task.n_samples + 1))
+    assert saved["draw"].tolist() == list(range(task.n_samples))[::-1]
