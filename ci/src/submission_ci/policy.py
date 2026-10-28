@@ -8,9 +8,10 @@ clears every check is submitted:
    jittered inits, only when `main` is past the convergence
    retry thresholds or was ruled out (`retry_budget`, 1 by default), and
    only when there is time for it before the window closes (`[timing]`).
-3. `fallback`: the same model code with `--config fallback` (no spatial
-   coupling, delays and missingness fixed from the data).
-4. `persistence`: the persistence baseline, built from the data alone.
+3. `renewalsp`: the single-patch model (independent renewal fits for each
+   province with cases and the country), fitted beside `main`.
+4. `persistencenow`: persistence on a nowcast, with no fit.
+5. `persistence`: the persistence baseline, built from the data alone.
 
 Stage `primary` candidates fit in parallel straight away. Stage `retry`
 candidates fit only when the primary `main` fails. Stage `baseline`
@@ -52,6 +53,8 @@ class Candidate:
     stage: str
     label: str
     sampler: dict[str, Any] = field(default_factory=dict)
+    model: str = ""
+    """The model the leg runs; empty for the chosen model."""
 
     def spec(self) -> dict[str, Any]:
         """What the fit depends on besides source and data."""
@@ -102,17 +105,18 @@ class Policy:
     def for_model(self, model: str) -> Policy:
         """The policy for the model chosen in the model choice record.
 
-        With persistence chosen, the chain is persistence alone. The
-        renewal candidates (main, fallback and any shadows) are still
-        fitted and checked as shadows, and the retry is dropped.
-        Any other choice keeps the policy as it is.
+        With a baseline chosen (`persistencenow` or `persistence`), the
+        chain starts at that baseline. Every candidate before it is still
+        fitted and checked, as a shadow, and the retry is dropped. Any
+        other choice keeps the policy as it is.
         """
-        if model != "persistence":
+        baselines = [c for c in self.chain() if c.kind == "persistence"]
+        names = [c.model or c.id for c in baselines]
+        if model not in names:
             return self
+        kept = {c.id for c in baselines[names.index(model) :]}
         cands = [
-            replace(c, kind="shadow")
-            if c.kind in ("main", "fallback", "shadow")
-            else c
+            c if c.id in kept else replace(c, kind="shadow")
             for c in self.candidates
             if c.kind != "retry"
         ]
@@ -138,6 +142,7 @@ def load_policy(path: Path | str) -> Policy:
             stage=c.get("stage", "primary"),
             label=c.get("label", c["id"]),
             sampler=dict(c.get("sampler", {})),
+            model=c.get("model", ""),
         )
         if cand.kind not in KINDS:
             raise ValueError(f"candidate {cand.id}: unknown kind {cand.kind}")
@@ -200,6 +205,7 @@ def matrix(
             "kind": c.kind,
             "config": c.config,
             "label": c.label,
+            "model": c.model,
             "sampler": json.dumps(c.sampler, sort_keys=True),
             "key": fit_key(src, hub_ref, c.spec()),
             "timeout": timeout,

@@ -1,0 +1,54 @@
+name: baselinenowcast fixtures
+
+# The Python persistence nowcast is checked against fixtures generated
+# by the R package baselinenowcast (tests/data/baselinenowcast). This
+# job regenerates them with the pinned package version and fails if
+# they differ from the committed files, so the fixtures cannot drift
+# from the reference implementation.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/bdbvhubrenewal/data/triangle.py'
+      - 'src/bdbvhubrenewal/forecasters/persistence.py'
+      - 'scripts/baselinenowcast_fixtures.R'
+      - 'tests/data/baselinenowcast/**'
+      - '.github/workflows/baselinenowcast.yml'
+  pull_request:
+    paths:
+      - 'src/bdbvhubrenewal/data/triangle.py'
+      - 'src/bdbvhubrenewal/forecasters/persistence.py'
+      - 'scripts/baselinenowcast_fixtures.R'
+      - 'tests/data/baselinenowcast/**'
+      - '.github/workflows/baselinenowcast.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Cancel superseded pull request runs; let runs on main finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  fixtures:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install baselinenowcast (pinned commit, v0.2.2)
+        run: |
+          install.packages("remotes")
+          remotes::install_github(
+            "epinowcast/baselinenowcast@1d29e5deab60906f4aee2d5134d9d0f1802a0f1b",
+            dependencies = TRUE
+          )
+        shell: Rscript {0}
+      - name: Regenerate fixtures
+        run: Rscript scripts/baselinenowcast_fixtures.R
+      - name: Fail if the fixtures changed
+        run: git diff --exit-code tests/data/baselinenowcast

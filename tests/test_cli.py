@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import Iterator
 from pathlib import Path
@@ -33,6 +34,63 @@ def test_cli_nowcast_and_metadata(tmp_path: Path) -> None:
     assert (tmp_path / "meta" / "epiforecasts-persistence.yml").exists()
 
 
+def _written(out: Path) -> pd.DataFrame:
+    files = list(out.rglob("*.csv"))
+    assert len(files) == 1
+    return pd.read_csv(files[0])
+
+
+@pytest.mark.usefixtures("in_root")
+def test_cli_nowcast_writes_coherent_zones(tmp_path: Path) -> None:
+    assert main(["nowcast", "--out", str(tmp_path / "sub")]) == 0
+    table = _written(tmp_path / "sub")
+    level = table["location"].str.count("-")
+    zones = table.loc[level == 2]
+    provs = table.loc[level == 1]
+    assert zones["location"].nunique() > 150
+    side = json.loads((tmp_path / "sub" / "zones.json").read_text())
+    assert side["zones"] is True
+    assert side["n_zones"] == zones["location"].nunique()
+    assert side["note"] == ""
+    keys = ["output_type_id", "target_end_date"]
+    summed = (
+        zones.assign(location=zones["location"].str.slice(0, 5))
+        .groupby(["location", *keys])["value"]
+        .sum()
+    )
+    want = provs.set_index(["location", *keys])["value"]
+    assert (summed.reindex(want.index) == want).all()
+    nat = table.loc[level == 0].set_index(keys)["value"]
+    assert (nat == provs.groupby(keys)["value"].sum().reindex(nat.index)).all()
+    assert main(["nowcast", "--no-zones", "--out", str(tmp_path / "p")]) == 0
+    assert (_written(tmp_path / "p")["location"].str.count("-") < 2).all()
+
+
+@pytest.mark.usefixtures("in_root")
+def test_cli_nowcast_without_zone_data_skips_zones(tmp_path: Path) -> None:
+    data = tmp_path / "data"
+    data.mkdir()
+    for f in (ROOT / "data").iterdir():
+        if f.name != "daily_zones.csv.gz":
+            (data / f.name).symlink_to(f)
+    out = tmp_path / "sub"
+    assert main(["nowcast", "--data", str(data), "--out", str(out)]) == 0
+    assert (_written(out)["location"].str.count("-") < 2).all()
+    assert "zone" in (out / "handled.json").read_text()
+    side = json.loads((out / "zones.json").read_text())
+    assert side["zones"] is False
+    assert side["n_zones"] == 0
+    assert "zone" in side["note"]
+
+
+@pytest.mark.usefixtures("in_root")
+def test_cli_zone_backtest(tmp_path: Path) -> None:
+    out = tmp_path / "zone-scores.csv"
+    assert main(["zone-backtest", "--out", str(out)]) == 0
+    scores = pd.read_csv(out)
+    assert {"persistence", "zonepersistence"} <= set(scores["model"])
+
+
 @pytest.mark.usefixtures("in_root")
 def test_cli_refuses_heldout_without_choice(tmp_path: Path) -> None:
     cfg = (
@@ -56,6 +114,34 @@ def test_cli_refuses_heldout_without_choice(tmp_path: Path) -> None:
         ]
     )
     assert code == 1
+    assert not (tmp_path / "res" / "heldout-scores.csv").exists()
+
+
+def test_cli_heldout_with_no_choices_scores_nothing(tmp_path: Path) -> None:
+    record = tmp_path / "choices.yml"
+    record.write_text("choices: []\n")
+    cfg = (
+        (ROOT / "config" / "backtest.toml")
+        .read_text()
+        .replace(
+            'model_choice = "results/model-choice.yml"',
+            f'model_choice = "{record}"',
+        )
+    )
+    path = tmp_path / "backtest.toml"
+    path.write_text(cfg)
+    code = main(
+        [
+            "backtest",
+            "--evaluate-holdout",
+            "--config",
+            str(path),
+            "--results",
+            str(tmp_path / "res"),
+        ]
+    )
+    # With no choice yet, every vintage is development: nothing is held out.
+    assert code == 0
     assert not (tmp_path / "res" / "heldout-scores.csv").exists()
 
 
@@ -202,6 +288,23 @@ def test_cli_backtest_shards_into_a_cache(tmp_path: Path) -> None:
     assert not (res / "recovery-scores.csv").exists()
 
 
+@pytest.mark.usefixtures("in_root")
+def test_cli_recovery_only_uses_the_cache(tmp_path: Path) -> None:
+    res, out, cache = tmp_path / "res", tmp_path / "out", tmp_path / "cache"
+    base = ["backtest", "--recovery-only", "--results", str(res),
+            "--output", str(out), "--models", "persistence",
+            "--cache", str(cache)]  # fmt: skip
+    assert main([*base, "--shard", "0/2"]) == 0
+    assert main([*base, "--shard", "1/2"]) == 0
+    assert list(cache.glob("persistence_simulated_*.csv.gz"))
+    assert not (res / "recovery-scores.csv").exists()
+    assert main(base) == 0
+    scores = pd.read_csv(res / "recovery-scores.csv")
+    assert set(scores["kind"]) == {"simulated"}
+    # The development results are left alone.
+    assert not (res / "backtest-scores.csv").exists()
+
+
 def test_host_devices_cover_the_chains(monkeypatch: pytest.MonkeyPatch) -> None:
     from bdbvhubrenewal.cli import host_devices
 
@@ -235,4 +338,30 @@ def test_cli_fit_task_carries_the_delay_files_for_the_lag() -> None:
     task, _ = _task(args)
     assert task.delay_history is not None
     assert task.delay_history["vintage"].nunique() >= 2
+    assert task.target_history is not None
+    assert task.target_history["vintage"].nunique() >= 3
     assert vintage_inputs(task, MAIN).publication_lag_pmf is not None
+
+
+@pytest.mark.usefixtures("in_root")
+def test_cli_backtest_scenarios(tmp_path: Path) -> None:
+    args = [
+        "backtest",
+        "--scenarios-only",
+        "--models",
+        "persistence",
+        "--scenario-dates",
+        "2026-10-17",
+        "--results",
+        str(tmp_path / "res"),
+        "--output",
+        str(tmp_path / "out"),
+    ]
+    assert main(args) == 0
+    scores = pd.read_csv(tmp_path / "res" / "scenario-scores.csv.gz")
+    assert set(scores["scenario"]) == {
+        "calibrated_falling",
+        "calibrated_flat",
+        "calibrated_rising",
+    }
+    assert (tmp_path / "out" / "scenario-forecasts.csv.gz").exists()

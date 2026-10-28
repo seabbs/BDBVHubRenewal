@@ -436,3 +436,4 @@ def test_learnt_kernel_flows_are_zero_at_prior_centre(sim_vintage):
 def test_default_has_no_sporadic_class():
     cfg = ModelConfig()
     assert cfg.outbreak_threshold is None and cfg.import_rt == "destination"
+

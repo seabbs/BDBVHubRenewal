@@ -2,8 +2,8 @@ name: Fit candidates
 
 # Reusable: fit and check one stage of the fallback chain, one matrix
 # leg per candidate, as BVDOutbreakSize's docs.yml fits one model per
-# matrix job. Called by submit.yml for the primary stage (main model and
-# fallback variant, in parallel) and, only if the main model failed, for
+# matrix job. Called by submit.yml for the primary stage (main model,
+# single-patch fallback and shadows, in parallel) and, only if the main model failed, for
 # the retry stage.
 #
 # Each fit is content-addressed: the cache key hashes the model source,
@@ -78,10 +78,10 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(inputs.matrix) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-forecast-env
       - name: Collect the shared inputs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: inputs
           path: ${{ env.WORK }}
@@ -89,7 +89,7 @@ jobs:
       # is saved as soon as it ends even if a later step fails.
       - name: Restore the fit cache
         id: cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ env.WORK }}/fits/${{ matrix.id }}
           key: fit-${{ matrix.id }}-${{ matrix.key }}
@@ -99,6 +99,7 @@ jobs:
           CAND_KIND: ${{ matrix.kind }}
           CAND_CONFIG: ${{ matrix.config }}
           CAND_LABEL: ${{ matrix.label }}
+          CAND_MODEL: ${{ matrix.model }}
           CAND_SAMPLER: ${{ matrix.sampler }}
           FIT_CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
           EXPECTED_LOCATIONS: ${{ inputs.expected_locations }}
@@ -107,12 +108,12 @@ jobs:
         if: >-
           ${{ always() && steps.cache.outputs.cache-hit != 'true' &&
           hashFiles(format('{0}/fits/{1}/diagnostics.json', env.WORK, matrix.id)) != '' }}
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ env.WORK }}/fits/${{ matrix.id }}
           key: fit-${{ matrix.id }}-${{ matrix.key }}
       # The candidate's verdicts, file and plot: small, read by the gate.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: candidate-${{ matrix.id }}
@@ -122,7 +123,7 @@ jobs:
       # The posterior itself, kept a few days for diagnosis, as
       # BVDOutbreakSize keeps its fit artefacts for three days. The
       # durable copy is the content-addressed cache above.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: fit-${{ matrix.id }}

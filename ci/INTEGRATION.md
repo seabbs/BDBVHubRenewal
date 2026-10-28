@@ -14,7 +14,7 @@ It is the reference for the interface, and `ci/run_dry.sh` runs the whole workfl
 | `bdbvhubrenewal nowcast --model persistence --vintage <as_of> --out <dir>` | exists | `prepare` (persistence candidate and baseline) |
 | `bdbvhubrenewal metadata --model <model> --out <dir>` | exists | `gate` |
 | `scripts/validate-hub.R <hub> <csv> <yml>`, with `CHECK_WINDOW=true` | exists | `gate`, through `ci/steps/validate_hub.sh` |
-| `bdbvhubrenewal fit ...` | done (`bdbvhubrenewal.submission.fitting`; `main` and `fallback` run the renewal model, `bdbvhubrenewal.forecasters.renewal`) | `fit`, `retry` |
+| `bdbvhubrenewal fit ...` | done (`bdbvhubrenewal.submission.fitting`; `main` runs the chosen renewal model and `renewalsp` the single-patch model, `bdbvhubrenewal.forecasters.renewal`) | `fit`, `retry` |
 | `nowcast --config <c> --fit <dir>` | done | `fit`, `retry` |
 | `bdbvhubrenewal plot-submission ...` | done, `plots.plot_submission` | every candidate |
 | `bdbvhubrenewal plot-ppc --ppc <ppc.json> --out <png>` | done, a thin wrapper on `ppc.plot_ppc` | candidates whose `ppc.json` is available |
@@ -24,18 +24,18 @@ It is the reference for the interface, and `ci/run_dry.sh` runs the whole workfl
 ### `bdbvhubrenewal fit`
 
 ```sh
-bdbvhubrenewal fit --model renewal --config main|fallback --vintage <as_of> \
+bdbvhubrenewal fit --model renewal|renewalsp --config main|renewalsp --vintage <as_of> \
   --sampler-json '{"num_chains": 4, "num_warmup": 1000, "num_samples": 1000,
                    "target_accept": 0.8, "max_tree_depth": 10, "seed": 1}' \
   --out <fit dir>
 ```
 
-- `--model` is the model chosen in `results/model-choice.yml` (`bdbvhubrenewal chosen-model`).
+- `--model` is the model chosen in `results/model-choice.yml` (`bdbvhubrenewal chosen-model`), unless the candidate names its own in `ci/policy.toml` (`model`), as the single-patch fallback and the `bvd` shadow do.
   The hub id is set apart in `config/hub.toml` (`bdbvhubrenewal hub-id`), `epiforecasts-seabbsrenewal`.
   `epiforecasts-renewal` is already a different hub model.
 - `--config` selects the model configuration.
   `main` is the full model.
-  `fallback` is the same code with the delays and missingness plugged in from data, and no spatial coupling.
+  `renewalsp` is the single-patch model: an independent renewal fit for each province with cases and for the country, with no pooling or coupling.
   Each matrix leg passes its own config.
 - `--sampler-json` is the candidate's `sampler` table from `ci/policy.toml`.
   The retries differ only in it.
@@ -94,7 +94,9 @@ Draw what was **submitted**, the samples in `<csv>`, not a re-run of the model.
 
 ```python
 def plot_submission(submission: Path, vintage: str) -> Figure:
-    samples = read_hub_file(submission)  # location, target_end_date, sample, value
+    samples = read_hub_file(
+        submission
+    )  # location, target_end_date, sample, value
     locations = ["CD", *largest_provinces(samples, n=3)]
     return grid_of(
         plot_nowcast(location=loc, vintage=vintage, forecasts=samples)
@@ -197,22 +199,34 @@ extra = mcmc.get_extra_fields(group_by_chain=True)  # needs extra_fields=(
 #   "diverging", "num_steps", "adapt_state.step_size", "accept_prob", "energy")
 depth = np.log2(extra["num_steps"] + 1)
 diagnostics = {
-    "schema_version": 1, "model": model, "config": config, "sampler": "nuts",
-    "num_chains": n_chains, "num_samples": n_samples,
-    "max_tree_depth": max_tree_depth, "runtime_seconds": runtime,
+    "schema_version": 1,
+    "model": model,
+    "config": config,
+    "sampler": "nuts",
+    "num_chains": n_chains,
+    "num_samples": n_samples,
+    "max_tree_depth": max_tree_depth,
+    "runtime_seconds": runtime,
     "parameters": [
-        {"name": name.split("[")[0], "index": index_of(name),
-         "rhat": none_if_nan(row.r_hat), "ess_bulk": none_if_nan(row.ess_bulk),
-         "ess_tail": none_if_nan(row.ess_tail)}
+        {
+            "name": name.split("[")[0],
+            "index": index_of(name),
+            "rhat": none_if_nan(row.r_hat),
+            "ess_bulk": none_if_nan(row.ess_bulk),
+            "ess_tail": none_if_nan(row.ess_tail),
+        }
         for name, row in summ.iterrows()
     ],
     "chains": [
-        {"chain": c, "draws": n_samples,
-         "divergences": int(extra["diverging"][c].sum()),
-         "step_size": float(extra["adapt_state.step_size"][c].mean()),
-         "tree_depth_hits": int((depth[c] >= max_tree_depth).sum()),
-         "mean_accept": float(extra["accept_prob"][c].mean()),
-         "ebfmi": float(az.bfmi(extra["energy"][c][None, :])[0])}
+        {
+            "chain": c,
+            "draws": n_samples,
+            "divergences": int(extra["diverging"][c].sum()),
+            "step_size": float(extra["adapt_state.step_size"][c].mean()),
+            "tree_depth_hits": int((depth[c] >= max_tree_depth).sum()),
+            "mean_accept": float(extra["accept_prob"][c].mean()),
+            "ebfmi": float(az.bfmi(extra["energy"][c][None, :])[0]),
+        }
         for c in range(n_chains)
     ],
 }

@@ -61,13 +61,14 @@ Each vintage is a forecast task, and every registered model forecasts every task
 |---|---|---|
 | Development backtest | Real and reconstructed up to the latest model choice date | Latest real vintage, and every later real vintage for real forecasts |
 | Recovery check | Simulated | Simulated final counts |
-| Rolling held-out evaluation | Real vintages after the first model choice date | Every later real vintage |
+| Rolling held-out evaluation | Real vintages after each model choice | Every later real vintage |
 | Comparison with hub forecasts | Real where one serves the round, else reconstructed | Latest real vintage |
 
 ## Rolling held-out evaluation
 
-Each model choice is logged with its date.
-Every real vintage after the first choice date is forecast by the model chosen at the time and by persistence, with the code at the time of the run.
+Each model choice is logged with its date, and the development set rolls forward with them.
+Development runs use every vintage up to the latest choice date.
+Each real vintage after a choice is forecast by the model chosen then and by persistence, with the code at the time of the run.
 Each forecast is scored when the next vintage arrives and re-scored as newer ones do.
 
 ## Leave-one-province-out
@@ -76,8 +77,16 @@ One province's likelihood is masked while it stays in the model, so coupling sti
 Its onsets are scored against the latest real vintage.
 It runs on development vintages, for models that support the mask, so not `renewalsp` or persistence.
 
+## Health zones
+
+Zone forecasts are scored against zone persistence, which runs persistence on each zone's own series and does not sum to the provinces.
+Each real vintage before the latest is forecast, and every zone of a forecast province is scored, against zero where it has no cases.
+`bdbvhubrenewal zone-backtest` runs it and writes `results/zone-scores.csv`.
+
 ## Comparison with hub forecasts
 
-For each hub reference date, our models forecast from the latest real vintage serving the round, or else a vintage reconstructed for the Saturday before.
-All sample forecasts of the current target are scored against the latest real vintage, on the locations and weeks every model covered.
+For each hub reference date, our unfitted models forecast from the latest real vintage serving the round, or else a vintage reconstructed for the Saturday before.
+Fitted models use their stored backtest or held-out forecasts for the same round.
+Every model is scored on the weeks it forecast, against the latest real vintage, and the [comparison page](../comparison.md) reports complete weeks.
+WIS is relative to `persistencenow` on the weeks both forecast.
 A round is pending until a later real vintage exists.

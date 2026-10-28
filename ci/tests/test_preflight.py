@@ -15,6 +15,7 @@ REPO = "seabbs/BDBVHubRenewal"
 FORK = "seabbs-bot/BDBV-Modeling-Hub"
 HUB = "InsightNet-US/BDBV-Modeling-Hub"
 MID = "epiforecasts-seabbsrenewal"
+MID2 = "epiforecasts-seabbsbaseline"
 ENV = f"repos/{REPO}/environments/hub-submission"
 NOW = dt.datetime(2026, 10, 27, 12, tzinfo=dt.UTC)
 
@@ -86,6 +87,9 @@ def settings(tmp_path: Path) -> Settings:
         "team_name: EpiForecasts\nteam_abbr: epiforecasts\n"
         "model_name: Renewal\nmodel_abbr: seabbsrenewal\n"
     )
+    (meta / f"{MID2}.yml").write_text(
+        "team_abbr: epiforecasts\nmodel_abbr: seabbsbaseline\n"
+    )
     choice = tmp_path / "model-choice.yml"
     choice.write_text(
         "choices:\n"
@@ -98,6 +102,8 @@ def settings(tmp_path: Path) -> Settings:
         hub=HUB,
         fork_default=FORK,
         model_id_default=MID,
+        other_model_ids=(MID2,),
+        opted_in=(MID2,),
         metadata_dir=meta,
         model_choice=choice,
         workflow_file=Path(".github/workflows/submit.yml"),
@@ -366,3 +372,25 @@ def test_main_exits_1_on_gaps(
         "submission_ci.preflight.subprocess_runner", ready_runner()
     )
     assert main(args) == 0
+
+
+def test_second_hub_model_is_checked(settings: Settings) -> None:
+    checks = {c.name: c for c in run_checks(ready_runner(), settings)}
+    assert checks[f"metadata {MID2}"].status == "ok"
+    assert checks[f"hub model id {MID2}"].status == "ok"
+    (settings.metadata_dir / f"{MID2}.yml").unlink()
+    checks = {c.name: c for c in run_checks(ready_runner(), settings)}
+    assert checks[f"metadata {MID2}"].status == "missing"
+
+
+def test_opt_in_is_reported(settings: Settings) -> None:
+    from dataclasses import replace
+
+    none = replace(settings, opted_in=())
+    check = {c.name: c for c in run_checks(ready_runner(), none)}["opt-in"]
+    assert check.status == "warn"
+    assert "submit = true" in check.fix
+    opted = replace(settings, opted_in=(MID2,))
+    check = {c.name: c for c in run_checks(ready_runner(), opted)}["opt-in"]
+    assert check.status == "ok"
+    assert MID2 in check.detail

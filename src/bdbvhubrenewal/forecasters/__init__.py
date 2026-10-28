@@ -2,9 +2,10 @@
 """Forecasters: the interface every model meets, the registry and the models.
 
 - `base`: `ForecastTask`, the `ForecastModel` protocol and the registry.
-- `persistence`: the persistence baseline.
+- `persistence`: the persistence baseline, and persistence on a nowcast.
 - `renewal`: the renewal variants, the adapter from a `ForecastTask` to
   the PyRenew model in `bdbvhubrenewal.model`.
+- `zones`: health-zone forecasts split from any model's province samples.
 
 Importing this package registers the built-in models.
 To add a variant, write a class with `name` and `forecast(task)` and call
@@ -25,6 +26,7 @@ from bdbvhubrenewal.forecasters.base import (
 )
 from bdbvhubrenewal.forecasters.persistence import (
     Persistence,
+    PersistenceNow,
     completeness_lag,
     last_complete_week,
 )
@@ -38,6 +40,7 @@ __all__ = [
     "ForecastTask",
     "ModelSpec",
     "Persistence",
+    "PersistenceNow",
     "RenewalModel",
     "add_national",
     "check_samples",

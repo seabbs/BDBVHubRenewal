@@ -2,6 +2,7 @@
 # Produce and check one candidate of the fallback chain. One matrix leg.
 #
 #   CAND_ID, CAND_KIND, CAND_CONFIG, CAND_LABEL, CAND_SAMPLER (JSON)
+#   CAND_MODEL          the model to run (default $MODEL, the chosen one)
 #   FIT_CACHE_HIT=true  the fit directory was restored from the cache
 #
 # A bad fit or a failed check does not fail this step: the verdicts are
@@ -13,6 +14,10 @@ source "$(dirname "$0")/lib.sh"
 : "${CAND_ID:?}" "${CAND_KIND:?}" "${CAND_CONFIG:?}"
 CAND_SAMPLER=${CAND_SAMPLER:-'{}'}
 CAND_LABEL=${CAND_LABEL:-$CAND_ID}
+# The model this leg runs: its own (the single-patch fallback, a shadow)
+# or the chosen one.
+model=${CAND_MODEL:-$MODEL}
+[ "$CAND_KIND" = persistence ] && model=${CAND_MODEL:-persistence}
 inputs="$WORK/inputs"
 [ -f "$inputs/context.json" ] || { echo "::error::run prepare.sh first"; exit 1; }
 ctx() { python3 -c "import json,sys; print(json.load(open('$inputs/context.json'))['$1'])"; }
@@ -55,7 +60,7 @@ else
   XLA_FLAGS=$(xla_flags_for "$CAND_SAMPLER")
   export XLA_FLAGS
   note "XLA host devices: ${XLA_FLAGS##*=}, for $(sampler_chains "$CAND_SAMPLER") chains."
-  if ! cli fit --model "$MODEL" --config "$CAND_CONFIG" --vintage "$AS_OF" \
+  if ! cli fit --model "$model" --config "$CAND_CONFIG" --vintage "$AS_OF" \
       --sampler-json "$CAND_SAMPLER" --out "$fit"; then
     fit_ok=false
     echo "::warning::fit for $CAND_ID exited non-zero"
@@ -65,10 +70,10 @@ else
 fi
 
 if [ "$CAND_KIND" = "persistence" ]; then
-  cli nowcast --model persistence --vintage "$AS_OF" \
-    --out "$out/submission" || echo "::warning::persistence nowcast failed"
+  cli nowcast --model "$model" --vintage "$AS_OF" \
+    --out "$out/submission" || echo "::warning::$model nowcast failed"
 elif $fit_ok; then
-  cli nowcast --model "$MODEL" --config "$CAND_CONFIG" --fit "$fit" \
+  cli nowcast --model "$model" --config "$CAND_CONFIG" --fit "$fit" \
     --vintage "$AS_OF" --out "$out/submission" \
     || echo "::warning::nowcast for $CAND_ID failed"
 fi
@@ -117,6 +122,10 @@ fi
 # national rows as the sum of the provinces plus its unassigned part, or,
 # without it, plus the data's national gap from coherence.json.
 checks+=(--national-sidecar "$out/submission/national.json")
+# seabbsbaseline must submit health zones (track.sh).
+if [ "${REQUIRE_ZONES:-false}" = "true" ]; then
+  checks+=(--require-zones)
+fi
 if [ -f "$inputs/coherence.json" ]; then
   checks+=(--coherence "$inputs/coherence.json")
 fi
@@ -149,7 +158,7 @@ fi
 
 cat > "$out/run.json" << EOF
 {"candidate": "$CAND_ID", "kind": "$CAND_KIND", "label": "$CAND_LABEL",
- "model": "$( [ "$CAND_KIND" = persistence ] && echo persistence || echo "$MODEL")",
+ "model": "$model",
  "config": "$CAND_CONFIG", "sampler": $CAND_SAMPLER,
  "package_version": "$(cli --version 2> /dev/null || echo unknown)",
  "as_of": "$AS_OF", "reference_date": "$REFERENCE_DATE",

@@ -13,10 +13,10 @@ from __future__ import annotations
 import datetime as dt
 import json
 import tomllib
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from functools import partial
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pandas as pd
 import yaml
@@ -46,8 +46,7 @@ from bdbvhubrenewal.evaluation.backtest import (
 from bdbvhubrenewal.evaluation.heldout import load_model_choices
 from bdbvhubrenewal.evaluation.hubcompare import (
     attribution,
-    display_names,
-    load_comparison_config,
+    summarise_comparison,
 )
 from bdbvhubrenewal.evaluation.scoring import relative_skill, summarise_scores
 from bdbvhubrenewal.forecasters.base import (
@@ -57,16 +56,18 @@ from bdbvhubrenewal.forecasters.base import (
     list_models,
 )
 from bdbvhubrenewal.reporting.plots import (
-    plot_comparison,
+    comparison_label,
     plot_delay_distribution,
     plot_delays_over_time,
     plot_forecasts,
+    plot_hub_round,
     plot_imputed_share,
     plot_newly_missing,
     plot_nowcast,
     plot_reconstruction,
     plot_relative_skill,
     plot_revisions,
+    plot_scenarios,
     plot_scores,
     plot_scores_by_truth,
     plot_simulation,
@@ -93,8 +94,7 @@ def make_report(
     results: Path | str = "results",
     output: Path | str = "results",
     config_path: Path | str = "config/backtest.toml",
-    hub_comparison: Path | str = "output/hub-comparison",
-    comparison_config: Path | str = "config/hub-comparison.toml",
+    hub_comparison: Path | str = "results/hub-comparison",
 ) -> None:
     """Write every docs figure and table.
 
@@ -114,8 +114,6 @@ def make_report(
         Backtest settings.
     hub_comparison : pathlib.Path or str
         Output of `bdbvhubrenewal compare-hub`, if it has been run.
-    comparison_config : pathlib.Path or str
-        Hub comparison settings, for the display mode.
     """
     fig, gen = Path(figures), Path(generated)
     res, out = Path(results), Path(output)
@@ -225,17 +223,11 @@ def make_report(
     names = [s.name for s in list_models()]
     _backtest_page(fig, gen, res, out, config, target, delays, names)
     _heldout_page(fig, gen, res, target, names, config)
-    _comparison_page(
-        fig / "comparison",
-        gen,
-        Path(hub_comparison),
-        load_comparison_config(comparison_config).display,
-        target,
-    )
+    _comparison_page(fig, gen, Path(hub_comparison), target)
 
     # Nowcast page: latest real vintage, every registered model.
     rows = real.loc[real["vintage"] == latest]
-    tasks = make_tasks(rows, delays, config)
+    tasks = make_tasks(rows, delays, config, history=real)
     forecasts_now = _nowcast_forecasts(tasks, latest, res)
     shown = [n for n in names if n in set(forecasts_now["model"])]
     locs = [NATIONAL, *tasks[0].locations]
@@ -248,6 +240,7 @@ def make_report(
                 models=shown,
                 target=target,
                 forecasts=forecasts_now,
+                complete_after_weeks=config.complete_after_weeks,
             ),
             fig / f"nowcast-{loc.lower()}.svg",
         )
@@ -293,30 +286,6 @@ def _nowcast_forecasts(
         ].drop(columns="chosen_model", errors="ignore")
         frames.append(keep)
     return pd.concat(frames, ignore_index=True)
-
-
-def _persistence_bias(scores: pd.DataFrame) -> str:
-    pers = scores.loc[scores["model"] == "persistence"]
-    real = pers.loc[pers["kind"] == "real"]
-    if real.empty:
-        return ""
-    rec = pers.loc[pers["kind"] == "reconstructed"]
-    by_h = real.groupby("horizon")[["bias", "coverage_90"]].mean()
-    worst = by_h.sort_values("bias").head(3)
-    hs = sorted(int(h) for h in worst.index)
-    lo, hi = worst["coverage_90"].min(), worst["coverage_90"].max()
-    rec_text = (
-        f" ({rec['bias'].mean():.2f} on reconstructed vintages)"
-        if not rec.empty
-        else ""
-    )
-    return (
-        f"On real vintages persistence has a mean bias of "
-        f"{real['bias'].mean():.2f}{rec_text}.\n"
-        f"It is most negative at horizons "
-        f"{', '.join(str(h) for h in hs[:-1])} and {hs[-1]}, where 90% "
-        f"coverage is {lo:.2f} to {hi:.2f}.\n"
-    )
 
 
 _LADDER_SECTIONS = (
@@ -391,6 +360,30 @@ _LADDER_LABELS = {
     "prior_wild": "Prior draws past 10x the peak",
 }
 """Column headers of the Model building tables, without the sim_ or real_."""
+
+
+def _evidence_link(evidence: object) -> str:
+    """Render a log row's evidence as a link."""
+    if not isinstance(evidence, str) or not evidence:
+        return ""
+    if evidence.startswith("http"):
+        label = evidence.rstrip("/").rsplit("/", 1)[-1]
+        return f"[{label}]({evidence})"
+    url = f"https://github.com/seabbs/BDBVHubRenewal/blob/main/{evidence}"
+    return f"[`{evidence}`]({url})"
+
+
+def _development_log(path: Path) -> str:
+    """Return the development log as a table, newest first."""
+    if not path.exists() or path.stat().st_size <= 1:
+        return ""
+    log = pd.read_csv(path, dtype=str).fillna("")
+    if log.empty:
+        return ""
+    log = log.iloc[::-1].sort_values("date", ascending=False, kind="stable")
+    log["evidence"] = log["evidence"].map(_evidence_link)
+    log.columns = [c.capitalize() for c in log.columns]
+    return log.to_markdown(index=False) + "\n"
 
 
 def _ladder_label(column: str) -> str:
@@ -507,7 +500,7 @@ def _lopo_section(path: Path) -> str:
     """Return the leave-one-province-out section, or nothing without results."""
     if not path.exists() or path.stat().st_size <= 1:
         return ""
-    scores = pd.read_csv(path)
+    scores = pd.read_csv(path, low_memory=False)
     if scores.empty:
         return ""
     table = summarise_scores(scores, by=("model", "masked"))
@@ -569,18 +562,73 @@ def _lag_prior_note(scores: pd.DataFrame) -> str:
     )
 
 
-def _overall_scores(views: dict[str, pd.DataFrame]) -> str:
-    """Mean scores by model and vintage kind for each view with rows."""
-    frames = [
-        summarise_scores(rows, by=("model", "kind")).assign(scores=name)
-        for name, rows in views.items()
-        if not rows.empty
-    ]
-    if not frames:
-        return ""
-    table = pd.concat(frames, ignore_index=True)
-    first = ["scores", "model", "kind"]
-    return _table(table[[*first, *[c for c in table if c not in first]]])
+SCORE_TABLE_COLUMNS: Final = (
+    "model",
+    "wis",
+    "relative_wis",
+    "coverage_50",
+    "coverage_90",
+    "bias",
+)
+"""Columns of each backtest score table."""
+
+SCORE_SETS: Final = (
+    "complete weeks",
+    "complete weeks, own lag estimate",
+    "vintage-matched",
+)
+"""Score sets shown on the Backtest page.
+
+Weeks still being reported are never scored against the latest data.
+"""
+
+
+def _level_tables(rows: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    """Split scores into the national and province levels."""
+    national = rows["location"] == NATIONAL
+    return {"National": rows[national], "Province": rows[~national]}
+
+
+def _score_table(rows: pd.DataFrame) -> str:
+    """Mean scores by model, with WIS relative to persistence.
+
+    Persistence has no relative WIS, so its cell is left blank.
+    """
+    kinds = set(rows["kind"])
+    by = ["model", "kind"] if len(kinds) > 1 else ["model"]
+    table = summarise_scores(rows, by=by)
+    table["relative_wis"] = float("nan")
+    models = set(rows["model"])
+    if len(models) > 1 and "persistence" in models:
+        rel = relative_skill(rows, by=by[1:], metrics=("wis",))
+        rel = rel.loc[rel["model"] != "persistence"]
+        table = table.drop(columns="relative_wis").merge(
+            rel[[*by, "relative_wis"]], on=by, how="left"
+        )
+    table = table.sort_values(by).reset_index(drop=True)
+    cols = [c for c in SCORE_TABLE_COLUMNS if c != "model"]
+    out = table[[*by, *cols]].round(2)
+    out["relative_wis"] = out["relative_wis"].map(
+        lambda v: "" if pd.isna(v) else f"{v:.2f}"
+    )
+    return out.to_markdown(index=False) + "\n"
+
+
+def _score_tables(views: dict[str, pd.DataFrame]) -> str:
+    """One small table per score set and level, as headed sections."""
+    parts = []
+    for name in SCORE_SETS:
+        rows = views.get(name, pd.DataFrame())
+        if rows.empty:
+            continue
+        for level, part in _level_tables(rows).items():
+            if part.empty:
+                continue
+            parts.append(
+                f"### {name.capitalize()}, {level.lower()}\n\n"
+                + _score_table(part)
+            )
+    return "\n".join(parts)
 
 
 def _completeness_note(k: int, delays: pd.DataFrame) -> str:
@@ -600,13 +648,131 @@ def _completeness_note(k: int, delays: pd.DataFrame) -> str:
     )
 
 
+BACKTEST_LOCATIONS: tuple[str, ...] = (NATIONAL, "CD-IT", "CD-NK")
+"""Locations with forecast plots on the Backtest page."""
+
+
+def _backtest_findings(primary: pd.DataFrame) -> str:
+    """One or two sentences of results on complete weeks of real origins."""
+    real = primary.loc[primary["kind"] == "real"]
+    if real["model"].nunique() < 2 or "persistence" not in set(real["model"]):
+        return ""
+    rel = relative_skill(real).set_index("model")["relative_wis"]
+    cov = real.groupby("model")["coverage_90"].mean()
+    others = [m for m in rel.index if m != "persistence"]
+    wis = ", ".join(f"{m} {rel[m]:.2f}" for m in others)
+    cover = ", ".join(f"{m} {cov[m]:.2f}" for m in [*others, "persistence"])
+    origins = real["vintage"].nunique()
+    return (
+        f"On complete weeks of the {origins} real origins, mean WIS relative "
+        f"to persistence is {wis}.\n"
+        f"90% interval coverage is {cover}.\n"
+    )
+
+
+def _forecast_tabs(names: Sequence[str], labels: Mapping[str, str]) -> str:
+    """Tabs of each model's forecasts from the real origins, by location."""
+    if not names:
+        return ""
+    tabs = []
+    for m in names:
+        tabs.append(f'=== "{m}"\n')
+        for loc, label in labels.items():
+            slug = f"forecasts-{m}-{loc.lower()}"
+            alt = f"{m} forecasts against later data, {label}."
+            tabs.append(
+                f'    === "{label}"\n\n'
+                f"        ![{alt}](figures/{slug}.svg#only-light)\n"
+                f"        ![{alt}](figures/{slug}-dark.svg#only-dark)\n"
+            )
+    return (
+        "## Forecasts against later data\n\n"
+        "Forecasts from the real origins: 100 sample trajectories, 50% and "
+        "90% intervals and the median, with the data at the time (dashed) "
+        "and the latest data (solid).\n\n" + "\n".join(tabs)
+    )
+
+
+def _recovery_section(path: Path) -> str:
+    """Return the recovery section, or nothing without results."""
+    if not path.exists() or path.stat().st_size <= 1:
+        return ""
+    if pd.read_csv(path).empty:
+        return ""
+    alt = "Mean WIS by horizon on simulated vintages."
+    return (
+        "## Recovery on simulated vintages\n\n"
+        "Forecasts from vintages of a [simulated outbreak]"
+        "(methods/data.md#simulated-vintages), scored against the known "
+        "final counts.\n\n"
+        f"![{alt}](figures/recovery-wis-horizon.svg#only-light)\n"
+        f"![{alt}](figures/recovery-wis-horizon-dark.svg#only-dark)\n"
+    )
+
+
+def _without_baseline(
+    rel: pd.DataFrame, baseline: str = "persistence"
+) -> pd.DataFrame:
+    """Drop the baseline's own rows, whose relative scores are all 1."""
+    return rel.loc[rel["model"] != baseline].reset_index(drop=True)
+
+
+def _scenario_scores(path: Path) -> str:
+    """Return mean scores on the simulated scenarios, or nothing."""
+    if not path.exists() or path.stat().st_size <= 1:
+        return ""
+    scores = pd.read_csv(path, low_memory=False)
+    if scores.empty:
+        return ""
+    if "level" not in scores:
+        scores["level"] = scores["location"].map(
+            lambda x: "national" if x == "CD" else "province"
+        )
+    views = {
+        "final data, complete weeks": (scores["truth_view"] == "final")
+        & scores["complete"],
+        "as of 2 weeks later": scores["truth_view"] != "final",
+    }
+    tables = []
+    for label, keep in views.items():
+        table = (
+            scores.loc[keep]
+            .groupby(["scenario", "level", "model"], sort=False)
+            .agg(
+                wis=("wis", "mean"),
+                coverage_50=("coverage_50", "mean"),
+                coverage_90=("coverage_90", "mean"),
+                bias=("bias", "mean"),
+            )
+            .reset_index()
+            .rename(
+                columns={
+                    "wis": "mean WIS",
+                    "coverage_50": "50% coverage",
+                    "coverage_90": "90% coverage",
+                    "bias": "mean bias",
+                }
+            )
+        )
+        tables.append(f"**Scored against {label}**\n\n" + _table(table))
+    return "\n".join(tables)
+
+
+def _scenario_figure(path: Path) -> str:
+    """Return the scenario figure links, or nothing without results."""
+    if not _scenario_scores(path):
+        return ""
+    alt = "Mean WIS by horizon on the simulated scenarios."
+    return (
+        f"![{alt}](figures/scenario-wis-horizon.svg#only-light)\n"
+        f"![{alt}](figures/scenario-wis-horizon-dark.svg#only-dark)\n"
+    )
+
+
 def _relative_section(scores: pd.DataFrame) -> str:
     if scores["model"].nunique() < 2:
-        return (
-            "The scores hold no model other than persistence, so there are "
-            "no relative scores.\n"
-        )
-    rel = relative_skill(scores, by=("kind",))
+        return ""
+    rel = _without_baseline(relative_skill(scores, by=("kind",)))
     tabs = []
     for by, label in (("horizon", "By horizon"), ("location", "By province")):
         alt = f"WIS relative to persistence {label.lower()}."
@@ -616,6 +782,7 @@ def _relative_section(scores: pd.DataFrame) -> str:
             f"    ![{alt}](figures/relative-wis-{by}-dark.svg#only-dark)\n"
         )
     return (
+        "## Relative skill\n\n"
         "Mean scores on complete weeks divided by those of persistence over "
         "the forecasts both made.\nValues below 1 beat persistence.\n\n"
         + _table(rel)
@@ -633,7 +800,7 @@ def _other_relative(views: dict[str, pd.DataFrame]) -> str:
             continue
         parts.append(
             f"\n{name.capitalize()}:\n\n"
-            + _table(relative_skill(rows, by=("kind",)))
+            + _table(_without_baseline(relative_skill(rows, by=("kind",))))
             + "\n"
         )
     return "".join(parts)
@@ -670,7 +837,6 @@ def _sampler_section(fits: pd.DataFrame, submission: Mapping[str, Any]) -> str:
     table = pd.DataFrame(
         {
             "fits": by.size(),
-            "median seconds": by["seconds"].median(),
             "median max R-hat": by["max_rhat"].median(),
             "worst max R-hat": by["max_rhat"].max(),
             "share with R-hat over 1.05": by["max_rhat"].apply(
@@ -703,13 +869,12 @@ def _backtest_page(
     delays: pd.DataFrame,
     names: list[str],
 ) -> None:
-    real = target.loc[target["kind"] == "real"]
     dev_path = res / "backtest-scores.csv"
     k = config.complete_after_weeks
     if dev_path.exists():
         views = _score_views(pd.read_csv(dev_path), k)
-        scores = views["all weeks as reported"]
         primary = views["complete weeks"]
+        scores = primary
         for by in ("horizon", "location"):
             for metric in ("wis", "log_wis", "coverage_90", "bias"):
                 save_light_dark(
@@ -730,12 +895,12 @@ def _backtest_page(
             + _completeness_note(k, delays)
             + _lag_prior_note(views["all weeks as reported"]),
         )
-        _write(gen / "scores-overall.md", _overall_scores(views))
+        _write(gen / "scores-overall.md", _score_tables(views))
         _write(
             gen / "relative-section.md",
             _relative_section(primary) + _other_relative(views),
         )
-        _write(gen / "persistence-bias.md", _persistence_bias(scores))
+        _write(gen / "backtest-findings.md", _backtest_findings(primary))
         by_loc = summarise_scores(primary, by=("model", "kind", "location"))
         _write(
             gen / "scores-location.md",
@@ -758,7 +923,7 @@ def _backtest_page(
     by_truth_path = res / "backtest-scores-by-truth.csv"
     if by_truth_path.exists():
         truth_views = _score_views(pd.read_csv(by_truth_path), k)
-        by_truth = truth_views["all weeks as reported"]
+        by_truth = truth_views["complete weeks"]
         save_light_dark(
             partial(plot_scores_by_truth, by_truth, models=names),
             fig / "scores-by-truth.svg",
@@ -769,7 +934,7 @@ def _backtest_page(
                     rows, by=("model", "vintage", "truth_vintage")
                 ).assign(scores=name)
                 for name, rows in truth_views.items()
-                if not rows.empty
+                if name in SCORE_SETS and not rows.empty
             ],
             ignore_index=True,
         )
@@ -801,28 +966,44 @@ def _backtest_page(
         wide = wide.astype("Int64").astype(str).replace("<NA>", "")
         _write(gen / "truth-changes.md", _table(wide.reset_index()))
     fc_path = out / "forecasts.csv.gz"
+    shown: list[str] = []
     if fc_path.exists():
-        forecasts = pd.read_csv(fc_path)
-        rec_all = reconstruct_vintages(
-            real, delays, list(config.reconstructed_dates)
-        )
-        both = pd.concat([target, rec_all], ignore_index=True)
-        for loc in (NATIONAL, "CD-IT", "CD-NK"):
-            slug = loc.lower()
-            for kind in ("real", "reconstructed"):
+        forecasts = pd.read_csv(fc_path, dtype={"as_of": object})
+        if "as_of" in forecasts:
+            forecasts = forecasts.loc[forecasts["as_of"].isna()]
+        real_fc = forecasts.loc[forecasts["kind"] == "real"]
+        shown = [m for m in names if m in set(real_fc["model"])]
+        for m in shown:
+            for loc in BACKTEST_LOCATIONS:
                 save_light_dark(
                     partial(
                         plot_forecasts,
-                        forecasts,
-                        both,
+                        real_fc,
+                        target,
                         loc,
-                        models=names,
-                        kind=kind,
+                        models=[m],
+                        kind="real",
+                        complete_after_weeks=k,
                     ),
-                    fig / f"forecasts-{kind}-{slug}.svg",
+                    fig / f"forecasts-{m}-{loc.lower()}.svg",
                 )
+    labels = _location_names(target)
+    _write(
+        gen / "backtest-forecasts.md",
+        _forecast_tabs(
+            shown,
+            {
+                loc: f"{labels.get(loc, loc)} ({loc})"
+                for loc in BACKTEST_LOCATIONS
+            },
+        ),
+    )
     _write(gen / "lopo-section.md", _lopo_section(res / "lopo-scores.csv"))
     _write(gen / "ladder.md", _ladder_page(res / "ladder.csv"))
+    _write(
+        gen / "development-log.md",
+        _development_log(res / "development-log.csv"),
+    )
     _write(
         gen / "nowcast-recovery.md",
         _nowcast_recovery_section(res / "nowcast-recovery.csv"),
@@ -835,6 +1016,7 @@ def _backtest_page(
         else "",
     )
     rec_path = res / "recovery-scores.csv"
+    _write(gen / "recovery-section.md", _recovery_section(rec_path))
     if rec_path.exists():
         rscores = pd.read_csv(rec_path)
         save_light_dark(
@@ -843,9 +1025,54 @@ def _backtest_page(
             ),
             fig / "recovery-wis-horizon.svg",
         )
+    scen_path = res / "scenario-scores.csv.gz"
+    _write(gen / "scenario-scores.md", _scenario_scores(scen_path))
+    _write(gen / "scenario-figure.md", _scenario_figure(scen_path))
+    if scen_path.exists() and scen_path.stat().st_size > 1:
+        sscores = pd.read_csv(scen_path, low_memory=False)
+        if not sscores.empty:
+            save_light_dark(
+                partial(
+                    plot_scenarios,
+                    sscores,
+                    models=[
+                        *names,
+                        *(
+                            m
+                            for m in sscores["model"].unique()
+                            if m not in names
+                        ),
+                    ],
+                ),
+                fig / "scenario-wis-horizon.svg",
+            )
+
+
+_HELDOUT_SECTIONS = (
+    ("heldout-choices.md", "Model choices"),
+    ("heldout-status.md", "Status"),
+    ("heldout-scores.md", "Scores"),
+    ("heldout-forecasts.md", "Forecasts against later data"),
+)
+"""Held-out snippets and their headings, shown only with content."""
 
 
 def _heldout_page(
+    fig: Path,
+    gen: Path,
+    res: Path,
+    target: pd.DataFrame,
+    names: list[str],
+    config: BacktestConfig,
+) -> None:
+    _heldout_snippets(fig, gen, res, target, names, config)
+    for name, title in _HELDOUT_SECTIONS:
+        path = gen / name
+        body = path.read_text() if path.exists() else ""
+        _write(path, f"## {title}\n\n{body}" if body.strip() else "")
+
+
+def _heldout_snippets(
     fig: Path,
     gen: Path,
     res: Path,
@@ -968,7 +1195,14 @@ def _heldout_page(
     for loc in (NATIONAL, "CD-IT", "CD-NK"):
         slug = loc.lower()
         save_light_dark(
-            partial(plot_forecasts, forecasts, target, loc, models=models),
+            partial(
+                plot_forecasts,
+                forecasts,
+                target,
+                loc,
+                models=models,
+                complete_after_weeks=config.complete_after_weeks,
+            ),
             fig / f"heldout-{slug}.svg",
         )
         label = f"{loc_names.get(loc, loc)} ({loc})"
@@ -986,112 +1220,134 @@ def _location_names(target: pd.DataFrame) -> dict[str, str]:
     return dict(zip(pairs["location"], pairs["location_name"], strict=False))
 
 
+HUB_METADATA_URL: Final = (
+    "https://github.com/InsightNet-US/BDBV-Modeling-Hub/blob/main/"
+    "model-metadata/{model}.yml"
+)
+"""Where the hub keeps each model's metadata file."""
+
+
+def _teams_table(teams: pd.DataFrame, hub_ids: Mapping[str, str]) -> str:
+    """Table of the hub's other models, with a link to each one's metadata.
+
+    Parameters
+    ----------
+    teams : pandas.DataFrame
+        Output of `load_team_metadata`.
+    hub_ids : mapping
+        Hub ids of our own models, which are left out.
+    """
+    teams = teams.loc[~teams["model"].isin(set(hub_ids.values()))]
+    if teams.empty:
+        return "No other team has submitted.\n"
+    table = pd.DataFrame(
+        {
+            "Team": teams["team_name"],
+            "Model": teams["model_name"],
+            "Hub model id": [f"`{m}`" for m in teams["model"]],
+            "Licence": teams["license"],
+            "Metadata": [
+                f"[{m}.yml]({HUB_METADATA_URL.format(model=m)})"
+                for m in teams["model"]
+            ],
+        }
+    )
+    return table.to_markdown(index=False) + "\n"
+
+
 def _comparison_page(
     fig: Path,
     gen: Path,
     cmp_dir: Path,
-    display: str,
     target: pd.DataFrame,
 ) -> None:
-    names_out = (
-        "comparison-teams.md",
-        "comparison-scores.md",
-        "comparison-pending.md",
-        "comparison-other.md",
-        "comparison-figures.md",
-    )
-    accessed = dt.date.today().isoformat()
-    manifest = cmp_dir / "manifest.json"
-    if manifest.exists():
-        accessed = str(json.loads(manifest.read_text())["accessed"])
-    _write(gen / "comparison-attribution.md", f"> {attribution(accessed)}\n")
-    _write(gen / "comparison-display.md", f"Display mode: **{display}**.\n")
-    if not (cmp_dir / "scores.csv").exists():
-        for name in names_out:
-            _write(gen / name, "")
+    summary_path = cmp_dir / "summary.json"
+    if not summary_path.exists():
+        missing = "Not run yet: `bdbvhubrenewal compare-hub --fetch`.\n"
+        for name in (
+            "comparison-lead.md",
+            "comparison-scores.md",
+            "comparison-teams.md",
+            "comparison-figures.md",
+        ):
+            _write(gen / name, missing)
+        _write(
+            gen / "comparison-attribution.md",
+            f"> {attribution(dt.date.today().isoformat())}\n",
+        )
         return
-    teams = pd.read_csv(cmp_dir / "teams.csv")
-    forecasts = pd.read_csv(cmp_dir / "forecasts.csv.gz")
-    models = sorted(set(teams["model"]) | set(forecasts["model"]))
-    names = display_names(models, display)
-    shown = teams.loc[teams["model"].isin(list(names))].assign(
-        model=lambda d: d["model"].map(names)
+    summary = json.loads(summary_path.read_text())
+    _write(
+        gen / "comparison-attribution.md",
+        f"> {attribution(summary['accessed'])}\n",
     )
-    if display != "named":
-        shown = shown.drop(columns=["team_name", "model_name", "website_url"])
-    _write(gen / "comparison-teams.md", _table(shown.sort_values("model")))
-
-    def _relabel(df: pd.DataFrame) -> pd.DataFrame:
-        df = df.loc[df["model"].isin(list(names))].copy()
-        df["model"] = df["model"].map(names)
-        return df
-
+    truth, k = summary["truth_vintage"], summary["complete_after_weeks"]
+    baseline = summary["baseline"]
+    hub_ids = summary.get("hub_ids", {})
+    complete_by = (
+        (pd.Timestamp(truth) - pd.Timedelta(weeks=k)).date().isoformat()
+    )
+    note = ""
+    if baseline != summary["preferred_baseline"]:
+        note = f" (`{summary['preferred_baseline']}` once it is registered)"
+    _write(
+        gen / "comparison-lead.md",
+        f"Scores use the **{truth}** data and the complete weeks only: "
+        f"weeks ending by {complete_by} ($K = {k}$). "
+        f"Relative WIS divides by `{baseline}`{note} on the weeks both "
+        "forecast.\n",
+    )
+    scores_path = cmp_dir / "scores.csv"
     scores = (
-        pd.read_csv(cmp_dir / "scores.csv")
-        if (cmp_dir / "scores.csv").stat().st_size > 1
+        pd.read_csv(scores_path)
+        if scores_path.stat().st_size > 1
         else pd.DataFrame()
     )
-    if scores.empty:
-        _write(
-            gen / "comparison-scores.md",
-            "",
-        )
-    else:
-        scores = _relabel(scores)
-        _write(
-            gen / "comparison-scores.md",
-            _table(
-                summarise_scores(
-                    scores, by=("reference_date", "model", "source")
-                )[
-                    [
-                        "reference_date",
-                        "model",
-                        "source",
-                        "n",
-                        "wis",
-                        "log_wis",
-                        "coverage_50",
-                        "coverage_90",
-                        "bias",
-                    ]
-                ]
-            ),
-        )
     pending = pd.read_csv(cmp_dir / "pending.csv")
-    pending["models"] = pending["models"].map(
-        lambda ms: ", ".join(
-            names[m] for m in str(ms).split(", ") if m in names
+    parts = []
+    if not scores.empty:
+        table = summarise_comparison(scores, baseline)
+        table = _without_baseline(table, baseline)
+        table["model"] = [
+            comparison_label(m, s, hub_ids)
+            for m, s in zip(table["model"], table["source"], strict=True)
+        ]
+        parts.append(_table(table) if not table.empty else "")
+    for row in pending.itertuples(index=False):
+        parts.append(
+            f"The {row.reference_date} round was made from the "
+            f"{row.vintage} data, so it is scored once later data are "
+            "published.\n"
         )
-    )
     _write(
-        gen / "comparison-pending.md",
-        _table(pending) if not pending.empty else "None.\n",
+        gen / "comparison-scores.md",
+        "\n".join(p for p in parts if p) or "No round has a score yet.\n",
     )
-    other = _relabel(pd.read_csv(cmp_dir / "other-rounds.csv"))
-    summary = other.groupby(["model", "target"], as_index=False).agg(
-        files=("reference_date", "size"),
-        first=("reference_date", "min"),
-        last=("reference_date", "max"),
-    )
+    teams = pd.read_csv(cmp_dir / "teams.csv")
     _write(
-        gen / "comparison-other.md",
-        _table(summary) if not summary.empty else "None.\n",
+        gen / "comparison-teams.md",
+        _teams_table(teams, hub_ids),
     )
+    quantiles = pd.read_csv(cmp_dir / "quantiles.csv.gz")
     tabs = []
-    for loc in (NATIONAL, "CD-IT", "CD-NK"):
-        if loc not in set(forecasts["location"]):
-            continue
-        slug = loc.lower()
+    for ref in sorted(set(quantiles["reference_date"].astype(str))):
+        stem = f"comparison-{ref}"
         save_light_dark(
-            partial(plot_comparison, forecasts, target, loc, names=names),
-            fig / f"comparison-{slug}.svg",
+            partial(
+                plot_hub_round,
+                quantiles,
+                target,
+                ref,
+                locations=tuple(summary["locations"]),
+                complete_after_weeks=k,
+                hub_ids=hub_ids,
+            ),
+            fig / f"{stem}.svg",
         )
-        alt = f"Hub and our forecasts for {loc}."
-        src = f"figures/comparison/comparison-{slug}"
+        alt = f"Forecasts for the {ref} round against the {truth} data."
         tabs.append(
-            f'=== "{loc}"\n\n'
-            f"    ![{alt}]({src}.svg#only-light)\n"
-            f"    ![{alt}]({src}-dark.svg#only-dark)\n"
+            f'=== "{ref}"\n\n'
+            f"    ![{alt}](figures/{stem}.svg#only-light)\n"
+            f"    ![{alt}](figures/{stem}-dark.svg#only-dark)\n"
         )
     _write(gen / "comparison-figures.md", "\n".join(tabs))

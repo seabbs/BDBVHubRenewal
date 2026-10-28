@@ -9,6 +9,9 @@ Commands:
   the leave-one-province-out check.
 - `nowcast`: forecast from a real vintage, write the hub file and check it.
   With `--config` (and `--fit`), forecast from a fit configuration.
+  The province samples are split across the health zones unless
+  `--no-zones` is given.
+- `zone-backtest`: score zone forecasts against zone persistence.
 - `fit`: fit a configuration and write the fit directory and its
   `diagnostics.json`, for the submission CI.
 - `plot-submission`: plot a submitted hub file.
@@ -44,11 +47,19 @@ from bdbvhubrenewal.data import (
     coherence_summary,
     delays_for_vintage,
     fetch_hub_data,
+    load_daily_zones,
     load_delays,
+    load_health_zones,
     load_target,
 )
+from bdbvhubrenewal.data.dates import as_date
+from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
 from bdbvhubrenewal.evaluation import backtest as bt
-from bdbvhubrenewal.evaluation.heldout import HeldOutError, run_heldout
+from bdbvhubrenewal.evaluation.heldout import (
+    HeldOutError,
+    load_model_choices,
+    run_heldout,
+)
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastTask,
@@ -56,6 +67,7 @@ from bdbvhubrenewal.forecasters.base import (
     get_model,
     list_models,
 )
+from bdbvhubrenewal.forecasters.zones import ZoneAllocator
 from bdbvhubrenewal.submission.fitting import (
     Forecast,
     get_config,
@@ -65,6 +77,7 @@ from bdbvhubrenewal.submission.fitting import (
 from bdbvhubrenewal.submission.hub import (
     SUBMISSION_CONFIG,
     load_hub_round,
+    model_abbr_for,
     model_id,
     render_model_metadata,
     submission_model_abbr,
@@ -95,7 +108,7 @@ MODEL_METADATA = {
             "published counts. Each sample is a joint trajectory and the "
             "national value is the sum of province samples. No spatial "
             "correlation beyond that sum. See "
-            "https://seabbs.github.io/BDBVHubRenewal/methods/model/."
+            "https://samabbott.co.uk/BDBVHubRenewal/methods/model/."
         ),
         "data_inputs": (
             "Hub target data (weekly confirmed cases by onset week, observed "
@@ -124,12 +137,40 @@ MODEL_METADATA = {
             "Both streams are negative binomial. Fitted by NUTS (NumPyro) to "
             "each data vintage. Each sample is one joint posterior "
             "trajectory and the national value is the sum of province "
-            "samples. See https://seabbs.github.io/BDBVHubRenewal/methods/model/."
+            "samples. See https://samabbott.co.uk/BDBVHubRenewal/methods/model/."
         ),
         "data_inputs": (
             "Hub target data (weekly confirmed cases by onset week, observed "
             "plus imputed), the hub's published onset-to-report delays, "
             "province populations and population-weighted province centres."
+        ),
+    },
+    # A hub model of its own (epiforecasts-seabbsbaseline), submitted every
+    # round. The nowcast step is being built; check this text against it.
+    "persistencenow": {
+        "model_name": "Persistence on a nowcast",
+        "methods": (
+            "Chain-ladder nowcast of recent onset weeks with negative binomial "
+            "uncertainty, then persistence on each draw. Provinces, health "
+            "zones and national."
+        ),
+        "methods_long": (
+            "A baseline model building on the ideas of the baselinenowcast "
+            "paper and package (Johnson et al. 2025, Wellcome Open Research, "
+            "doi:10.12688/wellcomeopenres.25027.2; "
+            "https://github.com/epinowcast/baselinenowcast/). Recent onset "
+            "weeks are nowcast with a chain ladder on the reporting triangle, "
+            "with a negative binomial for each delay horizon fitted to past "
+            "retrospective nowcasts. Each nowcast draw is carried forward as "
+            "persistence, with log-scale random walk noise. Province samples "
+            "are split across health zones, and the national value is the "
+            "sum of provinces. See "
+            "https://samabbott.co.uk/BDBVHubRenewal/methods/model/."
+        ),
+        "data_inputs": (
+            "Hub target data (weekly confirmed cases by onset week, observed "
+            "plus imputed), the hub's published onset-to-report delays and "
+            "daily health zone counts."
         ),
     },
 }
@@ -147,7 +188,7 @@ def _abbr(args: argparse.Namespace) -> str:
         return str(args.abbr)
     if args.model == "persistence":
         return "persistence"
-    return submission_model_abbr(args.hub_toml)
+    return model_abbr_for(args.model, args.hub_toml)
 
 
 def _abbr_args(p: argparse.ArgumentParser) -> None:
@@ -193,6 +234,28 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-recovery",
         action="store_true",
         help="Skip the recovery check on simulated vintages.",
+    )
+    back.add_argument(
+        "--recovery-only",
+        action="store_true",
+        help="Run only the recovery check on simulated vintages.",
+    )
+    back.add_argument(
+        "--scenarios-only",
+        action="store_true",
+        help="Run only the scenarios calibrated to the real data.",
+    )
+    back.add_argument(
+        "--scenario-as-of",
+        default=None,
+        help="Real vintage the scenarios copy. Defaults to the latest.",
+    )
+    back.add_argument(
+        "--scenario-dates",
+        nargs="*",
+        default=None,
+        help="Simulated vintages to forecast from. Defaults to the four "
+        "weeks up to the scenario vintage.",
     )
     back.add_argument(
         "--cache",
@@ -242,6 +305,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     now.add_argument("--out", default="output/submission")
     now.add_argument("--hub-config", default=None)
+    now.add_argument(
+        "--no-zones",
+        dest="zones",
+        action="store_false",
+        help="Leave the health zones out of the hub file.",
+    )
+
+    zb = sub.add_parser(
+        "zone-backtest", help="Score zone forecasts against zone persistence."
+    )
+    zb.add_argument("--data", default=data_dir)
+    zb.add_argument(
+        "--models", nargs="*", default=["persistence", "persistencenow"]
+    )
+    zb.add_argument("--hub-config", default=None)
+    zb.add_argument("--out", default="results/zone-scores.csv")
 
     fit = sub.add_parser(
         "fit", help="Fit a configuration and write its diagnostics."
@@ -308,6 +387,11 @@ def build_parser() -> argparse.ArgumentParser:
         "hub-id", help="Print the hub model id that submissions use."
     )
     hid.add_argument("--hub-toml", default=str(SUBMISSION_CONFIG))
+    hid.add_argument(
+        "--model",
+        default=None,
+        help="A model with its own hub id (`[models]` in config/hub.toml).",
+    )
     cho = sub.add_parser(
         "chosen-model",
         help="Print the model chosen in the model choice record.",
@@ -320,14 +404,42 @@ def build_parser() -> argparse.ArgumentParser:
     cmp.add_argument("--config", default="config/hub-comparison.toml")
     cmp.add_argument("--backtest-config", default="config/backtest.toml")
     cmp.add_argument("--data", default=data_dir)
-    cmp.add_argument("--hub-dir", default=f"{data_dir}/raw/hub-submissions")
-    cmp.add_argument("--out", default="output/hub-comparison")
-    cmp.add_argument("--models", nargs="*", default=None)
+    cmp.add_argument(
+        "--hub-dir",
+        default="data/hub-submissions",
+        help="Committed hub files: metadata and openly licensed forecasts.",
+    )
+    cmp.add_argument(
+        "--cache-dir",
+        default=f"{data_dir}/raw/hub-submissions",
+        help="Uncommitted hub files, for other licences.",
+    )
+    cmp.add_argument("--out", default="results/hub-comparison")
+    cmp.add_argument(
+        "--models",
+        nargs="*",
+        default=None,
+        help="Models to run live. Defaults to the unfitted ones.",
+    )
+    cmp.add_argument(
+        "--stored",
+        nargs="*",
+        default=None,
+        help="Forecast files for the other models. Defaults to the config.",
+    )
     cmp.add_argument(
         "--fetch",
         action="store_true",
         help="Download the hub files first.",
     )
+
+    frz = sub.add_parser(
+        "freeze-round",
+        help="Write a round's docs page to the ledger once, after its PR "
+        "merged.",
+    )
+    frz.add_argument("--ledger", required=True)
+    frz.add_argument("--round", required=True)
 
     rep = sub.add_parser("report", help="Make the docs figures and tables.")
     rep.add_argument("--figures", default="docs/figures")
@@ -386,7 +498,8 @@ def _task(args: argparse.Namespace) -> tuple[ForecastTask, list[str]]:
     vintage = _vintage([str(v) for v in real["vintage"].unique()], args.vintage)
     rows = real.loc[real["vintage"] == vintage]
     delays, note = delays_for_vintage(delays, vintage)
-    return bt.make_tasks(rows, delays, config)[0], [note] if note else []
+    task = bt.make_tasks(rows, delays, config, history=real)[0]
+    return task, [note] if note else []
 
 
 def host_devices(n: int) -> None:
@@ -452,6 +565,10 @@ def _backtest(args: argparse.Namespace) -> int:
     output.mkdir(parents=True, exist_ok=True)
     if args.evaluate_holdout:
         # The held-out run uses the models in the model choice record.
+        record = Path(config.model_choice)
+        if record.exists() and not load_model_choices(record):
+            print("No model choice recorded, so no vintage is held out.")
+            return 0
         try:
             scores = run_heldout(
                 target,
@@ -473,7 +590,9 @@ def _backtest(args: argparse.Namespace) -> int:
             print("ERROR: --shard needs --cache.", file=sys.stderr)
             return 1
         index, count = (int(x) for x in args.shard.split("/"))
-        if args.lopo:
+        if args.recovery_only:
+            tasks = bt.recovery_tasks(config)
+        elif args.lopo:
             models = [m for m in models if getattr(m, "supports_mask", False)]
             tasks = bt.lopo_tasks(
                 target,
@@ -488,11 +607,45 @@ def _backtest(args: argparse.Namespace) -> int:
                 config,
                 include_reconstructed=not args.no_reconstructed,
             )
-        mine = bt.shard_tasks(tasks, index, count)
+        mine = bt.shard_tasks(bt.order_tasks(tasks), index, count)
         bt.run_forecasts(models, mine, args.cache)
         print(f"Shard {args.shard}: {len(mine)} tasks in {args.cache}.")
         return 0
     fits: list[pd.DataFrame] = []
+    if args.scenarios_only:
+        as_of = args.scenario_as_of or bt.real_vintages(target)[-1]
+        dates = args.scenario_dates or [
+            (as_date(as_of) - dt.timedelta(weeks=k)).isoformat()
+            for k in (3, 2, 1, 0)
+        ]
+        sforecasts, sscores = bt.run_scenarios(
+            models,
+            config,
+            target,
+            delays,
+            load_health_zones(args.data),
+            as_of,
+            dates,
+        )
+        for table, path in (
+            (sforecasts, output / "scenario-forecasts.csv.gz"),
+            (sscores, results / "scenario-scores.csv.gz"),
+        ):
+            bt.merge_by_model(path, table).to_csv(path, index=False)
+        print(f"Scenarios: {len(sscores)} scored forecasts in {results}.")
+        return 0
+    if args.recovery_only:
+        rforecasts, rscores = bt.run_recovery(
+            models, config, cache=args.cache, fits=fits
+        )
+        for table, path in (
+            (rforecasts, output / "recovery-forecasts.csv.gz"),
+            (rscores, results / "recovery-scores.csv"),
+        ):
+            bt.merge_by_model(path, table).to_csv(path, index=False)
+        _write_fits(fits, results / "recovery-fits.csv")
+        print(f"Recovery: {len(rscores)} scored forecasts in {results}.")
+        return 0
     if args.lopo:
         lopo_fc, lopo_scores = bt.run_lopo(
             models,
@@ -552,7 +705,30 @@ def _write_fits(fits: list[pd.DataFrame], path: Path) -> None:
         bt.merge_by_model(path, table).to_csv(path, index=False)
 
 
+def _zones(
+    args: argparse.Namespace,
+    task: ForecastTask,
+    samples: pd.DataFrame,
+    hub_config: str,
+) -> tuple[pd.DataFrame | None, str]:
+    """Split province samples across zones, or say why not."""
+    if not args.zones:
+        return None, ""
+    try:
+        daily = load_daily_zones(args.data)
+    except OSError:
+        return None, "no zone data, so the file has no health zones"
+    counts = weekly_zone_counts(daily, task.vintage)
+    if counts.empty:
+        return None, f"no zone data for {task.vintage}, so no health zones"
+    zones = hub_zones(hub_config)
+    return ZoneAllocator().allocate(samples, task, counts, zones), ""
+
+
 def _nowcast(args: argparse.Namespace) -> int:
+    hub_config = args.hub_config or str(
+        Path(args.data) / "hub-config" / "tasks.json"
+    )
     try:
         task, handled = _task(args)
         if args.config:
@@ -570,11 +746,15 @@ def _nowcast(args: argparse.Namespace) -> int:
                     nat, ["target_end_date", "sample", "value"]
                 ]
             result = Forecast(samples.loc[~nat], national=national)
+        zones, zone_note = _zones(args, task, result.samples, hub_config)
+        if zone_note:
+            handled.append(zone_note)
         table = to_hub_table(
             result.samples,
             task.reference_date,
             unassigned=result.unassigned,
             national=result.national,
+            zones=zones,
         )
     except (KeyError, ValueError, OSError) as err:
         print(f"ERROR: {err}", file=sys.stderr)
@@ -584,11 +764,12 @@ def _nowcast(args: argparse.Namespace) -> int:
     _write_national_sidecar(Path(args.out), task, result)
     # Problems handled on the way, for the PR's `Handled:` line.
     (Path(args.out) / "handled.json").write_text(json.dumps(handled) + "\n")
+    # Whether the file has health zones, for the CI's zone check.
+    n_zones = 0 if zones is None else int(zones["location"].nunique())
+    zone_record = {"zones": n_zones > 0, "n_zones": n_zones, "note": zone_note}
+    (Path(args.out) / "zones.json").write_text(json.dumps(zone_record) + "\n")
     for note in handled:
         print(f"Handled: {note}")
-    hub_config = args.hub_config or str(
-        Path(args.data) / "hub-config" / "tasks.json"
-    )
     hub_round = load_hub_round(hub_config)
     open_round = task.reference_date.isoformat() in hub_round.reference_dates
     errors = validate_submission_file(path, hub_round, check_round=open_round)
@@ -601,6 +782,31 @@ def _nowcast(args: argparse.Namespace) -> int:
     for e in errors:
         print(f"ERROR: {e}", file=sys.stderr)
     return 1 if errors else 0
+
+
+def _zone_backtest(args: argparse.Namespace) -> int:
+    from bdbvhubrenewal.evaluation.zones import (
+        zone_backtest,
+        zone_relative_skill,
+    )
+
+    hub_config = args.hub_config or str(
+        Path(args.data) / "hub-config" / "tasks.json"
+    )
+    scores = zone_backtest(
+        load_target(args.data),
+        load_delays(args.data),
+        load_daily_zones(args.data),
+        hub_zones(hub_config),
+        models=args.models,
+    )
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    scores.to_csv(out, index=False)
+    rel = zone_relative_skill(scores, by=("horizon",))
+    print(rel.round(3).to_string(index=False))
+    print(f"Wrote {out} ({len(scores)} scores).")
+    return 0
 
 
 def _write_national_sidecar(
@@ -724,18 +930,29 @@ def _metadata(args: argparse.Namespace) -> int:
 def _bvd(args: argparse.Namespace) -> int:  # pragma: no cover - network
     from bdbvhubrenewal.data import bvd
 
+    config = bt.load_config(args.backtest_config)
     vintages = args.vintages
     if not vintages:
         target = load_target(args.data)
         real = target.loc[target["kind"] == "real", "vintage"].astype(str)
-        config = bt.load_config(args.backtest_config)
         vintages = sorted({*real, *config.reconstructed_dates})
     token = os.environ.get("GITHUB_TOKEN")
     chosen = bvd.refresh_cache(
-        Path(args.data) / "bvd", vintages, bvd.list_releases(token)
+        Path(args.data) / "bvd",
+        vintages,
+        bvd.list_releases(token),
+        max_rhat=config.bvd_max_rhat,
     )
-    for vintage, tag in chosen.items():
-        print(f"{vintage}: {tag or 'no release'}")
+    for vintage, choice in chosen.items():
+        if choice is None:
+            print(f"{vintage}: no release")
+            continue
+        print(
+            f"{vintage}: {choice.tag} (joint R-hat "
+            f"{choice.joint_max_rhat:.3f}, limit {choice.max_rhat:g})"
+        )
+        for tag, reason in choice.skipped:
+            print(f"  skipped {tag}: {reason}")
     return 0
 
 
@@ -756,43 +973,68 @@ def _compare_hub(args: argparse.Namespace) -> int:
     from bdbvhubrenewal.evaluation import hubcompare as hc
 
     cfg = hc.load_comparison_config(args.config)
-    hub_dir = Path(args.hub_dir)
+    hub_dir, cache = Path(args.hub_dir), Path(args.cache_dir)
     if args.fetch:  # pragma: no cover - network
-        hc.fetch_hub_submissions(hub_dir, cfg.models, ref=cfg.ref)
-    weekly, other = hc.load_hub_submissions(hub_dir)
-    weekly = weekly.loc[weekly["model"].isin(cfg.models)]
-    other = other.loc[other["model"].isin(cfg.models)]
+        hc.fetch_hub_submissions(hub_dir, cache, ref=cfg.ref)
+    hub = hc.load_hub_submissions(hub_dir, cache)
     target, delays = load_target(args.data), load_delays(args.data)
     config = bt.load_config(args.backtest_config)
+    rounds = sorted(set(hub["reference_date"]))
+    live = args.models or [s.name for s in list_models() if not s.fitted]
+    horizons = (
+        pd.to_datetime(hub["target_end_date"])
+        - pd.to_datetime(hub["reference_date"])
+    ).dt.days // 7
     ours = hc.our_forecasts(
-        sorted(set(weekly["reference_date"])),
+        rounds,
         target,
         delays,
         config,
-        _models(args.models),
+        live,
+        min_horizon=min(int(horizons.min()), config.min_horizon)
+        if len(hub)
+        else None,
     )
-    scores, pending = hc.score_comparison(weekly, ours, target)
+    stored = hc.stored_forecasts(
+        cfg.stored if args.stored is None else args.stored,
+        rounds,
+        exclude=live,
+    )
+    forecasts = pd.concat(
+        [f for f in (hub, ours, stored) if not f.empty], ignore_index=True
+    )
+    scores, pending = hc.score_comparison(
+        forecasts, target, config.complete_after_weeks
+    )
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    forecasts = pd.concat(
-        [weekly.drop(columns="output_type").assign(source="hub"), ours],
-        ignore_index=True,
-    )
-    forecasts.to_csv(out / "forecasts.csv.gz", index=False)
     scores.to_csv(out / "scores.csv", index=False)
     pending.to_csv(out / "pending.csv", index=False)
-    other.to_csv(out / "other-rounds.csv", index=False)
+    hc.forecast_quantiles(forecasts).to_csv(
+        out / "quantiles.csv.gz", index=False
+    )
     teams = hc.load_team_metadata(hub_dir)
-    teams.loc[teams["model"].isin(cfg.models)].to_csv(
+    teams.loc[teams["model"].isin(set(hub["model"]))].to_csv(
         out / "teams.csv", index=False
     )
     manifest = hub_dir / "manifest.json"
+    accessed = dt.date.today().isoformat()
     if manifest.exists():
-        (out / "manifest.json").write_text(manifest.read_text())
+        accessed = str(json.loads(manifest.read_text())["accessed"])
+    real = target.loc[target["kind"] == "real"]
+    summary = {
+        "truth_vintage": str(real["vintage"].max()),
+        "complete_after_weeks": config.complete_after_weeks,
+        "baseline": hc.resolve_baseline(cfg.baseline),
+        "preferred_baseline": cfg.baseline,
+        "locations": list(cfg.locations),
+        "hub_ids": hc.own_hub_ids(),
+        "accessed": accessed,
+    }
+    (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(
         f"Hub comparison: {len(scores)} scored forecasts, "
-        f"{len(pending)} rounds pending, {len(other)} files from other "
-        f"rounds. Written to {out}."
+        f"{len(pending)} rounds pending. Written to {out}."
     )
     return 0
 
@@ -845,17 +1087,33 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _backtest(args)
     if args.command == "nowcast":
         return _nowcast(args)
+    if args.command == "zone-backtest":
+        return _zone_backtest(args)
     if args.command == "metadata":
         return _metadata(args)
     if args.command == "bvd":  # pragma: no cover - network
         return _bvd(args)
     if args.command == "hub-id":
-        print(model_id(submission_model_abbr(args.hub_toml)))
+        abbr = (
+            model_abbr_for(args.model, args.hub_toml)
+            if args.model
+            else submission_model_abbr(args.hub_toml)
+        )
+        print(model_id(abbr))
         return 0
     if args.command == "chosen-model":
         return _chosen_model(args)
     if args.command == "compare-hub":
         return _compare_hub(args)
+    if args.command == "freeze-round":
+        from bdbvhubrenewal.submission.rounds import freeze_round
+
+        wrote = freeze_round(args.ledger, args.round)
+        print(
+            f"Round {args.round}: "
+            + ("page frozen." if wrote else "already frozen.")
+        )
+        return 0
     from bdbvhubrenewal.reporting.report import make_report
 
     make_report(figures=args.figures, generated=args.generated)

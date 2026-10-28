@@ -46,6 +46,7 @@ __all__ = [
     "TEAM_ABBR",
     "HubRound",
     "load_hub_round",
+    "model_abbr_for",
     "model_id",
     "render_model_metadata",
     "submission_model_abbr",
@@ -204,6 +205,31 @@ def submission_model_abbr(path: Path | str = SUBMISSION_CONFIG) -> str:
     return str(config["submission"]["model_abbr"])
 
 
+def model_abbr_for(model: str, path: Path | str = SUBMISSION_CONFIG) -> str:
+    """Return the hub abbreviation a model submits under.
+
+    A model with its own entry under `[models]` in `config/hub.toml` is a
+    hub model of its own. Every other model submits under the renewal
+    abbreviation (`submission_model_abbr`).
+
+    Parameters
+    ----------
+    model : str
+        The model key, such as `"persistencenow"`.
+    path : pathlib.Path or str
+        The configuration file.
+
+    Returns
+    -------
+    str
+        The abbreviation, such as `"seabbsbaseline"`.
+    """
+    with Path(path).open("rb") as fh:
+        config = tomllib.load(fh)
+    own = config.get("models", {}).get(model, {})
+    return str(own.get("model_abbr") or config["submission"]["model_abbr"])
+
+
 def model_id(model_abbr: str, team_abbr: str = TEAM_ABBR) -> str:
     """Join a team and model abbreviation into a hub model id.
 
@@ -262,6 +288,7 @@ def to_hub_table(
     *,
     unassigned: pd.DataFrame | None = None,
     national: pd.DataFrame | None = None,
+    zones: pd.DataFrame | None = None,
     n_samples: int = 100,
 ) -> pd.DataFrame:
     """Turn forecast samples into the hub's submission table.
@@ -290,6 +317,11 @@ def to_hub_table(
         National samples from a model that fits the nation on its own
         (columns `target_end_date`, `sample`, `value`). They are written
         as they are, in place of the sum, and `unassigned` is ignored.
+    zones : pandas.DataFrame, optional
+        Health-zone samples (columns as `samples`), such as from
+        `forecasters.zones.ZoneAllocator`. They must sum to the rounded
+        province samples, sample by sample, and are not added to the
+        national value.
     n_samples : int
         Number of samples each location must have.
 
@@ -303,8 +335,9 @@ def to_hub_table(
     Raises
     ------
     ValueError
-        If a province does not have sample ids `1..n_samples`, a sample
-        lacks a week, or provinces cover different weeks.
+        If a province or zone does not have sample ids `1..n_samples`, a
+        sample lacks a week, locations cover different weeks, or the
+        zones do not sum to their provinces.
     """
     ref = as_date(reference_date).isoformat()
     prov = samples.loc[samples["location"] != NATIONAL].copy()
@@ -314,9 +347,10 @@ def to_hub_table(
     prov["location"] = prov["location"].astype(str)
     prov["sample"] = prov["sample"].astype("int64")
     prov["value"] = prov["value"].clip(lower=0).round()
+    zone = _zone_rows(prov, zones)
     ids = set(range(1, n_samples + 1))
     weeks = sorted(set(prov["target_end_date"]))
-    for loc, rows in prov.groupby("location"):
+    for loc, rows in pd.concat([prov, zone]).groupby("location"):
         if set(rows["sample"]) != ids:
             raise ValueError(
                 f"{loc}: sample ids must be 1 to {n_samples}, the same in "
@@ -358,7 +392,7 @@ def to_hub_table(
         national["value"] = national["value"].add(extra, fill_value=0)
         national = national.reset_index()
     national["location"] = NATIONAL
-    both = pd.concat([prov, national], ignore_index=True)
+    both = pd.concat([prov, national, zone], ignore_index=True)
     out = pd.DataFrame(
         {
             "reference_date": ref,
@@ -373,6 +407,23 @@ def to_hub_table(
     return out.sort_values(
         ["location", "output_type_id", "target_end_date"]
     ).reset_index(drop=True)[list(HUB_COLUMNS)]
+
+
+def _zone_rows(prov: pd.DataFrame, zones: pd.DataFrame | None) -> pd.DataFrame:
+    """Tidy zone samples and check they sum to the province samples."""
+    if zones is None or zones.empty:
+        return prov.iloc[:0]
+    from bdbvhubrenewal.forecasters.zones import check_zone_coherence
+
+    zone = zones[list(prov.columns)].copy()
+    zone["target_end_date"] = zone["target_end_date"].astype(str)
+    zone["location"] = zone["location"].astype(str)
+    zone["sample"] = zone["sample"].astype("int64")
+    zone["value"] = zone["value"].clip(lower=0).round()
+    gaps = check_zone_coherence(prov, zone)
+    if gaps:
+        raise ValueError(f"{len(gaps)} zone sums differ: {gaps[0]}.")
+    return zone
 
 
 def submission_path(
@@ -682,6 +733,17 @@ def validate_submission_file(
 # Model metadata
 # --------------------------------------------------------------------------
 
+FUNDING: Final = (
+    "This study is funded by the National Institute for Health and Care "
+    "Research (NIHR) Health Protection Research Unit in Health Analytics & "
+    "Modelling, a partnership between the UK Health Security Agency, "
+    "Imperial College London and the London School of Hygiene & Tropical "
+    "Medicine (grant code NIHR207404). The views expressed are those of the "
+    "author(s) and not necessarily those of the NIHR, UK Health Security "
+    "Agency or the Department of Health and Social Care."
+)
+"""Sam Abbott's HPRU funding statement (`team_funding` in the metadata)."""
+
 METADATA_DEFAULTS: Final[dict[str, Any]] = {
     "team_name": "EpiForecasts",
     "team_abbr": TEAM_ABBR,
@@ -695,15 +757,11 @@ METADATA_DEFAULTS: Final[dict[str, Any]] = {
     ],
     "license": "CC-BY-4.0",
     "repo_url": "https://github.com/seabbs/BDBVHubRenewal",
-    "website_url": "https://seabbs.github.io/BDBVHubRenewal/",
+    "website_url": "https://samabbott.co.uk/BDBVHubRenewal/",
     "ensemble_of_hub_models": False,
+    "team_funding": FUNDING,
 }
-"""Fields shared by every model's metadata. Contributors are to confirm."""
-
-_LLM_NOTE: Final = (
-    " Model code was drafted with the assistance of a language model and "
-    "is under review by the named authors."
-)
+"""Fields shared by every model's metadata."""
 
 
 def render_model_metadata(
@@ -726,8 +784,7 @@ def render_model_metadata(
     methods : str
         Short description, at most 200 characters.
     methods_long : str
-        Full description. A note that the code was drafted with an LLM is
-        appended.
+        Full description.
     data_inputs : str
         The data the model uses.
     model_version : str, optional
@@ -751,12 +808,17 @@ def render_model_metadata(
         "model_details": {
             "data_inputs": data_inputs,
             "methods": methods,
-            "methods_long": methods_long + _LLM_NOTE,
+            "methods_long": methods_long,
         },
     }
     if model_version is not None:
         record["model_version"] = model_version
-    for key in ("website_url", "repo_url", "ensemble_of_hub_models"):
+    for key in (
+        "website_url",
+        "repo_url",
+        "team_funding",
+        "ensemble_of_hub_models",
+    ):
         record[key] = base[key]
     return record
 

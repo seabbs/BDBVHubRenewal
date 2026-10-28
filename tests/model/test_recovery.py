@@ -154,18 +154,25 @@ def test_forecast_trajectories(fitted, outbreak, sim_vintage):
         draws["national"],
         draws["province"].sum(axis=2) + draws["inactive"].sum(axis=2),
     )
-    # Final national truth for the last data week and the 3 forecast weeks.
-    true = outbreak.truth()
-    nat = true.loc[true["location"] == "CD"].set_index("target_end_date")[
-        "truth"
-    ]
+    # Final truth for the last data week and the 3 forecast weeks, for the
+    # nation and each modelled province: 20 intervals, so the check does
+    # not hang on one or two weeks.
+    true = outbreak.truth().set_index(["location", "target_end_date"])["truth"]
     weeks = [
         (sim_vintage.start_date + dt.timedelta(days=7 * i + 6)).isoformat()
         for i in range(n_weeks - 4, n_weeks)
     ]
-    lo, hi = np.quantile(draws["national"][:, -4:], [0.05, 0.95], axis=0)
-    obs = nat.reindex(weeks).fillna(0).to_numpy()
-    inside = (obs >= lo) & (obs <= hi)
+    series = {"CD": draws["national"][:, -4:]}
+    for j, loc in enumerate(sim_vintage.names):
+        series[loc] = draws["province"][:, -4:, j]
+    inside = []
+    for loc, d in series.items():
+        lo, hi = np.quantile(d, [0.05, 0.95], axis=0)
+        obs = np.array([true.get((loc, w), 0.0) for w in weeks])
+        inside.extend((obs >= lo) & (obs <= hi))
+        if loc == "CD":
+            nat_obs, nat_lo, nat_hi = obs, lo, hi
+    forecast90 = float(np.mean(inside))
     coverage = ppc_coverage(
         sim_vintage, draws["insample"], vintage_date(outbreak, VINTAGE_DAYS[-1])
     )
@@ -174,13 +181,17 @@ def test_forecast_trajectories(fitted, outbreak, sim_vintage):
     summary = json.loads(out.read_text()) if out.exists() else {}
     summary |= {
         "forecast_seconds": round(seconds, 1),
-        "national_truth_last4": obs.tolist(),
-        "national_90pc_low": lo.tolist(),
-        "national_90pc_high": hi.tolist(),
+        "national_truth_last4": nat_obs.tolist(),
+        "national_90pc_low": nat_lo.tolist(),
+        "national_90pc_high": nat_hi.tolist(),
+        "forecast90_cells": len(inside),
+        "forecast90": round(forecast90, 3),
         **coverage,
     }
     out.write_text(json.dumps(summary, indent=2))
     print(summary)
-    assert inside.sum() >= 3
+    # 90% intervals over 20 cells: below 0.7 has under 2% chance if they
+    # are calibrated.
+    assert forecast90 >= 0.7, summary
     assert 0.8 <= coverage["ppc90_province"] <= 1.0
     assert coverage["ppc90_national"] >= 0.75

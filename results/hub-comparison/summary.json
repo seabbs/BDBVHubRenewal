@@ -1,0 +1,15 @@
+{
+  "truth_vintage": "2026-10-24",
+  "complete_after_weeks": 3,
+  "baseline": "persistencenow",
+  "preferred_baseline": "persistencenow",
+  "locations": [
+    "CD",
+    "CD-IT",
+    "CD-NK"
+  ],
+  "hub_ids": {
+    "persistencenow": "epiforecasts-seabbsbaseline"
+  },
+  "accessed": "2026-10-28"
+}

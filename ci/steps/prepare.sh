@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Pin the inputs every candidate shares, then build the persistence
-# candidate, which needs no fit and is also the baseline the other
-# candidates are checked against.
+# Pin the inputs every candidate shares, then build the baseline
+# candidates, which need no fit: persistence first, since every other
+# candidate is checked against it, then persistence on a nowcast.
 #
 #   HUB_REF         hub commit to read the data at (from the data check)
 #   AS_OF           data vintage
@@ -76,6 +76,18 @@ if ! cli coherence --vintage "$AS_OF" --out "$inputs/coherence.json"; then
 fi
 sci check-coherence --coherence "$inputs/coherence.json" --out "$inputs"
 
-CAND_ID=persistence CAND_KIND=persistence CAND_CONFIG=persistence \
-  CAND_LABEL="persistence baseline" CAND_SAMPLER='{}' \
-  "$(dirname "$0")/candidate.sh"
+sci python -m submission_ci.policy --policy "$POLICY" --stage baseline \
+  --hub-ref "$HUB_REF" --model "$MODEL" --root "${SRC_ROOT:-.}" \
+  > "$WORK/matrix-baseline.json"
+python3 - "$WORK/matrix-baseline.json" << 'EOF' > "$WORK/legs-baseline.txt"
+import json, sys
+legs = json.load(open(sys.argv[1]))["include"]
+for e in sorted(legs, key=lambda e: e["id"] != "persistence"):
+    print("\t".join([e["id"], e["kind"], e["config"], e["label"],
+                     e["model"] or "-"]))
+EOF
+while IFS=$'\t' read -r id kind config label cmodel; do
+  [ "$cmodel" = - ] && cmodel=""
+  CAND_ID=$id CAND_KIND=$kind CAND_CONFIG=$config CAND_LABEL=$label \
+    CAND_MODEL=$cmodel CAND_SAMPLER='{}' "$(dirname "$0")/candidate.sh"
+done < "$WORK/legs-baseline.txt"

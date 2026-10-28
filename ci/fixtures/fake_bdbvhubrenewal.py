@@ -221,6 +221,17 @@ def cmd_fit(args: argparse.Namespace) -> int:
             for c in range(chains)
         ],
     }
+    if args.config == "bvd":
+        # As the model records the BVDOutbreakSize release it used.
+        diag["bvd"] = {
+            "tag": "results-3180",
+            "as_of": "2026-10-23",
+            "joint_max_rhat": 1.041,
+            "max_rhat": 1.1,
+            "skipped": [
+                {"tag": "results-3190", "reason": "no readable joint R-hat"}
+            ],
+        }
     (out / "diagnostics.json").write_text(json.dumps(diag, indent=2))
     if sc != "noppc":
         ppc = fake_ppc(args.vintage, sc, args.config)
@@ -259,6 +270,19 @@ def cmd_nowcast(args: argparse.Namespace) -> int:
         # `badnational`: the national rows do not add up, and there is no
         # national.json, so the gate rebuilds them.
         rows.append(["CD", s, w, v + (3 if sc == "badnational" else 0)])
+    # Health zones, as the baselines write them: each province split
+    # evenly over two zones. `nozones` (or FAKE_ZONES=none) leaves them out.
+    if (
+        args.model in ("persistence", "persistencenow")
+        and sc != "nozones"
+        and os.environ.get("FAKE_ZONES") != "none"
+    ):
+        rows += [
+            [f"{loc}-0{k}", s, w, v / 2]
+            for loc, s, w, v in list(rows)
+            if loc != "CD"
+            for k in (1, 2)
+        ]
     mid = f"epiforecasts-{args.model}"
     path = Path(args.out) / "model-output" / mid / f"{ref}-{mid}.csv"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -386,6 +410,25 @@ def cmd_plot(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_metadata(args: argparse.Namespace) -> int:
+    """Write a minimal metadata file named after the hub id."""
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"epiforecasts-{args.abbr}.yml").write_text(
+        f"team_abbr: epiforecasts\nmodel_abbr: {args.abbr}\n"
+    )
+    return 0
+
+
+def cmd_freeze(args: argparse.Namespace) -> int:
+    """Write the round's page once, as the real `freeze-round` does."""
+    page = Path(args.ledger) / "pages" / f"{args.round}.md"
+    if not page.exists():
+        page.parent.mkdir(parents=True, exist_ok=True)
+        page.write_text(f"# Round {args.round}\n")
+    return 0
+
+
 def main() -> int:
     p = argparse.ArgumentParser(prog="bdbvhubrenewal")
     p.add_argument("--version", action="store_true")
@@ -414,7 +457,15 @@ def main() -> int:
     sub.add_parser("chosen-model")
     b = sub.add_parser("bvd")
     b.add_argument("--vintages", nargs="*", default=None)
-    sub.add_parser("hub-id")
+    hid = sub.add_parser("hub-id")
+    hid.add_argument("--model", default=None)
+    me = sub.add_parser("metadata")
+    me.add_argument("--model", required=True)
+    me.add_argument("--abbr", required=True)
+    me.add_argument("--out", required=True)
+    fr = sub.add_parser("freeze-round")
+    fr.add_argument("--ledger", required=True)
+    fr.add_argument("--round", required=True)
     co = sub.add_parser("coherence")
     co.add_argument("--vintage", required=True)
     co.add_argument("--out", required=True)
@@ -433,7 +484,16 @@ def main() -> int:
             print(os.environ.get("FAKE_CHOSEN_MODEL") or "renewal") or 0
         ),
         "bvd": lambda _a: 0,
-        "hub-id": lambda _a: print("epiforecasts-seabbsrenewal") or 0,
+        "hub-id": lambda a: (
+            print(
+                "epiforecasts-seabbsbaseline"
+                if a.model == "persistencenow"
+                else "epiforecasts-seabbsrenewal"
+            )
+            or 0
+        ),
+        "metadata": cmd_metadata,
+        "freeze-round": cmd_freeze,
     }[args.command](args)
 
 

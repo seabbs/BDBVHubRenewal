@@ -14,6 +14,16 @@ republished on old data with newer code, so `as_of` alone is not enough:
 `results-3169`, published on 27 October with `as_of` 20 October, must not
 feed the 24 October vintage.
 
+The release must also come from a fit that converged, under a generous
+check: the joint fit's worst R-hat at most `MAX_RHAT` (1.1, the config
+value `[bvd] max_rhat`), with effective sample sizes ignored. The
+releases carry no diagnostics asset. The rendered site (`site.zip`) does,
+as the fit diagnostics table: `summary_assets/diagnostics.html` from
+17 September, and the analysis page before that. A release whose table
+cannot be read does not qualify, and the next older one is tried.
+`site.zip` is large, so it is downloaded once, only for a release that
+is otherwise eligible, and only the R-hat is kept.
+
 Each release is cached by tag. `load_release` returns plain arrays: the
 national `R_T` draws on the log scale and, where the release has
 province estimates, each BVD patch with the hub provinces it covers.
@@ -27,12 +37,15 @@ BVDOutbreakSize results are MIT licensed. Cite them as
 from __future__ import annotations
 
 import datetime as dt
+import io
 import json
 import re
 import tomllib
 import urllib.request
+import zipfile
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Final
 
@@ -53,18 +66,26 @@ __all__ = [
     "BVD_GI_SD",
     "BVD_PROVINCES",
     "BVD_REPO",
+    "DIAGNOSTICS_FILE",
     "HUB_TIMEZONE",
+    "MAX_RHAT",
     "MODEL_ROW_COLUMNS",
+    "SITE_ASSET",
     "BvdPatch",
     "BvdRelease",
+    "ReleaseChoice",
     "bvd_cutoff",
     "bvd_for_vintage",
+    "fetch_diagnostics",
     "fetch_release",
+    "joint_rhat_from_html",
+    "joint_rhat_from_site",
     "list_releases",
     "load_release",
     "load_releases",
     "model_rows",
     "parse_releases",
+    "read_max_rhat",
     "refresh_cache",
     "release_as_of",
     "save_releases",
@@ -101,6 +122,28 @@ ASSETS: Final = (
 """Release assets used: national draws, patch summaries, the national Rt
 row the patch summaries are relative to, and the data cut-off
 (`as_of_date`) for releases with no patch summaries."""
+
+SITE_ASSET: Final = "site.zip"
+"""The rendered site, read only for the joint fit's R-hat."""
+
+TIMED_ASSETS: Final = (*ASSETS, SITE_ASSET)
+"""Every asset a forecast reads, so each must predate its cut-off."""
+
+DIAGNOSTICS_PAGES: Final = ("summary_assets/diagnostics.html", "analysis.html")
+"""Pages of `site.zip` with the fit diagnostics table, in order of
+preference: the diagnostics page from 17 September, the analysis page
+before."""
+
+DIAGNOSTICS_FILE: Final = "diagnostics.json"
+"""The joint R-hat of a release, cached in place of `site.zip`."""
+
+MAX_RHAT: Final = 1.1
+"""Default limit on the joint fit's worst R-hat, BVDOutbreakSize's own
+fail level. Its pass level (1.05, with ESS and divergence limits) is
+stricter."""
+
+GATE_FILE: Final = "gate.json"
+"""The R-hat limit the cache was refreshed with, for later fits."""
 
 BVD_GI_MEAN: Final = 15.3
 """Prior mean of BVDOutbreakSize's Gamma generation interval, in days."""
@@ -225,7 +268,7 @@ def save_releases(releases: pd.DataFrame, cache_dir: Path | str) -> Path:
                     "updated_at": pd.Timestamp(a["updated_at"]).isoformat(),
                 }
                 for name, a in assets.items()
-                if name in ASSETS
+                if name in TIMED_ASSETS
             },
         }
         for tag, pub, assets in zip(
@@ -252,8 +295,8 @@ def load_releases(cache_dir: Path | str) -> pd.DataFrame | None:
     Returns
     -------
     pandas.DataFrame or None
-        As `parse_releases`, keeping only the assets in `ASSETS`, or None
-        if there is no cached list.
+        As `parse_releases`, keeping only the assets in `TIMED_ASSETS`, or
+        None if there is no cached list.
     """
     path = Path(cache_dir) / RELEASES_FILE
     if not path.exists():
@@ -303,17 +346,60 @@ def bvd_cutoff(vintage: dt.date | str) -> dt.datetime:
     return max(sunday, own)
 
 
+@dataclass(frozen=True)
+class ReleaseChoice:
+    """The release a forecast uses, and why newer ones were not.
+
+    Attributes
+    ----------
+    tag : str
+        The release tag.
+    joint_max_rhat : float
+        The joint fit's worst R-hat.
+    max_rhat : float
+        The limit it was held to.
+    skipped : tuple of (str, str)
+        Each newer release published by the cut-off, with the reason it
+        was not used, newest first.
+    """
+
+    tag: str
+    joint_max_rhat: float
+    max_rhat: float
+    skipped: tuple[tuple[str, str], ...] = ()
+
+    def record(self) -> dict[str, Any]:
+        """Return the choice as plain JSON values.
+
+        Returns
+        -------
+        dict
+            `tag`, `joint_max_rhat`, `max_rhat` and `skipped`, a list of
+            `tag` and `reason` mappings.
+        """
+        return {
+            "tag": self.tag,
+            "joint_max_rhat": self.joint_max_rhat,
+            "max_rhat": self.max_rhat,
+            "skipped": [{"tag": t, "reason": r} for t, r in self.skipped],
+        }
+
+
 def select_release(
     releases: pd.DataFrame,
     forecast_date: dt.date | str,
     cutoff: dt.datetime,
     as_of: Callable[[str], dt.date | str | None],
-) -> str | None:
+    rhat: Callable[[str], float | None],
+    max_rhat: float = MAX_RHAT,
+) -> ReleaseChoice | None:
     """Choose the release a forecast may use.
 
     The newest release, by publication, that was published and whose
-    used assets (`ASSETS`) were last updated by `cutoff`, and whose data
-    end on or before `forecast_date`.
+    used assets (`TIMED_ASSETS`) were last updated by `cutoff`, whose
+    data end on or before `forecast_date`, and whose joint fit's worst
+    R-hat is at most `max_rhat`. Releases published after `cutoff` did
+    not exist for the forecast and are not recorded as skipped.
 
     Parameters
     ----------
@@ -326,29 +412,221 @@ def select_release(
     as_of : callable
         Returns a release's data cut-off from its tag, or None if it is
         unknown. Only called for releases published in time.
+    rhat : callable
+        Returns a release's joint R-hat from its tag, or None if it
+        cannot be read. Only called for releases that are otherwise
+        eligible.
+    max_rhat : float
+        The R-hat limit.
 
     Returns
     -------
-    str or None
-        The tag, or None if no release qualifies.
+    ReleaseChoice or None
+        The choice, or None if no release qualifies.
     """
     limit = pd.Timestamp(cutoff).tz_convert("UTC")
     day = pd.Timestamp(forecast_date).date()
     ordered = releases.sort_values("published_at", ascending=False)
+    skipped: list[tuple[str, str]] = []
     for tag, published, assets in zip(
         ordered["tag"], ordered["published_at"], ordered["assets"], strict=True
     ):
-        times = [pd.Timestamp(published)] + [
+        tag = str(tag)
+        if pd.Timestamp(published) > limit:
+            continue
+        updated = [
             pd.Timestamp(a["updated_at"])
             for name, a in assets.items()
-            if name in ASSETS
+            if name in TIMED_ASSETS
         ]
-        if any(t > limit for t in times):
+        if any(t > limit for t in updated):
+            skipped.append((tag, "an asset was updated after the cut-off"))
             continue
-        data_end = as_of(str(tag))
-        if data_end is not None and pd.Timestamp(data_end).date() <= day:
-            return str(tag)
+        data_end = as_of(tag)
+        if data_end is None:
+            skipped.append((tag, "no data cut-off"))
+            continue
+        end = pd.Timestamp(data_end).date()
+        if end > day:
+            skipped.append((tag, f"data end {end}, after {day}"))
+            continue
+        value = rhat(tag)
+        if value is None:
+            skipped.append((tag, "no readable joint R-hat"))
+            continue
+        if value > max_rhat:
+            skipped.append(
+                (tag, f"joint R-hat {value:.3f} is above {max_rhat:g}")
+            )
+            continue
+        return ReleaseChoice(tag, float(value), float(max_rhat), tuple(skipped))
     return None
+
+
+class _Tables(HTMLParser):
+    """Collect the cell text of every table row in an HTML page."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.tables: list[list[list[str]]] = []
+        self._row: list[str] | None = None
+        self._cell: list[str] | None = None
+
+    def handle_starttag(
+        self, tag: str, attrs: list[tuple[str, str | None]]
+    ) -> None:
+        del attrs
+        if tag == "table":
+            self.tables.append([])
+        elif tag == "tr" and self.tables:
+            self._row = []
+        elif tag in ("td", "th") and self._row is not None:
+            self._cell = []
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in ("td", "th") and self._cell is not None:
+            assert self._row is not None
+            self._row.append(" ".join("".join(self._cell).split()))
+            self._cell = None
+        elif tag == "tr" and self._row is not None:
+            self.tables[-1].append(self._row)
+            self._row = None
+
+    def handle_data(self, data: str) -> None:
+        if self._cell is not None:
+            self._cell.append(data)
+
+
+def joint_rhat_from_html(html: str) -> float | None:
+    """Read the joint fit's worst R-hat from a rendered diagnostics table.
+
+    The first table with `fit` and `max_rhat` header cells and a `joint`
+    row. Columns are found by name, so the row-number and column-type
+    rows of older pages are ignored.
+
+    Parameters
+    ----------
+    html : str
+        A rendered page.
+
+    Returns
+    -------
+    float or None
+        The R-hat, or None if no such table or value is found.
+    """
+    parser = _Tables()
+    parser.feed(html)
+    for table in parser.tables:
+        for i, header in enumerate(table):
+            if "fit" not in header or "max_rhat" not in header:
+                continue
+            fit, col = header.index("fit"), header.index("max_rhat")
+            for row in table[i + 1 :]:
+                if len(row) > max(fit, col) and row[fit] == "joint":
+                    try:
+                        return float(row[col])
+                    except ValueError:
+                        return None
+    return None
+
+
+def joint_rhat_from_site(site: bytes) -> tuple[float | None, str]:
+    """Read the joint fit's worst R-hat from a release's `site.zip`.
+
+    Pages are tried in the order of `DIAGNOSTICS_PAGES`. Bundled script
+    chunks under `assets/` are not pages and are skipped.
+
+    Parameters
+    ----------
+    site : bytes
+        The zip archive.
+
+    Returns
+    -------
+    tuple
+        The R-hat and the page it came from, or None and the reason it
+        could not be read.
+    """
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(site))
+    except zipfile.BadZipFile:
+        return None, "site.zip is not a zip archive"
+    with archive:
+        names = [n for n in archive.namelist() if "/assets/" not in n]
+        for page in DIAGNOSTICS_PAGES:
+            for name in sorted(n for n in names if n.endswith(page)):
+                html = archive.read(name).decode("utf-8", "replace")
+                value = joint_rhat_from_html(html)
+                if value is not None:
+                    return value, name
+    return None, "site.zip has no fit diagnostics table with a joint row"
+
+
+def fetch_diagnostics(
+    tag: str,
+    assets: Mapping[str, Mapping[str, Any]],
+    cache_dir: Path | str,
+    download: Downloader = _download,
+) -> dict[str, Any]:
+    """Read a release's joint R-hat once, into `cache_dir/<tag>/`.
+
+    `site.zip` is downloaded, read and dropped. Only the value is kept,
+    in `DIAGNOSTICS_FILE`, so a release is never downloaded twice.
+
+    Parameters
+    ----------
+    tag : str
+        The release tag.
+    assets : mapping
+        Asset name to its `url`, as in `parse_releases`.
+    cache_dir : pathlib.Path or str
+        The cache.
+    download : callable
+        Returns the bytes at a URL.
+
+    Returns
+    -------
+    dict
+        `joint_max_rhat` (float or None), `source` (the page read, or
+        None) and `reason` (why there is no value, or None).
+    """
+    path = Path(cache_dir) / tag / DIAGNOSTICS_FILE
+    if path.exists():
+        cached: dict[str, Any] = json.loads(path.read_text())
+        return cached
+    if SITE_ASSET in assets:
+        value, where = joint_rhat_from_site(
+            download(str(assets[SITE_ASSET]["url"]))
+        )
+    else:
+        value, where = None, "the release has no site.zip"
+    record = {
+        "joint_max_rhat": value,
+        "source": where if value is not None else None,
+        "reason": None if value is not None else where,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(record, indent=1) + "\n")
+    return record
+
+
+def read_max_rhat(cache_dir: Path | str) -> float:
+    """Return the R-hat limit the cache was refreshed with.
+
+    Parameters
+    ----------
+    cache_dir : pathlib.Path or str
+        The cache.
+
+    Returns
+    -------
+    float
+        The limit in `GATE_FILE`, or `MAX_RHAT` if there is none.
+    """
+    path = Path(cache_dir) / GATE_FILE
+    if not path.exists():
+        return MAX_RHAT
+    return float(json.loads(path.read_text())["max_rhat"])
 
 
 def fetch_release(
@@ -431,6 +709,8 @@ class BvdRelease:
         Log median and log-scale SD of the national Rt at `as_of` in the
         same table as the patches (`province_timeseries.csv`), so patch
         deviations use one source. None if the release has no such row.
+    choice : ReleaseChoice or None
+        Why this release was chosen, when it was chosen for a vintage.
     """
 
     tag: str
@@ -438,6 +718,7 @@ class BvdRelease:
     national_log_rt: NDArray[np.float64]
     patches: dict[str, BvdPatch] = field(default_factory=dict)
     reference: tuple[float, float] | None = None
+    choice: ReleaseChoice | None = None
 
 
 def release_as_of(path: Path | str) -> dt.date | None:
@@ -608,8 +889,12 @@ def bvd_for_vintage(
     cache_dir: Path | str,
     releases: pd.DataFrame | None = None,
     download: Downloader = _download,
+    max_rhat: float | None = None,
 ) -> BvdRelease | None:
     """Return the BVDOutbreakSize estimates a vintage's forecast may use.
+
+    See `select_release`. Release files and R-hat values already in the
+    cache are not downloaded again.
 
     Parameters
     ----------
@@ -622,11 +907,14 @@ def bvd_for_vintage(
         not given, or listed from GitHub if the cache has none.
     download : callable
         Returns the bytes at a URL.
+    max_rhat : float, optional
+        The R-hat limit. Defaults to the one the cache was refreshed with
+        (`read_max_rhat`).
 
     Returns
     -------
     BvdRelease or None
-        The estimates, or None if no release qualifies.
+        The estimates, with the choice, or None if no release qualifies.
     """
     if releases is None:
         releases = load_releases(cache_dir)
@@ -639,10 +927,19 @@ def bvd_for_vintage(
             fetch_release(tag, assets[tag], cache_dir, download)
         )
 
-    tag = select_release(releases, vintage, bvd_cutoff(vintage), as_of)
-    if tag is None:
+    def rhat(tag: str) -> float | None:
+        value = fetch_diagnostics(tag, assets[tag], cache_dir, download)
+        found = value["joint_max_rhat"]
+        return None if found is None else float(found)
+
+    limit = read_max_rhat(cache_dir) if max_rhat is None else max_rhat
+    choice = select_release(
+        releases, vintage, bvd_cutoff(vintage), as_of, rhat, limit
+    )
+    if choice is None:
         return None
-    return load_release(Path(cache_dir) / tag)
+    release = load_release(Path(cache_dir) / choice.tag)
+    return replace(release, choice=choice)
 
 
 def refresh_cache(
@@ -650,8 +947,12 @@ def refresh_cache(
     vintages: Sequence[dt.date | str],
     releases: pd.DataFrame | None = None,
     download: Downloader = _download,
-) -> dict[str, str | None]:
+    max_rhat: float = MAX_RHAT,
+) -> dict[str, ReleaseChoice | None]:
     """Cache the release list and the release each vintage may use.
+
+    The R-hat limit is recorded in the cache (`GATE_FILE`), so a later fit
+    that reads the cache applies the same one.
 
     Parameters
     ----------
@@ -663,19 +964,23 @@ def refresh_cache(
         From `parse_releases`. Listed from GitHub if not given.
     download : callable
         Returns the bytes at a URL.
+    max_rhat : float
+        The R-hat limit.
 
     Returns
     -------
     dict
-        The tag chosen for each vintage, or None.
+        The choice for each vintage, or None.
     """
     if releases is None:  # pragma: no cover - network
         releases = list_releases()
     save_releases(releases, cache_dir)
-    chosen: dict[str, str | None] = {}
+    gate = Path(cache_dir) / GATE_FILE
+    gate.write_text(json.dumps({"max_rhat": max_rhat}) + "\n")
+    chosen: dict[str, ReleaseChoice | None] = {}
     for vintage in vintages:
-        rel = bvd_for_vintage(vintage, cache_dir, releases, download)
+        rel = bvd_for_vintage(vintage, cache_dir, releases, download, max_rhat)
         chosen[pd.Timestamp(vintage).date().isoformat()] = (
-            None if rel is None else rel.tag
+            None if rel is None else rel.choice
         )
     return chosen

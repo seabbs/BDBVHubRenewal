@@ -38,6 +38,9 @@ def test_variants_are_registered_as_fitted_models() -> None:
         assert isinstance(model, ForecastModel)
         assert model.name == name
     assert set(rn.VARIANTS) == {"renewal", "renewalsp", "renewalbvd"}
+    # Only the backtest models: no fallback and no unused options.
+    for name in ("fallback", "renewalhold", "renewalpo"):
+        assert name not in specs
     # The single patch fits each province on its own data only, so it
     # cannot forecast a province with its data held out.
     assert get_model("renewal").supports_mask
@@ -380,6 +383,57 @@ def test_bvd_variant_reads_the_release_for_its_vintage(
     assert data.bvd is not None
     assert rn.vintage_inputs(task, config).bvd is None
     assert "renewalbvd" in {s.name for s in list_models()}
+
+
+def test_bvd_fit_records_the_release_and_its_rhat(
+    task: ForecastTask, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import shutil
+
+    from bdbvhubrenewal.data import bvd
+
+    fixtures = Path(__file__).resolve().parents[1] / "data" / "bvd"
+    cache = tmp_path / "bvd"
+    releases = bvd.parse_releases(
+        json.loads((fixtures / "releases.json").read_text())
+    )
+    bvd.save_releases(
+        releases.loc[releases["tag"].isin(["results-3151", "results-3086"])],
+        cache,
+    )
+    for tag in ("results-3151", "results-3086"):
+        shutil.copytree(fixtures / tag, cache / tag)
+    monkeypatch.setenv("BDBV_DATA_DIR", str(tmp_path))
+    release = rn.bvd_release(task)
+    assert release is not None
+    assert release.tag == "results-3086"
+
+    def fake(self: rn.RenewalModel, t: ForecastTask) -> rn.RenewalRun:
+        run = _fake_run(t, self.variant)
+        return replace(run, bvd=rn.bvd_record(rn.bvd_release(t)))
+
+    monkeypatch.setattr(rn.RenewalModel, "run", fake)
+    out = tmp_path / "fit"
+    record = rn.fit_renewal(
+        task, {"num_chains": 2}, out, variant="renewalbvd", config_name="bvd"
+    )
+    assert record["bvd"] == {
+        "tag": "results-3086",
+        "as_of": "2026-10-15",
+        "joint_max_rhat": 1.044,
+        "max_rhat": bvd.MAX_RHAT,
+        "skipped": [],
+    }
+    # No release qualifies: the record says so.
+    assert rn.bvd_record(None) == {"tag": None}
+    plain = rn.fit_renewal(
+        task,
+        {"num_chains": 2},
+        tmp_path / "main",
+        variant="renewal",
+        config_name="main",
+    )
+    assert "bvd" not in plain
 
 
 def test_single_patch_fits_each_location_on_its_own(

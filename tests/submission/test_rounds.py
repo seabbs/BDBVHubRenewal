@@ -5,7 +5,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from bdbvhubrenewal.submission.rounds import latest_run, make_round_pages
+from bdbvhubrenewal.cli import main
+from bdbvhubrenewal.submission.rounds import (
+    freeze_round,
+    latest_run,
+    make_round_pages,
+)
 
 REF = "2026-10-31"
 
@@ -94,3 +99,47 @@ def test_no_ledger_yet(tmp_path: Path) -> None:
     index = (docs / "submission/rounds/index.md").read_text()
     assert "yet" not in index
     assert make_round_pages(tmp_path / "missing", docs, gen) == []
+
+
+def test_freeze_round_writes_the_page_once(tmp_path: Path) -> None:
+    ledger = _ledger(tmp_path)
+    assert freeze_round(ledger, REF)
+    frozen = ledger / "pages" / f"{REF}.md"
+    page = frozen.read_text()
+    assert page.startswith(f"# Round {REF}")
+    assert (ledger / "pages" / f"{REF}.png").read_bytes() == b"png 10"
+    # A later run of the round, or new rendering code, never rewrites it.
+    (ledger / "archive" / REF / "10" / "nowcast.png").write_bytes(b"new")
+    assert not freeze_round(ledger, REF)
+    assert frozen.read_text() == page
+    assert (ledger / "pages" / f"{REF}.png").read_bytes() == b"png 10"
+
+
+def test_frozen_pages_are_copied_not_rebuilt(tmp_path: Path) -> None:
+    ledger = _ledger(tmp_path)
+    pages = ledger / "pages"
+    pages.mkdir()
+    (pages / f"{REF}.md").write_text("# Round frozen\n")
+    (pages / f"{REF}.png").write_bytes(b"frozen png")
+    docs, gen = tmp_path / "docs", tmp_path / "gen"
+    assert make_round_pages(ledger, docs, gen) == [REF, "2026-10-24"]
+    rounds = docs / "submission" / "rounds"
+    assert (rounds / f"{REF}.md").read_text() == "# Round frozen\n"
+    assert (rounds / f"{REF}.png").read_bytes() == b"frozen png"
+    # A round not yet frozen is still built from the ledger.
+    assert (rounds / "2026-10-24.md").read_text().startswith("# Round")
+
+
+def test_rounds_index_lists_rounds_by_date(tmp_path: Path) -> None:
+    docs, gen = tmp_path / "docs", tmp_path / "gen"
+    make_round_pages(_ledger(tmp_path), docs, gen)
+    index = (docs / "submission" / "rounds" / "index.md").read_text()
+    assert index.index(REF) < index.index("2026-10-24")
+
+
+def test_freeze_round_command(tmp_path: Path) -> None:
+    ledger = _ledger(tmp_path)
+    args = ["freeze-round", "--ledger", str(ledger), "--round", REF]
+    assert main(args) == 0
+    assert (ledger / "pages" / f"{REF}.md").exists()
+    assert main(args) == 0  # already frozen: nothing to do

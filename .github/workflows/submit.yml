@@ -5,7 +5,7 @@ name: Submit to the BDBV hub
 # CI: the gate below decides, and the PR body says what was submitted
 # and why. See ci/SETUP.md and ci/INTEGRATION.md.
 #
-#   detect -> prepare -> fit (main, fallback) -> triage -> [retry] ->
+#   detect -> prepare -> fit (main, renewalsp, bvd) -> triage -> [retry] ->
 #   gate (select + hubValidations) -> submit -> record -> outcome
 #
 # DRY_RUN is true unless the repo variable DRY_RUN is `false` or a manual
@@ -20,12 +20,14 @@ on:
     - cron: '0 23 * * 6'       # Saturday 23:00 UTC, as the window opens
     - cron: '0 2-23/3 * * 0,1' # every 3 hours on Sunday and Monday
     # Tuesday until 14:00 UTC, which leaves 540 minutes to the close for
-    # prepare, the main fit (about 1 to 1.5 hours, the fallback beside
+    # prepare, the main fit (about 1 to 1.5 hours, renewalsp beside
     # it), one retry of about the same length, and the gate. Each fit's
     # timeout stops 45 minutes short of the close, and the retry runs only
     # if it can finish in time (ci/policy.toml [timing]), so even a late
     # failure reaches the fallback or persistence before the close.
     - cron: '0 2-14/3 * * 2'
+    # Outside the window, only to freeze the pages of merged rounds.
+    - cron: '0 6 * * 3-5'
   workflow_dispatch:
     inputs:
       dry_run:
@@ -85,8 +87,8 @@ jobs:
       as_of: ${{ steps.detect.outputs.as_of }}
       dry_run: ${{ steps.mode.outputs.dry_run }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
       - name: Decide dry run or live
         id: mode
         env:
@@ -128,6 +130,30 @@ jobs:
           [ -n "$REFERENCE_DATE" ] && args+=(--reference-date "$REFERENCE_DATE")
           uv run --project "$CI_DIR" detect-new-vintage "${args[@]}"
 
+  # Whatever the data: a round whose hub pull request has merged gets its
+  # docs page written once to the ledger, and is never rebuilt after.
+  freeze:
+    name: Freeze merged rounds' pages
+    needs: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-forecast-env
+      - name: Freeze
+        id: freeze
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ci/steps/freeze.sh
+      - name: Rebuild the docs with the frozen pages
+        if: steps.freeze.outputs.frozen != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --ref main -R "$GITHUB_REPOSITORY"
+
   prepare:
     name: Pin inputs and build the persistence candidate
     needs: detect
@@ -136,6 +162,8 @@ jobs:
     timeout-minutes: 30
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
+      renewal: ${{ steps.tracks.outputs.renewal }}
+      baseline: ${{ steps.tracks.outputs.baseline }}
     env:
       HUB_REF: ${{ needs.detect.outputs.hub_ref }}
       AS_OF: ${{ needs.detect.outputs.as_of }}
@@ -143,14 +171,23 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GITHUB_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-forecast-env
       - name: Download data and build the persistence baseline
         env:
           EXPECTED_LOCATIONS: ${{ vars.EXPECTED_LOCATIONS }}
         run: ci/steps/prepare.sh
+      # Each hub model runs only when opted in (`submit = true` in
+      # config/hub.toml); seabbsrenewal also needs a model choice.
+      - name: Decide which hub models run
+        id: tracks
+        run: |
+          source ci/steps/lib.sh
+          uv run --project "$CI_DIR" python -m submission_ci.tracks \
+            --chosen "$MODEL"
       - name: List the primary fits
         id: matrix
+        if: steps.tracks.outputs.renewal == 'true'
         # With persistence chosen, the renewal candidates are fitted as
         # shadows and the chain is persistence alone. Each fit's timeout
         # leaves the gate time before the window closes.
@@ -162,17 +199,18 @@ jobs:
           uv run --project "$CI_DIR" python -m submission_ci.policy \
             --policy "$CI_DIR/policy.toml" --stage primary --hub-ref "$HUB_REF" \
             --model "$MODEL" $(deadline_args)
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: inputs
           path: |
             ${{ env.WORK }}/inputs
-            ${{ env.WORK }}/candidates/persistence
+            ${{ env.WORK }}/candidates
           retention-days: 7
 
   fit:
     name: Fit primary
     needs: [detect, prepare]
+    if: needs.prepare.outputs.renewal == 'true'
     uses: ./.github/workflows/fit-candidates.yml
     with:
       matrix: ${{ needs.prepare.outputs.matrix }}
@@ -183,20 +221,22 @@ jobs:
   triage:
     name: Decide on retries
     needs: [detect, prepare, fit]
-    if: ${{ !cancelled() && needs.prepare.result == 'success' }}
+    if: >-
+      ${{ !cancelled() && needs.prepare.result == 'success' &&
+      needs.prepare.outputs.renewal == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
       need_retry: ${{ steps.triage.outputs.need_retry }}
       matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/download-artifact@v8
         with:
           name: inputs
           path: ${{ env.WORK }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: candidate-*
           path: ${{ env.WORK }}/candidates
@@ -205,7 +245,7 @@ jobs:
       - name: Lay out the candidates
         run: ci/steps/unpack_candidates.sh
       # No refit when too little of the window is left for it and the
-      # gate: the chain then moves on to the fallback.
+      # gate: the chain then moves on to the single-patch fallback.
       - name: Triage
         id: triage
         env:
@@ -259,20 +299,20 @@ jobs:
       AS_OF: ${{ needs.detect.outputs.as_of }}
       REFERENCE_DATE: ${{ needs.detect.outputs.reference_date }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-forecast-env
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: inputs
           path: ${{ env.WORK }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: candidate-*
           path: ${{ env.WORK }}/candidates
       - name: Lay out the candidates
         run: ci/steps/unpack_candidates.sh
       # The hub at the commit the data came from, for hubValidations.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: ${{ env.HUB }}
           ref: ${{ env.HUB_REF }}
@@ -314,7 +354,7 @@ jobs:
           METADATA: ${{ env.WORK }}/metadata/${{ env.MODEL_ID }}.yml
           CHECK_WINDOW: ${{ needs.detect.outputs.dry_run == 'false' }}
         run: ci/steps/select.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: gate
@@ -344,9 +384,9 @@ jobs:
       SOURCE_SHA: ${{ github.sha }}
       MODEL_ID: ${{ needs.gate.outputs.model_id }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/download-artifact@v8
         with:
           name: gate
           path: ${{ env.WORK }}
@@ -379,7 +419,7 @@ jobs:
             cat "$WORK/gate/pr-body.md"
             echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: pr
@@ -389,12 +429,102 @@ jobs:
             ${{ env.WORK }}/gate/pr-outcome.txt
           retention-days: 90
 
+  # seabbsbaseline: persistence on a nowcast, falling back to plain
+  # persistence, under its own hub id. Apart from the renewal chain; both
+  # candidates were built in `prepare`.
+  baseline:
+    name: Submit seabbsbaseline
+    needs: [detect, prepare]
+    if: >-
+      ${{ !cancelled() && needs.prepare.result == 'success' &&
+      needs.prepare.outputs.baseline == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: hub-submission
+    outputs:
+      action: ${{ steps.track.outputs.action }}
+      pr_url: ${{ steps.track.outputs.pr_url }}
+      produced_by: ${{ steps.track.outputs.produced_by }}
+      skipped: ${{ steps.track.outputs.skipped }}
+    env:
+      HUB_REF: ${{ needs.detect.outputs.hub_ref }}
+      AS_OF: ${{ needs.detect.outputs.as_of }}
+      DATA_COMMIT: ${{ needs.detect.outputs.data_commit }}
+      REFERENCE_DATE: ${{ needs.detect.outputs.reference_date }}
+      DRY_RUN: ${{ needs.detect.outputs.dry_run }}
+      SOURCE_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-forecast-env
+      - uses: actions/download-artifact@v8
+        with:
+          name: inputs
+          path: ${{ env.WORK }}
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ env.HUB }}
+          ref: ${{ env.HUB_REF }}
+          path: output/hub-clone
+          sparse-checkout: |
+            hub-config
+            model-metadata
+      - uses: r-lib/actions/setup-r@v2
+        if: vars.HUB_VALIDATIONS != 'false'
+        with:
+          use-public-rspm: true
+          extra-repositories: https://hubverse-org.r-universe.dev
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        if: vars.HUB_VALIDATIONS != 'false'
+        with:
+          packages: any::hubValidations
+          dependencies: '"hard"'
+      - name: Authenticate as the bot
+        if: env.DRY_RUN == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.HUB_SUBMIT_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::HUB_SUBMIT_TOKEN is not set in the hub-submission environment"
+            exit 1
+          fi
+          gh auth setup-git
+          git config --global user.name "seabbs-bot"
+          git config --global user.email "signin@samabbott.co.uk"
+      - name: Check and submit
+        id: track
+        env:
+          GH_TOKEN: ${{ needs.detect.outputs.dry_run == 'false' && secrets.HUB_SUBMIT_TOKEN || github.token }}
+          VALIDATE: 'true'
+          R_VALIDATION: ${{ vars.HUB_VALIDATIONS != 'false' }}
+          HUB_PATH: output/hub-clone
+          CHECK_WINDOW: ${{ needs.detect.outputs.dry_run == 'false' }}
+        run: ci/steps/track.sh
+      - name: Show the PR body
+        if: always()
+        run: |
+          {
+            echo "<details><summary>seabbsbaseline PR body</summary>"
+            echo
+            cat "$WORK/track-persistencenow/gate/pr-body.md" 2> /dev/null
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: baseline-gate
+          path: |
+            ${{ env.WORK }}/track-persistencenow/gate
+            ${{ env.WORK }}/track-persistencenow/metadata
+          retention-days: 90
+
   record:
     name: Record the round in the ledger
-    needs: [detect, gate, submit]
+    needs: [detect, prepare, gate, submit, baseline]
     if: >-
       ${{ always() && needs.detect.outputs.should_run == 'true' &&
-      needs.detect.outputs.dry_run == 'false' }}
+      needs.detect.outputs.dry_run == 'false' &&
+      (needs.prepare.outputs.renewal == 'true' ||
+      needs.prepare.outputs.baseline == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -405,22 +535,32 @@ jobs:
     env:
       REFERENCE_DATE: ${{ needs.detect.outputs.reference_date }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/download-artifact@v8
+        if: needs.prepare.outputs.renewal == 'true'
         continue-on-error: true
         with:
           name: gate
           path: ${{ env.WORK }}
+      - uses: actions/download-artifact@v8
+        if: needs.prepare.outputs.baseline == 'true'
+        continue-on-error: true
+        with:
+          name: baseline-gate
+          path: ${{ env.WORK }}/baseline
+      # The round's status is seabbsrenewal's when it ran, otherwise
+      # seabbsbaseline's. seabbsbaseline's files are archived beside it.
       - name: Update the ledger and archive the round
         env:
           GH_TOKEN: ${{ github.token }}
           DATA_COMMIT: ${{ needs.detect.outputs.data_commit }}
           AS_OF: ${{ needs.detect.outputs.as_of }}
-          ACTION: ${{ needs.submit.outputs.action }}
-          PR_URL: ${{ needs.submit.outputs.pr_url }}
-          PRODUCED_BY: ${{ needs.gate.outputs.produced_by }}
-          SKIPPED: ${{ needs.gate.outputs.skipped }}
+          ACTION: ${{ needs.submit.outputs.action || needs.baseline.outputs.action }}
+          PR_URL: ${{ needs.submit.outputs.pr_url || needs.baseline.outputs.pr_url }}
+          PRODUCED_BY: ${{ needs.gate.outputs.produced_by || needs.baseline.outputs.produced_by }}
+          SKIPPED: ${{ needs.prepare.outputs.renewal == 'true' && needs.gate.outputs.skipped || needs.baseline.outputs.skipped }}
+          BASELINE_GATE: ${{ needs.prepare.outputs.baseline == 'true' && format('{0}/baseline/gate', env.WORK) || '' }}
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: ci/steps/record.sh
       - name: Rebuild the docs with this round's page
@@ -430,7 +570,7 @@ jobs:
 
   outcome:
     name: Submission outcome
-    needs: [detect, prepare, fit, triage, retry, gate, submit, record]
+    needs: [detect, prepare, fit, triage, retry, gate, submit, baseline, record]
     if: ${{ always() && needs.detect.outputs.should_run == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -440,6 +580,10 @@ jobs:
       # is opened anywhere.
       - name: Report
         env:
+          RENEWAL: ${{ needs.prepare.outputs.renewal }}
+          BASELINE: ${{ needs.prepare.outputs.baseline }}
+          BASELINE_BY: ${{ needs.baseline.outputs.produced_by }}
+          BASELINE_PR: ${{ needs.baseline.outputs.action }} ${{ needs.baseline.outputs.pr_url }}
           SELECTED: ${{ needs.gate.outputs.selected }}
           PRODUCED_BY: ${{ needs.gate.outputs.produced_by }}
           STATUS: ${{ needs.gate.outputs.status }}
@@ -454,7 +598,13 @@ jobs:
           {
             echo "## Round $REF"
             echo
-            if [ -z "$SELECTED" ]; then
+            [ "$RENEWAL" = true ] || [ "$BASELINE" = true ] \
+              || echo "No hub model is opted in (config/hub.toml)."
+            [ "$BASELINE" = true ] \
+              && echo "seabbsbaseline: **${BASELINE_BY:-not submitted}**, PR $BASELINE_PR"
+            if [ "$RENEWAL" != true ]; then
+              :
+            elif [ -z "$SELECTED" ]; then
               echo "**Round skipped.** No candidate cleared the checks; the"
               echo "gate job's summary and the \`gate\` artefact say why."
             else
@@ -464,7 +614,7 @@ jobs:
             fi
             [ -n "$failed" ] && echo "Failed jobs: $failed"
           } >> "$GITHUB_STEP_SUMMARY"
-          if [ -z "$SELECTED" ]; then
+          if [ "$RENEWAL" = true ] && [ -z "$SELECTED" ]; then
             echo "::error::round $REF skipped: every candidate was ruled out"
             exit 1
           fi
@@ -472,6 +622,6 @@ jobs:
             echo "::error::jobs failed: $failed"
             exit 1
           fi
-          case "$ACTION" in
-            skipped-*) echo "::error::PR not submitted: $ACTION"; exit 1 ;;
+          case "$ACTION $BASELINE_PR" in
+            *skipped-*) echo "::error::PR not submitted: $ACTION $BASELINE_PR"; exit 1 ;;
           esac

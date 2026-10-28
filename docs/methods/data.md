@@ -19,8 +19,8 @@ Backtest forecasts cover $h = -4, \dots, 3$.
 
 | Hub file | What it holds | Vintages |
 |---|---|---|
-| `target-data/time-series.csv` | Weekly confirmed cases by onset week, by province and nationally: observed, imputed and total. Also health zone totals, not modelled. | All, in one file |
-| `auxiliary-data/daily-confirmed-case.csv` | Daily cases by onset day, observed and imputed. | All, in one file |
+| `target-data/time-series.csv` | Weekly confirmed cases by onset week, by province and nationally: observed, imputed and total. Also health zone totals. | All, in one file |
+| `auxiliary-data/daily-confirmed-case.csv` | Daily cases by onset day, observed and imputed, by province and health zone. | All, in one file |
 | `auxiliary-data/weekly-reporting-delays-by-province.csv` | One row per known-onset case: province, onset week and onset-to-report delay. | Latest only; earlier ones from the archive folder and git history |
 | `auxiliary-data/locations.csv` | Location codes, names and parents. | Static |
 | `hub-config/*.json` | Rounds, tasks, output types and the metadata schema. | Copied at download |
@@ -53,7 +53,7 @@ Cases reach a vintage some days after report, so the cut-off is $A' = A - 3$ day
   So a case imputed to week $W$ counts as reported by $A'$ with probability $\frac{1}{7}\sum_{u} \hat G(A' - W + u)$, with $\hat G$ the pooled delay cdf.
 - **Delay data.** Rows whose report (taking the onset mid-week) falls by $A'$.
 
-The 3-day lag best matches the real vintages ([Data](../data.md#reconstructed-vintages)).
+The publication lag is 3 days ([Data](../data.md#reconstructed-vintages) compares it with the real vintages).
 Reconstructed vintages miss real revisions and changes in the hub's imputation, so scores on them are optimistic.
 
 ## Simulated vintages
@@ -74,4 +74,9 @@ The truth is every confirmed case by its true onset week.
 
 `renewalbvd` uses the Rt estimates in the public `results-<run>` releases of [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) (MIT licence, [Zenodo 10.5281/zenodo.20312758](https://doi.org/10.5281/zenodo.20312758)).
 These are the national $R_T$ draws, the patch summaries from 23 October and the release's data cut-off.
+Each forecast uses the newest release that existed at its cut-off, with data ending by the forecast date, whose fit converged.
+The convergence check is generous.
+The joint fit's worst R-hat must be at most 1.1 (`[bvd] max_rhat` in `config/backtest.toml`), and effective sample sizes are ignored.
+The R-hat is read from the fit diagnostics table in the release's rendered site (`site.zip`), and a release without a readable table is passed over for the next older one.
+Each fit records the release it used, its R-hat and why newer releases were skipped.
 Their use is on the [Model page](model.md#bvdoutbreaksize-informed).
