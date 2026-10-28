@@ -105,6 +105,30 @@ def test_retry_fits_the_time_budget(tmp_path: Path) -> None:
     assert retry["num_chains"] <= 4
 
 
+def test_chain_stays_within_the_three_models(tmp_path: Path) -> None:
+    # Sam (2026-10-28): renewal, its refit, then the independent
+    # single-patch fits (renewalsp) fitted beside main as the standby,
+    # then persistence. renewalbvd is a shadow. No separate fallback
+    # configuration.
+    pol = load_policy(POLICY_PATH)
+    assert [(c.id, c.kind) for c in pol.chain()] == [
+        ("main", "main"),
+        ("retry-1", "retry"),
+        ("renewalsp", "fallback"),
+        ("persistence", "persistence"),
+    ]
+    assert "fallback" not in {c.config for c in pol.candidates}
+    root = repo(tmp_path)
+    primary = {e["id"]: e for e in matrix(pol, "primary", root, "hub")}
+    assert list(primary) == ["main", "renewalsp", "bvd"]
+    # The model each leg runs: the chosen model unless the candidate
+    # names its own.
+    assert primary["main"]["model"] == ""
+    assert primary["renewalsp"]["model"] == "renewalsp"
+    assert primary["bvd"]["model"] == "renewalbvd"
+    assert matrix(pol, "retry", root, "hub")[0]["model"] == ""
+
+
 def test_ci_sampler_settings(tmp_path: Path) -> None:
     # Sam (2026-10-28): 2 chains of 500 warm-up and 500 draws for every
     # fitted candidate; the retry differs by its target acceptance and
@@ -165,7 +189,7 @@ def test_persistence_chosen_makes_the_renewal_candidates_shadows(
     assert [c.id for c in pol.chain()] == ["persistence"]
     root = repo(tmp_path)
     primary = [e["id"] for e in matrix(pol, "primary", root, "hub")]
-    assert primary == ["main", "fallback", "bvd"]
+    assert primary == ["main", "renewalsp", "bvd"]
     assert matrix(pol, "retry", root, "hub") == []
     assert all(c.kind == "shadow" for c in pol.candidates if c.id in primary)
     # Any other choice keeps the full chain.
