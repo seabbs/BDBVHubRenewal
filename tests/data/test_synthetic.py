@@ -149,3 +149,45 @@ def test_simulated_onsets_follow_the_model_renewal(outbreak) -> None:  # type: i
         list(s.locations)
     ].to_numpy()
     np.testing.assert_allclose(onsets, np.asarray(x) * pop, rtol=1e-4)
+
+
+def _rows(
+    vintage: str, onset_weeks: list[str], delays: list[int]
+) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "vintage": vintage,
+            "location": "CD-IT",
+            "location_name": "Ituri",
+            "onset_week": onset_weeks,
+            "delay": delays,
+        }
+    )
+
+
+def test_publication_lag_pmf_from_rows_new_in_later_vintages() -> None:
+    from bdbv_hub_renewal.data.reconstruct import publication_lag_pmf
+
+    old = _rows("2026-10-10", ["2026-09-05"] * 5, [3] * 5)
+    # Two rows reported long ago appear late, three recent ones on time.
+    new = pd.concat(
+        [
+            old.assign(vintage="2026-10-17"),
+            _rows("2026-10-17", ["2026-08-15", "2026-08-15"], [2, 2]),
+            _rows("2026-10-17", ["2026-10-17"] * 3, [0, 0, 0]),
+        ]
+    )
+    later = _rows("2026-10-24", ["2026-10-24"], [0])
+    pmf = publication_lag_pmf(pd.concat([old, new, later]), "2026-10-17")
+    assert pmf is not None
+    assert pmf.shape == (61,)
+    assert pmf.sum() == pytest.approx(1.0)
+    # Report dates about 60 days old go to the last cell.
+    assert pmf[-1] == pytest.approx(0.4, abs=0.05)
+    assert pmf[:7].sum() == pytest.approx(0.6, abs=0.05)
+    # The 10-24 file is after the forecast date, so it is not used.
+    assert publication_lag_pmf(pd.concat([old, new]), "2026-10-17") == (
+        pytest.approx(pmf)
+    )
+    # With no earlier pair there is no estimate.
+    assert publication_lag_pmf(pd.concat([old, new]), "2026-10-10") is None
