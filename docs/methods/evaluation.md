@@ -84,6 +84,8 @@ Each real vintage before the latest is forecast, and every zone of a forecast pr
 `bdbvhubrenewal zone-backtest` runs it and writes `results/zone-scores.csv`.
 Against 2026-10-24, the zones split from persistence have a WIS 0.83 times and a log WIS 0.88 times those of zone persistence, over the three earlier real vintages.
 Their WIS is lower at every horizon from $-2$, and ties on the earlier weeks that both copy from the data.
+Split from `persistencenow`, the ratios are 0.94 and 0.91.
+They are lowest in the nowcast weeks and near one from horizon 0, where `persistencenow` also scores worse than persistence for the provinces.
 
 ## Comparison with hub forecasts
 
