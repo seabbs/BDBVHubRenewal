@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.completeness import share_from_cdf, truncated_delay_cdf
+from bdbvhubrenewal.data.triangle import delay_pmf, reporting_triangle
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import (
     ForecastTask,
@@ -16,7 +16,7 @@ from bdbvhubrenewal.forecasters import (
     get_model,
     list_models,
 )
-from bdbvhubrenewal.forecasters.persistence import nowcast_totals
+from bdbvhubrenewal.forecasters.persistence import nowcast_draws
 
 
 def _task(
@@ -51,18 +51,22 @@ def test_registry_has_persistencenow_and_not_the_lag_variant() -> None:
     assert isinstance(get_model("persistencenow"), PersistenceNow)
 
 
-def test_nowcast_totals_scale_by_the_reported_share() -> None:
+def test_nowcast_draws_add_negative_binomial_counts() -> None:
     rng = np.random.default_rng(1)
     observed = np.array([0.0, 40.0, 40.0, 40.0])
-    share = np.array([0.5, 1.0, 0.8, 0.4])
-    draws = nowcast_totals(observed, np.tile(share, (4000, 1)), rng)
-    assert draws.shape == (4000, 4)
-    # Never below the published count, nothing added once fully reported.
+    ratio = np.array([1.0, 0.0, 0.25, 1.5])
+    size = np.array([5.0, 5.0, np.inf, 5.0])
+    draws = nowcast_draws(observed, ratio, size, 20000, rng)
+    assert draws.shape == (20000, 4)
+    # Never below the published count; nothing added without a ratio.
     assert (draws >= observed).all()
     assert (draws[:, :2] == observed[:2]).all()
-    # Mean of the negative binomial posterior is observed / share.
-    assert np.allclose(draws[:, 2:].mean(axis=0), [50, 100], rtol=0.05)
-    assert draws[:, 3].std() > draws[:, 2].std()
+    added = draws[:, 2:] - observed[2:]
+    # The point nowcast is the mean of what is added.
+    assert np.allclose(added.mean(axis=0), [10, 60], rtol=0.05)
+    # Poisson with an infinite size, overdispersed otherwise.
+    assert added[:, 0].var() == pytest.approx(10, rel=0.1)
+    assert added[:, 1].var() == pytest.approx(60 + 60**2 / 5, rel=0.1)
 
 
 def test_persistencenow_output(task: ForecastTask) -> None:
@@ -165,9 +169,9 @@ def test_persistencenow_predicts_counts_as_reported_later(
     assert published < by_sample["value"].median()
     assert by_sample["value"].median() < by_sample["value_final"].median()
     assert task.delays is not None
-    cdf = truncated_delay_cdf(task.delays, "2026-10-09")
-    assert cdf is not None
-    s_v, s_t = share_from_cdf(cdf, [6, 21])
+    _, tri = reporting_triangle(task.delays, "2026-10-09")
+    cdf = np.cumsum(delay_pmf(tri[-14:]))
+    s_v, s_t = cdf[6], cdf[21]
     expected = published + (by_sample["value_final"].median() - published) * (
         (s_t - s_v) / (1 - s_v)
     )

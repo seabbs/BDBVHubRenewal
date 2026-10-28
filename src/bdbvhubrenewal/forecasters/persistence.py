@@ -35,31 +35,28 @@ published with the vintage), and taking at least the count already
 published for that week.
 There are no such rows when the vintage has no delay data.
 
-`PersistenceNow` (`persistencenow`) first nowcasts the recent weeks.
-With $s(t)$ the share of a week's final total reported $t$ days after it
-ends, each week $w$ published $t_w$ days before the vintage with total
-$Y(w)$ gets
+`PersistenceNow` (`persistencenow`) first nowcasts the recent weeks, with
+the baselinenowcast method (`bdbvhubrenewal.data.triangle`).
+A chain ladder on the reporting triangle of the hub's delay file, pooled
+over provinces, gives for each open onset week $w$ the ratio $r(w)$ of
+the cases still to come to those reported.
+Past nowcasts of the same triangle give a negative binomial size
+$\phi_h$ for each horizon $h$.
+Each week's published total $Y(w)$, known plus imputed, then gets
 
 $$
 C(w) = Y(w) + U(w), \quad
-U(w) \sim \text{NegBin}\big(Y(w), s(t_w)\big),
+U(w) \sim \text{NegBin}\big(\text{mean } r(w) Y(w),\ \text{size } \phi_h\big),
 $$
 
-the number of failures before $Y(w)$ successes, with mean
-$Y(w)\{1 - s(t_w)\}/s(t_w)$, as in the EpidemicDates nowcast.
-$s$ comes from the delays of onset weeks in the last `delay_window` days,
-corrected for right truncation
-(`bdbvhubrenewal.data.completeness.truncated_delay_cdf`), so it follows
-delays that change over time.
-Each sample redraws $s$ from a bootstrap of those delays.
-The last week with $s(t_w) \ge$ `min_share` takes the place of the last
-complete week, and each sample carries its own nowcast forward as above.
+the pooled delay applied to each place.
+The last week with a share reported $1 / \{1 + r(w)\} \ge$ `min_share`
+takes the place of the last complete week, and each sample carries its
+own nowcast forward as above.
 Later weeks are at least the published total.
-$s$ uses the delays of known onsets and a 3-day publication lag only.
-Late rows in the delay files are mostly onsets recorded later for cases
-already counted as imputed, which leave the total unchanged.
-If the vintage has fewer than `min_delays` delays in the window, it is
-`Persistence`.
+If the delay data have no complete onset week or fewer than `min_delays`
+cases in the last `n_history` weeks, or give fewer than `min_retro` past
+nowcasts, it is `Persistence`.
 """
 
 from __future__ import annotations
@@ -70,13 +67,16 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.completeness import (
-    reported_share,
-    share_from_cdf,
-    truncated_delay_cdf,
-)
+from bdbvhubrenewal.data.completeness import reported_share
 from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.delays import EmpiricalDelayModel
+from bdbvhubrenewal.data.triangle import (
+    chainladder_fill,
+    delay_pmf,
+    fit_nb_size,
+    reporting_triangle,
+    retrospective_errors,
+)
 from bdbvhubrenewal.forecasters.base import (
     SAMPLE_COLUMNS,
     ForecastTask,
@@ -88,7 +88,7 @@ __all__ = [
     "PersistenceNow",
     "completeness_lag",
     "last_complete_week",
-    "nowcast_totals",
+    "nowcast_draws",
 ]
 
 
@@ -280,56 +280,44 @@ def _step(
     return log_level, rng.poisson(np.expm1(np.maximum(log_level, 0)))
 
 
-def nowcast_totals(
-    observed: np.ndarray, share: np.ndarray, rng: np.random.Generator
+def nowcast_draws(
+    observed: np.ndarray,
+    ratio: np.ndarray,
+    size: np.ndarray,
+    n: int,
+    rng: np.random.Generator,
 ) -> np.ndarray:
-    r"""Draw final totals from published totals and the share reported.
+    r"""Draw final totals from published totals and point nowcast ratios.
 
-    Each draw is $Y + U$ with $U \sim \text{NegBin}(Y, s)$, the number
-    of failures before $Y$ successes with success probability $s$.
-    This is the posterior of the final total $C$ given $Y \sim
-    \text{Binomial}(C, s)$ and a prior proportional to $1 / C$, with
-    mean $Y / s$.
-    Weeks with nothing published, or fully reported, add nothing.
+    Each draw is $Y + U$ with $U$ negative binomial with mean $r Y$ and
+    size $\phi$, or Poisson where $\phi$ is infinite.
 
     Parameters
     ----------
     observed : numpy.ndarray
         Published totals $Y$, one per week.
-    share : numpy.ndarray
-        Shares reported $s$, one row per sample and one column per week.
+    ratio : numpy.ndarray
+        Cases still to come per case reported, $r$, one per week.
+    size : numpy.ndarray
+        Negative binomial size $\phi$, one per week.
+    n : int
+        Number of draws.
     rng : numpy.random.Generator
         Random generator.
 
     Returns
     -------
     numpy.ndarray
-        Final totals, shaped as `share`.
+        Final totals, one row per draw and one column per week.
     """
-    obs = np.broadcast_to(np.asarray(observed, dtype=float), share.shape)
-    p = np.clip(share, 1e-12, 1.0)
-    unseen = np.zeros(share.shape)
-    draw = (obs > 0) & (p < 1)
-    unseen[draw] = rng.negative_binomial(obs[draw], p[draw])
-    return obs + unseen
-
-
-def _bootstrap_shares(
-    rows: pd.DataFrame,
-    vintage: str,
-    days: np.ndarray,
-    n: int,
-    rng: np.random.Generator,
-    window: int,
-) -> np.ndarray:
-    """Return the share reported for each sample, over resampled delays."""
-    out = np.empty((n, days.size))
-    for b in range(n):
-        pick = rows.iloc[rng.integers(0, len(rows), len(rows))]
-        cdf = truncated_delay_cdf(pick, vintage, window)
-        assert cdf is not None
-        out[b] = share_from_cdf(cdf, days)
-    return out
+    mean = np.broadcast_to(observed * ratio, (n, observed.size))
+    phi = np.broadcast_to(size, (n, observed.size))
+    added = np.zeros((n, observed.size))
+    pois = (mean > 0) & ~np.isfinite(phi)
+    added[pois] = rng.poisson(mean[pois])
+    nb = (mean > 0) & np.isfinite(phi)
+    added[nb] = rng.negative_binomial(phi[nb], phi[nb] / (phi[nb] + mean[nb]))
+    return observed + added
 
 
 @dataclass
@@ -341,19 +329,25 @@ class PersistenceNow(Persistence):
     name : str
         Model name.
     min_share : float
-        Smallest share reported, $s(t_w)$, for a week to be nowcast. The
-        last such week is carried forward.
-    delay_window : int
-        Days of onset weeks whose delays give $s$.
+        Smallest share reported for a week's nowcast to be carried
+        forward. The last such week is.
+    n_history : int
+        Onset weeks of the reporting triangle each chain ladder uses.
+    n_retro : int
+        Past nowcasts to fit the negative binomial sizes to.
+    min_retro : int
+        Fewest past nowcasts to nowcast at all.
     min_delays : int
-        Fewest delays in the window to nowcast.
+        Fewest delays in the chain ladder's onset weeks to nowcast at all.
 
     See `Persistence` for the other attributes.
     """
 
     name: str = "persistencenow"
     min_share: float = 0.5
-    delay_window: int = 84
+    n_history: int = 14
+    n_retro: int = 8
+    min_retro: int = 3
     min_delays: int = 50
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
@@ -373,12 +367,21 @@ class PersistenceNow(Persistence):
         if task.delays is None or task.delays.empty:
             return super().forecast(task)
         delay_vintage = str(task.delays["vintage"].max())
-        rows = task.delays.loc[task.delays["vintage"] == delay_vintage]
-        age = pd.Timestamp(delay_vintage) - pd.to_datetime(rows["onset_week"])
-        recent = rows.loc[(age.dt.days < self.delay_window).to_numpy()]
-        cdf = truncated_delay_cdf(recent, delay_vintage, self.delay_window)
-        if cdf is None or len(recent) < self.min_delays:
+        tri_weeks, tri = reporting_triangle(task.delays, delay_vintage)
+        hist = tri[-self.n_history :]
+        obs, pred = retrospective_errors(tri, self.n_retro, self.n_history)
+        complete = (~np.isnan(hist)).all(axis=1).any()
+        enough = np.nansum(hist) >= self.min_delays
+        if len(hist) < self.n_history or not complete or not enough:
             return super().forecast(task)
+        if obs.shape[0] < self.min_retro:
+            return super().forecast(task)
+        filled = chainladder_fill(hist)
+        reported = np.nansum(hist, axis=1)
+        to_come = filled.sum(axis=1) - reported
+        ratio_tri = np.where(reported > 0, to_come / np.maximum(reported, 1), 0)
+        sizes = fit_nb_size(obs, pred)
+        cdf = np.cumsum(delay_pmf(hist))
         weeks = list(task.target_end_dates)
         ends = pd.date_range(
             min(task.target["target_end_date"].min(), weeks[0]),
@@ -386,23 +389,29 @@ class PersistenceNow(Persistence):
             freq="7D",
         )
         grid = [d.date().isoformat() for d in ends]
-        dates = (task.vintage, *task.report_by)
-        days = np.concatenate(
-            [(pd.Timestamp(d) - ends).days.to_numpy() for d in dates]
-        ).astype(np.int64)
-        point = share_from_cdf(cdf, days[: len(grid)])
-        nowcast = np.flatnonzero(point >= self.min_share)
-        if nowcast.size == 0:
+        # Ratio and size of each grid week; weeks before the history are
+        # complete, weeks after the delay vintage are not nowcast.
+        ratio, size = np.zeros(len(grid)), np.full(len(grid), np.inf)
+        share = np.where(np.array(grid) <= tri_weeks[0], 1.0, 0.0)
+        for i, week in enumerate(tri_weeks[-self.n_history :]):
+            if week in grid:
+                j = grid.index(week)
+                h = self.n_history - 1 - i
+                ratio[j] = ratio_tri[i]
+                size[j] = sizes[h] if h < sizes.size else np.inf
+                share[j] = 1.0 / (1.0 + ratio_tri[i])
+        share[np.array(grid) < tri_weeks[-self.n_history]] = 1.0
+        anchor = np.flatnonzero(share >= self.min_share)
+        if anchor.size == 0:
             return super().forecast(task)
-        last = int(nowcast[-1])
+        last = int(anchor[-1])
+        ratio[last + 1 :] = 0.0
         rng = task.rng()
         n = task.n_samples
-        shares = _bootstrap_shares(
-            recent, delay_vintage, days, n, rng, self.delay_window
-        )
-        s_v = shares[:, : len(grid)]
         cols = [grid.index(w) for w in weeks]
-        final, reported = [], []
+        end = pd.Timestamp(delay_vintage)
+        age = (end - ends).days.to_numpy()
+        final, as_of = [], []
         for loc in task.locations:
             seen = (
                 task.target.loc[task.target["location"] == loc]
@@ -410,34 +419,35 @@ class PersistenceNow(Persistence):
                 .reindex(grid, fill_value=0)
                 .to_numpy(dtype=float)
             )
-            totals = nowcast_totals(
-                seen, np.where(point >= self.min_share, s_v, 1.0), rng
-            )
-            sd = self._spread(seen[: last + 1] / point[: last + 1])
+            totals = nowcast_draws(seen, ratio, size, n, rng)
+            sd = self._spread(seen[: last + 1] * (1 + ratio[: last + 1]))
             log_level = np.log1p(totals[:, last])
             for j in range(last + 1, len(grid)):
                 log_level, draw = _step(log_level, sd, rng)
                 totals[:, j] = np.maximum(draw, seen[j])
             final.append(_frame(loc, weeks, totals[:, cols]))
-            for k, date in enumerate(task.report_by, start=1):
-                due = [c for c in cols if grid[c] <= date]
-                s_t = shares[:, k * len(grid) : (k + 1) * len(grid)]
-                left = np.maximum(1.0 - s_v, 1e-12)
-                q = np.clip((s_t - s_v) / left, 0.0, 1.0)
+            for date in task.report_by:
+                later = (pd.Timestamp(date) - ends).days.to_numpy()
+                s_v = _share(cdf, age)
+                s_t = _share(cdf, later)
+                q = np.clip((s_t - s_v) / np.maximum(1 - s_v, 1e-12), 0, 1)
                 q = np.where(s_v >= 1.0, 1.0, q)
                 extra = rng.binomial((totals - seen).astype(np.int64), q)
-                counts = (seen + extra)[:, due]
-                reported.append(
-                    _frame(loc, [grid[c] for c in due], counts).assign(
-                        as_of=date
-                    )
+                due = [c for c in cols if grid[c] <= date]
+                as_of.append(
+                    _frame(
+                        loc, [grid[c] for c in due], (seen + extra)[:, due]
+                    ).assign(as_of=date)
                 )
         out = pd.concat(final, ignore_index=True)[list(SAMPLE_COLUMNS)]
         if not task.report_by:
             return out
-        return pd.concat(
-            [out.assign(as_of=np.nan), *reported], ignore_index=True
-        )
+        return pd.concat([out.assign(as_of=np.nan), *as_of], ignore_index=True)
+
+
+def _share(cdf: np.ndarray, age: np.ndarray) -> np.ndarray:
+    """Share of a week's cases published `age` days after it ends."""
+    return np.where(age < 0, 0.0, cdf[np.clip(age, 0, cdf.size - 1)])
 
 
 def _frame(loc: str, weeks: list[str], values: np.ndarray) -> pd.DataFrame:
