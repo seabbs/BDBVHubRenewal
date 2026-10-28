@@ -298,30 +298,31 @@ The median has no growth and weeks up to $c$ are still revised upwards, so persi
 
 ### Persistence on a nowcast
 
-`persistencenow` nowcasts the recent weeks with a Python port of [baselinenowcast](https://github.com/epinowcast/baselinenowcast), then applies persistence to each nowcast draw.
+`persistencenow` nowcasts the recent weeks with a Python port of [baselinenowcast](https://github.com/epinowcast/baselinenowcast), then runs the hub baseline forward from each nowcast draw.
 Tests check the port's delay, point nowcast and negative binomial sizes against baselinenowcast 0.2.2 on fixed triangles, and a CI job regenerates those fixtures with the R package (`scripts/baselinenowcast_fixtures.R`).
 
+**Nowcast.**
 The reporting triangle $n(W, d)$ counts the cases in the vintage's delay file by onset week $W$ and delay $d$ in days, up to 35 days.
-Ituri and Nord-Kivu, with at least 50 delays a week, each have their own triangle. The other provinces borrow the triangle pooled over all provinces, as baselinenowcast borrows a delay from another triangle.
 A case is published on day $W + d$, its onset mid-week plus its delay plus a 3-day publication lag, so cell $(W, d)$ is observed if $W + d \le T_v$.
-On the last 6 onset weeks, a chain ladder fills the missing cells column by column,
+On the last 6 onset weeks, a chain ladder gives the delay pmf $p$, and each open row is filled from it as baselinenowcast's `apply_delay` does,
 
 $$
-\hat n(W, d) = \frac{\sum_{W' \in A_d} n(W', d)}{\sum_{W' \in A_d} \sum_{d' < d} n(W', d')} \sum_{d' < d} \hat n(W, d'),
+\hat n(W, d) = \frac{x + 1 - F(d - 1)}{F(d - 1)}\, p(d),
 $$
 
-with $A_d$ the weeks where delay $d$ is observed.
-Week $w$ gets the ratio $r(w)$ of its filled cells to its observed cells.
+with $F$ the cdf of $p$ and $x$ the row's sum over earlier delays, filled as it goes.
 The same is done on the triangle cut back to each of the 8 previous weeks.
-Comparing what each of those nowcasts expected to be added to week $w$ with what has been added since gives a negative binomial size $\phi_h$ for each horizon $h$, fitted by maximum likelihood.
-Each province's delay is applied to its published total, known plus imputed, and its cases still to come are drawn on their own:
+Comparing what each of those nowcasts expected to be added with what has been added since gives a negative binomial size $\phi_h$ for each horizon $h$.
+Ituri and Nord-Kivu, with at least 50 delays a week, use their own $p$ and $\phi_h$.
+The other provinces borrow those of the triangle pooled over provinces and apply them to their own triangle, as baselinenowcast borrows a delay from another triangle.
+A province's filled row, from $K$ cases so far to $\hat K$, scales its published total $Y_{p,v}(w)$, known plus imputed, and the cases still to come are
 
 $$
-U_{p,k}(w) \sim \text{NegBin}\big(\text{mean } r_p(w)\, Y_{p,v}(w),\ \text{size } \phi_{p,h(w)}\big).
+U_{p,k}(w) \sim \text{NegBin}\Big(\text{mean } Y_{p,v}(w) \big(\hat K / K - 1\big),\ \text{size } \phi_{p,h(w)}\Big).
 $$
 
-On reconstructed vintages, 6 weeks beat 4, 8 and 14 for the nowcast weeks (national WIS 20.5, 25.7, 21.9 and 27.3).
-Own triangles for Ituri and Nord-Kivu and the pooled triangle for all score about the same.
+A row with no cases yet adds what `apply_delay` expects for it.
+On reconstructed vintages, 6 weeks of history beat 4, 8 and 14 (national WIS of the nowcast weeks 20.5, 25.7, 21.9 and 27.3), and own and pooled delays score about the same.
 
 The hub re-imputes missing onsets at each vintage, so totals can also fall.
 Each province adds a revision $E_{p,k}(w) = A - B$ with $A, B \sim \text{Poisson}\{\kappa I_{p,v}(w)/2\}$, so its variance is $\kappa I_{p,v}(w)$:
@@ -335,23 +336,19 @@ $$
 The sums run over consecutive vintages $a < b$ up to $T_v$ and the weeks that ended at least 63 days before $a$.
 So $C_{p,k}(w)$ can fall below the published total, but not below the known onsets.
 
-The last week with $1/\{1 + r(w)\} \ge 0.5$ under the pooled triangle takes the place of $c$, and persistence runs from $C_{p,k}(c)$ in each sample $k$, with its spread at $h$ steps scaled by $\omega_h$:
+**Forecast.**
+From $c$, the latest week with at least half its cases reported under the pooled delay, each sample follows the baseline of the [COVID-19 Forecast Hub](https://github.com/reichlab/covidModels) and FluSight on the log scale, as [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) does for its persistence baseline:
 
 $$
-\log\{1 + \lambda_{p,k}(c + h)\} = \max\Big(0,\ \log\{1 + C_{p,k}(c)\} + \sum_{j=1}^{h} \epsilon_{p,j}\Big),
+\log\{1 + \tilde y_{p,k}(c + h)\} = \log\{1 + C_{p,k}(c)\} + \sum_{j=1}^{h} \delta_{p,k,j},
 \qquad
-\operatorname{Var}\Big(\sum_{j=1}^{h} \epsilon_{p,j}\Big) = \omega_h^2 h \sigma_p^2,
+\delta_{p,k,j} \sim \text{Uniform}\{\pm \Delta_p\}.
 $$
 
-$$
-\tilde y_{p,k}(c + h) = \max\big\{\text{Poisson}(\lambda_{p,k}(c + h)),\ K_{p,v}(c + h)\big\}.
-$$
-
-$\sigma_p$ is taken as for `persistence`, from $Y_{p,v}(1 + r)$ over the 8 weeks up to $c$.
-$\omega_h$ calibrates the walk on past errors, as baselinenowcast calibrates its nowcast.
-From each earlier vintage, each province with a nowcast level $L \ge 10$ gives $z = \{\log(1 + y) - \log(1 + L)\}/(\sigma \sqrt h)$ against its count $y$ in vintage $v$, for weeks at least 95% reported by then.
-Then $\omega_h^2 = (\sum z^2 + 10)/(n_h + 10)$, which shrinks to 1 when there are few errors.
-Only data available at $T_v$ are used.
+$\Delta_p$ are the weekly changes in $\log(1 + \hat y_p)$ over the 8 weeks up to $c$, with $\hat y_p$ the point nowcast.
+With their negatives, the median stays at the nowcast and the spread grows with the horizon.
+With fewer than 3 changes the forecast is Poisson around the nowcast.
+Forecasts are rounded and kept at least the known onsets.
 Counts reported by a later date $T$ are $Y_{p,v}(w) + \text{Binomial}\big(\max(D, 0),\ q\big) + \min(D, 0)$, with $D = C_{p,k}(w) - Y_{p,v}(w)$ and $q$ the share of the remaining delay mass of the province's pmf that is published by $T$.
 Late rows in the delay files are mostly onsets recorded later for cases already counted as imputed, so the publication lag has no long tail.
 Without a complete onset week or 50 cases in the last 6 weeks, or with fewer than 3 past nowcasts, `persistencenow` is `persistence`.
