@@ -745,7 +745,7 @@ FUNDING: Final = (
 """Sam Abbott's HPRU funding statement (`team_funding` in the metadata)."""
 
 METADATA_DEFAULTS: Final[dict[str, Any]] = {
-    "team_name": "EpiForecasts",
+    "team_name": "seabbs",
     "team_abbr": TEAM_ABBR,
     "model_contributors": [
         {
