@@ -54,7 +54,7 @@ You need Python 3.13 or later, [uv](https://docs.astral.sh/uv/) and [Task](https
 
 ```bash
 task setup             # install the package, PyRenew and the dev tools
-task test              # run the tests (task test-slow runs small model fits)
+task test              # run the tests (task test-all adds small model fits)
 task lint              # ruff and mypy
 task data              # download every hub vintage and rebuild data/
 task backtest          # development backtest and recovery check
@@ -69,6 +69,8 @@ task ci-dry            # dry run of the submission workflow on fixtures
 task submission-preflight  # list what a live submission still needs
 task docs              # build the docs site into _site/
 ```
+
+[CONTRIBUTING.md](CONTRIBUTING.md) lists the checks to run before sending a change.
 
 The tidy data in `data/` and the backtest results in `results/` are committed, so the docs build from a clean clone without refitting.
 The [Getting started](https://seabbs.github.io/BDBVHubRenewal/getting-started/) page walks through a small fit.
