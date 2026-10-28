@@ -48,7 +48,6 @@ from bdbv_hub_renewal.forecasters.base import ForecastTask  # noqa: E402
 from bdbv_hub_renewal.forecasters.persistence import Persistence  # noqa: E402
 from bdbv_hub_renewal.forecasters.renewal import (  # noqa: E402
     VARIANTS,
-    RenewalModel,
     bvd_rows,
     chain_diagnostics,
     parameter_diagnostics,
@@ -97,7 +96,13 @@ def run_nuts(model, data, sampler):
 adapter.run_nuts = run_nuts
 SIM_DAYS = (166, 206)
 SIM_LOCATIONS = ("CD-IT", "CD-NK", "CD-HU", "CD-TO", "CD-BU", "CD-SK")
-REAL_FIT, REAL_TRUTH = "2026-10-09", "2026-10-24"
+REAL_ORIGINS = ("2026-08-18", "2026-10-09", "2026-10-17")
+REAL_TRUTH = "2026-10-24"
+COMPLETE_K = 4
+"""Weeks ending at least this many weeks before the truth vintage count
+as complete; the complete-weeks scores use only those."""
+SP_MIN_CASES = 10
+"""renewalsp fits only locations with at least this many cases."""
 SAMPLER = {
     "num_warmup": 300,
     "num_samples": 300,
@@ -174,7 +179,8 @@ DECISIONS: dict[str, str] = {
     "renewal future Rt held": "An option for the backtest: level with the "
     "walk, slightly better on the real vintage.",
     "renewal per-origin importation": "An option for the backtest: level "
-    "with one shared share and fewer depth-cap hits on real data.",
+    "with one shared share; its lower real depth-cap share is one chain "
+    "capped and one not, not better mixing.",
     "renewal linear Rt knots": "Dropped: worse on the real vintage and no "
     "gain on simulated data.",
     "renewalbvd": "Shadow candidate: best on simulated data with a "
@@ -243,17 +249,26 @@ def synthetic_bvd(outbreak, vintage: str, seed: int = 7) -> pd.DataFrame:
     )  # fmt: skip
 
 
-def scores(samples: pd.DataFrame, truth: pd.Series) -> dict[str, float]:
+def scores(
+    samples: pd.DataFrame,
+    truth: pd.Series,
+    truth_as_of: str | None = None,
+) -> dict[str, float]:
     """CRPS and 50%/90% coverage, nowcast and forecast weeks apart.
 
-    National uses `CD` rows when the samples have them (a model's own
-    national fit), else the sum of the provinces. Provinces are the fixed
-    set with any case in the scored weeks, with a missing forecast taken
-    as zero, so every rung and persistence score the same rows.
+    Only weeks present in the truth are scored. National uses `CD` rows
+    when the samples have them (a model's own national fit), else the sum
+    of the provinces. Provinces are the fixed set with any case in the
+    scored weeks, with a missing forecast taken as zero, so every rung and
+    persistence score the same rows. With `truth_as_of`, CRPS is also
+    given over complete weeks only: those ending at least `COMPLETE_K`
+    weeks before it.
     """
     weeks_ = sorted(set(samples["target_end_date"]))
     n = int(samples["sample"].max())
     now = weeks_[-4]
+    in_truth = {w for (_, w) in truth.index}
+    scored = [w for w in weeks_ if w in in_truth]
     if (samples["location"] == "CD").any():
         nat = samples.loc[samples["location"] == "CD"]
     else:
@@ -265,7 +280,7 @@ def scores(samples: pd.DataFrame, truth: pd.Series) -> dict[str, float]:
         {
             loc
             for (loc, w), v in truth.items()
-            if loc != "CD" and w in weeks_ and v > 0
+            if loc != "CD" and w in scored and v > 0
         }
     )
     by = {
@@ -273,42 +288,84 @@ def scores(samples: pd.DataFrame, truth: pd.Series) -> dict[str, float]:
         for k, g in samples.groupby(["location", "target_end_date"])
     }
     rows = []
-    for w in weeks_:
+    for w in scored:
         rows.append(("national", w, truth.get(("CD", w), 0.0), nat[w]))
         for loc in provinces:
             x = by.get((loc, w), np.zeros(n))
             rows.append(("province", w, truth.get((loc, w), 0.0), x))
+    complete = None
+    if truth_as_of is not None:
+        complete = (
+            (pd.Timestamp(truth_as_of) - pd.Timedelta(weeks=COMPLETE_K))
+            .date()
+            .isoformat()
+        )
     out: dict[str, float] = {}
     for level in ("national", "province"):
         sel = [r for r in rows if r[0] == level]
         out[f"crps_{level}"] = float(
             np.mean([crps_sample(y, x) for _, _, y, x in sel])
         )
+        if complete is not None:
+            done = [r for r in sel if r[1] <= complete]
+            out[f"crps_{level}_complete"] = (
+                float(np.mean([crps_sample(y, x) for _, _, y, x in done]))
+                if done
+                else float("nan")
+            )
         for part, ahead in (("now", False), ("ahead", True)):
             part_rows = [r for r in sel if (r[1] >= now) == ahead]
             for q in (50, 90):
                 lo, hi = (1 - q / 100) / 2, 1 - (1 - q / 100) / 2
-                out[f"cov{q}_{level}_{part}"] = float(
-                    np.mean(
-                        [
-                            np.quantile(x, lo) <= y <= np.quantile(x, hi)
-                            for _, _, y, x in part_rows
-                        ]
+                out[f"cov{q}_{level}_{part}"] = (
+                    float(
+                        np.mean(
+                            [
+                                np.quantile(x, lo) <= y <= np.quantile(x, hi)
+                                for _, _, y, x in part_rows
+                            ]
+                        )
                     )
+                    if part_rows
+                    else float("nan")
                 )
     return out
 
 
-def fit_one(task, config, table, bvd=None) -> dict:
-    """Fit one configuration and return the pieces the metrics need."""
+def fit_one(task, config, table, bvd=None, as_of: str | None = None) -> dict:
+    """Fit one configuration and return the pieces the metrics need.
+
+    With `as_of`, a later truth vintage, the draws also hold the counts as
+    reported by it (`forecast_trajectories(..., as_of=...)`).
+    """
     data = vintage_inputs(task, config, table, bvd=bvd)
     model = pr.build_model(data, config)
     start = time.perf_counter()
     run_nuts(model, data, {"seed": task.seed, **SAMPLER})
     np.asarray(next(iter(model.mcmc.get_samples().values())))
     seconds = time.perf_counter() - start
-    draws = pr.forecast_trajectories(model, data, task.n_samples, seed=1)
+    cuts = ()
+    if as_of is not None:
+        cuts = ((pd.Timestamp(as_of).date() - data.start_date).days,)
+    draws = pr.forecast_trajectories(
+        model, data, task.n_samples, seed=1, as_of=cuts
+    )
     return {"data": data, "model": model, "draws": draws, "seconds": seconds}
+
+
+def as_reported_samples(task, run, as_of: str) -> pd.DataFrame:
+    """Sample table of the counts as reported by the truth vintage.
+
+    Like for like with scoring against `as_of` as reported: the draws are
+    the counts the model expects that vintage to show.
+    """
+    data = run["data"]
+    cut = (pd.Timestamp(as_of).date() - data.start_date).days
+    draws = run["draws"]["as_reported"][cut]
+    if data.names == ["CD"]:
+        return national_samples(task, run, draws["national"])
+    samples, _ = samples_table(task, data, draws)
+    return samples
 
 
 def fit_metrics(run) -> dict[str, float]:
@@ -326,7 +383,15 @@ def fit_metrics(run) -> dict[str, float]:
     chains = chain_diagnostics(extra, SAMPLER["max_tree_depth"])
     observed, draws = ppc_rows(run["data"], run["draws"]["insample"])
     rows = summarise_draws(observed, draws, as_of="2100-01-01")["rows"]
-    return {
+    worst = max(
+        (p for p in params if p["rhat"] is not None), key=lambda p: p["rhat"]
+    )
+    per_chain = {}
+    for c in chains:
+        per_chain[f"depth_share_chain{c['chain']}"] = c.get("tree_depth_share")
+        per_chain[f"step_size_chain{c['chain']}"] = c.get("step_size")
+    return per_chain | {
+        "worst_rhat_param": f"{worst['name']}[{worst['index']}]",
         "seconds": run["seconds"],
         "max_rhat": max(rhat),
         "min_ess": min(ess),
@@ -388,34 +453,100 @@ def prior_wild(config, outbreak, table) -> float:
     return float(np.mean(~np.isfinite(ahead) | (ahead > 10 * peak)))
 
 
-def per_location(task) -> tuple[pd.DataFrame, dict]:
-    """Fit `renewalsp` through the repository adapter and summarise."""
-    model = RenewalModel(VARIANTS["renewalsp"], sampler=dict(SAMPLER))
-    fit = model.forecast_fit(task)
-    samples = pd.concat([fit.samples, fit.national], ignore_index=True)
-    seconds = sum(r.seconds for r in fit.runs.values())
-    params = [
-        p for r in fit.runs.values() for p in parameter_diagnostics(r.trace)
-    ]
-    chains = [
-        c
-        for r in fit.runs.values()
-        for c in chain_diagnostics(r.extra, SAMPLER["max_tree_depth"])
-    ]
-    ess = [p["ess_bulk"] for p in params if p["ess_bulk"] is not None]
+def per_location(
+    task, table, as_of: str | None = None
+) -> tuple[pd.DataFrame, dict]:
+    """Fit `renewalsp`: one single-patch fit per location, national its own.
+
+    Locations with at least `SP_MIN_CASES` cases are fitted, the nation
+    included; the rest get zeros (their reported counts are below the
+    threshold). With `as_of`, samples are the counts as reported by it.
+    """
+    config = adapter.model_config(VARIANTS["renewalsp"])
+    rows = task.target.loc[task.target["vintage"] == task.vintage]
+    cases = rows.groupby("location")["total"].sum()
+    frames, fits = [], []
+    for loc in (*task.locations, "CD"):
+        if cases.get(loc, 0) < SP_MIN_CASES:
+            continue
+        sub = dataclasses.replace(task, locations=(loc,))
+        run = fit_one(sub, config, table, as_of=as_of)
+        nat = (
+            run["draws"]["as_reported"][
+                next(iter(run["draws"]["as_reported"]))
+            ]["national"]
+            if as_of is not None
+            else run["draws"]["national"]
+        )
+        part = national_samples(sub, run, nat).assign(location=loc)
+        frames.append(part)
+        fits.append((loc, fit_metrics(run)))
+    samples = pd.concat(frames, ignore_index=True)
+    seconds = sum(f["seconds"] for _, f in fits)
+    worst = max(fits, key=lambda f: f[1]["max_rhat"])
     summary = {
         "seconds": seconds,
-        "max_rhat": max(p["rhat"] for p in params if p["rhat"] is not None),
-        "min_ess": min(ess),
-        "min_ess_per_s": min(ess) / seconds,
-        "median_ess_per_s": float(np.median(ess)) / seconds,
-        "divergent": float(
-            np.mean([c["divergences"] / c["draws"] for c in chains])
-        ),
-        "depth_hits": float(np.mean([c["tree_depth_share"] for c in chains])),
-        "n_fits": len(fit.runs),
+        "max_rhat": worst[1]["max_rhat"],
+        "worst_rhat_param": f"{worst[0]}:{worst[1]['worst_rhat_param']}",
+        "min_ess": min(f["min_ess"] for _, f in fits),
+        "min_ess_per_s": min(f["min_ess"] for _, f in fits) / seconds,
+        "divergent": float(np.mean([f["divergent"] for _, f in fits])),
+        "depth_hits": float(np.mean([f["depth_hits"] for _, f in fits])),
+        "n_fits": len(fits),
     }
     return samples, summary
+
+
+def real_scores(name, config, table, real, out) -> dict:
+    """Fit each real origin, score as reported by `REAL_TRUTH`, average."""
+    target, delays, locations = real
+    later = target.loc[target["vintage"] == REAL_TRUTH].set_index(
+        ["location", "target_end_date"]
+    )["total"]
+    results = []
+    for origin in REAL_ORIGINS:
+        jax.clear_caches()
+        task = task_for(
+            target, delays.loc[delays["vintage"] == origin], origin,
+            locations, "real",
+        )  # fmt: skip
+        if config == "renewalsp":
+            samples, res = per_location(task, table, as_of=REAL_TRUTH)
+        else:
+            bvd = bvd_rows(task) if config.bvd else None
+            if config.bvd:
+                out[f"real_bvd_as_of_{origin}"] = (
+                    None if bvd is None else bvd["as_of"].iloc[0]
+                )
+            run = fit_one(task, config, table, bvd, as_of=REAL_TRUTH)
+            samples = as_reported_samples(task, run, REAL_TRUTH)
+            res = fit_metrics(run) | {"n_active": len(run["data"].names)}
+        res |= scores(samples, later, REAL_TRUTH)
+        print(name, "real", origin, res, flush=True)
+        results.append((origin, res))
+    return summarise_origins(results)
+
+
+def summarise_origins(results) -> dict:
+    """Average numeric results over origins, keep per-origin CRPS."""
+    out: dict = {}
+    keys = {k for _, r in results for k in r}
+    for k in sorted(keys):
+        values = [r.get(k) for _, r in results]
+        numbers = [v for v in values if isinstance(v, (int, float))]
+        if k == "max_rhat" and numbers:
+            out[f"real_{k}"] = max(numbers)
+        elif k == "worst_rhat_param":
+            worst = max(results, key=lambda r: r[1].get("max_rhat", 0))
+            out[f"real_{k}"] = f"{worst[0]}:{worst[1].get(k)}"
+        elif numbers and len(numbers) == len(values):
+            out[f"real_{k}"] = float(np.nanmean(numbers))
+    for origin, r in results:
+        tag = origin.replace("-", "")
+        for k in ("crps_national", "crps_province", "seconds", "max_rhat"):
+            if k in r:
+                out[f"real_{k}_{tag}"] = r[k]
+    return out
 
 
 def run_rung(name, config, outbreak, table, real) -> dict:
@@ -434,7 +565,7 @@ def run_rung(name, config, outbreak, table, real) -> dict:
         target, delays = outbreak.vintage(vintage)
         task = task_for(target, delays, vintage, SIM_LOCATIONS, "simulated")
         if single:
-            samples, res = per_location(task)
+            samples, res = per_location(task, table)
         else:
             bvd = synthetic_bvd(outbreak, vintage) if config.bvd else None
             run = fit_one(task, config, table, bvd)
@@ -453,37 +584,14 @@ def run_rung(name, config, outbreak, table, real) -> dict:
         )
     for key in sims[0]:
         out[f"sim_{key}"] = float(np.nanmean([s[key] for s in sims]))
-    jax.clear_caches()
-    target, delays, locations = real
-    task = task_for(
-        target, delays.loc[delays["vintage"] == REAL_FIT], REAL_FIT,
-        locations, "real",
-    )  # fmt: skip
-    later = target.loc[target["vintage"] == REAL_TRUTH].set_index(
-        ["location", "target_end_date"]
-    )["total"]
-    if single:
-        samples, res = per_location(task)
-    else:
-        bvd = bvd_rows(task) if config.bvd else None
-        if config.bvd:
-            out["real_bvd_as_of"] = (
-                None if bvd is None else bvd["as_of"].iloc[0]
-            )
-        run = fit_one(task, config, table, bvd)
-        samples, _ = samples_table(task, run["data"], run["draws"])
-        if config.national:
-            samples = national_samples(task, run)
-        res = fit_metrics(run) | {"n_active": len(run["data"].names)}
-    res |= scores(samples, later)
-    print(name, "real", {k: round(v, 3) for k, v in res.items()}, flush=True)
-    out |= {f"real_{k}": v for k, v in res.items()}
+    out |= real_scores(name, config, table, real, out)
     return out
 
 
-def national_samples(task, run) -> pd.DataFrame:
+def national_samples(task, run, nat=None) -> pd.DataFrame:
     """Sample table of a national-only fit, as location `CD`."""
-    data, nat = run["data"], run["draws"]["national"]
+    data = run["data"]
+    nat = run["draws"]["national"] if nat is None else nat
     first = data.start_date + dt.timedelta(days=6)
     rows = []
     for date in task.target_end_dates:
@@ -499,18 +607,20 @@ def national_samples(task, run) -> pd.DataFrame:
 def persistence_row(outbreak, real) -> dict:
     """Score persistence on the same tasks."""
     target, delays, locations = real
-    task = task_for(
-        target, delays.loc[delays["vintage"] == REAL_FIT], REAL_FIT,
-        locations, "real",
-    )  # fmt: skip
     later = target.loc[target["vintage"] == REAL_TRUTH].set_index(
         ["location", "target_end_date"]
     )["total"]
     out = {"rung": "persistence"}
-    out |= {
-        f"real_{k}": v
-        for k, v in scores(Persistence().forecast(task), later).items()
-    }
+    results = []
+    for origin in REAL_ORIGINS:
+        task = task_for(
+            target, delays.loc[delays["vintage"] == origin], origin,
+            locations, "real",
+        )  # fmt: skip
+        results.append(
+            (origin, scores(Persistence().forecast(task), later, REAL_TRUTH))
+        )
+    out |= summarise_origins(results)
     truth = outbreak.truth().set_index(["location", "target_end_date"])["truth"]
     sims = []
     for day in SIM_DAYS:
@@ -547,6 +657,15 @@ def main(args: list[str]) -> None:
     real = (target, delays, locations)
     if args[0] == "persistence":
         row = persistence_row(outbreak, real)
+    elif "--real-only" in args:
+        # Keep the simulated results and refit the real origins only.
+        name, config = list(RUNGS.items())[int(args[0])]
+        path = out / f"{slug(name)}.json"
+        old = json.loads(path.read_text()) if path.exists() else {"rung": name}
+        start = time.perf_counter()
+        row = {k: v for k, v in old.items() if not k.startswith("real_")}
+        row |= real_scores(name, config, table, real, row)
+        row["real_rung_seconds"] = time.perf_counter() - start
     else:
         name, config = list(RUNGS.items())[int(args[0])]
         start = time.perf_counter()
