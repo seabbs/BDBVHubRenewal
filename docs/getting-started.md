@@ -23,7 +23,7 @@ The tidy data in `data/` are committed, so nothing needs downloading to start.
 This is a small fit of the main variant, `renewal`, to the latest vintage.
 It uses 2 chains of 200 warm-up and 200 draws.
 On 2 cores it took 18 minutes and peaked at 2 GB of memory.
-The submission workflow uses 4 chains of 1000 each.
+The submission workflow uses 2 chains of 500 warm-up and 500 draws.
 
 ```console
 $ uv run bdbv-hub-renewal fit --model renewal --config main \

@@ -15,25 +15,7 @@ The figure shows the main variant, `renewal`.
 Grey boxes are parameters, blue boxes latent quantities and orange boxes the data with their likelihoods.
 The hub's pooled delay $\hat f$ is taken from the data of each vintage, not estimated.
 The dashed box is the BVDOutbreakSize term, in `renewalbvd` only.
-The source is `docs/diagrams/model_dag.tex`, built by `scripts/build_diagrams.sh`.
-
-## Components
-
-The model extends [PyRenew](https://github.com/CDCgov/PyRenew), pinned to a commit.
-Its code is in `bdbv_hub_renewal.model`.
 Every time-varying part has a smoothness prior, so it stays near constant when the data show no change and stays stable when data are sparse.
-
-| Component | PyRenew piece | Built here, and why |
-|---|---|---|
-| Pooled $R_p(t)$ | `SubpopulationInfections`, `WeeklyTemporalProcess` | `KnotWalk` and `NonCentredRandomWalk`: PyRenew's `RandomWalk` samples its steps one site at a time, a funnel. |
-| Renewal with importation and depletion | `SubpopulationInfections`, subclassed | `coupled_renewal`: PyRenew runs each province on its own and cannot carry cumulative depletion. |
-| Ascertainment $\alpha(s)$ | `IndependentAscertainment` with a temporal process | None. |
-| Onset-to-report delay $f_s(d)$ | None | `HazardDelay`: PyRenew has no time-varying or nonparametric delay. |
-| Missing onsets $\pi_p(t)$ | None | `MissingOnsetFraction`, built from the same pooled walk as $R_p$. |
-| Known and imputed onsets | `BaseObservationProcess`, `NegativeBinomialNoise` | `OnsetStreams`: PyRenew's count observation takes one fixed delay and no back-sampled imputation. |
-| Provinces with no cases | None | An importation-only component. |
-
-Fitting uses PyRenew's `PyrenewBuilder`, `MultiSignalModel` and NumPyro's NUTS.
 
 ## Transmission
 
@@ -70,8 +52,8 @@ BVDOutbreakSize uses the same form, with a 42-day half-life.
 The starting offsets are $v = Q u$, with $u \sim \mathcal{N}(0, \sigma_v^2)$ sampled centred and $\sigma_v \sim \mathcal{N}^+(0, 0.3^2)$.
 All walks are flat over the 6 seeding weeks before the data start, and are fitted on the data weeks only.
 Their steps past the data are drawn in the forecast, from the fitted step SDs.
-With `future_rt="hold"`, Rt instead holds at its last fitted value, as EpiNow2's `future = "latest"`.
-With `rt_cadence="linear"`, the weekly knots are joined linearly rather than held for the week.
+As an option, Rt instead holds at its last fitted value, as in EpiNow2.
+Another option joins the weekly knots linearly rather than holding them for the week.
 
 ### Renewal with importation and depletion
 
@@ -88,13 +70,12 @@ $$
 - $g$ is a Gamma generation interval with mean 15.3 and SD 9.3 days, BVDOutbreakSize's prior means, double interval censored on lags 1 to 42 (about its 98.5% quantile). After censoring, dropping lag 0 and truncation its mean is 14.8 and SD 8.4 days. Each infection day is uniform within its day and the pmf is $G(d + 1) - 2G(d) + G(d - 1)$, with $G$ the Gamma's integrated cdf, as in the R package primarycensored. Lag 0 is dropped and the rest renormalised.
 - $W = (1 - \varepsilon) I + \varepsilon\, \mathrm{diag}(1/N) K^\top \mathrm{diag}(N)$ mixes transmission between provinces, with $\varepsilon \sim \text{Beta}(1, 100)$.
 - $K$ is a row-normalised gravity kernel, $K_{qp} \propto N_p e^{-D_{qp}/300\,\text{km}}$, with $D$ the great-circle distance between population-weighted province centres and $N_p$ the province population.
-- With `coupling="learnt"` the kernel's decay and destination weights are estimated, $\log K_{qp} = \log N_p - D_{qp}/(300\,\text{km} \cdot e^{\kappa_K}) + w_p + c_q$, with $\kappa_K \sim \mathcal{N}(0, 1)$, sum-to-zero weights $w$ with scale $\mathcal{N}^+(0, 0.5^2)$, and $c_q$ normalising each row. With $\kappa_K = 0$ and $w = 0$ it is the fixed gravity kernel.
-- With `importation="per_origin"`, each origin has its own share $\varepsilon_q$, partially pooled on the logit scale.
+- As an option, the kernel's decay and destination weights are estimated, $\log K_{qp} = \log N_p - D_{qp}/(300\,\text{km} \cdot e^{\kappa_K}) + w_p + c_q$, with $\kappa_K \sim \mathcal{N}(0, 1)$, sum-to-zero weights $w$ with scale $\mathcal{N}^+(0, 0.5^2)$, and $c_q$ normalising each row. With $\kappa_K = 0$ and $w = 0$ it is the fixed gravity kernel.
+- As an option, each origin has its own share $\varepsilon_q$, partially pooled on the logit scale.
 - $\nu \sim \text{LogNormal}(\log 0.05, 0.75^2)$ is the share of each province at risk.
   $S_p$ starts at $\nu$, so cumulative infections never exceed $\nu N_p$.
 
 The exponential form agrees with linear depletion, $x = S y$, to first order, and cannot overshoot the pool.
-It is computed with `expm1` and on $\log S$, which keeps the log density smooth in single precision.
 
 Seeding is set on the scale of confirmed onsets.
 Each province's expected confirmed onsets per day are $c_p \sim \text{LogNormal}(0, 1.5^2)$, which become $I_{0,p} = c_p / (\alpha_0 N_p)$ infections per resident.
@@ -136,7 +117,7 @@ $$
   The fit to the 2026-10-24 vintage puts the step SD at 0.20 (90% CrI 0.16 to 0.25), in the tail of the earlier $\mathcal{N}^+(0, 0.1^2)$.
 - $\gamma$ is a weekly random walk over onset day from zero, with step SD $\mathcal{N}^+(0, 0.15^2)$.
   It shifts all hazards together.
-- With `report_dow=True` (off by default), the logit hazard also has a sum-to-zero effect of the report day's day of week, $\delta_{(s + d) \bmod 7}$, with scale $\mathcal{N}^+(0, 0.5^2)$.
+- As an option, off by default, the logit hazard also has a sum-to-zero effect of the report day's day of week, $\delta_{(s + d) \bmod 7}$, with scale $\mathcal{N}^+(0, 0.5^2)$.
 
 The delay is pooled over provinces.
 
@@ -188,11 +169,9 @@ $M_p(t)$ are the cases reported on day $t$ without an onset.
 $\hat f_T$ is the hub's delay at vintage $T$.
 It is the empirical pmf of all published delays of that vintage, pooled over provinces and onset weeks, with negative delays and delays over 60 days dropped.
 It is data, not a parameter, and it is not corrected for truncation.
-Both sums are computed by week, as products of banded $7 \times 7k$ blocks for each onset week, so the cost grows with the number of weeks and not its square.
 
 The forecast target is the eventual known plus imputed onsets, with future imputation using the latest $\hat f_T$.
 So the forecast carries the imputation's bias at turning points, which is what the hub scores.
-The tests check it against a NumPy reference (`tests/model/numpy_reference.py`).
 
 **Uncertain.**
 The hub has not published its code.
@@ -207,7 +186,7 @@ The non-monotone revisions in imputed counts suggest it re-imputes each time.
   Delays are clipped to 0 to 60 days.
   Given each week's total they are Dirichlet-multinomial, with mean probabilities from $\lambda$, $f$, $\pi$ and $c$, $1/\sqrt{\psi} \sim \text{HalfNormal}(0.1)$ and $\psi$ capped at $10^4$.
   A multinomial treats the 8,000 or so pooled delays as independent, which makes the delay overconfident.
-  `delay_counts="multinomial"` gives the multinomial.
+  The multinomial is available as an option.
   This is the conditional part of the reporting triangle, so the known stream is not counted twice.
 - Provinces with no cases have expected onsets $\mu_q(s) = \kappa \sum_p K_{pq}\, \lambda_p(s)$, with one scale $\kappa \sim \text{LogNormal}(\log 10^{-3}, 2^2)$.
   Their weekly zeros are Poisson.
@@ -257,7 +236,7 @@ Provinces with no cases get the importation-only component, so their forecasts a
 ### Model choice
 
 The variant to submit is chosen on the development backtest, by WIS and log WIS relative to persistence, by horizon and province.
-The choice and its date are logged in `results/model-choice.yml`.
+The choice and its date are logged.
 Every later vintage is held out (see [Evaluation](evaluation.md#rolling-held-out-evaluation)).
 
 ### Renewal variants
@@ -270,8 +249,6 @@ The renewal variants run in the backtest, the held-out evaluation and the plots,
 | `renewalsp` | Single patch: the renewal model fitted to each location's series on its own, the nation included. |
 | `renewalbvd` | The spatial model informed by the latest posterior estimates of the main [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model, taken from the newest release published before the data cut-off. |
 | `fallback` | The CI's fallback: no coupling, with the delays and $\pi$ fixed from the data. $\pi$ is the imputed share by onset week, moved later by the mean delay to date it by report day. It is a fit configuration, not a backtest variant. |
-
-The model code is in `bdbv_hub_renewal.model` and the variants in [`forecasters.renewal`][bdbv_hub_renewal.forecasters.renewal].
 
 ### Single patch
 
@@ -287,7 +264,7 @@ The single patch has no shared likelihood, so it does not take part in the leave
 ### BVDOutbreakSize-informed
 
 `renewalbvd` adds the latest reproduction number estimates of the main [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model as a tempered pseudo-observation on $R_p$.
-They come from its public `results-<run>` releases (`bdbv_hub_renewal.data.bvd`).
+They come from its public results releases.
 A forecast uses the newest release published by the forecast's cut-off whose data end on or before the vintage.
 The cut-off is the end of the Sunday that opens the submission window, in Kinshasa time.
 So a release republished later on old data is never used, and the backtest sees each release as it was published.
