@@ -152,11 +152,14 @@ class ModelConfig:
         Its tempering. 0 gives the model without it, exactly.
     dmax : int
         Maximum onset-to-report delay in days.
-    publication_lag : {"estimated", "fixed", "none"}
-        Lag from report to publication in a vintage: a Dirichlet simplex
-        on $0..L$, fixed at its prior mean (uniform), or none.
+    publication_lag : {"empirical", "estimated", "fixed", "none"}
+        Lag from report to publication in a vintage: the empirical pmf
+        on $0..60$ days from rows new in earlier delay files
+        (`Vintage.publication_lag_pmf`), a Dirichlet simplex on $0..L$,
+        uniform on $0..L$, or none. Empirical falls back to uniform on
+        $0..L$ for a vintage with no earlier pair of delay files.
     max_publication_lag : int
-        $L$, in days (`vintages.PUBLICATION_LAG_DAYS`).
+        $L$, in days (`data.reconstruct.PUBLICATION_LAG_DAYS`).
     delay_counts : {"multinomial", "dirichlet-multinomial"}
         Likelihood of the delay file's counts given the weekly totals.
         The Dirichlet-multinomial has $1/\sqrt{\psi} \sim
@@ -186,7 +189,9 @@ class ModelConfig:
     bvd: bool = False
     bvd_alpha: float = 0.5
     dmax: int = 60
-    publication_lag: Literal["estimated", "fixed", "none"] = "estimated"
+    publication_lag: Literal["empirical", "estimated", "fixed", "none"] = (
+        "empirical"
+    )
     max_publication_lag: int = 3
     delay_counts: Literal["multinomial", "dirichlet-multinomial"] = (
         "multinomial"
@@ -202,7 +207,6 @@ FALLBACK = ModelConfig(
     delay="fixed",
     missing="fixed",
     rt_cadence="weekly",
-    publication_lag="fixed",
 )
 _SIMPLE: dict[str, Any] = {
     "streams": "total",
@@ -270,6 +274,9 @@ class Vintage:
     bvd : dict or None
         External Rt summaries: `day` (index of $s_b$ from the first data
         day), `groups` `(G, P)`, `values`, `scales` and `kinds` `(G,)`.
+    publication_lag_pmf : numpy.ndarray or None
+        Empirical report to publication lag pmf on $0..60$ days
+        (`data.reconstruct.publication_lag_pmf`), or None.
     """
 
     start_date: dt.date
@@ -290,6 +297,7 @@ class Vintage:
     distances: np.ndarray | None = None
     all_populations: np.ndarray | None = None
     seed_days: np.ndarray | None = None
+    publication_lag_pmf: np.ndarray | None = None
 
     @property
     def n_weeks(self) -> int:
@@ -548,8 +556,13 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         lag = DistributionalVariable(
             "onsets_publication_lag", dist.Dirichlet(np.ones(n_lag))
         )
-    elif config.publication_lag == "fixed":
+    elif config.publication_lag == "fixed" or (
+        config.publication_lag == "empirical"
+        and data.publication_lag_pmf is None
+    ):
         lag = np.full(n_lag, 1 / n_lag)
+    elif config.publication_lag == "empirical":
+        lag = np.asarray(data.publication_lag_pmf, dtype=float)
 
     builder.add_observation(
         OnsetStreams(
