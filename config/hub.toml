@@ -15,4 +15,4 @@ submit = false
 # The baseline: persistence on a nowcast, falling back to persistence.
 [models.persistencenow]
 model_abbr = "baseline"
-submit = false
+submit = true
