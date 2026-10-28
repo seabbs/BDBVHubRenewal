@@ -86,7 +86,7 @@ def test_retrospective_errors_compare_past_nowcasts_with_later_data() -> None:
     cols = np.arange(pmf.size)[None, :]
     seen = np.minimum(n_rows - 1 - np.arange(n_rows), pmf.size - 1)
     tri = np.where(cols <= seen[:, None], full, np.nan)
-    obs, pred = retrospective_errors(tri, n_retro=5, n_history=8)
+    obs, pred = retrospective_errors(tri, n_retro=5, n_history=8, step=1)
     # One row per past nowcast, one column per horizon (rows still open).
     assert obs.shape == pred.shape == (5, 3)
     # Unbiased: what was later added is close to what was predicted.
