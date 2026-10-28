@@ -276,7 +276,9 @@ def test_late_provinces_are_seeded_at_their_first_cases(outbreak, table):
     tr = trace(model, data)
     x = np.asarray(tr["latent_infections_by_subpop"]["value"])
     n_init = model.latent.n_initialization_points
-    day = n_init + data.seed_days[1] - 7
+    day = n_init + data.seed_days[1]
+    # Infections are dated by onset, so nothing comes before the first
+    # case week; the seed lands in it.
     assert x[:day, 1].sum() < 1e-3 * x[day : day + 7, 1].sum()
     start = build_model(data, ModelConfig(coupling="none", seeding="start"))
     x0 = np.asarray(trace(start, data)["latent_infections_by_subpop"]["value"])
