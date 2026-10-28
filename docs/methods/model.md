@@ -213,13 +213,11 @@ Each week the submission takes the first of `renewal`, one refit of `renewal` wi
 | `renewal` | Nothing. It is the model in the figure. |
 | `renewalsp` | Each location fitted on its own, with no pooling, coupling or depletion. |
 | `renewalbvd` | A tempered pseudo-likelihood on BVDOutbreakSize's latest Rt. |
-| `renewalhold` | $R_p(t)$ held at its last fitted value past the data. |
-| `renewalpo` | One importation share $\varepsilon_q$ per origin, partially pooled. |
 
 ### Single patch
 
-`renewalsp` fits each location $\ell$, the nation included, to its own known and imputed onsets.
-A location with at least 10 cases has
+`renewalsp` fits each province $\ell$ to its own known and imputed onsets.
+A province with at least 20 cases in its last 6 data weeks, an outbreak province, has
 
 $$
 x_\ell(t) = R_\ell(t) \sum_{\tau \ge 1} x_\ell(t - \tau)\, g(\tau),
@@ -241,7 +239,7 @@ $$
 $$
 
 with one $\lambda_\ell$ per trajectory.
-The national forecast is the national fit, so it need not equal the sum of the provinces.
+The national forecast is the sum of the provinces plus the national cases in no province, as in the main model.
 
 ### BVDOutbreakSize-informed
 

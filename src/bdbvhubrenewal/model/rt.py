@@ -111,7 +111,7 @@ class NonCentredRandomWalk:
 
     `knots=(m, s)` samples the knots themselves (`KnotWalk`) on the fit
     axis, with the first knot $N(m, s)$ in place of `initial_value`
-    (random walk only). `centred=True` samples the path on the fit axis.
+    (random walk only).
 
     Parameters
     ----------
@@ -119,17 +119,12 @@ class NonCentredRandomWalk:
         Step SD $\sigma$.
     frozen : int, optional
         Leading steps fixed at zero.
-    centred : bool, optional
-        Sample the path rather than standardised steps.
     knots : tuple of float, optional
         Sample the knots (`KnotWalk`).
     n_fit : int, optional
         Length of the fit axis.
     half_life_rv : RandomVariable, optional
         Half-life in steps; makes the process AR(1).
-    future : {"walk", "hold"}, optional
-        Past the fit axis, keep walking (default) or hold the last value
-        (EpiNow2's `future = "latest"`).
     """
 
     step_size: int = 1
@@ -138,19 +133,15 @@ class NonCentredRandomWalk:
         self,
         innovation_sd_rv: RandomVariable,
         frozen: int = 0,
-        centred: bool = False,
         knots: tuple[float, float] | None = None,
         n_fit: int | None = None,
         half_life_rv: RandomVariable | None = None,
-        future: str = "walk",
     ) -> None:
         self.innovation_sd_rv = innovation_sd_rv
         self.frozen = frozen
-        self.centred = centred
         self.knots = knots
         self.n_fit = n_fit
         self.half_life_rv = half_life_rv
-        self.future = future
 
     def sample(
         self,
@@ -197,16 +188,6 @@ class NonCentredRandomWalk:
                 ),
             ).T
             past = jnp.vstack([jnp.repeat(k[:1], frozen, axis=0), k])
-        elif self.centred:
-            path = numpyro.sample(
-                f"{name_prefix}_path",
-                dist.GaussianRandomWalk(
-                    jnp.broadcast_to(sd, (n_processes,)), num_steps=n_free
-                ),
-            ).T
-            past = x0[None, :] + jnp.vstack(
-                [jnp.zeros((frozen + 1, n_processes)), path]
-            )
         else:
             z = numpyro.sample(
                 f"{name_prefix}_z",
@@ -220,8 +201,6 @@ class NonCentredRandomWalk:
         n_future = n_timepoints - n_past
         if n_future == 0:
             return past
-        if self.future == "hold":
-            return jnp.vstack([past, jnp.repeat(past[-1:], n_future, axis=0)])
         z_future = numpyro.sample(
             f"{name_prefix}_z_future",
             dist.Normal(0.0, 1.0).expand([n_future, n_processes]),
@@ -258,6 +237,8 @@ class PooledInitialValue(RandomVariable):
     centred : bool, optional
         Sample the $P - 1$ offsets on the basis directly (centred, the
         default, as BVDOutbreakSize #1083), rather than standardised.
+    active : array_like, optional
+        Provinces with their own offset; the others start at $\mu$.
     """
 
     def __init__(
@@ -269,8 +250,10 @@ class PooledInitialValue(RandomVariable):
         pooling_sd: float,
         fixed_mean: bool = False,
         centred: bool = True,
+        active: ArrayLike | None = None,
     ) -> None:
         super().__init__(name=name)
+        self.active = None if active is None else np.asarray(active, bool)
         self.fixed_mean = fixed_mean
         self.centred = centred
         self.n_groups = n_groups
@@ -293,25 +276,33 @@ class PooledInitialValue(RandomVariable):
                 f"{self.name}_mean", dist.Normal(self.loc, self.scale)
             )
         )
-        if self.n_groups == 1:
-            return jnp.full((1,), mu)
+        n_active = (
+            self.n_groups if self.active is None else int(self.active.sum())
+        )
+        if n_active <= 1:
+            return jnp.full((self.n_groups,), mu)
         sd = numpyro.sample(f"{self.name}_sd", dist.HalfNormal(self.pooling_sd))
-        basis = jnp.asarray(sum_to_zero_basis(self.n_groups))
+        basis = jnp.asarray(
+            sum_to_zero_basis(self.n_groups, active=self.active)
+        )
         if self.centred:
             offsets = numpyro.sample(
                 f"{self.name}_offsets",
-                dist.Normal(0.0, sd).expand([self.n_groups - 1]),
+                dist.Normal(0.0, sd).expand([n_active - 1]),
             )
             return jnp.asarray(mu + basis @ offsets)
         z = numpyro.sample(
             f"{self.name}_z",
-            dist.Normal(0.0, 1.0).expand([self.n_groups - 1]),
+            dist.Normal(0.0, 1.0).expand([n_active - 1]),
         )
         return jnp.asarray(mu + sd * (basis @ z))
 
 
 def split_initial_value(
-    initial: ArrayLike, n_groups: int, weights: ArrayLike | None = None
+    initial: ArrayLike,
+    n_groups: int,
+    weights: ArrayLike | None = None,
+    active: ArrayLike | None = None,
 ) -> tuple[ArrayLike, ArrayLike]:
     """Split starting values into a national value and province deviations.
 
@@ -333,15 +324,21 @@ def split_initial_value(
     initial = jnp.asarray(initial)
     if initial.ndim == 0:
         return initial, jnp.zeros(n_groups)
-    if weights is None:
+    if weights is None and active is None:
         start = jnp.mean(initial)
     else:
-        w = jnp.asarray(weights, dtype=float)
+        w = jnp.ones(n_groups) if weights is None else jnp.asarray(weights)
+        if active is not None:
+            w = w * jnp.asarray(active, dtype=float)
         start = (w @ initial) / w.sum()
     return start, initial - start
 
 
-def sum_to_zero_basis(n: int, weights: ArrayLike | None = None) -> np.ndarray:
+def sum_to_zero_basis(
+    n: int,
+    weights: ArrayLike | None = None,
+    active: ArrayLike | None = None,
+) -> np.ndarray:
     r"""Orthonormal basis of $\{\delta \in R^n : w^\top \delta = 0\}$.
 
     With no weights, $w = 1$ and the columns sum to zero. With weights
@@ -349,14 +346,22 @@ def sum_to_zero_basis(n: int, weights: ArrayLike | None = None) -> np.ndarray:
     average to zero weighted by cases, so the national value is the
     case-weighted one.
 
+    With `active`, the basis spans only the active (outbreak) provinces:
+    inactive rows are zero, so those provinces take the national value,
+    and the constraint uses the active weights only.
+
     Returns
     -------
     numpy.ndarray
-        Shape `(n, n - 1)`, orthonormal columns orthogonal to `w`.
+        Shape `(n, k - 1)`, with `k` active provinces (all by default),
+        orthonormal columns orthogonal to `w`.
     """
     w = np.ones(n) if weights is None else np.asarray(weights, dtype=float)
-    _, _, vt = np.linalg.svd(w[None, :])
-    return np.asarray(vt[1:].T, dtype=float)
+    on = np.ones(n, bool) if active is None else np.asarray(active, bool)
+    _, _, vt = np.linalg.svd(w[on][None, :])
+    out = np.zeros((n, int(on.sum()) - 1))
+    out[on] = vt[1:].T
+    return out
 
 
 def pooled_walk(
@@ -368,6 +373,7 @@ def pooled_walk(
     name_prefix: str,
     first_day_dow: int | None = None,
     weights: ArrayLike | None = None,
+    active: ArrayLike | None = None,
 ) -> tuple[ArrayLike, ArrayLike]:
     r"""Sample a national process plus sum-to-zero province deviations.
 
@@ -396,6 +402,14 @@ def pooled_walk(
         Day of week of element 0, needed by calendar-aligned processes.
     weights : ArrayLike, optional
         Province weights; deviations then satisfy $w^\top \delta = 0$.
+    active : ArrayLike, optional
+        Provinces with their own deviation, `(n_groups,)`, or by time,
+        `(n_timepoints, n_groups)`. The others follow the national process
+        exactly. The basis spans the provinces ever active. With a mask by
+        time, inactive deviations are set to zero and the rest re-centred
+        so the weighted constraint holds over the active ones at each
+        time; a province that goes quiet drops back to the national value
+        and picks its deviation up again when it returns.
 
     Returns
     -------
@@ -403,7 +417,11 @@ def pooled_walk(
         National trajectory `(n_timepoints, 1)` and province trajectories
         `(n_timepoints, n_groups)`.
     """
-    base_start, dev_start = split_initial_value(initial, n_groups, weights)
+    mask = None if active is None else np.asarray(active, bool)
+    ever = None if mask is None else (mask if mask.ndim == 1 else mask.any(0))
+    base_start, dev_start = split_initial_value(
+        initial, n_groups, weights, ever
+    )
     baseline = baseline_process.sample(
         n_timepoints=n_timepoints,
         initial_value=base_start,
@@ -412,15 +430,30 @@ def pooled_walk(
     )
     if n_groups == 1:
         return baseline, baseline
-    basis = jnp.asarray(sum_to_zero_basis(n_groups, weights))
+    n_active = n_groups if ever is None else int(ever.sum())
+    if n_active <= 1:
+        return baseline, jnp.repeat(baseline, n_groups, axis=1)
+    basis = jnp.asarray(sum_to_zero_basis(n_groups, weights, ever))
     coords = deviation_process.sample(
         n_timepoints=n_timepoints,
-        n_processes=n_groups - 1,
+        n_processes=n_active - 1,
         initial_value=basis.T @ dev_start,
         name_prefix=f"{name_prefix}_deviations",
         first_day_dow=first_day_dow,
     )
-    return baseline, baseline + coords @ basis.T
+    dev = coords @ basis.T
+    if mask is not None and mask.ndim == 2:
+        if mask.shape != (n_timepoints, n_groups):
+            raise ValueError(
+                "The active mask must be (n_timepoints, n_groups)."
+            )
+        on = jnp.asarray(mask, dtype=dev.dtype)
+        w = jnp.ones(n_groups) if weights is None else jnp.asarray(weights)
+        dev = on * dev
+        total = on @ w
+        shift = (dev @ w) / jnp.where(total > 0, total, 1.0)
+        dev = dev - shift[:, None] * on
+    return baseline, baseline + dev
 
 
 class MissingOnsetFraction(RandomVariable):
@@ -480,94 +513,3 @@ class MissingOnsetFraction(RandomVariable):
         pi = jax.nn.sigmoid(logit_pi)
         numpyro.deterministic(self.name, pi)
         return pi
-
-
-class LinearWeeklyProcess:
-    """Weekly knots joined linearly, rather than held for the week.
-
-    Wraps a `TemporalProcess` sampled at weekly cadence (one knot per
-    week, from the first day of the axis, which is a Sunday) and
-    interpolates daily values between successive knots, holding the last.
-    Use in place of PyRenew's `WeeklyTemporalProcess` for Rt.
-
-    Parameters
-    ----------
-    inner : TemporalProcess
-        Weekly process.
-    """
-
-    step_size: int = 7
-
-    def __init__(self, inner: TemporalProcess) -> None:
-        self.inner = inner
-
-    def sample(
-        self,
-        n_timepoints: int,
-        initial_value: float | ArrayLike | None = None,
-        n_processes: int = 1,
-        name_prefix: str = "linear",
-        *,
-        first_day_dow: int | None = None,
-    ) -> Array:
-        """Sample knots and interpolate to days.
-
-        Returns
-        -------
-        ArrayLike
-            Shape `(n_timepoints, n_processes)`.
-        """
-        n_weeks = (n_timepoints + 6) // 7
-        knots = self.inner.sample(
-            n_timepoints=n_weeks,
-            initial_value=initial_value,
-            n_processes=n_processes,
-            name_prefix=name_prefix,
-        )
-        position = jnp.arange(n_timepoints) / 7.0
-        return jax.vmap(
-            lambda k: jnp.interp(position, jnp.arange(n_weeks), k),
-            in_axes=1,
-            out_axes=1,
-        )(knots)
-
-
-class PerOriginShare(RandomVariable):
-    r"""Importation share per origin, partially pooled on the logit scale.
-
-    $$\operatorname{logit} \varepsilon_q = \mu + \sigma z_q, \qquad
-    \mu \sim N(\operatorname{logit} 0.01, 1), \
-    \sigma \sim N^+(0, 0.5), \ z_q \sim N(0, 1),$$
-
-    so the shares centre near the shared Beta(1, 100) prior's mean.
-
-    Parameters
-    ----------
-    name : str
-        Prefix for the sample sites.
-    n_groups : int
-        Number of origins.
-    """
-
-    def __init__(self, name: str, n_groups: int) -> None:
-        super().__init__(name=name)
-        self.n_groups = n_groups
-
-    def sample(self, **kwargs: object) -> Array:
-        """Sample one share per origin.
-
-        Returns
-        -------
-        ArrayLike
-            Shape `(n_groups,)`.
-        """
-        mu = numpyro.sample(
-            f"{self.name}_mean", dist.Normal(jnp.log(0.01 / 0.99), 1.0)
-        )
-        sd = numpyro.sample(f"{self.name}_sd", dist.HalfNormal(0.5))
-        z = numpyro.sample(
-            f"{self.name}_z", dist.Normal(0.0, 1.0).expand([self.n_groups])
-        )
-        share = jax.nn.sigmoid(mu + sd * z)
-        numpyro.deterministic(self.name, share)
-        return share

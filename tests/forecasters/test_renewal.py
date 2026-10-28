@@ -37,10 +37,12 @@ def test_variants_are_registered_as_fitted_models() -> None:
         model = get_model(name)
         assert isinstance(model, ForecastModel)
         assert model.name == name
+    assert set(rn.VARIANTS) == {"renewal", "renewalsp", "renewalbvd"}
     # Only the backtest models: no fallback and no unused options.
     for name in ("fallback", "renewalhold", "renewalpo"):
         assert name not in specs
-    # The single patch fits the national sum, so cannot mask a province.
+    # The single patch fits each province on its own data only, so it
+    # cannot forecast a province with its data held out.
     assert get_model("renewal").supports_mask
     assert not get_model("renewalsp").supports_mask
     assert not specs["persistence"].fitted
@@ -447,23 +449,32 @@ def test_single_patch_fits_each_location_on_its_own(
     model = get_model("renewalsp")
     assert isinstance(model, rn.RenewalModel)
     fit = model.forecast_fit(task)
-    # One fit per province with enough cases, and one for the nation.
+    # One fit per province with enough recent cases (an outbreak province,
+    # as the sporadic class), and none for the nation.
     rows = task.target.loc[task.target["vintage"] == task.vintage]
-    cases = rows.groupby("location")["total"].sum()
+    recent = sorted(set(rows["target_end_date"]))[-rn.SINGLE_PATCH_WEEKS :]
+    cases = (
+        rows.loc[rows["target_end_date"].isin(recent)]
+        .groupby("location")["total"]
+        .sum()
+    )
     enough = [
-        p for p in task.locations if cases[p] >= rn.SINGLE_PATCH_MIN_CASES
+        p
+        for p in task.locations
+        if cases.get(p, 0) >= rn.SINGLE_PATCH_MIN_CASES
     ]
     few = [p for p in task.locations if p not in enough]
-    assert few, "the fixture should have a province with few cases"
-    assert sorted(seen) == sorted([(p,) for p in enough] + [(NATIONAL,)])
-    assert set(fit.runs) == {*enough, NATIONAL}
-    assert fit.unassigned is None
-    assert fit.national is not None
-    assert list(fit.national.columns) == ["target_end_date", "sample", "value"]
+    # Bas-Uele has 13 cases to date but 7 in the last 6 weeks, too few for
+    # its own fit (R-hat 1.71 at 2026-10-24).
+    assert "CD-BU" in few
+    assert sorted(seen) == sorted([(p,) for p in enough])
+    assert set(fit.runs) == set(enough)
+    # National is the sum of the patches plus the unassigned cases, as in
+    # the main model.
+    assert not hasattr(fit, "national")
     assert set(fit.samples["location"]) == set(task.locations)
-    # The national rows are the national fit, not the provinces' sum.
     samples = model.forecast(task)
-    assert NATIONAL in set(samples["location"])
+    assert NATIONAL not in set(samples["location"])
 
 
 def test_fit_records_the_posterior_draw_behind_each_trajectory(

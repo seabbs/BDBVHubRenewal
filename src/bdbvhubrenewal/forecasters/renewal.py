@@ -60,6 +60,7 @@ __all__ = [
     "JITTER_RADIUS",
     "SAMPLER_ENV",
     "SINGLE_PATCH_MIN_CASES",
+    "SINGLE_PATCH_WEEKS",
     "TRAJECTORY_DRAW_FILE",
     "VARIANTS",
     "RenewalModel",
@@ -110,10 +111,15 @@ DEFAULT_SAMPLER: Final[Mapping[str, Any]] = {
 }
 """NUTS settings when neither the CI nor `SAMPLER_ENV` gives them."""
 
-SINGLE_PATCH_MIN_CASES: Final = 10
-"""Fewest cases for a location to get its own single-patch fit. Below it
-the location gets Poisson draws at a Gamma-distributed weekly rate
-(`bdbvhubrenewal.model.inputs.idle_draws`)."""
+SINGLE_PATCH_MIN_CASES: Final = 20
+"""Fewest cases in the last `SINGLE_PATCH_WEEKS` data weeks for a province
+to get its own single-patch fit: an outbreak province, as the main model's
+sporadic class. Below it the province gets Poisson draws at a
+Gamma-distributed weekly rate (`bdbvhubrenewal.model.inputs.idle_draws`).
+A few old cases alone (Bas-Uele, 13 to date and 7 in 6 weeks) did not
+converge (R-hat 1.71 at 2026-10-24)."""
+SINGLE_PATCH_WEEKS: Final = 6
+"""Weeks of recent cases the single-patch rule looks back over."""
 
 RECENT_WEEKS: Final = 4
 """Data weeks behind the share that carries the national data gap forward."""
@@ -149,8 +155,8 @@ class Variant:
     register : bool
         Register it as a model for the backtest.
     per_location : bool
-        Fit each location, the nation included, on its own series, with no
-        pooling or coupling. National is then its own fit.
+        Fit each province on its own series, with no pooling or coupling.
+        National is their sum plus the unassigned part.
     """
 
     name: str
@@ -171,8 +177,8 @@ VARIANTS: Final[dict[str, Variant]] = {
         ),
         Variant(
             "renewalsp",
-            "Single patch: one renewal fitted to each location's series on "
-            "its own, the nation included, with no pooling or coupling.",
+            "Single patch: one renewal fitted to each province's series on "
+            "its own, with no pooling or coupling; national is their sum.",
             overrides={
                 "national": True,
                 "coupling": "none",
@@ -983,18 +989,14 @@ class RenewalFit:
         Province samples (`SAMPLE_COLUMNS`).
     unassigned : pandas.DataFrame or None
         National cases in no reported province.
-    national : pandas.DataFrame or None
-        The national fit's samples, for a per-location variant.
     as_reported : pandas.DataFrame or None
         Samples of the counts reported by each date in `task.report_by`
         (`SAMPLE_COLUMNS` and `as_of`), for the weeks up to that date.
-        A per-location variant includes its national fit.
     """
 
     runs: Mapping[str, RenewalRun]
     samples: pd.DataFrame
     unassigned: pd.DataFrame | None = None
-    national: pd.DataFrame | None = None
     as_reported: pd.DataFrame | None = None
 
 
@@ -1102,11 +1104,11 @@ class RenewalModel:
     def forecast_fit(self, task: ForecastTask) -> RenewalFit:
         """Fit the variant to a task and return its samples.
 
-        A per-location variant fits each location with cases, the nation
-        included, on its own. Its national samples are that fit, and
-        there is no unassigned part. Otherwise the provinces are fitted
-        together and the unassigned part holds the provinces not reported
-        and the data's national gap (`data_gap`).
+        A per-location variant fits each province with cases on its own;
+        otherwise the provinces are fitted together. Either way national
+        is the sum of the provinces plus the unassigned part, which holds
+        the provinces not reported and the data's national gap
+        (`data_gap`).
 
         Parameters
         ----------
@@ -1136,13 +1138,19 @@ class RenewalModel:
             )
         rows = task.target.loc[task.target["vintage"] == task.vintage]
         cases = rows.groupby("location")["total"].sum()
+        weeks = sorted(set(rows["target_end_date"]))[-SINGLE_PATCH_WEEKS:]
+        recent = (
+            rows.loc[rows["target_end_date"].isin(weeks)]
+            .groupby("location")["total"]
+            .sum()
+        )
         runs: dict[str, RenewalRun] = {}
         frames: list[pd.DataFrame] = []
         reported: list[pd.DataFrame] = []
-        for loc in (*task.locations, NATIONAL):
+        for loc in task.locations:
             if cases.get(loc, 0) <= 0:
                 continue
-            if cases.get(loc, 0) < SINGLE_PATCH_MIN_CASES:
+            if recent.get(loc, 0) < SINGLE_PATCH_MIN_CASES:
                 idle = _idle_samples(task, loc, rows)
                 frames.append(idle)
                 # Too few cases to model reporting: the same draws.
@@ -1158,14 +1166,11 @@ class RenewalModel:
             )
             frames.append(part)
             reported.extend(_as_reported(sub, runs[loc], report_all=True))
-        both = pd.concat(frames, ignore_index=True)
-        nat = both["location"] == NATIONAL
-        national = both.loc[nat, ["target_end_date", "sample", "value"]]
+        samples = pd.concat(frames, ignore_index=True)
         return RenewalFit(
             runs,
-            both.loc[~nat].reset_index(drop=True),
-            None,
-            national.reset_index(drop=True) if nat.any() else None,
+            samples,
+            data_gap(task, samples),
             pd.concat(reported, ignore_index=True) if reported else None,
         )
 
@@ -1180,9 +1185,8 @@ class RenewalModel:
         Returns
         -------
         pandas.DataFrame
-            Columns `SAMPLE_COLUMNS`, with national rows for a
-            per-location variant, whose national is its own fit. With
-            `task.report_by`, also `as_of` rows (`RenewalFit.as_reported`).
+            Columns `SAMPLE_COLUMNS`. With `task.report_by`, also `as_of`
+            rows (`RenewalFit.as_reported`).
         """
         fit = self.forecast_fit(task)
         self.fit_diagnostics = [
@@ -1190,11 +1194,6 @@ class RenewalModel:
             for key, run in fit.runs.items()
         ]
         samples = fit.samples
-        if fit.national is not None:
-            national = fit.national.assign(location=NATIONAL)
-            samples = pd.concat(
-                [samples, national[list(SAMPLE_COLUMNS)]], ignore_index=True
-            )
         if not task.report_by:
             return samples
         later = [] if fit.as_reported is None else [fit.as_reported]
@@ -1205,7 +1204,6 @@ class RenewalModel:
 
 SAMPLES_FILE: Final = "samples.csv.gz"
 UNASSIGNED_FILE: Final = "unassigned.csv.gz"
-NATIONAL_FILE: Final = "national.csv.gz"
 TRAJECTORY_DRAW_FILE: Final = "trajectory_draw.csv"
 """The posterior draw behind each trajectory, by fit, so a later stage
 (health zones) can pair trajectories with posterior draws."""
@@ -1258,8 +1256,6 @@ def fit_renewal(
     fit.samples.to_csv(out / SAMPLES_FILE, index=False)
     if fit.unassigned is not None:
         fit.unassigned.to_csv(out / UNASSIGNED_FILE, index=False)
-    if fit.national is not None:
-        fit.national.to_csv(out / NATIONAL_FILE, index=False)
     pairs = [
         pd.DataFrame(
             {
@@ -1388,17 +1384,8 @@ def forecast_renewal(task: ForecastTask, fit_dir: Path | str) -> Forecast:
         unassigned = unassigned.loc[
             unassigned["target_end_date"].isin(task.target_end_dates)
         ].reset_index(drop=True)
-    national = None
-    if (path / NATIONAL_FILE).exists():
-        national = pd.read_csv(
-            path / NATIONAL_FILE, dtype={"target_end_date": str}
-        )
-        national = national.loc[
-            national["target_end_date"].isin(task.target_end_dates)
-        ].reset_index(drop=True)
     meta = json.loads((path / TRAJECTORIES_FILE).read_text())
     return Forecast(
-        national=national,
         samples=samples.reset_index(drop=True),
         unassigned=unassigned,
         modelled=tuple(meta["modelled"]),

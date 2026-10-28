@@ -35,12 +35,13 @@ from .delays import (
     ParametricDelay,
 )
 from .observation import OnsetStreams, RtPseudoObservation
-from .renewal import LearntKernel, MetapopulationInfections
+from .renewal import (
+    LearntKernel,
+    MetapopulationInfections,
+)
 from .rt import (
-    LinearWeeklyProcess,
     MissingOnsetFraction,
     NonCentredRandomWalk,
-    PerOriginShare,
     PooledInitialValue,
 )
 
@@ -118,20 +119,17 @@ class ModelConfig:
     truncation : bool
         Right truncation by vintage. For the total stream it uses the
         hub's delay pmf as a fixed reporting delay.
-    coupling : {"gravity", "learnt", "adjacency", "none"}
+    coupling : {"gravity", "learnt", "none"}
         Importation kernel between modelled provinces: fixed gravity,
         gravity with a learnt decay and destination weights
-        (`LearntKernel`), adjacency, or none.
+        (`LearntKernel`), or none.
+    kernel_flows : bool
+        With `coupling="learnt"`, add a multivariate normal on the log
+        flows (as BVDOutbreakSize).
     delay : {"hazard", "gamma", "lognormal"}
         Nonparametric hazard delay or a censored parametric family.
     depletion : bool
         Susceptible depletion in the renewal.
-    rt_cadence : {"daily", "weekly", "linear"}
-        Step of the Rt random walks: daily, weekly knots held for the
-        week, or weekly knots joined linearly (`LinearWeeklyProcess`).
-    rt_deviation : {"rw", "ar1"}
-        Province deviations as random walks, or mean-reverting AR(1)
-        with a sampled half-life (default, as BVDOutbreakSize).
     active : {"cases", "all"}
         Full renewal for provinces with cases only, or for every province.
     inactive : {"imports", "none"}
@@ -144,24 +142,28 @@ class ModelConfig:
         Share $\nu$ of each province at risk, which depletion uses.
         `None` (default) estimates it with a log-normal prior; a number
         fixes it.
-    importation : {"shared", "per_origin"}
-        One importation share $\varepsilon$, or one per origin partially
-        pooled on the logit scale (`PerOriginShare`).
-    future_rt : {"walk", "hold"}
-        Rt past the data: the random walks carry on, or Rt holds at its
-        last value (EpiNow2 `future = "latest"`).
-    rt_weighting : {"equal", "cases"}
-        Province Rt deviations sum to zero with equal weights, or weighted
-        by cumulative cases in the vintage, so the national Rt walk is the
-        case-weighted log Rt.
-    seeding : {"first_case", "start"}
-        Seed each province over its first case week, or every province
-        at the start of the grid.
-    walk : {"knots", "noncentred", "centred"}
-        Parameterisation of the national Rt walk: weekly knots of total
-        log Rt (`KnotWalk`, default), standardised steps, or the path
-        relative to its start. Province deviations, $\pi$, delays and
-        ascertainment always use standardised steps.
+    rt_weighting : {"equal", "cases", "sqrt_cases"}
+        Province Rt deviations sum to zero with equal weights, weighted by
+        cumulative cases in the vintage, so the national Rt walk is the
+        case-weighted log Rt, or by their square root, which tempers how
+        far the largest province pins the national walk.
+    outbreak_threshold : float or None
+        A province is an outbreak province in a week when its cases over
+        the last `outbreak_window` weeks reach this many, and sporadic
+        otherwise (`outbreak_classes`). Sporadic weeks have no Rt
+        deviation (national Rt plus imports); the province stays in the
+        coupled renewal and can switch either way. The case-weighted
+        basis covers the outbreak provinces at each time. `None`
+        (default) makes every province with cases an outbreak province.
+    outbreak_window : int
+        Weeks of cases the class looks back over.
+    import_rt : {"destination", "origin"}
+        Imports grow at the destination's Rt (default) or arrive at the
+        origin's, as BVDOutbreakSize relocates infections.
+    seeding : {"first_case", "primary"}
+        Seed each province over its first case week, or only the first
+        province with cases, with importation seeding the rest (as
+        BVDOutbreakSize).
     bvd : bool
         Add BVDOutbreakSize Rt as a tempered pseudo-observation
         (`RtPseudoObservation`), when the vintage carries it.
@@ -185,28 +187,24 @@ class ModelConfig:
         The Dirichlet-multinomial (default) has $1/\sqrt{\psi} \sim
         \text{HalfNormal}(0.1)$, with $\psi$ capped at $10^4$, so that
         thousands of pooled delays do not make the delay overconfident.
-    report_dow : bool
-        Add a report day-of-week effect to the hazard delay
-        (`HazardDelay` with `report_dow`). Needs `delay="hazard"`.
     """
 
     national: bool = False
     streams: Literal["split", "total"] = "split"
     truncation: bool = True
-    coupling: Literal["gravity", "learnt", "adjacency", "none"] = "gravity"
+    coupling: Literal["gravity", "learnt", "none"] = "gravity"
+    kernel_flows: bool = False
     delay: Literal["hazard", "gamma", "lognormal"] = "hazard"
     depletion: bool = True
-    rt_cadence: Literal["daily", "weekly", "linear"] = "weekly"
-    rt_deviation: Literal["rw", "ar1"] = "ar1"
     active: Literal["cases", "all"] = "cases"
     inactive: Literal["imports", "none"] = "imports"
     report_inactive: bool = True
     effective_population: float | None = None
-    walk: Literal["knots", "noncentred", "centred"] = "knots"
-    seeding: Literal["first_case", "start"] = "first_case"
-    rt_weighting: Literal["equal", "cases"] = "equal"
-    future_rt: Literal["walk", "hold"] = "walk"
-    importation: Literal["shared", "per_origin"] = "shared"
+    seeding: Literal["first_case", "primary"] = "first_case"
+    rt_weighting: Literal["equal", "cases", "sqrt_cases"] = "equal"
+    outbreak_threshold: float | None = None
+    outbreak_window: int = 6
+    import_rt: Literal["destination", "origin"] = "destination"
     bvd: bool = False
     bvd_alpha: float = 0.5
     dmax: int = 60
@@ -217,7 +215,6 @@ class ModelConfig:
     delay_counts: Literal["multinomial", "dirichlet-multinomial"] = (
         "dirichlet-multinomial"
     )
-    report_dow: bool = False
 
 
 MAIN = ModelConfig()
@@ -329,42 +326,31 @@ def _named_walk(
     name: str,
     sd: float,
     n_weeks: int,
-    cadence: str = "weekly",
     ar: bool = False,
-    centred: bool = False,
     knots: tuple[float, float] | None = None,
-    future: str = "walk",
 ) -> TemporalProcess:
-    """Walk frozen over the seeding period, fitted on the data weeks only.
+    """Weekly walk frozen over the seeding period, fitted on the data weeks.
 
     `n_weeks` data weeks set the fit axis; later steps are drawn in the
     forecast pass. With `ar`, the walk is AR(1) with a half-life of
     LogNormal(log 6 weeks, 0.6) (BVDOutbreakSize deviations: 42 days).
+    With `knots`, the knots of the walk are sampled (`KnotWalk`).
     """
     sd_rv = DistributionalVariable(name, dist.HalfNormal(sd))
-    weekly = cadence in ("weekly", "linear")
-    frozen = GEN_INT_LENGTH // 7 if weekly else GEN_INT_LENGTH
-    n_fit = frozen + n_weeks if weekly else frozen + 7 * n_weeks
+    frozen = GEN_INT_LENGTH // 7
     half_life = None
     if ar:
         half_life = DistributionalVariable(
-            f"{name}_half_life",
-            dist.LogNormal(np.log(6.0 if weekly else 42.0), 0.6),
+            f"{name}_half_life", dist.LogNormal(np.log(6.0), 0.6)
         )
     inner = NonCentredRandomWalk(
         sd_rv,
         frozen=frozen,
-        centred=centred,
         knots=knots,
-        n_fit=n_fit,
+        n_fit=frozen + n_weeks,
         half_life_rv=half_life,
-        future=future,
     )
-    if cadence == "linear":
-        return LinearWeeklyProcess(inner)
-    if cadence == "weekly":
-        return WeeklyTemporalProcess(inner, start_dow=SUNDAY)
-    return inner
+    return WeeklyTemporalProcess(inner, start_dow=SUNDAY)
 
 
 def fit_weeks(data: Vintage, config: ModelConfig) -> int:
@@ -409,6 +395,40 @@ def _nb_noise(stream: str) -> NegativeBinomialNoise:
     )
 
 
+def outbreak_classes(
+    weekly: np.ndarray, window: int, threshold: float | None
+) -> np.ndarray | None:
+    r"""Outbreak provinces by week: recent cases at or above a threshold.
+
+    A province is an outbreak province in week $w$ when its cases over
+    weeks $w - W + 1, \dots, w$ reach $N$. Recent weeks are part
+    reported, so a province can look quieter at the cut-off than it will
+    once its cases are in.
+
+    Parameters
+    ----------
+    weekly : numpy.ndarray
+        Cases by onset week, `(n_weeks, P)`, NaN for none.
+    window : int
+        $W$, in weeks.
+    threshold : float or None
+        $N$.
+
+    Returns
+    -------
+    numpy.ndarray or None
+        Boolean `(n_weeks, P)`, or `None` with no threshold.
+    """
+    if threshold is None:
+        return None
+    cases = np.nan_to_num(np.asarray(weekly, dtype=float))
+    total = np.cumsum(cases, axis=0)
+    lagged = np.vstack([np.zeros((window, cases.shape[1])), total])[
+        : cases.shape[0]
+    ]
+    return np.asarray(total - lagged >= threshold)
+
+
 def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     """Build the province model for one vintage.
 
@@ -425,26 +445,33 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         Model with one observation, `onsets`.
     """
     n_prov = data.n_provinces
-    daily = config.rt_cadence == "daily"
-    centred = config.walk == "centred"
-    knots = config.walk == "knots"
-    rt_scale = 1 / np.sqrt(7) if daily else 1.0
     single = n_prov == 1
     kernel = None if config.coupling == "none" or single else data.kernel
     if kernel is not None and config.coupling == "learnt":
         if data.distances is None or data.all_populations is None:
             raise ValueError("A learnt kernel needs distances and populations.")
         kernel = LearntKernel(
-            "kernel", data.distances, data.all_populations, n_prov
+            "kernel",
+            data.distances,
+            data.all_populations,
+            n_prov,
+            flows=config.kernel_flows,
         )
     if kernel is None:
         importation = None
     else:
-        importation = (
-            PerOriginShare("importation", n_prov)
-            if config.importation == "per_origin"
-            else DistributionalVariable("importation", dist.Beta(1, 100))
-        )
+        importation = DistributionalVariable("importation", dist.Beta(1, 100))
+
+    weekly = data.known + data.imputed
+    totals = np.nansum(weekly, axis=0)
+    outbreak = outbreak_classes(
+        weekly, config.outbreak_window, config.outbreak_threshold
+    )
+    primary = (
+        int(np.argmin(data.seed_days))
+        if config.seeding == "primary" and data.seed_days is not None
+        else None
+    )
 
     builder = PyrenewBuilder()
     builder.configure_latent(
@@ -456,37 +483,40 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         I0_rv=TransformedVariable(
             "I0",
             DistributionalVariable(
-                "initial_onsets", dist.LogNormal(0.0, 1.5).expand([n_prov])
+                "initial_onsets",
+                dist.LogNormal(0.0, 1.5).expand(
+                    [1 if primary is not None else n_prov]
+                ),
             ),
             AffineTransform(0.0, 1 / (ALPHA0 * data.populations)),
         ),
         log_rt_time_0_rv=PooledInitialValue(
-            "log_rt0", n_prov, 0.0, 0.5, 0.3, fixed_mean=knots
+            "log_rt0",
+            n_prov,
+            0.0,
+            0.5,
+            0.3,
+            fixed_mean=True,
+            active=None if outbreak is None else outbreak.any(axis=0),
         ),
         baseline_rt_process=_named_walk(
-            "rt_sd",
-            0.2 * rt_scale,
-            fit_weeks(data, config),
-            config.rt_cadence,
-            centred=centred,
-            knots=(0.0, 0.5) if knots else None,
-            future=config.future_rt,
+            "rt_sd", 0.2, fit_weeks(data, config), knots=(0.0, 0.5)
         ),
         subpop_rt_deviation_process=_named_walk(
-            "rt_dev_sd",
-            0.1 * rt_scale,
-            fit_weeks(data, config),
-            config.rt_cadence,
-            ar=config.rt_deviation == "ar1",
-            future=config.future_rt,
+            "rt_dev_sd", 0.1, fit_weeks(data, config), ar=True
         ),
         kernel=kernel,
         importation_rv=importation,
         deplete=config.depletion,
-        seed_days=data.seed_days if config.seeding == "first_case" else None,
-        deviation_weights=np.nansum(data.known + data.imputed, axis=0) + 1.0
-        if config.rt_weighting == "cases"
-        else None,
+        seed_days=data.seed_days,
+        primary=primary,
+        deviation_weights={
+            "equal": None,
+            "cases": totals + 1.0,
+            "sqrt_cases": np.sqrt(totals) + 1.0,
+        }[config.rt_weighting],
+        outbreak=outbreak,
+        import_rt=config.import_rt,
         rt_observation=RtPseudoObservation(alpha=config.bvd_alpha, **data.bvd)
         if config.bvd and data.bvd is not None
         else None,
@@ -546,9 +576,7 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
                 "delay", config.dmax, delay_time, config.delay
             )
         else:
-            delay = HazardDelay(
-                "delay", config.dmax, delay_time, report_dow=config.report_dow
-            )
+            delay = HazardDelay("delay", config.dmax, delay_time)
     imports = None
     if config.inactive == "imports" and data.import_kernel is not None:
         imports = DistributionalVariable(

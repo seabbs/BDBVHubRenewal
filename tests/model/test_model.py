@@ -55,16 +55,13 @@ def test_active_set_follows_the_data(outbreak, sim_tables, table):
     [
         *LADDER.values(),
         ModelConfig(delay="gamma"),
-        ModelConfig(delay="lognormal", coupling="adjacency"),
-        ModelConfig(rt_deviation="ar1"),
-        ModelConfig(rt_cadence="daily"),
+        ModelConfig(delay="lognormal"),
         ModelConfig(coupling="learnt"),
-        ModelConfig(walk="noncentred"),
-        ModelConfig(future_rt="hold"),
-        ModelConfig(importation="per_origin"),
         ModelConfig(rt_weighting="cases"),
-        ModelConfig(rt_cadence="linear"),
-        ModelConfig(seeding="start"),
+        ModelConfig(rt_weighting="sqrt_cases"),
+        ModelConfig(outbreak_threshold=20, import_rt="origin"),
+        ModelConfig(coupling="learnt", kernel_flows=True),
+        ModelConfig(seeding="primary"),
     ],
 )
 def test_model_sites_and_shapes(outbreak, sim_tables, table, cfg):
@@ -83,12 +80,8 @@ def test_model_sites_and_shapes(outbreak, sim_tables, table, cfg):
     assert tr["latent::rt_subpop"]["value"].shape == (7 * n_weeks, p)
     assert ("onsets_inactive_obs" in tr) == (cfg.inactive == "imports")
     # The fit sees the data weeks only; the horizon is drawn separately.
-    if not cfg.national and cfg.rt_deviation == "ar1":
-        held = cfg.future_rt == "hold"
-        assert ("log_rt_deviations_z_future" in tr) != held
-        if held:
-            rt = np.asarray(tr["latent::rt_subpop"]["value"])
-            np.testing.assert_allclose(rt[-1], rt[-21], rtol=1e-6)
+    if not cfg.national:
+        assert "log_rt_deviations_z_future" in tr
     tr = trace(model, data)
     sampled = {
         k: v["value"]
@@ -279,9 +272,6 @@ def test_late_provinces_are_seeded_at_their_first_cases(outbreak, table):
     # Infections are dated by onset, so nothing comes before the first
     # case week; the seed lands in it.
     assert x[:day, 1].sum() < 1e-3 * x[day : day + 7, 1].sum()
-    start = build_model(data, ModelConfig(coupling="none", seeding="start"))
-    x0 = np.asarray(trace(start, data)["latent_infections_by_subpop"]["value"])
-    assert x0[:day, 1].sum() > x[:day, 1].sum()
 
 
 def test_missingness_offsets_are_non_centred(sim_vintage):
@@ -330,3 +320,131 @@ def test_as_reported_draws_match_the_vintage_at_its_own_cutoff(sim_vintage):
         np.median(two_weeks, 0)[: n - 1]
         <= np.median(draws["national"], 0)[: n - 1] * 1.25 + 3
     )
+
+
+def _log_density(model, data):
+    tr = trace(model, data)
+    sampled = {
+        k: v["value"]
+        for k, v in tr.items()
+        if v["type"] == "sample" and not v["is_observed"]
+    }
+    return float(
+        numpyro.infer.util.log_density(
+            model.sample, (), model_args(model, data), sampled
+        )[0]
+    )
+
+
+def test_outbreak_classes_use_recent_cases():
+    from bdbvhubrenewal.model.model import outbreak_classes
+
+    weekly = np.array(
+        [[30, 0], [5, 1], [0, np.nan], [0, 25], [0, 0], [40, 0]], dtype=float
+    )
+    got = outbreak_classes(weekly, 2, 20)
+    expected = np.array(
+        [[1, 0], [1, 0], [0, 0], [0, 1], [0, 1], [1, 0]], dtype=bool
+    )
+    np.testing.assert_array_equal(got, expected)
+    assert outbreak_classes(weekly, 2, None) is None
+
+
+def test_sporadic_weeks_take_national_rt(sim_vintage):
+    from bdbvhubrenewal.model.model import outbreak_classes
+
+    data = sim_vintage
+    cfg = ModelConfig(
+        outbreak_threshold=20,
+        outbreak_window=6,
+        rt_weighting="cases",
+        import_rt="origin",
+    )
+    classes = outbreak_classes(data.known + data.imputed, 6, 20)
+    assert classes.any() and not classes.all()
+    model = build_model(data, cfg)
+    tr = trace(model, data)
+    n_init = model.latent.n_initialization_points
+    log_rt = np.log(np.asarray(tr["latent::rt_subpop"]["value"]))[n_init:]
+    base = np.log(np.asarray(tr["latent::rt_baseline"]["value"]))[n_init:]
+    daily = np.repeat(classes, 7, axis=0)[: log_rt.shape[0]]
+    dev = log_rt - base
+    np.testing.assert_allclose(dev[~daily], 0.0, atol=1e-5)
+    assert np.abs(dev[daily]).max() > 1e-4
+    # Case weights over the outbreak provinces at each time.
+    w = np.nansum(data.known + data.imputed, axis=0) + 1.0
+    np.testing.assert_allclose((dev * daily) @ w, 0.0, atol=1e-2)
+    imported = np.asarray(tr["latent::infections_imported"]["value"])
+    x = np.asarray(tr["latent_infections_by_subpop"]["value"])
+    f = np.asarray(data.populations) / np.sum(data.populations)
+    assert imported.shape == x.shape
+    assert np.all(imported * f * np.sum(data.populations) <= x + 1e-6)
+    assert np.isfinite(_log_density(model, data))
+
+
+def test_primary_seeding_leaves_other_provinces_to_importation(sim_vintage):
+    data = sim_vintage
+    model = build_model(data, ModelConfig(seeding="primary", coupling="none"))
+    tr = trace(model, data)
+    assert tr["initial_onsets"]["value"].shape == (1,)
+    x = np.asarray(tr["latent_infections_by_subpop"]["value"])
+    primary = int(np.argmin(data.seed_days))
+    others = np.arange(x.shape[1]) != primary
+    # Without coupling nothing reaches the other provinces.
+    assert x[:, others].max() < 1e-3
+    assert x[:, primary].max() > 1.0
+    coupled = build_model(data, ModelConfig(seeding="primary"))
+    xc = np.asarray(
+        trace(coupled, data)["latent_infections_by_subpop"]["value"]
+    )
+    assert xc[:, others].max(axis=0).min() > 1e-3
+    assert np.isfinite(_log_density(coupled, data))
+
+
+def test_learnt_kernel_flows_are_zero_at_prior_centre(sim_vintage):
+    from bdbvhubrenewal.model import LearntKernel
+
+    data = sim_vintage
+    p = data.n_provinces
+    k = LearntKernel(
+        "kernel", data.distances, data.all_populations, p, flows=True
+    )
+    n_flow = k.symmetric.shape[1] + k.antisymmetric.shape[1]
+    zero = {
+        "kernel_log_decay": 0.0,
+        "kernel_weight_z": np.zeros(p - 1),
+        "kernel_flow_z": np.zeros(n_flow),
+    }
+    with (
+        numpyro.handlers.seed(rng_seed=0),
+        numpyro.handlers.substitute(data=zero),
+    ):
+        got = np.asarray(k())
+    plain = LearntKernel("kernel", data.distances, data.all_populations, p)
+    with (
+        numpyro.handlers.seed(rng_seed=0),
+        numpyro.handlers.substitute(data=zero),
+    ):
+        base = np.asarray(plain())
+    np.testing.assert_allclose(got, base, rtol=1e-5, atol=1e-7)
+    with numpyro.handlers.seed(rng_seed=1), numpyro.handlers.trace() as tr:
+        draw = np.asarray(k())
+    np.testing.assert_allclose(draw.sum(axis=1), 1.0, rtol=1e-5)
+    np.testing.assert_allclose(np.diag(draw), 0.0, atol=1e-12)
+    assert "kernel_flow_sd" in tr and "kernel_destination_weights" in tr
+
+
+def test_default_has_no_sporadic_class():
+    cfg = ModelConfig()
+    assert cfg.outbreak_threshold is None and cfg.import_rt == "destination"
+
+
+def test_sqrt_case_weights_temper_the_basis(sim_vintage):
+    data = sim_vintage
+    model = build_model(data, ModelConfig(rt_weighting="sqrt_cases"))
+    tr = trace(model, data)
+    n_init = model.latent.n_initialization_points
+    log_rt = np.log(np.asarray(tr["latent::rt_subpop"]["value"]))[n_init:]
+    base = np.log(np.asarray(tr["latent::rt_baseline"]["value"]))[n_init:]
+    w = np.sqrt(np.nansum(data.known + data.imputed, axis=0)) + 1.0
+    np.testing.assert_allclose((log_rt - base) @ w, 0.0, atol=1e-3)
