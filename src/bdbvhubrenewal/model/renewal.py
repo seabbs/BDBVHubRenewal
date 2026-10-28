@@ -24,29 +24,6 @@ from .observation import RtPseudoObservation
 from .rt import pooled_walk
 
 
-def adjacency_kernel(adjacency: ArrayLike) -> np.ndarray:
-    """Build a row-normalised importation kernel from a 0/1 adjacency matrix.
-
-    Rows are origins, as in `bdbvhubrenewal.model.inputs.gravity_kernel`:
-    `K[q, p]` is the share of province `q`'s exported transmission that
-    lands in `p`.
-
-    Parameters
-    ----------
-    adjacency : array_like
-        Symmetric 0/1 matrix, shape `(P, P)`. Each province needs a
-        neighbour.
-
-    Returns
-    -------
-    numpy.ndarray
-        Kernel with zero diagonal and rows summing to one.
-    """
-    adj = np.asarray(adjacency, dtype=float).copy()
-    np.fill_diagonal(adj, 0.0)
-    return np.asarray(adj / adj.sum(axis=1, keepdims=True), dtype=float)
-
-
 def mixing_matrix(
     kernel: ArrayLike, importation: ArrayLike, fractions: ArrayLike
 ) -> Array:

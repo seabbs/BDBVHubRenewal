@@ -111,7 +111,7 @@ class NonCentredRandomWalk:
 
     `knots=(m, s)` samples the knots themselves (`KnotWalk`) on the fit
     axis, with the first knot $N(m, s)$ in place of `initial_value`
-    (random walk only). `centred=True` samples the path on the fit axis.
+    (random walk only).
 
     Parameters
     ----------
@@ -119,17 +119,12 @@ class NonCentredRandomWalk:
         Step SD $\sigma$.
     frozen : int, optional
         Leading steps fixed at zero.
-    centred : bool, optional
-        Sample the path rather than standardised steps.
     knots : tuple of float, optional
         Sample the knots (`KnotWalk`).
     n_fit : int, optional
         Length of the fit axis.
     half_life_rv : RandomVariable, optional
         Half-life in steps; makes the process AR(1).
-    future : {"walk", "hold"}, optional
-        Past the fit axis, keep walking (default) or hold the last value
-        (EpiNow2's `future = "latest"`).
     """
 
     step_size: int = 1
@@ -138,19 +133,15 @@ class NonCentredRandomWalk:
         self,
         innovation_sd_rv: RandomVariable,
         frozen: int = 0,
-        centred: bool = False,
         knots: tuple[float, float] | None = None,
         n_fit: int | None = None,
         half_life_rv: RandomVariable | None = None,
-        future: str = "walk",
     ) -> None:
         self.innovation_sd_rv = innovation_sd_rv
         self.frozen = frozen
-        self.centred = centred
         self.knots = knots
         self.n_fit = n_fit
         self.half_life_rv = half_life_rv
-        self.future = future
 
     def sample(
         self,
@@ -197,16 +188,6 @@ class NonCentredRandomWalk:
                 ),
             ).T
             past = jnp.vstack([jnp.repeat(k[:1], frozen, axis=0), k])
-        elif self.centred:
-            path = numpyro.sample(
-                f"{name_prefix}_path",
-                dist.GaussianRandomWalk(
-                    jnp.broadcast_to(sd, (n_processes,)), num_steps=n_free
-                ),
-            ).T
-            past = x0[None, :] + jnp.vstack(
-                [jnp.zeros((frozen + 1, n_processes)), path]
-            )
         else:
             z = numpyro.sample(
                 f"{name_prefix}_z",
@@ -220,8 +201,6 @@ class NonCentredRandomWalk:
         n_future = n_timepoints - n_past
         if n_future == 0:
             return past
-        if self.future == "hold":
-            return jnp.vstack([past, jnp.repeat(past[-1:], n_future, axis=0)])
         z_future = numpyro.sample(
             f"{name_prefix}_z_future",
             dist.Normal(0.0, 1.0).expand([n_future, n_processes]),
@@ -534,94 +513,3 @@ class MissingOnsetFraction(RandomVariable):
         pi = jax.nn.sigmoid(logit_pi)
         numpyro.deterministic(self.name, pi)
         return pi
-
-
-class LinearWeeklyProcess:
-    """Weekly knots joined linearly, rather than held for the week.
-
-    Wraps a `TemporalProcess` sampled at weekly cadence (one knot per
-    week, from the first day of the axis, which is a Sunday) and
-    interpolates daily values between successive knots, holding the last.
-    Use in place of PyRenew's `WeeklyTemporalProcess` for Rt.
-
-    Parameters
-    ----------
-    inner : TemporalProcess
-        Weekly process.
-    """
-
-    step_size: int = 7
-
-    def __init__(self, inner: TemporalProcess) -> None:
-        self.inner = inner
-
-    def sample(
-        self,
-        n_timepoints: int,
-        initial_value: float | ArrayLike | None = None,
-        n_processes: int = 1,
-        name_prefix: str = "linear",
-        *,
-        first_day_dow: int | None = None,
-    ) -> Array:
-        """Sample knots and interpolate to days.
-
-        Returns
-        -------
-        ArrayLike
-            Shape `(n_timepoints, n_processes)`.
-        """
-        n_weeks = (n_timepoints + 6) // 7
-        knots = self.inner.sample(
-            n_timepoints=n_weeks,
-            initial_value=initial_value,
-            n_processes=n_processes,
-            name_prefix=name_prefix,
-        )
-        position = jnp.arange(n_timepoints) / 7.0
-        return jax.vmap(
-            lambda k: jnp.interp(position, jnp.arange(n_weeks), k),
-            in_axes=1,
-            out_axes=1,
-        )(knots)
-
-
-class PerOriginShare(RandomVariable):
-    r"""Importation share per origin, partially pooled on the logit scale.
-
-    $$\operatorname{logit} \varepsilon_q = \mu + \sigma z_q, \qquad
-    \mu \sim N(\operatorname{logit} 0.01, 1), \
-    \sigma \sim N^+(0, 0.5), \ z_q \sim N(0, 1),$$
-
-    so the shares centre near the shared Beta(1, 100) prior's mean.
-
-    Parameters
-    ----------
-    name : str
-        Prefix for the sample sites.
-    n_groups : int
-        Number of origins.
-    """
-
-    def __init__(self, name: str, n_groups: int) -> None:
-        super().__init__(name=name)
-        self.n_groups = n_groups
-
-    def sample(self, **kwargs: object) -> Array:
-        """Sample one share per origin.
-
-        Returns
-        -------
-        ArrayLike
-            Shape `(n_groups,)`.
-        """
-        mu = numpyro.sample(
-            f"{self.name}_mean", dist.Normal(jnp.log(0.01 / 0.99), 1.0)
-        )
-        sd = numpyro.sample(f"{self.name}_sd", dist.HalfNormal(0.5))
-        z = numpyro.sample(
-            f"{self.name}_z", dist.Normal(0.0, 1.0).expand([self.n_groups])
-        )
-        share = jax.nn.sigmoid(mu + sd * z)
-        numpyro.deterministic(self.name, share)
-        return share

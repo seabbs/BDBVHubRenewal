@@ -36,7 +36,6 @@ from .observation import OnsetStreams, RtPseudoObservation, onset_expectations
 from .renewal import (
     LearntKernel,
     MetapopulationInfections,
-    adjacency_kernel,
     coupled_renewal,
     flow_pair_basis,
     importation_flow_factor,
@@ -64,7 +63,6 @@ __all__ = [
     "PooledInitialValue",
     "RtPseudoObservation",
     "Vintage",
-    "adjacency_kernel",
     "build_model",
     "censored_pmf",
     "coupled_renewal",

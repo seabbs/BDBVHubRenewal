@@ -111,24 +111,29 @@ SAMPLER = {
     "max_tree_depth": 10,
     "target_accept": 0.9,
 }
+_R1 = dataclasses.replace(pr.MAIN, rt_weighting="cases")
+_R2 = dataclasses.replace(_R1, coupling="learnt", kernel_flows=True)
+_R3 = dataclasses.replace(_R2, seeding="primary")
+_R4 = dataclasses.replace(_R3, outbreak_threshold=20, outbreak_window=6)
 RUNGS: dict[str, pr.ModelConfig | str] = {
     **pr.model.LADDER,
-    "S6 + report day-of-week": dataclasses.replace(pr.MAIN, report_dow=True),
-    "renewal case-weighted Rt": dataclasses.replace(
-        pr.MAIN, rt_weighting="cases"
+    "R1 case-weighted Rt": _R1,
+    "R2a R1 + learnt destination weights": dataclasses.replace(
+        _R1, coupling="learnt"
     ),
-    "renewal learnt kernel": dataclasses.replace(pr.MAIN, coupling="learnt"),
-    "renewal future Rt held": dataclasses.replace(pr.MAIN, future_rt="hold"),
-    "renewal per-origin importation": dataclasses.replace(
-        pr.MAIN, importation="per_origin"
-    ),
-    "renewal linear Rt knots": dataclasses.replace(
-        pr.MAIN, rt_cadence="linear"
+    "R2 R2a + MVN log flows": _R2,
+    "R3 R2 + primary seeding": _R3,
+    "R4 R3 + sporadic class (N=20, W=6)": _R4,
+    "R4 sensitivity N=10": dataclasses.replace(_R4, outbreak_threshold=10),
+    "R4 sensitivity N=50": dataclasses.replace(_R4, outbreak_threshold=50),
+    "R5 R4 + imports at the origin's Rt": dataclasses.replace(
+        _R4, import_rt="origin"
     ),
     "renewalbvd": pr.BVD,
     "renewalsp": "renewalsp",
 }
-"""Rungs in order: the build steps (S5 is `renewal`), then variants."""
+"""Rungs in order: the build steps (S5 is `renewal`), the R steps on
+importation and sporadic provinces, then the variants."""
 
 DESCRIPTIONS = {
     "persistence": "The last complete week carried forward, as the reference.",
@@ -143,15 +148,21 @@ DESCRIPTIONS = {
     "S4 + coupling and importation": "Gravity importation between provinces "
     "and an importation-only part for provinces with no cases.",
     "S5 + depletion (main)": "Susceptible depletion; this is `renewal`.",
-    "S6 + report day-of-week": "A sum-to-zero report day-of-week effect "
-    "on the delay hazard.",
-    "renewal case-weighted Rt": "Province Rt deviations sum to zero "
-    "weighted by cases, so the national walk is the case-weighted Rt.",
-    "renewal learnt kernel": "Gravity decay and destination weights learnt.",
-    "renewal future Rt held": "Rt held at its last value past the data.",
-    "renewal per-origin importation": "One importation share per origin, "
-    "partially pooled.",
-    "renewal linear Rt knots": "Weekly Rt knots joined linearly.",
+    "R1 case-weighted Rt": "Province Rt deviations sum to zero weighted by "
+    "cases, so the national walk is the case-weighted Rt.",
+    "R2a R1 + learnt destination weights": "Gravity with a learnt distance "
+    "decay and sum-to-zero destination log weights, holding each origin's "
+    "export total.",
+    "R2 R2a + MVN log flows": "A multivariate normal on the log flows on "
+    "top, as BVDOutbreakSize.",
+    "R3 R2 + primary seeding": "Only Ituri is seeded; importation seeds every "
+    "other province.",
+    "R4 R3 + sporadic class (N=20, W=6)": "Provinces with under 20 cases in "
+    "the last 6 weeks follow national Rt plus imports.",
+    "R4 sensitivity N=10": "As R4 with a threshold of 10.",
+    "R4 sensitivity N=50": "As R4 with a threshold of 50.",
+    "R5 R4 + imports at the origin's Rt": "Imported transmission arrives at "
+    "the origin's Rt, as BVDOutbreakSize, not the destination's.",
     "renewalbvd": "BVDOutbreakSize Rt as a tempered pseudo-observation.",
     "renewalsp": "An independent single-patch renewal per location, the "
     "nation included.",
@@ -173,25 +184,18 @@ DECISIONS: dict[str, str] = {
     "level, it learns across provinces and forecasts spread to new ones.",
     "S5 + depletion (main)": "Kept and chosen as `renewal`: fewer wild prior "
     "draws (0.44 to 0.32) and the best province scores of the build.",
-    "S6 + report day-of-week": "An option, not the default: no score gain, "
-    "slower and with a higher R-hat.",
-    "renewal learnt kernel": "An option for the backtest: scores slightly "
-    "worse than gravity and it mixes no better.",
-    "renewal future Rt held": "An option for the backtest: level with the "
-    "walk, slightly better on the real vintage.",
-    "renewal per-origin importation": "An option for the backtest: level "
-    "with one shared share; its lower real depth-cap share is one chain "
-    "capped and one not, not better mixing.",
-    "renewal linear Rt knots": "Dropped: worse on the real vintage and no "
-    "gain on simulated data.",
     "renewalbvd": "Shadow candidate: best on simulated data with a "
     "truth-based BVD summary, worse on the one real vintage.",
-    "renewalsp": "Comparison variant: province scores level with renewal "
-    "on the real vintage, but its own national fit did not converge (R-hat "
-    "2.2) and scores far worse.",
+    "renewalsp": "Comparison variant and the CI's step after the retry.",
 }
 """One sentence per rung: kept, dropped or an option, and why. Filled in
-from the results."""
+from the results. Rungs that have been decided and removed are in
+`results/development-log.csv`."""
+
+FOCUS = ("CD-TO", "CD-BU", "CD-NU", "CD-SU", "CD-SK")
+"""Late and sparse provinces reported on their own."""
+TIMING = ("CD-NK", "CD-HU", "CD-TO")
+"""Provinces whose first-case timing is checked."""
 
 
 def slug(name: str) -> str:
@@ -498,6 +502,78 @@ def per_location(
     return samples, summary
 
 
+def province_crps(samples, truth, locations) -> dict[str, float]:
+    """Mean CRPS per province over the truth weeks, a missing forecast 0."""
+    in_truth = {w for (_, w) in truth.index}
+    n = int(samples["sample"].max())
+    by = {
+        k: g["value"].to_numpy()
+        for k, g in samples.groupby(["location", "target_end_date"])
+    }
+    weeks_ = [
+        w for w in sorted(set(samples["target_end_date"])) if w in in_truth
+    ]
+    out = {}
+    for loc in locations:
+        vals = [
+            crps_sample(truth.get((loc, w), 0.0), by.get((loc, w), np.zeros(n)))
+            for w in weeks_
+        ]
+        out[f"crps_{loc}"] = float(np.mean(vals)) if vals else float("nan")
+        ahead = by.get((loc, weeks_[-3]), np.zeros(n)) if weeks_ else None
+        out[f"median_ahead1_{loc}"] = (
+            float(np.median(ahead)) if ahead is not None else float("nan")
+        )
+    return out
+
+
+def province_extras(run, locations, timing=()) -> dict:
+    """Import share, class, destination weight and first-case timing.
+
+    The import share is the posterior median share of a province's
+    infections up to the cut-off that came from importation. The class
+    is whether it is an outbreak province in the last data week. The
+    first-case lag is the first day the posterior median cumulative
+    infections reach one, less the first day of the first case week.
+    """
+    data, model = run["data"], run["model"]
+    smp = model.mcmc.get_samples()
+    n_init = model.latent.n_initialization_points
+    end = n_init + data.cutoff + 1
+    x = np.asarray(smp["latent_infections_by_subpop"])[:, n_init:end]
+    out: dict = {}
+    if "latent::infections_imported" in smp:
+        imp = np.asarray(smp["latent::infections_imported"])[:, n_init:end]
+        imp = imp * np.asarray(data.populations)[None, None, :]
+        share = imp.sum(1) / np.maximum(x.sum(1), 1e-12)
+    else:
+        share = None
+    classes = pr.model.outbreak_classes(
+        data.known + data.imputed,
+        model.config.outbreak_window,
+        model.config.outbreak_threshold,
+    )
+    weights = (
+        np.median(np.asarray(smp["kernel_destination_weights"]), axis=0)
+        if "kernel_destination_weights" in smp
+        else None
+    )
+    cum = np.median(np.cumsum(x, axis=1), axis=0)
+    for i, loc in enumerate(data.names):
+        if loc in locations:
+            if share is not None:
+                out[f"import_share_{loc}"] = float(np.median(share[:, i]))
+            if classes is not None:
+                out[f"outbreak_{loc}"] = float(classes[-1, i])
+            if weights is not None:
+                out[f"dest_weight_{loc}"] = float(weights[i])
+        if loc in timing and data.seed_days is not None:
+            hit = np.nonzero(cum[:, i] >= 1.0)[0]
+            first = int(hit[0]) if hit.size else np.nan
+            out[f"first_case_lag_{loc}"] = float(first - data.seed_days[i])
+    return out
+
+
 def real_scores(name, config, table, real, out) -> dict:
     """Fit each real origin, score as reported by `REAL_TRUTH`, average."""
     target, delays, locations = real
@@ -522,7 +598,10 @@ def real_scores(name, config, table, real, out) -> dict:
             run = fit_one(task, config, table, bvd, as_of=REAL_TRUTH)
             samples = as_reported_samples(task, run, REAL_TRUTH)
             res = fit_metrics(run) | {"n_active": len(run["data"].names)}
+            if not config.national:
+                res |= province_extras(run, FOCUS, TIMING)
         res |= scores(samples, later, REAL_TRUTH)
+        res |= province_crps(samples, later, FOCUS)
         print(name, "real", origin, res, flush=True)
         results.append((origin, res))
     return summarise_origins(results)
@@ -542,10 +621,14 @@ def summarise_origins(results) -> dict:
             out[f"real_{k}"] = f"{worst[0]}:{worst[1].get(k)}"
         elif numbers and len(numbers) == len(values):
             out[f"real_{k}"] = float(np.nanmean(numbers))
+    per_origin = ("crps_national", "crps_province", "seconds", "max_rhat")
+    focus = ("crps_CD-", "median_ahead1_", "import_share_", "outbreak_",
+             "dest_weight_", "first_case_lag_", "depth_share_chain",
+             "step_size_chain", "min_ess")  # fmt: skip
     for origin, r in results:
         tag = origin.replace("-", "")
-        for k in ("crps_national", "crps_province", "seconds", "max_rhat"):
-            if k in r:
+        for k in r:
+            if k in per_origin or k.startswith(focus):
                 out[f"real_{k}_{tag}"] = r[k]
     return out
 
@@ -574,6 +657,8 @@ def run_rung(name, config, outbreak, table, real) -> dict:
             if config.national:
                 samples = national_samples(task, run)
             res = fit_metrics(run) | rt_metrics(run, outbreak)
+            if not config.national:
+                res |= province_extras(run, SIM_LOCATIONS, TIMING)
         res |= scores(samples, truth)
         sims.append((str(day), res))
         print(

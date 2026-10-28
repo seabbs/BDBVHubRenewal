@@ -30,11 +30,12 @@ Model options map to `ModelConfig` fields.
 
 | Option | Field |
 |---|---|
-| Rt held at its last fitted value in the forecast | `future_rt="hold"` |
-| Weekly Rt knots joined linearly | `rt_cadence="linear"` |
-| Estimated gravity kernel | `coupling="learnt"` |
-| Importation share per origin | `importation="per_origin"` |
-| Report day-of-week effect on the delay hazard | `report_dow=True` |
+| Case-weighted Rt deviations | `rt_weighting="cases"` |
+| Learnt gravity decay and destination weights | `coupling="learnt"` |
+| Multivariate normal on the log flows | `kernel_flows=True` |
+| Only the first province seeded, the rest by importation | `seeding="primary"` |
+| Sporadic provinces from recent cases | `outbreak_threshold`, `outbreak_window` |
+| Imports at the origin's Rt | `import_rt="origin"` |
 | Multinomial delay counts | `delay_counts="multinomial"` |
 
 ## Numerics

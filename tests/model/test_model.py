@@ -55,16 +55,9 @@ def test_active_set_follows_the_data(outbreak, sim_tables, table):
     [
         *LADDER.values(),
         ModelConfig(delay="gamma"),
-        ModelConfig(delay="lognormal", coupling="adjacency"),
-        ModelConfig(rt_deviation="ar1"),
-        ModelConfig(rt_cadence="daily"),
+        ModelConfig(delay="lognormal"),
         ModelConfig(coupling="learnt"),
-        ModelConfig(walk="noncentred"),
-        ModelConfig(future_rt="hold"),
-        ModelConfig(importation="per_origin"),
         ModelConfig(rt_weighting="cases"),
-        ModelConfig(rt_cadence="linear"),
-        ModelConfig(seeding="start"),
         ModelConfig(outbreak_threshold=20, import_rt="origin"),
         ModelConfig(coupling="learnt", kernel_flows=True),
         ModelConfig(seeding="primary"),
@@ -86,12 +79,8 @@ def test_model_sites_and_shapes(outbreak, sim_tables, table, cfg):
     assert tr["latent::rt_subpop"]["value"].shape == (7 * n_weeks, p)
     assert ("onsets_inactive_obs" in tr) == (cfg.inactive == "imports")
     # The fit sees the data weeks only; the horizon is drawn separately.
-    if not cfg.national and cfg.rt_deviation == "ar1":
-        held = cfg.future_rt == "hold"
-        assert ("log_rt_deviations_z_future" in tr) != held
-        if held:
-            rt = np.asarray(tr["latent::rt_subpop"]["value"])
-            np.testing.assert_allclose(rt[-1], rt[-21], rtol=1e-6)
+    if not cfg.national:
+        assert "log_rt_deviations_z_future" in tr
     tr = trace(model, data)
     sampled = {
         k: v["value"]
@@ -282,9 +271,6 @@ def test_late_provinces_are_seeded_at_their_first_cases(outbreak, table):
     # Infections are dated by onset, so nothing comes before the first
     # case week; the seed lands in it.
     assert x[:day, 1].sum() < 1e-3 * x[day : day + 7, 1].sum()
-    start = build_model(data, ModelConfig(coupling="none", seeding="start"))
-    x0 = np.asarray(trace(start, data)["latent_infections_by_subpop"]["value"])
-    assert x0[:day, 1].sum() > x[:day, 1].sum()
 
 
 def test_missingness_offsets_are_non_centred(sim_vintage):

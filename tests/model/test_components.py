@@ -12,7 +12,6 @@ from bdbvhubrenewal.model import (
     MissingOnsetFraction,
     NonCentredRandomWalk,
     PooledInitialValue,
-    adjacency_kernel,
     censored_pmf,
     coupled_renewal,
     generation_interval,
@@ -29,6 +28,11 @@ from .numpy_reference import (
     expected_missing_by_report,
     renewal,
 )
+
+
+def uniform_kernel(n):
+    """Row-normalised kernel with equal flows and a zero diagonal."""
+    return (np.ones((n, n)) - np.eye(n)) / (n - 1)
 
 
 def seeded(fn, seed=0):
@@ -90,7 +94,7 @@ def test_onset_expectations_match_reference():
 
 def test_mixing_conserves_transmission():
     f = jnp.array([0.5, 0.3, 0.2])
-    k = adjacency_kernel(np.ones((3, 3)))
+    k = uniform_kernel(3)
     w = mixing_matrix(jnp.asarray(k), 0.1, f)
     # In counts, column q of diag(f) W diag(1/f) sums to one.
     counts = f[:, None] * w / f[None, :]
@@ -108,7 +112,7 @@ def test_coupled_renewal_matches_reference(deplete):
     pops = np.array([2e5, 1e5, 5e4]) if deplete else np.array([2e4, 1e4, 5e3])
     pops_ref = np.full(p, 1e30) if not deplete else pops
     f = pops / pops.sum()
-    k = adjacency_kernel(np.ones((p, p)))
+    k = uniform_kernel(p)
     rt = rng.uniform(1.2, 1.8, (n, p))
     seed = np.zeros((p, n_init + n))
     seed[:, :n_init] = rng.uniform(0, 2, (p, n_init))
@@ -297,31 +301,6 @@ def test_idle_provinces_are_zero_up_to_the_cutoff():
     assert y[40:].sum() > 0
 
 
-def test_per_origin_mixing_conserves_transmission():
-    f = jnp.array([0.5, 0.3, 0.2])
-    k = adjacency_kernel(np.ones((3, 3)))
-    eps = jnp.array([0.1, 0.0, 0.3])
-    w = mixing_matrix(jnp.asarray(k), eps, f)
-    counts = f[:, None] * w / f[None, :]
-    np.testing.assert_allclose(counts.sum(axis=0), 1.0, rtol=1e-6)
-    # An origin with no share sends nothing.
-    np.testing.assert_allclose(np.asarray(counts)[[0, 2], 1], 0.0, atol=1e-7)
-    same = mixing_matrix(jnp.asarray(k), jnp.full(3, 0.1), f)
-    np.testing.assert_allclose(same, mixing_matrix(jnp.asarray(k), 0.1, f))
-
-
-def test_linear_weekly_process_interpolates_knots():
-    from bdbvhubrenewal.model.rt import LinearWeeklyProcess
-
-    rw = NonCentredRandomWalk(DeterministicVariable("sd", 0.3))
-    out = seeded(lambda: LinearWeeklyProcess(rw).sample(29, initial_value=0.0))
-    weekly = out[::7, 0]
-    np.testing.assert_allclose(
-        out[3, 0], (weekly[0] * 4 + weekly[1] * 3) / 7, rtol=1e-5
-    )
-    assert out.shape == (29, 1)
-
-
 class _Daily:
     """A weekly process seen as a daily one, to force the daily path."""
 
@@ -355,42 +334,6 @@ def test_hazard_delay_smoothness_prior_allows_real_fits():
     with numpyro.handlers.trace() as tr:
         seeded(lambda: delay(n_timepoints=14, first_day_dow=6))
     assert float(tr["delay_smooth_sd"]["fn"].scale) == pytest.approx(0.4)
-
-
-def test_hazard_delay_report_day_of_week_effect():
-    weekly = WeeklyTemporalProcess(
-        NonCentredRandomWalk(DeterministicVariable("sd", 0.0)), start_dow=6
-    )
-    plain = HazardDelay("delay", 30, weekly)
-    dow = HazardDelay("delay", 30, weekly, report_dow=True)
-    with numpyro.handlers.trace() as tr:
-        pmf = seeded(lambda: dow(n_timepoints=28, first_day_dow=6), 2)
-    effect = np.asarray(tr["delay_report_dow"]["value"])
-    assert effect.shape == (7,)
-    assert abs(effect.sum()) < 1e-5
-    np.testing.assert_allclose(pmf.sum(axis=1), 1.0, rtol=1e-5)
-    # With no time shift, rows change within a week with period 7.
-    assert not np.allclose(pmf[0], pmf[1])
-    np.testing.assert_allclose(pmf[0], pmf[7], rtol=1e-5)
-    # With no effect it is the plain delay.
-    zero = {"delay_report_dow_sd": jnp.asarray(0.0)}
-    with numpyro.handlers.substitute(data=zero):
-        off = seeded(lambda: dow(n_timepoints=28, first_day_dow=6), 2)
-    base = seeded(lambda: plain(n_timepoints=28, first_day_dow=6), 2)
-    np.testing.assert_allclose(off, base, rtol=1e-5)
-
-
-def test_report_dow_config_adds_the_effect(sim_vintage):
-    import dataclasses
-
-    from bdbvhubrenewal.model import MAIN, build_model, model_args
-
-    cfg = dataclasses.replace(MAIN, report_dow=True)
-    model = build_model(sim_vintage, cfg)
-    with numpyro.handlers.trace() as tr:
-        seeded(lambda: model.sample(**model_args(model, sim_vintage)))
-    assert "delay_report_dow" in tr
-    assert not MAIN.report_dow
 
 
 def test_generation_interval_matches_bvdoutbreaksize():
@@ -479,7 +422,7 @@ def test_imports_at_the_origin_rt_and_imported_infections():
     g = generation_interval()
     p = 3
     f = np.array([0.5, 0.3, 0.2])
-    k = adjacency_kernel(np.ones((p, p)))
+    k = uniform_kernel(p)
     w = np.asarray(mixing_matrix(jnp.asarray(k), 0.05, jnp.asarray(f)))
     I0 = rng.uniform(0, 1e-5, (len(g), p))
     rt = rng.uniform(0.6, 1.8, (60, p))

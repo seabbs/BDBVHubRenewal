@@ -248,8 +248,6 @@ Each week the submission takes the first of `renewal`, one refit of `renewal` wi
 | `renewal` | Nothing. It is the model in the figure. |
 | `renewalsp` | Each location fitted on its own, with no pooling, coupling or depletion. |
 | `renewalbvd` | A tempered pseudo-likelihood on BVDOutbreakSize's latest Rt. |
-| `renewalhold` | $R_p(t)$ held at its last fitted value past the data. |
-| `renewalpo` | One importation share $\varepsilon_q$ per origin, partially pooled. |
 
 ### Single patch
 

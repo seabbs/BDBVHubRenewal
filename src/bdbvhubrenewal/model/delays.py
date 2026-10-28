@@ -58,15 +58,11 @@ def hazard_to_pmf(logit_hazard: Array) -> Array:
 class HazardDelay(RandomVariable):
     r"""Nonparametric delay with a smooth baseline and a time shift.
 
-    $$\operatorname{logit} h_s(d) = \beta(d) + \gamma(s)
-    \ [+ \delta_{(s + d) \bmod 7}],$$
+    $$\operatorname{logit} h_s(d) = \beta(d) + \gamma(s),$$
 
     where $\beta$ is a random walk over delay $d$ (a smoothness prior)
     and $\gamma$ is a temporal process over onset day $s$ that shifts all
-    hazards together (proportional odds). With `report_dow`, $\delta$ is
-    a sum-to-zero effect of the day of the week of the report day,
-    $\delta = \sigma_\delta (z - \bar z)$ with $z_k \sim N(0, 1)$ and
-    $\sigma_\delta \sim N^+(0, 0.5^2)$.
+    hazards together (proportional odds).
     The pmf follows from `hazard_to_pmf`. When $\gamma$ has a small
     innovation SD, the delay is near constant.
 
@@ -84,8 +80,6 @@ class HazardDelay(RandomVariable):
         Scale of the half-normal prior on the step SD of $\beta$. Real
         fits put the step SD at about 0.2 (2026-10-24: 90% CrI 0.16 to
         0.25), in the tail of a scale of 0.1, so the default is 0.4.
-    report_dow : bool, optional
-        Add the report day-of-week effect $\delta$.
     """
 
     def __init__(
@@ -95,7 +89,6 @@ class HazardDelay(RandomVariable):
         time_process: TemporalProcess,
         hazard0_loc: float = -2.0,
         smoothness_sd: float = 0.4,
-        report_dow: bool = False,
     ) -> None:
         super().__init__(name=name)
         self.dmax = dmax
@@ -106,7 +99,6 @@ class HazardDelay(RandomVariable):
             )
         )
         self.hazard0_loc = hazard0_loc
-        self.report_dow = report_dow
 
     def sample(
         self,
@@ -136,8 +128,7 @@ class HazardDelay(RandomVariable):
             first_day_dow=first_day_dow,
         )
         weekly = (
-            not self.report_dow
-            and isinstance(self.time_process, WeeklyTemporalProcess)
+            isinstance(self.time_process, WeeklyTemporalProcess)
             and first_day_dow == self.time_process.start_dow
         )
         if weekly:
@@ -145,8 +136,6 @@ class HazardDelay(RandomVariable):
             # week and repeat it.
             gamma = gamma[::7]
         logit = beta[None, :] + gamma
-        if self.report_dow:
-            logit = logit + self._report_dow(n_timepoints, first_day_dow or 0)
         pmf = hazard_to_pmf(logit)
         mean = pmf @ jnp.arange(self.dmax + 1)
         if weekly:
@@ -154,20 +143,6 @@ class HazardDelay(RandomVariable):
             mean = jnp.repeat(mean, 7, axis=0)[:n_timepoints]
         numpyro.deterministic(f"{self.name}_mean", mean)
         return pmf
-
-    def _report_dow(self, n: int, first_day_dow: int) -> Array:
-        r"""Return $\delta$ of each report day, by onset day and delay."""
-        sd = numpyro.sample(f"{self.name}_report_dow_sd", dist.HalfNormal(0.5))
-        z = numpyro.sample(
-            f"{self.name}_report_dow_z", dist.Normal(0.0, 1.0).expand([7])
-        )
-        effect = numpyro.deterministic(
-            f"{self.name}_report_dow", sd * (z - z.mean())
-        )
-        # Rows repeat every 7 onset days, so index 7 rows and tile them.
-        day = first_day_dow + np.arange(7)[:, None] + np.arange(self.dmax)
-        rows = effect[day % 7]
-        return jnp.tile(rows, (-(-n // 7), 1))[:n]
 
 
 def censored_pmf(

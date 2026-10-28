@@ -20,7 +20,6 @@ import pandas as pd
 from bdbvhubrenewal.data.delays import hub_delay_pmf
 
 from .model import MAIN, ModelConfig, Vintage
-from .renewal import adjacency_kernel
 
 NATIONAL = "CD"
 START_COUNT = 5
@@ -382,12 +381,7 @@ def vintage_from_tables(
         imputed = imputed.sum(axis=1, keepdims=True)
         pops = pd.Series([pops.sum()])
         names = [active[0] if len(active) == 1 else NATIONAL]
-    if len(names) == 1:
-        kernel = None
-    elif config.coupling == "adjacency":
-        kernel = adjacency_kernel(np.ones((len(active), len(active))))
-    else:
-        kernel = gravity_kernel(active, table)
+    kernel = None if len(names) == 1 else gravity_kernel(active, table)
     import_kernel, inactive = None, None
     if idle and not config.national:
         import_kernel = gravity_kernel(active + idle, table)[
