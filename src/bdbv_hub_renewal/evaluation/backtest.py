@@ -75,6 +75,7 @@ __all__ = [
     "saturdays",
     "score_by_truth_vintage",
     "score_tasks",
+    "shard_tasks",
     "truth_changes",
     "truth_from_vintage",
     "uses_lag_prior",
@@ -351,8 +352,37 @@ def uses_lag_prior(task: ForecastTask) -> bool:
     return publication_lag_pmf(task.delay_history, task.vintage) is None
 
 
+def shard_tasks(
+    tasks: Sequence[ForecastTask], index: int, count: int
+) -> list[ForecastTask]:
+    """Return every `count`-th task from `index`, to split a run.
+
+    Parameters
+    ----------
+    tasks : sequence of ForecastTask
+        All the tasks.
+    index : int
+        This shard, from 0.
+    count : int
+        Number of shards.
+
+    Returns
+    -------
+    list of ForecastTask
+        The shard's tasks. The shards cover every task once.
+    """
+    return list(tasks)[index::count]
+
+
+def _cache_path(cache: Path, model: str, task: ForecastTask) -> Path:
+    mask = f"_mask-{'-'.join(task.mask)}" if task.mask else ""
+    return cache / f"{model}_{task.kind}_{task.vintage}{mask}.csv.gz"
+
+
 def run_forecasts(
-    models: Sequence[ForecastModel], tasks: Iterable[ForecastTask]
+    models: Sequence[ForecastModel],
+    tasks: Iterable[ForecastTask],
+    cache: Path | str | None = None,
 ) -> pd.DataFrame:
     """Run every model on every task, adding the national total.
 
@@ -362,6 +392,10 @@ def run_forecasts(
         Models to run.
     tasks : iterable of ForecastTask
         Tasks to run them on.
+    cache : pathlib.Path or str, optional
+        A directory with one file per model and task. A task with a file
+        is read from it, and every new forecast is written to it at once,
+        so a long run can be resumed or split (`shard_tasks`).
 
     Returns
     -------
@@ -370,9 +404,18 @@ def run_forecasts(
         `location`, `target_end_date`, `sample`, `value`, `as_of`
         (missing for final counts) and `lag_prior` (`uses_lag_prior`).
     """
+    store = None if cache is None else Path(cache)
+    if store is not None:
+        store.mkdir(parents=True, exist_ok=True)
     frames = []
     for task in tasks:
         for model in models:
+            path = (
+                None if store is None else _cache_path(store, model.name, task)
+            )
+            if path is not None and path.exists():
+                frames.append(pd.read_csv(path, dtype={"as_of": object}))
+                continue
             samples = model.forecast(task)
             check_samples(samples, task)
             if "as_of" not in samples:
@@ -387,6 +430,8 @@ def run_forecasts(
             samples.insert(1, "kind", task.kind)
             samples.insert(2, "vintage", task.vintage)
             samples.insert(3, "reference_date", task.reference_date.isoformat())
+            if path is not None:
+                samples.to_csv(path, index=False)
             frames.append(samples)
     return pd.concat(frames, ignore_index=True)
 
@@ -655,6 +700,7 @@ def run_development(
     config: BacktestConfig,
     *,
     include_reconstructed: bool = True,
+    cache: Path | str | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Run the development backtest on real and reconstructed vintages.
 
@@ -674,6 +720,8 @@ def run_development(
         Settings.
     include_reconstructed : bool
         Whether to add reconstructed vintages.
+    cache : pathlib.Path or str, optional
+        Forecast cache, as for `run_forecasts`.
 
     Returns
     -------
@@ -685,7 +733,7 @@ def run_development(
     tasks = development_tasks(
         target, delays, config, include_reconstructed=include_reconstructed
     )
-    forecasts = run_forecasts(models, tasks)
+    forecasts = run_forecasts(models, tasks, cache)
     truth = truth_from_vintage(real, latest)
     scores = score_tasks(forecasts, truth, latest, config.complete_after_weeks)
     return forecasts, scores

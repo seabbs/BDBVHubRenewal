@@ -190,6 +190,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     back.add_argument("--no-reconstructed", action="store_true")
     back.add_argument(
+        "--no-recovery",
+        action="store_true",
+        help="Skip the recovery check on simulated vintages.",
+    )
+    back.add_argument(
+        "--cache",
+        default=None,
+        help="Directory with one forecast file per model and task. Tasks "
+        "with a file are read from it, so a run can be resumed or split.",
+    )
+    back.add_argument(
+        "--shard",
+        default=None,
+        metavar="I/N",
+        help="Forecast only shard I of N of the development tasks into "
+        "--cache, without scoring. Run once more without it to score.",
+    )
+    back.add_argument(
         "--no-fit",
         action="store_true",
         help="Never run fitted models. Their rows in results/ are kept and "
@@ -461,30 +479,52 @@ def _backtest(args: argparse.Namespace) -> int:
         lopo_scores.to_csv(results / "lopo-scores.csv", index=False)
         print(f"Leave one province out: {len(lopo_scores)} scored forecasts.")
         return 0
+    if args.shard:
+        if not args.cache:
+            print("ERROR: --shard needs --cache.", file=sys.stderr)
+            return 1
+        index, count = (int(x) for x in args.shard.split("/"))
+        tasks = bt.development_tasks(
+            target,
+            delays,
+            config,
+            include_reconstructed=not args.no_reconstructed,
+        )
+        mine = bt.shard_tasks(tasks, index, count)
+        bt.run_forecasts(models, mine, args.cache)
+        print(f"Shard {args.shard}: {len(mine)} tasks in {args.cache}.")
+        return 0
     forecasts, scores = bt.run_development(
         models,
         target,
         delays,
         config,
         include_reconstructed=not args.no_reconstructed,
+        cache=args.cache,
     )
     by_truth = bt.score_by_truth_vintage(
         forecasts, target, config.complete_after_weeks
     )
-    rforecasts, rscores = bt.run_recovery(models, config)
     # Rows of models not run here are kept, so the fitted variants can be
     # run apart from the others.
-    for table, path in (
+    tables = [
         (forecasts, output / "forecasts.csv.gz"),
         (scores, results / "backtest-scores.csv"),
         (by_truth, results / "backtest-scores-by-truth.csv"),
-        (rforecasts, output / "recovery-forecasts.csv.gz"),
-        (rscores, results / "recovery-scores.csv"),
-    ):
+    ]
+    recovery = ""
+    if not args.no_recovery:
+        rforecasts, rscores = bt.run_recovery(models, config)
+        tables += [
+            (rforecasts, output / "recovery-forecasts.csv.gz"),
+            (rscores, results / "recovery-scores.csv"),
+        ]
+        recovery = f"; recovery: {len(rscores)}"
+    for table, path in tables:
         bt.merge_by_model(path, table).to_csv(path, index=False)
     print(
-        f"Development: {len(scores)} scored forecasts; recovery: "
-        f"{len(rscores)}. Written to {results}."
+        f"Development: {len(scores)} scored forecasts{recovery}. "
+        f"Written to {results}."
     )
     return 0
 

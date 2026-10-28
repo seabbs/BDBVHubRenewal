@@ -190,7 +190,17 @@ VARIANTS: Final[dict[str, Variant]] = {
             "Province renewal with no coupling, and delays and missingness "
             "fixed from the data.",
             base="FALLBACK",
-            register=False,
+        ),
+        Variant(
+            "renewalhold",
+            "Province renewal with Rt held at its last value past the data.",
+            overrides={"future_rt": "hold"},
+        ),
+        Variant(
+            "renewalpo",
+            "Province renewal with one importation share per origin, "
+            "partially pooled.",
+            overrides={"importation": "per_origin"},
         ),
     )
 }
