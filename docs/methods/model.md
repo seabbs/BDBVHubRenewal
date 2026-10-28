@@ -136,6 +136,7 @@ $$
   The fit to the 2026-10-24 vintage puts the step SD at 0.20 (90% CrI 0.16 to 0.25), in the tail of the earlier $\mathcal{N}^+(0, 0.1^2)$.
 - $\gamma$ is a weekly random walk over onset day from zero, with step SD $\mathcal{N}^+(0, 0.15^2)$.
   It shifts all hazards together.
+- With `report_dow=True` (off by default), the logit hazard also has a sum-to-zero effect of the report day's day of week, $\delta_{(s + d) \bmod 7}$, with scale $\mathcal{N}^+(0, 0.5^2)$.
 
 The delay is pooled over provinces.
 

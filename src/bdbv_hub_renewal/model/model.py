@@ -161,6 +161,9 @@ class ModelConfig:
         Likelihood of the delay file's counts given the weekly totals.
         The Dirichlet-multinomial has $1/\sqrt{\psi} \sim
         \text{HalfNormal}(0.1)$.
+    report_dow : bool
+        Add a report day-of-week effect to the hazard delay
+        (`HazardDelay` with `report_dow`). Needs `delay="hazard"`.
     """
 
     national: bool = False
@@ -188,6 +191,7 @@ class ModelConfig:
     delay_counts: Literal["multinomial", "dirichlet-multinomial"] = (
         "multinomial"
     )
+    report_dow: bool = False
 
 
 MAIN = ModelConfig()
@@ -525,7 +529,9 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
                 "delay", config.dmax, delay_time, config.delay
             )
         else:
-            delay = HazardDelay("delay", config.dmax, delay_time)
+            delay = HazardDelay(
+                "delay", config.dmax, delay_time, report_dow=config.report_dow
+            )
     imports = None
     if config.inactive == "imports" and data.import_kernel is not None:
         imports = DistributionalVariable(

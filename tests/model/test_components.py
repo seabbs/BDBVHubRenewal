@@ -386,7 +386,7 @@ def test_hazard_delay_smoothness_prior_allows_real_fits():
 
 def test_hazard_delay_report_day_of_week_effect():
     weekly = WeeklyTemporalProcess(
-        NonCentredRandomWalk(DeterministicVariable("sd", 0.1)), start_dow=6
+        NonCentredRandomWalk(DeterministicVariable("sd", 0.0)), start_dow=6
     )
     plain = HazardDelay("delay", 30, weekly)
     dow = HazardDelay("delay", 30, weekly, report_dow=True)
@@ -396,7 +396,7 @@ def test_hazard_delay_report_day_of_week_effect():
     assert effect.shape == (7,)
     assert abs(effect.sum()) < 1e-5
     np.testing.assert_allclose(pmf.sum(axis=1), 1.0, rtol=1e-5)
-    # Rows change within a week, with a period of 7 days.
+    # With no time shift, rows change within a week with period 7.
     assert not np.allclose(pmf[0], pmf[1])
     np.testing.assert_allclose(pmf[0], pmf[7], rtol=1e-5)
     # With no effect it is the plain delay.
