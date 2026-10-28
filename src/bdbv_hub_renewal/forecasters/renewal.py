@@ -191,6 +191,7 @@ VARIANTS: Final[dict[str, Variant]] = {
             "Province renewal with no coupling, and delays and missingness "
             "fixed from the data.",
             base="FALLBACK",
+            register=False,
         ),
         Variant(
             "renewalhold",
