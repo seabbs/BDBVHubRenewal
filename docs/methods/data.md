@@ -79,4 +79,4 @@ The convergence check is generous.
 The joint fit's worst R-hat must be at most 1.1 (`[bvd] max_rhat` in `config/backtest.toml`), and effective sample sizes are ignored.
 The R-hat is read from the fit diagnostics table in the release's rendered site (`site.zip`), and a release without a readable table is passed over for the next older one.
 Each fit records the release it used, its R-hat and why newer releases were skipped.
-Their use is on the [Model page](model.md#bvdoutbreaksize-informed).
+Their use is on the [Renewal models page](model.md#bvdoutbreaksize-informed).
