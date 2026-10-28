@@ -203,10 +203,12 @@ VARIANTS: Final[dict[str, Variant]] = {
 
 FIT_VARIANTS: Final[dict[str, str]] = {
     "main": "renewal",
+    "renewalsp": "renewalsp",
     "bvd": "renewalbvd",
 }
-"""The variant each fit configuration of the CI runs. `bvd` is a shadow
-candidate: fitted weekly, never submitted until it is chosen."""
+"""The variant each fit configuration of the CI runs. The chain is `main`,
+a retry, then `renewalsp`, then persistence. `bvd` is a shadow candidate:
+fitted weekly, never submitted until it is chosen."""
 
 
 def model_config(variant: Variant) -> Any:
