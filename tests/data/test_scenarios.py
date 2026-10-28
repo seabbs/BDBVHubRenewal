@@ -119,3 +119,6 @@ def test_zone_totals_add_up_to_provinces(outbreak, zones):  # type: ignore[no-un
     # Zones come from the real zones of each province.
     real = set(zones["location"])
     assert set(zone["location"]) <= real
+    # Known and imputed onsets by zone, as in the real zone data.
+    assert (zone["observed"] + zone["imputed"] == zone["total"]).all()
+    assert zone["imputed"].sum() > 0
