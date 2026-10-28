@@ -311,23 +311,26 @@ def publication_lag_pmf(
     for a, b in itertools.pairwise(vintages):
         before = delays.loc[delays["vintage"] == a].groupby(key).size()
         after = delays.loc[delays["vintage"] == b].groupby(key).size()
-        added = after.sub(before, fill_value=0).clip(lower=0)
-        added = added[added > 0].reset_index(name="n")
+        change = after.sub(before, fill_value=0).clip(lower=0)
+        added = change[change > 0].reset_index(name="n")
         if added.empty:
             continue
         v1, v2 = pd.Timestamp(a), pd.Timestamp(b)
         gap = (v2 - v1).days
-        week = (pd.to_datetime(added["onset_week"]) - v1).dt.days.to_numpy()
+        onset = pd.to_datetime(pd.Series(added["onset_week"]))
+        week = (onset - v1).dt.days.to_numpy()
+        count = np.asarray(added["n"], dtype=float)
+        delay = np.asarray(added["delay"], dtype=int)
         # Lag for publication day j in 1..gap and onset u days before W.
         lag = (
             np.arange(1, gap + 1)[None, :, None]
             - week[:, None, None]
             + np.arange(7)[None, None, :]
-            - added["delay"].to_numpy()[:, None, None]
+            - delay[:, None, None]
         )
         keep = lag >= 0
         # Each row's count is spread over its feasible lags.
-        per_row = added["n"].to_numpy() / np.maximum(keep.sum(axis=(1, 2)), 1)
+        per_row = count / np.maximum(keep.sum(axis=(1, 2)), 1)
         weight = np.broadcast_to(per_row[:, None, None], lag.shape)
         mass += np.bincount(
             np.minimum(lag[keep], max_lag),
