@@ -252,3 +252,33 @@ def test_tidy_locations_has_a_centre_for_every_province() -> None:
     provinces = table.loc[table["location_type"] == "province"]
     assert len(provinces) == 26
     assert provinces[["latitude", "longitude"]].notna().all().all()
+
+
+def test_tidy_daily_keeps_zones_apart(raw: dict[str, Path]) -> None:
+    zones = tidy_daily(raw["daily"], level="zone")
+    assert set(zones["location"]) == {"CD-IT-01"}
+    assert list(zones.columns) == [
+        "vintage",
+        "location",
+        "onset_date",
+        "observed",
+        "imputed",
+    ]
+    assert "CD-IT-01" not in set(tidy_daily(raw["daily"])["location"])
+    with pytest.raises(ValueError, match="level"):
+        tidy_daily(raw["daily"], level="ward")
+
+
+def test_load_daily_zones_reads_the_tidy_file(tmp_path: Path) -> None:
+    from bdbv_hub_renewal.data import load_daily_zones
+
+    pd.DataFrame(
+        {
+            "vintage": ["2026-10-24"],
+            "location": ["CD-IT-01"],
+            "onset_date": ["2026-10-01"],
+            "observed": [1],
+            "imputed": [0],
+        }
+    ).to_csv(tmp_path / "daily_zones.csv.gz", index=False)
+    assert list(load_daily_zones(tmp_path)["location"]) == ["CD-IT-01"]
