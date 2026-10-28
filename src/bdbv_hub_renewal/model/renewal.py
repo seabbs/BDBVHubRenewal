@@ -303,11 +303,12 @@ class MetapopulationInfections(SubpopulationInfections):
     rt_observation : RtPseudoObservation, optional
         External Rt estimates as a tempered pseudo-observation.
     seed_days : array_like, optional
-        Day (from the first data day) each province is seeded. Provinces
-        with a day after 0 start (almost) empty and get their seed, the
-        `I0_rv` level, as a constant daily input over the week before
-        that day, plus whatever importation brings. `None` seeds every
-        province at the start.
+        First day (from the first data day) of each province's first
+        case week. Provinces with a day after 0 start (almost) empty and
+        get their seed, the `I0_rv` level, as a constant daily input over
+        that week, plus whatever importation brings. Infections are dated
+        by onset, so seeding the week before would put onsets where the
+        data have none. `None` seeds every province at the start.
     **kwargs
         Passed to `SubpopulationInfections` (without infection feedback).
     """
@@ -393,11 +394,11 @@ class MetapopulationInfections(SubpopulationInfections):
         if self.seed_days is not None:
             late = jnp.asarray(self.seed_days > 0)
             # Late provinces start from 1e-6 of their seed level (PyRenew
-            # needs a positive start) and take the seed in the week
-            # before their own first cases.
+            # needs a positive start) and take the seed over their first
+            # case week.
             I0_all = jnp.where(late[None, :], 1e-6 * I0_all, I0_all)
             days = np.arange(rt.shape[0] - n_init)[:, None]
-            window = (days >= self.seed_days - 7) & (days < self.seed_days)
+            window = (days >= self.seed_days) & (days < self.seed_days + 7)
             seeding = jnp.asarray(window & (self.seed_days > 0)) * I0[None, :]
         pool: Array | float = 1.0
         if self.deplete:

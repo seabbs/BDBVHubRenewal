@@ -100,7 +100,7 @@ Seeding is set on the scale of confirmed onsets.
 Each province's expected confirmed onsets per day are $c_p \sim \text{LogNormal}(0, 1.5^2)$, which become $I_{0,p} = c_p / (\alpha_0 N_p)$ infections per resident.
 Provinces with cases in the first data week are seeded at the start.
 Their seed is projected back over the seeding weeks at the growth rate implied by $R_p$ and $g$, clipped to $[-0.05, 0.3]$ per day, so a steep early decline cannot project a seed larger than the pool.
-Later provinces start at $10^{-6}$ of that level and take $I_{0,p}$ as a constant daily addition to $y_p(t)$ in the week before their first case week.
+Later provinces start at $10^{-6}$ of that level and take $I_{0,p}$ as a constant daily addition to $y_p(t)$ over their first case week.
 Importation adds to it.
 
 The simulator ([simulated vintages](data.md#simulated-vintages)) uses this renewal too.

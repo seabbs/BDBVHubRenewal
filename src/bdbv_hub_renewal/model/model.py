@@ -156,8 +156,8 @@ class ModelConfig:
         Rt past the data: the random walks carry on, or Rt holds at its
         last value (EpiNow2 `future = "latest"`).
     seeding : {"first_case", "start"}
-        Seed each province in the week before its first case week, or
-        every province at the start of the grid.
+        Seed each province over its first case week, or every province
+        at the start of the grid.
     walk : {"knots", "noncentred", "centred"}
         Parameterisation of the national Rt walk: weekly knots of total
         log Rt (`KnotWalk`, default), standardised steps, or the path
