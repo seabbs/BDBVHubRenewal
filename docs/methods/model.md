@@ -322,7 +322,6 @@ U_{p,k}(w) \sim \text{NegBin}\Big(\text{mean } Y_{p,v}(w) \big(\hat K / K - 1\bi
 $$
 
 A row with no cases yet adds what `apply_delay` expects for it.
-On reconstructed vintages, 6 weeks of history beat 4, 8 and 14 (national WIS of the nowcast weeks 20.5, 25.7, 21.9 and 27.3), and own and pooled delays score about the same.
 
 The hub re-imputes missing onsets at each vintage, so totals can also fall.
 Each province adds a revision $E_{p,k}(w) = A - B$ with $A, B \sim \text{Poisson}\{\kappa I_{p,v}(w)/2\}$, so its variance is $\kappa I_{p,v}(w)$:
