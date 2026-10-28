@@ -9,6 +9,9 @@ Commands:
   the leave-one-province-out check.
 - `nowcast`: forecast from a real vintage, write the hub file and check it.
   With `--config` (and `--fit`), forecast from a fit configuration.
+  The province samples are split across the health zones unless
+  `--no-zones` is given.
+- `zone-backtest`: score zone forecasts against zone persistence.
 - `fit`: fit a configuration and write the fit directory and its
   `diagnostics.json`, for the submission CI.
 - `plot-submission`: plot a submitted hub file.
@@ -44,9 +47,11 @@ from bdbvhubrenewal.data import (
     coherence_summary,
     delays_for_vintage,
     fetch_hub_data,
+    load_daily_zones,
     load_delays,
     load_target,
 )
+from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.evaluation.heldout import HeldOutError, run_heldout
 from bdbvhubrenewal.forecasters.base import (
@@ -56,6 +61,7 @@ from bdbvhubrenewal.forecasters.base import (
     get_model,
     list_models,
 )
+from bdbvhubrenewal.forecasters.zones import ZoneAllocator
 from bdbvhubrenewal.submission.fitting import (
     Forecast,
     get_config,
@@ -272,6 +278,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     now.add_argument("--out", default="output/submission")
     now.add_argument("--hub-config", default=None)
+    now.add_argument(
+        "--no-zones",
+        dest="zones",
+        action="store_false",
+        help="Leave the health zones out of the hub file.",
+    )
+
+    zb = sub.add_parser(
+        "zone-backtest", help="Score zone forecasts against zone persistence."
+    )
+    zb.add_argument("--data", default=data_dir)
+    zb.add_argument("--models", nargs="*", default=["persistence"])
+    zb.add_argument("--hub-config", default=None)
+    zb.add_argument("--out", default="results/zone-scores.csv")
 
     fit = sub.add_parser(
         "fit", help="Fit a configuration and write its diagnostics."
@@ -610,7 +630,30 @@ def _write_fits(fits: list[pd.DataFrame], path: Path) -> None:
         bt.merge_by_model(path, table).to_csv(path, index=False)
 
 
+def _zones(
+    args: argparse.Namespace,
+    task: ForecastTask,
+    samples: pd.DataFrame,
+    hub_config: str,
+) -> tuple[pd.DataFrame | None, str]:
+    """Split province samples across zones, or say why not."""
+    if not args.zones:
+        return None, ""
+    try:
+        daily = load_daily_zones(args.data)
+    except OSError:
+        return None, "no zone data, so the file has no health zones"
+    counts = weekly_zone_counts(daily, task.vintage)
+    if counts.empty:
+        return None, f"no zone data for {task.vintage}, so no health zones"
+    zones = hub_zones(hub_config)
+    return ZoneAllocator().allocate(samples, task, counts, zones), ""
+
+
 def _nowcast(args: argparse.Namespace) -> int:
+    hub_config = args.hub_config or str(
+        Path(args.data) / "hub-config" / "tasks.json"
+    )
     try:
         task, handled = _task(args)
         if args.config:
@@ -628,11 +671,15 @@ def _nowcast(args: argparse.Namespace) -> int:
                     nat, ["target_end_date", "sample", "value"]
                 ]
             result = Forecast(samples.loc[~nat], national=national)
+        zones, note = _zones(args, task, result.samples, hub_config)
+        if note:
+            handled.append(note)
         table = to_hub_table(
             result.samples,
             task.reference_date,
             unassigned=result.unassigned,
             national=result.national,
+            zones=zones,
         )
     except (KeyError, ValueError, OSError) as err:
         print(f"ERROR: {err}", file=sys.stderr)
@@ -644,9 +691,6 @@ def _nowcast(args: argparse.Namespace) -> int:
     (Path(args.out) / "handled.json").write_text(json.dumps(handled) + "\n")
     for note in handled:
         print(f"Handled: {note}")
-    hub_config = args.hub_config or str(
-        Path(args.data) / "hub-config" / "tasks.json"
-    )
     hub_round = load_hub_round(hub_config)
     open_round = task.reference_date.isoformat() in hub_round.reference_dates
     errors = validate_submission_file(path, hub_round, check_round=open_round)
@@ -659,6 +703,31 @@ def _nowcast(args: argparse.Namespace) -> int:
     for e in errors:
         print(f"ERROR: {e}", file=sys.stderr)
     return 1 if errors else 0
+
+
+def _zone_backtest(args: argparse.Namespace) -> int:
+    from bdbvhubrenewal.evaluation.zones import (
+        zone_backtest,
+        zone_relative_skill,
+    )
+
+    hub_config = args.hub_config or str(
+        Path(args.data) / "hub-config" / "tasks.json"
+    )
+    scores = zone_backtest(
+        load_target(args.data),
+        load_delays(args.data),
+        load_daily_zones(args.data),
+        hub_zones(hub_config),
+        models=args.models,
+    )
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    scores.to_csv(out, index=False)
+    rel = zone_relative_skill(scores, by=("horizon",))
+    print(rel.round(3).to_string(index=False))
+    print(f"Wrote {out} ({len(scores)} scores).")
+    return 0
 
 
 def _write_national_sidecar(
@@ -914,6 +983,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _backtest(args)
     if args.command == "nowcast":
         return _nowcast(args)
+    if args.command == "zone-backtest":
+        return _zone_backtest(args)
     if args.command == "metadata":
         return _metadata(args)
     if args.command == "bvd":  # pragma: no cover - network
