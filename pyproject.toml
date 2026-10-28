@@ -182,6 +182,5 @@ module = [
   "bdbv_hub_renewal.model",
   "bdbv_hub_renewal.model.delays",
   "bdbv_hub_renewal.model.model",
-  "bdbv_hub_renewal.model.renewal",
 ]
 ignore_errors = true

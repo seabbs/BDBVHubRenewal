@@ -11,12 +11,14 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import numpyro
+from jax import Array
 from jax.typing import ArrayLike
 from pyrenew.latent import SubpopulationInfections
 from pyrenew.latent.base import LatentSample
 from pyrenew.math import r_approx_from_R
 from pyrenew.metaclass import RandomVariable
 
+from .observation import RtPseudoObservation
 from .rt import pooled_walk
 
 
@@ -40,12 +42,12 @@ def adjacency_kernel(adjacency: ArrayLike) -> np.ndarray:
     """
     adj = np.asarray(adjacency, dtype=float).copy()
     np.fill_diagonal(adj, 0.0)
-    return adj / adj.sum(axis=1, keepdims=True)
+    return np.asarray(adj / adj.sum(axis=1, keepdims=True), dtype=float)
 
 
 def mixing_matrix(
     kernel: ArrayLike, importation: ArrayLike, fractions: ArrayLike
-) -> ArrayLike:
+) -> Array:
     r"""Per-capita mixing matrix from a row-normalised importation kernel.
 
     In counts the force on province $p$ is
@@ -57,37 +59,38 @@ def mixing_matrix(
 
     Parameters
     ----------
-    kernel : ArrayLike
+    kernel : Array
         Row-normalised kernel with zero diagonal, shape `(P, P)`.
-    importation : ArrayLike
+    importation : Array
         Share $\varepsilon$ of transmission sent to other provinces, a
         scalar or one per origin.
-    fractions : ArrayLike
+    fractions : Array
         Population fractions, shape `(P,)`.
 
     Returns
     -------
-    ArrayLike
+    Array
         Shape `(P, P)`.
     """
+    kernel, fractions = jnp.asarray(kernel), jnp.asarray(fractions)
     n = fractions.shape[0]
     # A vector of shares is one per origin: row p keeps 1 - eps_p of its
     # own force and takes eps_q of origin q's.
     eps = jnp.broadcast_to(jnp.asarray(importation), (n,))
     imported = kernel.T * (eps * fractions)[None, :] / fractions[:, None]
-    return jnp.diag(1 - eps) + imported
+    return jnp.asarray(jnp.diag(1 - eps) + imported)
 
 
 def coupled_renewal(
-    I0: ArrayLike,
-    rt: ArrayLike,
-    gen_int: ArrayLike,
-    mixing: ArrayLike,
-    susceptible0: ArrayLike,
+    I0: Array,
+    rt: Array,
+    gen_int: Array,
+    mixing: Array,
+    susceptible0: Array,
     deplete: bool = True,
-    pool: ArrayLike = 1.0,
-    seeding: ArrayLike | None = None,
-) -> tuple[ArrayLike, ArrayLike]:
+    pool: Array | float = 1.0,
+    seeding: Array | None = None,
+) -> tuple[Array, Array]:
     r"""Run a per-capita renewal with importation and depletion.
 
     With $x_p(t)$ infections per resident, $\nu$ the effective share of
@@ -117,28 +120,28 @@ def coupled_renewal(
 
     Parameters
     ----------
-    I0 : ArrayLike
+    I0 : Array
         Per-capita infections in the seeding period, shape `(n_init, P)`.
         Only the last `len(gen_int)` rows are used.
-    rt : ArrayLike
+    rt : Array
         Reproduction numbers after seeding, shape `(n, P)`.
-    gen_int : ArrayLike
+    gen_int : Array
         Generation interval pmf, element 0 at lag 1 (PyRenew convention).
-    mixing : ArrayLike
+    mixing : Array
         Mixing matrix $W$, shape `(P, P)`.
-    susceptible0 : ArrayLike
+    susceptible0 : Array
         Susceptibles per resident after seeding, shape `(P,)`.
     deplete : bool, optional
         Apply susceptible depletion.
-    pool : ArrayLike, optional
+    pool : Array, optional
         Effective share of the population at risk, $\nu$.
-    seeding : ArrayLike, optional
+    seeding : Array, optional
         Seed infections per resident added to $y_p(t)$, `(n, P)`, for
         provinces seeded after the start.
 
     Returns
     -------
-    tuple of ArrayLike
+    tuple of Array
         Infections `(n, P)` and the effective reproduction number
         $R_p(t) S_p(t) / \nu$, `(n, P)`.
     """
@@ -154,7 +157,9 @@ def coupled_renewal(
     if seeding is None:
         seeding = jnp.zeros_like(rt)
 
-    def step(carry, inputs):
+    def step(
+        carry: tuple[Array, Array], inputs: tuple[Array, Array]
+    ) -> tuple[tuple[Array, Array], tuple[Array, Array]]:
         hist, log_share = carry
         r_t, seed_t = inputs
         y = r_t * (mixing @ (rev_g @ hist)) + seed_t
@@ -209,8 +214,8 @@ class LearntKernel(RandomVariable):
     def __init__(
         self,
         name: str,
-        distances: ArrayLike,
-        populations: ArrayLike,
+        distances: Array,
+        populations: Array,
         n_active: int,
         decay_km: float = 300.0,
         weight_sd: float = 0.5,
@@ -221,14 +226,14 @@ class LearntKernel(RandomVariable):
         self.n_active = n_active
         self.decay_km = decay_km
         self.weight_sd = weight_sd
-        self.import_kernel = None
+        self.import_kernel: Array | None = None
 
-    def sample(self, **kwargs: object) -> ArrayLike:
+    def sample(self, **kwargs: object) -> Array:
         """Sample the kernel between modelled provinces.
 
         Returns
         -------
-        ArrayLike
+        Array
             Row-normalised, zero diagonal, `(P, P)`.
         """
         import numpyro.distributions as dist
@@ -286,7 +291,7 @@ class MetapopulationInfections(SubpopulationInfections):
 
     Parameters
     ----------
-    kernel : ArrayLike, LearntKernel or None
+    kernel : Array, LearntKernel or None
         Row-normalised importation kernel (rows are origins), fixed or
         learnt. `None` turns coupling off.
     importation_rv : RandomVariable or None
@@ -310,12 +315,12 @@ class MetapopulationInfections(SubpopulationInfections):
     def __init__(
         self,
         *,
-        kernel: ArrayLike | None = None,
+        kernel: Array | None = None,
         importation_rv: RandomVariable | None = None,
         deplete: bool = True,
         effective_population_rv: RandomVariable | None = None,
-        rt_observation=None,
-        seed_days: ArrayLike | None = None,
+        rt_observation: RtPseudoObservation | None = None,
+        seed_days: Array | None = None,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
@@ -335,7 +340,7 @@ class MetapopulationInfections(SubpopulationInfections):
     def sample(
         self,
         n_days_post_init: int,
-        subpop_fractions: ArrayLike | None = None,
+        subpop_fractions: Array | None = None,
         first_day_dow: int | None = None,
         **kwargs: object,
     ) -> LatentSample:
@@ -381,6 +386,8 @@ class MetapopulationInfections(SubpopulationInfections):
                 if isinstance(self.kernel, RandomVariable)
                 else self.kernel
             )
+            if self.importation_rv is None:
+                raise ValueError("A kernel needs importation_rv.")
             mixing = mixing_matrix(kernel, self.importation_rv(), pop.fractions)
         seeding = None
         if self.seed_days is not None:
@@ -392,7 +399,11 @@ class MetapopulationInfections(SubpopulationInfections):
             days = np.arange(rt.shape[0] - n_init)[:, None]
             window = (days >= self.seed_days - 7) & (days < self.seed_days)
             seeding = jnp.asarray(window & (self.seed_days > 0)) * I0[None, :]
-        pool = self.effective_population_rv() if self.deplete else 1.0
+        pool: Array | float = 1.0
+        if self.deplete:
+            if self.effective_population_rv is None:
+                raise ValueError("Depletion needs effective_population_rv.")
+            pool = self.effective_population_rv()
         susceptible0 = jnp.clip(pool - I0_all.sum(axis=0), 0.0, pool)
         post, r_eff = coupled_renewal(
             I0_all,
