@@ -221,6 +221,17 @@ def cmd_fit(args: argparse.Namespace) -> int:
             for c in range(chains)
         ],
     }
+    if args.config == "bvd":
+        # As the model records the BVDOutbreakSize release it used.
+        diag["bvd"] = {
+            "tag": "results-3180",
+            "as_of": "2026-10-23",
+            "joint_max_rhat": 1.041,
+            "max_rhat": 1.1,
+            "skipped": [
+                {"tag": "results-3190", "reason": "no readable joint R-hat"}
+            ],
+        }
     (out / "diagnostics.json").write_text(json.dumps(diag, indent=2))
     if sc != "noppc":
         ppc = fake_ppc(args.vintage, sc, args.config)

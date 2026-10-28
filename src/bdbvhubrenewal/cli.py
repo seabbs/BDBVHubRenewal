@@ -724,18 +724,29 @@ def _metadata(args: argparse.Namespace) -> int:
 def _bvd(args: argparse.Namespace) -> int:  # pragma: no cover - network
     from bdbvhubrenewal.data import bvd
 
+    config = bt.load_config(args.backtest_config)
     vintages = args.vintages
     if not vintages:
         target = load_target(args.data)
         real = target.loc[target["kind"] == "real", "vintage"].astype(str)
-        config = bt.load_config(args.backtest_config)
         vintages = sorted({*real, *config.reconstructed_dates})
     token = os.environ.get("GITHUB_TOKEN")
     chosen = bvd.refresh_cache(
-        Path(args.data) / "bvd", vintages, bvd.list_releases(token)
+        Path(args.data) / "bvd",
+        vintages,
+        bvd.list_releases(token),
+        max_rhat=config.bvd_max_rhat,
     )
-    for vintage, tag in chosen.items():
-        print(f"{vintage}: {tag or 'no release'}")
+    for vintage, choice in chosen.items():
+        if choice is None:
+            print(f"{vintage}: no release")
+            continue
+        print(
+            f"{vintage}: {choice.tag} (joint R-hat "
+            f"{choice.joint_max_rhat:.3f}, limit {choice.max_rhat:g})"
+        )
+        for tag, reason in choice.skipped:
+            print(f"  skipped {tag}: {reason}")
     return 0
 
 

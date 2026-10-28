@@ -36,6 +36,9 @@ def test_load_config() -> None:
     assert not cfg.is_heldout("2026-10-24")
     assert cfg.reconstructed_dates[0] == "2026-06-06"
     assert all(pd.Timestamp(d).dayofweek == 5 for d in cfg.simulated_dates)
+    # A generous convergence gate on BVDOutbreakSize releases.
+    assert cfg.bvd_max_rhat == 1.1
+    assert BacktestConfig().bvd_max_rhat == 1.1
 
 
 def test_forecast_weeks() -> None:

@@ -177,3 +177,27 @@ def test_fit_warnings_from_the_model_are_kept() -> None:
     out = check_fit("main", diag, LIMITS)
     assert out.status == "warn"
     assert out.warnings == ["publication_lag: no earlier pair of delay files"]
+
+
+def test_bvd_release_is_carried_into_the_summary(tmp_path: Path) -> None:
+    release = {
+        "tag": "results-3180",
+        "as_of": "2026-10-23",
+        "joint_max_rhat": 1.041,
+        "max_rhat": 1.1,
+        "skipped": [
+            {"tag": "results-3190", "reason": "no readable joint R-hat"}
+        ],
+    }
+    out = check_fit("bvd", diagnostics() | {"bvd": release}, LIMITS)
+    assert out.bvd == release
+    assert check_fit("main", diagnostics(), LIMITS).bvd is None
+    path = tmp_path / "diagnostics.json"
+    write_json(path, diagnostics() | {"bvd": release})
+    assert (
+        main(
+            ["--id", "bvd", "--diagnostics", str(path), "--out", str(tmp_path)]
+        )
+        == 0
+    )
+    assert read_json(tmp_path / "fit-summary.json")["bvd"] == release
