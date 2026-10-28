@@ -39,9 +39,9 @@ from numpyro.infer import Predictive  # noqa: E402
 
 from bdbv_hub_renewal import model as pr  # noqa: E402
 from bdbv_hub_renewal.data import load_delays, load_locations, load_target  # noqa: E402
-from bdbv_hub_renewal.models.base import ForecastTask  # noqa: E402
-from bdbv_hub_renewal.models.persistence import Persistence  # noqa: E402
-from bdbv_hub_renewal.models.renewal import (  # noqa: E402
+from bdbv_hub_renewal.forecasters.base import ForecastTask  # noqa: E402
+from bdbv_hub_renewal.forecasters.persistence import Persistence  # noqa: E402
+from bdbv_hub_renewal.forecasters.renewal import (  # noqa: E402
     VARIANTS,
     RenewalModel,
     bvd_rows,
@@ -52,9 +52,9 @@ from bdbv_hub_renewal.models.renewal import (  # noqa: E402
     samples_table,
     vintage_inputs,
 )
-from bdbv_hub_renewal.ppc import summarise_draws  # noqa: E402
-from bdbv_hub_renewal.scoring import crps_sample  # noqa: E402
-from bdbv_hub_renewal.simulate import simulate_outbreak  # noqa: E402
+from bdbv_hub_renewal.evaluation.ppc import summarise_draws  # noqa: E402
+from bdbv_hub_renewal.evaluation.scoring import crps_sample  # noqa: E402
+from bdbv_hub_renewal.data.simulate import simulate_outbreak  # noqa: E402
 
 OUT = Path(__file__).parents[1] / "results"
 SIM_DAYS = (166, 206)
