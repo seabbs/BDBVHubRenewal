@@ -36,7 +36,6 @@ from .delays import (
 )
 from .observation import OnsetStreams, RtPseudoObservation
 from .renewal import (
-    GravityFlowKernel,
     LearntKernel,
     MetapopulationInfections,
 )
@@ -122,12 +121,13 @@ class ModelConfig:
     truncation : bool
         Right truncation by vintage. For the total stream it uses the
         hub's delay pmf as a fixed reporting delay.
-    coupling : {"gravity", "learnt", "mvn", "adjacency", "none"}
+    coupling : {"gravity", "learnt", "adjacency", "none"}
         Importation kernel between modelled provinces: fixed gravity,
         gravity with a learnt decay and destination weights
-        (`LearntKernel`), gravity with a multivariate normal on the log
-        flows (`GravityFlowKernel`, as BVDOutbreakSize), adjacency, or
-        none.
+        (`LearntKernel`), adjacency, or none.
+    kernel_flows : bool
+        With `coupling="learnt"`, add a multivariate normal on the log
+        flows (as BVDOutbreakSize).
     delay : {"hazard", "gamma", "lognormal"}
         Nonparametric hazard delay or a censored parametric family.
     depletion : bool
@@ -211,9 +211,8 @@ class ModelConfig:
     national: bool = False
     streams: Literal["split", "total"] = "split"
     truncation: bool = True
-    coupling: Literal["gravity", "learnt", "mvn", "adjacency", "none"] = (
-        "gravity"
-    )
+    coupling: Literal["gravity", "learnt", "adjacency", "none"] = "gravity"
+    kernel_flows: bool = False
     delay: Literal["hazard", "gamma", "lognormal"] = "hazard"
     depletion: bool = True
     rt_cadence: Literal["daily", "weekly", "linear"] = "weekly"
@@ -435,7 +434,7 @@ def _nb_noise(stream: str) -> NegativeBinomialNoise:
 def outbreak_classes(
     weekly: np.ndarray, window: int, threshold: float | None
 ) -> np.ndarray | None:
-    """Outbreak provinces by week: recent cases at or above a threshold.
+    r"""Outbreak provinces by week: recent cases at or above a threshold.
 
     A province is an outbreak province in week $w$ when its cases over
     weeks $w - W + 1, \dots, w$ reach $N$. Recent weeks are part
@@ -488,13 +487,15 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     rt_scale = 1 / np.sqrt(7) if daily else 1.0
     single = n_prov == 1
     kernel = None if config.coupling == "none" or single else data.kernel
-    if kernel is not None and config.coupling == "mvn":
-        kernel = GravityFlowKernel("kernel", kernel)
     if kernel is not None and config.coupling == "learnt":
         if data.distances is None or data.all_populations is None:
             raise ValueError("A learnt kernel needs distances and populations.")
         kernel = LearntKernel(
-            "kernel", data.distances, data.all_populations, n_prov
+            "kernel",
+            data.distances,
+            data.all_populations,
+            n_prov,
+            flows=config.kernel_flows,
         )
     if kernel is None:
         importation = None

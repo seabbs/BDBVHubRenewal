@@ -7,6 +7,8 @@ different renewal step. Rt, seeding and the output contract are unchanged.
 
 from __future__ import annotations
 
+import math
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -214,6 +216,16 @@ class LearntKernel(RandomVariable):
     destination weights). With $\kappa = 0$ and $w = 0$ it is the gravity
     kernel. All on the log scale (`log_softmax`).
 
+    With `flows`, the log flows between modelled provinces also get a
+    multivariate normal deviation $W = L\zeta$, $\zeta \sim N(0, I)$
+    (non-centred), with $L$ from `importation_flow_factor`: double-centred
+    flows with $\sigma_\text{flow} \sim N^+(0, 0.5)$ and reciprocity
+    $(\rho + 1)/2 \sim \text{Beta}(2, 2)$, as BVDOutbreakSize (#1030 and
+    later). The flow basis, its scaling and these priors are copied from
+    there; BVDOutbreakSize's destination effect inside the factor and its
+    correlation with per-origin importation are not, as the destination
+    weights above take that role and $\varepsilon$ is shared.
+
     `sample` returns the kernel between modelled provinces. The kernel
     from them to provinces with no cases (gravity with the learnt decay,
     no weights) is kept as `import_kernel` for `OnsetStreams` in the
@@ -233,6 +245,8 @@ class LearntKernel(RandomVariable):
         Prior median of the decay.
     weight_sd : float, optional
         Scale of the half-normal prior on $\sigma_w$.
+    flows : bool, optional
+        Add the multivariate normal on the log flows.
     """
 
     def __init__(
@@ -243,8 +257,11 @@ class LearntKernel(RandomVariable):
         n_active: int,
         decay_km: float = 300.0,
         weight_sd: float = 0.5,
+        flows: bool = False,
     ) -> None:
         super().__init__(name=name)
+        self.flows = flows
+        self.symmetric, self.antisymmetric = flow_pair_basis(n_active)
         self.distances = jnp.asarray(distances)
         self.log_pop = jnp.log(jnp.asarray(populations))
         self.n_active = n_active
@@ -283,7 +300,28 @@ class LearntKernel(RandomVariable):
             w = sd * (jnp.asarray(sum_to_zero_basis(p)) @ z)
         else:
             w = jnp.zeros(1)
-        active = jax.nn.log_softmax(base[:p, :p] + w[None, :], axis=1)
+        flow = jnp.zeros((p, p))
+        ds, da = self.symmetric.shape[1], self.antisymmetric.shape[1]
+        if self.flows and ds + da > 0:
+            sd_flow = numpyro.sample(
+                f"{self.name}_flow_sd", dist.HalfNormal(0.5)
+            )
+            z = numpyro.sample(
+                f"{self.name}_flow_z", dist.Normal(0.0, 1.0).expand([ds + da])
+            )
+            rho = jnp.asarray(-1.0)
+            if ds > 0:
+                unit = numpyro.sample(
+                    f"{self.name}_reciprocity_unit", dist.Beta(2.0, 2.0)
+                )
+                rho = 2 * unit - 1
+            factor = importation_flow_factor(
+                self.symmetric, self.antisymmetric, sd_flow, rho
+            )
+            flow = (factor @ z).reshape(p, p)
+            numpyro.deterministic(f"{self.name}_log_flow_deviation", flow)
+        numpyro.deterministic(f"{self.name}_destination_weights", w)
+        active = jax.nn.log_softmax(base[:p, :p] + w[None, :] + flow, axis=1)
         kernel = jnp.exp(active)
         numpyro.deterministic(f"{self.name}_kernel", kernel)
         if base.shape[0] > p:
@@ -342,128 +380,39 @@ def flow_pair_basis(n: int) -> tuple[np.ndarray, np.ndarray]:
 
 
 def importation_flow_factor(
-    dest_basis: ArrayLike,
     symmetric: ArrayLike,
     antisymmetric: ArrayLike,
-    sd_dest: ArrayLike,
     sd_flow: ArrayLike,
     reciprocity: ArrayLike,
 ) -> Array:
-    r"""Factor $L$ of the normal prior on the log importation flows.
+    r"""Factor $L$ of the normal prior on the log flow deviations.
 
-    As BVDOutbreakSize `importation_flow_factor`. The deviation of the log
-    flows from gravity is $W = L\zeta$, $\zeta \sim N(0, I)$, with
-
-    $$L L^\top = \sigma_\text{dest}^2 C_\text{dest}
-    + \sigma_\text{flow}^2 R(\rho),$$
-
-    a destination effect ($\sigma_\text{dest}$ times the sum-to-zero basis
-    repeated over origins) plus double-centred flows scaled so each flow
-    has variance $\sigma_\text{flow}^2$ and correlation $\rho$ with its
-    reverse. Rows are flows $q \to p$ at `q * n + p`; diagonal rows are
-    zero.
+    The flow term of BVDOutbreakSize `importation_flow_factor`: the
+    double-centred flows (`flow_pair_basis`) scaled so each flow has
+    variance $\sigma_\text{flow}^2$ on average and correlation $\rho$ with
+    its reverse, $L L^\top = \sigma_\text{flow}^2 R(\rho)$. The
+    destination effect of BVDOutbreakSize's factor is left out here: the
+    learnt destination weights of `LearntKernel` carry it. Rows are flows
+    $q \to p$ at `q * n + p`; diagonal rows are zero.
 
     Returns
     -------
     Array
-        `(n * n, n - 1 + d)`.
+        `(n * n, d)`.
     """
-    q = jnp.asarray(dest_basis)
     sym, anti = jnp.asarray(symmetric), jnp.asarray(antisymmetric)
-    n = q.shape[0]
+    n2 = sym.shape[0]
+    n = math.isqrt(n2)
     pairs = n * (n - 1) // 2
     ds, da = sym.shape[1], anti.shape[1]
-    off = jnp.asarray(1.0 - np.eye(n).reshape(-1))[:, None]
-    dest = sd_dest * jnp.tile(q, (n, 1)) * off
-    parts = [dest]
+    parts = []
     if ds > 0:
         parts.append(sd_flow * jnp.sqrt((1 + reciprocity) * pairs / ds) * sym)
     if da > 0:
         parts.append(sd_flow * jnp.sqrt((1 - reciprocity) * pairs / da) * anti)
+    if not parts:
+        return jnp.zeros((n2, 0))
     return jnp.concatenate(parts, axis=1)
-
-
-class GravityFlowKernel(RandomVariable):
-    r"""Gravity kernel with a multivariate normal on the log flows.
-
-    Follows BVDOutbreakSize's importation kernel (#1030 and later):
-    gravity is the prior mean of the log flows, and the deviation
-    $W = L\zeta$ (`importation_flow_factor`, non-centred) is the data's
-    departure from it. Each origin's row is renormalised, so $W$ moves
-    where an origin's exports land, not how many it sends; that stays with
-    $\varepsilon$. Priors as BVDOutbreakSize: $\sigma_\text{dest} \sim
-    N^+(0, 1)$, $\sigma_\text{flow} \sim N^+(0, 0.5)$ and
-    $(\rho + 1)/2 \sim \text{Beta}(2, 2)$. BVDOutbreakSize also correlates
-    the destination effect with each province's origin importation
-    deviation; with one shared $\varepsilon$ there is no such deviation,
-    so that correlation is left out.
-
-    Parameters
-    ----------
-    name : str
-        Prefix for the sample sites.
-    kernel : array_like
-        Gravity kernel between modelled provinces, rows are origins.
-    """
-
-    def __init__(self, name: str, kernel: ArrayLike) -> None:
-        super().__init__(name=name)
-        from .rt import sum_to_zero_basis
-
-        self.log_kernel = jnp.log(jnp.asarray(kernel))
-        n = self.log_kernel.shape[0]
-        self.dest_basis = sum_to_zero_basis(n)
-        self.symmetric, self.antisymmetric = flow_pair_basis(n)
-
-    def sample(self, **kwargs: object) -> Array:
-        """Sample the kernel.
-
-        Returns
-        -------
-        Array
-            Row-normalised, zero diagonal, `(P, P)`.
-        """
-        import numpyro.distributions as dist
-
-        n = self.log_kernel.shape[0]
-        sd_dest = numpyro.sample(
-            f"{self.name}_destination_sd", dist.HalfNormal(1.0)
-        )
-        z_dest = numpyro.sample(
-            f"{self.name}_destination_z", dist.Normal(0.0, 1.0).expand([n - 1])
-        )
-        zeta = [z_dest]
-        ds, da = self.symmetric.shape[1], self.antisymmetric.shape[1]
-        sd_flow = jnp.asarray(0.0)
-        rho = jnp.asarray(-1.0)
-        if ds + da > 0:
-            sd_flow = numpyro.sample(
-                f"{self.name}_flow_sd", dist.HalfNormal(0.5)
-            )
-            zeta.append(
-                numpyro.sample(
-                    f"{self.name}_flow_z",
-                    dist.Normal(0.0, 1.0).expand([ds + da]),
-                )
-            )
-            if ds > 0:
-                unit = numpyro.sample(
-                    f"{self.name}_reciprocity_unit", dist.Beta(2.0, 2.0)
-                )
-                rho = 2 * unit - 1
-        factor = importation_flow_factor(
-            self.dest_basis,
-            self.symmetric,
-            self.antisymmetric,
-            sd_dest,
-            sd_flow,
-            rho,
-        )
-        w = (factor @ jnp.concatenate(zeta)).reshape(n, n)
-        kernel = jnp.exp(jax.nn.log_softmax(self.log_kernel + w, axis=1))
-        numpyro.deterministic(f"{self.name}_kernel", kernel)
-        numpyro.deterministic(f"{self.name}_log_flow_deviation", w)
-        return kernel
 
 
 class MetapopulationInfections(SubpopulationInfections):

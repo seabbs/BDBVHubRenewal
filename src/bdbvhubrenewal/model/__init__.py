@@ -34,7 +34,6 @@ from .model import (
 )
 from .observation import OnsetStreams, RtPseudoObservation, onset_expectations
 from .renewal import (
-    GravityFlowKernel,
     LearntKernel,
     MetapopulationInfections,
     adjacency_kernel,
@@ -54,7 +53,6 @@ __all__ = [
     "BVD",
     "MAIN",
     "FixedTimeVarying",
-    "GravityFlowKernel",
     "HazardDelay",
     "LearntKernel",
     "MetapopulationInfections",
