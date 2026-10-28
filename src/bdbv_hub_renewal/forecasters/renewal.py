@@ -58,6 +58,7 @@ __all__ = [
     "HUB_MODEL",
     "JITTER_RADIUS",
     "SAMPLER_ENV",
+    "TRAJECTORY_DRAW_FILE",
     "VARIANTS",
     "RenewalModel",
     "RenewalRun",
@@ -976,6 +977,9 @@ class RenewalModel:
 SAMPLES_FILE: Final = "samples.csv.gz"
 UNASSIGNED_FILE: Final = "unassigned.csv.gz"
 NATIONAL_FILE: Final = "national.csv.gz"
+TRAJECTORY_DRAW_FILE: Final = "trajectory_draw.csv"
+"""The posterior draw behind each trajectory, by fit, so a later stage
+(health zones) can pair trajectories with posterior draws."""
 TRAJECTORIES_FILE: Final = "trajectories.json"
 
 
@@ -1025,6 +1029,21 @@ def fit_renewal(
         fit.unassigned.to_csv(out / UNASSIGNED_FILE, index=False)
     if fit.national is not None:
         fit.national.to_csv(out / NATIONAL_FILE, index=False)
+    pairs = [
+        pd.DataFrame(
+            {
+                "location": loc,
+                "sample": np.arange(1, len(run.draws["draw"]) + 1),
+                "draw": np.asarray(run.draws["draw"], dtype=int),
+            }
+        )
+        for loc, run in fit.runs.items()
+        if "draw" in run.draws
+    ]
+    if pairs:
+        pd.concat(pairs, ignore_index=True).to_csv(
+            out / TRAJECTORY_DRAW_FILE, index=False
+        )
     modelled = sorted(set(fit.samples["location"]))
     (out / TRAJECTORIES_FILE).write_text(
         json.dumps({"variant": variant, "modelled": modelled}, indent=1) + "\n"
