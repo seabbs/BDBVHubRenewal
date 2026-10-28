@@ -176,7 +176,6 @@ ignore_missing_imports = true
 module = [
   "bdbv_hub_renewal.model",
   "bdbv_hub_renewal.model.delays",
-  "bdbv_hub_renewal.model.inputs",
   "bdbv_hub_renewal.model.model",
   "bdbv_hub_renewal.model.renewal",
   "bdbv_hub_renewal.model.rt",
