@@ -87,6 +87,16 @@ stage = "primary"
 label = "BVDOutbreakSize-informed variant (shadow, not submitted)"
 sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.9, max_tree_depth = 10, seed = 1, chain_method = "vectorized" }
 
+# Persistence on a nowcast (no MCMC). Like persistence it needs no fit and
+# is built in `prepare`.
+[[candidates]]
+id = "persistencenow"
+kind = "persistence"
+config = "persistencenow"
+model = "persistencenow"
+stage = "baseline"
+label = "persistence on a nowcast"
+
 [[candidates]]
 id = "persistence"
 kind = "persistence"

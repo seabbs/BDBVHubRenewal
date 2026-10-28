@@ -406,6 +406,6 @@ def test_provenance_lists_the_shadow_candidates(tmp_path: Path) -> None:
     chain(c, main=("pass", "pass"), persistence=(None, "pass"))
     prov = run_select(pol, c, tmp_path / "g", always("pass"), retried=False)
     shadows = {s["id"]: s for s in prov["shadows"]}
-    assert set(shadows) == {"main", "renewalsp", "bvd"}
+    assert set(shadows) == {"main", "renewalsp", "bvd", "persistencenow"}
     assert shadows["main"]["fit"] is not None
     assert shadows["bvd"]["fit"] is None

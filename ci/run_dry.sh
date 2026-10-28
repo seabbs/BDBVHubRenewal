@@ -52,8 +52,9 @@ SCENARIOS=(
   # Tuesday 21:00 UTC, two hours before the close: no time to refit, so
   # a failed main model goes straight to the single-patch fallback.
   "late|main=fail,retry-1=pass|renewalsp|NOW=2026-11-03T21:00:00+00:00|Fallback model used ("
-  "persistence|main=fail,retry-1=crash,renewalsp=fail|persistence"
-  "skip|main=fail,retry-1=fail,renewalsp=fail,persistence=negative|skip"
+  "persistencenow|main=fail,retry-1=fail,renewalsp=fail|persistencenow||Fallback model used (persistence on a nowcast)"
+  "persistence|main=fail,retry-1=crash,renewalsp=fail,persistencenow=negative|persistence"
+  "skip|main=fail,retry-1=fail,renewalsp=fail,persistencenow=negative,persistence=negative|skip"
 )
 
 sci() { uv run --quiet --project "$CI_DIR" "$@"; }
@@ -141,7 +142,10 @@ EOF
   # As downloaded by actions/download-artifact: one `candidate-<id>`
   # directory per artefact, laid out again by unpack_candidates.sh.
   for d in "$WORK"/candidates/*; do
-    [ "${d##*/}" = persistence ] || mv "$d" "$WORK/candidates/candidate-${d##*/}"
+    case "${d##*/}" in
+      persistence | persistencenow) ;;  # built in prepare, in `inputs`
+      *) mv "$d" "$WORK/candidates/candidate-${d##*/}" ;;
+    esac
   done
   "$CI_DIR/steps/unpack_candidates.sh" > /dev/null
 

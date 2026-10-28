@@ -193,7 +193,7 @@ jobs:
           name: inputs
           path: |
             ${{ env.WORK }}/inputs
-            ${{ env.WORK }}/candidates/persistence
+            ${{ env.WORK }}/candidates
           retention-days: 7
 
   fit:
