@@ -73,7 +73,9 @@ chmod +x "$ROOT/bin/gh"
 export PATH="$ROOT/bin:$PATH"
 
 # A stand-in main repo tree for the fit cache key (policy [cache] inputs).
-SRC_ROOT="$ROOT/main-repo"
+# Exported: prepare.sh hashes it too, from any working directory (the
+# GitHub job runs this script from ci/).
+export SRC_ROOT="$ROOT/main-repo"
 mkdir -p "$SRC_ROOT/src" "$SRC_ROOT/config"
 echo "model = 1" > "$SRC_ROOT/src/model.py"
 echo "x = 1" > "$SRC_ROOT/config/model.toml"

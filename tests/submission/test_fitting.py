@@ -350,3 +350,6 @@ def test_committed_metadata_is_only_for_hub_models() -> None:
         text = (ROOT / "hub" / "model-metadata" / f"{name}.yml").read_text()
         assert "language model" not in text
         assert "NIHR207404" in text
+        # Team seabbs, by name and abbreviation (Sam, 2026-10-28).
+        assert "team_name: seabbs\n" in text
+        assert "team_abbr: seabbs\n" in text

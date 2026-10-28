@@ -84,7 +84,7 @@ def settings(tmp_path: Path) -> Settings:
     meta = tmp_path / "meta"
     meta.mkdir()
     (meta / f"{MID}.yml").write_text(
-        "team_name: EpiForecasts\nteam_abbr: seabbs\n"
+        "team_name: seabbs\nteam_abbr: seabbs\n"
         "model_name: Renewal\nmodel_abbr: renewal\n"
     )
     (meta / f"{MID2}.yml").write_text(

@@ -1,4 +1,4 @@
-team_name: EpiForecasts
+team_name: seabbs
 team_abbr: seabbs
 model_name: Persistence on a nowcast
 model_abbr: baseline
@@ -10,8 +10,8 @@ model_contributors:
 license: CC-BY-4.0
 model_details:
   data_inputs: Hub target data (weekly confirmed cases by onset week, observed plus imputed), the hub's published onset-to-report delays and daily health zone counts.
-  methods: Chain-ladder nowcast of recent onset weeks with negative binomial uncertainty, then the hub baseline on each draw. Provinces, health zones and national.
-  methods_long: A baseline model building on the ideas of the baselinenowcast paper and package (Johnson et al. 2025, Wellcome Open Research, doi:10.12688/wellcomeopenres.25027.2; https://github.com/epinowcast/baselinenowcast/). Recent onset weeks are nowcast with a chain ladder on the reporting triangle, with a negative binomial for each delay horizon fitted to past retrospective nowcasts. Each nowcast draw is carried forward as the COVID-19 Forecast Hub baseline on the log scale, centred on the latest weeks weighted by the share of each reported, with steps drawn from past weekly changes and their negatives. Sparse provinces borrow the delay and steps of the provinces with more data. Province samples are split across health zones, and the national value is the sum of provinces. See https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/.
+  methods: Chain-ladder nowcast of recent onset weeks with negative binomial uncertainty, then persistence on each draw. Provinces, health zones and national.
+  methods_long: A baseline model building on the ideas of the baselinenowcast paper and package (Johnson et al. 2025, Wellcome Open Research, doi:10.12688/wellcomeopenres.25027.2; https://github.com/epinowcast/baselinenowcast/). Recent onset weeks are nowcast with a chain ladder on the reporting triangle, with a negative binomial for each delay horizon fitted to past retrospective nowcasts. Each nowcast draw is carried forward as persistence, with log-scale random walk noise. Province samples are split across health zones, and the national value is the sum of provinces. See https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/.
 website_url: https://samabbott.co.uk/BDBVHubRenewal/
 repo_url: https://github.com/seabbs/BDBVHubRenewal
 team_funding: This study is funded by the National Institute for Health and Care Research (NIHR) Health Protection Research Unit in Health Analytics & Modelling, a partnership between the UK Health Security Agency, Imperial College London and the London School of Hygiene & Tropical Medicine (grant code NIHR207404). The views expressed are those of the author(s) and not necessarily those of the NIHR, UK Health Security Agency or the Department of Health and Social Care.
