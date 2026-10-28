@@ -6,6 +6,8 @@ import jax.numpy as jnp
 import numpy as np
 import numpyro
 import numpyro.distributions as dist
+import pandas as pd
+import pytest
 from jax import random
 from numpyro.infer import Predictive
 
@@ -108,3 +110,91 @@ def test_dirichlet_multinomial_delays(sim_vintage):
     conc = np.asarray(dm.concentration)
     np.testing.assert_allclose(conc.sum(-1), psi, rtol=1e-4)
     np.testing.assert_allclose(conc / psi, mn.probs, rtol=1e-4, atol=1e-9)
+
+
+@pytest.mark.parametrize("final", [True, False])
+def test_weekly_blocks_match_the_dense_expectations(final):
+    rng = np.random.default_rng(5)
+    n_w, dmax = 12, 20
+    n = 7 * n_w
+    delay = np.repeat(rng.dirichlet(np.ones(dmax + 1), n_w), 7, axis=0)
+    args = (
+        jnp.asarray(rng.gamma(5, 4, (n, 3))),
+        jnp.asarray(delay),
+        jnp.asarray(rng.uniform(0.05, 0.3, (n, 3))),
+        jnp.asarray(rng.dirichlet(np.ones(dmax + 1))),
+        n - 10,
+        final,
+    )
+    lag = jnp.asarray([0.4, 0.3, 0.2, 0.1])
+    dense = onset_expectations(*args, publication_lag=lag)
+    blocks = onset_expectations(*args, publication_lag=lag, weekly=True)
+    for key, value in dense.items():
+        np.testing.assert_allclose(blocks[key], value, rtol=1e-5, atol=1e-6)
+
+
+def test_model_log_density_is_the_same_with_weekly_blocks(sim_vintage, config):
+    from numpyro.infer.util import log_density
+
+    model = build_model(sim_vintage, config)
+    args = model_args(model, sim_vintage)
+    with numpyro.handlers.trace() as tr:
+        numpyro.handlers.seed(model.sample, rng_seed=0)(**args)
+    values = {
+        k: v["value"]
+        for k, v in tr.items()
+        if v["type"] == "sample" and not v["is_observed"]
+    }
+    obs = model.observations["onsets"]
+    assert obs.weekly_delay
+    fast = log_density(model.sample, (), args, values)[0]
+    obs.weekly_delay = False
+    dense = log_density(model.sample, (), args, values)[0]
+    assert float(fast) == pytest.approx(float(dense), rel=1e-5)
+
+
+def test_dispersion_prior_is_half_normal_on_inverse_root_phi(sim_vintage):
+    model = build_model(sim_vintage, MAIN)
+    with numpyro.handlers.trace() as tr:
+        numpyro.handlers.seed(model.sample, rng_seed=0)(
+            **model_args(model, sim_vintage)
+        )
+    for stream in ("known", "imputed"):
+        site = tr[f"inv_sqrt_phi_{stream}"]
+        assert isinstance(site["fn"], dist.HalfNormal)
+        assert float(site["fn"].scale) == pytest.approx(0.25)
+
+
+def test_negative_and_long_delays_are_clipped_not_dropped(
+    outbreak, sim_tables, table
+):
+    from bdbv_hub_renewal.model.inputs import vintage_from_tables
+
+    from .conftest import SIM_LOCATIONS, VINTAGE_DAYS, vintage_date
+
+    day = VINTAGE_DAYS[-1]
+    target, delays = sim_tables[day]
+    odd = delays.iloc[:2].copy()
+    odd["delay"] = [-3, 90]
+    both = vintage_from_tables(
+        target,
+        pd.concat([delays, odd]),
+        vintage_date(outbreak, day),
+        SIM_LOCATIONS,
+        table,
+    )
+    base = vintage_from_tables(
+        target, delays, vintage_date(outbreak, day), SIM_LOCATIONS, table
+    )
+    extra = both.delay_counts - base.delay_counts
+    assert extra.sum() == 2
+    assert extra[:, 0].sum() == 1
+    assert extra[:, -1].sum() == 1
+
+
+def test_trajectories_name_their_posterior_draws(sim_vintage):
+    model = build_model(sim_vintage, MAIN)
+    latent = prior_latent(model, sim_vintage, n=8)
+    draws = forecast_trajectories(model, sim_vintage, 5, posterior=latent)
+    assert draws["draw"].shape == (5,)
+    assert np.all((draws["draw"] >= 0) & (draws["draw"] < 8))

@@ -11,7 +11,7 @@ import jax.numpy as jnp
 import numpy as np
 import numpyro.distributions as dist
 from jax import random
-from numpyro.distributions.transforms import AffineTransform
+from numpyro.distributions.transforms import AffineTransform, PowerTransform
 from numpyro.infer import MCMC, NUTS, Predictive, init_to_median
 from pyrenew.ascertainment import IndependentAscertainment
 from pyrenew.deterministic import DeterministicPMF, DeterministicVariable
@@ -346,6 +346,19 @@ def fit_weeks(data: Vintage, config: ModelConfig) -> int:
     return data.n_weeks
 
 
+def _nb_noise(stream: str) -> NegativeBinomialNoise:
+    r"""Negative binomial with $1 / \sqrt{\phi} \sim$ HalfNormal(0.25).
+
+    As EpiNow2 (`obs_opts`): the prior shrinks towards Poisson.
+    """
+    inv_sqrt = DistributionalVariable(
+        f"inv_sqrt_phi_{stream}", dist.HalfNormal(0.25)
+    )
+    return NegativeBinomialNoise(
+        TransformedVariable(f"phi_{stream}", inv_sqrt, PowerTransform(-2.0))
+    )
+
+
 def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     """Build the province model for one vintage.
 
@@ -509,18 +522,8 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             ascertainment_rate_rv=ascertainment.for_signal("onsets"),
             missing_fraction_rv=missing,
             delay_rv=delay,
-            known_noise=NegativeBinomialNoise(
-                DistributionalVariable(
-                    "phi_known", dist.LogNormal(np.log(20), 1.0)
-                )
-            ),
-            imputed_noise=None
-            if missing is None
-            else NegativeBinomialNoise(
-                DistributionalVariable(
-                    "phi_imputed", dist.LogNormal(np.log(20), 1.0)
-                )
-            ),
+            known_noise=_nb_noise("known"),
+            imputed_noise=None if missing is None else _nb_noise("imputed"),
             import_scale_rv=imports,
             kernel_rv=kernel if isinstance(kernel, LearntKernel) else None,
             start_dow=SUNDAY,
@@ -530,6 +533,9 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             )
             if config.delay_counts == "dirichlet-multinomial"
             else None,
+            # Delays walk weekly, fixed delays are weekly rows, and the
+            # axis starts on a Sunday with whole weeks.
+            weekly_delay=True,
         )
     )
     model = builder.build()
@@ -720,8 +726,9 @@ def forecast_trajectories(
     dict
         `province`: `(n_trajectories, n_weeks + horizon, P)`,
         `inactive`: `(n_trajectories, n_weeks + horizon, Q)` (Q may be 0),
-        `national`: the sum over both, and `insample`, the predictive
-        draws of the fitted streams at the vintage (see `ppc_draws`).
+        `national`: the sum over both, `insample`, the predictive
+        draws of the fitted streams at the vintage (see `ppc_draws`), and
+        `draw`, the index of the posterior draw behind each trajectory.
     """
     if posterior is None:
         posterior = model.mcmc.get_samples()
@@ -759,4 +766,5 @@ def forecast_trajectories(
         "inactive": inactive,
         "national": province.sum(axis=2) + inactive.sum(axis=2),
         "insample": insample,
+        "draw": keep,
     }
