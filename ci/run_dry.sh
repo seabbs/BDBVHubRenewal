@@ -24,9 +24,9 @@ export FORECAST_CLI="python3 $FIX/fake_bdbv_hub_renewal.py"
 # fixture CLI (`chosen-model`, `hub-id`) as the workflow does.
 unset MODEL MODEL_ID
 export HEARTBEAT_SECONDS=1
-# A GitHub-hosted runner's 4 vCPUs, fewer than the retry's 8 chains. The
-# fixture fit fails, as a sequential run would be too slow, when there
-# are fewer XLA devices than chains.
+# A GitHub-hosted runner's 4 vCPUs. The fixture fit fails, as a
+# sequential run would be too slow, when there are fewer XLA devices
+# than chains.
 export CPUS=4
 # Monday 2 November 2026, 10:00 UTC: inside the window for 2026-11-07.
 NOW=${NOW:-2026-11-02T10:00:00+00:00}
@@ -35,6 +35,7 @@ NOW=${NOW:-2026-11-02T10:00:00+00:00}
 #   | extra environment (optional) | text the PR body must hold (optional)
 SCENARIOS=(
   "main|main=pass|main||All checks passed."
+  "chosenpersistence|main=pass|persistence|FAKE_CHOSEN_MODEL=persistence|Shadow candidates"
   "coherence|main=pass|main|FAKE_COHERENCE_GAP=2026-10-24:2|Handled: national (CD) differs from the sum of the provinces"
   "warn|main=warn|main"
   "standin|main=standin|main||Stand-in: "
@@ -74,7 +75,7 @@ run_scenario() {
   local name=$1 scenarios=$2 expect=$3 extra=${4:-} want=${5:-}
   export WORK="$ROOT/$name"
   export FAKE_SCENARIOS=$scenarios
-  export FAKE_COHERENCE_GAP=""
+  export FAKE_COHERENCE_GAP="" FAKE_CHOSEN_MODEL=""
   local kv
   for kv in $extra; do export "${kv?}"; done
   export GH_LOG="$WORK/gh.log"
@@ -96,10 +97,16 @@ run_scenario() {
     PREVIOUS="$FIX/hub/previous.csv" EXPECTED_LOCATIONS="CD,CD-IT,CD-NK,CD-HU" \
     "$CI_DIR/steps/prepare.sh" > "$WORK/prepare.log"
 
+  # The model `prepare` resolved (the latest model choice).
+  local model
+  model=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1]))['model'])" \
+    "$WORK/inputs/context.json")
+
   # 3. Primary matrix legs (`fit` job), one after another here.
   run_stage() {
     sci python -m submission_ci.policy --policy "$CI_DIR/policy.toml" \
-      --stage "$1" --hub-ref "$HUB_REF" --root "$SRC_ROOT" > "$WORK/matrix-$1.json"
+      --stage "$1" --hub-ref "$HUB_REF" --root "$SRC_ROOT" --model "$model" \
+      > "$WORK/matrix-$1.json"
     python3 - "$WORK/matrix-$1.json" << 'EOF' > "$WORK/legs-$1.txt"
 import json, sys
 for e in json.load(open(sys.argv[1]))["include"]:
@@ -115,7 +122,7 @@ EOF
 
   # 4. Triage, then the retry matrix only if `main` was ruled out.
   local retried=false
-  if sci python -m submission_ci.select_candidate triage \
+  if sci python -m submission_ci.select_candidate triage --model "$model" \
       --policy "$CI_DIR/policy.toml" --candidates "$WORK/candidates" \
       | grep -q need_retry=true; then
     run_stage retry

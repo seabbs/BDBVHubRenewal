@@ -363,3 +363,28 @@ def test_stand_in_from_diagnostics_in_chain_table(tmp_path: Path) -> None:
     assert prov["selected"] == "retry-1"
     assert prov["stand_in"] == ""
     assert prov["reason"].startswith("Main model (stand-in) was ruled out")
+
+
+def test_persistence_chosen_never_selects_a_shadow(tmp_path: Path) -> None:
+    pol = POLICY.for_model("persistence")
+    c = tmp_path / "c"
+    chain(
+        c,
+        main=("pass", "pass"),
+        fallback=("pass", "pass"),
+        persistence=(None, "pass"),
+    )
+    assert not triage(pol, c)
+    prov = run_select(pol, c, tmp_path / "g", always("pass"), retried=False)
+    assert prov["selected"] == "persistence"
+
+
+def test_provenance_lists_the_shadow_candidates(tmp_path: Path) -> None:
+    pol = POLICY.for_model("persistence")
+    c = tmp_path / "c"
+    chain(c, main=("pass", "pass"), persistence=(None, "pass"))
+    prov = run_select(pol, c, tmp_path / "g", always("pass"), retried=False)
+    shadows = {s["id"]: s for s in prov["shadows"]}
+    assert set(shadows) == {"main", "fallback", "bvd"}
+    assert shadows["main"]["fit"] is not None
+    assert shadows["bvd"]["fit"] is None

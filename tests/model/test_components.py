@@ -5,8 +5,8 @@ import pytest
 from pyrenew.deterministic import DeterministicVariable
 from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
 
-from bdbv_hub_renewal.delays import ParametricDelay
-from bdbv_hub_renewal.latent import renewal
+from bdbv_hub_renewal.data.delays import ParametricDelay
+from bdbv_hub_renewal.data.simulate import renewal
 from bdbv_hub_renewal.model import (
     FixedTimeVarying,
     HazardDelay,
@@ -25,7 +25,8 @@ from bdbv_hub_renewal.model import (
     pooled_walk,
 )
 from bdbv_hub_renewal.model.observation import backsample
-from bdbv_hub_renewal.observation import (
+
+from .numpy_reference import (
     expected_imputed_onsets,
     expected_known_onsets,
     expected_missing_by_report,
@@ -307,6 +308,31 @@ def test_idle_provinces_are_zero_up_to_the_cutoff():
     )
     assert np.all(y[:40] == 0)
     assert y[40:].sum() > 0
+
+
+def test_per_origin_mixing_conserves_transmission():
+    f = jnp.array([0.5, 0.3, 0.2])
+    k = adjacency_kernel(np.ones((3, 3)))
+    eps = jnp.array([0.1, 0.0, 0.3])
+    w = mixing_matrix(jnp.asarray(k), eps, f)
+    counts = f[:, None] * w / f[None, :]
+    np.testing.assert_allclose(counts.sum(axis=0), 1.0, rtol=1e-6)
+    # An origin with no share sends nothing.
+    np.testing.assert_allclose(np.asarray(counts)[[0, 2], 1], 0.0, atol=1e-7)
+    same = mixing_matrix(jnp.asarray(k), jnp.full(3, 0.1), f)
+    np.testing.assert_allclose(same, mixing_matrix(jnp.asarray(k), 0.1, f))
+
+
+def test_linear_weekly_process_interpolates_knots():
+    from bdbv_hub_renewal.model.rt import LinearWeeklyProcess
+
+    rw = NonCentredRandomWalk(DeterministicVariable("sd", 0.3))
+    out = seeded(lambda: LinearWeeklyProcess(rw).sample(29, initial_value=0.0))
+    weekly = out[::7, 0]
+    np.testing.assert_allclose(
+        out[3, 0], (weekly[0] * 4 + weekly[1] * 3) / 7, rtol=1e-5
+    )
+    assert out.shape == (29, 1)
 
 
 def test_empirical_missing_fraction_moves_to_report_days():

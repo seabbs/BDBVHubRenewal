@@ -3,70 +3,64 @@
 
 The package has these parts:
 
-- `data`: download, tidy and load every stream the hub publishes.
-- `vintages` and `simulate`: reconstructed and simulated vintages.
-- `models`: the model interface, registry, persistence and the renewal
-  variants (`models.renewal`).
+- `data`: the hub data, dates, reconstructed and simulated vintages,
+  empirical delays and BVDOutbreakSize releases.
+- `forecasters`: the forecaster interface, registry, persistence and the
+  renewal variants (`forecasters.renewal`).
 - `model`: the PyRenew renewal model (JAX), imported lazily.
-- `bvd`: BVDOutbreakSize estimates as of a forecast's cut-off.
-- `delays`, `latent` and `observation`: NumPy references for the model's
-  delay, renewal and observation layers.
-- `hub`: write and check submission files and model metadata.
-- `scoring` and `backtest`: score forecasts over vintages, with a
-  development and held-out split.
-- `plots` and `report`: figures and docs tables.
+- `submission`: the hub file writer and checks, model metadata, the CI
+  fit configurations and the submitted rounds.
+- `evaluation`: scoring, the backtest, held-out evaluation, posterior
+  predictive checks and the comparison with hub forecasts.
+- `reporting`: figures and docs tables.
+- `cli`: the `bdbv-hub-renewal` command.
 
 - Repository: <https://github.com/seabbs/BDBVHubRenewal>
 - Docs: <https://seabbs.github.io/BDBVHubRenewal/>
 """
 
-from . import (
-    backtest,
+from bdbv_hub_renewal import (
     data,
-    dates,
-    delays,
-    hub,
-    latent,
-    models,
-    observation,
-    plots,
-    scoring,
-    simulate,
-    vintages,
+    evaluation,
+    forecasters,
+    reporting,
+    submission,
 )
-from .backtest import BacktestConfig, load_config, run_development
-from .data import load_delays, load_target
-from .hub import to_hub_table, validate_submission
-from .models import ForecastModel, ForecastTask, get_model, register_model
-from .plots import plot_nowcast
-from .scoring import relative_skill, score_forecasts
+from bdbv_hub_renewal.data import load_delays, load_target
+from bdbv_hub_renewal.evaluation.backtest import (
+    BacktestConfig,
+    load_config,
+    run_development,
+)
+from bdbv_hub_renewal.evaluation.scoring import relative_skill, score_forecasts
+from bdbv_hub_renewal.forecasters import (
+    ForecastModel,
+    ForecastTask,
+    get_model,
+    register_model,
+)
+from bdbv_hub_renewal.reporting.plots import plot_nowcast
+from bdbv_hub_renewal.submission.hub import to_hub_table, validate_submission
 
 __all__ = [
     "BacktestConfig",
     "ForecastModel",
     "ForecastTask",
-    "backtest",
     "data",
-    "dates",
-    "delays",
+    "evaluation",
+    "forecasters",
     "get_model",
-    "hub",
-    "latent",
     "load_config",
     "load_delays",
     "load_target",
-    "models",
-    "observation",
     "plot_nowcast",
-    "plots",
     "register_model",
     "relative_skill",
+    "reporting",
     "run_development",
     "score_forecasts",
-    "scoring",
-    "simulate",
+    "submission",
     "to_hub_table",
     "validate_submission",
-    "vintages",
 ]
 __version__ = "0.1.0"

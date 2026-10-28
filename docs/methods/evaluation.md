@@ -70,7 +70,7 @@ Held-out forecasts are re-run from their vintage with the model's code at the ti
 One province's likelihood is masked while it stays in the model, so spatial coupling still acts on it.
 Its onsets are then predicted and scored against the latest real vintage.
 It runs on development vintages only, over the provinces with cases, and compares variants such as coupling on or off and pooling strength.
-The harness is [`run_lopo`][bdbv_hub_renewal.backtest.run_lopo].
+The harness is [`run_lopo`][bdbv_hub_renewal.evaluation.backtest.run_lopo].
 It passes the province in `ForecastTask.mask` to models that set `supports_mask = True` and skips the rest, so persistence is not run.
 `renewal` honours the mask.
 The single patch fits the national total, so it cannot.

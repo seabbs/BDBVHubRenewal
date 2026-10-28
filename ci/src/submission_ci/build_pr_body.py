@@ -244,6 +244,26 @@ def _chain_section(provenance: Mapping[str, Any]) -> str:
     )
 
 
+def _shadow_section(provenance: Mapping[str, Any]) -> str:
+    shadows = provenance.get("shadows") or []
+    if not shadows:
+        return ""
+    rows = [
+        [
+            s["label"],
+            _fit_cell(s.get("fit")),
+            _ppc_cell(s.get("ppc"), s.get("fit")),
+        ]
+        for s in shadows
+    ]
+    return _section(
+        "Shadow candidates (fitted and checked, not submitted)",
+        markdown_table(
+            ["candidate", "convergence", "posterior predictive checks"], rows
+        ),
+    )
+
+
 def _convergence_section(fit: Mapping[str, Any] | None) -> str:
     if fit is None or fit.get("status") == "skip":
         return ""
@@ -403,6 +423,7 @@ def build(
     sections = [
         _checks_section(fit, ppc, checks, validation, coherence),
         _chain_section(provenance),
+        _shadow_section(provenance),
         _convergence_section(fit),
         _ppc_section(ppc),
         _forecast_section(checks),

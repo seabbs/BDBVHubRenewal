@@ -8,7 +8,7 @@
 # shellcheck source=ci/steps/lib.sh
 source "$(dirname "$0")/lib.sh"
 
-args=(select --policy "$POLICY" --candidates "$WORK/candidates"
+args=(select --policy "$POLICY" --candidates "$WORK/candidates" --model "$MODEL"
   --out "$WORK/gate")
 if [ "${RETRIED:-false}" = "true" ]; then
   args+=(--retried)

@@ -429,7 +429,9 @@ def main() -> int:
         "plot-submission": cmd_plot,
         "plot-ppc": cmd_plot,
         "coherence": cmd_coherence,
-        "chosen-model": lambda _a: print("renewal") or 0,
+        "chosen-model": lambda _a: (
+            print(os.environ.get("FAKE_CHOSEN_MODEL") or "renewal") or 0
+        ),
         "bvd": lambda _a: 0,
         "hub-id": lambda _a: print("epiforecasts-seabbsrenewal") or 0,
     }[args.command](args)

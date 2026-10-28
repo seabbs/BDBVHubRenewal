@@ -43,7 +43,7 @@ National forecasts are the sum of the province trajectories.
 | [Nowcast](nowcast.md) | The current nowcast and forecast from the latest vintage. |
 | Submission | The [workflow](submission/workflow.md), the [hub specification](submission/hub-spec.md), [Setup](submission/setup.md) and the [submitted rounds](submission/rounds/index.md). |
 | Development | [Adding a model](development/adding-a-model.md) and the [CLI](development/cli.md). |
-| [API reference](reference.md) | The Python package. |
+| [API reference](reference/index.md) | The Python package. |
 
 ## Data credit
 

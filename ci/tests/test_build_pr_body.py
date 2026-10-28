@@ -326,3 +326,23 @@ def test_stand_in_is_stated(tmp_path: Path) -> None:
         "All checks passed. Stand-in: persistence runs as the `main` model."
     )
     assert "Stand-in" not in body(gate(tmp_path / "real"))
+
+
+def test_body_reports_shadow_candidates(tmp_path: Path) -> None:
+    from submission_ci.common import read_json
+
+    g = gate(tmp_path)
+    prov = read_json(g / "provenance.json")
+    prov["shadows"] = [
+        {
+            "id": "bvd",
+            "label": "BVDOutbreakSize-informed variant",
+            "fit": {"status": "pass", "headline": {"max_rhat": 1.01}},
+            "ppc": None,
+        }
+    ]
+    text = body(g, provenance=prov)
+    assert "Shadow candidates (fitted and checked, not submitted)" in text
+    assert "BVDOutbreakSize-informed variant" in text
+    # Collapsed, so not on the visible lines.
+    assert not any("BVDOutbreakSize" in line for line in visible(text))
