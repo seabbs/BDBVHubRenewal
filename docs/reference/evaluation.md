@@ -16,3 +16,5 @@ Scoring, the backtest, held-out evaluation, posterior predictive checks and the 
 ::: bdbvhubrenewal.evaluation.ppc
 
 ::: bdbvhubrenewal.evaluation.hubcompare
+
+::: bdbvhubrenewal.evaluation.zones

@@ -18,7 +18,8 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 | `backtest --no-recovery` | Skip the recovery check on simulated vintages. |
 | `backtest --recovery-only` | Run only the recovery check, with `--cache` and `--shard` as for the backtest. |
 | `compare-hub [--fetch]` | Score our retrospective forecasts and the hub's submitted ones on the same truth and weeks. |
-| `nowcast` | Forecast from a real vintage, write the hub file and check it. With `--config` and `--fit`, forecast from a fit configuration. |
+| `nowcast` | Forecast from a real vintage, write the hub file and check it. With `--config` and `--fit`, forecast from a fit configuration. The province samples are split across the health zones, unless `--no-zones` is given. |
+| `zone-backtest` | Score zone forecasts against zone persistence on the real vintages. |
 | `fit` | Fit a configuration and write the fit directory and its diagnostics, for the submission CI. |
 | `plot-submission` | Plot a submitted hub file. |
 | `plot-ppc` | Plot a fit's posterior predictive checks (`ppc.json`). |

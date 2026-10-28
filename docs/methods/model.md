@@ -168,6 +168,36 @@ The national trajectory is the sum of the provinces plus an unassigned component
 | $\varepsilon$ | Timing of spread between provinces, against the seeds | Weakly; Beta prior |
 | $\kappa$ | Zeros in provinces with no cases | Bounded above only; it does not affect provinces with cases |
 
+## Health zones
+
+Health-zone forecasts split the province forecast of whichever model is submitted.
+So zone samples sum to their province's samples, sample by sample and week by week, and the national value stays the sum of the provinces.
+Every zone of a forecast province is included, zones with no cases too.
+
+For province $p$ with zones $z$, let $o_z(w)$ be zone $z$'s published count for week $w$ and $O(w) = \sum_z o_z(w)$.
+Each province sample $k$ draws its zone shares once, for all weeks:
+
+$$
+\theta^{(k)} \sim \text{Dirichlet}(\alpha),
+\qquad
+\alpha_z = r_z + \kappa\, \frac{l_z + a}{\sum_{z'} (l_{z'} + a)}.
+$$
+
+$r_z$ is the zone's onsets over the 2 weeks before the vintage and $l_z$ those over the 16 weeks before it.
+So recent shares are shrunk towards longer-run shares by $\kappa = 100$ pseudo-cases.
+The floor $a = 1/2$ gives a zone with no cases a small share, so its draws are near zero but not always zero.
+Each zone keeps its published count and the rest of the province sample $Y^{(k)}(w)$ is split:
+
+$$
+y^{(k)}_z(w) = o_z(w) + m_z,
+\qquad
+m \sim \text{Multinomial}\big(Y^{(k)}(w) - O(w),\ \theta^{(k)}\big).
+$$
+
+A sample below the published total is drawn from the published zone counts without replacement instead.
+Province values are rounded first, as in the hub file.
+The settings were the best of a small grid on the real vintages, and the differences across the grid were small (see [Evaluation](evaluation.md#health-zones)).
+
 ## Variants
 
 ### Model choice

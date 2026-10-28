@@ -288,6 +288,7 @@ def to_hub_table(
     *,
     unassigned: pd.DataFrame | None = None,
     national: pd.DataFrame | None = None,
+    zones: pd.DataFrame | None = None,
     n_samples: int = 100,
 ) -> pd.DataFrame:
     """Turn forecast samples into the hub's submission table.
@@ -316,6 +317,11 @@ def to_hub_table(
         National samples from a model that fits the nation on its own
         (columns `target_end_date`, `sample`, `value`). They are written
         as they are, in place of the sum, and `unassigned` is ignored.
+    zones : pandas.DataFrame, optional
+        Health-zone samples (columns as `samples`), such as from
+        `forecasters.zones.ZoneAllocator`. They must sum to the rounded
+        province samples, sample by sample, and are not added to the
+        national value.
     n_samples : int
         Number of samples each location must have.
 
@@ -329,8 +335,9 @@ def to_hub_table(
     Raises
     ------
     ValueError
-        If a province does not have sample ids `1..n_samples`, a sample
-        lacks a week, or provinces cover different weeks.
+        If a province or zone does not have sample ids `1..n_samples`, a
+        sample lacks a week, locations cover different weeks, or the
+        zones do not sum to their provinces.
     """
     ref = as_date(reference_date).isoformat()
     prov = samples.loc[samples["location"] != NATIONAL].copy()
@@ -340,9 +347,10 @@ def to_hub_table(
     prov["location"] = prov["location"].astype(str)
     prov["sample"] = prov["sample"].astype("int64")
     prov["value"] = prov["value"].clip(lower=0).round()
+    zone = _zone_rows(prov, zones)
     ids = set(range(1, n_samples + 1))
     weeks = sorted(set(prov["target_end_date"]))
-    for loc, rows in prov.groupby("location"):
+    for loc, rows in pd.concat([prov, zone]).groupby("location"):
         if set(rows["sample"]) != ids:
             raise ValueError(
                 f"{loc}: sample ids must be 1 to {n_samples}, the same in "
@@ -384,7 +392,7 @@ def to_hub_table(
         national["value"] = national["value"].add(extra, fill_value=0)
         national = national.reset_index()
     national["location"] = NATIONAL
-    both = pd.concat([prov, national], ignore_index=True)
+    both = pd.concat([prov, national, zone], ignore_index=True)
     out = pd.DataFrame(
         {
             "reference_date": ref,
@@ -399,6 +407,23 @@ def to_hub_table(
     return out.sort_values(
         ["location", "output_type_id", "target_end_date"]
     ).reset_index(drop=True)[list(HUB_COLUMNS)]
+
+
+def _zone_rows(prov: pd.DataFrame, zones: pd.DataFrame | None) -> pd.DataFrame:
+    """Tidy zone samples and check they sum to the province samples."""
+    if zones is None or zones.empty:
+        return prov.iloc[:0]
+    from bdbvhubrenewal.forecasters.zones import check_zone_coherence
+
+    zone = zones[list(prov.columns)].copy()
+    zone["target_end_date"] = zone["target_end_date"].astype(str)
+    zone["location"] = zone["location"].astype(str)
+    zone["sample"] = zone["sample"].astype("int64")
+    zone["value"] = zone["value"].clip(lower=0).round()
+    gaps = check_zone_coherence(prov, zone)
+    if gaps:
+        raise ValueError(f"{len(gaps)} zone sums differ: {gaps[0]}.")
+    return zone
 
 
 def submission_path(

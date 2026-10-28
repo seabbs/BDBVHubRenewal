@@ -77,6 +77,16 @@ One province's likelihood is masked while it stays in the model, so coupling sti
 Its onsets are scored against the latest real vintage.
 It runs on development vintages, for models that support the mask, so not `renewalsp` or persistence.
 
+## Health zones
+
+Zone forecasts are scored against zone persistence, which runs persistence on each zone's own series and does not sum to the provinces.
+Each real vintage before the latest is forecast, and every zone of a forecast province is scored, against zero where it has no cases.
+`bdbvhubrenewal zone-backtest` runs it and writes `results/zone-scores.csv`.
+Against 2026-10-24, the zones split from persistence have a WIS 0.83 times and a log WIS 0.88 times those of zone persistence, over the three earlier real vintages.
+Their WIS is lower at every horizon from $-2$, and ties on the earlier weeks that both copy from the data.
+Split from `persistencenow`, the ratios are 0.93 and 0.90.
+They are lowest in the nowcast weeks and near one from horizon 0, where `persistencenow` also scores worse than persistence for the provinces.
+
 ## Comparison with hub forecasts
 
 For each hub reference date, our unfitted models forecast from the latest real vintage serving the round, or else a vintage reconstructed for the Saturday before.
