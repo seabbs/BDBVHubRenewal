@@ -225,3 +225,15 @@ def test_nowcast_recovery_section(tmp_path: Path) -> None:
     assert "recentred" in text
     assert "final_vintage" not in text  # truths get plain labels
     assert "final vintage" in text
+
+
+def test_nowcast_recovery_lead_follows_the_results() -> None:
+    path = ROOT / "results" / "nowcast-recovery.csv"
+    text = report._nowcast_recovery_section(path)
+    rows = pd.read_csv(path)
+    final = rows.loc[rows["truth"] == "final_vintage"]
+    fresh = final.loc[final["version"] == "fresh", "mae_median"]
+    recentred = final.loc[final["version"] == "recentred", "mae_median"]
+    # The lead states the error of each version as the results give it.
+    for value in [*fresh, *recentred]:
+        assert f"{value:.1f}" in text
