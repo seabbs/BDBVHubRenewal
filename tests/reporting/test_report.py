@@ -244,3 +244,72 @@ def test_nowcast_recovery_lead_follows_the_results() -> None:
     # The lead states the error of each version as the results give it.
     for value in [*fresh, *recentred]:
         assert f"{value:.1f}" in text
+
+
+def _scores() -> pd.DataFrame:
+    base = pd.DataFrame(
+        {
+            "model": "persistence",
+            "kind": "real",
+            "vintage": "2026-10-09",
+            "reference_date": "2026-10-17",
+            "location": "CD",
+            "target_end_date": ["2026-09-26", "2026-10-17"],
+            "horizon": [-3, 0],
+            "truth_vintage": "2026-10-24",
+            "wis": [10.0, 50.0],
+        }
+    )
+    for col in (
+        "dispersion",
+        "overprediction",
+        "underprediction",
+        "log_wis",
+        "crps",
+        "ae_median",
+        "coverage_50",
+        "coverage_90",
+        "bias",
+    ):
+        base[col] = 0.0
+    return base
+
+
+def test_score_views() -> None:
+    old = _scores()
+    # Results without the new columns are final counts as reported, and
+    # complete weeks follow K.
+    views = report._score_views(old, 3)
+    assert list(views) == [
+        "complete weeks",
+        "all weeks as reported",
+        "vintage-matched",
+    ]
+    assert list(views["complete weeks"]["target_end_date"]) == ["2026-09-26"]
+    assert len(views["all weeks as reported"]) == 2
+    assert views["vintage-matched"].empty
+    new = pd.concat(
+        [
+            old.assign(scoring="as reported", complete=[True, False]),
+            old.assign(scoring="vintage-matched", complete=[True, False]),
+        ]
+    )
+    views = report._score_views(new, 3)
+    assert len(views["vintage-matched"]) == 2
+    assert len(views["all weeks as reported"]) == 2
+
+
+def test_overall_scores_table() -> None:
+    views = report._score_views(_scores(), 3)
+    text = report._overall_scores(views)
+    assert "complete weeks" in text
+    assert "all weeks as reported" in text
+    # A view with no rows is left out.
+    assert "vintage-matched" not in text
+
+
+def test_completeness_note(delays: pd.DataFrame) -> None:
+    text = report._completeness_note(3, delays)
+    assert "at least 3 weeks before the truth vintage" in text
+    assert "2026-10-24 delay data" in text
+    assert "96%" in text
