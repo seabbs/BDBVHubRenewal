@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Check and submit the baseline hub model (seabbsbaseline) on its own:
 # persistence on a nowcast, falling back to plain persistence, under its
-# own id. Both candidates were built by `prepare`. Run after it, apart
-# from the renewal chain.
+# own id, with health zones required. Run after `prepare`, apart from the
+# renewal chain.
 #
 #   TRACK_MODEL   the model (default persistencenow)
 #   TRACK_ID      its hub id (default: `bdbvhubrenewal hub-id --model`)
@@ -18,10 +18,17 @@ main_work=$WORK
 export WORK="$main_work/track-$TRACK_MODEL"
 rm -rf "$WORK" && mkdir -p "$WORK/candidates"
 cp -R "$main_work/inputs" "$WORK/inputs"
-for id in "$TRACK_MODEL" persistence; do
-  cp -R "$main_work/candidates/$id" "$WORK/candidates/"
-done
 export MODEL=$TRACK_MODEL MODEL_ID=$TRACK_ID
+
+# Both candidates again, here with health zones required: persistence
+# first, as the other is checked against it. Neither needs a fit.
+for id in persistence "$TRACK_MODEL"; do
+  label="persistence baseline"
+  [ "$id" = persistence ] || label="persistence on a nowcast"
+  CAND_ID=$id CAND_KIND=persistence CAND_CONFIG=$id CAND_MODEL=$id \
+    CAND_LABEL=$label CAND_SAMPLER='{}' REQUIRE_ZONES=true \
+    "$(dirname "$0")/candidate.sh"
+done
 
 cli metadata --model "$TRACK_MODEL" --abbr "${TRACK_ID#*-}" \
   --out "$WORK/metadata"
