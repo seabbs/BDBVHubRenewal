@@ -28,11 +28,14 @@ def test_persistence_bias_sentence() -> None:
 
 
 def test_heldout_page(tmp_path: Path, target: pd.DataFrame) -> None:
-    config = load_config(ROOT / "config" / "backtest.toml")
-    config = BacktestConfig(
-        model_choice=ROOT / config.model_choice,
-        development_until=config.development_until,
+    record = tmp_path / "model-choice.yml"
+    record.write_text(
+        "choices:\n"
+        "  - date: 2026-10-10\n"
+        "    model: persistence\n"
+        "    summary: A test choice.\n"
     )
+    config = BacktestConfig(model_choice=record, development_until="2026-10-10")
     gen, fig = tmp_path / "gen", tmp_path / "fig"
     report._heldout_page(
         fig, gen, ROOT / "results", target, ["persistence"], config
