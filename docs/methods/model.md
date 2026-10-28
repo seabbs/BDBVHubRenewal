@@ -153,10 +153,12 @@ $\pi_p$ is informed by the ratio of imputed to known onsets, through the imputat
 
 ### Known onsets
 
-With $T$ the vintage cut-off, the cases with onset $s$ reported by $T$ with an onset recorded are expected to be
+A case reported on day $t$ is in the vintage published at $T$ with probability $c(t) = F_\ell(T - t)$, with $F_\ell$ the cdf of the lag $\ell$ from report to publication.
+The lag is a pmf on 0 to 3 days with a $\text{Dirichlet}(1, 1, 1, 1)$ prior, so only the last 3 days before $T$ are partly in.
+The cases with onset $s$ in the vintage with an onset recorded are expected to be
 
 $$
-\mathrm{known}_{p,T}(s) = \lambda_p(s) \sum_{d \le T - s} f_s(d)\, \{1 - \pi_p(s + d)\}.
+\mathrm{known}_{p,T}(s) = \lambda_p(s) \sum_{d} f_s(d)\, \{1 - \pi_p(s + d)\}\, c(s + d).
 $$
 
 This is right truncation by vintage.
@@ -170,14 +172,14 @@ We model that procedure, including its bias, rather than correcting it.
 $$
 M_p(t) = \pi_p(t) \sum_s \lambda_p(s)\, f_s(t - s),
 \qquad
-\mathrm{imputed}_{p,T}(s) = \sum_{t = s}^{T} \hat f_T(t - s)\, M_p(t).
+\mathrm{imputed}_{p,T}(s) = \sum_{t = s}^{T} \hat f_T(t - s)\, c(t)\, M_p(t).
 $$
 
 $M_p(t)$ are the cases reported on day $t$ without an onset.
 $\hat f_T$ is the hub's delay at vintage $T$.
 It is the empirical pmf of all published delays of that vintage, pooled over provinces and onset weeks, with negative delays and delays over 60 days dropped.
 It is data, not a parameter, and it is not corrected for truncation.
-Both sums are written as banded matrix products.
+Both sums are computed by week, as products of banded $7 \times 7k$ blocks for each onset week, so the cost grows with the number of weeks and not its square.
 
 The forecast target is the eventual known plus imputed onsets, with future imputation using the latest $\hat f_T$.
 So the forecast carries the imputation's bias at turning points, which is what the hub scores.
@@ -193,7 +195,9 @@ The non-monotone revisions in imputed counts suggest it re-imputes each time.
 
 - Weekly sums of $\mathrm{known}_{p,T}$ and $\mathrm{imputed}_{p,T}$ are negative binomial, each stream with its own dispersion, $1/\sqrt{\phi} \sim \text{HalfNormal}(0.25)$, as in EpiNow2.
 - The delays of known-onset cases in the hub's delay file are tabulated by onset week and delay, pooled over provinces.
-  Given each week's total they are multinomial, with probabilities from $\lambda$, $f$ and $\pi$ truncated at $T$.
+  Delays are clipped to 0 to 60 days.
+  Given each week's total they are multinomial, with probabilities from $\lambda$, $f$, $\pi$ and $c$.
+  With `delay_counts="dirichlet-multinomial"` they are Dirichlet-multinomial instead, with $1/\sqrt{\psi} \sim \text{HalfNormal}(0.1)$.
   This is the conditional part of the reporting triangle, so the known stream is not counted twice.
 - Provinces with no cases have expected onsets $\mu_q(s) = \kappa \sum_p K_{pq}\, \lambda_p(s)$, with one scale $\kappa \sim \text{LogNormal}(\log 10^{-3}, 2^2)$.
   Their weekly zeros are Poisson.
