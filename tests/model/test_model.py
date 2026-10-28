@@ -62,6 +62,8 @@ def test_active_set_follows_the_data(outbreak, sim_tables, table):
         ModelConfig(rt_cadence="daily"),
         ModelConfig(coupling="learnt"),
         ModelConfig(walk="noncentred"),
+        ModelConfig(future_rt="hold"),
+        ModelConfig(seeding="start"),
     ],
 )
 def test_model_sites_and_shapes(outbreak, sim_tables, table, cfg):
@@ -79,6 +81,14 @@ def test_model_sites_and_shapes(outbreak, sim_tables, table, cfg):
     assert tr[f"onsets_{stream}_obs"]["value"].shape == (2, n_weeks, p)
     assert tr["latent::rt_subpop"]["value"].shape == (7 * n_weeks, p)
     assert ("onsets_inactive_obs" in tr) == (cfg.inactive == "imports")
+    # The fit sees the data weeks only; the horizon is drawn separately.
+    if not cfg.national and cfg.rt_deviation == "ar1":
+        held = cfg.future_rt == "hold"
+        assert ("log_rt_deviations_z_future" in tr) != held
+        if held:
+            rt = np.asarray(tr["latent::rt_subpop"]["value"])
+            np.testing.assert_allclose(rt[-1], rt[-21], rtol=1e-6)
+    tr = trace(model, data)
     sampled = {
         k: v["value"]
         for k, v in tr.items()
@@ -249,3 +259,23 @@ def test_single_patch_locations_are_independent(outbreak, sim_tables, table):
         for m, d in ((model_a, a), (model_b, b))
     ]
     assert lds[0] == lds[1]
+
+
+def test_late_provinces_are_seeded_at_their_first_cases(outbreak, table):
+    # At day 166 Nord-Kivu (seeded day 30 in the simulation) has its first
+    # cases weeks after Ituri, so it starts near empty.
+    target, delays = outbreak.vintage(vintage_date(outbreak, 166))
+    data = vintage_from_tables(
+        target, delays, vintage_date(outbreak, 166), SIM_LOCATIONS, table
+    )
+    assert data.seed_days[0] == 0 and data.seed_days[1] > 0
+    # Without coupling, nothing reaches it before its seed.
+    model = build_model(data, ModelConfig(coupling="none"))
+    tr = trace(model, data)
+    x = np.asarray(tr["latent_infections_by_subpop"]["value"])
+    n_init = model.latent.n_initialization_points
+    day = n_init + data.seed_days[1] - 7
+    assert x[:day, 1].sum() < 1e-3 * x[day : day + 7, 1].sum()
+    start = build_model(data, ModelConfig(coupling="none", seeding="start"))
+    x0 = np.asarray(trace(start, data)["latent_infections_by_subpop"]["value"])
+    assert x0[:day, 1].sum() > x[:day, 1].sum()

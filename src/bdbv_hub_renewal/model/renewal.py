@@ -82,6 +82,7 @@ def coupled_renewal(
     susceptible0: ArrayLike,
     deplete: bool = True,
     pool: ArrayLike = 1.0,
+    seeding: ArrayLike | None = None,
 ) -> tuple[ArrayLike, ArrayLike]:
     r"""Run a per-capita renewal with importation and depletion.
 
@@ -127,6 +128,9 @@ def coupled_renewal(
         Apply susceptible depletion.
     pool : ArrayLike, optional
         Effective share of the population at risk, $\nu$.
+    seeding : ArrayLike, optional
+        Seed infections per resident added to $y_p(t)$, `(n, P)`, for
+        provinces seeded after the start.
 
     Returns
     -------
@@ -143,9 +147,13 @@ def coupled_renewal(
     if not deplete:
         log_share0 = jnp.zeros_like(log_share0)
 
-    def step(carry, r_t):
+    if seeding is None:
+        seeding = jnp.zeros_like(rt)
+
+    def step(carry, inputs):
         hist, log_share = carry
-        y = r_t * (mixing @ (rev_g @ hist))
+        r_t, seed_t = inputs
+        y = r_t * (mixing @ (rev_g @ hist)) + seed_t
         share = jnp.exp(log_share)
         if deplete:
             x = -pool * share * jnp.expm1(-y / pool)
@@ -155,7 +163,7 @@ def coupled_renewal(
         hist = jnp.concatenate([hist[1:], x[None, :]])
         return (hist, log_share), (x, r_t * share)
 
-    _, (x, r_eff) = jax.lax.scan(step, (history, log_share0), rt)
+    _, (x, r_eff) = jax.lax.scan(step, (history, log_share0), (rt, seeding))
     return x, r_eff
 
 
@@ -285,6 +293,12 @@ class MetapopulationInfections(SubpopulationInfections):
         $\nu$. Needed with depletion.
     rt_observation : RtPseudoObservation, optional
         External Rt estimates as a tempered pseudo-observation.
+    seed_days : array_like, optional
+        Day (from the first data day) each province is seeded. Provinces
+        with a day after 0 start (almost) empty and get their seed, the
+        `I0_rv` level, as a constant daily input over the week before
+        that day, plus whatever importation brings. `None` seeds every
+        province at the start.
     **kwargs
         Passed to `SubpopulationInfections` (without infection feedback).
     """
@@ -297,9 +311,11 @@ class MetapopulationInfections(SubpopulationInfections):
         deplete: bool = True,
         effective_population_rv: RandomVariable | None = None,
         rt_observation=None,
+        seed_days: ArrayLike | None = None,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
+        self.seed_days = None if seed_days is None else np.asarray(seed_days)
         self.rt_observation = rt_observation
         if deplete and effective_population_rv is None:
             raise ValueError("Depletion needs effective_population_rv.")
@@ -362,6 +378,16 @@ class MetapopulationInfections(SubpopulationInfections):
                 else self.kernel
             )
             mixing = mixing_matrix(kernel, self.importation_rv(), pop.fractions)
+        seeding = None
+        if self.seed_days is not None:
+            late = jnp.asarray(self.seed_days > 0)
+            # Late provinces start from 1e-6 of their seed level (PyRenew
+            # needs a positive start) and take the seed in the week
+            # before their own first cases.
+            I0_all = jnp.where(late[None, :], 1e-6 * I0_all, I0_all)
+            days = np.arange(rt.shape[0] - n_init)[:, None]
+            window = (days >= self.seed_days - 7) & (days < self.seed_days)
+            seeding = jnp.asarray(window & (self.seed_days > 0)) * I0[None, :]
         pool = self.effective_population_rv() if self.deplete else 1.0
         susceptible0 = jnp.clip(pool - I0_all.sum(axis=0), 0.0, pool)
         post, r_eff = coupled_renewal(
@@ -372,6 +398,7 @@ class MetapopulationInfections(SubpopulationInfections):
             susceptible0,
             self.deplete,
             pool,
+            seeding,
         )
         infections = jnp.vstack([I0_all, post])
         aggregate = infections @ pop.fractions
@@ -383,5 +410,5 @@ class MetapopulationInfections(SubpopulationInfections):
                 "rt_subpop_adjusted", jnp.vstack([rt[:n_init], r_eff])
             )
         if self.rt_observation is not None:
-            self.rt_observation.sample(rt, infections, n_init)
+            self.rt_observation.sample(rt, infections, n_init, pop.fractions)
         return LatentSample(aggregate=aggregate, all_subpops=infections)
