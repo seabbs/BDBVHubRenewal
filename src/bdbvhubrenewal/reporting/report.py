@@ -13,7 +13,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import tomllib
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -295,30 +295,6 @@ def _nowcast_forecasts(
     return pd.concat(frames, ignore_index=True)
 
 
-def _persistence_bias(scores: pd.DataFrame) -> str:
-    pers = scores.loc[scores["model"] == "persistence"]
-    real = pers.loc[pers["kind"] == "real"]
-    if real.empty:
-        return ""
-    rec = pers.loc[pers["kind"] == "reconstructed"]
-    by_h = real.groupby("horizon")[["bias", "coverage_90"]].mean()
-    worst = by_h.sort_values("bias").head(3)
-    hs = sorted(int(h) for h in worst.index)
-    lo, hi = worst["coverage_90"].min(), worst["coverage_90"].max()
-    rec_text = (
-        f" ({rec['bias'].mean():.2f} on reconstructed vintages)"
-        if not rec.empty
-        else ""
-    )
-    return (
-        f"On real vintages persistence has a mean bias of "
-        f"{real['bias'].mean():.2f}{rec_text}.\n"
-        f"It is most negative at horizons "
-        f"{', '.join(str(h) for h in hs[:-1])} and {hs[-1]}, where 90% "
-        f"coverage is {lo:.2f} to {hi:.2f}.\n"
-    )
-
-
 _LADDER_SECTIONS = (
     (
         "Rungs",
@@ -391,6 +367,30 @@ _LADDER_LABELS = {
     "prior_wild": "Prior draws past 10x the peak",
 }
 """Column headers of the Model building tables, without the sim_ or real_."""
+
+
+def _evidence_link(evidence: object) -> str:
+    """Render a log row's evidence as a link."""
+    if not isinstance(evidence, str) or not evidence:
+        return ""
+    if evidence.startswith("http"):
+        label = evidence.rstrip("/").rsplit("/", 1)[-1]
+        return f"[{label}]({evidence})"
+    url = f"https://github.com/seabbs/BDBVHubRenewal/blob/main/{evidence}"
+    return f"[`{evidence}`]({url})"
+
+
+def _development_log(path: Path) -> str:
+    """Return the development log as a table, newest first."""
+    if not path.exists() or path.stat().st_size <= 1:
+        return ""
+    log = pd.read_csv(path, dtype=str).fillna("")
+    if log.empty:
+        return ""
+    log = log.iloc[::-1].sort_values("date", ascending=False, kind="stable")
+    log["evidence"] = log["evidence"].map(_evidence_link)
+    log.columns = [c.capitalize() for c in log.columns]
+    return log.to_markdown(index=False) + "\n"
 
 
 def _ladder_label(column: str) -> str:
@@ -600,12 +600,71 @@ def _completeness_note(k: int, delays: pd.DataFrame) -> str:
     )
 
 
+BACKTEST_LOCATIONS: tuple[str, ...] = (NATIONAL, "CD-IT", "CD-NK")
+"""Locations with forecast plots on the Backtest page."""
+
+
+def _backtest_findings(primary: pd.DataFrame) -> str:
+    """One or two sentences of results on complete weeks of real origins."""
+    real = primary.loc[primary["kind"] == "real"]
+    if real["model"].nunique() < 2 or "persistence" not in set(real["model"]):
+        return ""
+    rel = relative_skill(real).set_index("model")["relative_wis"]
+    cov = real.groupby("model")["coverage_90"].mean()
+    others = [m for m in rel.index if m != "persistence"]
+    wis = ", ".join(f"{m} {rel[m]:.2f}" for m in others)
+    cover = ", ".join(f"{m} {cov[m]:.2f}" for m in [*others, "persistence"])
+    origins = real["vintage"].nunique()
+    return (
+        f"On complete weeks of the {origins} real origins, mean WIS relative "
+        f"to persistence is {wis}.\n"
+        f"90% interval coverage is {cover}.\n"
+    )
+
+
+def _forecast_tabs(names: Sequence[str], labels: Mapping[str, str]) -> str:
+    """Tabs of each model's forecasts from the real origins, by location."""
+    if not names:
+        return ""
+    tabs = []
+    for m in names:
+        tabs.append(f'=== "{m}"\n')
+        for loc, label in labels.items():
+            slug = f"forecasts-{m}-{loc.lower()}"
+            alt = f"{m} forecasts against later data, {label}."
+            tabs.append(
+                f'    === "{label}"\n\n'
+                f"        ![{alt}](figures/{slug}.svg#only-light)\n"
+                f"        ![{alt}](figures/{slug}-dark.svg#only-dark)\n"
+            )
+    return (
+        "## Forecasts against later data\n\n"
+        "Forecasts from the real origins: 100 sample trajectories, 50% and "
+        "90% intervals and the median, with the data at the time (dashed) "
+        "and the latest data (solid).\n\n" + "\n".join(tabs)
+    )
+
+
+def _recovery_section(path: Path) -> str:
+    """Return the recovery section, or nothing without results."""
+    if not path.exists() or path.stat().st_size <= 1:
+        return ""
+    if pd.read_csv(path).empty:
+        return ""
+    alt = "Mean WIS by horizon on simulated vintages."
+    return (
+        "## Recovery on simulated vintages\n\n"
+        "Forecasts from vintages of a [simulated outbreak]"
+        "(methods/data.md#simulated-vintages), scored against the known "
+        "final counts.\n\n"
+        f"![{alt}](figures/recovery-wis-horizon.svg#only-light)\n"
+        f"![{alt}](figures/recovery-wis-horizon-dark.svg#only-dark)\n"
+    )
+
+
 def _relative_section(scores: pd.DataFrame) -> str:
     if scores["model"].nunique() < 2:
-        return (
-            "The scores hold no model other than persistence, so there are "
-            "no relative scores.\n"
-        )
+        return ""
     rel = relative_skill(scores, by=("kind",))
     tabs = []
     for by, label in (("horizon", "By horizon"), ("location", "By province")):
@@ -616,6 +675,7 @@ def _relative_section(scores: pd.DataFrame) -> str:
             f"    ![{alt}](figures/relative-wis-{by}-dark.svg#only-dark)\n"
         )
     return (
+        "## Relative skill\n\n"
         "Mean scores on complete weeks divided by those of persistence over "
         "the forecasts both made.\nValues below 1 beat persistence.\n\n"
         + _table(rel)
@@ -670,7 +730,6 @@ def _sampler_section(fits: pd.DataFrame, submission: Mapping[str, Any]) -> str:
     table = pd.DataFrame(
         {
             "fits": by.size(),
-            "median seconds": by["seconds"].median(),
             "median max R-hat": by["max_rhat"].median(),
             "worst max R-hat": by["max_rhat"].max(),
             "share with R-hat over 1.05": by["max_rhat"].apply(
@@ -703,7 +762,6 @@ def _backtest_page(
     delays: pd.DataFrame,
     names: list[str],
 ) -> None:
-    real = target.loc[target["kind"] == "real"]
     dev_path = res / "backtest-scores.csv"
     k = config.complete_after_weeks
     if dev_path.exists():
@@ -735,7 +793,7 @@ def _backtest_page(
             gen / "relative-section.md",
             _relative_section(primary) + _other_relative(views),
         )
-        _write(gen / "persistence-bias.md", _persistence_bias(scores))
+        _write(gen / "backtest-findings.md", _backtest_findings(primary))
         by_loc = summarise_scores(primary, by=("model", "kind", "location"))
         _write(
             gen / "scores-location.md",
@@ -801,28 +859,43 @@ def _backtest_page(
         wide = wide.astype("Int64").astype(str).replace("<NA>", "")
         _write(gen / "truth-changes.md", _table(wide.reset_index()))
     fc_path = out / "forecasts.csv.gz"
+    shown: list[str] = []
     if fc_path.exists():
-        forecasts = pd.read_csv(fc_path)
-        rec_all = reconstruct_vintages(
-            real, delays, list(config.reconstructed_dates)
-        )
-        both = pd.concat([target, rec_all], ignore_index=True)
-        for loc in (NATIONAL, "CD-IT", "CD-NK"):
-            slug = loc.lower()
-            for kind in ("real", "reconstructed"):
+        forecasts = pd.read_csv(fc_path, dtype={"as_of": object})
+        if "as_of" in forecasts:
+            forecasts = forecasts.loc[forecasts["as_of"].isna()]
+        real_fc = forecasts.loc[forecasts["kind"] == "real"]
+        shown = [m for m in names if m in set(real_fc["model"])]
+        for m in shown:
+            for loc in BACKTEST_LOCATIONS:
                 save_light_dark(
                     partial(
                         plot_forecasts,
-                        forecasts,
-                        both,
+                        real_fc,
+                        target,
                         loc,
-                        models=names,
-                        kind=kind,
+                        models=[m],
+                        kind="real",
                     ),
-                    fig / f"forecasts-{kind}-{slug}.svg",
+                    fig / f"forecasts-{m}-{loc.lower()}.svg",
                 )
+    labels = _location_names(target)
+    _write(
+        gen / "backtest-forecasts.md",
+        _forecast_tabs(
+            shown,
+            {
+                loc: f"{labels.get(loc, loc)} ({loc})"
+                for loc in BACKTEST_LOCATIONS
+            },
+        ),
+    )
     _write(gen / "lopo-section.md", _lopo_section(res / "lopo-scores.csv"))
     _write(gen / "ladder.md", _ladder_page(res / "ladder.csv"))
+    _write(
+        gen / "development-log.md",
+        _development_log(res / "development-log.csv"),
+    )
     _write(
         gen / "nowcast-recovery.md",
         _nowcast_recovery_section(res / "nowcast-recovery.csv"),
@@ -835,6 +908,7 @@ def _backtest_page(
         else "",
     )
     rec_path = res / "recovery-scores.csv"
+    _write(gen / "recovery-section.md", _recovery_section(rec_path))
     if rec_path.exists():
         rscores = pd.read_csv(rec_path)
         save_light_dark(
@@ -845,7 +919,31 @@ def _backtest_page(
         )
 
 
+_HELDOUT_SECTIONS = (
+    ("heldout-choices.md", "Model choices"),
+    ("heldout-status.md", "Status"),
+    ("heldout-scores.md", "Scores"),
+    ("heldout-forecasts.md", "Forecasts against later data"),
+)
+"""Held-out snippets and their headings, shown only with content."""
+
+
 def _heldout_page(
+    fig: Path,
+    gen: Path,
+    res: Path,
+    target: pd.DataFrame,
+    names: list[str],
+    config: BacktestConfig,
+) -> None:
+    _heldout_snippets(fig, gen, res, target, names, config)
+    for name, title in _HELDOUT_SECTIONS:
+        path = gen / name
+        body = path.read_text() if path.exists() else ""
+        _write(path, f"## {title}\n\n{body}" if body.strip() else "")
+
+
+def _heldout_snippets(
     fig: Path,
     gen: Path,
     res: Path,

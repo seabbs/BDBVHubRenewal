@@ -16,6 +16,7 @@ The renewal models are built on [PyRenew](https://github.com/CDCgov/PyRenew) and
 | `renewalsp` | One renewal per location, the nation included, fitted on its own. |
 | `renewalbvd` | `renewal` informed by the latest [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) Rt. |
 | `persistence` | The baseline: the last complete week carried forward. |
+| `persistencenow` | `persistence` carried forward from a nowcast of the recent weeks. |
 
 Each week the [submission](submission/workflow.md) takes the first of `renewal`, one refit of it, `renewalsp` and `persistence` that passes its checks.
 
@@ -30,7 +31,8 @@ Each week the [submission](submission/workflow.md) takes the first of `renewal`,
 | [Held-out evaluation](heldout.md) | Forecasts after the model choice, scored as later data arrive. |
 | [Nowcast](nowcast.md) | The latest nowcast and forecast. |
 | Submission | The [workflow](submission/workflow.md), [hub specification](submission/hub-spec.md), [setup](submission/setup.md) and [rounds](submission/rounds/index.md). |
-| Development | [Model building](development/model-building.md), [adding a model](development/adding-a-model.md) and the [CLI](development/cli.md). |
+| Model development | The [model building](model-development/model-building.md) ladder and the [development log](model-development/log.md). |
+| Development | [Contributing](development/contributing.md), [adding a model](development/adding-a-model.md) and the [CLI](development/cli.md). |
 | [API reference](reference/index.md) | The Python package. |
 
 ## Data credit

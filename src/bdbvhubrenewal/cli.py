@@ -96,7 +96,7 @@ MODEL_METADATA = {
             "published counts. Each sample is a joint trajectory and the "
             "national value is the sum of province samples. No spatial "
             "correlation beyond that sum. See "
-            "https://seabbs.github.io/BDBVHubRenewal/methods/model/."
+            "https://samabbott.co.uk/BDBVHubRenewal/methods/model/."
         ),
         "data_inputs": (
             "Hub target data (weekly confirmed cases by onset week, observed "
@@ -125,7 +125,7 @@ MODEL_METADATA = {
             "Both streams are negative binomial. Fitted by NUTS (NumPyro) to "
             "each data vintage. Each sample is one joint posterior "
             "trajectory and the national value is the sum of province "
-            "samples. See https://seabbs.github.io/BDBVHubRenewal/methods/model/."
+            "samples. See https://samabbott.co.uk/BDBVHubRenewal/methods/model/."
         ),
         "data_inputs": (
             "Hub target data (weekly confirmed cases by onset week, observed "
@@ -526,7 +526,7 @@ def _backtest(args: argparse.Namespace) -> int:
                 config,
                 include_reconstructed=not args.no_reconstructed,
             )
-        mine = bt.shard_tasks(tasks, index, count)
+        mine = bt.shard_tasks(bt.order_tasks(tasks), index, count)
         bt.run_forecasts(models, mine, args.cache)
         print(f"Shard {args.shard}: {len(mine)} tasks in {args.cache}.")
         return 0
@@ -762,18 +762,29 @@ def _metadata(args: argparse.Namespace) -> int:
 def _bvd(args: argparse.Namespace) -> int:  # pragma: no cover - network
     from bdbvhubrenewal.data import bvd
 
+    config = bt.load_config(args.backtest_config)
     vintages = args.vintages
     if not vintages:
         target = load_target(args.data)
         real = target.loc[target["kind"] == "real", "vintage"].astype(str)
-        config = bt.load_config(args.backtest_config)
         vintages = sorted({*real, *config.reconstructed_dates})
     token = os.environ.get("GITHUB_TOKEN")
     chosen = bvd.refresh_cache(
-        Path(args.data) / "bvd", vintages, bvd.list_releases(token)
+        Path(args.data) / "bvd",
+        vintages,
+        bvd.list_releases(token),
+        max_rhat=config.bvd_max_rhat,
     )
-    for vintage, tag in chosen.items():
-        print(f"{vintage}: {tag or 'no release'}")
+    for vintage, choice in chosen.items():
+        if choice is None:
+            print(f"{vintage}: no release")
+            continue
+        print(
+            f"{vintage}: {choice.tag} (joint R-hat "
+            f"{choice.joint_max_rhat:.3f}, limit {choice.max_rhat:g})"
+        )
+        for tag, reason in choice.skipped:
+            print(f"  skipped {tag}: {reason}")
     return 0
 
 

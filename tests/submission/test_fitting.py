@@ -258,9 +258,9 @@ def test_cli_hub_id_and_chosen_model(
 ) -> None:
     assert main(["hub-id"]) == 0
     assert capsys.readouterr().out.strip() == "epiforecasts-seabbsrenewal"
-    assert main(["chosen-model"]) == 0
-    # The latest entry of results/model-choice.yml.
-    assert capsys.readouterr().out.strip() == "persistence"
+    # results/model-choice.yml has no choice until Sam makes the first.
+    assert main(["chosen-model"]) == 1
+    assert "no model has been chosen" in capsys.readouterr().err
 
 
 @pytest.mark.usefixtures("in_root")
@@ -285,7 +285,7 @@ def test_persistencenow_has_its_own_hub_id(
     from bdbvhubrenewal.submission.hub import model_abbr_for
 
     abbr = model_abbr_for("persistencenow", ROOT / "config" / "hub.toml")
-    assert abbr == "seabbspersnow"
+    assert abbr == "seabbsbaseline"
     assert abbr.isalnum()
     assert len(abbr) < 16
     # Models without their own id submit under the renewal id.
@@ -293,8 +293,33 @@ def test_persistencenow_has_its_own_hub_id(
         "seabbsrenewal"
     )
     assert main(["hub-id", "--model", "persistencenow"]) == 0
-    assert capsys.readouterr().out.strip() == "epiforecasts-seabbspersnow"
+    assert capsys.readouterr().out.strip() == "epiforecasts-seabbsbaseline"
     assert main(["metadata", "--model", "persistencenow", "--out",
                  str(tmp_path)]) == 0  # fmt: skip
-    text = (tmp_path / "epiforecasts-seabbspersnow.yml").read_text()
-    assert "model_abbr: seabbspersnow" in text
+    text = (tmp_path / "epiforecasts-seabbsbaseline.yml").read_text()
+    assert "model_abbr: seabbsbaseline" in text
+
+
+@pytest.mark.usefixtures("in_root")
+def test_persistencenow_config_runs_the_nowcast_model(tmp_path: Path) -> None:
+    config = get_config("persistencenow")
+    assert config.stand_in is None
+    fit = tmp_path / "fit"
+    args = ["--config", "persistencenow", "--vintage", "2026-10-17"]
+    assert main(["fit", *args, "--out", str(fit)]) == 0
+    diag = json.loads((fit / "diagnostics.json").read_text())
+    assert diag["model"] == "persistencenow"
+    assert diag["status"] == "not-applicable"
+    out = tmp_path / "sub"
+    assert main(["nowcast", *args, "--fit", str(fit), "--out", str(out)]) == 0
+    (csv,) = out.rglob("*.csv")
+    plain = tmp_path / "plain"
+    assert main(["nowcast", "--vintage", "2026-10-17", "--out",
+                 str(plain)]) == 0  # fmt: skip
+    (csv2,) = plain.rglob("*.csv")
+    now, base = pd.read_csv(csv), pd.read_csv(csv2)
+    assert len(now) == len(base)
+    # The nowcast lifts the recent weeks above plain persistence.
+    week = now["target_end_date"] == "2026-10-10"
+    nat = (now["location"] == "CD") & week
+    assert now.loc[nat, "value"].median() > base.loc[nat, "value"].median()

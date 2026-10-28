@@ -15,7 +15,7 @@ task ci-dry     # the submission workflow dry runs
 task docs       # the site, built in strict mode
 ```
 
-`task test` leaves out the model fit tests (marked `slow`), which take several minutes.
+`task test` leaves out the model fit tests (marked `slow`).
 The CI runs them on every push to main.
 Any change to `src/bdbvhubrenewal/model/`, the simulator or the renewal forecaster needs `task test-all` to pass first.
 
@@ -23,3 +23,9 @@ Any change to `src/bdbvhubrenewal/model/`, the simulator or the renewal forecast
 
 Write a failing test, commit it, make it pass, commit again.
 Keep each commit to one change.
+
+## Development log
+
+`results/development-log.csv` records each decision about the model, the evaluation, the submission or the docs, with its date, reason and evidence (a commit, issue or results file).
+Add a row in the same change when you make a decision of this kind.
+The Model development section of the docs shows the log, newest first.

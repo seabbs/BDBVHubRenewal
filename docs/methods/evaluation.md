@@ -61,13 +61,14 @@ Each vintage is a forecast task, and every registered model forecasts every task
 |---|---|---|
 | Development backtest | Real and reconstructed up to the latest model choice date | Latest real vintage, and every later real vintage for real forecasts |
 | Recovery check | Simulated | Simulated final counts |
-| Rolling held-out evaluation | Real vintages after the first model choice date | Every later real vintage |
+| Rolling held-out evaluation | Real vintages after each model choice | Every later real vintage |
 | Comparison with hub forecasts | Real where one serves the round, else reconstructed | Latest real vintage |
 
 ## Rolling held-out evaluation
 
-Each model choice is logged with its date.
-Every real vintage after the first choice date is forecast by the model chosen at the time and by persistence, with the code at the time of the run.
+Each model choice is logged with its date, and the development set rolls forward with them.
+Development runs use every vintage up to the latest choice date.
+Each real vintage after a choice is forecast by the model chosen then and by persistence, with the code at the time of the run.
 Each forecast is scored when the next vintage arrives and re-scored as newer ones do.
 
 ## Leave-one-province-out

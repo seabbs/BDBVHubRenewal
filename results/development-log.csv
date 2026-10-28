@@ -1,0 +1,11 @@
+date,area,decision,reason,evidence
+2026-10-10,evaluation,Persistence recorded as the placeholder model choice.,"Only the persistence baseline existed. The split was fixed before any held-out scoring, after the 2026-10-09 vintage and the reconstructed vintage of 2026-10-10, so the 2026-10-17 and 2026-10-24 vintages and every later one were held out.",results/model-choice.yml
+2026-10-28,model,Missingness offsets of the imputed share sampled non-centred.,The centred offsets did not mix: R-hat 1.68 with a bulk ESS of 1.5 in a 2 x 200 fit.,https://github.com/seabbs/BDBVHubRenewal/commit/b8c001d
+2026-10-28,model,"A late province is seeded over its first case week, not the week before.",Seeding the week before put cases where the data have none.,https://github.com/seabbs/BDBVHubRenewal/commit/f1f1751
+2026-10-28,evaluation,Primary scores use complete weeks only: weeks that ended at least K = 3 weeks before the truth vintage.,"By 21 days 96% of a week's final count is published in the delay data, so these weeks are close to final for every model.",https://github.com/seabbs/BDBVHubRenewal/commit/91e4e94
+2026-10-28,submission,"Every fit uses 2 chains of 500 warm-up and 500 draws, in the CI and the backtest.","Sam's decision: one setting for all work, sized for the CI runners.",https://github.com/seabbs/BDBVHubRenewal/commit/4e852dc
+2026-10-28,model,"The fallback variant is removed. The chain is renewal, its retry, renewalsp, persistencenow and persistence.",Sam's decision.,https://github.com/seabbs/BDBVHubRenewal/commit/6142f10
+2026-10-28,model,The publication lag default reverted to a fixed 0 to 3 days.,"The empirical lag counted onset backfill as late reporting, so it over-predicted.",https://github.com/seabbs/BDBVHubRenewal/commit/167698f
+2026-10-28,docs,The package renamed to bdbvhubrenewal.,It follows the repository name.,https://github.com/seabbs/BDBVHubRenewal/commit/e491a54
+2026-10-28,evaluation,"The held-out set rolls forward with each model choice, and the placeholder choice is removed.","Sam's decision: models are tuned on all data up to each choice, and only vintages after a choice are held out.",results/model-choice.yml
+2026-10-28,model,A BVDOutbreakSize release is used only if its joint R-hat is at most 1.1.,Releases that had not converged would pass a poor Rt to renewalbvd.,

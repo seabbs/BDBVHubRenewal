@@ -16,7 +16,7 @@ The package has these parts:
 - `cli`: the `bdbvhubrenewal` command.
 
 - Repository: <https://github.com/seabbs/BDBVHubRenewal>
-- Docs: <https://seabbs.github.io/BDBVHubRenewal/>
+- Docs: <https://samabbott.co.uk/BDBVHubRenewal/>
 """
 
 from bdbvhubrenewal import (

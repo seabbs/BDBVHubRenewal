@@ -9,4 +9,4 @@ The public API of `bdbvhubrenewal`, generated from the numpy-style docstrings, o
 - [Evaluation](evaluation.md): scoring, the backtest, held-out evaluation, posterior predictive checks and the hub comparison.
 - [Submission](submission.md): the hub file writer and checks, metadata, fit configurations and rounds.
 - [Reporting](reporting.md): figures and docs tables.
-- [CLI](cli.md): the `bdbvhubrenewal` command.
+- [CLI](../development/cli.md#reference): the `bdbvhubrenewal` command.
