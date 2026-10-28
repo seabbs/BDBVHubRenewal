@@ -44,8 +44,8 @@ model = [
 ]
 
 [project.urls]
-Homepage = "https://seabbs.github.io/BDBVHubRenewal/"
-Documentation = "https://seabbs.github.io/BDBVHubRenewal/"
+Homepage = "https://samabbott.co.uk/BDBVHubRenewal/"
+Documentation = "https://samabbott.co.uk/BDBVHubRenewal/"
 Repository = "https://github.com/seabbs/BDBVHubRenewal"
 Issues = "https://github.com/seabbs/BDBVHubRenewal/issues"
 

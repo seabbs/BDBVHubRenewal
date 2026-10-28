@@ -37,16 +37,9 @@ def test_variants_are_registered_as_fitted_models() -> None:
         model = get_model(name)
         assert isinstance(model, ForecastModel)
         assert model.name == name
-    # The backtest options are registered too. There is no fallback
-    # variant: the chain is renewal, its retry, renewalsp and persistence.
-    assert "fallback" not in specs
-    for name, field, value in (
-        ("renewalhold", "future_rt", "hold"),
-        ("renewalpo", "importation", "per_origin"),
-    ):
-        assert specs[name].fitted
-        config = rn.model_config(rn.VARIANTS[name])
-        assert getattr(config, field) == value
+    # Only the backtest models: no fallback and no unused options.
+    for name in ("fallback", "renewalhold", "renewalpo"):
+        assert name not in specs
     # The single patch fits the national sum, so cannot mask a province.
     assert get_model("renewal").supports_mask
     assert not get_model("renewalsp").supports_mask

@@ -13,31 +13,31 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_relative_section_hidden_with_one_model() -> None:
     scores = pd.read_csv(ROOT / "results" / "backtest-scores.csv")
-    assert "no model other than persistence" in report._relative_section(scores)
+    # Persistence against itself means nothing, so nothing is shown.
+    assert report._relative_section(scores) == ""
     two = pd.concat([scores, scores.assign(model="other")])
     text = report._relative_section(two)
+    assert text.startswith("## Relative skill")
     assert "relative_wis" in text
     assert "relative-wis-horizon.svg" in text
 
 
-def test_persistence_bias_sentence() -> None:
-    scores = pd.read_csv(ROOT / "results" / "backtest-scores.csv")
-    text = report._persistence_bias(scores)
-    assert text.startswith("On real vintages persistence has a mean bias")
-    assert report._persistence_bias(scores.iloc[:0]) == ""
-
-
 def test_heldout_page(tmp_path: Path, target: pd.DataFrame) -> None:
-    config = load_config(ROOT / "config" / "backtest.toml")
-    config = BacktestConfig(
-        model_choice=ROOT / config.model_choice,
-        development_until=config.development_until,
+    record = tmp_path / "model-choice.yml"
+    record.write_text(
+        "choices:\n"
+        "  - date: 2026-10-10\n"
+        "    model: persistence\n"
+        "    summary: A test choice.\n"
     )
+    config = BacktestConfig(model_choice=record, development_until="2026-10-10")
     gen, fig = tmp_path / "gen", tmp_path / "fig"
     report._heldout_page(
         fig, gen, ROOT / "results", target, ["persistence"], config
     )
-    assert "2026-10-17" in (gen / "heldout-choices.md").read_text()
+    choices = (gen / "heldout-choices.md").read_text()
+    assert choices.startswith("## Model choices")
+    assert "2026-10-17" in choices
     status = (gen / "heldout-status.md").read_text()
     assert "next vintage" in status
     assert (fig / "heldout-cd.svg").exists()
@@ -138,7 +138,7 @@ def test_make_report_writes_every_page(
         "vintages.md",
         "scores-overall.md",
         "relative-section.md",
-        "persistence-bias.md",
+        "backtest-findings.md",
         "truth-changes.md",
         "heldout-status.md",
         "comparison-scores.md",
@@ -150,7 +150,7 @@ def test_make_report_writes_every_page(
         "target.svg",
         "scores-wis-horizon.svg",
         "scores-by-truth-dark.svg",
-        "forecasts-real-cd.svg",
+        "forecasts-persistence-cd.svg",
         "recovery-wis-horizon.svg",
         "nowcast-cd.svg",
     ):
@@ -356,3 +356,69 @@ def test_sampler_section() -> None:
     text = report._sampler_section(fits, same)
     assert "the same as the submission fit" in text
     assert "shorter" not in text
+
+
+def test_development_log(tmp_path: Path) -> None:
+    assert report._development_log(tmp_path / "missing.csv") == ""
+    log = pd.DataFrame(
+        {
+            "date": ["2026-10-10", "2026-10-28"],
+            "area": ["evaluation", "model"],
+            "decision": ["Old decision.", "New decision."],
+            "reason": ["Why then.", "Why now."],
+            "evidence": [
+                "results/model-choice.yml",
+                "https://github.com/seabbs/BDBVHubRenewal/commit/abc1234",
+            ],
+        }
+    )
+    path = tmp_path / "log.csv"
+    log.to_csv(path, index=False)
+    text = report._development_log(path)
+    # Newest first, with evidence as links.
+    assert text.index("New decision.") < text.index("Old decision.")
+    assert (
+        "[abc1234](https://github.com/seabbs/BDBVHubRenewal/commit/abc1234)"
+        in text
+    )
+    # The committed log reads.
+    assert "fixed 0 to 3 days" in report._development_log(
+        ROOT / "results" / "development-log.csv"
+    )
+
+
+def test_backtest_findings() -> None:
+    rows = []
+    for model, wis, cov in (
+        ("persistence", 20.0, 0.6),
+        ("renewal", 10.0, 0.9),
+        ("renewalsp", 15.0, 0.8),
+    ):
+        rows.append(
+            _scores().assign(
+                model=model, wis=wis, coverage_90=cov, complete=True
+            )
+        )
+    primary = pd.concat(rows)
+    text = report._backtest_findings(primary)
+    assert "renewal 0.50" in text
+    assert "renewalsp 0.75" in text
+    assert "persistence 0.60" in text
+    assert report._backtest_findings(rows[0]) == ""
+
+
+def test_forecast_tabs() -> None:
+    text = report._forecast_tabs(["persistence", "renewal"], {"CD": "DRC"})
+    assert text.startswith("## Forecasts against later data")
+    assert '=== "renewal"' in text
+    assert "figures/forecasts-renewal-cd.svg#only-light" in text
+    assert report._forecast_tabs([], {"CD": "DRC"}) == ""
+
+
+def test_recovery_section(tmp_path: Path) -> None:
+    assert report._recovery_section(tmp_path / "missing.csv") == ""
+    path = tmp_path / "recovery-scores.csv"
+    _scores().assign(kind="simulated").to_csv(path, index=False)
+    text = report._recovery_section(path)
+    assert text.startswith("## Recovery on simulated vintages")
+    assert "recovery-wis-horizon.svg" in text

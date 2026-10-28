@@ -186,17 +186,6 @@ VARIANTS: Final[dict[str, Variant]] = {
             "pseudo-observation.",
             base="BVD",
         ),
-        Variant(
-            "renewalhold",
-            "Province renewal with Rt held at its last value past the data.",
-            overrides={"future_rt": "hold"},
-        ),
-        Variant(
-            "renewalpo",
-            "Province renewal with one importation share per origin, "
-            "partially pooled.",
-            overrides={"importation": "per_origin"},
-        ),
     )
 }
 """Model variants, by name."""

@@ -72,6 +72,7 @@ __all__ = [
     "lopo_tasks",
     "make_tasks",
     "merge_by_model",
+    "order_tasks",
     "real_vintages",
     "run_development",
     "run_forecasts",
@@ -376,6 +377,45 @@ def uses_lag_prior(task: ForecastTask) -> bool:
     if task.delay_history is None:
         return True
     return publication_lag_pmf(task.delay_history, task.vintage) is None
+
+
+def order_tasks(
+    tasks: Sequence[ForecastTask], spread: int = 5
+) -> list[ForecastTask]:
+    """Order tasks so a long run gives a useful first batch.
+
+    Real origins come first, then `spread` reconstructed origins evenly
+    spaced over their range, then the rest in date order.
+
+    Parameters
+    ----------
+    tasks : sequence of ForecastTask
+        The tasks.
+    spread : int
+        Reconstructed origins to bring forward.
+
+    Returns
+    -------
+    list of ForecastTask
+        The same tasks, reordered.
+    """
+    real = sorted(
+        (t for t in tasks if t.kind == "real"), key=lambda t: t.vintage
+    )
+    rest = sorted(
+        (t for t in tasks if t.kind != "real"),
+        key=lambda t: (t.kind, t.vintage),
+    )
+    rec = [t for t in rest if t.kind == "reconstructed"]
+    if spread > 1 and len(rec) > spread:
+        picks = {
+            round(i * (len(rec) - 1) / (spread - 1)) for i in range(spread)
+        }
+    else:
+        picks = set(range(len(rec)))
+    early = [rec[i] for i in sorted(picks)]
+    taken = {id(t) for t in early}
+    return [*real, *early, *(t for t in rest if id(t) not in taken)]
 
 
 def shard_tasks(

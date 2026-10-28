@@ -12,6 +12,7 @@ from bdbvhubrenewal.evaluation.backtest import (
     load_config,
     lopo_tasks,
     make_tasks,
+    order_tasks,
     run_development,
     run_forecasts,
     run_lopo,
@@ -30,10 +31,9 @@ ROOT = Path(__file__).resolve().parents[2]
 def test_load_config() -> None:
     cfg = load_config(ROOT / "config" / "backtest.toml")
     assert cfg.n_samples == 100
-    # The development set ends at the latest model choice date.
-    assert cfg.development_until == "2026-10-10"
-    assert cfg.is_heldout("2026-10-17")
-    assert not cfg.is_heldout("2026-10-10")
+    # With no model chosen yet, every vintage is development.
+    assert cfg.development_until is None
+    assert not cfg.is_heldout("2026-10-24")
     assert cfg.reconstructed_dates[0] == "2026-06-06"
     assert all(pd.Timestamp(d).dayofweek == 5 for d in cfg.simulated_dates)
 
@@ -489,3 +489,25 @@ def test_backtest_sampler_comes_from_the_config(
     monkeypatch.setenv(SAMPLER_ENV, '{"num_warmup": 50}')
     apply_sampler(cfg)
     assert sampler_settings()["num_warmup"] == 50
+
+
+def test_order_tasks_puts_real_and_spread_origins_first(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    config = load_config(ROOT / "config" / "backtest.toml")
+    from bdbvhubrenewal.evaluation.backtest import development_tasks
+
+    tasks = development_tasks(target, delays, config)
+    ordered = order_tasks(tasks, spread=5)
+    assert sorted(t.vintage for t in ordered) == sorted(
+        t.vintage for t in tasks
+    )
+    real = [t for t in tasks if t.kind == "real"]
+    head = ordered[: len(real)]
+    assert all(t.kind == "real" for t in head)
+    # Then 5 reconstructed origins spread over the range.
+    nxt = [t.vintage for t in ordered[len(real) : len(real) + 5]]
+    rec = sorted(t.vintage for t in tasks if t.kind == "reconstructed")
+    assert nxt[0] == rec[0]
+    assert nxt[-1] == rec[-1]
+    assert nxt == sorted(nxt)

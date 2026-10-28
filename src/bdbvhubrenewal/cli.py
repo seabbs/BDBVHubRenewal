@@ -95,7 +95,7 @@ MODEL_METADATA = {
             "published counts. Each sample is a joint trajectory and the "
             "national value is the sum of province samples. No spatial "
             "correlation beyond that sum. See "
-            "https://seabbs.github.io/BDBVHubRenewal/methods/model/."
+            "https://samabbott.co.uk/BDBVHubRenewal/methods/model/."
         ),
         "data_inputs": (
             "Hub target data (weekly confirmed cases by onset week, observed "
@@ -124,7 +124,7 @@ MODEL_METADATA = {
             "Both streams are negative binomial. Fitted by NUTS (NumPyro) to "
             "each data vintage. Each sample is one joint posterior "
             "trajectory and the national value is the sum of province "
-            "samples. See https://seabbs.github.io/BDBVHubRenewal/methods/model/."
+            "samples. See https://samabbott.co.uk/BDBVHubRenewal/methods/model/."
         ),
         "data_inputs": (
             "Hub target data (weekly confirmed cases by onset week, observed "
@@ -488,7 +488,7 @@ def _backtest(args: argparse.Namespace) -> int:
                 config,
                 include_reconstructed=not args.no_reconstructed,
             )
-        mine = bt.shard_tasks(tasks, index, count)
+        mine = bt.shard_tasks(bt.order_tasks(tasks), index, count)
         bt.run_forecasts(models, mine, args.cache)
         print(f"Shard {args.shard}: {len(mine)} tasks in {args.cache}.")
         return 0
