@@ -320,6 +320,23 @@ def _named_walk(
     return inner
 
 
+def fit_weeks(data: Vintage, config: ModelConfig) -> int:
+    """Weeks on the fit axis: the data weeks, extended to the BVD day.
+
+    The BVD pseudo-observation sits on $s_b$, which can fall after the
+    cut-off; the fit axis then runs to the end of that week (with no
+    data) so the observation informs Rt there.
+
+    Returns
+    -------
+    int
+        Number of weeks.
+    """
+    if config.bvd and data.bvd is not None:
+        return max(data.n_weeks, data.bvd["day"] // 7 + 1)
+    return data.n_weeks
+
+
 def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     """Build the province model for one vintage.
 
@@ -371,7 +388,7 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         baseline_rt_process=_named_walk(
             "rt_sd",
             0.2 * rt_scale,
-            data.n_weeks,
+            fit_weeks(data, config),
             config.rt_cadence,
             centred=centred,
             knots=(0.0, 0.5) if knots else None,
@@ -380,7 +397,7 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         subpop_rt_deviation_process=_named_walk(
             "rt_dev_sd",
             0.1 * rt_scale,
-            data.n_weeks,
+            fit_weeks(data, config),
             config.rt_cadence,
             ar=config.rt_deviation == "ar1",
             future=config.future_rt,
@@ -408,7 +425,7 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         name="ascertainment",
         rate_rvs={"onsets": DeterministicVariable("alpha0", ALPHA0)},
         temporal_processes={
-            "onsets": _named_walk("alpha_sd", 0.03, data.n_weeks)
+            "onsets": _named_walk("alpha_sd", 0.03, fit_weeks(data, config))
         },
     )
     builder.add_ascertainment(ascertainment)
@@ -439,12 +456,12 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         missing = MissingOnsetFraction(
             "missing_fraction",
             PooledInitialValue("logit_pi0", n_prov, -2.0, 1.0, 0.5),
-            _named_walk("pi_sd", 0.3, data.n_weeks),
-            _named_walk("pi_dev_sd", 0.1, data.n_weeks),
+            _named_walk("pi_sd", 0.3, fit_weeks(data, config)),
+            _named_walk("pi_dev_sd", 0.1, fit_weeks(data, config)),
         )
 
     if missing is not None:
-        delay_time = _named_walk("delay_sd", 0.15, data.n_weeks)
+        delay_time = _named_walk("delay_sd", 0.15, fit_weeks(data, config))
         if config.delay == "fixed":
             # Delays near the cut-off are part published, so treat the
             # last L days as truncated.
@@ -503,6 +520,7 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         )
     )
     model = builder.build()
+    model.config = config
     if model.latent.n_initialization_points != pad:
         raise ValueError(
             "The model axis must start a whole number of weeks early."
@@ -529,7 +547,8 @@ def model_args(
     n_init = model.latent.n_initialization_points
     # The fit runs on the data weeks only; the forecast pass extends the
     # axis by the horizon and draws the new steps from their priors.
-    horizon = data.horizon_weeks if forecast else 0
+    extra = fit_weeks(data, model.config) - data.n_weeks
+    horizon = max(data.horizon_weeks, extra) if forecast else extra
     n_weeks = data.n_weeks + horizon
 
     def pad(x):

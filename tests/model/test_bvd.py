@@ -136,3 +136,33 @@ def test_group_rt_weights_by_counts_not_per_resident():
     expect = jnp.log((10 * 1.0 + 1 * 2.0) / 11)
     assert float(group[0]) == pytest.approx(float(expect), rel=1e-6)
     assert float(national) == pytest.approx(float(expect), rel=1e-6)
+
+
+def test_fit_axis_reaches_the_bvd_day(outbreak, sim_tables, table, release):
+    from bdbv_hub_renewal.model.model import fit_weeks
+
+    day = VINTAGE_DAYS[-1]
+    target, delays = sim_tables[day]
+    rows = release.copy()
+    # BVD's as_of a few days after ours puts s_b in a later week.
+    rows["as_of"] = vintage_date(outbreak, day + 3)
+    data = vintage_from_tables(
+        target, delays, vintage_date(outbreak, day), SIM_LOCATIONS, table,
+        BVD, bvd=rows,
+    )  # fmt: skip
+    assert data.bvd["day"] // 7 + 1 > data.n_weeks
+    assert fit_weeks(data, BVD) == data.bvd["day"] // 7 + 1
+    model = build_model(data, BVD)
+    tr = trace(model, data)
+    assert np.isfinite(np.asarray(tr["bvd_log_rt_model"]["value"])).all()
+    ld = numpyro.infer.util.log_density(
+        model.sample,
+        (),
+        model_args(model, data),
+        {
+            k: v["value"]
+            for k, v in tr.items()
+            if v["type"] == "sample" and not v["is_observed"]
+        },
+    )[0]
+    assert np.isfinite(float(ld))
