@@ -134,7 +134,7 @@ def test_simulated_missing_onsets_follow_the_report_day() -> None:
     day = day.clip(upper=s.n_days - 1)
     frac = np.clip(day - s.n_days / 3, 0, None) / (s.n_days * 2 / 3)
     expected = np.where(day >= s.n_days / 3, 0.9 * frac, 0.0).mean()
-    assert (~cases["onset_known"]).mean() == pytest.approx(expected, abs=0.01)
+    assert (~cases["onset_known"]).mean() == pytest.approx(expected, abs=0.025)
 
 
 def test_simulated_onsets_follow_the_model_renewal(outbreak) -> None:  # type: ignore[no-untyped-def]

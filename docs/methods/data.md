@@ -85,7 +85,8 @@ A simulator generates province outbreaks from the model's own code with known pa
 - Poisson confirmed cases, with ascertainment rising from 0.5 to 0.75;
 - a missing-onset share by report day rising from 5% to 25% and falling to 12%;
 - a double censored Gamma delay whose mean falls from 12 to 6 days;
-- a lag from report to publication uniform on 0 to 3 days.
+- a lag from report to publication, 85% uniform on 0 to 3 days and 15% uniform on 4 to 60 days, as late entries in the real delay files;
+- 30% of cases reported with no onset get one 7 to 42 days after publication, so imputed counts of past weeks fall and known counts rise, as between real vintages.
 
 It then publishes vintages as the hub does: known onsets by onset week, missing onsets given an onset by a delay drawn from the known delays reported so far, their total, and the delay line data.
 The truth is every confirmed case by its true onset week.
