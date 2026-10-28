@@ -289,6 +289,9 @@ def test_sparse_places_stay_plausible(
     bu = samples.loc[samples["location"] == "CD-BU"]
     top = bu.groupby("target_end_date")["value"].quantile(0.975)
     assert top.max() <= 20
+    # With 7 cases in the last 6 weeks, a few cases a week stay plausible.
+    ahead = top.loc[top.index > task.vintage]
+    assert (ahead >= 3).all()
     # Ituri's walk is centred between its last two nowcasts, nearer the
     # one with more of its cases reported.
     it = samples.loc[samples["location"] == "CD-IT"]
