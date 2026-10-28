@@ -20,6 +20,9 @@
 Forecasts of weekly confirmed Bundibugyo virus disease cases in the Democratic Republic of the Congo for the [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub).
 Forecasts are made nationally, by province and by health zone.
 The package, `bdbvhubrenewal`, fits the models, scores them and writes the hub submission files.
+The package has two sets of models.
+The renewal models are `renewal`, `renewalsp` and `renewalbvd`.
+The baseline models are `persistence` and `persistencenow`, which is persistence on a nowcast with a baselinenowcast-style adjustment for reporting delays ([Johnson et al. 2025](https://doi.org/10.12688/wellcomeopenres.25027.2), Wellcome Open Research).
 See the [documentation](https://samabbott.co.uk/BDBVHubRenewal/) for the methods and results.
 
 ## Installation
