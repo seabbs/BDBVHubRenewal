@@ -99,6 +99,9 @@ DEFAULT_SAMPLER: Final[Mapping[str, Any]] = {
     "target_accept": 0.9,
     "max_tree_depth": 10,
     "seed": 1,
+    # Parallel chains (pmap over host devices) leak memory on Linux CPU
+    # with JAX 0.12; vectorized chains stay flat, about a third slower.
+    "chain_method": "vectorized",
 }
 """NUTS settings when neither the CI nor `SAMPLER_ENV` gives them."""
 
@@ -319,9 +322,13 @@ def run_nuts(model: Any, data: Any, sampler: Mapping[str, Any]) -> Any:
     pyrenew.model.MultiSignalModel
         The model, with `model.mcmc` holding the posterior.
     """
+    import jax
     from jax import random
     from numpyro.infer import MCMC
 
+    # Each fit compiles its own model, so cached executables from earlier
+    # fits never help and exhaust LLVM memory over many locations.
+    jax.clear_caches()  # type: ignore[no-untyped-call]
     pr = engine()
     args = pr.model_args(model, data)
     model.validate_data(
@@ -332,6 +339,7 @@ def run_nuts(model: Any, data: Any, sampler: Mapping[str, Any]) -> Any:
         num_warmup=int(sampler["num_warmup"]),
         num_samples=int(sampler["num_samples"]),
         num_chains=int(sampler["num_chains"]),
+        chain_method=str(sampler.get("chain_method", "vectorized")),
         progress_bar=False,
     )
     model.mcmc.run(

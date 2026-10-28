@@ -384,6 +384,85 @@ def _ladder_page(path: Path) -> str:
     return "\n".join(parts)
 
 
+_TRUTH_LABELS = {
+    "final_vintage": "final vintage",
+    "true_onset": "true onset week",
+}
+_VERSION_LABELS = {
+    "fresh": "fresh draw of the final count",
+    "anchored": "anchored to the vintage",
+    "recentred": "known anchored, imputed around the current count",
+}
+
+
+def _nowcast_recovery_lead(rows: pd.DataFrame) -> str:
+    """Sentences on the error and coverage of each version, from the rows."""
+    final = rows.loc[rows["truth"] == "final vintage"]
+    lines = []
+    for vintage, by in final.groupby("vintage", sort=True):
+        v = by.set_index("version")
+        if not {"fresh", "recentred"} <= set(v.index):
+            continue
+        lines.append(
+            f"On the {vintage} vintage, the absolute error of the median "
+            f"is {v.loc['fresh', 'mae_median']:.1f} with a fresh draw and "
+            f"{v.loc['recentred', 'mae_median']:.1f} with the reported "
+            "counts kept, and 90% coverage is "
+            f"{v.loc['fresh', 'coverage_90']:.2f} and "
+            f"{v.loc['recentred', 'coverage_90']:.2f}."
+        )
+    if not lines:
+        return ""
+    n = int(rows["n_cells"].max()) if "n_cells" in rows else 0
+    tail = (
+        f"Each vintage has {n} province and national weeks, so coverage "
+        f"moves in steps of {1 / n:.2f}.\n\n"
+        if n
+        else "\n"
+    )
+    return "\n".join(lines) + "\n" + tail
+
+
+def _nowcast_recovery_section(path: Path) -> str:
+    """Return the nowcast recovery section, or nothing without results."""
+    if not path.exists() or path.stat().st_size <= 1:
+        return ""
+    rows = pd.read_csv(path)
+    if rows.empty:
+        return ""
+    rows = rows.assign(
+        truth=rows["truth"].map(_TRUTH_LABELS).fillna(rows["truth"]),
+        how=rows["version"].map(_VERSION_LABELS).fillna(""),
+    )
+    cols = [
+        "vintage",
+        "truth",
+        "version",
+        "how",
+        "coverage_50",
+        "coverage_90",
+        "mae_median",
+        "share_below_reported",
+        "divergent_share",
+        "max_rhat",
+    ]
+    table = (
+        rows[[c for c in cols if c in rows]]
+        .round(3)
+        .to_markdown(index=False, missingval="")
+    )
+    return (
+        "### Nowcasts of partly reported weeks\n\n"
+        "Nowcasts of the weeks before the reference date (horizons -4 to "
+        "-1, by province and nationally) on simulated vintages, by how the "
+        "counts still to be reported are drawn.\n"
+        "They are scored against the final simulated vintage, the hub-style "
+        "target, and against cases by true onset week.\n"
+        "`share_below_reported` is the mean share of draws below the counts "
+        "already reported.\n\n" + _nowcast_recovery_lead(rows) + table + "\n"
+    )
+
+
 def _lopo_section(path: Path) -> str:
     """Return the leave-one-province-out section, or nothing without results."""
     if not path.exists() or path.stat().st_size <= 1:
@@ -541,6 +620,10 @@ def _backtest_page(
                 )
     _write(gen / "lopo-section.md", _lopo_section(res / "lopo-scores.csv"))
     _write(gen / "ladder.md", _ladder_page(res / "ladder.csv"))
+    _write(
+        gen / "nowcast-recovery.md",
+        _nowcast_recovery_section(res / "nowcast-recovery.csv"),
+    )
     rec_path = res / "recovery-scores.csv"
     if rec_path.exists():
         rscores = pd.read_csv(rec_path)
