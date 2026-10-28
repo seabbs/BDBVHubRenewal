@@ -161,7 +161,11 @@ def test_heldout_also_runs_the_other_variants(
         models=("shadow",),
     )
     try:
-        assert set(scores["model"]) == {"persistence", "shadow"}
+        assert set(scores["model"]) == {
+            "persistence",
+            "persistencenow",
+            "shadow",
+        }
         # Each score still records the model chosen at the time.
         assert set(scores["chosen_model"]) == {"persistence"}
     finally:
@@ -185,8 +189,12 @@ def test_heldout_keeps_and_rescores_other_models_forecasts(
     scores = run_heldout(
         target, delays, config, evaluate_holdout=True, out_dir=tmp_path
     )
-    assert set(scores["model"]) == {"persistence", "other"}
-    assert set(pd.read_csv(path)["model"]) == {"persistence", "other"}
+    assert set(scores["model"]) == {"persistence", "persistencenow", "other"}
+    assert set(pd.read_csv(path)["model"]) == {
+        "persistence",
+        "persistencenow",
+        "other",
+    }
 
 
 def test_heldout_without_fits_reads_committed_forecasts(
@@ -235,7 +243,7 @@ def test_heldout_without_fits_reads_committed_forecasts(
     finally:
         _REGISTRY.pop("slowfit")
     assert not fc.empty
-    assert set(scores["model"]) == {"persistence", "slowfit"}
+    assert set(scores["model"]) == {"persistence", "persistencenow", "slowfit"}
     assert set(scores["chosen_model"]) == {"slowfit"}
 
 
