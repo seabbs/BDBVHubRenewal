@@ -1,4 +1,4 @@
-# Backtest settings. Read by `bdbv_hub_renewal.backtest.load_config`.
+# Backtest settings. Read by `bdbvhubrenewal.backtest.load_config`.
 
 [forecast]
 # Weeks in each forecast, as horizons in weeks from the reference date.
@@ -11,11 +11,35 @@ seed = 20261027
 
 [split]
 # The model choice record. It logs the chosen model and every change, with
-# dates. Development runs use vintages up to the latest choice date only.
-# Every real vintage after the first choice date is held out and scored by
-# `--evaluate-holdout` under the model chosen at the time.
+# dates. The development set rolls forward with the choices: development
+# runs use every vintage up to the latest choice date, and each real
+# vintage after a choice is held out and scored by `--evaluate-holdout`
+# under the model chosen then. With no choice, every vintage is development.
 # Every week is scored, against each later real vintage as reported then.
 model_choice = "results/model-choice.yml"
+# A truth week counts as complete if it ended at least this many weeks
+# before the truth vintage. It is the fewest weeks by which 95% of a
+# week's final count is published, from the latest delay data and a 3-day
+# publication lag (`bdbvhubrenewal.data.completeness.complete_weeks`).
+# Scores on complete weeks are the primary scores for the model choice.
+complete_after_weeks = 3
+
+[sampler]
+# NUTS settings of every fitted model in the backtest and leave one
+# province out, the same as the submission's main fit (ci/policy.toml).
+# Settings in BDBV_RENEWAL_SAMPLER win over these.
+num_chains = 2
+num_warmup = 500
+num_samples = 500
+target_accept = 0.8
+max_tree_depth = 10
+chain_method = "vectorized"
+
+[bvd]
+# The BVD variant uses the newest BVDOutbreakSize results release whose
+# joint fit's worst R-hat is at most this. A generous check: effective
+# sample sizes are ignored, and BVDOutbreakSize's own pass level is 1.05.
+max_rhat = 1.1
 
 [reconstructed]
 # Saturdays to reconstruct pseudo-vintages for. Any after the latest model

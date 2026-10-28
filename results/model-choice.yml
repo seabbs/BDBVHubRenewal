@@ -1,14 +1,8 @@
-# Model choice record. Read by `bdbv_hub_renewal.heldout`.
-# Each entry is the model chosen for submission from its date on.
-# Add an entry, never edit an old one, when the choice changes.
-# Every real vintage after the first date is held out and scored under the
-# model chosen at the time (`task backtest-heldout`).
-# Development runs use vintages up to the latest date only.
-choices:
-  - date: 2026-10-10
-    model: persistence
-    summary: >-
-      Only the persistence baseline exists. The split was fixed before any
-      held-out scoring, after the 2026-10-09 vintage and the reconstructed
-      vintage of 2026-10-10. So the 2026-10-17 and 2026-10-24 vintages and
-      every later one are held out.
+# Model choice record. Read by `bdbvhubrenewal.evaluation.heldout`.
+# Each entry is the model chosen for submission from its date on, with
+# the reason. Add an entry, never edit an old one, when the choice changes.
+# The development set rolls forward with the choices: development runs use
+# every vintage up to the latest choice date, and each real vintage after
+# a choice is held out and scored under the model chosen then
+# (`task backtest-heldout`). With no choice, every vintage is development.
+choices: []

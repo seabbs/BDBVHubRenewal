@@ -30,13 +30,16 @@ def statuses(path: Path, **kwargs: Any) -> dict[str, str]:
 
 def sub(tmp_path: Path, **kwargs: Any) -> Path:
     return write_samples(
-        tmp_path / f"{REF}-epiforecasts-hubrenewal.csv", make_samples(**kwargs)
+        tmp_path / f"{REF}-epiforecasts-seabbsrenewal.csv",
+        make_samples(**kwargs),
     )
 
 
 def test_plausible_file_passes(tmp_path: Path) -> None:
     s = statuses(sub(tmp_path))
     assert s.pop("baseline") == "skip" and s.pop("previous") == "skip"
+    # Zones are required only for seabbsbaseline.
+    assert s.pop("zones") == "skip"
     assert set(s.values()) == {"pass"}, s
 
 
@@ -364,3 +367,67 @@ def test_cli_missing_file_is_error(tmp_path: Path) -> None:
         == 1
     )
     assert read_json(tmp_path / "checks.json")["status"] == "error"
+
+
+def test_fitted_national_is_reported_not_rebuilt(tmp_path: Path) -> None:
+    # renewalsp fits the nation on its own, so national need not be the sum.
+    w = weeks()[-1]
+    path = sub(tmp_path, mutate=_bump_national(w, 3, -4.0))
+    side = _sidecar(national_source="fitted")
+    before = _national(path)
+    assert repair_national(path, "CD", side) == ""
+    assert _national(path) == before
+    c = _checks(path, national_sidecar=side)["national_sum"]
+    assert c.status == "pass"
+    assert "own fit" in c.summary
+    assert "report only" in c.summary
+
+
+def with_zones(rows: list[list[Any]], skip: str = "", off: float = 0.0) -> None:
+    """Split each province's samples evenly over two zones."""
+    for r in list(rows):
+        loc = r[3]
+        if loc == "CD" or loc == skip:
+            continue
+        for k in (1, 2):
+            rows.append([*r[:3], f"{loc}-0{k}", r[4], r[5], r[6] / 2 + off])
+
+
+def test_zones_required_and_present(tmp_path: Path) -> None:
+    f = sub(tmp_path, mutate=with_zones)
+    checks = {c.name: c for c in run_checks(
+        f, reference_date=REF, observed=read_observed(HUB / "time-series.csv"),
+        require_zones=True,
+    )}  # fmt: skip
+    assert checks["zones"].status == "pass"
+    # Zones do not count as provinces in the national sum.
+    assert checks["national_sum"].status == "pass"
+
+
+def test_missing_zones_fail_when_required(tmp_path: Path) -> None:
+    obs = read_observed(HUB / "time-series.csv")
+    none = sub(tmp_path)
+    check = {c.name: c for c in run_checks(
+        none, reference_date=REF, observed=obs, require_zones=True
+    )}["zones"]  # fmt: skip
+    assert check.status == "fail"
+    part = sub(tmp_path / "p", mutate=lambda r: with_zones(r, skip="CD-NK"))
+    check = {c.name: c for c in run_checks(
+        part, reference_date=REF, observed=obs, require_zones=True
+    )}["zones"]  # fmt: skip
+    assert check.status == "fail"
+    assert "CD-NK" in check.summary
+    # Not required: no zones is fine.
+    check = {c.name: c for c in run_checks(
+        none, reference_date=REF, observed=obs
+    )}["zones"]  # fmt: skip
+    assert check.status == "skip"
+
+
+def test_zones_that_do_not_add_up_warn(tmp_path: Path) -> None:
+    f = sub(tmp_path, mutate=lambda r: with_zones(r, off=1.0))
+    check = {c.name: c for c in run_checks(
+        f, reference_date=REF, observed=read_observed(HUB / "time-series.csv"),
+        require_zones=True,
+    )}["zones"]  # fmt: skip
+    assert check.status == "warn"

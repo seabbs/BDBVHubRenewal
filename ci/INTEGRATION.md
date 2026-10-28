@@ -2,40 +2,43 @@
 
 The bundle drops into `seabbs/BDBVHubRenewal` as `ci/` plus `.github/`.
 `ci/` is its own small uv project with only the standard library.
-The workflows call the main repo only through the `bdbv-hub-renewal` CLI, whose command is set by `FORECAST_CLI` (default `uv run bdbv-hub-renewal`), and through `scripts/validate-hub.R`.
-`ci/fixtures/fake_bdbv_hub_renewal.py` implements everything below on fixture data.
+The workflows call the main repo only through the `bdbvhubrenewal` CLI, whose command is set by `FORECAST_CLI` (default `uv run bdbvhubrenewal`), and through `scripts/validate-hub.R`.
+`ci/fixtures/fake_bdbvhubrenewal.py` implements everything below on fixture data.
 It is the reference for the interface, and `ci/run_dry.sh` runs the whole workflow against it.
 
 ## What exists and what is needed
 
 | command | status in the main repo | used by |
 | --- | --- | --- |
-| `bdbv-hub-renewal data --ref <hub sha>` | exists. Reads `GITHUB_TOKEN`. | `prepare` |
-| `bdbv-hub-renewal nowcast --model persistence --vintage <as_of> --out <dir>` | exists | `prepare` (persistence candidate and baseline) |
-| `bdbv-hub-renewal metadata --model <model> --out <dir>` | exists | `gate` |
+| `bdbvhubrenewal data --ref <hub sha>` | exists. Reads `GITHUB_TOKEN`. | `prepare` |
+| `bdbvhubrenewal nowcast --model persistence --vintage <as_of> --out <dir>` | exists | `prepare` (persistence candidate and baseline) |
+| `bdbvhubrenewal metadata --model <model> --out <dir>` | exists | `gate` |
 | `scripts/validate-hub.R <hub> <csv> <yml>`, with `CHECK_WINDOW=true` | exists | `gate`, through `ci/steps/validate_hub.sh` |
-| `bdbv-hub-renewal fit ...` | done (`bdbv_hub_renewal.fitting`; `main` and `fallback` run the renewal model, `bdbv_hub_renewal.models.renewal`) | `fit`, `retry` |
+| `bdbvhubrenewal fit ...` | done (`bdbvhubrenewal.submission.fitting`; `main` runs the chosen renewal model and `renewalsp` the single-patch model, `bdbvhubrenewal.forecasters.renewal`) | `fit`, `retry` |
 | `nowcast --config <c> --fit <dir>` | done | `fit`, `retry` |
-| `bdbv-hub-renewal plot-submission ...` | done, `plots.plot_submission` | every candidate |
-| `bdbv-hub-renewal plot-ppc --ppc <ppc.json> --out <png>` | done, a thin wrapper on `ppc.plot_ppc` | candidates whose `ppc.json` is available |
-| `bdbv-hub-renewal --version` | done | `run.json`, the PR body |
-| `bdbv-hub-renewal coherence --vintage <as_of> --out <json>` | done | `prepare` (data coherence check) |
+| `bdbvhubrenewal plot-submission ...` | done, `plots.plot_submission` | every candidate |
+| `bdbvhubrenewal plot-ppc --ppc <ppc.json> --out <png>` | done, a thin wrapper on `ppc.plot_ppc` | candidates whose `ppc.json` is available |
+| `bdbvhubrenewal --version` | done | `run.json`, the PR body |
+| `bdbvhubrenewal coherence --vintage <as_of> --out <json>` | done | `prepare` (data coherence check) |
 
-### `bdbv-hub-renewal fit`
+### `bdbvhubrenewal fit`
 
 ```sh
-bdbv-hub-renewal fit --model hubrenewal --config main|fallback --vintage <as_of> \
+bdbvhubrenewal fit --model renewal|renewalsp --config main|renewalsp --vintage <as_of> \
   --sampler-json '{"num_chains": 4, "num_warmup": 1000, "num_samples": 1000,
                    "target_accept": 0.8, "max_tree_depth": 10, "seed": 1}' \
   --out <fit dir>
 ```
 
-- `--model hubrenewal` is the PyRenew model. Its hub id is `epiforecasts-hubrenewal`, because `epiforecasts-renewal` is already a different hub model.
+- `--model` is the model chosen in `results/model-choice.yml` (`bdbvhubrenewal chosen-model`), unless the candidate names its own in `ci/policy.toml` (`model`), as the single-patch fallback and the `bvd` shadow do.
+  The hub id is set apart in `config/hub.toml` (`bdbvhubrenewal hub-id`), `epiforecasts-seabbsrenewal`.
+  `epiforecasts-renewal` is already a different hub model.
 - `--config` selects the model configuration.
   `main` is the full model.
-  `fallback` is the same code with the delays and missingness plugged in from data, no spatial coupling, and a weekly Rt random walk.
+  `renewalsp` is the single-patch model: an independent renewal fit for each province with cases and for the country, with no pooling or coupling.
   Each matrix leg passes its own config.
-- `--sampler-json` is the candidate's `sampler` table from `ci/policy.toml`. The retries differ only in it.
+- `--sampler-json` is the candidate's `sampler` table from `ci/policy.toml`.
+  The retries differ only in it.
 - `--vintage` is a real `as_of`, or `latest`.
 - Write `<fit dir>/diagnostics.json` (below) whether or not the fit converged.
   Exit non-zero only if the fit could not run.
@@ -50,7 +53,7 @@ bdbv-hub-renewal fit --model hubrenewal --config main|fallback --vintage <as_of>
 ### `nowcast` with a fit
 
 ```sh
-bdbv-hub-renewal nowcast --model hubrenewal --config main --fit <fit dir> \
+bdbvhubrenewal nowcast --model renewal --config main --fit <fit dir> \
   --vintage <as_of> --out <candidate dir>/submission
 ```
 
@@ -59,7 +62,8 @@ bdbv-hub-renewal nowcast --model hubrenewal --config main --fit <fit dir> \
   The PR always files it as `model-output/$HUB_MODEL_ID/<reference_date>-$HUB_MODEL_ID.csv`, so persistence can stand in for the main model.
 - Include the national row `CD`, as the sum of the province trajectories by sample index, plus any national cases the model does not assign to a province.
   Use the same sample ids across locations.
-  National sample k must equal the sum of province sample k plus that sample's unassigned cases, for every week. `to_hub_table` writes it that way, and the gate rebuilds the national rows the same way if they differ, and notes it.
+  National sample k must equal the sum of province sample k plus that sample's unassigned cases, for every week.
+  `to_hub_table` writes it that way, and the gate rebuilds the national rows the same way if they differ, and notes it.
 - Write `national.json` at the root of `--out` (`<candidate>/submission/national.json`), which `candidate.sh` passes to `check-forecast --national-sidecar`:
 
   ```json
@@ -70,7 +74,8 @@ bdbv-hub-renewal nowcast --model hubrenewal --config main --fit <fit dir> \
   A modelled province missing from the hub file warns.
   `unassigned` holds the national cases not assigned to a province, by week and sample; leave it empty when there are none.
   Without the file the gate takes the unassigned part from the gap between the national data and the provinces (`coherence.json`), and says so.
-- Write `handled.json` at the root of `--out`: a JSON list of short notes on anything handled on the way, such as a data stream taken from an earlier vintage. They go on the PR's `Handled:` line.
+- Write `handled.json` at the root of `--out`: a JSON list of short notes on anything handled on the way, such as a data stream taken from an earlier vintage.
+  They go on the PR's `Handled:` line.
 - Submit at least 7 back weeks (to `reference_date − 6 weeks`) as well as the 3 forecast weeks.
   The `observed` check compares the median of the last two complete weeks (4 or more weeks before `as_of`) with the data.
   With fewer back weeks it has nothing to compare, and skips.
@@ -81,15 +86,17 @@ bdbv-hub-renewal nowcast --model hubrenewal --config main --fit <fit dir> \
 ### `plot-submission`
 
 ```sh
-bdbv-hub-renewal plot-submission --submission <csv> --vintage <as_of> --out <png>
+bdbvhubrenewal plot-submission --submission <csv> --vintage <as_of> --out <png>
 ```
 
-Draw what was **submitted**: the samples in `<csv>`, not a re-run of the model.
+Draw what was **submitted**, the samples in `<csv>`, not a re-run of the model.
 `plots.plot_nowcast` already takes them:
 
 ```python
 def plot_submission(submission: Path, vintage: str) -> Figure:
-    samples = read_hub_file(submission)  # location, target_end_date, sample, value
+    samples = read_hub_file(
+        submission
+    )  # location, target_end_date, sample, value
     locations = ["CD", *largest_provinces(samples, n=3)]
     return grid_of(
         plot_nowcast(location=loc, vintage=vintage, forecasts=samples)
@@ -103,7 +110,7 @@ It renders inline in the PR body from a raw URL pinned to a commit.
 ### `coherence`
 
 ```sh
-bdbv-hub-renewal coherence --vintage <as_of> --out <inputs>/coherence.json
+bdbvhubrenewal coherence --vintage <as_of> --out <inputs>/coherence.json
 ```
 
 Compare the national count with the sum of the provinces in the data vintage, for each stream and week:
@@ -128,11 +135,11 @@ Compare the national count with the sum of the provinces in the data vintage, fo
 ### `plot-ppc`
 
 ```sh
-bdbv-hub-renewal plot-ppc --ppc <candidate>/ppc.json --out <candidate>/ppc.png
+bdbvhubrenewal plot-ppc --ppc <candidate>/ppc.json --out <candidate>/ppc.png
 ```
 
 `candidate.sh` calls it only when `ppc.json` has `available: true`.
-It is `plot_ppc(read_ppc(path))` from `bdbv_hub_renewal.ppc`, saved with `fig.savefig(out, dpi=...)`: small multiples by province of the predictive median and intervals against the observed counts, light mode, under 1 MB.
+It is `plot_ppc(read_ppc(path))` from `bdbvhubrenewal.evaluation.ppc`, saved with `fig.savefig(out, dpi=...)`: small multiples by province of the predictive median and intervals against the observed counts, light mode, under 1 MB.
 The PNG travels in the `candidate-<id>` artefact; the PR body points to it.
 
 ### `--version`
@@ -145,7 +152,7 @@ The PR body adds the commit SHA itself.
 ```json
 {
   "schema_version": 1,
-  "model": "hubrenewal",
+  "model": "renewal",
   "config": "main",
   "sampler": "nuts",
   "num_chains": 4,
@@ -192,22 +199,34 @@ extra = mcmc.get_extra_fields(group_by_chain=True)  # needs extra_fields=(
 #   "diverging", "num_steps", "adapt_state.step_size", "accept_prob", "energy")
 depth = np.log2(extra["num_steps"] + 1)
 diagnostics = {
-    "schema_version": 1, "model": model, "config": config, "sampler": "nuts",
-    "num_chains": n_chains, "num_samples": n_samples,
-    "max_tree_depth": max_tree_depth, "runtime_seconds": runtime,
+    "schema_version": 1,
+    "model": model,
+    "config": config,
+    "sampler": "nuts",
+    "num_chains": n_chains,
+    "num_samples": n_samples,
+    "max_tree_depth": max_tree_depth,
+    "runtime_seconds": runtime,
     "parameters": [
-        {"name": name.split("[")[0], "index": index_of(name),
-         "rhat": none_if_nan(row.r_hat), "ess_bulk": none_if_nan(row.ess_bulk),
-         "ess_tail": none_if_nan(row.ess_tail)}
+        {
+            "name": name.split("[")[0],
+            "index": index_of(name),
+            "rhat": none_if_nan(row.r_hat),
+            "ess_bulk": none_if_nan(row.ess_bulk),
+            "ess_tail": none_if_nan(row.ess_tail),
+        }
         for name, row in summ.iterrows()
     ],
     "chains": [
-        {"chain": c, "draws": n_samples,
-         "divergences": int(extra["diverging"][c].sum()),
-         "step_size": float(extra["adapt_state.step_size"][c].mean()),
-         "tree_depth_hits": int((depth[c] >= max_tree_depth).sum()),
-         "mean_accept": float(extra["accept_prob"][c].mean()),
-         "ebfmi": float(az.bfmi(extra["energy"][c][None, :])[0])}
+        {
+            "chain": c,
+            "draws": n_samples,
+            "divergences": int(extra["diverging"][c].sum()),
+            "step_size": float(extra["adapt_state.step_size"][c].mean()),
+            "tree_depth_hits": int((depth[c] >= max_tree_depth).sum()),
+            "mean_accept": float(extra["accept_prob"][c].mean()),
+            "ebfmi": float(az.bfmi(extra["energy"][c][None, :])[0]),
+        }
         for c in range(n_chains)
     ],
 }
@@ -216,7 +235,7 @@ diagnostics = {
 ## `ppc.json`
 
 ```json
-{"schema_version": 1, "available": true, "model": "hubrenewal", "config": "main",
+{"schema_version": 1, "available": true, "model": "renewal", "config": "main",
  "intervals": [0.5, 0.9],
  "rows": [{"location": "CD-IT", "stream": "total", "target_end_date": "2026-10-03",
            "observed": 12, "median": 10.0, "lower_50": 7.0, "upper_50": 13.0,
@@ -226,9 +245,10 @@ diagnostics = {
 - One row per province, stream and in-sample onset week.
   `stream` is `observed` (known onsets), `imputed` (the hub's imputed onsets) or `total`.
 - `median`, `lower_<pct>` and `upper_<pct>` summarise the posterior predictive draws of the count as observed in the data vintage, with one central interval per level in `intervals`.
-- `pit` is the **randomised** PIT for counts, `F(y − 1) + v (F(y) − F(y − 1))` with `v ~ Uniform(0, 1)` from a seeded generator and `F` the empirical predictive distribution function. It is uniform on (0, 1) under a calibrated model even though counts are discrete.
+- `pit` is the **randomised** PIT for counts, `F(y − 1) + v (F(y) − F(y − 1))` with `v ~ Uniform(0, 1)` from a seeded generator and `F` the empirical predictive distribution function.
+  It is uniform on (0, 1) under a calibrated model even though counts are discrete.
 - `complete` is true for weeks ending at least the completeness lag (4 weeks) before the data vintage.
-- `bdbv_hub_renewal.ppc.summarise_draws(observed, draws, as_of=..., model=..., config=...)` builds all of this from a table of observations (`location`, `stream`, `target_end_date`, `observed`) and an array of draws of shape `(n_draws, n_rows)`; `write_ppc` writes it.
+- `bdbvhubrenewal.evaluation.ppc.summarise_draws(observed, draws, as_of=..., model=..., config=...)` builds all of this from a table of observations (`location`, `stream`, `target_end_date`, `observed`) and an array of draws of shape `(n_draws, n_rows)`; `write_ppc` writes it.
 - A model with no posterior writes `{"schema_version": 1, "available": false, "reason": "<text>"}` (`ppc.not_available(reason)`), which the gate reports as `n/a`.
 - A sampled fit (`sampler` other than `none` in `diagnostics.json`) with a missing or unreadable `ppc.json` is an `error`, and gates as a failure, as a missing diagnostics file does.
   A fit with no sampler and no `ppc.json` is `n/a`.

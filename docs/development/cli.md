@@ -1,10 +1,10 @@
 # CLI
 
-The `bdbv-hub-renewal` command.
+The `bdbvhubrenewal` command.
 { .page-subtitle }
 
 Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
-`bdbv-hub-renewal <command> --help` lists each command's options.
+`bdbvhubrenewal <command> --help` lists each command's options.
 
 | Command | What it does |
 |---|---|
@@ -13,8 +13,13 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 | `backtest --evaluate-holdout` | Score every held-out vintage under the model chosen at the time, with the other models alongside. |
 | `backtest --no-fit` | Run only the models with no fit. Fitted models' rows in `results/` are kept, and their held-out forecasts are scored again. The docs build uses this, so it never fits a model. |
 | `backtest --lopo` | Leave one province out: forecast each province with its counts masked, for the variants that take a mask. |
+| `backtest --cache DIR` | Keep one forecast file per model and task in `DIR`, and read tasks already there, so a run can be resumed. |
+| `backtest --shard I/N` | With `--cache`, forecast only shard `I` of `N` of the tasks, without scoring. A run without it then scores the whole cache. |
+| `backtest --no-recovery` | Skip the recovery check on simulated vintages. |
+| `backtest --recovery-only` | Run only the recovery check, with `--cache` and `--shard` as for the backtest. |
 | `compare-hub [--fetch]` | Score our retrospective forecasts and the hub's submitted ones on the same truth and weeks. |
-| `nowcast` | Forecast from a real vintage, write the hub file and check it. With `--config` and `--fit`, forecast from a fit configuration. |
+| `nowcast` | Forecast from a real vintage, write the hub file and check it. With `--config` and `--fit`, forecast from a fit configuration. The province samples are split across the health zones, unless `--no-zones` is given. |
+| `zone-backtest` | Score zone forecasts against zone persistence on the real vintages. |
 | `fit` | Fit a configuration and write the fit directory and its diagnostics, for the submission CI. |
 | `plot-submission` | Plot a submitted hub file. |
 | `plot-ppc` | Plot a fit's posterior predictive checks (`ppc.json`). |
@@ -25,9 +30,30 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 
 `--version` prints the package version.
 
-## Writing and checking a hub file
+## Evaluation
 
-`bdbv-hub-renewal nowcast` writes `model-output/<model_id>/<reference_date>-<model_id>.csv` under `output/submission/`.
+```bash
+task backtest           # development backtest and recovery check
+task backtest-lopo      # leave one province out
+task backtest-heldout   # score the held-out vintages
+task docs               # build the site into _site/
+```
+
+The fitted models use the `[sampler]` settings in `config/backtest.toml`, the same as the submission's main fit.
+`BDBV_RENEWAL_SAMPLER` overrides them, for example `'{"num_chains": 2, "num_warmup": 300, "num_samples": 300}'`.
+Each forecast of a renewal variant is a fit.
+`--cache` and `--shard` split a run over several processes, and `--models` runs some models and keeps the others' rows in `results/`, which is committed.
+The docs build runs only the persistence models and reads the fitted models from there.
+
+The comparison with hub forecasts downloads other teams' files, so it is run on its own:
+
+```bash
+uv run bdbvhubrenewal compare-hub --fetch
+```
+
+## Hub files
+
+`bdbvhubrenewal nowcast` writes `model-output/<model_id>/<reference_date>-<model_id>.csv` under `output/submission/`.
 The model id is `epiforecasts-<model>`.
 It checks the file with `validate_submission`, which mirrors the hub's checks:
 
@@ -40,11 +66,13 @@ It checks the file with `validate_submission`, which mirrors the hub's checks:
 - the submission window, Sunday to Tuesday in Kinshasa time, when a time is given.
 
 `task validate-hub` then runs the hub's own `hubValidations::validate_submission()` in R against a fresh clone of the hub.
-The persistence file for 2026-10-31 passes every check.
 
-`bdbv-hub-renewal metadata` writes `hub/model-metadata/epiforecasts-<model>.yml` and checks it against the hub's schema.
+`bdbvhubrenewal metadata` writes `hub/model-metadata/epiforecasts-<model>.yml` and checks it against the hub's schema.
 Sam confirms the contributor list, licence and model name before a model is first submitted.
 
 !!! note "Sample ids"
-    Sample ids run from 1 to 100 within each location and are shared across locations.
-    `hubValidations` reads this as samples that are joint across locations, which they are: the national sample is the sum of the province samples with the same id.
+    Sample ids run from 1 to 100 and are shared across locations, so `hubValidations` reads samples as joint across locations.
+
+## Reference
+
+::: bdbvhubrenewal.cli

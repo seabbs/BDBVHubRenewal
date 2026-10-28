@@ -2,7 +2,7 @@
 \documentclass[tikz,border=6pt]{standalone}
 \input{style.tex}
 
-% The province renewal model (hubrenewal) as a generative chain:
+% The province renewal model (renewal) as a generative chain:
 % parameters, the coupled renewal, confirmed onsets, the onset-to-report
 % delay and missingness, and the hub's observation streams. Maths follows
 % docs/methods/model.md.
@@ -19,14 +19,20 @@
 \node[param, text width=3.6cm, minimum height=27mm] (rt) at (-4.6,0)
   {\textbf{Reproduction number}\\[1pt]
    $\log R_p(t) = \log R(t) + \delta_p(t)$\\[1pt]
-   {\footnotesize weekly knots for $\log R$,}\\ {\footnotesize $\sum_p \delta_p = 0$, one pooled}\\ {\footnotesize step SD for $\delta_p$}};
+   {\footnotesize weekly knots for $\log R$,}\\ {\footnotesize $\sum_p \delta_p = 0$, AR(1)}\\ {\footnotesize with pooled SD and half-life}};
 \node[param, text width=3.6cm, minimum height=27mm] (imp) at (-0.3,0)
   {\textbf{Importation}\\[1pt]
    $W = (1 - \varepsilon) I$\\ $+\, \varepsilon\, \mathrm{diag}(1/N) K^\top \mathrm{diag}(N)$\\[1pt]
    {\footnotesize gravity kernel $K$,}\\ {\footnotesize $\varepsilon \sim \mathrm{Beta}(1, 100)$}};
 \node[param, text width=3.6cm, minimum height=27mm] (gi) at (4.0,0)
-  {\textbf{Generation interval}\\[1pt] $g(\tau)$, Gamma with\\ mean 15 and SD 9 days;\\
+  {\textbf{Generation interval}\\[1pt] $g(\tau)$, double censored\\ Gamma, mean 15, SD 9 days;\\
    share at risk $\nu$,\\ seeds $c_p$};
+
+% The BVDOutbreakSize term of renewalbvd only.
+\node[joint, dashed, text width=3.6cm] (bvd) at (-4.6,2.4)
+  {BVDOutbreakSize $\hat R$ at $s_b$\\
+   {\footnotesize tempered, renewalbvd only}};
+\draw[jointflow, dashed] (bvd.south) -- (rt.north);
 
 % ---- Infections ----------------------------------------------------------
 \node[latent, text width=12.2cm, inner sep=7pt] (inf) at (-0.3,-3.1)
@@ -59,16 +65,17 @@
 \def\yc{-15.3}
 \def\yd{-17.2}
 
-\node[note, anchor=south] at ({\xl+0.2},{\ya+0.55}) {expected series, data vintage $T$};
-\node[note, anchor=south] at (\xr,{\ya+0.55}) {observed data and likelihood};
+\node[note, anchor=south] at ({\xl+0.2},{\ya+1.05}) {expected series, data vintage $T$};
+\node[note, anchor=south] at (\xr,{\ya+1.05}) {observed data and likelihood};
 
 \node[latent, text width=\wl] (known) at (\xl,\ya)
   {\textbf{Known onsets}\\[1pt]
-   $\mathrm{known}_T(s) = \lambda(s) \sum_{d \le T - s} f_s(d)\{1 - \pi(s + d)\}$};
+   $\mathrm{known}_T(s) =$\\ $\lambda(s) \sum_{d} f_s(d)\{1 - \pi(s + d)\}\, c(s + d)$\\[1pt]
+   {\footnotesize $c$: published by $T$, lag 0 to 3 days}};
 \node[latent, text width=\wl] (imput) at (\xl,\yb)
   {\textbf{Imputed onsets}, as the hub makes them\\[1pt]
    $M(t) = \pi(t) \sum_s \lambda(s) f_s(t - s)$\\[1pt]
-   $\mathrm{imputed}_T(s) = \sum_{t = s}^{T} \hat f(t - s)\, M(t)$};
+   $\mathrm{imputed}_T(s) = \sum_{t = s}^{T} \hat f(t - s)\, c(t)\, M(t)$};
 \node[latent, text width=\wl] (dl) at (\xl,\yc)
   {known onsets by onset week and delay, $f_s(d)$};
 \node[latent, text width=\wl] (idle) at (\xl,\yd)
@@ -109,7 +116,7 @@
 % ---- Forecast ------------------------------------------------------------
 \node[latent, text width=12.2cm] (fc) at (-0.3,{\yd-2.1})
   {\textbf{Forecast target} $y_p(w)$: final known plus final imputed onsets,\\
-   one posterior draw per trajectory; national is the sum over provinces};
+   one posterior draw per trajectory; national is the sum over provinces\\ {\footnotesize (renewalsp fits the nation on its own)}};
 \draw[flow] (idle.south) -- (idle.south |- fc.north);
 
 % ---- Key -------------------------------------------------------------------

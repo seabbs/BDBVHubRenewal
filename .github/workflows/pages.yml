@@ -48,7 +48,8 @@ jobs:
           enable-cache: true
       - run: uv sync --frozen --all-groups
       # Pages for the submitted rounds come from the ledger branch that
-      # the submission workflow's record job writes.
+      # the submission workflow writes. A merged round's page is frozen in
+      # its `pages/` and copied as it is.
       - name: Fetch the submission ledger
         run: |
           mkdir -p output/ledger
@@ -61,10 +62,13 @@ jobs:
       # scores the committed held-out forecasts again against the latest
       # vintage, even for a chosen fitted model.
       - name: Backtest, then the docs figures and tables
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          uv run bdbv-hub-renewal backtest --no-fit
-          uv run bdbv-hub-renewal backtest --evaluate-holdout --no-fit
-          uv run bdbv-hub-renewal report --ledger output/ledger
+          uv run bdbvhubrenewal backtest --no-fit
+          uv run bdbvhubrenewal backtest --evaluate-holdout --no-fit
+          uv run bdbvhubrenewal compare-hub --fetch
+          uv run bdbvhubrenewal report --ledger output/ledger
       - name: Build the site into _site
         run: uv run mkdocs build --strict
       - uses: actions/upload-pages-artifact@v3

@@ -70,7 +70,7 @@ def gate(
             "warnings": warnings or [],
             "attempts": [{"id": "main", "validation": "pass"}],
             "run": {
-                "model": "hubrenewal",
+                "model": "renewal",
                 "config": "main",
                 "package_version": "0.2.0",
             },
@@ -86,7 +86,7 @@ def body(g: Path, **kw: Any) -> str:
         "provenance": read_json(g / "provenance.json"),
         "selected_dir": g / "selected",
         "reference_date": REF,
-        "model_id": "epiforecasts-hubrenewal",
+        "model_id": "epiforecasts-seabbsrenewal",
         "hub_ref": "a" * 40,
         "data_commit": "b" * 40,
         "as_of": "2026-10-31",
@@ -116,11 +116,11 @@ def test_body_has_required_parts(
     monkeypatch.setenv("GITHUB_REPOSITORY", "seabbs/x")
     monkeypatch.setenv("GITHUB_RUN_ID", "42")
     text = body(gate(tmp_path))
-    assert text.startswith(marker("epiforecasts-hubrenewal", REF))
+    assert text.startswith(marker("epiforecasts-seabbsrenewal", REF))
     shown = visible(text)
     assert len(shown) <= 6, shown
     assert shown[0] == (
-        f"Automated submission of `epiforecasts-hubrenewal` for {REF}, from "
+        f"Automated submission of `epiforecasts-seabbsrenewal` for {REF}, from "
         "data as of 2026-10-31, for 4 locations."
     )
     assert shown[1] == "All checks passed."
@@ -129,7 +129,7 @@ def test_body_has_required_parts(
     assert shown[-1] == FOOTER
     assert "| Convergence | PASS (max R-hat 1.004" in text
     assert "| Hub validation | PASS |" in text
-    assert "hubrenewal (`main`), version 0.2.0" in text
+    assert "renewal (`main`), version 0.2.0" in text
     assert "bbbbbbbbbb" in text and "actions/runs/42" in text
     assert "<summary>National summary</summary>" in text
     assert "<summary>Provenance</summary>" in text
@@ -326,3 +326,85 @@ def test_stand_in_is_stated(tmp_path: Path) -> None:
         "All checks passed. Stand-in: persistence runs as the `main` model."
     )
     assert "Stand-in" not in body(gate(tmp_path / "real"))
+
+
+def test_body_reports_shadow_candidates(tmp_path: Path) -> None:
+    from submission_ci.common import read_json
+
+    g = gate(tmp_path)
+    prov = read_json(g / "provenance.json")
+    prov["shadows"] = [
+        {
+            "id": "bvd",
+            "label": "BVDOutbreakSize-informed variant",
+            "fit": {"status": "pass", "headline": {"max_rhat": 1.01}},
+            "ppc": None,
+        }
+    ]
+    text = body(g, provenance=prov)
+    assert "Shadow candidates (fitted and checked, not submitted)" in text
+    assert "BVDOutbreakSize-informed variant" in text
+    # Collapsed, so not on the visible lines.
+    assert not any("BVDOutbreakSize" in line for line in visible(text))
+
+
+def test_body_reports_the_bvd_release(tmp_path: Path) -> None:
+    from submission_ci.common import read_json
+
+    g = gate(tmp_path)
+    prov = read_json(g / "provenance.json")
+    release = {
+        "tag": "results-3180",
+        "as_of": "2026-10-23",
+        "joint_max_rhat": 1.041,
+        "max_rhat": 1.1,
+        "skipped": [
+            {"tag": "results-3190", "reason": "joint R-hat 1.230 is above 1.1"}
+        ],
+    }
+    prov["shadows"] = [
+        {
+            "id": "bvd",
+            "label": "BVDOutbreakSize-informed variant",
+            "fit": {
+                "status": "pass",
+                "headline": {"max_rhat": 1.01},
+                "bvd": release,
+            },
+            "ppc": None,
+        }
+    ]
+    text = body(g, provenance=prov)
+    assert (
+        "BVDOutbreakSize-informed variant used BVDOutbreakSize release "
+        "`results-3180` (data to 2026-10-23, joint R-hat 1.041, limit 1.1)."
+    ) in text
+    assert "Skipped `results-3190`: joint R-hat 1.230 is above 1.1." in text
+    assert not any("results-3180" in line for line in visible(text))
+    prov["shadows"][0]["fit"]["bvd"] = {"tag": None}
+    text = body(g, provenance=prov)
+    assert (
+        "BVDOutbreakSize-informed variant used no BVDOutbreakSize release: "
+        "none qualified, so it ran as the main model."
+    ) in text
+
+
+def test_convergence_section_reports_the_bvd_release(tmp_path: Path) -> None:
+    from submission_ci.common import read_json
+
+    g = gate(tmp_path)
+    fit = read_json(g / "selected" / "fit-summary.json")
+    fit["bvd"] = {
+        "tag": "results-3180",
+        "as_of": "2026-10-23",
+        "joint_max_rhat": 1.041,
+        "max_rhat": 1.1,
+        "skipped": [],
+    }
+    write_json(g / "selected" / "fit-summary.json", fit)
+    text = body(g)
+    assert (
+        "The model used BVDOutbreakSize release `results-3180` (data to "
+        "2026-10-23, joint R-hat 1.041, limit 1.1)."
+    ) in text
+    assert "Skipped" not in text

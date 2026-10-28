@@ -3,7 +3,7 @@ site_description: >-
   Renewal-model nowcasts and forecasts of confirmed Bundibugyo virus disease
   cases for the BDBV Modeling Hub, with data tools and a backtest.
 site_author: Sam Abbott
-site_url: https://seabbs.github.io/BDBVHubRenewal/
+site_url: https://samabbott.co.uk/BDBVHubRenewal/
 repo_url: https://github.com/seabbs/BDBVHubRenewal
 repo_name: seabbs/BDBVHubRenewal
 edit_uri: edit/main/docs/
@@ -15,31 +15,40 @@ site_dir: _site
 exclude_docs: |
   generated/*
   examples/*
-  # The comparison with hub forecasts stays off the site until its
-  # publication is decided (see config/hub-comparison.toml).
-  comparison.md
-  figures/comparison/
 
 nav:
   - Home: index.md
-  - Getting started: getting-started.md
+  - Getting started: getting-started.ipynb
   - Methods:
       - Data: methods/data.md
       - Model: methods/model.md
       - Evaluation: methods/evaluation.md
+      - Implementation: methods/implementation.md
   - Data: data.md
   - Backtest: backtest.md
   - Held-out evaluation: heldout.md
+  - Comparison with hub forecasts: comparison.md
   - Nowcast: nowcast.md
   - Submission:
-      - How submissions work: submission/workflow.md
-      - Hub specification: submission/hub-spec.md
-      - Setup: submission/setup.md
       - Rounds: submission/rounds/index.md
+      - Opting in: submission/opting-in.md
+      - Workflow: submission/workflow.md
+      - Hub specification: submission/hub-spec.md
+  - Model development:
+      - Model building: model-development/model-building.md
+      - Development log: model-development/log.md
   - Development:
+      - Contributing: development/contributing.md
       - Adding a model: development/adding-a-model.md
       - CLI: development/cli.md
-  - API reference: reference.md
+  - API reference:
+      - reference/index.md
+      - Data: reference/data.md
+      - Model: reference/model.md
+      - Forecasters: reference/forecasters.md
+      - Evaluation: reference/evaluation.md
+      - Submission: reference/submission.md
+      - Reporting: reference/reporting.md
   - Citation and licence: citation.md
 
 theme:
@@ -122,6 +131,10 @@ markdown_extensions:
 
 plugins:
   - search
+  - mkdocs-jupyter:
+      execute: false
+      include_source: true
+      ignore_h1_titles: false
   - mkdocstrings:
       default_handler: python
       handlers:

@@ -1,0 +1,2750 @@
+[
+ {
+  "tag": "results-3180",
+  "published_at": "2026-10-27T16:08:59+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3180/observations.toml",
+    "updated_at": "2026-10-27T16:08:51+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3180/posterior_draws.csv",
+    "updated_at": "2026-10-27T16:08:51+00:00"
+   },
+   "province_estimates.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3180/province_estimates.csv",
+    "updated_at": "2026-10-27T16:08:51+00:00"
+   },
+   "province_timeseries.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3180/province_timeseries.csv",
+    "updated_at": "2026-10-27T16:08:51+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3180/site.zip",
+    "updated_at": "2026-10-27T16:08:58+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-3169",
+  "published_at": "2026-10-27T03:09:20+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3169/observations.toml",
+    "updated_at": "2026-10-27T03:09:16+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3169/posterior_draws.csv",
+    "updated_at": "2026-10-27T03:09:16+00:00"
+   },
+   "province_estimates.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3169/province_estimates.csv",
+    "updated_at": "2026-10-27T03:09:16+00:00"
+   },
+   "province_timeseries.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3169/province_timeseries.csv",
+    "updated_at": "2026-10-27T03:09:16+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3169/site.zip",
+    "updated_at": "2026-10-27T03:09:19+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-3151",
+  "published_at": "2026-10-23T06:53:46+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3151/observations.toml",
+    "updated_at": "2026-10-23T06:53:42+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3151/posterior_draws.csv",
+    "updated_at": "2026-10-23T06:53:42+00:00"
+   },
+   "province_estimates.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3151/province_estimates.csv",
+    "updated_at": "2026-10-23T06:53:42+00:00"
+   },
+   "province_timeseries.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3151/province_timeseries.csv",
+    "updated_at": "2026-10-23T06:53:42+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3151/site.zip",
+    "updated_at": "2026-10-23T06:53:45+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-3140",
+  "published_at": "2026-10-22T21:12:41+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3140/observations.toml",
+    "updated_at": "2026-10-22T21:12:37+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3140/posterior_draws.csv",
+    "updated_at": "2026-10-22T21:12:37+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3140/site.zip",
+    "updated_at": "2026-10-22T21:12:40+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-3086",
+  "published_at": "2026-10-16T17:59:34+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3086/observations.toml",
+    "updated_at": "2026-10-16T17:59:29+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3086/posterior_draws.csv",
+    "updated_at": "2026-10-16T17:59:29+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3086/site.zip",
+    "updated_at": "2026-10-16T17:59:32+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-3084",
+  "published_at": "2026-10-16T15:32:44+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3084/observations.toml",
+    "updated_at": "2026-10-16T15:32:41+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3084/posterior_draws.csv",
+    "updated_at": "2026-10-16T15:32:41+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3084/site.zip",
+    "updated_at": "2026-10-16T15:32:44+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-3083",
+  "published_at": "2026-10-16T14:37:36+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3083/observations.toml",
+    "updated_at": "2026-10-16T14:37:33+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3083/posterior_draws.csv",
+    "updated_at": "2026-10-16T14:37:33+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3083/site.zip",
+    "updated_at": "2026-10-16T14:37:35+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-3059",
+  "published_at": "2026-10-16T07:01:21+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3059/observations.toml",
+    "updated_at": "2026-10-16T07:01:17+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3059/posterior_draws.csv",
+    "updated_at": "2026-10-16T07:01:17+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3059/site.zip",
+    "updated_at": "2026-10-16T07:01:20+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-3020",
+  "published_at": "2026-10-12T13:26:21+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3020/observations.toml",
+    "updated_at": "2026-10-12T13:26:18+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3020/posterior_draws.csv",
+    "updated_at": "2026-10-12T13:26:17+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3020/site.zip",
+    "updated_at": "2026-10-12T13:26:20+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-3000",
+  "published_at": "2026-10-12T06:40:07+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3000/observations.toml",
+    "updated_at": "2026-10-12T06:40:02+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3000/posterior_draws.csv",
+    "updated_at": "2026-10-12T06:40:02+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3000/site.zip",
+    "updated_at": "2026-10-12T06:40:06+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2978",
+  "published_at": "2026-10-09T03:18:35+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2978/observations.toml",
+    "updated_at": "2026-10-09T03:18:30+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2978/posterior_draws.csv",
+    "updated_at": "2026-10-09T03:18:30+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2978/site.zip",
+    "updated_at": "2026-10-09T03:18:34+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2968",
+  "published_at": "2026-10-08T20:19:16+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2968/observations.toml",
+    "updated_at": "2026-10-08T20:19:13+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2968/posterior_draws.csv",
+    "updated_at": "2026-10-08T20:19:12+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2968/site.zip",
+    "updated_at": "2026-10-08T20:19:15+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2935",
+  "published_at": "2026-10-07T07:08:42+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2935/observations.toml",
+    "updated_at": "2026-10-07T07:08:39+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2935/posterior_draws.csv",
+    "updated_at": "2026-10-07T07:08:39+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2935/site.zip",
+    "updated_at": "2026-10-07T07:08:42+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2847",
+  "published_at": "2026-10-06T08:12:39+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2847/observations.toml",
+    "updated_at": "2026-10-06T08:12:34+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2847/posterior_draws.csv",
+    "updated_at": "2026-10-06T08:12:34+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2847/site.zip",
+    "updated_at": "2026-10-06T08:12:38+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2817",
+  "published_at": "2026-10-01T03:04:35+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2817/observations.toml",
+    "updated_at": "2026-10-01T03:04:32+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2817/posterior_draws.csv",
+    "updated_at": "2026-10-01T03:04:32+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2817/site.zip",
+    "updated_at": "2026-10-01T03:04:35+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2735",
+  "published_at": "2026-09-30T22:07:53+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2735/observations.toml",
+    "updated_at": "2026-09-30T22:07:50+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2735/posterior_draws.csv",
+    "updated_at": "2026-09-30T22:07:50+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2735/site.zip",
+    "updated_at": "2026-09-30T22:07:53+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2720",
+  "published_at": "2026-09-30T05:19:01+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2720/observations.toml",
+    "updated_at": "2026-09-30T05:18:57+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2720/posterior_draws.csv",
+    "updated_at": "2026-09-30T05:18:57+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2720/site.zip",
+    "updated_at": "2026-09-30T05:19:00+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2713",
+  "published_at": "2026-09-29T23:56:22+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2713/observations.toml",
+    "updated_at": "2026-09-29T23:56:19+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2713/posterior_draws.csv",
+    "updated_at": "2026-09-29T23:56:19+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2713/site.zip",
+    "updated_at": "2026-09-29T23:56:21+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2700",
+  "published_at": "2026-09-29T18:06:07+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2700/observations.toml",
+    "updated_at": "2026-09-29T18:06:04+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2700/posterior_draws.csv",
+    "updated_at": "2026-09-29T18:06:04+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2700/site.zip",
+    "updated_at": "2026-09-29T18:06:06+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2690",
+  "published_at": "2026-09-29T17:17:47+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2690/observations.toml",
+    "updated_at": "2026-09-29T17:17:44+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2690/posterior_draws.csv",
+    "updated_at": "2026-09-29T17:17:44+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2690/site.zip",
+    "updated_at": "2026-09-29T17:17:46+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2536",
+  "published_at": "2026-09-28T16:22:55+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2536/observations.toml",
+    "updated_at": "2026-09-28T16:22:52+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2536/posterior_draws.csv",
+    "updated_at": "2026-09-28T16:22:52+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2536/site.zip",
+    "updated_at": "2026-09-28T16:22:54+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2506",
+  "published_at": "2026-09-27T20:15:12+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2506/observations.toml",
+    "updated_at": "2026-09-27T20:15:09+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2506/posterior_draws.csv",
+    "updated_at": "2026-09-27T20:15:09+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2506/site.zip",
+    "updated_at": "2026-09-27T20:15:11+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2416",
+  "published_at": "2026-09-25T20:25:02+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2416/observations.toml",
+    "updated_at": "2026-09-25T20:24:59+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2416/posterior_draws.csv",
+    "updated_at": "2026-09-25T20:24:59+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2416/site.zip",
+    "updated_at": "2026-09-25T20:25:02+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2412",
+  "published_at": "2026-09-25T19:59:37+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2412/observations.toml",
+    "updated_at": "2026-09-25T19:59:34+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2412/posterior_draws.csv",
+    "updated_at": "2026-09-25T19:59:34+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2412/site.zip",
+    "updated_at": "2026-09-25T19:59:36+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2415",
+  "published_at": "2026-09-25T19:55:34+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2415/observations.toml",
+    "updated_at": "2026-09-25T19:55:32+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2415/posterior_draws.csv",
+    "updated_at": "2026-09-25T19:55:32+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2415/site.zip",
+    "updated_at": "2026-09-25T19:55:34+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2407",
+  "published_at": "2026-09-25T19:45:57+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2407/observations.toml",
+    "updated_at": "2026-09-25T19:45:55+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2407/posterior_draws.csv",
+    "updated_at": "2026-09-25T19:45:55+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2407/site.zip",
+    "updated_at": "2026-09-25T19:45:57+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2360",
+  "published_at": "2026-09-24T22:12:46+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2360/observations.toml",
+    "updated_at": "2026-09-24T22:12:43+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2360/posterior_draws.csv",
+    "updated_at": "2026-09-24T22:12:43+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2360/site.zip",
+    "updated_at": "2026-09-24T22:12:45+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2354",
+  "published_at": "2026-09-24T20:17:26+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2354/observations.toml",
+    "updated_at": "2026-09-24T20:17:23+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2354/posterior_draws.csv",
+    "updated_at": "2026-09-24T20:17:23+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2354/site.zip",
+    "updated_at": "2026-09-24T20:17:25+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2338",
+  "published_at": "2026-09-24T18:59:41+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2338/observations.toml",
+    "updated_at": "2026-09-24T18:59:39+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2338/posterior_draws.csv",
+    "updated_at": "2026-09-24T18:59:39+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2338/site.zip",
+    "updated_at": "2026-09-24T18:59:40+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2339",
+  "published_at": "2026-09-24T18:46:08+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2339/observations.toml",
+    "updated_at": "2026-09-24T18:46:06+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2339/posterior_draws.csv",
+    "updated_at": "2026-09-24T18:46:06+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2339/site.zip",
+    "updated_at": "2026-09-24T18:46:07+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2326",
+  "published_at": "2026-09-24T15:29:02+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2326/observations.toml",
+    "updated_at": "2026-09-24T15:29:00+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2326/posterior_draws.csv",
+    "updated_at": "2026-09-24T15:29:00+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2326/site.zip",
+    "updated_at": "2026-09-24T15:29:01+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2318",
+  "published_at": "2026-09-24T15:25:44+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2318/observations.toml",
+    "updated_at": "2026-09-24T15:25:41+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2318/posterior_draws.csv",
+    "updated_at": "2026-09-24T15:25:41+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2318/site.zip",
+    "updated_at": "2026-09-24T15:25:43+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2320",
+  "published_at": "2026-09-24T14:57:48+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2320/observations.toml",
+    "updated_at": "2026-09-24T14:57:45+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2320/posterior_draws.csv",
+    "updated_at": "2026-09-24T14:57:45+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2320/site.zip",
+    "updated_at": "2026-09-24T14:57:47+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2311",
+  "published_at": "2026-09-24T13:02:50+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2311/observations.toml",
+    "updated_at": "2026-09-24T13:02:48+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2311/posterior_draws.csv",
+    "updated_at": "2026-09-24T13:02:47+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2311/site.zip",
+    "updated_at": "2026-09-24T13:02:49+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2307",
+  "published_at": "2026-09-24T11:55:19+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2307/observations.toml",
+    "updated_at": "2026-09-24T11:55:17+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2307/posterior_draws.csv",
+    "updated_at": "2026-09-24T11:55:17+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2307/site.zip",
+    "updated_at": "2026-09-24T11:55:18+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2218",
+  "published_at": "2026-09-23T19:00:22+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2218/observations.toml",
+    "updated_at": "2026-09-23T19:00:19+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2218/posterior_draws.csv",
+    "updated_at": "2026-09-23T19:00:19+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2218/site.zip",
+    "updated_at": "2026-09-23T19:00:22+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2177",
+  "published_at": "2026-09-23T16:53:03+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2177/observations.toml",
+    "updated_at": "2026-09-23T16:52:57+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2177/posterior_draws.csv",
+    "updated_at": "2026-09-23T16:52:57+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2177/site.zip",
+    "updated_at": "2026-09-23T16:53:02+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2005",
+  "published_at": "2026-09-21T20:11:07+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2005/observations.toml",
+    "updated_at": "2026-09-21T20:11:04+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2005/posterior_draws.csv",
+    "updated_at": "2026-09-21T20:11:04+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2005/site.zip",
+    "updated_at": "2026-09-21T20:11:06+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-2007",
+  "published_at": "2026-09-21T17:11:44+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2007/observations.toml",
+    "updated_at": "2026-09-21T17:11:41+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2007/posterior_draws.csv",
+    "updated_at": "2026-09-21T17:11:41+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2007/site.zip",
+    "updated_at": "2026-09-21T17:11:43+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1997",
+  "published_at": "2026-09-21T16:46:50+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1997/observations.toml",
+    "updated_at": "2026-09-21T16:46:48+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1997/posterior_draws.csv",
+    "updated_at": "2026-09-21T16:46:48+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1997/site.zip",
+    "updated_at": "2026-09-21T16:46:50+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1979",
+  "published_at": "2026-09-18T23:11:16+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1979/observations.toml",
+    "updated_at": "2026-09-18T23:11:14+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1979/posterior_draws.csv",
+    "updated_at": "2026-09-18T23:11:14+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1979/site.zip",
+    "updated_at": "2026-09-18T23:11:16+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1977",
+  "published_at": "2026-09-18T18:34:21+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1977/observations.toml",
+    "updated_at": "2026-09-18T18:34:17+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1977/posterior_draws.csv",
+    "updated_at": "2026-09-18T18:34:17+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1977/site.zip",
+    "updated_at": "2026-09-18T18:34:20+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1970",
+  "published_at": "2026-09-18T12:28:38+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1970/observations.toml",
+    "updated_at": "2026-09-18T12:28:35+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1970/posterior_draws.csv",
+    "updated_at": "2026-09-18T12:28:35+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1970/site.zip",
+    "updated_at": "2026-09-18T12:28:37+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1858",
+  "published_at": "2026-09-16T22:56:29+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1858/observations.toml",
+    "updated_at": "2026-09-16T22:56:25+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1858/posterior_draws.csv",
+    "updated_at": "2026-09-16T22:56:25+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1858/site.zip",
+    "updated_at": "2026-09-16T22:56:28+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1828",
+  "published_at": "2026-09-16T03:58:01+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1828/observations.toml",
+    "updated_at": "2026-09-16T03:57:58+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1828/posterior_draws.csv",
+    "updated_at": "2026-09-16T03:57:58+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1828/site.zip",
+    "updated_at": "2026-09-16T03:58:00+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1777",
+  "published_at": "2026-09-15T16:20:40+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1777/observations.toml",
+    "updated_at": "2026-09-15T16:20:38+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1777/posterior_draws.csv",
+    "updated_at": "2026-09-15T16:20:38+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1777/site.zip",
+    "updated_at": "2026-09-15T16:20:40+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1739",
+  "published_at": "2026-09-14T15:17:50+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1739/observations.toml",
+    "updated_at": "2026-09-14T15:17:46+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1739/posterior_draws.csv",
+    "updated_at": "2026-09-14T15:17:46+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1739/site.zip",
+    "updated_at": "2026-09-14T15:17:49+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1730",
+  "published_at": "2026-09-14T09:59:48+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1730/observations.toml",
+    "updated_at": "2026-09-14T09:59:44+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1730/posterior_draws.csv",
+    "updated_at": "2026-09-14T09:59:44+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1730/site.zip",
+    "updated_at": "2026-09-14T09:59:47+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1699",
+  "published_at": "2026-09-09T21:11:03+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1699/observations.toml",
+    "updated_at": "2026-09-09T21:11:00+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1699/posterior_draws.csv",
+    "updated_at": "2026-09-09T21:11:00+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1699/site.zip",
+    "updated_at": "2026-09-09T21:11:02+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1694",
+  "published_at": "2026-09-08T19:43:22+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1694/observations.toml",
+    "updated_at": "2026-09-08T19:43:19+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1694/posterior_draws.csv",
+    "updated_at": "2026-09-08T19:43:18+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1694/site.zip",
+    "updated_at": "2026-09-08T19:43:21+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1658",
+  "published_at": "2026-09-04T23:11:47+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1658/observations.toml",
+    "updated_at": "2026-09-04T23:11:44+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1658/posterior_draws.csv",
+    "updated_at": "2026-09-04T23:11:44+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1658/site.zip",
+    "updated_at": "2026-09-04T23:11:46+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1625",
+  "published_at": "2026-09-04T00:26:21+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1625/observations.toml",
+    "updated_at": "2026-09-04T00:26:19+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1625/posterior_draws.csv",
+    "updated_at": "2026-09-04T00:26:19+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1625/site.zip",
+    "updated_at": "2026-09-04T00:26:20+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1621",
+  "published_at": "2026-09-02T22:09:32+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1621/observations.toml",
+    "updated_at": "2026-09-02T22:09:29+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1621/posterior_draws.csv",
+    "updated_at": "2026-09-02T22:09:29+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1621/site.zip",
+    "updated_at": "2026-09-02T22:09:31+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1609",
+  "published_at": "2026-08-28T16:20:09+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1609/observations.toml",
+    "updated_at": "2026-08-28T16:20:05+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1609/posterior_draws.csv",
+    "updated_at": "2026-08-28T16:20:05+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1609/site.zip",
+    "updated_at": "2026-08-28T16:20:08+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1604",
+  "published_at": "2026-08-27T20:00:31+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1604/observations.toml",
+    "updated_at": "2026-08-27T20:00:26+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1604/posterior_draws.csv",
+    "updated_at": "2026-08-27T20:00:27+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1604/site.zip",
+    "updated_at": "2026-08-27T20:00:30+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1591",
+  "published_at": "2026-08-27T01:33:29+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1591/observations.toml",
+    "updated_at": "2026-08-27T01:33:25+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1591/posterior_draws.csv",
+    "updated_at": "2026-08-27T01:33:25+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1591/site.zip",
+    "updated_at": "2026-08-27T01:33:28+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1573",
+  "published_at": "2026-08-25T23:41:24+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1573/observations.toml",
+    "updated_at": "2026-08-25T23:41:20+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1573/posterior_draws.csv",
+    "updated_at": "2026-08-25T23:41:19+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1573/site.zip",
+    "updated_at": "2026-08-25T23:41:23+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1566",
+  "published_at": "2026-08-24T21:45:51+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1566/observations.toml",
+    "updated_at": "2026-08-24T21:45:47+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1566/posterior_draws.csv",
+    "updated_at": "2026-08-24T21:45:47+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1566/site.zip",
+    "updated_at": "2026-08-24T21:45:50+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1527",
+  "published_at": "2026-08-20T23:50:45+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1527/observations.toml",
+    "updated_at": "2026-08-20T23:50:42+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1527/posterior_draws.csv",
+    "updated_at": "2026-08-20T23:50:42+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1527/site.zip",
+    "updated_at": "2026-08-20T23:50:45+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1505",
+  "published_at": "2026-08-17T19:46:29+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1505/observations.toml",
+    "updated_at": "2026-08-17T19:46:26+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1505/posterior_draws.csv",
+    "updated_at": "2026-08-17T19:46:26+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1505/site.zip",
+    "updated_at": "2026-08-17T19:46:28+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1499",
+  "published_at": "2026-08-15T00:16:06+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1499/observations.toml",
+    "updated_at": "2026-08-15T00:16:03+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1499/posterior_draws.csv",
+    "updated_at": "2026-08-15T00:16:03+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1499/site.zip",
+    "updated_at": "2026-08-15T00:16:05+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1489",
+  "published_at": "2026-08-11T04:21:41+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1489/observations.toml",
+    "updated_at": "2026-08-11T04:21:37+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1489/posterior_draws.csv",
+    "updated_at": "2026-08-11T04:21:37+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1489/site.zip",
+    "updated_at": "2026-08-11T04:21:41+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1479",
+  "published_at": "2026-08-08T17:03:24+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1479/observations.toml",
+    "updated_at": "2026-08-08T17:03:20+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1479/posterior_draws.csv",
+    "updated_at": "2026-08-08T17:03:20+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1479/site.zip",
+    "updated_at": "2026-08-08T17:03:23+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1469",
+  "published_at": "2026-08-05T20:29:34+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1469/observations.toml",
+    "updated_at": "2026-08-05T20:29:30+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1469/posterior_draws.csv",
+    "updated_at": "2026-08-05T20:29:30+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1469/site.zip",
+    "updated_at": "2026-08-05T20:29:33+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1462",
+  "published_at": "2026-08-05T02:22:46+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1462/observations.toml",
+    "updated_at": "2026-08-05T02:22:43+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1462/posterior_draws.csv",
+    "updated_at": "2026-08-05T02:22:43+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1462/site.zip",
+    "updated_at": "2026-08-05T02:22:46+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1458",
+  "published_at": "2026-08-04T15:27:37+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1458/observations.toml",
+    "updated_at": "2026-08-04T15:27:34+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1458/posterior_draws.csv",
+    "updated_at": "2026-08-04T15:27:34+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1458/site.zip",
+    "updated_at": "2026-08-04T15:27:36+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1448",
+  "published_at": "2026-08-03T15:15:51+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1448/observations.toml",
+    "updated_at": "2026-08-03T15:15:47+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1448/posterior_draws.csv",
+    "updated_at": "2026-08-03T15:15:47+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1448/site.zip",
+    "updated_at": "2026-08-03T15:15:51+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1446",
+  "published_at": "2026-08-02T19:50:32+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1446/observations.toml",
+    "updated_at": "2026-08-02T19:50:29+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1446/posterior_draws.csv",
+    "updated_at": "2026-08-02T19:50:29+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1446/site.zip",
+    "updated_at": "2026-08-02T19:50:32+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1441",
+  "published_at": "2026-07-31T19:40:15+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1441/observations.toml",
+    "updated_at": "2026-07-31T19:40:12+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1441/posterior_draws.csv",
+    "updated_at": "2026-07-31T19:40:12+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1441/site.zip",
+    "updated_at": "2026-07-31T19:40:15+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1438",
+  "published_at": "2026-07-30T22:44:08+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1438/observations.toml",
+    "updated_at": "2026-07-30T22:44:05+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1438/posterior_draws.csv",
+    "updated_at": "2026-07-30T22:44:05+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1438/site.zip",
+    "updated_at": "2026-07-30T22:44:07+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1435",
+  "published_at": "2026-07-29T23:21:04+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1435/observations.toml",
+    "updated_at": "2026-07-29T23:21:01+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1435/posterior_draws.csv",
+    "updated_at": "2026-07-29T23:21:01+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1435/site.zip",
+    "updated_at": "2026-07-29T23:21:04+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1394",
+  "published_at": "2026-07-28T22:56:50+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1394/observations.toml",
+    "updated_at": "2026-07-28T22:56:47+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1394/posterior_draws.csv",
+    "updated_at": "2026-07-28T22:56:47+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1394/site.zip",
+    "updated_at": "2026-07-28T22:56:50+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1391",
+  "published_at": "2026-07-28T16:34:47+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1391/observations.toml",
+    "updated_at": "2026-07-28T16:34:43+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1391/posterior_draws.csv",
+    "updated_at": "2026-07-28T16:34:43+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1391/site.zip",
+    "updated_at": "2026-07-28T16:34:46+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1381",
+  "published_at": "2026-07-27T22:04:24+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1381/observations.toml",
+    "updated_at": "2026-07-27T22:04:21+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1381/posterior_draws.csv",
+    "updated_at": "2026-07-27T22:04:21+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1381/site.zip",
+    "updated_at": "2026-07-27T22:04:24+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1359",
+  "published_at": "2026-07-26T20:52:43+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1359/observations.toml",
+    "updated_at": "2026-07-26T20:52:40+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1359/posterior_draws.csv",
+    "updated_at": "2026-07-26T20:52:40+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1359/site.zip",
+    "updated_at": "2026-07-26T20:52:42+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1333",
+  "published_at": "2026-07-21T19:58:18+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1333/observations.toml",
+    "updated_at": "2026-07-21T19:58:15+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1333/posterior_draws.csv",
+    "updated_at": "2026-07-21T19:58:15+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1333/site.zip",
+    "updated_at": "2026-07-21T19:58:18+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1325",
+  "published_at": "2026-07-21T12:14:57+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1325/observations.toml",
+    "updated_at": "2026-07-21T12:14:54+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1325/posterior_draws.csv",
+    "updated_at": "2026-07-21T12:14:54+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1325/site.zip",
+    "updated_at": "2026-07-21T12:14:56+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1321",
+  "published_at": "2026-07-21T04:35:23+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1321/observations.toml",
+    "updated_at": "2026-07-21T04:35:20+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1321/posterior_draws.csv",
+    "updated_at": "2026-07-21T04:35:20+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1321/site.zip",
+    "updated_at": "2026-07-21T04:35:23+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1288",
+  "published_at": "2026-07-20T18:57:56+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1288/observations.toml",
+    "updated_at": "2026-07-20T18:57:52+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1288/posterior_draws.csv",
+    "updated_at": "2026-07-20T18:57:52+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1288/site.zip",
+    "updated_at": "2026-07-20T18:57:55+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1257",
+  "published_at": "2026-07-17T20:06:21+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1257/observations.toml",
+    "updated_at": "2026-07-17T20:06:19+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1257/posterior_draws.csv",
+    "updated_at": "2026-07-17T20:06:19+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1257/site.zip",
+    "updated_at": "2026-07-17T20:06:21+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1243",
+  "published_at": "2026-07-16T18:40:17+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1243/observations.toml",
+    "updated_at": "2026-07-16T18:40:13+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1243/posterior_draws.csv",
+    "updated_at": "2026-07-16T18:40:13+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1243/site.zip",
+    "updated_at": "2026-07-16T18:40:16+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1223",
+  "published_at": "2026-07-14T17:05:12+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1223/observations.toml",
+    "updated_at": "2026-07-14T17:05:09+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1223/posterior_draws.csv",
+    "updated_at": "2026-07-14T17:05:08+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1223/site.zip",
+    "updated_at": "2026-07-14T17:05:11+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1220",
+  "published_at": "2026-07-14T03:02:39+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1220/observations.toml",
+    "updated_at": "2026-07-14T03:02:36+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1220/posterior_draws.csv",
+    "updated_at": "2026-07-14T03:02:36+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1220/site.zip",
+    "updated_at": "2026-07-14T03:02:39+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1214",
+  "published_at": "2026-07-13T23:12:47+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1214/observations.toml",
+    "updated_at": "2026-07-13T23:12:44+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1214/posterior_draws.csv",
+    "updated_at": "2026-07-13T23:12:44+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1214/site.zip",
+    "updated_at": "2026-07-13T23:12:46+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1204",
+  "published_at": "2026-07-11T16:35:11+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1204/observations.toml",
+    "updated_at": "2026-07-11T16:35:08+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1204/posterior_draws.csv",
+    "updated_at": "2026-07-11T16:35:08+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1204/site.zip",
+    "updated_at": "2026-07-11T16:35:10+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1194",
+  "published_at": "2026-07-10T14:47:19+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1194/observations.toml",
+    "updated_at": "2026-07-10T14:47:15+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1194/posterior_draws.csv",
+    "updated_at": "2026-07-10T14:47:15+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1194/site.zip",
+    "updated_at": "2026-07-10T14:47:18+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1187",
+  "published_at": "2026-07-09T13:32:02+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1187/observations.toml",
+    "updated_at": "2026-07-09T13:31:59+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1187/posterior_draws.csv",
+    "updated_at": "2026-07-09T13:31:59+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1187/site.zip",
+    "updated_at": "2026-07-09T13:32:01+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1184",
+  "published_at": "2026-07-08T16:24:42+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1184/observations.toml",
+    "updated_at": "2026-07-08T16:24:38+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1184/posterior_draws.csv",
+    "updated_at": "2026-07-08T16:24:38+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1184/site.zip",
+    "updated_at": "2026-07-08T16:24:41+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1172",
+  "published_at": "2026-07-07T11:38:36+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1172/observations.toml",
+    "updated_at": "2026-07-07T11:38:33+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1172/posterior_draws.csv",
+    "updated_at": "2026-07-07T11:38:33+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1172/site.zip",
+    "updated_at": "2026-07-07T11:38:35+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1169",
+  "published_at": "2026-07-07T02:16:37+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1169/observations.toml",
+    "updated_at": "2026-07-07T02:16:34+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1169/posterior_draws.csv",
+    "updated_at": "2026-07-07T02:16:34+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1169/site.zip",
+    "updated_at": "2026-07-07T02:16:37+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1160",
+  "published_at": "2026-07-06T18:47:52+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1160/observations.toml",
+    "updated_at": "2026-07-06T18:47:49+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1160/posterior_draws.csv",
+    "updated_at": "2026-07-06T18:47:49+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1160/site.zip",
+    "updated_at": "2026-07-06T18:47:51+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1129",
+  "published_at": "2026-07-04T12:31:44+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1129/observations.toml",
+    "updated_at": "2026-07-04T12:31:41+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1129/posterior_draws.csv",
+    "updated_at": "2026-07-04T12:31:41+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1129/site.zip",
+    "updated_at": "2026-07-04T12:31:44+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1119",
+  "published_at": "2026-07-04T03:26:12+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1119/observations.toml",
+    "updated_at": "2026-07-04T03:26:10+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1119/posterior_draws.csv",
+    "updated_at": "2026-07-04T03:26:10+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1119/site.zip",
+    "updated_at": "2026-07-04T03:26:12+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1100",
+  "published_at": "2026-07-03T17:36:32+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1100/observations.toml",
+    "updated_at": "2026-07-03T17:36:29+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1100/posterior_draws.csv",
+    "updated_at": "2026-07-03T17:36:29+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1100/site.zip",
+    "updated_at": "2026-07-03T17:36:31+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-1002",
+  "published_at": "2026-06-26T21:18:25+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1002/observations.toml",
+    "updated_at": "2026-06-26T21:18:12+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1002/posterior_draws.csv",
+    "updated_at": "2026-06-26T21:18:12+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-1002/site.zip",
+    "updated_at": "2026-06-26T21:18:15+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-977",
+  "published_at": "2026-06-25T15:39:29+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-977/observations.toml",
+    "updated_at": "2026-06-25T15:39:26+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-977/posterior_draws.csv",
+    "updated_at": "2026-06-25T15:39:26+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-977/site.zip",
+    "updated_at": "2026-06-25T15:39:29+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-969",
+  "published_at": "2026-06-24T22:43:55+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-969/observations.toml",
+    "updated_at": "2026-06-24T22:43:52+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-969/posterior_draws.csv",
+    "updated_at": "2026-06-24T22:43:52+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-969/site.zip",
+    "updated_at": "2026-06-24T22:43:54+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-966",
+  "published_at": "2026-06-24T17:57:08+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-966/observations.toml",
+    "updated_at": "2026-06-24T17:57:05+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-966/posterior_draws.csv",
+    "updated_at": "2026-06-24T17:57:05+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-966/site.zip",
+    "updated_at": "2026-06-24T17:57:07+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-963",
+  "published_at": "2026-06-24T02:49:09+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-963/observations.toml",
+    "updated_at": "2026-06-24T02:49:07+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-963/posterior_draws.csv",
+    "updated_at": "2026-06-24T02:49:07+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-963/site.zip",
+    "updated_at": "2026-06-24T02:49:09+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-862",
+  "published_at": "2026-06-20T12:57:16+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-862/observations.toml",
+    "updated_at": "2026-06-20T12:57:15+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-862/posterior_draws.csv",
+    "updated_at": "2026-06-20T12:57:15+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-862/site.zip",
+    "updated_at": "2026-06-20T12:57:16+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-808",
+  "published_at": "2026-06-17T00:43:03+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-808/observations.toml",
+    "updated_at": "2026-06-17T00:43:01+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-808/posterior_draws.csv",
+    "updated_at": "2026-06-17T00:43:01+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-808/site.zip",
+    "updated_at": "2026-06-17T00:43:03+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-806",
+  "published_at": "2026-06-16T19:06:03+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-806/observations.toml",
+    "updated_at": "2026-06-16T19:06:01+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-806/posterior_draws.csv",
+    "updated_at": "2026-06-16T19:06:01+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-806/site.zip",
+    "updated_at": "2026-06-16T19:06:03+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-798",
+  "published_at": "2026-06-16T00:13:15+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-798/observations.toml",
+    "updated_at": "2026-06-16T00:13:13+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-798/posterior_draws.csv",
+    "updated_at": "2026-06-16T00:13:13+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-798/site.zip",
+    "updated_at": "2026-06-16T00:13:14+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-775",
+  "published_at": "2026-06-15T10:18:08+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-775/observations.toml",
+    "updated_at": "2026-06-15T10:18:05+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-775/posterior_draws.csv",
+    "updated_at": "2026-06-15T10:18:05+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-775/site.zip",
+    "updated_at": "2026-06-15T10:18:07+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-763",
+  "published_at": "2026-06-13T11:22:34+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-763/observations.toml",
+    "updated_at": "2026-06-13T11:22:32+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-763/posterior_draws.csv",
+    "updated_at": "2026-06-13T11:22:32+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-763/site.zip",
+    "updated_at": "2026-06-13T11:22:33+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-750",
+  "published_at": "2026-06-11T23:29:02+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-750/observations.toml",
+    "updated_at": "2026-06-11T23:28:59+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-750/posterior_draws.csv",
+    "updated_at": "2026-06-11T23:28:59+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-750/site.zip",
+    "updated_at": "2026-06-11T23:29:01+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-734",
+  "published_at": "2026-06-10T22:17:26+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-734/observations.toml",
+    "updated_at": "2026-06-10T22:17:24+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-734/posterior_draws.csv",
+    "updated_at": "2026-06-10T22:17:24+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-734/site.zip",
+    "updated_at": "2026-06-10T22:17:26+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-726",
+  "published_at": "2026-06-10T14:21:47+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-726/observations.toml",
+    "updated_at": "2026-06-10T14:21:45+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-726/posterior_draws.csv",
+    "updated_at": "2026-06-10T14:21:45+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-726/site.zip",
+    "updated_at": "2026-06-10T14:21:47+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-716",
+  "published_at": "2026-06-10T11:22:22+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-716/observations.toml",
+    "updated_at": "2026-06-10T11:22:20+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-716/posterior_draws.csv",
+    "updated_at": "2026-06-10T11:22:20+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-716/site.zip",
+    "updated_at": "2026-06-10T11:22:22+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-706",
+  "published_at": "2026-06-10T00:57:23+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-706/observations.toml",
+    "updated_at": "2026-06-10T00:57:21+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-706/posterior_draws.csv",
+    "updated_at": "2026-06-10T00:57:21+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-706/site.zip",
+    "updated_at": "2026-06-10T00:57:22+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-704",
+  "published_at": "2026-06-09T21:36:26+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-704/observations.toml",
+    "updated_at": "2026-06-09T21:36:24+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-704/posterior_draws.csv",
+    "updated_at": "2026-06-09T21:36:24+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-704/site.zip",
+    "updated_at": "2026-06-09T21:36:26+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-689",
+  "published_at": "2026-06-09T01:09:31+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-689/observations.toml",
+    "updated_at": "2026-06-09T01:09:28+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-689/posterior_draws.csv",
+    "updated_at": "2026-06-09T01:09:28+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-689/site.zip",
+    "updated_at": "2026-06-09T01:09:30+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-657",
+  "published_at": "2026-06-07T22:57:52+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-657/observations.toml",
+    "updated_at": "2026-06-07T22:57:49+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-657/posterior_draws.csv",
+    "updated_at": "2026-06-07T22:57:49+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-657/site.zip",
+    "updated_at": "2026-06-07T22:57:52+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-630",
+  "published_at": "2026-06-06T20:05:11+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-630/observations.toml",
+    "updated_at": "2026-06-06T20:05:09+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-630/posterior_draws.csv",
+    "updated_at": "2026-06-06T20:05:09+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-630/site.zip",
+    "updated_at": "2026-06-06T20:05:11+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-604",
+  "published_at": "2026-06-05T20:09:54+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-604/observations.toml",
+    "updated_at": "2026-06-05T20:09:51+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-604/posterior_draws.csv",
+    "updated_at": "2026-06-05T20:09:51+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-604/site.zip",
+    "updated_at": "2026-06-05T20:09:54+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-586",
+  "published_at": "2026-06-05T16:15:38+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-586/observations.toml",
+    "updated_at": "2026-06-05T16:15:35+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-586/posterior_draws.csv",
+    "updated_at": "2026-06-05T16:15:35+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-586/site.zip",
+    "updated_at": "2026-06-05T16:15:38+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-574",
+  "published_at": "2026-06-05T13:50:24+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-574/observations.toml",
+    "updated_at": "2026-06-05T13:50:22+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-574/posterior_draws.csv",
+    "updated_at": "2026-06-05T13:50:22+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-574/site.zip",
+    "updated_at": "2026-06-05T13:50:24+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-547",
+  "published_at": "2026-06-04T19:47:23+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-547/observations.toml",
+    "updated_at": "2026-06-04T19:47:19+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-547/posterior_draws.csv",
+    "updated_at": "2026-06-04T19:47:19+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-547/site.zip",
+    "updated_at": "2026-06-04T19:47:22+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-526",
+  "published_at": "2026-06-04T12:22:17+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-526/observations.toml",
+    "updated_at": "2026-06-04T12:22:14+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-526/posterior_draws.csv",
+    "updated_at": "2026-06-04T12:22:14+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-526/site.zip",
+    "updated_at": "2026-06-04T12:22:16+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-516",
+  "published_at": "2026-06-03T20:26:33+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-516/observations.toml",
+    "updated_at": "2026-06-03T20:26:31+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-516/posterior_draws.csv",
+    "updated_at": "2026-06-03T20:26:31+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-516/site.zip",
+    "updated_at": "2026-06-03T20:26:33+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-511",
+  "published_at": "2026-06-03T17:50:05+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-511/observations.toml",
+    "updated_at": "2026-06-03T17:50:02+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-511/posterior_draws.csv",
+    "updated_at": "2026-06-03T17:50:02+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-511/site.zip",
+    "updated_at": "2026-06-03T17:50:04+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-507",
+  "published_at": "2026-06-03T15:40:48+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-507/observations.toml",
+    "updated_at": "2026-06-03T15:40:44+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-507/posterior_draws.csv",
+    "updated_at": "2026-06-03T15:40:45+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-507/site.zip",
+    "updated_at": "2026-06-03T15:40:47+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-503",
+  "published_at": "2026-06-03T11:51:57+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-503/observations.toml",
+    "updated_at": "2026-06-03T11:51:54+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-503/posterior_draws.csv",
+    "updated_at": "2026-06-03T11:51:54+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-503/site.zip",
+    "updated_at": "2026-06-03T11:51:56+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-491",
+  "published_at": "2026-06-02T17:18:44+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-491/observations.toml",
+    "updated_at": "2026-06-02T17:18:40+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-491/posterior_draws.csv",
+    "updated_at": "2026-06-02T17:18:40+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-491/site.zip",
+    "updated_at": "2026-06-02T17:18:43+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-484",
+  "published_at": "2026-06-02T12:20:30+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-484/observations.toml",
+    "updated_at": "2026-06-02T12:20:27+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-484/posterior_draws.csv",
+    "updated_at": "2026-06-02T12:20:27+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-484/site.zip",
+    "updated_at": "2026-06-02T12:20:29+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-470",
+  "published_at": "2026-06-01T23:13:49+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-470/observations.toml",
+    "updated_at": "2026-06-01T23:13:46+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-470/posterior_draws.csv",
+    "updated_at": "2026-06-01T23:13:46+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-470/site.zip",
+    "updated_at": "2026-06-01T23:13:48+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-461",
+  "published_at": "2026-06-01T19:45:02+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-461/observations.toml",
+    "updated_at": "2026-06-01T19:44:59+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-461/posterior_draws.csv",
+    "updated_at": "2026-06-01T19:44:59+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-461/site.zip",
+    "updated_at": "2026-06-01T19:45:01+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-434",
+  "published_at": "2026-06-01T16:06:31+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-434/observations.toml",
+    "updated_at": "2026-06-01T16:06:29+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-434/posterior_draws.csv",
+    "updated_at": "2026-06-01T16:06:29+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-434/site.zip",
+    "updated_at": "2026-06-01T16:06:31+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-350",
+  "published_at": "2026-05-29T16:49:43+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-350/observations.toml",
+    "updated_at": "2026-05-29T16:49:40+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-350/posterior_draws.csv",
+    "updated_at": "2026-05-29T16:49:40+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-350/site.zip",
+    "updated_at": "2026-05-29T16:49:42+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-321",
+  "published_at": "2026-05-27T14:40:39+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-321/observations.toml",
+    "updated_at": "2026-05-27T14:40:36+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-321/posterior_draws.csv",
+    "updated_at": "2026-05-27T14:40:37+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-321/site.zip",
+    "updated_at": "2026-05-27T14:40:38+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-304",
+  "published_at": "2026-05-27T08:03:54+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-304/observations.toml",
+    "updated_at": "2026-05-27T08:03:52+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-304/posterior_draws.csv",
+    "updated_at": "2026-05-27T08:03:52+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-304/site.zip",
+    "updated_at": "2026-05-27T08:03:53+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-296",
+  "published_at": "2026-05-26T21:47:32+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-296/observations.toml",
+    "updated_at": "2026-05-26T21:47:30+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-296/posterior_draws.csv",
+    "updated_at": "2026-05-26T21:47:30+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-296/site.zip",
+    "updated_at": "2026-05-26T21:47:31+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-290",
+  "published_at": "2026-05-26T17:53:52+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-290/observations.toml",
+    "updated_at": "2026-05-26T17:53:43+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-290/posterior_draws.csv",
+    "updated_at": "2026-05-26T17:53:44+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-290/site.zip",
+    "updated_at": "2026-05-26T17:53:52+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-241",
+  "published_at": "2026-05-23T15:09:59+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-241/observations.toml",
+    "updated_at": "2026-05-23T15:09:57+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-241/posterior_draws.csv",
+    "updated_at": "2026-05-23T15:09:57+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-241/site.zip",
+    "updated_at": "2026-05-23T15:09:59+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-236",
+  "published_at": "2026-05-22T15:23:10+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-236/observations.toml",
+    "updated_at": "2026-05-22T15:23:08+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-236/posterior_draws.csv",
+    "updated_at": "2026-05-22T15:23:08+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-236/site.zip",
+    "updated_at": "2026-05-22T15:23:09+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-228",
+  "published_at": "2026-05-22T14:20:28+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-228/observations.toml",
+    "updated_at": "2026-05-22T14:20:27+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-228/posterior_draws.csv",
+    "updated_at": "2026-05-22T14:20:27+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-228/site.zip",
+    "updated_at": "2026-05-22T14:20:28+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-222",
+  "published_at": "2026-05-22T13:38:46+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-222/observations.toml",
+    "updated_at": "2026-05-22T13:37:42+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-222/posterior_draws.csv",
+    "updated_at": "2026-05-22T13:37:42+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-222/site.zip",
+    "updated_at": "2026-05-22T13:38:46+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-211",
+  "published_at": "2026-05-22T12:54:24+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-211/observations.toml",
+    "updated_at": "2026-05-22T12:54:22+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-211/posterior_draws.csv",
+    "updated_at": "2026-05-22T12:54:22+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-211/site.zip",
+    "updated_at": "2026-05-22T12:54:23+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-196",
+  "published_at": "2026-05-22T11:34:56+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-196/observations.toml",
+    "updated_at": "2026-05-22T11:34:55+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-196/posterior_draws.csv",
+    "updated_at": "2026-05-22T11:34:55+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-196/site.zip",
+    "updated_at": "2026-05-22T11:34:56+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-185",
+  "published_at": "2026-05-21T23:33:08+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-185/observations.toml",
+    "updated_at": "2026-05-21T23:33:07+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-185/posterior_draws.csv",
+    "updated_at": "2026-05-21T23:33:07+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-185/site.zip",
+    "updated_at": "2026-05-21T23:33:08+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-157",
+  "published_at": "2026-05-21T18:49:35+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-157/observations.toml",
+    "updated_at": "2026-05-21T18:49:32+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-157/posterior_draws.csv",
+    "updated_at": "2026-05-21T18:49:32+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-157/site.zip",
+    "updated_at": "2026-05-21T18:49:34+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-121",
+  "published_at": "2026-05-21T13:56:59+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-121/observations.toml",
+    "updated_at": "2026-05-21T13:56:57+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-121/posterior_draws.csv",
+    "updated_at": "2026-05-21T13:56:57+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-121/site.zip",
+    "updated_at": "2026-05-21T13:56:58+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-116",
+  "published_at": "2026-05-21T12:57:07+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-116/observations.toml",
+    "updated_at": "2026-05-21T12:57:05+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-116/posterior_draws.csv",
+    "updated_at": "2026-05-21T12:57:05+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-116/site.zip",
+    "updated_at": "2026-05-21T12:57:06+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-101",
+  "published_at": "2026-05-20T22:02:09+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-101/observations.toml",
+    "updated_at": "2026-05-20T22:02:07+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-101/posterior_draws.csv",
+    "updated_at": "2026-05-20T22:02:07+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-101/site.zip",
+    "updated_at": "2026-05-20T22:02:08+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-90",
+  "published_at": "2026-05-20T18:01:19+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-90/observations.toml",
+    "updated_at": "2026-05-20T18:01:17+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-90/posterior_draws.csv",
+    "updated_at": "2026-05-20T18:01:17+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-90/site.zip",
+    "updated_at": "2026-05-20T18:01:18+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-67",
+  "published_at": "2026-05-20T15:37:22+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-67/observations.toml",
+    "updated_at": "2026-05-20T15:37:21+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-67/posterior_draws.csv",
+    "updated_at": "2026-05-20T15:37:21+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-67/site.zip",
+    "updated_at": "2026-05-20T15:37:22+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-60",
+  "published_at": "2026-05-20T14:03:47+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-60/observations.toml",
+    "updated_at": "2026-05-20T14:03:46+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-60/posterior_draws.csv",
+    "updated_at": "2026-05-20T14:03:46+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-60/site.zip",
+    "updated_at": "2026-05-20T14:03:47+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-54",
+  "published_at": "2026-05-20T12:19:24+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-54/observations.toml",
+    "updated_at": "2026-05-20T12:19:23+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-54/posterior_draws.csv",
+    "updated_at": "2026-05-20T12:19:23+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-54/site.zip",
+    "updated_at": "2026-05-20T12:19:23+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-49",
+  "published_at": "2026-05-20T11:31:20+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-49/observations.toml",
+    "updated_at": "2026-05-20T11:31:19+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-49/posterior_draws.csv",
+    "updated_at": "2026-05-20T11:31:19+00:00"
+   },
+   "site.zip": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-49/site.zip",
+    "updated_at": "2026-05-20T11:31:19+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-44",
+  "published_at": "2026-05-20T09:51:54+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-44/observations.toml",
+    "updated_at": "2026-05-20T09:51:54+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-44/posterior_draws.csv",
+    "updated_at": "2026-05-20T09:51:54+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-4",
+  "published_at": "2026-05-20T09:28:59+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-4/observations.toml",
+    "updated_at": "2026-05-20T09:28:58+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-4/posterior_draws.csv",
+    "updated_at": "2026-05-20T09:28:58+00:00"
+   }
+  }
+ },
+ {
+  "tag": "results-43",
+  "published_at": "2026-05-20T09:28:40+00:00",
+  "assets": {
+   "observations.toml": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-43/observations.toml",
+    "updated_at": "2026-05-20T09:28:39+00:00"
+   },
+   "posterior_draws.csv": {
+    "url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-43/posterior_draws.csv",
+    "updated_at": "2026-05-20T09:28:39+00:00"
+   }
+  }
+ }
+]

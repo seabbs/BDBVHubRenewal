@@ -3,7 +3,7 @@
 This bundle submits each week's forecast to the [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub) as an automated pull request from `seabbs-bot`'s fork.
 Nobody approves the PR in CI.
 The gate decides, and the PR body states what was submitted and why.
-It is safe to install as is: `DRY_RUN` is on until you turn it off.
+It is safe to install as is, because `DRY_RUN` is on until you turn it off.
 
 ## What it does
 
@@ -11,10 +11,10 @@ It is safe to install as is: `DRY_RUN` is on until you turn it off.
 | --- | --- |
 | `detect` | Runs on schedule from Saturday 23:00 UTC (Sunday 00:00 Kinshasa) to Tuesday. It compares the hub's newest data commit and `as_of` with the ledger and stops unless there is new data for the open round. |
 | `prepare` | Pins the hub data at one commit and builds the persistence candidate, which is also the baseline for the checks. |
-| `fit` | A matrix over the primary candidates (`main` and `fallback`), fitted in parallel. Each fit is cached under a content hash of the model source, the hub commit and its sampler settings. |
+| `fit` | A matrix over the primary candidates (`main`, the single-patch fallback `renewalsp` and the `bvd` shadow), fitted in parallel. Each fit is cached under a content hash of the model source, the hub commit and its sampler settings. |
 | `triage` | Says whether `main` needs its one refit (past the convergence retry thresholds, or ruled out). |
-| `retry` | Only if `main` needs it: one refit with a longer warm-up, more chains and jittered inits. |
-| `gate` | Walks the chain `main` → `retry-1` → `fallback` → `persistence`, handling problems rather than failing on them. A candidate is ruled out only if its fit is clearly broken or its file is invalid (format checks or hubValidations). |
+| `retry` | Only if `main` needs it: one refit with smaller steps and jittered inits, costing about as much as `main`, and only with time left for it before the window closes. |
+| `gate` | Walks the chain `main` → `retry-1` → `renewalsp` → `persistence`, handling problems rather than failing on them. A candidate is ruled out only if its fit is clearly broken or its file is invalid (format checks or hubValidations). |
 | `submit` | Publishes the plot, builds the PR body, and opens or updates the PR. A dry run prints the body instead. |
 | `record` | Live runs only. Writes the outcome to `state.json` on the `submission-ledger` branch and archives the round's files there. |
 | `outcome` | Fails the run if the round was skipped or a job broke, so you are notified. |
@@ -41,9 +41,13 @@ The plots go on an orphan `submission-assets` branch of the fork.
 
 Create a **classic** personal access token on `seabbs-bot` with the scopes **`public_repo`** and **`workflow`**.
 
-- `public_repo` is what `epiforecasts/cityforecasts` uses for the same job (`bin/submit_to_hub.sh`, secret `HUB_PR_TOKEN`). It pushes to the fork and opens PRs into the hub.
-- `workflow` is needed when the hub's `main` has changed a file under `.github/workflows/` since the fork was made. The branch we push then carries that change, and GitHub refuses the push without this scope. The hub changes its workflows often (for example #65).
-- A fine-grained token will not work. Fine-grained tokens cannot open pull requests on a repository the bot neither owns nor collaborates on.
+- `public_repo` is what `epiforecasts/cityforecasts` uses for the same job (`bin/submit_to_hub.sh`, secret `HUB_PR_TOKEN`).
+  It pushes to the fork and opens PRs into the hub.
+- `workflow` is needed when the hub's `main` has changed a file under `.github/workflows/` since the fork was made.
+  The branch we push then carries that change, and GitHub refuses the push without this scope.
+  The hub changes its workflows often (for example #65).
+- A fine-grained token will not work.
+  Fine-grained tokens cannot open pull requests on a repository the bot neither owns nor collaborates on.
 
 Give the token an expiry, for example 90 days, and put a reminder in your calendar.
 When it expires, the `submit` job fails with an authentication error, and the run fails visibly.
@@ -53,16 +57,18 @@ When it expires, the `submit` job fails with an authentication error, and the ru
 Settings → Environments → **New environment** `hub-submission`:
 
 - Deployment branches: **Selected branches**, `main` only.
-- Required reviewers: **none**. The gate is the approval.
-- Environment secret: **`HUB_SUBMIT_TOKEN`**, the token above. It is not a repository secret, so only the `submit` job on `main` can read it.
+- Required reviewers: **none**.
+  The gate is the approval.
+- Environment secret: **`HUB_SUBMIT_TOKEN`**, the token above.
+  It is not a repository secret, so only the `submit` job on `main` can read it.
 
 Settings → Secrets and variables → Actions → **Variables**:
 
 | variable | default when unset | meaning |
 | --- | --- | --- |
 | `DRY_RUN` | dry run | Set to `false` to go live. Any other value, or none, is a dry run. |
-| `HUB_MODEL` | `persistence` | Model name passed to `bdbv-hub-renewal`. Set `hubrenewal` once the PyRenew model and its metadata are integrated; until then the `main` and `fallback` configs are persistence stand-ins. |
-| `HUB_MODEL_ID` | `epiforecasts-<HUB_MODEL>` | Hub model id. Fallbacks are submitted under this id too. |
+| `HUB_MODEL` | latest entry of `results/model-choice.yml` | Model name passed to `bdbvhubrenewal`. |
+| `HUB_MODEL_ID` | `config/hub.toml` (`epiforecasts-seabbsrenewal`) | Hub model id. Fallbacks are submitted under this id too. |
 | `HUB_FORK` | `seabbs-bot/BDBV-Modeling-Hub` | The fork to push to. |
 | `EXPECTED_LOCATIONS` | none | For example `CD,CD-IT,CD-NK,CD-HU,CD-TO`. The coverage check fails if any is missing. |
 | `HUB_VALIDATIONS` | on | `false` skips the R hubValidations step and keeps the Python checks. |
@@ -72,8 +78,11 @@ Settings → Secrets and variables → Actions → **Variables**:
 
 ### 4. Repository settings
 
-- Settings → Actions → General → Workflow permissions: **Read repository contents** is enough. Only the `record` job asks for `contents: write`, to push the `submission-ledger` branch. If a ruleset covers all branches, exclude `submission-ledger`.
-- "Allow GitHub Actions to create and approve pull requests" is not needed. PRs are opened with the bot's token on another repo.
+- Settings → Actions → General → Workflow permissions: **Read repository contents** is enough.
+  Only the `record` job asks for `contents: write`, to push the `submission-ledger` branch.
+  If a ruleset covers all branches, exclude `submission-ledger`.
+- "Allow GitHub Actions to create and approve pull requests" is not needed.
+  PRs are opened with the bot's token on another repo.
 
 ### 5. Tell the hub organisers
 
@@ -84,10 +93,16 @@ The plan's open questions for the organisers also apply here (issue 3 in `seabbs
 
 ## Switching off DRY_RUN
 
-1. Run **Actions → Submit to the BDBV hub → Run workflow** with the defaults. This is a dry run. Read the PR body in the `submit` job summary and the `gate` artefact.
-2. For a past vintage outside the window, set `force` and `ignore_window`, and give a `reference_date`. These are allowed only in a dry run. This is also how to time the fits (see Runtimes).
-3. Inside a window, with you watching, run it once with `dry_run: false`. Check the PR on the hub.
-4. Set the repository variable `DRY_RUN` to `false`. Scheduled runs are then live.
+1. Run **Actions → Submit to the BDBV hub → Run workflow** with the defaults.
+   This is a dry run.
+   Read the PR body in the `submit` job summary and the `gate` artefact.
+2. For a past vintage outside the window, set `force` and `ignore_window`, and give a `reference_date`.
+   These are allowed only in a dry run.
+   This is also how to time the fits (see Runtimes).
+3. Inside a window, with you watching, run it once with `dry_run: false`.
+   Check the PR on the hub.
+4. Set the repository variable `DRY_RUN` to `false`.
+   Scheduled runs are then live.
 
 To pause submissions, set `DRY_RUN` back to `true`, or disable the workflow.
 
@@ -98,10 +113,15 @@ A round that is skipped (every candidate failed), a broken job, or a PR the hub 
 The run's summary gives the reason, and the `gate` artefact has the details.
 Ways to see the failure:
 
-- **Default.** GitHub emails failed runs. For scheduled runs it notifies only the user who last changed the `cron` lines in `submit.yml`. Commits default to `seabbs-bot` here, so make the last edit to those lines yourself (`/commit --as-me`). Otherwise the bot gets the email.
+- **Default.** GitHub emails failed runs.
+  For scheduled runs it notifies only the user who last changed the `cron` lines in `submit.yml`.
+  Commits default to `seabbs-bot` here, so make the last edit to those lines yourself (`/commit --as-me`).
+  Otherwise the bot gets the email.
 - Settings → Notifications → System → Actions: set "Notify me on failed workflows only", by email or on the web and mobile.
 - Watch the repository with the custom **Actions** event, or check the Actions tab from GitHub Mobile.
-- Optional and not wired in: a Slack or email step on failure. It needs a webhook or SMTP secret. Add one to the `outcome` job if email is not enough.
+- Optional and not wired in: a Slack or email step on failure.
+  It needs a webhook or SMTP secret.
+  Add one to the `outcome` job if email is not enough.
 
 Warnings do not fail the run.
 They are stated in the PR body and the job summary.
@@ -113,28 +133,51 @@ Ledger commits are on a side branch, so an occasional commit to `main` keeps the
 ## Runtimes and limits
 
 GitHub-hosted `ubuntu-latest` on a public repository: 4 vCPUs, 16 GB RAM, 14 GB disk, and a **6-hour cap per job**.
-The fit jobs have `timeout-minutes: 350`.
+Each fit job's timeout is at most 350 minutes, and stops 45 minutes before the window closes (`ci/policy.toml` `[timing]`).
 The Actions cache holds 10 GB per repository and evicts entries unused for 7 days.
 Artefacts are kept for 90 days at most, so the ledger branch is the durable archive.
 Scheduled starts can be late by minutes, or dropped when GitHub is busy.
 The 3-hourly schedule covers that.
 
-The model is not built yet, so its runtime is not measured.
-The plan expects minutes to tens of minutes for 4 to 8 provinces and about 260 days with 4 NUTS chains.
-`seabbs/ecdc-weekly-growth-forecasts` fitted a Stan growth-rate model weekly on a hosted runner without trouble.
-Time the first real fit with a dry run on a past vintage (see above), and read the `Fit took N s` line in the job summary.
+Every fit runs 2 chains of 500 warm-up and 500 draws (`ci/policy.toml`).
+On the 2026-10-24 vintage, with vectorised chains on 2 cores of archie, 4 chains of 1000 warm-up and 1000 draws took 130 minutes of sampling for the main fit and 134 for the retry.
+Nearly every draw reaches the maximum tree depth, so cost follows the number of NUTS iterations, and the current settings take about a quarter of that, 35 to 45 minutes.
+The single-patch fallback (`renewalsp`) took 21 minutes of sampling for its six independent fits (the country and five provinces), so it is ready before the main fit.
+Hosted runners are 1.2 to 1.5 times slower, so each fit job takes about 1 to 1.5 hours with setup.
+These times are to be re-measured on the current model.
+Time a real fit with a dry run on a past vintage (see above), and read the `Fit took N s` line in the job summary.
+
+The whole chain runs in sequence: prepare (persistence), then main with the single-patch fallback beside it, then at most one retry, then the gate.
+From the last Tuesday start at 14:00 UTC there are 540 minutes to the close.
+A main fit of normal length leaves time for the retry.
+Two rules keep the chain inside the window when a fit runs late:
+
+- Every fit job's timeout leaves `reserve_minutes` (45) before the close for the gate and the pull request.
+- The retry runs only when `retry_minutes` (105) plus that reserve are left after the main fit. Otherwise the chain moves on to the fallback, which is already fitted, and the job summary says so.
+
+So a main fit that runs to its timeout still reaches the fallback or persistence before the close.
+`max_tree_depth` is set per candidate in `ci/policy.toml`.
 
 If fits come close to the cap:
 
-1. Make each fit cheaper. Use fewer warm-up iterations or draws, start from last week's posterior, and keep the JAX compilation cache warm (`setup-forecast-env` restores it).
-2. Split the matrix further where the model allows. The fallback variant has independent provinces, so it can fit per province group as separate legs. The coupled main model cannot.
-3. Start earlier. Data usually land on Friday or Saturday, and the window opens Sunday. The last scheduled start on Tuesday is 14:00 UTC, so a full-length fit still ends before the window closes.
-4. Use a bigger machine through `FIT_RUNNER`. GitHub's larger runners need a paid Team or Enterprise organisation, for example if the repo moves to `epiforecasts`. A self-hosted runner works too. The workflow only runs on `schedule` and `workflow_dispatch`, never on fork pull requests, so a self-hosted runner on this public repo is not exposed to outside code.
+1. Make each fit cheaper.
+   Use fewer warm-up iterations or draws, start from last week's posterior, and keep the JAX compilation cache warm (`setup-forecast-env` restores it).
+2. Split the matrix further where the model allows.
+   The single-patch fallback fits each province on its own, so it can fit per province group as separate legs.
+   The coupled main model cannot.
+3. Start earlier.
+   Data usually land on Friday or Saturday, and the window opens Sunday.
+   The last scheduled start on Tuesday is 14:00 UTC, which leaves 540 minutes before the window closes for the main fit, one retry of about the same length, and the gate.
+4. Use a bigger machine through `FIT_RUNNER`.
+   GitHub's larger runners need a paid Team or Enterprise organisation, for example if the repo moves to `epiforecasts`.
+   A self-hosted runner works too.
+   The workflow only runs on `schedule` and `workflow_dispatch`, never on fork pull requests, so a self-hosted runner on this public repo is not exposed to outside code.
 
 ## The fallback chain
 
 The chain is set in `ci/policy.toml`.
-It should rarely move past the main model: problems are handled where they can be, and the PR body leads with a `Handled:` line saying what was handled and how.
+It should rarely move past the main model.
+Problems are handled where they can be, and the PR body leads with a `Handled:` line saying what was handled and how.
 For example: "Handled: main model refitted once (max R-hat is 1.2, past the retry threshold 1.1)."
 When a fallback is used, the status line names it and why, for example "Fallback model used (persistence baseline): main model was ruled out (convergence: min bulk ESS is 8, past the failure threshold 10)."
 The same text goes to `provenance.json` in the `gate` artefact, to the job summary and to the ledger.
@@ -142,10 +185,17 @@ A round is skipped only if even persistence fails hub validation.
 
 A suggested general line for the model metadata's `methods_long`:
 
-> Submissions are produced automatically each week. If the main model's fit does not converge, we refit it once with more conservative sampler settings and, only if both are clearly broken, submit a simplified variant of the same model (data-driven delays and missingness, no spatial coupling, weekly Rt) or a persistence baseline. Each submission's pull request states which was used and why.
+> Submissions are produced automatically each week.
+> If the main model's fit does not converge, we refit it once with more conservative sampler settings and, only if both are clearly broken, submit independent single-patch renewal fits for each province and the country, or a persistence baseline.
+> Each submission's pull request states which was used and why.
 
 ## Where this approach comes from
 
-- **Fit monitoring and the matrix.** These follow `epiforecasts/BVDOutbreakSize`: `docs.yml`, `docs/fits/convergence.jl`, `docs/fits/check_convergence.jl` and `scripts/fetch_fits.sh`. That means the same fail and warn thresholds, two levels, environment overrides that must be finite, and treating a fit that cannot be judged as a failure. It also means one matrix job per fit, content-hash fit caches with separate restore and save, a once-a-minute progress heartbeat, short-lived fit artefacts, and a report in the job summary.
-- **Fork and PR mechanics.** These follow `epiforecasts/cityforecasts` (`bin/submit_to_hub.sh` and `.github/workflows/submit-to-hub.yaml`). That means a classic PAT, a branch per round cut from the hub's `main`, a force push, finding the open PR by head branch and fork owner, and `gh pr create --head owner:branch`.
-- **Scheduled fits on hosted runners with artefacts.** `seabbs/ecdc-weekly-growth-forecasts` (`.github/workflows/forecast.yaml`) shows this works. It did not open PRs. Its submissions were made by hand.
+- **Fit monitoring and the matrix.** These follow `epiforecasts/BVDOutbreakSize`: `docs.yml`, `docs/fits/convergence.jl`, `docs/fits/check_convergence.jl` and `scripts/fetch_fits.sh`.
+  That means the same fail and warn thresholds, two levels, environment overrides that must be finite, and treating a fit that cannot be judged as a failure.
+  It also means one matrix job per fit, content-hash fit caches with separate restore and save, a once-a-minute progress heartbeat, short-lived fit artefacts, and a report in the job summary.
+- **Fork and PR mechanics.** These follow `epiforecasts/cityforecasts` (`bin/submit_to_hub.sh` and `.github/workflows/submit-to-hub.yaml`).
+  That means a classic PAT, a branch per round cut from the hub's `main`, a force push, finding the open PR by head branch and fork owner, and `gh pr create --head owner:branch`.
+- **Scheduled fits on hosted runners with artefacts.** `seabbs/ecdc-weekly-growth-forecasts` (`.github/workflows/forecast.yaml`) shows this works.
+  It did not open PRs.
+  Its submissions were made by hand.

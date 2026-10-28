@@ -93,7 +93,18 @@ def tasks() -> None:
                             },
                             "location": {
                                 "required": None,
-                                "optional": sorted(NAMES),
+                                # Two health zones per province.
+                                "optional": sorted(
+                                    [
+                                        *NAMES,
+                                        *(
+                                            f"{p}-0{k}"
+                                            for p in NAMES
+                                            if p != "CD"
+                                            for k in (1, 2)
+                                        ),
+                                    ]
+                                ),
                             },
                             "target": {
                                 "required": None,
@@ -133,10 +144,10 @@ def previous() -> None:
     subprocess.run(
         [
             sys.executable,
-            str(HERE / "fake_bdbv_hub_renewal.py"),
+            str(HERE / "fake_bdbvhubrenewal.py"),
             "nowcast",
             "--model",
-            "hubrenewal",
+            "renewal",
             "--vintage",
             "2026-10-24",
             "--out",
@@ -190,6 +201,6 @@ if __name__ == "__main__":
         )
         + "\n"
     )
-    (HUB / "epiforecasts-hubrenewal.yml").write_text(
-        "team_abbr: epiforecasts\nmodel_abbr: hubrenewal\n"
+    (HUB / "epiforecasts-seabbsrenewal.yml").write_text(
+        "team_abbr: epiforecasts\nmodel_abbr: seabbsrenewal\n"
     )

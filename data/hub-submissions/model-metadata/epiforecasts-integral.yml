@@ -1,0 +1,36 @@
+team_name: "EpiForecasts"
+team_abbr: "epiforecasts"
+model_name: "Integral joint outbreak-size model"
+model_abbr: "integral"
+model_contributors: [
+  {
+    "name": "Sam Abbott",
+    "affiliation": "London School of Hygiene & Tropical Medicine",
+    "orcid": "0000-0001-8057-8037",
+    "email": "sam.abbott@lshtm.ac.uk"
+  },
+  {
+    "name": "Katharine Sherratt",
+    "affiliation": "London School of Hygiene & Tropical Medicine"
+  },
+  {
+    "name": "Samuel Brand",
+    "affiliation": "London School of Hygiene & Tropical Medicine"
+  },
+  {
+    "name": "Sebastian Funk",
+    "affiliation": "London School of Hygiene & Tropical Medicine",
+    "orcid": "0000-0002-2842-3406",
+    "email": "sebastian.funk@lshtm.ac.uk"
+  }
+]
+license: "CC-BY-4.0"
+model_details:
+  data_inputs: "DRC suspected and laboratory-confirmed BVD cases and deaths from INSP situation reports; cases and deaths exported to Uganda from WHO situation reports and Disease Outbreak News; informative priors from the McCabe et al. report; a genetic bound on the time to most recent common ancestor."
+  methods: "Joint Bayesian (Turing.jl) generative model fitting DRC and Uganda-export surveillance streams in a single posterior; headline outbreak size is the posterior cumulative symptomatic cases."
+  methods_long: "Real-time joint Bayesian generative model (implemented in Julia with Turing.jl) of the 2026 DRC Bundibugyo virus disease (BVD) outbreak. It fits the available surveillance streams jointly in a single posterior - DRC suspected cases, suspected deaths, laboratory-confirmed cases and confirmed deaths, and the cases and deaths exported to Uganda - and infers latent infections, symptom onsets and deaths, surveillance ascertainment, the case-fatality ratio and the reproduction number. This 'integral' formulation is the earlier model used for the pre-renewal release vintages; its headline outbreak-size posterior is the `cumulative_cases` quantity (defined upstream as the exponential-growth cumulative size at the data cut-off). The authors report this quantity as cumulative cases, and it is the value intended to map onto the hub's `cumulative cases` target (symptomatic cases, not underlying infections and not confirmed-only counts). Note that the integral model represents the outbreak size as a single coarse exponential-growth quantity rather than separately resolving latent infections and symptom onsets; in the transitional v1.3.0 vintage the upstream summaries additionally report a distinct, larger `cumulative_infections` quantity. These hub submissions were standardized by the hub from the upstream tagged results releases (results-v1.1.0 for 2026-05-18, results-v1.2.0 for 2026-05-23, results-v1.3.0 for 2026-06-07). For each vintage the reference_date is the data cut-off (`as_of_date`) recorded in the release, and the quantiles, median and mean were computed empirically from the posterior draws published in that release's `posterior_draws.csv`. Model code and analysis were drafted with the assistance of a language model and reviewed under human oversight by the named authors. See https://github.com/epiforecasts/BVDOutbreakSize for full details."
+model_version: "results-v1.1.0 through results-v1.3.0"
+website_url: "https://epiforecasts.io/BVDOutbreakSize/stable/"
+repo_url: "https://github.com/epiforecasts/BVDOutbreakSize"
+citation: "Abbott S, Sherratt K, Brand S, Funk S. BVDOutbreakSize: joint forward-generative Turing model for the 2026 DRC Bundibugyo outbreak. 2026. https://doi.org/10.5281/zenodo.20312758"
+ensemble_of_hub_models: false

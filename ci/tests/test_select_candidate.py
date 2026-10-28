@@ -71,7 +71,7 @@ def candidate(
             ],
         },
     )
-    write_json(d / "run.json", {"model": "hubrenewal", "config": cid})
+    write_json(d / "run.json", {"model": "renewal", "config": cid})
     if submission:
         write_samples(
             d / "submission" / "model-output" / "m" / "f.csv", make_samples()
@@ -95,10 +95,15 @@ def test_chain_order_and_budget() -> None:
     assert [c.id for c in POLICY.chain()] == [
         "main",
         "retry-1",
-        "fallback",
+        "renewalsp",
+        "persistencenow",
         "persistence",
     ]
-    assert [c.id for c in POLICY.stage("primary")] == ["main", "fallback"]
+    assert [c.id for c in POLICY.stage("primary")] == [
+        "main",
+        "renewalsp",
+        "bvd",
+    ]
     assert [c.id for c in POLICY.stage("retry")] == ["retry-1"]
 
 
@@ -107,7 +112,7 @@ def test_main_passes(tmp_path: Path) -> None:
     chain(
         c,
         main=("pass", "pass"),
-        fallback=("pass", "pass"),
+        renewalsp=("pass", "pass"),
         persistence=(None, "pass"),
     )
     assert not triage(POLICY, c)
@@ -117,7 +122,8 @@ def test_main_passes(tmp_path: Path) -> None:
     assert (tmp_path / "g" / "selected" / "submission").is_dir()
     states = {a["id"]: a["status"] for a in prov["attempts"]}
     assert (
-        states["fallback"] == "not needed" and states["retry-1"] == "not needed"
+        states["renewalsp"] == "not needed"
+        and states["retry-1"] == "not needed"
     )
 
 
@@ -136,10 +142,14 @@ def test_retry_passes(tmp_path: Path) -> None:
         c,
         main=("fail", "pass"),
         retry_1=("pass", "pass"),
-        fallback=("pass", "pass"),
+        renewalsp=("pass", "pass"),
         persistence=(None, "pass"),
     )
     assert triage(POLICY, c)
+    t = POLICY.timing
+    assert triage(POLICY, c, minutes_left=t.retry_minutes + t.reserve_minutes)
+    # Too close to the window's end for a refit: go down the chain.
+    assert not triage(POLICY, c, minutes_left=t.retry_minutes)
     prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=True)
     assert prov["selected"] == "retry-1"
     assert prov["produced_by"].startswith("main model, refitted")
@@ -155,7 +165,7 @@ def test_loose_main_is_refitted_once(tmp_path: Path) -> None:
         c,
         main=("loose", "pass"),
         retry_1=("pass", "pass"),
-        fallback=("pass", "pass"),
+        renewalsp=("pass", "pass"),
         persistence=(None, "pass"),
     )
     assert triage(POLICY, c)
@@ -173,7 +183,7 @@ def test_loose_main_is_kept_when_the_refit_is_broken(tmp_path: Path) -> None:
         c,
         main=("loose", "pass"),
         retry_1=("fail", "pass"),
-        fallback=("pass", "pass"),
+        renewalsp=("pass", "pass"),
         persistence=(None, "pass"),
     )
     prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=True)
@@ -233,12 +243,27 @@ def test_fallback_is_used(tmp_path: Path) -> None:
         c,
         main=("fail", "pass"),
         retry_1=("pass", "fail"),
-        fallback=("pass", "pass"),
+        renewalsp=("pass", "pass"),
         persistence=(None, "pass"),
     )
     prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=True)
-    assert prov["selected"] == "fallback" and prov["kind"] == "fallback"
+    assert prov["selected"] == "renewalsp" and prov["kind"] == "fallback"
     assert "growth" in prov["reason"]
+
+
+def test_persistencenow_before_persistence(tmp_path: Path) -> None:
+    c = tmp_path / "c"
+    chain(
+        c,
+        main=("fail", "pass"),
+        retry_1=("fail", "pass"),
+        renewalsp=("pass", "fail"),
+        persistencenow=(None, "pass"),
+        persistence=(None, "pass"),
+    )
+    prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=True)
+    assert prov["selected"] == "persistencenow"
+    assert prov["kind"] == "persistence"
 
 
 def test_persistence_is_the_last_resort(tmp_path: Path) -> None:
@@ -247,7 +272,7 @@ def test_persistence_is_the_last_resort(tmp_path: Path) -> None:
         c,
         main=("fail", "pass"),
         retry_1=("fail", "pass"),
-        fallback=("pass", "fail"),
+        renewalsp=("pass", "fail"),
         persistence=(None, "pass"),
     )
     prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=True)
@@ -261,7 +286,7 @@ def test_everything_fails_round_skipped(tmp_path: Path) -> None:
         c,
         main=("fail", "pass"),
         retry_1=("fail", "pass"),
-        fallback=("pass", "fail"),
+        renewalsp=("pass", "fail"),
         persistence=(None, "fail"),
     )
     prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=True)
@@ -276,7 +301,7 @@ def test_hub_validation_failure_moves_down_the_chain(tmp_path: Path) -> None:
     chain(
         c,
         main=("pass", "pass"),
-        fallback=("pass", "pass"),
+        renewalsp=("pass", "pass"),
         persistence=(None, "pass"),
     )
     seen: list[str] = []
@@ -287,8 +312,8 @@ def test_hub_validation_failure_moves_down_the_chain(tmp_path: Path) -> None:
         return "fail" if len(seen) == 1 else "pass"
 
     prov = run_select(POLICY, c, tmp_path / "g", validate, retried=False)
-    assert seen == ["main", "fallback"]
-    assert prov["selected"] == "fallback"
+    assert seen == ["main", "renewalsp"]
+    assert prov["selected"] == "renewalsp"
     assert "hub validation failed" in prov["reason"]
 
 
@@ -328,8 +353,7 @@ def test_cli_exit_code_on_skip(
 
 
 STAND_IN = (
-    "the `main` config runs the persistence baseline until the PyRenew "
-    "renewal model is integrated"
+    "the `main` config runs the persistence baseline in place of the model"
 )
 
 
@@ -338,7 +362,7 @@ def test_stand_in_is_named(tmp_path: Path) -> None:
     chain(root, main=("skip", "pass"))
     write_json(
         root / "main" / "run.json",
-        {"model": "hubrenewal", "stand_in": STAND_IN},
+        {"model": "renewal", "stand_in": STAND_IN},
     )
     prov = run_select(POLICY, root, tmp_path / "gate", None, retried=False)
     assert prov["stand_in"] == STAND_IN
@@ -360,3 +384,37 @@ def test_stand_in_from_diagnostics_in_chain_table(tmp_path: Path) -> None:
     assert prov["selected"] == "retry-1"
     assert prov["stand_in"] == ""
     assert prov["reason"].startswith("Main model (stand-in) was ruled out")
+
+
+def test_persistence_chosen_never_selects_a_shadow(tmp_path: Path) -> None:
+    pol = POLICY.for_model("persistence")
+    c = tmp_path / "c"
+    chain(
+        c,
+        main=("pass", "pass"),
+        renewalsp=("pass", "pass"),
+        persistence=(None, "pass"),
+    )
+    assert not triage(pol, c)
+    prov = run_select(pol, c, tmp_path / "g", always("pass"), retried=False)
+    assert prov["selected"] == "persistence"
+
+
+def test_provenance_lists_the_shadow_candidates(tmp_path: Path) -> None:
+    pol = POLICY.for_model("persistence")
+    c = tmp_path / "c"
+    chain(c, main=("pass", "pass"), persistence=(None, "pass"))
+    prov = run_select(pol, c, tmp_path / "g", always("pass"), retried=False)
+    shadows = {s["id"]: s for s in prov["shadows"]}
+    assert set(shadows) == {"main", "renewalsp", "bvd", "persistencenow"}
+    assert shadows["main"]["fit"] is not None
+    assert shadows["bvd"]["fit"] is None
+
+
+def test_baseline_track_falls_back_to_persistence(tmp_path: Path) -> None:
+    # seabbsbaseline: persistence on a nowcast, then plain persistence.
+    pol = POLICY.for_model("persistencenow")
+    c = tmp_path / "c"
+    chain(c, persistencenow=(None, "fail"), persistence=(None, "pass"))
+    prov = run_select(pol, c, tmp_path / "g", always("pass"), retried=False)
+    assert prov["selected"] == "persistence"
