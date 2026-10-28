@@ -450,11 +450,17 @@ def test_chain_method_defaults_to_vectorized(
         def sample(self) -> None:
             return None
 
+    import jax
+
+    cleared: list[bool] = []
+    monkeypatch.setattr(jax, "clear_caches", lambda: cleared.append(True))
     monkeypatch.setattr(numpyro.infer, "MCMC", FakeMCMC)
     monkeypatch.setattr(rn.engine(), "model_args", lambda *_: {})
     settings = rn.sampler_settings()
     assert settings["chain_method"] == "vectorized"
     rn.run_nuts(FakeModel(), None, settings)
     assert seen["chain_method"] == "vectorized"
+    # Each fit compiles its own model, so earlier executables are dropped.
+    assert cleared == [True]
     rn.run_nuts(FakeModel(), None, {**settings, "chain_method": "sequential"})
     assert seen["chain_method"] == "sequential"
