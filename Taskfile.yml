@@ -20,6 +20,12 @@ tasks:
     cmds:
       - uv run pytest -q -m slow
 
+  test-all:
+    desc: Run every test, the model fit tests included, as the CI does
+    cmds:
+      - task: test
+      - task: test-slow
+
   lint:
     desc: Lint, check formatting and type-check
     cmds:

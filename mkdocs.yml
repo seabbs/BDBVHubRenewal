@@ -49,7 +49,6 @@ nav:
       - Evaluation: reference/evaluation.md
       - Submission: reference/submission.md
       - Reporting: reference/reporting.md
-      - CLI: reference/cli.md
   - Citation and licence: citation.md
 
 theme:

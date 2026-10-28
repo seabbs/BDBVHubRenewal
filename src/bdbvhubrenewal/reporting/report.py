@@ -657,12 +657,19 @@ def _sampler_section(fits: pd.DataFrame, submission: Mapping[str, Any]) -> str:
     keys = ["num_chains", "num_warmup", "num_samples"]
     used = fits[keys].drop_duplicates().astype(int).to_numpy()
     runs = " or ".join(_settings_text(*row) for row in used)
-    sub = _settings_text(*(int(submission[k]) for k in keys))
+    target = tuple(int(submission[k]) for k in keys)
+    sub = _settings_text(*target)
+    if len(used) == 1 and tuple(used[0]) == target:
+        compare = f"This is the same as the submission fit, {sub}.\n"
+    else:
+        compare = (
+            f"The submission fit uses {sub}, so backtest fits are shorter "
+            "than the submission fit.\n"
+        )
     by = fits.groupby("model")
     table = pd.DataFrame(
         {
             "fits": by.size(),
-            "median seconds": by["seconds"].median(),
             "median max R-hat": by["max_rhat"].median(),
             "worst max R-hat": by["max_rhat"].max(),
             "share with R-hat over 1.05": by["max_rhat"].apply(
@@ -675,10 +682,8 @@ def _sampler_section(fits: pd.DataFrame, submission: Mapping[str, Any]) -> str:
     return (
         "## Sampler\n\n"
         f"Backtest fits use {runs}.\n"
-        f"The submission fit uses {sub}, so backtest fits are shorter than "
-        "the submission fit.\n"
-        "The table gives each model's fits and their convergence, to show "
-        "whether the shorter fits matter.\n"
+        + compare
+        + "The table gives each model's fits and their convergence.\n"
         "A per-location model has one fit per location with enough cases.\n"
         "R-hat is the largest over a fit's parameters, and the depth cap "
         "share is the share of draws at the maximum tree depth.\n\n"

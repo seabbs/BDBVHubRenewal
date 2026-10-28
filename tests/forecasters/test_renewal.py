@@ -37,16 +37,16 @@ def test_variants_are_registered_as_fitted_models() -> None:
         model = get_model(name)
         assert isinstance(model, ForecastModel)
         assert model.name == name
-    # The fallback and the backtest options are registered too.
+    # The backtest options are registered too. There is no fallback
+    # variant: the chain is renewal, its retry, renewalsp and persistence.
+    assert "fallback" not in specs
     for name, field, value in (
-        ("fallback", None, None),
         ("renewalhold", "future_rt", "hold"),
         ("renewalpo", "importation", "per_origin"),
     ):
         assert specs[name].fitted
-        if field is not None:
-            config = rn.model_config(rn.VARIANTS[name])
-            assert getattr(config, field) == value
+        config = rn.model_config(rn.VARIANTS[name])
+        assert getattr(config, field) == value
     # The single patch fits the national sum, so cannot mask a province.
     assert get_model("renewal").supports_mask
     assert not get_model("renewalsp").supports_mask
@@ -524,11 +524,14 @@ def test_lag_source_warns_when_the_prior_stands_in(
             BacktestConfig(seed=3),
         )
     }
-    early = vintage_inputs(tasks["2026-10-09"], MAIN)
-    late = vintage_inputs(tasks["2026-10-17"], MAIN)
-    (warning,) = lag_warnings([early])
+    empirical = replace(MAIN, publication_lag="empirical")
+    early = vintage_inputs(tasks["2026-10-09"], empirical)
+    late = vintage_inputs(tasks["2026-10-17"], empirical)
+    (warning,) = lag_warnings([early], empirical)
     assert warning.startswith("publication_lag:")
-    assert lag_warnings([late]) == []
+    assert lag_warnings([late], empirical) == []
+    # The default fixed lag never warns.
+    assert lag_warnings([early], MAIN) == []
 
 
 def test_report_cutoffs_are_days_from_the_model_start(
