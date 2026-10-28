@@ -157,9 +157,9 @@ def test_model_log_density_is_the_same_with_weekly_blocks(sim_vintage, config):
         if v["type"] == "sample" and not v["is_observed"]
     }
     obs = model.observations["onsets"]
-    assert obs.weekly_delay
+    assert obs.weekly_axis
     fast = log_density(model.sample, (), args, values)[0]
-    obs.weekly_delay = False
+    obs.weekly_axis = False
     dense = log_density(model.sample, (), args, values)[0]
     assert float(fast) == pytest.approx(float(dense), rel=1e-5)
 
