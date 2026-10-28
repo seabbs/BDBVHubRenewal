@@ -98,8 +98,9 @@ SIM_DAYS = (166, 206)
 SIM_LOCATIONS = ("CD-IT", "CD-NK", "CD-HU", "CD-TO", "CD-BU", "CD-SK")
 REAL_ORIGINS = ("2026-08-18", "2026-10-09", "2026-10-17")
 REAL_TRUTH = "2026-10-24"
-COMPLETE_K = 4
-"""Weeks ending at least this many weeks before the truth vintage count
+COMPLETE_K = 3
+"""Weeks ending at least this many weeks before the truth vintage count (as
+integration's `complete_weeks`, `complete_after_weeks = 3`)
 as complete; the complete-weeks scores use only those."""
 SP_MIN_CASES = 10
 """renewalsp fits only locations with at least this many cases."""
