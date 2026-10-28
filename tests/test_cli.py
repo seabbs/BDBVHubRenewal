@@ -31,7 +31,7 @@ def test_cli_nowcast_and_metadata(tmp_path: Path) -> None:
     table = pd.read_csv(files[0])
     assert set(table["output_type"]) == {"sample"}
     assert main(["metadata", "--out", str(tmp_path / "meta")]) == 0
-    assert (tmp_path / "meta" / "epiforecasts-persistence.yml").exists()
+    assert (tmp_path / "meta" / "seabbs-persistence.yml").exists()
 
 
 def _written(out: Path) -> pd.DataFrame:

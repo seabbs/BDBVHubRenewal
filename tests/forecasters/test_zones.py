@@ -269,7 +269,7 @@ def test_hub_table_with_zones_validates(
     assert set(alloc["location"]) <= set(table["location"])
     hub_round = load_hub_round(tasks_json)
     assert set(table["location"]) <= hub_round.locations
-    path = write_submission(table, tmp_path, "epiforecasts-seabbsrenewal")
+    path = write_submission(table, tmp_path, "seabbs-renewal")
     assert validate_submission_file(path, hub_round, check_round=False) == []
 
 

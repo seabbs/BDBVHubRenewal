@@ -196,7 +196,7 @@ def own_hub_ids(path: Path | str = "config/hub.toml") -> dict[str, str]:
     -------
     dict
         Model name to hub model id, such as
-        `{"persistencenow": "epiforecasts-seabbsbaseline"}`.
+        `{"persistencenow": "seabbs-baseline"}`.
     """
     from bdbvhubrenewal.submission.hub import model_abbr_for, model_id
 
