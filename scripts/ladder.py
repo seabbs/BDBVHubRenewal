@@ -461,17 +461,18 @@ def prior_wild(config, outbreak, table) -> float:
 def per_location(
     task, table, as_of: str | None = None
 ) -> tuple[pd.DataFrame, dict]:
-    """Fit `renewalsp`: one single-patch fit per location, national its own.
+    """Fit `renewalsp`: one single-patch fit per province.
 
-    Locations with at least `SP_MIN_CASES` cases are fitted, the nation
-    included; the rest get zeros (their reported counts are below the
-    threshold). With `as_of`, samples are the counts as reported by it.
+    Provinces with at least `SP_MIN_CASES` cases are fitted; the rest get
+    zeros (their reported counts are below the threshold). National is
+    the sum of the provinces. With `as_of`, samples are the counts as
+    reported by it.
     """
     config = adapter.model_config(VARIANTS["renewalsp"])
     rows = task.target.loc[task.target["vintage"] == task.vintage]
     cases = rows.groupby("location")["total"].sum()
     frames, fits = [], []
-    for loc in (*task.locations, "CD"):
+    for loc in task.locations:
         if cases.get(loc, 0) < SP_MIN_CASES:
             continue
         sub = dataclasses.replace(task, locations=(loc,))

@@ -251,7 +251,7 @@ Each week the submission takes the first of `renewal`, one refit of `renewal` wi
 
 ### Single patch
 
-`renewalsp` fits each location $\ell$, the nation included, to its own known and imputed onsets.
+`renewalsp` fits each province $\ell$ to its own known and imputed onsets.
 A location with at least 10 cases has
 
 $$
@@ -274,7 +274,7 @@ $$
 $$
 
 with one $\lambda_\ell$ per trajectory.
-The national forecast is the national fit, so it need not equal the sum of the provinces.
+The national forecast is the sum of the provinces plus the national cases in no province, as in the main model.
 
 ### BVDOutbreakSize-informed
 

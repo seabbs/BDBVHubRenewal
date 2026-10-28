@@ -407,7 +407,7 @@ def test_single_patch_fits_each_location_on_its_own(
     assert set(fit.runs) == set(enough)
     # National is the sum of the patches plus the unassigned cases, as in
     # the main model.
-    assert fit.national is None
+    assert not hasattr(fit, "national")
     assert set(fit.samples["location"]) == set(task.locations)
     samples = model.forecast(task)
     assert NATIONAL not in set(samples["location"])
