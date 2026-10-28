@@ -203,8 +203,9 @@ The non-monotone revisions in imputed counts suggest it re-imputes each time.
 - Weekly sums of $\mathrm{known}_{p,T}$ and $\mathrm{imputed}_{p,T}$ are negative binomial, each stream with its own dispersion, $1/\sqrt{\phi} \sim \text{HalfNormal}(0.25)$, as in EpiNow2.
 - The delays of known-onset cases in the hub's delay file are tabulated by onset week and delay, pooled over provinces.
   Delays are clipped to 0 to 60 days.
-  Given each week's total they are multinomial, with probabilities from $\lambda$, $f$, $\pi$ and $c$.
-  With `delay_counts="dirichlet-multinomial"` they are Dirichlet-multinomial instead, with $1/\sqrt{\psi} \sim \text{HalfNormal}(0.1)$ and $\psi$ capped at $10^4$.
+  Given each week's total they are Dirichlet-multinomial, with mean probabilities from $\lambda$, $f$, $\pi$ and $c$, $1/\sqrt{\psi} \sim \text{HalfNormal}(0.1)$ and $\psi$ capped at $10^4$.
+  A multinomial treats the 8,000 or so pooled delays as independent, which makes the delay overconfident.
+  `delay_counts="multinomial"` gives the multinomial.
   This is the conditional part of the reporting triangle, so the known stream is not counted twice.
 - Provinces with no cases have expected onsets $\mu_q(s) = \kappa \sum_p K_{pq}\, \lambda_p(s)$, with one scale $\kappa \sim \text{LogNormal}(\log 10^{-3}, 2^2)$.
   Their weekly zeros are Poisson.

@@ -162,8 +162,9 @@ class ModelConfig:
         $L$, in days (`data.reconstruct.PUBLICATION_LAG_DAYS`).
     delay_counts : {"multinomial", "dirichlet-multinomial"}
         Likelihood of the delay file's counts given the weekly totals.
-        The Dirichlet-multinomial has $1/\sqrt{\psi} \sim
-        \text{HalfNormal}(0.1)$.
+        The Dirichlet-multinomial (default) has $1/\sqrt{\psi} \sim
+        \text{HalfNormal}(0.1)$, with $\psi$ capped at $10^4$, so that
+        thousands of pooled delays do not make the delay overconfident.
     report_dow : bool
         Add a report day-of-week effect to the hazard delay
         (`HazardDelay` with `report_dow`). Needs `delay="hazard"`.
@@ -194,7 +195,7 @@ class ModelConfig:
     )
     max_publication_lag: int = 3
     delay_counts: Literal["multinomial", "dirichlet-multinomial"] = (
-        "multinomial"
+        "dirichlet-multinomial"
     )
     report_dow: bool = False
 

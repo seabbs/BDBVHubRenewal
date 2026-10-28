@@ -125,7 +125,9 @@ def test_dirichlet_multinomial_delays(sim_vintage):
         for k, v in tr.items()
         if v["type"] == "sample" and not v["is_observed"]
     }
-    _, mn = delay_site(MAIN, latent)
+    _, mn = delay_site(
+        dataclasses.replace(MAIN, delay_counts="multinomial"), latent
+    )
     # Same expected delay probabilities, with concentration psi.
     # Capped at 1e4, as the negative binomial concentrations are.
     psi = 1 / (latent["delay_overdispersion"] ** 2 + 1e-4)
