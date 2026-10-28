@@ -19,8 +19,14 @@
               "optional": [
                 "CD",
                 "CD-HU",
+                "CD-HU-01",
+                "CD-HU-02",
                 "CD-IT",
-                "CD-NK"
+                "CD-IT-01",
+                "CD-IT-02",
+                "CD-NK",
+                "CD-NK-01",
+                "CD-NK-02"
               ]
             },
             "target": {

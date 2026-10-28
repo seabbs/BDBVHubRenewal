@@ -93,7 +93,18 @@ def tasks() -> None:
                             },
                             "location": {
                                 "required": None,
-                                "optional": sorted(NAMES),
+                                # Two health zones per province.
+                                "optional": sorted(
+                                    [
+                                        *NAMES,
+                                        *(
+                                            f"{p}-0{k}"
+                                            for p in NAMES
+                                            if p != "CD"
+                                            for k in (1, 2)
+                                        ),
+                                    ]
+                                ),
                             },
                             "target": {
                                 "required": None,
