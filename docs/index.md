@@ -16,7 +16,7 @@ The renewal models are built on [PyRenew](https://github.com/CDCgov/PyRenew) and
 | `renewalsp` | One renewal per location, the nation included, fitted on its own. |
 | `renewalbvd` | `renewal` informed by the latest [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) Rt. |
 | `persistence` | The baseline: the last complete week carried forward. |
-| `persistencenow` | Persistence on a nowcast: recent weeks scaled up by the share reported so far, then the last nowcast week carried forward. |
+| `persistencenow` | `persistence` carried forward from a nowcast of the recent weeks. |
 
 Each week the [submission](submission/workflow.md) takes the first of `renewal`, one refit of it, `renewalsp` and `persistence` that passes its checks.
 
