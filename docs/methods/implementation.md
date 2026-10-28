@@ -6,7 +6,7 @@ How the [model](model.md) is built in code, computed and sampled.
 ## Code
 
 The model extends [PyRenew](https://github.com/CDCgov/PyRenew), pinned to a commit, and runs in JAX with NumPyro.
-Its code is in [`bdbv_hub_renewal.model`][bdbv_hub_renewal.model] and the variants are in [`forecasters.renewal`][bdbv_hub_renewal.forecasters.renewal].
+Its code is in [`bdbvhubrenewal.model`][bdbvhubrenewal.model] and the variants are in [`forecasters.renewal`][bdbvhubrenewal.forecasters.renewal].
 The model's options are fields of `ModelConfig`, and the defaults give the model on the Model page.
 The model figure is built from `docs/diagrams/model_dag.tex` by `scripts/build_diagrams.sh`.
 

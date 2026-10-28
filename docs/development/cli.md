@@ -1,10 +1,10 @@
 # CLI
 
-The `bdbv-hub-renewal` command.
+The `bdbvhubrenewal` command.
 { .page-subtitle }
 
 Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
-`bdbv-hub-renewal <command> --help` lists each command's options.
+`bdbvhubrenewal <command> --help` lists each command's options.
 
 | Command | What it does |
 |---|---|
@@ -46,12 +46,12 @@ The docs build runs only persistence and reads the fitted models from there.
 The comparison with hub forecasts downloads other teams' files, so it is run on its own:
 
 ```bash
-uv run bdbv-hub-renewal compare-hub --fetch
+uv run bdbvhubrenewal compare-hub --fetch
 ```
 
 ## Hub files
 
-`bdbv-hub-renewal nowcast` writes `model-output/<model_id>/<reference_date>-<model_id>.csv` under `output/submission/`.
+`bdbvhubrenewal nowcast` writes `model-output/<model_id>/<reference_date>-<model_id>.csv` under `output/submission/`.
 The model id is `epiforecasts-<model>`.
 It checks the file with `validate_submission`, which mirrors the hub's checks:
 
@@ -64,16 +64,13 @@ It checks the file with `validate_submission`, which mirrors the hub's checks:
 - the submission window, Sunday to Tuesday in Kinshasa time, when a time is given.
 
 `task validate-hub` then runs the hub's own `hubValidations::validate_submission()` in R against a fresh clone of the hub.
-The persistence file for 2026-10-31 passes every check.
 
-`bdbv-hub-renewal metadata` writes `hub/model-metadata/epiforecasts-<model>.yml` and checks it against the hub's schema.
+`bdbvhubrenewal metadata` writes `hub/model-metadata/epiforecasts-<model>.yml` and checks it against the hub's schema.
 Sam confirms the contributor list, licence and model name before a model is first submitted.
 
 !!! note "Sample ids"
-    Sample ids run from 1 to 100 within each location and are shared across locations.
-    `hubValidations` reads this as samples that are joint across locations, which they are.
-    The national sample is the sum of the province samples with the same id.
+    Sample ids run from 1 to 100 and are shared across locations, so `hubValidations` reads samples as joint across locations.
 
 ## Reference
 
-::: bdbv_hub_renewal.cli
+::: bdbvhubrenewal.cli

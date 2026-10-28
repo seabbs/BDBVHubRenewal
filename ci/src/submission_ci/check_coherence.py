@@ -1,6 +1,6 @@
 """Check that the hub's national data add up to its provinces.
 
-`bdbv-hub-renewal coherence` writes `coherence.json` for the data vintage
+`bdbvhubrenewal coherence` writes `coherence.json` for the data vintage
 (see INTEGRATION.md): for each stream (`observed`, `imputed`, `total`)
 the weeks where the national count is not the sum of the provinces.
 This is a check on the data, not on a candidate, so it runs once, in

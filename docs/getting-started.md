@@ -23,7 +23,7 @@ The tidy data in `data/` are committed, so nothing needs downloading to start.
 This fits the main variant, `renewal`, to the latest vintage, with the sampler settings the submission workflow uses.
 
 ```console
-$ uv run bdbv-hub-renewal fit --model renewal --config main \
+$ uv run bdbvhubrenewal fit --model renewal --config main \
     --out output/fits/main
 Fitted config 'main' on vintage 2026-10-24 (sampler nuts); wrote output/fits/main.
 ```
@@ -44,7 +44,7 @@ Each chain in `diagnostics.json` reports divergences, the share of draws at the 
 ## Forecast from the fit
 
 ```console
-$ uv run bdbv-hub-renewal nowcast --model renewal --config main \
+$ uv run bdbvhubrenewal nowcast --model renewal --config main \
     --fit output/fits/main --out output/candidates/main
 Wrote output/candidates/main/model-output/epiforecasts-seabbsrenewal/2026-10-31-epiforecasts-seabbsrenewal.csv (9000 rows, locations incl. CD).
 ```
@@ -54,7 +54,7 @@ National sample $k$ is the sum of province sample $k$.
 `national.json` beside it lists the modelled provinces and any national cases not assigned to a province.
 
 ```console
-$ uv run bdbv-hub-renewal plot-submission \
+$ uv run bdbvhubrenewal plot-submission \
     --submission output/candidates/main/model-output/epiforecasts-seabbsrenewal/2026-10-31-epiforecasts-seabbsrenewal.csv \
     --out nowcast.png
 ```
@@ -64,7 +64,7 @@ $ uv run bdbv-hub-renewal plot-submission \
 ## Check the fit
 
 ```console
-$ uv run bdbv-hub-renewal plot-ppc --ppc output/fits/main/ppc.json --out ppc.png
+$ uv run bdbvhubrenewal plot-ppc --ppc output/fits/main/ppc.json --out ppc.png
 ```
 
 ![Posterior predictive intervals of the known and imputed onsets in the data vintage, by province, against the data.](assets/getting-started/ppc.png)

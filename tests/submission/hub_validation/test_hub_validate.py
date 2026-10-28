@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 from hv_fixtures import BUNDLE, FIXTURES, METADATA_DIRS, SNAPSHOT
 
-from bdbv_hub_renewal.submission import validate as hv
+from bdbvhubrenewal.submission import validate as hv
 
 FILE_31 = "2026-10-31-testteam-testmodel.csv"
 
