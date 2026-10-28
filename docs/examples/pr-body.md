@@ -1,5 +1,5 @@
-<!-- bdbv-submission:epiforecasts-persistence:2026-10-31 -->
-Automated submission of `epiforecasts-persistence` for 2026-10-31, from data as of 2026-10-24, for 9 locations.
+<!-- bdbv-submission:seabbs-persistence:2026-10-31 -->
+Automated submission of `seabbs-persistence` for 2026-10-31, from data as of 2026-10-24, for 9 locations.
 
 All checks passed, with warnings on bounds. Stand-in: persistence runs as the `main` model. Dry run: nothing was pushed.
 
@@ -46,7 +46,7 @@ Submitted `CD` samples.
 
 |  |  |
 | --- | --- |
-| File | `model-output/epiforecasts-persistence/2026-10-31-epiforecasts-persistence.csv` |
+| File | `model-output/seabbs-persistence/2026-10-31-seabbs-persistence.csv` |
 | Contents | 9 locations, 9000 rows |
 | Model | persistence (`main`), version 0.1.0, code [`fd9d26eaed`](https://github.com/seabbs/BDBVHubRenewal/commit/fd9d26eaedecf543c851271d365d52db09fff85c) |
 | Data vintage (`as_of`) | 2026-10-24 |

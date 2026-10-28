@@ -19,8 +19,7 @@ from bdbvhubrenewal.forecasters import ForecastTask, register_model
 class MyModel:
     name: str = "my_model"
 
-    def forecast(self, task: ForecastTask) -> pd.DataFrame:
-        ...
+    def forecast(self, task: ForecastTask) -> pd.DataFrame: ...
 
 
 register_model("my_model", MyModel, "One line describing it.")

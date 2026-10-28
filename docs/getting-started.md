@@ -46,7 +46,7 @@ Each chain in `diagnostics.json` reports divergences, the share of draws at the 
 ```console
 $ uv run bdbvhubrenewal nowcast --model renewal --config main \
     --fit output/fits/main --out output/candidates/main
-Wrote output/candidates/main/model-output/epiforecasts-seabbsrenewal/2026-10-31-epiforecasts-seabbsrenewal.csv (9000 rows, locations incl. CD).
+Wrote output/candidates/main/model-output/seabbs-renewal/2026-10-31-seabbs-renewal.csv (9000 rows, locations incl. CD).
 ```
 
 The hub file has 100 samples for the 8 provinces with cases and the national total, over 10 weeks.
@@ -55,7 +55,7 @@ National sample $k$ is the sum of province sample $k$.
 
 ```console
 $ uv run bdbvhubrenewal plot-submission \
-    --submission output/candidates/main/model-output/epiforecasts-seabbsrenewal/2026-10-31-epiforecasts-seabbsrenewal.csv \
+    --submission output/candidates/main/model-output/seabbs-renewal/2026-10-31-seabbs-renewal.csv \
     --out nowcast.png
 ```
 

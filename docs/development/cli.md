@@ -54,7 +54,7 @@ uv run bdbvhubrenewal compare-hub --fetch
 ## Hub files
 
 `bdbvhubrenewal nowcast` writes `model-output/<model_id>/<reference_date>-<model_id>.csv` under `output/submission/`.
-The model id is `epiforecasts-<model>`.
+The model id is `seabbs-<model>`.
 It checks the file with `validate_submission`, which mirrors the hub's checks:
 
 - column names and order free, no extra columns;
@@ -67,7 +67,7 @@ It checks the file with `validate_submission`, which mirrors the hub's checks:
 
 `task validate-hub` then runs the hub's own `hubValidations::validate_submission()` in R against a fresh clone of the hub.
 
-`bdbvhubrenewal metadata` writes `hub/model-metadata/epiforecasts-<model>.yml` and checks it against the hub's schema.
+`bdbvhubrenewal metadata` writes `hub/model-metadata/seabbs-<model>.yml` and checks it against the hub's schema.
 Sam confirms the contributor list, licence and model name before a model is first submitted.
 
 !!! note "Sample ids"

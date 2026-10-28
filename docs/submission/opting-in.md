@@ -8,8 +8,8 @@ Each is opted in on its own in `config/hub.toml`.
 
 | hub model | model | falls back to | needs |
 | --- | --- | --- | --- |
-| `epiforecasts-seabbsbaseline` | persistence on a nowcast (`persistencenow`) | persistence | nothing more |
-| `epiforecasts-seabbsrenewal` | the renewal chain | its refit, `renewalsp`, `persistencenow`, persistence | a model choice in `results/model-choice.yml` |
+| `seabbs-baseline` | persistence on a nowcast (`persistencenow`) | persistence | nothing more |
+| `seabbs-renewal` | the renewal chain | its refit, `renewalsp`, `persistencenow`, persistence | a model choice in `results/model-choice.yml` |
 
 `DRY_RUN` is the global switch.
 Until it is `false`, an opted-in model is built and checked but nothing is pushed.
@@ -44,7 +44,7 @@ Run it after each part, logged in to `gh` as `seabbs`.
 
 1. Review its metadata in `hub/model-metadata/<hub model>.yml`.
 2. Set `submit = true` for it in `config/hub.toml` and push to `main`.
-   For `seabbsrenewal`, also commit the chosen model to `results/model-choice.yml`.
+   For `renewal`, also commit the chosen model to `results/model-choice.yml`.
 3. Dry run, and read the pull request body in the job summary.
    `gh workflow run submit.yml -R seabbs/BDBVHubRenewal`
 4. Inside the window (Sunday to Tuesday, Kinshasa time), do one supervised live run.
