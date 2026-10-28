@@ -53,7 +53,7 @@ Cases reach a vintage some days after report, so the cut-off is $A' = A - 3$ day
   So a case imputed to week $W$ counts as reported by $A'$ with probability $\frac{1}{7}\sum_{u} \hat G(A' - W + u)$, with $\hat G$ the pooled delay cdf.
 - **Delay data.** Rows whose report (taking the onset mid-week) falls by $A'$.
 
-The 3-day lag best matches the real vintages ([Data](../data.md#reconstructed-vintages)).
+The publication lag is 3 days ([Data](../data.md#reconstructed-vintages) compares it with the real vintages).
 Reconstructed vintages miss real revisions and changes in the hub's imputation, so scores on them are optimistic.
 
 ## Simulated vintages
