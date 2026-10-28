@@ -359,3 +359,32 @@ def test_sampler_section() -> None:
     text = report._sampler_section(fits, same)
     assert "the same as the submission fit" in text
     assert "shorter" not in text
+
+
+def test_development_log(tmp_path: Path) -> None:
+    assert report._development_log(tmp_path / "missing.csv") == ""
+    log = pd.DataFrame(
+        {
+            "date": ["2026-10-10", "2026-10-28"],
+            "area": ["evaluation", "model"],
+            "decision": ["Old decision.", "New decision."],
+            "reason": ["Why then.", "Why now."],
+            "evidence": [
+                "results/model-choice.yml",
+                "https://github.com/seabbs/BDBVHubRenewal/commit/abc1234",
+            ],
+        }
+    )
+    path = tmp_path / "log.csv"
+    log.to_csv(path, index=False)
+    text = report._development_log(path)
+    # Newest first, with evidence as links.
+    assert text.index("New decision.") < text.index("Old decision.")
+    assert (
+        "[abc1234](https://github.com/seabbs/BDBVHubRenewal/commit/abc1234)"
+        in text
+    )
+    # The committed log reads.
+    assert "fixed 0 to 3 days" in report._development_log(
+        ROOT / "results" / "development-log.csv"
+    )
