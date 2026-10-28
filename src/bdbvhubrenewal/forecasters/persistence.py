@@ -679,13 +679,8 @@ class PersistenceNow(Persistence):
         kappa = revision_variance(history, task.vintage)
         totals = nowcast_draws(seen, added, size, n, rng, known, kappa)
         ahead = len(grid) - 1 - last
-        # Steps come from the weeks at least half reported, so the noise of
-        # a barely reported week does not widen the walk.
-        point = np.log1p(seen + added)
-        steps = [
-            np.diff(row[: last + 1][sh[: last + 1] >= 0.5][-self.window :])
-            for row, sh in zip(point, share, strict=True)
-        ]
+        point = np.log1p(seen[:, : last + 1] + added[:, : last + 1])
+        steps = [np.diff(row[-self.window :]) for row in point]
         # Places with their own delay have enough data for their own steps;
         # the rest borrow the steps of those places, as they borrow a delay.
         shared = [st for st, o in zip(steps, own, strict=True) if o]

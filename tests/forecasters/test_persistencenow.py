@@ -327,12 +327,12 @@ def test_ituri_turning_point_at_08_22(
         assert q.loc[week, 0.05] <= truth <= q.loc[week, 0.95]
 
 
-def test_walk_spread_ignores_barely_reported_weeks(
+def test_walk_spread_stays_plausible(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
     # At 10-24 Ituri's latest week is about 17% reported, so its nowcast is
-    # noisy. Steps come from weeks at least half reported, so the 95%
-    # quantile four weeks ahead stays within twice the recent nowcasts.
+    # noisy. Its 95% quantile four weeks ahead stays within twice the
+    # recent nowcasts.
     task = _task(target, delays, "2026-10-24")
     samples = PersistenceNow().forecast(task)
     it = samples.loc[samples["location"] == "CD-IT"]

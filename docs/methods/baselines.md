@@ -92,7 +92,7 @@ $$
 \delta_{p,k,j} \sim \text{Uniform}\{\pm \Delta_{p}\}.
 $$
 
-$\Delta_p$ are the weekly changes in $\log(1 + \hat y_p)$ over the latest 8 weeks at least half reported, with $\hat y_p$ the point nowcast, so a barely reported week's nowcast does not widen the walk.
+$\Delta_p$ are the weekly changes in $\log(1 + \hat y_p)$ over the 8 weeks up to the latest week $c$, with $\hat y_p$ the point nowcast, every nowcast week counted equally.
 With their negatives, the median stays at the centre and the spread grows with the horizon.
 Provinces without their own delay draw from the changes of the provinces with one, so a few small, noisy counts do not set their spread.
 A province with fewer than 10 cases a week over the last 8 weeks instead walks the log of that mean as a Poisson rate, $\tilde y_{p,k}(c + h) \sim \text{Poisson}\{\bar y_{p,k} \exp(\sum_{j \le h} \delta_{p,k,j})\}$, so a few cases a week stay plausible.
