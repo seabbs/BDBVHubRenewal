@@ -148,14 +148,15 @@ def test_persistencenow_nowcasts_recent_weeks(task: ForecastTask) -> None:
 
 
 def test_persistencenow_carries_the_nowcast_forward(task: ForecastTask) -> None:
-    nat = _national(PersistenceNow().forecast(task))
-    plain = _national(Persistence().forecast(task))
-    # Persistence carries forward a published week; the nowcast lifts the
-    # level carried into the forecast weeks.
-    future = "2026-11-07"
-    assert nat.loc[future].median() > plain.loc[future].median()
+    samples = PersistenceNow().forecast(task)
+    it = samples.loc[samples["location"] == "CD-IT"]
+    it = it.pivot(index="target_end_date", columns="sample", values="value")
+    # The walk keeps its median at the nowcast of the week it starts from,
+    # the week ending 10-10, the latest at least half reported.
+    start = it.loc["2026-10-10"].median()
+    assert it.loc["2026-11-07"].median() == pytest.approx(start, rel=0.25)
     # The spread still grows with the horizon.
-    q = nat.quantile([0.05, 0.95], axis=1)
+    q = it.quantile([0.05, 0.95], axis=1)
     width = (q.loc[0.95] - q.loc[0.05]).to_numpy()
     assert width[-1] > width[-3]
 
@@ -254,18 +255,22 @@ def test_baseline_walk_is_a_symmetrised_empirical_random_walk() -> None:
     assert np.allclose(np.median(draws, axis=0), 100, rtol=0.05)
     iqr = np.subtract(*np.percentile(draws, [75, 25], axis=0))
     assert iqr[2] > iqr[0]
-    # Every one-week change is one of the past changes or its negative.
+    # Every one-week change is one of the past changes or its negative, up
+    # to rounding to whole cases.
     first = np.log1p(draws[:, 0]) - centre
     pool = np.r_[steps, -steps]
-    assert np.isin(np.round(first, 9), np.round(pool, 9)).all()
+    assert (np.abs(first[:, None] - pool[None, :]).min(axis=1) < 0.01).all()
     # Fewer than three past changes: Poisson around the centre.
     flat = baseline_walk(centre, np.array([0.2]), 2, rng)
     assert flat.var(axis=0) == pytest.approx([100, 100], rel=0.15)
 
 
-def test_persistencenow_nowcasts_the_latest_week(task: ForecastTask) -> None:
-    # The week ending on the vintage is nowcast, not skipped.
-    nat = _national(PersistenceNow().forecast(task))
+def test_persistencenow_can_start_from_the_latest_week(
+    task: ForecastTask,
+) -> None:
+    # With no minimum share, the week ending on the vintage is nowcast and
+    # the walk starts from it.
+    nat = _national(PersistenceNow(min_share=0.0).forecast(task))
     seen = task.target.loc[task.target["location"] == "CD"].set_index(
         "target_end_date"
     )["total"]
