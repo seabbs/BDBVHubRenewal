@@ -65,6 +65,8 @@ def test_active_set_follows_the_data(outbreak, sim_tables, table):
         ModelConfig(rt_weighting="cases"),
         ModelConfig(rt_cadence="linear"),
         ModelConfig(seeding="start"),
+        ModelConfig(outbreak_threshold=20, import_rt="origin"),
+        ModelConfig(outbreak_threshold=20, coupling="learnt"),
     ],
 )
 def test_model_sites_and_shapes(outbreak, sim_tables, table, cfg):
@@ -330,3 +332,46 @@ def test_as_reported_draws_match_the_vintage_at_its_own_cutoff(sim_vintage):
         np.median(two_weeks, 0)[: n - 1]
         <= np.median(draws["national"], 0)[: n - 1] * 1.25 + 3
     )
+
+
+def test_sporadic_provinces_take_national_rt_and_no_seed(sim_vintage):
+    data = sim_vintage
+    totals = np.nansum(data.known + data.imputed, axis=0)
+    threshold = float(np.sort(totals)[1])
+    sporadic = totals < threshold
+    assert sporadic.sum() == 1
+    cfg = ModelConfig(
+        outbreak_threshold=threshold, rt_weighting="cases", import_rt="origin"
+    )
+    model = build_model(data, cfg)
+    tr = trace(model, data, forecast=True)
+    log_rt = np.log(np.asarray(tr["latent::rt_subpop"]["value"]))
+    base = np.log(np.asarray(tr["latent::rt_baseline"]["value"]))
+    np.testing.assert_allclose(log_rt[:, sporadic], base, atol=1e-5)
+    # Case weights over the outbreak provinces only.
+    w = totals[~sporadic] + 1.0
+    np.testing.assert_allclose(
+        (log_rt[:, ~sporadic] - base) @ w / w.sum(), 0.0, atol=1e-4
+    )
+    # No own seed: the sporadic province starts empty.
+    x = np.asarray(tr["latent_infections_by_subpop"]["value"])
+    n_init = model.latent.n_initialization_points
+    assert x[:n_init, sporadic].max() < 1e-9
+    imported = np.asarray(tr["latent::infections_imported"]["value"])
+    assert imported.shape == x.shape
+    assert np.all(imported <= x + 1e-12)
+    tr = trace(model, data)
+    sampled = {
+        k: v["value"]
+        for k, v in tr.items()
+        if v["type"] == "sample" and not v["is_observed"]
+    }
+    log_density = numpyro.infer.util.log_density(
+        model.sample, (), model_args(model, data), sampled
+    )[0]
+    assert np.isfinite(float(log_density))
+
+
+def test_default_has_no_sporadic_class(sim_vintage):
+    cfg = ModelConfig()
+    assert cfg.outbreak_threshold is None and cfg.import_rt == "destination"
