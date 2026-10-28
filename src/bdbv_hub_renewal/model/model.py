@@ -155,6 +155,10 @@ class ModelConfig:
     future_rt : {"walk", "hold"}
         Rt past the data: the random walks carry on, or Rt holds at its
         last value (EpiNow2 `future = "latest"`).
+    rt_weighting : {"equal", "cases"}
+        Province Rt deviations sum to zero with equal weights, or weighted
+        by cumulative cases in the vintage, so the national Rt walk is the
+        case-weighted log Rt.
     seeding : {"first_case", "start"}
         Seed each province over its first case week, or every province
         at the start of the grid.
@@ -204,6 +208,7 @@ class ModelConfig:
     effective_population: float | None = None
     walk: Literal["knots", "noncentred", "centred"] = "knots"
     seeding: Literal["first_case", "start"] = "first_case"
+    rt_weighting: Literal["equal", "cases"] = "equal"
     future_rt: Literal["walk", "hold"] = "walk"
     importation: Literal["shared", "per_origin"] = "shared"
     bvd: bool = False
@@ -489,6 +494,9 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         importation_rv=importation,
         deplete=config.depletion,
         seed_days=data.seed_days if config.seeding == "first_case" else None,
+        deviation_weights=np.nansum(data.known + data.imputed, axis=0) + 1.0
+        if config.rt_weighting == "cases"
+        else None,
         rt_observation=RtPseudoObservation(alpha=config.bvd_alpha, **data.bvd)
         if config.bvd and data.bvd is not None
         else None,
