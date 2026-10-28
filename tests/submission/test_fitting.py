@@ -38,9 +38,9 @@ def stand_in() -> str:
 
 def test_main_runs_the_renewal_model() -> None:
     names = {c.name for c in list_configs()}
-    assert {"main", "persistence"} <= names
+    assert {"main", "renewalsp", "persistence"} <= names
     assert "fallback" not in names
-    for name in ("main", "persistence"):
+    for name in ("main", "renewalsp", "persistence"):
         assert get_config(name).stand_in is None
 
 

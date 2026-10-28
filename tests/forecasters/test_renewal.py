@@ -60,6 +60,7 @@ def test_fit_configs_run_the_renewal_model() -> None:
     assert rn.VARIANTS["renewal"].base == "MAIN"
     assert rn.FIT_VARIANTS == {
         "main": "renewal",
+        "renewalsp": "renewalsp",
         "bvd": "renewalbvd",
     }
     assert get_config("bvd").stand_in is None
