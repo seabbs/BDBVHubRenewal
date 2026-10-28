@@ -47,13 +47,20 @@ from .rt import (
 
 SUNDAY = 6
 GEN_INT_LENGTH = 42
+"""Lags of the generation interval, about its 98.5% quantile (a whole
+number of weeks, as the model axis starts this many days early)."""
+GI_MEAN = 15.3
+GI_SD = 9.3
+"""Gamma generation interval mean and SD in days, BVDOutbreakSize's prior
+means (from the NEJM serial interval). After double censoring, dropping
+lag 0 and truncating at 42 days the effective mean is 14.8 and SD 8.4."""
 PHI_FLOOR = 1e-3
 """Added to $1/\\phi$ so the concentration stays at or below 1000."""
 ALPHA0 = 0.6
 
 
 def generation_interval(
-    mean: float = 15.0, sd: float = 9.0, length: int = GEN_INT_LENGTH
+    mean: float = GI_MEAN, sd: float = GI_SD, length: int = GEN_INT_LENGTH
 ) -> np.ndarray:
     r"""Double interval censored Gamma generation interval on lags 1..length.
 

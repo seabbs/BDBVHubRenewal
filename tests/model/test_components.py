@@ -290,7 +290,8 @@ def test_generation_interval_is_double_censored():
     # Lags 1..42: the double-censored pmf on 0..42 with lag 0 dropped and
     # the rest renormalised (as BVDOutbreakSize left-truncates at a day).
     expected = DPCENS_GI[1:] / DPCENS_GI[1:].sum()
-    np.testing.assert_allclose(generation_interval(), expected, rtol=1e-6)
+    gi = generation_interval(15.0, 9.0)
+    np.testing.assert_allclose(gi, expected, rtol=1e-6)
 
 
 @pytest.mark.parametrize("family", ["gamma", "lognormal"])

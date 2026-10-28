@@ -85,7 +85,7 @@ x_p(t) = S_p(t)\big\{1 - e^{-y_p(t)/\nu}\big\},
 S_p(t + 1) = S_p(t)\, e^{-y_p(t)/\nu}.
 $$
 
-- $g$ is a Gamma generation interval with mean 15 and SD 9 days, double interval censored on lags 1 to 42. Each infection day is uniform within its day and the pmf is $G(d + 1) - 2G(d) + G(d - 1)$, with $G$ the Gamma's integrated cdf, as in the R package primarycensored. Lag 0 is dropped and the rest renormalised.
+- $g$ is a Gamma generation interval with mean 15.3 and SD 9.3 days, BVDOutbreakSize's prior means, double interval censored on lags 1 to 42 (about its 98.5% quantile). After censoring, dropping lag 0 and truncation its mean is 14.8 and SD 8.4 days. Each infection day is uniform within its day and the pmf is $G(d + 1) - 2G(d) + G(d - 1)$, with $G$ the Gamma's integrated cdf, as in the R package primarycensored. Lag 0 is dropped and the rest renormalised.
 - $W = (1 - \varepsilon) I + \varepsilon\, \mathrm{diag}(1/N) K^\top \mathrm{diag}(N)$ mixes transmission between provinces, with $\varepsilon \sim \text{Beta}(1, 100)$.
 - $K$ is a row-normalised gravity kernel, $K_{qp} \propto N_p e^{-D_{qp}/300\,\text{km}}$, with $D$ the great-circle distance between population-weighted province centres and $N_p$ the province population.
 - With `coupling="learnt"` the kernel's decay and destination weights are estimated, $\log K_{qp} = \log N_p - D_{qp}/(300\,\text{km} \cdot e^{\kappa_K}) + w_p + c_q$, with $\kappa_K \sim \mathcal{N}(0, 1)$, sum-to-zero weights $w$ with scale $\mathcal{N}^+(0, 0.5^2)$, and $c_q$ normalising each row. With $\kappa_K = 0$ and $w = 0$ it is the fixed gravity kernel.

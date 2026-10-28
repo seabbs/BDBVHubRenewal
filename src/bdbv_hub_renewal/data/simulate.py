@@ -40,6 +40,8 @@ from bdbv_hub_renewal.model.inputs import (
     gravity_kernel as model_gravity_kernel,
 )
 from bdbv_hub_renewal.model.model import (
+    GI_MEAN,
+    GI_SD,
     PRIOR_PUBLICATION_LAG,
     generation_interval,
 )
@@ -136,8 +138,8 @@ class SimulationSettings:
     publication_lag: tuple[float, ...] = PRIOR_PUBLICATION_LAG
     backfill_share: float = 0.3
     backfill_delay: tuple[int, int] = (7, 42)
-    gi_mean: float = 15.0
-    gi_sd: float = 9.0
+    gi_mean: float = GI_MEAN
+    gi_sd: float = GI_SD
     seed: int = 1
 
 
