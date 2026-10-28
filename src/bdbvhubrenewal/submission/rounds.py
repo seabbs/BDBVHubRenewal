@@ -10,7 +10,12 @@ file, the plot, the provenance and the pull request body).
 `docs/submission/rounds/<reference_date>.md`, served at
 `/submission/rounds/<reference_date>/`, which the hub pull request links to,
 an index of rounds, and a snippet on the latest submission for the
-Nowcast page. The pages are built with the docs and not committed.
+Nowcast page.
+
+A round's page is frozen once its hub pull request has merged:
+`freeze_round` writes it to `pages/` on the ledger branch, once, and
+later docs builds copy that file as it is. Rounds not yet frozen are
+built from the ledger at each docs build.
 """
 
 from __future__ import annotations
@@ -23,7 +28,10 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-__all__ = ["latest_run", "make_round_pages", "round_page"]
+__all__ = ["freeze_round", "latest_run", "make_round_pages", "round_page"]
+
+FROZEN = "pages"
+"""Folder on the ledger branch that holds the frozen round pages."""
 
 
 def latest_run(round_dir: Path) -> Path | None:
@@ -168,6 +176,42 @@ def round_page(
     return "\n".join(lines) + "\n"
 
 
+def _render(ledger: Path, ref: str, entry: dict[str, Any], out: Path) -> None:
+    """Write a round's page, and its plot if there is one, into `out`."""
+    round_dir = ledger / "archive" / ref
+    run_dir = latest_run(round_dir) if round_dir.is_dir() else None
+    image = None
+    if run_dir and (run_dir / "nowcast.png").exists():
+        image = f"{ref}.png"
+        shutil.copy(run_dir / "nowcast.png", out / image)
+    (out / f"{ref}.md").write_text(round_page(ref, entry, run_dir, image))
+
+
+def freeze_round(ledger: Path | str, reference_date: str) -> bool:
+    """Write a round's page to the ledger's `pages/`, unless it is there.
+
+    Parameters
+    ----------
+    ledger : pathlib.Path or str
+        A checkout of the `submission-ledger` branch.
+    reference_date : str
+        The round, which must be in the ledger's `state.json`.
+
+    Returns
+    -------
+    bool
+        True if the page was written, False if it was already frozen.
+    """
+    ledger = Path(ledger)
+    out = ledger / FROZEN
+    if (out / f"{reference_date}.md").exists():
+        return False
+    entry = _read(ledger / "state.json")["rounds"][reference_date]
+    out.mkdir(exist_ok=True)
+    _render(ledger, reference_date, entry, out)
+    return True
+
+
 def make_round_pages(
     ledger: Path | str | None,
     docs: Path | str = "docs",
@@ -198,14 +242,12 @@ def make_round_pages(
     rounds: dict[str, Any] = state.get("rounds", {})
     done = []
     for ref in sorted(rounds, reverse=True):
-        entry = rounds[ref]
-        round_dir = Path(ledger or ".") / "archive" / ref
-        run_dir = latest_run(round_dir) if round_dir.is_dir() else None
-        image = None
-        if run_dir and (run_dir / "nowcast.png").exists():
-            image = f"{ref}.png"
-            shutil.copy(run_dir / "nowcast.png", out / image)
-        (out / f"{ref}.md").write_text(round_page(ref, entry, run_dir, image))
+        frozen = Path(ledger or ".") / FROZEN
+        if (frozen / f"{ref}.md").exists():
+            for f in frozen.glob(f"{ref}.*"):
+                shutil.copy(f, out / f.name)
+        else:
+            _render(Path(ledger or "."), ref, rounds[ref], out)
         done.append(ref)
     index = ["# Submitted rounds", ""]
     if done:

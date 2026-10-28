@@ -277,6 +277,30 @@ def test_renewal_metadata_uses_the_submission_abbr(tmp_path: Path) -> None:
 
 
 @pytest.mark.usefixtures("in_root")
+def test_persistencenow_has_its_own_hub_id(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A second hub model, submitted under its own id every round. The
+    # hub's abbreviations allow no hyphen and fewer than 16 characters.
+    from bdbvhubrenewal.submission.hub import model_abbr_for
+
+    abbr = model_abbr_for("persistencenow", ROOT / "config" / "hub.toml")
+    assert abbr == "seabbsbaseline"
+    assert abbr.isalnum()
+    assert len(abbr) < 16
+    # Models without their own id submit under the renewal id.
+    assert model_abbr_for("renewalsp", ROOT / "config" / "hub.toml") == (
+        "seabbsrenewal"
+    )
+    assert main(["hub-id", "--model", "persistencenow"]) == 0
+    assert capsys.readouterr().out.strip() == "epiforecasts-seabbsbaseline"
+    assert main(["metadata", "--model", "persistencenow", "--out",
+                 str(tmp_path)]) == 0  # fmt: skip
+    text = (tmp_path / "epiforecasts-seabbsbaseline.yml").read_text()
+    assert "model_abbr: seabbsbaseline" in text
+
+
+@pytest.mark.usefixtures("in_root")
 def test_persistencenow_config_runs_the_nowcast_model(tmp_path: Path) -> None:
     config = get_config("persistencenow")
     assert config.stand_in is None

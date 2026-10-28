@@ -33,10 +33,10 @@ nav:
   - Held-out evaluation: heldout.md
   - Nowcast: nowcast.md
   - Submission:
+      - Rounds: submission/rounds/index.md
+      - Opting in: submission/opting-in.md
       - Workflow: submission/workflow.md
       - Hub specification: submission/hub-spec.md
-      - Setup: submission/setup.md
-      - Rounds: submission/rounds/index.md
   - Model development:
       - Model building: model-development/model-building.md
       - Development log: model-development/log.md

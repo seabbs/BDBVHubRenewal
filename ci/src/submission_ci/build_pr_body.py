@@ -136,6 +136,15 @@ def _first_reason(provenance: Mapping[str, Any]) -> str:
     return ""
 
 
+def _first_choice(provenance: Mapping[str, Any]) -> bool:
+    """Whether the submitted candidate was the first in its chain, as for
+    a hub model of its own, so it is no fallback."""
+    attempts = provenance.get("attempts") or []
+    return bool(attempts) and attempts[0].get("id") == provenance.get(
+        "selected"
+    )
+
+
 def status_line(
     provenance: Mapping[str, Any],
     coherence: Coherence | None = None,
@@ -149,7 +158,7 @@ def status_line(
     why = _first_reason(provenance)
     if kind == "retry" and why:
         head = f"Main model refitted once: {why[0].lower()}{why[1:]}."
-    elif kind in ("fallback", "persistence"):
+    elif kind in ("fallback", "persistence") and not _first_choice(provenance):
         head = (
             f"Fallback model used ({provenance['produced_by']})"
             + (f": {why[0].lower()}{why[1:]}" if why else "")

@@ -10,7 +10,8 @@ clears every check is submitted:
    only when there is time for it before the window closes (`[timing]`).
 3. `renewalsp`: the single-patch model (independent renewal fits for each
    province with cases and the country), fitted beside `main`.
-4. `persistence`: the persistence baseline, built from the data alone.
+4. `persistencenow`: persistence on a nowcast, with no fit.
+5. `persistence`: the persistence baseline, built from the data alone.
 
 Stage `primary` candidates fit in parallel straight away. Stage `retry`
 candidates fit only when the primary `main` fails. Stage `baseline`
@@ -104,18 +105,18 @@ class Policy:
     def for_model(self, model: str) -> Policy:
         """The policy for the model chosen in the model choice record.
 
-        With persistence chosen, the chain is persistence alone. The
-        renewal candidates (main, the single-patch fallback and any
-        shadows) are still
-        fitted and checked as shadows, and the retry is dropped.
-        Any other choice keeps the policy as it is.
+        With a baseline chosen (`persistencenow` or `persistence`), the
+        chain starts at that baseline. Every candidate before it is still
+        fitted and checked, as a shadow, and the retry is dropped. Any
+        other choice keeps the policy as it is.
         """
-        if model != "persistence":
+        baselines = [c for c in self.chain() if c.kind == "persistence"]
+        names = [c.model or c.id for c in baselines]
+        if model not in names:
             return self
+        kept = {c.id for c in baselines[names.index(model) :]}
         cands = [
-            replace(c, kind="shadow")
-            if c.kind in ("main", "fallback", "shadow")
-            else c
+            c if c.id in kept else replace(c, kind="shadow")
             for c in self.candidates
             if c.kind != "retry"
         ]

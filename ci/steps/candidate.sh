@@ -17,6 +17,7 @@ CAND_LABEL=${CAND_LABEL:-$CAND_ID}
 # The model this leg runs: its own (the single-patch fallback, a shadow)
 # or the chosen one.
 model=${CAND_MODEL:-$MODEL}
+[ "$CAND_KIND" = persistence ] && model=${CAND_MODEL:-persistence}
 inputs="$WORK/inputs"
 [ -f "$inputs/context.json" ] || { echo "::error::run prepare.sh first"; exit 1; }
 ctx() { python3 -c "import json,sys; print(json.load(open('$inputs/context.json'))['$1'])"; }
@@ -69,8 +70,8 @@ else
 fi
 
 if [ "$CAND_KIND" = "persistence" ]; then
-  cli nowcast --model persistence --vintage "$AS_OF" \
-    --out "$out/submission" || echo "::warning::persistence nowcast failed"
+  cli nowcast --model "$model" --vintage "$AS_OF" \
+    --out "$out/submission" || echo "::warning::$model nowcast failed"
 elif $fit_ok; then
   cli nowcast --model "$model" --config "$CAND_CONFIG" --fit "$fit" \
     --vintage "$AS_OF" --out "$out/submission" \
@@ -153,7 +154,7 @@ fi
 
 cat > "$out/run.json" << EOF
 {"candidate": "$CAND_ID", "kind": "$CAND_KIND", "label": "$CAND_LABEL",
- "model": "$( [ "$CAND_KIND" = persistence ] && echo persistence || echo "$model")",
+ "model": "$model",
  "config": "$CAND_CONFIG", "sampler": $CAND_SAMPLER,
  "package_version": "$(cli --version 2> /dev/null || echo unknown)",
  "as_of": "$AS_OF", "reference_date": "$REFERENCE_DATE",

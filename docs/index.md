@@ -30,7 +30,7 @@ Each week the [submission](submission/workflow.md) takes the first of `renewal`,
 | [Backtest](backtest.md) | Development scores against later data. |
 | [Held-out evaluation](heldout.md) | Forecasts after the model choice, scored as later data arrive. |
 | [Nowcast](nowcast.md) | The latest nowcast and forecast. |
-| Submission | The [workflow](submission/workflow.md), [hub specification](submission/hub-spec.md), [setup](submission/setup.md) and [rounds](submission/rounds/index.md). |
+| Submission | The [workflow](submission/workflow.md), [hub specification](submission/hub-spec.md), [opting in](submission/opting-in.md) and [rounds](submission/rounds/index.md). |
 | Model development | The [model building](model-development/model-building.md) ladder and the [development log](model-development/log.md). |
 | Development | [Contributing](development/contributing.md), [adding a model](development/adding-a-model.md) and the [CLI](development/cli.md). |
 | [API reference](reference/index.md) | The Python package. |
