@@ -33,6 +33,10 @@ For each, a model may predict the counts as they will be reported by that vintag
 These are scored against that vintage on every week, so recent weeks are compared like with like.
 Persistence thins each sample of week $w$ to $\text{Binomial}(x, s(T - w))$, from the delays published with its vintage, and takes at least the count already published.
 A model that does not predict reported counts has no vintage-matched scores.
+
+**Origins with the lag prior.** The renewal models estimate the report to publication lag from pairs of delay files on or before the vintage.
+An origin with no such pair takes the lag from a prior whose shape was set from later delay files, so it sees some later data.
+Its scores carry `lag_prior` (`uses_lag_prior`), and the Backtest page also shows complete-week scores without these origins.
 Simulated forecasts are scored against the simulated final counts.
 Scores follow [scoringutils](https://epiforecasts.io/scoringutils/) and [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize).
 
