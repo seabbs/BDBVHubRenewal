@@ -12,6 +12,7 @@ import jax.numpy as jnp
 import numpy as np
 import numpyro
 import numpyro.distributions as dist
+from jax import Array
 from jax.typing import ArrayLike
 from pyrenew.latent.temporal_processes import (
     TemporalProcess,
@@ -23,7 +24,7 @@ from pyrenew.randomvariable import DistributionalVariable
 from .rt import NonCentredRandomWalk
 
 
-def hazard_to_pmf(logit_hazard: ArrayLike) -> ArrayLike:
+def hazard_to_pmf(logit_hazard: Array) -> Array:
     r"""Convert discrete-time hazards to a pmf on the last axis.
 
     $$f(d) = h(d) \prod_{j < d} \{1 - h(j)\}, \qquad h(D) = 1,$$
@@ -98,8 +99,11 @@ class HazardDelay(RandomVariable):
         self.hazard0_loc = hazard0_loc
 
     def sample(
-        self, n_timepoints: int, first_day_dow: int | None = None, **kwargs
-    ) -> ArrayLike:
+        self,
+        n_timepoints: int,
+        first_day_dow: int | None = None,
+        **kwargs: object,
+    ) -> Array:
         """Sample the delay matrix.
 
         Returns
@@ -139,7 +143,7 @@ class HazardDelay(RandomVariable):
 
 def censored_pmf(
     family: str, mean: ArrayLike, cv: ArrayLike, dmax: int, n_nodes: int = 16
-) -> ArrayLike:
+) -> Array:
     r"""Daily double interval censored pmf of a continuous delay.
 
     With the primary event uniform over a day and the secondary censored
@@ -177,7 +181,7 @@ def censored_pmf(
     w = jnp.asarray(weights / 2)
     d = jnp.arange(dmax + 1)[:, None]
 
-    def cdf(x):
+    def cdf(x: Array) -> Array:
         pos = x > 0
         x = jnp.where(pos, x, 1.0)
         if family == "gamma":
@@ -233,8 +237,11 @@ class ParametricDelay(RandomVariable):
         self.mean_scale = mean_scale
 
     def sample(
-        self, n_timepoints: int, first_day_dow: int | None = None, **kwargs
-    ) -> ArrayLike:
+        self,
+        n_timepoints: int,
+        first_day_dow: int | None = None,
+        **kwargs: object,
+    ) -> Array:
         """Sample the delay matrix.
 
         Returns
@@ -283,7 +290,7 @@ class FixedTimeVarying(RandomVariable):
         super().__init__(name=name)
         self.value = jnp.asarray(value)
 
-    def sample(self, n_timepoints: int, **kwargs) -> ArrayLike:
+    def sample(self, n_timepoints: int, **kwargs: object) -> Array:
         """Return the input padded or cut to `n_timepoints` rows.
 
         Returns
