@@ -22,13 +22,6 @@ def test_relative_section_hidden_with_one_model() -> None:
     assert "relative-wis-horizon.svg" in text
 
 
-def test_persistence_bias_sentence() -> None:
-    scores = pd.read_csv(ROOT / "results" / "backtest-scores.csv")
-    text = report._persistence_bias(scores)
-    assert text.startswith("On real vintages persistence has a mean bias")
-    assert report._persistence_bias(scores.iloc[:0]) == ""
-
-
 def test_heldout_page(tmp_path: Path, target: pd.DataFrame) -> None:
     record = tmp_path / "model-choice.yml"
     record.write_text(
@@ -42,7 +35,9 @@ def test_heldout_page(tmp_path: Path, target: pd.DataFrame) -> None:
     report._heldout_page(
         fig, gen, ROOT / "results", target, ["persistence"], config
     )
-    assert "2026-10-17" in (gen / "heldout-choices.md").read_text()
+    choices = (gen / "heldout-choices.md").read_text()
+    assert choices.startswith("## Model choices")
+    assert "2026-10-17" in choices
     status = (gen / "heldout-status.md").read_text()
     assert "next vintage" in status
     assert (fig / "heldout-cd.svg").exists()
@@ -143,7 +138,7 @@ def test_make_report_writes_every_page(
         "vintages.md",
         "scores-overall.md",
         "relative-section.md",
-        "persistence-bias.md",
+        "backtest-findings.md",
         "truth-changes.md",
         "heldout-status.md",
         "comparison-scores.md",
@@ -155,7 +150,7 @@ def test_make_report_writes_every_page(
         "target.svg",
         "scores-wis-horizon.svg",
         "scores-by-truth-dark.svg",
-        "forecasts-real-cd.svg",
+        "forecasts-persistence-cd.svg",
         "recovery-wis-horizon.svg",
         "nowcast-cd.svg",
     ):
