@@ -8,13 +8,13 @@ import pytest
 
 numpyro.set_host_device_count(2)
 
-from bdbv_hub_renewal.data import (  # noqa: E402
+from bdbvhubrenewal.data import (  # noqa: E402
     PROVINCE_CENTRES,
     PROVINCE_POPULATIONS,
 )
-from bdbv_hub_renewal.data.simulate import simulate_outbreak  # noqa: E402
-from bdbv_hub_renewal.model import MAIN  # noqa: E402
-from bdbv_hub_renewal.model.inputs import vintage_from_tables  # noqa: E402
+from bdbvhubrenewal.data.simulate import simulate_outbreak  # noqa: E402
+from bdbvhubrenewal.model import MAIN  # noqa: E402
+from bdbvhubrenewal.model.inputs import vintage_from_tables  # noqa: E402
 
 # Vintage dates as days after the simulation start (each a Saturday).
 VINTAGE_DAYS = (166, 206)

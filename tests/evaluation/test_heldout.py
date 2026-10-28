@@ -7,8 +7,8 @@ import pandas as pd
 import pytest
 import yaml
 
-from bdbv_hub_renewal.evaluation.backtest import BacktestConfig
-from bdbv_hub_renewal.evaluation.heldout import (
+from bdbvhubrenewal.evaluation.backtest import BacktestConfig
+from bdbvhubrenewal.evaluation.heldout import (
     HeldOutError,
     ModelChoice,
     heldout_pairs,
@@ -117,8 +117,8 @@ def test_heldout_also_runs_the_other_variants(
     config: BacktestConfig,
     tmp_path: Path,
 ) -> None:
-    from bdbv_hub_renewal.forecasters import Persistence, register_model
-    from bdbv_hub_renewal.forecasters.base import _REGISTRY
+    from bdbvhubrenewal.forecasters import Persistence, register_model
+    from bdbvhubrenewal.forecasters.base import _REGISTRY
 
     register_model(
         "shadow",
@@ -172,8 +172,8 @@ def test_heldout_without_fits_reads_committed_forecasts(
     config: BacktestConfig,
     tmp_path: Path,
 ) -> None:
-    from bdbv_hub_renewal.forecasters import Persistence, register_model
-    from bdbv_hub_renewal.forecasters.base import _REGISTRY
+    from bdbvhubrenewal.forecasters import Persistence, register_model
+    from bdbvhubrenewal.forecasters.base import _REGISTRY
 
     class Slow(Persistence):
         def forecast(self, task):  # type: ignore[no-untyped-def]

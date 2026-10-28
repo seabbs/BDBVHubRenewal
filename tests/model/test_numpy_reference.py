@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbv_hub_renewal.data.delays import ParametricDelay, hub_delay_pmf
+from bdbvhubrenewal.data.delays import ParametricDelay, hub_delay_pmf
 
 from .numpy_reference import (
     delay_matrix,

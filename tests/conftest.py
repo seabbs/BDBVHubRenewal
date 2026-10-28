@@ -5,8 +5,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbv_hub_renewal.data import load_delays, load_target
-from bdbv_hub_renewal.evaluation.backtest import BacktestConfig
+from bdbvhubrenewal.data import load_delays, load_target
+from bdbvhubrenewal.evaluation.backtest import BacktestConfig
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"

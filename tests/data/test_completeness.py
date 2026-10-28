@@ -3,8 +3,8 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from bdbv_hub_renewal.data.completeness import complete_weeks, reported_share
-from bdbv_hub_renewal.evaluation.backtest import load_config
+from bdbvhubrenewal.data.completeness import complete_weeks, reported_share
+from bdbvhubrenewal.evaluation.backtest import load_config
 
 
 def _delays(delay: int, n: int = 20) -> pd.DataFrame:

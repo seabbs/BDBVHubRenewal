@@ -4,7 +4,7 @@ Adding a model to the registry, so every evaluation includes it.
 { .page-subtitle }
 
 A model is a class with a `name` and a `forecast(task)` method.
-`task` is a [`ForecastTask`][bdbv_hub_renewal.forecasters.base.ForecastTask]: the target rows and delay data of one vintage, the provinces and weeks to forecast, the number of samples and a seed.
+`task` is a [`ForecastTask`][bdbvhubrenewal.forecasters.base.ForecastTask]: the target rows and delay data of one vintage, the provinces and weeks to forecast, the number of samples and a seed.
 `forecast` returns one row per province, week and sample, with columns `location`, `target_end_date`, `sample` and `value`.
 
 ```python
@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from bdbv_hub_renewal.forecasters import ForecastTask, register_model
+from bdbvhubrenewal.forecasters import ForecastTask, register_model
 
 
 @dataclass
@@ -26,14 +26,14 @@ class MyModel:
 register_model("my_model", MyModel, "One line describing it.")
 ```
 
-Import the module in `bdbv_hub_renewal/forecasters/__init__.py`.
+Import the module in `bdbvhubrenewal/forecasters/__init__.py`.
 Then:
 
 - `task backtest` scores it on every development vintage;
 - the [Backtest](../backtest.md) page shows its scores and its WIS relative to persistence;
 - the [Nowcast](../nowcast.md) page shows its current forecast;
-- `bdbv-hub-renewal compare-hub` adds its retrospective forecasts to the comparison with hub forecasts;
-- `bdbv-hub-renewal nowcast --model my_model` writes and checks its hub file.
+- `bdbvhubrenewal compare-hub` adds its retrospective forecasts to the comparison with hub forecasts;
+- `bdbvhubrenewal nowcast --model my_model` writes and checks its hub file.
 
 Once it is chosen for submission, add an entry to `results/model-choice.yml`.
 The [held-out evaluation](../heldout.md) then scores it on every later vintage.
@@ -46,7 +46,7 @@ The model must then drop the counts of the provinces in `task.mask` from its lik
 
 ## Renewal variants
 
-A new renewal variant is one entry in `VARIANTS` in [`forecasters.renewal`][bdbv_hub_renewal.forecasters.renewal].
+A new renewal variant is one entry in `VARIANTS` in [`forecasters.renewal`][bdbvhubrenewal.forecasters.renewal].
 It names a base configuration (`MAIN` or `BVD`) and the `ModelConfig` fields it changes.
 Registered variants are marked `fitted`, because each forecast is an MCMC fit.
 So the docs build and the smoke tests run only the models with no fit.
@@ -60,5 +60,5 @@ BDBV_RENEWAL_SAMPLER='{"num_chains": 2, "num_warmup": 300, "num_samples": 300}' 
 A run with `--models` replaces only those models' rows in `results/`.
 `BDBV_RENEWAL_SAMPLER` sets the NUTS settings of every registered variant.
 
-The PyRenew model code is in `bdbv_hub_renewal.model`, with its tests in `tests/model/`.
+The PyRenew model code is in `bdbvhubrenewal.model`, with its tests in `tests/model/`.
 The adapter reads only `ModelConfig`, the configurations, `build_model`, `model_args`, `forecast_trajectories` and `inputs.vintage_from_tables` from it.

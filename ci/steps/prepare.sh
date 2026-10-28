@@ -9,7 +9,7 @@
 #   OBSERVED        optional local time-series.csv (skips the download)
 #   TASKS           optional local tasks.json (skips the download)
 #   PREVIOUS        optional last week's submission file
-#   SKIP_DATA=true  do not run `bdbv-hub-renewal data` (fixtures)
+#   SKIP_DATA=true  do not run `bdbvhubrenewal data` (fixtures)
 # shellcheck source=ci/steps/lib.sh
 source "$(dirname "$0")/lib.sh"
 resolve_model
@@ -71,7 +71,7 @@ EOF
 # Whether the national data add up to the provinces. A data check that
 # only warns: it is reported once, in the job summary and the PR body.
 if ! cli coherence --vintage "$AS_OF" --out "$inputs/coherence.json"; then
-  echo "::warning::bdbv-hub-renewal coherence failed; data coherence is n/a"
+  echo "::warning::bdbvhubrenewal coherence failed; data coherence is n/a"
   rm -f "$inputs/coherence.json"
 fi
 sci check-coherence --coherence "$inputs/coherence.json" --out "$inputs"

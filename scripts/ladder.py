@@ -38,15 +38,15 @@ import pandas as pd  # noqa: E402
 from jax import random  # noqa: E402
 from numpyro.infer import Predictive  # noqa: E402
 
-from bdbv_hub_renewal import model as pr  # noqa: E402
-from bdbv_hub_renewal.data import load_delays, load_locations, load_target  # noqa: E402
-from bdbv_hub_renewal.data.simulate import simulate_outbreak  # noqa: E402
-from bdbv_hub_renewal.evaluation.ppc import summarise_draws  # noqa: E402
-from bdbv_hub_renewal.evaluation.scoring import crps_sample  # noqa: E402
-from bdbv_hub_renewal.forecasters import renewal as adapter  # noqa: E402
-from bdbv_hub_renewal.forecasters.base import ForecastTask  # noqa: E402
-from bdbv_hub_renewal.forecasters.persistence import Persistence  # noqa: E402
-from bdbv_hub_renewal.forecasters.renewal import (  # noqa: E402
+from bdbvhubrenewal import model as pr  # noqa: E402
+from bdbvhubrenewal.data import load_delays, load_locations, load_target  # noqa: E402
+from bdbvhubrenewal.data.simulate import simulate_outbreak  # noqa: E402
+from bdbvhubrenewal.evaluation.ppc import summarise_draws  # noqa: E402
+from bdbvhubrenewal.evaluation.scoring import crps_sample  # noqa: E402
+from bdbvhubrenewal.forecasters import renewal as adapter  # noqa: E402
+from bdbvhubrenewal.forecasters.base import ForecastTask  # noqa: E402
+from bdbvhubrenewal.forecasters.persistence import Persistence  # noqa: E402
+from bdbvhubrenewal.forecasters.renewal import (  # noqa: E402
     VARIANTS,
     bvd_rows,
     chain_diagnostics,

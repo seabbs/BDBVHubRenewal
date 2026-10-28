@@ -15,8 +15,8 @@ The 2026-10-09 delay file exists only in the hub's git history.
 ## National coherence
 
 The national (`CD`) row should equal the sum of the provinces.
-`bdbv-hub-renewal data` checks this for every vintage, week and stream (observed, imputed and total), writes `data/national-coherence.csv` and prints the result for the latest vintage.
-`bdbv-hub-renewal coherence --vintage <as_of>` gives the same check for one vintage as JSON, which the [submission workflow](submission/workflow.md#checks-and-thresholds) reports in each pull request.
+`bdbvhubrenewal data` checks this for every vintage, week and stream (observed, imputed and total), writes `data/national-coherence.csv` and prints the result for the latest vintage.
+`bdbvhubrenewal coherence --vintage <as_of>` gives the same check for one vintage as JSON, which the [submission workflow](submission/workflow.md#checks-and-thresholds) reports in each pull request.
 The table counts the weeks where the two differ.
 
 --8<-- "national-coherence.md"

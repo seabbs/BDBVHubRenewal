@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbv_hub_renewal.data import (
+from bdbvhubrenewal.data import (
     PROVINCE_CENTRES,
     PROVINCE_POPULATIONS,
     imputed_share,
@@ -270,7 +270,7 @@ def test_tidy_daily_keeps_zones_apart(raw: dict[str, Path]) -> None:
 
 
 def test_load_daily_zones_reads_the_tidy_file(tmp_path: Path) -> None:
-    from bdbv_hub_renewal.data import load_daily_zones
+    from bdbvhubrenewal.data import load_daily_zones
 
     pd.DataFrame(
         {

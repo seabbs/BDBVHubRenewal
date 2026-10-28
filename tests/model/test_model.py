@@ -4,14 +4,14 @@ import pytest
 from jax import random
 from numpyro.infer import Predictive, init_to_median
 
-from bdbv_hub_renewal.model import (
+from bdbvhubrenewal.model import (
     MAIN,
     ModelConfig,
     build_model,
     model_args,
 )
-from bdbv_hub_renewal.model.inputs import vintage_from_tables
-from bdbv_hub_renewal.model.model import LADDER
+from bdbvhubrenewal.model.inputs import vintage_from_tables
+from bdbvhubrenewal.model.model import LADDER
 
 from .conftest import SIM_LOCATIONS, VINTAGE_DAYS, vintage_date
 
@@ -174,7 +174,7 @@ def test_main_is_the_last_ladder_step():
 
 
 def test_real_data_kernels_and_log_density_are_finite(table):
-    from bdbv_hub_renewal.data import load_delays, load_target
+    from bdbvhubrenewal.data import load_delays, load_target
 
     from .conftest import MAIN_REPO_DATA
 
@@ -207,7 +207,7 @@ def test_real_data_kernels_and_log_density_are_finite(table):
 
 
 def test_learnt_kernel_is_gravity_at_prior_centre(sim_vintage):
-    from bdbv_hub_renewal.model import LearntKernel
+    from bdbvhubrenewal.model import LearntKernel
 
     data = sim_vintage
     k = LearntKernel("k", data.distances, data.all_populations, 4)
@@ -226,7 +226,7 @@ def test_learnt_kernel_is_gravity_at_prior_centre(sim_vintage):
 
 
 def test_single_patch_locations_are_independent(outbreak, sim_tables, table):
-    from bdbv_hub_renewal.model.inputs import RENEWALSP
+    from bdbvhubrenewal.model.inputs import RENEWALSP
 
     day = VINTAGE_DAYS[-1]
     target, delays = sim_tables[day]
@@ -292,7 +292,7 @@ def test_missingness_offsets_are_non_centred(sim_vintage):
 
 
 def test_as_reported_draws_match_the_vintage_at_its_own_cutoff(sim_vintage):
-    from bdbv_hub_renewal.model import forecast_trajectories
+    from bdbvhubrenewal.model import forecast_trajectories
 
     model = build_model(sim_vintage)
     prior = Predictive(model.sample, num_samples=20)(

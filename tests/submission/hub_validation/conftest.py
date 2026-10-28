@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from hv_fixtures import SNAPSHOT
 
-from bdbv_hub_renewal.submission import validate as hv
+from bdbvhubrenewal.submission import validate as hv
 
 
 @pytest.fixture(scope="session")

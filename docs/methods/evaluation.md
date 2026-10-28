@@ -21,7 +21,7 @@ s(t) = \frac{1}{7}\sum_{u=0}^{6} P(d + \ell - u \le t).
 $$
 
 $P$ is the empirical delay distribution of onset weeks old enough to be fully observed, and $\ell$ is 3 days, the longest publication lag.
-$K$ is the fewest whole weeks with $s(7K) \ge 0.95$ (`bdbv_hub_renewal.data.completeness.complete_weeks`).
+$K$ is the fewest whole weeks with $s(7K) \ge 0.95$ (`bdbvhubrenewal.data.completeness.complete_weeks`).
 The 2026-10-09, 2026-10-17 and 2026-10-24 delay data all give $K = 3$, with $s(21) = 0.96$ in the latest.
 It is set as `complete_after_weeks` in `config/backtest.toml`.
 These are the primary scores for the model choice, since every model has them.
@@ -89,7 +89,7 @@ Each forecast is scored against every later real vintage.
 So a forecast gets its first score when the next vintage is published, and is re-scored as newer ones arrive.
 The development backtest only uses vintages up to the latest choice date.
 
-`task backtest-heldout` (`bdbv-hub-renewal backtest --evaluate-holdout`) runs it.
+`task backtest-heldout` (`bdbvhubrenewal backtest --evaluate-holdout`) runs it.
 It refuses without the record, uses real vintages only, and logs the run with the hash of the record in `results/heldout-run.yml`.
 Held-out forecasts are re-run from their vintage with the model's code at the time of the run.
 
@@ -98,7 +98,7 @@ Held-out forecasts are re-run from their vintage with the model's code at the ti
 One province's likelihood is masked while it stays in the model, so spatial coupling still acts on it.
 Its onsets are then predicted and scored against the latest real vintage.
 It runs on development vintages only, over the provinces with cases, and compares variants such as coupling on or off and pooling strength.
-The harness is [`run_lopo`][bdbv_hub_renewal.evaluation.backtest.run_lopo].
+The harness is [`run_lopo`][bdbvhubrenewal.evaluation.backtest.run_lopo].
 It passes the province in `ForecastTask.mask` to models that set `supports_mask = True` and skips the rest, so persistence is not run.
 `renewal` honours the mask.
 The single patch fits the national total, so it cannot.
@@ -106,7 +106,7 @@ The results are on the Backtest page.
 
 ## Comparison with hub forecasts
 
-`bdbv-hub-renewal compare-hub --fetch` downloads the forecasts other teams submitted to the hub (`model-output/`) and their metadata.
+`bdbvhubrenewal compare-hub --fetch` downloads the forecasts other teams submitted to the hub (`model-output/`) and their metadata.
 For each hub reference date, our registered models forecast from the matching vintage.
 That is the latest real vintage that serves the round if there is one.
 Otherwise it is a vintage reconstructed for the Saturday before the reference date, labelled `reconstructed`.
