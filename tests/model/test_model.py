@@ -281,3 +281,10 @@ def test_late_provinces_are_seeded_at_their_first_cases(outbreak, table):
     start = build_model(data, ModelConfig(coupling="none", seeding="start"))
     x0 = np.asarray(trace(start, data)["latent_infections_by_subpop"]["value"])
     assert x0[:day, 1].sum() > x[:day, 1].sum()
+
+
+def test_missingness_offsets_are_non_centred(sim_vintage):
+    model = build_model(sim_vintage)
+    tr = trace(model, sim_vintage)
+    assert "logit_pi0_z" in tr and "logit_pi0_offsets" not in tr
+    assert "log_rt0_offsets" in tr

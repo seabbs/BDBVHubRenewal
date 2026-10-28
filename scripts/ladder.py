@@ -32,6 +32,7 @@ import numpyro
 
 numpyro.set_host_device_count(2)
 
+import jax  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 from jax import random  # noqa: E402
@@ -70,6 +71,9 @@ def run_nuts(model, data, sampler):
     from jax import random as jrandom
     from numpyro.infer import MCMC
 
+    # Each fit compiles new executables; clearing them first stops a run
+    # of many fits (the per-location rung) exhausting LLVM's memory.
+    jax.clear_caches()
     args = pr.model_args(model, data)
     model.validate_data(
         **{k: v for k, v in args.items() if k != "population_size"}
@@ -391,6 +395,9 @@ def run_rung(name, config, outbreak, table, real) -> dict:
     truth = outbreak.truth().set_index(["location", "target_end_date"])["truth"]
     sims = []
     for day in SIM_DAYS:
+        # Each fit compiles new executables; without clearing, the
+        # per-location rung runs out of mappable memory in LLVM.
+        jax.clear_caches()
         vintage = (outbreak.settings.start + dt.timedelta(days=day)).isoformat()
         target, delays = outbreak.vintage(vintage)
         task = task_for(target, delays, vintage, SIM_LOCATIONS, "simulated")
@@ -414,6 +421,7 @@ def run_rung(name, config, outbreak, table, real) -> dict:
         )
     for key in sims[0]:
         out[f"sim_{key}"] = float(np.nanmean([s[key] for s in sims]))
+    jax.clear_caches()
     target, delays, locations = real
     task = task_for(
         target, delays.loc[delays["vintage"] == REAL_FIT], REAL_FIT,

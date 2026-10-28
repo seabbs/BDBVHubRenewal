@@ -510,7 +510,11 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     else:
         missing = MissingOnsetFraction(
             "missing_fraction",
-            PooledInitialValue("logit_pi0", n_prov, -2.0, 1.0, 0.5),
+            # Non-centred: the imputed share pins these offsets only
+            # weakly, and centred they form a funnel (R-hat 1.68).
+            PooledInitialValue(
+                "logit_pi0", n_prov, -2.0, 1.0, 0.5, centred=False
+            ),
             _named_walk("pi_sd", 0.3, fit_weeks(data, config)),
             _named_walk("pi_dev_sd", 0.1, fit_weeks(data, config)),
         )
