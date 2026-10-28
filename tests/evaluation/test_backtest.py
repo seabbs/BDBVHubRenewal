@@ -31,9 +31,10 @@ ROOT = Path(__file__).resolve().parents[2]
 def test_load_config() -> None:
     cfg = load_config(ROOT / "config" / "backtest.toml")
     assert cfg.n_samples == 100
-    # With no model chosen yet, every vintage is development.
-    assert cfg.development_until is None
+    # The development set ends at the latest model choice date.
+    assert cfg.development_until == "2026-10-28"
     assert not cfg.is_heldout("2026-10-24")
+    assert cfg.is_heldout("2026-10-31")
     assert cfg.reconstructed_dates[0] == "2026-06-06"
     assert all(pd.Timestamp(d).dayofweek == 5 for d in cfg.simulated_dates)
     # A generous convergence gate on BVDOutbreakSize releases.

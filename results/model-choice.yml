@@ -5,4 +5,9 @@
 # every vintage up to the latest choice date, and each real vintage after
 # a choice is held out and scored under the model chosen then
 # (`task backtest-heldout`). With no choice, every vintage is development.
-choices: []
+choices:
+  - date: 2026-10-28
+    model: persistencenow
+    summary: >-
+      persistencenow is the first model submitted (as seabbsbaseline): it
+      scores best on complete weeks of the development backtest.
