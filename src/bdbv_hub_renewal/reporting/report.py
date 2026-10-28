@@ -364,6 +364,36 @@ _LADDER_SECTIONS = (
 )
 """Sections of the Model building page, with the ladder columns each shows."""
 
+_LADDER_LABELS = {
+    "step": "Step",
+    "rung": "Rung",
+    "description": "Adds",
+    "decision": "Decision",
+    "seconds": "Seconds",
+    "max_rhat": "Max R-hat",
+    "min_ess": "Min ESS",
+    "min_ess_per_s": "Min ESS per second",
+    "divergent": "Divergent share",
+    "depth_hits": "Depth cap share",
+    "rt_mae": "Rt MAE",
+    "turn_error": "Days off the Rt = 1 crossing",
+    "ppc90": "PPC 90% coverage",
+    "crps_national": "National CRPS",
+    "crps_province": "Province CRPS",
+    "cov90_national_now": "National 90% coverage, nowcast",
+    "cov90_national_ahead": "National 90% coverage, ahead",
+    "cov90_province_now": "Province 90% coverage, nowcast",
+    "cov90_province_ahead": "Province 90% coverage, ahead",
+    "prior_wild": "Prior draws past 10x the peak",
+}
+"""Column headers of the Model building tables, without the sim_ or real_."""
+
+
+def _ladder_label(column: str) -> str:
+    """Return the header of a ladder column."""
+    key = column.removeprefix("sim_").removeprefix("real_")
+    return _LADDER_LABELS.get(key, column)
+
 
 def _ladder_page(path: Path) -> str:
     """Return the Model building tables from the ladder results."""
@@ -379,7 +409,13 @@ def _ladder_page(path: Path) -> str:
             continue
         if "rung" not in cols:
             cols = ["rung", *cols]
-        table = ladder[cols].round(3).to_markdown(index=False, missingval="")
+        metrics = [c for c in cols if c not in ("step", "rung")]
+        shown = ladder.dropna(subset=metrics, how="all")[cols].round(3)
+        # tabulate blanks None but prints NaN, so cells go to objects first.
+        shown = shown.astype(object).where(shown.notna(), None)
+        table = shown.rename(columns=_ladder_label).to_markdown(
+            index=False, missingval=""
+        )
         parts.append(f"## {title}\n\n{lead}\n\n{table}\n")
     return "\n".join(parts)
 
