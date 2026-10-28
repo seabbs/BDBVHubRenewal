@@ -100,6 +100,10 @@ class BacktestConfig:
         Vintage dates to reconstruct.
     simulated_dates : tuple of str
         Vintage dates to publish from the simulated outbreak.
+    complete_after_weeks : int
+        $K$: a truth week counts as complete if it ended at least this
+        many weeks before the truth vintage
+        (`bdbv_hub_renewal.data.completeness.complete_weeks`).
     """
 
     min_horizon: int = -4
@@ -110,6 +114,7 @@ class BacktestConfig:
     model_choice: Path = Path("results/model-choice.yml")
     reconstructed_dates: tuple[str, ...] = ()
     simulated_dates: tuple[str, ...] = ()
+    complete_after_weeks: int = 0
 
     def is_heldout(self, vintage: dt.date | str) -> bool:
         """Whether a vintage is held out from development.
@@ -178,6 +183,7 @@ def load_config(path: Path | str = "config/backtest.toml") -> BacktestConfig:
         seed=int(fc["seed"]),
         development_until=max(dates, default=None),
         model_choice=choice,
+        complete_after_weeks=int(sp.get("complete_after_weeks", 0)),
         reconstructed_dates=(
             saturdays(rec["first_vintage"], rec["last_vintage"]) if rec else ()
         ),
