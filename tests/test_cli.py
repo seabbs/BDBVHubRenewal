@@ -33,6 +33,55 @@ def test_cli_nowcast_and_metadata(tmp_path: Path) -> None:
     assert (tmp_path / "meta" / "epiforecasts-persistence.yml").exists()
 
 
+def _written(out: Path) -> pd.DataFrame:
+    files = list(out.rglob("*.csv"))
+    assert len(files) == 1
+    return pd.read_csv(files[0])
+
+
+@pytest.mark.usefixtures("in_root")
+def test_cli_nowcast_writes_coherent_zones(tmp_path: Path) -> None:
+    assert main(["nowcast", "--out", str(tmp_path / "sub")]) == 0
+    table = _written(tmp_path / "sub")
+    level = table["location"].str.count("-")
+    zones = table.loc[level == 2]
+    provs = table.loc[level == 1]
+    assert zones["location"].nunique() > 150
+    keys = ["output_type_id", "target_end_date"]
+    summed = (
+        zones.assign(location=zones["location"].str.slice(0, 5))
+        .groupby(["location", *keys])["value"]
+        .sum()
+    )
+    want = provs.set_index(["location", *keys])["value"]
+    assert (summed.reindex(want.index) == want).all()
+    nat = table.loc[level == 0].set_index(keys)["value"]
+    assert (nat == provs.groupby(keys)["value"].sum().reindex(nat.index)).all()
+    assert main(["nowcast", "--no-zones", "--out", str(tmp_path / "p")]) == 0
+    assert (_written(tmp_path / "p")["location"].str.count("-") < 2).all()
+
+
+@pytest.mark.usefixtures("in_root")
+def test_cli_nowcast_without_zone_data_skips_zones(tmp_path: Path) -> None:
+    data = tmp_path / "data"
+    data.mkdir()
+    for f in (ROOT / "data").iterdir():
+        if f.name != "daily_zones.csv.gz":
+            (data / f.name).symlink_to(f)
+    out = tmp_path / "sub"
+    assert main(["nowcast", "--data", str(data), "--out", str(out)]) == 0
+    assert (_written(out)["location"].str.count("-") < 2).all()
+    assert "zone" in (out / "handled.json").read_text()
+
+
+@pytest.mark.usefixtures("in_root")
+def test_cli_zone_backtest(tmp_path: Path) -> None:
+    out = tmp_path / "zone-scores.csv"
+    assert main(["zone-backtest", "--out", str(out)]) == 0
+    scores = pd.read_csv(out)
+    assert {"persistence", "zonepersistence"} <= set(scores["model"])
+
+
 @pytest.mark.usefixtures("in_root")
 def test_cli_refuses_heldout_without_choice(tmp_path: Path) -> None:
     cfg = (
