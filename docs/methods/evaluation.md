@@ -31,6 +31,7 @@ These are the primary scores for the model choice, since every model has them.
 **Vintage-matched.** A task lists the later truth vintages (`ForecastTask.report_by`).
 For each, a model may predict the counts as they will be reported by that vintage, known onsets plus imputed onsets, in rows with `as_of` set to its date.
 These are scored against that vintage on every week, so recent weeks are compared like with like.
+The renewal variants draw them from the fitted model (`forecast_trajectories` with `as_of`), with the same posterior draws as the final counts.
 Persistence thins each sample of week $w$ to $\text{Binomial}(x, s(T - w))$, from the delays published with its vintage, and takes at least the count already published.
 A model that does not predict reported counts has no vintage-matched scores.
 
