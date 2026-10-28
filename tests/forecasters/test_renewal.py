@@ -426,3 +426,34 @@ def test_fit_records_the_posterior_draw_behind_each_trajectory(
 def test_single_patch_has_no_depletion() -> None:
     config = rn.model_config(rn.VARIANTS["renewalsp"])
     assert config.depletion is False
+
+
+def test_chain_method_defaults_to_vectorized(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import numpyro.infer
+
+    seen: dict[str, Any] = {}
+
+    class FakeMCMC:
+        def __init__(self, kernel: Any, **kw: Any) -> None:
+            seen.update(kw)
+
+        def run(self, *args: Any, **kw: Any) -> None:
+            return None
+
+    class FakeModel:
+        def validate_data(self, **kw: Any) -> None:
+            return None
+
+        def sample(self) -> None:
+            return None
+
+    monkeypatch.setattr(numpyro.infer, "MCMC", FakeMCMC)
+    monkeypatch.setattr(rn.engine(), "model_args", lambda m, d: {})
+    settings = rn.sampler_settings()
+    assert settings["chain_method"] == "vectorized"
+    rn.run_nuts(FakeModel(), None, settings)
+    assert seen["chain_method"] == "vectorized"
+    rn.run_nuts(FakeModel(), None, {**settings, "chain_method": "sequential"})
+    assert seen["chain_method"] == "sequential"
