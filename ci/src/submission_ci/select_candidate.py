@@ -43,7 +43,14 @@ from .common import (
     write_json,
     write_text,
 )
-from .policy import Candidate, Policy, load_policy
+from .policy import (
+    Candidate,
+    Policy,
+    add_deadline_args,
+    deadline_minutes,
+    load_policy,
+    retry_fits,
+)
 
 Validator = Callable[[Path, Path], str]  # (submission, log) -> status
 
@@ -157,15 +164,29 @@ def assess(c: Candidate, cdir: Path) -> Attempt:
     return a
 
 
-def triage(policy: Policy, root: Path) -> bool:
-    """Whether the main model needs its one refit.
+def triage(
+    policy: Policy, root: Path, minutes_left: float | None = None
+) -> bool:
+    """Whether the main model gets its one refit.
 
     It does when its fit is past the retry thresholds, or when it was
-    ruled out.
+    ruled out, and there is still time to refit before the window closes
+    (`minutes_left`, None for no limit). Without that time the chain
+    moves on to the fallback, which was fitted beside the main model.
     """
     main = policy.chain()[0]
     a = assess(main, root / main.id)
-    return a.retry or blocks_status(a.status)
+    need = a.retry or blocks_status(a.status)
+    if need and not retry_fits(policy, minutes_left):
+        assert minutes_left is not None
+        t = policy.timing
+        append_summary(
+            f"Not refitted: {int(minutes_left)} minutes left before the "
+            f"window closes, and a refit needs about {t.retry_minutes} "
+            f"plus {t.reserve_minutes} for the gate."
+        )
+        return False
+    return need
 
 
 def blocks_status(status: str) -> bool:
@@ -399,6 +420,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         s.add_argument("--policy", type=Path, required=True)
         s.add_argument("--candidates", type=Path, required=True)
         s.add_argument("--model", default="", help="The chosen model")
+    add_deadline_args(sub.choices["triage"])
     sel = sub.choices["select"]
     sel.add_argument("--out", type=Path, required=True)
     sel.add_argument("--validate-cmd", default="")
@@ -406,7 +428,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = p.parse_args(argv)
     policy = load_policy(args.policy).for_model(args.model)
     if args.cmd == "triage":
-        need = triage(policy, args.candidates)
+        need = triage(policy, args.candidates, deadline_minutes(args))
         set_outputs({"need_retry": need})
         print(f"need_retry={str(need).lower()}")
         return 0
