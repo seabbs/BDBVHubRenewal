@@ -34,7 +34,7 @@ MAX_BODY = 60000  # GitHub's limit is 65536 characters
 SOURCE_REPO = "seabbs/BDBVHubRenewal"
 HUB = "InsightNet-US/BDBV-Modeling-Hub"
 FOOTER = "This was opened by a bot. Please ping @seabbs for any questions."
-DOCS = "https://seabbs.github.io/BDBVHubRenewal"
+DOCS = "https://samabbott.co.uk/BDBVHubRenewal"
 
 
 def round_url(reference_date: str, docs: str = DOCS) -> str:

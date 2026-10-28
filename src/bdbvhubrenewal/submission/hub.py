@@ -695,7 +695,7 @@ METADATA_DEFAULTS: Final[dict[str, Any]] = {
     ],
     "license": "CC-BY-4.0",
     "repo_url": "https://github.com/seabbs/BDBVHubRenewal",
-    "website_url": "https://seabbs.github.io/BDBVHubRenewal/",
+    "website_url": "https://samabbott.co.uk/BDBVHubRenewal/",
     "ensemble_of_hub_models": False,
 }
 """Fields shared by every model's metadata. Contributors are to confirm."""

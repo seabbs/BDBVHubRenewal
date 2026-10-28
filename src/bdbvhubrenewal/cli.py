@@ -95,7 +95,7 @@ MODEL_METADATA = {
             "published counts. Each sample is a joint trajectory and the "
             "national value is the sum of province samples. No spatial "
             "correlation beyond that sum. See "
-            "https://seabbs.github.io/BDBVHubRenewal/methods/model/."
+            "https://samabbott.co.uk/BDBVHubRenewal/methods/model/."
         ),
         "data_inputs": (
             "Hub target data (weekly confirmed cases by onset week, observed "
@@ -124,7 +124,7 @@ MODEL_METADATA = {
             "Both streams are negative binomial. Fitted by NUTS (NumPyro) to "
             "each data vintage. Each sample is one joint posterior "
             "trajectory and the national value is the sum of province "
-            "samples. See https://seabbs.github.io/BDBVHubRenewal/methods/model/."
+            "samples. See https://samabbott.co.uk/BDBVHubRenewal/methods/model/."
         ),
         "data_inputs": (
             "Hub target data (weekly confirmed cases by onset week, observed "

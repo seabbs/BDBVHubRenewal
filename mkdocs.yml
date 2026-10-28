@@ -3,7 +3,7 @@ site_description: >-
   Renewal-model nowcasts and forecasts of confirmed Bundibugyo virus disease
   cases for the BDBV Modeling Hub, with data tools and a backtest.
 site_author: Sam Abbott
-site_url: https://seabbs.github.io/BDBVHubRenewal/
+site_url: https://samabbott.co.uk/BDBVHubRenewal/
 repo_url: https://github.com/seabbs/BDBVHubRenewal
 repo_name: seabbs/BDBVHubRenewal
 edit_uri: edit/main/docs/
