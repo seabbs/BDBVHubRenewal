@@ -179,10 +179,9 @@ def onset_expectations(
         Pmf of the report to publication lag on $0..L$. `None` publishes
         every report on its report day.
     weekly : bool, optional
-        The delay is constant within each week of the axis, which starts
-        on a week boundary and has whole weeks. Then `_weekly_blocks`
-        gives the same values at a cost linear, not quadratic, in the
-        length of the outbreak.
+        The axis starts on a week boundary and has whole weeks. Then
+        `_weekly_blocks` gives the same values at a cost linear, not
+        quadratic, in the length of the outbreak.
 
     Returns
     -------
@@ -267,11 +266,11 @@ def _weekly_blocks(
     final: bool,
     publication_lag: Array | None,
 ) -> dict[str, Array]:
-    r"""`onset_expectations` for a delay that changes only weekly.
+    r"""`onset_expectations` on an axis of whole weeks.
 
     Onsets in week $w$ reach report days $7w$ to $7w + 6 + D$ only, so
     each term is a product of a $7 \times 7k$ banded block $G_w$, with
-    $G_w[j, i] = f_w(i - j)$ and $7k \ge D + 7$, and a window of the
+    $G_w[j, i] = f_{7w + j}(i - j)$ and $7k \ge D + 7$, and a window of the
     report-day axis. Windows are stacked reshapes and their adjoint is
     an overlap-add, so there is still no gather or scatter. The cost is
     linear in the number of weeks where the dense version is quadratic:
@@ -287,9 +286,7 @@ def _weekly_blocks(
     n_w, width = n // 7, n + n_d - 1
     k = -(-(n_d + 6) // 7)
     span = 7 * k
-    g = jax.vmap(lambda f: skew(jnp.broadcast_to(f, (7, n_d)), span))(
-        delay[::7]
-    )
+    g = jax.vmap(lambda f: skew(f, span))(delay.reshape(n_w, 7, n_d))
     gh = jnp.broadcast_to(
         skew(jnp.broadcast_to(hub_delay, (7, n_d)), span), (n_w, 7, span)
     )
@@ -390,10 +387,10 @@ class OnsetStreams(BaseObservationProcess):
         delay counts are Dirichlet-multinomial with concentration
         $\psi P(d \mid w)$ instead of multinomial, so that the pooled
         delays of thousands of cases do not make the delay overconfident.
-    weekly_delay : bool, optional
-        `delay_rv` changes only weekly and the model axis starts on
-        `start_dow` with whole weeks, so the expectations can use
-        per-week blocks (`onset_expectations` with `weekly`).
+    weekly_axis : bool, optional
+        The model axis starts on `start_dow` with whole weeks, so the
+        expectations can use per-week blocks (`onset_expectations` with
+        `weekly`).
     """
 
     def __init__(
@@ -409,7 +406,7 @@ class OnsetStreams(BaseObservationProcess):
         kernel_rv: RandomVariable | None = None,
         publication_lag: RandomVariable | Array | None = None,
         delay_overdispersion_rv: RandomVariable | None = None,
-        weekly_delay: bool = False,
+        weekly_axis: bool = False,
     ) -> None:
         super().__init__(
             name, DeterministicPMF(f"{name}_identity", jnp.ones(1))
@@ -424,7 +421,7 @@ class OnsetStreams(BaseObservationProcess):
         self.start_dow = start_dow
         self.publication_lag = publication_lag
         self.delay_overdispersion_rv = delay_overdispersion_rv
-        self.weekly_delay = weekly_delay
+        self.weekly_axis = weekly_axis
 
     def lookback_days(self) -> int:
         """Return 0: the latent process is already dated by onset."""
@@ -521,8 +518,8 @@ class OnsetStreams(BaseObservationProcess):
         alpha = alpha[:, None] if alpha.ndim == 1 else alpha
         onsets = alpha * infections
         delay = self.delay_rv(n_timepoints=n, first_day_dow=first_day_dow)
-        if self.weekly_delay and (n % 7 or first_day_dow != self.start_dow):
-            raise ValueError("Weekly delays need an axis of whole weeks.")
+        if self.weekly_axis and (n % 7 or first_day_dow != self.start_dow):
+            raise ValueError("Week blocks need an axis of whole weeks.")
         if self.missing_fraction_rv is None:
             pi = jnp.zeros_like(onsets)
         else:
@@ -540,7 +537,7 @@ class OnsetStreams(BaseObservationProcess):
             cutoff,
             forecast,
             publication_lag=lag,
-            weekly=self.weekly_delay,
+            weekly=self.weekly_axis,
         )
         weekly = {k: self._weekly(v, first_day_dow) for k, v in exp.items()}
         for key, value in weekly.items():

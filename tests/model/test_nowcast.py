@@ -120,11 +120,15 @@ def test_dirichlet_multinomial_delays(sim_vintage):
 
 
 @pytest.mark.parametrize("final", [True, False])
-def test_weekly_blocks_match_the_dense_expectations(final):
+@pytest.mark.parametrize("daily", [False, True])
+def test_weekly_blocks_match_the_dense_expectations(final, daily):
     rng = np.random.default_rng(5)
     n_w, dmax = 12, 20
     n = 7 * n_w
     delay = np.repeat(rng.dirichlet(np.ones(dmax + 1), n_w), 7, axis=0)
+    if daily:
+        # A delay that also changes within weeks, as a day-of-week effect.
+        delay = rng.dirichlet(np.ones(dmax + 1), n)
     args = (
         jnp.asarray(rng.gamma(5, 4, (n, 3))),
         jnp.asarray(delay),
@@ -153,9 +157,9 @@ def test_model_log_density_is_the_same_with_weekly_blocks(sim_vintage, config):
         if v["type"] == "sample" and not v["is_observed"]
     }
     obs = model.observations["onsets"]
-    assert obs.weekly_delay
+    assert obs.weekly_axis
     fast = log_density(model.sample, (), args, values)[0]
-    obs.weekly_delay = False
+    obs.weekly_axis = False
     dense = log_density(model.sample, (), args, values)[0]
     assert float(fast) == pytest.approx(float(dense), rel=1e-5)
 

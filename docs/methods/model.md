@@ -136,6 +136,7 @@ $$
   The fit to the 2026-10-24 vintage puts the step SD at 0.20 (90% CrI 0.16 to 0.25), in the tail of the earlier $\mathcal{N}^+(0, 0.1^2)$.
 - $\gamma$ is a weekly random walk over onset day from zero, with step SD $\mathcal{N}^+(0, 0.15^2)$.
   It shifts all hazards together.
+- With `report_dow=True` (off by default), the logit hazard also has a sum-to-zero effect of the report day's day of week, $\delta_{(s + d) \bmod 7}$, with scale $\mathcal{N}^+(0, 0.5^2)$.
 
 The delay is pooled over provinces.
 
@@ -317,6 +318,9 @@ Let $c$ be the last week judged complete.
 Week $w$ is complete if its midpoint (its Wednesday) is at least $L$ days before $T_v$.
 $L$ is the 90th centile of the delays published with the vintage, or 10 days if none were published.
 For the current vintages $L$ is 14 days, so $c$ is two weeks before the vintage's epi week, about horizon $-3$.
+Published delays are right truncated, so this $L$ is biased short.
+The comparator `persistence_fu` takes $L$ from onset weeks that ended at least 63 days (the longest delay plus the publication lag) before the vintage, whose delays are fully observed.
+On the real vintages this gives 14 or 15 days at the 90th centile, against 14.
 
 Weeks up to $c$ are copied from the vintage, with no uncertainty:
 

@@ -382,3 +382,39 @@ def test_hazard_delay_smoothness_prior_allows_real_fits():
     with numpyro.handlers.trace() as tr:
         seeded(lambda: delay(n_timepoints=14, first_day_dow=6))
     assert float(tr["delay_smooth_sd"]["fn"].scale) == pytest.approx(0.4)
+
+
+def test_hazard_delay_report_day_of_week_effect():
+    weekly = WeeklyTemporalProcess(
+        NonCentredRandomWalk(DeterministicVariable("sd", 0.0)), start_dow=6
+    )
+    plain = HazardDelay("delay", 30, weekly)
+    dow = HazardDelay("delay", 30, weekly, report_dow=True)
+    with numpyro.handlers.trace() as tr:
+        pmf = seeded(lambda: dow(n_timepoints=28, first_day_dow=6), 2)
+    effect = np.asarray(tr["delay_report_dow"]["value"])
+    assert effect.shape == (7,)
+    assert abs(effect.sum()) < 1e-5
+    np.testing.assert_allclose(pmf.sum(axis=1), 1.0, rtol=1e-5)
+    # With no time shift, rows change within a week with period 7.
+    assert not np.allclose(pmf[0], pmf[1])
+    np.testing.assert_allclose(pmf[0], pmf[7], rtol=1e-5)
+    # With no effect it is the plain delay.
+    zero = {"delay_report_dow_sd": jnp.asarray(0.0)}
+    with numpyro.handlers.substitute(data=zero):
+        off = seeded(lambda: dow(n_timepoints=28, first_day_dow=6), 2)
+    base = seeded(lambda: plain(n_timepoints=28, first_day_dow=6), 2)
+    np.testing.assert_allclose(off, base, rtol=1e-5)
+
+
+def test_report_dow_config_adds_the_effect(sim_vintage):
+    import dataclasses
+
+    from bdbv_hub_renewal.model import MAIN, build_model, model_args
+
+    cfg = dataclasses.replace(MAIN, report_dow=True)
+    model = build_model(sim_vintage, cfg)
+    with numpyro.handlers.trace() as tr:
+        seeded(lambda: model.sample(**model_args(model, sim_vintage)))
+    assert "delay_report_dow" in tr
+    assert not MAIN.report_dow
