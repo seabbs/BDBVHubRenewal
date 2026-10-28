@@ -195,6 +195,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip the recovery check on simulated vintages.",
     )
     back.add_argument(
+        "--recovery-only",
+        action="store_true",
+        help="Run only the recovery check on simulated vintages.",
+    )
+    back.add_argument(
         "--cache",
         default=None,
         help="Directory with one forecast file per model and task. Tasks "
@@ -473,7 +478,9 @@ def _backtest(args: argparse.Namespace) -> int:
             print("ERROR: --shard needs --cache.", file=sys.stderr)
             return 1
         index, count = (int(x) for x in args.shard.split("/"))
-        if args.lopo:
+        if args.recovery_only:
+            tasks = bt.recovery_tasks(config)
+        elif args.lopo:
             models = [m for m in models if getattr(m, "supports_mask", False)]
             tasks = bt.lopo_tasks(
                 target,
@@ -493,6 +500,18 @@ def _backtest(args: argparse.Namespace) -> int:
         print(f"Shard {args.shard}: {len(mine)} tasks in {args.cache}.")
         return 0
     fits: list[pd.DataFrame] = []
+    if args.recovery_only:
+        rforecasts, rscores = bt.run_recovery(
+            models, config, cache=args.cache, fits=fits
+        )
+        for table, path in (
+            (rforecasts, output / "recovery-forecasts.csv.gz"),
+            (rscores, results / "recovery-scores.csv"),
+        ):
+            bt.merge_by_model(path, table).to_csv(path, index=False)
+        _write_fits(fits, results / "recovery-fits.csv")
+        print(f"Recovery: {len(rscores)} scored forecasts in {results}.")
+        return 0
     if args.lopo:
         lopo_fc, lopo_scores = bt.run_lopo(
             models,
