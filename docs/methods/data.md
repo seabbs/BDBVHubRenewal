@@ -98,6 +98,16 @@ Recovery checks run on these vintages.
 `renewalbvd` also reads the reproduction number estimates of the main [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model.
 They are its public `results-<run>` GitHub releases, one per docs build, under the MIT licence ([Zenodo 10.5281/zenodo.20312758](https://doi.org/10.5281/zenodo.20312758)).
 Each vintage uses the newest release published, with its assets last updated, by the forecast's cut-off and with data ending on or before the vintage.
+The release must also come from a fit that converged.
+The check is generous.
+The joint fit's worst R-hat must be at most 1.1 (`[bvd] max_rhat` in `config/backtest.toml`), and effective sample sizes are ignored.
+BVDOutbreakSize's own pass level is stricter, with R-hat at most 1.05, at least 100 effective draws and at most 1% divergent draws.
+The releases have no diagnostics file, so the R-hat is read from the fit diagnostics table of the rendered site in each release (`site.zip`).
+From 17 September that table is on its own page, and before then it is on the analysis page.
+A release with no readable table does not qualify, and the next older one is tried.
+The site is only downloaded for a release that would otherwise be used, and only the R-hat is kept.
+The backtest applies the same check at each forecast date, among the releases published by its cut-off.
+Each fit records the release it used, its R-hat and why each newer release was skipped, and the submission pull request reports them.
 `task data-bvd` caches those releases in `data/bvd/`, with the release list, so the backtest needs no network.
 From each release it keeps the national $R_T$ draws (`posterior_draws.csv`), the patch summaries (`province_estimates.csv`), the national row they are relative to (`province_timeseries.csv`) and the data cut-off.
 Patch summaries are published from 23 October, so earlier vintages use the national estimate only.
