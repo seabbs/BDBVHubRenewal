@@ -6,10 +6,33 @@ Scoring, and the four evaluations.
 ## Scoring
 
 Every week of a forecast is scored against a later real vintage, as reported at that vintage.
-No week is left out for being recent.
+Only weeks in the truth vintage are scored.
 Each score records the vintage it was scored against (`truth_vintage`), and the results pages label scores "as reported" at that date.
 Recent weeks are still incomplete in the truth vintage, so their scores move as later vintages arrive.
 So forecasts from real vintages are re-scored against each newer real vintage (`score_by_truth_vintage`), and the [Backtest page](../backtest.md#scores-by-truth-vintage) shows how much the truth and the scores have changed.
+
+Scores come in three sets.
+
+**Complete weeks.** Forecasts of the final count, scored only on weeks that ended at least $K$ weeks before the truth vintage.
+With the onset day spread over the week, an onset-to-report delay $d$ and a publication lag $\ell$, the share of a week's final count published $t$ days after the week ends is
+
+$$
+s(t) = \frac{1}{7}\sum_{u=0}^{6} P(d + \ell - u \le t).
+$$
+
+$P$ is the empirical delay distribution of onset weeks old enough to be fully observed, and $\ell$ is 3 days, the longest publication lag.
+$K$ is the fewest whole weeks with $s(7K) \ge 0.95$ (`bdbv_hub_renewal.data.completeness.complete_weeks`).
+The 2026-10-09, 2026-10-17 and 2026-10-24 delay data all give $K = 3$, with $s(21) = 0.96$ in the latest.
+It is set as `complete_after_weeks` in `config/backtest.toml`.
+These are the primary scores for the model choice, since every model has them.
+
+**All weeks as reported.** The same forecasts on every week, including those still incomplete in the truth.
+
+**Vintage-matched.** A task lists the later truth vintages (`ForecastTask.report_by`).
+For each, a model may predict the counts as they will be reported by that vintage, known onsets plus imputed onsets, in rows with `as_of` set to its date.
+These are scored against that vintage on every week, so recent weeks are compared like with like.
+Persistence thins each sample of week $w$ to $\text{Binomial}(x, s(T - w))$, from the delays published with its vintage, and takes at least the count already published.
+A model that does not predict reported counts has no vintage-matched scores.
 Simulated forecasts are scored against the simulated final counts.
 Scores follow [scoringutils](https://epiforecasts.io/scoringutils/) and [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize).
 

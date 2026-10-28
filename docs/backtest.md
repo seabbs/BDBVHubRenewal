@@ -10,7 +10,7 @@ Forecasts made at past vintages, scored against later data.
     Read these results as a check of the harness, not as evidence about models.
 
 This page shows development results only.
-Every week is scored, including recent weeks that are still incomplete in the truth.
+Scores on complete weeks are the primary scores, with every week as reported and vintage-matched scores beside them.
 How scoring works is on the [Evaluation methods page](methods/evaluation.md).
 `task backtest` writes `results/backtest-scores.csv` (development, against the latest vintage), `results/backtest-scores-by-truth.csv` (real forecasts against every later vintage) and `results/recovery-scores.csv` (simulated).
 
