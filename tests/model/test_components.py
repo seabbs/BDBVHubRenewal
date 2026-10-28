@@ -418,3 +418,16 @@ def test_report_dow_config_adds_the_effect(sim_vintage):
         seeded(lambda: model.sample(**model_args(model, sim_vintage)))
     assert "delay_report_dow" in tr
     assert not MAIN.report_dow
+
+
+def test_generation_interval_matches_bvdoutbreaksize():
+    # BVDOutbreakSize's prior means (priors.jl): mean 15.3, SD 9.3 days.
+    from bdbv_hub_renewal.data.simulate import SimulationSettings
+    from bdbv_hub_renewal.model.model import GI_MEAN, GI_SD, generation_interval
+
+    assert (GI_MEAN, GI_SD) == (15.3, 9.3)
+    np.testing.assert_allclose(
+        generation_interval(), generation_interval(15.3, 9.3)
+    )
+    s = SimulationSettings()
+    assert (s.gi_mean, s.gi_sd) == (GI_MEAN, GI_SD)
