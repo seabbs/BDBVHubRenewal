@@ -220,3 +220,12 @@ def test_publication_lag_pmf_from_rows_new_in_later_vintages() -> None:
     )
     # With no earlier pair there is no estimate.
     assert publication_lag_pmf(pd.concat([old, new]), "2026-10-10") is None
+
+
+def test_unused_options_leave_the_default_outbreak_unchanged() -> None:
+    # The model recovery tests are calibrated on this realisation, so
+    # options that are off (removals, zones) must not draw random numbers.
+    outbreak = simulate_outbreak()
+    assert len(outbreak.cases) == 1797
+    target, _ = outbreak.vintage("2026-10-28")
+    assert int(target["imputed"].sum()) == 488

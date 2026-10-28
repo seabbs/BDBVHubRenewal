@@ -497,12 +497,14 @@ def simulate_outbreak(
             known, publish, np.where(filled, later, -1)
         ).astype(float)
         onset_known_day[onset_known_day < 0] = np.nan
-        removed = rng.uniform(size=days.size) < s.removal_share
-        lo, hi = s.removal_delay
-        removed_day = np.where(
-            removed, publish + rng.integers(lo, hi + 1, size=days.size), -1
-        ).astype(float)
-        removed_day[removed_day < 0] = np.nan
+        removed_day = np.full(days.size, np.nan)
+        # Draw only when removals are on, so the default outbreak keeps its
+        # random stream.
+        if s.removal_share > 0:
+            removed = rng.uniform(size=days.size) < s.removal_share
+            lo, hi = s.removal_delay
+            gone = publish + rng.integers(lo, hi + 1, size=days.size)
+            removed_day = np.where(removed, gone, np.nan)
         zone = np.full(days.size, "", dtype=object)
         mine = [(z, w) for p, z, w in s.zone_shares if p == loc]
         if mine:
