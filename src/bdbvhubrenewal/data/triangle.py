@@ -6,6 +6,10 @@ A port of the core of the R package
 
 `reporting_triangle` counts the known-onset cases of the hub's delay file
 by onset week $W$ (rows) and delay $d$ in days (columns).
+`first_publication_delays` first replaces each case's delay by the days
+from the end of its onset week to the first delay file it is in, so a
+batch published late counts as a long delay, which the chain ladder and
+its retrospective uncertainty then learn.
 A case is taken to be published on day $W + d$: its onset mid-week,
 $W - 3$, plus its delay, plus a 3-day publication lag.
 So cell $(W, d)$ is observed at vintage $T$ if $W + d \le T$ and is
@@ -47,11 +51,71 @@ __all__ = [
     "apply_delay",
     "chainladder_fill",
     "delay_pmf",
+    "first_publication_delays",
     "fit_nb_size",
     "preprocess_negative_values",
     "reporting_triangle",
     "retrospective_errors",
 ]
+
+
+def first_publication_delays(
+    history: pd.DataFrame,
+    vintage: str,
+    max_delay: int = DEFAULT_MAX_DELAY,
+) -> pd.DataFrame:
+    r"""Return delay rows with each delay counted to first publication.
+
+    Rows are matched across the delay files on or before `vintage` by
+    province, onset week and delay. A row in the first file keeps its
+    delay $d$. A row first in a later file, absent from the file before
+    it dated $V$, was published after $V$, so its delay becomes
+    $\max(d, V + 1 - W)$ days for onset week $W$. Rows whose delay is then
+    over `max_delay` are dropped: those are mostly onsets recorded late
+    for cases already counted as imputed, which leave the total unchanged.
+
+    Parameters
+    ----------
+    history : pandas.DataFrame
+        Delay rows of one or more files, with `vintage`, `location`,
+        `onset_week` and `delay` columns.
+    vintage : str
+        The forecast date. Later files are not used.
+    max_delay : int
+        Longest delay kept, in days.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `vintage` (the latest file on or before `vintage`),
+        `location`, `onset_week` and `delay`.
+    """
+    key = ["location", "onset_week", "delay"]
+    files = sorted(str(v) for v in history["vintage"].unique() if v <= vintage)
+    counts = [
+        history.loc[history["vintage"] == f].groupby(key).size() for f in files
+    ]
+    final = counts[-1]
+    seen = pd.Series(0, index=final.index)
+    parts = []
+    for i, count in enumerate(counts):
+        now = count.reindex(final.index, fill_value=0).clip(upper=final)
+        new = (now - seen).clip(lower=0)
+        new = new.loc[new > 0]
+        seen = seen.combine(now, max)
+        if new.empty:
+            continue
+        rows = new.index.to_frame(index=False).loc[
+            np.repeat(np.arange(len(new)), new.to_numpy())
+        ]
+        if i > 0:
+            week = pd.to_datetime(rows["onset_week"])
+            gap = pd.Timestamp(files[i - 1]) + pd.Timedelta(days=1) - week
+            rows["delay"] = np.maximum(rows["delay"], gap.dt.days)
+        parts.append(rows)
+    out = pd.concat(parts, ignore_index=True)
+    out = out.loc[out["delay"] <= max_delay].reset_index(drop=True)
+    return pd.DataFrame(out.assign(vintage=files[-1])[["vintage", *key]])
 
 
 def reporting_triangle(
