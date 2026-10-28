@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.completeness import reported_share
+from bdbvhubrenewal.data.completeness import share_from_cdf, truncated_delay_cdf
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import (
     ForecastTask,
@@ -121,6 +123,18 @@ def test_persistencenow_without_delays_is_persistence(
     )
 
 
+def test_persistencenow_needs_enough_recent_delays(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    # Too few delay rows in the window give persistence, not a noisy nowcast.
+    task = _task(target, delays, "2026-10-17")
+    assert task.delays is not None
+    few = replace(task, delays=task.delays.head(20))
+    pd.testing.assert_frame_equal(
+        PersistenceNow().forecast(few), Persistence().forecast(few)
+    )
+
+
 def test_persistencenow_predicts_counts_as_reported_later(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
@@ -151,7 +165,9 @@ def test_persistencenow_predicts_counts_as_reported_later(
     assert published < by_sample["value"].median()
     assert by_sample["value"].median() < by_sample["value_final"].median()
     assert task.delays is not None
-    s_v, s_t = reported_share(task.delays, "2026-10-09", [6, 21])
+    cdf = truncated_delay_cdf(task.delays, "2026-10-09")
+    assert cdf is not None
+    s_v, s_t = share_from_cdf(cdf, [6, 21])
     expected = published + (by_sample["value_final"].median() - published) * (
         (s_t - s_v) / (1 - s_v)
     )
