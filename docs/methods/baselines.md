@@ -95,6 +95,7 @@ $$
 $\Delta_p$ are the weekly changes in $\log(1 + \hat y_p)$ over the 8 weeks up to the latest week $c$, with $\hat y_p$ the point nowcast.
 With their negatives, the median stays at the centre and the spread grows with the horizon.
 Provinces without their own delay draw from the changes of the provinces with one, so a few small, noisy counts do not set their spread.
+A province with fewer than 10 cases a week over the last 8 weeks instead walks the log of that mean as a Poisson rate, $\tilde y_{p,k}(c + h) \sim \text{Poisson}\{\bar y_{p,k} \exp(\sum_{j \le h} \delta_{p,k,j})\}$, so a few cases a week stay plausible.
 With fewer than 3 changes the forecast is Poisson around the centre.
 Forecasts are rounded and kept at least the known onsets.
 Counts reported by a later date $T$ are $Y_{p,v}(w) + \text{Binomial}\big(\max(D, 0),\ q\big) + \min(D, 0)$, with $D = C_{p,k}(w) - Y_{p,v}(w)$ and $q = \{s_p(T - w) - s_p(w)\}/\{1 - s_p(w)\}$.
