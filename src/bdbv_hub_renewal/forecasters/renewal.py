@@ -322,9 +322,13 @@ def run_nuts(model: Any, data: Any, sampler: Mapping[str, Any]) -> Any:
     pyrenew.model.MultiSignalModel
         The model, with `model.mcmc` holding the posterior.
     """
+    import jax
     from jax import random
     from numpyro.infer import MCMC
 
+    # Each fit compiles its own model, so cached executables from earlier
+    # fits never help and exhaust LLVM memory over many locations.
+    jax.clear_caches()  # type: ignore[no-untyped-call]
     pr = engine()
     args = pr.model_args(model, data)
     model.validate_data(
