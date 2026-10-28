@@ -88,13 +88,40 @@ def test_simulation_parameters_have_turn(outbreak) -> None:  # type: ignore[no-u
 def test_simulated_vintage_publishes_after_a_lag(outbreak) -> None:  # type: ignore[no-untyped-def]
     cases = outbreak.cases
     lag = (cases["publish_date"] - cases["report_date"]).dt.days
-    assert lag.between(0, 3).all()
-    assert lag.nunique() == 4
+    assert lag.between(0, 60).all()
+    # Most cases appear within 3 days, a tail of late entries up to 60.
+    assert (lag > 3).mean() == pytest.approx(0.15, abs=0.03)
+    assert lag.max() > 40
     day = pd.Timestamp("2026-09-05")
     _, dly = outbreak.vintage(day.date())
-    published = cases.loc[cases["onset_known"] & (cases["publish_date"] <= day)]
-    reported = cases.loc[cases["onset_known"] & (cases["report_date"] <= day)]
-    assert len(dly) == len(published) < len(reported)
+    known = cases["onset_known_date"] <= day
+    reported = cases["onset_known"] & (cases["report_date"] <= day)
+    assert len(dly) == known.sum() < reported.sum()
+
+
+def test_simulated_missing_onsets_are_backfilled(outbreak) -> None:  # type: ignore[no-untyped-def]
+    cases = outbreak.cases
+    missing = ~cases["onset_known"]
+    filled = missing & cases["onset_known_date"].notna()
+    # About a third of cases reported with no onset get one later.
+    assert filled.sum() / missing.sum() == pytest.approx(0.3, abs=0.05)
+    gap = (
+        cases.loc[filled, "onset_known_date"]
+        - cases.loc[filled, "publish_date"]
+    )
+    assert gap.dt.days.between(7, 42).all()
+    # So imputed counts of a past week fall and known counts rise.
+    early, _ = outbreak.vintage("2026-09-05")
+    late, _ = outbreak.vintage("2026-10-10")
+    week = (early["location"] == "CD") & (
+        early["target_end_date"] == "2026-08-15"
+    )
+    later = (late["location"] == "CD") & (
+        late["target_end_date"] == "2026-08-15"
+    )
+    assert (
+        late.loc[later, "observed"].item() > early.loc[week, "observed"].item()
+    )
 
 
 def test_simulated_missing_onsets_follow_the_report_day() -> None:
