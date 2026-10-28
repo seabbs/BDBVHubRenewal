@@ -372,8 +372,13 @@ def run_select(
     out: Path,
     validate: Validator | None,
     retried: bool,
+    shadows: bool = True,
 ) -> dict[str, Any]:
-    """Select, write provenance and copy the chosen files."""
+    """Select, write provenance and copy the chosen files.
+
+    `shadows=False` leaves the shadow candidates out, for a hub model of
+    its own whose run fits none of them.
+    """
     chosen, attempts = select(policy, root, validate, retried)
     prov: dict[str, Any] = {
         "selected": chosen.id if chosen else None,
@@ -389,7 +394,7 @@ def run_select(
         "warnings": chosen.warnings if chosen else [],
         "handled": chosen.handled if chosen else [],
         "attempts": [asdict(a) for a in attempts],
-        "shadows": _shadows(policy, root),
+        "shadows": _shadows(policy, root) if shadows else [],
     }
     if chosen:
         cdir = root / chosen.id
@@ -425,6 +430,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     sel.add_argument("--out", type=Path, required=True)
     sel.add_argument("--validate-cmd", default="")
     sel.add_argument("--retried", action="store_true")
+    sel.add_argument(
+        "--no-shadows", action="store_true", help="Leave shadows out"
+    )
     args = p.parse_args(argv)
     policy = load_policy(args.policy).for_model(args.model)
     if args.cmd == "triage":
@@ -435,7 +443,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     validate = (
         command_validator(args.validate_cmd) if args.validate_cmd else None
     )
-    prov = run_select(policy, args.candidates, args.out, validate, args.retried)
+    prov = run_select(
+        policy,
+        args.candidates,
+        args.out,
+        validate,
+        args.retried,
+        shadows=not args.no_shadows,
+    )
     set_outputs(
         {
             "selected": prov["selected"] or "",

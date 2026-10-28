@@ -34,7 +34,7 @@ cli metadata --model "$TRACK_MODEL" --abbr "${TRACK_ID#*-}" \
   --out "$WORK/metadata"
 export METADATA="$WORK/metadata/$TRACK_ID.yml"
 status=0
-"$(dirname "$0")/select.sh" || status=$?
+NO_SHADOWS=true "$(dirname "$0")/select.sh" || status=$?
 if [ "$status" != 0 ]; then
   note "$TRACK_ID: no candidate cleared the checks; nothing submitted."
   exit "$status"

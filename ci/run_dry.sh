@@ -311,6 +311,9 @@ baseline_track() {
       || { echo "FAIL: baseline $case selected $selected"; return 1; }
     grep -q "CD-IT-01" "$(find "$gate/selected/submission" -name '*.csv' | head -n 1)" \
       || { echo "FAIL: baseline file has no zones"; return 1; }
+    if grep -q "Shadow candidates" "$gate/pr-body.md"; then
+      echo "FAIL: baseline body lists shadows"; return 1
+    fi
     grep -q "bdbv-submission:seabbs-baseline:" "$gate/pr-body.md" \
       || { echo "FAIL: baseline id"; return 1; }
     grep -q '"branch": "seabbs-baseline-' "$WORK/track.log" \
