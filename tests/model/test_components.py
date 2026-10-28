@@ -443,3 +443,47 @@ def test_case_weighted_basis_is_orthonormal_and_orthogonal_to_weights():
     np.testing.assert_allclose(w @ q, 0.0, atol=1e-8)
     plain = sum_to_zero_basis(4)
     np.testing.assert_allclose(plain.sum(axis=0), 0.0, atol=1e-10)
+
+
+def _quad_censored_pmf(family, mean, cv, dmax):
+    """Float64 double censored pmf by adaptive quadrature, as a reference."""
+    from scipy import integrate, stats
+
+    if family == "gamma":
+        shape = 1 / cv**2
+        dist = stats.gamma(shape, scale=mean / shape)
+    else:
+        sdlog = np.sqrt(np.log1p(cv**2))
+        dist = stats.lognorm(sdlog, scale=mean / np.sqrt(1 + cv**2))
+
+    def cdf(x):
+        return dist.cdf(x) if x > 0 else 0.0
+
+    pmf = np.array(
+        [
+            integrate.quad(
+                lambda u, d=d: cdf(d + 1 - u) - cdf(d - u),
+                0,
+                1,
+                epsabs=1e-14,
+                epsrel=1e-12,
+                points=[0.0, 1.0],
+            )[0]
+            for d in range(dmax + 1)
+        ]
+    )
+    return pmf / pmf.sum()
+
+
+@pytest.mark.parametrize("family", ["gamma", "lognormal"])
+@pytest.mark.parametrize("cv", [0.3, 0.5, 1.0, 1.5, 2.0])
+@pytest.mark.parametrize("mean", [2.0, 8.0, 15.0])
+def test_censored_pmf_is_exact_in_float32(family, cv, mean):
+    ours = np.asarray(censored_pmf(family, mean, cv, 60))
+    assert ours.dtype == np.float32
+    ref = _quad_censored_pmf(family, mean, cv, 60)
+    # Absolute error at float32 round-off, and relative error small even
+    # in the tail.
+    assert np.max(np.abs(ours - ref)) < 5e-7
+    big = ref > 1e-5
+    assert np.max(np.abs(ours[big] / ref[big] - 1)) < 1e-3
