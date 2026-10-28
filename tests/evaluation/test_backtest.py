@@ -226,6 +226,7 @@ def test_origins_without_a_lag_estimate_are_marked(
     assert set(map(tuple, marked.drop_duplicates().to_numpy())) == {
         ("real", "2026-08-18"),
         ("real", "2026-10-09"),
+        ("reconstructed", "2026-08-29"),
     }
     by_truth = score_by_truth_vintage(forecasts, target)
     assert set(by_truth.loc[by_truth["lag_prior"], "vintage"]) == {

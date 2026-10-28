@@ -44,6 +44,7 @@ from bdbv_hub_renewal.data.dates import (
     reference_date_for_vintage,
 )
 from bdbv_hub_renewal.data.reconstruct import (
+    publication_lag_pmf,
     reconstruct_delays,
     reconstruct_vintages,
 )
@@ -75,6 +76,7 @@ __all__ = [
     "score_tasks",
     "truth_changes",
     "truth_from_vintage",
+    "uses_lag_prior",
 ]
 
 log = logging.getLogger(__name__)
@@ -321,6 +323,29 @@ def make_tasks(
     return tasks
 
 
+def uses_lag_prior(task: ForecastTask) -> bool:
+    """Whether a task has no publication lag estimate of its own.
+
+    The lag is estimated from pairs of delay files on or before the
+    vintage (`bdbv_hub_renewal.data.reconstruct.publication_lag_pmf`).
+    Without one, the renewal models use a prior whose shape was set from
+    later delay files, so these origins see some later data.
+
+    Parameters
+    ----------
+    task : ForecastTask
+        The task.
+
+    Returns
+    -------
+    bool
+        True if no pair of delay files is available.
+    """
+    if task.delay_history is None:
+        return True
+    return publication_lag_pmf(task.delay_history, task.vintage) is None
+
+
 def run_forecasts(
     models: Sequence[ForecastModel], tasks: Iterable[ForecastTask]
 ) -> pd.DataFrame:
@@ -337,8 +362,8 @@ def run_forecasts(
     -------
     pandas.DataFrame
         Columns `model`, `kind`, `vintage`, `reference_date`, `horizon`,
-        `location`, `target_end_date`, `sample`, `value` and `as_of`
-        (missing for final counts).
+        `location`, `target_end_date`, `sample`, `value`, `as_of`
+        (missing for final counts) and `lag_prior` (`uses_lag_prior`).
     """
     frames = []
     for task in tasks:
@@ -348,6 +373,7 @@ def run_forecasts(
             if "as_of" not in samples:
                 samples["as_of"] = np.nan
             samples = add_national(samples)
+            samples["lag_prior"] = uses_lag_prior(task)
             ref = pd.Timestamp(task.reference_date)
             samples["horizon"] = (
                 pd.to_datetime(samples["target_end_date"]) - ref
@@ -443,7 +469,8 @@ def score_tasks(
     -------
     pandas.DataFrame
         Output of `bdbv_hub_renewal.evaluation.scoring.score_forecasts`, with
-        `truth_vintage`, `scoring` and `complete` columns.
+        `truth_vintage`, `scoring` and `complete` columns, and
+        `lag_prior` if the forecasts have it.
     """
     keep = forecasts["vintage"] < truth_date
     as_of = (
@@ -465,6 +492,9 @@ def score_tasks(
     if not frames:
         return pd.DataFrame()
     out = pd.concat(frames, ignore_index=True)
+    if "lag_prior" in forecasts:
+        flags = forecasts.groupby(["kind", "vintage"])["lag_prior"].first()
+        out = out.merge(flags.reset_index(), on=["kind", "vintage"], how="left")
     out["truth_vintage"] = truth_date
     age = pd.Timestamp(truth_date) - pd.to_datetime(out["target_end_date"])
     out["complete"] = age.dt.days >= 7 * complete_after_weeks
