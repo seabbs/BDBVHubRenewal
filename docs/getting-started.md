@@ -97,7 +97,7 @@ The backtest fits use the `[sampler]` settings in `config/backtest.toml`, 2 chai
 `BDBV_RENEWAL_SAMPLER` overrides them, for example `'{"num_chains": 2, "num_warmup": 300, "num_samples": 300}'`.
 Each forecast of a renewal variant is a fit, so a full backtest takes hours.
 `--models` runs some models and keeps the others' rows in `results/`, which is committed.
-The docs build runs only persistence and reads the variants from there.
+The docs build runs only the persistence models and reads the variants from there.
 
 The comparison with hub forecasts downloads other teams' files, so it is run on its own:
 

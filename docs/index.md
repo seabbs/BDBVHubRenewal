@@ -19,6 +19,7 @@ National forecasts are the sum of the province trajectories.
 | `renewalsp` | Single patch. One national renewal process, with each national trajectory split across provinces by their recent share of onsets. |
 | `renewalbvd` | The spatial model informed by the latest posterior estimates of the [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model. |
 | `persistence` | The baseline: the last complete week carried forward. |
+| `persistencenow` | Persistence on a nowcast: recent weeks scaled up by the share reported so far, then the last nowcast week carried forward. |
 
 ## Contents
 
