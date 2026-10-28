@@ -8,8 +8,8 @@ clears every check is submitted:
    jittered inits, only when `main` is past the convergence
    retry thresholds or was ruled out (`retry_budget`, 1 by default), and
    only when there is time for it before the window closes (`[timing]`).
-3. `fallback`: the same model code with `--config fallback` (no spatial
-   coupling, delays and missingness fixed from the data).
+3. `renewalsp`: the single-patch model (independent renewal fits for each
+   province with cases and the country), fitted beside `main`.
 4. `persistence`: the persistence baseline, built from the data alone.
 
 Stage `primary` candidates fit in parallel straight away. Stage `retry`
@@ -52,6 +52,8 @@ class Candidate:
     stage: str
     label: str
     sampler: dict[str, Any] = field(default_factory=dict)
+    model: str = ""
+    """The model the leg runs; empty for the chosen model."""
 
     def spec(self) -> dict[str, Any]:
         """What the fit depends on besides source and data."""
@@ -103,7 +105,8 @@ class Policy:
         """The policy for the model chosen in the model choice record.
 
         With persistence chosen, the chain is persistence alone. The
-        renewal candidates (main, fallback and any shadows) are still
+        renewal candidates (main, the single-patch fallback and any
+        shadows) are still
         fitted and checked as shadows, and the retry is dropped.
         Any other choice keeps the policy as it is.
         """
@@ -138,6 +141,7 @@ def load_policy(path: Path | str) -> Policy:
             stage=c.get("stage", "primary"),
             label=c.get("label", c["id"]),
             sampler=dict(c.get("sampler", {})),
+            model=c.get("model", ""),
         )
         if cand.kind not in KINDS:
             raise ValueError(f"candidate {cand.id}: unknown kind {cand.kind}")
@@ -200,6 +204,7 @@ def matrix(
             "kind": c.kind,
             "config": c.config,
             "label": c.label,
+            "model": c.model,
             "sampler": json.dumps(c.sampler, sort_keys=True),
             "key": fit_key(src, hub_ref, c.spec()),
             "timeout": timeout,

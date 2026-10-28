@@ -12,13 +12,15 @@ retry_budget = 1
 
 # Minutes the chain plans with. Measured on the 2026-10-24 vintage
 # (jax-review-1, vectorised chains on 2 cores of archie) at 4 chains x
-# 2000 iterations: main 130 and the retry 134 minutes of sampling, the
-# fallback about 0.7 times main. Nearly every draw reaches the maximum
-# tree depth, so cost follows iterations, and the 2 x 1000 used below
-# take about a quarter: 35 to 45 minutes (the Getting started fit, 2 x 400
-# on 2 cores, took 18). Hosted runners are 1.2 to 1.5 times slower, so
-# each fit job takes about 1 to 1.5 hours with setup (to be re-measured). The fallback fits beside main, and persistence is
-# built in `prepare`, so only the retry runs after main.
+# 2000 iterations: main 130 and the retry 134 minutes of sampling. Nearly
+# every draw reaches the maximum tree depth, so cost follows iterations,
+# and the 2 x 1000 used below take about a quarter: 35 to 45 minutes (the
+# Getting started fit, 2 x 400 on 2 cores, took 18). The single-patch
+# fallback took 21 minutes at 2 x 1000 for all six streams. Hosted
+# runners are 1.2 to 1.5 times slower, so each main fit job takes about
+# 1 to 1.5 hours with setup (to be re-measured). The fallback fits beside
+# main and persistence is built in `prepare`, so only the retry runs
+# after main.
 [timing]
 # GitHub's 360-minute job cap, less a margin.
 fit_cap_minutes = 350
@@ -61,14 +63,17 @@ label = "main model, refitted (smaller steps, jittered inits)"
 # set per candidate here.
 sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.95, max_tree_depth = 10, seed = 2, init = "jitter", chain_method = "vectorized" }
 
+# The fallback is the single-patch model: an independent renewal fit for
+# each province with cases and for the country, with no pooling or
+# coupling. It fits fast (21 minutes on the 2026-10-24 vintage), so it
+# runs beside `main`, not after it, as the standby.
 [[candidates]]
-id = "fallback"
+id = "renewalsp"
 kind = "fallback"
-config = "fallback"
-# Fitted alongside `main`, not after it, so that a failed main model
-# does not leave too little of the window to fit the fallback.
+config = "renewalsp"
+model = "renewalsp"
 stage = "primary"
-label = "fallback variant (no spatial coupling, delays and missingness fixed from the data)"
+label = "single-patch model (independent renewal fits, no pooling or coupling)"
 sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.9, max_tree_depth = 10, seed = 1, chain_method = "vectorized" }
 
 # A shadow: fitted and checked weekly with the primary stage, never
@@ -77,6 +82,7 @@ sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept =
 id = "bvd"
 kind = "shadow"
 config = "bvd"
+model = "renewalbvd"
 stage = "primary"
 label = "BVDOutbreakSize-informed variant (shadow, not submitted)"
 sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.9, max_tree_depth = 10, seed = 1, chain_method = "vectorized" }

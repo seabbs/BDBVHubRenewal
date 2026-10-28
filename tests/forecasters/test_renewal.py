@@ -58,11 +58,10 @@ def test_variants_are_registered_as_fitted_models() -> None:
 
 def test_fit_configs_run_the_renewal_model() -> None:
     assert get_config("main").stand_in is None
-    assert get_config("fallback").stand_in is None
     assert rn.VARIANTS["renewal"].base == "MAIN"
     assert rn.FIT_VARIANTS == {
         "main": "renewal",
-        "fallback": "fallback",
+        "renewalsp": "renewalsp",
         "bvd": "renewalbvd",
     }
     assert get_config("bvd").stand_in is None

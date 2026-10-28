@@ -1,4 +1,4 @@
-"""Fit the main and fallback configurations to a simulated vintage.
+"""Fit the main configuration to a simulated vintage.
 
 The outbreak comes from `bdbvhubrenewal.data.simulate.simulate_outbreak`, a
 case-level simulator independent of this model: Rt turns from about 1.6
@@ -17,7 +17,7 @@ import pytest
 
 from bdbvhubrenewal.evaluation.ppc import summarise_draws
 from bdbvhubrenewal.forecasters.renewal import ppc_rows
-from bdbvhubrenewal.model import FALLBACK, MAIN, build_model, fit
+from bdbvhubrenewal.model import MAIN, build_model, fit
 from bdbvhubrenewal.model.model import forecast_trajectories
 
 from .conftest import VINTAGE_DAYS, vintage_date
@@ -26,9 +26,9 @@ pytestmark = pytest.mark.slow
 RESULTS = Path(__file__).parents[1] / "results"
 
 
-@pytest.fixture(scope="module", params=["main", "fallback"])
+@pytest.fixture(scope="module", params=["main"])
 def fitted(request, sim_vintage):
-    cfg = {"main": MAIN, "fallback": FALLBACK}[request.param]
+    cfg = {"main": MAIN}[request.param]
     model = build_model(sim_vintage, cfg)
     start = time.perf_counter()
     fit(model, sim_vintage, num_warmup=300, num_samples=300, num_chains=2)
