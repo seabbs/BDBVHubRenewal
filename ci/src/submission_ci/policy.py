@@ -4,8 +4,8 @@ The chain is an ordered list of candidates. The first candidate that
 clears every check is submitted:
 
 1. `main`: the main model with the default sampler settings.
-2. `retry-1`: one refit of the main model with a longer warm-up, smaller
-   steps and jittered inits, only when `main` is past the convergence
+2. `retry-1`: one refit of the main model with smaller steps and
+   jittered inits, only when `main` is past the convergence
    retry thresholds or was ruled out (`retry_budget`, 1 by default), and
    only when there is time for it before the window closes (`[timing]`).
 3. `fallback`: the same model code with `--config fallback` (no spatial
