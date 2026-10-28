@@ -251,3 +251,22 @@ def _persistence_choice(tmp_path: Path) -> Path:
     path = tmp_path / "persistence-choice.yml"
     path.write_text("choices:\n  - {date: 2026-10-10, model: persistence}\n")
     return path
+
+
+def test_heldout_with_no_vintage_after_the_choice(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    config: BacktestConfig,
+    tmp_path: Path,
+) -> None:
+    # A choice after the latest vintage holds nothing out yet.
+    config.model_choice.write_text(
+        "choices:\n  - {date: 2026-12-31, model: persistencenow}\n"
+    )
+    scores = run_heldout(
+        target, delays, config, evaluate_holdout=True, out_dir=tmp_path
+    )
+    assert scores.empty
+    record = yaml.safe_load((tmp_path / "heldout-run.yml").read_text())
+    assert record["scored"] == []
+    assert record["pending"] == []
