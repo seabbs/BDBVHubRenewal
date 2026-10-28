@@ -246,8 +246,9 @@ def test_persistencenow_predicts_counts_as_reported_later(
     assert published < by_sample["value"].median()
     assert by_sample["value"].median() < by_sample["value_final"].median()
     assert task.delays is not None
-    _, tri = reporting_triangle(task.delays, "2026-10-09")
-    cdf = np.cumsum(delay_pmf(tri[-14:]))
+    model = PersistenceNow()
+    _, tri = reporting_triangle(task.delays, "2026-10-09", model.max_delay)
+    cdf = np.cumsum(delay_pmf(tri[-model.n_history :]))
     s_v, s_t = cdf[6], cdf[21]
     expected = published + (by_sample["value_final"].median() - published) * (
         (s_t - s_v) / (1 - s_v)
