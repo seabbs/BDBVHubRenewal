@@ -25,6 +25,10 @@ POLICY_PATH = Path(__file__).parents[1] / "policy.toml"
 SETUP, PREPARE = 15, 15
 MAIN = 130 / 4 * 1.5 + SETUP
 RETRY = 134 / 4 * 1.5 + SETUP
+# The single-patch fallback at 2 x (500 + 500) on the same vintage: 21
+# minutes of sampling for all six streams (a laptop, about 1.8 cores in
+# use; submission agent, 2026-10-28).
+SINGLE_PATCH = 21 * 1.5 + SETUP
 
 
 def repo(tmp_path: Path) -> Path:
@@ -247,8 +251,10 @@ def test_matrix_carries_the_fit_timeout(tmp_path: Path) -> None:
 
 
 def test_whole_chain_fits_from_the_last_tuesday_start() -> None:
-    # A main fit of normal length leaves time for the retry. The fallback
-    # (about 0.7 times main) runs beside main.
+    # The single-patch fallback runs beside main and is ready first, so
+    # the standby never delays the chain.
+    assert SINGLE_PATCH < MAIN
+    # A main fit of normal length leaves time for the retry.
     pol = load_policy(POLICY_PATH)
     t = pol.timing
     window = 540  # the last Tuesday start, 14:00 UTC, to the close

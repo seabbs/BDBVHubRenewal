@@ -142,7 +142,7 @@ The 3-hourly schedule covers that.
 Every fit runs 2 chains of 500 warm-up and 500 draws (`ci/policy.toml`).
 On the 2026-10-24 vintage, with vectorised chains on 2 cores of archie, 4 chains of 1000 warm-up and 1000 draws took 130 minutes of sampling for the main fit and 134 for the retry.
 Nearly every draw reaches the maximum tree depth, so cost follows the number of NUTS iterations, and the current settings take about a quarter of that, 35 to 45 minutes.
-The single-patch fallback (`renewalsp`) converges on real data without reaching the maximum tree depth and fits faster than the main fit.
+The single-patch fallback (`renewalsp`) took 21 minutes of sampling for its six independent fits (the country and five provinces), so it is ready before the main fit.
 Hosted runners are 1.2 to 1.5 times slower, so each fit job takes about 1 to 1.5 hours with setup.
 These times are to be re-measured on the current model.
 Time a real fit with a dry run on a past vintage (see above), and read the `Fit took N s` line in the job summary.

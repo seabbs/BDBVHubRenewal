@@ -80,7 +80,7 @@ The chain is set in `ci/policy.toml`.
    The refit is submitted unless it is clearly broken.
    Otherwise the original fit is kept, if it is not broken.
 3. `renewalsp`: the single-patch model, an independent renewal fit for each province with cases and for the country, with no pooling or coupling.
-   It converges on real data and fits fast.
+   It fits fast (21 minutes of sampling on the 2026-10-24 vintage), so it is ready before the main fit.
    It is fitted alongside `main`, so a broken main model does not leave too little of the window.
 4. `persistence`: the persistence baseline.
 
