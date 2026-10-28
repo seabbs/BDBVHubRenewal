@@ -11,7 +11,11 @@ import jax.numpy as jnp
 import numpy as np
 import numpyro.distributions as dist
 from jax import random
-from numpyro.distributions.transforms import AffineTransform, PowerTransform
+from numpyro.distributions.transforms import (
+    AffineTransform,
+    ComposeTransform,
+    PowerTransform,
+)
 from numpyro.infer import MCMC, NUTS, Predictive, init_to_median
 from pyrenew.ascertainment import IndependentAscertainment
 from pyrenew.deterministic import DeterministicPMF, DeterministicVariable
@@ -40,6 +44,8 @@ from .rt import (
 
 SUNDAY = 6
 GEN_INT_LENGTH = 42
+PHI_FLOOR = 1e-3
+"""Added to $1/\\phi$ so the concentration stays at or below 1000."""
 ALPHA0 = 0.6
 
 
@@ -349,13 +355,25 @@ def fit_weeks(data: Vintage, config: ModelConfig) -> int:
 def _nb_noise(stream: str) -> NegativeBinomialNoise:
     r"""Negative binomial with $1 / \sqrt{\phi} \sim$ HalfNormal(0.25).
 
-    As EpiNow2 (`obs_opts`): the prior shrinks towards Poisson.
+    As EpiNow2 (`obs_opts`): the prior shrinks towards Poisson. The
+    concentration is $\phi = 1 / (x^2 + 10^{-3})$ with $x = 1/\sqrt\phi$,
+    so it stays at or below 1000. The float32 negative binomial log
+    density loses precision as $\phi \to \infty$ (second-difference noise
+    1.5 at $x = 3 \times 10^{-4}$ on real data), which stalls NUTS; at
+    $\phi = 1000$ it is Poisson for these counts.
     """
     inv_sqrt = DistributionalVariable(
         f"inv_sqrt_phi_{stream}", dist.HalfNormal(0.25)
     )
+    capped = ComposeTransform(
+        [
+            PowerTransform(2.0),
+            AffineTransform(PHI_FLOOR, 1.0),
+            PowerTransform(-1.0),
+        ]
+    )
     return NegativeBinomialNoise(
-        TransformedVariable(f"phi_{stream}", inv_sqrt, PowerTransform(-2.0))
+        TransformedVariable(f"phi_{stream}", inv_sqrt, capped)
     )
 
 

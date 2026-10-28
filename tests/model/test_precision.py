@@ -69,3 +69,27 @@ def test_float32_log_density_matches_float64(table, config):
     assert jax.numpy.isfinite(lp32).all()
     assert rel < 1e-4
     assert noise < 0.05
+
+
+@pytest.mark.skipif(not MAIN_REPO_DATA.exists(), reason="main repo data absent")
+@pytest.mark.parametrize("x", [3e-2, 3e-4])
+def test_float32_density_stays_smooth_near_poisson(table, x):
+    # As 1/sqrt(phi) goes to zero the negative binomial approaches Poisson;
+    # the concentration cap keeps its float32 density smooth there.
+    data = real_vintage(table, FALLBACK)
+    model = build_model(data, FALLBACK)
+    with numpyro.handlers.seed(rng_seed=3), numpyro.handlers.trace() as tr:
+        model.sample(**model_args(model, data))
+    params = {
+        k: np.asarray(v["value"])
+        for k, v in tr.items()
+        if v["type"] == "sample" and not v["is_observed"]
+    }
+    params["inv_sqrt_phi_known"] = np.float32(x)
+    site = "log_rt_baseline_knots"
+    steps = np.linspace(-0.02, 0.02, 21)
+    lp32 = log_density_curve(model, data, params, site, steps, jnp.float32)
+    with enable_x64():
+        lp64 = log_density_curve(model, data, params, site, steps, jnp.float64)
+    noise = np.std(np.diff(lp32, 2) - np.diff(lp64, 2))
+    assert noise < 0.05
