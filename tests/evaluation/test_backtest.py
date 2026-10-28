@@ -529,3 +529,30 @@ def test_order_tasks_puts_real_and_spread_origins_first(
     assert nxt[0] == rec[0]
     assert nxt[-1] == rec[-1]
     assert nxt == sorted(nxt)
+
+
+def test_scenarios_are_scored_final_and_as_of(
+    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
+) -> None:
+    from bdbvhubrenewal.data import load_health_zones
+    from bdbvhubrenewal.evaluation.backtest import run_scenarios
+
+    data = Path(__file__).resolve().parents[2] / "data"
+    zones = load_health_zones(data)
+    forecasts, scores = run_scenarios(
+        [get_model("persistence")],
+        config,
+        target,
+        delays,
+        zones,
+        as_of="2026-10-24",
+        dates=("2026-10-10", "2026-10-17"),
+        names=("flat",),
+    )
+    assert set(scores["scenario"]) == {"calibrated_flat"}
+    assert set(scores["truth_view"]) == {"final", "as of 2 weeks later"}
+    assert {"CD", "CD-IT"} <= set(scores["location"])
+    assert set(scores["vintage"]) == {"2026-10-10", "2026-10-17"}
+    final = scores.loc[scores["truth_view"] == "final"]
+    assert final["complete"].any()
+    assert set(forecasts["kind"]) == {"simulated"}
