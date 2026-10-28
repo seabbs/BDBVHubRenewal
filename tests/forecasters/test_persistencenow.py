@@ -33,7 +33,9 @@ def task(target: pd.DataFrame, delays: pd.DataFrame) -> ForecastTask:
 
 
 def _national(samples: pd.DataFrame) -> pd.DataFrame:
-    final = samples.loc[samples.get("as_of", pd.Series(np.nan)).isna()]
+    final = samples
+    if "as_of" in samples:
+        final = samples.loc[samples["as_of"].isna()]
     return final.groupby(["target_end_date", "sample"])["value"].sum().unstack()
 
 
@@ -145,7 +147,7 @@ def test_persistencenow_predicts_counts_as_reported_later(
     # the published count and the final nowcast, near its expected share.
     nat = both.loc[both["target_end_date"] == "2026-10-03"]
     by_sample = nat.groupby("sample")[["value", "value_final"]].sum()
-    published = floor[both["target_end_date"] == "2026-10-03"].sum()
+    published = sum(seen.get((loc, "2026-10-03"), 0) for loc in task.locations)
     assert published < by_sample["value"].median()
     assert by_sample["value"].median() < by_sample["value_final"].median()
     assert task.delays is not None
