@@ -174,7 +174,7 @@ def test_negative_and_long_delays_are_clipped_not_dropped(
 
     day = VINTAGE_DAYS[-1]
     target, delays = sim_tables[day]
-    odd = delays.iloc[:2].copy()
+    odd = delays.sort_values("onset_week").iloc[-2:].copy()
     odd["delay"] = [-3, 90]
     both = vintage_from_tables(
         target,

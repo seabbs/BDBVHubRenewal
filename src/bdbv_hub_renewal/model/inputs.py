@@ -74,8 +74,8 @@ def gravity_kernel(
 ) -> np.ndarray:
     r"""Row-normalised gravity kernel between provinces.
 
-    $K_{qp} \propto N_p \exp(-D_{qp} / \text{decay})$ for $q \ne p$, as
-    `bdbv_hub_renewal.data.simulate.gravity_kernel`, with populations $N$ from
+    $K_{qp} \propto N_p \exp(-D_{qp} / \text{decay})$ for $q \ne p$,
+    with populations $N$ from
     `table` and great-circle distances $D$ between the centres in
     `province_centres()`, which cover all 26 provinces.
 

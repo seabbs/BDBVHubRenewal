@@ -79,12 +79,12 @@ So they are cleaner than real vintages, and scores on them are somewhat optimist
 
 ## Simulated vintages
 
-A simulator generates province outbreaks from the renewal model's own structure with known parameters:
+A simulator generates province outbreaks from the model's own code with known parameters:
 
-- a renewal process with a national Rt that turns from 1.6 to 0.85 around day 120, fixed province offsets, gravity-kernel importation ($\varepsilon = 0.01$) and susceptible depletion;
-- ascertainment rising from 0.5 to 0.75;
+- expected onsets from the model's renewal and generation interval, with a national Rt that turns from 1.6 to 0.85 around day 120, fixed province offsets, gravity-kernel importation ($\varepsilon = 0.01$) and susceptible depletion;
+- Poisson confirmed cases, with ascertainment rising from 0.5 to 0.75;
 - a missing-onset share by report day rising from 5% to 25% and falling to 12%;
-- a Gamma delay whose mean falls from 12 to 6 days;
+- a double censored Gamma delay whose mean falls from 12 to 6 days;
 - a lag from report to publication uniform on 0 to 3 days.
 
 It then publishes vintages as the hub does: known onsets by onset week, missing onsets given an onset by a delay drawn from the known delays reported so far, their total, and the delay line data.

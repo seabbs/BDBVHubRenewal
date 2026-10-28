@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbv_hub_renewal.data.delays import ParametricDelay
 from bdbv_hub_renewal.data.reconstruct import (
     compare_reconstruction,
     reconstruct_delays,
@@ -15,8 +14,6 @@ from bdbv_hub_renewal.data.reconstruct import (
 )
 from bdbv_hub_renewal.data.simulate import (
     SimulationSettings,
-    gravity_kernel,
-    renewal,
     simulate_outbreak,
 )
 
@@ -55,31 +52,6 @@ def test_reconstructed_delays_are_truncated(delays: pd.DataFrame) -> None:
     assert kept["onset_week"].max() <= "2026-09-05"
     assert kept["onset_week"].max() >= "2026-08-29"
     assert len(kept) < len(_latest(delays))
-
-
-def test_renewal_constant_r_one_is_flat() -> None:
-    gi = ParametricDelay("gamma", 15, 9).pmf(60)
-    days = 300
-    seed = np.zeros((1, days))
-    seed[0, :60] = 10
-    inf, sus = renewal(np.ones((1, days)), gi, seed, np.array([1e12]))
-    assert inf[0, 200] == pytest.approx(inf[0, 299], rel=0.02)
-    assert sus.min() > 0.999
-
-
-def test_renewal_depletion_bounds_outbreak() -> None:
-    gi = ParametricDelay("gamma", 15, 9).pmf(60)
-    seed = np.zeros((1, 400))
-    seed[0, 0] = 10
-    inf, sus = renewal(np.full((1, 400), 2.0), gi, seed, np.array([1000.0]))
-    assert inf.sum() < 1000
-    assert sus[0, -1] < 0.5
-
-
-def test_gravity_kernel_rows_sum_to_one() -> None:
-    k = gravity_kernel(("CD-IT", "CD-NK", "CD-HU"))
-    assert np.allclose(k.sum(axis=1), 1)
-    assert np.allclose(np.diag(k), 0)
 
 
 @pytest.fixture(scope="module")

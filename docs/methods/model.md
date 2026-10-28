@@ -91,7 +91,7 @@ Each province's expected confirmed onsets per day at the start are $c_p \sim \te
 They become $x_p = c_p / (\alpha_0 N_p)$ and grow back over the seeding weeks at the initial growth rate implied by $R_p$ and $g$.
 That rate is clipped to $[-0.05, 0.3]$ per day, so a steep early decline cannot project an implausibly large seed.
 
-The simulator's NumPy renewal, with linear depletion, is [`simulate.renewal`][bdbv_hub_renewal.data.simulate.renewal].
+The simulator ([simulated vintages](data.md#simulated-vintages)) uses this renewal too.
 
 ## Observation
 

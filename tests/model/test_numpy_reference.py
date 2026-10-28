@@ -11,6 +11,7 @@ from .numpy_reference import (
     expected_imputed_onsets,
     expected_known_onsets,
     expected_missing_by_report,
+    renewal,
     to_onset_weeks,
 )
 
@@ -46,3 +47,22 @@ def test_to_onset_weeks() -> None:
     weekly = to_onset_weeks(np.ones(14), "2026-10-04")
     assert list(weekly.index) == ["2026-10-10", "2026-10-17"]
     assert list(weekly) == [7, 7]
+
+
+def test_renewal_constant_r_one_is_flat() -> None:
+    gi = ParametricDelay("gamma", 15, 9).pmf(60)
+    days = 300
+    seed = np.zeros((1, days))
+    seed[0, :60] = 10
+    inf, sus = renewal(np.ones((1, days)), gi, seed, np.array([1e12]))
+    assert inf[0, 200] == pytest.approx(inf[0, 299], rel=0.02)
+    assert sus.min() > 0.999
+
+
+def test_renewal_depletion_bounds_outbreak() -> None:
+    gi = ParametricDelay("gamma", 15, 9).pmf(60)
+    seed = np.zeros((1, 400))
+    seed[0, 0] = 10
+    inf, sus = renewal(np.full((1, 400), 2.0), gi, seed, np.array([1000.0]))
+    assert inf.sum() < 1000
+    assert sus[0, -1] < 0.5
