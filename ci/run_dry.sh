@@ -265,6 +265,51 @@ ledger() {
   echo "ok: pages/2026-11-07.md frozen once on submission-ledger"
 }
 
+baseline_track() {
+  # track.sh on the `main` scenario's inputs: seabbsbaseline submits
+  # persistence on a nowcast under its own id, and falls back to plain
+  # persistence when the nowcast is ruled out.
+  local src="$ROOT/main" case want selected
+  for case in nowcast fallback; do
+    export WORK="$ROOT/baseline-$case"
+    rm -rf "$WORK" && mkdir -p "$WORK"
+    cp -R "$src/inputs" "$WORK/inputs"
+    mkdir -p "$WORK/candidates"
+    cp -R "$src/candidates/persistence" "$src/candidates/persistencenow" \
+      "$WORK/candidates/"
+    [ "$case" = fallback ] && rm -rf "$WORK/candidates/persistencenow/submission"
+    export GH_LOG="$WORK/gh.log" GITHUB_OUTPUT="$WORK/github-output"
+    export GITHUB_STEP_SUMMARY="$WORK/summary.md"
+    get() { python3 -c "import json;print(json.load(open('$src/decision.json'))['$1'])"; }
+    HUB_REF=$(get hub_ref) DATA_COMMIT=$(get data_commit) AS_OF=$(get as_of) \
+      REFERENCE_DATE=$(get reference_date) DRY_RUN=true HUB_PATH="$FIX/hub" \
+      HUB_VALIDATOR=true MODEL="" MODEL_ID="" \
+      "$CI_DIR/steps/track.sh" > "$WORK/track.log" 2>&1 \
+      || { echo "FAIL: baseline $case"; cat "$WORK/track.log"; return 1; }
+    local gate="$WORK/track-persistencenow/gate"
+    selected=$(python3 -c "import json;print(json.load(open('$gate/provenance.json'))['selected'])")
+    if [ "$case" = nowcast ]; then
+      want=persistencenow
+      grep -q "All checks passed" "$gate/pr-body.md" \
+        || { echo "FAIL: baseline body"; head -5 "$gate/pr-body.md"; return 1; }
+    else
+      want=persistence
+      grep -q "Fallback model used (persistence baseline)" "$gate/pr-body.md" \
+        || { echo "FAIL: baseline fallback body"; head -5 "$gate/pr-body.md"; return 1; }
+    fi
+    [ "$selected" = "$want" ] \
+      || { echo "FAIL: baseline $case selected $selected"; return 1; }
+    grep -q "bdbv-submission:epiforecasts-seabbsbaseline:" "$gate/pr-body.md" \
+      || { echo "FAIL: baseline id"; return 1; }
+    grep -q '"branch": "epiforecasts-seabbsbaseline-' "$WORK/track.log" \
+      || { echo "FAIL: baseline branch"; cat "$WORK/track.log"; return 1; }
+    if grep -v '^pr list' "$WORK/gh.log" 2> /dev/null; then
+      echo "FAIL: baseline dry run wrote to GitHub"; return 1
+    fi
+  done
+  echo "=== baseline ===" && echo "ok: seabbsbaseline submits persistencenow, else persistence"
+}
+
 no_new_data() {
   # A round that already ran on today's data must not run again.
   export WORK="$ROOT/no-new-data"
@@ -296,5 +341,6 @@ for s in "${SCENARIOS[@]}"; do
 done
 no_new_data || failed=1
 ledger || failed=1
+baseline_track || failed=1
 [ $failed = 0 ] && echo "All dry-run scenarios passed." || echo "Some scenarios FAILED."
 exit $failed

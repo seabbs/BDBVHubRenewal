@@ -397,6 +397,16 @@ def cmd_plot(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_metadata(args: argparse.Namespace) -> int:
+    """Write a minimal metadata file named after the hub id."""
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"epiforecasts-{args.abbr}.yml").write_text(
+        f"team_abbr: epiforecasts\nmodel_abbr: {args.abbr}\n"
+    )
+    return 0
+
+
 def cmd_freeze(args: argparse.Namespace) -> int:
     """Write the round's page once, as the real `freeze-round` does."""
     page = Path(args.ledger) / "pages" / f"{args.round}.md"
@@ -434,7 +444,12 @@ def main() -> int:
     sub.add_parser("chosen-model")
     b = sub.add_parser("bvd")
     b.add_argument("--vintages", nargs="*", default=None)
-    sub.add_parser("hub-id")
+    hid = sub.add_parser("hub-id")
+    hid.add_argument("--model", default=None)
+    me = sub.add_parser("metadata")
+    me.add_argument("--model", required=True)
+    me.add_argument("--abbr", required=True)
+    me.add_argument("--out", required=True)
     fr = sub.add_parser("freeze-round")
     fr.add_argument("--ledger", required=True)
     fr.add_argument("--round", required=True)
@@ -456,7 +471,15 @@ def main() -> int:
             print(os.environ.get("FAKE_CHOSEN_MODEL") or "renewal") or 0
         ),
         "bvd": lambda _a: 0,
-        "hub-id": lambda _a: print("epiforecasts-seabbsrenewal") or 0,
+        "hub-id": lambda a: (
+            print(
+                "epiforecasts-seabbsbaseline"
+                if a.model == "persistencenow"
+                else "epiforecasts-seabbsrenewal"
+            )
+            or 0
+        ),
+        "metadata": cmd_metadata,
         "freeze-round": cmd_freeze,
     }[args.command](args)
 

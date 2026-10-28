@@ -162,6 +162,8 @@ jobs:
     timeout-minutes: 30
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
+      renewal: ${{ steps.tracks.outputs.renewal }}
+      baseline: ${{ steps.tracks.outputs.baseline }}
     env:
       HUB_REF: ${{ needs.detect.outputs.hub_ref }}
       AS_OF: ${{ needs.detect.outputs.as_of }}
@@ -175,8 +177,17 @@ jobs:
         env:
           EXPECTED_LOCATIONS: ${{ vars.EXPECTED_LOCATIONS }}
         run: ci/steps/prepare.sh
+      # Each hub model runs only when opted in (`submit = true` in
+      # config/hub.toml); seabbsrenewal also needs a model choice.
+      - name: Decide which hub models run
+        id: tracks
+        run: |
+          source ci/steps/lib.sh
+          uv run --project "$CI_DIR" python -m submission_ci.tracks \
+            --chosen "$MODEL"
       - name: List the primary fits
         id: matrix
+        if: steps.tracks.outputs.renewal == 'true'
         # With persistence chosen, the renewal candidates are fitted as
         # shadows and the chain is persistence alone. Each fit's timeout
         # leaves the gate time before the window closes.
@@ -199,6 +210,7 @@ jobs:
   fit:
     name: Fit primary
     needs: [detect, prepare]
+    if: needs.prepare.outputs.renewal == 'true'
     uses: ./.github/workflows/fit-candidates.yml
     with:
       matrix: ${{ needs.prepare.outputs.matrix }}
@@ -209,7 +221,9 @@ jobs:
   triage:
     name: Decide on retries
     needs: [detect, prepare, fit]
-    if: ${{ !cancelled() && needs.prepare.result == 'success' }}
+    if: >-
+      ${{ !cancelled() && needs.prepare.result == 'success' &&
+      needs.prepare.outputs.renewal == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -415,12 +429,102 @@ jobs:
             ${{ env.WORK }}/gate/pr-outcome.txt
           retention-days: 90
 
+  # seabbsbaseline: persistence on a nowcast, falling back to plain
+  # persistence, under its own hub id. Apart from the renewal chain; both
+  # candidates were built in `prepare`.
+  baseline:
+    name: Submit seabbsbaseline
+    needs: [detect, prepare]
+    if: >-
+      ${{ !cancelled() && needs.prepare.result == 'success' &&
+      needs.prepare.outputs.baseline == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: hub-submission
+    outputs:
+      action: ${{ steps.track.outputs.action }}
+      pr_url: ${{ steps.track.outputs.pr_url }}
+      produced_by: ${{ steps.track.outputs.produced_by }}
+      skipped: ${{ steps.track.outputs.skipped }}
+    env:
+      HUB_REF: ${{ needs.detect.outputs.hub_ref }}
+      AS_OF: ${{ needs.detect.outputs.as_of }}
+      DATA_COMMIT: ${{ needs.detect.outputs.data_commit }}
+      REFERENCE_DATE: ${{ needs.detect.outputs.reference_date }}
+      DRY_RUN: ${{ needs.detect.outputs.dry_run }}
+      SOURCE_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-forecast-env
+      - uses: actions/download-artifact@v4
+        with:
+          name: inputs
+          path: ${{ env.WORK }}
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.HUB }}
+          ref: ${{ env.HUB_REF }}
+          path: output/hub-clone
+          sparse-checkout: |
+            hub-config
+            model-metadata
+      - uses: r-lib/actions/setup-r@v2
+        if: vars.HUB_VALIDATIONS != 'false'
+        with:
+          use-public-rspm: true
+          extra-repositories: https://hubverse-org.r-universe.dev
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        if: vars.HUB_VALIDATIONS != 'false'
+        with:
+          packages: any::hubValidations
+          dependencies: '"hard"'
+      - name: Authenticate as the bot
+        if: env.DRY_RUN == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.HUB_SUBMIT_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::HUB_SUBMIT_TOKEN is not set in the hub-submission environment"
+            exit 1
+          fi
+          gh auth setup-git
+          git config --global user.name "seabbs-bot"
+          git config --global user.email "signin@samabbott.co.uk"
+      - name: Check and submit
+        id: track
+        env:
+          GH_TOKEN: ${{ needs.detect.outputs.dry_run == 'false' && secrets.HUB_SUBMIT_TOKEN || github.token }}
+          VALIDATE: 'true'
+          R_VALIDATION: ${{ vars.HUB_VALIDATIONS != 'false' }}
+          HUB_PATH: output/hub-clone
+          CHECK_WINDOW: ${{ needs.detect.outputs.dry_run == 'false' }}
+        run: ci/steps/track.sh
+      - name: Show the PR body
+        if: always()
+        run: |
+          {
+            echo "<details><summary>seabbsbaseline PR body</summary>"
+            echo
+            cat "$WORK/track-persistencenow/gate/pr-body.md" 2> /dev/null
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: baseline-gate
+          path: |
+            ${{ env.WORK }}/track-persistencenow/gate
+            ${{ env.WORK }}/track-persistencenow/metadata
+          retention-days: 90
+
   record:
     name: Record the round in the ledger
-    needs: [detect, gate, submit]
+    needs: [detect, prepare, gate, submit, baseline]
     if: >-
       ${{ always() && needs.detect.outputs.should_run == 'true' &&
-      needs.detect.outputs.dry_run == 'false' }}
+      needs.detect.outputs.dry_run == 'false' &&
+      (needs.prepare.outputs.renewal == 'true' ||
+      needs.prepare.outputs.baseline == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -434,19 +538,29 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       - uses: actions/download-artifact@v4
+        if: needs.prepare.outputs.renewal == 'true'
         continue-on-error: true
         with:
           name: gate
           path: ${{ env.WORK }}
+      - uses: actions/download-artifact@v4
+        if: needs.prepare.outputs.baseline == 'true'
+        continue-on-error: true
+        with:
+          name: baseline-gate
+          path: ${{ env.WORK }}/baseline
+      # The round's status is seabbsrenewal's when it ran, otherwise
+      # seabbsbaseline's. seabbsbaseline's files are archived beside it.
       - name: Update the ledger and archive the round
         env:
           GH_TOKEN: ${{ github.token }}
           DATA_COMMIT: ${{ needs.detect.outputs.data_commit }}
           AS_OF: ${{ needs.detect.outputs.as_of }}
-          ACTION: ${{ needs.submit.outputs.action }}
-          PR_URL: ${{ needs.submit.outputs.pr_url }}
-          PRODUCED_BY: ${{ needs.gate.outputs.produced_by }}
-          SKIPPED: ${{ needs.gate.outputs.skipped }}
+          ACTION: ${{ needs.submit.outputs.action || needs.baseline.outputs.action }}
+          PR_URL: ${{ needs.submit.outputs.pr_url || needs.baseline.outputs.pr_url }}
+          PRODUCED_BY: ${{ needs.gate.outputs.produced_by || needs.baseline.outputs.produced_by }}
+          SKIPPED: ${{ needs.prepare.outputs.renewal == 'true' && needs.gate.outputs.skipped || needs.baseline.outputs.skipped }}
+          BASELINE_GATE: ${{ needs.prepare.outputs.baseline == 'true' && format('{0}/baseline/gate', env.WORK) || '' }}
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: ci/steps/record.sh
       - name: Rebuild the docs with this round's page
@@ -456,7 +570,7 @@ jobs:
 
   outcome:
     name: Submission outcome
-    needs: [detect, prepare, fit, triage, retry, gate, submit, record]
+    needs: [detect, prepare, fit, triage, retry, gate, submit, baseline, record]
     if: ${{ always() && needs.detect.outputs.should_run == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -466,6 +580,10 @@ jobs:
       # is opened anywhere.
       - name: Report
         env:
+          RENEWAL: ${{ needs.prepare.outputs.renewal }}
+          BASELINE: ${{ needs.prepare.outputs.baseline }}
+          BASELINE_BY: ${{ needs.baseline.outputs.produced_by }}
+          BASELINE_PR: ${{ needs.baseline.outputs.action }} ${{ needs.baseline.outputs.pr_url }}
           SELECTED: ${{ needs.gate.outputs.selected }}
           PRODUCED_BY: ${{ needs.gate.outputs.produced_by }}
           STATUS: ${{ needs.gate.outputs.status }}
@@ -480,7 +598,13 @@ jobs:
           {
             echo "## Round $REF"
             echo
-            if [ -z "$SELECTED" ]; then
+            [ "$RENEWAL" = true ] || [ "$BASELINE" = true ] \
+              || echo "No hub model is opted in (config/hub.toml)."
+            [ "$BASELINE" = true ] \
+              && echo "seabbsbaseline: **${BASELINE_BY:-not submitted}**, PR $BASELINE_PR"
+            if [ "$RENEWAL" != true ]; then
+              :
+            elif [ -z "$SELECTED" ]; then
               echo "**Round skipped.** No candidate cleared the checks; the"
               echo "gate job's summary and the \`gate\` artefact say why."
             else
@@ -490,7 +614,7 @@ jobs:
             fi
             [ -n "$failed" ] && echo "Failed jobs: $failed"
           } >> "$GITHUB_STEP_SUMMARY"
-          if [ -z "$SELECTED" ]; then
+          if [ "$RENEWAL" = true ] && [ -z "$SELECTED" ]; then
             echo "::error::round $REF skipped: every candidate was ruled out"
             exit 1
           fi
@@ -498,6 +622,6 @@ jobs:
             echo "::error::jobs failed: $failed"
             exit 1
           fi
-          case "$ACTION" in
-            skipped-*) echo "::error::PR not submitted: $ACTION"; exit 1 ;;
+          case "$ACTION $BASELINE_PR" in
+            *skipped-*) echo "::error::PR not submitted: $ACTION $BASELINE_PR"; exit 1 ;;
           esac

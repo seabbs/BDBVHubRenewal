@@ -103,6 +103,7 @@ def settings(tmp_path: Path) -> Settings:
         fork_default=FORK,
         model_id_default=MID,
         other_model_ids=(MID2,),
+        opted_in=(MID2,),
         metadata_dir=meta,
         model_choice=choice,
         workflow_file=Path(".github/workflows/submit.yml"),
@@ -380,3 +381,16 @@ def test_second_hub_model_is_checked(settings: Settings) -> None:
     (settings.metadata_dir / f"{MID2}.yml").unlink()
     checks = {c.name: c for c in run_checks(ready_runner(), settings)}
     assert checks[f"metadata {MID2}"].status == "missing"
+
+
+def test_opt_in_is_reported(settings: Settings) -> None:
+    from dataclasses import replace
+
+    none = replace(settings, opted_in=())
+    check = {c.name: c for c in run_checks(ready_runner(), none)}["opt-in"]
+    assert check.status == "warn"
+    assert "submit = true" in check.fix
+    opted = replace(settings, opted_in=(MID2,))
+    check = {c.name: c for c in run_checks(ready_runner(), opted)}["opt-in"]
+    assert check.status == "ok"
+    assert MID2 in check.detail

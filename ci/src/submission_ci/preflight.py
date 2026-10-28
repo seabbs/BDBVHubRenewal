@@ -82,6 +82,8 @@ class Settings:
     now: dt.datetime
     other_model_ids: tuple[str, ...] = ()
     """Further hub models, each submitted under its own id."""
+    opted_in: tuple[str, ...] = ()
+    """Hub models with `submit = true` in `config/hub.toml`."""
 
 
 def _api(runner: Runner, path: str) -> tuple[bool, Any]:
@@ -533,6 +535,18 @@ def other_model_ids(path: Path) -> tuple[str, ...]:
     return tuple(f"{TEAM}-{m['model_abbr']}" for m in models.values())
 
 
+def opted_in(path: Path) -> tuple[str, ...]:
+    """Hub ids of the models with `submit = true` in `config/hub.toml`."""
+    if not path.exists():
+        return ()
+    with path.open("rb") as fh:
+        cfg = tomllib.load(fh)
+    entries = [cfg.get("submission", {}), *cfg.get("models", {}).values()]
+    return tuple(
+        f"{TEAM}-{e['model_abbr']}" for e in entries if e.get("submit")
+    )
+
+
 def run_checks(runner: Runner, s: Settings) -> list[Check]:
     """Every check, in the order of the setup checklist."""
     checks = [check_gh(runner), check_hub(runner, s.hub)]
@@ -561,6 +575,18 @@ def run_checks(runner: Runner, s: Settings) -> list[Check]:
     checks.append(
         check_model_choice(s.model_choice, values.get("HUB_MODEL", ""))
     )
+    if s.opted_in:
+        checks.append(Check("opt-in", "ok", "submits " + ", ".join(s.opted_in)))
+    else:
+        checks.append(
+            Check(
+                "opt-in",
+                "warn",
+                "no hub model is opted in, so nothing is submitted",
+                "Set `submit = true` for the model in config/hub.toml and "
+                "push to `main`.",
+            )
+        )
     checks.append(mode)
     return checks
 
@@ -622,6 +648,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         fork_default=args.fork,
         model_id_default=hub_model_id(args.hub_config),
         other_model_ids=other_model_ids(args.hub_config),
+        opted_in=opted_in(args.hub_config),
         metadata_dir=args.metadata_dir,
         model_choice=args.model_choice,
         workflow_file=args.workflow_file,
