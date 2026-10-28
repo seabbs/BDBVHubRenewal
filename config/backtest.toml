@@ -25,9 +25,8 @@ complete_after_weeks = 3
 
 [sampler]
 # NUTS settings of every fitted model in the backtest and leave one
-# province out. Shorter than the submission fit (4 chains of 1000 and
-# 1000, ci/policy.toml), with the same target acceptance. Settings in
-# BDBV_RENEWAL_SAMPLER win over these.
+# province out, the same as the submission's main fit (ci/policy.toml).
+# Settings in BDBV_RENEWAL_SAMPLER win over these.
 num_chains = 2
 num_warmup = 500
 num_samples = 500
