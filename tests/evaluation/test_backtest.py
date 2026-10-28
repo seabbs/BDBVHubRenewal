@@ -214,6 +214,26 @@ def test_development_scores_both_ways(
     }
 
 
+def test_origins_without_a_lag_estimate_are_marked(
+    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
+) -> None:
+    forecasts, scores = run_development(
+        [get_model("persistence")], target, delays, config
+    )
+    # Origins with no earlier pair of delay files take the publication
+    # lag from a prior informed by later files.
+    marked = scores.loc[scores["lag_prior"], ["kind", "vintage"]]
+    assert set(map(tuple, marked.drop_duplicates().to_numpy())) == {
+        ("real", "2026-08-18"),
+        ("real", "2026-10-09"),
+    }
+    by_truth = score_by_truth_vintage(forecasts, target)
+    assert set(by_truth.loc[by_truth["lag_prior"], "vintage"]) == {
+        "2026-08-18",
+        "2026-10-09",
+    }
+
+
 def test_truth_changes(target: pd.DataFrame) -> None:
     changes = truth_changes(target, locations=("CD",))
     week = changes.loc[changes["target_end_date"] == "2026-10-10"]
