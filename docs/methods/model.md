@@ -103,7 +103,7 @@ Their seed is projected back over the seeding weeks at the growth rate implied b
 Later provinces start at $10^{-6}$ of that level and take $I_{0,p}$ as a constant daily addition to $y_p(t)$ in the week before their first case week.
 Importation adds to it.
 
-The simulator's NumPy renewal, with linear depletion, is [`simulate.renewal`][bdbv_hub_renewal.data.simulate.renewal].
+The simulator ([simulated vintages](data.md#simulated-vintages)) uses this renewal too.
 
 ## Observation
 
@@ -209,9 +209,11 @@ The non-monotone revisions in imputed counts suggest it re-imputes each time.
 The model axis runs to the end of the forecast horizon, so the random walks carry $R_p$, $\alpha$, $f$ and $\pi$ forward.
 Each of the 100 trajectories uses one posterior draw for every province and week.
 It is the final known plus final imputed counts.
-For each stream, this is the count already reported by the cut-off plus a negative binomial draw of the expected cases reported after it, as in epinowcast.
-So a trajectory is never below the counts already reported.
-The hub re-imputes missing onsets at each vintage, but the cases reported by the cut-off are spread with the same delay in expectation, so their imputed count is kept too.
+For known onsets, this is the count already reported by the cut-off plus a negative binomial draw of the expected cases reported after it, as in epinowcast.
+So a trajectory is never below the known onsets already reported.
+The hub re-imputes missing onsets at each vintage, so a week's imputed count can fall as well as rise.
+The final imputed count is a negative binomial draw centred on the current imputed count plus the count expected from cases reported later.
+In recovery fits, keeping the current imputed count fixed instead under-covered the final counts.
 A province left out uses a draw of its vintage count instead of the data.
 Provinces with no cases are zero up to the cut-off.
 After it they draw Poisson importations, $\mu_q = \kappa \sum_p K_{pq} \lambda_p$, which spread locally at the national Rt, $\sum_p R_p I_p / \sum_p I_p$, weighted by infections.

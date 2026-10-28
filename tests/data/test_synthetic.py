@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbv_hub_renewal.data.delays import ParametricDelay
 from bdbv_hub_renewal.data.reconstruct import (
     compare_reconstruction,
     reconstruct_delays,
@@ -15,8 +14,6 @@ from bdbv_hub_renewal.data.reconstruct import (
 )
 from bdbv_hub_renewal.data.simulate import (
     SimulationSettings,
-    gravity_kernel,
-    renewal,
     simulate_outbreak,
 )
 
@@ -55,31 +52,6 @@ def test_reconstructed_delays_are_truncated(delays: pd.DataFrame) -> None:
     assert kept["onset_week"].max() <= "2026-09-05"
     assert kept["onset_week"].max() >= "2026-08-29"
     assert len(kept) < len(_latest(delays))
-
-
-def test_renewal_constant_r_one_is_flat() -> None:
-    gi = ParametricDelay("gamma", 15, 9).pmf(60)
-    days = 300
-    seed = np.zeros((1, days))
-    seed[0, :60] = 10
-    inf, sus = renewal(np.ones((1, days)), gi, seed, np.array([1e12]))
-    assert inf[0, 200] == pytest.approx(inf[0, 299], rel=0.02)
-    assert sus.min() > 0.999
-
-
-def test_renewal_depletion_bounds_outbreak() -> None:
-    gi = ParametricDelay("gamma", 15, 9).pmf(60)
-    seed = np.zeros((1, 400))
-    seed[0, 0] = 10
-    inf, sus = renewal(np.full((1, 400), 2.0), gi, seed, np.array([1000.0]))
-    assert inf.sum() < 1000
-    assert sus[0, -1] < 0.5
-
-
-def test_gravity_kernel_rows_sum_to_one() -> None:
-    k = gravity_kernel(("CD-IT", "CD-NK", "CD-HU"))
-    assert np.allclose(k.sum(axis=1), 1)
-    assert np.allclose(np.diag(k), 0)
 
 
 @pytest.fixture(scope="module")
@@ -136,3 +108,44 @@ def test_simulated_missing_onsets_follow_the_report_day() -> None:
     frac = np.clip(day - s.n_days / 3, 0, None) / (s.n_days * 2 / 3)
     expected = np.where(day >= s.n_days / 3, 0.9 * frac, 0.0).mean()
     assert (~cases["onset_known"]).mean() == pytest.approx(expected, abs=0.01)
+
+
+def test_simulated_onsets_follow_the_model_renewal(outbreak) -> None:  # type: ignore[no-untyped-def]
+    import jax.numpy as jnp
+
+    from bdbv_hub_renewal.data import PROVINCE_POPULATIONS
+    from bdbv_hub_renewal.model.inputs import gravity_kernel as model_kernel
+    from bdbv_hub_renewal.model.model import generation_interval
+    from bdbv_hub_renewal.model.renewal import coupled_renewal, mixing_matrix
+
+    s = outbreak.settings
+    p = outbreak.parameters
+    rt = p.pivot(index="date", columns="location", values="rt")[
+        list(s.locations)
+    ].to_numpy()
+    pop = np.array([PROVINCE_POPULATIONS[q] for q in s.locations])
+    table = pd.DataFrame({"location": s.locations, "population": pop})
+    w = mixing_matrix(
+        jnp.asarray(model_kernel(s.locations, table)),
+        s.importation,
+        jnp.asarray(pop / pop.sum()),
+    )
+    seeding = np.zeros_like(rt)
+    for i, day in enumerate(s.seed_day):
+        if day >= 0:
+            seeding[day, i] = s.seed_size / pop[i]
+    g = generation_interval(s.gi_mean, s.gi_sd)
+    nu = s.effective_fraction
+    x, _ = coupled_renewal(
+        jnp.zeros((g.size, len(pop))),
+        jnp.asarray(rt),
+        jnp.asarray(g),
+        w,
+        jnp.full(len(pop), nu),
+        pool=nu,
+        seeding=jnp.asarray(seeding),
+    )
+    onsets = p.pivot(index="date", columns="location", values="onsets")[
+        list(s.locations)
+    ].to_numpy()
+    np.testing.assert_allclose(onsets, np.asarray(x) * pop, rtol=1e-4)
