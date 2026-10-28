@@ -84,7 +84,7 @@ from bdbvhubrenewal.data.completeness import reported_share
 from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.delays import DEFAULT_MAX_DELAY, EmpiricalDelayModel
 from bdbvhubrenewal.data.triangle import (
-    chainladder_fill,
+    apply_delay,
     delay_pmf,
     fit_nb_size,
     reporting_triangle,
@@ -491,11 +491,12 @@ class PersistenceNow(Persistence):
         obs, pred = retrospective_errors(tri, self.n_retro, self.n_history)
         if obs.shape[0] < self.min_retro:
             return None
-        filled = chainladder_fill(hist)
+        pmf = delay_pmf(hist)
+        filled = apply_delay(hist, pmf)
         reported = np.nansum(hist, axis=1)
         to_come = filled.sum(axis=1) - reported
         ratio = np.where(reported > 0, to_come / np.maximum(reported, 1), 0)
-        cdf = np.cumsum(delay_pmf(hist))
+        cdf = np.cumsum(pmf)
         return weeks[-self.n_history :], ratio, fit_nb_size(obs, pred), cdf
 
     def delay_sources(self, task: ForecastTask) -> dict[str, str]:
