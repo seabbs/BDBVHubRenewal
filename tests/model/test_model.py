@@ -66,7 +66,7 @@ def test_active_set_follows_the_data(outbreak, sim_tables, table):
         ModelConfig(rt_cadence="linear"),
         ModelConfig(seeding="start"),
         ModelConfig(outbreak_threshold=20, import_rt="origin"),
-        ModelConfig(coupling="mvn"),
+        ModelConfig(coupling="learnt", kernel_flows=True),
         ModelConfig(seeding="primary"),
     ],
 )
@@ -414,26 +414,37 @@ def test_primary_seeding_leaves_other_provinces_to_importation(sim_vintage):
     assert np.isfinite(_log_density(coupled, data))
 
 
-def test_gravity_flow_kernel_is_gravity_at_zero(sim_vintage):
-    from bdbvhubrenewal.model import GravityFlowKernel
+def test_learnt_kernel_flows_are_zero_at_prior_centre(sim_vintage):
+    from bdbvhubrenewal.model import LearntKernel
 
-    k = GravityFlowKernel("kernel", sim_vintage.kernel)
+    data = sim_vintage
+    p = data.n_provinces
+    k = LearntKernel(
+        "kernel", data.distances, data.all_populations, p, flows=True
+    )
+    n_flow = k.symmetric.shape[1] + k.antisymmetric.shape[1]
     zero = {
-        "kernel_destination_z": np.zeros(k.dest_basis.shape[1]),
-        "kernel_flow_z": np.zeros(
-            k.symmetric.shape[1] + k.antisymmetric.shape[1]
-        ),
+        "kernel_log_decay": 0.0,
+        "kernel_weight_z": np.zeros(p - 1),
+        "kernel_flow_z": np.zeros(n_flow),
     }
     with (
         numpyro.handlers.seed(rng_seed=0),
         numpyro.handlers.substitute(data=zero),
     ):
         got = np.asarray(k())
-    np.testing.assert_allclose(got, sim_vintage.kernel, rtol=1e-5, atol=1e-7)
-    with numpyro.handlers.seed(rng_seed=1):
+    plain = LearntKernel("kernel", data.distances, data.all_populations, p)
+    with (
+        numpyro.handlers.seed(rng_seed=0),
+        numpyro.handlers.substitute(data=zero),
+    ):
+        base = np.asarray(plain())
+    np.testing.assert_allclose(got, base, rtol=1e-5, atol=1e-7)
+    with numpyro.handlers.seed(rng_seed=1), numpyro.handlers.trace() as tr:
         draw = np.asarray(k())
     np.testing.assert_allclose(draw.sum(axis=1), 1.0, rtol=1e-5)
     np.testing.assert_allclose(np.diag(draw), 0.0, atol=1e-12)
+    assert "kernel_flow_sd" in tr and "kernel_destination_weights" in tr
 
 
 def test_default_has_no_sporadic_class():

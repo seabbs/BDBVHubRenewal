@@ -557,12 +557,10 @@ def test_flow_pair_basis_is_double_centred():
 
 def test_flow_factor_gives_flow_variance_and_reciprocity():
     from bdbvhubrenewal.model import flow_pair_basis, importation_flow_factor
-    from bdbvhubrenewal.model.rt import sum_to_zero_basis
 
     n = 5
     sym, anti = flow_pair_basis(n)
-    q = sum_to_zero_basis(n)
-    cov = np.asarray(importation_flow_factor(q, sym, anti, 0.0, 0.7, 0.4))
+    cov = np.asarray(importation_flow_factor(sym, anti, 0.7, 0.4))
     cov = cov @ cov.T
     off = ~np.eye(n, dtype=bool).reshape(-1)
     # On average over flows, as BVDOutbreakSize scales the two parts.
@@ -571,7 +569,3 @@ def test_flow_factor_gives_flow_variance_and_reciprocity():
     rev = np.arange(n * n).reshape(n, n).T.reshape(-1)
     pairs = cov[np.arange(n * n), rev][off]
     np.testing.assert_allclose(pairs.mean(), 0.4 * 0.49, rtol=1e-6)
-    dest = np.asarray(importation_flow_factor(q, sym, anti, 1.0, 0.0, 0.0))
-    dest = dest @ dest.T
-    # Flows into the same destination share the destination effect.
-    np.testing.assert_allclose(dest[0 * n + 2, 1 * n + 2], 1 - 1 / n)
