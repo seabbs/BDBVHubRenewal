@@ -52,11 +52,13 @@ The other provinces borrow those of the triangle pooled over provinces, as basel
 **Nowcast.**
 Every week is nowcast, the latest included.
 A case with onset on day $W - u$ of week $W$, delay $d$ and publication lag $\ell$ is in the vintage if $d + \ell - u \le T_v - W$.
-With onsets spread evenly over the week and $\ell$ uniform on 0 to 3 days, as in the renewal model, the share of week $w$ reported is
+With onsets spread evenly over the week, the share of week $w$ reported is
 
 $$
-s_p(w) = \frac{1}{28} \sum_{u=0}^{6} \sum_{\ell=0}^{3} F_p(T_v - w + u - \ell).
+s_p(w) = \frac{1}{7} \sum_{u=0}^{6} \sum_{\ell} P(\ell)\, F_p(T_v - w + u - \ell),
 $$
+
+with the publication lag $\ell$ uniform on 0 to 3 days with probability 0.9 and on 4 to 28 days with probability 0.1, for the cases that reach the hub's totals weeks after report.
 
 The published total $Y_{p,v}(w)$, known plus imputed, is expected to reach $Y_{p,v}(w)/s_p(w)$, and the cases still to come are
 
@@ -92,7 +94,7 @@ $$
 \delta_{p,k,j} \sim \text{Uniform}\{\pm \Delta_{p}\}.
 $$
 
-$\Delta_p$ are the weekly changes in $\log(1 + \hat y_p)$ over the latest 8 weeks at least half reported, with $\hat y_p$ the point nowcast, so a barely reported week's nowcast does not widen the walk.
+$\Delta_p$ are the weekly changes in $\log(1 + \hat y_p)$ over the 8 weeks up to the latest week $c$, with $\hat y_p$ the point nowcast, every nowcast week counted equally.
 With their negatives, the median stays at the centre and the spread grows with the horizon.
 Provinces without their own delay draw from the changes of the provinces with one, so a few small, noisy counts do not set their spread.
 A province with fewer than 10 cases a week over the last 8 weeks instead walks the log of that mean as a Poisson rate, $\tilde y_{p,k}(c + h) \sim \text{Poisson}\{\bar y_{p,k} \exp(\sum_{j \le h} \delta_{p,k,j})\}$, so a few cases a week stay plausible.

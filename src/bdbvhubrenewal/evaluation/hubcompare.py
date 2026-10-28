@@ -612,8 +612,9 @@ def summarise_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
     -------
     pandas.DataFrame
         Columns `reference_date`, `model`, `source`, `n`, `wis`,
-        `relative_wis` (on the weeks shared with the baseline; missing if
-        none), `coverage_50`, `coverage_90` and `bias`.
+        `log_wis`, `relative_wis` and `relative_log_wis` (on the weeks
+        shared with the baseline; missing if none), `coverage_50`,
+        `coverage_90` and `bias`.
     """
     done = scores.loc[scores["complete"]]
     cols = [
@@ -622,7 +623,9 @@ def summarise_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
         "source",
         "n",
         "wis",
+        "log_wis",
         "relative_wis",
+        "relative_log_wis",
         "coverage_50",
         "coverage_90",
         "bias",
@@ -634,11 +637,11 @@ def summarise_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
         done,
         baseline=baseline,
         by=("reference_date",),
-        metrics=("wis",),
+        metrics=("wis", "log_wis"),
         match_on=("reference_date", "location", "target_end_date"),
     )
     out = out.merge(
-        rel[["model", "reference_date", "relative_wis"]],
+        rel[["model", "reference_date", "relative_wis", "relative_log_wis"]],
         on=["model", "reference_date"],
         how="left",
     )

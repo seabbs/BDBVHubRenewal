@@ -154,7 +154,7 @@ def test_make_report_writes_every_page(
         "scores-by-truth-dark.svg",
         "forecasts-persistence-cd.svg",
         "recovery-wis-horizon.svg",
-        "nowcast-cd.svg",
+        "nowcast-persistence-main.svg",
     ):
         assert (fig / name).exists(), name
 
@@ -319,21 +319,23 @@ def test_score_tables_split_by_set_and_level() -> None:
     )
     text = report._score_tables(report._score_views(new, 3))
     for heading in (
-        "### Complete weeks, national",
-        "### Complete weeks, province",
-        "### Vintage-matched, national",
-        "### Vintage-matched, province",
+        "**Complete weeks, national**",
+        "**Complete weeks, province**",
+        "**Vintage-matched, national**",
+        "**Vintage-matched, province**",
     ):
         assert heading in text, heading
     # Weeks still being reported are not scored as final.
     assert "all weeks" not in text
     # The tables are small.
-    first = text.split("###")[1]
+    first = text.split("**")[2]
     header = first.splitlines()[2]
     assert [c.strip() for c in header.strip("|").split("|")] == [
         "model",
         "wis",
         "relative_wis",
+        "log_wis",
+        "relative_log_wis",
         "coverage_50",
         "coverage_90",
         "bias",
@@ -353,7 +355,7 @@ def test_score_table_leaves_persistence_without_relative_wis() -> None:
 def test_relative_section_leaves_out_persistence() -> None:
     two = _two_model_scores()
     text = report._relative_section(two)
-    table = [ln for ln in text.splitlines() if ln.startswith("|")]
+    table = [ln for ln in text.splitlines() if ln.strip().startswith("|")]
     assert any("renewal" in ln for ln in table)
     assert not any("persistence" in ln for ln in table)
 
@@ -506,6 +508,7 @@ def _scenario_scores() -> pd.DataFrame:
                                 "location": location,
                                 "horizon": horizon,
                                 "wis": 10.0 + horizon,
+                                "log_wis": 0.5,
                                 "coverage_50": 0.5,
                                 "coverage_90": 0.9,
                                 "bias": 0.123,
@@ -568,3 +571,43 @@ def test_heldout_page_before_any_held_out_vintage(
         "heldout-forecasts.md",
     ):
         assert (gen / name).read_text() == ""
+
+
+def test_dropdown_wraps_and_indents() -> None:
+    text = report._dropdown("a\n\nb\n")
+    assert text == '??? note "Tables"\n\n    a\n\n    b\n'
+    assert report._dropdown("  \n") == ""
+    assert report._dropdown("x", "More").startswith('??? note "More"')
+
+
+def test_relative_section_puts_tables_in_a_dropdown() -> None:
+    scores = pd.read_csv(ROOT / "results" / "backtest-scores.csv")
+    scores = scores.loc[scores["model"] == "persistence"]
+    two = pd.concat([scores, scores.assign(model="other")])
+    text = report._relative_section(two)
+    assert text.index("relative-wis-horizon") < text.index('??? note "Tables"')
+    assert "    | model" in text
+
+
+def test_metric_tabs_have_wis_and_log_wis() -> None:
+    text = report._metric_tabs("x", "WIS by horizon.")
+    assert '=== "WIS"' in text
+    assert '=== "Log WIS"' in text
+    assert "figures/x-log-wis.svg#only-light" in text
+
+
+def test_nowcast_groups() -> None:
+    target = pd.DataFrame(
+        {
+            "kind": "real",
+            "vintage": "2026-10-24",
+            "location": ["CD", "CD-A", "CD-B", "CD-C", "CD-D"],
+            "total": [10, 1, 5, 3, 2],
+        }
+    )
+    groups = report._nowcast_groups(
+        target, ["CD", "CD-A", "CD-B", "CD-C", "CD-D", "CD-D-01"]
+    )
+    assert groups["main"] == ["CD", "CD-B", "CD-C", "CD-D"]
+    assert groups["other"] == ["CD-A"]
+    assert groups["zones"] == ["CD-D-01"]

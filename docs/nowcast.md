@@ -7,11 +7,20 @@ The current nowcast and forecast from the latest vintage.
 
 --8<-- "latest-submission.md"
 
-Bars are published counts by onset week, known below and imputed above.
-Lines are sample trajectories, bands 50% and 90% intervals and the solid line the median.
-The dotted line is the reference date.
-Weeks still being reported are shaded, with hollow bars.
+Each model is shown from its latest origin.
+Lines are the data at the origin (dashed) and as later reported (solid), with 100 sample trajectories, 50% and 90% bands and the median for each model.
+The dotted line is the reference date and weeks still being reported are shaded.
+
+## Nowcast
+
+The weeks before the reference date, estimated for reporting delays.
+
+--8<-- "nowcast-only-tabs.md"
+
+## Nowcast and forecast
+
+The same nowcast with the reference week and the weeks after it.
 
 --8<-- "nowcast-tabs.md"
 
-The figure is [`plot_nowcast`][bdbvhubrenewal.reporting.plots.plot_nowcast], also embedded in each submission pull request.
+The submission pull request embeds [`plot_nowcast`][bdbvhubrenewal.reporting.plots.plot_nowcast].

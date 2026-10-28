@@ -360,19 +360,25 @@ def nowcast_draws(
 
 
 def week_share(
-    cdf: np.ndarray, age: np.ndarray, lag: int = PUBLICATION_LAG_DAYS
+    cdf: np.ndarray,
+    age: np.ndarray,
+    lag: int = PUBLICATION_LAG_DAYS,
+    tail: float = 0.0,
+    tail_max: int = 28,
 ) -> np.ndarray:
     r"""Return the share of a week's cases in a vintage `age` days after it.
 
     A case with onset on day $W - u$ of the week ending $W$, delay $d$
     and publication lag $\ell$ is in a vintage $t$ days after $W$ if
-    $d + \ell - u \le t$. With onsets spread evenly over the week and
-    $\ell$ uniform on $0, \dots, L$, as in the renewal model,
+    $d + \ell - u \le t$. With onsets spread evenly over the week,
 
     $$
-    s(t) = \frac{1}{7 (L + 1)} \sum_{u=0}^{6} \sum_{\ell=0}^{L}
-    F(t + u - \ell).
+    s(t) = \frac{1}{7} \sum_{u=0}^{6} \sum_{\ell} P(\ell) F(t + u - \ell),
     $$
+
+    with $\ell$ uniform on $0, \dots, L$ with probability $1 - \tau$ and
+    on $L + 1, \dots, L_{\max}$ with probability $\tau$, for the late
+    entries that reach the hub's totals weeks after report.
 
     Parameters
     ----------
@@ -381,17 +387,26 @@ def week_share(
     age : numpy.ndarray
         Days $t$ from the end of each week to the vintage.
     lag : int
-        Longest publication lag $L$ in days.
+        Longest usual publication lag $L$ in days.
+    tail : float
+        $\tau$, the share of cases published late.
+    tail_max : int
+        Longest late publication lag $L_{\max}$ in days.
 
     Returns
     -------
     numpy.ndarray
         $s(t)$ for each week.
     """
-    shift = (np.arange(7)[:, None] - np.arange(lag + 1)[None, :]).ravel()
+    lags = np.arange(tail_max + 1 if tail > 0 else lag + 1)
+    weight = np.where(lags <= lag, (1 - tail) / (lag + 1), 0.0)
+    if tail > 0:
+        weight += np.where(lags > lag, tail / (tail_max - lag), 0.0)
+    shift = (np.arange(7)[:, None] - lags[None, :]).ravel()
+    w = np.tile(weight, 7) / 7
     day = np.asarray(age)[:, None] + shift[None, :]
     covered = np.where(day < 0, 0.0, cdf[np.clip(day, 0, cdf.size - 1)])
-    return np.asarray(covered.mean(axis=1), dtype=np.float64)
+    return np.asarray(covered @ w, dtype=np.float64)
 
 
 def nowcast_means(totals: np.ndarray, share: np.ndarray) -> np.ndarray:
@@ -506,6 +521,25 @@ def revision_variance(
 
 
 @dataclass
+class _Nowcast:
+    """The point nowcast of a task and what the walk needs from it."""
+
+    weeks: list[str]
+    ends: pd.DatetimeIndex
+    grid: list[str]
+    cols: list[int]
+    last: int
+    seen: np.ndarray
+    known: np.ndarray
+    added: np.ndarray
+    size: np.ndarray
+    share: np.ndarray
+    own: list[bool]
+    cdfs: list[np.ndarray]
+    steps: list[np.ndarray]
+
+
+@dataclass
 class PersistenceNow(Persistence):
     """The hub baseline run forward from a nowcast of the recent weeks.
 
@@ -526,6 +560,14 @@ class PersistenceNow(Persistence):
     own_per_week : float
         Fewest delays a week, on average over those onset weeks, for a
         place to use its own delay rather than the pooled one.
+    lag_tail : float
+        Share of cases published 4 to 28 days after report rather than
+        within 3 days (`week_share`).
+    step_pool : numpy.ndarray, optional
+        Weekly log steps that places without their own delay draw from,
+        for example a province's for its health zones. By default, the
+        steps of the task's places with their own delay
+        (`step_pool_for`).
     low_count : float
         Below this mean count a week over the last `window` weeks, a place
         walks the log of its mean as a Poisson rate.
@@ -545,6 +587,8 @@ class PersistenceNow(Persistence):
     own_per_week: float = 50.0
     centre_weeks: int = 3
     low_count: float = 10.0
+    lag_tail: float = 0.1
+    step_pool: np.ndarray | None = None
 
     @property
     def max_delay(self) -> int:
@@ -612,23 +656,11 @@ class PersistenceNow(Persistence):
             for loc in task.locations
         }
 
-    def forecast(self, task: ForecastTask) -> pd.DataFrame:
-        """Return baseline trajectories from a nowcast for a task.
-
-        Parameters
-        ----------
-        task : ForecastTask
-            The data and weeks to forecast.
-
-        Returns
-        -------
-        pandas.DataFrame
-            Columns `location`, `target_end_date`, `sample`, `value`,
-            and `as_of` if the task asks for `report_by`.
-        """
+    def _prepare(self, task: ForecastTask) -> _Nowcast | None:
+        """Return the point nowcast and its inputs, or None without delays."""
         pooled = self._delay(task)
         if pooled is None:
-            return super().forecast(task)
+            return None
         assert task.delays is not None
         recent = pooled[0]
         weeks = list(task.target_end_dates)
@@ -665,12 +697,71 @@ class PersistenceNow(Persistence):
             own.append(fit is not None)
             _, pmf, sizes = fit or pooled
             cdfs.append(np.cumsum(pmf))
-            share[p] = week_share(cdfs[p], age)
+            share[p] = week_share(cdfs[p], age, tail=self.lag_tail)
             added[p, rows] = nowcast_means(seen[p, rows], share[p, rows])
             # Horizon 0 is the latest week; horizons with no fit are Poisson.
             h = np.arange(self.n_history)[::-1]
             fitted = np.r_[sizes, np.full(self.n_history, np.inf)]
             size[p, rows] = fitted[h]
+        point = np.log1p(seen[:, : last + 1] + added[:, : last + 1])
+        steps = [np.diff(row[-self.window :]) for row in point]
+        return _Nowcast(
+            weeks, ends, grid, cols, last, seen, known, added, size, share,
+            own, cdfs, steps,
+        )  # fmt: skip
+
+    def step_pool_for(self, task: ForecastTask) -> np.ndarray | None:
+        """Return the pooled weekly log steps of a task's places.
+
+        The steps of the places with their own delay, for a parent level to
+        pass to its children as `step_pool`. None without delay data.
+
+        Parameters
+        ----------
+        task : ForecastTask
+            The task.
+
+        Returns
+        -------
+        numpy.ndarray or None
+            The pooled steps.
+        """
+        prep = self._prepare(task)
+        return None if prep is None else _pool_steps(prep.steps, prep.own)
+
+    def forecast(self, task: ForecastTask) -> pd.DataFrame:
+        """Return baseline trajectories from a nowcast for a task.
+
+        Parameters
+        ----------
+        task : ForecastTask
+            The data and weeks to forecast.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Columns `location`, `target_end_date`, `sample`, `value`,
+            and `as_of` if the task asks for `report_by`.
+        """
+        prep = self._prepare(task)
+        if prep is None:
+            return super().forecast(task)
+        assert task.delays is not None
+        weeks, ends, grid, cols, last = (
+            prep.weeks,
+            prep.ends,
+            prep.grid,
+            prep.cols,
+            prep.last,
+        )
+        seen, known, added, size, share = (
+            prep.seen,
+            prep.known,
+            prep.added,
+            prep.size,
+            prep.share,
+        )
+        own, cdfs, steps = prep.own, prep.cdfs, prep.steps
         history = (
             task.target if task.target_history is None else task.target_history
         )
@@ -679,17 +770,13 @@ class PersistenceNow(Persistence):
         kappa = revision_variance(history, task.vintage)
         totals = nowcast_draws(seen, added, size, n, rng, known, kappa)
         ahead = len(grid) - 1 - last
-        # Steps come from the weeks at least half reported, so the noise of
-        # a barely reported week does not widen the walk.
-        point = np.log1p(seen + added)
-        steps = [
-            np.diff(row[: last + 1][sh[: last + 1] >= 0.5][-self.window :])
-            for row, sh in zip(point, share, strict=True)
-        ]
         # Places with their own delay have enough data for their own steps;
-        # the rest borrow the steps of those places, as they borrow a delay.
-        shared = [st for st, o in zip(steps, own, strict=True) if o]
-        pooled_steps = np.concatenate(shared) if shared else None
+        # the rest borrow the pooled steps, as they borrow a delay.
+        pooled_steps = (
+            _pool_steps(steps, own)
+            if self.step_pool is None
+            else self.step_pool
+        )
         span = slice(last + 1 - self.centre_weeks, last + 1)
         past = slice(last + 1 - self.window, last + 1)
         for p in range(len(task.locations)):
@@ -712,7 +799,7 @@ class PersistenceNow(Persistence):
             diff = totals[:, p] - seen[p]
             for date in task.report_by:
                 later = (pd.Timestamp(date) - ends).days.to_numpy()
-                s_t = week_share(cdfs[p], later)
+                s_t = week_share(cdfs[p], later, tail=self.lag_tail)
                 q = np.clip((s_t - s_v) / np.maximum(1 - s_v, 1e-12), 0, 1)
                 q = np.where(s_v >= 1.0, 1.0, q)
                 up = rng.binomial(np.maximum(diff, 0).astype(np.int64), q)
@@ -727,6 +814,12 @@ class PersistenceNow(Persistence):
         if not task.report_by:
             return out
         return pd.concat([out.assign(as_of=np.nan), *as_of], ignore_index=True)
+
+
+def _pool_steps(steps: list[np.ndarray], own: list[bool]) -> np.ndarray | None:
+    """Pool the steps of places with their own delay, or None if none."""
+    shared = [st for st, o in zip(steps, own, strict=True) if o]
+    return np.concatenate(shared) if shared else None
 
 
 def _frame(loc: str, weeks: list[str], values: np.ndarray) -> pd.DataFrame:

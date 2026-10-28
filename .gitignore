@@ -19,3 +19,4 @@ docs/submission/rounds/
 tests/results/
 # mkdocs-jupyter execution cache.
 .cache/
+docs/figures/*.json

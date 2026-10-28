@@ -152,6 +152,9 @@ def test_first_publication_delays_count_late_batches_as_long_delays() -> None:
     # The batch was not in the 10-09 file, so it was published on 10-10 at
     # the earliest: 14 days after the week ended.
     assert got == [2, 3, 14, 14, 14]
+    # The reported delay is kept for a report to publication lag.
+    batch = out.loc[out["delay"] == 14, "report_delay"]
+    assert batch.tolist() == [4, 4, 4]
     # A row whose first publication is more than 35 days late is dropped.
     assert (out["onset_week"] == "2026-07-04").sum() == 0
     # Without an earlier file, the delays are as reported.

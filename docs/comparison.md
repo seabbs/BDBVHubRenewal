@@ -5,16 +5,17 @@ Our models and the forecasts submitted to the hub's weekly round, scored on the 
 
 --8<-- "comparison-lead.md"
 
-Weeks still being reported are shaded in the plots, with hollow points, and are never scored.
-
 ## Scores
+
+--8<-- "comparison-summary.md"
 
 --8<-- "comparison-scores.md"
 
-## Forecasts by round
+## Forecasts
 
-Points are medians, thick lines 50% intervals and thin lines 90% intervals, against the latest data.
-Shaded weeks are still being reported.
+Choose a location and a round.
+Points are medians, thick lines 50% intervals and thin lines 90% intervals, against the latest data, with weeks still being reported shaded and hollow.
+Models can be switched off in the key.
 
 --8<-- "comparison-figures.md"
 
