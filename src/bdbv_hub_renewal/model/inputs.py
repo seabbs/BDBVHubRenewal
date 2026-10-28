@@ -340,10 +340,11 @@ def vintage_from_tables(
     pmf = np.full(config.dmax + 1, 1 / (config.dmax + 1))
     if delays is not None and len(delays):
         pmf = hub_delay_pmf(delays, config.dmax)
+        # Known onsets count every case, so negative delays go to 0 and
+        # delays past dmax to dmax, the last cell of the hazard pmf,
+        # rather than leaving the delay counts short of the known stream.
         keep = delays.loc[
-            (delays["delay"] >= 0)
-            & (delays["delay"] <= config.dmax)
-            & (
+            (
                 delays["location"].isin(active)
                 if active != (NATIONAL,)
                 else delays["location"].ne("")
@@ -358,7 +359,8 @@ def vintage_from_tables(
             dtype=int,
         )
         ok = (week >= 0) & (week < n_weeks)
-        np.add.at(counts, (week[ok], keep["delay"].to_numpy()[ok]), 1)
+        delay = np.clip(keep["delay"].to_numpy(), 0, config.dmax)
+        np.add.at(counts, (week[ok], delay[ok]), 1)
 
     known, imputed = grid("observed", active), grid("imputed", active)
     totals = known + imputed
