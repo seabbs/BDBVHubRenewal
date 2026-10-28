@@ -110,4 +110,4 @@ def test_persistence_chosen_makes_the_renewal_candidates_shadows(
     assert all(c.kind == "shadow" for c in pol.candidates if c.id in primary)
     # Any other choice keeps the full chain.
     full = load_policy(POLICY_PATH).for_model("renewal")
-    assert [c.id for c in full.chain()][0] == "main"
+    assert next(c.id for c in full.chain()) == "main"

@@ -22,7 +22,7 @@ import argparse
 import json
 import tomllib
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -81,6 +81,25 @@ class Policy:
         """Candidates fitted in one stage, shadows included."""
         shadows = [c for c in self.candidates if c.kind == "shadow"]
         return [c for c in [*self.chain(), *shadows] if c.stage == name]
+
+    def for_model(self, model: str) -> Policy:
+        """The policy for the model chosen in the model choice record.
+
+        With persistence chosen, the chain is persistence alone. The
+        renewal candidates (main, fallback and any shadows) are still
+        fitted and checked as shadows, and the retry is dropped.
+        Any other choice keeps the policy as it is.
+        """
+        if model != "persistence":
+            return self
+        cands = [
+            replace(c, kind="shadow")
+            if c.kind in ("main", "fallback", "shadow")
+            else c
+            for c in self.candidates
+            if c.kind != "retry"
+        ]
+        return replace(self, candidates=cands)
 
     def get(self, cid: str) -> Candidate:
         """Look up a candidate by id."""
@@ -150,9 +169,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--root", type=Path, default=Path())
     p.add_argument("--hub-ref", required=True)
     p.add_argument("--only", nargs="*", default=None)
+    p.add_argument(
+        "--model",
+        default="",
+        help="The chosen model; persistence makes a persistence-only chain",
+    )
     args = p.parse_args(argv)
     entries = matrix(
-        load_policy(args.policy), args.stage, args.root, args.hub_ref
+        load_policy(args.policy).for_model(args.model),
+        args.stage,
+        args.root,
+        args.hub_ref,
     )
     if args.only is not None:
         entries = [e for e in entries if e["id"] in args.only]

@@ -87,6 +87,11 @@ A round is skipped only if even persistence fails hub validation.
 Every candidate is filed under the same hub model id, so a fallback stands in for the main model.
 The pull request body leads with what was handled and how, on one `Handled:` line, and names the fallback and why if one was used.
 
+Shadow candidates are fitted and checked with the main model but are never submitted.
+`bvd` (`renewalbvd`) is one until the model choice picks it.
+When `results/model-choice.yml` has persistence as the chosen model, the chain is persistence alone, and `main` and `fallback` run as shadows with no refit.
+The pull request lists every shadow's convergence and posterior predictive checks in a collapsed section.
+
 ## Checks and thresholds
 
 Only an invalid submission or a clearly broken fit **fails**, which rules the candidate out.

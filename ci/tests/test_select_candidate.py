@@ -377,3 +377,14 @@ def test_persistence_chosen_never_selects_a_shadow(tmp_path: Path) -> None:
     assert not triage(pol, c)
     prov = run_select(pol, c, tmp_path / "g", always("pass"), retried=False)
     assert prov["selected"] == "persistence"
+
+
+def test_provenance_lists_the_shadow_candidates(tmp_path: Path) -> None:
+    pol = POLICY.for_model("persistence")
+    c = tmp_path / "c"
+    chain(c, main=("pass", "pass"), persistence=(None, "pass"))
+    prov = run_select(pol, c, tmp_path / "g", always("pass"), retried=False)
+    shadows = {s["id"]: s for s in prov["shadows"]}
+    assert set(shadows) == {"main", "fallback", "bvd"}
+    assert shadows["main"]["fit"] is not None
+    assert shadows["bvd"]["fit"] is None

@@ -147,9 +147,13 @@ jobs:
         run: ci/steps/prepare.sh
       - name: List the primary fits
         id: matrix
+        # With persistence chosen, the renewal candidates are fitted as
+        # shadows and the chain is persistence alone.
         run: |
+          source ci/steps/lib.sh
           uv run --project "$CI_DIR" python -m submission_ci.policy \
-            --policy "$CI_DIR/policy.toml" --stage primary --hub-ref "$HUB_REF"
+            --policy "$CI_DIR/policy.toml" --stage primary --hub-ref "$HUB_REF" \
+            --model "$MODEL"
       - uses: actions/upload-artifact@v4
         with:
           name: inputs
@@ -182,6 +186,10 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - uses: actions/download-artifact@v4
         with:
+          name: inputs
+          path: ${{ env.WORK }}
+      - uses: actions/download-artifact@v4
+        with:
           pattern: candidate-*
           path: ${{ env.WORK }}/candidates
       # download-artifact puts each artefact in a directory named after
@@ -191,16 +199,20 @@ jobs:
       - name: Triage
         id: triage
         run: |
+          source ci/steps/lib.sh
           uv run --project "$CI_DIR" python -m submission_ci.select_candidate \
-            triage --policy "$CI_DIR/policy.toml" --candidates "$WORK/candidates"
+            triage --policy "$CI_DIR/policy.toml" --candidates "$WORK/candidates" \
+            --model "$MODEL"
       - name: List the retries
         id: matrix
         if: steps.triage.outputs.need_retry == 'true'
         env:
           HUB_REF: ${{ needs.detect.outputs.hub_ref }}
         run: |
+          source ci/steps/lib.sh
           uv run --project "$CI_DIR" python -m submission_ci.policy \
-            --policy "$CI_DIR/policy.toml" --stage retry --hub-ref "$HUB_REF"
+            --policy "$CI_DIR/policy.toml" --stage retry --hub-ref "$HUB_REF" \
+            --model "$MODEL"
 
   retry:
     name: Fit retries

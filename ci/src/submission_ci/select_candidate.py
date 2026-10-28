@@ -326,6 +326,25 @@ def provenance_markdown(prov: dict[str, Any]) -> str:
     return f"{head}\n{table}\n"
 
 
+def _shadows(policy: Policy, root: Path) -> list[dict[str, Any]]:
+    """Fit and PPC summaries of the shadow candidates, never submitted."""
+    out = []
+    for c in policy.candidates:
+        if c.kind != "shadow":
+            continue
+        cdir = root / c.id
+        fit, ppc = cdir / "fit-summary.json", cdir / "ppc-summary.json"
+        out.append(
+            {
+                "id": c.id,
+                "label": c.label,
+                "fit": read_json(fit) if fit.exists() else None,
+                "ppc": read_json(ppc) if ppc.exists() else None,
+            }
+        )
+    return out
+
+
 def run_select(
     policy: Policy,
     root: Path,
@@ -349,6 +368,7 @@ def run_select(
         "warnings": chosen.warnings if chosen else [],
         "handled": chosen.handled if chosen else [],
         "attempts": [asdict(a) for a in attempts],
+        "shadows": _shadows(policy, root),
     }
     if chosen:
         cdir = root / chosen.id
@@ -378,12 +398,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         s = sub.add_parser(name)
         s.add_argument("--policy", type=Path, required=True)
         s.add_argument("--candidates", type=Path, required=True)
+        s.add_argument("--model", default="", help="The chosen model")
     sel = sub.choices["select"]
     sel.add_argument("--out", type=Path, required=True)
     sel.add_argument("--validate-cmd", default="")
     sel.add_argument("--retried", action="store_true")
     args = p.parse_args(argv)
-    policy = load_policy(args.policy)
+    policy = load_policy(args.policy).for_model(args.model)
     if args.cmd == "triage":
         need = triage(policy, args.candidates)
         set_outputs({"need_retry": need})
