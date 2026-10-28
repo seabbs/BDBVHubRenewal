@@ -6,7 +6,7 @@ The weekly path from new hub data to a submission.
 !!! warning "Dry run"
     The workflow runs in dry-run mode until Sam switches it on (see [Setup](setup.md)).
     It builds everything and prints the pull request it would open, but pushes nothing.
-    The `main` and `fallback` fit configs run the PyRenew renewal model, and submissions go in as `epiforecasts-seabbsrenewal`.
+    The `main` fit config runs the PyRenew renewal model and `renewalsp` the single-patch model, and submissions go in as `epiforecasts-seabbsrenewal`.
     Its model metadata is a draft until Sam has reviewed the held-out results.
 
 ## Pipeline
@@ -21,7 +21,7 @@ The gate's checks choose the candidate, and the pull request body says what was 
 | --- | --- |
 | `detect` | Compares the hub's newest data commit and `as_of` with the ledger. Stops unless there is new data for the open round. |
 | `prepare` | Pins the hub data at one commit (`bdbvhubrenewal data --ref <sha>`), checks national coherence and builds the persistence candidate, which is also the baseline for the checks. |
-| `fit` | One matrix job per primary candidate (`main` and `fallback`), in parallel. Each runs `bdbvhubrenewal fit`, then `nowcast --fit`, the checks and the plots. Fits are cached under a hash of the model source, the hub commit and the sampler settings. |
+| `fit` | One matrix job per primary candidate (`main`, the single-patch fallback `renewalsp` and the `bvd` shadow), in parallel. Each runs `bdbvhubrenewal fit`, then `nowcast --fit`, the checks and the plots. Fits are cached under a hash of the model source, the hub commit and the sampler settings. |
 | `triage` | Says whether `main` needs its one refit. |
 | `retry` | Only if `main` needs it: one refit with smaller steps and jittered inits, costing about as much as `main`, and only with time left for it before the window closes. |
 | `gate` | Walks the fallback chain and submits the first candidate that clears convergence, the posterior predictive checks, the forecast checks and hub validation. |
@@ -52,7 +52,7 @@ A fit config is registered in [`bdbvhubrenewal.submission.fitting`][bdbvhubrenew
 
 ### Model interface
 
-The model integration plugs PyRenew in by registering `main` and `fallback` with `register_config(..., replace=True)`.
+The model integration plugs PyRenew in by registering `main`, `renewalsp` and `bvd` with `register_config(..., replace=True)`.
 Each [`FitConfig`][bdbvhubrenewal.submission.fitting.FitConfig] has two functions.
 
 - `fit(task, sampler, fit_dir)` fits the model to the [`ForecastTask`][bdbvhubrenewal.forecasters.base.ForecastTask], with the candidate's `sampler` table from `ci/policy.toml` (`num_chains`, `num_warmup`, `num_samples`, `target_accept`, `max_tree_depth`, `seed`).
@@ -79,7 +79,8 @@ The chain is set in `ci/policy.toml`.
    It runs only when `main` is past the retry thresholds below, or was ruled out, and at least 150 minutes of the window are left (`retry_minutes` plus `reserve_minutes` in `[timing]`).
    The refit is submitted unless it is clearly broken.
    Otherwise the original fit is kept, if it is not broken.
-3. `fallback`: the simplified variant (no spatial coupling, delays and missingness fixed from the data).
+3. `renewalsp`: the single-patch model, an independent renewal fit for each province with cases and for the country, with no pooling or coupling.
+   It fits fast (21 minutes of sampling on the 2026-10-24 vintage), so it is ready before the main fit.
    It is fitted alongside `main`, so a broken main model does not leave too little of the window.
 4. `persistence`: the persistence baseline.
 
@@ -91,7 +92,7 @@ The pull request body leads with what was handled and how, on one `Handled:` lin
 
 Shadow candidates are fitted and checked with the main model but are never submitted.
 `bvd` (`renewalbvd`) is one until the model choice picks it.
-When `results/model-choice.yml` has persistence as the chosen model, the chain is persistence alone, and `main` and `fallback` run as shadows with no refit.
+When `results/model-choice.yml` has persistence as the chosen model, the chain is persistence alone, and `main` and `renewalsp` run as shadows with no refit.
 The pull request lists every shadow's convergence and posterior predictive checks in a collapsed section.
 
 ## Checks and thresholds

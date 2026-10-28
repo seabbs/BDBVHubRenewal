@@ -263,6 +263,47 @@ $$
 
 $\sigma_p$ is the SD of the 7 weekly changes in $\log(1 + Y_{p,v})$ over the last 8 complete weeks, floored at 0.1.
 Week $w$ is complete if its Wednesday is at least $L$ days before $T_v$, with $L$ the 90th centile of the delays published with the vintage, or 10 days if none were published.
-Published delays are right truncated, so the comparator `persistence_fu` takes $L$ from onset weeks that ended at least 63 days before the vintage.
 Each sample is one joint trajectory across weeks, and the national value is the sum of the provinces.
 The median has no growth and weeks up to $c$ are still revised upwards, so persistence underpredicts during growth (see [Backtest](../backtest.md#persistence-bias)).
+
+### Persistence on a nowcast
+
+`persistencenow` nowcasts the recent weeks first, then applies persistence to the nowcast.
+The share of a week's final total published $t$ days after it ends is
+
+$$
+s(t) = \frac{1}{7} \sum_{u=0}^{6} F(t + u - 3),
+\qquad
+F(x) = \prod_{y > x} \Big\{1 - \frac{n(y)}{R(y)}\Big\},
+\qquad
+R(y) = \#\{i : d_i \le y \le \tau_i\}.
+$$
+
+$F$ is the maximum likelihood delay cdf under right truncation (Lynden-Bell), from the published delays $d_i$ of onset weeks that ended in the 84 days before the vintage.
+$n(y)$ counts the delays equal to $y$.
+$\tau_i = T_v - W_i$ is the longest delay case $i$ could have and still be in the vintage, with its onset mid-week and the 3-day publication lag of the [reconstructed vintages](data.md#reconstructed-vintages).
+This is the delay step of the EpidemicDates EM nowcast with no missing onsets.
+Delays have shortened, so delays of onset weeks old enough to be complete would be too long.
+Late rows in the delay files are mostly onsets recorded later for cases already counted as imputed, so they leave the total unchanged and $s$ has no longer lag.
+With $t_w$ the days from the end of week $w$ to $T_v$, each sample $k$ draws
+
+$$
+C_{p,k}(w) = Y_{p,v}(w) + U_{p,k}(w),
+\qquad
+U_{p,k}(w) \sim \text{NegBin}\big(Y_{p,v}(w),\ s_k(t_w)\big),
+$$
+
+the failures before $Y_{p,v}(w)$ successes, with mean $Y_{p,v}(w)\{1 - s_k(t_w)\}/s_k(t_w)$.
+This is the posterior of the final count given $Y_{p,v}(w) \sim \text{Binomial}(C, s)$ and a prior proportional to $1/C$, as in the EpidemicDates nowcast.
+$s_k$ is computed from a bootstrap resample of those delays, so each sample carries the uncertainty in the delay.
+The last week with $s(t_w) \ge 0.5$ takes the place of $c$, and persistence runs from $C_{p,k}(c)$ in each sample:
+
+$$
+\log\{1 + \lambda_{p,k}(c + h)\} = \max\Big(0,\ \log\{1 + C_{p,k}(c)\} + \sum_{j=1}^{h} \epsilon_{p,j}\Big),
+\qquad
+\tilde y_{p,k}(c + h) = \max\big\{\text{Poisson}(\lambda_{p,k}(c + h)),\ Y_{p,v}(c + h)\big\}.
+$$
+
+$\sigma_p$ is taken as for `persistence`, from $Y_{p,v}/s$ over the 8 weeks up to $c$.
+Counts reported by a later date $T$ are $Y_{p,v}(w) + \text{Binomial}\big(C_{p,k}(w) - Y_{p,v}(w),\ q\big)$, with $q = \{s_k(T - w) - s_k(t_w)\}/\{1 - s_k(t_w)\}$.
+A vintage with fewer than 50 delays in the 84 days gets `persistence`.

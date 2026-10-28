@@ -2,8 +2,8 @@ name: Fit candidates
 
 # Reusable: fit and check one stage of the fallback chain, one matrix
 # leg per candidate, as BVDOutbreakSize's docs.yml fits one model per
-# matrix job. Called by submit.yml for the primary stage (main model and
-# fallback variant, in parallel) and, only if the main model failed, for
+# matrix job. Called by submit.yml for the primary stage (main model,
+# single-patch fallback and shadows, in parallel) and, only if the main model failed, for
 # the retry stage.
 #
 # Each fit is content-addressed: the cache key hashes the model source,
@@ -99,6 +99,7 @@ jobs:
           CAND_KIND: ${{ matrix.kind }}
           CAND_CONFIG: ${{ matrix.config }}
           CAND_LABEL: ${{ matrix.label }}
+          CAND_MODEL: ${{ matrix.model }}
           CAND_SAMPLER: ${{ matrix.sampler }}
           FIT_CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
           EXPECTED_LOCATIONS: ${{ inputs.expected_locations }}

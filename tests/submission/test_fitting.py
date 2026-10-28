@@ -36,10 +36,11 @@ def stand_in() -> str:
     return "standin"
 
 
-def test_main_and_fallback_run_the_renewal_model() -> None:
+def test_main_runs_the_renewal_model() -> None:
     names = {c.name for c in list_configs()}
-    assert {"main", "fallback", "persistence"} <= names
-    for name in ("main", "fallback", "persistence"):
+    assert {"main", "renewalsp", "persistence"} <= names
+    assert "fallback" not in names
+    for name in ("main", "renewalsp", "persistence"):
         assert get_config(name).stand_in is None
 
 
@@ -273,3 +274,28 @@ def test_renewal_metadata_uses_the_submission_abbr(tmp_path: Path) -> None:
     args = ["--model", "persistence", "--abbr", "seabbsrenewal"]
     assert main(["metadata", *args, "--out", out]) == 0
     assert (tmp_path / "p" / "epiforecasts-seabbsrenewal.yml").exists()
+
+
+@pytest.mark.usefixtures("in_root")
+def test_persistencenow_config_runs_the_nowcast_model(tmp_path: Path) -> None:
+    config = get_config("persistencenow")
+    assert config.stand_in is None
+    fit = tmp_path / "fit"
+    args = ["--config", "persistencenow", "--vintage", "2026-10-17"]
+    assert main(["fit", *args, "--out", str(fit)]) == 0
+    diag = json.loads((fit / "diagnostics.json").read_text())
+    assert diag["model"] == "persistencenow"
+    assert diag["status"] == "not-applicable"
+    out = tmp_path / "sub"
+    assert main(["nowcast", *args, "--fit", str(fit), "--out", str(out)]) == 0
+    (csv,) = out.rglob("*.csv")
+    plain = tmp_path / "plain"
+    assert main(["nowcast", "--vintage", "2026-10-17", "--out",
+                 str(plain)]) == 0  # fmt: skip
+    (csv2,) = plain.rglob("*.csv")
+    now, base = pd.read_csv(csv), pd.read_csv(csv2)
+    assert len(now) == len(base)
+    # The nowcast lifts the recent weeks above plain persistence.
+    week = now["target_end_date"] == "2026-10-10"
+    nat = (now["location"] == "CD") & week
+    assert now.loc[nat, "value"].median() > base.loc[nat, "value"].median()

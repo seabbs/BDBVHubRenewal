@@ -42,7 +42,7 @@ The fitted models use the `[sampler]` settings in `config/backtest.toml`, the sa
 `BDBV_RENEWAL_SAMPLER` overrides them, for example `'{"num_chains": 2, "num_warmup": 300, "num_samples": 300}'`.
 Each forecast of a renewal variant is a fit.
 `--cache` and `--shard` split a run over several processes, and `--models` runs some models and keeps the others' rows in `results/`, which is committed.
-The docs build runs only persistence and reads the fitted models from there.
+The docs build runs only the persistence models and reads the fitted models from there.
 
 The comparison with hub forecasts downloads other teams' files, so it is run on its own:
 

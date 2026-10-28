@@ -37,8 +37,11 @@ nav:
       - Hub specification: submission/hub-spec.md
       - Setup: submission/setup.md
       - Rounds: submission/rounds/index.md
+  - Model development:
+      - Model building: model-development/model-building.md
+      - Development log: model-development/log.md
   - Development:
-      - Model building: development/model-building.md
+      - Contributing: development/contributing.md
       - Adding a model: development/adding-a-model.md
       - CLI: development/cli.md
   - API reference:

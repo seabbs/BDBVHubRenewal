@@ -244,6 +244,29 @@ def _chain_section(provenance: Mapping[str, Any]) -> str:
     )
 
 
+def bvd_lines(who: str, fit: Mapping[str, Any] | None) -> list[str]:
+    """The BVDOutbreakSize release a fit used, and the newer ones skipped."""
+    release = (fit or {}).get("bvd")
+    if not release:
+        return []
+    if not release.get("tag"):
+        return [
+            f"{who} used no BVDOutbreakSize release: none qualified, so it "
+            "ran as the main model."
+        ]
+    lines = [
+        f"{who} used BVDOutbreakSize release `{release['tag']}` (data to "
+        f"{release.get('as_of', 'n/a')}, joint R-hat "
+        f"{fmt_rhat(release.get('joint_max_rhat'))}, limit "
+        f"{release.get('max_rhat', 'n/a')})."
+    ]
+    lines += [
+        f"- Skipped `{s['tag']}`: {s['reason']}."
+        for s in release.get("skipped") or []
+    ]
+    return lines
+
+
 def _shadow_section(provenance: Mapping[str, Any]) -> str:
     shadows = provenance.get("shadows") or []
     if not shadows:
@@ -256,11 +279,16 @@ def _shadow_section(provenance: Mapping[str, Any]) -> str:
         ]
         for s in shadows
     ]
+    notes = [
+        line for s in shadows for line in bvd_lines(s["label"], s.get("fit"))
+    ]
+    table = markdown_table(
+        ["candidate", "convergence", "posterior predictive checks"], rows
+    )
+    if notes:
+        table += "\n\n" + "\n".join(notes)
     return _section(
-        "Shadow candidates (fitted and checked, not submitted)",
-        markdown_table(
-            ["candidate", "convergence", "posterior predictive checks"], rows
-        ),
+        "Shadow candidates (fitted and checked, not submitted)", table
     )
 
 
@@ -270,6 +298,9 @@ def _convergence_section(fit: Mapping[str, Any] | None) -> str:
     lines = [f"{_fit_cell(fit)}."]
     lines += [f"- {m}" for m in (fit.get("failures") or [])]
     lines += [f"- {m}" for m in (fit.get("warnings") or [])]
+    bvd = bvd_lines("The model", fit)
+    if bvd:
+        lines += ["", *bvd]
     return _section("Convergence", "\n".join(lines))
 
 

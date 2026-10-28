@@ -48,11 +48,11 @@ def calibrated(
 
 def test_rows_have_the_schema() -> None:
     obs, draws = calibrated()
-    ppc = summarise_draws(obs, draws, as_of=AS_OF, config="fallback")
+    ppc = summarise_draws(obs, draws, as_of=AS_OF, config="bvd")
     assert ppc["schema_version"] == 1
     assert ppc["available"] is True
     assert ppc["model"] == "renewal"
-    assert ppc["config"] == "fallback"
+    assert ppc["config"] == "bvd"
     assert ppc["intervals"] == [0.5, 0.9]
     assert len(ppc["rows"]) == len(obs)
     row = ppc["rows"][0]

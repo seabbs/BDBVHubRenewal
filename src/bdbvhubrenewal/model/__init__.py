@@ -19,13 +19,10 @@ from .delays import (
     HazardDelay,
     ParametricDelay,
     censored_pmf,
-    empirical_delay_matrix,
-    empirical_missing_fraction,
     hazard_to_pmf,
 )
 from .model import (
     BVD,
-    FALLBACK,
     MAIN,
     ModelConfig,
     Vintage,
@@ -52,7 +49,6 @@ from .rt import (
 
 __all__ = [
     "BVD",
-    "FALLBACK",
     "MAIN",
     "FixedTimeVarying",
     "HazardDelay",
@@ -70,8 +66,6 @@ __all__ = [
     "build_model",
     "censored_pmf",
     "coupled_renewal",
-    "empirical_delay_matrix",
-    "empirical_missing_fraction",
     "fit",
     "forecast_trajectories",
     "generation_interval",
