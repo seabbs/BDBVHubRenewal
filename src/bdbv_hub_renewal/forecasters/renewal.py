@@ -77,6 +77,7 @@ __all__ = [
     "nuts_kernel",
     "parameter_diagnostics",
     "ppc_rows",
+    "report_cutoffs",
     "run_nuts",
     "sampler_settings",
     "samples_table",
@@ -536,6 +537,45 @@ def samples_table(
     return samples, extra
 
 
+def report_cutoffs(task: ForecastTask, data: Any) -> dict[int, str]:
+    """Days from the model start to each later vintage in `task.report_by`.
+
+    Parameters
+    ----------
+    task : ForecastTask
+        The task.
+    data : bdbv_hub_renewal.model.Vintage
+        The fitted inputs.
+
+    Returns
+    -------
+    dict
+        The vintage date (ISO) by its day on the model axis, the `as_of`
+        cut-offs of `forecast_trajectories`.
+    """
+    return {
+        (dt.date.fromisoformat(d) - data.start_date).days: d
+        for d in task.report_by
+    }
+
+
+def _as_reported(
+    task: ForecastTask, run: RenewalRun, report_all: bool
+) -> list[pd.DataFrame]:
+    """Province samples of the counts reported by each later vintage."""
+    out = []
+    for cut, date in report_cutoffs(task, run.data).items():
+        weeks = tuple(w for w in task.target_end_dates if w <= date)
+        if not weeks:
+            continue
+        sub = replace(task, target_end_dates=weeks)
+        part, _ = samples_table(
+            sub, run.data, run.draws["as_reported"][cut], report_all=report_all
+        )
+        out.append(part.assign(as_of=date))
+    return out
+
+
 def data_gap(task: ForecastTask, samples: pd.DataFrame) -> pd.DataFrame | None:
     r"""National cases in the data that no province has, by week and sample.
 
@@ -851,12 +891,17 @@ class RenewalFit:
         National cases in no reported province.
     national : pandas.DataFrame or None
         The national fit's samples, for a per-location variant.
+    as_reported : pandas.DataFrame or None
+        Samples of the counts reported by each date in `task.report_by`
+        (`SAMPLE_COLUMNS` and `as_of`), for the weeks up to that date.
+        A per-location variant includes its national fit.
     """
 
     runs: Mapping[str, RenewalRun]
     samples: pd.DataFrame
     unassigned: pd.DataFrame | None = None
     national: pd.DataFrame | None = None
+    as_reported: pd.DataFrame | None = None
 
 
 @dataclass
@@ -927,7 +972,11 @@ class RenewalModel:
         seconds = time.perf_counter() - start
         self._log(f"variant={self.name} sampling done seconds={seconds:.0f}")
         draws = pr.forecast_trajectories(
-            model, data, task.n_samples, seed=task.seed
+            model,
+            data,
+            task.n_samples,
+            seed=task.seed,
+            as_of=tuple(report_cutoffs(task, data)),
         )
         by_chain = model.mcmc.get_samples(group_by_chain=True)
         trace = {
@@ -967,16 +1016,31 @@ class RenewalModel:
                 task, run.data, run.draws, report_all=report_all
             )
             unassigned = _add_unassigned(unassigned, data_gap(task, samples))
-            return RenewalFit({"all": run}, samples, unassigned)
+            later = _as_reported(task, run, report_all)
+            return RenewalFit(
+                {"all": run},
+                samples,
+                unassigned,
+                as_reported=pd.concat(later, ignore_index=True)
+                if later
+                else None,
+            )
         rows = task.target.loc[task.target["vintage"] == task.vintage]
         cases = rows.groupby("location")["total"].sum()
         runs: dict[str, RenewalRun] = {}
         frames: list[pd.DataFrame] = []
+        reported: list[pd.DataFrame] = []
         for loc in (*task.locations, NATIONAL):
             if cases.get(loc, 0) <= 0:
                 continue
             if cases.get(loc, 0) < SINGLE_PATCH_MIN_CASES:
-                frames.append(_idle_samples(task, loc, rows))
+                idle = _idle_samples(task, loc, rows)
+                frames.append(idle)
+                # Too few cases to model reporting: the same draws.
+                reported.extend(
+                    idle.loc[idle["target_end_date"] <= d].assign(as_of=d)
+                    for d in task.report_by
+                )
                 continue
             sub = replace(task, locations=(loc,), mask=())
             runs[loc] = self.run(sub)
@@ -984,6 +1048,7 @@ class RenewalModel:
                 sub, runs[loc].data, runs[loc].draws, report_all=True
             )
             frames.append(part)
+            reported.extend(_as_reported(sub, runs[loc], report_all=True))
         both = pd.concat(frames, ignore_index=True)
         nat = both["location"] == NATIONAL
         national = both.loc[nat, ["target_end_date", "sample", "value"]]
@@ -992,6 +1057,7 @@ class RenewalModel:
             both.loc[~nat].reset_index(drop=True),
             None,
             national.reset_index(drop=True) if nat.any() else None,
+            pd.concat(reported, ignore_index=True) if reported else None,
         )
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
@@ -1006,14 +1072,21 @@ class RenewalModel:
         -------
         pandas.DataFrame
             Columns `SAMPLE_COLUMNS`, with national rows for a
-            per-location variant, whose national is its own fit.
+            per-location variant, whose national is its own fit. With
+            `task.report_by`, also `as_of` rows (`RenewalFit.as_reported`).
         """
         fit = self.forecast_fit(task)
-        if fit.national is None:
-            return fit.samples
-        national = fit.national.assign(location=NATIONAL)
+        samples = fit.samples
+        if fit.national is not None:
+            national = fit.national.assign(location=NATIONAL)
+            samples = pd.concat(
+                [samples, national[list(SAMPLE_COLUMNS)]], ignore_index=True
+            )
+        if not task.report_by:
+            return samples
+        later = [] if fit.as_reported is None else [fit.as_reported]
         return pd.concat(
-            [fit.samples, national[list(SAMPLE_COLUMNS)]], ignore_index=True
+            [samples.assign(as_of=np.nan), *later], ignore_index=True
         )
 
 
