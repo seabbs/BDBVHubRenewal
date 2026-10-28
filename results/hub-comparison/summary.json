@@ -1,0 +1,12 @@
+{
+  "truth_vintage": "2026-10-24",
+  "complete_after_weeks": 3,
+  "baseline": "persistencenow",
+  "preferred_baseline": "persistencenow",
+  "locations": [
+    "CD",
+    "CD-IT",
+    "CD-NK"
+  ],
+  "accessed": "2026-10-28"
+}

@@ -15,10 +15,6 @@ site_dir: _site
 exclude_docs: |
   generated/*
   examples/*
-  # The comparison with hub forecasts stays off the site until its
-  # publication is decided (see config/hub-comparison.toml).
-  comparison.md
-  figures/comparison/
 
 nav:
   - Home: index.md
@@ -31,6 +27,7 @@ nav:
   - Data: data.md
   - Backtest: backtest.md
   - Held-out evaluation: heldout.md
+  - Comparison with hub forecasts: comparison.md
   - Nowcast: nowcast.md
   - Submission:
       - Rounds: submission/rounds/index.md

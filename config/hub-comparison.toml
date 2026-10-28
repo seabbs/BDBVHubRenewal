@@ -1,24 +1,21 @@
 # Comparison with hub forecasts. Read by
-# `bdbvhubrenewal.hubcompare.load_comparison_config`.
-# `bdbvhubrenewal compare-hub --fetch` downloads these models' files to
-# data/raw/hub-submissions/ and writes output/hub-comparison/.
-# Neither is committed.
-#
-# The page (docs/comparison.md) and its figures are excluded from the site
-# in mkdocs.yml (`exclude_docs`) until publication is decided. To publish,
-# choose `display`, remove those lines from `exclude_docs` and add the
-# page to the nav.
+# `bdbvhubrenewal.evaluation.hubcompare.load_comparison_config`.
+# `bdbvhubrenewal compare-hub --fetch` downloads every team's metadata and
+# weekly-round forecasts. Files under CC0-1.0 or CC-BY-4.0 are committed in
+# data/hub-submissions/; others are cached in data/raw/hub-submissions/.
+# The scores and plotted quantiles go to results/hub-comparison/.
 
 [comparison]
-models = [
-  "MOBS-GLEAM_BDBV",
-  "OHTJHU-BM",
-  "epiforecasts-integral",
-  "epiforecasts-renewal",
-  "mccabe-backcalc",
-  "mccabe-geospread",
+# WIS is relative to this model, or to the registry baseline until it is
+# registered.
+baseline = "persistencenow"
+# Forecasts of fitted models, which are too slow to run here, are taken
+# from these files for the same rounds.
+stored = [
+  "results/heldout-forecasts.csv.gz",
+  "results/forecasts.csv.gz",
+  "output/backtest/forecasts.csv.gz",
 ]
-# How other teams are shown: "named" (hub model ids), "anonymised"
-# (Team A, Team B, ...) or "epiforecasts" (epiforecasts models only).
-display = "anonymised"
+# Locations shown in the plot of each round.
+locations = ["CD", "CD-IT", "CD-NK"]
 ref = "main"
