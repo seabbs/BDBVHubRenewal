@@ -370,3 +370,15 @@ def test_hazard_delay_on_weekly_rows_matches_daily(dow):
         return seeded(lambda: delay(n_timepoints=40, first_day_dow=dow), 4)
 
     np.testing.assert_allclose(run(weekly), run(_Daily(weekly)), rtol=1e-6)
+
+
+def test_hazard_delay_smoothness_prior_allows_real_fits():
+    # Real fits put the step SD of the delay shape at about 0.2
+    # (2026-10-24: 90% CrI 0.16 to 0.25), so the prior is HalfNormal(0.4).
+    weekly = WeeklyTemporalProcess(
+        NonCentredRandomWalk(DeterministicVariable("sd", 0.1)), start_dow=6
+    )
+    delay = HazardDelay("delay", 30, weekly)
+    with numpyro.handlers.trace() as tr:
+        seeded(lambda: delay(n_timepoints=14, first_day_dow=6))
+    assert float(tr["delay_smooth_sd"]["fn"].scale) == pytest.approx(0.4)
