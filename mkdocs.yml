@@ -21,7 +21,8 @@ nav:
   - Getting started: getting-started.ipynb
   - Methods:
       - Data: methods/data.md
-      - Model: methods/model.md
+      - Baseline models: methods/baselines.md
+      - Renewal models: methods/model.md
       - Evaluation: methods/evaluation.md
       - Implementation: methods/implementation.md
   - Results:
