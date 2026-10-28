@@ -4,7 +4,7 @@ Nowcasts and forecasts of confirmed Bundibugyo virus disease cases for the BDBV 
 { .page-subtitle }
 
 The [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub) target is weekly confirmed cases by symptom-onset week, by province and nationally, as 100 joint sample trajectories.
-Forecasts are submitted as `epiforecasts-seabbsrenewal`.
+Forecasts are submitted as `seabbs-renewal`.
 
 ## Models
 

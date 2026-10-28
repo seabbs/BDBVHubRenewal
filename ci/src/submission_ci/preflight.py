@@ -40,8 +40,8 @@ TOKEN_WARN_DAYS = 80
 # The schema allows 16 characters; the hub READMEs ask for fewer than 16.
 ABBR = re.compile(r"^[a-zA-Z0-9_+]{1,15}$")
 BOT = "seabbs-bot"
-TEAM = "epiforecasts"
-ABBR_DEFAULT = "seabbsrenewal"
+TEAM = "seabbs"
+ABBR_DEFAULT = "renewal"
 
 LABEL = {
     "ok": "OK",

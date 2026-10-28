@@ -58,7 +58,7 @@ def _ledger(root: Path) -> Path:
         {"location": loc, "target_end_date": "2026-11-07", "value": v}
         for loc, v in (("CD", 10), ("CD", 20), ("CD-IT", 5))
     ]
-    pd.DataFrame(rows).to_csv(d / f"{REF}-epiforecasts-persistence.csv")
+    pd.DataFrame(rows).to_csv(d / f"{REF}-seabbs-persistence.csv")
     return ledger
 
 

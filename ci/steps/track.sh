@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Check and submit the baseline hub model (seabbsbaseline) on its own:
+# Check and submit the baseline hub model (baseline) on its own:
 # persistence on a nowcast, falling back to plain persistence, under its
 # own id, with health zones required. Run after `prepare`, apart from the
 # renewal chain.

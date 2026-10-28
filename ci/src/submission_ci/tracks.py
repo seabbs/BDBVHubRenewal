@@ -4,9 +4,9 @@ Each hub model is opted in on its own with `submit = true`. `DRY_RUN`
 stays the global switch: an opted-in model in a dry run builds and
 checks everything but pushes nothing.
 
-- `seabbsrenewal` (`[submission]`): the renewal chain. It runs only when
+- `renewal` (`[submission]`): the renewal chain. It runs only when
   opted in and a model has been chosen in `results/model-choice.yml`.
-- `seabbsbaseline` (`[models.persistencenow]`): persistence on a nowcast,
+- `baseline` (`[models.persistencenow]`): persistence on a nowcast,
   with plain persistence as its fallback. It needs no model choice.
 """
 
@@ -20,8 +20,8 @@ from pathlib import Path
 
 from .common import append_summary, set_outputs
 
-TEAM = "epiforecasts"
-KEYS = {"seabbsrenewal": "renewal", "seabbsbaseline": "baseline"}
+TEAM = "seabbs"
+KEYS = {"renewal": "renewal", "baseline": "baseline"}
 """Step output name of each hub model's switch."""
 
 
