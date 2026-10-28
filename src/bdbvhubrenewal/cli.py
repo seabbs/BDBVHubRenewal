@@ -133,7 +133,7 @@ MODEL_METADATA = {
             "province populations and population-weighted province centres."
         ),
     },
-    # A hub model of its own (epiforecasts-seabbspersnow), submitted every
+    # A hub model of its own (epiforecasts-seabbsbaseline), submitted every
     # round. The nowcast step is being built; check this text against it.
     "persistencenow": {
         "model_name": "Persistence on a nowcast",

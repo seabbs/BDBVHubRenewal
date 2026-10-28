@@ -1,7 +1,7 @@
 team_name: EpiForecasts
 team_abbr: epiforecasts
 model_name: Persistence on a nowcast
-model_abbr: seabbspersnow
+model_abbr: seabbsbaseline
 model_contributors:
 - name: Sam Abbott
   affiliation: London School of Hygiene & Tropical Medicine

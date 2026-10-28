@@ -222,7 +222,7 @@ def model_abbr_for(model: str, path: Path | str = SUBMISSION_CONFIG) -> str:
     Returns
     -------
     str
-        The abbreviation, such as `"seabbspersnow"`.
+        The abbreviation, such as `"seabbsbaseline"`.
     """
     with Path(path).open("rb") as fh:
         config = tomllib.load(fh)

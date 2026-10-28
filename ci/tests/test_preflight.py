@@ -15,7 +15,7 @@ REPO = "seabbs/BDBVHubRenewal"
 FORK = "seabbs-bot/BDBV-Modeling-Hub"
 HUB = "InsightNet-US/BDBV-Modeling-Hub"
 MID = "epiforecasts-seabbsrenewal"
-MID2 = "epiforecasts-seabbspersnow"
+MID2 = "epiforecasts-seabbsbaseline"
 ENV = f"repos/{REPO}/environments/hub-submission"
 NOW = dt.datetime(2026, 10, 27, 12, tzinfo=dt.UTC)
 
@@ -88,7 +88,7 @@ def settings(tmp_path: Path) -> Settings:
         "model_name: Renewal\nmodel_abbr: seabbsrenewal\n"
     )
     (meta / f"{MID2}.yml").write_text(
-        "team_abbr: epiforecasts\nmodel_abbr: seabbspersnow\n"
+        "team_abbr: epiforecasts\nmodel_abbr: seabbsbaseline\n"
     )
     choice = tmp_path / "model-choice.yml"
     choice.write_text(
