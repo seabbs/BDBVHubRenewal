@@ -358,7 +358,7 @@ def test_cli_backtest_scenarios(tmp_path: Path) -> None:
         str(tmp_path / "out"),
     ]
     assert main(args) == 0
-    scores = pd.read_csv(tmp_path / "res" / "scenario-scores.csv")
+    scores = pd.read_csv(tmp_path / "res" / "scenario-scores.csv.gz")
     assert set(scores["scenario"]) == {
         "calibrated_falling",
         "calibrated_flat",

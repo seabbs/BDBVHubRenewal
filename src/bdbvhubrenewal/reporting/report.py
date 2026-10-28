@@ -499,7 +499,7 @@ def _lopo_section(path: Path) -> str:
     """Return the leave-one-province-out section, or nothing without results."""
     if not path.exists() or path.stat().st_size <= 1:
         return ""
-    scores = pd.read_csv(path)
+    scores = pd.read_csv(path, low_memory=False)
     if scores.empty:
         return ""
     table = summarise_scores(scores, by=("model", "masked"))
@@ -658,12 +658,13 @@ def _scenario_scores(path: Path) -> str:
     """Return mean scores on the simulated scenarios, or nothing."""
     if not path.exists() or path.stat().st_size <= 1:
         return ""
-    scores = pd.read_csv(path)
+    scores = pd.read_csv(path, low_memory=False)
     if scores.empty:
         return ""
-    scores["level"] = scores["location"].map(
-        lambda x: "national" if x == "CD" else "province"
-    )
+    if "level" not in scores:
+        scores["level"] = scores["location"].map(
+            lambda x: "national" if x == "CD" else "province"
+        )
     views = {
         "final data, complete weeks": (scores["truth_view"] == "final")
         & scores["complete"],
@@ -960,14 +961,25 @@ def _backtest_page(
             ),
             fig / "recovery-wis-horizon.svg",
         )
-    scen_path = res / "scenario-scores.csv"
+    scen_path = res / "scenario-scores.csv.gz"
     _write(gen / "scenario-scores.md", _scenario_scores(scen_path))
     _write(gen / "scenario-figure.md", _scenario_figure(scen_path))
     if scen_path.exists() and scen_path.stat().st_size > 1:
-        sscores = pd.read_csv(scen_path)
+        sscores = pd.read_csv(scen_path, low_memory=False)
         if not sscores.empty:
             save_light_dark(
-                partial(plot_scenarios, sscores, models=names),
+                partial(
+                    plot_scenarios,
+                    sscores,
+                    models=[
+                        *names,
+                        *(
+                            m
+                            for m in sscores["model"].unique()
+                            if m not in names
+                        ),
+                    ],
+                ),
                 fig / "scenario-wis-horizon.svg",
             )
 

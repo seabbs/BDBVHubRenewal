@@ -1083,7 +1083,11 @@ def run_scenarios(
     Returns
     -------
     tuple of pandas.DataFrame
-        The forecasts and the scores, with `scenario` and `truth_view`.
+        The province forecasts and the scores, with `scenario`,
+        `truth_view` and `level` (national, province or zone). Zone
+        scores split each model's province samples across zones
+        (`ZoneAllocator`) and add zone persistence
+        (`evaluation.zones.scenario_zone_scores`).
     """
     k = config.complete_after_weeks
     all_forecasts, all_scores = [], []
@@ -1093,9 +1097,8 @@ def run_scenarios(
         )
         outbreak = simulate_outbreak(settings)
         sim_target, sim_delays = outbreak.vintages(list(dates))
-        forecasts = run_forecasts(
-            models, make_tasks(sim_target, sim_delays, config)
-        )
+        tasks = make_tasks(sim_target, sim_delays, config)
+        forecasts = run_forecasts(models, tasks)
         end = (
             settings.start + dt.timedelta(days=settings.n_days - 1)
         ).isoformat()
@@ -1114,9 +1117,26 @@ def run_scenarios(
                     truth_view=f"as of {later_weeks} weeks later"
                 )
             )
+        scored = pd.concat(scores, ignore_index=True)
+        scored["level"] = np.where(
+            scored["location"] == NATIONAL, "national", "province"
+        )
+        # Local import: the zone backtest builds on this module.
+        from bdbvhubrenewal.evaluation.zones import scenario_zone_scores
+
+        zone = scenario_zone_scores(
+            outbreak,
+            tasks,
+            [m.name for m in models],
+            end,
+            later_weeks,
+            k,
+        ).assign(level="zone")
         all_forecasts.append(forecasts.assign(scenario=settings.name))
         all_scores.append(
-            pd.concat(scores, ignore_index=True).assign(scenario=settings.name)
+            pd.concat([scored, zone], ignore_index=True).assign(
+                scenario=settings.name
+            )
         )
     return (
         pd.concat(all_forecasts, ignore_index=True),

@@ -625,7 +625,7 @@ def _backtest(args: argparse.Namespace) -> int:
         )
         for table, path in (
             (sforecasts, output / "scenario-forecasts.csv.gz"),
-            (sscores, results / "scenario-scores.csv"),
+            (sscores, results / "scenario-scores.csv.gz"),
         ):
             bt.merge_by_model(path, table).to_csv(path, index=False)
         print(f"Scenarios: {len(sscores)} scored forecasts in {results}.")

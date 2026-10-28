@@ -1147,7 +1147,7 @@ def plot_scenarios(
     -------
     matplotlib.figure.Figure
         One panel per scenario, scored against the final data on complete
-        weeks. National is solid and provinces are dashed.
+        weeks. National is solid, provinces dashed and zones dotted.
     """
     models = list(models or scores["model"].unique())
     final = scores.loc[(scores["truth_view"] == "final") & scores["complete"]]
@@ -1155,8 +1155,17 @@ def plot_scenarios(
     fig, axes = _grid(len(scenarios), 3, width=3.6, height=2.6)
     for ax, scenario in zip(axes, scenarios, strict=True):
         s = final.loc[final["scenario"] == scenario]
-        for level, style in (("national", "-"), ("province", "--")):
-            part = s.loc[(s["location"] == "CD") == (level == "national")]
+        levels = (
+            s["level"]
+            if "level" in s
+            else np.where(s["location"] == "CD", "national", "province")
+        )
+        for level, style in (
+            ("national", "-"),
+            ("province", "--"),
+            ("zone", ":"),
+        ):
+            part = s.loc[levels == level]
             mean = part.groupby(["model", "horizon"])["wis"].mean().unstack(0)
             for m in models:
                 if m not in mean.columns:

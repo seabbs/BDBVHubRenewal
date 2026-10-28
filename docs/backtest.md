@@ -100,4 +100,4 @@ They are scored against the final simulated data on complete weeks and against t
 
 --8<-- "scenario-figure.md"
 
-Health zones are simulated but not yet scored, as neither baseline forecasts zones.
+Zone forecasts split each model's province samples across the zones of each province, and are compared with zone persistence.
