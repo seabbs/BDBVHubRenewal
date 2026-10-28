@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data.triangle import (
+    apply_delay,
     chainladder_fill,
     delay_pmf,
     fit_nb_size,
@@ -91,3 +92,26 @@ def test_retrospective_errors_compare_past_nowcasts_with_later_data() -> None:
     assert obs.shape == pred.shape == (5, 3)
     # Unbiased: what was later added is close to what was predicted.
     assert obs.sum() == pytest.approx(pred.sum(), rel=0.1)
+
+
+def test_apply_delay_follows_baselinenowcast() -> None:
+    # Missing cells of column d get (x + 1 - F(d - 1)) / F(d - 1) * p(d),
+    # with x the row's sum over earlier columns, filled as it goes.
+    pmf = np.array([0.5, 0.3, 0.2])
+    tri = np.array(
+        [[10.0, 6.0, 4.0], [8.0, 5.0, np.nan], [4.0, np.nan, np.nan]]
+    )
+    out = apply_delay(tri, pmf)
+    assert out[1, 2] == pytest.approx((13 + 1 - 0.8) / 0.8 * 0.2)
+    first = (4 + 1 - 0.5) / 0.5 * 0.3
+    assert out[2, 1] == pytest.approx(first)
+    assert out[2, 2] == pytest.approx((4 + first + 1 - 0.8) / 0.8 * 0.2)
+    assert out[0].tolist() == [10.0, 6.0, 4.0]
+
+
+def test_fit_nb_size_is_bounded_as_baselinenowcast() -> None:
+    rng = np.random.default_rng(4)
+    pred = rng.uniform(20, 200, size=(200, 1))
+    assert fit_nb_size(rng.poisson(pred), pred)[0] == pytest.approx(
+        1000, rel=0.01
+    )
