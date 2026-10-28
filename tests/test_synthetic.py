@@ -111,3 +111,28 @@ def test_simulation_parameters_have_turn(outbreak) -> None:  # type: ignore[no-u
     assert it["rt"].iloc[0] > 1.5
     assert it["rt"].iloc[-1] < 1
     assert it["missing"].max() == pytest.approx(0.25, abs=0.01)
+
+
+def test_simulated_vintage_publishes_after_a_lag(outbreak) -> None:  # type: ignore[no-untyped-def]
+    cases = outbreak.cases
+    lag = (cases["publish_date"] - cases["report_date"]).dt.days
+    assert lag.between(0, 3).all()
+    assert lag.nunique() == 4
+    day = pd.Timestamp("2026-09-05")
+    _, dly = outbreak.vintage(day.date())
+    published = cases.loc[cases["onset_known"] & (cases["publish_date"] <= day)]
+    reported = cases.loc[cases["onset_known"] & (cases["report_date"] <= day)]
+    assert len(dly) == len(published) < len(reported)
+
+
+def test_simulated_missing_onsets_follow_the_report_day() -> None:
+    s = dataclasses.replace(SimulationSettings(), missing=(0.0, 0.0, 0.9))
+    cases = simulate_outbreak(s).cases
+    # The missing share rises over the last two thirds, by report day,
+    # so cases reported late have no onset more often than their onset
+    # day alone implies.
+    day = (cases["report_date"] - pd.Timestamp(s.start)).dt.days
+    day = day.clip(upper=s.n_days - 1)
+    frac = np.clip(day - s.n_days / 3, 0, None) / (s.n_days * 2 / 3)
+    expected = np.where(day >= s.n_days / 3, 0.9 * frac, 0.0).mean()
+    assert (~cases["onset_known"]).mean() == pytest.approx(expected, abs=0.01)
