@@ -484,8 +484,17 @@ class RtPseudoObservation:
         self.scales = jnp.asarray(scales, dtype=float)
         self.kinds = jnp.asarray(kinds, dtype=int)
 
-    def log_group_rt(self, rt: ArrayLike, infections: ArrayLike, n_init: int):
+    def log_group_rt(
+        self,
+        rt: ArrayLike,
+        infections: ArrayLike,
+        n_init: int,
+        fractions: ArrayLike | None = None,
+    ):
         """Return log $R_G(s_b)$ for each group and for the nation.
+
+        Infections are per resident, so the weights are scaled by the
+        population `fractions` to be proportional to counts.
 
         Returns
         -------
@@ -494,6 +503,8 @@ class RtPseudoObservation:
         """
         week = n_init + 7 * (self.day // 7)
         w = infections[week : week + 7].sum(axis=0)
+        if fractions is not None:
+            w = w * fractions
         r = rt[n_init + self.day]
 
         def log_rt(member):
@@ -501,9 +512,15 @@ class RtPseudoObservation:
 
         return log_rt(self.groups), log_rt(jnp.ones_like(w))
 
-    def sample(self, rt: ArrayLike, infections: ArrayLike, n_init: int):
+    def sample(
+        self,
+        rt: ArrayLike,
+        infections: ArrayLike,
+        n_init: int,
+        fractions: ArrayLike | None = None,
+    ):
         """Add the pseudo-likelihood and record its diagnostics."""
-        group, national = self.log_group_rt(rt, infections, n_init)
+        group, national = self.log_group_rt(rt, infections, n_init, fractions)
         model = jnp.where(self.kinds == 0, group, group - national)
         numpyro.deterministic("bvd_log_rt_model", model)
         numpyro.deterministic("bvd_z", (self.values - model) / self.scales)

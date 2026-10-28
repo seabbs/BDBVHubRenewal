@@ -69,33 +69,58 @@ class KnotWalk(dist.Distribution):
         return start + steps.sum(-1)
 
 
+def _damped_sum(phi: ArrayLike, steps: ArrayLike) -> ArrayLike:
+    r"""Return $y_j = \sum_{i \le j} \phi^{j - i} s_i$ by a matrix product.
+
+    Lower-triangular with powers of $\phi$ (all ones for a random walk),
+    which is faster than a scan or `cumsum` on CPU.
+    """
+    m = steps.shape[0]
+    lag = jnp.arange(m)[:, None] - jnp.arange(m)[None, :]
+    weights = jnp.where(lag >= 0, phi ** jnp.maximum(lag, 0), 0.0)
+    return weights @ steps
+
+
 class NonCentredRandomWalk:
-    r"""Random walk with vectorised steps, frozen before the data begin.
+    r"""Random walk or AR(1), frozen before the data, extendable past them.
 
-    $$x(t) = x_0 \ (t \le k), \qquad x(t) = x(t - 1) + \sigma z_t,
-    \qquad z_t \sim N(0, 1) \ (t > k).$$
+    $$x(t) = x_0 \ (t \le k), \qquad x(t) = \phi\, x(t - 1) + \sigma z_t
+    \ (t > k), \qquad z_t \sim N(0, 1),$$
 
-    The same prior as PyRenew's `RandomWalk` after the first `frozen`
-    steps, which PyRenew samples one site per step in a scan as
-    $N(0, \sigma)$. Here the steps are one vectorised site.
-    `centred=False` samples the standardised steps $z$ (no funnel between
-    $\sigma$ and the steps). `centred=True` samples the path itself
-    (`GaussianRandomWalk`), which suits walks the data pin down. The
-    first `frozen` steps are zero, so nothing moves before the data begin
-    (the seeding period). It satisfies the `TemporalProcess` protocol, so
-    it can be wrapped in `WeeklyTemporalProcess`.
+    with $\phi = 1$ (random walk, the prior of PyRenew's `RandomWalk`)
+    or $\phi = 2^{-1/h}$ for a half-life $h$ steps from `half_life_rv`
+    (mean-reverting towards 0, for province deviations). PyRenew samples
+    the steps one site per step in a scan; here they are one vectorised
+    site. The first `frozen` steps are zero, so nothing moves before the
+    data begin.
+
+    Fit and forecast axes. With `n_fit` set, only the first `n_fit`
+    points are sampled as the main site, which is all the fit sees. A
+    longer axis (forecast mode) adds a separate `{prefix}_z_future` site
+    of standardised steps that `Predictive` draws from the prior given
+    the posterior, so steps with no data never enter NUTS (no funnel).
+
+    `knots=(m, s)` samples the knots themselves (`KnotWalk`) on the fit
+    axis, with the first knot $N(m, s)$ in place of `initial_value`
+    (random walk only). `centred=True` samples the path on the fit axis.
 
     Parameters
     ----------
     innovation_sd_rv : RandomVariable
         Step SD $\sigma$.
     frozen : int, optional
-        Number of leading steps fixed at zero.
+        Leading steps fixed at zero.
     centred : bool, optional
-        Sample the path rather than the standardised steps.
+        Sample the path rather than standardised steps.
     knots : tuple of float, optional
-        `(m, s)`: sample the knots themselves (`KnotWalk`), with the first
-        knot $N(m, s)$ in place of `initial_value`.
+        Sample the knots (`KnotWalk`).
+    n_fit : int, optional
+        Length of the fit axis.
+    half_life_rv : RandomVariable, optional
+        Half-life in steps; makes the process AR(1).
+    future : {"walk", "hold"}, optional
+        Past the fit axis, keep walking (default) or hold the last value
+        (EpiNow2's `future = "latest"`).
     """
 
     step_size: int = 1
@@ -106,11 +131,17 @@ class NonCentredRandomWalk:
         frozen: int = 0,
         centred: bool = False,
         knots: tuple[float, float] | None = None,
+        n_fit: int | None = None,
+        half_life_rv: RandomVariable | None = None,
+        future: str = "walk",
     ) -> None:
         self.innovation_sd_rv = innovation_sd_rv
         self.frozen = frozen
         self.centred = centred
         self.knots = knots
+        self.n_fit = n_fit
+        self.half_life_rv = half_life_rv
+        self.future = future
 
     def sample(
         self,
@@ -128,13 +159,23 @@ class NonCentredRandomWalk:
         ArrayLike
             Shape `(n_timepoints, n_processes)`.
         """
+        n_past = (
+            n_timepoints
+            if self.n_fit is None
+            else min(self.n_fit, n_timepoints)
+        )
         x0 = jnp.broadcast_to(
             jnp.asarray(0.0 if initial_value is None else initial_value),
             (n_processes,),
         )
-        frozen = min(self.frozen, n_timepoints - 1)
-        n_free = n_timepoints - 1 - frozen
+        frozen = min(self.frozen, n_past - 1)
+        n_free = n_past - 1 - frozen
         sd = self.innovation_sd_rv()
+        phi = (
+            1.0
+            if self.half_life_rv is None
+            else 0.5 ** (1.0 / self.half_life_rv())
+        )
         if self.knots is not None:
             loc, scale = self.knots
             k = numpyro.sample(
@@ -146,24 +187,39 @@ class NonCentredRandomWalk:
                     n_free + 1,
                 ),
             ).T
-            return jnp.vstack([jnp.repeat(k[:1], frozen, axis=0), k])
-        if self.centred:
+            past = jnp.vstack([jnp.repeat(k[:1], frozen, axis=0), k])
+        elif self.centred:
             path = numpyro.sample(
                 f"{name_prefix}_path",
                 dist.GaussianRandomWalk(
                     jnp.broadcast_to(sd, (n_processes,)), num_steps=n_free
                 ),
             ).T
-            walk = jnp.vstack([jnp.zeros((frozen + 1, n_processes)), path])
-            return x0[None, :] + walk
-        z = numpyro.sample(
-            f"{name_prefix}_z",
-            dist.Normal(0.0, 1.0).expand([n_free, n_processes]),
+            past = x0[None, :] + jnp.vstack(
+                [jnp.zeros((frozen + 1, n_processes)), path]
+            )
+        else:
+            z = numpyro.sample(
+                f"{name_prefix}_z",
+                dist.Normal(0.0, 1.0).expand([n_free, n_processes]),
+            )
+            free = _damped_sum(phi, sd * z)
+            decay = phi ** jnp.arange(1, n_free + 1)[:, None]
+            past = jnp.vstack(
+                [jnp.repeat(x0[None, :], frozen + 1, axis=0), decay * x0 + free]
+            )
+        n_future = n_timepoints - n_past
+        if n_future == 0:
+            return past
+        if self.future == "hold":
+            return jnp.vstack([past, jnp.repeat(past[-1:], n_future, axis=0)])
+        z_future = numpyro.sample(
+            f"{name_prefix}_z_future",
+            dist.Normal(0.0, 1.0).expand([n_future, n_processes]),
         )
-        # Cumulative sum as a lower-triangular product: faster than
-        # cumsum on CPU, forward and backward.
-        lower = jnp.tril(jnp.ones((n_timepoints, n_free)), -1 - frozen)
-        return x0[None, :] + lower @ (sd * z)
+        decay = phi ** jnp.arange(1, n_future + 1)[:, None]
+        future = decay * past[-1] + _damped_sum(phi, sd * z_future)
+        return jnp.vstack([past, future])
 
 
 class PooledInitialValue(RandomVariable):
@@ -190,6 +246,9 @@ class PooledInitialValue(RandomVariable):
     fixed_mean : bool, optional
         Fix $\mu = m$, when the national level is sampled elsewhere (as
         the first knot of a `KnotWalk`).
+    centred : bool, optional
+        Sample the $P - 1$ offsets on the basis directly (centred, the
+        default, as BVDOutbreakSize #1083), rather than standardised.
     """
 
     def __init__(
@@ -200,9 +259,11 @@ class PooledInitialValue(RandomVariable):
         scale: float,
         pooling_sd: float,
         fixed_mean: bool = False,
+        centred: bool = True,
     ) -> None:
         super().__init__(name=name)
         self.fixed_mean = fixed_mean
+        self.centred = centred
         self.n_groups = n_groups
         self.loc = loc
         self.scale = scale
@@ -223,14 +284,21 @@ class PooledInitialValue(RandomVariable):
                 f"{self.name}_mean", dist.Normal(self.loc, self.scale)
             )
         )
-        sd = numpyro.sample(f"{self.name}_sd", dist.HalfNormal(self.pooling_sd))
         if self.n_groups == 1:
             return jnp.full((1,), mu)
+        sd = numpyro.sample(f"{self.name}_sd", dist.HalfNormal(self.pooling_sd))
+        basis = jnp.asarray(sum_to_zero_basis(self.n_groups))
+        if self.centred:
+            offsets = numpyro.sample(
+                f"{self.name}_offsets",
+                dist.Normal(0.0, sd).expand([self.n_groups - 1]),
+            )
+            return mu + basis @ offsets
         z = numpyro.sample(
             f"{self.name}_z",
             dist.Normal(0.0, 1.0).expand([self.n_groups - 1]),
         )
-        return mu + sd * (jnp.asarray(sum_to_zero_basis(self.n_groups)) @ z)
+        return mu + sd * (basis @ z)
 
 
 def split_initial_value(

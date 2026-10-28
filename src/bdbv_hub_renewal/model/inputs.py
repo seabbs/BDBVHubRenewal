@@ -361,6 +361,7 @@ def vintage_from_tables(
         np.add.at(counts, (week[ok], keep["delay"].to_numpy()[ok]), 1)
 
     known, imputed = grid("observed", active), grid("imputed", active)
+    totals = known + imputed
     pops = table.set_index("location").loc[list(active), "population"]
     names = list(active)
     if config.national:
@@ -401,6 +402,9 @@ def vintage_from_tables(
         distances=None
         if config.national
         else province_distances(active + idle),
+        seed_days=None
+        if config.national
+        else 7 * np.argmax(totals > 0, axis=0),
         all_populations=None
         if config.national
         else table.set_index("location")

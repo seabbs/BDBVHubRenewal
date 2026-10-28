@@ -122,3 +122,17 @@ def test_alpha_zero_reproduces_main(outbreak, sim_tables, table, release):
     with_bvd = build_model(data, BVD)
     tr_bvd = trace(with_bvd, data)
     assert "bvd_rt_obs" in tr_bvd and "bvd_z" in tr_bvd
+
+
+def test_group_rt_weights_by_counts_not_per_resident():
+    # Province 0 is ten times larger, so with equal infections per
+    # resident it has ten times the onsets and dominates national Rt.
+    rt = jnp.ones((70, 2)).at[:, 1].set(2.0)
+    per_resident = jnp.ones((70, 2))
+    obs = RtPseudoObservation(1.0, 14, [[True, True]], [0.0], [0.1], [0])
+    group, national = obs.log_group_rt(
+        rt, per_resident, 14, jnp.array([10 / 11, 1 / 11])
+    )
+    expect = jnp.log((10 * 1.0 + 1 * 2.0) / 11)
+    assert float(group[0]) == pytest.approx(float(expect), rel=1e-6)
+    assert float(national) == pytest.approx(float(expect), rel=1e-6)
