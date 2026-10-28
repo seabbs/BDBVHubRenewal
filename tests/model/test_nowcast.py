@@ -82,12 +82,27 @@ def test_publication_lag_mixes_cut_offs():
     )
 
 
-def test_model_estimates_the_publication_lag(sim_vintage):
-    model = build_model(sim_vintage, MAIN)
-    prior = prior_latent(model, sim_vintage, n=5)
+def test_model_takes_the_empirical_publication_lag(sim_vintage):
+    lag = np.r_[np.full(10, 0.08), np.zeros(50), 0.2]
+    data = dataclasses.replace(sim_vintage, publication_lag_pmf=lag)
+    for cfg in (MAIN, FALLBACK):
+        assert cfg.publication_lag == "empirical"
+        model = build_model(data, cfg)
+        obs = model.observations["onsets"]
+        np.testing.assert_allclose(obs.publication_lag, lag)
+        assert "onsets_publication_lag" not in prior_latent(model, data, 2)
+    # With no estimate, a fixed uniform pmf on 0..3 days stands in.
+    model = build_model(
+        dataclasses.replace(sim_vintage, publication_lag_pmf=None), MAIN
+    )
+    np.testing.assert_allclose(
+        model.observations["onsets"].publication_lag, np.full(4, 0.25)
+    )
+    est = build_model(
+        sim_vintage, dataclasses.replace(MAIN, publication_lag="estimated")
+    )
+    prior = prior_latent(est, sim_vintage, n=5)
     assert prior["onsets_publication_lag"].shape == (5, 4)
-    fixed = build_model(sim_vintage, FALLBACK)
-    assert "onsets_publication_lag" not in prior_latent(fixed, sim_vintage, 2)
 
 
 def test_dirichlet_multinomial_delays(sim_vintage):
