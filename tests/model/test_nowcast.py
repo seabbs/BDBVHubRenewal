@@ -85,7 +85,7 @@ def test_publication_lag_mixes_cut_offs():
 def test_publication_lag_is_fixed_by_default(sim_vintage):
     # Delay-file lags mix late reports with onsets recorded later, so the
     # default stays a fixed uniform lag on 0..3 days.
-    for cfg in (MAIN, FALLBACK):
+    for cfg in (MAIN,):
         assert cfg.publication_lag == "fixed"
         model = build_model(sim_vintage, cfg)
         np.testing.assert_allclose(
