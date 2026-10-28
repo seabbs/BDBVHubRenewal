@@ -1,4 +1,4 @@
-"""Fit the main and fallback configurations to a simulated vintage.
+"""Fit the main configuration to a simulated vintage.
 
 The outbreak comes from `bdbvhubrenewal.data.simulate.simulate_outbreak`, a
 case-level simulator independent of this model: Rt turns from about 1.6
@@ -17,7 +17,7 @@ import pytest
 
 from bdbvhubrenewal.evaluation.ppc import summarise_draws
 from bdbvhubrenewal.forecasters.renewal import ppc_rows
-from bdbvhubrenewal.model import FALLBACK, MAIN, build_model, fit
+from bdbvhubrenewal.model import MAIN, build_model, fit
 from bdbvhubrenewal.model.model import forecast_trajectories
 
 from .conftest import VINTAGE_DAYS, vintage_date
@@ -27,12 +27,12 @@ RESULTS = Path(__file__).parents[1] / "results"
 N_INIT = 42
 
 
-@pytest.fixture(scope="module", params=["main", "fallback"])
+@pytest.fixture(scope="module", params=["main"])
 def fitted(request, sim_vintage):
-    cfg = {"main": MAIN, "fallback": FALLBACK}[request.param]
+    cfg = {"main": MAIN}[request.param]
     model = build_model(sim_vintage, cfg)
     start = time.perf_counter()
-    fit(model, sim_vintage, num_warmup=300, num_samples=300, num_chains=2)
+    fit(model, sim_vintage, num_warmup=500, num_samples=500, num_chains=2)
     jax.block_until_ready(model.mcmc.get_samples())
     seconds = time.perf_counter() - start
     return request.param, model, seconds
@@ -48,14 +48,27 @@ def first_below_one(rt, after=60):
     return int(below[0]) + after if below.size else None
 
 
+def on_sim_days(x, data, outbreak):
+    """A series on the data axis put on simulation days (NaN before)."""
+    offset = (data.start_date - outbreak.settings.start).days
+    out = np.full(offset + data.cutoff + 1, np.nan)
+    out[offset:] = x[: data.cutoff + 1]
+    return out
+
+
 def test_recovery(fitted, outbreak, sim_vintage):
     name, model, seconds = fitted
     smp = {k: np.asarray(v) for k, v in model.mcmc.get_samples().items()}
     extra = model.mcmc.get_extra_fields()
     divergent = float(np.mean(extra["diverging"]))
-    days = np.arange(sim_vintage.cutoff + 1)
-    rt = np.median(smp["latent::rt_subpop"][:, N_INIT:, 0], axis=0)[days]
-    true_rt = truth(outbreak, "rt")[days]
+    # The data axis starts at the first case week, after the simulation
+    # start, so model series are moved onto simulation days.
+    rt = on_sim_days(
+        np.median(smp["latent::rt_subpop"][:, N_INIT:, 0], axis=0),
+        sim_vintage,
+        outbreak,
+    )
+    true_rt = truth(outbreak, "rt")[: rt.size]
     checks = [56, 84, 112, 140, 168, 196]
     rt_err = np.abs(rt[checks] - true_rt[checks])
     turn, true_turn = first_below_one(rt), first_below_one(true_rt)
@@ -70,18 +83,26 @@ def test_recovery(fitted, outbreak, sim_vintage):
         "true_turn_day": true_turn,
     }
     if "delay_mean" in smp:
-        dm = np.median(smp["delay_mean"][:, N_INIT:], axis=0)
+        dm = on_sim_days(
+            np.median(smp["delay_mean"][:, N_INIT:], axis=0),
+            sim_vintage,
+            outbreak,
+        )
         summary["delay_true"] = np.round(
             truth(outbreak, "delay_mean")[[42, 168]], 1
         ).tolist()
         summary["delay_median"] = np.round(dm[[42, 168]], 1).tolist()
     if "missing_fraction" in smp:
-        pi = np.median(smp["missing_fraction"][:, N_INIT:, 0], axis=0)
+        pi = on_sim_days(
+            np.median(smp["missing_fraction"][:, N_INIT:, 0], axis=0),
+            sim_vintage,
+            outbreak,
+        )
         window = slice(56, 169)
         summary["pi_true_mean"] = round(
             float(truth(outbreak, "missing")[window].mean()), 3
         )
-        summary["pi_median_mean"] = round(float(pi[window].mean()), 3)
+        summary["pi_median_mean"] = round(float(np.nanmean(pi[window])), 3)
     RESULTS.mkdir(exist_ok=True)
     (RESULTS / f"recovery_{name}.json").write_text(
         json.dumps(summary, indent=2)

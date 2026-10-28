@@ -14,10 +14,10 @@ This module owns everything around it:
 - `ppc_rows`, `parameter_diagnostics`, `chain_diagnostics`: the CI's
   `ppc.json` and `diagnostics.json`;
 - `fit_renewal` and `forecast_renewal`: the `fit` and `forecast` of the
-  `main`, `fallback` and `bvd` fit configurations
+  `main` and `bvd` fit configurations
   (`bdbvhubrenewal.submission.fitting`).
 
-This module reads only `ModelConfig`, `MAIN`, `FALLBACK`, `build_model`,
+This module reads only `ModelConfig`, `MAIN`, `BVD`, `build_model`,
 `model_args`, `model.EXTRA_FIELDS`, `forecast_trajectories` and
 `adapter.vintage_from_tables` from the subpackage, so a new model version
 drops in if it keeps those. Sampling is here (`run_nuts`), so the CI's
@@ -140,7 +140,7 @@ class Variant:
     description : str
         One line for tables and docs.
     base : str
-        `MAIN` or `FALLBACK`, the configuration in `bdbvhubrenewal.model`.
+        `MAIN` or `BVD`, the configuration in `bdbvhubrenewal.model`.
     overrides : mapping
         `ModelConfig` fields to change.
     register : bool
@@ -187,12 +187,6 @@ VARIANTS: Final[dict[str, Variant]] = {
             base="BVD",
         ),
         Variant(
-            "fallback",
-            "Province renewal with no coupling, and delays and missingness "
-            "fixed from the data.",
-            base="FALLBACK",
-        ),
-        Variant(
             "renewalhold",
             "Province renewal with Rt held at its last value past the data.",
             overrides={"future_rt": "hold"},
@@ -209,11 +203,12 @@ VARIANTS: Final[dict[str, Variant]] = {
 
 FIT_VARIANTS: Final[dict[str, str]] = {
     "main": "renewal",
-    "fallback": "fallback",
+    "renewalsp": "renewalsp",
     "bvd": "renewalbvd",
 }
-"""The variant each fit configuration of the CI runs. `bvd` is a shadow
-candidate: fitted weekly, never submitted until it is chosen."""
+"""The variant each fit configuration of the CI runs. The chain is `main`,
+a retry, then `renewalsp`, then persistence. `bvd` is a shadow candidate:
+fitted weekly, never submitted until it is chosen."""
 
 
 def model_config(variant: Variant) -> Any:

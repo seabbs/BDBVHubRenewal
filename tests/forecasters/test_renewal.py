@@ -37,9 +37,8 @@ def test_variants_are_registered_as_fitted_models() -> None:
         model = get_model(name)
         assert isinstance(model, ForecastModel)
         assert model.name == name
-    # The fallback and the backtest options are registered too.
+    # The backtest options are registered too.
     for name, field, value in (
-        ("fallback", None, None),
         ("renewalhold", "future_rt", "hold"),
         ("renewalpo", "importation", "per_origin"),
     ):
@@ -58,11 +57,10 @@ def test_variants_are_registered_as_fitted_models() -> None:
 
 def test_fit_configs_run_the_renewal_model() -> None:
     assert get_config("main").stand_in is None
-    assert get_config("fallback").stand_in is None
     assert rn.VARIANTS["renewal"].base == "MAIN"
     assert rn.FIT_VARIANTS == {
         "main": "renewal",
-        "fallback": "fallback",
+        "renewalsp": "renewalsp",
         "bvd": "renewalbvd",
     }
     assert get_config("bvd").stand_in is None
