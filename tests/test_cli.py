@@ -180,3 +180,17 @@ def test_cli_backtest_no_fit_skips_fitted_models(tmp_path: Path) -> None:
     assert main(args) == 0  # would take minutes if it fitted anything
     scores = pd.read_csv(tmp_path / "res" / "backtest-scores.csv")
     assert set(scores["model"]) == {"persistence"}
+
+
+def test_host_devices_cover_the_chains(monkeypatch: pytest.MonkeyPatch) -> None:
+    from bdbv_hub_renewal.cli import host_devices
+
+    monkeypatch.setenv("XLA_FLAGS", "--xla_foo=1")
+    host_devices(4)
+    flags = os.environ["XLA_FLAGS"]
+    assert "--xla_foo=1" in flags
+    assert "--xla_force_host_platform_device_count=4" in flags
+    # A larger count already set is kept.
+    monkeypatch.setenv("XLA_FLAGS", "--xla_force_host_platform_device_count=8")
+    host_devices(4)
+    assert os.environ["XLA_FLAGS"] == "--xla_force_host_platform_device_count=8"
