@@ -409,3 +409,17 @@ def test_provenance_lists_the_shadow_candidates(tmp_path: Path) -> None:
     assert set(shadows) == {"main", "renewalsp", "bvd", "persistencenow"}
     assert shadows["main"]["fit"] is not None
     assert shadows["bvd"]["fit"] is None
+
+
+def test_a_track_submits_one_candidate_alone(tmp_path: Path) -> None:
+    # A second hub model (its own id) is the one candidate, with no chain.
+    pol = POLICY.only("persistencenow")
+    assert [c.id for c in pol.chain()] == ["persistencenow"]
+    c = tmp_path / "c"
+    chain(c, persistencenow=(None, "pass"), persistence=(None, "pass"))
+    prov = run_select(pol, c, tmp_path / "g", always("pass"), retried=False)
+    assert prov["selected"] == "persistencenow"
+    bad = tmp_path / "bad"
+    chain(bad, persistencenow=(None, "fail"), persistence=(None, "pass"))
+    prov = run_select(pol, bad, tmp_path / "g2", always("pass"), retried=False)
+    assert prov["selected"] is None
