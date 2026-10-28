@@ -713,8 +713,9 @@ def forecast_trajectories(
     dict
         `province`: `(n_trajectories, n_weeks + horizon, P)`,
         `inactive`: `(n_trajectories, n_weeks + horizon, Q)` (Q may be 0),
-        `national`: the sum over both, and `insample`, the predictive
-        draws of the fitted streams at the vintage (see `ppc_draws`).
+        `national`: the sum over both, `insample`, the predictive
+        draws of the fitted streams at the vintage (see `ppc_draws`), and
+        `draw`, the index of the posterior draw behind each trajectory.
     """
     if posterior is None:
         posterior = model.mcmc.get_samples()
@@ -752,4 +753,5 @@ def forecast_trajectories(
         "inactive": inactive,
         "national": province.sum(axis=2) + inactive.sum(axis=2),
         "insample": insample,
+        "draw": keep,
     }
