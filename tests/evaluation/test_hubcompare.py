@@ -255,10 +255,10 @@ def test_plot_hub_round(
         [load_hub_submissions(tmp_path), _ours(target, delays)]
     )
     q = forecast_quantiles(forecasts)
-    fig = plot_hub_round(
-        q, target, "2026-10-17", locations=("CD", "CD-IT"), complete_by=None
-    )
+    fig = plot_hub_round(q, target, "2026-10-17", locations=("CD", "CD-IT"))
     assert len([ax for ax in fig.axes if ax.get_visible()]) == 2
+    labels = [t.get_text() for t in fig.axes[0].get_legend().get_texts()]
+    assert "Still being reported" in labels
 
 
 def test_comparison_label_names_our_hub_models() -> None:

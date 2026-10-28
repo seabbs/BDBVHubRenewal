@@ -297,13 +297,78 @@ def test_score_views() -> None:
     assert len(views["all weeks as reported"]) == 2
 
 
-def test_overall_scores_table() -> None:
-    views = report._score_views(_scores(), 3)
-    text = report._overall_scores(views)
-    assert "complete weeks" in text
-    assert "all weeks as reported" in text
-    # A view with no rows is left out.
-    assert "vintage-matched" not in text
+def _two_model_scores() -> pd.DataFrame:
+    rows = []
+    for model, wis in (("persistence", 10.0), ("renewal", 5.0)):
+        for loc in ("CD", "CD-IT"):
+            rows.append(_scores().assign(model=model, location=loc, wis=wis))
+    return pd.concat(rows, ignore_index=True)
+
+
+def test_score_tables_split_by_set_and_level() -> None:
+    both = _two_model_scores()
+    new = pd.concat(
+        [
+            both.assign(scoring="as reported", complete=[True, False] * 4),
+            both.assign(scoring="vintage-matched", complete=[True, False] * 4),
+        ]
+    )
+    text = report._score_tables(report._score_views(new, 3))
+    for heading in (
+        "### Complete weeks, national",
+        "### Complete weeks, province",
+        "### Vintage-matched, national",
+        "### Vintage-matched, province",
+    ):
+        assert heading in text, heading
+    # Weeks still being reported are not scored as final.
+    assert "all weeks" not in text
+    # The tables are small.
+    first = text.split("###")[1]
+    header = first.splitlines()[2]
+    assert [c.strip() for c in header.strip("|").split("|")] == [
+        "model",
+        "wis",
+        "relative_wis",
+        "coverage_50",
+        "coverage_90",
+        "bias",
+    ]
+
+
+def test_score_table_leaves_persistence_without_relative_wis() -> None:
+    table = report._score_table(_two_model_scores().query("location == 'CD'"))
+    lines = {
+        ln.split("|")[1].strip(): ln.split("|")[3].strip()
+        for ln in table.splitlines()[2:]
+    }
+    assert lines["persistence"] == ""
+    assert float(lines["renewal"]) == 0.5
+
+
+def test_relative_section_leaves_out_persistence() -> None:
+    two = _two_model_scores()
+    text = report._relative_section(two)
+    table = [ln for ln in text.splitlines() if ln.startswith("|")]
+    assert any("renewal" in ln for ln in table)
+    assert not any("persistence" in ln for ln in table)
+
+
+def test_teams_table_links_to_hub_metadata() -> None:
+    teams = pd.DataFrame(
+        {
+            "model": ["teamA-weekly", "epiforecasts-x"],
+            "team_name": ["Team A", "Us"],
+            "model_name": ["Weekly", "X"],
+            "license": ["CC0-1.0", "MIT"],
+            "website_url": ["", ""],
+        }
+    )
+    text = report._teams_table(teams, {"x": "epiforecasts-x"})
+    assert "| Team " in text
+    assert "`teamA-weekly`" in text
+    assert "model-metadata/teamA-weekly.yml" in text
+    assert "epiforecasts-x" not in text
 
 
 def test_completeness_note(delays: pd.DataFrame) -> None:
