@@ -474,4 +474,4 @@ def test_plot_scenarios() -> None:
     fig = plot_scenarios(
         _scenario_scores(), models=["persistence", "persistencenow"]
     )
-    assert len(fig.axes) >= 3
+    assert len(fig.axes) == 2  # one panel per scenario
