@@ -77,12 +77,12 @@ The [Workflow](workflow.md) page explains the pipeline these steps unlock.
 15. Time a real fit on a past round.
     `gh workflow run submit.yml -R seabbs/BDBVHubRenewal -f force=true -f ignore_window=true -f reference_date=2026-10-31`
     Read the `Fit took N s` line in the fit job summary.
-    Each fit takes about 2.7 to 3.4 hours on a hosted runner.
+    Each fit (2 chains of 500 warm-up and 500 draws) takes about 1 to 1.5 hours on a hosted runner.
     With `ignore_window` the fit jobs stop at 350 minutes and the retry always runs if needed.
     If the measured times differ, update `retry_minutes` in the `[timing]` table of `ci/policy.toml`.
 16. Do one supervised live run inside the window (Sunday 00:00 to Tuesday 23:59 Kinshasa time, UTC+1).
     Start it on Sunday or Monday, so the whole chain has time to run.
-    Each fit job stops 45 minutes before the close, and the retry runs only if at least 285 minutes are left after the main fit (`[timing]` in `ci/policy.toml`).
+    Each fit job stops 45 minutes before the close, and the retry runs only if at least 150 minutes are left after the main fit (`[timing]` in `ci/policy.toml`).
     `gh workflow run submit.yml -R seabbs/BDBVHubRenewal -f dry_run=false`
     Check the pull request on the hub, its validation run, and the round's page linked from it.
 17. Go live.

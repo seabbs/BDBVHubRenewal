@@ -23,6 +23,18 @@ model_choice = "results/model-choice.yml"
 # Scores on complete weeks are the primary scores for the model choice.
 complete_after_weeks = 3
 
+[sampler]
+# NUTS settings of every fitted model in the backtest and leave one
+# province out. Shorter than the submission fit (4 chains of 1000 and
+# 1000, ci/policy.toml), with the same target acceptance. Settings in
+# BDBV_RENEWAL_SAMPLER win over these.
+num_chains = 2
+num_warmup = 500
+num_samples = 500
+target_accept = 0.8
+max_tree_depth = 10
+chain_method = "vectorized"
+
 [reconstructed]
 # Saturdays to reconstruct pseudo-vintages for. Any after the latest model
 # choice date are dropped.

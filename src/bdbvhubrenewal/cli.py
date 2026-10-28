@@ -439,8 +439,9 @@ def _models(names: Sequence[str] | None) -> list[str]:
 def _backtest(args: argparse.Namespace) -> int:
     from bdbvhubrenewal.forecasters.renewal import sampler_settings
 
-    host_devices(int(sampler_settings()["num_chains"]))
     config = bt.load_config(args.config)
+    bt.apply_sampler(config)
+    host_devices(int(sampler_settings()["num_chains"]))
     target, delays = load_target(args.data), load_delays(args.data)
     names = _models(args.models)
     if args.no_fit:

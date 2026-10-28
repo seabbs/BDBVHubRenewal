@@ -462,3 +462,30 @@ def test_lopo_reuses_the_cache(
     tasks = lopo_tasks(target, delays, config, **kwargs)
     assert all(t.mask == ("CD-IT",) for t in tasks)
     assert len(tasks) == calls
+
+
+def test_backtest_sampler_comes_from_the_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bdbvhubrenewal.evaluation.backtest import apply_sampler
+    from bdbvhubrenewal.forecasters.renewal import (
+        SAMPLER_ENV,
+        sampler_settings,
+    )
+
+    cfg = load_config(ROOT / "config" / "backtest.toml")
+    assert cfg.sampler == {
+        "num_chains": 2,
+        "num_warmup": 500,
+        "num_samples": 500,
+        "target_accept": 0.8,
+        "max_tree_depth": 10,
+        "chain_method": "vectorized",
+    }
+    monkeypatch.delenv(SAMPLER_ENV, raising=False)
+    apply_sampler(cfg)
+    assert sampler_settings()["num_warmup"] == 500
+    # Settings already in the environment win.
+    monkeypatch.setenv(SAMPLER_ENV, '{"num_warmup": 50}')
+    apply_sampler(cfg)
+    assert sampler_settings()["num_warmup"] == 50
