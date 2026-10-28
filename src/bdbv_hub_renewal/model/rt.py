@@ -311,7 +311,7 @@ class PooledInitialValue(RandomVariable):
 
 
 def split_initial_value(
-    initial: ArrayLike, n_groups: int
+    initial: ArrayLike, n_groups: int, weights: ArrayLike | None = None
 ) -> tuple[ArrayLike, ArrayLike]:
     """Split starting values into a national value and province deviations.
 
@@ -333,20 +333,30 @@ def split_initial_value(
     initial = jnp.asarray(initial)
     if initial.ndim == 0:
         return initial, jnp.zeros(n_groups)
-    start = jnp.mean(initial)
+    if weights is None:
+        start = jnp.mean(initial)
+    else:
+        w = jnp.asarray(weights, dtype=float)
+        start = (w @ initial) / w.sum()
     return start, initial - start
 
 
-def sum_to_zero_basis(n: int) -> np.ndarray:
-    """Orthonormal basis of the sum-to-zero subspace of R^n.
+def sum_to_zero_basis(n: int, weights: ArrayLike | None = None) -> np.ndarray:
+    r"""Orthonormal basis of $\{\delta \in R^n : w^\top \delta = 0\}$.
+
+    With no weights, $w = 1$ and the columns sum to zero. With weights
+    (case counts by province), deviations from the national value
+    average to zero weighted by cases, so the national value is the
+    case-weighted one.
 
     Returns
     -------
     numpy.ndarray
-        Shape `(n, n - 1)`, columns orthonormal and summing to zero.
+        Shape `(n, n - 1)`, orthonormal columns orthogonal to `w`.
     """
-    q, _ = np.linalg.qr(np.eye(n) - 1.0 / n)
-    return q[:, : n - 1]
+    w = np.ones(n) if weights is None else np.asarray(weights, dtype=float)
+    _, _, vt = np.linalg.svd(w[None, :])
+    return np.asarray(vt[1:].T, dtype=float)
 
 
 def pooled_walk(
@@ -357,6 +367,7 @@ def pooled_walk(
     n_groups: int,
     name_prefix: str,
     first_day_dow: int | None = None,
+    weights: ArrayLike | None = None,
 ) -> tuple[ArrayLike, ArrayLike]:
     r"""Sample a national process plus sum-to-zero province deviations.
 
@@ -383,6 +394,8 @@ def pooled_walk(
         Prefix for the sample sites.
     first_day_dow : int, optional
         Day of week of element 0, needed by calendar-aligned processes.
+    weights : ArrayLike, optional
+        Province weights; deviations then satisfy $w^\top \delta = 0$.
 
     Returns
     -------
@@ -390,7 +403,7 @@ def pooled_walk(
         National trajectory `(n_timepoints, 1)` and province trajectories
         `(n_timepoints, n_groups)`.
     """
-    base_start, dev_start = split_initial_value(initial, n_groups)
+    base_start, dev_start = split_initial_value(initial, n_groups, weights)
     baseline = baseline_process.sample(
         n_timepoints=n_timepoints,
         initial_value=base_start,
@@ -399,7 +412,7 @@ def pooled_walk(
     )
     if n_groups == 1:
         return baseline, baseline
-    basis = jnp.asarray(sum_to_zero_basis(n_groups))
+    basis = jnp.asarray(sum_to_zero_basis(n_groups, weights))
     coords = deviation_process.sample(
         n_timepoints=n_timepoints,
         n_processes=n_groups - 1,

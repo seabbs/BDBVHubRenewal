@@ -432,3 +432,14 @@ def test_generation_interval_matches_bvdoutbreaksize():
     )
     s = SimulationSettings()
     assert (s.gi_mean, s.gi_sd) == (GI_MEAN, GI_SD)
+
+
+def test_case_weighted_basis_is_orthonormal_and_orthogonal_to_weights():
+    from bdbv_hub_renewal.model.rt import sum_to_zero_basis
+
+    w = np.array([6000.0, 2000.0, 400.0, 90.0])
+    q = sum_to_zero_basis(4, w)
+    np.testing.assert_allclose(q.T @ q, np.eye(3), atol=1e-10)
+    np.testing.assert_allclose(w @ q, 0.0, atol=1e-8)
+    plain = sum_to_zero_basis(4)
+    np.testing.assert_allclose(plain.sum(axis=0), 0.0, atol=1e-10)

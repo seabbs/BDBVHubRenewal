@@ -309,6 +309,9 @@ class MetapopulationInfections(SubpopulationInfections):
         that week, plus whatever importation brings. Infections are dated
         by onset, so seeding the week before would put onsets where the
         data have none. `None` seeds every province at the start.
+    deviation_weights : array_like, optional
+        Case counts by province. Rt deviations then sum to zero weighted
+        by them, so the national Rt walk is the case-weighted log Rt.
     **kwargs
         Passed to `SubpopulationInfections` (without infection feedback).
     """
@@ -322,10 +325,14 @@ class MetapopulationInfections(SubpopulationInfections):
         effective_population_rv: RandomVariable | None = None,
         rt_observation: RtPseudoObservation | None = None,
         seed_days: Array | None = None,
+        deviation_weights: Array | None = None,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
         self.seed_days = None if seed_days is None else np.asarray(seed_days)
+        self.deviation_weights = (
+            None if deviation_weights is None else np.asarray(deviation_weights)
+        )
         self.rt_observation = rt_observation
         if deplete and effective_population_rv is None:
             raise ValueError("Depletion needs effective_population_rv.")
@@ -364,6 +371,7 @@ class MetapopulationInfections(SubpopulationInfections):
             pop.n_subpops,
             "log_rt",
             first_day_dow,
+            self.deviation_weights,
         )
         rt = jnp.exp(log_rt)
         gen_int = self.gen_int_rv()
