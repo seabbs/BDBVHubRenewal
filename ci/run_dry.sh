@@ -43,7 +43,10 @@ SCENARIOS=(
   "ppcwarn|main=ppcwarn|main||All checks passed, with warnings on ppc."
   "ppcfail|main=ppcfail|main||All checks passed, with warnings on ppc."
   "noppc|main=noppc|main||All checks passed, with warnings on ppc."
-  "implausible|main=implausible|main||with warnings on"
+  # A wildly high forecast is ruled out by the plausibility check: the
+  # main model is refitted, and if that is wild too the chain moves on.
+  "implausible|main=implausible|retry-1||main model was ruled out (plausible: "
+  "wild|main=implausible,retry-1=implausible|renewalsp||Fallback model used (single-patch model"
   "national|main=badnational|main||Handled: national (CD) rebuilt as the sum of the provinces"
   "latestream|main=latestream|main||Handled: delays: no delay data for this vintage"
   "loose|main=loose,retry-1=pass|retry-1||Handled: main model refitted once (max R-hat is 1.2"

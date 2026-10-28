@@ -162,6 +162,18 @@ national = "CD"
 # component (national.json, or the data's national gap without it), so
 # it is exact by construction.
 sum_tolerance = 1e-9       # absolute (or 1e-12 relative)
+# Plausibility, which rules a candidate out. For each location with data,
+# against the largest of its last `plausible_recent_weeks` observed weeks
+# (floored at `plausible_floor`), every week from the nowcast to the last
+# horizon must have a median under `plausible_median_ratio` times it and a
+# 97.5% quantile under `plausible_q975_ratio` times it, and, where that
+# maximum is at least the floor, a median above it over
+# `plausible_low_ratio`.
+plausible_recent_weeks = 4
+plausible_floor = 10
+plausible_median_ratio = 5.0
+plausible_q975_ratio = 10.0
+plausible_low_ratio = 20.0
 # Upper bound on any trajectory: the 95th centile of a week, relative to
 # the largest weekly count the location has ever had (floored).
 bound_floor = 20
