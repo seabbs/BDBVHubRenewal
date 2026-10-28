@@ -164,3 +164,5 @@ Forecasts from vintages of a [simulated outbreak](methods/data.md#simulated-vint
     Rt recovery against the true values is on the [Model building](development/model-building.md) page.
   </figcaption>
 </figure>
+
+--8<-- "nowcast-recovery.md"
