@@ -99,6 +99,9 @@ DEFAULT_SAMPLER: Final[Mapping[str, Any]] = {
     "target_accept": 0.9,
     "max_tree_depth": 10,
     "seed": 1,
+    # Parallel chains (pmap over host devices) leak memory on Linux CPU
+    # with JAX 0.12; vectorized chains stay flat, about a third slower.
+    "chain_method": "vectorized",
 }
 """NUTS settings when neither the CI nor `SAMPLER_ENV` gives them."""
 
@@ -332,6 +335,7 @@ def run_nuts(model: Any, data: Any, sampler: Mapping[str, Any]) -> Any:
         num_warmup=int(sampler["num_warmup"]),
         num_samples=int(sampler["num_samples"]),
         num_chains=int(sampler["num_chains"]),
+        chain_method=str(sampler.get("chain_method", "vectorized")),
         progress_bar=False,
     )
     model.mcmc.run(

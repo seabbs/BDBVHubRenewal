@@ -437,20 +437,21 @@ def test_chain_method_defaults_to_vectorized(
 
     class FakeMCMC:
         def __init__(self, kernel: Any, **kw: Any) -> None:
+            del kernel
             seen.update(kw)
 
         def run(self, *args: Any, **kw: Any) -> None:
-            return None
+            del args, kw
 
     class FakeModel:
         def validate_data(self, **kw: Any) -> None:
-            return None
+            del kw
 
         def sample(self) -> None:
             return None
 
     monkeypatch.setattr(numpyro.infer, "MCMC", FakeMCMC)
-    monkeypatch.setattr(rn.engine(), "model_args", lambda m, d: {})
+    monkeypatch.setattr(rn.engine(), "model_args", lambda *_: {})
     settings = rn.sampler_settings()
     assert settings["chain_method"] == "vectorized"
     rn.run_nuts(FakeModel(), None, settings)
