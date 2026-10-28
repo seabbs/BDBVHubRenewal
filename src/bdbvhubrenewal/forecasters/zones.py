@@ -90,9 +90,9 @@ class ZoneAllocator:
         Pseudo-cases $a$ added to every zone's longer-run count.
     """
 
-    recent_weeks: int = 4
+    recent_weeks: int = 2
     longer_weeks: int = 16
-    prior_strength: float = 20.0
+    prior_strength: float = 100.0
     floor: float = 0.5
 
     def alpha(

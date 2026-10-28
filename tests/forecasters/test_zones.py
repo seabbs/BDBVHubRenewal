@@ -169,12 +169,13 @@ def test_shares_shrink_recent_towards_longer_run() -> None:
     )
     counts["target_end_date"] = counts["target_end_date"].dt.date.astype(str)
     zones = ("CD-XX-01", "CD-XX-02", "CD-XX-03")
-    shares = ZoneAllocator().shares(counts, zones, "2026-10-17")
+    split = ZoneAllocator(recent_weeks=4, prior_strength=20)
+    shares = split.shares(counts, zones, "2026-10-17")
     a, b, c = (shares[z] for z in zones)
     assert b > a > c > 0
     assert sum(shares.values()) == pytest.approx(1)
     # Stronger shrinkage moves the split towards the longer run.
-    strong = ZoneAllocator(prior_strength=1e4).shares(
+    strong = ZoneAllocator(recent_weeks=4, prior_strength=1e4).shares(
         counts, zones, "2026-10-17"
     )
     assert strong["CD-XX-01"] > a
