@@ -13,10 +13,13 @@
 #   pmf.csv        triangle, delay, pmf
 #   point.csv      triangle, row, point_final
 #   nb_size.csv    triangle, horizon, nb_size (1 = most recent open row)
-#   VERSION        package version and commit
+#   VERSION        package version and the CRAN snapshot it came from
+#
+# baselinenowcast is installed from CRAN, pinned through a Posit Package
+# Manager snapshot (the date below and in the workflow).
 
-pinned_version <- "0.2.2"
-pinned_commit <- "1d29e5deab60906f4aee2d5134d9d0f1802a0f1b"
+pinned_version <- "0.2.0"
+snapshot <- "2026-10-27"
 
 suppressPackageStartupMessages(library(baselinenowcast))
 
@@ -32,6 +35,9 @@ triangles <- read.csv(file.path(dir, "triangles.csv"))
 settings <- read.csv(file.path(dir, "settings.csv"))
 
 fmt <- function(x) sprintf("%.12g", x)
+# Sizes come from a 1-d optimiser whose last digits differ across
+# platforms, so they are written to 6 significant figures.
+fmt_size <- function(x) sprintf("%.6g", x)
 
 write_csv <- function(df, name) {
   # Quote nothing: all fields are plain identifiers or numbers.
@@ -82,7 +88,7 @@ for (i in seq_len(nrow(settings))) {
   size_out[[name]] <- data.frame(
     triangle = name,
     horizon = seq_along(sizes),
-    nb_size = fmt(as.numeric(sizes))
+    nb_size = fmt_size(as.numeric(sizes))
   )
 }
 
@@ -90,11 +96,10 @@ write_csv(do.call(rbind, pmf_out), "pmf.csv")
 write_csv(do.call(rbind, point_out), "point.csv")
 write_csv(do.call(rbind, size_out), "nb_size.csv")
 
-commit <- packageDescription("baselinenowcast")$RemoteSha
-if (is.null(commit) || is.na(commit) || !nzchar(commit)) {
-  commit <- pinned_commit
-}
 writeLines(
-  c(paste0("baselinenowcast ", pinned_version), paste0("commit ", commit)),
+  c(
+    paste0("baselinenowcast ", pinned_version),
+    paste0("CRAN snapshot https://packagemanager.posit.co/cran/", snapshot)
+  ),
   file.path(dir, "VERSION")
 )

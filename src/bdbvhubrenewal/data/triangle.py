@@ -48,6 +48,7 @@ __all__ = [
     "chainladder_fill",
     "delay_pmf",
     "fit_nb_size",
+    "preprocess_negative_values",
     "reporting_triangle",
     "retrospective_errors",
 ]
@@ -135,9 +136,47 @@ def delay_pmf(triangle: NDArray[np.float64]) -> NDArray[np.float64]:
     -------
     numpy.ndarray
         Probabilities for each delay column.
+
+    Raises
+    ------
+    ValueError
+        If the triangle has no cases.
     """
     filled = chainladder_fill(triangle)
-    return np.asarray(filled.sum(axis=0) / filled.sum(), dtype=np.float64)
+    total = filled.sum()
+    if not total > 0:
+        raise ValueError("The triangle has no cases to estimate a delay from.")
+    return np.asarray(filled.sum(axis=0) / total, dtype=np.float64)
+
+
+def preprocess_negative_values(
+    triangle: NDArray[np.float64],
+) -> NDArray[np.float64]:
+    """Move negative counts to earlier delays, as baselinenowcast does.
+
+    In each row, from the longest delay back, a negative count is set to
+    0 and added to the next earlier observed delay. Counts in the delay
+    file are never negative, so this only matters for corrected data.
+
+    Parameters
+    ----------
+    triangle : numpy.ndarray
+        Counts by row and delay, missing where unobserved.
+
+    Returns
+    -------
+    numpy.ndarray
+        The triangle with no negative counts.
+    """
+    out = triangle.copy()
+    for row in out:
+        carry = 0.0
+        for col in range(row.size - 1, -1, -1):
+            if np.isnan(row[col]):
+                continue
+            value = row[col] + carry
+            row[col], carry = (0.0, value) if value < 0 else (value, 0.0)
+    return out
 
 
 def apply_delay(

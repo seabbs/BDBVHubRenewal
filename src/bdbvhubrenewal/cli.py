@@ -151,8 +151,8 @@ MODEL_METADATA = {
         "model_name": "Persistence on a nowcast",
         "methods": (
             "Chain-ladder nowcast of recent onset weeks with negative binomial "
-            "uncertainty, then persistence on each draw. Provinces, health "
-            "zones and national."
+            "uncertainty, then the hub baseline on each draw. Provinces, "
+            "health zones and national."
         ),
         "methods_long": (
             "A baseline model building on the ideas of the baselinenowcast "
@@ -162,7 +162,11 @@ MODEL_METADATA = {
             "weeks are nowcast with a chain ladder on the reporting triangle, "
             "with a negative binomial for each delay horizon fitted to past "
             "retrospective nowcasts. Each nowcast draw is carried forward as "
-            "persistence, with log-scale random walk noise. Province samples "
+            "the COVID-19 Forecast Hub baseline on the log scale, centred on "
+            "the latest weeks weighted by the share of each reported, with "
+            "steps drawn from past weekly changes and their negatives. "
+            "Sparse provinces borrow the delay and steps of the provinces "
+            "with more data. Province samples "
             "are split across health zones, and the national value is the "
             "sum of provinces. See "
             "https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."

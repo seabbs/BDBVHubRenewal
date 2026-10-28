@@ -9,6 +9,7 @@ from bdbvhubrenewal.data.triangle import (
     chainladder_fill,
     delay_pmf,
     fit_nb_size,
+    preprocess_negative_values,
     reporting_triangle,
     retrospective_errors,
 )
@@ -115,3 +116,19 @@ def test_fit_nb_size_is_bounded_as_baselinenowcast() -> None:
     assert fit_nb_size(rng.poisson(pred), pred)[0] == pytest.approx(
         1000, rel=0.01
     )
+
+
+def test_preprocess_negative_values_moves_negatives_to_earlier_delays() -> None:
+    # As baselinenowcast: from the longest delay back, a negative cell is
+    # set to 0 and taken off the next earlier one.
+    tri = np.array([[5.0, -2.0, 3.0, np.nan], [1.0, 2.0, -4.0, 1.0]])
+    out = preprocess_negative_values(tri)
+    assert out[0, :3].tolist() == [3.0, 0.0, 3.0]
+    assert np.isnan(out[0, 3])
+    assert out[1].tolist() == [0.0, 0.0, 0.0, 1.0]
+
+
+def test_delay_pmf_needs_cases() -> None:
+    tri = np.array([[0.0, 0.0], [0.0, np.nan]])
+    with pytest.raises(ValueError, match="no cases"):
+        delay_pmf(tri)

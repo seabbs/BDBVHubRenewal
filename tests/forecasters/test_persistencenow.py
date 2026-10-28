@@ -6,7 +6,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.triangle import delay_pmf, reporting_triangle
+from bdbvhubrenewal.data.triangle import (
+    delay_pmf,
+    reporting_triangle,
+)
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import (
     ForecastTask,
@@ -17,9 +20,11 @@ from bdbvhubrenewal.forecasters import (
     list_models,
 )
 from bdbvhubrenewal.forecasters.persistence import (
-    horizon_scales,
+    baseline_walk,
     nowcast_draws,
+    nowcast_means,
     revision_variance,
+    week_share,
 )
 
 
@@ -61,7 +66,7 @@ def test_nowcast_draws_add_negative_binomial_counts_per_place() -> None:
     observed = np.array([[0.0, 40.0, 40.0, 40.0], [0.0, 0.0, 10.0, 10.0]])
     ratio = np.array([[1.0, 0.0, 0.25, 1.5], [1.0, 1.0, 1.0, 1.0]])
     size = np.array([[5.0, 5.0, np.inf, 5.0], [5.0, 5.0, 5.0, 5.0]])
-    draws = nowcast_draws(observed, ratio, size, 20000, rng)
+    draws = nowcast_draws(observed, observed * ratio, size, 20000, rng)
     assert draws.shape == (20000, 2, 4)
     # Without revision noise, never below the published count.
     assert (draws >= observed).all()
@@ -114,38 +119,6 @@ def test_revision_variance_from_past_vintages(target: pd.DataFrame) -> None:
     assert revision_variance(one, "2026-10-24") == 0.0
 
 
-def test_horizon_scales_shrink_to_one() -> None:
-    rng = np.random.default_rng(3)
-    wide = [rng.normal(0, 2.0, 400), rng.normal(0, 2.0, 400), np.array([])]
-    scales = horizon_scales(wide, prior=10)
-    assert scales[0] == pytest.approx(2.0, rel=0.1)
-    assert scales[2] == pytest.approx(scales[1], rel=0.01)
-    assert horizon_scales([np.array([])], prior=10)[0] == 1.0
-    few = horizon_scales([np.array([5.0])], prior=10)[0]
-    assert 1.0 < few < 2.0
-
-
-def test_persistencenow_calibrates_the_walk_on_reconstructed_vintages(
-    target: pd.DataFrame, delays: pd.DataFrame
-) -> None:
-    from bdbvhubrenewal.evaluation.backtest import (
-        development_tasks,
-        load_config,
-    )
-
-    config = load_config()
-    tasks = development_tasks(target, delays, config)
-    task = next(
-        t for t in tasks
-        if t.kind == "reconstructed" and t.vintage == "2026-10-03"
-    )  # fmt: skip
-    model = PersistenceNow()
-    errors = model.walk_errors(task)
-    assert len(errors) >= 3
-    assert sum(e.size for e in errors) > 50
-    check_samples(model.forecast(task), task)
-
-
 def test_persistencenow_output(task: ForecastTask) -> None:
     samples = PersistenceNow().forecast(task)
     check_samples(samples, task)
@@ -175,14 +148,15 @@ def test_persistencenow_nowcasts_recent_weeks(task: ForecastTask) -> None:
 
 
 def test_persistencenow_carries_the_nowcast_forward(task: ForecastTask) -> None:
-    nat = _national(PersistenceNow().forecast(task))
-    plain = _national(Persistence().forecast(task))
-    # Persistence carries forward a published week; the nowcast lifts the
-    # level carried into the forecast weeks.
-    future = "2026-11-07"
-    assert nat.loc[future].median() > plain.loc[future].median()
+    samples = PersistenceNow().forecast(task)
+    it = samples.loc[samples["location"] == "CD-IT"]
+    it = it.pivot(index="target_end_date", columns="sample", values="value")
+    # The walk keeps its median at the nowcast of the week it starts from,
+    # the week ending 10-10, the latest at least half reported.
+    start = it.loc["2026-10-10"].median()
+    assert it.loc["2026-11-07"].median() == pytest.approx(start, rel=0.25)
     # The spread still grows with the horizon.
-    q = nat.quantile([0.05, 0.95], axis=1)
+    q = it.quantile([0.05, 0.95], axis=1)
     width = (q.loc[0.95] - q.loc[0.05]).to_numpy()
     assert width[-1] > width[-3]
 
@@ -254,3 +228,97 @@ def test_persistencenow_predicts_counts_as_reported_later(
         (s_t - s_v) / (1 - s_v)
     )
     assert by_sample["value"].median() == pytest.approx(expected, rel=0.1)
+
+
+def test_nowcast_means_scale_the_total_by_the_share_reported() -> None:
+    totals = np.array([12.0, 0.0, 5.0])
+    share = np.array([1.0, 0.1, 0.25])
+    added = nowcast_means(totals, share)
+    # Y / s - Y: nothing for a complete week or a week with no cases.
+    assert added.tolist() == pytest.approx([0.0, 0.0, 15.0])
+
+
+def test_week_share_averages_over_onset_days_and_lags() -> None:
+    # A case with onset on day W - u of the week ending W, delay d and
+    # publication lag l is in a vintage t days after W if d + l - u <= t.
+    cdf = np.cumsum([0.5, 0.25, 0.25])
+    share = week_share(cdf, np.array([-1, 0, 10]), lag=0)
+    assert share[0] == pytest.approx((0.5 + 0.75 + 1.0 * 4) / 7)
+    assert share[1] == pytest.approx((0.5 + 0.75 + 1.0 * 5) / 7)
+    assert share[2] == 1.0
+    # A lag uniform on 0 to 1 averages the shares with lags 0 and 1.
+    both = week_share(cdf, np.array([0]), lag=1)[0]
+    assert both == pytest.approx((share[1] + share[0]) / 2)
+
+
+def test_baseline_walk_is_a_symmetrised_empirical_random_walk() -> None:
+    rng = np.random.default_rng(5)
+    centre = np.full(4000, np.log1p(100.0))
+    steps = np.array([0.1, 0.3, -0.2, 0.05])
+    draws = baseline_walk(centre, steps, 3, rng)
+    assert draws.shape == (4000, 3)
+    # The median stays at the centre and the spread grows with the horizon.
+    assert np.allclose(np.median(draws, axis=0), 100, rtol=0.05)
+    iqr = np.subtract(*np.percentile(draws, [75, 25], axis=0))
+    assert iqr[2] > iqr[0]
+    # Every one-week change is one of the past changes or its negative, up
+    # to rounding to whole cases.
+    first = np.log1p(draws[:, 0]) - centre
+    pool = np.r_[steps, -steps]
+    assert (np.abs(first[:, None] - pool[None, :]).min(axis=1) < 0.01).all()
+    # Fewer than three past changes: Poisson around the centre.
+    flat = baseline_walk(centre, np.array([0.2]), 2, rng)
+    assert flat.var(axis=0) == pytest.approx([100, 100], rel=0.15)
+
+
+def test_persistencenow_nowcasts_the_latest_week(task: ForecastTask) -> None:
+    # The week ending on the vintage is nowcast and the walk starts from it.
+    nat = _national(PersistenceNow().forecast(task))
+    seen = task.target.loc[task.target["location"] == "CD"].set_index(
+        "target_end_date"
+    )["total"]
+    assert nat.loc["2026-10-17"].median() > 2 * seen["2026-10-17"]
+
+
+def test_sparse_places_stay_plausible(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    # Bas-Uele has had about 13 cases; its 97.5% quantile must stay small.
+    task = _task(target, delays, "2026-10-24")
+    samples = PersistenceNow().forecast(task)
+    bu = samples.loc[samples["location"] == "CD-BU"]
+    top = bu.groupby("target_end_date")["value"].quantile(0.975)
+    assert top.max() <= 20
+    # Ituri's walk is centred between its last two nowcasts, nearer the
+    # one with more of its cases reported.
+    it = samples.loc[samples["location"] == "CD-IT"]
+    med = it.groupby("target_end_date")["value"].median()
+    low, high = sorted(med.loc[["2026-10-17", "2026-10-24"]])
+    assert 0.8 * low <= med.iloc[-1] <= high
+
+
+def test_ituri_turning_point_at_08_22(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    # Ituri peaked in the week ending 08-15 (413 cases) and fell after it
+    # (337, 358, 298, 336, 277). At the reconstructed 08-22 vintage the
+    # week ending 08-22 is about 7% reported. Its nowcast enters the walk's
+    # centre weighted by that share, so the walk is not held at the peak.
+    from bdbvhubrenewal.evaluation.backtest import (
+        development_tasks,
+        load_config,
+    )
+
+    task = next(
+        t for t in development_tasks(target, delays, load_config())
+        if t.kind == "reconstructed" and t.vintage == "2026-08-22"
+    )  # fmt: skip
+    samples = PersistenceNow().forecast(task)
+    samples = samples.loc[samples["as_of"].isna()]
+    it = samples.loc[samples["location"] == "CD-IT"]
+    q = it.groupby("target_end_date")["value"].quantile([0.05, 0.5, 0.95])
+    q = q.unstack()
+    walk = ["2026-08-29", "2026-09-05", "2026-09-12", "2026-09-19"]
+    assert (q.loc[walk, 0.5] < 400).all()
+    for week, truth in zip(walk, [358, 298, 336, 277], strict=True):
+        assert q.loc[week, 0.05] <= truth <= q.loc[week, 0.95]
