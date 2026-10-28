@@ -327,10 +327,10 @@ class ParametricDelay(RandomVariable):
 
 
 class FixedTimeVarying(RandomVariable):
-    """A fixed time-varying input, for the fallback configuration.
+    """A fixed time-varying input: the hub's delay in the total-stream steps.
 
-    Stands in for `HazardDelay` or `MissingOnsetFraction` with a matrix
-    estimated from data beforehand. It is data, so it adds no sites.
+    Stands in for `HazardDelay` with a matrix fixed beforehand. It is
+    data, so it adds no sites.
     Rows past the end are filled with the last row, so the same input
     covers the forecast horizon.
 
@@ -356,114 +356,3 @@ class FixedTimeVarying(RandomVariable):
         """
         idx = jnp.minimum(jnp.arange(n_timepoints), self.value.shape[0] - 1)
         return self.value[idx]
-
-
-def empirical_delay_matrix(
-    delay_counts: ArrayLike,
-    cutoff: int,
-    window: int = 2,
-    prior_weight: float = 1.0,
-) -> np.ndarray:
-    r"""Smoothed time-varying delay pmf from the hub's delay file.
-
-    `delay_counts[w, d]` counts known-onset cases with onset in week $w$
-    (days $7w$ to $7w + 6$) and delay $d$, reported by day `cutoff`.
-    Week $w$ is pooled with its neighbours within `window` weeks. Delays
-    beyond the longest delay observable for that week,
-    $L_w = T - 7w - 6$, are right truncated, so the pmf is completed with
-    a pooled tail,
-
-    $$\hat f_w(d) = (1 - q_w)\frac{c_w(d)}{\sum_{j \le L_w} c_w(j)}
-    \ (d \le L_w), \qquad \hat f_w(d) = q_w \frac{\bar f(d)}
-    {\sum_{j > L_w} \bar f(j)}\ (d > L_w),$$
-
-    where $\bar f$ is the pooled pmf over weeks with full follow-up and
-    $q_w = \sum_{j > L_w} \bar f(j)$. A pseudo-count of
-    `prior_weight` times $\bar f$ smooths sparse weeks.
-
-    Parameters
-    ----------
-    delay_counts : array_like
-        Counts, shape `(n_weeks, dmax + 1)`.
-    cutoff : int
-        Data cut-off day on the same daily axis.
-    window : int, optional
-        Half-width of the pooling window in weeks.
-    prior_weight : float, optional
-        Pseudo-count weight on the pooled pmf.
-
-    Returns
-    -------
-    numpy.ndarray
-        Daily matrix, shape `(7 * n_weeks, dmax + 1)`.
-    """
-    counts = np.asarray(delay_counts, dtype=float)
-    n_weeks, n_d = counts.shape
-    longest = cutoff - 7 * np.arange(n_weeks) - 6
-    full = longest >= n_d - 1
-    base = counts[full].sum(axis=0) if full.any() else counts.sum(axis=0)
-    base = (base + 0.5) / (base + 0.5).sum()
-    out = np.empty_like(counts)
-    for w in range(n_weeks):
-        lo, hi = max(0, w - window), min(n_weeks, w + window + 1)
-        c = counts[lo:hi].sum(axis=0) + prior_weight * base
-        cap = int(np.clip(min(longest[lo:hi]), 0, n_d - 1))
-        head = c[: cap + 1] / c[: cap + 1].sum()
-        tail_mass = base[cap + 1 :].sum()
-        out[w, : cap + 1] = (1 - tail_mass) * head
-        out[w, cap + 1 :] = base[cap + 1 :]
-    return np.repeat(out, 7, axis=0)
-
-
-def empirical_missing_fraction(
-    known: ArrayLike,
-    imputed: ArrayLike,
-    window: int = 2,
-    shrink: float = 5.0,
-    shift: int = 0,
-) -> np.ndarray:
-    r"""Smoothed missing-onset fraction by province and week, from data.
-
-    The imputed share of onsets in each week, pooled over neighbouring
-    weeks and shrunk towards the national share,
-
-    $$\hat\pi_p(w) = \frac{\sum_{w'} m_p(w') + a \bar\pi}
-    {\sum_{w'} \{k_p(w') + m_p(w')\} + a},$$
-
-    with $k$ known and $m$ imputed onset counts and $a$ = `shrink`.
-    Weeks with no data take the last available value.
-    These shares are by onset week, but $\pi$ is by report day, so the
-    daily values move `shift` days later (the mean delay), and the first
-    days take the first value.
-
-    Parameters
-    ----------
-    known, imputed : array_like
-        Weekly counts, shape `(n_weeks, P)`, NaN where unobserved.
-    window : int, optional
-        Half-width of the pooling window in weeks.
-    shrink : float, optional
-        Pseudo-count $a$ towards the national share.
-    shift : int, optional
-        Days from onset to report day.
-
-    Returns
-    -------
-    numpy.ndarray
-        Daily matrix, shape `(7 * n_weeks, P)`.
-    """
-    k = np.nan_to_num(np.asarray(known, dtype=float))
-    m = np.nan_to_num(np.asarray(imputed, dtype=float))
-    national = (m.sum() + 1) / (k.sum() + m.sum() + 2)
-    out = np.full(k.shape, national)
-    for w in range(k.shape[0]):
-        lo, hi = max(0, w - window), min(k.shape[0], w + window + 1)
-        mw, tw = m[lo:hi].sum(axis=0), (k[lo:hi] + m[lo:hi]).sum(axis=0)
-        out[w] = (mw + shrink * national) / (tw + shrink)
-        if w > 0 and (k[w] + m[w]).sum() == 0:
-            out[w] = out[w - 1]
-    daily = np.repeat(out, 7, axis=0)
-    if shift <= 0:
-        return daily
-    lead = np.repeat(daily[:1], shift, axis=0)
-    return np.vstack([lead, daily[:-shift]])

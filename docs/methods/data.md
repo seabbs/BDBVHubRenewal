@@ -74,4 +74,9 @@ The truth is every confirmed case by its true onset week.
 
 `renewalbvd` uses the Rt estimates in the public `results-<run>` releases of [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) (MIT licence, [Zenodo 10.5281/zenodo.20312758](https://doi.org/10.5281/zenodo.20312758)).
 These are the national $R_T$ draws, the patch summaries from 23 October and the release's data cut-off.
+Each forecast uses the newest release that existed at its cut-off, with data ending by the forecast date, whose fit converged.
+The convergence check is generous.
+The joint fit's worst R-hat must be at most 1.1 (`[bvd] max_rhat` in `config/backtest.toml`), and effective sample sizes are ignored.
+The R-hat is read from the fit diagnostics table in the release's rendered site (`site.zip`), and a release without a readable table is passed over for the next older one.
+Each fit records the release it used, its R-hat and why newer releases were skipped.
 Their use is on the [Model page](model.md#bvdoutbreaksize-informed).

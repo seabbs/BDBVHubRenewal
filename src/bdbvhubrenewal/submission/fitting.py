@@ -6,9 +6,9 @@ its fallback chain with `bdbvhubrenewal fit --config <name>` and then
 forecasts from the saved fit with `bdbvhubrenewal nowcast --config <name>
 --fit <dir>`. A fit configuration says how to do both.
 
-The chain names two configurations, `main` (the full model, the
-`renewal` variant) and `fallback` (delays and missingness from data,
-no coupling). Both run the PyRenew renewal model through
+The chain is `main` (the full model, the `renewal` variant), a retry,
+`renewalsp` (single patch per location), then `persistence`, with `bvd`
+as a shadow. The renewal configurations run the PyRenew model through
 `bdbvhubrenewal.forecasters.renewal.fit_renewal`, which samples, draws the
 trajectories and writes `ppc.json`. `persistence` needs no fit.
 
@@ -131,7 +131,7 @@ def register_config(config: FitConfig, *, replace: bool = False) -> FitConfig:
         The configuration.
     replace : bool
         Allow replacing one of the same name, as the model integration
-        does for the `main` and `fallback` stand-ins.
+        does for the `main` stand-in.
 
     Returns
     -------
@@ -447,5 +447,5 @@ def _renewal_config(name: str) -> FitConfig:
     )
 
 
-for _name in ("main", "fallback", "bvd"):
+for _name in ("main", "renewalsp", "bvd"):
     register_config(_renewal_config(_name))

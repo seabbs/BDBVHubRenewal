@@ -5,7 +5,7 @@ name: Submit to the BDBV hub
 # CI: the gate below decides, and the PR body says what was submitted
 # and why. See ci/SETUP.md and ci/INTEGRATION.md.
 #
-#   detect -> prepare -> fit (main, fallback) -> triage -> [retry] ->
+#   detect -> prepare -> fit (main, renewalsp, bvd) -> triage -> [retry] ->
 #   gate (select + hubValidations) -> submit -> record -> outcome
 #
 # DRY_RUN is true unless the repo variable DRY_RUN is `false` or a manual
@@ -20,7 +20,7 @@ on:
     - cron: '0 23 * * 6'       # Saturday 23:00 UTC, as the window opens
     - cron: '0 2-23/3 * * 0,1' # every 3 hours on Sunday and Monday
     # Tuesday until 14:00 UTC, which leaves 540 minutes to the close for
-    # prepare, the main fit (about 1 to 1.5 hours, the fallback beside
+    # prepare, the main fit (about 1 to 1.5 hours, renewalsp beside
     # it), one retry of about the same length, and the gate. Each fit's
     # timeout stops 45 minutes short of the close, and the retry runs only
     # if it can finish in time (ci/policy.toml [timing]), so even a late
@@ -205,7 +205,7 @@ jobs:
       - name: Lay out the candidates
         run: ci/steps/unpack_candidates.sh
       # No refit when too little of the window is left for it and the
-      # gate: the chain then moves on to the fallback.
+      # gate: the chain then moves on to the single-patch fallback.
       - name: Triage
         id: triage
         env:

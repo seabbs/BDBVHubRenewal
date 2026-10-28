@@ -24,6 +24,11 @@
     "name": "province_timeseries.csv",
     "updated_at": "2026-10-27T09:12:00Z",
     "browser_download_url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3169/province_timeseries.csv"
+   },
+   {
+    "name": "site.zip",
+    "updated_at": "2026-10-27T09:12:00Z",
+    "browser_download_url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3169/site.zip"
    }
   ]
  },
@@ -52,6 +57,11 @@
     "name": "province_timeseries.csv",
     "updated_at": "2026-10-23T18:40:00Z",
     "browser_download_url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3151/province_timeseries.csv"
+   },
+   {
+    "name": "site.zip",
+    "updated_at": "2026-10-23T18:40:00Z",
+    "browser_download_url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3151/site.zip"
    }
   ]
  },
@@ -80,6 +90,11 @@
     "name": "province_timeseries.csv",
     "updated_at": "2026-10-26T08:00:00Z",
     "browser_download_url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3160/province_timeseries.csv"
+   },
+   {
+    "name": "site.zip",
+    "updated_at": "2026-10-26T08:00:00Z",
+    "browser_download_url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3160/site.zip"
    }
   ]
  },
@@ -98,6 +113,11 @@
     "name": "observations.toml",
     "updated_at": "2026-10-16T12:00:00Z",
     "browser_download_url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3086/observations.toml"
+   },
+   {
+    "name": "site.zip",
+    "updated_at": "2026-10-16T12:00:00Z",
+    "browser_download_url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3086/site.zip"
    }
   ]
  },
@@ -126,6 +146,11 @@
     "name": "province_timeseries.csv",
     "updated_at": "2026-10-27T10:00:00Z",
     "browser_download_url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-v3.1.0/province_timeseries.csv"
+   },
+   {
+    "name": "site.zip",
+    "updated_at": "2026-10-27T10:00:00Z",
+    "browser_download_url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-v3.1.0/site.zip"
    }
   ]
  },
@@ -161,6 +186,11 @@
     "name": "province_timeseries.csv",
     "updated_at": "2026-10-24T10:00:00Z",
     "browser_download_url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3200/province_timeseries.csv"
+   },
+   {
+    "name": "site.zip",
+    "updated_at": "2026-10-24T10:00:00Z",
+    "browser_download_url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-3200/site.zip"
    }
   ]
  },
@@ -179,6 +209,11 @@
     "name": "observations.toml",
     "updated_at": "2026-09-10T08:00:00Z",
     "browser_download_url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2007/observations.toml"
+   },
+   {
+    "name": "site.zip",
+    "updated_at": "2026-09-10T08:00:00Z",
+    "browser_download_url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2007/site.zip"
    }
   ]
  },
@@ -197,6 +232,11 @@
     "name": "observations.toml",
     "updated_at": "2026-09-10T09:00:00Z",
     "browser_download_url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2005/observations.toml"
+   },
+   {
+    "name": "site.zip",
+    "updated_at": "2026-09-10T09:00:00Z",
+    "browser_download_url": "https://github.com/epiforecasts/BVDOutbreakSize/releases/download/results-2005/site.zip"
    }
   ]
  }

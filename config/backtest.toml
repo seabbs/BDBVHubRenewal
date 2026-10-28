@@ -11,9 +11,10 @@ seed = 20261027
 
 [split]
 # The model choice record. It logs the chosen model and every change, with
-# dates. Development runs use vintages up to the latest choice date only.
-# Every real vintage after the first choice date is held out and scored by
-# `--evaluate-holdout` under the model chosen at the time.
+# dates. The development set rolls forward with the choices: development
+# runs use every vintage up to the latest choice date, and each real
+# vintage after a choice is held out and scored by `--evaluate-holdout`
+# under the model chosen then. With no choice, every vintage is development.
 # Every week is scored, against each later real vintage as reported then.
 model_choice = "results/model-choice.yml"
 # A truth week counts as complete if it ended at least this many weeks
@@ -33,6 +34,12 @@ num_samples = 500
 target_accept = 0.8
 max_tree_depth = 10
 chain_method = "vectorized"
+
+[bvd]
+# The BVD variant uses the newest BVDOutbreakSize results release whose
+# joint fit's worst R-hat is at most this. A generous check: effective
+# sample sizes are ignored, and BVDOutbreakSize's own pass level is 1.05.
+max_rhat = 1.1
 
 [reconstructed]
 # Saturdays to reconstruct pseudo-vintages for. Any after the latest model

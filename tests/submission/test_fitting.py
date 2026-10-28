@@ -36,10 +36,11 @@ def stand_in() -> str:
     return "standin"
 
 
-def test_main_and_fallback_run_the_renewal_model() -> None:
+def test_main_runs_the_renewal_model() -> None:
     names = {c.name for c in list_configs()}
-    assert {"main", "fallback", "persistence"} <= names
-    for name in ("main", "fallback", "persistence"):
+    assert {"main", "renewalsp", "persistence"} <= names
+    assert "fallback" not in names
+    for name in ("main", "renewalsp", "persistence"):
         assert get_config(name).stand_in is None
 
 
@@ -257,9 +258,9 @@ def test_cli_hub_id_and_chosen_model(
 ) -> None:
     assert main(["hub-id"]) == 0
     assert capsys.readouterr().out.strip() == "epiforecasts-seabbsrenewal"
-    assert main(["chosen-model"]) == 0
-    # The latest entry of results/model-choice.yml.
-    assert capsys.readouterr().out.strip() == "persistence"
+    # results/model-choice.yml has no choice until Sam makes the first.
+    assert main(["chosen-model"]) == 1
+    assert "no model has been chosen" in capsys.readouterr().err
 
 
 @pytest.mark.usefixtures("in_root")
