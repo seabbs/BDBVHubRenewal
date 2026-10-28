@@ -148,3 +148,49 @@ def test_followup_persistence_is_registered(task) -> None:  # type: ignore[no-un
     assert model.full_follow_up
     out = model.forecast(task)
     check_samples(out, task)
+
+
+def test_persistence_predicts_counts_as_reported_later(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    rows = target.loc[target["vintage"] == "2026-10-09"]
+    task = make_tasks(
+        rows, delays, BacktestConfig(seed=3), report_by=("2026-10-24",)
+    )[0]
+    assert task.report_by == ("2026-10-24",)
+    samples = Persistence().forecast(task)
+    check_samples(samples, task)
+    final = samples.loc[samples["as_of"].isna()]
+    later = samples.loc[samples["as_of"] == "2026-10-24"]
+    # Weeks up to the later vintage only, with the same samples.
+    assert later["target_end_date"].max() <= "2026-10-24"
+    assert set(later["sample"]) == set(final["sample"])
+    # At least what was reported at the vintage, and no more than the
+    # final count where that is higher.
+    keys = ["location", "target_end_date", "sample"]
+    both = later.merge(final, on=keys, suffixes=("", "_final"))
+    seen = rows.set_index(["location", "target_end_date"])["total"]
+    floor = [
+        seen.get((loc, week), 0)
+        for loc, week in zip(
+            both["location"], both["target_end_date"], strict=True
+        )
+    ]
+    assert (both["value"] >= floor).all()
+    assert (both["value"] <= np.maximum(both["value_final"], floor)).all()
+
+
+def test_add_national_sums_each_as_of(task) -> None:  # type: ignore[no-untyped-def]
+    samples = Persistence().forecast(task)
+    later = samples.assign(as_of="2026-10-24", value=1.0)
+    out = add_national(pd.concat([samples.assign(as_of=np.nan), later]))
+    nat = out.loc[(out["location"] == "CD") & (out["as_of"] == "2026-10-24")]
+    assert len(nat) == len(task.target_end_dates) * task.n_samples
+    assert (nat["value"] == len(task.locations)).all()
+
+
+def test_check_samples_rejects_unrequested_as_of(task) -> None:  # type: ignore[no-untyped-def]
+    samples = Persistence().forecast(task)
+    extra = samples.assign(as_of="2026-10-24")
+    with pytest.raises(ValueError, match="as_of"):
+        check_samples(pd.concat([samples.assign(as_of=np.nan), extra]), task)

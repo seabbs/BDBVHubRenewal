@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 
 import pandas as pd
@@ -182,6 +183,35 @@ def test_score_tasks_scores_vintage_matched_rows() -> None:
     )
     assert set(plain["scoring"]) == {"as reported"}
     assert plain["complete"].all()
+
+
+def test_make_tasks_asks_for_later_vintages(
+    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
+) -> None:
+    vintages = ("2026-08-18", "2026-10-09", "2026-10-17", "2026-10-24")
+    tasks = make_tasks(target, delays, config, report_by=vintages)
+    by = {t.vintage: t.report_by for t in tasks}
+    assert by["2026-08-18"] == vintages[1:]
+    assert by["2026-10-24"] == ()
+
+
+def test_development_scores_both_ways(
+    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
+) -> None:
+    config = dataclasses.replace(config, complete_after_weeks=3)
+    forecasts, scores = run_development(
+        [get_model("persistence")], target, delays, config
+    )
+    assert {"as reported", "vintage-matched"} <= set(scores["scoring"])
+    assert scores["complete"].any()
+    assert not scores["complete"].all()
+    by_truth = score_by_truth_vintage(forecasts, target, 3)
+    matched = by_truth.loc[by_truth["scoring"] == "vintage-matched"]
+    assert set(matched["truth_vintage"]) == {
+        "2026-10-09",
+        "2026-10-17",
+        "2026-10-24",
+    }
 
 
 def test_truth_changes(target: pd.DataFrame) -> None:
