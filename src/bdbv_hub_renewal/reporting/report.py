@@ -395,6 +395,34 @@ _VERSION_LABELS = {
 }
 
 
+def _nowcast_recovery_lead(rows: pd.DataFrame) -> str:
+    """Sentences on the error and coverage of each version, from the rows."""
+    final = rows.loc[rows["truth"] == "final vintage"]
+    lines = []
+    for vintage, by in final.groupby("vintage", sort=True):
+        v = by.set_index("version")
+        if not {"fresh", "recentred"} <= set(v.index):
+            continue
+        lines.append(
+            f"On the {vintage} vintage, the absolute error of the median "
+            f"is {v.loc['fresh', 'mae_median']:.1f} with a fresh draw and "
+            f"{v.loc['recentred', 'mae_median']:.1f} with the reported "
+            "counts kept, and 90% coverage is "
+            f"{v.loc['fresh', 'coverage_90']:.2f} and "
+            f"{v.loc['recentred', 'coverage_90']:.2f}."
+        )
+    if not lines:
+        return ""
+    n = int(rows["n_cells"].max()) if "n_cells" in rows else 0
+    tail = (
+        f"Each vintage has {n} province and national weeks, so coverage "
+        f"moves in steps of {1 / n:.2f}.\n\n"
+        if n
+        else "\n"
+    )
+    return "\n".join(lines) + "\n" + tail
+
+
 def _nowcast_recovery_section(path: Path) -> str:
     """Return the nowcast recovery section, or nothing without results."""
     if not path.exists() or path.stat().st_size <= 1:
@@ -431,7 +459,7 @@ def _nowcast_recovery_section(path: Path) -> str:
         "They are scored against the final simulated vintage, the hub-style "
         "target, and against cases by true onset week.\n"
         "`share_below_reported` is the mean share of draws below the counts "
-        "already reported.\n\n" + table + "\n"
+        "already reported.\n\n" + _nowcast_recovery_lead(rows) + table + "\n"
     )
 
 
