@@ -24,6 +24,10 @@ A week is judged complete if the vintage date is at least `lag_days`
 after its midpoint.
 `lag_days` is the `completeness` quantile of the pooled delay published
 with the vintage, or `default_lag_days` if no delays were published.
+Recent onset weeks only show the delays reported so far, so this lag is
+biased short. With `full_follow_up` (`persistence_followup`), it is
+taken over onset weeks that ended at least the maximum delay plus the
+publication lag before the vintage, whose delays are all observed.
 """
 
 from __future__ import annotations
@@ -35,7 +39,8 @@ import numpy as np
 import pandas as pd
 
 from bdbv_hub_renewal.data.dates import as_date
-from bdbv_hub_renewal.data.delays import EmpiricalDelayModel
+from bdbv_hub_renewal.data.delays import DEFAULT_MAX_DELAY, EmpiricalDelayModel
+from bdbv_hub_renewal.data.reconstruct import PUBLICATION_LAG_DAYS
 from bdbv_hub_renewal.forecasters.base import (
     SAMPLE_COLUMNS,
     ForecastTask,
@@ -50,6 +55,8 @@ def completeness_lag(
     vintage: str,
     quantile: float = 0.9,
     default: int = 10,
+    full_follow_up: bool = False,
+    min_cases: int = 50,
 ) -> int:
     """Return the days after a week's midpoint at which it counts as complete.
 
@@ -63,6 +70,12 @@ def completeness_lag(
         Share of cases that must have been reported.
     default : int
         Lag used when no delays are available.
+    full_follow_up : bool
+        Use only onset weeks ending at least `DEFAULT_MAX_DELAY` plus
+        `PUBLICATION_LAG_DAYS` days before the vintage, whose delays are
+        not right truncated, if they hold at least `min_cases` cases.
+    min_cases : int
+        Fewest cases in those weeks to use them.
 
     Returns
     -------
@@ -71,6 +84,12 @@ def completeness_lag(
     """
     if delays is None or delays.empty:
         return default
+    if full_follow_up:
+        horizon = DEFAULT_MAX_DELAY + PUBLICATION_LAG_DAYS
+        cut = pd.Timestamp(as_date(vintage)) - pd.Timedelta(days=horizon)
+        old = delays.loc[pd.to_datetime(delays["onset_week"]) <= cut]
+        if len(old) >= min_cases:
+            return int(np.quantile(old["delay"].clip(lower=0), quantile))
     fit = EmpiricalDelayModel().fit(delays, vintage)
     return fit.quantile(quantile)
 
@@ -111,6 +130,8 @@ class Persistence:
         Delay quantile defining a complete week.
     default_lag_days : int
         Completeness lag when a vintage has no delay data.
+    full_follow_up : bool
+        Take the lag from fully followed-up onset weeks only (#8).
     """
 
     name: str = "persistence"
@@ -118,6 +139,7 @@ class Persistence:
     min_sd: float = 0.1
     completeness: float = 0.9
     default_lag_days: int = 10
+    full_follow_up: bool = False
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return persistence trajectories for a task.
@@ -134,7 +156,11 @@ class Persistence:
         """
         rng = task.rng()
         lag = completeness_lag(
-            task.delays, task.vintage, self.completeness, self.default_lag_days
+            task.delays,
+            task.vintage,
+            self.completeness,
+            self.default_lag_days,
+            full_follow_up=self.full_follow_up,
         )
         last = last_complete_week(task.vintage, lag).isoformat()
         weeks = list(task.target_end_dates)
@@ -178,4 +204,11 @@ register_model(
     Persistence,
     "Last complete week carried forward, with log-scale random walk noise.",
     baseline=True,
+)
+
+
+register_model(
+    "persistence_followup",
+    lambda: Persistence(name="persistence_followup", full_follow_up=True),
+    "Persistence with the completeness lag from fully followed-up weeks.",
 )
