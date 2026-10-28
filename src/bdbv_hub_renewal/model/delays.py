@@ -13,7 +13,10 @@ import numpy as np
 import numpyro
 import numpyro.distributions as dist
 from jax.typing import ArrayLike
-from pyrenew.latent.temporal_processes import TemporalProcess
+from pyrenew.latent.temporal_processes import (
+    TemporalProcess,
+    WeeklyTemporalProcess,
+)
 from pyrenew.metaclass import RandomVariable
 from pyrenew.randomvariable import DistributionalVariable
 
@@ -118,10 +121,19 @@ class HazardDelay(RandomVariable):
             name_prefix=f"{self.name}_time",
             first_day_dow=first_day_dow,
         )
-        pmf = hazard_to_pmf(beta[None, :] + gamma)
-        numpyro.deterministic(
-            f"{self.name}_mean", pmf @ jnp.arange(self.dmax + 1)
+        weekly = isinstance(self.time_process, WeeklyTemporalProcess) and (
+            first_day_dow == self.time_process.start_dow
         )
+        if weekly:
+            # The shift is constant within weeks, so compute one row per
+            # week and repeat it.
+            gamma = gamma[::7]
+        pmf = hazard_to_pmf(beta[None, :] + gamma)
+        mean = pmf @ jnp.arange(self.dmax + 1)
+        if weekly:
+            pmf = jnp.repeat(pmf, 7, axis=0)[:n_timepoints]
+            mean = jnp.repeat(mean, 7, axis=0)[:n_timepoints]
+        numpyro.deterministic(f"{self.name}_mean", mean)
         return pmf
 
 
