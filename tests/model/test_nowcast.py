@@ -6,6 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 import numpyro
 import numpyro.distributions as dist
+import pandas as pd
 import pytest
 from jax import random
 from numpyro.infer import Predictive
@@ -162,3 +163,30 @@ def test_dispersion_prior_is_half_normal_on_inverse_root_phi(sim_vintage):
         site = tr[f"inv_sqrt_phi_{stream}"]
         assert isinstance(site["fn"], dist.HalfNormal)
         assert float(site["fn"].scale) == pytest.approx(0.25)
+
+
+def test_negative_and_long_delays_are_clipped_not_dropped(
+    outbreak, sim_tables, table
+):
+    from bdbv_hub_renewal.model.inputs import vintage_from_tables
+
+    from .conftest import SIM_LOCATIONS, VINTAGE_DAYS, vintage_date
+
+    day = VINTAGE_DAYS[-1]
+    target, delays = sim_tables[day]
+    odd = delays.iloc[:2].copy()
+    odd["delay"] = [-3, 90]
+    both = vintage_from_tables(
+        target,
+        pd.concat([delays, odd]),
+        vintage_date(outbreak, day),
+        SIM_LOCATIONS,
+        table,
+    )
+    base = vintage_from_tables(
+        target, delays, vintage_date(outbreak, day), SIM_LOCATIONS, table
+    )
+    extra = both.delay_counts - base.delay_counts
+    assert extra.sum() == 2
+    assert extra[:, 0].sum() == 1
+    assert extra[:, -1].sum() == 1
