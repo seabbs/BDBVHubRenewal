@@ -381,10 +381,10 @@ class OnsetStreams(BaseObservationProcess):
         $0..L$: a random variable to estimate it, or a fixed pmf.
         `None` is no lag.
     delay_overdispersion_rv : RandomVariable, optional
-        $1 / \sqrt{\psi}$. If given, the delay counts are
-        Dirichlet-multinomial with concentration $\psi P(d \mid w)$
-        instead of multinomial, so that the pooled delays of thousands of
-        cases do not make the delay overconfident.
+        $1 / \sqrt{\psi}$, with $\psi$ capped at $10^4$. If given, the
+        delay counts are Dirichlet-multinomial with concentration
+        $\psi P(d \mid w)$ instead of multinomial, so that the pooled
+        delays of thousands of cases do not make the delay overconfident.
     weekly_delay : bool, optional
         `delay_rv` changes only weekly and the model axis starts on
         `start_dow` with whole weeks, so the expectations can use
@@ -652,7 +652,9 @@ class OnsetStreams(BaseObservationProcess):
         if self.delay_overdispersion_rv is None:
             counts_dist = dist.Multinomial(total_count=totals, probs=probs)
         else:
-            psi = 1 / jnp.square(self.delay_overdispersion_rv())
+            # Capped at 1e4: near the multinomial the float32 log density
+            # is noisy enough to stall NUTS step-size adaptation.
+            psi = 1 / (jnp.square(self.delay_overdispersion_rv()) + 1e-4)
             counts_dist = dist.DirichletMultinomial(
                 concentration=psi * probs, total_count=totals
             )
