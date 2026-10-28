@@ -224,3 +224,8 @@ def test_trajectories_name_their_posterior_draws(sim_vintage):
     draws = forecast_trajectories(model, sim_vintage, 5, posterior=latent)
     assert draws["draw"].shape == (5,)
     assert np.all((draws["draw"] >= 0) & (draws["draw"] < 8))
+
+
+def test_delay_counts_are_dirichlet_multinomial_by_default():
+    assert MAIN.delay_counts == "dirichlet-multinomial"
+    assert FALLBACK.delay_counts == "dirichlet-multinomial"
