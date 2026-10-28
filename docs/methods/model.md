@@ -52,17 +52,26 @@ It is not the national Rt, which would weight provinces by their infections.
 It is a weekly random walk, sampled as its weekly values (knots) $k_j$:
 
 $$
-k_0 \sim \mathcal{N}(0, 0.5^2), \qquad k_j - k_{j-1} \sim \mathcal{N}(0, \sigma_R^2), \qquad \sigma_R \sim \mathcal{N}^+(0, 0.4^2).
+k_0 \sim \mathcal{N}(0, 0.5^2), \qquad k_j - k_{j-1} \sim \mathcal{N}(0, \sigma_R^2), \qquad \sigma_R \sim \mathcal{N}^+(0, 0.2^2).
 $$
 
 Sampling the knots rather than a level and its steps removes the direction in which the level and every step move together.
 The prior is the same.
 
 The province deviations sum to zero.
-They are $\delta_p(t) = \sum_j Q_{pj}\, \eta_j(t)$, with $Q$ an orthonormal basis of the sum-to-zero subspace and $P - 1$ weekly random walks $\eta_j$.
-The walks share one step SD $\sigma_\delta \sim \mathcal{N}^+(0, 0.3^2)$, which pools the provinces.
-Their starting values are $Q$ times standard normal draws scaled by $\mathcal{N}^+(0, 0.3^2)$.
-All walks are flat over the 6 seeding weeks before the data start.
+They are $\delta_p(t) = \sum_j Q_{pj}\, \eta_j(t)$, with $Q$ an orthonormal basis of the sum-to-zero subspace and $P - 1$ weekly AR(1) processes $\eta_j$, which revert to their starting offsets:
+
+$$
+\eta_j(t) = \phi\, \eta_j(t - 1) + \sigma_\delta z_j(t), \qquad \phi = 2^{-1/h}, \qquad h \sim \text{LogNormal}(\log 6, 0.6^2)\ \text{weeks}, \qquad \sigma_\delta \sim \mathcal{N}^+(0, 0.1^2).
+$$
+
+The shared $\sigma_\delta$ and half-life $h$ pool the provinces.
+BVDOutbreakSize uses the same form, with a 42-day half-life.
+The starting offsets are $v = Q u$, with $u \sim \mathcal{N}(0, \sigma_v^2)$ sampled centred and $\sigma_v \sim \mathcal{N}^+(0, 0.3^2)$.
+All walks are flat over the 6 seeding weeks before the data start, and are fitted on the data weeks only.
+Their steps past the data are drawn in the forecast, from the fitted step SDs.
+With `future_rt="hold"`, Rt instead holds at its last fitted value, as EpiNow2's `future = "latest"`.
+With `rt_cadence="linear"`, the weekly knots are joined linearly rather than held for the week.
 
 ### Renewal with importation and depletion
 
@@ -80,6 +89,7 @@ $$
 - $W = (1 - \varepsilon) I + \varepsilon\, \mathrm{diag}(1/N) K^\top \mathrm{diag}(N)$ mixes transmission between provinces, with $\varepsilon \sim \text{Beta}(1, 100)$.
 - $K$ is a row-normalised gravity kernel, $K_{qp} \propto N_p e^{-D_{qp}/300\,\text{km}}$, with $D$ the great-circle distance between population-weighted province centres and $N_p$ the province population.
 - With `coupling="learnt"` the kernel's decay and destination weights are estimated, $\log K_{qp} = \log N_p - D_{qp}/(300\,\text{km} \cdot e^{\kappa_K}) + w_p + c_q$, with $\kappa_K \sim \mathcal{N}(0, 1)$, sum-to-zero weights $w$ with scale $\mathcal{N}^+(0, 0.5^2)$, and $c_q$ normalising each row. With $\kappa_K = 0$ and $w = 0$ it is the fixed gravity kernel.
+- With `importation="per_origin"`, each origin has its own share $\varepsilon_q$, partially pooled on the logit scale.
 - $\nu \sim \text{LogNormal}(\log 0.05, 0.75^2)$ is the share of each province at risk.
   $S_p$ starts at $\nu$, so cumulative infections never exceed $\nu N_p$.
 
@@ -87,9 +97,11 @@ The exponential form agrees with linear depletion, $x = S y$, to first order, an
 It is computed with `expm1` and on $\log S$, which keeps the log density smooth in single precision.
 
 Seeding is set on the scale of confirmed onsets.
-Each province's expected confirmed onsets per day at the start are $c_p \sim \text{LogNormal}(0, 1.5^2)$.
-They become $x_p = c_p / (\alpha_0 N_p)$ and grow back over the seeding weeks at the initial growth rate implied by $R_p$ and $g$.
-That rate is clipped to $[-0.05, 0.3]$ per day, so a steep early decline cannot project an implausibly large seed.
+Each province's expected confirmed onsets per day are $c_p \sim \text{LogNormal}(0, 1.5^2)$, which become $I_{0,p} = c_p / (\alpha_0 N_p)$ infections per resident.
+Provinces with cases in the first data week are seeded at the start.
+Their seed is projected back over the seeding weeks at the growth rate implied by $R_p$ and $g$, clipped to $[-0.05, 0.3]$ per day, so a steep early decline cannot project a seed larger than the pool.
+Later provinces start at $10^{-6}$ of that level and take $I_{0,p}$ as a constant daily addition to $y_p(t)$ in the week before their first case week.
+Importation adds to it.
 
 The simulator ([simulated vintages](data.md#simulated-vintages)) uses this renewal too.
 
@@ -136,15 +148,17 @@ $$
 
 built as $\log R_p$ is: a pooled weekly random walk $b$ plus sum-to-zero province deviations $\eta_p$.
 The starting national value is $\mathcal{N}(-2, 1)$ with province spread $\mathcal{N}^+(0, 0.5^2)$.
-The step SDs are $\mathcal{N}^+(0, 0.6^2)$ for $b$ and $\mathcal{N}^+(0, 0.2^2)$ for $\eta$.
+The step SDs are $\mathcal{N}^+(0, 0.3^2)$ for $b$ and $\mathcal{N}^+(0, 0.1^2)$ for $\eta$, sampled non-centred.
 $\pi_p$ is informed by the ratio of imputed to known onsets, through the imputation below.
 
 ### Known onsets
 
-With $T$ the vintage cut-off, the cases with onset $s$ reported by $T$ with an onset recorded are expected to be
+A case reported on day $t$ is in the vintage published at $T$ with probability $c(t) = F_\ell(T - t)$, with $F_\ell$ the cdf of the lag $\ell$ from report to publication.
+The lag is a pmf on 0 to 3 days with a $\text{Dirichlet}(1, 1, 1, 1)$ prior, so only the last 3 days before $T$ are partly in.
+The cases with onset $s$ in the vintage with an onset recorded are expected to be
 
 $$
-\mathrm{known}_{p,T}(s) = \lambda_p(s) \sum_{d \le T - s} f_s(d)\, \{1 - \pi_p(s + d)\}.
+\mathrm{known}_{p,T}(s) = \lambda_p(s) \sum_{d} f_s(d)\, \{1 - \pi_p(s + d)\}\, c(s + d).
 $$
 
 This is right truncation by vintage.
@@ -158,14 +172,14 @@ We model that procedure, including its bias, rather than correcting it.
 $$
 M_p(t) = \pi_p(t) \sum_s \lambda_p(s)\, f_s(t - s),
 \qquad
-\mathrm{imputed}_{p,T}(s) = \sum_{t = s}^{T} \hat f_T(t - s)\, M_p(t).
+\mathrm{imputed}_{p,T}(s) = \sum_{t = s}^{T} \hat f_T(t - s)\, c(t)\, M_p(t).
 $$
 
 $M_p(t)$ are the cases reported on day $t$ without an onset.
 $\hat f_T$ is the hub's delay at vintage $T$.
 It is the empirical pmf of all published delays of that vintage, pooled over provinces and onset weeks, with negative delays and delays over 60 days dropped.
 It is data, not a parameter, and it is not corrected for truncation.
-Both sums are written as banded matrix products.
+Both sums are computed by week, as products of banded $7 \times 7k$ blocks for each onset week, so the cost grows with the number of weeks and not its square.
 
 The forecast target is the eventual known plus imputed onsets, with future imputation using the latest $\hat f_T$.
 So the forecast carries the imputation's bias at turning points, which is what the hub scores.
@@ -181,7 +195,9 @@ The non-monotone revisions in imputed counts suggest it re-imputes each time.
 
 - Weekly sums of $\mathrm{known}_{p,T}$ and $\mathrm{imputed}_{p,T}$ are negative binomial, each stream with its own dispersion, $1/\sqrt{\phi} \sim \text{HalfNormal}(0.25)$, as in EpiNow2.
 - The delays of known-onset cases in the hub's delay file are tabulated by onset week and delay, pooled over provinces.
-  Given each week's total they are multinomial, with probabilities from $\lambda$, $f$ and $\pi$ truncated at $T$.
+  Delays are clipped to 0 to 60 days.
+  Given each week's total they are multinomial, with probabilities from $\lambda$, $f$, $\pi$ and $c$.
+  With `delay_counts="dirichlet-multinomial"` they are Dirichlet-multinomial instead, with $1/\sqrt{\psi} \sim \text{HalfNormal}(0.1)$.
   This is the conditional part of the reporting triangle, so the known stream is not counted twice.
 - Provinces with no cases have expected onsets $\mu_q(s) = \kappa \sum_p K_{pq}\, \lambda_p(s)$, with one scale $\kappa \sim \text{LogNormal}(\log 10^{-3}, 2^2)$.
   Their weekly zeros are Poisson.
@@ -199,7 +215,8 @@ The hub re-imputes missing onsets at each vintage, so a week's imputed count can
 The final imputed count is a negative binomial draw centred on the current imputed count plus the count expected from cases reported later.
 In recovery fits, keeping the current imputed count fixed instead under-covered the final counts.
 A province left out uses a draw of its vintage count instead of the data.
-In provinces with no cases, importations are drawn and, from the cut-off, seed local spread at the pooled trend $R(t)$.
+Provinces with no cases are zero up to the cut-off.
+After it they draw Poisson importations, $\mu_q = \kappa \sum_p K_{pq} \lambda_p$, which spread locally at the national Rt, $\sum_p R_p I_p / \sum_p I_p$, weighted by infections.
 For `renewal` and `renewalbvd`, the national trajectory is the sum of the province trajectories plus an unassigned component.
 The unassigned component holds any provinces the model does not report, and the national cases in the data that no province has.
 In weeks with data, that gap is the vintage's $g(w) = \max\{0, Y_{CD}(w) - \sum_p Y_p(w)\}$ in every trajectory.
@@ -249,7 +266,9 @@ The model code is in `bdbv_hub_renewal.model` and the variants in [`forecasters.
 ### Single patch
 
 `renewalsp` fits the renewal model to each location's series on its own, the nation included, with no pooling and no coupling.
-Each province with cases and the nation get the same single-patch model: one $R(t)$ walk, ascertainment, the delays and the missing-onset share, all fitted to that location's known and imputed onsets alone.
+Each province with 10 or more cases, and the nation, get the same single-patch model: one $R(t)$ walk, ascertainment, the delays and the missing-onset share, all fitted to that location's known and imputed onsets alone.
+Depletion is off, since one series cannot inform the share at risk.
+A province with fewer cases gets Poisson draws at a weekly rate $\lambda \sim \text{Gamma}(1/2 + \sum_w y_w, n_w)$ over its $n_w$ weeks of data.
 The national forecast is the national fit, not the sum of the province forecasts.
 So the hub file's national value need not equal the sum of its provinces.
 The submission's national check reports that difference, sample by sample, and does not fail or change it.
@@ -264,10 +283,10 @@ The cut-off is the end of the Sunday that opens the submission window, in Kinsha
 So a release republished later on old data is never used, and the backtest sees each release as it was published.
 
 Let $a_b$ be the release's data cut-off and $s_b = a_b + 6$ days, since BVDOutbreakSize's Rt is on infection time and ours on onset time (incubation mean about 6 days).
-For a group $G$ of provinces, the nation or one BVDOutbreakSize patch, the model's Rt is onset weighted over the week of $s_b$:
+For a group $G$ of provinces, the nation or one BVDOutbreakSize patch, the model's Rt is weighted by onset counts over the week of $s_b$, with $O_p = N_p x_p$ the province's infections:
 
 $$
-R_G(s_b) = \frac{\sum_{p \in G} I_p\, R_p(s_b)}{\sum_{p \in G} I_p}.
+R_G(s_b) = \frac{\sum_{p \in G} O_p\, R_p(s_b)}{\sum_{p \in G} O_p}.
 $$
 
 The release gives the national log Rt mean $\mu_N$ and SD $\sigma_N$ from its posterior draws.

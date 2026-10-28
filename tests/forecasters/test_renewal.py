@@ -385,11 +385,16 @@ def test_single_patch_fits_each_location_on_its_own(
     model = get_model("renewalsp")
     assert isinstance(model, rn.RenewalModel)
     fit = model.forecast_fit(task)
-    # One fit per province with cases, and one for the nation.
-    assert sorted(seen) == sorted(
-        [(p,) for p in task.locations] + [(NATIONAL,)]
-    )
-    assert set(fit.runs) == {*task.locations, NATIONAL}
+    # One fit per province with enough cases, and one for the nation.
+    rows = task.target.loc[task.target["vintage"] == task.vintage]
+    cases = rows.groupby("location")["total"].sum()
+    enough = [
+        p for p in task.locations if cases[p] >= rn.SINGLE_PATCH_MIN_CASES
+    ]
+    few = [p for p in task.locations if p not in enough]
+    assert few, "the fixture should have a province with few cases"
+    assert sorted(seen) == sorted([(p,) for p in enough] + [(NATIONAL,)])
+    assert set(fit.runs) == {*enough, NATIONAL}
     assert fit.unassigned is None
     assert fit.national is not None
     assert list(fit.national.columns) == ["target_end_date", "sample", "value"]
@@ -416,3 +421,8 @@ def test_fit_records_the_posterior_draw_behind_each_trajectory(
     assert set(saved["location"]) == {"all"}
     assert saved["sample"].tolist() == list(range(1, task.n_samples + 1))
     assert saved["draw"].tolist() == list(range(task.n_samples))[::-1]
+
+
+def test_single_patch_has_no_depletion() -> None:
+    config = rn.model_config(rn.VARIANTS["renewalsp"])
+    assert config.depletion is False

@@ -58,6 +58,7 @@ __all__ = [
     "HUB_MODEL",
     "JITTER_RADIUS",
     "SAMPLER_ENV",
+    "SINGLE_PATCH_MIN_CASES",
     "TRAJECTORY_DRAW_FILE",
     "VARIANTS",
     "RenewalModel",
@@ -100,6 +101,11 @@ DEFAULT_SAMPLER: Final[Mapping[str, Any]] = {
     "seed": 1,
 }
 """NUTS settings when neither the CI nor `SAMPLER_ENV` gives them."""
+
+SINGLE_PATCH_MIN_CASES: Final = 10
+"""Fewest cases for a location to get its own single-patch fit. Below it
+the location gets Poisson draws at a Gamma-distributed weekly rate
+(`bdbv_hub_renewal.model.inputs.idle_draws`)."""
 
 RECENT_WEEKS: Final = 4
 """Data weeks behind the share that carries the national data gap forward."""
@@ -164,6 +170,8 @@ VARIANTS: Final[dict[str, Variant]] = {
                 "coupling": "none",
                 "inactive": "none",
                 "report_inactive": True,
+                # One series cannot inform the share at risk.
+                "depletion": False,
             },
             per_location=True,
         ),
@@ -560,6 +568,25 @@ def data_gap(task: ForecastTask, samples: pd.DataFrame) -> pd.DataFrame | None:
     return by.reset_index(drop=True)
 
 
+def _idle_samples(
+    task: ForecastTask, loc: str, rows: pd.DataFrame
+) -> pd.DataFrame:
+    """Draws for a location with too few cases for its own fit."""
+    from bdbv_hub_renewal.model.inputs import idle_draws
+
+    counts = rows.loc[rows["location"] == loc, "total"].to_numpy(dtype=float)
+    n, weeks = task.n_samples, list(task.target_end_dates)
+    draws = idle_draws(counts, len(weeks), n, task.rng())
+    return pd.DataFrame(
+        {
+            "location": loc,
+            "target_end_date": np.repeat(weeks, n),
+            "sample": np.tile(np.arange(1, n + 1), len(weeks)),
+            "value": draws.T.reshape(-1),
+        }
+    )
+
+
 def _add_unassigned(
     a: pd.DataFrame | None, b: pd.DataFrame | None
 ) -> pd.DataFrame | None:
@@ -934,6 +961,9 @@ class RenewalModel:
         frames: list[pd.DataFrame] = []
         for loc in (*task.locations, NATIONAL):
             if cases.get(loc, 0) <= 0:
+                continue
+            if cases.get(loc, 0) < SINGLE_PATCH_MIN_CASES:
+                frames.append(_idle_samples(task, loc, rows))
                 continue
             sub = replace(task, locations=(loc,), mask=())
             runs[loc] = self.run(sub)
