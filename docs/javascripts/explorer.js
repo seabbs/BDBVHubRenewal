@@ -170,22 +170,28 @@
       var by = {};
       s.forEach(function (r) { (by[r[0]] = by[r[0]] || []).push(r); });
       var key = function (r) { return r[1] + "|" + r[3]; };
-      var base = {};
-      (by[d.baseline] || []).forEach(function (r) { base[key(r)] = r[4]; });
+      var base = {}, baseLog = {};
+      (by[d.baseline] || []).forEach(function (r) {
+        base[key(r)] = r[4];
+        baseLog[key(r)] = r[5];
+      });
       var tbl = h("table", {}, table);
       var head = h("tr", {}, h("thead", {}, tbl));
-      ["Model", "Weeks", "WIS", "Relative WIS", "50% coverage", "90% coverage", "Bias"]
+      ["Model", "Weeks", "WIS", "Relative WIS", "Log WIS", "Relative log WIS",
+        "50% coverage", "90% coverage", "Bias"]
         .forEach(function (c) { h("th", {}, head, c); });
       var body = h("tbody", {}, tbl);
       Object.keys(by).map(Number).forEach(function (m) {
         if (state.off[m]) return;
         var rs = by[m];
-        var rel = "";
+        var rel = "", relLog = "";
         if (d.baseline !== null && m !== d.baseline) {
           var both = rs.filter(function (r) { return key(r) in base; });
           if (both.length) {
             rel = fmt(mean(both.map(function (r) { return r[4]; })) /
               mean(both.map(function (r) { return base[key(r)]; })), 2);
+            relLog = fmt(mean(both.map(function (r) { return r[5]; })) /
+              mean(both.map(function (r) { return baseLog[key(r)]; })), 2);
           }
         }
         var tr = h("tr", {}, body);
@@ -194,8 +200,10 @@
         h("td", {}, tr, fmt(mean(rs.map(function (r) { return r[4]; })), 1));
         h("td", {}, tr, rel);
         h("td", {}, tr, fmt(mean(rs.map(function (r) { return r[5]; })), 2));
+        h("td", {}, tr, relLog);
         h("td", {}, tr, fmt(mean(rs.map(function (r) { return r[6]; })), 2));
         h("td", {}, tr, fmt(mean(rs.map(function (r) { return r[7]; })), 2));
+        h("td", {}, tr, fmt(mean(rs.map(function (r) { return r[8]; })), 2));
       });
     }
     draw();

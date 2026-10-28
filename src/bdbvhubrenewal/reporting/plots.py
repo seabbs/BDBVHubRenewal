@@ -42,11 +42,13 @@ __all__ = [
     "plot_forecasts",
     "plot_hub_round",
     "plot_imputed_share",
+    "plot_location_grid",
     "plot_newly_missing",
     "plot_nowcast",
     "plot_reconstruction",
     "plot_relative_skill",
     "plot_revisions",
+    "plot_score_summary",
     "plot_scores",
     "plot_scores_by_truth",
     "plot_simulation",
@@ -1308,6 +1310,7 @@ def plot_score_summary(
     by: str = "horizon",
     models: Sequence[str] | None = None,
     mode: str = "light",
+    metric: str = "wis",
 ) -> Figure:
     """Plot WIS relative to a baseline and 90% coverage by model.
 
@@ -1323,6 +1326,8 @@ def plot_score_summary(
         Models in registry order.
     mode : str
         `"light"` or `"dark"`.
+    metric : str
+        `"wis"` or `"log_wis"`.
 
     Returns
     -------
@@ -1347,7 +1352,7 @@ def plot_score_summary(
         if c in scores
     ]
     rel = relative_skill(
-        scores, baseline=baseline, by=(by,), metrics=("wis",), match_on=match
+        scores, baseline=baseline, by=(by,), metrics=(metric,), match_on=match
     )
     cover = scores.groupby(["model", by])["coverage_90"].mean().reset_index()
     fig, axes = _grid(2, 2, width=3.8, height=2.6)
@@ -1356,13 +1361,19 @@ def plot_score_summary(
         if m != baseline:
             r = rel.loc[rel["model"] == m].sort_values(by)
             axes[0].plot(
-                r[by], r["relative_wis"], color=colour, marker="o", label=m
+                r[by],
+                r[f"relative_{metric}"],
+                color=colour,
+                marker="o",
+                label=m,
             )
         c = cover.loc[cover["model"] == m].sort_values(by)
         axes[1].plot(c[by], c["coverage_90"], color=colour, marker="o", label=m)
     axes[0].axhline(1, color=ink["muted"], lw=1, ls=":")
     axes[1].axhline(0.9, color=ink["muted"], lw=1, ls=":")
-    axes[0].set_ylabel(f"WIS relative to {baseline}")
+    axes[0].set_ylabel(
+        f"{'Log WIS' if metric == 'log_wis' else 'WIS'} relative to {baseline}"
+    )
     axes[1].set_ylabel("90% interval coverage")
     for ax in axes:
         ax.set_xlabel(by.capitalize())
@@ -1374,6 +1385,7 @@ def plot_scenarios(
     scores: pd.DataFrame,
     models: Sequence[str] | None = None,
     mode: str = "light",
+    metric: str = "wis",
 ) -> Figure:
     """Plot mean WIS by horizon on the simulated scenarios.
 
@@ -1410,7 +1422,7 @@ def plot_scenarios(
             ("zone", ":"),
         ):
             part = s.loc[levels == level]
-            mean = part.groupby(["model", "horizon"])["wis"].mean().unstack(0)
+            mean = part.groupby(["model", "horizon"])[metric].mean().unstack(0)
             for m in models:
                 if m not in mean.columns:
                     continue
@@ -1425,7 +1437,7 @@ def plot_scenarios(
                 )
         ax.set_title(scenario.removeprefix("calibrated_"))
         ax.set_xlabel("Horizon")
-    axes[0].set_ylabel(_METRIC_LABELS.get("wis", "wis"))
+    axes[0].set_ylabel(_METRIC_LABELS.get(metric, metric))
     axes[0].legend(fontsize=7)
     return fig
 

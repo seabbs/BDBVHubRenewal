@@ -7,7 +7,9 @@ Extraction and synthetic vintages are on the [Data methods page](methods/data.md
 
 ## Vintages
 
---8<-- "vintages.md"
+??? note "Tables"
+
+    --8<-- "vintages.md"
 
 The 2026-08-18 vintage has no delay data.
 The 2026-10-09 delay file exists only in the hub's git history.
@@ -17,7 +19,9 @@ The 2026-10-09 delay file exists only in the hub's git history.
 The national (`CD`) row should equal the sum of the provinces.
 The table counts the weeks where they differ, by vintage and stream.
 
---8<-- "national-coherence.md"
+??? note "Tables"
+
+    --8<-- "national-coherence.md"
 
 A gap is cases counted nationally but in no province.
 The renewal model forecasts it as an unassigned component ([Forecasts](methods/model.md#forecasts)).
@@ -71,7 +75,9 @@ It is net of cases that gain an onset later, so it can be negative.
   </figcaption>
 </figure>
 
---8<-- "newly-missing.md"
+??? note "Tables"
+
+    --8<-- "newly-missing.md"
 
 ## Delays
 
@@ -83,7 +89,9 @@ It is net of cases that gain an onset later, so it can be negative.
   </figcaption>
 </figure>
 
---8<-- "delays.md"
+??? note "Tables"
+
+    --8<-- "delays.md"
 
 A few delays are negative (down to −31 days) and a few very long (up to 193 days).
 
@@ -110,7 +118,9 @@ A few delays are negative (down to −31 days) and a few very long (up to 193 da
   </figcaption>
 </figure>
 
---8<-- "reconstruction.md"
+??? note "Tables"
+
+    --8<-- "reconstruction.md"
 
 Over the last four weeks of each real vintage, differences are mostly within 10%.
 The last, partial week is understated.

@@ -13,13 +13,14 @@ from __future__ import annotations
 import datetime as dt
 import json
 import tomllib
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from functools import partial
 from pathlib import Path
 from typing import Any, Final
 
 import pandas as pd
 import yaml
+from matplotlib.figure import Figure
 
 from bdbvhubrenewal.data import (
     load_delays,
@@ -46,6 +47,7 @@ from bdbvhubrenewal.evaluation.backtest import (
 from bdbvhubrenewal.evaluation.heldout import load_model_choices
 from bdbvhubrenewal.evaluation.hubcompare import (
     attribution,
+    forecast_quantiles,
     summarise_comparison,
 )
 from bdbvhubrenewal.evaluation.scoring import relative_skill, summarise_scores
@@ -55,6 +57,11 @@ from bdbvhubrenewal.forecasters.base import (
     get_model,
     list_models,
 )
+from bdbvhubrenewal.reporting.explorer import (
+    explorer_data,
+    explorer_html,
+    write_explorer,
+)
 from bdbvhubrenewal.reporting.plots import (
     comparison_label,
     plot_delay_distribution,
@@ -62,12 +69,13 @@ from bdbvhubrenewal.reporting.plots import (
     plot_forecasts,
     plot_hub_round,
     plot_imputed_share,
+    plot_location_grid,
     plot_newly_missing,
-    plot_nowcast,
     plot_reconstruction,
     plot_relative_skill,
     plot_revisions,
     plot_scenarios,
+    plot_score_summary,
     plot_scores,
     plot_scores_by_truth,
     plot_simulation,
@@ -80,6 +88,16 @@ __all__ = ["make_report"]
 
 def _table(df: pd.DataFrame, digits: int = 2) -> str:
     return df.round(digits).to_markdown(index=False) + "\n"
+
+
+def _dropdown(body: str, title: str = "Tables") -> str:
+    """Wrap Markdown in a collapsed admonition, or return nothing if empty."""
+    if not body.strip():
+        return ""
+    indented = "\n".join(
+        f"    {line}" if line.strip() else "" for line in body.splitlines()
+    )
+    return f'??? note "{title}"\n\n{indented}\n'
 
 
 def _write(path: Path, text: str) -> None:
@@ -229,38 +247,104 @@ def make_report(
     rows = real.loc[real["vintage"] == latest]
     tasks = make_tasks(rows, delays, config, history=real)
     forecasts_now = _nowcast_forecasts(tasks, latest, res)
-    shown = [n for n in names if n in set(forecasts_now["model"])]
-    locs = [NATIONAL, *tasks[0].locations]
-    for loc in locs:
-        save_light_dark(
-            partial(
-                plot_nowcast,
-                loc,
-                vintage=latest,
-                models=shown,
-                target=target,
-                forecasts=forecasts_now,
-                complete_after_weeks=config.complete_after_weeks,
-            ),
-            fig / f"nowcast-{loc.lower()}.svg",
+    _nowcast_page(fig, gen, target, forecasts_now, names, config, latest)
+
+
+_NOWCAST_GROUPS: Final = (
+    ("main", "National and main provinces"),
+    ("other", "Other provinces"),
+    ("zones", "Zones"),
+)
+"""Location groups of the Nowcast page, as figure suffix and tab label."""
+
+
+def _nowcast_groups(
+    target: pd.DataFrame, locations: Sequence[str]
+) -> dict[str, list[str]]:
+    """Group locations by level, with the main provinces by size."""
+    real = target.loc[target["kind"] == "real"]
+    latest = real.loc[real["vintage"] == real["vintage"].max()]
+    size = latest.groupby("location")["total"].sum()
+    provinces = sorted(
+        (loc for loc in set(latest["location"]) - {NATIONAL}),
+        key=lambda x: -size[x],
+    )
+    have = set(locations)
+    main = [loc for loc in provinces[:3] if loc in have]
+    return {
+        "main": [loc for loc in (NATIONAL, *main) if loc in have],
+        "other": [loc for loc in provinces[3:] if loc in have],
+        "zones": sorted(have - set(provinces) - {NATIONAL}),
+    }
+
+
+def _nowcast_page(
+    fig: Path,
+    gen: Path,
+    target: pd.DataFrame,
+    forecasts: pd.DataFrame,
+    names: Sequence[str],
+    config: BacktestConfig,
+    latest: str,
+) -> None:
+    """Write the Nowcast page figures, a tab per model and location group.
+
+    Each model is shown from its latest origin among `forecasts`.
+    """
+    shown = [n for n in names if n in set(forecasts["model"])]
+    origin = {
+        m: str(forecasts.loc[forecasts["model"] == m, "vintage"].max())
+        for m in shown
+    }
+    kinds = (
+        ("nowcast-only", "Nowcast", -1),
+        ("nowcast", "Nowcast and forecast", None),
+    )
+    pages: dict[str, list[str]] = {stem: [] for stem, _, _ in kinds}
+    for m in shown:
+        own = forecasts.loc[
+            (forecasts["model"] == m) & (forecasts["vintage"] == origin[m])
+        ]
+        groups = _nowcast_groups(target, sorted(set(own["location"])))
+        note = (
+            f"    From the {origin[m]} vintage.\n\n"
+            if origin[m] != latest
+            else ""
         )
-    nowcast_md = []
-    loc_names = dict(zip(rows["location"], rows["location_name"], strict=False))
-    for loc in locs:
-        slug = loc.lower()
-        label = f"{loc_names.get(loc, loc)} ({loc})"
-        nowcast_md.append(
-            f'=== "{label}"\n\n'
-            f"    ![Nowcast and forecast for {label}]"
-            f"(figures/nowcast-{slug}.svg#only-light)\n"
-            f"    ![Nowcast and forecast for {label}]"
-            f"(figures/nowcast-{slug}-dark.svg#only-dark)\n"
-        )
-    _write(gen / "nowcast-tabs.md", "\n".join(nowcast_md))
-    ref = tasks[0].reference_date.isoformat()
+        for stem, title, horizon in kinds:
+            inner = []
+            for key, label in _NOWCAST_GROUPS:
+                locs = groups[key]
+                if not locs:
+                    continue
+                path = fig / f"{stem}-{m}-{key}.svg"
+                save_light_dark(
+                    partial(
+                        plot_location_grid,
+                        own,
+                        target,
+                        locs,
+                        models=[m],
+                        truth_vintage=latest,
+                        max_horizon=horizon,
+                        weeks_before=12,
+                        complete_after_weeks=config.complete_after_weeks,
+                    ),
+                    path,
+                )
+                alt = f"{title} from {m}: {label.lower()}."
+                inner.append(
+                    f'    === "{label}"\n\n'
+                    f"        ![{alt}](figures/{path.name}#only-light)\n"
+                    f"        ![{alt}](figures/{path.stem}-dark.svg"
+                    "#only-dark)\n"
+                )
+            pages[stem].append(f'=== "{m}"\n\n{note}' + "\n".join(inner))
+    for stem, _, _ in kinds:
+        _write(gen / f"{stem}-tabs.md", "\n".join(pages[stem]))
     _write(
         gen / "nowcast-meta.md",
-        f"Vintage **{latest}**, reference date **{ref}**, models "
+        f"Latest vintage **{latest}**, models "
         f"{', '.join(f'`{n}`' for n in shown)}.\n",
     )
 
@@ -268,15 +352,17 @@ def make_report(
 def _nowcast_forecasts(
     tasks: list[ForecastTask], latest: str, res: Path
 ) -> pd.DataFrame:
-    """Forecasts from the latest vintage for the Nowcast page.
+    """Forecasts for the Nowcast page, from every source that has them.
 
-    Models that need no fit are run here. Fitted models are slow, so
-    their forecasts are taken from the held-out run, which forecasts the
-    latest vintage with every model, when it has them.
+    Models that need no fit are run on the latest vintage here. Fitted
+    models are slow, so they are taken from the held-out run when it
+    forecast the latest vintage, and otherwise from the backtest, at the
+    latest real origin it has.
     """
     specs = list_models()
     quick = [get_model(s.name) for s in specs if not s.fitted]
     frames = [run_forecasts(quick, tasks)]
+    have = {s.name for s in specs if not s.fitted}
     path = res / "heldout-forecasts.csv.gz"
     if path.exists():
         held = pd.read_csv(path)
@@ -285,6 +371,15 @@ def _nowcast_forecasts(
             (held["vintage"] == latest) & held["model"].isin(fitted)
         ].drop(columns="chosen_model", errors="ignore")
         frames.append(keep)
+        have |= set(keep["model"])
+    backtest = res / "forecasts.csv.gz"
+    if backtest.exists():
+        rows = pd.read_csv(backtest, dtype={"as_of": object})
+        if "as_of" in rows:
+            rows = rows.loc[rows["as_of"].isna()]
+        rows = rows.loc[(rows["kind"] == "real") & ~rows["model"].isin(have)]
+        for _, grp in rows.groupby("model"):
+            frames.append(grp.loc[grp["vintage"] == grp["vintage"].max()])
     return pd.concat(frames, ignore_index=True)
 
 
@@ -566,6 +661,8 @@ SCORE_TABLE_COLUMNS: Final = (
     "model",
     "wis",
     "relative_wis",
+    "log_wis",
+    "relative_log_wis",
     "coverage_50",
     "coverage_90",
     "bias",
@@ -597,20 +694,21 @@ def _score_table(rows: pd.DataFrame) -> str:
     kinds = set(rows["kind"])
     by = ["model", "kind"] if len(kinds) > 1 else ["model"]
     table = summarise_scores(rows, by=by)
-    table["relative_wis"] = float("nan")
+    relative = ("relative_wis", "relative_log_wis")
+    for c in relative:
+        table[c] = float("nan")
     models = set(rows["model"])
     if len(models) > 1 and "persistence" in models:
-        rel = relative_skill(rows, by=by[1:], metrics=("wis",))
+        rel = relative_skill(rows, by=by[1:], metrics=("wis", "log_wis"))
         rel = rel.loc[rel["model"] != "persistence"]
-        table = table.drop(columns="relative_wis").merge(
-            rel[[*by, "relative_wis"]], on=by, how="left"
+        table = table.drop(columns=list(relative)).merge(
+            rel[[*by, *relative]], on=by, how="left"
         )
     table = table.sort_values(by).reset_index(drop=True)
     cols = [c for c in SCORE_TABLE_COLUMNS if c != "model"]
     out = table[[*by, *cols]].round(2)
-    out["relative_wis"] = out["relative_wis"].map(
-        lambda v: "" if pd.isna(v) else f"{v:.2f}"
-    )
+    for c in relative:
+        out[c] = out[c].map(lambda v: "" if pd.isna(v) else f"{v:.2f}")
     return out.to_markdown(index=False) + "\n"
 
 
@@ -625,7 +723,7 @@ def _score_tables(views: dict[str, pd.DataFrame]) -> str:
             if part.empty:
                 continue
             parts.append(
-                f"### {name.capitalize()}, {level.lower()}\n\n"
+                f"**{name.capitalize()}, {level.lower()}**\n\n"
                 + _score_table(part)
             )
     return "\n".join(parts)
@@ -670,8 +768,57 @@ def _backtest_findings(primary: pd.DataFrame) -> str:
     )
 
 
-def _forecast_tabs(names: Sequence[str], labels: Mapping[str, str]) -> str:
-    """Tabs of each model's forecasts from the real origins, by location."""
+_METRIC_TABS: Final = (("wis", "WIS", ""), ("log_wis", "Log WIS", "-log-wis"))
+"""Score metrics shown as tabs, with their tab label and file suffix."""
+
+
+def _save_metric_figures(
+    fig: Path, stem: str, make: Callable[..., Figure]
+) -> None:
+    """Save `make(metric=...)` in light and dark for each metric tab."""
+    for metric, _, suffix in _METRIC_TABS:
+        save_light_dark(
+            partial(make, metric=metric), fig / f"{stem}{suffix}.svg"
+        )
+
+
+def _metric_tabs(stem: str, alt: str) -> str:
+    """Tabs of one figure per metric, as `_save_metric_figures` saves."""
+    tabs = []
+    for _, label, suffix in _METRIC_TABS:
+        what = alt.replace("WIS", label)
+        tabs.append(
+            f'=== "{label}"\n\n'
+            f"    ![{what}](figures/{stem}{suffix}.svg#only-light)\n"
+            f"    ![{what}](figures/{stem}{suffix}-dark.svg#only-dark)\n"
+        )
+    return "\n".join(tabs)
+
+
+def _summary_figure(
+    fig: Path,
+    gen: Path,
+    primary: pd.DataFrame,
+    names: Sequence[str],
+) -> None:
+    """Write the relative WIS and coverage figure of the real origins."""
+    real = primary.loc[primary["kind"] == "real"]
+    if real["model"].nunique() < 2 or "persistence" not in set(real["model"]):
+        _write(gen / "backtest-summary.md", "")
+        return
+    _save_metric_figures(
+        fig, "scores-summary", partial(plot_score_summary, real, models=names)
+    )
+    alt = "WIS relative to persistence and 90% coverage, by horizon."
+    _write(gen / "backtest-summary.md", _metric_tabs("scores-summary", alt))
+
+
+def _forecast_tabs(
+    names: Sequence[str],
+    labels: Mapping[str, str],
+    explorer_src: str | None = None,
+) -> str:
+    """Forecasts from the real origins, as an explorer and static tabs."""
     if not names:
         return ""
     tabs = []
@@ -685,11 +832,19 @@ def _forecast_tabs(names: Sequence[str], labels: Mapping[str, str]) -> str:
                 f"        ![{alt}](figures/{slug}.svg#only-light)\n"
                 f"        ![{alt}](figures/{slug}-dark.svg#only-dark)\n"
             )
-    return (
-        "## Forecasts against later data\n\n"
+    static = _dropdown(
         "Forecasts from the real origins: 100 sample trajectories, 50% and "
         "90% intervals and the median, with the data at the time (dashed) "
-        "and the latest data (solid).\n\n" + "\n".join(tabs)
+        "and the latest data (solid).\n\n" + "\n".join(tabs),
+        "Sample trajectories",
+    )
+    if explorer_src is None:
+        return "## Forecasts against later data\n\n" + static
+    return (
+        "## Forecasts against later data\n\n"
+        + explorer_html(explorer_src, "Backtest forecasts")
+        + "\n"
+        + static
     )
 
 
@@ -740,6 +895,7 @@ def _scenario_scores(path: Path) -> str:
             .groupby(["scenario", "level", "model"], sort=False)
             .agg(
                 wis=("wis", "mean"),
+                log_wis=("log_wis", "mean"),
                 coverage_50=("coverage_50", "mean"),
                 coverage_90=("coverage_90", "mean"),
                 bias=("bias", "mean"),
@@ -748,6 +904,7 @@ def _scenario_scores(path: Path) -> str:
             .rename(
                 columns={
                     "wis": "mean WIS",
+                    "log_wis": "mean log WIS",
                     "coverage_50": "50% coverage",
                     "coverage_90": "90% coverage",
                     "bias": "mean bias",
@@ -763,10 +920,7 @@ def _scenario_figure(path: Path) -> str:
     if not _scenario_scores(path):
         return ""
     alt = "Mean WIS by horizon on the simulated scenarios."
-    return (
-        f"![{alt}](figures/scenario-wis-horizon.svg#only-light)\n"
-        f"![{alt}](figures/scenario-wis-horizon-dark.svg#only-dark)\n"
-    )
+    return _metric_tabs("scenario-wis-horizon", alt)
 
 
 def _relative_section(scores: pd.DataFrame) -> str:
@@ -783,11 +937,13 @@ def _relative_section(scores: pd.DataFrame) -> str:
         )
     return (
         "## Relative skill\n\n"
-        "Mean scores on complete weeks divided by those of persistence over "
-        "the forecasts both made.\nValues below 1 beat persistence.\n\n"
-        + _table(rel)
-        + "\n"
         + "\n".join(tabs)
+        + "\n"
+        + _dropdown(
+            "Mean scores on complete weeks divided by those of persistence "
+            "over the forecasts both made.\n"
+            "Values below 1 beat persistence.\n\n" + _table(rel)
+        )
     )
 
 
@@ -850,12 +1006,15 @@ def _sampler_section(fits: pd.DataFrame, submission: Mapping[str, Any]) -> str:
         "## Sampler\n\n"
         f"Backtest fits use {runs}.\n"
         + compare
-        + "The table gives each model's fits and their convergence.\n"
-        "A per-location model has one fit per location with enough cases.\n"
-        "R-hat is the largest over a fit's parameters, and the depth cap "
-        "share is the share of draws at the maximum tree depth.\n\n"
-        + _table(table, digits=3)
         + "\n"
+        + _dropdown(
+            "A per-location model has one fit per location with enough "
+            "cases.\n"
+            "R-hat is the largest over a fit's parameters, and the depth cap "
+            "share is the share of draws at the maximum tree depth.\n\n"
+            + _table(table, digits=3),
+            "Convergence by model",
+        )
     )
 
 
@@ -871,6 +1030,7 @@ def _backtest_page(
 ) -> None:
     dev_path = res / "backtest-scores.csv"
     k = config.complete_after_weeks
+    explorer_scores = None
     if dev_path.exists():
         views = _score_views(pd.read_csv(dev_path), k)
         primary = views["complete weeks"]
@@ -891,16 +1051,25 @@ def _backtest_page(
         _write(
             gen / "backtest-truth.md",
             f"Scores are against the **{truth_v}** vintage, as reported "
-            "then.\n"
-            + _completeness_note(k, delays)
-            + _lag_prior_note(views["all weeks as reported"]),
+            "then.\n\n"
+            + _dropdown(
+                _completeness_note(k, delays)
+                + _lag_prior_note(views["all weeks as reported"]),
+                "Scoring notes",
+            ),
         )
-        _write(gen / "scores-overall.md", _score_tables(views))
+        _write(
+            gen / "scores-overall.md",
+            _dropdown(_score_tables(views), "Score tables"),
+        )
+        _summary_figure(fig, gen, primary, names)
         _write(
             gen / "relative-section.md",
-            _relative_section(primary) + _other_relative(views),
+            _relative_section(primary)
+            + _dropdown(_other_relative(views), "Other score sets"),
         )
         _write(gen / "backtest-findings.md", _backtest_findings(primary))
+        explorer_scores = primary.loc[primary["kind"] == "real"]
         by_loc = summarise_scores(primary, by=("model", "kind", "location"))
         _write(
             gen / "scores-location.md",
@@ -988,6 +1157,22 @@ def _backtest_page(
                     fig / f"forecasts-{m}-{loc.lower()}.svg",
                 )
     labels = _location_names(target)
+    explorer_src = None
+    if shown:
+        quantiles = forecast_quantiles(real_fc.assign(source="ours"))
+        quantiles = quantiles.assign(ours=True)
+        write_explorer(
+            fig / "explorer-backtest.json",
+            explorer_data(
+                quantiles,
+                target,
+                labels,
+                k,
+                baseline="persistence",
+                scores=explorer_scores,
+            ),
+        )
+        explorer_src = "../figures/explorer-backtest.json"
     _write(
         gen / "backtest-forecasts.md",
         _forecast_tabs(
@@ -996,6 +1181,7 @@ def _backtest_page(
                 loc: f"{labels.get(loc, loc)} ({loc})"
                 for loc in BACKTEST_LOCATIONS
             },
+            explorer_src,
         ),
     )
     _write(gen / "lopo-section.md", _lopo_section(res / "lopo-scores.csv"))
@@ -1031,7 +1217,9 @@ def _backtest_page(
     if scen_path.exists() and scen_path.stat().st_size > 1:
         sscores = pd.read_csv(scen_path, low_memory=False)
         if not sscores.empty:
-            save_light_dark(
+            _save_metric_figures(
+                fig,
+                "scenario-wis-horizon",
                 partial(
                     plot_scenarios,
                     sscores,
@@ -1044,7 +1232,6 @@ def _backtest_page(
                         ),
                     ],
                 ),
-                fig / "scenario-wis-horizon.svg",
             )
 
 
@@ -1143,7 +1330,8 @@ def _heldout_snippets(
     _write(
         gen / "heldout-status.md",
         f"Last run {run['run_at']} on vintages up to "
-        f"**{run['latest_vintage']}**.\n\n" + _table(status),
+        f"**{run['latest_vintage']}**.\n\n"
+        + _dropdown(_table(status), "Vintages"),
     )
     if scores.empty:
         _write(gen / "heldout-scores.md", "")
@@ -1165,8 +1353,7 @@ def _heldout_snippets(
             by=("model", "vintage", "truth_vintage", "horizon"),
         )
         cols = ["n", "wis", "log_wis", "coverage_50", "coverage_90", "bias"]
-        _write(
-            gen / "heldout-scores.md",
+        tables = (
             _table(
                 overall[
                     [
@@ -1182,7 +1369,21 @@ def _heldout_snippets(
             + "\nBy horizon, over provinces and the national total:\n\n"
             + _table(
                 horizon[["model", "vintage", "truth_vintage", "horizon", *cols]]
-            ),
+            )
+        )
+        shown = views["complete weeks"]
+        if shown.empty:
+            shown = views["all weeks as reported"]
+        alt = "Held-out WIS by horizon."
+        in_shown = set(shown["model"])
+        if len(in_shown) > 1 and "persistence" in in_shown:
+            make = partial(plot_score_summary, shown, models=names)
+        else:
+            make = partial(plot_scores, shown, by="horizon", models=names)
+        _save_metric_figures(fig, "heldout-scores", make)
+        _write(
+            gen / "heldout-scores.md",
+            _metric_tabs("heldout-scores", alt) + "\n" + _dropdown(tables),
         )
     fc_path = res / "heldout-forecasts.csv.gz"
     if not fc_path.exists():
@@ -1269,6 +1470,7 @@ def _comparison_page(
             "comparison-scores.md",
             "comparison-teams.md",
             "comparison-figures.md",
+            "comparison-summary.md",
         ):
             _write(gen / name, missing)
         _write(
@@ -1304,6 +1506,7 @@ def _comparison_page(
         else pd.DataFrame()
     )
     pending = pd.read_csv(cmp_dir / "pending.csv")
+    _write(gen / "comparison-summary.md", "")
     parts = []
     if not scores.empty:
         table = summarise_comparison(scores, baseline)
@@ -1312,7 +1515,12 @@ def _comparison_page(
             comparison_label(m, s, hub_ids)
             for m, s in zip(table["model"], table["source"], strict=True)
         ]
-        parts.append(_table(table) if not table.empty else "")
+        parts.append(
+            _dropdown(_table(table), "Scores by round")
+            if not table.empty
+            else ""
+        )
+        _comparison_summary(fig, gen, scores, baseline, hub_ids)
     for row in pending.itertuples(index=False):
         parts.append(
             f"The {row.reference_date} round was made from the "
@@ -1326,9 +1534,39 @@ def _comparison_page(
     teams = pd.read_csv(cmp_dir / "teams.csv")
     _write(
         gen / "comparison-teams.md",
-        _teams_table(teams, hub_ids),
+        _dropdown(_teams_table(teams, hub_ids), "Teams"),
     )
     quantiles = pd.read_csv(cmp_dir / "quantiles.csv.gz")
+    labelled = quantiles.assign(
+        model=[
+            comparison_label(m, src, hub_ids)
+            for m, src in zip(
+                quantiles["model"], quantiles["source"], strict=True
+            )
+        ],
+        ours=quantiles["source"] != "hub",
+    )
+    explorer_scores = None
+    if not scores.empty:
+        done = scores.loc[scores["complete"]]
+        explorer_scores = done.assign(
+            model=[
+                comparison_label(m, src, hub_ids)
+                for m, src in zip(done["model"], done["source"], strict=True)
+            ]
+        )
+    write_explorer(
+        fig / "explorer-comparison.json",
+        explorer_data(
+            labelled,
+            target,
+            _location_names(target),
+            k,
+            baseline=_baseline_label(baseline, labelled),
+            scores=explorer_scores,
+            truth_vintage=truth,
+        ),
+    )
     tabs = []
     for ref in sorted(set(quantiles["reference_date"].astype(str))):
         stem = f"comparison-{ref}"
@@ -1350,4 +1588,52 @@ def _comparison_page(
             f"    ![{alt}](figures/{stem}.svg#only-light)\n"
             f"    ![{alt}](figures/{stem}-dark.svg#only-dark)\n"
         )
-    _write(gen / "comparison-figures.md", "\n".join(tabs))
+    _write(
+        gen / "comparison-figures.md",
+        explorer_html("../figures/explorer-comparison.json", "Hub forecasts")
+        + "\n"
+        + _dropdown("\n".join(tabs), "Static figures by round"),
+    )
+
+
+def _baseline_label(baseline: str, quantiles: pd.DataFrame) -> str:
+    """Return the label our baseline has in the comparison."""
+    return next(
+        (
+            m
+            for m in quantiles["model"].unique()
+            if m.startswith(f"{baseline} (")
+        ),
+        baseline,
+    )
+
+
+def _comparison_summary(
+    fig: Path,
+    gen: Path,
+    scores: pd.DataFrame,
+    baseline: str,
+    hub_ids: Mapping[str, str],
+) -> None:
+    """Write the relative WIS and coverage figure of the complete weeks."""
+    done = scores.loc[scores["complete"]]
+    if done.empty or "horizon" not in done:
+        return
+    labelled = done.assign(
+        model=[
+            comparison_label(m, src, hub_ids)
+            for m, src in zip(done["model"], done["source"], strict=True)
+        ]
+    )
+    base = _baseline_label(baseline, labelled)
+    if base not in set(labelled["model"]):
+        return
+    _save_metric_figures(
+        fig,
+        "comparison-summary",
+        partial(plot_score_summary, labelled, baseline=base),
+    )
+    alt = f"WIS relative to {baseline} and 90% coverage, by horizon."
+    _write(
+        gen / "comparison-summary.md", _metric_tabs("comparison-summary", alt)
+    )

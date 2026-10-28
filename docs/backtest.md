@@ -4,9 +4,11 @@ Forecasts made at past vintages, scored against the latest data.
 { .page-subtitle }
 
 Scores on complete weeks are the primary scores ([Evaluation](methods/evaluation.md#scoring)).
-Weeks still being reported are shaded in the plots, with hollow points, and are scored only as vintage-matched.
+Weeks still being reported are shaded, with hollow points.
 
 --8<-- "backtest-findings.md"
+
+--8<-- "backtest-summary.md"
 
 ## Overall
 
@@ -20,7 +22,7 @@ Weeks still being reported are shaded in the plots, with hollow points, and are 
 
 ## By horizon
 
-Horizons −4 to −1 are nowcasts of past weeks, 0 is the reference week and 1 to 3 are forecasts.
+Horizons −4 to −1 are nowcasts, 0 is the reference week and 1 to 3 are forecasts.
 
 === "WIS"
 
@@ -64,7 +66,7 @@ Horizons −4 to −1 are nowcasts of past weeks, 0 is the reference week and 1 
     ![Mean bias by province and vintage kind.](figures/scores-bias-location.svg#only-light)
     ![Mean bias by province and vintage kind.](figures/scores-bias-location-dark.svg#only-dark)
 
-??? note "Scores by province"
+??? note "Tables"
 
     --8<-- "scores-location.md"
 
@@ -74,14 +76,16 @@ Horizons −4 to −1 are nowcasts of past weeks, 0 is the reference week and 1 
 
 Real forecasts scored against each later real vintage, as reported at each.
 
---8<-- "truth-changes.md"
-
 ![Mean WIS of each real forecast vintage against each later truth vintage.](figures/scores-by-truth.svg#only-light)
 ![Mean WIS of each real forecast vintage against each later truth vintage.](figures/scores-by-truth-dark.svg#only-dark)
 
-??? note "Scores by truth vintage"
+??? note "Tables"
 
     --8<-- "scores-by-truth.md"
+
+??? note "Truth changes"
+
+    --8<-- "truth-changes.md"
 
 --8<-- "lopo-section.md"
 
@@ -91,14 +95,13 @@ Real forecasts scored against each later real vintage, as reported at each.
 
 ## Simulated scenarios
 
-Three scenarios copy the real 2026-10-24 data.
-They use the province curves through the model's renewal, the real delays by onset week, the real missing-onset share, the real health zone shares, late entries, onset backfill and 2% of cases removed later.
-The scenarios differ only in Rt after the data, which falls by a quarter, holds or rises by a quarter.
-Forecasts are made from the four weekly simulated vintages up to 2026-10-24.
-They are scored against the final simulated data on complete weeks and against the data as reported two weeks later.
-
---8<-- "scenario-scores.md"
+Three scenarios copy the real 2026-10-24 data and differ only in Rt after the data, which falls by a quarter, holds or rises by a quarter.
+Forecasts are made from the four weekly simulated vintages up to 2026-10-24 and scored on complete weeks of the final simulated data.
 
 --8<-- "scenario-figure.md"
+
+??? note "Tables"
+
+    --8<-- "scenario-scores.md"
 
 Zone forecasts split each model's province samples across the zones of each province, and are compared with zone persistence.

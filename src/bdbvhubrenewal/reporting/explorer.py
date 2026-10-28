@@ -19,7 +19,7 @@ __all__ = ["explorer_data", "explorer_html", "write_explorer"]
 QUANTILE_COLUMNS = ("q05", "q25", "q50", "q75", "q95")
 """Interval columns of the forecast quantiles."""
 
-SCORE_COLUMNS = ("wis", "coverage_50", "coverage_90", "bias")
+SCORE_COLUMNS = ("wis", "log_wis", "coverage_50", "coverage_90", "bias")
 """Score columns shown in the explorer's table."""
 
 
@@ -83,9 +83,7 @@ def explorer_data(
     data = {
         loc: [
             [str(d), int(t)]
-            for d, t in zip(
-                grp["target_end_date"], grp["total"], strict=True
-            )
+            for d, t in zip(grp["target_end_date"], grp["total"], strict=True)
         ]
         for loc, grp in latest.loc[latest["location"].isin(locs)]
         .sort_values("target_end_date")
