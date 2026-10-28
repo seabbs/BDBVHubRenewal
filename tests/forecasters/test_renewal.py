@@ -14,6 +14,7 @@ from bdbv_hub_renewal.forecasters import (
     NATIONAL,
     ForecastModel,
     ForecastTask,
+    check_samples,
     get_model,
     list_models,
 )
@@ -227,6 +228,14 @@ def _fake_run(task: ForecastTask, variant: rn.Variant) -> rn.RenewalRun:
         "accept_prob": np.full((2, n), 0.9),
         "energy": rng.normal(size=(2, n)),
         "adapt_state.step_size": np.full((2, n), 0.1),
+    }
+    # The counts as reported by each later vintage: one case a province.
+    draws["as_reported"] = {
+        cut: {
+            "province": np.ones_like(draws["province"]),
+            "inactive": np.zeros_like(draws["inactive"]),
+        }
+        for cut in rn.report_cutoffs(task, data)
     }
     return rn.RenewalRun(
         variant=variant,
@@ -510,3 +519,33 @@ def test_lag_source_warns_when_the_prior_stands_in(
     (warning,) = lag_warnings([early])
     assert warning.startswith("publication_lag:")
     assert lag_warnings([late]) == []
+
+
+def test_report_cutoffs_are_days_from_the_model_start(
+    task: ForecastTask,
+) -> None:
+    task = replace(task, report_by=("2026-10-24", "2026-10-31"))
+    data = rn.vintage_inputs(task, rn.model_config(rn.VARIANTS["renewal"]))
+    cuts = rn.report_cutoffs(task, data)
+    start = pd.Timestamp(data.start_date)
+    assert cuts == {(pd.Timestamp(d) - start).days: d for d in task.report_by}
+
+
+@pytest.mark.parametrize("name", ["renewal", "renewalsp"])
+def test_forecast_gives_counts_as_reported_later(
+    task: ForecastTask, monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    monkeypatch.setattr(
+        rn.RenewalModel, "run", lambda self, t: _fake_run(t, self.variant)
+    )
+    task = replace(task, report_by=("2026-10-24",))
+    samples = get_model(name).forecast(task)
+    check_samples(samples, task)
+    later = samples.loc[samples["as_of"] == "2026-10-24"]
+    assert later["target_end_date"].max() <= "2026-10-24"
+    assert not later.empty
+    final = samples.loc[samples["as_of"].isna()]
+    assert set(final["target_end_date"]) == set(task.target_end_dates)
+    # Without later vintages there is no as_of column.
+    plain = get_model(name).forecast(replace(task, report_by=()))
+    assert "as_of" not in plain
