@@ -427,6 +427,7 @@ def run_forecast(
 
 
 register_config(persistence_config("persistence"))
+register_config(persistence_config("persistencenow", model="persistencenow"))
 
 
 def _renewal_config(name: str) -> FitConfig:
