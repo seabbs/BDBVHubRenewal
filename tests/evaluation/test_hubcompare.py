@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 from pathlib import Path
 
 import numpy as np
@@ -9,39 +10,59 @@ import pytest
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig
 from bdbvhubrenewal.evaluation.hubcompare import (
     ATTRIBUTION,
-    display_names,
+    OPEN_LICENCES,
+    forecast_quantiles,
+    load_comparison_config,
     load_hub_submissions,
     load_team_metadata,
     match_vintage,
     our_forecasts,
+    resolve_baseline,
     score_comparison,
+    stored_forecasts,
+    submission_dir,
+    summarise_comparison,
 )
-from bdbvhubrenewal.reporting.plots import plot_comparison
+from bdbvhubrenewal.reporting.plots import plot_hub_round
 
+ROOT = Path(__file__).resolve().parents[2]
 WEEKS = ["2026-09-19", "2026-09-26", "2026-10-03", "2026-10-10"]
+
+
+def _hub_rows(
+    ref: str = "2026-10-17", weeks: list[str] = WEEKS
+) -> pd.DataFrame:
+    rng = np.random.default_rng(1)
+    return pd.DataFrame(
+        [
+            {
+                "reference_date": ref,
+                "target": "wk inc confirmed cases",
+                "target_end_date": w,
+                "location": loc,
+                "output_type": "sample",
+                "output_type_id": s,
+                "value": float(rng.poisson(400 if loc == "CD" else 100)),
+            }
+            for loc in ("CD", "CD-IT")
+            for w in weeks
+            for s in range(1, 101)
+        ]
+    )
 
 
 def _write_hub(root: Path) -> None:
     out = root / "model-output"
-    rng = np.random.default_rng(1)
-    rows = [
-        {
-            "reference_date": "2026-10-17",
-            "target": "wk inc confirmed cases",
-            "target_end_date": w,
-            "location": loc,
-            "output_type": "sample",
-            "output_type_id": s,
-            "value": float(rng.poisson(400 if loc == "CD" else 100)),
-        }
-        for loc in ("CD", "CD-IT")
-        for w in WEEKS
-        for s in range(1, 101)
-    ]
     (out / "teamA-weekly").mkdir(parents=True)
-    pd.DataFrame(rows).to_csv(
+    _hub_rows().to_csv(
         out / "teamA-weekly" / "2026-10-17-teamA-weekly.csv", index=False
     )
+    # A gzipped file, as committed, for a second team.
+    (out / "teamB-late").mkdir(parents=True)
+    with gzip.open(
+        out / "teamB-late" / "2026-10-17-teamB-late.csv.gz", "wt"
+    ) as fh:
+        _hub_rows(weeks=WEEKS[2:]).to_csv(fh, index=False)
     (out / "epiforecasts-renewal").mkdir(parents=True)
     pd.DataFrame(
         {
@@ -61,186 +82,184 @@ def _write_hub(root: Path) -> None:
     (meta / "teamA-weekly.yml").write_text(
         'team_name: "Team A"\nmodel_name: "Weekly"\nlicense: "CC0-1.0"\n'
     )
-    (meta / "epiforecasts-renewal.yml").write_text(
-        'team_name: "epiforecasts"\nmodel_name: "Renewal"\n'
-        'license: "CC-BY-4.0"\n'
+    (meta / "teamB-late.yml").write_text(
+        'team_name: "Team B"\nmodel_name: "Late"\nlicense: "CC-BY-4.0"\n'
     )
 
 
-def test_load_hub_submissions_splits_rounds(tmp_path: Path) -> None:
+def _ours(target: pd.DataFrame, delays: pd.DataFrame) -> pd.DataFrame:
+    config = BacktestConfig(n_samples=100, seed=1)
+    return our_forecasts(
+        ["2026-10-17"], target, delays, config, ["persistence"], min_horizon=-4
+    )
+
+
+def test_load_hub_submissions_keeps_weekly_samples(tmp_path: Path) -> None:
     _write_hub(tmp_path)
-    weekly, other = load_hub_submissions(tmp_path)
-    assert set(weekly["model"]) == {"teamA-weekly"}
-    assert set(weekly["output_type"]) == {"sample"}
+    weekly = load_hub_submissions(tmp_path)
+    assert set(weekly["model"]) == {"teamA-weekly", "teamB-late"}
     assert weekly["sample"].max() == 100
-    assert list(other["model"]) == ["epiforecasts-renewal"]
-    assert other["target"].iloc[0] == "cumulative cases"
+    assert set(weekly["source"]) == {"hub"}
+    # Reads several roots, as the committed and cached files are apart.
+    assert len(load_hub_submissions(tmp_path, tmp_path / "none")) == len(weekly)
 
 
 def test_load_team_metadata(tmp_path: Path) -> None:
     _write_hub(tmp_path)
     meta = load_team_metadata(tmp_path)
     assert dict(zip(meta["model"], meta["license"], strict=True)) == {
-        "epiforecasts-renewal": "CC-BY-4.0",
         "teamA-weekly": "CC0-1.0",
+        "teamB-late": "CC-BY-4.0",
     }
+
+
+def test_submission_dir_follows_the_licence(tmp_path: Path) -> None:
+    assert set(OPEN_LICENCES) == {"CC0-1.0", "CC-BY-4.0"}
+    keep, cache = tmp_path / "keep", tmp_path / "cache"
+    assert submission_dir("CC-BY-4.0", keep, cache) == keep
+    assert submission_dir("CC0-1.0", keep, cache) == keep
+    assert submission_dir("Proprietary", keep, cache) == cache
+    assert submission_dir("", keep, cache) == cache
 
 
 def test_attribution_names_the_hub() -> None:
     assert "BDBV Modeling Hub" in ATTRIBUTION
-    assert "INSP" in ATTRIBUTION
+
+
+def test_load_comparison_config() -> None:
+    cfg = load_comparison_config(ROOT / "config" / "hub-comparison.toml")
+    assert cfg.baseline == "persistencenow"
+    assert "CD" in cfg.locations
+
+
+def test_resolve_baseline() -> None:
+    # Falls back to the registry baseline until the preferred one exists.
+    assert resolve_baseline("persistence") == "persistence"
+    assert resolve_baseline("not-registered") == "persistence"
 
 
 def test_match_vintage(target: pd.DataFrame) -> None:
     real = target.loc[target["kind"] == "real"]
     vintages = sorted(set(real["vintage"]))
-    # A real vintage serves 2026-10-24 and 2026-10-31.
-    assert match_vintage("2026-10-24", vintages) == ("2026-10-17", "real")
     assert match_vintage("2026-10-31", vintages) == ("2026-10-24", "real")
-    # None serves 2026-10-03, so it is reconstructed from the Saturday before.
     assert match_vintage("2026-10-03", vintages) == (
         "2026-09-26",
         "reconstructed",
     )
-    # Nothing can be built after the latest vintage's round.
     assert match_vintage("2026-11-07", vintages) is None
 
 
-def test_our_forecasts_use_matching_vintages(
+def test_our_forecasts_cover_the_hub_weeks(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
     config = BacktestConfig(n_samples=100, seed=1)
     fc = our_forecasts(
-        ["2026-10-03", "2026-10-24"], target, delays, config, ["persistence"]
+        ["2026-10-31"], target, delays, config, ["persistence"], min_horizon=-5
     )
-    by_ref = fc.groupby("reference_date")[["vintage", "source"]].first()
-    assert by_ref.loc["2026-10-03"].tolist() == ["2026-09-26", "reconstructed"]
-    assert by_ref.loc["2026-10-24"].tolist() == ["2026-10-17", "real"]
-    assert set(fc["model"]) == {"epiforecasts-persistence"}
+    assert set(fc["model"]) == {"persistence"}
+    assert set(fc["source"]) == {"real"}
+    assert fc["horizon"].min() == -5
+    assert fc["horizon"].max() == 3
 
 
-def test_score_comparison_on_common_weeks(
+def test_stored_forecasts_pick_matching_rounds(tmp_path: Path) -> None:
+    stored = pd.DataFrame(
+        {
+            "model": ["renewal", "renewal", "persistence", "renewal"],
+            "kind": ["real", "real", "real", "reconstructed"],
+            "vintage": ["2026-10-24", "2026-10-17", "2026-10-24", "2026-10-24"],
+            "reference_date": [
+                "2026-10-31",
+                "2026-10-24",
+                "2026-10-31",
+                "2026-10-31",
+            ],
+            "location": "CD",
+            "target_end_date": "2026-10-31",
+            "horizon": 0,
+            "sample": 1,
+            "value": 1.0,
+        }
+    )
+    path = tmp_path / "forecasts.csv.gz"
+    stored.to_csv(path, index=False)
+    out = stored_forecasts(
+        [path, tmp_path / "missing.csv.gz"],
+        ["2026-10-31"],
+        exclude=["persistence"],
+    )
+    # Real vintages win over reconstructed ones for the same round.
+    assert list(out["model"]) == ["renewal"]
+    assert list(out["source"]) == ["real"]
+
+
+def test_score_comparison_flags_complete_weeks(
     tmp_path: Path, target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
     _write_hub(tmp_path)
-    weekly, _ = load_hub_submissions(tmp_path)
-    config = BacktestConfig(n_samples=100, seed=1)
-    ours = our_forecasts(
-        ["2026-10-17"], target, delays, config, ["persistence"]
+    forecasts = pd.concat(
+        [load_hub_submissions(tmp_path), _ours(target, delays)]
     )
-    scores, pending = score_comparison(weekly, ours, target)
+    scores, pending = score_comparison(forecasts, target, 3)
     assert pending.empty
-    assert set(scores["model"]) == {"teamA-weekly", "epiforecasts-persistence"}
-    # Both models are scored on the same weeks and locations only.
-    keys = scores.groupby("model")[["location", "target_end_date"]].apply(
-        lambda d: frozenset(map(tuple, d.to_numpy()))
-    )
-    assert keys.nunique() == 1
-    assert set(scores["location"]) == {"CD", "CD-IT"}
+    assert set(scores["model"]) == {"teamA-weekly", "teamB-late", "persistence"}
+    # Each model is scored on the weeks it covered.
+    late = scores.loc[scores["model"] == "teamB-late"]
+    assert set(late["target_end_date"]) == set(WEEKS[2:])
     assert set(scores["truth_vintage"]) == {"2026-10-24"}
-    assert set(scores["source"]) == {"hub", "real"}
+    # Truth 2026-10-24, K = 3: weeks ending by 2026-10-03 are complete.
+    done = scores.loc[scores["complete"], "target_end_date"]
+    assert done.max() == "2026-10-03"
 
 
-def test_score_comparison_waits_for_later_truth(
-    tmp_path: Path, target: pd.DataFrame, delays: pd.DataFrame
+def test_score_comparison_waits_for_later_data(
+    target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
-    _write_hub(tmp_path)
-    weekly, _ = load_hub_submissions(tmp_path)
-    weekly["reference_date"] = "2026-10-31"
-    config = BacktestConfig(n_samples=100, seed=1)
-    ours = our_forecasts(
-        ["2026-10-31"], target, delays, config, ["persistence"]
-    )
-    scores, pending = score_comparison(weekly, ours, target)
+    hub = _hub_rows(ref="2026-10-31").assign(model="teamA-weekly")
+    hub = hub.rename(columns={"output_type_id": "sample"}).assign(source="hub")
+    scores, pending = score_comparison(hub, target, 3)
     assert scores.empty
     assert list(pending["reference_date"]) == ["2026-10-31"]
+    assert pending["vintage"].iloc[0] == "2026-10-24"
 
 
-@pytest.mark.parametrize(
-    ("mode", "expected"),
-    [
-        (
-            "named",
-            {
-                "teamB-x": "teamB-x",
-                "teamA-y": "teamA-y",
-                "epiforecasts-persistence": "epiforecasts-persistence",
-            },
-        ),
-        (
-            "anonymised",
-            {
-                "teamA-y": "Team A",
-                "teamB-x": "Team B",
-                "epiforecasts-persistence": "epiforecasts-persistence",
-            },
-        ),
-        (
-            "epiforecasts",
-            {"epiforecasts-persistence": "epiforecasts-persistence"},
-        ),
-    ],
-)
-def test_display_names(mode: str, expected: dict[str, str]) -> None:
-    models = ["teamB-x", "teamA-y", "epiforecasts-persistence"]
-    assert display_names(models, mode) == expected
-
-
-def test_display_names_rejects_unknown_mode() -> None:
-    with pytest.raises(ValueError, match="display"):
-        display_names(["a-b"], "public")
-
-
-def test_plot_comparison(
+def test_summarise_comparison(
     tmp_path: Path, target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
     _write_hub(tmp_path)
-    weekly, _ = load_hub_submissions(tmp_path)
-    config = BacktestConfig(n_samples=100, seed=1)
-    ours = our_forecasts(
-        ["2026-10-17"], target, delays, config, ["persistence"]
+    forecasts = pd.concat(
+        [load_hub_submissions(tmp_path), _ours(target, delays)]
     )
-    forecasts = pd.concat([weekly.assign(source="hub"), ours])
-    fig = plot_comparison(
-        forecasts,
-        target,
-        "CD",
-        names={"teamA-weekly": "Team A"},
+    scores, _ = score_comparison(forecasts, target, 3)
+    table = summarise_comparison(scores, "persistence")
+    rows = table.set_index("model")
+    assert rows.loc["persistence", "relative_wis"] == pytest.approx(1)
+    # Complete weeks only: teamB-late forecast 2026-10-03 and 2026-10-10,
+    # and only 2026-10-03 is complete, in two locations.
+    assert rows.loc["teamB-late", "n"] == 2
+    assert {"coverage_50", "coverage_90", "bias", "wis"} <= set(table.columns)
+
+
+def test_forecast_quantiles(
+    tmp_path: Path, target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    _write_hub(tmp_path)
+    q = forecast_quantiles(load_hub_submissions(tmp_path))
+    assert {"q05", "q25", "q50", "q75", "q95"} <= set(q.columns)
+    assert (q["q05"] <= q["q50"]).all()
+    assert (q["q50"] <= q["q95"]).all()
+    assert len(q) == q[["model", "location", "target_end_date"]].shape[0]
+
+
+def test_plot_hub_round(
+    tmp_path: Path, target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    _write_hub(tmp_path)
+    forecasts = pd.concat(
+        [load_hub_submissions(tmp_path), _ours(target, delays)]
     )
-    assert len(fig.axes) == 1
-
-
-def test_cli_compare_hub(tmp_path: Path) -> None:
-    import os
-
-    from bdbvhubrenewal.cli import main
-
-    _write_hub(tmp_path / "hub")
-    root = Path(__file__).resolve().parents[2]
-    cfg = tmp_path / "cmp.toml"
-    cfg.write_text(
-        '[comparison]\nmodels = ["teamA-weekly", "epiforecasts-renewal"]\n'
+    q = forecast_quantiles(forecasts)
+    fig = plot_hub_round(
+        q, target, "2026-10-17", locations=("CD", "CD-IT"), complete_by=None
     )
-    old = Path.cwd()
-    os.chdir(root)
-    try:
-        code = main(
-            [
-                "compare-hub",
-                "--config",
-                str(cfg),
-                "--hub-dir",
-                str(tmp_path / "hub"),
-                "--out",
-                str(tmp_path / "out"),
-                "--models",
-                "persistence",
-            ]
-        )
-    finally:
-        os.chdir(old)
-    assert code == 0
-    scores = pd.read_csv(tmp_path / "out" / "scores.csv")
-    assert set(scores["model"]) == {"teamA-weekly", "epiforecasts-persistence"}
-    teams = pd.read_csv(tmp_path / "out" / "teams.csv")
-    assert set(teams["license"]) == {"CC0-1.0", "CC-BY-4.0"}
+    assert len([ax for ax in fig.axes if ax.get_visible()]) == 2

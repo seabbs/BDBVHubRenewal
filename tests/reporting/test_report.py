@@ -48,53 +48,51 @@ def test_heldout_page(tmp_path: Path, target: pd.DataFrame) -> None:
     assert (gen / "heldout-status.md").read_text() == ""
 
 
-@pytest.mark.parametrize("display", ["named", "anonymised", "epiforecasts"])
-def test_comparison_page(
-    tmp_path: Path, target: pd.DataFrame, display: str
-) -> None:
+def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
     from evaluation.test_hubcompare import _write_hub
 
     from bdbvhubrenewal.cli import main
 
     gen, fig = tmp_path / "gen", tmp_path / "fig"
-    report._comparison_page(fig, gen, tmp_path / "missing", display, target)
-    assert (gen / "comparison-scores.md").read_text() == ""
+    report._comparison_page(fig, gen, tmp_path / "missing", target)
+    assert "compare-hub" in (gen / "comparison-scores.md").read_text()
     _write_hub(tmp_path / "hub")
-    cfg = tmp_path / "cmp.toml"
-    cfg.write_text(
-        '[comparison]\nmodels = ["teamA-weekly", "epiforecasts-renewal"]\n'
-    )
+    out = tmp_path / "out"
     assert (
         main(
             [
                 "compare-hub",
-                "--config",
-                str(cfg),
                 "--hub-dir",
                 str(tmp_path / "hub"),
+                "--cache-dir",
+                str(tmp_path / "cache"),
                 "--out",
-                str(tmp_path / "out"),
+                str(out),
                 "--data",
                 str(ROOT / "data"),
                 "--backtest-config",
                 str(ROOT / "config" / "backtest.toml"),
+                "--stored",
+                str(tmp_path / "none.csv.gz"),
                 "--models",
                 "persistence",
             ]
         )
         == 0
     )
-    report._comparison_page(fig, gen, tmp_path / "out", display, target)
+    for name in ("scores.csv", "quantiles.csv.gz", "teams.csv", "summary.json"):
+        assert (out / name).exists(), name
+    report._comparison_page(fig, gen, out, target)
     teams = (gen / "comparison-teams.md").read_text()
     scores = (gen / "comparison-scores.md").read_text()
-    if display == "named":
-        assert "teamA-weekly" in teams
-    elif display == "anonymised":
-        assert "Team A" in scores
-        assert "teamA-weekly" not in scores
-    else:
-        assert "teamA" not in scores
-        assert "Team A" not in scores
+    # Other teams are named as the hub names them.
+    assert "teamA-weekly" in teams
+    assert "CC0-1.0" in teams
+    assert "teamA-weekly" in scores
+    assert "relative_wis" in scores
+    figures = (gen / "comparison-figures.md").read_text()
+    assert "2026-10-17" in figures
+    assert (fig / "comparison-2026-10-17.svg").exists()
     assert (
         "BDBV Modeling Hub" in (gen / "comparison-attribution.md").read_text()
     )
