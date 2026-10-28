@@ -11,10 +11,13 @@ cases, against the zone counts as reported at the truth vintage.
 
 from __future__ import annotations
 
+import datetime as dt
 from collections.abc import Sequence
 
 import pandas as pd
 
+from bdbvhubrenewal.data.dates import as_date
+from bdbvhubrenewal.data.simulate import SimulatedOutbreak
 from bdbvhubrenewal.data.zones import weekly_zone_counts
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
@@ -27,7 +30,12 @@ from bdbvhubrenewal.forecasters.base import ForecastTask, get_model
 from bdbvhubrenewal.forecasters.persistence import Persistence
 from bdbvhubrenewal.forecasters.zones import ZoneAllocator, zone_task
 
-__all__ = ["ZONE_BASELINE", "zone_backtest", "zone_relative_skill"]
+__all__ = [
+    "ZONE_BASELINE",
+    "scenario_zone_scores",
+    "zone_backtest",
+    "zone_relative_skill",
+]
 
 ZONE_BASELINE = "zonepersistence"
 """Name of the zone baseline in the scores."""
@@ -142,3 +150,96 @@ def zone_relative_skill(
         See `bdbvhubrenewal.evaluation.scoring.relative_skill`.
     """
     return relative_skill(scores, baseline=ZONE_BASELINE, by=by)
+
+
+def _zone_truth(
+    counts: pd.DataFrame, forecasts: pd.DataFrame, truth_date: str
+) -> pd.DataFrame:
+    """Zone counts as a truth table over the forecast zones and weeks."""
+    weeks = sorted(
+        w for w in forecasts["target_end_date"].unique() if w <= truth_date
+    )
+    grid = pd.MultiIndex.from_product(
+        [sorted(forecasts["location"].unique()), weeks],
+        names=["location", "target_end_date"],
+    )
+    return (
+        counts.set_index(["location", "target_end_date"])["total"]
+        .reindex(grid, fill_value=0)
+        .rename("truth")
+        .reset_index()
+    )
+
+
+def scenario_zone_scores(
+    outbreak: SimulatedOutbreak,
+    tasks: Sequence[ForecastTask],
+    models: Sequence[str],
+    end: str,
+    later_weeks: int,
+    complete_after_weeks: int = 0,
+    allocator: ZoneAllocator | None = None,
+) -> pd.DataFrame:
+    """Score allocated zone forecasts and zone persistence on a scenario.
+
+    As `zone_backtest`, with the simulated zone counts
+    (`SimulatedOutbreak.zone_vintage`) in place of the real ones, scored
+    against the final simulated counts and as reported `later_weeks`
+    after each forecast date.
+
+    Parameters
+    ----------
+    outbreak : SimulatedOutbreak
+        The scenario.
+    tasks : sequence of ForecastTask
+        Its province tasks.
+    models : sequence of str
+        Registered province models whose samples are allocated.
+    end : str
+        Date of the final simulated data.
+    later_weeks : int
+        Weeks after each date for the as-of scores.
+    complete_after_weeks : int
+        As for `score_tasks`.
+    allocator : ZoneAllocator, optional
+        The split. Defaults to `ZoneAllocator()`.
+
+    Returns
+    -------
+    pandas.DataFrame
+        `score_tasks` output with `truth_view`.
+    """
+    allocator = allocator or ZoneAllocator()
+    zones = tuple(sorted({z for _, z, _ in outbreak.settings.zone_shares}))
+    frames = []
+    for task in tasks:
+        counts = outbreak.zone_vintage(task.vintage)
+        zt = zone_task(task, counts, zones)
+        frames.append(_frame(Persistence().forecast(zt), task, ZONE_BASELINE))
+        for name in models:
+            prov = get_model(name).forecast(task)
+            frames.append(
+                _frame(
+                    allocator.allocate(prov, task, counts, zones), task, name
+                )
+            )
+    forecasts = pd.concat(frames, ignore_index=True)
+    final = _zone_truth(outbreak.zone_vintage(end), forecasts, end)
+    scores = [
+        score_tasks(forecasts, final, end, complete_after_weeks).assign(
+            truth_view="final"
+        )
+    ]
+    for task in tasks:
+        later = (
+            as_date(task.vintage) + dt.timedelta(weeks=later_weeks)
+        ).isoformat()
+        rows = forecasts.loc[forecasts["vintage"] == task.vintage]
+        truth = _zone_truth(outbreak.zone_vintage(later), rows, later)
+        scores.append(
+            score_tasks(rows, truth, later, complete_after_weeks).assign(
+                truth_view=f"as of {later_weeks} weeks later"
+            )
+        )
+    out = pd.concat(scores, ignore_index=True)
+    return out.loc[out["scoring"] == "as reported"].reset_index(drop=True)

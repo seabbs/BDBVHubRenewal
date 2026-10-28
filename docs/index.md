@@ -8,15 +8,9 @@ Forecasts are submitted as `epiforecasts-seabbsrenewal`.
 
 ## Models
 
-The renewal models are built on [PyRenew](https://github.com/CDCgov/PyRenew) and fit the hub's known and imputed onsets, modelling the hub's imputation ([Model](methods/model.md)).
-
-| Model | What it is |
-|---|---|
-| `renewal` | One renewal per province, with pooled Rt, gravity importation and depletion. |
-| `renewalsp` | One renewal per location, the nation included, fitted on its own. |
-| `renewalbvd` | `renewal` informed by the latest [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) Rt. |
-| `persistence` | The baseline: the last complete week carried forward. |
-| `persistencenow` | `persistence` carried forward from a nowcast of the recent weeks. |
+The package has two sets of models.
+The renewal models (`renewal`, `renewalsp` and `renewalbvd`) are built on [PyRenew](https://github.com/CDCgov/PyRenew) and fit the hub's known and imputed onsets, modelling the hub's imputation ([Model](methods/model.md)).
+The baseline models are `persistence` and `persistencenow`, which is persistence on a nowcast with a baselinenowcast-style adjustment for reporting delays ([Johnson et al. 2025](https://doi.org/10.12688/wellcomeopenres.25027.2), Wellcome Open Research).
 
 Each week the [submission](submission/workflow.md) takes the first of `renewal`, one refit of it, `renewalsp` and `persistence` that passes its checks.
 
@@ -26,13 +20,9 @@ Each week the [submission](submission/workflow.md) takes the first of `renewal`,
 |---|---|
 | [Getting started](getting-started.ipynb) | Forecast, plot and score the two baselines in Python. |
 | Methods | [Data](methods/data.md), [Model](methods/model.md), [Evaluation](methods/evaluation.md) and [Implementation](methods/implementation.md). |
-| [Data](data.md) | The hub data, vintage by vintage. |
-| [Backtest](backtest.md) | Development scores against later data. |
-| [Held-out evaluation](heldout.md) | Forecasts after the model choice, scored as later data arrive. |
-| [Nowcast](nowcast.md) | The latest nowcast and forecast. |
+| Results | [Data](data.md), [nowcast](nowcast.md), [backtest](backtest.md), [held-out evaluation](heldout.md) and [comparison with hub forecasts](comparison.md). |
 | Submission | The [workflow](submission/workflow.md), [hub specification](submission/hub-spec.md), [opting in](submission/opting-in.md) and [rounds](submission/rounds/index.md). |
-| Model development | The [model building](model-development/model-building.md) ladder and the [development log](model-development/log.md). |
-| Development | [Contributing](development/contributing.md), [adding a model](development/adding-a-model.md) and the [CLI](development/cli.md). |
+| Development | The [model building](model-development/model-building.md) ladder, the [development log](model-development/log.md), [contributing](development/contributing.md), [adding a model](development/adding-a-model.md) and the [CLI](development/cli.md). |
 | [API reference](reference/index.md) | The Python package. |
 
 ## Data credit

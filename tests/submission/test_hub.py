@@ -149,7 +149,9 @@ def test_metadata_is_valid(schema_json: Path, tmp_path: Path) -> None:
     assert path.name == "epiforecasts-persistence.yml"
     back = yaml.safe_load(path.read_text())
     assert validate_model_metadata(back, schema_json, path.name) == []
-    assert "language model" in back["model_details"]["methods_long"]
+    assert "language model" not in back["model_details"]["methods_long"]
+    # Sam's HPRU funding, in the schema's `team_funding` field.
+    assert "NIHR207404" in back["team_funding"]
     bad = {**back, "license": "MIT"}
     assert validate_model_metadata(bad, schema_json)
     assert validate_model_metadata(back, schema_json, "wrong.yml")

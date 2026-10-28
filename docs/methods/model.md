@@ -298,7 +298,8 @@ The median has no growth and weeks up to $c$ are still revised upwards, so persi
 
 ### Persistence on a nowcast
 
-`persistencenow` nowcasts the recent weeks with a Python port of [baselinenowcast](https://github.com/epinowcast/baselinenowcast), then applies persistence to each nowcast draw.
+`persistencenow` is a baseline model that builds on the ideas of the baselinenowcast paper[^bnc-paper] and package[^bnc-package].
+It nowcasts the recent weeks with a Python port of [baselinenowcast](https://github.com/epinowcast/baselinenowcast), then applies persistence to each nowcast draw.
 Tests check the port's delay, point nowcast and negative binomial sizes against baselinenowcast 0.2.2 on fixed triangles, and a CI job regenerates those fixtures with the R package (`scripts/baselinenowcast_fixtures.R`).
 
 The reporting triangle $n(W, d)$ counts the cases in the vintage's delay file by onset week $W$ and delay $d$ in days, up to 35 days.
@@ -355,3 +356,6 @@ Only data available at $T_v$ are used.
 Counts reported by a later date $T$ are $Y_{p,v}(w) + \text{Binomial}\big(\max(D, 0),\ q\big) + \min(D, 0)$, with $D = C_{p,k}(w) - Y_{p,v}(w)$ and $q$ the share of the remaining delay mass of the province's pmf that is published by $T$.
 Late rows in the delay files are mostly onsets recorded later for cases already counted as imputed, so the publication lag has no long tail.
 Without a complete onset week or 50 cases in the last 6 weeks, or with fewer than 3 past nowcasts, `persistencenow` is `persistence`.
+
+[^bnc-paper]: Johnson KE, Tang M, Tyszka E, Nemcova B, Wolffram D, Ergas R, Reich NG, Funk S, Mellor J, Bracher J, Abbott S (2025). Baseline nowcasting methods for handling delays in epidemiological data. Wellcome Open Research. [doi:10.12688/wellcomeopenres.25027.2](https://doi.org/10.12688/wellcomeopenres.25027.2).
+[^bnc-package]: Johnson KE, Tyszka E, Bracher J, Funk S, Abbott S (2025). baselinenowcast: Methods for baseline nowcasting right-truncated epidemiological data. <https://github.com/epinowcast/baselinenowcast/>.
