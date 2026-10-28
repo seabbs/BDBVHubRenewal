@@ -60,7 +60,8 @@ def mixing_matrix(
     kernel : ArrayLike
         Row-normalised kernel with zero diagonal, shape `(P, P)`.
     importation : ArrayLike
-        Share $\varepsilon$ of transmission sent to other provinces.
+        Share $\varepsilon$ of transmission sent to other provinces, a
+        scalar or one per origin.
     fractions : ArrayLike
         Population fractions, shape `(P,)`.
 
@@ -70,8 +71,11 @@ def mixing_matrix(
         Shape `(P, P)`.
     """
     n = fractions.shape[0]
-    imported = kernel.T * fractions[None, :] / fractions[:, None]
-    return (1 - importation) * jnp.eye(n) + importation * imported
+    # A vector of shares is one per origin: row p keeps 1 - eps_p of its
+    # own force and takes eps_q of origin q's.
+    eps = jnp.broadcast_to(jnp.asarray(importation), (n,))
+    imported = kernel.T * (eps * fractions)[None, :] / fractions[:, None]
+    return jnp.diag(1 - eps) + imported
 
 
 def coupled_renewal(

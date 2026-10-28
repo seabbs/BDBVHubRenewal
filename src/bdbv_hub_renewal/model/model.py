@@ -31,8 +31,10 @@ from .delays import (
 from .observation import OnsetStreams, RtPseudoObservation
 from .renewal import LearntKernel, MetapopulationInfections
 from .rt import (
+    LinearWeeklyProcess,
     MissingOnsetFraction,
     NonCentredRandomWalk,
+    PerOriginShare,
     PooledInitialValue,
 )
 
@@ -100,8 +102,9 @@ class ModelConfig:
         Estimate $\pi_p(t)$ or fix it at the smoothed observed share.
     depletion : bool
         Susceptible depletion in the renewal.
-    rt_cadence : {"daily", "weekly"}
-        Step of the Rt random walks.
+    rt_cadence : {"daily", "weekly", "linear"}
+        Step of the Rt random walks: daily, weekly knots held for the
+        week, or weekly knots joined linearly (`LinearWeeklyProcess`).
     rt_deviation : {"rw", "ar1"}
         Province deviations as random walks, or mean-reverting AR(1)
         with a sampled half-life (default, as BVDOutbreakSize).
@@ -117,6 +120,9 @@ class ModelConfig:
         Share $\nu$ of each province at risk, which depletion uses.
         `None` (default) estimates it with a log-normal prior; a number
         fixes it.
+    importation : {"shared", "per_origin"}
+        One importation share $\varepsilon$, or one per origin partially
+        pooled on the logit scale (`PerOriginShare`).
     future_rt : {"walk", "hold"}
         Rt past the data: the random walks carry on, or Rt holds at its
         last value (EpiNow2 `future = "latest"`).
@@ -144,7 +150,7 @@ class ModelConfig:
     delay: Literal["hazard", "gamma", "lognormal", "fixed"] = "hazard"
     missing: Literal["estimated", "fixed"] = "estimated"
     depletion: bool = True
-    rt_cadence: Literal["daily", "weekly"] = "weekly"
+    rt_cadence: Literal["daily", "weekly", "linear"] = "weekly"
     rt_deviation: Literal["rw", "ar1"] = "ar1"
     active: Literal["cases", "all"] = "cases"
     inactive: Literal["imports", "none"] = "imports"
@@ -153,6 +159,7 @@ class ModelConfig:
     walk: Literal["knots", "noncentred", "centred"] = "knots"
     seeding: Literal["first_case", "start"] = "first_case"
     future_rt: Literal["walk", "hold"] = "walk"
+    importation: Literal["shared", "per_origin"] = "shared"
     bvd: bool = False
     bvd_alpha: float = 0.5
     dmax: int = 60
@@ -279,7 +286,7 @@ def _named_walk(
     LogNormal(log 6 weeks, 0.6) (BVDOutbreakSize deviations: 42 days).
     """
     sd_rv = DistributionalVariable(name, dist.HalfNormal(sd))
-    weekly = cadence == "weekly"
+    weekly = cadence in ("weekly", "linear")
     frozen = GEN_INT_LENGTH // 7 if weekly else GEN_INT_LENGTH
     n_fit = frozen + n_weeks if weekly else frozen + 7 * n_weeks
     half_life = None
@@ -297,6 +304,8 @@ def _named_walk(
         half_life_rv=half_life,
         future=future,
     )
+    if cadence == "linear":
+        return LinearWeeklyProcess(inner)
     if cadence == "weekly":
         return WeeklyTemporalProcess(inner, start_dow=SUNDAY)
     return inner
@@ -348,7 +357,11 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     if kernel is None:
         importation = None
     else:
-        importation = DistributionalVariable("importation", dist.Beta(1, 100))
+        importation = (
+            PerOriginShare("importation", n_prov)
+            if config.importation == "per_origin"
+            else DistributionalVariable("importation", dist.Beta(1, 100))
+        )
 
     builder = PyrenewBuilder()
     builder.configure_latent(
