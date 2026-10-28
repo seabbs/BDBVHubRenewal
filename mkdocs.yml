@@ -18,7 +18,7 @@ exclude_docs: |
 
 nav:
   - Home: index.md
-  - Getting started: getting-started.md
+  - Getting started: getting-started.ipynb
   - Methods:
       - Data: methods/data.md
       - Model: methods/model.md
@@ -131,6 +131,10 @@ markdown_extensions:
 
 plugins:
   - search
+  - mkdocs-jupyter:
+      execute: false
+      include_source: true
+      ignore_h1_titles: false
   - mkdocstrings:
       default_handler: python
       handlers:
