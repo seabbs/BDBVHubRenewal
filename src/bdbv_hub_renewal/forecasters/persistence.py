@@ -28,6 +28,14 @@ Recent onset weeks only show the delays reported so far, so this lag is
 biased short. With `full_follow_up` (`persistence_fu`), it is
 taken over onset weeks that ended at least the maximum delay plus the
 publication lag before the vintage, whose delays are all observed.
+
+For each later date $T$ in `task.report_by`, the counts reported by $T$
+are predicted by thinning each sample of week $w$ with the share of a
+week reported $T - w$ days after it ends
+(`bdbv_hub_renewal.data.completeness.reported_share`, from the delays
+published with the vintage), and taking at least the count already
+published for that week.
+There are no such rows when the vintage has no delay data.
 """
 
 from __future__ import annotations
@@ -38,6 +46,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from bdbv_hub_renewal.data.completeness import reported_share
 from bdbv_hub_renewal.data.dates import as_date
 from bdbv_hub_renewal.data.delays import DEFAULT_MAX_DELAY, EmpiricalDelayModel
 from bdbv_hub_renewal.data.reconstruct import PUBLICATION_LAG_DAYS
@@ -196,7 +205,45 @@ class Persistence:
                     }
                 )
             )
-        return pd.concat(frames, ignore_index=True)[list(SAMPLE_COLUMNS)]
+        final = pd.concat(frames, ignore_index=True)[list(SAMPLE_COLUMNS)]
+        if not task.report_by:
+            return final
+        return pd.concat(
+            [final.assign(as_of=np.nan), *self._reported_by(task, final, rng)],
+            ignore_index=True,
+        )
+
+    def _reported_by(
+        self,
+        task: ForecastTask,
+        final: pd.DataFrame,
+        rng: np.random.Generator,
+    ) -> list[pd.DataFrame]:
+        """Thin the final samples to the counts reported by each later date."""
+        if task.delays is None or task.delays.empty:
+            return []
+        delay_vintage = str(task.delays["vintage"].max())
+        seen = task.target.set_index(["location", "target_end_date"])["total"]
+        floor = np.array(
+            [
+                seen.get((loc, week), 0)
+                for loc, week in zip(
+                    final["location"], final["target_end_date"], strict=True
+                )
+            ],
+            dtype=float,
+        )
+        ends = pd.to_datetime(final["target_end_date"])
+        out = []
+        for date in task.report_by:
+            days = (pd.Timestamp(date) - ends).dt.days.to_numpy(dtype=np.int64)
+            due = days >= 0
+            share = reported_share(task.delays, delay_vintage, days[due])
+            counts = final["value"].to_numpy()[due].astype(np.int64)
+            thinned = rng.binomial(counts, share)
+            value = np.maximum(thinned, floor[due])
+            out.append(final.loc[due].assign(value=value, as_of=date))
+        return out
 
 
 register_model(

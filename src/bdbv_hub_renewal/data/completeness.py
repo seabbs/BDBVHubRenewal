@@ -22,11 +22,9 @@ ended at least $K$ weeks before the truth vintage.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-
 import numpy as np
 import pandas as pd
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike, NDArray
 
 from bdbv_hub_renewal.data.dates import as_date
 from bdbv_hub_renewal.data.delays import DEFAULT_MAX_DELAY
@@ -38,7 +36,7 @@ __all__ = ["complete_weeks", "reported_share"]
 def reported_share(
     delays: pd.DataFrame,
     vintage: str,
-    days: Sequence[int] | NDArray[np.int64],
+    days: ArrayLike,
     lag: int = PUBLICATION_LAG_DAYS,
 ) -> NDArray[np.float64]:
     """Return the share of a week's final count reported by each day.
@@ -50,7 +48,7 @@ def reported_share(
         Rows of `vintage` are used.
     vintage : str
         The delay vintage.
-    days : sequence of int
+    days : array-like of int
         Days after the end of the onset week.
     lag : int
         Days from report to publication.

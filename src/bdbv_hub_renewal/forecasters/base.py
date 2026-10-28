@@ -73,6 +73,11 @@ class ForecastTask:
         its latent process (for spatial coupling) while dropping them from
         its likelihood. Only models with `supports_mask = True` are given
         a non-empty mask.
+    report_by : tuple of str
+        Later vintage dates, ISO format. A model may also return, for each
+        date $T$ here, the counts it predicts will be reported by $T$ for
+        the weeks ending on or before $T$, in rows with `as_of` $= T$.
+        Scoring compares them with vintage $T$ as reported.
     """
 
     vintage: str
@@ -85,6 +90,7 @@ class ForecastTask:
     n_samples: int = 100
     seed: int = 0
     mask: tuple[str, ...] = ()
+    report_by: tuple[str, ...] = ()
 
     def rng(self) -> np.random.Generator:
         """Return a random generator seeded from the task.
@@ -126,6 +132,9 @@ class ForecastModel(Protocol):
             Columns `SAMPLE_COLUMNS`: one row per province, week and
             sample, with samples numbered 1 to `task.n_samples`. A sample
             number is one joint trajectory across weeks and provinces.
+            A model that answers `task.report_by` adds an `as_of` column:
+            missing for the final counts, and $T$ for the counts it
+            predicts are reported by $T$.
         """
         ...
 
@@ -236,6 +245,26 @@ def list_models() -> list[ModelSpec]:
     return sorted(_REGISTRY.values(), key=lambda s: (not s.baseline, s.name))
 
 
+def _check_block(
+    rows: pd.DataFrame, task: ForecastTask, weeks: set[str], what: str
+) -> set[str]:
+    """Check one set of sample rows against the task and return its places."""
+    locs = set(rows["location"])
+    if locs not in (set(task.locations), {*task.locations, NATIONAL}):
+        raise ValueError(f"Locations do not match the task{what}.")
+    if set(rows["target_end_date"]) != weeks:
+        raise ValueError(f"Weeks do not match the task{what}.")
+    want = set(range(1, task.n_samples + 1))
+    if set(rows["sample"]) != want:
+        raise ValueError(f"Samples must be numbered 1 to {task.n_samples}.")
+    expected = len(locs) * len(weeks) * len(want)
+    if len(rows) != expected:
+        raise ValueError(f"Expected {expected} rows{what}, got {len(rows)}.")
+    if rows["value"].isna().any() or (rows["value"] < 0).any():
+        raise ValueError("Values must be non-negative and not missing.")
+    return locs
+
+
 def check_samples(samples: pd.DataFrame, task: ForecastTask) -> None:
     """Check a model's output against its task.
 
@@ -243,31 +272,33 @@ def check_samples(samples: pd.DataFrame, task: ForecastTask) -> None:
     ----------
     samples : pandas.DataFrame
         Output of `ForecastModel.forecast`. It may include national
-        rows, for a model that fits the nation on its own.
+        rows, for a model that fits the nation on its own, and `as_of`
+        rows for the dates in `task.report_by`.
     task : ForecastTask
         The task it answers.
 
     Raises
     ------
     ValueError
-        If columns, locations, weeks or sample numbers do not match, or
-        any value is negative or missing.
+        If columns, locations, weeks or sample numbers do not match, any
+        value is negative or missing, or an `as_of` date was not asked
+        for.
     """
-    if tuple(samples.columns) != SAMPLE_COLUMNS:
-        raise ValueError(f"Columns must be {SAMPLE_COLUMNS}.")
-    locs = set(samples["location"])
-    if locs not in (set(task.locations), {*task.locations, NATIONAL}):
-        raise ValueError("Locations do not match the task.")
-    if set(samples["target_end_date"]) != set(task.target_end_dates):
-        raise ValueError("Weeks do not match the task.")
-    want = set(range(1, task.n_samples + 1))
-    if set(samples["sample"]) != want:
-        raise ValueError(f"Samples must be numbered 1 to {task.n_samples}.")
-    expected = len(locs) * len(task.target_end_dates) * len(want)
-    if len(samples) != expected:
-        raise ValueError(f"Expected {expected} rows, got {len(samples)}.")
-    if samples["value"].isna().any() or (samples["value"] < 0).any():
-        raise ValueError("Values must be non-negative and not missing.")
+    columns = tuple(samples.columns)
+    if columns not in (SAMPLE_COLUMNS, (*SAMPLE_COLUMNS, "as_of")):
+        raise ValueError(f"Columns must be {SAMPLE_COLUMNS}, then `as_of`.")
+    weeks = set(task.target_end_dates)
+    if "as_of" not in samples:
+        _check_block(samples, task, weeks, "")
+        return
+    as_of = samples["as_of"]
+    _check_block(samples.loc[as_of.isna()], task, weeks, "")
+    for key, rows in samples.loc[as_of.notna()].groupby("as_of"):
+        date = str(key)
+        if date not in task.report_by:
+            raise ValueError(f"as_of {date} is not in the task's report_by.")
+        due = {w for w in weeks if w <= date}
+        _check_block(rows, task, due, f" for as_of {date}")
 
 
 def add_national(samples: pd.DataFrame) -> pd.DataFrame:
@@ -279,7 +310,8 @@ def add_national(samples: pd.DataFrame) -> pd.DataFrame:
     Parameters
     ----------
     samples : pandas.DataFrame
-        Province samples with columns `SAMPLE_COLUMNS`.
+        Province samples with columns `SAMPLE_COLUMNS`, and optionally
+        `as_of`. Each `as_of` is summed on its own.
 
     Returns
     -------
@@ -289,10 +321,12 @@ def add_national(samples: pd.DataFrame) -> pd.DataFrame:
     if (samples["location"] == NATIONAL).any():
         return samples.reset_index(drop=True)
     provinces = samples.loc[samples["location"] != NATIONAL]
-    national = provinces.groupby(["target_end_date", "sample"], as_index=False)[
+    columns = [c for c in samples.columns if c != "location"]
+    keys = [c for c in columns if c != "value"]
+    national = provinces.groupby(keys, as_index=False, dropna=False)[
         "value"
     ].sum()
     national.insert(0, "location", NATIONAL)
-    return pd.concat([provinces, national[list(SAMPLE_COLUMNS)]]).reset_index(
+    return pd.concat([provinces, national[list(samples.columns)]]).reset_index(
         drop=True
     )

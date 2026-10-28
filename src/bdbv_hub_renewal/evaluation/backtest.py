@@ -258,6 +258,7 @@ def make_tasks(
     target: pd.DataFrame,
     delays: pd.DataFrame | None,
     config: BacktestConfig,
+    report_by: Sequence[str] = (),
 ) -> list[ForecastTask]:
     """Build one task per vintage in a target table.
 
@@ -272,6 +273,9 @@ def make_tasks(
         to its date, or None if there is no later one.
     config : BacktestConfig
         Horizons, samples and seed.
+    report_by : sequence of str
+        Truth vintage dates. Each real or reconstructed task asks for the
+        counts as reported by those after its own vintage.
 
     Returns
     -------
@@ -301,6 +305,11 @@ def make_tasks(
                 target_end_dates=forecast_weeks(ref, config),
                 n_samples=config.n_samples,
                 seed=config.seed,
+                report_by=(
+                    ()
+                    if kind == "simulated"
+                    else tuple(sorted(d for d in report_by if d > str(vintage)))
+                ),
             )
         )
     return tasks
@@ -322,13 +331,16 @@ def run_forecasts(
     -------
     pandas.DataFrame
         Columns `model`, `kind`, `vintage`, `reference_date`, `horizon`,
-        `location`, `target_end_date`, `sample` and `value`.
+        `location`, `target_end_date`, `sample`, `value` and `as_of`
+        (missing for final counts).
     """
     frames = []
     for task in tasks:
         for model in models:
             samples = model.forecast(task)
             check_samples(samples, task)
+            if "as_of" not in samples:
+                samples["as_of"] = np.nan
             samples = add_national(samples)
             ref = pd.Timestamp(task.reference_date)
             samples["horizon"] = (
@@ -590,7 +602,7 @@ def development_tasks(
     all_delays = pd.concat(dly_parts, ignore_index=True)
     return [
         t
-        for t in make_tasks(data, all_delays, config)
+        for t in make_tasks(data, all_delays, config, real_vintages(real))
         if not config.is_heldout(t.vintage) and t.vintage < latest
     ]
 
