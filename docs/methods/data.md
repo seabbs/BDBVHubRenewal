@@ -53,6 +53,7 @@ The delay file gives one row per case with a known onset: province, onset week a
 It is published for the latest vintage only.
 Earlier delay vintages come from the hub's archive folder and git history.
 The 2026-08-18 vintage has none.
+In the backtest it takes the 2026-10-09 delay rows cut back to those published by 2026-08-18, as for [reconstructed vintages](#reconstructed-vintages).
 
 The target data split each week's cases into known onsets and imputed onsets.
 The hub imputes an onset for each case reported without one, by subtracting a delay drawn from the pooled published delays ([hub issue 61](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/61)).

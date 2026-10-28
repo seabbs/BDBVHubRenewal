@@ -189,7 +189,8 @@ def test_vintage_without_delays_takes_reconstructed_rows(
         target.loc[target["vintage"] == "2026-08-18"], delays, config
     )
     got = tasks[0].delays
-    assert got is not None and len(got) > 0
+    assert got is not None
+    assert len(got) > 0
     assert set(got["vintage"]) == {"2026-08-18"}
     # The next vintage's rows, kept if published by the cut-off.
     nxt = delays.loc[delays["vintage"] == "2026-10-09"]
