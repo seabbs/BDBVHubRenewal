@@ -12,6 +12,7 @@ from bdbvhubrenewal.evaluation.backtest import (
     load_config,
     lopo_tasks,
     make_tasks,
+    order_tasks,
     run_development,
     run_forecasts,
     run_lopo,
@@ -19,7 +20,6 @@ from bdbvhubrenewal.evaluation.backtest import (
     saturdays,
     score_by_truth_vintage,
     score_tasks,
-    order_tasks,
     shard_tasks,
     truth_changes,
 )

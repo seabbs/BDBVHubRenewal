@@ -488,7 +488,7 @@ def _backtest(args: argparse.Namespace) -> int:
                 config,
                 include_reconstructed=not args.no_reconstructed,
             )
-        mine = bt.shard_tasks(tasks, index, count)
+        mine = bt.shard_tasks(bt.order_tasks(tasks), index, count)
         bt.run_forecasts(models, mine, args.cache)
         print(f"Shard {args.shard}: {len(mine)} tasks in {args.cache}.")
         return 0
