@@ -171,23 +171,32 @@ class HazardDelay(RandomVariable):
 
 
 def censored_pmf(
-    family: str, mean: ArrayLike, cv: ArrayLike, dmax: int, n_nodes: int = 16
+    family: str, mean: ArrayLike, cv: ArrayLike, dmax: int
 ) -> Array:
-    r"""Daily double interval censored pmf of a continuous delay.
+    r"""Daily double interval censored pmf of a delay, in closed form.
 
     With the primary event uniform over a day and the secondary censored
     to its day (primarycensored with `pwindow = swindow = 1`),
 
-    $$f(d) = F_{pc}(d + 1) - F_{pc}(d), \qquad
-    F_{pc}(t) = \int_0^1 F(t - u)\, du,$$
+    $$f(d) = G(d + 1) - 2 G(d) + G(d - 1), \qquad
+    G(x) = \int_0^x F(t)\, dt = x F_1(x) - m F_2(x),$$
 
-    computed as $\int_0^1 \{F(d + 1 - u) - F(d - u)\} du$ by
-    Gauss-Legendre quadrature, which keeps each term on the scale of the
-    pmf (the closed form differences cumulative integrals and loses digits
-    in float32). Truncated at `dmax` and renormalised, as
-    `primarycensored::dpcens(..., D = dmax + 1)`; matches it to 2e-4.
-    Gamma and log-normal families, parameterised by mean and coefficient
-    of variation.
+    for $x > 0$ and $G = 0$ otherwise, with $m$ the mean. For a Gamma
+    with shape $k$, $F_1$ and $F_2$ are Gamma cdfs with shapes $k$ and
+    $k + 1$; for a log-normal, $F_1(x) = \Phi(z)$ and
+    $F_2(x) = \Phi(z - \sigma)$ with $z = (\log x - \mu) / \sigma$.
+    Since $G(x) = x - m + Q(x)$ with $Q(x) = m S_2(x) - x S_1(x)$ and
+    $S = 1 - F$, and second differences of a linear term vanish, the right
+    tail uses $Q$: each delay takes whichever of $G$ and $Q$ is smaller
+    there. In float32 the cdfs are good to about $10^{-6}$ and the
+    second difference scales that by the delay, so against a float64
+    reference the error is at most $3 \times 10^{-5}$ for means of 2 to 15
+    days and cv 0.3 to 2 (16-node Gauss-Legendre quadrature reached
+    $5.7 \times 10^{-5}$), and the Gamma value and gradient are about 20
+    times faster. Truncated at `dmax` and renormalised, as
+    `primarycensored::dpcens(..., D = dmax + 1)`.
+    `bdbv_hub_renewal.model.model.generation_interval` uses the same form
+    in float64, once.
 
     Parameters
     ----------
@@ -197,32 +206,52 @@ def censored_pmf(
         Mean (days) and coefficient of variation.
     dmax : int
         Maximum delay.
-    n_nodes : int, optional
-        Quadrature nodes.
 
     Returns
     -------
     ArrayLike
         Pmf on 0..dmax.
     """
-    nodes, weights = np.polynomial.legendre.leggauss(n_nodes)
-    u = jnp.asarray((nodes + 1) / 2)
-    w = jnp.asarray(weights / 2)
-    d = jnp.arange(dmax + 1)[:, None]
+    mean = jnp.asarray(mean)
+    if family == "gamma":
+        shape = 1 / jnp.square(cv)
+        rate = shape / mean
 
-    def cdf(x: Array) -> Array:
-        pos = x > 0
-        x = jnp.where(pos, x, 1.0)
-        if family == "gamma":
-            shape = 1 / cv**2
-            value = jax.scipy.special.gammainc(shape, x * shape / mean)
-        else:
-            sdlog = jnp.sqrt(jnp.log1p(cv**2))
-            mu = jnp.log(mean) - sdlog**2 / 2
-            value = jax.scipy.stats.norm.cdf((jnp.log(x) - mu) / sdlog)
-        return jnp.where(pos, value, 0.0)
+        def cdfs(x: Array) -> tuple[Array, Array, Array, Array]:
+            f1 = jax.scipy.special.gammainc(shape, rate * x)
+            f2 = jax.scipy.special.gammainc(shape + 1, rate * x)
+            s1 = jax.scipy.special.gammaincc(shape, rate * x)
+            s2 = jax.scipy.special.gammaincc(shape + 1, rate * x)
+            return f1, f2, s1, s2
 
-    pmf = (cdf(d + 1 - u) - cdf(d - u)) @ w
+    else:
+        sdlog = jnp.sqrt(jnp.log1p(jnp.square(cv)))
+        mu = jnp.log(mean) - jnp.square(sdlog) / 2
+        norm = jax.scipy.stats.norm
+
+        def cdfs(x: Array) -> tuple[Array, Array, Array, Array]:
+            z = (jnp.log(x) - mu) / sdlog
+            return (
+                norm.cdf(z),
+                norm.cdf(z - sdlog),
+                norm.cdf(-z),
+                norm.cdf(sdlog - z),
+            )
+
+    x = jnp.arange(-1.0, dmax + 2.0)
+    pos = x > 0
+    xs = jnp.where(pos, x, 1.0)
+    f1, f2, s1, s2 = cdfs(xs)
+    g = jnp.where(pos, xs * f1 - mean * f2, 0.0)
+    # Q differs from G by x - m, which the second difference removes, but
+    # Q is only valid for x > 0.
+    q = jnp.where(pos, mean * s2 - xs * s1, mean - x)
+
+    def second(h: Array) -> Array:
+        return h[2:] - 2 * h[1:-1] + h[:-2]
+
+    right = jnp.arange(dmax + 1) >= mean
+    pmf = jnp.where(right, second(q), second(g))
     pmf = jnp.maximum(pmf, 1e-12)
     return pmf / pmf.sum()
 

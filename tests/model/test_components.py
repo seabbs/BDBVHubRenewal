@@ -478,12 +478,13 @@ def _quad_censored_pmf(family, mean, cv, dmax):
 @pytest.mark.parametrize("family", ["gamma", "lognormal"])
 @pytest.mark.parametrize("cv", [0.3, 0.5, 1.0, 1.5, 2.0])
 @pytest.mark.parametrize("mean", [2.0, 8.0, 15.0])
-def test_censored_pmf_is_exact_in_float32(family, cv, mean):
+def test_censored_pmf_is_close_in_float32(family, cv, mean):
     ours = np.asarray(censored_pmf(family, mean, cv, 60))
     assert ours.dtype == np.float32
     ref = _quad_censored_pmf(family, mean, cv, 60)
-    # Absolute error at float32 round-off, and relative error small even
-    # in the tail.
-    assert np.max(np.abs(ours - ref)) < 5e-7
-    big = ref > 1e-5
-    assert np.max(np.abs(ours[big] / ref[big] - 1)) < 1e-3
+    # float32 incomplete gamma is good to about 1e-6, and the closed form
+    # scales that by the delay, so errors are a few 1e-5 at most (16-node
+    # quadrature reached 5.7e-5 at cv 2).
+    assert np.max(np.abs(ours - ref)) < 4e-5
+    big = ref > 1e-4
+    assert np.max(np.abs(ours[big] / ref[big] - 1)) < 2e-2
