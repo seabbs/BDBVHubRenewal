@@ -48,7 +48,8 @@ jobs:
           enable-cache: true
       - run: uv sync --frozen --all-groups
       # Pages for the submitted rounds come from the ledger branch that
-      # the submission workflow's record job writes.
+      # the submission workflow writes. A merged round's page is frozen in
+      # its `pages/` and copied as it is.
       - name: Fetch the submission ledger
         run: |
           mkdir -p output/ledger

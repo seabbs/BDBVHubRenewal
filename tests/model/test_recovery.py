@@ -1,4 +1,4 @@
-"""Fit the main and fallback configurations to a simulated vintage.
+"""Fit the main configuration to a simulated vintage.
 
 The outbreak comes from `bdbvhubrenewal.data.simulate.simulate_outbreak`, a
 case-level simulator independent of this model: Rt turns from about 1.6
@@ -17,19 +17,18 @@ import pytest
 
 from bdbvhubrenewal.evaluation.ppc import summarise_draws
 from bdbvhubrenewal.forecasters.renewal import ppc_rows
-from bdbvhubrenewal.model import FALLBACK, MAIN, build_model, fit
+from bdbvhubrenewal.model import MAIN, build_model, fit
 from bdbvhubrenewal.model.model import forecast_trajectories
 
 from .conftest import VINTAGE_DAYS, vintage_date
 
 pytestmark = pytest.mark.slow
 RESULTS = Path(__file__).parents[1] / "results"
-N_INIT = 42
 
 
-@pytest.fixture(scope="module", params=["main", "fallback"])
+@pytest.fixture(scope="module", params=["main"])
 def fitted(request, sim_vintage):
-    cfg = {"main": MAIN, "fallback": FALLBACK}[request.param]
+    cfg = {"main": MAIN}[request.param]
     model = build_model(sim_vintage, cfg)
     start = time.perf_counter()
     fit(model, sim_vintage, num_warmup=300, num_samples=300, num_chains=2)
@@ -43,6 +42,23 @@ def truth(outbreak, column, location="CD-IT"):
     return par.loc[par["location"] == location, column].to_numpy()
 
 
+def on_sim_days(model, outbreak, data, site, subpop=True):
+    """Posterior median of a daily site, indexed by simulation day.
+
+    The model axis starts at `data.start_date` (the first-case week), not
+    at the simulation start, so days before it are NaN.
+    """
+    n_init = model.latent.n_initialization_points
+    draws = np.asarray(model.mcmc.get_samples()[site])[:, n_init:]
+    if subpop:
+        draws = draws[..., 0]
+    est = np.median(draws, axis=0)[: data.cutoff + 1]
+    offset = (data.start_date - outbreak.settings.start).days
+    out = np.full(offset + data.cutoff + 1, np.nan)
+    out[offset:] = est
+    return out
+
+
 def first_below_one(rt, after=60):
     below = np.nonzero(rt[after:] < 1)[0]
     return int(below[0]) + after if below.size else None
@@ -50,13 +66,15 @@ def first_below_one(rt, after=60):
 
 def test_recovery(fitted, outbreak, sim_vintage):
     name, model, seconds = fitted
-    smp = {k: np.asarray(v) for k, v in model.mcmc.get_samples().items()}
+    smp = model.mcmc.get_samples()
     extra = model.mcmc.get_extra_fields()
     divergent = float(np.mean(extra["diverging"]))
-    days = np.arange(sim_vintage.cutoff + 1)
-    rt = np.median(smp["latent::rt_subpop"][:, N_INIT:, 0], axis=0)[days]
-    true_rt = truth(outbreak, "rt")[days]
-    checks = [56, 84, 112, 140, 168, 196]
+    # Everything below is on simulation days, up to the vintage.
+    rt = on_sim_days(model, outbreak, sim_vintage, "latent::rt_subpop")
+    true_rt = truth(outbreak, "rt")[: rt.size]
+    # Every four weeks from day 56 to the last fitted day.
+    checks = list(range(56, rt.size, 28))
+    assert checks[-1] >= 196, "the fit should reach the turning point"
     rt_err = np.abs(rt[checks] - true_rt[checks])
     turn, true_turn = first_below_one(rt), first_below_one(true_rt)
     summary = {
@@ -70,13 +88,15 @@ def test_recovery(fitted, outbreak, sim_vintage):
         "true_turn_day": true_turn,
     }
     if "delay_mean" in smp:
-        dm = np.median(smp["delay_mean"][:, N_INIT:], axis=0)
+        dm = on_sim_days(
+            model, outbreak, sim_vintage, "delay_mean", subpop=False
+        )
         summary["delay_true"] = np.round(
             truth(outbreak, "delay_mean")[[42, 168]], 1
         ).tolist()
         summary["delay_median"] = np.round(dm[[42, 168]], 1).tolist()
     if "missing_fraction" in smp:
-        pi = np.median(smp["missing_fraction"][:, N_INIT:, 0], axis=0)
+        pi = on_sim_days(model, outbreak, sim_vintage, "missing_fraction")
         window = slice(56, 169)
         summary["pi_true_mean"] = round(
             float(truth(outbreak, "missing")[window].mean()), 3
@@ -149,6 +169,7 @@ def test_forecast_trajectories(fitted, outbreak, sim_vintage):
     coverage = ppc_coverage(
         sim_vintage, draws["insample"], vintage_date(outbreak, VINTAGE_DAYS[-1])
     )
+    RESULTS.mkdir(exist_ok=True)
     out = RESULTS / f"recovery_{name}.json"
     summary = json.loads(out.read_text()) if out.exists() else {}
     summary |= {

@@ -36,6 +36,7 @@ NOW=${NOW:-2026-11-02T10:00:00+00:00}
 SCENARIOS=(
   "main|main=pass|main||All checks passed."
   "chosenpersistence|main=pass|persistence|FAKE_CHOSEN_MODEL=persistence|Shadow candidates"
+  "bvdrelease|main=pass|main||used BVDOutbreakSize release \`results-3180\` (data to 2026-10-23, joint R-hat 1.041, limit 1.1)."
   "coherence|main=pass|main|FAKE_COHERENCE_GAP=2026-10-24:2|Handled: national (CD) differs from the sum of the provinces"
   "warn|main=warn|main"
   "standin|main=standin|main||Stand-in: "
@@ -48,12 +49,13 @@ SCENARIOS=(
   "loose|main=loose,retry-1=pass|retry-1||Handled: main model refitted once (max R-hat is 1.2"
   "loosekept|main=loose,retry-1=fail|main||Handled: main model kept after one refit did not help"
   "retry|main=fail,retry-1=pass|retry-1||Main model refitted once: main model was ruled out"
-  "fallback|main=fail,retry-1=fail|fallback||Fallback model used ("
+  "fallback|main=fail,retry-1=fail|renewalsp||Fallback model used (single-patch model"
   # Tuesday 21:00 UTC, two hours before the close: no time to refit, so
-  # a failed main model goes straight to the fallback.
-  "late|main=fail,retry-1=pass|fallback|NOW=2026-11-03T21:00:00+00:00|Fallback model used ("
-  "persistence|main=fail,retry-1=crash,fallback=fail|persistence"
-  "skip|main=fail,retry-1=fail,fallback=fail,persistence=negative|skip"
+  # a failed main model goes straight to the single-patch fallback.
+  "late|main=fail,retry-1=pass|renewalsp|NOW=2026-11-03T21:00:00+00:00|Fallback model used ("
+  "persistencenow|main=fail,retry-1=fail,renewalsp=fail|persistencenow||Fallback model used (persistence on a nowcast)"
+  "persistence|main=fail,retry-1=crash,renewalsp=fail,persistencenow=negative|persistence"
+  "skip|main=fail,retry-1=fail,renewalsp=fail,persistencenow=negative,persistence=negative|skip"
 )
 
 sci() { uv run --quiet --project "$CI_DIR" "$@"; }
@@ -115,11 +117,14 @@ run_scenario() {
     python3 - "$WORK/matrix-$1.json" << 'EOF' > "$WORK/legs-$1.txt"
 import json, sys
 for e in json.load(open(sys.argv[1]))["include"]:
-    print("\t".join([e["id"], e["kind"], e["config"], e["label"], e["sampler"]]))
+    print("\t".join([e["id"], e["kind"], e["config"], e["label"], e["sampler"],
+                     e["model"] or "-"]))
 EOF
-    while IFS=$'\t' read -r id kind config label sampler; do
+    while IFS=$'\t' read -r id kind config label sampler cmodel; do
+      [ "$cmodel" = - ] && cmodel=""
       CAND_ID=$id CAND_KIND=$kind CAND_CONFIG=$config CAND_LABEL=$label \
-        CAND_SAMPLER=$sampler EXPECTED_LOCATIONS="CD,CD-IT,CD-NK,CD-HU" \
+        CAND_SAMPLER=$sampler CAND_MODEL=$cmodel \
+        EXPECTED_LOCATIONS="CD,CD-IT,CD-NK,CD-HU" \
         "$CI_DIR/steps/candidate.sh" > "$WORK/candidate-$id.log" 2>&1
     done < "$WORK/legs-$1.txt"
   }
@@ -138,7 +143,10 @@ EOF
   # As downloaded by actions/download-artifact: one `candidate-<id>`
   # directory per artefact, laid out again by unpack_candidates.sh.
   for d in "$WORK"/candidates/*; do
-    [ "${d##*/}" = persistence ] || mv "$d" "$WORK/candidates/candidate-${d##*/}"
+    case "${d##*/}" in
+      persistence | persistencenow) ;;  # built in prepare, in `inputs`
+      *) mv "$d" "$WORK/candidates/candidate-${d##*/}" ;;
+    esac
   done
   "$CI_DIR/steps/unpack_candidates.sh" > /dev/null
 
@@ -235,6 +243,71 @@ ledger() {
   git -C "$origin" show submission-ledger:state.json \
     | python3 -c "import json,sys; r=json.load(sys.stdin)['rounds']['2026-11-07']; assert r['status']=='submitted' and len(r['history'])==2"
   echo "=== ledger ===" && echo "ok: state.json and archive/2026-11-07/{101,102} on submission-ledger"
+
+  # freeze.sh, with a `gh` that says the round's pull request merged:
+  # the page is frozen once, and a second run leaves it alone.
+  mkdir -p "$ROOT/merged-bin"
+  printf '#!/usr/bin/env bash\necho MERGED\n' > "$ROOT/merged-bin/gh"
+  chmod +x "$ROOT/merged-bin/gh"
+  local before
+  for pass in 1 2; do
+    (cd "$repo" && PATH="$ROOT/merged-bin:$PATH" WORK="$ROOT/freeze" \
+      "$CI_DIR/steps/freeze.sh" > "$ROOT/freeze-$pass.log" 2>&1) \
+      || { echo "FAIL: freeze pass $pass"; cat "$ROOT/freeze-$pass.log"; return 1; }
+    [ "$pass" = 1 ] && before=$(git -C "$origin" rev-parse submission-ledger)
+  done
+  git -C "$origin" show submission-ledger:pages/2026-11-07.md | grep -q "# Round" \
+    || { echo "FAIL: no frozen page"; return 1; }
+  [ "$(git -C "$origin" rev-parse submission-ledger)" = "$before" ] \
+    || { echo "FAIL: the second freeze changed the ledger"; return 1; }
+  grep -q "Froze 0" "$ROOT/freeze-2.log" \
+    || { echo "FAIL: second freeze"; cat "$ROOT/freeze-2.log"; return 1; }
+  echo "ok: pages/2026-11-07.md frozen once on submission-ledger"
+}
+
+baseline_track() {
+  # track.sh on the `main` scenario's inputs: seabbsbaseline submits
+  # persistence on a nowcast under its own id, and falls back to plain
+  # persistence when the nowcast is ruled out.
+  local src="$ROOT/main" case want selected
+  for case in nowcast fallback; do
+    export WORK="$ROOT/baseline-$case"
+    rm -rf "$WORK" && mkdir -p "$WORK"
+    cp -R "$src/inputs" "$WORK/inputs"
+    mkdir -p "$WORK/candidates"
+    cp -R "$src/candidates/persistence" "$src/candidates/persistencenow" \
+      "$WORK/candidates/"
+    [ "$case" = fallback ] && rm -rf "$WORK/candidates/persistencenow/submission"
+    export GH_LOG="$WORK/gh.log" GITHUB_OUTPUT="$WORK/github-output"
+    export GITHUB_STEP_SUMMARY="$WORK/summary.md"
+    get() { python3 -c "import json;print(json.load(open('$src/decision.json'))['$1'])"; }
+    HUB_REF=$(get hub_ref) DATA_COMMIT=$(get data_commit) AS_OF=$(get as_of) \
+      REFERENCE_DATE=$(get reference_date) DRY_RUN=true HUB_PATH="$FIX/hub" \
+      HUB_VALIDATOR=true MODEL="" MODEL_ID="" \
+      "$CI_DIR/steps/track.sh" > "$WORK/track.log" 2>&1 \
+      || { echo "FAIL: baseline $case"; cat "$WORK/track.log"; return 1; }
+    local gate="$WORK/track-persistencenow/gate"
+    selected=$(python3 -c "import json;print(json.load(open('$gate/provenance.json'))['selected'])")
+    if [ "$case" = nowcast ]; then
+      want=persistencenow
+      grep -q "All checks passed" "$gate/pr-body.md" \
+        || { echo "FAIL: baseline body"; head -5 "$gate/pr-body.md"; return 1; }
+    else
+      want=persistence
+      grep -q "Fallback model used (persistence baseline)" "$gate/pr-body.md" \
+        || { echo "FAIL: baseline fallback body"; head -5 "$gate/pr-body.md"; return 1; }
+    fi
+    [ "$selected" = "$want" ] \
+      || { echo "FAIL: baseline $case selected $selected"; return 1; }
+    grep -q "bdbv-submission:epiforecasts-seabbsbaseline:" "$gate/pr-body.md" \
+      || { echo "FAIL: baseline id"; return 1; }
+    grep -q '"branch": "epiforecasts-seabbsbaseline-' "$WORK/track.log" \
+      || { echo "FAIL: baseline branch"; cat "$WORK/track.log"; return 1; }
+    if grep -v '^pr list' "$WORK/gh.log" 2> /dev/null; then
+      echo "FAIL: baseline dry run wrote to GitHub"; return 1
+    fi
+  done
+  echo "=== baseline ===" && echo "ok: seabbsbaseline submits persistencenow, else persistence"
 }
 
 no_new_data() {
@@ -268,5 +341,6 @@ for s in "${SCENARIOS[@]}"; do
 done
 no_new_data || failed=1
 ledger || failed=1
+baseline_track || failed=1
 [ $failed = 0 ] && echo "All dry-run scenarios passed." || echo "Some scenarios FAILED."
 exit $failed

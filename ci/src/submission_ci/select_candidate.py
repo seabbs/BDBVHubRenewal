@@ -172,7 +172,7 @@ def triage(
     It does when its fit is past the retry thresholds, or when it was
     ruled out, and there is still time to refit before the window closes
     (`minutes_left`, None for no limit). Without that time the chain
-    moves on to the fallback, which was fitted beside the main model.
+    moves on to the single-patch fallback, fitted beside the main model.
     """
     main = policy.chain()[0]
     a = assess(main, root / main.id)

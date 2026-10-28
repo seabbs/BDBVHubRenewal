@@ -14,10 +14,10 @@ This module owns everything around it:
 - `ppc_rows`, `parameter_diagnostics`, `chain_diagnostics`: the CI's
   `ppc.json` and `diagnostics.json`;
 - `fit_renewal` and `forecast_renewal`: the `fit` and `forecast` of the
-  `main`, `fallback` and `bvd` fit configurations
+  `main` and `bvd` fit configurations
   (`bdbvhubrenewal.submission.fitting`).
 
-This module reads only `ModelConfig`, `MAIN`, `FALLBACK`, `build_model`,
+This module reads only `ModelConfig`, `MAIN`, `BVD`, `build_model`,
 `model_args`, `model.EXTRA_FIELDS`, `forecast_trajectories` and
 `adapter.vintage_from_tables` from the subpackage, so a new model version
 drops in if it keeps those. Sampling is here (`run_nuts`), so the CI's
@@ -50,6 +50,7 @@ from bdbvhubrenewal.forecasters.base import (
 )
 
 if TYPE_CHECKING:
+    from bdbvhubrenewal.data.bvd import BvdRelease
     from bdbvhubrenewal.submission.fitting import Forecast
 
 __all__ = [
@@ -64,6 +65,8 @@ __all__ = [
     "RenewalModel",
     "RenewalRun",
     "Variant",
+    "bvd_record",
+    "bvd_release",
     "bvd_rows",
     "chain_diagnostics",
     "data_gap",
@@ -140,7 +143,7 @@ class Variant:
     description : str
         One line for tables and docs.
     base : str
-        `MAIN` or `FALLBACK`, the configuration in `bdbvhubrenewal.model`.
+        `MAIN` or `BVD`, the configuration in `bdbvhubrenewal.model`.
     overrides : mapping
         `ModelConfig` fields to change.
     register : bool
@@ -186,34 +189,18 @@ VARIANTS: Final[dict[str, Variant]] = {
             "pseudo-observation.",
             base="BVD",
         ),
-        Variant(
-            "fallback",
-            "Province renewal with no coupling, and delays and missingness "
-            "fixed from the data.",
-            base="FALLBACK",
-        ),
-        Variant(
-            "renewalhold",
-            "Province renewal with Rt held at its last value past the data.",
-            overrides={"future_rt": "hold"},
-        ),
-        Variant(
-            "renewalpo",
-            "Province renewal with one importation share per origin, "
-            "partially pooled.",
-            overrides={"importation": "per_origin"},
-        ),
     )
 }
 """Model variants, by name."""
 
 FIT_VARIANTS: Final[dict[str, str]] = {
     "main": "renewal",
-    "fallback": "fallback",
+    "renewalsp": "renewalsp",
     "bvd": "renewalbvd",
 }
-"""The variant each fit configuration of the CI runs. `bvd` is a shadow
-candidate: fitted weekly, never submitted until it is chosen."""
+"""The variant each fit configuration of the CI runs. The chain is `main`,
+a retry, then `renewalsp`, then persistence. `bvd` is a shadow candidate:
+fitted weekly, never submitted until it is chosen."""
 
 
 def model_config(variant: Variant) -> Any:
@@ -388,10 +375,13 @@ def _weeks(first: dt.date, n: int) -> list[str]:
     return [(first + dt.timedelta(weeks=i)).isoformat() for i in range(n)]
 
 
-def bvd_rows(
+def bvd_release(
     task: ForecastTask, cache_dir: Path | str | None = None
-) -> pd.DataFrame | None:
-    """BVDOutbreakSize rows for a task's vintage, from the release cache.
+) -> BvdRelease | None:
+    """Return the BVDOutbreakSize release chosen for a task's vintage.
+
+    The newest release that existed at the vintage's cut-off and whose
+    joint fit passed the R-hat gate (`bdbvhubrenewal.data.bvd`).
 
     Parameters
     ----------
@@ -403,16 +393,64 @@ def bvd_rows(
 
     Returns
     -------
+    bdbvhubrenewal.data.bvd.BvdRelease or None
+        The release with its choice, or None if none qualifies.
+    """
+    from bdbvhubrenewal.data import bvd
+
+    data_dir = Path(os.environ.get("BDBV_DATA_DIR") or "data")
+    cache = Path(cache_dir) if cache_dir is not None else data_dir / "bvd"
+    return bvd.bvd_for_vintage(task.vintage, cache)
+
+
+def bvd_rows(
+    task: ForecastTask, cache_dir: Path | str | None = None
+) -> pd.DataFrame | None:
+    """BVDOutbreakSize rows for a task's vintage, from the release cache.
+
+    Parameters
+    ----------
+    task : ForecastTask
+        The task.
+    cache_dir : pathlib.Path or str, optional
+        The release cache, as in `bvd_release`.
+
+    Returns
+    -------
     pandas.DataFrame or None
         `bdbvhubrenewal.data.bvd.model_rows` of the release chosen for the
         vintage, or None if none qualifies.
     """
     from bdbvhubrenewal.data import bvd
 
-    data_dir = Path(os.environ.get("BDBV_DATA_DIR") or "data")
-    cache = Path(cache_dir) if cache_dir is not None else data_dir / "bvd"
-    release = bvd.bvd_for_vintage(task.vintage, cache)
+    release = bvd_release(task, cache_dir)
     return None if release is None else bvd.model_rows(release)
+
+
+def bvd_record(release: BvdRelease | None) -> dict[str, Any]:
+    """Describe the BVDOutbreakSize release used, for the fit diagnostics.
+
+    Parameters
+    ----------
+    release : bdbvhubrenewal.data.bvd.BvdRelease or None
+        From `bvd_release`.
+
+    Returns
+    -------
+    dict
+        `tag`, `as_of`, the joint fit's `joint_max_rhat`, the `max_rhat`
+        limit and the newer releases `skipped` with their reasons, or
+        only `tag: None` if no release qualified.
+    """
+    if release is None:
+        return {"tag": None}
+    record: dict[str, Any] = {
+        "tag": release.tag,
+        "as_of": release.as_of.isoformat(),
+    }
+    if release.choice is not None:
+        record.update(release.choice.record())
+    return record
 
 
 def vintage_inputs(
@@ -918,6 +956,9 @@ class RenewalRun:
         NUTS extra fields by chain.
     seconds : float
         Sampling time.
+    bvd : dict or None
+        The BVDOutbreakSize release used (`bvd_record`), for a variant
+        with the BVD term.
     """
 
     variant: Variant
@@ -926,6 +967,7 @@ class RenewalRun:
     trace: Mapping[str, Any]
     extra: Mapping[str, Any]
     seconds: float
+    bvd: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -1012,10 +1054,20 @@ class RenewalModel:
         """
         pr = engine()
         config = model_config(self.variant)
-        rows = bvd_rows(task) if config.bvd else None
+        rows, used = None, None
         if config.bvd:
-            tag = "none" if rows is None else rows["as_of"].iloc[0]
-            self._log(f"variant={self.name} bvd_as_of={tag}")
+            from bdbvhubrenewal.data import bvd
+
+            release = bvd_release(task)
+            used = bvd_record(release)
+            if release is not None:
+                rows = bvd.model_rows(release)
+            rhat = used.get("joint_max_rhat")
+            self._log(
+                f"variant={self.name} bvd={used['tag'] or 'none'} "
+                f"bvd_as_of={used.get('as_of', 'none')} "
+                f"bvd_joint_rhat={'none' if rhat is None else f'{rhat:.3f}'}"
+            )
         data = vintage_inputs(task, config, bvd=rows)
         model = pr.build_model(data, config)
         s = self.sampler
@@ -1043,7 +1095,9 @@ class RenewalModel:
             k: np.asarray(v)
             for k, v in model.mcmc.get_extra_fields(group_by_chain=True).items()
         }
-        return RenewalRun(self.variant, data, draws, trace, extra, seconds)
+        return RenewalRun(
+            self.variant, data, draws, trace, extra, seconds, bvd=used
+        )
 
     def forecast_fit(self, task: ForecastTask) -> RenewalFit:
         """Fit the variant to a task and return its samples.
@@ -1189,7 +1243,9 @@ def fit_renewal(
     Returns
     -------
     dict
-        The `diagnostics.json` record (schema 1, with `worst_rhat`).
+        The `diagnostics.json` record (schema 1, with `worst_rhat`, and
+        `bvd`, the BVDOutbreakSize release used, for a variant with the
+        BVD term).
     """
     from bdbvhubrenewal.evaluation.ppc import summarise_draws, write_ppc
 
@@ -1251,7 +1307,7 @@ def fit_renewal(
         for row in chain_diagnostics(run.extra, depth):
             extra = {"location": loc} if per_location else {}
             chains.append({**row, **extra, "chain": len(chains)})
-    return {
+    record: dict[str, Any] = {
         "schema_version": 1,
         "model": HUB_MODEL,
         "config": config_name,
@@ -1269,6 +1325,11 @@ def fit_renewal(
             model_config(VARIANTS[variant]),
         ),
     }
+    if model_config(VARIANTS[variant]).bvd:
+        # The BVDOutbreakSize release behind the BVD term and its R-hat.
+        used = [r.bvd for r in fit.runs.values() if r.bvd is not None]
+        record["bvd"] = dict(used[0]) if used else bvd_record(None)
+    return record
 
 
 def lag_warnings(inputs: Sequence[Any], config: Any = None) -> list[str]:

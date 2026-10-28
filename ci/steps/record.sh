@@ -6,6 +6,7 @@
 #   LEDGER_BRANCH  default submission-ledger
 #   REFERENCE_DATE, DATA_COMMIT, AS_OF, ACTION, PR_URL, PRODUCED_BY,
 #   SKIPPED, RUN   from the earlier jobs
+#   BASELINE_GATE  seabbsbaseline's gate folder, when it ran
 # shellcheck source=ci/steps/lib.sh
 source "$(dirname "$0")/lib.sh"
 
@@ -34,16 +35,31 @@ sci detect-new-vintage record --state "$ledger/state.json" \
   --pr-url "${PR_URL:-}" --run "${RUN:-}"
 
 archive="$ledger/archive/$REFERENCE_DATE/${GITHUB_RUN_ID:-local}"
-mkdir -p "$archive"
-gate="$WORK/gate"
-for f in provenance.json provenance.md pr-body.md; do
-  [ -f "$gate/$f" ] && cp "$gate/$f" "$archive/"
-done
-if [ -d "$gate/selected" ]; then
-  for f in run.json checks.json fit-summary.json nowcast.png; do
-    [ -f "$gate/selected/$f" ] && cp "$gate/selected/$f" "$archive/"
+# The gate's small files: provenance, PR body, the selected file and plot.
+archive_gate() {
+  local gate=$1 dest=$2 f
+  [ -d "$gate" ] || return 0
+  mkdir -p "$dest"
+  for f in provenance.json provenance.md pr-body.md; do
+    [ -f "$gate/$f" ] && cp "$gate/$f" "$dest/"
   done
-  find "$gate/selected/submission" -name '*.csv' -exec cp {} "$archive/" \;
+  if [ -d "$gate/selected" ]; then
+    for f in run.json checks.json fit-summary.json nowcast.png; do
+      [ -f "$gate/selected/$f" ] && cp "$gate/selected/$f" "$dest/"
+    done
+    find "$gate/selected/submission" -name '*.csv' -exec cp {} "$dest/" \;
+  fi
+}
+mkdir -p "$archive"
+archive_gate "$WORK/gate" "$archive"
+# seabbsbaseline's files sit beside the round's (BASELINE_GATE); when it
+# is the only hub model that ran, they are the round's own.
+if [ -n "${BASELINE_GATE:-}" ]; then
+  if [ -d "$WORK/gate" ]; then
+    archive_gate "$BASELINE_GATE" "$archive/seabbsbaseline"
+  else
+    archive_gate "$BASELINE_GATE" "$archive"
+  fi
 fi
 
 git -C "$ledger" add -A

@@ -65,6 +65,7 @@ from bdbvhubrenewal.submission.fitting import (
 from bdbvhubrenewal.submission.hub import (
     SUBMISSION_CONFIG,
     load_hub_round,
+    model_abbr_for,
     model_id,
     render_model_metadata,
     submission_model_abbr,
@@ -95,7 +96,7 @@ MODEL_METADATA = {
             "published counts. Each sample is a joint trajectory and the "
             "national value is the sum of province samples. No spatial "
             "correlation beyond that sum. See "
-            "https://seabbs.github.io/BDBVHubRenewal/methods/model/."
+            "https://samabbott.co.uk/BDBVHubRenewal/methods/model/."
         ),
         "data_inputs": (
             "Hub target data (weekly confirmed cases by onset week, observed "
@@ -124,12 +125,36 @@ MODEL_METADATA = {
             "Both streams are negative binomial. Fitted by NUTS (NumPyro) to "
             "each data vintage. Each sample is one joint posterior "
             "trajectory and the national value is the sum of province "
-            "samples. See https://seabbs.github.io/BDBVHubRenewal/methods/model/."
+            "samples. See https://samabbott.co.uk/BDBVHubRenewal/methods/model/."
         ),
         "data_inputs": (
             "Hub target data (weekly confirmed cases by onset week, observed "
             "plus imputed), the hub's published onset-to-report delays, "
             "province populations and population-weighted province centres."
+        ),
+    },
+    # A hub model of its own (epiforecasts-seabbsbaseline), submitted every
+    # round. The nowcast step is being built; check this text against it.
+    "persistencenow": {
+        "model_name": "Persistence on a nowcast",
+        "methods": (
+            "Recent onset weeks completed by a fast nowcast of reporting "
+            "delays, then the last week carried forward with random walk "
+            "noise. Provinces, health zones and national."
+        ),
+        "methods_long": (
+            "A persistence baseline on nowcast counts. Recent onset weeks "
+            "are first completed for reporting delays with a fast nowcast "
+            "(no MCMC). The last nowcast week is then carried forward, with "
+            "log-scale random walk noise and Poisson draws, as in the "
+            "persistence baseline. Province samples are split across health "
+            "zones, and the national value is the sum of provinces. See "
+            "https://seabbs.github.io/BDBVHubRenewal/methods/model/."
+        ),
+        "data_inputs": (
+            "Hub target data (weekly confirmed cases by onset week, observed "
+            "plus imputed), the hub's published onset-to-report delays and "
+            "daily health zone counts."
         ),
     },
 }
@@ -147,7 +172,7 @@ def _abbr(args: argparse.Namespace) -> str:
         return str(args.abbr)
     if args.model == "persistence":
         return "persistence"
-    return submission_model_abbr(args.hub_toml)
+    return model_abbr_for(args.model, args.hub_toml)
 
 
 def _abbr_args(p: argparse.ArgumentParser) -> None:
@@ -193,6 +218,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-recovery",
         action="store_true",
         help="Skip the recovery check on simulated vintages.",
+    )
+    back.add_argument(
+        "--recovery-only",
+        action="store_true",
+        help="Run only the recovery check on simulated vintages.",
     )
     back.add_argument(
         "--cache",
@@ -308,6 +338,11 @@ def build_parser() -> argparse.ArgumentParser:
         "hub-id", help="Print the hub model id that submissions use."
     )
     hid.add_argument("--hub-toml", default=str(SUBMISSION_CONFIG))
+    hid.add_argument(
+        "--model",
+        default=None,
+        help="A model with its own hub id (`[models]` in config/hub.toml).",
+    )
     cho = sub.add_parser(
         "chosen-model",
         help="Print the model chosen in the model choice record.",
@@ -348,6 +383,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Download the hub files first.",
     )
+
+    frz = sub.add_parser(
+        "freeze-round",
+        help="Write a round's docs page to the ledger once, after its PR "
+        "merged.",
+    )
+    frz.add_argument("--ledger", required=True)
+    frz.add_argument("--round", required=True)
 
     rep = sub.add_parser("report", help="Make the docs figures and tables.")
     rep.add_argument("--figures", default="docs/figures")
@@ -406,7 +449,8 @@ def _task(args: argparse.Namespace) -> tuple[ForecastTask, list[str]]:
     vintage = _vintage([str(v) for v in real["vintage"].unique()], args.vintage)
     rows = real.loc[real["vintage"] == vintage]
     delays, note = delays_for_vintage(delays, vintage)
-    return bt.make_tasks(rows, delays, config)[0], [note] if note else []
+    task = bt.make_tasks(rows, delays, config, history=real)[0]
+    return task, [note] if note else []
 
 
 def host_devices(n: int) -> None:
@@ -493,7 +537,9 @@ def _backtest(args: argparse.Namespace) -> int:
             print("ERROR: --shard needs --cache.", file=sys.stderr)
             return 1
         index, count = (int(x) for x in args.shard.split("/"))
-        if args.lopo:
+        if args.recovery_only:
+            tasks = bt.recovery_tasks(config)
+        elif args.lopo:
             models = [m for m in models if getattr(m, "supports_mask", False)]
             tasks = bt.lopo_tasks(
                 target,
@@ -508,11 +554,23 @@ def _backtest(args: argparse.Namespace) -> int:
                 config,
                 include_reconstructed=not args.no_reconstructed,
             )
-        mine = bt.shard_tasks(tasks, index, count)
+        mine = bt.shard_tasks(bt.order_tasks(tasks), index, count)
         bt.run_forecasts(models, mine, args.cache)
         print(f"Shard {args.shard}: {len(mine)} tasks in {args.cache}.")
         return 0
     fits: list[pd.DataFrame] = []
+    if args.recovery_only:
+        rforecasts, rscores = bt.run_recovery(
+            models, config, cache=args.cache, fits=fits
+        )
+        for table, path in (
+            (rforecasts, output / "recovery-forecasts.csv.gz"),
+            (rscores, results / "recovery-scores.csv"),
+        ):
+            bt.merge_by_model(path, table).to_csv(path, index=False)
+        _write_fits(fits, results / "recovery-fits.csv")
+        print(f"Recovery: {len(rscores)} scored forecasts in {results}.")
+        return 0
     if args.lopo:
         lopo_fc, lopo_scores = bt.run_lopo(
             models,
@@ -744,18 +802,29 @@ def _metadata(args: argparse.Namespace) -> int:
 def _bvd(args: argparse.Namespace) -> int:  # pragma: no cover - network
     from bdbvhubrenewal.data import bvd
 
+    config = bt.load_config(args.backtest_config)
     vintages = args.vintages
     if not vintages:
         target = load_target(args.data)
         real = target.loc[target["kind"] == "real", "vintage"].astype(str)
-        config = bt.load_config(args.backtest_config)
         vintages = sorted({*real, *config.reconstructed_dates})
     token = os.environ.get("GITHUB_TOKEN")
     chosen = bvd.refresh_cache(
-        Path(args.data) / "bvd", vintages, bvd.list_releases(token)
+        Path(args.data) / "bvd",
+        vintages,
+        bvd.list_releases(token),
+        max_rhat=config.bvd_max_rhat,
     )
-    for vintage, tag in chosen.items():
-        print(f"{vintage}: {tag or 'no release'}")
+    for vintage, choice in chosen.items():
+        if choice is None:
+            print(f"{vintage}: no release")
+            continue
+        print(
+            f"{vintage}: {choice.tag} (joint R-hat "
+            f"{choice.joint_max_rhat:.3f}, limit {choice.max_rhat:g})"
+        )
+        for tag, reason in choice.skipped:
+            print(f"  skipped {tag}: {reason}")
     return 0
 
 
@@ -894,12 +963,26 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "bvd":  # pragma: no cover - network
         return _bvd(args)
     if args.command == "hub-id":
-        print(model_id(submission_model_abbr(args.hub_toml)))
+        abbr = (
+            model_abbr_for(args.model, args.hub_toml)
+            if args.model
+            else submission_model_abbr(args.hub_toml)
+        )
+        print(model_id(abbr))
         return 0
     if args.command == "chosen-model":
         return _chosen_model(args)
     if args.command == "compare-hub":
         return _compare_hub(args)
+    if args.command == "freeze-round":
+        from bdbvhubrenewal.submission.rounds import freeze_round
+
+        wrote = freeze_round(args.ledger, args.round)
+        print(
+            f"Round {args.round}: "
+            + ("page frozen." if wrote else "already frozen.")
+        )
+        return 0
     from bdbvhubrenewal.reporting.report import make_report
 
     make_report(figures=args.figures, generated=args.generated)

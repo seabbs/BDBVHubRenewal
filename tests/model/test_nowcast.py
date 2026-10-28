@@ -11,7 +11,7 @@ import pytest
 from jax import random
 from numpyro.infer import Predictive
 
-from bdbvhubrenewal.model import FALLBACK, MAIN, build_model, model_args
+from bdbvhubrenewal.model import MAIN, build_model, model_args
 from bdbvhubrenewal.model.model import forecast_trajectories
 from bdbvhubrenewal.model.observation import onset_expectations
 
@@ -85,7 +85,7 @@ def test_publication_lag_mixes_cut_offs():
 def test_publication_lag_is_fixed_by_default(sim_vintage):
     # Delay-file lags mix late reports with onsets recorded later, so the
     # default stays a fixed uniform lag on 0..3 days.
-    for cfg in (MAIN, FALLBACK):
+    for cfg in (MAIN,):
         assert cfg.publication_lag == "fixed"
         model = build_model(sim_vintage, cfg)
         np.testing.assert_allclose(
@@ -96,7 +96,7 @@ def test_publication_lag_is_fixed_by_default(sim_vintage):
 def test_model_takes_the_empirical_publication_lag(sim_vintage):
     lag = np.r_[np.full(10, 0.08), np.zeros(50), 0.2]
     data = dataclasses.replace(sim_vintage, publication_lag_pmf=lag)
-    for base in (MAIN, FALLBACK):
+    for base in (MAIN,):
         cfg = dataclasses.replace(base, publication_lag="empirical")
         model = build_model(data, cfg)
         obs = model.observations["onsets"]
@@ -244,4 +244,3 @@ def test_trajectories_name_their_posterior_draws(sim_vintage):
 
 def test_delay_counts_are_dirichlet_multinomial_by_default():
     assert MAIN.delay_counts == "dirichlet-multinomial"
-    assert FALLBACK.delay_counts == "dirichlet-multinomial"

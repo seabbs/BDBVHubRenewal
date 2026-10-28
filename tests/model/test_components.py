@@ -15,8 +15,6 @@ from bdbvhubrenewal.model import (
     adjacency_kernel,
     censored_pmf,
     coupled_renewal,
-    empirical_delay_matrix,
-    empirical_missing_fraction,
     generation_interval,
     hazard_to_pmf,
     mixing_matrix,
@@ -201,18 +199,6 @@ def test_fixed_inputs_pad_with_last_row():
     assert out.shape == (5, 2)
 
 
-def test_empirical_inputs_are_valid(sim_vintage):
-    f = empirical_delay_matrix(sim_vintage.delay_counts, sim_vintage.cutoff)
-    assert f.shape == (
-        7 * sim_vintage.n_weeks,
-        sim_vintage.delay_counts.shape[1],
-    )
-    np.testing.assert_allclose(f.sum(axis=1), 1.0, rtol=1e-8)
-    pi = empirical_missing_fraction(sim_vintage.known, sim_vintage.imputed)
-    assert pi.shape == (7 * sim_vintage.n_weeks, sim_vintage.n_provinces)
-    assert np.all((pi > 0) & (pi < 1))
-
-
 def test_fast_kernels_match_reference_values_and_gradients():
     import jax
 
@@ -336,20 +322,6 @@ def test_linear_weekly_process_interpolates_knots():
     assert out.shape == (29, 1)
 
 
-def test_empirical_missing_fraction_moves_to_report_days():
-    # Onset-week shares are 0.1 then 0.4 from week 10. Missing onsets are
-    # dated by report, so the report-day fraction steps `shift` days later.
-    imputed = np.where(np.arange(20)[:, None] < 10, 10.0, 40.0)
-    known = 100.0 - imputed
-    base = empirical_missing_fraction(known, imputed, window=0, shrink=0)
-    pi = empirical_missing_fraction(known, imputed, window=0, shrink=0, shift=9)
-    assert pi.shape == base.shape
-    np.testing.assert_allclose(pi[9:], base[:-9])
-    np.testing.assert_allclose(pi[:9], np.repeat(base[:1], 9, axis=0))
-    assert pi[78, 0] == pytest.approx(0.1)
-    assert pi[79, 0] == pytest.approx(0.4)
-
-
 class _Daily:
     """A weekly process seen as a daily one, to force the daily path."""
 
@@ -443,3 +415,47 @@ def test_case_weighted_basis_is_orthonormal_and_orthogonal_to_weights():
     np.testing.assert_allclose(w @ q, 0.0, atol=1e-8)
     plain = sum_to_zero_basis(4)
     np.testing.assert_allclose(plain.sum(axis=0), 0.0, atol=1e-10)
+
+
+def _quad_censored_pmf(family, mean, cv, dmax):
+    """Float64 double censored pmf by numerical integration, as a reference."""
+    from scipy import integrate, stats
+
+    if family == "gamma":
+        shape = 1 / cv**2
+        dist = stats.gamma(shape, scale=mean / shape)
+    else:
+        sdlog = np.sqrt(np.log1p(cv**2))
+        dist = stats.lognorm(sdlog, scale=mean / np.sqrt(1 + cv**2))
+
+    def cdf(x):
+        return dist.cdf(x) if x > 0 else 0.0
+
+    pmf = np.array(
+        [
+            integrate.quad(
+                lambda u, d=d: cdf(d + 1 - u) - cdf(d - u),
+                0,
+                1,
+                epsabs=1e-14,
+                epsrel=1e-12,
+                points=[0.0, 1.0],
+            )[0]
+            for d in range(dmax + 1)
+        ]
+    )
+    return pmf / pmf.sum()
+
+
+@pytest.mark.parametrize("family", ["gamma", "lognormal"])
+@pytest.mark.parametrize("cv", [0.3, 0.5, 1.0, 1.5, 2.0])
+@pytest.mark.parametrize("mean", [2.0, 8.0, 15.0])
+def test_censored_pmf_is_close_in_float32(family, cv, mean):
+    ours = np.asarray(censored_pmf(family, mean, cv, 60))
+    assert ours.dtype == np.float32
+    ref = _quad_censored_pmf(family, mean, cv, 60)
+    # float32 incomplete gamma is good to about 1e-6, and the closed form
+    # scales that by the delay, so errors are a few 1e-5 at most.
+    assert np.max(np.abs(ours - ref)) < 4e-5
+    big = ref > 1e-4
+    assert np.max(np.abs(ours[big] / ref[big] - 1)) < 2e-2

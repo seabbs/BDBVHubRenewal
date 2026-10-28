@@ -263,6 +263,63 @@ $$
 
 $\sigma_p$ is the SD of the 7 weekly changes in $\log(1 + Y_{p,v})$ over the last 8 complete weeks, floored at 0.1.
 Week $w$ is complete if its Wednesday is at least $L$ days before $T_v$, with $L$ the 90th centile of the delays published with the vintage, or 10 days if none were published.
-Published delays are right truncated, so the comparator `persistence_fu` takes $L$ from onset weeks that ended at least 63 days before the vintage.
 Each sample is one joint trajectory across weeks, and the national value is the sum of the provinces.
 The median has no growth and weeks up to $c$ are still revised upwards, so persistence underpredicts during growth (see [Backtest](../backtest.md#persistence-bias)).
+
+### Persistence on a nowcast
+
+`persistencenow` nowcasts the recent weeks with a Python port of [baselinenowcast](https://github.com/epinowcast/baselinenowcast), then applies persistence to each nowcast draw.
+
+The reporting triangle $n(W, d)$ counts the cases in the vintage's delay file by onset week $W$ and delay $d$ in days, pooled over provinces.
+A case is published on day $W + d$, its onset mid-week plus its delay plus a 3-day publication lag, so cell $(W, d)$ is observed if $W + d \le T_v$.
+On the last 14 onset weeks, a chain ladder fills the missing cells column by column,
+
+$$
+\hat n(W, d) = \frac{\sum_{W' \in A_d} n(W', d)}{\sum_{W' \in A_d} \sum_{d' < d} n(W', d')} \sum_{d' < d} \hat n(W, d'),
+$$
+
+with $A_d$ the weeks where delay $d$ is observed.
+Week $w$ gets the ratio $r(w)$ of its filled cells to its observed cells.
+The same is done on the triangle cut back to each of the 8 previous weeks.
+Comparing what each of those nowcasts expected to be added to week $w$ with what has been added since gives a negative binomial size $\phi_h$ for each horizon $h$, fitted by maximum likelihood.
+The pooled delay is applied to the published totals, known plus imputed.
+The national cases still to come are drawn once and split over provinces in proportion to their totals, since $\phi_h$ is fitted to national errors:
+
+$$
+U_k(w) \sim \text{NegBin}\Big(\text{mean } r(w) \sum_p Y_{p,v}(w),\ \text{size } \phi_{h(w)}\Big),
+\qquad
+\big(U_{p,k}(w)\big)_p \sim \text{Multinomial}\Big(U_k(w),\ \frac{Y_{p,v}(w)}{\sum_q Y_{q,v}(w)}\Big).
+$$
+
+The hub re-imputes missing onsets at each vintage, so totals can also fall.
+Each province adds a revision $E_{p,k}(w) = A - B$ with $A, B \sim \text{Poisson}\{\kappa I_{p,v}(w)/2\}$, so its variance is $\kappa I_{p,v}(w)$:
+
+$$
+C_{p,k}(w) = \max\big\{Y_{p,v}(w) + U_{p,k}(w) + E_{p,k}(w),\ K_{p,v}(w)\big\},
+\qquad
+\kappa = \frac{\sum \{Y_{p,b}(w) - Y_{p,a}(w)\}^2}{\sum I_{p,a}(w)}.
+$$
+
+The sums run over consecutive vintages $a < b$ up to $T_v$ and the weeks that ended at least 63 days before $a$.
+So $C_{p,k}(w)$ can fall below the published total, but not below the known onsets.
+
+The last week with $1/\{1 + r(w)\} \ge 0.5$ takes the place of $c$, and persistence runs from $C_{p,k}(c)$ in each sample $k$, with its spread at $h$ steps scaled by $\omega_h$:
+
+$$
+\log\{1 + \lambda_{p,k}(c + h)\} = \max\Big(0,\ \log\{1 + C_{p,k}(c)\} + \sum_{j=1}^{h} \epsilon_{p,j}\Big),
+\qquad
+\operatorname{Var}\Big(\sum_{j=1}^{h} \epsilon_{p,j}\Big) = \omega_h^2 h \sigma_p^2,
+$$
+
+$$
+\tilde y_{p,k}(c + h) = \max\big\{\text{Poisson}(\lambda_{p,k}(c + h)),\ K_{p,v}(c + h)\big\}.
+$$
+
+$\sigma_p$ is taken as for `persistence`, from $Y_{p,v}(1 + r)$ over the 8 weeks up to $c$.
+$\omega_h$ calibrates the walk on past errors, as baselinenowcast calibrates its nowcast.
+From each earlier vintage, each province with a nowcast level $L \ge 10$ gives $z = \{\log(1 + y) - \log(1 + L)\}/(\sigma \sqrt h)$ against its count $y$ in vintage $v$, for weeks at least 95% reported by then.
+Then $\omega_h^2 = (\sum z^2 + 10)/(n_h + 10)$, which shrinks to 1 when there are few errors.
+Only data available at $T_v$ are used.
+Counts reported by a later date $T$ are $Y_{p,v}(w) + \text{Binomial}\big(\max(D, 0),\ q\big) + \min(D, 0)$, with $D = C_{p,k}(w) - Y_{p,v}(w)$ and $q$ the share of the remaining delay mass of the pooled pmf that is published by $T$.
+Late rows in the delay files are mostly onsets recorded later for cases already counted as imputed, so the publication lag has no long tail.
+Without a complete onset week or 50 cases in the last 14 weeks, or with fewer than 3 past nowcasts, `persistencenow` is `persistence`.

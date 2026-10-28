@@ -46,6 +46,7 @@ __all__ = [
     "TEAM_ABBR",
     "HubRound",
     "load_hub_round",
+    "model_abbr_for",
     "model_id",
     "render_model_metadata",
     "submission_model_abbr",
@@ -202,6 +203,31 @@ def submission_model_abbr(path: Path | str = SUBMISSION_CONFIG) -> str:
     with Path(path).open("rb") as fh:
         config = tomllib.load(fh)
     return str(config["submission"]["model_abbr"])
+
+
+def model_abbr_for(model: str, path: Path | str = SUBMISSION_CONFIG) -> str:
+    """Return the hub abbreviation a model submits under.
+
+    A model with its own entry under `[models]` in `config/hub.toml` is a
+    hub model of its own. Every other model submits under the renewal
+    abbreviation (`submission_model_abbr`).
+
+    Parameters
+    ----------
+    model : str
+        The model key, such as `"persistencenow"`.
+    path : pathlib.Path or str
+        The configuration file.
+
+    Returns
+    -------
+    str
+        The abbreviation, such as `"seabbsbaseline"`.
+    """
+    with Path(path).open("rb") as fh:
+        config = tomllib.load(fh)
+    own = config.get("models", {}).get(model, {})
+    return str(own.get("model_abbr") or config["submission"]["model_abbr"])
 
 
 def model_id(model_abbr: str, team_abbr: str = TEAM_ABBR) -> str:
@@ -695,7 +721,7 @@ METADATA_DEFAULTS: Final[dict[str, Any]] = {
     ],
     "license": "CC-BY-4.0",
     "repo_url": "https://github.com/seabbs/BDBVHubRenewal",
-    "website_url": "https://seabbs.github.io/BDBVHubRenewal/",
+    "website_url": "https://samabbott.co.uk/BDBVHubRenewal/",
     "ensemble_of_hub_models": False,
 }
 """Fields shared by every model's metadata. Contributors are to confirm."""

@@ -50,7 +50,9 @@ ctx_value() {
 # Before `prepare`: the chosen model and the configured hub id, from the
 # main repo. Called by `prepare` and by the gate's metadata step.
 resolve_model() {
-  [ -n "$MODEL" ] || MODEL=$(cli chosen-model)
+  # No model choice recorded leaves MODEL empty: the renewal chain is then
+  # skipped (submission_ci.tracks), and the baseline runs regardless.
+  [ -n "$MODEL" ] || MODEL=$(cli chosen-model 2> /dev/null || true)
   [ -n "$MODEL_ID" ] || MODEL_ID=$(cli hub-id)
 }
 

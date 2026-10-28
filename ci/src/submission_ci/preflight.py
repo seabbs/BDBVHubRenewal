@@ -25,7 +25,7 @@ import re
 import sys
 import tomllib
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -80,6 +80,10 @@ class Settings:
     model_choice: Path
     workflow_file: Path
     now: dt.datetime
+    other_model_ids: tuple[str, ...] = ()
+    """Further hub models, each submitted under its own id."""
+    opted_in: tuple[str, ...] = ()
+    """Hub models with `submit = true` in `config/hub.toml`."""
 
 
 def _api(runner: Runner, path: str) -> tuple[bool, Any]:
@@ -522,6 +526,27 @@ def hub_model_id(path: Path) -> str:
     return f"{TEAM}-{abbr}"
 
 
+def other_model_ids(path: Path) -> tuple[str, ...]:
+    """Hub ids of the models under `[models]` in `config/hub.toml`."""
+    if not path.exists():
+        return ()
+    with path.open("rb") as fh:
+        models = tomllib.load(fh).get("models", {})
+    return tuple(f"{TEAM}-{m['model_abbr']}" for m in models.values())
+
+
+def opted_in(path: Path) -> tuple[str, ...]:
+    """Hub ids of the models with `submit = true` in `config/hub.toml`."""
+    if not path.exists():
+        return ()
+    with path.open("rb") as fh:
+        cfg = tomllib.load(fh)
+    entries = [cfg.get("submission", {}), *cfg.get("models", {}).values()]
+    return tuple(
+        f"{TEAM}-{e['model_abbr']}" for e in entries if e.get("submit")
+    )
+
+
 def run_checks(runner: Runner, s: Settings) -> list[Check]:
     """Every check, in the order of the setup checklist."""
     checks = [check_gh(runner), check_hub(runner, s.hub)]
@@ -537,9 +562,31 @@ def run_checks(runner: Runner, s: Settings) -> list[Check]:
     checks.append(check_locations(values))
     checks.append(check_metadata(s.metadata_dir, model_id))
     checks.append(check_registered(runner, s.hub, model_id))
+    for other in s.other_model_ids:
+        checks += [
+            replace(
+                check_metadata(s.metadata_dir, other), name=f"metadata {other}"
+            ),
+            replace(
+                check_registered(runner, s.hub, other),
+                name=f"hub model id {other}",
+            ),
+        ]
     checks.append(
         check_model_choice(s.model_choice, values.get("HUB_MODEL", ""))
     )
+    if s.opted_in:
+        checks.append(Check("opt-in", "ok", "submits " + ", ".join(s.opted_in)))
+    else:
+        checks.append(
+            Check(
+                "opt-in",
+                "warn",
+                "no hub model is opted in, so nothing is submitted",
+                "Set `submit = true` for the model in config/hub.toml and "
+                "push to `main`.",
+            )
+        )
     checks.append(mode)
     return checks
 
@@ -600,6 +647,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         hub=args.hub,
         fork_default=args.fork,
         model_id_default=hub_model_id(args.hub_config),
+        other_model_ids=other_model_ids(args.hub_config),
+        opted_in=opted_in(args.hub_config),
         metadata_dir=args.metadata_dir,
         model_choice=args.model_choice,
         workflow_file=args.workflow_file,

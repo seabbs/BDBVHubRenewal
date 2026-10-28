@@ -41,6 +41,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
+from bdbvhubrenewal.data.bvd import MAX_RHAT
 from bdbvhubrenewal.data.dates import (
     as_date,
     epiweek_end,
@@ -72,7 +73,9 @@ __all__ = [
     "lopo_tasks",
     "make_tasks",
     "merge_by_model",
+    "order_tasks",
     "real_vintages",
+    "recovery_tasks",
     "run_development",
     "run_forecasts",
     "run_lopo",
@@ -116,6 +119,10 @@ class BacktestConfig:
         (`bdbvhubrenewal.data.completeness.complete_weeks`).
     sampler : dict
         NUTS settings of the fitted models (`apply_sampler`).
+    bvd_max_rhat : float
+        The limit on the joint fit's worst R-hat of a BVDOutbreakSize
+        release the BVD variant may use
+        (`bdbvhubrenewal.data.bvd.select_release`).
     """
 
     min_horizon: int = -4
@@ -128,6 +135,7 @@ class BacktestConfig:
     simulated_dates: tuple[str, ...] = ()
     complete_after_weeks: int = 0
     sampler: dict[str, Any] = field(default_factory=dict)
+    bvd_max_rhat: float = MAX_RHAT
 
     def is_heldout(self, vintage: dt.date | str) -> bool:
         """Whether a vintage is held out from development.
@@ -215,6 +223,7 @@ def load_config(path: Path | str = "config/backtest.toml") -> BacktestConfig:
         model_choice=choice,
         complete_after_weeks=int(sp.get("complete_after_weeks", 0)),
         sampler=dict(raw.get("sampler", {})),
+        bvd_max_rhat=float(raw.get("bvd", {}).get("max_rhat", MAX_RHAT)),
         reconstructed_dates=(
             saturdays(rec["first_vintage"], rec["last_vintage"]) if rec else ()
         ),
@@ -293,6 +302,7 @@ def make_tasks(
     delays: pd.DataFrame | None,
     config: BacktestConfig,
     report_by: Sequence[str] = (),
+    history: pd.DataFrame | None = None,
 ) -> list[ForecastTask]:
     """Build one task per vintage in a target table.
 
@@ -310,6 +320,9 @@ def make_tasks(
     report_by : sequence of str
         Truth vintage dates. Each real or reconstructed task asks for the
         counts as reported by those after its own vintage.
+    history : pandas.DataFrame, optional
+        Target rows to take each task's `target_history` from. Defaults
+        to `target`.
 
     Returns
     -------
@@ -317,7 +330,12 @@ def make_tasks(
         Tasks ordered by kind and vintage.
     """
     tasks = []
+    source = target if history is None else history
     for (kind, vintage), rows in target.groupby(["kind", "vintage"]):
+        same = source["vintage"] <= vintage
+        if "kind" in source.columns:
+            same &= source["kind"] == kind
+        past_target = source.loc[same]
         ref = reference_date_for_vintage(str(vintage))
         dly, history = None, None
         if delays is not None:
@@ -341,6 +359,7 @@ def make_tasks(
                 target=rows.reset_index(drop=True),
                 delays=dly,
                 delay_history=history,
+                target_history=past_target if not past_target.empty else None,
                 locations=forecast_locations(rows),
                 target_end_dates=forecast_weeks(ref, config),
                 n_samples=config.n_samples,
@@ -376,6 +395,45 @@ def uses_lag_prior(task: ForecastTask) -> bool:
     if task.delay_history is None:
         return True
     return publication_lag_pmf(task.delay_history, task.vintage) is None
+
+
+def order_tasks(
+    tasks: Sequence[ForecastTask], spread: int = 5
+) -> list[ForecastTask]:
+    """Order tasks so a long run gives a useful first batch.
+
+    Real origins come first, then `spread` reconstructed origins evenly
+    spaced over their range, then the rest in date order.
+
+    Parameters
+    ----------
+    tasks : sequence of ForecastTask
+        The tasks.
+    spread : int
+        Reconstructed origins to bring forward.
+
+    Returns
+    -------
+    list of ForecastTask
+        The same tasks, reordered.
+    """
+    real = sorted(
+        (t for t in tasks if t.kind == "real"), key=lambda t: t.vintage
+    )
+    rest = sorted(
+        (t for t in tasks if t.kind != "real"),
+        key=lambda t: (t.kind, t.vintage),
+    )
+    rec = [t for t in rest if t.kind == "reconstructed"]
+    if spread > 1 and len(rec) > spread:
+        picks = {
+            round(i * (len(rec) - 1) / (spread - 1)) for i in range(spread)
+        }
+    else:
+        picks = set(range(len(rec)))
+    early = [rec[i] for i in sorted(picks)]
+    taken = {id(t) for t in early}
+    return [*real, *early, *(t for t in rest if id(t) not in taken)]
 
 
 def shard_tasks(
@@ -915,10 +973,34 @@ def run_lopo(
     return forecasts, scores
 
 
+def recovery_tasks(
+    config: BacktestConfig, settings: SimulationSettings | None = None
+) -> list[ForecastTask]:
+    """Build the tasks of the simulated vintages.
+
+    Parameters
+    ----------
+    config : BacktestConfig
+        Settings, including `simulated_dates`.
+    settings : SimulationSettings, optional
+        The simulated scenario. Defaults to `turning_point`.
+
+    Returns
+    -------
+    list of ForecastTask
+        One task per simulated vintage.
+    """
+    outbreak = simulate_outbreak(settings)
+    target, delays = outbreak.vintages(list(config.simulated_dates))
+    return make_tasks(target, delays, config)
+
+
 def run_recovery(
     models: Sequence[ForecastModel],
     config: BacktestConfig,
     settings: SimulationSettings | None = None,
+    cache: Path | str | None = None,
+    fits: list[pd.DataFrame] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Run models on simulated vintages and score against the known truth.
 
@@ -930,6 +1012,10 @@ def run_recovery(
         Settings, including `simulated_dates`.
     settings : SimulationSettings, optional
         The simulated scenario. Defaults to `turning_point`.
+    cache : pathlib.Path or str, optional
+        Forecast cache, as for `run_forecasts`.
+    fits : list, optional
+        Collects fit summaries, as for `run_forecasts`.
 
     Returns
     -------
@@ -937,9 +1023,8 @@ def run_recovery(
         The forecasts and the scores.
     """
     outbreak = simulate_outbreak(settings)
-    target, delays = outbreak.vintages(list(config.simulated_dates))
-    tasks = make_tasks(target, delays, config)
-    forecasts = run_forecasts(models, tasks)
+    tasks = recovery_tasks(config, settings)
+    forecasts = run_forecasts(models, tasks, cache, fits)
     end = outbreak.settings.start + dt.timedelta(days=outbreak.settings.n_days)
     scores = score_tasks(forecasts, outbreak.truth(), end.isoformat())
     scores["truth_vintage"] = "simulated"

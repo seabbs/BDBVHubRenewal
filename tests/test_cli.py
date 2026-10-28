@@ -202,6 +202,23 @@ def test_cli_backtest_shards_into_a_cache(tmp_path: Path) -> None:
     assert not (res / "recovery-scores.csv").exists()
 
 
+@pytest.mark.usefixtures("in_root")
+def test_cli_recovery_only_uses_the_cache(tmp_path: Path) -> None:
+    res, out, cache = tmp_path / "res", tmp_path / "out", tmp_path / "cache"
+    base = ["backtest", "--recovery-only", "--results", str(res),
+            "--output", str(out), "--models", "persistence",
+            "--cache", str(cache)]  # fmt: skip
+    assert main([*base, "--shard", "0/2"]) == 0
+    assert main([*base, "--shard", "1/2"]) == 0
+    assert list(cache.glob("persistence_simulated_*.csv.gz"))
+    assert not (res / "recovery-scores.csv").exists()
+    assert main(base) == 0
+    scores = pd.read_csv(res / "recovery-scores.csv")
+    assert set(scores["kind"]) == {"simulated"}
+    # The development results are left alone.
+    assert not (res / "backtest-scores.csv").exists()
+
+
 def test_host_devices_cover_the_chains(monkeypatch: pytest.MonkeyPatch) -> None:
     from bdbvhubrenewal.cli import host_devices
 
@@ -235,4 +252,6 @@ def test_cli_fit_task_carries_the_delay_files_for_the_lag() -> None:
     task, _ = _task(args)
     assert task.delay_history is not None
     assert task.delay_history["vintage"].nunique() >= 2
+    assert task.target_history is not None
+    assert task.target_history["vintage"].nunique() >= 3
     assert vintage_inputs(task, MAIN).publication_lag_pmf is not None
