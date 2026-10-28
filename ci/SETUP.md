@@ -13,7 +13,7 @@ It is safe to install as is, because `DRY_RUN` is on until you turn it off.
 | `prepare` | Pins the hub data at one commit and builds the persistence candidate, which is also the baseline for the checks. |
 | `fit` | A matrix over the primary candidates (`main` and `fallback`), fitted in parallel. Each fit is cached under a content hash of the model source, the hub commit and its sampler settings. |
 | `triage` | Says whether `main` needs its one refit (past the convergence retry thresholds, or ruled out). |
-| `retry` | Only if `main` needs it: one refit with a longer warm-up, smaller steps and jittered inits, costing about as much as `main`. |
+| `retry` | Only if `main` needs it: one refit with a longer warm-up, smaller steps and jittered inits, costing about as much as `main`, and only with time left for it before the window closes. |
 | `gate` | Walks the chain `main` → `retry-1` → `fallback` → `persistence`, handling problems rather than failing on them. A candidate is ruled out only if its fit is clearly broken or its file is invalid (format checks or hubValidations). |
 | `submit` | Publishes the plot, builds the PR body, and opens or updates the PR. A dry run prints the body instead. |
 | `record` | Live runs only. Writes the outcome to `state.json` on the `submission-ledger` branch and archives the round's files there. |
@@ -133,16 +133,28 @@ Ledger commits are on a side branch, so an occasional commit to `main` keeps the
 ## Runtimes and limits
 
 GitHub-hosted `ubuntu-latest` on a public repository: 4 vCPUs, 16 GB RAM, 14 GB disk, and a **6-hour cap per job**.
-The fit jobs have `timeout-minutes: 350`.
+Each fit job's timeout is at most 350 minutes, and stops 45 minutes before the window closes (`ci/policy.toml` `[timing]`).
 The Actions cache holds 10 GB per repository and evicts entries unused for 7 days.
 Artefacts are kept for 90 days at most, so the ledger branch is the durable archive.
 Scheduled starts can be late by minutes, or dropped when GitHub is busy.
 The 3-hourly schedule covers that.
 
-The model is not built yet, so its runtime is not measured.
-The plan expects minutes to tens of minutes for 4 to 8 provinces and about 260 days with 4 NUTS chains.
-`seabbs/ecdc-weekly-growth-forecasts` fitted a Stan growth-rate model weekly on a hosted runner without trouble.
-Time the first real fit with a dry run on a past vintage (see above), and read the `Fit took N s` line in the job summary.
+On the 2026-10-24 vintage, with vectorised chains on 2 cores of archie, the main fit took 130 minutes of sampling and the retry 134.
+The fallback takes about 0.7 times the main fit.
+Nearly every draw reaches the maximum tree depth, so cost follows the number of NUTS iterations.
+Hosted runners are 1.2 to 1.5 times slower, so each fit job takes about 2.7 to 3.4 hours with setup.
+Time a real fit with a dry run on a past vintage (see above), and read the `Fit took N s` line in the job summary.
+
+The whole chain runs in sequence: prepare (persistence), then main with the fallback beside it, then at most one retry, then the gate.
+From the last Tuesday start at 14:00 UTC there are 540 minutes to the close.
+A main fit of normal length leaves time for the retry.
+Two rules keep the chain inside the window when a fit runs late:
+
+- Every fit job's timeout leaves `reserve_minutes` (45) before the close for the gate and the pull request.
+- The retry runs only when `retry_minutes` (240) plus that reserve are left after the main fit. Otherwise the chain moves on to the fallback, which is already fitted, and the job summary says so.
+
+So a main fit that runs to its timeout still reaches the fallback or persistence before the close.
+`max_tree_depth` is set per candidate in `ci/policy.toml`.
 
 If fits come close to the cap:
 
@@ -153,7 +165,7 @@ If fits come close to the cap:
    The coupled main model cannot.
 3. Start earlier.
    Data usually land on Friday or Saturday, and the window opens Sunday.
-   The last scheduled start on Tuesday is 14:00 UTC, which leaves about 540 minutes before the window closes for the main fit, one retry of about the same length, and the gate.
+   The last scheduled start on Tuesday is 14:00 UTC, which leaves 540 minutes before the window closes for the main fit, one retry of about the same length, and the gate.
 4. Use a bigger machine through `FIT_RUNNER`.
    GitHub's larger runners need a paid Team or Enterprise organisation, for example if the repo moves to `epiforecasts`.
    A self-hosted runner works too.

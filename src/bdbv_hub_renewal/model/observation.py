@@ -477,6 +477,7 @@ class OnsetStreams(BaseObservationProcess):
         import_kernel: Array | None = None,
         forecast: bool = False,
         vintage: Array | None = None,
+        as_of: int | None = None,
     ) -> ObservationSample:
         """Score or sample the two onset streams.
 
@@ -507,6 +508,11 @@ class OnsetStreams(BaseObservationProcess):
             Known and imputed vintage counts, `(2, n_weeks, P)`, NaN
             where unobserved or held out. With `forecast`, the final
             draws add the cases still to be reported to these.
+        as_of : int, optional
+            With `forecast`, a later cut-off on the model axis: the
+            "final" draws are then the counts as reported by it (the
+            vintage counts plus the cases reported between the two
+            cut-offs), for scoring against a later vintage as reported.
 
         Returns
         -------
@@ -540,6 +546,21 @@ class OnsetStreams(BaseObservationProcess):
             weekly=self.weekly_axis,
         )
         weekly = {k: self._weekly(v, first_day_dow) for k, v in exp.items()}
+        if as_of is not None:
+            later = onset_expectations(
+                onsets,
+                delay,
+                pi,
+                jnp.asarray(hub_delay_pmf),
+                as_of,
+                False,
+                publication_lag=lag,
+                weekly=self.weekly_axis,
+            )
+            weekly["known_final"] = self._weekly(later["known"], first_day_dow)
+            weekly["imputed_final"] = self._weekly(
+                later["imputed"], first_day_dow
+            )
         for key, value in weekly.items():
             self._deterministic(f"expected_{key}", value)
         self._deterministic("expected_daily", onsets)

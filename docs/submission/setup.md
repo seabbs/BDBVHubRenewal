@@ -64,7 +64,7 @@ The [Workflow](workflow.md) page explains the pipeline these steps unlock.
 ### Before going live
 
 10. Run `task submission-preflight` and clear every `MISSING` line.
-    The only expected warning is `mode` (dry run).
+    The expected warnings are `mode` (dry run) and, until step 12, `model choice`.
 11. Review the model metadata in `hub/model-metadata/epiforecasts-seabbsrenewal.yml` (team, model name, contributors, licence and methods text).
     The first pull request adds it to the hub, written for whichever model is chosen.
 12. Review the held-out results and commit the model to submit as a dated entry in `results/model-choice.yml`.
@@ -77,8 +77,12 @@ The [Workflow](workflow.md) page explains the pipeline these steps unlock.
 15. Time a real fit on a past round.
     `gh workflow run submit.yml -R seabbs/BDBVHubRenewal -f force=true -f ignore_window=true -f reference_date=2026-10-31`
     Read the `Fit took N s` line in the fit job summary.
-    The fit jobs stop at 350 minutes.
+    Each fit takes about 2.7 to 3.4 hours on a hosted runner.
+    With `ignore_window` the fit jobs stop at 350 minutes and the retry always runs if needed.
+    If the measured times differ, update `retry_minutes` in the `[timing]` table of `ci/policy.toml`.
 16. Do one supervised live run inside the window (Sunday 00:00 to Tuesday 23:59 Kinshasa time, UTC+1).
+    Start it on Sunday or Monday, so the whole chain has time to run.
+    Each fit job stops 45 minutes before the close, and the retry runs only if at least 285 minutes are left after the main fit (`[timing]` in `ci/policy.toml`).
     `gh workflow run submit.yml -R seabbs/BDBVHubRenewal -f dry_run=false`
     Check the pull request on the hub, its validation run, and the round's page linked from it.
 17. Go live.
@@ -90,6 +94,6 @@ The [Workflow](workflow.md) page explains the pipeline these steps unlock.
 
 - Renew the token before it expires and update the secret (step 5).
 - Scheduled workflows in a public repository stop after 60 days without activity, so commit to `main` now and then. The preflight reports a disabled workflow.
-- GitHub-hosted runners cap a job at 6 hours, and the fit jobs time out at 350 minutes.
+- GitHub-hosted runners cap a job at 6 hours. Each fit job times out at 350 minutes, or 45 minutes before the window closes if that is sooner.
 
 `ci/SETUP.md` covers runtimes, larger runners and where each part of the approach comes from (BVDOutbreakSize, cityforecasts and ecdc-weekly-growth-forecasts).

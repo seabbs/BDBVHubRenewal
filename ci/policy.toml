@@ -10,6 +10,26 @@
 # content-hash fit cache is reused across re-runs.
 retry_budget = 1
 
+# Minutes the chain plans with. Measured on the 2026-10-24 vintage
+# (jax-review-1, vectorised chains on 2 cores of archie): main 130 and
+# the retry 134 minutes of sampling, the fallback about 0.7 times main.
+# Hosted runners are 1.2 to 1.5 times slower, so each fit job takes
+# about 2.7 to 3.4 hours with setup. The fallback fits beside main, and
+# persistence is built in `prepare`, so only the retry runs after main.
+[timing]
+# GitHub's 360-minute job cap, less a margin.
+fit_cap_minutes = 350
+# Kept free before the window closes for triage, the gate (hubValidations)
+# and the pull request. Every fit job's timeout stops this short of the
+# close, so the gate always runs in time with the fallback or persistence.
+reserve_minutes = 45
+# What a refit needs on a hosted runner: 134 minutes x 1.5, plus setup,
+# rounded up. With less time than this plus the reserve left after main,
+# the refit is skipped and the chain moves on to the fallback.
+retry_minutes = 240
+# The shortest timeout a fit job gets, however late it starts.
+min_fit_minutes = 30
+
 [cache]
 # Everything a fit depends on in the main repo, listed once. The fit
 # cache key hashes these with the hub data commit and the candidate's
@@ -32,9 +52,8 @@ stage = "retry"
 label = "main model, refitted (longer warm-up, smaller steps, jittered inits)"
 # The same number of NUTS iterations as `main` (4 x 2000), spent on a
 # longer warm-up. Main fits reach the maximum tree depth on nearly every
-# draw, so cost follows iterations and the retry takes about as long as
-# main. Main and the retry then fit the 540 minutes from the last Tuesday
-# start, with each job well under its 350-minute cap. More chains than
+# draw, so cost follows iterations: 134 against main's 130 minutes on
+# archie. `max_tree_depth` is set per candidate here. More chains than
 # the runner's 4 vCPUs would only slow every chain down.
 sampler = { num_chains = 4, num_warmup = 1500, num_samples = 500, target_accept = 0.95, max_tree_depth = 10, seed = 2, init = "jitter", chain_method = "vectorized" }
 

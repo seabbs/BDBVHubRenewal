@@ -49,6 +49,9 @@ SCENARIOS=(
   "loosekept|main=loose,retry-1=fail|main||Handled: main model kept after one refit did not help"
   "retry|main=fail,retry-1=pass|retry-1||Main model refitted once: main model was ruled out"
   "fallback|main=fail,retry-1=fail|fallback||Fallback model used ("
+  # Tuesday 19:00 UTC, four hours before the close: no time to refit, so
+  # a failed main model goes straight to the fallback.
+  "late|main=fail,retry-1=pass|fallback|NOW=2026-11-03T19:00:00+00:00|Fallback model used ("
   "persistence|main=fail,retry-1=crash,fallback=fail|persistence"
   "skip|main=fail,retry-1=fail,fallback=fail,persistence=negative|skip"
 )
@@ -73,6 +76,8 @@ touch "$SRC_ROOT/pyproject.toml" "$SRC_ROOT/uv.lock"
 
 run_scenario() {
   local name=$1 scenarios=$2 expect=$3 extra=${4:-} want=${5:-}
+  # A scenario may move the clock; the next one gets it back.
+  local NOW=$NOW
   export WORK="$ROOT/$name"
   export FAKE_SCENARIOS=$scenarios
   export FAKE_COHERENCE_GAP="" FAKE_CHOSEN_MODEL=""
@@ -106,7 +111,7 @@ run_scenario() {
   run_stage() {
     sci python -m submission_ci.policy --policy "$CI_DIR/policy.toml" \
       --stage "$1" --hub-ref "$HUB_REF" --root "$SRC_ROOT" --model "$model" \
-      > "$WORK/matrix-$1.json"
+      --reference-date "$REFERENCE_DATE" --now "$NOW" > "$WORK/matrix-$1.json"
     python3 - "$WORK/matrix-$1.json" << 'EOF' > "$WORK/legs-$1.txt"
 import json, sys
 for e in json.load(open(sys.argv[1]))["include"]:
@@ -124,6 +129,7 @@ EOF
   local retried=false
   if sci python -m submission_ci.select_candidate triage --model "$model" \
       --policy "$CI_DIR/policy.toml" --candidates "$WORK/candidates" \
+      --reference-date "$REFERENCE_DATE" --now "$NOW" \
       | grep -q need_retry=true; then
     run_stage retry
     retried=true
@@ -194,6 +200,17 @@ EOF
   if [ -n "$want" ] && ! grep -qF -- "$want" "$WORK/gate/pr-body.md"; then
     echo "FAIL: $name PR body lacks: $want"; return 1
   fi
+  # Every fit job's timeout leaves the gate 45 minutes before the close:
+  # 350 on Monday morning, 240 - 45 = 195 at 19:00 UTC on Tuesday.
+  local timeout
+  timeout=$(python3 -c "import json, sys; print(sorted({e['timeout'] for e in json.load(open(sys.argv[1]))['include']}))" \
+    "$WORK/matrix-primary.json")
+  case "$name" in
+    late) [ "$timeout" = "['195']" ] && [ "$retried" = false ] \
+      || { echo "FAIL: late timeouts $timeout, retried $retried"; return 1; } ;;
+    *) [ "$timeout" = "['350']" ] \
+      || { echo "FAIL: $name timeouts $timeout"; return 1; } ;;
+  esac
   echo "ok: selected $got; body $WORK/gate/pr-body.md"
 }
 

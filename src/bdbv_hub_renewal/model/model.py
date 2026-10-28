@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final, Literal
 
@@ -616,7 +617,10 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
 
 
 def model_args(
-    model: MultiSignalModel, data: Vintage, forecast: bool = False
+    model: MultiSignalModel,
+    data: Vintage,
+    forecast: bool = False,
+    as_of: int | None = None,
 ) -> dict[str, Any]:
     """Arguments for `model.run` and `Predictive` for one vintage.
 
@@ -647,6 +651,7 @@ def model_args(
         "cutoff": n_init + data.cutoff,
         "hub_delay_pmf": jnp.asarray(data.hub_delay_pmf),
         "forecast": forecast,
+        **({"as_of": n_init + as_of} if forecast and as_of is not None else {}),
     }
     use_imports = data.import_kernel is not None and (
         model.observations["onsets"].import_scale_rv is not None
@@ -781,6 +786,7 @@ def forecast_trajectories(
     n_trajectories: int = 100,
     seed: int = 1,
     posterior: dict[str, Any] | None = None,
+    as_of: Sequence[int] = (),
 ) -> dict[str, Any]:
     """Draw joint trajectories of final weekly onsets (known plus imputed).
 
@@ -795,8 +801,12 @@ def forecast_trajectories(
         `province`: `(n_trajectories, n_weeks + horizon, P)`,
         `inactive`: `(n_trajectories, n_weeks + horizon, Q)` (Q may be 0),
         `national`: the sum over both, `insample`, the predictive
-        draws of the fitted streams at the vintage (see `ppc_draws`), and
-        `draw`, the index of the posterior draw behind each trajectory.
+        draws of the fitted streams at the vintage (see `ppc_draws`),
+        `draw`, the index of the posterior draw behind each trajectory,
+        and `as_reported`: for each later cut-off in `as_of` (days from
+        `start_date`), the counts as reported by it, with the same
+        posterior draws, as `{"province", "national"}`. These score
+        forecasts against a later vintage as reported, like for like.
     """
     if posterior is None:
         posterior = model.mcmc.get_samples()
@@ -829,10 +839,27 @@ def forecast_trajectories(
     insample = {
         s: np.asarray(pred[f"onsets_{s}_obs"])[:, 0, n_lead:] for s in sites
     }
+    as_reported = {}
+    for cut in as_of:
+        later = Predictive(model.sample, posterior_samples=thinned)(
+            random.key(seed + cut),
+            **model_args(model, data, forecast=True, as_of=cut),
+        )
+        prov = np.asarray(later["onsets_final_total"])[:, n_lead:]
+        # Provinces with no cases: their draws up to the later cut-off.
+        idle = inactive.copy()
+        first = (cut // 7) + 1
+        idle[:, first:] = 0.0
+        as_reported[cut] = {
+            "province": prov,
+            "inactive": idle,
+            "national": prov.sum(axis=2) + idle.sum(axis=2),
+        }
     return {
         "province": province,
         "inactive": inactive,
         "national": province.sum(axis=2) + inactive.sum(axis=2),
         "insample": insample,
         "draw": keep,
+        "as_reported": as_reported,
     }

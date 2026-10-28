@@ -69,10 +69,11 @@ jobs:
   fit:
     name: Fit ${{ matrix.id }}
     runs-on: ${{ vars.FIT_RUNNER || 'ubuntu-latest' }}
-    # Under GitHub's 360-minute cap for a hosted job. A fit that needs
-    # longer belongs on a larger or self-hosted runner (FIT_RUNNER); see
-    # SETUP.md.
-    timeout-minutes: 350
+    # From the matrix: under GitHub's 360-minute cap for a hosted job, and
+    # short enough to leave the gate time before the window closes
+    # (ci/policy.toml [timing]). A fit that needs longer belongs on a
+    # larger or self-hosted runner (FIT_RUNNER); see SETUP.md.
+    timeout-minutes: ${{ fromJSON(matrix.timeout || '350') }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(inputs.matrix) }}
