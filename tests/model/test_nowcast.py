@@ -91,13 +91,15 @@ def test_model_takes_the_empirical_publication_lag(sim_vintage):
         obs = model.observations["onsets"]
         np.testing.assert_allclose(obs.publication_lag, lag)
         assert "onsets_publication_lag" not in prior_latent(model, data, 2)
-    # With no estimate, a fixed uniform pmf on 0..3 days stands in.
+    # With no estimate, a fixed long-tail prior pmf stands in: 85% on
+    # 0..3 days and 15% spread over 4..60.
     model = build_model(
         dataclasses.replace(sim_vintage, publication_lag_pmf=None), MAIN
     )
-    np.testing.assert_allclose(
-        model.observations["onsets"].publication_lag, np.full(4, 0.25)
-    )
+    prior = np.asarray(model.observations["onsets"].publication_lag)
+    assert prior.shape == (61,)
+    assert prior[:4].sum() == pytest.approx(0.85)
+    assert prior[4:].sum() == pytest.approx(0.15)
     est = build_model(
         sim_vintage, dataclasses.replace(MAIN, publication_lag="estimated")
     )
