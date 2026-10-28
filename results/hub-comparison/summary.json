@@ -1,7 +1,7 @@
 {
   "truth_vintage": "2026-10-24",
   "complete_after_weeks": 3,
-  "baseline": "persistence",
+  "baseline": "persistencenow",
   "preferred_baseline": "persistencenow",
   "locations": [
     "CD",
