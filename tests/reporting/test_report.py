@@ -13,9 +13,11 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_relative_section_hidden_with_one_model() -> None:
     scores = pd.read_csv(ROOT / "results" / "backtest-scores.csv")
-    assert "no model other than persistence" in report._relative_section(scores)
+    # Persistence against itself means nothing, so nothing is shown.
+    assert report._relative_section(scores) == ""
     two = pd.concat([scores, scores.assign(model="other")])
     text = report._relative_section(two)
+    assert text.startswith("## Relative skill")
     assert "relative_wis" in text
     assert "relative-wis-horizon.svg" in text
 
@@ -388,3 +390,40 @@ def test_development_log(tmp_path: Path) -> None:
     assert "fixed 0 to 3 days" in report._development_log(
         ROOT / "results" / "development-log.csv"
     )
+
+
+def test_backtest_findings() -> None:
+    rows = []
+    for model, wis, cov in (
+        ("persistence", 20.0, 0.6),
+        ("renewal", 10.0, 0.9),
+        ("renewalsp", 15.0, 0.8),
+    ):
+        rows.append(
+            _scores().assign(
+                model=model, wis=wis, coverage_90=cov, complete=True
+            )
+        )
+    primary = pd.concat(rows)
+    text = report._backtest_findings(primary)
+    assert "renewal 0.50" in text
+    assert "renewalsp 0.75" in text
+    assert "persistence 0.60" in text
+    assert report._backtest_findings(rows[0]) == ""
+
+
+def test_forecast_tabs() -> None:
+    text = report._forecast_tabs(["persistence", "renewal"], {"CD": "DRC"})
+    assert text.startswith("## Forecasts against later data")
+    assert '=== "renewal"' in text
+    assert "figures/forecasts-renewal-cd.svg#only-light" in text
+    assert report._forecast_tabs([], {"CD": "DRC"}) == ""
+
+
+def test_recovery_section(tmp_path: Path) -> None:
+    assert report._recovery_section(tmp_path / "missing.csv") == ""
+    path = tmp_path / "recovery-scores.csv"
+    _scores().assign(kind="simulated").to_csv(path, index=False)
+    text = report._recovery_section(path)
+    assert text.startswith("## Recovery on simulated vintages")
+    assert "recovery-wis-horizon.svg" in text
