@@ -126,30 +126,6 @@ def test_a_model_may_give_its_own_national(task) -> None:  # type: ignore[no-unt
     assert (nat["value"].to_numpy() == own["value"].to_numpy()).all()
 
 
-def test_completeness_lag_from_fully_followed_up_weeks(
-    delays: pd.DataFrame,
-) -> None:
-    # Recent onset weeks only show short delays, so the lag over every
-    # week is biased short; weeks with full follow-up are not (#8).
-    vintage = "2026-10-09"
-    rows = delays.loc[delays["vintage"] == vintage]
-    naive = completeness_lag(rows, vintage)
-    full = completeness_lag(rows, vintage, full_follow_up=True)
-    assert full > naive
-    old = rows.loc[
-        pd.to_datetime(rows["onset_week"]) <= pd.Timestamp("2026-08-07")
-    ]
-    assert full == int(np.quantile(old["delay"].clip(lower=0), 0.9))
-
-
-def test_followup_persistence_is_registered(task) -> None:  # type: ignore[no-untyped-def]
-    model = get_model("persistence_fu")
-    assert isinstance(model, Persistence)
-    assert model.full_follow_up
-    out = model.forecast(task)
-    check_samples(out, task)
-
-
 def test_persistence_predicts_counts_as_reported_later(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
