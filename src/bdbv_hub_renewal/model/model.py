@@ -15,7 +15,7 @@ from numpyro.distributions.transforms import AffineTransform
 from numpyro.infer import MCMC, NUTS, Predictive, init_to_median
 from pyrenew.ascertainment import IndependentAscertainment
 from pyrenew.deterministic import DeterministicPMF, DeterministicVariable
-from pyrenew.latent.temporal_processes import AR1, WeeklyTemporalProcess
+from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
 from pyrenew.model import MultiSignalModel, PyrenewBuilder
 from pyrenew.observation import NegativeBinomialNoise
 from pyrenew.randomvariable import DistributionalVariable, TransformedVariable
@@ -103,7 +103,8 @@ class ModelConfig:
     rt_cadence : {"daily", "weekly"}
         Step of the Rt random walks.
     rt_deviation : {"rw", "ar1"}
-        Province deviations as random walks or mean-reverting AR(1).
+        Province deviations as random walks, or mean-reverting AR(1)
+        with a sampled half-life (default, as BVDOutbreakSize).
     active : {"cases", "all"}
         Full renewal for provinces with cases only, or for every province.
     inactive : {"imports", "none"}
@@ -116,6 +117,12 @@ class ModelConfig:
         Share $\nu$ of each province at risk, which depletion uses.
         `None` (default) estimates it with a log-normal prior; a number
         fixes it.
+    future_rt : {"walk", "hold"}
+        Rt past the data: the random walks carry on, or Rt holds at its
+        last value (EpiNow2 `future = "latest"`).
+    seeding : {"first_case", "start"}
+        Seed each province in the week before its first case week, or
+        every province at the start of the grid.
     walk : {"knots", "noncentred", "centred"}
         Parameterisation of the national Rt walk: weekly knots of total
         log Rt (`KnotWalk`, default), standardised steps, or the path
@@ -143,12 +150,14 @@ class ModelConfig:
     missing: Literal["estimated", "fixed"] = "estimated"
     depletion: bool = True
     rt_cadence: Literal["daily", "weekly"] = "weekly"
-    rt_deviation: Literal["rw", "ar1"] = "rw"
+    rt_deviation: Literal["rw", "ar1"] = "ar1"
     active: Literal["cases", "all"] = "cases"
     inactive: Literal["imports", "none"] = "imports"
     report_inactive: bool = True
     effective_population: float | None = None
     walk: Literal["knots", "noncentred", "centred"] = "knots"
+    seeding: Literal["first_case", "start"] = "first_case"
+    future_rt: Literal["walk", "hold"] = "walk"
     bvd: bool = False
     bvd_alpha: float = 0.5
     dmax: int = 60
@@ -224,6 +233,8 @@ class Vintage:
     fit_mask : numpy.ndarray or None
         Boolean `(P,)`. False switches a province's likelihood off (it
         stays in the latent process and is still predicted).
+    seed_days : numpy.ndarray or None
+        Day (from `start_date`) of each province's first case week.
     distances, all_populations : numpy.ndarray or None
         Distances (km) and populations of modelled then idle provinces,
         for the learnt kernel.
@@ -249,6 +260,7 @@ class Vintage:
     bvd: dict | None = None
     distances: np.ndarray | None = None
     all_populations: np.ndarray | None = None
+    seed_days: np.ndarray | None = None
 
     @property
     def n_weeks(self) -> int:
@@ -264,20 +276,37 @@ class Vintage:
 def _named_walk(
     name: str,
     sd: float,
+    n_weeks: int,
     cadence: str = "weekly",
     ar: bool = False,
     centred: bool = False,
     knots: tuple[float, float] | None = None,
+    future: str = "walk",
 ):
-    """Weekly (or daily) random walk, frozen over the seeding period."""
+    """Walk frozen over the seeding period, fitted on the data weeks only.
+
+    `n_weeks` data weeks set the fit axis; later steps are drawn in the
+    forecast pass. With `ar`, the walk is AR(1) with a half-life of
+    LogNormal(log 6 weeks, 0.6) (BVDOutbreakSize deviations: 42 days).
+    """
     sd_rv = DistributionalVariable(name, dist.HalfNormal(sd))
-    frozen = GEN_INT_LENGTH // 7 if cadence == "weekly" else GEN_INT_LENGTH
-    inner = (
-        AR1(DeterministicVariable(f"{name}_ar", 0.9), sd_rv)
-        if ar
-        else NonCentredRandomWalk(
-            sd_rv, frozen=frozen, centred=centred, knots=knots
+    weekly = cadence == "weekly"
+    frozen = GEN_INT_LENGTH // 7 if weekly else GEN_INT_LENGTH
+    n_fit = frozen + n_weeks if weekly else frozen + 7 * n_weeks
+    half_life = None
+    if ar:
+        half_life = DistributionalVariable(
+            f"{name}_half_life",
+            dist.LogNormal(np.log(6.0 if weekly else 42.0), 0.6),
         )
+    inner = NonCentredRandomWalk(
+        sd_rv,
+        frozen=frozen,
+        centred=centred,
+        knots=knots,
+        n_fit=n_fit,
+        half_life_rv=half_life,
+        future=future,
     )
     if cadence == "weekly":
         return WeeklyTemporalProcess(inner, start_dow=SUNDAY)
@@ -334,20 +363,25 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         ),
         baseline_rt_process=_named_walk(
             "rt_sd",
-            0.4 * rt_scale,
+            0.2 * rt_scale,
+            data.n_weeks,
             config.rt_cadence,
             centred=centred,
             knots=(0.0, 0.5) if knots else None,
+            future=config.future_rt,
         ),
         subpop_rt_deviation_process=_named_walk(
             "rt_dev_sd",
-            0.3 * rt_scale,
+            0.1 * rt_scale,
+            data.n_weeks,
             config.rt_cadence,
             ar=config.rt_deviation == "ar1",
+            future=config.future_rt,
         ),
         kernel=kernel,
         importation_rv=importation,
         deplete=config.depletion,
+        seed_days=data.seed_days if config.seeding == "first_case" else None,
         rt_observation=RtPseudoObservation(alpha=config.bvd_alpha, **data.bvd)
         if config.bvd and data.bvd is not None
         else None,
@@ -366,7 +400,9 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     ascertainment = IndependentAscertainment(
         name="ascertainment",
         rate_rvs={"onsets": DeterministicVariable("alpha0", ALPHA0)},
-        temporal_processes={"onsets": _named_walk("alpha_sd", 0.03)},
+        temporal_processes={
+            "onsets": _named_walk("alpha_sd", 0.03, data.n_weeks)
+        },
     )
     builder.add_ascertainment(ascertainment)
 
@@ -393,12 +429,12 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         missing = MissingOnsetFraction(
             "missing_fraction",
             PooledInitialValue("logit_pi0", n_prov, -2.0, 1.0, 0.5),
-            _named_walk("pi_sd", 0.6),
-            _named_walk("pi_dev_sd", 0.2),
+            _named_walk("pi_sd", 0.3, data.n_weeks),
+            _named_walk("pi_dev_sd", 0.1, data.n_weeks),
         )
 
     if missing is not None:
-        delay_time = _named_walk("delay_sd", 0.15)
+        delay_time = _named_walk("delay_sd", 0.15, data.n_weeks)
         if config.delay == "fixed":
             # Delays near the cut-off are part published, so treat the
             # last L days as truncated.
@@ -476,11 +512,14 @@ def model_args(
     if data.start_date.weekday() != SUNDAY:
         raise ValueError("start_date must be a Sunday.")
     n_init = model.latent.n_initialization_points
-    n_weeks = data.n_weeks + data.horizon_weeks
+    # The fit runs on the data weeks only; the forecast pass extends the
+    # axis by the horizon and draws the new steps from their priors.
+    horizon = data.horizon_weeks if forecast else 0
+    n_weeks = data.n_weeks + horizon
 
     def pad(x):
         lead = np.full((n_init // 7, x.shape[1]), np.nan)
-        tail = np.full((data.horizon_weeks, x.shape[1]), np.nan)
+        tail = np.full((horizon, x.shape[1]), np.nan)
         return jnp.asarray(np.vstack([lead, x, tail]))
 
     obs = {
@@ -578,9 +617,10 @@ def seed_from_imports(
     r"""Draw onsets in idle provinces: importations that may spread.
 
     For one posterior draw, importations are
-    $m_q(t) \sim \text{Poisson}(\mu_q(t))$ on every day. From day
-    `start` on, each also seeds local transmission at the national
-    reproduction number,
+    $m_q(t) \sim \text{Poisson}(\mu_q(t))$ from day `start` (the day
+    after the cut-off; before it these provinces are observed with no
+    cases). Each also seeds local transmission at the national
+    reproduction number, weighted by infections,
     $\ell_q(t) \sim \text{Poisson}\big(R(t) \sum_\tau g(\tau)
     y_q(t - \tau)\big)$ with $y = m + \ell$. Susceptible depletion is
     ignored because these provinces have had no cases.
@@ -603,7 +643,9 @@ def seed_from_imports(
     numpy.ndarray
         Onsets $y$, `(n, Q)`.
     """
+    # Up to the cut-off these provinces are observed with no cases.
     y = rng.poisson(np.maximum(imports, 0.0)).astype(float)
+    y[:start] = 0.0
     g = np.asarray(gen_int)
     for t in range(start, y.shape[0]):
         lags = y[max(0, t - g.size) : t][::-1]
@@ -650,7 +692,11 @@ def forecast_trajectories(
     inactive = np.zeros((n_trajectories, n_weeks, len(data.inactive_names)))
     if "onsets_expected_imports_daily" in pred:
         mu = np.asarray(pred["onsets_expected_imports_daily"])[:, n_init:]
-        rt = np.asarray(pred["latent::rt_baseline"])[:, n_init:, 0]
+        # National Rt weighted by infections (counts), not the geometric
+        # mean of the province values.
+        rt_p = np.asarray(pred["latent::rt_subpop"])[:, n_init:]
+        w = np.asarray(pred["latent_infections_by_subpop"])[:, n_init:]
+        rt = (rt_p * w).sum(-1) / np.maximum(w.sum(-1), 1e-12)
         g = np.asarray(model.latent.gen_int_rv())
         for k in range(n_trajectories):
             y = seed_from_imports(mu[k], rt[k], g, data.cutoff + 1, rng)

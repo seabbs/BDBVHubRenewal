@@ -296,3 +296,14 @@ def test_generation_interval_is_double_censored():
 def test_censored_pmf_matches_primarycensored(family):
     ours = np.asarray(censored_pmf(family, 8.0, 0.8, 60))
     np.testing.assert_allclose(ours[:12], DPCENS_DELAY[family], rtol=2e-4)
+
+
+def test_idle_provinces_are_zero_up_to_the_cutoff():
+    from bdbv_hub_renewal.model.model import seed_from_imports
+
+    rng = np.random.default_rng(0)
+    y = seed_from_imports(
+        np.full((60, 2), 0.5), np.full(60, 1.5), generation_interval(), 40, rng
+    )
+    assert np.all(y[:40] == 0)
+    assert y[40:].sum() > 0
