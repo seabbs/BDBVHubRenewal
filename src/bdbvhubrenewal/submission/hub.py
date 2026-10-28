@@ -708,6 +708,17 @@ def validate_submission_file(
 # Model metadata
 # --------------------------------------------------------------------------
 
+FUNDING: Final = (
+    "This study is funded by the National Institute for Health and Care "
+    "Research (NIHR) Health Protection Research Unit in Health Analytics & "
+    "Modelling, a partnership between the UK Health Security Agency, "
+    "Imperial College London and the London School of Hygiene & Tropical "
+    "Medicine (grant code NIHR207404). The views expressed are those of the "
+    "author(s) and not necessarily those of the NIHR, UK Health Security "
+    "Agency or the Department of Health and Social Care."
+)
+"""Sam Abbott's HPRU funding statement (`team_funding` in the metadata)."""
+
 METADATA_DEFAULTS: Final[dict[str, Any]] = {
     "team_name": "EpiForecasts",
     "team_abbr": TEAM_ABBR,
@@ -723,13 +734,9 @@ METADATA_DEFAULTS: Final[dict[str, Any]] = {
     "repo_url": "https://github.com/seabbs/BDBVHubRenewal",
     "website_url": "https://samabbott.co.uk/BDBVHubRenewal/",
     "ensemble_of_hub_models": False,
+    "team_funding": FUNDING,
 }
-"""Fields shared by every model's metadata. Contributors are to confirm."""
-
-_LLM_NOTE: Final = (
-    " Model code was drafted with the assistance of a language model and "
-    "is under review by the named authors."
-)
+"""Fields shared by every model's metadata."""
 
 
 def render_model_metadata(
@@ -752,8 +759,7 @@ def render_model_metadata(
     methods : str
         Short description, at most 200 characters.
     methods_long : str
-        Full description. A note that the code was drafted with an LLM is
-        appended.
+        Full description.
     data_inputs : str
         The data the model uses.
     model_version : str, optional
@@ -777,12 +783,17 @@ def render_model_metadata(
         "model_details": {
             "data_inputs": data_inputs,
             "methods": methods,
-            "methods_long": methods_long + _LLM_NOTE,
+            "methods_long": methods_long,
         },
     }
     if model_version is not None:
         record["model_version"] = model_version
-    for key in ("website_url", "repo_url", "ensemble_of_hub_models"):
+    for key in (
+        "website_url",
+        "repo_url",
+        "team_funding",
+        "ensemble_of_hub_models",
+    ):
         record[key] = base[key]
     return record
 

@@ -50,6 +50,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 To cite this software, use [CITATION.cff](CITATION.cff), or the "Cite this repository" button on GitHub.
 
+## Funding
+
+This study is funded by the National Institute for Health and Care Research (NIHR) Health Protection Research Unit in Health Analytics & Modelling, a partnership between the UK Health Security Agency, Imperial College London and the London School of Hygiene & Tropical Medicine (grant code NIHR207404).
+The views expressed are those of the author(s) and not necessarily those of the NIHR, UK Health Security Agency or the Department of Health and Social Care.
+
 ## Licence
 
 The code is under the MIT licence, see [LICENSE](LICENSE).

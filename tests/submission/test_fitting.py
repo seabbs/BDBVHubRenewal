@@ -126,7 +126,9 @@ def test_fit_fails_on_unknown_config_or_vintage(tmp_path: Path) -> None:
 @pytest.mark.usefixtures("in_root")
 def test_plot_submission_and_validate(tmp_path: Path) -> None:
     out = tmp_path / "sub"
-    assert main(["nowcast", "--out", str(out)]) == 0
+    # seabbsbaseline: the committed metadata covers the hub models only.
+    args = ["--model", "persistencenow", "--out", str(out)]
+    assert main(["nowcast", *args]) == 0
     (csv,) = out.rglob("*.csv")
     png = tmp_path / "plot.png"
     assert main(["plot-submission", "--submission", str(csv), "--out",

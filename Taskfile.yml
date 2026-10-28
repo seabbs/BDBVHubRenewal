@@ -70,22 +70,22 @@ tasks:
       - uv run bdbvhubrenewal nowcast {{.CLI_ARGS}}
 
   metadata:
-    desc: Write and check the model metadata YAML in hub/model-metadata/
+    desc: Write and check the metadata of both hub models in hub/model-metadata/
     cmds:
-      - uv run bdbvhubrenewal metadata {{.CLI_ARGS}}
+      - uv run bdbvhubrenewal metadata --model persistencenow --out hub/model-metadata
+      - uv run bdbvhubrenewal metadata --model renewal --out hub/model-metadata
 
   validate-hub:
     desc: Check the nowcast file and metadata with hub_validate (Python) and hubValidations (R)
-    deps: [nowcast, metadata]
+    deps: [metadata]
     vars:
-      MODEL: '{{.MODEL | default "persistence"}}'
+      MODEL: '{{.MODEL | default "persistencenow"}}'
       ID:
-        sh: >-
-          [ "{{.MODEL}}" = persistence ] && echo epiforecasts-persistence
-          || uv run --quiet bdbvhubrenewal hub-id
+        sh: uv run --quiet bdbvhubrenewal hub-id --model {{.MODEL}}
     env:
       R_CACHE_ROOTPATH: '{{.R_CACHE_ROOTPATH | default (printf "%s/rcache" (env "TMPDIR" | default "/tmp"))}}'
     cmds:
+      - uv run bdbvhubrenewal nowcast --model {{.MODEL}}
       - rm -rf output/hub
       - git clone --depth 1 -q https://github.com/InsightNet-US/BDBV-Modeling-Hub.git output/hub
       - >-
