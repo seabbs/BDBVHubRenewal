@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbv_hub_renewal.evaluation.backtest import BacktestConfig
-from bdbv_hub_renewal.evaluation.hubcompare import (
+from bdbvhubrenewal.evaluation.backtest import BacktestConfig
+from bdbvhubrenewal.evaluation.hubcompare import (
     ATTRIBUTION,
     display_names,
     load_hub_submissions,
@@ -16,7 +16,7 @@ from bdbv_hub_renewal.evaluation.hubcompare import (
     our_forecasts,
     score_comparison,
 )
-from bdbv_hub_renewal.reporting.plots import plot_comparison
+from bdbvhubrenewal.reporting.plots import plot_comparison
 
 WEEKS = ["2026-09-19", "2026-09-26", "2026-10-03", "2026-10-10"]
 
@@ -213,7 +213,7 @@ def test_plot_comparison(
 def test_cli_compare_hub(tmp_path: Path) -> None:
     import os
 
-    from bdbv_hub_renewal.cli import main
+    from bdbvhubrenewal.cli import main
 
     _write_hub(tmp_path / "hub")
     root = Path(__file__).resolve().parents[2]

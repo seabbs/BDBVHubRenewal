@@ -3,12 +3,12 @@
 The forecaster interface, the registry, persistence and the renewal variants.
 { .page-subtitle }
 
-::: bdbv_hub_renewal.forecasters
+::: bdbvhubrenewal.forecasters
     options:
       members: false
 
-::: bdbv_hub_renewal.forecasters.base
+::: bdbvhubrenewal.forecasters.base
 
-::: bdbv_hub_renewal.forecasters.persistence
+::: bdbvhubrenewal.forecasters.persistence
 
-::: bdbv_hub_renewal.forecasters.renewal
+::: bdbvhubrenewal.forecasters.renewal

@@ -10,13 +10,13 @@ import pandas as pd
 import pytest
 from jax.scipy.stats import norm
 
-from bdbv_hub_renewal.model import BVD, MAIN, build_model, model_args
-from bdbv_hub_renewal.model.inputs import (
+from bdbvhubrenewal.model import BVD, MAIN, build_model, model_args
+from bdbvhubrenewal.model.inputs import (
     bvd_inputs,
     bvd_rows,
     vintage_from_tables,
 )
-from bdbv_hub_renewal.model.observation import RtPseudoObservation
+from bdbvhubrenewal.model.observation import RtPseudoObservation
 
 from .conftest import SIM_LOCATIONS, VINTAGE_DAYS, vintage_date
 from .test_model import trace
@@ -139,7 +139,7 @@ def test_group_rt_weights_by_counts_not_per_resident():
 
 
 def test_fit_axis_reaches_the_bvd_day(outbreak, sim_tables, table, release):
-    from bdbv_hub_renewal.model.model import fit_weeks
+    from bdbvhubrenewal.model.model import fit_weeks
 
     day = VINTAGE_DAYS[-1]
     target, delays = sim_tables[day]

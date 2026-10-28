@@ -11,9 +11,9 @@ import pytest
 from jax import random
 from numpyro.infer import Predictive
 
-from bdbv_hub_renewal.model import FALLBACK, MAIN, build_model, model_args
-from bdbv_hub_renewal.model.model import forecast_trajectories
-from bdbv_hub_renewal.model.observation import onset_expectations
+from bdbvhubrenewal.model import FALLBACK, MAIN, build_model, model_args
+from bdbvhubrenewal.model.model import forecast_trajectories
+from bdbvhubrenewal.model.observation import onset_expectations
 
 
 def prior_latent(model, data, n=20):
@@ -82,11 +82,22 @@ def test_publication_lag_mixes_cut_offs():
     )
 
 
+def test_publication_lag_is_fixed_by_default(sim_vintage):
+    # Delay-file lags mix late reports with onsets recorded later, so the
+    # default stays a fixed uniform lag on 0..3 days.
+    for cfg in (MAIN, FALLBACK):
+        assert cfg.publication_lag == "fixed"
+        model = build_model(sim_vintage, cfg)
+        np.testing.assert_allclose(
+            model.observations["onsets"].publication_lag, np.full(4, 0.25)
+        )
+
+
 def test_model_takes_the_empirical_publication_lag(sim_vintage):
     lag = np.r_[np.full(10, 0.08), np.zeros(50), 0.2]
     data = dataclasses.replace(sim_vintage, publication_lag_pmf=lag)
-    for cfg in (MAIN, FALLBACK):
-        assert cfg.publication_lag == "empirical"
+    for base in (MAIN, FALLBACK):
+        cfg = dataclasses.replace(base, publication_lag="empirical")
         model = build_model(data, cfg)
         obs = model.observations["onsets"]
         np.testing.assert_allclose(obs.publication_lag, lag)
@@ -94,7 +105,8 @@ def test_model_takes_the_empirical_publication_lag(sim_vintage):
     # With no estimate, a fixed long-tail prior pmf stands in: 85% on
     # 0..3 days and 15% spread over 4..60.
     model = build_model(
-        dataclasses.replace(sim_vintage, publication_lag_pmf=None), MAIN
+        dataclasses.replace(sim_vintage, publication_lag_pmf=None),
+        dataclasses.replace(MAIN, publication_lag="empirical"),
     )
     prior = np.asarray(model.observations["onsets"].publication_lag)
     assert prior.shape == (61,)
@@ -198,7 +210,7 @@ def test_dispersion_prior_is_half_normal_on_inverse_root_phi(sim_vintage):
 def test_negative_and_long_delays_are_clipped_not_dropped(
     outbreak, sim_tables, table
 ):
-    from bdbv_hub_renewal.model.inputs import vintage_from_tables
+    from bdbvhubrenewal.model.inputs import vintage_from_tables
 
     from .conftest import SIM_LOCATIONS, VINTAGE_DAYS, vintage_date
 

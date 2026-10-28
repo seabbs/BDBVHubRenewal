@@ -51,7 +51,7 @@ jobs:
       - run: uv sync --frozen
       - name: Tests
         run: >-
-          uv run pytest -q --cov=bdbv_hub_renewal --cov-report=term-missing
+          uv run pytest -q --cov=bdbvhubrenewal --cov-report=term-missing
           --cov-report=xml
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -69,19 +69,19 @@ jobs:
         # The renewal variants are fitted per vintage, so the smoke test
         # runs persistence only. The full backtest runs on archie.
         run: |
-          uv run bdbv-hub-renewal backtest --models persistence --output output/backtest --results output/results
-          uv run bdbv-hub-renewal nowcast
-          uv run bdbv-hub-renewal metadata --out output/metadata
+          uv run bdbvhubrenewal backtest --models persistence --output output/backtest --results output/results
+          uv run bdbvhubrenewal nowcast
+          uv run bdbvhubrenewal metadata --out output/metadata
       - name: Fit and forecast as the submission CI does (a tiny fit)
         run: |
-          uv run bdbv-hub-renewal --version
-          uv run bdbv-hub-renewal fit --model renewal --config main \
+          uv run bdbvhubrenewal --version
+          uv run bdbvhubrenewal fit --model renewal --config main \
             --sampler-json '{"num_chains": 1, "num_warmup": 50, "num_samples": 50}' \
             --out output/fits/main
-          uv run bdbv-hub-renewal plot-ppc --ppc output/fits/main/ppc.json \
+          uv run bdbvhubrenewal plot-ppc --ppc output/fits/main/ppc.json \
             --out output/fits/main/ppc.png
-          uv run bdbv-hub-renewal nowcast --config main --fit output/fits/main \
+          uv run bdbvhubrenewal nowcast --config main --fit output/fits/main \
             --out output/candidates/main
-          uv run bdbv-hub-renewal plot-submission --out output/candidates/main.png \
+          uv run bdbvhubrenewal plot-submission --out output/candidates/main.png \
             --submission "$(ls output/candidates/main/model-output/*/*.csv)"
-          uv run bdbv-hub-renewal coherence
+          uv run bdbvhubrenewal coherence

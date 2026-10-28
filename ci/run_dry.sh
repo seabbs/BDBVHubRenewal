@@ -7,7 +7,7 @@
 # It runs the same step scripts as .github/workflows/submit.yml, in the
 # same order: detect -> prepare (persistence) -> primary candidates ->
 # triage -> retries -> select -> submit (DRY_RUN=true). The model is the
-# fixture CLI (fixtures/fake_bdbv_hub_renewal.py) and `gh`/`git` are never
+# fixture CLI (fixtures/fake_bdbvhubrenewal.py) and `gh`/`git` are never
 # called for writing. Outputs go to a new $TMPDIR/submission-ci-dry.XXXXXX/
 # <scenario>/ for each run, so concurrent dry runs never share files.
 set -euo pipefail
@@ -19,7 +19,7 @@ tmp=${TMPDIR:-/tmp}
 ROOT=$(mktemp -d "${tmp%/}/submission-ci-dry.XXXXXX")
 echo "Dry-run outputs: $ROOT"
 export UV_CACHE_DIR=${UV_CACHE_DIR:-${TMPDIR:-/tmp}/uvcache}
-export FORECAST_CLI="python3 $FIX/fake_bdbv_hub_renewal.py"
+export FORECAST_CLI="python3 $FIX/fake_bdbvhubrenewal.py"
 # MODEL and MODEL_ID are left unset, so `prepare` resolves them from the
 # fixture CLI (`chosen-model`, `hub-id`) as the workflow does.
 unset MODEL MODEL_ID

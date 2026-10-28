@@ -67,7 +67,7 @@ Settings → Secrets and variables → Actions → **Variables**:
 | variable | default when unset | meaning |
 | --- | --- | --- |
 | `DRY_RUN` | dry run | Set to `false` to go live. Any other value, or none, is a dry run. |
-| `HUB_MODEL` | latest entry of `results/model-choice.yml` | Model name passed to `bdbv-hub-renewal`. |
+| `HUB_MODEL` | latest entry of `results/model-choice.yml` | Model name passed to `bdbvhubrenewal`. |
 | `HUB_MODEL_ID` | `config/hub.toml` (`epiforecasts-seabbsrenewal`) | Hub model id. Fallbacks are submitted under this id too. |
 | `HUB_FORK` | `seabbs-bot/BDBV-Modeling-Hub` | The fork to push to. |
 | `EXPECTED_LOCATIONS` | none | For example `CD,CD-IT,CD-NK,CD-HU,CD-TO`. The coverage check fails if any is missing. |

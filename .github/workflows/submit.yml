@@ -63,7 +63,7 @@ env:
   # resolves both into the run's context.json. A repo variable overrides.
   MODEL: ${{ vars.HUB_MODEL }}
   MODEL_ID: ${{ vars.HUB_MODEL_ID }}
-  # Every bdbv-hub-renewal command reads the tidy data the prepare job
+  # Every bdbvhubrenewal command reads the tidy data the prepare job
   # pinned to the hub commit, shipped in the `inputs` artefact.
   BDBV_DATA_DIR: output/ci/inputs/data
   BDBV_RAW_DIR: output/ci/raw

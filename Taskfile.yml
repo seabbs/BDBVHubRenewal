@@ -13,7 +13,7 @@ tasks:
   test:
     desc: Run the tests with coverage
     cmds:
-      - uv run pytest -q --cov=bdbv_hub_renewal
+      - uv run pytest -q --cov=bdbvhubrenewal
 
   test-slow:
     desc: Run the model fit tests (tiny real fits)
@@ -36,37 +36,37 @@ tasks:
   data:
     desc: Download every hub data vintage and rebuild the tidy tables in data/
     cmds:
-      - uv run bdbv-hub-renewal data
+      - uv run bdbvhubrenewal data
 
   data-bvd:
     desc: Cache the BVDOutbreakSize releases each backtest vintage may use in data/bvd/ (for renewalbvd)
     cmds:
-      - uv run bdbv-hub-renewal bvd {{.CLI_ARGS}}
+      - uv run bdbvhubrenewal bvd {{.CLI_ARGS}}
 
   backtest:
     desc: Run the development backtest (real and reconstructed) and the recovery check (simulated)
     cmds:
-      - uv run bdbv-hub-renewal backtest {{.CLI_ARGS}}
+      - uv run bdbvhubrenewal backtest {{.CLI_ARGS}}
 
   backtest-lopo:
     desc: Leave one province out on the development vintages, for the variants that take a mask
     cmds:
-      - uv run bdbv-hub-renewal backtest --lopo {{.CLI_ARGS}}
+      - uv run bdbvhubrenewal backtest --lopo {{.CLI_ARGS}}
 
   backtest-heldout:
     desc: Score every held-out vintage under the model chosen at the time (needs results/model-choice.yml)
     cmds:
-      - uv run bdbv-hub-renewal backtest --evaluate-holdout
+      - uv run bdbvhubrenewal backtest --evaluate-holdout
 
   nowcast:
     desc: Forecast from the latest vintage and write a checked hub file to output/submission/
     cmds:
-      - uv run bdbv-hub-renewal nowcast {{.CLI_ARGS}}
+      - uv run bdbvhubrenewal nowcast {{.CLI_ARGS}}
 
   metadata:
     desc: Write and check the model metadata YAML in hub/model-metadata/
     cmds:
-      - uv run bdbv-hub-renewal metadata {{.CLI_ARGS}}
+      - uv run bdbvhubrenewal metadata {{.CLI_ARGS}}
 
   validate-hub:
     desc: Check the nowcast file and metadata with hub_validate (Python) and hubValidations (R)
@@ -76,14 +76,14 @@ tasks:
       ID:
         sh: >-
           [ "{{.MODEL}}" = persistence ] && echo epiforecasts-persistence
-          || uv run --quiet bdbv-hub-renewal hub-id
+          || uv run --quiet bdbvhubrenewal hub-id
     env:
       R_CACHE_ROOTPATH: '{{.R_CACHE_ROOTPATH | default (printf "%s/rcache" (env "TMPDIR" | default "/tmp"))}}'
     cmds:
       - rm -rf output/hub
       - git clone --depth 1 -q https://github.com/InsightNet-US/BDBV-Modeling-Hub.git output/hub
       - >-
-        uv run bdbv-hub-renewal validate --hub output/hub --skip-window
+        uv run bdbvhubrenewal validate --hub output/hub --skip-window
         --metadata-dir hub/model-metadata
         $(ls output/submission/model-output/{{.ID}}/*.csv | tail -n 1)
         hub/model-metadata/{{.ID}}.yml
@@ -110,7 +110,7 @@ tasks:
       - git clone --depth 1 -q https://github.com/InsightNet-US/BDBV-Modeling-Hub.git output/hub
       - >-
         if [ -f hub/model-metadata/{{.MODEL_ID}}.yml ]; then
-        uv run bdbv-hub-renewal validate --hub output/hub
+        uv run bdbvhubrenewal validate --hub output/hub
         hub/model-metadata/{{.MODEL_ID}}.yml; fi
       - uv run --quiet --project ci submission-preflight {{.CLI_ARGS}}
 
@@ -125,13 +125,13 @@ tasks:
       CONFIG: '{{.CONFIG | default "main"}}'
     cmds:
       - rm -rf output/fits/{{.CONFIG}}
-      - uv run bdbv-hub-renewal fit --config {{.CONFIG}} --out output/fits/{{.CONFIG}} {{.CLI_ARGS}}
-      - uv run bdbv-hub-renewal nowcast --config {{.CONFIG}} --fit output/fits/{{.CONFIG}} --out output/candidates/{{.CONFIG}}
+      - uv run bdbvhubrenewal fit --config {{.CONFIG}} --out output/fits/{{.CONFIG}} {{.CLI_ARGS}}
+      - uv run bdbvhubrenewal nowcast --config {{.CONFIG}} --fit output/fits/{{.CONFIG}} --out output/candidates/{{.CONFIG}}
 
   plots:
     desc: Make the docs figures and tables from the backtest results
     cmds:
-      - uv run bdbv-hub-renewal report
+      - uv run bdbvhubrenewal report
 
   docs:
     desc: Build the docs site into _site/

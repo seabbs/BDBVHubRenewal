@@ -3,20 +3,20 @@
 The hub data, dates, reconstructed and simulated vintages, delays, completeness and BVDOutbreakSize releases.
 { .page-subtitle }
 
-::: bdbv_hub_renewal.data
+::: bdbvhubrenewal.data
     options:
       members: false
 
-::: bdbv_hub_renewal.data.tidy
+::: bdbvhubrenewal.data.tidy
 
-::: bdbv_hub_renewal.data.dates
+::: bdbvhubrenewal.data.dates
 
-::: bdbv_hub_renewal.data.reconstruct
+::: bdbvhubrenewal.data.reconstruct
 
-::: bdbv_hub_renewal.data.simulate
+::: bdbvhubrenewal.data.simulate
 
-::: bdbv_hub_renewal.data.delays
+::: bdbvhubrenewal.data.delays
 
-::: bdbv_hub_renewal.data.completeness
+::: bdbvhubrenewal.data.completeness
 
-::: bdbv_hub_renewal.data.bvd
+::: bdbvhubrenewal.data.bvd

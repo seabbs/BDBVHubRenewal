@@ -3,18 +3,18 @@
 The PyRenew renewal model.
 { .page-subtitle }
 
-::: bdbv_hub_renewal.model
+::: bdbvhubrenewal.model
     options:
       members: false
 
-::: bdbv_hub_renewal.model.rt
+::: bdbvhubrenewal.model.rt
 
-::: bdbv_hub_renewal.model.renewal
+::: bdbvhubrenewal.model.renewal
 
-::: bdbv_hub_renewal.model.delays
+::: bdbvhubrenewal.model.delays
 
-::: bdbv_hub_renewal.model.observation
+::: bdbvhubrenewal.model.observation
 
-::: bdbv_hub_renewal.model.model
+::: bdbvhubrenewal.model.model
 
-::: bdbv_hub_renewal.model.inputs
+::: bdbvhubrenewal.model.inputs

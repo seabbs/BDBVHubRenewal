@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbv_hub_renewal.data.delays import (
+from bdbvhubrenewal.data.delays import (
     EmpiricalDelayModel,
     ParametricDelay,
     delay_summary,

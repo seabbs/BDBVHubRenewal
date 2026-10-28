@@ -1,4 +1,4 @@
-# Backtest settings. Read by `bdbv_hub_renewal.backtest.load_config`.
+# Backtest settings. Read by `bdbvhubrenewal.backtest.load_config`.
 
 [forecast]
 # Weeks in each forecast, as horizons in weeks from the reference date.
@@ -19,7 +19,7 @@ model_choice = "results/model-choice.yml"
 # A truth week counts as complete if it ended at least this many weeks
 # before the truth vintage. It is the fewest weeks by which 95% of a
 # week's final count is published, from the latest delay data and a 3-day
-# publication lag (`bdbv_hub_renewal.data.completeness.complete_weeks`).
+# publication lag (`bdbvhubrenewal.data.completeness.complete_weeks`).
 # Scores on complete weeks are the primary scores for the model choice.
 complete_after_weeks = 3
 

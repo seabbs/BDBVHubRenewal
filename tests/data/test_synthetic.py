@@ -6,13 +6,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbv_hub_renewal.data.reconstruct import (
+from bdbvhubrenewal.data.reconstruct import (
     compare_reconstruction,
     reconstruct_delays,
     reconstruct_vintage,
     reconstruct_vintages,
 )
-from bdbv_hub_renewal.data.simulate import (
+from bdbvhubrenewal.data.simulate import (
     SimulationSettings,
     simulate_outbreak,
 )
@@ -140,10 +140,10 @@ def test_simulated_missing_onsets_follow_the_report_day() -> None:
 def test_simulated_onsets_follow_the_model_renewal(outbreak) -> None:  # type: ignore[no-untyped-def]
     import jax.numpy as jnp
 
-    from bdbv_hub_renewal.data import PROVINCE_POPULATIONS
-    from bdbv_hub_renewal.model.inputs import gravity_kernel as model_kernel
-    from bdbv_hub_renewal.model.model import generation_interval
-    from bdbv_hub_renewal.model.renewal import coupled_renewal, mixing_matrix
+    from bdbvhubrenewal.data import PROVINCE_POPULATIONS
+    from bdbvhubrenewal.model.inputs import gravity_kernel as model_kernel
+    from bdbvhubrenewal.model.model import generation_interval
+    from bdbvhubrenewal.model.renewal import coupled_renewal, mixing_matrix
 
     s = outbreak.settings
     p = outbreak.parameters
@@ -193,7 +193,7 @@ def _rows(
 
 
 def test_publication_lag_pmf_from_rows_new_in_later_vintages() -> None:
-    from bdbv_hub_renewal.data.reconstruct import publication_lag_pmf
+    from bdbvhubrenewal.data.reconstruct import publication_lag_pmf
 
     old = _rows("2026-10-10", ["2026-09-05"] * 5, [3] * 5)
     # Two rows reported long ago appear late, three recent ones on time.

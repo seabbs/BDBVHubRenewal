@@ -13,14 +13,14 @@ import numpyro
 import pytest
 from jax import enable_x64
 
-from bdbv_hub_renewal.model import FALLBACK, MAIN, build_model, model_args
-from bdbv_hub_renewal.model.inputs import vintage_from_tables
+from bdbvhubrenewal.model import FALLBACK, MAIN, build_model, model_args
+from bdbvhubrenewal.model.inputs import vintage_from_tables
 
 from .conftest import MAIN_REPO_DATA
 
 
 def real_vintage(table, config):
-    from bdbv_hub_renewal.data import load_delays, load_target
+    from bdbvhubrenewal.data import load_delays, load_target
 
     target, delays = load_target(MAIN_REPO_DATA), load_delays(MAIN_REPO_DATA)
     vintage = target["vintage"].max()
