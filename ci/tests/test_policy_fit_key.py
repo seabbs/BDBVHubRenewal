@@ -96,3 +96,18 @@ def test_shadow_candidates_are_fitted_but_never_in_the_chain(
     primary = [e["id"] for e in matrix(pol, "primary", root, "hub")]
     assert "bvd" in primary
     assert primary[0] == "main"
+
+
+def test_persistence_chosen_makes_the_renewal_candidates_shadows(
+    tmp_path: Path,
+) -> None:
+    pol = load_policy(POLICY_PATH).for_model("persistence")
+    assert [c.id for c in pol.chain()] == ["persistence"]
+    root = repo(tmp_path)
+    primary = [e["id"] for e in matrix(pol, "primary", root, "hub")]
+    assert primary == ["main", "fallback", "bvd"]
+    assert matrix(pol, "retry", root, "hub") == []
+    assert all(c.kind == "shadow" for c in pol.candidates if c.id in primary)
+    # Any other choice keeps the full chain.
+    full = load_policy(POLICY_PATH).for_model("renewal")
+    assert [c.id for c in full.chain()][0] == "main"
