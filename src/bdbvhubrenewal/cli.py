@@ -45,8 +45,10 @@ from bdbvhubrenewal.data import (
     delays_for_vintage,
     fetch_hub_data,
     load_delays,
+    load_health_zones,
     load_target,
 )
+from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.evaluation.heldout import HeldOutError, run_heldout
 from bdbvhubrenewal.forecasters.base import (
@@ -223,6 +225,23 @@ def build_parser() -> argparse.ArgumentParser:
         "--recovery-only",
         action="store_true",
         help="Run only the recovery check on simulated vintages.",
+    )
+    back.add_argument(
+        "--scenarios-only",
+        action="store_true",
+        help="Run only the scenarios calibrated to the real data.",
+    )
+    back.add_argument(
+        "--scenario-as-of",
+        default=None,
+        help="Real vintage the scenarios copy. Defaults to the latest.",
+    )
+    back.add_argument(
+        "--scenario-dates",
+        nargs="*",
+        default=None,
+        help="Simulated vintages to forecast from. Defaults to the four "
+        "weeks up to the scenario vintage.",
     )
     back.add_argument(
         "--cache",
@@ -539,6 +558,28 @@ def _backtest(args: argparse.Namespace) -> int:
         print(f"Shard {args.shard}: {len(mine)} tasks in {args.cache}.")
         return 0
     fits: list[pd.DataFrame] = []
+    if args.scenarios_only:
+        as_of = args.scenario_as_of or bt.real_vintages(target)[-1]
+        dates = args.scenario_dates or [
+            (as_date(as_of) - dt.timedelta(weeks=k)).isoformat()
+            for k in (3, 2, 1, 0)
+        ]
+        sforecasts, sscores = bt.run_scenarios(
+            models,
+            config,
+            target,
+            delays,
+            load_health_zones(args.data),
+            as_of,
+            dates,
+        )
+        for table, path in (
+            (sforecasts, output / "scenario-forecasts.csv.gz"),
+            (sscores, results / "scenario-scores.csv"),
+        ):
+            bt.merge_by_model(path, table).to_csv(path, index=False)
+        print(f"Scenarios: {len(sscores)} scored forecasts in {results}.")
+        return 0
     if args.recovery_only:
         rforecasts, rscores = bt.run_recovery(
             models, config, cache=args.cache, fits=fits
