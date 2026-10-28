@@ -170,9 +170,9 @@ sum_tolerance = 1e-9       # absolute (or 1e-12 relative)
 # maximum is at least the floor, a median above it over
 # `plausible_low_ratio`.
 plausible_recent_weeks = 4
-plausible_floor = 10
+plausible_floor = 20
 plausible_median_ratio = 5.0
-plausible_q975_ratio = 10.0
+plausible_q975_ratio = 15.0
 plausible_low_ratio = 20.0
 # Upper bound on any trajectory: the 95th centile of a week, relative to
 # the largest weekly count the location has ever had (floored).

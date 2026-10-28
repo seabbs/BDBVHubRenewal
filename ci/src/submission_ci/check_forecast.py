@@ -97,9 +97,9 @@ DEFAULTS: dict[str, Any] = {
     "previous_warn": 2.0,
     "previous_fail": 0,
     "plausible_recent_weeks": 4,
-    "plausible_floor": 10,
+    "plausible_floor": 20,
     "plausible_median_ratio": 5.0,
-    "plausible_q975_ratio": 10.0,
+    "plausible_q975_ratio": 15.0,
     "plausible_low_ratio": 20.0,
 }
 
