@@ -1302,6 +1302,74 @@ def plot_scores(
     return fig
 
 
+def plot_score_summary(
+    scores: pd.DataFrame,
+    baseline: str = "persistence",
+    by: str = "horizon",
+    models: Sequence[str] | None = None,
+    mode: str = "light",
+) -> Figure:
+    """Plot WIS relative to a baseline and 90% coverage by model.
+
+    Parameters
+    ----------
+    scores : pandas.DataFrame
+        Output of `score_forecasts`, already limited to the scores shown.
+    baseline : str
+        The reference model.
+    by : str
+        Column to plot against, such as `"horizon"`.
+    models : sequence of str, optional
+        Models in registry order.
+    mode : str
+        `"light"` or `"dark"`.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Two panels. The first has each model's mean WIS divided by the
+        baseline's, with a line at 1. The second has the share of 90%
+        intervals holding the data, with a line at 0.9.
+    """
+    from bdbvhubrenewal.evaluation.scoring import relative_skill
+
+    models = list(models or scores["model"].unique())
+    ink = THEMES[mode]
+    match = [
+        c
+        for c in (
+            "kind",
+            "vintage",
+            "reference_date",
+            "location",
+            "target_end_date",
+        )
+        if c in scores
+    ]
+    rel = relative_skill(
+        scores, baseline=baseline, by=(by,), metrics=("wis",), match_on=match
+    )
+    cover = scores.groupby(["model", by])["coverage_90"].mean().reset_index()
+    fig, axes = _grid(2, 2, width=3.8, height=2.6)
+    for m in models:
+        colour = model_colour(m, models, mode)
+        if m != baseline:
+            r = rel.loc[rel["model"] == m].sort_values(by)
+            axes[0].plot(
+                r[by], r["relative_wis"], color=colour, marker="o", label=m
+            )
+        c = cover.loc[cover["model"] == m].sort_values(by)
+        axes[1].plot(c[by], c["coverage_90"], color=colour, marker="o", label=m)
+    axes[0].axhline(1, color=ink["muted"], lw=1, ls=":")
+    axes[1].axhline(0.9, color=ink["muted"], lw=1, ls=":")
+    axes[0].set_ylabel(f"WIS relative to {baseline}")
+    axes[1].set_ylabel("90% interval coverage")
+    for ax in axes:
+        ax.set_xlabel(by.capitalize())
+    axes[1].legend(fontsize=7)
+    return fig
+
+
 def plot_scenarios(
     scores: pd.DataFrame,
     models: Sequence[str] | None = None,
