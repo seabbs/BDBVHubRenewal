@@ -18,22 +18,6 @@ $\ell$ is the longest publication lag, so $s$ errs low.
 `complete_weeks` gives the fewest whole weeks $K$ with
 $s(7K) \ge$ `threshold`. Scoring treats a truth week as complete if it
 ended at least $K$ weeks before the truth vintage.
-
-`truncated_delay_cdf` instead uses the recent onset weeks, whose delays
-are right truncated, and corrects for it. A case with onset week $W$ is
-in the vintage dated $T$ only if its delay $d \le \tau = T - (W - 3) -
-\ell$, taking the onset mid-week. The maximum likelihood estimate of the
-delay cdf under right truncation (Lynden-Bell, 1971) is
-
-$$
-F(x) = \prod_{y > x} \Big\{1 - \frac{n(y)}{R(y)}\Big\},
-\qquad
-R(y) = \#\{i : d_i \le y \le \tau_i\},
-$$
-
-with $n(y)$ the cases with delay $y$. It is the delay step of the EM
-nowcast in EpidemicDates with no missing onsets. `share_from_cdf` turns
-it into $s(t)$ as above.
 """
 
 from __future__ import annotations
@@ -46,12 +30,7 @@ from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.delays import DEFAULT_MAX_DELAY
 from bdbvhubrenewal.data.reconstruct import PUBLICATION_LAG_DAYS
 
-__all__ = [
-    "complete_weeks",
-    "reported_share",
-    "share_from_cdf",
-    "truncated_delay_cdf",
-]
+__all__ = ["complete_weeks", "reported_share"]
 
 
 def reported_share(
@@ -127,81 +106,3 @@ def complete_weeks(
     share = reported_share(delays, vintage, 7 * weeks, lag)
     ok = np.nonzero(share >= threshold)[0]
     return int(weeks[ok[0]]) if ok.size else max_weeks
-
-
-def truncated_delay_cdf(
-    delays: pd.DataFrame,
-    vintage: str,
-    window: int = 84,
-    lag: int = PUBLICATION_LAG_DAYS,
-    max_delay: int = DEFAULT_MAX_DELAY,
-) -> NDArray[np.float64] | None:
-    r"""Return the delay cdf of recent onset weeks, corrected for truncation.
-
-    Parameters
-    ----------
-    delays : pandas.DataFrame
-        Delay line data with `vintage`, `onset_week` and `delay` columns.
-        Rows of `vintage` are used.
-    vintage : str
-        The delay vintage.
-    window : int
-        Use onset weeks ending fewer than this many days before
-        `vintage`.
-    lag : int
-        Days from report to publication.
-    max_delay : int
-        Longest delay. Longer delays are counted at `max_delay`.
-
-    Returns
-    -------
-    numpy.ndarray or None
-        $F(0), \dots, F(D)$ with $D$ = `max_delay`, or None if no rows
-        fall in the window.
-    """
-    rows = delays.loc[delays["vintage"] == vintage]
-    end = pd.Timestamp(as_date(vintage))
-    age = (end - pd.to_datetime(rows["onset_week"])).dt.days.to_numpy()
-    keep = age < window
-    if not keep.any():
-        return None
-    x = rows["delay"].to_numpy(dtype=np.int64)[keep].clip(0, max_delay)
-    # A case in the vintage has a delay of at most tau.
-    tau = np.clip(age[keep] + 3 - lag, x, max_delay)
-    n = np.bincount(x, minlength=max_delay + 1)
-    entered = n.cumsum()
-    left = np.bincount(tau + 1, minlength=max_delay + 2)[: max_delay + 1]
-    at_risk = entered - left.cumsum()
-    hazard = n / np.maximum(at_risk, 1)
-    # F(x) is the product of 1 - hazard over y > x.
-    tail = np.cumprod((1 - hazard)[::-1])[::-1]
-    return np.asarray(np.append(tail[1:], 1.0), dtype=np.float64)
-
-
-def share_from_cdf(
-    cdf: NDArray[np.float64],
-    days: ArrayLike,
-    lag: int = PUBLICATION_LAG_DAYS,
-) -> NDArray[np.float64]:
-    """Return the share of a week's final count reported by each day.
-
-    Parameters
-    ----------
-    cdf : numpy.ndarray
-        Delay cdf on `0..D`, as from `truncated_delay_cdf`.
-    days : array-like of int
-        Days after the end of the onset week.
-    lag : int
-        Days from report to publication.
-
-    Returns
-    -------
-    numpy.ndarray
-        $s(t)$ for each day $t$, averaged over the 7 onset days.
-    """
-    t = np.asarray(days, dtype=np.int64)
-    out = np.zeros(t.shape)
-    for u in range(7):
-        k = t + u - lag
-        out += np.where(k < 0, 0.0, cdf[np.clip(k, 0, cdf.size - 1)])
-    return out / 7
