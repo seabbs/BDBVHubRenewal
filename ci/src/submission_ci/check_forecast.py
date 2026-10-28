@@ -15,7 +15,7 @@ Handled (warn or pass):
   `coverage`     every expected location, with every nowcast and
                  forecast week (warns).
   `zones`        health zone rows (`CD-XX-NN`) for every province in the
-                 file, which baseline requires (`--require-zones`),
+                 file, which seabbs-baseline requires (`--require-zones`),
                  and each province's zones summing to it (warns only).
   `national_sum` national equals the sum of the provinces plus any
                  unassigned cases, per sample and week. It is correct by
