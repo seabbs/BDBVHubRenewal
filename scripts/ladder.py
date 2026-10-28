@@ -105,8 +105,8 @@ the complete-weeks scores use only those."""
 SP_MIN_CASES = 10
 """renewalsp fits only locations with at least this many cases."""
 SAMPLER = {
-    "num_warmup": 300,
-    "num_samples": 300,
+    "num_warmup": 500,
+    "num_samples": 500,
     "num_chains": 2,
     "max_tree_depth": 10,
     "target_accept": 0.9,
@@ -575,16 +575,23 @@ def run_rung(name, config, outbreak, table, real) -> dict:
                 samples = national_samples(task, run)
             res = fit_metrics(run) | rt_metrics(run, outbreak)
         res |= scores(samples, truth)
-        sims.append(res)
+        sims.append((str(day), res))
         print(
             name,
             "sim",
             day,
-            {k: round(v, 3) for k, v in res.items()},
+            {
+                k: round(v, 3) if isinstance(v, float) else v
+                for k, v in res.items()
+            },
             flush=True,
         )
-    for key in sims[0]:
-        out[f"sim_{key}"] = float(np.nanmean([s[key] for s in sims]))
+    days = tuple(f"_{day}" for day, _ in sims)
+    out |= {
+        f"sim_{k.removeprefix('real_')}": v
+        for k, v in summarise_origins(sims).items()
+        if not k.endswith(days)
+    }
     out |= real_scores(name, config, table, real, out)
     return out
 
