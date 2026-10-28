@@ -23,7 +23,7 @@ The gate's checks choose the candidate, and the pull request body says what was 
 | `prepare` | Pins the hub data at one commit (`bdbv-hub-renewal data --ref <sha>`), checks national coherence and builds the persistence candidate, which is also the baseline for the checks. |
 | `fit` | One matrix job per primary candidate (`main` and `fallback`), in parallel. Each runs `bdbv-hub-renewal fit`, then `nowcast --fit`, the checks and the plots. Fits are cached under a hash of the model source, the hub commit and the sampler settings. |
 | `triage` | Says whether `main` needs its one refit. |
-| `retry` | Only if `main` needs it: one refit with a longer warm-up, more chains and jittered inits. |
+| `retry` | Only if `main` needs it: one refit with a longer warm-up, smaller steps and jittered inits, costing about as much as `main`. |
 | `gate` | Walks the fallback chain and submits the first candidate that clears convergence, the posterior predictive checks, the forecast checks and hub validation. |
 | `submit` | Publishes the plot, builds the pull request body, and opens or updates the pull request from `seabbs-bot`'s fork. A dry run prints the body instead. |
 | `record` | Live runs only. Writes the outcome to `state.json` on the `submission-ledger` branch and archives the round's files there. |
@@ -74,7 +74,7 @@ A candidate is ruled out only when its fit is clearly broken, or its file would 
 The chain is set in `ci/policy.toml`.
 
 1. `main`: the main model.
-2. `retry-1`: one refit of the main model with a longer warm-up, 8 chains and jittered inits (`init = "jitter"` in its sampler table).
+2. `retry-1`: one refit of the main model with a longer warm-up (1500 iterations), a higher target acceptance (0.95) and jittered inits (`init = "jitter"` in its sampler table). It runs as many NUTS iterations as `main`, so main and the retry together fit the Tuesday window.
    It runs only when `main` is past the retry thresholds below, or was ruled out.
    The refit is submitted unless it is clearly broken.
    Otherwise the original fit is kept, if it is not broken.

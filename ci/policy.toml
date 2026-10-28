@@ -29,8 +29,14 @@ id = "retry-1"
 kind = "retry"
 config = "main"
 stage = "retry"
-label = "main model, refitted (longer warm-up, more chains, jittered inits)"
-sampler = { num_chains = 8, num_warmup = 2000, num_samples = 500, target_accept = 0.95, max_tree_depth = 10, seed = 2, init = "jitter" }
+label = "main model, refitted (longer warm-up, smaller steps, jittered inits)"
+# The same number of NUTS iterations as `main` (4 x 2000), spent on a
+# longer warm-up. Main fits reach the maximum tree depth on nearly every
+# draw, so cost follows iterations and the retry takes about as long as
+# main. Main and the retry then fit the 540 minutes from the last Tuesday
+# start, with each job well under its 350-minute cap. More chains than
+# the runner's 4 vCPUs would only slow every chain down.
+sampler = { num_chains = 4, num_warmup = 1500, num_samples = 500, target_accept = 0.95, max_tree_depth = 10, seed = 2, init = "jitter" }
 
 [[candidates]]
 id = "fallback"

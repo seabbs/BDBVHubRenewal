@@ -53,6 +53,7 @@ The delay file gives one row per case with a known onset: province, onset week a
 It is published for the latest vintage only.
 Earlier delay vintages come from the hub's archive folder and git history.
 The 2026-08-18 vintage has none.
+In the backtest it takes the 2026-10-09 delay rows cut back to those published by 2026-08-18, as for [reconstructed vintages](#reconstructed-vintages).
 
 The target data split each week's cases into known onsets and imputed onsets.
 The hub imputes an onset for each case reported without one, by subtracting a delay drawn from the pooled published delays ([hub issue 61](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/61)).
@@ -82,8 +83,9 @@ A simulator generates province outbreaks from the renewal model's own structure 
 
 - a renewal process with a national Rt that turns from 1.6 to 0.85 around day 120, fixed province offsets, gravity-kernel importation ($\varepsilon = 0.01$) and susceptible depletion;
 - ascertainment rising from 0.5 to 0.75;
-- a missing-onset share rising from 5% to 25% and falling to 12%;
-- a Gamma delay whose mean falls from 12 to 6 days.
+- a missing-onset share by report day rising from 5% to 25% and falling to 12%;
+- a Gamma delay whose mean falls from 12 to 6 days;
+- a lag from report to publication uniform on 0 to 3 days.
 
 It then publishes vintages as the hub does: known onsets by onset week, missing onsets given an onset by a delay drawn from the known delays reported so far, their total, and the delay line data.
 The truth is every confirmed case by its true onset week.

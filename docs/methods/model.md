@@ -192,7 +192,11 @@ The non-monotone revisions in imputed counts suggest it re-imputes each time.
 
 The model axis runs to the end of the forecast horizon, so the random walks carry $R_p$, $\alpha$, $f$ and $\pi$ forward.
 Each of the 100 trajectories uses one posterior draw for every province and week.
-It is the final known plus final imputed counts, drawn from the two negative binomials once every report is in.
+It is the final known plus final imputed counts.
+For each stream, this is the count already reported by the cut-off plus a negative binomial draw of the expected cases reported after it, as in epinowcast.
+So a trajectory is never below the counts already reported.
+The hub re-imputes missing onsets at each vintage, but the cases reported by the cut-off are spread with the same delay in expectation, so their imputed count is kept too.
+A province left out uses a draw of its vintage count instead of the data.
 In provinces with no cases, importations are drawn and, from the cut-off, seed local spread at the pooled trend $R(t)$.
 For `renewal` and `renewalbvd`, the national trajectory is the sum of the province trajectories plus an unassigned component.
 The unassigned component holds any provinces the model does not report, and the national cases in the data that no province has.
@@ -236,7 +240,7 @@ The renewal variants run in the backtest, the held-out evaluation and the plots,
 | `renewal` | The model in the figure: provinces with pooled $R_p(t)$, gravity importation and depletion. |
 | `renewalsp` | Single patch: the renewal model fitted to each location's series on its own, the nation included. |
 | `renewalbvd` | The spatial model informed by the latest posterior estimates of the main [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model, taken from the newest release published before the data cut-off. |
-| `fallback` | The CI's fallback: no coupling, with the delays and $\pi$ fixed from the data. It is a fit configuration, not a backtest variant. |
+| `fallback` | The CI's fallback: no coupling, with the delays, $\pi$ and a uniform publication lag fixed from the data. $\pi$ is the imputed share by onset week, moved later by the mean delay to date it by report day. It is a fit configuration, not a backtest variant. |
 
 The model code is in `bdbv_hub_renewal.model` and the variants in [`forecasters.renewal`][bdbv_hub_renewal.forecasters.renewal].
 

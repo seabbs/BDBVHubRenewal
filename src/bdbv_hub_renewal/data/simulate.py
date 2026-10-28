@@ -179,11 +179,16 @@ class SimulationSettings:
     ascertainment : tuple of float
         $\alpha$ at day 0 and at the end, changing logistically mid-way.
     missing : tuple of float
-        $\pi$ at day 0, at its peak (day `n_days` / 3) and at the end.
+        $\pi$ at day 0, at its peak (day `n_days` / 3) and at the end,
+        by report day as in the model.
     delay_mean : tuple of float
         Mean delay at day 0 and at the end, changing linearly.
     delay_cv : float
         Coefficient of variation of the delay.
+    publication_lag : tuple of float
+        Pmf of the days from report to publication in a vintage, from 0.
+        The default is uniform on 0..3, as `vintages.PUBLICATION_LAG_DAYS`
+        and the data suggest.
     gi_mean, gi_sd : float
         Generation interval mean and SD in days.
     seed : int
@@ -207,6 +212,7 @@ class SimulationSettings:
     missing: tuple[float, float, float] = (0.05, 0.25, 0.12)
     delay_mean: tuple[float, float] = (12.0, 6.0)
     delay_cv: float = 1.0
+    publication_lag: tuple[float, ...] = (0.25, 0.25, 0.25, 0.25)
     gi_mean: float = 15.0
     gi_sd: float = 9.0
     seed: int = 1
@@ -226,7 +232,7 @@ class SimulatedOutbreak:
         `delay_mean`.
     cases : pandas.DataFrame
         One row per confirmed case: `location`, `onset_date`,
-        `report_date` and `onset_known`.
+        `report_date`, `publish_date` and `onset_known`.
     """
 
     settings: SimulationSettings
@@ -255,7 +261,7 @@ class SimulatedOutbreak:
         rng = rng or np.random.default_rng(
             [self.settings.seed, day.toordinal()]
         )
-        seen = self.cases.loc[self.cases["report_date"] <= pd.Timestamp(day)]
+        seen = self.cases.loc[self.cases["publish_date"] <= pd.Timestamp(day)]
         known = seen.loc[seen["onset_known"]]
         missing = seen.loc[~seen["onset_known"]]
         delays = (known["report_date"] - known["onset_date"]).dt.days.to_numpy()
@@ -417,6 +423,7 @@ def simulate_outbreak(
     )
     mu = s.delay_mean[0] + (s.delay_mean[1] - s.delay_mean[0]) * t / n_days
 
+    lag_pmf = np.asarray(s.publication_lag) / np.sum(s.publication_lag)
     rows = []
     for i, loc in enumerate(s.locations):
         confirmed = rng.binomial(onsets[i].astype(int), asc)
@@ -424,13 +431,16 @@ def simulate_outbreak(
         shape = 1 / s.delay_cv**2
         delay = rng.gamma(shape, mu[days] / shape)
         report = days + np.floor(delay + rng.uniform(size=days.size))
-        known = rng.uniform(size=days.size) >= miss[days]
+        report_day = np.minimum(report.astype(int), n_days - 1)
+        known = rng.uniform(size=days.size) >= miss[report_day]
+        lag = rng.choice(len(s.publication_lag), days.size, p=lag_pmf)
         rows.append(
             pd.DataFrame(
                 {
                     "location": loc,
                     "onset_day": days,
                     "report_day": report.astype(int),
+                    "publish_day": report.astype(int) + lag,
                     "onset_known": known,
                 }
             )
@@ -441,7 +451,12 @@ def simulate_outbreak(
     cases["report_date"] = start + pd.to_timedelta(
         cases["report_day"], unit="D"
     )
-    cases = cases[["location", "onset_date", "report_date", "onset_known"]]
+    cases["publish_date"] = start + pd.to_timedelta(
+        cases["publish_day"], unit="D"
+    )
+    cases = cases[
+        ["location", "onset_date", "report_date", "publish_date", "onset_known"]
+    ]
 
     dates = pd.date_range(start, periods=n_days, freq="D")
     params = pd.DataFrame(

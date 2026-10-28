@@ -63,7 +63,30 @@ def test_matrix_has_distinct_keys(tmp_path: Path) -> None:
     assert len(set(keys)) == len(keys)
     sampler = json.loads(entries[0]["sampler"])
     assert sampler["target_accept"] == 0.95
-    assert sampler["num_chains"] == 8 and sampler["init"] == "jitter"
+    assert sampler["init"] == "jitter"
+
+
+def iterations(sampler: dict[str, int]) -> int:
+    """NUTS iterations over all chains, which sets a fit's wall time when
+    nearly every draw reaches the maximum tree depth."""
+    return sampler["num_chains"] * (
+        sampler["num_warmup"] + sampler["num_samples"]
+    )
+
+
+def test_retry_fits_the_time_budget(tmp_path: Path) -> None:
+    # The last Tuesday start leaves about 540 minutes for main and the
+    # retry in turn, and each job is capped at 350. A retry costing no
+    # more than main, with no deeper trees, keeps both within the window.
+    pol = load_policy(POLICY_PATH)
+    root = repo(tmp_path)
+    main = json.loads(matrix(pol, "primary", root, "hub")[0]["sampler"])
+    retry = json.loads(matrix(pol, "retry", root, "hub")[0]["sampler"])
+    assert iterations(retry) <= iterations(main)
+    assert retry["max_tree_depth"] <= main["max_tree_depth"]
+    assert retry["num_warmup"] > main["num_warmup"]
+    # No more chains than a hosted runner's 4 vCPUs.
+    assert retry["num_chains"] <= 4
 
 
 def test_policy_validation(tmp_path: Path) -> None:

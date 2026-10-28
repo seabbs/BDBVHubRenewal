@@ -229,6 +229,24 @@ def forecast_locations(vintage_rows: pd.DataFrame) -> tuple[str, ...]:
     return tuple(sorted(totals.index[totals > 0]))
 
 
+def _reconstructed_delays(delays: pd.DataFrame, vintage: str) -> pd.DataFrame:
+    """Delay rows for a real vintage that has none, from the next one.
+
+    The next real vintage with delays is cut back to what was published
+    by `vintage` (`reconstruct_delays`). 2026-08-18 has no delay file.
+    """
+    real = delays
+    if "kind" in delays.columns:
+        real = delays.loc[delays["kind"] == "real"]
+    later = sorted(str(v) for v in real["vintage"].unique() if v > vintage)
+    if not later:
+        return real.iloc[:0]
+    out = reconstruct_delays(real.loc[real["vintage"] == later[0]], vintage)
+    if "kind" in delays.columns:
+        out["kind"] = "real"
+    return out
+
+
 def make_tasks(
     target: pd.DataFrame,
     delays: pd.DataFrame | None,
@@ -242,8 +260,9 @@ def make_tasks(
         Target rows, possibly of several kinds and vintages.
     delays : pandas.DataFrame or None
         Delay line data with a `vintage` column, and optionally a `kind`
-        column. A task gets the rows of its own vintage (and kind), or
-        None if there are none.
+        column. A task gets the rows of its own vintage (and kind). A
+        real vintage with none gets the next real vintage's rows cut back
+        to its date, or None if there is no later one.
     config : BacktestConfig
         Horizons, samples and seed.
 
@@ -261,6 +280,8 @@ def make_tasks(
             if "kind" in delays.columns:
                 mask &= delays["kind"] == kind
             sel = delays.loc[mask]
+            if sel.empty and kind == "real":
+                sel = _reconstructed_delays(delays, str(vintage))
             dly = sel if not sel.empty else None
         tasks.append(
             ForecastTask(

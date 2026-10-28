@@ -13,7 +13,7 @@ It is safe to install as is, because `DRY_RUN` is on until you turn it off.
 | `prepare` | Pins the hub data at one commit and builds the persistence candidate, which is also the baseline for the checks. |
 | `fit` | A matrix over the primary candidates (`main` and `fallback`), fitted in parallel. Each fit is cached under a content hash of the model source, the hub commit and its sampler settings. |
 | `triage` | Says whether `main` needs its one refit (past the convergence retry thresholds, or ruled out). |
-| `retry` | Only if `main` needs it: one refit with a longer warm-up, more chains and jittered inits. |
+| `retry` | Only if `main` needs it: one refit with a longer warm-up, smaller steps and jittered inits, costing about as much as `main`. |
 | `gate` | Walks the chain `main` → `retry-1` → `fallback` → `persistence`, handling problems rather than failing on them. A candidate is ruled out only if its fit is clearly broken or its file is invalid (format checks or hubValidations). |
 | `submit` | Publishes the plot, builds the PR body, and opens or updates the PR. A dry run prints the body instead. |
 | `record` | Live runs only. Writes the outcome to `state.json` on the `submission-ledger` branch and archives the round's files there. |
@@ -153,7 +153,7 @@ If fits come close to the cap:
    The coupled main model cannot.
 3. Start earlier.
    Data usually land on Friday or Saturday, and the window opens Sunday.
-   The last scheduled start on Tuesday is 14:00 UTC, so a full-length fit still ends before the window closes.
+   The last scheduled start on Tuesday is 14:00 UTC, which leaves about 540 minutes before the window closes for the main fit, one retry of about the same length, and the gate.
 4. Use a bigger machine through `FIT_RUNNER`.
    GitHub's larger runners need a paid Team or Enterprise organisation, for example if the repo moves to `epiforecasts`.
    A self-hosted runner works too.
