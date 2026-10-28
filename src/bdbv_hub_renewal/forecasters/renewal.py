@@ -70,6 +70,7 @@ __all__ = [
     "ebfmi",
     "engine",
     "fit_renewal",
+    "fit_summary",
     "forecast_renewal",
     "horizon_weeks",
     "init_strategy",
@@ -736,6 +737,47 @@ def ebfmi(energy: NDArray[np.float64]) -> float:
     return float(np.sum(np.diff(e) ** 2) / np.sum((e - e.mean()) ** 2))
 
 
+def fit_summary(run: RenewalRun, sampler: Mapping[str, Any]) -> dict[str, Any]:
+    """Summarise one fit: sampler settings, time and convergence.
+
+    Parameters
+    ----------
+    run : RenewalRun
+        The fit.
+    sampler : mapping
+        Its sampler settings.
+
+    Returns
+    -------
+    dict
+        `num_chains`, `num_warmup`, `num_samples`, `max_tree_depth`,
+        `seconds`, `max_rhat`, `min_ess_bulk`, and the shares of draws
+        that diverged (`divergent_share`) or hit the tree depth cap
+        (`depth_share`).
+    """
+    depth = int(
+        sampler.get("max_tree_depth", DEFAULT_SAMPLER["max_tree_depth"])
+    )
+    chains = chain_diagnostics(run.extra, depth)
+    params = parameter_diagnostics(run.trace)
+    rhat = [p["rhat"] for p in params if p["rhat"] is not None]
+    ess = [p["ess_bulk"] for p in params if p["ess_bulk"] is not None]
+    draws = sum(c["draws"] for c in chains)
+    hits = sum(c.get("tree_depth_hits", 0) for c in chains)
+    return {
+        **{
+            k: int(sampler.get(k, DEFAULT_SAMPLER[k]))
+            for k in ("num_chains", "num_warmup", "num_samples")
+        },
+        "max_tree_depth": depth,
+        "seconds": float(run.seconds),
+        "max_rhat": max(rhat, default=float("nan")),
+        "min_ess_bulk": min(ess, default=float("nan")),
+        "divergent_share": sum(c["divergences"] for c in chains) / draws,
+        "depth_share": hits / draws,
+    }
+
+
 def chain_diagnostics(
     extra: Mapping[str, Any], max_tree_depth: int
 ) -> list[dict[str, Any]]:
@@ -938,6 +980,9 @@ class RenewalModel:
     progress: Path | None = None
     supports_mask: bool = field(init=False)
     name: str = field(init=False)
+    fit_diagnostics: list[dict[str, Any]] = field(
+        init=False, default_factory=list
+    )
 
     def __post_init__(self) -> None:
         """Name the model after its variant and say if it takes a mask."""
@@ -1086,6 +1131,10 @@ class RenewalModel:
             `task.report_by`, also `as_of` rows (`RenewalFit.as_reported`).
         """
         fit = self.forecast_fit(task)
+        self.fit_diagnostics = [
+            {"fit": key, **fit_summary(run, self.sampler)}
+            for key, run in fit.runs.items()
+        ]
         samples = fit.samples
         if fit.national is not None:
             national = fit.national.assign(location=NATIONAL)

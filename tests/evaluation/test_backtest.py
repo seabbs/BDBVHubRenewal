@@ -449,9 +449,7 @@ def test_lopo_reuses_the_cache(
 ) -> None:
     model = _Masking()
     kwargs = {"provinces": ("CD-IT",), "include_reconstructed": False}
-    run_lopo(
-        [model], target, delays, config, cache=tmp_path, **kwargs
-    )
+    run_lopo([model], target, delays, config, cache=tmp_path, **kwargs)
     calls = model.calls
     assert calls > 0
     again, scores = run_lopo(

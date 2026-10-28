@@ -467,6 +467,31 @@ def _backtest(args: argparse.Namespace) -> int:
         print(f"Held-out scores: {len(scores)} rows in {results}.")
         return 0
     models = [get_model(n) for n in names]
+    if args.shard:
+        if not args.cache:
+            print("ERROR: --shard needs --cache.", file=sys.stderr)
+            return 1
+        index, count = (int(x) for x in args.shard.split("/"))
+        if args.lopo:
+            models = [m for m in models if getattr(m, "supports_mask", False)]
+            tasks = bt.lopo_tasks(
+                target,
+                delays,
+                config,
+                include_reconstructed=not args.no_reconstructed,
+            )
+        else:
+            tasks = bt.development_tasks(
+                target,
+                delays,
+                config,
+                include_reconstructed=not args.no_reconstructed,
+            )
+        mine = bt.shard_tasks(tasks, index, count)
+        bt.run_forecasts(models, mine, args.cache)
+        print(f"Shard {args.shard}: {len(mine)} tasks in {args.cache}.")
+        return 0
+    fits: list[pd.DataFrame] = []
     if args.lopo:
         lopo_fc, lopo_scores = bt.run_lopo(
             models,
@@ -474,25 +499,13 @@ def _backtest(args: argparse.Namespace) -> int:
             delays,
             config,
             include_reconstructed=not args.no_reconstructed,
+            cache=args.cache,
+            fits=fits,
         )
         lopo_fc.to_csv(output / "lopo-forecasts.csv.gz", index=False)
         lopo_scores.to_csv(results / "lopo-scores.csv", index=False)
+        _write_fits(fits, results / "lopo-fits.csv")
         print(f"Leave one province out: {len(lopo_scores)} scored forecasts.")
-        return 0
-    if args.shard:
-        if not args.cache:
-            print("ERROR: --shard needs --cache.", file=sys.stderr)
-            return 1
-        index, count = (int(x) for x in args.shard.split("/"))
-        tasks = bt.development_tasks(
-            target,
-            delays,
-            config,
-            include_reconstructed=not args.no_reconstructed,
-        )
-        mine = bt.shard_tasks(tasks, index, count)
-        bt.run_forecasts(models, mine, args.cache)
-        print(f"Shard {args.shard}: {len(mine)} tasks in {args.cache}.")
         return 0
     forecasts, scores = bt.run_development(
         models,
@@ -501,7 +514,9 @@ def _backtest(args: argparse.Namespace) -> int:
         config,
         include_reconstructed=not args.no_reconstructed,
         cache=args.cache,
+        fits=fits,
     )
+    _write_fits(fits, results / "backtest-fits.csv")
     by_truth = bt.score_by_truth_vintage(
         forecasts, target, config.complete_after_weeks
     )
@@ -527,6 +542,13 @@ def _backtest(args: argparse.Namespace) -> int:
         f"Written to {results}."
     )
     return 0
+
+
+def _write_fits(fits: list[pd.DataFrame], path: Path) -> None:
+    """Merge the fit summaries of a run into a results file."""
+    if fits:
+        table = pd.concat(fits, ignore_index=True)
+        bt.merge_by_model(path, table).to_csv(path, index=False)
 
 
 def _nowcast(args: argparse.Namespace) -> int:

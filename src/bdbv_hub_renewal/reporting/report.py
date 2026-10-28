@@ -12,8 +12,11 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import tomllib
+from collections.abc import Mapping
 from functools import partial
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import yaml
@@ -636,6 +639,54 @@ def _other_relative(views: dict[str, pd.DataFrame]) -> str:
     return "".join(parts)
 
 
+def _submission_sampler(path: Path = Path("ci/policy.toml")) -> dict[str, Any]:
+    """Return the main candidate's sampler settings from the CI policy."""
+    policy = tomllib.loads(path.read_text())
+    main = next(c for c in policy["candidates"] if c["id"] == "main")
+    return dict(main["sampler"])
+
+
+def _settings_text(chains: int, warmup: int, draws: int) -> str:
+    return f"{chains} chains of {warmup} warm-up and {draws} draws"
+
+
+def _sampler_section(fits: pd.DataFrame, submission: Mapping[str, Any]) -> str:
+    """Say how long the backtest fits were and how well they converged."""
+    if fits.empty:
+        return ""
+    keys = ["num_chains", "num_warmup", "num_samples"]
+    used = fits[keys].drop_duplicates().astype(int).to_numpy()
+    runs = " or ".join(_settings_text(*row) for row in used)
+    sub = _settings_text(*(int(submission[k]) for k in keys))
+    by = fits.groupby("model")
+    table = pd.DataFrame(
+        {
+            "fits": by.size(),
+            "median seconds": by["seconds"].median(),
+            "median max R-hat": by["max_rhat"].median(),
+            "worst max R-hat": by["max_rhat"].max(),
+            "share with R-hat over 1.05": by["max_rhat"].apply(
+                lambda x: float((x > 1.05).mean())
+            ),
+            "depth cap share": by["depth_share"].mean(),
+            "divergent share": by["divergent_share"].mean(),
+        }
+    ).reset_index()
+    return (
+        "## Sampler\n\n"
+        f"Backtest fits use {runs}.\n"
+        f"The submission fit uses {sub}, so backtest fits are shorter than "
+        "the submission fit.\n"
+        "The table gives each model's fits and their convergence, to show "
+        "whether the shorter fits matter.\n"
+        "A per-location model has one fit per location with enough cases.\n"
+        "R-hat is the largest over a fit's parameters, and the depth cap "
+        "share is the share of draws at the maximum tree depth.\n\n"
+        + _table(table, digits=3)
+        + "\n"
+    )
+
+
 def _backtest_page(
     fig: Path,
     gen: Path,
@@ -769,6 +820,13 @@ def _backtest_page(
     _write(
         gen / "nowcast-recovery.md",
         _nowcast_recovery_section(res / "nowcast-recovery.csv"),
+    )
+    fits_path = res / "backtest-fits.csv"
+    _write(
+        gen / "backtest-sampler.md",
+        _sampler_section(pd.read_csv(fits_path), _submission_sampler())
+        if fits_path.exists()
+        else "",
     )
     rec_path = res / "recovery-scores.csv"
     if rec_path.exists():

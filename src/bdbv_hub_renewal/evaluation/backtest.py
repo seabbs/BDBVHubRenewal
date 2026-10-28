@@ -65,6 +65,7 @@ __all__ = [
     "forecast_locations",
     "forecast_weeks",
     "load_config",
+    "lopo_tasks",
     "make_tasks",
     "merge_by_model",
     "real_vintages",
@@ -379,10 +380,28 @@ def _cache_path(cache: Path, model: str, task: ForecastTask) -> Path:
     return cache / f"{model}_{task.kind}_{task.vintage}{mask}.csv.gz"
 
 
+def _fits_path(path: Path) -> Path:
+    return path.with_name(path.name.replace(".csv.gz", ".fits.csv"))
+
+
+def _fit_rows(model: ForecastModel, task: ForecastTask) -> pd.DataFrame:
+    """Return the model's summary of each fit it made for the task."""
+    rows = getattr(model, "fit_diagnostics", None) or []
+    table = pd.DataFrame(rows)
+    if table.empty:
+        return table
+    table.insert(0, "model", model.name)
+    table.insert(1, "kind", task.kind)
+    table.insert(2, "vintage", task.vintage)
+    table.insert(3, "masked", "-".join(task.mask))
+    return table
+
+
 def run_forecasts(
     models: Sequence[ForecastModel],
     tasks: Iterable[ForecastTask],
     cache: Path | str | None = None,
+    fits: list[pd.DataFrame] | None = None,
 ) -> pd.DataFrame:
     """Run every model on every task, adding the national total.
 
@@ -396,6 +415,9 @@ def run_forecasts(
         A directory with one file per model and task. A task with a file
         is read from it, and every new forecast is written to it at once,
         so a long run can be resumed or split (`shard_tasks`).
+    fits : list, optional
+        Collects a table of each model's fit summaries per task, for
+        models that set `fit_diagnostics` (cached with the forecasts).
 
     Returns
     -------
@@ -415,8 +437,18 @@ def run_forecasts(
             )
             if path is not None and path.exists():
                 frames.append(pd.read_csv(path, dtype={"as_of": object}))
+                fit_path = path.with_name(
+                    path.name.replace(".csv.gz", ".fits.csv")
+                )
+                if fits is not None and fit_path.exists():
+                    fits.append(pd.read_csv(fit_path, dtype={"masked": str}))
                 continue
+            if hasattr(model, "fit_diagnostics"):
+                model.fit_diagnostics = []
             samples = model.forecast(task)
+            table = _fit_rows(model, task)
+            if fits is not None and not table.empty:
+                fits.append(table)
             check_samples(samples, task)
             if "as_of" not in samples:
                 samples["as_of"] = np.nan
@@ -431,6 +463,9 @@ def run_forecasts(
             samples.insert(2, "vintage", task.vintage)
             samples.insert(3, "reference_date", task.reference_date.isoformat())
             if path is not None:
+                if not table.empty:
+                    table.to_csv(_fits_path(path), index=False)
+                # Written last, so a file means the task is complete.
                 samples.to_csv(path, index=False)
             frames.append(samples)
     return pd.concat(frames, ignore_index=True)
@@ -701,6 +736,7 @@ def run_development(
     *,
     include_reconstructed: bool = True,
     cache: Path | str | None = None,
+    fits: list[pd.DataFrame] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Run the development backtest on real and reconstructed vintages.
 
@@ -722,6 +758,8 @@ def run_development(
         Whether to add reconstructed vintages.
     cache : pathlib.Path or str, optional
         Forecast cache, as for `run_forecasts`.
+    fits : list, optional
+        Collects fit summaries, as for `run_forecasts`.
 
     Returns
     -------
@@ -733,10 +771,45 @@ def run_development(
     tasks = development_tasks(
         target, delays, config, include_reconstructed=include_reconstructed
     )
-    forecasts = run_forecasts(models, tasks, cache)
+    forecasts = run_forecasts(models, tasks, cache, fits)
     truth = truth_from_vintage(real, latest)
     scores = score_tasks(forecasts, truth, latest, config.complete_after_weeks)
     return forecasts, scores
+
+
+def lopo_tasks(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    config: BacktestConfig,
+    *,
+    provinces: Sequence[str] | None = None,
+    include_reconstructed: bool = True,
+) -> list[ForecastTask]:
+    """Build the development tasks with one province masked in each.
+
+    Parameters
+    ----------
+    target, delays, config
+        As for `development_tasks`.
+    provinces : sequence of str, optional
+        Provinces to mask. Defaults to every province with cases in each
+        task.
+    include_reconstructed : bool
+        Whether to add reconstructed vintages.
+
+    Returns
+    -------
+    list of ForecastTask
+        Each with `mask` set to one province.
+    """
+    return [
+        replace(task, mask=(prov,))
+        for task in development_tasks(
+            target, delays, config, include_reconstructed=include_reconstructed
+        )
+        for prov in task.locations
+        if provinces is None or prov in provinces
+    ]
 
 
 def run_lopo(
@@ -747,11 +820,14 @@ def run_lopo(
     *,
     provinces: Sequence[str] | None = None,
     include_reconstructed: bool = True,
+    cache: Path | str | None = None,
+    fits: list[pd.DataFrame] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Leave one province out: forecast it with its counts masked.
 
     For each development task and each province with cases, the model
-    gets the task with that province in `ForecastTask.mask`.
+    gets the task with that province in `ForecastTask.mask`
+    (`lopo_tasks`).
     Only the masked province's forecast is kept and scored, against the
     latest real vintage.
     Models without `supports_mask = True` cannot honour a mask and are
@@ -772,6 +848,10 @@ def run_lopo(
         cases in each task.
     include_reconstructed : bool
         Whether to add reconstructed vintages.
+    cache : pathlib.Path or str, optional
+        Forecast cache, as for `run_forecasts`.
+    fits : list, optional
+        Collects fit summaries, as for `run_forecasts`.
 
     Returns
     -------
@@ -788,27 +868,18 @@ def run_lopo(
     real = target.loc[target["kind"] == "real"]
     latest = real_vintages(real)[-1]
     frames = []
-    for task in development_tasks(
-        target, delays, config, include_reconstructed=include_reconstructed
+    for task in lopo_tasks(
+        target,
+        delays,
+        config,
+        provinces=provinces,
+        include_reconstructed=include_reconstructed,
     ):
-        for prov in task.locations:
-            if provinces is not None and prov not in provinces:
-                continue
-            masked = replace(task, mask=(prov,))
-            for model in able:
-                samples = model.forecast(masked)
-                check_samples(samples, masked)
-                kept = samples.loc[samples["location"] == prov].copy()
-                ref = pd.Timestamp(task.reference_date)
-                kept["horizon"] = (
-                    pd.to_datetime(kept["target_end_date"]) - ref
-                ).dt.days // 7
-                kept.insert(0, "model", model.name)
-                kept.insert(1, "kind", task.kind)
-                kept.insert(2, "vintage", task.vintage)
-                kept.insert(3, "reference_date", ref.date().isoformat())
-                kept.insert(4, "masked", prov)
-                frames.append(kept)
+        prov = task.mask[0]
+        samples = run_forecasts(able, [task], cache, fits)
+        kept = samples.loc[samples["location"] == prov].copy()
+        kept.insert(4, "masked", prov)
+        frames.append(kept)
     forecasts = pd.concat(frames, ignore_index=True)
     scores = score_tasks(
         forecasts,

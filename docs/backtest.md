@@ -119,6 +119,8 @@ Its intervals cover better beyond the reference week, because the random walk sp
 
     --8<-- "scores-location.md"
 
+--8<-- "backtest-sampler.md"
+
 ## Relative skill
 
 --8<-- "relative-section.md"
