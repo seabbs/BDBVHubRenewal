@@ -485,7 +485,7 @@ def revision_variance(
     for a, b in itertools.pairwise(vintages):
         old = rows.loc[rows["vintage"] == a].set_index(key)
         new = rows.loc[rows["vintage"] == b].set_index(key)
-        both = old.join(new[["total"]], rsuffix="_new", how="inner")
+        both = old.join(new[["total"]].add_suffix("_new"), how="inner")
         end = pd.to_datetime(both.index.get_level_values("target_end_date"))
         settled = np.asarray((pd.Timestamp(a) - end).days >= min_age)
         both = both.loc[settled]
