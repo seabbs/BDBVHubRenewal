@@ -24,6 +24,7 @@ from bdbvhubrenewal.forecasters.persistence import (
     baseline_walk,
     nowcast_draws,
     nowcast_means,
+    week_share,
     revision_variance,
 )
 
@@ -230,19 +231,23 @@ def test_persistencenow_predicts_counts_as_reported_later(
     assert by_sample["value"].median() == pytest.approx(expected, rel=0.1)
 
 
-def test_nowcast_means_follow_baselinenowcast_for_empty_rows() -> None:
-    pmf = np.array([0.5, 0.3, 0.2])
-    # Own triangle of one place: a full row, a row with nothing yet and a
-    # row with cases at delay 0 only.
-    tri = np.array([[6.0, 3.0, 1.0], [0.0, 0.0, np.nan], [4.0, np.nan, np.nan]])
+def test_nowcast_means_scale_the_total_by_the_share_reported() -> None:
     totals = np.array([12.0, 0.0, 5.0])
-    added = nowcast_means(tri, totals, pmf)
-    assert added[0] == 0.0
-    # An empty row still gets baselinenowcast's expectation (x + 1 - F) / F.
-    assert added[1] == pytest.approx((0 + 1 - 0.8) / 0.8 * 0.2)
-    # Otherwise the total is scaled by what the row expects to gain.
-    filled = apply_delay(tri, pmf)
-    assert added[2] == pytest.approx(5.0 * (filled[2].sum() / 4.0 - 1))
+    share = np.array([1.0, 0.1, 0.25])
+    added = nowcast_means(totals, share)
+    # Y / s - Y: nothing for a complete week or a week with no cases.
+    assert added.tolist() == pytest.approx([0.0, 0.0, 15.0])
+
+
+def test_week_share_averages_over_onset_days() -> None:
+    # A case with onset on day W - u of the week ending W, delay d and a
+    # 3-day publication lag is in a vintage t days after W if
+    # d + 3 - u <= t.
+    cdf = np.cumsum([0.5, 0.25, 0.25])
+    share = week_share(cdf, np.array([-1, 0, 10]))
+    assert share[0] == pytest.approx((0.5 + 0.75 + 1.0) / 7)
+    assert share[1] == pytest.approx((0.5 + 0.75 + 1.0 + 1.0) / 7)
+    assert share[2] == 1.0
 
 
 def test_baseline_walk_is_a_symmetrised_empirical_random_walk() -> None:
@@ -265,13 +270,25 @@ def test_baseline_walk_is_a_symmetrised_empirical_random_walk() -> None:
     assert flat.var(axis=0) == pytest.approx([100, 100], rel=0.15)
 
 
-def test_persistencenow_can_start_from_the_latest_week(
-    task: ForecastTask,
-) -> None:
-    # With no minimum share, the week ending on the vintage is nowcast and
-    # the walk starts from it.
-    nat = _national(PersistenceNow(min_share=0.0).forecast(task))
+def test_persistencenow_nowcasts_the_latest_week(task: ForecastTask) -> None:
+    # The week ending on the vintage is nowcast and the walk starts from it.
+    nat = _national(PersistenceNow().forecast(task))
     seen = task.target.loc[task.target["location"] == "CD"].set_index(
         "target_end_date"
     )["total"]
     assert nat.loc["2026-10-17"].median() > 2 * seen["2026-10-17"]
+
+
+def test_sparse_places_stay_plausible(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    # Bas-Uele has had about 13 cases; its 97.5% quantile must stay small.
+    task = _task(target, delays, "2026-10-24")
+    samples = PersistenceNow().forecast(task)
+    bu = samples.loc[samples["location"] == "CD-BU"]
+    top = bu.groupby("target_end_date")["value"].quantile(0.975)
+    assert top.max() <= 20
+    # The walk keeps its median at the latest nowcast for Ituri.
+    it = samples.loc[samples["location"] == "CD-IT"]
+    med = it.groupby("target_end_date")["value"].median()
+    assert med.iloc[-1] == pytest.approx(med.loc["2026-10-24"], rel=0.25)
