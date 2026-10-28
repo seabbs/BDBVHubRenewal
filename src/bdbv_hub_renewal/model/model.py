@@ -517,6 +517,9 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             )
             if config.delay_counts == "dirichlet-multinomial"
             else None,
+            # Delays walk weekly, fixed delays are weekly rows, and the
+            # axis starts on a Sunday with whole weeks.
+            weekly_delay=True,
         )
     )
     model = builder.build()

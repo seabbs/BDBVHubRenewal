@@ -130,3 +130,23 @@ def test_weekly_blocks_match_the_dense_expectations(final):
     blocks = onset_expectations(*args, publication_lag=lag, weekly=True)
     for key, value in dense.items():
         np.testing.assert_allclose(blocks[key], value, rtol=1e-5, atol=1e-6)
+
+
+def test_model_log_density_is_the_same_with_weekly_blocks(sim_vintage, config):
+    from numpyro.infer.util import log_density
+
+    model = build_model(sim_vintage, config)
+    args = model_args(model, sim_vintage)
+    with numpyro.handlers.trace() as tr:
+        numpyro.handlers.seed(model.sample, rng_seed=0)(**args)
+    values = {
+        k: v["value"]
+        for k, v in tr.items()
+        if v["type"] == "sample" and not v["is_observed"]
+    }
+    obs = model.observations["onsets"]
+    assert obs.weekly_delay
+    fast = log_density(model.sample, (), args, values)[0]
+    obs.weekly_delay = False
+    dense = log_density(model.sample, (), args, values)[0]
+    assert float(fast) == pytest.approx(float(dense), rel=1e-5)

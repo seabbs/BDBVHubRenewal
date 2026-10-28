@@ -22,6 +22,7 @@ $$\iota_p(s) = \sum_{t = s}^{T} \hat f(t - s) c(t) M_p(t).$$
 
 from __future__ import annotations
 
+import jax
 import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
@@ -131,6 +132,7 @@ def onset_expectations(
     cutoff: int,
     final: bool = True,
     publication_lag: ArrayLike | None = None,
+    weekly: bool = False,
 ) -> dict[str, ArrayLike]:
     r"""Compute expected known and imputed onsets by the cut-off and eventually.
 
@@ -165,6 +167,11 @@ def onset_expectations(
     publication_lag : ArrayLike, optional
         Pmf of the report to publication lag on $0..L$. `None` publishes
         every report on its report day.
+    weekly : bool, optional
+        The delay is constant within each week of the axis, which starts
+        on a week boundary and has whole weeks. Then `_weekly_blocks`
+        gives the same values at a cost linear, not quadratic, in the
+        length of the outbreak.
 
     Returns
     -------
@@ -175,6 +182,10 @@ def onset_expectations(
         expected known cases by onset day and delay published by $T$,
         summed over provinces, `(n, D + 1)`.
     """
+    if weekly:
+        return _weekly_blocks(
+            onsets, delay, missing, hub_delay, cutoff, final, publication_lag
+        )
     n, n_d = delay.shape
     width = n + n_d - 1
     pi_ext = missing[jnp.minimum(jnp.arange(width), n - 1)]
@@ -203,6 +214,104 @@ def onset_expectations(
         "known_final": known_final,
         "imputed_final": imputed_final,
         "triangle": unskew(band, n_d),
+    }
+
+
+def _windows(x: ArrayLike, n_w: int, k: int) -> ArrayLike:
+    """`out[w, i] = x[7w + i]` for `i < 7k`, from stacked reshapes.
+
+    Returns
+    -------
+    ArrayLike
+        Shape `(n_w, 7 k, P)` for `x` of shape `(m, P)`.
+    """
+    pad = 7 * (n_w + k) - x.shape[0]
+    blocks = jnp.pad(x, ((0, pad), (0, 0))).reshape(n_w + k, 7, -1)
+    out = jnp.stack([blocks[j : j + n_w] for j in range(k)], axis=1)
+    return out.reshape(n_w, 7 * k, -1)
+
+
+def _overlap_add(r: ArrayLike, n_w: int, k: int, width: int) -> ArrayLike:
+    """Sum windows back onto the day axis, the adjoint of `_windows`.
+
+    Returns
+    -------
+    ArrayLike
+        Shape `(width, P)`.
+    """
+    r = r.reshape(n_w, k, 7, -1)
+    total = sum(
+        jnp.pad(r[:, j], ((j, k - j), (0, 0), (0, 0))) for j in range(k)
+    )
+    return total.reshape(7 * (n_w + k), -1)[:width]
+
+
+def _weekly_blocks(
+    onsets: ArrayLike,
+    delay: ArrayLike,
+    missing: ArrayLike,
+    hub_delay: ArrayLike,
+    cutoff: int,
+    final: bool,
+    publication_lag: ArrayLike | None,
+) -> dict[str, ArrayLike]:
+    r"""`onset_expectations` for a delay that changes only weekly.
+
+    Onsets in week $w$ reach report days $7w$ to $7w + 6 + D$ only, so
+    each term is a product of a $7 \times 7k$ banded block $G_w$, with
+    $G_w[j, i] = f_w(i - j)$ and $7k \ge D + 7$, and a window of the
+    report-day axis. Windows are stacked reshapes and their adjoint is
+    an overlap-add, so there is still no gather or scatter. The cost is
+    linear in the number of weeks where the dense version is quadratic:
+    about 2 times faster for the value and gradient at twice the length
+    of the 2026-10-24 vintage, and the same at that length.
+
+    Returns
+    -------
+    dict
+        As `onset_expectations`.
+    """
+    n, n_d = delay.shape
+    n_w, width = n // 7, n + n_d - 1
+    k = -(-(n_d + 6) // 7)
+    span = 7 * k
+    g = jax.vmap(lambda f: skew(jnp.broadcast_to(f, (7, n_d)), span))(
+        delay[::7]
+    )
+    gh = jnp.broadcast_to(
+        skew(jnp.broadcast_to(hub_delay, (7, n_d)), span), (n_w, 7, span)
+    )
+    lam = onsets.reshape(n_w, 7, -1)
+    pi_ext = missing[jnp.minimum(jnp.arange(width), n - 1)]
+    keep = 1 - pi_ext
+    t1 = cutoff + 1
+    c = jnp.concatenate(
+        [published_by(t1, publication_lag), jnp.zeros(width - t1)]
+    )[:, None]
+
+    def ahead(blocks: ArrayLike, x: ArrayLike) -> ArrayLike:
+        # sum_d f_w(d) x(s + d) for every onset day s.
+        out = jnp.einsum("wji,wip->wjp", blocks, _windows(x, n_w, k))
+        return out.reshape(n, -1)
+
+    by_report = jnp.einsum("wji,wjp->wip", g, lam)
+    miss = pi_ext * _overlap_add(by_report, n_w, k, width)
+    seen = c * keep
+    known = onsets * ahead(g, seen)
+    imputed = ahead(gh, c * miss)
+    if final:
+        known_final = onsets * ahead(g, keep)
+        imputed_final = ahead(gh, miss)
+    else:
+        known_final, imputed_final = known, imputed
+    cells = jnp.einsum("wjp,wip->wji", lam, _windows(seen, n_w, k)) * g
+    triangle = jax.vmap(lambda b: unskew(b, n_d))(cells).reshape(n, n_d)
+    return {
+        "known": known,
+        "imputed": imputed,
+        "known_final": known_final,
+        "imputed_final": imputed_final,
+        "triangle": triangle,
     }
 
 
@@ -269,6 +378,10 @@ class OnsetStreams(BaseObservationProcess):
         Dirichlet-multinomial with concentration $\psi P(d \mid w)$
         instead of multinomial, so that the pooled delays of thousands of
         cases do not make the delay overconfident.
+    weekly_delay : bool, optional
+        `delay_rv` changes only weekly and the model axis starts on
+        `start_dow` with whole weeks, so the expectations can use
+        per-week blocks (`onset_expectations` with `weekly`).
     """
 
     def __init__(
@@ -284,6 +397,7 @@ class OnsetStreams(BaseObservationProcess):
         kernel_rv: RandomVariable | None = None,
         publication_lag: RandomVariable | ArrayLike | None = None,
         delay_overdispersion_rv: RandomVariable | None = None,
+        weekly_delay: bool = False,
     ) -> None:
         super().__init__(
             name, DeterministicPMF(f"{name}_identity", jnp.ones(1))
@@ -298,6 +412,7 @@ class OnsetStreams(BaseObservationProcess):
         self.start_dow = start_dow
         self.publication_lag = publication_lag
         self.delay_overdispersion_rv = delay_overdispersion_rv
+        self.weekly_delay = weekly_delay
 
     def lookback_days(self) -> int:
         """Return 0: the latent process is already dated by onset."""
@@ -394,6 +509,8 @@ class OnsetStreams(BaseObservationProcess):
         alpha = alpha[:, None] if alpha.ndim == 1 else alpha
         onsets = alpha * infections
         delay = self.delay_rv(n_timepoints=n, first_day_dow=first_day_dow)
+        if self.weekly_delay and (n % 7 or first_day_dow != self.start_dow):
+            raise ValueError("Weekly delays need an axis of whole weeks.")
         if self.missing_fraction_rv is None:
             pi = jnp.zeros_like(onsets)
         else:
@@ -411,6 +528,7 @@ class OnsetStreams(BaseObservationProcess):
             cutoff,
             forecast,
             publication_lag=lag,
+            weekly=self.weekly_delay,
         )
         weekly = {k: self._weekly(v, first_day_dow) for k, v in exp.items()}
         for key, value in weekly.items():
