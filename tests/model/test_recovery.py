@@ -24,7 +24,6 @@ from .conftest import VINTAGE_DAYS, vintage_date
 
 pytestmark = pytest.mark.slow
 RESULTS = Path(__file__).parents[1] / "results"
-N_INIT = 42
 
 
 @pytest.fixture(scope="module", params=["main"])
@@ -32,7 +31,7 @@ def fitted(request, sim_vintage):
     cfg = {"main": MAIN}[request.param]
     model = build_model(sim_vintage, cfg)
     start = time.perf_counter()
-    fit(model, sim_vintage, num_warmup=500, num_samples=500, num_chains=2)
+    fit(model, sim_vintage, num_warmup=300, num_samples=300, num_chains=2)
     jax.block_until_ready(model.mcmc.get_samples())
     seconds = time.perf_counter() - start
     return request.param, model, seconds
@@ -43,33 +42,39 @@ def truth(outbreak, column, location="CD-IT"):
     return par.loc[par["location"] == location, column].to_numpy()
 
 
+def on_sim_days(model, outbreak, data, site, subpop=True):
+    """Posterior median of a daily site, indexed by simulation day.
+
+    The model axis starts at `data.start_date` (the first-case week), not
+    at the simulation start, so days before it are NaN.
+    """
+    n_init = model.latent.n_initialization_points
+    draws = np.asarray(model.mcmc.get_samples()[site])[:, n_init:]
+    if subpop:
+        draws = draws[..., 0]
+    est = np.median(draws, axis=0)[: data.cutoff + 1]
+    offset = (data.start_date - outbreak.settings.start).days
+    out = np.full(offset + data.cutoff + 1, np.nan)
+    out[offset:] = est
+    return out
+
+
 def first_below_one(rt, after=60):
     below = np.nonzero(rt[after:] < 1)[0]
     return int(below[0]) + after if below.size else None
 
 
-def on_sim_days(x, data, outbreak):
-    """A series on the data axis put on simulation days (NaN before)."""
-    offset = (data.start_date - outbreak.settings.start).days
-    out = np.full(offset + data.cutoff + 1, np.nan)
-    out[offset:] = x[: data.cutoff + 1]
-    return out
-
-
 def test_recovery(fitted, outbreak, sim_vintage):
     name, model, seconds = fitted
-    smp = {k: np.asarray(v) for k, v in model.mcmc.get_samples().items()}
+    smp = model.mcmc.get_samples()
     extra = model.mcmc.get_extra_fields()
     divergent = float(np.mean(extra["diverging"]))
-    # The data axis starts at the first case week, after the simulation
-    # start, so model series are moved onto simulation days.
-    rt = on_sim_days(
-        np.median(smp["latent::rt_subpop"][:, N_INIT:, 0], axis=0),
-        sim_vintage,
-        outbreak,
-    )
+    # Everything below is on simulation days, up to the vintage.
+    rt = on_sim_days(model, outbreak, sim_vintage, "latent::rt_subpop")
     true_rt = truth(outbreak, "rt")[: rt.size]
-    checks = [56, 84, 112, 140, 168, 196]
+    # Every four weeks from day 56 to the last fitted day.
+    checks = list(range(56, rt.size, 28))
+    assert checks[-1] >= 196, "the fit should reach the turning point"
     rt_err = np.abs(rt[checks] - true_rt[checks])
     turn, true_turn = first_below_one(rt), first_below_one(true_rt)
     summary = {
@@ -84,25 +89,19 @@ def test_recovery(fitted, outbreak, sim_vintage):
     }
     if "delay_mean" in smp:
         dm = on_sim_days(
-            np.median(smp["delay_mean"][:, N_INIT:], axis=0),
-            sim_vintage,
-            outbreak,
+            model, outbreak, sim_vintage, "delay_mean", subpop=False
         )
         summary["delay_true"] = np.round(
             truth(outbreak, "delay_mean")[[42, 168]], 1
         ).tolist()
         summary["delay_median"] = np.round(dm[[42, 168]], 1).tolist()
     if "missing_fraction" in smp:
-        pi = on_sim_days(
-            np.median(smp["missing_fraction"][:, N_INIT:, 0], axis=0),
-            sim_vintage,
-            outbreak,
-        )
+        pi = on_sim_days(model, outbreak, sim_vintage, "missing_fraction")
         window = slice(56, 169)
         summary["pi_true_mean"] = round(
             float(truth(outbreak, "missing")[window].mean()), 3
         )
-        summary["pi_median_mean"] = round(float(np.nanmean(pi[window])), 3)
+        summary["pi_median_mean"] = round(float(pi[window].mean()), 3)
     RESULTS.mkdir(exist_ok=True)
     (RESULTS / f"recovery_{name}.json").write_text(
         json.dumps(summary, indent=2)
@@ -170,6 +169,7 @@ def test_forecast_trajectories(fitted, outbreak, sim_vintage):
     coverage = ppc_coverage(
         sim_vintage, draws["insample"], vintage_date(outbreak, VINTAGE_DAYS[-1])
     )
+    RESULTS.mkdir(exist_ok=True)
     out = RESULTS / f"recovery_{name}.json"
     summary = json.loads(out.read_text()) if out.exists() else {}
     summary |= {
