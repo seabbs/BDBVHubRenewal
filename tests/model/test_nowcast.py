@@ -6,6 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 import numpyro
 import numpyro.distributions as dist
+import pytest
 from jax import random
 from numpyro.infer import Predictive
 
@@ -108,3 +109,24 @@ def test_dirichlet_multinomial_delays(sim_vintage):
     conc = np.asarray(dm.concentration)
     np.testing.assert_allclose(conc.sum(-1), psi, rtol=1e-4)
     np.testing.assert_allclose(conc / psi, mn.probs, rtol=1e-4, atol=1e-9)
+
+
+@pytest.mark.parametrize("final", [True, False])
+def test_weekly_blocks_match_the_dense_expectations(final):
+    rng = np.random.default_rng(5)
+    n_w, dmax = 12, 20
+    n = 7 * n_w
+    delay = np.repeat(rng.dirichlet(np.ones(dmax + 1), n_w), 7, axis=0)
+    args = (
+        jnp.asarray(rng.gamma(5, 4, (n, 3))),
+        jnp.asarray(delay),
+        jnp.asarray(rng.uniform(0.05, 0.3, (n, 3))),
+        jnp.asarray(rng.dirichlet(np.ones(dmax + 1))),
+        n - 10,
+        final,
+    )
+    lag = jnp.asarray([0.4, 0.3, 0.2, 0.1])
+    dense = onset_expectations(*args, publication_lag=lag)
+    blocks = onset_expectations(*args, publication_lag=lag, weekly=True)
+    for key, value in dense.items():
+        np.testing.assert_allclose(blocks[key], value, rtol=1e-5, atol=1e-6)
