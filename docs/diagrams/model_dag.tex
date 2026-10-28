@@ -19,7 +19,7 @@
 \node[param, text width=3.6cm, minimum height=27mm] (rt) at (-4.6,0)
   {\textbf{Reproduction number}\\[1pt]
    $\log R_p(t) = \log R(t) + \delta_p(t)$\\[1pt]
-   {\footnotesize weekly knots for $\log R$,}\\ {\footnotesize $\sum_p \delta_p = 0$, one pooled}\\ {\footnotesize step SD for $\delta_p$}};
+   {\footnotesize weekly knots for $\log R$,}\\ {\footnotesize $\sum_p \delta_p = 0$, AR(1)}\\ {\footnotesize with pooled SD and half-life}};
 \node[param, text width=3.6cm, minimum height=27mm] (imp) at (-0.3,0)
   {\textbf{Importation}\\[1pt]
    $W = (1 - \varepsilon) I$\\ $+\, \varepsilon\, \mathrm{diag}(1/N) K^\top \mathrm{diag}(N)$\\[1pt]

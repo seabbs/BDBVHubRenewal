@@ -52,17 +52,26 @@ It is not the national Rt, which would weight provinces by their infections.
 It is a weekly random walk, sampled as its weekly values (knots) $k_j$:
 
 $$
-k_0 \sim \mathcal{N}(0, 0.5^2), \qquad k_j - k_{j-1} \sim \mathcal{N}(0, \sigma_R^2), \qquad \sigma_R \sim \mathcal{N}^+(0, 0.4^2).
+k_0 \sim \mathcal{N}(0, 0.5^2), \qquad k_j - k_{j-1} \sim \mathcal{N}(0, \sigma_R^2), \qquad \sigma_R \sim \mathcal{N}^+(0, 0.2^2).
 $$
 
 Sampling the knots rather than a level and its steps removes the direction in which the level and every step move together.
 The prior is the same.
 
 The province deviations sum to zero.
-They are $\delta_p(t) = \sum_j Q_{pj}\, \eta_j(t)$, with $Q$ an orthonormal basis of the sum-to-zero subspace and $P - 1$ weekly random walks $\eta_j$.
-The walks share one step SD $\sigma_\delta \sim \mathcal{N}^+(0, 0.3^2)$, which pools the provinces.
-Their starting values are $Q$ times standard normal draws scaled by $\mathcal{N}^+(0, 0.3^2)$.
-All walks are flat over the 6 seeding weeks before the data start.
+They are $\delta_p(t) = \sum_j Q_{pj}\, \eta_j(t)$, with $Q$ an orthonormal basis of the sum-to-zero subspace and $P - 1$ weekly AR(1) processes $\eta_j$, which revert to their starting offsets:
+
+$$
+\eta_j(t) = \phi\, \eta_j(t - 1) + \sigma_\delta z_j(t), \qquad \phi = 2^{-1/h}, \qquad h \sim \text{LogNormal}(\log 6, 0.6^2)\ \text{weeks}, \qquad \sigma_\delta \sim \mathcal{N}^+(0, 0.1^2).
+$$
+
+The shared $\sigma_\delta$ and half-life $h$ pool the provinces.
+BVDOutbreakSize uses the same form, with a 42-day half-life.
+The starting offsets are $v = Q u$, with $u \sim \mathcal{N}(0, \sigma_v^2)$ sampled centred and $\sigma_v \sim \mathcal{N}^+(0, 0.3^2)$.
+All walks are flat over the 6 seeding weeks before the data start, and are fitted on the data weeks only.
+Their steps past the data are drawn in the forecast, from the fitted step SDs.
+With `future_rt="hold"`, Rt instead holds at its last fitted value, as EpiNow2's `future = "latest"`.
+With `rt_cadence="linear"`, the weekly knots are joined linearly rather than held for the week.
 
 ### Renewal with importation and depletion
 
@@ -80,6 +89,7 @@ $$
 - $W = (1 - \varepsilon) I + \varepsilon\, \mathrm{diag}(1/N) K^\top \mathrm{diag}(N)$ mixes transmission between provinces, with $\varepsilon \sim \text{Beta}(1, 100)$.
 - $K$ is a row-normalised gravity kernel, $K_{qp} \propto N_p e^{-D_{qp}/300\,\text{km}}$, with $D$ the great-circle distance between population-weighted province centres and $N_p$ the province population.
 - With `coupling="learnt"` the kernel's decay and destination weights are estimated, $\log K_{qp} = \log N_p - D_{qp}/(300\,\text{km} \cdot e^{\kappa_K}) + w_p + c_q$, with $\kappa_K \sim \mathcal{N}(0, 1)$, sum-to-zero weights $w$ with scale $\mathcal{N}^+(0, 0.5^2)$, and $c_q$ normalising each row. With $\kappa_K = 0$ and $w = 0$ it is the fixed gravity kernel.
+- With `importation="per_origin"`, each origin has its own share $\varepsilon_q$, partially pooled on the logit scale.
 - $\nu \sim \text{LogNormal}(\log 0.05, 0.75^2)$ is the share of each province at risk.
   $S_p$ starts at $\nu$, so cumulative infections never exceed $\nu N_p$.
 
@@ -87,9 +97,11 @@ The exponential form agrees with linear depletion, $x = S y$, to first order, an
 It is computed with `expm1` and on $\log S$, which keeps the log density smooth in single precision.
 
 Seeding is set on the scale of confirmed onsets.
-Each province's expected confirmed onsets per day at the start are $c_p \sim \text{LogNormal}(0, 1.5^2)$.
-They become $x_p = c_p / (\alpha_0 N_p)$ and grow back over the seeding weeks at the initial growth rate implied by $R_p$ and $g$.
-That rate is clipped to $[-0.05, 0.3]$ per day, so a steep early decline cannot project an implausibly large seed.
+Each province's expected confirmed onsets per day are $c_p \sim \text{LogNormal}(0, 1.5^2)$, which become $I_{0,p} = c_p / (\alpha_0 N_p)$ infections per resident.
+Provinces with cases in the first data week are seeded at the start.
+Their seed is projected back over the seeding weeks at the growth rate implied by $R_p$ and $g$, clipped to $[-0.05, 0.3]$ per day, so a steep early decline cannot project a seed larger than the pool.
+Later provinces start at $10^{-6}$ of that level and take $I_{0,p}$ as a constant daily addition to $y_p(t)$ in the week before their first case week.
+Importation adds to it.
 
 The simulator's NumPy renewal, with linear depletion, is [`simulate.renewal`][bdbv_hub_renewal.data.simulate.renewal].
 
@@ -136,7 +148,7 @@ $$
 
 built as $\log R_p$ is: a pooled weekly random walk $b$ plus sum-to-zero province deviations $\eta_p$.
 The starting national value is $\mathcal{N}(-2, 1)$ with province spread $\mathcal{N}^+(0, 0.5^2)$.
-The step SDs are $\mathcal{N}^+(0, 0.6^2)$ for $b$ and $\mathcal{N}^+(0, 0.2^2)$ for $\eta$.
+The step SDs are $\mathcal{N}^+(0, 0.3^2)$ for $b$ and $\mathcal{N}^+(0, 0.1^2)$ for $\eta$, sampled non-centred.
 $\pi_p$ is informed by the ratio of imputed to known onsets, through the imputation below.
 
 ### Known onsets
@@ -197,7 +209,8 @@ For each stream, this is the count already reported by the cut-off plus a negati
 So a trajectory is never below the counts already reported.
 The hub re-imputes missing onsets at each vintage, but the cases reported by the cut-off are spread with the same delay in expectation, so their imputed count is kept too.
 A province left out uses a draw of its vintage count instead of the data.
-In provinces with no cases, importations are drawn and, from the cut-off, seed local spread at the pooled trend $R(t)$.
+Provinces with no cases are zero up to the cut-off.
+After it they draw Poisson importations, $\mu_q = \kappa \sum_p K_{pq} \lambda_p$, which spread locally at the national Rt, $\sum_p R_p I_p / \sum_p I_p$, weighted by infections.
 For `renewal` and `renewalbvd`, the national trajectory is the sum of the province trajectories plus an unassigned component.
 The unassigned component holds any provinces the model does not report, and the national cases in the data that no province has.
 In weeks with data, that gap is the vintage's $g(w) = \max\{0, Y_{CD}(w) - \sum_p Y_p(w)\}$ in every trajectory.
@@ -247,7 +260,9 @@ The model code is in `bdbv_hub_renewal.model` and the variants in [`forecasters.
 ### Single patch
 
 `renewalsp` fits the renewal model to each location's series on its own, the nation included, with no pooling and no coupling.
-Each province with cases and the nation get the same single-patch model: one $R(t)$ walk, ascertainment, the delays and the missing-onset share, all fitted to that location's known and imputed onsets alone.
+Each province with 10 or more cases, and the nation, get the same single-patch model: one $R(t)$ walk, ascertainment, the delays and the missing-onset share, all fitted to that location's known and imputed onsets alone.
+Depletion is off, since one series cannot inform the share at risk.
+A province with fewer cases gets Poisson draws at a weekly rate $\lambda \sim \text{Gamma}(1/2 + \sum_w y_w, n_w)$ over its $n_w$ weeks of data.
 The national forecast is the national fit, not the sum of the province forecasts.
 So the hub file's national value need not equal the sum of its provinces.
 The submission's national check reports that difference, sample by sample, and does not fail or change it.
@@ -262,10 +277,10 @@ The cut-off is the end of the Sunday that opens the submission window, in Kinsha
 So a release republished later on old data is never used, and the backtest sees each release as it was published.
 
 Let $a_b$ be the release's data cut-off and $s_b = a_b + 6$ days, since BVDOutbreakSize's Rt is on infection time and ours on onset time (incubation mean about 6 days).
-For a group $G$ of provinces, the nation or one BVDOutbreakSize patch, the model's Rt is onset weighted over the week of $s_b$:
+For a group $G$ of provinces, the nation or one BVDOutbreakSize patch, the model's Rt is weighted by onset counts over the week of $s_b$, with $O_p = N_p x_p$ the province's infections:
 
 $$
-R_G(s_b) = \frac{\sum_{p \in G} I_p\, R_p(s_b)}{\sum_{p \in G} I_p}.
+R_G(s_b) = \frac{\sum_{p \in G} O_p\, R_p(s_b)}{\sum_{p \in G} O_p}.
 $$
 
 The release gives the national log Rt mean $\mu_N$ and SD $\sigma_N$ from its posterior draws.
