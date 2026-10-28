@@ -351,3 +351,8 @@ def test_sampler_section() -> None:
     assert "shorter than the submission fit" in text
     assert "renewalsp" in text
     assert report._sampler_section(fits.iloc[:0], submission) == ""
+    # With the submission's settings the text says they match.
+    same = {"num_chains": 2, "num_warmup": 300, "num_samples": 300}
+    text = report._sampler_section(fits, same)
+    assert "the same as the submission fit" in text
+    assert "shorter" not in text
