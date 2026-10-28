@@ -93,7 +93,8 @@ task backtest-heldout   # score the held-out vintages
 task docs               # build this site into _site/
 ```
 
-`BDBV_RENEWAL_SAMPLER` sets the NUTS settings of the registered variants, for example `'{"num_chains": 2, "num_warmup": 300, "num_samples": 300}'`.
+The backtest fits use the `[sampler]` settings in `config/backtest.toml`, 2 chains of 500 warm-up and 500 draws.
+`BDBV_RENEWAL_SAMPLER` overrides them, for example `'{"num_chains": 2, "num_warmup": 300, "num_samples": 300}'`.
 Each forecast of a renewal variant is a fit, so a full backtest takes hours.
 `--models` runs some models and keeps the others' rows in `results/`, which is committed.
 The docs build runs only persistence and reads the variants from there.
