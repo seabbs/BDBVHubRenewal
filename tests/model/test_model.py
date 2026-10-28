@@ -288,3 +288,44 @@ def test_missingness_offsets_are_non_centred(sim_vintage):
     tr = trace(model, sim_vintage)
     assert "logit_pi0_z" in tr and "logit_pi0_offsets" not in tr
     assert "log_rt0_offsets" in tr
+
+
+def test_as_reported_draws_match_the_vintage_at_its_own_cutoff(sim_vintage):
+    from bdbv_hub_renewal.model import forecast_trajectories
+
+    model = build_model(sim_vintage, FALLBACK)
+    prior = Predictive(model.sample, num_samples=20)(
+        random.key(1), **model_args(model, sim_vintage)
+    )
+    sampled = {
+        k: v
+        for k, v in prior.items()
+        if not k.endswith("_obs") and k != "onsets_delays"
+    }
+    later = sim_vintage.cutoff + 14
+    draws = forecast_trajectories(
+        model,
+        sim_vintage,
+        20,
+        posterior=sampled,
+        as_of=(sim_vintage.cutoff, later),
+    )
+    now = draws["as_reported"][sim_vintage.cutoff]["province"]
+    seen = sim_vintage.known + sim_vintage.imputed
+    n = sim_vintage.n_weeks
+    # At the vintage's own cut-off the known counts are the vintage's, and
+    # the imputed ones are centred on it.
+    np.testing.assert_allclose(
+        np.median(now[:, : n - 1].sum(-1), axis=0),
+        seen[: n - 1].sum(-1),
+        rtol=0.25,
+        atol=3,
+    )
+    two_weeks = draws["as_reported"][later]["national"]
+    assert two_weeks.shape == draws["national"].shape
+    # More is reported two weeks on, and no more than eventually.
+    assert np.median(two_weeks[:, n - 1]) >= np.median(now.sum(-1)[:, n - 1])
+    assert np.all(
+        np.median(two_weeks, 0)[: n - 1]
+        <= np.median(draws["national"], 0)[: n - 1] * 1.25 + 3
+    )
