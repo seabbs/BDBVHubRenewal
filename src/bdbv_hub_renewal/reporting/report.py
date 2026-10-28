@@ -24,6 +24,7 @@ from bdbv_hub_renewal.data import (
     national_coherence,
     newly_missing,
 )
+from bdbv_hub_renewal.data.completeness import reported_share
 from bdbv_hub_renewal.data.dates import reference_date_for_vintage
 from bdbv_hub_renewal.data.delays import delay_summary
 from bdbv_hub_renewal.data.reconstruct import (
@@ -518,6 +519,58 @@ def _lopo_section(path: Path) -> str:
     )
 
 
+def _score_views(scores: pd.DataFrame, k: int) -> dict[str, pd.DataFrame]:
+    """Split scores into complete weeks, all weeks and vintage-matched.
+
+    Results written before the `scoring` and `complete` columns existed
+    are final counts as reported, and complete weeks follow `k`.
+    """
+    if "scoring" not in scores:
+        scores = scores.assign(scoring="as reported")
+    if "complete" not in scores:
+        age = pd.to_datetime(scores["truth_vintage"]) - pd.to_datetime(
+            scores["target_end_date"]
+        )
+        scores = scores.assign(complete=age.dt.days >= 7 * k)
+    reported = scores.loc[scores["scoring"] == "as reported"]
+    return {
+        "complete weeks": reported.loc[reported["complete"].astype(bool)],
+        "all weeks as reported": reported,
+        "vintage-matched": scores.loc[scores["scoring"] == "vintage-matched"],
+    }
+
+
+def _overall_scores(views: dict[str, pd.DataFrame]) -> str:
+    """Mean scores by model and vintage kind for each view with rows."""
+    frames = [
+        summarise_scores(rows, by=("model", "kind")).assign(scores=name)
+        for name, rows in views.items()
+        if not rows.empty
+    ]
+    if not frames:
+        return ""
+    table = pd.concat(frames, ignore_index=True)
+    first = ["scores", "model", "kind"]
+    return _table(table[[*first, *[c for c in table if c not in first]]])
+
+
+def _completeness_note(k: int, delays: pd.DataFrame) -> str:
+    """Say which weeks count as complete and why."""
+    latest = str(delays["vintage"].max())
+    share = reported_share(delays, latest, [7 * k])[0]
+    link = "reference/data.md#bdbv_hub_renewal.data.completeness.complete_weeks"
+    return (
+        f"Complete weeks are those that ended at least {k} weeks before the "
+        f"truth vintage.\nBy then {share:.0%} of a week's final count is "
+        f"published, from the {latest} delay data "
+        f"([`complete_weeks`]({link})).\n"
+        "Scores on complete weeks are the primary scores.\n"
+        "Vintage-matched scores compare each model's prediction of the "
+        "counts as reported by the truth vintage with that vintage, so "
+        "they cover every week.\n"
+    )
+
+
 def _relative_section(scores: pd.DataFrame) -> str:
     if scores["model"].nunique() < 2:
         return (
@@ -534,11 +587,22 @@ def _relative_section(scores: pd.DataFrame) -> str:
             f"    ![{alt}](figures/relative-wis-{by}-dark.svg#only-dark)\n"
         )
     return (
-        "Mean scores divided by those of persistence over the forecasts "
-        "both made.\nValues below 1 beat persistence.\n\n"
+        "Mean scores on complete weeks divided by those of persistence over "
+        "the forecasts both made.\nValues below 1 beat persistence.\n\n"
         + _table(rel)
         + "\n"
         + "\n".join(tabs)
+    )
+
+
+def _matched_relative(matched: pd.DataFrame) -> str:
+    """Relative scores of vintage-matched forecasts, if two models have any."""
+    if matched.empty or matched["model"].nunique() < 2:
+        return ""
+    return (
+        "\nVintage-matched, over every week:\n\n"
+        + _table(relative_skill(matched, by=("kind",)))
+        + "\n"
     )
 
 
@@ -554,8 +618,11 @@ def _backtest_page(
 ) -> None:
     real = target.loc[target["kind"] == "real"]
     dev_path = res / "backtest-scores.csv"
+    k = config.complete_after_weeks
     if dev_path.exists():
-        scores = pd.read_csv(dev_path)
+        views = _score_views(pd.read_csv(dev_path), k)
+        scores = views["all weeks as reported"]
+        primary = views["complete weeks"]
         for by in ("horizon", "location"):
             for metric in ("wis", "log_wis", "coverage_90", "bias"):
                 save_light_dark(
@@ -565,20 +632,23 @@ def _backtest_page(
                     fig / f"scores-{metric.replace('_', '-')}-{by}.svg",
                 )
             save_light_dark(
-                partial(plot_relative_skill, scores, by=by, models=names),
+                partial(plot_relative_skill, primary, by=by, models=names),
                 fig / f"relative-wis-{by}.svg",
             )
         truth_v = ", ".join(sorted(set(scores["truth_vintage"].astype(str))))
         _write(
             gen / "backtest-truth.md",
             f"Scores are against the **{truth_v}** vintage, as reported "
-            "then.\n",
+            "then.\n" + _completeness_note(k, delays),
         )
-        overall = summarise_scores(scores, by=("model", "kind"))
-        _write(gen / "scores-overall.md", _table(overall))
-        _write(gen / "relative-section.md", _relative_section(scores))
+        _write(gen / "scores-overall.md", _overall_scores(views))
+        _write(
+            gen / "relative-section.md",
+            _relative_section(primary)
+            + _matched_relative(views["vintage-matched"]),
+        )
         _write(gen / "persistence-bias.md", _persistence_bias(scores))
-        by_loc = summarise_scores(scores, by=("model", "kind", "location"))
+        by_loc = summarise_scores(primary, by=("model", "kind", "location"))
         _write(
             gen / "scores-location.md",
             _table(
@@ -599,19 +669,28 @@ def _backtest_page(
         )
     by_truth_path = res / "backtest-scores-by-truth.csv"
     if by_truth_path.exists():
-        by_truth = pd.read_csv(by_truth_path)
+        truth_views = _score_views(pd.read_csv(by_truth_path), k)
+        by_truth = truth_views["all weeks as reported"]
         save_light_dark(
             partial(plot_scores_by_truth, by_truth, models=names),
             fig / "scores-by-truth.svg",
         )
-        table = summarise_scores(
-            by_truth, by=("model", "vintage", "truth_vintage")
+        table = pd.concat(
+            [
+                summarise_scores(
+                    rows, by=("model", "vintage", "truth_vintage")
+                ).assign(scores=name)
+                for name, rows in truth_views.items()
+                if not rows.empty
+            ],
+            ignore_index=True,
         )
         _write(
             gen / "scores-by-truth.md",
             _table(
                 table[
                     [
+                        "scores",
                         "model",
                         "vintage",
                         "truth_vintage",
@@ -747,18 +826,35 @@ def _heldout_page(
     if scores.empty:
         _write(gen / "heldout-scores.md", "")
     else:
-        overall = summarise_scores(
-            scores, by=("chosen_model", "model", "vintage", "truth_vintage")
+        views = _score_views(scores, config.complete_after_weeks)
+        overall = pd.concat(
+            [
+                summarise_scores(
+                    rows,
+                    by=("chosen_model", "model", "vintage", "truth_vintage"),
+                ).assign(scores=name)
+                for name, rows in views.items()
+                if not rows.empty
+            ],
+            ignore_index=True,
         )
         horizon = summarise_scores(
-            scores, by=("model", "vintage", "truth_vintage", "horizon")
+            views["all weeks as reported"],
+            by=("model", "vintage", "truth_vintage", "horizon"),
         )
         cols = ["n", "wis", "log_wis", "coverage_50", "coverage_90", "bias"]
         _write(
             gen / "heldout-scores.md",
             _table(
                 overall[
-                    ["chosen_model", "model", "vintage", "truth_vintage", *cols]
+                    [
+                        "scores",
+                        "chosen_model",
+                        "model",
+                        "vintage",
+                        "truth_vintage",
+                        *cols,
+                    ]
                 ]
             )
             + "\nBy horizon, over provinces and the national total:\n\n"

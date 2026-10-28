@@ -1,6 +1,6 @@
 # Data
 
-The hub data, dates, reconstructed and simulated vintages, delays and BVDOutbreakSize releases.
+The hub data, dates, reconstructed and simulated vintages, delays, completeness and BVDOutbreakSize releases.
 { .page-subtitle }
 
 ::: bdbv_hub_renewal.data
@@ -16,5 +16,7 @@ The hub data, dates, reconstructed and simulated vintages, delays and BVDOutbrea
 ::: bdbv_hub_renewal.data.simulate
 
 ::: bdbv_hub_renewal.data.delays
+
+::: bdbv_hub_renewal.data.completeness
 
 ::: bdbv_hub_renewal.data.bvd
