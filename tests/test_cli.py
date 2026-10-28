@@ -341,3 +341,27 @@ def test_cli_fit_task_carries_the_delay_files_for_the_lag() -> None:
     assert task.target_history is not None
     assert task.target_history["vintage"].nunique() >= 3
     assert vintage_inputs(task, MAIN).publication_lag_pmf is not None
+
+
+@pytest.mark.usefixtures("in_root")
+def test_cli_backtest_scenarios(tmp_path: Path) -> None:
+    args = [
+        "backtest",
+        "--scenarios-only",
+        "--models",
+        "persistence",
+        "--scenario-dates",
+        "2026-10-17",
+        "--results",
+        str(tmp_path / "res"),
+        "--output",
+        str(tmp_path / "out"),
+    ]
+    assert main(args) == 0
+    scores = pd.read_csv(tmp_path / "res" / "scenario-scores.csv.gz")
+    assert set(scores["scenario"]) == {
+        "calibrated_falling",
+        "calibrated_flat",
+        "calibrated_rising",
+    }
+    assert (tmp_path / "out" / "scenario-forecasts.csv.gz").exists()

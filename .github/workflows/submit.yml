@@ -87,8 +87,8 @@ jobs:
       as_of: ${{ steps.detect.outputs.as_of }}
       dry_run: ${{ steps.mode.outputs.dry_run }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
       - name: Decide dry run or live
         id: mode
         env:
@@ -141,7 +141,7 @@ jobs:
       contents: write
       actions: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-forecast-env
       - name: Freeze
         id: freeze
@@ -171,7 +171,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GITHUB_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-forecast-env
       - name: Download data and build the persistence baseline
         env:
@@ -199,7 +199,7 @@ jobs:
           uv run --project "$CI_DIR" python -m submission_ci.policy \
             --policy "$CI_DIR/policy.toml" --stage primary --hub-ref "$HUB_REF" \
             --model "$MODEL" $(deadline_args)
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: inputs
           path: |
@@ -230,13 +230,13 @@ jobs:
       need_retry: ${{ steps.triage.outputs.need_retry }}
       matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/download-artifact@v8
         with:
           name: inputs
           path: ${{ env.WORK }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: candidate-*
           path: ${{ env.WORK }}/candidates
@@ -299,20 +299,20 @@ jobs:
       AS_OF: ${{ needs.detect.outputs.as_of }}
       REFERENCE_DATE: ${{ needs.detect.outputs.reference_date }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-forecast-env
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: inputs
           path: ${{ env.WORK }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: candidate-*
           path: ${{ env.WORK }}/candidates
       - name: Lay out the candidates
         run: ci/steps/unpack_candidates.sh
       # The hub at the commit the data came from, for hubValidations.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: ${{ env.HUB }}
           ref: ${{ env.HUB_REF }}
@@ -354,7 +354,7 @@ jobs:
           METADATA: ${{ env.WORK }}/metadata/${{ env.MODEL_ID }}.yml
           CHECK_WINDOW: ${{ needs.detect.outputs.dry_run == 'false' }}
         run: ci/steps/select.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: gate
@@ -384,9 +384,9 @@ jobs:
       SOURCE_SHA: ${{ github.sha }}
       MODEL_ID: ${{ needs.gate.outputs.model_id }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/download-artifact@v8
         with:
           name: gate
           path: ${{ env.WORK }}
@@ -419,7 +419,7 @@ jobs:
             cat "$WORK/gate/pr-body.md"
             echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: pr
@@ -454,13 +454,13 @@ jobs:
       DRY_RUN: ${{ needs.detect.outputs.dry_run }}
       SOURCE_SHA: ${{ github.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-forecast-env
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: inputs
           path: ${{ env.WORK }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: ${{ env.HUB }}
           ref: ${{ env.HUB_REF }}
@@ -508,7 +508,7 @@ jobs:
             cat "$WORK/track-persistencenow/gate/pr-body.md" 2> /dev/null
             echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: baseline-gate
@@ -535,15 +535,15 @@ jobs:
     env:
       REFERENCE_DATE: ${{ needs.detect.outputs.reference_date }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/download-artifact@v8
         if: needs.prepare.outputs.renewal == 'true'
         continue-on-error: true
         with:
           name: gate
           path: ${{ env.WORK }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         if: needs.prepare.outputs.baseline == 'true'
         continue-on-error: true
         with:
