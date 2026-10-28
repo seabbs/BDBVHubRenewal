@@ -10,6 +10,7 @@ The current nowcast and forecast from the latest vintage.
 Bars are published counts by onset week, known below and imputed above.
 Lines are sample trajectories, bands 50% and 90% intervals and the solid line the median.
 The dotted line is the reference date.
+Weeks still being reported are shaded, with hollow bars.
 
 --8<-- "nowcast-tabs.md"
 

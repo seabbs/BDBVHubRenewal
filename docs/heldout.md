@@ -7,6 +7,7 @@ The development set rolls forward with the model choices in `results/model-choic
 Development runs use every vintage up to the latest choice date.
 Each real vintage after a choice is held out, forecast by the model chosen then and by persistence, and scored against every later vintage as reported.
 With no choice recorded, nothing is held out.
+Weeks still being reported are shaded in the plots, with hollow points.
 The design is on the [Evaluation methods page](methods/evaluation.md#rolling-held-out-evaluation).
 
 --8<-- "heldout-choices.md"

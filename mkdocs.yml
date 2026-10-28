@@ -24,23 +24,25 @@ nav:
       - Model: methods/model.md
       - Evaluation: methods/evaluation.md
       - Implementation: methods/implementation.md
-  - Data: data.md
-  - Backtest: backtest.md
-  - Held-out evaluation: heldout.md
-  - Comparison with hub forecasts: comparison.md
-  - Nowcast: nowcast.md
+  - Results:
+      - Data: data.md
+      - Nowcast: nowcast.md
+      - Backtest: backtest.md
+      - Held-out evaluation: heldout.md
+      - Comparison with hub forecasts: comparison.md
   - Submission:
       - Rounds: submission/rounds/index.md
       - Opting in: submission/opting-in.md
       - Workflow: submission/workflow.md
       - Hub specification: submission/hub-spec.md
-  - Model development:
-      - Model building: model-development/model-building.md
-      - Development log: model-development/log.md
   - Development:
+      - Model development:
+          - Model building: model-development/model-building.md
+          - Development log: model-development/log.md
       - Contributing: development/contributing.md
       - Adding a model: development/adding-a-model.md
       - CLI: development/cli.md
+      - Citation and licence: citation.md
   - API reference:
       - reference/index.md
       - Data: reference/data.md
@@ -49,7 +51,6 @@ nav:
       - Evaluation: reference/evaluation.md
       - Submission: reference/submission.md
       - Reporting: reference/reporting.md
-  - Citation and licence: citation.md
 
 theme:
   name: material

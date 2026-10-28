@@ -4,6 +4,7 @@ Forecasts made at past vintages, scored against the latest data.
 { .page-subtitle }
 
 Scores on complete weeks are the primary scores ([Evaluation](methods/evaluation.md#scoring)).
+Weeks still being reported are shaded in the plots, with hollow points, and are scored only as vintage-matched.
 
 --8<-- "backtest-findings.md"
 
