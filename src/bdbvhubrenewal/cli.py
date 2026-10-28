@@ -148,18 +148,22 @@ MODEL_METADATA = {
     "persistencenow": {
         "model_name": "Persistence on a nowcast",
         "methods": (
-            "Recent onset weeks completed by a fast nowcast of reporting "
-            "delays, then the last week carried forward with random walk "
-            "noise. Provinces, health zones and national."
+            "Chain-ladder nowcast of recent onset weeks with negative binomial "
+            "uncertainty, then persistence on each draw. Provinces, health "
+            "zones and national."
         ),
         "methods_long": (
-            "A persistence baseline on nowcast counts. Recent onset weeks "
-            "are first completed for reporting delays with a fast nowcast "
-            "(no MCMC). The last nowcast week is then carried forward, with "
-            "log-scale random walk noise and Poisson draws, as in the "
-            "persistence baseline. Province samples are split across health "
-            "zones, and the national value is the sum of provinces. See "
-            "https://seabbs.github.io/BDBVHubRenewal/methods/model/."
+            "A baseline model building on the ideas of the baselinenowcast "
+            "paper and package (Johnson et al. 2025, Wellcome Open Research, "
+            "doi:10.12688/wellcomeopenres.25027.2; "
+            "https://github.com/epinowcast/baselinenowcast/). Recent onset "
+            "weeks are nowcast with a chain ladder on the reporting triangle, "
+            "with a negative binomial for each delay horizon fitted to past "
+            "retrospective nowcasts. Each nowcast draw is carried forward as "
+            "persistence, with log-scale random walk noise. Province samples "
+            "are split across health zones, and the national value is the "
+            "sum of provinces. See "
+            "https://samabbott.co.uk/BDBVHubRenewal/methods/model/."
         ),
         "data_inputs": (
             "Hub target data (weekly confirmed cases by onset week, observed "

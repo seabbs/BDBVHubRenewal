@@ -127,7 +127,9 @@ def test_fit_fails_on_unknown_config_or_vintage(tmp_path: Path) -> None:
 @pytest.mark.usefixtures("in_root")
 def test_plot_submission_and_validate(tmp_path: Path) -> None:
     out = tmp_path / "sub"
-    assert main(["nowcast", "--out", str(out)]) == 0
+    # seabbsbaseline: the committed metadata covers the hub models only.
+    args = ["--model", "persistencenow", "--out", str(out)]
+    assert main(["nowcast", *args]) == 0
     (csv,) = out.rglob("*.csv")
     png = tmp_path / "plot.png"
     assert main(["plot-submission", "--submission", str(csv), "--out",
@@ -324,3 +326,27 @@ def test_persistencenow_config_runs_the_nowcast_model(tmp_path: Path) -> None:
     week = now["target_end_date"] == "2026-10-10"
     nat = (now["location"] == "CD") & week
     assert now.loc[nat, "value"].median() > base.loc[nat, "value"].median()
+
+
+@pytest.mark.usefixtures("in_root")
+def test_seabbsbaseline_metadata_text(tmp_path: Path) -> None:
+    assert main(["metadata", "--model", "persistencenow", "--out",
+                 str(tmp_path)]) == 0  # fmt: skip
+    text = (tmp_path / "epiforecasts-seabbsbaseline.yml").read_text()
+    assert "https://samabbott.co.uk/BDBVHubRenewal/methods/model/" in text
+    assert "baselinenowcast" in text
+    assert "10.12688/wellcomeopenres.25027.2" in text
+    assert "language model" not in text
+
+
+def test_committed_metadata_is_only_for_hub_models() -> None:
+    # One file per hub model in config/hub.toml, written as the CLI does.
+    names = sorted(p.stem for p in (ROOT / "hub" / "model-metadata").glob("*"))
+    assert names == [
+        "epiforecasts-seabbsbaseline",
+        "epiforecasts-seabbsrenewal",
+    ]
+    for name in names:
+        text = (ROOT / "hub" / "model-metadata" / f"{name}.yml").read_text()
+        assert "language model" not in text
+        assert "NIHR207404" in text
