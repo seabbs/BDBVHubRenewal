@@ -24,7 +24,7 @@ Each week the [submission](submission/workflow.md) takes the first of `renewal`,
 
 | Section | What it holds |
 |---|---|
-| [Getting started](getting-started.md) | Install, fit the model and write a hub file. |
+| [Getting started](getting-started.ipynb) | Forecast, plot and score the two baselines in Python. |
 | Methods | [Data](methods/data.md), [Model](methods/model.md), [Evaluation](methods/evaluation.md) and [Implementation](methods/implementation.md). |
 | [Data](data.md) | The hub data, vintage by vintage. |
 | [Backtest](backtest.md) | Development scores against later data. |
