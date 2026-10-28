@@ -8,5 +8,8 @@
     "CD-IT",
     "CD-NK"
   ],
+  "hub_ids": {
+    "persistencenow": "epiforecasts-seabbsbaseline"
+  },
   "accessed": "2026-10-28"
 }

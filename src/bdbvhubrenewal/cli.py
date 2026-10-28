@@ -908,6 +908,7 @@ def _compare_hub(args: argparse.Namespace) -> int:
         "baseline": hc.resolve_baseline(cfg.baseline),
         "preferred_baseline": cfg.baseline,
         "locations": list(cfg.locations),
+        "hub_ids": hc.own_hub_ids(),
         "accessed": accessed,
     }
     (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")

@@ -71,6 +71,7 @@ __all__ = [
     "load_team_metadata",
     "match_vintage",
     "our_forecasts",
+    "own_hub_ids",
     "resolve_baseline",
     "score_comparison",
     "stored_forecasts",
@@ -180,6 +181,30 @@ def resolve_baseline(preferred: str) -> str:
     if any(s.name == preferred for s in specs):
         return preferred
     return next(s.name for s in specs if s.baseline)
+
+
+def own_hub_ids(path: Path | str = "config/hub.toml") -> dict[str, str]:
+    """Return the hub ids of our models that submit under their own id.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        The hub submission settings, with a `[models.<name>]` table per
+        model that has its own id.
+
+    Returns
+    -------
+    dict
+        Model name to hub model id, such as
+        `{"persistencenow": "epiforecasts-seabbsbaseline"}`.
+    """
+    from bdbvhubrenewal.submission.hub import model_abbr_for, model_id
+
+    raw = tomllib.loads(Path(path).read_text())
+    return {
+        name: model_id(model_abbr_for(name, path))
+        for name in raw.get("models", {})
+    }
 
 
 def attribution(accessed: str) -> str:
