@@ -64,6 +64,7 @@ def test_active_set_follows_the_data(outbreak, sim_tables, table):
         ModelConfig(walk="noncentred"),
         ModelConfig(future_rt="hold"),
         ModelConfig(importation="per_origin"),
+        ModelConfig(rt_weighting="cases"),
         ModelConfig(rt_cadence="linear"),
         ModelConfig(seeding="start"),
     ],
