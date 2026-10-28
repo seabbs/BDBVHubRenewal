@@ -114,6 +114,9 @@ SAMPLER = {
 RUNGS: dict[str, pr.ModelConfig | str] = {
     **pr.model.LADDER,
     "S6 + report day-of-week": dataclasses.replace(pr.MAIN, report_dow=True),
+    "renewal case-weighted Rt": dataclasses.replace(
+        pr.MAIN, rt_weighting="cases"
+    ),
     "renewal fallback": pr.FALLBACK,
     "renewal learnt kernel": dataclasses.replace(pr.MAIN, coupling="learnt"),
     "renewal future Rt held": dataclasses.replace(pr.MAIN, future_rt="hold"),
@@ -143,6 +146,8 @@ DESCRIPTIONS = {
     "S5 + depletion (main)": "Susceptible depletion; this is `renewal`.",
     "S6 + report day-of-week": "A sum-to-zero report day-of-week effect "
     "on the delay hazard.",
+    "renewal case-weighted Rt": "Province Rt deviations sum to zero "
+    "weighted by cases, so the national walk is the case-weighted Rt.",
     "renewal fallback": "Delays and missingness fixed from the data, no "
     "coupling.",
     "renewal learnt kernel": "Gravity decay and destination weights learnt.",
