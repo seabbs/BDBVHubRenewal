@@ -96,6 +96,7 @@ def test_chain_order_and_budget() -> None:
         "main",
         "retry-1",
         "renewalsp",
+        "persistencenow",
         "persistence",
     ]
     assert [c.id for c in POLICY.stage("primary")] == [
@@ -248,6 +249,21 @@ def test_fallback_is_used(tmp_path: Path) -> None:
     prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=True)
     assert prov["selected"] == "renewalsp" and prov["kind"] == "fallback"
     assert "growth" in prov["reason"]
+
+
+def test_persistencenow_before_persistence(tmp_path: Path) -> None:
+    c = tmp_path / "c"
+    chain(
+        c,
+        main=("fail", "pass"),
+        retry_1=("fail", "pass"),
+        renewalsp=("pass", "fail"),
+        persistencenow=(None, "pass"),
+        persistence=(None, "pass"),
+    )
+    prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=True)
+    assert prov["selected"] == "persistencenow"
+    assert prov["kind"] == "persistence"
 
 
 def test_persistence_is_the_last_resort(tmp_path: Path) -> None:

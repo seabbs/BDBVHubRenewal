@@ -119,8 +119,15 @@ def test_chain_stays_within_the_three_models(tmp_path: Path) -> None:
         ("main", "main"),
         ("retry-1", "retry"),
         ("renewalsp", "fallback"),
+        ("persistencenow", "persistence"),
         ("persistence", "persistence"),
     ]
+    # Both baselines need no fit and are built in `prepare`.
+    assert [c.id for c in pol.stage("baseline")] == [
+        "persistencenow",
+        "persistence",
+    ]
+    assert pol.get("persistencenow").model == "persistencenow"
     assert "fallback" not in {c.config for c in pol.candidates}
     root = repo(tmp_path)
     primary = {e["id"]: e for e in matrix(pol, "primary", root, "hub")}
@@ -131,6 +138,17 @@ def test_chain_stays_within_the_three_models(tmp_path: Path) -> None:
     assert primary["renewalsp"]["model"] == "renewalsp"
     assert primary["bvd"]["model"] == "renewalbvd"
     assert matrix(pol, "retry", root, "hub")[0]["model"] == ""
+
+
+def test_baseline_choices_keep_the_chain_from_that_baseline() -> None:
+    pol = load_policy(POLICY_PATH)
+    persistence = pol.for_model("persistence")
+    assert [c.id for c in persistence.chain()] == ["persistence"]
+    assert persistence.get("persistencenow").kind == "shadow"
+    now = pol.for_model("persistencenow")
+    assert [c.id for c in now.chain()] == ["persistencenow", "persistence"]
+    assert now.get("main").kind == "shadow"
+    assert now.stage("retry") == []
 
 
 def test_ci_sampler_settings(tmp_path: Path) -> None:
