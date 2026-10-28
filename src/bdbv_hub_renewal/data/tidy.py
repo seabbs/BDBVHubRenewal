@@ -59,6 +59,7 @@ __all__ = [
     "fetch_hub_data",
     "imputed_share",
     "load_daily",
+    "load_daily_zones",
     "load_delays",
     "load_health_zones",
     "load_locations",
@@ -355,13 +356,16 @@ def _weekly_split(daily: pd.DataFrame) -> pd.DataFrame:
     )[["observed", "imputed"]].sum()
 
 
-def tidy_daily(daily_csv: Path | str) -> pd.DataFrame:
-    """Tidy daily onsets for the country and provinces, by vintage.
+def tidy_daily(daily_csv: Path | str, level: str = "province") -> pd.DataFrame:
+    """Tidy daily onsets by vintage, for one level of geography.
 
     Parameters
     ----------
     daily_csv : pathlib.Path or str
         Path to the hub's `auxiliary-data/daily-confirmed-case.csv`.
+    level : {"province", "zone"}
+        The country and provinces, or the health zones, which are kept
+        apart for a later zone stage.
 
     Returns
     -------
@@ -369,8 +373,11 @@ def tidy_daily(daily_csv: Path | str) -> pd.DataFrame:
         Columns `vintage`, `location`, `onset_date`, `observed` and
         `imputed`. Only days with at least one case are present.
     """
+    types = {"province": ["country", "province"], "zone": ["health zone"]}
+    if level not in types:
+        raise ValueError(f"Unknown level {level!r}: use {sorted(types)}.")
     raw = pd.read_csv(daily_csv)
-    raw = raw.loc[raw["location_type"].isin(["country", "province"])]
+    raw = raw.loc[raw["location_type"].isin(types[level])]
     raw = raw.assign(
         kind=np.where(raw["imputed"].astype(bool), "imputed", "observed")
     )
@@ -579,10 +586,11 @@ def build_tidy_data(
 ) -> dict[str, pd.DataFrame]:
     """Tidy the raw downloads and write the tables to `out_dir`.
 
-    Writes `locations.csv`, `target.csv`, `daily.csv`, `delays.csv.gz`,
-    `health_zones.csv.gz` and `national-coherence.csv` (see
-    `national_coherence`), and copies the hub configuration to
-    `hub-config/` and the download manifest to `sources.json`.
+    Writes `locations.csv`, `target.csv`, `daily.csv`,
+    `daily_zones.csv.gz`, `delays.csv.gz`, `health_zones.csv.gz` and
+    `national-coherence.csv` (see `national_coherence`), and copies the
+    hub configuration to `hub-config/` and the download manifest to
+    `sources.json`.
 
     Parameters
     ----------
@@ -599,7 +607,9 @@ def build_tidy_data(
     raw, out = Path(raw_dir), Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     locations = tidy_locations(raw / "auxiliary-data" / "locations.csv")
-    daily = tidy_daily(raw / "auxiliary-data" / "daily-confirmed-case.csv")
+    daily_csv = raw / "auxiliary-data" / "daily-confirmed-case.csv"
+    daily = tidy_daily(daily_csv)
+    daily_zones = tidy_daily(daily_csv, level="zone")
     target = tidy_target(raw / "target-data" / "time-series.csv", daily)
     delays = tidy_delays(raw / "delays", locations)
     zones = tidy_health_zones(raw / "target-data" / "time-series.csv")
@@ -607,12 +617,14 @@ def build_tidy_data(
         "locations": locations,
         "target": target,
         "daily": daily,
+        "daily_zones": daily_zones,
         "delays": delays,
         "health_zones": zones,
     }
     locations.to_csv(out / "locations.csv", index=False)
     target.to_csv(out / "target.csv", index=False)
     daily.to_csv(out / "daily.csv", index=False)
+    daily_zones.to_csv(out / "daily_zones.csv.gz", index=False)
     delays.to_csv(out / "delays.csv.gz", index=False)
     zones.to_csv(out / "health_zones.csv.gz", index=False)
     national_coherence(target).to_csv(
@@ -827,6 +839,24 @@ def load_daily(data_dir: Path | str | None = None) -> pd.DataFrame:
         See `tidy_daily`.
     """
     return pd.read_csv(_data_dir(data_dir) / "daily.csv")
+
+
+def load_daily_zones(data_dir: Path | str | None = None) -> pd.DataFrame:
+    """Load the tidy daily onsets of the health zones.
+
+    See `tidy_daily` with `level="zone"`.
+
+    Parameters
+    ----------
+    data_dir : pathlib.Path or str, optional
+        Directory holding the tidy tables. Defaults to `data/`.
+
+    Returns
+    -------
+    pandas.DataFrame
+        See `tidy_daily`.
+    """
+    return pd.read_csv(_data_dir(data_dir) / "daily_zones.csv.gz")
 
 
 def load_delays(data_dir: Path | str | None = None) -> pd.DataFrame:
