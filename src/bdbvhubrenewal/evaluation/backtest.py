@@ -52,7 +52,12 @@ from bdbvhubrenewal.data.reconstruct import (
     reconstruct_delays,
     reconstruct_vintages,
 )
-from bdbvhubrenewal.data.simulate import SimulationSettings, simulate_outbreak
+from bdbvhubrenewal.data.simulate import (
+    SCENARIO_RT_SCALE,
+    SimulationSettings,
+    calibrated_settings,
+    simulate_outbreak,
+)
 from bdbvhubrenewal.evaluation.scoring import score_forecasts
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
@@ -80,6 +85,7 @@ __all__ = [
     "run_forecasts",
     "run_lopo",
     "run_recovery",
+    "run_scenarios",
     "saturdays",
     "score_by_truth_vintage",
     "score_tasks",
@@ -1029,3 +1035,90 @@ def run_recovery(
     scores = score_tasks(forecasts, outbreak.truth(), end.isoformat())
     scores["truth_vintage"] = "simulated"
     return forecasts, scores
+
+
+def _truth(rows: pd.DataFrame) -> pd.DataFrame:
+    """Target rows as a truth table: `location`, `target_end_date`, `truth`."""
+    out = rows.rename(columns={"total": "truth"})
+    return out[["location", "target_end_date", "truth"]]
+
+
+def run_scenarios(
+    models: Sequence[ForecastModel],
+    config: BacktestConfig,
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    zones: pd.DataFrame,
+    as_of: str,
+    dates: Sequence[str],
+    names: Sequence[str] = tuple(SCENARIO_RT_SCALE),
+    later_weeks: int = 2,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Run models on scenarios calibrated to the real data and score them.
+
+    For each scenario (`calibrated_settings` at `as_of`), the simulated
+    vintages at `dates` are forecast, then scored two ways: against the
+    final simulated data (`truth_view` `"final"`, with `complete` for
+    weeks reported in full, as `complete_after_weeks`) and against the
+    data as reported `later_weeks` after each forecast date (`"as of 2
+    weeks later"`), as the real backtest does with later vintages.
+
+    Parameters
+    ----------
+    models : sequence of ForecastModel
+        Models to check.
+    config : BacktestConfig
+        Settings: samples, seed and `complete_after_weeks`.
+    target, delays, zones : pandas.DataFrame
+        Real target, delay and health zone rows.
+    as_of : str
+        The real vintage the scenarios are calibrated to.
+    dates : sequence of str
+        Simulated vintage dates to forecast from.
+    names : sequence of str
+        Scenarios (`SCENARIO_RT_SCALE` keys).
+    later_weeks : int
+        Weeks after each date for the as-of scores.
+
+    Returns
+    -------
+    tuple of pandas.DataFrame
+        The forecasts and the scores, with `scenario` and `truth_view`.
+    """
+    k = config.complete_after_weeks
+    all_forecasts, all_scores = [], []
+    for name in names:
+        settings = calibrated_settings(
+            target, delays, zones, as_of, name=name, seed=config.seed
+        )
+        outbreak = simulate_outbreak(settings)
+        sim_target, sim_delays = outbreak.vintages(list(dates))
+        forecasts = run_forecasts(
+            models, make_tasks(sim_target, sim_delays, config)
+        )
+        end = (
+            settings.start + dt.timedelta(days=settings.n_days - 1)
+        ).isoformat()
+        final = _truth(outbreak.vintage(end)[0])
+        scores = [
+            score_tasks(forecasts, final, end, k).assign(truth_view="final")
+        ]
+        for date in dates:
+            later = (
+                as_date(date) + dt.timedelta(weeks=later_weeks)
+            ).isoformat()
+            truth = _truth(outbreak.vintage(later)[0])
+            rows = forecasts.loc[forecasts["vintage"] == date]
+            scores.append(
+                score_tasks(rows, truth, later, k).assign(
+                    truth_view=f"as of {later_weeks} weeks later"
+                )
+            )
+        all_forecasts.append(forecasts.assign(scenario=settings.name))
+        all_scores.append(
+            pd.concat(scores, ignore_index=True).assign(scenario=settings.name)
+        )
+    return (
+        pd.concat(all_forecasts, ignore_index=True),
+        pd.concat(all_scores, ignore_index=True),
+    )
