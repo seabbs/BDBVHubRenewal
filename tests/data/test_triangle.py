@@ -8,6 +8,7 @@ from bdbvhubrenewal.data.triangle import (
     apply_delay,
     chainladder_fill,
     delay_pmf,
+    first_publication_delays,
     fit_nb_size,
     preprocess_negative_values,
     reporting_triangle,
@@ -132,3 +133,32 @@ def test_delay_pmf_needs_cases() -> None:
     tri = np.array([[0.0, 0.0], [0.0, np.nan]])
     with pytest.raises(ValueError, match="no cases"):
         delay_pmf(tri)
+
+
+def test_first_publication_delays_count_late_batches_as_long_delays() -> None:
+    def rows(vintage: str, week: str, delays: list[int]) -> pd.DataFrame:
+        return _rows(vintage, week, delays)
+
+    history = pd.concat(
+        [
+            rows("2026-10-09", "2026-09-26", [2, 3]),
+            # The same two rows, plus a batch of three with delay 4 that
+            # first appear in the next file, and one case for a week too
+            # old to keep (backfill).
+            rows("2026-10-17", "2026-09-26", [2, 3, 4, 4, 4]),
+            rows("2026-10-17", "2026-07-04", [5]),
+        ]
+    )
+    out = first_publication_delays(history, "2026-10-17", max_delay=35)
+    assert set(out["vintage"]) == {"2026-10-17"}
+    got = sorted(out.loc[out["onset_week"] == "2026-09-26", "delay"])
+    # The batch was not in the 10-09 file, so it was published on 10-10 at
+    # the earliest: 14 days after the week ended.
+    assert got == [2, 3, 14, 14, 14]
+    # A row whose first publication is more than 35 days late is dropped.
+    assert (out["onset_week"] == "2026-07-04").sum() == 0
+    # Without an earlier file, the delays are as reported.
+    one = first_publication_delays(
+        history.loc[history["vintage"] == "2026-10-09"], "2026-10-09"
+    )
+    assert sorted(one["delay"]) == [2, 3]

@@ -1,6 +1,6 @@
 # Implementation
 
-How the [model](model.md) is built in code, computed and sampled.
+How the [models](model.md) are built in code, computed and sampled.
 { .page-subtitle }
 
 ## Code

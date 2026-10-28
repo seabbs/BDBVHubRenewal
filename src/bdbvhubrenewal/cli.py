@@ -108,7 +108,7 @@ MODEL_METADATA = {
             "published counts. Each sample is a joint trajectory and the "
             "national value is the sum of province samples. No spatial "
             "correlation beyond that sum. See "
-            "https://samabbott.co.uk/BDBVHubRenewal/methods/model/."
+            "https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."
         ),
         "data_inputs": (
             "Hub target data (weekly confirmed cases by onset week, observed "
@@ -169,7 +169,7 @@ MODEL_METADATA = {
             "with more data. Province samples "
             "are split across health zones, and the national value is the "
             "sum of provinces. See "
-            "https://samabbott.co.uk/BDBVHubRenewal/methods/model/."
+            "https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."
         ),
         "data_inputs": (
             "Hub target data (weekly confirmed cases by onset week, observed "

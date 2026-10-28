@@ -335,7 +335,7 @@ def test_seabbsbaseline_metadata_text(tmp_path: Path) -> None:
     assert main(["metadata", "--model", "persistencenow", "--out",
                  str(tmp_path)]) == 0  # fmt: skip
     text = (tmp_path / "epiforecasts-seabbsbaseline.yml").read_text()
-    assert "https://samabbott.co.uk/BDBVHubRenewal/methods/model/" in text
+    assert "https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/" in text
     assert "baselinenowcast" in text
     assert "10.12688/wellcomeopenres.25027.2" in text
     assert "language model" not in text
