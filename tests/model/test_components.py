@@ -446,7 +446,7 @@ def test_case_weighted_basis_is_orthonormal_and_orthogonal_to_weights():
 
 
 def _quad_censored_pmf(family, mean, cv, dmax):
-    """Float64 double censored pmf by adaptive quadrature, as a reference."""
+    """Float64 double censored pmf by numerical integration, as a reference."""
     from scipy import integrate, stats
 
     if family == "gamma":
@@ -483,8 +483,7 @@ def test_censored_pmf_is_close_in_float32(family, cv, mean):
     assert ours.dtype == np.float32
     ref = _quad_censored_pmf(family, mean, cv, 60)
     # float32 incomplete gamma is good to about 1e-6, and the closed form
-    # scales that by the delay, so errors are a few 1e-5 at most (16-node
-    # quadrature reached 5.7e-5 at cv 2).
+    # scales that by the delay, so errors are a few 1e-5 at most.
     assert np.max(np.abs(ours - ref)) < 4e-5
     big = ref > 1e-4
     assert np.max(np.abs(ours[big] / ref[big] - 1)) < 2e-2

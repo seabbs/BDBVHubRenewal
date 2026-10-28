@@ -191,11 +191,9 @@ def censored_pmf(
     there. In float32 the cdfs are good to about $10^{-6}$ and the
     second difference scales that by the delay, so against a float64
     reference the error is at most $3 \times 10^{-5}$ for means of 2 to 15
-    days and cv 0.3 to 2 (16-node Gauss-Legendre quadrature reached
-    $5.7 \times 10^{-5}$), and the Gamma value and gradient are about 20
-    times faster. Truncated at `dmax` and renormalised, as
+    days and cv 0.3 to 2. Truncated at `dmax` and renormalised, as
     `primarycensored::dpcens(..., D = dmax + 1)`.
-    `bdbv_hub_renewal.model.model.generation_interval` uses the same form
+    `bdbvhubrenewal.model.model.generation_interval` uses the same form
     in float64, once.
 
     Parameters
