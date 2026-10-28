@@ -42,6 +42,7 @@ from bdbv_hub_renewal.data import load_delays, load_locations, load_target  # no
 from bdbv_hub_renewal.data.simulate import simulate_outbreak  # noqa: E402
 from bdbv_hub_renewal.evaluation.ppc import summarise_draws  # noqa: E402
 from bdbv_hub_renewal.evaluation.scoring import crps_sample  # noqa: E402
+from bdbv_hub_renewal.forecasters import renewal as adapter  # noqa: E402
 from bdbv_hub_renewal.forecasters.base import ForecastTask  # noqa: E402
 from bdbv_hub_renewal.forecasters.persistence import Persistence  # noqa: E402
 from bdbv_hub_renewal.forecasters.renewal import (  # noqa: E402
@@ -51,12 +52,45 @@ from bdbv_hub_renewal.forecasters.renewal import (  # noqa: E402
     chain_diagnostics,
     parameter_diagnostics,
     ppc_rows,
-    run_nuts,
     samples_table,
     vintage_inputs,
 )
 
 OUT = Path(__file__).parents[1] / "results"
+
+
+def run_nuts(model, data, sampler):
+    """`forecasters.renewal.run_nuts` with vectorised chains.
+
+    Parallel (pmap) chains leak memory on Linux CPU (about 0.7 GB per
+    30 s on archie), so the ladder runs chains vectorised until the
+    adapter does. It also replaces the adapter's own function, so the
+    per-location rung runs the same way.
+    """
+    from jax import random as jrandom
+    from numpyro.infer import MCMC
+
+    args = pr.model_args(model, data)
+    model.validate_data(
+        **{k: v for k, v in args.items() if k != "population_size"}
+    )
+    model.mcmc = MCMC(
+        adapter.nuts_kernel(model.sample, sampler),
+        num_warmup=int(sampler["num_warmup"]),
+        num_samples=int(sampler["num_samples"]),
+        num_chains=int(sampler["num_chains"]),
+        chain_method="vectorized",
+        progress_bar=False,
+    )
+    model.mcmc.run(
+        jrandom.key(int(sampler["seed"])),
+        extra_fields=pr.model.EXTRA_FIELDS,
+        **args,
+    )
+    return model
+
+
+adapter.run_nuts = run_nuts
 SIM_DAYS = (166, 206)
 SIM_LOCATIONS = ("CD-IT", "CD-NK", "CD-HU", "CD-TO", "CD-BU", "CD-SK")
 REAL_FIT, REAL_TRUTH = "2026-10-09", "2026-10-24"
@@ -69,6 +103,7 @@ SAMPLER = {
 }
 RUNGS: dict[str, pr.ModelConfig | str] = {
     **pr.model.LADDER,
+    "S6 + report day-of-week": dataclasses.replace(pr.MAIN, report_dow=True),
     "renewal fallback": pr.FALLBACK,
     "renewal learnt kernel": dataclasses.replace(pr.MAIN, coupling="learnt"),
     "renewal future Rt held": dataclasses.replace(pr.MAIN, future_rt="hold"),
@@ -82,6 +117,38 @@ RUNGS: dict[str, pr.ModelConfig | str] = {
     "renewalsp": "renewalsp",
 }
 """Rungs in order: the build steps (S5 is `renewal`), then variants."""
+
+DESCRIPTIONS = {
+    "persistence": "The last complete week carried forward, as the reference.",
+    "S0 national renewal": "One renewal on the national total, no truncation.",
+    "S1 + provinces (pooled Rt)": "A renewal per province with case, Rt a "
+    "national walk plus pooled deviations.",
+    "S2 + truncation (hub delay)": "Right truncation of the total by the "
+    "hub's own delay.",
+    "S3 + delays, missingness, imputation": "Known and imputed onsets as two "
+    "streams, with time-varying delays and missingness and the hub's "
+    "imputation modelled.",
+    "S4 + coupling and importation": "Gravity importation between provinces "
+    "and an importation-only part for provinces with no cases.",
+    "S5 + depletion (main)": "Susceptible depletion; this is `renewal`.",
+    "S6 + report day-of-week": "A sum-to-zero report day-of-week effect "
+    "on the delay hazard.",
+    "renewal fallback": "Delays and missingness fixed from the data, no "
+    "coupling.",
+    "renewal learnt kernel": "Gravity decay and destination weights learnt.",
+    "renewal future Rt held": "Rt held at its last value past the data.",
+    "renewal per-origin importation": "One importation share per origin, "
+    "partially pooled.",
+    "renewal linear Rt knots": "Weekly Rt knots joined linearly.",
+    "renewalbvd": "BVDOutbreakSize Rt as a tempered pseudo-observation.",
+    "renewalsp": "An independent single-patch renewal per location, the "
+    "nation included.",
+}
+"""One sentence per rung: what it adds."""
+
+DECISIONS: dict[str, str] = {}
+"""One sentence per rung: kept, dropped or an option, and why. Filled in
+from the results."""
 
 
 def slug(name: str) -> str:
@@ -421,10 +488,13 @@ def main(args: list[str]) -> None:
     out.mkdir(parents=True, exist_ok=True)
     if args and args[0] == "collect":
         rows = [json.loads(p.read_text()) for p in sorted(out.glob("*.json"))]
-        order = [*RUNGS, "persistence"]
+        order = ["persistence", *RUNGS]
         rows.sort(key=lambda r: order.index(r["rung"]))
         frame = pd.DataFrame(rows)
-        frame.to_csv(OUT / "ladder.csv", index=False)
+        frame.insert(0, "step", [order.index(r) for r in frame["rung"]])
+        frame.insert(2, "description", frame["rung"].map(DESCRIPTIONS))
+        frame.insert(3, "decision", frame["rung"].map(DECISIONS))
+        frame.to_csv(OUT / "ladder.csv", index=False, na_rep="")
         (OUT / "ladder.md").write_text(
             frame.round(3).to_markdown(index=False) + "\n"
         )
