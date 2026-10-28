@@ -35,6 +35,12 @@ target_accept = 0.8
 max_tree_depth = 10
 chain_method = "vectorized"
 
+[bvd]
+# The BVD variant uses the newest BVDOutbreakSize results release whose
+# joint fit's worst R-hat is at most this. A generous check: effective
+# sample sizes are ignored, and BVDOutbreakSize's own pass level is 1.05.
+max_rhat = 1.1
+
 [reconstructed]
 # Saturdays to reconstruct pseudo-vintages for. Any after the latest model
 # choice date are dropped.

@@ -129,6 +129,8 @@ class FitCheck:
     chains: list[dict[str, Any]] = field(default_factory=list)
     worst: list[dict[str, Any]] = field(default_factory=list)
     families: list[dict[str, Any]] = field(default_factory=list)
+    # The BVDOutbreakSize release the fit used, as the model records it.
+    bvd: dict[str, Any] | None = None
 
 
 def headline(diag: Mapping[str, Any]) -> dict[str, float]:
@@ -290,6 +292,7 @@ def check_fit(
         failures=failures,
         warnings=warnings,
         chains=list(diag.get("chains", [])),
+        bvd=diag.get("bvd"),
     )
     if status != "pass":
         out.worst = worst_parameters(diag)

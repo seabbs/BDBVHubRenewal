@@ -41,6 +41,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
+from bdbv_hub_renewal.data.bvd import MAX_RHAT
 from bdbv_hub_renewal.data.dates import (
     as_date,
     epiweek_end,
@@ -116,6 +117,10 @@ class BacktestConfig:
         (`bdbv_hub_renewal.data.completeness.complete_weeks`).
     sampler : dict
         NUTS settings of the fitted models (`apply_sampler`).
+    bvd_max_rhat : float
+        The limit on the joint fit's worst R-hat of a BVDOutbreakSize
+        release the BVD variant may use
+        (`bdbv_hub_renewal.data.bvd.select_release`).
     """
 
     min_horizon: int = -4
@@ -128,6 +133,7 @@ class BacktestConfig:
     simulated_dates: tuple[str, ...] = ()
     complete_after_weeks: int = 0
     sampler: dict[str, Any] = field(default_factory=dict)
+    bvd_max_rhat: float = MAX_RHAT
 
     def is_heldout(self, vintage: dt.date | str) -> bool:
         """Whether a vintage is held out from development.
@@ -215,6 +221,7 @@ def load_config(path: Path | str = "config/backtest.toml") -> BacktestConfig:
         model_choice=choice,
         complete_after_weeks=int(sp.get("complete_after_weeks", 0)),
         sampler=dict(raw.get("sampler", {})),
+        bvd_max_rhat=float(raw.get("bvd", {}).get("max_rhat", MAX_RHAT)),
         reconstructed_dates=(
             saturdays(rec["first_vintage"], rec["last_vintage"]) if rec else ()
         ),

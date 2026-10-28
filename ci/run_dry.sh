@@ -36,6 +36,7 @@ NOW=${NOW:-2026-11-02T10:00:00+00:00}
 SCENARIOS=(
   "main|main=pass|main||All checks passed."
   "chosenpersistence|main=pass|persistence|FAKE_CHOSEN_MODEL=persistence|Shadow candidates"
+  "bvdrelease|main=pass|main||used BVDOutbreakSize release \`results-3180\` (data to 2026-10-23, joint R-hat 1.041, limit 1.1)."
   "coherence|main=pass|main|FAKE_COHERENCE_GAP=2026-10-24:2|Handled: national (CD) differs from the sum of the provinces"
   "warn|main=warn|main"
   "standin|main=standin|main||Stand-in: "
