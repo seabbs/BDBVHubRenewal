@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_relative_section_hidden_with_one_model() -> None:
     scores = pd.read_csv(ROOT / "results" / "backtest-scores.csv")
+    scores = scores.loc[scores["model"] == "persistence"]
     # Persistence against itself means nothing, so nothing is shown.
     assert report._relative_section(scores) == ""
     two = pd.concat([scores, scores.assign(model="other")])

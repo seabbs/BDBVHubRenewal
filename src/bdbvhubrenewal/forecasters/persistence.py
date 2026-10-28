@@ -25,9 +25,7 @@ after its midpoint.
 `lag_days` is the `completeness` quantile of the pooled delay published
 with the vintage, or `default_lag_days` if no delays were published.
 Recent onset weeks only show the delays reported so far, so this lag is
-biased short. With `full_follow_up` (`persistence_fu`), it is
-taken over onset weeks that ended at least the maximum delay plus the
-publication lag before the vintage, whose delays are all observed.
+biased short.
 
 For each later date $T$ in `task.report_by`, the counts reported by $T$
 are predicted by thinning each sample of week $w$ with the share of a
@@ -36,6 +34,32 @@ week reported $T - w$ days after it ends
 published with the vintage), and taking at least the count already
 published for that week.
 There are no such rows when the vintage has no delay data.
+
+`PersistenceNow` (`persistencenow`) first nowcasts the recent weeks.
+With $s(t)$ the share of a week's final total reported $t$ days after it
+ends, each week $w$ published $t_w$ days before the vintage with total
+$Y(w)$ gets
+
+$$
+C(w) = Y(w) + U(w), \quad
+U(w) \sim \text{NegBin}\big(Y(w), s(t_w)\big),
+$$
+
+the number of failures before $Y(w)$ successes, with mean
+$Y(w)\{1 - s(t_w)\}/s(t_w)$, as in the EpidemicDates nowcast.
+$s$ comes from the delays of onset weeks in the last `delay_window` days,
+corrected for right truncation
+(`bdbvhubrenewal.data.completeness.truncated_delay_cdf`), so it follows
+delays that change over time.
+Each sample redraws $s$ from a bootstrap of those delays.
+The last week with $s(t_w) \ge$ `min_share` takes the place of the last
+complete week, and each sample carries its own nowcast forward as above.
+Later weeks are at least the published total.
+$s$ uses the delays of known onsets and a 3-day publication lag only.
+Late rows in the delay files are mostly onsets recorded later for cases
+already counted as imputed, which leave the total unchanged.
+If the vintage has fewer than `min_delays` delays in the window, it is
+`Persistence`.
 """
 
 from __future__ import annotations
@@ -46,17 +70,26 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.completeness import reported_share
+from bdbvhubrenewal.data.completeness import (
+    reported_share,
+    share_from_cdf,
+    truncated_delay_cdf,
+)
 from bdbvhubrenewal.data.dates import as_date
-from bdbvhubrenewal.data.delays import DEFAULT_MAX_DELAY, EmpiricalDelayModel
-from bdbvhubrenewal.data.reconstruct import PUBLICATION_LAG_DAYS
+from bdbvhubrenewal.data.delays import EmpiricalDelayModel
 from bdbvhubrenewal.forecasters.base import (
     SAMPLE_COLUMNS,
     ForecastTask,
     register_model,
 )
 
-__all__ = ["Persistence", "completeness_lag", "last_complete_week"]
+__all__ = [
+    "Persistence",
+    "PersistenceNow",
+    "completeness_lag",
+    "last_complete_week",
+    "nowcast_totals",
+]
 
 
 def completeness_lag(
@@ -64,8 +97,6 @@ def completeness_lag(
     vintage: str,
     quantile: float = 0.9,
     default: int = 10,
-    full_follow_up: bool = False,
-    min_cases: int = 50,
 ) -> int:
     """Return the days after a week's midpoint at which it counts as complete.
 
@@ -79,12 +110,6 @@ def completeness_lag(
         Share of cases that must have been reported.
     default : int
         Lag used when no delays are available.
-    full_follow_up : bool
-        Use only onset weeks ending at least `DEFAULT_MAX_DELAY` plus
-        `PUBLICATION_LAG_DAYS` days before the vintage, whose delays are
-        not right truncated, if they hold at least `min_cases` cases.
-    min_cases : int
-        Fewest cases in those weeks to use them.
 
     Returns
     -------
@@ -93,12 +118,6 @@ def completeness_lag(
     """
     if delays is None or delays.empty:
         return default
-    if full_follow_up:
-        horizon = DEFAULT_MAX_DELAY + PUBLICATION_LAG_DAYS
-        cut = pd.Timestamp(as_date(vintage)) - pd.Timedelta(days=horizon)
-        old = delays.loc[pd.to_datetime(delays["onset_week"]) <= cut]
-        if len(old) >= min_cases:
-            return int(np.quantile(old["delay"].clip(lower=0), quantile))
     fit = EmpiricalDelayModel().fit(delays, vintage)
     return fit.quantile(quantile)
 
@@ -139,8 +158,6 @@ class Persistence:
         Delay quantile defining a complete week.
     default_lag_days : int
         Completeness lag when a vintage has no delay data.
-    full_follow_up : bool
-        Take the lag from fully followed-up onset weeks only (#8).
     """
 
     name: str = "persistence"
@@ -148,7 +165,6 @@ class Persistence:
     min_sd: float = 0.1
     completeness: float = 0.9
     default_lag_days: int = 10
-    full_follow_up: bool = False
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return persistence trajectories for a task.
@@ -169,7 +185,6 @@ class Persistence:
             task.vintage,
             self.completeness,
             self.default_lag_days,
-            full_follow_up=self.full_follow_up,
         )
         last = last_complete_week(task.vintage, lag).isoformat()
         weeks = list(task.target_end_dates)
@@ -183,18 +198,14 @@ class Persistence:
             )
             complete = series.loc[series.index <= last]
             level = float(complete.iloc[-1]) if len(complete) else 0.0
-            recent = np.log1p(complete.to_numpy(dtype=float)[-self.window :])
-            diffs = np.diff(recent)
-            sd = float(np.std(diffs, ddof=1)) if diffs.size >= 2 else 0.0
-            sd = max(sd, self.min_sd)
+            sd = self._spread(complete.to_numpy(dtype=float))
             values = np.empty((n, len(weeks)))
             log_level = np.full(n, np.log1p(level))
             for j, week in enumerate(weeks):
                 if week <= last:
                     values[:, j] = float(series.get(week, 0))
                     continue
-                log_level = log_level + rng.normal(0.0, sd, size=n)
-                values[:, j] = rng.poisson(np.expm1(np.maximum(log_level, 0)))
+                log_level, values[:, j] = _step(log_level, sd, rng)
             frames.append(
                 pd.DataFrame(
                     {
@@ -212,6 +223,13 @@ class Persistence:
             [final.assign(as_of=np.nan), *self._reported_by(task, final, rng)],
             ignore_index=True,
         )
+
+    def _spread(self, complete: np.ndarray) -> float:
+        """Return the SD of the last weekly log changes, floored."""
+        recent = np.log1p(complete[-self.window :])
+        diffs = np.diff(recent)
+        sd = float(np.std(diffs, ddof=1)) if diffs.size >= 2 else 0.0
+        return max(sd, self.min_sd)
 
     def _reported_by(
         self,
@@ -254,8 +272,189 @@ register_model(
 )
 
 
+def _step(
+    log_level: np.ndarray, sd: float, rng: np.random.Generator
+) -> tuple[np.ndarray, np.ndarray]:
+    """Take one random walk step on the log scale and draw Poisson counts."""
+    log_level = log_level + rng.normal(0.0, sd, size=log_level.size)
+    return log_level, rng.poisson(np.expm1(np.maximum(log_level, 0)))
+
+
+def nowcast_totals(
+    observed: np.ndarray, share: np.ndarray, rng: np.random.Generator
+) -> np.ndarray:
+    r"""Draw final totals from published totals and the share reported.
+
+    Each draw is $Y + U$ with $U \sim \text{NegBin}(Y, s)$, the number
+    of failures before $Y$ successes with success probability $s$.
+    This is the posterior of the final total $C$ given $Y \sim
+    \text{Binomial}(C, s)$ and a prior proportional to $1 / C$, with
+    mean $Y / s$.
+    Weeks with nothing published, or fully reported, add nothing.
+
+    Parameters
+    ----------
+    observed : numpy.ndarray
+        Published totals $Y$, one per week.
+    share : numpy.ndarray
+        Shares reported $s$, one row per sample and one column per week.
+    rng : numpy.random.Generator
+        Random generator.
+
+    Returns
+    -------
+    numpy.ndarray
+        Final totals, shaped as `share`.
+    """
+    obs = np.broadcast_to(np.asarray(observed, dtype=float), share.shape)
+    p = np.clip(share, 1e-12, 1.0)
+    unseen = np.zeros(share.shape)
+    draw = (obs > 0) & (p < 1)
+    unseen[draw] = rng.negative_binomial(obs[draw], p[draw])
+    return obs + unseen
+
+
+def _bootstrap_shares(
+    rows: pd.DataFrame,
+    vintage: str,
+    days: np.ndarray,
+    n: int,
+    rng: np.random.Generator,
+    window: int,
+) -> np.ndarray:
+    """Return the share reported for each sample, over resampled delays."""
+    out = np.empty((n, days.size))
+    for b in range(n):
+        pick = rows.iloc[rng.integers(0, len(rows), len(rows))]
+        cdf = truncated_delay_cdf(pick, vintage, window)
+        assert cdf is not None
+        out[b] = share_from_cdf(cdf, days)
+    return out
+
+
+@dataclass
+class PersistenceNow(Persistence):
+    """Persistence carried forward from a nowcast of the recent weeks.
+
+    Attributes
+    ----------
+    name : str
+        Model name.
+    min_share : float
+        Smallest share reported, $s(t_w)$, for a week to be nowcast. The
+        last such week is carried forward.
+    delay_window : int
+        Days of onset weeks whose delays give $s$.
+    min_delays : int
+        Fewest delays in the window to nowcast.
+
+    See `Persistence` for the other attributes.
+    """
+
+    name: str = "persistencenow"
+    min_share: float = 0.5
+    delay_window: int = 84
+    min_delays: int = 50
+
+    def forecast(self, task: ForecastTask) -> pd.DataFrame:
+        """Return persistence trajectories from a nowcast for a task.
+
+        Parameters
+        ----------
+        task : ForecastTask
+            The data and weeks to forecast.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Columns `location`, `target_end_date`, `sample`, `value`,
+            and `as_of` if the task asks for `report_by`.
+        """
+        if task.delays is None or task.delays.empty:
+            return super().forecast(task)
+        delay_vintage = str(task.delays["vintage"].max())
+        rows = task.delays.loc[task.delays["vintage"] == delay_vintage]
+        age = pd.Timestamp(delay_vintage) - pd.to_datetime(rows["onset_week"])
+        recent = rows.loc[(age.dt.days < self.delay_window).to_numpy()]
+        cdf = truncated_delay_cdf(recent, delay_vintage, self.delay_window)
+        if cdf is None or len(recent) < self.min_delays:
+            return super().forecast(task)
+        weeks = list(task.target_end_dates)
+        ends = pd.date_range(
+            min(task.target["target_end_date"].min(), weeks[0]),
+            weeks[-1],
+            freq="7D",
+        )
+        grid = [d.date().isoformat() for d in ends]
+        dates = (task.vintage, *task.report_by)
+        days = np.concatenate(
+            [(pd.Timestamp(d) - ends).days.to_numpy() for d in dates]
+        ).astype(np.int64)
+        point = share_from_cdf(cdf, days[: len(grid)])
+        nowcast = np.flatnonzero(point >= self.min_share)
+        if nowcast.size == 0:
+            return super().forecast(task)
+        last = int(nowcast[-1])
+        rng = task.rng()
+        n = task.n_samples
+        shares = _bootstrap_shares(
+            recent, delay_vintage, days, n, rng, self.delay_window
+        )
+        s_v = shares[:, : len(grid)]
+        cols = [grid.index(w) for w in weeks]
+        final, reported = [], []
+        for loc in task.locations:
+            seen = (
+                task.target.loc[task.target["location"] == loc]
+                .set_index("target_end_date")["total"]
+                .reindex(grid, fill_value=0)
+                .to_numpy(dtype=float)
+            )
+            totals = nowcast_totals(
+                seen, np.where(point >= self.min_share, s_v, 1.0), rng
+            )
+            sd = self._spread(seen[: last + 1] / point[: last + 1])
+            log_level = np.log1p(totals[:, last])
+            for j in range(last + 1, len(grid)):
+                log_level, draw = _step(log_level, sd, rng)
+                totals[:, j] = np.maximum(draw, seen[j])
+            final.append(_frame(loc, weeks, totals[:, cols]))
+            for k, date in enumerate(task.report_by, start=1):
+                due = [c for c in cols if grid[c] <= date]
+                s_t = shares[:, k * len(grid) : (k + 1) * len(grid)]
+                left = np.maximum(1.0 - s_v, 1e-12)
+                q = np.clip((s_t - s_v) / left, 0.0, 1.0)
+                q = np.where(s_v >= 1.0, 1.0, q)
+                extra = rng.binomial((totals - seen).astype(np.int64), q)
+                counts = (seen + extra)[:, due]
+                reported.append(
+                    _frame(loc, [grid[c] for c in due], counts).assign(
+                        as_of=date
+                    )
+                )
+        out = pd.concat(final, ignore_index=True)[list(SAMPLE_COLUMNS)]
+        if not task.report_by:
+            return out
+        return pd.concat(
+            [out.assign(as_of=np.nan), *reported], ignore_index=True
+        )
+
+
+def _frame(loc: str, weeks: list[str], values: np.ndarray) -> pd.DataFrame:
+    """Return sample rows for one location, one column of `values` a week."""
+    n = values.shape[0]
+    return pd.DataFrame(
+        {
+            "location": loc,
+            "target_end_date": np.tile(weeks, n),
+            "sample": np.repeat(np.arange(1, n + 1), len(weeks)),
+            "value": values.reshape(-1),
+        }
+    )
+
+
 register_model(
-    "persistence_fu",
-    lambda: Persistence(name="persistence_fu", full_follow_up=True),
-    "Persistence with the completeness lag from fully followed-up weeks.",
+    "persistencenow",
+    PersistenceNow,
+    "Persistence carried forward from a nowcast of the recent weeks.",
 )
