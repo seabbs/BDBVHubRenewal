@@ -48,7 +48,11 @@ from bdbvhubrenewal.data import (
     load_target,
 )
 from bdbvhubrenewal.evaluation import backtest as bt
-from bdbvhubrenewal.evaluation.heldout import HeldOutError, run_heldout
+from bdbvhubrenewal.evaluation.heldout import (
+    HeldOutError,
+    load_model_choices,
+    run_heldout,
+)
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastTask,
@@ -516,6 +520,10 @@ def _backtest(args: argparse.Namespace) -> int:
     output.mkdir(parents=True, exist_ok=True)
     if args.evaluate_holdout:
         # The held-out run uses the models in the model choice record.
+        record = Path(config.model_choice)
+        if record.exists() and not load_model_choices(record):
+            print("No model choice recorded, so no vintage is held out.")
+            return 0
         try:
             scores = run_heldout(
                 target,
