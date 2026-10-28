@@ -361,3 +361,17 @@ def test_a_parent_step_pool_sets_the_spread_of_places_without_delays(
 
     flat = replace(model, step_pool=np.zeros(5))
     assert width(flat) < width(model)
+
+
+def test_week_share_with_a_late_tail() -> None:
+    # A share tau of cases published 4 to 28 days late lowers the share of
+    # a recent week and mixes the two lag ranges.
+    cdf = np.cumsum(np.full(30, 1 / 30))
+    age = np.array([7])
+    usual = week_share(cdf, age, lag=3)[0]
+    late = np.mean(
+        [week_share(cdf, age - ell, lag=0)[0] for ell in range(4, 29)]
+    )
+    mixed = week_share(cdf, age, lag=3, tail=0.1, tail_max=28)[0]
+    assert mixed == pytest.approx(0.9 * usual + 0.1 * late)
+    assert mixed < usual
