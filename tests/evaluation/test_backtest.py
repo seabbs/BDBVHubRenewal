@@ -182,7 +182,7 @@ def test_lopo_without_mask_aware_models_is_empty(
 def test_vintage_without_delays_takes_reconstructed_rows(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
-    from bdbv_hub_renewal.vintages import reconstruct_delays
+    from bdbv_hub_renewal.data.reconstruct import reconstruct_delays
 
     assert not (delays["vintage"] == "2026-08-18").any()
     tasks = make_tasks(
