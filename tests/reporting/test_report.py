@@ -39,13 +39,13 @@ def test_heldout_page(tmp_path: Path, target: pd.DataFrame) -> None:
     )
     assert "2026-10-17" in (gen / "heldout-choices.md").read_text()
     status = (gen / "heldout-status.md").read_text()
-    assert "pending" in status
+    assert "next vintage" in status
     assert (fig / "heldout-cd.svg").exists()
     # Without a run or a record.
     empty = BacktestConfig(model_choice=tmp_path / "none.yml")
     report._heldout_page(fig, gen, tmp_path, target, ["persistence"], empty)
-    assert "No model" in (gen / "heldout-choices.md").read_text()
-    assert "No held-out" in (gen / "heldout-status.md").read_text()
+    assert (gen / "heldout-choices.md").read_text() == ""
+    assert (gen / "heldout-status.md").read_text() == ""
 
 
 @pytest.mark.parametrize("display", ["named", "anonymised", "epiforecasts"])
@@ -58,7 +58,7 @@ def test_comparison_page(
 
     gen, fig = tmp_path / "gen", tmp_path / "fig"
     report._comparison_page(fig, gen, tmp_path / "missing", display, target)
-    assert "Not run yet" in (gen / "comparison-scores.md").read_text()
+    assert (gen / "comparison-scores.md").read_text() == ""
     _write_hub(tmp_path / "hub")
     cfg = tmp_path / "cmp.toml"
     cfg.write_text(
@@ -172,7 +172,8 @@ def test_lopo_section_hidden_without_results(tmp_path: Path) -> None:
 
 
 def test_ladder_page(tmp_path: Path) -> None:
-    assert "not been run" in report._ladder_page(tmp_path / "missing.csv")
+    # Nothing is shown without results, and no progress wording.
+    assert report._ladder_page(tmp_path / "missing.csv") == ""
     ladder = pd.DataFrame(
         {
             "step": [0, 1],

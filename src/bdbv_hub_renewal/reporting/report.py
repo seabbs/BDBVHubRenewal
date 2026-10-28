@@ -368,7 +368,7 @@ _LADDER_SECTIONS = (
 def _ladder_page(path: Path) -> str:
     """Return the Model building tables from the ladder results."""
     if not path.exists() or path.stat().st_size <= 1:
-        return "The ladder has not been run yet.\n"
+        return ""
     ladder = pd.read_csv(path)
     if "step" in ladder:
         ladder = ladder.sort_values("step")
@@ -579,16 +579,20 @@ def _heldout_page(
         _write(
             gen / "heldout-choices.md",
             _table(table)
-            + f"\nVintages after {choices[0].date} are held out: "
-            + (", ".join(held) or "none yet")
-            + ".\n",
+            + (
+                f"\nVintages after {choices[0].date} are held out: "
+                + ", ".join(held)
+                + ".\n"
+                if held
+                else ""
+            ),
         )
     else:
-        _write(gen / "heldout-choices.md", "No model has been chosen yet.\n")
+        _write(gen / "heldout-choices.md", "")
     run_path = res / "heldout-run.yml"
     if not run_path.exists():
         for name in ("heldout-status.md", "heldout-scores.md"):
-            _write(gen / name, "No held-out evaluation has been run yet.\n")
+            _write(gen / name, "")
         _write(gen / "heldout-forecasts.md", "")
         return
     run = yaml.safe_load(run_path.read_text())
@@ -612,7 +616,7 @@ def _heldout_page(
                 "reference_date": reference_date_for_vintage(v).isoformat(),
                 "model chosen": entry["model"],
                 "scored against": ", ".join(map(str, truths))
-                or "pending: first score with the next vintage",
+                or "with the next vintage",
             }
         )
     status = pd.DataFrame(rows).sort_values("vintage")
@@ -622,9 +626,7 @@ def _heldout_page(
         f"**{run['latest_vintage']}**.\n\n" + _table(status),
     )
     if scores.empty:
-        _write(
-            gen / "heldout-scores.md", "No held-out forecast has a score yet.\n"
-        )
+        _write(gen / "heldout-scores.md", "")
     else:
         overall = summarise_scores(
             scores, by=("chosen_model", "model", "vintage", "truth_vintage")
@@ -696,10 +698,7 @@ def _comparison_page(
     _write(gen / "comparison-display.md", f"Display mode: **{display}**.\n")
     if not (cmp_dir / "scores.csv").exists():
         for name in names_out:
-            _write(
-                gen / name,
-                "Not run yet: `bdbv-hub-renewal compare-hub --fetch`.\n",
-            )
+            _write(gen / name, "")
         return
     teams = pd.read_csv(cmp_dir / "teams.csv")
     forecasts = pd.read_csv(cmp_dir / "forecasts.csv.gz")
@@ -725,7 +724,7 @@ def _comparison_page(
     if scores.empty:
         _write(
             gen / "comparison-scores.md",
-            "No hub forecast can be scored yet.\n",
+            "",
         )
     else:
         scores = _relabel(scores)
