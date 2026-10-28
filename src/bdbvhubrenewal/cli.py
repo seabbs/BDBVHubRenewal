@@ -289,7 +289,9 @@ def build_parser() -> argparse.ArgumentParser:
         "zone-backtest", help="Score zone forecasts against zone persistence."
     )
     zb.add_argument("--data", default=data_dir)
-    zb.add_argument("--models", nargs="*", default=["persistence"])
+    zb.add_argument(
+        "--models", nargs="*", default=["persistence", "persistencenow"]
+    )
     zb.add_argument("--hub-config", default=None)
     zb.add_argument("--out", default="results/zone-scores.csv")
 
@@ -671,9 +673,9 @@ def _nowcast(args: argparse.Namespace) -> int:
                     nat, ["target_end_date", "sample", "value"]
                 ]
             result = Forecast(samples.loc[~nat], national=national)
-        zones, note = _zones(args, task, result.samples, hub_config)
-        if note:
-            handled.append(note)
+        zones, zone_note = _zones(args, task, result.samples, hub_config)
+        if zone_note:
+            handled.append(zone_note)
         table = to_hub_table(
             result.samples,
             task.reference_date,
@@ -689,6 +691,10 @@ def _nowcast(args: argparse.Namespace) -> int:
     _write_national_sidecar(Path(args.out), task, result)
     # Problems handled on the way, for the PR's `Handled:` line.
     (Path(args.out) / "handled.json").write_text(json.dumps(handled) + "\n")
+    # Whether the file has health zones, for the CI's zone check.
+    n_zones = 0 if zones is None else int(zones["location"].nunique())
+    zone_record = {"zones": n_zones > 0, "n_zones": n_zones, "note": zone_note}
+    (Path(args.out) / "zones.json").write_text(json.dumps(zone_record) + "\n")
     for note in handled:
         print(f"Handled: {note}")
     hub_round = load_hub_round(hub_config)
