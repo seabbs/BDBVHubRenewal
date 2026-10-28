@@ -59,7 +59,7 @@ with $K_p(w)$ the known onsets, and $C_p(w)$ can fall below $Y_p(w)$.
 The last week with a share reported $1 / \{1 + r(w)\} \ge$ `min_share`
 takes the place of the last complete week, and each sample carries its
 own nowcast forward as above.
-The spread of the walk at $h$ steps is scaled by $\lambda_h$, from the
+The spread of the walk at $h$ steps is scaled by $\omega_h$, from the
 errors of the same walk run from each past vintage against the current
 data (`walk_errors`, `horizon_scales`), so only data available at the
 vintage are used.
@@ -397,9 +397,9 @@ def revision_variance(
 def horizon_scales(errors: list[np.ndarray], prior: float = 10.0) -> np.ndarray:
     r"""Return the scale of the walk's spread at each horizon.
 
-    $\lambda_h = \sqrt{(\sum z^2 + k) / (n_h + k)}$ over the $n_h$
+    $\omega_h = \sqrt{(\sum z^2 + k) / (n_h + k)}$ over the $n_h$
     standardised errors $z$ at horizon $h$, with $k$ = `prior`, so few
-    errors leave $\lambda_h$ near 1. A horizon with none takes the scale
+    errors leave $\omega_h$ near 1. A horizon with none takes the scale
     of the one before.
 
     Parameters
@@ -412,7 +412,7 @@ def horizon_scales(errors: list[np.ndarray], prior: float = 10.0) -> np.ndarray:
     Returns
     -------
     numpy.ndarray
-        $\lambda_h$, one per horizon.
+        $\omega_h$, one per horizon.
     """
     out = np.ones(len(errors))
     for h, z in enumerate(errors):
@@ -621,7 +621,7 @@ class PersistenceNow(Persistence):
             if scales.size
             else [np.ones(steps)]
         )
-        # Cumulative walk variance lambda_h^2 h sigma^2, in unit steps.
+        # Cumulative walk variance omega_h^2 h sigma^2, in unit steps.
         cum = lam[:steps] ** 2 * np.arange(1, steps + 1)
         inc = np.sqrt(np.maximum(np.diff(np.r_[0.0, cum]), 0.01))
         for p in range(len(task.locations)):
