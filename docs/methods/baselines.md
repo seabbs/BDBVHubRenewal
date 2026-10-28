@@ -52,11 +52,13 @@ The other provinces borrow those of the triangle pooled over provinces, as basel
 **Nowcast.**
 Every week is nowcast, the latest included.
 A case with onset on day $W - u$ of week $W$, delay $d$ and publication lag $\ell$ is in the vintage if $d + \ell - u \le T_v - W$.
-With onsets spread evenly over the week and $\ell$ uniform on 0 to 3 days, as in the renewal model, the share of week $w$ reported is
+With onsets spread evenly over the week, the share of week $w$ reported is
 
 $$
-s_p(w) = \frac{1}{28} \sum_{u=0}^{6} \sum_{\ell=0}^{3} F_p(T_v - w + u - \ell).
+s_p(w) = \frac{1}{7} \sum_{u=0}^{6} \sum_{\ell} P(\ell)\, F_p(T_v - w + u - \ell),
 $$
+
+with the publication lag $\ell$ uniform on 0 to 3 days with probability 0.9 and on 4 to 28 days with probability 0.1, for the cases that reach the hub's totals weeks after report.
 
 The published total $Y_{p,v}(w)$, known plus imputed, is expected to reach $Y_{p,v}(w)/s_p(w)$, and the cases still to come are
 

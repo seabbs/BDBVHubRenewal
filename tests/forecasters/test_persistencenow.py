@@ -339,3 +339,39 @@ def test_walk_spread_stays_plausible(
     q = it.groupby("target_end_date")["value"].quantile([0.5, 0.95]).unstack()
     recent = q.loc[q.index <= task.vintage, 0.5].iloc[-4:].max()
     assert q[0.95].iloc[-1] <= 2 * recent
+
+
+def test_a_parent_step_pool_sets_the_spread_of_places_without_delays(
+    task: ForecastTask,
+) -> None:
+    # Health zones pass their province's steps as `step_pool`; places
+    # without their own delay then draw from it.
+    model = PersistenceNow()
+    pool = model.step_pool_for(task)
+    assert pool is not None
+    assert pool.size >= 3
+
+    def width(m: PersistenceNow) -> float:
+        out = m.forecast(task)
+        hu = out.loc[out["location"] == "CD-HU"]
+        last = hu.loc[hu["target_end_date"] == hu["target_end_date"].max()]
+        return float(
+            last["value"].quantile(0.95) - last["value"].quantile(0.05)
+        )
+
+    flat = replace(model, step_pool=np.zeros(5))
+    assert width(flat) < width(model)
+
+
+def test_week_share_with_a_late_tail() -> None:
+    # A share tau of cases published 4 to 28 days late lowers the share of
+    # a recent week and mixes the two lag ranges.
+    cdf = np.cumsum(np.full(30, 1 / 30))
+    age = np.array([7])
+    usual = week_share(cdf, age, lag=3)[0]
+    late = np.mean(
+        [week_share(cdf, age - ell, lag=0)[0] for ell in range(4, 29)]
+    )
+    mixed = week_share(cdf, age, lag=3, tail=0.1, tail_max=28)[0]
+    assert mixed == pytest.approx(0.9 * usual + 0.1 * late)
+    assert mixed < usual
