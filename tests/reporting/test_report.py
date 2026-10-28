@@ -169,3 +169,30 @@ def test_lopo_section_hidden_without_results(tmp_path: Path) -> None:
     assert text.startswith("## Leave one province out")
     assert "renewal" in text
     assert "CD-IT" in text
+
+
+def test_ladder_page(tmp_path: Path) -> None:
+    assert "not been run" in report._ladder_page(tmp_path / "missing.csv")
+    ladder = pd.DataFrame(
+        {
+            "step": [0, 1],
+            "rung": ["persistence", "S0 national renewal"],
+            "description": ["The baseline.", "One national renewal."],
+            "decision": ["Reference.", "Kept as the starting point."],
+            "real_max_rhat": [None, 1.01],
+            "real_min_ess": [None, 400.0],
+            "real_divergent": [None, 0],
+            "sim_rt_mae": [None, 0.12],
+            "real_crps_national": [30.0, 25.0],
+            "real_cov90_national_ahead": [0.5, 0.8],
+        }
+    )
+    path = tmp_path / "ladder.csv"
+    ladder.to_csv(path, index=False)
+    text = report._ladder_page(path)
+    for heading in ("## Rungs", "## Sampler", "## Recovery", "## Scores"):
+        assert heading in text
+    assert "S0 national renewal" in text
+    assert "Kept as the starting point." in text
+    # Rows run in build order.
+    assert text.index("persistence") < text.index("S0 national renewal")
