@@ -61,7 +61,7 @@ env:
   CI_DIR: ci
   WORK: output/ci
   # The model is the latest entry of results/model-choice.yml and the hub
-  # id is set in config/hub.toml (epiforecasts-seabbsrenewal). `prepare`
+  # id is set in config/hub.toml (seabbs-renewal). `prepare`
   # resolves both into the run's context.json. A repo variable overrides.
   MODEL: ${{ vars.HUB_MODEL }}
   MODEL_ID: ${{ vars.HUB_MODEL_ID }}
@@ -178,7 +178,7 @@ jobs:
           EXPECTED_LOCATIONS: ${{ vars.EXPECTED_LOCATIONS }}
         run: ci/steps/prepare.sh
       # Each hub model runs only when opted in (`submit = true` in
-      # config/hub.toml); seabbsrenewal also needs a model choice.
+      # config/hub.toml); renewal also needs a model choice.
       - name: Decide which hub models run
         id: tracks
         run: |
@@ -429,11 +429,11 @@ jobs:
             ${{ env.WORK }}/gate/pr-outcome.txt
           retention-days: 90
 
-  # seabbsbaseline: persistence on a nowcast, falling back to plain
+  # baseline: persistence on a nowcast, falling back to plain
   # persistence, under its own hub id. Apart from the renewal chain; both
   # candidates were built in `prepare`.
   baseline:
-    name: Submit seabbsbaseline
+    name: Submit baseline
     needs: [detect, prepare]
     if: >-
       ${{ !cancelled() && needs.prepare.result == 'success' &&
@@ -503,7 +503,7 @@ jobs:
         if: always()
         run: |
           {
-            echo "<details><summary>seabbsbaseline PR body</summary>"
+            echo "<details><summary>baseline PR body</summary>"
             echo
             cat "$WORK/track-persistencenow/gate/pr-body.md" 2> /dev/null
             echo "</details>"
@@ -549,8 +549,8 @@ jobs:
         with:
           name: baseline-gate
           path: ${{ env.WORK }}/baseline
-      # The round's status is seabbsrenewal's when it ran, otherwise
-      # seabbsbaseline's. seabbsbaseline's files are archived beside it.
+      # The round's status is renewal's when it ran, otherwise
+      # baseline's. baseline's files are archived beside it.
       - name: Update the ledger and archive the round
         env:
           GH_TOKEN: ${{ github.token }}
@@ -601,7 +601,7 @@ jobs:
             [ "$RENEWAL" = true ] || [ "$BASELINE" = true ] \
               || echo "No hub model is opted in (config/hub.toml)."
             [ "$BASELINE" = true ] \
-              && echo "seabbsbaseline: **${BASELINE_BY:-not submitted}**, PR $BASELINE_PR"
+              && echo "baseline: **${BASELINE_BY:-not submitted}**, PR $BASELINE_PR"
             if [ "$RENEWAL" != true ]; then
               :
             elif [ -z "$SELECTED" ]; then

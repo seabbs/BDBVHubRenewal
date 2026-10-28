@@ -4,7 +4,7 @@
 # Read by `bdbvhubrenewal.hub.submission_model_abbr`.
 
 [submission]
-model_abbr = "seabbsrenewal"
+model_abbr = "renewal"
 # Opt in: `true` submits this model each round (DRY_RUN still applies).
 # It also needs a model choice in results/model-choice.yml.
 submit = false
@@ -14,5 +14,5 @@ submit = false
 # fewer than 16 characters. Read by `bdbvhubrenewal.hub.model_abbr_for`.
 # The baseline: persistence on a nowcast, falling back to persistence.
 [models.persistencenow]
-model_abbr = "seabbsbaseline"
+model_abbr = "baseline"
 submit = false

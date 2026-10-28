@@ -15,7 +15,7 @@ Handled (warn or pass):
   `coverage`     every expected location, with every nowcast and
                  forecast week (warns).
   `zones`        health zone rows (`CD-XX-NN`) for every province in the
-                 file, which seabbsbaseline requires (`--require-zones`),
+                 file, which seabbs-baseline requires (`--require-zones`),
                  and each province's zones summing to it (warns only).
   `national_sum` national equals the sum of the provinces plus any
                  unassigned cases, per sample and week. It is correct by
@@ -27,6 +27,9 @@ Handled (warn or pass):
                  warns.
 
 Plausibility (warn; a fail level is available but off by default):
+  `plausible`    each location's forecast near its recent data: median
+                 and 97.5% quantile under set multiples of the last 4
+                 weeks' maximum, and the median not collapsed. Fails.
   `bounds`       the 95th centile of each week is not far above the
                  largest weekly count the location has had.
   `growth`       week-on-week growth of the median over the forecast.
@@ -93,6 +96,11 @@ DEFAULTS: dict[str, Any] = {
     "baseline_fail": 0,
     "previous_warn": 2.0,
     "previous_fail": 0,
+    "plausible_recent_weeks": 4,
+    "plausible_floor": 20,
+    "plausible_median_ratio": 5.0,
+    "plausible_q975_ratio": 15.0,
+    "plausible_low_ratio": 20.0,
 }
 
 
@@ -495,6 +503,72 @@ def check_bounds(
     return _result("bounds", found, "trajectories within the bounds")
 
 
+def check_plausible(
+    s: Samples,
+    obs: Observed,
+    ref: dt.date,
+    horizon: int,
+    c: Mapping[str, Any],
+) -> Check:
+    """Rule out a forecast far from the recent data, at each location.
+
+    The base is the largest of the last `plausible_recent_weeks` observed
+    weeks, floored at `plausible_floor`. For each week from the nowcast
+    to the last horizon, the median must lie within
+    `plausible_median_ratio` times the base, the 97.5% quantile within
+    `plausible_q975_ratio` times it, and, where the recent maximum is at
+    least the floor, the median above the maximum over
+    `plausible_low_ratio`. Locations without observed data (the health
+    zones) are skipped. Any breach fails, so the chain moves on.
+    """
+    n_recent = int(c["plausible_recent_weeks"])
+    floor = float(c["plausible_floor"])
+    hi, tail, lo = (
+        float(c["plausible_median_ratio"]),
+        float(c["plausible_q975_ratio"]),
+        float(c["plausible_low_ratio"]),
+    )
+    weeks = [_week(ref, k) for k in range(-n_recent + 1, horizon + 1)]
+    found: list[tuple[str, str]] = []
+    for loc in s.locations:
+        series = obs.counts.get(loc)
+        if not series:
+            continue
+        recent = [series[w] for w in sorted(series)[-n_recent:]]
+        top = max(recent, default=0.0)
+        base = max(top, floor)
+        for w in weeks:
+            values = s.week_values(loc, w)
+            if not values:
+                continue
+            med, q975 = quantile(values, 0.5), quantile(values, 0.975)
+            if med > hi * base:
+                found.append(
+                    (
+                        "fail",
+                        f"{loc} {w}: median {fmt(med)} is over {fmt(hi)} "
+                        f"times the recent maximum {fmt(base)}",
+                    )
+                )
+            elif q975 > tail * base:
+                found.append(
+                    (
+                        "fail",
+                        f"{loc} {w}: 97.5% quantile {fmt(q975)} is over "
+                        f"{fmt(tail)} times the recent maximum {fmt(base)}",
+                    )
+                )
+            elif top >= floor and med < top / lo:
+                found.append(
+                    (
+                        "fail",
+                        f"{loc} {w}: median {fmt(med)} is under 1/"
+                        f"{fmt(lo)} of the recent maximum {fmt(top)}",
+                    )
+                )
+    return _result("plausible", found, "within range of the recent data")
+
+
 def check_growth(
     s: Samples,
     ref: dt.date,
@@ -692,6 +766,7 @@ def run_checks(
             float(c["bound_warn"]),
             float(c["bound_fail"]),
         ),
+        check_plausible(s, observed, ref, horizon, c),
         check_growth(
             s,
             ref,

@@ -6,7 +6,7 @@
 #   LEDGER_BRANCH  default submission-ledger
 #   REFERENCE_DATE, DATA_COMMIT, AS_OF, ACTION, PR_URL, PRODUCED_BY,
 #   SKIPPED, RUN   from the earlier jobs
-#   BASELINE_GATE  seabbsbaseline's gate folder, when it ran
+#   BASELINE_GATE  baseline's gate folder, when it ran
 # shellcheck source=ci/steps/lib.sh
 source "$(dirname "$0")/lib.sh"
 
@@ -52,11 +52,11 @@ archive_gate() {
 }
 mkdir -p "$archive"
 archive_gate "$WORK/gate" "$archive"
-# seabbsbaseline's files sit beside the round's (BASELINE_GATE); when it
+# baseline's files sit beside the round's (BASELINE_GATE); when it
 # is the only hub model that ran, they are the round's own.
 if [ -n "${BASELINE_GATE:-}" ]; then
   if [ -d "$WORK/gate" ]; then
-    archive_gate "$BASELINE_GATE" "$archive/seabbsbaseline"
+    archive_gate "$BASELINE_GATE" "$archive/baseline"
   else
     archive_gate "$BASELINE_GATE" "$archive"
   fi

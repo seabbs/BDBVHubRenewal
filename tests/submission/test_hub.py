@@ -57,17 +57,17 @@ def test_to_hub_table_is_valid(hub_round) -> None:  # type: ignore[no-untyped-de
     errors = validate_submission(
         table,
         hub_round,
-        file_name="2026-10-31-epiforecasts-persistence.csv",
-        mid="epiforecasts-persistence",
+        file_name="2026-10-31-seabbs-persistence.csv",
+        mid="seabbs-persistence",
     )
     assert errors == []
 
 
 def test_round_trip_through_csv(hub_round, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
     table = to_hub_table(_samples(), "2026-10-31")
-    path = write_submission(table, tmp_path, "epiforecasts-persistence")
-    assert path.name == "2026-10-31-epiforecasts-persistence.csv"
-    assert path.parent.name == "epiforecasts-persistence"
+    path = write_submission(table, tmp_path, "seabbs-persistence")
+    assert path.name == "2026-10-31-seabbs-persistence.csv"
+    assert path.parent.name == "seabbs-persistence"
     back = pd.read_csv(path)
     assert validate_submission(back, hub_round) == []
 
@@ -129,12 +129,12 @@ def test_backtest_dates_skip_round_checks(hub_round) -> None:  # type: ignore[no
 
 
 def test_model_ids() -> None:
-    assert model_id("persistence") == "epiforecasts-persistence"
+    assert model_id("persistence") == "seabbs-persistence"
     with pytest.raises(ValueError, match="letters"):
         model_id("bad-name")
-    assert validate_model_id("epiforecasts-renewal") == []
+    assert validate_model_id("seabbs-renewal") == []
     assert validate_model_id("a-b-c")
-    assert validate_model_id("epiforecasts-waytoolongmodelname")
+    assert validate_model_id("seabbs-waytoolongmodelname")
 
 
 def test_metadata_is_valid(schema_json: Path, tmp_path: Path) -> None:
@@ -146,7 +146,7 @@ def test_metadata_is_valid(schema_json: Path, tmp_path: Path) -> None:
         data_inputs="Hub data.",
     )
     path = write_model_metadata(record, tmp_path)
-    assert path.name == "epiforecasts-persistence.yml"
+    assert path.name == "seabbs-persistence.yml"
     back = yaml.safe_load(path.read_text())
     assert validate_model_metadata(back, schema_json, path.name) == []
     assert "language model" not in back["model_details"]["methods_long"]
@@ -214,17 +214,17 @@ def test_validation_checks_directory_and_metadata(
     tmp_path: Path,
 ) -> None:
     table = to_hub_table(_provinces(), "2026-10-31")
-    name = "2026-10-31-epiforecasts-persistence.csv"
-    mid = "epiforecasts-persistence"
+    name = "2026-10-31-seabbs-persistence.csv"
+    mid = "seabbs-persistence"
     errors = validate_submission(
-        table, hub_round, file_name=name, mid=mid, dir_name="epiforecasts-x"
+        table, hub_round, file_name=name, mid=mid, dir_name="seabbs-x"
     )
     assert any("directory" in e for e in errors), errors
     errors = validate_submission(
         table, hub_round, file_name=name, mid=mid, metadata_dir=tmp_path
     )
     assert any("metadata" in e.lower() for e in errors), errors
-    (tmp_path / f"{mid}.yml").write_text("team_abbr: epiforecasts\n")
+    (tmp_path / f"{mid}.yml").write_text("team_abbr: seabbs\n")
     assert (
         validate_submission(
             table,
@@ -239,10 +239,10 @@ def test_validation_checks_directory_and_metadata(
 
 
 def test_model_abbreviations_at_most_14_characters() -> None:
-    assert model_id("a" * 14) == f"epiforecasts-{'a' * 14}"
+    assert model_id("a" * 14) == f"seabbs-{'a' * 14}"
     with pytest.raises(ValueError, match="14"):
         model_id("a" * 15)
-    assert validate_model_id(f"epiforecasts-{'a' * 15}")
+    assert validate_model_id(f"seabbs-{'a' * 15}")
 
 
 def test_writer_makes_national_the_sum_of_provinces() -> None:

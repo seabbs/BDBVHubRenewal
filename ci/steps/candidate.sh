@@ -122,7 +122,7 @@ fi
 # national rows as the sum of the provinces plus its unassigned part, or,
 # without it, plus the data's national gap from coherence.json.
 checks+=(--national-sidecar "$out/submission/national.json")
-# seabbsbaseline must submit health zones (track.sh).
+# baseline must submit health zones (track.sh).
 if [ "${REQUIRE_ZONES:-false}" = "true" ]; then
   checks+=(--require-zones)
 fi

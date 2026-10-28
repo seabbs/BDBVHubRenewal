@@ -283,7 +283,7 @@ def cmd_nowcast(args: argparse.Namespace) -> int:
             if loc != "CD"
             for k in (1, 2)
         ]
-    mid = f"epiforecasts-{args.model}"
+    mid = f"seabbs-{args.model}"
     path = Path(args.out) / "model-output" / mid / f"{ref}-{mid}.csv"
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as fh:
@@ -414,8 +414,8 @@ def cmd_metadata(args: argparse.Namespace) -> int:
     """Write a minimal metadata file named after the hub id."""
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    (out / f"epiforecasts-{args.abbr}.yml").write_text(
-        f"team_abbr: epiforecasts\nmodel_abbr: {args.abbr}\n"
+    (out / f"seabbs-{args.abbr}.yml").write_text(
+        f"team_abbr: seabbs\nmodel_abbr: {args.abbr}\n"
     )
     return 0
 
@@ -486,9 +486,9 @@ def main() -> int:
         "bvd": lambda _a: 0,
         "hub-id": lambda a: (
             print(
-                "epiforecasts-seabbsbaseline"
+                "seabbs-baseline"
                 if a.model == "persistencenow"
-                else "epiforecasts-seabbsrenewal"
+                else "seabbs-renewal"
             )
             or 0
         ),

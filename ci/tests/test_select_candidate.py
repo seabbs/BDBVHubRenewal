@@ -412,7 +412,7 @@ def test_provenance_lists_the_shadow_candidates(tmp_path: Path) -> None:
 
 
 def test_baseline_track_falls_back_to_persistence(tmp_path: Path) -> None:
-    # seabbsbaseline: persistence on a nowcast, then plain persistence.
+    # baseline: persistence on a nowcast, then plain persistence.
     pol = POLICY.for_model("persistencenow")
     c = tmp_path / "c"
     chain(c, persistencenow=(None, "fail"), persistence=(None, "pass"))

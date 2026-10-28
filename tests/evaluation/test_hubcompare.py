@@ -264,10 +264,10 @@ def test_plot_hub_round(
 def test_comparison_label_names_our_hub_models() -> None:
     from bdbvhubrenewal.reporting.plots import comparison_label
 
-    ids = {"persistencenow": "epiforecasts-seabbsbaseline"}
+    ids = {"persistencenow": "seabbs-baseline"}
     assert (
         comparison_label("persistencenow", "real", ids)
-        == "persistencenow (epiforecasts-seabbsbaseline)"
+        == "persistencenow (seabbs-baseline)"
     )
     assert comparison_label("persistence", "real", ids) == "persistence (ours)"
     assert comparison_label("OHTJHU-BM", "hub", ids) == "OHTJHU-BM"
@@ -277,4 +277,4 @@ def test_own_hub_ids() -> None:
     from bdbvhubrenewal.evaluation.hubcompare import own_hub_ids
 
     ids = own_hub_ids(ROOT / "config" / "hub.toml")
-    assert ids["persistencenow"] == "epiforecasts-seabbsbaseline"
+    assert ids["persistencenow"] == "seabbs-baseline"

@@ -77,8 +77,8 @@ ROUND_NAME: Final = "BDBV 2026 nowcasting and forecasting"
 OUTPUT_TYPE: Final = "sample"
 """The only output type the round accepts."""
 
-TEAM_ABBR: Final = "epiforecasts"
-"""Team abbreviation, shared with earlier epiforecasts hub models."""
+TEAM_ABBR: Final = "seabbs"
+"""Team abbreviation, of our hub models."""
 
 # The schema allows 16 characters and the README says "less than 15" or
 # "less than 16", so keep to 14 to satisfy all three
@@ -198,7 +198,7 @@ def submission_model_abbr(path: Path | str = SUBMISSION_CONFIG) -> str:
     Returns
     -------
     str
-        The abbreviation, such as `"seabbsrenewal"`.
+        The abbreviation, such as `"renewal"`.
     """
     with Path(path).open("rb") as fh:
         config = tomllib.load(fh)
@@ -222,7 +222,7 @@ def model_abbr_for(model: str, path: Path | str = SUBMISSION_CONFIG) -> str:
     Returns
     -------
     str
-        The abbreviation, such as `"seabbsbaseline"`.
+        The abbreviation, such as `"baseline"`.
     """
     with Path(path).open("rb") as fh:
         config = tomllib.load(fh)
@@ -264,7 +264,7 @@ def validate_model_id(value: str) -> list[str]:
     Parameters
     ----------
     value : str
-        A model id such as `"epiforecasts-persistence"`.
+        A model id such as `"seabbs-persistence"`.
 
     Returns
     -------
@@ -438,7 +438,7 @@ def submission_path(
     reference_date : datetime.date or str
         The round's reference date.
     mid : str
-        The model id, such as `"epiforecasts-persistence"`.
+        The model id, such as `"seabbs-persistence"`.
 
     Returns
     -------
@@ -778,7 +778,7 @@ def render_model_metadata(
     Parameters
     ----------
     model_abbr : str
-        Model abbreviation (the part after `epiforecasts-`).
+        Model abbreviation (the part after `seabbs-`).
     model_name : str
         Full model name, under 50 characters.
     methods : str

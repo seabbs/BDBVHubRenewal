@@ -80,7 +80,7 @@ def test_fit_then_nowcast_from_the_fit(tmp_path: Path, stand_in: str) -> None:
     assert main(["nowcast", *args, "2026-10-17", "--fit", str(fit),
                  "--out", str(out)]) == 0  # fmt: skip
     (csv,) = out.rglob("*.csv")
-    assert csv.parent.name == "epiforecasts-persistence"
+    assert csv.parent.name == "seabbs-persistence"
     table = pd.read_csv(csv)
     # Seven weeks up to the reference date and three after.
     assert table["target_end_date"].nunique() == 10
@@ -127,7 +127,7 @@ def test_fit_fails_on_unknown_config_or_vintage(tmp_path: Path) -> None:
 @pytest.mark.usefixtures("in_root")
 def test_plot_submission_and_validate(tmp_path: Path) -> None:
     out = tmp_path / "sub"
-    # seabbsbaseline: the committed metadata covers the hub models only.
+    # baseline: the committed metadata covers the hub models only.
     args = ["--model", "persistencenow", "--out", str(out)]
     assert main(["nowcast", *args]) == 0
     (csv,) = out.rglob("*.csv")
@@ -247,9 +247,7 @@ def test_nowcast_notes_what_it_handled(tmp_path: Path) -> None:
 def test_submission_id_is_one_config_value(tmp_path: Path) -> None:
     from bdbvhubrenewal.submission.hub import submission_model_abbr
 
-    assert (
-        submission_model_abbr(ROOT / "config" / "hub.toml") == "seabbsrenewal"
-    )
+    assert submission_model_abbr(ROOT / "config" / "hub.toml") == "renewal"
     cfg = tmp_path / "hub.toml"
     cfg.write_text('[submission]\nmodel_abbr = "other"\n')
     assert submission_model_abbr(cfg) == "other"
@@ -260,7 +258,7 @@ def test_cli_hub_id_and_chosen_model(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     assert main(["hub-id"]) == 0
-    assert capsys.readouterr().out.strip() == "epiforecasts-seabbsrenewal"
+    assert capsys.readouterr().out.strip() == "seabbs-renewal"
     # results/model-choice.yml has no choice until Sam makes the first.
     assert main(["chosen-model"]) == 1
     assert "no model has been chosen" in capsys.readouterr().err
@@ -270,13 +268,13 @@ def test_cli_hub_id_and_chosen_model(
 def test_renewal_metadata_uses_the_submission_abbr(tmp_path: Path) -> None:
     assert main(["metadata", "--model", "renewal", "--out",
                  str(tmp_path)]) == 0  # fmt: skip
-    text = (tmp_path / "epiforecasts-seabbsrenewal.yml").read_text()
-    assert "model_abbr: seabbsrenewal" in text
+    text = (tmp_path / "seabbs-renewal.yml").read_text()
+    assert "model_abbr: renewal" in text
     # Any model can be written under the submission id explicitly.
     out = str(tmp_path / "p")
-    args = ["--model", "persistence", "--abbr", "seabbsrenewal"]
+    args = ["--model", "persistence", "--abbr", "renewal"]
     assert main(["metadata", *args, "--out", out]) == 0
-    assert (tmp_path / "p" / "epiforecasts-seabbsrenewal.yml").exists()
+    assert (tmp_path / "p" / "seabbs-renewal.yml").exists()
 
 
 @pytest.mark.usefixtures("in_root")
@@ -288,19 +286,19 @@ def test_persistencenow_has_its_own_hub_id(
     from bdbvhubrenewal.submission.hub import model_abbr_for
 
     abbr = model_abbr_for("persistencenow", ROOT / "config" / "hub.toml")
-    assert abbr == "seabbsbaseline"
+    assert abbr == "baseline"
     assert abbr.isalnum()
     assert len(abbr) < 16
     # Models without their own id submit under the renewal id.
     assert model_abbr_for("renewalsp", ROOT / "config" / "hub.toml") == (
-        "seabbsrenewal"
+        "renewal"
     )
     assert main(["hub-id", "--model", "persistencenow"]) == 0
-    assert capsys.readouterr().out.strip() == "epiforecasts-seabbsbaseline"
+    assert capsys.readouterr().out.strip() == "seabbs-baseline"
     assert main(["metadata", "--model", "persistencenow", "--out",
                  str(tmp_path)]) == 0  # fmt: skip
-    text = (tmp_path / "epiforecasts-seabbsbaseline.yml").read_text()
-    assert "model_abbr: seabbsbaseline" in text
+    text = (tmp_path / "seabbs-baseline.yml").read_text()
+    assert "model_abbr: baseline" in text
 
 
 @pytest.mark.usefixtures("in_root")
@@ -331,10 +329,10 @@ def test_persistencenow_config_runs_the_nowcast_model(tmp_path: Path) -> None:
 
 
 @pytest.mark.usefixtures("in_root")
-def test_seabbsbaseline_metadata_text(tmp_path: Path) -> None:
+def test_baseline_metadata_text(tmp_path: Path) -> None:
     assert main(["metadata", "--model", "persistencenow", "--out",
                  str(tmp_path)]) == 0  # fmt: skip
-    text = (tmp_path / "epiforecasts-seabbsbaseline.yml").read_text()
+    text = (tmp_path / "seabbs-baseline.yml").read_text()
     assert "https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/" in text
     assert "baselinenowcast" in text
     assert "10.12688/wellcomeopenres.25027.2" in text
@@ -345,8 +343,8 @@ def test_committed_metadata_is_only_for_hub_models() -> None:
     # One file per hub model in config/hub.toml, written as the CLI does.
     names = sorted(p.stem for p in (ROOT / "hub" / "model-metadata").glob("*"))
     assert names == [
-        "epiforecasts-seabbsbaseline",
-        "epiforecasts-seabbsrenewal",
+        "seabbs-baseline",
+        "seabbs-renewal",
     ]
     for name in names:
         text = (ROOT / "hub" / "model-metadata" / f"{name}.yml").read_text()

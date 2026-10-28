@@ -13,16 +13,16 @@ It submits only the hub models opted in ([Opting in](opting-in.md)), and pushes 
 | `detect` | Stops unless the open round has new hub data. |
 | `freeze` | Freezes the page of every round whose pull request has merged. |
 | `prepare` | Pins the data, builds `persistence` and `persistencenow`, and decides which hub models run. |
-| `baseline` | `seabbsbaseline`: checks and submits `persistencenow`, or `persistence` if it is ruled out. |
-| `fit` | `seabbsrenewal`: fits `main`, `renewalsp` and the `bvd` shadow in parallel. |
+| `baseline` | The baseline hub model: checks and submits `persistencenow`, or `persistence` if it is ruled out. |
+| `fit` | The renewal hub model: fits `main`, `renewalsp` and the `bvd` shadow in parallel. |
 | `triage`, `retry` | Refits `main` once if needed and if the window leaves time. |
 | `gate`, `submit` | Walks the chain, validates, and opens or updates the pull request. |
 | `record` | Live runs only: writes the round to the `submission-ledger` branch. |
 | `outcome` | Fails the run if a round was skipped or a job broke. |
 
-## seabbsrenewal chain
+## renewal chain
 
-The first candidate that clears the checks is submitted, under `epiforecasts-seabbsrenewal`.
+The first candidate that clears the checks is submitted, under `seabbs-renewal`.
 
 1. `main`: the renewal model.
 2. `retry-1`: one refit with target acceptance 0.95 and jittered inits.

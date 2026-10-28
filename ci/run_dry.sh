@@ -43,7 +43,10 @@ SCENARIOS=(
   "ppcwarn|main=ppcwarn|main||All checks passed, with warnings on ppc."
   "ppcfail|main=ppcfail|main||All checks passed, with warnings on ppc."
   "noppc|main=noppc|main||All checks passed, with warnings on ppc."
-  "implausible|main=implausible|main||with warnings on"
+  # A wildly high forecast is ruled out by the plausibility check: the
+  # main model is refitted, and if that is wild too the chain moves on.
+  "implausible|main=implausible|retry-1||main model was ruled out (plausible: "
+  "wild|main=implausible,retry-1=implausible|renewalsp||Fallback model used (single-patch model"
   "national|main=badnational|main||Handled: national (CD) rebuilt as the sum of the provinces"
   "latestream|main=latestream|main||Handled: delays: no delay data for this vintage"
   "loose|main=loose,retry-1=pass|retry-1||Handled: main model refitted once (max R-hat is 1.2"
@@ -266,7 +269,7 @@ ledger() {
 }
 
 baseline_track() {
-  # track.sh on the `main` scenario's inputs: seabbsbaseline submits
+  # track.sh on the `main` scenario's inputs: baseline submits
   # persistence on a nowcast with health zones under its own id, falls
   # back to plain persistence, and skips the round without zones.
   local src="$ROOT/main" case want selected status
@@ -306,16 +309,16 @@ baseline_track() {
       || { echo "FAIL: baseline $case selected $selected"; return 1; }
     grep -q "CD-IT-01" "$(find "$gate/selected/submission" -name '*.csv' | head -n 1)" \
       || { echo "FAIL: baseline file has no zones"; return 1; }
-    grep -q "bdbv-submission:epiforecasts-seabbsbaseline:" "$gate/pr-body.md" \
+    grep -q "bdbv-submission:seabbs-baseline:" "$gate/pr-body.md" \
       || { echo "FAIL: baseline id"; return 1; }
-    grep -q '"branch": "epiforecasts-seabbsbaseline-' "$WORK/track.log" \
+    grep -q '"branch": "seabbs-baseline-' "$WORK/track.log" \
       || { echo "FAIL: baseline branch"; cat "$WORK/track.log"; return 1; }
     if grep -v '^pr list' "$WORK/gh.log" 2> /dev/null; then
       echo "FAIL: baseline dry run wrote to GitHub"; return 1
     fi
   done
   export FAKE_ZONES="" FAKE_SCENARIOS=""
-  echo "=== baseline ===" && echo "ok: seabbsbaseline submits persistencenow with zones, else persistence; no zones skips"
+  echo "=== baseline ===" && echo "ok: baseline submits persistencenow with zones, else persistence; no zones skips"
 }
 
 no_new_data() {
