@@ -1278,7 +1278,7 @@ def lag_warnings(inputs: Sequence[Any], config: Any = None) -> list[str]:
     ----------
     inputs : sequence of bdbvhubrenewal.model.Vintage
         The model inputs of each run.
-    config : bdbv_hub_renewal.model.ModelConfig, optional
+    config : bdbvhubrenewal.model.ModelConfig, optional
         The configuration. Only `publication_lag="empirical"` can warn.
 
     Returns
