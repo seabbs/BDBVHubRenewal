@@ -19,8 +19,10 @@ on:
   schedule:
     - cron: '0 23 * * 6'       # Saturday 23:00 UTC, as the window opens
     - cron: '0 2-23/3 * * 0,1' # every 3 hours on Sunday and Monday
-    # Tuesday until 14:00 UTC, so a full 350-minute fit still lands
-    # before the window closes at 22:59 UTC.
+    # Tuesday until 14:00 UTC. That leaves about 540 minutes before the
+    # window closes at 22:59 UTC for prepare, the main fit, one retry
+    # (sized in ci/policy.toml to take about as long as main) and the
+    # gate. Each fit job is capped at 350 minutes on its own.
     - cron: '0 2-14/3 * * 2'
   workflow_dispatch:
     inputs:

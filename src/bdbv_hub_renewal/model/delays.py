@@ -13,7 +13,10 @@ import numpy as np
 import numpyro
 import numpyro.distributions as dist
 from jax.typing import ArrayLike
-from pyrenew.latent.temporal_processes import TemporalProcess
+from pyrenew.latent.temporal_processes import (
+    TemporalProcess,
+    WeeklyTemporalProcess,
+)
 from pyrenew.metaclass import RandomVariable
 from pyrenew.randomvariable import DistributionalVariable
 
@@ -118,10 +121,19 @@ class HazardDelay(RandomVariable):
             name_prefix=f"{self.name}_time",
             first_day_dow=first_day_dow,
         )
-        pmf = hazard_to_pmf(beta[None, :] + gamma)
-        numpyro.deterministic(
-            f"{self.name}_mean", pmf @ jnp.arange(self.dmax + 1)
+        weekly = isinstance(self.time_process, WeeklyTemporalProcess) and (
+            first_day_dow == self.time_process.start_dow
         )
+        if weekly:
+            # The shift is constant within weeks, so compute one row per
+            # week and repeat it.
+            gamma = gamma[::7]
+        pmf = hazard_to_pmf(beta[None, :] + gamma)
+        mean = pmf @ jnp.arange(self.dmax + 1)
+        if weekly:
+            pmf = jnp.repeat(pmf, 7, axis=0)[:n_timepoints]
+            mean = jnp.repeat(mean, 7, axis=0)[:n_timepoints]
+        numpyro.deterministic(f"{self.name}_mean", mean)
         return pmf
 
 
@@ -341,7 +353,11 @@ def empirical_delay_matrix(
 
 
 def empirical_missing_fraction(
-    known: ArrayLike, imputed: ArrayLike, window: int = 2, shrink: float = 5.0
+    known: ArrayLike,
+    imputed: ArrayLike,
+    window: int = 2,
+    shrink: float = 5.0,
+    shift: int = 0,
 ) -> np.ndarray:
     r"""Smoothed missing-onset fraction by province and week, from data.
 
@@ -353,6 +369,9 @@ def empirical_missing_fraction(
 
     with $k$ known and $m$ imputed onset counts and $a$ = `shrink`.
     Weeks with no data take the last available value.
+    These shares are by onset week, but $\pi$ is by report day, so the
+    daily values move `shift` days later (the mean delay), and the first
+    days take the first value.
 
     Parameters
     ----------
@@ -362,6 +381,8 @@ def empirical_missing_fraction(
         Half-width of the pooling window in weeks.
     shrink : float, optional
         Pseudo-count $a$ towards the national share.
+    shift : int, optional
+        Days from onset to report day.
 
     Returns
     -------
@@ -378,4 +399,8 @@ def empirical_missing_fraction(
         out[w] = (mw + shrink * national) / (tw + shrink)
         if w > 0 and (k[w] + m[w]).sum() == 0:
             out[w] = out[w - 1]
-    return np.repeat(out, 7, axis=0)
+    daily = np.repeat(out, 7, axis=0)
+    if shift <= 0:
+        return daily
+    lead = np.repeat(daily[:1], shift, axis=0)
+    return np.vstack([lead, daily[:-shift]])

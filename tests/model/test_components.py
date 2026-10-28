@@ -332,3 +332,40 @@ def test_linear_weekly_process_interpolates_knots():
         out[3, 0], (weekly[0] * 4 + weekly[1] * 3) / 7, rtol=1e-5
     )
     assert out.shape == (29, 1)
+
+
+def test_empirical_missing_fraction_moves_to_report_days():
+    # Onset-week shares are 0.1 then 0.4 from week 10. Missing onsets are
+    # dated by report, so the report-day fraction steps `shift` days later.
+    imputed = np.where(np.arange(20)[:, None] < 10, 10.0, 40.0)
+    known = 100.0 - imputed
+    base = empirical_missing_fraction(known, imputed, window=0, shrink=0)
+    pi = empirical_missing_fraction(known, imputed, window=0, shrink=0, shift=9)
+    assert pi.shape == base.shape
+    np.testing.assert_allclose(pi[9:], base[:-9])
+    np.testing.assert_allclose(pi[:9], np.repeat(base[:1], 9, axis=0))
+    assert pi[78, 0] == pytest.approx(0.1)
+    assert pi[79, 0] == pytest.approx(0.4)
+
+
+class _Daily:
+    """A weekly process seen as a daily one, to force the daily path."""
+
+    def __init__(self, inner):
+        self.inner = inner
+
+    def sample(self, **kwargs):
+        return self.inner.sample(**kwargs)
+
+
+@pytest.mark.parametrize("dow", [6, 2])
+def test_hazard_delay_on_weekly_rows_matches_daily(dow):
+    weekly = WeeklyTemporalProcess(
+        NonCentredRandomWalk(DeterministicVariable("sd", 0.3)), start_dow=6
+    )
+
+    def run(process):
+        delay = HazardDelay("delay", 30, process)
+        return seeded(lambda: delay(n_timepoints=40, first_day_dow=dow), 4)
+
+    np.testing.assert_allclose(run(weekly), run(_Daily(weekly)), rtol=1e-6)

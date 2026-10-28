@@ -141,6 +141,15 @@ class ModelConfig:
         Its tempering. 0 gives the model without it, exactly.
     dmax : int
         Maximum onset-to-report delay in days.
+    publication_lag : {"estimated", "fixed", "none"}
+        Lag from report to publication in a vintage: a Dirichlet simplex
+        on $0..L$, fixed at its prior mean (uniform), or none.
+    max_publication_lag : int
+        $L$, in days (`vintages.PUBLICATION_LAG_DAYS`).
+    delay_counts : {"multinomial", "dirichlet-multinomial"}
+        Likelihood of the delay file's counts given the weekly totals.
+        The Dirichlet-multinomial has $1/\sqrt{\psi} \sim
+        \text{HalfNormal}(0.1)$.
     """
 
     national: bool = False
@@ -163,13 +172,22 @@ class ModelConfig:
     bvd: bool = False
     bvd_alpha: float = 0.5
     dmax: int = 60
+    publication_lag: Literal["estimated", "fixed", "none"] = "estimated"
+    max_publication_lag: int = 3
+    delay_counts: Literal["multinomial", "dirichlet-multinomial"] = (
+        "multinomial"
+    )
 
 
 MAIN = ModelConfig()
 BVD = ModelConfig(bvd=True)
 """Main model informed by BVDOutbreakSize Rt (`hubrenewalbvd`)."""
 FALLBACK = ModelConfig(
-    coupling="none", delay="fixed", missing="fixed", rt_cadence="weekly"
+    coupling="none",
+    delay="fixed",
+    missing="fixed",
+    rt_cadence="weekly",
+    publication_lag="fixed",
 )
 _SIMPLE = {
     "streams": "total",
@@ -442,7 +460,10 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     elif not config.truncation:
         raise ValueError("Split streams always use right truncation.")
     elif config.missing == "fixed":
-        pi = empirical_missing_fraction(data.known, data.imputed)
+        mean_delay = data.hub_delay_pmf @ np.arange(data.hub_delay_pmf.size)
+        pi = empirical_missing_fraction(
+            data.known, data.imputed, shift=round(float(mean_delay))
+        )
         missing = fixed("missing_fraction", pi)
     else:
         missing = MissingOnsetFraction(
@@ -455,7 +476,11 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     if missing is not None:
         delay_time = _named_walk("delay_sd", 0.15, fit_weeks(data, config))
         if config.delay == "fixed":
-            f = empirical_delay_matrix(data.delay_counts, data.cutoff)
+            # Delays near the cut-off are part published, so treat the
+            # last L days as truncated.
+            f = empirical_delay_matrix(
+                data.delay_counts, data.cutoff - config.max_publication_lag
+            )
             delay = fixed("delay", f)
         elif config.delay in ("gamma", "lognormal"):
             delay = ParametricDelay(
@@ -468,6 +493,15 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         imports = DistributionalVariable(
             "import_scale", dist.LogNormal(np.log(1e-3), 2.0)
         )
+
+    n_lag = config.max_publication_lag + 1
+    lag: DistributionalVariable | np.ndarray | None = None
+    if config.publication_lag == "estimated":
+        lag = DistributionalVariable(
+            "onsets_publication_lag", dist.Dirichlet(np.ones(n_lag))
+        )
+    elif config.publication_lag == "fixed":
+        lag = np.full(n_lag, 1 / n_lag)
 
     builder.add_observation(
         OnsetStreams(
@@ -490,6 +524,12 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             import_scale_rv=imports,
             kernel_rv=kernel if isinstance(kernel, LearntKernel) else None,
             start_dow=SUNDAY,
+            publication_lag=lag,
+            delay_overdispersion_rv=DistributionalVariable(
+                "delay_overdispersion", dist.HalfNormal(0.1)
+            )
+            if config.delay_counts == "dirichlet-multinomial"
+            else None,
         )
     )
     model = builder.build()
@@ -539,11 +579,13 @@ def model_args(
     )
     if use_imports:
         obs["import_kernel"] = jnp.asarray(data.import_kernel)
-    if not forecast:
-        known, imputed = data.known.copy(), data.imputed.copy()
-        if data.fit_mask is not None:
-            known[:, ~data.fit_mask] = np.nan
-            imputed[:, ~data.fit_mask] = np.nan
+    known, imputed = data.known.copy(), data.imputed.copy()
+    if data.fit_mask is not None:
+        known[:, ~data.fit_mask] = np.nan
+        imputed[:, ~data.fit_mask] = np.nan
+    if forecast:
+        obs["vintage"] = jnp.stack([pad(known), pad(imputed)])
+    else:
         obs |= {
             "known": pad(known),
             "imputed": pad(imputed),

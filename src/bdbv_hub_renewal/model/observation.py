@@ -9,12 +9,15 @@ the hub's empirical delay for that vintage. Then
 $$\kappa_p(s, d) = \lambda_p(s) f_s(d) \{1 - \pi_p(s + d)\}$$
 
 is the expected number of known-onset cases with onset $s$ and delay
-$d$, and known onsets by $T$ are $\sum_{d \le T - s} \kappa_p(s, d)$.
+$d$. A case reported on day $t$ appears in the vintage at $T$ with
+probability $c(t) = F_\ell(T - t)$, with $F_\ell$ the cdf of the report
+to publication lag $\ell$ on $0..L$. Known onsets by $T$ are
+$\sum_d \kappa_p(s, d) c(s + d)$.
 Reports by report day are $R_p(t) = \sum_d \lambda_p(t - d) f_{t-d}(d)$,
 missing-onset cases are $M_p(t) = \pi_p(t) R_p(t)$, and the hub spreads
-those reported by $T$ back with $\hat f$, giving expected imputed onsets
+those published by $T$ back with $\hat f$, giving expected imputed onsets
 
-$$\iota_p(s) = \sum_{t = s}^{T} \hat f(t - s) M_p(t).$$
+$$\iota_p(s) = \sum_{t = s}^{T} \hat f(t - s) c(t) M_p(t).$$
 """
 
 from __future__ import annotations
@@ -56,6 +59,13 @@ def backsample(missing: ArrayLike, pmf: ArrayLike) -> ArrayLike:
     return jnp.convolve(missing[::-1], pmf, mode="full")[:n][::-1]
 
 
+def _nowcast(draws: ArrayLike, vintage: ArrayLike | None) -> ArrayLike:
+    """Add the draw of later reports to the vintage counts, or their draw."""
+    if vintage is None:
+        return draws[0] + draws[1]
+    return jnp.where(jnp.isnan(vintage), draws[0], vintage) + draws[1]
+
+
 def skew(x: ArrayLike, width: int) -> ArrayLike:
     r"""Shift row $s$ of `x` right by $s$: `out[s, s + d] = x[s, d]`.
 
@@ -85,6 +95,34 @@ def unskew(b: ArrayLike, k: int) -> ArrayLike:
     return flat.reshape(n, width + 1)[:, :k]
 
 
+def published_by(n: int, lag_pmf: ArrayLike | None) -> ArrayLike:
+    r"""Probability that a report on day $t$ is published by day $n - 1$.
+
+    $c(t) = F_\ell(n - 1 - t)$, with $F_\ell$ the cdf of the report to
+    publication lag pmf on $0..L$, so only the last $L$ days are partly
+    published.
+
+    Parameters
+    ----------
+    n : int
+        Number of report days, the last being the cut-off. Static.
+    lag_pmf : ArrayLike or None
+        Lag pmf on $0..L$. `None` is no lag.
+
+    Returns
+    -------
+    ArrayLike
+        Shape `(n,)`.
+    """
+    if lag_pmf is None:
+        return jnp.ones(n)
+    cdf = jnp.cumsum(jnp.asarray(lag_pmf))[::-1]
+    k = cdf.shape[0]
+    if n >= k:
+        return jnp.concatenate([jnp.ones(n - k), cdf])
+    return cdf[k - n :]
+
+
 def onset_expectations(
     onsets: ArrayLike,
     delay: ArrayLike,
@@ -92,17 +130,18 @@ def onset_expectations(
     hub_delay: ArrayLike,
     cutoff: int,
     final: bool = True,
+    publication_lag: ArrayLike | None = None,
 ) -> dict[str, ArrayLike]:
     r"""Compute expected known and imputed onsets by the cut-off and eventually.
 
     With $A_{st} = f_s(t - s)$ the onset-by-report-day delay matrix and
     $H_{st} = \hat f(t - s)$ the hub's back-sampling matrix, both banded
     and of shape `(n, n + D)`, and $\pi$ extended to report days past the
-    end (last row repeated):
+    end (last row repeated), and $c$ from `published_by`:
 
-    - known by $T$: $\lambda \odot (A_{:, \le T} (1 - \pi)_{\le T})$;
+    - known by $T$: $\lambda \odot (A_{:, \le T} (c (1 - \pi))_{\le T})$;
     - missing by report day: $M = \pi \odot A^\top \lambda$;
-    - imputed by $T$: $H_{:, \le T} M_{\le T}$, zero past $T$.
+    - imputed by $T$: $H_{:, \le T} (c M)_{\le T}$, zero past $T$.
 
     Every term is a dense matrix product, so autodiff needs no gather or
     scatter adjoints. Equal to the direct version in
@@ -123,6 +162,9 @@ def onset_expectations(
     final : bool, optional
         Also compute the final counts. Fitting does not need them, and
         skipping them saves about a fifth of the gradient cost.
+    publication_lag : ArrayLike, optional
+        Pmf of the report to publication lag on $0..L$. `None` publishes
+        every report on its report day.
 
     Returns
     -------
@@ -130,7 +172,7 @@ def onset_expectations(
         `known` and `imputed` by $T$, `known_final` and `imputed_final`
         once all reports are in (all `(n, P)`; equal to the counts by $T$
         when `final` is false), and `triangle`, the
-        expected known cases by onset day and delay reported by $T$,
+        expected known cases by onset day and delay published by $T$,
         summed over provinces, `(n, D + 1)`.
     """
     n, n_d = delay.shape
@@ -141,17 +183,19 @@ def onset_expectations(
     h = skew(jnp.broadcast_to(hub_delay, (n, n_d)), width)
     t1 = cutoff + 1
     a_t = a[:, :t1]
-    known = onsets * (a_t @ keep[:t1])
-    missing_by_t = pi_ext[:t1] * (a_t.T @ onsets)
+    c = published_by(t1, publication_lag)[:, None]
+    seen = c * keep[:t1]
+    known = onsets * (a_t @ seen)
+    missing_by_t = c * pi_ext[:t1] * (a_t.T @ onsets)
     imputed = h[:, :t1] @ missing_by_t
     if final:
         known_final = onsets * (a @ keep)
         imputed_final = h @ (pi_ext * (a.T @ onsets))
     else:
         known_final, imputed_final = known, imputed
-    # Expected known cells reported by T, summed over provinces, as a
+    # Expected known cells published by T, summed over provinces, as a
     # band on (onset, report day), then back to (onset, delay).
-    band = a_t * (onsets @ keep[:t1].T)
+    band = a_t * (onsets @ seen.T)
     band = jnp.pad(band, ((0, 0), (0, width - t1)))
     return {
         "known": known,
@@ -174,15 +218,24 @@ class OnsetStreams(BaseObservationProcess):
     weekly totals,
 
     $$P(d \mid w) = \frac{\sum_{s \in w} \sum_p \kappa_p(s, d)
-    \mathbb{1}[s + d \le T]}{\sum_{s \in w} \sum_{d'} \sum_p
-    \kappa_p(s, d') \mathbb{1}[s + d' \le T]},$$
+    c(s + d)}{\sum_{s \in w} \sum_{d'} \sum_p \kappa_p(s, d') c(s + d')},$$
+
+    with the same publication weights $c$ as the known stream, so the
+    two truncate alike.
 
     which is the conditional part of the Poisson reporting triangle, so
     it does not double count the known stream.
     Each stream's site, `{name}_known_obs` and `{name}_imputed_obs`, has
-    two rows: the vintage counts and the final (fully reported) counts,
-    which are never observed and so are drawn by `Predictive`. With
-    `forecast=True` their sum is recorded as `{name}_final_total`.
+    two rows: the vintage counts and the counts still to be reported
+    after the cut-off, which are never observed and so are drawn by
+    `Predictive`. With `forecast=True` the final counts are recorded as
+    `{name}_final_total`: the vintage counts where known (`vintage`),
+    else the row 0 draw, plus the row 1 draw of the rest, as in
+    epinowcast. Draws are then never below the counts already reported.
+    The imputed stream is anchored the same way. The hub re-imputes each
+    vintage, but the missing-onset cases reported by the cut-off are
+    spread with the same delay pmf in expectation, so their current
+    imputed count is kept and only cases reported later are drawn.
 
     Parameters
     ----------
@@ -207,6 +260,15 @@ class OnsetStreams(BaseObservationProcess):
         Poisson likelihood on their weekly counts (`inactive`).
     start_dow : int, optional
         First day of the reporting week (6 is Sunday).
+    publication_lag : RandomVariable or array_like, optional
+        Pmf of the lag from report to publication in a vintage, on
+        $0..L$: a random variable to estimate it, or a fixed pmf.
+        `None` is no lag.
+    delay_overdispersion_rv : RandomVariable, optional
+        $1 / \sqrt{\psi}$. If given, the delay counts are
+        Dirichlet-multinomial with concentration $\psi P(d \mid w)$
+        instead of multinomial, so that the pooled delays of thousands of
+        cases do not make the delay overconfident.
     """
 
     def __init__(
@@ -220,6 +282,8 @@ class OnsetStreams(BaseObservationProcess):
         import_scale_rv: RandomVariable | None = None,
         start_dow: int = 6,
         kernel_rv: RandomVariable | None = None,
+        publication_lag: RandomVariable | ArrayLike | None = None,
+        delay_overdispersion_rv: RandomVariable | None = None,
     ) -> None:
         super().__init__(
             name, DeterministicPMF(f"{name}_identity", jnp.ones(1))
@@ -232,6 +296,8 @@ class OnsetStreams(BaseObservationProcess):
         self.import_scale_rv = import_scale_rv
         self.kernel_rv = kernel_rv
         self.start_dow = start_dow
+        self.publication_lag = publication_lag
+        self.delay_overdispersion_rv = delay_overdispersion_rv
 
     def lookback_days(self) -> int:
         """Return 0: the latent process is already dated by onset."""
@@ -286,6 +352,7 @@ class OnsetStreams(BaseObservationProcess):
         inactive: ArrayLike | None = None,
         import_kernel: ArrayLike | None = None,
         forecast: bool = False,
+        vintage: ArrayLike | None = None,
     ) -> ObservationSample:
         """Score or sample the two onset streams.
 
@@ -312,6 +379,10 @@ class OnsetStreams(BaseObservationProcess):
             cases, `(P, Q)`. Needed with `import_scale_rv`.
         forecast : bool, optional
             Record the sum of the final draws of both streams.
+        vintage : ArrayLike, optional
+            Known and imputed vintage counts, `(2, n_weeks, P)`, NaN
+            where unobserved or held out. With `forecast`, the final
+            draws add the cases still to be reported to these.
 
         Returns
         -------
@@ -329,8 +400,17 @@ class OnsetStreams(BaseObservationProcess):
             pi = self.missing_fraction_rv(
                 n_timepoints=n, n_groups=n_prov, first_day_dow=first_day_dow
             )
+        lag = self.publication_lag
+        if isinstance(lag, RandomVariable):
+            lag = lag()
         exp = onset_expectations(
-            onsets, delay, pi, jnp.asarray(hub_delay_pmf), cutoff, forecast
+            onsets,
+            delay,
+            pi,
+            jnp.asarray(hub_delay_pmf),
+            cutoff,
+            forecast,
+            publication_lag=lag,
         )
         weekly = {k: self._weekly(v, first_day_dow) for k, v in exp.items()}
         for key, value in weekly.items():
@@ -348,7 +428,7 @@ class OnsetStreams(BaseObservationProcess):
                 weekly["known_final"],
                 total,
             )
-            final = draws[1]
+            final = _nowcast(draws, None if vintage is None else vintage.sum(0))
         else:
             draws = self._score(
                 "known",
@@ -364,7 +444,8 @@ class OnsetStreams(BaseObservationProcess):
                 weekly["imputed_final"],
                 imputed,
             )
-            final = draws[1] + imputed_draws[1]
+            seen = (None, None) if vintage is None else vintage
+            final = _nowcast(draws, seen[0]) + _nowcast(imputed_draws, seen[1])
             if delay_counts is not None:
                 self._score_delays(
                     weekly["triangle"], jnp.asarray(delay_counts)
@@ -410,10 +491,11 @@ class OnsetStreams(BaseObservationProcess):
         """Score the vintage counts and draw the final counts in one site.
 
         Row 0 of the site is the vintage (scored where `obs` is not NaN),
-        row 1 the final count once all reports are in, which is never
+        row 1 the count reported after the cut-off, which is never
         observed. One site keeps one concentration draw per stream.
         """
-        predicted = jnp.maximum(jnp.stack([by_cutoff, final]), _FLOOR)
+        rest = final - by_cutoff
+        predicted = jnp.maximum(jnp.stack([by_cutoff, rest]), _FLOOR)
         if obs is None:
             return noise.sample(
                 self._sample_site_name(f"{stream}_obs"), predicted
@@ -434,11 +516,16 @@ class OnsetStreams(BaseObservationProcess):
         )
         probs = jnp.maximum(probs, 1e-12)
         probs = probs / probs.sum(axis=1, keepdims=True)
+        if self.delay_overdispersion_rv is None:
+            counts_dist = dist.Multinomial(total_count=totals, probs=probs)
+        else:
+            psi = 1 / jnp.square(self.delay_overdispersion_rv())
+            counts_dist = dist.DirichletMultinomial(
+                concentration=psi * probs, total_count=totals
+            )
         with numpyro.handlers.mask(mask=totals > 0):
             numpyro.sample(
-                self._sample_site_name("delays"),
-                dist.Multinomial(total_count=totals, probs=probs),
-                obs=counts,
+                self._sample_site_name("delays"), counts_dist, obs=counts
             )
 
 
