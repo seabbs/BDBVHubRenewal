@@ -423,7 +423,10 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     elif not config.truncation:
         raise ValueError("Split streams always use right truncation.")
     elif config.missing == "fixed":
-        pi = empirical_missing_fraction(data.known, data.imputed)
+        mean_delay = data.hub_delay_pmf @ np.arange(data.hub_delay_pmf.size)
+        pi = empirical_missing_fraction(
+            data.known, data.imputed, shift=int(round(mean_delay))
+        )
         missing = fixed("missing_fraction", pi)
     else:
         missing = MissingOnsetFraction(

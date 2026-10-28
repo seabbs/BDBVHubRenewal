@@ -315,11 +315,9 @@ def test_empirical_missing_fraction_moves_to_report_days():
     imputed = np.where(np.arange(20)[:, None] < 10, 10.0, 40.0)
     known = 100.0 - imputed
     base = empirical_missing_fraction(known, imputed, window=0, shrink=0)
-    pi = empirical_missing_fraction(
-        known, imputed, window=0, shrink=0, shift=9
-    )
+    pi = empirical_missing_fraction(known, imputed, window=0, shrink=0, shift=9)
     assert pi.shape == base.shape
     np.testing.assert_allclose(pi[9:], base[:-9])
-    np.testing.assert_allclose(pi[:9], base[0])
+    np.testing.assert_allclose(pi[:9], np.repeat(base[:1], 9, axis=0))
     assert pi[78, 0] == pytest.approx(0.1)
     assert pi[79, 0] == pytest.approx(0.4)
