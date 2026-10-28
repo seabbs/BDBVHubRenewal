@@ -670,7 +670,6 @@ def _sampler_section(fits: pd.DataFrame, submission: Mapping[str, Any]) -> str:
     table = pd.DataFrame(
         {
             "fits": by.size(),
-            "median seconds": by["seconds"].median(),
             "median max R-hat": by["max_rhat"].median(),
             "worst max R-hat": by["max_rhat"].max(),
             "share with R-hat over 1.05": by["max_rhat"].apply(

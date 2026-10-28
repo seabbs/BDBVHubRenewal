@@ -13,6 +13,9 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 | `backtest --evaluate-holdout` | Score every held-out vintage under the model chosen at the time, with the other models alongside. |
 | `backtest --no-fit` | Run only the models with no fit. Fitted models' rows in `results/` are kept, and their held-out forecasts are scored again. The docs build uses this, so it never fits a model. |
 | `backtest --lopo` | Leave one province out: forecast each province with its counts masked, for the variants that take a mask. |
+| `backtest --cache DIR` | Keep one forecast file per model and task in `DIR`, and read tasks already there, so a run can be resumed. |
+| `backtest --shard I/N` | With `--cache`, forecast only shard `I` of `N` of the tasks, without scoring. A run without it then scores the whole cache. |
+| `backtest --no-recovery` | Skip the recovery check on simulated vintages. |
 | `compare-hub [--fetch]` | Score our retrospective forecasts and the hub's submitted ones on the same truth and weeks. |
 | `nowcast` | Forecast from a real vintage, write the hub file and check it. With `--config` and `--fit`, forecast from a fit configuration. |
 | `fit` | Fit a configuration and write the fit directory and its diagnostics, for the submission CI. |
@@ -24,6 +27,27 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 | `report` | Make the docs figures and tables. |
 
 `--version` prints the package version.
+
+## Evaluation
+
+```bash
+task backtest           # development backtest and recovery check
+task backtest-lopo      # leave one province out
+task backtest-heldout   # score the held-out vintages
+task docs               # build the site into _site/
+```
+
+The fitted models use the `[sampler]` settings in `config/backtest.toml`, the same as the submission's main fit.
+`BDBV_RENEWAL_SAMPLER` overrides them, for example `'{"num_chains": 2, "num_warmup": 300, "num_samples": 300}'`.
+Each forecast of a renewal variant is a fit.
+`--cache` and `--shard` split a run over several processes, and `--models` runs some models and keeps the others' rows in `results/`, which is committed.
+The docs build runs only persistence and reads the fitted models from there.
+
+The comparison with hub forecasts downloads other teams' files, so it is run on its own:
+
+```bash
+uv run bdbvhubrenewal compare-hub --fetch
+```
 
 ## Hub files
 
@@ -46,3 +70,7 @@ Sam confirms the contributor list, licence and model name before a model is firs
 
 !!! note "Sample ids"
     Sample ids run from 1 to 100 and are shared across locations, so `hubValidations` reads samples as joint across locations.
+
+## Reference
+
+::: bdbvhubrenewal.cli
