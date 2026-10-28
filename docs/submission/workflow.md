@@ -57,7 +57,7 @@ Each [`FitConfig`][bdbv_hub_renewal.fitting.FitConfig] has two functions.
 
 - `fit(task, sampler, fit_dir)` fits the model to the [`ForecastTask`][bdbv_hub_renewal.forecasters.base.ForecastTask], with the candidate's `sampler` table from `ci/policy.toml` (`num_chains`, `num_warmup`, `num_samples`, `target_accept`, `max_tree_depth`, `seed`).
   It saves what the forecast needs (posterior draws) in `fit_dir`, appends progress lines to `fit_dir/progress.log`, and returns the `diagnostics.json` record (one row per sampled scalar with R-hat and bulk and tail ESS, and one row per chain with draws and divergences, as in `ci/INTEGRATION.md`).
-  It must also write `fit_dir/ppc.json` from the in-sample posterior predictive draws, with [`summarise_draws`][bdbv_hub_renewal.ppc.summarise_draws] and [`write_ppc`][bdbv_hub_renewal.ppc.write_ppc].
+  It must also write `fit_dir/ppc.json` from the in-sample posterior predictive draws, with [`summarise_draws`][bdbv_hub_renewal.evaluation.ppc.summarise_draws] and [`write_ppc`][bdbv_hub_renewal.evaluation.ppc.write_ppc].
   `run_fit` writes the record, `fit.json` and the run time.
 - `forecast(task, fit_dir)` returns a [`Forecast`][bdbv_hub_renewal.fitting.Forecast]: province samples numbered 1 to 100, each one joint posterior draw across weeks and provinces, and optionally an `unassigned` national component by week and sample.
 

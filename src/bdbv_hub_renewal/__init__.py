@@ -9,8 +9,8 @@ The package has these parts:
   renewal variants (`forecasters.renewal`).
 - `model`: the PyRenew renewal model (JAX), imported lazily.
 - `hub`: write and check submission files and model metadata.
-- `scoring` and `backtest`: score forecasts over vintages, with a
-  development and held-out split.
+- `evaluation`: scoring, the backtest, held-out evaluation, posterior
+  predictive checks and the comparison with hub forecasts.
 - `plots` and `report`: figures and docs tables.
 
 - Repository: <https://github.com/seabbs/BDBVHubRenewal>
@@ -18,19 +18,19 @@ The package has these parts:
 """
 
 from bdbv_hub_renewal import (
-    backtest,
     data,
+    evaluation,
     forecasters,
     hub,
     plots,
-    scoring,
 )
-from bdbv_hub_renewal.backtest import (
+from bdbv_hub_renewal.data import load_delays, load_target
+from bdbv_hub_renewal.evaluation.backtest import (
     BacktestConfig,
     load_config,
     run_development,
 )
-from bdbv_hub_renewal.data import load_delays, load_target
+from bdbv_hub_renewal.evaluation.scoring import relative_skill, score_forecasts
 from bdbv_hub_renewal.forecasters import (
     ForecastModel,
     ForecastTask,
@@ -39,14 +39,13 @@ from bdbv_hub_renewal.forecasters import (
 )
 from bdbv_hub_renewal.hub import to_hub_table, validate_submission
 from bdbv_hub_renewal.plots import plot_nowcast
-from bdbv_hub_renewal.scoring import relative_skill, score_forecasts
 
 __all__ = [
     "BacktestConfig",
     "ForecastModel",
     "ForecastTask",
-    "backtest",
     "data",
+    "evaluation",
     "forecasters",
     "get_model",
     "hub",
@@ -59,7 +58,6 @@ __all__ = [
     "relative_skill",
     "run_development",
     "score_forecasts",
-    "scoring",
     "to_hub_table",
     "validate_submission",
 ]

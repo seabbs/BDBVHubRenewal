@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 from bdbv_hub_renewal import report
-from bdbv_hub_renewal.backtest import BacktestConfig, load_config
+from bdbv_hub_renewal.evaluation.backtest import BacktestConfig, load_config
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -52,7 +52,7 @@ def test_heldout_page(tmp_path: Path, target: pd.DataFrame) -> None:
 def test_comparison_page(
     tmp_path: Path, target: pd.DataFrame, display: str
 ) -> None:
-    from test_hubcompare import _write_hub
+    from evaluation.test_hubcompare import _write_hub
 
     from bdbv_hub_renewal.cli import main
 
@@ -105,7 +105,7 @@ def test_make_report_writes_every_page(
 ) -> None:
     import os
 
-    from bdbv_hub_renewal.backtest import run_development
+    from bdbv_hub_renewal.evaluation.backtest import run_development
     from bdbv_hub_renewal.forecasters import get_model
 
     config = load_config(ROOT / "config" / "backtest.toml")

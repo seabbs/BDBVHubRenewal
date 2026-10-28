@@ -1,11 +1,11 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""Plug the model into the `bdbv_hub_renewal` interfaces.
+"""Model inputs from the tidy hub tables.
 
-- `PyRenewProvinceModel(config).forecast(task)` is a `ForecastModel`.
-- `fit_renewal(task, sampler, fit_dir, config)` and
-  `forecast_renewal(task, fit_dir)` are the `fit` and `forecast` of a
-  `bdbv_hub_renewal.fitting.FitConfig`.
-- `ppc_rows` gives the inputs of `bdbv_hub_renewal.ppc.summarise_draws`.
+- `vintage_from_tables` builds the model's `Vintage` for one data vintage.
+- `province_centres`, `province_distances` and `gravity_kernel` give the
+  importation kernel.
+- `bvd_rows` and `bvd_inputs` turn BVDOutbreakSize estimates into the
+  inputs of the BVD term.
 """
 
 from __future__ import annotations

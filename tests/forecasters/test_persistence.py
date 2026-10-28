@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbv_hub_renewal.backtest import BacktestConfig, make_tasks
+from bdbv_hub_renewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbv_hub_renewal.forecasters import (
     ForecastModel,
     Persistence,

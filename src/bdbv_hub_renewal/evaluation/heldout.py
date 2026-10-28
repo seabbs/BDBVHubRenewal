@@ -18,7 +18,7 @@ Each forecast is scored against every later real vintage, as reported
 then, so a forecast gets its first score when the next vintage is
 published and is re-scored as each newer one arrives.
 The development backtest only uses vintages up to the latest choice date
-(`bdbv_hub_renewal.backtest.BacktestConfig.development_until`).
+(`bdbv_hub_renewal.evaluation.backtest.BacktestConfig.development_until`).
 
 `run_heldout` refuses to run unless asked explicitly and needs the record
 to exist first.
@@ -38,7 +38,8 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-from bdbv_hub_renewal.backtest import (
+from bdbv_hub_renewal.data.dates import as_date
+from bdbv_hub_renewal.evaluation.backtest import (
     BacktestConfig,
     make_tasks,
     merge_by_model,
@@ -46,7 +47,6 @@ from bdbv_hub_renewal.backtest import (
     run_forecasts,
     score_by_truth_vintage,
 )
-from bdbv_hub_renewal.data.dates import as_date
 from bdbv_hub_renewal.forecasters import get_model, list_models
 
 __all__ = [

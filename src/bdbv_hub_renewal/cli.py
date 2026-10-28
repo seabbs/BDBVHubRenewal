@@ -39,7 +39,6 @@ from pathlib import Path
 
 import pandas as pd
 
-from bdbv_hub_renewal import backtest as bt
 from bdbv_hub_renewal.data import (
     build_tidy_data,
     coherence_summary,
@@ -48,6 +47,8 @@ from bdbv_hub_renewal.data import (
     load_delays,
     load_target,
 )
+from bdbv_hub_renewal.evaluation import backtest as bt
+from bdbv_hub_renewal.evaluation.heldout import HeldOutError, run_heldout
 from bdbv_hub_renewal.fitting import Forecast, get_config, run_fit, run_forecast
 from bdbv_hub_renewal.forecasters.base import (
     NATIONAL,
@@ -56,7 +57,6 @@ from bdbv_hub_renewal.forecasters.base import (
     get_model,
     list_models,
 )
-from bdbv_hub_renewal.heldout import HeldOutError, run_heldout
 from bdbv_hub_renewal.hub import (
     SUBMISSION_CONFIG,
     load_hub_round,
@@ -552,7 +552,7 @@ def _plot_submission(args: argparse.Namespace) -> int:
 
 
 def _plot_ppc(args: argparse.Namespace) -> int:
-    from bdbv_hub_renewal.ppc import plot_ppc, read_ppc
+    from bdbv_hub_renewal.evaluation.ppc import plot_ppc, read_ppc
 
     ppc = read_ppc(args.ppc)
     if not ppc.get("available"):
@@ -643,7 +643,7 @@ def _bvd(args: argparse.Namespace) -> int:  # pragma: no cover - network
 
 
 def _chosen_model(args: argparse.Namespace) -> int:
-    from bdbv_hub_renewal.heldout import load_model_choices
+    from bdbv_hub_renewal.evaluation.heldout import load_model_choices
 
     choices = load_model_choices(
         bt.load_config(args.backtest_config).model_choice
@@ -656,7 +656,7 @@ def _chosen_model(args: argparse.Namespace) -> int:
 
 
 def _compare_hub(args: argparse.Namespace) -> int:
-    from bdbv_hub_renewal import hubcompare as hc
+    from bdbv_hub_renewal.evaluation import hubcompare as hc
 
     cfg = hc.load_comparison_config(args.config)
     hub_dir = Path(args.hub_dir)

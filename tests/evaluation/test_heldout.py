@@ -7,8 +7,8 @@ import pandas as pd
 import pytest
 import yaml
 
-from bdbv_hub_renewal.backtest import BacktestConfig
-from bdbv_hub_renewal.heldout import (
+from bdbv_hub_renewal.evaluation.backtest import BacktestConfig
+from bdbv_hub_renewal.evaluation.heldout import (
     HeldOutError,
     ModelChoice,
     heldout_pairs,

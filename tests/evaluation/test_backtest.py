@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbv_hub_renewal.backtest import (
+from bdbv_hub_renewal.evaluation.backtest import (
     BacktestConfig,
     forecast_weeks,
     load_config,
@@ -19,7 +19,7 @@ from bdbv_hub_renewal.backtest import (
 )
 from bdbv_hub_renewal.forecasters import get_model
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_load_config() -> None:

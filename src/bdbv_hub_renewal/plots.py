@@ -633,7 +633,7 @@ def plot_forecasts(
     Parameters
     ----------
     forecasts : pandas.DataFrame
-        Output of `bdbv_hub_renewal.backtest.run_forecasts`.
+        Output of `bdbv_hub_renewal.evaluation.backtest.run_forecasts`.
     target : pandas.DataFrame
         Target rows holding each forecast's vintage and the truth vintage.
         For reconstructed forecasts, pass the reconstructed rows too.
@@ -758,8 +758,12 @@ def plot_nowcast(
         Observed, imputed and total cases by onset week, and each model's
         sample trajectories, 50% and 90% intervals and median.
     """
-    from bdbv_hub_renewal.backtest import load_config, make_tasks, run_forecasts
     from bdbv_hub_renewal.data import load_delays, load_target
+    from bdbv_hub_renewal.evaluation.backtest import (
+        load_config,
+        make_tasks,
+        run_forecasts,
+    )
     from bdbv_hub_renewal.forecasters.base import get_model
 
     target = load_target(data_dir) if target is None else target
@@ -1092,7 +1096,7 @@ def plot_scores_by_truth(
     Parameters
     ----------
     scores : pandas.DataFrame
-        Output of `bdbv_hub_renewal.backtest.score_by_truth_vintage`.
+        Output of `bdbv_hub_renewal.evaluation.backtest.score_by_truth_vintage`.
     metric : str
         A score column.
     models : sequence of str, optional
@@ -1175,7 +1179,7 @@ def plot_relative_skill(
         Relative score by `by`, one panel per vintage kind, with a line at
         1. With only the baseline, the panels say so.
     """
-    from bdbv_hub_renewal.scoring import relative_skill
+    from bdbv_hub_renewal.evaluation.scoring import relative_skill
 
     models = list(models or scores["model"].unique())
     kinds = [

@@ -137,7 +137,7 @@ bdbv-hub-renewal plot-ppc --ppc <candidate>/ppc.json --out <candidate>/ppc.png
 ```
 
 `candidate.sh` calls it only when `ppc.json` has `available: true`.
-It is `plot_ppc(read_ppc(path))` from `bdbv_hub_renewal.ppc`, saved with `fig.savefig(out, dpi=...)`: small multiples by province of the predictive median and intervals against the observed counts, light mode, under 1 MB.
+It is `plot_ppc(read_ppc(path))` from `bdbv_hub_renewal.evaluation.ppc`, saved with `fig.savefig(out, dpi=...)`: small multiples by province of the predictive median and intervals against the observed counts, light mode, under 1 MB.
 The PNG travels in the `candidate-<id>` artefact; the PR body points to it.
 
 ### `--version`
@@ -234,7 +234,7 @@ diagnostics = {
 - `pit` is the **randomised** PIT for counts, `F(y − 1) + v (F(y) − F(y − 1))` with `v ~ Uniform(0, 1)` from a seeded generator and `F` the empirical predictive distribution function.
   It is uniform on (0, 1) under a calibrated model even though counts are discrete.
 - `complete` is true for weeks ending at least the completeness lag (4 weeks) before the data vintage.
-- `bdbv_hub_renewal.ppc.summarise_draws(observed, draws, as_of=..., model=..., config=...)` builds all of this from a table of observations (`location`, `stream`, `target_end_date`, `observed`) and an array of draws of shape `(n_draws, n_rows)`; `write_ppc` writes it.
+- `bdbv_hub_renewal.evaluation.ppc.summarise_draws(observed, draws, as_of=..., model=..., config=...)` builds all of this from a table of observations (`location`, `stream`, `target_end_date`, `observed`) and an array of draws of shape `(n_draws, n_rows)`; `write_ppc` writes it.
 - A model with no posterior writes `{"schema_version": 1, "available": false, "reason": "<text>"}` (`ppc.not_available(reason)`), which the gate reports as `n/a`.
 - A sampled fit (`sampler` other than `none` in `diagnostics.json`) with a missing or unreadable `ppc.json` is an `error`, and gates as a failure, as a missing diagnostics file does.
   A fit with no sampler and no `ppc.json` is `n/a`.

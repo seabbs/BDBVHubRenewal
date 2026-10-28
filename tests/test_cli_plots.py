@@ -110,7 +110,7 @@ def test_plot_scores_by_truth() -> None:
 
 @pytest.mark.usefixtures("in_root")
 def test_cli_lopo_writes_scores_for_mask_aware_models(tmp_path: Path) -> None:
-    from test_backtest import _MaskAware
+    from evaluation.test_backtest import _MaskAware
 
     from bdbv_hub_renewal.forecasters.base import _REGISTRY, register_model
 

@@ -29,15 +29,15 @@ The public API of `bdbv_hub_renewal`, generated from the numpy-style docstrings.
 
 ::: bdbv_hub_renewal.fitting
 
-::: bdbv_hub_renewal.ppc
+::: bdbv_hub_renewal.evaluation.ppc
 
-::: bdbv_hub_renewal.scoring
+::: bdbv_hub_renewal.evaluation.scoring
 
-::: bdbv_hub_renewal.backtest
+::: bdbv_hub_renewal.evaluation.backtest
 
-::: bdbv_hub_renewal.heldout
+::: bdbv_hub_renewal.evaluation.heldout
 
-::: bdbv_hub_renewal.hubcompare
+::: bdbv_hub_renewal.evaluation.hubcompare
 
 ::: bdbv_hub_renewal.plots
 

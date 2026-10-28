@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbv_hub_renewal.backtest import BacktestConfig
-from bdbv_hub_renewal.hubcompare import (
+from bdbv_hub_renewal.evaluation.backtest import BacktestConfig
+from bdbv_hub_renewal.evaluation.hubcompare import (
     ATTRIBUTION,
     display_names,
     load_hub_submissions,
@@ -216,7 +216,7 @@ def test_cli_compare_hub(tmp_path: Path) -> None:
     from bdbv_hub_renewal.cli import main
 
     _write_hub(tmp_path / "hub")
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     cfg = tmp_path / "cmp.toml"
     cfg.write_text(
         '[comparison]\nmodels = ["teamA-weekly", "epiforecasts-renewal"]\n'

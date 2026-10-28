@@ -180,7 +180,11 @@ def test_cli_coherence(
 def test_cli_plot_ppc(tmp_path: Path) -> None:
     import numpy as np
 
-    from bdbv_hub_renewal.ppc import not_available, summarise_draws, write_ppc
+    from bdbv_hub_renewal.evaluation.ppc import (
+        not_available,
+        summarise_draws,
+        write_ppc,
+    )
 
     weeks = pd.date_range("2026-08-01", periods=10, freq="7D").strftime(
         "%Y-%m-%d"

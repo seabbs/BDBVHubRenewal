@@ -577,7 +577,8 @@ def ppc_rows(
     One row per location, stream and data week for the streams the model
     fits (`observed` and `imputed`, or `total`), plus national rows as
     the sum of the province draws within each draw. These are the
-    `observed` and `draws` arguments of `bdbv_hub_renewal.ppc.summarise_draws`.
+    `observed` and `draws` arguments of
+    `bdbv_hub_renewal.evaluation.ppc.summarise_draws`.
 
     Parameters
     ----------
@@ -1010,7 +1011,7 @@ def fit_renewal(
     dict
         The `diagnostics.json` record (schema 1, with `worst_rhat`).
     """
-    from bdbv_hub_renewal.ppc import summarise_draws, write_ppc
+    from bdbv_hub_renewal.evaluation.ppc import summarise_draws, write_ppc
 
     out = Path(fit_dir)
     out.mkdir(parents=True, exist_ok=True)
