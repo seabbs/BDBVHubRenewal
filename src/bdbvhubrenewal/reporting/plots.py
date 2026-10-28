@@ -677,6 +677,106 @@ def _draw_forecast(
     ax.plot(q.index, q[0.5], color=colour, lw=1.5, label=label)
 
 
+def plot_location_grid(
+    forecasts: pd.DataFrame,
+    target: pd.DataFrame,
+    locations: Sequence[str],
+    models: Sequence[str] | None = None,
+    truth_vintage: str | None = None,
+    max_horizon: int | None = None,
+    weeks_before: int = 10,
+    ncol: int = 2,
+    mode: str = "light",
+    complete_after_weeks: int = 3,
+) -> Figure:
+    """Plot one origin's forecasts as a grid with a panel per location.
+
+    Parameters
+    ----------
+    forecasts : pandas.DataFrame
+        Output of `run_forecasts` for one origin.
+    target : pandas.DataFrame
+        Target rows holding the origin and the truth vintage.
+    locations : sequence of str
+        Locations to show, one panel each.
+    models : sequence of str, optional
+        Models in registry order. Defaults to those in `forecasts`.
+    truth_vintage : str, optional
+        Vintage drawn as later data. Defaults to the latest real vintage.
+    max_horizon : int, optional
+        Last horizon drawn. `-1` shows the nowcast alone, without the
+        reference week or the forecast weeks.
+    weeks_before : int
+        Weeks of data shown before the reference date.
+    ncol : int
+        Panels per row.
+    mode : str
+        `"light"` or `"dark"`.
+    complete_after_weeks : int
+        Weeks after which a week of the later data counts as complete.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Per panel, the data at the origin (dashed), the later data
+        (solid) and each model's trajectories, intervals and median.
+    """
+    fc = forecasts
+    if max_horizon is not None:
+        fc = fc.loc[fc["horizon"] <= max_horizon]
+    models = list(models or fc["model"].unique())
+    real = target.loc[target["kind"] == "real"]
+    truth_v = truth_vintage or real["vintage"].max()
+    vintage = fc["vintage"].iloc[0]
+    ref = pd.Timestamp(fc["reference_date"].iloc[0])
+    end = pd.Timestamp(fc["target_end_date"].max())
+    start = ref - pd.Timedelta(weeks=weeks_before)
+    names = _names(real)
+    ink = THEMES[mode]
+    cut = _incomplete_after(truth_v, complete_after_weeks)
+    fig, axes = _grid(len(locations), ncol, width=3.6, height=2.5)
+    for ax, loc in zip(axes, locations, strict=True):
+        for v, style, lab in (
+            (truth_v, "-", f"Data {truth_v}"),
+            (vintage, "--", "Data at the origin"),
+        ):
+            rows = real.loc[(real["vintage"] == v) & (real["location"] == loc)]
+            x = pd.to_datetime(rows["target_end_date"])
+            sel = (x >= start) & (x <= end)
+            if style == "-":
+                _plot_data(
+                    ax,
+                    x[sel],
+                    rows["total"][sel],
+                    cut,
+                    ink["data"],
+                    lab,
+                    ls=style,
+                    lw=1.2,
+                )
+            else:
+                ax.plot(
+                    x[sel],
+                    rows["total"][sel],
+                    color=ink["data"],
+                    ls=style,
+                    lw=1.2,
+                    label=lab,
+                )
+        for m in models:
+            s = fc.loc[(fc["location"] == loc) & (fc["model"] == m)]
+            if not s.empty:
+                _draw_forecast(ax, s, model_colour(m, models, mode), m)
+        ax.axvline(mdates.date2num(ref), color=ink["muted"], lw=0.8, ls=":")
+        _shade_incomplete(ax, cut, mode)
+        ax.set_title(f"{names.get(loc, loc)} ({loc})")
+        ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=4))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
+    axes[0].set_ylabel("Cases by onset week")
+    axes[0].legend(fontsize=7)
+    return fig
+
+
 def plot_forecasts(
     forecasts: pd.DataFrame,
     target: pd.DataFrame,
