@@ -7,7 +7,6 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data.triangle import (
-    apply_delay,
     delay_pmf,
     reporting_triangle,
 )
@@ -24,8 +23,8 @@ from bdbvhubrenewal.forecasters.persistence import (
     baseline_walk,
     nowcast_draws,
     nowcast_means,
-    week_share,
     revision_variance,
+    week_share,
 )
 
 
@@ -239,15 +238,17 @@ def test_nowcast_means_scale_the_total_by_the_share_reported() -> None:
     assert added.tolist() == pytest.approx([0.0, 0.0, 15.0])
 
 
-def test_week_share_averages_over_onset_days() -> None:
-    # A case with onset on day W - u of the week ending W, delay d and a
-    # 3-day publication lag is in a vintage t days after W if
-    # d + 3 - u <= t.
+def test_week_share_averages_over_onset_days_and_lags() -> None:
+    # A case with onset on day W - u of the week ending W, delay d and
+    # publication lag l is in a vintage t days after W if d + l - u <= t.
     cdf = np.cumsum([0.5, 0.25, 0.25])
-    share = week_share(cdf, np.array([-1, 0, 10]))
-    assert share[0] == pytest.approx((0.5 + 0.75 + 1.0) / 7)
-    assert share[1] == pytest.approx((0.5 + 0.75 + 1.0 + 1.0) / 7)
+    share = week_share(cdf, np.array([-1, 0, 10]), lag=0)
+    assert share[0] == pytest.approx((0.5 + 0.75 + 1.0 * 4) / 7)
+    assert share[1] == pytest.approx((0.5 + 0.75 + 1.0 * 5) / 7)
     assert share[2] == 1.0
+    # A lag uniform on 0 to 1 averages the shares with lags 0 and 1.
+    both = week_share(cdf, np.array([0]), lag=1)[0]
+    assert both == pytest.approx((share[1] + share[0]) / 2)
 
 
 def test_baseline_walk_is_a_symmetrised_empirical_random_walk() -> None:
@@ -288,7 +289,36 @@ def test_sparse_places_stay_plausible(
     bu = samples.loc[samples["location"] == "CD-BU"]
     top = bu.groupby("target_end_date")["value"].quantile(0.975)
     assert top.max() <= 20
-    # The walk keeps its median at the latest nowcast for Ituri.
+    # Ituri's walk is centred between its last two nowcasts, nearer the
+    # one with more of its cases reported.
     it = samples.loc[samples["location"] == "CD-IT"]
     med = it.groupby("target_end_date")["value"].median()
-    assert med.iloc[-1] == pytest.approx(med.loc["2026-10-24"], rel=0.25)
+    low, high = sorted(med.loc[["2026-10-17", "2026-10-24"]])
+    assert 0.8 * low <= med.iloc[-1] <= high
+
+
+def test_ituri_turning_point_at_08_22(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    # Ituri peaked in the week ending 08-15 (413 cases) and fell after it
+    # (337, 358, 298, 336, 277). At the reconstructed 08-22 vintage the
+    # week ending 08-22 is about 7% reported. Its nowcast enters the walk's
+    # centre weighted by that share, so the walk is not held at the peak.
+    from bdbvhubrenewal.evaluation.backtest import (
+        development_tasks,
+        load_config,
+    )
+
+    task = next(
+        t for t in development_tasks(target, delays, load_config())
+        if t.kind == "reconstructed" and t.vintage == "2026-08-22"
+    )  # fmt: skip
+    samples = PersistenceNow().forecast(task)
+    samples = samples.loc[samples["as_of"].isna()]
+    it = samples.loc[samples["location"] == "CD-IT"]
+    q = it.groupby("target_end_date")["value"].quantile([0.05, 0.5, 0.95])
+    q = q.unstack()
+    walk = ["2026-08-29", "2026-09-05", "2026-09-12", "2026-09-19"]
+    assert (q.loc[walk, 0.5] < 400).all()
+    for week, truth in zip(walk, [358, 298, 336, 277], strict=True):
+        assert q.loc[week, 0.05] <= truth <= q.loc[week, 0.95]

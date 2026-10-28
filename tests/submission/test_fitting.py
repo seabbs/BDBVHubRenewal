@@ -320,7 +320,9 @@ def test_persistencenow_config_runs_the_nowcast_model(tmp_path: Path) -> None:
     (csv2,) = plain.rglob("*.csv")
     now, base = pd.read_csv(csv), pd.read_csv(csv2)
     assert len(now) == len(base)
-    # The nowcast lifts the recent weeks above plain persistence.
+    # The nowcast lifts a recent week above its published total (314), where
+    # persistence carries an older week forward.
     week = now["target_end_date"] == "2026-10-10"
     nat = (now["location"] == "CD") & week
-    assert now.loc[nat, "value"].median() > base.loc[nat, "value"].median()
+    assert now.loc[nat, "value"].median() > 314
+    assert now.loc[nat, "value"].std() > 0
