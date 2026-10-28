@@ -150,7 +150,39 @@ DESCRIPTIONS = {
 }
 """One sentence per rung: what it adds."""
 
-DECISIONS: dict[str, str] = {}
+DECISIONS: dict[str, str] = {
+    "persistence": "Reference only.",
+    "S0 national renewal": "Dropped as a candidate: national scores no "
+    "better than persistence, and it gives no provinces.",
+    "S1 + provinces (pooled Rt)": "Kept: province forecasts and pooling, "
+    "with national scores as S0.",
+    "S2 + truncation (hub delay)": "Kept: the largest gain, national CRPS "
+    "down by about three quarters on simulated data and by a third on real.",
+    "S3 + delays, missingness, imputation": "Kept on the fuller-model rule: "
+    "scores level with S2, and it models the imputed stream and changing "
+    "delays the target depends on.",
+    "S4 + coupling and importation": "Kept on the fuller-model rule: scores "
+    "level, it learns across provinces and forecasts spread to new ones.",
+    "S5 + depletion (main)": "Kept and chosen as `renewal`: fewer wild prior "
+    "draws (0.44 to 0.32) and the best province scores of the build.",
+    "S6 + report day-of-week": "An option, not the default: no score gain, "
+    "slower and with a higher R-hat.",
+    "renewal fallback": "Kept as the fallback: best real-vintage scores and "
+    "fastest full model, but worse on simulated data with changing delays.",
+    "renewal learnt kernel": "An option for the backtest: scores slightly "
+    "worse than gravity and it mixes no better.",
+    "renewal future Rt held": "An option for the backtest: level with the "
+    "walk, slightly better on the real vintage.",
+    "renewal per-origin importation": "An option for the backtest: level "
+    "with one shared share and fewer depth-cap hits on real data.",
+    "renewal linear Rt knots": "Dropped: worse on the real vintage and no "
+    "gain on simulated data.",
+    "renewalbvd": "Shadow candidate: best on simulated data with a "
+    "truth-based BVD summary, worse on the one real vintage.",
+    "renewalsp": "Comparison variant: province scores level with renewal "
+    "on the real vintage, but its own national fit did not converge (R-hat "
+    "2.2) and scores far worse.",
+}
 """One sentence per rung: kept, dropped or an option, and why. Filled in
 from the results."""
 
