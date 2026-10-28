@@ -197,6 +197,13 @@ def test_ladder_page(tmp_path: Path) -> None:
     assert "Kept as the starting point." in text
     # Rows run in build order.
     assert text.index("persistence") < text.index("S0 national renewal")
+    # Headers are labels, missing cells are blank, and persistence has no
+    # sampler row.
+    assert "nan" not in text
+    assert "real_max_rhat" not in text
+    assert "Max R-hat" in text
+    sampler = text.split("## Sampler")[1].split("## Recovery")[0]
+    assert "persistence" not in sampler
 
 
 def test_nowcast_recovery_section(tmp_path: Path) -> None:

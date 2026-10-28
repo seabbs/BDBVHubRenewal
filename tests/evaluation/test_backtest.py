@@ -91,6 +91,29 @@ def test_score_by_truth_vintage(
     assert at_latest["wis"].sum() == pytest.approx(real["wis"].sum())
 
 
+def test_scores_cover_only_weeks_in_the_truth(
+    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
+) -> None:
+    forecasts, _ = run_development(
+        [get_model("persistence")], target, delays, config
+    )
+    scores = score_by_truth_vintage(forecasts, target)
+    # A week past the end of a truth vintage is not scored, not taken as 0.
+    weeks = target.groupby("vintage")["target_end_date"].max()
+    last = scores["truth_vintage"].map(weeks)
+    assert (scores["target_end_date"] <= last).all()
+    assert scores["target_end_date"].max() < forecasts["target_end_date"].max()
+    index = ["vintage", "location", "target_end_date"]
+    truth = target.set_index(index)["total"]
+    keys = zip(
+        scores["truth_vintage"],
+        scores["location"],
+        scores["target_end_date"],
+        strict=True,
+    )
+    assert list(scores["truth"]) == [truth[k] for k in keys]
+
+
 def test_truth_changes(target: pd.DataFrame) -> None:
     changes = truth_changes(target, locations=("CD",))
     week = changes.loc[changes["target_end_date"] == "2026-10-10"]
