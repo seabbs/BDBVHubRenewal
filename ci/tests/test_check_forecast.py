@@ -41,6 +41,7 @@ def test_plausible_file_passes(tmp_path: Path) -> None:
     # Zones are required only for seabbsbaseline.
     assert s.pop("zones") == "skip"
     assert set(s.values()) == {"pass"}, s
+    assert "plausible" in s
 
 
 def test_negative_and_nan_values_fail(tmp_path: Path) -> None:
@@ -431,3 +432,46 @@ def test_zones_that_do_not_add_up_warn(tmp_path: Path) -> None:
         require_zones=True,
     )}["zones"]  # fmt: skip
     assert check.status == "warn"
+
+
+def test_plausible_forecast_passes(tmp_path: Path) -> None:
+    assert statuses(sub(tmp_path))["plausible"] == "pass"
+
+
+def test_wildly_high_median_is_ruled_out(tmp_path: Path) -> None:
+    # Far above the last 4 observed weeks' maximum: the candidate fails.
+    assert statuses(sub(tmp_path, growth=8.0))["plausible"] == "fail"
+
+
+def test_heavy_upper_tail_is_ruled_out(tmp_path: Path) -> None:
+    def mutate(rows: list[list[Any]]) -> None:
+        last = max(r[2] for r in rows)
+        for r in rows:
+            if r[3] == "CD-IT" and r[5] <= 5 and r[2] == last:
+                r[6] = r[6] * 100
+
+    checks = {c.name: c for c in run_checks(
+        sub(tmp_path, mutate=mutate, national=False), reference_date=REF,
+        observed=read_observed(HUB / "time-series.csv"),
+    )}  # fmt: skip
+    assert checks["plausible"].status == "fail"
+    assert "97.5%" in " ".join(checks["plausible"].details)
+
+
+def test_collapse_to_near_zero_is_ruled_out(tmp_path: Path) -> None:
+    low = {"CD-IT": 1.0, "CD-NK": 80.0, "CD-HU": 15.0}
+    checks = {c.name: c for c in run_checks(
+        sub(tmp_path, levels=low), reference_date=REF,
+        observed=read_observed(HUB / "time-series.csv"),
+    )}  # fmt: skip
+    assert checks["plausible"].status == "fail"
+    assert "CD-IT" in checks["plausible"].summary
+
+
+def test_plausible_thresholds_are_settings(tmp_path: Path) -> None:
+    loose = {"plausible_median_ratio": 1e6, "plausible_q975_ratio": 1e9}
+    checks = {c.name: c for c in run_checks(
+        sub(tmp_path, growth=8.0), reference_date=REF,
+        observed=read_observed(HUB / "time-series.csv"), settings=loose,
+    )}  # fmt: skip
+    assert checks["plausible"].status == "pass"
