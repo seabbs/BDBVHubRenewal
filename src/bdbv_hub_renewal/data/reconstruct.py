@@ -53,6 +53,7 @@ from bdbv_hub_renewal.data.delays import DEFAULT_MAX_DELAY, empirical_pmf
 from bdbv_hub_renewal.forecasters.base import NATIONAL
 
 __all__ = [
+    "MAX_PUBLICATION_LAG",
     "PUBLICATION_LAG_DAYS",
     "VINTAGE_KINDS",
     "compare_reconstruction",
@@ -305,8 +306,16 @@ def compare_reconstruction(
     return out
 
 
+MAX_PUBLICATION_LAG = 180
+"""Longest report to publication lag kept in `publication_lag_pmf`, in days.
+Between the real files 8-9% of new rows were over 60 days late and none
+over 180."""
+
+
 def publication_lag_pmf(
-    delays: pd.DataFrame, as_of: dt.date | str, max_lag: int = DEFAULT_MAX_DELAY
+    delays: pd.DataFrame,
+    as_of: dt.date | str,
+    max_lag: int = MAX_PUBLICATION_LAG,
 ) -> np.ndarray | None:
     r"""Empirical pmf of the lag from report to first publication.
 
