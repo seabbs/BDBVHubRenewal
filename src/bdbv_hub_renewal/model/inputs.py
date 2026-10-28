@@ -273,6 +273,7 @@ def vintage_from_tables(
     horizon_weeks: int = 3,
     masked: tuple[str, ...] = (),
     bvd: pd.DataFrame | None = None,
+    publication_lag: np.ndarray | None = None,
 ) -> Vintage:
     """Build a `Vintage` from the target and delay rows of one vintage.
 
@@ -303,6 +304,9 @@ def vintage_from_tables(
     bvd : pandas.DataFrame, optional
         BVDOutbreakSize rows from `bvd_rows` for the release chosen for
         this vintage (`ForecastTask.auxiliary["bvd"]`).
+    publication_lag : numpy.ndarray, optional
+        Empirical report to publication lag pmf
+        (`data.reconstruct.publication_lag_pmf`).
 
     Returns
     -------
@@ -419,6 +423,7 @@ def vintage_from_tables(
         else table.set_index("location")
         .loc[list(active + idle), "population"]
         .to_numpy(float),
+        publication_lag_pmf=publication_lag,
     )
 
 

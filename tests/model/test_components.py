@@ -290,7 +290,8 @@ def test_generation_interval_is_double_censored():
     # Lags 1..42: the double-censored pmf on 0..42 with lag 0 dropped and
     # the rest renormalised (as BVDOutbreakSize left-truncates at a day).
     expected = DPCENS_GI[1:] / DPCENS_GI[1:].sum()
-    np.testing.assert_allclose(generation_interval(), expected, rtol=1e-6)
+    gi = generation_interval(15.0, 9.0)
+    np.testing.assert_allclose(gi, expected, rtol=1e-6)
 
 
 @pytest.mark.parametrize("family", ["gamma", "lognormal"])
@@ -418,3 +419,16 @@ def test_report_dow_config_adds_the_effect(sim_vintage):
         seeded(lambda: model.sample(**model_args(model, sim_vintage)))
     assert "delay_report_dow" in tr
     assert not MAIN.report_dow
+
+
+def test_generation_interval_matches_bvdoutbreaksize():
+    # BVDOutbreakSize's prior means (priors.jl): mean 15.3, SD 9.3 days.
+    from bdbv_hub_renewal.data.simulate import SimulationSettings
+    from bdbv_hub_renewal.model.model import GI_MEAN, GI_SD, generation_interval
+
+    assert (GI_MEAN, GI_SD) == (15.3, 9.3)
+    np.testing.assert_allclose(
+        generation_interval(), generation_interval(15.3, 9.3)
+    )
+    s = SimulationSettings()
+    assert (s.gi_mean, s.gi_sd) == (GI_MEAN, GI_SD)

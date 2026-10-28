@@ -436,8 +436,12 @@ def vintage_inputs(
         The model inputs.
     """
     from bdbv_hub_renewal.data import load_locations
+    from bdbv_hub_renewal.data.reconstruct import publication_lag_pmf
     from bdbv_hub_renewal.model.inputs import vintage_from_tables
 
+    lag = None
+    if task.delay_history is not None:
+        lag = publication_lag_pmf(task.delay_history, task.vintage)
     return vintage_from_tables(
         task.target,
         task.delays,
@@ -448,6 +452,7 @@ def vintage_inputs(
         horizon_weeks(task),
         tuple(task.mask),
         bvd=bvd,
+        publication_lag=lag,
     )
 
 

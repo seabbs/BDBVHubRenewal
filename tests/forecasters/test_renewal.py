@@ -464,3 +464,24 @@ def test_chain_method_defaults_to_vectorized(
     assert cleared == [True]
     rn.run_nuts(FakeModel(), None, {**settings, "chain_method": "sequential"})
     assert seen["chain_method"] == "sequential"
+
+
+def test_inputs_carry_the_publication_lag_from_earlier_files(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    from bdbv_hub_renewal.evaluation.backtest import BacktestConfig, make_tasks
+    from bdbv_hub_renewal.forecasters.renewal import vintage_inputs
+    from bdbv_hub_renewal.model import MAIN
+
+    tasks = {
+        t.vintage: t
+        for t in make_tasks(
+            target.loc[target["kind"] == "real"],
+            delays.assign(kind="real"),
+            BacktestConfig(seed=3),
+        )
+    }
+    late = vintage_inputs(tasks["2026-10-17"], MAIN)
+    assert late.publication_lag_pmf is not None
+    assert late.publication_lag_pmf.sum() == pytest.approx(1.0)
+    assert vintage_inputs(tasks["2026-10-09"], MAIN).publication_lag_pmf is None

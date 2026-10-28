@@ -42,6 +42,7 @@ somewhat better.
 from __future__ import annotations
 
 import datetime as dt
+import itertools
 
 import numpy as np
 import pandas as pd
@@ -54,6 +55,7 @@ __all__ = [
     "PUBLICATION_LAG_DAYS",
     "VINTAGE_KINDS",
     "compare_reconstruction",
+    "publication_lag_pmf",
     "reconstruct_delays",
     "reconstruct_vintage",
     "reconstruct_vintages",
@@ -271,3 +273,70 @@ def compare_reconstruction(
     )
     out["total_difference"] = out["total_reconstructed"] - out["total_real"]
     return out
+
+
+def publication_lag_pmf(
+    delays: pd.DataFrame, as_of: dt.date | str, max_lag: int = DEFAULT_MAX_DELAY
+) -> np.ndarray | None:
+    r"""Empirical pmf of the lag from report to first publication.
+
+    For each pair of consecutive delay vintages $V_1 < V_2$ on or before
+    `as_of`, the rows of $V_2$ beyond those of $V_1$ (by location, onset
+    week and delay) were first published in $(V_1, V_2]$. A row with
+    onset week $W$ and delay $d$ was reported on $W - u + d$ for an onset
+    $u$ days before $W$, so with $u$ uniform on $0..6$ and publication
+    uniform over the days of $(V_1, V_2]$ its lag is spread over
+    $V_1 + j - (W - u + d)$, the feasible (non-negative) ones only, and
+    lags past `max_lag` go to the last cell. Pairs whose later vintage is after
+    `as_of` are not used, so a backtest does not see later files.
+
+    Parameters
+    ----------
+    delays : pandas.DataFrame
+        Delay rows of several vintages, with a `vintage` column.
+    as_of : datetime.date or str
+        The forecast date.
+    max_lag : int
+        Last lag cell, in days.
+
+    Returns
+    -------
+    numpy.ndarray or None
+        Pmf on `0..max_lag`, or None if no pair is available.
+    """
+    day = as_date(as_of).isoformat()
+    vintages = sorted(str(v) for v in delays["vintage"].unique() if v <= day)
+    key = ["location", "onset_week", "delay"]
+    mass = np.zeros(max_lag + 1)
+    for a, b in itertools.pairwise(vintages):
+        before = delays.loc[delays["vintage"] == a].groupby(key).size()
+        after = delays.loc[delays["vintage"] == b].groupby(key).size()
+        change = after.sub(before, fill_value=0).clip(lower=0)
+        added = change[change > 0].reset_index(name="n")
+        if added.empty:
+            continue
+        v1, v2 = pd.Timestamp(a), pd.Timestamp(b)
+        gap = (v2 - v1).days
+        onset = pd.to_datetime(pd.Series(added["onset_week"]))
+        week = (onset - v1).dt.days.to_numpy()
+        count = np.asarray(added["n"], dtype=float)
+        delay = np.asarray(added["delay"], dtype=int)
+        # Lag for publication day j in 1..gap and onset u days before W.
+        lag = (
+            np.arange(1, gap + 1)[None, :, None]
+            - week[:, None, None]
+            + np.arange(7)[None, None, :]
+            - delay[:, None, None]
+        )
+        keep = lag >= 0
+        # Each row's count is spread over its feasible lags.
+        per_row = count / np.maximum(keep.sum(axis=(1, 2)), 1)
+        weight = np.broadcast_to(per_row[:, None, None], lag.shape)
+        mass += np.bincount(
+            np.minimum(lag[keep], max_lag),
+            weights=weight[keep],
+            minlength=max_lag + 1,
+        )
+    if mass.sum() == 0:
+        return None
+    return mass / mass.sum()

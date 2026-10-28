@@ -82,12 +82,29 @@ def test_publication_lag_mixes_cut_offs():
     )
 
 
-def test_model_estimates_the_publication_lag(sim_vintage):
-    model = build_model(sim_vintage, MAIN)
-    prior = prior_latent(model, sim_vintage, n=5)
+def test_model_takes_the_empirical_publication_lag(sim_vintage):
+    lag = np.r_[np.full(10, 0.08), np.zeros(50), 0.2]
+    data = dataclasses.replace(sim_vintage, publication_lag_pmf=lag)
+    for cfg in (MAIN, FALLBACK):
+        assert cfg.publication_lag == "empirical"
+        model = build_model(data, cfg)
+        obs = model.observations["onsets"]
+        np.testing.assert_allclose(obs.publication_lag, lag)
+        assert "onsets_publication_lag" not in prior_latent(model, data, 2)
+    # With no estimate, a fixed long-tail prior pmf stands in: 85% on
+    # 0..3 days and 15% spread over 4..60.
+    model = build_model(
+        dataclasses.replace(sim_vintage, publication_lag_pmf=None), MAIN
+    )
+    prior = np.asarray(model.observations["onsets"].publication_lag)
+    assert prior.shape == (61,)
+    assert prior[:4].sum() == pytest.approx(0.85)
+    assert prior[4:].sum() == pytest.approx(0.15)
+    est = build_model(
+        sim_vintage, dataclasses.replace(MAIN, publication_lag="estimated")
+    )
+    prior = prior_latent(est, sim_vintage, n=5)
     assert prior["onsets_publication_lag"].shape == (5, 4)
-    fixed = build_model(sim_vintage, FALLBACK)
-    assert "onsets_publication_lag" not in prior_latent(fixed, sim_vintage, 2)
 
 
 def test_dirichlet_multinomial_delays(sim_vintage):
@@ -110,7 +127,9 @@ def test_dirichlet_multinomial_delays(sim_vintage):
         for k, v in tr.items()
         if v["type"] == "sample" and not v["is_observed"]
     }
-    _, mn = delay_site(MAIN, latent)
+    _, mn = delay_site(
+        dataclasses.replace(MAIN, delay_counts="multinomial"), latent
+    )
     # Same expected delay probabilities, with concentration psi.
     # Capped at 1e4, as the negative binomial concentrations are.
     psi = 1 / (latent["delay_overdispersion"] ** 2 + 1e-4)
@@ -209,3 +228,8 @@ def test_trajectories_name_their_posterior_draws(sim_vintage):
     draws = forecast_trajectories(model, sim_vintage, 5, posterior=latent)
     assert draws["draw"].shape == (5,)
     assert np.all((draws["draw"] >= 0) & (draws["draw"] < 8))
+
+
+def test_delay_counts_are_dirichlet_multinomial_by_default():
+    assert MAIN.delay_counts == "dirichlet-multinomial"
+    assert FALLBACK.delay_counts == "dirichlet-multinomial"

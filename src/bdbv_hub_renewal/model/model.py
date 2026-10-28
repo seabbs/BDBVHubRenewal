@@ -6,7 +6,7 @@ from __future__ import annotations
 import datetime as dt
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Final, Literal
 
 import jax.numpy as jnp
 import numpy as np
@@ -48,13 +48,20 @@ from .rt import (
 
 SUNDAY = 6
 GEN_INT_LENGTH = 42
+"""Lags of the generation interval, about its 98.5% quantile (a whole
+number of weeks, as the model axis starts this many days early)."""
+GI_MEAN = 15.3
+GI_SD = 9.3
+"""Gamma generation interval mean and SD in days, BVDOutbreakSize's prior
+means (from the NEJM serial interval). After double censoring, dropping
+lag 0 and truncating at 42 days the effective mean is 14.8 and SD 8.4."""
 PHI_FLOOR = 1e-3
 """Added to $1/\\phi$ so the concentration stays at or below 1000."""
 ALPHA0 = 0.6
 
 
 def generation_interval(
-    mean: float = 15.0, sd: float = 9.0, length: int = GEN_INT_LENGTH
+    mean: float = GI_MEAN, sd: float = GI_SD, length: int = GEN_INT_LENGTH
 ) -> np.ndarray:
     r"""Double interval censored Gamma generation interval on lags 1..length.
 
@@ -87,6 +94,16 @@ def generation_interval(
     pmf = integrated_cdf(d + 1) - 2 * integrated_cdf(d) + integrated_cdf(d - 1)
     pmf = np.maximum(pmf, 0.0)[1:]
     return np.asarray(pmf / pmf.sum(), dtype=float)
+
+
+PRIOR_PUBLICATION_LAG: Final[tuple[float, ...]] = tuple(
+    [0.85 / 4] * 4 + [0.15 / 57] * 57
+)
+"""Report to publication lag pmf on 0..60 days where no pair of delay files
+gives an estimate: 85% within 3 days and 15% spread over 4 to 60 days.
+It is a prior shaped by the later files (29% of rows new between 10-09
+and 10-17 were more than 6 days late), so for the 2026-10-09 backtest it
+uses a little later information."""
 
 
 @dataclass(frozen=True)
@@ -153,15 +170,20 @@ class ModelConfig:
         Its tempering. 0 gives the model without it, exactly.
     dmax : int
         Maximum onset-to-report delay in days.
-    publication_lag : {"estimated", "fixed", "none"}
-        Lag from report to publication in a vintage: a Dirichlet simplex
-        on $0..L$, fixed at its prior mean (uniform), or none.
+    publication_lag : {"empirical", "estimated", "fixed", "none"}
+        Lag from report to publication in a vintage: the empirical pmf
+        on $0..60$ days from rows new in earlier delay files
+        (`Vintage.publication_lag_pmf`), a Dirichlet simplex on $0..L$,
+        uniform on $0..L$, or none. Empirical falls back to
+        `PRIOR_PUBLICATION_LAG` for a vintage with no earlier pair of
+        delay files.
     max_publication_lag : int
-        $L$, in days (`vintages.PUBLICATION_LAG_DAYS`).
+        $L$, in days (`data.reconstruct.PUBLICATION_LAG_DAYS`).
     delay_counts : {"multinomial", "dirichlet-multinomial"}
         Likelihood of the delay file's counts given the weekly totals.
-        The Dirichlet-multinomial has $1/\sqrt{\psi} \sim
-        \text{HalfNormal}(0.1)$.
+        The Dirichlet-multinomial (default) has $1/\sqrt{\psi} \sim
+        \text{HalfNormal}(0.1)$, with $\psi$ capped at $10^4$, so that
+        thousands of pooled delays do not make the delay overconfident.
     report_dow : bool
         Add a report day-of-week effect to the hazard delay
         (`HazardDelay` with `report_dow`). Needs `delay="hazard"`.
@@ -187,10 +209,12 @@ class ModelConfig:
     bvd: bool = False
     bvd_alpha: float = 0.5
     dmax: int = 60
-    publication_lag: Literal["estimated", "fixed", "none"] = "estimated"
+    publication_lag: Literal["empirical", "estimated", "fixed", "none"] = (
+        "empirical"
+    )
     max_publication_lag: int = 3
     delay_counts: Literal["multinomial", "dirichlet-multinomial"] = (
-        "multinomial"
+        "dirichlet-multinomial"
     )
     report_dow: bool = False
 
@@ -203,7 +227,6 @@ FALLBACK = ModelConfig(
     delay="fixed",
     missing="fixed",
     rt_cadence="weekly",
-    publication_lag="fixed",
 )
 _SIMPLE: dict[str, Any] = {
     "streams": "total",
@@ -271,6 +294,9 @@ class Vintage:
     bvd : dict or None
         External Rt summaries: `day` (index of $s_b$ from the first data
         day), `groups` `(G, P)`, `values`, `scales` and `kinds` `(G,)`.
+    publication_lag_pmf : numpy.ndarray or None
+        Empirical report to publication lag pmf on $0..60$ days
+        (`data.reconstruct.publication_lag_pmf`), or None.
     """
 
     start_date: dt.date
@@ -291,6 +317,7 @@ class Vintage:
     distances: np.ndarray | None = None
     all_populations: np.ndarray | None = None
     seed_days: np.ndarray | None = None
+    publication_lag_pmf: np.ndarray | None = None
 
     @property
     def n_weeks(self) -> int:
@@ -551,6 +578,13 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         )
     elif config.publication_lag == "fixed":
         lag = np.full(n_lag, 1 / n_lag)
+    elif config.publication_lag == "empirical":
+        lag = np.asarray(
+            PRIOR_PUBLICATION_LAG
+            if data.publication_lag_pmf is None
+            else data.publication_lag_pmf,
+            dtype=float,
+        )
 
     builder.add_observation(
         OnsetStreams(

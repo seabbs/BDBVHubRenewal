@@ -39,7 +39,12 @@ from bdbv_hub_renewal.model.delays import censored_pmf
 from bdbv_hub_renewal.model.inputs import (
     gravity_kernel as model_gravity_kernel,
 )
-from bdbv_hub_renewal.model.model import generation_interval
+from bdbv_hub_renewal.model.model import (
+    GI_MEAN,
+    GI_SD,
+    PRIOR_PUBLICATION_LAG,
+    generation_interval,
+)
 from bdbv_hub_renewal.model.renewal import coupled_renewal, mixing_matrix
 
 __all__ = [
@@ -99,8 +104,14 @@ class SimulationSettings:
         Coefficient of variation of the delay.
     publication_lag : tuple of float
         Pmf of the days from report to publication in a vintage, from 0.
-        The default is uniform on 0..3, as `vintages.PUBLICATION_LAG_DAYS`
-        and the data suggest.
+        The default is the model's `PRIOR_PUBLICATION_LAG`: 85% uniform
+        on 0..3 days and 15% uniform on 4..60 days, a tail of late
+        entries as in the real delay files.
+    backfill_share : float
+        Share of cases reported with no onset whose onset is recorded
+        later.
+    backfill_delay : tuple of int
+        Range of days from publication to the onset being recorded.
     gi_mean, gi_sd : float
         Generation interval mean and SD in days.
     seed : int
@@ -124,9 +135,11 @@ class SimulationSettings:
     missing: tuple[float, float, float] = (0.05, 0.25, 0.12)
     delay_mean: tuple[float, float] = (12.0, 6.0)
     delay_cv: float = 1.0
-    publication_lag: tuple[float, ...] = (0.25, 0.25, 0.25, 0.25)
-    gi_mean: float = 15.0
-    gi_sd: float = 9.0
+    publication_lag: tuple[float, ...] = PRIOR_PUBLICATION_LAG
+    backfill_share: float = 0.3
+    backfill_delay: tuple[int, int] = (7, 42)
+    gi_mean: float = GI_MEAN
+    gi_sd: float = GI_SD
     seed: int = 1
 
 
@@ -144,7 +157,9 @@ class SimulatedOutbreak:
         `delay_mean`.
     cases : pandas.DataFrame
         One row per confirmed case: `location`, `onset_date`,
-        `report_date`, `publish_date` and `onset_known`.
+        `report_date`, `publish_date`, `onset_known` (recorded when first
+        published) and `onset_known_date` (when the onset is recorded,
+        NaT if never).
     """
 
     settings: SimulationSettings
@@ -173,9 +188,13 @@ class SimulatedOutbreak:
         rng = rng or np.random.default_rng(
             [self.settings.seed, day.toordinal()]
         )
-        seen = self.cases.loc[self.cases["publish_date"] <= pd.Timestamp(day)]
-        known = seen.loc[seen["onset_known"]]
-        missing = seen.loc[~seen["onset_known"]]
+        cut = pd.Timestamp(day)
+        seen = self.cases.loc[self.cases["publish_date"] <= cut]
+        # A case counts as known once its onset is recorded, which for a
+        # backfilled case is after it was first published.
+        has_onset = seen["onset_known_date"] <= cut
+        known = seen.loc[has_onset]
+        missing = seen.loc[~has_onset]
         delays = (known["report_date"] - known["onset_date"]).dt.days.to_numpy()
         if delays.size:
             draws = rng.choice(delays, size=len(missing), replace=True)
@@ -365,13 +384,22 @@ def simulate_outbreak(
         report_day = np.minimum(report.astype(int), n_days - 1)
         known = rng.uniform(size=days.size) >= miss[report_day]
         lag = rng.choice(len(s.publication_lag), days.size, p=lag_pmf)
+        publish = report.astype(int) + lag
+        lo, hi = s.backfill_delay
+        filled = ~known & (rng.uniform(size=days.size) < s.backfill_share)
+        later = publish + rng.integers(lo, hi + 1, size=days.size)
+        onset_known_day = np.where(
+            known, publish, np.where(filled, later, -1)
+        ).astype(float)
+        onset_known_day[onset_known_day < 0] = np.nan
         rows.append(
             pd.DataFrame(
                 {
                     "location": loc,
                     "onset_day": days,
                     "report_day": report.astype(int),
-                    "publish_day": report.astype(int) + lag,
+                    "publish_day": publish,
+                    "onset_known_day": onset_known_day,
                     "onset_known": known,
                 }
             )
@@ -385,8 +413,18 @@ def simulate_outbreak(
     cases["publish_date"] = start + pd.to_timedelta(
         cases["publish_day"], unit="D"
     )
+    cases["onset_known_date"] = start + pd.to_timedelta(
+        cases["onset_known_day"], unit="D"
+    )
     cases = cases[
-        ["location", "onset_date", "report_date", "publish_date", "onset_known"]
+        [
+            "location",
+            "onset_date",
+            "report_date",
+            "publish_date",
+            "onset_known",
+            "onset_known_date",
+        ]
     ]
 
     dates = pd.date_range(start, periods=n_days, freq="D")

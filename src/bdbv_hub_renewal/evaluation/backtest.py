@@ -285,7 +285,7 @@ def make_tasks(
     tasks = []
     for (kind, vintage), rows in target.groupby(["kind", "vintage"]):
         ref = reference_date_for_vintage(str(vintage))
-        dly = None
+        dly, history = None, None
         if delays is not None:
             mask = delays["vintage"] == vintage
             if "kind" in delays.columns:
@@ -294,6 +294,11 @@ def make_tasks(
             if sel.empty and kind == "real":
                 sel = _reconstructed_delays(delays, str(vintage))
             dly = sel if not sel.empty else None
+            same = delays["vintage"] <= vintage
+            if "kind" in delays.columns:
+                same &= delays["kind"] == kind
+            past = delays.loc[same]
+            history = past if not past.empty else None
         tasks.append(
             ForecastTask(
                 vintage=str(vintage),
@@ -301,6 +306,7 @@ def make_tasks(
                 kind=str(kind),
                 target=rows.reset_index(drop=True),
                 delays=dly,
+                delay_history=history,
                 locations=forecast_locations(rows),
                 target_end_dates=forecast_weeks(ref, config),
                 n_samples=config.n_samples,

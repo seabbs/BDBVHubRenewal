@@ -78,6 +78,10 @@ class ForecastTask:
         date $T$ here, the counts it predicts will be reported by $T$ for
         the weeks ending on or before $T$, in rows with `as_of` $= T$.
         Scoring compares them with vintage $T$ as reported.
+    delay_history : pandas.DataFrame or None
+        Delay rows of every vintage of this kind on or before `vintage`,
+        from which `data.reconstruct.publication_lag_pmf` estimates the
+        report to publication lag. None if there are none.
     """
 
     vintage: str
@@ -91,6 +95,7 @@ class ForecastTask:
     seed: int = 0
     mask: tuple[str, ...] = ()
     report_by: tuple[str, ...] = ()
+    delay_history: pd.DataFrame | None = None
 
     def rng(self) -> np.random.Generator:
         """Return a random generator seeded from the task.

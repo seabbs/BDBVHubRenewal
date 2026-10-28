@@ -85,7 +85,7 @@ x_p(t) = S_p(t)\big\{1 - e^{-y_p(t)/\nu}\big\},
 S_p(t + 1) = S_p(t)\, e^{-y_p(t)/\nu}.
 $$
 
-- $g$ is a Gamma generation interval with mean 15 and SD 9 days, double interval censored on lags 1 to 42. Each infection day is uniform within its day and the pmf is $G(d + 1) - 2G(d) + G(d - 1)$, with $G$ the Gamma's integrated cdf, as in the R package primarycensored. Lag 0 is dropped and the rest renormalised.
+- $g$ is a Gamma generation interval with mean 15.3 and SD 9.3 days, BVDOutbreakSize's prior means, double interval censored on lags 1 to 42 (about its 98.5% quantile). After censoring, dropping lag 0 and truncation its mean is 14.8 and SD 8.4 days. Each infection day is uniform within its day and the pmf is $G(d + 1) - 2G(d) + G(d - 1)$, with $G$ the Gamma's integrated cdf, as in the R package primarycensored. Lag 0 is dropped and the rest renormalised.
 - $W = (1 - \varepsilon) I + \varepsilon\, \mathrm{diag}(1/N) K^\top \mathrm{diag}(N)$ mixes transmission between provinces, with $\varepsilon \sim \text{Beta}(1, 100)$.
 - $K$ is a row-normalised gravity kernel, $K_{qp} \propto N_p e^{-D_{qp}/300\,\text{km}}$, with $D$ the great-circle distance between population-weighted province centres and $N_p$ the province population.
 - With `coupling="learnt"` the kernel's decay and destination weights are estimated, $\log K_{qp} = \log N_p - D_{qp}/(300\,\text{km} \cdot e^{\kappa_K}) + w_p + c_q$, with $\kappa_K \sim \mathcal{N}(0, 1)$, sum-to-zero weights $w$ with scale $\mathcal{N}^+(0, 0.5^2)$, and $c_q$ normalising each row. With $\kappa_K = 0$ and $w = 0$ it is the fixed gravity kernel.
@@ -156,7 +156,14 @@ $\pi_p$ is informed by the ratio of imputed to known onsets, through the imputat
 ### Known onsets
 
 A case reported on day $t$ is in the vintage published at $T$ with probability $c(t) = F_\ell(T - t)$, with $F_\ell$ the cdf of the lag $\ell$ from report to publication.
-The lag is a pmf on 0 to 3 days with a $\text{Dirichlet}(1, 1, 1, 1)$ prior, so only the last 3 days before $T$ are partly in.
+The lag pmf is estimated from the data on 0 to 60 days.
+Rows in a delay file beyond those of the previous file were first published between the two dates.
+Each such row's lag is spread over its onset day within the week and its publication day between the files, over feasible lags only, and lags past 60 days go to the last cell.
+Only pairs of files dated on or before the forecast date are used, so backtests do not see later files.
+Between 2026-10-17 and 2026-10-24, 23% of new rows had report dates more than 41 days old, so late entries matter for the nowcast weeks.
+A vintage with no earlier pair (2026-10-09 and before) uses a fixed prior pmf instead: 85% uniform on 0 to 3 days and 15% uniform on 4 to 60 days.
+That prior is shaped by the later files (29% of rows new between 10-09 and 10-17 were more than 6 days late), so the 2026-10-09 backtest uses a little later information.
+Without a tail, the 2026-10-09 fit treated weeks 4 to 5 weeks old as complete and its national 90% intervals fell below the counts reported by 10-24 for three of the four nowcast weeks.
 The cases with onset $s$ in the vintage with an onset recorded are expected to be
 
 $$
@@ -198,8 +205,9 @@ The non-monotone revisions in imputed counts suggest it re-imputes each time.
 - Weekly sums of $\mathrm{known}_{p,T}$ and $\mathrm{imputed}_{p,T}$ are negative binomial, each stream with its own dispersion, $1/\sqrt{\phi} \sim \text{HalfNormal}(0.25)$, as in EpiNow2.
 - The delays of known-onset cases in the hub's delay file are tabulated by onset week and delay, pooled over provinces.
   Delays are clipped to 0 to 60 days.
-  Given each week's total they are multinomial, with probabilities from $\lambda$, $f$, $\pi$ and $c$.
-  With `delay_counts="dirichlet-multinomial"` they are Dirichlet-multinomial instead, with $1/\sqrt{\psi} \sim \text{HalfNormal}(0.1)$ and $\psi$ capped at $10^4$.
+  Given each week's total they are Dirichlet-multinomial, with mean probabilities from $\lambda$, $f$, $\pi$ and $c$, $1/\sqrt{\psi} \sim \text{HalfNormal}(0.1)$ and $\psi$ capped at $10^4$.
+  A multinomial treats the 8,000 or so pooled delays as independent, which makes the delay overconfident.
+  `delay_counts="multinomial"` gives the multinomial.
   This is the conditional part of the reporting triangle, so the known stream is not counted twice.
 - Provinces with no cases have expected onsets $\mu_q(s) = \kappa \sum_p K_{pq}\, \lambda_p(s)$, with one scale $\kappa \sim \text{LogNormal}(\log 10^{-3}, 2^2)$.
   Their weekly zeros are Poisson.
@@ -261,7 +269,7 @@ The renewal variants run in the backtest, the held-out evaluation and the plots,
 | `renewal` | The model in the figure: provinces with pooled $R_p(t)$, gravity importation and depletion. |
 | `renewalsp` | Single patch: the renewal model fitted to each location's series on its own, the nation included. |
 | `renewalbvd` | The spatial model informed by the latest posterior estimates of the main [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) model, taken from the newest release published before the data cut-off. |
-| `fallback` | The CI's fallback: no coupling, with the delays, $\pi$ and a uniform publication lag fixed from the data. $\pi$ is the imputed share by onset week, moved later by the mean delay to date it by report day. It is a fit configuration, not a backtest variant. |
+| `fallback` | The CI's fallback: no coupling, with the delays and $\pi$ fixed from the data. $\pi$ is the imputed share by onset week, moved later by the mean delay to date it by report day. It is a fit configuration, not a backtest variant. |
 
 The model code is in `bdbv_hub_renewal.model` and the variants in [`forecasters.renewal`][bdbv_hub_renewal.forecasters.renewal].
 

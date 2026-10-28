@@ -319,3 +319,20 @@ def test_vintage_without_delays_takes_reconstructed_rows(
     nxt = delays.loc[delays["vintage"] == "2026-10-09"]
     want = reconstruct_delays(nxt, "2026-08-18")
     assert len(got) == len(want)
+
+
+def test_tasks_carry_earlier_delay_files_for_the_publication_lag(
+    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
+) -> None:
+    tasks = {
+        t.vintage: t
+        for t in make_tasks(
+            target.loc[target["kind"] == "real"],
+            delays.assign(kind="real"),
+            config,
+        )
+    }
+    history = tasks["2026-10-17"].delay_history
+    assert history is not None
+    assert set(history["vintage"]) == {"2026-10-09", "2026-10-17"}
+    assert tasks["2026-08-18"].delay_history is None
