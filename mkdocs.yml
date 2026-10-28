@@ -37,12 +37,12 @@ nav:
       - Workflow: submission/workflow.md
       - Hub specification: submission/hub-spec.md
   - Development:
-      - Model development:
-          - Model building: model-development/model-building.md
-          - Development log: model-development/log.md
       - Contributing: development/contributing.md
       - Adding a model: development/adding-a-model.md
       - CLI: development/cli.md
+      - Model development:
+          - Model building: model-development/model-building.md
+          - Development log: model-development/log.md
       - Citation and licence: citation.md
   - API reference:
       - reference/index.md
