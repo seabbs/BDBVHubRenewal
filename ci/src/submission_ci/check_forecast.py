@@ -14,6 +14,9 @@ Format (fail):
 Handled (warn or pass):
   `coverage`     every expected location, with every nowcast and
                  forecast week (warns).
+  `zones`        health zone rows (`CD-XX-NN`) for every province in the
+                 file, which seabbsbaseline requires (`--require-zones`),
+                 and each province's zones summing to it (warns only).
   `national_sum` national equals the sum of the provinces plus any
                  unassigned cases, per sample and week. It is correct by
                  construction: `repair_national` rebuilds the national
@@ -608,6 +611,43 @@ def check_against(
     )
 
 
+def check_zones(s: Samples, require: bool, tol: float) -> Check:
+    """Every province has zone rows, and its zones add up to it."""
+    provs = [loc for loc in s.locations if is_province(loc)]
+    zones: dict[str, list[str]] = {p: [] for p in provs}
+    for loc in s.locations:
+        parent = loc.rsplit("-", 1)[0]
+        if loc.count("-") == 2 and parent in zones:
+            zones[parent].append(loc)
+    missing = [p for p in provs if not zones[p]]
+    if not any(zones.values()):
+        if require:
+            return Check("zones", "fail", "no health zone rows")
+        return Check("zones", "skip", "no health zone rows")
+    if missing:
+        return Check(
+            "zones",
+            "fail" if require else "warn",
+            f"provinces without zone rows: {', '.join(missing)}",
+        )
+    off = 0
+    for p, zs in zones.items():
+        for sid, weeks in s.values[p].items():
+            for week, value in weeks.items():
+                total = sum(s.values[z].get(sid, {}).get(week, 0.0) for z in zs)
+                if abs(total - value) > tol:
+                    off += 1
+    n = sum(len(zs) for zs in zones.values())
+    if off:
+        return Check(
+            "zones",
+            "warn",
+            f"{n} zones; {off} province sample-weeks differ from the sum "
+            "of their zones",
+        )
+    return Check("zones", "pass", f"{n} zones in {len(provs)} provinces")
+
+
 def run_checks(
     submission: Path,
     *,
@@ -621,6 +661,7 @@ def run_checks(
     settings: Mapping[str, Any] | None = None,
     national_sidecar: Mapping[str, Any] | None = None,
     sidecar_error: str = "",
+    require_zones: bool = False,
 ) -> list[Check]:
     """Run every check on one candidate file."""
     c = {**DEFAULTS, **(settings or {})}
@@ -636,6 +677,7 @@ def run_checks(
         check_coverage(
             s, ref, expected_locations, horizon, int(c["nowcast_weeks"])
         ),
+        check_zones(s, require_zones, float(c["sum_tolerance"])),
         check_national_sum(
             s,
             str(c["national"]),
@@ -753,6 +795,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--policy", type=Path, default=None)
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--no-fail", action="store_true")
+    p.add_argument(
+        "--require-zones",
+        action="store_true",
+        help="Rule the file out if a province has no health zone rows",
+    )
     args = p.parse_args(argv)
     settings = None
     if args.policy:
@@ -797,6 +844,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             settings=settings,
             national_sidecar=sidecar,
             sidecar_error=sidecar_error,
+            require_zones=args.require_zones,
         )
     status = worst(c.status for c in checks)
     md = markdown(args.id, checks)

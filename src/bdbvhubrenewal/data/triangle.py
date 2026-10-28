@@ -18,6 +18,12 @@ $$
 \sum_{d' < d} n(W', d')} \sum_{d' < d} \hat n(W, d'),
 $$
 and `delay_pmf` is the column sums of the filled triangle over its total.
+`apply_delay` then fills each open row from that pmf $p$, with $F$ its
+cdf and $x$ the row's sum over earlier columns, filled as it goes,
+$$
+\hat n(W, d) = \frac{x + 1 - F(d - 1)}{F(d - 1)}\, p(d),
+$$
+as baselinenowcast's `apply_delay` does.
 
 `retrospective_errors` repeats this on the triangle as it was at earlier
 vintages, and compares what each past nowcast expected to be added to
@@ -38,6 +44,7 @@ from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.delays import DEFAULT_MAX_DELAY
 
 __all__ = [
+    "apply_delay",
     "chainladder_fill",
     "delay_pmf",
     "fit_nb_size",
@@ -133,6 +140,34 @@ def delay_pmf(triangle: NDArray[np.float64]) -> NDArray[np.float64]:
     return np.asarray(filled.sum(axis=0) / filled.sum(), dtype=np.float64)
 
 
+def apply_delay(
+    triangle: NDArray[np.float64], pmf: NDArray[np.float64]
+) -> NDArray[np.float64]:
+    """Fill the missing cells of a reporting triangle from a delay pmf.
+
+    Parameters
+    ----------
+    triangle : numpy.ndarray
+        Counts by row and delay, missing in the bottom right.
+    pmf : numpy.ndarray
+        Delay pmf, one entry per column.
+
+    Returns
+    -------
+    numpy.ndarray
+        The triangle with its missing cells filled with expectations.
+    """
+    out = triangle.copy()
+    cdf = np.cumsum(pmf)
+    for col in range(1, triangle.shape[1]):
+        missing = np.isnan(out[:, col])
+        if not missing.any():
+            continue
+        x = out[missing, :col].sum(axis=1)
+        out[missing, col] = (x + 1 - cdf[col - 1]) / cdf[col - 1] * pmf[col]
+    return out
+
+
 def retrospective_errors(
     triangle: NDArray[np.float64],
     n_retro: int,
@@ -181,7 +216,7 @@ def retrospective_errors(
         hist = cut[-n_history:]
         if not (~np.isnan(hist)).all(axis=1).any():
             continue
-        filled = chainladder_fill(hist)
+        filled = apply_delay(hist, delay_pmf(hist))
         o, p = np.zeros(horizons), np.zeros(horizons)
         for h in range(min(horizons, n_history)):
             r = last - h
@@ -202,9 +237,11 @@ def fit_nb_size(
 ) -> NDArray[np.float64]:
     """Fit a negative binomial size to observed against predicted counts.
 
-    Each column (horizon) gets its own size by maximum likelihood, with
-    the predictions as means. Entries with a zero prediction are left
-    out. A column with none gets an infinite size (Poisson).
+    Each column (horizon) gets its own size by maximum likelihood on
+    0.1 to 1000, with the predictions as means, as baselinenowcast's
+    `fit_nb` does. Entries with a zero prediction are left out, unless
+    one has a count, which gives 1000 as in baselinenowcast. A column
+    with no prediction gets an infinite size (Poisson).
 
     Parameters
     ----------
@@ -214,22 +251,27 @@ def fit_nb_size(
     Returns
     -------
     numpy.ndarray
-        One size per column, between $e^{-5}$ and $e^{12}$.
+        One size per column.
     """
     sizes = np.full(obs.shape[1], np.inf)
     for h in range(obs.shape[1]):
         keep = pred[:, h] > 0
         if not keep.any():
             continue
+        if (obs[~keep, h] > 0).any():
+            # A count where none was predicted makes the likelihood zero for
+            # every size, and baselinenowcast's optimiser then stops at the
+            # upper bound.
+            sizes[h] = 1000.0
+            continue
         y, mu = obs[keep, h], pred[keep, h]
 
-        def nll(log_size: float, y: NDArray[np.float64] = y,
+        def nll(size: float, y: NDArray[np.float64] = y,
                 mu: NDArray[np.float64] = mu) -> float:  # fmt: skip
-            size = np.exp(log_size)
             return float(
                 -stats.nbinom.logpmf(y, size, size / (size + mu)).sum()
             )
 
-        fit = minimize_scalar(nll, bounds=(-5.0, 12.0), method="bounded")
-        sizes[h] = float(np.exp(fit.x))
+        fit = minimize_scalar(nll, bounds=(0.1, 1000.0), method="bounded")
+        sizes[h] = float(fit.x)
     return sizes

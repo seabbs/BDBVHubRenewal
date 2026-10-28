@@ -35,11 +35,12 @@ from bdbvhubrenewal.data.delays import delay_summary
 __all__ = [
     "MODEL_COLOURS",
     "THEMES",
+    "comparison_label",
     "model_colour",
-    "plot_comparison",
     "plot_delay_distribution",
     "plot_delays_over_time",
     "plot_forecasts",
+    "plot_hub_round",
     "plot_imputed_share",
     "plot_newly_missing",
     "plot_nowcast",
@@ -818,91 +819,131 @@ def plot_nowcast(
     return fig
 
 
-def _label(model: str, source: str, names: Mapping[str, str]) -> str:
-    name = names.get(model, model)
-    if source == "hub":
-        return name
-    return f"{name} (retrospective, {source} vintage)"
-
-
-def plot_comparison(
-    forecasts: pd.DataFrame,
-    target: pd.DataFrame,
-    location: str,
-    names: Mapping[str, str] | None = None,
-    weeks_before: int = 10,
-    mode: str = "light",
-) -> Figure:
-    """Plot hub and our forecasts side by side, one panel per round.
+def comparison_label(
+    model: str, source: str, hub_ids: Mapping[str, str] | None = None
+) -> str:
+    """Label a model in the hub comparison.
 
     Parameters
     ----------
-    forecasts : pandas.DataFrame
-        Hub and our samples, with `model`, `source`, `reference_date`,
-        `location`, `target_end_date`, `sample` and `value`.
+    model : str
+        Hub model id or our registry name.
+    source : str
+        `hub`, or the kind of vintage our forecast used.
+    hub_ids : mapping, optional
+        Hub ids of our models that submit under their own id.
+
+    Returns
+    -------
+    str
+        The hub id for submitted forecasts. Ours are `<model> (<hub id>)`
+        if they have their own hub id, else `<model> (ours)`, with
+        `reconstructed` added when the vintage was reconstructed.
+    """
+    if source == "hub":
+        return model
+    tag = (hub_ids or {}).get(model, "ours")
+    if source == "reconstructed":
+        return f"{model} ({tag}, reconstructed)"
+    return f"{model} ({tag})"
+
+
+def plot_hub_round(
+    quantiles: pd.DataFrame,
+    target: pd.DataFrame,
+    reference_date: str,
+    locations: Sequence[str] = ("CD",),
+    complete_by: str | None = None,
+    weeks_before: int = 8,
+    mode: str = "light",
+    hub_ids: Mapping[str, str] | None = None,
+) -> Figure:
+    """Plot every model's intervals for one hub round against the data.
+
+    Parameters
+    ----------
+    quantiles : pandas.DataFrame
+        Output of `bdbvhubrenewal.evaluation.hubcompare.forecast_quantiles`.
     target : pandas.DataFrame
         Target rows; the latest real vintage is drawn as data.
-    location : str
-        Location to show.
-    names : mapping, optional
-        Labels from `display_names`. Hub models not in it are left out,
-        and our models keep their id.
+    reference_date : str
+        The round.
+    locations : sequence of str
+        Locations to show, one panel each, if any model forecast them.
+    complete_by : str, optional
+        Last complete week of the truth, marked with a dotted line.
     weeks_before : int
-        Weeks of data shown before each reference date.
+        Weeks of data shown before the reference date.
     mode : str
         `"light"` or `"dark"`.
+    hub_ids : mapping, optional
+        Hub ids of our models, for their labels (`comparison_label`).
 
     Returns
     -------
     matplotlib.figure.Figure
-        Each model's sample trajectories, 50% and 90% intervals and
-        median, over the latest data.
+        Per week and model, the median (point), 50% interval (thick line)
+        and 90% interval (thin line), side by side, over the latest data.
     """
-    names = dict(names or {})
-    fc = forecasts.loc[forecasts["location"] == location]
-    fc = fc.loc[(fc["source"] != "hub") | fc["model"].isin(list(names))].assign(
-        label=lambda d: [
-            _label(m, s, names)
-            for m, s in zip(d["model"], d["source"], strict=True)
+    q = quantiles.loc[quantiles["reference_date"].astype(str) == reference_date]
+    q = q.assign(
+        label=[
+            comparison_label(m, s, hub_ids)
+            for m, s in zip(q["model"], q["source"], strict=True)
         ]
     )
-    labels = sorted(set(fc["label"]))
+    ours = set(q.loc[q["source"] != "hub", "label"])
+    labels = sorted(set(q["label"]), key=lambda lab: (lab in ours, lab))
+    locs = [loc for loc in locations if loc in set(q["location"])]
     real = target.loc[target["kind"] == "real"]
-    data = real.loc[
-        (real["vintage"] == real["vintage"].max())
-        & (real["location"] == location)
-    ]
-    refs = sorted(set(fc["reference_date"]))
+    latest = real["vintage"].max()
+    names = _names(real)
     ink = THEMES[mode]
-    fig, axes = _grid(max(len(refs), 1), 3, width=3.6, height=2.6)
-    for ax, ref in zip(axes, refs, strict=False):
-        f_ref = fc.loc[fc["reference_date"] == ref]
-        start = pd.Timestamp(ref) - pd.Timedelta(weeks=weeks_before)
-        end = pd.Timestamp(f_ref["target_end_date"].max())
+    fig, axes = _grid(max(len(locs), 1), 2, width=4.8, height=3.0)
+    width = 5.0 / max(len(labels), 1)
+    ref = pd.Timestamp(reference_date)
+    for ax, loc in zip(axes, locs, strict=False):
+        ql = q.loc[q["location"] == loc]
+        data = real.loc[(real["vintage"] == latest) & (real["location"] == loc)]
         x = pd.to_datetime(data["target_end_date"])
+        start = ref - pd.Timedelta(weeks=weeks_before)
+        end = pd.to_datetime(ql["target_end_date"]).max()
         sel = (x >= start) & (x <= end)
         ax.plot(
             x[sel],
             data["total"][sel],
             color=ink["data"],
             lw=1.2,
-            label=f"Data {real['vintage'].max()}",
+            marker="o",
+            ms=3,
+            label=f"Data {latest}",
+            zorder=3,
         )
-        for lab in labels:
-            s = f_ref.loc[f_ref["label"] == lab]
-            if not s.empty:
-                _draw_forecast(ax, s, model_colour(lab, labels, mode), lab)
-        ax.axvline(
-            mdates.date2num(pd.Timestamp(ref)),
-            color=ink["muted"],
-            lw=0.8,
-            ls=":",
-        )
-        ax.set_title(str(ref))
-        ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=4))
+        for i, lab in enumerate(labels):
+            m = ql.loc[ql["label"] == lab]
+            if m.empty:
+                continue
+            offset = pd.Timedelta(days=(i - (len(labels) - 1) / 2) * width)
+            xm = pd.to_datetime(m["target_end_date"]) + offset
+            colour = model_colour(lab, labels, mode)
+            ax.vlines(xm, m["q05"], m["q95"], color=colour, lw=1, alpha=0.7)
+            ax.vlines(xm, m["q25"], m["q75"], color=colour, lw=3)
+            ax.plot(xm, m["q50"], "o", color=colour, ms=3, label=lab)
+        ax.axvline(mdates.date2num(ref), color=ink["muted"], lw=0.8, ls=":")
+        if complete_by is not None:
+            ax.axvline(
+                mdates.date2num(
+                    pd.Timestamp(complete_by) + pd.Timedelta(days=3)
+                ),
+                color=ink["muted"],
+                lw=0.8,
+                ls="--",
+            )
+        ax.set_title(f"{names.get(loc, loc)} ({loc})")
+        ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
-    axes[0].set_ylabel(f"Cases by onset week ({location})")
-    axes[0].legend(fontsize=7)
+    axes[0].set_ylabel("Confirmed cases by onset week")
+    axes[0].legend(fontsize=7, loc="upper left")
     return fig
 
 

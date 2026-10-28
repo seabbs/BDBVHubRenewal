@@ -19,8 +19,8 @@ Backtest forecasts cover $h = -4, \dots, 3$.
 
 | Hub file | What it holds | Vintages |
 |---|---|---|
-| `target-data/time-series.csv` | Weekly confirmed cases by onset week, by province and nationally: observed, imputed and total. Also health zone totals, not modelled. | All, in one file |
-| `auxiliary-data/daily-confirmed-case.csv` | Daily cases by onset day, observed and imputed. | All, in one file |
+| `target-data/time-series.csv` | Weekly confirmed cases by onset week, by province and nationally: observed, imputed and total. Also health zone totals. | All, in one file |
+| `auxiliary-data/daily-confirmed-case.csv` | Daily cases by onset day, observed and imputed, by province and health zone. | All, in one file |
 | `auxiliary-data/weekly-reporting-delays-by-province.csv` | One row per known-onset case: province, onset week and onset-to-report delay. | Latest only; earlier ones from the archive folder and git history |
 | `auxiliary-data/locations.csv` | Location codes, names and parents. | Static |
 | `hub-config/*.json` | Rounds, tasks, output types and the metadata schema. | Copied at download |

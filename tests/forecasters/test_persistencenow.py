@@ -55,26 +55,38 @@ def test_registry_has_persistencenow_and_not_the_lag_variant() -> None:
     assert isinstance(get_model("persistencenow"), PersistenceNow)
 
 
-def test_nowcast_draws_split_a_national_negative_binomial() -> None:
+def test_nowcast_draws_add_negative_binomial_counts_per_place() -> None:
     rng = np.random.default_rng(1)
-    # Two places, four weeks.
-    observed = np.array([[0.0, 40.0, 30.0, 30.0], [0.0, 0.0, 10.0, 10.0]])
-    ratio = np.array([1.0, 0.0, 0.25, 1.5])
-    size = np.array([5.0, 5.0, np.inf, 5.0])
+    # Two places, four weeks, each with its own ratio and size.
+    observed = np.array([[0.0, 40.0, 40.0, 40.0], [0.0, 0.0, 10.0, 10.0]])
+    ratio = np.array([[1.0, 0.0, 0.25, 1.5], [1.0, 1.0, 1.0, 1.0]])
+    size = np.array([[5.0, 5.0, np.inf, 5.0], [5.0, 5.0, 5.0, 5.0]])
     draws = nowcast_draws(observed, ratio, size, 20000, rng)
     assert draws.shape == (20000, 2, 4)
     # Without revision noise, never below the published count.
     assert (draws >= observed).all()
-    assert (draws[:, :, :2] == observed[:, :2]).all()
-    added = (draws - observed).sum(axis=1)[:, 2:]
-    # The national point nowcast is the mean of what is added, with the
-    # national size: Poisson if infinite, overdispersed otherwise.
+    assert (draws[:, 0, :2] == observed[0, :2]).all()
+    added = (draws - observed)[:, 0, 2:]
+    # The point nowcast is the mean of what is added: Poisson with an
+    # infinite size, overdispersed otherwise.
     assert np.allclose(added.mean(axis=0), [10, 60], rtol=0.05)
     assert added[:, 0].var() == pytest.approx(10, rel=0.1)
     assert added[:, 1].var() == pytest.approx(60 + 60**2 / 5, rel=0.1)
-    # Each place gets its share of what is added.
-    share = (draws - observed)[:, 0, 3].mean() / added[:, 1].mean()
-    assert share == pytest.approx(0.75, abs=0.02)
+    # Places are drawn independently.
+    other = (draws - observed)[:, 1, 3]
+    assert abs(np.corrcoef(added[:, 1], other)[0, 1]) < 0.05
+
+
+def test_high_count_places_use_their_own_delay(task: ForecastTask) -> None:
+    sources = PersistenceNow().delay_sources(task)
+    assert sources["CD-IT"] == "own"
+    assert sources["CD-NK"] == "own"
+    assert sources["CD-BU"] == "pooled"
+
+
+def test_the_delay_window_sets_the_longest_delay() -> None:
+    assert PersistenceNow(n_history=4).max_delay == 21
+    assert PersistenceNow(n_history=14).max_delay == 60
 
 
 def test_nowcast_draws_can_fall_below_the_published_total() -> None:
@@ -82,7 +94,7 @@ def test_nowcast_draws_can_fall_below_the_published_total() -> None:
     observed = np.array([[100.0]])
     known = np.array([[80.0]])
     draws = nowcast_draws(
-        observed, np.zeros(1), np.full(1, np.inf), 20000, rng,
+        observed, np.zeros((1, 1)), np.full((1, 1), np.inf), 20000, rng,
         known=known, revision=0.5,
     )  # fmt: skip
     # Re-imputation moves the total both ways, with variance
@@ -234,8 +246,9 @@ def test_persistencenow_predicts_counts_as_reported_later(
     assert published < by_sample["value"].median()
     assert by_sample["value"].median() < by_sample["value_final"].median()
     assert task.delays is not None
-    _, tri = reporting_triangle(task.delays, "2026-10-09")
-    cdf = np.cumsum(delay_pmf(tri[-14:]))
+    model = PersistenceNow()
+    _, tri = reporting_triangle(task.delays, "2026-10-09", model.max_delay)
+    cdf = np.cumsum(delay_pmf(tri[-model.n_history :]))
     s_v, s_t = cdf[6], cdf[21]
     expected = published + (by_sample["value_final"].median() - published) * (
         (s_t - s_v) / (1 - s_v)

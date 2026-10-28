@@ -134,9 +134,15 @@ tasks:
       - uv run bdbvhubrenewal fit --config {{.CONFIG}} --out output/fits/{{.CONFIG}} {{.CLI_ARGS}}
       - uv run bdbvhubrenewal nowcast --config {{.CONFIG}} --fit output/fits/{{.CONFIG}} --out output/candidates/{{.CONFIG}}
 
+  compare-hub:
+    desc: Fetch the hub's weekly-round forecasts and score them with ours
+    cmds:
+      - uv run bdbvhubrenewal compare-hub --fetch
+
   plots:
     desc: Make the docs figures and tables from the backtest results
     cmds:
+      - uv run bdbvhubrenewal compare-hub
       - uv run bdbvhubrenewal report
 
   docs:

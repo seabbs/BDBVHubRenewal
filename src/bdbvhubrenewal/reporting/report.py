@@ -46,8 +46,7 @@ from bdbvhubrenewal.evaluation.backtest import (
 from bdbvhubrenewal.evaluation.heldout import load_model_choices
 from bdbvhubrenewal.evaluation.hubcompare import (
     attribution,
-    display_names,
-    load_comparison_config,
+    summarise_comparison,
 )
 from bdbvhubrenewal.evaluation.scoring import relative_skill, summarise_scores
 from bdbvhubrenewal.forecasters.base import (
@@ -57,10 +56,11 @@ from bdbvhubrenewal.forecasters.base import (
     list_models,
 )
 from bdbvhubrenewal.reporting.plots import (
-    plot_comparison,
+    comparison_label,
     plot_delay_distribution,
     plot_delays_over_time,
     plot_forecasts,
+    plot_hub_round,
     plot_imputed_share,
     plot_newly_missing,
     plot_nowcast,
@@ -94,8 +94,7 @@ def make_report(
     results: Path | str = "results",
     output: Path | str = "results",
     config_path: Path | str = "config/backtest.toml",
-    hub_comparison: Path | str = "output/hub-comparison",
-    comparison_config: Path | str = "config/hub-comparison.toml",
+    hub_comparison: Path | str = "results/hub-comparison",
 ) -> None:
     """Write every docs figure and table.
 
@@ -115,8 +114,6 @@ def make_report(
         Backtest settings.
     hub_comparison : pathlib.Path or str
         Output of `bdbvhubrenewal compare-hub`, if it has been run.
-    comparison_config : pathlib.Path or str
-        Hub comparison settings, for the display mode.
     """
     fig, gen = Path(figures), Path(generated)
     res, out = Path(results), Path(output)
@@ -226,13 +223,7 @@ def make_report(
     names = [s.name for s in list_models()]
     _backtest_page(fig, gen, res, out, config, target, delays, names)
     _heldout_page(fig, gen, res, target, names, config)
-    _comparison_page(
-        fig / "comparison",
-        gen,
-        Path(hub_comparison),
-        load_comparison_config(comparison_config).display,
-        target,
-    )
+    _comparison_page(fig, gen, Path(hub_comparison), target)
 
     # Nowcast page: latest real vintage, every registered model.
     rows = real.loc[real["vintage"] == latest]
@@ -1150,108 +1141,94 @@ def _comparison_page(
     fig: Path,
     gen: Path,
     cmp_dir: Path,
-    display: str,
     target: pd.DataFrame,
 ) -> None:
-    names_out = (
-        "comparison-teams.md",
-        "comparison-scores.md",
-        "comparison-pending.md",
-        "comparison-other.md",
-        "comparison-figures.md",
-    )
-    accessed = dt.date.today().isoformat()
-    manifest = cmp_dir / "manifest.json"
-    if manifest.exists():
-        accessed = str(json.loads(manifest.read_text())["accessed"])
-    _write(gen / "comparison-attribution.md", f"> {attribution(accessed)}\n")
-    _write(gen / "comparison-display.md", f"Display mode: **{display}**.\n")
-    if not (cmp_dir / "scores.csv").exists():
-        for name in names_out:
-            _write(gen / name, "")
+    summary_path = cmp_dir / "summary.json"
+    if not summary_path.exists():
+        missing = "Not run yet: `bdbvhubrenewal compare-hub --fetch`.\n"
+        for name in (
+            "comparison-lead.md",
+            "comparison-scores.md",
+            "comparison-teams.md",
+            "comparison-figures.md",
+        ):
+            _write(gen / name, missing)
+        _write(
+            gen / "comparison-attribution.md",
+            f"> {attribution(dt.date.today().isoformat())}\n",
+        )
         return
-    teams = pd.read_csv(cmp_dir / "teams.csv")
-    forecasts = pd.read_csv(cmp_dir / "forecasts.csv.gz")
-    models = sorted(set(teams["model"]) | set(forecasts["model"]))
-    names = display_names(models, display)
-    shown = teams.loc[teams["model"].isin(list(names))].assign(
-        model=lambda d: d["model"].map(names)
+    summary = json.loads(summary_path.read_text())
+    _write(
+        gen / "comparison-attribution.md",
+        f"> {attribution(summary['accessed'])}\n",
     )
-    if display != "named":
-        shown = shown.drop(columns=["team_name", "model_name", "website_url"])
-    _write(gen / "comparison-teams.md", _table(shown.sort_values("model")))
-
-    def _relabel(df: pd.DataFrame) -> pd.DataFrame:
-        df = df.loc[df["model"].isin(list(names))].copy()
-        df["model"] = df["model"].map(names)
-        return df
-
+    truth, k = summary["truth_vintage"], summary["complete_after_weeks"]
+    baseline = summary["baseline"]
+    hub_ids = summary.get("hub_ids", {})
+    complete_by = (
+        (pd.Timestamp(truth) - pd.Timedelta(weeks=k)).date().isoformat()
+    )
+    note = ""
+    if baseline != summary["preferred_baseline"]:
+        note = f" (`{summary['preferred_baseline']}` once it is registered)"
+    _write(
+        gen / "comparison-lead.md",
+        f"Scores use the **{truth}** data and the complete weeks only: "
+        f"weeks ending by {complete_by} ($K = {k}$). "
+        f"Relative WIS divides by `{baseline}`{note} on the weeks both "
+        "forecast.\n",
+    )
+    scores_path = cmp_dir / "scores.csv"
     scores = (
-        pd.read_csv(cmp_dir / "scores.csv")
-        if (cmp_dir / "scores.csv").stat().st_size > 1
+        pd.read_csv(scores_path)
+        if scores_path.stat().st_size > 1
         else pd.DataFrame()
     )
-    if scores.empty:
-        _write(
-            gen / "comparison-scores.md",
-            "",
-        )
-    else:
-        scores = _relabel(scores)
-        _write(
-            gen / "comparison-scores.md",
-            _table(
-                summarise_scores(
-                    scores, by=("reference_date", "model", "source")
-                )[
-                    [
-                        "reference_date",
-                        "model",
-                        "source",
-                        "n",
-                        "wis",
-                        "log_wis",
-                        "coverage_50",
-                        "coverage_90",
-                        "bias",
-                    ]
-                ]
-            ),
-        )
     pending = pd.read_csv(cmp_dir / "pending.csv")
-    pending["models"] = pending["models"].map(
-        lambda ms: ", ".join(
-            names[m] for m in str(ms).split(", ") if m in names
+    parts = []
+    if not scores.empty:
+        table = summarise_comparison(scores, baseline)
+        table["model"] = [
+            comparison_label(m, s, hub_ids)
+            for m, s in zip(table["model"], table["source"], strict=True)
+        ]
+        parts.append(_table(table) if not table.empty else "")
+    for row in pending.itertuples(index=False):
+        parts.append(
+            f"The {row.reference_date} round was made from the "
+            f"{row.vintage} data, so it is scored once later data are "
+            "published.\n"
         )
-    )
     _write(
-        gen / "comparison-pending.md",
-        _table(pending) if not pending.empty else "None.\n",
+        gen / "comparison-scores.md",
+        "\n".join(p for p in parts if p) or "No round has a score yet.\n",
     )
-    other = _relabel(pd.read_csv(cmp_dir / "other-rounds.csv"))
-    summary = other.groupby(["model", "target"], as_index=False).agg(
-        files=("reference_date", "size"),
-        first=("reference_date", "min"),
-        last=("reference_date", "max"),
-    )
+    teams = pd.read_csv(cmp_dir / "teams.csv")
     _write(
-        gen / "comparison-other.md",
-        _table(summary) if not summary.empty else "None.\n",
+        gen / "comparison-teams.md",
+        _table(teams[["model", "team_name", "model_name", "license"]]),
     )
+    quantiles = pd.read_csv(cmp_dir / "quantiles.csv.gz")
     tabs = []
-    for loc in (NATIONAL, "CD-IT", "CD-NK"):
-        if loc not in set(forecasts["location"]):
-            continue
-        slug = loc.lower()
+    for ref in sorted(set(quantiles["reference_date"].astype(str))):
+        stem = f"comparison-{ref}"
         save_light_dark(
-            partial(plot_comparison, forecasts, target, loc, names=names),
-            fig / f"comparison-{slug}.svg",
+            partial(
+                plot_hub_round,
+                quantiles,
+                target,
+                ref,
+                locations=tuple(summary["locations"]),
+                complete_by=complete_by,
+                hub_ids=hub_ids,
+            ),
+            fig / f"{stem}.svg",
         )
-        alt = f"Hub and our forecasts for {loc}."
-        src = f"figures/comparison/comparison-{slug}"
+        alt = f"Forecasts for the {ref} round against the {truth} data."
         tabs.append(
-            f'=== "{loc}"\n\n'
-            f"    ![{alt}]({src}.svg#only-light)\n"
-            f"    ![{alt}]({src}-dark.svg#only-dark)\n"
+            f'=== "{ref}"\n\n'
+            f"    ![{alt}](figures/{stem}.svg#only-light)\n"
+            f"    ![{alt}](figures/{stem}-dark.svg#only-dark)\n"
         )
     _write(gen / "comparison-figures.md", "\n".join(tabs))

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+
 from submission_ci.tracks import load_tracks, main
 
 HUB_TOML = Path(__file__).parents[2] / "config" / "hub.toml"

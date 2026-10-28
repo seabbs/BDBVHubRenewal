@@ -20,3 +20,5 @@ The hub data, dates, reconstructed and simulated vintages, delays, completeness 
 ::: bdbvhubrenewal.data.completeness
 
 ::: bdbvhubrenewal.data.bvd
+
+::: bdbvhubrenewal.data.zones
