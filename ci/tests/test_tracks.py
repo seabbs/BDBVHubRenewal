@@ -29,8 +29,11 @@ def test_repository_config_names_both_hub_models() -> None:
     base = tracks["baseline"]
     assert base.model_id == "seabbs-baseline"
     assert base.model == "persistencenow"
-    # Nothing is submitted until Sam opts a model in.
-    assert not any(t.submit for t in tracks.values())
+    # Sam opted seabbs-baseline in for the 2026-11-07 round (2026-10-28);
+    # seabbs-renewal waits for its models. DRY_RUN still applies.
+    assert base.submit
+    assert base.runs
+    assert not tracks["renewal"].submit
 
 
 def test_opted_in_baseline_runs_without_a_model_choice(tmp_path: Path) -> None:
