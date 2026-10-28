@@ -174,9 +174,11 @@ class ModelConfig:
         Lag from report to publication in a vintage: the empirical pmf
         on $0..180$ days from rows new in earlier delay files
         (`Vintage.publication_lag_pmf`), a Dirichlet simplex on $0..L$,
-        uniform on $0..L$, or none. Empirical falls back to
+        uniform on $0..L$ (the default), or none. Empirical falls back to
         `PRIOR_PUBLICATION_LAG` for a vintage with no earlier pair of
-        delay files.
+        delay files. It is not the default: late rows in the delay files
+        are mostly onsets recorded later for cases already counted as
+        imputed, so it overstates late reporting of the total.
     max_publication_lag : int
         $L$, in days (`data.reconstruct.PUBLICATION_LAG_DAYS`).
     delay_counts : {"multinomial", "dirichlet-multinomial"}
@@ -206,7 +208,7 @@ class ModelConfig:
     bvd_alpha: float = 0.5
     dmax: int = 60
     publication_lag: Literal["empirical", "estimated", "fixed", "none"] = (
-        "empirical"
+        "fixed"
     )
     max_publication_lag: int = 3
     delay_counts: Literal["multinomial", "dirichlet-multinomial"] = (
