@@ -60,6 +60,7 @@ __all__ = [
     "JITTER_RADIUS",
     "SAMPLER_ENV",
     "SINGLE_PATCH_MIN_CASES",
+    "SINGLE_PATCH_WEEKS",
     "TRAJECTORY_DRAW_FILE",
     "VARIANTS",
     "RenewalModel",
@@ -110,10 +111,15 @@ DEFAULT_SAMPLER: Final[Mapping[str, Any]] = {
 }
 """NUTS settings when neither the CI nor `SAMPLER_ENV` gives them."""
 
-SINGLE_PATCH_MIN_CASES: Final = 10
-"""Fewest cases for a location to get its own single-patch fit. Below it
-the location gets Poisson draws at a Gamma-distributed weekly rate
-(`bdbvhubrenewal.model.inputs.idle_draws`)."""
+SINGLE_PATCH_MIN_CASES: Final = 20
+"""Fewest cases in the last `SINGLE_PATCH_WEEKS` data weeks for a province
+to get its own single-patch fit: an outbreak province, as the main model's
+sporadic class. Below it the province gets Poisson draws at a
+Gamma-distributed weekly rate (`bdbvhubrenewal.model.inputs.idle_draws`).
+A few old cases alone (Bas-Uele, 13 to date and 7 in 6 weeks) did not
+converge (R-hat 1.71 at 2026-10-24)."""
+SINGLE_PATCH_WEEKS: Final = 6
+"""Weeks of recent cases the single-patch rule looks back over."""
 
 RECENT_WEEKS: Final = 4
 """Data weeks behind the share that carries the national data gap forward."""
@@ -1132,13 +1138,19 @@ class RenewalModel:
             )
         rows = task.target.loc[task.target["vintage"] == task.vintage]
         cases = rows.groupby("location")["total"].sum()
+        weeks = sorted(set(rows["target_end_date"]))[-SINGLE_PATCH_WEEKS:]
+        recent = (
+            rows.loc[rows["target_end_date"].isin(weeks)]
+            .groupby("location")["total"]
+            .sum()
+        )
         runs: dict[str, RenewalRun] = {}
         frames: list[pd.DataFrame] = []
         reported: list[pd.DataFrame] = []
         for loc in task.locations:
             if cases.get(loc, 0) <= 0:
                 continue
-            if cases.get(loc, 0) < SINGLE_PATCH_MIN_CASES:
+            if recent.get(loc, 0) < SINGLE_PATCH_MIN_CASES:
                 idle = _idle_samples(task, loc, rows)
                 frames.append(idle)
                 # Too few cases to model reporting: the same draws.

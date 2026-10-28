@@ -217,7 +217,7 @@ Each week the submission takes the first of `renewal`, one refit of `renewal` wi
 ### Single patch
 
 `renewalsp` fits each province $\ell$ to its own known and imputed onsets.
-A location with at least 10 cases has
+A province with at least 20 cases in its last 6 data weeks, an outbreak province, has
 
 $$
 x_\ell(t) = R_\ell(t) \sum_{\tau \ge 1} x_\ell(t - \tau)\, g(\tau),

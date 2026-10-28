@@ -142,10 +142,11 @@ class ModelConfig:
         Share $\nu$ of each province at risk, which depletion uses.
         `None` (default) estimates it with a log-normal prior; a number
         fixes it.
-    rt_weighting : {"equal", "cases"}
-        Province Rt deviations sum to zero with equal weights, or weighted
-        by cumulative cases in the vintage, so the national Rt walk is the
-        case-weighted log Rt.
+    rt_weighting : {"equal", "cases", "sqrt_cases"}
+        Province Rt deviations sum to zero with equal weights, weighted by
+        cumulative cases in the vintage, so the national Rt walk is the
+        case-weighted log Rt, or by their square root, which tempers how
+        far the largest province pins the national walk.
     outbreak_threshold : float or None
         A province is an outbreak province in a week when its cases over
         the last `outbreak_window` weeks reach this many, and sporadic
@@ -200,7 +201,7 @@ class ModelConfig:
     report_inactive: bool = True
     effective_population: float | None = None
     seeding: Literal["first_case", "primary"] = "first_case"
-    rt_weighting: Literal["equal", "cases"] = "equal"
+    rt_weighting: Literal["equal", "cases", "sqrt_cases"] = "equal"
     outbreak_threshold: float | None = None
     outbreak_window: int = 6
     import_rt: Literal["destination", "origin"] = "destination"
@@ -509,9 +510,11 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         deplete=config.depletion,
         seed_days=data.seed_days,
         primary=primary,
-        deviation_weights=totals + 1.0
-        if config.rt_weighting == "cases"
-        else None,
+        deviation_weights={
+            "equal": None,
+            "cases": totals + 1.0,
+            "sqrt_cases": np.sqrt(totals) + 1.0,
+        }[config.rt_weighting],
         outbreak=outbreak,
         import_rt=config.import_rt,
         rt_observation=RtPseudoObservation(alpha=config.bvd_alpha, **data.bvd)

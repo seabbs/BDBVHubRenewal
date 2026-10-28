@@ -102,7 +102,8 @@ COMPLETE_K = 3
 """Weeks ending at least this many weeks before the truth vintage count as
 complete, as `data.completeness.complete_weeks` (`complete_after_weeks`);
 the complete-weeks scores use only those."""
-SP_MIN_CASES = 10
+SP_MIN_CASES = adapter.SINGLE_PATCH_MIN_CASES
+SP_WEEKS = adapter.SINGLE_PATCH_WEEKS
 """renewalsp fits only locations with at least this many cases."""
 SAMPLER = {
     "num_warmup": 500,
@@ -118,6 +119,9 @@ _R4 = dataclasses.replace(_R3, outbreak_threshold=20, outbreak_window=6)
 RUNGS: dict[str, pr.ModelConfig | str] = {
     **pr.model.LADDER,
     "R1 case-weighted Rt": _R1,
+    "R1s sqrt case-weighted Rt": dataclasses.replace(
+        pr.MAIN, rt_weighting="sqrt_cases"
+    ),
     "R2a R1 + learnt destination weights": dataclasses.replace(
         _R1, coupling="learnt"
     ),
@@ -150,6 +154,8 @@ DESCRIPTIONS = {
     "S5 + depletion (main)": "Susceptible depletion; this is `renewal`.",
     "R1 case-weighted Rt": "Province Rt deviations sum to zero weighted by "
     "cases, so the national walk is the case-weighted Rt.",
+    "R1s sqrt case-weighted Rt": "As R1 with weights the square root of "
+    "cases, so the largest province pins the national walk less.",
     "R2a R1 + learnt destination weights": "Gravity with a learnt distance "
     "decay and sum-to-zero destination log weights, holding each origin's "
     "export total.",
@@ -463,14 +469,20 @@ def per_location(
 ) -> tuple[pd.DataFrame, dict]:
     """Fit `renewalsp`: one single-patch fit per province.
 
-    Provinces with at least `SP_MIN_CASES` cases are fitted; the rest get
+    Provinces with at least `SP_MIN_CASES` cases in the last `SP_WEEKS`
+    data weeks are fitted, as `renewalsp`; the rest get
     zeros (their reported counts are below the threshold). National is
     the sum of the provinces. With `as_of`, samples are the counts as
     reported by it.
     """
     config = adapter.model_config(VARIANTS["renewalsp"])
     rows = task.target.loc[task.target["vintage"] == task.vintage]
-    cases = rows.groupby("location")["total"].sum()
+    weeks_ = sorted(set(rows["target_end_date"]))[-SP_WEEKS:]
+    cases = (
+        rows.loc[rows["target_end_date"].isin(weeks_)]
+        .groupby("location")["total"]
+        .sum()
+    )
     frames, fits = [], []
     for loc in task.locations:
         if cases.get(loc, 0) < SP_MIN_CASES:
