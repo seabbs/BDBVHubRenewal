@@ -5,3 +5,9 @@
 
 [submission]
 model_abbr = "seabbsrenewal"
+
+# Further hub models, each submitted under its own id every round, apart
+# from the chain above. The hub allows no hyphen in an abbreviation and
+# fewer than 16 characters. Read by `bdbvhubrenewal.hub.model_abbr_for`.
+[models.persistencenow]
+model_abbr = "seabbspersnow"

@@ -65,6 +65,7 @@ from bdbvhubrenewal.submission.fitting import (
 from bdbvhubrenewal.submission.hub import (
     SUBMISSION_CONFIG,
     load_hub_round,
+    model_abbr_for,
     model_id,
     render_model_metadata,
     submission_model_abbr,
@@ -132,6 +133,30 @@ MODEL_METADATA = {
             "province populations and population-weighted province centres."
         ),
     },
+    # A hub model of its own (epiforecasts-seabbspersnow), submitted every
+    # round. The nowcast step is being built; check this text against it.
+    "persistencenow": {
+        "model_name": "Persistence on a nowcast",
+        "methods": (
+            "Recent onset weeks completed by a fast nowcast of reporting "
+            "delays, then the last week carried forward with random walk "
+            "noise. Provinces, health zones and national."
+        ),
+        "methods_long": (
+            "A persistence baseline on nowcast counts. Recent onset weeks "
+            "are first completed for reporting delays with a fast nowcast "
+            "(no MCMC). The last nowcast week is then carried forward, with "
+            "log-scale random walk noise and Poisson draws, as in the "
+            "persistence baseline. Province samples are split across health "
+            "zones, and the national value is the sum of provinces. See "
+            "https://seabbs.github.io/BDBVHubRenewal/methods/model/."
+        ),
+        "data_inputs": (
+            "Hub target data (weekly confirmed cases by onset week, observed "
+            "plus imputed), the hub's published onset-to-report delays and "
+            "daily health zone counts."
+        ),
+    },
 }
 """Metadata text for each model that may be submitted."""
 
@@ -147,7 +172,7 @@ def _abbr(args: argparse.Namespace) -> str:
         return str(args.abbr)
     if args.model == "persistence":
         return "persistence"
-    return submission_model_abbr(args.hub_toml)
+    return model_abbr_for(args.model, args.hub_toml)
 
 
 def _abbr_args(p: argparse.ArgumentParser) -> None:
@@ -308,6 +333,11 @@ def build_parser() -> argparse.ArgumentParser:
         "hub-id", help="Print the hub model id that submissions use."
     )
     hid.add_argument("--hub-toml", default=str(SUBMISSION_CONFIG))
+    hid.add_argument(
+        "--model",
+        default=None,
+        help="A model with its own hub id (`[models]` in config/hub.toml).",
+    )
     cho = sub.add_parser(
         "chosen-model",
         help="Print the model chosen in the model choice record.",
@@ -858,7 +888,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "bvd":  # pragma: no cover - network
         return _bvd(args)
     if args.command == "hub-id":
-        print(model_id(submission_model_abbr(args.hub_toml)))
+        abbr = (
+            model_abbr_for(args.model, args.hub_toml)
+            if args.model
+            else submission_model_abbr(args.hub_toml)
+        )
+        print(model_id(abbr))
         return 0
     if args.command == "chosen-model":
         return _chosen_model(args)

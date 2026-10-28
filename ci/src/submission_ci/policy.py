@@ -122,6 +122,12 @@ class Policy:
         ]
         return replace(self, candidates=cands)
 
+    def only(self, cid: str) -> Policy:
+        """A policy whose chain is one candidate, for a hub model of its
+        own that is submitted every round apart from the main chain."""
+        cand = replace(self.get(cid), stage="baseline")
+        return replace(self, candidates=[cand], retry_budget=0)
+
     def get(self, cid: str) -> Candidate:
         """Look up a candidate by id."""
         for c in self.candidates:

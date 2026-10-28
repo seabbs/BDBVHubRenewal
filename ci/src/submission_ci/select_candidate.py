@@ -425,8 +425,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     sel.add_argument("--out", type=Path, required=True)
     sel.add_argument("--validate-cmd", default="")
     sel.add_argument("--retried", action="store_true")
+    sel.add_argument(
+        "--only",
+        default="",
+        help="Submit this one candidate alone (a hub model of its own)",
+    )
     args = p.parse_args(argv)
     policy = load_policy(args.policy).for_model(args.model)
+    if getattr(args, "only", ""):
+        policy = policy.only(args.only)
     if args.cmd == "triage":
         need = triage(policy, args.candidates, deadline_minutes(args))
         set_outputs({"need_retry": need})

@@ -286,7 +286,8 @@ def test_persistencenow_has_its_own_hub_id(
 
     abbr = model_abbr_for("persistencenow", ROOT / "config" / "hub.toml")
     assert abbr == "seabbspersnow"
-    assert abbr.isalnum() and len(abbr) < 16
+    assert abbr.isalnum()
+    assert len(abbr) < 16
     # Models without their own id submit under the renewal id.
     assert model_abbr_for("renewalsp", ROOT / "config" / "hub.toml") == (
         "seabbsrenewal"
