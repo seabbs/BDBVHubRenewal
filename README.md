@@ -36,6 +36,11 @@ uv sync
 
 The [Getting started](https://samabbott.co.uk/BDBVHubRenewal/getting-started/) page walks through a small fit.
 
+## Data
+
+The surveillance data are from the Institut National de Santé Publique (INSP) and the Incident Management Support Team (IMST), Democratic Republic of the Congo.
+They are processed by the Atlantic Coast Center for Infectious Disease Dynamics and Analytics (ACCIDDA) and the Kinshasa School of Public Health, University of Kinshasa, and distributed through the [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub).
+
 ## Contributing
 
 Contributions are welcome.
