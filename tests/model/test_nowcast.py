@@ -190,3 +190,11 @@ def test_negative_and_long_delays_are_clipped_not_dropped(
     assert extra.sum() == 2
     assert extra[:, 0].sum() == 1
     assert extra[:, -1].sum() == 1
+
+
+def test_trajectories_name_their_posterior_draws(sim_vintage):
+    model = build_model(sim_vintage, MAIN)
+    latent = prior_latent(model, sim_vintage, n=8)
+    draws = forecast_trajectories(model, sim_vintage, 5, posterior=latent)
+    assert draws["draw"].shape == (5,)
+    assert np.all((draws["draw"] >= 0) & (draws["draw"] < 8))
