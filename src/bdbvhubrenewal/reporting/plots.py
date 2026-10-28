@@ -42,11 +42,13 @@ __all__ = [
     "plot_forecasts",
     "plot_hub_round",
     "plot_imputed_share",
+    "plot_location_grid",
     "plot_newly_missing",
     "plot_nowcast",
     "plot_reconstruction",
     "plot_relative_skill",
     "plot_revisions",
+    "plot_score_summary",
     "plot_scores",
     "plot_scores_by_truth",
     "plot_simulation",
@@ -677,6 +679,106 @@ def _draw_forecast(
     ax.plot(q.index, q[0.5], color=colour, lw=1.5, label=label)
 
 
+def plot_location_grid(
+    forecasts: pd.DataFrame,
+    target: pd.DataFrame,
+    locations: Sequence[str],
+    models: Sequence[str] | None = None,
+    truth_vintage: str | None = None,
+    max_horizon: int | None = None,
+    weeks_before: int = 10,
+    ncol: int = 2,
+    mode: str = "light",
+    complete_after_weeks: int = 3,
+) -> Figure:
+    """Plot one origin's forecasts as a grid with a panel per location.
+
+    Parameters
+    ----------
+    forecasts : pandas.DataFrame
+        Output of `run_forecasts` for one origin.
+    target : pandas.DataFrame
+        Target rows holding the origin and the truth vintage.
+    locations : sequence of str
+        Locations to show, one panel each.
+    models : sequence of str, optional
+        Models in registry order. Defaults to those in `forecasts`.
+    truth_vintage : str, optional
+        Vintage drawn as later data. Defaults to the latest real vintage.
+    max_horizon : int, optional
+        Last horizon drawn. `-1` shows the nowcast alone, without the
+        reference week or the forecast weeks.
+    weeks_before : int
+        Weeks of data shown before the reference date.
+    ncol : int
+        Panels per row.
+    mode : str
+        `"light"` or `"dark"`.
+    complete_after_weeks : int
+        Weeks after which a week of the later data counts as complete.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Per panel, the data at the origin (dashed), the later data
+        (solid) and each model's trajectories, intervals and median.
+    """
+    fc = forecasts
+    if max_horizon is not None:
+        fc = fc.loc[fc["horizon"] <= max_horizon]
+    models = list(models or fc["model"].unique())
+    real = target.loc[target["kind"] == "real"]
+    truth_v = truth_vintage or real["vintage"].max()
+    vintage = fc["vintage"].iloc[0]
+    ref = pd.Timestamp(fc["reference_date"].iloc[0])
+    end = pd.Timestamp(fc["target_end_date"].max())
+    start = ref - pd.Timedelta(weeks=weeks_before)
+    names = _names(real)
+    ink = THEMES[mode]
+    cut = _incomplete_after(truth_v, complete_after_weeks)
+    fig, axes = _grid(len(locations), ncol, width=3.6, height=2.5)
+    for ax, loc in zip(axes, locations, strict=True):
+        for v, style, lab in (
+            (truth_v, "-", f"Data {truth_v}"),
+            (vintage, "--", "Data at the origin"),
+        ):
+            rows = real.loc[(real["vintage"] == v) & (real["location"] == loc)]
+            x = pd.to_datetime(rows["target_end_date"])
+            sel = (x >= start) & (x <= end)
+            if style == "-":
+                _plot_data(
+                    ax,
+                    x[sel],
+                    rows["total"][sel],
+                    cut,
+                    ink["data"],
+                    lab,
+                    ls=style,
+                    lw=1.2,
+                )
+            else:
+                ax.plot(
+                    x[sel],
+                    rows["total"][sel],
+                    color=ink["data"],
+                    ls=style,
+                    lw=1.2,
+                    label=lab,
+                )
+        for m in models:
+            s = fc.loc[(fc["location"] == loc) & (fc["model"] == m)]
+            if not s.empty:
+                _draw_forecast(ax, s, model_colour(m, models, mode), m)
+        ax.axvline(mdates.date2num(ref), color=ink["muted"], lw=0.8, ls=":")
+        _shade_incomplete(ax, cut, mode)
+        ax.set_title(f"{names.get(loc, loc)} ({loc})")
+        ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=4))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
+    axes[0].set_ylabel("Cases by onset week")
+    axes[0].legend(fontsize=7)
+    return fig
+
+
 def plot_forecasts(
     forecasts: pd.DataFrame,
     target: pd.DataFrame,
@@ -1202,10 +1304,88 @@ def plot_scores(
     return fig
 
 
+def plot_score_summary(
+    scores: pd.DataFrame,
+    baseline: str = "persistence",
+    by: str = "horizon",
+    models: Sequence[str] | None = None,
+    mode: str = "light",
+    metric: str = "wis",
+) -> Figure:
+    """Plot WIS relative to a baseline and 90% coverage by model.
+
+    Parameters
+    ----------
+    scores : pandas.DataFrame
+        Output of `score_forecasts`, already limited to the scores shown.
+    baseline : str
+        The reference model.
+    by : str
+        Column to plot against, such as `"horizon"`.
+    models : sequence of str, optional
+        Models in registry order.
+    mode : str
+        `"light"` or `"dark"`.
+    metric : str
+        `"wis"` or `"log_wis"`.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Two panels. The first has each model's mean WIS divided by the
+        baseline's, with a line at 1. The second has the share of 90%
+        intervals holding the data, with a line at 0.9.
+    """
+    from bdbvhubrenewal.evaluation.scoring import relative_skill
+
+    models = list(models or scores["model"].unique())
+    ink = THEMES[mode]
+    match = [
+        c
+        for c in (
+            "kind",
+            "vintage",
+            "reference_date",
+            "location",
+            "target_end_date",
+        )
+        if c in scores
+    ]
+    rel = relative_skill(
+        scores, baseline=baseline, by=(by,), metrics=(metric,), match_on=match
+    )
+    cover = scores.groupby(["model", by])["coverage_90"].mean().reset_index()
+    fig, axes = _grid(2, 2, width=3.8, height=2.6)
+    for m in models:
+        colour = model_colour(m, models, mode)
+        if m != baseline:
+            r = rel.loc[rel["model"] == m].sort_values(by)
+            axes[0].plot(
+                r[by],
+                r[f"relative_{metric}"],
+                color=colour,
+                marker="o",
+                label=m,
+            )
+        c = cover.loc[cover["model"] == m].sort_values(by)
+        axes[1].plot(c[by], c["coverage_90"], color=colour, marker="o", label=m)
+    axes[0].axhline(1, color=ink["muted"], lw=1, ls=":")
+    axes[1].axhline(0.9, color=ink["muted"], lw=1, ls=":")
+    axes[0].set_ylabel(
+        f"{'Log WIS' if metric == 'log_wis' else 'WIS'} relative to {baseline}"
+    )
+    axes[1].set_ylabel("90% interval coverage")
+    for ax in axes:
+        ax.set_xlabel(by.capitalize())
+    axes[1].legend(fontsize=7)
+    return fig
+
+
 def plot_scenarios(
     scores: pd.DataFrame,
     models: Sequence[str] | None = None,
     mode: str = "light",
+    metric: str = "wis",
 ) -> Figure:
     """Plot mean WIS by horizon on the simulated scenarios.
 
@@ -1242,7 +1422,7 @@ def plot_scenarios(
             ("zone", ":"),
         ):
             part = s.loc[levels == level]
-            mean = part.groupby(["model", "horizon"])["wis"].mean().unstack(0)
+            mean = part.groupby(["model", "horizon"])[metric].mean().unstack(0)
             for m in models:
                 if m not in mean.columns:
                     continue
@@ -1257,7 +1437,7 @@ def plot_scenarios(
                 )
         ax.set_title(scenario.removeprefix("calibrated_"))
         ax.set_xlabel("Horizon")
-    axes[0].set_ylabel(_METRIC_LABELS.get("wis", "wis"))
+    axes[0].set_ylabel(_METRIC_LABELS.get(metric, metric))
     axes[0].legend(fontsize=7)
     return fig
 

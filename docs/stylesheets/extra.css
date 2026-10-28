@@ -52,3 +52,87 @@
 .md-typeset table:not([class]) {
   font-size: 0.7rem;
 }
+
+/* Forecast explorer. */
+.explorer {
+  margin: 1em 0;
+}
+
+.explorer-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em 1.5em;
+}
+
+.explorer select {
+  font: inherit;
+  color: var(--md-default-fg-color);
+  background: var(--md-default-bg-color);
+  border: 1px solid var(--md-default-fg-color--lighter);
+  border-radius: 4px;
+  padding: 0.2em 0.4em;
+}
+
+.explorer-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3em 1em;
+  margin: 0.6em 0;
+  font-size: 0.8rem;
+}
+
+.explorer-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  cursor: pointer;
+}
+
+.explorer-swatch {
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  border-radius: 2px;
+}
+
+.explorer-figure svg {
+  width: 100%;
+  height: auto;
+}
+
+.explorer-grid {
+  stroke: var(--md-default-fg-color--lightest);
+}
+
+.explorer-tick {
+  fill: var(--md-default-fg-color--light);
+  font-size: 11px;
+}
+
+.explorer-shade {
+  fill: var(--md-default-fg-color--lightest);
+  opacity: 0.6;
+}
+
+.explorer-data {
+  stroke: var(--md-default-fg-color);
+  stroke-width: 1.2;
+}
+
+.explorer-point {
+  fill: var(--md-default-fg-color);
+}
+
+.explorer-point.hollow {
+  fill: var(--md-default-bg-color);
+  stroke: var(--md-default-fg-color);
+}
+
+.explorer-ref {
+  stroke: var(--md-default-fg-color--light);
+  stroke-dasharray: 2 3;
+}
+
+.explorer-note {
+  color: var(--md-default-fg-color--light);
+}
