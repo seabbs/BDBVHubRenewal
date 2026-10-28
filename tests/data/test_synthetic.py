@@ -136,3 +136,44 @@ def test_simulated_missing_onsets_follow_the_report_day() -> None:
     frac = np.clip(day - s.n_days / 3, 0, None) / (s.n_days * 2 / 3)
     expected = np.where(day >= s.n_days / 3, 0.9 * frac, 0.0).mean()
     assert (~cases["onset_known"]).mean() == pytest.approx(expected, abs=0.01)
+
+
+def test_simulated_onsets_follow_the_model_renewal(outbreak) -> None:  # type: ignore[no-untyped-def]
+    import jax.numpy as jnp
+
+    from bdbv_hub_renewal.data import PROVINCE_POPULATIONS
+    from bdbv_hub_renewal.model.inputs import gravity_kernel as model_kernel
+    from bdbv_hub_renewal.model.model import generation_interval
+    from bdbv_hub_renewal.model.renewal import coupled_renewal, mixing_matrix
+
+    s = outbreak.settings
+    p = outbreak.parameters
+    rt = p.pivot(index="date", columns="location", values="rt")[
+        list(s.locations)
+    ].to_numpy()
+    pop = np.array([PROVINCE_POPULATIONS[q] for q in s.locations])
+    table = pd.DataFrame({"location": s.locations, "population": pop})
+    w = mixing_matrix(
+        jnp.asarray(model_kernel(s.locations, table)),
+        s.importation,
+        jnp.asarray(pop / pop.sum()),
+    )
+    seeding = np.zeros_like(rt)
+    for i, day in enumerate(s.seed_day):
+        if day >= 0:
+            seeding[day, i] = s.seed_size / pop[i]
+    g = generation_interval(s.gi_mean, s.gi_sd)
+    nu = s.effective_fraction
+    x, _ = coupled_renewal(
+        jnp.zeros((g.size, len(pop))),
+        jnp.asarray(rt),
+        jnp.asarray(g),
+        w,
+        jnp.full(len(pop), nu),
+        pool=nu,
+        seeding=jnp.asarray(seeding),
+    )
+    onsets = p.pivot(index="date", columns="location", values="onsets")[
+        list(s.locations)
+    ].to_numpy()
+    np.testing.assert_allclose(onsets, np.asarray(x) * pop, rtol=1e-4)
