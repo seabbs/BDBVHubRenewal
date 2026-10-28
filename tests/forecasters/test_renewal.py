@@ -485,3 +485,28 @@ def test_inputs_carry_the_publication_lag_from_earlier_files(
     assert late.publication_lag_pmf is not None
     assert late.publication_lag_pmf.sum() == pytest.approx(1.0)
     assert vintage_inputs(tasks["2026-10-09"], MAIN).publication_lag_pmf is None
+
+
+def test_lag_source_warns_when_the_prior_stands_in(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    from bdbv_hub_renewal.evaluation.backtest import BacktestConfig, make_tasks
+    from bdbv_hub_renewal.forecasters.renewal import (
+        lag_warnings,
+        vintage_inputs,
+    )
+    from bdbv_hub_renewal.model import MAIN
+
+    tasks = {
+        t.vintage: t
+        for t in make_tasks(
+            target.loc[target["kind"] == "real"],
+            delays.assign(kind="real"),
+            BacktestConfig(seed=3),
+        )
+    }
+    early = vintage_inputs(tasks["2026-10-09"], MAIN)
+    late = vintage_inputs(tasks["2026-10-17"], MAIN)
+    (warning,) = lag_warnings([early])
+    assert warning.startswith("publication_lag:")
+    assert lag_warnings([late]) == []

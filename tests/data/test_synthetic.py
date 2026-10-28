@@ -207,10 +207,12 @@ def test_publication_lag_pmf_from_rows_new_in_later_vintages() -> None:
     later = _rows("2026-10-24", ["2026-10-24"], [0])
     pmf = publication_lag_pmf(pd.concat([old, new, later]), "2026-10-17")
     assert pmf is not None
-    assert pmf.shape == (61,)
+    assert pmf.shape == (181,)
     assert pmf.sum() == pytest.approx(1.0)
-    # Report dates about 60 days old go to the last cell.
-    assert pmf[-1] == pytest.approx(0.4, abs=0.05)
+    # Report dates about 100 days old keep their lag: the real files have
+    # 8-9% of new rows more than 60 days late.
+    assert pmf[90:110].sum() == pytest.approx(0.4, abs=0.05)
+    assert pmf[-1] == 0
     assert pmf[:7].sum() == pytest.approx(0.6, abs=0.05)
     # The 10-24 file is after the forecast date, so it is not used.
     assert publication_lag_pmf(pd.concat([old, new]), "2026-10-17") == (

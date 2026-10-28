@@ -168,3 +168,12 @@ def test_cli_exit_codes_and_outputs(
         data["status"] == "fail" and data["thresholds"]["retry"]["rhat"] == 1.1
     )
     assert "Fit convergence" in summary.read_text()
+
+
+def test_fit_warnings_from_the_model_are_kept() -> None:
+    diag = diagnostics() | {
+        "warnings": ["publication_lag: no earlier pair of delay files"]
+    }
+    out = check_fit("main", diag, LIMITS)
+    assert out.status == "warn"
+    assert out.warnings == ["publication_lag: no earlier pair of delay files"]

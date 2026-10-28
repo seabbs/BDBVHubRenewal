@@ -336,10 +336,17 @@ def test_vintage_without_delays_takes_reconstructed_rows(
     assert got is not None
     assert len(got) > 0
     assert set(got["vintage"]) == {"2026-08-18"}
-    # The next vintage's rows, kept if published by the cut-off.
+    # The next vintage's rows, thinned by the chance each was published
+    # by the cut-off under the prior publication lag.
+    from bdbv_hub_renewal.model.model import PRIOR_PUBLICATION_LAG
+
     nxt = delays.loc[delays["vintage"] == "2026-10-09"]
-    want = reconstruct_delays(nxt, "2026-08-18")
-    assert len(got) == len(want)
+    cut = reconstruct_delays(nxt, "2026-08-18", publication_lag_days=0)
+    thinned = reconstruct_delays(
+        nxt, "2026-08-18", lag_pmf=PRIOR_PUBLICATION_LAG
+    )
+    assert len(got) == len(thinned) < len(cut)
+    assert len(thinned) > 0.8 * len(cut)
 
 
 def test_tasks_carry_earlier_delay_files_for_the_publication_lag(

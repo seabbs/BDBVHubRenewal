@@ -31,7 +31,7 @@ import datetime as dt
 import json
 import os
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from functools import partial
 from pathlib import Path
@@ -1132,7 +1132,29 @@ def fit_renewal(
         "parameters": params,
         "chains": chains,
         "worst_rhat": worst_rhat(params),
+        "warnings": lag_warnings([run.data for run in fit.runs.values()]),
     }
+
+
+def lag_warnings(inputs: Sequence[Any]) -> list[str]:
+    """Warn when a fit used the prior publication lag, not an estimate.
+
+    Parameters
+    ----------
+    inputs : sequence of bdbv_hub_renewal.model.Vintage
+        The model inputs of each run.
+
+    Returns
+    -------
+    list of str
+        One `name: message` warning, or none.
+    """
+    if any(getattr(v, "publication_lag_pmf", None) is None for v in inputs):
+        return [
+            "publication_lag: no earlier pair of delay files, so the fit "
+            "used PRIOR_PUBLICATION_LAG"
+        ]
+    return []
 
 
 def forecast_renewal(task: ForecastTask, fit_dir: Path | str) -> Forecast:

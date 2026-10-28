@@ -172,7 +172,7 @@ class ModelConfig:
         Maximum onset-to-report delay in days.
     publication_lag : {"empirical", "estimated", "fixed", "none"}
         Lag from report to publication in a vintage: the empirical pmf
-        on $0..60$ days from rows new in earlier delay files
+        on $0..180$ days from rows new in earlier delay files
         (`Vintage.publication_lag_pmf`), a Dirichlet simplex on $0..L$,
         uniform on $0..L$, or none. Empirical falls back to
         `PRIOR_PUBLICATION_LAG` for a vintage with no earlier pair of
@@ -295,7 +295,7 @@ class Vintage:
         External Rt summaries: `day` (index of $s_b$ from the first data
         day), `groups` `(G, P)`, `values`, `scales` and `kinds` `(G,)`.
     publication_lag_pmf : numpy.ndarray or None
-        Empirical report to publication lag pmf on $0..60$ days
+        Empirical report to publication lag pmf on $0..180$ days
         (`data.reconstruct.publication_lag_pmf`), or None.
     """
 

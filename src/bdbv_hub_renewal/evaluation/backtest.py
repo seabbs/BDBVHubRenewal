@@ -57,6 +57,7 @@ from bdbv_hub_renewal.forecasters.base import (
     add_national,
     check_samples,
 )
+from bdbv_hub_renewal.model.model import PRIOR_PUBLICATION_LAG
 
 __all__ = [
     "BacktestConfig",
@@ -250,7 +251,11 @@ def _reconstructed_delays(delays: pd.DataFrame, vintage: str) -> pd.DataFrame:
     later = sorted(str(v) for v in real["vintage"].unique() if v > vintage)
     if not later:
         return real.iloc[:0]
-    out = reconstruct_delays(real.loc[real["vintage"] == later[0]], vintage)
+    out = reconstruct_delays(
+        real.loc[real["vintage"] == later[0]],
+        vintage,
+        lag_pmf=PRIOR_PUBLICATION_LAG,
+    )
     if "kind" in delays.columns:
         out["kind"] = "real"
     return out

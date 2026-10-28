@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import datetime as dt
 import itertools
+from collections.abc import Sequence
 
 import numpy as np
 import pandas as pd
@@ -52,6 +53,7 @@ from bdbv_hub_renewal.data.delays import DEFAULT_MAX_DELAY, empirical_pmf
 from bdbv_hub_renewal.forecasters.base import NATIONAL
 
 __all__ = [
+    "MAX_PUBLICATION_LAG",
     "PUBLICATION_LAG_DAYS",
     "VINTAGE_KINDS",
     "compare_reconstruction",
@@ -210,12 +212,17 @@ def reconstruct_delays(
     delays: pd.DataFrame,
     as_of: dt.date | str,
     publication_lag_days: int = PUBLICATION_LAG_DAYS,
+    lag_pmf: Sequence[float] | None = None,
 ) -> pd.DataFrame:
-    """Keep the delay rows a vintage at an earlier date would have had.
+    r"""Keep the delay rows a vintage at an earlier date would have had.
 
     A case is kept if its report, taking onset at the middle of its onset
     week, falls by the vintage date minus `publication_lag_days`, and its
     onset week has started by then (a few delays are negative).
+    With `lag_pmf`, each case is instead kept with the chance it was
+    published by the vintage date $A$,
+    $\frac{1}{7}\sum_u F_\ell(A - (W - u + d))$, so late entries in the
+    later file are thinned out. The draws are seeded from the date.
 
     Parameters
     ----------
@@ -225,6 +232,8 @@ def reconstruct_delays(
         The date to reconstruct.
     publication_lag_days : int
         Days from report to appearing in a vintage.
+    lag_pmf : sequence of float, optional
+        Report to publication lag pmf from 0 days.
 
     Returns
     -------
@@ -232,12 +241,34 @@ def reconstruct_delays(
         The kept rows, with `vintage` set to `as_of`.
     """
     day = as_date(as_of)
+    if lag_pmf is not None:
+        return _thin_by_lag(delays, day, np.asarray(lag_pmf, dtype=float))
     cut = pd.Timestamp(day - dt.timedelta(days=publication_lag_days))
     report = pd.to_datetime(delays["onset_week"]) + pd.to_timedelta(
         delays["delay"] - 3, unit="D"
     )
     started = pd.to_datetime(delays["onset_week"]) - pd.Timedelta(days=6)
     out = delays.loc[(report <= cut) & (started <= cut)].copy()
+    out["vintage"] = day.isoformat()
+    return out.reset_index(drop=True)
+
+
+def _thin_by_lag(
+    delays: pd.DataFrame, day: dt.date, lag_pmf: np.ndarray
+) -> pd.DataFrame:
+    """Keep each row with the chance it was published by `day`."""
+    cdf = np.cumsum(lag_pmf)
+    gap = (pd.Timestamp(day) - pd.to_datetime(delays["onset_week"])).dt.days
+    # Days from report to `day` for an onset u days before the week end.
+    since = (
+        gap.to_numpy()[:, None]
+        + _onset_offsets()[None, :]
+        - delays["delay"].to_numpy()[:, None]
+    )
+    seen = np.where(since < 0, 0.0, cdf[np.clip(since, 0, cdf.size - 1)])
+    rng = np.random.default_rng(day.toordinal())
+    keep = rng.uniform(size=len(delays)) < seen.mean(axis=1)
+    out = delays.loc[keep].copy()
     out["vintage"] = day.isoformat()
     return out.reset_index(drop=True)
 
@@ -275,8 +306,16 @@ def compare_reconstruction(
     return out
 
 
+MAX_PUBLICATION_LAG = 180
+"""Longest report to publication lag kept in `publication_lag_pmf`, in days.
+Between the real files 8-9% of new rows were over 60 days late and none
+over 180."""
+
+
 def publication_lag_pmf(
-    delays: pd.DataFrame, as_of: dt.date | str, max_lag: int = DEFAULT_MAX_DELAY
+    delays: pd.DataFrame,
+    as_of: dt.date | str,
+    max_lag: int = MAX_PUBLICATION_LAG,
 ) -> np.ndarray | None:
     r"""Empirical pmf of the lag from report to first publication.
 

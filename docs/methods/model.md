@@ -156,9 +156,10 @@ $\pi_p$ is informed by the ratio of imputed to known onsets, through the imputat
 ### Known onsets
 
 A case reported on day $t$ is in the vintage published at $T$ with probability $c(t) = F_\ell(T - t)$, with $F_\ell$ the cdf of the lag $\ell$ from report to publication.
-The lag pmf is estimated from the data on 0 to 60 days.
+The lag pmf is estimated from the data on 0 to 180 days.
 Rows in a delay file beyond those of the previous file were first published between the two dates.
-Each such row's lag is spread over its onset day within the week and its publication day between the files, over feasible lags only, and lags past 60 days go to the last cell.
+Each such row's lag is spread over its onset day within the week and its publication day between the files, over feasible lags only.
+Between the real files 8-9% of new rows were more than 60 days late and none more than 180.
 Only pairs of files dated on or before the forecast date are used, so backtests do not see later files.
 Between 2026-10-17 and 2026-10-24, 23% of new rows had report dates more than 41 days old, so late entries matter for the nowcast weeks.
 A vintage with no earlier pair (2026-10-09 and before) uses a fixed prior pmf instead: 85% uniform on 0 to 3 days and 15% uniform on 4 to 60 days.
