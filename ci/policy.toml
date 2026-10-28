@@ -11,11 +11,14 @@
 retry_budget = 1
 
 # Minutes the chain plans with. Measured on the 2026-10-24 vintage
-# (jax-review-1, vectorised chains on 2 cores of archie): main 130 and
-# the retry 134 minutes of sampling, the fallback about 0.7 times main.
-# Hosted runners are 1.2 to 1.5 times slower, so each fit job takes
-# about 2.7 to 3.4 hours with setup. The fallback fits beside main, and
-# persistence is built in `prepare`, so only the retry runs after main.
+# (jax-review-1, vectorised chains on 2 cores of archie) at 4 chains x
+# 2000 iterations: main 130 and the retry 134 minutes of sampling, the
+# fallback about 0.7 times main. Nearly every draw reaches the maximum
+# tree depth, so cost follows iterations, and the 2 x 1000 used below
+# take about a quarter: 35 to 45 minutes (the Getting started fit, 2 x 400
+# on 2 cores, took 18). Hosted runners are 1.2 to 1.5 times slower, so
+# each fit job takes about 1 to 1.5 hours with setup (to be re-measured). The fallback fits beside main, and persistence is
+# built in `prepare`, so only the retry runs after main.
 [timing]
 # GitHub's 360-minute job cap, less a margin.
 fit_cap_minutes = 350
@@ -23,10 +26,10 @@ fit_cap_minutes = 350
 # and the pull request. Every fit job's timeout stops this short of the
 # close, so the gate always runs in time with the fallback or persistence.
 reserve_minutes = 45
-# What a refit needs on a hosted runner: 134 minutes x 1.5, plus setup,
-# rounded up. With less time than this plus the reserve left after main,
-# the refit is skipped and the chain moves on to the fallback.
-retry_minutes = 240
+# What a refit needs on a hosted runner: 45 minutes x 1.5, plus setup,
+# with margin. With less time than this plus the reserve left
+# after main, the refit is skipped and the chain moves on to the fallback.
+retry_minutes = 105
 # The shortest timeout a fit job gets, however late it starts.
 min_fit_minutes = 30
 
@@ -42,20 +45,21 @@ kind = "main"
 config = "main"
 stage = "primary"
 label = "main model"
-sampler = { num_chains = 4, num_warmup = 1000, num_samples = 1000, target_accept = 0.8, max_tree_depth = 10, seed = 1, chain_method = "vectorized" }
+# Sam (2026-10-28): 2 chains of 500 warm-up and 500 draws for every fit.
+sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.8, max_tree_depth = 10, seed = 1, chain_method = "vectorized" }
 
 [[candidates]]
 id = "retry-1"
 kind = "retry"
 config = "main"
 stage = "retry"
-label = "main model, refitted (longer warm-up, smaller steps, jittered inits)"
-# The same number of NUTS iterations as `main` (4 x 2000), spent on a
-# longer warm-up. Main fits reach the maximum tree depth on nearly every
-# draw, so cost follows iterations: 134 against main's 130 minutes on
-# archie. `max_tree_depth` is set per candidate here. More chains than
-# the runner's 4 vCPUs would only slow every chain down.
-sampler = { num_chains = 4, num_warmup = 1500, num_samples = 500, target_accept = 0.95, max_tree_depth = 10, seed = 2, init = "jitter", chain_method = "vectorized" }
+label = "main model, refitted (smaller steps, jittered inits)"
+# The same iterations as `main` (2 x 1000), with smaller steps (target
+# acceptance 0.95) and jittered inits. Main fits reach the maximum tree
+# depth on nearly every draw, so cost follows iterations: 134 against
+# main's 130 minutes on archie at the old 4 x 2000. `max_tree_depth` is
+# set per candidate here.
+sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.95, max_tree_depth = 10, seed = 2, init = "jitter", chain_method = "vectorized" }
 
 [[candidates]]
 id = "fallback"
@@ -65,7 +69,7 @@ config = "fallback"
 # does not leave too little of the window to fit the fallback.
 stage = "primary"
 label = "fallback variant (no spatial coupling, delays and missingness fixed from the data)"
-sampler = { num_chains = 4, num_warmup = 1000, num_samples = 1000, target_accept = 0.9, max_tree_depth = 10, seed = 1, chain_method = "vectorized" }
+sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.9, max_tree_depth = 10, seed = 1, chain_method = "vectorized" }
 
 # A shadow: fitted and checked weekly with the primary stage, never
 # submitted, until the model choice picks it.
@@ -75,7 +79,7 @@ kind = "shadow"
 config = "bvd"
 stage = "primary"
 label = "BVDOutbreakSize-informed variant (shadow, not submitted)"
-sampler = { num_chains = 4, num_warmup = 1000, num_samples = 1000, target_accept = 0.9, max_tree_depth = 10, seed = 1, chain_method = "vectorized" }
+sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.9, max_tree_depth = 10, seed = 1, chain_method = "vectorized" }
 
 [[candidates]]
 id = "persistence"

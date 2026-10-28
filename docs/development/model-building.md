@@ -10,7 +10,7 @@ The real-vintage columns come from forecasts at one origin, the 2026-10-09 vinta
 They are a check on each step, not a comparison of models.
 The [Backtest](../backtest.md) compares the models.
 A component is kept only if the sampler stays healthy, the simulated parameters are recovered, and the real forecasts are no worse.
-The rungs and their settings are in `bdbv_hub_renewal.model.model.LADDER`, and `scripts/ladder.py` runs them into `results/ladder.csv`.
+The rungs and their settings are in `bdbvhubrenewal.model.model.LADDER`, and `scripts/ladder.py` runs them into `results/ladder.csv`.
 The [Model](../methods/model.md) page describes the result.
 
 --8<-- "ladder.md"

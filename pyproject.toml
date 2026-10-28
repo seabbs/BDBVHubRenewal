@@ -1,5 +1,5 @@
 [project]
-name = "bdbv-hub-renewal"
+name = "BDBVHubRenewal"
 version = "0.1.0"
 description = "Renewal-model nowcasts and forecasts for the BDBV Modeling Hub, with data tools and a backtest harness"
 readme = "README.md"
@@ -37,7 +37,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-# The PyRenew renewal model (`bdbv_hub_renewal.model`), pinned by SHA.
+# The PyRenew renewal model (`bdbvhubrenewal.model`), pinned by SHA.
 # PyRenew brings JAX and NumPyro. The package imports without it.
 model = [
   "pyrenew @ git+https://github.com/CDCgov/PyRenew@e16093b0d20c918f282032123c19691a568f114a",
@@ -50,7 +50,7 @@ Repository = "https://github.com/seabbs/BDBVHubRenewal"
 Issues = "https://github.com/seabbs/BDBVHubRenewal/issues"
 
 [project.scripts]
-bdbv-hub-renewal = "bdbv_hub_renewal.cli:main"
+bdbvhubrenewal = "bdbvhubrenewal.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.8,<0.14"]
@@ -58,7 +58,7 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
-  "bdbv-hub-renewal[model]",
+  "BDBVHubRenewal[model]",
   "mypy>=1.11",
   "pandas-stubs>=2.1",
   "pytest>=8",
@@ -77,7 +77,7 @@ docs = [
 default-groups = ["dev"]
 
 [tool.uv.build-backend]
-module-name = "bdbv_hub_renewal"
+module-name = "bdbvhubrenewal"
 
 [tool.ruff]
 line-length = 80
@@ -116,9 +116,9 @@ convention = "numpy"
 # Ported from the hub validation bundle, whose checks are named after
 # hubValidations' and are documented in docs/submission/hub-spec.md.
 # The small config classes and helpers carry no docstrings.
-"src/bdbv_hub_renewal/submission/validate.py" = ["D101", "D102", "D103"]
+"src/bdbvhubrenewal/submission/validate.py" = ["D101", "D102", "D103"]
 # Method signatures follow PyRenew's, and maths names keep their capitals.
-"src/bdbv_hub_renewal/model/**" = ["ARG002", "N803", "N806", "PTH123"]
+"src/bdbvhubrenewal/model/**" = ["ARG002", "N803", "N806", "PTH123"]
 # The model's tests, from the prototype.
 "tests/model/**" = ["D", "PT018", "PD008", "N806", "ARG001"]
 
@@ -137,7 +137,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["bdbv_hub_renewal"]
+source = ["bdbvhubrenewal"]
 branch = true
 
 [tool.coverage.report]
@@ -152,7 +152,7 @@ files = ["src"]
 
 [[tool.mypy.overrides]]
 # matplotlib's date locators and formatters are untyped.
-module = ["bdbv_hub_renewal.reporting.plots"]
+module = ["bdbvhubrenewal.reporting.plots"]
 disallow_untyped_calls = false
 
 [[tool.mypy.overrides]]
@@ -172,5 +172,5 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 # The model subclasses PyRenew's and NumPyro's classes, which are untyped.
-module = ["bdbv_hub_renewal.model.*"]
+module = ["bdbvhubrenewal.model.*"]
 disallow_subclassing_any = false

@@ -6,7 +6,7 @@
 # renamed), with the metadata beside it, and runs both validators of the
 # hub validation bundle against the hub checkout:
 #
-#   1. `bdbv-hub-renewal validate` (hub_validate.py, Python, fast);
+#   1. `bdbvhubrenewal validate` (hub_validate.py, Python, fast);
 #   2. scripts/validate-hub.R (hubValidations, the hub's own checks),
 #      unless R_VALIDATION=false.
 #

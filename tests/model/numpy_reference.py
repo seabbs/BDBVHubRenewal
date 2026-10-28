@@ -2,7 +2,7 @@
 r"""Expected values of the two observed streams, including the hub's imputation.
 
 A NumPy reference for the model's observation layer, for one province.
-The tests check the JAX observation process (`bdbv_hub_renewal.model`)
+The tests check the JAX observation process (`bdbvhubrenewal.model`)
 against these functions.
 
 Notation, all by day:

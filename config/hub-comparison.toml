@@ -1,6 +1,6 @@
 # Comparison with hub forecasts. Read by
-# `bdbv_hub_renewal.hubcompare.load_comparison_config`.
-# `bdbv-hub-renewal compare-hub --fetch` downloads these models' files to
+# `bdbvhubrenewal.hubcompare.load_comparison_config`.
+# `bdbvhubrenewal compare-hub --fetch` downloads these models' files to
 # data/raw/hub-submissions/ and writes output/hub-comparison/.
 # Neither is committed.
 #

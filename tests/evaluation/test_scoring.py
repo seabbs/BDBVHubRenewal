@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 import scoringrules as sr
 
-from bdbv_hub_renewal.evaluation.scoring import (
+from bdbvhubrenewal.evaluation.scoring import (
     QUANTILE_LEVELS,
     bias_sample,
     coverage_sample,

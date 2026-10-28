@@ -9,7 +9,7 @@ import jax
 import jax.numpy as jnp
 from jax.typing import ArrayLike
 
-from bdbv_hub_renewal.model.observation import backsample
+from bdbvhubrenewal.model.observation import backsample
 
 
 def onset_expectations_reference(

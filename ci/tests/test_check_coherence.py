@@ -13,7 +13,7 @@ from conftest import AS_OF, FIXTURES, write_json
 from submission_ci.check_coherence import assess, gap_by_week, main
 from submission_ci.common import read_json
 
-FAKE = FIXTURES / "fake_bdbv_hub_renewal.py"
+FAKE = FIXTURES / "fake_bdbvhubrenewal.py"
 
 
 def coherence(gaps: list[dict[str, Any]] | None = None) -> dict[str, Any]:

@@ -13,7 +13,7 @@ It is safe to install as is, because `DRY_RUN` is on until you turn it off.
 | `prepare` | Pins the hub data at one commit and builds the persistence candidate, which is also the baseline for the checks. |
 | `fit` | A matrix over the primary candidates (`main` and `fallback`), fitted in parallel. Each fit is cached under a content hash of the model source, the hub commit and its sampler settings. |
 | `triage` | Says whether `main` needs its one refit (past the convergence retry thresholds, or ruled out). |
-| `retry` | Only if `main` needs it: one refit with a longer warm-up, smaller steps and jittered inits, costing about as much as `main`, and only with time left for it before the window closes. |
+| `retry` | Only if `main` needs it: one refit with smaller steps and jittered inits, costing about as much as `main`, and only with time left for it before the window closes. |
 | `gate` | Walks the chain `main` → `retry-1` → `fallback` → `persistence`, handling problems rather than failing on them. A candidate is ruled out only if its fit is clearly broken or its file is invalid (format checks or hubValidations). |
 | `submit` | Publishes the plot, builds the PR body, and opens or updates the PR. A dry run prints the body instead. |
 | `record` | Live runs only. Writes the outcome to `state.json` on the `submission-ledger` branch and archives the round's files there. |
@@ -67,7 +67,7 @@ Settings → Secrets and variables → Actions → **Variables**:
 | variable | default when unset | meaning |
 | --- | --- | --- |
 | `DRY_RUN` | dry run | Set to `false` to go live. Any other value, or none, is a dry run. |
-| `HUB_MODEL` | latest entry of `results/model-choice.yml` | Model name passed to `bdbv-hub-renewal`. |
+| `HUB_MODEL` | latest entry of `results/model-choice.yml` | Model name passed to `bdbvhubrenewal`. |
 | `HUB_MODEL_ID` | `config/hub.toml` (`epiforecasts-seabbsrenewal`) | Hub model id. Fallbacks are submitted under this id too. |
 | `HUB_FORK` | `seabbs-bot/BDBV-Modeling-Hub` | The fork to push to. |
 | `EXPECTED_LOCATIONS` | none | For example `CD,CD-IT,CD-NK,CD-HU,CD-TO`. The coverage check fails if any is missing. |
@@ -139,10 +139,12 @@ Artefacts are kept for 90 days at most, so the ledger branch is the durable arch
 Scheduled starts can be late by minutes, or dropped when GitHub is busy.
 The 3-hourly schedule covers that.
 
-On the 2026-10-24 vintage, with vectorised chains on 2 cores of archie, the main fit took 130 minutes of sampling and the retry 134.
+Every fit runs 2 chains of 500 warm-up and 500 draws (`ci/policy.toml`).
+On the 2026-10-24 vintage, with vectorised chains on 2 cores of archie, 4 chains of 1000 warm-up and 1000 draws took 130 minutes of sampling for the main fit and 134 for the retry.
+Nearly every draw reaches the maximum tree depth, so cost follows the number of NUTS iterations, and the current settings take about a quarter of that, 35 to 45 minutes.
 The fallback takes about 0.7 times the main fit.
-Nearly every draw reaches the maximum tree depth, so cost follows the number of NUTS iterations.
-Hosted runners are 1.2 to 1.5 times slower, so each fit job takes about 2.7 to 3.4 hours with setup.
+Hosted runners are 1.2 to 1.5 times slower, so each fit job takes about 1 to 1.5 hours with setup.
+These times are to be re-measured on the current model.
 Time a real fit with a dry run on a past vintage (see above), and read the `Fit took N s` line in the job summary.
 
 The whole chain runs in sequence: prepare (persistence), then main with the fallback beside it, then at most one retry, then the gate.
@@ -151,7 +153,7 @@ A main fit of normal length leaves time for the retry.
 Two rules keep the chain inside the window when a fit runs late:
 
 - Every fit job's timeout leaves `reserve_minutes` (45) before the close for the gate and the pull request.
-- The retry runs only when `retry_minutes` (240) plus that reserve are left after the main fit. Otherwise the chain moves on to the fallback, which is already fitted, and the job summary says so.
+- The retry runs only when `retry_minutes` (105) plus that reserve are left after the main fit. Otherwise the chain moves on to the fallback, which is already fitted, and the job summary says so.
 
 So a main fit that runs to its timeout still reaches the fallback or persistence before the close.
 `max_tree_depth` is set per candidate in `ci/policy.toml`.

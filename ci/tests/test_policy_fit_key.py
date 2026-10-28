@@ -17,6 +17,15 @@ from submission_ci.window import minutes_left
 
 POLICY_PATH = Path(__file__).parents[1] / "policy.toml"
 
+# Measured on archie (jax-review-1, 2026-10-24 vintage, vectorised chains
+# on 2 cores): main 130 and retry 134 minutes of sampling at 4 chains x
+# 2000 iterations. Cost follows iterations (trees at maximum depth), so
+# 2 chains x 1000 take a quarter. Hosted runners are up to 1.5 times
+# slower, plus about 15 minutes of setup.
+SETUP, PREPARE = 15, 15
+MAIN = 130 / 4 * 1.5 + SETUP
+RETRY = 134 / 4 * 1.5 + SETUP
+
 
 def repo(tmp_path: Path) -> Path:
     (tmp_path / "src").mkdir()
@@ -91,9 +100,30 @@ def test_retry_fits_the_time_budget(tmp_path: Path) -> None:
     retry = json.loads(matrix(pol, "retry", root, "hub")[0]["sampler"])
     assert iterations(retry) <= iterations(main)
     assert retry["max_tree_depth"] <= main["max_tree_depth"]
-    assert retry["num_warmup"] > main["num_warmup"]
+    assert retry["num_warmup"] >= main["num_warmup"]
     # No more chains than a hosted runner's 4 vCPUs.
     assert retry["num_chains"] <= 4
+
+
+def test_ci_sampler_settings(tmp_path: Path) -> None:
+    # Sam (2026-10-28): 2 chains of 500 warm-up and 500 draws for every
+    # fitted candidate; the retry differs by its target acceptance and
+    # jittered inits.
+    pol = load_policy(POLICY_PATH)
+    root = repo(tmp_path)
+    fitted = [
+        *matrix(pol, "primary", root, "hub"),
+        *matrix(pol, "retry", root, "hub"),
+    ]
+    for e in fitted:
+        s = json.loads(e["sampler"])
+        assert (s["num_chains"], s["num_warmup"], s["num_samples"]) == (
+            2,
+            500,
+            500,
+        ), e["id"]
+    retry = json.loads(matrix(pol, "retry", root, "hub")[0]["sampler"])
+    assert retry["target_accept"] == 0.95 and retry["init"] == "jitter"
 
 
 def test_policy_validation(tmp_path: Path) -> None:
@@ -147,9 +177,10 @@ def test_timing_defaults() -> None:
     t = load_policy(POLICY_PATH).timing
     assert t.fit_cap_minutes == 350
     assert t.reserve_minutes >= 30
-    # About the retry's measured 134 minutes, 1.5 times slower on a
-    # hosted runner, plus setup.
-    assert t.retry_minutes >= 134 * 1.5 + 10
+    # The retry's measured 134 minutes at 4 chains x 2000 iterations,
+    # scaled to 2 x 1000 (a quarter), 1.5 times slower on a hosted runner,
+    # plus setup, and not so much more that a refit is skipped needlessly.
+    assert RETRY + 10 <= t.retry_minutes <= 2 * RETRY
 
 
 def test_minutes_left_to_the_window_close() -> None:
@@ -192,20 +223,17 @@ def test_matrix_carries_the_fit_timeout(tmp_path: Path) -> None:
 
 
 def test_whole_chain_fits_from_the_last_tuesday_start() -> None:
-    # Measured on archie (jax-review-1): main 130 and retry 134 minutes of
-    # sampling; the fallback takes about 0.7 times main and runs beside
-    # it. Hosted runners are up to 1.5 times slower, plus setup.
+    # A main fit of normal length leaves time for the retry. The fallback
+    # (about 0.7 times main) runs beside main.
     pol = load_policy(POLICY_PATH)
     t = pol.timing
-    setup, prepare = 15, 15
-    main = 130 * 1.5 + setup
     window = 540  # the last Tuesday start, 14:00 UTC, to the close
-    after_main = window - prepare - main
-    # A main fit of normal length leaves time for the retry.
+    after_main = window - PREPARE - MAIN
     assert retry_fits(pol, after_main)
-    assert fit_timeout(pol, after_main) >= 134 * 1.5 + setup
-    # A main fit that runs to its job cap leaves no time: the retry is
-    # skipped and the gate still runs before the close.
-    after_cap = window - prepare - fit_timeout(pol, window - prepare)
-    assert not retry_fits(pol, after_cap)
+    assert fit_timeout(pol, after_main) >= RETRY
+    # A main fit that runs to its job cap still leaves the gate its time,
+    # and a retry runs then only if its timeout covers a normal refit.
+    after_cap = window - PREPARE - fit_timeout(pol, window - PREPARE)
     assert after_cap >= t.reserve_minutes
+    if retry_fits(pol, after_cap):
+        assert fit_timeout(pol, after_cap) >= RETRY
