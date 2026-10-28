@@ -177,3 +177,21 @@ def test_lopo_without_mask_aware_models_is_empty(
     )
     assert forecasts.empty
     assert scores.empty
+
+
+def test_vintage_without_delays_takes_reconstructed_rows(
+    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
+) -> None:
+    from bdbv_hub_renewal.vintages import reconstruct_delays
+
+    assert not (delays["vintage"] == "2026-08-18").any()
+    tasks = make_tasks(
+        target.loc[target["vintage"] == "2026-08-18"], delays, config
+    )
+    got = tasks[0].delays
+    assert got is not None and len(got) > 0
+    assert set(got["vintage"]) == {"2026-08-18"}
+    # The next vintage's rows, kept if published by the cut-off.
+    nxt = delays.loc[delays["vintage"] == "2026-10-09"]
+    want = reconstruct_delays(nxt, "2026-08-18")
+    assert len(got) == len(want)
