@@ -128,6 +128,11 @@ class ModelConfig:
         Its tempering. 0 gives the model without it, exactly.
     dmax : int
         Maximum onset-to-report delay in days.
+    publication_lag : {"estimated", "fixed", "none"}
+        Lag from report to publication in a vintage: a Dirichlet simplex
+        on $0..L$, fixed at its prior mean (uniform), or none.
+    max_publication_lag : int
+        $L$, in days (`vintages.PUBLICATION_LAG_DAYS`).
     """
 
     national: bool = False
@@ -147,13 +152,19 @@ class ModelConfig:
     bvd: bool = False
     bvd_alpha: float = 0.5
     dmax: int = 60
+    publication_lag: Literal["estimated", "fixed", "none"] = "estimated"
+    max_publication_lag: int = 3
 
 
 MAIN = ModelConfig()
 BVD = ModelConfig(bvd=True)
 """Main model informed by BVDOutbreakSize Rt (`hubrenewalbvd`)."""
 FALLBACK = ModelConfig(
-    coupling="none", delay="fixed", missing="fixed", rt_cadence="weekly"
+    coupling="none",
+    delay="fixed",
+    missing="fixed",
+    rt_cadence="weekly",
+    publication_lag="fixed",
 )
 _SIMPLE = {
     "streams": "total",
@@ -389,7 +400,11 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     if missing is not None:
         delay_time = _named_walk("delay_sd", 0.15)
         if config.delay == "fixed":
-            f = empirical_delay_matrix(data.delay_counts, data.cutoff)
+            # Delays near the cut-off are part published, so treat the
+            # last L days as truncated.
+            f = empirical_delay_matrix(
+                data.delay_counts, data.cutoff - config.max_publication_lag
+            )
             delay = fixed("delay", f)
         elif config.delay in ("gamma", "lognormal"):
             delay = ParametricDelay(
@@ -402,6 +417,15 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         imports = DistributionalVariable(
             "import_scale", dist.LogNormal(np.log(1e-3), 2.0)
         )
+
+    n_lag = config.max_publication_lag + 1
+    lag: DistributionalVariable | np.ndarray | None = None
+    if config.publication_lag == "estimated":
+        lag = DistributionalVariable(
+            "onsets_publication_lag", dist.Dirichlet(np.ones(n_lag))
+        )
+    elif config.publication_lag == "fixed":
+        lag = np.full(n_lag, 1 / n_lag)
 
     builder.add_observation(
         OnsetStreams(
@@ -424,6 +448,7 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             import_scale_rv=imports,
             kernel_rv=kernel if isinstance(kernel, LearntKernel) else None,
             start_dow=SUNDAY,
+            publication_lag=lag,
         )
     )
     model = builder.build()

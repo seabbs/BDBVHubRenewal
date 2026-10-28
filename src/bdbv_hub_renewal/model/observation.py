@@ -9,12 +9,15 @@ the hub's empirical delay for that vintage. Then
 $$\kappa_p(s, d) = \lambda_p(s) f_s(d) \{1 - \pi_p(s + d)\}$$
 
 is the expected number of known-onset cases with onset $s$ and delay
-$d$, and known onsets by $T$ are $\sum_{d \le T - s} \kappa_p(s, d)$.
+$d$. A case reported on day $t$ appears in the vintage at $T$ with
+probability $c(t) = F_\ell(T - t)$, with $F_\ell$ the cdf of the report
+to publication lag $\ell$ on $0..L$. Known onsets by $T$ are
+$\sum_d \kappa_p(s, d) c(s + d)$.
 Reports by report day are $R_p(t) = \sum_d \lambda_p(t - d) f_{t-d}(d)$,
 missing-onset cases are $M_p(t) = \pi_p(t) R_p(t)$, and the hub spreads
-those reported by $T$ back with $\hat f$, giving expected imputed onsets
+those published by $T$ back with $\hat f$, giving expected imputed onsets
 
-$$\iota_p(s) = \sum_{t = s}^{T} \hat f(t - s) M_p(t).$$
+$$\iota_p(s) = \sum_{t = s}^{T} \hat f(t - s) c(t) M_p(t).$$
 """
 
 from __future__ import annotations
@@ -92,6 +95,34 @@ def unskew(b: ArrayLike, k: int) -> ArrayLike:
     return flat.reshape(n, width + 1)[:, :k]
 
 
+def published_by(n: int, lag_pmf: ArrayLike | None) -> ArrayLike:
+    r"""Probability that a report on day $t$ is published by day $n - 1$.
+
+    $c(t) = F_\ell(n - 1 - t)$, with $F_\ell$ the cdf of the report to
+    publication lag pmf on $0..L$, so only the last $L$ days are partly
+    published.
+
+    Parameters
+    ----------
+    n : int
+        Number of report days, the last being the cut-off. Static.
+    lag_pmf : ArrayLike or None
+        Lag pmf on $0..L$. `None` is no lag.
+
+    Returns
+    -------
+    ArrayLike
+        Shape `(n,)`.
+    """
+    if lag_pmf is None:
+        return jnp.ones(n)
+    cdf = jnp.cumsum(jnp.asarray(lag_pmf))[::-1]
+    k = cdf.shape[0]
+    if n >= k:
+        return jnp.concatenate([jnp.ones(n - k), cdf])
+    return cdf[k - n :]
+
+
 def onset_expectations(
     onsets: ArrayLike,
     delay: ArrayLike,
@@ -99,17 +130,18 @@ def onset_expectations(
     hub_delay: ArrayLike,
     cutoff: int,
     final: bool = True,
+    publication_lag: ArrayLike | None = None,
 ) -> dict[str, ArrayLike]:
     r"""Compute expected known and imputed onsets by the cut-off and eventually.
 
     With $A_{st} = f_s(t - s)$ the onset-by-report-day delay matrix and
     $H_{st} = \hat f(t - s)$ the hub's back-sampling matrix, both banded
     and of shape `(n, n + D)`, and $\pi$ extended to report days past the
-    end (last row repeated):
+    end (last row repeated), and $c$ from `published_by`:
 
-    - known by $T$: $\lambda \odot (A_{:, \le T} (1 - \pi)_{\le T})$;
+    - known by $T$: $\lambda \odot (A_{:, \le T} (c (1 - \pi))_{\le T})$;
     - missing by report day: $M = \pi \odot A^\top \lambda$;
-    - imputed by $T$: $H_{:, \le T} M_{\le T}$, zero past $T$.
+    - imputed by $T$: $H_{:, \le T} (c M)_{\le T}$, zero past $T$.
 
     Every term is a dense matrix product, so autodiff needs no gather or
     scatter adjoints. Equal to the direct version in
@@ -130,6 +162,9 @@ def onset_expectations(
     final : bool, optional
         Also compute the final counts. Fitting does not need them, and
         skipping them saves about a fifth of the gradient cost.
+    publication_lag : ArrayLike, optional
+        Pmf of the report to publication lag on $0..L$. `None` publishes
+        every report on its report day.
 
     Returns
     -------
@@ -137,7 +172,7 @@ def onset_expectations(
         `known` and `imputed` by $T$, `known_final` and `imputed_final`
         once all reports are in (all `(n, P)`; equal to the counts by $T$
         when `final` is false), and `triangle`, the
-        expected known cases by onset day and delay reported by $T$,
+        expected known cases by onset day and delay published by $T$,
         summed over provinces, `(n, D + 1)`.
     """
     n, n_d = delay.shape
@@ -148,17 +183,19 @@ def onset_expectations(
     h = skew(jnp.broadcast_to(hub_delay, (n, n_d)), width)
     t1 = cutoff + 1
     a_t = a[:, :t1]
-    known = onsets * (a_t @ keep[:t1])
-    missing_by_t = pi_ext[:t1] * (a_t.T @ onsets)
+    c = published_by(t1, publication_lag)[:, None]
+    seen = c * keep[:t1]
+    known = onsets * (a_t @ seen)
+    missing_by_t = c * pi_ext[:t1] * (a_t.T @ onsets)
     imputed = h[:, :t1] @ missing_by_t
     if final:
         known_final = onsets * (a @ keep)
         imputed_final = h @ (pi_ext * (a.T @ onsets))
     else:
         known_final, imputed_final = known, imputed
-    # Expected known cells reported by T, summed over provinces, as a
+    # Expected known cells published by T, summed over provinces, as a
     # band on (onset, report day), then back to (onset, delay).
-    band = a_t * (onsets @ keep[:t1].T)
+    band = a_t * (onsets @ seen.T)
     band = jnp.pad(band, ((0, 0), (0, width - t1)))
     return {
         "known": known,
@@ -181,8 +218,10 @@ class OnsetStreams(BaseObservationProcess):
     weekly totals,
 
     $$P(d \mid w) = \frac{\sum_{s \in w} \sum_p \kappa_p(s, d)
-    \mathbb{1}[s + d \le T]}{\sum_{s \in w} \sum_{d'} \sum_p
-    \kappa_p(s, d') \mathbb{1}[s + d' \le T]},$$
+    c(s + d)}{\sum_{s \in w} \sum_{d'} \sum_p \kappa_p(s, d') c(s + d')},$$
+
+    with the same publication weights $c$ as the known stream, so the
+    two truncate alike.
 
     which is the conditional part of the Poisson reporting triangle, so
     it does not double count the known stream.
@@ -221,6 +260,10 @@ class OnsetStreams(BaseObservationProcess):
         Poisson likelihood on their weekly counts (`inactive`).
     start_dow : int, optional
         First day of the reporting week (6 is Sunday).
+    publication_lag : RandomVariable or array_like, optional
+        Pmf of the lag from report to publication in a vintage, on
+        $0..L$: a random variable to estimate it, or a fixed pmf.
+        `None` is no lag.
     """
 
     def __init__(
@@ -234,6 +277,7 @@ class OnsetStreams(BaseObservationProcess):
         import_scale_rv: RandomVariable | None = None,
         start_dow: int = 6,
         kernel_rv: RandomVariable | None = None,
+        publication_lag: RandomVariable | ArrayLike | None = None,
     ) -> None:
         super().__init__(
             name, DeterministicPMF(f"{name}_identity", jnp.ones(1))
@@ -246,6 +290,7 @@ class OnsetStreams(BaseObservationProcess):
         self.import_scale_rv = import_scale_rv
         self.kernel_rv = kernel_rv
         self.start_dow = start_dow
+        self.publication_lag = publication_lag
 
     def lookback_days(self) -> int:
         """Return 0: the latent process is already dated by onset."""
@@ -348,8 +393,17 @@ class OnsetStreams(BaseObservationProcess):
             pi = self.missing_fraction_rv(
                 n_timepoints=n, n_groups=n_prov, first_day_dow=first_day_dow
             )
+        lag = self.publication_lag
+        if isinstance(lag, RandomVariable):
+            lag = lag()
         exp = onset_expectations(
-            onsets, delay, pi, jnp.asarray(hub_delay_pmf), cutoff, forecast
+            onsets,
+            delay,
+            pi,
+            jnp.asarray(hub_delay_pmf),
+            cutoff,
+            forecast,
+            publication_lag=lag,
         )
         weekly = {k: self._weekly(v, first_day_dow) for k, v in exp.items()}
         for key, value in weekly.items():
