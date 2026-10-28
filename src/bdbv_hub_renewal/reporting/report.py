@@ -533,11 +533,37 @@ def _score_views(scores: pd.DataFrame, k: int) -> dict[str, pd.DataFrame]:
         )
         scores = scores.assign(complete=age.dt.days >= 7 * k)
     reported = scores.loc[scores["scoring"] == "as reported"]
-    return {
-        "complete weeks": reported.loc[reported["complete"].astype(bool)],
+    complete = reported.loc[reported["complete"].astype(bool)]
+    views = {
+        "complete weeks": complete,
         "all weeks as reported": reported,
         "vintage-matched": scores.loc[scores["scoring"] == "vintage-matched"],
     }
+    if "lag_prior" in scores and scores["lag_prior"].fillna(False).any():
+        own = ~complete["lag_prior"].fillna(False).astype(bool)
+        views["complete weeks, own lag estimate"] = complete.loc[own]
+    return views
+
+
+def _lag_prior_note(scores: pd.DataFrame) -> str:
+    """Name the origins whose publication lag comes from the prior."""
+    if "lag_prior" not in scores:
+        return ""
+    marked = scores.loc[scores["lag_prior"].fillna(False).astype(bool)]
+    if marked.empty:
+        return ""
+    origins = (
+        marked[["kind", "vintage"]].drop_duplicates().sort_values("vintage")
+    )
+    names = ", ".join(f"{v} ({k})" for k, v in origins.to_numpy())
+    which = "origin" if len(origins) == 1 else "origins"
+    have = "has" if len(origins) == 1 else "have"
+    return (
+        f"The {which} {names} {have} no earlier pair of delay files, so the "
+        "renewal models take their publication lag from a prior whose shape "
+        "was set from later delay files.\n"
+        'The scores marked "own lag estimate" leave them out.\n'
+    )
 
 
 def _overall_scores(views: dict[str, pd.DataFrame]) -> str:
@@ -595,15 +621,19 @@ def _relative_section(scores: pd.DataFrame) -> str:
     )
 
 
-def _matched_relative(matched: pd.DataFrame) -> str:
-    """Relative scores of vintage-matched forecasts, if two models have any."""
-    if matched.empty or matched["model"].nunique() < 2:
-        return ""
-    return (
-        "\nVintage-matched, over every week:\n\n"
-        + _table(relative_skill(matched, by=("kind",)))
-        + "\n"
-    )
+def _other_relative(views: dict[str, pd.DataFrame]) -> str:
+    """Relative scores of the other score sets that two models have."""
+    parts = []
+    for name in ("complete weeks, own lag estimate", "vintage-matched"):
+        rows = views.get(name, pd.DataFrame())
+        if rows.empty or rows["model"].nunique() < 2:
+            continue
+        parts.append(
+            f"\n{name.capitalize()}:\n\n"
+            + _table(relative_skill(rows, by=("kind",)))
+            + "\n"
+        )
+    return "".join(parts)
 
 
 def _backtest_page(
@@ -639,13 +669,14 @@ def _backtest_page(
         _write(
             gen / "backtest-truth.md",
             f"Scores are against the **{truth_v}** vintage, as reported "
-            "then.\n" + _completeness_note(k, delays),
+            "then.\n"
+            + _completeness_note(k, delays)
+            + _lag_prior_note(views["all weeks as reported"]),
         )
         _write(gen / "scores-overall.md", _overall_scores(views))
         _write(
             gen / "relative-section.md",
-            _relative_section(primary)
-            + _matched_relative(views["vintage-matched"]),
+            _relative_section(primary) + _other_relative(views),
         )
         _write(gen / "persistence-bias.md", _persistence_bias(scores))
         by_loc = summarise_scores(primary, by=("model", "kind", "location"))
