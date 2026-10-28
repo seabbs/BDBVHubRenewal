@@ -10,6 +10,7 @@ from bdbv_hub_renewal.evaluation.backtest import (
     BacktestConfig,
     forecast_weeks,
     load_config,
+    lopo_tasks,
     make_tasks,
     run_development,
     run_forecasts,
@@ -408,3 +409,58 @@ def test_shard_tasks_splits_every_task_once(
     assert sum(len(s) for s in shards) == len(tasks)
     seen = [t.vintage for s in shards for t in s]
     assert sorted(seen) == sorted(t.vintage for t in tasks)
+
+
+class _Fitted(_Counting):
+    def forecast(self, task):  # type: ignore[no-untyped-def]
+        self.fit_diagnostics = [{"fit": "all", "max_rhat": 1.01}]
+        return super().forecast(task)
+
+
+def test_run_forecasts_collects_fit_summaries(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    config: BacktestConfig,
+    tmp_path: Path,
+) -> None:
+    tasks = make_tasks(
+        target.loc[target["vintage"] >= "2026-10-17"], delays, config
+    )
+    fits: list[pd.DataFrame] = []
+    run_forecasts([_Fitted()], tasks, cache=tmp_path, fits=fits)
+    table = pd.concat(fits)
+    assert set(table["vintage"]) == {t.vintage for t in tasks}
+    assert (table["max_rhat"] == 1.01).all()
+    # Read back from the cache with the forecasts.
+    again: list[pd.DataFrame] = []
+    run_forecasts([_Counting()], tasks, cache=tmp_path, fits=again)
+    assert len(pd.concat(again)) == len(table)
+
+
+class _Masking(_Counting):
+    supports_mask = True
+
+
+def test_lopo_reuses_the_cache(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    config: BacktestConfig,
+    tmp_path: Path,
+) -> None:
+    model = _Masking()
+    kwargs = {"provinces": ("CD-IT",), "include_reconstructed": False}
+    first, _ = run_lopo(
+        [model], target, delays, config, cache=tmp_path, **kwargs
+    )
+    calls = model.calls
+    assert calls > 0
+    again, scores = run_lopo(
+        [model], target, delays, config, cache=tmp_path, **kwargs
+    )
+    assert model.calls == calls
+    assert set(again["masked"]) == {"CD-IT"}
+    assert set(again["location"]) == {"CD-IT"}
+    assert len(scores) > 0
+    tasks = lopo_tasks(target, delays, config, **kwargs)
+    assert all(t.mask == ("CD-IT",) for t in tasks)
+    assert len(tasks) == calls

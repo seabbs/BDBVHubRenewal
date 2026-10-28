@@ -559,3 +559,23 @@ def test_forecast_gives_counts_as_reported_later(
     # Without later vintages there is no as_of column.
     plain = get_model(name).forecast(replace(task, report_by=()))
     assert "as_of" not in plain
+
+
+def test_forecast_records_a_summary_of_each_fit(
+    task: ForecastTask, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        rn.RenewalModel, "run", lambda self, t: _fake_run(t, self.variant)
+    )
+    model = get_model("renewal")
+    assert isinstance(model, rn.RenewalModel)
+    model.sampler = {**model.sampler, "num_chains": 2, "num_warmup": 300}
+    model.forecast(task)
+    (row,) = model.fit_diagnostics
+    assert row["fit"] == "all"
+    assert row["num_chains"] == 2
+    assert row["num_warmup"] == 300
+    assert row["seconds"] == 1.5
+    assert row["max_rhat"] > 0.9
+    assert row["depth_share"] == 0.0
+    assert row["divergent_share"] == 0.0

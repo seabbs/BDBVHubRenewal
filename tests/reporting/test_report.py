@@ -326,3 +326,28 @@ def test_score_views_without_lag_prior_origins() -> None:
     assert "2026-08-18" in note
     assert "2026-10-09" not in note
     assert report._lag_prior_note(scores) == ""
+
+
+def test_sampler_section() -> None:
+    fits = pd.DataFrame(
+        {
+            "model": ["renewal", "renewal", "renewalsp"],
+            "kind": "real",
+            "vintage": ["2026-08-18", "2026-10-09", "2026-10-09"],
+            "fit": ["all", "all", "CD-IT"],
+            "num_chains": 2,
+            "num_warmup": 300,
+            "num_samples": 300,
+            "seconds": [100.0, 200.0, 50.0],
+            "max_rhat": [1.01, 1.2, 1.02],
+            "depth_share": [0.9, 1.0, 0.2],
+            "divergent_share": [0.0, 0.01, 0.0],
+        }
+    )
+    submission = {"num_chains": 4, "num_warmup": 1000, "num_samples": 1000}
+    text = report._sampler_section(fits, submission)
+    assert "2 chains of 300 warm-up and 300 draws" in text
+    assert "4 chains of 1000 warm-up and 1000 draws" in text
+    assert "shorter than the submission fit" in text
+    assert "renewalsp" in text
+    assert report._sampler_section(fits.iloc[:0], submission) == ""
