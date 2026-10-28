@@ -259,9 +259,9 @@ def test_cli_hub_id_and_chosen_model(
 ) -> None:
     assert main(["hub-id"]) == 0
     assert capsys.readouterr().out.strip() == "seabbs-renewal"
-    # results/model-choice.yml has no choice until Sam makes the first.
-    assert main(["chosen-model"]) == 1
-    assert "no model has been chosen" in capsys.readouterr().err
+    assert main(["chosen-model"]) == 0
+    # The latest entry of results/model-choice.yml.
+    assert capsys.readouterr().out.strip() == "persistencenow"
 
 
 @pytest.mark.usefixtures("in_root")

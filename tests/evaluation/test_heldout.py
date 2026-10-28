@@ -101,7 +101,8 @@ def test_heldout_scores_each_forecast_under_its_model(
     assert set(scores["vintage"]) == {"2026-10-17"}
     assert set(scores["truth_vintage"]) == {"2026-10-24"}
     assert set(scores["chosen_model"]) == {"persistence"}
-    assert set(scores["model"]) == {"persistence"}
+    # Both baselines are scored on every held-out vintage.
+    assert set(scores["model"]) == {"persistence", "persistencenow"}
     assert set(scores["kind"]) == {"real"}
     record = yaml.safe_load((out / "heldout-run.yml").read_text())
     assert len(record["model_choice_sha256"]) == 64
@@ -110,6 +111,27 @@ def test_heldout_scores_each_forecast_under_its_model(
     ]
     forecasts = pd.read_csv(out / "heldout-forecasts.csv.gz")
     assert set(forecasts["vintage"]) == {"2026-10-17", "2026-10-24"}
+
+
+def test_heldout_scores_both_baselines_beside_a_fitted_choice(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    config: BacktestConfig,
+    tmp_path: Path,
+) -> None:
+    config.model_choice.write_text(
+        "choices:\n  - {date: 2026-10-10, model: renewal}\n"
+    )
+    scores = run_heldout(
+        target,
+        delays,
+        config,
+        evaluate_holdout=True,
+        out_dir=tmp_path,
+        fit=False,
+    )
+    assert set(scores["model"]) == {"persistence", "persistencenow"}
+    assert set(scores["chosen_model"]) == {"renewal"}
 
 
 def test_heldout_also_runs_the_other_variants(
@@ -139,7 +161,11 @@ def test_heldout_also_runs_the_other_variants(
         models=("shadow",),
     )
     try:
-        assert set(scores["model"]) == {"persistence", "shadow"}
+        assert set(scores["model"]) == {
+            "persistence",
+            "persistencenow",
+            "shadow",
+        }
         # Each score still records the model chosen at the time.
         assert set(scores["chosen_model"]) == {"persistence"}
     finally:
@@ -163,8 +189,12 @@ def test_heldout_keeps_and_rescores_other_models_forecasts(
     scores = run_heldout(
         target, delays, config, evaluate_holdout=True, out_dir=tmp_path
     )
-    assert set(scores["model"]) == {"persistence", "other"}
-    assert set(pd.read_csv(path)["model"]) == {"persistence", "other"}
+    assert set(scores["model"]) == {"persistence", "persistencenow", "other"}
+    assert set(pd.read_csv(path)["model"]) == {
+        "persistence",
+        "persistencenow",
+        "other",
+    }
 
 
 def test_heldout_without_fits_reads_committed_forecasts(
@@ -213,7 +243,7 @@ def test_heldout_without_fits_reads_committed_forecasts(
     finally:
         _REGISTRY.pop("slowfit")
     assert not fc.empty
-    assert set(scores["model"]) == {"persistence", "slowfit"}
+    assert set(scores["model"]) == {"persistence", "persistencenow", "slowfit"}
     assert set(scores["chosen_model"]) == {"slowfit"}
 
 

@@ -189,6 +189,11 @@ def _baseline() -> str:
     return next(s.name for s in list_models() if s.baseline)
 
 
+def _baselines() -> list[str]:
+    """Every registered model with no fit: cheap, so always scored."""
+    return [s.name for s in list_models() if not s.fitted]
+
+
 def run_heldout(
     target: pd.DataFrame,
     delays: pd.DataFrame,
@@ -201,8 +206,9 @@ def run_heldout(
 ) -> pd.DataFrame:
     """Forecast and score every held-out vintage under its chosen model.
 
-    Each held-out vintage is forecast by its chosen model, the baseline
-    and any other `models`, and scored against every later real vintage.
+    Each held-out vintage is forecast by its chosen model, every model
+    with no fit (persistence and persistencenow) and any other `models`,
+    and scored against every later real vintage.
 
     Parameters
     ----------
@@ -258,7 +264,7 @@ def run_heldout(
     fitted = {s.name for s in list_models() if s.fitted}
     frames = []
     for row in pairs.itertuples(index=False):
-        names = list(dict.fromkeys([str(row.model), baseline, *models]))
+        names = list(dict.fromkeys([str(row.model), *_baselines(), *models]))
         if not fit:
             names = [n for n in names if n not in fitted]
         rows = real.loc[real["vintage"] == row.vintage]

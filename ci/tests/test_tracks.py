@@ -66,3 +66,13 @@ def test_cli_sets_one_output_per_track(
     assert "renewal=false" in text
     assert "baseline=true" in text
     assert "baseline_id=seabbs-baseline" in text
+
+
+def test_renewal_skips_without_opt_in_even_with_a_choice(
+    tmp_path: Path,
+) -> None:
+    path = write(tmp_path / "hub.toml", renewal=False, baseline=True)
+    tracks = {t.name: t for t in load_tracks(path, chosen="persistencenow")}
+    assert not tracks["renewal"].runs
+    assert tracks["renewal"].reason == "not opted in (`submit = false`)"
+    assert tracks["baseline"].runs
