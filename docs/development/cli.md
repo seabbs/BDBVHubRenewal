@@ -16,6 +16,7 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 | `backtest --cache DIR` | Keep one forecast file per model and task in `DIR`, and read tasks already there, so a run can be resumed. |
 | `backtest --shard I/N` | With `--cache`, forecast only shard `I` of `N` of the tasks, without scoring. A run without it then scores the whole cache. |
 | `backtest --no-recovery` | Skip the recovery check on simulated vintages. |
+| `backtest --recovery-only` | Run only the recovery check, with `--cache` and `--shard` as for the backtest. |
 | `compare-hub [--fetch]` | Score our retrospective forecasts and the hub's submitted ones on the same truth and weeks. |
 | `nowcast` | Forecast from a real vintage, write the hub file and check it. With `--config` and `--fit`, forecast from a fit configuration. |
 | `fit` | Fit a configuration and write the fit directory and its diagnostics, for the submission CI. |

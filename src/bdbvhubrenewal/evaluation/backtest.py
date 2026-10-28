@@ -75,6 +75,7 @@ __all__ = [
     "merge_by_model",
     "order_tasks",
     "real_vintages",
+    "recovery_tasks",
     "run_development",
     "run_forecasts",
     "run_lopo",
@@ -962,10 +963,34 @@ def run_lopo(
     return forecasts, scores
 
 
+def recovery_tasks(
+    config: BacktestConfig, settings: SimulationSettings | None = None
+) -> list[ForecastTask]:
+    """Build the tasks of the simulated vintages.
+
+    Parameters
+    ----------
+    config : BacktestConfig
+        Settings, including `simulated_dates`.
+    settings : SimulationSettings, optional
+        The simulated scenario. Defaults to `turning_point`.
+
+    Returns
+    -------
+    list of ForecastTask
+        One task per simulated vintage.
+    """
+    outbreak = simulate_outbreak(settings)
+    target, delays = outbreak.vintages(list(config.simulated_dates))
+    return make_tasks(target, delays, config)
+
+
 def run_recovery(
     models: Sequence[ForecastModel],
     config: BacktestConfig,
     settings: SimulationSettings | None = None,
+    cache: Path | str | None = None,
+    fits: list[pd.DataFrame] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Run models on simulated vintages and score against the known truth.
 
@@ -977,6 +1002,10 @@ def run_recovery(
         Settings, including `simulated_dates`.
     settings : SimulationSettings, optional
         The simulated scenario. Defaults to `turning_point`.
+    cache : pathlib.Path or str, optional
+        Forecast cache, as for `run_forecasts`.
+    fits : list, optional
+        Collects fit summaries, as for `run_forecasts`.
 
     Returns
     -------
@@ -984,9 +1013,8 @@ def run_recovery(
         The forecasts and the scores.
     """
     outbreak = simulate_outbreak(settings)
-    target, delays = outbreak.vintages(list(config.simulated_dates))
-    tasks = make_tasks(target, delays, config)
-    forecasts = run_forecasts(models, tasks)
+    tasks = recovery_tasks(config, settings)
+    forecasts = run_forecasts(models, tasks, cache, fits)
     end = outbreak.settings.start + dt.timedelta(days=outbreak.settings.n_days)
     scores = score_tasks(forecasts, outbreak.truth(), end.isoformat())
     scores["truth_vintage"] = "simulated"

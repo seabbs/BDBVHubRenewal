@@ -8,4 +8,4 @@ date,area,decision,reason,evidence
 2026-10-28,model,The publication lag default reverted to a fixed 0 to 3 days.,"The empirical lag counted onset backfill as late reporting, so it over-predicted.",https://github.com/seabbs/BDBVHubRenewal/commit/167698f
 2026-10-28,docs,The package renamed to bdbvhubrenewal.,It follows the repository name.,https://github.com/seabbs/BDBVHubRenewal/commit/e491a54
 2026-10-28,evaluation,"The held-out set rolls forward with each model choice, and the placeholder choice is removed.","Sam's decision: models are tuned on all data up to each choice, and only vintages after a choice are held out.",results/model-choice.yml
-2026-10-28,model,A BVDOutbreakSize release is used only if its joint R-hat is at most 1.1.,Releases that had not converged would pass a poor Rt to renewalbvd.,
+2026-10-28,model,A BVDOutbreakSize release is used only if its joint R-hat is at most 1.1.,Releases that had not converged would pass a poor Rt to renewalbvd.,https://github.com/seabbs/BDBVHubRenewal/commit/b32b7e0
