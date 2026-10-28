@@ -31,7 +31,7 @@ import datetime as dt
 import json
 import os
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from functools import partial
 from pathlib import Path
