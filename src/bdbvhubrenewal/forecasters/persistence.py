@@ -37,14 +37,16 @@ There are no such rows when the vintage has no delay data.
 
 `PersistenceNow` (`persistencenow`) first nowcasts the recent weeks, with
 the baselinenowcast method (`bdbvhubrenewal.data.triangle`).
-A chain ladder on the reporting triangle of the hub's delay file, pooled
-over provinces, gives for each open onset week $w$ the ratio $r(w)$ of
-the cases still to come to those reported.
+A chain ladder on the reporting triangle of the hub's delay file, over
+the last `n_history` onset weeks, gives for each open onset week $w$ the
+ratio $r_p(w)$ of the cases still to come to those reported.
+Places with at least `own_per_week` delays a week use their own triangle,
+the rest the triangle pooled over places.
 Past nowcasts of the same triangle give a negative binomial size
-$\phi_h$ for each horizon $h$.
-The national cases still to come, $U(w) \sim \text{NegBin}$ with mean
-$r(w) \sum_p Y_p(w)$ and size $\phi_h$, are split over places in
-proportion to their published totals $Y_p(w)$, known plus imputed.
+$\phi_{p,h}$ for each horizon $h$.
+Each place's cases still to come, $U_p(w) \sim \text{NegBin}$ with mean
+$r_p(w) Y_p(w)$ and size $\phi_{p,h}$, are drawn on their own, with
+$Y_p(w)$ its published total, known plus imputed.
 The hub re-imputes missing onsets at each vintage, so totals also move
 both ways. Each place adds $E_p(w) = A - B$, with $A, B \sim
 \text{Poisson}(\kappa I_p(w) / 2)$ and $I_p(w)$ its imputed count, so
@@ -80,9 +82,9 @@ import pandas as pd
 
 from bdbvhubrenewal.data.completeness import reported_share
 from bdbvhubrenewal.data.dates import as_date
-from bdbvhubrenewal.data.delays import EmpiricalDelayModel
+from bdbvhubrenewal.data.delays import DEFAULT_MAX_DELAY, EmpiricalDelayModel
 from bdbvhubrenewal.data.triangle import (
-    chainladder_fill,
+    apply_delay,
     delay_pmf,
     fit_nb_size,
     reporting_triangle,
@@ -303,10 +305,10 @@ def nowcast_draws(
 ) -> np.ndarray:
     r"""Draw final totals from published totals and point nowcast ratios.
 
-    The national count still to come in week $w$ is negative binomial
-    with mean $r(w) \sum_p Y_p(w)$ and size $\phi(w)$, or Poisson where
-    $\phi$ is infinite. It is split over places multinomially in
-    proportion to $Y_p(w)$. With `known` and `revision` $\kappa > 0$,
+    The count still to come in place $p$ and week $w$ is negative
+    binomial with mean $r_p(w) Y_p(w)$ and size $\phi_p(w)$, or Poisson
+    where $\phi_p$ is infinite, independently. With `known` and
+    `revision` $\kappa > 0$,
     each place also adds the difference of two Poisson draws with mean
     $\kappa (Y_p - K_p) / 2$, and is kept at least $K_p$.
 
@@ -315,9 +317,10 @@ def nowcast_draws(
     observed : numpy.ndarray
         Published totals $Y_p(w)$, one row per place, one column per week.
     ratio : numpy.ndarray
-        Cases still to come per case reported, $r(w)$.
+        Cases still to come per case reported, $r_p(w)$, shaped as
+        `observed`.
     size : numpy.ndarray
-        Negative binomial size $\phi(w)$.
+        Negative binomial size $\phi_p(w)$, shaped as `observed`.
     n : int
         Number of draws.
     rng : numpy.random.Generator
@@ -333,16 +336,15 @@ def nowcast_draws(
         Final totals, shaped `(n, places, weeks)`.
     """
     obs = np.asarray(observed, dtype=float)
-    total = obs.sum(axis=0)
-    mean = total * ratio
+    mean = obs * ratio
     out = np.broadcast_to(obs, (n, *obs.shape)).copy()
-    for j in np.flatnonzero(mean > 0):
-        if np.isfinite(size[j]):
-            phi = size[j]
-            added = rng.negative_binomial(phi, phi / (phi + mean[j]), size=n)
+    for p, j in zip(*np.nonzero(mean > 0), strict=True):
+        if np.isfinite(size[p, j]):
+            phi = size[p, j]
+            added = rng.negative_binomial(phi, phi / (phi + mean[p, j]), n)
         else:
-            added = rng.poisson(mean[j], size=n)
-        out[:, :, j] += rng.multinomial(added, obs[:, j] / total[j])
+            added = rng.poisson(mean[p, j], size=n)
+        out[:, p, j] += added
     if known is not None and revision > 0:
         lam = revision * np.clip(obs - known, 0, None) / 2
         shape = out.shape
@@ -435,49 +437,85 @@ class PersistenceNow(Persistence):
         Smallest share reported for a week's nowcast to be carried
         forward. The last such week is.
     n_history : int
-        Onset weeks of the reporting triangle each chain ladder uses.
+        Onset weeks of the reporting triangle each chain ladder uses. The
+        longest delay is `7 * (n_history - 1)` days, at most `DMAX`, so
+        the oldest week is complete.
     n_retro : int
         Past nowcasts to fit the negative binomial sizes to.
     min_retro : int
         Fewest past nowcasts to nowcast at all.
     min_delays : int
         Fewest delays in the chain ladder's onset weeks to nowcast at all.
+    own_per_week : float
+        Fewest delays a week, on average over those onset weeks, for a
+        place to use its own triangle rather than the pooled one.
 
     See `Persistence` for the other attributes.
     """
 
     name: str = "persistencenow"
     min_share: float = 0.5
-    n_history: int = 14
+    n_history: int = 6
     n_retro: int = 8
     min_retro: int = 3
     min_delays: int = 50
+    own_per_week: float = 50.0
+
+    @property
+    def max_delay(self) -> int:
+        """Longest delay of the triangle, in days."""
+        return min(7 * (self.n_history - 1), DEFAULT_MAX_DELAY)
 
     def _delay(
-        self, task: ForecastTask
+        self, task: ForecastTask, location: str | None = None
     ) -> tuple[list[str], np.ndarray, np.ndarray, np.ndarray] | None:
         """Return the triangle's weeks, ratios, sizes and delay cdf, or None.
 
-        None means too little delay data to nowcast.
+        Pooled over places, or for `location` alone with at least
+        `own_per_week` delays a week. None means too little delay data.
         """
         if task.delays is None or task.delays.empty:
             return None
         delay_vintage = str(task.delays["vintage"].max())
-        weeks, tri = reporting_triangle(task.delays, delay_vintage)
+        rows = task.delays
+        need = float(self.min_delays)
+        if location is not None:
+            rows = rows.loc[rows["location"] == location]
+            need = max(need, self.own_per_week * self.n_history)
+        weeks, tri = reporting_triangle(rows, delay_vintage, self.max_delay)
         hist = tri[-self.n_history :]
         complete = (~np.isnan(hist)).all(axis=1).any()
-        enough = np.nansum(hist) >= self.min_delays
+        enough = np.nansum(hist) >= need
         if len(hist) < self.n_history or not complete or not enough:
             return None
         obs, pred = retrospective_errors(tri, self.n_retro, self.n_history)
         if obs.shape[0] < self.min_retro:
             return None
-        filled = chainladder_fill(hist)
+        pmf = delay_pmf(hist)
+        filled = apply_delay(hist, pmf)
         reported = np.nansum(hist, axis=1)
         to_come = filled.sum(axis=1) - reported
         ratio = np.where(reported > 0, to_come / np.maximum(reported, 1), 0)
-        cdf = np.cumsum(delay_pmf(hist))
+        cdf = np.cumsum(pmf)
         return weeks[-self.n_history :], ratio, fit_nb_size(obs, pred), cdf
+
+    def delay_sources(self, task: ForecastTask) -> dict[str, str]:
+        """Return `"own"` or `"pooled"`, the delay each place nowcasts with.
+
+        Parameters
+        ----------
+        task : ForecastTask
+            The task.
+
+        Returns
+        -------
+        dict
+            One entry per place in `task.locations`.
+        """
+        return {
+            loc: "own" if self._delay(task, loc) is not None else "pooled"
+            for loc in task.locations
+        }
 
     def walk_errors(self, task: ForecastTask) -> list[np.ndarray]:
         r"""Return the standardised errors of the walk from past vintages.
@@ -564,10 +602,9 @@ class PersistenceNow(Persistence):
             Columns `location`, `target_end_date`, `sample`, `value`,
             and `as_of` if the task asks for `report_by`.
         """
-        fit = self._delay(task)
-        if fit is None:
+        pooled = self._delay(task)
+        if pooled is None:
             return super().forecast(task)
-        tri_weeks, ratio_tri, sizes, cdf = fit
         weeks = list(task.target_end_dates)
         ends = pd.date_range(
             min(task.target["target_end_date"].min(), weeks[0]),
@@ -575,22 +612,16 @@ class PersistenceNow(Persistence):
             freq="7D",
         )
         grid = [d.date().isoformat() for d in ends]
-        # Ratio and size of each grid week; weeks before the history are
-        # complete, weeks after the delay vintage are not nowcast.
-        ratio, size = np.zeros(len(grid)), np.full(len(grid), np.inf)
-        share = np.where(np.array(grid) < tri_weeks[0], 1.0, 0.0)
-        for i, week in enumerate(tri_weeks):
-            if week in grid:
-                j = grid.index(week)
-                h = len(tri_weeks) - 1 - i
-                ratio[j] = ratio_tri[i]
-                size[j] = sizes[h] if h < sizes.size else np.inf
-                share[j] = 1.0 / (1.0 + ratio_tri[i])
+        _, _, share = _on_grid(pooled, grid)
         anchor = np.flatnonzero(share >= self.min_share)
         if anchor.size == 0:
             return super().forecast(task)
         last = int(anchor[-1])
-        ratio[last + 1 :] = 0.0
+        fits = [self._delay(task, loc) or pooled for loc in task.locations]
+        on_grid = [_on_grid(f, grid) for f in fits]
+        ratio = np.array([g[0] for g in on_grid])
+        size = np.array([g[1] for g in on_grid])
+        ratio[:, last + 1 :] = 0.0
         rng = task.rng()
         n = task.n_samples
         cols = [grid.index(w) for w in weeks]
@@ -625,7 +656,7 @@ class PersistenceNow(Persistence):
         cum = lam[:steps] ** 2 * np.arange(1, steps + 1)
         inc = np.sqrt(np.maximum(np.diff(np.r_[0.0, cum]), 0.01))
         for p in range(len(task.locations)):
-            point = seen[p, : last + 1] * (1 + ratio[: last + 1])
+            point = seen[p, : last + 1] * (1 + ratio[p, : last + 1])
             sd = self._spread(point)
             log_level = np.log1p(totals[:, p, last])
             for k, j in enumerate(range(last + 1, len(grid))):
@@ -633,9 +664,10 @@ class PersistenceNow(Persistence):
                 totals[:, p, j] = np.maximum(draw, known[p, j])
         assert task.delays is not None
         age = (pd.Timestamp(str(task.delays["vintage"].max())) - ends).days
-        s_v = _share(cdf, age.to_numpy())
         final, as_of = [], []
         for p, loc in enumerate(task.locations):
+            cdf = fits[p][3]
+            s_v = _share(cdf, age.to_numpy())
             final.append(_frame(loc, weeks, totals[:, p, cols]))
             diff = totals[:, p] - seen[p]
             for date in task.report_by:
@@ -655,6 +687,27 @@ class PersistenceNow(Persistence):
         if not task.report_by:
             return out
         return pd.concat([out.assign(as_of=np.nan), *as_of], ignore_index=True)
+
+
+def _on_grid(
+    fit: tuple[list[str], np.ndarray, np.ndarray, np.ndarray], grid: list[str]
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return the ratio, size and share reported of each grid week.
+
+    Weeks before the triangle's history are complete, and weeks after the
+    delay vintage are not nowcast.
+    """
+    tri_weeks, ratio_tri, sizes, _ = fit
+    ratio, size = np.zeros(len(grid)), np.full(len(grid), np.inf)
+    share = np.where(np.array(grid) < tri_weeks[0], 1.0, 0.0)
+    for i, week in enumerate(tri_weeks):
+        if week in grid:
+            j = grid.index(week)
+            h = len(tri_weeks) - 1 - i
+            ratio[j] = ratio_tri[i]
+            size[j] = sizes[h] if h < sizes.size else np.inf
+            share[j] = 1.0 / (1.0 + ratio_tri[i])
+    return ratio, size, share
 
 
 def _share(cdf: np.ndarray, age: np.ndarray) -> np.ndarray:
