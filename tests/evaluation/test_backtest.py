@@ -14,8 +14,8 @@ from bdbv_hub_renewal.evaluation.backtest import (
     run_lopo,
     run_recovery,
     saturdays,
-    score_tasks,
     score_by_truth_vintage,
+    score_tasks,
     truth_changes,
 )
 from bdbv_hub_renewal.forecasters import get_model

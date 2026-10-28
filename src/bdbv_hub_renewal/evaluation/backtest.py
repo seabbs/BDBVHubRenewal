@@ -34,6 +34,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import yaml
 
@@ -397,11 +398,16 @@ def score_tasks(
     forecasts: pd.DataFrame,
     truth: pd.DataFrame,
     truth_date: str,
+    complete_after_weeks: int = 0,
 ) -> pd.DataFrame:
     """Score forecasts on every week against one truth vintage.
 
     Forecasts made at or after `truth_date` are dropped.
     Every week the truth covers is scored, as reported at `truth_date`.
+    Final-count rows (no `as_of`) are scored `"as reported"`.
+    Rows with `as_of` equal to `truth_date` predict the counts as reported
+    then, and are scored `"vintage-matched"`. Rows for other dates are
+    left out.
 
     Parameters
     ----------
@@ -411,17 +417,40 @@ def score_tasks(
         Columns `location`, `target_end_date` and `truth`.
     truth_date : str
         The date of the truth data.
+    complete_after_weeks : int
+        $K$: weeks that ended at least this many weeks before `truth_date`
+        are flagged `complete`.
 
     Returns
     -------
     pandas.DataFrame
-        Output of `bdbv_hub_renewal.evaluation.scoring.score_forecasts`, with a
-        `truth_vintage` column.
+        Output of `bdbv_hub_renewal.evaluation.scoring.score_forecasts`, with
+        `truth_vintage`, `scoring` and `complete` columns.
     """
     keep = forecasts["vintage"] < truth_date
-    scores = score_forecasts(forecasts.loc[keep], truth)
-    scores["truth_vintage"] = truth_date
-    return scores
+    as_of = (
+        forecasts["as_of"]
+        if "as_of" in forecasts
+        else pd.Series(np.nan, index=forecasts.index)
+    )
+    frames = []
+    for scoring, rows in (
+        ("as reported", as_of.isna()),
+        ("vintage-matched", as_of == truth_date),
+    ):
+        sel = forecasts.loc[keep & rows].drop(columns="as_of", errors="ignore")
+        if sel.empty:
+            continue
+        scores = score_forecasts(sel, truth)
+        scores["scoring"] = scoring
+        frames.append(scores)
+    if not frames:
+        return pd.DataFrame()
+    out = pd.concat(frames, ignore_index=True)
+    out["truth_vintage"] = truth_date
+    age = pd.Timestamp(truth_date) - pd.to_datetime(out["target_end_date"])
+    out["complete"] = age.dt.days >= 7 * complete_after_weeks
+    return out
 
 
 def real_vintages(target: pd.DataFrame) -> list[str]:
@@ -441,7 +470,9 @@ def real_vintages(target: pd.DataFrame) -> list[str]:
 
 
 def score_by_truth_vintage(
-    forecasts: pd.DataFrame, target: pd.DataFrame
+    forecasts: pd.DataFrame,
+    target: pd.DataFrame,
+    complete_after_weeks: int = 0,
 ) -> pd.DataFrame:
     """Score real forecasts against every later real vintage.
 
@@ -454,6 +485,8 @@ def score_by_truth_vintage(
         Output of `run_forecasts`.
     target : pandas.DataFrame
         Target rows with every real vintage.
+    complete_after_weeks : int
+        $K$, as for `score_tasks`.
 
     Returns
     -------
@@ -463,7 +496,9 @@ def score_by_truth_vintage(
     """
     real = forecasts.loc[forecasts["kind"] == "real"]
     frames = [
-        score_tasks(real, truth_from_vintage(target, v), v)
+        score_tasks(
+            real, truth_from_vintage(target, v), v, complete_after_weeks
+        )
         for v in real_vintages(target)
         if (real["vintage"] < v).any()
     ]
@@ -599,7 +634,7 @@ def run_development(
     )
     forecasts = run_forecasts(models, tasks)
     truth = truth_from_vintage(real, latest)
-    scores = score_tasks(forecasts, truth, latest)
+    scores = score_tasks(forecasts, truth, latest, config.complete_after_weeks)
     return forecasts, scores
 
 
@@ -674,7 +709,12 @@ def run_lopo(
                 kept.insert(4, "masked", prov)
                 frames.append(kept)
     forecasts = pd.concat(frames, ignore_index=True)
-    scores = score_tasks(forecasts, truth_from_vintage(real, latest), latest)
+    scores = score_tasks(
+        forecasts,
+        truth_from_vintage(real, latest),
+        latest,
+        config.complete_after_weeks,
+    )
     return forecasts, scores
 
 

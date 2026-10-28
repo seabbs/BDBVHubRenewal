@@ -274,7 +274,9 @@ def run_heldout(
         out / "heldout-forecasts.csv.gz", pd.concat(frames, ignore_index=True)
     )
     chosen = dict(zip(pairs["vintage"], pairs["model"], strict=True))
-    scores = score_by_truth_vintage(forecasts, real)
+    scores = score_by_truth_vintage(
+        forecasts, real, config.complete_after_weeks
+    )
     if not scores.empty:
         scores.insert(1, "chosen_model", scores["vintage"].map(chosen))
     out.mkdir(parents=True, exist_ok=True)

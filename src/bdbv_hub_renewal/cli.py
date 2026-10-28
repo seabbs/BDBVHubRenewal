@@ -468,7 +468,9 @@ def _backtest(args: argparse.Namespace) -> int:
         config,
         include_reconstructed=not args.no_reconstructed,
     )
-    by_truth = bt.score_by_truth_vintage(forecasts, target)
+    by_truth = bt.score_by_truth_vintage(
+        forecasts, target, config.complete_after_weeks
+    )
     rforecasts, rscores = bt.run_recovery(models, config)
     # Rows of models not run here are kept, so the fitted variants can be
     # run apart from the others.
