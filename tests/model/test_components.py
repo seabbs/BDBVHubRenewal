@@ -5,8 +5,8 @@ import pytest
 from pyrenew.deterministic import DeterministicVariable
 from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
 
-from bdbv_hub_renewal.data.delays import ParametricDelay
-from bdbv_hub_renewal.model import (
+from bdbvhubrenewal.data.delays import ParametricDelay
+from bdbvhubrenewal.model import (
     FixedTimeVarying,
     HazardDelay,
     MissingOnsetFraction,
@@ -23,7 +23,7 @@ from bdbv_hub_renewal.model import (
     onset_expectations,
     pooled_walk,
 )
-from bdbv_hub_renewal.model.observation import backsample
+from bdbvhubrenewal.model.observation import backsample
 
 from .numpy_reference import (
     expected_imputed_onsets,
@@ -250,8 +250,8 @@ def test_fast_kernels_match_reference_values_and_gradients():
 
 
 def test_province_centres_cover_all_provinces_and_match_reference():
-    from bdbv_hub_renewal.data import PROVINCE_CENTRES
-    from bdbv_hub_renewal.model.inputs import province_centres
+    from bdbvhubrenewal.data import PROVINCE_CENTRES
+    from bdbvhubrenewal.model.inputs import province_centres
 
     c = province_centres().set_index("location")
     assert len(c) == 26 and not c.isna().any().any()
@@ -301,7 +301,7 @@ def test_censored_pmf_matches_primarycensored(family):
 
 
 def test_idle_provinces_are_zero_up_to_the_cutoff():
-    from bdbv_hub_renewal.model.model import seed_from_imports
+    from bdbvhubrenewal.model.model import seed_from_imports
 
     rng = np.random.default_rng(0)
     y = seed_from_imports(
@@ -325,7 +325,7 @@ def test_per_origin_mixing_conserves_transmission():
 
 
 def test_linear_weekly_process_interpolates_knots():
-    from bdbv_hub_renewal.model.rt import LinearWeeklyProcess
+    from bdbvhubrenewal.model.rt import LinearWeeklyProcess
 
     rw = NonCentredRandomWalk(DeterministicVariable("sd", 0.3))
     out = seeded(lambda: LinearWeeklyProcess(rw).sample(29, initial_value=0.0))
@@ -411,7 +411,7 @@ def test_hazard_delay_report_day_of_week_effect():
 def test_report_dow_config_adds_the_effect(sim_vintage):
     import dataclasses
 
-    from bdbv_hub_renewal.model import MAIN, build_model, model_args
+    from bdbvhubrenewal.model import MAIN, build_model, model_args
 
     cfg = dataclasses.replace(MAIN, report_dow=True)
     model = build_model(sim_vintage, cfg)
@@ -423,8 +423,8 @@ def test_report_dow_config_adds_the_effect(sim_vintage):
 
 def test_generation_interval_matches_bvdoutbreaksize():
     # BVDOutbreakSize's prior means (priors.jl): mean 15.3, SD 9.3 days.
-    from bdbv_hub_renewal.data.simulate import SimulationSettings
-    from bdbv_hub_renewal.model.model import GI_MEAN, GI_SD, generation_interval
+    from bdbvhubrenewal.data.simulate import SimulationSettings
+    from bdbvhubrenewal.model.model import GI_MEAN, GI_SD, generation_interval
 
     assert (GI_MEAN, GI_SD) == (15.3, 9.3)
     np.testing.assert_allclose(
@@ -435,7 +435,7 @@ def test_generation_interval_matches_bvdoutbreaksize():
 
 
 def test_case_weighted_basis_is_orthonormal_and_orthogonal_to_weights():
-    from bdbv_hub_renewal.model.rt import sum_to_zero_basis
+    from bdbvhubrenewal.model.rt import sum_to_zero_basis
 
     w = np.array([6000.0, 2000.0, 400.0, 90.0])
     q = sum_to_zero_basis(4, w)

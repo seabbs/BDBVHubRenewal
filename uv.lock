@@ -104,7 +104,7 @@ wheels = [
 ]
 
 [[package]]
-name = "bdbv-hub-renewal"
+name = "bdbvhubrenewal"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
@@ -125,7 +125,7 @@ model = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "bdbv-hub-renewal", extra = ["model"] },
+    { name = "bdbvhubrenewal", extra = ["model"] },
     { name = "mypy" },
     { name = "pandas-stubs" },
     { name = "pytest" },
@@ -156,7 +156,7 @@ provides-extras = ["model"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "bdbv-hub-renewal", extras = ["model"] },
+    { name = "bdbvhubrenewal", extras = ["model"] },
     { name = "mypy", specifier = ">=1.11" },
     { name = "pandas-stubs", specifier = ">=2.1" },
     { name = "pytest", specifier = ">=8" },

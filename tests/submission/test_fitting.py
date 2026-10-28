@@ -8,9 +8,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbv_hub_renewal.cli import main
-from bdbv_hub_renewal.data import coherence_summary, national_coherence
-from bdbv_hub_renewal.submission.fitting import (
+from bdbvhubrenewal.cli import main
+from bdbvhubrenewal.data import coherence_summary, national_coherence
+from bdbvhubrenewal.submission.fitting import (
     get_config,
     list_configs,
     persistence_config,
@@ -180,7 +180,7 @@ def test_cli_coherence(
 def test_cli_plot_ppc(tmp_path: Path) -> None:
     import numpy as np
 
-    from bdbv_hub_renewal.evaluation.ppc import (
+    from bdbvhubrenewal.evaluation.ppc import (
         not_available,
         summarise_draws,
         write_ppc,
@@ -214,7 +214,7 @@ def test_cli_plot_ppc(tmp_path: Path) -> None:
 def test_delays_for_vintage_uses_the_latest_available(
     delays: pd.DataFrame,
 ) -> None:
-    from bdbv_hub_renewal.data import delays_for_vintage
+    from bdbvhubrenewal.data import delays_for_vintage
 
     have = str(delays["vintage"].max())
     same, note = delays_for_vintage(delays, have)
@@ -241,7 +241,7 @@ def test_nowcast_notes_what_it_handled(tmp_path: Path) -> None:
 
 @pytest.mark.usefixtures("in_root")
 def test_submission_id_is_one_config_value(tmp_path: Path) -> None:
-    from bdbv_hub_renewal.submission.hub import submission_model_abbr
+    from bdbvhubrenewal.submission.hub import submission_model_abbr
 
     assert (
         submission_model_abbr(ROOT / "config" / "hub.toml") == "seabbsrenewal"

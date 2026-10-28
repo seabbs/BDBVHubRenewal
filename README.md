@@ -85,7 +85,7 @@ docs/            MkDocs site; figures are built at docs build time,
 hub/             model metadata YAML
 results/         score tables and the model choice record
 scripts/         hubValidations runner (R), diagram build
-src/bdbv_hub_renewal/
+src/bdbvhubrenewal/
   data/          hub data, dates, reconstructed and simulated vintages,
                  delays and BVDOutbreakSize releases
   model/         the PyRenew renewal model (JAX)
@@ -94,7 +94,7 @@ src/bdbv_hub_renewal/
   evaluation/    scoring, backtest, held-out evaluation, PPC, hub comparison
   submission/    hub file writer and checks, metadata, CI fit configs, rounds
   reporting/     figures and docs tables
-  cli.py         the bdbv-hub-renewal command
+  cli.py         the bdbvhubrenewal command
 tests/           mirrors src/
 ```
 

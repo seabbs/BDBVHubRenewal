@@ -3,14 +3,14 @@
 The hub file writer and checks, metadata, fit configurations and rounds.
 { .page-subtitle }
 
-::: bdbv_hub_renewal.submission
+::: bdbvhubrenewal.submission
     options:
       members: false
 
-::: bdbv_hub_renewal.submission.hub
+::: bdbvhubrenewal.submission.hub
 
-::: bdbv_hub_renewal.submission.validate
+::: bdbvhubrenewal.submission.validate
 
-::: bdbv_hub_renewal.submission.fitting
+::: bdbvhubrenewal.submission.fitting
 
-::: bdbv_hub_renewal.submission.rounds
+::: bdbvhubrenewal.submission.rounds

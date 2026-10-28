@@ -9,8 +9,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbv_hub_renewal.evaluation.backtest import BacktestConfig, make_tasks
-from bdbv_hub_renewal.forecasters import (
+from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
+from bdbvhubrenewal.forecasters import (
     NATIONAL,
     ForecastModel,
     ForecastTask,
@@ -18,8 +18,8 @@ from bdbv_hub_renewal.forecasters import (
     get_model,
     list_models,
 )
-from bdbv_hub_renewal.forecasters import renewal as rn
-from bdbv_hub_renewal.submission.fitting import Forecast, get_config
+from bdbvhubrenewal.forecasters import renewal as rn
+from bdbvhubrenewal.submission.fitting import Forecast, get_config
 
 pytest.importorskip("pyrenew")
 
@@ -368,7 +368,7 @@ def test_bvd_variant_reads_the_release_for_its_vintage(
 ) -> None:
     import shutil
 
-    from bdbv_hub_renewal.data import bvd
+    from bdbvhubrenewal.data import bvd
 
     fixtures = Path(__file__).resolve().parents[1] / "data" / "bvd"
     releases = bvd.parse_releases(
@@ -396,7 +396,7 @@ def test_bvd_fit_records_the_release_and_its_rhat(
 ) -> None:
     import shutil
 
-    from bdbv_hub_renewal.data import bvd
+    from bdbvhubrenewal.data import bvd
 
     fixtures = Path(__file__).resolve().parents[1] / "data" / "bvd"
     cache = tmp_path / "bvd"
@@ -539,9 +539,9 @@ def test_chain_method_defaults_to_vectorized(
 def test_inputs_carry_the_publication_lag_from_earlier_files(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
-    from bdbv_hub_renewal.evaluation.backtest import BacktestConfig, make_tasks
-    from bdbv_hub_renewal.forecasters.renewal import vintage_inputs
-    from bdbv_hub_renewal.model import MAIN
+    from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
+    from bdbvhubrenewal.forecasters.renewal import vintage_inputs
+    from bdbvhubrenewal.model import MAIN
 
     tasks = {
         t.vintage: t
@@ -560,12 +560,12 @@ def test_inputs_carry_the_publication_lag_from_earlier_files(
 def test_lag_source_warns_when_the_prior_stands_in(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
-    from bdbv_hub_renewal.evaluation.backtest import BacktestConfig, make_tasks
-    from bdbv_hub_renewal.forecasters.renewal import (
+    from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
+    from bdbvhubrenewal.forecasters.renewal import (
         lag_warnings,
         vintage_inputs,
     )
-    from bdbv_hub_renewal.model import MAIN
+    from bdbvhubrenewal.model import MAIN
 
     tasks = {
         t.vintage: t
@@ -575,11 +575,14 @@ def test_lag_source_warns_when_the_prior_stands_in(
             BacktestConfig(seed=3),
         )
     }
-    early = vintage_inputs(tasks["2026-10-09"], MAIN)
-    late = vintage_inputs(tasks["2026-10-17"], MAIN)
-    (warning,) = lag_warnings([early])
+    empirical = replace(MAIN, publication_lag="empirical")
+    early = vintage_inputs(tasks["2026-10-09"], empirical)
+    late = vintage_inputs(tasks["2026-10-17"], empirical)
+    (warning,) = lag_warnings([early], empirical)
     assert warning.startswith("publication_lag:")
-    assert lag_warnings([late]) == []
+    assert lag_warnings([late], empirical) == []
+    # The default fixed lag never warns.
+    assert lag_warnings([early], MAIN) == []
 
 
 def test_report_cutoffs_are_days_from_the_model_start(

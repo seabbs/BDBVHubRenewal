@@ -8,8 +8,8 @@ import pandas as pd
 import pytest
 from matplotlib.figure import Figure
 
-from bdbv_hub_renewal.cli import main
-from bdbv_hub_renewal.reporting import plots
+from bdbvhubrenewal.cli import main
+from bdbvhubrenewal.reporting import plots
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -112,7 +112,7 @@ def test_plot_scores_by_truth() -> None:
 def test_cli_lopo_writes_scores_for_mask_aware_models(tmp_path: Path) -> None:
     from evaluation.test_backtest import _MaskAware
 
-    from bdbv_hub_renewal.forecasters.base import _REGISTRY, register_model
+    from bdbvhubrenewal.forecasters.base import _REGISTRY, register_model
 
     register_model("mask_aware", _MaskAware, "Test model.", replace=True)
     try:
@@ -165,7 +165,7 @@ def test_cli_backtest_keeps_other_models_results(tmp_path: Path) -> None:
 
 @pytest.mark.usefixtures("in_root")
 def test_cli_backtest_no_fit_skips_fitted_models(tmp_path: Path) -> None:
-    from bdbv_hub_renewal.forecasters import list_models
+    from bdbvhubrenewal.forecasters import list_models
 
     assert any(s.fitted for s in list_models())
     args = [
@@ -203,7 +203,7 @@ def test_cli_backtest_shards_into_a_cache(tmp_path: Path) -> None:
 
 
 def test_host_devices_cover_the_chains(monkeypatch: pytest.MonkeyPatch) -> None:
-    from bdbv_hub_renewal.cli import host_devices
+    from bdbvhubrenewal.cli import host_devices
 
     monkeypatch.setenv("XLA_FLAGS", "--xla_foo=1")
     host_devices(4)
@@ -222,9 +222,9 @@ def test_cli_fit_task_carries_the_delay_files_for_the_lag() -> None:
     # publication lag, not the prior.
     import argparse
 
-    from bdbv_hub_renewal.cli import _task
-    from bdbv_hub_renewal.forecasters.renewal import vintage_inputs
-    from bdbv_hub_renewal.model import MAIN
+    from bdbvhubrenewal.cli import _task
+    from bdbvhubrenewal.forecasters.renewal import vintage_inputs
+    from bdbvhubrenewal.model import MAIN
 
     args = argparse.Namespace(
         vintage="latest",

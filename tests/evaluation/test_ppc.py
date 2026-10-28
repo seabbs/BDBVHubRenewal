@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 from matplotlib.figure import Figure
 
-from bdbv_hub_renewal.evaluation.ppc import (
+from bdbvhubrenewal.evaluation.ppc import (
     not_available,
     plot_ppc,
     read_ppc,

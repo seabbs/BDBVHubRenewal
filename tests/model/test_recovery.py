@@ -1,6 +1,6 @@
 """Fit the main and fallback configurations to a simulated vintage.
 
-The outbreak comes from `bdbv_hub_renewal.data.simulate.simulate_outbreak`, a
+The outbreak comes from `bdbvhubrenewal.data.simulate.simulate_outbreak`, a
 case-level simulator independent of this model: Rt turns from about 1.6
 to 0.85 around day 120, the mean delay falls from 12 to 6 days and the
 missing-onset share rises then falls.
@@ -15,10 +15,10 @@ import jax
 import numpy as np
 import pytest
 
-from bdbv_hub_renewal.evaluation.ppc import summarise_draws
-from bdbv_hub_renewal.forecasters.renewal import ppc_rows
-from bdbv_hub_renewal.model import FALLBACK, MAIN, build_model, fit
-from bdbv_hub_renewal.model.model import forecast_trajectories
+from bdbvhubrenewal.evaluation.ppc import summarise_draws
+from bdbvhubrenewal.forecasters.renewal import ppc_rows
+from bdbvhubrenewal.model import FALLBACK, MAIN, build_model, fit
+from bdbvhubrenewal.model.model import forecast_trajectories
 
 from .conftest import VINTAGE_DAYS, vintage_date
 

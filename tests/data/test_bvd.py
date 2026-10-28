@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbv_hub_renewal.data import bvd
+from bdbvhubrenewal.data import bvd
 
 FIXTURES = Path(__file__).resolve().parent / "bvd"
 

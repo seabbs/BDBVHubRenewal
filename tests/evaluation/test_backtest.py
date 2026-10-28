@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbv_hub_renewal.evaluation.backtest import (
+from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     forecast_weeks,
     load_config,
@@ -22,7 +22,7 @@ from bdbv_hub_renewal.evaluation.backtest import (
     shard_tasks,
     truth_changes,
 )
-from bdbv_hub_renewal.forecasters import get_model
+from bdbvhubrenewal.forecasters import get_model
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -332,7 +332,7 @@ def test_lopo_without_mask_aware_models_is_empty(
 def test_vintage_without_delays_takes_reconstructed_rows(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
-    from bdbv_hub_renewal.data.reconstruct import reconstruct_delays
+    from bdbvhubrenewal.data.reconstruct import reconstruct_delays
 
     assert not (delays["vintage"] == "2026-08-18").any()
     tasks = make_tasks(
@@ -344,7 +344,7 @@ def test_vintage_without_delays_takes_reconstructed_rows(
     assert set(got["vintage"]) == {"2026-08-18"}
     # The next vintage's rows, thinned by the chance each was published
     # by the cut-off under the prior publication lag.
-    from bdbv_hub_renewal.model.model import PRIOR_PUBLICATION_LAG
+    from bdbvhubrenewal.model.model import PRIOR_PUBLICATION_LAG
 
     nxt = delays.loc[delays["vintage"] == "2026-10-09"]
     cut = reconstruct_delays(nxt, "2026-08-18", publication_lag_days=0)
@@ -470,8 +470,8 @@ def test_lopo_reuses_the_cache(
 def test_backtest_sampler_comes_from_the_config(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from bdbv_hub_renewal.evaluation.backtest import apply_sampler
-    from bdbv_hub_renewal.forecasters.renewal import (
+    from bdbvhubrenewal.evaluation.backtest import apply_sampler
+    from bdbvhubrenewal.forecasters.renewal import (
         SAMPLER_ENV,
         sampler_settings,
     )
