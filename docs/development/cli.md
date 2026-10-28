@@ -40,12 +40,9 @@ It checks the file with `validate_submission`, which mirrors the hub's checks:
 - the submission window, Sunday to Tuesday in Kinshasa time, when a time is given.
 
 `task validate-hub` then runs the hub's own `hubValidations::validate_submission()` in R against a fresh clone of the hub.
-The persistence file for 2026-10-31 passes every check.
 
 `bdbvhubrenewal metadata` writes `hub/model-metadata/epiforecasts-<model>.yml` and checks it against the hub's schema.
 Sam confirms the contributor list, licence and model name before a model is first submitted.
 
 !!! note "Sample ids"
-    Sample ids run from 1 to 100 within each location and are shared across locations.
-    `hubValidations` reads this as samples that are joint across locations, which they are.
-    The national sample is the sum of the province samples with the same id.
+    Sample ids run from 1 to 100 and are shared across locations, so `hubValidations` reads samples as joint across locations.

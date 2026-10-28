@@ -27,38 +27,22 @@ register_model("my_model", MyModel, "One line describing it.")
 ```
 
 Import the module in `bdbvhubrenewal/forecasters/__init__.py`.
-Then:
-
-- `task backtest` scores it on every development vintage;
-- the [Backtest](../backtest.md) page shows its scores and its WIS relative to persistence;
-- the [Nowcast](../nowcast.md) page shows its current forecast;
-- `bdbvhubrenewal compare-hub` adds its retrospective forecasts to the comparison with hub forecasts;
-- `bdbvhubrenewal nowcast --model my_model` writes and checks its hub file.
-
-Once it is chosen for submission, add an entry to `results/model-choice.yml`.
-The [held-out evaluation](../heldout.md) then scores it on every later vintage.
-
+The backtest, the [Backtest](../backtest.md) and [Nowcast](../nowcast.md) pages, `compare-hub` and `nowcast --model my_model` then include it.
+Once it is chosen for submission, an entry in `results/model-choice.yml` adds it to the [held-out evaluation](../heldout.md).
 The harness adds the national total, the horizons and the vintage kind.
-Model colours follow registry order, so a model keeps its colour as others are added.
 
-To take part in the leave-one-province-out check, set `supports_mask = True` on the class.
-The model must then drop the counts of the provinces in `task.mask` from its likelihood, while still forecasting them.
+For the leave-one-province-out check, set `supports_mask = True` and drop the provinces in `task.mask` from the likelihood while still forecasting them.
 
 ## Renewal variants
 
 A new renewal variant is one entry in `VARIANTS` in [`forecasters.renewal`][bdbvhubrenewal.forecasters.renewal].
-It names a base configuration (`MAIN` or `FALLBACK`) and the `ModelConfig` fields it changes.
-Registered variants are marked `fitted`, because each forecast is an MCMC fit.
-So the docs build and the smoke tests run only the models with no fit.
-Run the fitted variants apart, for example on a bigger machine, and commit what they write to `results/`:
+It names a base `ModelConfig` and the fields it changes.
+Fitted variants are not run by the docs build or the smoke tests.
+Run them apart and commit what they write to `results/`:
 
 ```bash
 BDBV_RENEWAL_SAMPLER='{"num_chains": 2, "num_warmup": 300, "num_samples": 300}' \
   task backtest -- --models renewal
 ```
 
-A run with `--models` replaces only those models' rows in `results/`.
-`BDBV_RENEWAL_SAMPLER` sets the NUTS settings of every registered variant.
-
-The PyRenew model code is in `bdbvhubrenewal.model`, with its tests in `tests/model/`.
-The adapter reads only `ModelConfig`, the configurations, `build_model`, `model_args`, `forecast_trajectories` and `inputs.vintage_from_tables` from it.
+A run with `--models` replaces only those models' rows, and `BDBV_RENEWAL_SAMPLER` sets the NUTS settings.
