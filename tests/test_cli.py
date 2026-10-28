@@ -196,3 +196,25 @@ def test_host_devices_cover_the_chains(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("XLA_FLAGS", "--xla_force_host_platform_device_count=8")
     host_devices(4)
     assert os.environ["XLA_FLAGS"] == "--xla_force_host_platform_device_count=8"
+
+
+@pytest.mark.usefixtures("in_root")
+def test_cli_fit_task_carries_the_delay_files_for_the_lag() -> None:
+    # A live fit sees every earlier delay file, so it uses the empirical
+    # publication lag, not the prior.
+    import argparse
+
+    from bdbv_hub_renewal.cli import _task
+    from bdbv_hub_renewal.forecasters.renewal import vintage_inputs
+    from bdbv_hub_renewal.model import MAIN
+
+    args = argparse.Namespace(
+        vintage="latest",
+        data="data",
+        backtest_config="config/backtest.toml",
+        min_horizon=-6,
+    )
+    task, _ = _task(args)
+    assert task.delay_history is not None
+    assert task.delay_history["vintage"].nunique() >= 2
+    assert vintage_inputs(task, MAIN).publication_lag_pmf is not None
