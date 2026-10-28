@@ -19,10 +19,12 @@ on:
   schedule:
     - cron: '0 23 * * 6'       # Saturday 23:00 UTC, as the window opens
     - cron: '0 2-23/3 * * 0,1' # every 3 hours on Sunday and Monday
-    # Tuesday until 14:00 UTC. That leaves about 540 minutes before the
-    # window closes at 22:59 UTC for prepare, the main fit, one retry
-    # (sized in ci/policy.toml to take about as long as main) and the
-    # gate. Each fit job is capped at 350 minutes on its own.
+    # Tuesday until 14:00 UTC, which leaves 540 minutes to the close for
+    # prepare, the main fit (about 2.7 to 3.4 hours, the fallback beside
+    # it), one retry of about the same length, and the gate. Each fit's
+    # timeout stops 45 minutes short of the close, and the retry runs only
+    # if it can finish in time (ci/policy.toml [timing]), so even a late
+    # failure reaches the fallback or persistence before the close.
     - cron: '0 2-14/3 * * 2'
   workflow_dispatch:
     inputs:
@@ -150,12 +152,16 @@ jobs:
       - name: List the primary fits
         id: matrix
         # With persistence chosen, the renewal candidates are fitted as
-        # shadows and the chain is persistence alone.
+        # shadows and the chain is persistence alone. Each fit's timeout
+        # leaves the gate time before the window closes.
+        env:
+          IGNORE_WINDOW: ${{ inputs.ignore_window }}
         run: |
           source ci/steps/lib.sh
+          # shellcheck disable=SC2046
           uv run --project "$CI_DIR" python -m submission_ci.policy \
             --policy "$CI_DIR/policy.toml" --stage primary --hub-ref "$HUB_REF" \
-            --model "$MODEL"
+            --model "$MODEL" $(deadline_args)
       - uses: actions/upload-artifact@v4
         with:
           name: inputs
@@ -198,23 +204,32 @@ jobs:
       # it; the candidate id is the name without the prefix.
       - name: Lay out the candidates
         run: ci/steps/unpack_candidates.sh
+      # No refit when too little of the window is left for it and the
+      # gate: the chain then moves on to the fallback.
       - name: Triage
         id: triage
+        env:
+          REFERENCE_DATE: ${{ needs.detect.outputs.reference_date }}
+          IGNORE_WINDOW: ${{ inputs.ignore_window }}
         run: |
           source ci/steps/lib.sh
+          # shellcheck disable=SC2046
           uv run --project "$CI_DIR" python -m submission_ci.select_candidate \
             triage --policy "$CI_DIR/policy.toml" --candidates "$WORK/candidates" \
-            --model "$MODEL"
+            --model "$MODEL" $(deadline_args)
       - name: List the retries
         id: matrix
         if: steps.triage.outputs.need_retry == 'true'
         env:
           HUB_REF: ${{ needs.detect.outputs.hub_ref }}
+          REFERENCE_DATE: ${{ needs.detect.outputs.reference_date }}
+          IGNORE_WINDOW: ${{ inputs.ignore_window }}
         run: |
           source ci/steps/lib.sh
+          # shellcheck disable=SC2046
           uv run --project "$CI_DIR" python -m submission_ci.policy \
             --policy "$CI_DIR/policy.toml" --stage retry --hub-ref "$HUB_REF" \
-            --model "$MODEL"
+            --model "$MODEL" $(deadline_args)
 
   retry:
     name: Fit retries

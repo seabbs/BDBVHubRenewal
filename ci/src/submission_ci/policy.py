@@ -4,9 +4,10 @@ The chain is an ordered list of candidates. The first candidate that
 clears every check is submitted:
 
 1. `main`: the main model with the default sampler settings.
-2. `retry-1`: one refit of the main model with a longer warm-up, more
-   chains and jittered inits, only when `main` is past the convergence
-   retry thresholds or was ruled out (`retry_budget`, 1 by default).
+2. `retry-1`: one refit of the main model with a longer warm-up, smaller
+   steps and jittered inits, only when `main` is past the convergence
+   retry thresholds or was ruled out (`retry_budget`, 1 by default), and
+   only when there is time for it before the window closes (`[timing]`).
 3. `fallback`: the same model code with `--config fallback` (no spatial
    coupling, delays and missingness fixed from the data).
 4. `persistence`: the persistence baseline, built from the data alone.
@@ -14,6 +15,10 @@ clears every check is submitted:
 Stage `primary` candidates fit in parallel straight away. Stage `retry`
 candidates fit only when the primary `main` fails. Stage `baseline`
 candidates need no fit.
+
+Every fit job's timeout leaves `reserve_minutes` before the window
+closes for the gate and the pull request, so the chain can always reach
+the fallback or persistence in time.
 """
 
 from __future__ import annotations
@@ -28,6 +33,7 @@ from typing import Any
 
 from .common import set_outputs
 from .fit_key import fit_key, source_hash
+from .window import minutes_left, parse_now
 
 KINDS = ("main", "retry", "fallback", "persistence", "shadow")
 """A `shadow` candidate is fitted and checked with its stage but is never
@@ -53,6 +59,16 @@ class Candidate:
 
 
 @dataclass(frozen=True)
+class Timing:
+    """Minutes the chain plans with (`[timing]` in `policy.toml`)."""
+
+    fit_cap_minutes: int = 350
+    reserve_minutes: int = 45
+    retry_minutes: int = 240
+    min_fit_minutes: int = 30
+
+
+@dataclass(frozen=True)
 class Policy:
     """The parsed policy file."""
 
@@ -62,6 +78,7 @@ class Policy:
     convergence: dict[str, dict[str, float]]
     checks: dict[str, Any]
     ppc: dict[str, Any] = field(default_factory=dict)
+    timing: Timing = field(default_factory=Timing)
 
     def chain(self) -> list[Candidate]:
         """Candidates in submission order, with retries cut to budget."""
@@ -140,14 +157,43 @@ def load_policy(path: Path | str) -> Policy:
         convergence=raw.get("convergence", {}),
         checks=raw.get("checks", {}),
         ppc=raw.get("ppc", {}),
+        timing=Timing(**{k: int(v) for k, v in raw.get("timing", {}).items()}),
     )
 
 
+def fit_timeout(policy: Policy, minutes_left: float | None) -> int:
+    """A fit job's timeout: the cap, less whatever the gate needs.
+
+    `minutes_left` is the time to the window's close (None for no
+    limit). The timeout never drops below `min_fit_minutes`; a fit that
+    cannot finish then fails and the chain moves on.
+    """
+    t = policy.timing
+    if minutes_left is None:
+        return t.fit_cap_minutes
+    room = int(minutes_left) - t.reserve_minutes
+    return max(t.min_fit_minutes, min(t.fit_cap_minutes, room))
+
+
+def retry_fits(policy: Policy, minutes_left: float | None) -> bool:
+    """Whether a refit can finish and still leave the gate its time."""
+    if minutes_left is None:
+        return True
+    t = policy.timing
+    return minutes_left >= t.retry_minutes + t.reserve_minutes
+
+
 def matrix(
-    policy: Policy, stage: str, root: Path, hub_ref: str
+    policy: Policy,
+    stage: str,
+    root: Path,
+    hub_ref: str,
+    minutes_left: float | None = None,
 ) -> list[dict[str, str]]:
-    """Matrix `include` entries for one stage, each with its cache key."""
+    """Matrix `include` entries for one stage, each with its cache key
+    and its job timeout in minutes."""
     src = source_hash(root, policy.cache_inputs) if policy.cache_inputs else ""
+    timeout = str(fit_timeout(policy, minutes_left))
     return [
         {
             "id": c.id,
@@ -156,9 +202,26 @@ def matrix(
             "label": c.label,
             "sampler": json.dumps(c.sampler, sort_keys=True),
             "key": fit_key(src, hub_ref, c.spec()),
+            "timeout": timeout,
         }
         for c in policy.stage(stage)
     ]
+
+
+def add_deadline_args(p: argparse.ArgumentParser) -> None:
+    """The round, so fits can be timed against its window."""
+    p.add_argument("--reference-date", default="")
+    p.add_argument("--ignore-window", action="store_true")
+    p.add_argument("--now", default=None, help="ISO time (for tests)")
+
+
+def deadline_minutes(args: argparse.Namespace) -> float | None:
+    """Minutes to the window's close from parsed `add_deadline_args`."""
+    return minutes_left(
+        args.reference_date,
+        parse_now(args.now),
+        ignore_window=args.ignore_window,
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -174,12 +237,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         default="",
         help="The chosen model; persistence makes a persistence-only chain",
     )
+    add_deadline_args(p)
     args = p.parse_args(argv)
     entries = matrix(
         load_policy(args.policy).for_model(args.model),
         args.stage,
         args.root,
         args.hub_ref,
+        deadline_minutes(args),
     )
     if args.only is not None:
         entries = [e for e in entries if e["id"] in args.only]

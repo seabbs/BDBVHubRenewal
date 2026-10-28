@@ -56,6 +56,20 @@ def current_window(now: dt.datetime) -> Window:
     return win
 
 
+def minutes_left(
+    reference_date: str, now: dt.datetime, *, ignore_window: bool = False
+) -> float | None:
+    """Minutes until the round's window closes, or None without a limit.
+
+    There is no limit when no round is given or the window is ignored
+    (dry runs on past rounds).
+    """
+    if not reference_date or ignore_window:
+        return None
+    win = window_for(dt.date.fromisoformat(reference_date))
+    return (win.closes - now).total_seconds() / 60
+
+
 def parse_now(value: str | None) -> dt.datetime:
     """Parse an ISO timestamp, defaulting to the current UTC time."""
     if not value:

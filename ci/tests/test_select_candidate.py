@@ -144,6 +144,10 @@ def test_retry_passes(tmp_path: Path) -> None:
         persistence=(None, "pass"),
     )
     assert triage(POLICY, c)
+    t = POLICY.timing
+    assert triage(POLICY, c, minutes_left=t.retry_minutes + t.reserve_minutes)
+    # Too close to the window's end for a refit: go down the chain.
+    assert not triage(POLICY, c, minutes_left=t.retry_minutes)
     prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=True)
     assert prov["selected"] == "retry-1"
     assert prov["produced_by"].startswith("main model, refitted")
