@@ -173,7 +173,7 @@ def test_publication_lag_pmf_from_rows_new_in_later_vintages() -> None:
     new = pd.concat(
         [
             old.assign(vintage="2026-10-17"),
-            _rows("2026-10-17", ["2026-08-15", "2026-08-15"], [2, 2]),
+            _rows("2026-10-17", ["2026-07-04", "2026-07-04"], [2, 2]),
             _rows("2026-10-17", ["2026-10-17"] * 3, [0, 0, 0]),
         ]
     )
