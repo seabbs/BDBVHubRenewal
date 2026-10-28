@@ -161,7 +161,9 @@ Rows in a delay file beyond those of the previous file were first published betw
 Each such row's lag is spread over its onset day within the week and its publication day between the files, over feasible lags only, and lags past 60 days go to the last cell.
 Only pairs of files dated on or before the forecast date are used, so backtests do not see later files.
 Between 2026-10-17 and 2026-10-24, 23% of new rows had report dates more than 41 days old, so late entries matter for the nowcast weeks.
-A vintage with no earlier pair (2026-10-09 and before) uses a uniform pmf on 0 to 3 days instead.
+A vintage with no earlier pair (2026-10-09 and before) uses a fixed prior pmf instead: 85% uniform on 0 to 3 days and 15% uniform on 4 to 60 days.
+That prior is shaped by the later files (29% of rows new between 10-09 and 10-17 were more than 6 days late), so the 2026-10-09 backtest uses a little later information.
+Without a tail, the 2026-10-09 fit treated weeks 4 to 5 weeks old as complete and its national 90% intervals fell below the counts reported by 10-24 for three of the four nowcast weeks.
 The cases with onset $s$ in the vintage with an onset recorded are expected to be
 
 $$

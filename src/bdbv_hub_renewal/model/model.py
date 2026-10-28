@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import datetime as dt
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Final, Literal
 
 import jax.numpy as jnp
 import numpy as np
@@ -88,6 +88,16 @@ def generation_interval(
     return np.asarray(pmf / pmf.sum(), dtype=float)
 
 
+PRIOR_PUBLICATION_LAG: Final[tuple[float, ...]] = tuple(
+    [0.85 / 4] * 4 + [0.15 / 57] * 57
+)
+"""Report to publication lag pmf on 0..60 days where no pair of delay files
+gives an estimate: 85% within 3 days and 15% spread over 4 to 60 days.
+It is a prior shaped by the later files (29% of rows new between 10-09
+and 10-17 were more than 6 days late), so for the 2026-10-09 backtest it
+uses a little later information."""
+
+
 @dataclass(frozen=True)
 class ModelConfig:
     r"""Structural choices of the model, for the ladder and the variants.
@@ -156,8 +166,9 @@ class ModelConfig:
         Lag from report to publication in a vintage: the empirical pmf
         on $0..60$ days from rows new in earlier delay files
         (`Vintage.publication_lag_pmf`), a Dirichlet simplex on $0..L$,
-        uniform on $0..L$, or none. Empirical falls back to uniform on
-        $0..L$ for a vintage with no earlier pair of delay files.
+        uniform on $0..L$, or none. Empirical falls back to
+        `PRIOR_PUBLICATION_LAG` for a vintage with no earlier pair of
+        delay files.
     max_publication_lag : int
         $L$, in days (`data.reconstruct.PUBLICATION_LAG_DAYS`).
     delay_counts : {"multinomial", "dirichlet-multinomial"}
@@ -557,13 +568,15 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         lag = DistributionalVariable(
             "onsets_publication_lag", dist.Dirichlet(np.ones(n_lag))
         )
-    elif config.publication_lag == "fixed" or (
-        config.publication_lag == "empirical"
-        and data.publication_lag_pmf is None
-    ):
+    elif config.publication_lag == "fixed":
         lag = np.full(n_lag, 1 / n_lag)
     elif config.publication_lag == "empirical":
-        lag = np.asarray(data.publication_lag_pmf, dtype=float)
+        lag = np.asarray(
+            PRIOR_PUBLICATION_LAG
+            if data.publication_lag_pmf is None
+            else data.publication_lag_pmf,
+            dtype=float,
+        )
 
     builder.add_observation(
         OnsetStreams(
