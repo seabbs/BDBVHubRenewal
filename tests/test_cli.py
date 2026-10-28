@@ -184,6 +184,24 @@ def test_cli_backtest_no_fit_skips_fitted_models(tmp_path: Path) -> None:
     assert "persistence" in unfitted
 
 
+@pytest.mark.usefixtures("in_root")
+def test_cli_backtest_shards_into_a_cache(tmp_path: Path) -> None:
+    res, out, cache = tmp_path / "res", tmp_path / "out", tmp_path / "cache"
+    base = ["backtest", "--no-reconstructed", "--no-recovery",
+            "--results", str(res), "--output", str(out),
+            "--models", "persistence", "--cache", str(cache)]  # fmt: skip
+    # A shard only fills the cache.
+    assert main([*base, "--shard", "0/2"]) == 0
+    assert main([*base, "--shard", "1/2"]) == 0
+    assert list(cache.glob("*.csv.gz"))
+    assert not (res / "backtest-scores.csv").exists()
+    # Without a shard every task comes from the cache and is scored.
+    assert main(base) == 0
+    scores = pd.read_csv(res / "backtest-scores.csv")
+    assert set(scores["model"]) == {"persistence"}
+    assert not (res / "recovery-scores.csv").exists()
+
+
 def test_host_devices_cover_the_chains(monkeypatch: pytest.MonkeyPatch) -> None:
     from bdbv_hub_renewal.cli import host_devices
 

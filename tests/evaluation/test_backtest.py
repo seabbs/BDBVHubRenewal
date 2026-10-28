@@ -12,11 +12,13 @@ from bdbv_hub_renewal.evaluation.backtest import (
     load_config,
     make_tasks,
     run_development,
+    run_forecasts,
     run_lopo,
     run_recovery,
     saturdays,
     score_by_truth_vintage,
     score_tasks,
+    shard_tasks,
     truth_changes,
 )
 from bdbv_hub_renewal.forecasters import get_model
@@ -364,3 +366,45 @@ def test_tasks_carry_earlier_delay_files_for_the_publication_lag(
     assert history is not None
     assert set(history["vintage"]) == {"2026-10-09", "2026-10-17"}
     assert tasks["2026-08-18"].delay_history is None
+
+
+class _Counting:
+    name = "persistence"
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def forecast(self, task):  # type: ignore[no-untyped-def]
+        self.calls += 1
+        return get_model("persistence").forecast(task)
+
+
+def test_run_forecasts_reuses_cached_tasks(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    config: BacktestConfig,
+    tmp_path: Path,
+) -> None:
+    tasks = make_tasks(
+        target.loc[target["vintage"] >= "2026-10-17"], delays, config
+    )
+    model = _Counting()
+    first = run_forecasts([model], tasks, cache=tmp_path)
+    assert model.calls == len(tasks)
+    assert len(list(tmp_path.glob("*.csv.gz"))) == len(tasks)
+    again = run_forecasts([model], tasks, cache=tmp_path)
+    assert model.calls == len(tasks)
+    pd.testing.assert_frame_equal(
+        first.reset_index(drop=True), again.reset_index(drop=True),
+        check_dtype=False,
+    )  # fmt: skip
+
+
+def test_shard_tasks_splits_every_task_once(
+    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
+) -> None:
+    tasks = make_tasks(target, delays, config)
+    shards = [shard_tasks(tasks, i, 3) for i in range(3)]
+    assert sum(len(s) for s in shards) == len(tasks)
+    seen = [t.vintage for s in shards for t in s]
+    assert sorted(seen) == sorted(t.vintage for t in tasks)
