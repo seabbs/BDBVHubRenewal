@@ -88,6 +88,7 @@ from bdbvhubrenewal.data.delays import DEFAULT_MAX_DELAY, EmpiricalDelayModel
 from bdbvhubrenewal.data.reconstruct import PUBLICATION_LAG_DAYS
 from bdbvhubrenewal.data.triangle import (
     delay_pmf,
+    first_publication_delays,
     fit_nb_size,
     reporting_triangle,
     retrospective_errors,
@@ -538,12 +539,20 @@ class PersistenceNow(Persistence):
     def _triangle(
         self, task: ForecastTask, location: str | None = None
     ) -> tuple[list[str], np.ndarray]:
-        """Return the triangle's weeks and counts, pooled or for a place."""
+        """Return the triangle's weeks and counts, pooled or for a place.
+
+        Delays run to each case's first publication, over every delay file
+        up to the task's (`first_publication_delays`).
+        """
         assert task.delays is not None
-        rows = task.delays
+        vintage = str(task.delays["vintage"].max())
+        files = task.delays
+        if task.delay_history is not None:
+            past = task.delay_history["vintage"] < vintage
+            files = pd.concat([task.delay_history.loc[past], task.delays])
+        rows = first_publication_delays(files, vintage, self.max_delay)
         if location is not None:
             rows = rows.loc[rows["location"] == location]
-        vintage = str(task.delays["vintage"].max())
         return reporting_triangle(rows, vintage, self.max_delay)
 
     def _delay(

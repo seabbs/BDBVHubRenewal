@@ -37,7 +37,11 @@ It nowcasts the recent weeks with a Python port of [baselinenowcast](https://git
 Tests check the port's delay, point nowcast and negative binomial sizes against baselinenowcast 0.2.0 from CRAN on fixed triangles, and a CI job regenerates those fixtures with the R package (`scripts/baselinenowcast_fixtures.R`).
 
 **Delay and uncertainty.**
-The reporting triangle $n(W, d)$ counts the cases in the vintage's delay file by onset week $W$ and delay $d$ in days, up to 35 days.
+The reporting triangle $n(W, d)$ counts the cases in the vintage's delay file by onset week $W$ and delay $d$ in days, up to 35 days, with $d$ counted to each case's first publication.
+Rows are matched across the delay files up to $T_v$ by province, onset week and reported delay.
+A row in the first file keeps its reported delay.
+A row first in a later file, absent from the file before it dated $V$, gets $\max(d, V + 1 - W)$, so a batch published late is a long delay that the chain ladder and its retrospective uncertainty learn.
+Rows whose delay is then over 35 days are left out, as they are mostly onsets recorded late for cases already counted as imputed.
 A case is taken as published on day $W + d$, so cell $(W, d)$ is observed if $W + d \le T_v$.
 On the last 6 onset weeks, a chain ladder gives the delay pmf $p$ with cdf $F$, as baselinenowcast's `estimate_delay` does.
 The same is done on the triangle cut back to each of the 8 previous weeks, and each open row is filled from its pmf as `apply_delay` does.
