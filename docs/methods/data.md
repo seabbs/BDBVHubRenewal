@@ -28,7 +28,7 @@ Raw downloads go to `data/raw/` and are not.
 | `target-data/time-series.csv` | `target.csv` | Weekly confirmed cases by onset week for the country and provinces: observed, imputed and total. | All, in one file |
 | `auxiliary-data/daily-confirmed-case.csv` | `daily.csv` | Daily cases by onset day, split into observed and imputed onsets. | All, in one file |
 | `auxiliary-data/weekly-reporting-delays-by-province.csv` | `delays.csv.gz` | One row per known-onset case: province, onset week and onset-to-report delay. | Latest only; earlier ones from the archive folder and the git history |
-| `target-data/time-series.csv` (health zones) | `health_zones.csv.gz` | Weekly totals by health zone. Not modelled yet. | All |
+| `target-data/time-series.csv` (health zones) | `health_zones.csv.gz` | Weekly totals by health zone. The province models do not use them. | All |
 | `auxiliary-data/locations.csv` | `locations.csv` | Codes, names and parents, plus populations and centres added here. | Static |
 | `hub-config/*.json` | `hub-config/` | Rounds, tasks, output types and the metadata schema. | Copied at download |
 

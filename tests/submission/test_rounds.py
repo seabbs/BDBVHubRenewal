@@ -90,6 +90,7 @@ def test_round_pages(tmp_path: Path) -> None:
 def test_no_ledger_yet(tmp_path: Path) -> None:
     docs, gen = tmp_path / "docs", tmp_path / "gen"
     assert make_round_pages(None, docs, gen) == []
-    assert "none yet" in (gen / "latest-submission.md").read_text()
-    assert "No round" in (docs / "submission/rounds/index.md").read_text()
+    assert (gen / "latest-submission.md").read_text() == ""
+    index = (docs / "submission/rounds/index.md").read_text()
+    assert "yet" not in index
     assert make_round_pages(tmp_path / "missing", docs, gen) == []

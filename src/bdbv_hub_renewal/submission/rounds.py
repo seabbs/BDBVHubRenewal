@@ -179,7 +179,7 @@ def make_round_pages(
     ----------
     ledger : pathlib.Path or str or None
         A checkout of the `submission-ledger` branch. None, or a folder
-        without `state.json`, means no round has been submitted yet.
+        without `state.json`, means no round has been submitted.
     docs : pathlib.Path or str
         The docs folder. Pages go to `submission/rounds/` inside it.
     generated : pathlib.Path or str
@@ -215,8 +215,7 @@ def make_round_pages(
             f"{rounds[ref].get('produced_by', '')} |"
             for ref in done
         ]
-    else:
-        index.append("No round has been submitted yet.")
+
     (out / "index.md").write_text("\n".join(index) + "\n")
     snippet = Path(generated) / "latest-submission.md"
     snippet.parent.mkdir(parents=True, exist_ok=True)
@@ -230,10 +229,7 @@ def make_round_pages(
             f"{entry.get('produced_by') or 'n/a'}. "
             "[All submitted rounds](submission/rounds/index.md)."
         )
+        snippet.write_text(text + "\n")
     else:
-        text = (
-            "**Latest submission:** none yet. The submission workflow runs "
-            "in dry-run mode until it is switched on."
-        )
-    snippet.write_text(text + "\n")
+        snippet.write_text("")
     return done

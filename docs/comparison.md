@@ -27,7 +27,7 @@ Each team's licence is taken from its hub metadata.
 
 --8<-- "comparison-scores.md"
 
-Rounds that cannot be scored yet, because no later real vintage exists:
+Rounds with no later real vintage to score against:
 
 --8<-- "comparison-pending.md"
 
