@@ -28,11 +28,14 @@ vintage, and `truth_changes` shows how much the truth moved meanwhile.
 from __future__ import annotations
 
 import datetime as dt
+import json
 import logging
+import os
 import tomllib
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -61,6 +64,7 @@ from bdbv_hub_renewal.model.model import PRIOR_PUBLICATION_LAG
 
 __all__ = [
     "BacktestConfig",
+    "apply_sampler",
     "development_tasks",
     "forecast_locations",
     "forecast_weeks",
@@ -110,6 +114,8 @@ class BacktestConfig:
         $K$: a truth week counts as complete if it ended at least this
         many weeks before the truth vintage
         (`bdbv_hub_renewal.data.completeness.complete_weeks`).
+    sampler : dict
+        NUTS settings of the fitted models (`apply_sampler`).
     """
 
     min_horizon: int = -4
@@ -121,6 +127,7 @@ class BacktestConfig:
     reconstructed_dates: tuple[str, ...] = ()
     simulated_dates: tuple[str, ...] = ()
     complete_after_weeks: int = 0
+    sampler: dict[str, Any] = field(default_factory=dict)
 
     def is_heldout(self, vintage: dt.date | str) -> bool:
         """Whether a vintage is held out from development.
@@ -138,6 +145,23 @@ class BacktestConfig:
         if self.development_until is None:
             return False
         return as_date(vintage) > as_date(self.development_until)
+
+
+def apply_sampler(config: BacktestConfig) -> None:
+    """Set the fitted models' NUTS settings from the backtest config.
+
+    The settings go in the `SAMPLER_ENV` environment variable, which
+    models read when they are built. Settings already there are kept.
+
+    Parameters
+    ----------
+    config : BacktestConfig
+        Gives `sampler`.
+    """
+    from bdbv_hub_renewal.forecasters.renewal import SAMPLER_ENV
+
+    if config.sampler and not os.environ.get(SAMPLER_ENV):
+        os.environ[SAMPLER_ENV] = json.dumps(config.sampler)
 
 
 def saturdays(first: str, last: str) -> tuple[str, ...]:
@@ -190,6 +214,7 @@ def load_config(path: Path | str = "config/backtest.toml") -> BacktestConfig:
         development_until=max(dates, default=None),
         model_choice=choice,
         complete_after_weeks=int(sp.get("complete_after_weeks", 0)),
+        sampler=dict(raw.get("sampler", {})),
         reconstructed_dates=(
             saturdays(rec["first_vintage"], rec["last_vintage"]) if rec else ()
         ),
