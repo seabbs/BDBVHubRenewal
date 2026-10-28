@@ -49,8 +49,10 @@ from bdbvhubrenewal.data import (
     fetch_hub_data,
     load_daily_zones,
     load_delays,
+    load_health_zones,
     load_target,
 )
+from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.evaluation.heldout import (
@@ -148,18 +150,22 @@ MODEL_METADATA = {
     "persistencenow": {
         "model_name": "Persistence on a nowcast",
         "methods": (
-            "Recent onset weeks completed by a fast nowcast of reporting "
-            "delays, then the last week carried forward with random walk "
-            "noise. Provinces, health zones and national."
+            "Chain-ladder nowcast of recent onset weeks with negative binomial "
+            "uncertainty, then persistence on each draw. Provinces, health "
+            "zones and national."
         ),
         "methods_long": (
-            "A persistence baseline on nowcast counts. Recent onset weeks "
-            "are first completed for reporting delays with a fast nowcast "
-            "(no MCMC). The last nowcast week is then carried forward, with "
-            "log-scale random walk noise and Poisson draws, as in the "
-            "persistence baseline. Province samples are split across health "
-            "zones, and the national value is the sum of provinces. See "
-            "https://seabbs.github.io/BDBVHubRenewal/methods/model/."
+            "A baseline model building on the ideas of the baselinenowcast "
+            "paper and package (Johnson et al. 2025, Wellcome Open Research, "
+            "doi:10.12688/wellcomeopenres.25027.2; "
+            "https://github.com/epinowcast/baselinenowcast/). Recent onset "
+            "weeks are nowcast with a chain ladder on the reporting triangle, "
+            "with a negative binomial for each delay horizon fitted to past "
+            "retrospective nowcasts. Each nowcast draw is carried forward as "
+            "persistence, with log-scale random walk noise. Province samples "
+            "are split across health zones, and the national value is the "
+            "sum of provinces. See "
+            "https://samabbott.co.uk/BDBVHubRenewal/methods/model/."
         ),
         "data_inputs": (
             "Hub target data (weekly confirmed cases by onset week, observed "
@@ -233,6 +239,23 @@ def build_parser() -> argparse.ArgumentParser:
         "--recovery-only",
         action="store_true",
         help="Run only the recovery check on simulated vintages.",
+    )
+    back.add_argument(
+        "--scenarios-only",
+        action="store_true",
+        help="Run only the scenarios calibrated to the real data.",
+    )
+    back.add_argument(
+        "--scenario-as-of",
+        default=None,
+        help="Real vintage the scenarios copy. Defaults to the latest.",
+    )
+    back.add_argument(
+        "--scenario-dates",
+        nargs="*",
+        default=None,
+        help="Simulated vintages to forecast from. Defaults to the four "
+        "weeks up to the scenario vintage.",
     )
     back.add_argument(
         "--cache",
@@ -589,6 +612,28 @@ def _backtest(args: argparse.Namespace) -> int:
         print(f"Shard {args.shard}: {len(mine)} tasks in {args.cache}.")
         return 0
     fits: list[pd.DataFrame] = []
+    if args.scenarios_only:
+        as_of = args.scenario_as_of or bt.real_vintages(target)[-1]
+        dates = args.scenario_dates or [
+            (as_date(as_of) - dt.timedelta(weeks=k)).isoformat()
+            for k in (3, 2, 1, 0)
+        ]
+        sforecasts, sscores = bt.run_scenarios(
+            models,
+            config,
+            target,
+            delays,
+            load_health_zones(args.data),
+            as_of,
+            dates,
+        )
+        for table, path in (
+            (sforecasts, output / "scenario-forecasts.csv.gz"),
+            (sscores, results / "scenario-scores.csv.gz"),
+        ):
+            bt.merge_by_model(path, table).to_csv(path, index=False)
+        print(f"Scenarios: {len(sscores)} scored forecasts in {results}.")
+        return 0
     if args.recovery_only:
         rforecasts, rscores = bt.run_recovery(
             models, config, cache=args.cache, fits=fits

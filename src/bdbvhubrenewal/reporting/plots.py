@@ -603,6 +603,64 @@ def _bands(samples: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+INCOMPLETE_LABEL = "Still being reported"
+
+
+def _incomplete_after(vintage: object, weeks: int) -> pd.Timestamp:
+    """Return the date after which weeks are not completely reported.
+
+    Weeks complete once they ended `weeks` weeks before the vintage.
+    The returned date is the middle of the first incomplete week.
+    """
+    last = pd.Timestamp(str(vintage)) - pd.Timedelta(weeks=weeks)
+    return last + pd.Timedelta(days=3)
+
+
+def _shade_incomplete(ax: Axes, start: pd.Timestamp, mode: str) -> None:
+    """Shade the weeks still being reported, from `start` to the axis end."""
+    right = max(ax.get_xlim()[1], mdates.date2num(start))
+    ax.axvspan(
+        mdates.date2num(start),
+        right + 1,
+        color=THEMES[mode]["muted"],
+        alpha=0.12,
+        lw=0,
+        label=INCOMPLETE_LABEL,
+        zorder=0,
+    )
+
+
+def _plot_data(
+    ax: Axes,
+    x: pd.Series,
+    y: pd.Series,
+    start: pd.Timestamp,
+    colour: str,
+    label: str,
+    **kwargs: Any,
+) -> None:
+    """Draw data as a line with filled points, hollow where incomplete."""
+    ax.plot(x, y, color=colour, label=label, **kwargs)
+    done = x <= start
+    ax.plot(
+        x[done],
+        y[done],
+        "o",
+        color=colour,
+        ms=3,
+        zorder=kwargs.get("zorder", 2),
+    )
+    ax.plot(
+        x[~done],
+        y[~done],
+        "o",
+        mfc="none",
+        color=colour,
+        ms=3,
+        zorder=kwargs.get("zorder", 2),
+    )
+
+
 def _draw_forecast(
     ax: Axes, samples: pd.DataFrame, colour: str, label: str
 ) -> None:
@@ -628,6 +686,7 @@ def plot_forecasts(
     truth_vintage: str | None = None,
     weeks_before: int = 10,
     mode: str = "light",
+    complete_after_weeks: int = 3,
 ) -> Figure:
     """Plot forecasts against data at the time and later data, by date.
 
@@ -650,6 +709,9 @@ def plot_forecasts(
         Weeks of data shown before each forecast.
     mode : str
         `"light"` or `"dark"`.
+    complete_after_weeks : int
+        Weeks after which a week of the later data counts as complete.
+        Later weeks are shaded and their points drawn hollow.
 
     Returns
     -------
@@ -669,6 +731,7 @@ def plot_forecasts(
     ]
     refs = sorted(fc["reference_date"].unique())
     ink = THEMES[mode]
+    cut = _incomplete_after(truth_v, complete_after_weeks)
     fig, axes = _grid(len(refs), 4, width=3.0, height=2.3)
     for ax, ref in zip(axes, refs, strict=True):
         f_ref = fc.loc[fc["reference_date"] == ref]
@@ -686,6 +749,18 @@ def plot_forecasts(
         ):
             x = pd.to_datetime(rows["target_end_date"])
             sel = (x >= start) & (x <= end)
+            if style == "-":
+                _plot_data(
+                    ax,
+                    x[sel],
+                    rows["total"][sel],
+                    cut,
+                    ink["data"],
+                    lab,
+                    ls=style,
+                    lw=1.2,
+                )
+                continue
             ax.plot(
                 x[sel],
                 rows["total"][sel],
@@ -704,6 +779,7 @@ def plot_forecasts(
             lw=0.8,
             ls=":",
         )
+        _shade_incomplete(ax, cut, mode)
         ax.set_title(f"{ref} ({kind})")
         ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=4))
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
@@ -721,6 +797,7 @@ def plot_nowcast(
     forecasts: pd.DataFrame | None = None,
     weeks_before: int = 16,
     mode: str = "light",
+    complete_after_weeks: int = 3,
     data_dir: Path | str | None = None,
     config_path: Path | str = "config/backtest.toml",
     ax: Axes | None = None,
@@ -746,6 +823,9 @@ def plot_nowcast(
         Weeks of data shown before the forecast.
     mode : str
         `"light"` or `"dark"`.
+    complete_after_weeks : int
+        Weeks after which a week counts as complete.
+        Later weeks are shaded and their bars drawn hollow.
     data_dir : pathlib.Path or str, optional
         Directory of the tidy tables.
     config_path : pathlib.Path or str
@@ -789,25 +869,27 @@ def plot_nowcast(
         fig, ax = plt.subplots(figsize=(7.2, 3.6), layout="constrained")
     else:
         fig = cast(Figure, ax.get_figure())
-    ax.bar(
-        data["date"],
-        data["observed"],
-        width=5,
-        color=ink["axis"],
-        label="Known onset",
-    )
-    ax.bar(
-        data["date"],
-        data["imputed"],
-        width=5,
-        bottom=data["observed"],
-        color=ink["muted"],
-        label="Imputed onset",
-    )
+    cut = _incomplete_after(vintage, complete_after_weeks)
+    done = data["date"] <= cut
+    for part, hollow in ((data.loc[done], False), (data.loc[~done], True)):
+        for col, colour, label, base in (
+            ("observed", ink["axis"], "Known onset", None),
+            ("imputed", ink["muted"], "Imputed onset", "observed"),
+        ):
+            ax.bar(
+                part["date"],
+                part[col],
+                width=5,
+                bottom=None if base is None else part[base],
+                color="none" if hollow else colour,
+                edgecolor=colour,
+                label=label if not hollow else None,
+            )
     for m in models:
         s = fc.loc[fc["model"] == m]
         _draw_forecast(ax, s, model_colour(m, list(models), mode), m)
     ax.axvline(mdates.date2num(ref), color=ink["muted"], lw=0.8, ls=":")
+    _shade_incomplete(ax, cut, mode)
     names = _names(rows)
     ax.set_title(
         f"{names.get(location, location)} ({location}): vintage {vintage}, "
@@ -853,7 +935,7 @@ def plot_hub_round(
     target: pd.DataFrame,
     reference_date: str,
     locations: Sequence[str] = ("CD",),
-    complete_by: str | None = None,
+    complete_after_weeks: int = 3,
     weeks_before: int = 8,
     mode: str = "light",
     hub_ids: Mapping[str, str] | None = None,
@@ -870,8 +952,9 @@ def plot_hub_round(
         The round.
     locations : sequence of str
         Locations to show, one panel each, if any model forecast them.
-    complete_by : str, optional
-        Last complete week of the truth, marked with a dotted line.
+    complete_after_weeks : int
+        Weeks after which a week of the data counts as complete.
+        Later weeks are shaded and their points drawn hollow.
     weeks_before : int
         Weeks of data shown before the reference date.
     mode : str
@@ -899,6 +982,7 @@ def plot_hub_round(
     latest = real["vintage"].max()
     names = _names(real)
     ink = THEMES[mode]
+    cut = _incomplete_after(latest, complete_after_weeks)
     fig, axes = _grid(max(len(locs), 1), 2, width=4.8, height=3.0)
     width = 5.0 / max(len(labels), 1)
     ref = pd.Timestamp(reference_date)
@@ -909,14 +993,14 @@ def plot_hub_round(
         start = ref - pd.Timedelta(weeks=weeks_before)
         end = pd.to_datetime(ql["target_end_date"]).max()
         sel = (x >= start) & (x <= end)
-        ax.plot(
+        _plot_data(
+            ax,
             x[sel],
             data["total"][sel],
-            color=ink["data"],
+            cut,
+            ink["data"],
+            f"Data {latest}",
             lw=1.2,
-            marker="o",
-            ms=3,
-            label=f"Data {latest}",
             zorder=3,
         )
         for i, lab in enumerate(labels):
@@ -930,15 +1014,7 @@ def plot_hub_round(
             ax.vlines(xm, m["q25"], m["q75"], color=colour, lw=3)
             ax.plot(xm, m["q50"], "o", color=colour, ms=3, label=lab)
         ax.axvline(mdates.date2num(ref), color=ink["muted"], lw=0.8, ls=":")
-        if complete_by is not None:
-            ax.axvline(
-                mdates.date2num(
-                    pd.Timestamp(complete_by) + pd.Timedelta(days=3)
-                ),
-                color=ink["muted"],
-                lw=0.8,
-                ls="--",
-            )
+        _shade_incomplete(ax, cut, mode)
         ax.set_title(f"{names.get(loc, loc)} ({loc})")
         ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
@@ -1123,6 +1199,66 @@ def plot_scores(
         ax.set_xlabel(by.capitalize())
     axes[0].set_ylabel(_METRIC_LABELS.get(metric, metric))
     axes[0].legend()
+    return fig
+
+
+def plot_scenarios(
+    scores: pd.DataFrame,
+    models: Sequence[str] | None = None,
+    mode: str = "light",
+) -> Figure:
+    """Plot mean WIS by horizon on the simulated scenarios.
+
+    Parameters
+    ----------
+    scores : pandas.DataFrame
+        Scenario scores with `scenario`, `location`, `model`, `horizon`,
+        `wis`, `truth_view` and `complete`.
+    models : sequence of str, optional
+        Models in registry order.
+    mode : str
+        `"light"` or `"dark"`.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        One panel per scenario, scored against the final data on complete
+        weeks. National is solid, provinces dashed and zones dotted.
+    """
+    models = list(models or scores["model"].unique())
+    final = scores.loc[(scores["truth_view"] == "final") & scores["complete"]]
+    scenarios = list(final["scenario"].unique())
+    fig, axes = _grid(len(scenarios), 3, width=3.6, height=2.6)
+    for ax, scenario in zip(axes, scenarios, strict=True):
+        s = final.loc[final["scenario"] == scenario]
+        levels = (
+            s["level"]
+            if "level" in s
+            else np.where(s["location"] == "CD", "national", "province")
+        )
+        for level, style in (
+            ("national", "-"),
+            ("province", "--"),
+            ("zone", ":"),
+        ):
+            part = s.loc[levels == level]
+            mean = part.groupby(["model", "horizon"])["wis"].mean().unstack(0)
+            for m in models:
+                if m not in mean.columns:
+                    continue
+                ax.plot(
+                    mean.index,
+                    mean[m],
+                    color=model_colour(m, models, mode),
+                    ls=style,
+                    marker="o",
+                    ms=4,
+                    label=f"{m}, {level}",
+                )
+        ax.set_title(scenario.removeprefix("calibrated_"))
+        ax.set_xlabel("Horizon")
+    axes[0].set_ylabel(_METRIC_LABELS.get("wis", "wis"))
+    axes[0].legend(fontsize=7)
     return fig
 
 

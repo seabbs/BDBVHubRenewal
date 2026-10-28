@@ -297,13 +297,78 @@ def test_score_views() -> None:
     assert len(views["all weeks as reported"]) == 2
 
 
-def test_overall_scores_table() -> None:
-    views = report._score_views(_scores(), 3)
-    text = report._overall_scores(views)
-    assert "complete weeks" in text
-    assert "all weeks as reported" in text
-    # A view with no rows is left out.
-    assert "vintage-matched" not in text
+def _two_model_scores() -> pd.DataFrame:
+    rows = []
+    for model, wis in (("persistence", 10.0), ("renewal", 5.0)):
+        for loc in ("CD", "CD-IT"):
+            rows.append(_scores().assign(model=model, location=loc, wis=wis))
+    return pd.concat(rows, ignore_index=True)
+
+
+def test_score_tables_split_by_set_and_level() -> None:
+    both = _two_model_scores()
+    new = pd.concat(
+        [
+            both.assign(scoring="as reported", complete=[True, False] * 4),
+            both.assign(scoring="vintage-matched", complete=[True, False] * 4),
+        ]
+    )
+    text = report._score_tables(report._score_views(new, 3))
+    for heading in (
+        "### Complete weeks, national",
+        "### Complete weeks, province",
+        "### Vintage-matched, national",
+        "### Vintage-matched, province",
+    ):
+        assert heading in text, heading
+    # Weeks still being reported are not scored as final.
+    assert "all weeks" not in text
+    # The tables are small.
+    first = text.split("###")[1]
+    header = first.splitlines()[2]
+    assert [c.strip() for c in header.strip("|").split("|")] == [
+        "model",
+        "wis",
+        "relative_wis",
+        "coverage_50",
+        "coverage_90",
+        "bias",
+    ]
+
+
+def test_score_table_leaves_persistence_without_relative_wis() -> None:
+    table = report._score_table(_two_model_scores().query("location == 'CD'"))
+    lines = {
+        ln.split("|")[1].strip(): ln.split("|")[3].strip()
+        for ln in table.splitlines()[2:]
+    }
+    assert lines["persistence"] == ""
+    assert float(lines["renewal"]) == 0.5
+
+
+def test_relative_section_leaves_out_persistence() -> None:
+    two = _two_model_scores()
+    text = report._relative_section(two)
+    table = [ln for ln in text.splitlines() if ln.startswith("|")]
+    assert any("renewal" in ln for ln in table)
+    assert not any("persistence" in ln for ln in table)
+
+
+def test_teams_table_links_to_hub_metadata() -> None:
+    teams = pd.DataFrame(
+        {
+            "model": ["teamA-weekly", "epiforecasts-x"],
+            "team_name": ["Team A", "Us"],
+            "model_name": ["Weekly", "X"],
+            "license": ["CC0-1.0", "MIT"],
+            "website_url": ["", ""],
+        }
+    )
+    text = report._teams_table(teams, {"x": "epiforecasts-x"})
+    assert "| Team " in text
+    assert "`teamA-weekly`" in text
+    assert "model-metadata/teamA-weekly.yml" in text
+    assert "epiforecasts-x" not in text
 
 
 def test_completeness_note(delays: pd.DataFrame) -> None:
@@ -420,3 +485,55 @@ def test_recovery_section(tmp_path: Path) -> None:
     text = report._recovery_section(path)
     assert text.startswith("## Recovery on simulated vintages")
     assert "recovery-wis-horizon.svg" in text
+
+
+def _scenario_scores() -> pd.DataFrame:
+    rows = []
+    for model in ("persistence", "persistencenow"):
+        for scenario in ("calibrated_falling", "calibrated_rising"):
+            for location in ("CD", "CD-IT"):
+                for horizon in (0, 1):
+                    for view in ("final", "later"):
+                        rows.append(
+                            {
+                                "model": model,
+                                "scenario": scenario,
+                                "vintage": "2026-10-24",
+                                "location": location,
+                                "horizon": horizon,
+                                "wis": 10.0 + horizon,
+                                "coverage_50": 0.5,
+                                "coverage_90": 0.9,
+                                "bias": 0.123,
+                                "complete": view == "final",
+                                "truth_view": view,
+                            }
+                        )
+    return pd.DataFrame(rows)
+
+
+def test_scenario_scores_hidden_without_results(tmp_path: Path) -> None:
+    assert report._scenario_scores(tmp_path / "missing.csv") == ""
+
+
+def test_scenario_scores_table(tmp_path: Path) -> None:
+    path = tmp_path / "scenario-scores.csv"
+    _scenario_scores().to_csv(path, index=False)
+    text = report._scenario_scores(path)
+    assert "final data, complete weeks" in text
+    assert "as of 2 weeks later" in text
+    assert "calibrated_falling" in text
+    assert "national" in text
+    assert "province" in text
+    assert "persistencenow" in text
+    assert "10.5" in text  # mean WIS over horizons 0 and 1
+    assert "0.12" in text  # bias to 2 dp
+
+
+def test_plot_scenarios() -> None:
+    from bdbvhubrenewal.reporting.plots import plot_scenarios
+
+    fig = plot_scenarios(
+        _scenario_scores(), models=["persistence", "persistencenow"]
+    )
+    assert len(fig.axes) == 2  # one panel per scenario
