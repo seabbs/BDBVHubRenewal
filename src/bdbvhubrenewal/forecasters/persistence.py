@@ -66,7 +66,10 @@ COVID-19 Forecast Hub baseline on the log scale (`baseline_walk`): its
 median stays at the centre, and each weekly step is drawn from the past
 weekly changes of the place's point nowcast, and their negatives, as
 BVDOutbreakSize does. Places without their own delay borrow the steps of
-those with one. Later weeks are at least the known onsets.
+those with one. A place with fewer than `low_count` cases a week over the
+last `window` weeks walks the log of that mean as a Poisson rate instead,
+so a few cases a week stay plausible. Later weeks are at least the known
+onsets.
 
 If the delay data have no complete onset week or fewer than `min_delays`
 cases in the last `n_history` weeks, or give fewer than `min_retro` past
@@ -419,24 +422,29 @@ def baseline_walk(
     steps: np.ndarray,
     horizons: int,
     rng: np.random.Generator,
+    rate: bool = False,
 ) -> np.ndarray:
     r"""Draw the COVID-19 Forecast Hub baseline forward on the log scale.
 
     Each draw adds `horizons` weekly steps sampled with replacement from
     `steps` and their negatives to its centre, so the median stays at the
     centre and the spread grows with the horizon. With fewer than three
-    past steps it is Poisson around the centre.
+    past steps it is Poisson around the centre. With `rate`, the walk is
+    on the log of a Poisson rate and each week is a Poisson draw from it,
+    so a place with a few cases keeps a few cases plausible.
 
     Parameters
     ----------
     centre : numpy.ndarray
-        $\log(1 + C)$ for each draw.
+        $\log(1 + C)$ for each draw, or the log rate with `rate`.
     steps : numpy.ndarray
         Past weekly changes in $\log(1 + y)$.
     horizons : int
         Weeks to draw.
     rng : numpy.random.Generator
         Random generator.
+    rate : bool
+        Walk on the log of a Poisson rate.
 
     Returns
     -------
@@ -444,10 +452,13 @@ def baseline_walk(
         Counts, one row per draw and one column per week ahead.
     """
     shape = (centre.size, horizons)
+    level = np.exp(centre) if rate else np.expm1(centre)
     if steps.size < 3:
-        return rng.poisson(np.expm1(centre)[:, None], size=shape).astype(float)
+        return rng.poisson(level[:, None], size=shape).astype(float)
     pool = np.r_[steps, -steps]
     walk = centre[:, None] + rng.choice(pool, size=shape).cumsum(axis=1)
+    if rate:
+        return rng.poisson(np.exp(walk)).astype(float)
     return np.round(np.maximum(np.expm1(walk), 0.0))
 
 
@@ -515,6 +526,9 @@ class PersistenceNow(Persistence):
     own_per_week : float
         Fewest delays a week, on average over those onset weeks, for a
         place to use its own delay rather than the pooled one.
+    low_count : float
+        Below this mean count a week over the last `window` weeks, a place
+        walks the log of its mean as a Poisson rate.
     centre_weeks : int
         Latest nowcast weeks the walk is centred on, weighted by the share
         of each reported, so a week with few cases reported yet counts
@@ -530,6 +544,7 @@ class PersistenceNow(Persistence):
     min_delays: int = 50
     own_per_week: float = 50.0
     centre_weeks: int = 3
+    low_count: float = 10.0
 
     @property
     def max_delay(self) -> int:
@@ -671,11 +686,19 @@ class PersistenceNow(Persistence):
         shared = [st for st, o in zip(steps, own, strict=True) if o]
         pooled_steps = np.concatenate(shared) if shared else None
         span = slice(last + 1 - self.centre_weeks, last + 1)
+        past = slice(last + 1 - self.window, last + 1)
         for p in range(len(task.locations)):
-            weight = share[p, span]
-            centre = np.log1p(totals[:, p, span]) @ weight / weight.sum()
             mine = steps[p] if own[p] or pooled_steps is None else pooled_steps
-            walk = baseline_walk(centre, mine, ahead, rng)
+            mean = totals[:, p, past].mean(axis=1)
+            if np.median(mean) < self.low_count:
+                # A place with few cases walks the log of its recent mean as
+                # a Poisson rate, so a few cases a week stay plausible.
+                centre = np.log(np.maximum(mean, 1e-9))
+                walk = baseline_walk(centre, mine, ahead, rng, rate=True)
+            else:
+                weight = share[p, span]
+                centre = np.log1p(totals[:, p, span]) @ weight / weight.sum()
+                walk = baseline_walk(centre, mine, ahead, rng)
             totals[:, p, last + 1 :] = np.maximum(walk, known[p, last + 1 :])
         final, as_of = [], []
         for p, loc in enumerate(task.locations):
