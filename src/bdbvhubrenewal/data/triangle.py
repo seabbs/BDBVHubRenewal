@@ -88,7 +88,8 @@ def first_publication_delays(
     -------
     pandas.DataFrame
         Columns `vintage` (the latest file on or before `vintage`),
-        `location`, `onset_week` and `delay`.
+        `location`, `onset_week`, `delay` (to first publication) and
+        `report_delay` (as reported).
     """
     key = ["location", "onset_week", "delay"]
     files = sorted(str(v) for v in history["vintage"].unique() if v <= vintage)
@@ -108,6 +109,7 @@ def first_publication_delays(
         rows = new.index.to_frame(index=False).loc[
             np.repeat(np.arange(len(new)), new.to_numpy())
         ]
+        rows["report_delay"] = rows["delay"]
         if i > 0:
             week = pd.to_datetime(rows["onset_week"])
             gap = pd.Timestamp(files[i - 1]) + pd.Timedelta(days=1) - week
@@ -115,7 +117,8 @@ def first_publication_delays(
         parts.append(rows)
     out = pd.concat(parts, ignore_index=True)
     out = out.loc[out["delay"] <= max_delay].reset_index(drop=True)
-    return pd.DataFrame(out.assign(vintage=files[-1])[["vintage", *key]])
+    cols = ["vintage", *key, "report_delay"]
+    return pd.DataFrame(out.assign(vintage=files[-1])[cols])
 
 
 def reporting_triangle(
