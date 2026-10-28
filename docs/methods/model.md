@@ -131,8 +131,9 @@ f_s(d) = h_s(d) \prod_{j < d}\{1 - h_s(j)\},
 \qquad h_s(60) = 1.
 $$
 
-- $\beta$ is a random walk over delay with $\beta(0) \sim \mathcal{N}(-2, 1)$ and step SD $\mathcal{N}^+(0, 0.1^2)$.
+- $\beta$ is a random walk over delay with $\beta(0) \sim \mathcal{N}(-2, 1)$ and step SD $\mathcal{N}^+(0, 0.4^2)$.
   This makes the shape smooth but not parametric.
+  The fit to the 2026-10-24 vintage puts the step SD at 0.20 (90% CrI 0.16 to 0.25), in the tail of the earlier $\mathcal{N}^+(0, 0.1^2)$.
 - $\gamma$ is a weekly random walk over onset day from zero, with step SD $\mathcal{N}^+(0, 0.15^2)$.
   It shifts all hazards together.
 
@@ -197,7 +198,7 @@ The non-monotone revisions in imputed counts suggest it re-imputes each time.
 - The delays of known-onset cases in the hub's delay file are tabulated by onset week and delay, pooled over provinces.
   Delays are clipped to 0 to 60 days.
   Given each week's total they are multinomial, with probabilities from $\lambda$, $f$, $\pi$ and $c$.
-  With `delay_counts="dirichlet-multinomial"` they are Dirichlet-multinomial instead, with $1/\sqrt{\psi} \sim \text{HalfNormal}(0.1)$.
+  With `delay_counts="dirichlet-multinomial"` they are Dirichlet-multinomial instead, with $1/\sqrt{\psi} \sim \text{HalfNormal}(0.1)$ and $\psi$ capped at $10^4$.
   This is the conditional part of the reporting triangle, so the known stream is not counted twice.
 - Provinces with no cases have expected onsets $\mu_q(s) = \kappa \sum_p K_{pq}\, \lambda_p(s)$, with one scale $\kappa \sim \text{LogNormal}(\log 10^{-3}, 2^2)$.
   Their weekly zeros are Poisson.

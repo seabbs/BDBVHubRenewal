@@ -77,7 +77,9 @@ class HazardDelay(RandomVariable):
     hazard0_loc : float, optional
         Prior mean of $\beta(0)$.
     smoothness_sd : float, optional
-        Scale of the half-normal prior on the step SD of $\beta$.
+        Scale of the half-normal prior on the step SD of $\beta$. Real
+        fits put the step SD at about 0.2 (2026-10-24: 90% CrI 0.16 to
+        0.25), in the tail of a scale of 0.1, so the default is 0.4.
     """
 
     def __init__(
@@ -86,7 +88,7 @@ class HazardDelay(RandomVariable):
         dmax: int,
         time_process: TemporalProcess,
         hazard0_loc: float = -2.0,
-        smoothness_sd: float = 0.1,
+        smoothness_sd: float = 0.4,
     ) -> None:
         super().__init__(name=name)
         self.dmax = dmax
