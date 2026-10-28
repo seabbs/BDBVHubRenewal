@@ -75,7 +75,7 @@ from bdbv_hub_renewal.submission.hub import (
     write_submission,
 )
 
-__all__ = ["build_parser", "main"]
+__all__ = ["build_parser", "host_devices", "main"]
 
 MODEL_METADATA = {
     "persistence": {
@@ -371,10 +371,34 @@ def _task(args: argparse.Namespace) -> tuple[ForecastTask, list[str]]:
     return bt.make_tasks(rows, delays, config)[0], [note] if note else []
 
 
+def host_devices(n: int) -> None:
+    """Give XLA at least `n` host devices, so `n` chains run in parallel.
+
+    NumPyro runs chains in parallel only with as many devices as chains.
+    This must run before JAX starts, so the CLI calls it before any fit.
+    Other flags in `XLA_FLAGS` are kept, and a larger count is kept.
+
+    Parameters
+    ----------
+    n : int
+        The number of chains.
+    """
+    key = "--xla_force_host_platform_device_count="
+    flags = os.environ.get("XLA_FLAGS", "").split()
+    have = [int(f[len(key) :]) for f in flags if f.startswith(key)]
+    if have and max(have) >= n:
+        return
+    rest = [f for f in flags if not f.startswith(key)]
+    os.environ["XLA_FLAGS"] = " ".join([*rest, f"{key}{n}"])
+
+
 def _fit(args: argparse.Namespace) -> int:
     try:
         config = get_config(args.config)
         sampler = json.loads(args.sampler_json or "{}")
+        from bdbv_hub_renewal.forecasters.renewal import sampler_settings
+
+        host_devices(int(sampler_settings(sampler)["num_chains"]))
         task, _ = _task(args)
         result = run_fit(config, task, sampler, args.out, model=args.model)
     except (KeyError, ValueError, OSError) as err:
@@ -395,6 +419,9 @@ def _models(names: Sequence[str] | None) -> list[str]:
 
 
 def _backtest(args: argparse.Namespace) -> int:
+    from bdbv_hub_renewal.forecasters.renewal import sampler_settings
+
+    host_devices(int(sampler_settings()["num_chains"]))
     config = bt.load_config(args.config)
     target, delays = load_target(args.data), load_delays(args.data)
     names = _models(args.models)
