@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import Iterator
 from pathlib import Path
@@ -47,6 +48,10 @@ def test_cli_nowcast_writes_coherent_zones(tmp_path: Path) -> None:
     zones = table.loc[level == 2]
     provs = table.loc[level == 1]
     assert zones["location"].nunique() > 150
+    side = json.loads((tmp_path / "sub" / "zones.json").read_text())
+    assert side["zones"] is True
+    assert side["n_zones"] == zones["location"].nunique()
+    assert side["note"] == ""
     keys = ["output_type_id", "target_end_date"]
     summed = (
         zones.assign(location=zones["location"].str.slice(0, 5))
@@ -72,6 +77,10 @@ def test_cli_nowcast_without_zone_data_skips_zones(tmp_path: Path) -> None:
     assert main(["nowcast", "--data", str(data), "--out", str(out)]) == 0
     assert (_written(out)["location"].str.count("-") < 2).all()
     assert "zone" in (out / "handled.json").read_text()
+    side = json.loads((out / "zones.json").read_text())
+    assert side["zones"] is False
+    assert side["n_zones"] == 0
+    assert "zone" in side["note"]
 
 
 @pytest.mark.usefixtures("in_root")
