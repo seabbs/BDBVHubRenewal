@@ -425,7 +425,7 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     elif config.missing == "fixed":
         mean_delay = data.hub_delay_pmf @ np.arange(data.hub_delay_pmf.size)
         pi = empirical_missing_fraction(
-            data.known, data.imputed, shift=int(round(mean_delay))
+            data.known, data.imputed, shift=round(float(mean_delay))
         )
         missing = fixed("missing_fraction", pi)
     else:
