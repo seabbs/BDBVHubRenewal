@@ -143,7 +143,7 @@ def test_completeness_lag_from_fully_followed_up_weeks(
 
 
 def test_followup_persistence_is_registered(task) -> None:  # type: ignore[no-untyped-def]
-    model = get_model("persistence_followup")
+    model = get_model("persistence_fu")
     assert isinstance(model, Persistence)
     assert model.full_follow_up
     out = model.forecast(task)

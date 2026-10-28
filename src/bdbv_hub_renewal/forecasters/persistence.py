@@ -25,7 +25,7 @@ after its midpoint.
 `lag_days` is the `completeness` quantile of the pooled delay published
 with the vintage, or `default_lag_days` if no delays were published.
 Recent onset weeks only show the delays reported so far, so this lag is
-biased short. With `full_follow_up` (`persistence_followup`), it is
+biased short. With `full_follow_up` (`persistence_fu`), it is
 taken over onset weeks that ended at least the maximum delay plus the
 publication lag before the vintage, whose delays are all observed.
 """
@@ -208,7 +208,7 @@ register_model(
 
 
 register_model(
-    "persistence_followup",
-    lambda: Persistence(name="persistence_followup", full_follow_up=True),
+    "persistence_fu",
+    lambda: Persistence(name="persistence_fu", full_follow_up=True),
     "Persistence with the completeness lag from fully followed-up weeks.",
 )

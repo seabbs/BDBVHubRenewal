@@ -317,6 +317,9 @@ Let $c$ be the last week judged complete.
 Week $w$ is complete if its midpoint (its Wednesday) is at least $L$ days before $T_v$.
 $L$ is the 90th centile of the delays published with the vintage, or 10 days if none were published.
 For the current vintages $L$ is 14 days, so $c$ is two weeks before the vintage's epi week, about horizon $-3$.
+Published delays are right truncated, so this $L$ is biased short.
+The comparator `persistence_fu` takes $L$ from onset weeks that ended at least 63 days (the longest delay plus the publication lag) before the vintage, whose delays are fully observed.
+On the real vintages this gives 14 or 15 days at the 90th centile, against 14.
 
 Weeks up to $c$ are copied from the vintage, with no uncertainty:
 

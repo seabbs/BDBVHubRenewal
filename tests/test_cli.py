@@ -179,7 +179,9 @@ def test_cli_backtest_no_fit_skips_fitted_models(tmp_path: Path) -> None:
     ]
     assert main(args) == 0  # would take minutes if it fitted anything
     scores = pd.read_csv(tmp_path / "res" / "backtest-scores.csv")
-    assert set(scores["model"]) == {"persistence"}
+    unfitted = {s.name for s in list_models() if not s.fitted}
+    assert set(scores["model"]) == unfitted
+    assert "persistence" in unfitted
 
 
 def test_host_devices_cover_the_chains(monkeypatch: pytest.MonkeyPatch) -> None:
