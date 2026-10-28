@@ -277,13 +277,18 @@ def run_heldout(
     out = Path(out_dir)
     # Forecasts of models not run here, such as fitted variants run on a
     # bigger machine, are kept and scored again against the latest data.
-    forecasts = merge_by_model(
-        out / "heldout-forecasts.csv.gz", pd.concat(frames, ignore_index=True)
-    )
     chosen = dict(zip(pairs["vintage"], pairs["model"], strict=True))
-    scores = score_by_truth_vintage(
-        forecasts, real, config.complete_after_weeks
-    )
+    if frames:
+        forecasts = merge_by_model(
+            out / "heldout-forecasts.csv.gz",
+            pd.concat(frames, ignore_index=True),
+        )
+        scores = score_by_truth_vintage(
+            forecasts, real, config.complete_after_weeks
+        )
+    else:
+        # No vintage after the choice yet, so nothing is held out.
+        forecasts, scores = pd.DataFrame(), pd.DataFrame()
     if not scores.empty:
         scores.insert(1, "chosen_model", scores["vintage"].map(chosen))
     out.mkdir(parents=True, exist_ok=True)
