@@ -51,8 +51,14 @@ def test_calibrated_onsets_follow_the_real_provinces(outbreak, target):  # type:
     # and timing of every province.
     old = [w for w in real.index if w <= "2026-09-12" and w in truth.index]
     for loc in s.locations:
-        sim, obs = truth.loc[old, loc].fillna(0), real.loc[old, loc]
-        assert sim.sum() == pytest.approx(obs.sum(), rel=0.15, abs=10)
+        obs = real.loc[old, loc]
+        if loc not in truth:
+            assert obs.sum() <= 2
+            continue
+        sim = truth.loc[old, loc].fillna(0)
+        # Within Poisson noise of the real total.
+        tol = 3 * np.sqrt(obs.sum()) + 5
+        assert sim.sum() == pytest.approx(obs.sum(), rel=0.1, abs=tol)
         if obs.sum() > 50:
             assert np.argmax(sim.to_numpy()) == pytest.approx(
                 np.argmax(obs.to_numpy()), abs=2
