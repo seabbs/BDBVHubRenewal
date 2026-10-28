@@ -58,6 +58,7 @@ def test_active_set_follows_the_data(outbreak, sim_tables, table):
         ModelConfig(delay="lognormal"),
         ModelConfig(coupling="learnt"),
         ModelConfig(rt_weighting="cases"),
+        ModelConfig(rt_weighting="sqrt_cases"),
         ModelConfig(outbreak_threshold=20, import_rt="origin"),
         ModelConfig(coupling="learnt", kernel_flows=True),
         ModelConfig(seeding="primary"),
@@ -437,3 +438,13 @@ def test_default_has_no_sporadic_class():
     cfg = ModelConfig()
     assert cfg.outbreak_threshold is None and cfg.import_rt == "destination"
 
+
+def test_sqrt_case_weights_temper_the_basis(sim_vintage):
+    data = sim_vintage
+    model = build_model(data, ModelConfig(rt_weighting="sqrt_cases"))
+    tr = trace(model, data)
+    n_init = model.latent.n_initialization_points
+    log_rt = np.log(np.asarray(tr["latent::rt_subpop"]["value"]))[n_init:]
+    base = np.log(np.asarray(tr["latent::rt_baseline"]["value"]))[n_init:]
+    w = np.sqrt(np.nansum(data.known + data.imputed, axis=0)) + 1.0
+    np.testing.assert_allclose((log_rt - base) @ w, 0.0, atol=1e-3)

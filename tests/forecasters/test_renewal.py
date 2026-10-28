@@ -449,14 +449,24 @@ def test_single_patch_fits_each_location_on_its_own(
     model = get_model("renewalsp")
     assert isinstance(model, rn.RenewalModel)
     fit = model.forecast_fit(task)
-    # One fit per province with enough cases, and none for the nation.
+    # One fit per province with enough recent cases (an outbreak province,
+    # as the sporadic class), and none for the nation.
     rows = task.target.loc[task.target["vintage"] == task.vintage]
-    cases = rows.groupby("location")["total"].sum()
+    recent = sorted(set(rows["target_end_date"]))[-rn.SINGLE_PATCH_WEEKS :]
+    cases = (
+        rows.loc[rows["target_end_date"].isin(recent)]
+        .groupby("location")["total"]
+        .sum()
+    )
     enough = [
-        p for p in task.locations if cases[p] >= rn.SINGLE_PATCH_MIN_CASES
+        p
+        for p in task.locations
+        if cases.get(p, 0) >= rn.SINGLE_PATCH_MIN_CASES
     ]
     few = [p for p in task.locations if p not in enough]
-    assert few, "the fixture should have a province with few cases"
+    # Bas-Uele has 13 cases to date but 7 in the last 6 weeks, too few for
+    # its own fit (R-hat 1.71 at 2026-10-24).
+    assert "CD-BU" in few
     assert sorted(seen) == sorted([(p,) for p in enough])
     assert set(fit.runs) == set(enough)
     # National is the sum of the patches plus the unassigned cases, as in
