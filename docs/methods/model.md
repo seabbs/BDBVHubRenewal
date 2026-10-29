@@ -10,7 +10,6 @@ How the models are built in code and sampled is on the [Implementation](implemen
 
 ![The province renewal model as a generative chain, from the reproduction number to the hub's data streams.](../assets/diagrams/model_dag.svg)
 
-The figure shows `renewal`.
 Grey boxes are parameters, blue latent quantities and orange data with their likelihoods.
 The dashed box is in `renewalbvd` only.
 Every time-varying part is a random walk or AR(1), so it stays near constant unless the data show change.
@@ -41,8 +40,6 @@ $$
 
 The shared $\sigma_\delta$ and $h$ pool the provinces, as in BVDOutbreakSize with a 42-day half-life.
 The starting offsets are $v = Q u$, with $u \sim \mathcal{N}(0, \sigma_v^2)$ and $\sigma_v \sim \mathcal{N}^+(0, 0.3^2)$.
-All walks are flat over the 6 seeding weeks and continue past the data with their fitted step SDs.
-Options hold Rt at its last fitted value past the data, or join the knots linearly.
 
 ### Renewal with importation and depletion
 
@@ -59,11 +56,7 @@ $$
 - $g$ is BVDOutbreakSize's Gamma generation interval (mean 15.3, SD 9.3 days), double interval censored as $G(d + 1) - 2G(d) + G(d - 1)$ with $G$ the integrated cdf, on lags 1 to 42 and renormalised (mean 14.8, SD 8.4 days).
 - $W = (1 - \varepsilon) I + \varepsilon\, \mathrm{diag}(1/N) K^\top \mathrm{diag}(N)$ mixes transmission between provinces, with $\varepsilon \sim \text{Beta}(1, 100)$.
 - $K$ is a row-normalised gravity kernel, $K_{qp} \propto N_p e^{-D_{qp}/300\,\text{km}}$, with $D$ the great-circle distance between population-weighted province centres and $N_p$ the province population.
-- An option estimates the kernel, $\log K_{qp} = \log N_p - D_{qp}/(300\,\text{km} \cdot e^{\kappa_K}) + w_p + c_q$, with $\kappa_K \sim \mathcal{N}(0, 1)$, sum-to-zero $w$ with scale $\mathcal{N}^+(0, 0.5^2)$ and $c_q$ normalising rows.
-- An option gives each origin its own $\varepsilon_q$, partially pooled on the logit scale.
 - $\nu \sim \text{LogNormal}(\log 0.05, 0.75^2)$ is the share at risk, and $S_p$ starts at $\nu$, so infections never exceed $\nu N_p$.
-
-To first order this is linear depletion, $x = S y$, and it cannot overshoot the pool.
 
 Seeds are expected confirmed onsets per day, $c_p \sim \text{LogNormal}(0, 1.5^2)$, or $I_{0,p} = c_p / (\alpha_0 N_p)$ infections per resident.
 Provinces with cases in the first data week are seeded at the start, projected back at the growth rate implied by $R_p$ and $g$, clipped to $[-0.05, 0.3]$ per day.
@@ -82,7 +75,6 @@ $$
 $$
 
 with $\alpha_0 = 0.6$ fixed and $a$ a national weekly random walk from zero with step SD $\mathcal{N}^+(0, 0.03^2)$.
-The level is fixed because the data only identify ascertainment together with $\nu$ and the seeds.
 
 ### Delays
 
@@ -97,9 +89,6 @@ $$
 
 - $\beta$ is a random walk over delay, $\beta(0) \sim \mathcal{N}(-2, 1)$ with step SD $\mathcal{N}^+(0, 0.4^2)$, so the shape is smooth but not parametric.
 - $\gamma$ is a weekly random walk over onset day from zero, with step SD $\mathcal{N}^+(0, 0.15^2)$, shifting all hazards together.
-- An option adds a sum-to-zero report day-of-week effect $\delta_{(s + d) \bmod 7}$ with scale $\mathcal{N}^+(0, 0.5^2)$.
-
-The delay is pooled over provinces.
 
 ### Missing onsets
 
@@ -135,7 +124,6 @@ $$
 
 $M_p(t)$ are the cases reported on day $t$ without an onset.
 $\hat f_T$ is the empirical pmf of all delays published at $T$, pooled and on 0 to 60 days, and is data.
-Future imputation uses the latest $\hat f_T$, so forecasts carry the imputation's bias, which is what the hub scores.
 The hub's code is not public, so pooling and the handling of negative and long delays are assumed.
 
 ### Likelihood
@@ -172,7 +160,6 @@ The national trajectory is the sum of the provinces plus an unassigned component
 
 Health-zone forecasts split the province forecast of whichever model is submitted.
 So zone samples sum to their province's samples, sample by sample and week by week, and the national value stays the sum of the provinces.
-Every zone of a forecast province is included, zones with no cases too.
 
 For province $p$ with zones $z$, let $o_z(w)$ be zone $z$'s published count for week $w$ and $O(w) = \sum_z o_z(w)$.
 Each province sample $k$ draws its zone shares once, for all weeks:
@@ -185,7 +172,7 @@ $$
 
 $r_z$ is the zone's onsets over the 2 weeks before the vintage and $l_z$ those over the 16 weeks before it.
 So recent shares are shrunk towards longer-run shares by $\kappa = 100$ pseudo-cases.
-The floor $a = 1/2$ gives a zone with no cases a small share, so its draws are near zero but not always zero.
+The floor $a = 1/2$ gives a zone with no cases a small share.
 Each zone keeps its published count and the rest of the province sample $Y^{(k)}(w)$ is split:
 
 $$
@@ -195,15 +182,13 @@ m \sim \text{Multinomial}\big(Y^{(k)}(w) - O(w),\ \theta^{(k)}\big).
 $$
 
 A sample below the published total is drawn from the published zone counts without replacement instead.
-Province values are rounded first, as in the hub file.
-The settings were the best of a small grid on the real vintages, and the differences across the grid were small (see [Evaluation](evaluation.md#health-zones)).
+Province values are rounded.
 
 ## Variants
 
 ### Model choice
 
 The variant to submit is chosen on the development backtest, by WIS and log WIS relative to persistence, by horizon and province.
-Every later vintage is held out (see [Evaluation](evaluation.md#rolling-held-out-evaluation)).
 Each week the submission takes the first of `renewal`, one refit of `renewal` with smaller steps, `renewalsp` and `persistence` that passes its checks.
 
 ### Renewal variants
@@ -268,5 +253,3 @@ $$
 $\mu_N$ and $\sigma_N$ are the mean and SD of the release's national log Rt draws.
 $m_k$ and $\sigma_k$ are each patch's log median and SD, and $m_N$ and $\sigma_N'$ the national row of the same table.
 The term adds no parameters, and $\alpha = 0$ gives `renewal`.
-It is tempered because both models fit the same confirmed cases.
-Releases before 23 October give the national term only, and the earliest give a growth rate $r$, converted by $R = (1 + r\theta)^k$ with BVDOutbreakSize's Gamma generation interval.
