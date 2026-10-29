@@ -25,7 +25,7 @@ $$
 \tilde y_p(c + h) \sim \text{Poisson}\big(\lambda_p(c + h)\big).
 $$
 
-$\sigma_p$ is the SD of the 7 weekly changes in $\log(1 + Y_{p,v})$ over the last 8 complete weeks, floored at 0.1.
+$\epsilon_{p,j}$ is modelled as a random walk with $\sigma_p$ as the SD of the 7 weekly changes in $\log(1 + Y_{p,v})$ over the last 8 complete weeks, floored at 0.1.
 Week $w$ is complete if its Wednesday is at least $L$ days before $T_v$, with $L$ the 90th centile of the delays published with the vintage, or 10 days if none were published.
 Each sample is one joint trajectory across weeks, and the national value is the sum of the provinces.
 The median has no growth and weeks up to $c$ are still revised upwards, so persistence underpredicts during growth (see [Backtest](../backtest.md#persistence-bias)).
@@ -50,7 +50,6 @@ Ituri and Nord-Kivu, with at least 50 delays a week, use their own $p$ and $\phi
 The other provinces borrow those of the triangle pooled over provinces, as baselinenowcast borrows a delay from another triangle.
 
 **Nowcast.**
-Every week is nowcast, the latest included.
 A case with onset on day $W - u$ of week $W$, delay $d$ and publication lag $\ell$ is in the vintage if $d + \ell - u \le T_v - W$.
 With onsets spread evenly over the week, the share of week $w$ reported is
 
@@ -66,7 +65,6 @@ $$
 U_{p,k}(w) \sim \text{NegBin}\Big(\text{mean } Y_{p,v}(w) \frac{1 - s_p(w)}{s_p(w)},\ \text{size } \phi_{p,h(w)}\Big).
 $$
 
-A week reported in small part gets a wide spread through the size of its horizon.
 The hub re-imputes missing onsets at each vintage, so totals can also fall.
 Each province adds a revision $E_{p,k}(w) = A - B$ with $A, B \sim \text{Poisson}\{\kappa I_{p,v}(w)/2\}$, so its variance is $\kappa I_{p,v}(w)$:
 
