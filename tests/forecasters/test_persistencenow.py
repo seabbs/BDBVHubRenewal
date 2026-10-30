@@ -409,3 +409,22 @@ def test_the_daily_nowcast_without_daily_data_is_persistence(
     pd.testing.assert_frame_equal(
         PersistenceNowDaily().forecast(task), Persistence().forecast(task)
     )
+
+
+def test_the_daily_cutoff_column_wins_over_the_latest_onset() -> None:
+    from bdbvhubrenewal.forecasters.persistence import release_cutoff
+
+    rows = pd.DataFrame(
+        {
+            "vintage": "2026-10-24",
+            "location": "CD-IT",
+            "onset_date": ["2026-10-20", "2026-10-22"],
+            "observed": [3, 1],
+            "imputed": [0, 0],
+        }
+    )
+    # Real data: the latest onset day.
+    assert release_cutoff(rows, "2026-10-24").isoformat() == "2026-10-22"
+    # A stated cut-off is used even when its day has no cases.
+    stated = rows.assign(cutoff="2026-10-23")
+    assert release_cutoff(stated, "2026-10-24").isoformat() == "2026-10-23"
