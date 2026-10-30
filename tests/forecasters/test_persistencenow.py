@@ -375,3 +375,37 @@ def test_week_share_with_a_late_tail() -> None:
     mixed = week_share(cdf, age, lag=3, tail=0.1, tail_max=28)[0]
     assert mixed == pytest.approx(0.9 * usual + 0.1 * late)
     assert mixed < usual
+
+
+def test_onsets_filled_in_later_are_not_late_reports(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    # Between the 10-17 and 10-24 delay files Nord-Kivu filled in about 25
+    # onsets a week for weeks up to 09-26, while their totals barely moved:
+    # imputed cases given an onset, not late reports. The triangle uses the
+    # delays as reported, so weeks three weeks old are mostly reported and
+    # their nowcast stays near the published count (issue #25).
+    task = _task(target, delays, "2026-10-24")
+    samples = PersistenceNow().forecast(task)
+    seen = task.target.set_index(["location", "target_end_date"])["total"]
+    week = "2026-10-10"
+    nat = _national(samples).loc[week]
+    assert nat.quantile(0.95) <= 1.3 * seen[("CD", week)]
+    nk = samples.loc[
+        (samples["location"] == "CD-NK") & (samples["target_end_date"] == week)
+    ]
+    assert nk["value"].quantile(0.95) <= 1.5 * seen[("CD-NK", week)]
+
+
+def test_the_walk_starts_from_each_trajectory_latest_nowcast(
+    task: ForecastTask,
+) -> None:
+    # Each forecast trajectory continues from its own nowcast of the latest
+    # week: the next week's median matches that week's, and draws that are
+    # high in the latest week stay high in the next.
+    samples = PersistenceNow().forecast(task)
+    it = samples.loc[samples["location"] == "CD-IT"]
+    it = it.pivot(index="target_end_date", columns="sample", values="value")
+    latest, ahead = it.loc["2026-10-17"], it.loc["2026-10-24"]
+    assert ahead.median() == pytest.approx(latest.median(), rel=0.1)
+    assert np.corrcoef(np.log1p(latest), np.log1p(ahead))[0, 1] > 0.5
