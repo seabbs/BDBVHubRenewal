@@ -34,9 +34,9 @@ Completeness comes from the hub's releases.
 The totals of each onset week by release form a reporting triangle.
 Each pair of releases a week apart up to $T_v$ gives, pooled over provinces, the growth $f_k$ of the totals of weeks $k$ weeks old to the next release.
 The share of a week's final total published at $k$ weeks old is $1 / \prod_{j \ge k} f_j$, for $j$ up to 12 weeks, with $f_j = 1$ where no pair gives it.
-Week $w$ is complete once that share is at least 0.9.
+Week $w$ is complete once that share is at least 0.95.
 Late entries, re-imputation and filled-in onsets are all in the totals, so they are counted.
-Without two releases a week apart, week $w$ is complete if its Wednesday is at least $L$ days before $T_v$, with $L$ the 90th centile of the delays published with the vintage, or 10 days if none were published.
+Without two releases a week apart, week $w$ is complete if its Wednesday is at least $L$ days before $T_v$, with $L$ the 95th centile of the delays published with the vintage, or 10 days if none were published.
 Each sample is one joint trajectory across weeks, and the national value is the sum of the provinces.
 The median has no growth and weeks up to $c$ are still revised upwards, so persistence underpredicts during growth (see [Backtest](../backtest.md#persistence-bias)).
 
@@ -58,6 +58,7 @@ Comparing what each of those nowcasts expected to be added to each onset week wi
 So the sizes are fitted to weekly sums.
 Ituri and Nord-Kivu, with at least 50 delays a week, use their own $p$ and $\phi_h$.
 The other provinces borrow those of the triangle pooled over provinces, as baselinenowcast borrows a delay from another triangle.
+The hub's totals by release would give a reporting triangle with late entries in it, but with four releases it has no complete row, so it waits for more weekly releases.
 
 **Nowcast.**
 Each onset week $w$ of the last 13 has a point nowcast $\hat N_p(w)$, its observed cells plus its missing cells filled from $p$.

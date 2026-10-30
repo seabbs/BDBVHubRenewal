@@ -192,7 +192,7 @@ class Persistence:
     name: str = "persistence"
     window: int = 8
     min_sd: float = 0.1
-    completeness: float = 0.9
+    completeness: float = 0.95
     default_lag_days: int = 10
     low_count: float = 10.0
 
@@ -859,7 +859,7 @@ register_model(
 
 
 def release_complete_weeks(
-    history: pd.DataFrame, vintage: str, share: float = 0.9
+    history: pd.DataFrame, vintage: str, share: float = 0.95
 ) -> int | None:
     """Return the weeks old at which a week counts as complete.
 
