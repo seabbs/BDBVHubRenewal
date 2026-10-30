@@ -337,26 +337,29 @@ def test_walk_spread_stays_plausible(
     assert q[0.95].iloc[-1] <= 3 * recent
 
 
-def test_a_parent_step_pool_sets_the_spread_of_places_without_delays(
+def test_a_parent_step_pool_sets_the_spread_of_low_count_places(
     task: ForecastTask,
 ) -> None:
-    # Health zones pass their province's steps as `step_pool`; places
-    # without their own delay then draw from it.
+    # Health zones pass their province's steps as `step_pool`. Places with
+    # fewer than `low_count` cases a week draw from it; the rest keep their
+    # own steps, with or without their own delay.
     model = PersistenceNow()
     pool = model.step_pool_for(task)
     assert pool is not None
     assert pool.size >= 3
 
-    def width(m: PersistenceNow) -> float:
+    def width(m: PersistenceNow, loc: str) -> float:
         out = m.forecast(task)
-        hu = out.loc[out["location"] == "CD-HU"]
-        last = hu.loc[hu["target_end_date"] == hu["target_end_date"].max()]
+        out = out.loc[out["location"] == loc]
+        last = out.loc[out["target_end_date"] == out["target_end_date"].max()]
         return float(
             last["value"].quantile(0.95) - last["value"].quantile(0.05)
         )
 
     flat = replace(model, step_pool=np.zeros(5))
-    assert width(flat) < width(model)
+    # Tshopo has a few cases a week; Haut-Uele about 25 and no own delay.
+    assert width(flat, "CD-TO") < width(model, "CD-TO")
+    assert width(flat, "CD-HU") == width(model, "CD-HU")
 
 
 def test_onsets_filled_in_later_are_not_late_reports(
