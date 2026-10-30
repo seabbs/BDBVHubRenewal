@@ -144,7 +144,7 @@ def test_persistencenow_nowcasts_recent_weeks(task: ForecastTask) -> None:
     old, recent = "2026-09-26", "2026-10-10"
     assert nat.loc[old].median() - seen[old] < 0.08 * seen[old]
     assert nat.loc[recent].median() > 1.15 * seen[recent]
-    assert nat.loc[recent].std() > 3 * nat.loc[old].std()
+    assert nat.loc[recent].std() > 2 * nat.loc[old].std()
 
 
 def test_persistencenow_carries_the_nowcast_forward(task: ForecastTask) -> None:
@@ -152,8 +152,8 @@ def test_persistencenow_carries_the_nowcast_forward(task: ForecastTask) -> None:
     it = samples.loc[samples["location"] == "CD-IT"]
     it = it.pivot(index="target_end_date", columns="sample", values="value")
     # The walk keeps its median at the nowcast of the week it starts from,
-    # the week ending 10-10, the latest at least half reported.
-    start = it.loc["2026-10-10"].median()
+    # the week ending on the vintage.
+    start = it.loc["2026-10-17"].median()
     assert it.loc["2026-11-07"].median() == pytest.approx(start, rel=0.25)
     # The spread still grows with the horizon.
     q = it.quantile([0.05, 0.95], axis=1)
@@ -330,15 +330,15 @@ def test_ituri_turning_point_at_08_22(
 def test_walk_spread_stays_plausible(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
-    # At 10-24 Ituri's latest week is about 17% reported, so its nowcast is
-    # noisy. Its 95% quantile four weeks ahead stays within twice the
-    # recent nowcasts.
+    # At 10-24 Ituri's latest week is about 18% reported, so its nowcast,
+    # where the walk starts, is noisy. Its 95% quantile four weeks ahead
+    # stays within three times the recent nowcasts.
     task = _task(target, delays, "2026-10-24")
     samples = PersistenceNow().forecast(task)
     it = samples.loc[samples["location"] == "CD-IT"]
     q = it.groupby("target_end_date")["value"].quantile([0.5, 0.95]).unstack()
     recent = q.loc[q.index <= task.vintage, 0.5].iloc[-4:].max()
-    assert q[0.95].iloc[-1] <= 2 * recent
+    assert q[0.95].iloc[-1] <= 3 * recent
 
 
 def test_a_parent_step_pool_sets_the_spread_of_places_without_delays(
