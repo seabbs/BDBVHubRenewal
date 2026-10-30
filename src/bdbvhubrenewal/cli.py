@@ -54,6 +54,7 @@ from bdbvhubrenewal.data import (
     load_target,
 )
 from bdbvhubrenewal.data.dates import as_date
+from bdbvhubrenewal.data.reconstruct import cutoff_lags
 from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.evaluation.heldout import (
@@ -598,7 +599,9 @@ def _backtest(args: argparse.Namespace) -> int:
             return 1
         index, count = (int(x) for x in args.shard.split("/"))
         if args.recovery_only:
-            tasks = bt.recovery_tasks(config)
+            tasks = bt.recovery_tasks(
+                config, lags=cutoff_lags(load_daily(args.data))
+            )
         elif args.lopo:
             models = [m for m in models if getattr(m, "supports_mask", False)]
             tasks = bt.lopo_tasks(
@@ -634,6 +637,7 @@ def _backtest(args: argparse.Namespace) -> int:
             load_health_zones(args.data),
             as_of,
             dates,
+            daily=load_daily(args.data),
         )
         for table, path in (
             (sforecasts, output / "scenario-forecasts.csv.gz"),
@@ -644,7 +648,11 @@ def _backtest(args: argparse.Namespace) -> int:
         return 0
     if args.recovery_only:
         rforecasts, rscores = bt.run_recovery(
-            models, config, cache=args.cache, fits=fits
+            models,
+            config,
+            cache=args.cache,
+            fits=fits,
+            lags=cutoff_lags(load_daily(args.data)),
         )
         for table, path in (
             (rforecasts, output / "recovery-forecasts.csv.gz"),
@@ -692,7 +700,9 @@ def _backtest(args: argparse.Namespace) -> int:
     ]
     recovery = ""
     if not args.no_recovery:
-        rforecasts, rscores = bt.run_recovery(models, config)
+        rforecasts, rscores = bt.run_recovery(
+            models, config, lags=cutoff_lags(load_daily(args.data))
+        )
         tables += [
             (rforecasts, output / "recovery-forecasts.csv.gz"),
             (rscores, results / "recovery-scores.csv"),

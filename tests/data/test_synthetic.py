@@ -6,14 +6,21 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from bdbvhubrenewal.data.dates import epiweek_end
 from bdbvhubrenewal.data.reconstruct import (
     compare_reconstruction,
+    cutoff_lags,
+    fit_publication_lag,
+    publication_lag_pmf,
+    reconstruct_daily_vintage,
+    reconstruct_daily_vintages,
     reconstruct_delays,
     reconstruct_vintage,
     reconstruct_vintages,
 )
 from bdbvhubrenewal.data.simulate import (
     SimulationSettings,
+    release_dates,
     simulate_outbreak,
 )
 
@@ -25,14 +32,15 @@ def _latest(df: pd.DataFrame) -> pd.DataFrame:
 def test_reconstruction_far_ahead_recovers_latest(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
-    # Weeks well before the date are fully reported, so totals match.
-    rec = reconstruct_vintage(_latest(target), _latest(delays), "2026-10-24")
+    # Weeks well before the date are almost fully published.
+    lag = fit_publication_lag(target, delays).pmf
+    rec = reconstruct_vintage(
+        _latest(target), _latest(delays), "2026-10-24", lag
+    )
     rec = rec.set_index(["location", "target_end_date"])["total"]
     real = _latest(target).set_index(["location", "target_end_date"])["total"]
     old = [i for i in rec.index if i[1] <= "2026-08-01"]
-    pd.testing.assert_series_equal(
-        rec.loc[old], real.loc[old], check_names=False
-    )
+    assert rec.loc[old].sum() == pytest.approx(real.loc[old].sum(), rel=0.01)
 
 
 def test_reconstruction_is_close_to_real_vintages(
@@ -44,6 +52,77 @@ def test_reconstruction_is_close_to_real_vintages(
     nat = comp.loc[comp["location"] == "CD"]
     rel = nat["total_difference"].sum() / nat["total_real"].sum()
     assert abs(rel) < 0.06
+
+
+def test_publication_lag_fit_matches_real_releases(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    fit = fit_publication_lag(target, delays)
+    assert fit.pmf.sum() == pytest.approx(1.0)
+    rec = reconstruct_vintages(target, delays, ["2026-10-09", "2026-10-17"])
+    comp = compare_reconstruction(target, rec)
+    nat = comp.loc[comp["location"] == "CD"]
+    for _, rows in nat.groupby("vintage"):
+        rel = rows["total_difference"].sum() / rows["total_real"].sum()
+        assert abs(rel) < 0.03
+
+
+def test_daily_reconstruction_sums_to_weekly(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    lag = fit_publication_lag(target, delays).pmf
+    tgt, dly = _latest(target), _latest(delays)
+    for cut in (0, 2):
+        weekly = reconstruct_vintage(
+            tgt, dly, "2026-10-09", lag, cutoff_lag=cut
+        )
+        daily = reconstruct_daily_vintage(
+            tgt, dly, "2026-10-09", lag, cutoff_lag=cut
+        )
+        assert daily["onset_date"].max() <= daily["cutoff"].iloc[0]
+        assert daily["cutoff"].iloc[0] == f"2026-10-0{9 - cut}"
+        week = daily["onset_date"].map(lambda x: epiweek_end(x).isoformat())
+        got = (
+            daily.assign(
+                target_end_date=week,
+                total=daily["observed"] + daily["imputed"],
+                o=daily["observed"],
+                i=daily["imputed"],
+            )
+            .groupby(["location", "target_end_date"])[["o", "i", "total"]]
+            .sum()
+        )
+        want = weekly.set_index(["location", "target_end_date"])
+        want = want.loc[want["total"] > 0]
+        assert (got["total"] == want["total"].reindex(got.index)).all()
+        assert (got["o"] == want["observed"].reindex(got.index)).all()
+        assert len(got) == len(want)
+
+
+def test_daily_reconstruction_many_dates(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    out = reconstruct_daily_vintages(
+        target, delays, ["2026-10-06", "2026-10-09"], cutoff_lags={1: 0, 4: 2}
+    )
+    assert set(out["vintage"]) == {"2026-10-06", "2026-10-09"}
+    assert set(out["kind"]) == {"reconstructed"}
+    cut = out.groupby("vintage")["cutoff"].first()
+    assert cut["2026-10-06"] == "2026-10-06"
+    assert cut["2026-10-09"] == "2026-10-07"
+
+
+def test_cutoff_lags_follow_real_releases() -> None:
+    daily = pd.DataFrame(
+        {
+            "vintage": ["2026-10-09", "2026-10-09", "2026-10-17"],
+            "onset_date": ["2026-10-06", "2026-10-07", "2026-10-16"],
+        }
+    )
+    lags = cutoff_lags(daily)
+    assert lags[4] == 2
+    assert lags[5] == 1
+    assert lags[1] == 1
 
 
 def test_reconstructed_delays_are_truncated(delays: pd.DataFrame) -> None:
@@ -193,7 +272,6 @@ def _rows(
 
 
 def test_publication_lag_pmf_from_rows_new_in_later_vintages() -> None:
-    from bdbvhubrenewal.data.reconstruct import publication_lag_pmf
 
     old = _rows("2026-10-10", ["2026-09-05"] * 5, [3] * 5)
     # Two rows reported long ago appear late, three recent ones on time.
@@ -229,3 +307,47 @@ def test_unused_options_leave_the_default_outbreak_unchanged() -> None:
     assert len(outbreak.cases) == 1797
     target, _ = outbreak.vintage("2026-10-28")
     assert int(target["imputed"].sum()) == 488
+
+
+def test_release_dates_are_the_real_weekdays() -> None:
+    days = release_dates("2026-10-05", "2026-10-11")
+    assert days == ["2026-10-06", "2026-10-07", "2026-10-09", "2026-10-10"]
+
+
+@pytest.mark.parametrize("cutoff_lag", [0, 2])
+def test_simulated_daily_vintage_sums_to_weekly(
+    outbreak,
+    cutoff_lag: int,  # type: ignore[no-untyped-def]
+) -> None:
+    day = "2026-09-04"
+    weekly, _ = outbreak.vintage(day, cutoff_lag=cutoff_lag)
+    daily = outbreak.daily_vintage(day, cutoff_lag=cutoff_lag)
+    assert set(daily["kind"]) == {"simulated"}
+    cut = (pd.Timestamp(day) - pd.Timedelta(days=cutoff_lag)).date()
+    assert daily["cutoff"].iloc[0] == cut.isoformat()
+    assert daily["onset_date"].max() <= daily["cutoff"].iloc[0]
+    week = daily["onset_date"].map(lambda x: epiweek_end(x).isoformat())
+    got = (
+        daily.assign(target_end_date=week)
+        .groupby(["location", "target_end_date"])[["observed", "imputed"]]
+        .sum()
+    )
+    want = weekly.set_index(["location", "target_end_date"])[
+        ["observed", "imputed"]
+    ]
+    want = want.loc[want.sum(axis=1) > 0]
+    pd.testing.assert_frame_equal(
+        got.sort_index(), want.sort_index(), check_dtype=False
+    )
+
+
+def test_simulated_cutoffs_follow_weekday(outbreak) -> None:  # type: ignore[no-untyped-def]
+    dates = release_dates("2026-09-01", "2026-09-05")
+    out = outbreak.daily_vintages(dates, cutoff_lags={1: 0, 2: 1, 4: 2, 5: 1})
+    cut = out.groupby("vintage")["cutoff"].first().to_dict()
+    assert cut == {
+        "2026-09-01": "2026-09-01",
+        "2026-09-02": "2026-09-01",
+        "2026-09-04": "2026-09-02",
+        "2026-09-05": "2026-09-04",
+    }

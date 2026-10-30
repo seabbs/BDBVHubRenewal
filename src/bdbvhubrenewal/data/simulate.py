@@ -24,6 +24,7 @@ back-sampling), their total, and the delay line data.
 from __future__ import annotations
 
 import datetime as dt
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 import jax
@@ -50,6 +51,7 @@ from bdbvhubrenewal.model.renewal import coupled_renewal, mixing_matrix
 __all__ = [
     "SimulatedOutbreak",
     "SimulationSettings",
+    "release_dates",
     "simulate_outbreak",
 ]
 
@@ -165,6 +167,23 @@ class SimulationSettings:
     zone_shares: tuple[tuple[str, str, float], ...] = ()
 
 
+RELEASE_WEEKDAYS = (1, 2, 4, 5)
+"""Release weekdays (Tuesday, Wednesday, Friday, Saturday), as the real
+releases fell."""
+
+
+def release_dates(first: dt.date | str, last: dt.date | str) -> list[str]:
+    """List the release days from `first` to `last`, ISO format."""
+    days = pd.date_range(as_date(first), as_date(last), freq="D")
+    return [
+        d.date().isoformat() for d in days if d.weekday() in RELEASE_WEEKDAYS
+    ]
+
+
+def _cutoff(day: dt.date | str, lags: Mapping[int, int] | None) -> int:
+    return 0 if lags is None else lags[as_date(day).weekday()]
+
+
 @dataclass(frozen=True)
 class SimulatedOutbreak:
     """A simulated outbreak: the true parameters and the case line list.
@@ -189,7 +208,10 @@ class SimulatedOutbreak:
     cases: pd.DataFrame = field(repr=False)
 
     def vintage(
-        self, as_of: dt.date | str, rng: np.random.Generator | None = None
+        self,
+        as_of: dt.date | str,
+        rng: np.random.Generator | None = None,
+        cutoff_lag: int = 0,
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Publish the data the hub would show at a date.
 
@@ -199,6 +221,9 @@ class SimulatedOutbreak:
             The vintage date.
         rng : numpy.random.Generator, optional
             For the back-sampling draws. Seeded from the date by default.
+        cutoff_lag : int
+            Days from the release to the data cut-off. The release holds
+            what was published by the cut-off.
 
         Returns
         -------
@@ -207,7 +232,7 @@ class SimulatedOutbreak:
             `kind = "simulated"`) and the delay line data.
         """
         day = as_date(as_of)
-        known, missing, imputed_onset = self._published(day, rng)
+        known, missing, imputed_onset = self._published(day, rng, cutoff_lag)
         delays = (known["report_date"] - known["onset_date"]).dt.days.to_numpy()
 
         def weekly(loc: pd.Series, onset: pd.Series) -> pd.Series:
@@ -260,13 +285,16 @@ class SimulatedOutbreak:
         return tab[cols], delay_rows
 
     def _published(
-        self, day: dt.date, rng: np.random.Generator | None = None
+        self,
+        day: dt.date,
+        rng: np.random.Generator | None = None,
+        cutoff_lag: int = 0,
     ) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series]:
         """Cases in the data at `day`: known, missing and imputed onsets."""
         rng = rng or np.random.default_rng(
             [self.settings.seed, day.toordinal()]
         )
-        cut = pd.Timestamp(day)
+        cut = pd.Timestamp(day - dt.timedelta(days=cutoff_lag))
         cases = self.cases
         seen = cases.loc[
             (cases["publish_date"] <= cut) & ~(cases["removed_date"] <= cut)
@@ -343,8 +371,74 @@ class SimulatedOutbreak:
         ]
         return out[cols].reset_index(drop=True)
 
+    def daily_vintage(
+        self,
+        as_of: dt.date | str,
+        rng: np.random.Generator | None = None,
+        cutoff_lag: int = 0,
+    ) -> pd.DataFrame:
+        """Publish the daily release the hub would show at a date.
+
+        The counts are those of `vintage` (same draws for the imputed
+        onsets), split by onset day, so each week's daily counts add up to
+        its weekly total.
+
+        Parameters
+        ----------
+        as_of : datetime.date or str
+            The release date.
+        rng : numpy.random.Generator, optional
+            As for `vintage`.
+        cutoff_lag : int
+            As for `vintage`.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Columns `kind` (`"simulated"`), `vintage`, `location`,
+            `onset_date`, `observed`, `imputed` and `cutoff` (the data
+            cut-off, ISO format), with the country and provinces and only
+            days with a case.
+        """
+        day = as_date(as_of)
+        known, missing, imputed_onset = self._published(day, rng, cutoff_lag)
+
+        def daily(loc: pd.Series, onset: pd.Series) -> pd.Series:
+            return pd.DataFrame(
+                {"location": loc, "onset_date": onset.dt.normalize()}
+            ).value_counts()
+
+        obs = daily(known["location"], known["onset_date"]).rename("observed")
+        imp = daily(missing["location"], imputed_onset).rename("imputed")
+        prov = pd.concat([obs, imp], axis=1).fillna(0).astype("int64")
+        prov = prov.reset_index()
+        nat = prov.groupby("onset_date", as_index=False)[
+            ["observed", "imputed"]
+        ].sum()
+        out = pd.concat([prov, nat.assign(location=NATIONAL)])
+        out["onset_date"] = out["onset_date"].dt.strftime("%Y-%m-%d")
+        out["kind"] = "simulated"
+        out["vintage"] = day.isoformat()
+        out["cutoff"] = (day - dt.timedelta(days=cutoff_lag)).isoformat()
+        cols = [
+            "kind",
+            "vintage",
+            "location",
+            "onset_date",
+            "observed",
+            "imputed",
+            "cutoff",
+        ]
+        return (
+            out[cols]
+            .sort_values(["location", "onset_date"])
+            .reset_index(drop=True)
+        )
+
     def vintages(
-        self, dates: list[dt.date] | list[str]
+        self,
+        dates: list[dt.date] | list[str],
+        cutoff_lags: Mapping[int, int] | None = None,
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Publish several vintages and stack them.
 
@@ -352,17 +446,48 @@ class SimulatedOutbreak:
         ----------
         dates : list of datetime.date or str
             Vintage dates.
+        cutoff_lags : mapping of int to int, optional
+            Days from release to data cut-off by release weekday
+            (`bdbvhubrenewal.data.reconstruct.cutoff_lags`). None for no
+            cut-off.
 
         Returns
         -------
         tuple of pandas.DataFrame
             Stacked target rows and delay line data.
         """
-        parts = [self.vintage(d) for d in dates]
+        parts = [
+            self.vintage(d, cutoff_lag=_cutoff(d, cutoff_lags)) for d in dates
+        ]
         return (
             pd.concat([p[0] for p in parts], ignore_index=True),
             pd.concat([p[1] for p in parts], ignore_index=True),
         )
+
+    def daily_vintages(
+        self,
+        dates: list[dt.date] | list[str],
+        cutoff_lags: Mapping[int, int] | None = None,
+    ) -> pd.DataFrame:
+        """Publish several daily releases and stack them.
+
+        Parameters
+        ----------
+        dates : list of datetime.date or str
+            Release dates, for example `release_dates`.
+        cutoff_lags : mapping of int to int, optional
+            As for `vintages`.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Daily rows (`daily_vintage`) for every date.
+        """
+        parts = [
+            self.daily_vintage(d, cutoff_lag=_cutoff(d, cutoff_lags))
+            for d in dates
+        ]
+        return pd.concat(parts, ignore_index=True)
 
     def truth(self) -> pd.DataFrame:
         """Return the final weekly totals by onset week.

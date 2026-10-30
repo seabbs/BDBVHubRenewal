@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from bdbvhubrenewal.data.reconstruct import cutoff_lags
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     development_tasks,
@@ -14,6 +15,7 @@ from bdbvhubrenewal.evaluation.backtest import (
     lopo_tasks,
     make_tasks,
     order_tasks,
+    recovery_tasks,
     run_development,
     run_forecasts,
     run_lopo,
@@ -605,3 +607,41 @@ def test_development_tasks_pass_the_daily_releases(
         daily=load_daily(),
     )  # fmt: skip
     assert all(t.daily_history is not None for t in tasks)
+
+
+def test_reconstructed_tasks_carry_daily_releases(
+    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
+) -> None:
+    from bdbvhubrenewal.data.tidy import load_daily
+
+    tasks = development_tasks(
+        target, delays, config, daily=load_daily()
+    )  # fmt: skip
+    rec = [t for t in tasks if t.kind == "reconstructed"]
+    assert rec
+    for task in rec:
+        hist = task.daily_history
+        assert hist is not None
+        assert set(hist["kind"]) == {"reconstructed"}
+        assert hist["vintage"].max() == task.vintage
+        # Releases on the days of the week the hub released.
+        days = pd.to_datetime(hist["vintage"]).dt.day_of_week
+        assert set(days) <= {1, 2, 4, 5}
+        assert hist["vintage"].nunique() > 4
+
+
+def test_simulated_tasks_carry_daily_releases(config: BacktestConfig) -> None:
+    from bdbvhubrenewal.data.tidy import load_daily
+
+    lags = cutoff_lags(load_daily())
+    tasks = recovery_tasks(config, lags=lags)
+    assert tasks
+    for task in tasks:
+        hist = task.daily_history
+        assert hist is not None
+        assert set(hist["kind"]) == {"simulated"}
+        assert hist["vintage"].max() == task.vintage
+        assert hist["vintage"].nunique() > 4
+        last = hist.loc[hist["vintage"] == task.vintage]
+        # The vintage's weekly target is cut at the same day.
+        assert last["onset_date"].max() <= last["cutoff"].iloc[0]

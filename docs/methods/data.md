@@ -43,17 +43,19 @@ The backtest thins the 2026-10-09 rows to those likely published by then under t
 
 ## Reconstructed vintages
 
-Reconstructed vintages rebuild what the hub would have shown on a past Saturday $A$ from the latest real vintage.
-Cases reach a vintage some days after report, so the cut-off is $A' = A - 3$ days.
+Reconstructed vintages rebuild what the hub would have shown on a past release day $A$ from the latest real vintage.
+A case reaches a release a lag $\ell$ after its report, with $\ell$ lognormal (log mean 0.56, log SD 1.34, median 1.7 days, 73% within 3 days).
+The lognormal is fitted by minimising the Pearson chi-squared distance between the reconstructed and real national weekly totals of the earlier real releases.
+With $F_\ell$ its cdf on whole days:
 
 - **Known onsets.** Each delay row is a case with onset week $W$ and delay $d$.
-  Its onset day is uniform in the week, so it counts as reported by $A'$ with probability $\frac{1}{7}\sum_{u=0}^{6} \mathbb{1}\{W - u + d \le A'\}$.
+  Its onset day $W - u$ is uniform in the week, so it is in the release with probability $\frac{1}{7}\sum_{u=0}^{6} F_\ell(A - W + u - d)$.
 - **Imputed onsets.** Their report dates are not public.
   The hub imputed each onset by subtracting a delay drawn from the pooled delays.
-  So a case imputed to week $W$ counts as reported by $A'$ with probability $\frac{1}{7}\sum_{u} \hat G(A' - W + u)$, with $\hat G$ the pooled delay cdf.
-- **Delay data.** Rows whose report (taking the onset mid-week) falls by $A'$.
-
-The publication lag is 3 days ([Data](../data.md#reconstructed-vintages) compares it with the real vintages).
+  So an imputed case of week $W$ is in the release with probability $\frac{1}{7}\sum_{u} G(A - W + u)$, with $G$ the cdf of the pooled delay plus $\ell$.
+- **Delay data.** Rows whose report (taking the onset mid-week) is published by $A$.
+- **Daily release.** Expected counts are split by onset day $W - u$ and rounded so each week's daily counts sum to the weekly target.
+  Onset days after the data cut-off, the release day minus the lag the real releases of that weekday had (0 to 2 days), are absent.
 
 ## Simulated vintages
 
@@ -67,6 +69,8 @@ Simulated vintages come from the model's own renewal with known parameters:
 - 30% of cases reported with no onset get one 7 to 42 days after publication, so imputed counts of past weeks fall and known counts rise, as between real vintages.
 
 Vintages are published as the hub does, with missing onsets imputed from the known delays reported so far.
+Daily releases are published on Tuesdays, Wednesdays, Fridays and Saturdays, each cut off the lag the real releases of that weekday had.
+Their weekly sums are the weekly target.
 The truth is every confirmed case by its true onset week.
 
 ## BVDOutbreakSize estimates
