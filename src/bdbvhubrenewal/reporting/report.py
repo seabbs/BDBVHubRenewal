@@ -813,7 +813,32 @@ def _summary_figure(
         fig, "scores-summary", partial(plot_score_summary, real, models=names)
     )
     alt = "WIS relative to persistence and 90% coverage, by horizon."
-    _write(gen / "backtest-summary.md", _metric_tabs("scores-summary", alt))
+    _write(
+        gen / "backtest-summary.md",
+        _metric_tabs("scores-summary", alt)
+        + "\n"
+        + _dropdown(_summary_table(real, names), "Summary table"),
+    )
+
+
+def _summary_table(real: pd.DataFrame, names: Sequence[str]) -> str:
+    """Return the table behind the summary figure, by model and horizon."""
+    match = ["kind", "vintage", "reference_date", "location", "target_end_date"]
+    rel = relative_skill(real, by=("horizon",), match_on=match)
+    cover = (
+        real.groupby(["model", "horizon"])["coverage_90"].mean().reset_index()
+    )
+    table = cover.merge(rel, on=["model", "horizon"], how="left")
+    table = table[
+        ["model", "horizon", "relative_wis", "relative_log_wis", "coverage_90"]
+    ]
+    table["model"] = pd.Categorical(table["model"], list(names), ordered=True)
+    table = table.sort_values(["model", "horizon"]).reset_index(drop=True)
+    return (
+        "Mean WIS and log WIS divided by those of persistence over the "
+        "forecasts both made, and the share of 90% intervals holding the "
+        "data.\n\n" + _table(table)
+    )
 
 
 def _forecast_tabs(
