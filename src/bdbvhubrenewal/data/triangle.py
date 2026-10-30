@@ -4,12 +4,8 @@ r"""Reporting triangles and the baselinenowcast method.
 A port of the core of the R package
 [baselinenowcast](https://github.com/epinowcast/baselinenowcast).
 
-`reporting_triangle` counts the known-onset cases of the hub's delay file
-by onset week $W$ (rows) and delay $d$ in days (columns).
-A case is taken to be published on day $W + d$: its onset mid-week,
-$W - 3$, plus its delay, plus a 3-day publication lag.
-So cell $(W, d)$ is observed at vintage $T$ if $W + d \le T$ and is
-missing otherwise.
+A reporting triangle has one row per reference time and one column per
+delay, with the cells not yet observed missing in the bottom right.
 
 `chainladder_fill` fills the missing cells column by column.
 For column $d$, with $A$ the rows where it is observed,
@@ -35,13 +31,9 @@ to come are drawn as $\text{NegBin}$ with the point nowcast as mean.
 from __future__ import annotations
 
 import numpy as np
-import pandas as pd
 from numpy.typing import NDArray
 from scipy import stats
 from scipy.optimize import minimize_scalar
-
-from bdbvhubrenewal.data.dates import as_date
-from bdbvhubrenewal.data.delays import DEFAULT_MAX_DELAY
 
 __all__ = [
     "apply_delay",
@@ -49,53 +41,8 @@ __all__ = [
     "delay_pmf",
     "fit_nb_size",
     "preprocess_negative_values",
-    "reporting_triangle",
     "retrospective_errors",
-    "week_shares",
 ]
-
-
-def reporting_triangle(
-    delays: pd.DataFrame,
-    vintage: str,
-    max_delay: int = DEFAULT_MAX_DELAY,
-) -> tuple[list[str], NDArray[np.float64]]:
-    """Count known-onset cases by onset week and delay, pooled over places.
-
-    Parameters
-    ----------
-    delays : pandas.DataFrame
-        Delay line data with `vintage`, `onset_week` and `delay` columns.
-        Rows of `vintage` are used.
-    vintage : str
-        The delay vintage, $T$.
-    max_delay : int
-        Last delay column. Longer delays are counted in it.
-
-    Returns
-    -------
-    weeks : list of str
-        Every onset week from the first in the data to the last ending on
-        or before $T$.
-    triangle : numpy.ndarray
-        Counts, one row per week and one column per delay, missing where
-        $W + d > T$.
-    """
-    rows = delays.loc[delays["vintage"] == vintage]
-    end = pd.Timestamp(as_date(vintage))
-    onset = pd.to_datetime(rows["onset_week"])
-    rows, onset = rows.loc[(onset <= end).to_numpy()], onset[onset <= end]
-    if rows.empty:
-        return [], np.zeros((0, max_delay + 1))
-    ends = pd.date_range(onset.min(), onset.max(), freq="7D")
-    weeks = [w.date().isoformat() for w in ends]
-    row = ((onset - ends[0]).dt.days // 7).to_numpy()
-    col = rows["delay"].to_numpy(dtype=np.int64).clip(0, max_delay)
-    tri = np.zeros((len(weeks), max_delay + 1))
-    np.add.at(tri, (row, col), 1.0)
-    seen = (end - ends).days.to_numpy()
-    unseen = np.arange(max_delay + 1)[None, :] > seen[:, None]
-    return weeks, np.where(unseen, np.nan, tri)
 
 
 def chainladder_fill(triangle: NDArray[np.float64]) -> NDArray[np.float64]:
@@ -206,40 +153,6 @@ def apply_delay(
         x = out[missing, :col].sum(axis=1)
         out[missing, col] = (x + 1 - cdf[col - 1]) / cdf[col - 1] * pmf[col]
     return out
-
-
-def week_shares(
-    triangle: NDArray[np.float64],
-    pmf: NDArray[np.float64],
-    published: NDArray[np.float64],
-) -> NDArray[np.float64]:
-    r"""Return the share of each row's expected final count published so far.
-
-    Each row's point nowcast $\hat N(W)$ is its observed cells plus its
-    missing cells filled by `apply_delay`, summed over delays. With
-    $K(W)$ the cases of the row in the delay file, observed cells or not,
-    the share is $K(W) / \hat N(W)$, at most 1. Both come from the same
-    file, so any lag from report to publication is in $K(W)$ already.
-
-    Parameters
-    ----------
-    triangle : numpy.ndarray
-        Counts by row and delay, missing in the bottom right.
-    pmf : numpy.ndarray
-        Delay pmf, one entry per column.
-    published : numpy.ndarray
-        $K(W)$, one per row.
-
-    Returns
-    -------
-    numpy.ndarray
-        One share per row, 1 where nothing is expected.
-    """
-    final = apply_delay(triangle, pmf).sum(axis=1)
-    share = np.divide(
-        published, final, out=np.ones_like(final), where=final > 0
-    )
-    return np.asarray(np.clip(share, 0.0, 1.0), dtype=np.float64)
 
 
 def retrospective_errors(

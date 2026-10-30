@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data.triangle import (
@@ -10,43 +9,8 @@ from bdbvhubrenewal.data.triangle import (
     delay_pmf,
     fit_nb_size,
     preprocess_negative_values,
-    reporting_triangle,
     retrospective_errors,
-    week_shares,
 )
-
-
-def _rows(vintage: str, week: str, delays: list[int]) -> pd.DataFrame:
-    return pd.DataFrame(
-        {
-            "vintage": vintage,
-            "location": "CD-IT",
-            "onset_week": week,
-            "delay": delays,
-        }
-    )
-
-
-def test_reporting_triangle_counts_and_masks_unseen_cells() -> None:
-    rows = pd.concat(
-        [
-            _rows("2026-10-24", "2026-10-10", [0, 0, 5, 13]),
-            _rows("2026-10-24", "2026-10-17", [1, 6]),
-        ]
-    )
-    weeks, tri = reporting_triangle(rows, "2026-10-24", max_delay=20)
-    assert weeks == ["2026-10-10", "2026-10-17"]
-    assert tri.shape == (2, 21)
-    # A case with onset week W and delay d is published on W + d.
-    assert tri[0, 0] == 2
-    assert tri[0, 5] == 1
-    assert tri[0, 13] == 1
-    assert np.isnan(tri[0, 15])
-    assert not np.isnan(tri[0, 14])
-    assert tri[1, 1] == 1
-    assert tri[1, 6] == 1
-    assert np.isnan(tri[1, 8])
-    assert not np.isnan(tri[1, 7])
 
 
 def _expected_triangle(
@@ -133,17 +97,3 @@ def test_delay_pmf_needs_cases() -> None:
     tri = np.array([[0.0, 0.0], [0.0, np.nan]])
     with pytest.raises(ValueError, match="no cases"):
         delay_pmf(tri)
-
-
-def test_week_shares_compare_the_file_with_the_point_nowcast() -> None:
-    # Two complete rows set a pmf of 0.5 on each delay. The open row has 4
-    # cases at delay 0, so its nowcast is 8; with 6 of its cases in the
-    # file, 3/4 of it is published.
-    tri = np.array([[5.0, 5.0], [3.0, 3.0], [4.0, np.nan]])
-    pmf = np.array([0.5, 0.5])
-    shares = week_shares(tri, pmf, np.array([10.0, 6.0, 6.0]))
-    assert shares[:2] == pytest.approx([1.0, 1.0])
-    assert shares[2] == pytest.approx(6 / (4 + (4 + 1 - 0.5) / 0.5 * 0.5))
-    # No cases expected: all published.
-    zero = week_shares(np.zeros((2, 2)), pmf, np.zeros(2))
-    assert zero == pytest.approx([1.0, 1.0])

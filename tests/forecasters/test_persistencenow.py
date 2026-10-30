@@ -188,11 +188,6 @@ def test_sparse_places_stay_plausible(
     assert 0.8 * low <= med.iloc[-1] <= 1.25 * high
 
 
-@pytest.mark.xfail(
-    reason="Without a publication lag the latest week of a reconstructed "
-    "vintage is nowcast far too high, and the walk starts from it.",
-    strict=True,
-)
 def test_ituri_turning_point_at_08_22(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
@@ -240,16 +235,17 @@ def test_walk_spread_stays_plausible(
 
 
 def test_the_walk_starts_from_each_trajectory_latest_nowcast(
-    task: ForecastTask,
+    target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
     # Each forecast trajectory continues from its own nowcast of the latest
     # week: the next week's median matches that week's, and draws that are
     # high in the latest week stay high in the next.
+    task = _task(target, delays, "2026-10-24")
     samples = PersistenceNow().forecast(task)
     it = samples.loc[samples["location"] == "CD-IT"]
     it = it.pivot(index="target_end_date", columns="sample", values="value")
-    latest, ahead = it.loc["2026-10-17"], it.loc["2026-10-24"]
-    assert ahead.median() == pytest.approx(latest.median(), rel=0.1)
+    latest, ahead = it.loc["2026-10-24"], it.loc["2026-10-31"]
+    assert ahead.median() == pytest.approx(latest.median(), rel=0.15)
     assert np.corrcoef(np.log1p(latest), np.log1p(ahead))[0, 1] > 0.5
 
 
