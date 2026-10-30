@@ -1,15 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import replace
-
 import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.triangle import (
-    delay_pmf,
-    reporting_triangle,
-)
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import (
     ForecastTask,
@@ -21,8 +15,7 @@ from bdbvhubrenewal.forecasters import (
 )
 from bdbvhubrenewal.forecasters.persistence import (
     nowcast_draws,
-    nowcast_means,
-    revision_variance,
+    release_growth,
 )
 
 
@@ -33,7 +26,10 @@ def _task(
     report_by: tuple[str, ...] = (),
 ) -> ForecastTask:
     rows = target.loc[target["vintage"] == vintage]
-    return make_tasks(rows, delays, BacktestConfig(seed=3), report_by)[0]
+    real = target.loc[target["kind"] == "real"]
+    return make_tasks(
+        rows, delays, BacktestConfig(seed=3), report_by, history=real
+    )[0]
 
 
 @pytest.fixture
@@ -78,43 +74,6 @@ def test_nowcast_draws_add_negative_binomial_counts_per_place() -> None:
     # Places are drawn independently.
     other = (draws - observed)[:, 1, 3]
     assert abs(np.corrcoef(added[:, 1], other)[0, 1]) < 0.05
-
-
-def test_high_count_places_use_their_own_delay(task: ForecastTask) -> None:
-    sources = PersistenceNow().delay_sources(task)
-    assert sources["CD-IT"] == "own"
-    assert sources["CD-NK"] == "own"
-    assert sources["CD-BU"] == "pooled"
-
-
-def test_the_delay_window_sets_the_longest_delay() -> None:
-    assert PersistenceNow(n_history=4).max_delay == 21
-    assert PersistenceNow(n_history=14).max_delay == 91
-
-
-def test_nowcast_draws_can_fall_below_the_published_total() -> None:
-    rng = np.random.default_rng(2)
-    observed = np.array([[100.0]])
-    known = np.array([[80.0]])
-    draws = nowcast_draws(
-        observed, np.zeros((1, 1)), np.full((1, 1), np.inf), 20000, rng,
-        known=known, revision=0.5,
-    )  # fmt: skip
-    # Re-imputation moves the total both ways, with variance
-    # revision * imputed, and never below the known onsets.
-    assert (draws < observed).mean() > 0.3
-    assert draws.mean() == pytest.approx(100, abs=0.5)
-    assert draws.var() == pytest.approx(0.5 * 20, rel=0.15)
-    assert (draws >= known).all()
-
-
-def test_revision_variance_from_past_vintages(target: pd.DataFrame) -> None:
-    real = target.loc[target["kind"] == "real"]
-    kappa = revision_variance(real, "2026-10-24")
-    assert 0 < kappa < 5
-    # One vintage has no revisions to learn from.
-    one = real.loc[real["vintage"] == "2026-10-24"]
-    assert revision_variance(one, "2026-10-24") == 0.0
 
 
 def test_persistencenow_output(task: ForecastTask) -> None:
@@ -165,33 +124,10 @@ def test_persistencenow_is_reproducible(task: ForecastTask) -> None:
     pd.testing.assert_frame_equal(a, b)
 
 
-def test_persistencenow_without_delays_is_persistence(
-    target: pd.DataFrame,
-) -> None:
-    rows = target.loc[target["vintage"] == "2026-08-18"]
-    task = make_tasks(rows, None, BacktestConfig(seed=3))[0]
-    assert task.delays is None
-    pd.testing.assert_frame_equal(
-        PersistenceNow().forecast(task), Persistence().forecast(task)
-    )
-
-
-def test_persistencenow_needs_enough_recent_delays(
-    target: pd.DataFrame, delays: pd.DataFrame
-) -> None:
-    # Too few delay rows in the window give persistence, not a noisy nowcast.
-    task = _task(target, delays, "2026-10-17")
-    assert task.delays is not None
-    few = replace(task, delays=task.delays.head(20))
-    pd.testing.assert_frame_equal(
-        PersistenceNow().forecast(few), Persistence().forecast(few)
-    )
-
-
 def test_persistencenow_predicts_counts_as_reported_later(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
-    task = _task(target, delays, "2026-10-09", ("2026-10-24",))
+    task = _task(target, delays, "2026-10-17", ("2026-10-24",))
     samples = PersistenceNow().forecast(task)
     check_samples(samples, task)
     final = samples.loc[samples["as_of"].isna()]
@@ -210,30 +146,16 @@ def test_persistencenow_predicts_counts_as_reported_later(
     # Between the published count and the final count.
     assert (both["value"] >= floor).all()
     assert (both["value"] <= both["value_final"]).all()
-    # A week reported by then in part: the national median sits between
-    # the published count and the final nowcast, near its expected share.
-    nat = both.loc[both["target_end_date"] == "2026-10-03"]
+    # The week ending 10-10, one week old: by 10-24 it gains the share of
+    # its remaining growth that the releases give for one more week.
+    nat = both.loc[both["target_end_date"] == "2026-10-10"]
     by_sample = nat.groupby("sample")[["value", "value_final"]].sum()
-    published = sum(seen.get((loc, "2026-10-03"), 0) for loc in task.locations)
-    assert published < by_sample["value"].median()
-    assert by_sample["value"].median() < by_sample["value_final"].median()
-    assert task.delays is not None
-    model = PersistenceNow()
-    _, tri = reporting_triangle(task.delays, "2026-10-09", model.max_delay)
-    cdf = np.cumsum(delay_pmf(tri[-model.n_history :]))
-    s_v, s_t = cdf[6], cdf[21]
-    expected = published + (by_sample["value_final"].median() - published) * (
-        (s_t - s_v) / (1 - s_v)
-    )
+    published = sum(seen.get((loc, "2026-10-10"), 0) for loc in task.locations)
+    num, den = release_growth(task.target_history, task.vintage)
+    f = np.where(den > 0, num / np.maximum(den, 1), 1.0)
+    q = (f[1] - 1) / (np.prod(f[1:]) - 1)
+    expected = published + (by_sample["value_final"].median() - published) * q
     assert by_sample["value"].median() == pytest.approx(expected, rel=0.1)
-
-
-def test_nowcast_means_scale_the_total_by_the_share_reported() -> None:
-    totals = np.array([12.0, 0.0, 5.0])
-    share = np.array([1.0, 0.1, 0.25])
-    added = nowcast_means(totals, share)
-    # Y / s - Y: nothing for a complete week or a week with no cases.
-    assert added.tolist() == pytest.approx([0.0, 0.0, 15.0])
 
 
 def test_persistencenow_nowcasts_the_latest_week(task: ForecastTask) -> None:
@@ -317,26 +239,6 @@ def test_walk_spread_stays_plausible(
     assert q[0.95].iloc[-1] <= 3 * recent
 
 
-def test_onsets_filled_in_later_are_not_late_reports(
-    target: pd.DataFrame, delays: pd.DataFrame
-) -> None:
-    # Between the 10-17 and 10-24 delay files Nord-Kivu filled in about 25
-    # onsets a week for weeks up to 09-26, while their totals barely moved:
-    # imputed cases given an onset, not late reports. The triangle uses the
-    # delays as reported, so weeks three weeks old are mostly reported and
-    # their nowcast stays near the published count (issue #25).
-    task = _task(target, delays, "2026-10-24")
-    samples = PersistenceNow().forecast(task)
-    seen = task.target.set_index(["location", "target_end_date"])["total"]
-    week = "2026-10-10"
-    nat = _national(samples).loc[week]
-    assert nat.quantile(0.95) <= 1.3 * seen[("CD", week)]
-    nk = samples.loc[
-        (samples["location"] == "CD-NK") & (samples["target_end_date"] == week)
-    ]
-    assert nk["value"].quantile(0.95) <= 1.5 * seen[("CD-NK", week)]
-
-
 def test_the_walk_starts_from_each_trajectory_latest_nowcast(
     task: ForecastTask,
 ) -> None:
@@ -349,3 +251,55 @@ def test_the_walk_starts_from_each_trajectory_latest_nowcast(
     latest, ahead = it.loc["2026-10-17"], it.loc["2026-10-24"]
     assert ahead.median() == pytest.approx(latest.median(), rel=0.1)
     assert np.corrcoef(np.log1p(latest), np.log1p(ahead))[0, 1] > 0.5
+
+
+def test_release_growth_from_weekly_release_pairs() -> None:
+    # Two releases a week apart: a week 1 week old grows from 10 to 15 and
+    # one 0 weeks old from 4 to 8. A release 3 weeks earlier is not paired.
+    rows = pd.DataFrame(
+        {
+            "vintage": ["2026-09-26", "2026-10-17", "2026-10-17", "2026-10-24",
+                        "2026-10-24"],
+            "location": "CD-IT",
+            "target_end_date": ["2026-09-26", "2026-10-10", "2026-10-17",
+                                "2026-10-10", "2026-10-17"],
+            "total": [3, 10, 4, 15, 8],
+        }
+    )  # fmt: skip
+    num, den = release_growth(rows, "2026-10-24", max_weeks=3)
+    assert num.tolist() == [8, 15, 0, 0]
+    assert den.tolist() == [4, 10, 0, 0]
+
+
+def test_the_release_nowcast_lifts_weeks_one_and_two_weeks_old(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    # Hub totals of weeks one and two weeks old still grow by about 40% and
+    # 15% between releases, so their nowcasts sit well above them.
+    task = _task(target, delays, "2026-10-24")
+    nat = _national(PersistenceNow().forecast(task))
+    seen = task.target.loc[task.target["location"] == "CD"].set_index(
+        "target_end_date"
+    )["total"]
+    assert nat.loc["2026-10-17"].median() > 1.4 * seen["2026-10-17"]
+    assert nat.loc["2026-10-10"].median() > 1.1 * seen["2026-10-10"]
+
+
+def test_the_uncertainty_is_learnt_from_past_releases(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    # At 10-24 the nowcast made at 10-17 can be checked against 10-24, so
+    # the negative binomial sizes are fitted, not Poisson.
+    prep = PersistenceNow()._prepare(_task(target, delays, "2026-10-24"))
+    assert prep is not None
+    latest = prep.size[:, prep.last]
+    assert np.isfinite(latest).all()
+
+
+def test_without_two_weekly_releases_it_is_persistence(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    task = _task(target, delays, "2026-10-09")
+    pd.testing.assert_frame_equal(
+        PersistenceNow().forecast(task), Persistence().forecast(task)
+    )
