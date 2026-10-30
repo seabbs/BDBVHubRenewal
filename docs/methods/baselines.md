@@ -40,57 +40,51 @@ Each sample is one joint trajectory across weeks, and the national value is the 
 
 ## Persistence on a nowcast
 
-`persistencenow` is a baseline model that builds on the ideas of the baselinenowcast paper[^bnc-paper] and package[^bnc-package].
-It nowcasts the recent weeks with a chain ladder on the hub's totals by release, then runs the `persistence` random walk forward from each nowcast draw.
+`persistencenow` nowcasts recent weeks with a chain ladder on the hub's releases, as in baselinenowcast[^bnc-paper][^bnc-package], then runs the `persistence` random walk from each nowcast draw.
 
 **Release triangle.**
-The hub's totals $Y_{p,r}(w)$, known plus imputed, for onset week $w$ at each release $r$ form a cumulative reporting triangle, with onset week as reference and release as report date.
-Each release is placed at the Saturday ending its week, so week $w$ is $k = (r - w)/7$ weeks old at it.
-Late entries, re-imputation and onsets filled in for imputed cases all change the totals, so they are in the triangle.
-With releases on 08-18, 10-09, 10-17 and 10-24, each week is seen at only a few ages, so the triangle is a band with no complete row.
-baselinenowcast's `estimate_delay` needs a complete row, so the delay is estimated with the chain ladder in development-factor form, the same estimator on the cells the band has.
-For each pair of releases a week apart up to $T_v$, a week $k$ weeks old at the first adds its total there to $D_k$ and at the second to $N_k$, and
+$Y_{p,r}(w)$ is the total, known plus imputed, of onset week $w$ in province $p$ at release $r$.
+Week $w$ is $k = \lfloor (r - w)/7 \rfloor$ weeks old at $r$, and weeks ending after $r$ are left out.
+For consecutive releases $a < b$ up to $T_v$, the weeks $k_a$ weeks old at $a$ and $k_b$ at $b$ give
 
 $$
-f_k = \frac{N_k}{D_k}, \qquad G_k = \prod_{j=k}^{12} f_j,
+\log \frac{\sum_w Y_{p,b}(w)}{\sum_w Y_{p,a}(w)} = \sum_{j=k_a}^{k_b - 1} \log f_j,
 $$
 
-with $f_k = 1$ where no pair gives it and weeks over 12 weeks old taken as final.
-A province with at least 50 cases a week over the last 8 weeks uses its own $f_k$ where it has them, and the others use the factors pooled over provinces.
-This part is our own code; the rest follows baselinenowcast.
+fitted by least squares weighted by $\sum_w Y_{p,a}(w)$.
+$f_j = 1$ for ages no pair covers, and weeks over 12 weeks old are final, so $G_k = \prod_{j=k}^{12} f_j$.
+Provinces with at least 50 cases a week over the last 8 weeks use their own $f_j$ where their releases cover $j$, and the others use $f_j$ pooled over provinces.
+With one release, `persistencenow` is `persistence`.
 
 **Nowcast.**
-Week $w$, $k$ weeks old at $T_v$, is expected to reach $Y_{p,v}(w) G_k$, and the cases still to come are
+For week $w$, $k$ weeks old at $T_v$, and sample $i$,
 
 $$
-U_{p,k'}(w) \sim \text{NegBin}\Big(\text{mean } Y_{p,v}(w) (G_k - 1),\ \text{size } \phi_k\Big),
+C_{p,i}(w) = \max\big\{0,\ Y_{p,v}(w) + A - B\big\},
 \qquad
-C_{p,k'}(w) = Y_{p,v}(w) + U_{p,k'}(w),
+A \sim \text{Poisson}(\mu^+ + \rho_k Y_{p,v}(w)),
+\qquad
+B \sim \text{Poisson}(\mu^- + \rho_k Y_{p,v}(w)),
 $$
 
-for each sample $k'$, as baselinenowcast's `sample_nb`.
-The sizes $\phi_k$ are learnt from the releases, as `estimate_uncertainty_retro` does.
-From each earlier release $r$ with a pair of releases a week apart up to it, the factors at $r$ predict the growth of each week's total from $r$ to $T_v$, which is compared with the growth seen, in each province.
-A negative binomial is fitted to those points for each $k$ with at least 3 of them, and to all of them together for the rest (`fit_nb_size`, as baselinenowcast's `fit_nb`).
-Without such a release the sizes are infinite, so the draws are Poisson.
-At 10-24 only the release of 10-17 gives a retrospective nowcast, so each $\phi_k$ rests on one release of the 8 provinces, and the estimates will settle as weekly releases accumulate.
-Without two releases a week apart, `persistencenow` is `persistence`.
+with $\mu = Y_{p,v}(w)(G_k - 1)$ and $\mu^+$, $\mu^-$ its positive and negative parts.
+The change still to come is Skellam with mean $\mu$ and variance $|\mu| + 2 \rho_k Y_{p,v}(w)$, so totals can be revised down.
+$\rho_k$ is fitted by maximum likelihood to nowcasts made at each earlier release with factors, compared with $T_v$, pooled over provinces.
+Ages with fewer than 3 points share one $\rho$.
 
 **Forecast.**
-Each sample $k'$ starts from its own nowcast of the latest week $c$, the one ending on or after $T_v$, $\log\{1 + C_{p,k'}(c)\}$.
-From there it follows the `persistence` random walk, with the same code:
+Each sample starts from its own nowcast of the latest week $c$, the last ending on or before $T_v$:
 
 $$
-\log\{1 + \lambda_{p,k'}(c + h)\} = \max\Big(0,\ \log\{1 + C_{p,k'}(c)\} + \sum_{j=1}^{h} \epsilon_{p,k',j}\Big),
+\log\{1 + \lambda_{p,i}(c + h)\} = \max\Big(0,\ \log\{1 + C_{p,i}(c)\} + \sum_{j=1}^{h} \epsilon_{p,i,j}\Big),
 \qquad
-\epsilon_{p,k',j} \sim \mathcal{N}(0, \sigma_p^2),
+\epsilon_{p,i,j} \sim \mathcal{N}(0, \sigma_p^2),
 \qquad
-\tilde y_{p,k'}(c + h) \sim \text{Poisson}\big(\lambda_{p,k'}(c + h)\big).
+\tilde y_{p,i}(c + h) \sim \text{Poisson}\big(\lambda_{p,i}(c + h)\big).
 $$
 
-$\sigma_p$ is set as for `persistence`, from the weekly changes in $\log(1 + \hat y_p)$ over the 8 weeks up to $c$, with $\hat y_p(w) = Y_{p,v}(w) G_k$ the point nowcast.
-Forecasts are kept at least the known onsets.
-Counts reported by a later release $T$, $m$ weeks after $T_v$, are $Y_{p,v}(w) + \text{Binomial}\big(\max(B, 0),\ q\big) + \min(B, 0)$, with $B = C_{p,k'}(w) - Y_{p,v}(w)$ and $q = (G_k / G_{k+m} - 1)/(G_k - 1)$, the share of the growth still to come that arrives by $T$.
+$\sigma_p$ is set as for `persistence`, from $\log\{1 + Y_{p,v}(w) G_k\}$ over the 8 weeks up to $c$.
+Counts reported by a later release $T$ are $Y_{p,v}(w) + \text{Binomial}\big(\max(D, 0),\ q\big) + \min(D, 0)$, with $D = C_{p,i}(w) - Y_{p,v}(w)$, $q = (G_k / G_{k'} - 1)/(G_k - 1)$ and $k'$ the age of $w$ at $T$.
 
 [^bnc-paper]: Johnson KE, Tang M, Tyszka E, Nemcova B, Wolffram D, Ergas R, Reich NG, Funk S, Mellor J, Bracher J, Abbott S (2025). Baseline nowcasting methods for handling delays in epidemiological data. Wellcome Open Research. [doi:10.12688/wellcomeopenres.25027.2](https://doi.org/10.12688/wellcomeopenres.25027.2).
 [^bnc-package]: Johnson KE, Tyszka E, Bracher J, Funk S, Abbott S (2025). baselinenowcast: Methods for baseline nowcasting right-truncated epidemiological data. <https://github.com/epinowcast/baselinenowcast/>.

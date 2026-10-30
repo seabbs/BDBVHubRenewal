@@ -45,22 +45,21 @@ walk forward from each nowcast draw.
 
 **Nowcast.** The totals of each onset week at each release form a
 cumulative reporting triangle with onset week as reference and release
-as report date. With few releases it is a band with no complete row, so
-the chain ladder is in development-factor form: releases a week apart
-give the growth $f_k$ of weeks $k$ weeks old (`release_growth`), own for
-places with at least `own_per_week` cases a week and pooled otherwise.
-A week $k$ weeks old gains a negative binomial count with mean
-$Y (\prod_{j \ge k} f_j - 1)$ and size $\phi_k$ from nowcasts made at
-earlier releases (`retrospective_release_errors`, `release_sizes`), as
-baselinenowcast does.
+as report date, aged by release date. With few releases it is a band
+with no complete row, so the development factors are fitted to the
+growth between consecutive releases (`release_factors`), own for places
+with at least `own_per_week` cases a week and pooled otherwise. The
+change still to come is Skellam (`nowcast_draws`), with its spread fitted
+to nowcasts made at earlier releases (`retrospective_release_errors`,
+`fit_skellam_spread`), so totals can be revised down. Totals are floored
+at zero.
 
 **Forecast.** Each sample starts from its own nowcast of the latest week,
 $\log\{1 + C_p(c)\}$, and follows the same random walk as `Persistence`
 (`random_walk`), with $\sigma$ from the weekly changes of the place's
 point nowcast (`walk_spreads`), pooled below `low_count` cases a week.
-Later weeks are at least the known onsets.
 
-Without two releases a week apart, it is `Persistence`.
+With one release, it is `Persistence`.
 """
 
 from __future__ import annotations
