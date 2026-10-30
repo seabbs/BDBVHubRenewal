@@ -170,3 +170,21 @@ def test_check_samples_rejects_unrequested_as_of(task) -> None:  # type: ignore[
     extra = samples.assign(as_of="2026-10-24")
     with pytest.raises(ValueError, match="as_of"):
         check_samples(pd.concat([samples.assign(as_of=np.nan), extra]), task)
+
+
+def test_low_count_places_take_the_pooled_spread() -> None:
+    # Places with at least `own_per_week` cases a week keep their own
+    # spread. The rest take the spread of the pooled weekly changes of
+    # those places, as persistencenow pools its steps.
+    big = np.array([100.0, 120, 90, 130, 80, 140, 70, 150])
+    calm = np.array([60.0, 61, 62, 63, 64, 65, 66, 67])
+    small = np.array([0.0, 9, 0, 9, 0, 9, 0, 9])
+    model = Persistence(own_per_week=50.0)
+    sds = model._spreads([big, calm, small])
+    assert sds[0] == pytest.approx(model._spread(big))
+    assert sds[1] == pytest.approx(model._spread(calm))
+    pooled = np.r_[np.diff(np.log1p(big)), np.diff(np.log1p(calm))]
+    assert sds[2] == pytest.approx(np.std(pooled, ddof=1))
+    # With no place above the limit, each keeps its own.
+    alone = model._spreads([small])
+    assert alone[0] == pytest.approx(model._spread(small))
