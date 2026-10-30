@@ -96,6 +96,7 @@ __all__ = [
     "nowcast_draws",
     "random_walk",
     "release_complete_weeks",
+    "release_cutoff",
     "release_factors",
     "release_shares",
     "release_week",
@@ -934,11 +935,28 @@ def _daily_totals(
     return total.groupby(rows["onset_date"].astype(str)).sum().sort_index()
 
 
-def _cutoff(daily: pd.DataFrame, release: str) -> dt.date:
-    """Return a release's data cut-off, its latest onset day."""
-    return as_date(
-        str(daily.loc[daily["vintage"] == release, "onset_date"].max())
-    )
+def release_cutoff(daily: pd.DataFrame, release: str) -> dt.date:
+    """Return a release's data cut-off.
+
+    The `cutoff` column where the data state it, as reconstructed and
+    simulated releases do, else the release's latest onset day.
+
+    Parameters
+    ----------
+    daily : pandas.DataFrame
+        Daily onsets by release (`ForecastTask.daily_history`).
+    release : str
+        The release date.
+
+    Returns
+    -------
+    datetime.date
+        The cut-off.
+    """
+    rows = daily.loc[daily["vintage"] == release]
+    if "cutoff" in rows.columns and rows["cutoff"].notna().any():
+        return as_date(str(rows["cutoff"].dropna().iloc[0]))
+    return as_date(str(rows["onset_date"].max()))
 
 
 def daily_growth(
@@ -985,7 +1003,7 @@ def daily_growth(
     releases = sorted(str(v) for v in daily["vintage"].unique() if v <= vintage)
     design, logs, weights = [], [], []
     for a, b in itertools.pairwise(releases):
-        ca, cb = _cutoff(daily, a), _cutoff(daily, b)
+        ca, cb = release_cutoff(daily, a), release_cutoff(daily, b)
         old, new = (
             _daily_totals(daily, a, location),
             _daily_totals(daily, b, location),
@@ -1058,7 +1076,7 @@ class PersistenceNowDaily(PersistenceNow):
         release = str(
             max(v for v in daily["vintage"].unique() if v <= task.vintage)
         )
-        cut = _cutoff(daily, release)
+        cut = release_cutoff(daily, release)
         latest = cut + dt.timedelta(days=(5 - cut.weekday()) % 7)
         weeks = list(task.target_end_dates)
         ends = pd.date_range(
@@ -1149,7 +1167,7 @@ class PersistenceNowDaily(PersistenceNow):
             if fit is None:
                 continue
             g = np.r_[fit[0], 1.0]
-            cr = _cutoff(daily, r)
+            cr = release_cutoff(daily, r)
             top = cr + dt.timedelta(days=(5 - cr.weekday()) % 7)
             for loc in task.locations:
                 then = _daily_totals(daily, r, loc)
