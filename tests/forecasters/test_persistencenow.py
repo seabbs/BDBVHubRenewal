@@ -15,7 +15,7 @@ from bdbvhubrenewal.forecasters import (
 )
 from bdbvhubrenewal.forecasters.persistence import (
     nowcast_draws,
-    release_growth,
+    release_factors,
 )
 
 
@@ -54,26 +54,25 @@ def test_registry_has_persistencenow_and_not_the_lag_variant() -> None:
     assert isinstance(get_model("persistencenow"), PersistenceNow)
 
 
-def test_nowcast_draws_add_negative_binomial_counts_per_place() -> None:
+def test_nowcast_draws_add_skellam_increments_per_place() -> None:
     rng = np.random.default_rng(1)
-    # Two places, four weeks, each with its own ratio and size.
-    observed = np.array([[0.0, 40.0, 40.0, 40.0], [0.0, 0.0, 10.0, 10.0]])
-    ratio = np.array([[1.0, 0.0, 0.25, 1.5], [1.0, 1.0, 1.0, 1.0]])
-    size = np.array([[5.0, 5.0, np.inf, 5.0], [5.0, 5.0, 5.0, 5.0]])
-    draws = nowcast_draws(observed, observed * ratio, size, 20000, rng)
-    assert draws.shape == (20000, 2, 4)
-    # Without revision noise, never below the published count.
-    assert (draws >= observed).all()
-    assert (draws[:, 0, :2] == observed[0, :2]).all()
-    added = (draws - observed)[:, 0, 2:]
-    # The point nowcast is the mean of what is added: Poisson with an
-    # infinite size, overdispersed otherwise.
-    assert np.allclose(added.mean(axis=0), [10, 60], rtol=0.05)
-    assert added[:, 0].var() == pytest.approx(10, rel=0.1)
-    assert added[:, 1].var() == pytest.approx(60 + 60**2 / 5, rel=0.1)
+    # Two places, three weeks: growth, none, and a revision down.
+    observed = np.array([[40.0, 40.0, 5.0], [10.0, 0.0, 10.0]])
+    mean = np.array([[20.0, 0.0, -3.0], [5.0, 0.0, 0.0]])
+    spread = np.array([[4.0, 0.0, 2.0], [1.0, 0.0, 3.0]])
+    draws = nowcast_draws(observed, mean, spread, 40000, rng)
+    assert draws.shape == (40000, 2, 3)
+    added = draws - observed
+    # The increment is Skellam: mean as given, variance |mean| + 2 spread.
+    assert added[:, 0, 0].mean() == pytest.approx(20, rel=0.05)
+    assert added[:, 0, 0].var() == pytest.approx(20 + 8, rel=0.1)
+    assert (added[:, 0, 1] == 0).all()
+    # Revisions down are allowed, and totals are floored at zero only.
+    assert (added[:, 0, 2] < 0).mean() > 0.5
+    assert (draws >= 0).all()
+    assert (draws[:, 0, 2] == 0).any()
     # Places are drawn independently.
-    other = (draws - observed)[:, 1, 3]
-    assert abs(np.corrcoef(added[:, 1], other)[0, 1]) < 0.05
+    assert abs(np.corrcoef(added[:, 0, 0], added[:, 1, 0])[0, 1]) < 0.05
 
 
 def test_persistencenow_output(task: ForecastTask) -> None:
@@ -143,16 +142,18 @@ def test_persistencenow_predicts_counts_as_reported_later(
             )
         ]
     )
-    # Between the published count and the final count.
-    assert (both["value"] >= floor).all()
-    assert (both["value"] <= both["value_final"]).all()
+    # Between the published count and the final count, either way round,
+    # as totals can be revised down.
+    low = np.minimum(floor, both["value_final"])
+    high = np.maximum(floor, both["value_final"])
+    assert ((both["value"] >= low) & (both["value"] <= high)).all()
     # The week ending 10-10, one week old: by 10-24 it gains the share of
-    # its remaining growth that the releases give for one more week.
+    # its remaining growth that the factors give for one more week.
     nat = both.loc[both["target_end_date"] == "2026-10-10"]
     by_sample = nat.groupby("sample")[["value", "value_final"]].sum()
     published = sum(seen.get((loc, "2026-10-10"), 0) for loc in task.locations)
-    num, den = release_growth(task.target_history, task.vintage)
-    f = np.where(den > 0, num / np.maximum(den, 1), 1.0)
+    f = release_factors(task.target_history, task.vintage)
+    assert f is not None
     q = (f[1] - 1) / (np.prod(f[1:]) - 1)
     expected = published + (by_sample["value_final"].median() - published) * q
     assert by_sample["value"].median() == pytest.approx(expected, rel=0.1)
@@ -249,22 +250,29 @@ def test_the_walk_starts_from_each_trajectory_latest_nowcast(
     assert np.corrcoef(np.log1p(latest), np.log1p(ahead))[0, 1] > 0.5
 
 
-def test_release_growth_from_weekly_release_pairs() -> None:
-    # Two releases a week apart: a week 1 week old grows from 10 to 15 and
-    # one 0 weeks old from 4 to 8. A release 3 weeks earlier is not paired.
+def test_release_factors_index_ages_by_release_date() -> None:
+    # Ages are whole weeks from a week's end to the release date. A week
+    # ending after the release date (10-10 in the Friday 10-09 release) is
+    # partial and left out. Week 10-03 grows from 5 at 10-09 (0 weeks old)
+    # to 15 at 10-17 (2 weeks old): f_0 f_1 = 3. Week 10-17 grows from 8 to
+    # 16 (f_0 = 2) and week 10-10 from 20 to 30 (f_1 = 1.5).
     rows = pd.DataFrame(
         {
-            "vintage": ["2026-09-26", "2026-10-17", "2026-10-17", "2026-10-24",
+            "vintage": ["2026-10-09", "2026-10-09", "2026-10-17",
+                        "2026-10-17", "2026-10-17", "2026-10-24",
                         "2026-10-24"],
             "location": "CD-IT",
-            "target_end_date": ["2026-09-26", "2026-10-10", "2026-10-17",
-                                "2026-10-10", "2026-10-17"],
-            "total": [3, 10, 4, 15, 8],
+            "target_end_date": ["2026-10-03", "2026-10-10", "2026-10-03",
+                                "2026-10-10", "2026-10-17", "2026-10-10",
+                                "2026-10-17"],
+            "total": [5, 99, 15, 20, 8, 30, 16],
         }
     )  # fmt: skip
-    num, den = release_growth(rows, "2026-10-24", max_weeks=3)
-    assert num.tolist() == [8, 15, 0, 0]
-    assert den.tolist() == [4, 10, 0, 0]
+    f = release_factors(rows, "2026-10-24", max_weeks=3)
+    assert f is not None
+    assert f == pytest.approx([2.0, 1.5, 1.0, 1.0])
+    # One release alone gives no factors.
+    assert release_factors(rows, "2026-10-09") is None
 
 
 def test_the_release_nowcast_lifts_weeks_one_and_two_weeks_old(
@@ -292,10 +300,28 @@ def test_the_uncertainty_is_learnt_from_past_releases(
     assert np.isfinite(latest).all()
 
 
-def test_without_two_weekly_releases_it_is_persistence(
+def test_with_one_release_it_is_persistence(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
-    task = _task(target, delays, "2026-10-09")
+    task = _task(target, delays, "2026-08-18")
     pd.testing.assert_frame_equal(
         PersistenceNow().forecast(task), Persistence().forecast(task)
     )
+
+
+def test_the_skellam_spread_is_fitted_to_retrospective_errors() -> None:
+    from bdbvhubrenewal.forecasters.persistence import fit_skellam_spread
+
+    # Increments with mean m and extra spread 0.2 Y on each side.
+    rng = np.random.default_rng(2)
+    y = rng.integers(20, 200, size=(400, 2)).astype(float)
+    mean = np.c_[0.3 * y[:, 0], -0.02 * y[:, 1]]
+    lam = 0.2 * y
+    obs = rng.poisson(np.maximum(mean, 0) + lam) - rng.poisson(
+        np.maximum(-mean, 0) + lam
+    )
+    rates = fit_skellam_spread(obs.astype(float), mean, y)
+    assert rates == pytest.approx([0.2, 0.2], rel=0.25)
+    # A horizon with too few points takes the rate fitted to all of them.
+    few = fit_skellam_spread(obs[:2].astype(float), mean[:2], y[:2])
+    assert few[0] == few[1]
