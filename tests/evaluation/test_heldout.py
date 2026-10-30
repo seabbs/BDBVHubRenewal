@@ -102,7 +102,11 @@ def test_heldout_scores_each_forecast_under_its_model(
     assert set(scores["truth_vintage"]) == {"2026-10-24"}
     assert set(scores["chosen_model"]) == {"persistence"}
     # Both baselines are scored on every held-out vintage.
-    assert set(scores["model"]) == {"persistence", "persistencenow"}
+    assert set(scores["model"]) == {
+        "persistence",
+        "persistencenow",
+        "persistdaily",
+    }
     assert set(scores["kind"]) == {"real"}
     record = yaml.safe_load((out / "heldout-run.yml").read_text())
     assert len(record["model_choice_sha256"]) == 64
@@ -130,7 +134,11 @@ def test_heldout_scores_both_baselines_beside_a_fitted_choice(
         out_dir=tmp_path,
         fit=False,
     )
-    assert set(scores["model"]) == {"persistence", "persistencenow"}
+    assert set(scores["model"]) == {
+        "persistence",
+        "persistencenow",
+        "persistdaily",
+    }
     assert set(scores["chosen_model"]) == {"renewal"}
 
 
@@ -164,6 +172,7 @@ def test_heldout_also_runs_the_other_variants(
         assert set(scores["model"]) == {
             "persistence",
             "persistencenow",
+            "persistdaily",
             "shadow",
         }
         # Each score still records the model chosen at the time.
@@ -189,10 +198,16 @@ def test_heldout_keeps_and_rescores_other_models_forecasts(
     scores = run_heldout(
         target, delays, config, evaluate_holdout=True, out_dir=tmp_path
     )
-    assert set(scores["model"]) == {"persistence", "persistencenow", "other"}
+    assert set(scores["model"]) == {
+        "persistence",
+        "persistencenow",
+        "persistdaily",
+        "other",
+    }
     assert set(pd.read_csv(path)["model"]) == {
         "persistence",
         "persistencenow",
+        "persistdaily",
         "other",
     }
 
@@ -243,7 +258,12 @@ def test_heldout_without_fits_reads_committed_forecasts(
     finally:
         _REGISTRY.pop("slowfit")
     assert not fc.empty
-    assert set(scores["model"]) == {"persistence", "persistencenow", "slowfit"}
+    assert set(scores["model"]) == {
+        "persistence",
+        "persistencenow",
+        "persistdaily",
+        "slowfit",
+    }
     assert set(scores["chosen_model"]) == {"slowfit"}
 
 

@@ -87,8 +87,10 @@ from bdbvhubrenewal.forecasters.base import (
 __all__ = [
     "Persistence",
     "PersistenceNow",
+    "PersistenceNowDaily",
     "completeness_lag",
     "cutoff_week",
+    "daily_growth",
     "fit_skellam_spread",
     "last_complete_week",
     "nowcast_draws",
@@ -723,7 +725,8 @@ class _Nowcast:
     seen: np.ndarray
     mean: np.ndarray
     spread: np.ndarray
-    to_final: list[np.ndarray]
+    later: dict[str, np.ndarray]
+    stretch: np.ndarray
     point: np.ndarray
 
 
@@ -801,9 +804,22 @@ class PersistenceNow(Persistence):
                 rates[age[young]] * seen[p, : last + 1][young]
             )
         point = np.maximum(seen[:, : last + 1] + mean[:, : last + 1], 0.0)
+        cap = self.max_weeks + 1
+        k = np.array([min(max(_age(task.vintage, w), 0), cap) for w in grid])
+        later = {}
+        for date in task.report_by:
+            k2 = np.array([min(max(_age(date, w), 0), cap) for w in grid])
+            g = np.array(to_final)
+            total = g[:, k] - 1
+            later[date] = np.where(
+                np.abs(total) > 1e-12,
+                (g[:, k] / g[:, k2] - 1) / np.where(total == 0, 1.0, total),
+                1.0,
+            )
         return _Nowcast(
-            weeks, grid, cols, last, seen, mean, spread, to_final, point
-        )
+            weeks, grid, cols, last, seen, mean, spread, later,
+            np.ones(seen.shape), point,
+        )  # fmt: skip
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return random walk trajectories from a nowcast for a task.
@@ -827,6 +843,7 @@ class PersistenceNow(Persistence):
         rng = task.rng()
         n = task.n_samples
         totals = nowcast_draws(seen, prep.mean, prep.spread, n, rng)
+        totals = np.round(totals * prep.stretch[None])
         ahead = len(grid) - 1 - last
         # The walk's spread comes from the point nowcast; each draw starts
         # from its own nowcast of the latest week.
@@ -837,25 +854,13 @@ class PersistenceNow(Persistence):
             walk = random_walk(np.log1p(totals[:, p, last]), sd, ahead, rng)
             totals[:, p, last + 1 :] = walk
         final, as_of = [], []
-        cap = self.max_weeks + 1
         for p, loc in enumerate(task.locations):
             final.append(_frame(loc, weeks, totals[:, p, cols]))
             diff = totals[:, p] - seen[p]
-            g = prep.to_final[p]
             for date in task.report_by:
                 # The share of the change still to come that arrives by
-                # `date`, from the same development factors.
-                k = np.array(
-                    [min(max(_age(task.vintage, w), 0), cap) for w in grid]
-                )
-                k2 = np.array([min(max(_age(date, w), 0), cap) for w in grid])
-                total = g[k] - 1
-                q = np.where(
-                    np.abs(total) > 1e-12,
-                    (g[k] / g[k2] - 1) / np.where(total == 0, 1.0, total),
-                    1.0,
-                )
-                q = np.clip(q, 0, 1)
+                # `date`, from the same growth to final.
+                q = np.clip(prep.later[date][p], 0, 1)
                 up = rng.binomial(np.maximum(diff, 0).astype(np.int64), q)
                 counts = np.maximum(seen[p] + up + np.minimum(diff, 0), 0.0)
                 due = [c for c in cols if grid[c] <= date]
@@ -913,3 +918,266 @@ def release_complete_weeks(
     """
     shares = release_shares(history, vintage)
     return None if shares is None else int(np.argmax(shares >= share))
+
+
+def _daily_totals(
+    daily: pd.DataFrame, release: str, location: str | None = None
+) -> pd.Series:
+    """Return a release's total onsets by day, for a place or the provinces."""
+    rows = daily.loc[daily["vintage"] == release]
+    rows = rows.loc[
+        rows["location"] == location
+        if location is not None
+        else rows["location"] != NATIONAL
+    ]
+    total = rows["observed"] + rows["imputed"]
+    return total.groupby(rows["onset_date"].astype(str)).sum().sort_index()
+
+
+def _cutoff(daily: pd.DataFrame, release: str) -> dt.date:
+    """Return a release's data cut-off, its latest onset day."""
+    return as_date(
+        str(daily.loc[daily["vintage"] == release, "onset_date"].max())
+    )
+
+
+def daily_growth(
+    daily: pd.DataFrame,
+    vintage: str,
+    max_days: int = 84,
+    location: str | None = None,
+) -> tuple[np.ndarray, np.ndarray] | None:
+    r"""Return each daily age's growth to final, from the hub's releases.
+
+    The daily totals by release form a cumulative reporting triangle with
+    onset day as reference and the release's data cut-off $c_r$, its
+    latest onset day, as report date. Onset day $d$ is $a = c_r - d$ days
+    old at release $r$. With $h_a = \log G_a$ the log growth from age $a$
+    to final, and $h_a = 0$ beyond `max_days`, consecutive releases
+    $a < b$ give for each onset day
+
+    $$
+    \log \frac{Y_b(d)}{Y_a(d)} = h_{c_a - d} - h_{c_b - d},
+    $$
+
+    with $Y$ summed over provinces, or for `location`. The $h$ are fitted
+    by least squares weighted by $\sqrt{Y_a(d)}$. Each chain of ages
+    $c_a - d, c_b - d, \dots$ ends beyond `max_days`, so every age with
+    data is identified.
+
+    Parameters
+    ----------
+    daily : pandas.DataFrame
+        Daily onsets by release (`ForecastTask.daily_history`).
+    vintage : str
+        The forecast vintage. Later releases are not used.
+    max_days : int
+        Oldest age, in days, that may still grow.
+    location : str, optional
+        One place. By default the provinces, pooled.
+
+    Returns
+    -------
+    tuple of numpy.ndarray or None
+        $G_a$ for $a = 0, \dots,$ `max_days`, and which ages the data
+        cover, or None with one release.
+    """
+    releases = sorted(str(v) for v in daily["vintage"].unique() if v <= vintage)
+    design, logs, weights = [], [], []
+    for a, b in itertools.pairwise(releases):
+        ca, cb = _cutoff(daily, a), _cutoff(daily, b)
+        old, new = (
+            _daily_totals(daily, a, location),
+            _daily_totals(daily, b, location),
+        )
+        for day, count in old.items():
+            age = (ca - as_date(str(day))).days
+            after = float(new.get(day, 0.0))
+            if age < 0 or age > max_days or count <= 0 or after <= 0:
+                continue
+            row = np.zeros(max_days + 1)
+            row[age] += 1.0
+            later = (cb - as_date(str(day))).days
+            if later <= max_days:
+                row[later] -= 1.0
+            design.append(row)
+            logs.append(np.log(after / float(count)))
+            weights.append(np.sqrt(float(count)))
+    if not design:
+        return None
+    x, w = np.asarray(design), np.asarray(weights)
+    h = np.linalg.lstsq(x * w[:, None], np.asarray(logs) * w, rcond=None)[0]
+    return np.exp(h), x.any(axis=0)
+
+
+@dataclass
+class PersistenceNowDaily(PersistenceNow):
+    """The random walk run forward from a daily nowcast of the recent weeks.
+
+    The hub's daily totals by release are nowcast by onset day
+    (`daily_growth`) and summed to the target weeks. A latest week only
+    partly observed at the data cut-off is scaled by 7 over the days
+    observed. The weekly change still to come is Skellam, with its spread
+    fitted to weekly nowcasts made at earlier releases. Without daily
+    releases, it is `Persistence`.
+
+    Attributes
+    ----------
+    name : str
+        Model name.
+    max_days : int
+        Oldest age, in days, whose total may still change.
+
+    See `PersistenceNow` for `max_weeks` and `own_per_week`.
+    """
+
+    name: str = "persistdaily"
+    max_days: int = 84
+
+    def _growth(
+        self, daily: pd.DataFrame, vintage: str, pooled: np.ndarray, loc: str,
+        big: bool,
+    ) -> np.ndarray:  # fmt: skip
+        """Return a place's growth by age: its own where covered, if big."""
+        g = pooled
+        if big:
+            own = daily_growth(daily, vintage, self.max_days, loc)
+            if own is not None:
+                g = np.where(own[1], own[0], pooled)
+        return np.asarray(np.r_[g, 1.0], dtype=np.float64)
+
+    def _prepare(self, task: ForecastTask) -> _Nowcast | None:
+        """Return the weekly nowcast from the daily one, or None."""
+        daily = task.daily_history
+        if daily is None:
+            return None
+        fit = daily_growth(daily, task.vintage, self.max_days)
+        if fit is None:
+            return None
+        pooled = fit[0]
+        release = str(
+            max(v for v in daily["vintage"].unique() if v <= task.vintage)
+        )
+        cut = _cutoff(daily, release)
+        latest = cut + dt.timedelta(days=(5 - cut.weekday()) % 7)
+        weeks = list(task.target_end_dates)
+        ends = pd.date_range(
+            min(task.target["target_end_date"].min(), weeks[0]),
+            weeks[-1],
+            freq="7D",
+        )
+        grid = [d.date().isoformat() for d in ends]
+        cols = [grid.index(w) for w in weeks]
+        last = grid.index(latest.isoformat())
+        seen = np.array(
+            [
+                task.target.loc[task.target["location"] == loc]
+                .set_index("target_end_date")["total"]
+                .reindex(grid, fill_value=0)
+                .to_numpy(dtype=float)
+                for loc in task.locations
+            ]
+        )
+        cap = self.max_days + 1
+        week_of = {w: j for j, w in enumerate(grid)}
+
+        def week(day: dt.date) -> str:
+            return (
+                day + dt.timedelta(days=(5 - day.weekday()) % 7)
+            ).isoformat()
+
+        obs, mean_r, scale = self._retrospective(daily, task, release, cut)
+        rates = fit_skellam_spread(obs, mean_r, scale)
+        mean = np.zeros(seen.shape)
+        later = {d: np.ones(seen.shape) for d in task.report_by}
+        now_part = {d: np.zeros(seen.shape) for d in task.report_by}
+        stretch = np.ones(seen.shape)
+        observed_days = (cut - (latest - dt.timedelta(days=6))).days + 1
+        stretch[:, last] = 7 / observed_days
+        for p, loc in enumerate(task.locations):
+            big = seen[p, last + 1 - self.window : last + 1].mean() >= (
+                self.own_per_week
+            )
+            g = self._growth(daily, task.vintage, pooled, loc, bool(big))
+            for day, count in _daily_totals(daily, release, loc).items():
+                d = as_date(str(day))
+                j = week_of.get(week(d))
+                if j is None or j > last:
+                    continue
+                age = min((cut - d).days, cap)
+                mean[p, j] += count * (g[age] - 1)
+                for date in task.report_by:
+                    age2 = min(age + (as_date(date) - cut).days, cap)
+                    now_part[date][p, j] += count * (g[age] / g[age2] - 1)
+        for date in task.report_by:
+            later[date] = np.where(
+                np.abs(mean) > 1e-12,
+                now_part[date] / np.where(mean == 0, 1.0, mean),
+                1.0,
+            )
+        horizon = np.clip(last - np.arange(seen.shape[1]), 0, None)
+        spread = np.zeros(seen.shape)
+        young = horizon[: last + 1] < rates.size
+        spread[:, : last + 1][:, young] = (
+            rates[horizon[: last + 1][young]] * seen[:, : last + 1][:, young]
+        )
+        point = np.maximum(
+            (seen[:, : last + 1] + mean[:, : last + 1])
+            * stretch[:, : last + 1],
+            0.0,
+        )
+        return _Nowcast(
+            weeks, grid, cols, last, seen, mean, spread, later, stretch, point
+        )
+
+    def _retrospective(
+        self, daily: pd.DataFrame, task: ForecastTask, release: str,
+        cut: dt.date,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:  # fmt: skip
+        """Compare weekly nowcasts from earlier releases with this one."""
+        cap = self.max_days + 1
+        n_weeks = self.max_weeks + 1
+        rows: tuple[list[np.ndarray], list[np.ndarray], list[np.ndarray]] = (
+            [],
+            [],
+            [],
+        )
+        for r in sorted(
+            str(v) for v in daily["vintage"].unique() if v < release
+        ):
+            fit = daily_growth(daily, r, self.max_days)
+            if fit is None:
+                continue
+            g = np.r_[fit[0], 1.0]
+            cr = _cutoff(daily, r)
+            top = cr + dt.timedelta(days=(5 - cr.weekday()) % 7)
+            for loc in task.locations:
+                then = _daily_totals(daily, r, loc)
+                now = _daily_totals(daily, release, loc)
+                o, m, s = (np.zeros(n_weeks) for _ in range(3))
+                for day, count in then.items():
+                    d = as_date(str(day))
+                    end = d + dt.timedelta(days=(5 - d.weekday()) % 7)
+                    k = (top - end).days // 7
+                    if k >= n_weeks:
+                        continue
+                    a, b = min((cr - d).days, cap), min((cut - d).days, cap)
+                    o[k] += float(now.get(day, 0.0)) - count
+                    m[k] += count * (g[a] / g[b] - 1)
+                    s[k] += count
+                empty = s == 0
+                o[empty] = m[empty] = np.nan
+                for acc, value in zip(rows, (o, m, s), strict=True):
+                    acc.append(value)
+        shape = (len(rows[0]), n_weeks)
+        obs, mean, scale = (
+            np.asarray(a, dtype=np.float64).reshape(shape) for a in rows
+        )
+        return obs, mean, scale
+
+
+register_model(
+    "persistdaily",
+    PersistenceNowDaily,
+    "Persistence carried forward from a daily nowcast of the recent weeks.",
+)
