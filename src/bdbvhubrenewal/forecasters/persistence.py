@@ -39,31 +39,20 @@ published with the vintage), and taking at least the count already
 published for that week.
 There are no such rows when the vintage has no delay data.
 
-`PersistenceNow` (`persistencenow`) nowcasts the recent weeks with the
-baselinenowcast method (`bdbvhubrenewal.data.triangle`), then runs the
-hub baseline forward from each nowcast draw.
+`PersistenceNow` (`persistencenow`) nowcasts the recent weeks with a
+chain ladder on the hub's totals by release, then runs the same random
+walk forward from each nowcast draw.
 
-**Nowcast.** A chain ladder on each place's reporting triangle from the
-hub's delay file, over the last `n_history` onset weeks, gives a delay
-pmf, and past nowcasts of the triangle give a negative binomial size
-$\phi_h$ for each horizon $h$, as in baselinenowcast. Places with at
-least `own_per_week` delays a week use their own; the rest borrow those
-of the triangle pooled over places. Each onset week of the triangle, the
-latest included, has a share $s_p(w)$ of its point nowcast already in
-the delay file (`bdbvhubrenewal.data.triangle.week_shares`), and its
-published total
-$Y_p(w)$, known plus imputed, gains $U_p(w) \sim \text{NegBin}$ with
-mean $Y_p(w) \{1 - s_p(w)\} / s_p(w)$ (`nowcast_means`) and size
-$\phi_h$. The hub re-imputes missing onsets at each vintage, so each
-place also adds a revision $E_p(w) = A - B$, with $A, B \sim
-\text{Poisson}(\kappa I_p(w) / 2)$, $I_p(w)$ its imputed count and
-$\kappa$ from past revisions (`revision_variance`), and
-
-$$
-C_p(w) = \max\{Y_p(w) + U_p(w) + E_p(w),\ K_p(w)\},
-$$
-
-with $K_p(w)$ the known onsets.
+**Nowcast.** The totals of each onset week at each release form a
+cumulative reporting triangle with onset week as reference and release
+as report date. With few releases it is a band with no complete row, so
+the chain ladder is in development-factor form: releases a week apart
+give the growth $f_k$ of weeks $k$ weeks old (`release_growth`), own for
+places with at least `own_per_week` cases a week and pooled otherwise.
+A week $k$ weeks old gains a negative binomial count with mean
+$Y (\prod_{j \ge k} f_j - 1)$ and size $\phi_k$ from nowcasts made at
+earlier releases (`retrospective_release_errors`, `release_sizes`), as
+baselinenowcast does.
 
 **Forecast.** Each sample starts from its own nowcast of the latest week,
 $\log\{1 + C_p(c)\}$, and follows the same random walk as `Persistence`
@@ -71,9 +60,7 @@ $\log\{1 + C_p(c)\}$, and follows the same random walk as `Persistence`
 point nowcast (`walk_spreads`), pooled below `low_count` cases a week.
 Later weeks are at least the known onsets.
 
-If the delay data have no complete onset week or fewer than `min_delays`
-cases in the last `n_history` weeks, or give fewer than `min_retro` past
-nowcasts, it is `Persistence`.
+Without two releases a week apart, it is `Persistence`.
 """
 
 from __future__ import annotations
