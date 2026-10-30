@@ -20,6 +20,7 @@ from bdbvhubrenewal.data.reconstruct import (
 )
 from bdbvhubrenewal.data.simulate import (
     SimulationSettings,
+    release_dates,
     simulate_outbreak,
 )
 
@@ -306,3 +307,47 @@ def test_unused_options_leave_the_default_outbreak_unchanged() -> None:
     assert len(outbreak.cases) == 1797
     target, _ = outbreak.vintage("2026-10-28")
     assert int(target["imputed"].sum()) == 488
+
+
+def test_release_dates_are_the_real_weekdays() -> None:
+    days = release_dates("2026-10-05", "2026-10-11")
+    assert days == ["2026-10-06", "2026-10-07", "2026-10-09", "2026-10-10"]
+
+
+@pytest.mark.parametrize("cutoff_lag", [0, 2])
+def test_simulated_daily_vintage_sums_to_weekly(
+    outbreak,
+    cutoff_lag: int,  # type: ignore[no-untyped-def]
+) -> None:
+    day = "2026-09-04"
+    weekly, _ = outbreak.vintage(day, cutoff_lag=cutoff_lag)
+    daily = outbreak.daily_vintage(day, cutoff_lag=cutoff_lag)
+    assert set(daily["kind"]) == {"simulated"}
+    cut = (pd.Timestamp(day) - pd.Timedelta(days=cutoff_lag)).date()
+    assert daily["cutoff"].iloc[0] == cut.isoformat()
+    assert daily["onset_date"].max() <= daily["cutoff"].iloc[0]
+    week = daily["onset_date"].map(lambda x: epiweek_end(x).isoformat())
+    got = (
+        daily.assign(target_end_date=week)
+        .groupby(["location", "target_end_date"])[["observed", "imputed"]]
+        .sum()
+    )
+    want = weekly.set_index(["location", "target_end_date"])[
+        ["observed", "imputed"]
+    ]
+    want = want.loc[want.sum(axis=1) > 0]
+    pd.testing.assert_frame_equal(
+        got.sort_index(), want.sort_index(), check_dtype=False
+    )
+
+
+def test_simulated_cutoffs_follow_weekday(outbreak) -> None:  # type: ignore[no-untyped-def]
+    dates = release_dates("2026-09-01", "2026-09-05")
+    out = outbreak.daily_vintages(dates, cutoff_lags={1: 0, 2: 1, 4: 2, 5: 1})
+    cut = out.groupby("vintage")["cutoff"].first().to_dict()
+    assert cut == {
+        "2026-09-01": "2026-09-01",
+        "2026-09-02": "2026-09-01",
+        "2026-09-04": "2026-09-02",
+        "2026-09-05": "2026-09-04",
+    }
