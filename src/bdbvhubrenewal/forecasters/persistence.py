@@ -59,11 +59,10 @@ $$
 
 with $K_p(w)$ the known onsets.
 
-**Forecast.** Each sample is centred on the mean of $\log\{1 + C_p(w)\}$
-over the latest `centre_weeks` weeks, weighted by $s_p(w)$, so a week
-with few cases reported yet counts little. From there it follows the
-COVID-19 Forecast Hub baseline on the log scale (`baseline_walk`): its
-median stays at the centre, and each weekly step is drawn from the past
+**Forecast.** Each sample starts from its own nowcast of the latest week,
+$\log\{1 + C_p(c)\}$. From there it follows the COVID-19 Forecast Hub
+baseline on the log scale (`baseline_walk`): its median stays at that
+start, and each weekly step is drawn from the past
 weekly changes of the place's point nowcast, and their negatives, as
 BVDOutbreakSize does. Places without their own delay borrow the steps of
 those with one. A place with fewer than `low_count` cases a week over the
@@ -91,7 +90,6 @@ from bdbvhubrenewal.data.delays import DEFAULT_MAX_DELAY, EmpiricalDelayModel
 from bdbvhubrenewal.data.reconstruct import PUBLICATION_LAG_DAYS
 from bdbvhubrenewal.data.triangle import (
     delay_pmf,
-    first_publication_delays,
     fit_nb_size,
     reporting_triangle,
     retrospective_errors,
@@ -571,10 +569,6 @@ class PersistenceNow(Persistence):
     low_count : float
         Below this mean count a week over the last `window` weeks, a place
         walks the log of its mean as a Poisson rate.
-    centre_weeks : int
-        Latest nowcast weeks the walk is centred on, weighted by the share
-        of each reported, so a week with few cases reported yet counts
-        little.
 
     See `Persistence` for `window`, the weeks of past changes.
     """
@@ -585,7 +579,6 @@ class PersistenceNow(Persistence):
     min_retro: int = 3
     min_delays: int = 50
     own_per_week: float = 50.0
-    centre_weeks: int = 3
     low_count: float = 10.0
     lag_tail: float = 0.1
     step_pool: np.ndarray | None = None
@@ -600,16 +593,13 @@ class PersistenceNow(Persistence):
     ) -> tuple[list[str], np.ndarray]:
         """Return the triangle's weeks and counts, pooled or for a place.
 
-        Delays run to each case's first publication, over every delay file
-        up to the task's (`first_publication_delays`).
+        Delays are as reported in the task's delay file. Onsets the hub
+        fills in later for cases it had imputed keep their reported delay,
+        as they were already in the totals.
         """
         assert task.delays is not None
         vintage = str(task.delays["vintage"].max())
-        files = task.delays
-        if task.delay_history is not None:
-            past = task.delay_history["vintage"] < vintage
-            files = pd.concat([task.delay_history.loc[past], task.delays])
-        rows = first_publication_delays(files, vintage, self.max_delay)
+        rows = task.delays.loc[task.delays["vintage"] == vintage]
         if location is not None:
             rows = rows.loc[rows["location"] == location]
         return reporting_triangle(rows, vintage, self.max_delay)
@@ -777,7 +767,6 @@ class PersistenceNow(Persistence):
             if self.step_pool is None
             else self.step_pool
         )
-        span = slice(last + 1 - self.centre_weeks, last + 1)
         past = slice(last + 1 - self.window, last + 1)
         for p in range(len(task.locations)):
             mine = steps[p] if own[p] or pooled_steps is None else pooled_steps
@@ -788,8 +777,7 @@ class PersistenceNow(Persistence):
                 centre = np.log(np.maximum(mean, 1e-9))
                 walk = baseline_walk(centre, mine, ahead, rng, rate=True)
             else:
-                weight = share[p, span]
-                centre = np.log1p(totals[:, p, span]) @ weight / weight.sum()
+                centre = np.log1p(totals[:, p, last])
                 walk = baseline_walk(centre, mine, ahead, rng)
             totals[:, p, last + 1 :] = np.maximum(walk, known[p, last + 1 :])
         final, as_of = [], []
