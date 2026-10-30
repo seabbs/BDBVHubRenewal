@@ -47,6 +47,7 @@ from bdbvhubrenewal.data import (
     coherence_summary,
     delays_for_vintage,
     fetch_hub_data,
+    load_daily,
     load_daily_zones,
     load_delays,
     load_health_zones,
@@ -502,7 +503,8 @@ def _task(args: argparse.Namespace) -> tuple[ForecastTask, list[str]]:
     vintage = _vintage([str(v) for v in real["vintage"].unique()], args.vintage)
     rows = real.loc[real["vintage"] == vintage]
     delays, note = delays_for_vintage(delays, vintage)
-    task = bt.make_tasks(rows, delays, config, history=real)[0]
+    daily = load_daily(args.data)
+    task = bt.make_tasks(rows, delays, config, history=real, daily=daily)[0]
     return task, [note] if note else []
 
 
@@ -582,6 +584,7 @@ def _backtest(args: argparse.Namespace) -> int:
                 out_dir=results,
                 models=names,
                 fit=not args.no_fit,
+                daily=load_daily(args.data),
             )
         except HeldOutError as err:
             print(f"ERROR: {err}", file=sys.stderr)
@@ -610,6 +613,7 @@ def _backtest(args: argparse.Namespace) -> int:
                 delays,
                 config,
                 include_reconstructed=not args.no_reconstructed,
+                daily=load_daily(args.data),
             )
         mine = bt.shard_tasks(bt.order_tasks(tasks), index, count)
         bt.run_forecasts(models, mine, args.cache)
@@ -673,6 +677,7 @@ def _backtest(args: argparse.Namespace) -> int:
         include_reconstructed=not args.no_reconstructed,
         cache=args.cache,
         fits=fits,
+        daily=load_daily(args.data),
     )
     _write_fits(fits, results / "backtest-fits.csv")
     by_truth = bt.score_by_truth_vintage(

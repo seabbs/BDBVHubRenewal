@@ -203,6 +203,7 @@ def run_heldout(
     out_dir: Path | str = "results",
     models: Sequence[str] = (),
     fit: bool = True,
+    daily: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Forecast and score every held-out vintage under its chosen model.
 
@@ -231,6 +232,8 @@ def run_heldout(
         Run fitted models. If False, as in the docs build, fitted models
         are not run, even when chosen: their forecasts come only from the
         existing `heldout-forecasts.csv.gz`, and are scored again.
+    daily : pandas.DataFrame, optional
+        Daily onsets by release, as for `make_tasks`.
 
     Returns
     -------
@@ -270,7 +273,9 @@ def run_heldout(
         rows = real.loc[real["vintage"] == row.vintage]
         fc = run_forecasts(
             [get_model(n) for n in names],
-            make_tasks(rows, delays, config, real_vintages(real), real),
+            make_tasks(
+                rows, delays, config, real_vintages(real), real, daily=daily
+            ),
         )
         fc.insert(1, "chosen_model", row.model)
         frames.append(fc)

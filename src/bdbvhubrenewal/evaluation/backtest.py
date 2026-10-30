@@ -309,6 +309,7 @@ def make_tasks(
     config: BacktestConfig,
     report_by: Sequence[str] = (),
     history: pd.DataFrame | None = None,
+    daily: pd.DataFrame | None = None,
 ) -> list[ForecastTask]:
     """Build one task per vintage in a target table.
 
@@ -329,6 +330,11 @@ def make_tasks(
     history : pandas.DataFrame, optional
         Target rows to take each task's `target_history` from. Defaults
         to `target`.
+    daily : pandas.DataFrame, optional
+        Daily onsets by release, with `vintage`, `location`, `onset_date`,
+        `observed` and `imputed` columns, and optionally `kind`. Each task
+        gets the rows of its kind on or before its vintage as
+        `daily_history`.
 
     Returns
     -------
@@ -366,6 +372,7 @@ def make_tasks(
                 delays=dly,
                 delay_history=history,
                 target_history=past_target if not past_target.empty else None,
+                daily_history=_daily_for(daily, str(kind), str(vintage)),
                 locations=forecast_locations(rows),
                 target_end_dates=forecast_weeks(ref, config),
                 n_samples=config.n_samples,
@@ -767,12 +774,28 @@ def truth_changes(
     ).reset_index(drop=True)
 
 
+def _daily_for(
+    daily: pd.DataFrame | None, kind: str, vintage: str
+) -> pd.DataFrame | None:
+    """Return the daily releases of a kind on or before a vintage, or None."""
+    if daily is None:
+        return None
+    rows = daily
+    if "kind" in rows.columns:
+        rows = rows.loc[rows["kind"] == kind]
+    elif kind != "real":
+        return None
+    rows = rows.loc[rows["vintage"] <= vintage]
+    return rows.reset_index(drop=True) if not rows.empty else None
+
+
 def development_tasks(
     target: pd.DataFrame,
     delays: pd.DataFrame,
     config: BacktestConfig,
     *,
     include_reconstructed: bool = True,
+    daily: pd.DataFrame | None = None,
 ) -> list[ForecastTask]:
     """Build the development tasks: real and reconstructed, not held out.
 
@@ -786,6 +809,11 @@ def development_tasks(
         Settings.
     include_reconstructed : bool
         Whether to add reconstructed vintages.
+    daily : pandas.DataFrame, optional
+        Daily onsets by release, with `vintage`, `location`, `onset_date`,
+        `observed` and `imputed` columns, and optionally `kind`. Real tasks
+        get the rows of its kind on or before its vintage as
+        `daily_history`.
 
     Returns
     -------
@@ -812,7 +840,9 @@ def development_tasks(
     all_delays = pd.concat(dly_parts, ignore_index=True)
     return [
         t
-        for t in make_tasks(data, all_delays, config, real_vintages(real))
+        for t in make_tasks(
+            data, all_delays, config, real_vintages(real), daily=daily
+        )
         if not config.is_heldout(t.vintage) and t.vintage < latest
     ]
 
@@ -826,6 +856,7 @@ def run_development(
     include_reconstructed: bool = True,
     cache: Path | str | None = None,
     fits: list[pd.DataFrame] | None = None,
+    daily: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Run the development backtest on real and reconstructed vintages.
 
@@ -849,6 +880,8 @@ def run_development(
         Forecast cache, as for `run_forecasts`.
     fits : list, optional
         Collects fit summaries, as for `run_forecasts`.
+    daily : pandas.DataFrame, optional
+        Daily onsets by release, as for `development_tasks`.
 
     Returns
     -------
@@ -858,7 +891,11 @@ def run_development(
     real = target.loc[target["kind"] == "real"]
     latest = real_vintages(real)[-1]
     tasks = development_tasks(
-        target, delays, config, include_reconstructed=include_reconstructed
+        target,
+        delays,
+        config,
+        include_reconstructed=include_reconstructed,
+        daily=daily,
     )
     forecasts = run_forecasts(models, tasks, cache, fits)
     truth = truth_from_vintage(real, latest)

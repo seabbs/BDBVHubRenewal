@@ -86,6 +86,12 @@ class ForecastTask:
         Target rows of every vintage of this kind on or before `vintage`,
         from which a model can learn how totals are revised. None if there
         are none.
+    daily_history : pandas.DataFrame or None
+        Daily onsets of every release of this kind on or before `vintage`:
+        one row per release, place and onset day with any cases, with
+        columns `vintage` (release date), `location`, `onset_date`,
+        `observed` and `imputed`. A release's data cut-off is its latest
+        onset day. None if there are none.
     """
 
     vintage: str
@@ -101,6 +107,7 @@ class ForecastTask:
     report_by: tuple[str, ...] = ()
     delay_history: pd.DataFrame | None = None
     target_history: pd.DataFrame | None = None
+    daily_history: pd.DataFrame | None = None
 
     def rng(self) -> np.random.Generator:
         """Return a random generator seeded from the task.
