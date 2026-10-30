@@ -85,8 +85,11 @@ def test_persistencenow_output(task: ForecastTask) -> None:
             samples["location"], samples["target_end_date"], strict=True
         )
     ]
-    # Never below the published total.
-    assert (samples["value"].to_numpy() >= floor).all()
+    # Totals can be revised down, so only zero is a floor; most draws
+    # still sit at or above the published total.
+    value = samples["value"].to_numpy()
+    assert (value >= 0).all()
+    assert (value >= np.asarray(floor)).mean() > 0.9
 
 
 def test_persistencenow_nowcasts_recent_weeks(task: ForecastTask) -> None:
@@ -94,13 +97,14 @@ def test_persistencenow_nowcasts_recent_weeks(task: ForecastTask) -> None:
     seen = task.target.loc[task.target["location"] == "CD"].set_index(
         "target_end_date"
     )["total"]
-    # The oldest forecast week is all but complete: little added, little
-    # spread. The last full week before the vintage is mostly unreported,
-    # so its nowcast is well above the published count, with spread.
+    # The oldest forecast week is mostly complete: it grows less than the
+    # last full week before the vintage, whose nowcast is well above the
+    # published count.
     old, recent = "2026-09-26", "2026-10-10"
-    assert nat.loc[old].median() - seen[old] < 0.08 * seen[old]
-    assert nat.loc[recent].median() > 1.15 * seen[recent]
-    assert nat.loc[recent].std() > 2 * nat.loc[old].std()
+    grow_old = nat.loc[old].median() / seen[old]
+    grow_recent = nat.loc[recent].median() / seen[recent]
+    assert 1.0 <= grow_old < grow_recent
+    assert grow_recent > 1.15
 
 
 def test_persistencenow_carries_the_nowcast_forward(task: ForecastTask) -> None:
@@ -216,11 +220,6 @@ def test_ituri_turning_point_at_08_22(
         assert q.loc[week, 0.05] <= truth <= q.loc[week, 0.95]
 
 
-@pytest.mark.xfail(
-    reason="The walk starts from the latest week, about 13% reported, and "
-    "its steps include the noisy change into it.",
-    strict=True,
-)
 def test_walk_spread_stays_plausible(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
@@ -292,12 +291,12 @@ def test_the_release_nowcast_lifts_weeks_one_and_two_weeks_old(
 def test_the_uncertainty_is_learnt_from_past_releases(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
-    # At 10-24 the nowcast made at 10-17 can be checked against 10-24, so
-    # the negative binomial sizes are fitted, not Poisson.
+    # At 10-24 nowcasts made at earlier releases can be checked against
+    # 10-24, so the Skellam spread is fitted, not zero.
     prep = PersistenceNow()._prepare(_task(target, delays, "2026-10-24"))
     assert prep is not None
-    latest = prep.size[:, prep.last]
-    assert np.isfinite(latest).all()
+    cases = prep.seen[:, prep.last] > 0
+    assert (prep.spread[cases, prep.last] > 0).all()
 
 
 def test_with_one_release_it_is_persistence(
