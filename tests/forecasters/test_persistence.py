@@ -188,3 +188,52 @@ def test_low_count_places_take_the_pooled_spread() -> None:
     # With no place above the limit, each keeps its own.
     alone = model._spreads([small])
     assert alone[0] == pytest.approx(model._spread(small))
+
+
+def test_random_walk_is_a_log_scale_walk_with_poisson_draws() -> None:
+    from bdbvhubrenewal.forecasters.persistence import random_walk
+
+    rng = np.random.default_rng(1)
+    start = np.full(4000, np.log1p(100.0))
+    draws = random_walk(start, 0.3, 3, rng)
+    assert draws.shape == (4000, 3)
+    # The median stays at the start and the spread grows with the horizon.
+    med = np.median(draws, axis=0)
+    assert med == pytest.approx([100, 100, 100], rel=0.1)
+    width = np.quantile(draws, 0.95, axis=0) - np.quantile(draws, 0.05, axis=0)
+    assert width[0] < width[1] < width[2]
+    # With no spread it is Poisson around the start.
+    flat = random_walk(start, 0.0, 2, rng)
+    assert flat.var() == pytest.approx(100, rel=0.15)
+
+
+def test_both_baselines_use_the_one_random_walk(
+    task, monkeypatch: pytest.MonkeyPatch  # type: ignore[no-untyped-def]
+) -> None:
+    import bdbvhubrenewal.forecasters.persistence as mod
+
+    calls: list[str] = []
+    walk = mod.random_walk
+
+    def spy(*args, **kwargs):  # type: ignore[no-untyped-def]
+        calls.append("walk")
+        return walk(*args, **kwargs)
+
+    monkeypatch.setattr(mod, "random_walk", spy)
+    mod.Persistence().forecast(task)
+    n = len(calls)
+    assert n > 0
+    mod.PersistenceNow().forecast(task)
+    assert len(calls) > n
+
+
+def test_completeness_from_releases(target: pd.DataFrame) -> None:
+    from bdbvhubrenewal.forecasters.persistence import release_complete_weeks
+
+    # Hub totals of 1 to 3 week old weeks still grow between releases, so
+    # at 10-24 a week is complete only from about three weeks old.
+    weeks = release_complete_weeks(target, "2026-10-24")
+    assert weeks is not None
+    assert 2 <= weeks <= 5
+    # One release has no growth to learn from.
+    assert release_complete_weeks(target, "2026-08-18") is None
