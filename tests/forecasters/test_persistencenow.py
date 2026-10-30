@@ -324,3 +324,88 @@ def test_the_skellam_spread_is_fitted_to_retrospective_errors() -> None:
     # A horizon with too few points takes the rate fitted to all of them.
     few = fit_skellam_spread(obs[:2].astype(float), mean[:2], y[:2])
     assert few[0] == few[1]
+
+
+def _daily_task(
+    target: pd.DataFrame, delays: pd.DataFrame, vintage: str
+) -> ForecastTask:
+    from bdbvhubrenewal.data.tidy import load_daily
+
+    rows = target.loc[target["vintage"] == vintage]
+    real = target.loc[target["kind"] == "real"]
+    return make_tasks(
+        rows, delays, BacktestConfig(seed=3), history=real, daily=load_daily()
+    )[0]
+
+
+def test_daily_growth_is_recovered_from_release_cutoffs() -> None:
+    from bdbvhubrenewal.forecasters.persistence import daily_growth
+
+    # Each onset day ends at 100 cases and has 100 / G(a) at age a days.
+    def g(a: np.ndarray) -> np.ndarray:
+        return np.where(a > 30, 1.0, 1 + 2 * np.exp(-a / 5))
+
+    rows = []
+    for release, cutoff in [("2026-10-09", "2026-10-07"),
+                            ("2026-10-17", "2026-10-16"),
+                            ("2026-10-24", "2026-10-24")]:  # fmt: skip
+        days = pd.date_range("2026-08-01", cutoff)
+        age = (pd.Timestamp(cutoff) - days).days.to_numpy()
+        rows.append(
+            pd.DataFrame(
+                {
+                    "vintage": release,
+                    "location": "CD-IT",
+                    "onset_date": days.strftime("%Y-%m-%d"),
+                    "observed": 100 / g(age),
+                    "imputed": 0.0,
+                }
+            )
+        )
+    fit = daily_growth(pd.concat(rows), "2026-10-24", max_days=40)
+    assert fit is not None
+    growth, _ = fit
+    ages = np.arange(0, 20)
+    assert growth[ages] == pytest.approx(g(ages), rel=0.02)
+    assert daily_growth(rows[0], "2026-10-09") is None
+
+
+def test_the_daily_nowcast_scales_a_partial_latest_week(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    # The 10-17 release has onsets to 10-16, six days of the week ending
+    # 10-17. That week's nowcast covers the missing day by 7/6.
+    from bdbvhubrenewal.forecasters.persistence import PersistenceNowDaily
+
+    task = _daily_task(target, delays, "2026-10-17")
+    samples = PersistenceNowDaily().forecast(task)
+    check_samples(samples, task)
+    nat = _national(samples)
+    seen = task.target.loc[task.target["location"] == "CD"].set_index(
+        "target_end_date"
+    )["total"]
+    assert nat.loc["2026-10-17"].median() > 7 / 6 * seen["2026-10-17"]
+    assert (samples["value"] >= 0).all()
+
+
+def test_the_daily_nowcast_learns_its_spread_from_past_releases(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    from bdbvhubrenewal.forecasters.persistence import PersistenceNowDaily
+
+    prep = PersistenceNowDaily()._prepare(
+        _daily_task(target, delays, "2026-10-24")
+    )
+    assert prep is not None
+    cases = prep.seen[:, prep.last] > 0
+    assert (prep.spread[cases, prep.last] > 0).all()
+
+
+def test_the_daily_nowcast_without_daily_data_is_persistence(
+    task: ForecastTask,
+) -> None:
+    from bdbvhubrenewal.forecasters.persistence import PersistenceNowDaily
+
+    pd.testing.assert_frame_equal(
+        PersistenceNowDaily().forecast(task), Persistence().forecast(task)
+    )
