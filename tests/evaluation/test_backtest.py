@@ -8,6 +8,7 @@ import pytest
 
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
+    development_tasks,
     forecast_weeks,
     load_config,
     lopo_tasks,
@@ -564,3 +565,43 @@ def test_scenarios_are_scored_final_and_as_of(
     assert zone["location"].str.count("-").eq(2).all()
     assert set(zone["truth_view"]) == {"final", "as of 2 weeks later"}
     assert set(scores["level"]) == {"national", "province", "zone"}
+
+
+def test_tasks_carry_the_daily_releases_up_to_their_vintage(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    from bdbvhubrenewal.data.tidy import load_daily
+
+    daily = load_daily()
+    real = target.loc[target["kind"] == "real"]
+    rows = real.loc[real["vintage"] == "2026-10-17"]
+    task = make_tasks(
+        rows, delays, BacktestConfig(seed=3), history=real, daily=daily
+    )[0]
+    assert task.daily_history is not None
+    assert set(task.daily_history["vintage"]) == {
+        "2026-08-18",
+        "2026-10-09",
+        "2026-10-17",
+    }
+    assert {"location", "onset_date", "observed", "imputed"} <= set(
+        task.daily_history.columns
+    )
+    # Without daily data, or for another kind, there is none.
+    assert make_tasks(rows, delays, BacktestConfig())[0].daily_history is None
+    other = make_tasks(
+        rows.assign(kind="reconstructed"), delays, BacktestConfig(), daily=daily
+    )[0]
+    assert other.daily_history is None
+
+
+def test_development_tasks_pass_the_daily_releases(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    from bdbvhubrenewal.data.tidy import load_daily
+
+    tasks = development_tasks(
+        target, delays, BacktestConfig(), include_reconstructed=False,
+        daily=load_daily(),
+    )  # fmt: skip
+    assert all(t.daily_history is not None for t in tasks)
