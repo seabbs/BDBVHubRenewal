@@ -27,7 +27,7 @@ $$
 
 The weekly steps $\epsilon_{p,j}$ are independent, so the log level is a random walk from the last complete week.
 $\sigma_p$ is the standard deviation of the 7 weekly changes in $\log(1 + Y_{p,v})$ over the last 8 complete weeks, floored at 0.1.
-A province with fewer than 50 cases a week over those weeks takes $\sigma_p$ from the weekly changes of the provinces above that, pooled, as `persistencenow` pools its steps.
+A province with fewer than 10 cases a week over those weeks takes $\sigma_p$ from the weekly changes of the provinces above that, pooled, as `persistencenow` pools its steps.
 Week $w$ is complete if its Wednesday is at least $L$ days before $T_v$, with $L$ the 90th centile of the delays published with the vintage, or 10 days if none were published.
 Each sample is one joint trajectory across weeks, and the national value is the sum of the provinces.
 The median has no growth and weeks up to $c$ are still revised upwards, so persistence underpredicts during growth (see [Backtest](../backtest.md#persistence-bias)).
@@ -93,8 +93,8 @@ $$
 with each step $\delta_{p,k,j}$ drawn with equal probability from $\pm \Delta_{p,i}$.
 $\Delta_{p,i}$, $i = 1, \dots, 7$, are the weekly changes in $\log(1 + \hat y_p)$ over the 8 weeks up to $c$, with $\hat y_p(w) = Y_{p,v}(w) / s_p(w)$ the point nowcast.
 With their negatives, the median stays at the start and the spread grows with the horizon.
-Provinces without their own delay draw from the changes of the provinces with one, so a few small, noisy counts do not set their spread.
-A province whose mean nowcast over the last 8 weeks, $\bar y_{p,k}$, has a median over samples below 10 cases a week instead walks the log of that mean as a Poisson rate, $\tilde y_{p,k}(c + h) \sim \text{Poisson}\{\bar y_{p,k} \exp(\sum_{j \le h} \delta_{p,k,j})\}$, so a few cases a week stay plausible.
+A province whose mean nowcast over the last 8 weeks, $\bar y_{p,k}$, has a median over samples below 10 cases a week draws its steps from the changes of the provinces above 10, so a few small, noisy counts do not set its spread.
+It also walks the log of that mean as a Poisson rate, $\tilde y_{p,k}(c + h) \sim \text{Poisson}\{\bar y_{p,k} \exp(\sum_{j \le h} \delta_{p,k,j})\}$, so a few cases a week stay plausible.
 With fewer than 3 changes the forecast is Poisson around the start.
 Forecasts are rounded and kept at least the known onsets.
 Counts reported by a later date $T$ are $Y_{p,v}(w) + \text{Binomial}\big(\max(D, 0),\ q\big) + \min(D, 0)$, with $D = C_{p,k}(w) - Y_{p,v}(w)$ and $q = \{F_p(T - w) - F_p(T_v - w)\}/\{1 - F_p(T_v - w)\}$, the share of the cases still to come that are reported by $T$.

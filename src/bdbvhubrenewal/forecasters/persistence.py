@@ -15,7 +15,7 @@ $$
 
 $\sigma$ is the standard deviation of the weekly changes in
 $\log(1 + y)$ over the last `window` complete weeks, floored at
-`min_sd`. A place with fewer than `own_per_week` cases a week over those
+`min_sd`. A place with fewer than `low_count` cases a week over those
 weeks takes $\sigma$ from the changes of the places above it, pooled.
 Weeks up to $c$ are returned as published (a point mass).
 The median is flat and the spread grows with the horizon.
@@ -67,10 +67,10 @@ $\log\{1 + C_p(c)\}$. From there it follows the COVID-19 Forecast Hub
 baseline on the log scale (`baseline_walk`): its median stays at that
 start, and each weekly step is drawn from the past
 weekly changes of the place's point nowcast, and their negatives, as
-BVDOutbreakSize does. Places without their own delay borrow the steps of
-those with one. A place with fewer than `low_count` cases a week over the
-last `window` weeks walks the log of that mean as a Poisson rate instead,
-so a few cases a week stay plausible. Later weeks are at least the known
+BVDOutbreakSize does. A place with fewer than `low_count` cases a week
+over the last `window` weeks borrows the steps of the places above that,
+and walks the log of that mean as a Poisson rate instead, so a few cases
+a week stay plausible. Later weeks are at least the known
 onsets.
 
 If the delay data have no complete onset week or fewer than `min_delays`
@@ -181,7 +181,7 @@ class Persistence:
         Delay quantile defining a complete week.
     default_lag_days : int
         Completeness lag when a vintage has no delay data.
-    own_per_week : float
+    low_count : float
         Fewest cases a week, on average over the last `window` weeks, for a
         place to use its own weekly changes rather than the pooled ones.
     """
@@ -191,7 +191,7 @@ class Persistence:
     min_sd: float = 0.1
     completeness: float = 0.9
     default_lag_days: int = 10
-    own_per_week: float = 50.0
+    low_count: float = 10.0
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return persistence trajectories for a task.
@@ -264,9 +264,9 @@ class Persistence:
         return max(sd, self.min_sd)
 
     def _spreads(self, completes: list[np.ndarray]) -> list[float]:
-        """Return each place's spread, pooled below `own_per_week` cases."""
+        """Return each place's spread, pooled below `low_count` cases."""
         recent = [c[-self.window :] for c in completes]
-        own = [r.size > 0 and r.mean() >= self.own_per_week for r in recent]
+        own = [r.size > 0 and r.mean() >= self.low_count for r in recent]
         if not any(own):
             return [self._spread(c) for c in completes]
         pooled = self._sd(
@@ -514,6 +514,7 @@ class _Nowcast:
     size: np.ndarray
     share: np.ndarray
     own: list[bool]
+    big: list[bool]
     cdfs: list[np.ndarray]
     steps: list[np.ndarray]
 
@@ -538,7 +539,7 @@ class PersistenceNow(Persistence):
         Fewest delays in the triangle's onset weeks to nowcast at all.
     own_per_week : float
         Fewest delays a week, on average over those onset weeks, for a
-        place to use its own delay and steps rather than the pooled ones.
+        place to use its own delay rather than the pooled one.
     step_pool : numpy.ndarray, optional
         Weekly log steps that places without their own delay draw from,
         for example a province's for its health zones. By default, the
@@ -546,7 +547,7 @@ class PersistenceNow(Persistence):
         (`step_pool_for`).
     low_count : float
         Below this mean count a week over the last `window` weeks, a place
-        walks the log of its mean as a Poisson rate.
+        walks the log of its mean as a Poisson rate, with the pooled steps.
 
     See `Persistence` for `window`, the weeks of past changes.
     """
@@ -556,7 +557,7 @@ class PersistenceNow(Persistence):
     n_retro: int = 8
     min_retro: int = 3
     min_delays: int = 50
-    low_count: float = 10.0
+    own_per_week: float = 50.0
     step_pool: np.ndarray | None = None
 
     @property
@@ -671,18 +672,22 @@ class PersistenceNow(Persistence):
             h = np.arange(self.n_history)[::-1]
             fitted = np.r_[sizes, np.full(self.n_history, np.inf)]
             size[p, rows] = fitted[h]
-        point = np.log1p(seen[:, : last + 1] + added[:, : last + 1])
-        steps = [np.diff(row[-self.window :]) for row in point]
+        point = seen[:, : last + 1] + added[:, : last + 1]
+        steps = [np.diff(np.log1p(row[-self.window :])) for row in point]
+        big = [
+            bool(row[-self.window :].mean() >= self.low_count) for row in point
+        ]
         return _Nowcast(
             weeks, ends, grid, cols, last, seen, known, added, size, share,
-            own, cdfs, steps,
+            own, big, cdfs, steps,
         )  # fmt: skip
 
     def step_pool_for(self, task: ForecastTask) -> np.ndarray | None:
         """Return the pooled weekly log steps of a task's places.
 
-        The steps of the places with their own delay, for a parent level to
-        pass to its children as `step_pool`. None without delay data.
+        The steps of the places with at least `low_count` cases a week, for
+        a parent level to pass to its children as `step_pool`. None without
+        delay data.
 
         Parameters
         ----------
@@ -695,7 +700,7 @@ class PersistenceNow(Persistence):
             The pooled steps.
         """
         prep = self._prepare(task)
-        return None if prep is None else _pool_steps(prep.steps, prep.own)
+        return None if prep is None else _pool_steps(prep.steps, prep.big)
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return baseline trajectories from a nowcast for a task.
@@ -729,7 +734,7 @@ class PersistenceNow(Persistence):
             prep.size,
             prep.share,
         )
-        own, cdfs, steps = prep.own, prep.cdfs, prep.steps
+        big, cdfs, steps = prep.big, prep.cdfs, prep.steps
         history = (
             task.target if task.target_history is None else task.target_history
         )
@@ -738,16 +743,15 @@ class PersistenceNow(Persistence):
         kappa = revision_variance(history, task.vintage)
         totals = nowcast_draws(seen, added, size, n, rng, known, kappa)
         ahead = len(grid) - 1 - last
-        # Places with their own delay have enough data for their own steps;
-        # the rest borrow the pooled steps, as they borrow a delay.
+        # Places with few cases borrow the steps of those with more.
         pooled_steps = (
-            _pool_steps(steps, own)
+            _pool_steps(steps, big)
             if self.step_pool is None
             else self.step_pool
         )
         past = slice(last + 1 - self.window, last + 1)
         for p in range(len(task.locations)):
-            mine = steps[p] if own[p] or pooled_steps is None else pooled_steps
+            mine = steps[p] if big[p] or pooled_steps is None else pooled_steps
             mean = totals[:, p, past].mean(axis=1)
             if np.median(mean) < self.low_count:
                 # A place with few cases walks the log of its recent mean as
@@ -789,9 +793,9 @@ class PersistenceNow(Persistence):
         return pd.concat([out.assign(as_of=np.nan), *as_of], ignore_index=True)
 
 
-def _pool_steps(steps: list[np.ndarray], own: list[bool]) -> np.ndarray | None:
-    """Pool the steps of places with their own delay, or None if none."""
-    shared = [st for st, o in zip(steps, own, strict=True) if o]
+def _pool_steps(steps: list[np.ndarray], big: list[bool]) -> np.ndarray | None:
+    """Pool the steps of places with enough cases, or None if none."""
+    shared = [st for st, b in zip(steps, big, strict=True) if b]
     return np.concatenate(shared) if shared else None
 
 
