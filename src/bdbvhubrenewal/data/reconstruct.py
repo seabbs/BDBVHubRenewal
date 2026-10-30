@@ -48,6 +48,7 @@ from typing import NamedTuple
 
 import numpy as np
 import pandas as pd
+from numpy.typing import ArrayLike
 from scipy import optimize, stats
 
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
@@ -82,7 +83,7 @@ def _onset_offsets() -> np.ndarray:
     return np.arange(7)
 
 
-def lag_cdf(lag_pmf: Sequence[float]) -> np.ndarray:
+def lag_cdf(lag_pmf: ArrayLike) -> np.ndarray:
     """Return the cdf of a report to publication lag pmf from 0 days."""
     return np.cumsum(np.asarray(lag_pmf, dtype=float))
 
@@ -96,7 +97,7 @@ def _daily_expected(
     target: pd.DataFrame,
     delays: pd.DataFrame,
     day: dt.date,
-    lag_pmf: Sequence[float],
+    lag_pmf: ArrayLike,
     cutoff_lag: int,
     max_delay: int,
 ) -> pd.DataFrame:
@@ -115,7 +116,7 @@ def _daily_expected(
     last = pd.Timestamp(day - dt.timedelta(days=cutoff_lag))
     u = _onset_offsets()
 
-    def open_days(week: pd.Series) -> np.ndarray:
+    def open_days(week: pd.Series) -> tuple[np.ndarray, np.ndarray]:
         """Days from onset day `W - u` to the release, and if cut off."""
         gap = (pd.Timestamp(day) - pd.to_datetime(week)).dt.days.to_numpy()
         onset = (
@@ -161,14 +162,14 @@ def _allocate(expected: np.ndarray) -> np.ndarray:
     rank = np.argsort(
         np.argsort(-(scaled - base), axis=1, kind="stable"), axis=1
     )
-    return base + (rank < short[:, None])
+    return np.asarray(base + (rank < short[:, None]), dtype=np.int64)
 
 
 def _daily_counts(
     target: pd.DataFrame,
     delays: pd.DataFrame,
     day: dt.date,
-    lag_pmf: Sequence[float],
+    lag_pmf: ArrayLike,
     cutoff_lag: int,
     max_delay: int,
 ) -> tuple[pd.DataFrame, np.ndarray, np.ndarray]:
@@ -182,7 +183,7 @@ def reconstruct_vintage(
     target: pd.DataFrame,
     delays: pd.DataFrame,
     as_of: dt.date | str,
-    lag_pmf: Sequence[float],
+    lag_pmf: ArrayLike,
     max_delay: int = DEFAULT_MAX_DELAY,
     cutoff_lag: int = 0,
 ) -> pd.DataFrame:
@@ -250,7 +251,7 @@ def reconstruct_daily_vintage(
     target: pd.DataFrame,
     delays: pd.DataFrame,
     as_of: dt.date | str,
-    lag_pmf: Sequence[float],
+    lag_pmf: ArrayLike,
     max_delay: int = DEFAULT_MAX_DELAY,
     cutoff_lag: int = 0,
 ) -> pd.DataFrame:
@@ -676,8 +677,8 @@ def fit_publication_lag(
         pmf = _lognormal_pmf(par[0], float(np.exp(par[1])), max_lag)
         out = 0.0
         for v in dates:
-            rec = reconstruct_vintage(tgt, dly, v, pmf)
-            rec = rec.loc[rec["location"] == NATIONAL].set_index(
+            full = reconstruct_vintage(tgt, dly, v, pmf)
+            rec = full.loc[full["location"] == NATIONAL].set_index(
                 "target_end_date"
             )["total"]
             both = truth[v].index.intersection(rec.index)

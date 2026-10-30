@@ -32,7 +32,7 @@ import json
 import logging
 import os
 import tomllib
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
@@ -48,14 +48,18 @@ from bdbvhubrenewal.data.dates import (
     reference_date_for_vintage,
 )
 from bdbvhubrenewal.data.reconstruct import (
+    cutoff_lags,
     publication_lag_pmf,
+    reconstruct_daily_vintages,
     reconstruct_delays,
     reconstruct_vintages,
 )
 from bdbvhubrenewal.data.simulate import (
     SCENARIO_RT_SCALE,
+    SimulatedOutbreak,
     SimulationSettings,
     calibrated_settings,
+    release_dates,
     simulate_outbreak,
 )
 from bdbvhubrenewal.evaluation.scoring import score_forecasts
@@ -830,7 +834,22 @@ def development_tasks(
             d for d in config.reconstructed_dates if not config.is_heldout(d)
         ]
         if dates:
-            parts.append(reconstruct_vintages(real, delays, dates, latest))
+            lags = None if daily is None else cutoff_lags(daily)
+            parts.append(
+                reconstruct_vintages(real, delays, dates, latest, lags)
+            )
+            if daily is not None:
+                first = real.loc[real["vintage"] == latest, "target_end_date"]
+                days = release_dates(first.min(), max(dates))
+                daily = pd.concat(
+                    [
+                        daily.assign(kind="real"),
+                        reconstruct_daily_vintages(
+                            real, delays, days, latest, lags
+                        ),
+                    ],
+                    ignore_index=True,
+                )
             src = delays.loc[delays["vintage"] == latest]
             dly_parts.extend(
                 reconstruct_delays(src, d).assign(kind="reconstructed")
@@ -1016,8 +1035,15 @@ def run_lopo(
     return forecasts, scores
 
 
+def _release_days(outbreak: SimulatedOutbreak, dates: list[str]) -> list[str]:
+    """Release days from the outbreak start to the last vintage date."""
+    return release_dates(outbreak.settings.start, max(dates))
+
+
 def recovery_tasks(
-    config: BacktestConfig, settings: SimulationSettings | None = None
+    config: BacktestConfig,
+    settings: SimulationSettings | None = None,
+    lags: Mapping[int, int] | None = None,
 ) -> list[ForecastTask]:
     """Build the tasks of the simulated vintages.
 
@@ -1027,15 +1053,21 @@ def recovery_tasks(
         Settings, including `simulated_dates`.
     settings : SimulationSettings, optional
         The simulated scenario. Defaults to `turning_point`.
+    lags : mapping of int to int, optional
+        Days from release to data cut-off by release weekday
+        (`bdbvhubrenewal.data.reconstruct.cutoff_lags`). None for none.
 
     Returns
     -------
     list of ForecastTask
-        One task per simulated vintage.
+        One task per simulated vintage, with the daily releases (Tuesday,
+        Wednesday, Friday and Saturday) up to it as `daily_history`.
     """
     outbreak = simulate_outbreak(settings)
-    target, delays = outbreak.vintages(list(config.simulated_dates))
-    return make_tasks(target, delays, config)
+    dates = list(config.simulated_dates)
+    target, delays = outbreak.vintages(dates, lags)
+    daily = outbreak.daily_vintages(_release_days(outbreak, dates), lags)
+    return make_tasks(target, delays, config, daily=daily)
 
 
 def run_recovery(
@@ -1044,6 +1076,7 @@ def run_recovery(
     settings: SimulationSettings | None = None,
     cache: Path | str | None = None,
     fits: list[pd.DataFrame] | None = None,
+    lags: Mapping[int, int] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Run models on simulated vintages and score against the known truth.
 
@@ -1059,6 +1092,8 @@ def run_recovery(
         Forecast cache, as for `run_forecasts`.
     fits : list, optional
         Collects fit summaries, as for `run_forecasts`.
+    lags : mapping of int to int, optional
+        Release cut-off lags, as for `recovery_tasks`.
 
     Returns
     -------
@@ -1066,7 +1101,7 @@ def run_recovery(
         The forecasts and the scores.
     """
     outbreak = simulate_outbreak(settings)
-    tasks = recovery_tasks(config, settings)
+    tasks = recovery_tasks(config, settings, lags)
     forecasts = run_forecasts(models, tasks, cache, fits)
     end = outbreak.settings.start + dt.timedelta(days=outbreak.settings.n_days)
     scores = score_tasks(forecasts, outbreak.truth(), end.isoformat())
@@ -1090,6 +1125,7 @@ def run_scenarios(
     dates: Sequence[str],
     names: Sequence[str] = tuple(SCENARIO_RT_SCALE),
     later_weeks: int = 2,
+    daily: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Run models on scenarios calibrated to the real data and score them.
 
@@ -1116,6 +1152,10 @@ def run_scenarios(
         Scenarios (`SCENARIO_RT_SCALE` keys).
     later_weeks : int
         Weeks after each date for the as-of scores.
+    daily : pandas.DataFrame, optional
+        Real daily rows, from which the release cut-off lags are taken
+        (`bdbvhubrenewal.data.reconstruct.cutoff_lags`). The simulated
+        releases then carry cut-offs, and tasks their daily releases.
 
     Returns
     -------
@@ -1127,14 +1167,18 @@ def run_scenarios(
         (`evaluation.zones.scenario_zone_scores`).
     """
     k = config.complete_after_weeks
+    lags = None if daily is None else cutoff_lags(daily)
     all_forecasts, all_scores = [], []
     for name in names:
         settings = calibrated_settings(
             target, delays, zones, as_of, name=name, seed=config.seed
         )
         outbreak = simulate_outbreak(settings)
-        sim_target, sim_delays = outbreak.vintages(list(dates))
-        tasks = make_tasks(sim_target, sim_delays, config)
+        sim_target, sim_delays = outbreak.vintages(list(dates), lags)
+        sim_daily = outbreak.daily_vintages(
+            _release_days(outbreak, list(dates)), lags
+        )
+        tasks = make_tasks(sim_target, sim_delays, config, daily=sim_daily)
         forecasts = run_forecasts(models, tasks)
         end = (
             settings.start + dt.timedelta(days=settings.n_days - 1)
