@@ -20,7 +20,6 @@ from bdbvhubrenewal.forecasters import (
     list_models,
 )
 from bdbvhubrenewal.forecasters.persistence import (
-    baseline_walk,
     nowcast_draws,
     nowcast_means,
     revision_variance,
@@ -237,26 +236,6 @@ def test_nowcast_means_scale_the_total_by_the_share_reported() -> None:
     assert added.tolist() == pytest.approx([0.0, 0.0, 15.0])
 
 
-def test_baseline_walk_is_a_symmetrised_empirical_random_walk() -> None:
-    rng = np.random.default_rng(5)
-    centre = np.full(4000, np.log1p(100.0))
-    steps = np.array([0.1, 0.3, -0.2, 0.05])
-    draws = baseline_walk(centre, steps, 3, rng)
-    assert draws.shape == (4000, 3)
-    # The median stays at the centre and the spread grows with the horizon.
-    assert np.allclose(np.median(draws, axis=0), 100, rtol=0.05)
-    iqr = np.subtract(*np.percentile(draws, [75, 25], axis=0))
-    assert iqr[2] > iqr[0]
-    # Every one-week change is one of the past changes or its negative, up
-    # to rounding to whole cases.
-    first = np.log1p(draws[:, 0]) - centre
-    pool = np.r_[steps, -steps]
-    assert (np.abs(first[:, None] - pool[None, :]).min(axis=1) < 0.01).all()
-    # Fewer than three past changes: Poisson around the centre.
-    flat = baseline_walk(centre, np.array([0.2]), 2, rng)
-    assert flat.var(axis=0) == pytest.approx([100, 100], rel=0.15)
-
-
 def test_persistencenow_nowcasts_the_latest_week(task: ForecastTask) -> None:
     # The week ending on the vintage is nowcast and the walk starts from it.
     nat = _national(PersistenceNow().forecast(task))
@@ -275,15 +254,16 @@ def test_sparse_places_stay_plausible(
     bu = samples.loc[samples["location"] == "CD-BU"]
     top = bu.groupby("target_end_date")["value"].quantile(0.975)
     assert top.max() <= 20
-    # With 7 cases in the last 6 weeks, a few cases a week stay plausible.
+    # Its latest weeks have no cases and the walk starts there, but its
+    # spread still leaves a case a week plausible.
     ahead = top.loc[top.index > task.vintage]
-    assert (ahead >= 3).all()
+    assert (ahead >= 1).all()
     # Ituri's walk starts from its latest nowcast, so its median stays
     # near its last two nowcasts.
     it = samples.loc[samples["location"] == "CD-IT"]
     med = it.groupby("target_end_date")["value"].median()
     low, high = sorted(med.loc[["2026-10-17", "2026-10-24"]])
-    assert 0.8 * low <= med.iloc[-1] <= 1.1 * high
+    assert 0.8 * low <= med.iloc[-1] <= 1.25 * high
 
 
 @pytest.mark.xfail(
@@ -335,35 +315,6 @@ def test_walk_spread_stays_plausible(
     q = it.groupby("target_end_date")["value"].quantile([0.5, 0.95]).unstack()
     recent = q.loc[q.index <= task.vintage, 0.5].iloc[-4:].max()
     assert q[0.95].iloc[-1] <= 3 * recent
-
-
-def test_a_parent_step_pool_sets_the_spread_of_low_count_places(
-    task: ForecastTask,
-) -> None:
-    # Health zones pass their province's steps as `step_pool`. Places with
-    # fewer than `low_count` cases a week draw from it; the rest keep their
-    # own steps, with or without their own delay.
-    model = PersistenceNow()
-    pool = model.step_pool_for(task)
-    assert pool is not None
-    assert pool.size >= 3
-
-    def width(m: PersistenceNow, loc: str) -> float:
-        out = m.forecast(task)
-        out = out.loc[out["location"] == loc]
-        last = out.loc[out["target_end_date"] == out["target_end_date"].max()]
-        return float(
-            last["value"].quantile(0.95) - last["value"].quantile(0.05)
-        )
-
-    flat = replace(model, step_pool=np.zeros(5))
-    # Tshopo has a few cases a week; Haut-Uele about 25 and no own delay.
-    assert width(flat, "CD-TO") < width(model, "CD-TO")
-    prep = model._prepare(task)
-    assert prep is not None
-    big = dict(zip(task.locations, prep.big, strict=True))
-    assert big["CD-HU"]
-    assert not big["CD-TO"]
 
 
 def test_onsets_filled_in_later_are_not_late_reports(

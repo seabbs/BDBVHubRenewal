@@ -21,12 +21,15 @@ Weeks up to $c$ are returned as published (a point mass).
 The median is flat and the spread grows with the horizon.
 Each sample is one joint trajectory across weeks.
 
-A week is judged complete if the vintage date is at least `lag_days`
-after its midpoint.
-`lag_days` is the `completeness` quantile of the pooled delay published
-with the vintage, or `default_lag_days` if no delays were published.
-Recent onset weeks only show the delays reported so far, so this lag is
-biased short.
+A week is judged complete once `completeness` of its final total is
+published, from how the hub's totals grow between releases a week apart
+(`release_shares`). Late entries and re-imputation are in the totals, so
+they are counted. Without two such releases, a week is complete if the
+vintage date is at least `lag_days` after its midpoint, with `lag_days`
+the `completeness` quantile of the pooled delay published with the
+vintage, or `default_lag_days` if no delays were published.
+Weeks from $c$ to the last forecast week are drawn by `random_walk`, with
+$\sigma$ from `walk_spreads`.
 
 For each later date $T$ in `task.report_by`, the counts reported by $T$
 are predicted by thinning each sample of week $w$ with the share of a
@@ -63,15 +66,10 @@ $$
 with $K_p(w)$ the known onsets.
 
 **Forecast.** Each sample starts from its own nowcast of the latest week,
-$\log\{1 + C_p(c)\}$. From there it follows the COVID-19 Forecast Hub
-baseline on the log scale (`baseline_walk`): its median stays at that
-start, and each weekly step is drawn from the past
-weekly changes of the place's point nowcast, and their negatives, as
-BVDOutbreakSize does. A place with fewer than `low_count` cases a week
-over the last `window` weeks borrows the steps of the places above that,
-and walks the log of that mean as a Poisson rate instead, so a few cases
-a week stay plausible. Later weeks are at least the known
-onsets.
+$\log\{1 + C_p(c)\}$, and follows the same random walk as `Persistence`
+(`random_walk`), with $\sigma$ from the weekly changes of the place's
+point nowcast (`walk_spreads`), pooled below `low_count` cases a week.
+Later weeks are at least the known onsets.
 
 If the delay data have no complete onset week or fewer than `min_delays`
 cases in the last `n_history` weeks, or give fewer than `min_retro` past
@@ -107,11 +105,14 @@ from bdbvhubrenewal.forecasters.base import (
 __all__ = [
     "Persistence",
     "PersistenceNow",
-    "baseline_walk",
     "completeness_lag",
     "last_complete_week",
     "nowcast_draws",
     "nowcast_means",
+    "random_walk",
+    "release_complete_weeks",
+    "release_shares",
+    "walk_spreads",
 ]
 
 
@@ -178,9 +179,11 @@ class Persistence:
     min_sd : float
         Floor on the log-scale weekly spread.
     completeness : float
-        Delay quantile defining a complete week.
+        Share of a week's final total published for it to be complete,
+        from the hub's releases (`release_complete_weeks`), or the delay
+        quantile without two releases a week apart.
     default_lag_days : int
-        Completeness lag when a vintage has no delay data.
+        Completeness lag with neither releases nor delay data.
     low_count : float
         Fewest cases a week, on average over the last `window` weeks, for a
         place to use its own weekly changes rather than the pooled ones.
@@ -207,45 +210,63 @@ class Persistence:
             Columns `location`, `target_end_date`, `sample`, `value`.
         """
         rng = task.rng()
-        lag = completeness_lag(
-            task.delays,
-            task.vintage,
-            self.completeness,
-            self.default_lag_days,
+        history = (
+            task.target if task.target_history is None else task.target_history
         )
-        last = last_complete_week(task.vintage, lag).isoformat()
+        weeks_old = release_complete_weeks(
+            history, task.vintage, self.completeness
+        )
+        if weeks_old is None:
+            lag = completeness_lag(
+                task.delays,
+                task.vintage,
+                self.completeness,
+                self.default_lag_days,
+            )
+            last = last_complete_week(task.vintage, lag)
+        else:
+            last = release_week(task.vintage) - dt.timedelta(weeks=weeks_old)
         weeks = list(task.target_end_dates)
+        ahead = [
+            (last + dt.timedelta(weeks=h)).isoformat()
+            for h in range(1, _weeks_between(last, weeks[-1]) + 1)
+        ]
         n = task.n_samples
-        frames = []
         series = [
             task.target.loc[task.target["location"] == loc]
             .set_index("target_end_date")["total"]
             .sort_index()
             for loc in task.locations
         ]
-        completes = [x.loc[x.index <= last] for x in series]
-        sds = self._spreads([c.to_numpy(dtype=float) for c in completes])
+        completes = [x.loc[x.index <= last.isoformat()] for x in series]
+        sds = walk_spreads(
+            [c.to_numpy(dtype=float) for c in completes],
+            self.window,
+            self.min_sd,
+            self.low_count,
+        )
+        frames = []
         for loc, series_p, complete, sd in zip(
             task.locations, series, completes, sds, strict=True
         ):
             level = float(complete.iloc[-1]) if len(complete) else 0.0
-            values = np.empty((n, len(weeks)))
-            log_level = np.full(n, np.log1p(level))
-            for j, week in enumerate(weeks):
-                if week <= last:
-                    values[:, j] = float(series_p.get(week, 0))
-                    continue
-                log_level, values[:, j] = _step(log_level, sd, rng)
-            frames.append(
-                pd.DataFrame(
-                    {
-                        "location": loc,
-                        "target_end_date": np.tile(weeks, n),
-                        "sample": np.repeat(np.arange(1, n + 1), len(weeks)),
-                        "value": values.reshape(-1),
-                    }
+            start = np.full(n, np.log1p(level))
+            walk = dict(
+                zip(
+                    ahead,
+                    random_walk(start, sd, len(ahead), rng).T,
+                    strict=True,
                 )
             )
+            values = np.column_stack(
+                [
+                    walk[w]
+                    if w in walk
+                    else np.full(n, float(series_p.get(w, 0)))
+                    for w in weeks
+                ]
+            )
+            frames.append(_frame(loc, weeks, values))
         final = pd.concat(frames, ignore_index=True)[list(SAMPLE_COLUMNS)]
         if not task.report_by:
             return final
@@ -254,45 +275,24 @@ class Persistence:
             ignore_index=True,
         )
 
-    def _spread(self, complete: np.ndarray) -> float:
-        """Return the SD of the last weekly log changes, floored."""
-        return self._sd(np.diff(np.log1p(complete[-self.window :])))
-
-    def _sd(self, diffs: np.ndarray) -> float:
-        """Return the SD of weekly log changes, floored."""
-        sd = float(np.std(diffs, ddof=1)) if diffs.size >= 2 else 0.0
-        return max(sd, self.min_sd)
-
-    def _spreads(self, completes: list[np.ndarray]) -> list[float]:
-        """Return each place's spread, pooled below `low_count` cases."""
-        recent = [c[-self.window :] for c in completes]
-        own = [r.size > 0 and r.mean() >= self.low_count for r in recent]
-        if not any(own):
-            return [self._spread(c) for c in completes]
-        pooled = self._sd(
-            np.concatenate(
-                [
-                    np.diff(np.log1p(r))
-                    for r, o in zip(recent, own, strict=True)
-                    if o
-                ]
-            )
-        )
-        return [
-            self._spread(c) if o else pooled
-            for c, o in zip(completes, own, strict=True)
-        ]
-
     def _reported_by(
         self,
         task: ForecastTask,
         final: pd.DataFrame,
         rng: np.random.Generator,
     ) -> list[pd.DataFrame]:
-        """Thin the final samples to the counts reported by each later date."""
-        if task.delays is None or task.delays.empty:
+        """Thin the final samples to the counts reported by each later date.
+
+        The share of a week published by date $T$ is from the hub's
+        releases (`release_shares`), or from the delays published with the
+        vintage without two releases a week apart.
+        """
+        history = (
+            task.target if task.target_history is None else task.target_history
+        )
+        shares = release_shares(history, task.vintage)
+        if shares is None and (task.delays is None or task.delays.empty):
             return []
-        delay_vintage = str(task.delays["vintage"].max())
         seen = task.target.set_index(["location", "target_end_date"])["total"]
         floor = np.array(
             [
@@ -308,7 +308,15 @@ class Persistence:
         for date in task.report_by:
             days = (pd.Timestamp(date) - ends).dt.days.to_numpy(dtype=np.int64)
             due = days >= 0
-            share = reported_share(task.delays, delay_vintage, days[due])
+            if shares is None:
+                assert task.delays is not None
+                vintage = str(task.delays["vintage"].max())
+                share = reported_share(task.delays, vintage, days[due])
+            else:
+                end = pd.Timestamp(release_week(date))
+                old = ((end - ends[due]).dt.days // 7).to_numpy()
+                share = shares[np.clip(old, 0, shares.size - 1)]
+                share = np.where(old >= shares.size, 1.0, share)
             counts = final["value"].to_numpy()[due].astype(np.int64)
             thinned = rng.binomial(counts, share)
             value = np.maximum(thinned, floor[due])
@@ -324,12 +332,138 @@ register_model(
 )
 
 
-def _step(
-    log_level: np.ndarray, sd: float, rng: np.random.Generator
-) -> tuple[np.ndarray, np.ndarray]:
-    """Take one random walk step on the log scale and draw Poisson counts."""
-    log_level = log_level + rng.normal(0.0, sd, size=log_level.size)
-    return log_level, rng.poisson(np.expm1(np.maximum(log_level, 0)))
+def random_walk(
+    start: np.ndarray, sd: float, horizons: int, rng: np.random.Generator
+) -> np.ndarray:
+    r"""Draw the random walk forward on the log scale with Poisson counts.
+
+    Each draw starts from its own $\log(1 + y)$ and adds independent
+    $\mathcal{N}(0, \sigma^2)$ steps, one a week. Each week's count is
+    Poisson with mean $\exp(\max(0, \text{level})) - 1$. Both baselines
+    use this walk.
+
+    Parameters
+    ----------
+    start : numpy.ndarray
+        $\log(1 + y)$ for each draw.
+    sd : float
+        $\sigma$, the weekly step's standard deviation.
+    horizons : int
+        Weeks to draw.
+    rng : numpy.random.Generator
+        Random generator.
+
+    Returns
+    -------
+    numpy.ndarray
+        Counts, one row per draw and one column per week ahead.
+    """
+    steps = rng.normal(0.0, sd, size=(start.size, horizons))
+    level = start[:, None] + steps.cumsum(axis=1)
+    return rng.poisson(np.expm1(np.maximum(level, 0.0))).astype(float)
+
+
+def walk_spreads(
+    series: list[np.ndarray], window: int, min_sd: float, low_count: float
+) -> list[float]:
+    r"""Return each place's walk spread $\sigma$, pooled at low counts.
+
+    $\sigma$ is the standard deviation of the weekly changes in
+    $\log(1 + y)$ over the last `window` weeks, floored at `min_sd`. A
+    place with fewer than `low_count` cases a week over those weeks takes
+    the spread of the changes of the places above it, pooled. With no
+    place above it, each keeps its own.
+
+    Parameters
+    ----------
+    series : list of numpy.ndarray
+        Weekly counts of each place, oldest first.
+    window : int
+        Weeks used.
+    min_sd : float
+        Floor on $\sigma$.
+    low_count : float
+        Fewest cases a week for a place's own spread.
+
+    Returns
+    -------
+    list of float
+        One $\sigma$ per place.
+    """
+
+    def sd(diffs: np.ndarray) -> float:
+        value = float(np.std(diffs, ddof=1)) if diffs.size >= 2 else 0.0
+        return max(value, min_sd)
+
+    recent = [x[-window:] for x in series]
+    diffs = [np.diff(np.log1p(r)) for r in recent]
+    own = [r.size > 0 and r.mean() >= low_count for r in recent]
+    if not any(own):
+        return [sd(d) for d in diffs]
+    pooled = sd(
+        np.concatenate([d for d, o in zip(diffs, own, strict=True) if o])
+    )
+    return [sd(d) if o else pooled for d, o in zip(diffs, own, strict=True)]
+
+
+def release_week(vintage: str) -> dt.date:
+    """Return the Saturday ending the week a release covers."""
+    day = as_date(vintage)
+    return day + dt.timedelta(days=(5 - day.weekday()) % 7)
+
+
+def _weeks_between(start: dt.date, end: str) -> int:
+    """Return whole weeks from `start` to the week ending `end`."""
+    return max((as_date(end) - start).days // 7, 0)
+
+
+def release_shares(
+    history: pd.DataFrame, vintage: str, max_weeks: int = 12
+) -> np.ndarray | None:
+    r"""Return the share of a week's final total published, by weeks old.
+
+    The hub's totals by release form a reporting triangle by onset week
+    and release. Each pair of releases a week apart, up to `vintage`,
+    gives, pooled over provinces, the growth $f_k$ of the totals of weeks
+    $k$ weeks old at the first release to the next. The share published
+    at $k$ weeks old is $1 / \prod_{j \ge k} f_j$, with $f_j = 1$ where no
+    pair gives it.
+
+    Parameters
+    ----------
+    history : pandas.DataFrame
+        Target rows of several releases.
+    vintage : str
+        The forecast vintage. Later releases are not used.
+    max_weeks : int
+        Oldest week, in weeks, that may still grow.
+
+    Returns
+    -------
+    numpy.ndarray or None
+        Shares for 0 to `max_weeks` weeks old, or None without two
+        releases a week apart.
+    """
+    rows = history.loc[
+        (history["vintage"] <= vintage) & (history["location"] != NATIONAL)
+    ]
+    totals = rows.groupby(["vintage", "target_end_date"])["total"].sum()
+    releases = sorted(str(v) for v in rows["vintage"].unique())
+    num, den = np.zeros(max_weeks + 1), np.zeros(max_weeks + 1)
+    for a, b in itertools.pairwise(releases):
+        end = release_week(a)
+        if (release_week(b) - end).days != 7:
+            continue
+        old, new = totals.loc[a], totals.loc[b]
+        for week, count in old.items():
+            k = (end - as_date(str(week))).days // 7
+            if 0 <= k <= max_weeks and week in new.index and count > 0:
+                num[k] += new[week]
+                den[k] += count
+    if not den.any():
+        return None
+    growth = np.where(den > 0, num / np.maximum(den, 1.0), 1.0)
+    return np.asarray(1.0 / np.cumprod(growth[::-1])[::-1], dtype=np.float64)
 
 
 def nowcast_draws(
@@ -411,51 +545,6 @@ def nowcast_means(totals: np.ndarray, share: np.ndarray) -> np.ndarray:
     return np.asarray(totals * (1 - s) / s, dtype=np.float64)
 
 
-def baseline_walk(
-    centre: np.ndarray,
-    steps: np.ndarray,
-    horizons: int,
-    rng: np.random.Generator,
-    rate: bool = False,
-) -> np.ndarray:
-    r"""Draw the COVID-19 Forecast Hub baseline forward on the log scale.
-
-    Each draw adds `horizons` weekly steps sampled with replacement from
-    `steps` and their negatives to its centre, so the median stays at the
-    centre and the spread grows with the horizon. With fewer than three
-    past steps it is Poisson around the centre. With `rate`, the walk is
-    on the log of a Poisson rate and each week is a Poisson draw from it,
-    so a place with a few cases keeps a few cases plausible.
-
-    Parameters
-    ----------
-    centre : numpy.ndarray
-        $\log(1 + C)$ for each draw, or the log rate with `rate`.
-    steps : numpy.ndarray
-        Past weekly changes in $\log(1 + y)$.
-    horizons : int
-        Weeks to draw.
-    rng : numpy.random.Generator
-        Random generator.
-    rate : bool
-        Walk on the log of a Poisson rate.
-
-    Returns
-    -------
-    numpy.ndarray
-        Counts, one row per draw and one column per week ahead.
-    """
-    shape = (centre.size, horizons)
-    level = np.exp(centre) if rate else np.expm1(centre)
-    if steps.size < 3:
-        return rng.poisson(level[:, None], size=shape).astype(float)
-    pool = np.r_[steps, -steps]
-    walk = centre[:, None] + rng.choice(pool, size=shape).cumsum(axis=1)
-    if rate:
-        return rng.poisson(np.exp(walk)).astype(float)
-    return np.round(np.maximum(np.expm1(walk), 0.0))
-
-
 def revision_variance(
     history: pd.DataFrame, vintage: str, min_age: int = 63
 ) -> float:
@@ -514,9 +603,8 @@ class _Nowcast:
     size: np.ndarray
     share: np.ndarray
     own: list[bool]
-    big: list[bool]
     cdfs: list[np.ndarray]
-    steps: list[np.ndarray]
+    point: np.ndarray
 
 
 @dataclass
@@ -540,16 +628,9 @@ class PersistenceNow(Persistence):
     own_per_week : float
         Fewest delays a week, on average over those onset weeks, for a
         place to use its own delay rather than the pooled one.
-    step_pool : numpy.ndarray, optional
-        Weekly log steps that places without their own delay draw from,
-        for example a province's for its health zones. By default, the
-        steps of the task's places with their own delay
-        (`step_pool_for`).
-    low_count : float
-        Below this mean count a week over the last `window` weeks, a place
-        walks the log of its mean as a Poisson rate, with the pooled steps.
 
-    See `Persistence` for `window`, the weeks of past changes.
+    See `Persistence` for `window`, `min_sd` and `low_count`, which set the
+    walk's spread from the point nowcast.
     """
 
     name: str = "persistencenow"
@@ -558,7 +639,6 @@ class PersistenceNow(Persistence):
     min_retro: int = 3
     min_delays: int = 50
     own_per_week: float = 50.0
-    step_pool: np.ndarray | None = None
 
     @property
     def max_delay(self) -> int:
@@ -673,34 +753,10 @@ class PersistenceNow(Persistence):
             fitted = np.r_[sizes, np.full(self.n_history, np.inf)]
             size[p, rows] = fitted[h]
         point = seen[:, : last + 1] + added[:, : last + 1]
-        steps = [np.diff(np.log1p(row[-self.window :])) for row in point]
-        big = [
-            bool(row[-self.window :].mean() >= self.low_count) for row in point
-        ]
         return _Nowcast(
             weeks, ends, grid, cols, last, seen, known, added, size, share,
-            own, big, cdfs, steps,
+            own, cdfs, point,
         )  # fmt: skip
-
-    def step_pool_for(self, task: ForecastTask) -> np.ndarray | None:
-        """Return the pooled weekly log steps of a task's places.
-
-        The steps of the places with at least `low_count` cases a week, for
-        a parent level to pass to its children as `step_pool`. None without
-        delay data.
-
-        Parameters
-        ----------
-        task : ForecastTask
-            The task.
-
-        Returns
-        -------
-        numpy.ndarray or None
-            The pooled steps.
-        """
-        prep = self._prepare(task)
-        return None if prep is None else _pool_steps(prep.steps, prep.big)
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return baseline trajectories from a nowcast for a task.
@@ -734,7 +790,7 @@ class PersistenceNow(Persistence):
             prep.size,
             prep.share,
         )
-        big, cdfs, steps = prep.big, prep.cdfs, prep.steps
+        cdfs = prep.cdfs
         history = (
             task.target if task.target_history is None else task.target_history
         )
@@ -743,24 +799,13 @@ class PersistenceNow(Persistence):
         kappa = revision_variance(history, task.vintage)
         totals = nowcast_draws(seen, added, size, n, rng, known, kappa)
         ahead = len(grid) - 1 - last
-        # Places with few cases borrow the steps of those with more.
-        pooled_steps = (
-            _pool_steps(steps, big)
-            if self.step_pool is None
-            else self.step_pool
+        # The walk's spread comes from the point nowcast; each draw starts
+        # from its own nowcast of the latest week.
+        sds = walk_spreads(
+            list(prep.point), self.window, self.min_sd, self.low_count
         )
-        past = slice(last + 1 - self.window, last + 1)
-        for p in range(len(task.locations)):
-            mine = steps[p] if big[p] or pooled_steps is None else pooled_steps
-            mean = totals[:, p, past].mean(axis=1)
-            if np.median(mean) < self.low_count:
-                # A place with few cases walks the log of its recent mean as
-                # a Poisson rate, so a few cases a week stay plausible.
-                centre = np.log(np.maximum(mean, 1e-9))
-                walk = baseline_walk(centre, mine, ahead, rng, rate=True)
-            else:
-                centre = np.log1p(totals[:, p, last])
-                walk = baseline_walk(centre, mine, ahead, rng)
+        for p, sd in enumerate(sds):
+            walk = random_walk(np.log1p(totals[:, p, last]), sd, ahead, rng)
             totals[:, p, last + 1 :] = np.maximum(walk, known[p, last + 1 :])
         final, as_of = [], []
         delay_end = pd.Timestamp(str(task.delays["vintage"].max()))
@@ -793,12 +838,6 @@ class PersistenceNow(Persistence):
         return pd.concat([out.assign(as_of=np.nan), *as_of], ignore_index=True)
 
 
-def _pool_steps(steps: list[np.ndarray], big: list[bool]) -> np.ndarray | None:
-    """Pool the steps of places with enough cases, or None if none."""
-    shared = [st for st, b in zip(steps, big, strict=True) if b]
-    return np.concatenate(shared) if shared else None
-
-
 def _frame(loc: str, weeks: list[str], values: np.ndarray) -> pd.DataFrame:
     """Return sample rows for one location, one column of `values` a week."""
     n = values.shape[0]
@@ -817,3 +856,28 @@ register_model(
     PersistenceNow,
     "Persistence carried forward from a nowcast of the recent weeks.",
 )
+
+
+def release_complete_weeks(
+    history: pd.DataFrame, vintage: str, share: float = 0.9
+) -> int | None:
+    """Return the weeks old at which a week counts as complete.
+
+    The first age at which `release_shares` reaches `share`.
+
+    Parameters
+    ----------
+    history : pandas.DataFrame
+        Target rows of several releases.
+    vintage : str
+        The forecast vintage.
+    share : float
+        Share of the final total that must be published.
+
+    Returns
+    -------
+    int or None
+        Weeks old, or None without two releases a week apart.
+    """
+    shares = release_shares(history, vintage)
+    return None if shares is None else int(np.argmax(shares >= share))

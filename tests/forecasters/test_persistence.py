@@ -173,21 +173,25 @@ def test_check_samples_rejects_unrequested_as_of(task) -> None:  # type: ignore[
 
 
 def test_low_count_places_take_the_pooled_spread() -> None:
+    from bdbvhubrenewal.forecasters.persistence import walk_spreads
+
     # Places with at least `low_count` cases a week keep their own spread.
     # The rest take the spread of the pooled weekly changes of those
-    # places, as persistencenow pools its steps.
+    # places. Both baselines use this rule.
     big = np.array([100.0, 120, 90, 130, 80, 140, 70, 150])
     calm = np.array([60.0, 61, 62, 63, 64, 65, 66, 67])
     small = np.array([0.0, 9, 0, 9, 0, 9, 0, 9])
-    model = Persistence(low_count=10.0)
-    sds = model._spreads([big, calm, small])
-    assert sds[0] == pytest.approx(model._spread(big))
-    assert sds[1] == pytest.approx(model._spread(calm))
+
+    def own(x: np.ndarray) -> float:
+        return max(float(np.std(np.diff(np.log1p(x)), ddof=1)), 0.1)
+
+    sds = walk_spreads([big, calm, small], 8, 0.1, 10.0)
+    assert sds[0] == pytest.approx(own(big))
+    assert sds[1] == pytest.approx(own(calm))
     pooled = np.r_[np.diff(np.log1p(big)), np.diff(np.log1p(calm))]
     assert sds[2] == pytest.approx(np.std(pooled, ddof=1))
     # With no place above the limit, each keeps its own.
-    alone = model._spreads([small])
-    assert alone[0] == pytest.approx(model._spread(small))
+    assert walk_spreads([small], 8, 0.1, 10.0)[0] == pytest.approx(own(small))
 
 
 def test_random_walk_is_a_log_scale_walk_with_poisson_draws() -> None:
@@ -208,7 +212,8 @@ def test_random_walk_is_a_log_scale_walk_with_poisson_draws() -> None:
 
 
 def test_both_baselines_use_the_one_random_walk(
-    task, monkeypatch: pytest.MonkeyPatch  # type: ignore[no-untyped-def]
+    task,
+    monkeypatch: pytest.MonkeyPatch,  # type: ignore[no-untyped-def]
 ) -> None:
     import bdbvhubrenewal.forecasters.persistence as mod
 
