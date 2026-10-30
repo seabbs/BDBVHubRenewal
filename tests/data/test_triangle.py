@@ -12,6 +12,7 @@ from bdbvhubrenewal.data.triangle import (
     preprocess_negative_values,
     reporting_triangle,
     retrospective_errors,
+    week_shares,
 )
 
 
@@ -132,3 +133,17 @@ def test_delay_pmf_needs_cases() -> None:
     tri = np.array([[0.0, 0.0], [0.0, np.nan]])
     with pytest.raises(ValueError, match="no cases"):
         delay_pmf(tri)
+
+
+def test_week_shares_compare_the_file_with_the_point_nowcast() -> None:
+    # Two complete rows set a pmf of 0.5 on each delay. The open row has 4
+    # cases at delay 0, so its nowcast is 8; with 6 of its cases in the
+    # file, 3/4 of it is published.
+    tri = np.array([[5.0, 5.0], [3.0, 3.0], [4.0, np.nan]])
+    pmf = np.array([0.5, 0.5])
+    shares = week_shares(tri, pmf, np.array([10.0, 6.0, 6.0]))
+    assert shares[:2] == pytest.approx([1.0, 1.0])
+    assert shares[2] == pytest.approx(6 / (4 + (4 + 1 - 0.5) / 0.5 * 0.5))
+    # No cases expected: all published.
+    zero = week_shares(np.zeros((2, 2)), pmf, np.zeros(2))
+    assert zero == pytest.approx([1.0, 1.0])

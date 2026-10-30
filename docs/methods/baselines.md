@@ -38,11 +38,12 @@ It nowcasts the recent weeks with a Python port of [baselinenowcast](https://git
 Tests check the port's delay, point nowcast and negative binomial sizes against baselinenowcast 0.2.0 from CRAN on fixed triangles, and a CI job regenerates those fixtures with the R package (`scripts/baselinenowcast_fixtures.R`).
 
 **Delay and uncertainty.**
-The reporting triangle $n(W, d)$ counts the cases in the vintage's delay file by onset week $W$ and reported delay $d$ in days, from onset to report, up to 35 days.
+The reporting triangle $n(W, d)$ counts the cases in the vintage's delay file by onset week $W$ and reported delay $d$ in days, from onset to report, up to $D = 84$ days.
+Longer delays, under 0.1% of cases, are left out.
 Delays are not matched across delay files.
 The hub fills in onsets for cases it had imputed, and these appear in later files with their original report delay while the totals stay the same, so they are not late reports.
 A case is taken as published on day $W + d$, so cell $(W, d)$ is observed if $W + d \le T_v$.
-On the last 6 onset weeks, a chain ladder gives the delay pmf $p$ with cdf $F$, as baselinenowcast's `estimate_delay` does.
+On the last 13 onset weeks, a chain ladder gives the delay pmf $p$ with cdf $F$, as baselinenowcast's `estimate_delay` does.
 The same is done on the triangle cut back to each of the 8 previous weeks, and each open row is filled from its pmf as `apply_delay` does.
 Comparing what each of those nowcasts expected to be added to each onset week with what has been added since gives a negative binomial size $\phi_h$ for each horizon $h$, the weeks from that onset week to the latest, as `estimate_uncertainty_retro` does.
 So the sizes are fitted to weekly sums.
@@ -50,16 +51,15 @@ Ituri and Nord-Kivu, with at least 50 delays a week, use their own $p$ and $\phi
 The other provinces borrow those of the triangle pooled over provinces, as baselinenowcast borrows a delay from another triangle.
 
 **Nowcast.**
-A case with onset on day $W - u$ of week $W$, delay $d$ and publication lag $\ell$ is in the vintage if $d + \ell - u \le T_v - W$.
-With onsets spread evenly over the week, the share of week $w$ reported is
+Each onset week $w$ of the last 13 has a point nowcast $\hat N_p(w)$, its observed cells plus its missing cells filled from $p$.
+With $K_p(w)$ the cases of week $w$ in the delay file, observed cells or not, the share of week $w$ published is
 
 $$
-s_p(w) = \frac{1}{7} \sum_{u=0}^{6} \sum_{\ell} P(\ell)\, F_p(T_v - w + u - \ell),
+s_p(w) = \min\Big\{1,\ \frac{K_p(w)}{\hat N_p(w)}\Big\}.
 $$
 
-with the publication lag $\ell$ uniform on 0 to 3 days with probability 0.9 and on 4 to 28 days with probability 0.1, for the cases that reach the hub's totals weeks after report.
-The delay file holds no report or publication dates, so the lag cannot be learnt from it.
-Without it, the shares are too high and recent weeks are nowcast too low.
+Both come from the same file, so no separate lag from report to publication is needed.
+Provinces without their own delay take the shares of the pooled triangle.
 
 The published total $Y_{p,v}(w)$, known plus imputed, is expected to reach $Y_{p,v}(w)/s_p(w)$, and the cases still to come are
 
@@ -96,7 +96,7 @@ Provinces without their own delay draw from the changes of the provinces with on
 A province whose mean nowcast over the last 8 weeks, $\bar y_{p,k}$, has a median over samples below 10 cases a week instead walks the log of that mean as a Poisson rate, $\tilde y_{p,k}(c + h) \sim \text{Poisson}\{\bar y_{p,k} \exp(\sum_{j \le h} \delta_{p,k,j})\}$, so a few cases a week stay plausible.
 With fewer than 3 changes the forecast is Poisson around the start.
 Forecasts are rounded and kept at least the known onsets.
-Counts reported by a later date $T$ are $Y_{p,v}(w) + \text{Binomial}\big(\max(D, 0),\ q\big) + \min(D, 0)$, with $D = C_{p,k}(w) - Y_{p,v}(w)$ and $q = \{s_p(T - w) - s_p(w)\}/\{1 - s_p(w)\}$.
+Counts reported by a later date $T$ are $Y_{p,v}(w) + \text{Binomial}\big(\max(D, 0),\ q\big) + \min(D, 0)$, with $D = C_{p,k}(w) - Y_{p,v}(w)$ and $q = \{F_p(T - w) - F_p(T_v - w)\}/\{1 - F_p(T_v - w)\}$, the share of the cases still to come that are reported by $T$.
 Without a complete onset week or 50 cases in the last 6 weeks, or with fewer than 3 past nowcasts, `persistencenow` is `persistence`.
 
 [^bnc-paper]: Johnson KE, Tang M, Tyszka E, Nemcova B, Wolffram D, Ergas R, Reich NG, Funk S, Mellor J, Bracher J, Abbott S (2025). Baseline nowcasting methods for handling delays in epidemiological data. Wellcome Open Research. [doi:10.12688/wellcomeopenres.25027.2](https://doi.org/10.12688/wellcomeopenres.25027.2).

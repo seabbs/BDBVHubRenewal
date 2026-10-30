@@ -51,6 +51,7 @@ __all__ = [
     "preprocess_negative_values",
     "reporting_triangle",
     "retrospective_errors",
+    "week_shares",
 ]
 
 
@@ -205,6 +206,40 @@ def apply_delay(
         x = out[missing, :col].sum(axis=1)
         out[missing, col] = (x + 1 - cdf[col - 1]) / cdf[col - 1] * pmf[col]
     return out
+
+
+def week_shares(
+    triangle: NDArray[np.float64],
+    pmf: NDArray[np.float64],
+    published: NDArray[np.float64],
+) -> NDArray[np.float64]:
+    r"""Return the share of each row's expected final count published so far.
+
+    Each row's point nowcast $\hat N(W)$ is its observed cells plus its
+    missing cells filled by `apply_delay`, summed over delays. With
+    $K(W)$ the cases of the row in the delay file, observed cells or not,
+    the share is $K(W) / \hat N(W)$, at most 1. Both come from the same
+    file, so any lag from report to publication is in $K(W)$ already.
+
+    Parameters
+    ----------
+    triangle : numpy.ndarray
+        Counts by row and delay, missing in the bottom right.
+    pmf : numpy.ndarray
+        Delay pmf, one entry per column.
+    published : numpy.ndarray
+        $K(W)$, one per row.
+
+    Returns
+    -------
+    numpy.ndarray
+        One share per row, 1 where nothing is expected.
+    """
+    final = apply_delay(triangle, pmf).sum(axis=1)
+    share = np.divide(
+        published, final, out=np.ones_like(final), where=final > 0
+    )
+    return np.asarray(np.clip(share, 0.0, 1.0), dtype=np.float64)
 
 
 def retrospective_errors(

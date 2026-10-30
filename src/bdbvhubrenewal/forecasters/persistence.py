@@ -44,8 +44,10 @@ hub's delay file, over the last `n_history` onset weeks, gives a delay
 pmf, and past nowcasts of the triangle give a negative binomial size
 $\phi_h$ for each horizon $h$, as in baselinenowcast. Places with at
 least `own_per_week` delays a week use their own; the rest borrow those
-of the triangle pooled over places. Each week, the latest included, has
-a share reported $s_p(w)$ (`week_share`), and its published total
+of the triangle pooled over places. Each onset week of the triangle, the
+latest included, has a share $s_p(w)$ of its point nowcast already in
+the delay file (`bdbvhubrenewal.data.triangle.week_shares`), and its
+published total
 $Y_p(w)$, known plus imputed, gains $U_p(w) \sim \text{NegBin}$ with
 mean $Y_p(w) \{1 - s_p(w)\} / s_p(w)$ (`nowcast_means`) and size
 $\phi_h$. The hub re-imputes missing onsets at each vintage, so each
@@ -86,13 +88,13 @@ import pandas as pd
 
 from bdbvhubrenewal.data.completeness import reported_share
 from bdbvhubrenewal.data.dates import as_date
-from bdbvhubrenewal.data.delays import DEFAULT_MAX_DELAY, EmpiricalDelayModel
-from bdbvhubrenewal.data.reconstruct import PUBLICATION_LAG_DAYS
+from bdbvhubrenewal.data.delays import EmpiricalDelayModel
 from bdbvhubrenewal.data.triangle import (
     delay_pmf,
     fit_nb_size,
     reporting_triangle,
     retrospective_errors,
+    week_shares,
 )
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
@@ -109,7 +111,6 @@ __all__ = [
     "last_complete_week",
     "nowcast_draws",
     "nowcast_means",
-    "week_share",
 ]
 
 
@@ -357,56 +358,6 @@ def nowcast_draws(
     return out
 
 
-def week_share(
-    cdf: np.ndarray,
-    age: np.ndarray,
-    lag: int = PUBLICATION_LAG_DAYS,
-    tail: float = 0.0,
-    tail_max: int = 28,
-) -> np.ndarray:
-    r"""Return the share of a week's cases in a vintage `age` days after it.
-
-    A case with onset on day $W - u$ of the week ending $W$, delay $d$
-    and publication lag $\ell$ is in a vintage $t$ days after $W$ if
-    $d + \ell - u \le t$. With onsets spread evenly over the week,
-
-    $$
-    s(t) = \frac{1}{7} \sum_{u=0}^{6} \sum_{\ell} P(\ell) F(t + u - \ell),
-    $$
-
-    with $\ell$ uniform on $0, \dots, L$ with probability $1 - \tau$ and
-    on $L + 1, \dots, L_{\max}$ with probability $\tau$, for the late
-    entries that reach the hub's totals weeks after report.
-
-    Parameters
-    ----------
-    cdf : numpy.ndarray
-        Delay cdf $F$ on days $0, 1, \dots$.
-    age : numpy.ndarray
-        Days $t$ from the end of each week to the vintage.
-    lag : int
-        Longest usual publication lag $L$ in days.
-    tail : float
-        $\tau$, the share of cases published late.
-    tail_max : int
-        Longest late publication lag $L_{\max}$ in days.
-
-    Returns
-    -------
-    numpy.ndarray
-        $s(t)$ for each week.
-    """
-    lags = np.arange(tail_max + 1 if tail > 0 else lag + 1)
-    weight = np.where(lags <= lag, (1 - tail) / (lag + 1), 0.0)
-    if tail > 0:
-        weight += np.where(lags > lag, tail / (tail_max - lag), 0.0)
-    shift = (np.arange(7)[:, None] - lags[None, :]).ravel()
-    w = np.tile(weight, 7) / 7
-    day = np.asarray(age)[:, None] + shift[None, :]
-    covered = np.where(day < 0, 0.0, cdf[np.clip(day, 0, cdf.size - 1)])
-    return np.asarray(covered @ w, dtype=np.float64)
-
-
 def nowcast_means(totals: np.ndarray, share: np.ndarray) -> np.ndarray:
     r"""Return the point nowcast of the cases still to come in each week.
 
@@ -419,7 +370,7 @@ def nowcast_means(totals: np.ndarray, share: np.ndarray) -> np.ndarray:
     totals : numpy.ndarray
         Published totals $Y$, known plus imputed.
     share : numpy.ndarray
-        Shares reported $s$, from `week_share`.
+        Shares reported $s$, from `week_shares`.
 
     Returns
     -------
@@ -547,8 +498,8 @@ class PersistenceNow(Persistence):
         Model name.
     n_history : int
         Onset weeks of the reporting triangle the delay is estimated on.
-        The longest delay is `7 * (n_history - 1)` days, at most
-        `DEFAULT_MAX_DELAY`, so the oldest week is complete.
+        The longest delay, $D$, is `7 * (n_history - 1)` days, so the
+        oldest week is complete. Longer delays are left out.
     n_retro : int
         Past nowcasts to fit the negative binomial sizes to.
     min_retro : int
@@ -558,9 +509,6 @@ class PersistenceNow(Persistence):
     own_per_week : float
         Fewest delays a week, on average over those onset weeks, for a
         place to use its own delay rather than the pooled one.
-    lag_tail : float
-        Share of cases published 4 to 28 days after report rather than
-        within 3 days (`week_share`).
     step_pool : numpy.ndarray, optional
         Weekly log steps that places without their own delay draw from,
         for example a province's for its health zones. By default, the
@@ -574,24 +522,23 @@ class PersistenceNow(Persistence):
     """
 
     name: str = "persistencenow"
-    n_history: int = 6
+    n_history: int = 13
     n_retro: int = 8
     min_retro: int = 3
     min_delays: int = 50
     own_per_week: float = 50.0
     low_count: float = 10.0
-    lag_tail: float = 0.1
     step_pool: np.ndarray | None = None
 
     @property
     def max_delay(self) -> int:
         """Longest delay of the triangle, in days."""
-        return min(7 * (self.n_history - 1), DEFAULT_MAX_DELAY)
+        return 7 * (self.n_history - 1)
 
     def _triangle(
         self, task: ForecastTask, location: str | None = None
-    ) -> tuple[list[str], np.ndarray]:
-        """Return the triangle's weeks and counts, pooled or for a place.
+    ) -> tuple[list[str], np.ndarray, np.ndarray]:
+        """Return the triangle's weeks, counts and cases in the file.
 
         Delays are as reported in the task's delay file. Onsets the hub
         fills in later for cases it had imputed keep their reported delay,
@@ -600,14 +547,17 @@ class PersistenceNow(Persistence):
         assert task.delays is not None
         vintage = str(task.delays["vintage"].max())
         rows = task.delays.loc[task.delays["vintage"] == vintage]
+        rows = rows.loc[rows["delay"] <= self.max_delay]
         if location is not None:
             rows = rows.loc[rows["location"] == location]
-        return reporting_triangle(rows, vintage, self.max_delay)
+        weeks, tri = reporting_triangle(rows, vintage, self.max_delay)
+        published = rows.groupby("onset_week").size().reindex(weeks)
+        return weeks, tri, published.fillna(0).to_numpy(dtype=float)
 
     def _delay(
         self, task: ForecastTask, location: str | None = None
-    ) -> tuple[list[str], np.ndarray, np.ndarray] | None:
-        """Return the latest weeks, delay pmf and sizes, or None.
+    ) -> tuple[list[str], np.ndarray, np.ndarray, np.ndarray] | None:
+        """Return the latest weeks, delay pmf, sizes and shares, or None.
 
         Pooled over places, or for `location` alone with at least
         `own_per_week` delays a week. None means too little delay data.
@@ -617,7 +567,7 @@ class PersistenceNow(Persistence):
         need = float(self.min_delays)
         if location is not None:
             need = max(need, self.own_per_week * self.n_history)
-        weeks, tri = self._triangle(task, location)
+        weeks, tri, published = self._triangle(task, location)
         hist = tri[-self.n_history :]
         complete = (~np.isnan(hist)).all(axis=1).any()
         if len(hist) < self.n_history or not complete or np.nansum(hist) < need:
@@ -626,7 +576,8 @@ class PersistenceNow(Persistence):
         if obs.shape[0] < self.min_retro:
             return None
         pmf = delay_pmf(hist)
-        return weeks[-self.n_history :], pmf, fit_nb_size(obs, pred)
+        shares = week_shares(hist, pmf, published[-self.n_history :])
+        return weeks[-self.n_history :], pmf, fit_nb_size(obs, pred), shares
 
     def delay_sources(self, task: ForecastTask) -> dict[str, str]:
         """Return `"own"` or `"pooled"`, the delay each place nowcasts with.
@@ -675,8 +626,6 @@ class PersistenceNow(Persistence):
             )
 
         seen, known = wide("total"), wide("observed")
-        delay_end = pd.Timestamp(str(task.delays["vintage"].max()))
-        age = np.asarray((delay_end - ends).days)
         last = rows[-1]
         added = np.zeros(seen.shape)
         size = np.full(seen.shape, np.inf)
@@ -685,9 +634,9 @@ class PersistenceNow(Persistence):
         for p, loc in enumerate(task.locations):
             fit = self._delay(task, loc)
             own.append(fit is not None)
-            _, pmf, sizes = fit or pooled
+            _, pmf, sizes, shares = fit or pooled
             cdfs.append(np.cumsum(pmf))
-            share[p] = week_share(cdfs[p], age, tail=self.lag_tail)
+            share[p, rows] = shares
             added[p, rows] = nowcast_means(seen[p, rows], share[p, rows])
             # Horizon 0 is the latest week; horizons with no fit are Poisson.
             h = np.arange(self.n_history)[::-1]
@@ -781,15 +730,22 @@ class PersistenceNow(Persistence):
                 walk = baseline_walk(centre, mine, ahead, rng)
             totals[:, p, last + 1 :] = np.maximum(walk, known[p, last + 1 :])
         final, as_of = [], []
+        delay_end = pd.Timestamp(str(task.delays["vintage"].max()))
+        age = (delay_end - ends).days.to_numpy()
         for p, loc in enumerate(task.locations):
-            s_v = share[p]
             final.append(_frame(loc, weeks, totals[:, p, cols]))
             diff = totals[:, p] - seen[p]
+            cdf = cdfs[p]
             for date in task.report_by:
+                # The cases still to come arrive by delay, in the triangle's
+                # days from the end of the week.
                 later = (pd.Timestamp(date) - ends).days.to_numpy()
-                s_t = week_share(cdfs[p], later, tail=self.lag_tail)
-                q = np.clip((s_t - s_v) / np.maximum(1 - s_v, 1e-12), 0, 1)
-                q = np.where(s_v >= 1.0, 1.0, q)
+                now = np.where(age < 0, 0.0, cdf[np.clip(age, 0, cdf.size - 1)])
+                then = np.where(
+                    later < 0, 0.0, cdf[np.clip(later, 0, cdf.size - 1)]
+                )
+                q = np.clip((then - now) / np.maximum(1 - now, 1e-12), 0, 1)
+                q = np.where((now >= 1.0) | (share[p] >= 1.0), 1.0, q)
                 up = rng.binomial(np.maximum(diff, 0).astype(np.int64), q)
                 counts = seen[p] + up + np.minimum(diff, 0)
                 due = [c for c in cols if grid[c] <= date]
