@@ -242,3 +242,30 @@ def test_completeness_from_releases(target: pd.DataFrame) -> None:
     assert 2 <= weeks <= 5
     # One release has no growth to learn from.
     assert release_complete_weeks(target, "2026-08-18") is None
+
+
+def test_persistence_holds_weeks_95_percent_published(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    from bdbvhubrenewal.forecasters.persistence import (
+        release_complete_weeks,
+        release_week,
+    )
+
+    # A week is complete once 95% of its final total is published, from
+    # the hub's releases. Complete weeks are returned as published.
+    rows = target.loc[target["vintage"] <= "2026-10-17"]
+    task = next(
+        t
+        for t in make_tasks(rows, delays, BacktestConfig(seed=3))
+        if t.vintage == "2026-10-17"
+    )
+    weeks = release_complete_weeks(task.target_history, task.vintage, 0.95)
+    assert weeks is not None
+    last = release_week(task.vintage) - dt.timedelta(weeks=weeks)
+    samples = Persistence().forecast(task)
+    spread = samples.groupby(["location", "target_end_date"])["value"].nunique()
+    held = spread.loc[spread.index.get_level_values(1) <= last.isoformat()]
+    assert (held == 1).all()
+    walked = spread.loc[spread.index.get_level_values(1) > last.isoformat()]
+    assert (walked.groupby(level=1).max() > 1).all()
