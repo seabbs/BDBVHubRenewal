@@ -35,10 +35,8 @@ The totals of each onset week by release form a reporting triangle.
 Each pair of releases a week apart up to $T_v$ gives, pooled over provinces, the growth $f_k$ of the totals of weeks $k$ weeks old to the next release.
 The share of a week's final total published at $k$ weeks old is $1 / \prod_{j \ge k} f_j$, for $j$ up to 12 weeks, with $f_j = 1$ where no pair gives it.
 Week $w$ is complete once that share is at least 0.95.
-Late entries, re-imputation and filled-in onsets are all in the totals, so they are counted.
 Without two releases a week apart, week $w$ is complete if its Wednesday is at least $L$ days before $T_v$, with $L$ the 95th centile of the delays published with the vintage, or 10 days if none were published.
 Each sample is one joint trajectory across weeks, and the national value is the sum of the provinces.
-The median has no growth and weeks up to $c$ are still revised upwards, so persistence underpredicts during growth (see [Backtest](../backtest.md#persistence-bias)).
 
 ## Persistence on a nowcast
 

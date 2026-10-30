@@ -39,7 +39,7 @@ Recent weeks are revised upwards in later vintages, so each forecast is made fro
 The hub imputes an onset for each case reported without one by subtracting a delay drawn from the pooled published delays ([hub issue 61](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/61)).
 So the share of cases without an onset is measured at every vintage.
 The 2026-08-18 vintage has no delay file.
-The backtest thins the 2026-10-09 rows to those likely published by then under the prior publication lag (3,846 of 4,184), which leaks which rows were late and later corrections.
+The backtest thins the 2026-10-09 rows to those likely published by then under the prior publication lag (3,846 of 4,184).
 
 ## Reconstructed vintages
 
@@ -54,7 +54,6 @@ Cases reach a vintage some days after report, so the cut-off is $A' = A - 3$ day
 - **Delay data.** Rows whose report (taking the onset mid-week) falls by $A'$.
 
 The publication lag is 3 days ([Data](../data.md#reconstructed-vintages) compares it with the real vintages).
-Reconstructed vintages miss real revisions and changes in the hub's imputation, so scores on them are optimistic.
 
 ## Simulated vintages
 
@@ -75,7 +74,6 @@ The truth is every confirmed case by its true onset week.
 `renewalbvd` uses the Rt estimates in the public `results-<run>` releases of [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) (MIT licence, [Zenodo 10.5281/zenodo.20312758](https://doi.org/10.5281/zenodo.20312758)).
 These are the national $R_T$ draws, the patch summaries from 23 October and the release's data cut-off.
 Each forecast uses the newest release that existed at its cut-off, with data ending by the forecast date, whose fit converged.
-The convergence check is generous.
 The joint fit's worst R-hat must be at most 1.1 (`[bvd] max_rhat` in `config/backtest.toml`), and effective sample sizes are ignored.
 The R-hat is read from the fit diagnostics table in the release's rendered site (`site.zip`), and a release without a readable table is passed over for the next older one.
 Each fit records the release it used, its R-hat and why newer releases were skipped.

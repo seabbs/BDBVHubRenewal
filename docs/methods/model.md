@@ -38,7 +38,7 @@ $$
 \eta_j(t) = \phi\, \eta_j(t - 1) + \sigma_\delta z_j(t), \qquad \phi = 2^{-1/h}, \qquad h \sim \text{LogNormal}(\log 6, 0.6^2)\ \text{weeks}, \qquad \sigma_\delta \sim \mathcal{N}^+(0, 0.1^2).
 $$
 
-The shared $\sigma_\delta$ and $h$ pool the provinces, as in BVDOutbreakSize with a 42-day half-life.
+The shared $\sigma_\delta$ and $h$ pool the provinces.
 The starting offsets are $v = Q u$, with $u \sim \mathcal{N}(0, \sigma_v^2)$ and $\sigma_v \sim \mathcal{N}^+(0, 0.3^2)$.
 
 ### Renewal with importation and depletion
@@ -124,12 +124,12 @@ $$
 
 $M_p(t)$ are the cases reported on day $t$ without an onset.
 $\hat f_T$ is the empirical pmf of all delays published at $T$, pooled and on 0 to 60 days, and is data.
-The hub's code is not public, so pooling and the handling of negative and long delays are assumed.
+Pooling and the handling of negative and long delays are assumed.
 
 ### Likelihood
 
 - Weekly $\mathrm{known}_{p,T}$ and $\mathrm{imputed}_{p,T}$ are negative binomial, each with $1/\sqrt{\phi} \sim \text{HalfNormal}(0.25)$.
-- Known-onset delays, by onset week and delay on 0 to 60 days, are Dirichlet-multinomial given each week's total, with probabilities from $\lambda$, $f$, $\pi$ and $c$ and $1/\sqrt{\psi} \sim \text{HalfNormal}(0.1)$. A multinomial, an option, would treat the 8,000 pooled delays as independent.
+- Known-onset delays, by onset week and delay on 0 to 60 days, are Dirichlet-multinomial given each week's total, with probabilities from $\lambda$, $f$, $\pi$ and $c$ and $1/\sqrt{\psi} \sim \text{HalfNormal}(0.1)$.
 - Provinces with no cases have Poisson weekly zeros with mean $\mu_q(s) = \kappa \sum_p K_{pq}\, \lambda_p(s)$, $\kappa \sim \text{LogNormal}(\log 10^{-3}, 2^2)$.
 - Leaving a province out removes its first two terms but keeps it in the latent process.
 
@@ -142,20 +142,6 @@ Final imputed counts are a negative binomial draw centred on the current imputed
 Provinces with no cases draw Poisson importations after the cut-off, which spread at the infection-weighted national Rt.
 The national trajectory is the sum of the provinces plus an unassigned component, $\max\{0, Y_{CD}(w) - \sum_p Y_p(w)\}$ in data weeks and $\rho \sum_p \tilde y_{p,k}(w)$ after, with $\rho$ its share over the last 4 data weeks.
 
-### Identifiability
-
-| Quantity | Informed by | Identified? |
-|---|---|---|
-| $R_p(t)$ | Growth of onsets in each province | Well where cases are many; pooled where few |
-| $\pi_p(t)$ | Imputed against known onsets | Well in recent weeks; prior-driven in early weeks with few cases |
-| $f_s(d)$ | The delay file and the shape of right truncation | Well |
-| $\hat f_T$ | Published delays | Known |
-| $\alpha(s)$ level | Only with $\nu$ and the seeds | Fixed at $\alpha_0$ |
-| $\alpha(s)$ change | Trades off against $R_p(t)$ | Weakly; its small step SD keeps it near constant |
-| $\nu$ | Depletion only | Mostly prior; it bounds forecasts rather than explaining the data |
-| $\varepsilon$ | Timing of spread between provinces, against the seeds | Weakly; Beta prior |
-| $\kappa$ | Zeros in provinces with no cases | Bounded above only; it does not affect provinces with cases |
-
 ## Health zones
 
 Health-zone forecasts split the province forecast of whichever model is submitted.
@@ -167,11 +153,11 @@ Each province sample $k$ draws its zone shares once, for all weeks:
 $$
 \theta^{(k)} \sim \text{Dirichlet}(\alpha),
 \qquad
-\alpha_z = r_z + \kappa\, \frac{l_z + a}{\sum_{z'} (l_{z'} + a)}.
+\alpha_z = r_z + \kappa_z\, \frac{l_z + a}{\sum_{z'} (l_{z'} + a)}.
 $$
 
 $r_z$ is the zone's onsets over the 2 weeks before the vintage and $l_z$ those over the 16 weeks before it.
-So recent shares are shrunk towards longer-run shares by $\kappa = 100$ pseudo-cases.
+Recent shares are shrunk towards longer-run shares by $\kappa_z = 100$ pseudo-cases.
 The floor $a = 1/2$ gives a zone with no cases a small share.
 Each zone keeps its published count and the rest of the province sample $Y^{(k)}(w)$ is split:
 

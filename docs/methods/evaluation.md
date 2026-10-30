@@ -23,7 +23,6 @@ $$
 
 with $P$ the empirical delay distribution of fully observed onset weeks.
 $K$ is the fewest whole weeks with $s(7K) \ge 0.95$.
-The 2026-10-09 to 2026-10-24 delay data all give $K = 3$.
 
 **Vintage-matched.** The renewal variants draw reported counts from the same posterior draws as the final counts.
 Persistence thins each sample $x$ of week $w$ to $\max\{Y_{p,v}(w),\ \text{Binomial}(x, s(T - w))\}$.
