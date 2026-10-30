@@ -25,7 +25,8 @@ $$
 \tilde y_p(c + h) \sim \text{Poisson}\big(\lambda_p(c + h)\big).
 $$
 
-$\epsilon_{p,j}$ is modelled as a random walk with $\sigma_p$ as the SD of the 7 weekly changes in $\log(1 + Y_{p,v})$ over the last 8 complete weeks, floored at 0.1.
+The weekly steps $\epsilon_{p,j}$ are independent, so the log level is a random walk from the last complete week.
+$\sigma_p$ is the standard deviation of the 7 weekly changes in $\log(1 + Y_{p,v})$ over the last 8 complete weeks, floored at 0.1.
 Week $w$ is complete if its Wednesday is at least $L$ days before $T_v$, with $L$ the 90th centile of the delays published with the vintage, or 10 days if none were published.
 Each sample is one joint trajectory across weeks, and the national value is the sum of the provinces.
 The median has no growth and weeks up to $c$ are still revised upwards, so persistence underpredicts during growth (see [Backtest](../backtest.md#persistence-bias)).
@@ -37,15 +38,14 @@ It nowcasts the recent weeks with a Python port of [baselinenowcast](https://git
 Tests check the port's delay, point nowcast and negative binomial sizes against baselinenowcast 0.2.0 from CRAN on fixed triangles, and a CI job regenerates those fixtures with the R package (`scripts/baselinenowcast_fixtures.R`).
 
 **Delay and uncertainty.**
-The reporting triangle $n(W, d)$ counts the cases in the vintage's delay file by onset week $W$ and delay $d$ in days, up to 35 days, with $d$ counted to each case's first publication.
-Rows are matched across the delay files up to $T_v$ by province, onset week and reported delay.
-A row in the first file keeps its reported delay.
-A row first in a later file, absent from the file before it dated $V$, gets $\max(d, V + 1 - W)$, so a batch published late is a long delay that the chain ladder and its retrospective uncertainty learn.
-Rows whose delay is then over 35 days are left out, as they are mostly onsets recorded late for cases already counted as imputed.
+The reporting triangle $n(W, d)$ counts the cases in the vintage's delay file by onset week $W$ and reported delay $d$ in days, from onset to report, up to 35 days.
+Delays are not matched across delay files.
+The hub fills in onsets for cases it had imputed, and these appear in later files with their original report delay while the totals stay the same, so they are not late reports.
 A case is taken as published on day $W + d$, so cell $(W, d)$ is observed if $W + d \le T_v$.
 On the last 6 onset weeks, a chain ladder gives the delay pmf $p$ with cdf $F$, as baselinenowcast's `estimate_delay` does.
 The same is done on the triangle cut back to each of the 8 previous weeks, and each open row is filled from its pmf as `apply_delay` does.
-Comparing what each of those nowcasts expected to be added with what has been added since gives a negative binomial size $\phi_h$ for each horizon $h$, as `estimate_uncertainty_retro` does.
+Comparing what each of those nowcasts expected to be added to each onset week with what has been added since gives a negative binomial size $\phi_h$ for each horizon $h$, the weeks from that onset week to the latest, as `estimate_uncertainty_retro` does.
+So the sizes are fitted to weekly sums.
 Ituri and Nord-Kivu, with at least 50 delays a week, use their own $p$ and $\phi_h$.
 The other provinces borrow those of the triangle pooled over provinces, as baselinenowcast borrows a delay from another triangle.
 
@@ -58,12 +58,16 @@ s_p(w) = \frac{1}{7} \sum_{u=0}^{6} \sum_{\ell} P(\ell)\, F_p(T_v - w + u - \ell
 $$
 
 with the publication lag $\ell$ uniform on 0 to 3 days with probability 0.9 and on 4 to 28 days with probability 0.1, for the cases that reach the hub's totals weeks after report.
+The delay file holds no report or publication dates, so the lag cannot be learnt from it.
+Without it, the shares are too high and recent weeks are nowcast too low.
 
 The published total $Y_{p,v}(w)$, known plus imputed, is expected to reach $Y_{p,v}(w)/s_p(w)$, and the cases still to come are
 
 $$
-U_{p,k}(w) \sim \text{NegBin}\Big(\text{mean } Y_{p,v}(w) \frac{1 - s_p(w)}{s_p(w)},\ \text{size } \phi_{p,h(w)}\Big).
+U_{p,k}(w) \sim \text{NegBin}\Big(\text{mean } Y_{p,v}(w) \frac{1 - s_p(w)}{s_p(w)},\ \text{size } \phi_{p,h(w)}\Big),
 $$
+
+for each sample $k$, with $h(w)$ the weeks from $w$ to the latest week $c$, the one ending on or before $T_v$.
 
 The hub re-imputes missing onsets at each vintage, so totals can also fall.
 Each province adds a revision $E_{p,k}(w) = A - B$ with $A, B \sim \text{Poisson}\{\kappa I_{p,v}(w)/2\}$, so its variance is $\kappa I_{p,v}(w)$:
@@ -78,25 +82,19 @@ The sums run over consecutive vintages $a < b$ up to $T_v$ and the weeks that en
 So $C_{p,k}(w)$ can fall below the published total, but not below the known onsets $K_{p,v}(w)$.
 
 **Forecast.**
-Each sample $k$ is centred on the latest 3 nowcast weeks, weighted by the share of each reported, so a week with few cases reported yet counts little:
-
-$$
-m_{p,k} = \frac{\sum_{w} s_p(w) \log\{1 + C_{p,k}(w)\}}{\sum_{w} s_p(w)}.
-$$
-
+Each sample $k$ starts from its own nowcast of the latest week, $\log\{1 + C_{p,k}(c)\}$.
 From there it follows the baseline of the [COVID-19 Forecast Hub](https://github.com/reichlab/covidModels) and FluSight on the log scale, as [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) does for its persistence baseline:
 
 $$
-\log\{1 + \tilde y_{p,k}(c + h)\} = m_{p,k} + \sum_{j=1}^{h} \delta_{p,k,j},
-\qquad
-\delta_{p,k,j} \sim \text{Uniform}\{\pm \Delta_{p}\}.
+\log\{1 + \tilde y_{p,k}(c + h)\} = \log\{1 + C_{p,k}(c)\} + \sum_{j=1}^{h} \delta_{p,k,j},
 $$
 
-$\Delta_p$ are the weekly changes in $\log(1 + \hat y_p)$ over the 8 weeks up to the latest week $c$, with $\hat y_p$ the point nowcast, every nowcast week counted equally.
-With their negatives, the median stays at the centre and the spread grows with the horizon.
+with each step $\delta_{p,k,j}$ drawn with equal probability from $\pm \Delta_{p,i}$.
+$\Delta_{p,i}$, $i = 1, \dots, 7$, are the weekly changes in $\log(1 + \hat y_p)$ over the 8 weeks up to $c$, with $\hat y_p(w) = Y_{p,v}(w) / s_p(w)$ the point nowcast.
+With their negatives, the median stays at the start and the spread grows with the horizon.
 Provinces without their own delay draw from the changes of the provinces with one, so a few small, noisy counts do not set their spread.
-A province with fewer than 10 cases a week over the last 8 weeks instead walks the log of that mean as a Poisson rate, $\tilde y_{p,k}(c + h) \sim \text{Poisson}\{\bar y_{p,k} \exp(\sum_{j \le h} \delta_{p,k,j})\}$, so a few cases a week stay plausible.
-With fewer than 3 changes the forecast is Poisson around the centre.
+A province whose mean nowcast over the last 8 weeks, $\bar y_{p,k}$, has a median over samples below 10 cases a week instead walks the log of that mean as a Poisson rate, $\tilde y_{p,k}(c + h) \sim \text{Poisson}\{\bar y_{p,k} \exp(\sum_{j \le h} \delta_{p,k,j})\}$, so a few cases a week stay plausible.
+With fewer than 3 changes the forecast is Poisson around the start.
 Forecasts are rounded and kept at least the known onsets.
 Counts reported by a later date $T$ are $Y_{p,v}(w) + \text{Binomial}\big(\max(D, 0),\ q\big) + \min(D, 0)$, with $D = C_{p,k}(w) - Y_{p,v}(w)$ and $q = \{s_p(T - w) - s_p(w)\}/\{1 - s_p(w)\}$.
 Without a complete onset week or 50 cases in the last 6 weeks, or with fewer than 3 past nowcasts, `persistencenow` is `persistence`.

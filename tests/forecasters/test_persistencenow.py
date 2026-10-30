@@ -292,8 +292,8 @@ def test_sparse_places_stay_plausible(
     # With 7 cases in the last 6 weeks, a few cases a week stay plausible.
     ahead = top.loc[top.index > task.vintage]
     assert (ahead >= 3).all()
-    # Ituri's walk is centred between its last two nowcasts, nearer the
-    # one with more of its cases reported.
+    # Ituri's walk starts from its latest nowcast, so its median stays
+    # near its last two nowcasts.
     it = samples.loc[samples["location"] == "CD-IT"]
     med = it.groupby("target_end_date")["value"].median()
     low, high = sorted(med.loc[["2026-10-17", "2026-10-24"]])
@@ -305,8 +305,8 @@ def test_ituri_turning_point_at_08_22(
 ) -> None:
     # Ituri peaked in the week ending 08-15 (413 cases) and fell after it
     # (337, 358, 298, 336, 277). At the reconstructed 08-22 vintage the
-    # week ending 08-22 is about 7% reported. Its nowcast enters the walk's
-    # centre weighted by that share, so the walk is not held at the peak.
+    # week ending 08-22 is about 7% reported. The walk starts from its
+    # nowcast, so it is not held at the peak.
     from bdbvhubrenewal.evaluation.backtest import (
         development_tasks,
         load_config,
