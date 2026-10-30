@@ -15,7 +15,8 @@ $$
 
 $\sigma$ is the standard deviation of the weekly changes in
 $\log(1 + y)$ over the last `window` complete weeks, floored at
-`min_sd`.
+`min_sd`. A place with fewer than `own_per_week` cases a week over those
+weeks takes $\sigma$ from the changes of the places above it, pooled.
 Weeks up to $c$ are returned as published (a point mass).
 The median is flat and the spread grows with the horizon.
 Each sample is one joint trajectory across weeks.
@@ -180,6 +181,9 @@ class Persistence:
         Delay quantile defining a complete week.
     default_lag_days : int
         Completeness lag when a vintage has no delay data.
+    own_per_week : float
+        Fewest cases a week, on average over the last `window` weeks, for a
+        place to use its own weekly changes rather than the pooled ones.
     """
 
     name: str = "persistence"
@@ -187,6 +191,7 @@ class Persistence:
     min_sd: float = 0.1
     completeness: float = 0.9
     default_lag_days: int = 10
+    own_per_week: float = 50.0
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return persistence trajectories for a task.
@@ -212,20 +217,23 @@ class Persistence:
         weeks = list(task.target_end_dates)
         n = task.n_samples
         frames = []
-        for loc in task.locations:
-            series = (
-                task.target.loc[task.target["location"] == loc]
-                .set_index("target_end_date")["total"]
-                .sort_index()
-            )
-            complete = series.loc[series.index <= last]
+        series = [
+            task.target.loc[task.target["location"] == loc]
+            .set_index("target_end_date")["total"]
+            .sort_index()
+            for loc in task.locations
+        ]
+        completes = [x.loc[x.index <= last] for x in series]
+        sds = self._spreads([c.to_numpy(dtype=float) for c in completes])
+        for loc, series_p, complete, sd in zip(
+            task.locations, series, completes, sds, strict=True
+        ):
             level = float(complete.iloc[-1]) if len(complete) else 0.0
-            sd = self._spread(complete.to_numpy(dtype=float))
             values = np.empty((n, len(weeks)))
             log_level = np.full(n, np.log1p(level))
             for j, week in enumerate(weeks):
                 if week <= last:
-                    values[:, j] = float(series.get(week, 0))
+                    values[:, j] = float(series_p.get(week, 0))
                     continue
                 log_level, values[:, j] = _step(log_level, sd, rng)
             frames.append(
@@ -248,10 +256,32 @@ class Persistence:
 
     def _spread(self, complete: np.ndarray) -> float:
         """Return the SD of the last weekly log changes, floored."""
-        recent = np.log1p(complete[-self.window :])
-        diffs = np.diff(recent)
+        return self._sd(np.diff(np.log1p(complete[-self.window :])))
+
+    def _sd(self, diffs: np.ndarray) -> float:
+        """Return the SD of weekly log changes, floored."""
         sd = float(np.std(diffs, ddof=1)) if diffs.size >= 2 else 0.0
         return max(sd, self.min_sd)
+
+    def _spreads(self, completes: list[np.ndarray]) -> list[float]:
+        """Return each place's spread, pooled below `own_per_week` cases."""
+        recent = [c[-self.window :] for c in completes]
+        own = [r.size > 0 and r.mean() >= self.own_per_week for r in recent]
+        if not any(own):
+            return [self._spread(c) for c in completes]
+        pooled = self._sd(
+            np.concatenate(
+                [
+                    np.diff(np.log1p(r))
+                    for r, o in zip(recent, own, strict=True)
+                    if o
+                ]
+            )
+        )
+        return [
+            self._spread(c) if o else pooled
+            for c, o in zip(completes, own, strict=True)
+        ]
 
     def _reported_by(
         self,
@@ -508,7 +538,7 @@ class PersistenceNow(Persistence):
         Fewest delays in the triangle's onset weeks to nowcast at all.
     own_per_week : float
         Fewest delays a week, on average over those onset weeks, for a
-        place to use its own delay rather than the pooled one.
+        place to use its own delay and steps rather than the pooled ones.
     step_pool : numpy.ndarray, optional
         Weekly log steps that places without their own delay draw from,
         for example a province's for its health zones. By default, the
@@ -526,7 +556,6 @@ class PersistenceNow(Persistence):
     n_retro: int = 8
     min_retro: int = 3
     min_delays: int = 50
-    own_per_week: float = 50.0
     low_count: float = 10.0
     step_pool: np.ndarray | None = None
 
