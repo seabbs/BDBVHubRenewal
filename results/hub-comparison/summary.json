@@ -9,7 +9,9 @@
     "CD-NK"
   ],
   "hub_ids": {
-    "randomwalknowcast": "epiforecasts-seabbsbaseline"
+    "randomwalknowcast": "seabbs-rwnowcast",
+    "randomwalk": "seabbs-randomwalk",
+    "randomwalknowcastdaily": "seabbs-rwnowcastdaily"
   },
   "accessed": "2026-10-28"
 }
