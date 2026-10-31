@@ -1,15 +1,16 @@
 # Baseline models
 
-The random walk baselines, with the maths of each.
+The three random walk baselines, with the maths of each.
 { .page-subtitle }
 
 The data and notation are on the [Data methods page](data.md#target-and-notation).
 The renewal models are on the [Renewal models](model.md) page.
-Health-zone forecasts split the province samples of either baseline as described under [Health zones](model.md#health-zones).
+Health-zone forecasts split the province samples of any baseline as described under [Health zones](model.md#health-zones).
 
-## RandomWalk
+## Random walk
 
 `randomwalk` is the baseline every other model is compared against.
+It makes no nowcast.
 With $c$ the last complete week, weeks up to $c$ are the vintage counts and later weeks a log-scale random walk from $Y_{p,v}(c)$ with Poisson noise.
 For $h \ge 1$,
 
@@ -28,7 +29,7 @@ $$
 The weekly steps $\epsilon_{p,j}$ are independent, so the log level is a random walk from the last complete week.
 $\sigma_p$ is the standard deviation of the 7 weekly changes in $\log(1 + Y_{p,v})$ over the last 8 complete weeks, floored at 0.1.
 A province with fewer than 10 cases a week over those weeks takes $\sigma_p$ from the weekly changes of the provinces above that, pooled.
-`randomwalknowcast` uses the same walk and the same rule for $\sigma_p$.
+`randomwalknowcast` and `randomwalknowcastdaily` use the same walk and the same rule for $\sigma_p$.
 
 Completeness comes from the hub's releases.
 The totals of each onset week by release form a reporting triangle.
@@ -38,9 +39,9 @@ Week $w$ is complete once that share is at least 0.95.
 Without two releases a week apart, week $w$ is complete if its Wednesday is at least $L$ days before $T_v$, with $L$ the 95th centile of the delays published with the vintage, or 10 days if none were published.
 Each sample is one joint trajectory across weeks, and the national value is the sum of the provinces.
 
-## RandomWalk on a nowcast
+## Random walk on a nowcast
 
-`randomwalknowcast` nowcasts recent weeks with a chain ladder on the hub's releases, as in baselinenowcast[^bnc-paper][^bnc-package], then runs the `randomwalk` random walk from each nowcast draw.
+`randomwalknowcast` nowcasts recent weeks with a chain ladder on the hub's releases, as in baselinenowcast[^bnc-paper][^bnc-package], then runs the random walk of `randomwalk` from each nowcast draw.
 
 **Release triangle.**
 $Y_{p,r}(w)$ is the total, known plus imputed, of onset week $w$ in province $p$ at release $r$.
@@ -85,6 +86,31 @@ $$
 
 $\sigma_p$ is set as for `randomwalk`, from $\log\{1 + Y_{p,v}(w) G_k\}$ over the 8 weeks up to $c$.
 Counts reported by a later release $T$ are $Y_{p,v}(w) + \text{Binomial}\big(\max(D, 0),\ q\big) + \min(D, 0)$, with $D = C_{p,i}(w) - Y_{p,v}(w)$, $q = (G_k / G_{k'} - 1)/(G_k - 1)$ and $k'$ the age of $w$ at $T$.
+
+## Random walk on a daily nowcast
+
+`randomwalknowcastdaily` is `randomwalknowcast` with the nowcast made from the daily totals of each release.
+It is `randomwalk` where the vintage has no daily releases.
+
+**Daily triangle.**
+The daily totals by release form a reporting triangle with onset day as the reference and the release's data cut-off $c_r$ as the report date.
+The cut-off is the release's `cutoff` column where it has one, else its latest onset day.
+Onset day $d$ is $a = c_r - d$ days old at release $r$, and $h_a = \log G_a$ is the log growth from age $a$ to final, with $h_a = 0$ beyond 84 days.
+For consecutive releases $a < b$ up to $T_v$ and each onset day,
+
+$$
+\log \frac{Y_b(d)}{Y_a(d)} = h_{c_a - d} - h_{c_b - d},
+$$
+
+with $Y$ summed over provinces.
+The $h$ are fitted by least squares weighted by $\sqrt{Y_a(d)}$.
+Provinces with at least 50 cases a week over the last 8 weeks use growth fitted to their own totals where their releases cover the age, and the others use the pooled growth.
+
+**Nowcast and forecast.**
+The latest release's daily totals are grown by $G_a$ and summed to onset weeks.
+Where the latest week is only partly observed at the cut-off, its nowcast is scaled by 7 over the days observed.
+The change still to come is Skellam as for `randomwalknowcast`, with $\rho_k$ fitted to weekly nowcasts made from earlier releases.
+The forecast and the counts reported by a later release follow `randomwalknowcast`.
 
 [^bnc-paper]: Johnson KE, Tang M, Tyszka E, Nemcova B, Wolffram D, Ergas R, Reich NG, Funk S, Mellor J, Bracher J, Abbott S (2025). Baseline nowcasting methods for handling delays in epidemiological data. Wellcome Open Research. [doi:10.12688/wellcomeopenres.25027.2](https://doi.org/10.12688/wellcomeopenres.25027.2).
 [^bnc-package]: Johnson KE, Tyszka E, Bracher J, Funk S, Abbott S (2025). baselinenowcast: Methods for baseline nowcasting right-truncated epidemiological data. <https://github.com/epinowcast/baselinenowcast/>.

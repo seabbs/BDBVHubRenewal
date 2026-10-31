@@ -104,4 +104,4 @@ Forecasts are made from the four weekly simulated vintages up to 2026-10-24 and 
 
     --8<-- "scenario-scores.md"
 
-Zone forecasts split each model's province samples across the zones of each province, and are compared with zone randomwalk.
+Zone forecasts split each model's province samples across the zones of each province, and are compared with the zone random walk.

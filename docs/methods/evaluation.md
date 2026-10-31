@@ -49,7 +49,7 @@ $$
 $$
 
 Positive bias is overprediction.
-Relative WIS is a ratio of means against randomwalk $b$ over the forecasts both made, and below 1 beats it.
+Relative WIS is a ratio of means against `randomwalk` $b$ over the forecasts both made, and below 1 beats it.
 Coverage is whether $y$ falls in the central 50% and 90% sample intervals.
 
 ## Backtest design
@@ -67,18 +67,18 @@ Each vintage is a forecast task, and every registered model forecasts every task
 
 Each model choice is logged with its date, and the development set rolls forward with them.
 Development runs use every vintage up to the latest choice date.
-Each real vintage after a choice is forecast by the model chosen then and by randomwalk, with the code at the time of the run.
+Each real vintage after a choice is forecast by the model chosen then and by `randomwalk`, with the code at the time of the run.
 Each forecast is scored when the next vintage arrives and re-scored as newer ones do.
 
 ## Leave-one-province-out
 
 One province's likelihood is masked while it stays in the model, so coupling still acts on it.
 Its onsets are scored against the latest real vintage.
-It runs on development vintages, for models that support the mask, so not `renewalsp` or randomwalk.
+It runs on development vintages, for models that support the mask, so not `renewalsp` or `randomwalk`.
 
 ## Health zones
 
-Zone forecasts are scored against zone randomwalk, which runs randomwalk on each zone's own series and does not sum to the provinces.
+Zone forecasts are scored against zone `randomwalk`, which runs `randomwalk` on each zone's own series and does not sum to the provinces.
 Each real vintage before the latest is forecast, and every zone of a forecast province is scored, against zero where it has no cases.
 `bdbvhubrenewal zone-backtest` runs it and writes `results/zone-scores.csv`.
 

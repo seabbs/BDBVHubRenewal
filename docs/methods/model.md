@@ -174,7 +174,7 @@ Province values are rounded.
 
 ### Model choice
 
-The variant to submit is chosen on the development backtest, by WIS and log WIS relative to randomwalk, by horizon and province.
+The variant to submit is chosen on the development backtest, by WIS and log WIS relative to `randomwalk`, by horizon and province.
 Each week the submission takes the first of `renewal`, one refit of `renewal` with smaller steps, `renewalsp` and `randomwalk` that passes its checks.
 
 ### Renewal variants
