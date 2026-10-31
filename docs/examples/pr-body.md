@@ -1,7 +1,7 @@
-<!-- bdbv-submission:seabbs-persistence:2026-10-31 -->
-Automated submission of `seabbs-persistence` for 2026-10-31, from data as of 2026-10-24, for 9 locations.
+<!-- bdbv-submission:seabbs-randomwalk:2026-10-31 -->
+Automated submission of `seabbs-randomwalk` for 2026-10-31, from data as of 2026-10-24, for 9 locations.
 
-All checks passed, with warnings on bounds. Stand-in: persistence runs as the `main` model. Dry run: nothing was pushed.
+All checks passed, with warnings on bounds. Stand-in: random walk runs as the `main` model. Dry run: nothing was pushed.
 
 ![Nowcast and forecast for 2026-10-31](../assets/example-submission-nowcast.png)
 
@@ -12,7 +12,7 @@ This round in our docs: https://samabbott.co.uk/BDBVHubRenewal/submission/rounds
 | check | status |
 | --- | --- |
 | Convergence | N/A (no sampler) |
-| Posterior predictive checks | N/A (persistence has no sampler and no posterior) |
+| Posterior predictive checks | N/A (random walk has no sampler and no posterior) |
 | Forecast checks | WARN (bounds flagged) |
 | Hub validation | PASS |
 | Data coherence | PASS (national (CD) equals the sum of the provinces in every week) |
@@ -46,9 +46,9 @@ Submitted `CD` samples.
 
 |  |  |
 | --- | --- |
-| File | `model-output/seabbs-persistence/2026-10-31-seabbs-persistence.csv` |
+| File | `model-output/seabbs-randomwalk/2026-10-31-seabbs-randomwalk.csv` |
 | Contents | 9 locations, 9000 rows |
-| Model | persistence (`main`), version 0.1.0, code [`fd9d26eaed`](https://github.com/seabbs/BDBVHubRenewal/commit/fd9d26eaedecf543c851271d365d52db09fff85c) |
+| Model | random walk (`main`), version 0.1.0, code [`fd9d26eaed`](https://github.com/seabbs/BDBVHubRenewal/commit/fd9d26eaedecf543c851271d365d52db09fff85c) |
 | Data vintage (`as_of`) | 2026-10-24 |
 | Hub data commit | [`187015937f`](https://github.com/InsightNet-US/BDBV-Modeling-Hub/commit/187015937fc7c0fc28cc769fb938ed89c9e18ae8) |
 | Hub config | [`88478a33b6`](https://github.com/InsightNet-US/BDBV-Modeling-Hub/tree/88478a33b6f81dc717eec16d3ec0417c8f0d5588) |

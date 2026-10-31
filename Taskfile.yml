@@ -72,14 +72,14 @@ tasks:
   metadata:
     desc: Write and check the metadata of both hub models in hub/model-metadata/
     cmds:
-      - uv run bdbvhubrenewal metadata --model persistencenow --out hub/model-metadata
+      - uv run bdbvhubrenewal metadata --model randomwalknowcast --out hub/model-metadata
       - uv run bdbvhubrenewal metadata --model renewal --out hub/model-metadata
 
   validate-hub:
     desc: Check the nowcast file and metadata with hub_validate (Python) and hubValidations (R)
     deps: [metadata]
     vars:
-      MODEL: '{{.MODEL | default "persistencenow"}}'
+      MODEL: '{{.MODEL | default "randomwalknowcast"}}'
       ID:
         sh: uv run --quiet bdbvhubrenewal hub-id --model {{.MODEL}}
     env:

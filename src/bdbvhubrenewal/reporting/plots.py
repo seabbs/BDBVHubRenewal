@@ -893,7 +893,7 @@ def plot_forecasts(
 def plot_nowcast(
     location: str,
     vintage: str | None = None,
-    models: Sequence[str] = ("persistence",),
+    models: Sequence[str] = ("randomwalk",),
     target: pd.DataFrame | None = None,
     delays: pd.DataFrame | None = None,
     forecasts: pd.DataFrame | None = None,
@@ -1306,7 +1306,7 @@ def plot_scores(
 
 def plot_score_summary(
     scores: pd.DataFrame,
-    baseline: str = "persistence",
+    baseline: str = "randomwalk",
     by: str = "horizon",
     models: Sequence[str] | None = None,
     mode: str = "light",
@@ -1500,8 +1500,8 @@ _METRIC_LABELS: Final[dict[str, str]] = {
     "coverage_50": "50% interval coverage",
     "coverage_90": "90% interval coverage",
     "bias": "Mean bias",
-    "relative_wis": "WIS relative to persistence",
-    "relative_log_wis": "Log WIS relative to persistence",
+    "relative_wis": "WIS relative to randomwalk",
+    "relative_log_wis": "Log WIS relative to randomwalk",
 }
 
 
@@ -1509,7 +1509,7 @@ def plot_relative_skill(
     scores: pd.DataFrame,
     by: str = "horizon",
     metric: str = "wis",
-    baseline: str = "persistence",
+    baseline: str = "randomwalk",
     models: Sequence[str] | None = None,
     mode: str = "light",
 ) -> Figure:

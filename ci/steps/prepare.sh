@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Pin the inputs every candidate shares, then build the baseline
-# candidates, which need no fit: persistence first, since every other
-# candidate is checked against it, then persistence on a nowcast.
+# candidates, which need no fit: random walk first, since every other
+# candidate is checked against it, then random walk on a nowcast.
 #
 #   HUB_REF         hub commit to read the data at (from the data check)
 #   AS_OF           data vintage
@@ -82,7 +82,7 @@ sci python -m submission_ci.policy --policy "$POLICY" --stage baseline \
 python3 - "$WORK/matrix-baseline.json" << 'EOF' > "$WORK/legs-baseline.txt"
 import json, sys
 legs = json.load(open(sys.argv[1]))["include"]
-for e in sorted(legs, key=lambda e: e["id"] != "persistence"):
+for e in sorted(legs, key=lambda e: e["id"] != "randomwalk"):
     print("\t".join([e["id"], e["kind"], e["config"], e["label"],
                      e["model"] or "-"]))
 EOF

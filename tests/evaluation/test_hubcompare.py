@@ -90,7 +90,7 @@ def _write_hub(root: Path) -> None:
 def _ours(target: pd.DataFrame, delays: pd.DataFrame) -> pd.DataFrame:
     config = BacktestConfig(n_samples=100, seed=1)
     return our_forecasts(
-        ["2026-10-17"], target, delays, config, ["persistence"], min_horizon=-4
+        ["2026-10-17"], target, delays, config, ["randomwalk"], min_horizon=-4
     )
 
 
@@ -128,14 +128,14 @@ def test_attribution_names_the_hub() -> None:
 
 def test_load_comparison_config() -> None:
     cfg = load_comparison_config(ROOT / "config" / "hub-comparison.toml")
-    assert cfg.baseline == "persistencenow"
+    assert cfg.baseline == "randomwalknowcast"
     assert "CD" in cfg.locations
 
 
 def test_resolve_baseline() -> None:
     # Falls back to the registry baseline until the preferred one exists.
-    assert resolve_baseline("persistence") == "persistence"
-    assert resolve_baseline("not-registered") == "persistence"
+    assert resolve_baseline("randomwalk") == "randomwalk"
+    assert resolve_baseline("not-registered") == "randomwalk"
 
 
 def test_match_vintage(target: pd.DataFrame) -> None:
@@ -154,9 +154,9 @@ def test_our_forecasts_cover_the_hub_weeks(
 ) -> None:
     config = BacktestConfig(n_samples=100, seed=1)
     fc = our_forecasts(
-        ["2026-10-31"], target, delays, config, ["persistence"], min_horizon=-5
+        ["2026-10-31"], target, delays, config, ["randomwalk"], min_horizon=-5
     )
-    assert set(fc["model"]) == {"persistence"}
+    assert set(fc["model"]) == {"randomwalk"}
     assert set(fc["source"]) == {"real"}
     assert fc["horizon"].min() == -5
     assert fc["horizon"].max() == 3
@@ -165,7 +165,7 @@ def test_our_forecasts_cover_the_hub_weeks(
 def test_stored_forecasts_pick_matching_rounds(tmp_path: Path) -> None:
     stored = pd.DataFrame(
         {
-            "model": ["renewal", "renewal", "persistence", "renewal"],
+            "model": ["renewal", "renewal", "randomwalk", "renewal"],
             "kind": ["real", "real", "real", "reconstructed"],
             "vintage": ["2026-10-24", "2026-10-17", "2026-10-24", "2026-10-24"],
             "reference_date": [
@@ -186,7 +186,7 @@ def test_stored_forecasts_pick_matching_rounds(tmp_path: Path) -> None:
     out = stored_forecasts(
         [path, tmp_path / "missing.csv.gz"],
         ["2026-10-31"],
-        exclude=["persistence"],
+        exclude=["randomwalk"],
     )
     # Real vintages win over reconstructed ones for the same round.
     assert list(out["model"]) == ["renewal"]
@@ -202,7 +202,7 @@ def test_score_comparison_flags_complete_weeks(
     )
     scores, pending = score_comparison(forecasts, target, 3)
     assert pending.empty
-    assert set(scores["model"]) == {"teamA-weekly", "teamB-late", "persistence"}
+    assert set(scores["model"]) == {"teamA-weekly", "teamB-late", "randomwalk"}
     # Each model is scored on the weeks it covered.
     late = scores.loc[scores["model"] == "teamB-late"]
     assert set(late["target_end_date"]) == set(WEEKS[2:])
@@ -229,9 +229,9 @@ def test_summarise_comparison(
         [load_hub_submissions(tmp_path), _ours(target, delays)]
     )
     scores, _ = score_comparison(forecasts, target, 3)
-    table = summarise_comparison(scores, "persistence")
+    table = summarise_comparison(scores, "randomwalk")
     rows = table.set_index("model")
-    assert rows.loc["persistence", "relative_wis"] == pytest.approx(1)
+    assert rows.loc["randomwalk", "relative_wis"] == pytest.approx(1)
     # Complete weeks only: teamB-late forecast 2026-10-03 and 2026-10-10,
     # and only 2026-10-03 is complete, in two locations.
     assert rows.loc["teamB-late", "n"] == 2
@@ -264,12 +264,12 @@ def test_plot_hub_round(
 def test_comparison_label_names_our_hub_models() -> None:
     from bdbvhubrenewal.reporting.plots import comparison_label
 
-    ids = {"persistencenow": "seabbs-baseline"}
+    ids = {"randomwalknowcast": "seabbs-rwnowcast"}
     assert (
-        comparison_label("persistencenow", "real", ids)
-        == "persistencenow (seabbs-baseline)"
+        comparison_label("randomwalknowcast", "real", ids)
+        == "randomwalknowcast (seabbs-rwnowcast)"
     )
-    assert comparison_label("persistence", "real", ids) == "persistence (ours)"
+    assert comparison_label("randomwalk", "real", ids) == "randomwalk (ours)"
     assert comparison_label("OHTJHU-BM", "hub", ids) == "OHTJHU-BM"
 
 
@@ -277,4 +277,4 @@ def test_own_hub_ids() -> None:
     from bdbvhubrenewal.evaluation.hubcompare import own_hub_ids
 
     ids = own_hub_ids(ROOT / "config" / "hub.toml")
-    assert ids["persistencenow"] == "seabbs-baseline"
+    assert ids["randomwalknowcast"] == "seabbs-rwnowcast"

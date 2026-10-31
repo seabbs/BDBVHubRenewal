@@ -24,7 +24,7 @@ on:
     # it), one retry of about the same length, and the gate. Each fit's
     # timeout stops 45 minutes short of the close, and the retry runs only
     # if it can finish in time (ci/policy.toml [timing]), so even a late
-    # failure reaches the fallback or persistence before the close.
+    # failure reaches the fallback or random walk before the close.
     - cron: '0 2-14/3 * * 2'
     # Outside the window, only to freeze the pages of merged rounds.
     - cron: '0 6 * * 3-5'
@@ -155,7 +155,7 @@ jobs:
         run: gh workflow run pages.yml --ref main -R "$GITHUB_REPOSITORY"
 
   prepare:
-    name: Pin inputs and build the persistence candidate
+    name: Pin inputs and build the random walk candidate
     needs: detect
     if: needs.detect.outputs.should_run == 'true'
     runs-on: ubuntu-latest
@@ -173,7 +173,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-forecast-env
-      - name: Download data and build the persistence baseline
+      - name: Download data and build the random walk baseline
         env:
           EXPECTED_LOCATIONS: ${{ vars.EXPECTED_LOCATIONS }}
         run: ci/steps/prepare.sh
@@ -188,8 +188,8 @@ jobs:
       - name: List the primary fits
         id: matrix
         if: steps.tracks.outputs.renewal == 'true'
-        # With persistence chosen, the renewal candidates are fitted as
-        # shadows and the chain is persistence alone. Each fit's timeout
+        # With random walk chosen, the renewal candidates are fitted as
+        # shadows and the chain is random walk alone. Each fit's timeout
         # leaves the gate time before the window closes.
         env:
           IGNORE_WINDOW: ${{ inputs.ignore_window }}
@@ -429,8 +429,8 @@ jobs:
             ${{ env.WORK }}/gate/pr-outcome.txt
           retention-days: 90
 
-  # baseline: persistence on a nowcast, falling back to plain
-  # persistence, under its own hub id. Apart from the renewal chain; both
+  # baseline: random walk on a nowcast, falling back to plain
+  # random walk, under its own hub id. Apart from the renewal chain; both
   # candidates were built in `prepare`.
   baseline:
     name: Submit baseline
@@ -505,7 +505,7 @@ jobs:
           {
             echo "<details><summary>baseline PR body</summary>"
             echo
-            cat "$WORK/track-persistencenow/gate/pr-body.md" 2> /dev/null
+            cat "$WORK/track-randomwalknowcast/gate/pr-body.md" 2> /dev/null
             echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v7
@@ -513,8 +513,8 @@ jobs:
         with:
           name: baseline-gate
           path: |
-            ${{ env.WORK }}/track-persistencenow/gate
-            ${{ env.WORK }}/track-persistencenow/metadata
+            ${{ env.WORK }}/track-randomwalknowcast/gate
+            ${{ env.WORK }}/track-randomwalknowcast/metadata
           retention-days: 90
 
   record:

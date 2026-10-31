@@ -7,7 +7,7 @@ submission and every later change, each with a date:
 ```yaml
 choices:
   - date: 2026-10-10
-    model: persistence
+    model: randomwalk
     summary: Why this model.
 ```
 
@@ -208,7 +208,7 @@ def run_heldout(
     """Forecast and score every held-out vintage under its chosen model.
 
     Each held-out vintage is forecast by its chosen model, every model
-    with no fit (persistence and persistencenow) and any other `models`,
+    with no fit (random walk and randomwalknowcast) and any other `models`,
     and scored against every later real vintage.
 
     Parameters

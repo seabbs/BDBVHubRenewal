@@ -17,7 +17,7 @@ CAND_LABEL=${CAND_LABEL:-$CAND_ID}
 # The model this leg runs: its own (the single-patch fallback, a shadow)
 # or the chosen one.
 model=${CAND_MODEL:-$MODEL}
-[ "$CAND_KIND" = persistence ] && model=${CAND_MODEL:-persistence}
+[ "$CAND_KIND" = randomwalk ] && model=${CAND_MODEL:-randomwalk}
 inputs="$WORK/inputs"
 [ -f "$inputs/context.json" ] || { echo "::error::run prepare.sh first"; exit 1; }
 ctx() { python3 -c "import json,sys; print(json.load(open('$inputs/context.json'))['$1'])"; }
@@ -35,7 +35,7 @@ cp "$inputs/coherence-summary.json" "$out/" 2> /dev/null || true
 note "### Candidate \`$CAND_ID\`: $CAND_LABEL"
 
 fit_ok=true
-if [ "$CAND_KIND" = "persistence" ]; then
+if [ "$CAND_KIND" = "randomwalk" ]; then
   : # no fit
 elif [ "${FIT_CACHE_HIT:-false}" = "true" ] && [ -f "$fit/diagnostics.json" ]; then
   note "Fit restored from the cache, not refitted."
@@ -69,7 +69,7 @@ else
   note "Fit took $(( SECONDS - start )) s."
 fi
 
-if [ "$CAND_KIND" = "persistence" ]; then
+if [ "$CAND_KIND" = "randomwalk" ]; then
   cli nowcast --model "$model" --vintage "$AS_OF" \
     --out "$out/submission" || echo "::warning::$model nowcast failed"
 elif $fit_ok; then
@@ -79,7 +79,7 @@ elif $fit_ok; then
 fi
 sub=$(find "$out/submission" -name '*.csv' 2> /dev/null | sort | head -n 1)
 
-if [ "$CAND_KIND" != "persistence" ]; then
+if [ "$CAND_KIND" != "randomwalk" ]; then
   cp "$fit/diagnostics.json" "$out/" 2> /dev/null || true
   sci summarise-fit --id "$CAND_ID" --diagnostics "$out/diagnostics.json" \
     --out "$out" --policy "$POLICY" --no-fail
@@ -90,7 +90,7 @@ fi
 # fit that wrote none.
 ppc_args=(--id "$CAND_ID" --kind "$CAND_KIND" --ppc "$out/ppc.json"
   --out "$out" --policy "$POLICY" --no-fail)
-if [ "$CAND_KIND" != "persistence" ]; then
+if [ "$CAND_KIND" != "randomwalk" ]; then
   cp "$fit/ppc.json" "$out/" 2> /dev/null || true
   ppc_args+=(--diagnostics "$out/diagnostics.json")
 fi
@@ -104,7 +104,7 @@ if python3 -c "import json, sys; sys.exit(not json.load(open(sys.argv[1])).get('
   fi
 fi
 
-baseline=$(find "$WORK/candidates/persistence/submission" -name '*.csv' \
+baseline=$(find "$WORK/candidates/randomwalk/submission" -name '*.csv' \
   2> /dev/null | sort | head -n 1)
 checks=(--id "$CAND_ID" --kind "$CAND_KIND"
   --submission "${sub:-$out/submission/missing.csv}"
@@ -136,7 +136,7 @@ if [ -n "$sub" ]; then
     --out "$out/nowcast.png" || echo "::warning::plot for $CAND_ID failed"
 fi
 
-# A config that runs a stand-in model (for example persistence in place
+# A config that runs a stand-in model (for example random walk in place
 # of the model) says so in its diagnostics or fit.json.
 stand_in=$(python3 - "$out/diagnostics.json" "$fit/fit.json" << 'PY'
 import json, sys

@@ -20,6 +20,7 @@ from bdbvhubrenewal.forecasters import (
 )
 from bdbvhubrenewal.forecasters import renewal as rn
 from bdbvhubrenewal.submission.fitting import Forecast, get_config
+from bdbvhubrenewal.submission.hub import model_abbr_for
 
 pytest.importorskip("pyrenew")
 
@@ -45,10 +46,10 @@ def test_variants_are_registered_as_fitted_models() -> None:
     # cannot forecast a province with its data held out.
     assert get_model("renewal").supports_mask
     assert not get_model("renewalsp").supports_mask
-    assert not specs["persistence"].fitted
+    assert not specs["randomwalk"].fitted
     # Hub model abbreviations: letters, digits and underscores, under 16.
     for name in specs:
-        assert len(name) < 16
+        assert len(model_abbr_for(name)) < 16
 
 
 def test_fit_configs_run_the_renewal_model() -> None:

@@ -15,7 +15,7 @@ Handled (warn or pass):
   `coverage`     every expected location, with every nowcast and
                  forecast week (warns).
   `zones`        health zone rows (`CD-XX-NN`) for every province in the
-                 file, which seabbs-baseline requires (`--require-zones`),
+                 file, which seabbs-rwnowcast requires (`--require-zones`),
                  and each province's zones summing to it (warns only).
   `national_sum` national equals the sum of the provinces plus any
                  unassigned cases, per sample and week. It is correct by
@@ -37,7 +37,7 @@ Plausibility (warn; a fail level is available but off by default):
                  observed.
 
 Consistency (warn by default):
-  `baseline`     forecast median against the persistence baseline.
+  `baseline`     forecast median against the random walk baseline.
   `previous`     shared weeks against last week's submission.
 """
 
@@ -785,7 +785,7 @@ def run_checks(
             float(c["observed_fail"]),
         ),
     ]
-    if kind == "persistence":
+    if kind == "randomwalk":
         out.append(Check("baseline", "skip", "this is the baseline"))
     else:
         out.append(
@@ -801,7 +801,7 @@ def run_checks(
                 off,
                 float(c["baseline_warn"]),
                 float(c["baseline_fail"]),
-                "persistence baseline",
+                "random walk baseline",
             )
         )
     out.append(

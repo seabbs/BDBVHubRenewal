@@ -9,7 +9,7 @@ It has one row per location, stream and in-sample onset week, with the
 observed count, the predictive median, the central intervals and the
 randomised probability integral transform (PIT) of the observation.
 
-A model with no posterior, such as persistence, writes the
+A model with no posterior, such as random walk, writes the
 `not_available` form instead.
 """
 

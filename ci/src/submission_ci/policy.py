@@ -10,8 +10,8 @@ clears every check is submitted:
    only when there is time for it before the window closes (`[timing]`).
 3. `renewalsp`: the single-patch model (independent renewal fits for each
    province with cases and the country), fitted beside `main`.
-4. `persistencenow`: persistence on a nowcast, with no fit.
-5. `persistence`: the persistence baseline, built from the data alone.
+4. `randomwalknowcast`: random walk on a nowcast, with no fit.
+5. `randomwalk`: the random walk baseline, built from the data alone.
 
 Stage `primary` candidates fit in parallel straight away. Stage `retry`
 candidates fit only when the primary `main` fails. Stage `baseline`
@@ -19,7 +19,7 @@ candidates need no fit.
 
 Every fit job's timeout leaves `reserve_minutes` before the window
 closes for the gate and the pull request, so the chain can always reach
-the fallback or persistence in time.
+the fallback or random walk in time.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ from .common import set_outputs
 from .fit_key import fit_key, source_hash
 from .window import minutes_left, parse_now
 
-KINDS = ("main", "retry", "fallback", "persistence", "shadow")
+KINDS = ("main", "retry", "fallback", "randomwalk", "shadow")
 """A `shadow` candidate is fitted and checked with its stage but is never
 part of the chain, so it is never submitted. It lets a variant run weekly
 before it is chosen."""
@@ -105,12 +105,12 @@ class Policy:
     def for_model(self, model: str) -> Policy:
         """The policy for the model chosen in the model choice record.
 
-        With a baseline chosen (`persistencenow` or `persistence`), the
+        With a baseline chosen (`randomwalknowcast` or `randomwalk`), the
         chain starts at that baseline. Every candidate before it is still
         fitted and checked, as a shadow, and the retry is dropped. Any
         other choice keeps the policy as it is.
         """
-        baselines = [c for c in self.chain() if c.kind == "persistence"]
+        baselines = [c for c in self.chain() if c.kind == "randomwalk"]
         names = [c.model or c.id for c in baselines]
         if model not in names:
             return self
@@ -241,7 +241,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument(
         "--model",
         default="",
-        help="The chosen model; persistence makes a persistence-only chain",
+        help="The chosen model; random walk makes a randomwalk-only chain",
     )
     add_deadline_args(p)
     args = p.parse_args(argv)

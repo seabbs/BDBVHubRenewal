@@ -690,9 +690,9 @@ def _level_tables(rows: pd.DataFrame) -> dict[str, pd.DataFrame]:
 
 
 def _score_table(rows: pd.DataFrame) -> str:
-    """Mean scores by model, with WIS relative to persistence.
+    """Mean scores by model, with WIS relative to randomwalk.
 
-    Persistence has no relative WIS, so its cell is left blank.
+    Random walk has no relative WIS, so its cell is left blank.
     """
     kinds = set(rows["kind"])
     by = ["model", "kind"] if len(kinds) > 1 else ["model"]
@@ -701,9 +701,9 @@ def _score_table(rows: pd.DataFrame) -> str:
     for c in relative:
         table[c] = float("nan")
     models = set(rows["model"])
-    if len(models) > 1 and "persistence" in models:
+    if len(models) > 1 and "randomwalk" in models:
         rel = relative_skill(rows, by=by[1:], metrics=("wis", "log_wis"))
-        rel = rel.loc[rel["model"] != "persistence"]
+        rel = rel.loc[rel["model"] != "randomwalk"]
         table = table.drop(columns=list(relative)).merge(
             rel[[*by, *relative]], on=by, how="left"
         )
@@ -756,17 +756,17 @@ BACKTEST_LOCATIONS: tuple[str, ...] = (NATIONAL, "CD-IT", "CD-NK")
 def _backtest_findings(primary: pd.DataFrame) -> str:
     """One or two sentences of results on complete weeks of real origins."""
     real = primary.loc[primary["kind"] == "real"]
-    if real["model"].nunique() < 2 or "persistence" not in set(real["model"]):
+    if real["model"].nunique() < 2 or "randomwalk" not in set(real["model"]):
         return ""
     rel = relative_skill(real).set_index("model")["relative_wis"]
     cov = real.groupby("model")["coverage_90"].mean()
-    others = [m for m in rel.index if m != "persistence"]
+    others = [m for m in rel.index if m != "randomwalk"]
     wis = ", ".join(f"{m} {rel[m]:.2f}" for m in others)
-    cover = ", ".join(f"{m} {cov[m]:.2f}" for m in [*others, "persistence"])
+    cover = ", ".join(f"{m} {cov[m]:.2f}" for m in [*others, "randomwalk"])
     origins = real["vintage"].nunique()
     return (
         f"On complete weeks of the {origins} real origins, mean WIS relative "
-        f"to persistence is {wis}.\n"
+        f"to random walk is {wis}.\n"
         f"90% interval coverage is {cover}.\n"
     )
 
@@ -806,13 +806,13 @@ def _summary_figure(
 ) -> None:
     """Write the relative WIS and coverage figure of the real origins."""
     real = primary.loc[primary["kind"] == "real"]
-    if real["model"].nunique() < 2 or "persistence" not in set(real["model"]):
+    if real["model"].nunique() < 2 or "randomwalk" not in set(real["model"]):
         _write(gen / "backtest-summary.md", "")
         return
     _save_metric_figures(
         fig, "scores-summary", partial(plot_score_summary, real, models=names)
     )
-    alt = "WIS relative to persistence and 90% coverage, by horizon."
+    alt = "WIS relative to random walk and 90% coverage, by horizon."
     _write(
         gen / "backtest-summary.md",
         _metric_tabs("scores-summary", alt)
@@ -835,7 +835,7 @@ def _summary_table(real: pd.DataFrame, names: Sequence[str]) -> str:
     table["model"] = pd.Categorical(table["model"], list(names), ordered=True)
     table = table.sort_values(["model", "horizon"]).reset_index(drop=True)
     return (
-        "Mean WIS and log WIS divided by those of persistence over the "
+        "Mean WIS and log WIS divided by those of random walk over the "
         "forecasts both made, and the share of 90% intervals holding the "
         "data.\n\n" + _table(table)
     )
@@ -894,7 +894,7 @@ def _recovery_section(path: Path) -> str:
 
 
 def _without_baseline(
-    rel: pd.DataFrame, baseline: str = "persistence"
+    rel: pd.DataFrame, baseline: str = "randomwalk"
 ) -> pd.DataFrame:
     """Drop the baseline's own rows, whose relative scores are all 1."""
     return rel.loc[rel["model"] != baseline].reset_index(drop=True)
@@ -957,7 +957,7 @@ def _relative_section(scores: pd.DataFrame) -> str:
     rel = _without_baseline(relative_skill(scores, by=("kind",)))
     tabs = []
     for by, label in (("horizon", "By horizon"), ("location", "By province")):
-        alt = f"WIS relative to persistence {label.lower()}."
+        alt = f"WIS relative to random walk {label.lower()}."
         tabs.append(
             f'=== "{label}"\n\n'
             f"    ![{alt}](figures/relative-wis-{by}.svg#only-light)\n"
@@ -968,9 +968,9 @@ def _relative_section(scores: pd.DataFrame) -> str:
         + "\n".join(tabs)
         + "\n"
         + _dropdown(
-            "Mean scores on complete weeks divided by those of persistence "
+            "Mean scores on complete weeks divided by those of random walk "
             "over the forecasts both made.\n"
-            "Values below 1 beat persistence.\n\n" + _table(rel)
+            "Values below 1 beat randomwalk.\n\n" + _table(rel)
         )
     )
 
@@ -1196,7 +1196,7 @@ def _backtest_page(
                 target,
                 labels,
                 k,
-                baseline="persistence",
+                baseline="randomwalk",
                 scores=explorer_scores,
             ),
         )
@@ -1410,7 +1410,7 @@ def _heldout_snippets(
             shown = views["all weeks as reported"]
         alt = "Held-out WIS by horizon."
         in_shown = set(shown["model"])
-        if len(in_shown) > 1 and "persistence" in in_shown:
+        if len(in_shown) > 1 and "randomwalk" in in_shown:
             make = partial(plot_score_summary, shown, models=names)
         else:
             make = partial(plot_scores, shown, by="horizon", models=names)

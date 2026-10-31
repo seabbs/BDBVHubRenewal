@@ -1163,7 +1163,7 @@ def run_scenarios(
         The province forecasts and the scores, with `scenario`,
         `truth_view` and `level` (national, province or zone). Zone
         scores split each model's province samples across zones
-        (`ZoneAllocator`) and add zone persistence
+        (`ZoneAllocator`) and add zone random walk
         (`evaluation.zones.scenario_zone_scores`).
     """
     k = config.complete_after_weeks

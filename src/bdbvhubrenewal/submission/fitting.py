@@ -7,10 +7,10 @@ forecasts from the saved fit with `bdbvhubrenewal nowcast --config <name>
 --fit <dir>`. A fit configuration says how to do both.
 
 The chain is `main` (the full model, the `renewal` variant), a retry,
-`renewalsp` (single patch per location), then `persistence`, with `bvd`
+`renewalsp` (single patch per location), then `randomwalk`, with `bvd`
 as a shadow. The renewal configurations run the PyRenew model through
 `bdbvhubrenewal.forecasters.renewal.fit_renewal`, which samples, draws the
-trajectories and writes `ppc.json`. `persistence` needs no fit.
+trajectories and writes `ppc.json`. `randomwalk` needs no fit.
 
 A fit function gets the forecast task, the sampler settings from
 `ci/policy.toml` and the fit directory. It writes whatever the forecast
@@ -47,7 +47,7 @@ __all__ = [
     "get_config",
     "list_configs",
     "no_sampler_diagnostics",
-    "persistence_config",
+    "randomwalk_config",
     "read_fit",
     "register_config",
     "run_fit",
@@ -225,8 +225,8 @@ def _ppc_not_available(model: str, config: str, reason: str) -> dict[str, Any]:
     }
 
 
-def persistence_config(
-    name: str, stand_in: str | None = None, model: str = "persistence"
+def randomwalk_config(
+    name: str, stand_in: str | None = None, model: str = "randomwalk"
 ) -> FitConfig:
     """Build a fit configuration that runs a registered sample-free model.
 
@@ -396,7 +396,7 @@ def run_forecast(
         The forecast task.
     fit_dir : pathlib.Path or str, optional
         The fit directory written by `run_fit`. Required unless the
-        configuration needs no fit, which the persistence stand-ins do not.
+        configuration needs no fit, which the random walk stand-ins do not.
 
     Returns
     -------
@@ -426,8 +426,10 @@ def run_forecast(
     return result
 
 
-register_config(persistence_config("persistence"))
-register_config(persistence_config("persistencenow", model="persistencenow"))
+register_config(randomwalk_config("randomwalk"))
+register_config(
+    randomwalk_config("randomwalknowcast", model="randomwalknowcast")
+)
 
 
 def _renewal_config(name: str) -> FitConfig:

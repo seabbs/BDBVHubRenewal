@@ -317,8 +317,8 @@ def test_baseline_and_previous_only_warn(tmp_path: Path) -> None:
     assert s["baseline"] == "warn"
 
 
-def test_persistence_skips_baseline(tmp_path: Path) -> None:
-    assert statuses(sub(tmp_path), kind="persistence")["baseline"] == "skip"
+def test_randomwalk_skips_baseline(tmp_path: Path) -> None:
+    assert statuses(sub(tmp_path), kind="randomwalk")["baseline"] == "skip"
 
 
 def test_cli_writes_report(tmp_path: Path) -> None:

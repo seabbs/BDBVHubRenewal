@@ -8,8 +8,8 @@ Each is opted in on its own in `config/hub.toml`.
 
 | hub model | model | falls back to | needs |
 | --- | --- | --- | --- |
-| `seabbs-baseline` | persistence on a nowcast (`persistencenow`) | persistence | nothing more |
-| `seabbs-renewal` | the renewal chain | its refit, `renewalsp`, `persistencenow`, persistence | a model choice in `results/model-choice.yml` |
+| `seabbs-rwnowcast` | random walk on a nowcast (`randomwalknowcast`) | random walk | nothing more |
+| `seabbs-renewal` | the renewal chain | its refit, `renewalsp`, `randomwalknowcast`, random walk | a model choice in `results/model-choice.yml` |
 
 `DRY_RUN` is the global switch.
 Until it is `false`, an opted-in model is built and checked but nothing is pushed.

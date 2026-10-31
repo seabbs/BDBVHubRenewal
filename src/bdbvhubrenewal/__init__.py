@@ -5,7 +5,7 @@ The package has these parts:
 
 - `data`: the hub data, dates, reconstructed and simulated vintages,
   empirical delays and BVDOutbreakSize releases.
-- `forecasters`: the forecaster interface, registry, persistence and the
+- `forecasters`: the forecaster interface, registry, random walk and the
   renewal variants (`forecasters.renewal`).
 - `model`: the PyRenew renewal model (JAX), imported lazily.
 - `submission`: the hub file writer and checks, model metadata, the CI

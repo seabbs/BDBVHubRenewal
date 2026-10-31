@@ -6,8 +6,8 @@ checks everything but pushes nothing.
 
 - `renewal` (`[submission]`): the renewal chain. It runs only when
   opted in and a model has been chosen in `results/model-choice.yml`.
-- `baseline` (`[models.persistencenow]`): persistence on a nowcast,
-  with plain persistence as its fallback. It needs no model choice.
+- `baseline` (`[models.randomwalknowcast]`): random walk on a nowcast,
+  with plain random walk as its fallback. It needs no model choice.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from pathlib import Path
 from .common import append_summary, set_outputs
 
 TEAM = "seabbs"
-KEYS = {"renewal": "renewal", "baseline": "baseline"}
+KEYS = {"renewal": "renewal", "rwnowcast": "baseline"}
 """Step output name of each hub model's switch."""
 
 

@@ -150,11 +150,11 @@ def test_warnings_are_stated(tmp_path: Path) -> None:
 
 
 def test_fallback_is_named_with_why(tmp_path: Path) -> None:
-    g = gate(tmp_path, produced_by="persistence baseline")
+    g = gate(tmp_path, produced_by="random walk baseline")
     prov = read_json(g / "provenance.json")
     prov.update(
-        kind="persistence",
-        selected="persistence",
+        kind="randomwalk",
+        selected="randomwalk",
         attempts=[
             {
                 "id": "main",
@@ -163,8 +163,8 @@ def test_fallback_is_named_with_why(tmp_path: Path) -> None:
                 "reasons": ["convergence: max R-hat is 1.4"],
             },
             {
-                "id": "persistence",
-                "label": "persistence baseline",
+                "id": "randomwalk",
+                "label": "random walk baseline",
                 "status": "pass",
                 "validation": "pass",
                 "reasons": [],
@@ -174,11 +174,11 @@ def test_fallback_is_named_with_why(tmp_path: Path) -> None:
     write_json(g / "provenance.json", prov)
     text = body(g)
     assert visible(text)[1] == (
-        "Fallback model used (persistence baseline): main model was ruled "
+        "Fallback model used (random walk baseline): main model was ruled "
         "out (convergence: max R-hat is 1.4)."
     )
     assert "<summary>Fallback chain</summary>" in text
-    assert "| persistence baseline | submitted |  |" in text
+    assert "| random walk baseline | submitted |  |" in text
 
 
 def test_retry_is_named(tmp_path: Path) -> None:
@@ -320,10 +320,10 @@ def test_ppc_row_without_posterior(tmp_path: Path) -> None:
 def test_stand_in_is_stated(tmp_path: Path) -> None:
     g = gate(tmp_path, produced_by="main model (stand-in)")
     prov = read_json(g / "provenance.json")
-    prov["run"]["model"] = "persistence"
+    prov["run"]["model"] = "randomwalk"
     write_json(g / "provenance.json", {**prov, "stand_in": STAND_IN})
     assert visible(body(g))[1] == (
-        "All checks passed. Stand-in: persistence runs as the `main` model."
+        "All checks passed. Stand-in: randomwalk runs as the `main` model."
     )
     assert "Stand-in" not in body(gate(tmp_path / "real"))
 

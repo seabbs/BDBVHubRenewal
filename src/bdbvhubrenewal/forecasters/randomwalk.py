@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-r"""Persistence baseline.
+r"""RandomWalk baseline.
 
 For each province, take the last week judged complete, $c$, and carry its
 count $y_c$ forward on the log scale with random walk noise:
@@ -39,7 +39,7 @@ published with the vintage), and taking at least the count already
 published for that week.
 There are no such rows when the vintage has no delay data.
 
-`PersistenceNow` (`persistencenow`) nowcasts the recent weeks with a
+`RandomWalkNowcast` (`randomwalknowcast`) nowcasts the recent weeks with a
 chain ladder on the hub's totals by release, then runs the same random
 walk forward from each nowcast draw.
 
@@ -55,11 +55,11 @@ to nowcasts made at earlier releases (`retrospective_release_errors`,
 at zero.
 
 **Forecast.** Each sample starts from its own nowcast of the latest week,
-$\log\{1 + C_p(c)\}$, and follows the same random walk as `Persistence`
+$\log\{1 + C_p(c)\}$, and follows the same random walk as `RandomWalk`
 (`random_walk`), with $\sigma$ from the weekly changes of the place's
 point nowcast (`walk_spreads`), pooled below `low_count` cases a week.
 
-With one release, it is `Persistence`.
+With one release, it is `RandomWalk`.
 """
 
 from __future__ import annotations
@@ -85,9 +85,9 @@ from bdbvhubrenewal.forecasters.base import (
 )
 
 __all__ = [
-    "Persistence",
-    "PersistenceNow",
-    "PersistenceNowDaily",
+    "RandomWalk",
+    "RandomWalkNowcast",
+    "RandomWalkNowcastDaily",
     "completeness_lag",
     "cutoff_week",
     "daily_growth",
@@ -156,7 +156,7 @@ def last_complete_week(vintage: str, lag_days: int) -> dt.date:
 
 
 @dataclass
-class Persistence:
+class RandomWalk:
     """Carry the last complete week forward with growing noise.
 
     Attributes
@@ -178,7 +178,7 @@ class Persistence:
         place to use its own weekly changes rather than the pooled ones.
     """
 
-    name: str = "persistence"
+    name: str = "randomwalk"
     window: int = 8
     min_sd: float = 0.1
     completeness: float = 0.95
@@ -186,7 +186,7 @@ class Persistence:
     low_count: float = 10.0
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
-        """Return persistence trajectories for a task.
+        """Return random walk trajectories for a task.
 
         Parameters
         ----------
@@ -314,8 +314,8 @@ class Persistence:
 
 
 register_model(
-    "persistence",
-    Persistence,
+    "randomwalk",
+    RandomWalk,
     "Last complete week carried forward, with log-scale random walk noise.",
     baseline=True,
 )
@@ -732,7 +732,7 @@ class _Nowcast:
 
 
 @dataclass
-class PersistenceNow(Persistence):
+class RandomWalkNowcast(RandomWalk):
     """The random walk run forward from a nowcast of the recent weeks.
 
     Attributes
@@ -745,11 +745,11 @@ class PersistenceNow(Persistence):
         Fewest cases a week, on average over the last `window` weeks, for
         a place to use its own development factors where it has them.
 
-    See `Persistence` for `window`, `min_sd` and `low_count`, which set the
+    See `RandomWalk` for `window`, `min_sd` and `low_count`, which set the
     walk's spread from the point nowcast.
     """
 
-    name: str = "persistencenow"
+    name: str = "randomwalknowcast"
     max_weeks: int = 12
     own_per_week: float = 50.0
 
@@ -890,9 +890,9 @@ def _frame(loc: str, weeks: list[str], values: np.ndarray) -> pd.DataFrame:
 
 
 register_model(
-    "persistencenow",
-    PersistenceNow,
-    "Persistence carried forward from a nowcast of the recent weeks.",
+    "randomwalknowcast",
+    RandomWalkNowcast,
+    "RandomWalk carried forward from a nowcast of the recent weeks.",
 )
 
 
@@ -1029,7 +1029,7 @@ def daily_growth(
 
 
 @dataclass
-class PersistenceNowDaily(PersistenceNow):
+class RandomWalkNowcastDaily(RandomWalkNowcast):
     """The random walk run forward from a daily nowcast of the recent weeks.
 
     The hub's daily totals by release are nowcast by onset day
@@ -1037,7 +1037,7 @@ class PersistenceNowDaily(PersistenceNow):
     partly observed at the data cut-off is scaled by 7 over the days
     observed. The weekly change still to come is Skellam, with its spread
     fitted to weekly nowcasts made at earlier releases. Without daily
-    releases, it is `Persistence`.
+    releases, it is `RandomWalk`.
 
     Attributes
     ----------
@@ -1046,10 +1046,10 @@ class PersistenceNowDaily(PersistenceNow):
     max_days : int
         Oldest age, in days, whose total may still change.
 
-    See `PersistenceNow` for `max_weeks` and `own_per_week`.
+    See `RandomWalkNowcast` for `max_weeks` and `own_per_week`.
     """
 
-    name: str = "persistdaily"
+    name: str = "randomwalknowcastdaily"
     max_days: int = 84
 
     def _growth(
@@ -1195,7 +1195,7 @@ class PersistenceNowDaily(PersistenceNow):
 
 
 register_model(
-    "persistdaily",
-    PersistenceNowDaily,
-    "Persistence carried forward from a daily nowcast of the recent weeks.",
+    "randomwalknowcastdaily",
+    RandomWalkNowcastDaily,
+    "RandomWalk carried forward from a daily nowcast of the recent weeks.",
 )

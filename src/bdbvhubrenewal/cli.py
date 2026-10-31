@@ -11,7 +11,7 @@ Commands:
   With `--config` (and `--fit`), forecast from a fit configuration.
   The province samples are split across the health zones unless
   `--no-zones` is given.
-- `zone-backtest`: score zone forecasts against zone persistence.
+- `zone-backtest`: score zone forecasts against zone randomwalk.
 - `fit`: fit a configuration and write the fit directory and its
   `diagnostics.json`, for the submission CI.
 - `plot-submission`: plot a submitted hub file.
@@ -93,8 +93,8 @@ from bdbvhubrenewal.submission.hub import (
 __all__ = ["build_parser", "host_devices", "main"]
 
 MODEL_METADATA = {
-    "persistence": {
-        "model_name": "Persistence baseline",
+    "randomwalk": {
+        "model_name": "RandomWalk baseline",
         "methods": (
             "Last complete onset week carried forward per province, with "
             "log-scale random walk noise and Poisson draws; national is the "
@@ -147,10 +147,10 @@ MODEL_METADATA = {
             "province populations and population-weighted province centres."
         ),
     },
-    # A hub model of its own (seabbs-baseline), submitted every
+    # A hub model of its own (seabbs-rwnowcast), submitted every
     # round. The nowcast step is being built; check this text against it.
-    "persistencenow": {
-        "model_name": "Persistence on a nowcast",
+    "randomwalknowcast": {
+        "model_name": "RandomWalk on a nowcast",
         "methods": (
             "Chain-ladder nowcast of recent onset weeks with negative binomial "
             "uncertainty, then the hub baseline on each draw. Provinces, "
@@ -184,7 +184,7 @@ MODEL_METADATA = {
 
 
 _ABBR_HELP = (
-    "Hub model abbreviation. Defaults to `persistence` for persistence and "
+    "Hub model abbreviation. Defaults to `randomwalk` for random walk and "
     "otherwise to the submission abbreviation in config/hub.toml."
 )
 
@@ -192,8 +192,8 @@ _ABBR_HELP = (
 def _abbr(args: argparse.Namespace) -> str:
     if args.abbr:
         return str(args.abbr)
-    if args.model == "persistence":
-        return "persistence"
+    if args.model == "randomwalk":
+        return "randomwalk"
     return model_abbr_for(args.model, args.hub_toml)
 
 
@@ -296,7 +296,7 @@ def build_parser() -> argparse.ArgumentParser:
     now = sub.add_parser("nowcast", help="Forecast and write a hub file.")
     now.add_argument(
         "--model",
-        default="persistence",
+        default="randomwalk",
         help="Model name. Without --config, the registered model to run.",
     )
     _abbr_args(now)
@@ -319,11 +319,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     zb = sub.add_parser(
-        "zone-backtest", help="Score zone forecasts against zone persistence."
+        "zone-backtest", help="Score zone forecasts against zone randomwalk."
     )
     zb.add_argument("--data", default=data_dir)
     zb.add_argument(
-        "--models", nargs="*", default=["persistence", "persistencenow"]
+        "--models", nargs="*", default=["randomwalk", "randomwalknowcast"]
     )
     zb.add_argument("--hub-config", default=None)
     zb.add_argument("--out", default="results/zone-scores.csv")
@@ -331,7 +331,7 @@ def build_parser() -> argparse.ArgumentParser:
     fit = sub.add_parser(
         "fit", help="Fit a configuration and write its diagnostics."
     )
-    fit.add_argument("--model", default="persistence")
+    fit.add_argument("--model", default="randomwalk")
     fit.add_argument("--config", required=True)
     _task_args(fit, data_dir)
     fit.add_argument(
@@ -369,7 +369,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     meta = sub.add_parser("metadata", help="Write model metadata YAML.")
-    meta.add_argument("--model", default="persistence")
+    meta.add_argument("--model", default="randomwalk")
     _abbr_args(meta)
     meta.add_argument("--out", default="hub/model-metadata")
     meta.add_argument(

@@ -112,22 +112,22 @@ def test_retry_fits_the_time_budget(tmp_path: Path) -> None:
 def test_chain_stays_within_the_three_models(tmp_path: Path) -> None:
     # Sam (2026-10-28): renewal, its refit, then the independent
     # single-patch fits (renewalsp) fitted beside main as the standby,
-    # then persistence. renewalbvd is a shadow. No separate fallback
+    # then randomwalk. renewalbvd is a shadow. No separate fallback
     # configuration.
     pol = load_policy(POLICY_PATH)
     assert [(c.id, c.kind) for c in pol.chain()] == [
         ("main", "main"),
         ("retry-1", "retry"),
         ("renewalsp", "fallback"),
-        ("persistencenow", "persistence"),
-        ("persistence", "persistence"),
+        ("randomwalknowcast", "randomwalk"),
+        ("randomwalk", "randomwalk"),
     ]
     # Both baselines need no fit and are built in `prepare`.
     assert [c.id for c in pol.stage("baseline")] == [
-        "persistencenow",
-        "persistence",
+        "randomwalknowcast",
+        "randomwalk",
     ]
-    assert pol.get("persistencenow").model == "persistencenow"
+    assert pol.get("randomwalknowcast").model == "randomwalknowcast"
     assert "fallback" not in {c.config for c in pol.candidates}
     root = repo(tmp_path)
     primary = {e["id"]: e for e in matrix(pol, "primary", root, "hub")}
@@ -142,11 +142,11 @@ def test_chain_stays_within_the_three_models(tmp_path: Path) -> None:
 
 def test_baseline_choices_keep_the_chain_from_that_baseline() -> None:
     pol = load_policy(POLICY_PATH)
-    persistence = pol.for_model("persistence")
-    assert [c.id for c in persistence.chain()] == ["persistence"]
-    assert persistence.get("persistencenow").kind == "shadow"
-    now = pol.for_model("persistencenow")
-    assert [c.id for c in now.chain()] == ["persistencenow", "persistence"]
+    randomwalk = pol.for_model("randomwalk")
+    assert [c.id for c in randomwalk.chain()] == ["randomwalk"]
+    assert randomwalk.get("randomwalknowcast").kind == "shadow"
+    now = pol.for_model("randomwalknowcast")
+    assert [c.id for c in now.chain()] == ["randomwalknowcast", "randomwalk"]
     assert now.get("main").kind == "shadow"
     assert now.stage("retry") == []
 
@@ -204,11 +204,11 @@ def test_shadow_candidates_are_fitted_but_never_in_the_chain(
     assert primary[0] == "main"
 
 
-def test_persistence_chosen_makes_the_renewal_candidates_shadows(
+def test_randomwalk_chosen_makes_the_renewal_candidates_shadows(
     tmp_path: Path,
 ) -> None:
-    pol = load_policy(POLICY_PATH).for_model("persistence")
-    assert [c.id for c in pol.chain()] == ["persistence"]
+    pol = load_policy(POLICY_PATH).for_model("randomwalk")
+    assert [c.id for c in pol.chain()] == ["randomwalk"]
     root = repo(tmp_path)
     primary = [e["id"] for e in matrix(pol, "primary", root, "hub")]
     assert primary == ["main", "renewalsp", "bvd"]
@@ -244,7 +244,7 @@ def test_fit_timeout_leaves_room_for_the_gate() -> None:
     assert fit_timeout(pol, 2000) == t.fit_cap_minutes
     assert fit_timeout(pol, 240) == 240 - t.reserve_minutes
     # Never below a floor: a fit that cannot finish fails and the chain
-    # falls through to the fallback or persistence.
+    # falls through to the fallback or randomwalk.
     assert fit_timeout(pol, 10) == 30
 
 

@@ -287,7 +287,7 @@ def summarise_scores(
 
 def relative_skill(
     scores: pd.DataFrame,
-    baseline: str = "persistence",
+    baseline: str = "randomwalk",
     by: Sequence[str] = (),
     metrics: Sequence[str] = ("wis", "log_wis"),
     match_on: Sequence[str] = (

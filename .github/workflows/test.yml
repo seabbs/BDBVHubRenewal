@@ -67,9 +67,9 @@ jobs:
         run: uv run pytest -q -m slow
       - name: Backtest and nowcast smoke test
         # The renewal variants are fitted per vintage, so the smoke test
-        # runs persistence only. The full backtest runs on archie.
+        # runs random walk only. The full backtest runs on archie.
         run: |
-          uv run bdbvhubrenewal backtest --models persistence --output output/backtest --results output/results
+          uv run bdbvhubrenewal backtest --models randomwalk --output output/backtest --results output/results
           uv run bdbvhubrenewal nowcast
           uv run bdbvhubrenewal metadata --out output/metadata
       - name: Fit and forecast as the submission CI does (a tiny fit)

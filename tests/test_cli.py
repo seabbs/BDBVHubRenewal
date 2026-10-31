@@ -31,7 +31,7 @@ def test_cli_nowcast_and_metadata(tmp_path: Path) -> None:
     table = pd.read_csv(files[0])
     assert set(table["output_type"]) == {"sample"}
     assert main(["metadata", "--out", str(tmp_path / "meta")]) == 0
-    assert (tmp_path / "meta" / "seabbs-persistence.yml").exists()
+    assert (tmp_path / "meta" / "seabbs-randomwalk.yml").exists()
 
 
 def _written(out: Path) -> pd.DataFrame:
@@ -88,7 +88,7 @@ def test_cli_zone_backtest(tmp_path: Path) -> None:
     out = tmp_path / "zone-scores.csv"
     assert main(["zone-backtest", "--out", str(out)]) == 0
     scores = pd.read_csv(out)
-    assert {"persistence", "zonepersistence"} <= set(scores["model"])
+    assert {"randomwalk", "zonerandomwalk"} <= set(scores["model"])
 
 
 @pytest.mark.usefixtures("in_root")
@@ -177,11 +177,11 @@ def test_forecast_draws_trajectories_ribbons_and_median() -> None:
         }
     )
     fig, ax = plt.subplots()
-    plots._draw_forecast(ax, samples, "C0", "persistence")
+    plots._draw_forecast(ax, samples, "C0", "randomwalk")
     # One faint line per sample, plus the median.
     faint = [ln for ln in ax.lines if (ln.get_alpha() or 1) < 0.5]
     assert len(faint) == 100
-    assert sum(ln.get_label() == "persistence" for ln in ax.lines) == 1
+    assert sum(ln.get_label() == "randomwalk" for ln in ax.lines) == 1
     # 50% and 90% ribbons.
     assert len(ax.collections) == 2
     plt.close(fig)
@@ -189,7 +189,7 @@ def test_forecast_draws_trajectories_ribbons_and_median() -> None:
 
 def test_plot_scores_by_truth() -> None:
     scores = pd.read_csv(ROOT / "results" / "backtest-scores-by-truth.csv")
-    fig = plots.plot_scores_by_truth(scores, models=["persistence"])
+    fig = plots.plot_scores_by_truth(scores, models=["randomwalk"])
     assert len(fig.axes) == 1
     assert len(fig.axes[0].lines) == scores["vintage"].nunique()
 
@@ -211,7 +211,7 @@ def test_cli_lopo_writes_scores_for_mask_aware_models(tmp_path: Path) -> None:
             "--output",
             str(tmp_path / "out"),
         ]
-        assert main([*args, "--models", "persistence", "mask_aware"]) == 0
+        assert main([*args, "--models", "randomwalk", "mask_aware"]) == 0
     finally:
         _REGISTRY.pop("mask_aware")
     scores = pd.read_csv(tmp_path / "res" / "lopo-scores.csv")
@@ -225,7 +225,7 @@ def test_cli_lopo_writes_scores_for_mask_aware_models(tmp_path: Path) -> None:
 def test_cli_backtest_keeps_other_models_results(tmp_path: Path) -> None:
     res, out = tmp_path / "res", tmp_path / "out"
     args = ["backtest", "--no-reconstructed", "--results", str(res),
-            "--output", str(out), "--models", "persistence"]  # fmt: skip
+            "--output", str(out), "--models", "randomwalk"]  # fmt: skip
     assert main(args) == 0
     names = ("backtest-scores.csv", "backtest-scores-by-truth.csv",
              "recovery-scores.csv")  # fmt: skip
@@ -242,10 +242,10 @@ def test_cli_backtest_keeps_other_models_results(tmp_path: Path) -> None:
     assert main(args) == 0
     for name in names:
         table = pd.read_csv(res / name)
-        assert set(table["model"]) == {"persistence", "other"}
+        assert set(table["model"]) == {"randomwalk", "other"}
         assert not table.duplicated().any()
     fc = pd.read_csv(out / "forecasts.csv.gz")
-    assert set(fc["model"]) == {"persistence", "other"}
+    assert set(fc["model"]) == {"randomwalk", "other"}
     assert len(fc) == 2 * (fc["model"] == "other").sum()
 
 
@@ -267,7 +267,7 @@ def test_cli_backtest_no_fit_skips_fitted_models(tmp_path: Path) -> None:
     scores = pd.read_csv(tmp_path / "res" / "backtest-scores.csv")
     unfitted = {s.name for s in list_models() if not s.fitted}
     assert set(scores["model"]) == unfitted
-    assert "persistence" in unfitted
+    assert "randomwalk" in unfitted
 
 
 @pytest.mark.usefixtures("in_root")
@@ -275,7 +275,7 @@ def test_cli_backtest_shards_into_a_cache(tmp_path: Path) -> None:
     res, out, cache = tmp_path / "res", tmp_path / "out", tmp_path / "cache"
     base = ["backtest", "--no-reconstructed", "--no-recovery",
             "--results", str(res), "--output", str(out),
-            "--models", "persistence", "--cache", str(cache)]  # fmt: skip
+            "--models", "randomwalk", "--cache", str(cache)]  # fmt: skip
     # A shard only fills the cache.
     assert main([*base, "--shard", "0/2"]) == 0
     assert main([*base, "--shard", "1/2"]) == 0
@@ -284,7 +284,7 @@ def test_cli_backtest_shards_into_a_cache(tmp_path: Path) -> None:
     # Without a shard every task comes from the cache and is scored.
     assert main(base) == 0
     scores = pd.read_csv(res / "backtest-scores.csv")
-    assert set(scores["model"]) == {"persistence"}
+    assert set(scores["model"]) == {"randomwalk"}
     assert not (res / "recovery-scores.csv").exists()
 
 
@@ -292,11 +292,11 @@ def test_cli_backtest_shards_into_a_cache(tmp_path: Path) -> None:
 def test_cli_recovery_only_uses_the_cache(tmp_path: Path) -> None:
     res, out, cache = tmp_path / "res", tmp_path / "out", tmp_path / "cache"
     base = ["backtest", "--recovery-only", "--results", str(res),
-            "--output", str(out), "--models", "persistence",
+            "--output", str(out), "--models", "randomwalk",
             "--cache", str(cache)]  # fmt: skip
     assert main([*base, "--shard", "0/2"]) == 0
     assert main([*base, "--shard", "1/2"]) == 0
-    assert list(cache.glob("persistence_simulated_*.csv.gz"))
+    assert list(cache.glob("randomwalk_simulated_*.csv.gz"))
     assert not (res / "recovery-scores.csv").exists()
     assert main(base) == 0
     scores = pd.read_csv(res / "recovery-scores.csv")
@@ -349,7 +349,7 @@ def test_cli_backtest_scenarios(tmp_path: Path) -> None:
         "backtest",
         "--scenarios-only",
         "--models",
-        "persistence",
+        "randomwalk",
         "--scenario-dates",
         "2026-10-17",
         "--results",

@@ -8,7 +8,7 @@
 [comparison]
 # WIS is relative to this model, or to the registry baseline until it is
 # registered.
-baseline = "persistencenow"
+baseline = "randomwalknowcast"
 # Forecasts of fitted models, which are too slow to run here, are taken
 # from these files for the same rounds.
 stored = [

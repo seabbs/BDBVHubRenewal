@@ -135,12 +135,12 @@ def test_bad_inputs_raise(change: Any, match: str) -> None:
 
 
 def test_not_available_and_round_trip(tmp_path: Path) -> None:
-    na = not_available("persistence has no posterior", "persistence")
+    na = not_available("randomwalk has no posterior", "randomwalk")
     assert na == {
         "schema_version": 1,
         "available": False,
-        "reason": "persistence has no posterior",
-        "model": "persistence",
+        "reason": "randomwalk has no posterior",
+        "model": "randomwalk",
     }
     assert read_ppc(write_ppc(na, tmp_path / "ppc.json")) == na
     obs, draws = calibrated()

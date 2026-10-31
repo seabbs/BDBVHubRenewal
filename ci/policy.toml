@@ -19,14 +19,14 @@ retry_budget = 1
 # fallback took 21 minutes at 2 x 1000 for all six streams. Hosted
 # runners are 1.2 to 1.5 times slower, so each main fit job takes about
 # 1 to 1.5 hours with setup (to be re-measured). The fallback fits beside
-# main and persistence is built in `prepare`, so only the retry runs
+# main and random walk is built in `prepare`, so only the retry runs
 # after main.
 [timing]
 # GitHub's 360-minute job cap, less a margin.
 fit_cap_minutes = 350
 # Kept free before the window closes for triage, the gate (hubValidations)
 # and the pull request. Every fit job's timeout stops this short of the
-# close, so the gate always runs in time with the fallback or persistence.
+# close, so the gate always runs in time with the fallback or randomwalk.
 reserve_minutes = 45
 # What a refit needs on a hosted runner: 45 minutes x 1.5, plus setup,
 # with margin. With less time than this plus the reserve left
@@ -87,22 +87,22 @@ stage = "primary"
 label = "BVDOutbreakSize-informed variant (shadow, not submitted)"
 sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.9, max_tree_depth = 10, seed = 1, chain_method = "vectorized" }
 
-# Persistence on a nowcast (no MCMC). Like persistence it needs no fit and
+# Random walk on a nowcast (no MCMC). Like random walk it needs no fit and
 # is built in `prepare`.
 [[candidates]]
-id = "persistencenow"
-kind = "persistence"
-config = "persistencenow"
-model = "persistencenow"
+id = "randomwalknowcast"
+kind = "randomwalk"
+config = "randomwalknowcast"
+model = "randomwalknowcast"
 stage = "baseline"
-label = "persistence on a nowcast"
+label = "random walk on a nowcast"
 
 [[candidates]]
-id = "persistence"
-kind = "persistence"
-config = "persistence"
+id = "randomwalk"
+kind = "randomwalk"
+config = "randomwalk"
 stage = "baseline"
-label = "persistence baseline"
+label = "random walk baseline"
 
 # Convergence thresholds. `retry` and `warn` are the fail and warn
 # defaults of BVDOutbreakSize's gate (docs/fits/convergence.jl): past
@@ -190,7 +190,7 @@ complete_weeks = 2
 ratio_offset = 5
 observed_warn = 2.0
 observed_fail = 0
-# Median of the forecast weeks against the persistence baseline. A
+# Median of the forecast weeks against the random walk baseline. A
 # departure is flagged, never failed.
 baseline_warn = 3.0
 baseline_fail = 0

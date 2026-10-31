@@ -9,7 +9,7 @@ import pytest
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import (
     ForecastModel,
-    Persistence,
+    RandomWalk,
     add_national,
     check_samples,
     get_model,
@@ -17,7 +17,7 @@ from bdbvhubrenewal.forecasters import (
     list_models,
     register_model,
 )
-from bdbvhubrenewal.forecasters.persistence import completeness_lag
+from bdbvhubrenewal.forecasters.randomwalk import completeness_lag
 
 
 @pytest.fixture
@@ -26,15 +26,15 @@ def task(target: pd.DataFrame, delays: pd.DataFrame):  # type: ignore[no-untyped
     return make_tasks(rows, delays, BacktestConfig(seed=3))[0]
 
 
-def test_registry_has_persistence_as_baseline() -> None:
+def test_registry_has_randomwalk_as_baseline() -> None:
     specs = list_models()
-    assert specs[0].name == "persistence"
+    assert specs[0].name == "randomwalk"
     assert specs[0].baseline
-    assert isinstance(get_model("persistence"), ForecastModel)
+    assert isinstance(get_model("randomwalk"), ForecastModel)
     with pytest.raises(KeyError):
         get_model("nope")
     with pytest.raises(ValueError, match="already registered"):
-        register_model("persistence", Persistence, "dup")
+        register_model("randomwalk", RandomWalk, "dup")
 
 
 def test_last_complete_week() -> None:
@@ -53,8 +53,8 @@ def test_completeness_lag_uses_delays(delays: pd.DataFrame) -> None:
     assert completeness_lag(None, "2026-08-18", default=12) == 12
 
 
-def test_persistence_output(task) -> None:  # type: ignore[no-untyped-def]
-    samples = Persistence().forecast(task)
+def test_randomwalk_output(task) -> None:  # type: ignore[no-untyped-def]
+    samples = RandomWalk().forecast(task)
     check_samples(samples, task)
     lag = completeness_lag(task.delays, task.vintage)
     last = last_complete_week(task.vintage, lag).isoformat()
@@ -74,22 +74,22 @@ def test_persistence_output(task) -> None:  # type: ignore[no-untyped-def]
         assert np.allclose(med, level, rtol=0.35, atol=3)
 
 
-def test_persistence_spread_grows(task) -> None:  # type: ignore[no-untyped-def]
-    samples = Persistence().forecast(task)
+def test_randomwalk_spread_grows(task) -> None:  # type: ignore[no-untyped-def]
+    samples = RandomWalk().forecast(task)
     it = samples.loc[samples["location"] == "CD-IT"]
     q = it.groupby("target_end_date")["value"].quantile([0.05, 0.95]).unstack()
     width = (q[0.95] - q[0.05]).to_numpy()
     assert width[-1] > width[-4]
 
 
-def test_persistence_is_reproducible(task) -> None:  # type: ignore[no-untyped-def]
-    a = Persistence().forecast(task)
-    b = Persistence().forecast(task)
+def test_randomwalk_is_reproducible(task) -> None:  # type: ignore[no-untyped-def]
+    a = RandomWalk().forecast(task)
+    b = RandomWalk().forecast(task)
     pd.testing.assert_frame_equal(a, b)
 
 
 def test_add_national_sums_provinces(task) -> None:  # type: ignore[no-untyped-def]
-    samples = add_national(Persistence().forecast(task))
+    samples = add_national(RandomWalk().forecast(task))
     nat = samples.loc[samples["location"] == "CD"].set_index(
         ["target_end_date", "sample"]
     )["value"]
@@ -104,7 +104,7 @@ def test_add_national_sums_provinces(task) -> None:  # type: ignore[no-untyped-d
 
 
 def test_check_samples_rejects_bad_output(task) -> None:  # type: ignore[no-untyped-def]
-    samples = Persistence().forecast(task)
+    samples = RandomWalk().forecast(task)
     with pytest.raises(ValueError, match="numbered"):
         check_samples(samples.assign(sample=samples["sample"] + 1), task)
     with pytest.raises(ValueError, match="non-negative"):
@@ -112,7 +112,7 @@ def test_check_samples_rejects_bad_output(task) -> None:  # type: ignore[no-unty
 
 
 def test_a_model_may_give_its_own_national(task) -> None:  # type: ignore[no-untyped-def]
-    samples = Persistence().forecast(task)
+    samples = RandomWalk().forecast(task)
     own = (
         samples.groupby(["target_end_date", "sample"], as_index=False)["value"]
         .sum()
@@ -126,7 +126,7 @@ def test_a_model_may_give_its_own_national(task) -> None:  # type: ignore[no-unt
     assert (nat["value"].to_numpy() == own["value"].to_numpy()).all()
 
 
-def test_persistence_predicts_counts_as_reported_later(
+def test_randomwalk_predicts_counts_as_reported_later(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
     rows = target.loc[target["vintage"] == "2026-10-09"]
@@ -134,7 +134,7 @@ def test_persistence_predicts_counts_as_reported_later(
         rows, delays, BacktestConfig(seed=3), report_by=("2026-10-24",)
     )[0]
     assert task.report_by == ("2026-10-24",)
-    samples = Persistence().forecast(task)
+    samples = RandomWalk().forecast(task)
     check_samples(samples, task)
     final = samples.loc[samples["as_of"].isna()]
     later = samples.loc[samples["as_of"] == "2026-10-24"]
@@ -157,7 +157,7 @@ def test_persistence_predicts_counts_as_reported_later(
 
 
 def test_add_national_sums_each_as_of(task) -> None:  # type: ignore[no-untyped-def]
-    samples = Persistence().forecast(task)
+    samples = RandomWalk().forecast(task)
     later = samples.assign(as_of="2026-10-24", value=1.0)
     out = add_national(pd.concat([samples.assign(as_of=np.nan), later]))
     nat = out.loc[(out["location"] == "CD") & (out["as_of"] == "2026-10-24")]
@@ -166,14 +166,14 @@ def test_add_national_sums_each_as_of(task) -> None:  # type: ignore[no-untyped-
 
 
 def test_check_samples_rejects_unrequested_as_of(task) -> None:  # type: ignore[no-untyped-def]
-    samples = Persistence().forecast(task)
+    samples = RandomWalk().forecast(task)
     extra = samples.assign(as_of="2026-10-24")
     with pytest.raises(ValueError, match="as_of"):
         check_samples(pd.concat([samples.assign(as_of=np.nan), extra]), task)
 
 
 def test_low_count_places_take_the_pooled_spread() -> None:
-    from bdbvhubrenewal.forecasters.persistence import walk_spreads
+    from bdbvhubrenewal.forecasters.randomwalk import walk_spreads
 
     # Places with at least `low_count` cases a week keep their own spread.
     # The rest take the spread of the pooled weekly changes of those
@@ -195,7 +195,7 @@ def test_low_count_places_take_the_pooled_spread() -> None:
 
 
 def test_random_walk_is_a_log_scale_walk_with_poisson_draws() -> None:
-    from bdbvhubrenewal.forecasters.persistence import random_walk
+    from bdbvhubrenewal.forecasters.randomwalk import random_walk
 
     rng = np.random.default_rng(1)
     start = np.full(4000, np.log1p(100.0))
@@ -215,7 +215,7 @@ def test_both_baselines_use_the_one_random_walk(
     task,
     monkeypatch: pytest.MonkeyPatch,  # type: ignore[no-untyped-def]
 ) -> None:
-    import bdbvhubrenewal.forecasters.persistence as mod
+    import bdbvhubrenewal.forecasters.randomwalk as mod
 
     calls: list[str] = []
     walk = mod.random_walk
@@ -225,15 +225,15 @@ def test_both_baselines_use_the_one_random_walk(
         return walk(*args, **kwargs)
 
     monkeypatch.setattr(mod, "random_walk", spy)
-    mod.Persistence().forecast(task)
+    mod.RandomWalk().forecast(task)
     n = len(calls)
     assert n > 0
-    mod.PersistenceNow().forecast(task)
+    mod.RandomWalkNowcast().forecast(task)
     assert len(calls) > n
 
 
 def test_completeness_from_releases(target: pd.DataFrame) -> None:
-    from bdbvhubrenewal.forecasters.persistence import release_complete_weeks
+    from bdbvhubrenewal.forecasters.randomwalk import release_complete_weeks
 
     # Hub totals of 1 to 3 week old weeks still grow between releases, so
     # at 10-24 a week is complete only from about three weeks old.
@@ -244,10 +244,10 @@ def test_completeness_from_releases(target: pd.DataFrame) -> None:
     assert release_complete_weeks(target, "2026-08-18") is None
 
 
-def test_persistence_holds_weeks_95_percent_published(
+def test_randomwalk_holds_weeks_95_percent_published(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
-    from bdbvhubrenewal.forecasters.persistence import (
+    from bdbvhubrenewal.forecasters.randomwalk import (
         release_complete_weeks,
         release_week,
     )
@@ -263,7 +263,7 @@ def test_persistence_holds_weeks_95_percent_published(
     weeks = release_complete_weeks(task.target_history, task.vintage, 0.95)
     assert weeks is not None
     last = release_week(task.vintage) - dt.timedelta(weeks=weeks)
-    samples = Persistence().forecast(task)
+    samples = RandomWalk().forecast(task)
     spread = samples.groupby(["location", "target_end_date"])["value"].nunique()
     held = spread.loc[spread.index.get_level_values(1) <= last.isoformat()]
     assert (held == 1).all()

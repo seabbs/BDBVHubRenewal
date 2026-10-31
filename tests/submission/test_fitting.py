@@ -13,7 +13,7 @@ from bdbvhubrenewal.data import coherence_summary, national_coherence
 from bdbvhubrenewal.submission.fitting import (
     get_config,
     list_configs,
-    persistence_config,
+    randomwalk_config,
     register_config,
 )
 
@@ -31,25 +31,25 @@ def in_root() -> Iterator[None]:
 @pytest.fixture
 def stand_in() -> str:
     register_config(
-        persistence_config("standin", stand_in="a test stand-in"), replace=True
+        randomwalk_config("standin", stand_in="a test stand-in"), replace=True
     )
     return "standin"
 
 
 def test_main_runs_the_renewal_model() -> None:
     names = {c.name for c in list_configs()}
-    assert {"main", "renewalsp", "persistence"} <= names
+    assert {"main", "renewalsp", "randomwalk"} <= names
     assert "fallback" not in names
-    for name in ("main", "renewalsp", "persistence"):
+    for name in ("main", "renewalsp", "randomwalk"):
         assert get_config(name).stand_in is None
 
 
 def test_register_config_needs_replace() -> None:
     with pytest.raises(ValueError, match="already registered"):
-        register_config(persistence_config("main"))
+        register_config(randomwalk_config("main"))
     old = get_config("main")
     try:
-        new = register_config(persistence_config("main"), replace=True)
+        new = register_config(randomwalk_config("main"), replace=True)
         assert get_config("main") is new
     finally:
         register_config(old, replace=True)
@@ -64,7 +64,7 @@ def test_version(capsys: pytest.CaptureFixture[str]) -> None:
 def test_fit_then_nowcast_from_the_fit(tmp_path: Path, stand_in: str) -> None:
     fit = tmp_path / "fit"
     sampler = '{"num_chains": 4, "seed": 1}'
-    args = ["--model", "persistence", "--config", stand_in, "--vintage"]
+    args = ["--model", "randomwalk", "--config", stand_in, "--vintage"]
     assert main(["fit", *args, "2026-10-17", "--sampler-json", sampler,
                  "--out", str(fit)]) == 0  # fmt: skip
     diag = json.loads((fit / "diagnostics.json").read_text())
@@ -80,7 +80,7 @@ def test_fit_then_nowcast_from_the_fit(tmp_path: Path, stand_in: str) -> None:
     assert main(["nowcast", *args, "2026-10-17", "--fit", str(fit),
                  "--out", str(out)]) == 0  # fmt: skip
     (csv,) = out.rglob("*.csv")
-    assert csv.parent.name == "seabbs-persistence"
+    assert csv.parent.name == "seabbs-randomwalk"
     table = pd.read_csv(csv)
     # Seven weeks up to the reference date and three after.
     assert table["target_end_date"].nunique() == 10
@@ -97,7 +97,7 @@ def test_fit_then_nowcast_from_the_fit(tmp_path: Path, stand_in: str) -> None:
     assert sorted(side["modelled_provinces"]) == sorted(provinces)
     assert side["unassigned"] == []
 
-    # The plain persistence nowcast gives the same samples.
+    # The plain random walk nowcast gives the same samples.
     plain = tmp_path / "plain"
     assert main(["nowcast", "--vintage", "2026-10-17", "--out",
                  str(plain)]) == 0  # fmt: skip
@@ -108,7 +108,7 @@ def test_fit_then_nowcast_from_the_fit(tmp_path: Path, stand_in: str) -> None:
 @pytest.mark.usefixtures("in_root")
 def test_nowcast_refuses_a_fit_of_another_config(tmp_path: Path) -> None:
     fit = tmp_path / "fit"
-    assert main(["fit", "--config", "persistence", "--out", str(fit)]) == 0
+    assert main(["fit", "--config", "randomwalk", "--out", str(fit)]) == 0
     code = main(
         ["nowcast", "--config", "main", "--fit", str(fit), "--out",
          str(tmp_path / "s")]
@@ -128,7 +128,7 @@ def test_fit_fails_on_unknown_config_or_vintage(tmp_path: Path) -> None:
 def test_plot_submission_and_validate(tmp_path: Path) -> None:
     out = tmp_path / "sub"
     # baseline: the committed metadata covers the hub models only.
-    args = ["--model", "persistencenow", "--out", str(out)]
+    args = ["--model", "randomwalknowcast", "--out", str(out)]
     assert main(["nowcast", *args]) == 0
     (csv,) = out.rglob("*.csv")
     png = tmp_path / "plot.png"
@@ -209,7 +209,7 @@ def test_cli_plot_ppc(tmp_path: Path) -> None:
     assert main(["plot-ppc", "--ppc", str(ppc), "--out", str(png)]) == 0
     assert 0 < png.stat().st_size < 1_000_000
     na = write_ppc(
-        not_available("no posterior", model="persistence", config="main"),
+        not_available("no posterior", model="randomwalk", config="main"),
         tmp_path / "na.json",
     )
     assert main(["plot-ppc", "--ppc", str(na), "--out", str(png)]) == 1
@@ -261,7 +261,7 @@ def test_cli_hub_id_and_chosen_model(
     assert capsys.readouterr().out.strip() == "seabbs-renewal"
     assert main(["chosen-model"]) == 0
     # The latest entry of results/model-choice.yml.
-    assert capsys.readouterr().out.strip() == "persistencenow"
+    assert capsys.readouterr().out.strip() == "randomwalknowcast"
 
 
 @pytest.mark.usefixtures("in_root")
@@ -272,44 +272,46 @@ def test_renewal_metadata_uses_the_submission_abbr(tmp_path: Path) -> None:
     assert "model_abbr: renewal" in text
     # Any model can be written under the submission id explicitly.
     out = str(tmp_path / "p")
-    args = ["--model", "persistence", "--abbr", "renewal"]
+    args = ["--model", "randomwalk", "--abbr", "renewal"]
     assert main(["metadata", *args, "--out", out]) == 0
     assert (tmp_path / "p" / "seabbs-renewal.yml").exists()
 
 
 @pytest.mark.usefixtures("in_root")
-def test_persistencenow_has_its_own_hub_id(
+def test_randomwalknowcast_has_its_own_hub_id(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # A second hub model, submitted under its own id every round. The
     # hub's abbreviations allow no hyphen and fewer than 16 characters.
     from bdbvhubrenewal.submission.hub import model_abbr_for
 
-    abbr = model_abbr_for("persistencenow", ROOT / "config" / "hub.toml")
-    assert abbr == "baseline"
+    abbr = model_abbr_for("randomwalknowcast", ROOT / "config" / "hub.toml")
+    assert abbr == "rwnowcast"
     assert abbr.isalnum()
     assert len(abbr) < 16
     # Models without their own id submit under the renewal id.
     assert model_abbr_for("renewalsp", ROOT / "config" / "hub.toml") == (
         "renewal"
     )
-    assert main(["hub-id", "--model", "persistencenow"]) == 0
-    assert capsys.readouterr().out.strip() == "seabbs-baseline"
-    assert main(["metadata", "--model", "persistencenow", "--out",
+    assert main(["hub-id", "--model", "randomwalknowcast"]) == 0
+    assert capsys.readouterr().out.strip() == "seabbs-rwnowcast"
+    assert main(["metadata", "--model", "randomwalknowcast", "--out",
                  str(tmp_path)]) == 0  # fmt: skip
-    text = (tmp_path / "seabbs-baseline.yml").read_text()
-    assert "model_abbr: baseline" in text
+    text = (tmp_path / "seabbs-rwnowcast.yml").read_text()
+    assert "model_abbr: rwnowcast" in text
 
 
 @pytest.mark.usefixtures("in_root")
-def test_persistencenow_config_runs_the_nowcast_model(tmp_path: Path) -> None:
-    config = get_config("persistencenow")
+def test_randomwalknowcast_config_runs_the_nowcast_model(
+    tmp_path: Path,
+) -> None:
+    config = get_config("randomwalknowcast")
     assert config.stand_in is None
     fit = tmp_path / "fit"
-    args = ["--config", "persistencenow", "--vintage", "2026-10-17"]
+    args = ["--config", "randomwalknowcast", "--vintage", "2026-10-17"]
     assert main(["fit", *args, "--out", str(fit)]) == 0
     diag = json.loads((fit / "diagnostics.json").read_text())
-    assert diag["model"] == "persistencenow"
+    assert diag["model"] == "randomwalknowcast"
     assert diag["status"] == "not-applicable"
     out = tmp_path / "sub"
     assert main(["nowcast", *args, "--fit", str(fit), "--out", str(out)]) == 0
@@ -321,7 +323,7 @@ def test_persistencenow_config_runs_the_nowcast_model(tmp_path: Path) -> None:
     now, base = pd.read_csv(csv), pd.read_csv(csv2)
     assert len(now) == len(base)
     # The nowcast lifts a recent week above its published total (314), where
-    # persistence carries an older week forward.
+    # random walk carries an older week forward.
     week = now["target_end_date"] == "2026-10-10"
     nat = (now["location"] == "CD") & week
     assert now.loc[nat, "value"].median() > 314
@@ -330,9 +332,9 @@ def test_persistencenow_config_runs_the_nowcast_model(tmp_path: Path) -> None:
 
 @pytest.mark.usefixtures("in_root")
 def test_baseline_metadata_text(tmp_path: Path) -> None:
-    assert main(["metadata", "--model", "persistencenow", "--out",
+    assert main(["metadata", "--model", "randomwalknowcast", "--out",
                  str(tmp_path)]) == 0  # fmt: skip
-    text = (tmp_path / "seabbs-baseline.yml").read_text()
+    text = (tmp_path / "seabbs-rwnowcast.yml").read_text()
     assert "https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/" in text
     assert "baselinenowcast" in text
     assert "10.12688/wellcomeopenres.25027.2" in text
@@ -343,8 +345,8 @@ def test_committed_metadata_is_only_for_hub_models() -> None:
     # One file per hub model in config/hub.toml, written as the CLI does.
     names = sorted(p.stem for p in (ROOT / "hub" / "model-metadata").glob("*"))
     assert names == [
-        "seabbs-baseline",
         "seabbs-renewal",
+        "seabbs-rwnowcast",
     ]
     for name in names:
         text = (ROOT / "hub" / "model-metadata" / f"{name}.yml").read_text()

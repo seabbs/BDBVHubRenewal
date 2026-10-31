@@ -234,7 +234,7 @@ def submit(
     _git(runner, work, "fetch", "-q", "upstream", "main")
     _git(runner, work, "checkout", "-q", "-B", branch, "upstream/main")
     # The hub file name always carries the submitting model id, even when
-    # a fallback (such as persistence) produced it.
+    # a fallback (such as random walk) produced it.
     rel = f"model-output/{model_id}/{reference_date}-{model_id}.csv"
     (work / rel).parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(submission, work / rel)

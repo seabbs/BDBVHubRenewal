@@ -15,7 +15,7 @@ REPO = "seabbs/BDBVHubRenewal"
 FORK = "seabbs-bot/BDBV-Modeling-Hub"
 HUB = "InsightNet-US/BDBV-Modeling-Hub"
 MID = "seabbs-renewal"
-MID2 = "seabbs-baseline"
+MID2 = "seabbs-rwnowcast"
 ENV = f"repos/{REPO}/environments/hub-submission"
 NOW = dt.datetime(2026, 10, 27, 12, tzinfo=dt.UTC)
 
@@ -88,12 +88,12 @@ def settings(tmp_path: Path) -> Settings:
         "model_name: Renewal\nmodel_abbr: renewal\n"
     )
     (meta / f"{MID2}.yml").write_text(
-        "team_abbr: seabbs\nmodel_abbr: baseline\n"
+        "team_abbr: seabbs\nmodel_abbr: rwnowcast\n"
     )
     choice = tmp_path / "model-choice.yml"
     choice.write_text(
         "choices:\n"
-        "  - date: 2026-10-10\n    model: persistence\n"
+        "  - date: 2026-10-10\n    model: randomwalk\n"
         "  - date: 2026-10-27\n    model: renewal\n    summary: >-\n"
         "      Chosen.\n"
     )
@@ -247,7 +247,7 @@ def test_variables_override_model_and_id(settings: Settings) -> None:
         **{
             f"repos/{REPO}/actions/variables": {
                 "variables": [
-                    {"name": "HUB_MODEL", "value": "persistence"},
+                    {"name": "HUB_MODEL", "value": "randomwalk"},
                     {"name": "HUB_MODEL_ID", "value": "seabbs-other"},
                     {"name": "EXPECTED_LOCATIONS", "value": "CD"},
                 ]
@@ -295,15 +295,15 @@ def test_chosen_model_is_ok(settings: Settings) -> None:
     assert check.detail == "submits `renewal`, as last chosen"
 
 
-def test_persistence_chosen_warns(settings: Settings) -> None:
+def test_randomwalk_chosen_warns(settings: Settings) -> None:
     settings.model_choice.write_text(
-        "choices:\n  - date: 2026-10-10\n    model: persistence\n"
+        "choices:\n  - date: 2026-10-10\n    model: randomwalk\n"
     )
     check = {c.name: c for c in run_checks(ready_runner(), settings)}[
         "model choice"
     ]
     assert check.status == "warn"
-    assert "persistence" in check.detail
+    assert "randomwalk" in check.detail
 
 
 def test_unregistered_model_id_is_reported(settings: Settings) -> None:

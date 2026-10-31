@@ -455,11 +455,11 @@ def check_model_choice(path: Path, override: str = "") -> Check:
             f"Delete the repository variable HUB_MODEL, or {fix[0].lower()}"
             f"{fix[1:]}",
         )
-    if chosen == "persistence":
+    if chosen == "randomwalk":
         return Check(
             "model choice",
             "warn",
-            f"submits `persistence`, the latest entry of {path.name}",
+            f"submits `randomwalk`, the latest entry of {path.name}",
             fix,
         )
     return Check("model choice", "ok", f"submits `{chosen}`, as last chosen")

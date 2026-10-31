@@ -16,8 +16,8 @@ def write(path: Path, renewal: bool, baseline: bool) -> Path:
         "[submission]\n"
         'model_abbr = "renewal"\n'
         f"submit = {str(renewal).lower()}\n"
-        "[models.persistencenow]\n"
-        'model_abbr = "baseline"\n'
+        "[models.randomwalknowcast]\n"
+        'model_abbr = "rwnowcast"\n'
         f"submit = {str(baseline).lower()}\n"
     )
     return path
@@ -26,10 +26,10 @@ def write(path: Path, renewal: bool, baseline: bool) -> Path:
 def test_repository_config_names_both_hub_models() -> None:
     tracks = {t.name: t for t in load_tracks(HUB_TOML, chosen="")}
     assert tracks["renewal"].model_id == "seabbs-renewal"
-    base = tracks["baseline"]
-    assert base.model_id == "seabbs-baseline"
-    assert base.model == "persistencenow"
-    # Sam opted seabbs-baseline in for the 2026-11-07 round (2026-10-28);
+    base = tracks["rwnowcast"]
+    assert base.model_id == "seabbs-rwnowcast"
+    assert base.model == "randomwalknowcast"
+    # Sam opted seabbs-rwnowcast in for the 2026-11-07 round (2026-10-28);
     # seabbs-renewal waits for its models. DRY_RUN still applies.
     assert base.submit
     assert base.runs
@@ -39,7 +39,7 @@ def test_repository_config_names_both_hub_models() -> None:
 def test_opted_in_baseline_runs_without_a_model_choice(tmp_path: Path) -> None:
     cfg = write(tmp_path / "hub.toml", renewal=False, baseline=True)
     tracks = {t.name: t for t in load_tracks(cfg, chosen="")}
-    assert tracks["baseline"].runs
+    assert tracks["rwnowcast"].runs
     assert not tracks["renewal"].runs
     assert "not opted in" in tracks["renewal"].reason
 
@@ -68,14 +68,14 @@ def test_cli_sets_one_output_per_track(
     text = out.read_text()
     assert "renewal=false" in text
     assert "baseline=true" in text
-    assert "baseline_id=seabbs-baseline" in text
+    assert "baseline_id=seabbs-rwnowcast" in text
 
 
 def test_renewal_skips_without_opt_in_even_with_a_choice(
     tmp_path: Path,
 ) -> None:
     path = write(tmp_path / "hub.toml", renewal=False, baseline=True)
-    tracks = {t.name: t for t in load_tracks(path, chosen="persistencenow")}
+    tracks = {t.name: t for t in load_tracks(path, chosen="randomwalknowcast")}
     assert not tracks["renewal"].runs
     assert tracks["renewal"].reason == "not opted in (`submit = false`)"
-    assert tracks["baseline"].runs
+    assert tracks["rwnowcast"].runs

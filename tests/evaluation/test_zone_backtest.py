@@ -23,14 +23,14 @@ def scores(target: pd.DataFrame, delays: pd.DataFrame) -> pd.DataFrame:
         delays,
         load_daily_zones(DATA),
         hub_zones(DATA / "hub-config" / "tasks.json"),
-        models=("persistence",),
+        models=("randomwalk",),
     )
 
 
 def test_zone_backtest_scores_every_zone_against_the_latest_vintage(
     scores: pd.DataFrame,
 ) -> None:
-    assert set(scores["model"]) == {"persistence", ZONE_BASELINE}
+    assert set(scores["model"]) == {"randomwalk", ZONE_BASELINE}
     assert (scores["location"].str.count("-") == 2).all()
     assert set(scores["truth_vintage"]) == {"2026-10-24"}
     assert set(scores["vintage"]) == {"2026-08-18", "2026-10-09", "2026-10-17"}
@@ -40,13 +40,13 @@ def test_zone_backtest_scores_every_zone_against_the_latest_vintage(
     assert per.min() > 150
 
 
-def test_allocated_zones_beat_zone_persistence(scores: pd.DataFrame) -> None:
+def test_allocated_zones_beat_zone_randomwalk(scores: pd.DataFrame) -> None:
     rel = zone_relative_skill(scores)
-    row = rel.set_index("model").loc["persistence"]
+    row = rel.set_index("model").loc["randomwalk"]
     assert row["relative_wis"] < 1
     assert row["relative_log_wis"] < 1
     by = zone_relative_skill(scores, by=("horizon",))
-    mine = by.loc[by["model"] == "persistence"].set_index("horizon")
+    mine = by.loc[by["model"] == "randomwalk"].set_index("horizon")
     # Weeks both copy from the data tie; later weeks are better.
     assert (mine["relative_wis"] <= 1 + 1e-9).all()
     assert (mine.loc[mine.index >= -2, "relative_wis"] < 1).all()

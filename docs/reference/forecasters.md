@@ -1,6 +1,6 @@
 # Forecasters
 
-The forecaster interface, the registry, persistence and the renewal variants.
+The forecaster interface, the registry, random walk and the renewal variants.
 { .page-subtitle }
 
 ::: bdbvhubrenewal.forecasters
@@ -9,7 +9,7 @@ The forecaster interface, the registry, persistence and the renewal variants.
 
 ::: bdbvhubrenewal.forecasters.base
 
-::: bdbvhubrenewal.forecasters.persistence
+::: bdbvhubrenewal.forecasters.randomwalk
 
 ::: bdbvhubrenewal.forecasters.renewal
 

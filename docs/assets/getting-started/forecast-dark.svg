@@ -3133,7 +3133,7 @@ L 67.860703 50.968437
 " style="fill: none; stroke: #3987e5; stroke-width: 1.5; stroke-linecap: square"/>
     </g>
     <g id="text_18">
-     <text style="font-size: 7px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: start; fill: #c3c2b7" x="73.460703" y="53.418437" transform="rotate(-0 73.460703 53.418437)">persistence</text>
+     <text style="font-size: 7px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: start; fill: #c3c2b7" x="73.460703" y="53.418437" transform="rotate(-0 73.460703 53.418437)">randomwalk</text>
     </g>
     <g id="line2d_237">
      <path d="M 53.860703 61.468984 
@@ -3142,7 +3142,7 @@ L 67.860703 61.468984
 " style="fill: none; stroke: #d95926; stroke-width: 1.5; stroke-linecap: square"/>
     </g>
     <g id="text_19">
-     <text style="font-size: 7px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: start; fill: #c3c2b7" x="73.460703" y="63.918984" transform="rotate(-0 73.460703 63.918984)">persistencenow</text>
+     <text style="font-size: 7px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: start; fill: #c3c2b7" x="73.460703" y="63.918984" transform="rotate(-0 73.460703 63.918984)">randomwalknowcast</text>
     </g>
     <g id="patch_6">
      <path d="M 53.860703 74.419531 

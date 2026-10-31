@@ -215,7 +215,7 @@ def model_abbr_for(model: str, path: Path | str = SUBMISSION_CONFIG) -> str:
     Parameters
     ----------
     model : str
-        The model key, such as `"persistencenow"`.
+        The model key, such as `"randomwalknowcast"`.
     path : pathlib.Path or str
         The configuration file.
 
@@ -236,7 +236,7 @@ def model_id(model_abbr: str, team_abbr: str = TEAM_ABBR) -> str:
     Parameters
     ----------
     model_abbr : str
-        Model abbreviation, such as `"persistence"`.
+        Model abbreviation, such as `"randomwalk"`.
     team_abbr : str
         Team abbreviation.
 
@@ -264,7 +264,7 @@ def validate_model_id(value: str) -> list[str]:
     Parameters
     ----------
     value : str
-        A model id such as `"seabbs-persistence"`.
+        A model id such as `"seabbs-randomwalk"`.
 
     Returns
     -------
@@ -438,7 +438,7 @@ def submission_path(
     reference_date : datetime.date or str
         The round's reference date.
     mid : str
-        The model id, such as `"seabbs-persistence"`.
+        The model id, such as `"seabbs-randomwalk"`.
 
     Returns
     -------

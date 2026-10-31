@@ -406,11 +406,11 @@ def summarise(
 def is_sampled(kind: str, diagnostics: Path | None) -> bool:
     """Whether the candidate's fit used a sampler.
 
-    Persistence and fits whose diagnostics say `sampler: none` did not.
+    Random walk and fits whose diagnostics say `sampler: none` did not.
     Any other fit is taken to be sampled, so a fit that wrote nothing
     cannot pass by omission.
     """
-    if kind == "persistence":
+    if kind == "randomwalk":
         return False
     if diagnostics is None or not diagnostics.exists():
         return True

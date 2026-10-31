@@ -12,8 +12,8 @@ It submits only the hub models opted in ([Opting in](opting-in.md)), and pushes 
 | --- | --- |
 | `detect` | Stops unless the open round has new hub data. |
 | `freeze` | Freezes the page of every round whose pull request has merged. |
-| `prepare` | Pins the data, builds `persistence` and `persistencenow`, and decides which hub models run. |
-| `baseline` | The baseline hub model: checks and submits `persistencenow`, or `persistence` if it is ruled out. |
+| `prepare` | Pins the data, builds `randomwalk` and `randomwalknowcast`, and decides which hub models run. |
+| `baseline` | The baseline hub model: checks and submits `randomwalknowcast`, or `randomwalk` if it is ruled out. |
 | `fit` | The renewal hub model: fits `main`, `renewalsp` and the `bvd` shadow in parallel. |
 | `triage`, `retry` | Refits `main` once if needed and if the window leaves time. |
 | `gate`, `submit` | Walks the chain, validates, and opens or updates the pull request. |
@@ -27,8 +27,8 @@ The first candidate that clears the checks is submitted, under `seabbs-renewal`.
 1. `main`: the renewal model.
 2. `retry-1`: one refit with target acceptance 0.95 and jittered inits.
 3. `renewalsp`: independent single-patch fits, fitted beside `main`.
-4. `persistencenow`: persistence on a nowcast.
-5. `persistence`.
+4. `randomwalknowcast`: random walk on a nowcast.
+5. `randomwalk`.
 
 Every fit is 2 chains of 500 warm-up and 500 draws.
 Fit timeouts and the retry are set against the window's close (`[timing]` in `ci/policy.toml`).
@@ -46,7 +46,7 @@ Thresholds are in `ci/policy.toml`.
 | 90% predictive coverage | | | < 0.70 |
 | schema, values, 100 samples per trajectory | any | | |
 | hub validation (Python and hubValidations) | any error | | |
-| bounds, growth, against observed, persistence and last week | | | yes |
+| bounds, growth, against observed, random walk and last week | | | yes |
 
 The national rows are rebuilt as the sum of the provinces plus the unassigned component.
 The [hub specification](hub-spec.md) lists the hub's rules.

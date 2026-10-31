@@ -13,7 +13,7 @@ from bdbvhubrenewal.data.zones import (
     weekly_zone_counts,
 )
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
-from bdbvhubrenewal.forecasters import ForecastTask, Persistence
+from bdbvhubrenewal.forecasters import ForecastTask, RandomWalk
 from bdbvhubrenewal.forecasters.zones import (
     ZoneAllocator,
     check_zone_coherence,
@@ -56,7 +56,7 @@ def _alloc(
     zones: tuple[str, ...],
     samples: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    prov = Persistence().forecast(task) if samples is None else samples
+    prov = RandomWalk().forecast(task) if samples is None else samples
     return prov, ZoneAllocator().allocate(prov, task, counts, zones)
 
 
@@ -115,7 +115,7 @@ def test_published_zone_counts_are_kept(
     prov, alloc = _alloc(task, counts, zones)
     seen = counts.set_index(["location", "target_end_date"])["total"]
     both = alloc.join(seen, on=["location", "target_end_date"]).fillna(0)
-    # Persistence copies complete weeks, so the zones copy theirs too.
+    # Random walk copies complete weeks, so the zones copy theirs too.
     old = both.loc[both["target_end_date"] == "2026-09-13"]
     assert (old["value"] == old["total"]).all()
     # A zone never falls below what it has published, unless its
@@ -220,7 +220,7 @@ def test_provinces_below_their_published_zone_total_are_thinned() -> None:
 def test_allocation_is_reproducible(
     task: ForecastTask, counts: pd.DataFrame, zones: tuple[str, ...]
 ) -> None:
-    prov = Persistence().forecast(task)
+    prov = RandomWalk().forecast(task)
     a = ZoneAllocator().allocate(prov, task, counts, zones)
     b = ZoneAllocator().allocate(prov, task, counts, zones)
     pd.testing.assert_frame_equal(a, b)
@@ -235,7 +235,7 @@ def test_check_zone_coherence_flags_a_gap(
     assert check_zone_coherence(prov, bad)
 
 
-def test_zone_task_is_a_zero_filled_persistence_task(
+def test_zone_task_is_a_zero_filled_randomwalk_task(
     task: ForecastTask, counts: pd.DataFrame, zones: tuple[str, ...]
 ) -> None:
     zt = zone_task(task, counts, zones)
@@ -247,7 +247,7 @@ def test_zone_task_is_a_zero_filled_persistence_task(
     assert one["target_end_date"].max() <= task.vintage
     gaps = pd.to_datetime(one["target_end_date"]).diff().dropna()
     assert (gaps == pd.Timedelta(days=7)).all()
-    samples = Persistence().forecast(zt)
+    samples = RandomWalk().forecast(zt)
     assert set(samples["location"]) == set(zt.locations)
 
 
@@ -291,7 +291,7 @@ def test_allocation_reads_final_rows_only(
 ) -> None:
     rows = target.loc[target["vintage"] == "2026-10-09"]
     task = make_tasks(rows, delays, BacktestConfig(seed=3), ("2026-10-24",))[0]
-    prov = Persistence().forecast(task)
+    prov = RandomWalk().forecast(task)
     assert "as_of" in prov
     counts = weekly_zone_counts(daily_zones, task.vintage)
     alloc = ZoneAllocator().allocate(prov, task, counts, zones)

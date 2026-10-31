@@ -25,7 +25,7 @@ with $P$ the empirical delay distribution of fully observed onset weeks.
 $K$ is the fewest whole weeks with $s(7K) \ge 0.95$.
 
 **Vintage-matched.** The renewal variants draw reported counts from the same posterior draws as the final counts.
-Persistence thins each sample $x$ of week $w$ to $\max\{Y_{p,v}(w),\ \text{Binomial}(x, s(T - w))\}$.
+RandomWalk thins each sample $x$ of week $w$ to $\max\{Y_{p,v}(w),\ \text{Binomial}(x, s(T - w))\}$.
 
 **Lag prior.** An origin with no earlier pair of delay files takes the publication lag from a prior shaped by later files.
 Its scores are flagged, and the Backtest page also shows complete-week scores without them.
@@ -49,7 +49,7 @@ $$
 $$
 
 Positive bias is overprediction.
-Relative WIS is a ratio of means against persistence $b$ over the forecasts both made, and below 1 beats it.
+Relative WIS is a ratio of means against randomwalk $b$ over the forecasts both made, and below 1 beats it.
 Coverage is whether $y$ falls in the central 50% and 90% sample intervals.
 
 ## Backtest design
@@ -67,18 +67,18 @@ Each vintage is a forecast task, and every registered model forecasts every task
 
 Each model choice is logged with its date, and the development set rolls forward with them.
 Development runs use every vintage up to the latest choice date.
-Each real vintage after a choice is forecast by the model chosen then and by persistence, with the code at the time of the run.
+Each real vintage after a choice is forecast by the model chosen then and by randomwalk, with the code at the time of the run.
 Each forecast is scored when the next vintage arrives and re-scored as newer ones do.
 
 ## Leave-one-province-out
 
 One province's likelihood is masked while it stays in the model, so coupling still acts on it.
 Its onsets are scored against the latest real vintage.
-It runs on development vintages, for models that support the mask, so not `renewalsp` or persistence.
+It runs on development vintages, for models that support the mask, so not `renewalsp` or randomwalk.
 
 ## Health zones
 
-Zone forecasts are scored against zone persistence, which runs persistence on each zone's own series and does not sum to the provinces.
+Zone forecasts are scored against zone randomwalk, which runs randomwalk on each zone's own series and does not sum to the provinces.
 Each real vintage before the latest is forecast, and every zone of a forecast province is scored, against zero where it has no cases.
 `bdbvhubrenewal zone-backtest` runs it and writes `results/zone-scores.csv`.
 
@@ -87,5 +87,5 @@ Each real vintage before the latest is forecast, and every zone of a forecast pr
 For each hub reference date, our unfitted models forecast from the latest real vintage serving the round, or else a vintage reconstructed for the Saturday before.
 Fitted models use their stored backtest or held-out forecasts for the same round.
 Every model is scored on the weeks it forecast, against the latest real vintage, and the [comparison page](../comparison.md) reports complete weeks.
-WIS is relative to `persistencenow` on the weeks both forecast.
+WIS is relative to `randomwalknowcast` on the weeks both forecast.
 A round is pending until a later real vintage exists.

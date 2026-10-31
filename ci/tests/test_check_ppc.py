@@ -103,8 +103,8 @@ def test_unavailable_is_na(tmp_path: Path) -> None:
     assert data["reason"] == "no posterior"
 
 
-def test_persistence_without_file_is_na(tmp_path: Path) -> None:
-    assert run(tmp_path, None, "--kind", "persistence")["status"] == "skip"
+def test_randomwalk_without_file_is_na(tmp_path: Path) -> None:
+    assert run(tmp_path, None, "--kind", "randomwalk")["status"] == "skip"
 
 
 def test_no_sampler_without_file_is_na(tmp_path: Path) -> None:
@@ -186,7 +186,7 @@ def test_assess_without_ppc_summary(tmp_path: Path) -> None:
     a = assess(POLICY.get("main"), d)
     assert a.ppc == "warn"
     assert a.status == "warn"
-    p = tmp_path / "persistence"
+    p = tmp_path / "randomwalk"
     write_json(p / "checks.json", {"status": "pass", "checks": []})
     write_json(p / "submission" / "x.csv", {})
-    assert assess(POLICY.get("persistence"), p).ppc == "skip"
+    assert assess(POLICY.get("randomwalk"), p).ppc == "skip"

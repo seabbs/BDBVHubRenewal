@@ -158,7 +158,7 @@ def status_line(
     why = _first_reason(provenance)
     if kind == "retry" and why:
         head = f"Main model refitted once: {why[0].lower()}{why[1:]}."
-    elif kind in ("fallback", "persistence") and not _first_choice(provenance):
+    elif kind in ("fallback", "randomwalk") and not _first_choice(provenance):
         head = (
             f"Fallback model used ({provenance['produced_by']})"
             + (f": {why[0].lower()}{why[1:]}" if why else "")
@@ -171,7 +171,7 @@ def status_line(
     run = provenance.get("run") or {}
     if provenance.get("stand_in"):
         head += (
-            f" Stand-in: {run.get('model', 'persistence')} runs as the "
+            f" Stand-in: {run.get('model', 'randomwalk')} runs as the "
             f"`{run.get('config', 'main')}` model."
         )
     if dry_run:

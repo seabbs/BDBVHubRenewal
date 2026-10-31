@@ -71,13 +71,13 @@ print(task.target_end_dates[0], "to", task.target_end_dates[-1])
 # ## Forecast
 #
 # `get_model` returns a model from the registry by name.
-# `persistence` carries the last complete week forward with random walk noise on the log scale.
-# `persistencenow` first nowcasts the recent weeks for reporting delays, then does the same.
-# `persistencenow` is the baseline we submit to the hub as `seabbs-baseline`.
+# `randomwalk` carries the last complete week forward with random walk noise on the log scale.
+# `randomwalknowcast` first nowcasts the recent weeks for reporting delays, then does the same.
+# `randomwalknowcast` is the baseline we submit to the hub as `seabbs-rwnowcast`.
 # `run_forecasts` runs each model, checks the samples, adds the national total and returns 100 trajectories per location.
 
 # %%
-models = [get_model("persistence"), get_model("persistencenow")]
+models = [get_model("randomwalk"), get_model("randomwalknowcast")]
 forecasts = bt.run_forecasts(models, [task])
 forecasts.groupby("model")["sample"].nunique()
 
@@ -123,16 +123,16 @@ save("forecast")
 panels
 
 # %% [markdown]
-# ![Nowcasts from persistence and persistencenow at 2026-10-09 against the data as later reported.](../assets/getting-started/nowcast.svg#only-light)
-# ![Nowcasts from persistence and persistencenow at 2026-10-09 against the data as later reported.](../assets/getting-started/nowcast-dark.svg#only-dark)
+# ![Nowcasts from random walk and randomwalknowcast at 2026-10-09 against the data as later reported.](../assets/getting-started/nowcast.svg#only-light)
+# ![Nowcasts from random walk and randomwalknowcast at 2026-10-09 against the data as later reported.](../assets/getting-started/nowcast-dark.svg#only-dark)
 
 # %% [markdown]
 # ## Plot the forecast
 #
 # The second figure adds the reference week and the three forecast weeks.
 #
-# ![Nowcasts and forecasts from persistence and persistencenow at 2026-10-09 against the data as later reported.](../assets/getting-started/forecast.svg#only-light)
-# ![Nowcasts and forecasts from persistence and persistencenow at 2026-10-09 against the data as later reported.](../assets/getting-started/forecast-dark.svg#only-dark)
+# ![Nowcasts and forecasts from random walk and randomwalknowcast at 2026-10-09 against the data as later reported.](../assets/getting-started/forecast.svg#only-light)
+# ![Nowcasts and forecasts from random walk and randomwalknowcast at 2026-10-09 against the data as later reported.](../assets/getting-started/forecast-dark.svg#only-dark)
 
 # %% [markdown]
 # ## Score on complete weeks
@@ -141,7 +141,7 @@ panels
 # A week counts as complete once it ended at least `complete_after_weeks` weeks before it, so most of its cases are reported.
 # `score_tasks` scores every forecast sample set with the weighted interval score (WIS) and interval coverage.
 # The table averages over those weeks, for the national total and over the provinces.
-# Relative WIS is `persistencenow` divided by `persistence`, so values below 1 favour the nowcast.
+# Relative WIS is `randomwalknowcast` divided by `randomwalk`, so values below 1 favour the nowcast.
 
 # %%
 scores = bt.score_tasks(
@@ -161,7 +161,7 @@ table = by_level.pivot(
     index="level", columns="model", values=["wis", "coverage_90"]
 )
 table[("wis", "relative")] = (
-    table[("wis", "persistencenow")] / table[("wis", "persistence")]
+    table[("wis", "randomwalknowcast")] / table[("wis", "randomwalk")]
 )
 table.round(2)
 

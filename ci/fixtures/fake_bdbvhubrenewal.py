@@ -16,11 +16,11 @@ candidate id the step script exports as `CAND_ID`. Scenarios:
                of the observations (PPC warns)
   ppcfail      converged, but they cover about 30% (PPC fails)
   noppc        converged, but the fit writes no ppc.json (PPC error)
-  standin      the config runs a stand-in (persistence): no sampler, no
+  standin      the config runs a stand-in (random walk): no sampler, no
                posterior, and `stand_in` in diagnostics.json and fit.json
 
-Unknown candidates default to `pass`. `persistence=implausible` breaks
-the persistence baseline too, which is how the dry run reaches a skip.
+Unknown candidates default to `pass`. `randomwalk=implausible` breaks
+the random walk baseline too, which is how the dry run reaches a skip.
 """
 
 from __future__ import annotations
@@ -145,7 +145,7 @@ def cmd_fit(args: argparse.Namespace) -> int:
         return 1
     if sc == "standin":
         text = (
-            f"the `{args.config}` config runs the persistence baseline in "
+            f"the `{args.config}` config runs the random walk baseline in "
             "place of the model"
         )
         diag = {"schema_version": 1, "sampler": "none", "stand_in": text}
@@ -249,7 +249,7 @@ def cmd_nowcast(args: argparse.Namespace) -> int:
         for k in range(-BACK_WEEKS, HORIZON + 1)
     ]
     provinces = sorted(loc for loc in obs if loc != "CD")
-    rng = random.Random(7 if args.model == "persistence" else 11)
+    rng = random.Random(7 if args.model == "randomwalk" else 11)
     rows = []
     totals: dict[tuple[int, str], float] = defaultdict(float)
     for loc in provinces:
@@ -273,7 +273,7 @@ def cmd_nowcast(args: argparse.Namespace) -> int:
     # Health zones, as the baselines write them: each province split
     # evenly over two zones. `nozones` (or FAKE_ZONES=none) leaves them out.
     if (
-        args.model in ("persistence", "persistencenow")
+        args.model in ("randomwalk", "randomwalknowcast")
         and sc != "nozones"
         and os.environ.get("FAKE_ZONES") != "none"
     ):
@@ -486,8 +486,8 @@ def main() -> int:
         "bvd": lambda _a: 0,
         "hub-id": lambda a: (
             print(
-                "seabbs-baseline"
-                if a.model == "persistencenow"
+                "seabbs-rwnowcast"
+                if a.model == "randomwalknowcast"
                 else "seabbs-renewal"
             )
             or 0

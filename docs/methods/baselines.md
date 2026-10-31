@@ -1,15 +1,15 @@
 # Baseline models
 
-The persistence baselines, with the maths of each.
+The random walk baselines, with the maths of each.
 { .page-subtitle }
 
 The data and notation are on the [Data methods page](data.md#target-and-notation).
 The renewal models are on the [Renewal models](model.md) page.
 Health-zone forecasts split the province samples of either baseline as described under [Health zones](model.md#health-zones).
 
-## Persistence
+## RandomWalk
 
-`persistence` is the baseline every other model is compared against.
+`randomwalk` is the baseline every other model is compared against.
 With $c$ the last complete week, weeks up to $c$ are the vintage counts and later weeks a log-scale random walk from $Y_{p,v}(c)$ with Poisson noise.
 For $h \ge 1$,
 
@@ -28,7 +28,7 @@ $$
 The weekly steps $\epsilon_{p,j}$ are independent, so the log level is a random walk from the last complete week.
 $\sigma_p$ is the standard deviation of the 7 weekly changes in $\log(1 + Y_{p,v})$ over the last 8 complete weeks, floored at 0.1.
 A province with fewer than 10 cases a week over those weeks takes $\sigma_p$ from the weekly changes of the provinces above that, pooled.
-`persistencenow` uses the same walk and the same rule for $\sigma_p$.
+`randomwalknowcast` uses the same walk and the same rule for $\sigma_p$.
 
 Completeness comes from the hub's releases.
 The totals of each onset week by release form a reporting triangle.
@@ -38,9 +38,9 @@ Week $w$ is complete once that share is at least 0.95.
 Without two releases a week apart, week $w$ is complete if its Wednesday is at least $L$ days before $T_v$, with $L$ the 95th centile of the delays published with the vintage, or 10 days if none were published.
 Each sample is one joint trajectory across weeks, and the national value is the sum of the provinces.
 
-## Persistence on a nowcast
+## RandomWalk on a nowcast
 
-`persistencenow` nowcasts recent weeks with a chain ladder on the hub's releases, as in baselinenowcast[^bnc-paper][^bnc-package], then runs the `persistence` random walk from each nowcast draw.
+`randomwalknowcast` nowcasts recent weeks with a chain ladder on the hub's releases, as in baselinenowcast[^bnc-paper][^bnc-package], then runs the `randomwalk` random walk from each nowcast draw.
 
 **Release triangle.**
 $Y_{p,r}(w)$ is the total, known plus imputed, of onset week $w$ in province $p$ at release $r$.
@@ -54,7 +54,7 @@ $$
 fitted by least squares weighted by $\sum_w Y_{p,a}(w)$.
 $f_j = 1$ for ages no pair covers, and weeks over 12 weeks old are final, so $G_k = \prod_{j=k}^{12} f_j$.
 Provinces with at least 50 cases a week over the last 8 weeks use their own $f_j$ where their releases cover $j$, and the others use $f_j$ pooled over provinces.
-With one release, `persistencenow` is `persistence`.
+With one release, `randomwalknowcast` is `randomwalk`.
 
 **Nowcast.**
 For week $w$, $k$ weeks old at $T_v$, and sample $i$,
@@ -83,7 +83,7 @@ $$
 \tilde y_{p,i}(c + h) \sim \text{Poisson}\big(\lambda_{p,i}(c + h)\big).
 $$
 
-$\sigma_p$ is set as for `persistence`, from $\log\{1 + Y_{p,v}(w) G_k\}$ over the 8 weeks up to $c$.
+$\sigma_p$ is set as for `randomwalk`, from $\log\{1 + Y_{p,v}(w) G_k\}$ over the 8 weeks up to $c$.
 Counts reported by a later release $T$ are $Y_{p,v}(w) + \text{Binomial}\big(\max(D, 0),\ q\big) + \min(D, 0)$, with $D = C_{p,i}(w) - Y_{p,v}(w)$, $q = (G_k / G_{k'} - 1)/(G_k - 1)$ and $k'$ the age of $w$ at $T$.
 
 [^bnc-paper]: Johnson KE, Tang M, Tyszka E, Nemcova B, Wolffram D, Ergas R, Reich NG, Funk S, Mellor J, Bracher J, Abbott S (2025). Baseline nowcasting methods for handling delays in epidemiological data. Wellcome Open Research. [doi:10.12688/wellcomeopenres.25027.2](https://doi.org/10.12688/wellcomeopenres.25027.2).

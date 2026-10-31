@@ -64,7 +64,7 @@ def test_development_never_uses_heldout_vintages(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
     forecasts, scores = run_development(
-        [get_model("persistence")], target, delays, config
+        [get_model("randomwalk")], target, delays, config
     )
     # Vintages after the model choice date are held out.
     assert (forecasts["vintage"] <= "2026-10-10").all()
@@ -83,7 +83,7 @@ def test_score_by_truth_vintage(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
     forecasts, latest = run_development(
-        [get_model("persistence")], target, delays, config
+        [get_model("randomwalk")], target, delays, config
     )
     scores = score_by_truth_vintage(forecasts, target)
     # Real forecasts only, each against every later real vintage.
@@ -107,7 +107,7 @@ def test_scores_cover_only_weeks_in_the_truth(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
     forecasts, _ = run_development(
-        [get_model("persistence")], target, delays, config
+        [get_model("randomwalk")], target, delays, config
     )
     scores = score_by_truth_vintage(forecasts, target)
     # A week past the end of a truth vintage is not scored, not taken as 0.
@@ -210,7 +210,7 @@ def test_development_scores_both_ways(
 ) -> None:
     config = dataclasses.replace(config, complete_after_weeks=3)
     forecasts, scores = run_development(
-        [get_model("persistence")], target, delays, config
+        [get_model("randomwalk")], target, delays, config
     )
     assert {"as reported", "vintage-matched"} <= set(scores["scoring"])
     assert scores["complete"].any()
@@ -228,7 +228,7 @@ def test_origins_without_a_lag_estimate_are_marked(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
     forecasts, scores = run_development(
-        [get_model("persistence")], target, delays, config
+        [get_model("randomwalk")], target, delays, config
     )
     # Origins with no earlier pair of delay files take the publication
     # lag from a prior informed by later files.
@@ -259,13 +259,13 @@ def test_truth_changes(target: pd.DataFrame) -> None:
 
 
 def test_recovery_on_simulated_vintages(config: BacktestConfig) -> None:
-    _, scores = run_recovery([get_model("persistence")], config)
+    _, scores = run_recovery([get_model("randomwalk")], config)
     assert set(scores["kind"]) == {"simulated"}
     assert len(scores) > 0
 
 
 class _MaskAware:
-    """Persistence that forecasts masked provinces from the others."""
+    """RandomWalk that forecasts masked provinces from the others."""
 
     name = "mask_aware"
     supports_mask = True
@@ -285,7 +285,7 @@ class _MaskAware:
             + [mean.assign(location=p, location_name=p) for p in task.mask],
             ignore_index=True,
         )
-        return get_model("persistence").forecast(replace(task, target=filled))
+        return get_model("randomwalk").forecast(replace(task, target=filled))
 
 
 def test_tasks_carry_an_empty_mask(
@@ -300,7 +300,7 @@ def test_tasks_carry_an_empty_mask(
 def test_lopo_masks_one_province_at_a_time(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
-    models = [get_model("persistence"), _MaskAware()]
+    models = [get_model("randomwalk"), _MaskAware()]
     forecasts, scores = run_lopo(
         models,
         target,
@@ -309,7 +309,7 @@ def test_lopo_masks_one_province_at_a_time(
         provinces=("CD-IT", "CD-NK"),
         include_reconstructed=False,
     )
-    # Persistence cannot honour a mask, so it is skipped.
+    # Random walk cannot honour a mask, so it is skipped.
     assert set(forecasts["model"]) == {"mask_aware"}
     # Only the masked province is kept, from development vintages only.
     assert (forecasts["location"] == forecasts["masked"]).all()
@@ -323,7 +323,7 @@ def test_lopo_without_mask_aware_models_is_empty(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
     forecasts, scores = run_lopo(
-        [get_model("persistence")],
+        [get_model("randomwalk")],
         target,
         delays,
         config,
@@ -392,14 +392,14 @@ def test_tasks_carry_earlier_target_vintages(
 
 
 class _Counting:
-    name = "persistence"
+    name = "randomwalk"
 
     def __init__(self) -> None:
         self.calls = 0
 
     def forecast(self, task):  # type: ignore[no-untyped-def]
         self.calls += 1
-        return get_model("persistence").forecast(task)
+        return get_model("randomwalk").forecast(task)
 
 
 def test_run_forecasts_reuses_cached_tasks(
@@ -544,7 +544,7 @@ def test_scenarios_are_scored_final_and_as_of(
     data = Path(__file__).resolve().parents[2] / "data"
     zones = load_health_zones(data)
     forecasts, scores = run_scenarios(
-        [get_model("persistence")],
+        [get_model("randomwalk")],
         config,
         target,
         delays,
@@ -561,9 +561,9 @@ def test_scenarios_are_scored_final_and_as_of(
     assert final["complete"].any()
     assert set(forecasts["kind"]) == {"simulated"}
     # Zones: the model's province samples split across zones, and zone
-    # persistence, scored on the simulated zone counts.
+    # random walk, scored on the simulated zone counts.
     zone = scores.loc[scores["level"] == "zone"]
-    assert set(zone["model"]) == {"persistence", "zonepersistence"}
+    assert set(zone["model"]) == {"randomwalk", "zonerandomwalk"}
     assert zone["location"].str.count("-").eq(2).all()
     assert set(zone["truth_view"]) == {"final", "as of 2 weeks later"}
     assert set(scores["level"]) == {"national", "province", "zone"}

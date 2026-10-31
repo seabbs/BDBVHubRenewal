@@ -1,7 +1,7 @@
 # Generate test fixtures from the R package baselinenowcast.
 #
 # The Python port (src/bdbvhubrenewal/data/triangle.py and
-# src/bdbvhubrenewal/forecasters/persistence.py) is checked against
+# src/bdbvhubrenewal/forecasters/randomwalk.py) is checked against
 # these fixtures. Run from the repo root:
 #
 #   Rscript scripts/baselinenowcast_fixtures.R

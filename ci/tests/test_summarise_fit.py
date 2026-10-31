@@ -72,7 +72,7 @@ def test_missing_diagnostics_is_an_error() -> None:
 
 
 def test_no_sampler_is_not_applicable() -> None:
-    c = check_fit("persistence", diagnostics(sampler="none"), LIMITS)
+    c = check_fit("randomwalk", diagnostics(sampler="none"), LIMITS)
     assert c.status == "skip" and not c.applicable
 
 

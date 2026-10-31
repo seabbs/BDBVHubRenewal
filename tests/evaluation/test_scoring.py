@@ -68,7 +68,7 @@ def test_bias_and_coverage() -> None:
 def test_score_forecasts_and_relative_skill() -> None:
     rng = np.random.default_rng(4)
     rows = []
-    for model, centre in (("persistence", 30), ("better", 20)):
+    for model, centre in (("randomwalk", 30), ("better", 20)):
         for week in ("2026-09-05", "2026-09-12"):
             for i, v in enumerate(rng.poisson(centre, 100)):
                 rows.append(
@@ -95,5 +95,5 @@ def test_score_forecasts_and_relative_skill() -> None:
     scores = score_forecasts(forecasts, truth)
     assert len(scores) == 4
     rel = relative_skill(scores).set_index("model")
-    assert rel.loc["persistence", "relative_wis"] == pytest.approx(1.0)
+    assert rel.loc["randomwalk", "relative_wis"] == pytest.approx(1.0)
     assert rel.loc["better", "relative_wis"] < 1

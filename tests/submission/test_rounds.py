@@ -42,7 +42,7 @@ def _ledger(root: Path) -> Path:
         json.dumps(
             {
                 "selected": "main",
-                "stand_in": "the `main` config runs the persistence baseline",
+                "stand_in": "the `main` config runs the random walk baseline",
                 "reason": "The main model (stand-in) cleared every check.",
                 "attempts": [
                     {"id": "main", "label": "main model", "status": "pass"},
@@ -52,13 +52,13 @@ def _ledger(root: Path) -> Path:
         )
     )
     (d / "run.json").write_text(
-        json.dumps({"model": "persistence", "config": "main"})
+        json.dumps({"model": "randomwalk", "config": "main"})
     )
     rows = [
         {"location": loc, "target_end_date": "2026-11-07", "value": v}
         for loc, v in (("CD", 10), ("CD", 20), ("CD-IT", 5))
     ]
-    pd.DataFrame(rows).to_csv(d / f"{REF}-seabbs-persistence.csv")
+    pd.DataFrame(rows).to_csv(d / f"{REF}-seabbs-randomwalk.csv")
     return ledger
 
 
@@ -79,7 +79,7 @@ def test_round_pages(tmp_path: Path) -> None:
     assert f"![Nowcast and forecast submitted for {REF}]({REF}.png)" in page
     assert (rounds / f"{REF}.png").read_bytes() == b"png 10"
     assert "<https://github.com/o/r/pull/1>" in page
-    assert "persistence (`main`)" in page
+    assert "randomwalk (`main`)" in page
     assert '!!! note "Stand-in"' in page
     assert "| 2026-11-07 | 15 |" in page
     assert "| main model | submitted |  |" in page

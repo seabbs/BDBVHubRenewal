@@ -133,7 +133,7 @@ class ComparisonConfig:
         Git ref of the hub to fetch from.
     """
 
-    baseline: str = "persistencenow"
+    baseline: str = "randomwalknowcast"
     stored: tuple[str, ...] = ()
     locations: tuple[str, ...] = ("CD",)
     ref: str = "main"
@@ -196,7 +196,7 @@ def own_hub_ids(path: Path | str = "config/hub.toml") -> dict[str, str]:
     -------
     dict
         Model name to hub model id, such as
-        `{"persistencenow": "seabbs-baseline"}`.
+        `{"randomwalknowcast": "seabbs-rwnowcast"}`.
     """
     from bdbvhubrenewal.submission.hub import model_abbr_for, model_id
 

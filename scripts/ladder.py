@@ -8,11 +8,11 @@ it records the prior predictive, fit time, R-hat, ESS, ESS per second,
 divergences, the tree-depth cap share, in-sample PPC coverage, Rt error
 and turning point (simulated), CRPS (national, and over a fixed set of
 provinces with cases) and 50% and 90% coverage for nowcast weeks (-4 to
--1) and forecast weeks (0 to +3). Persistence is the reference.
+-1) and forecast weeks (0 to +3). Random walk is the reference.
 
 Usage::
 
-    uv run python scripts/ladder.py <rung index | persistence | collect>
+    uv run python scripts/ladder.py <rung index | randomwalk | collect>
 
 Each run writes `results/ladder/<rung>.json`; `collect` writes
 `results/ladder.csv` and `results/ladder.md`.
@@ -45,7 +45,7 @@ from bdbvhubrenewal.evaluation.ppc import summarise_draws  # noqa: E402
 from bdbvhubrenewal.evaluation.scoring import crps_sample  # noqa: E402
 from bdbvhubrenewal.forecasters import renewal as adapter  # noqa: E402
 from bdbvhubrenewal.forecasters.base import ForecastTask  # noqa: E402
-from bdbvhubrenewal.forecasters.persistence import Persistence  # noqa: E402
+from bdbvhubrenewal.forecasters.randomwalk import RandomWalk  # noqa: E402
 from bdbvhubrenewal.forecasters.renewal import (  # noqa: E402
     VARIANTS,
     bvd_rows,
@@ -140,7 +140,7 @@ RUNGS: dict[str, pr.ModelConfig | str] = {
 importation and sporadic provinces, then the variants."""
 
 DESCRIPTIONS = {
-    "persistence": "The last complete week carried forward, as the reference.",
+    "randomwalk": "The last complete week carried forward, as the reference.",
     "S0 national renewal": "One renewal on the national total, no truncation.",
     "S1 + provinces (pooled Rt)": "A renewal per province with case, Rt a "
     "national walk plus pooled deviations.",
@@ -176,9 +176,9 @@ DESCRIPTIONS = {
 """One sentence per rung: what it adds."""
 
 DECISIONS: dict[str, str] = {
-    "persistence": "Reference only.",
+    "randomwalk": "Reference only.",
     "S0 national renewal": "Dropped as a candidate: national scores no "
-    "better than persistence, and it gives no provinces.",
+    "better than random walk, and it gives no provinces.",
     "S1 + provinces (pooled Rt)": "Kept: province forecasts and pooling, "
     "with national scores as S0.",
     "S2 + truncation (hub delay)": "Kept: the largest gain, national CRPS "
@@ -271,7 +271,7 @@ def scores(
     when the samples have them (a model's own national fit), else the sum
     of the provinces. Provinces are the fixed set with any case in the
     scored weeks, with a missing forecast taken as zero, so every rung and
-    persistence score the same rows. With `truth_as_of`, CRPS is also
+    random walk score the same rows. With `truth_as_of`, CRPS is also
     given over complete weeks only: those ending at least `COMPLETE_K`
     weeks before it.
     """
@@ -710,13 +710,13 @@ def national_samples(task, run, nat=None) -> pd.DataFrame:
     )
 
 
-def persistence_row(outbreak, real) -> dict:
-    """Score persistence on the same tasks."""
+def randomwalk_row(outbreak, real) -> dict:
+    """Score random walk on the same tasks."""
     target, delays, locations = real
     later = target.loc[target["vintage"] == REAL_TRUTH].set_index(
         ["location", "target_end_date"]
     )["total"]
-    out = {"rung": "persistence"}
+    out = {"rung": "randomwalk"}
     results = []
     for origin in REAL_ORIGINS:
         task = task_for(
@@ -724,7 +724,7 @@ def persistence_row(outbreak, real) -> dict:
             locations, "real",
         )  # fmt: skip
         results.append(
-            (origin, scores(Persistence().forecast(task), later, REAL_TRUTH))
+            (origin, scores(RandomWalk().forecast(task), later, REAL_TRUTH))
         )
     out |= summarise_origins(results)
     truth = outbreak.truth().set_index(["location", "target_end_date"])["truth"]
@@ -733,18 +733,18 @@ def persistence_row(outbreak, real) -> dict:
         vintage = (outbreak.settings.start + dt.timedelta(days=day)).isoformat()
         t, d = outbreak.vintage(vintage)
         task = task_for(t, d, vintage, SIM_LOCATIONS, "simulated")
-        sims.append(scores(Persistence().forecast(task), truth))
+        sims.append(scores(RandomWalk().forecast(task), truth))
     out |= {f"sim_{k}": float(np.mean([s[k] for s in sims])) for k in sims[0]}
     return out
 
 
 def main(args: list[str]) -> None:
-    """Run one rung, persistence, or collect the table."""
+    """Run one rung, random walk, or collect the table."""
     out = OUT / "ladder"
     out.mkdir(parents=True, exist_ok=True)
     if args and args[0] == "collect":
         rows = [json.loads(p.read_text()) for p in sorted(out.glob("*.json"))]
-        order = ["persistence", *RUNGS]
+        order = ["randomwalk", *RUNGS]
         rows.sort(key=lambda r: order.index(r["rung"]))
         frame = pd.DataFrame(rows)
         frame.insert(0, "step", [order.index(r) for r in frame["rung"]])
@@ -761,8 +761,8 @@ def main(args: list[str]) -> None:
     target, delays = load_target(), load_delays()
     locations = tuple(sorted(set(target["location"]) - {"CD"}))
     real = (target, delays, locations)
-    if args[0] == "persistence":
-        row = persistence_row(outbreak, real)
+    if args[0] == "randomwalk":
+        row = randomwalk_row(outbreak, real)
     elif "--real-only" in args:
         # Keep the simulated results and refit the real origins only.
         name, config = list(RUNGS.items())[int(args[0])]

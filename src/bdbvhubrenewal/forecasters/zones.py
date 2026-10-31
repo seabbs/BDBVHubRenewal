@@ -290,7 +290,7 @@ def zone_task(
 ) -> ForecastTask:
     """Return the task with zones in place of provinces.
 
-    This is how zone persistence, the baseline for zone forecasts, is
+    This is how zone random walk, the baseline for zone forecasts, is
     run. Each zone gets a weekly series from the first week with zone
     data to the vintage, with zeros filled in.
 

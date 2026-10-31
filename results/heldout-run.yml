@@ -3,10 +3,10 @@ model_choice: results/model-choice.yml
 model_choice_sha256: b4dc1ba3ec59887a4d3420970023bc257dfc7f208005f1e67ad05844334d7489
 choices:
 - date: '2026-10-28'
-  model: persistencenow
-  summary: 'persistencenow is the first model submitted (as seabbsbaseline): it scores
+  model: randomwalknowcast
+  summary: 'randomwalknowcast is the first model submitted (as seabbsbaseline): it scores
     best on complete weeks of the development backtest.'
-baseline: persistence
+baseline: randomwalk
 latest_vintage: '2026-10-24'
 scored: []
 pending: []

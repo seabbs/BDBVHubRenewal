@@ -2,7 +2,7 @@
 
 Each candidate directory (`<candidates>/<id>/`) holds what its matrix
 job produced: `fit-summary.json` and `ppc-summary.json` (none for
-persistence), `checks.json`, `run.json` and the hub file under
+random walk), `checks.json`, `run.json` and the hub file under
 `submission/`. Problems are handled rather than failed on, so the chain
 rarely moves past the main model. A candidate is ruled out only when
 its fit is clearly broken, or its file would be invalid on the hub
@@ -88,7 +88,7 @@ def stand_in(cdir: Path) -> str:
     """What a candidate stands in with, from `run.json` or diagnostics.
 
     The main CLI writes `"stand_in": "<text>"` when a config runs a
-    stand-in model, such as persistence until the renewal model is
+    stand-in model, such as random walk until the renewal model is
     integrated. Empty when the candidate is the real thing.
     """
     for name in ("run.json", "diagnostics.json"):
@@ -112,7 +112,7 @@ def assess(c: Candidate, cdir: Path) -> Attempt:
     a.stand_in = stand_in(cdir)
     statuses = []
     fit_path = cdir / "fit-summary.json"
-    if c.kind == "persistence" and not fit_path.exists():
+    if c.kind == "randomwalk" and not fit_path.exists():
         a.fit = "skip"
     elif fit_path.exists():
         fit = read_json(fit_path)
@@ -132,7 +132,7 @@ def assess(c: Candidate, cdir: Path) -> Attempt:
             f"ppc: {m}"
             for m in [*ppc.get("failures", []), *ppc.get("warnings", [])]
         ]
-    elif c.kind == "persistence" or a.fit == "skip":
+    elif c.kind == "randomwalk" or a.fit == "skip":
         a.ppc = "skip"
     else:
         a.ppc = "warn"

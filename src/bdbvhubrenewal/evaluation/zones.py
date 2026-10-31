@@ -1,9 +1,9 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""Zone backtest: allocated zone forecasts against zone persistence.
+"""Zone backtest: allocated zone forecasts against zone randomwalk.
 
 Each real vintage before the truth vintage is forecast by the province
 models, and their samples are split across zones (`ZoneAllocator`).
-The baseline, `zonepersistence`, runs persistence on each zone's own
+The baseline, `zonerandomwalk`, runs random walk on each zone's own
 series (`zone_task`), which does not sum to the provinces.
 Every zone of a forecast province is scored, including zones with no
 cases, against the zone counts as reported at the truth vintage.
@@ -27,7 +27,7 @@ from bdbvhubrenewal.evaluation.backtest import (
 )
 from bdbvhubrenewal.evaluation.scoring import relative_skill
 from bdbvhubrenewal.forecasters.base import ForecastTask, get_model
-from bdbvhubrenewal.forecasters.persistence import Persistence
+from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
 from bdbvhubrenewal.forecasters.zones import ZoneAllocator, zone_task
 
 __all__ = [
@@ -37,7 +37,7 @@ __all__ = [
     "zone_relative_skill",
 ]
 
-ZONE_BASELINE = "zonepersistence"
+ZONE_BASELINE = "zonerandomwalk"
 """Name of the zone baseline in the scores."""
 
 
@@ -60,12 +60,12 @@ def zone_backtest(
     delays: pd.DataFrame | None,
     daily_zones: pd.DataFrame,
     zones: tuple[str, ...],
-    models: Sequence[str] = ("persistence",),
+    models: Sequence[str] = ("randomwalk",),
     allocator: ZoneAllocator | None = None,
     config: BacktestConfig | None = None,
     truth_date: str | None = None,
 ) -> pd.DataFrame:
-    """Score allocated zone forecasts and zone persistence.
+    """Score allocated zone forecasts and zone randomwalk.
 
     Parameters
     ----------
@@ -105,7 +105,7 @@ def zone_backtest(
         ]
         counts = weekly_zone_counts(daily_zones, vintage)
         zt = zone_task(task, counts, zones)
-        frames.append(_frame(Persistence().forecast(zt), task, ZONE_BASELINE))
+        frames.append(_frame(RandomWalk().forecast(zt), task, ZONE_BASELINE))
         for name in models:
             prov = get_model(name).forecast(task)
             frames.append(
@@ -135,7 +135,7 @@ def zone_backtest(
 def zone_relative_skill(
     scores: pd.DataFrame, by: Sequence[str] = ()
 ) -> pd.DataFrame:
-    """Return each model's mean WIS and log WIS relative to zone persistence.
+    """Return each model's mean WIS and log WIS relative to zone randomwalk.
 
     Parameters
     ----------
@@ -180,7 +180,7 @@ def scenario_zone_scores(
     complete_after_weeks: int = 0,
     allocator: ZoneAllocator | None = None,
 ) -> pd.DataFrame:
-    """Score allocated zone forecasts and zone persistence on a scenario.
+    """Score allocated zone forecasts and zone random walk on a scenario.
 
     As `zone_backtest`, with the simulated zone counts
     (`SimulatedOutbreak.zone_vintage`) in place of the real ones, scored
@@ -215,7 +215,7 @@ def scenario_zone_scores(
     for task in tasks:
         counts = outbreak.zone_vintage(task.vintage)
         zt = zone_task(task, counts, zones)
-        frames.append(_frame(Persistence().forecast(zt), task, ZONE_BASELINE))
+        frames.append(_frame(RandomWalk().forecast(zt), task, ZONE_BASELINE))
         for name in models:
             prov = get_model(name).forecast(task)
             frames.append(

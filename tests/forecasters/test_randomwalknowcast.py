@@ -7,13 +7,13 @@ import pytest
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import (
     ForecastTask,
-    Persistence,
-    PersistenceNow,
+    RandomWalk,
+    RandomWalkNowcast,
     check_samples,
     get_model,
     list_models,
 )
-from bdbvhubrenewal.forecasters.persistence import (
+from bdbvhubrenewal.forecasters.randomwalk import (
     nowcast_draws,
     release_factors,
 )
@@ -44,14 +44,14 @@ def _national(samples: pd.DataFrame) -> pd.DataFrame:
     return final.groupby(["target_end_date", "sample"])["value"].sum().unstack()
 
 
-def test_registry_has_persistencenow_and_not_the_lag_variant() -> None:
+def test_registry_has_randomwalknowcast_and_not_the_lag_variant() -> None:
     names = [s.name for s in list_models()]
-    assert "persistencenow" in names
-    assert "persistence_fu" not in names
-    spec = next(s for s in list_models() if s.name == "persistencenow")
+    assert "randomwalknowcast" in names
+    assert "randomwalk_fu" not in names
+    spec = next(s for s in list_models() if s.name == "randomwalknowcast")
     assert not spec.baseline
     assert not spec.fitted
-    assert isinstance(get_model("persistencenow"), PersistenceNow)
+    assert isinstance(get_model("randomwalknowcast"), RandomWalkNowcast)
 
 
 def test_nowcast_draws_add_skellam_increments_per_place() -> None:
@@ -75,8 +75,8 @@ def test_nowcast_draws_add_skellam_increments_per_place() -> None:
     assert abs(np.corrcoef(added[:, 0, 0], added[:, 1, 0])[0, 1]) < 0.05
 
 
-def test_persistencenow_output(task: ForecastTask) -> None:
-    samples = PersistenceNow().forecast(task)
+def test_randomwalknowcast_output(task: ForecastTask) -> None:
+    samples = RandomWalkNowcast().forecast(task)
     check_samples(samples, task)
     seen = task.target.set_index(["location", "target_end_date"])["total"]
     floor = [
@@ -92,8 +92,8 @@ def test_persistencenow_output(task: ForecastTask) -> None:
     assert (value >= np.asarray(floor)).mean() > 0.9
 
 
-def test_persistencenow_nowcasts_recent_weeks(task: ForecastTask) -> None:
-    nat = _national(PersistenceNow().forecast(task))
+def test_randomwalknowcast_nowcasts_recent_weeks(task: ForecastTask) -> None:
+    nat = _national(RandomWalkNowcast().forecast(task))
     seen = task.target.loc[task.target["location"] == "CD"].set_index(
         "target_end_date"
     )["total"]
@@ -107,8 +107,10 @@ def test_persistencenow_nowcasts_recent_weeks(task: ForecastTask) -> None:
     assert grow_recent > 1.15
 
 
-def test_persistencenow_carries_the_nowcast_forward(task: ForecastTask) -> None:
-    samples = PersistenceNow().forecast(task)
+def test_randomwalknowcast_carries_the_nowcast_forward(
+    task: ForecastTask,
+) -> None:
+    samples = RandomWalkNowcast().forecast(task)
     it = samples.loc[samples["location"] == "CD-IT"]
     it = it.pivot(index="target_end_date", columns="sample", values="value")
     # The walk keeps its median at the nowcast of the week it starts from,
@@ -121,17 +123,17 @@ def test_persistencenow_carries_the_nowcast_forward(task: ForecastTask) -> None:
     assert width[-1] > width[-3]
 
 
-def test_persistencenow_is_reproducible(task: ForecastTask) -> None:
-    a = PersistenceNow().forecast(task)
-    b = PersistenceNow().forecast(task)
+def test_randomwalknowcast_is_reproducible(task: ForecastTask) -> None:
+    a = RandomWalkNowcast().forecast(task)
+    b = RandomWalkNowcast().forecast(task)
     pd.testing.assert_frame_equal(a, b)
 
 
-def test_persistencenow_predicts_counts_as_reported_later(
+def test_randomwalknowcast_predicts_counts_as_reported_later(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
     task = _task(target, delays, "2026-10-17", ("2026-10-24",))
-    samples = PersistenceNow().forecast(task)
+    samples = RandomWalkNowcast().forecast(task)
     check_samples(samples, task)
     final = samples.loc[samples["as_of"].isna()]
     later = samples.loc[samples["as_of"] == "2026-10-24"]
@@ -163,9 +165,9 @@ def test_persistencenow_predicts_counts_as_reported_later(
     assert by_sample["value"].median() == pytest.approx(expected, rel=0.1)
 
 
-def test_persistencenow_nowcasts_the_latest_week(task: ForecastTask) -> None:
+def test_randomwalknowcast_nowcasts_the_latest_week(task: ForecastTask) -> None:
     # The week ending on the vintage is nowcast and the walk starts from it.
-    nat = _national(PersistenceNow().forecast(task))
+    nat = _national(RandomWalkNowcast().forecast(task))
     seen = task.target.loc[task.target["location"] == "CD"].set_index(
         "target_end_date"
     )["total"]
@@ -177,7 +179,7 @@ def test_sparse_places_stay_plausible(
 ) -> None:
     # Bas-Uele has had about 13 cases; its 97.5% quantile must stay small.
     task = _task(target, delays, "2026-10-24")
-    samples = PersistenceNow().forecast(task)
+    samples = RandomWalkNowcast().forecast(task)
     bu = samples.loc[samples["location"] == "CD-BU"]
     top = bu.groupby("target_end_date")["value"].quantile(0.975)
     assert top.max() <= 20
@@ -209,7 +211,7 @@ def test_ituri_turning_point_at_08_22(
         t for t in development_tasks(target, delays, load_config())
         if t.kind == "reconstructed" and t.vintage == "2026-08-22"
     )  # fmt: skip
-    samples = PersistenceNow().forecast(task)
+    samples = RandomWalkNowcast().forecast(task)
     samples = samples.loc[samples["as_of"].isna()]
     it = samples.loc[samples["location"] == "CD-IT"]
     q = it.groupby("target_end_date")["value"].quantile([0.05, 0.5, 0.95])
@@ -227,7 +229,7 @@ def test_walk_spread_stays_plausible(
     # where the walk starts, is noisy. Its 95% quantile four weeks ahead
     # stays within three times the recent nowcasts.
     task = _task(target, delays, "2026-10-24")
-    samples = PersistenceNow().forecast(task)
+    samples = RandomWalkNowcast().forecast(task)
     it = samples.loc[samples["location"] == "CD-IT"]
     q = it.groupby("target_end_date")["value"].quantile([0.5, 0.95]).unstack()
     recent = q.loc[q.index <= task.vintage, 0.5].iloc[-4:].max()
@@ -241,7 +243,7 @@ def test_the_walk_starts_from_each_trajectory_latest_nowcast(
     # week: the next week's median matches that week's, and draws that are
     # high in the latest week stay high in the next.
     task = _task(target, delays, "2026-10-24")
-    samples = PersistenceNow().forecast(task)
+    samples = RandomWalkNowcast().forecast(task)
     it = samples.loc[samples["location"] == "CD-IT"]
     it = it.pivot(index="target_end_date", columns="sample", values="value")
     latest, ahead = it.loc["2026-10-24"], it.loc["2026-10-31"]
@@ -280,7 +282,7 @@ def test_the_release_nowcast_lifts_weeks_one_and_two_weeks_old(
     # Hub totals of weeks one and two weeks old still grow by about 40% and
     # 15% between releases, so their nowcasts sit well above them.
     task = _task(target, delays, "2026-10-24")
-    nat = _national(PersistenceNow().forecast(task))
+    nat = _national(RandomWalkNowcast().forecast(task))
     seen = task.target.loc[task.target["location"] == "CD"].set_index(
         "target_end_date"
     )["total"]
@@ -293,23 +295,23 @@ def test_the_uncertainty_is_learnt_from_past_releases(
 ) -> None:
     # At 10-24 nowcasts made at earlier releases can be checked against
     # 10-24, so the Skellam spread is fitted, not zero.
-    prep = PersistenceNow()._prepare(_task(target, delays, "2026-10-24"))
+    prep = RandomWalkNowcast()._prepare(_task(target, delays, "2026-10-24"))
     assert prep is not None
     cases = prep.seen[:, prep.last] > 0
     assert (prep.spread[cases, prep.last] > 0).all()
 
 
-def test_with_one_release_it_is_persistence(
+def test_with_one_release_it_is_randomwalk(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
     task = _task(target, delays, "2026-08-18")
     pd.testing.assert_frame_equal(
-        PersistenceNow().forecast(task), Persistence().forecast(task)
+        RandomWalkNowcast().forecast(task), RandomWalk().forecast(task)
     )
 
 
 def test_the_skellam_spread_is_fitted_to_retrospective_errors() -> None:
-    from bdbvhubrenewal.forecasters.persistence import fit_skellam_spread
+    from bdbvhubrenewal.forecasters.randomwalk import fit_skellam_spread
 
     # Increments with mean m and extra spread 0.2 Y on each side.
     rng = np.random.default_rng(2)
@@ -339,7 +341,7 @@ def _daily_task(
 
 
 def test_daily_growth_is_recovered_from_release_cutoffs() -> None:
-    from bdbvhubrenewal.forecasters.persistence import daily_growth
+    from bdbvhubrenewal.forecasters.randomwalk import daily_growth
 
     # Each onset day ends at 100 cases and has 100 / G(a) at age a days.
     def g(a: np.ndarray) -> np.ndarray:
@@ -375,10 +377,10 @@ def test_the_daily_nowcast_scales_a_partial_latest_week(
 ) -> None:
     # The 10-17 release has onsets to 10-16, six days of the week ending
     # 10-17. That week's nowcast covers the missing day by 7/6.
-    from bdbvhubrenewal.forecasters.persistence import PersistenceNowDaily
+    from bdbvhubrenewal.forecasters.randomwalk import RandomWalkNowcastDaily
 
     task = _daily_task(target, delays, "2026-10-17")
-    samples = PersistenceNowDaily().forecast(task)
+    samples = RandomWalkNowcastDaily().forecast(task)
     check_samples(samples, task)
     nat = _national(samples)
     seen = task.target.loc[task.target["location"] == "CD"].set_index(
@@ -391,9 +393,9 @@ def test_the_daily_nowcast_scales_a_partial_latest_week(
 def test_the_daily_nowcast_learns_its_spread_from_past_releases(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
-    from bdbvhubrenewal.forecasters.persistence import PersistenceNowDaily
+    from bdbvhubrenewal.forecasters.randomwalk import RandomWalkNowcastDaily
 
-    prep = PersistenceNowDaily()._prepare(
+    prep = RandomWalkNowcastDaily()._prepare(
         _daily_task(target, delays, "2026-10-24")
     )
     assert prep is not None
@@ -401,18 +403,18 @@ def test_the_daily_nowcast_learns_its_spread_from_past_releases(
     assert (prep.spread[cases, prep.last] > 0).all()
 
 
-def test_the_daily_nowcast_without_daily_data_is_persistence(
+def test_the_daily_nowcast_without_daily_data_is_randomwalk(
     task: ForecastTask,
 ) -> None:
-    from bdbvhubrenewal.forecasters.persistence import PersistenceNowDaily
+    from bdbvhubrenewal.forecasters.randomwalk import RandomWalkNowcastDaily
 
     pd.testing.assert_frame_equal(
-        PersistenceNowDaily().forecast(task), Persistence().forecast(task)
+        RandomWalkNowcastDaily().forecast(task), RandomWalk().forecast(task)
     )
 
 
 def test_the_daily_cutoff_column_wins_over_the_latest_onset() -> None:
-    from bdbvhubrenewal.forecasters.persistence import release_cutoff
+    from bdbvhubrenewal.forecasters.randomwalk import release_cutoff
 
     rows = pd.DataFrame(
         {

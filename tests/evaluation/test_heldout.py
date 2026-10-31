@@ -18,7 +18,7 @@ from bdbvhubrenewal.evaluation.heldout import (
 )
 
 CHOICES = (
-    ModelChoice(date="2026-10-10", model="persistence"),
+    ModelChoice(date="2026-10-10", model="randomwalk"),
     ModelChoice(date="2026-10-20", model="renewal"),
 )
 
@@ -32,7 +32,7 @@ def test_load_model_choices(tmp_path: Path) -> None:
                     {"date": "2026-10-20", "model": "renewal"},
                     {
                         "date": "2026-10-10",
-                        "model": "persistence",
+                        "model": "randomwalk",
                         "summary": "Baseline only.",
                     },
                 ]
@@ -40,7 +40,7 @@ def test_load_model_choices(tmp_path: Path) -> None:
         )
     )
     choices = load_model_choices(path)
-    assert [c.model for c in choices] == ["persistence", "renewal"]
+    assert [c.model for c in choices] == ["randomwalk", "renewal"]
     assert choices[0].summary == "Baseline only."
     assert load_model_choices(tmp_path / "missing.yml") == ()
 
@@ -59,7 +59,7 @@ def test_model_choices_need_unique_dates(tmp_path: Path) -> None:
 def test_model_for_vintage() -> None:
     assert model_for_vintage(CHOICES, "2026-10-09") is None
     assert model_for_vintage(CHOICES, "2026-10-10") is None
-    assert model_for_vintage(CHOICES, "2026-10-17") == "persistence"
+    assert model_for_vintage(CHOICES, "2026-10-17") == "randomwalk"
     assert model_for_vintage(CHOICES, "2026-10-24") == "renewal"
 
 
@@ -67,7 +67,7 @@ def test_heldout_pairs() -> None:
     vintages = ["2026-08-18", "2026-10-09", "2026-10-17", "2026-10-24"]
     pairs = heldout_pairs(CHOICES[:1], vintages)
     assert pairs["vintage"].tolist() == ["2026-10-17", "2026-10-24"]
-    assert pairs["model"].tolist() == ["persistence", "persistence"]
+    assert pairs["model"].tolist() == ["randomwalk", "randomwalk"]
     # Missing is None or NaN depending on the pandas string dtype.
     assert pairs["truth_vintage"].iloc[0] == "2026-10-24"
     assert pd.isna(pairs["truth_vintage"].iloc[1])
@@ -91,7 +91,7 @@ def test_heldout_scores_each_forecast_under_its_model(
     tmp_path: Path,
 ) -> None:
     config.model_choice.write_text(
-        "choices:\n  - {date: 2026-10-10, model: persistence}\n"
+        "choices:\n  - {date: 2026-10-10, model: randomwalk}\n"
     )
     out = tmp_path / "out"
     scores = run_heldout(
@@ -100,18 +100,18 @@ def test_heldout_scores_each_forecast_under_its_model(
     # Only the 2026-10-17 forecast has later data.
     assert set(scores["vintage"]) == {"2026-10-17"}
     assert set(scores["truth_vintage"]) == {"2026-10-24"}
-    assert set(scores["chosen_model"]) == {"persistence"}
+    assert set(scores["chosen_model"]) == {"randomwalk"}
     # Both baselines are scored on every held-out vintage.
     assert set(scores["model"]) == {
-        "persistence",
-        "persistencenow",
-        "persistdaily",
+        "randomwalk",
+        "randomwalknowcast",
+        "randomwalknowcastdaily",
     }
     assert set(scores["kind"]) == {"real"}
     record = yaml.safe_load((out / "heldout-run.yml").read_text())
     assert len(record["model_choice_sha256"]) == 64
     assert record["pending"] == [
-        {"vintage": "2026-10-24", "model": "persistence"}
+        {"vintage": "2026-10-24", "model": "randomwalk"}
     ]
     forecasts = pd.read_csv(out / "heldout-forecasts.csv.gz")
     assert set(forecasts["vintage"]) == {"2026-10-17", "2026-10-24"}
@@ -135,9 +135,9 @@ def test_heldout_scores_both_baselines_beside_a_fitted_choice(
         fit=False,
     )
     assert set(scores["model"]) == {
-        "persistence",
-        "persistencenow",
-        "persistdaily",
+        "randomwalk",
+        "randomwalknowcast",
+        "randomwalknowcastdaily",
     }
     assert set(scores["chosen_model"]) == {"renewal"}
 
@@ -148,17 +148,17 @@ def test_heldout_also_runs_the_other_variants(
     config: BacktestConfig,
     tmp_path: Path,
 ) -> None:
-    from bdbvhubrenewal.forecasters import Persistence, register_model
+    from bdbvhubrenewal.forecasters import RandomWalk, register_model
     from bdbvhubrenewal.forecasters.base import _REGISTRY
 
     register_model(
         "shadow",
-        lambda: Persistence(name="shadow"),
+        lambda: RandomWalk(name="shadow"),
         "A second cheap model.",
         replace=True,
     )
     config.model_choice.write_text(
-        "choices:\n  - {date: 2026-10-10, model: persistence}\n"
+        "choices:\n  - {date: 2026-10-10, model: randomwalk}\n"
     )
     scores = run_heldout(
         target,
@@ -170,13 +170,13 @@ def test_heldout_also_runs_the_other_variants(
     )
     try:
         assert set(scores["model"]) == {
-            "persistence",
-            "persistencenow",
-            "persistdaily",
+            "randomwalk",
+            "randomwalknowcast",
+            "randomwalknowcastdaily",
             "shadow",
         }
         # Each score still records the model chosen at the time.
-        assert set(scores["chosen_model"]) == {"persistence"}
+        assert set(scores["chosen_model"]) == {"randomwalk"}
     finally:
         _REGISTRY.pop("shadow")
 
@@ -188,7 +188,7 @@ def test_heldout_keeps_and_rescores_other_models_forecasts(
     tmp_path: Path,
 ) -> None:
     config.model_choice.write_text(
-        "choices:\n  - {date: 2026-10-10, model: persistence}\n"
+        "choices:\n  - {date: 2026-10-10, model: randomwalk}\n"
     )
     run_heldout(target, delays, config, evaluate_holdout=True, out_dir=tmp_path)
     path = tmp_path / "heldout-forecasts.csv.gz"
@@ -199,15 +199,15 @@ def test_heldout_keeps_and_rescores_other_models_forecasts(
         target, delays, config, evaluate_holdout=True, out_dir=tmp_path
     )
     assert set(scores["model"]) == {
-        "persistence",
-        "persistencenow",
-        "persistdaily",
+        "randomwalk",
+        "randomwalknowcast",
+        "randomwalknowcastdaily",
         "other",
     }
     assert set(pd.read_csv(path)["model"]) == {
-        "persistence",
-        "persistencenow",
-        "persistdaily",
+        "randomwalk",
+        "randomwalknowcast",
+        "randomwalknowcastdaily",
         "other",
     }
 
@@ -218,10 +218,10 @@ def test_heldout_without_fits_reads_committed_forecasts(
     config: BacktestConfig,
     tmp_path: Path,
 ) -> None:
-    from bdbvhubrenewal.forecasters import Persistence, register_model
+    from bdbvhubrenewal.forecasters import RandomWalk, register_model
     from bdbvhubrenewal.forecasters.base import _REGISTRY
 
-    class Slow(Persistence):
+    class Slow(RandomWalk):
         def forecast(self, task):  # type: ignore[no-untyped-def]
             del task
             raise AssertionError("a fitted model was refitted")
@@ -237,7 +237,7 @@ def test_heldout_without_fits_reads_committed_forecasts(
         fc = run_heldout(
             target,
             delays,
-            replace(config, model_choice=_persistence_choice(tmp_path)),
+            replace(config, model_choice=_randomwalk_choice(tmp_path)),
             evaluate_holdout=True,
             out_dir=tmp_path / "seed",
         )
@@ -259,17 +259,17 @@ def test_heldout_without_fits_reads_committed_forecasts(
         _REGISTRY.pop("slowfit")
     assert not fc.empty
     assert set(scores["model"]) == {
-        "persistence",
-        "persistencenow",
-        "persistdaily",
+        "randomwalk",
+        "randomwalknowcast",
+        "randomwalknowcastdaily",
         "slowfit",
     }
     assert set(scores["chosen_model"]) == {"slowfit"}
 
 
-def _persistence_choice(tmp_path: Path) -> Path:
-    path = tmp_path / "persistence-choice.yml"
-    path.write_text("choices:\n  - {date: 2026-10-10, model: persistence}\n")
+def _randomwalk_choice(tmp_path: Path) -> Path:
+    path = tmp_path / "randomwalk-choice.yml"
+    path.write_text("choices:\n  - {date: 2026-10-10, model: randomwalk}\n")
     return path
 
 
@@ -281,7 +281,7 @@ def test_heldout_with_no_vintage_after_the_choice(
 ) -> None:
     # A choice after the latest vintage holds nothing out yet.
     config.model_choice.write_text(
-        "choices:\n  - {date: 2026-12-31, model: persistencenow}\n"
+        "choices:\n  - {date: 2026-12-31, model: randomwalknowcast}\n"
     )
     scores = run_heldout(
         target, delays, config, evaluate_holdout=True, out_dir=tmp_path

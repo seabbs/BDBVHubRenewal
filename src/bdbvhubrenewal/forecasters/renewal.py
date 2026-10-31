@@ -205,7 +205,7 @@ FIT_VARIANTS: Final[dict[str, str]] = {
     "bvd": "renewalbvd",
 }
 """The variant each fit configuration of the CI runs. The chain is `main`,
-a retry, then `renewalsp`, then persistence. `bvd` is a shadow candidate:
+a retry, then `renewalsp`, then randomwalk. `bvd` is a shadow candidate:
 fitted weekly, never submitted until it is chosen."""
 
 

@@ -5,7 +5,7 @@
 #   ci/run_dry.sh retry        one scenario, printing its PR body
 #
 # It runs the same step scripts as .github/workflows/submit.yml, in the
-# same order: detect -> prepare (persistence) -> primary candidates ->
+# same order: detect -> prepare (random walk) -> primary candidates ->
 # triage -> retries -> select -> submit (DRY_RUN=true). The model is the
 # fixture CLI (fixtures/fake_bdbvhubrenewal.py) and `gh`/`git` are never
 # called for writing. Outputs go to a new $TMPDIR/submission-ci-dry.XXXXXX/
@@ -35,7 +35,7 @@ NOW=${NOW:-2026-11-02T10:00:00+00:00}
 #   | extra environment (optional) | text the PR body must hold (optional)
 SCENARIOS=(
   "main|main=pass|main||All checks passed."
-  "chosenpersistence|main=pass|persistence|FAKE_CHOSEN_MODEL=persistence|Shadow candidates"
+  "chosenrandomwalk|main=pass|randomwalk|FAKE_CHOSEN_MODEL=randomwalk|Shadow candidates"
   "bvdrelease|main=pass|main||used BVDOutbreakSize release \`results-3180\` (data to 2026-10-23, joint R-hat 1.041, limit 1.1)."
   "coherence|main=pass|main|FAKE_COHERENCE_GAP=2026-10-24:2|Handled: national (CD) differs from the sum of the provinces"
   "warn|main=warn|main"
@@ -56,9 +56,9 @@ SCENARIOS=(
   # Tuesday 21:00 UTC, two hours before the close: no time to refit, so
   # a failed main model goes straight to the single-patch fallback.
   "late|main=fail,retry-1=pass|renewalsp|NOW=2026-11-03T21:00:00+00:00|Fallback model used ("
-  "persistencenow|main=fail,retry-1=fail,renewalsp=fail|persistencenow||Fallback model used (persistence on a nowcast)"
-  "persistence|main=fail,retry-1=crash,renewalsp=fail,persistencenow=negative|persistence"
-  "skip|main=fail,retry-1=fail,renewalsp=fail,persistencenow=negative,persistence=negative|skip"
+  "randomwalknowcast|main=fail,retry-1=fail,renewalsp=fail|randomwalknowcast||Fallback model used (random walk on a nowcast)"
+  "randomwalk|main=fail,retry-1=crash,renewalsp=fail,randomwalknowcast=negative|randomwalk"
+  "skip|main=fail,retry-1=fail,renewalsp=fail,randomwalknowcast=negative,randomwalk=negative|skip"
 )
 
 sci() { uv run --quiet --project "$CI_DIR" "$@"; }
@@ -104,7 +104,7 @@ run_scenario() {
   REFERENCE_DATE=$(get reference_date)
   export HUB_REF DATA_COMMIT AS_OF REFERENCE_DATE
 
-  # 2. Shared inputs and the persistence candidate (`prepare` job).
+  # 2. Shared inputs and the random walk candidate (`prepare` job).
   SKIP_DATA=true OBSERVED="$FIX/hub/time-series.csv" TASKS="$FIX/hub/tasks.json" \
     PREVIOUS="$FIX/hub/previous.csv" EXPECTED_LOCATIONS="CD,CD-IT,CD-NK,CD-HU" \
     "$CI_DIR/steps/prepare.sh" > "$WORK/prepare.log"
@@ -149,7 +149,7 @@ EOF
   # directory per artefact, laid out again by unpack_candidates.sh.
   for d in "$WORK"/candidates/*; do
     case "${d##*/}" in
-      persistence | persistencenow) ;;  # built in prepare, in `inputs`
+      randomwalk | randomwalknowcast) ;;  # built in prepare, in `inputs`
       *) mv "$d" "$WORK/candidates/candidate-${d##*/}" ;;
     esac
   done
@@ -272,8 +272,8 @@ ledger() {
 
 baseline_track() {
   # track.sh on the `main` scenario's inputs: baseline submits
-  # persistence on a nowcast with health zones under its own id, falls
-  # back to plain persistence, and skips the round without zones.
+  # random walk on a nowcast with health zones under its own id, falls
+  # back to plain random walk, and skips the round without zones.
   local src="$ROOT/main" case want selected status
   get() { python3 -c "import json;print(json.load(open('$src/decision.json'))['$1'])"; }
   for case in nowcast fallback nozones; do
@@ -282,14 +282,14 @@ baseline_track() {
     cp -R "$src/inputs" "$WORK/inputs"
     export GH_LOG="$WORK/gh.log" GITHUB_OUTPUT="$WORK/github-output"
     export GITHUB_STEP_SUMMARY="$WORK/summary.md" FAKE_ZONES="" FAKE_SCENARIOS=""
-    [ "$case" = fallback ] && export FAKE_SCENARIOS="persistencenow=negative"
+    [ "$case" = fallback ] && export FAKE_SCENARIOS="randomwalknowcast=negative"
     [ "$case" = nozones ] && export FAKE_ZONES=none
     status=0
     HUB_REF=$(get hub_ref) DATA_COMMIT=$(get data_commit) AS_OF=$(get as_of) \
       REFERENCE_DATE=$(get reference_date) DRY_RUN=true HUB_PATH="$FIX/hub" \
       HUB_VALIDATOR=true MODEL="" MODEL_ID="" \
       "$CI_DIR/steps/track.sh" > "$WORK/track.log" 2>&1 || status=$?
-    local gate="$WORK/track-persistencenow/gate"
+    local gate="$WORK/track-randomwalknowcast/gate"
     if [ "$case" = nozones ]; then
       [ "$status" = 3 ] || { echo "FAIL: baseline without zones exited $status"; cat "$WORK/track.log"; return 1; }
       grep -q "no health zone rows" "$gate/provenance.md" \
@@ -299,12 +299,12 @@ baseline_track() {
     [ "$status" = 0 ] || { echo "FAIL: baseline $case"; cat "$WORK/track.log"; return 1; }
     selected=$(python3 -c "import json;print(json.load(open('$gate/provenance.json'))['selected'])")
     if [ "$case" = nowcast ]; then
-      want=persistencenow
+      want=randomwalknowcast
       grep -q "All checks passed" "$gate/pr-body.md" \
         || { echo "FAIL: baseline body"; head -5 "$gate/pr-body.md"; return 1; }
     else
-      want=persistence
-      grep -q "Fallback model used (persistence baseline)" "$gate/pr-body.md" \
+      want=randomwalk
+      grep -q "Fallback model used (random walk baseline)" "$gate/pr-body.md" \
         || { echo "FAIL: baseline fallback body"; head -5 "$gate/pr-body.md"; return 1; }
     fi
     [ "$selected" = "$want" ] \
@@ -314,16 +314,16 @@ baseline_track() {
     if grep -q "Shadow candidates" "$gate/pr-body.md"; then
       echo "FAIL: baseline body lists shadows"; return 1
     fi
-    grep -q "bdbv-submission:seabbs-baseline:" "$gate/pr-body.md" \
+    grep -q "bdbv-submission:seabbs-rwnowcast:" "$gate/pr-body.md" \
       || { echo "FAIL: baseline id"; return 1; }
-    grep -q '"branch": "seabbs-baseline-' "$WORK/track.log" \
+    grep -q '"branch": "seabbs-rwnowcast-' "$WORK/track.log" \
       || { echo "FAIL: baseline branch"; cat "$WORK/track.log"; return 1; }
     if grep -v '^pr list' "$WORK/gh.log" 2> /dev/null; then
       echo "FAIL: baseline dry run wrote to GitHub"; return 1
     fi
   done
   export FAKE_ZONES="" FAKE_SCENARIOS=""
-  echo "=== baseline ===" && echo "ok: baseline submits persistencenow with zones, else persistence; no zones skips"
+  echo "=== baseline ===" && echo "ok: baseline submits randomwalknowcast with zones, else random walk; no zones skips"
 }
 
 no_new_data() {

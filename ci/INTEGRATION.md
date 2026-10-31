@@ -11,7 +11,7 @@ It is the reference for the interface, and `ci/run_dry.sh` runs the whole workfl
 | command | status in the main repo | used by |
 | --- | --- | --- |
 | `bdbvhubrenewal data --ref <hub sha>` | exists. Reads `GITHUB_TOKEN`. | `prepare` |
-| `bdbvhubrenewal nowcast --model persistence --vintage <as_of> --out <dir>` | exists | `prepare` (persistence candidate and baseline) |
+| `bdbvhubrenewal nowcast --model random walk --vintage <as_of> --out <dir>` | exists | `prepare` (random walk candidate and baseline) |
 | `bdbvhubrenewal metadata --model <model> --out <dir>` | exists | `gate` |
 | `scripts/validate-hub.R <hub> <csv> <yml>`, with `CHECK_WINDOW=true` | exists | `gate`, through `ci/steps/validate_hub.sh` |
 | `bdbvhubrenewal fit ...` | done (`bdbvhubrenewal.submission.fitting`; `main` runs the chosen renewal model and `renewalsp` the single-patch model, `bdbvhubrenewal.forecasters.renewal`) | `fit`, `retry` |
@@ -59,7 +59,7 @@ bdbvhubrenewal nowcast --model renewal --config main --fit <fit dir> \
 
 - Write one hub file anywhere under `--out`.
   The existing layout, `model-output/<model_id>/<reference_date>-<model_id>.csv`, is fine.
-  The PR always files it as `model-output/$HUB_MODEL_ID/<reference_date>-$HUB_MODEL_ID.csv`, so persistence can stand in for the main model.
+  The PR always files it as `model-output/$HUB_MODEL_ID/<reference_date>-$HUB_MODEL_ID.csv`, so random walk can stand in for the main model.
 - Include the national row `CD`, as the sum of the province trajectories by sample index, plus any national cases the model does not assign to a province.
   Use the same sample ids across locations.
   National sample k must equal the sum of province sample k plus that sample's unassigned cases, for every week.
@@ -180,8 +180,8 @@ The PR body adds the commit SHA itself.
   The renewal model also reports `tree_depth_share`, the share of draws at the depth cap.
   The other fields are reported, not gated.
 - `worst_rhat` lists the ten parameter elements with the highest R-hat, as BVDOutbreakSize does.
-- A model with no sampler, such as persistence, writes `{"schema_version": 1, "sampler": "none"}`.
-- A config that runs a stand-in model, such as a config running persistence in place of a model not yet built, adds `"stand_in": "<text>"`.
+- A model with no sampler, such as random walk, writes `{"schema_version": 1, "sampler": "none"}`.
+- A config that runs a stand-in model, such as a config running random walk in place of a model not yet built, adds `"stand_in": "<text>"`.
   It can also go in `<fit dir>/fit.json`.
   `candidate.sh` copies it into `run.json`.
   The chain table, the job summary and the PR body then mark the candidate "(stand-in)", and the PR body states the text in a bold **Stand-in:** line under "Produced by".

@@ -7,7 +7,7 @@
 # (`task backtest-heldout`). With no choice, every vintage is development.
 choices:
   - date: 2026-10-28
-    model: persistencenow
+    model: randomwalknowcast
     summary: >-
-      persistencenow is the first model submitted (as seabbsbaseline): it
+      randomwalknowcast is the first model submitted (as seabbsbaseline): it
       scores best on complete weeks of the development backtest.

@@ -10,9 +10,9 @@ Forecasts are submitted as `seabbs-renewal`.
 
 The package has two sets of models.
 The renewal models (`renewal`, `renewalsp` and `renewalbvd`) are built on [PyRenew](https://github.com/CDCgov/PyRenew) and fit the hub's known and imputed onsets, modelling the hub's imputation ([Renewal models](methods/model.md)).
-The baseline models are `persistence` and `persistencenow`, which is persistence on a nowcast with a baselinenowcast-style adjustment for reporting delays ([Johnson et al. 2025](https://doi.org/10.12688/wellcomeopenres.25027.2), Wellcome Open Research).
+The baseline models are `randomwalk` and `randomwalknowcast`, which is random walk on a nowcast with a baselinenowcast-style adjustment for reporting delays ([Johnson et al. 2025](https://doi.org/10.12688/wellcomeopenres.25027.2), Wellcome Open Research).
 
-Each week the [submission](submission/workflow.md) takes the first of `renewal`, one refit of it, `renewalsp` and `persistence` that passes its checks.
+Each week the [submission](submission/workflow.md) takes the first of `renewal`, one refit of it, `renewalsp` and `randomwalk` that passes its checks.
 
 ## Pages
 

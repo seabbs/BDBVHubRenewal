@@ -10,11 +10,11 @@ It is safe to install as is, because `DRY_RUN` is on until you turn it off.
 | job | what |
 | --- | --- |
 | `detect` | Runs on schedule from Saturday 23:00 UTC (Sunday 00:00 Kinshasa) to Tuesday. It compares the hub's newest data commit and `as_of` with the ledger and stops unless there is new data for the open round. |
-| `prepare` | Pins the hub data at one commit and builds the persistence candidate, which is also the baseline for the checks. |
+| `prepare` | Pins the hub data at one commit and builds the random walk candidate, which is also the baseline for the checks. |
 | `fit` | A matrix over the primary candidates (`main`, the single-patch fallback `renewalsp` and the `bvd` shadow), fitted in parallel. Each fit is cached under a content hash of the model source, the hub commit and its sampler settings. |
 | `triage` | Says whether `main` needs its one refit (past the convergence retry thresholds, or ruled out). |
 | `retry` | Only if `main` needs it: one refit with smaller steps and jittered inits, costing about as much as `main`, and only with time left for it before the window closes. |
-| `gate` | Walks the chain `main` → `retry-1` → `renewalsp` → `persistence`, handling problems rather than failing on them. A candidate is ruled out only if its fit is clearly broken or its file is invalid (format checks or hubValidations). |
+| `gate` | Walks the chain `main` → `retry-1` → `renewalsp` → `randomwalk`, handling problems rather than failing on them. A candidate is ruled out only if its fit is clearly broken or its file is invalid (format checks or hubValidations). |
 | `submit` | Publishes the plot, builds the PR body, and opens or updates the PR. A dry run prints the body instead. |
 | `record` | Live runs only. Writes the outcome to `state.json` on the `submission-ledger` branch and archives the round's files there. |
 | `outcome` | Fails the run if the round was skipped or a job broke, so you are notified. |
@@ -147,7 +147,7 @@ Hosted runners are 1.2 to 1.5 times slower, so each fit job takes about 1 to 1.5
 These times are to be re-measured on the current model.
 Time a real fit with a dry run on a past vintage (see above), and read the `Fit took N s` line in the job summary.
 
-The whole chain runs in sequence: prepare (persistence), then main with the single-patch fallback beside it, then at most one retry, then the gate.
+The whole chain runs in sequence: prepare (random walk), then main with the single-patch fallback beside it, then at most one retry, then the gate.
 From the last Tuesday start at 14:00 UTC there are 540 minutes to the close.
 A main fit of normal length leaves time for the retry.
 Two rules keep the chain inside the window when a fit runs late:
@@ -155,7 +155,7 @@ Two rules keep the chain inside the window when a fit runs late:
 - Every fit job's timeout leaves `reserve_minutes` (45) before the close for the gate and the pull request.
 - The retry runs only when `retry_minutes` (105) plus that reserve are left after the main fit. Otherwise the chain moves on to the fallback, which is already fitted, and the job summary says so.
 
-So a main fit that runs to its timeout still reaches the fallback or persistence before the close.
+So a main fit that runs to its timeout still reaches the fallback or random walk before the close.
 `max_tree_depth` is set per candidate in `ci/policy.toml`.
 
 If fits come close to the cap:
@@ -179,14 +179,14 @@ The chain is set in `ci/policy.toml`.
 It should rarely move past the main model.
 Problems are handled where they can be, and the PR body leads with a `Handled:` line saying what was handled and how.
 For example: "Handled: main model refitted once (max R-hat is 1.2, past the retry threshold 1.1)."
-When a fallback is used, the status line names it and why, for example "Fallback model used (persistence baseline): main model was ruled out (convergence: min bulk ESS is 8, past the failure threshold 10)."
+When a fallback is used, the status line names it and why, for example "Fallback model used (random walk baseline): main model was ruled out (convergence: min bulk ESS is 8, past the failure threshold 10)."
 The same text goes to `provenance.json` in the `gate` artefact, to the job summary and to the ledger.
-A round is skipped only if even persistence fails hub validation.
+A round is skipped only if even random walk fails hub validation.
 
 A suggested general line for the model metadata's `methods_long`:
 
 > Submissions are produced automatically each week.
-> If the main model's fit does not converge, we refit it once with more conservative sampler settings and, only if both are clearly broken, submit independent single-patch renewal fits for each province and the country, or a persistence baseline.
+> If the main model's fit does not converge, we refit it once with more conservative sampler settings and, only if both are clearly broken, submit independent single-patch renewal fits for each province and the country, or a random walk baseline.
 > Each submission's pull request states which was used and why.
 
 ## Where this approach comes from

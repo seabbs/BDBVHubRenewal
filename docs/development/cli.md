@@ -19,7 +19,7 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 | `backtest --recovery-only` | Run only the recovery check, with `--cache` and `--shard` as for the backtest. |
 | `compare-hub [--fetch]` | Score our retrospective forecasts and the hub's submitted ones on the same truth and weeks. |
 | `nowcast` | Forecast from a real vintage, write the hub file and check it. With `--config` and `--fit`, forecast from a fit configuration. The province samples are split across the health zones, unless `--no-zones` is given. |
-| `zone-backtest` | Score zone forecasts against zone persistence on the real vintages. |
+| `zone-backtest` | Score zone forecasts against zone random walk on the real vintages. |
 | `fit` | Fit a configuration and write the fit directory and its diagnostics, for the submission CI. |
 | `plot-submission` | Plot a submitted hub file. |
 | `plot-ppc` | Plot a fit's posterior predictive checks (`ppc.json`). |
@@ -43,7 +43,7 @@ The fitted models use the `[sampler]` settings in `config/backtest.toml`, the sa
 `BDBV_RENEWAL_SAMPLER` overrides them, for example `'{"num_chains": 2, "num_warmup": 300, "num_samples": 300}'`.
 Each forecast of a renewal variant is a fit.
 `--cache` and `--shard` split a run over several processes, and `--models` runs some models and keeps the others' rows in `results/`, which is committed.
-The docs build runs only the persistence models and reads the fitted models from there.
+The docs build runs only the random walk models and reads the fitted models from there.
 
 The comparison with hub forecasts downloads other teams' files, so it is run on its own:
 
