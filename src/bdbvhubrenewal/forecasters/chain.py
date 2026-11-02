@@ -162,7 +162,7 @@ def _week_sum(x: np.ndarray, snap: SnapshotArrays) -> np.ndarray:
 
 
 def weeks_back(snap: SnapshotArrays, r: int, max_delay: int) -> int:
-    r"""Return the number of weeks back from the as-of week with young days.
+    r"""Return the number of weeks back from the cut-off week with young days.
 
     Parameters
     ----------
@@ -180,13 +180,13 @@ def weeks_back(snap: SnapshotArrays, r: int, max_delay: int) -> int:
         $D$.
     """
     youngest = max(int(snap.cut[r]) - max_delay + 1, 0)
-    return snap.asof_week(r) - int(snap.week[youngest]) + 1
+    return snap.cut_week(r) - int(snap.week[youngest]) + 1
 
 
 def levels(snap: SnapshotArrays, r: int, settings: Settings) -> np.ndarray:
     """Return mean weekly counts over the level weeks at release `r`."""
     weekly = weekly_sums(snap, r)
-    wa = snap.asof_week(r)
+    wa = snap.cut_week(r)
     lo, hi = settings.level_weeks
     cols = [wa - k for k in range(lo, hi + 1)]
     vals = [weekly[:, c] if c >= 0 else np.zeros(weekly.shape[0]) for c in cols]
@@ -414,7 +414,7 @@ def retro_errors(snap: SnapshotArrays, o: int, settings: Settings) -> Errors:
                 snap.releases[r],
             )
             continue
-        wa, k_r = snap.asof_week(r), weeks_back(snap, r, settings.max_delay)
+        wa, k_r = snap.cut_week(r), weeks_back(snap, r, settings.max_delay)
         cols = wa - np.arange(k_n)
         take = (cols >= 0) & (np.arange(k_n) < k_r)
         safe = np.clip(cols, 0, None)

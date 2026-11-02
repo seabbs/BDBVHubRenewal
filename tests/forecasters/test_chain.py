@@ -17,6 +17,7 @@ from bdbvhubrenewal.forecasters.chain import (
     fit_delay,
     retro_errors,
     retro_plan,
+    weeks_back,
 )
 
 PLACES = ("CD-HU", "CD-IT", "CD-NK", "CD-TO")
@@ -213,3 +214,19 @@ def test_zones_use_their_province_then_the_country(
             ) <= len("CD-XX"), loc
             seen.add("country")
     assert seen == {"own", "province", "country"}
+
+
+def test_weeks_back_count_from_the_cutoff_week(daily: pd.DataFrame) -> None:
+    provinces = tuple(sorted(set(daily["location"]) - {"CD"}))
+    snap = snapshot_arrays(daily, "2026-11-01", provinces)
+    o = len(snap.releases) - 1
+    # The as-of day is a Sunday, one week after the cut-off Saturday.
+    assert snap.week[snap.asof[o]] == snap.week[snap.cut[o]] + 1
+    assert snap.cut_week(o) == snap.n_weeks - 2
+    # The newest data week (ages 0-6) is k = 0, with no empty week at k = 0.
+    assert weeks_back(snap, o, 42) == 6
+    errors = retro_errors(snap, o, Settings())
+    assert errors.n[:, 0].sum() > 0
+    origin = build_origin(snap, Settings(), errors=True)
+    assert origin.rho is not None
+    assert origin.rho[:, 0].max() > 0

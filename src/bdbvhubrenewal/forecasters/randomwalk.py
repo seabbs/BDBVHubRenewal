@@ -293,11 +293,10 @@ class RandomWalkNowcast(RandomWalk):
         n_data, n_all, n = snap.n_weeks, len(weeks), task.n_samples
         n_loc = len(snap.locations)
         k_n = origin.rho.shape[1]
-        back = n_data - 1 - np.arange(n_data)
+        back = snap.cut_week(origin.o) - np.arange(n_data)
+        use = (back >= 0) & (back < k_n)
         rho = np.where(
-            back[None, :] < k_n,
-            origin.rho[:, np.minimum(back, k_n - 1)],
-            0.0,
+            use[None, :], origin.rho[:, np.clip(back, 0, k_n - 1)], 0.0
         )
         key_x, key_walk, key_part = jax.random.split(_key(task), 3)
         nowcast = np.asarray(
