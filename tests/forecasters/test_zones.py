@@ -270,7 +270,12 @@ def test_hub_table_with_zones_validates(
     tmp_path: Path,
 ) -> None:
     prov, alloc = _alloc(task, counts, zones)
-    table = to_hub_table(prov, task.reference_date, zones=alloc)
+    table = to_hub_table(
+        prov,
+        task.reference_date,
+        zones=alloc,
+        forecast_date=task.reference_date,
+    )
     nat = table.loc[table["location"] == "CD"]
     provs = table.loc[table["location"].str.len() == 5]
     summed = provs.groupby(["output_type_id", "target_end_date"])["value"].sum()

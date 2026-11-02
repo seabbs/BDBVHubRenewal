@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
 from collections.abc import Iterator
@@ -16,7 +17,13 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture
-def in_root() -> Iterator[None]:
+def in_root(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    # The vintages used here are in the past, and a forecast date cannot
+    # follow its reference date.
+    monkeypatch.setattr(
+        "bdbvhubrenewal.submission.hub.run_date",
+        lambda *_: dt.date(2026, 8, 1),
+    )
     old = Path.cwd()
     os.chdir(ROOT)
     yield

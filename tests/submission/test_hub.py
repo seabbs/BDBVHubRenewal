@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import datetime as dt
+import io
 import json
+import urllib.error
 from pathlib import Path
 
 import pandas as pd
@@ -10,9 +12,12 @@ import yaml
 
 from bdbvhubrenewal.submission.hub import (
     HUB_COLUMNS,
+    append_submission,
+    fetch_hub_submission,
     load_hub_round,
     model_id,
     render_model_metadata,
+    run_date,
     to_hub_table,
     validate_model_id,
     validate_model_metadata,
@@ -21,6 +26,14 @@ from bdbvhubrenewal.submission.hub import (
     write_model_metadata,
     write_submission,
 )
+
+FORECAST_DATE = "2026-10-20"
+"""On or before every reference date these tests use."""
+
+
+def _table(samples: pd.DataFrame, ref: str, **kw: object) -> pd.DataFrame:
+    kw.setdefault("forecast_date", FORECAST_DATE)
+    return to_hub_table(samples, ref, **kw)  # type: ignore[arg-type]
 
 
 def _samples(n: int = 100) -> pd.DataFrame:
@@ -51,7 +64,7 @@ def test_load_hub_round(hub_round) -> None:  # type: ignore[no-untyped-def]
 
 
 def test_to_hub_table_is_valid(hub_round) -> None:  # type: ignore[no-untyped-def]
-    table = to_hub_table(_samples(), "2026-10-31")
+    table = _table(_samples(), "2026-10-31")
     assert tuple(table.columns) == HUB_COLUMNS
     assert (table["value"] == 10).all()
     errors = validate_submission(
@@ -64,7 +77,7 @@ def test_to_hub_table_is_valid(hub_round) -> None:  # type: ignore[no-untyped-de
 
 
 def test_round_trip_through_csv(hub_round, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
-    table = to_hub_table(_samples(), "2026-10-31")
+    table = _table(_samples(), "2026-10-31")
     path = write_submission(table, tmp_path, "seabbs-randomwalk")
     assert path.name == "2026-10-31-seabbs-randomwalk.csv"
     assert path.parent.name == "seabbs-randomwalk"
@@ -87,13 +100,13 @@ def test_round_trip_through_csv(hub_round, tmp_path: Path) -> None:  # type: ign
     ],
 )
 def test_validation_catches_problems(hub_round, change, message: str) -> None:  # type: ignore[no-untyped-def]
-    table = change(to_hub_table(_samples(), "2026-10-31"))
+    table = change(_table(_samples(), "2026-10-31"))
     errors = validate_submission(table, hub_round)
     assert any(message in e for e in errors), errors
 
 
 def test_validation_catches_ragged_trajectories(hub_round) -> None:  # type: ignore[no-untyped-def]
-    table = to_hub_table(_samples(), "2026-10-31")
+    table = _table(_samples(), "2026-10-31")
     # Move one sample's week so samples cover different week sets.
     mask = (
         (table["location"] == "CD-IT")
@@ -106,7 +119,7 @@ def test_validation_catches_ragged_trajectories(hub_round) -> None:  # type: ign
 
 
 def test_validation_window(hub_round) -> None:  # type: ignore[no-untyped-def]
-    table = to_hub_table(_samples(), "2026-10-31")
+    table = _table(_samples(), "2026-10-31", forecast_date="2026-10-26")
     tz = dt.UTC
     inside = dt.datetime(2026, 10, 26, 12, tzinfo=tz)
     late = dt.datetime(2026, 10, 28, 12, tzinfo=tz)
@@ -124,7 +137,7 @@ def test_backtest_dates_skip_round_checks(hub_round) -> None:  # type: ignore[no
             }
         )
     )
-    table = to_hub_table(samples, "2026-08-22")
+    table = _table(samples, "2026-08-22", forecast_date="2026-08-20")
     assert validate_submission(table, hub_round, check_round=False) == []
 
 
@@ -175,7 +188,7 @@ def _provinces(n: int = 100, value: float = 10.4) -> pd.DataFrame:
 
 
 def test_validation_needs_same_ids_in_every_location(hub_round) -> None:  # type: ignore[no-untyped-def]
-    table = to_hub_table(_provinces(), "2026-10-31")
+    table = _table(_provinces(), "2026-10-31")
     mask = (table["location"] == "CD-IT") & (table["output_type_id"] == 1)
     table.loc[mask, "output_type_id"] = 101
     errors = validate_submission(table, hub_round)
@@ -183,7 +196,7 @@ def test_validation_needs_same_ids_in_every_location(hub_round) -> None:  # type
 
 
 def test_unique_ids_need_same_weeks_everywhere(hub_round) -> None:  # type: ignore[no-untyped-def]
-    table = to_hub_table(_provinces(), "2026-10-31")
+    table = _table(_provinces(), "2026-10-31")
     offset = (table["location"] == "CD-NK") * 100
     offset += (table["location"] == "CD") * 200
     table["output_type_id"] += offset
@@ -199,7 +212,7 @@ def test_unique_ids_need_same_weeks_everywhere(hub_round) -> None:  # type: igno
 
 
 def test_reused_ids_allow_different_weeks_by_location(hub_round) -> None:  # type: ignore[no-untyped-def]
-    table = to_hub_table(_provinces(), "2026-10-31")
+    table = _table(_provinces(), "2026-10-31")
     table = table.loc[
         ~(
             (table["location"] == "CD-NK")
@@ -213,7 +226,7 @@ def test_validation_checks_directory_and_metadata(
     hub_round,  # type: ignore[no-untyped-def]
     tmp_path: Path,
 ) -> None:
-    table = to_hub_table(_provinces(), "2026-10-31")
+    table = _table(_provinces(), "2026-10-31")
     name = "2026-10-31-seabbs-randomwalk.csv"
     mid = "seabbs-randomwalk"
     errors = validate_submission(
@@ -251,7 +264,7 @@ def test_writer_makes_national_the_sum_of_provinces() -> None:
     national = samples.loc[samples["location"] == "CD-IT"].assign(
         location="CD", value=999.0
     )
-    table = to_hub_table(pd.concat([samples, national]), "2026-10-31")
+    table = _table(pd.concat([samples, national]), "2026-10-31")
     wide = table.pivot_table(
         index=["output_type_id", "target_end_date"],
         columns="location",
@@ -271,7 +284,7 @@ def test_writer_adds_an_unassigned_component() -> None:
             "value": 2.0,
         }
     )
-    table = to_hub_table(_provinces(), "2026-10-31", unassigned=unassigned)
+    table = _table(_provinces(), "2026-10-31", unassigned=unassigned)
     cd = table.loc[table["location"] == "CD"].set_index(
         ["output_type_id", "target_end_date"]
     )["value"]
@@ -295,7 +308,7 @@ def test_writer_adds_an_unassigned_component() -> None:
 )
 def test_writer_refuses_inconsistent_samples(change) -> None:  # type: ignore[no-untyped-def]
     with pytest.raises(ValueError, match=r"sample|week"):
-        to_hub_table(change(_provinces()), "2026-10-31")
+        _table(change(_provinces()), "2026-10-31")
 
 
 def _round2_fixtures() -> list[dict[str, object]]:
@@ -317,3 +330,151 @@ def test_in_package_check_agrees_with_bundle_fixtures(fx) -> None:  # type: igno
     ]
     errors = validate_submission_file(path, hub_round, metadata_dirs=meta)
     assert (errors == []) is bool(fx["valid_py"]), errors
+
+
+# forecast_date ---------------------------------------------------------------
+
+
+def test_forecast_date_column_is_written_after_reference_date() -> None:
+    table = _table(_samples(), "2026-10-31")
+    assert list(table.columns)[:2] == ["reference_date", "forecast_date"]
+    assert (table["forecast_date"] == FORECAST_DATE).all()
+
+
+def test_forecast_date_defaults_to_the_run_date_in_utc() -> None:
+    table = to_hub_table(_samples(), "2026-10-31")
+    assert (table["forecast_date"] == run_date().isoformat()).all()
+    late = dt.datetime(
+        2026, 10, 26, 23, 30, tzinfo=dt.timezone(dt.timedelta(hours=-5))
+    )
+    assert run_date(late) == dt.date(2026, 10, 27)
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        (lambda t: t.drop(columns="forecast_date"), "Columns"),
+        (lambda t: t.assign(forecast_date="20/10/2026"), "YYYY-MM-DD"),
+        (lambda t: t.assign(forecast_date=""), "YYYY-MM-DD"),
+        (lambda t: t.assign(forecast_date="2026-11-01"), "on or before"),
+        (
+            lambda t: t.assign(
+                forecast_date=lambda d: d["forecast_date"].where(
+                    d["output_type_id"] <= 50, "2026-10-21"
+                )
+            ),
+            "exactly one new",
+        ),
+    ],
+)
+def test_validation_catches_forecast_date_problems(
+    hub_round, change, message: str
+) -> None:  # type: ignore[no-untyped-def]
+    table = change(_table(_samples(), "2026-10-31"))
+    errors = validate_submission(table, hub_round)
+    assert any(message in e for e in errors), errors
+
+
+def test_new_forecast_date_must_be_within_a_day_of_submission(
+    hub_round,
+) -> None:  # type: ignore[no-untyped-def]
+    table = _table(_samples(), "2026-10-31", forecast_date="2026-10-26")
+    ok = dt.datetime(2026, 10, 27, 12, tzinfo=dt.UTC)
+    assert validate_submission(table, hub_round, submitted_at=ok) == []
+    stale = _table(_samples(), "2026-10-31", forecast_date="2026-10-24")
+    errors = validate_submission(stale, hub_round, submitted_at=ok)
+    assert any("within 1 day" in e for e in errors), errors
+
+
+def _hub_copy() -> pd.DataFrame:
+    return _table(_samples(), "2026-10-31").astype(str)
+
+
+def test_append_keeps_every_original_row_and_adds_one_date() -> None:
+    previous = _hub_copy()
+    new = _table(_samples(), "2026-10-31", forecast_date="2026-10-22")
+    both = append_submission(previous, new)
+    assert len(both) == len(previous) + len(new)
+    kept = both.iloc[: len(previous)].reset_index(drop=True)
+    assert kept.equals(previous[list(HUB_COLUMNS)])
+    assert set(both["forecast_date"]) == {FORECAST_DATE, "2026-10-22"}
+
+
+def test_append_keeps_cell_text_exactly() -> None:
+    previous = _hub_copy().assign(value="436.0")
+    new = _table(_samples(), "2026-10-31", forecast_date="2026-10-22")
+    both = append_submission(previous, new)
+    assert (both["value"].iloc[: len(previous)] == "436.0").all()
+
+
+@pytest.mark.parametrize(
+    ("date", "message"),
+    [
+        (FORECAST_DATE, "kept unchanged"),
+    ],
+)
+def test_append_needs_a_new_forecast_date(date: str, message: str) -> None:
+    new = _table(_samples(), "2026-10-31", forecast_date=date)
+    with pytest.raises(ValueError, match=message):
+        append_submission(_hub_copy(), new)
+
+
+def test_append_refuses_a_second_new_date() -> None:
+    new = _table(_samples(), "2026-10-31", forecast_date="2026-10-22")
+    new.loc[new.index[:5], "forecast_date"] = "2026-10-23"
+    with pytest.raises(ValueError, match="exactly one new"):
+        append_submission(_hub_copy(), new)
+
+
+def test_append_refuses_a_hub_copy_without_the_column() -> None:
+    old = _hub_copy().drop(columns="forecast_date")
+    new = _table(_samples(), "2026-10-31", forecast_date="2026-10-22")
+    with pytest.raises(ValueError, match="no `forecast_date`"):
+        append_submission(old, new)
+
+
+def test_appended_file_is_valid_and_written(hub_round, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    previous = _hub_copy()
+    new = _table(_samples(), "2026-10-31", forecast_date="2026-10-26")
+    path = write_submission(new, tmp_path, "seabbs-randomwalk", previous)
+    written = pd.read_csv(path, dtype=str, keep_default_na=False)
+    assert len(written) == len(previous) + len(new)
+    errors = validate_submission_file(
+        path,
+        hub_round,
+        previous=previous,
+        submitted_at=dt.datetime(2026, 10, 26, 12, tzinfo=dt.UTC),
+    )
+    assert errors == []
+
+
+def test_validation_of_an_append_rejects_a_changed_row(hub_round) -> None:  # type: ignore[no-untyped-def]
+    previous = _hub_copy()
+    new = _table(_samples(), "2026-10-31", forecast_date="2026-10-22")
+    both = append_submission(previous, new)
+    both.loc[0, "value"] = "999"
+    errors = validate_submission(both, hub_round, previous=previous)
+    assert any("unchanged" in e for e in errors), errors
+
+
+def test_fetch_reads_the_public_raw_file_and_none_when_absent() -> None:
+    seen: list[str] = []
+    text = "reference_date,forecast_date,value\n2026-10-31,2026-10-20,1.0\n"
+
+    def opener(url: str, timeout: float = 0.0):  # noqa: ARG001  # type: ignore[no-untyped-def]
+        seen.append(url)
+        if "seabbs-missing" in url:
+            raise urllib.error.HTTPError(url, 404, "Not Found", None, None)  # type: ignore[arg-type]
+        return io.BytesIO(text.encode())
+
+    got = fetch_hub_submission("seabbs-randomwalk", "2026-10-31", opener=opener)
+    assert got is not None
+    assert got["value"].tolist() == ["1.0"]
+    assert seen == [
+        "https://raw.githubusercontent.com/InsightNet-US/BDBV-Modeling-Hub/"
+        "main/model-output/seabbs-randomwalk/2026-10-31-seabbs-randomwalk.csv"
+    ]
+    assert (
+        fetch_hub_submission("seabbs-missing", "2026-10-31", opener=opener)
+        is None
+    )

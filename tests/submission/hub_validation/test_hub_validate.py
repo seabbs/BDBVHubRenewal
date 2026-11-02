@@ -287,7 +287,7 @@ def test_resubmission_needs_a_new_date(hub: hv.Hub, tmp_path: Path) -> None:
         same, hub, metadata_dirs=METADATA_DIRS, skip_window=True, previous=old
     )
     assert failures(rep) == ["forecast_date_one_new"]
-    extra = rows + [dict(rows[0])]
+    extra = [*rows, dict(rows[0])]
     more = _write(
         tmp_path / "pr2" / "testteam-testmodel" / FILE_31, cols, extra
     )
