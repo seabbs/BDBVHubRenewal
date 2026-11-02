@@ -1,5 +1,5 @@
 {
-  "truth_vintage": "2026-10-24",
+  "truth_vintage": "2026-11-01",
   "complete_after_weeks": 3,
   "baseline": "randomwalknowcast",
   "preferred_baseline": "randomwalknowcast",
@@ -10,8 +10,7 @@
   ],
   "hub_ids": {
     "randomwalknowcast": "seabbs-rwnowcast",
-    "randomwalk": "seabbs-randomwalk",
-    "randomwalknowcastdaily": "seabbs-rwnowcastdaily"
+    "randomwalk": "seabbs-randomwalk"
   },
   "accessed": "2026-10-28"
 }
