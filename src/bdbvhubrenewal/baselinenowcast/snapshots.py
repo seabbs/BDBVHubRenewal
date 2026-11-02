@@ -2,21 +2,182 @@
 
 R's ``estimate_delay`` needs a report in every delay cell of the
 triangle or a right truncation.
-Release snapshots are published on a few days only.
-The extension E1 skips unobserved cells in the chain ladder ratio of
-sums instead of filling them.
+Release snapshots are published on a few days only, so most cells of
+the triangle are unobserved.
+E1 is the one named extension of the port.
+It takes the chain ladder ratio of sums over the cells observed in
+both releases of a pair and skips the others, which are not filled.
+
+Axes.
+``counts`` is ``(n_loc, n_release, n_day)``, the count of onset day t
+in release r.
+``observed`` is ``(n_release, n_day)``, True where day t has data in
+release r, and ``cut[r]`` is the index of the latest onset day of
+release r.
+The age of day t in release r is ``cut[r] - t``.
+Pair p is releases ``(pairs[p], pairs[p] + 1)`` with step
+``cut[r + 1] - cut[r]``.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
+from functools import partial
 from typing import Any
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 from jax import Array
 
 Aggregator = Callable[[Array, np.ndarray], tuple[Array, np.ndarray]]
+
+
+@partial(jax.jit, static_argnames="max_delay")
+def _pair_sums(
+    counts: Array,
+    observed: Array,
+    cut: Array,
+    pairs: Array,
+    max_delay: int,
+) -> tuple[Array, Array]:
+    n_day = counts.shape[-1]
+    t = cut[pairs][:, None] - jnp.arange(max_delay)[None, :]
+    inside = (t >= 0) & (t < n_day)
+    tc = jnp.clip(t, 0, n_day - 1)
+    r = pairs[:, None]
+    both = inside & observed[r, tc] & observed[r + 1, tc]
+    den = jnp.where(both, counts[:, r, tc], 0.0)
+    num = jnp.where(both, counts[:, r + 1, tc], 0.0)
+    return num, den
+
+
+def pair_sums(
+    counts: Any,
+    observed: Any,
+    cut: Any,
+    pairs: Any,
+    max_delay: int,
+) -> tuple[Array, Array]:
+    """Numerator and denominator per pair and age (extension E1).
+
+    For pair ``p = (r, r + 1)`` and age ``x = 0 .. max_delay - 1`` at
+    release r, the cell is day ``t = cut[r] - x``.
+    ``den`` is its count in release r and ``num`` its count in
+    release r + 1.
+    Cells not observed in both releases, or outside the days, are
+    skipped and add 0.
+    Both are ``(n_loc, n_pair, max_delay)``.
+    """
+    c = jnp.asarray(counts)
+    return _pair_sums(
+        c,
+        jnp.asarray(observed, bool),
+        jnp.asarray(cut, int),
+        jnp.asarray(pairs, int),
+        int(max_delay),
+    )
+
+
+@partial(jax.jit, static_argnames="n_steps")
+def _pair_factors(
+    num: Array, den: Array, step_index: Array, n_steps: int
+) -> tuple[Array, Array]:
+    onehot = (step_index[:, None] == jnp.arange(n_steps)[None, :]).astype(
+        num.dtype
+    )
+    n = jnp.einsum("lpx,ps->lsx", num, onehot)
+    d = jnp.einsum("lpx,ps->lsx", den, onehot)
+    ok = d > 0
+    return jnp.where(ok, n / jnp.where(ok, d, 1.0), jnp.nan), ok
+
+
+def pair_factors(
+    num: Any, den: Any, step_index: Any, n_steps: int
+) -> tuple[Array, Array]:
+    """Development factors per step and age (extension E1).
+
+    ``step_index[p]`` is the slot ``0 .. n_steps - 1`` of pair p's
+    step.
+    Pairs of equal step are summed before the ratio, as
+    baselinenowcast sums over reference times.
+    The factor is ``sum(num) / sum(den)`` where ``sum(den) > 0``.
+    Elsewhere it is NaN and not identified (R divides by
+    ``max(den, 1)`` instead).
+    Returns ``(F, identified)`` of shape ``(n_loc, n_steps, max_delay)``.
+    """
+    return _pair_factors(
+        jnp.asarray(num),
+        jnp.asarray(den),
+        jnp.asarray(step_index, int),
+        int(n_steps),
+    )
+
+
+def window_pairs(cut: Any, max_delay: int) -> tuple[np.ndarray, np.ndarray]:
+    """Pairs whose step is at most ``max_delay``, and their steps.
+
+    A longer step has no age inside the window to attach a factor to.
+    Its releases stay in the data and in the counts.
+    Returns the first release index and the step of each pair.
+    """
+    steps = np.diff(np.asarray(cut, dtype=int))
+    keep = np.flatnonzero((steps >= 1) & (steps <= max_delay))
+    return keep, steps[keep]
+
+
+def exact_plan(
+    ages: Any, step: int, slot: int, max_delay: int
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Chain steps of the latest pair, from each age to ``max_delay``.
+
+    Day of age ``a`` takes the fewest steps ``M`` with
+    ``a + M * step >= max_delay``, at ages ``a, a + step, ...``.
+    There is no tail factor past ``max_delay``, and ages from
+    ``max_delay`` have no step.
+    Returns ``(slot, age, mask)`` of shape ``(n, M_max)``, padded
+    where ``mask`` is False.
+    """
+    a = np.asarray(ages, dtype=int)
+    if np.any(a < 0):
+        raise ValueError("`ages` must not be negative.")
+    if step < 1:
+        raise ValueError("`step` must be at least 1.")
+    n_steps = np.maximum(-(-(max_delay - a) // step), 0)
+    m_max = max(int(n_steps.max(initial=0)), 1)
+    m = np.arange(m_max)[None, :]
+    mask = m < n_steps[:, None]
+    ages_m = a[:, None] + m * step
+    return (
+        np.where(mask, slot, 0),
+        np.where(mask, ages_m, 0),
+        mask,
+    )
+
+
+@jax.jit
+def _chain_growth(
+    factors: Array, slot: Array, age: Array, mask: Array
+) -> Array:
+    f = factors[:, slot, age]
+    return jnp.prod(jnp.where(mask[None], f, 1.0), axis=-1)
+
+
+def chain_growth(factors: Any, plan: tuple[Any, Any, Any]) -> Array:
+    """Growth to ``max_delay`` per location and day (extension E1).
+
+    ``plan`` is ``(slot, age, mask)`` as from ``exact_plan``.
+    The growth is the product of the factors at the planned steps, and
+    NaN where one of them is not identified.
+    Returns ``(n_loc, n)``.
+    """
+    slot, age, mask = plan
+    return _chain_growth(
+        jnp.asarray(factors),
+        jnp.asarray(slot, int),
+        jnp.asarray(age, int),
+        jnp.asarray(mask, bool),
+    )
 
 
 def hub_week_matrix(

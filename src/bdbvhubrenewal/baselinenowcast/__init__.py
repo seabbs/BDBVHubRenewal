@@ -1,8 +1,10 @@
-"""JAX port of R baselinenowcast 0.2.2.
+"""JAX port of R baselinenowcast 0.2.2 with one extension.
 
 Reporting triangles are ``(triangle, mask)`` pairs.
 ``mask`` is True where R has an observed cell and False where R has
 NA.
+The extension (E1) skips unobserved cells in the chain ladder ratio
+of sums for release snapshots (``snapshots.py``).
 See ``docs/methods/baselines.md`` for the methods.
 """
 
@@ -15,7 +17,15 @@ from .sample import (
     sample_nowcasts,
     sample_prediction,
 )
-from .snapshots import hub_week_matrix, hub_weeks
+from .snapshots import (
+    chain_growth,
+    exact_plan,
+    hub_week_matrix,
+    hub_weeks,
+    pair_factors,
+    pair_sums,
+    window_pairs,
+)
 from .triangle import (
     allocate_reference_times,
     apply_reporting_structure,
@@ -38,17 +48,21 @@ __all__ = [
     "apply_delay",
     "apply_reporting_structure",
     "baselinenowcast",
+    "chain_growth",
     "combine_obs_with_pred",
     "estimate_and_apply_delay",
     "estimate_delay",
     "estimate_uncertainty",
     "estimate_uncertainty_retro",
+    "exact_plan",
     "fit_by_horizon",
     "fit_nb",
     "get_reporting_structure",
     "hub_week_matrix",
     "hub_weeks",
     "identity",
+    "pair_factors",
+    "pair_sums",
     "preprocess_negative_values",
     "rolling_sum",
     "row_sums",
@@ -57,4 +71,5 @@ __all__ = [
     "sample_nowcasts",
     "sample_prediction",
     "truncate_to_rows",
+    "window_pairs",
 ]
