@@ -38,6 +38,10 @@ Each pair is one step at its own exact ages, and the factor is a ratio of sums o
 Cells a release does not observe are skipped, not filled.
 A zero denominator follows baselinenowcast, so that $F_{p,s}(x) = 1 + (\sum N_{p,r+1}(t) - \sum N_{p,r}(t)) / \max(\sum N_{p,r}(t), 1)$.
 The parent of a province is the country, whose counts are the sum of its provinces.
+Only onset days within $1.5 D = 63$ days of the cut-off of the latest release used contribute to the sums, as baselinenowcast's default `n_history_delay`, and a retrospective fit uses the cut-off of its own release.
+Before the sums, each day's increments between its releases go through baselinenowcast's `preprocess_negative_values`, so a downward revision is set to zero and taken from the earlier increments of that day and no factor falls below 1.
+This applies to the delay only, because the Skellam spread below still allows negative revisions.
+The preprocessing runs along releases for each onset day, where baselinenowcast runs it along the delay columns of a reporting triangle.
 
 At the latest release $o$, $s_o$ is the step of its latest in-window pair.
 Day $t$ of age $a$ is chained over the actual release gap,
@@ -50,6 +54,7 @@ $$
 
 with $M(a)$ the fewest steps with $a + M s_o \ge D$.
 There is no factor past $D$.
+With a step $s_o > 1$, the factor at an age above $D - s_o$ includes growth past $D$ in its numerator, which baselinenowcast truncates, so those factors can be slightly larger.
 $G_p(a)$ is the growth of a day's count from age $a$ to final, and $1 / G_p(a)$ is the share of it reported.
 
 ## Nowcast
