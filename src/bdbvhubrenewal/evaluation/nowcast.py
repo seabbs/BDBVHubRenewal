@@ -428,9 +428,9 @@ def _score(
     # A model with no forecast of a target (the chain has no step within
     # the allowed mismatch) drops it for every model, so all are scored
     # on the same forecasts.
-    ids = ["target", "origin", "truth_vintage"]
+    forecast_ids = ["target", "origin", "truth_vintage"]
     n_models = samples.groupby("target")["model"].transform("nunique")
-    have = samples.groupby(ids)["model"].transform("nunique")
+    have = samples.groupby(forecast_ids)["model"].transform("nunique")
     samples = samples.loc[have == n_models].reset_index(drop=True)
     places = sorted({loc for t in tasks for loc in t.locations})
     done = complete_weeks(daily, latest, places, cfg)
