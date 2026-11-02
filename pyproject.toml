@@ -123,6 +123,8 @@ convention = "numpy"
 "src/bdbvhubrenewal/model/**" = ["ARG002", "N803", "N806", "PTH123"]
 # The model's tests, from the prototype.
 "tests/model/**" = ["D", "PT018", "PD008", "N806", "ARG001"]
+# The port's abort tests check R's conditions, not message text.
+"tests/baselinenowcast/**" = ["PT011"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -132,6 +134,8 @@ xfail_strict = true
 filterwarnings = [
   # Raised inside pandas by `pd.Timedelta(days=...)` with NumPy 2.4.
   "ignore:The 'generic' unit for NumPy timedelta:DeprecationWarning",
+  # baselinenowcast warns when fewer reference times exist than targeted.
+  "ignore:.*reference times available.*:UserWarning",
 ]
 markers = [
   "network: tests that download from GitHub (deselect with '-m \"not network\"')",
@@ -171,6 +175,12 @@ module = [
   "pyrenew.*",
 ]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# JAX calls are untyped, so results come back as Any.
+module = ["bdbvhubrenewal.baselinenowcast.*"]
+warn_return_any = false
+disallow_untyped_calls = false
 
 [[tool.mypy.overrides]]
 # The model subclasses PyRenew's and NumPyro's classes, which are untyped.
