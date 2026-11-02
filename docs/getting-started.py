@@ -133,16 +133,16 @@ save("forecast")
 panels
 
 # %% [markdown]
-# ![Nowcasts from random walk and randomwalknowcast at 2026-10-17 against the data as later reported.](../assets/getting-started/nowcast.svg#only-light)
-# ![Nowcasts from random walk and randomwalknowcast at 2026-10-17 against the data as later reported.](../assets/getting-started/nowcast-dark.svg#only-dark)
+# ![Nowcasts from randomwalk and randomwalknowcast at 2026-10-17 against the data as later reported.](../assets/getting-started/nowcast.svg#only-light)
+# ![Nowcasts from randomwalk and randomwalknowcast at 2026-10-17 against the data as later reported.](../assets/getting-started/nowcast-dark.svg#only-dark)
 
 # %% [markdown]
 # ## Plot the forecast
 #
 # The second figure adds the reference week and the three forecast weeks.
 #
-# ![Nowcasts and forecasts from random walk and randomwalknowcast at 2026-10-17 against the data as later reported.](../assets/getting-started/forecast.svg#only-light)
-# ![Nowcasts and forecasts from random walk and randomwalknowcast at 2026-10-17 against the data as later reported.](../assets/getting-started/forecast-dark.svg#only-dark)
+# ![Nowcasts and forecasts from randomwalk and randomwalknowcast at 2026-10-17 against the data as later reported.](../assets/getting-started/forecast.svg#only-light)
+# ![Nowcasts and forecasts from randomwalk and randomwalknowcast at 2026-10-17 against the data as later reported.](../assets/getting-started/forecast-dark.svg#only-dark)
 
 # %% [markdown]
 # ## Score on complete weeks

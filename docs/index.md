@@ -3,19 +3,20 @@
 Nowcasts and forecasts of confirmed Bundibugyo virus disease cases for the BDBV Modeling Hub.
 { .page-subtitle }
 
-The [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub) target is weekly confirmed cases by symptom-onset week, by province and nationally, as 100 joint sample trajectories.
-Forecasts are submitted as `seabbs-renewal`.
+The [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub) target is weekly confirmed cases by symptom-onset week, nationally, by province and by health zone, as 100 joint sample trajectories.
+The submitted model is `randomwalknowcast`, under the hub id `seabbs-rwnowcast`.
 
 ## Models
 
-The package has two sets of models.
+`randomwalknowcast` is baselinenowcast ([Johnson et al. 2025](https://doi.org/10.12688/wellcomeopenres.25027.2), Wellcome Open Research) with a random walk on top.
+It nowcasts the hub's daily release snapshots with a JAX port of baselinenowcast 0.2.2 and carries each nowcast forward with a random walk.
+It runs at province and zone level, and the national value is the sum of the provinces ([Baseline models](methods/baselines.md)).
+`randomwalk` runs the same walk from the latest week judged complete, with no nowcast.
+It is a comparison model and is not submitted.
 The renewal models (`renewal`, `renewalsp` and `renewalbvd`) are built on [PyRenew](https://github.com/CDCgov/PyRenew) and fit the hub's known and imputed onsets, modelling the hub's imputation ([Renewal models](methods/model.md)).
-The baseline models are `randomwalk` and `randomwalknowcast`.
-Both run on the hub's daily release snapshots.
-`randomwalknowcast` is a random walk on a baselinenowcast nowcast of every day with data ([Johnson et al. 2025](https://doi.org/10.12688/wellcomeopenres.25027.2), Wellcome Open Research).
-`randomwalk` starts the same walk from the latest week judged complete.
+They are candidates and are not submitted.
 
-Each week the [submission](submission/workflow.md) takes the first of `renewal`, one refit of it, `renewalsp` and `randomwalk` that passes its checks.
+Each week the [submission](submission/workflow.md) submits `randomwalknowcast` as `seabbs-rwnowcast`, and falls back to `randomwalk` if it fails its checks.
 
 ## Pages
 

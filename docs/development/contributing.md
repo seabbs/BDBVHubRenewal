@@ -15,4 +15,5 @@ Setting up, checking and documenting changes to the package.
 
 Pre-commit hooks run the same checks on each commit.
 New behaviour comes with a test, and docs follow UK English with one sentence per line.
+The docs read generated tables, so build them with `task docs`, not `mkdocs build`.
 New models are added as on [Adding a model](adding-a-model.md).

@@ -11,7 +11,7 @@ Simulated forecasts are scored against the simulated final counts.
 
 | Score set | Forecast | Weeks scored |
 |---|---|---|
-| Complete weeks | Final count | Weeks ended at least $K = 3$ weeks before the truth vintage. |
+| Complete weeks | Final count | Weeks ended at least $K = 3$ weeks before the truth vintage. These can still grow in later vintages. |
 | All weeks | Final count | Every week in the truth vintage. |
 | Vintage-matched | Count as reported by the truth vintage | Every week, so recent weeks compare like with like. |
 
@@ -38,7 +38,8 @@ $$
 $$
 
 Positive bias is overprediction.
-Relative WIS is a ratio of means against `randomwalk` $b$ over the forecasts both made, and below 1 beats it.
+Relative WIS is a ratio of means against a baseline $b$ over the forecasts both made, and below 1 beats it.
+The baseline is `randomwalk` in the backtests and `randomwalknowcast`, the submitted model, in the comparison with hub forecasts.
 Coverage is whether $y$ falls in the central 50% and 90% sample intervals.
 
 ## Backtest design
@@ -68,7 +69,7 @@ The prediction is scored only when the chained steps differ from the gap by at m
 `randomwalk` has no chain between releases, so its forecast samples serve for both targets.
 
 **Complete weeks.** The count the latest release shows for the weeks it reports in full.
-A week is complete when $\pi \ge 0.95$ under the delay estimate of the latest release, with $\pi$ the share of the week's final count reported ([Baseline models](baselines.md)).
+A week is complete when $\pi \ge 0.95$ under the delay estimate of the latest release, with $\pi$ the estimated share of the week's final count reported ([Baseline models](baselines.md#random-walk)).
 Forecast weeks are scored only on this target.
 
 The floor is the count reported at the origin, scored on the same targets as a forecast with no spread.
@@ -79,7 +80,7 @@ The run stops if a model has no snapshots or two models give identical samples.
 
 The weekly cross-check runs the snapshot chain ladder on hub weeks from the latest two releases with cut-offs a week apart, with a step of one week and national factors for every place.
 It checks the daily ladder for consistency on weekly data.
-It is drawn over the `randomwalknowcast` intervals at the later release and is not a model in the package.
+It is drawn over the `randomwalknowcast` intervals at the later release.
 
 ## Rolling held-out evaluation
 
@@ -98,7 +99,7 @@ It runs on development vintages, for models that support the mask, so not `renew
 
 `randomwalk` and `randomwalknowcast` run on each zone's own release snapshots, for every zone with cases at the vintage.
 Zones use the same models as provinces.
-Each zone takes its own delay, Skellam spread and walk spread where it has at least 10 cases a week, else its province's, else national's.
+Each zone takes its delay and spreads by the rules of the [Baseline models](baselines.md#own-or-pooled-estimates) page.
 Each model is scored as it runs, and again with its zone samples made to sum to its province samples, as in the submitted file.
 Each real vintage before the latest is forecast, and origins with no pair of releases within the delay window are skipped, as for provinces.
 Zones are scored on every week against the zone counts as reported at the latest real vintage.

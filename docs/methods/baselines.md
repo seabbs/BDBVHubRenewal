@@ -1,11 +1,13 @@
 # Baseline models
 
-The two random walk baselines, with the maths of each.
+`randomwalknowcast`, the submitted model, and `randomwalk`, its comparison model.
 { .page-subtitle }
 
 The data and notation are on the [Data methods page](data.md#target-and-notation).
 The renewal models are on the [Renewal models](model.md) page.
-Both baselines also run at zone level, as described under [Health zones](model.md#health-zones).
+`randomwalknowcast` is baselinenowcast[^bnc-paper][^bnc-package] with a random walk on top.
+`randomwalk` is the same walk with no nowcast.
+Both run at province and zone level ([Health zones](#health-zones)), and national is the sum of the provinces.
 
 ## Daily release snapshots
 
@@ -56,7 +58,7 @@ $G_p(a)$ is the growth of a day's count from age $a$ to final, and $1 / G_p(a)$ 
 
 Every observed day is nowcast, with no handover and no minimum count.
 The nowcast mean of day $t$ is $N_{p,o}(t)\, G_p(c_o - t)$, summed to hub weeks as $\mu_p(w)$.
-With $\mu_p(w) - Y_{p,o}(w)$ the change still to come, the count at the next release is Skellam,
+With $\mu_p(w) - Y_{p,o}(w)$ the change still to come, the final count is Skellam,
 
 $$
 X_{p,i}(w) = \max\big\{0,\ Y_{p,o}(w) + A - B\big\},
@@ -87,7 +89,9 @@ e = y_p(w) - \hat y_p(w),
 $$
 
 summed over the kept releases.
-Weeks without a $\rho_{p,k}$ have $\rho = 0$.
+Weeks without a $\rho_{p,k}$ have $\rho = 0$, which assumes no error beyond the Skellam remainder.
+Baselinenowcast 0.2.2 has a negative binomial observation model.
+The Skellam replaces it so that counts can be revised down.
 
 ## Own or pooled estimates
 
@@ -95,13 +99,13 @@ The delay $F_{p,s}(x)$ is own or parent by age.
 A place uses its own factor at age $x$ when its denominator $\sum N_{p,r}(t)$, summed over the pooled pairs, is at least 10 cases.
 Otherwise it uses the factor of its parent at that age (zone, province, country).
 The country uses its own factor.
-The spread $\rho_{p,k}$ and the spread of the walk $\sigma_p$ use one rule and the same threshold of 10.
+The spread $\rho_{p,k}$ and the spread of the walk $\sigma_p$ use one rule with a threshold of 10 cases a week and 2 errors.
 $\ell_p$ is the mean of $Y_{p,r}(w)$ over weeks 3 to 6 back, in cases a week.
-A province with $\ell_p \ge 10$ uses its own estimate.
+A place with $\ell_p \ge 10$ uses its own estimate.
 For $\rho_{p,k}$ it also needs at least 2 errors at $k$.
-Otherwise it uses the pooled estimate of the country, which pools the provinces with $\ell \ge 10$.
-The pooled $\rho_{p,k}$ and $\sigma_p$ use the errors and weekly changes of those provinces together.
-If the pooled estimate has fewer than 2 errors at $k$, $\rho_{p,k} = 0$.
+Otherwise it uses the pooled estimate of its nearest parent that meets the same rule, and otherwise the country's.
+A pooled estimate uses the errors and weekly changes of the place and its children with $\ell \ge 10$ together.
+If the estimate used has fewer than 2 errors at $k$, $\rho_{p,k} = 0$.
 
 ## Walk
 
@@ -133,7 +137,10 @@ $$
 \pi_p(w) = \frac{1}{7} \sum_{t \in w,\ t \le c_o} \frac{1}{G_p(c_o - t)} \ge 0.95,
 $$
 
-the share of the week's final count reported, under the delay above.
+the estimated share of the week's final count reported, under the delay above.
+A day with $G_p = 0$ counts as fully reported.
+$\pi_p(w)$ can exceed 1 where counts are revised down.
+If no week has $\pi_p(w) \ge 0.95$, the start week is the first week of data.
 $x_i = Y_{p,o}(w_0)$ for every sample.
 Weeks up to $w_0$ are the reported counts.
 Later weeks with data are walk draws, floored at the reported count.
@@ -145,6 +152,31 @@ Weeks up to $w_0$ are the nowcast draws.
 If the week after $w_0$ holds $c_o$ and is partial, $n$ days of it have no data.
 Its value is its nowcast draw plus Poisson$(n \lambda_i / 7)$, with $\lambda_i$ the walk rate of that week.
 Later weeks are walk draws.
+
+## Health zones
+
+`randomwalk` and `randomwalknowcast` run on each zone's own release snapshots with the same code as for provinces.
+The hierarchy is zone, province, country, and each zone takes its delay, spread and walk spread by the rules [above](#own-or-pooled-estimates).
+Zone samples sum to their province's samples, sample by sample and week by week.
+Province sample $Y^{(k)}(w)$ is apportioned over the zones in proportion to the zone model's own sample $x^{(k)}_z(w)$ of the same id and week:
+
+$$
+y^{(k)}_z(w) \approx Y^{(k)}(w)\, \frac{x^{(k)}_z(w)}{\sum_{z'} x^{(k)}_{z'}(w)}.
+$$
+
+Largest remainders make the values whole numbers that sum to $Y^{(k)}(w)$.
+Where every $x^{(k)}_z(w)$ is 0 the split uses the Dirichlet mean shares of the [Renewal models](model.md#split-of-province-samples) page.
+
+## Limitations
+
+The release history in the delay window is shorter than $D$, so no chain to the final count has been checked against a final count.
+Each delay factor rests on one onset day per age per pair, and the youngest ages rest on few cases even nationally.
+The onset clock assumes a constant lag from the latest onset day to extraction, and the real lag varies by a few days.
+The chain ladder treats reporting speed as fixed by age and step, but speed and backlogs vary between releases.
+The spread is learnt from few release transitions.
+Counts include the hub's imputed onsets, which are re-drawn as cases gain onsets, so changes between releases mix reporting with imputation.
+Places are sampled independently, so a shock to a whole release is not shared, and the national band is a sum of independent provincial bands.
+The walk has no drift, and its spread comes from 8 weekly changes, which for small places include Poisson noise.
 
 [^bnc-paper]: Johnson KE, Tang M, Tyszka E, Nemcova B, Wolffram D, Ergas R, Reich NG, Funk S, Mellor J, Bracher J, Abbott S (2025). Baseline nowcasting methods for handling delays in epidemiological data. Wellcome Open Research. [doi:10.12688/wellcomeopenres.25027.2](https://doi.org/10.12688/wellcomeopenres.25027.2).
 [^bnc-package]: Johnson KE, Tyszka E, Bracher J, Funk S, Abbott S (2025). baselinenowcast: Methods for baseline nowcasting right-truncated epidemiological data. <https://github.com/epinowcast/baselinenowcast/>.

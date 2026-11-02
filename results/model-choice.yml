@@ -9,5 +9,6 @@ choices:
   - date: 2026-10-28
     model: randomwalknowcast
     summary: >-
-      randomwalknowcast is the first model submitted (as seabbsbaseline): it
-      scores best on complete weeks of the development backtest.
+      randomwalknowcast is the submitted baseline (as seabbs-rwnowcast). It
+      is chosen by design, as baselinenowcast with a random walk, not on its
+      backtest scores.
