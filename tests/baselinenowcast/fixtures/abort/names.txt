@@ -1,0 +1,17 @@
+estimate_n_too_large
+estimate_n_zero
+estimate_no_complete_row
+apply_wrong_length
+apply_complete
+apply_negative_first
+alloc_scale_negative
+alloc_prop_large
+alloc_not_enough
+structure_zero
+structure_big
+trunc_negative
+fit_nb_negative
+fit_nb_fraction
+retro_too_few
+retro_too_many
+sample_params_short
