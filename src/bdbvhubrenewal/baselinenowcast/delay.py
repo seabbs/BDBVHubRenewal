@@ -122,6 +122,7 @@ def estimate_delay(
         validate_reporting_triangle(m)
     if n is None:
         n = m.shape[0]
+    assert_integerish(n, "n")
     _validate_for_delay_estimation(values, m, int(n))
     n = int(n)
     return _estimate_kernel(values[-n:], jnp.asarray(m[-n:]))

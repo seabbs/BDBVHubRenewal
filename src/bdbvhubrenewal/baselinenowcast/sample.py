@@ -29,7 +29,7 @@ def sample_nb(key: Array, pred: Any, uncertainty_params: Any) -> Array:
     mixed Poisson.
     ``uncertainty_params`` has length 1 or matches ``pred``.
     """
-    mu = jnp.asarray(pred)
+    mu = jnp.asarray(pred, dtype=jnp.result_type(pred, jnp.float32))
     size = jnp.asarray(uncertainty_params, dtype=mu.dtype)
     if size.ndim > 0 and size.size not in (1, mu.size):
         raise ValueError(
@@ -38,7 +38,10 @@ def sample_nb(key: Array, pred: Any, uncertainty_params: Any) -> Array:
     size = size.reshape(()) if size.size == 1 else size.reshape(mu.shape)
     k_gamma, k_pois = jax.random.split(key)
     lam = jax.random.gamma(k_gamma, size, mu.shape, dtype=mu.dtype) * mu / size
-    return jax.random.poisson(k_pois, lam).astype(mu.dtype)
+    draw = jax.random.poisson(k_pois, lam).astype(mu.dtype)
+    # R's rnbinom gives NaN for a NaN mean or size, not a count.
+    ok = jnp.isfinite(mu) & jnp.isfinite(size)
+    return jnp.where(ok, draw, jnp.nan)
 
 
 class _Prepared:

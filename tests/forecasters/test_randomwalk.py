@@ -24,7 +24,12 @@ from bdbvhubrenewal.forecasters import (
     get_model,
     list_models,
 )
-from bdbvhubrenewal.forecasters.chain import MissingSnapshots, NoDelayPair
+from bdbvhubrenewal.forecasters.chain import (
+    MissingSnapshots,
+    NoCompleteWeek,
+    NoDelayPair,
+    Settings,
+)
 from bdbvhubrenewal.forecasters.zones import zone_task
 
 
@@ -220,3 +225,14 @@ def test_zones_run_from_the_same_code(
     zt = dataclasses.replace(zt, locations=zt.locations[:60])
     out = RandomWalkNowcast().forecast(zt)
     check_samples(out, zt)
+
+
+def test_randomwalk_raises_when_no_week_is_complete_and_the_backtest_skips(
+    task: ForecastTask,
+) -> None:
+    strict = RandomWalk(settings=Settings(completeness=1.5))
+    with pytest.raises(NoCompleteWeek, match="no start week"):
+        strict.forecast(task)
+    assert issubclass(NoCompleteWeek, ModelUnavailableError)
+    out = run_forecasts([strict], [task])
+    assert out.empty

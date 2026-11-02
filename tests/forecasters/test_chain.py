@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from bdbvhubrenewal.data.snapshots import snapshot_arrays, weekly_sums
 from bdbvhubrenewal.forecasters.chain import (
     NoDelayPair,
     Settings,
+    _delay_counts,
     build_origin,
     fit_delay,
     retro_errors,
@@ -92,12 +94,13 @@ def test_10_24_point_nowcasts_pool_every_pair(origin24) -> None:
     # Weeks 10-24, 10-17, 10-10, 10-03. The R script chained the 8 day
     # pair alone and filled zero denominators from the parent, so it gave 439.2,
     # 418.1, 539.7 and 544.1 for the country.
+    # Downward revisions are moved onto earlier releases before the sums.
     assert _weeks(origin24, "CD") == pytest.approx(
-        [387.5, 376.6, 493.7, 511.9], abs=0.06
+        [390.6, 376.7, 499.1, 517.0], abs=0.06
     )
     # Tshopo has under 10 cases a week, so uses the national delay.
     assert _weeks(origin24, "CD-TO") == pytest.approx(
-        [20.7, 12.0, 21.6, 18.4], abs=0.06
+        [20.8, 12.0, 21.7, 18.7], abs=0.06
     )
 
 
@@ -106,10 +109,10 @@ def test_provinces_use_own_factors_where_they_have_10_cases(origin24) -> None:
         [259.4, 182.4, 288.2, 254.1], abs=0.06
     )
     assert _weeks(origin24, "CD-NK") == pytest.approx(
-        [85.7, 150.4, 154.8, 202.8], abs=0.06
+        [89.9, 154.2, 163.7, 214.8], abs=0.06
     )
     assert _weeks(origin24, "CD-HU") == pytest.approx(
-        [11.1, 31.1, 27.4, 29.4], abs=0.06
+        [11.3, 31.1, 27.7, 29.7], abs=0.06
     )
 
 
@@ -160,7 +163,7 @@ def test_the_spread_pools_four_errors_at_10_24(origin24) -> None:
     assert origin24.rho is not None
     assert origin24.rho_n is not None
     assert origin24.rho[loc, :4] == pytest.approx(
-        [0.7006, 8.4005, 4.8158, 106.1023], rel=1e-3
+        [0.7006, 8.4005, 4.8158, 85.9253], rel=1e-3
     )
     # CD, Haut-Uele, Ituri and North Kivu give an error each.
     assert origin24.rho_n[loc, :4].tolist() == [4, 4, 4, 4]
@@ -189,8 +192,13 @@ def test_a_factor_is_own_by_age_with_10_cases_else_the_parent(
     snap = snapshot_arrays(both, "2026-10-24", zones)
     fit = fit_delay(snap, 3, Settings())
     assert fit is not None
+    window = np.arange(snap.week.size) > int(snap.cut[3]) - 63
     num, den = pair_sums(
-        snap.counts, snap.observed, snap.cut, fit.pairs[:, 0], 42
+        _delay_counts(snap, 3),
+        snap.observed & window[None, :],
+        snap.cut,
+        fit.pairs[:, 0],
+        42,
     )
     every = np.ones((len(fit.pairs), len(fit.steps)))
     own_f = np.asarray(pair_factors(num, den, every))
@@ -269,3 +277,82 @@ def test_a_later_clock_ages_the_origin_days_and_lowers_the_nowcast(
     assert late.point[cd, -1] < newest < early.point[cd, -1]
     # The delay factors come from the release pairs and do not move.
     np.testing.assert_allclose(late.fit.factors, base.fit.factors)
+
+
+def test_the_delay_uses_the_baselinenowcast_window_of_onset_days(
+    snap24,
+) -> None:
+    assert Settings().history_delay == 63
+    assert Settings(max_delay=10).history_delay == 15
+    settings = Settings(max_delay=10)
+    r = 3
+    base = fit_delay(snap24, r, settings)
+    assert base is not None
+    day = np.arange(snap24.week.size)
+    cut = int(snap24.cut[r])
+
+    def scaled(old: bool):
+        sel = day <= cut - 15 if old else (day > cut - 15) & (day <= cut)
+        counts = snap24.counts.copy()
+        counts[:, 1:, sel] *= 3.0
+        return dataclasses.replace(snap24, counts=counts)
+
+    outside = fit_delay(scaled(True), r, settings)
+    inside = fit_delay(scaled(False), r, settings)
+    assert outside is not None
+    assert inside is not None
+    np.testing.assert_allclose(outside.factors, base.factors)
+    assert not np.allclose(inside.factors, base.factors)
+
+
+def test_a_retrospective_fit_uses_its_own_cutoff_for_the_window(
+    snap24,
+) -> None:
+    settings = Settings(max_delay=10)
+    r = 2
+    cut = int(snap24.cut[r])
+    base = fit_delay(snap24, r, settings)
+    counts = snap24.counts.copy()
+    counts[:, 1:, : cut - 15 + 1] *= 3.0
+    other = fit_delay(dataclasses.replace(snap24, counts=counts), r, settings)
+    assert base is not None
+    assert other is not None
+    np.testing.assert_allclose(other.factors, base.factors)
+
+
+def test_downward_revisions_move_onto_earlier_releases(snap24) -> None:
+    counts = snap24.counts.copy()
+    day = int(snap24.cut[1]) - 3
+    counts[0, :, day] = [0, 10, 7, 9, 0][: counts.shape[1]]
+    snap = dataclasses.replace(snap24, counts=counts)
+    got = _delay_counts(snap, 3)[0, :4, day]
+    # The 10 to 7 revision is taken from the day's first observed release.
+    np.testing.assert_allclose(got, [0, 7, 7, 9])
+    cum = _delay_counts(snap, 3)[:, :4]
+    seen = snap.observed[:4]
+    diff = np.diff(np.where(seen[None], cum, 0.0), axis=1)
+    both = seen[1:] & seen[:-1]
+    assert (diff[:, both] >= 0).all()
+    f = fit_delay(snap, 3, Settings())
+    assert f is not None
+    assert (f.factors >= 1.0 - 1e-9).all()
+
+
+def test_no_nowcast_is_below_the_reported_count_at_11_01(
+    daily: pd.DataFrame, daily_zones: pd.DataFrame
+) -> None:
+    from bdbvhubrenewal.data import load_health_zones  # noqa: F401
+    from bdbvhubrenewal.data.zones import hub_zones
+
+    data = Path(__file__).resolve().parents[2] / "data"
+    zones = hub_zones(data / "hub-config" / "tasks.json")
+    provinces = tuple(sorted(set(daily["location"]) - {"CD"}))
+    cases = {
+        "provinces": (daily, provinces),
+        "zones": (pd.concat([daily, daily_zones]), zones),
+    }
+    for name, (frame, places) in cases.items():
+        snap = snapshot_arrays(frame, "2026-11-01", places)
+        origin = build_origin(snap, Settings(), errors=False)
+        short = origin.reported - origin.point
+        assert short.max() <= 1e-3, (name, float(short.max()))

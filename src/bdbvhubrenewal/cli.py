@@ -157,9 +157,8 @@ MODEL_METADATA = {
         "model_name": "RandomWalk on a nowcast",
         "methods": (
             "Baselinenowcast chain ladder on daily release snapshots with a "
-            "Skellam observation model on the remaining count, then a "
-            "log-scale random walk. Health zones and provinces, with national "
-            "the sum of provinces."
+            "Skellam observation model, then a log-scale random walk. Health "
+            "zones and provinces, with national the sum of provinces."
         ),
         "methods_long": (
             "The baselinenowcast method (Johnson et al. 2025, Wellcome Open "

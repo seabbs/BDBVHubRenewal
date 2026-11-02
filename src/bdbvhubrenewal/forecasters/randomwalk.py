@@ -55,6 +55,7 @@ from bdbvhubrenewal.forecasters.base import (
 )
 from bdbvhubrenewal.forecasters.chain import (
     MissingSnapshots,
+    NoCompleteWeek,
     Origin,
     Settings,
     build_origin,
@@ -205,13 +206,27 @@ class RandomWalk:
         Raises
         ------
         ModelUnavailableError
-            If the task has no snapshots, or no pair of releases within
-            the delay window.
+            If the task has no snapshots, no pair of releases within
+            the delay window, or a place with no week that is 95 per cent
+            complete (`NoCompleteWeek`).
         """
         origin = self.origin_at(task, errors=False)
         weeks = _timeline(origin, task)
         n_data, n_all, n = origin.snap.n_weeks, len(weeks), task.n_samples
         n_loc = len(origin.snap.locations)
+        good = origin.complete >= origin.settings.completeness
+        if not good.any(axis=1).all():
+            has = good.any(axis=1)
+            none = [
+                x
+                for x, ok in zip(origin.snap.locations, has, strict=True)
+                if not ok
+            ]
+            raise NoCompleteWeek(
+                f"No week reaches {origin.settings.completeness:.0%} "
+                f"complete at {origin.snap.releases[origin.o]} for "
+                f"{', '.join(none)}, so the walk has no start week."
+            )
         start = origin.start
         x0 = origin.reported[np.arange(n_loc), start]
         _, y = _walks(
