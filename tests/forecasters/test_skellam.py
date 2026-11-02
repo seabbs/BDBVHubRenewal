@@ -11,7 +11,9 @@ import pytest
 
 from bdbvhubrenewal.forecasters.skellam import (
     fit_rho_moments,
+    sample_nowcast,
     sample_skellam_moments,
+    spread_sums,
 )
 
 DATA = Path(__file__).parent / "data"
@@ -76,3 +78,64 @@ def test_a_revision_can_go_down_and_counts_stay_non_negative() -> None:
         )
     )
     assert (zero == 0).all()
+
+
+def test_spread_sums_scale_with_the_quantity_each_variant_names() -> None:
+    obs, pred = np.array([10.0, 30.0]), np.array([20.0, 40.0])
+    target = np.array([25.0, 32.0])
+    err2 = np.array([25.0, 64.0])
+    rem = np.array([10.0, 10.0])
+    num, den, n = spread_sums(obs, pred, target, model="skellam")
+    assert num == pytest.approx((err2 - rem).sum())
+    assert den == pytest.approx((2 * pred).sum())
+    num, den, _ = spread_sums(obs, pred, target, model="skellam_rem")
+    assert num == pytest.approx((err2 - rem).sum())
+    assert den == pytest.approx((2 * rem).sum())
+    num, den, _ = spread_sums(obs, pred, target, model="nb")
+    assert num == pytest.approx((err2 - rem).sum())
+    assert den == pytest.approx((rem**2).sum())
+    assert n == 2
+    with pytest.raises(ValueError, match="observation model"):
+        spread_sums(obs, pred, target, model="poisson")
+
+
+@pytest.mark.parametrize(
+    ("model", "spread", "var"),
+    [
+        ("skellam", 1.5, 50.0 + 2 * 1.5 * 200.0),
+        ("skellam_rem", 1.5, 50.0 + 2 * 1.5 * 50.0),
+        ("nb", 0.1, 50.0 + 50.0**2 * 0.1),
+    ],
+)
+def test_each_observation_model_has_the_nowcast_mean_and_its_variance(
+    model: str, spread: float, var: float
+) -> None:
+    key = jax.random.key(3)
+    draws = np.asarray(
+        sample_nowcast(
+            key,
+            np.float32(200.0),
+            np.float32(150.0),
+            np.float32(spread),
+            40000,
+            model,
+        )
+    )
+    assert draws.mean() == pytest.approx(200.0, abs=2.0)
+    assert draws.var() == pytest.approx(var, rel=0.1)
+
+
+def test_a_complete_week_gets_no_spread_under_the_remainder_models() -> None:
+    key = jax.random.key(4)
+    for model in ("skellam_rem", "nb"):
+        draws = np.asarray(
+            sample_nowcast(
+                key,
+                np.float32(80.0),
+                np.float32(80.0),
+                np.float32(2.0),
+                500,
+                model,
+            )
+        )
+        assert (draws == 80).all()

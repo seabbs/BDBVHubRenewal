@@ -244,3 +244,42 @@ def test_weeks_back_count_from_the_cutoff_week(daily: pd.DataFrame) -> None:
     origin = build_origin(snap, Settings(), errors=True)
     assert origin.rho is not None
     assert origin.rho[:, 0].max() > 0
+
+
+def test_a_later_clock_ages_the_origin_days_and_lowers_the_nowcast(
+    snap24,
+) -> None:
+    base = build_origin(snap24, Settings(), errors=False)
+    late = build_origin(snap24, Settings(clock_shift=1), errors=False)
+    early = build_origin(snap24, Settings(clock_shift=-1), errors=False)
+    cd, day = 0, int(snap24.cut[-1])
+    f = base.fit.factors[cd, 0]
+    # One day later the newest day is age 1, chained over 1, 9, ..., 41.
+    assert late.growth[cd, day] == pytest.approx(
+        float(np.prod(f[1:42:8])), rel=1e-5
+    )
+    # One day earlier no age is below 0, so the newest day stays at 0.
+    assert early.growth[cd, day] == pytest.approx(
+        float(np.prod(f[0:42:8])), rel=1e-5
+    )
+    assert early.growth[cd, day - 1] == pytest.approx(
+        float(np.prod(f[0:42:8])), rel=1e-5
+    )
+    newest = base.point[cd, -1]
+    assert late.point[cd, -1] < newest < early.point[cd, -1]
+    # The delay factors come from the release pairs and do not move.
+    np.testing.assert_allclose(late.fit.factors, base.fit.factors)
+
+
+def test_the_nb_spread_pools_every_weeks_back(origin24, snap24) -> None:
+    nb = build_origin(snap24, Settings(obs_model="nb"), errors=True)
+    assert nb.rho is not None
+    assert origin24.rho is not None
+    # One dispersion for every k, from the errors of all k together.
+    k_n = nb.rho.shape[1]
+    np.testing.assert_allclose(nb.rho, nb.rho[:, :1].repeat(k_n, axis=1))
+    assert nb.rho_n is not None
+    assert origin24.rho_n is not None
+    loc = snap24.locations.index("CD")
+    assert nb.rho_n[loc, 0] == origin24.rho_n[loc].sum()
+    assert nb.rho[loc, 0] > 0
