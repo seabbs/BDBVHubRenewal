@@ -1,271 +1,222 @@
+"""The random walk baselines on release snapshots."""
+
 from __future__ import annotations
 
-import datetime as dt
+import dataclasses
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
+from bdbvhubrenewal.data.zones import weekly_zone_counts
+from bdbvhubrenewal.evaluation.backtest import (
+    BacktestConfig,
+    make_tasks,
+    run_forecasts,
+)
 from bdbvhubrenewal.forecasters import (
-    ForecastModel,
+    ForecastTask,
+    ModelUnavailableError,
     RandomWalk,
+    RandomWalkNowcast,
     add_national,
     check_samples,
     get_model,
-    last_complete_week,
     list_models,
-    register_model,
 )
-from bdbvhubrenewal.forecasters.randomwalk import completeness_lag
+from bdbvhubrenewal.forecasters.chain import MissingSnapshots, NoDelayPair
+from bdbvhubrenewal.forecasters.zones import zone_task
+
+
+def _task(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    vintage: str,
+) -> ForecastTask:
+    rows = target.loc[target["vintage"] == vintage]
+    return make_tasks(rows, delays, BacktestConfig(seed=3), daily=daily)[0]
 
 
 @pytest.fixture
-def task(target: pd.DataFrame, delays: pd.DataFrame):  # type: ignore[no-untyped-def]
-    rows = target.loc[target["vintage"] == "2026-10-17"]
-    return make_tasks(rows, delays, BacktestConfig(seed=3))[0]
+def task(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> ForecastTask:
+    return _task(target, delays, daily, "2026-10-24")
 
 
-def test_registry_has_randomwalk_as_baseline() -> None:
-    specs = list_models()
-    assert specs[0].name == "randomwalk"
-    assert specs[0].baseline
-    assert isinstance(get_model("randomwalk"), ForecastModel)
-    with pytest.raises(KeyError):
-        get_model("nope")
-    with pytest.raises(ValueError, match="already registered"):
-        register_model("randomwalk", RandomWalk, "dup")
+def test_registry_has_both_models_and_no_daily_variant() -> None:
+    specs = {s.name: s for s in list_models()}
+    assert "randomwalknowcastdaily" not in specs
+    assert specs["randomwalk"].baseline
+    assert not specs["randomwalknowcast"].baseline
+    assert isinstance(get_model("randomwalk"), RandomWalk)
+    assert isinstance(get_model("randomwalknowcast"), RandomWalkNowcast)
 
 
-def test_last_complete_week() -> None:
-    # Midpoint (Wednesday) at least 10 days before a Saturday vintage.
-    assert last_complete_week("2026-10-24", 10) == dt.date(2026, 10, 17)
-    assert last_complete_week("2026-10-24", 14) == dt.date(2026, 10, 10)
-    assert last_complete_week("2026-10-24", 3) == dt.date(2026, 10, 24)
-    # A Tuesday vintage: the week ending the Saturday before is not complete.
-    assert last_complete_week("2026-08-18", 10) == dt.date(2026, 8, 8)
-
-
-def test_completeness_lag_uses_delays(delays: pd.DataFrame) -> None:
-    latest = delays.loc[delays["vintage"] == "2026-10-24"]
-    lag = completeness_lag(latest, "2026-10-24")
-    assert 8 <= lag <= 20
-    assert completeness_lag(None, "2026-08-18", default=12) == 12
-
-
-def test_randomwalk_output(task) -> None:  # type: ignore[no-untyped-def]
-    samples = RandomWalk().forecast(task)
-    check_samples(samples, task)
-    lag = completeness_lag(task.delays, task.vintage)
-    last = last_complete_week(task.vintage, lag).isoformat()
-    for loc in task.locations:
-        s = samples.loc[samples["location"] == loc]
-        obs = task.target.set_index(["location", "target_end_date"])["total"]
-        # Complete weeks are the published counts.
-        for week in s["target_end_date"].unique():
-            vals = s.loc[s["target_end_date"] == week, "value"]
-            if week <= last:
-                assert vals.nunique() == 1
-                assert vals.iloc[0] == obs.get((loc, week), 0)
-        # Later weeks are centred on the last complete week.
-        level = obs.get((loc, last), 0)
-        later = s.loc[s["target_end_date"] > last]
-        med = later.groupby("target_end_date")["value"].median()
-        assert np.allclose(med, level, rtol=0.35, atol=3)
-
-
-def test_randomwalk_spread_grows(task) -> None:  # type: ignore[no-untyped-def]
-    samples = RandomWalk().forecast(task)
-    it = samples.loc[samples["location"] == "CD-IT"]
-    q = it.groupby("target_end_date")["value"].quantile([0.05, 0.95]).unstack()
-    width = (q[0.95] - q[0.05]).to_numpy()
-    assert width[-1] > width[-4]
-
-
-def test_randomwalk_is_reproducible(task) -> None:  # type: ignore[no-untyped-def]
-    a = RandomWalk().forecast(task)
-    b = RandomWalk().forecast(task)
+@pytest.mark.parametrize("name", ["randomwalk", "randomwalknowcast"])
+def test_samples_are_valid_and_reproducible(
+    task: ForecastTask, name: str
+) -> None:
+    a = get_model(name).forecast(task)
+    b = get_model(name).forecast(task)
+    check_samples(a, task)
     pd.testing.assert_frame_equal(a, b)
+    assert set(a["location"]) == set(task.locations)
+    assert (a["value"] >= 0).all()
+    assert (a["value"] == a["value"].round()).all()
 
 
-def test_add_national_sums_provinces(task) -> None:  # type: ignore[no-untyped-def]
-    samples = add_national(RandomWalk().forecast(task))
-    nat = samples.loc[samples["location"] == "CD"].set_index(
+def test_the_two_models_give_different_samples(task: ForecastTask) -> None:
+    a = RandomWalk().forecast(task)
+    b = RandomWalkNowcast().forecast(task)
+    assert not np.array_equal(a["value"].to_numpy(), b["value"].to_numpy())
+
+
+def test_national_is_the_sum_of_provinces_by_sample(task: ForecastTask) -> None:
+    out = add_national(RandomWalkNowcast().forecast(task))
+    prov = out.loc[out["location"] != "CD"]
+    nat = out.loc[out["location"] == "CD"].set_index(
         ["target_end_date", "sample"]
     )["value"]
-    prov = (
-        samples.loc[samples["location"] != "CD"]
-        .groupby(["target_end_date", "sample"])["value"]
-        .sum()
-    )
-    pd.testing.assert_series_equal(
-        nat.sort_index(), prov.sort_index(), check_names=False
-    )
+    summed = prov.groupby(["target_end_date", "sample"])["value"].sum()
+    assert (summed == nat.reindex(summed.index)).all()
 
 
-def test_check_samples_rejects_bad_output(task) -> None:  # type: ignore[no-untyped-def]
-    samples = RandomWalk().forecast(task)
-    with pytest.raises(ValueError, match="numbered"):
-        check_samples(samples.assign(sample=samples["sample"] + 1), task)
-    with pytest.raises(ValueError, match="non-negative"):
-        check_samples(samples.assign(value=-1.0), task)
-
-
-def test_a_model_may_give_its_own_national(task) -> None:  # type: ignore[no-untyped-def]
-    samples = RandomWalk().forecast(task)
-    own = (
-        samples.groupby(["target_end_date", "sample"], as_index=False)["value"]
-        .sum()
-        .assign(location="CD", value=lambda d: d["value"] + 7.0)
-    )[list(samples.columns)]
-    both = pd.concat([samples, own], ignore_index=True)
-    check_samples(both, task)
-    out = add_national(both)
-    nat = out.loc[out["location"] == "CD"]
-    assert len(nat) == len(own)
-    assert (nat["value"].to_numpy() == own["value"].to_numpy()).all()
-
-
-def test_randomwalk_predicts_counts_as_reported_later(
-    target: pd.DataFrame, delays: pd.DataFrame
+def test_randomwalk_returns_complete_weeks_as_reported(
+    task: ForecastTask,
 ) -> None:
-    rows = target.loc[target["vintage"] == "2026-10-09"]
-    task = make_tasks(
-        rows, delays, BacktestConfig(seed=3), report_by=("2026-10-24",)
-    )[0]
-    assert task.report_by == ("2026-10-24",)
-    samples = RandomWalk().forecast(task)
-    check_samples(samples, task)
-    final = samples.loc[samples["as_of"].isna()]
-    later = samples.loc[samples["as_of"] == "2026-10-24"]
-    # Weeks up to the later vintage only, with the same samples.
-    assert later["target_end_date"].max() <= "2026-10-24"
-    assert set(later["sample"]) == set(final["sample"])
-    # At least what was reported at the vintage, and no more than the
-    # final count where that is higher.
-    keys = ["location", "target_end_date", "sample"]
-    both = later.merge(final, on=keys, suffixes=("", "_final"))
-    seen = rows.set_index(["location", "target_end_date"])["total"]
-    floor = [
-        seen.get((loc, week), 0)
-        for loc, week in zip(
-            both["location"], both["target_end_date"], strict=True
-        )
+    weeks = tuple(
+        w.date().isoformat()
+        for w in pd.date_range("2026-08-29", "2026-11-21", freq="7D")
+    )
+    task = dataclasses.replace(task, target_end_dates=weeks)
+    model = RandomWalk()
+    out = model.forecast(task)
+    info = pd.DataFrame(model.fit_diagnostics).set_index("location")
+    seen = task.target.set_index(["location", "target_end_date"])["total"]
+    for loc in ("CD-IT", "CD-NK"):
+        start = info.loc[loc, "start_week"]
+        rows = out.loc[
+            (out["location"] == loc) & (out["target_end_date"] <= start)
+        ]
+        assert len(rows) > 0
+        for week, grp in rows.groupby("target_end_date"):
+            assert (grp["value"] == seen[(loc, week)]).all()
+    # Later weeks are not flat: the walk adds noise that grows with horizon.
+    late = out.loc[
+        (out["location"] == "CD-IT") & (out["target_end_date"] == "2026-11-14")
     ]
-    assert (both["value"] >= floor).all()
-    assert (both["value"] <= np.maximum(both["value_final"], floor)).all()
+    assert late["value"].nunique() > 5
 
 
-def test_add_national_sums_each_as_of(task) -> None:  # type: ignore[no-untyped-def]
-    samples = RandomWalk().forecast(task)
-    later = samples.assign(as_of="2026-10-24", value=1.0)
-    out = add_national(pd.concat([samples.assign(as_of=np.nan), later]))
-    nat = out.loc[(out["location"] == "CD") & (out["as_of"] == "2026-10-24")]
-    assert len(nat) == len(task.target_end_dates) * task.n_samples
-    assert (nat["value"] == len(task.locations)).all()
-
-
-def test_check_samples_rejects_unrequested_as_of(task) -> None:  # type: ignore[no-untyped-def]
-    samples = RandomWalk().forecast(task)
-    extra = samples.assign(as_of="2026-10-24")
-    with pytest.raises(ValueError, match="as_of"):
-        check_samples(pd.concat([samples.assign(as_of=np.nan), extra]), task)
-
-
-def test_low_count_places_take_the_pooled_spread() -> None:
-    from bdbvhubrenewal.forecasters.randomwalk import walk_spreads
-
-    # Places with at least `low_count` cases a week keep their own spread.
-    # The rest take the spread of the pooled weekly changes of those
-    # places. Both baselines use this rule.
-    big = np.array([100.0, 120, 90, 130, 80, 140, 70, 150])
-    calm = np.array([60.0, 61, 62, 63, 64, 65, 66, 67])
-    small = np.array([0.0, 9, 0, 9, 0, 9, 0, 9])
-
-    def own(x: np.ndarray) -> float:
-        return max(float(np.std(np.diff(np.log1p(x)), ddof=1)), 0.1)
-
-    sds = walk_spreads([big, calm, small], 8, 0.1, 10.0)
-    assert sds[0] == pytest.approx(own(big))
-    assert sds[1] == pytest.approx(own(calm))
-    pooled = np.r_[np.diff(np.log1p(big)), np.diff(np.log1p(calm))]
-    assert sds[2] == pytest.approx(np.std(pooled, ddof=1))
-    # With no place above the limit, each keeps its own.
-    assert walk_spreads([small], 8, 0.1, 10.0)[0] == pytest.approx(own(small))
-
-
-def test_random_walk_is_a_log_scale_walk_with_poisson_draws() -> None:
-    from bdbvhubrenewal.forecasters.randomwalk import random_walk
-
-    rng = np.random.default_rng(1)
-    start = np.full(4000, np.log1p(100.0))
-    draws = random_walk(start, 0.3, 3, rng)
-    assert draws.shape == (4000, 3)
-    # The median stays at the start and the spread grows with the horizon.
-    med = np.median(draws, axis=0)
-    assert med == pytest.approx([100, 100, 100], rel=0.1)
-    width = np.quantile(draws, 0.95, axis=0) - np.quantile(draws, 0.05, axis=0)
-    assert width[0] < width[1] < width[2]
-    # With no spread it is Poisson around the start.
-    flat = random_walk(start, 0.0, 2, rng)
-    assert flat.var() == pytest.approx(100, rel=0.15)
-
-
-def test_both_baselines_use_the_one_random_walk(
-    task,
-    monkeypatch: pytest.MonkeyPatch,  # type: ignore[no-untyped-def]
+def test_the_start_week_is_the_latest_week_at_95_per_cent(
+    task: ForecastTask,
 ) -> None:
-    import bdbvhubrenewal.forecasters.randomwalk as mod
+    model = RandomWalk()
+    model.forecast(task)
+    info = pd.DataFrame(model.fit_diagnostics).set_index("location")
+    assert info.loc["CD-IT", "start_week"] <= "2026-10-10"
+    assert info.loc["CD-IT", "start_week"] >= "2026-09-12"
 
-    calls: list[str] = []
+
+def test_nowcast_starts_from_the_latest_full_week(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    # Cut-off 10-24 is a Saturday, so its week is full.
+    model = RandomWalkNowcast()
+    model.forecast(_task(target, delays, daily, "2026-10-24"))
+    assert {r["start_week"] for r in model.fit_diagnostics} == {"2026-10-24"}
+    # Cut-off 10-16 is a Friday, so the week of 10-17 is partial.
+    model.forecast(_task(target, delays, daily, "2026-10-17"))
+    assert {r["start_week"] for r in model.fit_diagnostics} == {"2026-10-10"}
+
+
+def test_a_partial_week_adds_the_days_after_the_cutoff(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    task = _task(target, delays, daily, "2026-10-17")
+    nowcast = RandomWalkNowcast().forecast(task)
+    plain = RandomWalk().forecast(task)
+    wk = "2026-10-17"
+    mine = nowcast.loc[
+        (nowcast["location"] == "CD-IT") & (nowcast["target_end_date"] == wk)
+    ]["value"]
+    # The week has 6 of 7 days, so no draw is below the nowcast of 6 days.
+    assert mine.mean() > 100
+    assert mine.nunique() > 10
+    assert plain["target_end_date"].min() <= wk
+
+
+def test_diagnostics_name_the_sources(task: ForecastTask) -> None:
+    model = RandomWalkNowcast()
+    model.forecast(task)
+    info = pd.DataFrame(model.fit_diagnostics).set_index("location")
+    assert {
+        "start_week", "n_err", "delay_source", "rho_source", "sigma_source"
+    } <= set(info.columns)  # fmt: skip
+    assert info.loc["CD-IT", "delay_source"] == "own:CD-IT"
+    assert info.loc["CD-TO", "delay_source"] == "own:CD" or info.loc[
+        "CD-TO", "delay_source"
+    ].endswith("CD")
+    assert info.loc["CD-IT", "rho_source"] == "pooled:CD"
+    assert info.loc["CD-IT", "n_err"] == 4
+
+
+def test_both_models_use_the_one_random_walk(
+    task: ForecastTask, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bdbvhubrenewal.forecasters import randomwalk as mod
+
     walk = mod.random_walk
+    calls: list[int] = []
 
-    def spy(*args, **kwargs):  # type: ignore[no-untyped-def]
-        calls.append("walk")
+    def spy(*args, **kwargs):
+        calls.append(1)
         return walk(*args, **kwargs)
 
     monkeypatch.setattr(mod, "random_walk", spy)
     mod.RandomWalk().forecast(task)
+    assert calls
     n = len(calls)
-    assert n > 0
     mod.RandomWalkNowcast().forecast(task)
     assert len(calls) > n
 
 
-def test_completeness_from_releases(target: pd.DataFrame) -> None:
-    from bdbvhubrenewal.forecasters.randomwalk import release_complete_weeks
-
-    # Hub totals of 1 to 3 week old weeks still grow between releases, so
-    # at 10-24 a week is complete only from about three weeks old.
-    weeks = release_complete_weeks(target, "2026-10-24")
-    assert weeks is not None
-    assert 2 <= weeks <= 5
-    # One release has no growth to learn from.
-    assert release_complete_weeks(target, "2026-08-18") is None
-
-
-def test_randomwalk_holds_weeks_95_percent_published(
-    target: pd.DataFrame, delays: pd.DataFrame
+def test_models_raise_without_snapshots_or_a_delay_pair(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
-    from bdbvhubrenewal.forecasters.randomwalk import (
-        release_complete_weeks,
-        release_week,
-    )
+    bare = make_tasks(
+        target.loc[target["vintage"] == "2026-10-24"],
+        delays,
+        BacktestConfig(seed=3),
+    )[0]
+    early = _task(target, delays, daily, "2026-10-09")
+    for name in ("randomwalk", "randomwalknowcast"):
+        with pytest.raises(MissingSnapshots):
+            get_model(name).forecast(bare)
+        with pytest.raises(NoDelayPair):
+            get_model(name).forecast(early)
+    assert issubclass(NoDelayPair, ModelUnavailableError)
 
-    # A week is complete once 95% of its final total is published, from
-    # the hub's releases. Complete weeks are returned as published.
-    rows = target.loc[target["vintage"] <= "2026-10-17"]
-    task = next(
-        t
-        for t in make_tasks(rows, delays, BacktestConfig(seed=3))
-        if t.vintage == "2026-10-17"
+
+def test_the_backtest_skips_origins_a_model_cannot_forecast(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    real = target.loc[target["kind"] == "real"]
+    tasks = make_tasks(
+        real, delays, BacktestConfig(seed=3), history=real, daily=daily
     )
-    weeks = release_complete_weeks(task.target_history, task.vintage, 0.95)
-    assert weeks is not None
-    last = release_week(task.vintage) - dt.timedelta(weeks=weeks)
-    samples = RandomWalk().forecast(task)
-    spread = samples.groupby(["location", "target_end_date"])["value"].nunique()
-    held = spread.loc[spread.index.get_level_values(1) <= last.isoformat()]
-    assert (held == 1).all()
-    walked = spread.loc[spread.index.get_level_values(1) > last.isoformat()]
-    assert (walked.groupby(level=1).max() > 1).all()
+    out = run_forecasts([get_model("randomwalk")], tasks)
+    assert set(out["vintage"]) == {"2026-10-17", "2026-10-24"}
+
+
+def test_zones_run_from_the_same_code(
+    task: ForecastTask, daily: pd.DataFrame, daily_zones: pd.DataFrame
+) -> None:
+    zones = tuple(sorted(set(daily_zones["location"])))
+    counts = weekly_zone_counts(daily_zones, task.vintage)
+    zt = zone_task(task, counts, zones, pd.concat([daily, daily_zones]))
+    zt = dataclasses.replace(zt, locations=zt.locations[:60])
+    out = RandomWalkNowcast().forecast(zt)
+    check_samples(out, zt)

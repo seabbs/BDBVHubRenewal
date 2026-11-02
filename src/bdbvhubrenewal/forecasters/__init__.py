@@ -2,7 +2,8 @@
 """Forecasters: the interface every model meets, the registry and the models.
 
 - `base`: `ForecastTask`, the `ForecastModel` protocol and the registry.
-- `randomwalk`: the random walk baseline, and random walk on a nowcast.
+- `randomwalk`: the random walk baseline, and random walk on a nowcast,
+  with `chain` (the daily chain ladder), `pooling`, `skellam` and `walk`.
 - `renewal`: the renewal variants, the adapter from a `ForecastTask` to
   the PyRenew model in `bdbvhubrenewal.model`.
 - `zones`: health-zone forecasts split from any model's province samples.
@@ -18,6 +19,7 @@ from bdbvhubrenewal.forecasters.base import (
     ForecastModel,
     ForecastTask,
     ModelSpec,
+    ModelUnavailableError,
     add_national,
     check_samples,
     get_model,
@@ -27,8 +29,6 @@ from bdbvhubrenewal.forecasters.base import (
 from bdbvhubrenewal.forecasters.randomwalk import (
     RandomWalk,
     RandomWalkNowcast,
-    completeness_lag,
-    last_complete_week,
 )
 from bdbvhubrenewal.forecasters.renewal import VARIANTS, RenewalModel
 
@@ -39,14 +39,13 @@ __all__ = [
     "ForecastModel",
     "ForecastTask",
     "ModelSpec",
+    "ModelUnavailableError",
     "RandomWalk",
     "RandomWalkNowcast",
     "RenewalModel",
     "add_national",
     "check_samples",
-    "completeness_lag",
     "get_model",
-    "last_complete_week",
     "list_models",
     "register_model",
 ]

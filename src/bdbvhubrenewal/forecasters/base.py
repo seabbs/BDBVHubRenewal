@@ -25,6 +25,7 @@ __all__ = [
     "ForecastModel",
     "ForecastTask",
     "ModelSpec",
+    "ModelUnavailableError",
     "add_national",
     "check_samples",
     "get_model",
@@ -37,6 +38,13 @@ NATIONAL = "CD"
 
 SAMPLE_COLUMNS = ("location", "target_end_date", "sample", "value")
 """Columns of a model's sample output."""
+
+
+class ModelUnavailableError(ValueError):
+    """A model cannot forecast a task, because its data are missing.
+
+    The backtest skips the task for that model and says so.
+    """
 
 
 @dataclass(frozen=True)

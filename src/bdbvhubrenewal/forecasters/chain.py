@@ -1,0 +1,593 @@
+# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+r"""Daily chain ladder on release snapshots, with its uncertainty.
+
+Counts $N_r(t)$ are the daily onsets of release $r$, on the onset clock.
+Release $r$ has cut-off $c_r$, and day $t$ is $a = c_r - t$ days old.
+A pair of consecutive releases $(r, r + 1)$ has step
+$s = c_{r+1} - c_r$ days and is in window when $s \le D$.
+
+**Delay.** For step $s$ and age $x = 0, \dots, D - 1$,
+
+$$
+F_s(x) = \frac{\sum N_{r+1}(t)}{\sum N_r(t)},
+$$
+
+summed over in-window pairs of step $s$ and over days of age $x$ that
+both releases observe.
+Cells a release does not observe are skipped, not filled.
+An age with no cases in the denominator is not identified, and takes its
+parent's factor.
+
+**Nowcast.** At the latest release $o$, with $s_o$ the step of its latest
+in-window pair, day $t$ is chained over the actual release gap,
+
+$$
+\mu(t) = N_o(t) \prod_{m=0}^{M-1} F_{s_o}(a + m s_o),
+$$
+
+with $M$ the fewest steps taking the age to $D$ or more.
+Every day with data is nowcast.
+Daily nowcasts are summed to hub weeks.
+
+**Uncertainty.** A release $r < o$ with an in-window pair at $r$ nowcasts
+the count expected at $o$ for days up to $c_r$.
+It chains over the gap $c_o - c_r$ only, using the nearest earlier pair's
+factor for each remaining part of the gap.
+Only plans within `max_mismatch` days of the gap are kept.
+The errors by weeks back give the Skellam spread (`skellam`).
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field
+
+import jax.numpy as jnp
+import numpy as np
+
+from bdbvhubrenewal.baselinenowcast import (
+    ChainPlan,
+    chain_growth,
+    pair_factors,
+    pair_sums,
+)
+from bdbvhubrenewal.data.snapshots import SnapshotArrays, weekly_sums
+from bdbvhubrenewal.forecasters.base import ModelUnavailableError
+from bdbvhubrenewal.forecasters.pooling import (
+    MIN_ERRORS,
+    MIN_LEVEL,
+    pool_matrix,
+    source_index,
+)
+from bdbvhubrenewal.forecasters.skellam import rho_from_sums, rho_sums
+
+__all__ = [
+    "MissingSnapshots",
+    "NoDelayPair",
+    "Origin",
+    "Settings",
+    "UnidentifiedDelay",
+    "build_origin",
+    "final_plan",
+    "retro_plan",
+]
+
+log = logging.getLogger(__name__)
+
+
+class MissingSnapshots(ModelUnavailableError):  # noqa: N818
+    """The task has no daily release snapshots."""
+
+
+class NoDelayPair(ModelUnavailableError):  # noqa: N818
+    """No pair of releases has a step within the delay window."""
+
+
+class UnidentifiedDelay(ModelUnavailableError):  # noqa: N818
+    """A delay factor needed by the nowcast has no cases behind it."""
+
+
+@dataclass(frozen=True)
+class Settings:
+    """Settings shared by the random walk models.
+
+    Attributes
+    ----------
+    max_delay : int
+        $D$, the days a count may still grow, baselinenowcast's
+        `max_delay`.
+    min_level : float
+        Cases a week for a place to use its own estimates.
+    min_errors : int
+        Errors at a horizon for a Skellam spread.
+    level_weeks : tuple of int
+        First and last weeks back averaged for a place's level.
+    max_mismatch : int
+        Days by which a retrospective plan may differ from the gap.
+    completeness : float
+        Share of a week's final count that must be reported for it to
+        start the random walk.
+    walk_weeks : int
+        Weeks, ending at the start week, whose changes set the spread.
+    """
+
+    max_delay: int = 42
+    min_level: float = MIN_LEVEL
+    min_errors: int = MIN_ERRORS
+    level_weeks: tuple[int, int] = (3, 6)
+    max_mismatch: int = 1
+    completeness: float = 0.95
+    walk_weeks: int = 9
+
+
+@dataclass
+class DelayFit:
+    """Delay factors at a release, as each place uses them.
+
+    Attributes
+    ----------
+    pairs : numpy.ndarray
+        Earlier and later release of each in-window pair, `[P, 2]`.
+    steps : numpy.ndarray
+        Distinct steps in days, `[S]`.
+    pair_step : numpy.ndarray
+        Index in `steps` of each pair, `[P]`.
+    factors : numpy.ndarray
+        $F$ for each place, `[L, S, D]`, from its source.
+    identified : numpy.ndarray
+        Whether each factor has cases behind it, `[L, S, D]`.
+    level : numpy.ndarray
+        Cases a week of each place, `[L]`.
+    source : numpy.ndarray
+        Index of the estimate each place uses, `[L]`, as for
+        `source_index`. The factors of a place are its parent's pooled
+        factors, which are the parent's own.
+    """
+
+    pairs: np.ndarray
+    steps: np.ndarray
+    pair_step: np.ndarray
+    factors: np.ndarray
+    identified: np.ndarray
+    level: np.ndarray
+    source: np.ndarray
+
+
+def _week_sum(x: np.ndarray, snap: SnapshotArrays) -> np.ndarray:
+    """Sum `[L, T]` day values to hub weeks, `[L, W]`."""
+    onehot = np.zeros((snap.week.size, snap.n_weeks))
+    onehot[np.arange(snap.week.size), snap.week] = 1.0
+    return x @ onehot
+
+
+def weeks_back(snap: SnapshotArrays, r: int, max_delay: int) -> int:
+    r"""Return the number of weeks back from the as-of week with young days.
+
+    Parameters
+    ----------
+    snap : SnapshotArrays
+        The arrays.
+    r : int
+        Release index.
+    max_delay : int
+        $D$.
+
+    Returns
+    -------
+    int
+        $K$: weeks back $k = 0, \dots, K - 1$ hold a day younger than
+        $D$.
+    """
+    youngest = max(int(snap.cut[r]) - max_delay + 1, 0)
+    return snap.asof_week(r) - int(snap.week[youngest]) + 1
+
+
+def levels(snap: SnapshotArrays, r: int, settings: Settings) -> np.ndarray:
+    """Return mean weekly counts over the level weeks at release `r`."""
+    weekly = weekly_sums(snap, r)
+    wa = snap.asof_week(r)
+    lo, hi = settings.level_weeks
+    cols = [wa - k for k in range(lo, hi + 1)]
+    vals = [weekly[:, c] if c >= 0 else np.zeros(weekly.shape[0]) for c in cols]
+    return np.mean(vals, axis=0)
+
+
+def _pairs_at(snap: SnapshotArrays, r: int, max_delay: int) -> np.ndarray:
+    """Return the in-window pairs among releases up to `r`."""
+    out = [
+        (q, q + 1)
+        for q in range(r)
+        if 0 < snap.cut[q + 1] - snap.cut[q] <= max_delay
+    ]
+    return np.array(out, dtype=np.int64).reshape(-1, 2)
+
+
+def fit_delay(
+    snap: SnapshotArrays, r: int, settings: Settings
+) -> DelayFit | None:
+    """Estimate the delay factors from the pairs up to release `r`.
+
+    Parameters
+    ----------
+    snap : SnapshotArrays
+        The arrays.
+    r : int
+        Release index. Pairs of later releases are not used.
+    settings : Settings
+        Settings.
+
+    Returns
+    -------
+    DelayFit or None
+        The factors, or None with no in-window pair.
+    """
+    pairs = _pairs_at(snap, r, settings.max_delay)
+    if pairs.size == 0:
+        return None
+    gaps = snap.cut[pairs[:, 1]] - snap.cut[pairs[:, 0]]
+    steps = np.unique(gaps)
+    pair_step = np.searchsorted(steps, gaps)
+    num, den = pair_sums(
+        jnp.asarray(snap.counts),
+        jnp.asarray(snap.observed),
+        jnp.asarray(snap.cut),
+        jnp.asarray(pairs),
+        settings.max_delay,
+    )
+    f, ident = pair_factors(num, den, jnp.asarray(pair_step), len(steps))
+    f, ident = np.array(f), np.array(ident)
+    for n in range(f.shape[0]):
+        p = snap.parent[n]
+        if p >= 0:
+            f[n] = np.where(ident[n], f[n], f[p])
+            ident[n] = ident[n] | ident[p]
+    level = levels(snap, r, settings)
+    source = source_index(level, snap.parent, min_level=settings.min_level)
+    node = source % len(level)
+    return DelayFit(
+        pairs, steps, pair_step, f[node], ident[node], level, source
+    )
+
+
+def final_plan(
+    snap: SnapshotArrays, o: int, fit: DelayFit, settings: Settings
+) -> ChainPlan:
+    """Chain each day over the steps of the latest pair, with no tail.
+
+    Parameters
+    ----------
+    snap : SnapshotArrays
+        The arrays.
+    o : int
+        The origin release.
+    fit : DelayFit
+        Factors at the origin.
+    settings : Settings
+        Settings.
+
+    Returns
+    -------
+    ChainPlan
+        For each day, the steps from its age until the age reaches $D$.
+    """
+    d = settings.max_delay
+    last = len(fit.pairs) - 1
+    s = int(fit.steps[fit.pair_step[last]])
+    age0 = snap.cut[o] - np.arange(snap.week.size)
+    m = np.arange(-(-d // s))
+    age = age0[:, None] + m[None, :] * s
+    valid = (age0 >= 0)[:, None] & (age < d)
+    step = np.full(age.shape, fit.pair_step[last])
+    return ChainPlan(jnp.asarray(step), jnp.asarray(age), jnp.asarray(valid))
+
+
+def retro_plan(
+    snap: SnapshotArrays, r: int, o: int, fit: DelayFit, settings: Settings
+) -> tuple[ChainPlan, int]:
+    """Chain each day from release `r` over the gap to release `o`.
+
+    Each part of the remaining gap uses the pair whose step is nearest
+    (ties to the latest pair). Ages are never interpolated.
+
+    Parameters
+    ----------
+    snap : SnapshotArrays
+        The arrays.
+    r, o : int
+        The earlier release and the origin.
+    fit : DelayFit
+        Factors at release `r`.
+    settings : Settings
+        Settings.
+
+    Returns
+    -------
+    tuple
+        The plan, and the days by which its steps differ from the gap.
+    """
+    d = settings.max_delay
+    gap = int(snap.cut[o] - snap.cut[r])
+    sizes = snap.cut[fit.pairs[:, 1]] - snap.cut[fit.pairs[:, 0]]
+    recency = r - fit.pairs[:, 0]
+    seq: list[int] = []
+    left = gap
+    while left > 0:
+        j = int(np.argmin(np.abs(sizes - left) + 1e-3 * recency))
+        seq.append(j)
+        left -= int(sizes[j])
+    age0 = snap.cut[r] - np.arange(snap.week.size)
+    taken = np.concatenate([[0], np.cumsum(sizes[seq])])[: len(seq)]
+    age = age0[:, None] + taken[None, :]
+    valid = (age0 >= 0)[:, None] & (age < d)
+    step = np.broadcast_to(fit.pair_step[seq], age.shape)
+    mismatch = abs(int(sizes[seq].sum()) - gap)
+    plan = ChainPlan(jnp.asarray(step), jnp.asarray(age), jnp.asarray(valid))
+    return plan, mismatch
+
+
+def _grow(
+    fit: DelayFit, plan: ChainPlan, counts: np.ndarray
+) -> tuple[np.ndarray, bool]:
+    """Return growth `[L, T]` and whether every needed factor is identified."""
+    g = np.array(chain_growth(jnp.asarray(fit.factors), plan))
+    ok = np.array(chain_growth(jnp.asarray(fit.identified, jnp.float32), plan))
+    return g, bool(np.all((ok > 0.5) | (counts <= 0)))
+
+
+@dataclass
+class Errors:
+    """Retrospective errors by place and weeks back, summed over releases.
+
+    Attributes
+    ----------
+    num, den, n : numpy.ndarray
+        The sums behind the Skellam spread, `[L, K]`.
+    releases : list of str
+        Releases that gave errors.
+    """
+
+    num: np.ndarray
+    den: np.ndarray
+    n: np.ndarray
+    releases: list[str] = field(default_factory=list)
+
+
+def retro_errors(snap: SnapshotArrays, o: int, settings: Settings) -> Errors:
+    """Collect the errors of nowcasts made at earlier releases.
+
+    Parameters
+    ----------
+    snap : SnapshotArrays
+        The arrays.
+    o : int
+        The origin release.
+    settings : Settings
+        Settings.
+
+    Returns
+    -------
+    Errors
+        Sums over the releases that give errors.
+    """
+    n_loc = len(snap.locations)
+    k_n = weeks_back(snap, o, settings.max_delay)
+    out = Errors(
+        np.zeros((n_loc, k_n)), np.zeros((n_loc, k_n)), np.zeros((n_loc, k_n))
+    )
+    for r in range(1, o):
+        fit = fit_delay(snap, r, settings)
+        if fit is None:
+            continue
+        plan, mismatch = retro_plan(snap, r, o, fit, settings)
+        if mismatch > settings.max_mismatch:
+            continue
+        counts = snap.counts[:, r, :]
+        g, ok = _grow(fit, plan, counts)
+        if not ok:
+            log.info(
+                "Release %s has unidentified factors, skipped.",
+                snap.releases[r],
+            )
+            continue
+        wa, k_r = snap.asof_week(r), weeks_back(snap, r, settings.max_delay)
+        cols = wa - np.arange(k_n)
+        take = (cols >= 0) & (np.arange(k_n) < k_r)
+        safe = np.clip(cols, 0, None)
+        obs = weekly_sums(snap, r)[:, safe]
+        pred = _week_sum(counts * g, snap)[:, safe]
+        tgt = weekly_sums(snap, o, upto=int(snap.cut[r]))[:, safe]
+        valid = take[None, :] & ((obs > 0) | (pred > 0))
+        num, den, n = rho_sums(
+            obs[None], pred[None], tgt[None], valid[None], axis=0
+        )
+        out.num += num
+        out.den += den
+        out.n += n
+        out.releases.append(snap.releases[r])
+    return out
+
+
+@dataclass
+class Origin:
+    r"""Everything the random walk models need at one release.
+
+    Attributes
+    ----------
+    snap : SnapshotArrays
+        The arrays.
+    o : int
+        The origin release.
+    settings : Settings
+        Settings.
+    fit : DelayFit
+        Delay factors at the origin.
+    growth : numpy.ndarray
+        $G$ for each place and day, `[L, T]`.
+    reported : numpy.ndarray
+        Counts reported at the origin by hub week, `[L, W]`.
+    point : numpy.ndarray
+        Nowcast mean by hub week, `[L, W]`.
+    complete : numpy.ndarray
+        Estimated share reported, $\pi$, `[L, W]`.
+    start : numpy.ndarray
+        Week index where `randomwalk` starts, `[L]`.
+    sigma : numpy.ndarray
+        Spread of the walk, `[L]`.
+    sigma_source : numpy.ndarray
+        Index of the estimate behind each spread, `[L]`, as for
+        `source_index`.
+    """
+
+    snap: SnapshotArrays
+    o: int
+    settings: Settings
+    fit: DelayFit
+    growth: np.ndarray
+    reported: np.ndarray
+    point: np.ndarray
+    complete: np.ndarray
+    start: np.ndarray
+    sigma: np.ndarray
+    sigma_source: np.ndarray
+    errors: Errors | None = None
+    rho: np.ndarray | None = None
+    rho_n: np.ndarray | None = None
+    rho_source: np.ndarray | None = None
+
+    @property
+    def start_nowcast(self) -> int:
+        """Latest week whose seven days are all on or before the cut-off."""
+        sat = np.array(
+            [
+                np.flatnonzero(self.snap.week == w).max()
+                for w in range(self.snap.n_weeks)
+            ]
+        )
+        full = np.flatnonzero(sat <= self.snap.cut[self.o])
+        return int(full.max()) if full.size else 0
+
+
+def build_origin(
+    snap: SnapshotArrays, settings: Settings, errors: bool
+) -> Origin:
+    """Fit the delay and the walk spread at the latest release.
+
+    Parameters
+    ----------
+    snap : SnapshotArrays
+        The arrays. The origin is the latest release.
+    settings : Settings
+        Settings.
+    errors : bool
+        Whether to estimate the Skellam spread.
+
+    Returns
+    -------
+    Origin
+        The fit.
+
+    Raises
+    ------
+    NoDelayPair
+        If no pair of releases has a step within the delay window.
+    UnidentifiedDelay
+        If a factor the nowcast needs has no cases behind it.
+    """
+    o = len(snap.releases) - 1
+    fit = fit_delay(snap, o, settings)
+    if fit is None:
+        raise NoDelayPair(
+            f"No pair of releases up to {snap.releases[o]} has a step of at "
+            f"most {settings.max_delay} days."
+        )
+    plan = final_plan(snap, o, fit, settings)
+    counts = snap.counts[:, o, :]
+    g, ok = _grow(fit, plan, counts)
+    if not ok:
+        raise UnidentifiedDelay(
+            f"A delay factor needed at {snap.releases[o]} has no cases "
+            "behind it, for the place or any parent."
+        )
+    reported = weekly_sums(snap, o)
+    point = _week_sum(counts * g, snap)
+    # A chain with a zero factor revises the day to nothing, so it counts
+    # as fully reported.
+    share = 1.0 / np.where(g > 0, g, 1.0)
+    inv = np.where(snap.observed[o][None, :], share, 0.0)
+    complete = _week_sum(inv, snap) / 7.0
+    good = complete >= settings.completeness
+    start = np.where(
+        good.any(axis=1), snap.n_weeks - 1 - np.argmax(good[:, ::-1], axis=1), 0
+    )
+    own, pooled = _walk_spreads(reported, start, snap, fit.level, settings)
+    both = np.concatenate([own, pooled])
+    sigma_source = fit.source
+    sigma = both[sigma_source]
+    origin = Origin(
+        snap, o, settings, fit, g, reported, point, complete, start, sigma,
+        sigma_source,
+    )  # fmt: skip
+    if errors:
+        _add_spread(origin)
+    return origin
+
+
+def _walk_spreads(
+    reported: np.ndarray,
+    start: np.ndarray,
+    snap: SnapshotArrays,
+    level: np.ndarray,
+    settings: Settings,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return each place's own and pooled spread of the weekly log changes."""
+    n_loc = reported.shape[0]
+    diffs = []
+    for n in range(n_loc):
+        lo = max(int(start[n]) - settings.walk_weeks + 1, 0)
+        x = np.log1p(reported[n, lo : int(start[n]) + 1])
+        diffs.append(np.diff(x))
+
+    def sd(x: np.ndarray) -> float:
+        return float(np.std(x, ddof=1)) if x.size >= 2 else 0.0
+
+    own = np.array([sd(d) for d in diffs])
+    pool = pool_matrix(level, snap.parent, settings.min_level)
+    pooled = np.array(
+        [
+            sd(np.concatenate([diffs[m] for m in np.flatnonzero(pool[n])]))
+            for n in range(n_loc)
+        ]
+    )
+    return own, pooled
+
+
+def _add_spread(origin: Origin) -> None:
+    """Estimate the Skellam spread by weeks back, with the one rule."""
+    snap, settings = origin.snap, origin.settings
+    errors = retro_errors(snap, origin.o, settings)
+    k_n = errors.n.shape[1]
+    pool = pool_matrix(origin.fit.level, snap.parent, settings.min_level)
+    own = rho_from_sums(errors.num, errors.den)
+    n_pooled = pool @ errors.n
+    pooled = rho_from_sums(pool @ errors.num, pool @ errors.den)
+    source = source_index(
+        origin.fit.level,
+        snap.parent,
+        errors.n,
+        n_pooled,
+        settings.min_level,
+        settings.min_errors,
+    )
+    k = np.arange(k_n)[None, :]
+    rho = np.concatenate([own, pooled])[source, k]
+    n_used = np.concatenate([errors.n, n_pooled])[source, k]
+    rho = np.where(n_used >= settings.min_errors, rho, 0.0)
+    origin.errors, origin.rho, origin.rho_n, origin.rho_source = (
+        errors, rho, n_used, source,
+    )  # fmt: skip
+    if errors.n.sum() == 0:
+        log.info(
+            "No retrospective errors at %s, so the spread is 0 and the "
+            "observation model is Poisson-Skellam.",
+            snap.releases[origin.o],
+        )
