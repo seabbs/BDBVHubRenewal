@@ -78,8 +78,13 @@ It runs on development vintages, for models that support the mask, so not `renew
 
 ## Health zones
 
-Zone forecasts are scored against zone `randomwalk`, which runs `randomwalk` on each zone's own series and does not sum to the provinces.
-Each real vintage before the latest is forecast, and every zone of a forecast province is scored, against zero where it has no cases.
+`randomwalk` and `randomwalknowcast` run on each zone's own release snapshots, for every zone with cases at the vintage.
+Zones use the same models as provinces.
+Each zone takes its own delay, Skellam spread and walk spread where it has at least 10 cases a week, else its province's, else national's.
+Each model is scored as it runs, and again with its zone samples made to sum to its province samples, as in the submitted file.
+Each real vintage before the latest is forecast, and origins with no pair of releases within the delay window are skipped, as for provinces.
+Zones are scored on every week against the zone counts as reported at the latest real vintage.
+Relative WIS is against `randomwalk` run at zone level.
 `bdbvhubrenewal zone-backtest` runs it and writes `results/zone-scores.csv`.
 
 ## Comparison with hub forecasts

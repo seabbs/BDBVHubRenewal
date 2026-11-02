@@ -44,7 +44,8 @@ to the zone model's own sample $x^{(k)}_z(w)$, by largest remainders, so
 the values are whole numbers that sum exactly to $Y^{(k)}(w)$:
 
 $$
-y^{(k)}_z(w) \approx Y^{(k)}(w)\, \frac{x^{(k)}_z(w)}{\sum_{z'} x^{(k)}_{z'}(w)}.
+y^{(k)}_z(w) \approx
+  Y^{(k)}(w)\, \frac{x^{(k)}_z(w)}{\sum_{z'} x^{(k)}_{z'}(w)}.
 $$
 
 Where every zone sample is 0 the split uses the Dirichlet mean shares of
@@ -281,7 +282,8 @@ def _apportion(total: np.ndarray, weights: np.ndarray) -> np.ndarray:
     base = np.floor(quota)
     left = total - base.sum(axis=-1)
     rank = np.argsort(np.argsort(-(quota - base), axis=-1, kind="stable"), -1)
-    return (base + (rank < left[..., None])).astype(np.int64)
+    out: np.ndarray = (base + (rank < left[..., None])).astype(np.int64)
+    return out
 
 
 def reconcile_zones(

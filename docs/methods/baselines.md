@@ -5,7 +5,7 @@ The three random walk baselines, with the maths of each.
 
 The data and notation are on the [Data methods page](data.md#target-and-notation).
 The renewal models are on the [Renewal models](model.md) page.
-Health-zone forecasts split the province samples of any baseline as described under [Health zones](model.md#health-zones).
+Both baselines also run at zone level, as described under [Health zones](model.md#health-zones).
 
 ## Random walk
 
