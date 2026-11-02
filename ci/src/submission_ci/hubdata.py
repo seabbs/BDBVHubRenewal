@@ -14,6 +14,7 @@ TARGET = "wk inc confirmed cases"
 SUBMISSION_COLUMNS = frozenset(
     {
         "reference_date",
+        "forecast_date",
         "target",
         "target_end_date",
         "location",
@@ -37,6 +38,7 @@ class Samples:
     columns: list[str]
     rows: int
     reference_dates: set[str] = field(default_factory=set)
+    forecast_dates: set[str] = field(default_factory=set)
     targets: set[str] = field(default_factory=set)
     output_types: set[str] = field(default_factory=set)
     # location -> sample id -> target_end_date -> value
@@ -67,12 +69,22 @@ class Samples:
         ]
 
 
-def read_samples(path: Path | str) -> Samples:
-    """Read a hub-format sample CSV."""
+def read_samples(path: Path | str, latest: bool = True) -> Samples:
+    """Read a hub-format sample CSV.
+
+    A resubmitted file holds several forecasts, one per `forecast_date`.
+    With `latest` only the newest is read, which is the one this run adds.
+    Every date is still listed in `forecast_dates`.
+    """
     with Path(path).open(newline="", encoding="utf-8") as fh:
         reader = csv.DictReader(fh)
         out = Samples(columns=list(reader.fieldnames or []), rows=0)
-        for line, row in enumerate(reader, start=2):
+        table = list(reader)
+        out.forecast_dates = {r.get("forecast_date", "") for r in table}
+        newest = max(out.forecast_dates, default="")
+        for line, row in enumerate(table, start=2):
+            if latest and row.get("forecast_date", "") != newest:
+                continue
             out.rows += 1
             out.reference_dates.add(row.get("reference_date", ""))
             out.targets.add(row.get("target", ""))

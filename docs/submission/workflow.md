@@ -57,6 +57,11 @@ It goes from `seabbs-bot/BDBV-Modeling-Hub`, branch `<model_id>-<reference_date>
 The body shows what was submitted, one status line, the plot and a link to the round's page.
 The details sit in collapsed sections.
 
+Every row carries a `forecast_date`, the day the PR is opened.
+If the hub's `main` already has this model's file for the round, the gate reads it (read only) and writes the file the PR holds as the hub's rows unchanged plus the new rows with one new `forecast_date` ([hub specification](hub-spec.md)).
+The same file goes through both validators.
+The submit step stops, without pushing, if the hub's file changed after the gate.
+
 A round's page is frozen once its pull request merges, and later docs builds do not change it ([Rounds](rounds/index.md)).
 
 <div class="pr-body-example" markdown>

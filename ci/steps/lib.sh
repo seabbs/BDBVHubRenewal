@@ -47,6 +47,30 @@ ctx_value() {
 [ -n "$MODEL" ] || MODEL=$(ctx_value model)
 [ -n "$MODEL_ID" ] || MODEL_ID=$(ctx_value model_id)
 
+# Resubmission in the same forecast week: if the hub's main branch already
+# has this model's file for the round, rewrite $1 as that file unchanged
+# plus its rows, with one new forecast_date (the hub's rule). The hub's
+# copy is read only, from raw GitHub, or from PREVIOUS_CHECKOUT (a local
+# copy of the hub, for the dry run). Sets PREVIOUS_FILE when there is one
+# and fails when the rows cannot be appended.
+#   MODEL_ID, REFERENCE_DATE
+append_previous() {
+  local csv=$1 prev="$WORK/hub-previous.csv" args found
+  PREVIOUS_FILE=""
+  rm -f "$prev"
+  args=(--model-id "$MODEL_ID" --reference-date "$REFERENCE_DATE" --out "$prev")
+  if [ -n "${PREVIOUS_CHECKOUT:-}" ]; then
+    args+=(--checkout "$PREVIOUS_CHECKOUT")
+  fi
+  found=$(sci python -m submission_ci.forecast_date fetch "${args[@]}")
+  [ "$found" = found ] || return 0
+  sci python -m submission_ci.forecast_date append --previous "$prev" \
+    --new "$csv" --out "$csv.appended"
+  mv "$csv.appended" "$csv"
+  PREVIOUS_FILE=$prev
+  export PREVIOUS_FILE
+}
+
 # Before `prepare`: the chosen model and the configured hub id, from the
 # main repo. Called by `prepare` and by the gate's metadata step.
 resolve_model() {

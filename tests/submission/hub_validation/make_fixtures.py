@@ -22,8 +22,11 @@ ROOT = Path(__file__).resolve().parent
 OUT = ROOT / "fixtures" / "constructed"
 MODEL_ID = "testteam-testmodel"
 REF = "2026-10-31"
+FORECAST = "2026-10-20"
+"""A forecast date on or before every reference date the fixtures use."""
 COLS = [
     "reference_date",
+    "forecast_date",
     "target",
     "target_end_date",
     "location",
@@ -80,6 +83,7 @@ def trajectories(
         rows.append(
             {
                 "reference_date": REF,
+                "forecast_date": FORECAST,
                 "target": TARGET,
                 "target_end_date": w,
                 "location": loc,
@@ -193,6 +197,30 @@ def submissions() -> None:
                 ),
             )
             for r in diff
+        ],
+    )
+
+    write(
+        "invalid_forecast_date_missing",
+        b,
+        cols=[c for c in COLS if c != "forecast_date"],
+    )
+    write(
+        "invalid_forecast_date_format",
+        [dict(r, forecast_date="20/10/2026") for r in b],
+    )
+    write(
+        "invalid_forecast_date_after_reference",
+        [dict(r, forecast_date="2026-11-01") for r in b],
+    )
+    # A new file adds one forecast date, so two dates are rejected.
+    write(
+        "invalid_forecast_dates_two",
+        [
+            dict(r, forecast_date="2026-10-21")
+            if int(r["output_type_id"]) > 50
+            else r
+            for r in b
         ],
     )
 

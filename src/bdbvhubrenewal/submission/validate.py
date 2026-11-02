@@ -360,14 +360,171 @@ def _invalid_values(rows: list[Row], rnd: Round, cols: list[str]) -> str:
     return " ".join(msgs) or "Invalid value combinations present."
 
 
+FORECAST_DATE = "forecast_date"
+"""Column the hub validates in its own script, not through `tasks.json`."""
+
+RECENCY_DAYS = 1
+"""How far a new forecast date may be from the validation date."""
+
+
+def parse_iso_date(value: str) -> date | None:
+    """Parse a strict `YYYY-MM-DD` date, or None for `NA` and timestamps."""
+    if not DATE_RE.match(value) or value.startswith("0000"):
+        return None
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError:
+        return None
+    return parsed if parsed.isoformat() == value else None
+
+
+def _row_key(row: Row, cols: list[str]) -> tuple[str, ...]:
+    return tuple(row.get(c, "") for c in cols)
+
+
+def forecast_date_problems(
+    rows: list[Row],
+    cols: list[str],
+    previous: list[Row] | None = None,
+    previous_cols: list[str] | None = None,
+    today: date | None = None,
+) -> tuple[list[tuple[str, str]], list[int]]:
+    """Apply the hub's `forecast_date` rules to a file's rows.
+
+    These follow `src/validate-submission.R` in the hub: the column is
+    present once, every value is a valid `YYYY-MM-DD` date on or before the
+    row's `reference_date`, and the file holds only the base file's rows
+    (unchanged, duplicates counted) plus rows with exactly one new
+    forecast date. Without a base file, all rows are new. A new date must
+    be within a day of `today` when `today` is given.
+
+    Returns
+    -------
+    tuple
+        `(problems, new_rows)`. Problems are `(check, message)` pairs, at
+        most one, as the hub stops at its first failure. `new_rows` are
+        the indices of the rows added by this submission.
+    """
+    if cols.count(FORECAST_DATE) != 1:
+        return [
+            (
+                "forecast_date_column",
+                f"The `{FORECAST_DATE}` column must be present exactly once.",
+            )
+        ], []
+    dates = [r.get(FORECAST_DATE, "") for r in rows]
+    parsed = [parse_iso_date(d) for d in dates]
+    bad = [i for i, d in enumerate(parsed) if d is None]
+    if bad:
+        return [
+            (
+                "forecast_date_valid",
+                f"`{FORECAST_DATE}` must be a nonblank YYYY-MM-DD date; "
+                f'CSV line {bad[0] + 2} has "{dates[bad[0]]}".',
+            )
+        ], []
+    refs = [parse_iso_date(r.get("reference_date", "")) for r in rows]
+    if any(r is None for r in refs):
+        return [
+            (
+                "forecast_date_valid",
+                "`reference_date` must be a YYYY-MM-DD date.",
+            )
+        ], []
+    # Valid ISO dates sort as text in date order.
+    late = [
+        i for i, r in enumerate(rows) if dates[i] > r.get("reference_date", "")
+    ]
+    if late:
+        return [
+            (
+                "forecast_date_le_reference",
+                f"`{FORECAST_DATE}` must be on or before `reference_date`; "
+                f"CSV line {late[0] + 2} has {dates[late[0]]} after "
+                f"{refs[late[0]]}.",
+            )
+        ], []
+    if previous is None:
+        new_idx = list(range(len(rows)))
+    else:
+        pcols = previous_cols or []
+        if FORECAST_DATE not in pcols:
+            return [
+                (
+                    "forecast_date_preserved",
+                    "The hub's copy of this file has no `forecast_date` "
+                    "column, so it cannot be appended to.",
+                )
+            ], []
+        if sorted(pcols) != sorted(cols):
+            return [
+                (
+                    "forecast_date_preserved",
+                    "An appended submission must keep the existing file's "
+                    "columns.",
+                )
+            ], []
+        old = {r[FORECAST_DATE] for r in previous}
+        kept = [i for i, d in enumerate(dates) if d in old]
+        same = Counter(
+            _row_key(rows[i], sorted(cols)) for i in kept
+        ) == Counter(_row_key(r, sorted(cols)) for r in previous)
+        if not same:
+            return [
+                (
+                    "forecast_date_preserved",
+                    "Every existing row must be kept unchanged, duplicates "
+                    "included, and new rows need a new `forecast_date`.",
+                )
+            ], []
+        new_idx = [i for i, d in enumerate(dates) if d not in old]
+    new_dates = sorted({dates[i] for i in new_idx})
+    if len(new_dates) != 1:
+        return [
+            (
+                "forecast_date_one_new",
+                "A submission must add exactly one new `forecast_date`; "
+                f"found {new_dates or 'none'}.",
+            )
+        ], []
+    if today is not None:
+        gap = abs((date.fromisoformat(new_dates[0]) - today).days)
+        if gap > RECENCY_DAYS:
+            return [
+                (
+                    "forecast_date_recent",
+                    f"The new `forecast_date` {new_dates[0]} must be within "
+                    f"{RECENCY_DAYS} day of today ({today.isoformat()}) in "
+                    "the hub's timezone.",
+                )
+            ], []
+    return [], new_idx
+
+
+def read_rows(path: str | Path) -> tuple[list[str], list[Row]]:
+    """Read a CSV as text, as the hub's validation does."""
+    with Path(path).open(newline="", encoding="utf-8-sig") as fh:
+        reader = csv.DictReader(fh)
+        cols = list(reader.fieldnames or [])
+        return cols, [dict(r) for r in reader]
+
+
 def validate_submission(
     file: str | Path,
     hub: Hub,
     metadata_dirs: Iterable[Path] = (),
     now: datetime | None = None,
     skip_window: bool = False,
+    previous: str | Path | None = None,
 ) -> Report:
-    """Run all model-output checks on one file."""
+    """Run all model-output checks on one file.
+
+    The hub's `forecast_date` checks run first. `previous` is the file now
+    on the hub's main branch at the same path, if any. The window check
+    and the check that the new forecast date is recent are both skipped
+    with `skip_window`. The standard checks then see only the new rows,
+    without `forecast_date`, as in the hub's own workflow.
+    """
     fp = Path(file)
     rep = Report(str(file))
 
@@ -411,6 +568,9 @@ def validate_submission(
         fail_message=f'Extension "{meta["ext"]}" not in {hub.file_formats}.',
     ):
         return rep
+    clock = now or datetime.now(hub.timezone)
+    if clock.tzinfo is None:
+        clock = clock.replace(tzinfo=hub.timezone)
     dirs = [*metadata_dirs, hub.path / "model-metadata"]
     rep.add(
         "metadata_exists",
@@ -422,9 +582,7 @@ def validate_submission(
         rep.skip("submission_time", "Submission window check skipped.")
     else:
         start, end = hub.submission_window(rnd, round_id)
-        t = now or datetime.now(hub.timezone)
-        if t.tzinfo is None:
-            t = t.replace(tzinfo=hub.timezone)
+        t = clock
         rep.add(
             "submission_time",
             start <= t <= end,
@@ -469,6 +627,44 @@ def validate_submission(
         + "; ".join(bad_read[:5]),
     ):
         return rep
+
+    # The hub's own forecast_date checks, then the standard ones on the
+    # rows this submission adds, without that column. Files of the
+    # round's first, cumulative target have neither column and are not
+    # subject to them.
+    if FORECAST_DATE in cols or "target_end_date" in cols:
+        prev_cols: list[str] | None = None
+        prev_rows: list[Row] | None = None
+        if previous is not None:
+            try:
+                prev_cols, prev_rows = read_rows(previous)
+            except (OSError, csv.Error, UnicodeDecodeError) as e:
+                rep.add(
+                    "forecast_date_preserved",
+                    False,
+                    "",
+                    halt=True,
+                    fail_message=f"The hub's copy could not be read: {e}",
+                )
+                return rep
+        today = None if skip_window else clock.astimezone(hub.timezone).date()
+        problems, new_idx = forecast_date_problems(
+            rows, cols, prev_rows, prev_cols, today
+        )
+        for check, message in problems:
+            rep.add(check, False, "", halt=True, fail_message=message)
+        if problems:
+            return rep
+        rep.add(
+            "forecast_date",
+            True,
+            "`forecast_date` is valid and adds one new date.",
+        )
+        rows = [
+            {k: v for k, v in rows[i].items() if k != FORECAST_DATE}
+            for i in new_idx
+        ]
+        cols = [c for c in cols if c != FORECAST_DATE]
 
     # Round id column.
     ric = rnd.round_id
@@ -980,7 +1176,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Extra directory to search for <model_id>.yml.",
     )
     ap.add_argument("--now", help="ISO 8601 time for the window check.")
-    ap.add_argument("--skip-window", action="store_true")
+    ap.add_argument(
+        "--skip-window",
+        action="store_true",
+        help="Skip the submission window and forecast date recency checks.",
+    )
+    ap.add_argument(
+        "--previous",
+        type=Path,
+        help="The file at the same path on the hub's main branch, if any.",
+    )
     ap.add_argument("--json", type=Path, help="Write results as JSON.")
     a = ap.parse_args(argv)
     hub = Hub.load(a.hub)
@@ -992,6 +1197,7 @@ def main(argv: list[str] | None = None) -> int:
             metadata_dirs=a.metadata_dir,
             now=now,
             skip_window=a.skip_window,
+            **({"previous": a.previous} if f.suffix == ".csv" else {}),
         )
         for f in a.files
     ]

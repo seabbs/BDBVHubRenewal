@@ -45,6 +45,7 @@ from .common import (
     set_outputs,
     subprocess_runner,
 )
+from .forecast_date import problems, read_rows
 from .window import window_for
 
 ASSETS_BRANCH = "submission-assets"
@@ -237,6 +238,19 @@ def submit(
     # a fallback (such as random walk) produced it.
     rel = f"model-output/{model_id}/{reference_date}-{model_id}.csv"
     (work / rel).parent.mkdir(parents=True, exist_ok=True)
+    if (work / rel).exists():
+        # The gate appended to the hub's file as it stood then. If the hub
+        # has changed it since, the rows would no longer be a pure append.
+        on_hub = read_rows(work / rel)
+        added = read_rows(submission)
+        found = problems(added[0], added[1], on_hub)
+        if found and added != on_hub:
+            return Outcome(
+                "skipped-changed-on-hub",
+                branch,
+                message=f"{rel} changed on {hub} main after the gate: "
+                f"{found[0]}",
+            )
     shutil.copyfile(submission, work / rel)
     paths = [rel]
     if metadata is not None:

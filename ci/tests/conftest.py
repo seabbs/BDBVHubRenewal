@@ -19,6 +19,8 @@ FIXTURES = Path(__file__).parents[1] / "fixtures"
 HUB = FIXTURES / "hub"
 REF = "2026-11-07"
 AS_OF = "2026-10-31"
+FORECAST_DATE = "2026-11-02"
+"""The run date, within the hub's window for REF."""
 PROVINCES = {"CD-IT": 200.0, "CD-NK": 80.0, "CD-HU": 15.0}
 
 Handler = Callable[[Sequence[str]], CommandResult]
@@ -103,13 +105,31 @@ def make_samples(
                 g = growth ** max(0, k - 7)
                 v = float(round(level * noise * g))
                 rows.append(
-                    [ref, "wk inc confirmed cases", w, loc, "sample", s, v]
+                    [
+                        ref,
+                        "wk inc confirmed cases",
+                        w,
+                        loc,
+                        "sample",
+                        s,
+                        v,
+                        FORECAST_DATE,
+                    ]
                 )
                 totals[(s, w)] = totals.get((s, w), 0.0) + v
     if national:
         for (s, w), v in totals.items():
             rows.append(
-                [ref, "wk inc confirmed cases", w, "CD", "sample", s, v]
+                [
+                    ref,
+                    "wk inc confirmed cases",
+                    w,
+                    "CD",
+                    "sample",
+                    s,
+                    v,
+                    FORECAST_DATE,
+                ]
             )
     if mutate:
         mutate(rows)
@@ -133,6 +153,7 @@ def write_samples(
                 "output_type",
                 "output_type_id",
                 "value",
+                "forecast_date",
             ]
         )
         w.writerows(rows)

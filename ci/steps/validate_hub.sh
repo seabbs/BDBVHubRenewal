@@ -10,6 +10,8 @@
 #   2. scripts/validate-hub.R (hubValidations, the hub's own checks),
 #      unless R_VALIDATION=false.
 #
+# Both see the appended file and the hub's copy when the hub already has
+# this round's file (forecast_date rules, see lib.sh `append_previous`).
 # Either failing fails the candidate. Set HUB_VALIDATOR to replace both
 # with one command, called as `$HUB_VALIDATOR <hub_path> <csv> <metadata>`
 # (the dry-run harness uses `true`).
@@ -28,6 +30,9 @@ csv="$stage/$MODEL_ID/$REFERENCE_DATE-$MODEL_ID.csv"
 yml="$stage/$MODEL_ID.yml"
 cp "$submission" "$csv"
 cp "$METADATA" "$yml"
+# A resubmission is checked as the file the PR will hold: the hub's file
+# unchanged plus this forecast, against the hub's file.
+append_previous "$csv"
 
 if [ -n "${HUB_VALIDATOR:-}" ]; then
   $HUB_VALIDATOR "$HUB_PATH" "$csv" "$yml"
@@ -39,10 +44,15 @@ if [ "${CHECK_WINDOW:-false}" = "true" ]; then
   window=()
 fi
 echo "== hub_validate (Python)"
+prev=()
+if [ -n "${PREVIOUS_FILE:-}" ]; then
+  prev=(--previous "$PREVIOUS_FILE")
+fi
 cli validate --hub "$HUB_PATH" --metadata-dir "$stage" ${window[@]+"${window[@]}"} \
+  ${prev[@]+"${prev[@]}"} \
   --json "$stage/py-validation.json" "$csv" "$yml"
 if [ "${R_VALIDATION:-true}" != "false" ]; then
   echo "== hubValidations (R)"
-  VALIDATION_JSON="$stage/r-validation.json" \
+  VALIDATION_JSON="$stage/r-validation.json" PREVIOUS="${PREVIOUS_FILE:-}" \
     Rscript scripts/validate-hub.R "$HUB_PATH" "$csv" "$yml"
 fi

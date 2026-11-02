@@ -25,14 +25,16 @@ A pinned copy of the three config files is in `fixtures/hub-snapshot/hub-config/
 - The directory name must equal the `model_id` in the file name (hubValidations `file_location`, tested).
 - `team_abbr` and `model_abbr` match `^[a-zA-Z0-9_+]+$` with at most 16 characters each (S L11–26).
 - One file per model per round (hubValidations `file_n`).
+  A resubmission in the same forecast week keeps the file name and appends rows (section 2a).
 
 ## 2. Columns and types
 
-Exactly these seven columns, in any order, and no others (MO L70–80, tested with `invalid_extra_column`, `invalid_missing_column` and `valid_reordered_columns`).
+Exactly these eight columns, in any order, and no others (MO README, tested with `invalid_extra_column`, `invalid_missing_column` and `valid_reordered_columns`).
 
 | column | type | rule |
 |---|---|---|
 | `reference_date` | date `YYYY-MM-DD` | a single value per file, equal to the file name date |
+| `forecast_date` | date `YYYY-MM-DD` | on or before `reference_date` in every row, see section 2a |
 | `target` | string | `wk inc confirmed cases` |
 | `target_end_date` | date `YYYY-MM-DD` | one of the listed Saturdays |
 | `location` | string | one of 546 listed codes |
@@ -41,7 +43,42 @@ Exactly these seven columns, in any order, and no others (MO L70–80, tested wi
 | `value` | double | finite, `>= 0`, not missing |
 
 The task id columns are `reference_date`, `location`, `target` and `target_end_date` (T L147–205).
+`forecast_date` is not a task id.
 There is no `horizon` column.
+
+## 2a. `forecast_date`
+
+The hub announced this column after the commit above.
+The rules here follow the hub's `model-output/README.md` and `src/validate-submission.R` as read on 2026-11-02.
+Where this page and the hub differ, the hub's text decides.
+
+- Every row has a nonblank, valid calendar date in exactly `YYYY-MM-DD`.
+  `NA`, timestamps and other formats are rejected.
+- Each row's `forecast_date` is on or before its `reference_date`.
+- A new file has exactly one `forecast_date` in all rows.
+  It is within one day of the date when validation runs in Africa/Kinshasa.
+  The hub takes the day once per run, so a later rerun can fail.
+- A resubmission appends rows to the file on the hub's `main` branch at the same path.
+  Every existing row is kept unchanged, including duplicate rows.
+  Row and column order may change.
+  The parsed cell text must not change, so `1.0` does not become `1`.
+- A resubmission adds rows with exactly one `forecast_date` that is not in the existing file.
+  No new rows, rows added to an existing date and several new dates all fail.
+  Retained dates are not checked for recency.
+- A resubmission does not extend the submission window.
+- The hub copies only the new rows, without `forecast_date`, into a temporary hub and runs hubValidations on them.
+  The 100 samples per task are counted for each forecast date.
+  Calling `hubValidations::validate_submission()` on the file directly rejects the column.
+
+This repository sets `forecast_date` to the day the PR is opened (the run date in UTC).
+UTC is within a day of Kinshasa, so the recency check holds.
+`bdbvhubrenewal nowcast` takes `--forecast-date` to set another day.
+`--append-hub-main` reads the hub's file for the round from raw GitHub (read only) and appends.
+The CI does the same for the model id that is submitted, after a candidate is chosen, so a fallback model appends to the file of the submitting id.
+`hub_validate.py` checks each rule above, with `--previous` for the hub's copy, and `--skip-window` also skips the recency check.
+The R wrapper drops the column and, given the hub's copy, the retained rows, as the hub's script does.
+If the hub's copy has no `forecast_date` column it cannot be appended to, as in the hub's script.
+If the hub's file already holds the run date, the candidate fails and the round is skipped until a later day.
 
 ## 3. Task ids
 
