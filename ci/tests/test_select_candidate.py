@@ -512,3 +512,12 @@ def test_baseline_track_lists_no_shadows(tmp_path: Path) -> None:
         pol, c, tmp_path / "g", always("pass"), retried=False, shadows=False
     )
     assert prov["shadows"] == []
+
+
+def test_no_refit_when_the_chain_has_none(tmp_path: Path) -> None:
+    # The single-patch track has no retry leg, so a failed fit is not
+    # refitted: the round is skipped instead.
+    pol = POLICY.for_model("renewalsp", only=True)
+    c = tmp_path / "c"
+    chain(c, renewalsp=("fail", "pass"))
+    assert not triage(pol, c)
