@@ -38,17 +38,31 @@ DELAY_WEEKS = 6
 PLACES = ("CD", "CD-IT", "CD-NK", "CD-HU", "CD-TO")
 
 
-def weekly_pair(daily: pd.DataFrame) -> tuple[str, str]:
-    """Return the latest two releases whose cut-offs are 7 days apart."""
+def weekly_pair(daily: pd.DataFrame) -> tuple[str, str, str, str]:
+    """Return the latest two releases whose cut-offs are 7 days apart.
+
+    Gives the two releases, then their cut-off days.
+    """
     cut = pd.to_datetime(daily["onset_date"]).groupby(daily["vintage"]).max()
     cut = cut.sort_index()
     for i in range(len(cut) - 1, 0, -1):
         if (cut.iloc[i] - cut.iloc[i - 1]).days == 7:
-            return str(cut.index[i - 1]), str(cut.index[i])
+            return (
+                str(cut.index[i - 1]),
+                str(cut.index[i]),
+                cut.iloc[i - 1].date().isoformat(),
+                cut.iloc[i].date().isoformat(),
+            )
     raise ValueError("No two releases have cut-offs one week apart.")
 
 
-def weekly_points(real: pd.DataFrame, earlier: str, later: str) -> pd.DataFrame:
+def weekly_points(
+    real: pd.DataFrame,
+    earlier: str,
+    later: str,
+    cut_earlier: str,
+    cut_later: str,
+) -> pd.DataFrame:
     """Grow the latest weeks of the later release with the weekly ladder."""
     wide = real.loc[real["vintage"].isin([earlier, later])].pivot_table(
         index=["location", "target_end_date"],
@@ -65,7 +79,7 @@ def weekly_points(real: pd.DataFrame, earlier: str, later: str) -> pd.DataFrame:
             row[earlier],
             row[later],
         ]
-    cut = np.array([weeks.index(earlier), weeks.index(later)])
+    cut = np.array([weeks.index(cut_earlier), weeks.index(cut_later)])
     observed = np.arange(len(weeks))[None, :] <= cut[:, None]
     counts = counts * observed[None]
     num, den = pair_sums(counts, observed, cut, np.array([0]), DELAY_WEEKS)
@@ -127,8 +141,8 @@ def make_crosscheck(
         load_daily(data_dir),
     )
     real = target.loc[target["kind"] == "real"]
-    earlier, later = weekly_pair(daily)
-    weekly = weekly_points(real, earlier, later)
+    earlier, later, cut_earlier, cut_later = weekly_pair(daily)
+    weekly = weekly_points(real, earlier, later, cut_earlier, cut_later)
     task = bt.make_tasks(
         real.loc[real["vintage"] == later],
         delays.assign(kind="real"),
