@@ -457,6 +457,33 @@ def test_renewal_track_is_the_main_model_and_its_refit_only() -> None:
     assert [c.id for c in pol.stage("retry")] == ["retry-1"]
 
 
+def test_renewal_track_can_carry_the_single_patch_model() -> None:
+    # With renewalsp as seabbs-renewal's model, its own leg is the chain.
+    # The main model is a shadow and its refit is dropped.
+    pol = POLICY.for_model("renewalsp", only=True)
+    assert [c.id for c in pol.chain()] == ["renewalsp"]
+    assert pol.get("main").kind == "shadow"
+    assert pol.stage("retry") == []
+    assert {c.id for c in pol.stage("primary")} == {"main", "renewalsp", "bvd"}
+
+
+def test_single_patch_track_never_falls_back(tmp_path: Path) -> None:
+    pol = POLICY.for_model("renewalsp", only=True)
+    c = tmp_path / "c"
+    chain(
+        c,
+        main=("pass", "pass"),
+        renewalsp=("fail", "pass"),
+        randomwalknowcast=(None, "pass"),
+        randomwalk=(None, "pass"),
+    )
+    prov = run_select(
+        pol, c, tmp_path / "g", always("pass"), False, False, only=True
+    )
+    assert prov["selected"] is None
+    assert "no other model is submitted in its place" in prov["reason"]
+
+
 def test_renewal_track_never_falls_back(tmp_path: Path) -> None:
     pol = POLICY.for_model("renewal", only=True)
     c = tmp_path / "c"
