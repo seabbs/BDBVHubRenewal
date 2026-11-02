@@ -77,8 +77,9 @@ Every table counts its forecasts, $n$.
 Each forecast row records the model, the start week of the walk, the number of errors behind the Skellam spread and the source of the delay, the spread and the walk.
 The run stops if a model has no snapshots or two models give identical samples.
 
-The weekly cross-check runs the port's snapshot chain ladder on hub weeks from the 2026-10-17 and 2026-10-24 releases, with a step of one week and national factors for every place.
-It is drawn over the `randomwalknowcast` intervals at 2026-10-24 and is not a model in the package.
+The weekly cross-check runs the snapshot chain ladder on hub weeks from the latest two releases with cut-offs a week apart, with a step of one week and national factors for every place.
+It checks the daily ladder for consistency on weekly data.
+It is drawn over the `randomwalknowcast` intervals at the later release and is not a model in the package.
 
 ## Rolling held-out evaluation
 

@@ -86,7 +86,6 @@ e = y_p(w) - \hat y_p(w),
 $$
 
 summed over the kept releases.
-$\rho_{p,k} = 0$ with fewer than 2 errors at $k$, and so is Poisson-Skellam.
 Weeks without a $\rho_{p,k}$ have $\rho = 0$.
 
 ## Own or pooled estimates

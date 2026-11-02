@@ -39,12 +39,11 @@ Recent weeks are revised upwards in later vintages, so each forecast is made fro
 `auxiliary-data/daily-confirmed-case.csv` holds, for each release, the daily onsets known at that release.
 The count of a day is its known plus imputed onsets, and the counts of a week sum to the hub's weekly target.
 A release has an `as_of` date and a data cut-off, its latest onset day over all places.
-For the four real releases the `as_of` dates are 2026-08-18, 2026-10-09, 2026-10-17 and 2026-10-24, and the cut-offs are 2026-08-18, 2026-10-07, 2026-10-16 and 2026-10-24.
 A release observes the days up to its cut-off, and a day in range with no row counts 0.
 The age of day $t$ at release $r$ is the cut-off minus $t$, the onset clock.
 Counts of a day are compared across releases on this clock.
 A release with a later release gives one pair of releases.
-Its step is the difference of the two cut-offs in days, 50, 9 and 8 days for the real pairs.
+Its step is the difference of the two cut-offs in days.
 
 ## Delay and missingness data
 

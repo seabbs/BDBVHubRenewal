@@ -28,6 +28,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from matplotlib.ticker import MaxNLocator
 
 from bdbvhubrenewal.data import imputed_share, newly_missing, revision_table
 from bdbvhubrenewal.data.delays import delay_summary
@@ -1439,6 +1440,9 @@ def plot_score_summary(
     axes[1].set_ylabel("90% interval coverage")
     for ax in axes:
         ax.set_xlabel(by.capitalize())
+        if by == "horizon":
+            ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    axes[0].legend(fontsize=7)
     axes[1].legend(fontsize=7)
     return fig
 

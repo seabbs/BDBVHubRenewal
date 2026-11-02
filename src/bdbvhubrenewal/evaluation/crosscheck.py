@@ -1,16 +1,16 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """Weekly cross-check of the daily nowcast.
 
-Two Saturday releases, 2026-10-17 and 2026-10-24, give one week of
-growth for every hub week.
+The latest two releases whose cut-offs are one week apart give one week
+of growth for every hub week.
 The port's chain ladder (`pair_sums`, `pair_factors`, `chain_growth`)
 runs on those hub weeks, with national factors for every place and a
 step of one week.
 Weeks up to six old at the earlier release are grown to the 42 day window.
 Two releases give no right-truncated incremental triangle, so
 `estimate_delay` itself cannot run.
-The points are drawn over the `randomwalknowcast` bands of the latest
-release.
+The points are drawn over the `randomwalknowcast` bands of the later
+of the two releases.
 This is a check and not a model in the package.
 `scripts/weekly_crosscheck.py` runs it.
 """
@@ -34,14 +34,25 @@ from bdbvhubrenewal.forecasters.base import add_national, get_model
 from bdbvhubrenewal.reporting.nowcast_plots import plot_weekly_crosscheck
 from bdbvhubrenewal.reporting.plots import save_light_dark
 
-EARLIER, LATER = "2026-10-17", "2026-10-24"
 DELAY_WEEKS = 6
 PLACES = ("CD", "CD-IT", "CD-NK", "CD-HU", "CD-TO")
 
 
-def weekly_points(real: pd.DataFrame) -> pd.DataFrame:
+def weekly_pair(daily: pd.DataFrame) -> tuple[str, str]:
+    """Return the latest two releases whose cut-offs are 7 days apart."""
+    cut = pd.to_datetime(daily["onset_date"]).groupby(daily["vintage"]).max()
+    cut = cut.sort_index()
+    for i in range(len(cut) - 1, 0, -1):
+        if (cut.iloc[i] - cut.iloc[i - 1]).days == 7:
+            return str(cut.index[i - 1]), str(cut.index[i])
+    raise ValueError("No two releases have cut-offs one week apart.")
+
+
+def weekly_points(
+    real: pd.DataFrame, earlier: str, later: str
+) -> pd.DataFrame:
     """Grow the latest weeks of the later release with the weekly ladder."""
-    wide = real.loc[real["vintage"].isin([EARLIER, LATER])].pivot_table(
+    wide = real.loc[real["vintage"].isin([earlier, later])].pivot_table(
         index=["location", "target_end_date"],
         columns="vintage",
         values="total",
@@ -53,10 +64,10 @@ def weekly_points(real: pd.DataFrame) -> pd.DataFrame:
     for key, row in wide.iterrows():
         loc, week = str(key[0]), str(key[1])  # type: ignore[index]
         counts[places.index(loc), :, weeks.index(week)] = [
-            row[EARLIER],
-            row[LATER],
+            row[earlier],
+            row[later],
         ]
-    cut = np.array([weeks.index(EARLIER), weeks.index(LATER)])
+    cut = np.array([weeks.index(earlier), weeks.index(later)])
     observed = np.arange(len(weeks))[None, :] <= cut[:, None]
     counts = counts * observed[None]
     num, den = pair_sums(counts, observed, cut, np.array([0]), DELAY_WEEKS)
@@ -118,9 +129,10 @@ def make_crosscheck(
         load_daily(data_dir),
     )
     real = target.loc[target["kind"] == "real"]
-    weekly = weekly_points(real)
+    earlier, later = weekly_pair(daily)
+    weekly = weekly_points(real, earlier, later)
     task = bt.make_tasks(
-        real.loc[real["vintage"] == LATER],
+        real.loc[real["vintage"] == later],
         delays.assign(kind="real"),
         config,
         daily=daily,

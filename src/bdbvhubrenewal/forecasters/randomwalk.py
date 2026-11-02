@@ -2,7 +2,7 @@
 r"""The random walk baselines.
 
 Both models run on the hub's daily release snapshots (`chain`), at
-province level, from one random walk (`walk.random_walk`).
+province and zone level, from one random walk (`walk.random_walk`).
 
 `RandomWalk` (`randomwalk`) starts from the reported count of the latest
 week judged complete, $\pi \ge 0.95$, where

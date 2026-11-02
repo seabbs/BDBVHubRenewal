@@ -108,7 +108,7 @@ REAL_ORIGINS = ("2026-08-18", "2026-10-09", "2026-10-17")
 REAL_TRUTH = "2026-10-24"
 COMPLETE_K = 3
 """Weeks ending at least this many weeks before the truth vintage count as
-complete, as `data.completeness.complete_weeks` (`complete_after_weeks`);
+complete, as the hub comparison does (`complete_after_weeks`);
 the complete-weeks scores use only those."""
 SP_MIN_CASES = adapter.SINGLE_PATCH_MIN_CASES
 SP_WEEKS = adapter.SINGLE_PATCH_WEEKS

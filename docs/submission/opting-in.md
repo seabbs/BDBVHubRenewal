@@ -3,14 +3,13 @@
 The steps to start submitting a hub model.
 { .page-subtitle }
 
-There are four hub models.
+There are three hub models.
 Each is opted in on its own in `config/hub.toml`.
 
 | hub model | model | falls back to | needs |
 | --- | --- | --- | --- |
 | `seabbs-rwnowcast` | random walk on a nowcast (`randomwalknowcast`) | random walk | nothing more |
 | `seabbs-randomwalk` | the random walk (`randomwalk`) | nothing | nothing more |
-| `seabbs-rwnowcastdaily` | random walk on a daily nowcast (`randomwalknowcastdaily`) | random walk | nothing more |
 | `seabbs-renewal` | the renewal chain | its refit, `renewalsp`, `randomwalknowcast`, random walk | a model choice in `results/model-choice.yml` |
 
 `DRY_RUN` is the global switch.
