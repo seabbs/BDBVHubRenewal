@@ -7,7 +7,7 @@
 model_abbr = "renewal"
 # The model this id carries, and nothing else: no fallback to another
 # model. Without it, the latest entry of results/model-choice.yml.
-model = "renewalsp"
+model = "renewal"
 # Opt in: `true` submits this model each round (DRY_RUN still applies).
 # It also needs a model choice in results/model-choice.yml.
 submit = false
