@@ -48,6 +48,7 @@ nav:
       - reference/index.md
       - Data: reference/data.md
       - Model: reference/model.md
+      - Baselinenowcast: reference/baselinenowcast.md
       - Forecasters: reference/forecasters.md
       - Evaluation: reference/evaluation.md
       - Submission: reference/submission.md
