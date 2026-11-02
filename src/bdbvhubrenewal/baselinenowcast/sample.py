@@ -1,7 +1,7 @@
 """Sampling nowcasts.
 
 Ports of R baselinenowcast 0.2.2 ``sample_distrib.R`` and
-``sample_predictions.R``, plus the Skellam sampler (extension E4).
+``sample_predictions.R``.
 Randomness takes a ``jax.random`` key.
 """
 
@@ -39,22 +39,6 @@ def sample_nb(key: Array, pred: Any, uncertainty_params: Any) -> Array:
     k_gamma, k_pois = jax.random.split(key)
     lam = jax.random.gamma(k_gamma, size, mu.shape, dtype=mu.dtype) * mu / size
     return jax.random.poisson(k_pois, lam).astype(mu.dtype)
-
-
-def sample_skellam(key: Array, pred: Any, phi: Any) -> Array:
-    """Skellam draws with mean ``pred`` and variance ``pred + phi pred^2``.
-
-    nu = phi * pred^2 / 2 and the draw is Pois(pred + nu) - Pois(nu)
-    (extension E4).
-    """
-    mu = jnp.maximum(jnp.asarray(pred), 0.0)
-    ph = jnp.asarray(phi, dtype=mu.dtype)
-    ph = ph.reshape(()) if ph.size == 1 else ph.reshape(mu.shape)
-    nu = ph * mu**2 / 2.0
-    k1, k2 = jax.random.split(key)
-    up = jax.random.poisson(k1, mu + nu)
-    down = jax.random.poisson(k2, nu)
-    return (up - down).astype(mu.dtype)
 
 
 class _Prepared:

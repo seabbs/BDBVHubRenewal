@@ -21,7 +21,6 @@ from bdbvhubrenewal.baselinenowcast import (
     sample_nowcast,
     sample_nowcasts,
     sample_prediction,
-    sample_skellam,
 )
 
 pytestmark = pytest.mark.filterwarnings(
@@ -96,24 +95,6 @@ def test_sample_nb_vector_size_and_errors() -> None:
         sample_nb(jax.random.key(0), jnp.ones(4), jnp.array([1.0, 2.0]))
 
 
-def test_sample_skellam_mean_and_variance() -> None:
-    for mu, phi in ((10.0, 0.0), (50.0, 0.2), (200.0, 1.0)):
-        x = sample_skellam(jax.random.key(5), jnp.full((N_DRAW,), mu), phi)
-        m, v = _moments(x)
-        se = np.sqrt((mu + phi * mu**2) / N_DRAW)
-        assert abs(m - mu) < 4.5 * se
-        expected = mu + phi * mu**2
-        assert abs(v - expected) < 6 * np.sqrt(2 / (N_DRAW - 1)) * expected
-
-
-def test_sample_skellam_can_be_below_the_prediction_by_more_than_poisson() -> (
-    None
-):
-    x = sample_skellam(jax.random.key(0), jnp.full((5000,), 20.0), 2.0)
-    assert float(np.mean(np.asarray(x) < 0)) > 0.05
-    assert np.all(np.asarray(x) == np.round(np.asarray(x)))
-
-
 def _prepared(case: Case) -> tuple[jax.Array, jax.Array]:
     pre = preprocess_negative_values(case.values, case.mask)
     pmf = estimate_delay(pre, case.mask, n=case.n_hist)
@@ -155,14 +136,16 @@ def test_sample_nowcasts_equal_observed_when_fully_observed(
     )
 
 
-def test_sample_nowcasts_use_skellam_sampler(small: Case) -> None:
+def test_sample_nowcasts_use_a_given_sampler(small: Case) -> None:
     out = baselinenowcast(
         small.values,
         small.mask,
         jax.random.key(0),
         draws=30,
         uncertainty_model=lambda o, _p: jnp.zeros(o.shape[1]),
-        uncertainty_sampler=sample_skellam,
+        uncertainty_sampler=lambda key, pred, _p: jax.random.poisson(
+            key, pred
+        ).astype(pred.dtype),
     )
     assert out.shape == (30, small.values.shape[0])
 

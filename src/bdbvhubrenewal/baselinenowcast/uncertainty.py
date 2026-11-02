@@ -1,7 +1,7 @@
 """Uncertainty estimation from retrospective nowcasts.
 
 Ports of R baselinenowcast 0.2.2 ``estimate_uncertainty.R`` and
-``estimate_uncertainty_retro.R``, plus the Skellam fit (extension E4).
+``estimate_uncertainty_retro.R``.
 """
 
 from __future__ import annotations
@@ -172,27 +172,6 @@ def fit_nb(x: Any, mu: Any) -> Array:
     return _fit_nb_kernel(xa, mua)
 
 
-@jax.jit
-def _fit_skellam_kernel(x: Array, mu: Array) -> Array:
-    num = jnp.maximum(0.0, jnp.sum((x - mu) ** 2 - mu))
-    den = jnp.sum(mu**2)
-    return jnp.where(den > 0, num / jnp.where(den > 0, den, 1.0), 0.0)
-
-
-def fit_skellam(x: Any, mu: Any) -> Array:
-    """Moment estimate of the Skellam spread (extension E4).
-
-    phi = max(0, sum((x - mu)^2 - mu)) / sum(mu^2), and 0 when
-    sum(mu^2) is 0.
-    The observation variance is ``mu + phi * mu^2``.
-    """
-    xa = jnp.atleast_1d(jnp.asarray(x))
-    mua = jnp.atleast_1d(jnp.asarray(mu, dtype=xa.dtype))
-    if xa.size == 0:
-        return jnp.asarray(jnp.nan)
-    return _fit_skellam_kernel(xa, mua)
-
-
 def _check_obs_and_pred(obs: Any, pred: Any) -> tuple[Array, Array]:
     """R ``.check_obs_and_pred`` (estimate_uncertainty.R:409)."""
     if obs is None or pred is None:
@@ -322,8 +301,8 @@ def estimate_uncertainty(
             "and `truncated_reporting_triangles` are not the same."
         )
 
-    # E3: count horizons on the aggregated retrospective triangle.
-    # This equals R's daily count for rolling sums.
+    # Count horizons on the aggregated retrospective triangle, which
+    # equals R's daily count for rolling sums.
     n_possible_horizons = int(
         np.sum(~np.asarray(ref_time_aggregator(*rt_list[0])[1]).all(axis=1))
     )
@@ -496,5 +475,4 @@ __all__ = [
     "estimate_uncertainty_retro",
     "fit_by_horizon",
     "fit_nb",
-    "fit_skellam",
 ]

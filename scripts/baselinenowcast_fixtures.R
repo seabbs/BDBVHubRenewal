@@ -11,9 +11,7 @@
 #
 # Cases are toy, example (the package example triangle), neg (negative
 # cells and zeros), struct2 (reporting structure 2) and hub (a daily
-# triangle with a maximum delay of 84). The rel case checks the release
-# extension against an independent R implementation of the E-step and
-# the EM loop, with estimate_delay as the M-step.
+# triangle with a maximum delay of 84).
 
 pinned_version <- "0.2.2"
 
@@ -343,100 +341,5 @@ if (!all(status)) {
   stop("expected R aborts did not occur: ", toString(names(status)[!status]))
 }
 writeLines(names(aborts), file.path(dir, "names.txt"))
-
-# ---- release extension -----------------------------------------------
-
-dir <- file.path(root, "rel")
-dir.create(dir, showWarnings = FALSE)
-set.seed(11)
-D <- 6
-n_ref <- 14
-cutoffs <- c(8, 11, 13)
-rel_pmf <- c(0.3, 0.25, 0.15, 0.1, 0.08, 0.05, 0.03, 0.02, 0.01, 0.01)
-level <- 60 + 5 * seq_len(n_ref)
-full <- t(sapply(seq_len(n_ref), function(i) {
-  rpois(length(rel_pmf), level[i] * rel_pmf)
-}))
-# Cumulative count in release k for onset t (0-based row index t - 1).
-cum <- matrix(NA_real_, n_ref, length(cutoffs))
-for (k in seq_along(cutoffs)) {
-  for (t in 0:(n_ref - 1)) {
-    if (t <= cutoffs[k]) {
-      upto <- min(cutoffs[k] - t, length(rel_pmf) - 1)
-      cum[t + 1, k] <- sum(full[t + 1, 1:(upto + 1)])
-    }
-  }
-}
-# A negative revision in release 2 for onset day 9.
-cum[10, 2] <- cum[10, 1] - 3
-cum[10, 3] <- cum[10, 2] + 2
-wm(cum, dir, "cum")
-writeLines(as.character(c(D, n_ref, cutoffs)), file.path(dir, "settings.txt"))
-
-inc <- matrix(NA_real_, n_ref, length(cutoffs))
-lo <- hi <- matrix(NA_real_, n_ref, length(cutoffs))
-for (k in seq_along(cutoffs)) {
-  prev <- if (k == 1) -Inf else cutoffs[k - 1]
-  for (t in 0:(n_ref - 1)) {
-    if (t <= cutoffs[k]) {
-      before <- if (k == 1) 0 else if (is.na(cum[t + 1, k - 1])) 0 else
-        cum[t + 1, k - 1]
-      lo_t <- max(prev - t + 1, 0)
-      hi_t <- min(cutoffs[k] - t, D)
-      if (lo_t <= hi_t) {
-        inc[t + 1, k] <- cum[t + 1, k] - before
-        lo[t + 1, k] <- lo_t
-        hi[t + 1, k] <- hi_t
-      }
-    }
-  }
-}
-wm(inc, dir, "increments")
-wm(lo, dir, "lo")
-wm(hi, dir, "hi")
-
-# Releases play the part of report columns. The NA pattern is not
-# bottom right, so the triangle is built without validation.
-inc_rt <- baselinenowcast:::new_reporting_triangle(
-  inc,
-  as.Date("2026-01-01") + seq_len(n_ref) - 1,
-  "days"
-)
-inc_pre <- unclass(quiet(preprocess_negative_values(
-  inc_rt,
-  validate = FALSE
-)))
-dimnames(inc_pre) <- NULL
-wm(inc_pre, dir, "increments_pre")
-
-expand <- function(p) {
-  x <- matrix(0, n_ref, D + 1)
-  for (t in 0:(n_ref - 1)) {
-    for (k in seq_along(cutoffs)) {
-      if (is.na(inc_pre[t + 1, k])) next
-      js <- lo[t + 1, k]:hi[t + 1, k]
-      w <- p[js + 1]
-      w <- if (sum(w) > 0) w / sum(w) else rep(1 / length(js), length(js))
-      x[t + 1, js + 1] <- x[t + 1, js + 1] + inc_pre[t + 1, k] * w
-    }
-  }
-  for (t in 0:(n_ref - 1)) {
-    for (d in 0:D) if (t + d > cutoffs[length(cutoffs)]) x[t + 1, d + 1] <- NA
-  }
-  x
-}
-n_used <- quiet(allocate_reference_times(
-  as_rt(expand(rep(1 / (D + 1), D + 1))),
-  scale_factor = 3, prop_delay = 0.5
-))$n_history_delay
-writeLines(as.character(n_used), file.path(dir, "n.txt"))
-p <- rep(1 / (D + 1), D + 1)
-wm(expand(p), dir, "expanded_uniform")
-for (iter in 1:50) {
-  p <- quiet(estimate_delay(as_rt(expand(p)), n = n_used))
-  if (iter == 1) wm(p, dir, "pmf_iter1")
-}
-wm(p, dir, "pmf_iter50")
-wm(expand(p), dir, "expanded_iter50")
 
 message("fixtures written to ", root)

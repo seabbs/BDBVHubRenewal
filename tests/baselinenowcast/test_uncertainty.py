@@ -6,7 +6,6 @@ import warnings
 from functools import partial
 from typing import Any
 
-import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -18,10 +17,8 @@ from bdbvhubrenewal.baselinenowcast import (
     estimate_uncertainty_retro,
     fit_by_horizon,
     fit_nb,
-    fit_skellam,
     preprocess_negative_values,
     rolling_sum,
-    sample_skellam,
 )
 
 NB_CASES = 7
@@ -105,39 +102,6 @@ def test_fit_nb_aborts() -> None:
         fit_nb(np.array([1.0, 2.0]), np.array([-1.0, 1.0]))
     with pytest.raises(ValueError):
         fit_nb(np.array([1.5, 2.0]), np.array([1.0, 1.0]))
-
-
-def test_fit_skellam_recovers_phi() -> None:
-    key = jax.random.key(3)
-    for phi in (0.0, 0.05, 0.4):
-        mu = jnp.full((20000,), 60.0)
-        draws = sample_skellam(key, mu, phi)
-        got = float(fit_skellam(draws, mu))
-        assert abs(got - phi) < 0.02 + 0.05 * phi
-        key = jax.random.fold_in(key, 1)
-
-
-def test_fit_skellam_allows_negative_updates() -> None:
-    x = np.array([-3.0, 2.0, -1.0, 5.0])
-    mu = np.array([4.0, 4.0, 4.0, 4.0])
-    assert float(fit_skellam(x, mu)) > 0
-
-
-def test_fit_skellam_zero_prediction_is_zero() -> None:
-    assert float(fit_skellam(np.array([1.0, 2.0]), np.zeros(2))) == 0.0
-
-
-def test_fit_skellam_floors_at_zero() -> None:
-    mu = np.array([10.0, 10.0])
-    assert float(fit_skellam(mu, mu)) == 0.0
-
-
-def test_fit_skellam_in_fit_by_horizon() -> None:
-    obs = np.array([[5.0, 20.0], [7.0, 1.0], [3.0, 40.0]])
-    pred = np.array([[6.0, 10.0], [6.0, 10.0], [6.0, 10.0]])
-    got = fit_by_horizon(obs, pred, fit_model=fit_skellam)
-    assert got.shape == (2,)
-    assert float(got[1]) > float(got[0])
 
 
 def test_retro_aborts(small: Case) -> None:
