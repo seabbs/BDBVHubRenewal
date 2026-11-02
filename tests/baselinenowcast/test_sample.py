@@ -24,6 +24,10 @@ from bdbvhubrenewal.baselinenowcast import (
     sample_skellam,
 )
 
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:.*reference times available.*:UserWarning"
+)
+
 N_DRAW = 20000
 
 
@@ -99,16 +103,14 @@ def test_sample_skellam_mean_and_variance() -> None:
         se = np.sqrt((mu + phi * mu**2) / N_DRAW)
         assert abs(m - mu) < 4.5 * se
         expected = mu + phi * mu**2
-        assert (
-            abs(v - expected) < 6 * np.sqrt(2 / (N_DRAW - 1)) * expected * 1.5
-        )
+        assert abs(v - expected) < 6 * np.sqrt(2 / (N_DRAW - 1)) * expected
 
 
 def test_sample_skellam_can_be_below_the_prediction_by_more_than_poisson() -> (
     None
 ):
     x = sample_skellam(jax.random.key(0), jnp.full((5000,), 20.0), 2.0)
-    assert float(x.min()) < 0 or float(x.min()) < 5
+    assert float(np.mean(np.asarray(x) < 0)) > 0.05
     assert np.all(np.asarray(x) == np.round(np.asarray(x)))
 
 
@@ -218,3 +220,14 @@ def test_no_horizons_returns_observed_counts() -> None:
     m = np.ones((4, 3), bool)
     out = sample_nowcasts(jax.random.key(0), v, v, m, jnp.ones(1), draws=3)
     np.testing.assert_allclose(out, np.tile(v.sum(1), (3, 1)))
+
+
+def test_sample_nowcasts_vmap_over_locations(small: Case) -> None:
+    pre, nc = _prepared(small)
+    params = jnp.ones(small.values.shape[0]) * 5.0
+    out = jax.vmap(
+        lambda v, n: sample_nowcasts(
+            jax.random.key(1), n, v, small.mask, params, draws=7
+        )
+    )(jnp.stack([pre, pre]), jnp.stack([nc, nc]))
+    assert out.shape == (2, 7, small.values.shape[0])

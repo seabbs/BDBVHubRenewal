@@ -141,7 +141,7 @@ def estimate_delay_releases(
     tol: float = 1e-6,
     max_iter: int = 5000,
     preprocess: bool = True,
-) -> tuple[Array, int, float]:
+) -> tuple[Array, Array, Array]:
     """Delay pmf from release increments by EM (extension E1).
 
     Starts from the uniform pmf on ``0 .. max_delay``.
@@ -152,7 +152,8 @@ def estimate_delay_releases(
     Negative increments are first moved to earlier releases with
     ``preprocess_negative_values`` (releases play the part of report
     columns).
-    Returns ``(pmf, n_iter, max_change)``.
+    Returns ``(pmf, n_iter, max_change)`` as arrays, so the call can be
+    ``vmap``ped or ``jit``ted over locations.
     """
     lo_a = np.asarray(lo, dtype=int)
     hi_a = np.asarray(hi, dtype=int)
@@ -200,7 +201,7 @@ def estimate_delay_releases(
         return lax.while_loop(cond, body, init)
 
     p, i, change = run(p0)
-    return p, int(i), float(change)
+    return p, i, change
 
 
 def hub_week_matrix(

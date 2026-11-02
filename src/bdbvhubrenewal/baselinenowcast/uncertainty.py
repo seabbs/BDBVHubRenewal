@@ -322,7 +322,11 @@ def estimate_uncertainty(
             "and `truncated_reporting_triangles` are not the same."
         )
 
-    n_possible_horizons = int(np.sum(~rt_list[0][1].all(axis=1)))
+    # E3: count horizons on the aggregated retrospective triangle.
+    # This equals R's daily count for rolling sums.
+    n_possible_horizons = int(
+        np.sum(~np.asarray(ref_time_aggregator(*rt_list[0])[1]).all(axis=1))
+    )
     n_iters = _count_retro_times(
         obs_list, n_possible_horizons, ref_time_aggregator
     )

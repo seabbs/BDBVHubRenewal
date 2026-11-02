@@ -9,6 +9,10 @@ from bnc_helpers import Case, read_vec
 
 from bdbvhubrenewal.baselinenowcast import baselinenowcast
 
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:.*reference times available.*:UserWarning"
+)
+
 
 def test_point_nowcast_matches_r(case: Case) -> None:
     got = baselinenowcast(case.values, case.mask, output_type="point")

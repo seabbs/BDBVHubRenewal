@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import jax
+import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 import pytest
@@ -249,3 +251,17 @@ def test_hub_weeks_sum_days_and_propagate_unobserved() -> None:
     np.testing.assert_allclose(np.asarray(out)[:, 0], [7, 7, 2])
     np.testing.assert_array_equal(ok[:, 1], [True, True, False])
     assert ok[:, 0].all()
+
+
+def test_em_vmaps_over_locations() -> None:
+    cum, rm, cutoffs, d, _ = _simulate_sparse()
+    inc, lo, hi, mask = release_increments(cum, rm, cutoffs, d)
+    stacked = jnp.stack([jnp.asarray(inc), 2 * jnp.asarray(inc)])
+    pmfs, n_iter, change = jax.vmap(
+        lambda x: estimate_delay_releases(x, lo, hi, mask, n=60)
+    )(stacked)
+    single, _, _ = estimate_delay_releases(inc, lo, hi, mask, n=60)
+    assert pmfs.shape == (2, d + 1)
+    assert n_iter.shape == (2,)
+    np.testing.assert_allclose(pmfs[0], single, atol=1e-10)
+    assert bool(jnp.all(change < 1e-6))

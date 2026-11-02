@@ -192,3 +192,53 @@ def test_delay_pmf_argument_is_used(small: Case) -> None:
         pre, small.mask, small.n_hist, small.n_retro, delay_pmf=pmf
     )
     assert a.shape[0] == int(np.sum(~small.mask.all(axis=1)))
+
+
+def _hub_week_inputs(
+    cutoff: str, step: int, n_ref: int = 262, d: int = 84
+) -> Any:
+    import pandas as pd
+
+    from bdbvhubrenewal.baselinenowcast import (
+        estimate_and_apply_delay,
+        hub_weeks,
+    )
+
+    rng = np.random.default_rng(1)
+    pmf = np.exp(-np.arange(d + 1) / 10)
+    pmf /= pmf.sum()
+    full = rng.poisson(30 * pmf[None, :] * np.ones((n_ref, 1))).astype(float)
+
+    def tri(c: int) -> tuple[np.ndarray, np.ndarray]:
+        t = np.arange(c + 1)[:, None]
+        dl = np.arange(d + 1)[None, :]
+        m = (t + dl) <= c
+        return np.where(m, full[: c + 1], 0.0), m
+
+    first = pd.Timestamp(cutoff) - pd.Timedelta(days=n_ref - 1)
+    lv, lm = tri(n_ref - 1)
+    qs = [n_ref - 1 - step, n_ref - 1 - 2 * step]
+    ncs, trs, rts = [], [], []
+    for q in qs:
+        v, m = tri(q)
+        ncs.append(estimate_and_apply_delay(v, m, n=150))
+        trs.append((lv[: q + 1], lm[: q + 1]))
+        rts.append((v, m))
+    return ncs, trs, rts, hub_weeks(first.date())
+
+
+@pytest.mark.parametrize(("step", "horizons"), [(7, 12), (8, 13)])
+def test_estimate_uncertainty_runs_with_hub_weeks(
+    step: int, horizons: int
+) -> None:
+    # The cut-off is a Saturday, so the first retrospective origin is a
+    # Saturday only when it is a whole number of weeks earlier.
+    ncs, trs, rts, agg = _hub_week_inputs("2026-10-24", step)
+    store, model = _capture()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        out = estimate_uncertainty(
+            ncs, trs, rts, n=2, uncertainty_model=model, ref_time_aggregator=agg
+        )
+    assert store["obs"].shape == (2, horizons)
+    assert out.shape[0] == horizons

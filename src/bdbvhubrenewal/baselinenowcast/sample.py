@@ -99,7 +99,13 @@ def _prepare(
             "same shape."
         )
     # .extract_predictions (sample_predictions.R:138)
-    if not bool(jnp.all(jnp.where(jnp.asarray(m), nc == values, True))):
+    # The check needs concrete values, so it is skipped under tracing.
+    traced = isinstance(nc, jax.core.Tracer) or isinstance(
+        values, jax.core.Tracer
+    )
+    if not traced and not bool(
+        jnp.all(jnp.where(jnp.asarray(m), nc == values, True))
+    ):
         raise ValueError(
             "`reporting_triangle` is not a subset of `point_nowcast_matrix`."
         )
