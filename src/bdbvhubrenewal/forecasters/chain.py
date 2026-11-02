@@ -41,13 +41,14 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from typing import NamedTuple
 
 import jax.numpy as jnp
 import numpy as np
 
 from bdbvhubrenewal.baselinenowcast import (
-    ChainPlan,
     chain_growth,
+    exact_plan,
     pair_factors,
     pair_sums,
 )
@@ -202,6 +203,24 @@ def _pairs_at(snap: SnapshotArrays, r: int, max_delay: int) -> np.ndarray:
     return np.array(out, dtype=np.int64).reshape(-1, 2)
 
 
+class ChainPlan(NamedTuple):
+    """Chain steps for each onset day, padded to a common length.
+
+    Attributes
+    ----------
+    step : numpy.ndarray
+        Slot of the step size, `[T, M]`.
+    age : numpy.ndarray
+        Age in days at each step, `[T, M]`.
+    valid : numpy.ndarray
+        Whether the step is used, `[T, M]`.
+    """
+
+    step: np.ndarray
+    age: np.ndarray
+    valid: np.ndarray
+
+
 def fit_delay(
     snap: SnapshotArrays, r: int, settings: Settings
 ) -> DelayFit | None:
@@ -231,11 +250,13 @@ def fit_delay(
         jnp.asarray(snap.counts),
         jnp.asarray(snap.observed),
         jnp.asarray(snap.cut),
-        jnp.asarray(pairs),
+        jnp.asarray(pairs[:, 0]),
         settings.max_delay,
     )
-    f, ident = pair_factors(num, den, jnp.asarray(pair_step), len(steps))
-    f, ident = np.array(f), np.array(ident)
+    f_raw, ident_raw = pair_factors(
+        num, den, jnp.asarray(pair_step), len(steps)
+    )
+    f, ident = np.array(f_raw), np.array(ident_raw)
     for n in range(f.shape[0]):
         p = snap.parent[n]
         if p >= 0:
@@ -270,15 +291,19 @@ def final_plan(
     ChainPlan
         For each day, the steps from its age until the age reaches $D$.
     """
-    d = settings.max_delay
     last = len(fit.pairs) - 1
     s = int(fit.steps[fit.pair_step[last]])
     age0 = snap.cut[o] - np.arange(snap.week.size)
-    m = np.arange(-(-d // s))
-    age = age0[:, None] + m[None, :] * s
-    valid = (age0 >= 0)[:, None] & (age < d)
-    step = np.full(age.shape, fit.pair_step[last])
-    return ChainPlan(jnp.asarray(step), jnp.asarray(age), jnp.asarray(valid))
+    seen = age0 >= 0
+    slot, age, mask = exact_plan(
+        age0[seen], s, int(fit.pair_step[last]), settings.max_delay
+    )
+    m = slot.shape[1]
+    step = np.zeros((age0.size, m), dtype=np.int64)
+    ages = np.zeros((age0.size, m), dtype=np.int64)
+    valid = np.zeros((age0.size, m), dtype=bool)
+    step[seen], ages[seen], valid[seen] = slot, age, mask
+    return ChainPlan(step, ages, valid)
 
 
 def retro_plan(
@@ -321,7 +346,7 @@ def retro_plan(
     valid = (age0 >= 0)[:, None] & (age < d)
     step = np.broadcast_to(fit.pair_step[seq], age.shape)
     mismatch = abs(int(sizes[seq].sum()) - gap)
-    plan = ChainPlan(jnp.asarray(step), jnp.asarray(age), jnp.asarray(valid))
+    plan = ChainPlan(step, age, valid)
     return plan, mismatch
 
 
@@ -329,9 +354,9 @@ def _grow(
     fit: DelayFit, plan: ChainPlan, counts: np.ndarray
 ) -> tuple[np.ndarray, bool]:
     """Return growth `[L, T]` and whether every needed factor is identified."""
-    g = np.array(chain_growth(jnp.asarray(fit.factors), plan))
-    ok = np.array(chain_growth(jnp.asarray(fit.identified, jnp.float32), plan))
-    return g, bool(np.all((ok > 0.5) | (counts <= 0)))
+    raw = np.array(chain_growth(fit.factors, (plan.step, plan.age, plan.valid)))
+    ok = np.isfinite(raw)
+    return np.where(ok, raw, 1.0), bool(np.all(ok | (counts <= 0)))
 
 
 @dataclass
