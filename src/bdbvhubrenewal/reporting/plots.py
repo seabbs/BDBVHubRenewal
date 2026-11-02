@@ -789,8 +789,8 @@ def plot_delay_check(
         Left, the growth $G$ from each age in days to final, chained over
         the release gap, on a log scale. Right, the Skellam spread
         $\rho_k$ by weeks back with the number of errors behind it.
-        A place's label says whether it uses its own estimate or its
-        parent's.
+        A place's label says at how many ages it uses its own delay
+        factor and not its parent's.
     """
     from bdbvhubrenewal.data.snapshots import snapshot_arrays
     from bdbvhubrenewal.forecasters.chain import Settings, build_origin
@@ -809,8 +809,8 @@ def plot_delay_check(
     drawn: set[tuple[float, ...]] = set()
     for i, loc in enumerate(locations):
         j = snap.locations.index(loc)
-        src = int(origin.fit.source[j]) % len(snap.locations)
-        kind = "own" if src == j else f"from {snap.locations[src]}"
+        own = origin.fit.own[j]
+        kind = f"own at {int(own.sum())} of {own.size} ages"
         colour = palette[i % len(palette)]
         order = np.argsort(age[seen])
         left.plot(

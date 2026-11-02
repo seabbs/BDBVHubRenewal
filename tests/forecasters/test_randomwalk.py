@@ -155,10 +155,10 @@ def test_diagnostics_name_the_sources(task: ForecastTask) -> None:
     assert {
         "start_week", "n_err", "delay_source", "rho_source", "sigma_source"
     } <= set(info.columns)  # fmt: skip
-    assert info.loc["CD-IT", "delay_source"] == "own:CD-IT"
-    assert info.loc["CD-TO", "delay_source"] == "own:CD" or info.loc[
-        "CD-TO", "delay_source"
-    ].endswith("CD")
+    assert info.loc["CD-IT", "delay_source"].startswith("own at ")
+    n_it = int(info.loc["CD-IT", "delay_source"].split()[2])
+    n_to = int(info.loc["CD-TO", "delay_source"].split()[2])
+    assert n_to < n_it <= 42
     assert info.loc["CD-IT", "rho_source"] == "pooled:CD"
     assert info.loc["CD-IT", "n_err"] == 4
 

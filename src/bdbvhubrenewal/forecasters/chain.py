@@ -146,6 +146,9 @@ class DelayFit:
     source : numpy.ndarray
         Index of the estimate each place uses for its walk spread, `[L]`,
         as for `source_index`.
+    own : numpy.ndarray
+        Whether each place uses its own factor at each age, `[L, D]`. The
+        country always does.
     """
 
     pairs: np.ndarray
@@ -154,6 +157,7 @@ class DelayFit:
     factors: np.ndarray
     level: np.ndarray
     source: np.ndarray
+    own: np.ndarray
 
 
 def weeks_back(snap: SnapshotArrays, r: int, max_delay: int) -> int:
@@ -248,6 +252,7 @@ def fit_delay(
     f = np.array(pair_factors(num, den, every))
     # With every pair in every step, the denominator is the same for all.
     own = np.array(den).sum(axis=1) >= settings.min_level
+    own[snap.parent < 0] = True
     # Nodes are sorted by code length, so a parent precedes its children.
     for n in range(f.shape[0]):
         p = snap.parent[n]
@@ -255,7 +260,7 @@ def fit_delay(
             f[n] = np.where(own[n][None, :], f[n], f[p])
     level = levels(snap, r, settings)
     source = source_index(level, snap.parent, min_level=settings.min_level)
-    return DelayFit(pairs, steps, pair_step, f, level, source)
+    return DelayFit(pairs, steps, pair_step, f, level, source, own)
 
 
 def final_plan(

@@ -83,6 +83,11 @@ def _label(origin: Origin, i: int) -> str:
     return f"{kind}:{origin.snap.locations[i % n]}"
 
 
+def _delay_label(origin: Origin, i: int) -> str:
+    own = origin.fit.own[i]
+    return f"own at {int(own.sum())} of {own.size} ages"
+
+
 def _walks(
     key: jax.Array, x0: np.ndarray, sigma: np.ndarray, h: int
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -175,7 +180,7 @@ class RandomWalk:
                     "location": loc,
                     "start_week": origin.snap.week_ends[int(start[i])],
                     "n_err": rho_n,
-                    "delay_source": _label(origin, int(origin.fit.source[i])),
+                    "delay_source": _delay_label(origin, i),
                     "rho_source": rho_src,
                     "sigma_source": _label(origin, int(origin.sigma_source[i])),
                 }
