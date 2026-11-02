@@ -10,7 +10,7 @@ Two targets are scored.
 week up to four back from the origin's week.
 `randomwalknowcast` predicts it by chaining the origin's days over the
 actual gap to $o'$ only (`forecasters.chain.retro_plan`), with the
-Skellam spread of the origin.
+dispersion of the origin.
 The prediction is scored only when the steps stand in for the gap within
 `Settings.max_mismatch` days, as for the errors behind the spread.
 A forecast dropped for one model is dropped for all.

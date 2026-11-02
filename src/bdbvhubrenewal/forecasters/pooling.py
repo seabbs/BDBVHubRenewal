@@ -6,12 +6,12 @@ Each node has an own estimate, from its own counts, errors or weekly
 changes, and a pooled estimate, from the node and its children with a
 level of at least `min_level` cases a week.
 A node counts as qualifying when its level is at least `min_level`, and
-for the Skellam spread also when its own estimate has at least `min_err`
+for the dispersion also when its own estimate has at least `min_err`
 errors.
 A qualifying node uses its own estimate.
 Otherwise it uses the pooled estimate of its nearest ancestor that
 qualifies, else the country's pooled estimate.
-The delay, the spread of the walk and the Skellam spread all use this
+The delay, the spread of the walk and the dispersion all use this
 rule with one threshold.
 """
 

@@ -40,7 +40,8 @@ the count expected at $o$ for days up to $c_r$.
 It chains over the gap $c_o - c_r$ only, using the nearest earlier pair's
 factor for each remaining part of the gap.
 Only plans within `max_mismatch` days of the gap are kept.
-The errors by weeks back give the Skellam spread (`skellam`).
+The errors, pooled over weeks back, give the dispersion of the negative
+binomial on the remaining count (`negbin`).
 """
 
 from __future__ import annotations
@@ -61,13 +62,13 @@ from bdbvhubrenewal.baselinenowcast import (
 )
 from bdbvhubrenewal.data.snapshots import SnapshotArrays, week_sum, weekly_sums
 from bdbvhubrenewal.forecasters.base import ModelUnavailableError
+from bdbvhubrenewal.forecasters.negbin import inv_phi_from_sums, inv_phi_sums
 from bdbvhubrenewal.forecasters.pooling import (
     MIN_ERRORS,
     MIN_LEVEL,
     pool_matrix,
     source_index,
 )
-from bdbvhubrenewal.forecasters.skellam import rho_from_sums, rho_sums
 
 __all__ = [
     "MissingSnapshots",
@@ -103,7 +104,7 @@ class Settings:
         Cases a week for a place to use its own spreads, and cases in the
         pooled denominator of an age for it to use its own delay factor.
     min_errors : int
-        Errors at a horizon for a Skellam spread.
+        Errors, over all weeks back, for a place's dispersion.
     level_weeks : tuple of int
         First and last weeks back averaged for a place's level.
     max_mismatch : int
@@ -357,7 +358,7 @@ class Errors:
     Attributes
     ----------
     num, den, n : numpy.ndarray
-        The sums behind the Skellam spread, `[L, K]`.
+        The sums behind the dispersion, `[L, K]`.
     releases : list of str
         Releases that gave errors.
     """
@@ -407,7 +408,7 @@ def retro_errors(snap: SnapshotArrays, o: int, settings: Settings) -> Errors:
         pred = week_sum(snap, counts * g)[:, safe]
         tgt = weekly_sums(snap, o, upto=int(snap.cut[r]))[:, safe]
         valid = take[None, :] & ((obs > 0) | (pred > 0))
-        num, den, n = rho_sums(
+        num, den, n = inv_phi_sums(
             obs[None], pred[None], tgt[None], valid[None], axis=0
         )
         out.num += num
@@ -448,12 +449,12 @@ class Origin:
         `source_index`.
     errors : Errors or None
         Retrospective errors, or None where they were not asked for.
-    rho : numpy.ndarray or None
-        Skellam spread $\rho_k$ of each place by weeks back from the
-        cut-off week, `[L, K]`.
-    rho_n : numpy.ndarray or None
+    inv_phi : numpy.ndarray or None
+        Dispersion $1/\phi$ of the negative binomial of each place,
+        pooled over the weeks back and repeated for each, `[L, K]`.
+    inv_phi_n : numpy.ndarray or None
         Errors behind each spread, `[L, K]`.
-    rho_source : numpy.ndarray or None
+    inv_phi_source : numpy.ndarray or None
         Index of the estimate behind each spread, `[L, K]`.
     """
 
@@ -469,9 +470,9 @@ class Origin:
     sigma: np.ndarray
     sigma_source: np.ndarray
     errors: Errors | None = None
-    rho: np.ndarray | None = None
-    rho_n: np.ndarray | None = None
-    rho_source: np.ndarray | None = None
+    inv_phi: np.ndarray | None = None
+    inv_phi_n: np.ndarray | None = None
+    inv_phi_source: np.ndarray | None = None
 
     @property
     def start_nowcast(self) -> int:
@@ -498,7 +499,7 @@ def build_origin(
     settings : Settings
         Settings.
     errors : bool
-        Whether to estimate the Skellam spread.
+        Whether to estimate the dispersion.
 
     Returns
     -------
@@ -574,32 +575,40 @@ def _walk_spreads(
 
 
 def _add_spread(origin: Origin) -> None:
-    """Estimate the Skellam spread by weeks back, with the one rule."""
+    """Estimate the dispersion of the negative binomial, with the one rule.
+
+    The errors are pooled over the weeks back, so each place has one
+    dispersion, repeated for every week back.
+    """
     snap, settings = origin.snap, origin.settings
     errors = retro_errors(snap, origin.o, settings)
     k_n = errors.n.shape[1]
+    num, den, n_err = (
+        x.sum(axis=1, keepdims=True) for x in (errors.num, errors.den, errors.n)
+    )
     pool = pool_matrix(origin.fit.level, snap.parent, settings.min_level)
-    own = rho_from_sums(errors.num, errors.den)
-    n_pooled = pool @ errors.n
-    pooled = rho_from_sums(pool @ errors.num, pool @ errors.den)
+    own = inv_phi_from_sums(num, den)
+    n_pooled = pool @ n_err
+    pooled = inv_phi_from_sums(pool @ num, pool @ den)
     source = source_index(
         origin.fit.level,
         snap.parent,
-        errors.n,
+        n_err,
         n_pooled,
         settings.min_level,
         settings.min_errors,
-    )
-    k = np.arange(k_n)[None, :]
-    rho = np.concatenate([own, pooled])[source, k]
-    n_used = np.concatenate([errors.n, n_pooled])[source, k]
-    rho = np.where(n_used >= settings.min_errors, rho, 0.0)
-    origin.errors, origin.rho, origin.rho_n, origin.rho_source = (
-        errors, rho, n_used, source,
-    )  # fmt: skip
+    )[:, :1]
+    inv_phi = np.concatenate([own, pooled])[source, 0]
+    n_used = np.concatenate([n_err, n_pooled])[source, 0]
+    inv_phi = np.where(n_used >= settings.min_errors, inv_phi, 0.0)
+    rep = np.ones((1, k_n))
+    origin.errors = errors
+    origin.inv_phi = inv_phi * rep
+    origin.inv_phi_n = n_used * rep
+    origin.inv_phi_source = np.broadcast_to(source, (source.shape[0], k_n))
     if errors.n.sum() == 0:
         log.info(
-            "No retrospective errors at %s, so the spread is 0 and the "
-            "observation model is Poisson-Skellam.",
+            "No retrospective errors at %s, so the dispersion is 0 and the "
+            "observation model is Poisson.",
             snap.releases[origin.o],
         )

@@ -157,8 +157,9 @@ MODEL_METADATA = {
         "model_name": "RandomWalk on a nowcast",
         "methods": (
             "Baselinenowcast chain ladder on daily release snapshots with a "
-            "Skellam observation model, then a log-scale random walk. Health "
-            "zones and provinces, with national the sum of provinces."
+            "negative binomial on the remaining count, then a log-scale random "
+            "walk. Health zones and provinces, with national the sum of "
+            "provinces."
         ),
         "methods_long": (
             "The baselinenowcast method (Johnson et al. 2025, Wellcome Open "
@@ -173,13 +174,14 @@ MODEL_METADATA = {
             "and otherwise its parent's (zone, then province, then "
             "national). Daily nowcasts are summed to hub weeks. "
             # The uncertainty. Edit here if the observation model changes.
-            "The observation model is Skellam, with a spread by weeks back "
-            "fitted to retrospective nowcasts against the count expected at "
-            "the later release, so counts can be revised down. "
+            "The observation model is baselinenowcast's negative binomial on "
+            "the remaining count, with a dispersion fitted by moments to "
+            "retrospective nowcasts and pooled over horizons. "
             "Each nowcast draw is carried forward from its latest week as a "
             "random walk on the log scale with Poisson noise. A place under "
-            "10 cases a week, or with fewer than 2 errors, uses the spreads "
-            "of its parent. The national value is the sum of provinces. See "
+            "10 cases a week, or with fewer than 2 errors, uses the dispersion "
+            "and spreads of its parent. The national value is the sum of "
+            "provinces. See "
             "https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."
         ),
         "data_inputs": (
