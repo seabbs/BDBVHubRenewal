@@ -51,8 +51,9 @@ from bdbvhubrenewal.baselinenowcast import (
     exact_plan,
     pair_factors,
     pair_sums,
+    window_pairs,
 )
-from bdbvhubrenewal.data.snapshots import SnapshotArrays, weekly_sums
+from bdbvhubrenewal.data.snapshots import SnapshotArrays, week_sum, weekly_sums
 from bdbvhubrenewal.forecasters.base import ModelUnavailableError
 from bdbvhubrenewal.forecasters.pooling import (
     MIN_ERRORS,
@@ -154,13 +155,6 @@ class DelayFit:
     source: np.ndarray
 
 
-def _week_sum(x: np.ndarray, snap: SnapshotArrays) -> np.ndarray:
-    """Sum `[L, T]` day values to hub weeks, `[L, W]`."""
-    onehot = np.zeros((snap.week.size, snap.n_weeks))
-    onehot[np.arange(snap.week.size), snap.week] = 1.0
-    return x @ onehot
-
-
 def weeks_back(snap: SnapshotArrays, r: int, max_delay: int) -> int:
     r"""Return the number of weeks back from the cut-off week with young days.
 
@@ -195,12 +189,8 @@ def levels(snap: SnapshotArrays, r: int, settings: Settings) -> np.ndarray:
 
 def _pairs_at(snap: SnapshotArrays, r: int, max_delay: int) -> np.ndarray:
     """Return the in-window pairs among releases up to `r`."""
-    out = [
-        (q, q + 1)
-        for q in range(r)
-        if 0 < snap.cut[q + 1] - snap.cut[q] <= max_delay
-    ]
-    return np.array(out, dtype=np.int64).reshape(-1, 2)
+    keep, _ = window_pairs(snap.cut[: r + 1], max_delay)
+    return np.stack([keep, keep + 1], axis=1).astype(np.int64)
 
 
 class ChainPlan(NamedTuple):
@@ -350,7 +340,7 @@ def retro_plan(
     return plan, mismatch
 
 
-def _grow(
+def grow(
     fit: DelayFit, plan: ChainPlan, counts: np.ndarray
 ) -> tuple[np.ndarray, bool]:
     """Return growth `[L, T]` and whether every needed factor is identified."""
@@ -407,7 +397,7 @@ def retro_errors(snap: SnapshotArrays, o: int, settings: Settings) -> Errors:
         if mismatch > settings.max_mismatch:
             continue
         counts = snap.counts[:, r, :]
-        g, ok = _grow(fit, plan, counts)
+        g, ok = grow(fit, plan, counts)
         if not ok:
             log.info(
                 "Release %s has unidentified factors, skipped.",
@@ -419,7 +409,7 @@ def retro_errors(snap: SnapshotArrays, o: int, settings: Settings) -> Errors:
         take = (cols >= 0) & (np.arange(k_n) < k_r)
         safe = np.clip(cols, 0, None)
         obs = weekly_sums(snap, r)[:, safe]
-        pred = _week_sum(counts * g, snap)[:, safe]
+        pred = week_sum(snap, counts * g)[:, safe]
         tgt = weekly_sums(snap, o, upto=int(snap.cut[r]))[:, safe]
         valid = take[None, :] & ((obs > 0) | (pred > 0))
         num, den, n = rho_sums(
@@ -527,19 +517,19 @@ def build_origin(
         )
     plan = final_plan(snap, o, fit, settings)
     counts = snap.counts[:, o, :]
-    g, ok = _grow(fit, plan, counts)
+    g, ok = grow(fit, plan, counts)
     if not ok:
         raise UnidentifiedDelay(
             f"A delay factor needed at {snap.releases[o]} has no cases "
             "behind it, for the place or any parent."
         )
     reported = weekly_sums(snap, o)
-    point = _week_sum(counts * g, snap)
+    point = week_sum(snap, counts * g)
     # A chain with a zero factor revises the day to nothing, so it counts
     # as fully reported.
     share = 1.0 / np.where(g > 0, g, 1.0)
     inv = np.where(snap.observed[o][None, :], share, 0.0)
-    complete = _week_sum(inv, snap) / 7.0
+    complete = week_sum(snap, inv) / 7.0
     good = complete >= settings.completeness
     start = np.where(
         good.any(axis=1), snap.n_weeks - 1 - np.argmax(good[:, ::-1], axis=1), 0

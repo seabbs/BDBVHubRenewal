@@ -29,6 +29,7 @@ __all__ = [
     "parent_code",
     "release_cutoff",
     "snapshot_arrays",
+    "week_sum",
     "weekly_sums",
 ]
 
@@ -113,8 +114,6 @@ class SnapshotArrays:
         The $W$ hub weeks, labelled by their Saturday.
     parent : numpy.ndarray
         Index of each node's parent, or -1, `[L]`.
-    depth : numpy.ndarray
-        Depth of each node, 0 for the country, `[L]`.
     """
 
     locations: tuple[str, ...]
@@ -127,7 +126,6 @@ class SnapshotArrays:
     week: np.ndarray
     week_ends: tuple[str, ...]
     parent: np.ndarray
-    depth: np.ndarray
 
     @property
     def n_weeks(self) -> int:
@@ -224,13 +222,17 @@ def snapshot_arrays(
         ],
         dtype=np.int64,
     )
-    depth = np.zeros(len(nodes_t), dtype=np.int64)
-    for i in range(len(nodes_t)):
-        depth[i] = 0 if parent[i] < 0 else depth[parent[i]] + 1
     return SnapshotArrays(
         nodes_t, releases, days, counts, observed, cut, asof, week,
-        week_ends, parent, depth,
+        week_ends, parent,
     )  # fmt: skip
+
+
+def week_sum(snap: SnapshotArrays, x: np.ndarray) -> np.ndarray:
+    """Sum `[L, T]` day values to hub weeks, `[L, W]`."""
+    onehot = np.zeros((snap.week.size, snap.n_weeks))
+    onehot[np.arange(snap.week.size), snap.week] = 1.0
+    return np.asarray(x @ onehot)
 
 
 def weekly_sums(
@@ -253,8 +255,5 @@ def weekly_sums(
         Weekly counts, `[L, W]`.
     """
     last = snap.cut[r] if upto is None else upto
-    out = np.zeros((len(snap.locations), snap.n_weeks))
-    for w in range(snap.n_weeks):
-        sel = (snap.week == w) & (np.arange(len(snap.week)) <= last)
-        out[:, w] = snap.counts[:, r, sel].sum(axis=1)
-    return out
+    days = np.arange(snap.week.size) <= last
+    return week_sum(snap, snap.counts[:, r, :] * days)

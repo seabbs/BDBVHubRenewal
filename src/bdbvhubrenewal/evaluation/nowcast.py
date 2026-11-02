@@ -38,13 +38,11 @@ import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.baselinenowcast import chain_growth
 from bdbvhubrenewal.data.dates import epiweek_end
-from bdbvhubrenewal.data.snapshots import snapshot_arrays
+from bdbvhubrenewal.data.snapshots import snapshot_arrays, week_sum
 from bdbvhubrenewal.evaluation.scoring import SCORE_COLUMNS, score_forecasts
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
@@ -59,11 +57,12 @@ from bdbvhubrenewal.forecasters.chain import (
     Origin,
     Settings,
     build_origin,
+    grow,
     retro_plan,
 )
 from bdbvhubrenewal.forecasters.randomwalk import (
     RandomWalkNowcast,
-    _frame,
+    frame,
 )
 
 __all__ = [
@@ -161,14 +160,6 @@ def complete_weeks(
     return rows.loc[rows["location"].isin(keep)].reset_index(drop=True)
 
 
-def _week_sums(
-    snap_weeks: np.ndarray, x: np.ndarray, n_weeks: int
-) -> np.ndarray:
-    onehot = np.zeros((snap_weeks.size, n_weeks))
-    onehot[np.arange(snap_weeks.size), snap_weeks] = 1.0
-    return np.asarray(x @ onehot)
-
-
 def expected_point(
     origin: Origin, daily: pd.DataFrame, later: str, locations: Sequence[str]
 ) -> tuple[np.ndarray, int]:
@@ -206,23 +197,13 @@ def expected_point(
         raise ValueError("Releases or places differ from the origin's.")
     p = big.releases.index(later)
     plan, mismatch = retro_plan(big, origin.o, p, origin.fit, origin.settings)
-    raw = np.array(
-        chain_growth(
-            origin.fit.factors,
-            (
-                jnp.asarray(plan.step),
-                jnp.asarray(plan.age),
-                jnp.asarray(plan.valid),
-            ),
-        )
-    )
     counts = big.counts[:, origin.o, :]
-    ok = np.isfinite(raw)
-    if not np.all(ok | (counts <= 0)):
+    growth, ok = grow(origin.fit, plan, counts)
+    if not ok:
         raise ModelUnavailableError(
             f"A factor for the step to {later} has no cases behind it."
         )
-    point = _week_sums(big.week, counts * np.where(ok, raw, 1.0), big.n_weeks)
+    point = week_sum(big, counts * growth)
     return point[:, : snap.n_weeks], mismatch
 
 
@@ -373,23 +354,30 @@ def release_backtest(
                 frames.append(
                     _label(samples, name, task.vintage, "complete", latest)
                 )
+            origin = (
+                model.origin_at(task, errors=True)
+                if isinstance(model, RandomWalkNowcast)
+                else None
+            )
             for o2 in later:
-                if isinstance(model, RandomWalkNowcast):
-                    origin = model._origin(task, errors=True)
-                    point, miss = expected_point(
-                        origin, daily, o2, task.locations
-                    )
+                if origin is not None and isinstance(model, RandomWalkNowcast):
+                    try:
+                        point, miss = expected_point(
+                            origin, daily, o2, task.locations
+                        )
+                    except ModelUnavailableError as err:
+                        log.warning(
+                            "%s has no count expected at %s: %s",
+                            name, o2, err,
+                        )  # fmt: skip
+                        row[f"unavailable_{o2}"] = str(err)
+                        continue
                     row[f"mismatch_{o2}"] = miss
                     if miss > cfg.max_mismatch:
                         continue
                     traj, weeks = model.trajectories(origin, task, point)
                     nxt = add_national(
-                        _frame(
-                            task,
-                            weeks,
-                            traj,
-                            model._rows(origin, task),
-                        )
+                        frame(task, weeks, traj, model.rows(origin, task))
                     )
                 else:
                     nxt = samples
