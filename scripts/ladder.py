@@ -39,12 +39,20 @@ from jax import random  # noqa: E402
 from numpyro.infer import Predictive  # noqa: E402
 
 from bdbvhubrenewal import model as pr  # noqa: E402
-from bdbvhubrenewal.data import load_delays, load_locations, load_target  # noqa: E402
+from bdbvhubrenewal.data import (  # noqa: E402
+    load_daily,
+    load_delays,
+    load_locations,
+    load_target,
+)
 from bdbvhubrenewal.data.simulate import simulate_outbreak  # noqa: E402
 from bdbvhubrenewal.evaluation.ppc import summarise_draws  # noqa: E402
 from bdbvhubrenewal.evaluation.scoring import crps_sample  # noqa: E402
 from bdbvhubrenewal.forecasters import renewal as adapter  # noqa: E402
-from bdbvhubrenewal.forecasters.base import ForecastTask  # noqa: E402
+from bdbvhubrenewal.forecasters.base import (  # noqa: E402
+    ForecastTask,
+    ModelUnavailableError,
+)
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalk  # noqa: E402
 from bdbvhubrenewal.forecasters.renewal import (  # noqa: E402
     VARIANTS,
@@ -717,24 +725,23 @@ def randomwalk_row(outbreak, real) -> dict:
         ["location", "target_end_date"]
     )["total"]
     out = {"rung": "randomwalk"}
+    daily = load_daily()
     results = []
     for origin in REAL_ORIGINS:
         task = task_for(
             target, delays.loc[delays["vintage"] == origin], origin,
             locations, "real",
         )  # fmt: skip
-        results.append(
-            (origin, scores(RandomWalk().forecast(task), later, REAL_TRUTH))
+        task = dataclasses.replace(
+            task, daily_history=daily.loc[daily["vintage"] <= origin]
         )
+        try:
+            samples = RandomWalk().forecast(task)
+        except ModelUnavailableError:
+            continue
+        results.append((origin, scores(samples, later, REAL_TRUTH)))
     out |= summarise_origins(results)
-    truth = outbreak.truth().set_index(["location", "target_end_date"])["truth"]
-    sims = []
-    for day in SIM_DAYS:
-        vintage = (outbreak.settings.start + dt.timedelta(days=day)).isoformat()
-        t, d = outbreak.vintage(vintage)
-        task = task_for(t, d, vintage, SIM_LOCATIONS, "simulated")
-        sims.append(scores(RandomWalk().forecast(task), truth))
-    out |= {f"sim_{k}": float(np.mean([s[k] for s in sims])) for k in sims[0]}
+    # Simulated outbreaks have no release snapshots for the random walk.
     return out
 
 

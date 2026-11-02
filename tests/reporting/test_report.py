@@ -23,7 +23,10 @@ def test_relative_section_hidden_with_one_model() -> None:
 
 
 def test_heldout_page(
-    tmp_path: Path, target: pd.DataFrame, delays: pd.DataFrame
+    tmp_path: Path,
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
 ) -> None:
     from bdbvhubrenewal.evaluation.heldout import run_heldout
 
@@ -36,7 +39,9 @@ def test_heldout_page(
     )
     config = BacktestConfig(model_choice=record, development_until="2026-10-10")
     res = tmp_path / "res"
-    run_heldout(target, delays, config, evaluate_holdout=True, out_dir=res)
+    run_heldout(
+        target, delays, config, evaluate_holdout=True, out_dir=res, daily=daily
+    )
     gen, fig = tmp_path / "gen", tmp_path / "fig"
     report._heldout_page(fig, gen, res, target, ["randomwalk"], config)
     choices = (gen / "heldout-choices.md").read_text()
@@ -103,7 +108,10 @@ def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
 
 
 def test_make_report_writes_every_page(
-    tmp_path: Path, target: pd.DataFrame, delays: pd.DataFrame
+    tmp_path: Path,
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
 ) -> None:
     import os
 
@@ -122,7 +130,7 @@ def test_make_report_writes_every_page(
     models = [get_model("randomwalk")]
     out = tmp_path / "output"
     out.mkdir()
-    forecasts, _ = run_development(models, target, delays, config)
+    forecasts, _ = run_development(models, target, delays, config, daily=daily)
     forecasts.to_csv(out / "forecasts.csv.gz", index=False)
     old = Path.cwd()
     os.chdir(ROOT)
@@ -377,11 +385,9 @@ def test_teams_table_links_to_hub_metadata() -> None:
     assert "epiforecasts-x" not in text
 
 
-def test_completeness_note(delays: pd.DataFrame) -> None:
-    text = report._completeness_note(3, delays)
+def test_completeness_note() -> None:
+    text = report._completeness_note(3)
     assert "at least 3 weeks before the truth vintage" in text
-    assert "2026-10-24 delay data" in text
-    assert "96%" in text
 
 
 def test_score_views_without_lag_prior_origins() -> None:

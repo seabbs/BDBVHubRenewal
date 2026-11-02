@@ -3,8 +3,8 @@
 
 Each real vintage before the truth vintage is forecast by the province
 models, and their samples are split across zones (`ZoneAllocator`).
-The baseline, `zonerandomwalk`, runs random walk on each zone's own
-series (`zone_task`), which does not sum to the provinces.
+The baseline, `randomwalk` run at zone level, uses each zone's own
+release snapshots (`zone_task`), which do not sum to the provinces.
 Every zone of a forecast province is scored, including zones with no
 cases, against the zone counts as reported at the truth vintage.
 """
@@ -12,6 +12,7 @@ cases, against the zone counts as reported at the truth vintage.
 from __future__ import annotations
 
 import datetime as dt
+import logging
 from collections.abc import Sequence
 
 import pandas as pd
@@ -26,9 +27,15 @@ from bdbvhubrenewal.evaluation.backtest import (
     score_tasks,
 )
 from bdbvhubrenewal.evaluation.scoring import relative_skill
-from bdbvhubrenewal.forecasters.base import ForecastTask, get_model
+from bdbvhubrenewal.forecasters.base import (
+    ForecastTask,
+    ModelUnavailableError,
+    get_model,
+)
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
 from bdbvhubrenewal.forecasters.zones import ZoneAllocator, zone_task
+
+log = logging.getLogger(__name__)
 
 __all__ = [
     "ZONE_BASELINE",
@@ -37,7 +44,7 @@ __all__ = [
     "zone_relative_skill",
 ]
 
-ZONE_BASELINE = "zonerandomwalk"
+ZONE_BASELINE = "randomwalk (zone)"
 """Name of the zone baseline in the scores."""
 
 
@@ -58,6 +65,7 @@ def _frame(
 def zone_backtest(
     target: pd.DataFrame,
     delays: pd.DataFrame | None,
+    daily: pd.DataFrame,
     daily_zones: pd.DataFrame,
     zones: tuple[str, ...],
     models: Sequence[str] = ("randomwalk",),
@@ -73,6 +81,8 @@ def zone_backtest(
         The province target table (`load_target`).
     delays : pandas.DataFrame or None
         The delay table (`load_delays`).
+    daily : pandas.DataFrame
+        The daily table of the country and provinces (`load_daily`).
     daily_zones : pandas.DataFrame
         The daily zone table (`load_daily_zones`).
     zones : tuple of str
@@ -100,14 +110,23 @@ def zone_backtest(
     truth_date = truth_date or vintages[-1]
     frames = []
     for vintage in (v for v in vintages if v < truth_date):
-        task = make_tasks(real.loc[real["vintage"] == vintage], delays, config)[
-            0
-        ]
+        task = make_tasks(
+            real.loc[real["vintage"] == vintage], delays, config, daily=daily
+        )[0]
         counts = weekly_zone_counts(daily_zones, vintage)
-        zt = zone_task(task, counts, zones)
-        frames.append(_frame(RandomWalk().forecast(zt), task, ZONE_BASELINE))
+        zt = zone_task(task, counts, zones, pd.concat([daily, daily_zones]))
+        try:
+            base = RandomWalk().forecast(zt)
+        except ModelUnavailableError as err:
+            log.warning("No zone baseline for %s: %s", vintage, err)
+        else:
+            frames.append(_frame(base, task, ZONE_BASELINE))
         for name in models:
-            prov = get_model(name).forecast(task)
+            try:
+                prov = get_model(name).forecast(task)
+            except ModelUnavailableError as err:
+                log.warning("%s skipped %s: %s", name, vintage, err)
+                continue
             frames.append(
                 _frame(
                     allocator.allocate(prov, task, counts, zones), task, name
@@ -180,12 +199,13 @@ def scenario_zone_scores(
     complete_after_weeks: int = 0,
     allocator: ZoneAllocator | None = None,
 ) -> pd.DataFrame:
-    """Score allocated zone forecasts and zone random walk on a scenario.
+    """Score allocated zone forecasts on a scenario.
 
     As `zone_backtest`, with the simulated zone counts
     (`SimulatedOutbreak.zone_vintage`) in place of the real ones, scored
     against the final simulated counts and as reported `later_weeks`
-    after each forecast date.
+    after each forecast date. Scenarios have no zone snapshots, so there
+    is no zone random walk.
 
     Parameters
     ----------
@@ -214,10 +234,12 @@ def scenario_zone_scores(
     frames = []
     for task in tasks:
         counts = outbreak.zone_vintage(task.vintage)
-        zt = zone_task(task, counts, zones)
-        frames.append(_frame(RandomWalk().forecast(zt), task, ZONE_BASELINE))
         for name in models:
-            prov = get_model(name).forecast(task)
+            try:
+                prov = get_model(name).forecast(task)
+            except ModelUnavailableError as err:
+                log.warning("%s skipped %s: %s", name, task.vintage, err)
+                continue
             frames.append(
                 _frame(
                     allocator.allocate(prov, task, counts, zones), task, name

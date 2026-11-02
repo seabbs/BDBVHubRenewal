@@ -26,6 +26,8 @@ from bdbvhubrenewal.evaluation.hubcompare import (
 from bdbvhubrenewal.reporting.plots import plot_hub_round
 
 ROOT = Path(__file__).resolve().parents[2]
+
+pytestmark = pytest.mark.usefixtures("flat_model")
 WEEKS = ["2026-09-19", "2026-09-26", "2026-10-03", "2026-10-10"]
 
 
@@ -87,10 +89,18 @@ def _write_hub(root: Path) -> None:
     )
 
 
-def _ours(target: pd.DataFrame, delays: pd.DataFrame) -> pd.DataFrame:
+def _ours(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> pd.DataFrame:
     config = BacktestConfig(n_samples=100, seed=1)
     return our_forecasts(
-        ["2026-10-17"], target, delays, config, ["randomwalk"], min_horizon=-4
+        ["2026-10-17"],
+        target,
+        delays,
+        config,
+        ["flat"],
+        min_horizon=-4,
+        daily=daily,
     )
 
 
@@ -150,13 +160,19 @@ def test_match_vintage(target: pd.DataFrame) -> None:
 
 
 def test_our_forecasts_cover_the_hub_weeks(
-    target: pd.DataFrame, delays: pd.DataFrame
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
     config = BacktestConfig(n_samples=100, seed=1)
     fc = our_forecasts(
-        ["2026-10-31"], target, delays, config, ["randomwalk"], min_horizon=-5
+        ["2026-10-31"],
+        target,
+        delays,
+        config,
+        ["flat"],
+        min_horizon=-5,
+        daily=daily,
     )
-    assert set(fc["model"]) == {"randomwalk"}
+    assert set(fc["model"]) == {"flat"}
     assert set(fc["source"]) == {"real"}
     assert fc["horizon"].min() == -5
     assert fc["horizon"].max() == 3
@@ -194,15 +210,18 @@ def test_stored_forecasts_pick_matching_rounds(tmp_path: Path) -> None:
 
 
 def test_score_comparison_flags_complete_weeks(
-    tmp_path: Path, target: pd.DataFrame, delays: pd.DataFrame
+    tmp_path: Path,
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
 ) -> None:
     _write_hub(tmp_path)
     forecasts = pd.concat(
-        [load_hub_submissions(tmp_path), _ours(target, delays)]
+        [load_hub_submissions(tmp_path), _ours(target, delays, daily)]
     )
     scores, pending = score_comparison(forecasts, target, 3)
     assert pending.empty
-    assert set(scores["model"]) == {"teamA-weekly", "teamB-late", "randomwalk"}
+    assert set(scores["model"]) == {"teamA-weekly", "teamB-late", "flat"}
     # Each model is scored on the weeks it covered.
     late = scores.loc[scores["model"] == "teamB-late"]
     assert set(late["target_end_date"]) == set(WEEKS[2:])
@@ -222,16 +241,19 @@ def test_score_comparison_waits_for_later_data(target: pd.DataFrame) -> None:
 
 
 def test_summarise_comparison(
-    tmp_path: Path, target: pd.DataFrame, delays: pd.DataFrame
+    tmp_path: Path,
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
 ) -> None:
     _write_hub(tmp_path)
     forecasts = pd.concat(
-        [load_hub_submissions(tmp_path), _ours(target, delays)]
+        [load_hub_submissions(tmp_path), _ours(target, delays, daily)]
     )
     scores, _ = score_comparison(forecasts, target, 3)
-    table = summarise_comparison(scores, "randomwalk")
+    table = summarise_comparison(scores, "flat")
     rows = table.set_index("model")
-    assert rows.loc["randomwalk", "relative_wis"] == pytest.approx(1)
+    assert rows.loc["flat", "relative_wis"] == pytest.approx(1)
     # Complete weeks only: teamB-late forecast 2026-10-03 and 2026-10-10,
     # and only 2026-10-03 is complete, in two locations.
     assert rows.loc["teamB-late", "n"] == 2
@@ -248,11 +270,14 @@ def test_forecast_quantiles(tmp_path: Path) -> None:
 
 
 def test_plot_hub_round(
-    tmp_path: Path, target: pd.DataFrame, delays: pd.DataFrame
+    tmp_path: Path,
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
 ) -> None:
     _write_hub(tmp_path)
     forecasts = pd.concat(
-        [load_hub_submissions(tmp_path), _ours(target, delays)]
+        [load_hub_submissions(tmp_path), _ours(target, delays, daily)]
     )
     q = forecast_quantiles(forecasts)
     fig = plot_hub_round(q, target, "2026-10-17", locations=("CD", "CD-IT"))

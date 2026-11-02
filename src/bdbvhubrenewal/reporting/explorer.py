@@ -123,7 +123,9 @@ def explorer_data(
         s = scores.loc[scores["model"].isin(models)]
         s = s.assign(
             m=s["model"].map(models.index),
-            r=s["reference_date"].astype(str).map(rounds.index),
+            r=s["reference_date"]
+            .astype(str)
+            .map({r: i for i, r in enumerate(rounds)}),
         ).dropna(subset=["r"])
         out["scores"] = [
             [int(m), int(r), loc, str(d), *(round(float(v), 3) for v in vals)]

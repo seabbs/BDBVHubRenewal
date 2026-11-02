@@ -12,17 +12,12 @@ submit = false
 # Further hub models, each submitted under its own id every round, apart
 # from the chain above. The hub allows no hyphen in an abbreviation and
 # fewer than 16 characters. Read by `bdbvhubrenewal.hub.model_abbr_for`.
-# The random walk on a nowcast, falling back to the random walk.
+# The random walk on a daily nowcast of the recent weeks.
 [models.randomwalknowcast]
 model_abbr = "rwnowcast"
 submit = true
 
-# The random walk from the last complete week, with no nowcast.
+# The random walk from the latest complete week, with no nowcast.
 [models.randomwalk]
 model_abbr = "randomwalk"
-submit = false
-
-# The random walk on a nowcast from the daily release triangle.
-[models.randomwalknowcastdaily]
-model_abbr = "rwnowcastdaily"
 submit = false

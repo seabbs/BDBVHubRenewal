@@ -23,12 +23,12 @@ import yaml
 from matplotlib.figure import Figure
 
 from bdbvhubrenewal.data import (
+    load_daily,
     load_delays,
     load_target,
     national_coherence,
     newly_missing,
 )
-from bdbvhubrenewal.data.completeness import reported_share
 from bdbvhubrenewal.data.dates import reference_date_for_vintage
 from bdbvhubrenewal.data.delays import delay_summary
 from bdbvhubrenewal.data.reconstruct import (
@@ -239,13 +239,14 @@ def make_report(
 
     # Backtest, held-out and comparison pages.
     names = [s.name for s in list_models()]
-    _backtest_page(fig, gen, res, out, config, target, delays, names)
+    _backtest_page(fig, gen, res, out, config, target, names)
     _heldout_page(fig, gen, res, target, names, config)
     _comparison_page(fig, gen, Path(hub_comparison), target)
 
     # Nowcast page: latest real vintage, every registered model.
     rows = real.loc[real["vintage"] == latest]
-    tasks = make_tasks(rows, delays, config, history=real)
+    daily = load_daily(data_dir)
+    tasks = make_tasks(rows, delays, config, history=real, daily=daily)
     forecasts_now = _nowcast_forecasts(tasks, latest, res)
     _nowcast_page(fig, gen, target, forecasts_now, names, config, latest)
 
@@ -732,16 +733,11 @@ def _score_tables(views: dict[str, pd.DataFrame]) -> str:
     return "\n".join(parts)
 
 
-def _completeness_note(k: int, delays: pd.DataFrame) -> str:
-    """Say which weeks count as complete and why."""
-    latest = str(delays["vintage"].max())
-    share = reported_share(delays, latest, [7 * k])[0]
-    link = "reference/data.md#bdbvhubrenewal.data.completeness.complete_weeks"
+def _completeness_note(k: int) -> str:
+    """Say which weeks count as complete."""
     return (
         f"Complete weeks are those that ended at least {k} weeks before the "
-        f"truth vintage.\nBy then {share:.0%} of a week's final count is "
-        f"published, from the {latest} delay data "
-        f"([`complete_weeks`]({link})).\n"
+        "truth vintage.\n"
         "Scores on complete weeks are the primary scores.\n"
         "Vintage-matched scores compare each model's prediction of the "
         "counts as reported by the truth vintage with that vintage, so "
@@ -1053,7 +1049,6 @@ def _backtest_page(
     out: Path,
     config: BacktestConfig,
     target: pd.DataFrame,
-    delays: pd.DataFrame,
     names: list[str],
 ) -> None:
     dev_path = res / "backtest-scores.csv"
@@ -1081,7 +1076,7 @@ def _backtest_page(
             f"Scores are against the **{truth_v}** vintage, as reported "
             "then.\n\n"
             + _dropdown(
-                _completeness_note(k, delays)
+                _completeness_note(k)
                 + _lag_prior_note(views["all weeks as reported"]),
                 "Scoring notes",
             ),

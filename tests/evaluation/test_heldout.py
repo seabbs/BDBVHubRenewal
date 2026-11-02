@@ -76,17 +76,19 @@ def test_heldout_pairs() -> None:
 def test_heldout_needs_flag_and_choice(
     target: pd.DataFrame,
     delays: pd.DataFrame,
+    daily: pd.DataFrame,
     config: BacktestConfig,
 ) -> None:
     with pytest.raises(HeldOutError, match="evaluate_holdout"):
-        run_heldout(target, delays, config)
+        run_heldout(target, delays, config, daily=daily)
     with pytest.raises(HeldOutError, match="model choice"):
-        run_heldout(target, delays, config, evaluate_holdout=True)
+        run_heldout(target, delays, config, evaluate_holdout=True, daily=daily)
 
 
 def test_heldout_scores_each_forecast_under_its_model(
     target: pd.DataFrame,
     delays: pd.DataFrame,
+    daily: pd.DataFrame,
     config: BacktestConfig,
     tmp_path: Path,
 ) -> None:
@@ -95,7 +97,7 @@ def test_heldout_scores_each_forecast_under_its_model(
     )
     out = tmp_path / "out"
     scores = run_heldout(
-        target, delays, config, evaluate_holdout=True, out_dir=out
+        target, delays, config, evaluate_holdout=True, out_dir=out, daily=daily
     )
     # Only the 2026-10-17 forecast has later data.
     assert set(scores["vintage"]) == {"2026-10-17"}
@@ -105,7 +107,6 @@ def test_heldout_scores_each_forecast_under_its_model(
     assert set(scores["model"]) == {
         "randomwalk",
         "randomwalknowcast",
-        "randomwalknowcastdaily",
     }
     assert set(scores["kind"]) == {"real"}
     record = yaml.safe_load((out / "heldout-run.yml").read_text())
@@ -120,6 +121,7 @@ def test_heldout_scores_each_forecast_under_its_model(
 def test_heldout_scores_both_baselines_beside_a_fitted_choice(
     target: pd.DataFrame,
     delays: pd.DataFrame,
+    daily: pd.DataFrame,
     config: BacktestConfig,
     tmp_path: Path,
 ) -> None:
@@ -133,11 +135,11 @@ def test_heldout_scores_both_baselines_beside_a_fitted_choice(
         evaluate_holdout=True,
         out_dir=tmp_path,
         fit=False,
+        daily=daily,
     )
     assert set(scores["model"]) == {
         "randomwalk",
         "randomwalknowcast",
-        "randomwalknowcastdaily",
     }
     assert set(scores["chosen_model"]) == {"renewal"}
 
@@ -145,6 +147,7 @@ def test_heldout_scores_both_baselines_beside_a_fitted_choice(
 def test_heldout_also_runs_the_other_variants(
     target: pd.DataFrame,
     delays: pd.DataFrame,
+    daily: pd.DataFrame,
     config: BacktestConfig,
     tmp_path: Path,
 ) -> None:
@@ -167,12 +170,12 @@ def test_heldout_also_runs_the_other_variants(
         evaluate_holdout=True,
         out_dir=tmp_path,
         models=("shadow",),
+        daily=daily,
     )
     try:
         assert set(scores["model"]) == {
             "randomwalk",
             "randomwalknowcast",
-            "randomwalknowcastdaily",
             "shadow",
         }
         # Each score still records the model chosen at the time.
@@ -184,30 +187,41 @@ def test_heldout_also_runs_the_other_variants(
 def test_heldout_keeps_and_rescores_other_models_forecasts(
     target: pd.DataFrame,
     delays: pd.DataFrame,
+    daily: pd.DataFrame,
     config: BacktestConfig,
     tmp_path: Path,
 ) -> None:
     config.model_choice.write_text(
         "choices:\n  - {date: 2026-10-10, model: randomwalk}\n"
     )
-    run_heldout(target, delays, config, evaluate_holdout=True, out_dir=tmp_path)
+    run_heldout(
+        target,
+        delays,
+        config,
+        evaluate_holdout=True,
+        out_dir=tmp_path,
+        daily=daily,
+    )
     path = tmp_path / "heldout-forecasts.csv.gz"
     fc = pd.read_csv(path)
     # A fitted variant's forecasts, as a run on archie would leave them.
     pd.concat([fc, fc.assign(model="other")]).to_csv(path, index=False)
     scores = run_heldout(
-        target, delays, config, evaluate_holdout=True, out_dir=tmp_path
+        target,
+        delays,
+        config,
+        evaluate_holdout=True,
+        out_dir=tmp_path,
+        daily=daily,
     )
     assert set(scores["model"]) == {
         "randomwalk",
         "randomwalknowcast",
-        "randomwalknowcastdaily",
         "other",
     }
     assert set(pd.read_csv(path)["model"]) == {
         "randomwalk",
         "randomwalknowcast",
-        "randomwalknowcastdaily",
         "other",
     }
 
@@ -215,6 +229,7 @@ def test_heldout_keeps_and_rescores_other_models_forecasts(
 def test_heldout_without_fits_reads_committed_forecasts(
     target: pd.DataFrame,
     delays: pd.DataFrame,
+    daily: pd.DataFrame,
     config: BacktestConfig,
     tmp_path: Path,
 ) -> None:
@@ -240,6 +255,7 @@ def test_heldout_without_fits_reads_committed_forecasts(
             replace(config, model_choice=_randomwalk_choice(tmp_path)),
             evaluate_holdout=True,
             out_dir=tmp_path / "seed",
+            daily=daily,
         )
         seeded = pd.read_csv(tmp_path / "seed" / "heldout-forecasts.csv.gz")
         out = tmp_path / "out"
@@ -254,6 +270,7 @@ def test_heldout_without_fits_reads_committed_forecasts(
             evaluate_holdout=True,
             out_dir=out,
             fit=False,
+            daily=daily,
         )
     finally:
         _REGISTRY.pop("slowfit")
@@ -261,7 +278,6 @@ def test_heldout_without_fits_reads_committed_forecasts(
     assert set(scores["model"]) == {
         "randomwalk",
         "randomwalknowcast",
-        "randomwalknowcastdaily",
         "slowfit",
     }
     assert set(scores["chosen_model"]) == {"slowfit"}
@@ -276,6 +292,7 @@ def _randomwalk_choice(tmp_path: Path) -> Path:
 def test_heldout_with_no_vintage_after_the_choice(
     target: pd.DataFrame,
     delays: pd.DataFrame,
+    daily: pd.DataFrame,
     config: BacktestConfig,
     tmp_path: Path,
 ) -> None:
@@ -284,7 +301,12 @@ def test_heldout_with_no_vintage_after_the_choice(
         "choices:\n  - {date: 2026-12-31, model: randomwalknowcast}\n"
     )
     scores = run_heldout(
-        target, delays, config, evaluate_holdout=True, out_dir=tmp_path
+        target,
+        delays,
+        config,
+        evaluate_holdout=True,
+        out_dir=tmp_path,
+        daily=daily,
     )
     assert scores.empty
     record = yaml.safe_load((tmp_path / "heldout-run.yml").read_text())

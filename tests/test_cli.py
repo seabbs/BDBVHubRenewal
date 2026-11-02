@@ -88,7 +88,7 @@ def test_cli_zone_backtest(tmp_path: Path) -> None:
     out = tmp_path / "zone-scores.csv"
     assert main(["zone-backtest", "--out", str(out)]) == 0
     scores = pd.read_csv(out)
-    assert {"randomwalk", "zonerandomwalk"} <= set(scores["model"])
+    assert {"randomwalk", "randomwalk (zone)"} <= set(scores["model"])
 
 
 @pytest.mark.usefixtures("in_root")
@@ -194,7 +194,7 @@ def test_plot_scores_by_truth() -> None:
     assert len(fig.axes[0].lines) == scores["vintage"].nunique()
 
 
-@pytest.mark.usefixtures("in_root")
+@pytest.mark.usefixtures("in_root", "flat_model")
 def test_cli_lopo_writes_scores_for_mask_aware_models(tmp_path: Path) -> None:
     from evaluation.test_backtest import _MaskAware
 

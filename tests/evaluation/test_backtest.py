@@ -30,6 +30,8 @@ from bdbvhubrenewal.forecasters import get_model
 
 ROOT = Path(__file__).resolve().parents[2]
 
+pytestmark = pytest.mark.usefixtures("flat_model")
+
 
 def test_load_config() -> None:
     cfg = load_config(ROOT / "config" / "backtest.toml")
@@ -64,7 +66,7 @@ def test_development_never_uses_heldout_vintages(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
     forecasts, scores = run_development(
-        [get_model("randomwalk")], target, delays, config
+        [get_model("flat")], target, delays, config
     )
     # Vintages after the model choice date are held out.
     assert (forecasts["vintage"] <= "2026-10-10").all()
@@ -83,7 +85,7 @@ def test_score_by_truth_vintage(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
     forecasts, latest = run_development(
-        [get_model("randomwalk")], target, delays, config
+        [get_model("flat")], target, delays, config
     )
     scores = score_by_truth_vintage(forecasts, target)
     # Real forecasts only, each against every later real vintage.
@@ -106,9 +108,7 @@ def test_score_by_truth_vintage(
 def test_scores_cover_only_weeks_in_the_truth(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
-    forecasts, _ = run_development(
-        [get_model("randomwalk")], target, delays, config
-    )
+    forecasts, _ = run_development([get_model("flat")], target, delays, config)
     scores = score_by_truth_vintage(forecasts, target)
     # A week past the end of a truth vintage is not scored, not taken as 0.
     weeks = target.groupby("vintage")["target_end_date"].max()
@@ -210,7 +210,7 @@ def test_development_scores_both_ways(
 ) -> None:
     config = dataclasses.replace(config, complete_after_weeks=3)
     forecasts, scores = run_development(
-        [get_model("randomwalk")], target, delays, config
+        [get_model("flat")], target, delays, config
     )
     assert {"as reported", "vintage-matched"} <= set(scores["scoring"])
     assert scores["complete"].any()
@@ -228,7 +228,7 @@ def test_origins_without_a_lag_estimate_are_marked(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
     forecasts, scores = run_development(
-        [get_model("randomwalk")], target, delays, config
+        [get_model("flat")], target, delays, config
     )
     # Origins with no earlier pair of delay files take the publication
     # lag from a prior informed by later files.
@@ -259,7 +259,7 @@ def test_truth_changes(target: pd.DataFrame) -> None:
 
 
 def test_recovery_on_simulated_vintages(config: BacktestConfig) -> None:
-    _, scores = run_recovery([get_model("randomwalk")], config)
+    _, scores = run_recovery([get_model("flat")], config)
     assert set(scores["kind"]) == {"simulated"}
     assert len(scores) > 0
 
@@ -285,7 +285,7 @@ class _MaskAware:
             + [mean.assign(location=p, location_name=p) for p in task.mask],
             ignore_index=True,
         )
-        return get_model("randomwalk").forecast(replace(task, target=filled))
+        return get_model("flat").forecast(replace(task, target=filled))
 
 
 def test_tasks_carry_an_empty_mask(
@@ -300,7 +300,7 @@ def test_tasks_carry_an_empty_mask(
 def test_lopo_masks_one_province_at_a_time(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
-    models = [get_model("randomwalk"), _MaskAware()]
+    models = [get_model("flat"), _MaskAware()]
     forecasts, scores = run_lopo(
         models,
         target,
@@ -323,7 +323,7 @@ def test_lopo_without_mask_aware_models_is_empty(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
     forecasts, scores = run_lopo(
-        [get_model("randomwalk")],
+        [get_model("flat")],
         target,
         delays,
         config,
@@ -399,7 +399,7 @@ class _Counting:
 
     def forecast(self, task):  # type: ignore[no-untyped-def]
         self.calls += 1
-        return get_model("randomwalk").forecast(task)
+        return get_model("flat").forecast(task)
 
 
 def test_run_forecasts_reuses_cached_tasks(
@@ -544,7 +544,7 @@ def test_scenarios_are_scored_final_and_as_of(
     data = Path(__file__).resolve().parents[2] / "data"
     zones = load_health_zones(data)
     forecasts, scores = run_scenarios(
-        [get_model("randomwalk")],
+        [get_model("flat")],
         config,
         target,
         delays,
@@ -560,10 +560,10 @@ def test_scenarios_are_scored_final_and_as_of(
     final = scores.loc[scores["truth_view"] == "final"]
     assert final["complete"].any()
     assert set(forecasts["kind"]) == {"simulated"}
-    # Zones: the model's province samples split across zones, and zone
-    # random walk, scored on the simulated zone counts.
+    # Zones: the model's province samples split across zones, scored on
+    # the simulated zone counts.
     zone = scores.loc[scores["level"] == "zone"]
-    assert set(zone["model"]) == {"randomwalk", "zonerandomwalk"}
+    assert set(zone["model"]) == {"flat"}
     assert zone["location"].str.count("-").eq(2).all()
     assert set(zone["truth_view"]) == {"final", "as of 2 weeks later"}
     assert set(scores["level"]) == {"national", "province", "zone"}
@@ -609,25 +609,16 @@ def test_development_tasks_pass_the_daily_releases(
     assert all(t.daily_history is not None for t in tasks)
 
 
-def test_reconstructed_tasks_carry_daily_releases(
+def test_reconstructed_tasks_have_no_daily_releases(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
     from bdbvhubrenewal.data.tidy import load_daily
 
-    tasks = development_tasks(
-        target, delays, config, daily=load_daily()
-    )  # fmt: skip
+    tasks = development_tasks(target, delays, config, daily=load_daily())
     rec = [t for t in tasks if t.kind == "reconstructed"]
     assert rec
-    for task in rec:
-        hist = task.daily_history
-        assert hist is not None
-        assert set(hist["kind"]) == {"reconstructed"}
-        assert hist["vintage"].max() == task.vintage
-        # Releases on the days of the week the hub released.
-        days = pd.to_datetime(hist["vintage"]).dt.day_of_week
-        assert set(days) <= {1, 2, 4, 5}
-        assert hist["vintage"].nunique() > 4
+    assert all(t.daily_history is None for t in rec)
+    assert all(t.daily_history is not None for t in tasks if t.kind == "real")
 
 
 def test_simulated_tasks_carry_daily_releases(config: BacktestConfig) -> None:

@@ -40,9 +40,11 @@ def zones() -> tuple[str, ...]:
 
 
 @pytest.fixture
-def task(target: pd.DataFrame, delays: pd.DataFrame) -> ForecastTask:
+def task(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> ForecastTask:
     rows = target.loc[target["vintage"] == "2026-10-17"]
-    return make_tasks(rows, delays, BacktestConfig(seed=3))[0]
+    return make_tasks(rows, delays, BacktestConfig(seed=3), daily=daily)[0]
 
 
 @pytest.fixture
@@ -236,9 +238,13 @@ def test_check_zone_coherence_flags_a_gap(
 
 
 def test_zone_task_is_a_zero_filled_randomwalk_task(
-    task: ForecastTask, counts: pd.DataFrame, zones: tuple[str, ...]
+    task: ForecastTask,
+    counts: pd.DataFrame,
+    zones: tuple[str, ...],
+    daily: pd.DataFrame,
+    daily_zones: pd.DataFrame,
 ) -> None:
-    zt = zone_task(task, counts, zones)
+    zt = zone_task(task, counts, zones, pd.concat([daily, daily_zones]))
     assert set(zt.locations) == {
         z for z in zones if province_of(z) in task.locations
     }
@@ -247,8 +253,13 @@ def test_zone_task_is_a_zero_filled_randomwalk_task(
     assert one["target_end_date"].max() <= task.vintage
     gaps = pd.to_datetime(one["target_end_date"]).diff().dropna()
     assert (gaps == pd.Timedelta(days=7)).all()
+    # The zone task carries snapshots of the country, provinces and zones.
+    assert zt.daily_history is not None
+    assert {"CD", "CD-IT", "CD-IT-10"} <= set(zt.daily_history["location"])
+    assert zt.daily_history["vintage"].max() == task.vintage
     samples = RandomWalk().forecast(zt)
     assert set(samples["location"]) == set(zt.locations)
+    assert zone_task(task, counts, zones).daily_history is None
 
 
 def test_hub_table_with_zones_validates(
@@ -284,18 +295,16 @@ def test_hub_table_rejects_incoherent_zones(
 
 
 def test_allocation_reads_final_rows_only(
-    target: pd.DataFrame,
-    delays: pd.DataFrame,
-    daily_zones: pd.DataFrame,
+    task: ForecastTask,
+    counts: pd.DataFrame,
     zones: tuple[str, ...],
 ) -> None:
-    rows = target.loc[target["vintage"] == "2026-10-09"]
-    task = make_tasks(rows, delays, BacktestConfig(seed=3), ("2026-10-24",))[0]
-    prov = RandomWalk().forecast(task)
-    assert "as_of" in prov
-    counts = weekly_zone_counts(daily_zones, task.vintage)
+    final = RandomWalk().forecast(task)
+    prov = pd.concat(
+        [final.assign(as_of=np.nan), final.assign(as_of="2026-10-24")],
+        ignore_index=True,
+    )
     alloc = ZoneAllocator().allocate(prov, task, counts, zones)
     assert "as_of" not in alloc
-    final = prov.loc[prov["as_of"].isna()].drop(columns="as_of")
     assert check_zone_coherence(final, alloc) == []
     assert np.isfinite(alloc["value"]).all()

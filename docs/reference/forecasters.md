@@ -11,6 +11,14 @@ The forecaster interface, the registry, random walk and the renewal variants.
 
 ::: bdbvhubrenewal.forecasters.randomwalk
 
+::: bdbvhubrenewal.forecasters.chain
+
+::: bdbvhubrenewal.forecasters.pooling
+
+::: bdbvhubrenewal.forecasters.skellam
+
+::: bdbvhubrenewal.forecasters.walk
+
 ::: bdbvhubrenewal.forecasters.renewal
 
 ::: bdbvhubrenewal.forecasters.zones

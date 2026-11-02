@@ -237,10 +237,10 @@ def test_nowcast_notes_what_it_handled(tmp_path: Path) -> None:
     out = tmp_path / "sub"
     assert main(["nowcast", "--vintage", "2026-10-17", "--out", str(out)]) == 0
     assert json.loads((out / "handled.json").read_text()) == []
+    # The first release has no pair of releases, so the model raises.
     old = tmp_path / "old"
-    assert main(["nowcast", "--vintage", "2026-08-18", "--out", str(old)]) == 0
-    (note,) = json.loads((old / "handled.json").read_text())
-    assert note.startswith("delays: none published by 2026-08-18")
+    assert main(["nowcast", "--vintage", "2026-08-18", "--out", str(old)]) == 1
+    assert not old.exists()
 
 
 @pytest.mark.usefixtures("in_root")

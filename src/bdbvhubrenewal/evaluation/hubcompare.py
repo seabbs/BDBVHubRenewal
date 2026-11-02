@@ -432,6 +432,7 @@ def our_forecasts(
     config: BacktestConfig,
     models: Sequence[str],
     min_horizon: int | None = None,
+    daily: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Run our models for hub rounds from the matching vintages.
 
@@ -448,6 +449,9 @@ def our_forecasts(
     min_horizon : int, optional
         First week, in weeks from the reference date, to cover the weeks
         the hub forecasts did. Defaults to `config.min_horizon`.
+    daily : pandas.DataFrame, optional
+        Daily onsets by release. Real vintages get their releases, which
+        the random walk models need. Reconstructed vintages have none.
 
     Returns
     -------
@@ -469,11 +473,15 @@ def our_forecasts(
         if source == "real":
             rows = real.loc[real["vintage"] == vintage]
             dly = delays
+            snapshots = daily
         else:
             rows = reconstruct_vintages(real, delays, [vintage])
             src = delays.loc[delays["vintage"] == delays["vintage"].max()]
             dly = reconstruct_delays(src, vintage).assign(kind="reconstructed")
-        fc = run_forecasts(built, make_tasks(rows, dly, config))
+            snapshots = None
+        fc = run_forecasts(
+            built, make_tasks(rows, dly, config, daily=snapshots)
+        )
         fc["source"] = source
         frames.append(fc)
     if not frames:

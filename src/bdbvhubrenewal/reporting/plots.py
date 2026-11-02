@@ -941,7 +941,7 @@ def plot_nowcast(
         Observed, imputed and total cases by onset week, and each model's
         sample trajectories, 50% and 90% intervals and median.
     """
-    from bdbvhubrenewal.data import load_delays, load_target
+    from bdbvhubrenewal.data import load_daily, load_delays, load_target
     from bdbvhubrenewal.evaluation.backtest import (
         load_config,
         make_tasks,
@@ -956,7 +956,8 @@ def plot_nowcast(
     if forecasts is None:
         delays = load_delays(data_dir) if delays is None else delays
         config = load_config(config_path)
-        tasks = make_tasks(rows, delays, config)
+        daily = load_daily(data_dir)
+        tasks = make_tasks(rows, delays, config, daily=daily)
         forecasts = run_forecasts([get_model(m) for m in models], tasks)
     fc = forecasts.loc[
         (forecasts["location"] == location) & (forecasts["vintage"] == vintage)

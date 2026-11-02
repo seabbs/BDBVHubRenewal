@@ -96,25 +96,26 @@ MODEL_METADATA = {
     "randomwalk": {
         "model_name": "RandomWalk baseline",
         "methods": (
-            "Last complete onset week carried forward per province, with "
+            "Latest complete onset week carried forward per province, with "
             "log-scale random walk noise and Poisson draws; national is the "
             "sum of provinces."
         ),
         "methods_long": (
-            "For each province with cases, the last onset week judged complete "
-            "(its midpoint at least the 90th centile of the published "
-            "onset-to-report delay before the data date) is carried forward. "
-            "Later weeks are drawn on the log scale as a random walk whose "
-            "weekly SD is the SD of the last 8 complete weekly log changes "
-            "(floored at 0.1), with Poisson noise. Earlier weeks are the "
-            "published counts. Each sample is a joint trajectory and the "
-            "national value is the sum of province samples. No spatial "
-            "correlation beyond that sum. See "
+            "For each province, the latest onset week with at least 95% of "
+            "its final count reported is carried forward. The share reported "
+            "comes from the daily release snapshots, with delay factors "
+            "chained over the release gaps on the onset clock. Later weeks "
+            "are drawn on the log scale as a random walk whose weekly SD is "
+            "the SD of the last 8 weekly changes of log(1 + cases), with "
+            "Poisson noise and a floor at the count already reported. "
+            "Provinces under 10 cases a week use the delay and spread of "
+            "the country. Each sample is a joint trajectory and the "
+            "national value is the sum of province samples. See "
             "https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."
         ),
         "data_inputs": (
-            "Hub target data (weekly confirmed cases by onset week, observed "
-            "plus imputed) and the hub's published onset-to-report delays."
+            "Hub daily onsets by release (observed plus imputed) and the "
+            "hub's weekly target data."
         ),
     },
     # Draft for the PyRenew model. Not submitted until Sam has reviewed
@@ -147,36 +148,35 @@ MODEL_METADATA = {
             "province populations and population-weighted province centres."
         ),
     },
-    # A hub model of its own (seabbs-rwnowcast), submitted every
-    # round. The nowcast step is being built; check this text against it.
+    # A hub model of its own (seabbs-rwnowcast), submitted every round.
     "randomwalknowcast": {
         "model_name": "RandomWalk on a nowcast",
         "methods": (
-            "Chain-ladder nowcast of recent onset weeks with negative binomial "
-            "uncertainty, then the hub baseline on each draw. Provinces, "
-            "health zones and national."
+            "Daily chain-ladder nowcast of recent onsets summed to weeks "
+            "with a Skellam observation model, then a log-scale random walk "
+            "from each nowcast trajectory. Provinces, with national as "
+            "their sum."
         ),
         "methods_long": (
             "A baseline model building on the ideas of the baselinenowcast "
             "paper and package (Johnson et al. 2025, Wellcome Open Research, "
             "doi:10.12688/wellcomeopenres.25027.2; "
-            "https://github.com/epinowcast/baselinenowcast/). Recent onset "
-            "weeks are nowcast with a chain ladder on the reporting triangle, "
-            "with a negative binomial for each weekly horizon fitted to past "
-            "retrospective nowcasts. Each nowcast draw is carried forward "
-            "from its own latest week as the COVID-19 Forecast Hub baseline "
-            "on the log scale, with steps drawn from past weekly changes and "
-            "their negatives. "
-            "Sparse provinces borrow the delay and steps of the provinces "
-            "with more data. Province samples "
-            "are split across health zones, and the national value is the "
-            "sum of provinces. See "
+            "https://github.com/epinowcast/baselinenowcast/). Daily onsets "
+            "in the hub's release snapshots are nowcast with a chain ladder "
+            "over the actual gaps between releases, with ages counted from "
+            "each release's latest onset day, and summed to hub weeks. The "
+            "observation model is Skellam, with a spread by weeks back "
+            "fitted to nowcasts made at earlier releases, so counts can be "
+            "revised down. Each nowcast draw is carried forward from its "
+            "latest week as a random walk on the log scale with Poisson "
+            "noise. Provinces under 10 cases a week use the delay and "
+            "spreads of the country. The national value is the sum of "
+            "provinces. See "
             "https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."
         ),
         "data_inputs": (
-            "Hub target data (weekly confirmed cases by onset week, observed "
-            "plus imputed), the hub's published onset-to-report delays and "
-            "daily health zone counts."
+            "Hub daily onsets by release (observed plus imputed) and the "
+            "hub's weekly target data."
         ),
     },
 }
@@ -815,6 +815,7 @@ def _zone_backtest(args: argparse.Namespace) -> int:
     scores = zone_backtest(
         load_target(args.data),
         load_delays(args.data),
+        load_daily(args.data),
         load_daily_zones(args.data),
         hub_zones(hub_config),
         models=args.models,
@@ -1013,6 +1014,7 @@ def _compare_hub(args: argparse.Namespace) -> int:
         min_horizon=min(int(horizons.min()), config.min_horizon)
         if len(hub)
         else None,
+        daily=load_daily(args.data),
     )
     stored = hc.stored_forecasts(
         cfg.stored if args.stored is None else args.stored,

@@ -286,13 +286,16 @@ def check_zone_coherence(
 
 
 def zone_task(
-    task: ForecastTask, counts: pd.DataFrame, zones: tuple[str, ...]
+    task: ForecastTask,
+    counts: pd.DataFrame,
+    zones: tuple[str, ...],
+    daily: pd.DataFrame | None = None,
 ) -> ForecastTask:
     """Return the task with zones in place of provinces.
 
-    This is how zone random walk, the baseline for zone forecasts, is
-    run. Each zone gets a weekly series from the first week with zone
-    data to the vintage, with zeros filled in.
+    This is how the random walk models run at zone level. Each zone gets
+    a weekly series from the first week with zone data to the vintage,
+    with zeros filled in.
 
     Parameters
     ----------
@@ -302,6 +305,11 @@ def zone_task(
         Weekly zone counts at the task's vintage.
     zones : tuple of str
         Zone codes. Those of the task's provinces are kept.
+    daily : pandas.DataFrame, optional
+        Daily onsets by release of the country, provinces and zones.
+        The task keeps the rows of its releases for the country, its
+        provinces and its zones as `daily_history`. Without it the task
+        has none, so the random walk models cannot run.
 
     Returns
     -------
@@ -321,6 +329,17 @@ def zone_task(
         .reset_index()
         .assign(vintage=task.vintage)
     )
+    history = None
+    if daily is not None:
+        keep = {NATIONAL, *task.locations, *mine}
+        history = daily.loc[
+            daily["location"].isin(keep) & (daily["vintage"] <= task.vintage)
+        ].reset_index(drop=True)
     return dataclasses.replace(
-        task, target=target, locations=mine, mask=(), report_by=()
+        task,
+        target=target,
+        locations=mine,
+        mask=(),
+        report_by=(),
+        daily_history=history,
     )

@@ -50,7 +50,6 @@ from bdbvhubrenewal.data.dates import (
 from bdbvhubrenewal.data.reconstruct import (
     cutoff_lags,
     publication_lag_pmf,
-    reconstruct_daily_vintages,
     reconstruct_delays,
     reconstruct_vintages,
 )
@@ -65,8 +64,10 @@ from bdbvhubrenewal.data.simulate import (
 from bdbvhubrenewal.evaluation.scoring import score_forecasts
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
+    SAMPLE_COLUMNS,
     ForecastModel,
     ForecastTask,
+    ModelUnavailableError,
     add_national,
     check_samples,
 )
@@ -101,6 +102,18 @@ __all__ = [
 
 log = logging.getLogger(__name__)
 
+FORECAST_COLUMNS = (
+    "model",
+    "kind",
+    "vintage",
+    "reference_date",
+    *SAMPLE_COLUMNS,
+    "as_of",
+    "horizon",
+    "lag_prior",
+)
+"""Columns of `run_forecasts` output, which is empty if no model could run."""
+
 
 @dataclass(frozen=True)
 class BacktestConfig:
@@ -125,8 +138,7 @@ class BacktestConfig:
         Vintage dates to publish from the simulated outbreak.
     complete_after_weeks : int
         $K$: a truth week counts as complete if it ended at least this
-        many weeks before the truth vintage
-        (`bdbvhubrenewal.data.completeness.complete_weeks`).
+        many weeks before the truth vintage.
     sampler : dict
         NUTS settings of the fitted models (`apply_sampler`).
     bvd_max_rhat : float
@@ -505,6 +517,9 @@ def run_forecasts(
 ) -> pd.DataFrame:
     """Run every model on every task, adding the national total.
 
+    A model that raises `ModelUnavailableError` for a task, as the random
+    walk models do without release snapshots, has no rows for that task.
+
     Parameters
     ----------
     models : sequence of ForecastModel
@@ -545,7 +560,14 @@ def run_forecasts(
                 continue
             if hasattr(model, "fit_diagnostics"):
                 model.fit_diagnostics = []
-            samples = model.forecast(task)
+            try:
+                samples = model.forecast(task)
+            except ModelUnavailableError as err:
+                log.warning(
+                    "%s skipped %s %s: %s", model.name, task.kind,
+                    task.vintage, err,
+                )  # fmt: skip
+                continue
             table = _fit_rows(model, task)
             if fits is not None and not table.empty:
                 fits.append(table)
@@ -568,6 +590,8 @@ def run_forecasts(
                 # Written last, so a file means the task is complete.
                 samples.to_csv(path, index=False)
             frames.append(samples)
+    if not frames:
+        return pd.DataFrame(columns=FORECAST_COLUMNS)
     return pd.concat(frames, ignore_index=True)
 
 
@@ -817,7 +841,8 @@ def development_tasks(
         Daily onsets by release, with `vintage`, `location`, `onset_date`,
         `observed` and `imputed` columns, and optionally `kind`. Real tasks
         get the rows of its kind on or before its vintage as
-        `daily_history`.
+        `daily_history`. Reconstructed tasks have none, so the random walk
+        models, which need release snapshots, skip them.
 
     Returns
     -------
@@ -838,18 +863,6 @@ def development_tasks(
             parts.append(
                 reconstruct_vintages(real, delays, dates, latest, lags)
             )
-            if daily is not None:
-                first = real.loc[real["vintage"] == latest, "target_end_date"]
-                days = release_dates(first.min(), max(dates))
-                daily = pd.concat(
-                    [
-                        daily.assign(kind="real"),
-                        reconstruct_daily_vintages(
-                            real, delays, days, latest, lags
-                        ),
-                    ],
-                    ignore_index=True,
-                )
             src = delays.loc[delays["vintage"] == latest]
             dly_parts.extend(
                 reconstruct_delays(src, d).assign(kind="reconstructed")
