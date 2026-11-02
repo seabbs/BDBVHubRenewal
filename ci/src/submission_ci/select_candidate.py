@@ -292,10 +292,18 @@ def select(
     return chosen, attempts
 
 
-def _reason(chosen: Attempt | None, attempts: Sequence[Attempt]) -> str:
+def _reason(
+    chosen: Attempt | None, attempts: Sequence[Attempt], only: bool = False
+) -> str:
     """One sentence on why this candidate produced the submission."""
     before = [a for a in attempts if a.reasons and a is not chosen]
     why = "; ".join(f"{a.name} was ruled out ({a.reasons[0]})" for a in before)
+    if chosen is None and only:
+        return (
+            f"{attempts[0].name} could not run or was ruled out "
+            f"({why or 'no output'}). This round is skipped for this model: "
+            "no other model is submitted in its place."
+        )
     if chosen is None:
         return "Every candidate was ruled out: " + (why or "none ran") + "."
     if not before:
@@ -373,11 +381,13 @@ def run_select(
     validate: Validator | None,
     retried: bool,
     shadows: bool = True,
+    only: bool = False,
 ) -> dict[str, Any]:
     """Select, write provenance and copy the chosen files.
 
     `shadows=False` leaves the shadow candidates out, for a hub model of
-    its own whose run fits none of them.
+    its own whose run fits none of them. `only` marks a chain of one model
+    with no fallback, so a skip says so.
     """
     chosen, attempts = select(policy, root, validate, retried)
     prov: dict[str, Any] = {
@@ -390,7 +400,7 @@ def run_select(
             if chosen
             else "skip"
         ),
-        "reason": _reason(chosen, attempts),
+        "reason": _reason(chosen, attempts, only),
         "warnings": chosen.warnings if chosen else [],
         "handled": chosen.handled if chosen else [],
         "attempts": [asdict(a) for a in attempts],
@@ -433,8 +443,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     sel.add_argument(
         "--no-shadows", action="store_true", help="Leave shadows out"
     )
+    sel.add_argument(
+        "--only-model",
+        action="store_true",
+        help="Submit --model or nothing: no fallback to another baseline",
+    )
     args = p.parse_args(argv)
-    policy = load_policy(args.policy).for_model(args.model)
+    only = bool(getattr(args, "only_model", False))
+    policy = load_policy(args.policy).for_model(args.model, only=only)
     if args.cmd == "triage":
         need = triage(policy, args.candidates, deadline_minutes(args))
         set_outputs({"need_retry": need})
@@ -450,6 +466,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         validate,
         args.retried,
         shadows=not args.no_shadows,
+        only=only,
     )
     set_outputs(
         {

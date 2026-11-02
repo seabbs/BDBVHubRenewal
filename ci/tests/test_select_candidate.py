@@ -411,13 +411,45 @@ def test_provenance_lists_the_shadow_candidates(tmp_path: Path) -> None:
     assert shadows["bvd"]["fit"] is None
 
 
-def test_baseline_track_falls_back_to_randomwalk(tmp_path: Path) -> None:
-    # baseline: random walk on a nowcast, then plain randomwalk.
-    pol = POLICY.for_model("randomwalknowcast")
+def test_baseline_track_never_falls_back_to_randomwalk(
+    tmp_path: Path,
+) -> None:
+    # seabbs-rwnowcast submits random walk on a nowcast or nothing.
+    pol = POLICY.for_model("randomwalknowcast", only=True)
+    assert [c.id for c in pol.chain()] == ["randomwalknowcast"]
     c = tmp_path / "c"
     chain(c, randomwalknowcast=(None, "fail"), randomwalk=(None, "pass"))
-    prov = run_select(pol, c, tmp_path / "g", always("pass"), retried=False)
-    assert prov["selected"] == "randomwalk"
+    prov = run_select(
+        pol,
+        c,
+        tmp_path / "g",
+        always("pass"),
+        retried=False,
+        shadows=False,
+        only=True,
+    )
+    assert prov["selected"] is None
+    assert "no other model is submitted in its place" in prov["reason"]
+    assert not (tmp_path / "g" / "selected").exists()
+    assert "Round skipped" in (tmp_path / "g" / "provenance.md").read_text()
+
+
+def test_baseline_track_skips_when_the_model_did_not_run(
+    tmp_path: Path,
+) -> None:
+    pol = POLICY.for_model("randomwalknowcast", only=True)
+    c = tmp_path / "c"
+    chain(c, randomwalk=(None, "pass"))
+    prov = run_select(
+        pol, c, tmp_path / "g", always("pass"), False, False, only=True
+    )
+    assert prov["selected"] is None
+    assert "could not run" in prov["reason"]
+
+
+def test_only_needs_a_baseline_model() -> None:
+    with pytest.raises(ValueError, match="not a baseline"):
+        POLICY.for_model("renewal", only=True)
 
 
 def test_baseline_track_lists_no_shadows(tmp_path: Path) -> None:

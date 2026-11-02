@@ -394,3 +394,39 @@ def test_opt_in_is_reported(settings: Settings) -> None:
     check = {c.name: c for c in run_checks(ready_runner(), opted)}["opt-in"]
     assert check.status == "ok"
     assert MID2 in check.detail
+
+
+def test_default_hub_id_is_the_submitting_model(tmp_path: Path) -> None:
+    from submission_ci.preflight import (
+        opted_in,
+        other_model_ids,
+        submitting_model_id,
+    )
+
+    path = tmp_path / "hub.toml"
+    path.write_text(
+        '[submission]\nmodel_abbr = "renewal"\nsubmit = false\n'
+        '[models.randomwalknowcast]\nmodel_abbr = "rwnowcast"\n'
+        "submit = true\n"
+        '[models.randomwalk]\nmodel_abbr = "randomwalk"\nsubmit = false\n'
+    )
+    assert submitting_model_id(path) == "seabbs-rwnowcast"
+    assert opted_in(path) == ("seabbs-rwnowcast",)
+    assert set(other_model_ids(path)) == {
+        "seabbs-renewal",
+        "seabbs-randomwalk",
+    }
+    path.write_text('[submission]\nmodel_abbr = "renewal"\n')
+    assert submitting_model_id(path) == "seabbs-renewal"
+
+
+def test_print_submitting(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "hub.toml"
+    path.write_text(
+        '[submission]\nmodel_abbr = "renewal"\n'
+        '[models.a]\nmodel_abbr = "rwnowcast"\nsubmit = true\n'
+    )
+    assert main(["--hub-config", str(path), "--print-submitting"]) == 0
+    assert capsys.readouterr().out.strip() == "seabbs-rwnowcast"
