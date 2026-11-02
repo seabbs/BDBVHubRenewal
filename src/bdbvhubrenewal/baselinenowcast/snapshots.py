@@ -79,38 +79,35 @@ def pair_sums(
     )
 
 
-@partial(jax.jit, static_argnames="n_steps")
-def _pair_factors(
-    num: Array, den: Array, step_index: Array, n_steps: int
-) -> tuple[Array, Array]:
-    onehot = (step_index[:, None] == jnp.arange(n_steps)[None, :]).astype(
-        num.dtype
-    )
-    n = jnp.einsum("lpx,ps->lsx", num, onehot)
-    d = jnp.einsum("lpx,ps->lsx", den, onehot)
-    ok = d > 0
-    return jnp.where(ok, n / jnp.where(ok, d, 1.0), jnp.nan), ok
+@jax.jit
+def _pair_factors(num: Array, den: Array, member: Array) -> Array:
+    n = jnp.einsum("lpx,ps->lsx", num, member)
+    d = jnp.einsum("lpx,ps->lsx", den, member)
+    return n / jnp.maximum(d, 1.0)
 
 
 def pair_factors(
-    num: Any, den: Any, step_index: Any, n_steps: int
-) -> tuple[Array, Array]:
+    num: Any, den: Any, step_index: Any, n_steps: int | None = None
+) -> Array:
     """Development factors per step and age (extension E1).
 
-    ``step_index[p]`` is the slot ``0 .. n_steps - 1`` of pair p's
-    step.
-    Pairs of equal step are summed before the ratio, as
-    baselinenowcast sums over reference times.
-    The factor is ``sum(num) / sum(den)`` where ``sum(den) > 0``.
-    Elsewhere it is NaN and not identified (R divides by
-    ``max(den, 1)`` instead).
-    Returns ``(F, identified)`` of shape ``(n_loc, n_steps, max_delay)``.
+    ``step_index`` maps pairs to steps.
+    A vector gives the slot ``0 .. n_steps - 1`` of each pair's one step.
+    A matrix ``(n_pair, n_steps)`` of 0 and 1 lets a pair enter several
+    steps, as when steps within a day of each other are pooled.
+    The numerators and denominators of the pairs of a step are summed
+    before the ratio, as baselinenowcast sums over reference times.
+    The factor is ``sum(num) / max(sum(den), 1)``, the rule of
+    ``.calculate_mult_factor``.
+    Returns ``F`` of shape ``(n_loc, n_steps, max_delay)``.
     """
+    idx = jnp.asarray(step_index)
+    if idx.ndim == 1:
+        if n_steps is None:
+            raise ValueError("`n_steps` is needed with a vector step index.")
+        idx = idx[:, None] == jnp.arange(int(n_steps))[None, :]
     return _pair_factors(
-        jnp.asarray(num),
-        jnp.asarray(den),
-        jnp.asarray(step_index, int),
-        int(n_steps),
+        jnp.asarray(num), jnp.asarray(den), idx.astype(jnp.asarray(num).dtype)
     )
 
 
@@ -167,8 +164,7 @@ def chain_growth(factors: Any, plan: tuple[Any, Any, Any]) -> Array:
     """Growth to ``max_delay`` per location and day (extension E1).
 
     ``plan`` is ``(slot, age, mask)`` as from ``exact_plan``.
-    The growth is the product of the factors at the planned steps, and
-    NaN where one of them is not identified.
+    The growth is the product of the factors at the planned steps.
     Returns ``(n_loc, n)``.
     """
     slot, age, mask = plan

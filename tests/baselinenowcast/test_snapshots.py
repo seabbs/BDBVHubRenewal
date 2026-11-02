@@ -83,8 +83,7 @@ def test_daily_snapshots_reduce_to_estimate_delay() -> None:
     assert set(steps) == {1}
     num, den = pair_sums(counts, observed, cut, pairs, d)
     assert bool(jnp.all(jnp.sum(den, axis=1) > 0))
-    f, ok = pair_factors(num, den, np.zeros(len(pairs), int), 1)
-    assert bool(ok.all())
+    f = pair_factors(num, den, np.zeros(len(pairs), int), 1)
     plan = exact_plan(np.arange(d + 1), 1, 0, d)
     g = np.asarray(chain_growth(f, plan))[0]
     np.testing.assert_allclose(g[d], 1.0)
@@ -97,7 +96,7 @@ def test_daily_snapshots_reproduce_the_filled_row_totals() -> None:
     counts, observed, cut, d, n, n_use = _recon()
     pairs, _ = window_pairs(cut, d)
     num, den = pair_sums(counts, observed, cut, pairs, d)
-    f, _ = pair_factors(num, den, np.zeros(len(pairs), int), 1)
+    f = pair_factors(num, den, np.zeros(len(pairs), int), 1)
     rows = np.arange(n - n_use, n)
     plan = exact_plan(n - 1 - rows, 1, 0, d)
     g = np.asarray(chain_growth(f, plan))[0]
@@ -127,9 +126,7 @@ def test_pair_sums_skip_unobserved_cells_as_in_r() -> None:
     np.testing.assert_allclose(den, r[:, :, 1])
 
 
-def test_pair_factors_match_r_and_leave_zero_denominators_unidentified() -> (
-    None
-):
+def test_pair_factors_match_r_with_the_max_den_1_rule() -> None:
     counts, observed, cut, d = _skip()
     pairs, steps = window_pairs(cut, d)
     assert 9 not in steps
@@ -138,13 +135,14 @@ def test_pair_factors_match_r_and_leave_zero_denominators_unidentified() -> (
     assert list(uniq) == sorted(set(steps.tolist()))
     num, den = pair_sums(counts, observed, cut, pairs, d)
     slot = np.searchsorted(uniq, steps)
-    f, ok = pair_factors(num, den, slot, len(uniq))
+    f = np.asarray(pair_factors(num, den, slot, len(uniq)))
     expected = read("skip", "factors").reshape(counts.shape[0], len(uniq), d)
-    np.testing.assert_array_equal(~np.isnan(expected), np.asarray(ok))
-    assert not bool(ok.all())
-    np.testing.assert_allclose(
-        np.asarray(f)[ok], expected[~np.isnan(expected)], rtol=1e-12
-    )
+    seen = ~np.isnan(expected)
+    assert not seen.all()
+    np.testing.assert_allclose(f[seen], expected[seen], rtol=1e-12)
+    # Where R has no factor the denominator is 0, and 0.2.2 divides by 1.
+    n_sum = np.einsum("lpx,ps->lsx", num, np.eye(len(uniq))[slot])
+    np.testing.assert_allclose(f[~seen], n_sum[~seen])
 
 
 def test_exact_chain_matches_r() -> None:
@@ -152,16 +150,15 @@ def test_exact_chain_matches_r() -> None:
     pairs, steps = window_pairs(cut, d)
     num, den = pair_sums(counts, observed, cut, pairs, d)
     uniq = read_ints("skip", "uniq_steps")
-    f, _ = pair_factors(num, den, np.searchsorted(uniq, steps), len(uniq))
+    f = pair_factors(num, den, np.searchsorted(uniq, steps), len(uniq))
     s_o = read_ints("skip", "chain_step")[0]
     assert s_o == steps[-1]
     plan = exact_plan(np.arange(d), s_o, uniq.index(s_o), d)
     g = np.asarray(chain_growth(f, plan))
     expected = read("skip", "chain")
-    np.testing.assert_array_equal(np.isnan(expected), np.isnan(g))
-    np.testing.assert_allclose(
-        g[~np.isnan(g)], expected[~np.isnan(expected)], rtol=1e-12
-    )
+    seen = ~np.isnan(expected)
+    assert not np.isnan(g).any()
+    np.testing.assert_allclose(g[seen], expected[seen], rtol=1e-12)
 
 
 def _toy() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -186,20 +183,21 @@ def test_hand_derived_toy_with_two_steps_and_a_zero_denominator() -> None:
     # Pair 1 (step 3) has ages 3..0 at release 1; age 4 is outside.
     np.testing.assert_array_equal(num[0, 1], [2, 11 - 2, 10, 11])
     np.testing.assert_array_equal(den[0, 1], [0, 7, 9, 10])
-    f, ok = pair_factors(num, den, [0, 1], 2)
-    np.testing.assert_array_equal(
-        np.asarray(ok)[0], [[1, 1, 1, 0], [0, 1, 1, 1]]
-    )
+    f = pair_factors(num, den, [0, 1], 2)
     np.testing.assert_allclose(
         np.asarray(f)[0, 0, :3], [9 / 5, 10 / 8, 12 / 10]
     )
+    # Zero denominators take max(den, 1), as R does.
+    np.testing.assert_allclose(np.asarray(f)[0, 0, 3], 0.0)
+    np.testing.assert_allclose(np.asarray(f)[0, 1, 0], 2.0)
     np.testing.assert_allclose(
         np.asarray(f)[0, 1, 1:], [9 / 7, 10 / 9, 11 / 10]
     )
     # The origin is release 2 with step 3.
     plan = exact_plan(np.arange(6), 3, 1, 4)
     g = np.asarray(chain_growth(f, plan))[0]
-    assert np.isnan(g[0])  # needs F3(0), which is unidentified
+    # F3(0) = 2 / max(0, 1), then F3(3).
+    np.testing.assert_allclose(g[0], 2.0 * 11 / 10)
     np.testing.assert_allclose(g[1:4], [9 / 7, 10 / 9, 11 / 10])
     np.testing.assert_allclose(g[4:], 1.0)
 
@@ -210,7 +208,7 @@ def test_pairs_of_equal_step_are_summed_before_the_ratio() -> None:
     cut = np.array([1, 2, 3])
     pairs, _ = window_pairs(cut, 3)
     num, den = pair_sums(counts, observed, cut, pairs, 3)
-    f, _ = pair_factors(num, den, [0, 0], 1)
+    f = pair_factors(num, den, [0, 0], 1)
     # Age 0 has the cell of pair 0 only, the other is unobserved.
     np.testing.assert_allclose(np.asarray(f)[0, 0], [3 / 2, 9 / 7, 6 / 5])
 
@@ -237,8 +235,9 @@ def test_the_longest_step_gives_no_factor_but_keeps_its_counts() -> None:
     assert len(pairs) == 0
     num, den = pair_sums(counts, observed, cut, [0], 42)
     assert float(den.sum()) == 1.0
-    _, ok = pair_factors(num[:, :0], den[:, :0], np.zeros(0, int), 1)
-    assert not bool(ok.any())
+    f = pair_factors(num[:, :0], den[:, :0], np.zeros(0, int), 1)
+    assert f.shape == (1, 1, 42)
+    assert not bool(np.any(f))
     assert counts.sum() == 120
 
 
@@ -247,11 +246,69 @@ def test_chain_vmaps_over_locations() -> None:
     both = np.concatenate([counts, 2 * counts])
     pairs, _ = window_pairs(cut, 4)
     num, den = pair_sums(both, observed, cut, pairs, 4)
-    f, _ = pair_factors(num, den, [0, 1], 2)
+    f = pair_factors(num, den, [0, 1], 2)
     plan = exact_plan(np.arange(4), 3, 1, 4)
     g = np.asarray(chain_growth(f, plan))
-    np.testing.assert_allclose(g[0], g[1])
+    # Age 0 has a zero denominator, so max(den, 1) does not scale.
+    np.testing.assert_allclose(g[0, 1:], g[1, 1:])
     single = jax.vmap(
         lambda c: pair_sums(c[None], observed, cut, pairs, 4)[0][0]
     )(jnp.asarray(both))
     np.testing.assert_allclose(single, np.asarray(num))
+
+
+def _gapped() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Four releases with steps 7, 8 and 9 and a growing count."""
+    cut = np.array([9, 16, 24, 33])
+    n_day = 34
+    rng = np.random.default_rng(1)
+    base = rng.integers(5, 20, size=n_day).astype(float)
+    counts = np.zeros((2, len(cut), n_day))
+    for r, c in enumerate(cut):
+        age = c - np.arange(n_day)
+        grown = base * (1 + 0.5 * np.exp(-age / 6.0)) * (1 + 0.1 * r)
+        counts[0, r] = np.where(age >= 0, np.round(grown), 0)
+        counts[1, r] = 2 * counts[0, r]
+    observed = np.arange(n_day)[None, :] <= cut[:, None]
+    pairs, _ = window_pairs(cut, 12)
+    return counts, observed, cut, pairs
+
+
+def test_pooled_factor_is_the_ratio_of_sums_over_pairs_within_a_day() -> None:
+    counts, observed, cut, pairs = _gapped()
+    gaps = np.diff(cut)
+    np.testing.assert_array_equal(gaps, [7, 8, 9])
+    num, den = pair_sums(counts, observed, cut, pairs, 12)
+    steps = np.unique(gaps)
+    near = np.abs(gaps[:, None] - steps[None, :]) <= 1
+    f = np.asarray(pair_factors(num, den, near))
+    for s, step in enumerate(steps):
+        use = np.flatnonzero(np.abs(gaps - step) <= 1)
+        for x in range(12):
+            n = sum(counts[0, p + 1, cut[p] - x] for p in use)
+            d = sum(counts[0, p, cut[p] - x] for p in use)
+            np.testing.assert_allclose(f[0, s, x], n / max(d, 1), rtol=1e-12)
+    # A ratio of sums differs from the mean of the pair ratios.
+    ratios = [
+        counts[0, p + 1, cut[p] - 3] / counts[0, p, cut[p] - 3]
+        for p in range(3)
+    ]
+    assert not np.isclose(f[0, 1, 3], np.mean(ratios))
+    np.testing.assert_allclose(f[1], f[0])
+
+
+def test_pooling_a_regular_release_triangle_equals_the_unpooled_factor() -> (
+    None
+):
+    counts, observed, cut, _ = _gapped()
+    cut = np.arange(7, 7 + 7 * 4, 7)
+    n_day = int(cut[-1]) + 1
+    counts = np.tile(np.arange(1.0, n_day + 1), (1, len(cut), 1))
+    counts = counts * (1 + 0.2 * np.arange(len(cut)))[None, :, None]
+    observed = np.arange(n_day)[None, :] <= cut[:, None]
+    pairs, steps = window_pairs(cut, 14)
+    assert set(steps) == {7}
+    num, den = pair_sums(counts, observed, cut, pairs, 7)
+    pooled = pair_factors(num, den, np.ones((len(pairs), 1)))
+    unpooled = pair_factors(num, den, np.zeros(len(pairs), int), 1)
+    np.testing.assert_allclose(pooled, unpooled, rtol=1e-12)

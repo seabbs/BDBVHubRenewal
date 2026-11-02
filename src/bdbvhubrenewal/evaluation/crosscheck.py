@@ -61,7 +61,7 @@ def weekly_points(real: pd.DataFrame) -> pd.DataFrame:
     counts = counts * observed[None]
     num, den = pair_sums(counts, observed, cut, np.array([0]), DELAY_WEEKS)
     national = places.index("CD")
-    factors, _ = pair_factors(
+    factors = pair_factors(
         num[national : national + 1], den[national : national + 1],
         np.array([0]), 1,
     )  # fmt: skip

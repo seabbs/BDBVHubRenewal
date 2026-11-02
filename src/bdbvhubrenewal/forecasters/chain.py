@@ -12,11 +12,12 @@ $$
 F_s(x) = \frac{\sum N_{r+1}(t)}{\sum N_r(t)},
 $$
 
-summed over in-window pairs of step $s$ and over days of age $x$ that
-both releases observe.
+summed over the in-window pairs whose step is within 1 day of $s$ and
+over days of age $x$ that both releases observe.
+Steps of 7, 8 and 9 days then share their pairs, and each pooled factor is
+a ratio of sums, not a mean of ratios.
 Cells a release does not observe are skipped, not filled.
-An age with no cases in the denominator is not identified, and takes its
-parent's factor.
+The denominator is $\max(\sum N_r(t), 1)$, as in baselinenowcast.
 
 **Nowcast.** At the latest release $o$, with $s_o$ the step of its latest
 in-window pair, day $t$ is chained over the actual release gap,
@@ -67,7 +68,6 @@ __all__ = [
     "NoDelayPair",
     "Origin",
     "Settings",
-    "UnidentifiedDelay",
     "build_origin",
     "final_plan",
     "retro_plan",
@@ -82,10 +82,6 @@ class MissingSnapshots(ModelUnavailableError):  # noqa: N818
 
 class NoDelayPair(ModelUnavailableError):  # noqa: N818
     """No pair of releases has a step within the delay window."""
-
-
-class UnidentifiedDelay(ModelUnavailableError):  # noqa: N818
-    """A delay factor needed by the nowcast has no cases behind it."""
 
 
 @dataclass(frozen=True)
@@ -105,6 +101,9 @@ class Settings:
         First and last weeks back averaged for a place's level.
     max_mismatch : int
         Days by which a retrospective plan may differ from the gap.
+    pool_gap : int
+        Days by which a pair's step may differ from the step of a factor
+        and still enter its sums.
     completeness : float
         Share of a week's final count that must be reported for it to
         start the random walk.
@@ -117,6 +116,7 @@ class Settings:
     min_errors: int = MIN_ERRORS
     level_weeks: tuple[int, int] = (3, 6)
     max_mismatch: int = 1
+    pool_gap: int = 1
     completeness: float = 0.95
     walk_weeks: int = 9
 
@@ -134,9 +134,8 @@ class DelayFit:
     pair_step : numpy.ndarray
         Index in `steps` of each pair, `[P]`.
     factors : numpy.ndarray
-        $F$ for each place, `[L, S, D]`, from its source.
-    identified : numpy.ndarray
-        Whether each factor has cases behind it, `[L, S, D]`.
+        $F$ for each place, `[L, S, D]`, from its source. Each step pools
+        the pairs within `Settings.pool_gap` days of it.
     level : numpy.ndarray
         Cases a week of each place, `[L]`.
     source : numpy.ndarray
@@ -149,7 +148,6 @@ class DelayFit:
     steps: np.ndarray
     pair_step: np.ndarray
     factors: np.ndarray
-    identified: np.ndarray
     level: np.ndarray
     source: np.ndarray
 
@@ -253,21 +251,12 @@ def fit_delay(
         jnp.asarray(pairs[:, 0]),
         settings.max_delay,
     )
-    f_raw, ident_raw = pair_factors(
-        num, den, jnp.asarray(pair_step), len(steps)
-    )
-    f, ident = np.array(f_raw), np.array(ident_raw)
-    for n in range(f.shape[0]):
-        p = snap.parent[n]
-        if p >= 0:
-            f[n] = np.where(ident[n], f[n], f[p])
-            ident[n] = ident[n] | ident[p]
+    near = np.abs(gaps[:, None] - steps[None, :]) <= settings.pool_gap
+    f = np.array(pair_factors(num, den, jnp.asarray(near)))
     level = levels(snap, r, settings)
     source = source_index(level, snap.parent, min_level=settings.min_level)
     node = source % len(level)
-    return DelayFit(
-        pairs, steps, pair_step, f[node], ident[node], level, source
-    )
+    return DelayFit(pairs, steps, pair_step, f[node], level, source)
 
 
 def final_plan(
@@ -350,13 +339,11 @@ def retro_plan(
     return plan, mismatch
 
 
-def _grow(
-    fit: DelayFit, plan: ChainPlan, counts: np.ndarray
-) -> tuple[np.ndarray, bool]:
-    """Return growth `[L, T]` and whether every needed factor is identified."""
-    raw = np.array(chain_growth(fit.factors, (plan.step, plan.age, plan.valid)))
-    ok = np.isfinite(raw)
-    return np.where(ok, raw, 1.0), bool(np.all(ok | (counts <= 0)))
+def _grow(fit: DelayFit, plan: ChainPlan) -> np.ndarray:
+    """Return growth `[L, T]`."""
+    return np.array(
+        chain_growth(fit.factors, (plan.step, plan.age, plan.valid))
+    )
 
 
 @dataclass
@@ -407,13 +394,7 @@ def retro_errors(snap: SnapshotArrays, o: int, settings: Settings) -> Errors:
         if mismatch > settings.max_mismatch:
             continue
         counts = snap.counts[:, r, :]
-        g, ok = _grow(fit, plan, counts)
-        if not ok:
-            log.info(
-                "Release %s has unidentified factors, skipped.",
-                snap.releases[r],
-            )
-            continue
+        g = _grow(fit, plan)
         wa, k_r = snap.asof_week(r), weeks_back(snap, r, settings.max_delay)
         cols = wa - np.arange(k_n)
         take = (cols >= 0) & (np.arange(k_n) < k_r)
@@ -515,8 +496,6 @@ def build_origin(
     ------
     NoDelayPair
         If no pair of releases has a step within the delay window.
-    UnidentifiedDelay
-        If a factor the nowcast needs has no cases behind it.
     """
     o = len(snap.releases) - 1
     fit = fit_delay(snap, o, settings)
@@ -527,12 +506,7 @@ def build_origin(
         )
     plan = final_plan(snap, o, fit, settings)
     counts = snap.counts[:, o, :]
-    g, ok = _grow(fit, plan, counts)
-    if not ok:
-        raise UnidentifiedDelay(
-            f"A delay factor needed at {snap.releases[o]} has no cases "
-            "behind it, for the place or any parent."
-        )
+    g = _grow(fit, plan)
     reported = weekly_sums(snap, o)
     point = _week_sum(counts * g, snap)
     # A chain with a zero factor revises the day to nothing, so it counts

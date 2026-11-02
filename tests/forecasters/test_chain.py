@@ -86,26 +86,28 @@ def test_the_50_day_pair_gives_no_factor_but_its_counts_stay(
     assert first[0].sum() == snap.counts[0, 0].sum()
 
 
-def test_10_24_point_nowcasts_match_the_r_script(origin24) -> None:
-    # Weeks 10-24, 10-17, 10-10, 10-03, from rwnc/check/spec_check.R.
+def test_10_24_point_nowcasts_pool_the_8_and_9_day_pairs(origin24) -> None:
+    # Weeks 10-24, 10-17, 10-10, 10-03. The R script chained the 8 day
+    # pair alone and divided by max(den, 1) only in 0.2.2, so it gave 439.2,
+    # 418.1, 539.7 and 544.1 for the country.
     assert _weeks(origin24, "CD") == pytest.approx(
-        [439.2, 418.1, 539.7, 544.1], abs=0.06
+        [387.5, 376.6, 493.7, 511.9], abs=0.06
     )
     # Tshopo has under 10 cases a week, so uses the national delay.
     assert _weeks(origin24, "CD-TO") == pytest.approx(
-        [23.9, 13.2, 23.6, 19.6], abs=0.06
+        [20.7, 12.0, 21.6, 18.4], abs=0.06
     )
 
 
 def test_places_with_10_cases_a_week_use_their_own_delay(origin24) -> None:
     assert _weeks(origin24, "CD-IT") == pytest.approx(
-        [267.4, 198.4, 317.8, 276.3], abs=0.06
+        [269.4, 182.4, 288.2, 254.1], abs=0.06
     )
     assert _weeks(origin24, "CD-NK") == pytest.approx(
-        [147.0, 194.0, 172.0, 212.0], abs=0.06
+        [87.8, 150.4, 154.8, 202.8], abs=0.06
     )
     assert _weeks(origin24, "CD-HU") == pytest.approx(
-        [6.0, 36.8, 24.5, 27.2], abs=0.06
+        [9.3, 34.5, 25.9, 28.8], abs=0.06
     )
     loc = origin24.snap.locations
     assert origin24.fit.level[loc.index("CD-TO")] < 10
@@ -161,7 +163,7 @@ def test_the_spread_pools_four_errors_at_10_24(origin24) -> None:
     assert origin24.rho is not None
     assert origin24.rho_n is not None
     assert origin24.rho[loc, :4] == pytest.approx(
-        [1.566, 2.213, 0.447, 1.511], abs=0.0006
+        [1.530, 2.212, 0.447, 1.511], abs=0.0006
     )
     # CD, Haut-Uele, Ituri and North Kivu give an error each.
     assert origin24.rho_n[loc, :4].tolist() == [4, 4, 4, 4]
@@ -213,3 +215,18 @@ def test_zones_use_their_province_then_the_country(
             ) <= len("CD-XX"), loc
             seen.add("country")
     assert seen == {"own", "province", "country"}
+
+
+def test_the_final_factors_pool_pairs_within_a_day_of_the_step(
+    snap24,
+) -> None:
+    fit = fit_delay(snap24, 3, Settings())
+    assert fit is not None
+    assert fit.steps.tolist() == [8, 9]
+    # Both pairs are within a day of both steps, so the steps share a
+    # factor per age.
+    np.testing.assert_allclose(fit.factors[:, 0], fit.factors[:, 1])
+    # The unpooled factor of the latest pair alone differs.
+    alone = fit_delay(snap24, 3, Settings(pool_gap=0))
+    assert alone is not None
+    assert not np.allclose(alone.factors[:, 0], alone.factors[:, 1])

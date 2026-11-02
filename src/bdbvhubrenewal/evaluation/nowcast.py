@@ -194,8 +194,8 @@ def expected_point(
 
     Raises
     ------
-    ModelUnavailableError
-        If a factor the chain needs has no cases behind it.
+    ValueError
+        If the releases or places differ from the origin's.
     """
     big = snapshot_arrays(daily, later, tuple(locations))
     snap = origin.snap
@@ -217,12 +217,7 @@ def expected_point(
         )
     )
     counts = big.counts[:, origin.o, :]
-    ok = np.isfinite(raw)
-    if not np.all(ok | (counts <= 0)):
-        raise ModelUnavailableError(
-            f"A factor for the step to {later} has no cases behind it."
-        )
-    point = _week_sums(big.week, counts * np.where(ok, raw, 1.0), big.n_weeks)
+    point = _week_sums(big.week, counts * raw, big.n_weeks)
     return point[:, : snap.n_weeks], mismatch
 
 
