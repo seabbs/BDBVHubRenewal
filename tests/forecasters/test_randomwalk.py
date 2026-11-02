@@ -208,7 +208,7 @@ def test_the_backtest_skips_origins_a_model_cannot_forecast(
         real, delays, BacktestConfig(seed=3), history=real, daily=daily
     )
     out = run_forecasts([get_model("randomwalk")], tasks)
-    assert set(out["vintage"]) == {"2026-10-17", "2026-10-24"}
+    assert set(out["vintage"]) == {"2026-10-17", "2026-10-24", "2026-11-01"}
 
 
 def test_zones_run_from_the_same_code(

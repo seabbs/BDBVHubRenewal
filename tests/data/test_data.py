@@ -179,6 +179,7 @@ def test_committed_target_is_consistent(target: pd.DataFrame) -> None:
         "2026-10-09",
         "2026-10-17",
         "2026-10-24",
+        "2026-11-01",
     ]
     assert (target["observed"] + target["imputed"] == target["total"]).all()
     assert set(target["kind"]) == {"real"}
@@ -217,7 +218,12 @@ def test_imputed_share_and_newly_missing(target: pd.DataFrame) -> None:
     assert valid.between(0, 1).all()
     new = newly_missing(target)
     nat = new.loc[new["location"] == "CD"]
-    assert list(nat["vintage"]) == ["2026-10-09", "2026-10-17", "2026-10-24"]
+    assert list(nat["vintage"]) == [
+        "2026-10-09",
+        "2026-10-17",
+        "2026-10-24",
+        "2026-11-01",
+    ]
     assert (nat["new_observed"] + nat["new_imputed"] == nat["new_total"]).all()
 
 

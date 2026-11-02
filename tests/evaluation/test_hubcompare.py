@@ -153,7 +153,8 @@ def test_match_vintage(target: pd.DataFrame) -> None:
     vintages = sorted(set(real["vintage"]))
     assert match_vintage("2026-10-31", vintages) == "2026-10-24"
     assert match_vintage("2026-10-03", vintages) is None
-    assert match_vintage("2026-11-07", vintages) is None
+    assert match_vintage("2026-11-07", vintages) == "2026-11-01"
+    assert match_vintage("2026-11-14", vintages) is None
 
 
 def test_our_forecasts_cover_the_hub_weeks(
@@ -222,19 +223,19 @@ def test_score_comparison_flags_complete_weeks(
     # Each model is scored on the weeks it covered.
     late = scores.loc[scores["model"] == "teamB-late"]
     assert set(late["target_end_date"]) == set(WEEKS[2:])
-    assert set(scores["truth_vintage"]) == {"2026-10-24"}
-    # Truth 2026-10-24, K = 3: weeks ending by 2026-10-03 are complete.
+    assert set(scores["truth_vintage"]) == {"2026-11-01"}
+    # Truth 2026-11-01, K = 3: weeks ending by 2026-10-10 are complete.
     done = scores.loc[scores["complete"], "target_end_date"]
-    assert done.max() == "2026-10-03"
+    assert done.max() == "2026-10-10"
 
 
 def test_score_comparison_waits_for_later_data(target: pd.DataFrame) -> None:
-    hub = _hub_rows(ref="2026-10-31").assign(model="teamA-weekly")
+    hub = _hub_rows(ref="2026-11-07").assign(model="teamA-weekly")
     hub = hub.rename(columns={"output_type_id": "sample"}).assign(source="hub")
     scores, pending = score_comparison(hub, target, 3)
     assert scores.empty
-    assert list(pending["reference_date"]) == ["2026-10-31"]
-    assert pending["vintage"].iloc[0] == "2026-10-24"
+    assert list(pending["reference_date"]) == ["2026-11-07"]
+    assert pending["vintage"].iloc[0] == "2026-11-01"
 
 
 def test_summarise_comparison(
@@ -252,8 +253,8 @@ def test_summarise_comparison(
     rows = table.set_index("model")
     assert rows.loc["flat", "relative_wis"] == pytest.approx(1)
     # Complete weeks only: teamB-late forecast 2026-10-03 and 2026-10-10,
-    # and only 2026-10-03 is complete, in two locations.
-    assert rows.loc["teamB-late", "n"] == 2
+    # and both are complete, in two locations.
+    assert rows.loc["teamB-late", "n"] == 4
     assert {"coverage_50", "coverage_90", "bias", "wis"} <= set(table.columns)
 
 

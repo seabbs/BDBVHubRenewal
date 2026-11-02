@@ -13,6 +13,7 @@ actual gap to $o'$ only (`forecasters.chain.retro_plan`), with the
 Skellam spread of the origin.
 The prediction is scored only when the steps stand in for the gap within
 `Settings.max_mismatch` days, as for the errors behind the spread.
+A forecast dropped for one model is dropped for all.
 `randomwalk` has no release to release chain, so its samples serve for
 both targets.
 
@@ -424,6 +425,13 @@ def _score(
             pd.DataFrame(), pd.DataFrame(), pd.DataFrame(origin_rows), fits
         )
     samples = pd.concat(frames, ignore_index=True)
+    # A model with no forecast of a target (the chain has no step within
+    # the allowed mismatch) drops it for every model, so all are scored
+    # on the same forecasts.
+    ids = ["target", "origin", "truth_vintage"]
+    n_models = samples.groupby("target")["model"].transform("nunique")
+    have = samples.groupby(ids)["model"].transform("nunique")
+    samples = samples.loc[have == n_models].reset_index(drop=True)
     places = sorted({loc for t in tasks for loc in t.locations})
     done = complete_weeks(daily, latest, places, cfg)
     scored, quant = [], []

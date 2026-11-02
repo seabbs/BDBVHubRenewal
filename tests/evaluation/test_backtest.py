@@ -73,8 +73,8 @@ def test_development_never_uses_heldout_vintages(
     assert set(real["vintage"]) == {"2026-08-18", "2026-10-09"}
     assert set(scores["kind"]) == {"real"}
     # Every week is scored, up to the last week of the truth vintage.
-    assert scores["target_end_date"].max() == "2026-10-24"
-    assert set(scores["truth_vintage"]) == {"2026-10-24"}
+    assert scores["target_end_date"].max() == "2026-10-31"
+    assert set(scores["truth_vintage"]) == {"2026-11-01"}
     assert (scores["n_samples"] == 100).all()
 
 
@@ -92,11 +92,13 @@ def test_score_by_truth_vintage(
         ("2026-08-18", "2026-10-09"),
         ("2026-08-18", "2026-10-17"),
         ("2026-08-18", "2026-10-24"),
+        ("2026-08-18", "2026-11-01"),
         ("2026-10-09", "2026-10-17"),
         ("2026-10-09", "2026-10-24"),
+        ("2026-10-09", "2026-11-01"),
     }
     # Against the latest vintage it matches the development scores.
-    at_latest = scores.loc[scores["truth_vintage"] == "2026-10-24"]
+    at_latest = scores.loc[scores["truth_vintage"] == "2026-11-01"]
     real = latest.loc[latest["kind"] == "real"]
     assert len(at_latest) == len(real)
     assert at_latest["wis"].sum() == pytest.approx(real["wis"].sum())
@@ -218,6 +220,7 @@ def test_development_scores_both_ways(
         "2026-10-09",
         "2026-10-17",
         "2026-10-24",
+        "2026-11-01",
     }
 
 
@@ -248,6 +251,7 @@ def test_truth_changes(target: pd.DataFrame) -> None:
         "2026-10-09",
         "2026-10-17",
         "2026-10-24",
+        "2026-11-01",
     ]
     last = week.iloc[-1]
     assert last["change"] == 0
@@ -307,7 +311,7 @@ def test_lopo_masks_one_province_at_a_time(
     assert set(forecasts["masked"]) == {"CD-IT", "CD-NK"}
     assert set(forecasts["vintage"]) == {"2026-08-18", "2026-10-09"}
     assert set(scores["location"]) == {"CD-IT", "CD-NK"}
-    assert set(scores["truth_vintage"]) == {"2026-10-24"}
+    assert set(scores["truth_vintage"]) == {"2026-11-01"}
 
 
 def test_lopo_without_mask_aware_models_is_empty(

@@ -99,9 +99,9 @@ def test_heldout_scores_each_forecast_under_its_model(
     scores = run_heldout(
         target, delays, config, evaluate_holdout=True, out_dir=out, daily=daily
     )
-    # Only the 2026-10-17 forecast has later data.
-    assert set(scores["vintage"]) == {"2026-10-17"}
-    assert set(scores["truth_vintage"]) == {"2026-10-24"}
+    # The 2026-10-17 and 2026-10-24 forecasts have later data.
+    assert set(scores["vintage"]) == {"2026-10-17", "2026-10-24"}
+    assert set(scores["truth_vintage"]) == {"2026-10-24", "2026-11-01"}
     assert set(scores["chosen_model"]) == {"randomwalk"}
     # Both baselines are scored on every held-out vintage.
     assert set(scores["model"]) == {
@@ -112,10 +112,14 @@ def test_heldout_scores_each_forecast_under_its_model(
     record = yaml.safe_load((out / "heldout-run.yml").read_text())
     assert len(record["model_choice_sha256"]) == 64
     assert record["pending"] == [
-        {"vintage": "2026-10-24", "model": "randomwalk"}
+        {"vintage": "2026-11-01", "model": "randomwalk"}
     ]
     forecasts = pd.read_csv(out / "heldout-forecasts.csv.gz")
-    assert set(forecasts["vintage"]) == {"2026-10-17", "2026-10-24"}
+    assert set(forecasts["vintage"]) == {
+        "2026-10-17",
+        "2026-10-24",
+        "2026-11-01",
+    }
 
 
 def test_heldout_scores_both_baselines_beside_a_fitted_choice(

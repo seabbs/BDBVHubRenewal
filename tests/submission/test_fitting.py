@@ -142,8 +142,8 @@ def test_plot_submission_and_validate(tmp_path: Path) -> None:
     assert main(["plot-submission", "--submission", str(csv), "--out",
                  str(png)]) == 0  # fmt: skip
     assert 0 < png.stat().st_size < 1_000_000
-    snapshot = ROOT / "tests/submission/hub_validation/fixtures/hub-snapshot"
-    code = main(["validate", "--hub", str(snapshot), "--skip-window",
+    # The committed hub config follows the hub, so it lists the round.
+    code = main(["validate", "--hub", str(ROOT / "data"), "--skip-window",
                  "--metadata-dir", "hub/model-metadata", str(csv)])  # fmt: skip
     assert code == 0
 

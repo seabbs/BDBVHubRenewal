@@ -57,8 +57,9 @@ def test_scores_cover_both_targets_and_the_floor(
         "randomwalknowcast",
         BASELINE,
     }
-    assert set(s["origin"]) == {"2026-10-17"}
-    assert set(s.loc[s["target"] == "next", "truth_vintage"]) == {"2026-10-24"}
+    assert set(s["origin"]) == {"2026-10-17", "2026-10-24"}
+    nxt = s.loc[s["target"] == "next"]
+    assert set(nxt["truth_vintage"]) == {"2026-10-24", "2026-11-01"}
     # Every model is scored on the same forecasts.
     n = summarise(s)
     for _, g in n.groupby("target"):
@@ -70,7 +71,7 @@ def test_complete_target_only_has_complete_weeks(
     daily: pd.DataFrame,
 ) -> None:
     s = result.scores.loc[result.scores["target"] == "complete"]
-    done = complete_weeks(daily, "2026-10-24", sorted(set(s["location"])))
+    done = complete_weeks(daily, "2026-11-01", sorted(set(s["location"])))
     ok = set(
         zip(
             done.loc[done["complete"], "location"],

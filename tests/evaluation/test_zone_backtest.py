@@ -34,13 +34,13 @@ def test_both_baselines_are_scored_at_zone_level(
     names = {"randomwalk", "randomwalknowcast"}
     assert set(scores["model"]) == names | {n + SUMMED for n in names}
     assert (scores["location"].str.count("-") == 2).all()
-    assert set(scores["truth_vintage"]) == {"2026-10-24"}
+    assert set(scores["truth_vintage"]) == {"2026-11-01"}
     # Earlier origins have no pair of releases in the delay window.
-    assert set(scores["vintage"]) == {"2026-10-17"}
+    assert set(scores["vintage"]) == {"2026-10-17", "2026-10-24"}
     # Only zones with cases at the origin are forecast.
     per = scores.groupby(["model", "vintage"])["location"].nunique()
-    assert per.nunique() == 1
-    assert 20 < per.iloc[0] < 300
+    assert (per.groupby("vintage").nunique() == 1).all()
+    assert per.between(20, 300).all()
 
 
 def test_every_model_scores_the_same_zones_and_weeks(
