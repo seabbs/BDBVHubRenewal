@@ -98,26 +98,28 @@ MODEL_METADATA = {
     "randomwalk": {
         "model_name": "RandomWalk baseline",
         "methods": (
-            "Latest complete onset week carried forward per province, with "
-            "log-scale random walk noise and Poisson draws; national is the "
-            "sum of provinces."
+            "Latest complete onset week carried forward per place, with "
+            "log-scale random walk noise and Poisson draws. Health zones "
+            "and provinces, with national the sum of provinces."
         ),
         "methods_long": (
-            "For each province, the latest onset week with at least 95% of "
-            "its final count reported is carried forward. The share reported "
-            "comes from the daily release snapshots, with delay factors "
-            "chained over the release gaps on the onset clock. Later weeks "
-            "are drawn on the log scale as a random walk whose weekly SD is "
-            "the SD of the last 8 weekly changes of log(1 + cases), with "
-            "Poisson noise and a floor at the count already reported. "
-            "Provinces under 10 cases a week use the delay and spread of "
-            "the country. Each sample is a joint trajectory and the "
-            "national value is the sum of province samples. See "
+            "For each place, the latest onset week with at least 95% of its "
+            "final count reported is carried forward. The share reported "
+            "comes from a baselinenowcast chain ladder on the daily release "
+            "snapshots. Later weeks are drawn on the log scale as a random "
+            "walk whose weekly SD is the SD of the last 8 weekly changes of "
+            "log(1 + cases), with Poisson noise and a floor at the count "
+            "already reported. A place uses its own delay factor at an age "
+            "if that factor rests on at least 10 cases, and otherwise its "
+            "parent's (zone, then province, then national). A place under "
+            "10 cases a week uses the walk spread of its parent. Each sample "
+            "is a joint trajectory and the national value is the sum of "
+            "province samples. See "
             "https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."
         ),
         "data_inputs": (
-            "Hub daily onsets by release (observed plus imputed) and the "
-            "hub's weekly target data."
+            "Hub daily onsets by release (observed plus imputed) for "
+            "provinces and health zones, and the hub's weekly target data."
         ),
     },
     # Draft for the PyRenew model. Not submitted until Sam has reviewed
@@ -154,31 +156,35 @@ MODEL_METADATA = {
     "randomwalknowcast": {
         "model_name": "RandomWalk on a nowcast",
         "methods": (
-            "Daily chain-ladder nowcast of recent onsets summed to weeks "
-            "with a Skellam observation model, then a log-scale random walk "
-            "from each nowcast trajectory. Provinces, with national as "
-            "their sum."
+            "Baselinenowcast chain ladder on daily release snapshots with a "
+            "Skellam observation model, then a log-scale random walk. Health "
+            "zones and provinces, with national the sum of provinces."
         ),
         "methods_long": (
-            "A baseline model building on the ideas of the baselinenowcast "
-            "paper and package (Johnson et al. 2025, Wellcome Open Research, "
-            "doi:10.12688/wellcomeopenres.25027.2; "
-            "https://github.com/epinowcast/baselinenowcast/). Daily onsets "
-            "in the hub's release snapshots are nowcast with a chain ladder "
-            "over the actual gaps between releases, with ages counted from "
-            "each release's latest onset day, and summed to hub weeks. The "
-            "observation model is Skellam, with a spread by weeks back "
-            "fitted to nowcasts made at earlier releases, so counts can be "
-            "revised down. Each nowcast draw is carried forward from its "
-            "latest week as a random walk on the log scale with Poisson "
-            "noise. Provinces under 10 cases a week use the delay and "
-            "spreads of the country. The national value is the sum of "
-            "provinces. See "
+            "The baselinenowcast method (Johnson et al. 2025, Wellcome Open "
+            "Research, doi:10.12688/wellcomeopenres.25027.2; "
+            "https://github.com/epinowcast/baselinenowcast/), from a JAX "
+            "port of baselinenowcast 0.2.2, with a random walk on top. "
+            "Daily onsets in the hub's weekly release snapshots are nowcast "
+            "with a chain ladder. Unobserved report days are skipped, every "
+            "release pair in the 42-day window is pooled, and each release "
+            "is aged from its latest onset day. A place uses its own delay "
+            "factor at an age if that factor rests on at least 10 cases, "
+            "and otherwise its parent's (zone, then province, then "
+            "national). Daily nowcasts are summed to hub weeks. "
+            # The uncertainty. Edit here if the observation model changes.
+            "The observation model is Skellam, with a spread by weeks back "
+            "fitted to retrospective nowcasts against the count expected at "
+            "the later release, so counts can be revised down. "
+            "Each nowcast draw is carried forward from its latest week as a "
+            "random walk on the log scale with Poisson noise. A place under "
+            "10 cases a week, or with fewer than 2 errors, uses the spreads "
+            "of its parent. The national value is the sum of provinces. See "
             "https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."
         ),
         "data_inputs": (
-            "Hub daily onsets by release (observed plus imputed) and the "
-            "hub's weekly target data."
+            "Hub daily onsets by release (observed plus imputed) for "
+            "provinces and health zones, and the hub's weekly target data."
         ),
     },
 }

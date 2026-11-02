@@ -43,7 +43,7 @@ Run it after each part, logged in to `gh` as `seabbs`.
 
 ## For each hub model
 
-1. Review its metadata in `hub/model-metadata/<hub model>.yml`.
+1. Review its metadata in `hub/model-metadata/<hub model>.yml`, including the contributor list, licence and model name.
 2. Set `submit = true` for it in `config/hub.toml` and push to `main`.
    For `renewal`, also commit the chosen model to `results/model-choice.yml`.
 3. Dry run, and read the pull request body in the job summary.

@@ -34,7 +34,7 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 
 ```bash
 task backtest           # development backtest, real releases and recovery check
-task crosscheck         # weekly cross-check of the daily nowcast
+task crosscheck         # weekly cross-check of the nowcast
 task backtest-lopo      # leave one province out
 task backtest-heldout   # score the held-out vintages
 task docs               # build the site into _site/
@@ -55,7 +55,7 @@ uv run bdbvhubrenewal compare-hub --fetch
 ## Hub files
 
 `bdbvhubrenewal nowcast` writes `model-output/<model_id>/<reference_date>-<model_id>.csv` under `output/submission/`.
-The model id is `seabbs-<model>`.
+The model id is `seabbs-` plus the model's `model_abbr` in `config/hub.toml`.
 It checks the file with `validate_submission`, which mirrors the hub's checks:
 
 - column names and order free, no extra columns;
@@ -68,8 +68,7 @@ It checks the file with `validate_submission`, which mirrors the hub's checks:
 
 `task validate-hub` then runs the hub's own `hubValidations::validate_submission()` in R against a fresh clone of the hub.
 
-`bdbvhubrenewal metadata` writes `hub/model-metadata/seabbs-<model>.yml` and checks it against the hub's schema.
-Sam confirms the contributor list, licence and model name before a model is first submitted.
+`bdbvhubrenewal metadata` writes `hub/model-metadata/<model id>.yml` and checks it against the hub's schema.
 
 !!! note "Sample ids"
     Sample ids run from 1 to 100 and are shared across locations, so `hubValidations` reads samples as joint across locations.
