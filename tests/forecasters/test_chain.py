@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from bdbvhubrenewal.baselinenowcast import pair_factors, pair_sums
 from bdbvhubrenewal.data.snapshots import snapshot_arrays, weekly_sums
 from bdbvhubrenewal.forecasters.chain import (
     NoDelayPair,
@@ -99,21 +100,16 @@ def test_10_24_point_nowcasts_pool_every_pair(origin24) -> None:
     )
 
 
-def test_places_with_10_cases_a_week_use_their_own_delay(origin24) -> None:
+def test_provinces_use_own_factors_where_they_have_10_cases(origin24) -> None:
     assert _weeks(origin24, "CD-IT") == pytest.approx(
-        [270.7, 182.4, 288.2, 254.1], abs=0.06
+        [259.4, 182.4, 288.2, 254.1], abs=0.06
     )
     assert _weeks(origin24, "CD-NK") == pytest.approx(
-        [87.8, 150.4, 154.8, 202.8], abs=0.06
+        [85.7, 150.4, 154.8, 202.8], abs=0.06
     )
     assert _weeks(origin24, "CD-HU") == pytest.approx(
-        [9.3, 34.5, 25.9, 28.8], abs=0.06
+        [11.1, 31.1, 27.4, 29.4], abs=0.06
     )
-    loc = origin24.snap.locations
-    assert origin24.fit.level[loc.index("CD-TO")] < 10
-    # Source indices from the number of places up are pooled estimates.
-    assert origin24.fit.source[loc.index("CD-TO")] == len(loc) + loc.index("CD")
-    assert origin24.fit.source[loc.index("CD-IT")] == loc.index("CD-IT")
 
 
 def test_every_day_with_data_is_nowcast(origin24) -> None:
@@ -163,7 +159,7 @@ def test_the_spread_pools_four_errors_at_10_24(origin24) -> None:
     assert origin24.rho is not None
     assert origin24.rho_n is not None
     assert origin24.rho[loc, :4] == pytest.approx(
-        [1.443, 2.204, 0.447, 1.511], abs=0.0006
+        [0.4728, 2.2176, 0.4354, 1.5124], abs=0.0006
     )
     # CD, Haut-Uele, Ituri and North Kivu give an error each.
     assert origin24.rho_n[loc, :4].tolist() == [4, 4, 4, 4]
@@ -182,7 +178,7 @@ def test_no_errors_is_poisson_skellam_and_says_so(
     assert "Poisson-Skellam" in caplog.text
 
 
-def test_zones_use_their_province_then_the_country(
+def test_a_factor_is_own_by_age_with_10_cases_else_the_parent(
     daily: pd.DataFrame, daily_zones: pd.DataFrame
 ) -> None:
     both = pd.concat([daily, daily_zones])
@@ -192,29 +188,32 @@ def test_zones_use_their_province_then_the_country(
     snap = snapshot_arrays(both, "2026-10-24", zones)
     fit = fit_delay(snap, 3, Settings())
     assert fit is not None
-    n = len(snap.locations)
-    seen = set()
-    for i, loc in enumerate(snap.locations):
-        src = int(fit.source[i])
-        if fit.level[i] >= 10:
-            assert src == i
-            seen.add("own")
+    num, den = pair_sums(
+        snap.counts, snap.observed, snap.cut, fit.pairs[:, 0], 42
+    )
+    every = np.ones((len(fit.pairs), len(fit.steps)))
+    own_f = np.asarray(pair_factors(num, den, every))
+    n_cases = np.asarray(den).sum(axis=1)
+    seen = {"own": 0, "parent": 0}
+    for i in np.argsort(snap.depth, kind="stable"):
+        p = int(snap.parent[i])
+        if p < 0:
+            # The country has no parent, so it uses its own factor.
+            np.testing.assert_allclose(fit.factors[i], own_f[i])
             continue
-        parent = int(snap.parent[i])
-        if parent < 0:
-            assert src == n + i
-            continue
-        node = src - n
-        if fit.level[parent] >= 10:
-            assert node == parent, loc
-            seen.add("province")
-        else:
-            # A zone in a small province uses the country, never a zone.
-            assert snap.locations[node] == "CD" or len(
-                snap.locations[node]
-            ) <= len("CD-XX"), loc
-            seen.add("country")
-    assert seen == {"own", "province", "country"}
+        use = n_cases[i] >= 10
+        seen["own"] += int(use.sum())
+        seen["parent"] += int((~use).sum())
+        np.testing.assert_allclose(
+            fit.factors[i][:, use], own_f[i][:, use], err_msg=snap.locations[i]
+        )
+        np.testing.assert_allclose(
+            fit.factors[i][:, ~use],
+            fit.factors[p][:, ~use],
+            err_msg=snap.locations[i],
+        )
+    assert seen["own"] > 0
+    assert seen["parent"] > 0
 
 
 def test_the_final_factors_pool_every_in_window_pair(snap24) -> None:

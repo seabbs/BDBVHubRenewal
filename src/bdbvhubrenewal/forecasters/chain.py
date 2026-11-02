@@ -17,6 +17,10 @@ releases observe.
 Each pair is one step at its own exact ages, and the pooled factor is a
 ratio of sums, not a mean of ratios.
 Cells a release does not observe are skipped, not filled.
+A place uses its own factor at an age when the denominator, summed over
+the pooled pairs, is at least 10 cases, and otherwise its parent's factor
+at that age (zone, province, country).
+The country uses its own factor.
 A zero denominator takes baselinenowcast's rule, so that
 $F_s(x) = 1 + (\sum N_{r+1}(t) - \sum N_r(t)) / \max(\sum N_r(t), 1)$.
 
@@ -95,7 +99,8 @@ class Settings:
         $D$, the days a count may still grow, baselinenowcast's
         `max_delay`.
     min_level : float
-        Cases a week for a place to use its own estimates.
+        Cases a week for a place to use its own spreads, and cases in the
+        pooled denominator of an age for it to use its own delay factor.
     min_errors : int
         Errors at a horizon for a Skellam spread.
     level_weeks : tuple of int
@@ -131,14 +136,15 @@ class DelayFit:
     pair_step : numpy.ndarray
         Index in `steps` of each pair, `[P]`.
     factors : numpy.ndarray
-        $F$ for each place, `[L, S, D]`, from its source. Every step
-        pools all the in-window pairs, so the steps share one factor.
+        $F$ for each place, `[L, S, D]`. Every step pools all the
+        in-window pairs, so the steps share one factor. A place uses its
+        own factor at an age when the pooled denominator there is at
+        least `Settings.min_level` cases, and otherwise its parent's.
     level : numpy.ndarray
         Cases a week of each place, `[L]`.
     source : numpy.ndarray
-        Index of the estimate each place uses, `[L]`, as for
-        `source_index`. The factors of a place are its parent's pooled
-        factors, which are the parent's own.
+        Index of the estimate each place uses for its walk spread, `[L]`,
+        as for `source_index`.
     """
 
     pairs: np.ndarray
@@ -250,10 +256,15 @@ def fit_delay(
     )
     every = jnp.ones((len(pairs), len(steps)))
     f = np.array(pair_factors(num, den, every))
+    # With every pair in every step, the denominator is the same for all.
+    own = np.array(den).sum(axis=1) >= settings.min_level
+    for n in np.argsort(snap.depth, kind="stable"):
+        p = snap.parent[n]
+        if p >= 0:
+            f[n] = np.where(own[n][None, :], f[n], f[p])
     level = levels(snap, r, settings)
     source = source_index(level, snap.parent, min_level=settings.min_level)
-    node = source % len(level)
-    return DelayFit(pairs, steps, pair_step, f[node], level, source)
+    return DelayFit(pairs, steps, pair_step, f, level, source)
 
 
 def final_plan(

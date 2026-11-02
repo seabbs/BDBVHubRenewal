@@ -92,12 +92,15 @@ Weeks without a $\rho_{p,k}$ have $\rho = 0$.
 
 ## Own or pooled estimates
 
-The delay $F_{p,s}$, the spread $\rho_{p,k}$ and the spread of the walk $\sigma_p$ use one rule and one threshold.
+The delay $F_{p,s}(x)$ is own or parent by age.
+A place uses its own factor at age $x$ when its denominator $\sum N_{p,r}(t)$, summed over the pooled pairs, is at least 10 cases.
+Otherwise it uses the factor of its parent at that age (zone, province, country).
+The country uses its own factor.
+The spread $\rho_{p,k}$ and the spread of the walk $\sigma_p$ use one rule and the same threshold of 10.
 $\ell_p$ is the mean of $Y_{p,r}(w)$ over weeks 3 to 6 back, in cases a week.
 A province with $\ell_p \ge 10$ uses its own estimate.
 For $\rho_{p,k}$ it also needs at least 2 errors at $k$.
 Otherwise it uses the pooled estimate of the country, which pools the provinces with $\ell \ge 10$.
-The pooled $F$ is the country's own, since its counts are the sum of the provinces.
 The pooled $\rho_{p,k}$ and $\sigma_p$ use the errors and weekly changes of those provinces together.
 If the pooled estimate has fewer than 2 errors at $k$, $\rho_{p,k} = 0$.
 
