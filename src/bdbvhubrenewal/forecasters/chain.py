@@ -451,6 +451,15 @@ class Origin:
     sigma_source : numpy.ndarray
         Index of the estimate behind each spread, `[L]`, as for
         `source_index`.
+    errors : Errors or None
+        Retrospective errors, or None where they were not asked for.
+    rho : numpy.ndarray or None
+        Skellam spread $\rho_k$ of each place by weeks back from the
+        cut-off week, `[L, K]`.
+    rho_n : numpy.ndarray or None
+        Errors behind each spread, `[L, K]`.
+    rho_source : numpy.ndarray or None
+        Index of the estimate behind each spread, `[L, K]`.
     """
 
     snap: SnapshotArrays

@@ -939,11 +939,23 @@ def plot_forecasts(
                 lw=1.2,
                 label=lab,
             )
+        drawn = False
         for m in models:
             s = f_ref.loc[f_ref["model"] == m]
             if not s.empty:
                 _draw_forecast(ax, s, model_colour(m, models, mode), m)
                 _fit_y(ax, s, top)
+                drawn = True
+        if not drawn:
+            ax.text(
+                0.5,
+                0.92,
+                "No forecast from this origin",
+                transform=ax.transAxes,
+                ha="center",
+                fontsize=7,
+                color=ink["muted"],
+            )
         ax.axvline(
             mdates.date2num(pd.Timestamp(ref)),
             color=ink["muted"],

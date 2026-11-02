@@ -48,9 +48,7 @@ def weekly_pair(daily: pd.DataFrame) -> tuple[str, str]:
     raise ValueError("No two releases have cut-offs one week apart.")
 
 
-def weekly_points(
-    real: pd.DataFrame, earlier: str, later: str
-) -> pd.DataFrame:
+def weekly_points(real: pd.DataFrame, earlier: str, later: str) -> pd.DataFrame:
     """Grow the latest weeks of the later release with the weekly ladder."""
     wide = real.loc[real["vintage"].isin([earlier, later])].pivot_table(
         index=["location", "target_end_date"],
