@@ -102,19 +102,27 @@ class Policy:
         shadows = [c for c in self.candidates if c.kind == "shadow"]
         return [c for c in [*self.chain(), *shadows] if c.stage == name]
 
-    def for_model(self, model: str) -> Policy:
+    def for_model(self, model: str, only: bool = False) -> Policy:
         """The policy for the model chosen in the model choice record.
 
         With a baseline chosen (`randomwalknowcast` or `randomwalk`), the
         chain starts at that baseline. Every candidate before it is still
         fitted and checked, as a shadow, and the retry is dropped. Any
         other choice keeps the policy as it is.
+
+        With `only`, the chain is that baseline alone, for a hub model
+        that must never be submitted as anything else. The others are
+        still built as shadows, as references for the checks, and are
+        never selected.
         """
         baselines = [c for c in self.chain() if c.kind == "randomwalk"]
         names = [c.model or c.id for c in baselines]
         if model not in names:
+            if only:
+                raise ValueError(f"{model!r} is not a baseline model")
             return self
-        kept = {c.id for c in baselines[names.index(model) :]}
+        start = names.index(model)
+        kept = {c.id for c in baselines[start : start + 1 if only else None]}
         cands = [
             c if c.id in kept else replace(c, kind="shadow")
             for c in self.candidates

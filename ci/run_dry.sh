@@ -322,17 +322,18 @@ ledger() {
 
 baseline_track() {
   # track.sh on the `main` scenario's inputs: baseline submits
-  # random walk on a nowcast with health zones under its own id, falls
-  # back to plain random walk, and skips the round without zones.
+  # random walk on a nowcast with health zones under its own id. It has
+  # no fallback: when the model cannot run, or has no zones, the round is
+  # skipped and nothing is submitted under that id.
   local src="$ROOT/main" case want selected status
   get() { python3 -c "import json;print(json.load(open('$src/decision.json'))['$1'])"; }
-  for case in nowcast fallback nozones; do
+  for case in nowcast skipped nozones; do
     export WORK="$ROOT/baseline-$case"
     rm -rf "$WORK" && mkdir -p "$WORK"
     cp -R "$src/inputs" "$WORK/inputs"
     export GH_LOG="$WORK/gh.log" GITHUB_OUTPUT="$WORK/github-output"
     export GITHUB_STEP_SUMMARY="$WORK/summary.md" FAKE_ZONES="" FAKE_SCENARIOS=""
-    [ "$case" = fallback ] && export FAKE_SCENARIOS="randomwalknowcast=negative"
+    [ "$case" = skipped ] && export FAKE_SCENARIOS="randomwalknowcast=negative"
     [ "$case" = nozones ] && export FAKE_ZONES=none
     status=0
     HUB_REF=$(get hub_ref) DATA_COMMIT=$(get data_commit) AS_OF=$(get as_of) \
@@ -346,16 +347,31 @@ baseline_track() {
         || { echo "FAIL: zones reason"; cat "$gate/provenance.md"; return 1; }
       continue
     fi
+    if [ "$case" = skipped ]; then
+      # randomwalknowcast cannot run: skip, explicitly, and submit nothing.
+      [ "$status" = 3 ] || { echo "FAIL: baseline skip exited $status"; cat "$WORK/track.log"; return 1; }
+      grep -q "no other model is submitted in its place" "$gate/provenance.md" \
+        || { echo "FAIL: skip reason"; cat "$gate/provenance.md"; return 1; }
+      grep -q "round skipped" "$WORK/track.log" \
+        || { echo "FAIL: skip not in log"; cat "$WORK/track.log"; return 1; }
+      grep -q "round skipped, nothing submitted" "$WORK/summary.md" \
+        || { echo "FAIL: skip not in summary"; return 1; }
+      [ "$(python3 -c "import json;print(json.load(open('$gate/provenance.json'))['selected'])")" = None ] \
+        || { echo "FAIL: skip selected a candidate"; return 1; }
+      [ ! -e "$gate/selected" ] && [ ! -e "$gate/pr-body.md" ] \
+        || { echo "FAIL: skipped baseline has a submission"; return 1; }
+      if grep -q '"action"' "$WORK/track.log"; then
+        echo "FAIL: skipped baseline submitted"; return 1
+      fi
+      continue
+    fi
     [ "$status" = 0 ] || { echo "FAIL: baseline $case"; cat "$WORK/track.log"; return 1; }
     selected=$(python3 -c "import json;print(json.load(open('$gate/provenance.json'))['selected'])")
-    if [ "$case" = nowcast ]; then
-      want=randomwalknowcast
-      grep -q "All checks passed" "$gate/pr-body.md" \
-        || { echo "FAIL: baseline body"; head -5 "$gate/pr-body.md"; return 1; }
-    else
-      want=randomwalk
-      grep -q "Fallback model used (random walk baseline)" "$gate/pr-body.md" \
-        || { echo "FAIL: baseline fallback body"; head -5 "$gate/pr-body.md"; return 1; }
+    want=randomwalknowcast
+    grep -q "All checks passed" "$gate/pr-body.md" \
+      || { echo "FAIL: baseline body"; head -5 "$gate/pr-body.md"; return 1; }
+    if grep -q "Fallback model used" "$gate/pr-body.md"; then
+      echo "FAIL: baseline body names a fallback"; return 1
     fi
     [ "$selected" = "$want" ] \
       || { echo "FAIL: baseline $case selected $selected"; return 1; }
@@ -373,7 +389,7 @@ baseline_track() {
     fi
   done
   export FAKE_ZONES="" FAKE_SCENARIOS=""
-  echo "=== baseline ===" && echo "ok: baseline submits randomwalknowcast with zones, else random walk; no zones skips"
+  echo "=== baseline ===" && echo "ok: baseline submits randomwalknowcast with zones; a failed model or no zones skips the round, never a fallback"
 }
 
 no_new_data() {

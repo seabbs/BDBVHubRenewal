@@ -5,6 +5,8 @@
 #   RETRIED=true         the retry stage ran
 #   VALIDATE=true|false  run the hub validation hook (default true)
 #   NO_SHADOWS=true      leave the shadow candidates out (track.sh)
+#   ONLY_MODEL=true      submit $MODEL or nothing, never another candidate
+#                        in its place (track.sh)
 # Exits 3 when every candidate is ruled out and the round is skipped.
 # shellcheck source=ci/steps/lib.sh
 source "$(dirname "$0")/lib.sh"
@@ -16,6 +18,9 @@ if [ "${RETRIED:-false}" = "true" ]; then
 fi
 if [ "${NO_SHADOWS:-false}" = "true" ]; then
   args+=(--no-shadows)
+fi
+if [ "${ONLY_MODEL:-false}" = "true" ]; then
+  args+=(--only-model)
 fi
 if [ "${VALIDATE:-true}" = "true" ]; then
   args+=(--validate-cmd "$CI_DIR/steps/validate_hub.sh {submission}")

@@ -72,8 +72,8 @@ tasks:
   metadata:
     desc: Write and check the metadata of both hub models in hub/model-metadata/
     cmds:
+      - uv run bdbvhubrenewal metadata --model randomwalk --out hub/model-metadata
       - uv run bdbvhubrenewal metadata --model randomwalknowcast --out hub/model-metadata
-      - uv run bdbvhubrenewal metadata --model renewal --out hub/model-metadata
 
   validate-hub:
     desc: Check the nowcast file and metadata with hub_validate (Python) and hubValidations (R)
@@ -110,14 +110,19 @@ tasks:
   submission-preflight:
     desc: Check every prerequisite of a live submission that can be read, and print what is missing (needs gh as a repo admin)
     vars:
-      MODEL_ID: '{{.MODEL_ID | default "seabbs-renewal"}}'
+      # The ids with `submit = true` in config/hub.toml, unless set.
+      MODEL_IDS:
+        sh: >-
+          echo "{{.MODEL_ID}}" | grep . ||
+          uv run --quiet --project ci submission-preflight --print-submitting
     cmds:
       - rm -rf output/hub
       - git clone --depth 1 -q https://github.com/InsightNet-US/BDBV-Modeling-Hub.git output/hub
       - >-
-        if [ -f hub/model-metadata/{{.MODEL_ID}}.yml ]; then
+        for id in {{.MODEL_IDS}}; do
+        if [ -f hub/model-metadata/$id.yml ]; then
         uv run bdbvhubrenewal validate --hub output/hub
-        hub/model-metadata/{{.MODEL_ID}}.yml; fi
+        hub/model-metadata/$id.yml; fi; done
       - uv run --quiet --project ci submission-preflight {{.CLI_ARGS}}
 
   ci-dry:

@@ -149,6 +149,9 @@ def test_baseline_choices_keep_the_chain_from_that_baseline() -> None:
     assert [c.id for c in now.chain()] == ["randomwalknowcast", "randomwalk"]
     assert now.get("main").kind == "shadow"
     assert now.stage("retry") == []
+    only = pol.for_model("randomwalknowcast", only=True)
+    assert [c.id for c in only.chain()] == ["randomwalknowcast"]
+    assert only.get("randomwalk").kind == "shadow"
 
 
 def test_ci_sampler_settings(tmp_path: Path) -> None:

@@ -13,7 +13,8 @@ the bot's first pull request. `render` lists them at the end.
 The model and hub id follow the same rule as `submit.yml`: the
 repository variables `HUB_MODEL` and `HUB_MODEL_ID` when set, otherwise
 the latest entry of `results/model-choice.yml` and the id from
-`config/hub.toml`.
+`config/hub.toml`. The hub id defaults to the first model there with
+`submit = true`, not to `[submission]`.
 """
 
 from __future__ import annotations
@@ -527,12 +528,24 @@ def hub_model_id(path: Path) -> str:
 
 
 def other_model_ids(path: Path) -> tuple[str, ...]:
-    """Hub ids of the models under `[models]` in `config/hub.toml`."""
+    """Hub ids in `config/hub.toml` other than the submitting model."""
     if not path.exists():
         return ()
     with path.open("rb") as fh:
-        models = tomllib.load(fh).get("models", {})
-    return tuple(f"{TEAM}-{m['model_abbr']}" for m in models.values())
+        cfg = tomllib.load(fh)
+    entries = [cfg["submission"], *cfg.get("models", {}).values()]
+    ids = [f"{TEAM}-{e['model_abbr']}" for e in entries]
+    first = submitting_model_id(path)
+    return tuple(i for i in ids if i != first)
+
+
+def submitting_model_id(path: Path) -> str:
+    """The hub id this repository submits: the first with `submit = true`.
+
+    With none opted in, the `[submission]` id.
+    """
+    chosen = opted_in(path)
+    return chosen[0] if chosen else hub_model_id(path)
 
 
 def opted_in(path: Path) -> tuple[str, ...]:
@@ -636,7 +649,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=Path(".github/workflows") / WORKFLOW,
     )
     p.add_argument("--now", default=None, help="ISO 8601 time (for tests).")
+    p.add_argument(
+        "--print-submitting",
+        action="store_true",
+        help="Print the hub ids opted in to submit, and exit.",
+    )
     args = p.parse_args(argv)
+    if args.print_submitting:
+        print(*opted_in(args.hub_config))
+        return 0
     now = (
         dt.datetime.fromisoformat(args.now)
         if args.now
@@ -646,7 +667,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         repo=args.repo,
         hub=args.hub,
         fork_default=args.fork,
-        model_id_default=hub_model_id(args.hub_config),
+        model_id_default=submitting_model_id(args.hub_config),
         other_model_ids=other_model_ids(args.hub_config),
         opted_in=opted_in(args.hub_config),
         metadata_dir=args.metadata_dir,

@@ -6,8 +6,9 @@ checks everything but pushes nothing.
 
 - `renewal` (`[submission]`): the renewal chain. It runs only when
   opted in and a model has been chosen in `results/model-choice.yml`.
-- `baseline` (`[models.randomwalknowcast]`): random walk on a nowcast,
-  with plain random walk as its fallback. It needs no model choice.
+- `baseline` (`[models.randomwalknowcast]`): random walk on a nowcast.
+  It needs no model choice and has no fallback. If it cannot run, its
+  round is skipped and nothing is submitted under its id.
 """
 
 from __future__ import annotations
