@@ -6,8 +6,9 @@
 [submission]
 model_abbr = "renewal"
 # Opt in: `true` submits this model each round (DRY_RUN still applies).
-# It also needs a model choice in results/model-choice.yml.
-submit = false
+# It also needs a renewal model chosen in results/model-choice.yml.
+# Drop the commit that sets this to `true` to leave seabbs-renewal out.
+submit = true
 
 # Further hub models, each submitted under its own id every round, apart
 # from the chain above. The hub allows no hyphen in an abbreviation and

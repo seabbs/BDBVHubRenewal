@@ -430,3 +430,33 @@ def test_print_submitting(
     )
     assert main(["--hub-config", str(path), "--print-submitting"]) == 0
     assert capsys.readouterr().out.strip() == "seabbs-rwnowcast"
+
+
+def test_two_submitting_models(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from submission_ci.preflight import (
+        opted_in,
+        other_model_ids,
+        submitting_model_id,
+    )
+
+    path = tmp_path / "hub.toml"
+    path.write_text(
+        '[submission]\nmodel_abbr = "renewal"\nsubmit = true\n'
+        '[models.randomwalknowcast]\nmodel_abbr = "rwnowcast"\n'
+        "submit = true\n"
+        '[models.randomwalk]\nmodel_abbr = "randomwalk"\nsubmit = false\n'
+    )
+    assert opted_in(path) == ("seabbs-renewal", "seabbs-rwnowcast")
+    assert submitting_model_id(path) == "seabbs-renewal"
+    # Every other id is still checked, including the second submitter.
+    assert set(other_model_ids(path)) == {
+        "seabbs-rwnowcast",
+        "seabbs-randomwalk",
+    }
+    assert main(["--hub-config", str(path), "--print-submitting"]) == 0
+    assert capsys.readouterr().out.split() == [
+        "seabbs-renewal",
+        "seabbs-rwnowcast",
+    ]
