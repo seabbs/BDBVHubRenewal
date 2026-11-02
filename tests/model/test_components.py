@@ -1,3 +1,4 @@
+import jax
 import jax.numpy as jnp
 import numpy as np
 import numpyro
@@ -548,7 +549,9 @@ def _quad_censored_pmf(family, mean, cv, dmax):
 @pytest.mark.parametrize("cv", [0.3, 0.5, 1.0, 1.5, 2.0])
 @pytest.mark.parametrize("mean", [2.0, 8.0, 15.0])
 def test_censored_pmf_is_close_in_float32(family, cv, mean):
-    ours = np.asarray(censored_pmf(family, mean, cv, 60))
+    # The baselinenowcast port enables float64 on import, so pin float32.
+    with jax.enable_x64(False):
+        ours = np.asarray(censored_pmf(family, mean, cv, 60))
     assert ours.dtype == np.float32
     ref = _quad_censored_pmf(family, mean, cv, 60)
     # float32 incomplete gamma is good to about 1e-6, and the closed form
