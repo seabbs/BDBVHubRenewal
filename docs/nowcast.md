@@ -24,6 +24,8 @@ The same nowcast with the reference week and the weeks after it.
 
 --8<-- "nowcast-tabs.md"
 
+The submission pull request embeds [`plot_nowcast`][bdbvhubrenewal.reporting.plots.plot_nowcast].
+
 ## Delay and spread
 
 The growth to final of each onset day by its age at the latest release, and the Skellam spread by weeks back.
@@ -31,5 +33,3 @@ A place using its parent's estimate is labelled with the parent.
 
 ![Growth to final by age and the Skellam spread by weeks back at the latest release.](figures/delay-check.svg#only-light)
 ![Growth to final by age and the Skellam spread by weeks back at the latest release.](figures/delay-check-dark.svg#only-dark)
-
-The submission pull request embeds [`plot_nowcast`][bdbvhubrenewal.reporting.plots.plot_nowcast].
