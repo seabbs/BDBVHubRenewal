@@ -787,8 +787,8 @@ def plot_delay_check(
     -------
     matplotlib.figure.Figure
         Left, the growth $G$ from each age in days to final, chained over
-        the release gap, on a log scale. Right, the dispersion
-        $1/\phi$ with the number of errors behind it.
+        the release gap, on a log scale. Right, the Skellam spread
+        $\rho_k$ by weeks back with the number of errors behind it.
         A place's label says at how many ages it uses its own delay
         factor and not its parent's.
     """
@@ -797,8 +797,8 @@ def plot_delay_check(
 
     snap = snapshot_arrays(daily, vintage, tuple(locations))
     origin = build_origin(snap, Settings(), errors=True)
-    assert origin.inv_phi is not None
-    assert origin.inv_phi_n is not None
+    assert origin.rho is not None
+    assert origin.rho_n is not None
     ink = THEMES[mode]
     palette = MODEL_COLOURS[mode]
     age = int(snap.cut[origin.o]) - np.arange(snap.week.size)
@@ -820,13 +820,13 @@ def plot_delay_check(
             lw=1.2,
             label=f"{loc} ({kind})",
         )
-        row = tuple(np.round(origin.inv_phi[j], 6))
+        row = tuple(np.round(origin.rho[j], 6))
         if row not in drawn:
             drawn.add(row)
-            k = np.arange(origin.inv_phi.shape[1])
+            k = np.arange(origin.rho.shape[1])
             right.plot(
                 k,
-                origin.inv_phi[j],
+                origin.rho[j],
                 "o-",
                 color=colour,
                 ms=3,
@@ -837,8 +837,8 @@ def plot_delay_check(
     left.set_xlabel("Age of the onset day (days)")
     left.set_ylabel("Growth to final")
     right.set_xlabel("Weeks back")
-    right.set_ylabel("Dispersion 1/\u03c6")
-    n_err = int(origin.inv_phi_n.max())
+    right.set_ylabel("Skellam spread")
+    n_err = int(origin.rho_n.max())
     right.set_title(f"At most {n_err} errors behind a spread", fontsize=8)
     right.legend(fontsize=7, frameon=False)
     left.axhline(1, color=ink["muted"], lw=0.8, ls=":")

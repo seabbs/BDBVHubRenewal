@@ -58,17 +58,19 @@ $G_p(a)$ is the growth of a day's count from age $a$ to final, and $1 / G_p(a)$ 
 
 Every observed day is nowcast, with no handover and no minimum count.
 The nowcast mean of day $t$ is $N_{p,o}(t)\, G_p(c_o - t)$, summed to hub weeks as $\mu_p(w)$.
-With $\text{rem} = \mu_p(w) - Y_{p,o}(w)$ the change still to come and $\text{rem}^+ = \max(\text{rem}, 0)$, the observation model is baselinenowcast's negative binomial on the remaining count,
+With $\text{rem} = \mu_p(w) - Y_{p,o}(w)$ the change still to come, the final count is Skellam on the remaining count,
 
 $$
-X_{p,i}(w) = Y_{p,o}(w) + Z,
+X_{p,i}(w) = \max\big\{0,\ Y_{p,o}(w) + A - B\big\},
 \qquad
-Z \sim \text{NB}\big(\text{mean } \text{rem}^+,\ \text{size } \phi_p\big),
+A \sim \text{Poisson}\big(\text{rem}^+ + \rho_{p,k}\,|\text{rem}|\big),
+\qquad
+B \sim \text{Poisson}\big(\text{rem}^- + \rho_{p,k}\,|\text{rem}|\big),
 $$
 
-with variance $\text{rem}^+ + (\text{rem}^+)^2 / \phi_p$.
-A count never falls below the count already reported, and a week with nothing left to report gets no spread.
-With $1/\phi_p = 0$, $Z$ is Poisson.
+with $\text{rem}^+ = \max(\text{rem}, 0)$ and $\text{rem}^- = \max(-\text{rem}, 0)$.
+Before the floor the mean is $\mu_p(w)$ and the variance is $|\text{rem}|(1 + 2\rho_{p,k})$, so counts can be revised down and a week with nothing left to report has no spread.
+The Skellam is plugged into baselinenowcast's uncertainty interface, as a fit by horizon (`fit_skellam`, in place of `fit_nb`) and a sampler (`sample_skellam`, in place of `sample_nb`) with the same arguments.
 Sample $i$ is one draw of $X_{p,i}(w)$ per week.
 
 **Spread.**
@@ -82,14 +84,15 @@ For weeks back $k$ with a day younger than $D$ at $r$, and where $Y_{p,r}(w) > 0
 $$
 e = y_p(w) - \hat y_p(w),
 \qquad
-\text{rem}^+ = \max\{\hat y_p(w) - Y_{p,r}(w), 0\},
+\text{rem} = \hat y_p(w) - Y_{p,r}(w),
 \qquad
-\frac{1}{\phi_p} = \max\Big(0,\ \frac{\sum (e^2 - \text{rem}^+)}{\sum (\text{rem}^+)^2}\Big),
+\rho_{p,k} = \max\Big(0,\ \frac{\sum (e^2 - |\text{rem}|)}{\sum 2|\text{rem}|}\Big),
 $$
 
-by moments, summed over the kept releases and pooled over all weeks back $k$.
-A place has one $1/\phi_p$.
-A place with no errors has $1/\phi_p = 0$, which is Poisson.
+summed over the kept releases.
+Weeks without a $\rho_{p,k}$ have $\rho = 0$, which assumes no error beyond the Skellam remainder.
+The spread is fitted per horizon from the retrospective errors, as `fit_by_horizon` does in baselinenowcast.
+Baselinenowcast 0.2.2 has a negative binomial observation model, and the Skellam replaces it so that counts can be revised down.
 
 ## Own or pooled estimates
 
@@ -97,13 +100,13 @@ The delay $F_{p,s}(x)$ is own or parent by age.
 A place uses its own factor at age $x$ when its denominator $\sum N_{p,r}(t)$, summed over the pooled pairs, is at least 10 cases.
 Otherwise it uses the factor of its parent at that age (zone, province, country).
 The country uses its own factor.
-The dispersion $1/\phi_p$ and the spread of the walk $\sigma_p$ use one rule with a threshold of 10 cases a week and 2 errors.
+The spread $\rho_{p,k}$ and the spread of the walk $\sigma_p$ use one rule with a threshold of 10 cases a week and 2 errors.
 $\ell_p$ is the mean of $Y_{p,r}(w)$ over weeks 3 to 6 back, in cases a week.
 A place with $\ell_p \ge 10$ uses its own estimate.
-For $1/\phi_p$ it also needs at least 2 errors over the weeks back.
+For $\rho_{p,k}$ it also needs at least 2 errors at $k$.
 Otherwise it uses the pooled estimate of its nearest parent that meets the same rule, and otherwise the country's.
 A pooled estimate uses the errors and weekly changes of the place and its children with $\ell \ge 10$ together.
-If the estimate used has fewer than 2 errors, $1/\phi_p = 0$.
+If the estimate used has fewer than 2 errors at $k$, $\rho_{p,k} = 0$.
 
 ## Walk
 

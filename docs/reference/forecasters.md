@@ -15,7 +15,7 @@ The forecaster interface, the registry, random walk and the renewal variants.
 
 ::: bdbvhubrenewal.forecasters.pooling
 
-::: bdbvhubrenewal.forecasters.negbin
+::: bdbvhubrenewal.forecasters.skellam
 
 ::: bdbvhubrenewal.forecasters.walk
 

@@ -155,15 +155,15 @@ def test_only_the_10_17_to_10_24_retrospective_is_kept(snap24) -> None:
     assert strict.n.sum() == 0
 
 
-def test_the_dispersion_pools_the_errors_over_weeks_back(origin24) -> None:
+def test_the_spread_pools_four_errors_at_10_24(origin24) -> None:
     loc = origin24.snap.locations.index("CD")
-    assert origin24.inv_phi is not None
-    assert origin24.inv_phi_n is not None
-    # One value for every week back, from the sums of all of them.
-    assert origin24.inv_phi[loc] == pytest.approx(0.0487, abs=0.0001)
-    assert np.ptp(origin24.inv_phi[loc]) == 0
-    # One release, with an error at each of 6 weeks back.
-    assert origin24.inv_phi_n[loc, 0] == 6
+    assert origin24.rho is not None
+    assert origin24.rho_n is not None
+    assert origin24.rho[loc, :4] == pytest.approx(
+        [0.7006, 8.4005, 4.8158, 106.1023], rel=1e-3
+    )
+    # CD, Haut-Uele, Ituri and North Kivu give an error each.
+    assert origin24.rho_n[loc, :4].tolist() == [4, 4, 4, 4]
 
 
 def test_no_errors_is_poisson_and_says_so(
@@ -172,11 +172,11 @@ def test_no_errors_is_poisson_and_says_so(
     snap = snapshot_arrays(daily, "2026-10-17", ("CD-IT", "CD-NK"))
     with caplog.at_level(logging.INFO):
         origin = build_origin(snap, Settings(), errors=True)
-    assert origin.inv_phi is not None
-    assert origin.inv_phi_n is not None
-    assert (origin.inv_phi == 0).all()
-    assert (origin.inv_phi_n == 0).all()
-    assert "Poisson" in caplog.text
+    assert origin.rho is not None
+    assert origin.rho_n is not None
+    assert (origin.rho == 0).all()
+    assert (origin.rho_n == 0).all()
+    assert "Poisson-Skellam" in caplog.text
 
 
 def test_a_factor_is_own_by_age_with_10_cases_else_the_parent(
@@ -242,5 +242,30 @@ def test_weeks_back_count_from_the_cutoff_week(daily: pd.DataFrame) -> None:
     errors = retro_errors(snap, o, Settings())
     assert errors.n[:, 0].sum() > 0
     origin = build_origin(snap, Settings(), errors=True)
-    assert origin.inv_phi is not None
-    assert origin.inv_phi[:, 0].max() > 0
+    assert origin.rho is not None
+    assert origin.rho[:, 0].max() > 0
+
+
+def test_a_later_clock_ages_the_origin_days_and_lowers_the_nowcast(
+    snap24,
+) -> None:
+    base = build_origin(snap24, Settings(), errors=False)
+    late = build_origin(snap24, Settings(clock_shift=1), errors=False)
+    early = build_origin(snap24, Settings(clock_shift=-1), errors=False)
+    cd, day = 0, int(snap24.cut[-1])
+    f = base.fit.factors[cd, 0]
+    # One day later the newest day is age 1, chained over 1, 9, ..., 41.
+    assert late.growth[cd, day] == pytest.approx(
+        float(np.prod(f[1:42:8])), rel=1e-5
+    )
+    # One day earlier no age is below 0, so the newest day stays at 0.
+    assert early.growth[cd, day] == pytest.approx(
+        float(np.prod(f[0:42:8])), rel=1e-5
+    )
+    assert early.growth[cd, day - 1] == pytest.approx(
+        float(np.prod(f[0:42:8])), rel=1e-5
+    )
+    newest = base.point[cd, -1]
+    assert late.point[cd, -1] < newest < early.point[cd, -1]
+    # The delay factors come from the release pairs and do not move.
+    np.testing.assert_allclose(late.fit.factors, base.fit.factors)

@@ -153,14 +153,14 @@ def test_diagnostics_name_the_sources(task: ForecastTask) -> None:
     model.forecast(task)
     info = pd.DataFrame(model.fit_diagnostics).set_index("location")
     assert {
-        "start_week", "n_err", "delay_source", "phi_source", "sigma_source"
+        "start_week", "n_err", "delay_source", "rho_source", "sigma_source"
     } <= set(info.columns)  # fmt: skip
     assert info.loc["CD-IT", "delay_source"].startswith("own at ")
     n_it = int(info.loc["CD-IT", "delay_source"].split()[2])
     n_to = int(info.loc["CD-TO", "delay_source"].split()[2])
     assert n_to < n_it <= 42
-    assert info.loc["CD-IT", "phi_source"] == "own:CD-IT"
-    assert info.loc["CD-IT", "n_err"] == 6
+    assert info.loc["CD-IT", "rho_source"] == "pooled:CD"
+    assert info.loc["CD-IT", "n_err"] == 4
 
 
 def test_both_models_use_the_one_random_walk(
