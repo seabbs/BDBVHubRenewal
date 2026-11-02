@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 
 import numpy as np
@@ -13,10 +14,17 @@ from bdbvhubrenewal.data.zones import (
     weekly_zone_counts,
 )
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
-from bdbvhubrenewal.forecasters import ForecastTask, RandomWalk
+from bdbvhubrenewal.forecasters import (
+    ForecastTask,
+    RandomWalk,
+    RandomWalkNowcast,
+)
 from bdbvhubrenewal.forecasters.zones import (
     ZoneAllocator,
+    _apportion,
     check_zone_coherence,
+    reconcile_zones,
+    zone_forecast,
     zone_task,
 )
 from bdbvhubrenewal.submission.hub import (
@@ -308,3 +316,101 @@ def test_allocation_reads_final_rows_only(
     assert "as_of" not in alloc
     assert check_zone_coherence(final, alloc) == []
     assert np.isfinite(alloc["value"]).all()
+
+
+def test_apportion_sums_to_the_total_in_whole_numbers() -> None:
+    total = np.array([[7, 0], [3, 10]])
+    weight = np.array(
+        [[[1.0, 1.0, 1.0], [2.0, 1.0, 1.0]], [[0.0, 5.0, 0.0], [1.0, 3.0, 6.0]]]
+    )
+    out = _apportion(total, weight)
+    assert (out.sum(axis=-1) == total).all()
+    assert (out >= 0).all()
+    assert out[1, 0].tolist() == [0, 3, 0]
+    assert out[1, 1].tolist() == [1, 3, 6]
+    assert out[0, 1].tolist() == [0, 0, 0]
+    assert out[0, 0].tolist() == [3, 2, 2]
+
+
+def _zone_model_inputs(
+    task: ForecastTask,
+    counts: pd.DataFrame,
+    zones: tuple[str, ...],
+    daily_zones: pd.DataFrame,
+    model: RandomWalk,
+    n_provinces: int = 2,
+) -> tuple[ForecastTask, pd.DataFrame, pd.DataFrame]:
+    sub = dataclasses.replace(task, locations=task.locations[:n_provinces])
+    prov = model.forecast(sub)
+    got = zone_forecast(model, sub, prov, counts, zones, daily_zones)
+    return sub, prov, got
+
+
+@pytest.mark.parametrize("model", [RandomWalk(), RandomWalkNowcast()])
+def test_zone_walk_models_sum_to_their_provinces(
+    task: ForecastTask,
+    counts: pd.DataFrame,
+    zones: tuple[str, ...],
+    daily_zones: pd.DataFrame,
+    model: RandomWalk,
+) -> None:
+    sub, prov, got = _zone_model_inputs(task, counts, zones, daily_zones, model)
+    assert check_zone_coherence(prov, got) == []
+    want = {z for z in zones if province_of(z) in sub.locations}
+    assert set(got["location"]) == want
+    assert (got["value"] == got["value"].round()).all()
+    assert (got["value"] >= 0).all()
+
+
+def test_zone_values_follow_the_zone_model_not_the_shares(
+    task: ForecastTask,
+    counts: pd.DataFrame,
+    zones: tuple[str, ...],
+    daily_zones: pd.DataFrame,
+) -> None:
+    model = RandomWalkNowcast()
+    sub, prov, got = _zone_model_inputs(task, counts, zones, daily_zones, model)
+    allocated = ZoneAllocator().allocate(prov, sub, counts, zones)
+    keys = ["location", "target_end_date"]
+    mine = got.groupby(keys)["value"].mean()
+    theirs = allocated.groupby(keys)["value"].mean()
+    assert not np.allclose(mine, theirs.reindex(mine.index))
+
+
+def test_reconcile_falls_back_to_the_allocator_shares(
+    task: ForecastTask, counts: pd.DataFrame, zones: tuple[str, ...]
+) -> None:
+    sub = dataclasses.replace(task, locations=task.locations[:1])
+    prov = RandomWalk().forecast(sub)
+    empty = pd.DataFrame(columns=list(prov.columns))
+    got = reconcile_zones(empty, prov, sub, counts, zones)
+    assert check_zone_coherence(prov, got) == []
+    assert got["value"].sum() > 0
+
+
+def test_zone_hub_table_validates_and_sums_up_the_hierarchy(
+    task: ForecastTask,
+    counts: pd.DataFrame,
+    zones: tuple[str, ...],
+    daily_zones: pd.DataFrame,
+    tasks_json: Path,
+    tmp_path: Path,
+) -> None:
+    model = RandomWalkNowcast()
+    prov = model.forecast(task)
+    got = zone_forecast(model, task, prov, counts, zones, daily_zones)
+    table = to_hub_table(prov, task.reference_date, zones=got)
+    zone_rows = table.loc[table["location"].str.count("-") == 2]
+    by_prov = (
+        zone_rows.assign(location=zone_rows["location"].str[:5])
+        .groupby(["location", "output_type_id", "target_end_date"])["value"]
+        .sum()
+    )
+    prov_rows = table.loc[table["location"].str.len() == 5]
+    want = prov_rows.set_index(
+        ["location", "output_type_id", "target_end_date"]
+    )
+    assert (by_prov == want["value"].reindex(by_prov.index)).all()
+    hub_round = load_hub_round(tasks_json)
+    path = write_submission(table, tmp_path, "seabbs-rwnowcast")
+    assert validate_submission_file(path, hub_round, check_round=False) == []
