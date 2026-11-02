@@ -152,6 +152,37 @@ MODEL_METADATA = {
             "province populations and population-weighted province centres."
         ),
     },
+    # Submitted as seabbs-renewal (`[submission] model` in config/hub.toml).
+    "renewalsp": {
+        "model_name": "Single-patch renewal model (PyRenew)",
+        "methods": (
+            "A PyRenew renewal model fitted to each outbreak province on its "
+            "own, with no pooling, coupling or depletion, to known and "
+            "imputed onsets with modelled delays; national is the sum."
+        ),
+        "methods_long": (
+            "Each province with at least 20 cases in its last 6 data weeks "
+            "gets its own renewal process, with a weekly random walk on log "
+            "Rt, and no pooling, importation or susceptible depletion. "
+            "Confirmed onsets follow a time-varying ascertainment. Known "
+            "onsets are right truncated by a time-varying onset-to-report "
+            "delay, and the hub's imputed onsets are modelled as the hub "
+            "makes them, from cases missing an onset date by report day, "
+            "back-sampled with the hub's delay. Both streams are negative "
+            "binomial. Each province is fitted by NUTS (NumPyro) to each "
+            "data vintage. A province with cases but fewer than 20 in its "
+            "last 6 weeks gets Poisson draws at a Gamma-distributed weekly "
+            "rate. Each province sample is split across its health zones "
+            "by their recent shares of cases, shrunk towards longer-run "
+            "shares. The national value is the sum of province samples. See "
+            "https://samabbott.co.uk/BDBVHubRenewal/methods/model/."
+        ),
+        "data_inputs": (
+            "Hub target data (weekly confirmed cases by onset week, observed "
+            "plus imputed), the hub's published onset-to-report delays and "
+            "health zone counts."
+        ),
+    },
     # A hub model of its own (seabbs-rwnowcast), submitted every round.
     "randomwalknowcast": {
         "model_name": "RandomWalk on a nowcast",
