@@ -447,9 +447,32 @@ def test_baseline_track_skips_when_the_model_did_not_run(
     assert "could not run" in prov["reason"]
 
 
-def test_only_needs_a_baseline_model() -> None:
-    with pytest.raises(ValueError, match="not a baseline"):
-        POLICY.for_model("renewal", only=True)
+def test_renewal_track_is_the_main_model_and_its_refit_only() -> None:
+    # seabbs-renewal carries its own model: the main fit and its one
+    # refit. The fallback and both random walks are shadows.
+    pol = POLICY.for_model("renewal", only=True)
+    assert [c.id for c in pol.chain()] == ["main", "retry-1"]
+    for cid in ("renewalsp", "randomwalknowcast", "randomwalk"):
+        assert pol.get(cid).kind == "shadow"
+    assert [c.id for c in pol.stage("retry")] == ["retry-1"]
+
+
+def test_renewal_track_never_falls_back(tmp_path: Path) -> None:
+    pol = POLICY.for_model("renewal", only=True)
+    c = tmp_path / "c"
+    chain(
+        c,
+        main=("fail", "pass"),
+        retry_1=("fail", "pass"),
+        renewalsp=("pass", "pass"),
+        randomwalknowcast=(None, "pass"),
+        randomwalk=(None, "pass"),
+    )
+    prov = run_select(
+        pol, c, tmp_path / "g", always("pass"), True, False, only=True
+    )
+    assert prov["selected"] is None
+    assert "no other model is submitted in its place" in prov["reason"]
 
 
 def test_baseline_track_lists_no_shadows(tmp_path: Path) -> None:

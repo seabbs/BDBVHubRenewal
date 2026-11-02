@@ -79,3 +79,18 @@ def test_renewal_skips_without_opt_in_even_with_a_choice(
     assert not tracks["renewal"].runs
     assert tracks["renewal"].reason == "not opted in (`submit = false`)"
     assert tracks["rwnowcast"].runs
+
+
+def test_renewal_carries_its_own_model_not_the_choice(tmp_path: Path) -> None:
+    # An id only ever carries its own model: `[submission] model` wins
+    # over the model choice record, which names the baseline.
+    cfg = write(tmp_path / "hub.toml", renewal=True, baseline=True)
+    cfg.write_text(
+        cfg.read_text().replace(
+            'model_abbr = "renewal"\n',
+            'model_abbr = "renewal"\nmodel = "renewal"\n',
+        )
+    )
+    tracks = {t.name: t for t in load_tracks(cfg, chosen="randomwalknowcast")}
+    assert tracks["renewal"].runs
+    assert tracks["renewal"].model == "renewal"
