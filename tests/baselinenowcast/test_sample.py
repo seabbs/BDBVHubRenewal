@@ -214,3 +214,17 @@ def test_sample_nowcasts_vmap_over_locations(small: Case) -> None:
         )
     )(jnp.stack([pre, pre]), jnp.stack([nc, nc]))
     assert out.shape == (2, 7, small.values.shape[0])
+
+
+def test_sample_nb_gives_nan_for_a_nan_mean_or_size_and_takes_integers() -> (
+    None
+):
+    key = jax.random.PRNGKey(1)
+    assert np.isnan(np.asarray(sample_nb(key, jnp.array([4.0]), np.nan))).all()
+    assert np.isnan(np.asarray(sample_nb(key, jnp.array([np.nan]), 2.0))).all()
+    mixed = np.asarray(sample_nb(key, jnp.array([4.0, np.nan]), 2.0))
+    assert np.isfinite(mixed[0])
+    assert np.isnan(mixed[1])
+    ints = np.asarray(sample_nb(key, np.array([3, 5]), 2.0))
+    assert np.isfinite(ints).all()
+    assert (ints >= 0).all()

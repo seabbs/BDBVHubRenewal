@@ -130,3 +130,10 @@ def test_estimate_and_apply_delay_aborts() -> None:
         estimate_and_apply_delay(v, m, n=99)
     with pytest.raises(ValueError):
         estimate_and_apply_delay(v, m, n=2)
+
+
+def test_estimate_delay_rejects_a_non_integer_n() -> None:
+    tri = np.array([[3.0, 2.0, 1.0], [4.0, 2.0, 1.0], [5.0, 3.0, 2.0]])
+    mask = np.ones_like(tri, bool)
+    with pytest.raises(ValueError, match="integer"):
+        estimate_delay(tri, mask, n=2.5)
