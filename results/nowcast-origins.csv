@@ -3,7 +3,7 @@ origin,model,status,reason,mismatch_2026-10-24,mismatch_2026-11-01,n_complete,n_
 2026-08-18,randomwalknowcast,no forecast,No pair of releases up to 2026-08-18 has a step of at most 42 days.,,,0,0
 2026-10-09,randomwalk,no forecast,No pair of releases up to 2026-10-09 has a step of at most 42 days.,,,0,0
 2026-10-09,randomwalknowcast,no forecast,No pair of releases up to 2026-10-09 has a step of at most 42 days.,,,0,0
-2026-10-17,randomwalk,ran,,,,26,64
+2026-10-17,randomwalk,ran,,,,26,32
 2026-10-17,randomwalknowcast,ran,,1.0,3.0,26,32
 2026-10-24,randomwalk,ran,,,,20,36
 2026-10-24,randomwalknowcast,ran,,,1.0,20,36
