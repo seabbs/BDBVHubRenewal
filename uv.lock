@@ -132,6 +132,7 @@ name = "bdbvhubrenewal"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "jax" },
     { name = "jsonschema" },
     { name = "matplotlib" },
     { name = "numpy" },
@@ -168,6 +169,7 @@ docs = [
 
 [package.metadata]
 requires-dist = [
+    { name = "jax", specifier = ">=0.12.0" },
     { name = "jsonschema", specifier = ">=4.20" },
     { name = "matplotlib", specifier = ">=3.8,<4" },
     { name = "numpy", specifier = ">=1.26,<3" },
