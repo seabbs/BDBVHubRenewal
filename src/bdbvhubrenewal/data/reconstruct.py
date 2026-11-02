@@ -65,8 +65,6 @@ __all__ = [
     "fit_publication_lag",
     "lag_cdf",
     "publication_lag_pmf",
-    "reconstruct_daily_vintage",
-    "reconstruct_daily_vintages",
     "reconstruct_delays",
     "reconstruct_vintage",
     "reconstruct_vintages",
@@ -247,71 +245,6 @@ def reconstruct_vintage(
     )
 
 
-def reconstruct_daily_vintage(
-    target: pd.DataFrame,
-    delays: pd.DataFrame,
-    as_of: dt.date | str,
-    lag_pmf: ArrayLike,
-    max_delay: int = DEFAULT_MAX_DELAY,
-    cutoff_lag: int = 0,
-) -> pd.DataFrame:
-    """Rebuild the daily release a vintage at an earlier date would show.
-
-    The counts are those of `reconstruct_vintage` split by onset day, so
-    each week's daily counts add up to its weekly total.
-
-    Parameters
-    ----------
-    target, delays, as_of, lag_pmf, max_delay, cutoff_lag
-        As for `reconstruct_vintage`.
-
-    Returns
-    -------
-    pandas.DataFrame
-        Columns `kind` (`"reconstructed"`), `vintage`, `location`,
-        `onset_date`, `observed`, `imputed` and `cutoff` (the last onset
-        day the release can hold, ISO format), as the hub's daily file
-        with the country and provinces and only days with a case.
-    """
-    day = as_date(as_of)
-    keys, obs, imp = _daily_counts(
-        target, delays, day, lag_pmf, cutoff_lag, max_delay
-    )
-    week = pd.to_datetime(keys["target_end_date"]).to_numpy()
-    onset = (
-        week[:, None] - pd.to_timedelta(_onset_offsets(), unit="D").to_numpy()
-    )
-    prov = pd.DataFrame(
-        {
-            "location": np.repeat(keys["location"].to_numpy(), 7),
-            "onset_date": onset.ravel(),
-            "observed": obs.ravel(),
-            "imputed": imp.ravel(),
-        }
-    )
-    nat = prov.groupby("onset_date", as_index=False)[
-        ["observed", "imputed"]
-    ].sum()
-    out = pd.concat([prov, nat.assign(location=NATIONAL)], ignore_index=True)
-    out = out.loc[(out["observed"] + out["imputed"]) > 0].copy()
-    out["onset_date"] = out["onset_date"].dt.strftime("%Y-%m-%d")
-    out["kind"] = "reconstructed"
-    out["vintage"] = day.isoformat()
-    out["cutoff"] = (day - dt.timedelta(days=cutoff_lag)).isoformat()
-    cols = [
-        "kind",
-        "vintage",
-        "location",
-        "onset_date",
-        "observed",
-        "imputed",
-        "cutoff",
-    ]
-    return (
-        out[cols].sort_values(["location", "onset_date"]).reset_index(drop=True)
-    )
-
-
 def reconstruct_vintages(
     target: pd.DataFrame,
     delays: pd.DataFrame,
@@ -345,35 +278,6 @@ def reconstruct_vintages(
     _, tgt, dly, lag = _source(target, delays, source_vintage)
     frames = [
         reconstruct_vintage(
-            tgt, dly, d, lag, cutoff_lag=_cutoff(d, cutoff_lags)
-        )
-        for d in dates
-    ]
-    return pd.concat(frames, ignore_index=True)
-
-
-def reconstruct_daily_vintages(
-    target: pd.DataFrame,
-    delays: pd.DataFrame,
-    dates: list[str] | list[dt.date],
-    source_vintage: str | None = None,
-    cutoff_lags: Mapping[int, int] | None = None,
-) -> pd.DataFrame:
-    """Reconstruct several daily releases from one real vintage.
-
-    Parameters
-    ----------
-    target, delays, dates, source_vintage, cutoff_lags
-        As for `reconstruct_vintages`.
-
-    Returns
-    -------
-    pandas.DataFrame
-        Daily rows (`reconstruct_daily_vintage`) for every date, stacked.
-    """
-    _, tgt, dly, lag = _source(target, delays, source_vintage)
-    frames = [
-        reconstruct_daily_vintage(
             tgt, dly, d, lag, cutoff_lag=_cutoff(d, cutoff_lags)
         )
         for d in dates

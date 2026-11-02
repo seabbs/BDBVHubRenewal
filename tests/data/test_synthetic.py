@@ -12,8 +12,6 @@ from bdbvhubrenewal.data.reconstruct import (
     cutoff_lags,
     fit_publication_lag,
     publication_lag_pmf,
-    reconstruct_daily_vintage,
-    reconstruct_daily_vintages,
     reconstruct_delays,
     reconstruct_vintage,
     reconstruct_vintages,
@@ -65,51 +63,6 @@ def test_publication_lag_fit_matches_real_releases(
     for _, rows in nat.groupby("vintage"):
         rel = rows["total_difference"].sum() / rows["total_real"].sum()
         assert abs(rel) < 0.03
-
-
-def test_daily_reconstruction_sums_to_weekly(
-    target: pd.DataFrame, delays: pd.DataFrame
-) -> None:
-    lag = fit_publication_lag(target, delays).pmf
-    tgt, dly = _latest(target), _latest(delays)
-    for cut in (0, 2):
-        weekly = reconstruct_vintage(
-            tgt, dly, "2026-10-09", lag, cutoff_lag=cut
-        )
-        daily = reconstruct_daily_vintage(
-            tgt, dly, "2026-10-09", lag, cutoff_lag=cut
-        )
-        assert daily["onset_date"].max() <= daily["cutoff"].iloc[0]
-        assert daily["cutoff"].iloc[0] == f"2026-10-0{9 - cut}"
-        week = daily["onset_date"].map(lambda x: epiweek_end(x).isoformat())
-        got = (
-            daily.assign(
-                target_end_date=week,
-                total=daily["observed"] + daily["imputed"],
-                o=daily["observed"],
-                i=daily["imputed"],
-            )
-            .groupby(["location", "target_end_date"])[["o", "i", "total"]]
-            .sum()
-        )
-        want = weekly.set_index(["location", "target_end_date"])
-        want = want.loc[want["total"] > 0]
-        assert (got["total"] == want["total"].reindex(got.index)).all()
-        assert (got["o"] == want["observed"].reindex(got.index)).all()
-        assert len(got) == len(want)
-
-
-def test_daily_reconstruction_many_dates(
-    target: pd.DataFrame, delays: pd.DataFrame
-) -> None:
-    out = reconstruct_daily_vintages(
-        target, delays, ["2026-10-06", "2026-10-09"], cutoff_lags={1: 0, 4: 2}
-    )
-    assert set(out["vintage"]) == {"2026-10-06", "2026-10-09"}
-    assert set(out["kind"]) == {"reconstructed"}
-    cut = out.groupby("vintage")["cutoff"].first()
-    assert cut["2026-10-06"] == "2026-10-06"
-    assert cut["2026-10-09"] == "2026-10-07"
 
 
 def test_cutoff_lags_follow_real_releases() -> None:

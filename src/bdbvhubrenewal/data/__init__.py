@@ -6,7 +6,7 @@
 - `reconstruct`: reconstructed vintages.
 - `simulate`: simulated outbreaks published as vintages.
 - `delays`: empirical onset-to-report delays.
-- `completeness`: how much of a week is reported by a later date.
+- `snapshots`: daily release snapshots as arrays on the onset clock.
 - `bvd`: BVDOutbreakSize releases as of a forecast's cut-off.
 - `zones`: the hub's health-zone codes and weekly zone counts.
 
