@@ -279,7 +279,9 @@ def test_the_nb_spread_pools_every_weeks_back(origin24, snap24) -> None:
     k_n = nb.rho.shape[1]
     np.testing.assert_allclose(nb.rho, nb.rho[:, :1].repeat(k_n, axis=1))
     assert nb.rho_n is not None
-    assert origin24.rho_n is not None
+    assert nb.errors is not None
     loc = snap24.locations.index("CD")
-    assert nb.rho_n[loc, 0] == origin24.rho_n[loc].sum()
+    # The country has one error per k, so 6 over all k: enough of its own.
+    assert nb.errors.n[loc].tolist() == [1] * k_n
+    assert nb.rho_n[loc, 0] == k_n
     assert nb.rho[loc, 0] > 0

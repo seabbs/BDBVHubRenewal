@@ -67,7 +67,11 @@ from bdbvhubrenewal.forecasters.pooling import (
     pool_matrix,
     source_index,
 )
-from bdbvhubrenewal.forecasters.skellam import rho_from_sums, rho_sums
+from bdbvhubrenewal.forecasters.skellam import (
+    rho_from_sums,
+    rho_sums,
+    spread_sums,
+)
 
 __all__ = [
     "MissingSnapshots",
@@ -113,6 +117,12 @@ class Settings:
         start the random walk.
     walk_weeks : int
         Weeks, ending at the start week, whose changes set the spread.
+    obs_model : str
+        Observation model of the nowcast, one of `skellam.OBS_MODELS`.
+    clock_shift : int
+        Days added to the ages of the origin's days, for the sensitivity
+        of the nowcast to the onset clock. Ages below 0 count as 0. The
+        delay factors and the retrospective errors are not moved.
     """
 
     max_delay: int = 42
@@ -122,6 +132,8 @@ class Settings:
     max_mismatch: int = 1
     completeness: float = 0.95
     walk_weeks: int = 9
+    obs_model: str = "skellam"
+    clock_shift: int = 0
 
 
 @dataclass
@@ -283,8 +295,9 @@ def final_plan(
     s = int(fit.steps[fit.pair_step[last]])
     age0 = snap.cut[o] - np.arange(snap.week.size)
     seen = age0 >= 0
+    shifted = np.maximum(age0[seen] + settings.clock_shift, 0)
     slot, age, mask = exact_plan(
-        age0[seen], s, int(fit.pair_step[last]), settings.max_delay
+        shifted, s, int(fit.pair_step[last]), settings.max_delay
     )
     m = slot.shape[1]
     step = np.zeros((age0.size, m), dtype=np.int64)
@@ -355,12 +368,27 @@ class Errors:
         The sums behind the Skellam spread, `[L, K]`.
     releases : list of str
         Releases that gave errors.
+    cells : list of tuple
+        For each release, the count reported then, its nowcast, the count
+        at the origin and which errors are kept, each `[L, K]`.
     """
 
     num: np.ndarray
     den: np.ndarray
     n: np.ndarray
     releases: list[str] = field(default_factory=list)
+    cells: list[tuple[np.ndarray, ...]] = field(default_factory=list)
+
+    def sums(self, model: str) -> tuple[np.ndarray, ...]:
+        """Return the sums behind the spread of an observation model."""
+        shape = self.num.shape
+        out = [np.zeros(shape), np.zeros(shape), np.zeros(shape)]
+        for obs, pred, tgt, valid in self.cells:
+            for i, x in enumerate(
+                spread_sums(obs, pred, tgt, valid, axis=0, model=model)
+            ):
+                out[i] += x
+        return tuple(out)
 
 
 def retro_errors(snap: SnapshotArrays, o: int, settings: Settings) -> Errors:
@@ -409,6 +437,7 @@ def retro_errors(snap: SnapshotArrays, o: int, settings: Settings) -> Errors:
         out.den += den
         out.n += n
         out.releases.append(snap.releases[r])
+        out.cells.append((obs[None], pred[None], tgt[None], valid[None]))
     return out
 
 
@@ -569,25 +598,35 @@ def _walk_spreads(
 
 
 def _add_spread(origin: Origin) -> None:
-    """Estimate the Skellam spread by weeks back, with the one rule."""
+    """Estimate the observation model's spread by weeks back.
+
+    The one rule picks each place's source. The NB pools its errors over
+    every weeks back.
+    """
     snap, settings = origin.snap, origin.settings
     errors = retro_errors(snap, origin.o, settings)
     k_n = errors.n.shape[1]
+    num, den, n_err = errors.sums(settings.obs_model)
+    if settings.obs_model == "nb":
+        num, den, n_err = (
+            np.repeat(x.sum(axis=1, keepdims=True), k_n, axis=1)
+            for x in (num, den, n_err)
+        )
     pool = pool_matrix(origin.fit.level, snap.parent, settings.min_level)
-    own = rho_from_sums(errors.num, errors.den)
-    n_pooled = pool @ errors.n
-    pooled = rho_from_sums(pool @ errors.num, pool @ errors.den)
+    own = rho_from_sums(num, den)
+    n_pooled = pool @ n_err
+    pooled = rho_from_sums(pool @ num, pool @ den)
     source = source_index(
         origin.fit.level,
         snap.parent,
-        errors.n,
+        n_err,
         n_pooled,
         settings.min_level,
         settings.min_errors,
     )
     k = np.arange(k_n)[None, :]
     rho = np.concatenate([own, pooled])[source, k]
-    n_used = np.concatenate([errors.n, n_pooled])[source, k]
+    n_used = np.concatenate([n_err, n_pooled])[source, k]
     rho = np.where(n_used >= settings.min_errors, rho, 0.0)
     origin.errors, origin.rho, origin.rho_n, origin.rho_source = (
         errors, rho, n_used, source,

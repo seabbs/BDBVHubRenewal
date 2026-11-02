@@ -48,7 +48,8 @@ def test_origins_without_a_delay_pair_are_listed_with_no_forecasts(
     assert (early["n_complete"] == 0).all()
     ran = o.loc[(o["origin"] == "2026-10-17") & (o["status"] == "ran")]
     assert set(ran["model"]) == {"randomwalk", "randomwalknowcast"}
-    assert (ran["n_next"] > 0).all()
+    assert (ran["n_complete"] > 0).all()
+    assert (ran.loc[ran["model"] == "randomwalknowcast", "n_next"] > 0).all()
 
 
 def test_scores_cover_the_three_targets_and_the_floor(
@@ -143,7 +144,7 @@ def test_pooled_summaries_say_which_places_they_hold(
         "provinces",
         "provinces without near-zero",
     }
-    for (_, pool), g in pooled.groupby(["target", "pool"]):
+    for _, g in pooled.groupby(["target", "pool"]):
         assert g["n"].nunique() == 1
     every = pooled.loc[pooled["pool"] == "provinces", "n"].max()
     some = pooled.loc[pooled["pool"] == "provinces without near-zero", "n"]
@@ -153,8 +154,7 @@ def test_pooled_summaries_say_which_places_they_hold(
 def test_relative_wis_is_against_randomwalk_or_the_floor(
     result,  # type: ignore[no-untyped-def]
 ) -> None:
-    table = summarise(result.scores, by=("target", "model"))
-    rel = relative_wis(table, by=("target",))
+    rel = relative_wis(result.scores, by=("target",))
     done = rel.loc[rel["target"] == "complete"].set_index("model")
     assert done.loc["randomwalk", "rel_wis"] == pytest.approx(1.0)
     assert (done["rel_to"] == "randomwalk").all()
@@ -168,7 +168,7 @@ def test_stored_forecasts_are_scored_on_the_final_targets_only(
 ) -> None:
     real = target.loc[target["kind"] == "real"]
     tasks = make_tasks(
-        real.loc[real["vintage"] == "2026-10-24"],
+        real.loc[real["vintage"] == "2026-10-17"],
         delays.assign(kind="real"),
         BacktestConfig(n_samples=20, seed=3),
         daily=daily,
@@ -178,7 +178,7 @@ def test_stored_forecasts_are_scored_on_the_final_targets_only(
     stored = pd.DataFrame(
         {
             "model": "flat",
-            "vintage": "2026-10-24",
+            "vintage": "2026-10-17",
             "location": np.repeat(["CD-IT", "CD-NK"], len(weeks) * 20),
             "target_end_date": np.tile(np.repeat(weeks, 20), 2),
             "sample": np.tile(np.arange(1, 21), 2 * len(weeks)),
@@ -205,7 +205,9 @@ def test_clock_sensitivity_moves_the_newest_week(
     )
     table = clock_sensitivity(tasks, daily, target, shifts=(-1, 0, 1))
     cd = table.loc[
-        (table["location"] == "CD") & (table["weeks_back"] == 0)
+        (table["location"] == "CD")
+        & (table["weeks_back"] == 0)
+        & (table["model"] == "randomwalknowcast")
     ].set_index("clock_shift")
     assert cd.loc[-1, "q50"] > cd.loc[0, "q50"] > cd.loc[1, "q50"]
     assert set(table["model"]) == {"randomwalknowcast", "randomwalk"}

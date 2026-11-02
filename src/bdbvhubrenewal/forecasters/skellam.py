@@ -22,6 +22,17 @@ $$
 
 Baselinenowcast 0.2.2 has no Skellam model.
 This one lives outside the port.
+
+Two variants are scored against it in the release backtest
+(`OBS_MODELS`).
+`skellam_rem` has the extra spread $\rho\,|\mathrm{rem}|$ in place of
+$\rho\mu$, so a week with nothing left to report gets no extra noise.
+`nb` is baselinenowcast's own observation model, a negative binomial on
+the remaining count, $X = Y + \mathrm{NB}(\mathrm{rem}^+, \phi)$ with
+variance $\mathrm{rem}^+ + (\mathrm{rem}^+)^2 / \phi$.
+Its $1/\phi$ is fitted by moments,
+$\sum (e^2 - \mathrm{rem}^+) / \sum (\mathrm{rem}^+)^2$, floored at 0,
+pooled over every number of weeks back.
 """
 
 from __future__ import annotations
@@ -32,11 +43,17 @@ import numpy as np
 from jax import Array
 
 __all__ = [
+    "OBS_MODELS",
     "fit_rho_moments",
     "rho_from_sums",
     "rho_sums",
+    "sample_nowcast",
     "sample_skellam_moments",
+    "spread_sums",
 ]
+
+OBS_MODELS = ("skellam", "skellam_rem", "nb")
+"""Observation models: the Skellam, the Skellam on the remainder, the NB."""
 
 
 def rho_sums(
@@ -73,6 +90,51 @@ def rho_sums(
     num = np.where(keep, err**2 - np.abs(rem), 0.0).sum(axis=axis)
     den = np.where(keep, 2.0 * np.maximum(pred, 0.0), 0.0).sum(axis=axis)
     return num, den, keep.sum(axis=axis)
+
+
+def spread_sums(
+    obs: np.ndarray,
+    pred: np.ndarray,
+    target: np.ndarray,
+    valid: np.ndarray | None = None,
+    axis: int = -1,
+    model: str = "skellam",
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    r"""Return the sums behind the spread of an observation model.
+
+    Parameters
+    ----------
+    obs, pred, target, valid, axis
+        As for `rho_sums`.
+    model : str
+        One of `OBS_MODELS`.
+
+    Returns
+    -------
+    tuple of numpy.ndarray
+        The moment numerator and denominator, and the number of errors.
+        The spread is their ratio, floored at 0 (`rho_from_sums`).
+
+    Raises
+    ------
+    ValueError
+        If `model` is not one of `OBS_MODELS`.
+    """
+    if model == "skellam":
+        return rho_sums(obs, pred, target, valid, axis)
+    if model not in OBS_MODELS:
+        raise ValueError(f"Unknown observation model {model!r}.")
+    keep = np.ones(np.shape(obs), dtype=bool) if valid is None else valid
+    rem = pred - obs
+    err = target - pred
+    if model == "skellam_rem":
+        num = np.where(keep, err**2 - np.abs(rem), 0.0)
+        den = np.where(keep, 2.0 * np.abs(rem), 0.0)
+    else:
+        pos = np.maximum(rem, 0.0)
+        num = np.where(keep, err**2 - pos, 0.0)
+        den = np.where(keep, pos**2, 0.0)
+    return num.sum(axis=axis), den.sum(axis=axis), keep.sum(axis=axis)
 
 
 def rho_from_sums(num: np.ndarray, den: np.ndarray) -> np.ndarray:
@@ -134,3 +196,55 @@ def sample_skellam_moments(
     rise = jax.random.poisson(up, jnp.maximum(rem, 0.0) + extra, shape)
     fall = jax.random.poisson(down, jnp.maximum(-rem, 0.0) + extra, shape)
     return jnp.maximum(obs + rise - fall, 0).astype(mean.dtype)
+
+
+def sample_nowcast(
+    key: Array, mean: Array, obs: Array, spread: Array, n: int, model: str
+) -> Array:
+    r"""Draw the count at the later release under an observation model.
+
+    Parameters
+    ----------
+    key : jax.Array
+        Random key.
+    mean : jax.Array
+        Nowcast mean $\mu$ of each week.
+    obs : jax.Array
+        Count reported so far, $Y$.
+    spread : jax.Array
+        $\rho$ for the Skellam models, $1/\phi$ for the NB.
+    n : int
+        Number of samples.
+    model : str
+        One of `OBS_MODELS`.
+
+    Returns
+    -------
+    jax.Array
+        Samples, shape `(n, *mean.shape)`, floored at 0.
+
+    Raises
+    ------
+    ValueError
+        If `model` is not one of `OBS_MODELS`.
+    """
+    if model == "skellam":
+        return sample_skellam_moments(key, mean, obs, spread, n)
+    if model not in OBS_MODELS:
+        raise ValueError(f"Unknown observation model {model!r}.")
+    rem = mean - obs
+    shape = (n, *jnp.shape(mean))
+    if model == "skellam_rem":
+        extra = spread * jnp.abs(rem)
+        up, down = jax.random.split(key)
+        rise = jax.random.poisson(up, jnp.maximum(rem, 0.0) + extra, shape)
+        fall = jax.random.poisson(down, jnp.maximum(-rem, 0.0) + extra, shape)
+        return jnp.maximum(obs + rise - fall, 0).astype(mean.dtype)
+    pos = jnp.maximum(rem, 0.0)
+    k_gamma, k_count = jax.random.split(key)
+    inv = jnp.broadcast_to(spread, jnp.shape(mean))
+    size = jnp.where(inv > 0, 1.0 / jnp.where(inv > 0, inv, 1.0), 1.0)
+    mix = jax.random.gamma(k_gamma, size, shape) / size
+    rate = pos * jnp.where(inv > 0, mix, 1.0)
+    add = jax.random.poisson(k_count, rate, shape)
+    return jnp.maximum(obs + add, 0).astype(mean.dtype)

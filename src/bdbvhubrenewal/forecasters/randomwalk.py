@@ -58,7 +58,7 @@ from bdbvhubrenewal.forecasters.chain import (
     Settings,
     build_origin,
 )
-from bdbvhubrenewal.forecasters.skellam import sample_skellam_moments
+from bdbvhubrenewal.forecasters.skellam import sample_nowcast
 from bdbvhubrenewal.forecasters.walk import random_walk
 
 __all__ = ["RandomWalk", "RandomWalkNowcast"]
@@ -300,12 +300,13 @@ class RandomWalkNowcast(RandomWalk):
         )
         key_x, key_walk, key_part = jax.random.split(_key(task), 3)
         nowcast = np.asarray(
-            sample_skellam_moments(
+            sample_nowcast(
                 key_x,
                 jnp.asarray(point, jnp.float32),
                 jnp.asarray(origin.reported, jnp.float32),
                 jnp.asarray(rho, jnp.float32),
                 n,
+                self.settings.obs_model,
             ),
             dtype=np.float64,
         )
