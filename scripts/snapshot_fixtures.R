@@ -72,6 +72,24 @@ last <- tri[(n_ref - n_use + 1):n_ref, , drop = FALSE]
 filled <- baselinenowcast:::.chainladder_fill_triangle(last)
 wm(rowSums(filled), dir, "row_totals")
 
+# ---- zero ------------------------------------------------------------
+
+# Case zero: a right-truncated daily triangle with no cases at ages 0
+# and 1 in the history and cases on the last day. The chain ladder fill
+# has a zero denominator, which 0.2.2 divides by max(den, 1) after
+# taking the factor as 1 + mult.
+
+dir <- file.path(root, "zero")
+dir.create(dir, recursive = TRUE, showWarnings = FALSE)
+tri <- rbind(
+  c(0, 0, 4, 2), c(0, 0, 3, 1), c(0, 0, 5, 3),
+  c(0, 0, 2, NA), c(0, 0, NA, NA), c(6, NA, NA, NA)
+)
+wm(tri, dir, "tri")
+writeLines(as.character(c(3, 6, 6)), file.path(dir, "settings.txt"))
+filled <- baselinenowcast:::.chainladder_fill_triangle(tri)
+wm(rowSums(filled), dir, "row_totals")
+
 # ---- skip ------------------------------------------------------------
 
 dir <- file.path(root, "skip")

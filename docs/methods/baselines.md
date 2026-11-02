@@ -33,10 +33,10 @@ $$
 F_{p,s}(x) = \frac{\sum N_{p,r+1}(t)}{\sum N_{p,r}(t)},
 $$
 
-summed over the in-window pairs whose step is within 1 day of $s$ and over days $t$ of age $x$ at $r$.
-Steps of 7, 8 and 9 days then share their pairs, and each factor is a ratio of sums over the pairs, not a mean of their ratios.
+summed over all in-window pairs and over days $t$ of age $x$ at $r$.
+Each pair is one step at its own exact ages, and the factor is a ratio of sums over the pairs, not a mean of their ratios.
 Cells a release does not observe are skipped, not filled.
-The denominator is $\max(\sum N_{p,r}(t), 1)$, as in baselinenowcast.
+A zero denominator follows baselinenowcast, so that $F_{p,s}(x) = 1 + (\sum N_{p,r+1}(t) - \sum N_{p,r}(t)) / \max(\sum N_{p,r}(t), 1)$.
 The parent of a province is the country, whose counts are the sum of its provinces.
 
 At the latest release $o$, $s_o$ is the step of its latest in-window pair.

@@ -83,7 +83,7 @@ def pair_sums(
 def _pair_factors(num: Array, den: Array, member: Array) -> Array:
     n = jnp.einsum("lpx,ps->lsx", num, member)
     d = jnp.einsum("lpx,ps->lsx", den, member)
-    return n / jnp.maximum(d, 1.0)
+    return 1.0 + (n - d) / jnp.maximum(d, 1.0)
 
 
 def pair_factors(
@@ -94,11 +94,12 @@ def pair_factors(
     ``step_index`` maps pairs to steps.
     A vector gives the slot ``0 .. n_steps - 1`` of each pair's one step.
     A matrix ``(n_pair, n_steps)`` of 0 and 1 lets a pair enter several
-    steps, as when steps within a day of each other are pooled.
+    steps, as when every pair is pooled into every step.
     The numerators and denominators of the pairs of a step are summed
     before the ratio, as baselinenowcast sums over reference times.
-    The factor is ``sum(num) / max(sum(den), 1)``, the rule of
-    ``.calculate_mult_factor``.
+    The factor is ``1 + (sum(num) - sum(den)) / max(sum(den), 1)``.
+    This is ``1 + mult`` with the ``mult`` of ``.calculate_mult_factor``,
+    and equals ``sum(num) / sum(den)`` where ``sum(den) >= 1``.
     Returns ``F`` of shape ``(n_loc, n_steps, max_delay)``.
     """
     idx = jnp.asarray(step_index)

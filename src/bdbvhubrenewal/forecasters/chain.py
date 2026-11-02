@@ -12,12 +12,13 @@ $$
 F_s(x) = \frac{\sum N_{r+1}(t)}{\sum N_r(t)},
 $$
 
-summed over the in-window pairs whose step is within 1 day of $s$ and
-over days of age $x$ that both releases observe.
-Steps of 7, 8 and 9 days then share their pairs, and each pooled factor is
-a ratio of sums, not a mean of ratios.
+summed over all in-window pairs and over days of age $x$ that both
+releases observe.
+Each pair is one step at its own exact ages, and the pooled factor is a
+ratio of sums, not a mean of ratios.
 Cells a release does not observe are skipped, not filled.
-The denominator is $\max(\sum N_r(t), 1)$, as in baselinenowcast.
+A zero denominator takes baselinenowcast's rule, so that
+$F_s(x) = 1 + (\sum N_{r+1}(t) - \sum N_r(t)) / \max(\sum N_r(t), 1)$.
 
 **Nowcast.** At the latest release $o$, with $s_o$ the step of its latest
 in-window pair, day $t$ is chained over the actual release gap,
@@ -101,9 +102,6 @@ class Settings:
         First and last weeks back averaged for a place's level.
     max_mismatch : int
         Days by which a retrospective plan may differ from the gap.
-    pool_gap : int
-        Days by which a pair's step may differ from the step of a factor
-        and still enter its sums.
     completeness : float
         Share of a week's final count that must be reported for it to
         start the random walk.
@@ -116,7 +114,6 @@ class Settings:
     min_errors: int = MIN_ERRORS
     level_weeks: tuple[int, int] = (3, 6)
     max_mismatch: int = 1
-    pool_gap: int = 1
     completeness: float = 0.95
     walk_weeks: int = 9
 
@@ -134,8 +131,8 @@ class DelayFit:
     pair_step : numpy.ndarray
         Index in `steps` of each pair, `[P]`.
     factors : numpy.ndarray
-        $F$ for each place, `[L, S, D]`, from its source. Each step pools
-        the pairs within `Settings.pool_gap` days of it.
+        $F$ for each place, `[L, S, D]`, from its source. Every step
+        pools all the in-window pairs, so the steps share one factor.
     level : numpy.ndarray
         Cases a week of each place, `[L]`.
     source : numpy.ndarray
@@ -251,8 +248,8 @@ def fit_delay(
         jnp.asarray(pairs[:, 0]),
         settings.max_delay,
     )
-    near = np.abs(gaps[:, None] - steps[None, :]) <= settings.pool_gap
-    f = np.array(pair_factors(num, den, jnp.asarray(near)))
+    every = jnp.ones((len(pairs), len(steps)))
+    f = np.array(pair_factors(num, den, every))
     level = levels(snap, r, settings)
     source = source_index(level, snap.parent, min_level=settings.min_level)
     node = source % len(level)

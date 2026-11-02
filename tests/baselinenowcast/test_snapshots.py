@@ -126,7 +126,7 @@ def test_pair_sums_skip_unobserved_cells_as_in_r() -> None:
     np.testing.assert_allclose(den, r[:, :, 1])
 
 
-def test_pair_factors_match_r_with_the_max_den_1_rule() -> None:
+def test_pair_factors_match_r_with_the_zero_denominator_rule() -> None:
     counts, observed, cut, d = _skip()
     pairs, steps = window_pairs(cut, d)
     assert 9 not in steps
@@ -142,7 +142,7 @@ def test_pair_factors_match_r_with_the_max_den_1_rule() -> None:
     np.testing.assert_allclose(f[seen], expected[seen], rtol=1e-12)
     # Where R has no factor the denominator is 0, and 0.2.2 divides by 1.
     n_sum = np.einsum("lpx,ps->lsx", num, np.eye(len(uniq))[slot])
-    np.testing.assert_allclose(f[~seen], n_sum[~seen])
+    np.testing.assert_allclose(f[~seen], 1.0 + n_sum[~seen])
 
 
 def test_exact_chain_matches_r() -> None:
@@ -187,17 +187,17 @@ def test_hand_derived_toy_with_two_steps_and_a_zero_denominator() -> None:
     np.testing.assert_allclose(
         np.asarray(f)[0, 0, :3], [9 / 5, 10 / 8, 12 / 10]
     )
-    # Zero denominators take max(den, 1), as R does.
-    np.testing.assert_allclose(np.asarray(f)[0, 0, 3], 0.0)
-    np.testing.assert_allclose(np.asarray(f)[0, 1, 0], 2.0)
+    # Zero denominators take 1 + (num - den) / max(den, 1), as R does.
+    np.testing.assert_allclose(np.asarray(f)[0, 0, 3], 1.0)
+    np.testing.assert_allclose(np.asarray(f)[0, 1, 0], 3.0)
     np.testing.assert_allclose(
         np.asarray(f)[0, 1, 1:], [9 / 7, 10 / 9, 11 / 10]
     )
     # The origin is release 2 with step 3.
     plan = exact_plan(np.arange(6), 3, 1, 4)
     g = np.asarray(chain_growth(f, plan))[0]
-    # F3(0) = 2 / max(0, 1), then F3(3).
-    np.testing.assert_allclose(g[0], 2.0 * 11 / 10)
+    # F3(0) = 1 + 2 / max(0, 1), then F3(3).
+    np.testing.assert_allclose(g[0], 3.0 * 11 / 10)
     np.testing.assert_allclose(g[1:4], [9 / 7, 10 / 9, 11 / 10])
     np.testing.assert_allclose(g[4:], 1.0)
 
@@ -237,7 +237,7 @@ def test_the_longest_step_gives_no_factor_but_keeps_its_counts() -> None:
     assert float(den.sum()) == 1.0
     f = pair_factors(num[:, :0], den[:, :0], np.zeros(0, int), 1)
     assert f.shape == (1, 1, 42)
-    assert not bool(np.any(f))
+    np.testing.assert_allclose(f, 1.0)
     assert counts.sum() == 120
 
 
@@ -274,26 +274,25 @@ def _gapped() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     return counts, observed, cut, pairs
 
 
-def test_pooled_factor_is_the_ratio_of_sums_over_pairs_within_a_day() -> None:
+def test_pooled_factor_is_the_ratio_of_sums_over_all_pairs() -> None:
     counts, observed, cut, pairs = _gapped()
     gaps = np.diff(cut)
     np.testing.assert_array_equal(gaps, [7, 8, 9])
     num, den = pair_sums(counts, observed, cut, pairs, 12)
-    steps = np.unique(gaps)
-    near = np.abs(gaps[:, None] - steps[None, :]) <= 1
-    f = np.asarray(pair_factors(num, den, near))
-    for s, step in enumerate(steps):
-        use = np.flatnonzero(np.abs(gaps - step) <= 1)
-        for x in range(12):
-            n = sum(counts[0, p + 1, cut[p] - x] for p in use)
-            d = sum(counts[0, p, cut[p] - x] for p in use)
-            np.testing.assert_allclose(f[0, s, x], n / max(d, 1), rtol=1e-12)
+    every = np.ones((len(pairs), 3))
+    f = np.asarray(pair_factors(num, den, every))
+    for x in range(12):
+        n = sum(counts[0, p + 1, cut[p] - x] for p in range(3))
+        d = sum(counts[0, p, cut[p] - x] for p in range(3))
+        expected = 1 + (n - d) / max(d, 1)
+        for s in range(3):
+            np.testing.assert_allclose(f[0, s, x], expected, rtol=1e-12)
     # A ratio of sums differs from the mean of the pair ratios.
     ratios = [
         counts[0, p + 1, cut[p] - 3] / counts[0, p, cut[p] - 3]
         for p in range(3)
     ]
-    assert not np.isclose(f[0, 1, 3], np.mean(ratios))
+    assert not np.isclose(f[0, 0, 3], np.mean(ratios))
     np.testing.assert_allclose(f[1], f[0])
 
 
@@ -312,3 +311,24 @@ def test_pooling_a_regular_release_triangle_equals_the_unpooled_factor() -> (
     pooled = pair_factors(num, den, np.ones((len(pairs), 1)))
     unpooled = pair_factors(num, den, np.zeros(len(pairs), int), 1)
     np.testing.assert_allclose(pooled, unpooled, rtol=1e-12)
+
+
+def test_a_zero_denominator_matches_the_r_chain_fill() -> None:
+    tri = read("zero", "tri")
+    d, n, _ = read_ints("zero", "settings")
+    t = np.arange(n)
+    counts = np.zeros((1, n, n))
+    for r in range(n):
+        for day in range(r + 1):
+            counts[0, r, day] = np.nansum(tri[day, : r - day + 1])
+    observed = t[None, :] <= t[:, None]
+    pairs, _ = window_pairs(t, d)
+    num, den = pair_sums(counts, observed, t, pairs, d)
+    f = pair_factors(num, den, np.zeros(len(pairs), int), 1)
+    plan = exact_plan(n - 1 - t, 1, 0, d)
+    g = np.asarray(chain_growth(f, plan))[0]
+    got = counts[0, n - 1] * g
+    expected = read_vec("zero", "row_totals")
+    # The newest day has cases and no history, so its fill is 135, not 0.
+    assert expected[-1] == 135
+    np.testing.assert_allclose(got, expected, rtol=1e-12)
