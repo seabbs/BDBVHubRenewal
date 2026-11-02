@@ -53,7 +53,10 @@ def preprocess_negative_values(
     Scanning each row from the last delay back, a negative value is set
     to zero and its amount is taken from the next earlier observed
     cell.
-    Cells are truncated to integers as R's ``as.integer`` does.
+    Every cell is truncated to an integer.
+    R truncates only the first ``ncol`` cells in column-major order
+    because of an upstream indexing slip.
+    Non-integer inputs therefore differ from R.
     Unobserved cells stay zero.
     """
     values, m = coerce(triangle, mask)

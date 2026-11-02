@@ -27,9 +27,10 @@ def test_hub_week_matrix_uses_sunday_to_saturday_weeks() -> None:
     assert [str(s) for s in sats] == ["2026-07-11", "2026-07-18", "2026-07-25"]
     np.testing.assert_array_equal(w.sum(1), [7, 7, 3])
     w2, sats2 = hub_week_matrix("2026-07-08", 17)
-    assert str(sats2[0]) == "2026-07-18"
-    assert w2[0, :4].sum() == 0
-    assert w2[0].sum() == 7
+    assert str(sats2[0]) == "2026-07-11"
+    assert w2[0].sum() == 4
+    assert w2.sum() == 17
+    np.testing.assert_array_equal(w2.sum(0), np.ones(17))
 
 
 def test_hub_weeks_give_12_horizons_at_a_saturday_and_13_otherwise() -> None:

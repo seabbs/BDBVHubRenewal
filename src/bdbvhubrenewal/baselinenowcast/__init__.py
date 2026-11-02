@@ -5,9 +5,9 @@ Reporting triangles are ``(triangle, mask)`` pairs.
 NA.
 The extension (E1) skips unobserved cells in the chain ladder ratio
 of sums for release snapshots (``snapshots.py``).
-See ``docs/methods/baselines.md`` for the methods.
 """
 
+from . import _x64  # noqa: F401  (enables float64 first)
 from .delay import apply_delay, estimate_and_apply_delay, estimate_delay
 from .nowcast import baselinenowcast
 from .sample import (

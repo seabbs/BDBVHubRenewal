@@ -186,7 +186,8 @@ def hub_week_matrix(
     """0/1 matrix of hub weeks (weeks by days) and the Saturday labels.
 
     Hub weeks run Sunday to Saturday and carry the Saturday's date.
-    A first week that starts before ``first_onset`` is dropped.
+    A first week that starts after its Sunday keeps the days present.
+    No onset day is dropped.
     The last week keeps only the days present, so the cut-off week is
     partial unless the last day is a Saturday.
     """
@@ -195,11 +196,8 @@ def hub_week_matrix(
     # numpy weekday: 1970-01-01 was a Thursday; Sunday = 0 below.
     dow = (days.astype(int) + 4) % 7
     sat = days + (6 - dow)
-    first_sunday = start + ((7 - ((start.astype(int) + 4) % 7)) % 7)
-    keep_from = int((first_sunday - start).astype(int))
-    saturdays = np.unique(sat[keep_from:])
+    saturdays = np.unique(sat)
     w = (sat[None, :] == saturdays[:, None]).astype(float)
-    w[:, :keep_from] = 0.0
     return w, saturdays
 
 

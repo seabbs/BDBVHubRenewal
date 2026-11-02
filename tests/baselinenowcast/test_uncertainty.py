@@ -206,3 +206,9 @@ def test_estimate_uncertainty_runs_with_hub_weeks(
         )
     assert store["obs"].shape == (2, horizons)
     assert out.shape[0] == horizons
+
+
+def test_package_runs_in_float64_without_a_fixture() -> None:
+    import jax.numpy as jnp
+
+    assert jnp.zeros(1).dtype == jnp.float64

@@ -1,21 +1,12 @@
 """Fixtures for the baselinenowcast port.
 
-Tests run in float64.
+Importing the package enables float64.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterator
-
-import jax
 import pytest
 from bnc_helpers import CASES, SMALL, Case, load_case
-
-
-@pytest.fixture(autouse=True)
-def _x64() -> Iterator[None]:
-    with jax.enable_x64(True):
-        yield
 
 
 @pytest.fixture(params=CASES)
