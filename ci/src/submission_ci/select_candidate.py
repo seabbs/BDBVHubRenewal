@@ -435,6 +435,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         s.add_argument("--policy", type=Path, required=True)
         s.add_argument("--candidates", type=Path, required=True)
         s.add_argument("--model", default="", help="The chosen model")
+        s.add_argument(
+            "--only-model",
+            action="store_true",
+            help="Submit --model or nothing: no fallback to another model",
+        )
     add_deadline_args(sub.choices["triage"])
     sel = sub.choices["select"]
     sel.add_argument("--out", type=Path, required=True)
@@ -442,11 +447,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     sel.add_argument("--retried", action="store_true")
     sel.add_argument(
         "--no-shadows", action="store_true", help="Leave shadows out"
-    )
-    sel.add_argument(
-        "--only-model",
-        action="store_true",
-        help="Submit --model or nothing: no fallback to another baseline",
     )
     args = p.parse_args(argv)
     only = bool(getattr(args, "only_model", False))

@@ -38,7 +38,7 @@ export FORECAST_DATE=${FORECAST_DATE:-${NOW%%T*}}
 #   | extra environment (optional) | text the PR body must hold (optional)
 SCENARIOS=(
   "main|main=pass|main||All checks passed."
-  "chosenrandomwalk|main=pass|randomwalk|FAKE_CHOSEN_MODEL=randomwalk|Shadow candidates"
+  "chosenrandomwalk|main=pass|randomwalk|MODEL=randomwalk|Shadow candidates"
   "bvdrelease|main=pass|main||used BVDOutbreakSize release \`results-3180\` (data to 2026-10-23, joint R-hat 1.041, limit 1.1)."
   "coherence|main=pass|main|FAKE_COHERENCE_GAP=2026-10-24:2|Handled: national (CD) differs from the sum of the provinces"
   "warn|main=warn|main"
@@ -47,20 +47,22 @@ SCENARIOS=(
   "ppcfail|main=ppcfail|main||All checks passed, with warnings on ppc."
   "noppc|main=noppc|main||All checks passed, with warnings on ppc."
   # A wildly high forecast is ruled out by the plausibility check: the
-  # main model is refitted, and if that is wild too the chain moves on.
+  # main model is refitted, and if that is wild too the round is skipped.
+  # seabbs-renewal carries its own model or nothing: there is no fallback
+  # to the single-patch model or a random walk.
   "implausible|main=implausible|retry-1||main model was ruled out (plausible: "
-  "wild|main=implausible,retry-1=implausible|renewalsp||Fallback model used (single-patch model"
+  "wild|main=implausible,retry-1=implausible|skip"
   "national|main=badnational|main||Handled: national (CD) rebuilt as the sum of the provinces"
   "latestream|main=latestream|main||Handled: delays: no delay data for this vintage"
   "loose|main=loose,retry-1=pass|retry-1||Handled: main model refitted once (max R-hat is 1.2"
   "loosekept|main=loose,retry-1=fail|main||Handled: main model kept after one refit did not help"
   "retry|main=fail,retry-1=pass|retry-1||Main model refitted once: main model was ruled out"
-  "fallback|main=fail,retry-1=fail|renewalsp||Fallback model used (single-patch model"
+  "fallback|main=fail,retry-1=fail|skip"
   # Tuesday 21:00 UTC, two hours before the close: no time to refit, so
-  # a failed main model goes straight to the single-patch fallback.
-  "late|main=fail,retry-1=pass|renewalsp|NOW=2026-11-03T21:00:00+00:00|Fallback model used ("
-  "randomwalknowcast|main=fail,retry-1=fail,renewalsp=fail|randomwalknowcast||Fallback model used (random walk on a nowcast)"
-  "randomwalk|main=fail,retry-1=crash,renewalsp=fail,randomwalknowcast=negative|randomwalk"
+  # a failed main model skips the round.
+  "late|main=fail,retry-1=pass|skip|NOW=2026-11-03T21:00:00+00:00"
+  "randomwalknowcast|main=fail,retry-1=fail,renewalsp=pass,randomwalknowcast=pass|skip"
+  "randomwalk|main=fail,retry-1=crash,renewalsp=fail,randomwalknowcast=negative|skip"
   "skip|main=fail,retry-1=fail,renewalsp=fail,randomwalknowcast=negative,randomwalk=negative|skip"
 )
 
@@ -91,6 +93,7 @@ run_scenario() {
   export WORK="$ROOT/$name"
   export FAKE_SCENARIOS=$scenarios
   export FAKE_COHERENCE_GAP="" FAKE_CHOSEN_MODEL=""
+  unset MODEL
   local kv
   for kv in $extra; do export "${kv?}"; done
   export GH_LOG="$WORK/gh.log"
@@ -121,7 +124,7 @@ run_scenario() {
   run_stage() {
     sci python -m submission_ci.policy --policy "$CI_DIR/policy.toml" \
       --stage "$1" --hub-ref "$HUB_REF" --root "$SRC_ROOT" --model "$model" \
-      --reference-date "$REFERENCE_DATE" --now "$NOW" > "$WORK/matrix-$1.json"
+      --only-model --reference-date "$REFERENCE_DATE" --now "$NOW" > "$WORK/matrix-$1.json"
     python3 - "$WORK/matrix-$1.json" << 'EOF' > "$WORK/legs-$1.txt"
 import json, sys
 for e in json.load(open(sys.argv[1]))["include"]:
@@ -140,7 +143,7 @@ EOF
 
   # 4. Triage, then the retry matrix only if `main` was ruled out.
   local retried=false
-  if sci python -m submission_ci.select_candidate triage --model "$model" \
+  if sci python -m submission_ci.select_candidate triage --model "$model" --only-model \
       --policy "$CI_DIR/policy.toml" --candidates "$WORK/candidates" \
       --reference-date "$REFERENCE_DATE" --now "$NOW" \
       | grep -q need_retry=true; then
@@ -165,7 +168,7 @@ EOF
   # 5. Select, with a stand-in for hubValidations (`gate` job).
   local status=0
   RETRIED=$retried HUB_PATH="$FIX/hub" METADATA="$FIX/hub/$model_id.yml" \
-    HUB_VALIDATOR="true" "$CI_DIR/steps/select.sh" > "$WORK/select.log" \
+    HUB_VALIDATOR="true" ONLY_MODEL=true "$CI_DIR/steps/select.sh" > "$WORK/select.log" \
     || status=$?
   local got
   got=$(python3 -c "import json;print(json.load(open('$WORK/gate/provenance.json'))['selected'] or 'skip')")
@@ -173,6 +176,17 @@ EOF
     echo "FAIL: $name selected $got, expected $expect"; cat "$WORK/select.log"
     return 1
   fi
+  # Every fit job's timeout leaves the gate 45 minutes before the close:
+  # 350 on Monday morning, 120 - 45 = 75 at 21:00 UTC on Tuesday.
+  local timeout
+  timeout=$(python3 -c "import json, sys; print(sorted({e['timeout'] for e in json.load(open(sys.argv[1]))['include']}))" \
+    "$WORK/matrix-primary.json")
+  case "$name" in
+    late) [ "$timeout" = "['75']" ] && [ "$retried" = false ] \
+      || { echo "FAIL: late timeouts $timeout, retried $retried"; return 1; } ;;
+    *) [ "$timeout" = "['350']" ] \
+      || { echo "FAIL: $name timeouts $timeout"; return 1; } ;;
+  esac
   if [ "$expect" = "skip" ]; then
     [ "$status" = 3 ] || { echo "FAIL: skip should exit 3, got $status"; return 1; }
     echo "ok: round skipped (exit 3); reason in $WORK/gate/provenance.md"
@@ -216,17 +230,6 @@ EOF
   if [ -n "$want" ] && ! grep -qF -- "$want" "$WORK/gate/pr-body.md"; then
     echo "FAIL: $name PR body lacks: $want"; return 1
   fi
-  # Every fit job's timeout leaves the gate 45 minutes before the close:
-  # 350 on Monday morning, 120 - 45 = 75 at 21:00 UTC on Tuesday.
-  local timeout
-  timeout=$(python3 -c "import json, sys; print(sorted({e['timeout'] for e in json.load(open(sys.argv[1]))['include']}))" \
-    "$WORK/matrix-primary.json")
-  case "$name" in
-    late) [ "$timeout" = "['75']" ] && [ "$retried" = false ] \
-      || { echo "FAIL: late timeouts $timeout, retried $retried"; return 1; } ;;
-    *) [ "$timeout" = "['350']" ] \
-      || { echo "FAIL: $name timeouts $timeout"; return 1; } ;;
-  esac
   echo "ok: selected $got; body $WORK/gate/pr-body.md"
 }
 

@@ -110,17 +110,23 @@ class Policy:
         fitted and checked, as a shadow, and the retry is dropped. Any
         other choice keeps the policy as it is.
 
-        With `only`, the chain is that baseline alone, for a hub model
-        that must never be submitted as anything else. The others are
+        With `only`, the chain is that model alone, for a hub model
+        that must never be submitted as anything else: a baseline, or
+        for any other model the main fit and its refit. The others are
         still built as shadows, as references for the checks, and are
         never selected.
         """
         baselines = [c for c in self.chain() if c.kind == "randomwalk"]
         names = [c.model or c.id for c in baselines]
         if model not in names:
-            if only:
-                raise ValueError(f"{model!r} is not a baseline model")
-            return self
+            if not only:
+                return self
+            own = ("main", "retry")
+            cands = [
+                c if c.kind in own else replace(c, kind="shadow")
+                for c in self.candidates
+            ]
+            return replace(self, candidates=cands)
         start = names.index(model)
         kept = {c.id for c in baselines[start : start + 1 if only else None]}
         cands = [
@@ -251,10 +257,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         default="",
         help="The chosen model; random walk makes a randomwalk-only chain",
     )
+    p.add_argument(
+        "--only-model",
+        action="store_true",
+        help="A chain of --model alone, with the others as shadows",
+    )
     add_deadline_args(p)
     args = p.parse_args(argv)
     entries = matrix(
-        load_policy(args.policy).for_model(args.model),
+        load_policy(args.policy).for_model(args.model, args.only_model),
         args.stage,
         args.root,
         args.hub_ref,
