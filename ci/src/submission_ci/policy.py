@@ -41,6 +41,8 @@ KINDS = ("main", "retry", "fallback", "randomwalk", "shadow")
 part of the chain, so it is never submitted. It lets a variant run weekly
 before it is chosen."""
 STAGES = ("primary", "retry", "baseline")
+RENEWAL_MODELS = ("renewal", "renewalsp", "renewalbvd")
+"""The models the renewal hub id (`seabbs-renewal`) may submit."""
 
 
 @dataclass(frozen=True)
@@ -82,6 +84,9 @@ class Policy:
     checks: dict[str, Any]
     ppc: dict[str, Any] = field(default_factory=dict)
     timing: Timing = field(default_factory=Timing)
+    renewal_only: bool = True
+    """The renewal hub id submits its chosen model (and its one refit) or
+    nothing: never a fallback model, never a baseline."""
 
     def chain(self) -> list[Candidate]:
         """Candidates in submission order, with retries cut to budget."""
@@ -114,12 +119,29 @@ class Policy:
         that must never be submitted as anything else. The others are
         still built as shadows, as references for the checks, and are
         never selected.
+
+        With `only` and a renewal model (`RENEWAL_MODELS`), the chain is
+        `main` and its refit, which run the chosen model. The fallback
+        and the baselines stay as shadows, so the round is skipped when
+        the chosen model cannot be submitted.
         """
         baselines = [c for c in self.chain() if c.kind == "randomwalk"]
         names = [c.model or c.id for c in baselines]
         if model not in names:
+            if only and model in RENEWAL_MODELS:
+                return replace(
+                    self,
+                    candidates=[
+                        c
+                        if c.kind in ("main", "retry", "shadow")
+                        else replace(c, kind="shadow")
+                        for c in self.candidates
+                    ],
+                )
             if only:
-                raise ValueError(f"{model!r} is not a baseline model")
+                raise ValueError(
+                    f"{model!r} is not a baseline or renewal model"
+                )
             return self
         start = names.index(model)
         kept = {c.id for c in baselines[start : start + 1 if only else None]}
@@ -171,6 +193,7 @@ def load_policy(path: Path | str) -> Policy:
         checks=raw.get("checks", {}),
         ppc=raw.get("ppc", {}),
         timing=Timing(**{k: int(v) for k, v in raw.get("timing", {}).items()}),
+        renewal_only=bool(pol.get("renewal_only", True)),
     )
 
 

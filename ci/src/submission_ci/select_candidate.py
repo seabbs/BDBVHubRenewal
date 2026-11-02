@@ -44,6 +44,7 @@ from .common import (
     write_text,
 )
 from .policy import (
+    RENEWAL_MODELS,
     Candidate,
     Policy,
     add_deadline_args,
@@ -450,7 +451,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
     only = bool(getattr(args, "only_model", False))
-    policy = load_policy(args.policy).for_model(args.model, only=only)
+    policy = load_policy(args.policy)
+    if policy.renewal_only and args.model in RENEWAL_MODELS:
+        # The renewal hub id: the chosen model or nothing.
+        only = True
+    policy = policy.for_model(args.model, only=only)
     if args.cmd == "triage":
         need = triage(policy, args.candidates, deadline_minutes(args))
         set_outputs({"need_retry": need})

@@ -154,6 +154,10 @@ def test_baseline_choices_keep_the_chain_from_that_baseline() -> None:
     assert only.get("randomwalk").kind == "shadow"
 
 
+def test_renewal_only_is_on_in_the_repository_policy() -> None:
+    assert load_policy(POLICY_PATH).renewal_only
+
+
 def test_ci_sampler_settings(tmp_path: Path) -> None:
     # Sam (2026-10-28): 2 chains of 500 warm-up and 500 draws for every
     # fitted candidate; the retry differs by its target acceptance and

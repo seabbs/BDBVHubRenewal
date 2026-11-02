@@ -58,6 +58,31 @@ def test_renewal_needs_a_model_choice(tmp_path: Path) -> None:
     assert renewal.model == "renewal"
 
 
+@pytest.mark.parametrize(
+    "chosen", ["randomwalknowcast", "randomwalk", "nonsense"]
+)
+def test_renewal_does_not_run_for_a_baseline_choice(
+    tmp_path: Path, chosen: str
+) -> None:
+    # A baseline is submitted only under its own id, never as
+    # seabbs-renewal.
+    cfg = write(tmp_path / "hub.toml", renewal=True, baseline=True)
+    tracks = {t.name: t for t in load_tracks(cfg, chosen=chosen)}
+    assert not tracks["renewal"].runs
+    assert "not a renewal model" in tracks["renewal"].reason
+    assert tracks["rwnowcast"].runs
+
+
+@pytest.mark.parametrize("chosen", ["renewal", "renewalsp", "renewalbvd"])
+def test_renewal_runs_for_each_renewal_variant(
+    tmp_path: Path, chosen: str
+) -> None:
+    cfg = write(tmp_path / "hub.toml", renewal=True, baseline=True)
+    tracks = {t.name: t for t in load_tracks(cfg, chosen=chosen)}
+    assert tracks["renewal"].runs
+    assert tracks["rwnowcast"].runs
+
+
 def test_cli_sets_one_output_per_track(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

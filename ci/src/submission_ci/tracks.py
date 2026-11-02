@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .common import append_summary, set_outputs
+from .policy import RENEWAL_MODELS
 
 TEAM = "seabbs"
 KEYS = {"renewal": "renewal", "rwnowcast": "baseline"}
@@ -59,6 +60,12 @@ def _track(abbr: str, model: str, submit: bool, needs_choice: bool) -> Track:
         runs, reason = False, "not opted in (`submit = false`)"
     elif needs_choice and not model:
         runs, reason = False, "no model choice recorded"
+    elif needs_choice and model not in RENEWAL_MODELS:
+        runs, reason = (
+            False,
+            f"chosen model `{model}` is not a renewal model, so nothing "
+            "is submitted under this id",
+        )
     else:
         runs, reason = True, "opted in"
     return Track(abbr, f"{TEAM}-{abbr}", model, submit, runs, reason)

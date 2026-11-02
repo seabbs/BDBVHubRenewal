@@ -9,6 +9,14 @@
 # retry thresholds or was ruled out. No other refits, to stay fast; the
 # content-hash fit cache is reused across re-runs.
 retry_budget = 1
+# seabbs-renewal submits its chosen renewal model (renewal, renewalsp or
+# renewalbvd, from results/model-choice.yml), refitted once if needed, or
+# nothing. When true, the single-patch fallback, randomwalknowcast and
+# randomwalk are never submitted under that id, and the round is skipped
+# if the chosen model is ruled out. They are still fitted or built, as
+# shadows and as reference for the checks. Baselines are submitted only
+# under their own ids (seabbs-rwnowcast).
+renewal_only = true
 
 # Minutes the chain plans with. Measured on the 2026-10-24 vintage
 # (jax-review-1, vectorised chains on 2 cores of archie) at 4 chains x

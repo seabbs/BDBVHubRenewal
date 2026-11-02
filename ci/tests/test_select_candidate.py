@@ -447,9 +447,80 @@ def test_baseline_track_skips_when_the_model_did_not_run(
     assert "could not run" in prov["reason"]
 
 
-def test_only_needs_a_baseline_model() -> None:
-    with pytest.raises(ValueError, match="not a baseline"):
-        POLICY.for_model("renewal", only=True)
+def test_only_needs_a_baseline_or_renewal_model() -> None:
+    with pytest.raises(ValueError, match="not a baseline or renewal"):
+        POLICY.for_model("nonsense", only=True)
+
+
+@pytest.mark.parametrize("model", ["renewal", "renewalsp", "renewalbvd"])
+def test_renewal_track_chain_is_the_chosen_model_and_its_refit(
+    model: str,
+) -> None:
+    pol = POLICY.for_model(model, only=True)
+    assert [c.id for c in pol.chain()] == ["main", "retry-1"]
+    for cid in ("renewalsp", "randomwalknowcast", "randomwalk"):
+        assert pol.get(cid).kind == "shadow"
+
+
+def test_renewal_track_never_falls_back(tmp_path: Path) -> None:
+    # seabbs-renewal submits the chosen renewal model or nothing, even
+    # when the single-patch model or a baseline would pass every check.
+    pol = POLICY.for_model("renewal", only=True)
+    c = tmp_path / "c"
+    chain(
+        c,
+        main=("fail", "pass"),
+        retry_1=("fail", "pass"),
+        renewalsp=("pass", "pass"),
+        randomwalknowcast=(None, "pass"),
+        randomwalk=(None, "pass"),
+    )
+    prov = run_select(
+        pol, c, tmp_path / "g", always("pass"), retried=True, only=True
+    )
+    assert prov["selected"] is None
+    assert "no other model is submitted in its place" in prov["reason"]
+    assert not (tmp_path / "g" / "selected").exists()
+
+
+def test_renewal_track_submits_the_chosen_model(tmp_path: Path) -> None:
+    pol = POLICY.for_model("renewal", only=True)
+    c = tmp_path / "c"
+    chain(c, main=("pass", "pass"), randomwalk=(None, "pass"))
+    prov = run_select(
+        pol, c, tmp_path / "g", always("pass"), retried=False, only=True
+    )
+    assert prov["selected"] == "main"
+
+
+def test_cli_cuts_the_chain_for_a_renewal_model(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # No --only-model needed: policy.toml's `renewal_only` applies it.
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "out"))
+    c = tmp_path / "c"
+    chain(
+        c,
+        main=("fail", "pass"),
+        retry_1=("fail", "pass"),
+        renewalsp=("pass", "pass"),
+        randomwalknowcast=(None, "pass"),
+    )
+    code = main(
+        [
+            "select",
+            "--policy",
+            str(Path(__file__).parents[1] / "policy.toml"),
+            "--candidates",
+            str(c),
+            "--model",
+            "renewal",
+            "--out",
+            str(tmp_path / "g"),
+            "--retried",
+        ]
+    )
+    assert code == 3
 
 
 def test_baseline_track_lists_no_shadows(tmp_path: Path) -> None:
