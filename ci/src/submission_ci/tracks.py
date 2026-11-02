@@ -6,8 +6,8 @@ checks everything but pushes nothing.
 
 - `renewal` (`[submission]`): the renewal chain. It runs only when
   opted in and it has a model: `model` there, otherwise the latest
-  choice in `results/model-choice.yml`. It carries that model alone,
-  with no fallback.
+  choice in `results/model-choice.yml`, and may fall back from it
+  (`ci/policy.toml`).
 - `baseline` (`[models.randomwalknowcast]`): random walk on a nowcast.
   It needs no model choice and has no fallback. If it cannot run, its
   round is skipped and nothing is submitted under its id.

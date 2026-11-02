@@ -84,7 +84,7 @@ def test_renewal_skips_without_opt_in_even_with_a_choice(
 
 
 def test_renewal_carries_its_own_model_not_the_choice(tmp_path: Path) -> None:
-    # An id only ever carries its own model: `[submission] model` wins
+    # The renewal id names its model: `[submission] model` wins
     # over the model choice record, which names the baseline.
     cfg = write(tmp_path / "hub.toml", renewal=True, baseline=True)
     cfg.write_text(

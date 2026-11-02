@@ -199,7 +199,7 @@ jobs:
           # shellcheck disable=SC2046
           uv run --project "$CI_DIR" python -m submission_ci.policy \
             --policy "$CI_DIR/policy.toml" --stage primary --hub-ref "$HUB_REF" \
-            --model "$MODEL" --only-model $(deadline_args)
+            --model "$MODEL" $(deadline_args)
       - uses: actions/upload-artifact@v7
         with:
           name: inputs
@@ -257,7 +257,7 @@ jobs:
           # shellcheck disable=SC2046
           uv run --project "$CI_DIR" python -m submission_ci.select_candidate \
             triage --policy "$CI_DIR/policy.toml" --candidates "$WORK/candidates" \
-            --model "$MODEL" --only-model $(deadline_args)
+            --model "$MODEL" $(deadline_args)
       - name: List the retries
         id: matrix
         if: steps.triage.outputs.need_retry == 'true'
@@ -270,7 +270,7 @@ jobs:
           # shellcheck disable=SC2046
           uv run --project "$CI_DIR" python -m submission_ci.policy \
             --policy "$CI_DIR/policy.toml" --stage retry --hub-ref "$HUB_REF" \
-            --model "$MODEL" --only-model $(deadline_args)
+            --model "$MODEL" $(deadline_args)
 
   retry:
     name: Fit retries
@@ -347,8 +347,6 @@ jobs:
         continue-on-error: true
         env:
           RETRIED: ${{ needs.triage.outputs.need_retry }}
-          # seabbs-renewal carries its own model or nothing: no fallback.
-          ONLY_MODEL: 'true'
           # The Python checks (hub_validate) always run; HUB_VALIDATIONS
           # turns off only the R hubValidations step.
           VALIDATE: 'true'

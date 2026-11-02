@@ -110,35 +110,37 @@ class Policy:
         fitted and checked, as a shadow, and the retry is dropped. Any
         other choice keeps the policy as it is.
 
-        With `only`, the chain is that model alone, for a hub model
-        that must never be submitted as anything else: the leg that
-        names the model (a baseline, or `renewalsp`), with no refit, or
-        else the main fit and its refit. The others are still built as
-        shadows, as references for the checks, and are never selected.
+        A renewal variant with its own leg (`renewalsp`, `renewalbvd`)
+        heads the chain, followed by the random walks, since the `main`
+        leg always fits the pooled renewal config. The main model and its
+        refit are then shadows.
+
+        With `only`, the chain is that baseline alone, for a hub model
+        that must never be submitted as anything else. The others are
+        still built as shadows, as references for the checks, and are
+        never selected.
         """
         baselines = [c for c in self.chain() if c.kind == "randomwalk"]
         names = [c.model or c.id for c in baselines]
         if model not in names:
-            if not only:
-                return self
-            legs = [c for c in self.chain() if c.model == model]
+            if only:
+                raise ValueError(f"{model!r} is not a baseline model")
+            legs = [c for c in self.candidates if model and c.model == model]
             if not legs:
-                cands = [
-                    c
-                    if c.kind in ("main", "retry")
-                    else replace(c, kind="shadow")
-                    for c in self.candidates
-                ]
-                return replace(self, candidates=cands)
-            kept = {legs[0].id}
-            return replace(
-                self,
-                candidates=[
-                    c if c.id in kept else replace(c, kind="shadow")
-                    for c in self.candidates
-                    if c.kind != "retry"
-                ],
-            )
+                return self
+            head = replace(legs[0], kind="fallback")
+            rest = [
+                c
+                if c.kind in ("fallback", "randomwalk", "shadow")
+                else replace(c, kind="shadow")
+                for c in self.candidates
+                if c.id != head.id and c.kind != "retry"
+            ]
+            others = [c for c in rest if c.kind == "fallback"]
+            rest = [
+                replace(c, kind="shadow") if c in others else c for c in rest
+            ]
+            return replace(self, candidates=[head, *rest])
         start = names.index(model)
         kept = {c.id for c in baselines[start : start + 1 if only else None]}
         cands = [

@@ -47,27 +47,25 @@ SCENARIOS=(
   "ppcfail|main=ppcfail|main||All checks passed, with warnings on ppc."
   "noppc|main=noppc|main||All checks passed, with warnings on ppc."
   # A wildly high forecast is ruled out by the plausibility check: the
-  # main model is refitted, and if that is wild too the round is skipped.
-  # seabbs-renewal carries its own model or nothing: there is no fallback
-  # to the single-patch model or a random walk.
+  # main model is refitted, and if that is wild too the chain moves on.
   "implausible|main=implausible|retry-1||main model was ruled out (plausible: "
-  "wild|main=implausible,retry-1=implausible|skip"
+  "wild|main=implausible,retry-1=implausible|renewalsp||Fallback model used (single-patch model"
   "national|main=badnational|main||Handled: national (CD) rebuilt as the sum of the provinces"
   "latestream|main=latestream|main||Handled: delays: no delay data for this vintage"
   "loose|main=loose,retry-1=pass|retry-1||Handled: main model refitted once (max R-hat is 1.2"
   "loosekept|main=loose,retry-1=fail|main||Handled: main model kept after one refit did not help"
   "retry|main=fail,retry-1=pass|retry-1||Main model refitted once: main model was ruled out"
-  "fallback|main=fail,retry-1=fail|skip"
+  "fallback|main=fail,retry-1=fail|renewalsp||Fallback model used (single-patch model"
   # Tuesday 21:00 UTC, two hours before the close: no time to refit, so
-  # a failed main model skips the round.
-  "late|main=fail,retry-1=pass|skip|NOW=2026-11-03T21:00:00+00:00"
-  "randomwalknowcast|main=fail,retry-1=fail,renewalsp=pass,randomwalknowcast=pass|skip"
-  "randomwalk|main=fail,retry-1=crash,renewalsp=fail,randomwalknowcast=negative|skip"
+  # a failed main model goes straight to the single-patch fallback.
+  "late|main=fail,retry-1=pass|renewalsp|NOW=2026-11-03T21:00:00+00:00|Fallback model used ("
+  "randomwalknowcast|main=fail,retry-1=fail,renewalsp=fail|randomwalknowcast||Fallback model used (random walk on a nowcast)"
+  "randomwalk|main=fail,retry-1=crash,renewalsp=fail,randomwalknowcast=negative|randomwalk"
   "skip|main=fail,retry-1=fail,renewalsp=fail,randomwalknowcast=negative,randomwalk=negative|skip"
-  # seabbs-renewal carrying the single-patch model: its leg alone, with
-  # main as a shadow and no refit.
+  # A chosen variant with its own leg heads the chain, then the random
+  # walks: renewalsp, else randomwalknowcast.
   "singlepatch|main=pass|renewalsp|MODEL=renewalsp|Shadow candidates"
-  "singlepatchskip|main=pass,renewalsp=fail,randomwalknowcast=pass|skip|MODEL=renewalsp"
+  "singlepatchfallback|main=pass,renewalsp=fail|randomwalknowcast|MODEL=renewalsp|Fallback model used (random walk on a nowcast)"
 )
 
 sci() { uv run --quiet --project "$CI_DIR" "$@"; }
@@ -97,8 +95,8 @@ run_scenario() {
   export WORK="$ROOT/$name"
   export FAKE_SCENARIOS=$scenarios
   export FAKE_COHERENCE_GAP="" FAKE_CHOSEN_MODEL=""
-  # Most scenarios walk the main model's chain; `singlepatch*` carry
-  # renewalsp, as config/hub.toml does (checked by `own_model`).
+  # Most scenarios walk the main model's chain; `singlepatch*` choose
+  # renewalsp. `own_model` checks what config/hub.toml resolves to.
   export MODEL=renewal
   local kv
   for kv in $extra; do export "${kv?}"; done
@@ -130,7 +128,7 @@ run_scenario() {
   run_stage() {
     sci python -m submission_ci.policy --policy "$CI_DIR/policy.toml" \
       --stage "$1" --hub-ref "$HUB_REF" --root "$SRC_ROOT" --model "$model" \
-      --only-model --reference-date "$REFERENCE_DATE" --now "$NOW" > "$WORK/matrix-$1.json"
+      --reference-date "$REFERENCE_DATE" --now "$NOW" > "$WORK/matrix-$1.json"
     python3 - "$WORK/matrix-$1.json" << 'EOF' > "$WORK/legs-$1.txt"
 import json, sys
 for e in json.load(open(sys.argv[1]))["include"]:
@@ -149,7 +147,7 @@ EOF
 
   # 4. Triage, then the retry matrix only if `main` was ruled out.
   local retried=false
-  if sci python -m submission_ci.select_candidate triage --model "$model" --only-model \
+  if sci python -m submission_ci.select_candidate triage --model "$model" \
       --policy "$CI_DIR/policy.toml" --candidates "$WORK/candidates" \
       --reference-date "$REFERENCE_DATE" --now "$NOW" \
       | grep -q need_retry=true; then
@@ -174,7 +172,7 @@ EOF
   # 5. Select, with a stand-in for hubValidations (`gate` job).
   local status=0
   RETRIED=$retried HUB_PATH="$FIX/hub" METADATA="$FIX/hub/$model_id.yml" \
-    HUB_VALIDATOR="true" ONLY_MODEL=true "$CI_DIR/steps/select.sh" > "$WORK/select.log" \
+    HUB_VALIDATOR="true" "$CI_DIR/steps/select.sh" > "$WORK/select.log" \
     || status=$?
   local got
   got=$(python3 -c "import json;print(json.load(open('$WORK/gate/provenance.json'))['selected'] or 'skip')")

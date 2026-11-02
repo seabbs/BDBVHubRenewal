@@ -1,14 +1,8 @@
 # Fallback chain and gate thresholds for automated hub submissions.
-# seabbs-renewal runs this chain with --only-model and the model in
-# `[submission] model` of config/hub.toml: it carries that model's own
-# leg (renewalsp, with no refit; or main and its refit for renewal), or
-# skips the round. Every other leg, the random walks included, is then a
-# shadow, built and checked as a reference but never submitted under
-# that id (Sam: an id only ever carries its own model).
-# Problems are handled rather than failed on, so the chain rarely moves
-# past the main model: a candidate is ruled out only when its fit is
-# clearly broken or its file would be invalid on the hub. See
-# src/submission_ci/policy.py and src/submission_ci/select_candidate.py.
+# seabbs-renewal walks this chain for the model in `[submission] model`
+# of config/hub.toml. A variant with its own leg (renewalsp, renewalbvd)
+# heads it, followed by the random walks. Only seabbs-rwnowcast has no
+# fallback (ci/steps/track.sh).
 
 [policy]
 # One refit of the main model, only when `main` is past the convergence
