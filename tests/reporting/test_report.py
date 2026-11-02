@@ -180,6 +180,14 @@ def test_lopo_section_hidden_without_results(tmp_path: Path) -> None:
     assert "CD-IT" in text
 
 
+def test_zone_section_hidden_without_results(tmp_path: Path) -> None:
+    assert report._zone_section(tmp_path / "missing.csv") == ""
+    text = report._zone_section(ROOT / "results" / "zone-scores.csv")
+    assert text.startswith("## Health zones")
+    assert "randomwalknowcast (summed to provinces)" in text
+    assert "week 0" in text
+
+
 def test_ladder_page(tmp_path: Path) -> None:
     # Nothing is shown without results, and no progress wording.
     assert report._ladder_page(tmp_path / "missing.csv") == ""

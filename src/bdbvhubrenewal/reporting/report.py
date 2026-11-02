@@ -50,6 +50,7 @@ from bdbvhubrenewal.evaluation.hubcompare import (
 )
 from bdbvhubrenewal.evaluation.nowcast import summarise
 from bdbvhubrenewal.evaluation.scoring import relative_skill, summarise_scores
+from bdbvhubrenewal.evaluation.zones import zone_relative_skill
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastTask,
@@ -689,6 +690,36 @@ def _lopo_section(path: Path) -> str:
     )
 
 
+def _zone_section(path: Path) -> str:
+    """Return the health-zone section, or nothing without results."""
+    if not path.exists() or path.stat().st_size <= 1:
+        return ""
+    scores = pd.read_csv(path, low_memory=False)
+    if scores.empty:
+        return ""
+    cols = ["n", "wis", "log_wis", "coverage_50", "coverage_90", "bias"]
+    table = summarise_scores(scores, by=("model",)).merge(
+        zone_relative_skill(scores)[["model", "relative_wis"]], on="model"
+    )
+    by = zone_relative_skill(scores, by=("horizon",)).pivot(
+        index="model", columns="horizon", values="relative_wis"
+    )
+    by.columns = [f"week {int(h)}" for h in by.columns]
+    return (
+        "## Health zones\n\n"
+        "`randomwalk` and `randomwalknowcast` are run on each zone with "
+        "cases (see [Evaluation](methods/evaluation.md#health-zones)).\n"
+        "Models marked summed to provinces have their zone samples made to "
+        "sum to the province samples, as in the submitted file.\n"
+        "Scores are against zone counts as reported at the latest real "
+        "vintage.\n"
+        "Relative WIS is against `randomwalk`, and below 1 is better.\n\n"
+        + _table(table[["model", *cols, "relative_wis"]])
+        + "\n\nRelative WIS by week, with 0 the week of the reference "
+        "date.\n\n" + _table(by.reset_index())
+    )
+
+
 def _score_views(scores: pd.DataFrame, k: int) -> dict[str, pd.DataFrame]:
     """Split scores into complete weeks, all weeks and vintage-matched.
 
@@ -1288,6 +1319,7 @@ def _backtest_page(
         ),
     )
     _write(gen / "lopo-section.md", _lopo_section(res / "lopo-scores.csv"))
+    _write(gen / "zone-section.md", _zone_section(res / "zone-scores.csv"))
     _write(gen / "ladder.md", _ladder_page(res / "ladder.csv"))
     _write(
         gen / "development-log.md",

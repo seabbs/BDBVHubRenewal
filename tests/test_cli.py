@@ -88,7 +88,7 @@ def test_cli_zone_backtest(tmp_path: Path) -> None:
     out = tmp_path / "zone-scores.csv"
     assert main(["zone-backtest", "--out", str(out)]) == 0
     scores = pd.read_csv(out)
-    assert {"randomwalk", "randomwalk (zone)"} <= set(scores["model"])
+    assert {"randomwalk", "randomwalknowcast"} <= set(scores["model"])
 
 
 @pytest.mark.usefixtures("in_root")

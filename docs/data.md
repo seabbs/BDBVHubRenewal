@@ -109,4 +109,4 @@ A few delays are negative (down to −31 days) and a few very long (up to 193 da
 
 Health zone onsets are in `daily_zones.csv.gz`, and their weekly totals in `health_zones.csv.gz`.
 Zone totals sum to the province totals in every vintage.
-They set the zone shares that split the province forecasts (see [Health zones](methods/model.md#health-zones)).
+They set the zone series of the random walk baselines and the zone shares that split the province forecasts of the other models (see [Health zones](methods/model.md#health-zones)).

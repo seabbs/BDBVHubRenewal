@@ -1,12 +1,17 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""Zone backtest: allocated zone forecasts against zone randomwalk.
+"""Zone backtest: the random walk models run at zone level.
 
-Each real vintage before the truth vintage is forecast by the province
-models, and their samples are split across zones (`ZoneAllocator`).
-The baseline, `randomwalk` run at zone level, uses each zone's own
-release snapshots (`zone_task`), which do not sum to the provinces.
-Every zone of a forecast province is scored, including zones with no
-cases, against the zone counts as reported at the truth vintage.
+Each real vintage before the truth vintage is forecast by `randomwalk` and
+`randomwalknowcast` on each zone's own release snapshots (`zone_task`),
+for every zone with cases at the vintage.
+The zone delay, Skellam spread and walk spread are each the zone's own
+where it has at least 10 cases a week, else its province's, else
+national (`pooling`).
+Each model is scored as it runs, and again with its zone samples made to
+sum to its province samples (`reconcile_zones`), which is the form
+submitted.
+Zones are scored against the zone counts as reported at the truth
+vintage.
 """
 
 from __future__ import annotations
@@ -32,20 +37,27 @@ from bdbvhubrenewal.forecasters.base import (
     ModelUnavailableError,
     get_model,
 )
-from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
-from bdbvhubrenewal.forecasters.zones import ZoneAllocator, zone_task
+from bdbvhubrenewal.forecasters.zones import (
+    ZoneAllocator,
+    reconcile_zones,
+    zone_task,
+)
 
 log = logging.getLogger(__name__)
 
 __all__ = [
+    "SUMMED",
     "ZONE_BASELINE",
     "scenario_zone_scores",
     "zone_backtest",
     "zone_relative_skill",
 ]
 
-ZONE_BASELINE = "randomwalk (zone)"
+ZONE_BASELINE = "randomwalk"
 """Name of the zone baseline in the scores."""
+
+SUMMED = " (summed to provinces)"
+"""Suffix of a model whose zones were made to sum to its provinces."""
 
 
 def _frame(
@@ -68,12 +80,11 @@ def zone_backtest(
     daily: pd.DataFrame,
     daily_zones: pd.DataFrame,
     zones: tuple[str, ...],
-    models: Sequence[str] = ("randomwalk",),
-    allocator: ZoneAllocator | None = None,
+    models: Sequence[str] = ("randomwalk", "randomwalknowcast"),
     config: BacktestConfig | None = None,
     truth_date: str | None = None,
 ) -> pd.DataFrame:
-    """Score allocated zone forecasts and zone randomwalk.
+    """Score the random walk models run at zone level.
 
     Parameters
     ----------
@@ -86,11 +97,10 @@ def zone_backtest(
     daily_zones : pandas.DataFrame
         The daily zone table (`load_daily_zones`).
     zones : tuple of str
-        The hub's zone codes (`hub_zones`).
+        The hub's zone codes (`hub_zones`). Those with cases at a vintage
+        are forecast from it.
     models : sequence of str
-        Registered province models whose samples are allocated.
-    allocator : ZoneAllocator, optional
-        The split. Defaults to `ZoneAllocator()`.
+        Registered models that read release snapshots.
     config : BacktestConfig, optional
         Horizons, samples and seed. Defaults to `BacktestConfig()`.
     truth_date : str, optional
@@ -100,10 +110,9 @@ def zone_backtest(
     -------
     pandas.DataFrame
         `score_tasks` output for the final counts, one row per model,
-        vintage, zone and week, with models named by their province
-        model and `ZONE_BASELINE`.
+        vintage, zone and week. Each model appears under its name and
+        again under its name with `SUMMED`.
     """
-    allocator = allocator or ZoneAllocator()
     config = config or BacktestConfig()
     real = target.loc[target["kind"] == "real"]
     vintages = real_vintages(real)
@@ -114,24 +123,19 @@ def zone_backtest(
             real.loc[real["vintage"] == vintage], delays, config, daily=daily
         )[0]
         counts = weekly_zone_counts(daily_zones, vintage)
-        zt = zone_task(task, counts, zones, pd.concat([daily, daily_zones]))
-        try:
-            base = RandomWalk().forecast(zt)
-        except ModelUnavailableError as err:
-            log.warning("No zone baseline for %s: %s", vintage, err)
-        else:
-            frames.append(_frame(base, task, ZONE_BASELINE))
+        active = tuple(z for z in zones if z in set(counts["location"]))
+        zt = zone_task(task, counts, active, pd.concat([daily, daily_zones]))
         for name in models:
+            model = get_model(name)
             try:
-                prov = get_model(name).forecast(task)
+                prov = model.forecast(task)
+                direct = model.forecast(zt)
             except ModelUnavailableError as err:
                 log.warning("%s skipped %s: %s", name, vintage, err)
                 continue
-            frames.append(
-                _frame(
-                    allocator.allocate(prov, task, counts, zones), task, name
-                )
-            )
+            summed = reconcile_zones(direct, prov, task, counts, active)
+            frames.append(_frame(direct, task, name))
+            frames.append(_frame(summed, task, name + SUMMED))
     forecasts = pd.concat(frames, ignore_index=True)
     truth = weekly_zone_counts(daily_zones, truth_date)
     weeks = sorted(

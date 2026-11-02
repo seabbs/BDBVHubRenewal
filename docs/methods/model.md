@@ -144,8 +144,27 @@ The national trajectory is the sum of the provinces plus an unassigned component
 
 ## Health zones
 
-Health-zone forecasts split the province forecast of whichever model is submitted.
-So zone samples sum to their province's samples, sample by sample and week by week, and the national value stays the sum of the provinces.
+Zone samples sum to their province's samples, sample by sample and week by week, and the national value stays the sum of the provinces.
+The random walk baselines run at zone level and are then summed to their province samples.
+Every other model's province forecast is split across the zones.
+
+### Random walk baselines
+
+`randomwalk` and `randomwalknowcast` run on each zone's own release snapshots with the same code as for provinces.
+The hierarchy is zone, province, national.
+A zone with at least 10 cases a week uses its own delay, Skellam spread and walk spread.
+Otherwise it uses its province's, if the province has at least 10 cases a week, and otherwise national's.
+The spread of the Skellam observation model also needs at least 2 errors at the weeks back in question, and moves up the hierarchy alone where it has fewer.
+Province sample $Y^{(k)}(w)$ is then apportioned over the zones in proportion to the zone model's own sample $x^{(k)}_z(w)$ of the same id and week:
+
+$$
+y^{(k)}_z(w) \approx Y^{(k)}(w)\, \frac{x^{(k)}_z(w)}{\sum_{z'} x^{(k)}_{z'}(w)}.
+$$
+
+Largest remainders make the values whole numbers that sum to $Y^{(k)}(w)$.
+Where every $x^{(k)}_z(w)$ is 0 the split uses the Dirichlet mean shares below.
+
+### Split of province samples
 
 For province $p$ with zones $z$, let $o_z(w)$ be zone $z$'s published count for week $w$ and $O(w) = \sum_z o_z(w)$.
 Each province sample $k$ draws its zone shares once, for all weeks:

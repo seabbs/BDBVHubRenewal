@@ -110,6 +110,9 @@ class FitConfig:
         the text says so, as a fragment that reads after "Stand-in:".
         It is recorded in `fit.json` and in the diagnostics, and printed
         by the CLI.
+    model : str or None
+        The registered model the configuration runs, for configurations
+        that run one. The submission adds health zones by it.
     """
 
     name: str
@@ -117,6 +120,7 @@ class FitConfig:
     fit: FitFn
     forecast: ForecastFn
     stand_in: str | None = None
+    model: str | None = None
 
 
 _CONFIGS: dict[str, FitConfig] = {}
@@ -272,6 +276,7 @@ def randomwalk_config(
         fit=fit,
         forecast=forecast,
         stand_in=stand_in,
+        model=model,
     )
 
 

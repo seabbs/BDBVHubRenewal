@@ -9,9 +9,8 @@ Commands:
   the leave-one-province-out check.
 - `nowcast`: forecast from a real vintage, write the hub file and check it.
   With `--config` (and `--fit`), forecast from a fit configuration.
-  The province samples are split across the health zones unless
-  `--no-zones` is given.
-- `zone-backtest`: score zone forecasts against zone randomwalk.
+  The health zones are added unless `--no-zones` is given.
+- `zone-backtest`: score the random walk models run at zone level.
 - `fit`: fit a configuration and write the fit directory and its
   `diagnostics.json`, for the submission CI.
 - `plot-submission`: plot a submitted hub file.
@@ -70,7 +69,8 @@ from bdbvhubrenewal.forecasters.base import (
     get_model,
     list_models,
 )
-from bdbvhubrenewal.forecasters.zones import ZoneAllocator
+from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
+from bdbvhubrenewal.forecasters.zones import ZoneAllocator, zone_forecast
 from bdbvhubrenewal.submission.fitting import (
     Forecast,
     get_config,
@@ -319,7 +319,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     zb = sub.add_parser(
-        "zone-backtest", help="Score zone forecasts against zone randomwalk."
+        "zone-backtest", help="Score the random walk models at zone level."
     )
     zb.add_argument("--data", default=data_dir)
     zb.add_argument(
@@ -755,7 +755,12 @@ def _zones(
     samples: pd.DataFrame,
     hub_config: str,
 ) -> tuple[pd.DataFrame | None, str]:
-    """Split province samples across zones, or say why not."""
+    """Forecast the zones to sum to the provinces, or say why not.
+
+    The random walk models run at zone level and are summed to the
+    province samples. Any other model's province samples are split across
+    the zones by the allocator.
+    """
     if not args.zones:
         return None, ""
     try:
@@ -766,6 +771,10 @@ def _zones(
     if counts.empty:
         return None, f"no zone data for {task.vintage}, so no health zones"
     zones = hub_zones(hub_config)
+    name = get_config(args.config).model if args.config else args.model
+    model = None if name is None else get_model(name)
+    if isinstance(model, RandomWalk):
+        return zone_forecast(model, task, samples, counts, zones, daily), ""
     return ZoneAllocator().allocate(samples, task, counts, zones), ""
 
 
