@@ -447,28 +447,38 @@ def test_baseline_track_skips_when_the_model_did_not_run(
     assert "could not run" in prov["reason"]
 
 
-def test_renewal_track_is_the_main_model_and_its_refit_only() -> None:
-    # seabbs-renewal carries its own model: the main fit and its one
-    # refit. The fallback and both random walks are shadows.
-    pol = POLICY.for_model("renewal", only=True)
-    assert [c.id for c in pol.chain()] == ["main", "retry-1"]
-    for cid in ("renewalsp", "randomwalknowcast", "randomwalk"):
-        assert pol.get(cid).kind == "shadow"
-    assert [c.id for c in pol.stage("retry")] == ["retry-1"]
+def test_renewal_track_keeps_its_fallbacks() -> None:
+    # Sam (2026-11-02): seabbs-renewal may fall back, as before. Only
+    # seabbs-rwnowcast carries its own model or nothing.
+    pol = POLICY.for_model("renewal")
+    assert [c.id for c in pol.chain()] == [
+        "main",
+        "retry-1",
+        "renewalsp",
+        "randomwalknowcast",
+        "randomwalk",
+    ]
 
 
-def test_renewal_track_can_carry_the_single_patch_model() -> None:
-    # With renewalsp as seabbs-renewal's model, its own leg is the chain.
-    # The main model is a shadow and its refit is dropped.
-    pol = POLICY.for_model("renewalsp", only=True)
-    assert [c.id for c in pol.chain()] == ["renewalsp"]
+def test_a_chosen_variant_heads_the_chain() -> None:
+    # The `main` leg always fits the pooled renewal config, so a chosen
+    # renewalsp runs as its own leg, first, then the random walks. The
+    # main model and its refit are shadows.
+    pol = POLICY.for_model("renewalsp")
+    assert [c.id for c in pol.chain()] == [
+        "renewalsp",
+        "randomwalknowcast",
+        "randomwalk",
+    ]
     assert pol.get("main").kind == "shadow"
     assert pol.stage("retry") == []
     assert {c.id for c in pol.stage("primary")} == {"main", "renewalsp", "bvd"}
 
 
-def test_single_patch_track_never_falls_back(tmp_path: Path) -> None:
-    pol = POLICY.for_model("renewalsp", only=True)
+def test_a_chosen_variant_falls_back_to_the_random_walk(
+    tmp_path: Path,
+) -> None:
+    pol = POLICY.for_model("renewalsp")
     c = tmp_path / "c"
     chain(
         c,
@@ -477,47 +487,14 @@ def test_single_patch_track_never_falls_back(tmp_path: Path) -> None:
         randomwalknowcast=(None, "pass"),
         randomwalk=(None, "pass"),
     )
-    prov = run_select(
-        pol, c, tmp_path / "g", always("pass"), False, False, only=True
-    )
-    assert prov["selected"] is None
-    assert "no other model is submitted in its place" in prov["reason"]
-
-
-def test_renewal_track_never_falls_back(tmp_path: Path) -> None:
-    pol = POLICY.for_model("renewal", only=True)
-    c = tmp_path / "c"
-    chain(
-        c,
-        main=("fail", "pass"),
-        retry_1=("fail", "pass"),
-        renewalsp=("pass", "pass"),
-        randomwalknowcast=(None, "pass"),
-        randomwalk=(None, "pass"),
-    )
-    prov = run_select(
-        pol, c, tmp_path / "g", always("pass"), True, False, only=True
-    )
-    assert prov["selected"] is None
-    assert "no other model is submitted in its place" in prov["reason"]
-
-
-def test_baseline_track_lists_no_shadows(tmp_path: Path) -> None:
-    # The seabbs-rwnowcast track fits no renewal candidates, so its pull
-    # request has no shadow section.
-    pol = POLICY.for_model("randomwalknowcast")
-    c = tmp_path / "c"
-    chain(c, randomwalknowcast=(None, "pass"), randomwalk=(None, "pass"))
-    prov = run_select(
-        pol, c, tmp_path / "g", always("pass"), retried=False, shadows=False
-    )
-    assert prov["shadows"] == []
+    prov = run_select(pol, c, tmp_path / "g", always("pass"), False, False)
+    assert prov["selected"] == "randomwalknowcast"
 
 
 def test_no_refit_when_the_chain_has_none(tmp_path: Path) -> None:
-    # The single-patch track has no retry leg, so a failed fit is not
-    # refitted: the round is skipped instead.
-    pol = POLICY.for_model("renewalsp", only=True)
+    # A chain headed by renewalsp has no retry leg, so a failed fit is
+    # not refitted: the chain moves on.
+    pol = POLICY.for_model("renewalsp")
     c = tmp_path / "c"
     chain(c, renewalsp=("fail", "pass"))
     assert not triage(pol, c)
