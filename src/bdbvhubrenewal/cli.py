@@ -54,7 +54,7 @@ from bdbvhubrenewal.data import (
     load_target,
 )
 from bdbvhubrenewal.data.dates import as_date
-from bdbvhubrenewal.data.reconstruct import cutoff_lags
+from bdbvhubrenewal.data.releases import cutoff_lags
 from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.evaluation.heldout import (
@@ -62,6 +62,7 @@ from bdbvhubrenewal.evaluation.heldout import (
     load_model_choices,
     run_heldout,
 )
+from bdbvhubrenewal.evaluation.nowcast import release_backtest
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastTask,
@@ -235,7 +236,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Where the forecasts go. They are committed in results/, so "
         "the docs can show fitted variants without refitting them.",
     )
-    back.add_argument("--no-reconstructed", action="store_true")
     back.add_argument(
         "--no-recovery",
         action="store_true",
@@ -386,7 +386,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--vintages",
         nargs="*",
         default=None,
-        help="Defaults to every real and reconstructed backtest vintage.",
+        help="Defaults to every real backtest vintage.",
     )
 
     hid = sub.add_parser(
@@ -608,14 +608,12 @@ def _backtest(args: argparse.Namespace) -> int:
                 target,
                 delays,
                 config,
-                include_reconstructed=not args.no_reconstructed,
             )
         else:
             tasks = bt.development_tasks(
                 target,
                 delays,
                 config,
-                include_reconstructed=not args.no_reconstructed,
                 daily=load_daily(args.data),
             )
         mine = bt.shard_tasks(bt.order_tasks(tasks), index, count)
@@ -668,7 +666,6 @@ def _backtest(args: argparse.Namespace) -> int:
             target,
             delays,
             config,
-            include_reconstructed=not args.no_reconstructed,
             cache=args.cache,
             fits=fits,
         )
@@ -682,12 +679,12 @@ def _backtest(args: argparse.Namespace) -> int:
         target,
         delays,
         config,
-        include_reconstructed=not args.no_reconstructed,
         cache=args.cache,
         fits=fits,
         daily=load_daily(args.data),
     )
     _write_fits(fits, results / "backtest-fits.csv")
+    _release_backtest(args, config, target, delays, results)
     by_truth = bt.score_by_truth_vintage(
         forecasts, target, config.complete_after_weeks
     )
@@ -715,6 +712,34 @@ def _backtest(args: argparse.Namespace) -> int:
         f"Written to {results}."
     )
     return 0
+
+
+def _release_backtest(
+    args: argparse.Namespace,
+    config: bt.BacktestConfig,
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    results: Path,
+) -> None:
+    """Score the random walk models from every real release."""
+    daily = load_daily(args.data)
+    real = target.loc[target["kind"] == "real"]
+    tasks = [
+        t
+        for t in bt.make_tasks(
+            real, delays.assign(kind="real"), config, daily=daily
+        )
+        if not config.is_heldout(t.vintage)
+    ]
+    out = release_backtest(tasks, daily, target)
+    for name, table in (
+        ("scores", out.scores),
+        ("quantiles", out.quantiles),
+        ("origins", out.origins),
+        ("fits", out.fits),
+    ):
+        table.to_csv(results / f"nowcast-{name}.csv", index=False)
+    print(f"Release backtest: {len(out.scores)} scored forecasts.")
 
 
 def _write_fits(fits: list[pd.DataFrame], path: Path) -> None:
@@ -955,7 +980,7 @@ def _bvd(args: argparse.Namespace) -> int:  # pragma: no cover - network
     if not vintages:
         target = load_target(args.data)
         real = target.loc[target["kind"] == "real", "vintage"].astype(str)
-        vintages = sorted({*real, *config.reconstructed_dates})
+        vintages = sorted(set(real))
     token = os.environ.get("GITHUB_TOKEN")
     chosen = bvd.refresh_cache(
         Path(args.data) / "bvd",

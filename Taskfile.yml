@@ -50,7 +50,7 @@ tasks:
       - uv run bdbvhubrenewal bvd {{.CLI_ARGS}}
 
   backtest:
-    desc: Run the development backtest (real and reconstructed) and the recovery check (simulated)
+    desc: Run the development backtest, the real-release evaluation and the recovery check (simulated)
     cmds:
       - uv run bdbvhubrenewal backtest {{.CLI_ARGS}}
 
@@ -144,6 +144,11 @@ tasks:
     cmds:
       - uv run bdbvhubrenewal compare-hub
       - uv run bdbvhubrenewal report
+
+  crosscheck:
+    desc: Write the weekly cross-check of the daily nowcast
+    cmds:
+      - uv run python scripts/weekly_crosscheck.py
 
   getting-started:
     desc: Run the Getting started notebook again and save its outputs

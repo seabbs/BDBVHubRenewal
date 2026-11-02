@@ -58,7 +58,7 @@ class ForecastTask:
     reference_date : datetime.date
         The round's reference date.
     kind : str
-        `"real"`, `"reconstructed"` or `"simulated"`.
+        `"real"` or `"simulated"`.
     target : pandas.DataFrame
         The target table rows of this vintage only (columns as in
         `bdbvhubrenewal.data.tidy_target`), for the country and
@@ -88,7 +88,7 @@ class ForecastTask:
         Scoring compares them with vintage $T$ as reported.
     delay_history : pandas.DataFrame or None
         Delay rows of every vintage of this kind on or before `vintage`,
-        from which `data.reconstruct.publication_lag_pmf` estimates the
+        from which `data.releases.publication_lag_pmf` estimates the
         report to publication lag. None if there are none.
     target_history : pandas.DataFrame or None
         Target rows of every vintage of this kind on or before `vintage`,

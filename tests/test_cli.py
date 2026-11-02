@@ -191,7 +191,8 @@ def test_plot_scores_by_truth() -> None:
     scores = pd.read_csv(ROOT / "results" / "backtest-scores-by-truth.csv")
     fig = plots.plot_scores_by_truth(scores, models=["randomwalk"])
     assert len(fig.axes) == 1
-    assert len(fig.axes[0].lines) == scores["vintage"].nunique()
+    own = scores.loc[scores["model"] == "randomwalk"]
+    assert len(fig.axes[0].lines) == own["vintage"].nunique()
 
 
 @pytest.mark.usefixtures("in_root", "flat_model")
@@ -205,7 +206,6 @@ def test_cli_lopo_writes_scores_for_mask_aware_models(tmp_path: Path) -> None:
         args = [
             "backtest",
             "--lopo",
-            "--no-reconstructed",
             "--results",
             str(tmp_path / "res"),
             "--output",
@@ -224,7 +224,7 @@ def test_cli_lopo_writes_scores_for_mask_aware_models(tmp_path: Path) -> None:
 @pytest.mark.usefixtures("in_root")
 def test_cli_backtest_keeps_other_models_results(tmp_path: Path) -> None:
     res, out = tmp_path / "res", tmp_path / "out"
-    args = ["backtest", "--no-reconstructed", "--results", str(res),
+    args = ["backtest", "--results", str(res),
             "--output", str(out), "--models", "randomwalk"]  # fmt: skip
     assert main(args) == 0
     names = ("backtest-scores.csv", "backtest-scores-by-truth.csv",
@@ -257,7 +257,6 @@ def test_cli_backtest_no_fit_skips_fitted_models(tmp_path: Path) -> None:
     args = [
         "backtest",
         "--no-fit",
-        "--no-reconstructed",
         "--results",
         str(tmp_path / "res"),
         "--output",
@@ -273,7 +272,7 @@ def test_cli_backtest_no_fit_skips_fitted_models(tmp_path: Path) -> None:
 @pytest.mark.usefixtures("in_root")
 def test_cli_backtest_shards_into_a_cache(tmp_path: Path) -> None:
     res, out, cache = tmp_path / "res", tmp_path / "out", tmp_path / "cache"
-    base = ["backtest", "--no-reconstructed", "--no-recovery",
+    base = ["backtest", "--no-recovery",
             "--results", str(res), "--output", str(out),
             "--models", "randomwalk", "--cache", str(cache)]  # fmt: skip
     # A shard only fills the cache.

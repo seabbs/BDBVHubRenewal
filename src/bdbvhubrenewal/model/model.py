@@ -181,7 +181,7 @@ class ModelConfig:
         are mostly onsets recorded later for cases already counted as
         imputed, so it overstates late reporting of the total.
     max_publication_lag : int
-        $L$, in days (`data.reconstruct.PUBLICATION_LAG_DAYS`).
+        $L$, in days (the model default).
     delay_counts : {"multinomial", "dirichlet-multinomial"}
         Likelihood of the delay file's counts given the weekly totals.
         The Dirichlet-multinomial (default) has $1/\sqrt{\psi} \sim
@@ -288,7 +288,7 @@ class Vintage:
         day), `groups` `(G, P)`, `values`, `scales` and `kinds` `(G,)`.
     publication_lag_pmf : numpy.ndarray or None
         Empirical report to publication lag pmf on $0..180$ days
-        (`data.reconstruct.publication_lag_pmf`), or None.
+        (`data.releases.publication_lag_pmf`), or None.
     """
 
     start_date: dt.date

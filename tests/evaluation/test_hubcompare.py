@@ -151,11 +151,8 @@ def test_resolve_baseline() -> None:
 def test_match_vintage(target: pd.DataFrame) -> None:
     real = target.loc[target["kind"] == "real"]
     vintages = sorted(set(real["vintage"]))
-    assert match_vintage("2026-10-31", vintages) == ("2026-10-24", "real")
-    assert match_vintage("2026-10-03", vintages) == (
-        "2026-09-26",
-        "reconstructed",
-    )
+    assert match_vintage("2026-10-31", vintages) == "2026-10-24"
+    assert match_vintage("2026-10-03", vintages) is None
     assert match_vintage("2026-11-07", vintages) is None
 
 
@@ -182,7 +179,7 @@ def test_stored_forecasts_pick_matching_rounds(tmp_path: Path) -> None:
     stored = pd.DataFrame(
         {
             "model": ["renewal", "renewal", "randomwalk", "renewal"],
-            "kind": ["real", "real", "real", "reconstructed"],
+            "kind": ["real", "real", "real", "simulated"],
             "vintage": ["2026-10-24", "2026-10-17", "2026-10-24", "2026-10-24"],
             "reference_date": [
                 "2026-10-31",
@@ -204,7 +201,7 @@ def test_stored_forecasts_pick_matching_rounds(tmp_path: Path) -> None:
         ["2026-10-31"],
         exclude=["randomwalk"],
     )
-    # Real vintages win over reconstructed ones for the same round.
+    # Only real vintages are taken.
     assert list(out["model"]) == ["renewal"]
     assert list(out["source"]) == ["real"]
 

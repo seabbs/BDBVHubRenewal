@@ -31,25 +31,24 @@ from bdbvhubrenewal.data import (
 )
 from bdbvhubrenewal.data.dates import reference_date_for_vintage
 from bdbvhubrenewal.data.delays import delay_summary
-from bdbvhubrenewal.data.reconstruct import (
-    compare_reconstruction,
-    reconstruct_vintages,
-)
 from bdbvhubrenewal.data.simulate import simulate_outbreak
 from bdbvhubrenewal.data.tidy import COHERENCE_STREAMS
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
+    check_distinct,
     load_config,
     make_tasks,
     run_forecasts,
     truth_changes,
 )
+from bdbvhubrenewal.evaluation.crosscheck import make_crosscheck
 from bdbvhubrenewal.evaluation.heldout import load_model_choices
 from bdbvhubrenewal.evaluation.hubcompare import (
     attribution,
     forecast_quantiles,
     summarise_comparison,
 )
+from bdbvhubrenewal.evaluation.nowcast import summarise
 from bdbvhubrenewal.evaluation.scoring import relative_skill, summarise_scores
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
@@ -62,6 +61,7 @@ from bdbvhubrenewal.reporting.explorer import (
     explorer_html,
     write_explorer,
 )
+from bdbvhubrenewal.reporting.nowcast_plots import plot_release_nowcasts
 from bdbvhubrenewal.reporting.plots import (
     comparison_label,
     plot_delay_distribution,
@@ -71,7 +71,6 @@ from bdbvhubrenewal.reporting.plots import (
     plot_imputed_share,
     plot_location_grid,
     plot_newly_missing,
-    plot_reconstruction,
     plot_relative_skill,
     plot_revisions,
     plot_scenarios,
@@ -165,35 +164,6 @@ def make_report(
         lambda mode: plot_delays_over_time(delays, mode=mode),
         fig / "delays-time.svg",
     )
-    real_dates = sorted(real["vintage"].unique())[:-1]
-    rec = reconstruct_vintages(real, delays, real_dates)
-    comparison = compare_reconstruction(real, rec)
-    save_light_dark(
-        lambda mode: plot_reconstruction(comparison, mode=mode),
-        fig / "reconstruction.svg",
-    )
-    recent = comparison.assign(
-        rank=comparison.groupby(["vintage", "location"])[
-            "target_end_date"
-        ].rank(ascending=False)
-    )
-    recent = recent.loc[
-        (recent["rank"] <= 4) & (recent["location"] == NATIONAL)
-    ]
-    _write(
-        gen / "reconstruction.md",
-        _table(
-            recent[
-                [
-                    "vintage",
-                    "target_end_date",
-                    "total_real",
-                    "total_reconstructed",
-                    "total_difference",
-                ]
-            ]
-        ),
-    )
     summary = real.groupby("vintage").agg(
         weeks=("target_end_date", "nunique"),
         first_week=("target_end_date", "min"),
@@ -239,6 +209,8 @@ def make_report(
 
     # Backtest, held-out and comparison pages.
     names = [s.name for s in list_models()]
+    _release_section(fig, gen, res, real)
+    make_crosscheck(data_dir, config_path, fig, res)
     _backtest_page(fig, gen, res, out, config, target, names)
     _heldout_page(fig, gen, res, target, names, config)
     _comparison_page(fig, gen, Path(hub_comparison), target)
@@ -249,6 +221,93 @@ def make_report(
     tasks = make_tasks(rows, delays, config, history=real, daily=daily)
     forecasts_now = _nowcast_forecasts(tasks, latest, res)
     _nowcast_page(fig, gen, target, forecasts_now, names, config, latest)
+
+
+_RELEASE_PLACES: Final = ("CD", "CD-IT", "CD-NK")
+_RELEASE_MODELS: Final = ("randomwalk", "randomwalknowcast")
+_TARGET_LABELS: Final = {
+    "next": "Next release",
+    "complete": "Complete weeks",
+}
+
+
+def _release_section(
+    fig: Path, gen: Path, res: Path, real: pd.DataFrame
+) -> None:
+    """Write the real-release evaluation tables and figure.
+
+    The tables hold the number of forecasts, $n$, in every row.
+    """
+    paths = {
+        n: res / f"nowcast-{n}.csv" for n in ("scores", "quantiles", "origins")
+    }
+    if not all(p.exists() and p.stat().st_size > 2 for p in paths.values()):
+        _write(gen / "release-backtest.md", "")
+        return
+    scores = pd.read_csv(paths["scores"])
+    quantiles = pd.read_csv(paths["quantiles"])
+    origins = pd.read_csv(paths["origins"])
+    scores["target"] = scores["target"].map(_TARGET_LABELS)
+    cols = ["n", "wis", "coverage_50", "coverage_90", "bias"]
+    by_model = summarise(scores, ("target", "model"))[
+        ["target", "model", *cols]
+    ]
+    by_origin = summarise(scores, ("target", "model", "origin", "weeks_back"))[
+        ["target", "model", "origin", "weeks_back", *cols]
+    ]
+    by_place = summarise(scores, ("target", "model", "location"))[
+        ["target", "model", "location", *cols]
+    ]
+    listing = origins[
+        [c for c in origins.columns if c != "reason"] + ["reason"]
+    ].fillna("")
+    save_light_dark(
+        partial(
+            plot_release_nowcasts,
+            quantiles,
+            real,
+            _RELEASE_PLACES,
+            _RELEASE_MODELS,
+        ),
+        fig / "release-nowcasts.svg",
+    )
+    _write(
+        gen / "release-backtest.md",
+        "## Nowcasts from the real releases\n\n"
+        "Each release with a later release is an origin.\n"
+        "The next release target is the count the later release shows for "
+        "the four latest weeks.\n"
+        "The complete weeks target is the count the latest release shows "
+        "for the weeks it reports in full ("
+        "[Evaluation](methods/evaluation.md#real-releases)).\n"
+        "Every row counts its forecasts, $n$.\n\n"
+        "Origins and what each model gave.\n\n"
+        + _table(listing)
+        + "\nScores by target and model.\n\n"
+        + _table(by_model)
+        + "\n![Final forecasts of the recent weeks by origin, with the "
+        "counts each release reports.](figures/release-nowcasts.svg"
+        "#only-light)\n"
+        "![Final forecasts of the recent weeks by origin, with the counts "
+        "each release reports.](figures/release-nowcasts-dark.svg"
+        "#only-dark)\n\n"
+        + _dropdown(
+            "Scores by origin and weeks back.\n\n"
+            + _table(by_origin)
+            + "\nScores by place.\n\n"
+            + _table(by_place),
+            "Tables",
+        )
+        + "\n## Weekly cross-check\n\n"
+        "Crosses are the daily ladder run on hub weeks from the "
+        "2026-10-17 and 2026-10-24 releases.\n"
+        "Bars are the `randomwalknowcast` 50% and 90% intervals at "
+        "2026-10-24.\n\n"
+        "![Weekly cross-check points over the randomwalknowcast bands.]"
+        "(figures/weekly-crosscheck.svg#only-light)\n"
+        "![Weekly cross-check points over the randomwalknowcast bands.]"
+        "(figures/weekly-crosscheck-dark.svg#only-dark)\n",
+    )
 
 
 _NOWCAST_GROUPS: Final = (
@@ -362,7 +421,15 @@ def _nowcast_forecasts(
     """
     specs = list_models()
     quick = [get_model(s.name) for s in specs if not s.fitted]
-    frames = [run_forecasts(quick, tasks)]
+    ran = run_forecasts(quick, tasks)
+    silent = {m.name for m in quick} - set(ran["model"])
+    if silent:
+        raise RuntimeError(
+            f"No forecast from {sorted(silent)} on the latest vintage "
+            f"{latest}, so the Nowcast page would show another model's."
+        )
+    check_distinct(ran)
+    frames = [ran]
     have = {s.name for s in specs if not s.fitted}
     path = res / "heldout-forecasts.csv.gz"
     try:
@@ -999,9 +1066,14 @@ def _settings_text(chains: int, warmup: int, draws: int) -> str:
 
 def _sampler_section(fits: pd.DataFrame, submission: Mapping[str, Any]) -> str:
     """Say how long the backtest fits were and how well they converged."""
+    keys = ["num_chains", "num_warmup", "num_samples"]
+    fits = (
+        fits.dropna(subset=keys)
+        if set(keys) <= set(fits.columns)
+        else fits.iloc[:0]
+    )
     if fits.empty:
         return ""
-    keys = ["num_chains", "num_warmup", "num_samples"]
     used = fits[keys].drop_duplicates().astype(int).to_numpy()
     runs = " or ".join(_settings_text(*row) for row in used)
     target = tuple(int(submission[k]) for k in keys)

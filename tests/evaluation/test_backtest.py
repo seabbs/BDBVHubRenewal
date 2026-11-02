@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.reconstruct import cutoff_lags
+from bdbvhubrenewal.data.releases import cutoff_lags
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     development_tasks,
@@ -40,7 +40,6 @@ def test_load_config() -> None:
     assert cfg.development_until == "2026-10-28"
     assert not cfg.is_heldout("2026-10-24")
     assert cfg.is_heldout("2026-10-31")
-    assert cfg.reconstructed_dates[0] == "2026-06-06"
     assert all(pd.Timestamp(d).dayofweek == 5 for d in cfg.simulated_dates)
     # A generous convergence gate on BVDOutbreakSize releases.
     assert cfg.bvd_max_rhat == 1.1
@@ -72,9 +71,7 @@ def test_development_never_uses_heldout_vintages(
     assert (forecasts["vintage"] <= "2026-10-10").all()
     real = forecasts.loc[forecasts["kind"] == "real"]
     assert set(real["vintage"]) == {"2026-08-18", "2026-10-09"}
-    rec = forecasts.loc[forecasts["kind"] == "reconstructed"]
-    assert set(rec["vintage"]) == {"2026-08-29", "2026-10-10"}
-    assert set(scores["kind"]) == {"real", "reconstructed"}
+    assert set(scores["kind"]) == {"real"}
     # Every week is scored, up to the last week of the truth vintage.
     assert scores["target_end_date"].max() == "2026-10-24"
     assert set(scores["truth_vintage"]) == {"2026-10-24"}
@@ -236,7 +233,6 @@ def test_origins_without_a_lag_estimate_are_marked(
     assert set(map(tuple, marked.drop_duplicates().to_numpy())) == {
         ("real", "2026-08-18"),
         ("real", "2026-10-09"),
-        ("reconstructed", "2026-08-29"),
     }
     by_truth = score_by_truth_vintage(forecasts, target)
     assert set(by_truth.loc[by_truth["lag_prior"], "vintage"]) == {
@@ -302,12 +298,7 @@ def test_lopo_masks_one_province_at_a_time(
 ) -> None:
     models = [get_model("flat"), _MaskAware()]
     forecasts, scores = run_lopo(
-        models,
-        target,
-        delays,
-        config,
-        provinces=("CD-IT", "CD-NK"),
-        include_reconstructed=False,
+        models, target, delays, config, provinces=("CD-IT", "CD-NK")
     )
     # Random walk cannot honour a mask, so it is skipped.
     assert set(forecasts["model"]) == {"mask_aware"}
@@ -322,41 +313,9 @@ def test_lopo_masks_one_province_at_a_time(
 def test_lopo_without_mask_aware_models_is_empty(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
-    forecasts, scores = run_lopo(
-        [get_model("flat")],
-        target,
-        delays,
-        config,
-        include_reconstructed=False,
-    )
+    forecasts, scores = run_lopo([get_model("flat")], target, delays, config)
     assert forecasts.empty
     assert scores.empty
-
-
-def test_vintage_without_delays_takes_reconstructed_rows(
-    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
-) -> None:
-    from bdbvhubrenewal.data.reconstruct import reconstruct_delays
-
-    assert not (delays["vintage"] == "2026-08-18").any()
-    tasks = make_tasks(
-        target.loc[target["vintage"] == "2026-08-18"], delays, config
-    )
-    got = tasks[0].delays
-    assert got is not None
-    assert len(got) > 0
-    assert set(got["vintage"]) == {"2026-08-18"}
-    # The next vintage's rows, thinned by the chance each was published
-    # by the cut-off under the prior publication lag.
-    from bdbvhubrenewal.model.model import PRIOR_PUBLICATION_LAG
-
-    nxt = delays.loc[delays["vintage"] == "2026-10-09"]
-    cut = reconstruct_delays(nxt, "2026-08-18", publication_lag_days=0)
-    thinned = reconstruct_delays(
-        nxt, "2026-08-18", lag_pmf=PRIOR_PUBLICATION_LAG
-    )
-    assert len(got) == len(thinned) < len(cut)
-    assert len(thinned) > 0.8 * len(cut)
 
 
 def test_tasks_carry_earlier_delay_files_for_the_publication_lag(
@@ -470,7 +429,7 @@ def test_lopo_reuses_the_cache(
     tmp_path: Path,
 ) -> None:
     model = _Masking()
-    kwargs = {"provinces": ("CD-IT",), "include_reconstructed": False}
+    kwargs = {"provinces": ("CD-IT",)}
     run_lopo([model], target, delays, config, cache=tmp_path, **kwargs)
     calls = model.calls
     assert calls > 0
@@ -513,26 +472,18 @@ def test_backtest_sampler_comes_from_the_config(
     assert sampler_settings()["num_warmup"] == 50
 
 
-def test_order_tasks_puts_real_and_spread_origins_first(
+def test_order_tasks_sorts_by_vintage(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
     config = load_config(ROOT / "config" / "backtest.toml")
     from bdbvhubrenewal.evaluation.backtest import development_tasks
 
     tasks = development_tasks(target, delays, config)
-    ordered = order_tasks(tasks, spread=5)
+    ordered = order_tasks(tasks)
     assert sorted(t.vintage for t in ordered) == sorted(
         t.vintage for t in tasks
     )
-    real = [t for t in tasks if t.kind == "real"]
-    head = ordered[: len(real)]
-    assert all(t.kind == "real" for t in head)
-    # Then 5 reconstructed origins spread over the range.
-    nxt = [t.vintage for t in ordered[len(real) : len(real) + 5]]
-    rec = sorted(t.vintage for t in tasks if t.kind == "reconstructed")
-    assert nxt[0] == rec[0]
-    assert nxt[-1] == rec[-1]
-    assert nxt == sorted(nxt)
+    assert [t.vintage for t in ordered] == sorted(t.vintage for t in tasks)
 
 
 def test_scenarios_are_scored_final_and_as_of(
@@ -592,7 +543,7 @@ def test_tasks_carry_the_daily_releases_up_to_their_vintage(
     # Without daily data, or for another kind, there is none.
     assert make_tasks(rows, delays, BacktestConfig())[0].daily_history is None
     other = make_tasks(
-        rows.assign(kind="reconstructed"), delays, BacktestConfig(), daily=daily
+        rows.assign(kind="simulated"), delays, BacktestConfig(), daily=daily
     )[0]
     assert other.daily_history is None
 
@@ -603,22 +554,9 @@ def test_development_tasks_pass_the_daily_releases(
     from bdbvhubrenewal.data.tidy import load_daily
 
     tasks = development_tasks(
-        target, delays, BacktestConfig(), include_reconstructed=False,
-        daily=load_daily(),
+        target, delays, BacktestConfig(), daily=load_daily(),
     )  # fmt: skip
     assert all(t.daily_history is not None for t in tasks)
-
-
-def test_reconstructed_tasks_have_no_daily_releases(
-    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
-) -> None:
-    from bdbvhubrenewal.data.tidy import load_daily
-
-    tasks = development_tasks(target, delays, config, daily=load_daily())
-    rec = [t for t in tasks if t.kind == "reconstructed"]
-    assert rec
-    assert all(t.daily_history is None for t in rec)
-    assert all(t.daily_history is not None for t in tasks if t.kind == "real")
 
 
 def test_simulated_tasks_carry_daily_releases(config: BacktestConfig) -> None:

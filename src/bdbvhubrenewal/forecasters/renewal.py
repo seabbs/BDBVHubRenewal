@@ -492,7 +492,7 @@ def vintage_inputs(
         The model inputs.
     """
     from bdbvhubrenewal.data import load_locations
-    from bdbvhubrenewal.data.reconstruct import publication_lag_pmf
+    from bdbvhubrenewal.data.releases import publication_lag_pmf
     from bdbvhubrenewal.model.inputs import vintage_from_tables
 
     lag = None

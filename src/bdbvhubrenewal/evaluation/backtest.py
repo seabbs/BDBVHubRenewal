@@ -8,11 +8,9 @@ Every registered model forecasts every task.
 Forecasts are scored on every week against a later truth vintage, as
 reported then, and each score records that `truth_vintage`.
 
-There are three kinds of vintage:
+There are two kinds of vintage:
 
 - **real**: published by the hub. Truth is the latest real vintage.
-- **reconstructed**: rebuilt from the latest real data for past dates
-  (`bdbvhubrenewal.data.reconstruct`). Truth is the latest real vintage.
 - **simulated**: from a simulated outbreak with known parameters
   (`bdbvhubrenewal.data.simulate`). Truth is the final simulated count.
 
@@ -47,12 +45,7 @@ from bdbvhubrenewal.data.dates import (
     epiweek_end,
     reference_date_for_vintage,
 )
-from bdbvhubrenewal.data.reconstruct import (
-    cutoff_lags,
-    publication_lag_pmf,
-    reconstruct_delays,
-    reconstruct_vintages,
-)
+from bdbvhubrenewal.data.releases import cutoff_lags, publication_lag_pmf
 from bdbvhubrenewal.data.simulate import (
     SCENARIO_RT_SCALE,
     SimulatedOutbreak,
@@ -71,11 +64,12 @@ from bdbvhubrenewal.forecasters.base import (
     add_national,
     check_samples,
 )
-from bdbvhubrenewal.model.model import PRIOR_PUBLICATION_LAG
+from bdbvhubrenewal.forecasters.chain import MissingSnapshots
 
 __all__ = [
     "BacktestConfig",
     "apply_sampler",
+    "check_distinct",
     "development_tasks",
     "forecast_locations",
     "forecast_weeks",
@@ -132,8 +126,6 @@ class BacktestConfig:
         None if no model has been chosen, so every vintage is development.
     model_choice : pathlib.Path
         The model choice record (`bdbvhubrenewal.evaluation.heldout`).
-    reconstructed_dates : tuple of str
-        Vintage dates to reconstruct.
     simulated_dates : tuple of str
         Vintage dates to publish from the simulated outbreak.
     complete_after_weeks : int
@@ -153,7 +145,6 @@ class BacktestConfig:
     seed: int = 0
     development_until: str | None = None
     model_choice: Path = Path("results/model-choice.yml")
-    reconstructed_dates: tuple[str, ...] = ()
     simulated_dates: tuple[str, ...] = ()
     complete_after_weeks: int = 0
     sampler: dict[str, Any] = field(default_factory=dict)
@@ -230,7 +221,7 @@ def load_config(path: Path | str = "config/backtest.toml") -> BacktestConfig:
     """
     raw = tomllib.loads(Path(path).read_text())
     fc, sp = raw["forecast"], raw["split"]
-    rec, sim = raw.get("reconstructed", {}), raw.get("simulated", {})
+    sim = raw.get("simulated", {})
     choice = Path(sp["model_choice"])
     dates: list[str] = []
     if choice.exists():
@@ -246,9 +237,6 @@ def load_config(path: Path | str = "config/backtest.toml") -> BacktestConfig:
         complete_after_weeks=int(sp.get("complete_after_weeks", 0)),
         sampler=dict(raw.get("sampler", {})),
         bvd_max_rhat=float(raw.get("bvd", {}).get("max_rhat", MAX_RHAT)),
-        reconstructed_dates=(
-            saturdays(rec["first_vintage"], rec["last_vintage"]) if rec else ()
-        ),
         simulated_dates=(
             saturdays(sim["first_vintage"], sim["last_vintage"]) if sim else ()
         ),
@@ -297,28 +285,6 @@ def forecast_locations(vintage_rows: pd.DataFrame) -> tuple[str, ...]:
     return tuple(sorted(totals.index[totals > 0]))
 
 
-def _reconstructed_delays(delays: pd.DataFrame, vintage: str) -> pd.DataFrame:
-    """Delay rows for a real vintage that has none, from the next one.
-
-    The next real vintage with delays is cut back to what was published
-    by `vintage` (`reconstruct_delays`). 2026-08-18 has no delay file.
-    """
-    real = delays
-    if "kind" in delays.columns:
-        real = delays.loc[delays["kind"] == "real"]
-    later = sorted(str(v) for v in real["vintage"].unique() if v > vintage)
-    if not later:
-        return real.iloc[:0]
-    out = reconstruct_delays(
-        real.loc[real["vintage"] == later[0]],
-        vintage,
-        lag_pmf=PRIOR_PUBLICATION_LAG,
-    )
-    if "kind" in delays.columns:
-        out["kind"] = "real"
-    return out
-
-
 def make_tasks(
     target: pd.DataFrame,
     delays: pd.DataFrame | None,
@@ -335,14 +301,13 @@ def make_tasks(
         Target rows, possibly of several kinds and vintages.
     delays : pandas.DataFrame or None
         Delay line data with a `vintage` column, and optionally a `kind`
-        column. A task gets the rows of its own vintage (and kind). A
-        real vintage with none gets the next real vintage's rows cut back
-        to its date, or None if there is no later one.
+        column. A task gets the rows of its own vintage (and kind), or
+        None if there are none.
     config : BacktestConfig
         Horizons, samples and seed.
     report_by : sequence of str
-        Truth vintage dates. Each real or reconstructed task asks for the
-        counts as reported by those after its own vintage.
+        Truth vintage dates. Each real task asks for the counts as
+        reported by those after its own vintage.
     history : pandas.DataFrame, optional
         Target rows to take each task's `target_history` from. Defaults
         to `target`.
@@ -371,8 +336,6 @@ def make_tasks(
             if "kind" in delays.columns:
                 mask &= delays["kind"] == kind
             sel = delays.loc[mask]
-            if sel.empty and kind == "real":
-                sel = _reconstructed_delays(delays, str(vintage))
             dly = sel if not sel.empty else None
             same = delays["vintage"] <= vintage
             if "kind" in delays.columns:
@@ -407,7 +370,7 @@ def uses_lag_prior(task: ForecastTask) -> bool:
     """Whether a task has no publication lag estimate of its own.
 
     The lag is estimated from pairs of delay files on or before the
-    vintage (`bdbvhubrenewal.data.reconstruct.publication_lag_pmf`).
+    vintage (`bdbvhubrenewal.data.releases.publication_lag_pmf`).
     Without one, the renewal models use a prior whose shape was set from
     later delay files, so these origins see some later data.
 
@@ -426,43 +389,20 @@ def uses_lag_prior(task: ForecastTask) -> bool:
     return publication_lag_pmf(task.delay_history, task.vintage) is None
 
 
-def order_tasks(
-    tasks: Sequence[ForecastTask], spread: int = 5
-) -> list[ForecastTask]:
-    """Order tasks so a long run gives a useful first batch.
-
-    Real origins come first, then `spread` reconstructed origins evenly
-    spaced over their range, then the rest in date order.
+def order_tasks(tasks: Sequence[ForecastTask]) -> list[ForecastTask]:
+    """Order tasks by kind, real first, then by vintage.
 
     Parameters
     ----------
     tasks : sequence of ForecastTask
         The tasks.
-    spread : int
-        Reconstructed origins to bring forward.
 
     Returns
     -------
     list of ForecastTask
         The same tasks, reordered.
     """
-    real = sorted(
-        (t for t in tasks if t.kind == "real"), key=lambda t: t.vintage
-    )
-    rest = sorted(
-        (t for t in tasks if t.kind != "real"),
-        key=lambda t: (t.kind, t.vintage),
-    )
-    rec = [t for t in rest if t.kind == "reconstructed"]
-    if spread > 1 and len(rec) > spread:
-        picks = {
-            round(i * (len(rec) - 1) / (spread - 1)) for i in range(spread)
-        }
-    else:
-        picks = set(range(len(rec)))
-    early = [rec[i] for i in sorted(picks)]
-    taken = {id(t) for t in early}
-    return [*real, *early, *(t for t in rest if id(t) not in taken)]
+    return sorted(tasks, key=lambda t: (t.kind != "real", t.kind, t.vintage))
 
 
 def shard_tasks(
@@ -509,6 +449,39 @@ def _fit_rows(model: ForecastModel, task: ForecastTask) -> pd.DataFrame:
     return table
 
 
+def check_distinct(forecasts: pd.DataFrame) -> None:
+    """Stop if two models gave the same samples for a task.
+
+    A model that silently ran another would give the same samples, as
+    the daily random walk once did when it had no snapshots.
+
+    Parameters
+    ----------
+    forecasts : pandas.DataFrame
+        Output of `run_forecasts` with `model`, `kind`, `vintage` and
+        `value`.
+
+    Raises
+    ------
+    ValueError
+        If two models have identical values for the same task.
+    """
+    for key, rows in forecasts.groupby(["kind", "vintage"]):
+        seen: dict[str, np.ndarray] = {}
+        for name, grp in rows.groupby("model"):
+            values = grp.sort_values(["location", "target_end_date", "sample"])[
+                "value"
+            ].to_numpy()
+            for other, prior in seen.items():
+                if prior.shape == values.shape and np.array_equal(
+                    prior, values
+                ):
+                    raise ValueError(
+                        f"{name} and {other} gave identical samples for {key}."
+                    )
+            seen[str(name)] = values
+
+
 def run_forecasts(
     models: Sequence[ForecastModel],
     tasks: Iterable[ForecastTask],
@@ -518,7 +491,10 @@ def run_forecasts(
     """Run every model on every task, adding the national total.
 
     A model that raises `ModelUnavailableError` for a task, as the random
-    walk models do without release snapshots, has no rows for that task.
+    walk models do when no pair of releases is within the delay window,
+    has no rows for that task.
+    A model with `needs_snapshots` set must be given the task's release
+    snapshots, and the run stops if it is not.
 
     Parameters
     ----------
@@ -547,6 +523,13 @@ def run_forecasts(
     frames = []
     for task in tasks:
         for model in models:
+            if getattr(model, "needs_snapshots", False) and (
+                task.daily_history is None or task.daily_history.empty
+            ):
+                raise MissingSnapshots(
+                    f"{model.name} needs daily release snapshots, and the "
+                    f"{task.kind} task for {task.vintage} has none."
+                )
             path = (
                 None if store is None else _cache_path(store, model.name, task)
             )
@@ -822,10 +805,9 @@ def development_tasks(
     delays: pd.DataFrame,
     config: BacktestConfig,
     *,
-    include_reconstructed: bool = True,
     daily: pd.DataFrame | None = None,
 ) -> list[ForecastTask]:
-    """Build the development tasks: real and reconstructed, not held out.
+    """Build the development tasks: the real vintages not held out.
 
     Parameters
     ----------
@@ -835,14 +817,11 @@ def development_tasks(
         The tidy delay table.
     config : BacktestConfig
         Settings.
-    include_reconstructed : bool
-        Whether to add reconstructed vintages.
     daily : pandas.DataFrame, optional
         Daily onsets by release, with `vintage`, `location`, `onset_date`,
-        `observed` and `imputed` columns, and optionally `kind`. Real tasks
-        get the rows of its kind on or before its vintage as
-        `daily_history`. Reconstructed tasks have none, so the random walk
-        models, which need release snapshots, skip them.
+        `observed` and `imputed` columns, and optionally `kind`. Each task
+        gets the rows of its kind on or before its vintage as
+        `daily_history`.
 
     Returns
     -------
@@ -852,28 +831,14 @@ def development_tasks(
     """
     real = target.loc[target["kind"] == "real"]
     latest = real_vintages(real)[-1]
-    parts = [real]
-    dly_parts = [delays.assign(kind="real")]
-    if include_reconstructed:
-        dates = [
-            d for d in config.reconstructed_dates if not config.is_heldout(d)
-        ]
-        if dates:
-            lags = None if daily is None else cutoff_lags(daily)
-            parts.append(
-                reconstruct_vintages(real, delays, dates, latest, lags)
-            )
-            src = delays.loc[delays["vintage"] == latest]
-            dly_parts.extend(
-                reconstruct_delays(src, d).assign(kind="reconstructed")
-                for d in dates
-            )
-    data = pd.concat(parts, ignore_index=True)
-    all_delays = pd.concat(dly_parts, ignore_index=True)
     return [
         t
         for t in make_tasks(
-            data, all_delays, config, real_vintages(real), daily=daily
+            real,
+            delays.assign(kind="real"),
+            config,
+            real_vintages(real),
+            daily=daily,
         )
         if not config.is_heldout(t.vintage) and t.vintage < latest
     ]
@@ -885,15 +850,14 @@ def run_development(
     delays: pd.DataFrame,
     config: BacktestConfig,
     *,
-    include_reconstructed: bool = True,
     cache: Path | str | None = None,
     fits: list[pd.DataFrame] | None = None,
     daily: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Run the development backtest on real and reconstructed vintages.
+    """Run the development backtest on the real vintages.
 
     Vintages after `config.development_until` are held out: they are not
-    forecast from, and reconstructed vintages after it are not built.
+    forecast from.
     The truth is the latest real vintage, and every week is scored.
 
     Parameters
@@ -906,8 +870,6 @@ def run_development(
         The tidy delay table.
     config : BacktestConfig
         Settings.
-    include_reconstructed : bool
-        Whether to add reconstructed vintages.
     cache : pathlib.Path or str, optional
         Forecast cache, as for `run_forecasts`.
     fits : list, optional
@@ -922,13 +884,7 @@ def run_development(
     """
     real = target.loc[target["kind"] == "real"]
     latest = real_vintages(real)[-1]
-    tasks = development_tasks(
-        target,
-        delays,
-        config,
-        include_reconstructed=include_reconstructed,
-        daily=daily,
-    )
+    tasks = development_tasks(target, delays, config, daily=daily)
     forecasts = run_forecasts(models, tasks, cache, fits)
     truth = truth_from_vintage(real, latest)
     scores = score_tasks(forecasts, truth, latest, config.complete_after_weeks)
@@ -941,7 +897,6 @@ def lopo_tasks(
     config: BacktestConfig,
     *,
     provinces: Sequence[str] | None = None,
-    include_reconstructed: bool = True,
 ) -> list[ForecastTask]:
     """Build the development tasks with one province masked in each.
 
@@ -952,8 +907,6 @@ def lopo_tasks(
     provinces : sequence of str, optional
         Provinces to mask. Defaults to every province with cases in each
         task.
-    include_reconstructed : bool
-        Whether to add reconstructed vintages.
 
     Returns
     -------
@@ -962,9 +915,7 @@ def lopo_tasks(
     """
     return [
         replace(task, mask=(prov,))
-        for task in development_tasks(
-            target, delays, config, include_reconstructed=include_reconstructed
-        )
+        for task in development_tasks(target, delays, config)
         for prov in task.locations
         if provinces is None or prov in provinces
     ]
@@ -977,7 +928,6 @@ def run_lopo(
     config: BacktestConfig,
     *,
     provinces: Sequence[str] | None = None,
-    include_reconstructed: bool = True,
     cache: Path | str | None = None,
     fits: list[pd.DataFrame] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -1004,8 +954,6 @@ def run_lopo(
     provinces : sequence of str, optional
         Provinces to mask, one at a time. Defaults to every province with
         cases in each task.
-    include_reconstructed : bool
-        Whether to add reconstructed vintages.
     cache : pathlib.Path or str, optional
         Forecast cache, as for `run_forecasts`.
     fits : list, optional
@@ -1026,13 +974,7 @@ def run_lopo(
     real = target.loc[target["kind"] == "real"]
     latest = real_vintages(real)[-1]
     frames = []
-    for task in lopo_tasks(
-        target,
-        delays,
-        config,
-        provinces=provinces,
-        include_reconstructed=include_reconstructed,
-    ):
+    for task in lopo_tasks(target, delays, config, provinces=provinces):
         prov = task.mask[0]
         samples = run_forecasts(able, [task], cache, fits)
         kept = samples.loc[samples["location"] == prov].copy()
@@ -1068,7 +1010,7 @@ def recovery_tasks(
         The simulated scenario. Defaults to `turning_point`.
     lags : mapping of int to int, optional
         Days from release to data cut-off by release weekday
-        (`bdbvhubrenewal.data.reconstruct.cutoff_lags`). None for none.
+        (`bdbvhubrenewal.data.releases.cutoff_lags`). None for none.
 
     Returns
     -------
@@ -1167,7 +1109,7 @@ def run_scenarios(
         Weeks after each date for the as-of scores.
     daily : pandas.DataFrame, optional
         Real daily rows, from which the release cut-off lags are taken
-        (`bdbvhubrenewal.data.reconstruct.cutoff_lags`). The simulated
+        (`bdbvhubrenewal.data.releases.cutoff_lags`). The simulated
         releases then carry cut-offs, and tasks their daily releases.
 
     Returns

@@ -46,7 +46,6 @@ def config(tmp_path: Path) -> BacktestConfig:
         seed=1,
         development_until="2026-10-10",
         model_choice=tmp_path / "model-choice.yml",
-        reconstructed_dates=("2026-08-29", "2026-10-10", "2026-10-17"),
         simulated_dates=("2026-08-01", "2026-09-05"),
     )
 

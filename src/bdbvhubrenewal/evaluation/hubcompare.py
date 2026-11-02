@@ -8,11 +8,11 @@ gzipped in a committed directory; the rest go to an uncommitted cache.
 Files from the archived cumulative outbreak size round are skipped.
 
 For each hub round, `our_forecasts` runs our unfitted models from the
-matching vintage: the latest real vintage that serves the round if there
-is one, otherwise a vintage reconstructed for the Saturday before it.
+latest real vintage that serves the round.
+Rounds with no such vintage are skipped.
 Fitted models are slow, so `stored_forecasts` takes theirs from backtest
 and held-out forecast files for the same round.
-The `source` column says which (`real`, `reconstructed`, or `hub`).
+The `source` column says which (`real` or `hub`).
 
 `score_comparison` scores every model on every week it forecast, against
 the latest real vintage as reported then, and flags complete weeks: those
@@ -41,10 +41,6 @@ import pandas as pd
 import yaml
 
 from bdbvhubrenewal.data.dates import as_date, reference_date_for_vintage
-from bdbvhubrenewal.data.reconstruct import (
-    reconstruct_delays,
-    reconstruct_vintages,
-)
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     make_tasks,
@@ -397,8 +393,8 @@ def load_team_metadata(root: Path | str) -> pd.DataFrame:
 
 def match_vintage(
     reference_date: dt.date | str, real_vintages: Sequence[str]
-) -> tuple[str, str] | None:
-    """Return the vintage our forecast for a hub round is made from.
+) -> str | None:
+    """Return the real vintage our forecast for a hub round is made from.
 
     Parameters
     ----------
@@ -409,20 +405,13 @@ def match_vintage(
 
     Returns
     -------
-    tuple of str or None
-        The vintage and its kind: the latest real vintage serving the
-        round (`real`), else the Saturday a week before the reference date
-        (`reconstructed`). None if that Saturday is after the latest real
-        vintage, so it cannot be reconstructed.
+    str or None
+        The latest real vintage serving the round, or None if there is
+        none.
     """
     ref = as_date(reference_date)
     serving = [v for v in real_vintages if reference_date_for_vintage(v) == ref]
-    if serving:
-        return max(serving), "real"
-    day = ref - dt.timedelta(days=7)
-    if not real_vintages or day > as_date(max(real_vintages)):
-        return None
-    return day.isoformat(), "reconstructed"
+    return max(serving) if serving else None
 
 
 def our_forecasts(
@@ -450,14 +439,13 @@ def our_forecasts(
         First week, in weeks from the reference date, to cover the weeks
         the hub forecasts did. Defaults to `config.min_horizon`.
     daily : pandas.DataFrame, optional
-        Daily onsets by release. Real vintages get their releases, which
-        the random walk models need. Reconstructed vintages have none.
+        Daily onsets by release, which the random walk models need.
 
     Returns
     -------
     pandas.DataFrame
-        Output of `run_forecasts` with a `source` column (`real` or
-        `reconstructed`). Rounds with no matching vintage are skipped.
+        Output of `run_forecasts` with a `source` column (`real`). Rounds
+        with no matching vintage are skipped.
     """
     if min_horizon is not None:
         config = replace(config, min_horizon=min_horizon)
@@ -466,23 +454,12 @@ def our_forecasts(
     built = [get_model(n) for n in models]
     frames = []
     for ref in sorted(set(reference_dates)):
-        match = match_vintage(ref, vintages)
-        if match is None or not built:
+        vintage = match_vintage(ref, vintages)
+        if vintage is None or not built:
             continue
-        vintage, source = match
-        if source == "real":
-            rows = real.loc[real["vintage"] == vintage]
-            dly = delays
-            snapshots = daily
-        else:
-            rows = reconstruct_vintages(real, delays, [vintage])
-            src = delays.loc[delays["vintage"] == delays["vintage"].max()]
-            dly = reconstruct_delays(src, vintage).assign(kind="reconstructed")
-            snapshots = None
-        fc = run_forecasts(
-            built, make_tasks(rows, dly, config, daily=snapshots)
-        )
-        fc["source"] = source
+        rows = real.loc[real["vintage"] == vintage]
+        fc = run_forecasts(built, make_tasks(rows, delays, config, daily=daily))
+        fc["source"] = "real"
         frames.append(fc)
     if not frames:
         return pd.DataFrame(columns=[*SAMPLE_COLUMNS, "horizon"])
@@ -509,8 +486,7 @@ def stored_forecasts(
     Returns
     -------
     pandas.DataFrame
-        Columns `SAMPLE_COLUMNS`, with `source` the vintage kind. For each
-        model and round, real vintages win over reconstructed ones.
+        Columns `SAMPLE_COLUMNS`, with `source` the vintage kind.
     """
     frames = []
     for path in paths:
@@ -521,16 +497,12 @@ def stored_forecasts(
         fc = fc.loc[
             fc["reference_date"].astype(str).isin(list(reference_dates))
             & ~fc["model"].isin(list(exclude))
-            & fc["kind"].isin(["real", "reconstructed"])
+            & (fc["kind"] == "real")
         ]
         frames.append(fc)
     if not frames:
         return pd.DataFrame(columns=list(SAMPLE_COLUMNS))
     fc = pd.concat(frames, ignore_index=True).drop_duplicates()
-    best = fc.groupby(["model", "reference_date"])["kind"].transform(
-        lambda k: "real" if (k == "real").any() else "reconstructed"
-    )
-    fc = fc.loc[fc["kind"] == best]
     return fc.rename(columns={"kind": "source"})[list(SAMPLE_COLUMNS)]
 
 
@@ -568,11 +540,11 @@ def score_comparison(
     scored, pending = [], []
     for ref, grp in forecasts[list(SAMPLE_COLUMNS)].groupby("reference_date"):
         match = match_vintage(str(ref), vintages)
-        if match is None or match[0] >= latest:
+        if match is None or match >= latest:
             pending.append(
                 {
                     "reference_date": str(ref),
-                    "vintage": match[0] if match else None,
+                    "vintage": match,
                     "models": ", ".join(sorted(set(grp["model"]))),
                 }
             )
@@ -594,7 +566,7 @@ def score_comparison(
                 "target_end_date",
             ),
         )
-        s["vintage"] = match[0]
+        s["vintage"] = match
         s["truth_vintage"] = latest
         s["complete"] = pd.to_datetime(s["target_end_date"]) <= pd.Timestamp(
             cutoff

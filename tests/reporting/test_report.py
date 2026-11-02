@@ -124,7 +124,6 @@ def test_make_report_writes_every_page(
         seed=1,
         development_until=config.development_until,
         model_choice=ROOT / config.model_choice,
-        reconstructed_dates=("2026-09-26", "2026-10-03"),
         simulated_dates=("2026-08-01",),
     )
     models = [get_model("randomwalk")]

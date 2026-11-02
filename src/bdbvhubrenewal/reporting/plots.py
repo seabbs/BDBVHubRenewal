@@ -45,7 +45,6 @@ __all__ = [
     "plot_location_grid",
     "plot_newly_missing",
     "plot_nowcast",
-    "plot_reconstruction",
     "plot_relative_skill",
     "plot_revisions",
     "plot_score_summary",
@@ -101,7 +100,7 @@ MODEL_COLOURS: Final[dict[str, tuple[str, ...]]] = {
 }
 """Categorical colours in fixed order (checked for colour vision deficiency)."""
 
-_KIND_MARKERS: Final = {"real": "o", "reconstructed": "s", "simulated": "^"}
+_KIND_MARKERS: Final = {"real": "o", "simulated": "^"}
 
 
 def model_colour(name: str, models: Sequence[str], mode: str = "light") -> str:
@@ -513,48 +512,6 @@ def plot_delays_over_time(
     return fig
 
 
-def plot_reconstruction(
-    comparison: pd.DataFrame, location: str = "CD", mode: str = "light"
-) -> Figure:
-    """Plot reconstructed against real vintages for one location.
-
-    Parameters
-    ----------
-    comparison : pandas.DataFrame
-        Output of `bdbvhubrenewal.data.reconstruct.compare_reconstruction`.
-    location : str
-        Location to show.
-    mode : str
-        `"light"` or `"dark"`.
-
-    Returns
-    -------
-    matplotlib.figure.Figure
-        One panel per vintage: real and reconstructed totals by week.
-    """
-    comp = comparison.loc[comparison["location"] == location]
-    vints = sorted(comp["vintage"].unique())
-    fig, axes = _grid(len(vints), 3, width=3.4)
-    palette = MODEL_COLOURS[mode]
-    for ax, vin in zip(axes, vints, strict=True):
-        c = comp.loc[comp["vintage"] == vin]
-        c = c.loc[c["target_end_date"] >= "2026-05-01"]
-        x = pd.to_datetime(c["target_end_date"])
-        ax.plot(x, c["total_real"], color=THEMES[mode]["data"], label="Real")
-        ax.plot(
-            x,
-            c["total_reconstructed"],
-            color=palette[1],
-            ls="--",
-            label="Reconstructed",
-        )
-        ax.set_title(f"Vintage {vin}")
-        _date_axis(ax)
-    axes[0].set_ylabel(f"Cases by onset week ({location})")
-    axes[0].legend()
-    return fig
-
-
 def plot_simulation(parameters: pd.DataFrame, mode: str = "light") -> Figure:
     """Plot the true parameters of a simulated outbreak.
 
@@ -798,7 +755,6 @@ def plot_forecasts(
         Output of `bdbvhubrenewal.evaluation.backtest.run_forecasts`.
     target : pandas.DataFrame
         Target rows holding each forecast's vintage and the truth vintage.
-        For reconstructed forecasts, pass the reconstructed rows too.
     location : str
         Location to show.
     models : sequence of str, optional
@@ -1022,14 +978,11 @@ def comparison_label(
     -------
     str
         The hub id for submitted forecasts. Ours are `<model> (<hub id>)`
-        if they have their own hub id, else `<model> (ours)`, with
-        `reconstructed` added when the vintage was reconstructed.
+        if they have their own hub id, else `<model> (ours)`.
     """
     if source == "hub":
         return model
     tag = (hub_ids or {}).get(model, "ours")
-    if source == "reconstructed":
-        return f"{model} ({tag}, reconstructed)"
     return f"{model} ({tag})"
 
 
@@ -1257,11 +1210,7 @@ def plot_scores(
         Mean score by `by`, with the number of forecasts in the title.
     """
     models = list(models or scores["model"].unique())
-    kinds = [
-        k
-        for k in ("real", "reconstructed", "simulated")
-        if k in set(scores["kind"])
-    ]
+    kinds = [k for k in ("real", "simulated") if k in set(scores["kind"])]
     fig, axes = _grid(len(kinds), 3, width=3.6, height=2.6)
     for ax, kind in zip(axes, kinds, strict=True):
         s = scores.loc[scores["kind"] == kind]
@@ -1540,11 +1489,7 @@ def plot_relative_skill(
     from bdbvhubrenewal.evaluation.scoring import relative_skill
 
     models = list(models or scores["model"].unique())
-    kinds = [
-        k
-        for k in ("real", "reconstructed", "simulated")
-        if k in set(scores["kind"])
-    ]
+    kinds = [k for k in ("real", "simulated") if k in set(scores["kind"])]
     fig, axes = _grid(len(kinds), 3, width=3.6, height=2.6)
     col = f"relative_{metric}"
     for ax, kind in zip(axes, kinds, strict=True):

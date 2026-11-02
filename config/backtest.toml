@@ -39,12 +39,6 @@ chain_method = "vectorized"
 # sample sizes are ignored, and BVDOutbreakSize's own pass level is 1.05.
 max_rhat = 1.1
 
-[reconstructed]
-# Saturdays to reconstruct pseudo-vintages for. Any after the latest model
-# choice date are dropped.
-first_vintage = "2026-06-06"
-last_vintage = "2026-10-10"
-
 [simulated]
 # Vintage dates for the simulated outbreak (Saturdays).
 first_vintage = "2026-06-27"

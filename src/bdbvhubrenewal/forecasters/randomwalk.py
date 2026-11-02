@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import datetime as dt
 from dataclasses import dataclass, field
+from typing import ClassVar
 
 import jax
 import jax.numpy as jnp
@@ -140,6 +141,7 @@ class RandomWalk:
     name: str = "randomwalk"
     settings: Settings = field(default_factory=Settings)
     fit_diagnostics: list[dict[str, object]] = field(default_factory=list)
+    needs_snapshots: ClassVar[bool] = True
 
     def _origin(self, task: ForecastTask, errors: bool) -> Origin:
         daily = task.daily_history
@@ -255,6 +257,36 @@ class RandomWalkNowcast(RandomWalk):
             the delay window.
         """
         origin = self._origin(task, errors=True)
+        values, weeks = self.trajectories(origin, task, origin.point)
+        self._diagnostics(
+            origin,
+            task,
+            np.full(len(origin.snap.locations), origin.start_nowcast),
+        )
+        return _frame(task, weeks, values, self._rows(origin, task))
+
+    def trajectories(
+        self, origin: Origin, task: ForecastTask, point: np.ndarray
+    ) -> tuple[np.ndarray, list[str]]:
+        """Return trajectories from a nowcast with mean `point`.
+
+        Parameters
+        ----------
+        origin : Origin
+            The fit at the task's vintage, with its Skellam spread.
+        task : ForecastTask
+            The task.
+        point : numpy.ndarray
+            Mean weekly nowcast, `[L, W]`. The model's own is
+            `origin.point`. A later release's expected count gives the
+            prediction scored in the backtest.
+
+        Returns
+        -------
+        tuple
+            Samples `[S, L, H]` for every hub week from the first data
+            week to the last target, and those weeks.
+        """
         snap = origin.snap
         assert origin.rho is not None
         weeks = _timeline(origin, task)
@@ -271,7 +303,7 @@ class RandomWalkNowcast(RandomWalk):
         nowcast = np.asarray(
             sample_skellam_moments(
                 key_x,
-                jnp.asarray(origin.point, jnp.float32),
+                jnp.asarray(point, jnp.float32),
                 jnp.asarray(origin.reported, jnp.float32),
                 jnp.asarray(rho, jnp.float32),
                 n,
@@ -297,8 +329,7 @@ class RandomWalkNowcast(RandomWalk):
                 values[:, :, u] = y[:, :, u - w0 - 1].T
                 if u == w0 + 1 and miss > 0 and u < n_data:
                     values[:, :, u] = nowcast[:, :, u] + part.T
-        self._diagnostics(origin, task, np.full(n_loc, w0))
-        return _frame(task, weeks, values, self._rows(origin, task))
+        return values, weeks
 
 
 register_model(

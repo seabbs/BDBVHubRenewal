@@ -7,62 +7,12 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data.dates import epiweek_end
-from bdbvhubrenewal.data.reconstruct import (
-    compare_reconstruction,
-    cutoff_lags,
-    fit_publication_lag,
-    publication_lag_pmf,
-    reconstruct_delays,
-    reconstruct_vintage,
-    reconstruct_vintages,
-)
+from bdbvhubrenewal.data.releases import cutoff_lags, publication_lag_pmf
 from bdbvhubrenewal.data.simulate import (
     SimulationSettings,
     release_dates,
     simulate_outbreak,
 )
-
-
-def _latest(df: pd.DataFrame) -> pd.DataFrame:
-    return df.loc[df["vintage"] == "2026-10-24"]
-
-
-def test_reconstruction_far_ahead_recovers_latest(
-    target: pd.DataFrame, delays: pd.DataFrame
-) -> None:
-    # Weeks well before the date are almost fully published.
-    lag = fit_publication_lag(target, delays).pmf
-    rec = reconstruct_vintage(
-        _latest(target), _latest(delays), "2026-10-24", lag
-    )
-    rec = rec.set_index(["location", "target_end_date"])["total"]
-    real = _latest(target).set_index(["location", "target_end_date"])["total"]
-    old = [i for i in rec.index if i[1] <= "2026-08-01"]
-    assert rec.loc[old].sum() == pytest.approx(real.loc[old].sum(), rel=0.01)
-
-
-def test_reconstruction_is_close_to_real_vintages(
-    target: pd.DataFrame, delays: pd.DataFrame
-) -> None:
-    rec = reconstruct_vintages(target, delays, ["2026-10-09", "2026-10-17"])
-    assert set(rec["kind"]) == {"reconstructed"}
-    comp = compare_reconstruction(target, rec)
-    nat = comp.loc[comp["location"] == "CD"]
-    rel = nat["total_difference"].sum() / nat["total_real"].sum()
-    assert abs(rel) < 0.06
-
-
-def test_publication_lag_fit_matches_real_releases(
-    target: pd.DataFrame, delays: pd.DataFrame
-) -> None:
-    fit = fit_publication_lag(target, delays)
-    assert fit.pmf.sum() == pytest.approx(1.0)
-    rec = reconstruct_vintages(target, delays, ["2026-10-09", "2026-10-17"])
-    comp = compare_reconstruction(target, rec)
-    nat = comp.loc[comp["location"] == "CD"]
-    for _, rows in nat.groupby("vintage"):
-        rel = rows["total_difference"].sum() / rows["total_real"].sum()
-        assert abs(rel) < 0.03
 
 
 def test_cutoff_lags_follow_real_releases() -> None:
@@ -76,14 +26,6 @@ def test_cutoff_lags_follow_real_releases() -> None:
     assert lags[4] == 2
     assert lags[5] == 1
     assert lags[1] == 1
-
-
-def test_reconstructed_delays_are_truncated(delays: pd.DataFrame) -> None:
-    kept = reconstruct_delays(_latest(delays), "2026-09-05")
-    assert (kept["vintage"] == "2026-09-05").all()
-    assert kept["onset_week"].max() <= "2026-09-05"
-    assert kept["onset_week"].max() >= "2026-08-29"
-    assert len(kept) < len(_latest(delays))
 
 
 @pytest.fixture(scope="module")

@@ -448,7 +448,7 @@ class SimulatedOutbreak:
             Vintage dates.
         cutoff_lags : mapping of int to int, optional
             Days from release to data cut-off by release weekday
-            (`bdbvhubrenewal.data.reconstruct.cutoff_lags`). None for no
+            (`bdbvhubrenewal.data.releases.cutoff_lags`). None for no
             cut-off.
 
         Returns

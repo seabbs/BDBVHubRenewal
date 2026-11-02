@@ -305,7 +305,7 @@ def vintage_from_tables(
         this vintage (`ForecastTask.auxiliary["bvd"]`).
     publication_lag : numpy.ndarray, optional
         Empirical report to publication lag pmf
-        (`data.reconstruct.publication_lag_pmf`).
+        (`data.releases.publication_lag_pmf`).
 
     Returns
     -------

@@ -3,7 +3,7 @@
 
 The package has these parts:
 
-- `data`: the hub data, dates, reconstructed and simulated vintages,
+- `data`: the hub data, dates, simulated vintages,
   empirical delays and BVDOutbreakSize releases.
 - `forecasters`: the forecaster interface, registry, random walk and the
   renewal variants (`forecasters.renewal`).
