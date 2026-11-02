@@ -21,6 +21,9 @@ A place uses its own factor at an age when the denominator, summed over
 the pooled pairs, is at least 10 cases, and otherwise its parent's factor
 at that age (zone, province, country).
 The country uses its own factor.
+Only onset days within `Settings.history_delay` (63 for $D = 42$) of the
+latest cut-off are summed, and downward revisions are first moved onto
+earlier releases of the day, as baselinenowcast does.
 A zero denominator takes baselinenowcast's rule, so that
 $F_s(x) = 1 + (\sum N_{r+1}(t) - \sum N_r(t)) / \max(\sum N_r(t), 1)$.
 
@@ -57,6 +60,7 @@ from bdbvhubrenewal.baselinenowcast import (
     exact_plan,
     pair_factors,
     pair_sums,
+    preprocess_negative_values,
     window_pairs,
 )
 from bdbvhubrenewal.data.snapshots import SnapshotArrays, week_sum, weekly_sums
@@ -88,6 +92,10 @@ class MissingSnapshots(ModelUnavailableError):  # noqa: N818
 
 class NoDelayPair(ModelUnavailableError):  # noqa: N818
     """No pair of releases has a step within the delay window."""
+
+
+class NoCompleteWeek(ModelUnavailableError):  # noqa: N818
+    """No week of a place reaches the completeness that starts the walk."""
 
 
 @dataclass(frozen=True)
@@ -122,6 +130,16 @@ class Settings:
     max_mismatch: int = 1
     completeness: float = 0.95
     walk_weeks: int = 9
+
+    @property
+    def history_delay(self) -> int:
+        """Onset days used for the delay, baselinenowcast's default.
+
+        R uses `floor(0.5 * round(3 * D))` reference times for the delay,
+        at least `D + 1`, and the rest for the uncertainty.
+        """
+        n_used = round(3 * self.max_delay)
+        return max(n_used // 2, self.max_delay + 1)
 
 
 @dataclass
@@ -212,6 +230,35 @@ class ChainPlan(NamedTuple):
     valid: np.ndarray
 
 
+def _delay_counts(snap: SnapshotArrays, r: int) -> np.ndarray:
+    """Return counts with downward revisions moved onto earlier releases.
+
+    For each day the increments between its observed releases up to `r`
+    go through baselinenowcast's `preprocess_negative_values`, so a
+    negative revision is set to zero and taken from the earlier
+    increments. The cumulative counts are then rebuilt, and never fall
+    from one release to the next. Releases after `r` are left as they
+    are, and are not read by a fit at `r`.
+    """
+    c = np.asarray(snap.counts, dtype=float)
+    n_loc, _, n_day = c.shape
+    obs = snap.observed[: r + 1]
+    cum = c[:, : r + 1]
+    prev = np.concatenate(
+        [np.zeros_like(cum[:, :1]), cum[:, :-1] * obs[None, :-1]], axis=1
+    )
+    inc = np.where(obs[None], cum - prev, 0.0)
+    rows = inc.transpose(0, 2, 1).reshape(n_loc * n_day, r + 1)
+    mask = np.tile(obs.T, (n_loc, 1))
+    fixed = np.asarray(preprocess_negative_values(rows, mask, validate=False))
+    fixed = fixed.reshape(n_loc, n_day, r + 1).transpose(0, 2, 1)
+    out = c.copy()
+    out[:, : r + 1] = np.where(
+        obs[None], np.cumsum(fixed, axis=1), c[:, : r + 1]
+    )
+    return out
+
+
 def fit_delay(
     snap: SnapshotArrays, r: int, settings: Settings
 ) -> DelayFit | None:
@@ -234,12 +281,16 @@ def fit_delay(
     pairs = _pairs_at(snap, r, settings.max_delay)
     if pairs.size == 0:
         return None
+    counts = _delay_counts(snap, r)
+    day = np.arange(snap.week.size)
+    window = day > int(snap.cut[r]) - settings.history_delay
+    observed = snap.observed & window[None, :]
     gaps = snap.cut[pairs[:, 1]] - snap.cut[pairs[:, 0]]
     steps = np.unique(gaps)
     pair_step = np.searchsorted(steps, gaps)
     num, den = pair_sums(
-        jnp.asarray(snap.counts),
-        jnp.asarray(snap.observed),
+        jnp.asarray(counts),
+        jnp.asarray(observed),
         jnp.asarray(snap.cut),
         jnp.asarray(pairs[:, 0]),
         settings.max_delay,
