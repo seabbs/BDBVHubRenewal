@@ -362,3 +362,19 @@ def test_committed_metadata_is_only_for_hub_models() -> None:
         # Team seabbs, by name and abbreviation (Sam, 2026-10-28).
         assert "team_name: seabbs\n" in text
         assert "team_abbr: seabbs\n" in text
+
+
+@pytest.mark.usefixtures("in_root")
+def test_committed_renewal_metadata_is_one_of_the_variants(
+    tmp_path: Path,
+) -> None:
+    # seabbs-renewal.yml is the metadata of the variant chosen for
+    # submission. After a choice, regenerate it (see MODEL_METADATA).
+    path = ROOT / "hub" / "model-metadata" / "seabbs-renewal.yml"
+    rendered = {}
+    for variant in ("renewal", "renewalsp", "renewalbvd"):
+        out = tmp_path / variant
+        assert main(["metadata", "--model", variant, "--out", str(out)]) == 0
+        rendered[variant] = (out / "seabbs-renewal.yml").read_text()
+    assert path.read_text() in rendered.values()
+    assert len(set(rendered.values())) == 3
