@@ -404,7 +404,9 @@ def test_zone_hub_table_validates_and_sums_up_the_hierarchy(
     model = RandomWalkNowcast()
     prov = model.forecast(task)
     got = zone_forecast(model, task, prov, counts, zones, daily_zones)
-    table = to_hub_table(prov, task.reference_date, zones=got)
+    table = to_hub_table(
+        prov, task.reference_date, zones=got, forecast_date=task.reference_date
+    )
     zone_rows = table.loc[table["location"].str.count("-") == 2]
     by_prov = (
         zone_rows.assign(location=zone_rows["location"].str[:5])
