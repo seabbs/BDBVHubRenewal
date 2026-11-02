@@ -11,7 +11,8 @@
 #
 # The submission window check is skipped unless CHECK_WINDOW=true, so
 # files can be checked outside the window. Set VALIDATION_JSON to write
-# per-check results as JSON. Exits 1 if any check fails.
+# per-check results as JSON. Set PREVIOUS to the file now on the hub's main
+# branch for a resubmission. Exits 1 if any check fails.
 args <- commandArgs(trailingOnly = TRUE)
 if (length(args) != 3) {
   stop("Usage: validate-hub.R <hub_path> <submission.csv> <metadata.yml>")
@@ -28,6 +29,10 @@ opts <- c(
 )
 if (!identical(Sys.getenv("CHECK_WINDOW"), "true")) {
   opts <- c(opts, "--skip-window")
+}
+previous <- Sys.getenv("PREVIOUS")
+if (nzchar(previous)) {
+  opts <- c(opts, "--previous", normalizePath(previous))
 }
 json <- Sys.getenv("VALIDATION_JSON")
 if (nzchar(json)) {

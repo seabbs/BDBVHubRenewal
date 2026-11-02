@@ -17,7 +17,14 @@
 #   --no-metadata        Do not copy any metadata file into the temp hub.
 #   --skip-window        Skip the submission window check
 #                        (`skip_submit_window_check = TRUE`).
+#   --previous PATH      The file now on the hub's main branch at the same
+#                        path. Rows with its forecast dates are left out
+#                        of the check, as in the hub's own workflow.
 #   --json PATH          Write per-check results as JSON.
+#
+# `forecast_date` is not in the hub's `tasks.json`, so it is dropped before
+# hubValidations runs, and only rows with a new forecast date are checked.
+# The column's own rules are checked by `hub_validate.py`.
 #
 # FILE is either a model-output file (`.csv`/`.parquet`) whose parent
 # directory is the model_id (e.g. `model-output/team-model/2026-10-31-...`)
@@ -37,7 +44,8 @@ suppressPackageStartupMessages({
 parse_args <- function(args) {
   opts <- list(
     hub = NULL, metadata_dir = NULL, no_metadata = FALSE,
-    skip_window = FALSE, json = NULL, files = character()
+    skip_window = FALSE, previous = NULL, json = NULL,
+    files = character()
   )
   i <- 1L
   while (i <= length(args)) {
@@ -50,6 +58,9 @@ parse_args <- function(args) {
       i <- i + 1L
     } else if (a == "--json") {
       opts$json <- args[[i + 1L]]
+      i <- i + 1L
+    } else if (a == "--previous") {
+      opts$previous <- args[[i + 1L]]
       i <- i + 1L
     } else if (a == "--skip-window") {
       opts$skip_window <- TRUE
@@ -87,6 +98,25 @@ find_metadata <- function(model_id, metadata_dir, hub) {
     }
   }
   NULL
+}
+
+# Copy a submission, as the hub's workflow does before hubValidations: keep
+# only the new forecast's rows and drop `forecast_date`.
+copy_new_forecast <- function(file, dest, previous) {
+  read <- function(f) {
+    read.csv(f, colClasses = "character", check.names = FALSE,
+             na.strings = character(), row.names = NULL)
+  }
+  tbl <- read(file)
+  if (!"forecast_date" %in% names(tbl)) {
+    return(file.copy(file, dest))
+  }
+  if (!is.null(previous)) {
+    tbl <- tbl[!tbl$forecast_date %in% read(previous)$forecast_date, ,
+               drop = FALSE]
+  }
+  tbl$forecast_date <- NULL
+  write.csv(tbl, dest, row.names = FALSE)
 }
 
 # Flatten a hub_validations object into a data frame of checks.
@@ -127,7 +157,7 @@ validate_one <- function(file, opts) {
     model_dir <- basename(dirname(normalizePath(file)))
     dest <- file.path(tmp, "model-output", model_dir)
     dir.create(dest)
-    file.copy(file, file.path(dest, basename(file)))
+    copy_new_forecast(file, file.path(dest, basename(file)), opts$previous)
     if (!opts$no_metadata) {
       # hubValidations looks metadata up by the model_id in the file name.
       model_id <- sub(

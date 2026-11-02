@@ -235,6 +235,54 @@
       "valid_r": false
     },
     {
+      "path": "fixtures/constructed/invalid_forecast_date_missing/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "forecast_date_column"
+      ],
+      "r_failures": [],
+      "case": "invalid_forecast_date_missing",
+      "description": "Without the forecast_date column.",
+      "valid_py": false,
+      "valid_r": true
+    },
+    {
+      "path": "fixtures/constructed/invalid_forecast_date_format/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "forecast_date_valid"
+      ],
+      "r_failures": [],
+      "case": "invalid_forecast_date_format",
+      "description": "forecast_date 20/10/2026, not YYYY-MM-DD.",
+      "valid_py": false,
+      "valid_r": true
+    },
+    {
+      "path": "fixtures/constructed/invalid_forecast_date_after_reference/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "forecast_date_le_reference"
+      ],
+      "r_failures": [],
+      "case": "invalid_forecast_date_after_reference",
+      "description": "forecast_date 2026-11-01, after the reference date.",
+      "valid_py": false,
+      "valid_r": true
+    },
+    {
+      "path": "fixtures/constructed/invalid_forecast_dates_two/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
+      "kind": "submission",
+      "py_failures": [
+        "forecast_date_one_new"
+      ],
+      "r_failures": [],
+      "case": "invalid_forecast_dates_two",
+      "description": "Two forecast dates in a new file.",
+      "valid_py": false,
+      "valid_r": true
+    },
+    {
       "path": "fixtures/constructed/invalid_samples_99/testteam-testmodel/2026-10-31-testteam-testmodel.csv",
       "kind": "submission",
       "py_failures": [
@@ -445,7 +493,9 @@
     {
       "path": "fixtures/real/model-output/OHTJHU-BM/2026-10-31-OHTJHU-BM.csv",
       "kind": "submission",
-      "py_failures": [],
+      "py_failures": [
+        "forecast_date_column"
+      ],
       "r_failures": [],
       "case": "2026-10-31-OHTJHU-BM.csv",
       "source": {
@@ -453,8 +503,8 @@
         "path": "model-output/OHTJHU-BM/2026-10-31-OHTJHU-BM.csv",
         "commit": "d1ddf9d70a04dd969ea42aba7aab3b7bbe7a3890"
       },
-      "description": "Only round-2 (sample) submission so far; passed hub CI on PR #64. 62 locations, 9 weeks, ids 1-100 reused per location.",
-      "valid_py": true,
+      "description": "Only round-2 (sample) submission so far; passed hub CI on PR #64. 62 locations, 9 weeks, ids 1-100 reused per location. Written before the hub added the forecast_date column, so the Python validator rejects it for that.",
+      "valid_py": false,
       "valid_r": true
     },
     {
