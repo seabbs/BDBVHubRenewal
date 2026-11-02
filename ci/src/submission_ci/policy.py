@@ -111,22 +111,34 @@ class Policy:
         other choice keeps the policy as it is.
 
         With `only`, the chain is that model alone, for a hub model
-        that must never be submitted as anything else: a baseline, or
-        for any other model the main fit and its refit. The others are
-        still built as shadows, as references for the checks, and are
-        never selected.
+        that must never be submitted as anything else: the leg that
+        names the model (a baseline, or `renewalsp`), with no refit, or
+        else the main fit and its refit. The others are still built as
+        shadows, as references for the checks, and are never selected.
         """
         baselines = [c for c in self.chain() if c.kind == "randomwalk"]
         names = [c.model or c.id for c in baselines]
         if model not in names:
             if not only:
                 return self
-            own = ("main", "retry")
-            cands = [
-                c if c.kind in own else replace(c, kind="shadow")
-                for c in self.candidates
-            ]
-            return replace(self, candidates=cands)
+            legs = [c for c in self.chain() if c.model == model]
+            if not legs:
+                cands = [
+                    c
+                    if c.kind in ("main", "retry")
+                    else replace(c, kind="shadow")
+                    for c in self.candidates
+                ]
+                return replace(self, candidates=cands)
+            kept = {legs[0].id}
+            return replace(
+                self,
+                candidates=[
+                    c if c.id in kept else replace(c, kind="shadow")
+                    for c in self.candidates
+                    if c.kind != "retry"
+                ],
+            )
         start = names.index(model)
         kept = {c.id for c in baselines[start : start + 1 if only else None]}
         cands = [

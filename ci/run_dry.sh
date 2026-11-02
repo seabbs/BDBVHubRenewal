@@ -64,6 +64,10 @@ SCENARIOS=(
   "randomwalknowcast|main=fail,retry-1=fail,renewalsp=pass,randomwalknowcast=pass|skip"
   "randomwalk|main=fail,retry-1=crash,renewalsp=fail,randomwalknowcast=negative|skip"
   "skip|main=fail,retry-1=fail,renewalsp=fail,randomwalknowcast=negative,randomwalk=negative|skip"
+  # seabbs-renewal carrying the single-patch model: its leg alone, with
+  # main as a shadow and no refit.
+  "singlepatch|main=pass|renewalsp|MODEL=renewalsp|Shadow candidates"
+  "singlepatchskip|main=pass,renewalsp=fail,randomwalknowcast=pass|skip|MODEL=renewalsp"
 )
 
 sci() { uv run --quiet --project "$CI_DIR" "$@"; }
@@ -93,7 +97,9 @@ run_scenario() {
   export WORK="$ROOT/$name"
   export FAKE_SCENARIOS=$scenarios
   export FAKE_COHERENCE_GAP="" FAKE_CHOSEN_MODEL=""
-  unset MODEL
+  # Most scenarios walk the main model's chain; `singlepatch*` carry
+  # renewalsp, as config/hub.toml does (checked by `own_model`).
+  export MODEL=renewal
   local kv
   for kv in $extra; do export "${kv?}"; done
   export GH_LOG="$WORK/gh.log"
@@ -409,6 +415,20 @@ no_new_data() {
   echo "=== no-new-data ===" && echo "ok: $(grep '^reason=' "$WORK/out")"
 }
 
+own_model() {
+  # With no override, the renewal track resolves its model from
+  # `[submission] model` in config/hub.toml, not the model choice record
+  # (which names randomwalknowcast).
+  local got want
+  want=$(python3 -c 'import sys, tomllib
+print(tomllib.load(open(sys.argv[1], "rb"))["submission"]["model"])' \
+    "$CI_DIR/../config/hub.toml")
+  got=$(unset MODEL MODEL_ID; export WORK="$ROOT/own-model"; FAKE_CHOSEN_MODEL=randomwalknowcast \
+    bash -c 'source "$CI_DIR/steps/lib.sh"; resolve_model; echo "$MODEL"')
+  [ "$got" = "$want" ] || { echo "FAIL: renewal track resolved $got, not $want"; return 1; }
+  echo "=== own-model ===" && echo "ok: seabbs-renewal resolves $got from config/hub.toml"
+}
+
 failed=0
 if [ $# -gt 0 ]; then
   for s in "${SCENARIOS[@]}"; do
@@ -428,5 +448,6 @@ no_new_data || failed=1
 resubmission || failed=1
 ledger || failed=1
 baseline_track || failed=1
+own_model || failed=1
 [ $failed = 0 ] && echo "All dry-run scenarios passed." || echo "Some scenarios FAILED."
 exit $failed
