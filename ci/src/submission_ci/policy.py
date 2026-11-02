@@ -13,10 +13,6 @@ clears every check is submitted:
 4. `randomwalknowcast`: random walk on a nowcast, with no fit.
 5. `randomwalk`: the random walk baseline, built from the data alone.
 
-With `renewal_only` (the default, for the `seabbs-renewal` id), the chain
-is cut to the chosen renewal model, and its refit for `renewal`: steps 3
-to 5 are fitted or built as shadows and never submitted under that id.
-
 Stage `primary` candidates fit in parallel straight away. Stage `retry`
 candidates fit only when the primary `main` fails. Stage `baseline`
 candidates need no fit.
@@ -45,8 +41,6 @@ KINDS = ("main", "retry", "fallback", "randomwalk", "shadow")
 part of the chain, so it is never submitted. It lets a variant run weekly
 before it is chosen."""
 STAGES = ("primary", "retry", "baseline")
-RENEWAL_MODELS = ("renewal", "renewalsp", "renewalbvd")
-"""The models the renewal hub id (`seabbs-renewal`) may submit."""
 
 
 @dataclass(frozen=True)
@@ -88,9 +82,6 @@ class Policy:
     checks: dict[str, Any]
     ppc: dict[str, Any] = field(default_factory=dict)
     timing: Timing = field(default_factory=Timing)
-    renewal_only: bool = True
-    """The renewal hub id submits its chosen model (and its one refit) or
-    nothing: never a fallback model, never a baseline."""
 
     def chain(self) -> list[Candidate]:
         """Candidates in submission order, with retries cut to budget."""
@@ -123,23 +114,12 @@ class Policy:
         that must never be submitted as anything else. The others are
         still built as shadows, as references for the checks, and are
         never selected.
-
-        With `only` and a renewal model (`RENEWAL_MODELS`), the chain is
-        the candidates that fit that model: `main` and its refit for
-        `renewal` (config `main` is the pooled model), or the one
-        candidate with `model` set to it. Everything else stays as a
-        shadow, so the round is skipped when the chosen model cannot be
-        submitted.
         """
         baselines = [c for c in self.chain() if c.kind == "randomwalk"]
         names = [c.model or c.id for c in baselines]
         if model not in names:
-            if only and model in RENEWAL_MODELS:
-                return self._renewal_only(model)
             if only:
-                raise ValueError(
-                    f"{model!r} is not a baseline or renewal model"
-                )
+                raise ValueError(f"{model!r} is not a baseline model")
             return self
         start = names.index(model)
         kept = {c.id for c in baselines[start : start + 1 if only else None]}
@@ -148,19 +128,6 @@ class Policy:
             for c in self.candidates
             if c.kind != "retry"
         ]
-        return replace(self, candidates=cands)
-
-    def _renewal_only(self, model: str) -> Policy:
-        """The chain of the candidates that fit `model` alone."""
-        cands = []
-        for c in self.candidates:
-            fits = c.kind != "randomwalk" and (c.model or "renewal") == model
-            if not fits:
-                cands.append(replace(c, kind="shadow"))
-            elif c.kind == "shadow":
-                cands.append(replace(c, kind="fallback"))
-            else:
-                cands.append(c)
         return replace(self, candidates=cands)
 
     def get(self, cid: str) -> Candidate:
@@ -204,7 +171,6 @@ def load_policy(path: Path | str) -> Policy:
         checks=raw.get("checks", {}),
         ppc=raw.get("ppc", {}),
         timing=Timing(**{k: int(v) for k, v in raw.get("timing", {}).items()}),
-        renewal_only=bool(pol.get("renewal_only", True)),
     )
 
 

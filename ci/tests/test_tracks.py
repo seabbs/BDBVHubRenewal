@@ -29,12 +29,11 @@ def test_repository_config_names_both_hub_models() -> None:
     base = tracks["rwnowcast"]
     assert base.model_id == "seabbs-rwnowcast"
     assert base.model == "randomwalknowcast"
-    # Both are opted in for the 2026-11-07 round. seabbs-renewal runs
-    # only with a renewal model chosen. DRY_RUN still applies.
+    # Sam opted seabbs-rwnowcast in for the 2026-11-07 round (2026-10-28);
+    # seabbs-renewal waits for its models. DRY_RUN still applies.
     assert base.submit
     assert base.runs
-    assert tracks["renewal"].submit
-    assert not tracks["renewal"].runs
+    assert not tracks["renewal"].submit
 
 
 def test_opted_in_baseline_runs_without_a_model_choice(tmp_path: Path) -> None:
@@ -57,31 +56,6 @@ def test_renewal_needs_a_model_choice(tmp_path: Path) -> None:
     )
     assert renewal.runs
     assert renewal.model == "renewal"
-
-
-@pytest.mark.parametrize(
-    "chosen", ["randomwalknowcast", "randomwalk", "nonsense"]
-)
-def test_renewal_does_not_run_for_a_baseline_choice(
-    tmp_path: Path, chosen: str
-) -> None:
-    # A baseline is submitted only under its own id, never as
-    # seabbs-renewal.
-    cfg = write(tmp_path / "hub.toml", renewal=True, baseline=True)
-    tracks = {t.name: t for t in load_tracks(cfg, chosen=chosen)}
-    assert not tracks["renewal"].runs
-    assert "not a renewal model" in tracks["renewal"].reason
-    assert tracks["rwnowcast"].runs
-
-
-@pytest.mark.parametrize("chosen", ["renewal", "renewalsp", "renewalbvd"])
-def test_renewal_runs_for_each_renewal_variant(
-    tmp_path: Path, chosen: str
-) -> None:
-    cfg = write(tmp_path / "hub.toml", renewal=True, baseline=True)
-    tracks = {t.name: t for t in load_tracks(cfg, chosen=chosen)}
-    assert tracks["renewal"].runs
-    assert tracks["rwnowcast"].runs
 
 
 def test_cli_sets_one_output_per_track(

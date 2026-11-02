@@ -38,6 +38,7 @@ export FORECAST_DATE=${FORECAST_DATE:-${NOW%%T*}}
 #   | extra environment (optional) | text the PR body must hold (optional)
 SCENARIOS=(
   "main|main=pass|main||All checks passed."
+  "chosenrandomwalk|main=pass|randomwalk|FAKE_CHOSEN_MODEL=randomwalk|Shadow candidates"
   "bvdrelease|main=pass|main||used BVDOutbreakSize release \`results-3180\` (data to 2026-10-23, joint R-hat 1.041, limit 1.1)."
   "coherence|main=pass|main|FAKE_COHERENCE_GAP=2026-10-24:2|Handled: national (CD) differs from the sum of the provinces"
   "warn|main=warn|main"
@@ -48,26 +49,18 @@ SCENARIOS=(
   # A wildly high forecast is ruled out by the plausibility check: the
   # main model is refitted, and if that is wild too the chain moves on.
   "implausible|main=implausible|retry-1||main model was ruled out (plausible: "
-  # seabbs-renewal submits only its chosen model: when main and its one
-  # refit are ruled out, the round is skipped. The single-patch model,
-  # randomwalknowcast and randomwalk are never submitted in its place.
-  "wild|main=implausible,retry-1=implausible,renewalsp=pass|skip"
+  "wild|main=implausible,retry-1=implausible|renewalsp||Fallback model used (single-patch model"
   "national|main=badnational|main||Handled: national (CD) rebuilt as the sum of the provinces"
   "latestream|main=latestream|main||Handled: delays: no delay data for this vintage"
   "loose|main=loose,retry-1=pass|retry-1||Handled: main model refitted once (max R-hat is 1.2"
   "loosekept|main=loose,retry-1=fail|main||Handled: main model kept after one refit did not help"
   "retry|main=fail,retry-1=pass|retry-1||Main model refitted once: main model was ruled out"
-  # Another renewal variant chosen: only its own candidate is submitted.
-  "renewalspchosen|renewalsp=pass|renewalsp|FAKE_CHOSEN_MODEL=renewalsp"
-  "renewalspfailed|renewalsp=fail,main=pass|skip|FAKE_CHOSEN_MODEL=renewalsp"
-  "nofallback|main=fail,retry-1=fail,renewalsp=pass|skip"
+  "fallback|main=fail,retry-1=fail|renewalsp||Fallback model used (single-patch model"
   # Tuesday 21:00 UTC, two hours before the close: no time to refit, so
-  # a fit that passes is submitted with the shorter timeout, and a failed
-  # main model skips the round.
-  "late|main=pass|main|NOW=2026-11-03T21:00:00+00:00"
-  "latefail|main=fail,retry-1=pass,renewalsp=pass|skip|NOW=2026-11-03T21:00:00+00:00"
-  "nonowcast|main=fail,retry-1=fail,renewalsp=fail,randomwalknowcast=pass|skip"
-  "norandomwalk|main=fail,retry-1=crash,renewalsp=fail,randomwalknowcast=negative,randomwalk=pass|skip"
+  # a failed main model goes straight to the single-patch fallback.
+  "late|main=fail,retry-1=pass|renewalsp|NOW=2026-11-03T21:00:00+00:00|Fallback model used ("
+  "randomwalknowcast|main=fail,retry-1=fail,renewalsp=fail|randomwalknowcast||Fallback model used (random walk on a nowcast)"
+  "randomwalk|main=fail,retry-1=crash,renewalsp=fail,randomwalknowcast=negative|randomwalk"
   "skip|main=fail,retry-1=fail,renewalsp=fail,randomwalknowcast=negative,randomwalk=negative|skip"
 )
 
@@ -182,8 +175,6 @@ EOF
   fi
   if [ "$expect" = "skip" ]; then
     [ "$status" = 3 ] || { echo "FAIL: skip should exit 3, got $status"; return 1; }
-    grep -q "no other model is submitted in its place" "$WORK/gate/provenance.md" \
-      || { echo "FAIL: $name skip does not rule out a fallback"; return 1; }
     echo "ok: round skipped (exit 3); reason in $WORK/gate/provenance.md"
     return 0
   fi
@@ -401,40 +392,6 @@ baseline_track() {
   echo "=== baseline ===" && echo "ok: baseline submits randomwalknowcast with zones; a failed model or no zones skips the round, never a fallback"
 }
 
-renewal_track() {
-  # The renewal hub id never submits a baseline: with a baseline as the
-  # latest model choice, the renewal track does not run at all. With a
-  # renewal model chosen it runs, and the policy cuts the chain to it.
-  local choice out cfg
-  export WORK="$ROOT/renewal-track"
-  rm -rf "$WORK" && mkdir -p "$WORK"
-  cfg="$WORK/hub.toml"
-  sed 's/^submit = false/submit = true/' "$CI_DIR/../config/hub.toml" > "$cfg"
-  for choice in randomwalknowcast randomwalk renewal renewalsp renewalbvd; do
-    out="$WORK/out-$choice"
-    GITHUB_OUTPUT="$out" GITHUB_STEP_SUMMARY="$WORK/summary.md" \
-      sci python -m submission_ci.tracks --hub-config "$cfg" \
-      --chosen "$choice" > "$WORK/log-$choice" 2>&1 || return 1
-    case "$choice" in
-      renewal*) want=true ;;
-      *) want=false ;;
-    esac
-    grep -q "^renewal=$want" "$out" \
-      || { echo "FAIL: renewal track for choice $choice, wanted $want"; return 1; }
-    [ "$want" = true ] || continue
-    sci python - "$CI_DIR/policy.toml" "$choice" << 'EOF' || return 1
-import sys
-from submission_ci.policy import load_policy
-pol = load_policy(sys.argv[1]).for_model(sys.argv[2], only=True)
-ids = [c.id for c in pol.chain()]
-want = {"renewal": ["main", "retry-1"], "renewalsp": ["renewalsp"],
-        "renewalbvd": ["bvd"]}[sys.argv[2]]
-assert ids == want, ids
-EOF
-  done
-  echo "=== renewal-track ===" && echo "ok: seabbs-renewal does not run for a baseline choice, and its chain is the chosen model alone (with its refit)"
-}
-
 no_new_data() {
   # A round that already ran on today's data must not run again.
   export WORK="$ROOT/no-new-data"
@@ -465,7 +422,6 @@ for s in "${SCENARIOS[@]}"; do
   run_scenario "$name" "$sc" "$expect" "$extra" "$want" || failed=1
 done
 no_new_data || failed=1
-renewal_track || failed=1
 resubmission || failed=1
 ledger || failed=1
 baseline_track || failed=1

@@ -44,7 +44,6 @@ from .common import (
     write_text,
 )
 from .policy import (
-    RENEWAL_MODELS,
     Candidate,
     Policy,
     add_deadline_args,
@@ -175,8 +174,6 @@ def triage(
     (`minutes_left`, None for no limit). Without that time the chain
     moves on to the single-patch fallback, fitted beside the main model.
     """
-    if not any(c.kind == "retry" for c in policy.chain()):
-        return False
     main = policy.chain()[0]
     a = assess(main, root / main.id)
     need = a.retry or blocks_status(a.status)
@@ -453,11 +450,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
     only = bool(getattr(args, "only_model", False))
-    policy = load_policy(args.policy)
-    if policy.renewal_only and args.model in RENEWAL_MODELS:
-        # The renewal hub id: the chosen model or nothing.
-        only = True
-    policy = policy.for_model(args.model, only=only)
+    policy = load_policy(args.policy).for_model(args.model, only=only)
     if args.cmd == "triage":
         need = triage(policy, args.candidates, deadline_minutes(args))
         set_outputs({"need_retry": need})
