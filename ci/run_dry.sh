@@ -30,6 +30,9 @@ export HEARTBEAT_SECONDS=1
 export CPUS=4
 # Monday 2 November 2026, 10:00 UTC: inside the window for 2026-11-07.
 NOW=${NOW:-2026-11-02T10:00:00+00:00}
+# The run date the fixture CLI writes as `forecast_date`, as today (UTC)
+# would be on a real run.
+export FORECAST_DATE=${FORECAST_DATE:-${NOW%%T*}}
 
 # name | FAKE_SCENARIOS | expected selection ("skip" for a skipped round)
 #   | extra environment (optional) | text the PR body must hold (optional)
@@ -227,6 +230,53 @@ EOF
   echo "ok: selected $got; body $WORK/gate/pr-body.md"
 }
 
+resubmission() {
+  # The hub already has this model's file for the round, from an earlier
+  # forecast date. The new file must keep its rows unchanged and add one
+  # new forecast_date. A local copy of the hub stands in for raw GitHub.
+  local src prev rel out
+  src=$(find "$ROOT/main/gate/selected/submission" -name '*.csv' | head -n 1)
+  [ -n "$src" ] || { echo "FAIL: resubmission needs the main scenario"; return 1; }
+  rel="model-output/$(basename "$(dirname "$src")")/$(basename "$src")"
+  prev="$ROOT/prev-hub"
+  mkdir -p "$prev/$(dirname "$rel")"
+  hub_copy() {
+    python3 - "$src" "$prev/$rel" "$1" << 'EOF'
+import csv, sys
+with open(sys.argv[1], newline="") as fh:
+    reader = csv.DictReader(fh)
+    rows = list(reader)
+    cols = reader.fieldnames
+for r in rows:
+    r["forecast_date"] = sys.argv[3]
+with open(sys.argv[2], "w", newline="") as fh:
+    w = csv.DictWriter(fh, fieldnames=cols)
+    w.writeheader()
+    w.writerows(rows)
+EOF
+  }
+  hub_copy 2026-10-31
+  run_scenario resubmit "main=pass" main "PREVIOUS_CHECKOUT=$prev" || return 1
+  out=$(find "$ROOT/resubmit/gate/selected/submission" -name '*.csv' | head -n 1)
+  python3 - "$prev/$rel" "$out" << 'EOF' || { echo "FAIL: resubmission file"; return 1; }
+import csv, sys
+def read(p):
+    with open(p, newline="") as fh:
+        return list(csv.DictReader(fh))
+old, new = read(sys.argv[1]), read(sys.argv[2])
+assert new[: len(old)] == old, "existing rows changed"
+added = {r["forecast_date"] for r in new[len(old):]}
+assert added == {"2026-11-02"}, added
+assert len(new) > len(old)
+EOF
+  echo "ok: resubmission keeps the hub's rows and adds forecast_date 2026-11-02"
+  # The hub's file already has today's forecast date, so nothing can be
+  # appended, every candidate fails and the round is skipped.
+  hub_copy 2026-11-02
+  run_scenario resubmit-same-date "main=pass" skip "PREVIOUS_CHECKOUT=$prev" \
+    || return 1
+}
+
 ledger() {
   # record.sh against a throwaway repo with a local `origin`: the round
   # from the `retry` scenario is written to the ledger branch, twice.
@@ -356,6 +406,7 @@ for s in "${SCENARIOS[@]}"; do
   run_scenario "$name" "$sc" "$expect" "$extra" "$want" || failed=1
 done
 no_new_data || failed=1
+resubmission || failed=1
 ledger || failed=1
 baseline_track || failed=1
 [ $failed = 0 ] && echo "All dry-run scenarios passed." || echo "Some scenarios FAILED."

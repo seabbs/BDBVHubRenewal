@@ -272,6 +272,7 @@ def test_schema_failures(tmp_path: Path) -> None:
             "output_type",
             "output_type_id",
             "value",
+            "forecast_date",
             "extra",
         ],
     )
@@ -391,7 +392,9 @@ def with_zones(rows: list[list[Any]], skip: str = "", off: float = 0.0) -> None:
         if loc == "CD" or loc == skip:
             continue
         for k in (1, 2):
-            rows.append([*r[:3], f"{loc}-0{k}", r[4], r[5], r[6] / 2 + off])
+            rows.append(
+                [*r[:3], f"{loc}-0{k}", r[4], r[5], r[6] / 2 + off, *r[7:]]
+            )
 
 
 def test_zones_required_and_present(tmp_path: Path) -> None:
@@ -475,3 +478,63 @@ def test_plausible_thresholds_are_settings(tmp_path: Path) -> None:
         observed=read_observed(HUB / "time-series.csv"), settings=loose,
     )}  # fmt: skip
     assert checks["plausible"].status == "pass"
+
+
+def _with_forecast_date(
+    rows: list[list[object]], value: str
+) -> list[list[object]]:
+    return [[*r[:7], value] for r in rows]
+
+
+@pytest.mark.parametrize(
+    ("value", "message"),
+    [
+        ("20/11/2026", "not YYYY-MM-DD"),
+        ("", "not YYYY-MM-DD"),
+        ("2026-11-08", "after"),
+    ],
+)
+def test_forecast_date_must_be_valid_and_not_after_reference(
+    tmp_path: Path, value: str, message: str
+) -> None:
+    path = write_samples(
+        tmp_path / "x" / f"{REF}-m.csv",
+        _with_forecast_date(make_samples(), value),
+    )
+    assert statuses(path)["schema"] == "fail"
+    schema = next(
+        c
+        for c in run_checks(
+            path,
+            reference_date=REF,
+            observed=OBS,
+            expected_locations=LOCS,
+            tasks=TASKS,
+        )
+        if c.name == "schema"
+    )
+    assert message in str(schema)
+
+
+def test_forecast_date_column_is_required(tmp_path: Path) -> None:
+    path = write_samples(
+        tmp_path / "x" / f"{REF}-m.csv",
+        [r[:7] for r in make_samples()],
+        header=[
+            "reference_date",
+            "target",
+            "target_end_date",
+            "location",
+            "output_type",
+            "output_type_id",
+            "value",
+        ],
+    )
+    assert statuses(path)["schema"] == "fail"
+
+
+def test_a_new_forecast_has_one_forecast_date(tmp_path: Path) -> None:
+    rows = make_samples()
+    rows[0][7] = "2026-11-01"
+    path = write_samples(tmp_path / "x" / f"{REF}-m.csv", rows)
+    assert statuses(path)["schema"] == "fail"

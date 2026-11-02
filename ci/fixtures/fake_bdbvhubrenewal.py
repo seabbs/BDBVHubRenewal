@@ -283,6 +283,11 @@ def cmd_nowcast(args: argparse.Namespace) -> int:
             if loc != "CD"
             for k in (1, 2)
         ]
+    # The day the PR is opened (the run date, UTC), as the real CLI does.
+    fdate = (
+        os.environ.get("FORECAST_DATE")
+        or dt.datetime.now(dt.UTC).date().isoformat()
+    )
     mid = f"seabbs-{args.model}"
     path = Path(args.out) / "model-output" / mid / f"{ref}-{mid}.csv"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -291,6 +296,7 @@ def cmd_nowcast(args: argparse.Namespace) -> int:
         w.writerow(
             [
                 "reference_date",
+                "forecast_date",
                 "target",
                 "target_end_date",
                 "location",
@@ -300,7 +306,9 @@ def cmd_nowcast(args: argparse.Namespace) -> int:
             ]
         )
         for loc, s, week, v in rows:
-            w.writerow([ref.isoformat(), TARGET, week, loc, "sample", s, v])
+            w.writerow(
+                [ref.isoformat(), fdate, TARGET, week, loc, "sample", s, v]
+            )
     sidecar = {
         "schema_version": 1,
         "national": "CD",

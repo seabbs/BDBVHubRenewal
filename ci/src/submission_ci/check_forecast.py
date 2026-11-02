@@ -63,6 +63,7 @@ from .common import (
     write_json,
     write_text,
 )
+from .forecast_date import parse_date
 from .hubdata import (
     SUBMISSION_COLUMNS,
     TARGET,
@@ -148,6 +149,21 @@ def _result(name: str, found: list[tuple[str, str]], ok: str) -> Check:
     return Check(name, status, summary, shown[:MAX_DETAILS] + extra)
 
 
+def _forecast_date_problems(s: Samples, ref: str) -> list[tuple[str, str]]:
+    """A new file has one valid `forecast_date`, on or before the round's."""
+    if "forecast_date" not in s.columns:
+        return []  # the missing column is reported with the others
+    dates = sorted(s.forecast_dates)
+    bad = [d for d in dates if parse_date(d) is None]
+    if bad:
+        return [("fail", f"forecast_date is not YYYY-MM-DD: {bad[:3]}")]
+    if len(dates) != 1:
+        return [("fail", f"a new forecast has one forecast_date, not {dates}")]
+    if dates[0] > ref:
+        return [("fail", f"forecast_date {dates[0]} is after {ref}")]
+    return []
+
+
 def check_schema(
     s: Samples,
     ref: str,
@@ -169,6 +185,7 @@ def check_schema(
         found.append(
             ("fail", f"reference dates {sorted(s.reference_dates)}, not {ref}")
         )
+    found.extend(_forecast_date_problems(s, ref))
     if file_name is not None and not file_name.startswith(f"{ref}-"):
         found.append(("fail", f"file name {file_name} does not start {ref}-"))
     if s.duplicates:
