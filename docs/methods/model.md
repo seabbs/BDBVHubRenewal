@@ -145,7 +145,7 @@ The national trajectory is the sum of the provinces plus an unassigned component
 ## Health zones
 
 Zone samples sum to their province's samples, sample by sample and week by week, and the national value stays the sum of the provinces.
-The random walk baselines run at zone level and are then summed to their province samples.
+The random walk baselines run at zone level, and the province samples are then apportioned over the zones.
 Every other model's province forecast is split across the zones.
 
 ### Random walk baselines

@@ -666,6 +666,7 @@ def validate_submission(
     metadata_dir: Path | str | None = None,
     metadata_dirs: Sequence[Path | str] = (),
     previous: pd.DataFrame | None = None,
+    text: pd.DataFrame | None = None,
 ) -> list[str]:
     """Check a submission table against the round's rules.
 
@@ -704,6 +705,10 @@ def validate_submission(
         If given, `<model_id>.yml` (or `.yaml`) must exist in one of them.
     previous : pandas.DataFrame, optional
         The file now on the hub's main branch, read as text.
+    text : pandas.DataFrame, optional
+        The same table read as text, whose cells the `forecast_date`
+        checks compare with `previous` as written. Defaults to the
+        table's own values as strings.
 
     Returns
     -------
@@ -724,7 +729,7 @@ def validate_submission(
         if submitted_at is None
         else submitted_at.astimezone(HUB_TIMEZONE).date()
     )
-    text = df.astype(str)
+    text = df.astype(str) if text is None else text.astype(str)
     prev_text = None if previous is None else previous.astype(str)
     problems, new_idx = forecast_date_problems(
         _records(text),
@@ -870,9 +875,12 @@ def validate_submission_file(
     """
     p = Path(path)
     try:
-        table = pd.read_csv(p, dtype={"output_type_id": str})
+        text = pd.read_csv(p, dtype=str, keep_default_na=False)
     except (OSError, ValueError, pd.errors.ParserError) as err:
         return [f"Could not read {p}: {err}"]
+    table = text.copy()
+    if "value" in table.columns:
+        table["value"] = pd.to_numeric(table["value"], errors="coerce")
     if "output_type_id" in table.columns:
         ids = table["output_type_id"].astype(str)
         if not ids.str.fullmatch(r"-?\d+").all():
@@ -887,6 +895,7 @@ def validate_submission_file(
         check_round=check_round,
         submitted_at=submitted_at,
         previous=previous,
+        text=text,
     )
 
 

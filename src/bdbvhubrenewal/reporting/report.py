@@ -309,9 +309,9 @@ def _release_section(
         )
         + "\n## Weekly cross-check\n\n"
         "Crosses are the daily ladder run on hub weeks from the "
-        "2026-10-17 and 2026-10-24 releases.\n"
+        "latest two releases with cut-offs a week apart.\n"
         "Bars are the `randomwalknowcast` 50% and 90% intervals at "
-        "2026-10-24.\n\n"
+        "the later of the two.\n\n"
         "![Weekly cross-check points over the randomwalknowcast bands.]"
         "(figures/weekly-crosscheck.svg#only-light)\n"
         "![Weekly cross-check points over the randomwalknowcast bands.]"
@@ -1772,7 +1772,19 @@ def _comparison_summary(
     _save_metric_figures(
         fig,
         "comparison-summary",
-        partial(plot_score_summary, labelled, baseline=base),
+        partial(
+            plot_score_summary,
+            labelled,
+            baseline=base,
+            models=list(
+                dict.fromkeys(
+                    comparison_label(m, src, hub_ids)
+                    for m, src in zip(
+                        scores["model"], scores["source"], strict=True
+                    )
+                )
+            ),
+        ),
     )
     alt = f"WIS relative to {baseline} and 90% coverage, by horizon."
     _write(

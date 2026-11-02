@@ -57,8 +57,9 @@ from bdbvhubrenewal.baselinenowcast import (
     exact_plan,
     pair_factors,
     pair_sums,
+    window_pairs,
 )
-from bdbvhubrenewal.data.snapshots import SnapshotArrays, weekly_sums
+from bdbvhubrenewal.data.snapshots import SnapshotArrays, week_sum, weekly_sums
 from bdbvhubrenewal.forecasters.base import ModelUnavailableError
 from bdbvhubrenewal.forecasters.pooling import (
     MIN_ERRORS,
@@ -155,15 +156,8 @@ class DelayFit:
     source: np.ndarray
 
 
-def _week_sum(x: np.ndarray, snap: SnapshotArrays) -> np.ndarray:
-    """Sum `[L, T]` day values to hub weeks, `[L, W]`."""
-    onehot = np.zeros((snap.week.size, snap.n_weeks))
-    onehot[np.arange(snap.week.size), snap.week] = 1.0
-    return x @ onehot
-
-
 def weeks_back(snap: SnapshotArrays, r: int, max_delay: int) -> int:
-    r"""Return the number of weeks back from the as-of week with young days.
+    r"""Return the number of weeks back from the cut-off week with young days.
 
     Parameters
     ----------
@@ -181,13 +175,13 @@ def weeks_back(snap: SnapshotArrays, r: int, max_delay: int) -> int:
         $D$.
     """
     youngest = max(int(snap.cut[r]) - max_delay + 1, 0)
-    return snap.asof_week(r) - int(snap.week[youngest]) + 1
+    return snap.cut_week(r) - int(snap.week[youngest]) + 1
 
 
 def levels(snap: SnapshotArrays, r: int, settings: Settings) -> np.ndarray:
     """Return mean weekly counts over the level weeks at release `r`."""
     weekly = weekly_sums(snap, r)
-    wa = snap.asof_week(r)
+    wa = snap.cut_week(r)
     lo, hi = settings.level_weeks
     cols = [wa - k for k in range(lo, hi + 1)]
     vals = [weekly[:, c] if c >= 0 else np.zeros(weekly.shape[0]) for c in cols]
@@ -196,12 +190,8 @@ def levels(snap: SnapshotArrays, r: int, settings: Settings) -> np.ndarray:
 
 def _pairs_at(snap: SnapshotArrays, r: int, max_delay: int) -> np.ndarray:
     """Return the in-window pairs among releases up to `r`."""
-    out = [
-        (q, q + 1)
-        for q in range(r)
-        if 0 < snap.cut[q + 1] - snap.cut[q] <= max_delay
-    ]
-    return np.array(out, dtype=np.int64).reshape(-1, 2)
+    keep, _ = window_pairs(snap.cut[: r + 1], max_delay)
+    return np.stack([keep, keep + 1], axis=1).astype(np.int64)
 
 
 class ChainPlan(NamedTuple):
@@ -258,7 +248,8 @@ def fit_delay(
     f = np.array(pair_factors(num, den, every))
     # With every pair in every step, the denominator is the same for all.
     own = np.array(den).sum(axis=1) >= settings.min_level
-    for n in np.argsort(snap.depth, kind="stable"):
+    # Nodes are sorted by code length, so a parent precedes its children.
+    for n in range(f.shape[0]):
         p = snap.parent[n]
         if p >= 0:
             f[n] = np.where(own[n][None, :], f[n], f[p])
@@ -347,7 +338,7 @@ def retro_plan(
     return plan, mismatch
 
 
-def _grow(fit: DelayFit, plan: ChainPlan) -> np.ndarray:
+def grow(fit: DelayFit, plan: ChainPlan) -> np.ndarray:
     """Return growth `[L, T]`."""
     return np.array(
         chain_growth(fit.factors, (plan.step, plan.age, plan.valid))
@@ -402,13 +393,13 @@ def retro_errors(snap: SnapshotArrays, o: int, settings: Settings) -> Errors:
         if mismatch > settings.max_mismatch:
             continue
         counts = snap.counts[:, r, :]
-        g = _grow(fit, plan)
-        wa, k_r = snap.asof_week(r), weeks_back(snap, r, settings.max_delay)
+        g = grow(fit, plan)
+        wa, k_r = snap.cut_week(r), weeks_back(snap, r, settings.max_delay)
         cols = wa - np.arange(k_n)
         take = (cols >= 0) & (np.arange(k_n) < k_r)
         safe = np.clip(cols, 0, None)
         obs = weekly_sums(snap, r)[:, safe]
-        pred = _week_sum(counts * g, snap)[:, safe]
+        pred = week_sum(snap, counts * g)[:, safe]
         tgt = weekly_sums(snap, o, upto=int(snap.cut[r]))[:, safe]
         valid = take[None, :] & ((obs > 0) | (pred > 0))
         num, den, n = rho_sums(
@@ -450,6 +441,15 @@ class Origin:
     sigma_source : numpy.ndarray
         Index of the estimate behind each spread, `[L]`, as for
         `source_index`.
+    errors : Errors or None
+        Retrospective errors, or None where they were not asked for.
+    rho : numpy.ndarray or None
+        Skellam spread $\rho_k$ of each place by weeks back from the
+        cut-off week, `[L, K]`.
+    rho_n : numpy.ndarray or None
+        Errors behind each spread, `[L, K]`.
+    rho_source : numpy.ndarray or None
+        Index of the estimate behind each spread, `[L, K]`.
     """
 
     snap: SnapshotArrays
@@ -514,14 +514,14 @@ def build_origin(
         )
     plan = final_plan(snap, o, fit, settings)
     counts = snap.counts[:, o, :]
-    g = _grow(fit, plan)
+    g = grow(fit, plan)
     reported = weekly_sums(snap, o)
-    point = _week_sum(counts * g, snap)
+    point = week_sum(snap, counts * g)
     # A chain with a zero factor revises the day to nothing, so it counts
     # as fully reported.
     share = 1.0 / np.where(g > 0, g, 1.0)
     inv = np.where(snap.observed[o][None, :], share, 0.0)
-    complete = _week_sum(inv, snap) / 7.0
+    complete = week_sum(snap, inv) / 7.0
     good = complete >= settings.completeness
     start = np.where(
         good.any(axis=1), snap.n_weeks - 1 - np.argmax(good[:, ::-1], axis=1), 0

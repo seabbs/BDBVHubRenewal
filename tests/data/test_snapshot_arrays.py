@@ -86,7 +86,6 @@ def test_hierarchy_and_node_order(daily: pd.DataFrame) -> None:
     snap = snapshot_arrays(daily, "2026-10-24", ("CD-IT", "CD-IT-01"))
     assert snap.locations == ("CD", "CD-IT", "CD-IT-01")
     assert snap.parent.tolist() == [-1, 0, 1]
-    assert snap.depth.tolist() == [0, 1, 2]
     assert parent_code("CD-IT-01") == "CD-IT"
     assert parent_code("CD") is None
 

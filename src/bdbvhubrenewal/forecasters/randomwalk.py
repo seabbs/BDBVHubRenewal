@@ -2,7 +2,7 @@
 r"""The random walk baselines.
 
 Both models run on the hub's daily release snapshots (`chain`), at
-province level, from one random walk (`walk.random_walk`).
+province and zone level, from one random walk (`walk.random_walk`).
 
 `RandomWalk` (`randomwalk`) starts from the reported count of the latest
 week judged complete, $\pi \ge 0.95$, where
@@ -94,7 +94,7 @@ def _walks(
     return np.asarray(lam, dtype=np.float64), np.asarray(y, dtype=np.float64)
 
 
-def _frame(
+def frame(
     task: ForecastTask, weeks: list[str], values: np.ndarray, rows: list[int]
 ) -> pd.DataFrame:
     """Return sample rows from `values` of shape `[S, L, H]`."""
@@ -143,7 +143,8 @@ class RandomWalk:
     fit_diagnostics: list[dict[str, object]] = field(default_factory=list)
     needs_snapshots: ClassVar[bool] = True
 
-    def _origin(self, task: ForecastTask, errors: bool) -> Origin:
+    def origin_at(self, task: ForecastTask, errors: bool) -> Origin:
+        """Return the fit at the task's vintage, with errors if asked."""
         daily = task.daily_history
         if daily is None or daily.empty:
             raise MissingSnapshots(
@@ -153,7 +154,8 @@ class RandomWalk:
         snap = snapshot_arrays(daily, task.vintage, task.locations)
         return build_origin(snap, self.settings, errors)
 
-    def _rows(self, origin: Origin, task: ForecastTask) -> list[int]:
+    def rows(self, origin: Origin, task: ForecastTask) -> list[int]:
+        """Return the origin's row of each of the task's places."""
         pos = {c: i for i, c in enumerate(origin.snap.locations)}
         return [pos[c] for c in task.locations]
 
@@ -161,9 +163,7 @@ class RandomWalk:
         self, origin: Origin, task: ForecastTask, start: np.ndarray
     ) -> None:
         rows: list[dict[str, object]] = []
-        for loc, i in zip(
-            task.locations, self._rows(origin, task), strict=True
-        ):
+        for loc, i in zip(task.locations, self.rows(origin, task), strict=True):
             rho_n = None if origin.rho_n is None else int(origin.rho_n[i, 0])
             rho_src = (
                 None
@@ -202,7 +202,7 @@ class RandomWalk:
             If the task has no snapshots, or no pair of releases within
             the delay window.
         """
-        origin = self._origin(task, errors=False)
+        origin = self.origin_at(task, errors=False)
         weeks = _timeline(origin, task)
         n_data, n_all, n = origin.snap.n_weeks, len(weeks), task.n_samples
         n_loc = len(origin.snap.locations)
@@ -221,7 +221,7 @@ class RandomWalk:
                     floor = origin.reported[loc, u] if u < n_data else 0.0
                     values[:, loc, u] = np.maximum(draw, floor)
         self._diagnostics(origin, task, start)
-        return _frame(task, weeks, values, self._rows(origin, task))
+        return frame(task, weeks, values, self.rows(origin, task))
 
 
 @dataclass
@@ -256,14 +256,14 @@ class RandomWalkNowcast(RandomWalk):
             If the task has no snapshots, or no pair of releases within
             the delay window.
         """
-        origin = self._origin(task, errors=True)
+        origin = self.origin_at(task, errors=True)
         values, weeks = self.trajectories(origin, task, origin.point)
         self._diagnostics(
             origin,
             task,
             np.full(len(origin.snap.locations), origin.start_nowcast),
         )
-        return _frame(task, weeks, values, self._rows(origin, task))
+        return frame(task, weeks, values, self.rows(origin, task))
 
     def trajectories(
         self, origin: Origin, task: ForecastTask, point: np.ndarray
@@ -293,11 +293,10 @@ class RandomWalkNowcast(RandomWalk):
         n_data, n_all, n = snap.n_weeks, len(weeks), task.n_samples
         n_loc = len(snap.locations)
         k_n = origin.rho.shape[1]
-        back = n_data - 1 - np.arange(n_data)
+        back = snap.cut_week(origin.o) - np.arange(n_data)
+        use = (back >= 0) & (back < k_n)
         rho = np.where(
-            back[None, :] < k_n,
-            origin.rho[:, np.minimum(back, k_n - 1)],
-            0.0,
+            use[None, :], origin.rho[:, np.clip(back, 0, k_n - 1)], 0.0
         )
         key_x, key_walk, key_part = jax.random.split(_key(task), 3)
         nowcast = np.asarray(

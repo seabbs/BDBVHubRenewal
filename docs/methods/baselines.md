@@ -16,7 +16,7 @@ Day $t \le c_r$ is observed at $r$ and is $a = c_r - t$ days old.
 Cells after the cut-off are not observed.
 Hub weeks run Sunday to Saturday and are labelled by the Saturday.
 $Y_{p,r}(w)$ is the sum of $N_{p,r}$ over the days of week $w$.
-$w$ is $k$ weeks back when it is $k$ weeks before the week holding the release date.
+$w$ is $k$ weeks back when it is $k$ weeks before the week holding the release cut-off.
 
 A pair of consecutive releases $(r, r + 1)$ has step $s = c_{r+1} - c_r$ days.
 $D = 42$ days is baselinenowcast's `max_delay`, and a pair is in window when $s \le D$.
@@ -87,7 +87,6 @@ e = y_p(w) - \hat y_p(w),
 $$
 
 summed over the kept releases.
-$\rho_{p,k} = 0$ with fewer than 2 errors at $k$, and so is Poisson-Skellam.
 Weeks without a $\rho_{p,k}$ have $\rho = 0$.
 
 ## Own or pooled estimates

@@ -448,6 +448,22 @@ def test_appended_file_is_valid_and_written(hub_round, tmp_path: Path) -> None: 
     assert errors == []
 
 
+def test_file_validation_keeps_retained_value_text(
+    hub_round, tmp_path: Path
+) -> None:  # type: ignore[no-untyped-def]
+    previous = _hub_copy()
+    previous.loc[0, "value"] = "427.0"
+    new = _table(_samples(), "2026-10-31", forecast_date="2026-10-26")
+    path = write_submission(new, tmp_path, "seabbs-randomwalk", previous)
+    errors = validate_submission_file(
+        path,
+        hub_round,
+        previous=previous,
+        submitted_at=dt.datetime(2026, 10, 26, 12, tzinfo=dt.UTC),
+    )
+    assert errors == []
+
+
 def test_validation_of_an_append_rejects_a_changed_row(hub_round) -> None:  # type: ignore[no-untyped-def]
     previous = _hub_copy()
     new = _table(_samples(), "2026-10-31", forecast_date="2026-10-22")

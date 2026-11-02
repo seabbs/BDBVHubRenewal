@@ -28,12 +28,11 @@ The model figure is built from `docs/diagrams/model_dag.tex` by `scripts/build_d
 
 The baselines are in [`forecasters.randomwalk`][bdbvhubrenewal.forecasters.randomwalk] and [`forecasters.chain`][bdbvhubrenewal.forecasters.chain], on a JAX port of baselinenowcast 0.2.2 in [`bdbvhubrenewal.baselinenowcast`][bdbvhubrenewal.baselinenowcast].
 The port is checked against fixtures from the R package, and has one named extension, the skipping of unobserved cells in the chain ladder of release snapshots.
-Importing the port switches on float64 for the whole process.
 
 | Part | Where |
 |---|---|
 | Snapshots as arrays `[location, release, day]` | `data.snapshots` |
-| Pair sums, factors and chained growth | `baselinenowcast.snapshots`, `jit` and `vmap` over locations |
+| Pair sums, factors and chained growth | `baselinenowcast.snapshots`, `jit` over locations |
 | Own or pooled source of each estimate | `forecasters.pooling` |
 | Skellam spread by moments | `forecasters.skellam` |
 | One random walk for both models | `forecasters.walk` |
