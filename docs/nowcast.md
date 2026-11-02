@@ -10,6 +10,7 @@ The current nowcast and forecast from the latest vintage.
 Each model is shown from its latest origin.
 Lines are the data at the origin (dashed) and as later reported (solid), with 100 sample trajectories, 50% and 90% bands and the median for each model.
 The dotted line is the reference date and weeks still being reported are shaded.
+Both models run on the daily release snapshots, and the page stops if a model has none or two models give the same samples.
 
 ## Nowcast
 

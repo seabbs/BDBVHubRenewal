@@ -9,4 +9,6 @@ Figures and docs tables.
 
 ::: bdbvhubrenewal.reporting.plots
 
+::: bdbvhubrenewal.reporting.nowcast_plots
+
 ::: bdbvhubrenewal.reporting.report

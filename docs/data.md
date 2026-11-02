@@ -105,26 +105,6 @@ A few delays are negative (down to −31 days) and a few very long (up to 193 da
   </figcaption>
 </figure>
 
-## Reconstructed vintages
-
-[Reconstructed vintages](methods/data.md#reconstructed-vintages) are checked against the real vintages of the same date.
-
-<figure class="doc-figure" markdown="span">
-  ![Real and reconstructed national counts by onset week for each real vintage.](figures/reconstruction.svg#only-light)
-  ![Real and reconstructed national counts by onset week for each real vintage.](figures/reconstruction-dark.svg#only-dark)
-  <figcaption markdown="1">
-    Real (solid) and reconstructed (dashed) national counts.
-    Older weeks are higher in the reconstruction, because later data added onsets that the real vintage did not yet have.
-  </figcaption>
-</figure>
-
-??? note "Tables"
-
-    --8<-- "reconstruction.md"
-
-Over the last four weeks of each real vintage, differences are mostly within 10%.
-The last, partial week is understated.
-
 ## Health zones
 
 Health zone onsets are in `daily_zones.csv.gz`, and their weekly totals in `health_zones.csv.gz`.

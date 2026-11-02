@@ -3,7 +3,7 @@
 The public API of `bdbvhubrenewal`, generated from the numpy-style docstrings, one page per subpackage.
 { .page-subtitle }
 
-- [Data](data.md): the hub data, dates, reconstructed and simulated vintages, delays and BVDOutbreakSize releases.
+- [Data](data.md): the hub data, dates, simulated vintages, delays and BVDOutbreakSize releases.
 - [Model](model.md): the PyRenew renewal model.
 - [Forecasters](forecasters.md): the forecaster interface, the registry, random walk and the renewal variants.
 - [Evaluation](evaluation.md): scoring, the backtest, held-out evaluation, posterior predictive checks and the hub comparison.

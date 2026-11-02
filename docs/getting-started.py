@@ -28,19 +28,27 @@
 # ## Load the data
 #
 # `load_target` reads the weekly confirmed cases by onset week of every hub vintage.
-# `load_delays` reads the reporting delays the hub published.
+# `load_daily` reads the daily onsets of every hub release, which the baselines need.
+# `load_delays` reads the reporting delays the hub published, which the renewal models use.
 
 # %%
 import dataclasses
 from pathlib import Path
 
-from bdbvhubrenewal.data import delays_for_vintage, load_delays, load_target
+from bdbvhubrenewal.data import (
+    delays_for_vintage,
+    load_daily,
+    load_delays,
+    load_target,
+)
 from bdbvhubrenewal.evaluation import backtest as bt
+from bdbvhubrenewal.evaluation.nowcast import complete_weeks
 from bdbvhubrenewal.evaluation.scoring import summarise_scores
 from bdbvhubrenewal.forecasters import NATIONAL, get_model
 from bdbvhubrenewal.reporting.plots import plot_location_grid, save_light_dark
 
 target = load_target("data")
+daily = load_daily("data")
 delays = load_delays("data")
 real = target.loc[target["kind"] == "real"]
 sorted(real["vintage"].unique())
@@ -48,14 +56,14 @@ sorted(real["vintage"].unique())
 # %% [markdown]
 # ## Build the forecast task
 #
-# The origin is the vintage 2026-10-09.
-# Later vintages hold the same weeks as they were reported afterwards.
-# The task holds what a model sees at the origin and the weeks to forecast.
-# Its reference date is the next Saturday, 2026-10-17, and the forecast weeks run from six weeks before it to three weeks after it.
+# The origin is the vintage 2026-10-17.
+# The 2026-10-24 vintage holds the same weeks as they were reported afterwards.
+# The task holds what a model sees at the origin, including the daily onsets of every release up to it, and the weeks to forecast.
+# Its reference date is the next Saturday, 2026-10-24, and the forecast weeks run from six weeks before it to three weeks after it.
 # `min_horizon=-6` asks for the six weeks before the reference date as well, as the submission does.
 
 # %%
-ORIGIN = "2026-10-09"
+ORIGIN = "2026-10-17"
 LATER = "2026-10-24"
 
 config = dataclasses.replace(
@@ -63,7 +71,9 @@ config = dataclasses.replace(
 )
 origin_delays, _ = delays_for_vintage(delays, ORIGIN)
 origin = real.loc[real["vintage"] == ORIGIN]
-task = bt.make_tasks(origin, origin_delays, config, history=real)[0]
+task = bt.make_tasks(
+    origin, origin_delays, config, history=real, daily=daily
+)[0]
 print(task.vintage, task.reference_date, len(task.locations), "provinces")
 print(task.target_end_dates[0], "to", task.target_end_dates[-1])
 
@@ -72,7 +82,7 @@ print(task.target_end_dates[0], "to", task.target_end_dates[-1])
 #
 # `get_model` returns a model from the registry by name.
 # `randomwalk` carries the last complete week forward with random walk noise on the log scale.
-# `randomwalknowcast` first nowcasts the recent weeks for reporting delays, then does the same.
+# `randomwalknowcast` first nowcasts every day with data for reporting delays, sums the days to hub weeks, then does the same.
 # `randomwalknowcast` is the baseline we submit to the hub as `seabbs-rwnowcast`.
 # `run_forecasts` runs each model, checks the samples, adds the national total and returns 100 trajectories per location.
 
@@ -123,34 +133,35 @@ save("forecast")
 panels
 
 # %% [markdown]
-# ![Nowcasts from random walk and randomwalknowcast at 2026-10-09 against the data as later reported.](../assets/getting-started/nowcast.svg#only-light)
-# ![Nowcasts from random walk and randomwalknowcast at 2026-10-09 against the data as later reported.](../assets/getting-started/nowcast-dark.svg#only-dark)
+# ![Nowcasts from random walk and randomwalknowcast at 2026-10-17 against the data as later reported.](../assets/getting-started/nowcast.svg#only-light)
+# ![Nowcasts from random walk and randomwalknowcast at 2026-10-17 against the data as later reported.](../assets/getting-started/nowcast-dark.svg#only-dark)
 
 # %% [markdown]
 # ## Plot the forecast
 #
 # The second figure adds the reference week and the three forecast weeks.
 #
-# ![Nowcasts and forecasts from random walk and randomwalknowcast at 2026-10-09 against the data as later reported.](../assets/getting-started/forecast.svg#only-light)
-# ![Nowcasts and forecasts from random walk and randomwalknowcast at 2026-10-09 against the data as later reported.](../assets/getting-started/forecast-dark.svg#only-dark)
+# ![Nowcasts and forecasts from random walk and randomwalknowcast at 2026-10-17 against the data as later reported.](../assets/getting-started/forecast.svg#only-light)
+# ![Nowcasts and forecasts from random walk and randomwalknowcast at 2026-10-17 against the data as later reported.](../assets/getting-started/forecast-dark.svg#only-dark)
 
 # %% [markdown]
 # ## Score on complete weeks
 #
 # The truth is the 2026-10-24 vintage.
-# A week counts as complete once it ended at least `complete_after_weeks` weeks before it, so most of its cases are reported.
+# A week counts as complete when the 2026-10-24 release reports at least 95% of its final count under the delay estimate (`complete_weeks`).
 # `score_tasks` scores every forecast sample set with the weighted interval score (WIS) and interval coverage.
 # The table averages over those weeks, for the national total and over the provinces.
 # Relative WIS is `randomwalknowcast` divided by `randomwalk`, so values below 1 favour the nowcast.
 
 # %%
 scores = bt.score_tasks(
-    forecasts,
-    bt.truth_from_vintage(target, LATER),
-    LATER,
-    config.complete_after_weeks,
+    forecasts, bt.truth_from_vintage(target, LATER), LATER
 )
-complete = scores.loc[scores["complete"]]
+done = complete_weeks(daily, LATER, task.locations)
+complete = scores.drop(columns="complete").merge(
+    done.loc[done["complete"], ["location", "target_end_date"]],
+    on=["location", "target_end_date"],
+)
 complete = complete.assign(
     level=complete["location"].map(
         lambda x: "National" if x == NATIONAL else "Province"

@@ -31,31 +31,26 @@ Province populations are the Institut National de la Statistique's 2019 figures 
 
 ## Vintages
 
-Each hub release is a vintage, labelled by its `as_of` date and of kind `real`, `reconstructed` or `simulated`.
+Each hub release is a vintage, labelled by its `as_of` date and of kind `real` or `simulated`.
 Recent weeks are revised upwards in later vintages, so each forecast is made from one vintage and scored against a later one.
+
+## Release snapshots
+
+`auxiliary-data/daily-confirmed-case.csv` holds, for each release, the daily onsets known at that release.
+The count of a day is its known plus imputed onsets, and the counts of a week sum to the hub's weekly target.
+A release has an `as_of` date and a data cut-off, its latest onset day over all places.
+For the four real releases the `as_of` dates are 2026-08-18, 2026-10-09, 2026-10-17 and 2026-10-24, and the cut-offs are 2026-08-18, 2026-10-07, 2026-10-16 and 2026-10-24.
+A release observes the days up to its cut-off, and a day in range with no row counts 0.
+The age of day $t$ at release $r$ is the cut-off minus $t$, the onset clock.
+Counts of a day are compared across releases on this clock.
+A release with a later release gives one pair of releases.
+Its step is the difference of the two cut-offs in days, 50, 9 and 8 days for the real pairs.
 
 ## Delay and missingness data
 
 The hub imputes an onset for each case reported without one by subtracting a delay drawn from the pooled published delays ([hub issue 61](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/61)).
 So the share of cases without an onset is measured at every vintage.
 The 2026-08-18 vintage has no delay file.
-The backtest thins the 2026-10-09 rows to those likely published by then under the prior publication lag (3,846 of 4,184).
-
-## Reconstructed vintages
-
-Reconstructed vintages rebuild what the hub would have shown on a past release day $A$ from the latest real vintage.
-A case reaches a release a lag $\ell$ after its report, with $\ell$ lognormal (log mean 0.56, log SD 1.34, median 1.7 days, 73% within 3 days).
-The lognormal is fitted by minimising the Pearson chi-squared distance between the reconstructed and real national weekly totals of the earlier real releases.
-With $F_\ell$ its cdf on whole days:
-
-- **Known onsets.** Each delay row is a case with onset week $W$ and delay $d$.
-  Its onset day $W - u$ is uniform in the week, so it is in the release with probability $\frac{1}{7}\sum_{u=0}^{6} F_\ell(A - W + u - d)$.
-- **Imputed onsets.** Their report dates are not public.
-  The hub imputed each onset by subtracting a delay drawn from the pooled delays.
-  So an imputed case of week $W$ is in the release with probability $\frac{1}{7}\sum_{u} G(A - W + u)$, with $G$ the cdf of the pooled delay plus $\ell$.
-- **Delay data.** Rows whose report (taking the onset mid-week) is published by $A$.
-- **Daily release.** Expected counts are split by onset day $W - u$ and rounded so each week's daily counts sum to the weekly target.
-  Onset days after the data cut-off, the release day minus the lag the real releases of that weekday had (0 to 2 days), are absent.
 
 ## Simulated vintages
 

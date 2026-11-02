@@ -6,6 +6,8 @@ Forecasts made at past vintages, scored against the latest data.
 Scores on complete weeks are the primary scores ([Evaluation](methods/evaluation.md#scoring)).
 Weeks still being reported are shaded, with hollow points.
 
+--8<-- "release-backtest.md"
+
 --8<-- "backtest-findings.md"
 
 --8<-- "backtest-summary.md"

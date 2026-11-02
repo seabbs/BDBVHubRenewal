@@ -1,6 +1,6 @@
 # Evaluation
 
-Scoring, the backtest, held-out evaluation, posterior predictive checks and the hub comparison.
+Scoring, the backtest, the real-release evaluation, held-out evaluation, posterior predictive checks and the hub comparison.
 { .page-subtitle }
 
 ::: bdbvhubrenewal.evaluation
@@ -10,6 +10,10 @@ Scoring, the backtest, held-out evaluation, posterior predictive checks and the 
 ::: bdbvhubrenewal.evaluation.scoring
 
 ::: bdbvhubrenewal.evaluation.backtest
+
+::: bdbvhubrenewal.evaluation.nowcast
+
+::: bdbvhubrenewal.evaluation.crosscheck
 
 ::: bdbvhubrenewal.evaluation.heldout
 

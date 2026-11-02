@@ -9,7 +9,7 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 | Command | What it does |
 |---|---|
 | `data` | Download the hub data and write the tidy tables to `data/`. |
-| `backtest` | Run the development backtest and the recovery check. With `--models`, only those models run and the others' rows in `results/` are kept. |
+| `backtest` | Run the development backtest, the evaluation on the real releases (`results/nowcast-*.csv`) and the recovery check. With `--models`, only those models run and the others' rows in `results/` are kept. |
 | `backtest --evaluate-holdout` | Score every held-out vintage under the model chosen at the time, with the other models alongside. |
 | `backtest --no-fit` | Run only the models with no fit. Fitted models' rows in `results/` are kept, and their held-out forecasts are scored again. The docs build uses this, so it never fits a model. |
 | `backtest --lopo` | Leave one province out: forecast each province with its counts masked, for the variants that take a mask. |
@@ -33,7 +33,8 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 ## Evaluation
 
 ```bash
-task backtest           # development backtest and recovery check
+task backtest           # development backtest, real releases and recovery check
+task crosscheck         # weekly cross-check of the daily nowcast
 task backtest-lopo      # leave one province out
 task backtest-heldout   # score the held-out vintages
 task docs               # build the site into _site/

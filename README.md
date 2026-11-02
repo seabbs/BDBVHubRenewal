@@ -22,7 +22,8 @@ Forecasts are made nationally, by province and by health zone.
 The package, `bdbvhubrenewal`, fits the models, scores them and writes the hub submission files.
 The package has two sets of models.
 The renewal models are `renewal`, `renewalsp` and `renewalbvd`.
-The baseline models are `randomwalk` and `randomwalknowcast`, which is random walk on a nowcast with a baselinenowcast-style adjustment for reporting delays ([Johnson et al. 2025](https://doi.org/10.12688/wellcomeopenres.25027.2), Wellcome Open Research).
+The baseline models are `randomwalk` and `randomwalknowcast`.
+`randomwalknowcast` is a random walk on a baselinenowcast nowcast of the daily release snapshots ([Johnson et al. 2025](https://doi.org/10.12688/wellcomeopenres.25027.2), Wellcome Open Research).
 See the [documentation](https://samabbott.co.uk/BDBVHubRenewal/) for the methods and results.
 
 ## Installation
