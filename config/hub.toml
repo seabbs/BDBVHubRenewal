@@ -1,6 +1,6 @@
-# The hub model id every submission uses: <team_abbr>-<model_abbr>.
+# The hub model id of the renewal track: <team_abbr>-<model_abbr>.
 # It does not follow the internal model keys (renewal, renewalsp,
-# renewalbvd): whichever model the chain submits, the hub sees this id.
+# renewalbvd): it carries the one model named in `model`.
 # Read by `bdbvhubrenewal.hub.submission_model_abbr`.
 
 [submission]
@@ -9,7 +9,6 @@ model_abbr = "renewal"
 # model. Without it, the latest entry of results/model-choice.yml.
 model = "renewal"
 # Opt in: `true` submits this model each round (DRY_RUN still applies).
-# It also needs a model choice in results/model-choice.yml.
 submit = false
 
 # Further hub models, each submitted under its own id every round, apart
