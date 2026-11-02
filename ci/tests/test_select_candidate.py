@@ -452,14 +452,37 @@ def test_only_needs_a_baseline_or_renewal_model() -> None:
         POLICY.for_model("nonsense", only=True)
 
 
-@pytest.mark.parametrize("model", ["renewal", "renewalsp", "renewalbvd"])
-def test_renewal_track_chain_is_the_chosen_model_and_its_refit(
-    model: str,
+@pytest.mark.parametrize(
+    ("model", "ids"),
+    [
+        ("renewal", ["main", "retry-1"]),
+        ("renewalsp", ["renewalsp"]),
+        ("renewalbvd", ["bvd"]),
+    ],
+)
+def test_renewal_track_chain_is_the_candidates_of_the_chosen_model(
+    model: str, ids: list[str]
 ) -> None:
+    # `main` runs config `main`, the pooled model, whatever `--model`
+    # says, so another variant is submitted from its own candidate.
     pol = POLICY.for_model(model, only=True)
-    assert [c.id for c in pol.chain()] == ["main", "retry-1"]
-    for cid in ("renewalsp", "randomwalknowcast", "randomwalk"):
-        assert pol.get(cid).kind == "shadow"
+    assert [c.id for c in pol.chain()] == ids
+    for c in pol.candidates:
+        assert (c.id in ids) == (c.kind != "shadow")
+    assert pol.get("randomwalknowcast").kind == "shadow"
+
+
+def test_renewal_track_with_no_refit_never_asks_for_one(
+    tmp_path: Path,
+) -> None:
+    pol = POLICY.for_model("renewalsp", only=True)
+    c = tmp_path / "c"
+    chain(c, renewalsp=("loose", "pass"))
+    assert not triage(pol, c)
+    prov = run_select(
+        pol, c, tmp_path / "g", always("pass"), retried=False, only=True
+    )
+    assert prov["selected"] == "renewalsp"
 
 
 def test_renewal_track_never_falls_back(tmp_path: Path) -> None:

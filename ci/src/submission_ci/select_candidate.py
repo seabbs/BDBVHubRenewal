@@ -175,6 +175,8 @@ def triage(
     (`minutes_left`, None for no limit). Without that time the chain
     moves on to the single-patch fallback, fitted beside the main model.
     """
+    if not any(c.kind == "retry" for c in policy.chain()):
+        return False
     main = policy.chain()[0]
     a = assess(main, root / main.id)
     need = a.retry or blocks_status(a.status)

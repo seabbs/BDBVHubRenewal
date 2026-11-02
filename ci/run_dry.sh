@@ -57,6 +57,9 @@ SCENARIOS=(
   "loose|main=loose,retry-1=pass|retry-1||Handled: main model refitted once (max R-hat is 1.2"
   "loosekept|main=loose,retry-1=fail|main||Handled: main model kept after one refit did not help"
   "retry|main=fail,retry-1=pass|retry-1||Main model refitted once: main model was ruled out"
+  # Another renewal variant chosen: only its own candidate is submitted.
+  "renewalspchosen|renewalsp=pass|renewalsp|FAKE_CHOSEN_MODEL=renewalsp"
+  "renewalspfailed|renewalsp=fail,main=pass|skip|FAKE_CHOSEN_MODEL=renewalsp"
   "nofallback|main=fail,retry-1=fail,renewalsp=pass|skip"
   # Tuesday 21:00 UTC, two hours before the close: no time to refit, so
   # a fit that passes is submitted with the shorter timeout, and a failed
@@ -424,10 +427,12 @@ import sys
 from submission_ci.policy import load_policy
 pol = load_policy(sys.argv[1]).for_model(sys.argv[2], only=True)
 ids = [c.id for c in pol.chain()]
-assert ids == ["main", "retry-1"], ids
+want = {"renewal": ["main", "retry-1"], "renewalsp": ["renewalsp"],
+        "renewalbvd": ["bvd"]}[sys.argv[2]]
+assert ids == want, ids
 EOF
   done
-  echo "=== renewal-track ===" && echo "ok: seabbs-renewal does not run for a baseline choice, and its chain is the chosen model and its refit"
+  echo "=== renewal-track ===" && echo "ok: seabbs-renewal does not run for a baseline choice, and its chain is the chosen model alone (with its refit)"
 }
 
 no_new_data() {

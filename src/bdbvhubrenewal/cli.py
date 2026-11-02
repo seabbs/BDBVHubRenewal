@@ -94,6 +94,33 @@ from bdbvhubrenewal.submission.hub import (
 
 __all__ = ["build_parser", "host_devices", "main"]
 
+_RENEWAL_OBSERVATION = (
+    "Confirmed onsets follow a time-varying ascertainment. The "
+    "onset-to-report delay is nonparametric, a discrete hazard that is "
+    "smooth over delay and shifts weekly with onset day, and known onsets "
+    "are right truncated by it and by the report-to-publication lag. The "
+    "share of reports with no onset date is modelled by province. The "
+    "hub's imputed onsets are modelled as the hub makes them, from cases "
+    "missing an onset date by report day, back-sampled with the hub's "
+    "delay. Weekly known and imputed counts are negative binomial and the "
+    "delays of known onsets are Dirichlet-multinomial. Fitted by NUTS "
+    "(NumPyro) to each data vintage. Each sample is one joint posterior "
+    "trajectory. The national value is the sum of province samples plus "
+    "the national cases in no province. Health zones are not fitted: "
+    "each province sample is split across its zones with shares drawn "
+    "once per sample from a Dirichlet built on recent and longer-run "
+    "published zone counts, keeping each zone's published count, so zone "
+    "samples sum to the province sample. See "
+    "https://samabbott.co.uk/BDBVHubRenewal/methods/model/."
+)
+_RENEWAL_INPUTS = (
+    "Hub target data (weekly confirmed cases by onset week, observed plus "
+    "imputed, for the country, provinces and health zones), the hub's "
+    "published onset-to-report delays by vintage, province populations and "
+    "population-weighted province centres. The generation interval is "
+    "BVDOutbreakSize's."
+)
+
 MODEL_METADATA = {
     "randomwalk": {
         "model_name": "RandomWalk baseline",
@@ -122,8 +149,13 @@ MODEL_METADATA = {
             "provinces and health zones, and the hub's weekly target data."
         ),
     },
-    # Draft for the PyRenew model. Not submitted until Sam has reviewed
-    # the held-out results.
+    # The PyRenew models, submitted as seabbs-renewal. Which variant is
+    # submitted is the latest entry of results/model-choice.yml, and the
+    # gate writes the metadata of that model (`metadata --model <variant>`).
+    # VARIANT CHOICE: after the model choice is recorded, regenerate the
+    # committed hub/model-metadata/seabbs-renewal.yml with
+    #   bdbvhubrenewal metadata --model <renewal|renewalsp|renewalbvd>
+    # (tests/submission/test_fitting.py fails if it matches none of them).
     "renewal": {
         "model_name": "Province renewal model (PyRenew)",
         "methods": (
@@ -136,20 +168,49 @@ MODEL_METADATA = {
             "weekly random walk on log Rt plus partially pooled province "
             "deviations, importation between provinces through a gravity "
             "kernel, and susceptible depletion. Provinces with no cases get "
-            "importations that can seed local spread. Confirmed onsets follow "
-            "a time-varying ascertainment. Known onsets are right truncated "
-            "by a time-varying onset-to-report delay, and the hub's imputed "
-            "onsets are modelled as the hub makes them, from cases missing "
-            "an onset date by report day, back-sampled with the hub's delay. "
-            "Both streams are negative binomial. Fitted by NUTS (NumPyro) to "
-            "each data vintage. Each sample is one joint posterior "
-            "trajectory and the national value is the sum of province "
-            "samples. See https://samabbott.co.uk/BDBVHubRenewal/methods/model/."
+            "importations that can seed local spread. " + _RENEWAL_OBSERVATION
+        ),
+        "data_inputs": _RENEWAL_INPUTS,
+    },
+    "renewalsp": {
+        "model_name": "Single-patch renewal model (PyRenew)",
+        "methods": (
+            "Independent renewal model in PyRenew for each province with "
+            "cases, with no pooling or coupling, fitted to known and "
+            "imputed onsets with modelled delays; national is the sum."
+        ),
+        "methods_long": (
+            "A renewal process fitted to each province alone, with a weekly "
+            "random walk on log Rt and no pooling, importation between "
+            "provinces or depletion. Provinces with at least 20 cases in "
+            "their last 6 data weeks are fitted this way. A province with "
+            "fewer cases has a constant Poisson rate, with a Gamma prior "
+            "updated by its weekly counts, drawn once per trajectory. "
+            + _RENEWAL_OBSERVATION
+        ),
+        "data_inputs": _RENEWAL_INPUTS,
+    },
+    "renewalbvd": {
+        "model_name": "Province renewal model with BVD Rt (PyRenew)",
+        "methods": (
+            "Province renewal model in PyRenew with pooled Rt, gravity "
+            "importation and depletion, with a tempered likelihood on "
+            "BVDOutbreakSize Rt, fitted to known and imputed onsets."
+        ),
+        "methods_long": (
+            "A renewal process for each province with cases, with a national "
+            "weekly random walk on log Rt plus partially pooled province "
+            "deviations, importation between provinces through a gravity "
+            "kernel, and susceptible depletion. Provinces with no cases get "
+            "importations that can seed local spread. The model's national "
+            "and patch Rt in the week of the newest BVDOutbreakSize release "
+            "available at the cut-off are tied to that release's Rt "
+            "estimates, as a likelihood term tempered by 0.5. "
+            + _RENEWAL_OBSERVATION
         ),
         "data_inputs": (
-            "Hub target data (weekly confirmed cases by onset week, observed "
-            "plus imputed), the hub's published onset-to-report delays, "
-            "province populations and population-weighted province centres."
+            _RENEWAL_INPUTS + " The newest BVDOutbreakSize release published "
+            "by the forecast's cut-off, for its Rt estimates."
         ),
     },
     # A hub model of its own (seabbs-rwnowcast), submitted every round.
