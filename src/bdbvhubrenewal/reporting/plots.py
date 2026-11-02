@@ -37,6 +37,7 @@ __all__ = [
     "THEMES",
     "comparison_label",
     "model_colour",
+    "plot_delay_check",
     "plot_delay_distribution",
     "plot_delays_over_time",
     "plot_forecasts",
@@ -636,6 +637,29 @@ def _draw_forecast(
     ax.plot(q.index, q[0.5], color=colour, lw=1.5, label=label)
 
 
+def _fit_y(ax: Axes, samples: pd.DataFrame, shown: Sequence[float]) -> None:
+    """Set the y-axis from the data and the 95% band, not single paths.
+
+    A few sample paths of a walk can reach far above the band, so the
+    axis ends at the band's top, with room for at least one case.
+    """
+    top = max([*shown, float(_bands(samples)[0.95].max()), 1.0])
+    ax.set_ylim(0, top * 1.08)
+
+
+def _legend_below(fig: Figure, ax: Axes) -> None:
+    """Put the legend of `ax` under the figure, clear of the data."""
+    handles, labels = ax.get_legend_handles_labels()
+    fig.legend(
+        handles,
+        labels,
+        loc="outside lower center",
+        ncol=len(labels),
+        fontsize=7,
+        frameon=False,
+    )
+
+
 def plot_location_grid(
     forecasts: pd.DataFrame,
     target: pd.DataFrame,
@@ -694,14 +718,16 @@ def plot_location_grid(
     ink = THEMES[mode]
     cut = _incomplete_after(truth_v, complete_after_weeks)
     fig, axes = _grid(len(locations), ncol, width=3.6, height=2.5)
+    shown_data = [(truth_v, "-", f"Data {truth_v}")]
+    if vintage != truth_v:
+        shown_data.append((vintage, "--", "Data at the origin"))
     for ax, loc in zip(axes, locations, strict=True):
-        for v, style, lab in (
-            (truth_v, "-", f"Data {truth_v}"),
-            (vintage, "--", "Data at the origin"),
-        ):
+        top: list[float] = []
+        for v, style, lab in shown_data:
             rows = real.loc[(real["vintage"] == v) & (real["location"] == loc)]
             x = pd.to_datetime(rows["target_end_date"])
             sel = (x >= start) & (x <= end)
+            top.append(float(rows["total"][sel].max()) if sel.any() else 0.0)
             if style == "-":
                 _plot_data(
                     ax,
@@ -726,13 +752,96 @@ def plot_location_grid(
             s = fc.loc[(fc["location"] == loc) & (fc["model"] == m)]
             if not s.empty:
                 _draw_forecast(ax, s, model_colour(m, models, mode), m)
+                _fit_y(ax, s, top)
         ax.axvline(mdates.date2num(ref), color=ink["muted"], lw=0.8, ls=":")
         _shade_incomplete(ax, cut, mode)
         ax.set_title(f"{names.get(loc, loc)} ({loc})")
         ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=4))
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
     axes[0].set_ylabel("Cases by onset week")
-    axes[0].legend(fontsize=7)
+    _legend_below(fig, axes[0])
+    return fig
+
+
+def plot_delay_check(
+    daily: pd.DataFrame,
+    vintage: str,
+    locations: Sequence[str],
+    mode: str = "light",
+) -> Figure:
+    r"""Plot the delay and spread each place uses at one release.
+
+    Parameters
+    ----------
+    daily : pandas.DataFrame
+        Daily onsets by release, as for `make_tasks`.
+    vintage : str
+        The release, the origin of the nowcast.
+    locations : sequence of str
+        Places to show.
+    mode : str
+        `"light"` or `"dark"`.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Left, the growth $G$ from each age in days to final, chained over
+        the release gap, on a log scale. Right, the Skellam spread
+        $\rho_k$ by weeks back with the number of errors behind it.
+        A place's label says whether it uses its own estimate or its
+        parent's.
+    """
+    from bdbvhubrenewal.data.snapshots import snapshot_arrays
+    from bdbvhubrenewal.forecasters.chain import Settings, build_origin
+
+    snap = snapshot_arrays(daily, vintage, tuple(locations))
+    origin = build_origin(snap, Settings(), errors=True)
+    assert origin.rho is not None
+    assert origin.rho_n is not None
+    ink = THEMES[mode]
+    palette = MODEL_COLOURS[mode]
+    age = int(snap.cut[origin.o]) - np.arange(snap.week.size)
+    seen = (age >= 0) & (age < origin.settings.max_delay)
+    fig, (left, right) = plt.subplots(
+        1, 2, figsize=(7.2, 3.2), layout="constrained"
+    )
+    drawn: set[tuple[float, ...]] = set()
+    for i, loc in enumerate(locations):
+        j = snap.locations.index(loc)
+        src = int(origin.fit.source[j]) % len(snap.locations)
+        kind = "own" if src == j else f"from {snap.locations[src]}"
+        colour = palette[i % len(palette)]
+        order = np.argsort(age[seen])
+        left.plot(
+            age[seen][order],
+            origin.growth[j, seen][order],
+            color=colour,
+            lw=1.2,
+            label=f"{loc} ({kind})",
+        )
+        row = tuple(np.round(origin.rho[j], 6))
+        if row not in drawn:
+            drawn.add(row)
+            k = np.arange(origin.rho.shape[1])
+            right.plot(
+                k,
+                origin.rho[j],
+                "o-",
+                color=colour,
+                ms=3,
+                lw=1,
+                label=f"{loc} and places using it",
+            )
+    left.set_yscale("log")
+    left.set_xlabel("Age of the onset day (days)")
+    left.set_ylabel("Growth to final")
+    right.set_xlabel("Weeks back")
+    right.set_ylabel("Skellam spread")
+    n_err = int(origin.rho_n.max())
+    right.set_title(f"At most {n_err} errors behind a spread", fontsize=8)
+    right.legend(fontsize=7, frameon=False)
+    left.axhline(1, color=ink["muted"], lw=0.8, ls=":")
+    left.legend(fontsize=7, frameon=False)
     return fig
 
 
@@ -792,6 +901,7 @@ def plot_forecasts(
     cut = _incomplete_after(truth_v, complete_after_weeks)
     fig, axes = _grid(len(refs), 4, width=3.0, height=2.3)
     for ax, ref in zip(axes, refs, strict=True):
+        top: list[float] = []
         f_ref = fc.loc[fc["reference_date"] == ref]
         vintage = f_ref["vintage"].iloc[0]
         start = pd.Timestamp(ref) - pd.Timedelta(weeks=weeks_before)
@@ -801,12 +911,13 @@ def plot_forecasts(
             & (target["vintage"] == vintage)
             & (target["location"] == location)
         ]
-        for rows, style, lab in (
-            (truth, "-", f"Data {truth_v}"),
-            (at_time, "--", "Data at the time"),
-        ):
+        shown = [(truth, "-", f"Data {truth_v}")]
+        if vintage != truth_v:
+            shown.append((at_time, "--", "Data at the time"))
+        for rows, style, lab in shown:
             x = pd.to_datetime(rows["target_end_date"])
             sel = (x >= start) & (x <= end)
+            top.append(float(rows["total"][sel].max()) if sel.any() else 0.0)
             if style == "-":
                 _plot_data(
                     ax,
@@ -831,6 +942,7 @@ def plot_forecasts(
             s = f_ref.loc[f_ref["model"] == m]
             if not s.empty:
                 _draw_forecast(ax, s, model_colour(m, models, mode), m)
+                _fit_y(ax, s, top)
         ax.axvline(
             mdates.date2num(pd.Timestamp(ref)),
             color=ink["muted"],
@@ -838,11 +950,11 @@ def plot_forecasts(
             ls=":",
         )
         _shade_incomplete(ax, cut, mode)
-        ax.set_title(f"{ref} ({kind})")
+        ax.set_title(f"{location}, origin {vintage}")
         ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=4))
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
-    axes[0].set_ylabel(f"Cases by onset week ({location})")
-    axes[0].legend(fontsize=7)
+    axes[0].set_ylabel("Cases by onset week")
+    _legend_below(fig, axes[0])
     return fig
 
 

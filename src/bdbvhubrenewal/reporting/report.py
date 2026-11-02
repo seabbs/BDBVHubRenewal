@@ -64,6 +64,7 @@ from bdbvhubrenewal.reporting.explorer import (
 from bdbvhubrenewal.reporting.nowcast_plots import plot_release_nowcasts
 from bdbvhubrenewal.reporting.plots import (
     comparison_label,
+    plot_delay_check,
     plot_delay_distribution,
     plot_delays_over_time,
     plot_forecasts,
@@ -221,6 +222,13 @@ def make_report(
     tasks = make_tasks(rows, delays, config, history=real, daily=daily)
     forecasts_now = _nowcast_forecasts(tasks, latest, res)
     _nowcast_page(fig, gen, target, forecasts_now, names, config, latest)
+    groups = _nowcast_groups(target, sorted(set(forecasts_now["location"])))
+    save_light_dark(
+        partial(
+            plot_delay_check, daily, latest, [*groups["main"], *groups["other"]]
+        ),
+        fig / "delay-check.svg",
+    )
 
 
 _RELEASE_PLACES: Final = ("CD", "CD-IT", "CD-NK")

@@ -1,116 +1,147 @@
 # Baseline models
 
-The three random walk baselines, with the maths of each.
+The two random walk baselines, with the maths of each.
 { .page-subtitle }
 
 The data and notation are on the [Data methods page](data.md#target-and-notation).
 The renewal models are on the [Renewal models](model.md) page.
 Health-zone forecasts split the province samples of any baseline as described under [Health zones](model.md#health-zones).
 
-## Random walk
+## Daily release snapshots
 
-`randomwalk` is the baseline every other model is compared against.
-It makes no nowcast.
-With $c$ the last complete week, weeks up to $c$ are the vintage counts and later weeks a log-scale random walk from $Y_{p,v}(c)$ with Poisson noise.
+Both models use the daily onsets of each hub release.
+$N_{p,r}(t)$ is the known plus imputed onsets in province $p$ on day $t$ at release $r$, which sum over a hub week to the weekly target.
+Release $r$ has a cut-off $c_r$, the latest onset day in the release over all provinces.
+Day $t \le c_r$ is observed at $r$ and is $a = c_r - t$ days old.
+Cells after the cut-off are not observed.
+Hub weeks run Sunday to Saturday and are labelled by the Saturday.
+$Y_{p,r}(w)$ is the sum of $N_{p,r}$ over the days of week $w$.
+$w$ is $k$ weeks back when it is $k$ weeks before the week holding the release date.
+
+A pair of consecutive releases $(r, r + 1)$ has step $s = c_{r+1} - c_r$ days.
+$D = 42$ days is baselinenowcast's `max_delay`, and a pair is in window when $s \le D$.
+Only in-window pairs give delay factors.
+A pair outside the window keeps its counts in the data.
+A model raises if the vintage has no snapshots or no in-window pair.
+
+## Delay
+
+The delay follows baselinenowcast[^bnc-paper][^bnc-package] on the daily snapshots, with one extension.
+For step $s$ and age $x = 0, \dots, D - 1$,
+
+$$
+F_{p,s}(x) = \frac{\sum N_{p,r+1}(t)}{\sum N_{p,r}(t)},
+$$
+
+summed over in-window pairs of step $s$ and over days $t$ of age $x$ at $r$.
+Cells a release does not observe are skipped, not filled.
+$F_{p,s}(x)$ is not identified where the denominator is 0, and takes the factor of the parent of $p$ at that age.
+The parent of a province is the country, whose counts are the sum of its provinces.
+
+At the latest release $o$, $s_o$ is the step of its latest in-window pair.
+Day $t$ of age $a$ is chained over the actual release gap,
+
+$$
+G_p(a) = \prod_{m=0}^{M(a)-1} F_{p,s_o}(a + m s_o),
+\qquad
+G_p(a) = 1 \text{ for } a \ge D,
+$$
+
+with $M(a)$ the fewest steps with $a + M s_o \ge D$.
+There is no factor past $D$.
+$G_p(a)$ is the growth of a day's count from age $a$ to final, and $1 / G_p(a)$ is the share of it reported.
+
+## Nowcast
+
+Every observed day is nowcast, with no handover and no minimum count.
+The nowcast mean of day $t$ is $N_{p,o}(t)\, G_p(c_o - t)$, summed to hub weeks as $\mu_p(w)$.
+With $\mu_p(w) - Y_{p,o}(w)$ the change still to come, the count at the next release is Skellam,
+
+$$
+X_{p,i}(w) = \max\big\{0,\ Y_{p,o}(w) + A - B\big\},
+\qquad
+A \sim \text{Poisson}\big(\text{rem}^+ + \rho_{p,k}\, \mu_p(w)\big),
+\qquad
+B \sim \text{Poisson}\big(\text{rem}^- + \rho_{p,k}\, \mu_p(w)\big),
+$$
+
+with $\text{rem} = \mu_p(w) - Y_{p,o}(w)$, $\text{rem}^+ = \max(\text{rem}, 0)$ and $\text{rem}^- = \max(-\text{rem}, 0)$.
+Before the floor the mean is $\mu_p(w)$ and the variance is $|\text{rem}| + 2\rho_{p,k}\mu_p(w)$, so counts can be revised down.
+Sample $i$ is one draw of $X_{p,i}(w)$ per week.
+
+**Spread.**
+For each earlier release $r < o$ with an in-window pair, a nowcast $\hat y_p(w)$ is made from the data up to $r$, with the delay of $r$.
+It is chained over the gap $c_o - c_r$ only.
+Each remaining part of the gap takes the step of the in-window pair at $r$ nearest to it, ties to the latest pair, and ages are never interpolated.
+The release is kept when the steps differ from the gap by at most 1 day.
+The target is $y_p(w)$, the count of $w$ at release $o$ on days up to $c_r$.
+For weeks back $k$ with a day younger than $D$ at $r$, and where $Y_{p,r}(w) > 0$ or $\hat y_p(w) > 0$,
+
+$$
+e = y_p(w) - \hat y_p(w),
+\qquad
+\text{rem} = \hat y_p(w) - Y_{p,r}(w),
+\qquad
+\rho_{p,k} = \max\Big(0,\ \frac{\sum (e^2 - |\text{rem}|)}{\sum 2\hat y_p(w)^+}\Big),
+$$
+
+summed over the kept releases.
+$\rho_{p,k} = 0$ with fewer than 2 errors at $k$, and so is Poisson-Skellam.
+Weeks without a $\rho_{p,k}$ have $\rho = 0$.
+
+## Own or pooled estimates
+
+The delay $F_{p,s}$, the spread $\rho_{p,k}$ and the spread of the walk $\sigma_p$ use one rule and one threshold.
+$\ell_p$ is the mean of $Y_{p,r}(w)$ over weeks 3 to 6 back, in cases a week.
+A province with $\ell_p \ge 10$ uses its own estimate.
+For $\rho_{p,k}$ it also needs at least 2 errors at $k$.
+Otherwise it uses the pooled estimate of the country, which pools the provinces with $\ell \ge 10$.
+The pooled $F$ is the country's own, since its counts are the sum of the provinces.
+The pooled $\rho_{p,k}$ and $\sigma_p$ use the errors and weekly changes of those provinces together.
+If the pooled estimate has fewer than 2 errors at $k$, $\rho_{p,k} = 0$.
+
+## Walk
+
+`randomwalk` and `randomwalknowcast` run the same walk from a start week $w_0$ with start value $x_i$ in sample $i$.
 For $h \ge 1$,
 
 $$
-\tilde y_p(w) = Y_{p,v}(w), \quad w \le c,
+\log\{1 + \lambda_i(w_0 + h)\} = \max\Big(0,\ \log\{1 + x_i\} + \sum_{j=1}^{h} \epsilon_{i,j}\Big),
 \qquad
-\log\{1 + \lambda_p(c + h)\} = \max\Big(0,\ \log\{1 + Y_{p,v}(c)\} + \sum_{j=1}^{h} \epsilon_{p,j}\Big),
-\qquad
-\epsilon_{p,j} \sim \mathcal{N}(0, \sigma_p^2),
+\epsilon_{i,j} \sim \mathcal{N}(0, \sigma_p^2),
 $$
 
 $$
-\tilde y_p(c + h) \sim \text{Poisson}\big(\lambda_p(c + h)\big).
+\tilde y_i(w_0 + h) \sim \text{Poisson}\big(\lambda_i(w_0 + h)\big).
 $$
 
-The weekly steps $\epsilon_{p,j}$ are independent, so the log level is a random walk from the last complete week.
-$\sigma_p$ is the standard deviation of the 7 weekly changes in $\log(1 + Y_{p,v})$ over the last 8 complete weeks, floored at 0.1.
-A province with fewer than 10 cases a week over those weeks takes $\sigma_p$ from the weekly changes of the provinces above that, pooled.
-`randomwalknowcast` and `randomwalknowcastdaily` use the same walk and the same rule for $\sigma_p$.
+Steps are summed within a sample, so each sample is one trajectory.
+National is the sum of the provinces, sample by sample.
 
-Completeness comes from the hub's releases.
-The totals of each onset week by release form a reporting triangle.
-Each pair of releases a week apart up to $T_v$ gives, pooled over provinces, the growth $f_k$ of the totals of weeks $k$ weeks old to the next release.
-The share of a week's final total published at $k$ weeks old is $1 / \prod_{j \ge k} f_j$, for $j$ up to 12 weeks, with $f_j = 1$ where no pair gives it.
-Week $w$ is complete once that share is at least 0.95.
-Without two releases a week apart, week $w$ is complete if its Wednesday is at least $L$ days before $T_v$, with $L$ the 95th centile of the delays published with the vintage, or 10 days if none were published.
-Each sample is one joint trajectory across weeks, and the national value is the sum of the provinces.
+$\sigma_p$ is the standard deviation of the 8 weekly changes of $\log\{1 + Y_{p,o}(w)\}$ over the 9 weeks ending at the start week of `randomwalk`.
+Both models use reported counts for $\sigma_p$.
+
+## Random walk
+
+`randomwalk` makes no nowcast.
+Its start week $w_0$ is the latest week with
+
+$$
+\pi_p(w) = \frac{1}{7} \sum_{t \in w,\ t \le c_o} \frac{1}{G_p(c_o - t)} \ge 0.95,
+$$
+
+the share of the week's final count reported, under the delay above.
+$x_i = Y_{p,o}(w_0)$ for every sample.
+Weeks up to $w_0$ are the reported counts.
+Later weeks with data are walk draws, floored at the reported count.
 
 ## Random walk on a nowcast
 
-`randomwalknowcast` nowcasts recent weeks with a chain ladder on the hub's releases, as in baselinenowcast[^bnc-paper][^bnc-package], then runs the random walk of `randomwalk` from each nowcast draw.
-
-**Release triangle.**
-$Y_{p,r}(w)$ is the total, known plus imputed, of onset week $w$ in province $p$ at release $r$.
-Week $w$ is $k = \lfloor (r - w)/7 \rfloor$ weeks old at $r$, and weeks ending after $r$ are left out.
-For consecutive releases $a < b$ up to $T_v$, the weeks $k_a$ weeks old at $a$ and $k_b$ at $b$ give
-
-$$
-\log \frac{\sum_w Y_{p,b}(w)}{\sum_w Y_{p,a}(w)} = \sum_{j=k_a}^{k_b - 1} \log f_j,
-$$
-
-fitted by least squares weighted by $\sum_w Y_{p,a}(w)$.
-$f_j = 1$ for ages no pair covers, and weeks over 12 weeks old are final, so $G_k = \prod_{j=k}^{12} f_j$.
-Provinces with at least 50 cases a week over the last 8 weeks use their own $f_j$ where their releases cover $j$, and the others use $f_j$ pooled over provinces.
-With one release, `randomwalknowcast` is `randomwalk`.
-
-**Nowcast.**
-For week $w$, $k$ weeks old at $T_v$, and sample $i$,
-
-$$
-C_{p,i}(w) = \max\big\{0,\ Y_{p,v}(w) + A - B\big\},
-\qquad
-A \sim \text{Poisson}(\mu^+ + \rho_k Y_{p,v}(w)),
-\qquad
-B \sim \text{Poisson}(\mu^- + \rho_k Y_{p,v}(w)),
-$$
-
-with $\mu = Y_{p,v}(w)(G_k - 1)$ and $\mu^+$, $\mu^-$ its positive and negative parts.
-The change still to come is Skellam with mean $\mu$ and variance $|\mu| + 2 \rho_k Y_{p,v}(w)$, so totals can be revised down.
-$\rho_k$ is fitted by maximum likelihood to nowcasts made at each earlier release with factors, compared with $T_v$, pooled over provinces.
-Ages with fewer than 3 points share one $\rho$.
-
-**Forecast.**
-Each sample starts from its own nowcast of the latest week $c$, the last ending on or before $T_v$:
-
-$$
-\log\{1 + \lambda_{p,i}(c + h)\} = \max\Big(0,\ \log\{1 + C_{p,i}(c)\} + \sum_{j=1}^{h} \epsilon_{p,i,j}\Big),
-\qquad
-\epsilon_{p,i,j} \sim \mathcal{N}(0, \sigma_p^2),
-\qquad
-\tilde y_{p,i}(c + h) \sim \text{Poisson}\big(\lambda_{p,i}(c + h)\big).
-$$
-
-$\sigma_p$ is set as for `randomwalk`, from $\log\{1 + Y_{p,v}(w) G_k\}$ over the 8 weeks up to $c$.
-Counts reported by a later release $T$ are $Y_{p,v}(w) + \text{Binomial}\big(\max(D, 0),\ q\big) + \min(D, 0)$, with $D = C_{p,i}(w) - Y_{p,v}(w)$, $q = (G_k / G_{k'} - 1)/(G_k - 1)$ and $k'$ the age of $w$ at $T$.
-
-## Random walk on a daily nowcast
-
-`randomwalknowcastdaily` is `randomwalknowcast` with the nowcast made from the daily totals of each release.
-It is `randomwalk` where the vintage has no daily releases.
-
-**Daily triangle.**
-The daily totals by release form a reporting triangle with onset day as the reference and the release's data cut-off $c_r$ as the report date.
-The cut-off is the release's `cutoff` column where it has one, else its latest onset day.
-Onset day $d$ is $a = c_r - d$ days old at release $r$, and $h_a = \log G_a$ is the log growth from age $a$ to final, with $h_a = 0$ beyond 84 days.
-For consecutive releases $a < b$ up to $T_v$ and each onset day,
-
-$$
-\log \frac{Y_b(d)}{Y_a(d)} = h_{c_a - d} - h_{c_b - d},
-$$
-
-with $Y$ summed over provinces.
-The $h$ are fitted by least squares weighted by $\sqrt{Y_a(d)}$.
-Provinces with at least 50 cases a week over the last 8 weeks use growth fitted to their own totals where their releases cover the age, and the others use the pooled growth.
-
-**Nowcast and forecast.**
-The latest release's daily totals are grown by $G_a$ and summed to onset weeks.
-Where the latest week is only partly observed at the cut-off, its nowcast is scaled by 7 over the days observed.
-The change still to come is Skellam as for `randomwalknowcast`, with $\rho_k$ fitted to weekly nowcasts made from earlier releases.
-The forecast and the counts reported by a later release follow `randomwalknowcast`.
+`randomwalknowcast` starts each sample from its own nowcast $X_{p,i}$ of the latest week with all 7 days on or before $c_o$, so $x_i = X_{p,i}(w_0)$.
+Weeks up to $w_0$ are the nowcast draws.
+If the week after $w_0$ holds $c_o$ and is partial, $n$ days of it have no data.
+Its value is its nowcast draw plus Poisson$(n \lambda_i / 7)$, with $\lambda_i$ the walk rate of that week.
+Later weeks are walk draws.
 
 [^bnc-paper]: Johnson KE, Tang M, Tyszka E, Nemcova B, Wolffram D, Ergas R, Reich NG, Funk S, Mellor J, Bracher J, Abbott S (2025). Baseline nowcasting methods for handling delays in epidemiological data. Wellcome Open Research. [doi:10.12688/wellcomeopenres.25027.2](https://doi.org/10.12688/wellcomeopenres.25027.2).
 [^bnc-package]: Johnson KE, Tyszka E, Bracher J, Funk S, Abbott S (2025). baselinenowcast: Methods for baseline nowcasting right-truncated epidemiological data. <https://github.com/epinowcast/baselinenowcast/>.
