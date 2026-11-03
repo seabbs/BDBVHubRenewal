@@ -14,8 +14,7 @@ retry_budget = 1
 # (jax-review-1, vectorised chains on 2 cores of archie) at 4 chains x
 # 2000 iterations: main 130 and the retry 134 minutes of sampling. Nearly
 # every draw reaches the maximum tree depth, so cost follows iterations,
-# and the 2 x 1000 used below take about a quarter: 35 to 45 minutes (the
-# Getting started fit, 2 x 400 on 2 cores, took 18). The single-patch
+# and the 2 x 1000 used below take about a quarter: 35 to 45 minutes. The single-patch
 # fallback took 21 minutes at 2 x 1000 for all six streams. Hosted
 # runners are 1.2 to 1.5 times slower, so each main fit job takes about
 # 1 to 1.5 hours with setup (to be re-measured). The fallback fits beside
@@ -151,8 +150,8 @@ pit_min_rows = 20
 # Plausibility and consistency checks on the forecast file. Ratios are
 # symmetric: a ratio r is breached when the value is above r times or
 # below 1/r times the reference. A threshold of 0 turns a level off.
-# Only the format checks (schema, values, samples) fail; the national
-# sum is rebuilt by construction, and the plausibility checks only warn.
+# The format checks (schema, values, samples) and `plausible` fail; the
+# national sum is rebuilt by construction, and the other checks warn.
 [checks]
 samples = 100
 horizon_weeks = 3          # target end dates required after the reference date
