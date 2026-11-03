@@ -4,7 +4,7 @@
 # The development set rolls forward with the choices: development runs use
 # every vintage up to the latest choice date, and each real vintage after
 # a choice is held out and scored under the model chosen then
-# (`task backtest-heldout`). With no choice, every vintage is development.
+# (`task backtest-heldout`).
 choices:
   - date: 2026-10-28
     model: randomwalknowcast

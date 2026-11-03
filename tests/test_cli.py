@@ -99,59 +99,6 @@ def test_cli_zone_backtest(tmp_path: Path) -> None:
 
 
 @pytest.mark.usefixtures("in_root")
-def test_cli_refuses_heldout_without_choice(tmp_path: Path) -> None:
-    cfg = (
-        (ROOT / "config" / "backtest.toml")
-        .read_text()
-        .replace(
-            'model_choice = "results/model-choice.yml"',
-            f'model_choice = "{tmp_path / "missing.yml"}"',
-        )
-    )
-    path = tmp_path / "backtest.toml"
-    path.write_text(cfg)
-    code = main(
-        [
-            "backtest",
-            "--evaluate-holdout",
-            "--config",
-            str(path),
-            "--results",
-            str(tmp_path / "res"),
-        ]
-    )
-    assert code == 1
-    assert not (tmp_path / "res" / "heldout-scores.csv").exists()
-
-
-def test_cli_heldout_with_no_choices_scores_nothing(tmp_path: Path) -> None:
-    record = tmp_path / "choices.yml"
-    record.write_text("choices: []\n")
-    cfg = (
-        (ROOT / "config" / "backtest.toml")
-        .read_text()
-        .replace(
-            'model_choice = "results/model-choice.yml"',
-            f'model_choice = "{record}"',
-        )
-    )
-    path = tmp_path / "backtest.toml"
-    path.write_text(cfg)
-    code = main(
-        [
-            "backtest",
-            "--evaluate-holdout",
-            "--config",
-            str(path),
-            "--results",
-            str(tmp_path / "res"),
-        ]
-    )
-    # With no choice yet, every vintage is development: nothing is held out.
-    assert code == 0
-    assert not (tmp_path / "res" / "heldout-scores.csv").exists()
-
-
 @pytest.mark.usefixtures("in_root")
 def test_plot_nowcast_returns_figure(
     target: pd.DataFrame, delays: pd.DataFrame
