@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
-import io
 import json
-import urllib.error
 from pathlib import Path
 
 import pandas as pd
@@ -12,8 +10,6 @@ import yaml
 
 from bdbvhubrenewal.submission.hub import (
     HUB_COLUMNS,
-    append_submission,
-    fetch_hub_submission,
     load_hub_round,
     model_id,
     render_model_metadata,
@@ -384,113 +380,3 @@ def test_new_forecast_date_must_be_within_a_day_of_submission(
     stale = _table(_samples(), "2026-10-31", forecast_date="2026-10-24")
     errors = validate_submission(stale, hub_round, submitted_at=ok)
     assert any("within 1 day" in e for e in errors), errors
-
-
-def _hub_copy() -> pd.DataFrame:
-    return _table(_samples(), "2026-10-31").astype(str)
-
-
-def test_append_keeps_every_original_row_and_adds_one_date() -> None:
-    previous = _hub_copy()
-    new = _table(_samples(), "2026-10-31", forecast_date="2026-10-22")
-    both = append_submission(previous, new)
-    assert len(both) == len(previous) + len(new)
-    kept = both.iloc[: len(previous)].reset_index(drop=True)
-    assert kept.equals(previous[list(HUB_COLUMNS)])
-    assert set(both["forecast_date"]) == {FORECAST_DATE, "2026-10-22"}
-
-
-def test_append_keeps_cell_text_exactly() -> None:
-    previous = _hub_copy().assign(value="436.0")
-    new = _table(_samples(), "2026-10-31", forecast_date="2026-10-22")
-    both = append_submission(previous, new)
-    assert (both["value"].iloc[: len(previous)] == "436.0").all()
-
-
-@pytest.mark.parametrize(
-    ("date", "message"),
-    [
-        (FORECAST_DATE, "kept unchanged"),
-    ],
-)
-def test_append_needs_a_new_forecast_date(date: str, message: str) -> None:
-    new = _table(_samples(), "2026-10-31", forecast_date=date)
-    with pytest.raises(ValueError, match=message):
-        append_submission(_hub_copy(), new)
-
-
-def test_append_refuses_a_second_new_date() -> None:
-    new = _table(_samples(), "2026-10-31", forecast_date="2026-10-22")
-    new.loc[new.index[:5], "forecast_date"] = "2026-10-23"
-    with pytest.raises(ValueError, match="exactly one new"):
-        append_submission(_hub_copy(), new)
-
-
-def test_append_refuses_a_hub_copy_without_the_column() -> None:
-    old = _hub_copy().drop(columns="forecast_date")
-    new = _table(_samples(), "2026-10-31", forecast_date="2026-10-22")
-    with pytest.raises(ValueError, match="no `forecast_date`"):
-        append_submission(old, new)
-
-
-def test_appended_file_is_valid_and_written(hub_round, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
-    previous = _hub_copy()
-    new = _table(_samples(), "2026-10-31", forecast_date="2026-10-26")
-    path = write_submission(new, tmp_path, "seabbs-randomwalk", previous)
-    written = pd.read_csv(path, dtype=str, keep_default_na=False)
-    assert len(written) == len(previous) + len(new)
-    errors = validate_submission_file(
-        path,
-        hub_round,
-        previous=previous,
-        submitted_at=dt.datetime(2026, 10, 26, 12, tzinfo=dt.UTC),
-    )
-    assert errors == []
-
-
-def test_file_validation_keeps_retained_value_text(
-    hub_round, tmp_path: Path
-) -> None:  # type: ignore[no-untyped-def]
-    previous = _hub_copy()
-    previous.loc[0, "value"] = "427.0"
-    new = _table(_samples(), "2026-10-31", forecast_date="2026-10-26")
-    path = write_submission(new, tmp_path, "seabbs-randomwalk", previous)
-    errors = validate_submission_file(
-        path,
-        hub_round,
-        previous=previous,
-        submitted_at=dt.datetime(2026, 10, 26, 12, tzinfo=dt.UTC),
-    )
-    assert errors == []
-
-
-def test_validation_of_an_append_rejects_a_changed_row(hub_round) -> None:  # type: ignore[no-untyped-def]
-    previous = _hub_copy()
-    new = _table(_samples(), "2026-10-31", forecast_date="2026-10-22")
-    both = append_submission(previous, new)
-    both.loc[0, "value"] = "999"
-    errors = validate_submission(both, hub_round, previous=previous)
-    assert any("unchanged" in e for e in errors), errors
-
-
-def test_fetch_reads_the_public_raw_file_and_none_when_absent() -> None:
-    seen: list[str] = []
-    text = "reference_date,forecast_date,value\n2026-10-31,2026-10-20,1.0\n"
-
-    def opener(url: str, timeout: float = 0.0):  # noqa: ARG001  # type: ignore[no-untyped-def]
-        seen.append(url)
-        if "seabbs-missing" in url:
-            raise urllib.error.HTTPError(url, 404, "Not Found", None, None)  # type: ignore[arg-type]
-        return io.BytesIO(text.encode())
-
-    got = fetch_hub_submission("seabbs-randomwalk", "2026-10-31", opener=opener)
-    assert got is not None
-    assert got["value"].tolist() == ["1.0"]
-    assert seen == [
-        "https://raw.githubusercontent.com/InsightNet-US/BDBV-Modeling-Hub/"
-        "main/model-output/seabbs-randomwalk/2026-10-31-seabbs-randomwalk.csv"
-    ]
-    assert (
-        fetch_hub_submission("seabbs-missing", "2026-10-31", opener=opener)
-        is None
-    )

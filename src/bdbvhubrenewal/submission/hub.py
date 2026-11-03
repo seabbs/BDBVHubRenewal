@@ -7,8 +7,7 @@ and `value`.
 Every row is one week of one sample trajectory.
 `forecast_date` is the day the PR is opened.
 A resubmission in the same week keeps the file on the hub's main branch
-unchanged and appends rows with one new `forecast_date`
-(`append_submission`).
+unchanged and appends rows with one new `forecast_date`.
 The round `BDBV 2026 nowcasting and forecasting` takes exactly 100
 samples for each `(reference_date, location, target)`, and each sample
 index covers the same target weeks within a location.
@@ -21,14 +20,11 @@ The authoritative check is still `hubValidations` (`task validate-hub`).
 from __future__ import annotations
 
 import datetime as dt
-import io
 import json
 import math
 import re
 import tomllib
-import urllib.error
-import urllib.request
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
@@ -47,15 +43,12 @@ from bdbvhubrenewal.submission.validate import forecast_date_problems
 
 __all__ = [
     "HUB_COLUMNS",
-    "HUB_REPO",
     "METADATA_DEFAULTS",
     "OUTPUT_TYPE",
     "ROUND_NAME",
     "SUBMISSION_CONFIG",
     "TEAM_ABBR",
     "HubRound",
-    "append_submission",
-    "fetch_hub_submission",
     "load_hub_round",
     "model_abbr_for",
     "model_id",
@@ -83,9 +76,6 @@ HUB_COLUMNS: Final = (
     "value",
 )
 """Columns of a submission file, in the order we write them."""
-
-HUB_REPO: Final = "InsightNet-US/BDBV-Modeling-Hub"
-"""The hub's repository, read (never written) through raw GitHub."""
 
 ROUND_NAME: Final = "BDBV 2026 nowcasting and forecasting"
 """The round this repository submits to."""
@@ -486,92 +476,10 @@ def run_date(now: dt.datetime | None = None) -> dt.date:
     return moment.astimezone(dt.UTC).date()
 
 
-def append_submission(
-    previous: pd.DataFrame, table: pd.DataFrame
-) -> pd.DataFrame:
-    """Append a new forecast to the file now on the hub's main branch.
-
-    Every row of `previous` is kept as text, unchanged, and the rows of
-    `table` follow it. The hub rejects a resubmission that changes a
-    retained row, adds no new `forecast_date`, adds more than one, or
-    adds rows to an existing one.
-
-    Parameters
-    ----------
-    previous : pandas.DataFrame
-        The hub's copy, read as text (`fetch_hub_submission`).
-    table : pandas.DataFrame
-        Output of `to_hub_table`, with one `forecast_date`.
-
-    Returns
-    -------
-    pandas.DataFrame
-        All rows as text, in `HUB_COLUMNS` order.
-
-    Raises
-    ------
-    ValueError
-        If the combined file would fail the hub's `forecast_date` rules.
-    """
-    old = previous.astype(str)
-    new = table.astype(str)
-    cols = list(HUB_COLUMNS)
-    if "forecast_date" not in old.columns:
-        raise ValueError(
-            "The hub's copy has no `forecast_date` column, so it cannot "
-            "be appended to."
-        )
-    if sorted(old.columns) != sorted(cols) or sorted(new.columns) != sorted(
-        cols
-    ):
-        raise ValueError(f"Both files must have the columns {cols}.")
-    both = pd.concat([old[cols], new[cols]], ignore_index=True)
-    problems, _ = forecast_date_problems(
-        _records(both),
-        cols,
-        _records(old[cols]),
-        cols,
-    )
-    if problems:
-        raise ValueError(problems[0][1])
-    return both
-
-
-def fetch_hub_submission(
-    mid: str,
-    reference_date: dt.date | str,
-    *,
-    repo: str = HUB_REPO,
-    ref: str = "main",
-    timeout: float = 30.0,
-    opener: Callable[..., Any] = urllib.request.urlopen,
-) -> pd.DataFrame | None:
-    """Read this round's file for a model from the hub's main branch.
-
-    This is a read of a public file through raw GitHub. Nothing is sent.
-
-    Returns
-    -------
-    pandas.DataFrame or None
-        The file read as text, or None if the hub has no such file.
-    """
-    rel = submission_path(".", reference_date, mid).as_posix()
-    url = f"https://raw.githubusercontent.com/{repo}/{ref}/{rel}"
-    try:
-        with opener(url, timeout=timeout) as resp:
-            text = resp.read().decode("utf-8-sig")
-    except urllib.error.HTTPError as err:
-        if err.code == 404:
-            return None
-        raise
-    return pd.read_csv(io.StringIO(text), dtype=str, keep_default_na=False)
-
-
 def write_submission(
     table: pd.DataFrame,
     root: Path | str,
     mid: str,
-    previous: pd.DataFrame | None = None,
 ) -> Path:
     """Write a submission table to its place under `root`.
 
@@ -583,9 +491,6 @@ def write_submission(
         Root of the hub checkout or an output directory.
     mid : str
         The model id.
-    previous : pandas.DataFrame, optional
-        The file now on the hub's main branch. If given, the file written
-        is `append_submission(previous, table)`.
 
     Returns
     -------
@@ -597,8 +502,6 @@ def write_submission(
         raise ValueError("A submission must have one reference date.")
     if len(table["forecast_date"].unique()) != 1:
         raise ValueError("A submission must have one forecast date.")
-    if previous is not None:
-        table = append_submission(previous, table)
     path = submission_path(root, str(refs[0]), mid)
     path.parent.mkdir(parents=True, exist_ok=True)
     table.to_csv(path, index=False)
@@ -665,8 +568,6 @@ def validate_submission(
     dir_name: str | None = None,
     metadata_dir: Path | str | None = None,
     metadata_dirs: Sequence[Path | str] = (),
-    previous: pd.DataFrame | None = None,
-    text: pd.DataFrame | None = None,
 ) -> list[str]:
     """Check a submission table against the round's rules.
 
@@ -675,10 +576,8 @@ def validate_submission(
     the sample structure, value type and range, and the submission
     window.
     The hub's own `forecast_date` rules run first: the column is present
-    and parseable, on or before `reference_date`, and the file adds
-    exactly one new date to `previous` (the file on the hub's main
-    branch, or none for a new file).
-    The remaining checks see only the new rows, without `forecast_date`.
+    and parseable and on or before `reference_date`.
+    The remaining checks run without `forecast_date`.
 
     Parameters
     ----------
@@ -703,12 +602,6 @@ def validate_submission(
         model id in the file name.
     metadata_dir, metadata_dirs : pathlib.Path or str, optional
         If given, `<model_id>.yml` (or `.yaml`) must exist in one of them.
-    previous : pandas.DataFrame, optional
-        The file now on the hub's main branch, read as text.
-    text : pandas.DataFrame, optional
-        The same table read as text, whose cells the `forecast_date`
-        checks compare with `previous` as written. Defaults to the
-        table's own values as strings.
 
     Returns
     -------
@@ -729,18 +622,10 @@ def validate_submission(
         if submitted_at is None
         else submitted_at.astimezone(HUB_TIMEZONE).date()
     )
-    text = df.astype(str) if text is None else text.astype(str)
-    prev_text = None if previous is None else previous.astype(str)
-    problems, new_idx = forecast_date_problems(
-        _records(text),
-        list(text.columns),
-        None if prev_text is None else _records(prev_text),
-        None if prev_text is None else list(prev_text.columns),
-        today,
-    )
+    problems, _ = forecast_date_problems(_records(df), cols, today=today)
     if problems:
         return [*errors, *(message for _, message in problems)]
-    df = df.iloc[new_idx].drop(columns="forecast_date")
+    df = df.drop(columns="forecast_date")
 
     refs = df["reference_date"].unique()
     if len(refs) != 1:
@@ -845,7 +730,6 @@ def validate_submission_file(
     metadata_dirs: Sequence[Path | str] = (),
     check_round: bool = True,
     submitted_at: dt.datetime | None = None,
-    previous: pd.DataFrame | None = None,
 ) -> list[str]:
     """Check a submission file where it sits.
 
@@ -864,8 +748,6 @@ def validate_submission_file(
     check_round : bool
         As for `validate_submission`.
     submitted_at : datetime.datetime, optional
-        As for `validate_submission`.
-    previous : pandas.DataFrame, optional
         As for `validate_submission`.
 
     Returns
@@ -894,8 +776,6 @@ def validate_submission_file(
         metadata_dirs=metadata_dirs,
         check_round=check_round,
         submitted_at=submitted_at,
-        previous=previous,
-        text=text,
     )
 
 

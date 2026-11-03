@@ -79,7 +79,6 @@ from bdbvhubrenewal.submission.fitting import (
 )
 from bdbvhubrenewal.submission.hub import (
     SUBMISSION_CONFIG,
-    fetch_hub_submission,
     load_hub_round,
     model_abbr_for,
     model_id,
@@ -385,14 +384,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--forecast-date",
         default=None,
         help="Day the PR is opened, YYYY-MM-DD. Default: today (UTC).",
-    )
-    now.add_argument(
-        "--append-hub-main",
-        action="store_true",
-        help=(
-            "Resubmission: read this round's file from the hub's main "
-            "branch (read only) and append the new rows to it."
-        ),
     )
     now.add_argument(
         "--no-zones",
@@ -933,13 +924,7 @@ def _nowcast(args: argparse.Namespace) -> int:
             zones=zones,
             forecast_date=args.forecast_date,
         )
-        mid = model_id(_abbr(args))
-        previous = None
-        if args.append_hub_main:
-            previous = fetch_hub_submission(mid, task.reference_date)
-            if previous is None:
-                handled.append("no file on the hub's main branch to append to")
-        path = write_submission(table, args.out, mid, previous)
+        path = write_submission(table, args.out, model_id(_abbr(args)))
     except (KeyError, ValueError, OSError) as err:
         print(f"ERROR: {err}", file=sys.stderr)
         return 1
@@ -954,9 +939,7 @@ def _nowcast(args: argparse.Namespace) -> int:
         print(f"Handled: {note}")
     hub_round = load_hub_round(hub_config)
     open_round = task.reference_date.isoformat() in hub_round.reference_dates
-    errors = validate_submission_file(
-        path, hub_round, check_round=open_round, previous=previous
-    )
+    errors = validate_submission_file(path, hub_round, check_round=open_round)
     print(f"Wrote {path} ({len(table)} rows, locations incl. {NATIONAL}).")
     if not open_round:
         print(
