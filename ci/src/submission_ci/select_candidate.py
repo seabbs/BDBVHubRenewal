@@ -4,11 +4,12 @@ Each candidate directory (`<candidates>/<id>/`) holds what its matrix
 job produced: `fit-summary.json` and `ppc-summary.json` (none for
 random walk), `checks.json`, `run.json` and the hub file under
 `submission/`. Problems are handled rather than failed on, so the chain
-rarely moves past the main model. A candidate is ruled out only when
-its fit is clearly broken, or its file would be invalid on the hub
-(forecast format checks, then the hub's own rules through the
-`--validate-cmd` hook, hubValidations in CI). Posterior predictive
-checks and plausibility checks are reported, never gated.
+rarely moves past the main model. A candidate is ruled out when its fit
+is clearly broken, its forecast is far from the recent data
+(`plausible`), or its file would be invalid on the hub (forecast format
+checks, then the hub's own rules through the `--validate-cmd` hook,
+hubValidations in CI). Posterior predictive checks are reported, never
+gated.
 
 A main model past the convergence retry thresholds is refitted once
 (`retry-1`). The refit is preferred if it is not clearly broken;

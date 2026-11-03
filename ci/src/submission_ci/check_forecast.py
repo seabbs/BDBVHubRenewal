@@ -26,7 +26,7 @@ Handled (warn or pass):
                  provinces. A modelled province missing from the file
                  warns.
 
-Plausibility (warn; a fail level is available but off by default):
+Plausibility (`plausible` fails; the others warn):
   `plausible`    each location's forecast near its recent data: median
                  and 97.5% quantile under set multiples of the last 4
                  weeks' maximum, and the median not collapsed. Fails.
