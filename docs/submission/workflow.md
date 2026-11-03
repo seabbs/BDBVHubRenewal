@@ -32,7 +32,7 @@ The chain runs from the most to the least complex renewal model, then the random
 5. `randomwalk`.
 
 `[submission] model` in `config/hub.toml` says where the chain starts.
-Every fit is 2 chains of 500 warm-up and 500 draws, with no refit.
+Every fit is 2 chains of 1000 warm-up and 1000 draws, with no refit.
 Fit timeouts are set against the window's close (`[timing]` in `ci/policy.toml`).
 
 ## Checks

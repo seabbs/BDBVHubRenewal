@@ -113,7 +113,7 @@ def test_baseline_choices_keep_the_chain_from_that_baseline() -> None:
 
 
 def test_ci_sampler_settings(tmp_path: Path) -> None:
-    # Sam (2026-10-28): 2 chains of 500 warm-up and 500 draws for every
+    # 2 chains of 1000 warm-up and 1000 draws for every
     # fitted candidate, all with the same settings.
     pol = load_policy(POLICY_PATH)
     root = repo(tmp_path)
@@ -126,7 +126,7 @@ def test_ci_sampler_settings(tmp_path: Path) -> None:
         samplers[0]["num_chains"],
         samplers[0]["num_warmup"],
         samplers[0]["num_samples"],
-    ) == (2, 500, 500)
+    ) == (2, 1000, 1000)
 
 
 def test_policy_validation(tmp_path: Path) -> None:

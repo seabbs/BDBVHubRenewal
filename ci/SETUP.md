@@ -135,7 +135,7 @@ Artefacts are kept for 90 days at most, so the ledger branch is the durable arch
 Scheduled starts can be late by minutes, or dropped when GitHub is busy.
 The 3-hourly schedule covers that.
 
-Every fit runs 2 chains of 500 warm-up and 500 draws (`ci/policy.toml`).
+Every fit runs 2 chains of 1000 warm-up and 1000 draws (`ci/policy.toml`).
 On the 2026-10-24 vintage, with vectorised chains on 2 cores of archie, 4 chains of 1000 warm-up and 1000 draws took 130 minutes of sampling for the main fit.
 Nearly every draw reaches the maximum tree depth, so cost follows the number of NUTS iterations, and the current settings take about a quarter of that, 35 to 45 minutes.
 The single-patch fallback (`renewalsp`) took 21 minutes of sampling for its six independent fits (the country and five provinces), so it is ready before the main fit.
