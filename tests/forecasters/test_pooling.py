@@ -40,7 +40,7 @@ def test_one_error_is_not_enough_for_a_spread() -> None:
     level = np.array([60.0, 30.0, 40.0, 0.0, 0.0])
     n_own = np.array([[5, 1], [1, 2], [2, 2], [0, 0], [0, 0]])
     n_pooled = np.array([[5, 5], [6, 6], [6, 6], [0, 0], [0, 0]])
-    src = source_index(level, PARENT, n_own, n_pooled)
+    src = source_index(level, PARENT, n_own, n_pooled, min_err=2)
     assert src.shape == (5, 2)
     # Province 1 has 1 own error at k = 0 and 2 at k = 1.
     assert src[1].tolist() == [5 + 0, 1]

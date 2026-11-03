@@ -145,8 +145,8 @@ def test_the_fit_pools_three_errors_at_10_24(origin24) -> None:
     # Haut-Uele, Ituri and North Kivu give an error each. CD is their sum,
     # so it is not in its own pool.
     assert origin24.obs_n[loc, :4].tolist() == [3, 3, 3, 3]
-    assert (origin24.size[loc, :4] > 0.1).all()
-    assert (origin24.size[loc, :4] < 1000).all()
+    # Three errors are under the four a fit needs, so it is Poisson.
+    assert (origin24.size[loc, :4] == MAX_SIZE).all()
     assert (origin24.removal >= 0).all()
 
 
