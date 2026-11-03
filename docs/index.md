@@ -4,7 +4,7 @@ Nowcasts and forecasts of confirmed Bundibugyo virus disease cases for the BDBV 
 { .page-subtitle }
 
 The [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub) target is weekly confirmed cases by symptom-onset week, nationally, by province and by health zone, as 100 joint sample trajectories.
-The submitted model is `randomwalknowcast`, under the hub id `seabbs-rwnowcast`.
+Two hub models are submitted, `seabbs-rwnowcast` and `seabbs-renewal`.
 
 ## Models
 
@@ -14,9 +14,9 @@ It runs at province and zone level, and the national value is the sum of the pro
 `randomwalk` runs the same walk from the latest week judged complete, with no nowcast.
 It is a comparison model and is not submitted.
 The renewal models (`renewal`, `renewalsp` and `renewalbvd`) are built on [PyRenew](https://github.com/CDCgov/PyRenew) and fit the hub's known and imputed onsets, modelling the hub's imputation ([Renewal models](methods/model.md)).
-They are candidates and are not submitted.
 
-Each week the [submission](submission/workflow.md) submits `randomwalknowcast` as `seabbs-rwnowcast`, and falls back to `randomwalk` if it fails its checks.
+Each week the [submission](submission/workflow.md) submits `randomwalknowcast` as `seabbs-rwnowcast`, and skips the round if it fails its checks.
+It submits one renewal model as `seabbs-renewal`, taking the first in the chain in `ci/policy.toml` that passes its checks.
 
 ## Pages
 

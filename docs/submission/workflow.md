@@ -13,7 +13,7 @@ It submits only the hub models opted in ([Opting in](opting-in.md)), and pushes 
 | `detect` | Stops unless the open round has new hub data. |
 | `freeze` | Freezes the page of every round whose pull request has merged. |
 | `prepare` | Pins the data, builds `randomwalk` and `randomwalknowcast`, and decides which hub models run. |
-| `baseline` | The baseline hub model: checks and submits `randomwalknowcast`, or `randomwalk` if it is ruled out. |
+| `baseline` | The baseline hub model: checks and submits `randomwalknowcast`, or skips the round if it is ruled out. |
 | `fit` | The renewal hub model: fits `main`, `renewalsp` and the `bvd` shadow in parallel. |
 | `triage`, `retry` | Refits `main` once if needed and if the window leaves time. |
 | `gate`, `submit` | Walks the chain, validates, and opens or updates the pull request. |
@@ -35,7 +35,7 @@ Fit timeouts and the retry are set against the window's close (`[timing]` in `ci
 
 ## Checks
 
-Only an invalid file or a clearly broken fit rules a candidate out.
+An invalid file, a clearly broken fit or a forecast far from the recent data rules a candidate out.
 Thresholds are in `ci/policy.toml`.
 
 | check | rules out | refits once | warns |
@@ -46,6 +46,7 @@ Thresholds are in `ci/policy.toml`.
 | 90% predictive coverage | | | < 0.70 |
 | schema, values, 100 samples per trajectory | any | | |
 | hub validation (Python and hubValidations) | any error | | |
+| plausible (median and 97.5% quantile against the recent maximum) | any | | |
 | bounds, growth, against observed, random walk and last week | | | yes |
 
 The national rows are rebuilt as the sum of the provinces plus the unassigned component.

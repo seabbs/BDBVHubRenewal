@@ -20,11 +20,11 @@
 Forecasts of weekly confirmed Bundibugyo virus disease cases in the Democratic Republic of the Congo for the [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub).
 Forecasts are made nationally, by province and by health zone.
 The package, `bdbvhubrenewal`, fits the models, scores them and writes the hub submission files.
-The submitted model is `randomwalknowcast`, under the hub id `seabbs-rwnowcast`.
-It is baselinenowcast ([Johnson et al. 2025](https://doi.org/10.12688/wellcomeopenres.25027.2), Wellcome Open Research), ported to JAX, with a random walk on top.
+Two hub models are submitted, `seabbs-rwnowcast` and `seabbs-renewal`.
+`seabbs-rwnowcast` is `randomwalknowcast`, baselinenowcast ([Johnson et al. 2025](https://doi.org/10.12688/wellcomeopenres.25027.2), Wellcome Open Research), ported to JAX, with a random walk on top.
 It runs at province and zone level, and the national value is the sum of the provinces.
 `randomwalk` is the same walk with no nowcast, kept for comparison.
-The renewal models, `renewal`, `renewalsp` and `renewalbvd`, are candidates and are not submitted.
+`seabbs-renewal` carries one of the renewal models, `renewalbvd`, `renewalsp` or `renewal`, through the chain in `ci/policy.toml`.
 See the [documentation](https://samabbott.co.uk/BDBVHubRenewal/) for the methods and results.
 
 ## Installation

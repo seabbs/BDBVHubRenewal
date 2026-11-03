@@ -8,9 +8,9 @@ Each is opted in on its own in `config/hub.toml`.
 
 | hub model | model | falls back to | needs |
 | --- | --- | --- | --- |
-| `seabbs-rwnowcast` | random walk on a nowcast (`randomwalknowcast`) | random walk | nothing more |
+| `seabbs-rwnowcast` | random walk on a nowcast (`randomwalknowcast`) | nothing (round skipped) | nothing more |
 | `seabbs-randomwalk` | the random walk (`randomwalk`) | nothing | nothing more |
-| `seabbs-renewal` | the renewal chain | its refit, `renewalsp`, `randomwalknowcast`, random walk | a model choice in `results/model-choice.yml` |
+| `seabbs-renewal` | the renewal chain | the next model in the chain in `ci/policy.toml` | `[submission] model` in `config/hub.toml` |
 
 `DRY_RUN` is the global switch.
 Until it is `false`, an opted-in model is built and checked but nothing is pushed.
@@ -45,7 +45,7 @@ Run it after each part, logged in to `gh` as `seabbs`.
 
 1. Review its metadata in `hub/model-metadata/<hub model>.yml`, including the contributor list, licence and model name.
 2. Set `submit = true` for it in `config/hub.toml` and push to `main`.
-   For `renewal`, also commit the chosen model to `results/model-choice.yml`.
+   For `seabbs-renewal`, also set `[submission] model`.
 3. Dry run, and read the pull request body in the job summary.
    `gh workflow run submit.yml -R seabbs/BDBVHubRenewal`
 4. Inside the window (Sunday to Tuesday, Kinshasa time), do one supervised live run.

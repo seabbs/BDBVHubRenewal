@@ -39,7 +39,7 @@ $$
 
 Positive bias is overprediction.
 Relative WIS is a ratio of means against a baseline $b$ over the forecasts both made, and below 1 beats it.
-The baseline is `randomwalk` in the backtests and `randomwalknowcast`, the submitted model, in the comparison with hub forecasts.
+The baseline is `randomwalk` in the backtests and `randomwalknowcast` in the comparison with hub forecasts.
 Coverage is whether $y$ falls in the central 50% and 90% sample intervals.
 
 ## Backtest design

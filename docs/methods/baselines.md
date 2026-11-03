@@ -1,6 +1,6 @@
 # Baseline models
 
-`randomwalknowcast`, the submitted model, and `randomwalk`, its comparison model.
+`randomwalknowcast` and `randomwalk`, its comparison model.
 { .page-subtitle }
 
 The data and notation are on the [Data methods page](data.md#target-and-notation).

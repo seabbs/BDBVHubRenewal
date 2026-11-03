@@ -175,12 +175,6 @@ Province values are rounded.
 
 ## Variants
 
-### Model choice
-
-The variant to submit is chosen on the development backtest, by WIS and log WIS relative to `randomwalk`, by horizon and province.
-Each week `seabbs-renewal` takes the first of `renewal`, one refit of `renewal` with smaller steps, `renewalsp`, `randomwalknowcast` and `randomwalk` that passes its checks.
-A chosen `renewalsp` or `renewalbvd` goes first instead, followed by `randomwalknowcast` and `randomwalk`.
-
 ### Renewal variants
 
 | Variant | What differs from the main model |
