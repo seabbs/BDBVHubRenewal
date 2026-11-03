@@ -42,8 +42,7 @@ from bdbvhubrenewal.data import (
     load_target,
 )
 from bdbvhubrenewal.evaluation import backtest as bt
-from bdbvhubrenewal.evaluation.nowcast import complete_weeks
-from bdbvhubrenewal.evaluation.scoring import summarise_scores
+from bdbvhubrenewal.evaluation.nowcast import relative_wis, release_backtest
 from bdbvhubrenewal.forecasters import NATIONAL, get_model
 from bdbvhubrenewal.reporting.plots import plot_location_grid, save_light_dark
 
@@ -57,14 +56,14 @@ sorted(real["vintage"].unique())
 # ## Build the forecast task
 #
 # The origin is the vintage 2026-10-17.
-# The 2026-10-24 vintage holds the same weeks as they were reported afterwards.
+# The latest vintage, 2026-11-01, holds the same weeks as they were reported afterwards.
 # The task holds what a model sees at the origin, including the daily onsets of every release up to it, and the weeks to forecast.
 # Its reference date is the next Saturday, 2026-10-24, and the forecast weeks run from six weeks before it to three weeks after it.
 # `min_horizon=-6` asks for the six weeks before the reference date as well, as the submission does.
 
 # %%
 ORIGIN = "2026-10-17"
-LATER = "2026-10-24"
+LATER = "2026-11-01"
 
 config = dataclasses.replace(
     bt.load_config("config/backtest.toml"), min_horizon=-6
@@ -145,36 +144,26 @@ panels
 # ![Nowcasts and forecasts from randomwalk and randomwalknowcast at 2026-10-17 against the data as later reported.](../assets/getting-started/forecast-dark.svg#only-dark)
 
 # %% [markdown]
-# ## Score on complete weeks
+# ## Score
 #
-# The truth is the 2026-10-24 vintage.
-# A week counts as complete when it is at least four weeks old at the 2026-10-24 release and grew by less than 2% since the release before (`complete_weeks`).
-# `score_tasks` scores every forecast sample set with the weighted interval score (WIS) and interval coverage.
-# The table averages over those weeks, for the national total and over the provinces.
-# Relative WIS is `randomwalknowcast` divided by `randomwalk`, so values below 1 favour the nowcast.
+# Each forecast is scored on what each later release reported.
+# `release_backtest` maps the forecast of final counts to the counts a later release would report, using the reporting delays fitted at the origin.
+# It scores the mapped samples with the weighted interval score (WIS) and interval coverage.
+# The table gives each model's mean WIS relative to `randomwalk` on the same forecasts, for the national total and over the provinces.
+# Values below 1 favour the model.
+# `as reported` uses the data at the origin as the forecast.
 
 # %%
-scores = bt.score_tasks(
-    forecasts, bt.truth_from_vintage(target, LATER), LATER
-)
-done = complete_weeks(target, daily, LATER)
-complete = scores.drop(columns="complete").merge(
-    done.loc[done["complete"], ["location", "target_end_date"]],
-    on=["location", "target_end_date"],
-)
-complete = complete.assign(
-    level=complete["location"].map(
+scores = release_backtest(
+    [task], daily, target, models=(), stored=forecasts
+).scores
+scores = scores.loc[scores["target"] == "reported"]
+scores = scores.assign(
+    level=scores["location"].map(
         lambda x: "National" if x == NATIONAL else "Province"
     )
 )
-by_level = summarise_scores(complete, by=["level", "model"])
-table = by_level.pivot(
-    index="level", columns="model", values=["wis", "coverage_90"]
-)
-table[("wis", "relative")] = (
-    table[("wis", "randomwalknowcast")] / table[("wis", "randomwalk")]
-)
-table.round(2)
+relative_wis(scores, by=["level"]).round(2)
 
 # %% [markdown]
 # ## Next steps
