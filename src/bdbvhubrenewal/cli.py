@@ -234,14 +234,17 @@ MODEL_METADATA = {
             "and otherwise its parent's (zone, then province, then "
             "national). Daily nowcasts are summed to hub weeks. "
             # The uncertainty. Edit here if the observation model changes.
-            "The observation model is a Skellam plugged into baselinenowcast's "
-            "uncertainty interface, with a spread proportional to the "
-            "remaining count, fitted per horizon from retrospective errors, "
-            "so counts can be revised down. "
+            "The observation model is a two-part Skellam plugged into "
+            "baselinenowcast's uncertainty interface: Poisson additions "
+            "scaled to the remaining count less Poisson removals scaled to "
+            "the count reported, each rate fitted per horizon from the "
+            "rises and falls seen in retrospective nowcasts, so counts can "
+            "be revised down. "
             "Each nowcast draw is carried forward from its latest week as a "
             "random walk on the log scale with Poisson noise. A place under "
-            "10 cases a week, or with fewer than 2 errors, uses the spreads "
-            "of its parent. The national value is the sum of provinces. See "
+            "10 cases a week, or with fewer than 2 errors, uses the rates "
+            "and spread pooled at its parent. The national value is the sum "
+            "of provinces. See "
             "https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."
         ),
         "data_inputs": (

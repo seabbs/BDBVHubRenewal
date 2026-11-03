@@ -43,8 +43,10 @@ the count expected at $o$ for days up to $c_r$.
 It chains over the gap $c_o - c_r$ only, using the nearest earlier pair's
 factor for each remaining part of the gap.
 Only plans within `max_mismatch` days of the gap are kept.
-The errors by weeks back give the Skellam spread on the remaining count
-(`skellam`).
+For each day the rises and the falls of its count from $r$ to $o$ are
+summed by hub week.
+By weeks back they give the rates of the two-part Skellam on the
+remaining count (`skellam`), fitted through the port's `fit_by_horizon`.
 """
 
 from __future__ import annotations
@@ -59,6 +61,7 @@ import numpy as np
 from bdbvhubrenewal.baselinenowcast import (
     chain_growth,
     exact_plan,
+    fit_by_horizon,
     pair_factors,
     pair_sums,
     preprocess_negative_values,
@@ -72,7 +75,11 @@ from bdbvhubrenewal.forecasters.pooling import (
     pool_matrix,
     source_index,
 )
-from bdbvhubrenewal.forecasters.skellam import rho_from_sums, rho_sums
+from bdbvhubrenewal.forecasters.skellam import (
+    NO_FIT,
+    fit_skellam,
+    n_errors,
+)
 
 __all__ = [
     "MissingSnapshots",
@@ -112,7 +119,7 @@ class Settings:
         Cases a week for a place to use its own spreads, and cases in the
         pooled denominator of an age for it to use its own delay factor.
     min_errors : int
-        Errors at a horizon for a Skellam spread.
+        Errors at a horizon for the Skellam rates.
     level_weeks : tuple of int
         First and last weeks back averaged for a place's level.
     max_mismatch : int
@@ -410,20 +417,27 @@ def grow(fit: DelayFit, plan: ChainPlan) -> np.ndarray:
 
 @dataclass
 class Errors:
-    """Retrospective errors by place and weeks back, summed over releases.
+    """Retrospective nowcasts by release, place and weeks back.
 
     Attributes
     ----------
-    num, den, n : numpy.ndarray
-        The sums behind the Skellam spread, `[L, K]`.
+    obs : numpy.ndarray
+        Realised additions and removals, `[R, L, K, 2]`, NaN where a
+        release gives no error.
+    pred : numpy.ndarray
+        Nowcast remaining count and count reported, `[R, L, K, 2]`.
     releases : list of str
-        Releases that gave errors.
+        Releases that gave errors, one for each row.
     """
 
-    num: np.ndarray
-    den: np.ndarray
-    n: np.ndarray
+    obs: np.ndarray
+    pred: np.ndarray
     releases: list[str] = field(default_factory=list)
+
+    @property
+    def n(self) -> np.ndarray:
+        """Errors at each place and weeks back, `[L, K]`."""
+        return n_errors(self.obs)
 
 
 def retro_errors(snap: SnapshotArrays, o: int, settings: Settings) -> Errors:
@@ -441,13 +455,13 @@ def retro_errors(snap: SnapshotArrays, o: int, settings: Settings) -> Errors:
     Returns
     -------
     Errors
-        Sums over the releases that give errors.
+        One row for each release that gives errors.
     """
     n_loc = len(snap.locations)
     k_n = weeks_back(snap, o, settings.max_delay)
-    out = Errors(
-        np.zeros((n_loc, k_n)), np.zeros((n_loc, k_n)), np.zeros((n_loc, k_n))
-    )
+    obs_rows: list[np.ndarray] = []
+    pred_rows: list[np.ndarray] = []
+    releases: list[str] = []
     for r in range(1, o):
         fit = fit_delay(snap, r, settings)
         if fit is None:
@@ -461,19 +475,27 @@ def retro_errors(snap: SnapshotArrays, o: int, settings: Settings) -> Errors:
         cols = wa - np.arange(k_n)
         take = (cols >= 0) & (np.arange(k_n) < k_r)
         safe = np.clip(cols, 0, None)
-        obs = weekly_sums(snap, r)[:, safe]
-        pred = week_sum(snap, counts * g)[:, safe]
-        tgt = weekly_sums(snap, o, upto=int(snap.cut[r]))[:, safe]
-        valid = take[None, :] & ((obs > 0) | (pred > 0))
-        # The remaining count: realised and nowcast.
-        num, den, n = rho_sums(
-            (tgt - obs)[None], (pred - obs)[None], valid[None], axis=0
+        reported = weekly_sums(snap, r)[:, safe]
+        rhat = week_sum(snap, counts * g)[:, safe] - reported
+        # Each day's rise or fall in count from release r to the origin.
+        both = snap.observed[r] & snap.observed[o]
+        step = np.where(both[None], snap.counts[:, o] - counts, 0.0)
+        rise = week_sum(snap, np.maximum(step, 0.0))[:, safe]
+        fall = week_sum(snap, np.maximum(-step, 0.0))[:, safe]
+        valid = take[None, :] & ((reported > 0) | (rhat > 0))
+        obs = np.where(valid[..., None], np.stack([rise, fall], -1), np.nan)
+        pred = np.where(
+            valid[..., None], np.stack([rhat, reported], -1), np.nan
         )
-        out.num += num
-        out.den += den
-        out.n += n
-        out.releases.append(snap.releases[r])
-    return out
+        obs_rows.append(obs)
+        pred_rows.append(pred)
+        releases.append(snap.releases[r])
+    shape = (0, n_loc, k_n, 2)
+    return Errors(
+        np.stack(obs_rows) if obs_rows else np.zeros(shape),
+        np.stack(pred_rows) if pred_rows else np.zeros(shape),
+        releases,
+    )
 
 
 @dataclass
@@ -508,12 +530,12 @@ class Origin:
     errors : Errors or None
         Retrospective errors, or None where they were not asked for.
     rho : numpy.ndarray or None
-        Skellam spread $\rho_k$ of each place by weeks back from the
-        cut-off week, `[L, K]`.
+        Skellam rates $(a_k, b_k)$ of each place's additions and removals
+        by weeks back from the cut-off week, `[L, K, 2]`.
     rho_n : numpy.ndarray or None
-        Errors behind each spread, `[L, K]`.
+        Errors behind each pair of rates, `[L, K]`.
     rho_source : numpy.ndarray or None
-        Index of the estimate behind each spread, `[L, K]`.
+        Index of the estimate behind each pair of rates, `[L, K]`.
     """
 
     snap: SnapshotArrays
@@ -557,7 +579,7 @@ def build_origin(
     settings : Settings
         Settings.
     errors : bool
-        Whether to estimate the Skellam spread.
+        Whether to estimate the Skellam rates.
 
     Returns
     -------
@@ -632,15 +654,34 @@ def _walk_spreads(
     return own, pooled
 
 
+def _fit_rows(obs: np.ndarray, pred: np.ndarray) -> np.ndarray:
+    """Fit the rates by weeks back from rows `[N, K, 2]`, `[K, 2]`."""
+    if obs.shape[0] == 0:
+        return np.broadcast_to(np.asarray(NO_FIT), (obs.shape[1], 2))
+    return np.asarray(fit_by_horizon(obs, pred, fit_skellam))
+
+
 def _add_spread(origin: Origin) -> None:
-    """Estimate the Skellam spread by weeks back, with the one rule."""
+    """Estimate the Skellam rates by weeks back, with the one rule."""
     snap, settings = origin.snap, origin.settings
     errors = retro_errors(snap, origin.o, settings)
-    k_n = errors.n.shape[1]
+    n_loc, k_n = errors.n.shape
     pool = pool_matrix(origin.fit.level, snap.parent, settings.min_level)
-    own = rho_from_sums(errors.num, errors.den)
-    n_pooled = pool @ errors.n
-    pooled = rho_from_sums(pool @ errors.num, pool @ errors.den)
+    own = np.stack(
+        [_fit_rows(errors.obs[:, n], errors.pred[:, n]) for n in range(n_loc)]
+    )
+    pooled_obs = [
+        errors.obs[:, np.flatnonzero(pool[n])].reshape(-1, k_n, 2)
+        for n in range(n_loc)
+    ]
+    pooled_pred = [
+        errors.pred[:, np.flatnonzero(pool[n])].reshape(-1, k_n, 2)
+        for n in range(n_loc)
+    ]
+    pooled = np.stack(
+        [_fit_rows(o, p) for o, p in zip(pooled_obs, pooled_pred, strict=True)]
+    )
+    n_pooled = np.stack([n_errors(o) for o in pooled_obs])
     source = source_index(
         origin.fit.level,
         snap.parent,
@@ -652,13 +693,14 @@ def _add_spread(origin: Origin) -> None:
     k = np.arange(k_n)[None, :]
     rho = np.concatenate([own, pooled])[source, k]
     n_used = np.concatenate([errors.n, n_pooled])[source, k]
-    rho = np.where(n_used >= settings.min_errors, rho, 0.0)
+    short = n_used < settings.min_errors
+    rho = np.where(short[..., None], np.asarray(NO_FIT), rho)
     origin.errors, origin.rho, origin.rho_n, origin.rho_source = (
         errors, rho, n_used, source,
     )  # fmt: skip
     if errors.n.sum() == 0:
         log.info(
-            "No retrospective errors at %s, so the spread is 0 and the "
-            "observation model is Poisson-Skellam.",
+            "No retrospective errors at %s, so the nowcast is Poisson with "
+            "no removals.",
             snap.releases[origin.o],
         )

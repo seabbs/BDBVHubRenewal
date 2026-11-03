@@ -787,8 +787,9 @@ def plot_delay_check(
     -------
     matplotlib.figure.Figure
         Left, the growth $G$ from each age in days to final, chained over
-        the release gap, on a log scale. Right, the Skellam spread
-        $\rho_k$ by weeks back with the number of errors behind it.
+        the release gap, on a log scale. Right, the Skellam rates by
+        weeks back, $a_k$ of the additions (solid) and $b_k$ of the
+        removals (dashed), with the number of errors behind them.
         A place's label says at how many ages it uses its own delay
         factor and not its parent's.
     """
@@ -820,24 +821,25 @@ def plot_delay_check(
             lw=1.2,
             label=f"{loc} ({kind})",
         )
-        row = tuple(np.round(origin.rho[j], 6))
+        row = tuple(np.round(origin.rho[j], 6).ravel())
         if row not in drawn:
             drawn.add(row)
             k = np.arange(origin.rho.shape[1])
             right.plot(
                 k,
-                origin.rho[j],
+                origin.rho[j, :, 0],
                 "o-",
                 color=colour,
                 ms=3,
                 lw=1,
                 label=f"{loc} and places using it",
             )
+            right.plot(k, origin.rho[j, :, 1], "o--", color=colour, ms=3, lw=1)
     left.set_yscale("log")
     left.set_xlabel("Age of the onset day (days)")
     left.set_ylabel("Growth to final")
     right.set_xlabel("Weeks back")
-    right.set_ylabel("Skellam spread")
+    right.set_ylabel("Skellam rate")
     n_err = int(origin.rho_n.max())
     right.set_title(f"At most {n_err} errors behind a spread", fontsize=8)
     right.legend(fontsize=7, frameon=False)

@@ -158,13 +158,17 @@ def test_only_the_10_17_to_10_24_retrospective_is_kept(snap24) -> None:
     assert strict.n.sum() == 0
 
 
-def test_the_spread_pools_three_errors_at_10_24(origin24) -> None:
+def test_the_rates_pool_three_errors_at_10_24(origin24) -> None:
     loc = origin24.snap.locations.index("CD")
     assert origin24.rho is not None
     assert origin24.rho_n is not None
-    assert origin24.rho[loc, :4] == pytest.approx(
-        [1.5490, 16.6763, 7.1786, 87.9480], rel=1e-3
+    # Additions over the nowcast remaining count, by weeks back.
+    assert origin24.rho[loc, :4, 0] == pytest.approx(
+        [1.0354, 0.8808, 1.4757, 7.2716], rel=1e-3
     )
+    # North Kivu loses 4 of the 32 + 210 + 130 cases reported 3 weeks
+    # back, and nothing else is removed.
+    assert origin24.rho[loc, :4, 1] == pytest.approx([0, 0, 0, 4 / 372])
     # Haut-Uele, Ituri and North Kivu give an error each. The country is
     # their sum, so it is not pooled with them.
     assert origin24.rho_n[loc, :4].tolist() == [3, 3, 3, 3]
@@ -178,9 +182,10 @@ def test_no_errors_is_poisson_and_says_so(
         origin = build_origin(snap, Settings(), errors=True)
     assert origin.rho is not None
     assert origin.rho_n is not None
-    assert (origin.rho == 0).all()
+    assert (origin.rho[..., 0] == 1).all()
+    assert (origin.rho[..., 1] == 0).all()
     assert (origin.rho_n == 0).all()
-    assert "Poisson-Skellam" in caplog.text
+    assert "Poisson with no removals" in caplog.text
 
 
 def test_a_factor_is_own_by_age_with_10_cases_else_the_parent(
@@ -252,7 +257,7 @@ def test_weeks_back_count_from_the_cutoff_week(daily: pd.DataFrame) -> None:
     assert errors.n[:, 0].sum() > 0
     origin = build_origin(snap, Settings(), errors=True)
     assert origin.rho is not None
-    assert origin.rho[:, 0].max() > 0
+    assert origin.rho[:, 0, 0].max() > 0
 
 
 def test_a_later_clock_ages_the_origin_days_and_lowers_the_nowcast(

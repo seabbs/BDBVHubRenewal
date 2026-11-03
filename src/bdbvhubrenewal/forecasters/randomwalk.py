@@ -17,8 +17,8 @@ Weeks up to the start are returned as reported.
 Later weeks are walk draws, floored at the count reported.
 
 `RandomWalkNowcast` (`randomwalknowcast`) nowcasts every day with data and
-sums to hub weeks with a Skellam observation model on the remaining
-count (`skellam`).
+sums to hub weeks with a two-part Skellam observation model on the
+remaining count (`skellam`), additions less removals.
 Each sample then starts the walk from its own nowcast of the latest week
 whose seven days are all on or before the cut-off.
 If the week holding the cut-off is partial, its days after the cut-off
@@ -27,7 +27,7 @@ add Poisson draws from that week's walk rate.
 The spread of the walk is the standard deviation of the weekly changes of
 $\log(1 + y)$ in reported counts, over the weeks ending at the start of
 `randomwalk`.
-The delay, the Skellam spread and the walk spread each use their own
+The delay, the Skellam rates and the walk spread each use their own
 estimate where a place has at least 10 cases a week, and otherwise the
 pooled estimate of the nearest parent that does (`pooling`).
 National is the sum of provinces by sample.
@@ -294,7 +294,7 @@ class RandomWalkNowcast(RandomWalk):
         Parameters
         ----------
         origin : Origin
-            The fit at the task's vintage, with its Skellam spread.
+            The fit at the task's vintage, with its Skellam rates.
         task : ForecastTask
             The task.
         point : numpy.ndarray
@@ -316,19 +316,22 @@ class RandomWalkNowcast(RandomWalk):
         k_n = origin.rho.shape[1]
         back = snap.cut_week(origin.o) - np.arange(n_data)
         use = (back >= 0) & (back < k_n)
-        rho = np.where(
-            use[None, :], origin.rho[:, np.clip(back, 0, k_n - 1)], 0.0
+        # Weeks out of the window are final: no additions or removals.
+        rates = np.where(
+            use[None, :, None],
+            origin.rho[:, np.clip(back, 0, k_n - 1)],
+            0.0,
         )
         key_x, key_walk, key_part = jax.random.split(_key(task), 3)
         mean = jnp.asarray(point, jnp.float32)
         reported = jnp.asarray(origin.reported, jnp.float32)
-        shape = (n, *mean.shape)
+        shape = (n, *mean.shape, 2)
         # The port's sampler interface: draw the remaining count, then add
         # the count reported and floor at 0.
         drawn = sample_skellam(
             key_x,
-            jnp.broadcast_to(mean - reported, shape),
-            jnp.asarray(rho, jnp.float32),
+            jnp.broadcast_to(jnp.stack([mean - reported, reported], -1), shape),
+            jnp.asarray(rates, jnp.float32),
         )
         nowcast = np.asarray(jnp.maximum(reported + drawn, 0.0), np.float64)
         w0 = origin.start_nowcast
