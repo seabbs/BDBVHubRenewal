@@ -6,13 +6,13 @@ Forecasts made at past vintages, scored on what each later release reported.
 Every model is scored on the count each later release reports, and complete weeks are a secondary check ([Evaluation](methods/evaluation.md#scoring)).
 Weeks still being reported are shaded, with hollow points.
 
---8<-- "release-backtest.md"
+--8<-- "release-headline.md"
 
 --8<-- "backtest-findings.md"
 
---8<-- "backtest-summary.md"
-
 --8<-- "backtest-forecasts.md"
+
+--8<-- "release-nowcasts.md"
 
 ## By horizon
 
@@ -38,6 +38,8 @@ Horizons −4 to −1 are nowcasts, 0 is the reference week and 1 to 3 are forec
 
     ![Mean bias by horizon and vintage kind.](figures/scores-bias-horizon.svg#only-light)
     ![Mean bias by horizon and vintage kind.](figures/scores-bias-horizon-dark.svg#only-dark)
+
+--8<-- "backtest-summary.md"
 
 ## By province
 
@@ -85,18 +87,5 @@ Each origin's forecasts scored on the counts each later release reported.
     --8<-- "truth-changes.md"
 
 --8<-- "lopo-section.md"
-
---8<-- "recovery-section.md"
-
-## Simulated scenarios
-
-Three scenarios copy the real 2026-10-24 data and differ only in Rt after the data, which falls by a quarter, holds or rises by a quarter.
-Forecasts are made from the four weekly simulated vintages up to 2026-10-24 and scored on complete weeks of the final simulated data.
-
---8<-- "scenario-figure.md"
-
-??? note "Tables"
-
-    --8<-- "scenario-scores.md"
 
 --8<-- "zone-section.md"

@@ -79,10 +79,6 @@ Relative WIS is against `randomwalk` on the forecasts both made, for national an
 Every table counts its forecasts, $n$.
 The run stops if an origin has no release snapshots or two models run here give identical samples.
 
-The weekly cross-check runs the snapshot chain ladder on hub weeks from the latest two releases with cut-offs a week apart, with a gap of one week and the national delay for every place.
-It checks the daily ladder for consistency on weekly data.
-It is drawn over the `randomwalknowcast` intervals at the later release.
-
 ## Rolling held-out evaluation
 
 Each model choice is logged with its date, and the development set rolls forward with them.

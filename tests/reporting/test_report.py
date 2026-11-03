@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -133,6 +134,8 @@ def test_make_report_writes_every_page(
     gen = tmp_path / "gen"
     for name in (
         "vintages.md",
+        "release-headline.md",
+        "release-nowcasts.md",
         "backtest-findings.md",
         "backtest-summary.md",
         "truth-changes.md",
@@ -141,6 +144,12 @@ def test_make_report_writes_every_page(
         "nowcast-tabs.md",
     ):
         assert (gen / name).exists(), name
+    # Hub teams are shown on the comparison page only.
+    backtest = (Path(ROOT) / "docs" / "backtest.md").read_text()
+    for name in re.findall(r'--8<-- "([^"]+)"', backtest):
+        text = (gen / name).read_text()
+        assert "OHTJHU" not in text, name
+        assert "Chromantis" not in text, name
     fig = tmp_path / "fig"
     for name in (
         "target.svg",
@@ -487,9 +496,7 @@ def test_summary_covers_only_forecasts_randomwalk_made(tmp_path: Path) -> None:
     reported = scores.loc[scores["target"] == "reported"]
     gen = tmp_path / "gen"
     gen.mkdir()
-    report._summary_figure(
-        tmp_path, gen, reported, ["randomwalk", "randomwalknowcast"]
-    )
+    report._horizon_table(gen, reported, ["randomwalk", "randomwalknowcast"])
     text = (gen / "backtest-summary.md").read_text()
     walk = reported.loc[reported["model"] == "randomwalk", "origin"]
     origins = ", ".join(sorted(set(walk.astype(str))))

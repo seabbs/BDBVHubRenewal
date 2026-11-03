@@ -18,7 +18,7 @@ from bdbvhubrenewal.reporting.plots import (
     _grid,
 )
 
-__all__ = ["plot_release_nowcasts", "plot_weekly_crosscheck"]
+__all__ = ["plot_release_nowcasts"]
 
 
 def _draw_bars(ax: Axes, rows: pd.DataFrame, colour: str, shift: float) -> None:
@@ -119,72 +119,55 @@ def plot_release_nowcasts(
     return fig
 
 
-def plot_weekly_crosscheck(
-    quantiles: pd.DataFrame,
-    weekly: pd.DataFrame,
-    releases: pd.DataFrame,
-    locations: Sequence[str],
-    model: str = "randomwalknowcast",
+def plot_relative_overall(
+    table: pd.DataFrame,
+    models: Sequence[str],
+    baseline: str = "randomwalk",
     mode: str = "light",
 ) -> Figure:
-    """Plot the weekly cross-check points over a model's nowcast bands.
+    """Plot each model's relative WIS and 90% coverage by pool.
 
     Parameters
     ----------
-    quantiles : pandas.DataFrame
-        Quantiles of `model` at the latest release, columns `location`,
-        `target_end_date`, `q5` to `q95`.
-    weekly : pandas.DataFrame
-        Columns `location`, `target_end_date` and `point`.
-    releases : pandas.DataFrame
-        Real target rows with `vintage`, `location`, `target_end_date`
-        and `total`, for the reported counts.
-    locations : sequence of str
-        Places to show.
-    model : str
-        Model name for the legend.
+    table : pandas.DataFrame
+        `relative_wis` output by `pool`, for one target.
+    models : sequence of str
+        Models in registry order. Those absent from a pool are skipped.
+    baseline : str
+        The model WIS is relative to.
     mode : str
         `"light"` or `"dark"`.
 
     Returns
     -------
     matplotlib.figure.Figure
-        One panel per place.
+        Two panels of bars grouped by pool. The first has relative WIS,
+        with a line at 1. The second has 90% interval coverage, with a
+        line at 0.9.
     """
-    fig, axes = _grid(len(locations), 3, width=3.4, height=2.6)
     ink = THEMES[mode]
     palette = MODEL_COLOURS[mode]
-    latest = releases["vintage"].max()
-    for ax, loc in zip(axes, locations, strict=True):
-        q = quantiles.loc[quantiles["location"] == loc]
-        _draw_bars(ax, q, palette[0], 0.0)
-        w = weekly.loc[weekly["location"] == loc]
-        ax.plot(
-            mdates.date2num(pd.to_datetime(w["target_end_date"])) + 0.0,
-            w["point"],
-            "x",
-            color=palette[1],
-            ms=6,
-            mew=1.8,
-        )
-        r = releases.loc[
-            (releases["vintage"] == latest) & (releases["location"] == loc)
-        ]
-        r = r.loc[r["target_end_date"].isin(q["target_end_date"])]
-        ax.plot(
-            pd.to_datetime(r["target_end_date"]),
-            r["total"],
-            color=ink["data"],
-            lw=1.2,
-        )
-        ax.set_title(loc)
-        ax.xaxis.set_major_locator(
-            mdates.WeekdayLocator(byweekday=5, interval=1)
-        )
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
-    axes[0].set_ylabel("Cases by onset week")
-    axes[0].plot([], [], color=palette[0], lw=4, label=f"{model} (50% and 90%)")
-    axes[0].plot([], [], "x", color=palette[1], label="Weekly cross-check")
-    axes[0].plot([], [], color=ink["data"], label=f"Reported {latest}")
-    axes[0].legend(fontsize=6)
+    have_pools = set(table["pool"])
+    pools = [p for p in ("national", "provinces", "zones") if p in have_pools]
+    fig, axes = _grid(2, 2, width=3.8, height=2.8)
+    width = 0.8 / len(models)
+    for i, m in enumerate(models):
+        rows = table.loc[table["model"] == m].set_index("pool")
+        have = [p for p in pools if p in rows.index]
+        shift = (i - (len(models) - 1) / 2) * width
+        x = [pools.index(p) + shift for p in have]
+        colour = palette[i % len(palette)]
+        axes[0].bar(x, rows.loc[have, "rel_wis"], width, color=colour, label=m)
+        axes[1].bar(x, rows.loc[have, "coverage_90"], width, color=colour)
+    axes[0].axhline(1, color=ink["muted"], lw=1, ls=":")
+    axes[1].axhline(0.9, color=ink["muted"], lw=1, ls=":")
+    axes[0].set_ylabel(f"WIS relative to {baseline}")
+    axes[1].set_ylabel("90% interval coverage")
+    axes[1].set_ylim(0, 1)
+    for ax in axes:
+        ax.set_axisbelow(True)
+        ax.set_xticks(range(len(pools)), [p.capitalize() for p in pools])
+    fig.legend(
+        fontsize=7, loc="outside lower center", ncols=min(len(models), 5)
+    )
     return fig

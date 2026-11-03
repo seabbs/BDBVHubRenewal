@@ -13,8 +13,6 @@ Scoring, the backtest, the real-release evaluation, held-out evaluation, posteri
 
 ::: bdbvhubrenewal.evaluation.nowcast
 
-::: bdbvhubrenewal.evaluation.crosscheck
-
 ::: bdbvhubrenewal.evaluation.heldout
 
 ::: bdbvhubrenewal.evaluation.ppc

@@ -160,11 +160,6 @@ tasks:
       - uv run bdbvhubrenewal compare-hub
       - uv run bdbvhubrenewal report
 
-  crosscheck:
-    desc: Write the weekly cross-check of the daily nowcast
-    cmds:
-      - uv run python scripts/weekly_crosscheck.py
-
   getting-started:
     desc: Run the Getting started notebook again and save its outputs
     cmds:

@@ -35,7 +35,6 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 
 ```bash
 task backtest           # development backtest, real releases and recovery check
-task crosscheck         # weekly cross-check of the nowcast
 task backtest-lopo      # leave one province out
 task backtest-scenarios # simulated scenarios calibrated to the real data
 task backtest-zones     # random walk models at health-zone level

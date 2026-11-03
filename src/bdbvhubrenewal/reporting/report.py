@@ -41,14 +41,13 @@ from bdbvhubrenewal.evaluation.backtest import (
     run_forecasts,
     truth_changes,
 )
-from bdbvhubrenewal.evaluation.crosscheck import make_crosscheck
 from bdbvhubrenewal.evaluation.heldout import load_model_choices
 from bdbvhubrenewal.evaluation.hubcompare import (
     attribution,
     forecast_quantiles,
     summarise_comparison,
 )
-from bdbvhubrenewal.evaluation.nowcast import relative_wis
+from bdbvhubrenewal.evaluation.nowcast import BASELINE, relative_wis
 from bdbvhubrenewal.evaluation.scoring import summarise_scores
 from bdbvhubrenewal.evaluation.zones import zone_relative_skill
 from bdbvhubrenewal.forecasters.base import (
@@ -62,7 +61,10 @@ from bdbvhubrenewal.reporting.explorer import (
     explorer_html,
     write_explorer,
 )
-from bdbvhubrenewal.reporting.nowcast_plots import plot_release_nowcasts
+from bdbvhubrenewal.reporting.nowcast_plots import (
+    plot_relative_overall,
+    plot_release_nowcasts,
+)
 from bdbvhubrenewal.reporting.plots import (
     comparison_label,
     plot_delay_check,
@@ -210,8 +212,7 @@ def make_report(
 
     # Backtest, held-out and comparison pages.
     names = [s.name for s in list_models()]
-    _release_section(fig, gen, res, real)
-    make_crosscheck(data_dir, config_path, fig, res)
+    _release_section(fig, gen, res, real, names)
     _backtest_page(fig, gen, res, out, config, target, names)
     _heldout_page(fig, gen, res, target, names, config)
     _comparison_page(fig, gen, Path(hub_comparison), target)
@@ -245,19 +246,25 @@ _TARGET_LABELS: Final = {
 }
 
 
+def _ours(frame: pd.DataFrame, names: Sequence[str]) -> pd.DataFrame:
+    """Keep our models and the as-reported floor, without the hub teams."""
+    return frame.loc[frame["model"].isin([*names, BASELINE])]
+
+
 def _release_section(
-    fig: Path, gen: Path, res: Path, real: pd.DataFrame
+    fig: Path, gen: Path, res: Path, real: pd.DataFrame, names: Sequence[str]
 ) -> None:
     """Write the real-release evaluation tables and figure.
 
-    The tables hold the number of forecasts, $n$, in every row.
+    The tables hold the number of forecasts, $n$, in every row, for our
+    models only.
     """
     paths = {
         n: res / f"nowcast-{n}.csv" for n in ("scores", "quantiles", "origins")
     }
-    scores = pd.read_csv(paths["scores"])
-    quantiles = pd.read_csv(paths["quantiles"])
-    origins = pd.read_csv(paths["origins"]).fillna("")
+    scores = _ours(pd.read_csv(paths["scores"]), names)
+    quantiles = _ours(pd.read_csv(paths["quantiles"]), names)
+    origins = _ours(pd.read_csv(paths["origins"]).fillna(""), names)
     national = scores["location"] == NATIONAL
     scores["pool"] = national.map({True: "national", False: "provinces"})
     zones = pd.read_csv(res / "zone-scores.csv", low_memory=False)
@@ -268,6 +275,15 @@ def _release_section(
     by_pool = relative_wis(pooled, ("target", "pool", "origin"))
     scores["target"] = scores["target"].map(_TARGET_LABELS)
     by_place = relative_wis(scores, ("target", "origin", "location"))
+    reported = overall.loc[overall["target"] == _TARGET_LABELS["reported"]]
+    save_light_dark(
+        partial(
+            plot_relative_overall,
+            reported,
+            [n for n in names if n in set(reported["model"])],
+        ),
+        fig / "relative-overall.svg",
+    )
     save_light_dark(
         partial(
             plot_release_nowcasts,
@@ -279,8 +295,8 @@ def _release_section(
         fig / "release-nowcasts.svg",
     )
     _write(
-        gen / "release-backtest.md",
-        "## Nowcasts from the real releases\n\n"
+        gen / "release-headline.md",
+        "## Overall\n\n"
         "Each release with a later release is an origin.\n"
         "Every model is scored on the count each later release reports, "
         "with the count outstanding at the origin in each final-count "
@@ -293,33 +309,36 @@ def _release_section(
         "Zones have only the random walk models, run on each zone, and "
         "only the reported target "
         "([Health zones](methods/evaluation.md#health-zones)).\n\n"
-        "Scores by target and national or provinces pooled, over every "
-        "origin.\n\n"
-        + _table(overall)
-        + "\n![Final forecasts of the recent weeks by origin, with the "
-        "counts each release reports.](figures/release-nowcasts.svg"
+        "![Relative WIS and 90% coverage of each model on the counts each "
+        "later release reported, by pool.](figures/relative-overall.svg"
         "#only-light)\n"
-        "![Final forecasts of the recent weeks by origin, with the counts "
-        "each release reports.](figures/release-nowcasts-dark.svg"
+        "![Relative WIS and 90% coverage of each model on the counts each "
+        "later release reported, by pool.](figures/relative-overall-dark.svg"
         "#only-dark)\n\n"
+        "Scores by target and pool, over every origin.\n\n" + _table(overall),
+    )
+    _write(
+        gen / "release-nowcasts.md",
+        "## Nowcasts from the real releases\n\n"
         + _dropdown(
-            "Scores by target, national or provinces pooled, and origin.\n\n"
+            "![Final forecasts of the recent weeks by origin, with the "
+            "counts each release reports.](figures/release-nowcasts.svg"
+            "#only-light)\n"
+            "![Final forecasts of the recent weeks by origin, with the "
+            "counts each release reports.](figures/release-nowcasts-dark.svg"
+            "#only-dark)\n",
+            "Figure",
+        )
+        + "\n"
+        + _dropdown(
+            "Scores by target, pool and origin.\n\n"
             + _table(by_pool)
             + "\nScores by target, origin and place.\n\n"
             + _table(by_place)
             + "\nOrigins.\n\n"
             + _table(origins),
             "Tables",
-        )
-        + "\n## Weekly cross-check\n\n"
-        "Crosses are the daily ladder run on hub weeks from the "
-        "latest two releases with cut-offs a week apart.\n"
-        "Bars are the `randomwalknowcast` 50% and 90% intervals at "
-        "the later of the two.\n\n"
-        "![Weekly cross-check points over the randomwalknowcast bands.]"
-        "(figures/weekly-crosscheck.svg#only-light)\n"
-        "![Weekly cross-check points over the randomwalknowcast bands.]"
-        "(figures/weekly-crosscheck-dark.svg#only-dark)\n",
+        ),
     )
 
 
@@ -500,7 +519,7 @@ _LADDER_SECTIONS = (
     ),
     (
         "Scores",
-        "Forecasts from the real vintage, scored against a later one.",
+        "Forecasts from the real vintage, scored against a later release.",
         (
             "real_ppc90",
             "real_crps_national",
@@ -604,7 +623,7 @@ def _lopo_section(path: Path) -> str:
         "of the likelihood (see "
         "[Evaluation](methods/evaluation.md#leave-one-province-out)).\n"
         "The scores are for the left-out province only, against the latest "
-        "real vintage.\n\n" + _table(table[["model", "masked", *cols]])
+        "release.\n\n" + _table(table[["model", "masked", *cols]])
     )
 
 
@@ -625,7 +644,7 @@ def _zone_section(path: Path) -> str:
         "cases (see [Evaluation](methods/evaluation.md#health-zones)).\n"
         "Models marked summed to provinces have their zone samples made to "
         "sum to the province samples, as in the submitted file.\n"
-        "Scores are on the zone count each later real vintage reports.\n"
+        "Scores are on the zone count each later release reports.\n"
         "Relative WIS is against `randomwalk`, and below 1 is better.\n\n"
         + _table(table[["model", *cols, "relative_wis"]])
         + "\n\nRelative WIS by week, with 0 the week of the reference "
@@ -711,13 +730,12 @@ _RELEASE_MATCH: Final = [
 """Columns that identify one forecast scored against one release."""
 
 
-def _summary_figure(
-    fig: Path,
+def _horizon_table(
     gen: Path,
     reported: pd.DataFrame,
     names: Sequence[str],
 ) -> None:
-    """Write relative WIS and coverage by horizon on the reported target.
+    """Write the relative WIS and coverage by horizon table, reported target.
 
     Only the forecasts random walk also made are shown.
     """
@@ -727,19 +745,13 @@ def _summary_figure(
     if both["model"].nunique() < 2:
         _write(gen / "backtest-summary.md", "")
         return
-    _save_metric_figures(
-        fig, "scores-summary", partial(plot_score_summary, both, models=names)
-    )
     table = relative_wis(both, ("horizon",))
     table["model"] = pd.Categorical(table["model"], list(names), ordered=True)
     table = table.sort_values(["model", "horizon"]).reset_index(drop=True)
     origins = ", ".join(sorted(set(both["origin"].astype(str))))
-    alt = "WIS relative to random walk and 90% coverage, by horizon."
     _write(
         gen / "backtest-summary.md",
-        _metric_tabs("scores-summary", alt)
-        + "\n"
-        + _dropdown(
+        _dropdown(
             "Mean WIS divided by that of random walk, and interval "
             "coverage, on the counts each later release reported, over the "
             f"forecasts both made from the origins {origins}.\n"
@@ -917,7 +929,7 @@ def _backtest_page(
     names: list[str],
 ) -> None:
     k = config.complete_after_weeks
-    scores = _release_scores(res)
+    scores = _ours(_release_scores(res), names)
     reported = scores.loc[scores["target"] == "reported"]
     for by in ("horizon", "location"):
         for metric in ("wis", "log_wis", "coverage_90", "bias"):
@@ -927,7 +939,7 @@ def _backtest_page(
                 ),
                 fig / f"scores-{metric.replace('_', '-')}-{by}.svg",
             )
-    _summary_figure(fig, gen, reported, names)
+    _horizon_table(gen, reported, names)
     _write(gen / "backtest-findings.md", _backtest_findings(scores))
     _write(
         gen / "scores-location.md",
