@@ -199,9 +199,9 @@ DECISIONS: dict[str, str] = {
     "S5 + depletion (main)": "Kept and chosen as `renewal`: fewer wild prior "
     "draws (0.44 to 0.32), with scores level with S3 and S4 and a little "
     "behind S2.",
-    "renewalbvd": "Shadow candidate: best on simulated data with a "
+    "renewalbvd": "Heads the submission chain: best on simulated data with a "
     "truth-based BVD summary, worse on the one real vintage.",
-    "renewalsp": "Comparison variant and the CI's step after the retry.",
+    "renewalsp": "Second in the submission chain, after renewalbvd.",
 }
 """One sentence per rung: kept, dropped or an option, and why. Filled in
 from the results."""
