@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gzip
+import tomllib
 from pathlib import Path
 
 import numpy as np
@@ -309,3 +310,6 @@ def test_own_hub_ids() -> None:
 
     ids = own_hub_ids(ROOT / "config" / "hub.toml")
     assert ids["randomwalknowcast"] == "seabbs-rwnowcast"
+    # The renewal track's id carries the model the chain submits first.
+    track = tomllib.loads((ROOT / "config" / "hub.toml").read_text())
+    assert ids[track["submission"]["model"]] == "seabbs-renewal"

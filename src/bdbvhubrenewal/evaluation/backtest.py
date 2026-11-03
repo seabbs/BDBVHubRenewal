@@ -87,6 +87,7 @@ __all__ = [
     "run_scenarios",
     "saturdays",
     "score_by_truth_vintage",
+    "score_development",
     "score_tasks",
     "shard_tasks",
     "truth_changes",
@@ -886,13 +887,35 @@ def run_development(
     tuple of pandas.DataFrame
         The forecasts and the scores.
     """
-    real = target.loc[target["kind"] == "real"]
-    latest = real_vintages(real)[-1]
     tasks = development_tasks(target, delays, config, daily=daily)
     forecasts = run_forecasts(models, tasks, cache, fits)
+    return forecasts, score_development(forecasts, target, config)
+
+
+def score_development(
+    forecasts: pd.DataFrame, target: pd.DataFrame, config: BacktestConfig
+) -> pd.DataFrame:
+    """Score development forecasts against the latest real vintage.
+
+    Parameters
+    ----------
+    forecasts : pandas.DataFrame
+        Output of `run_forecasts`, such as every model's committed
+        forecasts, so all are scored against the same truth.
+    target : pandas.DataFrame
+        The tidy target table.
+    config : BacktestConfig
+        Settings.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Output of `score_tasks`.
+    """
+    real = target.loc[target["kind"] == "real"]
+    latest = real_vintages(real)[-1]
     truth = truth_from_vintage(real, latest)
-    scores = score_tasks(forecasts, truth, latest, config.complete_after_weeks)
-    return forecasts, scores
+    return score_tasks(forecasts, truth, latest, config.complete_after_weeks)
 
 
 def lopo_tasks(

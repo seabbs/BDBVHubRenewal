@@ -180,27 +180,27 @@ def resolve_baseline(preferred: str) -> str:
 
 
 def own_hub_ids(path: Path | str = "config/hub.toml") -> dict[str, str]:
-    """Return the hub ids of our models that submit under their own id.
+    """Return the hub ids of our submitted models.
 
     Parameters
     ----------
     path : pathlib.Path or str
-        The hub submission settings, with a `[models.<name>]` table per
-        model that has its own id.
+        The hub submission settings: the model the `[submission]` id
+        carries first, and a `[models.<name>]` table per model that has
+        its own id.
 
     Returns
     -------
     dict
         Model name to hub model id, such as
-        `{"randomwalknowcast": "seabbs-rwnowcast"}`.
+        `{"renewal": "seabbs-renewal", "randomwalknowcast":
+        "seabbs-rwnowcast"}`.
     """
     from bdbvhubrenewal.submission.hub import model_abbr_for, model_id
 
     raw = tomllib.loads(Path(path).read_text())
-    return {
-        name: model_id(model_abbr_for(name, path))
-        for name in raw.get("models", {})
-    }
+    names = [raw["submission"]["model"], *raw.get("models", {})]
+    return {name: model_id(model_abbr_for(name, path)) for name in names}
 
 
 def attribution(accessed: str) -> str:

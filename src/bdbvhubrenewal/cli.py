@@ -756,7 +756,7 @@ def _backtest(args: argparse.Namespace) -> int:
         _write_fits(fits, results / "lopo-fits.csv")
         print(f"Leave one province out: {len(lopo_scores)} scored forecasts.")
         return 0
-    forecasts, scores = bt.run_development(
+    forecasts, _ = bt.run_development(
         models,
         target,
         delays,
@@ -766,29 +766,32 @@ def _backtest(args: argparse.Namespace) -> int:
         daily=load_daily(args.data),
     )
     _write_fits(fits, results / "backtest-fits.csv")
-    _release_backtest(args, config, target, delays, results)
+    # Rows of models not run here are kept, so the fitted variants can be
+    # run apart from the others, and every model is scored again against
+    # the same truth.
+    forecasts = bt.merge_by_model(output / "forecasts.csv.gz", forecasts)
+    scores = bt.score_development(forecasts, target, config)
     by_truth = bt.score_by_truth_vintage(
         forecasts, target, config.complete_after_weeks
     )
-    # Rows of models not run here are kept, so the fitted variants can be
-    # run apart from the others.
-    tables = [
+    _release_backtest(args, config, target, delays, results, forecasts)
+    for table, path in (
         (forecasts, output / "forecasts.csv.gz"),
         (scores, results / "backtest-scores.csv"),
         (by_truth, results / "backtest-scores-by-truth.csv"),
-    ]
+    ):
+        table.to_csv(path, index=False)
     recovery = ""
     if not args.no_recovery:
         rforecasts, rscores = bt.run_recovery(
             models, config, lags=cutoff_lags(load_daily(args.data))
         )
-        tables += [
+        for table, path in (
             (rforecasts, output / "recovery-forecasts.csv.gz"),
             (rscores, results / "recovery-scores.csv"),
-        ]
+        ):
+            bt.merge_by_model(path, table).to_csv(path, index=False)
         recovery = f"; recovery: {len(rscores)}"
-    for table, path in tables:
-        bt.merge_by_model(path, table).to_csv(path, index=False)
     print(
         f"Development: {len(scores)} scored forecasts{recovery}. "
         f"Written to {results}."
@@ -802,8 +805,12 @@ def _release_backtest(
     target: pd.DataFrame,
     delays: pd.DataFrame,
     results: Path,
+    forecasts: pd.DataFrame,
 ) -> None:
-    """Score the random walk models from every real release."""
+    """Score every model from every real release.
+
+    The fitted models' final-count forecasts are taken from `forecasts`.
+    """
     daily = load_daily(args.data)
     real = target.loc[target["kind"] == "real"]
     tasks = [
@@ -814,7 +821,7 @@ def _release_backtest(
         if not config.is_heldout(t.vintage)
     ]
     out = release_backtest(
-        tasks, daily, target, stored=_stored_samples(args, target)
+        tasks, daily, target, stored=_stored_samples(args, target, forecasts)
     )
     for name, table in (
         ("scores", out.scores),
@@ -827,12 +834,12 @@ def _release_backtest(
 
 
 def _stored_samples(
-    args: argparse.Namespace, target: pd.DataFrame
+    args: argparse.Namespace, target: pd.DataFrame, forecasts: pd.DataFrame
 ) -> pd.DataFrame:
     """Final-count samples of the models not run here, by vintage.
 
-    The fitted models' forecasts are those committed in `--output`. Hub
-    teams' forecasts are matched to the real vintage serving their round.
+    The fitted models' come from the backtest forecasts. Hub teams'
+    forecasts are matched to the real vintage serving their round.
     """
     from bdbvhubrenewal.evaluation import hubcompare as hc
 
@@ -844,17 +851,11 @@ def _stored_samples(
         "sample",
         "value",
     ]
-    path = Path(args.output) / "forecasts.csv.gz"
-    ours = (
-        pd.read_csv(path)
-        if path.exists()
-        else pd.DataFrame(columns=[*cols, "kind", "as_of"])
-    )
     fitted = [s.name for s in list_models() if s.fitted]
-    ours = ours.loc[
-        ours["model"].isin(fitted)
-        & (ours["kind"] == "real")
-        & ours["as_of"].isna()
+    ours = forecasts.loc[
+        forecasts["model"].isin(fitted)
+        & (forecasts["kind"] == "real")
+        & forecasts["as_of"].isna()
     ]
     data = Path(args.data)
     hub = hc.load_hub_submissions(
