@@ -262,6 +262,7 @@ def _release_section(
     scores["target"] = scores["target"].map(_TARGET_LABELS)
     national = scores["location"] == NATIONAL
     scores["pool"] = national.map({True: "national", False: "provinces"})
+    overall = relative_wis(scores, ("target", "pool"))
     by_pool = relative_wis(scores, ("target", "pool", "origin"))
     by_place = relative_wis(scores, ("target", "origin", "location"))
     save_light_dark(
@@ -286,8 +287,9 @@ def _release_section(
         "([Evaluation](methods/evaluation.md#real-releases)).\n"
         "Relative WIS is against `randomwalk` on the forecasts both made, "
         "and every row counts them, $n$.\n\n"
-        "Scores by target, national or provinces pooled, and origin.\n\n"
-        + _table(by_pool)
+        "Scores by target and national or provinces pooled, over every "
+        "origin.\n\n"
+        + _table(overall)
         + "\n![Final forecasts of the recent weeks by origin, with the "
         "counts each release reports.](figures/release-nowcasts.svg"
         "#only-light)\n"
@@ -295,7 +297,9 @@ def _release_section(
         "each release reports.](figures/release-nowcasts-dark.svg"
         "#only-dark)\n\n"
         + _dropdown(
-            "Scores by target, origin and place.\n\n"
+            "Scores by target, national or provinces pooled, and origin.\n\n"
+            + _table(by_pool)
+            + "\nScores by target, origin and place.\n\n"
             + _table(by_place)
             + "\nOrigins.\n\n"
             + _table(origins),
