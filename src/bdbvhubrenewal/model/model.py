@@ -330,7 +330,6 @@ def _named_walk(
     sd: float,
     n_weeks: int,
     ar: bool = False,
-    knots: tuple[float, float] | None = None,
     forecast_half_life: float | None = None,
 ) -> TemporalProcess:
     """Weekly walk frozen over the seeding period, fitted on the data weeks.
@@ -338,7 +337,6 @@ def _named_walk(
     `n_weeks` data weeks set the fit axis; later steps are drawn in the
     forecast pass. With `ar`, the walk is AR(1) with a half-life of
     LogNormal(log 6 weeks, 0.6) (BVDOutbreakSize deviations: 42 days).
-    With `knots`, the knots of the walk are sampled (`KnotWalk`).
     With `forecast_half_life`, the forecast steps revert towards 0
     (`NonCentredRandomWalk`).
     """
@@ -352,7 +350,6 @@ def _named_walk(
     inner = NonCentredRandomWalk(
         sd_rv,
         frozen=frozen,
-        knots=knots,
         n_fit=frozen + n_weeks,
         half_life_rv=half_life,
         forecast_half_life=forecast_half_life,
@@ -503,14 +500,12 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             0.0,
             0.5,
             0.3,
-            fixed_mean=True,
             active=None if outbreak is None else outbreak.any(axis=0),
         ),
         baseline_rt_process=_named_walk(
             "rt_sd",
             0.2,
             fit_weeks(data, config),
-            knots=(0.0, 0.5),
             forecast_half_life=FORECAST_RT_HALF_LIFE,
         ),
         subpop_rt_deviation_process=_named_walk(

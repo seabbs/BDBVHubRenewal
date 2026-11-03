@@ -58,7 +58,7 @@ def test_float32_log_density_matches_float64(table, config):
         for k, v in tr.items()
         if v["type"] == "sample" and not v["is_observed"]
     }
-    site = "log_rt_baseline_knots"
+    site = "log_rt_baseline_z"
     steps = np.linspace(-0.02, 0.02, 21)
     lp32 = log_density_curve(model, data, params, site, steps, jnp.float32)
     with enable_x64():
@@ -86,7 +86,7 @@ def test_float32_density_stays_smooth_near_poisson(table, x):
         if v["type"] == "sample" and not v["is_observed"]
     }
     params["inv_sqrt_phi_known"] = np.float32(x)
-    site = "log_rt_baseline_knots"
+    site = "log_rt_baseline_z"
     steps = np.linspace(-0.02, 0.02, 21)
     lp32 = log_density_curve(model, data, params, site, steps, jnp.float32)
     with enable_x64():

@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """The province renewal model, built on PyRenew (JAX, NumPyro).
 
-- `rt`: random walks on knots, pooled initial values and sum-to-zero
+- `rt`: non-centred random walks, pooled initial values and sum-to-zero
   province deviations.
 - `renewal`: the coupled renewal with importation, seeding and depletion.
 - `delays`: the generation interval and the onset-to-report delay.

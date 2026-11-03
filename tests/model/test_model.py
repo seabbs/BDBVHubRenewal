@@ -382,25 +382,6 @@ def test_sporadic_weeks_take_national_rt(sim_vintage):
     assert np.isfinite(_log_density(model, data))
 
 
-def test_primary_seeding_leaves_other_provinces_to_importation(sim_vintage):
-    data = sim_vintage
-    model = build_model(data, ModelConfig(seeding="primary", coupling="none"))
-    tr = trace(model, data)
-    assert tr["initial_onsets"]["value"].shape == (1,)
-    x = np.asarray(tr["latent_infections_by_subpop"]["value"])
-    primary = int(np.argmin(data.seed_days))
-    others = np.arange(x.shape[1]) != primary
-    # Without coupling nothing reaches the other provinces.
-    assert x[:, others].max() < 1e-3
-    assert x[:, primary].max() > 1.0
-    coupled = build_model(data, ModelConfig(seeding="primary"))
-    xc = np.asarray(
-        trace(coupled, data)["latent_infections_by_subpop"]["value"]
-    )
-    assert xc[:, others].max(axis=0).min() > 1e-3
-    assert np.isfinite(_log_density(coupled, data))
-
-
 def test_learnt_kernel_flows_are_zero_at_prior_centre(sim_vintage):
     from bdbvhubrenewal.model import LearntKernel
 

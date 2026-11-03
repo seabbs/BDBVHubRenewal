@@ -14,7 +14,7 @@ The model figure is built from `docs/diagrams/model_dag.tex` by `scripts/build_d
 
 | Component | PyRenew piece | Built here |
 |---|---|---|
-| Pooled $R_p(t)$ | `SubpopulationInfections`, `WeeklyTemporalProcess` | `KnotWalk` and `NonCentredRandomWalk`. |
+| Pooled $R_p(t)$ | `SubpopulationInfections`, `WeeklyTemporalProcess` | `NonCentredRandomWalk`. |
 | Renewal with importation and depletion | `SubpopulationInfections`, subclassed | `coupled_renewal`. |
 | Ascertainment $\alpha(s)$ | `IndependentAscertainment` with a temporal process | None. |
 | Onset-to-report delay $f_s(d)$ | None | `HazardDelay`. |
@@ -65,7 +65,6 @@ Submission and backtest fits take their settings from `ci/policy.toml` and `conf
 
 The parameterisation is as follows.
 
-- The pooled $\log R(t)$ walk samples its weekly knots, not a level and its steps.
-- The other walks sample their steps non-centred, as standard normals scaled by the step SD.
+- Every walk, the pooled $\log R(t)$ included, samples its steps non-centred, as standard normals scaled by the step SD.
 - Province deviations sum to zero through an orthonormal basis $Q$ of the sum-to-zero subspace, so the $P - 1$ free processes are unconstrained.
 - The starting offsets of the deviations are sampled centred.

@@ -8,8 +8,6 @@ deviations with a sum-to-zero constraint.
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
-
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -20,62 +18,6 @@ from jax import Array
 from jax.typing import ArrayLike
 from pyrenew.latent.temporal_processes import TemporalProcess
 from pyrenew.metaclass import RandomVariable
-
-
-class KnotWalk(dist.Distribution):
-    r"""Random walk over knots, with the knots themselves as the variable.
-
-    $$k_0 \sim N(m, s), \qquad k_j - k_{j-1} \sim N(0, \sigma).$$
-
-    Sampling the knots (total log Rt per week) rather than a level plus
-    steps removes the stiff direction where the level and every step move
-    together (BVDOutbreakSize #1124). The prior is unchanged.
-    Batch shape is that of `loc`; the event is the `num_knots` knots.
-    """
-
-    arg_constraints: ClassVar[dict[str, Any]] = {
-        "loc": dist.constraints.real,
-        "scale": dist.constraints.positive,
-        "step_sd": dist.constraints.positive,
-    }
-    support = dist.constraints.real_vector
-    reparametrized_params: ClassVar[list[str]] = ["loc", "scale", "step_sd"]
-
-    def __init__(
-        self,
-        loc: ArrayLike,
-        scale: ArrayLike,
-        step_sd: ArrayLike,
-        num_knots: int,
-        *,
-        validate_args: bool | None = None,
-    ) -> None:
-        self.loc, self.scale, self.step_sd = dist.util.promote_shapes(
-            loc, scale, step_sd
-        )
-        self.num_knots = num_knots
-        batch = jax.lax.broadcast_shapes(
-            jnp.shape(loc), jnp.shape(scale), jnp.shape(step_sd)
-        )
-        super().__init__(batch, (num_knots,), validate_args=validate_args)
-
-    def sample(self, key: Array, sample_shape: tuple[int, ...] = ()) -> Array:
-        """Draw knots: a start and cumulative steps."""
-        shape = sample_shape + self.batch_shape + (self.num_knots,)
-        eps = jax.random.normal(key, shape)
-        start = self.loc[..., None] + self.scale[..., None] * eps[..., :1]
-        steps = self.step_sd[..., None] * eps[..., 1:]
-        return jnp.concatenate(
-            [start, start + jnp.cumsum(steps, axis=-1)], axis=-1
-        )
-
-    def log_prob(self, value: Array) -> Array:
-        """Return the log density: normal start plus normal increments."""
-        start = dist.Normal(self.loc, self.scale).log_prob(value[..., 0])
-        steps = dist.Normal(0.0, self.step_sd[..., None]).log_prob(
-            jnp.diff(value, axis=-1)
-        )
-        return jnp.asarray(start + steps.sum(-1))
 
 
 def _damped_sum(phi: ArrayLike, steps: Array) -> Array:
@@ -109,10 +51,6 @@ class NonCentredRandomWalk:
     of standardised steps that `Predictive` draws from the prior given
     the posterior, so steps with no data never enter NUTS (no funnel).
 
-    `knots=(m, s)` samples the knots themselves (`KnotWalk`) on the fit
-    axis, with the first knot $N(m, s)$ in place of `initial_value`
-    (random walk only).
-
     `forecast_half_life` $h_f$ makes the steps past the fit axis AR(1),
     $x(t) = \phi_f\, x(t - 1) + \sigma z_t$ with $\phi_f = 2^{-1/h_f}$,
     so a random walk reverts towards 0 there. The fit is unchanged.
@@ -123,8 +61,6 @@ class NonCentredRandomWalk:
         Step SD $\sigma$.
     frozen : int, optional
         Leading steps fixed at zero.
-    knots : tuple of float, optional
-        Sample the knots (`KnotWalk`).
     n_fit : int, optional
         Length of the fit axis.
     half_life_rv : RandomVariable, optional
@@ -139,7 +75,6 @@ class NonCentredRandomWalk:
         self,
         innovation_sd_rv: RandomVariable,
         frozen: int = 0,
-        knots: tuple[float, float] | None = None,
         n_fit: int | None = None,
         half_life_rv: RandomVariable | None = None,
         forecast_half_life: float | None = None,
@@ -147,7 +82,6 @@ class NonCentredRandomWalk:
         self.innovation_sd_rv = innovation_sd_rv
         self.forecast_half_life = forecast_half_life
         self.frozen = frozen
-        self.knots = knots
         self.n_fit = n_fit
         self.half_life_rv = half_life_rv
 
@@ -184,28 +118,15 @@ class NonCentredRandomWalk:
             if self.half_life_rv is None
             else 0.5 ** (1.0 / self.half_life_rv())
         )
-        if self.knots is not None:
-            loc, scale = self.knots
-            k = numpyro.sample(
-                f"{name_prefix}_knots",
-                KnotWalk(
-                    jnp.full((n_processes,), loc),
-                    jnp.full((n_processes,), scale),
-                    jnp.broadcast_to(sd, (n_processes,)),
-                    n_free + 1,
-                ),
-            ).T
-            past = jnp.vstack([jnp.repeat(k[:1], frozen, axis=0), k])
-        else:
-            z = numpyro.sample(
-                f"{name_prefix}_z",
-                dist.Normal(0.0, 1.0).expand([n_free, n_processes]),
-            )
-            free = _damped_sum(phi, sd * z)
-            decay = phi ** jnp.arange(1, n_free + 1)[:, None]
-            past = jnp.vstack(
-                [jnp.repeat(x0[None, :], frozen + 1, axis=0), decay * x0 + free]
-            )
+        z = numpyro.sample(
+            f"{name_prefix}_z",
+            dist.Normal(0.0, 1.0).expand([n_free, n_processes]),
+        )
+        free = _damped_sum(phi, sd * z)
+        decay = phi ** jnp.arange(1, n_free + 1)[:, None]
+        past = jnp.vstack(
+            [jnp.repeat(x0[None, :], frozen + 1, axis=0), decay * x0 + free]
+        )
         n_future = n_timepoints - n_past
         if n_future == 0:
             return past
@@ -241,9 +162,6 @@ class PooledInitialValue(RandomVariable):
         Mean $m$ and SD $s$ of the national value.
     pooling_sd : float
         Scale $\tau$ of the half-normal prior on the province spread.
-    fixed_mean : bool, optional
-        Fix $\mu = m$, when the national level is sampled elsewhere (as
-        the first knot of a `KnotWalk`).
     centred : bool, optional
         Sample the $P - 1$ offsets on the basis directly (centred, the
         default, as BVDOutbreakSize #1083), rather than standardised.
@@ -258,13 +176,11 @@ class PooledInitialValue(RandomVariable):
         loc: float,
         scale: float,
         pooling_sd: float,
-        fixed_mean: bool = False,
         centred: bool = True,
         active: ArrayLike | None = None,
     ) -> None:
         super().__init__(name=name)
         self.active = None if active is None else np.asarray(active, bool)
-        self.fixed_mean = fixed_mean
         self.centred = centred
         self.n_groups = n_groups
         self.loc = loc
@@ -279,12 +195,8 @@ class PooledInitialValue(RandomVariable):
         ArrayLike
             Shape `(n_groups,)`.
         """
-        mu = (
-            self.loc
-            if self.fixed_mean
-            else numpyro.sample(
-                f"{self.name}_mean", dist.Normal(self.loc, self.scale)
-            )
+        mu = numpyro.sample(
+            f"{self.name}_mean", dist.Normal(self.loc, self.scale)
         )
         n_active = (
             self.n_groups if self.active is None else int(self.active.sum())
