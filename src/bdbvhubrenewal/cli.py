@@ -930,7 +930,8 @@ def _plot_submission(args: argparse.Namespace) -> int:
     fig = plot_submission(args.submission, vintage, target=target)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out, dpi=100)
+    # The light theme is transparent, which is unreadable in dark mode PRs.
+    fig.savefig(out, dpi=100, facecolor="white", transparent=False)
     print(f"Wrote {out}.")
     return 0
 
