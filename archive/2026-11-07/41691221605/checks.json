@@ -1,0 +1,84 @@
+{
+  "checks": [
+    {
+      "details": [],
+      "name": "schema",
+      "status": "pass",
+      "summary": "format matches the hub's round"
+    },
+    {
+      "details": [],
+      "name": "values",
+      "status": "pass",
+      "summary": "all values finite and non-negative"
+    },
+    {
+      "details": [],
+      "name": "samples",
+      "status": "pass",
+      "summary": "100 full trajectories per location"
+    },
+    {
+      "details": [],
+      "name": "coverage",
+      "status": "pass",
+      "summary": "187 locations, weeks 2026-10-17 to 2026-11-28"
+    },
+    {
+      "details": [],
+      "name": "zones",
+      "status": "pass",
+      "summary": "178 zones in 8 provinces"
+    },
+    {
+      "details": [],
+      "name": "national_sum",
+      "status": "pass",
+      "summary": "CD is the exact sum (national.json: 8 modelled provinces)"
+    },
+    {
+      "details": [],
+      "name": "bounds",
+      "status": "pass",
+      "summary": "trajectories within the bounds"
+    },
+    {
+      "details": [],
+      "name": "plausible",
+      "status": "pass",
+      "summary": "within range of the recent data"
+    },
+    {
+      "details": [],
+      "name": "growth",
+      "status": "pass",
+      "summary": "forecast growth within the cap"
+    },
+    {
+      "details": [],
+      "name": "observed",
+      "status": "pass",
+      "summary": "close to observed (2026-11-01)"
+    },
+    {
+      "details": [
+        "WARN: CD-IT-05: median 28.5 against random walk baseline 1 over 2026-11-14 to 2026-11-28 (ratio 5.58)",
+        "WARN: CD-IT-25: median 50 against random walk baseline 11 over 2026-11-14 to 2026-11-28 (ratio 3.44)",
+        "WARN: CD-TO-02: median 12 against random walk baseline 0 over 2026-11-14 to 2026-11-28 (ratio 3.4)",
+        "WARN: CD-TO-08: median 18 against random walk baseline 0 over 2026-11-14 to 2026-11-28 (ratio 4.6)",
+        "WARN: CD-TO-11: median 22 against random walk baseline 2 over 2026-11-14 to 2026-11-28 (ratio 3.86)"
+      ],
+      "name": "baseline",
+      "status": "warn",
+      "summary": "CD-IT-05: median 28.5 against random walk baseline 1 over 2026-11-14 to 2026-11-28 (ratio 5.58) (and 4 more)"
+    },
+    {
+      "details": [],
+      "name": "previous",
+      "status": "skip",
+      "summary": "no last week's submission to compare with"
+    }
+  ],
+  "id": "bvd",
+  "status": "warn"
+}

@@ -1,0 +1,25 @@
+{
+  "rounds": {
+    "2026-11-07": {
+      "as_of": "2026-11-01",
+      "data_commit": "d67f1b74e0ecd1b32bb3d57554d871502acb2eca",
+      "history": [
+        {
+          "as_of": "2026-11-01",
+          "data_commit": "d67f1b74e0ecd1b32bb3d57554d871502acb2eca",
+          "pr_url": "https://github.com/InsightNet-US/BDBV-Modeling-Hub/pull/95",
+          "produced_by": "BVDOutbreakSize-informed renewal model",
+          "run": "https://github.com/seabbs/BDBVHubRenewal/actions/runs/41691221605",
+          "status": "submitted",
+          "updated": "2026-11-03T18:59:47.418775+00:00"
+        }
+      ],
+      "pr_url": "https://github.com/InsightNet-US/BDBV-Modeling-Hub/pull/95",
+      "produced_by": "BVDOutbreakSize-informed renewal model",
+      "run": "https://github.com/seabbs/BDBVHubRenewal/actions/runs/41691221605",
+      "status": "submitted",
+      "updated": "2026-11-03T18:59:47.418775+00:00"
+    }
+  },
+  "schema_version": 1
+}

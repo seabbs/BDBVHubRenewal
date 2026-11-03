@@ -1,0 +1,5 @@
+{"candidate": "bvd", "kind": "main", "label": "BVDOutbreakSize-informed renewal model",
+ "model": "renewalbvd",
+ "config": "bvd", "sampler": {"chain_method": "vectorized", "max_tree_depth": 10, "num_chains": 2, "num_samples": 500, "num_warmup": 500, "seed": 1, "target_accept": 0.9},
+ "package_version": "0.1.0",
+ "as_of": "2026-11-01", "reference_date": "2026-11-07"}

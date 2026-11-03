@@ -1,0 +1,40 @@
+{
+  "attempts": [
+    {
+      "checks": "warn",
+      "fit": "skip",
+      "handled": [],
+      "id": "randomwalknowcast",
+      "kind": "randomwalk",
+      "label": "random walk on a nowcast",
+      "ppc": "skip",
+      "reasons": [],
+      "status": "warn",
+      "validation": "pass",
+      "warnings": [
+        "bounds: CD-HU-02: 95th centile 172 is 8.61 times the bound base 20 (and 3 more)"
+      ]
+    }
+  ],
+  "handled": [],
+  "kind": "randomwalk",
+  "produced_by": "random walk on a nowcast",
+  "reason": "The random walk on a nowcast cleared every check, with warnings.",
+  "run": {
+    "as_of": "2026-11-01",
+    "candidate": "randomwalknowcast",
+    "config": "randomwalknowcast",
+    "kind": "randomwalk",
+    "label": "random walk on a nowcast",
+    "model": "randomwalknowcast",
+    "package_version": "0.1.0",
+    "reference_date": "2026-11-07",
+    "sampler": {}
+  },
+  "selected": "randomwalknowcast",
+  "shadows": [],
+  "status": "warn",
+  "warnings": [
+    "bounds: CD-HU-02: 95th centile 172 is 8.61 times the bound base 20 (and 3 more)"
+  ]
+}

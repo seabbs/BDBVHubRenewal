@@ -1,0 +1,5 @@
+{"candidate": "randomwalknowcast", "kind": "randomwalk", "label": "random walk on a nowcast",
+ "model": "randomwalknowcast",
+ "config": "randomwalknowcast", "sampler": {},
+ "package_version": "0.1.0",
+ "as_of": "2026-11-01", "reference_date": "2026-11-07"}

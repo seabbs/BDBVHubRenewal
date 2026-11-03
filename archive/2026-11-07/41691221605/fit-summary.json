@@ -1,0 +1,195 @@
+{
+  "applicable": true,
+  "bvd": {
+    "as_of": "2026-10-25",
+    "joint_max_rhat": 1.042,
+    "max_rhat": 1.1,
+    "skipped": [],
+    "tag": "results-3306"
+  },
+  "chains": [
+    {
+      "chain": 0,
+      "divergences": 2,
+      "draws": 500,
+      "ebfmi": 1.0040314381334545,
+      "mean_accept": 0.9071494936943054,
+      "step_size": 0.0036299549974501133,
+      "tree_depth_hits": 498,
+      "tree_depth_share": 0.996
+    },
+    {
+      "chain": 1,
+      "divergences": 12,
+      "draws": 500,
+      "ebfmi": 0.8234888729417531,
+      "mean_accept": 0.9200478196144104,
+      "step_size": 0.003750620409846306,
+      "tree_depth_hits": 489,
+      "tree_depth_share": 0.978
+    }
+  ],
+  "failures": [],
+  "families": [
+    {
+      "above": 0,
+      "elements": 1,
+      "max_rhat": 1.0117018875588502,
+      "min_ess_bulk": 131.94603502566164,
+      "parameter": "log_rt0_sd"
+    },
+    {
+      "above": 0,
+      "elements": 7,
+      "max_rhat": 1.0136398446527355,
+      "min_ess_bulk": 137.11190666333874,
+      "parameter": "log_rt0_offsets"
+    },
+    {
+      "above": 0,
+      "elements": 1,
+      "max_rhat": 1.0238561550259124,
+      "min_ess_bulk": 141.5631531567037,
+      "parameter": "rt_sd"
+    },
+    {
+      "above": 0,
+      "elements": 1,
+      "max_rhat": 1.012551616858085,
+      "min_ess_bulk": 168.7313950365079,
+      "parameter": "log_rt0_mean"
+    },
+    {
+      "above": 0,
+      "elements": 1,
+      "max_rhat": 1.0142667958919318,
+      "min_ess_bulk": 186.70564542393845,
+      "parameter": "inv_sqrt_phi_imputed"
+    },
+    {
+      "above": 0,
+      "elements": 1,
+      "max_rhat": 1.0082471669991964,
+      "min_ess_bulk": 219.14334520042024,
+      "parameter": "inv_sqrt_phi_known"
+    },
+    {
+      "above": 0,
+      "elements": 1,
+      "max_rhat": 1.007084361025318,
+      "min_ess_bulk": 252.16613110655598,
+      "parameter": "delay_smooth_sd"
+    },
+    {
+      "above": 0,
+      "elements": 1,
+      "max_rhat": 1.0010855696428693,
+      "min_ess_bulk": 298.22315955934835,
+      "parameter": "rt_dev_sd"
+    },
+    {
+      "above": 0,
+      "elements": 1,
+      "max_rhat": 1.0062853434538028,
+      "min_ess_bulk": 310.46666528459565,
+      "parameter": "pi_sd"
+    },
+    {
+      "above": 0,
+      "elements": 28,
+      "max_rhat": 1.0075897231109125,
+      "min_ess_bulk": 323.6515451579755,
+      "parameter": "log_rt_baseline_z"
+    }
+  ],
+  "headline": {
+    "divergent_fraction": 0.014,
+    "max_rhat": 1.0238561550259124,
+    "min_ess_bulk": 131.94603502566164,
+    "min_ess_tail": 88.69335140378998,
+    "n_divergent": 14.0,
+    "n_draws": 1000.0
+  },
+  "id": "bvd",
+  "status": "warn",
+  "thresholds": {
+    "fail": {
+      "divergent_fraction": 0.05,
+      "ess_bulk": 25,
+      "ess_tail": 25,
+      "rhat": 1.1
+    },
+    "warn": {
+      "divergent_fraction": 0.01,
+      "ess_bulk": 100,
+      "ess_tail": 100,
+      "rhat": 1.05
+    }
+  },
+  "warnings": [
+    "min tail ESS is 88.7, past the warning threshold 100",
+    "divergent fraction is 0.014, past the warning threshold 0.01"
+  ],
+  "worst": [
+    {
+      "ess_bulk": 131.94603502566164,
+      "ess_tail": 328.7110136122403,
+      "parameter": "log_rt0_sd",
+      "rhat": 1.0117018875588502
+    },
+    {
+      "ess_bulk": 137.11190666333874,
+      "ess_tail": 324.24768997543595,
+      "parameter": "log_rt0_offsets[1]",
+      "rhat": 1.0106169797714297
+    },
+    {
+      "ess_bulk": 141.5631531567037,
+      "ess_tail": 201.19430579425855,
+      "parameter": "rt_sd",
+      "rhat": 1.0238561550259124
+    },
+    {
+      "ess_bulk": 161.87880091647932,
+      "ess_tail": 465.39603052579173,
+      "parameter": "log_rt0_offsets[2]",
+      "rhat": 1.0136398446527355
+    },
+    {
+      "ess_bulk": 168.7313950365079,
+      "ess_tail": 358.96660024213304,
+      "parameter": "log_rt0_mean",
+      "rhat": 1.012551616858085
+    },
+    {
+      "ess_bulk": 186.70564542393845,
+      "ess_tail": 88.69335140378998,
+      "parameter": "inv_sqrt_phi_imputed",
+      "rhat": 1.0142667958919318
+    },
+    {
+      "ess_bulk": 219.14334520042024,
+      "ess_tail": 343.6969512139713,
+      "parameter": "inv_sqrt_phi_known",
+      "rhat": 1.0082471669991964
+    },
+    {
+      "ess_bulk": 252.16613110655598,
+      "ess_tail": 672.2436515931911,
+      "parameter": "delay_smooth_sd",
+      "rhat": 1.007084361025318
+    },
+    {
+      "ess_bulk": 298.22315955934835,
+      "ess_tail": 477.8219175779089,
+      "parameter": "rt_dev_sd",
+      "rhat": 1.0010855696428693
+    },
+    {
+      "ess_bulk": 310.46666528459565,
+      "ess_tail": 288.38842479219596,
+      "parameter": "pi_sd",
+      "rhat": 1.0062853434538028
+    }
+  ]
+}
