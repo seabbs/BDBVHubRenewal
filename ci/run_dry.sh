@@ -38,7 +38,7 @@ export FORECAST_DATE=${FORECAST_DATE:-${NOW%%T*}}
 #   | extra environment (optional) | text the PR body must hold (optional)
 SCENARIOS=(
   "main|main=pass|main||All checks passed."
-  "chosenrandomwalk|main=pass|randomwalk|FAKE_CHOSEN_MODEL=randomwalk|Shadow candidates"
+  "chosenrandomwalk|main=pass|randomwalk|MODEL=randomwalk|Shadow candidates"
   "bvdrelease|main=pass|main||used BVDOutbreakSize release \`results-3180\` (data to 2026-10-23, joint R-hat 1.041, limit 1.1)."
   "coherence|main=pass|main|FAKE_COHERENCE_GAP=2026-10-24:2|Handled: national (CD) differs from the sum of the provinces"
   "warn|main=warn|main"
@@ -62,6 +62,10 @@ SCENARIOS=(
   "randomwalknowcast|main=fail,retry-1=fail,renewalsp=fail|randomwalknowcast||Fallback model used (random walk on a nowcast)"
   "randomwalk|main=fail,retry-1=crash,renewalsp=fail,randomwalknowcast=negative|randomwalk"
   "skip|main=fail,retry-1=fail,renewalsp=fail,randomwalknowcast=negative,randomwalk=negative|skip"
+  # A chosen variant with its own leg heads the chain, then the random
+  # walks: renewalsp, else randomwalknowcast.
+  "singlepatch|main=pass|renewalsp|MODEL=renewalsp|Shadow candidates"
+  "singlepatchfallback|main=pass,renewalsp=fail|randomwalknowcast|MODEL=renewalsp|Fallback model used (random walk on a nowcast)"
 )
 
 sci() { uv run --quiet --project "$CI_DIR" "$@"; }
@@ -91,6 +95,9 @@ run_scenario() {
   export WORK="$ROOT/$name"
   export FAKE_SCENARIOS=$scenarios
   export FAKE_COHERENCE_GAP="" FAKE_CHOSEN_MODEL=""
+  # Most scenarios walk the main model's chain; `singlepatch*` choose
+  # renewalsp. `own_model` checks what config/hub.toml resolves to.
+  export MODEL=renewal
   local kv
   for kv in $extra; do export "${kv?}"; done
   export GH_LOG="$WORK/gh.log"
@@ -173,6 +180,17 @@ EOF
     echo "FAIL: $name selected $got, expected $expect"; cat "$WORK/select.log"
     return 1
   fi
+  # Every fit job's timeout leaves the gate 45 minutes before the close:
+  # 350 on Monday morning, 120 - 45 = 75 at 21:00 UTC on Tuesday.
+  local timeout
+  timeout=$(python3 -c "import json, sys; print(sorted({e['timeout'] for e in json.load(open(sys.argv[1]))['include']}))" \
+    "$WORK/matrix-primary.json")
+  case "$name" in
+    late) [ "$timeout" = "['75']" ] && [ "$retried" = false ] \
+      || { echo "FAIL: late timeouts $timeout, retried $retried"; return 1; } ;;
+    *) [ "$timeout" = "['350']" ] \
+      || { echo "FAIL: $name timeouts $timeout"; return 1; } ;;
+  esac
   if [ "$expect" = "skip" ]; then
     [ "$status" = 3 ] || { echo "FAIL: skip should exit 3, got $status"; return 1; }
     echo "ok: round skipped (exit 3); reason in $WORK/gate/provenance.md"
@@ -216,17 +234,6 @@ EOF
   if [ -n "$want" ] && ! grep -qF -- "$want" "$WORK/gate/pr-body.md"; then
     echo "FAIL: $name PR body lacks: $want"; return 1
   fi
-  # Every fit job's timeout leaves the gate 45 minutes before the close:
-  # 350 on Monday morning, 120 - 45 = 75 at 21:00 UTC on Tuesday.
-  local timeout
-  timeout=$(python3 -c "import json, sys; print(sorted({e['timeout'] for e in json.load(open(sys.argv[1]))['include']}))" \
-    "$WORK/matrix-primary.json")
-  case "$name" in
-    late) [ "$timeout" = "['75']" ] && [ "$retried" = false ] \
-      || { echo "FAIL: late timeouts $timeout, retried $retried"; return 1; } ;;
-    *) [ "$timeout" = "['350']" ] \
-      || { echo "FAIL: $name timeouts $timeout"; return 1; } ;;
-  esac
   echo "ok: selected $got; body $WORK/gate/pr-body.md"
 }
 
@@ -406,6 +413,20 @@ no_new_data() {
   echo "=== no-new-data ===" && echo "ok: $(grep '^reason=' "$WORK/out")"
 }
 
+own_model() {
+  # With no override, the renewal track resolves its model from
+  # `[submission] model` in config/hub.toml, not the model choice record
+  # (which names randomwalknowcast).
+  local got want
+  want=$(python3 -c 'import sys, tomllib
+print(tomllib.load(open(sys.argv[1], "rb"))["submission"]["model"])' \
+    "$CI_DIR/../config/hub.toml")
+  got=$(unset MODEL MODEL_ID; export WORK="$ROOT/own-model"; FAKE_CHOSEN_MODEL=randomwalknowcast \
+    bash -c 'source "$CI_DIR/steps/lib.sh"; resolve_model; echo "$MODEL"')
+  [ "$got" = "$want" ] || { echo "FAIL: renewal track resolved $got, not $want"; return 1; }
+  echo "=== own-model ===" && echo "ok: seabbs-renewal resolves $got from config/hub.toml"
+}
+
 failed=0
 if [ $# -gt 0 ]; then
   for s in "${SCENARIOS[@]}"; do
@@ -425,5 +446,6 @@ no_new_data || failed=1
 resubmission || failed=1
 ledger || failed=1
 baseline_track || failed=1
+own_model || failed=1
 [ $failed = 0 ] && echo "All dry-run scenarios passed." || echo "Some scenarios FAILED."
 exit $failed

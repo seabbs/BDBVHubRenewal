@@ -29,11 +29,13 @@ def test_repository_config_names_both_hub_models() -> None:
     base = tracks["rwnowcast"]
     assert base.model_id == "seabbs-rwnowcast"
     assert base.model == "randomwalknowcast"
-    # Sam opted seabbs-rwnowcast in for the 2026-11-07 round (2026-10-28);
-    # seabbs-renewal waits for its models. DRY_RUN still applies.
+    # Sam opted seabbs-rwnowcast in for the 2026-11-07 round (2026-10-28),
+    # and seabbs-renewal, carrying renewal, from 2026-11-02. DRY_RUN still
+    # applies.
     assert base.submit
     assert base.runs
-    assert not tracks["renewal"].submit
+    assert tracks["renewal"].submit
+    assert tracks["renewal"].model == "renewal"
 
 
 def test_opted_in_baseline_runs_without_a_model_choice(tmp_path: Path) -> None:
@@ -79,3 +81,18 @@ def test_renewal_skips_without_opt_in_even_with_a_choice(
     assert not tracks["renewal"].runs
     assert tracks["renewal"].reason == "not opted in (`submit = false`)"
     assert tracks["rwnowcast"].runs
+
+
+def test_renewal_carries_its_own_model_not_the_choice(tmp_path: Path) -> None:
+    # The renewal id names its model: `[submission] model` wins
+    # over the model choice record, which names the baseline.
+    cfg = write(tmp_path / "hub.toml", renewal=True, baseline=True)
+    cfg.write_text(
+        cfg.read_text().replace(
+            'model_abbr = "renewal"\n',
+            'model_abbr = "renewal"\nmodel = "renewal"\n',
+        )
+    )
+    tracks = {t.name: t for t in load_tracks(cfg, chosen="randomwalknowcast")}
+    assert tracks["renewal"].runs
+    assert tracks["renewal"].model == "renewal"

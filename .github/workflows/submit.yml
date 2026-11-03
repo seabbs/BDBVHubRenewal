@@ -60,8 +60,9 @@ permissions:
 env:
   CI_DIR: ci
   WORK: output/ci
-  # The model is the latest entry of results/model-choice.yml and the hub
-  # id is set in config/hub.toml (seabbs-renewal). `prepare`
+  # The model is `[submission] model` in config/hub.toml (else the latest
+  # entry of results/model-choice.yml) and the hub id is set there too
+  # (seabbs-renewal). `prepare`
   # resolves both into the run's context.json. A repo variable overrides.
   MODEL: ${{ vars.HUB_MODEL }}
   MODEL_ID: ${{ vars.HUB_MODEL_ID }}

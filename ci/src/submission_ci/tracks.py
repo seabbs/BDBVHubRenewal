@@ -5,7 +5,9 @@ stays the global switch: an opted-in model in a dry run builds and
 checks everything but pushes nothing.
 
 - `renewal` (`[submission]`): the renewal chain. It runs only when
-  opted in and a model has been chosen in `results/model-choice.yml`.
+  opted in and it has a model: `model` there, otherwise the latest
+  choice in `results/model-choice.yml`, and may fall back from it
+  (`ci/policy.toml`).
 - `baseline` (`[models.randomwalknowcast]`): random walk on a nowcast.
   It needs no model choice and has no fallback. If it cannot run, its
   round is skipped and nothing is submitted under its id.
@@ -46,7 +48,8 @@ def load_tracks(path: Path | str, chosen: str) -> list[Track]:
     with Path(path).open("rb") as fh:
         cfg = tomllib.load(fh)
     sub = cfg["submission"]
-    tracks = [_track(sub["model_abbr"], chosen, bool(sub.get("submit")), True)]
+    model = str(sub.get("model") or chosen)
+    tracks = [_track(sub["model_abbr"], model, bool(sub.get("submit")), True)]
     for model, entry in cfg.get("models", {}).items():
         tracks.append(
             _track(entry["model_abbr"], model, bool(entry.get("submit")), False)
