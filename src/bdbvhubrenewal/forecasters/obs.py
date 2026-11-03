@@ -37,7 +37,9 @@ MAX_SIZE = 1000.0
 """Upper bound of `fit_nb`'s size, the Poisson end of its range."""
 
 
-def fit_sizes(added: np.ndarray, remaining: np.ndarray) -> np.ndarray:
+def fit_sizes(
+    added: np.ndarray, remaining: np.ndarray, min_errors: int
+) -> np.ndarray:
     r"""Fit the size $\phi_k$ of each week back by maximum likelihood.
 
     Parameters
@@ -47,13 +49,17 @@ def fit_sizes(added: np.ndarray, remaining: np.ndarray) -> np.ndarray:
     remaining : numpy.ndarray
         Nowcast of the count still to come, `[N, K]`. A cell with 0 and
         no new reports adds nothing to the likelihood, so it pads.
+    min_errors : int
+        Cells with something to come a fit needs. With fewer, as before
+        any earlier release chains to the origin, the size is `MAX_SIZE`.
 
     Returns
     -------
     numpy.ndarray
-        $\phi_k$, `[K]`, NaN with no cells.
+        $\phi_k$, `[K]`.
     """
-    return np.asarray(fit_by_horizon(added, remaining))
+    fitted = np.asarray(fit_by_horizon(added, remaining))
+    return np.where((remaining > 0).sum(axis=0) >= min_errors, fitted, MAX_SIZE)
 
 
 def rate(num: np.ndarray, den: np.ndarray) -> np.ndarray:

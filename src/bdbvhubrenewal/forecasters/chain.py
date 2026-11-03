@@ -66,7 +66,7 @@ from bdbvhubrenewal.baselinenowcast import (
 )
 from bdbvhubrenewal.data.snapshots import SnapshotArrays, week_sum, weekly_sums
 from bdbvhubrenewal.forecasters.base import ModelUnavailableError
-from bdbvhubrenewal.forecasters.obs import MAX_SIZE, fit_sizes, rate
+from bdbvhubrenewal.forecasters.obs import fit_sizes, rate
 from bdbvhubrenewal.forecasters.pooling import (
     MIN_ERRORS,
     MIN_LEVEL,
@@ -666,19 +666,17 @@ def _add_spread(origin: Origin) -> None:
         settings.min_level,
         settings.min_errors,
     )
-    size = np.full(n.shape, MAX_SIZE)
+    size = np.zeros(n.shape)
     for e in np.unique(source):
         keep = fit & member[e][None, :, None]
         k_n = keep.shape[-1]
         size[e] = fit_sizes(
             np.where(keep, errors.added, 0.0).reshape(-1, k_n),
             np.where(keep, errors.remaining, 0.0).reshape(-1, k_n),
+            settings.min_errors,
         )
     k = np.arange(n.shape[1])[None, :]
-    n_used = n[source, k]
     origin.errors = errors
-    origin.size = np.where(
-        n_used >= settings.min_errors, size[source, k], MAX_SIZE
-    )
+    origin.size = size[source, k]
     origin.removal = rate(removed, reported)[source, k]
-    origin.obs_n, origin.obs_source = n_used, source
+    origin.obs_n, origin.obs_source = n[source, k], source
