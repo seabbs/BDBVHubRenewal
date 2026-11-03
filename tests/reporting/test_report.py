@@ -254,24 +254,19 @@ def _scores() -> pd.DataFrame:
 
 def test_score_views() -> None:
     old = _scores()
-    # Results without the new columns are final counts as reported, and
-    # complete weeks follow K.
-    views = report._score_views(old, 3)
-    assert list(views) == [
-        "complete weeks",
-        "all weeks as reported",
-        "vintage-matched",
-    ]
-    assert list(views["complete weeks"]["target_end_date"]) == ["2026-09-26"]
-    assert len(views["all weeks as reported"]) == 2
-    assert views["vintage-matched"].empty
     new = pd.concat(
         [
             old.assign(scoring="as reported", complete=[True, False]),
             old.assign(scoring="vintage-matched", complete=[True, False]),
         ]
     )
-    views = report._score_views(new, 3)
+    views = report._score_views(new)
+    assert list(views) == [
+        "complete weeks",
+        "all weeks as reported",
+        "vintage-matched",
+    ]
+    assert len(views["complete weeks"]) == 1
     assert len(views["vintage-matched"]) == 2
     assert len(views["all weeks as reported"]) == 2
 
@@ -292,7 +287,7 @@ def test_score_tables_split_by_set_and_level() -> None:
             both.assign(scoring="vintage-matched", complete=[True, False] * 4),
         ]
     )
-    text = report._score_tables(report._score_views(new, 3))
+    text = report._score_tables(report._score_views(new))
     for heading in (
         "**Complete weeks, national**",
         "**Complete weeks, province**",
@@ -358,9 +353,11 @@ def test_completeness_note() -> None:
 
 
 def test_score_views_without_lag_prior_origins() -> None:
-    scores = _scores().assign(lag_prior=[False, False])
-    other = _scores().assign(vintage="2026-08-18", lag_prior=[True, True])
-    views = report._score_views(pd.concat([scores, other]), 3)
+    scores = _scores().assign(
+        lag_prior=[False, False], scoring="as reported", complete=[True, False]
+    )
+    other = scores.assign(vintage="2026-08-18", lag_prior=[True, True])
+    views = report._score_views(pd.concat([scores, other]))
     own = views["complete weeks, own lag estimate"]
     assert set(own["vintage"]) == {"2026-10-09"}
     assert len(views["complete weeks"]) == 2

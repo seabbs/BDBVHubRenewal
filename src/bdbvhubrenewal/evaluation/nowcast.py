@@ -49,7 +49,6 @@ from bdbvhubrenewal.data.dates import as_date, epiweek_end
 from bdbvhubrenewal.data.snapshots import release_cutoff
 from bdbvhubrenewal.evaluation.scoring import SCORE_COLUMNS, score_forecasts
 from bdbvhubrenewal.forecasters.base import (
-    NATIONAL,
     ForecastModel,
     ForecastTask,
     ModelUnavailableError,
@@ -59,22 +58,17 @@ from bdbvhubrenewal.forecasters.base import (
 from bdbvhubrenewal.forecasters.chain import (
     MissingSnapshots,
     Origin,
-    Settings,
 )
 from bdbvhubrenewal.forecasters.randomwalk import (
     RandomWalk,
-    RandomWalkNowcast,
 )
 
 __all__ = [
     "BASELINE",
     "COMPLETE_GROWTH",
     "COMPLETE_WEEKS",
-    "NEAR_ZERO",
     "ReleaseBacktest",
-    "clock_sensitivity",
     "complete_weeks",
-    "pooled_summary",
     "relative_wis",
     "release_backtest",
     "reported_share",
@@ -93,9 +87,6 @@ COMPLETE_WEEKS = 4
 
 COMPLETE_GROWTH = 0.02
 """Most a complete week may grow between the last two releases."""
-
-NEAR_ZERO = 5.0
-"""Places whose weekly count never reaches this are near zero."""
 
 _LEVELS = (0.05, 0.25, 0.5, 0.75, 0.95)
 _KEYS = (
@@ -529,11 +520,6 @@ def _score(
         on=["location", "target_end_date"],
         how="left",
     )
-    level = scores.groupby("location")["truth"].max().rename("level")
-    scores = scores.merge(level, on="location", how="left")
-    scores["near_zero"] = (scores["location"] != NATIONAL) & (
-        scores["level"] < NEAR_ZERO
-    )
     counts = (
         scores.groupby(["model", "origin", "target"])
         .size()
@@ -600,48 +586,6 @@ def summarise(
     return out.reset_index()
 
 
-def pooled_summary(
-    scores: pd.DataFrame,
-    by: Sequence[str] = ("target", "model"),
-    unit: str = "provinces",
-) -> pd.DataFrame:
-    """Summarise national and the pooled places, with and without near zero.
-
-    National is the sum of the places, so it is kept apart from them
-    rather than pooled with them.
-
-    Parameters
-    ----------
-    scores : pandas.DataFrame
-        `ReleaseBacktest.scores`, with `near_zero`.
-    by : sequence of str
-        Columns to group by within each pool.
-    unit : str
-        Name of the places in the pool labels.
-
-    Returns
-    -------
-    pandas.DataFrame
-        `summarise` output with a `pool` column: `national`, `unit` and
-        `unit` without near-zero places (`NEAR_ZERO`).
-    """
-    national = scores["location"] == NATIONAL
-    pools = {
-        "national": scores.loc[national],
-        unit: scores.loc[~national],
-        f"{unit} without near-zero": scores.loc[
-            ~national & ~scores["near_zero"]
-        ],
-    }
-    out = [
-        summarise(rows, by).assign(pool=name)
-        for name, rows in pools.items()
-        if not rows.empty
-    ]
-    table = pd.concat(out, ignore_index=True)
-    return table[["pool", *[c for c in table if c != "pool"]]]
-
-
 def relative_wis(
     scores: pd.DataFrame,
     by: Sequence[str] = ("target",),
@@ -682,94 +626,3 @@ def relative_wis(
     out["rel_wis"] = out["wis"] / out["base_wis"]
     order = ["n", "wis", "base_wis", "rel_wis", "coverage_50", "coverage_90"]
     return out[[*by, "model", *order]]
-
-
-def clock_sensitivity(
-    tasks: Sequence[ForecastTask],
-    daily: pd.DataFrame,
-    target: pd.DataFrame,
-    shifts: Sequence[int] = (-1, 0, 1),
-    weeks: int = 1,
-) -> pd.DataFrame:
-    """Rerun both random walk models with the origin's clock moved.
-
-    Each shift adds days to the ages of the origin's days
-    (`Settings.clock_shift`), as if the release were extracted that many
-    days later after its last onset.
-
-    Parameters
-    ----------
-    tasks : sequence of ForecastTask
-        Real tasks with their release snapshots.
-    daily : pandas.DataFrame
-        Daily onsets by release.
-    target : pandas.DataFrame
-        The tidy target table, for the count reported and later counts.
-    shifts : sequence of int
-        Days to move the clock by.
-    weeks : int
-        Weeks back from the cut-off week to give, from 0.
-
-    Returns
-    -------
-    pandas.DataFrame
-        One row per model, origin, shift, place and week: the 5, 25, 50,
-        75 and 95% quantiles, the count reported, the count at the next
-        release and at the latest one, where they exist.
-    """
-    real = target.loc[target["kind"] == "real"]
-    releases = sorted(str(v) for v in real["vintage"].unique())
-    rows = []
-    for task in tasks:
-        later = [v for v in releases if v > task.vintage]
-        for shift in shifts:
-            cfg = Settings(clock_shift=shift)
-            for model in (
-                RandomWalkNowcast(settings=cfg),
-                RandomWalk(settings=cfg),
-            ):
-                try:
-                    samples = add_national(model.forecast(task))
-                except ModelUnavailableError:
-                    continue
-                samples["weeks_back"] = weeks_back_from_cutoff(
-                    daily, task.vintage, samples["target_end_date"]
-                )
-                keep = samples.loc[samples["weeks_back"].between(0, weeks - 1)]
-                q = (
-                    keep.groupby(["location", "target_end_date", "weeks_back"])[
-                        "value"
-                    ]
-                    .quantile(np.array(_LEVELS))
-                    .unstack()
-                )
-                q.columns = [f"q{int(100 * p)}" for p in q.columns]
-                q = q.reset_index().assign(
-                    model=model.name, origin=task.vintage, clock_shift=shift
-                )
-                rows.append(q)
-    out = pd.concat(rows, ignore_index=True)
-    out = out.merge(
-        pd.concat(
-            [
-                _truth(real, v).assign(origin=v)
-                for v in sorted(set(out["origin"]))
-            ]
-        ).rename(columns={"truth": "reported"}),
-        on=["origin", "location", "target_end_date"],
-        how="left",
-    )
-    for name, pick in (("next", 0), ("latest", -1)):
-        truths = []
-        for v in sorted(set(out["origin"])):
-            later = [r for r in releases if r > v]
-            if later:
-                truths.append(_truth(real, later[pick]).assign(origin=v))
-        if truths:
-            out = out.merge(
-                pd.concat(truths).rename(columns={"truth": f"truth_{name}"}),
-                on=["origin", "location", "target_end_date"],
-                how="left",
-            )
-    first = ["model", "origin", "clock_shift", "location", "target_end_date"]
-    return out[[*first, *[c for c in out if c not in first]]]

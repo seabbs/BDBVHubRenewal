@@ -636,19 +636,8 @@ def _zone_section(path: Path) -> str:
     )
 
 
-def _score_views(scores: pd.DataFrame, k: int) -> dict[str, pd.DataFrame]:
-    """Split scores into complete weeks, all weeks and vintage-matched.
-
-    Results written before the `scoring` and `complete` columns existed
-    are final counts as reported, and complete weeks follow `k`.
-    """
-    if "scoring" not in scores:
-        scores = scores.assign(scoring="as reported")
-    if "complete" not in scores:
-        age = pd.to_datetime(scores["truth_vintage"]) - pd.to_datetime(
-            scores["target_end_date"]
-        )
-        scores = scores.assign(complete=age.dt.days >= 7 * k)
+def _score_views(scores: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    """Split scores into complete weeks, all weeks and vintage-matched."""
     reported = scores.loc[scores["scoring"] == "as reported"]
     complete = reported.loc[reported["complete"].astype(bool)]
     views = {
@@ -1082,7 +1071,7 @@ def _backtest_page(
     k = config.complete_after_weeks
     explorer_scores = None
     if dev_path.exists():
-        views = _score_views(pd.read_csv(dev_path), k)
+        views = _score_views(pd.read_csv(dev_path))
         primary = views["complete weeks"]
         scores = primary
         for by in ("horizon", "location"):
@@ -1141,7 +1130,7 @@ def _backtest_page(
         )
     by_truth_path = res / "backtest-scores-by-truth.csv"
     if by_truth_path.exists():
-        truth_views = _score_views(pd.read_csv(by_truth_path), k)
+        truth_views = _score_views(pd.read_csv(by_truth_path))
         by_truth = truth_views["complete weeks"]
         save_light_dark(
             partial(plot_scores_by_truth, by_truth, models=names),
@@ -1389,7 +1378,7 @@ def _heldout_snippets(
     if scores.empty:
         _write(gen / "heldout-scores.md", "")
     else:
-        views = _score_views(scores, config.complete_after_weeks)
+        views = _score_views(scores)
         overall = pd.concat(
             [
                 summarise_scores(

@@ -15,9 +15,7 @@ from bdbvhubrenewal.evaluation.backtest import (
 )
 from bdbvhubrenewal.evaluation.nowcast import (
     BASELINE,
-    clock_sensitivity,
     complete_weeks,
-    pooled_summary,
     relative_wis,
     release_backtest,
     reported_share,
@@ -118,27 +116,6 @@ def test_weeks_back_count_from_the_cutoff_week(
     assert got.tolist() == [0, 1, -1]
 
 
-def test_pooled_summaries_say_which_places_they_hold(
-    result,  # type: ignore[no-untyped-def]
-) -> None:
-    s = result.scores
-    assert {"near_zero", "level"} <= set(s)
-    small = set(s.loc[s["near_zero"], "location"])
-    assert {"CD-BU", "CD-SU"} <= small
-    assert not small & {"CD", "CD-IT", "CD-NK", "CD-HU", "CD-TO"}
-    pooled = pooled_summary(s, by=("target", "model"))
-    assert set(pooled["pool"]) == {
-        "national",
-        "provinces",
-        "provinces without near-zero",
-    }
-    for _, g in pooled.groupby(["target", "pool"]):
-        assert g["n"].nunique() == 1
-    every = pooled.loc[pooled["pool"] == "provinces", "n"].max()
-    some = pooled.loc[pooled["pool"] == "provinces without near-zero", "n"]
-    assert some.max() < every
-
-
 def test_relative_wis_is_against_randomwalk(
     result,  # type: ignore[no-untyped-def]
 ) -> None:
@@ -184,26 +161,6 @@ def test_stored_forecasts_are_scored_on_both_targets(
     ]
     assert (rep["q95"] <= 100).all()
     assert (rep.loc[rep["weeks_back"] >= 4, "q50"] >= 95).all()
-
-
-def test_clock_sensitivity_moves_the_newest_week(
-    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
-) -> None:
-    real = target.loc[target["kind"] == "real"]
-    tasks = make_tasks(
-        real.loc[real["vintage"] == "2026-10-24"],
-        delays.assign(kind="real"),
-        BacktestConfig(n_samples=50, seed=3),
-        daily=daily,
-    )
-    table = clock_sensitivity(tasks, daily, target, shifts=(-1, 0, 1))
-    cd = table.loc[
-        (table["location"] == "CD")
-        & (table["weeks_back"] == 0)
-        & (table["model"] == "randomwalknowcast")
-    ].set_index("clock_shift")
-    assert cd.loc[-1, "q50"] > cd.loc[0, "q50"] > cd.loc[1, "q50"]
-    assert set(table["model"]) == {"randomwalknowcast", "randomwalk"}
 
 
 def test_quantiles_carry_the_reported_count_and_truth(
