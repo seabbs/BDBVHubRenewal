@@ -62,7 +62,7 @@ bdbvhubrenewal nowcast --model renewal --config main --fit <fit dir> \
 - Include the national row `CD`, as the sum of the province trajectories by sample index, plus any national cases the model does not assign to a province.
   Use the same sample ids across locations.
   National sample k must equal the sum of province sample k plus that sample's unassigned cases, for every week.
-  `to_hub_table` writes it that way, and the gate rebuilds the national rows the same way if they differ, and notes it.
+  `to_hub_table` writes it that way, and the gate fails a file whose national rows differ.
 - Write `national.json` at the root of `--out` (`<candidate>/submission/national.json`), which `candidate.sh` passes to `check-forecast --national-sidecar`:
 
   ```json
@@ -72,7 +72,6 @@ bdbvhubrenewal nowcast --model renewal --config main --fit <fit dir> \
 
   A modelled province missing from the hub file warns.
   `unassigned` holds the national cases not assigned to a province, by week and sample; leave it empty when there are none.
-  Without the file the gate takes the unassigned part from the gap between the national data and the provinces (`coherence.json`), and says so.
 - Write `handled.json` at the root of `--out`: a JSON list of short notes on anything handled on the way, such as a data stream taken from an earlier vintage.
   They go on the PR's `Handled:` line.
 - Submit at least 7 back weeks (to `reference_date − 6 weeks`) as well as the 3 forecast weeks.
@@ -303,5 +302,5 @@ Thresholds are in `ci/policy.toml`, and the policy is described on the docs' Sub
 In short, problems are handled rather than failed on:
 
 - **fail** (rules a candidate out): a file the hub would reject (schema, values, samples, hubValidations) or a fit past BVDOutbreakSize's failure thresholds (R-hat 1.1, ESS 25, divergent draws 5%), or no diagnostics from a sampled fit;
-- **handled** (on the PR's `Handled:` line): the national rows rebuilt as the sum of the provinces plus the unassigned component; a gap between the national data and the provinces; a data stream taken from an earlier vintage (`handled.json` beside the hub file);
+- **handled** (on the PR's `Handled:` line): a gap between the national data and the provinces; a data stream taken from an earlier vintage (`handled.json` beside the hub file);
 - **warn** (reported only): posterior predictive checks, plausibility checks, missing locations or weeks, and BVDOutbreakSize's warn thresholds.

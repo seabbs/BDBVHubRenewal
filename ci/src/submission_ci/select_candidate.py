@@ -110,7 +110,6 @@ def assess(c: Candidate, cdir: Path) -> Attempt:
                 a.reasons.append(f"{ch['name']}: {ch['summary']}")
             elif ch["status"] == "warn":
                 a.warnings.append(f"{ch['name']}: {ch['summary']}")
-        a.handled += [str(h) for h in checks.get("handled", [])]
     else:
         a.checks = "error"
         a.reasons.append("forecast checks: no result was written")
@@ -118,7 +117,7 @@ def assess(c: Candidate, cdir: Path) -> Attempt:
     notes = cdir / "submission" / "handled.json"
     if notes.exists():
         with contextlib.suppress(ValueError):
-            a.handled = [str(h) for h in read_json(notes)] + a.handled
+            a.handled = [str(h) for h in read_json(notes)]
     if _submission(cdir) is None:
         statuses.append("error")
         a.reasons.append("no submission file was written")

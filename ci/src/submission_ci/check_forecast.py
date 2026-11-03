@@ -17,14 +17,10 @@ Handled (warn or pass):
   `zones`        health zone rows (`CD-XX-NN`) for every province in the
                  file, which seabbs-rwnowcast requires (`--require-zones`),
                  and each province's zones summing to it (warns only).
-  `national_sum` national equals the sum of the provinces plus any
-                 unassigned cases, per sample and week. It is correct by
-                 construction: `repair_national` rebuilds the national
-                 rows from the provinces before the checks, with the
-                 unassigned part from `national.json`, or, without it,
-                 from the gap between the national data and the
-                 provinces. A modelled province missing from the file
-                 warns.
+  `national_sum` national equals the sum of the provinces plus the
+                 unassigned cases in `national.json`, per sample and
+                 week (fails otherwise). A modelled province missing
+                 from the file warns.
 
 Plausibility (`plausible` fails; the others warn):
   `plausible`    each location's forecast near its recent data: median
@@ -44,7 +40,6 @@ Consistency (warn):
 from __future__ import annotations
 
 import argparse
-import csv
 import datetime as dt
 import math
 from collections.abc import Mapping, Sequence
@@ -258,52 +253,32 @@ def check_coverage(
     )
 
 
-def _unassigned(
-    sidecar: Mapping[str, Any] | None,
-) -> dict[tuple[str, str], float]:
+def _unassigned(sidecar: Mapping[str, Any]) -> dict[tuple[str, str], float]:
     """Unassigned national cases by (sample id, week) from `national.json`."""
     out: dict[tuple[str, str], float] = {}
-    for row in (sidecar or {}).get("unassigned") or []:
+    for row in sidecar["unassigned"]:
         key = (str(int(row["sample"])), str(row["target_end_date"]))
         out[key] = out.get(key, 0.0) + float(row["value"])
     return out
 
 
 def check_national_sum(
-    s: Samples,
-    national: str,
-    tol: float,
-    sidecar: Mapping[str, Any] | None = None,
-    sidecar_error: str = "",
+    s: Samples, tol: float, sidecar: Mapping[str, Any]
 ) -> Check:
     """National equals the sum of provinces exactly, per sample and week.
 
     National sample k must equal the sum of province sample k plus the
     sample's modelled unassigned component (`national.json`), for every
     week, up to float noise (`tol` absolute, or 1e-12 relative). Every
-    modelled province must be in the file. Without `national.json` the
-    provinces are those in the file and there is no unassigned part.
+    modelled province must be in the file.
     """
-    if sidecar_error:
-        sidecar = None
-    if sidecar:
-        national = str(sidecar.get("national", national))
+    national = str(sidecar["national"])
     provs = [loc for loc in s.locations if is_province(loc)]
-    if (sidecar or {}).get("national_source") == "fitted":
-        return _fitted_national(s, national, provs)
-    modelled = sorted((sidecar or {}).get("modelled_provinces") or provs)
+    modelled = sorted(sidecar["modelled_provinces"])
     unassigned = _unassigned(sidecar)
-    if sidecar is None:
-        basis = (
-            f"no national.json, so the {len(provs)} provinces in the file "
-            "and no unassigned component"
-        )
-    else:
-        basis = f"national.json: {len(modelled)} modelled provinces" + (
-            " plus the unassigned component" if unassigned else ""
-        )
-    if sidecar is None and (national not in s.values or not provs):
-        return Check("national_sum", "skip", "no national and province pair")
+    basis = f"national.json: {len(modelled)} modelled provinces" + (
+        " plus the unassigned component" if unassigned else ""
+    )
     found: list[tuple[str, str]] = []
     missing = sorted(set(modelled) - set(s.locations))
     if missing:
@@ -341,122 +316,6 @@ def check_national_sum(
     if out.status != "pass":
         out.summary = f"{out.summary} ({basis})"
     return out
-
-
-def _fitted_national(s: Samples, national: str, provs: list[str]) -> Check:
-    """Report how a fitted national differs from the sum of the provinces.
-
-    A model that fits the nation on its own (`national_source: fitted` in
-    `national.json`) need not add up, so this only reports.
-    """
-    if national not in s.values:
-        return Check("national_sum", "fail", f"{national} is not in the file")
-    gaps = []
-    for sid, traj in s.values[national].items():
-        for week, value in traj.items():
-            parts = [s.values[p].get(sid, {}).get(week) for p in provs]
-            if all(v is not None for v in parts):
-                gaps.append(
-                    value - math.fsum(v for v in parts if v is not None)
-                )
-    gaps.sort()
-    mid = gaps[len(gaps) // 2] if gaps else 0.0
-    return Check(
-        "national_sum",
-        "pass",
-        f"{national} is the model's own fit, not the sum of the provinces; "
-        f"national minus provinces has median {fmt(mid)} "
-        f"(range {fmt(gaps[0] if gaps else 0.0)} to "
-        f"{fmt(gaps[-1] if gaps else 0.0)}), report only",
-    )
-
-
-def repair_national(
-    submission: Path,
-    national: str = "CD",
-    sidecar: Mapping[str, Any] | None = None,
-    data_gap: Mapping[str, float] | None = None,
-) -> str:
-    """Make the national rows the sum of the provinces, by construction.
-
-    National sample k, week w becomes the sum of province sample k, week
-    w plus the unassigned part: from `national.json` when there is one,
-    otherwise the gap between the national data and the provinces for
-    that week (`data_gap`, zero for weeks without data). The file is
-    rewritten only when its national rows differ, and never when
-    `national.json` says the national is the model's own fit.
-
-    Returns
-    -------
-    str
-        A `Handled:` note when the file was rewritten, else empty.
-    """
-    if (sidecar or {}).get("national_source") == "fitted":
-        return ""
-    s = read_samples(submission)
-    provs = [loc for loc in s.locations if is_province(loc)]
-    if not provs or s.unparsable:
-        return ""
-    if sidecar:
-        unassigned = _unassigned(sidecar)
-        source = "the model's unassigned component"
-    else:
-        gap = dict(data_gap or {})
-        unassigned = {
-            (sid, w): gap.get(w, 0.0)
-            for sid in s.values[provs[0]]
-            for w in s.weeks(provs[0])
-        }
-        source = (
-            "the gap between the national data and the provinces"
-            if any(unassigned.values())
-            else "nothing unassigned"
-        )
-    want: dict[str, dict[str, float]] = {}
-    for sid in s.values[provs[0]]:
-        for w in s.values[provs[0]][sid]:
-            parts = [s.values[p].get(sid, {}).get(w) for p in provs]
-            if any(v is None for v in parts):
-                return ""
-            total = math.fsum(v for v in parts if v is not None)
-            want.setdefault(sid, {})[w] = total + unassigned.get((sid, w), 0)
-    have = s.values.get(national, {})
-    if (
-        have
-        and all(
-            math.isclose(have.get(sid, {}).get(w, math.nan), v, abs_tol=1e-9)
-            for sid, traj in want.items()
-            for w, v in traj.items()
-        )
-        and sum(len(t) for t in have.values())
-        == sum(len(t) for t in want.values())
-    ):
-        return ""
-    with submission.open(newline="", encoding="utf-8") as fh:
-        reader = csv.DictReader(fh)
-        header = list(reader.fieldnames or [])
-        rows = [r for r in reader if r.get("location") != national]
-    template = rows[0]
-    for sid, traj in want.items():
-        for w, v in sorted(traj.items()):
-            rows.append(
-                {
-                    **template,
-                    "location": national,
-                    "output_type_id": sid,
-                    "target_end_date": w,
-                    "value": str(int(v)) if float(v).is_integer() else repr(v),
-                }
-            )
-    with submission.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=header)
-        writer.writeheader()
-        writer.writerows(rows)
-    what = "rebuilt" if have else "added"
-    return (
-        f"national ({national}) {what} as the sum of the provinces plus "
-        f"{source}"
-    )
 
 
 def check_bounds(s: Samples, obs: Observed, floor: float, warn: float) -> Check:
@@ -705,8 +564,7 @@ def run_checks(
     previous: Path | None = None,
     kind: str = "main",
     settings: Mapping[str, Any],
-    national_sidecar: Mapping[str, Any] | None = None,
-    sidecar_error: str = "",
+    national_sidecar: Mapping[str, Any],
     require_zones: bool = False,
 ) -> list[Check]:
     """Run every check on one candidate file."""
@@ -724,11 +582,7 @@ def run_checks(
         ),
         check_zones(s, require_zones, float(settings["sum_tolerance"])),
         check_national_sum(
-            s,
-            str(settings["national"]),
-            float(settings["sum_tolerance"]),
-            national_sidecar,
-            sidecar_error,
+            s, float(settings["sum_tolerance"]), national_sidecar
         ),
         check_bounds(
             s,
@@ -823,15 +677,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument(
         "--national-sidecar",
         type=Path,
-        default=None,
-        help="national.json written beside the nowcast (optional)",
-    )
-    p.add_argument(
-        "--coherence",
-        type=Path,
-        default=None,
-        help="coherence.json of the data, for the unassigned part when "
-        "there is no national.json (optional)",
+        required=True,
+        help="national.json written beside the nowcast",
     )
     p.add_argument("--policy", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
@@ -843,27 +690,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
     settings = load_policy(args.policy).checks
-    sidecar, sidecar_error = None, ""
-    handled: list[str] = []
-    if args.national_sidecar and args.national_sidecar.exists():
-        try:
-            sidecar = read_json(args.national_sidecar)
-        except ValueError as err:
-            sidecar_error = f"{args.national_sidecar.name} unreadable: {err}"
-            handled.append(f"{sidecar_error}; worked without it")
-    if args.submission.exists():
-        gap: dict[str, float] = {}
-        if not sidecar and args.coherence and args.coherence.exists():
-            from .check_coherence import assess, gap_by_week
-
-            try:
-                gap = gap_by_week(assess(read_json(args.coherence)))
-            except ValueError:
-                gap = {}
-        national = str(settings["national"])
-        note = repair_national(args.submission, national, sidecar, gap)
-        if note:
-            handled.append(note)
     if not args.submission.exists():
         checks = [
             Check("schema", "error", f"{args.submission} was not written")
@@ -879,8 +705,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             previous=args.previous,
             kind=args.kind,
             settings=settings,
-            national_sidecar=sidecar,
-            sidecar_error=sidecar_error,
+            national_sidecar=read_json(args.national_sidecar),
             require_zones=args.require_zones,
         )
     status = worst(c.status for c in checks)
@@ -892,7 +717,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             "id": args.id,
             "status": status,
             "checks": [asdict(c) for c in checks],
-            "handled": handled,
         },
     )
     append_summary(md)

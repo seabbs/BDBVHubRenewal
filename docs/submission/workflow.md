@@ -49,9 +49,9 @@ Thresholds are in `ci/policy.toml`.
 | schema, values, 100 samples per trajectory | any | |
 | hub validation (Python and hubValidations) | any error | |
 | plausible (median and 97.5% quantile against the recent maximum) | any | |
+| national equals the provinces plus the unassigned part in `national.json` | any | |
 | bounds, growth, against observed, random walk and last week | | yes |
 
-The national rows are rebuilt as the sum of the provinces plus the unassigned component.
 The [hub specification](hub-spec.md) lists the hub's rules.
 
 ## Pull request

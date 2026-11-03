@@ -118,16 +118,12 @@ fi
 if [ -f "$inputs/previous.csv" ]; then
   checks+=(--previous "$inputs/previous.csv")
 fi
-# Written by the nowcast beside the hub file. The gate rebuilds the
-# national rows as the sum of the provinces plus its unassigned part, or,
-# without it, plus the data's national gap from coherence.json.
+# Written by the nowcast beside the hub file: the unassigned part of the
+# national rows.
 checks+=(--national-sidecar "$out/submission/national.json")
 # baseline must submit health zones (track.sh).
 if [ "${REQUIRE_ZONES:-false}" = "true" ]; then
   checks+=(--require-zones)
-fi
-if [ -f "$inputs/coherence.json" ]; then
-  checks+=(--coherence "$inputs/coherence.json")
 fi
 sci check-forecast "${checks[@]}"
 

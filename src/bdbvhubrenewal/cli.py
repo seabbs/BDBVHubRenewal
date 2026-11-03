@@ -837,13 +837,7 @@ def _nowcast(args: argparse.Namespace) -> int:
         else:
             samples = get_model(args.model).forecast(task)
             check_samples(samples, task)
-            nat = samples["location"] == NATIONAL
-            national = None
-            if nat.any():
-                national = samples.loc[
-                    nat, ["target_end_date", "sample", "value"]
-                ]
-            result = Forecast(samples.loc[~nat], national=national)
+            result = Forecast(samples)
         zones, zone_note = _zones(args, task, result.samples, hub_config)
         if zone_note:
             handled.append(zone_note)
@@ -851,7 +845,6 @@ def _nowcast(args: argparse.Namespace) -> int:
             result.samples,
             task.reference_date,
             unassigned=result.unassigned,
-            national=result.national,
             zones=zones,
             forecast_date=args.forecast_date,
         )
@@ -930,9 +923,6 @@ def _write_national_sidecar(
         "modelled_provinces": list(
             task.locations if result.modelled is None else result.modelled
         ),
-        # `fitted`: national is the model's own fit, not the sum of the
-        # provinces, so the national check reports the difference only.
-        "national_source": "sum" if result.national is None else "fitted",
         "unassigned": unassigned,
     }
     path.write_text(json.dumps(record, indent=2) + "\n")

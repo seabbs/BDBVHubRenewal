@@ -99,15 +99,6 @@ def assess(data: Mapping[str, Any] | None, error: str = "") -> Coherence:
     return out
 
 
-def gap_by_week(c: Coherence, stream: str = "total") -> dict[str, float]:
-    """National minus the provinces, by week, for one stream."""
-    return {
-        str(r["target_end_date"]): float(r.get("gap") or 0.0)
-        for r in c.rows
-        if r.get("stream") == stream
-    }
-
-
 def details(c: Coherence) -> str:
     """The stream table, the weeks with a gap and the handling note."""
     lines: list[str] = []

@@ -245,9 +245,7 @@ def cmd_nowcast(args: argparse.Namespace) -> int:
                 totals[(s, w)] += v
                 rows.append([loc, s, w, v])
     for (s, w), v in totals.items():
-        # `badnational`: the national rows do not add up, and there is no
-        # national.json, so the gate rebuilds them.
-        rows.append(["CD", s, w, v + (3 if sc == "badnational" else 0)])
+        rows.append(["CD", s, w, v])
     # Health zones, as the baselines write them: each province split
     # evenly over two zones. `nozones` (or FAKE_ZONES=none) leaves them out.
     if (
@@ -293,8 +291,7 @@ def cmd_nowcast(args: argparse.Namespace) -> int:
         "modelled_provinces": provinces,
         "unassigned": [],
     }
-    if sc != "badnational":
-        (Path(args.out) / "national.json").write_text(json.dumps(sidecar))
+    (Path(args.out) / "national.json").write_text(json.dumps(sidecar))
     if sc == "latestream":
         (Path(args.out) / "handled.json").write_text(
             json.dumps(

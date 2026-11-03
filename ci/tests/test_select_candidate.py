@@ -167,15 +167,9 @@ def test_handled_notes_are_collected(tmp_path: Path) -> None:
         c / "bvd" / "submission" / "handled.json",
         ["delays: used the 2026-10-17 vintage, the latest available"],
     )
-    checks = read_json(c / "bvd" / "checks.json")
-    write_json(
-        c / "bvd" / "checks.json",
-        {**checks, "handled": ["national (CD) rebuilt as the sum"]},
-    )
     prov = run_select(POLICY, c, tmp_path / "g", always("pass"))
     assert prov["handled"] == [
         "delays: used the 2026-10-17 vintage, the latest available",
-        "national (CD) rebuilt as the sum",
     ]
 
 

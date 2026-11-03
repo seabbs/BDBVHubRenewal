@@ -50,7 +50,6 @@ SCENARIOS=(
   "implausible|bvd=implausible|renewalsp||was ruled out (plausible: "
   "wild|bvd=implausible,renewalsp=implausible|main||Fallback model used (province renewal model"
   "latestream|bvd=latestream|bvd||Handled: delays: no delay data for this vintage"
-  "national|bvd=badnational|bvd||Handled: national (CD) rebuilt as the sum of the provinces"
   "fallback|bvd=fail|renewalsp||Fallback model used (single-patch renewal model"
   # Tuesday 21:00 UTC, two hours before the close: the fit timeouts are
   # cut so the gate still runs in time.

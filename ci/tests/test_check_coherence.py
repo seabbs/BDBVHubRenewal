@@ -10,7 +10,7 @@ from typing import Any
 
 from conftest import AS_OF, FIXTURES, write_json
 
-from submission_ci.check_coherence import assess, gap_by_week, main
+from submission_ci.check_coherence import assess, main
 from submission_ci.common import read_json
 
 FAKE = FIXTURES / "fake_bdbvhubrenewal.py"
@@ -61,7 +61,6 @@ def test_gap_is_handled_and_noted() -> None:
     assert c.gap
     assert "1 week" in c.summary and "largest gap 2" in c.summary
     assert c.handled().endswith("modelled as an unassigned national component")
-    assert gap_by_week(c) == {"2026-10-24": 2.0}
     assert not assess(coherence([])).handled()
 
 
