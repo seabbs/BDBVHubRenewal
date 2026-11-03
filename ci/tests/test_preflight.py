@@ -90,13 +90,6 @@ def settings(tmp_path: Path) -> Settings:
     (meta / f"{MID2}.yml").write_text(
         "team_abbr: seabbs\nmodel_abbr: rwnowcast\n"
     )
-    choice = tmp_path / "model-choice.yml"
-    choice.write_text(
-        "choices:\n"
-        "  - date: 2026-10-10\n    model: randomwalk\n"
-        "  - date: 2026-10-27\n    model: renewal\n    summary: >-\n"
-        "      Chosen.\n"
-    )
     return Settings(
         repo=REPO,
         hub=HUB,
@@ -105,7 +98,7 @@ def settings(tmp_path: Path) -> Settings:
         other_model_ids=(MID2,),
         opted_in=(MID2,),
         metadata_dir=meta,
-        model_choice=choice,
+        configured_model="renewal",
         workflow_file=Path(".github/workflows/submit.yml"),
         now=NOW,
     )
@@ -257,7 +250,7 @@ def test_variables_override_model_and_id(settings: Settings) -> None:
     checks = {c.name: c for c in run_checks(runner, settings)}
     assert "seabbs-other" in checks["metadata"].detail
     assert checks["metadata"].status == "missing"
-    assert checks["model choice"].status == "warn"
+    assert checks["model"].detail == "submits `randomwalk` (HUB_MODEL)"
 
 
 def test_metadata_name_mismatch_is_missing(settings: Settings) -> None:
@@ -288,22 +281,30 @@ def test_metadata_abbr_too_long_is_missing(settings: Settings) -> None:
     assert "16" in check.detail
 
 
-def test_chosen_model_is_ok(settings: Settings) -> None:
-    check = {c.name: c for c in run_checks(ready_runner(), settings)}[
-        "model choice"
-    ]
-    assert check.detail == "submits `renewal`, as last chosen"
+def test_configured_model_is_what_submits(settings: Settings) -> None:
+    check = {c.name: c for c in run_checks(ready_runner(), settings)}["model"]
+    assert check.status == "ok"
+    assert check.detail == "submits `renewal` (config/hub.toml)"
 
 
-def test_randomwalk_chosen_warns(settings: Settings) -> None:
-    settings.model_choice.write_text(
-        "choices:\n  - date: 2026-10-10\n    model: randomwalk\n"
+def test_no_configured_model_is_missing(settings: Settings) -> None:
+    from dataclasses import replace
+
+    none = replace(settings, configured_model="")
+    check = {c.name: c for c in run_checks(ready_runner(), none)}["model"]
+    assert check.status == "missing"
+
+
+def test_configured_model_is_read_from_hub_config(tmp_path: Path) -> None:
+    from submission_ci.preflight import configured_model
+
+    path = tmp_path / "hub.toml"
+    path.write_text('[submission]\nmodel_abbr = "renewal"\n')
+    assert configured_model(path) == ""
+    path.write_text(
+        '[submission]\nmodel_abbr = "renewal"\nmodel = "renewalbvd"\n'
     )
-    check = {c.name: c for c in run_checks(ready_runner(), settings)}[
-        "model choice"
-    ]
-    assert check.status == "warn"
-    assert "randomwalk" in check.detail
+    assert configured_model(path) == "renewalbvd"
 
 
 def test_unregistered_model_id_is_reported(settings: Settings) -> None:
@@ -354,7 +355,9 @@ def test_main_exits_1_on_gaps(
     runner = ready_runner(**{f"repos/{FORK}": None})
     monkeypatch.setattr("submission_ci.preflight.subprocess_runner", runner)
     hub_toml = settings.metadata_dir / "hub.toml"
-    hub_toml.write_text('[submission]\nmodel_abbr = "renewal"\n')
+    hub_toml.write_text(
+        '[submission]\nmodel_abbr = "renewal"\nmodel = "renewal"\n'
+    )
     args = [
         "--hub-config",
         str(hub_toml),
@@ -362,8 +365,6 @@ def test_main_exits_1_on_gaps(
         REPO,
         "--metadata-dir",
         str(settings.metadata_dir),
-        "--model-choice",
-        str(settings.model_choice),
         "--now",
         NOW.isoformat(),
     ]
@@ -412,10 +413,16 @@ def test_default_hub_id_is_the_submitting_model(tmp_path: Path) -> None:
     )
     assert submitting_model_id(path) == "seabbs-rwnowcast"
     assert opted_in(path) == ("seabbs-rwnowcast",)
-    assert set(other_model_ids(path)) == {
-        "seabbs-renewal",
-        "seabbs-randomwalk",
-    }
+    # Models that are not opted in need no metadata.
+    assert other_model_ids(path) == ()
+    path.write_text(
+        '[submission]\nmodel_abbr = "renewal"\nsubmit = true\n'
+        '[models.randomwalknowcast]\nmodel_abbr = "rwnowcast"\n'
+        "submit = true\n"
+        '[models.randomwalk]\nmodel_abbr = "randomwalk"\nsubmit = false\n'
+    )
+    assert submitting_model_id(path) == "seabbs-renewal"
+    assert other_model_ids(path) == ("seabbs-rwnowcast",)
     path.write_text('[submission]\nmodel_abbr = "renewal"\n')
     assert submitting_model_id(path) == "seabbs-renewal"
 

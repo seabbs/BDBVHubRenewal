@@ -12,9 +12,8 @@ the bot's first pull request. `render` lists them at the end.
 
 The model and hub id follow the same rule as `submit.yml`: the
 repository variables `HUB_MODEL` and `HUB_MODEL_ID` when set, otherwise
-the latest entry of `results/model-choice.yml` and the id from
-`config/hub.toml`. The hub id defaults to the first model there with
-`submit = true`, not to `[submission]`.
+`[submission] model` in `config/hub.toml` and the id of the first model
+there with `submit = true`. Only models with `submit = true` need metadata.
 """
 
 from __future__ import annotations
@@ -78,13 +77,14 @@ class Settings:
     fork_default: str
     model_id_default: str
     metadata_dir: Path
-    model_choice: Path
     workflow_file: Path
     now: dt.datetime
     other_model_ids: tuple[str, ...] = ()
     """Further hub models, each submitted under its own id."""
     opted_in: tuple[str, ...] = ()
     """Hub models with `submit = true` in `config/hub.toml`."""
+    configured_model: str = ""
+    """`[submission] model` in `config/hub.toml`, if set."""
 
 
 def _api(runner: Runner, path: str) -> tuple[bool, Any]:
@@ -418,52 +418,18 @@ def check_metadata(metadata_dir: Path, model_id: str) -> Check:
     return Check("metadata", "ok", f"{path} names `{model_id}`")
 
 
-def latest_choice(path: Path) -> str | None:
-    """The model of the newest entry in `model-choice.yml`."""
-    if not path.exists():
-        return None
-    entries: list[tuple[str, str]] = []
-    date = ""
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if m := re.match(r"^\s*-\s*date:\s*(\S+)", line):
-            date = m.group(1)
-        elif (m := re.match(r"^\s+model:\s*(\S+)", line)) and date:
-            entries.append((date, m.group(1)))
-    return max(entries)[1] if entries else None
-
-
-def check_model_choice(path: Path, override: str = "") -> Check:
-    """The model the workflow submits: the latest choice unless overridden."""
-    chosen = latest_choice(path)
-    if chosen is None:
+def check_model(configured: str, override: str = "") -> Check:
+    """The model the renewal track submits, as `submit.yml` resolves it."""
+    model = override or configured
+    if not model:
         return Check(
-            "model choice",
+            "model",
             "missing",
-            f"no choice recorded in {path}",
-            "Commit the choice to results/model-choice.yml before held-out "
-            "scoring.",
+            "no `[submission] model` in config/hub.toml",
+            "Set `[submission] model` in config/hub.toml.",
         )
-    fix = (
-        "Review the held-out results, then add a dated entry to "
-        "results/model-choice.yml."
-    )
-    if override and override != chosen:
-        return Check(
-            "model choice",
-            "warn",
-            f"HUB_MODEL submits `{override}` but {path.name} last chose "
-            f"`{chosen}`",
-            f"Delete the repository variable HUB_MODEL, or {fix[0].lower()}"
-            f"{fix[1:]}",
-        )
-    if chosen == "randomwalk":
-        return Check(
-            "model choice",
-            "warn",
-            f"submits `randomwalk`, the latest entry of {path.name}",
-            fix,
-        )
-    return Check("model choice", "ok", f"submits `{chosen}`, as last chosen")
+    source = "HUB_MODEL" if override else "config/hub.toml"
+    return Check("model", "ok", f"submits `{model}` ({source})")
 
 
 def check_registered(runner: Runner, hub: str, model_id: str) -> Check:
@@ -528,15 +494,16 @@ def hub_model_id(path: Path) -> str:
 
 
 def other_model_ids(path: Path) -> tuple[str, ...]:
-    """Hub ids in `config/hub.toml` other than the submitting model."""
+    """Opted-in hub ids in `config/hub.toml` other than the first."""
+    return opted_in(path)[1:]
+
+
+def configured_model(path: Path) -> str:
+    """`[submission] model` in `config/hub.toml`, or empty."""
     if not path.exists():
-        return ()
+        return ""
     with path.open("rb") as fh:
-        cfg = tomllib.load(fh)
-    entries = [cfg["submission"], *cfg.get("models", {}).values()]
-    ids = [f"{TEAM}-{e['model_abbr']}" for e in entries]
-    first = submitting_model_id(path)
-    return tuple(i for i in ids if i != first)
+        return str(tomllib.load(fh).get("submission", {}).get("model", ""))
 
 
 def submitting_model_id(path: Path) -> str:
@@ -585,9 +552,7 @@ def run_checks(runner: Runner, s: Settings) -> list[Check]:
                 name=f"hub model id {other}",
             ),
         ]
-    checks.append(
-        check_model_choice(s.model_choice, values.get("HUB_MODEL", ""))
-    )
+    checks.append(check_model(s.configured_model, values.get("HUB_MODEL", "")))
     if s.opted_in:
         checks.append(Check("opt-in", "ok", "submits " + ", ".join(s.opted_in)))
     else:
@@ -641,9 +606,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--metadata-dir", type=Path, default=Path("hub/model-metadata")
     )
     p.add_argument(
-        "--model-choice", type=Path, default=Path("results/model-choice.yml")
-    )
-    p.add_argument(
         "--workflow-file",
         type=Path,
         default=Path(".github/workflows") / WORKFLOW,
@@ -670,8 +632,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         model_id_default=submitting_model_id(args.hub_config),
         other_model_ids=other_model_ids(args.hub_config),
         opted_in=opted_in(args.hub_config),
+        configured_model=configured_model(args.hub_config),
         metadata_dir=args.metadata_dir,
-        model_choice=args.model_choice,
         workflow_file=args.workflow_file,
         now=now,
     )
