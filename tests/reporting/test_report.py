@@ -10,18 +10,6 @@ from bdbvhubrenewal.reporting import report
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_relative_section_hidden_with_one_model() -> None:
-    scores = pd.read_csv(ROOT / "results" / "backtest-scores.csv")
-    scores = scores.loc[scores["model"] == "randomwalk"]
-    # Random walk against itself means nothing, so nothing is shown.
-    assert report._relative_section(scores) == ""
-    two = pd.concat([scores, scores.assign(model="other")])
-    text = report._relative_section(two)
-    assert text.startswith("## Relative skill")
-    assert "relative_wis" in text
-    assert "relative-wis-horizon.svg" in text
-
-
 def test_heldout_page(
     tmp_path: Path,
     target: pd.DataFrame,
@@ -129,7 +117,7 @@ def test_make_report_writes_every_page(
     models = [get_model("randomwalk")]
     out = tmp_path / "output"
     out.mkdir()
-    forecasts, _ = run_development(models, target, delays, config, daily=daily)
+    forecasts = run_development(models, target, delays, config, daily=daily)
     forecasts.to_csv(out / "forecasts.csv.gz", index=False)
     old = Path.cwd()
     os.chdir(ROOT)
@@ -145,9 +133,8 @@ def test_make_report_writes_every_page(
     gen = tmp_path / "gen"
     for name in (
         "vintages.md",
-        "scores-overall.md",
-        "relative-section.md",
         "backtest-findings.md",
+        "backtest-summary.md",
         "truth-changes.md",
         "heldout-status.md",
         "comparison-scores.md",
@@ -168,7 +155,7 @@ def test_make_report_writes_every_page(
 
 def test_lopo_section_hidden_without_results(tmp_path: Path) -> None:
     assert report._lopo_section(tmp_path / "missing.csv") == ""
-    scores = pd.read_csv(ROOT / "results" / "backtest-scores.csv")
+    scores = _two_model_scores()
     lopo = scores.loc[scores["location"] != "CD"].assign(
         model="renewal", masked=lambda d: d["location"]
     )
@@ -277,57 +264,6 @@ def _two_model_scores() -> pd.DataFrame:
     return pd.concat(rows, ignore_index=True)
 
 
-def test_score_tables_split_by_set_and_level() -> None:
-    both = _two_model_scores()
-    new = pd.concat(
-        [
-            both.assign(scoring="as reported", complete=[True, False] * 4),
-            both.assign(scoring="vintage-matched", complete=[True, False] * 4),
-        ]
-    )
-    text = report._score_tables(report._score_views(new))
-    for heading in (
-        "**Complete weeks, national**",
-        "**Complete weeks, province**",
-        "**Vintage-matched, national**",
-        "**Vintage-matched, province**",
-    ):
-        assert heading in text, heading
-    # Weeks still being reported are not scored as final.
-    assert "all weeks" not in text
-    # The tables are small.
-    first = text.split("**")[2]
-    header = first.splitlines()[2]
-    assert [c.strip() for c in header.strip("|").split("|")] == [
-        "model",
-        "wis",
-        "relative_wis",
-        "log_wis",
-        "relative_log_wis",
-        "coverage_50",
-        "coverage_90",
-        "bias",
-    ]
-
-
-def test_score_table_leaves_randomwalk_without_relative_wis() -> None:
-    table = report._score_table(_two_model_scores().query("location == 'CD'"))
-    lines = {
-        ln.split("|")[1].strip(): ln.split("|")[3].strip()
-        for ln in table.splitlines()[2:]
-    }
-    assert lines["randomwalk"] == ""
-    assert float(lines["renewal"]) == 0.5
-
-
-def test_relative_section_leaves_out_randomwalk() -> None:
-    two = _two_model_scores()
-    text = report._relative_section(two)
-    table = [ln for ln in text.splitlines() if ln.strip().startswith("|")]
-    assert any("renewal" in ln for ln in table)
-    assert not any("randomwalk" in ln for ln in table)
-
-
 def test_teams_table_links_to_hub_metadata() -> None:
     teams = pd.DataFrame(
         {
@@ -343,26 +279,6 @@ def test_teams_table_links_to_hub_metadata() -> None:
     assert "`teamA-weekly`" in text
     assert "model-metadata/teamA-weekly.yml" in text
     assert "epiforecasts-x" not in text
-
-
-def test_completeness_note() -> None:
-    text = report._completeness_note(3)
-    assert "at least 3 weeks before the truth vintage" in text
-
-
-def test_score_views_without_lag_prior_origins() -> None:
-    scores = _scores().assign(
-        lag_prior=[False, False], scoring="as reported", complete=[True, False]
-    )
-    other = scores.assign(vintage="2026-08-18", lag_prior=[True, True])
-    views = report._score_views(pd.concat([scores, other]))
-    own = views["complete weeks, own lag estimate"]
-    assert set(own["vintage"]) == {"2026-10-09"}
-    assert len(views["complete weeks"]) == 2
-    note = report._lag_prior_note(pd.concat([scores, other]))
-    assert "2026-08-18" in note
-    assert "2026-10-09" not in note
-    assert report._lag_prior_note(scores) == ""
 
 
 def test_sampler_section() -> None:
@@ -432,7 +348,11 @@ def test_backtest_findings() -> None:
     ):
         rows.append(
             _scores().assign(
-                model=model, wis=wis, coverage_90=cov, complete=True
+                model=model,
+                wis=wis,
+                coverage_90=cov,
+                origin="2026-10-09",
+                target="reported",
             )
         )
     primary = pd.concat(rows)
@@ -543,15 +463,6 @@ def test_dropdown_wraps_and_indents() -> None:
     assert report._dropdown("x", "More").startswith('??? note "More"')
 
 
-def test_relative_section_puts_tables_in_a_dropdown() -> None:
-    scores = pd.read_csv(ROOT / "results" / "backtest-scores.csv")
-    scores = scores.loc[scores["model"] == "randomwalk"]
-    two = pd.concat([scores, scores.assign(model="other")])
-    text = report._relative_section(two)
-    assert text.index("relative-wis-horizon") < text.index('??? note "Tables"')
-    assert "    | model" in text
-
-
 def test_metric_tabs_have_wis_and_log_wis() -> None:
     text = report._metric_tabs("x", "WIS by horizon.")
     assert '=== "WIS"' in text
@@ -576,15 +487,38 @@ def test_nowcast_groups() -> None:
     assert groups["zones"] == ["CD-D-01"]
 
 
+def test_release_scores_horizon_is_weeks_from_the_reference_date(
+    tmp_path: Path,
+) -> None:
+    pd.DataFrame(
+        {
+            "origin": "2026-10-17",
+            "target_end_date": ["2026-10-10", "2026-10-17", "2026-10-24"],
+        }
+    ).to_csv(tmp_path / "nowcast-scores.csv", index=False)
+    scores = report._release_scores(tmp_path)
+    assert scores["horizon"].tolist() == [-2, -1, 0]
+    assert set(scores["vintage"]) == {"2026-10-17"}
+
+
 def test_summary_covers_only_forecasts_randomwalk_made(tmp_path: Path) -> None:
-    scores = pd.read_csv(ROOT / "results" / "backtest-scores.csv")
-    scores = scores.loc[scores["model"].isin(["randomwalk", "renewal"])]
+    scores = report._release_scores(ROOT / "results")
+    reported = scores.loc[scores["target"] == "reported"]
     gen = tmp_path / "gen"
     gen.mkdir()
-    report._summary_figure(tmp_path, gen, scores, ["randomwalk", "renewal"])
+    report._summary_figure(
+        tmp_path, gen, reported, ["randomwalk", "randomwalknowcast"]
+    )
     text = (gen / "backtest-summary.md").read_text()
-    walk = scores.loc[scores["model"] == "randomwalk", "vintage"]
+    walk = reported.loc[reported["model"] == "randomwalk", "origin"]
     origins = ", ".join(sorted(set(walk.astype(str))))
-    assert f"({origins})" in text
+    assert f"the origins {origins}" in text
     assert "   n |" in text
     assert "nan" not in text.lower()
+
+
+def test_backtest_findings_name_the_reported_target() -> None:
+    scores = report._release_scores(ROOT / "results")
+    text = report._backtest_findings(scores)
+    assert text.startswith("On the counts each later release reported")
+    assert "randomwalknowcast" in text

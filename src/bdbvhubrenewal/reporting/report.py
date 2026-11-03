@@ -49,7 +49,7 @@ from bdbvhubrenewal.evaluation.hubcompare import (
     summarise_comparison,
 )
 from bdbvhubrenewal.evaluation.nowcast import relative_wis
-from bdbvhubrenewal.evaluation.scoring import relative_skill, summarise_scores
+from bdbvhubrenewal.evaluation.scoring import summarise_scores
 from bdbvhubrenewal.evaluation.zones import zone_relative_skill
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
@@ -73,7 +73,6 @@ from bdbvhubrenewal.reporting.plots import (
     plot_imputed_share,
     plot_location_grid,
     plot_newly_missing,
-    plot_relative_skill,
     plot_revisions,
     plot_scenarios,
     plot_score_summary,
@@ -643,130 +642,40 @@ def _score_views(scores: pd.DataFrame) -> dict[str, pd.DataFrame]:
     return views
 
 
-def _lag_prior_note(scores: pd.DataFrame) -> str:
-    """Name the origins whose publication lag comes from the prior."""
-    if "lag_prior" not in scores:
-        return ""
-    marked = scores.loc[scores["lag_prior"].fillna(False).astype(bool)]
-    if marked.empty:
-        return ""
-    origins = (
-        marked[["kind", "vintage"]].drop_duplicates().sort_values("vintage")
-    )
-    names = ", ".join(f"{v} ({k})" for k, v in origins.to_numpy())
-    which = "origin" if len(origins) == 1 else "origins"
-    have = "has" if len(origins) == 1 else "have"
-    return (
-        f"The {which} {names} {have} no earlier pair of delay files, so the "
-        "renewal models take their publication lag from a prior whose shape "
-        "was set from later delay files.\n"
-        'The scores marked "own lag estimate" leave them out.\n'
-    )
-
-
-SCORE_TABLE_COLUMNS: Final = (
-    "model",
-    "wis",
-    "relative_wis",
-    "log_wis",
-    "relative_log_wis",
-    "coverage_50",
-    "coverage_90",
-    "bias",
-)
-"""Columns of each backtest score table."""
-
-SCORE_SETS: Final = (
-    "complete weeks",
-    "complete weeks, own lag estimate",
-    "vintage-matched",
-)
-"""Score sets shown on the Backtest page.
-
-Weeks still being reported are never scored against the latest data.
-"""
-
-
-def _level_tables(rows: pd.DataFrame) -> dict[str, pd.DataFrame]:
-    """Split scores into the national and province levels."""
-    national = rows["location"] == NATIONAL
-    return {"National": rows[national], "Province": rows[~national]}
-
-
-def _score_table(rows: pd.DataFrame) -> str:
-    """Mean scores by model, with WIS relative to randomwalk.
-
-    Random walk has no relative WIS, so its cell is left blank.
-    """
-    kinds = set(rows["kind"])
-    by = ["model", "kind"] if len(kinds) > 1 else ["model"]
-    table = summarise_scores(rows, by=by)
-    relative = ("relative_wis", "relative_log_wis")
-    for c in relative:
-        table[c] = float("nan")
-    models = set(rows["model"])
-    if len(models) > 1 and "randomwalk" in models:
-        rel = relative_skill(rows, by=by[1:], metrics=("wis", "log_wis"))
-        rel = rel.loc[rel["model"] != "randomwalk"]
-        table = table.drop(columns=list(relative)).merge(
-            rel[[*by, *relative]], on=by, how="left"
-        )
-    table = table.sort_values(by).reset_index(drop=True)
-    cols = [c for c in SCORE_TABLE_COLUMNS if c != "model"]
-    out = table[[*by, *cols]].round(2)
-    for c in relative:
-        out[c] = out[c].map(lambda v: "" if pd.isna(v) else f"{v:.2f}")
-    return out.to_markdown(index=False) + "\n"
-
-
-def _score_tables(views: dict[str, pd.DataFrame]) -> str:
-    """One small table per score set and level, as headed sections."""
-    parts = []
-    for name in SCORE_SETS:
-        rows = views.get(name, pd.DataFrame())
-        if rows.empty:
-            continue
-        for level, part in _level_tables(rows).items():
-            if part.empty:
-                continue
-            parts.append(
-                f"**{name.capitalize()}, {level.lower()}**\n\n"
-                + _score_table(part)
-            )
-    return "\n".join(parts)
-
-
-def _completeness_note(k: int) -> str:
-    """Say which weeks count as complete."""
-    return (
-        f"Complete weeks are those that ended at least {k} weeks before the "
-        "truth vintage.\n"
-        "They are a check on the release scores, which score every model "
-        "on the count each later release reports.\n"
-        "Vintage-matched scores compare each model's prediction of the "
-        "counts as reported by the truth vintage with that vintage, so "
-        "they cover every week.\n"
-    )
-
-
 BACKTEST_LOCATIONS: tuple[str, ...] = (NATIONAL, "CD-IT", "CD-NK")
 """Locations with forecast plots on the Backtest page."""
 
 
-def _backtest_findings(primary: pd.DataFrame) -> str:
-    """One or two sentences of results on complete weeks of real origins."""
-    real = primary.loc[primary["kind"] == "real"]
-    if real["model"].nunique() < 2 or "randomwalk" not in set(real["model"]):
+def _release_scores(res: Path) -> pd.DataFrame:
+    """Read the release scores, with each origin as a real vintage.
+
+    `horizon` is in weeks from the reference date, a week after the origin.
+    """
+    scores = pd.read_csv(res / "nowcast-scores.csv")
+    weeks = (
+        pd.to_datetime(scores["target_end_date"])
+        - pd.to_datetime(scores["origin"])
+    ).dt.days // 7
+    return scores.assign(
+        kind="real", vintage=scores["origin"], horizon=weeks - 1
+    )
+
+
+def _backtest_findings(scores: pd.DataFrame) -> str:
+    """One or two sentences on the reported target over every origin."""
+    rel = relative_wis(scores.loc[scores["target"] == "reported"])
+    if rel["model"].nunique() < 2:
         return ""
-    rel = relative_skill(real).set_index("model")["relative_wis"]
-    cov = real.groupby("model")["coverage_90"].mean()
+    rel = rel.set_index("model")
     others = [m for m in rel.index if m != "randomwalk"]
-    wis = ", ".join(f"{m} {rel[m]:.2f}" for m in others)
-    cover = ", ".join(f"{m} {cov[m]:.2f}" for m in [*others, "randomwalk"])
-    origins = real["vintage"].nunique()
+    wis = ", ".join(f"{m} {rel.loc[m, 'rel_wis']:.2f}" for m in others)
+    cover = ", ".join(
+        f"{m} {rel.loc[m, 'coverage_90']:.2f}" for m in [*others, "randomwalk"]
+    )
+    origins = scores["origin"].nunique()
     return (
-        f"On complete weeks of the {origins} real origins, mean WIS relative "
-        f"to random walk is {wis}.\n"
+        f"On the counts each later release reported, from {origins} "
+        f"origins, mean WIS relative to random walk is {wis}.\n"
         f"90% interval coverage is {cover}.\n"
     )
 
@@ -798,68 +707,51 @@ def _metric_tabs(stem: str, alt: str) -> str:
     return "\n".join(tabs)
 
 
-_SUMMARY_MATCH = [
-    "kind",
-    "vintage",
-    "reference_date",
+_RELEASE_MATCH: Final = [
+    "origin",
+    "truth_vintage",
     "location",
     "target_end_date",
 ]
+"""Columns that identify one forecast scored against one release."""
 
 
 def _summary_figure(
     fig: Path,
     gen: Path,
-    primary: pd.DataFrame,
+    reported: pd.DataFrame,
     names: Sequence[str],
 ) -> None:
-    """Write the relative WIS and coverage figure of the real origins."""
-    real = primary.loc[primary["kind"] == "real"]
-    if real["model"].nunique() < 2 or "randomwalk" not in set(real["model"]):
+    """Write relative WIS and coverage by horizon on the reported target.
+
+    Only the forecasts random walk also made are shown.
+    """
+    ours = reported.loc[reported["model"].isin(names)]
+    base = ours.loc[ours["model"] == "randomwalk", _RELEASE_MATCH]
+    both = ours.merge(base, on=_RELEASE_MATCH)
+    if both["model"].nunique() < 2:
         _write(gen / "backtest-summary.md", "")
         return
-    base = real.loc[real["model"] == "randomwalk", _SUMMARY_MATCH]
-    real = real.merge(base.drop_duplicates(), on=_SUMMARY_MATCH)
     _save_metric_figures(
-        fig, "scores-summary", partial(plot_score_summary, real, models=names)
+        fig, "scores-summary", partial(plot_score_summary, both, models=names)
     )
+    table = relative_wis(both, ("horizon",))
+    table["model"] = pd.Categorical(table["model"], list(names), ordered=True)
+    table = table.sort_values(["model", "horizon"]).reset_index(drop=True)
+    origins = ", ".join(sorted(set(both["origin"].astype(str))))
     alt = "WIS relative to random walk and 90% coverage, by horizon."
     _write(
         gen / "backtest-summary.md",
         _metric_tabs("scores-summary", alt)
         + "\n"
-        + _dropdown(_summary_table(real, names), "Summary table"),
-    )
-
-
-def _summary_table(real: pd.DataFrame, names: Sequence[str]) -> str:
-    """Return the table behind the summary figure, by model and horizon.
-
-    `real` holds only the forecasts random walk also made.
-    """
-    rel = relative_skill(real, by=("horizon",), match_on=_SUMMARY_MATCH)
-    cover = (
-        real.groupby(["model", "horizon"])["coverage_90"].mean().reset_index()
-    )
-    table = rel.merge(cover, on=["model", "horizon"])
-    table = table[
-        [
-            "model",
-            "horizon",
-            "n",
-            "relative_wis",
-            "relative_log_wis",
-            "coverage_90",
-        ]
-    ]
-    table["model"] = pd.Categorical(table["model"], list(names), ordered=True)
-    table = table.sort_values(["model", "horizon"]).reset_index(drop=True)
-    origins = ", ".join(sorted(set(real["vintage"].astype(str))))
-    return (
-        "Mean WIS and log WIS divided by those of random walk over the "
-        "forecasts both made, and the share of 90% intervals holding the "
-        f"data. It covers the origins where random walk forecast "
-        f"({origins}).\n\n" + _table(table)
+        + _dropdown(
+            "Mean WIS divided by that of random walk, and interval "
+            "coverage, on the counts each later release reported, over the "
+            f"forecasts both made from the origins {origins}.\n"
+            "Horizons after the latest release have no score yet.\n\n"
+            + _table(table),
+            "Summary table",
+        ),
     )
 
 
@@ -959,45 +851,6 @@ def _scenario_figure() -> str:
     return _metric_tabs("scenario-wis-horizon", alt)
 
 
-def _relative_section(scores: pd.DataFrame) -> str:
-    if scores["model"].nunique() < 2:
-        return ""
-    rel = _without_baseline(relative_skill(scores, by=("kind",)))
-    tabs = []
-    for by, label in (("horizon", "By horizon"), ("location", "By province")):
-        alt = f"WIS relative to random walk {label.lower()}."
-        tabs.append(
-            f'=== "{label}"\n\n'
-            f"    ![{alt}](figures/relative-wis-{by}.svg#only-light)\n"
-            f"    ![{alt}](figures/relative-wis-{by}-dark.svg#only-dark)\n"
-        )
-    return (
-        "## Relative skill\n\n"
-        + "\n".join(tabs)
-        + "\n"
-        + _dropdown(
-            "Mean scores on complete weeks divided by those of random walk "
-            "over the forecasts both made.\n"
-            "Values below 1 beat randomwalk.\n\n" + _table(rel)
-        )
-    )
-
-
-def _other_relative(views: dict[str, pd.DataFrame]) -> str:
-    """Relative scores of the other score sets that two models have."""
-    parts = []
-    for name in ("complete weeks, own lag estimate", "vintage-matched"):
-        rows = views.get(name, pd.DataFrame())
-        if rows.empty or rows["model"].nunique() < 2:
-            continue
-        parts.append(
-            f"\n{name.capitalize()}:\n\n"
-            + _table(_without_baseline(relative_skill(rows, by=("kind",))))
-            + "\n"
-        )
-    return "".join(parts)
-
-
 def _submission_sampler(path: Path = Path("ci/policy.toml")) -> dict[str, Any]:
     """Return the main candidate's sampler settings from the CI policy."""
     policy = tomllib.loads(path.read_text())
@@ -1068,102 +921,32 @@ def _backtest_page(
     target: pd.DataFrame,
     names: list[str],
 ) -> None:
-    dev_path = res / "backtest-scores.csv"
     k = config.complete_after_weeks
-    explorer_scores = None
-    views = _score_views(pd.read_csv(dev_path))
-    primary = views["complete weeks"]
-    scores = primary
+    scores = _release_scores(res)
+    reported = scores.loc[scores["target"] == "reported"]
     for by in ("horizon", "location"):
         for metric in ("wis", "log_wis", "coverage_90", "bias"):
             save_light_dark(
                 partial(
-                    plot_scores, scores, by=by, metric=metric, models=names
+                    plot_scores, reported, by=by, metric=metric, models=names
                 ),
                 fig / f"scores-{metric.replace('_', '-')}-{by}.svg",
             )
-        save_light_dark(
-            partial(plot_relative_skill, primary, by=by, models=names),
-            fig / f"relative-wis-{by}.svg",
-        )
-    truth_v = ", ".join(sorted(set(scores["truth_vintage"].astype(str))))
-    _write(
-        gen / "backtest-truth.md",
-        f"Scores are against the **{truth_v}** vintage, as reported "
-        "then.\n\n"
-        + _dropdown(
-            _completeness_note(k)
-            + _lag_prior_note(views["all weeks as reported"]),
-            "Scoring notes",
-        ),
-    )
-    _write(
-        gen / "scores-overall.md",
-        _dropdown(_score_tables(views), "Score tables"),
-    )
-    _summary_figure(fig, gen, primary, names)
-    _write(
-        gen / "relative-section.md",
-        _relative_section(primary)
-        + _dropdown(_other_relative(views), "Other score sets"),
-    )
-    _write(gen / "backtest-findings.md", _backtest_findings(primary))
-    explorer_scores = primary.loc[primary["kind"] == "real"]
-    by_loc = summarise_scores(primary, by=("model", "kind", "location"))
+    _summary_figure(fig, gen, reported, names)
+    _write(gen / "backtest-findings.md", _backtest_findings(scores))
     _write(
         gen / "scores-location.md",
-        _table(
-            by_loc[
-                [
-                    "model",
-                    "kind",
-                    "location",
-                    "n",
-                    "wis",
-                    "log_wis",
-                    "coverage_50",
-                    "coverage_90",
-                    "bias",
-                ]
-            ]
-        ),
+        _table(relative_wis(scores, ("target", "location"))),
     )
-    by_truth_path = res / "backtest-scores-by-truth.csv"
-    truth_views = _score_views(pd.read_csv(by_truth_path))
-    by_truth = truth_views["complete weeks"]
     save_light_dark(
-        partial(plot_scores_by_truth, by_truth, models=names),
+        partial(plot_scores_by_truth, reported, models=names),
         fig / "scores-by-truth.svg",
-    )
-    table = pd.concat(
-        [
-            summarise_scores(
-                rows, by=("model", "vintage", "truth_vintage")
-            ).assign(scores=name)
-            for name, rows in truth_views.items()
-            if name in SCORE_SETS and not rows.empty
-        ],
-        ignore_index=True,
     )
     _write(
         gen / "scores-by-truth.md",
-        _table(
-            table[
-                [
-                    "scores",
-                    "model",
-                    "vintage",
-                    "truth_vintage",
-                    "n",
-                    "wis",
-                    "log_wis",
-                    "coverage_90",
-                    "bias",
-                ]
-            ]
-        ),
+        _table(relative_wis(scores, ("target", "origin", "truth_vintage"))),
     )
-    weeks = sorted(set(by_truth["target_end_date"].astype(str)))
+    weeks = sorted(set(reported["target_end_date"].astype(str)))
     changes = truth_changes(target, locations=(NATIONAL,))
     changes = changes.loc[changes["target_end_date"].isin(weeks)]
     wide = changes.pivot_table(
@@ -1199,6 +982,8 @@ def _backtest_page(
     if shown:
         quantiles = forecast_quantiles(real_fc.assign(source="ours"))
         quantiles = quantiles.assign(ours=True)
+        rounds = real_fc[["vintage", "reference_date"]].drop_duplicates()
+        complete = scores.loc[scores["target"] == "complete"]
         write_explorer(
             fig / "explorer-backtest.json",
             explorer_data(
@@ -1207,7 +992,7 @@ def _backtest_page(
                 labels,
                 k,
                 baseline="randomwalk",
-                scores=explorer_scores,
+                scores=complete.merge(rounds, on="vintage"),
             ),
         )
         explorer_src = "../figures/explorer-backtest.json"

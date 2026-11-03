@@ -683,7 +683,7 @@ def _backtest(args: argparse.Namespace) -> int:
         _write_fits(fits, results / "lopo-fits.csv")
         print(f"Leave one province out: {len(lopo_scores)} scored forecasts.")
         return 0
-    forecasts, _ = bt.run_development(
+    forecasts = bt.run_development(
         models,
         target,
         delays,
@@ -693,20 +693,10 @@ def _backtest(args: argparse.Namespace) -> int:
     )
     _write_fits(fits, results / "backtest-fits.csv")
     # Rows of models not run here are kept, so the fitted variants can be
-    # run apart from the others, and every model is scored again against
-    # the same truth.
+    # run apart from the others, and every model is scored again.
     forecasts = bt.merge_by_model(output / "forecasts.csv.gz", forecasts)
-    scores = bt.score_development(forecasts, target, config)
-    by_truth = bt.score_by_truth_vintage(
-        forecasts, target, config.complete_after_weeks
-    )
     _release_backtest(args, config, target, delays, results, forecasts)
-    for table, path in (
-        (forecasts, output / "forecasts.csv.gz"),
-        (scores, results / "backtest-scores.csv"),
-        (by_truth, results / "backtest-scores-by-truth.csv"),
-    ):
-        table.to_csv(path, index=False)
+    forecasts.to_csv(output / "forecasts.csv.gz", index=False)
     rforecasts, rscores = bt.run_recovery(
         models, config, lags=cutoff_lags(load_daily(args.data))
     )
@@ -716,7 +706,7 @@ def _backtest(args: argparse.Namespace) -> int:
     ):
         bt.merge_by_model(path, table).to_csv(path, index=False)
     print(
-        f"Development: {len(scores)} scored forecasts; recovery: "
+        f"Development: {len(forecasts)} forecast rows; recovery: "
         f"{len(rscores)}. Written to {results}."
     )
     return 0

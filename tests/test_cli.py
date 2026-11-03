@@ -142,7 +142,8 @@ def test_forecast_draws_trajectories_ribbons_and_median() -> None:
 
 
 def test_plot_scores_by_truth() -> None:
-    scores = pd.read_csv(ROOT / "results" / "backtest-scores-by-truth.csv")
+    scores = pd.read_csv(ROOT / "results" / "nowcast-scores.csv")
+    scores = scores.rename(columns={"origin": "vintage"})
     fig = plots.plot_scores_by_truth(scores, models=["randomwalk"])
     assert len(fig.axes) == 1
     own = scores.loc[scores["model"] == "randomwalk"]
@@ -172,7 +173,7 @@ def test_cli_lopo_writes_scores_for_mask_aware_models(tmp_path: Path) -> None:
     assert set(scores["model"]) == {"mask_aware"}
     assert (tmp_path / "out" / "lopo-forecasts.csv.gz").exists()
     # The development backtest is not rerun.
-    assert not (tmp_path / "res" / "backtest-scores.csv").exists()
+    assert not (tmp_path / "res" / "nowcast-scores.csv").exists()
 
 
 @pytest.mark.usefixtures("in_root")
@@ -181,8 +182,7 @@ def test_cli_backtest_keeps_other_models_results(tmp_path: Path) -> None:
     args = ["backtest", "--results", str(res),
             "--output", str(out), "--models", "randomwalk"]  # fmt: skip
     assert main(args) == 0
-    names = ("backtest-scores.csv", "backtest-scores-by-truth.csv",
-             "recovery-scores.csv")  # fmt: skip
+    names = ("recovery-scores.csv",)
     # Another model's results, as a fit on archie would leave them.
     for name in names:
         table = pd.read_csv(res / name)
@@ -217,10 +217,12 @@ def test_cli_backtest_no_fit_skips_fitted_models(tmp_path: Path) -> None:
         str(tmp_path / "out"),
     ]
     assert main(args) == 0  # would take minutes if it fitted anything
-    scores = pd.read_csv(tmp_path / "res" / "backtest-scores.csv")
-    unfitted = {s.name for s in list_models() if not s.fitted}
-    assert set(scores["model"]) == unfitted
-    assert "randomwalk" in unfitted
+    scores = pd.read_csv(tmp_path / "res" / "nowcast-scores.csv")
+    fitted = {s.name for s in list_models() if s.fitted}
+    assert "randomwalk" in set(scores["model"])
+    # Fitted models are scored only from their stored forecasts.
+    fc = pd.read_csv(tmp_path / "out" / "forecasts.csv.gz")
+    assert not fitted & set(fc["model"])
 
 
 def test_host_devices_cover_the_chains(monkeypatch: pytest.MonkeyPatch) -> None:

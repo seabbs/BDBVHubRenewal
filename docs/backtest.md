@@ -1,9 +1,9 @@
 # Backtest
 
-Forecasts made at past vintages, scored against the latest data.
+Forecasts made at past vintages, scored on what each later release reported.
 { .page-subtitle }
 
-The main comparison scores every model on the count each later release reports, and complete weeks are a secondary check ([Evaluation](methods/evaluation.md#scoring)).
+Every model is scored on the count each later release reports, and complete weeks are a secondary check ([Evaluation](methods/evaluation.md#scoring)).
 Weeks still being reported are shaded, with hollow points.
 
 --8<-- "release-backtest.md"
@@ -12,18 +12,11 @@ Weeks still being reported are shaded, with hollow points.
 
 --8<-- "backtest-summary.md"
 
-## Overall
-
---8<-- "backtest-truth.md"
-
---8<-- "scores-overall.md"
-
---8<-- "relative-section.md"
-
 --8<-- "backtest-forecasts.md"
 
 ## By horizon
 
+Scores on the count each later release reported.
 Horizons −4 to −1 are nowcasts, 0 is the reference week and 1 to 3 are forecasts.
 
 === "WIS"
@@ -47,6 +40,8 @@ Horizons −4 to −1 are nowcasts, 0 is the reference week and 1 to 3 are forec
     ![Mean bias by horizon and vintage kind.](figures/scores-bias-horizon-dark.svg#only-dark)
 
 ## By province
+
+Scores on the count each later release reported.
 
 === "WIS"
 
@@ -74,12 +69,12 @@ Horizons −4 to −1 are nowcasts, 0 is the reference week and 1 to 3 are forec
 
 --8<-- "backtest-sampler.md"
 
-## Scores by truth vintage
+## Scores by release
 
-Complete weeks of real forecasts scored against each later real vintage.
+Each origin's forecasts scored on the counts each later release reported.
 
-![Mean WIS of each real forecast vintage against each later truth vintage.](figures/scores-by-truth.svg#only-light)
-![Mean WIS of each real forecast vintage against each later truth vintage.](figures/scores-by-truth-dark.svg#only-dark)
+![Mean WIS of each origin's forecasts against each later release.](figures/scores-by-truth.svg#only-light)
+![Mean WIS of each origin's forecasts against each later release.](figures/scores-by-truth-dark.svg#only-dark)
 
 ??? note "Tables"
 

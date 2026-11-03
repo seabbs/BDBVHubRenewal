@@ -5,12 +5,12 @@ Each vintage becomes a `ForecastTask`: the data as of that vintage, the
 reference date it serves (`reference_date_for_vintage`) and the weeks
 from `min_horizon` to `max_horizon`.
 Every registered model forecasts every task.
-Forecasts are scored on every week against a later truth vintage, as
-reported then, and each score records that `truth_vintage`.
+Real forecasts are scored by `bdbvhubrenewal.evaluation.nowcast` on the
+count each later release reported.
 
 There are two kinds of vintage:
 
-- **real**: published by the hub. Truth is the latest real vintage.
+- **real**: published by the hub.
 - **simulated**: from a simulated outbreak with known parameters
   (`bdbvhubrenewal.data.simulate`). Truth is the final simulated count.
 
@@ -86,7 +86,6 @@ __all__ = [
     "run_scenarios",
     "saturdays",
     "score_by_truth_vintage",
-    "score_development",
     "score_tasks",
     "truth_changes",
     "truth_from_vintage",
@@ -777,12 +776,13 @@ def run_development(
     *,
     fits: list[pd.DataFrame] | None = None,
     daily: pd.DataFrame | None = None,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Run the development backtest on the real vintages.
+) -> pd.DataFrame:
+    """Forecast from the development vintages.
 
     Vintages after `config.development_until` are held out: they are not
     forecast from.
-    The truth is the latest real vintage, and every week is scored.
+    The forecasts are scored by
+    `bdbvhubrenewal.evaluation.nowcast.release_backtest`.
 
     Parameters
     ----------
@@ -801,38 +801,11 @@ def run_development(
 
     Returns
     -------
-    tuple of pandas.DataFrame
-        The forecasts and the scores.
+    pandas.DataFrame
+        Output of `run_forecasts`.
     """
     tasks = development_tasks(target, delays, config, daily=daily)
-    forecasts = run_forecasts(models, tasks, fits)
-    return forecasts, score_development(forecasts, target, config)
-
-
-def score_development(
-    forecasts: pd.DataFrame, target: pd.DataFrame, config: BacktestConfig
-) -> pd.DataFrame:
-    """Score development forecasts against the latest real vintage.
-
-    Parameters
-    ----------
-    forecasts : pandas.DataFrame
-        Output of `run_forecasts`, such as every model's committed
-        forecasts, so all are scored against the same truth.
-    target : pandas.DataFrame
-        The tidy target table.
-    config : BacktestConfig
-        Settings.
-
-    Returns
-    -------
-    pandas.DataFrame
-        Output of `score_tasks`.
-    """
-    real = target.loc[target["kind"] == "real"]
-    latest = real_vintages(real)[-1]
-    truth = truth_from_vintage(real, latest)
-    return score_tasks(forecasts, truth, latest, config.complete_after_weeks)
+    return run_forecasts(models, tasks, fits)
 
 
 def lopo_tasks(

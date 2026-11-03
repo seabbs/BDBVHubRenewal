@@ -7,15 +7,8 @@ Scoring, and the evaluations.
 
 Every model is scored on the count each later real release reports, with its final-count forecast turned into a forecast of that count ([Real releases](#real-releases)).
 The release scores never compare a final count with a count still being reported.
-The development backtest scores complete weeks against each later real vintage as a secondary check ([Backtest](../backtest.md#scores-by-truth-vintage)).
+Complete weeks of the latest release are a secondary check ([Real releases](#real-releases)).
 Simulated forecasts are scored against the simulated final counts.
-
-| Score set | Forecast | Weeks scored |
-|---|---|---|
-| Complete weeks | Final count | Weeks ended at least $K = 3$ weeks before the truth vintage. These can still grow in later vintages. |
-| Vintage-matched | Count as reported by the truth vintage | Every week, so recent weeks compare like with like. |
-
-**Vintage-matched.** The renewal variants draw reported counts from the same posterior draws as the final counts.
 
 ## Scores
 
@@ -46,7 +39,7 @@ Each vintage is a forecast task, and every registered model forecasts every task
 
 | Run | Vintages | Truth |
 |---|---|---|
-| Development backtest | Real up to the latest model choice date, except the latest real vintage | Latest real vintage, and every later real vintage for real forecasts |
+| Development backtest | Real up to the latest model choice date, except the latest real vintage | As for real releases |
 | Recovery check | Simulated | Simulated final counts |
 | Simulated scenarios | The four weekly simulated vintages up to the latest real vintage, from outbreaks calibrated to it with Rt after the data scaled by 0.75, 1 or 1.25 | Simulated final counts, and the counts as reported two weeks after each vintage |
 | Rolling held-out evaluation | Real vintages after each model choice | Every later real vintage |

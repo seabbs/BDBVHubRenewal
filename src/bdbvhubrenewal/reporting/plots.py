@@ -47,7 +47,6 @@ __all__ = [
     "plot_location_grid",
     "plot_newly_missing",
     "plot_nowcast",
-    "plot_relative_skill",
     "plot_revisions",
     "plot_score_summary",
     "plot_scores",
@@ -1420,6 +1419,7 @@ def plot_score_summary(
             "kind",
             "vintage",
             "reference_date",
+            "truth_vintage",
             "location",
             "target_end_date",
         )
@@ -1580,75 +1580,3 @@ _METRIC_LABELS: Final[dict[str, str]] = {
     "relative_wis": "WIS relative to randomwalk",
     "relative_log_wis": "Log WIS relative to randomwalk",
 }
-
-
-def plot_relative_skill(
-    scores: pd.DataFrame,
-    by: str = "horizon",
-    metric: str = "wis",
-    baseline: str = "randomwalk",
-    models: Sequence[str] | None = None,
-    mode: str = "light",
-) -> Figure:
-    """Plot each model's score relative to the baseline.
-
-    Parameters
-    ----------
-    scores : pandas.DataFrame
-        Output of `score_forecasts` with at least the baseline.
-    by : str
-        `"horizon"` or `"location"`.
-    metric : str
-        `"wis"` or `"log_wis"`.
-    baseline : str
-        The reference model.
-    models : sequence of str, optional
-        Models in registry order.
-    mode : str
-        `"light"` or `"dark"`.
-
-    Returns
-    -------
-    matplotlib.figure.Figure
-        Relative score by `by`, one panel per vintage kind, with a line at
-        1. With only the baseline, the panels say so.
-    """
-    from bdbvhubrenewal.evaluation.scoring import relative_skill
-
-    models = list(models or scores["model"].unique())
-    kinds = [k for k in ("real", "simulated") if k in set(scores["kind"])]
-    fig, axes = _grid(len(kinds), 3, width=3.6, height=2.6)
-    col = f"relative_{metric}"
-    for ax, kind in zip(axes, kinds, strict=True):
-        rel = relative_skill(
-            scores.loc[scores["kind"] == kind],
-            baseline=baseline,
-            by=(by,),
-            metrics=(metric,),
-        )
-        ax.axhline(1, color=THEMES[mode]["muted"], lw=1, ls=":")
-        others = [m for m in models if m != baseline]
-        if not others:
-            ax.text(
-                0.5,
-                0.5,
-                f"No model other than {baseline}",
-                transform=ax.transAxes,
-                ha="center",
-                color=THEMES[mode]["muted"],
-            )
-        for m in others:
-            r = rel.loc[rel["model"] == m]
-            ax.plot(
-                r[by].astype(str) if by != "horizon" else r[by],
-                r[col],
-                color=model_colour(m, models, mode),
-                marker=_KIND_MARKERS[kind],
-                label=m,
-            )
-        ax.set_title(kind)
-        ax.set_xlabel(by.capitalize())
-    axes[0].set_ylabel(_METRIC_LABELS.get(col, col))
-    if len(models) > 1:
-        axes[0].legend()
-    return fig

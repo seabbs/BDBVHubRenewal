@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import dataclasses
 from pathlib import Path
 
 import pandas as pd
@@ -62,26 +61,17 @@ def test_saturdays() -> None:
 def test_development_never_uses_heldout_vintages(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
-    forecasts, scores = run_development(
-        [get_model("flat")], target, delays, config
-    )
+    forecasts = run_development([get_model("flat")], target, delays, config)
     # Vintages after the model choice date are held out.
     assert (forecasts["vintage"] <= "2026-10-10").all()
     real = forecasts.loc[forecasts["kind"] == "real"]
     assert set(real["vintage"]) == {"2026-08-18", "2026-10-09"}
-    assert set(scores["kind"]) == {"real"}
-    # Every week is scored, up to the last week of the truth vintage.
-    assert scores["target_end_date"].max() == "2026-10-31"
-    assert set(scores["truth_vintage"]) == {"2026-11-01"}
-    assert (scores["n_samples"] == 100).all()
 
 
 def test_score_by_truth_vintage(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
-    forecasts, latest = run_development(
-        [get_model("flat")], target, delays, config
-    )
+    forecasts = run_development([get_model("flat")], target, delays, config)
     scores = score_by_truth_vintage(forecasts, target)
     # Real forecasts only, each against every later real vintage.
     assert set(scores["kind"]) == {"real"}
@@ -95,17 +85,12 @@ def test_score_by_truth_vintage(
         ("2026-10-09", "2026-10-24"),
         ("2026-10-09", "2026-11-01"),
     }
-    # Against the latest vintage it matches the development scores.
-    at_latest = scores.loc[scores["truth_vintage"] == "2026-11-01"]
-    real = latest.loc[latest["kind"] == "real"]
-    assert len(at_latest) == len(real)
-    assert at_latest["wis"].sum() == pytest.approx(real["wis"].sum())
 
 
 def test_scores_cover_only_weeks_in_the_truth(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
-    forecasts, _ = run_development([get_model("flat")], target, delays, config)
+    forecasts = run_development([get_model("flat")], target, delays, config)
     scores = score_by_truth_vintage(forecasts, target)
     # A week past the end of a truth vintage is not scored, not taken as 0.
     weeks = target.groupby("vintage")["target_end_date"].max()
@@ -202,35 +187,13 @@ def test_make_tasks_asks_for_later_vintages(
     assert by["2026-10-24"] == ()
 
 
-def test_development_scores_both_ways(
-    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
-) -> None:
-    config = dataclasses.replace(config, complete_after_weeks=3)
-    forecasts, scores = run_development(
-        [get_model("flat")], target, delays, config
-    )
-    assert {"as reported", "vintage-matched"} <= set(scores["scoring"])
-    assert scores["complete"].any()
-    assert not scores["complete"].all()
-    by_truth = score_by_truth_vintage(forecasts, target, 3)
-    matched = by_truth.loc[by_truth["scoring"] == "vintage-matched"]
-    assert set(matched["truth_vintage"]) == {
-        "2026-10-09",
-        "2026-10-17",
-        "2026-10-24",
-        "2026-11-01",
-    }
-
-
 def test_origins_without_a_lag_estimate_are_marked(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
-    forecasts, scores = run_development(
-        [get_model("flat")], target, delays, config
-    )
+    forecasts = run_development([get_model("flat")], target, delays, config)
     # Origins with no earlier pair of delay files take the publication
     # lag from a prior informed by later files.
-    marked = scores.loc[scores["lag_prior"], ["kind", "vintage"]]
+    marked = forecasts.loc[forecasts["lag_prior"], ["kind", "vintage"]]
     assert set(map(tuple, marked.drop_duplicates().to_numpy())) == {
         ("real", "2026-08-18"),
         ("real", "2026-10-09"),
