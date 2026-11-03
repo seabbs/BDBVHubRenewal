@@ -63,7 +63,11 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.baselinenowcast import chain_growth, exact_plan
-from bdbvhubrenewal.data.dates import as_date, epiweek_end
+from bdbvhubrenewal.data.dates import (
+    as_date,
+    epiweek_end,
+    reference_date_for_vintage,
+)
 from bdbvhubrenewal.data.snapshots import release_cutoff
 from bdbvhubrenewal.evaluation.scoring import SCORE_COLUMNS, score_forecasts
 from bdbvhubrenewal.forecasters.base import (
@@ -98,6 +102,7 @@ __all__ = [
     "relative_wis",
     "release_backtest",
     "reported_share",
+    "stored_finals",
     "summarise",
     "weeks_back_from_cutoff",
 ]
@@ -373,6 +378,58 @@ def expected_reported(
     q = out.pop("q")
     out["value"] = np.maximum(r + q * (out["value"] - r), 0.0)
     return out[list(samples.columns)]
+
+
+def stored_finals(
+    forecasts: pd.DataFrame,
+    hub: pd.DataFrame,
+    vintages: Sequence[str],
+    exclude: Sequence[str] = (),
+) -> pd.DataFrame:
+    """Return stored and hub samples of the final count by origin.
+
+    Parameters
+    ----------
+    forecasts : pandas.DataFrame
+        Backtest forecasts, as in `results/forecasts.csv.gz`. Only real
+        rows of the final count, with no `as_of`, are kept.
+    hub : pandas.DataFrame
+        Hub team samples with `reference_date`, as from
+        `hubcompare.load_hub_submissions`. Each round takes the latest
+        real vintage serving it as its origin, and rounds with none are
+        dropped.
+    vintages : sequence of str
+        The real vintages.
+    exclude : sequence of str
+        Models to leave out, such as those run here.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `model`, `vintage`, `location`, `target_end_date`,
+        `sample` and `value`.
+    """
+    cols = ["model", "vintage", "location", "target_end_date", "sample",
+            "value"]  # fmt: skip
+    frames = []
+    if not forecasts.empty:
+        final = forecasts["kind"] == "real"
+        if "as_of" in forecasts:
+            final &= forecasts["as_of"].isna()
+        frames.append(forecasts.loc[final, cols])
+    if not hub.empty:
+        serving: dict[str, str] = {}
+        for v in sorted(vintages):
+            serving[reference_date_for_vintage(v).isoformat()] = v
+        rows = hub.assign(
+            vintage=hub["reference_date"].astype(str).map(serving)
+        )
+        frames.append(rows.loc[rows["vintage"].notna(), cols])
+    if not frames:
+        return pd.DataFrame(columns=cols)
+    out = pd.concat(frames, ignore_index=True)
+    out = out.loc[~out["model"].isin(set(exclude))].reset_index(drop=True)
+    return out.astype({"vintage": str, "target_end_date": str})
 
 
 def _reported(

@@ -244,6 +244,9 @@ def test_relative_wis_is_against_randomwalk_or_the_floor(
     rep = rel.loc[rel["target"] == "reported"].set_index("model")
     assert rep.loc["randomwalk", "rel_wis"] == pytest.approx(1.0)
     assert (rep["rel_to"] == "randomwalk").all()
+    # Coverage is of the forecasts matched with the baseline.
+    assert {"coverage_50", "coverage_90"} <= set(rel)
+    assert rel["coverage_90"].between(0, 1).all()
 
 
 def test_stored_forecasts_are_scored_on_both_targets(

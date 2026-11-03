@@ -61,7 +61,7 @@ from bdbvhubrenewal.evaluation.heldout import (
     load_model_choices,
     run_heldout,
 )
-from bdbvhubrenewal.evaluation.nowcast import release_backtest
+from bdbvhubrenewal.evaluation.nowcast import release_backtest, stored_finals
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastTask,
@@ -766,7 +766,6 @@ def _backtest(args: argparse.Namespace) -> int:
         daily=load_daily(args.data),
     )
     _write_fits(fits, results / "backtest-fits.csv")
-    _release_backtest(args, config, target, delays, results)
     by_truth = bt.score_by_truth_vintage(
         forecasts, target, config.complete_after_weeks
     )
@@ -789,6 +788,9 @@ def _backtest(args: argparse.Namespace) -> int:
         recovery = f"; recovery: {len(rscores)}"
     for table, path in tables:
         bt.merge_by_model(path, table).to_csv(path, index=False)
+    _release_backtest(
+        args, config, target, delays, results, output / "forecasts.csv.gz"
+    )
     print(
         f"Development: {len(scores)} scored forecasts{recovery}. "
         f"Written to {results}."
@@ -802,8 +804,15 @@ def _release_backtest(
     target: pd.DataFrame,
     delays: pd.DataFrame,
     results: Path,
+    forecasts: Path,
 ) -> None:
-    """Score the random walk models from every real release."""
+    """Score every model from every real release.
+
+    The random walk models run here. Fitted models take their stored
+    backtest forecasts, and hub teams their committed or cached files.
+    """
+    from bdbvhubrenewal.evaluation.hubcompare import load_hub_submissions
+
     daily = load_daily(args.data)
     real = target.loc[target["kind"] == "real"]
     tasks = [
@@ -813,7 +822,21 @@ def _release_backtest(
         )
         if not config.is_heldout(t.vintage)
     ]
-    out = release_backtest(tasks, daily, target)
+    run = ("randomwalk", "randomwalknowcast")
+    hub = load_hub_submissions(
+        "data/hub-submissions", Path(args.data) / "raw" / "hub-submissions"
+    )
+    try:
+        fc = pd.read_csv(forecasts, dtype={"as_of": object})
+    except (FileNotFoundError, pd.errors.EmptyDataError):
+        fc = pd.DataFrame()
+    stored = stored_finals(
+        fc,
+        hub,
+        bt.real_vintages(target),
+        exclude=run,
+    )
+    out = release_backtest(tasks, daily, target, models=run, stored=stored)
     for name, table in (
         ("scores", out.scores),
         ("quantiles", out.quantiles),

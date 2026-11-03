@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, load_config
 from bdbvhubrenewal.reporting import report
@@ -624,3 +625,34 @@ def test_nowcast_groups() -> None:
     assert groups["main"] == ["CD", "CD-B", "CD-C", "CD-D"]
     assert groups["other"] == ["CD-A"]
     assert groups["zones"] == ["CD-D-01"]
+
+
+def test_release_scores_are_relative_by_origin_and_pool() -> None:
+    from bdbvhubrenewal.reporting.report import _release_scores
+
+    rows = []
+    for model, wis in (("randomwalk", 2.0), ("renewal", 1.0)):
+        for loc in ("CD", "CD-IT", "CD-NK"):
+            rows.append(
+                {
+                    "target": "reported",
+                    "model": model,
+                    "origin": "2026-10-17",
+                    "truth_vintage": "2026-10-24",
+                    "location": loc,
+                    "target_end_date": "2026-10-10",
+                    "wis": wis,
+                    "coverage_50": 1.0,
+                    "coverage_90": 1.0,
+                }
+            )
+    table = _release_scores(pd.DataFrame(rows), ("target", "origin", "pool"))
+    assert list(table.columns) == [
+        "target", "origin", "pool", "model", "n", "rel_wis",
+        "coverage_50", "coverage_90",
+    ]  # fmt: skip
+    prov = table.loc[table["pool"] == "provinces"].set_index("model")
+    assert prov.loc["renewal", "rel_wis"] == pytest.approx(0.5)
+    assert prov.loc["renewal", "n"] == 2
+    nat = table.loc[table["pool"] == "national"].set_index("model")
+    assert nat.loc["randomwalk", "n"] == 1
