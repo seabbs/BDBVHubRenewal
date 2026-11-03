@@ -32,7 +32,7 @@ import io
 import json
 import os
 import tomllib
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Final
@@ -74,6 +74,7 @@ __all__ = [
     "stored_forecasts",
     "submission_dir",
     "summarise_comparison",
+    "with_submissions",
 ]
 
 WEEKLY_TARGET: Final = "wk inc confirmed cases"
@@ -128,12 +129,16 @@ class ComparisonConfig:
         Locations shown in the plots.
     ref : str
         Git ref of the hub to fetch from.
+    submitted : str
+        Directory holding the forecasts we submitted to the hub, as
+        `model-output/<hub id>/*.csv.gz`.
     """
 
-    baseline: str = "randomwalknowcast"
+    baseline: str = "randomwalk"
     stored: tuple[str, ...] = ()
     locations: tuple[str, ...] = ("CD",)
     ref: str = "main"
+    submitted: str = "data/our-submissions"
 
 
 def load_comparison_config(
@@ -158,6 +163,7 @@ def load_comparison_config(
         stored=tuple(raw.get("stored", default.stored)),
         locations=tuple(raw.get("locations", default.locations)),
         ref=str(raw.get("ref", default.ref)),
+        submitted=str(raw.get("submitted", default.submitted)),
     )
 
 
@@ -193,15 +199,55 @@ def own_hub_ids(path: Path | str = "config/hub.toml") -> dict[str, str]:
     Returns
     -------
     dict
-        Model name to hub model id, such as
-        `{"renewal": "seabbs-renewal", "randomwalknowcast":
+        Model name to hub model id, for the models set to submit, such as
+        `{"renewalbvd": "seabbs-renewal", "randomwalknowcast":
         "seabbs-rwnowcast"}`.
     """
     from bdbvhubrenewal.submission.hub import model_abbr_for, model_id
 
     raw = tomllib.loads(Path(path).read_text())
-    names = [raw["submission"]["model"], *raw.get("models", {})]
-    return {name: model_id(model_abbr_for(name, path)) for name in names}
+    tables = {raw["submission"]["model"]: raw["submission"]}
+    tables |= raw.get("models", {})
+    return {
+        name: model_id(model_abbr_for(name, path))
+        for name, table in tables.items()
+        if table["submit"]
+    }
+
+
+def with_submissions(
+    forecasts: pd.DataFrame,
+    submitted: pd.DataFrame,
+    hub_ids: Mapping[str, str],
+) -> pd.DataFrame:
+    """Put what we submitted in place of our forecasts for those rounds.
+
+    Parameters
+    ----------
+    forecasts : pandas.DataFrame
+        Samples with `SAMPLE_COLUMNS`.
+    submitted : pandas.DataFrame
+        Our submissions, from `load_hub_submissions`, by hub id.
+    hub_ids : mapping
+        Model name to hub id (`own_hub_ids`).
+
+    Returns
+    -------
+    pandas.DataFrame
+        `forecasts` without our model's rows for each round it submitted
+        or the hub's copy of them, and the submitted rows under the model
+        name with `source` `submitted`.
+    """
+    names = {hub_id: name for name, hub_id in hub_ids.items()}
+    sub = submitted.assign(
+        model=submitted["model"].map(names), source="submitted"
+    )
+    done = sub[["model", "reference_date"]].drop_duplicates()
+    keep = forecasts.loc[~forecasts["model"].isin(list(names))].merge(
+        done, on=["model", "reference_date"], how="left", indicator=True
+    )
+    keep = keep.loc[keep["_merge"] == "left_only"].drop(columns="_merge")
+    return pd.concat([keep, sub[list(SAMPLE_COLUMNS)]], ignore_index=True)
 
 
 def attribution(accessed: str) -> str:

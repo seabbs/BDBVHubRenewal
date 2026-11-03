@@ -1,8 +1,8 @@
 {
   "truth_vintage": "2026-11-01",
   "complete_after_weeks": 3,
-  "baseline": "randomwalknowcast",
-  "preferred_baseline": "randomwalknowcast",
+  "baseline": "randomwalk",
+  "preferred_baseline": "randomwalk",
   "locations": [
     "CD",
     "CD-IT",
@@ -10,8 +10,7 @@
   ],
   "hub_ids": {
     "renewalbvd": "seabbs-renewal",
-    "randomwalknowcast": "seabbs-rwnowcast",
-    "randomwalk": "seabbs-randomwalk"
+    "randomwalknowcast": "seabbs-rwnowcast"
   },
-  "accessed": "2026-10-28"
+  "accessed": "2026-11-03"
 }

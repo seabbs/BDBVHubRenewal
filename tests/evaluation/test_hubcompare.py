@@ -142,7 +142,8 @@ def test_attribution_names_the_hub() -> None:
 
 def test_load_comparison_config() -> None:
     cfg = load_comparison_config(ROOT / "config" / "hub-comparison.toml")
-    assert cfg.baseline == "randomwalknowcast"
+    assert cfg.baseline == "randomwalk"
+    assert cfg.submitted == "data/our-submissions"
     assert "CD" in cfg.locations
 
 
@@ -298,9 +299,63 @@ def test_plot_hub_round(
     )
     q = forecast_quantiles(forecasts)
     fig = plot_hub_round(q, target, "2026-10-24", locations=("CD", "CD-IT"))
-    assert len([ax for ax in fig.axes if ax.get_visible()]) == 2
-    labels = [t.get_text() for t in fig.axes[0].get_legend().get_texts()]
+    # Ours above the hub teams, one column per location.
+    assert len(fig.axes) == 4
+    labels = [t.get_text() for t in fig.legends[0].get_texts()]
     assert "Still being reported" in labels
+    assert {"teamA-weekly", "teamB-late"} <= set(labels)
+    hub_ax = fig.axes[2]
+    assert hub_ax.get_title().endswith("Hub teams")
+    lines = {ln.get_label(): ln for ln in hub_ax.get_lines()}
+    # A hub team keeps its style in a round it alone forecast.
+    later = q.loc[q["model"] == "teamB-late"].assign(
+        reference_date="2026-10-31"
+    )
+    both = pd.concat([q, later])
+    again = plot_hub_round(
+        both, target, "2026-10-31", locations=("CD", "CD-IT")
+    )
+    again_lines = {ln.get_label(): ln for ln in again.axes[2].get_lines()}
+    assert (
+        again_lines["teamB-late"].get_color() == lines["teamB-late"].get_color()
+    )
+
+
+def test_with_submissions_replaces_our_rounds() -> None:
+    from bdbvhubrenewal.evaluation.hubcompare import with_submissions
+
+    def rows(model: str, source: str, ref: str, value: float) -> pd.DataFrame:
+        return pd.DataFrame(
+            {
+                "model": model,
+                "source": source,
+                "reference_date": ref,
+                "location": "CD",
+                "target_end_date": "2026-11-07",
+                "sample": [1, 2],
+                "value": value,
+            }
+        )
+
+    ids = {"randomwalknowcast": "seabbs-rwnowcast"}
+    forecasts = pd.concat(
+        [
+            rows("randomwalknowcast", "real", "2026-10-31", 1.0),
+            rows("randomwalknowcast", "real", "2026-11-07", 2.0),
+            rows("seabbs-rwnowcast", "hub", "2026-11-07", 3.0),
+            rows("teamA", "hub", "2026-11-07", 4.0),
+        ]
+    )
+    submitted = rows("seabbs-rwnowcast", "hub", "2026-11-07", 5.0)
+    out = with_submissions(forecasts, submitted, ids)
+    got = out.groupby(["model", "reference_date"])["value"].first()
+    assert got.to_dict() == {
+        ("randomwalknowcast", "2026-10-31"): 1.0,
+        ("randomwalknowcast", "2026-11-07"): 5.0,
+        ("teamA", "2026-11-07"): 4.0,
+    }
+    sources = out.groupby("reference_date")["source"].unique()
+    assert "submitted" in sources["2026-11-07"]
 
 
 def test_comparison_label_names_our_hub_models() -> None:
@@ -323,3 +378,6 @@ def test_own_hub_ids() -> None:
     # The renewal track's id carries the model the chain submits first.
     track = tomllib.loads((ROOT / "config" / "hub.toml").read_text())
     assert ids[track["submission"]["model"]] == "seabbs-renewal"
+    # Only models set to submit have a hub id.
+    off = [m for m, t in track.get("models", {}).items() if not t["submit"]]
+    assert not set(off) & set(ids)

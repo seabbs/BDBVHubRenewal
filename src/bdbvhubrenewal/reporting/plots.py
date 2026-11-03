@@ -101,6 +101,12 @@ MODEL_COLOURS: Final[dict[str, tuple[str, ...]]] = {
 }
 """Categorical colours in fixed order (checked for colour vision deficiency)."""
 
+HUB_GREYS: Final[dict[str, tuple[str, ...]]] = {
+    "light": ("#5f5e5a", "#898781", "#b4b2a9"),
+    "dark": ("#c3c2b7", "#898781", "#5f5e5a"),
+}
+"""Greys for the hub teams beside our models."""
+
 _KIND_MARKERS: Final = {"real": "o", "simulated": "^"}
 
 
@@ -1109,6 +1115,16 @@ def comparison_label(
     return f"{model} ({tag})"
 
 
+def _hub_styles(teams: Sequence[str], mode: str) -> dict[str, tuple[str, str]]:
+    """Give each hub team a grey and a marker, fixed by its sorted place."""
+    greys = HUB_GREYS[mode]
+    markers = "os^Dv"
+    return {
+        team: (greys[i % len(greys)], markers[i // len(greys) % len(markers)])
+        for i, team in enumerate(sorted(teams))
+    }
+
+
 def plot_hub_round(
     quantiles: pd.DataFrame,
     target: pd.DataFrame,
@@ -1118,19 +1134,25 @@ def plot_hub_round(
     weeks_before: int = 8,
     mode: str = "light",
     hub_ids: Mapping[str, str] | None = None,
+    shown: Sequence[str] | None = None,
 ) -> Figure:
-    """Plot every model's intervals for one hub round against the data.
+    """Plot our and the hub teams' intervals for one round against the data.
+
+    Our models are in the top row, each in its `MODEL_COLOURS` colour by
+    registry order, and the hub teams in the bottom row, in greys with a
+    marker each. Colours and markers do not depend on the round.
 
     Parameters
     ----------
     quantiles : pandas.DataFrame
-        Output of `bdbvhubrenewal.evaluation.hubcompare.forecast_quantiles`.
+        Output of `bdbvhubrenewal.evaluation.hubcompare.forecast_quantiles`,
+        with every round, so a team keeps its style across rounds.
     target : pandas.DataFrame
         Target rows; the latest real vintage is drawn as data.
     reference_date : str
         The round.
     locations : sequence of str
-        Locations to show, one panel each, if any model forecast them.
+        Locations to show, one column each, if any model forecast them.
     complete_after_weeks : int
         Weeks after which a week of the data counts as complete.
         Later weeks are shaded and their points drawn hollow.
@@ -1140,65 +1162,110 @@ def plot_hub_round(
         `"light"` or `"dark"`.
     hub_ids : mapping, optional
         Hub ids of our models, for their labels (`comparison_label`).
+    shown : sequence of str, optional
+        Our models to draw. Defaults to all of ours in the round.
 
     Returns
     -------
     matplotlib.figure.Figure
         Per week and model, the median (point), 50% interval (thick line)
-        and 90% interval (thin line), side by side, over the latest data.
+        and 90% interval (thin line), side by side, over the latest data,
+        with the legend below the panels.
     """
+    from bdbvhubrenewal.forecasters.base import list_models
+
+    registry = [s.name for s in list_models()]
+    styles = _hub_styles(
+        sorted(set(quantiles.loc[quantiles["source"] == "hub", "model"])), mode
+    )
     q = quantiles.loc[quantiles["reference_date"].astype(str) == reference_date]
+    hub = q["source"] == "hub"
+    if shown is not None:
+        q = q.loc[hub | q["model"].isin(list(shown))]
+        hub = q["source"] == "hub"
     q = q.assign(
         label=[
             comparison_label(m, s, hub_ids)
             for m, s in zip(q["model"], q["source"], strict=True)
         ]
     )
-    ours = set(q.loc[q["source"] != "hub", "label"])
-    labels = sorted(set(q["label"]), key=lambda lab: (lab in ours, lab))
+    palette = MODEL_COLOURS[mode]
+    ours = q.loc[~hub, ["model", "label"]].drop_duplicates()
+    rows = [
+        {
+            lab: (palette[registry.index(m) % len(palette)], "o")
+            for m, lab in sorted(
+                ours.itertuples(index=False),
+                key=lambda ml: registry.index(ml[0]),
+            )
+        },
+        {lab: styles[lab] for lab in sorted(set(q.loc[hub, "label"]))},
+    ]
     locs = [loc for loc in locations if loc in set(q["location"])]
     real = target.loc[target["kind"] == "real"]
     latest = real["vintage"].max()
     names = _names(real)
     ink = THEMES[mode]
     cut = _incomplete_after(latest, complete_after_weeks)
-    fig, axes = _grid(max(len(locs), 1), 2, width=4.8, height=3.0)
-    width = 5.0 / max(len(labels), 1)
+    n_col = max(len(locs), 1)
+    fig, axes = plt.subplots(
+        2,
+        n_col,
+        figsize=(4.0 * n_col, 5.6),
+        squeeze=False,
+        sharex=True,
+        sharey="col",
+        layout="constrained",
+    )
     ref = pd.Timestamp(reference_date)
-    for ax, loc in zip(axes, locs, strict=False):
+    start = ref - pd.Timedelta(weeks=weeks_before)
+    for j, loc in enumerate(locs):
         ql = q.loc[q["location"] == loc]
         data = real.loc[(real["vintage"] == latest) & (real["location"] == loc)]
         x = pd.to_datetime(data["target_end_date"])
-        start = ref - pd.Timedelta(weeks=weeks_before)
         end = pd.to_datetime(ql["target_end_date"]).max()
         sel = (x >= start) & (x <= end)
-        _plot_data(
-            ax,
-            x[sel],
-            data["total"][sel],
-            cut,
-            ink["data"],
-            f"Data {latest}",
-            lw=1.2,
-            zorder=3,
-        )
-        for i, lab in enumerate(labels):
-            m = ql.loc[ql["label"] == lab]
-            if m.empty:
-                continue
-            offset = pd.Timedelta(days=(i - (len(labels) - 1) / 2) * width)
-            xm = pd.to_datetime(m["target_end_date"]) + offset
-            colour = model_colour(lab, labels, mode)
-            ax.vlines(xm, m["q05"], m["q95"], color=colour, lw=1, alpha=0.7)
-            ax.vlines(xm, m["q25"], m["q75"], color=colour, lw=3)
-            ax.plot(xm, m["q50"], "o", color=colour, ms=3, label=lab)
-        ax.axvline(mdates.date2num(ref), color=ink["muted"], lw=0.8, ls=":")
-        _shade_incomplete(ax, cut, mode)
-        ax.set_title(f"{names.get(loc, loc)} ({loc})")
-        ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
-    axes[0].set_ylabel("Confirmed cases by onset week")
-    axes[0].legend(fontsize=7, loc="upper left")
+        for i, (ax, style) in enumerate(zip(axes[:, j], rows, strict=True)):
+            _plot_data(
+                ax,
+                x[sel],
+                data["total"][sel],
+                cut,
+                ink["data"],
+                f"Data {latest}",
+                lw=1.2,
+                zorder=3,
+            )
+            width = 5.0 / max(len(style), 1)
+            for k, (lab, (colour, marker)) in enumerate(style.items()):
+                m = ql.loc[ql["label"] == lab]
+                offset = pd.Timedelta(days=(k - (len(style) - 1) / 2) * width)
+                xm = pd.to_datetime(m["target_end_date"]) + offset
+                ax.vlines(xm, m["q05"], m["q95"], color=colour, lw=1, alpha=0.7)
+                ax.vlines(xm, m["q25"], m["q75"], color=colour, lw=3)
+                ax.plot(
+                    xm, m["q50"], marker, color=colour, ms=3, ls="", label=lab
+                )
+            ax.axvline(mdates.date2num(ref), color=ink["muted"], lw=0.8, ls=":")
+            _shade_incomplete(ax, cut, mode)
+            title = ("Ours", "Hub teams")[i]
+            ax.set_title(f"{names.get(loc, loc)} ({loc}): {title}", fontsize=9)
+            ax.xaxis.set_major_locator(mdates.AutoDateLocator(maxticks=5))
+            ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
+    for ax in axes[:, 0]:
+        ax.set_ylabel("Confirmed cases by onset week")
+    seen: dict[str, Any] = {}
+    for ax in axes[:, 0]:
+        for h, lab in zip(*ax.get_legend_handles_labels(), strict=True):
+            seen.setdefault(lab, h)
+    fig.legend(
+        list(seen.values()),
+        list(seen),
+        loc="outside lower center",
+        ncol=min(len(seen), 4),
+        fontsize=7,
+        frameon=False,
+    )
     return fig
 
 

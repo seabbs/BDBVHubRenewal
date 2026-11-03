@@ -1084,8 +1084,13 @@ def _compare_hub(args: argparse.Namespace) -> int:
         rounds,
         exclude=live,
     )
-    forecasts = pd.concat(
-        [f for f in (hub, ours, stored) if not f.empty], ignore_index=True
+    hub_ids = hc.own_hub_ids()
+    forecasts = hc.with_submissions(
+        pd.concat(
+            [f for f in (hub, ours, stored) if not f.empty], ignore_index=True
+        ),
+        hc.load_hub_submissions(cfg.submitted),
+        hub_ids,
     )
     scores, pending = hc.score_comparison(
         forecasts, target, delays, config, daily
@@ -1112,7 +1117,7 @@ def _compare_hub(args: argparse.Namespace) -> int:
         "baseline": hc.resolve_baseline(cfg.baseline),
         "preferred_baseline": cfg.baseline,
         "locations": list(cfg.locations),
-        "hub_ids": hc.own_hub_ids(),
+        "hub_ids": hub_ids,
         "accessed": accessed,
     }
     (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")

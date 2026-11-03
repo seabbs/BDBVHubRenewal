@@ -1271,6 +1271,9 @@ def _comparison_page(
     note = ""
     if baseline != summary["preferred_baseline"]:
         note = f" (`{summary['preferred_baseline']}` once it is registered)"
+    quantiles = pd.read_csv(cmp_dir / "quantiles.csv.gz")
+    sent = quantiles.loc[quantiles["source"] == "submitted", "reference_date"]
+    rounds = ", ".join(sorted(set(sent.astype(str)))) or "none yet"
     _write(
         gen / "comparison-lead.md",
         "Every model is scored on the count each later release reported, "
@@ -1278,7 +1281,10 @@ def _comparison_page(
         f"the **{truth}** release as a secondary check "
         "([Evaluation](methods/evaluation.md#real-releases)).\n"
         f"Relative WIS divides by `{baseline}`{note} on the weeks both "
-        "forecast.\n",
+        "forecast.\n"
+        "A model shown with a hub id is what we submitted under that id "
+        f"for the rounds we submitted ({rounds}), and the model's own "
+        "forecast for earlier rounds.\n",
     )
     scores_path = cmp_dir / "scores.csv"
     scores = (
@@ -1318,7 +1324,6 @@ def _comparison_page(
         gen / "comparison-teams.md",
         _dropdown(_teams_table(teams, hub_ids), "Teams"),
     )
-    quantiles = pd.read_csv(cmp_dir / "quantiles.csv.gz")
     labelled = quantiles.assign(
         model=[
             comparison_label(m, src, hub_ids)
@@ -1361,6 +1366,7 @@ def _comparison_page(
                 locations=tuple(summary["locations"]),
                 complete_after_weeks=k,
                 hub_ids=hub_ids,
+                shown=[*hub_ids, baseline],
             ),
             fig / f"{stem}.svg",
         )

@@ -8,7 +8,7 @@
 [comparison]
 # WIS is relative to this model, or to the registry baseline until it is
 # registered.
-baseline = "randomwalknowcast"
+baseline = "randomwalk"
 # Forecasts of fitted models, which are too slow to run here, are taken
 # from these files for the same rounds.
 stored = [
@@ -16,6 +16,9 @@ stored = [
   "results/forecasts.csv.gz",
   "output/backtest/forecasts.csv.gz",
 ]
+# What we submitted to the hub, as model-output/<hub id>/*.csv.gz. It
+# takes the place of our forecasts for the rounds we submitted.
+submitted = "data/our-submissions"
 # Locations shown in the plot of each round.
 locations = ["CD", "CD-IT", "CD-NK"]
 ref = "main"
