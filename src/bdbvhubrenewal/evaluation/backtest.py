@@ -207,8 +207,7 @@ def saturdays(first: str, last: str) -> tuple[str, ...]:
 def load_config(path: Path | str = "config/backtest.toml") -> BacktestConfig:
     """Read the backtest settings.
 
-    `development_until` is the latest date in the model choice record, if
-    the record exists.
+    `development_until` is the latest date in the model choice record.
 
     Parameters
     ----------
@@ -221,26 +220,20 @@ def load_config(path: Path | str = "config/backtest.toml") -> BacktestConfig:
         The settings.
     """
     raw = tomllib.loads(Path(path).read_text())
-    fc, sp = raw["forecast"], raw["split"]
-    sim = raw.get("simulated", {})
+    fc, sp, sim = raw["forecast"], raw["split"], raw["simulated"]
     choice = Path(sp["model_choice"])
-    dates: list[str] = []
-    if choice.exists():
-        record = yaml.safe_load(choice.read_text()) or {}
-        dates = [str(c["date"]) for c in record.get("choices", [])]
+    record = yaml.safe_load(choice.read_text())
     return BacktestConfig(
         min_horizon=int(fc["min_horizon"]),
         max_horizon=int(fc["max_horizon"]),
         n_samples=int(fc["n_samples"]),
         seed=int(fc["seed"]),
-        development_until=max(dates, default=None),
+        development_until=max(str(c["date"]) for c in record["choices"]),
         model_choice=choice,
-        complete_after_weeks=int(sp.get("complete_after_weeks", 0)),
-        sampler=dict(raw.get("sampler", {})),
-        bvd_max_rhat=float(raw.get("bvd", {}).get("max_rhat", MAX_RHAT)),
-        simulated_dates=(
-            saturdays(sim["first_vintage"], sim["last_vintage"]) if sim else ()
-        ),
+        complete_after_weeks=int(sp["complete_after_weeks"]),
+        sampler=dict(raw["sampler"]),
+        bvd_max_rhat=float(raw["bvd"]["max_rhat"]),
+        simulated_dates=saturdays(sim["first_vintage"], sim["last_vintage"]),
     )
 
 
