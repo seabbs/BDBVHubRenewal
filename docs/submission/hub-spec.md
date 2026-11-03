@@ -12,8 +12,8 @@ Line references are to that commit and use these short names.
 - `W` is `.github/workflows/validate-submission.yaml`.
 
 Where the config and the README differ, the config is what CI enforces.
-Behaviour marked "tested" was checked by running hubValidations 3.0.0 (the version the hub's CI installed on 2026-10-27) on the fixtures in `fixtures/`.
-A pinned copy of the three config files is in `fixtures/hub-snapshot/hub-config/`.
+Behaviour marked "tested" was checked by running hubValidations 3.0.0 (the version the hub's CI installed on 2026-10-27) on the fixtures in `tests/submission/hub_validation/fixtures/`.
+A pinned copy of the three config files is in `tests/submission/hub_validation/fixtures/hub-snapshot/hub-config/`.
 
 ## 1. File path and name
 
@@ -75,7 +75,7 @@ UTC is within a day of Kinshasa, so the recency check holds.
 `bdbvhubrenewal nowcast` takes `--forecast-date` to set another day.
 `--append-hub-main` reads the hub's file for the round from raw GitHub (read only) and appends.
 The CI does the same for the model id that is submitted, after a candidate is chosen, so a fallback model appends to the file of the submitting id.
-`hub_validate.py` checks each rule above, with `--previous` for the hub's copy, and `--skip-window` also skips the recency check.
+`bdbvhubrenewal validate` (`submission/validate.py`) checks each rule above, with `--previous` for the hub's copy, and `--skip-window` also skips the recency check.
 The R wrapper drops the column and, given the hub's copy, the retained rows, as the hub's script does.
 If the hub's copy has no `forecast_date` column it cannot be appended to, as in the hub's script.
 If the hub's file already holds the run date, the candidate fails and the round is skipped until a later day.
@@ -249,7 +249,7 @@ hubValidations enforces `format: email` (tested, `invalid_bad_email`).
 
 ## 9. Fixtures
 
-`fixtures/manifest.json` lists every fixture, its expected failing checks for Python and R and, for real files, the source path and commit.
+`tests/submission/hub_validation/fixtures/manifest.json` lists every fixture, its expected failing checks for Python and R and, for real files, the source path and commit.
 
 Real submissions copied from the hub:
 
@@ -262,5 +262,5 @@ Real submissions copied from the hub:
 | `model-metadata/epiforecasts-renewal.yml` | `4174b51` | contributors without email |
 | `model-metadata/MOBS-GLEAM_BDBV.yml` | `ae5ffd8` | block-style list |
 
-Constructed fixtures are written by `make_fixtures.py`.
+Constructed fixtures are written by `tests/submission/hub_validation/make_fixtures.py`.
 Each invalid file changes one thing in `valid_basic`.

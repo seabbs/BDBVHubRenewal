@@ -16,7 +16,7 @@ metadata files.
 
 Usage::
 
-    python hub_validate.py --hub PATH [--metadata-dir DIR]
+    bdbvhubrenewal validate --hub PATH [--metadata-dir DIR]
         [--now ISO8601 | --skip-window] [--json OUT] FILE...
 
 Exit status is 1 if any file has a failed check.

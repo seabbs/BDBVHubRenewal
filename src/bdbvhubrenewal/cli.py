@@ -446,7 +446,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser(
         "validate",
-        help="Check hub files with hub_validate (see `validate --help`).",
+        help="Check hub files against the hub's rules (see `validate --help`).",
         add_help=False,
     )
 

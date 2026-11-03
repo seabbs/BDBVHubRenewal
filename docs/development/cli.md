@@ -17,6 +17,8 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 | `backtest --shard I/N` | With `--cache`, forecast only shard `I` of `N` of the tasks, without scoring. A run without it then scores the whole cache. |
 | `backtest --no-recovery` | Skip the recovery check on simulated vintages. |
 | `backtest --recovery-only` | Run only the recovery check, with `--cache` and `--shard` as for the backtest. |
+| `backtest --scenarios-only` | Run only the scenarios calibrated to the real data, from `--scenario-as-of` and `--scenario-dates`. |
+| `bvd` | Cache the BVDOutbreakSize releases each vintage may use. |
 | `compare-hub [--fetch]` | Score our retrospective forecasts and the hub's submitted ones on the same truth and weeks. |
 | `nowcast` | Forecast from a real vintage, write the hub file and check it. With `--config` and `--fit`, forecast from a fit configuration. The health zones are added unless `--no-zones` is given. |
 | `zone-backtest` | Score `randomwalk` and `randomwalknowcast` run at zone level on the real vintages. |
@@ -26,6 +28,9 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 | `coherence` | Compare the national data with the sum of the provinces. |
 | `validate` | Run the hub's checks on files. |
 | `metadata` | Write and check a model's metadata YAML. |
+| `hub-id` | Print the hub model id that submissions use. |
+| `chosen-model` | Print the model chosen in `results/model-choice.yml`. |
+| `freeze-round` | Write a round's docs page to the ledger once its pull request has merged. |
 | `report` | Make the docs figures and tables. |
 
 `--version` prints the package version.
