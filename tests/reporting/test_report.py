@@ -237,25 +237,6 @@ def _scores() -> pd.DataFrame:
     return base
 
 
-def test_score_views() -> None:
-    old = _scores()
-    new = pd.concat(
-        [
-            old.assign(scoring="as reported", complete=[True, False]),
-            old.assign(scoring="vintage-matched", complete=[True, False]),
-        ]
-    )
-    views = report._score_views(new)
-    assert list(views) == [
-        "complete weeks",
-        "all weeks as reported",
-        "vintage-matched",
-    ]
-    assert len(views["complete weeks"]) == 1
-    assert len(views["vintage-matched"]) == 2
-    assert len(views["all weeks as reported"]) == 2
-
-
 def _two_model_scores() -> pd.DataFrame:
     rows = []
     for model, wis in (("randomwalk", 10.0), ("renewal", 5.0)):

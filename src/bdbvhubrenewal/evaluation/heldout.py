@@ -14,9 +14,10 @@ choices:
 Every real vintage after the first choice date is held out.
 A held-out vintage is forecast by the model chosen at the time, the
 latest choice dated before the vintage, and by the baseline.
-Each forecast is scored against every later real vintage, as reported
-then, so a forecast gets its first score when the next vintage is
-published and is re-scored as each newer one arrives.
+Each forecast is scored on the count each later real vintage reports
+(`bdbvhubrenewal.evaluation.nowcast.release_backtest`), so a forecast
+gets its first score when the next vintage is published and another as
+each newer one arrives.
 The development backtest only uses vintages up to the latest choice date
 (`bdbvhubrenewal.evaluation.backtest.BacktestConfig.development_until`).
 
@@ -45,8 +46,8 @@ from bdbvhubrenewal.evaluation.backtest import (
     merge_by_model,
     real_vintages,
     run_forecasts,
-    score_by_truth_vintage,
 )
+from bdbvhubrenewal.evaluation.nowcast import release_backtest
 from bdbvhubrenewal.forecasters import get_model, list_models
 
 __all__ = [
@@ -59,6 +60,9 @@ __all__ = [
 ]
 
 log = logging.getLogger(__name__)
+
+_STORED = ["model", "vintage", "location", "target_end_date", "sample", "value"]
+"""Columns of the final-count samples the release scores read."""
 
 
 class HeldOutError(RuntimeError):
@@ -203,13 +207,13 @@ def run_heldout(
     out_dir: Path | str = "results",
     models: Sequence[str] = (),
     fit: bool = True,
-    daily: pd.DataFrame | None = None,
+    daily: pd.DataFrame,
 ) -> pd.DataFrame:
     """Forecast and score every held-out vintage under its chosen model.
 
     Each held-out vintage is forecast by its chosen model, every model
     with no fit (random walk and randomwalknowcast) and any other `models`,
-    and scored against every later real vintage.
+    and scored on the count each later real vintage reports.
 
     Parameters
     ----------
@@ -232,13 +236,14 @@ def run_heldout(
         Run fitted models. If False, as in the docs build, fitted models
         are not run, even when chosen: their forecasts come only from the
         existing `heldout-forecasts.csv.gz`, and are scored again.
-    daily : pandas.DataFrame, optional
+    daily : pandas.DataFrame
         Daily onsets by release, as for `make_tasks`.
 
     Returns
     -------
     pandas.DataFrame
-        The held-out scores, with `chosen_model` and `truth_vintage`.
+        `ReleaseBacktest.scores` of the held-out origins, with
+        `chosen_model`.
 
     Raises
     ------
@@ -266,40 +271,41 @@ def run_heldout(
     baseline = _baseline()
     fitted = {s.name for s in list_models() if s.fitted}
     frames = []
+    tasks = []
     for row in pairs.itertuples(index=False):
         names = list(dict.fromkeys([str(row.model), *_baselines(), *models]))
         if not fit:
             names = [n for n in names if n not in fitted]
         rows = real.loc[real["vintage"] == row.vintage]
-        fc = run_forecasts(
-            [get_model(n) for n in names],
-            make_tasks(
-                rows, delays, config, real_vintages(real), real, daily=daily
-            ),
+        task = make_tasks(
+            rows, delays, config, real_vintages(real), real, daily=daily
         )
+        fc = run_forecasts([get_model(n) for n in names], task)
         fc.insert(1, "chosen_model", row.model)
         frames.append(fc)
+        tasks += task
     out = Path(out_dir)
     # Forecasts of models not run here, such as fitted variants run on a
-    # bigger machine, are kept and scored again against the latest data.
+    # bigger machine, are kept and scored again.
     chosen = dict(zip(pairs["vintage"], pairs["model"], strict=True))
     if frames:
         forecasts = merge_by_model(
             out / "heldout-forecasts.csv.gz",
             pd.concat(frames, ignore_index=True),
         )
-        scores = score_by_truth_vintage(
-            forecasts, real, config.complete_after_weeks
-        )
+        final = forecasts.loc[forecasts["as_of"].isna(), _STORED]
+        scores = release_backtest(
+            tasks, daily, target, models=(), stored=final
+        ).scores
     else:
         # No vintage after the choice yet, so nothing is held out.
         forecasts, scores = pd.DataFrame(), pd.DataFrame()
     if not scores.empty:
-        scores.insert(1, "chosen_model", scores["vintage"].map(chosen))
+        scores.insert(1, "chosen_model", scores["origin"].map(chosen))
     out.mkdir(parents=True, exist_ok=True)
     forecasts.to_csv(out / "heldout-forecasts.csv.gz", index=False)
     scores.to_csv(out / "heldout-scores.csv", index=False)
-    scored = set(scores["vintage"]) if not scores.empty else set()
+    scored = set(scores["origin"]) if not scores.empty else set()
     record = {
         "run_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
         "model_choice": str(config.model_choice),

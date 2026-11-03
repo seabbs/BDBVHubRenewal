@@ -42,7 +42,7 @@ Each vintage is a forecast task, and every registered model forecasts every task
 | Development backtest | Real up to the latest model choice date, except the latest real vintage | As for real releases |
 | Recovery check | Simulated | Simulated final counts |
 | Simulated scenarios | The four weekly simulated vintages up to the latest real vintage, from outbreaks calibrated to it with Rt after the data scaled by 0.75, 1 or 1.25 | Simulated final counts, and the counts as reported two weeks after each vintage |
-| Rolling held-out evaluation | Real vintages after each model choice | Every later real vintage |
+| Rolling held-out evaluation | Real vintages after each model choice | As for real releases |
 | Real releases | Every real release up to the latest model choice date with a later release | The count each later release shows, and the latest release's count for its complete weeks |
 | Comparison with hub forecasts | Real where one serves the round | Latest real vintage, complete weeks |
 
@@ -89,7 +89,7 @@ Each model choice is logged with its date, and the development set rolls forward
 Development runs use every vintage up to the latest choice date.
 Each real vintage after a choice is forecast by the model chosen then, the latest choice dated before it.
 It is also forecast by `randomwalk` and `randomwalknowcast`, and by default every other registered model, with the code at the time of the run.
-Each forecast is scored when the next vintage arrives and re-scored as newer ones do.
+Each forecast is scored as for [real releases](#real-releases), first when the next vintage arrives and again as newer ones do.
 
 ## Leave-one-province-out
 

@@ -19,7 +19,6 @@ from bdbvhubrenewal.evaluation.backtest import (
     run_lopo,
     run_recovery,
     saturdays,
-    score_by_truth_vintage,
     score_tasks,
     truth_changes,
 )
@@ -66,46 +65,6 @@ def test_development_never_uses_heldout_vintages(
     assert (forecasts["vintage"] <= "2026-10-10").all()
     real = forecasts.loc[forecasts["kind"] == "real"]
     assert set(real["vintage"]) == {"2026-08-18", "2026-10-09"}
-
-
-def test_score_by_truth_vintage(
-    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
-) -> None:
-    forecasts = run_development([get_model("flat")], target, delays, config)
-    scores = score_by_truth_vintage(forecasts, target)
-    # Real forecasts only, each against every later real vintage.
-    assert set(scores["kind"]) == {"real"}
-    pairs = set(zip(scores["vintage"], scores["truth_vintage"], strict=True))
-    assert pairs == {
-        ("2026-08-18", "2026-10-09"),
-        ("2026-08-18", "2026-10-17"),
-        ("2026-08-18", "2026-10-24"),
-        ("2026-08-18", "2026-11-01"),
-        ("2026-10-09", "2026-10-17"),
-        ("2026-10-09", "2026-10-24"),
-        ("2026-10-09", "2026-11-01"),
-    }
-
-
-def test_scores_cover_only_weeks_in_the_truth(
-    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
-) -> None:
-    forecasts = run_development([get_model("flat")], target, delays, config)
-    scores = score_by_truth_vintage(forecasts, target)
-    # A week past the end of a truth vintage is not scored, not taken as 0.
-    weeks = target.groupby("vintage")["target_end_date"].max()
-    last = scores["truth_vintage"].map(weeks)
-    assert (scores["target_end_date"] <= last).all()
-    assert scores["target_end_date"].max() < forecasts["target_end_date"].max()
-    index = ["vintage", "location", "target_end_date"]
-    truth = target.set_index(index)["total"]
-    keys = zip(
-        scores["truth_vintage"],
-        scores["location"],
-        scores["target_end_date"],
-        strict=True,
-    )
-    assert list(scores["truth"]) == [truth[k] for k in keys]
 
 
 def _forecast_rows(as_of: str | None) -> pd.DataFrame:
@@ -197,11 +156,6 @@ def test_origins_without_a_lag_estimate_are_marked(
     assert set(map(tuple, marked.drop_duplicates().to_numpy())) == {
         ("real", "2026-08-18"),
         ("real", "2026-10-09"),
-    }
-    by_truth = score_by_truth_vintage(forecasts, target)
-    assert set(by_truth.loc[by_truth["lag_prior"], "vintage"]) == {
-        "2026-08-18",
-        "2026-10-09",
     }
 
 

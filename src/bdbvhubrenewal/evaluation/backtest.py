@@ -19,8 +19,7 @@ see `bdbvhubrenewal.evaluation.heldout`).
 Development runs use vintages up to the latest choice date only.
 Every later vintage is held out and scored by
 `bdbvhubrenewal.evaluation.heldout`.
-`score_by_truth_vintage` re-scores real forecasts against every later real
-vintage, and `truth_changes` shows how much the truth moved meanwhile.
+`truth_changes` shows how much the truth moved between vintages.
 """
 
 from __future__ import annotations
@@ -85,7 +84,6 @@ __all__ = [
     "run_recovery",
     "run_scenarios",
     "saturdays",
-    "score_by_truth_vintage",
     "score_tasks",
     "truth_changes",
     "truth_from_vintage",
@@ -631,44 +629,6 @@ def real_vintages(target: pd.DataFrame) -> list[str]:
         The vintage dates.
     """
     return sorted(set(target.loc[target["kind"] == "real", "vintage"]))
-
-
-def score_by_truth_vintage(
-    forecasts: pd.DataFrame,
-    target: pd.DataFrame,
-    complete_after_weeks: int = 0,
-) -> pd.DataFrame:
-    """Score real forecasts against every later real vintage.
-
-    Reconstructed vintages are built from the latest data, so only real
-    forecasts are re-scored.
-
-    Parameters
-    ----------
-    forecasts : pandas.DataFrame
-        Output of `run_forecasts`.
-    target : pandas.DataFrame
-        Target rows with every real vintage.
-    complete_after_weeks : int
-        $K$, as for `score_tasks`.
-
-    Returns
-    -------
-    pandas.DataFrame
-        Scores as from `score_tasks`, one set per `truth_vintage`. Empty
-        if no real vintage is later than a forecast.
-    """
-    real = forecasts.loc[forecasts["kind"] == "real"]
-    frames = [
-        score_tasks(
-            real, truth_from_vintage(target, v), v, complete_after_weeks
-        )
-        for v in real_vintages(target)
-        if (real["vintage"] < v).any()
-    ]
-    if not frames:
-        return pd.DataFrame()
-    return pd.concat(frames, ignore_index=True)
 
 
 def truth_changes(

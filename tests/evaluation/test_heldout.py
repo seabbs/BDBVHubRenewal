@@ -100,15 +100,17 @@ def test_heldout_scores_each_forecast_under_its_model(
         target, delays, config, evaluate_holdout=True, out_dir=out, daily=daily
     )
     # The 2026-10-17 and 2026-10-24 forecasts have later data.
-    assert set(scores["vintage"]) == {"2026-10-17", "2026-10-24"}
+    assert set(scores["origin"]) == {"2026-10-17", "2026-10-24"}
     assert set(scores["truth_vintage"]) == {"2026-10-24", "2026-11-01"}
     assert set(scores["chosen_model"]) == {"randomwalk"}
-    # Both baselines are scored on every held-out vintage.
+    # Both baselines and the floor are scored on every held-out vintage,
+    # on the count each later vintage reports.
     assert set(scores["model"]) == {
+        "as reported",
         "randomwalk",
         "randomwalknowcast",
     }
-    assert set(scores["kind"]) == {"real"}
+    assert "reported" in set(scores["target"])
     record = yaml.safe_load((out / "heldout-run.yml").read_text())
     assert len(record["model_choice_sha256"]) == 64
     assert record["pending"] == [
@@ -142,6 +144,7 @@ def test_heldout_scores_both_baselines_beside_a_fitted_choice(
         daily=daily,
     )
     assert set(scores["model"]) == {
+        "as reported",
         "randomwalk",
         "randomwalknowcast",
     }
@@ -178,6 +181,7 @@ def test_heldout_also_runs_the_other_variants(
     )
     try:
         assert set(scores["model"]) == {
+            "as reported",
             "randomwalk",
             "randomwalknowcast",
             "shadow",
@@ -219,6 +223,7 @@ def test_heldout_keeps_and_rescores_other_models_forecasts(
         daily=daily,
     )
     assert set(scores["model"]) == {
+        "as reported",
         "randomwalk",
         "randomwalknowcast",
         "other",
@@ -280,6 +285,7 @@ def test_heldout_without_fits_reads_committed_forecasts(
         _REGISTRY.pop("slowfit")
     assert not fc.empty
     assert set(scores["model"]) == {
+        "as reported",
         "randomwalk",
         "randomwalknowcast",
         "slowfit",

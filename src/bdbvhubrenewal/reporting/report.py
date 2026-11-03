@@ -627,31 +627,20 @@ def _zone_section(path: Path) -> str:
     )
 
 
-def _score_views(scores: pd.DataFrame) -> dict[str, pd.DataFrame]:
-    """Split scores into complete weeks, all weeks and vintage-matched."""
-    reported = scores.loc[scores["scoring"] == "as reported"]
-    complete = reported.loc[reported["complete"].astype(bool)]
-    views = {
-        "complete weeks": complete,
-        "all weeks as reported": reported,
-        "vintage-matched": scores.loc[scores["scoring"] == "vintage-matched"],
-    }
-    if "lag_prior" in scores and scores["lag_prior"].fillna(False).any():
-        own = ~complete["lag_prior"].fillna(False).astype(bool)
-        views["complete weeks, own lag estimate"] = complete.loc[own]
-    return views
-
-
 BACKTEST_LOCATIONS: tuple[str, ...] = (NATIONAL, "CD-IT", "CD-NK")
 """Locations with forecast plots on the Backtest page."""
 
 
 def _release_scores(res: Path) -> pd.DataFrame:
-    """Read the release scores, with each origin as a real vintage.
+    """Read the release scores, as `_with_horizon` gives them."""
+    return _with_horizon(pd.read_csv(res / "nowcast-scores.csv"))
+
+
+def _with_horizon(scores: pd.DataFrame) -> pd.DataFrame:
+    """Add each origin as a real vintage, and the horizon.
 
     `horizon` is in weeks from the reference date, a week after the origin.
     """
-    scores = pd.read_csv(res / "nowcast-scores.csv")
     weeks = (
         pd.to_datetime(scores["target_end_date"])
         - pd.to_datetime(scores["origin"])
@@ -1130,7 +1119,7 @@ def _heldout_snippets(
     for entry in [*run["scored"], *run["pending"]]:
         v = str(entry["vintage"])
         truths = (
-            sorted(set(scores.loc[scores["vintage"] == v, "truth_vintage"]))
+            sorted(set(scores.loc[scores["origin"] == v, "truth_vintage"]))
             if not scores.empty
             else []
         )
@@ -1153,50 +1142,20 @@ def _heldout_snippets(
     if scores.empty:
         _write(gen / "heldout-scores.md", "")
     else:
-        views = _score_views(scores)
-        overall = pd.concat(
-            [
-                summarise_scores(
-                    rows,
-                    by=("chosen_model", "model", "vintage", "truth_vintage"),
-                ).assign(scores=name)
-                for name, rows in views.items()
-                if not rows.empty
-            ],
-            ignore_index=True,
-        )
-        horizon = summarise_scores(
-            views["all weeks as reported"],
-            by=("model", "vintage", "truth_vintage", "horizon"),
-        )
-        cols = ["n", "wis", "log_wis", "coverage_50", "coverage_90", "bias"]
+        scores = _with_horizon(scores)
+        reported = scores.loc[scores["target"] == "reported"]
         tables = (
             _table(
-                overall[
-                    [
-                        "scores",
-                        "chosen_model",
-                        "model",
-                        "vintage",
-                        "truth_vintage",
-                        *cols,
-                    ]
-                ]
+                relative_wis(
+                    scores,
+                    ("target", "chosen_model", "origin", "truth_vintage"),
+                )
             )
             + "\nBy horizon, over provinces and the national total:\n\n"
-            + _table(
-                horizon[["model", "vintage", "truth_vintage", "horizon", *cols]]
-            )
+            + _table(relative_wis(scores, ("target", "origin", "horizon")))
         )
-        shown = views["complete weeks"]
-        if shown.empty:
-            shown = views["all weeks as reported"]
         alt = "Held-out WIS by horizon."
-        in_shown = set(shown["model"])
-        if len(in_shown) > 1 and "randomwalk" in in_shown:
-            make = partial(plot_score_summary, shown, models=names)
-        else:
-            make = partial(plot_scores, shown, by="horizon", models=names)
+        make = partial(plot_score_summary, reported, models=names)
         _save_metric_figures(fig, "heldout-scores", make)
         _write(
             gen / "heldout-scores.md",

@@ -1530,7 +1530,7 @@ def plot_scores_by_truth(
     Parameters
     ----------
     scores : pandas.DataFrame
-        Output of `bdbvhubrenewal.evaluation.backtest.score_by_truth_vintage`.
+        Scores with `model`, `vintage`, `truth_vintage` and `metric`.
     metric : str
         A score column.
     models : sequence of str, optional
