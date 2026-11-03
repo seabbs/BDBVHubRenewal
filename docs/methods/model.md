@@ -1,6 +1,6 @@
 # Renewal models
 
-The renewal models, with the maths of each.
+The three renewal models, with the maths of each.
 { .page-subtitle }
 
 The data and notation are on the [Data methods page](data.md#target-and-notation).
@@ -8,7 +8,9 @@ How the models are built in code and sampled is on the [Implementation](implemen
 
 ## Structure
 
-The three renewal models share one generative structure.
+We fit three renewal models, `renewalbvd`, `renewalsp` and `renewal`.
+`seabbs-renewal` submits the first of these, in that order, to pass its checks.
+They share one generative structure.
 `renewal` is the full model.
 `renewalbvd` adds one likelihood term on Rt.
 `renewalsp` fits each province on its own and drops the parts that link provinces.
