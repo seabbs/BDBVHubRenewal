@@ -1262,16 +1262,15 @@ def _comparison_page(
     truth, k = summary["truth_vintage"], summary["complete_after_weeks"]
     baseline = summary["baseline"]
     hub_ids = summary.get("hub_ids", {})
-    complete_by = (
-        (pd.Timestamp(truth) - pd.Timedelta(weeks=k)).date().isoformat()
-    )
     note = ""
     if baseline != summary["preferred_baseline"]:
         note = f" (`{summary['preferred_baseline']}` once it is registered)"
     _write(
         gen / "comparison-lead.md",
-        f"Scores use the **{truth}** data and the complete weeks only: "
-        f"weeks ending by {complete_by} ($K = {k}$). "
+        "Every model is scored on the count each later release reported, "
+        "from the release serving its round, with the complete weeks of "
+        f"the **{truth}** release as a secondary check "
+        "([Evaluation](methods/evaluation.md#real-releases)).\n"
         f"Relative WIS divides by `{baseline}`{note} on the weeks both "
         "forecast.\n",
     )
@@ -1287,6 +1286,7 @@ def _comparison_page(
     if not scores.empty:
         table = summarise_comparison(scores, baseline)
         table = _without_baseline(table, baseline)
+        table["target"] = table["target"].map(_TARGET_LABELS)
         table["model"] = [
             comparison_label(m, s, hub_ids)
             for m, s in zip(table["model"], table["source"], strict=True)
@@ -1324,7 +1324,7 @@ def _comparison_page(
     )
     explorer_scores = None
     if not scores.empty:
-        done = scores.loc[scores["complete"]]
+        done = scores.loc[scores["target"] == "complete"]
         explorer_scores = done.assign(
             model=[
                 comparison_label(m, src, hub_ids)
@@ -1391,10 +1391,8 @@ def _comparison_summary(
     baseline: str,
     hub_ids: Mapping[str, str],
 ) -> None:
-    """Write the relative WIS and coverage figure of the complete weeks."""
-    done = scores.loc[scores["complete"]]
-    if done.empty or "horizon" not in done:
-        return
+    """Write relative WIS and coverage on the counts later releases reported."""
+    done = scores.loc[scores["target"] == "reported"]
     labelled = done.assign(
         model=[
             comparison_label(m, src, hub_ids)

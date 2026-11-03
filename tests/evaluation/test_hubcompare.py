@@ -33,7 +33,7 @@ WEEKS = ["2026-09-19", "2026-09-26", "2026-10-03", "2026-10-10"]
 
 
 def _hub_rows(
-    ref: str = "2026-10-17", weeks: list[str] = WEEKS
+    ref: str = "2026-10-24", weeks: list[str] = WEEKS
 ) -> pd.DataFrame:
     rng = np.random.default_rng(1)
     return pd.DataFrame(
@@ -58,12 +58,12 @@ def _write_hub(root: Path) -> None:
     out = root / "model-output"
     (out / "teamA-weekly").mkdir(parents=True)
     _hub_rows().to_csv(
-        out / "teamA-weekly" / "2026-10-17-teamA-weekly.csv", index=False
+        out / "teamA-weekly" / "2026-10-24-teamA-weekly.csv", index=False
     )
     # A gzipped file, as committed, for a second team.
     (out / "teamB-late").mkdir(parents=True)
     with gzip.open(
-        out / "teamB-late" / "2026-10-17-teamB-late.csv.gz", "wt"
+        out / "teamB-late" / "2026-10-24-teamB-late.csv.gz", "wt"
     ) as fh:
         _hub_rows(weeks=WEEKS[2:]).to_csv(fh, index=False)
     (out / "epiforecasts-renewal").mkdir(parents=True)
@@ -90,12 +90,15 @@ def _write_hub(root: Path) -> None:
     )
 
 
+_CONFIG = BacktestConfig(n_samples=100, seed=1)
+
+
 def _ours(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> pd.DataFrame:
-    config = BacktestConfig(n_samples=100, seed=1)
+    config = _CONFIG
     return our_forecasts(
-        ["2026-10-17"],
+        ["2026-10-24"],
         target,
         delays,
         config,
@@ -216,7 +219,7 @@ def test_stored_forecasts_pick_matching_rounds(tmp_path: Path) -> None:
     assert list(out["source"]) == ["real"]
 
 
-def test_score_comparison_flags_complete_weeks(
+def test_score_comparison_scores_each_later_release(
     tmp_path: Path,
     target: pd.DataFrame,
     delays: pd.DataFrame,
@@ -226,22 +229,29 @@ def test_score_comparison_flags_complete_weeks(
     forecasts = pd.concat(
         [load_hub_submissions(tmp_path), _ours(target, delays, daily)]
     )
-    scores, pending = score_comparison(forecasts, target, 3)
+    scores, pending = score_comparison(
+        forecasts, target, delays, _CONFIG, daily
+    )
     assert pending.empty
     assert set(scores["model"]) == {"teamA-weekly", "teamB-late", "flat"}
+    # The 2026-10-24 round is made from the 2026-10-17 release and scored
+    # on what each later release reported.
+    assert set(scores["origin"]) == {"2026-10-17"}
+    assert set(scores["reference_date"]) == {"2026-10-24"}
+    reported = scores.loc[scores["target"] == "reported"]
+    assert set(reported["truth_vintage"]) == {"2026-10-24", "2026-11-01"}
     # Each model is scored on the weeks it covered.
-    late = scores.loc[scores["model"] == "teamB-late"]
+    late = reported.loc[reported["model"] == "teamB-late"]
     assert set(late["target_end_date"]) == set(WEEKS[2:])
-    assert set(scores["truth_vintage"]) == {"2026-11-01"}
-    # Truth 2026-11-01, K = 3: weeks ending by 2026-10-10 are complete.
-    done = scores.loc[scores["complete"], "target_end_date"]
-    assert done.max() == "2026-10-10"
+    assert set(scores.loc[scores["model"] == "flat", "source"]) == {"real"}
 
 
-def test_score_comparison_waits_for_later_data(target: pd.DataFrame) -> None:
+def test_score_comparison_waits_for_later_data(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
     hub = _hub_rows(ref="2026-11-07").assign(model="teamA-weekly")
     hub = hub.rename(columns={"output_type_id": "sample"}).assign(source="hub")
-    scores, pending = score_comparison(hub, target, 3)
+    scores, pending = score_comparison(hub, target, delays, _CONFIG, daily)
     assert scores.empty
     assert list(pending["reference_date"]) == ["2026-11-07"]
     assert pending["vintage"].iloc[0] == "2026-11-01"
@@ -257,13 +267,13 @@ def test_summarise_comparison(
     forecasts = pd.concat(
         [load_hub_submissions(tmp_path), _ours(target, delays, daily)]
     )
-    scores, _ = score_comparison(forecasts, target, 3)
+    scores, _ = score_comparison(forecasts, target, delays, _CONFIG, daily)
     table = summarise_comparison(scores, "flat")
-    rows = table.set_index("model")
+    rows = table.loc[table["target"] == "reported"].set_index("model")
     assert rows.loc["flat", "relative_wis"] == pytest.approx(1)
-    # Complete weeks only: teamB-late forecast 2026-10-03 and 2026-10-10,
-    # and both are complete, in two locations.
-    assert rows.loc["teamB-late", "n"] == 4
+    # teamB-late forecast 2026-10-03 and 2026-10-10 in two locations,
+    # each scored against two later releases.
+    assert rows.loc["teamB-late", "n"] == 8
     assert {"coverage_50", "coverage_90", "bias", "wis"} <= set(table.columns)
 
 
@@ -287,7 +297,7 @@ def test_plot_hub_round(
         [load_hub_submissions(tmp_path), _ours(target, delays, daily)]
     )
     q = forecast_quantiles(forecasts)
-    fig = plot_hub_round(q, target, "2026-10-17", locations=("CD", "CD-IT"))
+    fig = plot_hub_round(q, target, "2026-10-24", locations=("CD", "CD-IT"))
     assert len([ax for ax in fig.axes if ax.get_visible()]) == 2
     labels = [t.get_text() for t in fig.axes[0].get_legend().get_texts()]
     assert "Still being reported" in labels

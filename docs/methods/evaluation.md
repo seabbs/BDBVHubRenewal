@@ -44,7 +44,7 @@ Each vintage is a forecast task, and every registered model forecasts every task
 | Simulated scenarios | The four weekly simulated vintages up to the latest real vintage, from outbreaks calibrated to it with Rt after the data scaled by 0.75, 1 or 1.25 | Simulated final counts, and the counts as reported two weeks after each vintage |
 | Rolling held-out evaluation | Real vintages after each model choice | As for real releases |
 | Real releases | Every real release up to the latest model choice date with a later release | The count each later release shows, and the latest release's count for its complete weeks |
-| Comparison with hub forecasts | Real where one serves the round | Latest real vintage, complete weeks |
+| Comparison with hub forecasts | Real where one serves the round | As for real releases |
 
 ## Real releases
 
@@ -111,6 +111,6 @@ Relative WIS is against `randomwalk` run at zone level.
 
 For each hub reference date, our unfitted models forecast from the latest real vintage serving the round.
 Fitted models use their stored backtest or held-out forecasts for the same round.
-Every model is scored on the weeks it forecast, against the latest real vintage, and the [comparison page](../comparison.md) reports complete weeks.
-WIS is relative to `randomwalknowcast` on the weeks both forecast.
+Every model is scored on the weeks it forecast as for [real releases](#real-releases), from the vintage serving the round.
+WIS is relative to `randomwalknowcast` on the weeks both forecast, on the [comparison page](../comparison.md).
 A round is pending until a later real vintage exists.

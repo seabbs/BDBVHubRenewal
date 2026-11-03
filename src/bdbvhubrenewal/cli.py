@@ -1059,6 +1059,7 @@ def _compare_hub(args: argparse.Namespace) -> int:
         hc.fetch_hub_submissions(hub_dir, cache, ref=cfg.ref)
     hub = hc.load_hub_submissions(hub_dir, cache)
     target, delays = load_target(args.data), load_delays(args.data)
+    daily = load_daily(args.data)
     config = bt.load_config(args.backtest_config)
     rounds = sorted(set(hub["reference_date"]))
     live = args.models or [s.name for s in list_models() if not s.fitted]
@@ -1075,7 +1076,7 @@ def _compare_hub(args: argparse.Namespace) -> int:
         min_horizon=min(int(horizons.min()), config.min_horizon)
         if len(hub)
         else None,
-        daily=load_daily(args.data),
+        daily=daily,
     )
     stored = hc.stored_forecasts(
         cfg.stored if args.stored is None else args.stored,
@@ -1086,7 +1087,7 @@ def _compare_hub(args: argparse.Namespace) -> int:
         [f for f in (hub, ours, stored) if not f.empty], ignore_index=True
     )
     scores, pending = hc.score_comparison(
-        forecasts, target, config.complete_after_weeks
+        forecasts, target, delays, config, daily
     )
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)

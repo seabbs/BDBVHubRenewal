@@ -14,13 +14,14 @@ Fitted models are slow, so `stored_forecasts` takes theirs from backtest
 and held-out forecast files for the same round.
 The `source` column says which (`real` or `hub`).
 
-`score_comparison` scores every model on every week it forecast, against
-the latest real vintage as reported then, and flags complete weeks: those
-ending at least $K$ weeks before the truth vintage.
+`score_comparison` scores every model on the count each later real
+vintage reports, from the vintage serving its round
+(`bdbvhubrenewal.evaluation.nowcast.release_backtest`), with the complete
+weeks of the latest vintage as a secondary check.
 A round is pending until a real vintage later than its matching vintage
-exists, as before then the truth is the data the forecasts were made from.
-`summarise_comparison` reports complete weeks only, with WIS relative to
-a baseline on the weeks both forecast.
+exists.
+`summarise_comparison` gives WIS relative to a baseline on the weeks both
+forecast, by round and target.
 """
 
 from __future__ import annotations
@@ -46,9 +47,9 @@ from bdbvhubrenewal.evaluation.backtest import (
     make_tasks,
     run_forecasts,
 )
+from bdbvhubrenewal.evaluation.nowcast import BASELINE, release_backtest
 from bdbvhubrenewal.evaluation.scoring import (
     relative_skill,
-    score_forecasts,
     summarise_scores,
 )
 from bdbvhubrenewal.forecasters import get_model, list_models
@@ -511,38 +512,36 @@ def stored_forecasts(
 def score_comparison(
     forecasts: pd.DataFrame,
     target: pd.DataFrame,
-    complete_after_weeks: int = 0,
+    delays: pd.DataFrame,
+    config: BacktestConfig,
+    daily: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Score every model on the weeks it forecast, against the latest data.
+    """Score every model on the count each later real vintage reports.
 
     Parameters
     ----------
     forecasts : pandas.DataFrame
         Hub and our samples with `SAMPLE_COLUMNS`.
-    target : pandas.DataFrame
-        Target rows with every real vintage.
-    complete_after_weeks : int
-        $K$: a week is complete if it ended at least this many weeks
-        before the truth vintage.
+    target, delays : pandas.DataFrame
+        Tidy tables with every real vintage.
+    config : BacktestConfig
+        Settings of the tasks the rounds are scored from.
+    daily : pandas.DataFrame
+        Daily onsets by release, as for `make_tasks`.
 
     Returns
     -------
     tuple of pandas.DataFrame
-        The scores (`score_forecasts` output with `source`, `vintage`,
-        `truth_vintage` and `complete`), and the pending rounds with
-        columns `reference_date`, `vintage` and `models`.
+        The scores (`ReleaseBacktest.scores` with `reference_date`,
+        `source` and `horizon`), and the pending rounds with columns
+        `reference_date`, `vintage` and `models`.
     """
     real = target.loc[target["kind"] == "real"]
     vintages = sorted(set(real["vintage"]))
-    latest = vintages[-1]
-    truth = real.loc[
-        real["vintage"] == latest, ["location", "target_end_date", "total"]
-    ].rename(columns={"total": "truth"})
-    cutoff = as_date(latest) - dt.timedelta(weeks=complete_after_weeks)
-    scored, pending = [], []
+    rounds, tasks, stored, pending = {}, [], [], []
     for ref, grp in forecasts[list(SAMPLE_COLUMNS)].groupby("reference_date"):
         match = match_vintage(str(ref), vintages)
-        if match is None or match >= latest:
+        if match is None or match >= vintages[-1]:
             pending.append(
                 {
                     "reference_date": str(ref),
@@ -551,37 +550,34 @@ def score_comparison(
                 }
             )
             continue
-        grp = grp.assign(
-            horizon=(
-                pd.to_datetime(grp["target_end_date"]) - pd.Timestamp(str(ref))
-            ).dt.days
-            // 7
-        )
-        s = score_forecasts(
-            grp,
-            truth,
-            keys=(
-                "model",
-                "source",
-                "reference_date",
-                "location",
-                "target_end_date",
-            ),
-        )
-        s["vintage"] = match
-        s["truth_vintage"] = latest
-        s["complete"] = pd.to_datetime(s["target_end_date"]) <= pd.Timestamp(
-            cutoff
-        )
-        scored.append(s)
-    scores = pd.concat(scored, ignore_index=True) if scored else pd.DataFrame()
-    return scores, pd.DataFrame(
+        rounds[match] = str(ref)
+        rows = real.loc[real["vintage"] == match]
+        tasks += make_tasks(rows, delays, config, daily=daily)
+        stored.append(grp.assign(vintage=match))
+    pending_rounds = pd.DataFrame(
         pending, columns=["reference_date", "vintage", "models"]
     )
+    if not tasks:
+        return pd.DataFrame(), pending_rounds
+    samples = pd.concat(stored, ignore_index=True)
+    scores = release_backtest(
+        tasks, daily, target, models=(), stored=samples
+    ).scores
+    scores = scores.loc[scores["model"] != BASELINE]
+    sources = samples[["model", "vintage", "source"]].drop_duplicates()
+    scores = scores.merge(
+        sources.rename(columns={"vintage": "origin"}), on=["model", "origin"]
+    )
+    scores["reference_date"] = scores["origin"].map(rounds)
+    scores["horizon"] = (
+        pd.to_datetime(scores["target_end_date"])
+        - pd.to_datetime(scores["reference_date"])
+    ).dt.days // 7
+    return scores.reset_index(drop=True), pending_rounds
 
 
 def summarise_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
-    """Summarise complete-week scores by round and model.
+    """Summarise scores by round, target and model.
 
     Parameters
     ----------
@@ -593,14 +589,27 @@ def summarise_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
     Returns
     -------
     pandas.DataFrame
-        Columns `reference_date`, `model`, `source`, `n`, `wis`,
+        Columns `reference_date`, `target`, `model`, `source`, `n`, `wis`,
         `log_wis`, `relative_wis` and `relative_log_wis` (on the weeks
         shared with the baseline; missing if none), `coverage_50`,
         `coverage_90` and `bias`.
     """
-    done = scores.loc[scores["complete"]]
+    by = ("reference_date", "target")
+    out = summarise_scores(scores, by=(*by, "model", "source"))
+    rel = relative_skill(
+        scores,
+        baseline=baseline,
+        by=by,
+        metrics=("wis", "log_wis"),
+        match_on=(*by, "truth_vintage", "location", "target_end_date"),
+    )
+    out = out.merge(
+        rel[[*by, "model", "relative_wis", "relative_log_wis"]],
+        on=[*by, "model"],
+        how="left",
+    )
     cols = [
-        "reference_date",
+        *by,
         "model",
         "source",
         "n",
@@ -612,24 +621,7 @@ def summarise_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
         "coverage_90",
         "bias",
     ]
-    if done.empty:
-        return pd.DataFrame(columns=cols)
-    out = summarise_scores(done, by=("reference_date", "model", "source"))
-    rel = relative_skill(
-        done,
-        baseline=baseline,
-        by=("reference_date",),
-        metrics=("wis", "log_wis"),
-        match_on=("reference_date", "location", "target_end_date"),
-    )
-    out = out.merge(
-        rel[["model", "reference_date", "relative_wis", "relative_log_wis"]],
-        on=["model", "reference_date"],
-        how="left",
-    )
-    return (
-        out[cols].sort_values(["reference_date", "wis"]).reset_index(drop=True)
-    )
+    return out[cols].sort_values([*by, "wis"]).reset_index(drop=True)
 
 
 def forecast_quantiles(forecasts: pd.DataFrame) -> pd.DataFrame:
