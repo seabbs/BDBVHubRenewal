@@ -339,7 +339,7 @@ def test_backtest_sampler_comes_from_the_config(
         "num_samples": 500,
         "target_accept": 0.8,
         "max_tree_depth": 10,
-        "chain_method": "vectorized",
+        "chain_method": "parallel",
     }
     monkeypatch.delenv(SAMPLER_ENV, raising=False)
     apply_sampler(cfg)

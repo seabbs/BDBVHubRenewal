@@ -133,14 +133,13 @@ Each fit job's timeout is at most 350 minutes, and stops 45 minutes before the w
 The Actions cache holds 10 GB per repository and evicts entries unused for 7 days.
 Artefacts are kept for 90 days at most, so the ledger branch is the durable archive.
 Scheduled starts can be late by minutes, or dropped when GitHub is busy.
-The 3-hourly schedule covers that.
+If a morning check is dropped, the next morning's check runs the round, and a manual dispatch covers the Tuesday check.
 
-Every fit runs 2 chains of 500 warm-up and 500 draws (`ci/policy.toml`).
-On the 2026-10-24 vintage, with vectorised chains on 2 cores of archie, 4 chains of 1000 warm-up and 1000 draws took 130 minutes of sampling for the main fit.
-Nearly every draw reaches the maximum tree depth, so cost follows the number of NUTS iterations, and the current settings take about a quarter of that, 35 to 45 minutes.
-The single-patch fallback (`renewalsp`) took 21 minutes of sampling for its six independent fits (the country and five provinces), so it is ready before the main fit.
-Hosted runners are 1.2 to 1.5 times slower, so each fit job takes about 1 to 1.5 hours with setup.
-These times are to be re-measured on the current model.
+Every fit runs 2 chains of 500 warm-up in parallel (`ci/policy.toml`).
+`renewalbvd` takes 1000 draws at target acceptance 0.95, and the other candidates 500 at 0.9.
+On hosted runners with the 2026-11-01 vintage, sampling took 29 minutes for `renewalbvd`, 27 for `renewalsp` and 25 for `renewal`, against 37, 41 and 16 minutes with vectorised chains and 500 `renewalbvd` draws.
+Nearly every `renewalbvd` and `renewal` draw reaches the maximum tree depth, so cost follows the number of NUTS iterations.
+The candidates fit in separate jobs at the same time, so the fit stage takes about 30 minutes.
 Time a real fit with a dry run on a past vintage (see above), and read the `Fit took N s` line in the job summary.
 
 The chain runs prepare (random walk), then every renewal fit in parallel, then the gate.

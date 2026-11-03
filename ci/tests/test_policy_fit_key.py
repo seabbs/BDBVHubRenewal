@@ -113,20 +113,26 @@ def test_baseline_choices_keep_the_chain_from_that_baseline() -> None:
 
 
 def test_ci_sampler_settings(tmp_path: Path) -> None:
-    # Sam (2026-10-28): 2 chains of 500 warm-up and 500 draws for every
-    # fitted candidate, all with the same settings.
+    # 2 chains of 500 warm-up, run in parallel. renewalbvd draws 1000 at
+    # target acceptance 0.95 to clear its tail ESS and divergence warnings;
+    # the others draw 500.
     pol = load_policy(POLICY_PATH)
     root = repo(tmp_path)
-    samplers = [
-        json.loads(e["sampler"]) for e in matrix(pol, "primary", root, "hub")
-    ]
-    assert len(samplers) == 3
-    assert all(s == samplers[0] for s in samplers)
+    samplers = {
+        e["id"]: json.loads(e["sampler"])
+        for e in matrix(pol, "primary", root, "hub")
+    }
+    assert set(samplers) == {"bvd", "renewalsp", "main"}
+    for s in samplers.values():
+        assert (s["num_chains"], s["num_warmup"]) == (2, 500)
+        assert s["chain_method"] == "parallel"
+    assert samplers["bvd"]["num_samples"] == 1000
+    assert samplers["bvd"]["target_accept"] == 0.95
     assert (
-        samplers[0]["num_chains"],
-        samplers[0]["num_warmup"],
-        samplers[0]["num_samples"],
-    ) == (2, 500, 500)
+        samplers["main"]["num_samples"]
+        == samplers["renewalsp"]["num_samples"]
+        == 500
+    )
 
 
 def test_policy_validation(tmp_path: Path) -> None:

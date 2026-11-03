@@ -9,15 +9,15 @@
 # ruled out and the chain moves on. The content-hash fit cache is reused
 # across re-runs.
 
-# Minutes the chain plans with. Measured on the 2026-10-24 vintage
-# (jax-review-1, vectorised chains on 2 cores of archie) at 4 chains x
-# 2000 iterations: 130 minutes of sampling for the main model. Nearly
-# every draw reaches the maximum tree depth, so cost follows iterations,
-# and the 2 x 1000 used below take about a quarter: 35 to 45 minutes. The single-patch
-# fallback took 21 minutes at 2 x 1000 for all six streams. Hosted
-# runners are 1.2 to 1.5 times slower, so each main fit job takes about
-# 1 to 1.5 hours with setup (to be re-measured). Every renewal candidate
-# fits in parallel and random walk is built in `prepare`.
+# Minutes the chain plans with. Measured on hosted runners on the
+# 2026-11-01 vintage (2026-11-03), with the two chains of each fit in
+# parallel (run 41736611138) against vectorised (run 41691221605):
+# renewalbvd 29 min of sampling at 500 + 1000 draws (37 min vectorised
+# at 500 + 500), renewalsp 27 min (41 min), renewal 25 min (16 min).
+# Nearly every renewalbvd and renewal draw reaches the maximum tree
+# depth, so cost follows iterations. Every renewal candidate fits in its
+# own job at the same time, and random walk is built in `prepare`, so
+# the fit stage takes about 30 minutes.
 [timing]
 # GitHub's 360-minute job cap, less a margin.
 fit_cap_minutes = 350
@@ -42,7 +42,7 @@ config = "bvd"
 model = "renewalbvd"
 stage = "primary"
 label = "BVDOutbreakSize-informed renewal model"
-sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.9, max_tree_depth = 10, seed = 1, chain_method = "vectorized" }
+sampler = { num_chains = 2, num_warmup = 500, num_samples = 1000, target_accept = 0.95, max_tree_depth = 10, seed = 1, chain_method = "parallel" }
 
 [[candidates]]
 id = "renewalsp"
@@ -51,7 +51,7 @@ config = "renewalsp"
 model = "renewalsp"
 stage = "primary"
 label = "single-patch renewal model (independent fits, no pooling or coupling)"
-sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.9, max_tree_depth = 10, seed = 1, chain_method = "vectorized" }
+sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.9, max_tree_depth = 10, seed = 1, chain_method = "parallel" }
 
 [[candidates]]
 id = "main"
@@ -60,7 +60,7 @@ config = "main"
 model = "renewal"
 stage = "primary"
 label = "province renewal model"
-sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.9, max_tree_depth = 10, seed = 1, chain_method = "vectorized" }
+sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.9, max_tree_depth = 10, seed = 1, chain_method = "parallel" }
 
 # Random walk on a nowcast (no MCMC). Like random walk it needs no fit and
 # is built in `prepare`.
