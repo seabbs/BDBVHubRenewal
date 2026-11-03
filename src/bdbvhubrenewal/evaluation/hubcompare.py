@@ -477,7 +477,8 @@ def stored_forecasts(
     ----------
     paths : sequence of pathlib.Path or str
         Outputs of `run_forecasts`, such as the backtest and held-out
-        forecasts. Missing files are skipped.
+        forecasts. Missing files are skipped, and so are the rows of counts
+        as reported by a later vintage (`as_of`).
     reference_dates : sequence of str
         Hub reference dates.
     exclude : sequence of str
@@ -498,6 +499,7 @@ def stored_forecasts(
             fc["reference_date"].astype(str).isin(list(reference_dates))
             & ~fc["model"].isin(list(exclude))
             & (fc["kind"] == "real")
+            & fc["as_of"].isna()
         ]
         frames.append(fc)
     if not frames:

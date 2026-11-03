@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+import datetime as dt
 
 import numpy as np
 import pandas as pd
@@ -19,11 +20,14 @@ from bdbvhubrenewal.evaluation.nowcast import (
     pooled_summary,
     relative_wis,
     release_backtest,
+    reported_share,
     summarise,
+    thin,
     weeks_back_from_cutoff,
 )
 from bdbvhubrenewal.forecasters import get_model
 from bdbvhubrenewal.forecasters.chain import MissingSnapshots
+from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
 
 
 @pytest.fixture(scope="module")
@@ -44,44 +48,28 @@ def test_origins_without_a_delay_pair_are_listed_with_no_forecasts(
     o = result.origins
     early = o.loc[o["origin"].isin(["2026-08-18", "2026-10-09"])]
     assert set(early["status"]) == {"no forecast"}
-    assert (early["n_next"] == 0).all()
+    assert (early["n_reported"] == 0).all()
     assert (early["n_complete"] == 0).all()
-    ran = o.loc[(o["origin"] == "2026-10-17") & (o["status"] == "ran")]
-    assert set(ran["model"]) == {"randomwalk", "randomwalknowcast"}
+    ran = o.loc[o["origin"] == "2026-10-17"]
+    assert set(ran["model"]) == {"randomwalk", "randomwalknowcast", BASELINE}
     assert (ran["n_complete"] > 0).all()
-    assert (ran.loc[ran["model"] == "randomwalknowcast", "n_next"] > 0).all()
+    assert (ran["n_reported"] > 0).all()
 
 
-def test_scores_cover_the_three_targets_and_the_floor(
+def test_every_model_is_scored_on_each_later_release(
     result,  # type: ignore[no-untyped-def]
 ) -> None:
     s = result.scores
-    assert set(s["target"]) == {"next", "complete", "latest"}
-    assert set(s["model"]) == {
-        "randomwalk",
-        "randomwalknowcast",
-        BASELINE,
-    }
+    assert set(s["target"]) == {"reported", "complete"}
+    assert set(s["model"]) == {"randomwalk", "randomwalknowcast", BASELINE}
     assert set(s["origin"]) == {"2026-10-17", "2026-10-24"}
-    nxt = s.loc[s["target"] == "next"]
-    assert set(nxt["truth_vintage"]) == {"2026-10-24", "2026-11-01"}
+    rep = s.loc[(s["target"] == "reported") & (s["origin"] == "2026-10-17")]
+    assert set(rep["truth_vintage"]) == {"2026-10-24", "2026-11-01"}
     # Every model is scored on the same forecasts of a target.
-    n = summarise(s)
-    for _, g in n.groupby("target"):
+    for _, g in summarise(s).groupby("target"):
         assert g["n"].nunique() == 1
-
-
-def test_randomwalk_is_not_scored_on_the_next_release(
-    result,  # type: ignore[no-untyped-def]
-) -> None:
-    # Its samples are of the final count, so they do not predict the
-    # count at the next release.
-    nxt = result.scores.loc[result.scores["target"] == "next"]
-    assert set(nxt["model"]) == {"randomwalknowcast", BASELINE}
-    o = result.origins
-    rw = o.loc[(o["model"] == "randomwalk") & (o["status"] == "ran")]
-    assert (rw["n_next"] == 0).all()
-    assert rw["next"].str.contains("not scored").all()
+    # Forecast weeks are scored once a later release reports them.
+    assert (rep["weeks_back"] < 0).any()
 
 
 def test_complete_weeks_come_from_later_releases_only(
@@ -151,19 +139,17 @@ def test_pooled_summaries_say_which_places_they_hold(
     assert some.max() < every
 
 
-def test_relative_wis_is_against_randomwalk_or_the_floor(
+def test_relative_wis_is_against_randomwalk(
     result,  # type: ignore[no-untyped-def]
 ) -> None:
-    rel = relative_wis(result.scores, by=("target",))
-    done = rel.loc[rel["target"] == "complete"].set_index("model")
-    assert done.loc["randomwalk", "rel_wis"] == pytest.approx(1.0)
-    assert (done["rel_to"] == "randomwalk").all()
-    nxt = rel.loc[rel["target"] == "next"].set_index("model")
-    assert nxt.loc[BASELINE, "rel_wis"] == pytest.approx(1.0)
-    assert (nxt["rel_to"] == BASELINE).all()
+    rel = relative_wis(result.scores, by=("target",)).set_index(
+        ["target", "model"]
+    )
+    for tgt in ("reported", "complete"):
+        assert rel.loc[(tgt, "randomwalk"), "rel_wis"] == pytest.approx(1.0)
 
 
-def test_stored_forecasts_are_scored_on_the_final_targets_only(
+def test_stored_forecasts_are_scored_on_both_targets(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
     real = target.loc[target["kind"] == "real"]
@@ -189,8 +175,15 @@ def test_stored_forecasts_are_scored_on_the_final_targets_only(
         tasks, daily, target, models=("randomwalk",), stored=stored
     )
     flat = out.scores.loc[out.scores["model"] == "flat"]
-    assert set(flat["target"]) == {"complete", "latest"}
+    assert set(flat["target"]) == {"reported", "complete"}
     assert set(flat["location"]) == {"CD-IT", "CD-NK"}
+    # Thinned to the count each release shows, so never above the final.
+    rep = out.quantiles.loc[
+        (out.quantiles["model"] == "flat")
+        & (out.quantiles["target"] == "reported")
+    ]
+    assert (rep["q95"] <= 100).all()
+    assert (rep.loc[rep["weeks_back"] >= 4, "q50"] >= 95).all()
 
 
 def test_clock_sensitivity_moves_the_newest_week(
@@ -211,16 +204,6 @@ def test_clock_sensitivity_moves_the_newest_week(
     ].set_index("clock_shift")
     assert cd.loc[-1, "q50"] > cd.loc[0, "q50"] > cd.loc[1, "q50"]
     assert set(table["model"]) == {"randomwalknowcast", "randomwalk"}
-
-
-def test_next_target_uses_the_chain_over_the_gap(
-    result,  # type: ignore[no-untyped-def]
-) -> None:
-    o = result.origins
-    row = o.loc[
-        (o["origin"] == "2026-10-17") & (o["model"] == "randomwalknowcast")
-    ]
-    assert row["mismatch_2026-10-24"].iloc[0] == 1
 
 
 def test_quantiles_carry_the_reported_count_and_truth(
@@ -259,3 +242,64 @@ def test_identical_samples_from_two_models_stop_the_run() -> None:
     check_distinct(
         pd.concat([a, dataclasses.replace(b) if False else b.assign(value=4.0)])
     )
+
+
+@pytest.fixture(scope="module")
+def origin(target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame):  # type: ignore[no-untyped-def]
+    real = target.loc[target["kind"] == "real"]
+    task = make_tasks(
+        real.loc[real["vintage"] == "2026-10-24"],
+        delays.assign(kind="real"),
+        BacktestConfig(n_samples=20, seed=3),
+        daily=daily,
+    )[0]
+    return RandomWalk().origin_at(task, errors=False)
+
+
+def test_share_reported_at_the_origin_is_its_completeness(
+    origin,  # type: ignore[no-untyped-def]
+) -> None:
+    snap = origin.snap
+    cut = snap.days[snap.cut[origin.o]].date()
+    share = reported_share(origin, cut, snap.week_ends)
+    got = share["share"].to_numpy().reshape(len(snap.locations), -1)
+    # The first week holds fewer than seven onset days.
+    np.testing.assert_allclose(got[:, 1:], origin.complete[:, 1:], rtol=1e-6)
+
+
+def test_share_is_zero_after_the_cutoff_and_one_when_old(
+    origin,  # type: ignore[no-untyped-def]
+) -> None:
+    cut = dt.date(2026, 10, 31)
+    weeks = ["2026-08-29", "2026-10-31", "2026-11-07"]
+    share = reported_share(origin, cut, weeks).set_index(
+        ["location", "target_end_date"]
+    )["share"]
+    assert share.between(0, 1).all()
+    assert (share.xs("2026-08-29", level=1) == 1).all()
+    assert (share.xs("2026-11-07", level=1) == 0).all()
+    assert (share.xs("2026-10-31", level=1) < 1).all()
+
+
+def test_thinning_draws_the_reported_count() -> None:
+    samples = pd.DataFrame(
+        {
+            "location": "CD",
+            "target_end_date": ["2026-10-24"] * 4000 + ["2026-10-31"] * 4000,
+            "sample": np.tile(np.arange(1, 4001), 2),
+            "value": 100.0,
+        }
+    )
+    share = pd.DataFrame(
+        {
+            "location": "CD",
+            "target_end_date": ["2026-10-24", "2026-10-31"],
+            "share": [1.0, 0.3],
+        }
+    )
+    out = thin(samples, share, np.random.default_rng(1))
+    full = out.loc[out["target_end_date"] == "2026-10-24", "value"]
+    part = out.loc[out["target_end_date"] == "2026-10-31", "value"]
+    assert (full == 100).all()
+    assert part.mean() == pytest.approx(30, abs=0.5)
+    assert part.var() == pytest.approx(21, rel=0.1)

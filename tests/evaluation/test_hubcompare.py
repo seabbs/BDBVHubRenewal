@@ -179,15 +179,23 @@ def test_our_forecasts_cover_the_hub_weeks(
 def test_stored_forecasts_pick_matching_rounds(tmp_path: Path) -> None:
     stored = pd.DataFrame(
         {
-            "model": ["renewal", "renewal", "randomwalk", "renewal"],
-            "kind": ["real", "real", "real", "simulated"],
-            "vintage": ["2026-10-24", "2026-10-17", "2026-10-24", "2026-10-24"],
+            "model": ["renewal", "renewal", "randomwalk", "renewal", "renewal"],
+            "kind": ["real", "real", "real", "simulated", "real"],
+            "vintage": [
+                "2026-10-24",
+                "2026-10-17",
+                "2026-10-24",
+                "2026-10-24",
+                "2026-10-24",
+            ],
             "reference_date": [
                 "2026-10-31",
                 "2026-10-24",
                 "2026-10-31",
                 "2026-10-31",
+                "2026-10-31",
             ],
+            "as_of": [None, None, None, None, "2026-11-01"],
             "location": "CD",
             "target_end_date": "2026-10-31",
             "horizon": 0,
@@ -202,7 +210,7 @@ def test_stored_forecasts_pick_matching_rounds(tmp_path: Path) -> None:
         ["2026-10-31"],
         exclude=["randomwalk"],
     )
-    # Only real vintages are taken.
+    # Only final counts of real vintages are taken.
     assert list(out["model"]) == ["renewal"]
     assert list(out["source"]) == ["real"]
 

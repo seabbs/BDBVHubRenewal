@@ -1,24 +1,22 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-r"""Backtest of the random walk models on the real releases.
+r"""Backtest of every model on the real releases.
 
 Every real release with a later release is an origin.
-The models forecast from the releases up to the origin only
+The random walk models forecast from the releases up to the origin only
 (`bdbvhubrenewal.forecasters.randomwalk`).
+Stored forecasts of other models, such as the renewal models and hub
+teams, are scored with them.
 Weeks back $k$ count from the week holding the origin's cut-off, so
 forecast weeks have $k < 0$.
-Three targets are scored.
+Two targets are scored.
 
-**Next release.** The count the later release $o'$ shows for each hub
-week up to `MAX_WEEKS_BACK` back from the origin's cut-off week.
-`randomwalknowcast` predicts it by chaining the origin's days over the
-actual gap to $o'$ only (`forecasters.chain.retro_plan`), with the
-spread of the origin.
-The prediction is scored only when the steps stand in for the gap within
-`Settings.max_mismatch` days, as for the errors behind the spread.
-A forecast dropped for one model is dropped for all.
-Other models forecast the final count, not the count at the next
-release, so they are not scored on this target, and the origin listing
-says so.
+**Reported.** The count each later release $o'$ shows, for every week
+of the forecast that $o'$ reports.
+Every model forecasts the final count $X_w$ of week $w$.
+Its samples become the count $o'$ shows by binomial thinning,
+$X'_w \sim \text{Binomial}(X_w, \pi_w)$, with $\pi_w$ the share of the
+week's final count reported by $o'$ under the delay fitted at the origin
+(`reported_share`).
 
 **Complete weeks.** The count the latest release shows for the weeks it
 reports in full, decided from the releases alone and never from a
@@ -27,18 +25,9 @@ By default a week is complete when it is at least `COMPLETE_WEEKS` weeks
 old at the latest release and grew by less than `COMPLETE_GROWTH`
 between the last two releases.
 
-**Latest release.** The count the latest release shows for every week,
-forecast weeks included. Recent weeks are still incomplete there, so
-this target favours forecasts that are low, and it is the only one that
-scores forecast weeks before they are complete.
-
-Stored forecasts of models too slow to run here, such as the renewal
-models, are scored on the complete and latest targets.
-
-A floor, the count as reported at the origin, is scored on the same
-targets.
-An origin that has no pair of releases within the delay window is listed
-with no forecasts.
+A floor, the count as reported at the origin, is scored on both targets.
+An origin that has no pair of releases within the delay window has no
+delay fit, so it is listed with no forecasts.
 A model with no snapshots stops the run.
 
 Scores are WIS, coverage and bias (`bdbvhubrenewal.evaluation.scoring`)
@@ -47,6 +36,7 @@ and every table counts its forecasts, $n$.
 
 from __future__ import annotations
 
+import datetime as dt
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -54,12 +44,9 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.dates import epiweek_end
-from bdbvhubrenewal.data.snapshots import (
-    release_cutoff,
-    snapshot_arrays,
-    week_sum,
-)
+from bdbvhubrenewal.baselinenowcast import chain_growth, exact_plan
+from bdbvhubrenewal.data.dates import as_date, epiweek_end
+from bdbvhubrenewal.data.snapshots import release_cutoff
 from bdbvhubrenewal.evaluation.scoring import SCORE_COLUMNS, score_forecasts
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
@@ -73,20 +60,16 @@ from bdbvhubrenewal.forecasters.chain import (
     MissingSnapshots,
     Origin,
     Settings,
-    grow,
-    retro_plan,
 )
 from bdbvhubrenewal.forecasters.randomwalk import (
     RandomWalk,
     RandomWalkNowcast,
-    frame,
 )
 
 __all__ = [
     "BASELINE",
     "COMPLETE_GROWTH",
     "COMPLETE_WEEKS",
-    "MAX_WEEKS_BACK",
     "NEAR_ZERO",
     "ReleaseBacktest",
     "clock_sensitivity",
@@ -94,7 +77,9 @@ __all__ = [
     "pooled_summary",
     "relative_wis",
     "release_backtest",
+    "reported_share",
     "summarise",
+    "thin",
     "weeks_back_from_cutoff",
 ]
 
@@ -102,12 +87,6 @@ log = logging.getLogger(__name__)
 
 BASELINE = "as reported"
 """Name of the floor: the count reported at the origin, as a forecast."""
-
-MAX_WEEKS_BACK = 3
-"""Last week back from the origin's week scored on the next release."""
-
-MAX_WEEKS_AHEAD = 4
-"""Last forecast week after the origin's week scored on the latest release."""
 
 COMPLETE_WEEKS = 4
 """Weeks a week must be old at the latest release to count as complete."""
@@ -117,9 +96,6 @@ COMPLETE_GROWTH = 0.02
 
 NEAR_ZERO = 5.0
 """Places whose weekly count never reaches this are near zero."""
-
-NO_NEXT = "not scored: no next-release prediction"
-"""Why a model that forecasts the final count has no next release score."""
 
 _LEVELS = (0.05, 0.25, 0.5, 0.75, 0.95)
 _KEYS = (
@@ -140,15 +116,13 @@ class ReleaseBacktest:
     ----------
     scores : pandas.DataFrame
         One row per scored forecast: the keys, `weeks_back`, `truth`,
-        `complete` and the scores.
+        `complete_at_latest` and the scores.
     quantiles : pandas.DataFrame
-        The 5, 25, 50, 75 and 95% quantiles of every forecast made for
-        the weeks up to four back, with the count reported at the origin
-        and the truth where there is one.
+        The 5, 25, 50, 75 and 95% quantiles of every forecast, with the
+        count reported at the origin and the truth where there is one.
     origins : pandas.DataFrame
-        One row per origin and model: `status`, `reason`, the days by
-        which the chain steps differ from the gap to each later release
-        and the number of forecasts scored on each target.
+        One row per origin and model: `status`, `reason` and the number
+        of forecasts scored on each target.
     fits : pandas.DataFrame
         Each model's fit summaries from `ForecastModel.fit_diagnostics`.
     """
@@ -157,6 +131,86 @@ class ReleaseBacktest:
     quantiles: pd.DataFrame
     origins: pd.DataFrame
     fits: pd.DataFrame
+
+
+def reported_share(
+    origin: Origin, cutoff: dt.date, weeks: Sequence[str]
+) -> pd.DataFrame:
+    r"""Return the share of each week's final count reported by a cut-off.
+
+    Day $t$ is $a = c - t$ days old at cut-off $c$.
+    The share of its final count reported then is $\pi(a) = 1 / G(a)$,
+    with $G(a)$ the growth from age $a$ to $D$ chained over the step of
+    the origin's latest pair, as in the nowcast
+    (`bdbvhubrenewal.forecasters.chain`), and $\pi = 0$ for days after
+    the cut-off.
+    A week's share is the mean over its seven days,
+    $\pi_w = \frac{1}{7} \sum_{t \in w} \pi(c - t)$.
+
+    Parameters
+    ----------
+    origin : Origin
+        The fit at the origin, which gives the delay.
+    cutoff : datetime.date
+        The cut-off of the later release.
+    weeks : sequence of str
+        Hub week ends.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `location`, `target_end_date` and `share`, for every place
+        of the origin.
+    """
+    fit = origin.fit
+    slot = int(fit.pair_step[-1])
+    ends = [as_date(w) for w in weeks]
+    age = np.array([[(cutoff - e).days + d for d in range(7)] for e in ends])
+    plan = exact_plan(
+        np.maximum(age, 0).ravel(),
+        int(fit.steps[slot]),
+        slot,
+        origin.settings.max_delay,
+    )
+    g = np.asarray(chain_growth(fit.factors, plan)).reshape(-1, *age.shape)
+    # A chain with a zero factor revises the day to nothing, so it counts
+    # as fully reported, as in `build_origin`.
+    pi = np.where(age >= 0, 1.0 / np.where(g > 0, g, 1.0), 0.0)
+    places = origin.snap.locations
+    return pd.DataFrame(
+        {
+            "location": np.repeat(places, len(ends)),
+            "target_end_date": np.tile(list(weeks), len(places)),
+            "share": pi.mean(axis=2).ravel(),
+        }
+    )
+
+
+def thin(
+    samples: pd.DataFrame, share: pd.DataFrame, rng: np.random.Generator
+) -> pd.DataFrame:
+    r"""Turn samples of final counts into samples of a reported count.
+
+    Each sample $X_w$ becomes $X'_w \sim \text{Binomial}(X_w, \pi_w)$.
+
+    Parameters
+    ----------
+    samples : pandas.DataFrame
+        Columns `location`, `target_end_date`, `sample` and `value`.
+    share : pandas.DataFrame
+        `reported_share` output.
+    rng : numpy.random.Generator
+        Random numbers.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The samples of the places and weeks in `share`, thinned.
+    """
+    rows = samples.merge(share, on=["location", "target_end_date"])
+    final = np.round(rows["value"].to_numpy()).astype(np.int64)
+    rows["value"] = rng.binomial(final, rows.pop("share").to_numpy())
+    return rows.astype({"value": float})
 
 
 def complete_weeks(
@@ -252,49 +306,6 @@ def weeks_back_from_cutoff(
     return back.astype(int).set_axis(weeks.index)
 
 
-def expected_point(
-    origin: Origin, daily: pd.DataFrame, later: str, locations: Sequence[str]
-) -> tuple[np.ndarray, int]:
-    """Return the count expected at a later release, by hub week.
-
-    Parameters
-    ----------
-    origin : Origin
-        The fit at the origin.
-    daily : pandas.DataFrame
-        Daily onsets by release, including `later`.
-    later : str
-        The later release.
-    locations : sequence of str
-        The task's places.
-
-    Returns
-    -------
-    tuple
-        The mean weekly count the later release shows for the days up to
-        the origin's cut-off, `[L, W]` over the origin's weeks, and the
-        days by which the chain steps differ from the gap.
-
-    Raises
-    ------
-    ValueError
-        If the releases or places differ from the origin's.
-    """
-    big = snapshot_arrays(daily, later, tuple(locations))
-    snap = origin.snap
-    if (
-        big.locations != snap.locations
-        or big.releases[: len(snap.releases)] != snap.releases
-    ):
-        raise ValueError("Releases or places differ from the origin's.")
-    p = big.releases.index(later)
-    plan, mismatch = retro_plan(big, origin.o, p, origin.fit, origin.settings)
-    counts = big.counts[:, origin.o, :]
-    growth = grow(origin.fit, plan)
-    point = week_sum(big, counts * growth)
-    return point[:, : snap.n_weeks], mismatch
-
-
 def _reported(
     real: pd.DataFrame, vintage: str, task: ForecastTask
 ) -> pd.DataFrame:
@@ -358,7 +369,7 @@ def release_backtest(
     complete_rule: str = "growth",
     complete_after: int = COMPLETE_WEEKS,
 ) -> ReleaseBacktest:
-    """Run the random walk models from every real release and score them.
+    """Forecast from every real release and score every model.
 
     Parameters
     ----------
@@ -369,12 +380,10 @@ def release_backtest(
     target : pandas.DataFrame
         The tidy target table.
     models : sequence of str or ForecastModel
-        Registered model names, or models. `randomwalknowcast` also gives
-        the next release prediction from the chain.
+        Registered model names, or models, to run.
     stored : pandas.DataFrame, optional
-        Samples of other models with columns `model`, `vintage`,
-        `location`, `target_end_date`, `sample` and `value`. They are
-        scored on the complete and latest targets.
+        Final-count samples of other models with columns `model`,
+        `vintage`, `location`, `target_end_date`, `sample` and `value`.
     complete_rule, complete_after : str, int
         The `rule` and `weeks` of `complete_weeks`.
 
@@ -393,132 +402,96 @@ def release_backtest(
     real = target.loc[target["kind"] == "real"]
     releases = sorted(str(v) for v in real["vintage"].unique())
     latest = releases[-1]
-    built: dict[str, ForecastModel] = {}
-    for m in models:
-        model = get_model(m) if isinstance(m, str) else m
-        built[model.name] = model
+    built = [get_model(m) if isinstance(m, str) else m for m in models]
+    cols = ["location", "target_end_date", "sample", "value"]
+    kept = pd.DataFrame(columns=["model", "vintage", *cols])
+    kept = kept if stored is None else stored
     frames: list[pd.DataFrame] = []
     origin_rows: list[dict[str, object]] = []
     fit_rows: list[pd.DataFrame] = []
-
-    def final(
-        samples: pd.DataFrame, name: str, origin: str, kept: bool = False
-    ) -> None:
-        if origin < latest:
-            for tgt in ("complete", "latest"):
-                frames.append(
-                    _label(samples, name, origin, tgt, latest, daily).assign(
-                        stored=kept
-                    )
-                )
-
     for task in sorted(tasks, key=lambda t: t.vintage):
-        if task.kind != "real":
-            continue
         later = [v for v in releases if v > task.vintage]
-        made: dict[str, np.ndarray] = {}
-        for name, model in built.items():
-            chained = isinstance(model, RandomWalkNowcast)
-            row: dict[str, object] = {
+        if task.kind != "real" or not later:
+            continue
+        if task.daily_history is None or task.daily_history.empty:
+            raise MissingSnapshots(
+                f"Release backtest needs daily release snapshots, and the "
+                f"task for {task.vintage} has none."
+            )
+        here = kept.loc[kept["vintage"].astype(str) == task.vintage]
+        names = [m.name for m in built] + sorted(set(here["model"]))
+        try:
+            origin = RandomWalk().origin_at(task, errors=False)
+        except ModelUnavailableError as err:
+            log.warning("No delay fit at %s: %s", task.vintage, err)
+            origin_rows += [
+                {
+                    "origin": task.vintage,
+                    "model": name,
+                    "status": "no forecast",
+                    "reason": str(err),
+                }
+                for name in names
+            ]
+            continue
+        forecasts: dict[str, pd.DataFrame] = {}
+        for model in built:
+            forecasts[model.name] = add_national(model.forecast(task))
+            fits = pd.DataFrame(getattr(model, "fit_diagnostics", []))
+            fits.insert(0, "model", model.name)
+            fits.insert(1, "origin", task.vintage)
+            fit_rows.append(fits)
+        _check_distinct(forecasts, task.vintage)
+        for name, grp in here.groupby("model"):
+            forecasts[str(name)] = grp[cols]
+        weeks = sorted(
+            {w for s in forecasts.values() for w in s["target_end_date"]}
+        )
+        rng = task.rng()
+        for o2 in later:
+            cut = release_cutoff(daily.loc[daily["vintage"] == o2], o2)
+            share = reported_share(origin, cut, weeks)
+            for name, samples in forecasts.items():
+                drawn = thin(samples, share, rng)
+                frames.append(
+                    _label(drawn, name, task.vintage, "reported", o2, daily)
+                )
+        floor = _reported(real, task.vintage, task)
+        frames += [
+            _label(floor, BASELINE, task.vintage, "reported", o2, daily)
+            for o2 in later
+        ]
+        forecasts[BASELINE] = floor
+        frames += [
+            _label(s, name, task.vintage, "complete", latest, daily)
+            for name, s in forecasts.items()
+        ]
+        origin_rows += [
+            {
                 "origin": task.vintage,
                 "model": name,
-                "status": "ran" if later else "no later release",
+                "status": "ran",
                 "reason": "",
-                "next": "chain over the gap" if chained else NO_NEXT,
-                "n_next": 0,
-                "n_complete": 0,
-                "n_latest": 0,
             }
-            if task.daily_history is None or task.daily_history.empty:
-                raise MissingSnapshots(
-                    f"{name} needs daily release snapshots, and the task "
-                    f"for {task.vintage} has none."
-                )
-            try:
-                samples = add_national(model.forecast(task))
-            except MissingSnapshots:
-                raise
-            except ModelUnavailableError as err:
-                log.warning("%s has no forecast from %s: %s", name,
-                            task.vintage, err)  # fmt: skip
-                row.update(status="no forecast", reason=str(err))
-                origin_rows.append(row)
-                continue
-            values = samples["value"].to_numpy()
-            for other, prior in made.items():
-                if prior.shape == values.shape and np.array_equal(
-                    prior, values
-                ):
-                    raise ValueError(
-                        f"{name} and {other} gave identical samples from "
-                        f"{task.vintage}."
-                    )
-            made[name] = values
-            fits = pd.DataFrame(getattr(model, "fit_diagnostics", []))
-            if not fits.empty:
-                fits.insert(0, "model", name)
-                fits.insert(1, "origin", task.vintage)
-                fit_rows.append(fits)
-            final(samples, name, task.vintage)
-            if chained:
-                assert isinstance(model, RandomWalkNowcast)
-                origin = model.origin_at(task, errors=True)
-                for o2 in later:
-                    nxt = _next_release(model, origin, task, daily, o2, row)
-                    if nxt is not None:
-                        frames.append(
-                            _label(nxt, name, task.vintage, "next", o2, daily)
-                        )
-            origin_rows.append(row)
-        if stored is not None and later:
-            rows = stored.loc[stored["vintage"].astype(str) == task.vintage]
-            for stored_name, grp in rows.groupby("model"):
-                keep = grp[["location", "target_end_date", "sample", "value"]]
-                final(keep, str(stored_name), task.vintage, kept=True)
-                origin_rows.append(
-                    {
-                        "origin": task.vintage,
-                        "model": str(stored_name),
-                        "status": "stored",
-                        "reason": "",
-                        "next": NO_NEXT,
-                    }
-                )
-        if made and task.vintage < latest:
-            floor = _reported(real, task.vintage, task)
-            final(floor, BASELINE, task.vintage)
-            for o2 in later:
-                frames.append(
-                    _label(floor, BASELINE, task.vintage, "next", o2, daily)
-                )
+            for name in forecasts
+        ]
     done = complete_weeks(
         target, daily, latest, rule=complete_rule, weeks=complete_after
     )
     return _score(frames, origin_rows, fit_rows, real, done)
 
 
-def _next_release(
-    model: RandomWalkNowcast,
-    origin: Origin,
-    task: ForecastTask,
-    daily: pd.DataFrame,
-    later: str,
-    row: dict[str, object],
-) -> pd.DataFrame | None:
-    """Return the prediction of the count at a later release, or None."""
-    try:
-        point, miss = expected_point(origin, daily, later, task.locations)
-    except ModelUnavailableError as err:
-        log.warning(
-            "%s has no count expected at %s: %s", model.name, later, err
-        )
-        row[f"unavailable_{later}"] = str(err)
-        return None
-    row[f"mismatch_{later}"] = miss
-    if miss > origin.settings.max_mismatch:
-        return None
-    traj, weeks = model.trajectories(origin, task, point)
-    return add_national(frame(task, weeks, traj, model.rows(origin, task)))
+def _check_distinct(forecasts: dict[str, pd.DataFrame], vintage: str) -> None:
+    """Stop if two models give identical samples."""
+    seen: dict[str, np.ndarray] = {}
+    for name, samples in forecasts.items():
+        values = samples["value"].to_numpy()
+        for other, prior in seen.items():
+            if np.array_equal(prior, values):
+                raise ValueError(
+                    f"{name} and {other} gave identical samples from {vintage}."
+                )
+        seen[name] = values
 
 
 def _score(
@@ -531,117 +504,74 @@ def _score(
     fits = (
         pd.concat(fit_rows, ignore_index=True) if fit_rows else pd.DataFrame()
     )
+    origins = pd.DataFrame(
+        origin_rows, columns=["origin", "model", "status", "reason"]
+    )
     if not frames:
-        return ReleaseBacktest(
-            pd.DataFrame(), pd.DataFrame(), pd.DataFrame(origin_rows), fits
-        )
+        return ReleaseBacktest(pd.DataFrame(), pd.DataFrame(), origins, fits)
     samples = pd.concat(frames, ignore_index=True)
-    samples["stored"] = samples["stored"].fillna(False).astype(bool)
-    # A model run here with no forecast of a target (the chain has no
-    # step within the allowed mismatch) drops it for every model run here,
-    # so all are scored on the same forecasts. Stored forecasts are scored
-    # where they exist.
-    forecast_ids = ["target", "origin", "truth_vintage"]
-    run = samples.loc[~samples["stored"]]
-    need = run.groupby("target")["model"].nunique().rename("need")
-    have = (
-        run.groupby(forecast_ids)["model"]
-        .nunique()
-        .rename("have")
-        .reset_index()
-        .merge(need, on="target")
-    )
-    full = have.loc[have["have"] == have["need"], forecast_ids]
-    keep = (
-        samples[forecast_ids]
-        .merge(full.assign(ok=True), on=forecast_ids, how="left")["ok"]
-        .fillna(False)
-        .to_numpy(dtype=bool)
-    )
-    samples = samples.loc[keep | samples["stored"]].reset_index(drop=True)
-    scored, quant = [], []
-    for (target, truth_v), grp in samples.groupby(["target", "truth_vintage"]):
-        truth = _truth(real, str(truth_v))
-        grp = grp.assign(horizon=grp["weeks_back"])
-        if target == "next":
-            grp = grp.loc[grp["weeks_back"].between(0, MAX_WEEKS_BACK)]
-        elif target == "latest":
-            grp = grp.loc[grp["weeks_back"] >= -MAX_WEEKS_AHEAD]
-        else:
-            grp = grp.merge(
-                done.loc[done["complete"], ["location", "target_end_date"]],
-                on=["location", "target_end_date"],
-            )
-        if grp.empty:
-            continue
-        s = score_forecasts(grp, truth, keys=_KEYS)
+    complete = done.loc[done["complete"], ["location", "target_end_date"]]
+    scored = []
+    for (tgt, truth_v), grp in samples.groupby(["target", "truth_vintage"]):
+        if tgt == "complete":
+            grp = grp.merge(complete, on=["location", "target_end_date"])
+        s = score_forecasts(
+            grp.assign(horizon=grp["weeks_back"]),
+            _truth(real, str(truth_v)),
+            keys=_KEYS,
+        )
         s["weeks_back"] = s.pop("horizon")
         scored.append(s)
-    scores = pd.concat(scored, ignore_index=True) if scored else pd.DataFrame()
-    reported = {
-        v: _truth(real, v).rename(columns={"truth": "reported"})
-        for v in sorted(set(samples["origin"]))
-    }
-    window = samples["weeks_back"].between(-MAX_WEEKS_AHEAD, MAX_WEEKS_BACK)
-    for key, grp in samples.loc[window].groupby([*_KEYS]):
-        ids = dict(zip(_KEYS, key, strict=True))
-        q = np.quantile(grp["value"].to_numpy(), _LEVELS)
-        quant.append(
-            {
-                **ids,
-                "weeks_back": int(grp["weeks_back"].iloc[0]),
-                **{
-                    f"q{int(100 * p)}": float(v)
-                    for p, v in zip(_LEVELS, q, strict=True)
-                },
-            }
-        )
-    quantiles = pd.DataFrame(quant)
-    if not quantiles.empty:
-        quantiles = quantiles.merge(
-            pd.concat([r.assign(origin=v) for v, r in reported.items()]),
-            on=["origin", "location", "target_end_date"],
-            how="left",
-        )
-        truths = pd.concat(
+    scores = pd.concat(scored, ignore_index=True)
+    flags = done.rename(columns={"complete": "complete_at_latest"})
+    scores = scores.merge(
+        flags[["location", "target_end_date", "complete_at_latest"]],
+        on=["location", "target_end_date"],
+        how="left",
+    )
+    level = scores.groupby("location")["truth"].max().rename("level")
+    scores = scores.merge(level, on="location", how="left")
+    scores["near_zero"] = (scores["location"] != NATIONAL) & (
+        scores["level"] < NEAR_ZERO
+    )
+    counts = (
+        scores.groupby(["model", "origin", "target"])
+        .size()
+        .unstack("target", fill_value=0)
+        .reindex(columns=["reported", "complete"], fill_value=0)
+        .add_prefix("n_")
+        .reset_index()
+    )
+    origins = origins.merge(counts, on=["model", "origin"], how="left")
+    origins[["n_reported", "n_complete"]] = (
+        origins[["n_reported", "n_complete"]].fillna(0).astype(int)
+    )
+    return ReleaseBacktest(scores, _quantiles(samples, real), origins, fits)
+
+
+def _quantiles(samples: pd.DataFrame, real: pd.DataFrame) -> pd.DataFrame:
+    """Quantiles of every forecast, with the count at the origin and truth."""
+    grp = samples.groupby([*_KEYS, "weeks_back"])["value"]
+    q = grp.quantile(np.array(_LEVELS)).unstack()
+    q.columns = [f"q{int(100 * p)}" for p in _LEVELS]
+    q = q.reset_index()
+    at = {
+        role: pd.concat(
             [
-                _truth(real, str(v)).assign(truth_vintage=str(v))
-                for v in sorted(set(samples["truth_vintage"]))
+                _truth(real, str(v)).assign(**{col: str(v)})
+                for v in sorted(set(q[col]))
             ]
-        )
-        quantiles = quantiles.merge(
-            truths,
-            on=["truth_vintage", "location", "target_end_date"],
-            how="left",
-        )
-    origins = pd.DataFrame(origin_rows)
-    if not scores.empty and not origins.empty:
-        counts = (
-            scores.groupby(["model", "origin", "target"])
-            .size()
-            .unstack("target", fill_value=0)
-            .rename(columns=lambda t: f"n_{t}")
-            .reset_index()
-        )
-        origins = origins.drop(
-            columns=[c for c in origins if str(c).startswith("n_")]
-        ).merge(counts, on=["model", "origin"], how="left")
-        for c in ("n_next", "n_complete", "n_latest"):
-            origins[c] = origins.get(c, 0)
-            origins[c] = origins[c].fillna(0).astype(int)
-    if not scores.empty:
-        flags = done.rename(columns={"complete": "complete_at_latest"})
-        scores = scores.merge(
-            flags[["location", "target_end_date", "complete_at_latest"]],
-            on=["location", "target_end_date"],
-            how="left",
-        )
-        level = scores.groupby("location")["truth"].max().rename("level")
-        scores = scores.merge(level, on="location", how="left")
-        scores["near_zero"] = (scores["location"] != NATIONAL) & (
-            scores["level"] < NEAR_ZERO
-        )
-    return ReleaseBacktest(scores, quantiles, origins, fits)
+        ).rename(columns={"truth": role})
+        for role, col in (("reported", "origin"), ("truth", "truth_vintage"))
+    }
+    q = q.merge(
+        at["reported"], on=["origin", "location", "target_end_date"], how="left"
+    )
+    return q.merge(
+        at["truth"],
+        on=["truth_vintage", "location", "target_end_date"],
+        how="left",
+    )
 
 
 def summarise(
@@ -726,45 +656,32 @@ def relative_wis(
     by : sequence of str
         Columns of a cell other than `model`.
     baseline : str
-        The model to divide by. A cell without it uses the floor,
-        `BASELINE`, and says so in `rel_to`.
+        The model to divide by.
 
     Returns
     -------
     pandas.DataFrame
-        One row per cell and model: `n` matched forecasts, `wis`,
-        `base_wis`, `rel_wis` and `rel_to`.
+        One row per cell and model, over the forecasts the baseline also
+        made: `n`, `wis`, `base_wis`, `rel_wis` and the coverage of the
+        50% and 90% intervals.
     """
-    match = ["origin", "truth_vintage", "location", "target_end_date"]
-    keys = list(by)
-    out = []
-    for cell, grp in (
-        scores.groupby(keys, sort=False) if keys else [((), scores)]
-    ):
-        ids = dict(
-            zip(keys, cell if isinstance(cell, tuple) else (cell,), strict=True)
+    match = ["target", "origin", "truth_vintage", "location", "target_end_date"]
+    base = scores.loc[scores["model"] == baseline, [*match, "wis"]]
+    pair = scores.merge(base.rename(columns={"wis": "base_wis"}), on=match)
+    out = (
+        pair.groupby([*by, "model"], sort=False)
+        .agg(
+            n=("wis", "size"),
+            wis=("wis", "mean"),
+            base_wis=("base_wis", "mean"),
+            coverage_50=("coverage_50", "mean"),
+            coverage_90=("coverage_90", "mean"),
         )
-        ref = baseline if baseline in set(grp["model"]) else BASELINE
-        base = grp.loc[grp["model"] == ref, [*match, "wis"]]
-        for name, rows in grp.groupby("model", sort=False):
-            pair = rows[[*match, "wis"]].merge(
-                base, on=match, suffixes=("", "_base")
-            )
-            mean_base = float(pair["wis_base"].mean()) if len(pair) else np.nan
-            out.append(
-                {
-                    **ids,
-                    "model": name,
-                    "n": len(pair),
-                    "wis": float(pair["wis"].mean()) if len(pair) else np.nan,
-                    "base_wis": mean_base,
-                    "rel_wis": float(pair["wis"].mean()) / mean_base
-                    if mean_base > 0
-                    else np.nan,
-                    "rel_to": ref,
-                }
-            )
-    return pd.DataFrame(out)
+        .reset_index()
+    )
+    out["rel_wis"] = out["wis"] / out["base_wis"]
+    order = ["n", "wis", "base_wis", "rel_wis", "coverage_50", "coverage_90"]
+    return out[[*by, "model", *order]]
 
 
 def clock_sensitivity(

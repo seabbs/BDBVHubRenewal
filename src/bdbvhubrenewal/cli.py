@@ -813,7 +813,9 @@ def _release_backtest(
         )
         if not config.is_heldout(t.vintage)
     ]
-    out = release_backtest(tasks, daily, target)
+    out = release_backtest(
+        tasks, daily, target, stored=_stored_samples(args, target)
+    )
     for name, table in (
         ("scores", out.scores),
         ("quantiles", out.quantiles),
@@ -822,6 +824,47 @@ def _release_backtest(
     ):
         table.to_csv(results / f"nowcast-{name}.csv", index=False)
     print(f"Release backtest: {len(out.scores)} scored forecasts.")
+
+
+def _stored_samples(
+    args: argparse.Namespace, target: pd.DataFrame
+) -> pd.DataFrame:
+    """Final-count samples of the models not run here, by vintage.
+
+    The fitted models' forecasts are those committed in `--output`. Hub
+    teams' forecasts are matched to the real vintage serving their round.
+    """
+    from bdbvhubrenewal.evaluation import hubcompare as hc
+
+    cols = [
+        "model",
+        "vintage",
+        "location",
+        "target_end_date",
+        "sample",
+        "value",
+    ]
+    path = Path(args.output) / "forecasts.csv.gz"
+    ours = (
+        pd.read_csv(path)
+        if path.exists()
+        else pd.DataFrame(columns=[*cols, "kind", "as_of"])
+    )
+    fitted = [s.name for s in list_models() if s.fitted]
+    ours = ours.loc[
+        ours["model"].isin(fitted)
+        & (ours["kind"] == "real")
+        & ours["as_of"].isna()
+    ]
+    data = Path(args.data)
+    hub = hc.load_hub_submissions(
+        data / "hub-submissions", data / "raw" / "hub-submissions"
+    )
+    vintages = sorted(set(target.loc[target["kind"] == "real", "vintage"]))
+    hub["vintage"] = [
+        hc.match_vintage(r, vintages) for r in hub["reference_date"]
+    ]
+    return pd.concat([ours[cols], hub.dropna(subset=["vintage"])[cols]])
 
 
 def _write_fits(fits: list[pd.DataFrame], path: Path) -> None:
