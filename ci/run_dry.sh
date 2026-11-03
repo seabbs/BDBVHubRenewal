@@ -289,6 +289,9 @@ ledger() {
     (cd "$repo" && WORK="$ROOT/fallback" GITHUB_RUN_ID=$run \
       REFERENCE_DATE=2026-11-07 DATA_COMMIT=dddd AS_OF=2026-10-31 GITHUB_SHA=cccc \
       ACTION=created PR_URL=https://example/pr/1 PRODUCED_BY="renewalsp" \
+      RENEWAL_ID=seabbs-renewal RENEWAL_ACTION=created \
+      RENEWAL_PR_URL=https://example/pr/1 RENEWAL_PRODUCED_BY="renewalsp" \
+      BASELINE_ID=seabbs-rwnowcast BASELINE_SKIPPED=true \
       "$CI_DIR/steps/record.sh" > /dev/null)
   done
   local files
@@ -296,7 +299,7 @@ ledger() {
   echo "$files" | grep -q "archive/2026-11-07/102/provenance.json" \
     || { echo "FAIL: ledger archive"; echo "$files"; return 1; }
   git -C "$origin" show submission-ledger:state.json \
-    | python3 -c "import json,sys; r=json.load(sys.stdin)['rounds']['2026-11-07']; assert r['status']=='submitted' and r['code_commit']=='cccc' and len(r['history'])==2"
+    | python3 -c "import json,sys; r=json.load(sys.stdin)['rounds']['2026-11-07']; m=r['models']; assert r['status']=='submitted' and r['code_commit']=='cccc' and len(r['history'])==2 and m['seabbs-renewal']['status']=='submitted' and m['seabbs-renewal']['archive']=='archive/2026-11-07/102' and m['seabbs-rwnowcast']['status']=='skipped'"
   echo "=== ledger ===" && echo "ok: state.json and archive/2026-11-07/{101,102} on submission-ledger"
 
   # freeze.sh, with a `gh` that says the round's pull request merged:

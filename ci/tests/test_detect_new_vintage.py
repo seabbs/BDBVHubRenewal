@@ -18,6 +18,7 @@ from submission_ci.detect_new_vintage import (
     main,
     open_reference_dates,
     record,
+    record_model,
 )
 from submission_ci.window import KINSHASA, current_window, window_for
 
@@ -207,6 +208,29 @@ def test_record_keeps_history() -> None:
     entry = s["rounds"]["2026-11-07"]
     assert entry["data_commit"] == "b" and entry["code_commit"] == "c"
     assert [h["status"] for h in entry["history"]] == ["failed", "submitted"]
+
+
+def test_record_model_keeps_each_model_across_round_records() -> None:
+    s = record(
+        empty_state(),
+        "2026-11-07",
+        data_commit="a",
+        as_of="x",
+        status="submitted",
+    )
+    for model_id, pr in (("seabbs-renewal", "95"), ("seabbs-rwnowcast", "94")):
+        s = record_model(
+            s,
+            "2026-11-07",
+            model_id,
+            status="submitted",
+            archive=f"archive/2026-11-07/1/{model_id}",
+            pr_url=f"https://h/pull/{pr}",
+        )
+    s = record(s, "2026-11-07", data_commit="b", as_of="x", status="submitted")
+    models = s["rounds"]["2026-11-07"]["models"]
+    assert sorted(models) == ["seabbs-renewal", "seabbs-rwnowcast"]
+    assert models["seabbs-rwnowcast"]["pr_url"] == "https://h/pull/94"
 
 
 def test_gh_source_picks_newest_commit(monkeypatch: pytest.MonkeyPatch) -> None:

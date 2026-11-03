@@ -23,6 +23,7 @@ export WORK="$main_work/track-$TRACK_MODEL"
 rm -rf "$WORK" && mkdir -p "$WORK/candidates"
 cp -R "$main_work/inputs" "$WORK/inputs"
 export MODEL=$TRACK_MODEL MODEL_ID=$TRACK_ID
+echo "model_id=$TRACK_ID" >> "${GITHUB_OUTPUT:-/dev/null}"
 
 # Plain random walk is built only as the reference the model's forecast
 # is checked against. It is a shadow here and is never selected. Neither

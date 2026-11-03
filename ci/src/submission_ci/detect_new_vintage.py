@@ -24,7 +24,8 @@ Rules, for the round whose window is open now:
   unless `ignore_window` is also set, which only a dry run may use.
 
 Subcommands: `detect` writes the decision to `$GITHUB_OUTPUT`; `record`
-updates the ledger after a run.
+updates the ledger after a run, and `record-model` records each hub
+model's submission in the round under `models`.
 """
 
 from __future__ import annotations
@@ -312,7 +313,39 @@ def record(
     }
     history.append({k: v for k, v in entry.items() if k != "history"})
     entry["history"] = history
+    entry["models"] = new["rounds"].get(reference_date, {}).get("models", {})
     new["rounds"][reference_date] = entry
+    return new
+
+
+def record_model(
+    state: dict[str, Any],
+    reference_date: str,
+    model_id: str,
+    *,
+    status: str,
+    archive: str,
+    produced_by: str = "",
+    pr_url: str = "",
+    run: str = "",
+    code_commit: str = "",
+    now: dt.datetime | None = None,
+) -> dict[str, Any]:
+    """Return the ledger with one hub model's submission in the round.
+
+    `archive` is the folder of the model's files, relative to the ledger.
+    The round must already be recorded.
+    """
+    new: dict[str, Any] = json.loads(json.dumps(state))
+    new["rounds"][reference_date]["models"][model_id] = {
+        "status": status,
+        "produced_by": produced_by,
+        "pr_url": pr_url,
+        "run": run,
+        "code_commit": code_commit,
+        "archive": archive,
+        "updated": (now or dt.datetime.now(dt.UTC)).isoformat(),
+    }
     return new
 
 
@@ -352,6 +385,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     rec.add_argument("--pr-url", default="")
     rec.add_argument("--run", default="")
     rec.add_argument("--code-commit", default="")
+    mod = sub.add_parser("record-model")
+    mod.add_argument("--state", type=Path, required=True)
+    mod.add_argument("--reference-date", required=True)
+    mod.add_argument("--model-id", required=True)
+    mod.add_argument("--status", required=True)
+    mod.add_argument("--archive", required=True)
+    mod.add_argument("--produced-by", default="")
+    mod.add_argument("--pr-url", default="")
+    mod.add_argument("--run", default="")
+    mod.add_argument("--code-commit", default="")
     args = p.parse_args(argv)
 
     state = read_json(args.state) if args.state.exists() else empty_state()
@@ -364,6 +407,22 @@ def main(argv: Sequence[str] | None = None) -> int:
                 data_commit=args.data_commit,
                 as_of=args.as_of,
                 status=args.status,
+                produced_by=args.produced_by,
+                pr_url=args.pr_url,
+                run=args.run,
+                code_commit=args.code_commit,
+            ),
+        )
+        return 0
+    if args.cmd == "record-model":
+        write_json(
+            args.state,
+            record_model(
+                state,
+                args.reference_date,
+                args.model_id,
+                status=args.status,
+                archive=args.archive,
                 produced_by=args.produced_by,
                 pr_url=args.pr_url,
                 run=args.run,

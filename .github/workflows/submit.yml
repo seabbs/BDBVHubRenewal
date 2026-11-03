@@ -387,6 +387,7 @@ jobs:
       pr_url: ${{ steps.track.outputs.pr_url }}
       produced_by: ${{ steps.track.outputs.produced_by }}
       skipped: ${{ steps.track.outputs.skipped }}
+      model_id: ${{ steps.track.outputs.model_id }}
     env:
       HUB_REF: ${{ needs.detect.outputs.hub_ref }}
       AS_OF: ${{ needs.detect.outputs.as_of }}
@@ -503,6 +504,17 @@ jobs:
           SKIPPED: ${{ needs.prepare.outputs.renewal == 'true' && needs.gate.outputs.skipped || needs.baseline.outputs.skipped }}
           BASELINE_GATE: ${{ needs.prepare.outputs.baseline == 'true' && format('{0}/baseline/gate', env.WORK) || '' }}
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          # Each hub model that ran, recorded under its id.
+          RENEWAL_ID: ${{ needs.gate.outputs.model_id }}
+          RENEWAL_ACTION: ${{ needs.submit.outputs.action }}
+          RENEWAL_PR_URL: ${{ needs.submit.outputs.pr_url }}
+          RENEWAL_PRODUCED_BY: ${{ needs.gate.outputs.produced_by }}
+          RENEWAL_SKIPPED: ${{ needs.gate.outputs.skipped }}
+          BASELINE_ID: ${{ needs.baseline.outputs.model_id }}
+          BASELINE_ACTION: ${{ needs.baseline.outputs.action }}
+          BASELINE_PR_URL: ${{ needs.baseline.outputs.pr_url }}
+          BASELINE_PRODUCED_BY: ${{ needs.baseline.outputs.produced_by }}
+          BASELINE_SKIPPED: ${{ needs.baseline.outputs.skipped }}
         run: ci/steps/record.sh
       - name: Rebuild the docs with this round's page
         env:

@@ -16,7 +16,7 @@ It submits only the hub models opted in ([Opting in](opting-in.md)), and pushes 
 | `baseline` | The baseline hub model: checks and submits `randomwalknowcast`, or skips the round if it is ruled out. |
 | `fit` | The renewal hub model: fits `bvd`, `renewalsp` and `main` in parallel. |
 | `gate`, `submit` | Walks the chain, validates, and opens or updates the pull request. |
-| `record` | Live runs only: writes the round to the `submission-ledger` branch. |
+| `record` | Live runs only: writes the round, and each hub model's submission under its id, to the `submission-ledger` branch. |
 | `outcome` | Fails the run if a round was skipped or a job broke. |
 
 ## renewal chain
@@ -66,7 +66,7 @@ If the hub's `main` already has this model's file for the round, the gate reads 
 The same file goes through both validators.
 The submit step stops, without pushing, if the hub's file changed after the gate.
 
-A round's page is frozen once its pull request merges, and later docs builds do not change it ([Rounds](rounds/index.md)).
+A round's page is frozen once its pull request merges, and later docs builds do not change it ([Submission log](rounds/index.md)).
 
 <div class="pr-body-example" markdown>
 

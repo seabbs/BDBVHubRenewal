@@ -6,11 +6,14 @@ The submission workflow records every live round on the
 `archive/<reference_date>/<run>/` holds the files of each run (the hub
 file, the plot, the provenance and the pull request body).
 
+Each round records every hub model it submitted under `models`, keyed by
+hub model id, with the folder of that model's archived files.
 `make_round_pages` turns that into one page per round at
 `docs/submission/rounds/<reference_date>.md`, served at
-`/submission/rounds/<reference_date>/`, which the hub pull request links to,
-an index of rounds, and a snippet on the latest submission for the
-Nowcast page.
+`/submission/rounds/<reference_date>/`, which the hub pull requests link
+to, with one tab per hub model id. The index is the submission log, one
+table per hub model id, and a snippet on the latest submission goes to
+the Nowcast page. A new hub model id appears without code changes.
 
 A round's page is frozen once its hub pull request has merged:
 `freeze_round` writes it to `pages/` on the ledger branch, once, and
@@ -22,13 +25,21 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
-__all__ = ["freeze_round", "latest_run", "make_round_pages", "round_page"]
+__all__ = [
+    "freeze_round",
+    "gh_pr_state",
+    "latest_run",
+    "make_round_pages",
+    "round_page",
+]
 
 FROZEN = "pages"
 """Folder on the ledger branch that holds the frozen round pages."""
@@ -88,13 +99,105 @@ def _read(path: Path) -> dict[str, Any]:
     return data
 
 
+def gh_pr_state(url: str) -> str:
+    """Return a pull request's state (open, closed or merged) from `gh`."""
+    out = subprocess.run(
+        ["gh", "pr", "view", url, "--json", "state", "-q", ".state"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return out.stdout.strip().lower()
+
+
+def _link(url: str, text: str) -> str:
+    return f"[{text}]({url})" if url else "n/a"
+
+
+def _commit(model: dict[str, Any]) -> str:
+    """Link the model's commit in the repo its workflow run belongs to."""
+    sha = str(model.get("code_commit") or "")
+    repo = str(model.get("run") or "").split("/actions/")[0]
+    return f"[`{sha[:7]}`]({repo}/commit/{sha})" if sha and repo else "n/a"
+
+
+def _files(ledger: Path, model: dict[str, Any]) -> dict[str, Any]:
+    """Return a model's archived run, provenance and checks."""
+    d = ledger / str(model.get("archive", ""))
+    return {
+        "dir": d,
+        "run": _read(d / "run.json"),
+        "prov": _read(d / "provenance.json"),
+        "checks": _read(d / "checks.json").get("checks", []),
+    }
+
+
+def _model_section(
+    ref: str, model_id: str, model: dict[str, Any], ledger: Path, out: Path
+) -> list[str]:
+    """Return one hub model's part of a round page, and copy its plot."""
+    f = _files(ledger, model)
+    run, prov = f["run"], f["prov"]
+    facts = [
+        ("Status", str(model.get("status", "unknown"))),
+        ("Produced by", str(model.get("produced_by") or "n/a")),
+        ("Model", f"{run.get('model', 'n/a')} (`{run.get('config', 'n/a')}`)"),
+        ("Gate status", str(prov.get("status", "n/a"))),
+        ("Hub pull request", _link(str(model.get("pr_url", "")), "link")),
+        ("Workflow run", _link(str(model.get("run", "")), "link")),
+        ("Commit", _commit(model)),
+    ]
+    lines = ["| | |", "| --- | --- |"]
+    lines += [f"| {k} | {v} |" for k, v in facts]
+    lines.append("")
+    if prov.get("reason"):
+        lines += [str(prov["reason"]), ""]
+    if (f["dir"] / "nowcast.png").exists():
+        image = f"{ref}-{model_id}.png"
+        shutil.copy(f["dir"] / "nowcast.png", out / image)
+        lines += [
+            f"![Nowcast and forecast submitted by {model_id} for {ref}]"
+            f"({image})",
+            "",
+            "Bars are the published counts by onset week in the data used. "
+            "Lines and bands are the submitted median, sample trajectories "
+            "and 50% and 90% intervals.",
+            "",
+        ]
+    csvs = sorted(f["dir"].glob(f"*-{model_id}.csv"))
+    nat = _national_table(csvs[0]) if csvs else ""
+    if nat:
+        lines += ["**National**", "", nat]
+    if f["checks"]:
+        lines += ["**Checks**", "", "| check | status | summary |"]
+        lines.append("| --- | --- | --- |")
+        lines += [
+            f"| {c['name']} | {c['status']} | {c.get('summary', '')} |"
+            for c in f["checks"]
+        ]
+        lines.append("")
+    tried = [
+        a
+        for a in prov.get("attempts", [])
+        if a.get("status") not in ("not needed", "not run")
+    ]
+    if tried:
+        lines += ["**Candidates**", "", "| step | outcome | why |"]
+        lines.append("| --- | --- | --- |")
+        for a in tried:
+            why = a["reasons"][0] if a.get("reasons") else ""
+            outcome = (
+                "submitted" if a["id"] == prov.get("selected") else a["status"]
+            )
+            lines.append(f"| {a['label']} | {outcome} | {why} |")
+        lines.append("")
+    return lines
+
+
 def round_page(
-    reference_date: str,
-    entry: dict[str, Any],
-    run_dir: Path | None,
-    image: str | None,
+    reference_date: str, entry: dict[str, Any], ledger: Path, out: Path
 ) -> str:
-    """Return the Markdown page of one round.
+    """Return the Markdown page of one round, with one tab per hub model.
 
     Parameters
     ----------
@@ -102,83 +205,36 @@ def round_page(
         The round.
     entry : dict
         The round's record in the ledger's `state.json`.
-    run_dir : pathlib.Path or None
-        The newest archived run of the round.
-    image : str or None
-        File name of the plot, beside the page.
+    ledger : pathlib.Path
+        A checkout of the `submission-ledger` branch.
+    out : pathlib.Path
+        Folder of the page, where each model's plot is copied.
 
     Returns
     -------
     str
         The page.
     """
-    prov = _read(run_dir / "provenance.json") if run_dir else {}
-    run = _read(run_dir / "run.json") if run_dir else {}
     lines = [f"# Round {reference_date}", ""]
     lines.append(
-        f"Nowcast and forecast submitted to the BDBV Modeling Hub for the "
+        f"Nowcasts and forecasts submitted to the BDBV Modeling Hub for the "
         f"round with reference date {reference_date}."
     )
     lines.append("{ .page-subtitle }")
     lines.append("")
-    facts = [
-        ("Status", str(entry.get("status", "unknown"))),
-        ("Produced by", str(entry.get("produced_by") or "n/a")),
-        ("Data vintage (`as_of`)", str(entry.get("as_of") or "n/a")),
-        ("Model", f"{run.get('model', 'n/a')} (`{run.get('config', 'n/a')}`)"),
-    ]
-    if entry.get("pr_url"):
-        facts.append(("Hub pull request", f"<{entry['pr_url']}>"))
-    if entry.get("run"):
-        facts.append(("Workflow run", f"<{entry['run']}>"))
-    if entry.get("updated"):
-        facts.append(("Updated", str(entry["updated"])[:16].replace("T", " ")))
-    lines += ["| | |", "| --- | --- |"]
-    lines += [f"| {k} | {v} |" for k, v in facts]
+    lines.append(f"Data vintage (`as_of`): {entry.get('as_of') or 'n/a'}.")
     lines.append("")
-    if prov.get("reason"):
-        lines += [str(prov["reason"]), ""]
-    if image:
-        lines += [
-            f"![Nowcast and forecast submitted for {reference_date}]({image})",
-            "",
-            "Bars are the published counts by onset week in the data used. "
-            "Lines and bands are the submitted median, sample trajectories "
-            "and 50% and 90% intervals.",
-            "",
-        ]
-    csvs = sorted(run_dir.glob("*.csv")) if run_dir else []
-    if csvs:
-        nat = _national_table(csvs[0])
-        if nat:
-            lines += ["## National", "", nat]
-    if prov.get("attempts"):
-        lines += ["## Fallback chain", ""]
-        lines += [
-            "| step | outcome | why |",
-            "| --- | --- | --- |",
-        ]
-        for a in prov["attempts"]:
-            if a.get("status") in ("not needed", "not run"):
-                continue
-            why = a["reasons"][0] if a.get("reasons") else ""
-            out = (
-                "submitted" if a["id"] == prov.get("selected") else a["status"]
-            )
-            lines.append(f"| {a['label']} | {out} | {why} |")
-        lines.append("")
+    for model_id, model in sorted(entry.get("models", {}).items()):
+        lines += [f'=== "{model_id}"', ""]
+        section = _model_section(reference_date, model_id, model, ledger, out)
+        text = "\n".join(section).splitlines()
+        lines += [f"    {x}" if x else "" for x in text]
     return "\n".join(lines) + "\n"
 
 
 def _render(ledger: Path, ref: str, entry: dict[str, Any], out: Path) -> None:
-    """Write a round's page, and its plot if there is one, into `out`."""
-    round_dir = ledger / "archive" / ref
-    run_dir = latest_run(round_dir) if round_dir.is_dir() else None
-    image = None
-    if run_dir and (run_dir / "nowcast.png").exists():
-        image = f"{ref}.png"
-        shutil.copy(run_dir / "nowcast.png", out / image)
-    (out / f"{ref}.md").write_text(round_page(ref, entry, run_dir, image))
+    """Write a round's page, and its plots, into `out`."""
+    (out / f"{ref}.md").write_text(round_page(ref, entry, ledger, out))
 
 
 def freeze_round(ledger: Path | str, reference_date: str) -> bool:
@@ -206,12 +262,46 @@ def freeze_round(ledger: Path | str, reference_date: str) -> bool:
     return True
 
 
+def _log(
+    rounds: dict[str, Any], ledger: Path, pr_state: Callable[[str], str]
+) -> list[str]:
+    """Return the submission log, one table per hub model id."""
+    ids = sorted({m for r in rounds.values() for m in r.get("models", {})})
+    lines = []
+    for model_id in ids:
+        lines += [f"## {model_id}", ""]
+        lines += [
+            "| round | run | commit | chosen model | gate status | hub PR "
+            "| PR state |",
+            "| --- | --- | --- | --- | --- | --- | --- |",
+        ]
+        for ref in sorted(rounds, reverse=True):
+            model = rounds[ref].get("models", {}).get(model_id)
+            if model is None:
+                continue
+            f = _files(ledger, model)
+            run_url = str(model.get("run", ""))
+            pr = str(model.get("pr_url", ""))
+            lines.append(
+                f"| [{ref}]({ref}.md) "
+                f"| {_link(run_url, run_url.rsplit('/', 1)[-1])} "
+                f"| {_commit(model)} "
+                f"| {f['run'].get('model', 'n/a')} "
+                f"| {f['prov'].get('status', 'n/a')} "
+                f"| {_link(pr, '#' + pr.rsplit('/', 1)[-1])} "
+                f"| {pr_state(pr) if pr else 'n/a'} |"
+            )
+        lines.append("")
+    return lines
+
+
 def make_round_pages(
     ledger: Path | str | None,
     docs: Path | str = "docs",
     generated: Path | str = "docs/generated",
+    pr_state: Callable[[str], str] = gh_pr_state,
 ) -> list[str]:
-    """Write the round pages, their index and the latest-submission snippet.
+    """Write the round pages, the submission log and the latest snippet.
 
     Parameters
     ----------
@@ -222,6 +312,8 @@ def make_round_pages(
         The docs folder. Pages go to `submission/rounds/` inside it.
     generated : pathlib.Path or str
         Where the `latest-submission.md` snippet goes.
+    pr_state : callable
+        Returns a hub pull request's state from its URL.
 
     Returns
     -------
@@ -232,40 +324,41 @@ def make_round_pages(
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
-    state = _read(Path(ledger) / "state.json") if ledger else {}
+    root = Path(ledger or ".")
+    state = _read(root / "state.json") if ledger else {}
     rounds: dict[str, Any] = state.get("rounds", {})
-    done = []
-    for ref in sorted(rounds, reverse=True):
-        frozen = Path(ledger or ".") / FROZEN
+    done = sorted(rounds, reverse=True)
+    frozen = root / FROZEN
+    for ref in done:
         if (frozen / f"{ref}.md").exists():
-            for f in frozen.glob(f"{ref}.*"):
+            for f in frozen.glob(f"{ref}*"):
                 shutil.copy(f, out / f.name)
         else:
-            _render(Path(ledger or "."), ref, rounds[ref], out)
-        done.append(ref)
-    index = ["# Submitted rounds", ""]
+            _render(root, ref, rounds[ref], out)
+    index = ["# Submission log", ""]
     if done:
-        index += ["| round | status | produced by |", "| --- | --- | --- |"]
         index += [
-            f"| [{ref}]({ref}.md) | {rounds[ref].get('status', '')} | "
-            f"{rounds[ref].get('produced_by', '')} |"
-            for ref in done
+            "Every round each hub model was submitted for, newest first.",
+            "The round links to its page.",
+            "",
         ]
-
+        index += _log(rounds, root, pr_state)
     (out / "index.md").write_text("\n".join(index) + "\n")
     snippet = Path(generated) / "latest-submission.md"
     snippet.parent.mkdir(parents=True, exist_ok=True)
     if done:
         ref = done[0]
-        entry = rounds[ref]
-        text = (
-            f"**Latest submission:** "
-            f"[round {ref}](submission/rounds/{ref}.md), "
-            f"{entry.get('status', '')}, produced by "
-            f"{entry.get('produced_by') or 'n/a'}. "
-            "[All submitted rounds](submission/rounds/index.md)."
+        models = rounds[ref].get("models", {})
+        each = ", ".join(
+            f"{model_id} {m.get('status', '')} "
+            f"({m.get('produced_by') or 'n/a'})"
+            for model_id, m in sorted(models.items())
         )
-        snippet.write_text(text + "\n")
+        snippet.write_text(
+            f"**Latest submission:** "
+            f"[round {ref}](submission/rounds/{ref}.md): {each}. "
+            "[Submission log](submission/rounds/index.md).\n"
+        )
     else:
         snippet.write_text("")
     return done

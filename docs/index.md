@@ -25,7 +25,7 @@ It submits one renewal model as `seabbs-renewal`, taking the first in the chain 
 | [Getting started](getting-started.ipynb) | Forecast, plot and score the two baselines in Python. |
 | Methods | [Data](methods/data.md), [Baseline models](methods/baselines.md), [Renewal models](methods/model.md), [Evaluation](methods/evaluation.md) and [Implementation](methods/implementation.md). |
 | Results | [Data](data.md), [nowcast](nowcast.md), [backtest](backtest.md), [held-out evaluation](heldout.md) and [comparison with hub forecasts](comparison.md). |
-| Submission | The [workflow](submission/workflow.md), [hub specification](submission/hub-spec.md), [opting in](submission/opting-in.md) and [rounds](submission/rounds/index.md). |
+| Submission | The [workflow](submission/workflow.md), [hub specification](submission/hub-spec.md), [opting in](submission/opting-in.md) and [submission log](submission/rounds/index.md). |
 | Development | The [model building](model-development/model-building.md) ladder, the [development log](model-development/log.md), [contributing](development/contributing.md), [adding a model](development/adding-a-model.md) and the [CLI](development/cli.md). |
 | [API reference](reference/index.md) | The Python package. |
 

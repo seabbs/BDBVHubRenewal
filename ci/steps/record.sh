@@ -7,6 +7,8 @@
 #   REFERENCE_DATE, DATA_COMMIT, AS_OF, ACTION, PR_URL, PRODUCED_BY,
 #   SKIPPED, RUN   from the earlier jobs
 #   GITHUB_SHA     the commit the round was submitted from
+#   RENEWAL_ID, RENEWAL_ACTION, RENEWAL_PR_URL, RENEWAL_PRODUCED_BY,
+#   RENEWAL_SKIPPED and the same for BASELINE_: each hub model that ran
 #   BASELINE_GATE  baseline's gate folder, when it ran
 # shellcheck source=ci/steps/lib.sh
 source "$(dirname "$0")/lib.sh"
@@ -22,14 +24,18 @@ else
   git worktree add -q --orphan -b "$LEDGER_BRANCH" "$ledger"
 fi
 
-if [ "${SKIPPED:-}" = "true" ]; then
-  status=skipped
-else
-  case "${ACTION:-}" in
-    created | updated | unchanged-on-hub) status=submitted ;;
-    *) status=failed ;;
+# A track's status from its SKIPPED and ACTION.
+status_of() {
+  if [ "$1" = "true" ]; then
+    echo skipped
+    return
+  fi
+  case "$2" in
+    created | updated | unchanged-on-hub) echo submitted ;;
+    *) echo failed ;;
   esac
-fi
+}
+status=$(status_of "${SKIPPED:-}" "${ACTION:-}")
 sci detect-new-vintage record --state "$ledger/state.json" \
   --reference-date "$REFERENCE_DATE" --data-commit "$DATA_COMMIT" \
   --as-of "${AS_OF:-}" --status "$status" --produced-by "${PRODUCED_BY:-}" \
@@ -55,13 +61,24 @@ mkdir -p "$archive"
 archive_gate "$WORK/gate" "$archive"
 # baseline's files sit beside the round's (BASELINE_GATE); when it
 # is the only hub model that ran, they are the round's own.
-if [ -n "${BASELINE_GATE:-}" ]; then
-  if [ -d "$WORK/gate" ]; then
-    archive_gate "$BASELINE_GATE" "$archive/baseline"
-  else
-    archive_gate "$BASELINE_GATE" "$archive"
-  fi
-fi
+baseline_archive=$archive
+[ -d "$WORK/gate" ] && baseline_archive="$archive/baseline"
+[ -n "${BASELINE_GATE:-}" ] && archive_gate "$BASELINE_GATE" "$baseline_archive"
+
+# Each hub model that ran, under its id: status, PR and files.
+#   record_model ID ACTION PR_URL PRODUCED_BY SKIPPED ARCHIVE
+record_model() {
+  [ -n "$1" ] || return 0
+  sci detect-new-vintage record-model --state "$ledger/state.json" \
+    --reference-date "$REFERENCE_DATE" --model-id "$1" \
+    --status "$(status_of "$5" "$2")" --pr-url "$3" --produced-by "$4" \
+    --run "${RUN:-}" --code-commit "$GITHUB_SHA" --archive "${6#"$ledger"/}"
+}
+record_model "${RENEWAL_ID:-}" "${RENEWAL_ACTION:-}" "${RENEWAL_PR_URL:-}" \
+  "${RENEWAL_PRODUCED_BY:-}" "${RENEWAL_SKIPPED:-}" "$archive"
+record_model "${BASELINE_ID:-}" "${BASELINE_ACTION:-}" \
+  "${BASELINE_PR_URL:-}" "${BASELINE_PRODUCED_BY:-}" \
+  "${BASELINE_SKIPPED:-}" "$baseline_archive"
 
 git -C "$ledger" add -A
 git -C "$ledger" -c user.name="github-actions[bot]" \

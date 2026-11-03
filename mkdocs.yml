@@ -33,7 +33,7 @@ nav:
       - Held-out evaluation: heldout.md
       - Comparison with hub forecasts: comparison.md
   - Submission:
-      - Rounds: submission/rounds/index.md
+      - Submission log: submission/rounds/index.md
       - Opting in: submission/opting-in.md
       - Workflow: submission/workflow.md
       - Hub specification: submission/hub-spec.md
