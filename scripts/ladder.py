@@ -2,8 +2,8 @@
 """The step-by-step build of the renewal model, and its variants.
 
 Each rung is a `ModelConfig` fitted with the repository's own NUTS set-up
-(`models.renewal.run_nuts`) on two simulated vintages and on the
-2026-10-09 real vintage, scored against 2026-10-24 as reported. Per rung
+(`models.renewal.run_nuts`) on two simulated vintages and on the real
+origins in `REAL_ORIGINS`, scored against 2026-10-24 as reported. Per rung
 it records the prior predictive, fit time, R-hat, ESS, ESS per second,
 divergences, the tree-depth cap share, in-sample PPC coverage, Rt error
 and turning point (simulated), CRPS (national, and over a fixed set of
@@ -15,7 +15,7 @@ Usage::
     uv run python scripts/ladder.py <rung index | randomwalk | collect>
 
 Each run writes `results/ladder/<rung>.json`; `collect` writes
-`results/ladder.csv` and `results/ladder.md`.
+`results/ladder.csv`.
 """
 
 from __future__ import annotations
@@ -192,19 +192,19 @@ DECISIONS: dict[str, str] = {
     "S2 + truncation (hub delay)": "Kept: the largest gain, national CRPS "
     "down by about three quarters on simulated data and by a third on real.",
     "S3 + delays, missingness, imputation": "Kept on the fuller-model rule: "
-    "scores level with S2, and it models the imputed stream and changing "
-    "delays the target depends on.",
+    "level with S2 on real data and worse on simulated national, and it "
+    "models the imputed stream and changing delays the target depends on.",
     "S4 + coupling and importation": "Kept on the fuller-model rule: scores "
     "level, it learns across provinces and forecasts spread to new ones.",
     "S5 + depletion (main)": "Kept and chosen as `renewal`: fewer wild prior "
-    "draws (0.44 to 0.32) and the best province scores of the build.",
+    "draws (0.44 to 0.32), with scores level with S3 and S4 and a little "
+    "behind S2.",
     "renewalbvd": "Shadow candidate: best on simulated data with a "
     "truth-based BVD summary, worse on the one real vintage.",
     "renewalsp": "Comparison variant and the CI's step after the retry.",
 }
 """One sentence per rung: kept, dropped or an option, and why. Filled in
-from the results. Rungs that have been decided and removed are in
-`results/development-log.csv`."""
+from the results."""
 
 FOCUS = ("CD-TO", "CD-BU", "CD-NU", "CD-SU", "CD-SK")
 """Late and sparse provinces reported on their own."""
@@ -718,7 +718,7 @@ def national_samples(task, run, nat=None) -> pd.DataFrame:
     )
 
 
-def randomwalk_row(outbreak, real) -> dict:
+def randomwalk_row(real) -> dict:
     """Score random walk on the same tasks."""
     target, delays, locations = real
     later = target.loc[target["vintage"] == REAL_TRUTH].set_index(
@@ -758,9 +758,6 @@ def main(args: list[str]) -> None:
         frame.insert(2, "description", frame["rung"].map(DESCRIPTIONS))
         frame.insert(3, "decision", frame["rung"].map(DECISIONS))
         frame.to_csv(OUT / "ladder.csv", index=False, na_rep="")
-        (OUT / "ladder.md").write_text(
-            frame.round(3).to_markdown(index=False) + "\n"
-        )
         print(frame.round(3).to_string())
         return
     outbreak = simulate_outbreak()
@@ -769,7 +766,7 @@ def main(args: list[str]) -> None:
     locations = tuple(sorted(set(target["location"]) - {"CD"}))
     real = (target, delays, locations)
     if args[0] == "randomwalk":
-        row = randomwalk_row(outbreak, real)
+        row = randomwalk_row(real)
     elif "--real-only" in args:
         # Keep the simulated results and refit the real origins only.
         name, config = list(RUNGS.items())[int(args[0])]
