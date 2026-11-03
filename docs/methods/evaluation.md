@@ -64,8 +64,8 @@ Two targets are scored.
 
 **Next release.** The count the next release $o'$ shows for each of the four latest hub weeks.
 `randomwalknowcast` predicts it by chaining the origin's days over the gap $c_{o'} - c_o$ between the cut-offs only, taking for each part of the gap the factor of the nearest earlier pair and never interpolating ages.
-Its Skellam spread is the origin's.
-The prediction is scored only when the chained steps differ from the gap by at most 1 day, as for the errors behind the spread.
+Its Skellam rates are the origin's.
+The prediction is scored only when the chained steps differ from the gap by at most 1 day, as for the errors behind the rates.
 `randomwalk` has no chain between releases, so its forecast samples serve for both targets.
 
 **Complete weeks.** The count the latest release shows for the weeks it reports in full.
@@ -75,7 +75,7 @@ Forecast weeks are scored only on this target.
 The floor is the count reported at the origin, scored on the same targets as a forecast with no spread.
 Scores are WIS, 50% and 90% coverage and bias, by model, origin, weeks back from the origin's week and place.
 Every table counts its forecasts, $n$.
-Each forecast row records the model, the start week of the walk, the number of errors behind the Skellam spread and the source of the delay, the spread and the walk.
+Each forecast row records the model, the start week of the walk, the number of errors behind the Skellam rates and the source of the delay, the spread and the walk.
 The run stops if a model has no snapshots or two models give identical samples.
 
 The weekly cross-check runs the snapshot chain ladder on hub weeks from the latest two releases with cut-offs a week apart, with a step of one week and national factors for every place.

@@ -35,7 +35,7 @@ The Skellam observation model is in `forecasters.skellam`, outside the port and 
 | Snapshots as arrays `[location, release, day]` | `data.snapshots` |
 | Pair sums, factors and chained growth | `baselinenowcast.snapshots`, `jit` with locations on the leading axis |
 | Own or pooled source of each estimate | `forecasters.pooling` |
-| Skellam spread by moments | `forecasters.skellam` |
+| Two-part Skellam rates by horizon | `forecasters.skellam` |
 | One random walk for both models | `forecasters.walk` |
 | Backtest on real releases | `evaluation.nowcast` |
 

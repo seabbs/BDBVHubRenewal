@@ -42,7 +42,7 @@ A zero denominator follows baselinenowcast, so that $F_{p,s}(x) = 1 + (\sum N_{p
 The parent of a province is the country, whose counts are the sum of its provinces.
 Only onset days within $1.5 D = 63$ days of the cut-off of the latest release used contribute to the sums, as baselinenowcast's default `n_history_delay`, and a retrospective fit uses the cut-off of its own release.
 Before the sums, each day's increments between its releases go through baselinenowcast's `preprocess_negative_values`, so a downward revision is set to zero and taken from the earlier increments of that day and no factor falls below 1.
-This applies to the delay only, because the Skellam spread below still allows negative revisions.
+This applies to the delay only, because the Skellam below still allows negative revisions.
 The preprocessing runs along releases for each onset day, where baselinenowcast runs it along the delay columns of a reporting triangle.
 
 At the latest release $o$, $s_o$ is the step of its latest in-window pair.
@@ -63,40 +63,44 @@ $G_p(a)$ is the growth of a day's count from age $a$ to final, and $1 / G_p(a)$ 
 
 Every observed day is nowcast, with no handover and no minimum count.
 The nowcast mean of day $t$ is $N_{p,o}(t)\, G_p(c_o - t)$, summed to hub weeks as $\mu_p(w)$.
-With $\text{rem} = \mu_p(w) - Y_{p,o}(w)$ the change still to come, the final count is Skellam on the remaining count,
+With $\text{rem} = \mu_p(w) - Y_{p,o}(w)$ the change still to come, the final count is a two-part Skellam on the remaining count,
 
 $$
 X_{p,i}(w) = \max\big\{0,\ Y_{p,o}(w) + A - B\big\},
 \qquad
-A \sim \text{Poisson}\big(\text{rem}^+ + \rho_{p,k}\,|\text{rem}|\big),
+A \sim \text{Poisson}\big(a_{p,k}\,\text{rem}\big),
 \qquad
-B \sim \text{Poisson}\big(\text{rem}^- + \rho_{p,k}\,|\text{rem}|\big),
+B \sim \text{Poisson}\big(b_{p,k}\,Y_{p,o}(w)\big).
 $$
 
-with $\text{rem}^+ = \max(\text{rem}, 0)$ and $\text{rem}^- = \max(-\text{rem}, 0)$.
-Before the floor the mean is $\mu_p(w)$ and the variance is $|\text{rem}|(1 + 2\rho_{p,k})$, so counts can be revised down and a week with nothing left to report has no spread.
-The Skellam is plugged into baselinenowcast's uncertainty interface, as a fit by horizon (`fit_skellam`, in place of `fit_nb`) and a sampler (`sample_skellam`, in place of `sample_nb`) with the same arguments.
+$A$ are the cases still to be added to the week's onset days, and $B$ the cases still to be removed from them.
+Before the floor the mean is $Y_{p,o}(w) + a_{p,k}\,\text{rem} - b_{p,k}\,Y_{p,o}(w)$ and the variance is $a_{p,k}\,\text{rem} + b_{p,k}\,Y_{p,o}(w)$.
+So counts can be revised down, by as much as the observed removals suggest.
+Weeks with $k \ge K$ are final and are not drawn.
+The Skellam is plugged into baselinenowcast's uncertainty interface, as a fit by horizon (`fit_skellam`, in place of `fit_nb`, through `fit_by_horizon`) and a sampler (`sample_skellam`, in place of `sample_nb`) with the same arguments.
 Sample $i$ is one draw of $X_{p,i}(w)$ per week.
 
-**Spread.**
+**Rates.**
 For each earlier release $r < o$ with an in-window pair, a nowcast $\hat y_p(w)$ is made from the data up to $r$, with the delay of $r$.
 It is chained over the gap $c_o - c_r$ only.
 Each remaining part of the gap takes the step of the in-window pair at $r$ nearest to it, ties to the latest pair, and ages are never interpolated.
 The release is kept when the steps differ from the gap by at most 1 day.
-The target is $y_p(w)$, the count of $w$ at release $o$ on days up to $c_r$.
+For each day $t \le c_r$ observed at both releases, the count rises by $(N_{p,o}(t) - N_{p,r}(t))^+$ and falls by $(N_{p,r}(t) - N_{p,o}(t))^+$.
+$u_p(w)$ and $d_p(w)$ are these rises and falls summed over the days of $w$.
 For weeks back $k$ with a day younger than $D$ at $r$, and where $Y_{p,r}(w) > 0$ or $\hat y_p(w) > 0$,
 
 $$
-e = y_p(w) - \hat y_p(w),
-\qquad
 \text{rem} = \hat y_p(w) - Y_{p,r}(w),
 \qquad
-\rho_{p,k} = \max\Big(0,\ \frac{\sum (e^2 - |\text{rem}|)}{\sum 2|\text{rem}|}\Big),
+a_{p,k} = \frac{\sum u_p(w)}{\sum \text{rem}},
+\qquad
+b_{p,k} = \frac{\sum d_p(w)}{\sum Y_{p,r}(w)},
 $$
 
 summed over the kept releases.
-Weeks without a $\rho_{p,k}$ have $\rho = 0$, which assumes no error beyond the Skellam remainder.
-The spread is fitted per horizon from the retrospective errors, as `fit_by_horizon` does in baselinenowcast.
+These are the Poisson maximum likelihood rates of each part.
+Where a sum to divide by is 0, or there are fewer than 2 errors, $a_{p,k} = 1$ and $b_{p,k} = 0$, a Poisson nowcast with no removals.
+The rates are fitted per horizon from the retrospective nowcasts with `fit_by_horizon`, as in baselinenowcast.
 Baselinenowcast 0.2.2 has a negative binomial observation model, and the Skellam replaces it so that counts can be revised down.
 
 ## Own or pooled estimates
@@ -105,15 +109,15 @@ The delay $F_{p,s}(x)$ is own or parent by age.
 A place uses its own factor at age $x$ when its denominator $\sum N_{p,r}(t)$, summed over the pooled pairs, is at least 10 cases.
 Otherwise it uses the factor of its parent at that age (zone, province, country).
 The country uses its own factor.
-The spread $\rho_{p,k}$ and the spread of the walk $\sigma_p$ use one rule with a threshold of 10 cases a week and 2 errors.
+The Skellam rates $(a_{p,k}, b_{p,k})$ and the spread of the walk $\sigma_p$ use one rule with a threshold of 10 cases a week and 2 errors.
 $\ell_p$ is the mean of $Y_{p,r}(w)$ over weeks 3 to 6 back, in cases a week.
 A place with $\ell_p \ge 10$ uses its own estimate.
-For $\rho_{p,k}$ it also needs at least 2 errors at $k$.
+For the rates it also needs at least 2 errors at $k$.
 Otherwise it uses the pooled estimate of its nearest parent that meets the same rule, and otherwise the country's.
 A pooled estimate uses the errors and weekly changes of the place's children with $\ell \ge 10$ together.
 A place's counts are the sum of its children's, so the place itself is left out of its pool and no case counts twice.
 A place with no such child pools alone.
-If the estimate used has fewer than 2 errors at $k$, $\rho_{p,k} = 0$.
+If the estimate used has fewer than 2 errors at $k$, $a_{p,k} = 1$ and $b_{p,k} = 0$.
 
 ## Walk
 
