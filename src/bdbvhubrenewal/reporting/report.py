@@ -48,7 +48,7 @@ from bdbvhubrenewal.evaluation.hubcompare import (
     forecast_quantiles,
     summarise_comparison,
 )
-from bdbvhubrenewal.evaluation.nowcast import summarise
+from bdbvhubrenewal.evaluation.nowcast import relative_wis
 from bdbvhubrenewal.evaluation.scoring import relative_skill, summarise_scores
 from bdbvhubrenewal.evaluation.zones import zone_relative_skill
 from bdbvhubrenewal.forecasters.base import (
@@ -234,16 +234,43 @@ def make_report(
 
 _RELEASE_PLACES: Final = ("CD", "CD-IT", "CD-NK")
 _RELEASE_MODELS: Final = ("randomwalk", "randomwalknowcast")
+_RELEASE_ALL: Final = (
+    "randomwalk",
+    "randomwalknowcast",
+    "renewal",
+    "renewalsp",
+    "renewalbvd",
+)
 _TARGET_LABELS: Final = {
-    "next": "Next release",
+    "reported": "Reported",
     "complete": "Complete weeks",
 }
+
+
+def _release_scores(
+    scores: pd.DataFrame, by: Sequence[str] = ("target", "origin", "pool")
+) -> pd.DataFrame:
+    """Return WIS relative to `randomwalk` and coverage, with $n$.
+
+    `pool` splits national from the provinces. Each model is matched
+    with `randomwalk`, or the floor where it has none, forecast by
+    forecast.
+    """
+    rows = scores.assign(
+        pool=scores["location"]
+        .eq(NATIONAL)
+        .map({True: "national", False: "provinces"})
+    )
+    rel = relative_wis(rows, by=tuple(by))
+    rel = rel.loc[rel["n"] > 0]
+    cols = [*by, "model", "n", "rel_wis", "coverage_50", "coverage_90"]
+    return rel[cols].sort_values([*by, "rel_wis"]).reset_index(drop=True)
 
 
 def _release_section(
     fig: Path, gen: Path, res: Path, real: pd.DataFrame
 ) -> None:
-    """Write the real-release evaluation tables and figure.
+    """Write the real-release evaluation tables and figures.
 
     The tables hold the number of forecasts, $n$, in every row.
     """
@@ -257,19 +284,27 @@ def _release_section(
     quantiles = pd.read_csv(paths["quantiles"])
     origins = pd.read_csv(paths["origins"])
     scores["target"] = scores["target"].map(_TARGET_LABELS)
-    cols = ["n", "wis", "coverage_50", "coverage_90", "bias"]
-    by_model = summarise(scores, ("target", "model"))[
-        ["target", "model", *cols]
-    ]
-    by_origin = summarise(scores, ("target", "model", "origin", "weeks_back"))[
-        ["target", "model", "origin", "weeks_back", *cols]
-    ]
-    by_place = summarise(scores, ("target", "model", "location"))[
-        ["target", "model", "location", *cols]
-    ]
+    by_target = _release_scores(scores, ("target", "pool"))
+    by_origin = _release_scores(scores, ("target", "origin", "pool"))
+    by_place = _release_scores(scores, ("target", "origin", "location"))
     listing = origins[
         [c for c in origins.columns if c != "reason"] + ["reason"]
     ].fillna("")
+    shown = [m for m in _RELEASE_ALL if m in set(quantiles["model"])]
+    if not (quantiles["target"] == "reported").any():
+        _write(gen / "release-backtest.md", "")
+        return
+    save_light_dark(
+        partial(
+            plot_release_nowcasts,
+            quantiles,
+            real,
+            _RELEASE_PLACES,
+            shown,
+            target="reported",
+        ),
+        fig / "release-reported.svg",
+    )
     save_light_dark(
         partial(
             plot_release_nowcasts,
@@ -284,25 +319,33 @@ def _release_section(
         gen / "release-backtest.md",
         "## Nowcasts from the real releases\n\n"
         "Each release with a later release is an origin.\n"
-        "The next release target is the count the later release shows for "
-        "the four latest weeks.\n"
+        "The reported target is the count each later release shows for "
+        "every week, against each model's forecast mapped to the count "
+        "expected by that release.\n"
         "The complete weeks target is the count the latest release shows "
         "for the weeks it reports in full ("
         "[Evaluation](methods/evaluation.md#real-releases)).\n"
-        "Every row counts its forecasts, $n$.\n\n"
-        "Origins and what each model gave.\n\n"
-        + _table(listing)
-        + "\nScores by target and model.\n\n"
-        + _table(by_model)
-        + "\n![Final forecasts of the recent weeks by origin, with the "
+        "WIS is relative to `randomwalk` on the forecasts both made, and "
+        "every row counts them, $n$.\n\n"
+        "Scores by target, national and provinces.\n\n"
+        + _table(by_target)
+        + "\nScores by origin.\n\n"
+        + _table(by_origin)
+        + "\n![Forecasts mapped to the count expected at the latest "
+        "release, by origin, with the counts each release reports.]"
+        "(figures/release-reported.svg#only-light)\n"
+        "![Forecasts mapped to the count expected at the latest release, "
+        "by origin, with the counts each release reports.]"
+        "(figures/release-reported-dark.svg#only-dark)\n\n"
+        "![Final forecasts of the recent weeks by origin, with the "
         "counts each release reports.](figures/release-nowcasts.svg"
         "#only-light)\n"
         "![Final forecasts of the recent weeks by origin, with the counts "
         "each release reports.](figures/release-nowcasts-dark.svg"
         "#only-dark)\n\n"
         + _dropdown(
-            "Scores by origin and weeks back.\n\n"
-            + _table(by_origin)
+            "Origins and what each model gave.\n\n"
+            + _table(listing)
             + "\nScores by place.\n\n"
             + _table(by_place),
             "Tables",

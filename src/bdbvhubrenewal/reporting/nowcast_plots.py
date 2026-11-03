@@ -34,8 +34,9 @@ def plot_release_nowcasts(
     locations: Sequence[str],
     models: Sequence[str],
     mode: str = "light",
+    target: str = "complete",
 ) -> Figure:
-    """Plot each model's final forecast of the recent weeks by origin.
+    """Plot each model's forecast of the recent weeks by origin.
 
     Parameters
     ----------
@@ -50,6 +51,9 @@ def plot_release_nowcasts(
         Models to show.
     mode : str
         `"light"` or `"dark"`.
+    target : str
+        `"complete"` for the final count, or `"reported"` for the count
+        expected at the latest release.
 
     Returns
     -------
@@ -57,8 +61,11 @@ def plot_release_nowcasts(
         One panel per origin and place. Lines are the counts each release
         reports, bars the 50% and 90% intervals.
     """
-    final = quantiles.loc[quantiles["target"] == "complete"]
-    final = final.loc[final["model"].isin(models)]
+    final = quantiles.loc[quantiles["target"] == target]
+    final = final.loc[
+        final["model"].isin(models)
+        & (final["truth_vintage"] == final["truth_vintage"].max())
+    ]
     origins = sorted(final["origin"].unique())
     fig, axes = _grid(
         len(origins) * len(locations), len(locations), width=3.4, height=2.6
@@ -95,7 +102,8 @@ def plot_release_nowcasts(
                     & (final["location"] == loc)
                     & (final["model"] == m)
                 ]
-                _draw_bars(ax, rows, palette[m_i], (m_i - 0.5) * 1.6)
+                shift = (m_i - (len(models) - 1) / 2) * 3.2 / len(models)
+                _draw_bars(ax, rows, palette[m_i], shift)
             ax.set_title(f"{loc}, origin {origin}")
             _date_axis(ax)
             ax.xaxis.set_major_locator(

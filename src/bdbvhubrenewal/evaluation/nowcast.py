@@ -842,7 +842,8 @@ def relative_wis(
     -------
     pandas.DataFrame
         One row per cell and model: `n` matched forecasts, `wis`,
-        `base_wis`, `rel_wis` and `rel_to`.
+        `base_wis`, `rel_wis`, `rel_to` and the model's mean
+        `coverage_50` and `coverage_90` on the matched forecasts.
     """
     match = ["origin", "truth_vintage", "location", "target_end_date"]
     keys = list(by)
@@ -855,8 +856,9 @@ def relative_wis(
         )
         ref = baseline if baseline in set(grp["model"]) else BASELINE
         base = grp.loc[grp["model"] == ref, [*match, "wis"]]
+        cover = ["coverage_50", "coverage_90"]
         for name, rows in grp.groupby("model", sort=False):
-            pair = rows[[*match, "wis"]].merge(
+            pair = rows[[*match, "wis", *cover]].merge(
                 base, on=match, suffixes=("", "_base")
             )
             mean_base = float(pair["wis_base"].mean()) if len(pair) else np.nan
@@ -871,6 +873,10 @@ def relative_wis(
                     if mean_base > 0
                     else np.nan,
                     "rel_to": ref,
+                    **{
+                        c: float(pair[c].mean()) if len(pair) else np.nan
+                        for c in cover
+                    },
                 }
             )
     return pd.DataFrame(out)
