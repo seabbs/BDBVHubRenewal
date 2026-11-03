@@ -798,6 +798,15 @@ def _metric_tabs(stem: str, alt: str) -> str:
     return "\n".join(tabs)
 
 
+_SUMMARY_MATCH = [
+    "kind",
+    "vintage",
+    "reference_date",
+    "location",
+    "target_end_date",
+]
+
+
 def _summary_figure(
     fig: Path,
     gen: Path,
@@ -809,6 +818,8 @@ def _summary_figure(
     if real["model"].nunique() < 2 or "randomwalk" not in set(real["model"]):
         _write(gen / "backtest-summary.md", "")
         return
+    base = real.loc[real["model"] == "randomwalk", _SUMMARY_MATCH]
+    real = real.merge(base.drop_duplicates(), on=_SUMMARY_MATCH)
     _save_metric_figures(
         fig, "scores-summary", partial(plot_score_summary, real, models=names)
     )
@@ -822,22 +833,33 @@ def _summary_figure(
 
 
 def _summary_table(real: pd.DataFrame, names: Sequence[str]) -> str:
-    """Return the table behind the summary figure, by model and horizon."""
-    match = ["kind", "vintage", "reference_date", "location", "target_end_date"]
-    rel = relative_skill(real, by=("horizon",), match_on=match)
+    """Return the table behind the summary figure, by model and horizon.
+
+    `real` holds only the forecasts random walk also made.
+    """
+    rel = relative_skill(real, by=("horizon",), match_on=_SUMMARY_MATCH)
     cover = (
         real.groupby(["model", "horizon"])["coverage_90"].mean().reset_index()
     )
-    table = cover.merge(rel, on=["model", "horizon"], how="left")
+    table = rel.merge(cover, on=["model", "horizon"])
     table = table[
-        ["model", "horizon", "relative_wis", "relative_log_wis", "coverage_90"]
+        [
+            "model",
+            "horizon",
+            "n",
+            "relative_wis",
+            "relative_log_wis",
+            "coverage_90",
+        ]
     ]
     table["model"] = pd.Categorical(table["model"], list(names), ordered=True)
     table = table.sort_values(["model", "horizon"]).reset_index(drop=True)
+    origins = ", ".join(sorted(set(real["vintage"].astype(str))))
     return (
         "Mean WIS and log WIS divided by those of random walk over the "
         "forecasts both made, and the share of 90% intervals holding the "
-        "data.\n\n" + _table(table)
+        f"data. It covers the origins where random walk forecast "
+        f"({origins}).\n\n" + _table(table)
     )
 
 

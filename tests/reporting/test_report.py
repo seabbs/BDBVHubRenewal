@@ -574,3 +574,17 @@ def test_nowcast_groups() -> None:
     assert groups["main"] == ["CD", "CD-B", "CD-C", "CD-D"]
     assert groups["other"] == ["CD-A"]
     assert groups["zones"] == ["CD-D-01"]
+
+
+def test_summary_covers_only_forecasts_randomwalk_made(tmp_path: Path) -> None:
+    scores = pd.read_csv(ROOT / "results" / "backtest-scores.csv")
+    scores = scores.loc[scores["model"].isin(["randomwalk", "renewal"])]
+    gen = tmp_path / "gen"
+    gen.mkdir()
+    report._summary_figure(tmp_path, gen, scores, ["randomwalk", "renewal"])
+    text = (gen / "backtest-summary.md").read_text()
+    walk = scores.loc[scores["model"] == "randomwalk", "vintage"]
+    origins = ", ".join(sorted(set(walk.astype(str))))
+    assert f"({origins})" in text
+    assert "   n |" in text
+    assert "nan" not in text.lower()
