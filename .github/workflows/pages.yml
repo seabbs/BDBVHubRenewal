@@ -43,9 +43,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v7
+      # uv and its cache, and JAX's persistent compilation cache.
+      - uses: ./.github/actions/setup-forecast-env
         with:
-          enable-cache: true
+          sync: 'false'
       - run: uv sync --frozen --all-groups
       # Pages for the submitted rounds come from the ledger branch that
       # the submission workflow writes. A merged round's page is frozen in
@@ -61,14 +62,36 @@ jobs:
       # `--no-fit` runs only the models with no fit, keeps those rows, and
       # scores the committed held-out forecasts again against the latest
       # vintage, even for a chosen fitted model.
-      - name: Backtest, then the docs figures and tables
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+      # The backtest reads only these inputs (the fitted variants' rows
+      # come from results/), so an unchanged hash reuses its outputs.
+      - name: Restore the backtest outputs
+        id: backtest
+        uses: actions/cache@v6
+        with:
+          path: |
+            results
+            output
+          key: backtest-${{ hashFiles('src/**', 'config/**', 'data/**', 'results/**', 'uv.lock') }}
+      - name: Backtest
+        if: steps.backtest.outputs.cache-hit != 'true'
         run: |
           uv run bdbvhubrenewal backtest --no-fit
           uv run bdbvhubrenewal backtest --evaluate-holdout --no-fit
+      - name: Compare with hub forecasts, then the docs figures and tables
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
           uv run bdbvhubrenewal compare-hub --fetch
           uv run bdbvhubrenewal report --ledger output/ledger
+      # As `task getting-started`. The notebook and its figures are built
+      # here, not committed. The filter keeps a tqdm notice about
+      # ipywidgets out of the published outputs.
+      - name: Run the Getting started notebook
+        env:
+          PYTHONWARNINGS: 'ignore:IProgress not found'
+        run: >-
+          uv run --group docs jupytext --to ipynb --execute --run-path .
+          docs/getting-started.py
       - name: Build the site into _site
         run: uv run mkdocs build --strict
       - uses: actions/upload-pages-artifact@v5

@@ -39,7 +39,7 @@ uv sync
 
 ## Usage
 
-The [Getting started](https://samabbott.co.uk/BDBVHubRenewal/getting-started/) page walks through a small fit.
+The [Getting started](https://samabbott.co.uk/BDBVHubRenewal/getting-started/) page forecasts, plots and scores the two baselines in Python.
 
 ## Data
 

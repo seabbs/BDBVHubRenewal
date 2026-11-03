@@ -17,6 +17,10 @@ docs/generated/
 # submission-ledger branch at each docs build.
 docs/submission/rounds/
 tests/results/
+# The Getting started notebook and its figures: built at docs build time
+# from docs/getting-started.py (`task getting-started`).
+docs/getting-started.ipynb
+docs/assets/getting-started/
 # mkdocs-jupyter execution cache.
 .cache/
 docs/figures/*.json
