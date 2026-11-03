@@ -50,6 +50,8 @@ jobs:
             "epinowcast/baselinenowcast@999d1ad50e27921a4078175d6315bbd655878888"
           )
         shell: Rscript {0}
+        env:
+          GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       - name: Regenerate fixtures
         run: |
           Rscript scripts/baselinenowcast_fixtures.R
