@@ -109,7 +109,13 @@ def plot_release_nowcasts(
     for m_i, m in enumerate(models):
         handles.append(axes[0].plot([], [], color=palette[m_i], lw=4)[0])
         labels.append(f"{m} (50% and 90%)")
-    axes[0].legend(handles, labels, fontsize=6)
+    fig.legend(
+        handles,
+        labels,
+        fontsize=7,
+        loc="outside lower center",
+        ncols=min(len(labels), 5),
+    )
     return fig
 
 

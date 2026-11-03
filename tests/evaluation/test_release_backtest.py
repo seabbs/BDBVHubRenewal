@@ -16,11 +16,11 @@ from bdbvhubrenewal.evaluation.backtest import (
 from bdbvhubrenewal.evaluation.nowcast import (
     BASELINE,
     complete_weeks,
+    expected_reported,
     relative_wis,
     release_backtest,
     reported_share,
     summarise,
-    thin,
     weeks_back_from_cutoff,
 )
 from bdbvhubrenewal.forecasters import get_model
@@ -154,13 +154,12 @@ def test_stored_forecasts_are_scored_on_both_targets(
     flat = out.scores.loc[out.scores["model"] == "flat"]
     assert set(flat["target"]) == {"reported", "complete"}
     assert set(flat["location"]) == {"CD-IT", "CD-NK"}
-    # Thinned to the count each release shows, so never above the final.
+    # Old weeks keep the forecast final count at every later release.
     rep = out.quantiles.loc[
         (out.quantiles["model"] == "flat")
         & (out.quantiles["target"] == "reported")
     ]
-    assert (rep["q95"] <= 100).all()
-    assert (rep.loc[rep["weeks_back"] >= 4, "q50"] >= 95).all()
+    assert (rep.loc[rep["weeks_back"] >= 6, "q50"] == 100).all()
 
 
 def test_quantiles_carry_the_reported_count_and_truth(
@@ -238,25 +237,21 @@ def test_share_is_zero_after_the_cutoff_and_one_when_old(
     assert (share.xs("2026-10-31", level=1) < 1).all()
 
 
-def test_thinning_draws_the_reported_count() -> None:
+def test_map_keeps_the_reported_count_and_adds_the_expected_share() -> None:
+    keys = {
+        "location": "CD",
+        "target_end_date": ["2026-10-17", "2026-10-24", "2026-10-31"],
+    }
     samples = pd.DataFrame(
-        {
-            "location": "CD",
-            "target_end_date": ["2026-10-24"] * 4000 + ["2026-10-31"] * 4000,
-            "sample": np.tile(np.arange(1, 4001), 2),
-            "value": 100.0,
-        }
+        {**keys, "sample": 1, "value": [100.0, 100.0, 100.0]}
     )
-    share = pd.DataFrame(
-        {
-            "location": "CD",
-            "target_end_date": ["2026-10-24", "2026-10-31"],
-            "share": [1.0, 0.3],
-        }
-    )
-    out = thin(samples, share, np.random.default_rng(1))
-    full = out.loc[out["target_end_date"] == "2026-10-24", "value"]
-    part = out.loc[out["target_end_date"] == "2026-10-31", "value"]
-    assert (full == 100).all()
-    assert part.mean() == pytest.approx(30, abs=0.5)
-    assert part.var() == pytest.approx(21, rel=0.1)
+    reported = pd.DataFrame({**keys, "reported": [100.0, 40.0, 20.0]})[:2]
+    now = pd.DataFrame({**keys, "share": [1.0, 0.4, 0.0]})
+    then = pd.DataFrame({**keys, "share": [1.0, 0.7, 0.5]})
+    out = expected_reported(samples, reported, now, then)
+    # Complete at the origin: the final count stands. Part reported: the
+    # outstanding 60 is half reported. After the origin: X times the share.
+    assert out["value"].tolist() == pytest.approx([100.0, 70.0, 50.0])
+    floor = samples.assign(value=[100.0, 40.0, 0.0])
+    out = expected_reported(floor, reported, now, then)
+    assert out["value"].tolist() == pytest.approx([100.0, 40.0, 0.0])

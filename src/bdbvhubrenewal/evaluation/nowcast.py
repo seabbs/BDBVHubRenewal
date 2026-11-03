@@ -12,11 +12,14 @@ Two targets are scored.
 
 **Reported.** The count each later release $o'$ shows, for every week
 of the forecast that $o'$ reports.
-Every model forecasts the final count $X_w$ of week $w$.
-Its samples become the count $o'$ shows by binomial thinning,
-$X'_w \sim \text{Binomial}(X_w, \pi_w)$, with $\pi_w$ the share of the
-week's final count reported by $o'$ under the delay fitted at the origin
-(`reported_share`).
+Every model forecasts the final count $X$ of a week.
+Its samples are mapped to the count expected at $o'$,
+$R_o + q (X - R_o)$, with $R_o$ the count reported at the origin and
+$q = (\pi_{o'} - \pi_o) / (1 - \pi_o)$, where $\pi$ is the share of the
+week's final count reported by a cut-off under the delay fitted at the
+origin (`reported_share`, `expected_reported`).
+For the chain nowcast this is the chain over the gap to $o'$, and the
+floor maps to itself.
 
 **Complete weeks.** The count the latest release shows for the weeks it
 reports in full, decided from the releases alone and never from a
@@ -69,11 +72,11 @@ __all__ = [
     "COMPLETE_WEEKS",
     "ReleaseBacktest",
     "complete_weeks",
+    "expected_reported",
     "relative_wis",
     "release_backtest",
     "reported_share",
     "summarise",
-    "thin",
     "weeks_back_from_cutoff",
 ]
 
@@ -177,31 +180,45 @@ def reported_share(
     )
 
 
-def thin(
-    samples: pd.DataFrame, share: pd.DataFrame, rng: np.random.Generator
+def expected_reported(
+    samples: pd.DataFrame,
+    reported: pd.DataFrame,
+    now: pd.DataFrame,
+    then: pd.DataFrame,
 ) -> pd.DataFrame:
-    r"""Turn samples of final counts into samples of a reported count.
+    r"""Map samples of the final count to the count expected at a release.
 
-    Each sample $X_w$ becomes $X'_w \sim \text{Binomial}(X_w, \pi_w)$.
+    Each sample $X$ becomes $R_o + q (X - R_o)$, with $R_o$ the count
+    reported at the origin and
+    $q = (\pi_{o'} - \pi_o) / (1 - \pi_o)$ the share of the count
+    outstanding at the origin that the later release $o'$ is expected to
+    report. A week fully reported at the origin has $q = 1$.
 
     Parameters
     ----------
     samples : pandas.DataFrame
         Columns `location`, `target_end_date`, `sample` and `value`.
-    share : pandas.DataFrame
-        `reported_share` output.
-    rng : numpy.random.Generator
-        Random numbers.
+    reported : pandas.DataFrame
+        Columns `location`, `target_end_date` and `reported`, the counts
+        at the origin. Weeks not in it have 0 reported.
+    now, then : pandas.DataFrame
+        `reported_share` at the origin's cut-off and the later one's.
 
     Returns
     -------
     pandas.DataFrame
-        The samples of the places and weeks in `share`, thinned.
+        The samples of the places and weeks in `now`, mapped.
     """
-    rows = samples.merge(share, on=["location", "target_end_date"])
-    final = np.round(rows["value"].to_numpy()).astype(np.int64)
-    rows["value"] = rng.binomial(final, rows.pop("share").to_numpy())
-    return rows.astype({"value": float})
+    keys = ["location", "target_end_date"]
+    share = now.merge(then, on=keys, suffixes=("_o", "_l"))
+    rows = samples.merge(share, on=keys).merge(reported, on=keys, how="left")
+    pi_o, pi_l = rows.pop("share_o"), rows.pop("share_l")
+    q = np.divide(
+        pi_l - pi_o, 1.0 - pi_o, out=np.ones(len(rows)), where=pi_o < 1.0
+    ).clip(0.0, 1.0)
+    r = rows.pop("reported").fillna(0.0)
+    rows["value"] = r + q * (rows["value"] - r)
+    return rows
 
 
 def complete_weeks(
@@ -291,8 +308,7 @@ def weeks_back_from_cutoff(
     pandas.Series
         Whole weeks, below 0 for weeks after the cut-off week.
     """
-    cut = release_cutoff(daily.loc[daily["vintage"] == vintage], vintage)
-    here = pd.Timestamp(epiweek_end(cut))
+    here = pd.Timestamp(epiweek_end(_cutoff(daily, vintage)))
     back = (here - pd.to_datetime(weeks.reset_index(drop=True))).dt.days // 7
     return back.astype(int).set_axis(weeks.index)
 
@@ -342,6 +358,10 @@ def _label(
         daily, origin, out["target_end_date"]
     )
     return out
+
+
+def _cutoff(daily: pd.DataFrame, vintage: str) -> dt.date:
+    return release_cutoff(daily.loc[daily["vintage"] == vintage], vintage)
 
 
 def _truth(real: pd.DataFrame, vintage: str) -> pd.DataFrame:
@@ -435,24 +455,21 @@ def release_backtest(
         _check_distinct(forecasts, task.vintage)
         for name, grp in here.groupby("model"):
             forecasts[str(name)] = grp[cols]
+        forecasts[BASELINE] = _reported(real, task.vintage, task)
         weeks = sorted(
             {w for s in forecasts.values() for w in s["target_end_date"]}
         )
-        rng = task.rng()
+        now = reported_share(origin, _cutoff(daily, task.vintage), weeks)
+        reported = _truth(real, task.vintage).rename(
+            columns={"truth": "reported"}
+        )
         for o2 in later:
-            cut = release_cutoff(daily.loc[daily["vintage"] == o2], o2)
-            share = reported_share(origin, cut, weeks)
+            then = reported_share(origin, _cutoff(daily, o2), weeks)
             for name, samples in forecasts.items():
-                drawn = thin(samples, share, rng)
+                mapped = expected_reported(samples, reported, now, then)
                 frames.append(
-                    _label(drawn, name, task.vintage, "reported", o2, daily)
+                    _label(mapped, name, task.vintage, "reported", o2, daily)
                 )
-        floor = _reported(real, task.vintage, task)
-        frames += [
-            _label(floor, BASELINE, task.vintage, "reported", o2, daily)
-            for o2 in later
-        ]
-        forecasts[BASELINE] = floor
         frames += [
             _label(s, name, task.vintage, "complete", latest, daily)
             for name, s in forecasts.items()
