@@ -71,9 +71,18 @@ def test_the_spread_moves_up_alone_when_errors_are_short() -> None:
     assert short[1, 0] == 5 + 0
 
 
-def test_pools_hold_a_node_and_its_qualifying_children() -> None:
+def test_a_pool_holds_the_qualifying_children_and_not_the_node() -> None:
+    # The country is the sum of its provinces, so pooling it with them
+    # would count the same cases twice.
+    level = np.array([60.0, 30.0, 4.0, 12.0, 0.0])
+    m = pool_matrix(level, PARENT)
+    assert m[0].tolist() == [0, 1, 0, 0, 0]
+    assert m[1].tolist() == [0, 0, 0, 1, 0]
+
+
+def test_a_node_with_no_qualifying_child_pools_alone() -> None:
     level = np.array([60.0, 30.0, 4.0, 0.0, 0.0])
     m = pool_matrix(level, PARENT)
-    assert m[0].tolist() == [1, 1, 0, 0, 0]
     assert m[1].tolist() == [0, 1, 0, 0, 0]
-    assert np.allclose(np.diag(m), 1)
+    assert m[2].tolist() == [0, 0, 1, 0, 0]
+    assert m[3].tolist() == [0, 0, 0, 1, 0]
