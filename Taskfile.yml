@@ -59,6 +59,16 @@ tasks:
     cmds:
       - uv run bdbvhubrenewal backtest --lopo {{.CLI_ARGS}}
 
+  backtest-scenarios:
+    desc: Forecast the simulated scenarios calibrated to the latest real vintage (writes results/scenario-scores.csv.gz)
+    cmds:
+      - uv run bdbvhubrenewal backtest --scenarios-only {{.CLI_ARGS}}
+
+  backtest-zones:
+    desc: Score randomwalk and randomwalknowcast at health-zone level (writes results/zone-scores.csv)
+    cmds:
+      - uv run bdbvhubrenewal zone-backtest {{.CLI_ARGS}}
+
   backtest-heldout:
     desc: Score every held-out vintage under the model chosen at the time (needs results/model-choice.yml)
     cmds:
