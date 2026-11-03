@@ -9,12 +9,15 @@ newest commit touching those paths, and the newest `as_of` in
 Rules, for the round whose window is open now:
 
 - The round must be open in the hub's `tasks.json`.
+- Submit once per round: a round the ledger records as submitted (its
+  hub PR exists) is left alone. A manual dispatch can resubmit.
 - Run when the hub data changed since this round last ran (a new round,
   or a data fix during the window, which updates the round's PR).
 - On a new round, only run on *fresh* data: an `as_of` no earlier round
   used. Last week's data are not resubmitted on Sunday morning, but if
   nothing new lands by the last `stale_fallback_hours` of the window the
-  round runs on what there is rather than being missed.
+  round runs on what there is rather than being missed. With one check
+  each morning, that is the Tuesday check.
 - `force` (manual dispatch) skips the data checks but never the window,
   unless `ignore_window` is also set, which only a dry run may use.
 
@@ -190,7 +193,7 @@ def decide(
     force: bool = False,
     ignore_window: bool = False,
     reference_date: str | None = None,
-    stale_fallback_hours: float = 12.0,
+    stale_fallback_hours: float = 24.0,
 ) -> Decision:
     """Apply the run rules in the module docstring."""
     win = (
@@ -240,6 +243,8 @@ def decide(
         return out(False, f"{ref} is not an open round in the hub's tasks.json")
     if force:
         return out(True, "forced by manual dispatch")
+    if entry is not None and entry.get("status") == "submitted":
+        return out(False, f"{ref} already has a hub PR")
     if not new_for_round:
         return out(False, f"no new hub data since {ref} last ran")
     if entry is not None:
@@ -310,7 +315,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     det.add_argument("--force", action="store_true")
     det.add_argument("--ignore-window", action="store_true")
     det.add_argument("--reference-date", default=None)
-    det.add_argument("--stale-fallback-hours", type=float, default=12.0)
+    det.add_argument("--stale-fallback-hours", type=float, default=24.0)
     det.add_argument("--out", type=Path, default=None)
     rec = sub.add_parser("record")
     rec.add_argument("--state", type=Path, required=True)

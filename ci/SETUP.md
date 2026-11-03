@@ -144,7 +144,9 @@ These times are to be re-measured on the current model.
 Time a real fit with a dry run on a past vintage (see above), and read the `Fit took N s` line in the job summary.
 
 The chain runs prepare (random walk), then every renewal fit in parallel, then the gate.
-From the last Tuesday start at 14:00 UTC there are 540 minutes to the close.
+Scheduled runs check once each morning, at 06:00 UTC on Sunday, Monday and Tuesday, after the Saturday 23:00 UTC run as the window opens.
+A round is submitted once: when the ledger records its PR, later scheduled runs stop, and a manual dispatch resubmits.
+From the Tuesday 06:00 UTC check there are about 17 hours to the close, which also leaves the organisers the US working day to approve the PR's checks.
 Every fit job's timeout leaves `reserve_minutes` (45) before the close for the gate and the pull request.
 So a fit that runs to its timeout still reaches the fallback or random walk before the close.
 `max_tree_depth` is set per candidate in `ci/policy.toml`.
@@ -158,7 +160,7 @@ If fits come close to the cap:
    The coupled main model cannot.
 3. Start earlier.
    Data usually land on Friday or Saturday, and the window opens Sunday.
-   The last scheduled start on Tuesday is 14:00 UTC, which leaves 540 minutes before the window closes for the fits and the gate.
+   The last scheduled start on Tuesday is 06:00 UTC, which leaves about 17 hours before the window closes for the fits and the gate.
 4. Use a bigger machine through `FIT_RUNNER`.
    GitHub's larger runners need a paid Team or Enterprise organisation, for example if the repo moves to `epiforecasts`.
    A self-hosted runner works too.

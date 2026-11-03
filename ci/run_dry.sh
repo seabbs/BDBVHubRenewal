@@ -403,6 +403,16 @@ no_new_data() {
   grep -q "should_run=false" "$WORK/out" \
     || { echo "FAIL: no-new-data ran"; return 1; }
   echo "=== no-new-data ===" && echo "ok: $(grep '^reason=' "$WORK/out")"
+  # Submit once per round: new data after the PR opened is not resubmitted
+  # by a scheduled run.
+  sci detect-new-vintage record --state "$WORK/state.json" \
+    --reference-date 2026-11-07 --data-commit "$(printf 'e%.0s' {1..40})" \
+    --as-of 2026-10-31 --status submitted
+  GITHUB_OUTPUT="$WORK/out2" sci detect-new-vintage detect \
+    --state "$WORK/state.json" --fixture "$FIX/hub" --now "$NOW" > /dev/null
+  grep -q "reason=2026-11-07 already has a hub PR" "$WORK/out2" \
+    || { echo "FAIL: submitted round ran again"; return 1; }
+  echo "ok: $(grep '^reason=' "$WORK/out2")"
 }
 
 own_model() {

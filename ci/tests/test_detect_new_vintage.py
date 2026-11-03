@@ -95,6 +95,30 @@ def test_last_weeks_vintage_waits_then_falls_back_late() -> None:
     assert d.should_run and "latest data" in d.reason
 
 
+def test_submitted_round_is_left_to_a_manual_dispatch() -> None:
+    s = state_with(
+        **{
+            "2026_11_07": {
+                "data_commit": "e" * 40,
+                "as_of": V.as_of,
+                "status": "submitted",
+            }
+        }
+    )
+    d = decide(s, V, TASKS, MONDAY)
+    assert not d.should_run and "already has a hub PR" in d.reason
+    assert decide(s, V, TASKS, MONDAY, force=True).should_run
+
+
+def test_tuesday_morning_check_falls_back_to_the_latest_data() -> None:
+    s = state_with(
+        **{"2026_10_31": {"data_commit": "c" * 40, "as_of": V.as_of}}
+    )
+    tuesday = dt.datetime(2026, 11, 3, 6, tzinfo=dt.UTC)  # 17 h left
+    d = decide(s, V, TASKS, tuesday)
+    assert d.should_run and "latest data" in d.reason
+
+
 def test_outside_window_never_runs_even_forced() -> None:
     friday = dt.datetime(2026, 11, 6, 10, tzinfo=dt.UTC)
     assert not decide(state_with(), V, TASKS, friday, force=True).should_run

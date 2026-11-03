@@ -17,14 +17,14 @@ on:
   # (UTC+1, no daylight saving), which is Saturday 23:00 to Tuesday 22:59
   # UTC. Runs are cheap when there is no new data: `detect` stops them.
   schedule:
-    - cron: '0 23 * * 6'       # Saturday 23:00 UTC, as the window opens
-    - cron: '0 2-23/3 * * 0,1' # every 3 hours on Sunday and Monday
-    # Tuesday until 14:00 UTC, which leaves 540 minutes to the close for
-    # prepare, the fits (about 1 to 1.5 hours, in parallel) and the gate.
-    # Each fit's timeout stops 45 minutes short of the close
-    # (ci/policy.toml [timing]), so even a late failure reaches the
-    # fallback or random walk before the close.
-    - cron: '0 2-14/3 * * 2'
+    - cron: '0 23 * * 6'  # Saturday 23:00 UTC, as the window opens
+    # One check each morning in the window. A round is submitted once
+    # (detect), so a check after its PR opened stops at once. Tuesday
+    # 06:00 UTC leaves 17 hours to the close: the fits take about an
+    # hour, each fit's timeout stops 45 minutes short of the close
+    # (ci/policy.toml [timing]), and the organisers have the US working
+    # day to approve the PR's checks.
+    - cron: '0 6 * * 0-2'
     # Outside the window, only to freeze the pages of merged rounds.
     - cron: '0 6 * * 3-5'
   workflow_dispatch:
