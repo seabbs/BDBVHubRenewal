@@ -18,8 +18,8 @@ $A$ is baselinenowcast's negative binomial on the remaining count, fitted
 and drawn with the port's `fit_nb` and `sample_nb` through
 `fit_by_horizon`, one size $\phi_k$ for each week back $k$.
 $b_k$ is the share of the reported count later removed, the Poisson
-maximum likelihood estimate $\sum B / \sum Y$ from the downward
-revisions of earlier releases.
+maximum likelihood estimate $\sum B / \sum Y$ from the falls of weekly
+counts between earlier releases and the origin.
 """
 
 from __future__ import annotations

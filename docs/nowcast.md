@@ -31,7 +31,7 @@ The submission pull request embeds [`plot_nowcast`][bdbvhubrenewal.reporting.plo
 
 The growth to final of each onset day by its age at the latest release, and the observation model by weeks back.
 A place using its parent's estimate is labelled with the parent.
-Few earlier releases chain to the latest within a day of its gap, so the observation model rests on few retrospective nowcasts, one release at 2026-11-01.
+The observation model rests on few retrospective nowcasts, two earlier releases at 2026-11-01.
 
 ![Growth to final by age, and the dispersion of new reports and the removal rate by weeks back, at the latest release.](figures/delay-check.svg#only-light)
 ![Growth to final by age, and the dispersion of new reports and the removal rate by weeks back, at the latest release.](figures/delay-check-dark.svg#only-dark)

@@ -20,44 +20,43 @@ Hub weeks run Sunday to Saturday and are labelled by the Saturday.
 $Y_{p,r}(w)$ is the sum of $N_{p,r}$ over the days of week $w$.
 $w$ is $k$ weeks back when it is $k$ weeks before the week holding the release cut-off.
 
-A pair of consecutive releases $(r, r + 1)$ has step $s = c_{r+1} - c_r$ days.
+A pair of consecutive releases $(r, r + 1)$ has gap $s = c_{r+1} - c_r$ days.
 $D = 42$ days is baselinenowcast's `max_delay`, and a pair is in window when $s \le D$.
-Only in-window pairs give delay factors.
+Only in-window pairs inform the delay.
 A pair outside the window keeps its counts in the data.
 A model raises if the vintage has no snapshots or no in-window pair.
 
 ## Delay
 
 The delay follows baselinenowcast[^bnc-paper][^bnc-package] on the daily snapshots, with one extension.
-For step $s$ and age $x = 0, \dots, D - 1$,
+Releases are batched reports of one daily delay.
+With $g_p(j) \ge 0$ the daily log development factor at age $j$, and $g_p(j) = 0$ for $j \ge D$, a day of age $x$ at release $r$ grows to release $r + 1$ by $\exp \sum_{j=x}^{x+s-1} g_p(j)$.
+For each gap $s$ and age $x = 0, \dots, D - 1$,
 
 $$
-F_{p,s}(x) = \frac{\sum N_{p,r+1}(t)}{\sum N_{p,r}(t)},
+\log \frac{\sum N_{p,r+1}(t)}{\sum N_{p,r}(t)} = \sum_{j=x}^{x+s-1} g_p(j),
 $$
 
-summed over all in-window pairs and over days $t$ of age $x$ at $r$.
-Each pair is one step at its own exact ages, and the factor is a ratio of sums over the pairs, not a mean of their ratios.
-Cells a release does not observe are skipped, not filled.
-A zero denominator follows baselinenowcast, so that $F_{p,s}(x) = 1 + (\sum N_{p,r+1}(t) - \sum N_{p,r}(t)) / \max(\sum N_{p,r}(t), 1)$.
+summed over the in-window pairs of gap $s$ and over days $t$ of age $x$ at $r$.
+$g_p$ is the non-negative least squares fit of all these equations, each weighted by its denominator $\sum N_{p,r}(t)$, with no smoothing over age.
+With a gap of 1 only, $\exp g_p(x)$ is baselinenowcast's chain ladder factor.
+Cells a release does not observe are skipped, not filled, and a gap and age with a zero denominator give no equation.
 The parent of a province is the country, whose counts are the sum of its provinces.
 Only onset days within $1.5 D = 63$ days of the cut-off of the latest release used contribute to the sums, as baselinenowcast's default `n_history_delay`, and a retrospective fit uses the cut-off of its own release.
-Before the sums, each day's increments between its releases go through baselinenowcast's `preprocess_negative_values`, so a downward revision is set to zero and taken from the earlier increments of that day and no factor falls below 1.
+Before the sums, each day's increments between its releases go through baselinenowcast's `preprocess_negative_values`, so a downward revision is set to zero and taken from the earlier increments of that day and no ratio falls below 1.
 This applies to the delay only, because the removals below still allow negative revisions.
 The preprocessing runs along releases for each onset day, where baselinenowcast runs it along the delay columns of a reporting triangle.
 
-At the latest release $o$, $s_o$ is the step of its latest in-window pair.
-Day $t$ of age $a$ is chained over the actual release gap,
+The growth of a day's count from age $a$ to final is
 
 $$
-G_p(a) = \prod_{m=0}^{M(a)-1} F_{p,s_o}(a + m s_o),
+G_p(a) = \exp \sum_{j=a}^{D-1} g_p(j),
 \qquad
 G_p(a) = 1 \text{ for } a \ge D,
 $$
 
-with $M(a)$ the fewest steps with $a + M s_o \ge D$.
-There is no factor past $D$.
-With a step $s_o > 1$, the factor at an age above $D - s_o$ includes growth past $D$ in its numerator, which baselinenowcast truncates, so those factors can be slightly larger.
-$G_p(a)$ is the growth of a day's count from age $a$ to final, and $1 / G_p(a)$ is the share of it reported.
+and $1 / G_p(a)$ is the share of it reported.
+There is no growth past $D$, so an equation whose ages run past $D$ puts that growth on its ages below $D$.
 
 ## Nowcast
 
@@ -80,11 +79,9 @@ Sample $i$ is one draw of $X_{p,i}(w)$ per week.
 
 **Fit.**
 For each earlier release $r < o$ with an in-window pair, a nowcast $\hat y_p(w)$ is made from the data up to $r$, with the delay of $r$.
-It is chained over the gap $c_o - c_r$ only.
-Each remaining part of the gap takes the step of the in-window pair at $r$ nearest to it, ties to the latest pair, and ages are never interpolated.
-The release is kept when the steps differ from the gap by at most 1 day.
-For weeks back $k$ with a day younger than $D$ at $r$, and where $Y_{p,r}(w) > 0$ or $\hat y_p(w) > 0$, each onset day up to $c_r$ is compared between releases $r$ and $o$.
-Its rises sum to the new reports $A_{p,r}(w)$ and its falls to the removals $B_{p,r}(w)$.
+Each day grows over the gap $c_o - c_r$ by $\exp \sum_{j=a}^{a+c_o-c_r-1} g_p(j)$, with the $g_p$ of $r$.
+For weeks back $k$ with a day younger than $D$ at $r$, and where $Y_{p,r}(w) > 0$ or $\hat y_p(w) > 0$, the count of $w$ on days up to $c_r$ is compared between releases $r$ and $o$.
+A rise is the new reports $A_{p,r}(w)$ and a fall the removals $B_{p,r}(w)$, so both are weekly, as the forecast is.
 With $\widehat{\text{rem}} = \hat y_p(w) - Y_{p,r}(w)$,
 
 $$
@@ -101,10 +98,10 @@ An estimate with fewer than 2 errors at $k$ has $\phi_{p,k} = 1000$, the Poisson
 
 ## Own or pooled estimates
 
-The delay $F_{p,s}(x)$ is own or parent by age.
-A place uses its own factor at age $x$ when its denominator $\sum N_{p,r}(t)$, summed over the pooled pairs, is at least 10 cases.
-Otherwise it uses the factor of its parent at that age (zone, province, country).
-The country uses its own factor.
+The delay $g_p(x)$ is own or parent by age.
+A place uses its own $g_p(x)$ when its denominator $\sum N_{p,r}(t)$ at age $x$, summed over the pairs, is at least 10 cases.
+Otherwise it uses its parent's at that age (zone, province, country).
+The country uses its own.
 The observation model $(\phi_{p,k}, b_{p,k})$ and the spread of the walk $\sigma_p$ use one rule with a threshold of 10 cases a week and 2 errors.
 $\ell_p$ is the mean of $Y_{p,r}(w)$ over weeks 3 to 6 back, in cases a week.
 A place with $\ell_p \ge 10$ uses its own estimate.

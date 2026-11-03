@@ -3,9 +3,9 @@
 
 The latest two releases whose cut-offs are one week apart give one week
 of growth for every hub week.
-The port's chain ladder (`pair_sums`, `pair_factors`, `chain_growth`)
-runs on those hub weeks, with national factors for every place and a
-step of one week.
+The port's chain ladder (`pair_sums`, `log_factors`, `growth`) runs on
+those hub weeks, with the national factors for every place and a gap of
+one week.
 Weeks up to six old at the earlier release are grown to the 42 day window.
 Two releases give no right-truncated incremental triangle, so
 `estimate_delay` itself cannot run.
@@ -22,12 +22,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.baselinenowcast import (
-    chain_growth,
-    exact_plan,
-    pair_factors,
-    pair_sums,
-)
+from bdbvhubrenewal.baselinenowcast import growth, log_factors, pair_sums
 from bdbvhubrenewal.data import load_daily, load_delays, load_target
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.forecasters.base import add_national, get_model
@@ -84,14 +79,10 @@ def weekly_points(
     counts = counts * observed[None]
     num, den = pair_sums(counts, observed, cut, np.array([0]), DELAY_WEEKS)
     national = places.index("CD")
-    factors = pair_factors(
-        num[national : national + 1], den[national : national + 1],
-        np.array([0]), 1,
-    )  # fmt: skip
-    ages = np.arange(DELAY_WEEKS)
-    growth = np.asarray(
-        chain_growth(factors, exact_plan(ages, 1, 0, DELAY_WEEKS))
-    )[0]
+    g = log_factors(
+        num[national : national + 1], den[national : national + 1], [1]
+    )
+    grown = growth(g, np.arange(DELAY_WEEKS), DELAY_WEEKS)[0]
     out = []
     for loc in PLACES:
         for age in range(4):
@@ -103,7 +94,7 @@ def weekly_points(
                     "target_end_date": week,
                     "weeks_back": age,
                     "reported": seen,
-                    "point": seen * growth[age],
+                    "point": seen * grown[age],
                 }
             )
     return pd.DataFrame(out)

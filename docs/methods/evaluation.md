@@ -57,13 +57,13 @@ Each vintage is a forecast task, and every registered model forecasts every task
 Each real release with a later release is an origin.
 The random walk models forecast from the releases up to the origin only.
 The renewal models' stored forecasts from the origin, and hub teams' forecasts for the round the origin serves, are scored with them.
-An origin with no pair of releases whose step is within the delay window, $D = 42$ days, has no delay factor and no forecast.
+An origin with no pair of releases whose gap is within the delay window, $D = 42$ days, has no delay factor and no forecast.
 It is listed with no forecasts and nothing replaces it.
 Two targets are scored.
 
 **Reported.** The count each later release $o'$ shows for every forecast week it reports.
 Every model forecasts the final count $X$ of week $w$.
-Day $t$ is $a = c - t$ days old at a cut-off $c$, and the share of its final count reported then is $\pi(a) = 1 / G(a)$, with $G(a)$ the growth from age $a$ to $D$ chained with the delay factors and step of the origin ([Baseline models](baselines.md#nowcast)).
+Day $t$ is $a = c - t$ days old at a cut-off $c$, and the share of its final count reported then is $\pi(a) = 1 / G(a)$, with $G(a)$ the growth from age $a$ to $D$ under the daily delay of the origin ([Baseline models](baselines.md#delay)).
 Days after the cut-off have $\pi = 0$, and a week's share $\pi_w$ is the mean over its seven days.
 With $R_o$ the count reported at the origin, each sample is mapped to the count expected at $o'$,
 
@@ -73,7 +73,7 @@ $$
 
 and a week fully reported at the origin has $q = 1$.
 Only the delay fitted at the origin is used.
-For `randomwalknowcast` this is the chain over the gap to $o'$, and the floor maps to itself.
+For `randomwalknowcast` this is the growth over the gap to $o'$, and the floor maps to itself.
 
 **Complete weeks.** The count the latest release shows for the weeks it reports in full.
 A week is complete when it is at least 4 weeks old at the latest release and grew by less than 2% since the release before.
@@ -84,7 +84,7 @@ Relative WIS is against `randomwalk` on the forecasts both made, by origin, for 
 Every table counts its forecasts, $n$.
 The run stops if a model has no snapshots or two models run here give identical samples.
 
-The weekly cross-check runs the snapshot chain ladder on hub weeks from the latest two releases with cut-offs a week apart, with a step of one week and national factors for every place.
+The weekly cross-check runs the snapshot chain ladder on hub weeks from the latest two releases with cut-offs a week apart, with a gap of one week and the national delay for every place.
 It checks the daily ladder for consistency on weekly data.
 It is drawn over the `randomwalknowcast` intervals at the later release.
 

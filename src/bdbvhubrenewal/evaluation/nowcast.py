@@ -47,7 +47,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.baselinenowcast import chain_growth, exact_plan
+from bdbvhubrenewal.baselinenowcast import growth
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
 from bdbvhubrenewal.data.snapshots import release_cutoff
 from bdbvhubrenewal.evaluation.scoring import SCORE_COLUMNS, score_forecasts
@@ -134,10 +134,9 @@ def reported_share(
 
     Day $t$ is $a = c - t$ days old at cut-off $c$.
     The share of its final count reported then is $\pi(a) = 1 / G(a)$,
-    with $G(a)$ the growth from age $a$ to $D$ chained over the step of
-    the origin's latest pair, as in the nowcast
-    (`bdbvhubrenewal.forecasters.chain`), and $\pi = 0$ for days after
-    the cut-off.
+    with $G(a) = \exp \sum_{j=a}^{D-1} g(j)$ from the origin's daily
+    delay, as in the nowcast (`bdbvhubrenewal.forecasters.chain`), and
+    $\pi = 0$ for days after the cut-off.
     A week's share is the mean over its seven days,
     $\pi_w = \frac{1}{7} \sum_{t \in w} \pi(c - t)$.
 
@@ -156,20 +155,10 @@ def reported_share(
         Columns `location`, `target_end_date` and `share`, for every place
         of the origin.
     """
-    fit = origin.fit
-    slot = int(fit.pair_step[-1])
     ends = [as_date(w) for w in weeks]
     age = np.array([[(cutoff - e).days + d for d in range(7)] for e in ends])
-    plan = exact_plan(
-        np.maximum(age, 0).ravel(),
-        int(fit.steps[slot]),
-        slot,
-        origin.settings.max_delay,
-    )
-    g = np.asarray(chain_growth(fit.factors, plan)).reshape(-1, *age.shape)
-    # A chain with a zero factor revises the day to nothing, so it counts
-    # as fully reported, as in `build_origin`.
-    pi = np.where(age >= 0, 1.0 / np.where(g > 0, g, 1.0), 0.0)
+    g = growth(origin.fit.g, age, origin.settings.max_delay)
+    pi = np.where(age >= 0, 1.0 / g, 0.0)
     places = origin.snap.locations
     return pd.DataFrame(
         {

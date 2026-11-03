@@ -6,43 +6,34 @@ Release $r$ has cut-off $c_r$, and day $t$ is $a = c_r - t$ days old.
 A pair of consecutive releases $(r, r + 1)$ has step
 $s = c_{r+1} - c_r$ days and is in window when $s \le D$.
 
-**Delay.** For step $s$ and age $x = 0, \dots, D - 1$,
-
-$$
-F_s(x) = \frac{\sum N_{r+1}(t)}{\sum N_r(t)},
-$$
-
-summed over all in-window pairs and over days of age $x$ that both
-releases observe.
-Each pair is one step at its own exact ages, and the pooled factor is a
-ratio of sums, not a mean of ratios.
+**Delay.** Releases are batched reports of one daily delay.
+A day of age $a$ at release $r$ grows by $\exp \sum_{j=a}^{a+s-1} g(j)$
+to release $r + 1$, with $g(j) \ge 0$ the daily log development factor
+and $g(j) = 0$ for $j \ge D$.
+For each gap $s$ and age $a$, the ratio of sums
+$\sum N_{r+1}(t) / \sum N_r(t)$, over the in-window pairs of that gap
+and the days of age $a$ that both releases observe, gives one equation
+for $\sum_{j=a}^{a+s-1} g(j)$ on the log scale, weighted by the
+denominator.
+$g$ is the non-negative least squares fit of all of them
+(`log_factors`).
 Cells a release does not observe are skipped, not filled.
-A place uses its own factor at an age when the denominator, summed over
-the pooled pairs, is at least 10 cases, and otherwise its parent's factor
-at that age (zone, province, country).
-The country uses its own factor.
+A place uses its own $g(a)$ when the denominator at age $a$, summed over
+the pairs, is at least 10 cases, and otherwise its parent's (zone,
+province, country).
+The country uses its own.
 Only onset days within `Settings.history_delay` (63 for $D = 42$) of the
 latest cut-off are summed, and downward revisions are first moved onto
 earlier releases of the day, as baselinenowcast does.
-A zero denominator takes baselinenowcast's rule, so that
-$F_s(x) = 1 + (\sum N_{r+1}(t) - \sum N_r(t)) / \max(\sum N_r(t), 1)$.
 
-**Nowcast.** At the latest release $o$, with $s_o$ the step of its latest
-in-window pair, day $t$ is chained over the actual release gap,
-
-$$
-\mu(t) = N_o(t) \prod_{m=0}^{M-1} F_{s_o}(a + m s_o),
-$$
-
-with $M$ the fewest steps taking the age to $D$ or more.
+**Nowcast.** At the latest release $o$, day $t$ of age $a$ grows to final
+by $G(a) = \exp \sum_{j=a}^{D-1} g(j)$, so $\mu(t) = N_o(t) G(a)$.
 Every day with data is nowcast.
 Daily nowcasts are summed to hub weeks.
 
 **Uncertainty.** A release $r < o$ with an in-window pair at $r$ nowcasts
-the count expected at $o$ for days up to $c_r$.
-It chains over the gap $c_o - c_r$ only, using the nearest earlier pair's
-factor for each remaining part of the gap.
-Only plans within `max_mismatch` days of the gap are kept.
+the count expected at $o$ for days up to $c_r$, growing each day over the
+gap $c_o - c_r$ with the $g$ of $r$.
 Its new reports and removals by weeks back fit the observation model
 (`obs`).
 """
@@ -51,15 +42,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import NamedTuple
 
 import jax.numpy as jnp
 import numpy as np
 
 from bdbvhubrenewal.baselinenowcast import (
-    chain_growth,
-    exact_plan,
-    pair_factors,
+    growth,
+    log_factors,
     pair_sums,
     preprocess_negative_values,
     window_pairs,
@@ -80,8 +69,7 @@ __all__ = [
     "Origin",
     "Settings",
     "build_origin",
-    "final_plan",
-    "retro_plan",
+    "final_growth",
 ]
 
 log = logging.getLogger(__name__)
@@ -115,8 +103,6 @@ class Settings:
         Errors at a horizon to fit the observation model.
     level_weeks : tuple of int
         First and last weeks back averaged for a place's level.
-    max_mismatch : int
-        Days by which a retrospective plan may differ from the gap.
     completeness : float
         Share of a week's final count that must be reported for it to
         start the random walk.
@@ -125,14 +111,13 @@ class Settings:
     clock_shift : int
         Days added to the ages of the origin's days, for the sensitivity
         of the nowcast to the onset clock. Ages below 0 count as 0. The
-        delay factors and the retrospective errors are not moved.
+        delay and the retrospective errors are not moved.
     """
 
     max_delay: int = 42
     min_level: float = MIN_LEVEL
     min_errors: int = MIN_ERRORS
     level_weeks: tuple[int, int] = (3, 6)
-    max_mismatch: int = 1
     completeness: float = 0.95
     walk_weeks: int = 9
     clock_shift: int = 0
@@ -150,21 +135,17 @@ class Settings:
 
 @dataclass
 class DelayFit:
-    """Delay factors at a release, as each place uses them.
+    """The daily delay at a release, as each place uses it.
 
     Attributes
     ----------
     pairs : numpy.ndarray
         Earlier and later release of each in-window pair, `[P, 2]`.
-    steps : numpy.ndarray
-        Distinct steps in days, `[S]`.
-    pair_step : numpy.ndarray
-        Index in `steps` of each pair, `[P]`.
-    factors : numpy.ndarray
-        $F$ for each place, `[L, S, D]`. Every step pools all the
-        in-window pairs, so the steps share one factor. A place uses its
-        own factor at an age when the pooled denominator there is at
-        least `Settings.min_level` cases, and otherwise its parent's.
+    g : numpy.ndarray
+        Daily log development factor $g(a)$ of each place, `[L, D]`. A
+        place uses its own at an age when the denominator there, summed
+        over the pairs, is at least `Settings.min_level` cases, and
+        otherwise its parent's.
     level : numpy.ndarray
         Cases a week of each place, `[L]`.
     source : numpy.ndarray
@@ -176,9 +157,7 @@ class DelayFit:
     """
 
     pairs: np.ndarray
-    steps: np.ndarray
-    pair_step: np.ndarray
-    factors: np.ndarray
+    g: np.ndarray
     level: np.ndarray
     source: np.ndarray
     own: np.ndarray
@@ -220,24 +199,6 @@ def _pairs_at(snap: SnapshotArrays, r: int, max_delay: int) -> np.ndarray:
     """Return the in-window pairs among releases up to `r`."""
     keep, _ = window_pairs(snap.cut[: r + 1], max_delay)
     return np.stack([keep, keep + 1], axis=1).astype(np.int64)
-
-
-class ChainPlan(NamedTuple):
-    """Chain steps for each onset day, padded to a common length.
-
-    Attributes
-    ----------
-    step : numpy.ndarray
-        Slot of the step size, `[T, M]`.
-    age : numpy.ndarray
-        Age in days at each step, `[T, M]`.
-    valid : numpy.ndarray
-        Whether the step is used, `[T, M]`.
-    """
-
-    step: np.ndarray
-    age: np.ndarray
-    valid: np.ndarray
 
 
 def _delay_counts(snap: SnapshotArrays, r: int) -> np.ndarray:
@@ -296,8 +257,6 @@ def fit_delay(
     window = day > int(snap.cut[r]) - settings.history_delay
     observed = snap.observed & window[None, :]
     gaps = snap.cut[pairs[:, 1]] - snap.cut[pairs[:, 0]]
-    steps = np.unique(gaps)
-    pair_step = np.searchsorted(steps, gaps)
     num, den = pair_sums(
         jnp.asarray(counts),
         jnp.asarray(observed),
@@ -305,25 +264,23 @@ def fit_delay(
         jnp.asarray(pairs[:, 0]),
         settings.max_delay,
     )
-    every = jnp.ones((len(pairs), len(steps)))
-    f = np.array(pair_factors(num, den, every))
-    # With every pair in every step, the denominator is the same for all.
+    g = log_factors(num, den, gaps)
     own = np.array(den).sum(axis=1) >= settings.min_level
     own[snap.parent < 0] = True
     # Nodes are sorted by code length, so a parent precedes its children.
-    for n in range(f.shape[0]):
+    for n in range(g.shape[0]):
         p = snap.parent[n]
         if p >= 0:
-            f[n] = np.where(own[n][None, :], f[n], f[p])
+            g[n] = np.where(own[n], g[n], g[p])
     level = levels(snap, r, settings)
     source = source_index(level, snap.parent, min_level=settings.min_level)
-    return DelayFit(pairs, steps, pair_step, f, level, source, own)
+    return DelayFit(pairs, g, level, source, own)
 
 
-def final_plan(
+def final_growth(
     snap: SnapshotArrays, o: int, fit: DelayFit, settings: Settings
-) -> ChainPlan:
-    """Chain each day over the steps of the latest pair, with no tail.
+) -> np.ndarray:
+    """Return the growth to final of each place and day at release `o`.
 
     Parameters
     ----------
@@ -332,80 +289,18 @@ def final_plan(
     o : int
         The origin release.
     fit : DelayFit
-        Factors at the origin.
+        The delay at the origin.
     settings : Settings
         Settings.
 
     Returns
     -------
-    ChainPlan
-        For each day, the steps from its age until the age reaches $D$.
+    numpy.ndarray
+        $G(a)$ at each day's age, shifted by `Settings.clock_shift`,
+        `[L, T]`.
     """
-    last = len(fit.pairs) - 1
-    s = int(fit.steps[fit.pair_step[last]])
-    age0 = snap.cut[o] - np.arange(snap.week.size)
-    seen = age0 >= 0
-    shifted = np.maximum(age0[seen] + settings.clock_shift, 0)
-    slot, age, mask = exact_plan(
-        shifted, s, int(fit.pair_step[last]), settings.max_delay
-    )
-    m = slot.shape[1]
-    step = np.zeros((age0.size, m), dtype=np.int64)
-    ages = np.zeros((age0.size, m), dtype=np.int64)
-    valid = np.zeros((age0.size, m), dtype=bool)
-    step[seen], ages[seen], valid[seen] = slot, age, mask
-    return ChainPlan(step, ages, valid)
-
-
-def retro_plan(
-    snap: SnapshotArrays, r: int, o: int, fit: DelayFit, settings: Settings
-) -> tuple[ChainPlan, int]:
-    """Chain each day from release `r` over the gap to release `o`.
-
-    Each part of the remaining gap uses the pair whose step is nearest
-    (ties to the latest pair). Ages are never interpolated.
-
-    Parameters
-    ----------
-    snap : SnapshotArrays
-        The arrays.
-    r, o : int
-        The earlier release and the origin.
-    fit : DelayFit
-        Factors at release `r`.
-    settings : Settings
-        Settings.
-
-    Returns
-    -------
-    tuple
-        The plan, and the days by which its steps differ from the gap.
-    """
-    d = settings.max_delay
-    gap = int(snap.cut[o] - snap.cut[r])
-    sizes = snap.cut[fit.pairs[:, 1]] - snap.cut[fit.pairs[:, 0]]
-    recency = r - fit.pairs[:, 0]
-    seq: list[int] = []
-    left = gap
-    while left > 0:
-        j = int(np.argmin(np.abs(sizes - left) + 1e-3 * recency))
-        seq.append(j)
-        left -= int(sizes[j])
-    age0 = snap.cut[r] - np.arange(snap.week.size)
-    taken = np.concatenate([[0], np.cumsum(sizes[seq])])[: len(seq)]
-    age = age0[:, None] + taken[None, :]
-    valid = (age0 >= 0)[:, None] & (age < d)
-    step = np.broadcast_to(fit.pair_step[seq], age.shape)
-    mismatch = abs(int(sizes[seq].sum()) - gap)
-    plan = ChainPlan(step, age, valid)
-    return plan, mismatch
-
-
-def grow(fit: DelayFit, plan: ChainPlan) -> np.ndarray:
-    """Return growth `[L, T]`."""
-    return np.array(
-        chain_growth(fit.factors, (plan.step, plan.age, plan.valid))
-    )
+    age = snap.cut[o] - np.arange(snap.week.size) + settings.clock_shift
+    return growth(fit.g, age, settings.max_delay)
 
 
 @dataclass
@@ -415,8 +310,8 @@ class Errors:
     Attributes
     ----------
     added, removed : numpy.ndarray
-        New reports and removals between each release and the origin,
-        `[R, L, K]`.
+        Rise and fall of each week's count between each release and the
+        origin, `[R, L, K]`.
     remaining : numpy.ndarray
         Nowcast of the count still to come, `[R, L, K]`.
     reported : numpy.ndarray
@@ -460,21 +355,18 @@ def retro_errors(snap: SnapshotArrays, o: int, settings: Settings) -> Errors:
         fit = fit_delay(snap, r, settings)
         if fit is None:
             continue
-        plan, mismatch = retro_plan(snap, r, o, fit, settings)
-        if mismatch > settings.max_mismatch:
-            continue
         counts = snap.counts[:, r, :]
-        g = grow(fit, plan)
+        age = snap.cut[r] - np.arange(snap.week.size)
+        g = growth(fit.g, age, age + snap.cut[o] - snap.cut[r])
         wa, k_r = snap.cut_week(r), weeks_back(snap, r, settings.max_delay)
         cols = wa - np.arange(k_n)
         take = (cols >= 0) & (np.arange(k_n) < k_r)
         safe = np.clip(cols, 0, None)
         obs = weekly_sums(snap, r)[:, safe]
         pred = week_sum(snap, counts * g)[:, safe]
-        upto = np.arange(snap.week.size) <= snap.cut[r]
-        change = (snap.counts[:, o, :] - counts) * upto
-        added = week_sum(snap, np.maximum(change, 0.0))[:, safe]
-        removed = week_sum(snap, np.maximum(-change, 0.0))[:, safe]
+        # The week's change to the origin, on days up to the cut-off of r.
+        change = weekly_sums(snap, o, upto=int(snap.cut[r]))[:, safe] - obs
+        added, removed = np.maximum(change, 0.0), np.maximum(-change, 0.0)
         valid = take[None, :] & ((obs > 0) | (pred > 0))
         cells.append((added, removed, pred - obs, obs, valid))
         releases.append(snap.releases[r])
@@ -585,15 +477,10 @@ def build_origin(
             f"No pair of releases up to {snap.releases[o]} has a step of at "
             f"most {settings.max_delay} days."
         )
-    plan = final_plan(snap, o, fit, settings)
-    counts = snap.counts[:, o, :]
-    g = grow(fit, plan)
+    g = final_growth(snap, o, fit, settings)
     reported = weekly_sums(snap, o)
-    point = week_sum(snap, counts * g)
-    # A chain with a zero factor revises the day to nothing, so it counts
-    # as fully reported.
-    share = 1.0 / np.where(g > 0, g, 1.0)
-    inv = np.where(snap.observed[o][None, :], share, 0.0)
+    point = week_sum(snap, snap.counts[:, o, :] * g)
+    inv = np.where(snap.observed[o][None, :], 1.0 / g, 0.0)
     complete = week_sum(snap, inv) / 7.0
     good = complete >= settings.completeness
     start = np.where(

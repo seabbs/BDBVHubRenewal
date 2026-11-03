@@ -7,6 +7,8 @@ the triangle are unobserved.
 E1 is the one named extension of the port.
 It takes the chain ladder ratio of sums over the cells observed in
 both releases of a pair and skips the others, which are not filled.
+Pairs of any gap share one daily log development factor per age
+(``log_factors``), and ``growth`` sums it between two ages.
 
 Axes.
 ``counts`` is ``(n_loc, n_release, n_day)``, the count of onset day t
@@ -29,6 +31,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from jax import Array
+from scipy.optimize import nnls
 
 Aggregator = Callable[[Array, np.ndarray], tuple[Array, np.ndarray]]
 
@@ -79,37 +82,62 @@ def pair_sums(
     )
 
 
-@jax.jit
-def _pair_factors(num: Array, den: Array, member: Array) -> Array:
-    n = jnp.einsum("lpx,ps->lsx", num, member)
-    d = jnp.einsum("lpx,ps->lsx", den, member)
-    return 1.0 + (n - d) / jnp.maximum(d, 1.0)
+def log_factors(num: Any, den: Any, gaps: Any) -> np.ndarray:
+    r"""Daily log development factors shared by all pairs (extension E1).
 
+    A day of age $a$ at release $r$ is age $a + s$ at release $r + 1$,
+    with $s$ the pair's gap in days.
+    Releases are batched reports, so its growth over the gap is
+    $\exp \sum_{j=a}^{a+s-1} g(j)$, with $g(j) = 0$ from ``max_delay``.
+    The pairs of each gap are summed by age before the ratio, as
+    baselinenowcast sums over reference times.
+    Every gap and age with a denominator gives one equation
+    $\log(\sum \mathrm{num} / \sum \mathrm{den}) = \sum g$,
+    weighted by $\sum \mathrm{den}$, and $g \ge 0$ is the
+    non-negative least squares fit.
+    With a gap of 1 only, $g(a)$ is the log of the chain ladder factor.
 
-def pair_factors(
-    num: Any, den: Any, step_index: Any, n_steps: int | None = None
-) -> Array:
-    """Development factors per step and age (extension E1).
-
-    ``step_index`` maps pairs to steps.
-    A vector gives the slot ``0 .. n_steps - 1`` of each pair's one step.
-    A matrix ``(n_pair, n_steps)`` of 0 and 1 lets a pair enter several
-    steps, as when every pair is pooled into every step.
-    The numerators and denominators of the pairs of a step are summed
-    before the ratio, as baselinenowcast sums over reference times.
-    The factor is ``1 + (sum(num) - sum(den)) / max(sum(den), 1)``.
-    This is ``1 + mult`` with the ``mult`` of ``.calculate_mult_factor``,
-    and equals ``sum(num) / sum(den)`` where ``sum(den) >= 1``.
-    Returns ``F`` of shape ``(n_loc, n_steps, max_delay)``.
+    ``num`` and ``den`` are ``(n_loc, n_pair, max_delay)`` from
+    ``pair_sums``, and ``gaps`` holds each pair's gap.
+    Returns $g$, ``(n_loc, max_delay)``.
     """
-    idx = jnp.asarray(step_index)
-    if idx.ndim == 1:
-        if n_steps is None:
-            raise ValueError("`n_steps` is needed with a vector step index.")
-        idx = idx[:, None] == jnp.arange(int(n_steps))[None, :]
-    return _pair_factors(
-        jnp.asarray(num), jnp.asarray(den), idx.astype(jnp.asarray(num).dtype)
+    num, den = np.asarray(num, float), np.asarray(den, float)
+    gaps = np.asarray(gaps, int)
+    n_loc, _, d = num.shape
+    uniq = np.unique(gaps)
+    member = (gaps[:, None] == uniq[None, :]).astype(float)
+    n_sum = np.einsum("lpa,ps->lsa", num, member)
+    d_sum = np.einsum("lpa,ps->lsa", den, member)
+    age = np.arange(d)
+    j = np.arange(d)[None, None, :]
+    lo = age[None, :, None]
+    rows = ((j >= lo) & (j < lo + uniq[:, None, None])).reshape(-1, d)
+    g = np.zeros((n_loc, d))
+    for n in range(n_loc):
+        w = d_sum[n].ravel()
+        # A zero denominator gives a row of weight 0, so no equation.
+        seen = w > 0
+        y = np.log(np.where(seen, n_sum[n].ravel() / np.where(seen, w, 1), 1))
+        root = np.sqrt(w)
+        g[n] = nnls(rows * root[:, None], y * root)[0]
+    return g
+
+
+def growth(g: Any, start: Any, stop: Any) -> np.ndarray:
+    r"""Growth $\exp \sum_{j=\mathrm{start}}^{\mathrm{stop}-1} g(j)$.
+
+    ``start`` and ``stop`` are ages that broadcast together, clipped to
+    ``0 .. max_delay``, so growth from ``max_delay`` on is 1.
+    Returns ``(n_loc, *shape)``.
+    """
+    g = np.asarray(g, float)
+    d = g.shape[1]
+    total = np.concatenate([np.zeros((g.shape[0], 1)), np.cumsum(g, 1)], 1)
+    a, b = np.broadcast_arrays(
+        np.clip(np.asarray(start, int), 0, d),
+        np.clip(np.asarray(stop, int), 0, d),
     )
+    return np.exp(total[:, b] - total[:, a])
 
 
 def window_pairs(cut: Any, max_delay: int) -> tuple[np.ndarray, np.ndarray]:
@@ -122,59 +150,6 @@ def window_pairs(cut: Any, max_delay: int) -> tuple[np.ndarray, np.ndarray]:
     steps = np.diff(np.asarray(cut, dtype=int))
     keep = np.flatnonzero((steps >= 1) & (steps <= max_delay))
     return keep, steps[keep]
-
-
-def exact_plan(
-    ages: Any, step: int, slot: int, max_delay: int
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Chain steps of the latest pair, from each age to ``max_delay``.
-
-    Day of age ``a`` takes the fewest steps ``M`` with
-    ``a + M * step >= max_delay``, at ages ``a, a + step, ...``.
-    There is no tail factor past ``max_delay``, and ages from
-    ``max_delay`` have no step.
-    Returns ``(slot, age, mask)`` of shape ``(n, M_max)``, padded
-    where ``mask`` is False.
-    """
-    a = np.asarray(ages, dtype=int)
-    if np.any(a < 0):
-        raise ValueError("`ages` must not be negative.")
-    if step < 1:
-        raise ValueError("`step` must be at least 1.")
-    n_steps = np.maximum(-(-(max_delay - a) // step), 0)
-    m_max = max(int(n_steps.max(initial=0)), 1)
-    m = np.arange(m_max)[None, :]
-    mask = m < n_steps[:, None]
-    ages_m = a[:, None] + m * step
-    return (
-        np.where(mask, slot, 0),
-        np.where(mask, ages_m, 0),
-        mask,
-    )
-
-
-@jax.jit
-def _chain_growth(
-    factors: Array, slot: Array, age: Array, mask: Array
-) -> Array:
-    f = factors[:, slot, age]
-    return jnp.prod(jnp.where(mask[None], f, 1.0), axis=-1)
-
-
-def chain_growth(factors: Any, plan: tuple[Any, Any, Any]) -> Array:
-    """Growth to ``max_delay`` per location and day (extension E1).
-
-    ``plan`` is ``(slot, age, mask)`` as from ``exact_plan``.
-    The growth is the product of the factors at the planned steps.
-    Returns ``(n_loc, n)``.
-    """
-    slot, age, mask = plan
-    return _chain_growth(
-        jnp.asarray(factors),
-        jnp.asarray(slot, int),
-        jnp.asarray(age, int),
-        jnp.asarray(mask, bool),
-    )
 
 
 def hub_week_matrix(

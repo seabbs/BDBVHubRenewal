@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.baselinenowcast import pair_factors, pair_sums
+from bdbvhubrenewal.baselinenowcast import log_factors, pair_sums
 from bdbvhubrenewal.data.snapshots import snapshot_arrays, weekly_sums
 from bdbvhubrenewal.forecasters.chain import (
     NoDelayPair,
@@ -18,7 +18,6 @@ from bdbvhubrenewal.forecasters.chain import (
     build_origin,
     fit_delay,
     retro_errors,
-    retro_plan,
     weeks_back,
 )
 from bdbvhubrenewal.forecasters.obs import MAX_SIZE
@@ -43,32 +42,16 @@ def _weeks(origin, loc: str) -> list[float]:
     return [round(float(x), 1) for x in row[-4:][::-1]]
 
 
-def test_10_24_chains_by_8_days_with_no_tail(origin24) -> None:
+def test_growth_to_final_sums_the_daily_delay(origin24) -> None:
     fit = origin24.fit
     # The 8 and 9 day pairs are in window, the 50 day pair is not.
     assert fit.pairs.tolist() == [[1, 2], [2, 3]]
-    assert fit.steps.tolist() == [8, 9]
-    snap = origin24.snap
-    day = int(snap.cut[-1])
-    # A day of age 0 is chained over ages 0, 8, ..., 40 only.
-    f = fit.factors[0, 0]
-    assert origin24.growth[0, day] == pytest.approx(
-        float(np.prod(f[0:42:8])), rel=1e-5
-    )
-    # A day of age 41 has one step, and age 42 or more none.
-    assert origin24.growth[0, day - 41] == pytest.approx(f[41], rel=1e-5)
+    assert (fit.g >= 0).all()
+    day = int(origin24.snap.cut[-1])
+    g = fit.g[0]
+    assert origin24.growth[0, day] == pytest.approx(np.exp(g.sum()))
+    assert origin24.growth[0, day - 41] == pytest.approx(np.exp(g[41]))
     assert origin24.growth[0, day - 42] == 1.0
-
-
-def test_10_17_chains_by_9_days(daily: pd.DataFrame) -> None:
-    snap = snapshot_arrays(daily, "2026-10-17", ("CD-IT",))
-    origin = build_origin(snap, Settings(), errors=False)
-    assert origin.fit.steps.tolist() == [9]
-    day = int(snap.cut[-1])
-    f = origin.fit.factors[0, 0]
-    assert origin.growth[0, day] == pytest.approx(
-        float(np.prod(f[0:42:9])), rel=1e-5
-    )
 
 
 def test_10_09_raises_with_no_delay_pair(daily: pd.DataFrame) -> None:
@@ -90,29 +73,27 @@ def test_the_50_day_pair_gives_no_factor_but_its_counts_stay(
     assert first[0].sum() == snap.counts[0, 0].sum()
 
 
-def test_10_24_point_nowcasts_pool_every_pair(origin24) -> None:
-    # Weeks 10-24, 10-17, 10-10, 10-03. The R script chained the 8 day
-    # pair alone and filled zero denominators from the parent, so it gave 439.2,
-    # 418.1, 539.7 and 544.1 for the country.
+def test_10_24_point_nowcasts_use_one_daily_delay(origin24) -> None:
+    # Weeks 10-24, 10-17, 10-10, 10-03, from the 8 and 9 day pairs.
     # Downward revisions are moved onto earlier releases before the sums.
     assert _weeks(origin24, "CD") == pytest.approx(
-        [390.6, 376.7, 499.1, 517.0], abs=0.06
+        [373.0, 369.3, 489.5, 515.6], abs=0.06
     )
     # Tshopo has under 10 cases a week, so uses the national delay.
     assert _weeks(origin24, "CD-TO") == pytest.approx(
-        [20.8, 12.0, 21.7, 18.7], abs=0.06
+        [19.6, 11.5, 21.4, 18.4], abs=0.06
     )
 
 
 def test_provinces_use_own_factors_where_they_have_10_cases(origin24) -> None:
     assert _weeks(origin24, "CD-IT") == pytest.approx(
-        [259.4, 182.4, 288.2, 254.1], abs=0.06
+        [239.8, 180.1, 282.7, 253.1], abs=0.06
     )
     assert _weeks(origin24, "CD-NK") == pytest.approx(
-        [89.9, 154.2, 163.7, 214.8], abs=0.06
+        [84.0, 146.2, 155.1, 213.7], abs=0.06
     )
     assert _weeks(origin24, "CD-HU") == pytest.approx(
-        [11.3, 31.1, 27.7, 29.7], abs=0.06
+        [10.5, 30.5, 27.6, 29.7], abs=0.06
     )
 
 
@@ -134,28 +115,15 @@ def test_ages_count_from_the_cutoff_not_as_of(daily: pd.DataFrame) -> None:
     assert snap.cut[r] - snap.cut[r] == 0
 
 
-def test_expected_plan_steps_match_the_r_script(snap24) -> None:
-    plans = pd.read_csv(Path(__file__).parent / "data" / "expected_plans.csv")
-    row = plans.loc[
-        (plans["from"] == "2026-10-17") & (plans["to"] == "2026-10-24")
-    ]
-    assert row["gap_days"].iloc[0] == 8
-    assert row["steps"].iloc[0] == "10-07->10-16 (9d)"
-    fit = fit_delay(snap24, 2, Settings())
-    assert fit is not None
-    plan, mismatch = retro_plan(snap24, 2, 3, fit, Settings())
-    assert mismatch == 1
-    assert np.asarray(plan.valid).shape[1] == 1
-    # 10-09 has no in-window pair, so gives no retrospective.
-    assert fit_delay(snap24, 1, Settings()) is None
-
-
-def test_only_the_10_17_to_10_24_retrospective_is_kept(snap24) -> None:
-    errors = retro_errors(snap24, 3, Settings())
-    assert errors.releases == ["2026-10-17"]
-    strict = retro_errors(snap24, 3, Settings(max_mismatch=0))
-    assert strict.releases == []
-    assert strict.valid.shape[0] == 0
+def test_every_release_with_a_pair_gives_a_retrospective(
+    daily: pd.DataFrame,
+) -> None:
+    provinces = tuple(sorted(set(daily["location"]) - {"CD"}))
+    snap = snapshot_arrays(daily, "2026-11-01", provinces)
+    # 10-09 has no in-window pair. 10-17 and 10-24 chain to 11-01 over
+    # gaps of 15 and 7 days with their own daily delay.
+    errors = retro_errors(snap, 4, Settings())
+    assert errors.releases == ["2026-10-17", "2026-10-24"]
 
 
 def test_new_reports_minus_removals_is_the_realised_change(snap24) -> None:
@@ -209,42 +177,39 @@ def test_a_factor_is_own_by_age_with_10_cases_else_the_parent(
         fit.pairs[:, 0],
         42,
     )
-    every = np.ones((len(fit.pairs), len(fit.steps)))
-    own_f = np.asarray(pair_factors(num, den, every))
+    gaps = snap.cut[fit.pairs[:, 1]] - snap.cut[fit.pairs[:, 0]]
+    own_g = log_factors(num, den, gaps)
     n_cases = np.asarray(den).sum(axis=1)
     seen = {"own": 0, "parent": 0}
     for i in range(len(snap.locations)):
         p = int(snap.parent[i])
         if p < 0:
             # The country has no parent, so it uses its own factor.
-            np.testing.assert_allclose(fit.factors[i], own_f[i])
+            np.testing.assert_allclose(fit.g[i], own_g[i])
             continue
         use = n_cases[i] >= 10
         seen["own"] += int(use.sum())
         seen["parent"] += int((~use).sum())
         np.testing.assert_allclose(
-            fit.factors[i][:, use], own_f[i][:, use], err_msg=snap.locations[i]
+            fit.g[i][use], own_g[i][use], err_msg=snap.locations[i]
         )
         np.testing.assert_allclose(
-            fit.factors[i][:, ~use],
-            fit.factors[p][:, ~use],
+            fit.g[i][~use],
+            fit.g[p][~use],
             err_msg=snap.locations[i],
         )
     assert seen["own"] > 0
     assert seen["parent"] > 0
 
 
-def test_the_final_factors_pool_every_in_window_pair(snap24) -> None:
+def test_the_delay_uses_every_in_window_pair(snap24) -> None:
     fit = fit_delay(snap24, 3, Settings())
     assert fit is not None
-    assert fit.steps.tolist() == [8, 9]
-    # Every step pools both pairs, so the steps share a factor per age.
-    np.testing.assert_allclose(fit.factors[:, 0], fit.factors[:, 1])
-    # At 10-17 only the 9 day pair is in window, so it gives the factor.
+    # At 10-17 only the 9 day pair is in window.
     early = fit_delay(snap24, 2, Settings())
     assert early is not None
     assert early.pairs.tolist() == [[1, 2]]
-    assert not np.allclose(early.factors[:, 0], fit.factors[:, 0])
+    assert not np.allclose(early.g, fit.g)
 
 
 def test_weeks_back_count_from_the_cutoff_week(daily: pd.DataFrame) -> None:
@@ -270,22 +235,16 @@ def test_a_later_clock_ages_the_origin_days_and_lowers_the_nowcast(
     late = build_origin(snap24, Settings(clock_shift=1), errors=False)
     early = build_origin(snap24, Settings(clock_shift=-1), errors=False)
     cd, day = 0, int(snap24.cut[-1])
-    f = base.fit.factors[cd, 0]
-    # One day later the newest day is age 1, chained over 1, 9, ..., 41.
-    assert late.growth[cd, day] == pytest.approx(
-        float(np.prod(f[1:42:8])), rel=1e-5
-    )
+    g = base.fit.g[cd]
+    # One day later the newest day is age 1.
+    assert late.growth[cd, day] == pytest.approx(np.exp(g[1:].sum()))
     # One day earlier no age is below 0, so the newest day stays at 0.
-    assert early.growth[cd, day] == pytest.approx(
-        float(np.prod(f[0:42:8])), rel=1e-5
-    )
-    assert early.growth[cd, day - 1] == pytest.approx(
-        float(np.prod(f[0:42:8])), rel=1e-5
-    )
+    assert early.growth[cd, day] == pytest.approx(np.exp(g.sum()))
+    assert early.growth[cd, day - 1] == pytest.approx(np.exp(g.sum()))
     newest = base.point[cd, -1]
     assert late.point[cd, -1] < newest < early.point[cd, -1]
-    # The delay factors come from the release pairs and do not move.
-    np.testing.assert_allclose(late.fit.factors, base.fit.factors)
+    # The delay comes from the release pairs and does not move.
+    np.testing.assert_allclose(late.fit.g, base.fit.g)
 
 
 def test_the_delay_uses_the_baselinenowcast_window_of_onset_days(
@@ -310,8 +269,8 @@ def test_the_delay_uses_the_baselinenowcast_window_of_onset_days(
     inside = fit_delay(scaled(False), r, settings)
     assert outside is not None
     assert inside is not None
-    np.testing.assert_allclose(outside.factors, base.factors)
-    assert not np.allclose(inside.factors, base.factors)
+    np.testing.assert_allclose(outside.g, base.g)
+    assert not np.allclose(inside.g, base.g)
 
 
 def test_a_retrospective_fit_uses_its_own_cutoff_for_the_window(
@@ -326,7 +285,7 @@ def test_a_retrospective_fit_uses_its_own_cutoff_for_the_window(
     other = fit_delay(dataclasses.replace(snap24, counts=counts), r, settings)
     assert base is not None
     assert other is not None
-    np.testing.assert_allclose(other.factors, base.factors)
+    np.testing.assert_allclose(other.g, base.g)
 
 
 def test_downward_revisions_move_onto_earlier_releases(snap24) -> None:
@@ -344,7 +303,7 @@ def test_downward_revisions_move_onto_earlier_releases(snap24) -> None:
     assert (diff[:, both] >= 0).all()
     f = fit_delay(snap, 3, Settings())
     assert f is not None
-    assert (f.factors >= 1.0 - 1e-9).all()
+    assert (f.g >= 0).all()
 
 
 def test_no_nowcast_is_below_the_reported_count_at_11_01(

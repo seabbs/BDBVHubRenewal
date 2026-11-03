@@ -26,21 +26,20 @@ The model figure is built from `docs/diagrams/model_dag.tex` by `scripts/build_d
 ## Baseline models
 
 The baselines are in [`forecasters.randomwalk`][bdbvhubrenewal.forecasters.randomwalk] and [`forecasters.chain`][bdbvhubrenewal.forecasters.chain], on a JAX port of baselinenowcast 0.2.2 in [`bdbvhubrenewal.baselinenowcast`][bdbvhubrenewal.baselinenowcast].
-The port is checked against fixtures from the R package, and has one named extension, the skipping of unobserved cells in the chain ladder of release snapshots.
+The port is checked against fixtures from the R package, and has one named extension, the chain ladder of release snapshots, which skips unobserved cells and fits one daily delay shared by pairs of any gap.
 The models use the port's chain ladder on snapshots.
 The observation model is in `forecasters.obs`, and fits and draws its new reports with the port's `fit_by_horizon`, `fit_nb` and `sample_nb`.
 
 | Part | Where |
 |---|---|
 | Snapshots as arrays `[location, release, day]` | `data.snapshots` |
-| Pair sums, factors and chained growth | `baselinenowcast.snapshots`, `jit` with locations on the leading axis |
+| Pair sums, the daily delay fit and growth | `baselinenowcast.snapshots`, pair sums `jit` with locations on the leading axis |
 | Own or pooled source of each estimate | `forecasters.pooling` |
 | New reports minus removals | `forecasters.obs` |
 | One random walk for both models | `forecasters.walk` |
 | Backtest on real releases | `evaluation.nowcast` |
 
 Shapes are fixed within an origin, so each new origin compiles once.
-Plans of chain steps are integer arrays fixed per origin.
 Pandas only builds the inputs and the output frames.
 
 ## Numerics
