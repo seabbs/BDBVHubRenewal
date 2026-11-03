@@ -165,7 +165,7 @@ def test_diagnostics_name_the_sources(task: ForecastTask) -> None:
     n_to = int(info.loc["CD-TO", "delay_source"].split()[2])
     assert n_to < n_it <= 42
     assert info.loc["CD-IT", "rho_source"] == "pooled:CD"
-    assert info.loc["CD-IT", "n_err"] == 4
+    assert info.loc["CD-IT", "n_err"] == 3
 
 
 def test_both_models_use_the_one_random_walk(

@@ -3,8 +3,10 @@ r"""The one own-or-pooled rule.
 
 Places form a hierarchy, zone then province then country.
 Each node has an own estimate, from its own counts, errors or weekly
-changes, and a pooled estimate, from the node and its children with a
-level of at least `min_level` cases a week.
+changes, and a pooled estimate, from its children with a level of at
+least `min_level` cases a week.
+A parent's counts are the sum of its children's, so the parent is not
+in its own pool unless no child qualifies.
 A node counts as qualifying when its level is at least `min_level`, and
 for the Skellam spread also when its own estimate has at least `min_err`
 errors.
@@ -31,7 +33,7 @@ MIN_ERRORS = 2
 def pool_matrix(
     level: np.ndarray, parent: np.ndarray, min_level: float = MIN_LEVEL
 ) -> np.ndarray:
-    """Return the matrix that sums a node with its qualifying children.
+    """Return the matrix that sums a node's qualifying children.
 
     Parameters
     ----------
@@ -45,14 +47,17 @@ def pool_matrix(
     Returns
     -------
     numpy.ndarray
-        `[L, L]`, with entry `[n, m]` 1 if $m = n$ or $m$ is a child of
-        $n$ with a level of at least `min_level`.
+        `[L, L]`, with entry `[n, m]` 1 if $m$ is a child of $n$ with a
+        level of at least `min_level`, or if $m = n$ and no child of $n$
+        qualifies.
     """
     n = len(level)
-    out = np.eye(n)
+    out = np.zeros((n, n))
     for m in range(n):
         if parent[m] >= 0 and level[m] >= min_level:
             out[parent[m], m] = 1.0
+    alone = out.sum(axis=1) == 0
+    out[alone, alone] = 1.0
     return out
 
 
