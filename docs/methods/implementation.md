@@ -8,7 +8,7 @@ How the [models](model.md) are built in code, computed and sampled.
 The model extends [PyRenew](https://github.com/CDCgov/PyRenew), pinned to a commit, and runs in JAX with NumPyro.
 Its code is in [`bdbvhubrenewal.model`][bdbvhubrenewal.model] and the variants are in [`forecasters.renewal`][bdbvhubrenewal.forecasters.renewal].
 The model is configured by `ModelConfig`.
-The model diagram is a mermaid block in `docs/methods/model.md`.
+The model diagrams are mermaid blocks in `docs/methods/model.md`.
 
 ## PyRenew and what is built here
 
