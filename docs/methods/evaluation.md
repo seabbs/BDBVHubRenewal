@@ -16,7 +16,6 @@ Simulated forecasts are scored against the simulated final counts.
 | Vintage-matched | Count as reported by the truth vintage | Every week, so recent weeks compare like with like. |
 
 **Vintage-matched.** The renewal variants draw reported counts from the same posterior draws as the final counts.
-A further set of complete weeks leaves out origins with no earlier pair of delay files, whose publication lag comes from a prior.
 
 ## Scores
 

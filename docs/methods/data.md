@@ -74,7 +74,7 @@ Rt is the ratio of onsets to the force of infection, capped at 3, and onsets abo
 From 4 weeks before the vintage, Rt is the mean of its last 3 weeks times 0.75, 1 or 1.25 (falling, flat or rising), for 10 weeks past the vintage.
 Ascertainment is 1, there is no importation and the whole population is at risk.
 The delay is the real delay by onset week, completed for right truncation from weeks with full follow-up.
-The missing-onset share is the real imputed share by onset week, moved later by the mean delay.
+The missing-onset share is the real national imputed share by onset week, $(I + 1)/(Y + 2)$, averaged over 5 weeks and moved later by the mean delay.
 Zones take the real share of each province's cases.
 Late entries and onset backfill are as in the default, and 2% of cases are removed 7 to 42 days after publication.
 Their truth is the last simulated vintage.

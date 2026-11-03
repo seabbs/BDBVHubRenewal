@@ -52,7 +52,7 @@ Every time-varying part is a weekly random walk or AR(1), so it stays near const
 
 ### Time axis
 
-The data weeks start one week before weekly onsets, summed over the modelled provinces, first reach 5.
+The data weeks start one week before weekly onsets, summed over the modelled provinces, first reach 5, or their peak if lower.
 They end with the week that holds the vintage date $T$.
 The model axis starts 42 days (6 weeks) earlier, the length of the generation interval, for seeding.
 Every weekly walk is held at its starting value over the 6 seeding weeks and the first data week.
