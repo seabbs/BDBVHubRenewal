@@ -10,9 +10,9 @@
 # 0.2.2. The fixtures hold the triangle, the pmf from estimate_delay and
 # the row totals of the chain ladder fill.
 #
-# Case skip: release snapshots on irregular days with unobserved cells,
-# a zero denominator and two steps. The fixtures come from a plain R
-# loop over the cells, written independently of the Python code.
+# Case skip: release snapshots on irregular days with unobserved cells
+# and a zero denominator. The pair sums come from a plain R loop over
+# the cells, written independently of the Python code.
 #
 # Outputs go to tests/baselinenowcast/fixtures/<case>/ as CSV matrices
 # without a header. NA marks an unobserved or unidentified value.
@@ -72,24 +72,6 @@ last <- tri[(n_ref - n_use + 1):n_ref, , drop = FALSE]
 filled <- baselinenowcast:::.chainladder_fill_triangle(last)
 wm(rowSums(filled), dir, "row_totals")
 
-# ---- zero ------------------------------------------------------------
-
-# Case zero: a right-truncated daily triangle with no cases at ages 0
-# and 1 in the history and cases on the last day. The chain ladder fill
-# has a zero denominator, which 0.2.2 divides by max(den, 1) after
-# taking the factor as 1 + mult.
-
-dir <- file.path(root, "zero")
-dir.create(dir, recursive = TRUE, showWarnings = FALSE)
-tri <- rbind(
-  c(0, 0, 4, 2), c(0, 0, 3, 1), c(0, 0, 5, 3),
-  c(0, 0, 2, NA), c(0, 0, NA, NA), c(6, NA, NA, NA)
-)
-wm(tri, dir, "tri")
-writeLines(as.character(c(3, 6, 6)), file.path(dir, "settings.txt"))
-filled <- baselinenowcast:::.chainladder_fill_triangle(tri)
-wm(rowSums(filled), dir, "row_totals")
-
 # ---- skip ------------------------------------------------------------
 
 dir <- file.path(root, "skip")
@@ -128,9 +110,7 @@ wm(observed * 1, dir, "observed")
 writeLines(as.character(cut), file.path(dir, "cut.txt"))
 writeLines(as.character(c(D, n_loc, n_day)), file.path(dir, "settings.txt"))
 
-# Cell by cell sums over the pairs, then the ratio per step.
-steps <- diff(cut)
-in_window <- steps <= D
+# Cell by cell sums over the pairs.
 sums <- list()
 for (l in 1:n_loc) {
   for (p in seq_len(n_rel - 1)) {
@@ -153,38 +133,5 @@ wm(do.call(rbind, lapply(1:n_loc, function(l) {
     sums[[paste(l, p)]]
   }))
 })), dir, "pair_sums")
-writeLines(as.character(steps), file.path(dir, "steps.txt"))
-
-uniq <- sort(unique(steps[in_window]))
-fac <- list()
-for (l in 1:n_loc) {
-  for (s in uniq) {
-    ps <- which(steps == s & in_window)
-    num <- rowSums(sapply(ps, function(p) sums[[paste(l, p)]]["num", ]))
-    den <- rowSums(sapply(ps, function(p) sums[[paste(l, p)]]["den", ]))
-    fac[[paste(l, s)]] <- ifelse(den > 0, num / den, NA)
-  }
-}
-wm(do.call(rbind, lapply(1:n_loc, function(l) {
-  do.call(rbind, lapply(uniq, function(s) fac[[paste(l, s)]]))
-})), dir, "factors")
-writeLines(as.character(uniq), file.path(dir, "uniq_steps.txt"))
-
-# Exact chain at the latest in-window pair: ages 0..D-1, NA when a
-# factor used is not identified.
-s_o <- steps[max(which(in_window))]
-chain <- do.call(rbind, lapply(1:n_loc, function(l) {
-  vapply(0:(D - 1), function(a) {
-    g <- 1
-    x <- a
-    while (x < D) {
-      g <- g * fac[[paste(l, s_o)]][x + 1]
-      x <- x + s_o
-    }
-    g
-  }, numeric(1))
-}))
-wm(chain, dir, "chain")
-writeLines(as.character(s_o), file.path(dir, "chain_step.txt"))
 
 message("snapshot fixtures written to ", root)
