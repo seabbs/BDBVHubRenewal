@@ -236,3 +236,18 @@ def test_randomwalk_raises_when_no_week_is_complete_and_the_backtest_skips(
     assert issubclass(NoCompleteWeek, ModelUnavailableError)
     out = run_forecasts([strict], [task])
     assert out.empty
+
+
+def test_places_with_no_falls_of_their_own_have_no_removals(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    task = _task(target, delays, daily, "2026-11-01")
+    model = RandomWalkNowcast()
+    origin = model.origin_at(task, errors=True)
+    values, weeks = model.trajectories(origin, task, origin.point)
+    u = weeks.index("2026-10-10")
+    locs = list(origin.snap.locations)
+    for code in ("CD-IT", "CD-NK"):
+        i = locs.index(code)
+        assert (origin.removal[i] == 0).all()
+        assert (values[:, i, u] >= origin.reported[i, u]).all()

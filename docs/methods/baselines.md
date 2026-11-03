@@ -102,10 +102,11 @@ The delay $g_p(x)$ is own or parent by age.
 A place uses its own $g_p(x)$ when its denominator $\sum N_{p,r}(t)$ at age $x$, summed over the pairs, is at least 10 cases.
 Otherwise it uses its parent's at that age (zone, province, country).
 The country uses its own.
-The observation model $(\phi_{p,k}, b_{p,k})$ and the spread of the walk $\sigma_p$ use one rule with a threshold of 10 cases a week and 3 errors.
+The size $\phi_{p,k}$ and the spread of the walk $\sigma_p$ use one rule with a threshold of 10 cases a week and 3 errors.
+The removal rate $b_{p,k}$ is each place's own, so a place with no falls has none.
 $\ell_p$ is the mean of $Y_{p,r}(w)$ over weeks 3 to 6 back, in cases a week.
 A place with $\ell_p \ge 10$ uses its own estimate.
-For $(\phi_{p,k}, b_{p,k})$ it also needs at least 3 errors at $k$.
+For $\phi_{p,k}$ it also needs at least 3 errors at $k$.
 Otherwise it uses the pooled estimate of its nearest parent that meets the same rule, and otherwise the country's.
 A pooled estimate uses the errors and weekly changes of the place's children with $\ell \ge 10$ together.
 A place's counts are the sum of its children's, so the place itself is pooled only when none of its children has $\ell \ge 10$.

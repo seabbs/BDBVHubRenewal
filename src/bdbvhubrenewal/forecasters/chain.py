@@ -529,11 +529,13 @@ def _walk_spreads(
 
 
 def _add_spread(origin: Origin) -> None:
-    """Fit the observation model by weeks back, with the one rule.
+    """Fit the observation model by weeks back.
 
-    Each place's own estimate uses its errors, and its pooled estimate
-    the errors of the places in its pool. The size is fitted only for
-    the estimates some place uses.
+    The size follows the one rule. Each place's own estimate uses its
+    errors, and its pooled estimate the errors of the places in its
+    pool. The size is fitted only for the estimates some place uses.
+    The removal rate is each place's own, so a place with no falls has
+    none.
     """
     snap, settings = origin.snap, origin.settings
     errors = retro_errors(snap, origin.o, settings)
@@ -543,8 +545,8 @@ def _add_spread(origin: Origin) -> None:
     # A cell with nothing nowcast to come says nothing about the size.
     fit = errors.valid & (errors.remaining > 0)
     n = np.einsum("el,rlk->ek", member, fit, dtype=int)
-    removed = np.einsum("el,rlk->ek", member, errors.removed * errors.valid)
-    reported = np.einsum("el,rlk->ek", member, errors.reported * errors.valid)
+    removed = (errors.removed * errors.valid).sum(axis=0)
+    reported = (errors.reported * errors.valid).sum(axis=0)
     source = source_index(
         origin.fit.level,
         snap.parent,
@@ -565,5 +567,5 @@ def _add_spread(origin: Origin) -> None:
     k = np.arange(n.shape[1])[None, :]
     origin.errors = errors
     origin.size = size[source, k]
-    origin.removal = rate(removed, reported)[source, k]
+    origin.removal = rate(removed, reported)
     origin.obs_n, origin.obs_source = n[source, k], source

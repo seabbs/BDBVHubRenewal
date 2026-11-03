@@ -244,7 +244,8 @@ MODEL_METADATA = {
             "Each nowcast draw is carried forward from its latest week as a "
             "random walk on the log scale with Poisson noise. A place under "
             "10 cases a week, or with fewer than 3 errors, uses the spreads "
-            "of its parent. The national value is the sum of provinces. See "
+            "of its parent, and each place its own removal rate. The "
+            "national value is the sum of provinces. See "
             "https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."
         ),
         "data_inputs": (
