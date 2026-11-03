@@ -113,6 +113,10 @@ class NonCentredRandomWalk:
     axis, with the first knot $N(m, s)$ in place of `initial_value`
     (random walk only).
 
+    `forecast_half_life` $h_f$ makes the steps past the fit axis AR(1),
+    $x(t) = \phi_f\, x(t - 1) + \sigma z_t$ with $\phi_f = 2^{-1/h_f}$,
+    so a random walk reverts towards 0 there. The fit is unchanged.
+
     Parameters
     ----------
     innovation_sd_rv : RandomVariable
@@ -125,6 +129,8 @@ class NonCentredRandomWalk:
         Length of the fit axis.
     half_life_rv : RandomVariable, optional
         Half-life in steps; makes the process AR(1).
+    forecast_half_life : float, optional
+        Half-life in steps of the reversion past the fit axis.
     """
 
     step_size: int = 1
@@ -136,8 +142,10 @@ class NonCentredRandomWalk:
         knots: tuple[float, float] | None = None,
         n_fit: int | None = None,
         half_life_rv: RandomVariable | None = None,
+        forecast_half_life: float | None = None,
     ) -> None:
         self.innovation_sd_rv = innovation_sd_rv
+        self.forecast_half_life = forecast_half_life
         self.frozen = frozen
         self.knots = knots
         self.n_fit = n_fit
@@ -205,6 +213,8 @@ class NonCentredRandomWalk:
             f"{name_prefix}_z_future",
             dist.Normal(0.0, 1.0).expand([n_future, n_processes]),
         )
+        if self.forecast_half_life is not None:
+            phi = 0.5 ** (1.0 / self.forecast_half_life)
         decay = phi ** jnp.arange(1, n_future + 1)[:, None]
         future = decay * past[-1] + _damped_sum(phi, sd * z_future)
         return jnp.vstack([past, future])

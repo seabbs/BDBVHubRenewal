@@ -172,6 +172,26 @@ def test_random_walk_and_pooled_walk_shapes():
     np.testing.assert_allclose(groups[0], [0.1, 0.2, 0.3], atol=1e-6)
 
 
+def test_forecast_reverts_towards_zero():
+    def walk(half_life):
+        rw = NonCentredRandomWalk(
+            DeterministicVariable("sd", 1e-6),
+            n_fit=4,
+            forecast_half_life=half_life,
+        )
+        z = jnp.array([[1.0e6], [1.0e6], [1.0e6]])
+        with numpyro.handlers.condition(data={"rw_z": z}):
+            return seeded(lambda: rw.sample(40, initial_value=0.0))
+
+    free = walk(None)
+    np.testing.assert_allclose(free[:4, 0], [0.0, 1.0, 2.0, 3.0], atol=1e-4)
+    np.testing.assert_allclose(free[4:, 0], 3.0, atol=1e-3)
+    damped = walk(1.0)
+    np.testing.assert_allclose(damped[:4, 0], free[:4, 0], atol=1e-6)
+    np.testing.assert_allclose(damped[4, 0], 1.5, atol=1e-3)
+    np.testing.assert_allclose(damped[-1, 0], 0.0, atol=1e-3)
+
+
 def test_missing_fraction_and_hazard_delay_shapes():
     weekly = WeeklyTemporalProcess(
         NonCentredRandomWalk(DeterministicVariable("sd", 0.1)), start_dow=6

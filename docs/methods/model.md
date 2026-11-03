@@ -135,7 +135,10 @@ Pooling and the handling of negative and long delays are assumed.
 
 ### Forecasts
 
-The random walks carry $R_p$, $\alpha$, $f$ and $\pi$ to the forecast horizon, and each of 100 trajectories is one posterior draw.
+The random walks carry $\alpha$, $f$ and $\pi$ to the forecast horizon, and each of 100 trajectories is one posterior draw.
+Past the data weeks the pooled trend reverts towards $\log R = 0$ with a half-life of 2 weeks, $\log R(t) = 2^{-1/2} \log R(t - 1) + \sigma_R z(t)$, and the province deviations keep their AR(1).
+This stops the unanchored walk from compounding growth over the horizon.
+The half-life is fixed, not fitted, since no data inform the forecast weeks.
 A trajectory is the final known plus final imputed counts.
 Final known counts are those reported by the cut-off plus a negative binomial draw of those reported later, as in epinowcast.
 Final imputed counts are a negative binomial draw centred on the current imputed count plus those expected later, since the hub re-imputes each vintage.

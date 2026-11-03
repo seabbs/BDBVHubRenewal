@@ -57,6 +57,9 @@ lag 0 and truncating at 42 days the effective mean is 14.8 and SD 8.4."""
 PHI_FLOOR = 1e-3
 """Added to $1/\\phi$ so the concentration stays at or below 1000."""
 ALPHA0 = 0.6
+FORECAST_RT_HALF_LIFE = 2.0
+"""Half-life in weeks with which the pooled log Rt reverts towards 0
+(Rt of 1) past the data weeks."""
 
 
 def generation_interval(
@@ -328,6 +331,7 @@ def _named_walk(
     n_weeks: int,
     ar: bool = False,
     knots: tuple[float, float] | None = None,
+    forecast_half_life: float | None = None,
 ) -> TemporalProcess:
     """Weekly walk frozen over the seeding period, fitted on the data weeks.
 
@@ -335,6 +339,8 @@ def _named_walk(
     forecast pass. With `ar`, the walk is AR(1) with a half-life of
     LogNormal(log 6 weeks, 0.6) (BVDOutbreakSize deviations: 42 days).
     With `knots`, the knots of the walk are sampled (`KnotWalk`).
+    With `forecast_half_life`, the forecast steps revert towards 0
+    (`NonCentredRandomWalk`).
     """
     sd_rv = DistributionalVariable(name, dist.HalfNormal(sd))
     frozen = GEN_INT_LENGTH // 7
@@ -349,6 +355,7 @@ def _named_walk(
         knots=knots,
         n_fit=frozen + n_weeks,
         half_life_rv=half_life,
+        forecast_half_life=forecast_half_life,
     )
     return WeeklyTemporalProcess(inner, start_dow=SUNDAY)
 
@@ -500,7 +507,11 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             active=None if outbreak is None else outbreak.any(axis=0),
         ),
         baseline_rt_process=_named_walk(
-            "rt_sd", 0.2, fit_weeks(data, config), knots=(0.0, 0.5)
+            "rt_sd",
+            0.2,
+            fit_weeks(data, config),
+            knots=(0.0, 0.5),
+            forecast_half_life=FORECAST_RT_HALF_LIFE,
         ),
         subpop_rt_deviation_process=_named_walk(
             "rt_dev_sd", 0.1, fit_weeks(data, config), ar=True
