@@ -1,12 +1,14 @@
-run_at: '2026-10-28T19:23:37+00:00'
+run_at: '2026-11-03T13:10:41+00:00'
 model_choice: results/model-choice.yml
-model_choice_sha256: b4dc1ba3ec59887a4d3420970023bc257dfc7f208005f1e67ad05844334d7489
+model_choice_sha256: a308dbe769aaebff5a1eae139f138fb20c5f5113c4f6c0c97d913682843fe8d4
 choices:
 - date: '2026-10-28'
   model: randomwalknowcast
-  summary: 'randomwalknowcast is the first model submitted (as seabbsbaseline): it scores
-    best on complete weeks of the development backtest.'
+  summary: randomwalknowcast is the submitted baseline (as seabbs-rwnowcast). It is
+    chosen by design, as baselinenowcast with a random walk, not on its backtest scores.
 baseline: randomwalk
-latest_vintage: '2026-10-24'
+latest_vintage: '2026-11-01'
 scored: []
-pending: []
+pending:
+- vintage: '2026-11-01'
+  model: randomwalknowcast
