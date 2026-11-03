@@ -48,9 +48,11 @@ Pandas only builds the inputs and the output frames.
 The model runs in single precision (float32), JAX's default.
 
 - Depletion is carried on $\log S$, which needs no subtraction, and $1 - e^{-y}$ is computed with `expm1`.
-- The generation interval is double interval censored in closed form, $G(d + 1) - 2G(d) + G(d - 1)$ with the Gamma's integrated cdf. It is computed once, in float64, and matches primarycensored.
-- The negative binomial concentration is capped at $\phi \le 1000$, which is Poisson for these counts. The Dirichlet-multinomial concentration is capped at $\psi \le 10^4$.
-- The hub imputation sums are products of banded $7 \times 7k$ blocks for each onset week. So the cost grows with the number of weeks and not its square.
+- The generation interval is double interval censored in closed form, $G(d + 1) - 2G(d) + G(d - 1)$ with the Gamma's integrated cdf.
+  It is computed once, in float64, and matches primarycensored.
+- The negative binomial concentration is capped at $\phi \le 1000$, which is Poisson for these counts.
+  The Dirichlet-multinomial concentration is capped at $\psi \le 10^4$.
+- The hub imputation sums are products of banded $7 \times 7k$ blocks for each onset week, so the cost grows with the number of weeks and not its square.
 
 The tests check the renewal and the imputation against a NumPy reference, `tests/model/numpy_reference.py`.
 

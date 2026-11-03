@@ -93,7 +93,8 @@ It is net of cases that gain an onset later, so it can be negative.
 
     --8<-- "delays.md"
 
-A few delays are negative (down to −31 days) and a few very long (up to 193 days).
+A few delays are negative (down to −104 days) and a few very long (up to 193 days).
+The daily split into observed and imputed matches the weekly totals in every row, and the delay rows match the observed totals of their vintage.
 
 <figure class="doc-figure" markdown="span">
   ![Mean and median delay by onset week for the four largest provinces, with the number of cases per week below.](figures/delays-time.svg#only-light)

@@ -25,7 +25,6 @@ Backtest forecasts cover $h = -4, \dots, 3$.
 | `auxiliary-data/locations.csv` | Location codes, names and parents. | Static |
 | `hub-config/*.json` | Rounds, tasks, output types and the metadata schema. | Copied at download |
 
-The daily split into observed and imputed matches the weekly totals in every row, and the delay rows match the observed totals of their vintage.
 The hub does not publish deaths, suspected cases, counts by report date, the imputation code or populations.
 Province populations are the Institut National de la Statistique's 2019 figures (*Annuaire statistique RDC 2020*), and province centres the WorldPop-weighted centres of BVDOutbreakSize.
 
@@ -49,7 +48,6 @@ Its step is the difference of the two cut-offs in days.
 
 The hub imputes an onset for each case reported without one by subtracting a delay drawn from the pooled published delays ([hub issue 61](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/61)).
 So the share of cases without an onset is measured at every vintage.
-The 2026-08-18 vintage has no delay file.
 
 ## Simulated vintages
 
