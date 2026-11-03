@@ -66,6 +66,9 @@ def plot_release_nowcasts(
         final["model"].isin(models)
         & (final["truth_vintage"] == final["truth_vintage"].max())
     ]
+    if target == "reported":
+        # Weeks after the release's cut-off have nothing reported.
+        final = final.loc[final["truth"].notna()]
     origins = sorted(final["origin"].unique())
     fig, axes = _grid(
         len(origins) * len(locations), len(locations), width=3.4, height=2.6
@@ -87,7 +90,11 @@ def plot_release_nowcasts(
                     (releases["vintage"] == v) & (releases["location"] == loc)
                 ]
                 x = pd.to_datetime(r["target_end_date"])
-                keep = (x >= lo) & (x <= pd.Timestamp(origin) + pd.Timedelta(7))
+                hi = max(
+                    pd.Timestamp(weeks.max()),
+                    pd.Timestamp(origin) + pd.Timedelta(days=7),
+                )
+                keep = (x >= lo) & (x <= hi)
                 ax.plot(
                     x[keep],
                     r["total"][keep],
@@ -115,7 +122,13 @@ def plot_release_nowcasts(
     for m_i, m in enumerate(models):
         handles.append(axes[0].plot([], [], color=palette[m_i], lw=4)[0])
         labels.append(f"{m} (50% and 90%)")
-    axes[0].legend(handles, labels, fontsize=6)
+    fig.legend(
+        handles,
+        labels,
+        fontsize=7,
+        loc="outside lower center",
+        ncols=min(len(labels), 5),
+    )
     return fig
 
 

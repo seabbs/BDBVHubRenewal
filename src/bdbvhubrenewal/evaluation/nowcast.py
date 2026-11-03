@@ -648,10 +648,9 @@ def _score(
         )
     samples = pd.concat(frames, ignore_index=True)
     samples["stored"] = samples["stored"].fillna(False).astype(bool)
-    # A model run here with no forecast of a target (the chain has no
-    # step within the allowed mismatch) drops it for every model run here,
-    # so all are scored on the same forecasts. Stored forecasts are scored
-    # where they exist.
+    # A model run here with no forecast from an origin drops it for every
+    # model run here, so all are scored on the same forecasts. Stored
+    # forecasts are scored where they exist.
     forecast_ids = ["target", "origin", "truth_vintage"]
     run = samples.loc[~samples["stored"]]
     need = run.groupby("target")["model"].nunique().rename("need")
