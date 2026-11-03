@@ -1,10 +1,12 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """Check regenerated fixtures against the committed ones.
 
-R writes numbers to the last floating point digit, and that digit moves
-between R builds and platforms. Numbers therefore match to a relative
-tolerance of 1e-9 and everything else exactly. A file added or removed
-by the regeneration fails too.
+R's numbers move between R builds and platforms: the last floating point
+digit everywhere, and the negative binomial sizes from `optimize` (whose
+default tolerance is about 1e-4) further. Numbers therefore match to a
+relative 1e-3, the tolerance the tests compare those sizes to, and
+everything else exactly. A file added or removed by the regeneration
+fails too.
 
 Usage::
 
@@ -30,9 +32,9 @@ def git(*args: str) -> str:
 
 
 def same(a: str, b: str) -> bool:
-    """Whether two tokens match: numbers to 1e-9, others exactly."""
+    """Whether two tokens match: numbers to 1e-3, others exactly."""
     try:
-        return math.isclose(float(a), float(b), rel_tol=1e-9, abs_tol=1e-12)
+        return math.isclose(float(a), float(b), rel_tol=1e-3, abs_tol=1e-9)
     except ValueError:
         return a == b
 
