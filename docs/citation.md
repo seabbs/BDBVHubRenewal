@@ -1,5 +1,8 @@
 # Citation and licence
 
+How to cite the software and the data, the funding and the licence.
+{ .page-subtitle }
+
 ## Citing this software
 
 The citation metadata are in [CITATION.cff](https://github.com/seabbs/BDBVHubRenewal/blob/main/CITATION.cff).

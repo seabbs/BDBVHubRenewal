@@ -45,7 +45,7 @@ The renewal model forecasts it as an unassigned component ([Forecasts](methods/m
   <figcaption markdown="1">
     National counts in each vintage as a share of the latest vintage, by weeks from the onset week to the vintage's epi week.
     The last two weeks are far from complete.
-    Weeks three or more back are still revised by 5 to 10%.
+    Weeks three back are still revised by 3 to 13%.
   </figcaption>
 </figure>
 
@@ -71,7 +71,7 @@ It is net of cases that gain an onset later, so it can be negative.
   ![Known-onset and imputed-onset cases added between consecutive vintages, by province.](figures/newly-missing-dark.svg#only-dark)
   <figcaption markdown="1">
     Cases added between vintages, by onset status.
-    In Nord Kivu between 2026-10-17 and 2026-10-24, imputed onsets fell by 175 while known onsets rose by 380, so many cases gained an onset after their first report.
+    In Nord Kivu between 2026-10-17 and 2026-10-24, imputed onsets fell by 174 while known onsets rose by 379, so many cases gained an onset after their first report.
   </figcaption>
 </figure>
 

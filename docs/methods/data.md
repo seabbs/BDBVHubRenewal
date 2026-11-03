@@ -32,7 +32,7 @@ Province populations are the Institut National de la Statistique's 2019 figures 
 ## Vintages
 
 Each hub release is a vintage, labelled by its `as_of` date and of kind `real` or `simulated`.
-Recent weeks are revised in later vintages, so each forecast is made from one vintage and scored against a later one.
+Recent weeks are revised in later releases, so each forecast is made from one vintage and scored on the counts later releases report.
 
 ## Release snapshots
 

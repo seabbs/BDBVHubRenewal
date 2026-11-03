@@ -11,7 +11,7 @@ Each model is shown from its latest origin.
 Lines are the data at the origin (dashed, shown when the origin is not the latest vintage) and as later reported (solid), with 100 sample trajectories, 50% and 90% bands and the median for each model.
 The dotted line is the reference date and weeks still being reported are shaded, with hollow points.
 The vertical axis ends at the top of the 90% band.
-Both models run on the daily release snapshots, and the page stops if a model has none or two models give the same samples.
+The baselines run on the daily release snapshots, and the page stops if one has none or two models give the same samples.
 
 ## Nowcast
 
@@ -31,8 +31,7 @@ The submission pull request embeds [`plot_nowcast`][bdbvhubrenewal.reporting.plo
 
 The growth to final of each onset day by its age at the latest release, and the observation model by weeks back.
 A place using its parent's estimate is labelled with the parent.
-The observation model rests on few retrospective nowcasts, two earlier releases at 2026-11-01.
-With fewer than 3 errors an estimate falls back to Poisson, the narrowest spread, when least is known. With few errors the size of older weeks can sit near its lower bound of 0.1, and once provinces have 3 errors each they fit their own from 3 points.
+How both are fitted is on the [Baseline models](methods/baselines.md#nowcast) page.
 
 ![Growth to final by age, and the dispersion of new reports and the removal rate by weeks back, at the latest release.](figures/delay-check.svg#only-light)
 ![Growth to final by age, and the dispersion of new reports and the removal rate by weeks back, at the latest release.](figures/delay-check-dark.svg#only-dark)

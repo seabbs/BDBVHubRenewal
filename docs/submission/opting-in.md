@@ -13,7 +13,8 @@ Each is opted in on its own in `config/hub.toml`.
 | `seabbs-renewal` | the renewal chain | the next model in the chain in `ci/policy.toml` | `[submission] model` in `config/hub.toml` |
 
 `DRY_RUN` is the global switch.
-Until it is `false`, an opted-in model is built and checked but nothing is pushed.
+Until it is `false`, a scheduled run builds and checks an opted-in model but pushes nothing.
+A manual dispatch with `dry_run=false` pushes whatever `DRY_RUN` is.
 
 `task submission-preflight` checks every step it can and lists what is missing.
 Run it after each part, logged in to `gh` as `seabbs`.

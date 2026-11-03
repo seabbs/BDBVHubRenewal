@@ -89,7 +89,7 @@ Each model choice is logged with its date, and the development set rolls forward
 Development runs use every vintage up to the latest choice date.
 Each real vintage after a choice is forecast by the model chosen then, the latest choice dated before it.
 It is also forecast by `randomwalk` and `randomwalknowcast`, and by default every other registered model, with the code at the time of the run.
-Each forecast is scored as for [real releases](#real-releases), first when the next vintage arrives and again as newer ones do.
+Each forecast is scored as for [real releases](#real-releases), first when the next release arrives and again as newer ones do.
 
 ## Leave-one-province-out
 
@@ -113,4 +113,4 @@ For each hub reference date, our unfitted models forecast from the latest real v
 Fitted models use their stored backtest or held-out forecasts for the same round.
 Every model is scored on the weeks it forecast as for [real releases](#real-releases), from the vintage serving the round.
 WIS is relative to `randomwalknowcast` on the weeks both forecast, on the [comparison page](../comparison.md).
-A round is pending until a later real vintage exists.
+A round is pending until a later real release exists.
