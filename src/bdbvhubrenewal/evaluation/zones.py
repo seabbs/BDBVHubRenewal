@@ -10,8 +10,10 @@ national (`pooling`).
 Each model is scored as it runs, and again with its zone samples made to
 sum to its province samples (`reconcile_zones`), which is the form
 submitted.
-Zones are scored against the zone counts as reported at the truth
-vintage.
+Zones are scored on the zone count each later real vintage reports, with
+the final-count samples drawn as for provinces
+(`bdbvhubrenewal.evaluation.nowcast.draw_reported`) under the zone delays
+fitted at the origin.
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.simulate import SimulatedOutbreak
+from bdbvhubrenewal.data.snapshots import release_cutoff
 from bdbvhubrenewal.data.zones import weekly_zone_counts
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
@@ -31,12 +34,14 @@ from bdbvhubrenewal.evaluation.backtest import (
     real_vintages,
     score_tasks,
 )
-from bdbvhubrenewal.evaluation.scoring import relative_skill
+from bdbvhubrenewal.evaluation.nowcast import draw_reported, reported_share
+from bdbvhubrenewal.evaluation.scoring import relative_skill, score_forecasts
 from bdbvhubrenewal.forecasters.base import (
     ForecastTask,
     ModelUnavailableError,
     get_model,
 )
+from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
 from bdbvhubrenewal.forecasters.zones import (
     ZoneAllocator,
     reconcile_zones,
@@ -58,6 +63,16 @@ ZONE_BASELINE = "randomwalk"
 
 SUMMED = " (summed to provinces)"
 """Suffix of a model whose zones were made to sum to its provinces."""
+
+_KEYS = (
+    "model",
+    "origin",
+    "target",
+    "truth_vintage",
+    "location",
+    "target_end_date",
+)
+"""Columns that identify one zone forecast scored against one release."""
 
 
 def _frame(
@@ -82,9 +97,8 @@ def zone_backtest(
     zones: tuple[str, ...],
     models: Sequence[str] = ("randomwalk", "randomwalknowcast"),
     config: BacktestConfig | None = None,
-    truth_date: str | None = None,
 ) -> pd.DataFrame:
-    """Score the random walk models run at zone level.
+    """Score the random walk models run at zone level on later releases.
 
     Parameters
     ----------
@@ -103,56 +117,74 @@ def zone_backtest(
         Registered models that read release snapshots.
     config : BacktestConfig, optional
         Horizons, samples and seed. Defaults to `BacktestConfig()`.
-    truth_date : str, optional
-        The truth vintage. Defaults to the latest real vintage.
 
     Returns
     -------
     pandas.DataFrame
-        `score_tasks` output for the final counts, one row per model,
-        vintage, zone and week. Each model appears under its name and
-        again under its name with `SUMMED`.
+        `score_forecasts` output with `model`, `origin`, `target`
+        (`"reported"`), `truth_vintage` and `horizon` in weeks from the
+        reference date, one row per model, origin, later vintage, zone and
+        week. Each model appears under its name and again under its name
+        with `SUMMED`.
     """
     config = config or BacktestConfig()
     real = target.loc[target["kind"] == "real"]
     vintages = real_vintages(real)
-    truth_date = truth_date or vintages[-1]
     frames = []
-    for vintage in (v for v in vintages if v < truth_date):
+    for vintage in vintages[:-1]:
         task = make_tasks(
             real.loc[real["vintage"] == vintage], delays, config, daily=daily
         )[0]
         counts = weekly_zone_counts(daily_zones, vintage)
         active = tuple(z for z in zones if z in set(counts["location"]))
         zt = zone_task(task, counts, active, pd.concat([daily, daily_zones]))
+        try:
+            origin = RandomWalk().origin_at(zt, errors=False)
+        except ModelUnavailableError as err:
+            log.warning("No zone delay fit at %s: %s", vintage, err)
+            continue
+        forecasts = {}
         for name in models:
             model = get_model(name)
-            try:
-                prov = model.forecast(task)
-                direct = model.forecast(zt)
-            except ModelUnavailableError as err:
-                log.warning("%s skipped %s: %s", name, vintage, err)
-                continue
-            summed = reconcile_zones(direct, prov, task, counts, active)
-            frames.append(_frame(direct, task, name))
-            frames.append(_frame(summed, task, name + SUMMED))
-    forecasts = pd.concat(frames, ignore_index=True)
-    truth = weekly_zone_counts(daily_zones, truth_date)
-    weeks = sorted(
-        w for w in forecasts["target_end_date"].unique() if w <= truth_date
-    )
-    grid = pd.MultiIndex.from_product(
-        [sorted(forecasts["location"].unique()), weeks],
-        names=["location", "target_end_date"],
-    )
-    truth = (
-        truth.set_index(["location", "target_end_date"])["total"]
-        .reindex(grid, fill_value=0)
-        .rename("truth")
-        .reset_index()
-    )
-    scores = score_tasks(forecasts, truth, truth_date)
-    return scores.loc[scores["scoring"] == "as reported"].reset_index(drop=True)
+            direct = model.forecast(zt)
+            prov = model.forecast(task)
+            forecasts[name] = direct
+            forecasts[name + SUMMED] = reconcile_zones(
+                direct, prov, task, counts, active
+            )
+        weeks = sorted(set(direct["target_end_date"]))
+        now = reported_share(origin, _cutoff(daily, vintage), weeks)
+        reported = counts.rename(columns={"total": "reported"})[
+            ["location", "target_end_date", "reported"]
+        ]
+        rng = task.rng()
+        for later in (v for v in vintages if v > vintage):
+            then = reported_share(origin, _cutoff(daily, later), weeks)
+            truth = _zone_truth(
+                weekly_zone_counts(daily_zones, later), direct, later
+            )
+            for name, samples in forecasts.items():
+                drawn = draw_reported(samples, reported, now, then, rng)
+                drawn = drawn.assign(
+                    model=name,
+                    origin=vintage,
+                    target="reported",
+                    truth_vintage=later,
+                    horizon=_weeks(drawn, task),
+                )
+                frames.append(score_forecasts(drawn, truth, keys=_KEYS))
+    return pd.concat(frames, ignore_index=True)
+
+
+def _weeks(samples: pd.DataFrame, task: ForecastTask) -> pd.Series:
+    """Weeks from the task's reference date to each sample's week."""
+    ref = pd.Timestamp(task.reference_date)
+    return (pd.to_datetime(samples["target_end_date"]) - ref).dt.days // 7
+
+
+def _cutoff(daily: pd.DataFrame, vintage: str) -> dt.date:
+    """Return the cut-off of a release."""
+    return release_cutoff(daily.loc[daily["vintage"] == vintage], vintage)
 
 
 def zone_relative_skill(
@@ -172,7 +204,9 @@ def zone_relative_skill(
     pandas.DataFrame
         See `bdbvhubrenewal.evaluation.scoring.relative_skill`.
     """
-    return relative_skill(scores, baseline=ZONE_BASELINE, by=by)
+    return relative_skill(
+        scores, baseline=ZONE_BASELINE, by=by, match_on=_KEYS[1:]
+    )
 
 
 def _zone_truth(

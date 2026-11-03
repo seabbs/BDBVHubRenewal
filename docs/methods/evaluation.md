@@ -104,7 +104,7 @@ Zones use the same models as provinces.
 Each zone takes its delay and spreads by the rules of the [Baseline models](baselines.md#own-or-pooled-estimates) page.
 Each model is scored as it runs, and again with its zone samples made to sum to its province samples, as in the submitted file.
 Each real vintage before the latest is forecast, and origins with no pair of releases within the delay window are skipped, as for provinces.
-Zones are scored on every week against the zone counts as reported at the latest real vintage.
+Zones are scored on the reported target as for [real releases](#real-releases), with the zone delays fitted at the origin, so a zone count is never scored against a count still being reported.
 Relative WIS is against `randomwalk` run at zone level.
 
 ## Comparison with hub forecasts

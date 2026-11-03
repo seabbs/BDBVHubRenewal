@@ -258,11 +258,15 @@ def _release_section(
     scores = pd.read_csv(paths["scores"])
     quantiles = pd.read_csv(paths["quantiles"])
     origins = pd.read_csv(paths["origins"]).fillna("")
-    scores["target"] = scores["target"].map(_TARGET_LABELS)
     national = scores["location"] == NATIONAL
     scores["pool"] = national.map({True: "national", False: "provinces"})
-    overall = relative_wis(scores, ("target", "pool"))
-    by_pool = relative_wis(scores, ("target", "pool", "origin"))
+    zones = pd.read_csv(res / "zone-scores.csv", low_memory=False)
+    zones = zones.loc[zones["model"].isin(set(scores["model"]))]
+    pooled = pd.concat([scores, zones.assign(pool="zones")])
+    pooled["target"] = pooled["target"].map(_TARGET_LABELS)
+    overall = relative_wis(pooled, ("target", "pool"))
+    by_pool = relative_wis(pooled, ("target", "pool", "origin"))
+    scores["target"] = scores["target"].map(_TARGET_LABELS)
     by_place = relative_wis(scores, ("target", "origin", "location"))
     save_light_dark(
         partial(
@@ -285,7 +289,10 @@ def _release_section(
         "Complete weeks are scored against the latest release "
         "([Evaluation](methods/evaluation.md#real-releases)).\n"
         "Relative WIS is against `randomwalk` on the forecasts both made, "
-        "and every row counts them, $n$.\n\n"
+        "and every row counts them, $n$.\n"
+        "Zones have only the random walk models, run on each zone, and "
+        "only the reported target "
+        "([Health zones](methods/evaluation.md#health-zones)).\n\n"
         "Scores by target and national or provinces pooled, over every "
         "origin.\n\n"
         + _table(overall)
@@ -618,8 +625,7 @@ def _zone_section(path: Path) -> str:
         "cases (see [Evaluation](methods/evaluation.md#health-zones)).\n"
         "Models marked summed to provinces have their zone samples made to "
         "sum to the province samples, as in the submitted file.\n"
-        "Scores are against zone counts as reported at the latest real "
-        "vintage.\n"
+        "Scores are on the zone count each later real vintage reports.\n"
         "Relative WIS is against `randomwalk`, and below 1 is better.\n\n"
         + _table(table[["model", *cols, "relative_wis"]])
         + "\n\nRelative WIS by week, with 0 the week of the reference "
