@@ -11,9 +11,6 @@ hubValidations 3.0.0: ``spl_id_type`` (sample ids must be integers when the
 config says so) and ``readme_horizon`` (a warning when a target_end_date is
 not a Saturday within the README's window).
 
-Dependencies: the standard library only for model output; PyYAML for
-metadata files.
-
 Usage::
 
     bdbvhubrenewal validate --hub PATH [--metadata-dir DIR]
@@ -38,6 +35,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
+
+import yaml
 
 STD_COLS = ("output_type", "output_type_id", "value")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -1104,17 +1103,6 @@ def validate_metadata(file: str | Path, hub: Hub) -> Report:
         'Metadata file extension is "yml" or "yaml".',
         halt=True,
     ):
-        return rep
-    try:
-        import yaml
-    except ImportError:
-        rep.add(
-            "metadata_file_read",
-            False,
-            "",
-            halt=True,
-            fail_message="PyYAML is needed to read metadata files.",
-        )
         return rep
     try:
         data = yaml.safe_load(fp.read_text())
