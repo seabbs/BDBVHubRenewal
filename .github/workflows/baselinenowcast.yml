@@ -45,9 +45,9 @@ jobs:
       - name: Install baselinenowcast 0.2.2
         run: |
           install.packages("remotes")
-          remotes::install_version(
-            "baselinenowcast", version = "0.2.2",
-            repos = "https://cloud.r-project.org"
+          # 0.2.2 is not on CRAN yet: the commit that set the version.
+          remotes::install_github(
+            "epinowcast/baselinenowcast@999d1ad50e27921a4078175d6315bbd655878888"
           )
         shell: Rscript {0}
       - name: Regenerate fixtures
