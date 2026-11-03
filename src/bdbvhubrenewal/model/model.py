@@ -6,7 +6,7 @@ from __future__ import annotations
 import datetime as dt
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Final, Literal
+from typing import Any, Literal
 
 import jax.numpy as jnp
 import numpy as np
@@ -98,16 +98,6 @@ def generation_interval(
     return np.asarray(pmf / pmf.sum(), dtype=float)
 
 
-PRIOR_PUBLICATION_LAG: Final[tuple[float, ...]] = tuple(
-    [0.85 / 4] * 4 + [0.15 / 57] * 57
-)
-"""Report to publication lag pmf on 0..60 days where no pair of delay files
-gives an estimate: 85% within 3 days and 15% spread over 4 to 60 days.
-It is a prior shaped by the later files (29% of rows new between 10-09
-and 10-17 were more than 6 days late), so for the 2026-10-09 backtest it
-uses a little later information."""
-
-
 @dataclass(frozen=True)
 class ModelConfig:
     r"""Structural choices of the model, for the ladder and the variants.
@@ -149,17 +139,6 @@ class ModelConfig:
         Its tempering. 0 gives the model without it, exactly.
     dmax : int
         Maximum onset-to-report delay in days.
-    publication_lag : {"empirical", "estimated", "fixed", "none"}
-        Lag from report to publication in a vintage: the empirical pmf
-        on $0..180$ days from rows new in earlier delay files
-        (`Vintage.publication_lag_pmf`), a Dirichlet simplex on $0..L$,
-        uniform on $0..L$ (the default), or none. Empirical falls back to
-        `PRIOR_PUBLICATION_LAG` for a vintage with no earlier pair of
-        delay files. It is not the default: late rows in the delay files
-        are mostly onsets recorded later for cases already counted as
-        imputed, so it overstates late reporting of the total.
-    max_publication_lag : int
-        $L$, in days (the model default).
     delay_counts : {"multinomial", "dirichlet-multinomial"}
         Likelihood of the delay file's counts given the weekly totals.
         The Dirichlet-multinomial (default) has $1/\sqrt{\psi} \sim
@@ -180,10 +159,6 @@ class ModelConfig:
     bvd: bool = False
     bvd_alpha: float = 0.5
     dmax: int = 60
-    publication_lag: Literal["empirical", "estimated", "fixed", "none"] = (
-        "fixed"
-    )
-    max_publication_lag: int = 3
     delay_counts: Literal["multinomial", "dirichlet-multinomial"] = (
         "dirichlet-multinomial"
     )
@@ -256,9 +231,6 @@ class Vintage:
     bvd : dict or None
         External Rt summaries: `day` (index of $s_b$ from the first data
         day), `groups` `(G, P)`, `values`, `scales` and `kinds` `(G,)`.
-    publication_lag_pmf : numpy.ndarray or None
-        Empirical report to publication lag pmf on $0..180$ days
-        (`data.releases.publication_lag_pmf`), or None.
     """
 
     start_date: dt.date
@@ -279,7 +251,6 @@ class Vintage:
     distances: np.ndarray | None = None
     all_populations: np.ndarray | None = None
     seed_days: np.ndarray | None = None
-    publication_lag_pmf: np.ndarray | None = None
 
     @property
     def n_weeks(self) -> int:
@@ -490,22 +461,6 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             "import_scale", dist.LogNormal(np.log(1e-3), 2.0)
         )
 
-    n_lag = config.max_publication_lag + 1
-    lag: DistributionalVariable | np.ndarray | None = None
-    if config.publication_lag == "estimated":
-        lag = DistributionalVariable(
-            "onsets_publication_lag", dist.Dirichlet(np.ones(n_lag))
-        )
-    elif config.publication_lag == "fixed":
-        lag = np.full(n_lag, 1 / n_lag)
-    elif config.publication_lag == "empirical":
-        lag = np.asarray(
-            PRIOR_PUBLICATION_LAG
-            if data.publication_lag_pmf is None
-            else data.publication_lag_pmf,
-            dtype=float,
-        )
-
     builder.add_observation(
         OnsetStreams(
             name="onsets",
@@ -517,7 +472,6 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             import_scale_rv=imports,
             kernel_rv=kernel if isinstance(kernel, LearntKernel) else None,
             start_dow=SUNDAY,
-            publication_lag=lag,
             delay_overdispersion_rv=DistributionalVariable(
                 "delay_overdispersion", dist.HalfNormal(0.1)
             )

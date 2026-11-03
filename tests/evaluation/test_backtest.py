@@ -146,19 +146,6 @@ def test_make_tasks_asks_for_later_vintages(
     assert by["2026-10-24"] == ()
 
 
-def test_origins_without_a_lag_estimate_are_marked(
-    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
-) -> None:
-    forecasts = run_development([get_model("flat")], target, delays, config)
-    # Origins with no earlier pair of delay files take the publication
-    # lag from a prior informed by later files.
-    marked = forecasts.loc[forecasts["lag_prior"], ["kind", "vintage"]]
-    assert set(map(tuple, marked.drop_duplicates().to_numpy())) == {
-        ("real", "2026-08-18"),
-        ("real", "2026-10-09"),
-    }
-
-
 def test_truth_changes(target: pd.DataFrame) -> None:
     changes = truth_changes(target, locations=("CD",))
     week = changes.loc[changes["target_end_date"] == "2026-10-10"]
@@ -235,23 +222,6 @@ def test_lopo_without_mask_aware_models_is_empty(
     forecasts, scores = run_lopo([get_model("flat")], target, delays, config)
     assert forecasts.empty
     assert scores.empty
-
-
-def test_tasks_carry_earlier_delay_files_for_the_publication_lag(
-    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
-) -> None:
-    tasks = {
-        t.vintage: t
-        for t in make_tasks(
-            target.loc[target["kind"] == "real"],
-            delays.assign(kind="real"),
-            config,
-        )
-    }
-    history = tasks["2026-10-17"].delay_history
-    assert history is not None
-    assert set(history["vintage"]) == {"2026-10-09", "2026-10-17"}
-    assert tasks["2026-08-18"].delay_history is None
 
 
 def test_tasks_carry_earlier_target_vintages(

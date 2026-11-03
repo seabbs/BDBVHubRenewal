@@ -86,10 +86,6 @@ class ForecastTask:
         date $T$ here, the counts it predicts will be reported by $T$ for
         the weeks ending on or before $T$, in rows with `as_of` $= T$.
         Scoring compares them with vintage $T$ as reported.
-    delay_history : pandas.DataFrame or None
-        Delay rows of every vintage of this kind on or before `vintage`,
-        from which `data.releases.publication_lag_pmf` estimates the
-        report to publication lag. None if there are none.
     target_history : pandas.DataFrame or None
         Target rows of every vintage of this kind on or before `vintage`,
         from which a model can learn how totals are revised. None if there
@@ -113,7 +109,6 @@ class ForecastTask:
     seed: int = 0
     mask: tuple[str, ...] = ()
     report_by: tuple[str, ...] = ()
-    delay_history: pd.DataFrame | None = None
     target_history: pd.DataFrame | None = None
     daily_history: pd.DataFrame | None = None
 

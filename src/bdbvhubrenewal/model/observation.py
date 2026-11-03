@@ -9,15 +9,13 @@ the hub's empirical delay for that vintage. Then
 $$\kappa_p(s, d) = \lambda_p(s) f_s(d) \{1 - \pi_p(s + d)\}$$
 
 is the expected number of known-onset cases with onset $s$ and delay
-$d$. A case reported on day $t$ appears in the vintage at $T$ with
-probability $c(t) = F_\ell(T - t)$, with $F_\ell$ the cdf of the report
-to publication lag $\ell$ on $0..L$. Known onsets by $T$ are
-$\sum_d \kappa_p(s, d) c(s + d)$.
+$d$. A case reported by $T$ is in the vintage at $T$, so known onsets by
+$T$ are $\sum_{d \le T - s} \kappa_p(s, d)$.
 Reports by report day are $R_p(t) = \sum_d \lambda_p(t - d) f_{t-d}(d)$,
 missing-onset cases are $M_p(t) = \pi_p(t) R_p(t)$, and the hub spreads
-those published by $T$ back with $\hat f$, giving expected imputed onsets
+those reported by $T$ back with $\hat f$, giving expected imputed onsets
 
-$$\iota_p(s) = \sum_{t = s}^{T} \hat f(t - s) c(t) M_p(t).$$
+$$\iota_p(s) = \sum_{t = s}^{T} \hat f(t - s) M_p(t).$$
 """
 
 from __future__ import annotations
@@ -107,34 +105,6 @@ def unskew(b: Array, k: int) -> Array:
     return flat.reshape(n, width + 1)[:, :k]
 
 
-def published_by(n: int, lag_pmf: Array | None) -> Array:
-    r"""Probability that a report on day $t$ is published by day $n - 1$.
-
-    $c(t) = F_\ell(n - 1 - t)$, with $F_\ell$ the cdf of the report to
-    publication lag pmf on $0..L$, so only the last $L$ days are partly
-    published.
-
-    Parameters
-    ----------
-    n : int
-        Number of report days, the last being the cut-off. Static.
-    lag_pmf : Array or None
-        Lag pmf on $0..L$. `None` is no lag.
-
-    Returns
-    -------
-    Array
-        Shape `(n,)`.
-    """
-    if lag_pmf is None:
-        return jnp.ones(n)
-    cdf = jnp.cumsum(jnp.asarray(lag_pmf))[::-1]
-    k = cdf.shape[0]
-    if n >= k:
-        return jnp.concatenate([jnp.ones(n - k), cdf])
-    return cdf[k - n :]
-
-
 def onset_expectations(
     onsets: Array,
     delay: Array,
@@ -142,7 +112,6 @@ def onset_expectations(
     hub_delay: Array,
     cutoff: int,
     final: bool = True,
-    publication_lag: Array | None = None,
     weekly: bool = False,
 ) -> dict[str, Array]:
     r"""Compute expected known and imputed onsets by the cut-off and eventually.
@@ -150,11 +119,11 @@ def onset_expectations(
     With $A_{st} = f_s(t - s)$ the onset-by-report-day delay matrix and
     $H_{st} = \hat f(t - s)$ the hub's back-sampling matrix, both banded
     and of shape `(n, n + D)`, and $\pi$ extended to report days past the
-    end (last row repeated), and $c$ from `published_by`:
+    end (last row repeated):
 
-    - known by $T$: $\lambda \odot (A_{:, \le T} (c (1 - \pi))_{\le T})$;
+    - known by $T$: $\lambda \odot (A_{:, \le T} (1 - \pi)_{\le T})$;
     - missing by report day: $M = \pi \odot A^\top \lambda$;
-    - imputed by $T$: $H_{:, \le T} (c M)_{\le T}$, zero past $T$.
+    - imputed by $T$: $H_{:, \le T} M_{\le T}$, zero past $T$.
 
     Every term is a dense matrix product, so autodiff needs no gather or
     scatter adjoints. Equal to the direct version in
@@ -175,9 +144,6 @@ def onset_expectations(
     final : bool, optional
         Also compute the final counts. Fitting does not need them, and
         skipping them saves about a fifth of the gradient cost.
-    publication_lag : Array, optional
-        Pmf of the report to publication lag on $0..L$. `None` publishes
-        every report on its report day.
     weekly : bool, optional
         The axis starts on a week boundary and has whole weeks. Then
         `_weekly_blocks` gives the same values at a cost linear, not
@@ -193,9 +159,7 @@ def onset_expectations(
         summed over provinces, `(n, D + 1)`.
     """
     if weekly:
-        return _weekly_blocks(
-            onsets, delay, missing, hub_delay, cutoff, final, publication_lag
-        )
+        return _weekly_blocks(onsets, delay, missing, hub_delay, cutoff, final)
     n, n_d = delay.shape
     width = n + n_d - 1
     pi_ext = missing[jnp.minimum(jnp.arange(width), n - 1)]
@@ -204,10 +168,9 @@ def onset_expectations(
     h = skew(jnp.broadcast_to(hub_delay, (n, n_d)), width)
     t1 = cutoff + 1
     a_t = a[:, :t1]
-    c = published_by(t1, publication_lag)[:, None]
-    seen = c * keep[:t1]
+    seen = keep[:t1]
     known = onsets * (a_t @ seen)
-    missing_by_t = c * pi_ext[:t1] * (a_t.T @ onsets)
+    missing_by_t = pi_ext[:t1] * (a_t.T @ onsets)
     imputed = h[:, :t1] @ missing_by_t
     if final:
         known_final = onsets * (a @ keep)
@@ -264,7 +227,6 @@ def _weekly_blocks(
     hub_delay: Array,
     cutoff: int,
     final: bool,
-    publication_lag: Array | None,
 ) -> dict[str, Array]:
     r"""`onset_expectations` on an axis of whole weeks.
 
@@ -294,9 +256,7 @@ def _weekly_blocks(
     pi_ext = missing[jnp.minimum(jnp.arange(width), n - 1)]
     keep = 1 - pi_ext
     t1 = cutoff + 1
-    c = jnp.concatenate(
-        [published_by(t1, publication_lag), jnp.zeros(width - t1)]
-    )[:, None]
+    c = (jnp.arange(width) < t1).astype(onsets.dtype)[:, None]
 
     def ahead(blocks: Array, x: Array) -> Array:
         # sum_d f_w(d) x(s + d) for every onset day s.
@@ -335,11 +295,11 @@ class OnsetStreams(BaseObservationProcess):
     by onset week and delay, are scored with a multinomial given the
     weekly totals,
 
-    $$P(d \mid w) = \frac{\sum_{s \in w} \sum_p \kappa_p(s, d)
-    c(s + d)}{\sum_{s \in w} \sum_{d'} \sum_p \kappa_p(s, d') c(s + d')},$$
+    $$P(d \mid w) = \frac{\sum_{s \in w} \sum_p \kappa_p(s, d)}
+    {\sum_{s \in w} \sum_{d'} \sum_p \kappa_p(s, d')},$$
 
-    with the same publication weights $c$ as the known stream, so the
-    two truncate alike.
+    summed over the delays reported by $T$, as the known stream is, so
+    the two truncate alike.
 
     which is the conditional part of the Poisson reporting triangle, so
     it does not double count the known stream.
@@ -378,10 +338,6 @@ class OnsetStreams(BaseObservationProcess):
         Poisson likelihood on their weekly counts (`inactive`).
     start_dow : int, optional
         First day of the reporting week (6 is Sunday).
-    publication_lag : RandomVariable or array_like, optional
-        Pmf of the lag from report to publication in a vintage, on
-        $0..L$: a random variable to estimate it, or a fixed pmf.
-        `None` is no lag.
     delay_overdispersion_rv : RandomVariable, optional
         $1 / \sqrt{\psi}$, with $\psi$ capped at $10^4$. If given, the
         delay counts are Dirichlet-multinomial with concentration
@@ -404,7 +360,6 @@ class OnsetStreams(BaseObservationProcess):
         import_scale_rv: RandomVariable | None = None,
         start_dow: int = 6,
         kernel_rv: RandomVariable | None = None,
-        publication_lag: RandomVariable | Array | None = None,
         delay_overdispersion_rv: RandomVariable | None = None,
         weekly_axis: bool = False,
     ) -> None:
@@ -419,7 +374,6 @@ class OnsetStreams(BaseObservationProcess):
         self.import_scale_rv = import_scale_rv
         self.kernel_rv = kernel_rv
         self.start_dow = start_dow
-        self.publication_lag = publication_lag
         self.delay_overdispersion_rv = delay_overdispersion_rv
         self.weekly_axis = weekly_axis
 
@@ -532,9 +486,6 @@ class OnsetStreams(BaseObservationProcess):
             pi = self.missing_fraction_rv(
                 n_timepoints=n, n_groups=n_prov, first_day_dow=first_day_dow
             )
-        lag = self.publication_lag
-        if isinstance(lag, RandomVariable):
-            lag = lag()
         exp = onset_expectations(
             onsets,
             delay,
@@ -542,7 +493,6 @@ class OnsetStreams(BaseObservationProcess):
             jnp.asarray(hub_delay_pmf),
             cutoff,
             forecast,
-            publication_lag=lag,
             weekly=self.weekly_axis,
         )
         weekly = {k: self._weekly(v, first_day_dow) for k, v in exp.items()}
@@ -554,7 +504,6 @@ class OnsetStreams(BaseObservationProcess):
                 jnp.asarray(hub_delay_pmf),
                 as_of,
                 False,
-                publication_lag=lag,
                 weekly=self.weekly_axis,
             )
             weekly["known_final"] = self._weekly(later["known"], first_day_dow)

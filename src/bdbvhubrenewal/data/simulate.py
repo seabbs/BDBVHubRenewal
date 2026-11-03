@@ -43,10 +43,14 @@ from bdbvhubrenewal.model.inputs import (
 from bdbvhubrenewal.model.model import (
     GI_MEAN,
     GI_SD,
-    PRIOR_PUBLICATION_LAG,
     generation_interval,
 )
 from bdbvhubrenewal.model.renewal import coupled_renewal, mixing_matrix
+
+PUBLICATION_LAG = tuple([0.85 / 4] * 4 + [0.15 / 57] * 57)
+"""Pmf of the days from report to publication in a simulated vintage, on
+0..60: 85% within 3 days and 15% spread over 4 to 60 days, a tail of late
+entries as in the real delay files."""
 
 __all__ = [
     "SimulatedOutbreak",
@@ -106,9 +110,7 @@ class SimulationSettings:
         Coefficient of variation of the delay.
     publication_lag : tuple of float
         Pmf of the days from report to publication in a vintage, from 0.
-        The default is the model's `PRIOR_PUBLICATION_LAG`: 85% uniform
-        on 0..3 days and 15% uniform on 4..60 days, a tail of late
-        entries as in the real delay files.
+        The default is `PUBLICATION_LAG`.
     backfill_share : float
         Share of cases reported with no onset whose onset is recorded
         later.
@@ -152,7 +154,7 @@ class SimulationSettings:
     missing: tuple[float, float, float] = (0.05, 0.25, 0.12)
     delay_mean: tuple[float, float] = (12.0, 6.0)
     delay_cv: float = 1.0
-    publication_lag: tuple[float, ...] = PRIOR_PUBLICATION_LAG
+    publication_lag: tuple[float, ...] = PUBLICATION_LAG
     backfill_share: float = 0.3
     backfill_delay: tuple[int, int] = (7, 42)
     gi_mean: float = GI_MEAN

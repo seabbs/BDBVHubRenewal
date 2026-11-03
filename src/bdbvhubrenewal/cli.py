@@ -100,7 +100,7 @@ _RENEWAL_OBSERVATION = (
     "Confirmed onsets follow a time-varying ascertainment. The "
     "onset-to-report delay is nonparametric, a discrete hazard that is "
     "smooth over delay and shifts weekly with onset day, and known onsets "
-    "are right truncated by it and by the report-to-publication lag. The "
+    "are right truncated by it. The "
     "share of reports with no onset date is modelled by province. The "
     "hub's imputed onsets are modelled as the hub makes them, from cases "
     "missing an onset date by report day, back-sampled with the hub's "

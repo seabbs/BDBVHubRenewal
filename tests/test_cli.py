@@ -238,14 +238,10 @@ def test_host_devices_cover_the_chains(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.usefixtures("in_root")
-def test_cli_fit_task_carries_the_delay_files_for_the_lag() -> None:
-    # A live fit sees every earlier delay file, so it uses the empirical
-    # publication lag, not the prior.
+def test_cli_fit_task_carries_the_earlier_target_vintages() -> None:
     import argparse
 
     from bdbvhubrenewal.cli import _task
-    from bdbvhubrenewal.forecasters.renewal import vintage_inputs
-    from bdbvhubrenewal.model import MAIN
 
     args = argparse.Namespace(
         vintage="latest",
@@ -253,11 +249,8 @@ def test_cli_fit_task_carries_the_delay_files_for_the_lag() -> None:
         backtest_config="config/backtest.toml",
     )
     task, _ = _task(args)
-    assert task.delay_history is not None
-    assert task.delay_history["vintage"].nunique() >= 2
     assert task.target_history is not None
     assert task.target_history["vintage"].nunique() >= 3
-    assert vintage_inputs(task, MAIN).publication_lag_pmf is not None
 
 
 @pytest.mark.usefixtures("in_root")

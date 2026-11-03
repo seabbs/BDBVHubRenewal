@@ -31,7 +31,7 @@ import datetime as dt
 import json
 import os
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from functools import partial
 from pathlib import Path
@@ -482,12 +482,8 @@ def vintage_inputs(
         The model inputs.
     """
     from bdbvhubrenewal.data import load_locations
-    from bdbvhubrenewal.data.releases import publication_lag_pmf
     from bdbvhubrenewal.model.inputs import vintage_from_tables
 
-    lag = None
-    if task.delay_history is not None:
-        lag = publication_lag_pmf(task.delay_history, task.vintage)
     return vintage_from_tables(
         task.target,
         task.delays,
@@ -498,7 +494,6 @@ def vintage_inputs(
         horizon_weeks(task),
         tuple(task.mask),
         bvd=bvd,
-        publication_lag=lag,
     )
 
 
@@ -1306,41 +1301,13 @@ def fit_renewal(
         "parameters": params,
         "chains": chains,
         "worst_rhat": worst_rhat(params),
-        "warnings": lag_warnings(
-            [run.data for run in fit.runs.values()],
-            model_config(VARIANTS[variant]),
-        ),
+        "warnings": [],
     }
     if model_config(VARIANTS[variant]).bvd:
         # The BVDOutbreakSize release behind the BVD term and its R-hat.
         used = [r.bvd for r in fit.runs.values() if r.bvd is not None]
         record["bvd"] = dict(used[0]) if used else bvd_record(None)
     return record
-
-
-def lag_warnings(inputs: Sequence[Any], config: Any = None) -> list[str]:
-    """Warn when a fit used the prior publication lag, not an estimate.
-
-    Parameters
-    ----------
-    inputs : sequence of bdbvhubrenewal.model.Vintage
-        The model inputs of each run.
-    config : bdbvhubrenewal.model.ModelConfig, optional
-        The configuration. Only `publication_lag="empirical"` can warn.
-
-    Returns
-    -------
-    list of str
-        One `name: message` warning, or none.
-    """
-    if config is not None and config.publication_lag != "empirical":
-        return []
-    if any(getattr(v, "publication_lag_pmf", None) is None for v in inputs):
-        return [
-            "publication_lag: no earlier pair of delay files, so the fit "
-            "used PRIOR_PUBLICATION_LAG"
-        ]
-    return []
 
 
 def forecast_renewal(task: ForecastTask, fit_dir: Path | str) -> Forecast:
