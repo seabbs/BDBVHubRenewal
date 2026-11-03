@@ -598,9 +598,13 @@ def merge_by_model(path: Path | str, new: pd.DataFrame) -> pd.DataFrame:
         The kept rows of other models, then `new`.
     """
     path = Path(path)
-    if not path.exists() or path.stat().st_size <= 1 or "model" not in new:
+    if not path.exists() or "model" not in new:
         return new
-    old = pd.read_csv(path)
+    # An empty table still has a gzip header, so the size cannot tell.
+    try:
+        old = pd.read_csv(path)
+    except pd.errors.EmptyDataError:
+        return new
     if "model" not in old:
         return new
     kept = old.loc[~old["model"].isin(set(new["model"]))]

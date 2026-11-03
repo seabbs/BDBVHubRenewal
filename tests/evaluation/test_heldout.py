@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 import yaml
 
-from bdbvhubrenewal.evaluation.backtest import BacktestConfig
+from bdbvhubrenewal.evaluation.backtest import BacktestConfig, merge_by_model
 from bdbvhubrenewal.evaluation.heldout import (
     HeldOutError,
     ModelChoice,
@@ -316,3 +316,10 @@ def test_heldout_with_no_vintage_after_the_choice(
     record = yaml.safe_load((tmp_path / "heldout-run.yml").read_text())
     assert record["scored"] == []
     assert record["pending"] == []
+
+
+def test_merge_by_model_reads_an_empty_gzipped_file(tmp_path: Path) -> None:
+    path = tmp_path / "heldout-forecasts.csv.gz"
+    pd.DataFrame().to_csv(path, index=False)
+    new = pd.DataFrame({"model": ["randomwalk"], "value": [1.0]})
+    pd.testing.assert_frame_equal(merge_by_model(path, new), new)
