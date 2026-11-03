@@ -15,7 +15,7 @@ Simulated forecasts are scored against the simulated final counts.
 | All weeks | Final count | Every week in the truth vintage. |
 | Vintage-matched | Count as reported by the truth vintage | Every week, so recent weeks compare like with like. |
 
-The [real releases](#real-releases) evaluation scores the random walk models on their own targets.
+The [real releases](#real-releases) evaluation scores every model on the count each later release reports.
 
 **Vintage-matched.** The renewal variants draw reported counts from the same posterior draws as the final counts.
 
@@ -51,29 +51,40 @@ Each vintage is a forecast task, and every registered model forecasts every task
 | Development backtest | Real up to the latest model choice date | Latest real vintage, and every later real vintage for real forecasts |
 | Recovery check | Simulated | Simulated final counts |
 | Rolling held-out evaluation | Real vintages after each model choice | Every later real vintage |
-| Real releases | Every real release with a later release | The count the next release shows, and the latest release's count for its complete weeks |
+| Real releases | Every real release with a later release | The count each later release shows, and the latest release's count for its complete weeks |
 | Comparison with hub forecasts | Real where one serves the round | Latest real vintage |
 
 ## Real releases
 
 Each real release with a later release is an origin.
 The models forecast from the releases up to the origin only.
-An origin with no pair of releases whose step is within the delay window, $D = 42$ days, has no delay factor and no forecast.
+The random walk models run here.
+The renewal models use their stored backtest forecasts, and hub teams their forecast for the round the origin serves.
+An origin with no pair of releases whose step is within the delay window, $D = 42$ days, has no delay factor and no random walk forecast.
 It is listed with no forecasts and nothing replaces it.
 Two targets are scored.
 
-**Next release.** The count the next release $o'$ shows for each of the four latest hub weeks.
-`randomwalknowcast` predicts it by chaining the origin's days over the gap $c_{o'} - c_o$ between the cut-offs only, taking for each part of the gap the factor of the nearest earlier pair and never interpolating ages.
-Its Skellam spread is the origin's.
-The prediction is scored only when the chained steps differ from the gap by at most 1 day, as for the errors behind the spread.
-`randomwalk` has no chain between releases, so its forecast samples serve for both targets.
+**Reported.** The count each later release $o'$ shows for every week it covers.
+Every model forecasts the final count $X$, so each sample is mapped to the count expected at $o'$,
+
+$$
+\hat{y}_{o'} = R_o + q \, (X - R_o), \qquad q = \frac{\pi_{o'} - \pi_o}{1 - \pi_o},
+$$
+
+with $R_o$ the count reported at the origin.
+$\pi_o$ and $\pi_{o'}$ are the shares of the week's final count reported by the cut-offs of $o$ and $o'$, under the delay estimate of the origin ([Baseline models](baselines.md#random-walk)).
+So $q$ is the share of the count outstanding at the origin that $o'$ is expected to report.
+A week with nothing outstanding at the origin takes $q = 1$.
+The map is the same for every model and keeps the order of the samples.
+For a model whose final count is the chain nowcast, it gives the chain over the gap to $o'$.
+An origin with no delay factor has no map, so no model is scored on this target from it.
 
 **Complete weeks.** The count the latest release shows for the weeks it reports in full.
-A week is complete when $\pi \ge 0.95$ under the delay estimate of the latest release, with $\pi$ the estimated share of the week's final count reported ([Baseline models](baselines.md#random-walk)).
-Forecast weeks are scored only on this target.
+A week is complete when it is at least 4 weeks old at the latest release and grew by less than 2% since the release before.
+It is decided from the releases alone and never from a model.
 
 The floor is the count reported at the origin, scored on the same targets as a forecast with no spread.
-Scores are WIS, 50% and 90% coverage and bias, by model, origin, weeks back from the origin's week and place.
+Scores are WIS relative to `randomwalk` on the forecasts both made, and 50% and 90% coverage, by model, origin, national and provinces, and place.
 Every table counts its forecasts, $n$.
 Each forecast row records the model, the start week of the walk, the number of errors behind the Skellam spread and the source of the delay, the spread and the walk.
 The run stops if a model has no snapshots or two models give identical samples.
