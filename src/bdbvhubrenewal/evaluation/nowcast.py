@@ -669,7 +669,7 @@ def relative_wis(
     base = scores.loc[scores["model"] == baseline, [*match, "wis"]]
     pair = scores.merge(base.rename(columns={"wis": "base_wis"}), on=match)
     out = (
-        pair.groupby([*by, "model"], sort=False)
+        pair.groupby([*by, "model"])
         .agg(
             n=("wis", "size"),
             wis=("wis", "mean"),

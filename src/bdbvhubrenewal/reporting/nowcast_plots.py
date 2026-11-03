@@ -66,6 +66,8 @@ def plot_release_nowcasts(
     ink = THEMES[mode]
     palette = MODEL_COLOURS[mode]
     shades = np.linspace(0.4, 1.0, len(releases["vintage"].unique()))
+    # Each model's bars sit side by side within the week.
+    width, mid = 5.6 / len(models), (len(models) - 1) / 2
     for i, origin in enumerate(origins):
         for j, loc in enumerate(locations):
             ax = axes[i * len(locations) + j]
@@ -95,7 +97,7 @@ def plot_release_nowcasts(
                     & (final["location"] == loc)
                     & (final["model"] == m)
                 ]
-                _draw_bars(ax, rows, palette[m_i], (m_i - 0.5) * 1.6)
+                _draw_bars(ax, rows, palette[m_i], (m_i - mid) * width)
             ax.set_title(f"{loc}, origin {origin}")
             _date_axis(ax)
             ax.xaxis.set_major_locator(

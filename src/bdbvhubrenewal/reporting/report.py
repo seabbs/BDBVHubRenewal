@@ -48,7 +48,7 @@ from bdbvhubrenewal.evaluation.hubcompare import (
     forecast_quantiles,
     summarise_comparison,
 )
-from bdbvhubrenewal.evaluation.nowcast import summarise
+from bdbvhubrenewal.evaluation.nowcast import relative_wis
 from bdbvhubrenewal.evaluation.scoring import relative_skill, summarise_scores
 from bdbvhubrenewal.evaluation.zones import zone_relative_skill
 from bdbvhubrenewal.forecasters.base import (
@@ -233,9 +233,15 @@ def make_report(
 
 
 _RELEASE_PLACES: Final = ("CD", "CD-IT", "CD-NK")
-_RELEASE_MODELS: Final = ("randomwalk", "randomwalknowcast")
+_RELEASE_MODELS: Final = (
+    "randomwalk",
+    "randomwalknowcast",
+    "renewal",
+    "renewalsp",
+    "renewalbvd",
+)
 _TARGET_LABELS: Final = {
-    "next": "Next release",
+    "reported": "Reported by each later release",
     "complete": "Complete weeks",
 }
 
@@ -255,21 +261,12 @@ def _release_section(
         return
     scores = pd.read_csv(paths["scores"])
     quantiles = pd.read_csv(paths["quantiles"])
-    origins = pd.read_csv(paths["origins"])
+    origins = pd.read_csv(paths["origins"]).fillna("")
     scores["target"] = scores["target"].map(_TARGET_LABELS)
-    cols = ["n", "wis", "coverage_50", "coverage_90", "bias"]
-    by_model = summarise(scores, ("target", "model"))[
-        ["target", "model", *cols]
-    ]
-    by_origin = summarise(scores, ("target", "model", "origin", "weeks_back"))[
-        ["target", "model", "origin", "weeks_back", *cols]
-    ]
-    by_place = summarise(scores, ("target", "model", "location"))[
-        ["target", "model", "location", *cols]
-    ]
-    listing = origins[
-        [c for c in origins.columns if c != "reason"] + ["reason"]
-    ].fillna("")
+    national = scores["location"] == NATIONAL
+    scores["pool"] = national.map({True: "national", False: "provinces"})
+    by_pool = relative_wis(scores, ("target", "pool", "origin"))
+    by_place = relative_wis(scores, ("target", "origin", "location"))
     save_light_dark(
         partial(
             plot_release_nowcasts,
@@ -284,16 +281,17 @@ def _release_section(
         gen / "release-backtest.md",
         "## Nowcasts from the real releases\n\n"
         "Each release with a later release is an origin.\n"
-        "The next release target is the count the later release shows for "
-        "the four latest weeks.\n"
-        "The complete weeks target is the count the latest release shows "
-        "for the weeks it reports in full ("
-        "[Evaluation](methods/evaluation.md#real-releases)).\n"
-        "Every row counts its forecasts, $n$.\n\n"
+        "Every model is scored on the count each later release reports, "
+        "with its final-count forecast thinned by the share of each week "
+        "reported by then under the delay fitted at the origin.\n"
+        "Complete weeks are scored against the latest release "
+        "([Evaluation](methods/evaluation.md#real-releases)).\n"
+        "Relative WIS is against `randomwalk` on the forecasts both made, "
+        "and every row counts them, $n$.\n\n"
         "Origins and what each model gave.\n\n"
-        + _table(listing)
-        + "\nScores by target and model.\n\n"
-        + _table(by_model)
+        + _table(origins)
+        + "\nScores by target, national or provinces pooled, and origin.\n\n"
+        + _table(by_pool)
         + "\n![Final forecasts of the recent weeks by origin, with the "
         "counts each release reports.](figures/release-nowcasts.svg"
         "#only-light)\n"
@@ -301,10 +299,7 @@ def _release_section(
         "each release reports.](figures/release-nowcasts-dark.svg"
         "#only-dark)\n\n"
         + _dropdown(
-            "Scores by origin and weeks back.\n\n"
-            + _table(by_origin)
-            + "\nScores by place.\n\n"
-            + _table(by_place),
+            "Scores by target, origin and place.\n\n" + _table(by_place),
             "Tables",
         )
         + "\n## Weekly cross-check\n\n"
