@@ -148,7 +148,7 @@ panels
 # ## Score on complete weeks
 #
 # The truth is the 2026-10-24 vintage.
-# A week counts as complete when the 2026-10-24 release reports at least 95% of its final count under the delay estimate (`complete_weeks`).
+# A week counts as complete when it is at least four weeks old at the 2026-10-24 release and grew by less than 2% since the release before (`complete_weeks`).
 # `score_tasks` scores every forecast sample set with the weighted interval score (WIS) and interval coverage.
 # The table averages over those weeks, for the national total and over the provinces.
 # Relative WIS is `randomwalknowcast` divided by `randomwalk`, so values below 1 favour the nowcast.
@@ -157,7 +157,7 @@ panels
 scores = bt.score_tasks(
     forecasts, bt.truth_from_vintage(target, LATER), LATER
 )
-done = complete_weeks(daily, LATER, task.locations)
+done = complete_weeks(target, daily, LATER)
 complete = scores.drop(columns="complete").merge(
     done.loc[done["complete"], ["location", "target_end_date"]],
     on=["location", "target_end_date"],
