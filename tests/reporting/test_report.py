@@ -223,46 +223,6 @@ def test_ladder_page(tmp_path: Path) -> None:
     assert "randomwalk" not in sampler
 
 
-def test_nowcast_recovery_section(tmp_path: Path) -> None:
-    assert report._nowcast_recovery_section(tmp_path / "missing.csv") == ""
-    rows = pd.DataFrame(
-        {
-            "sim_day": [188, 188],
-            "vintage": ["2026-10-10", "2026-10-10"],
-            "version": ["fresh", "recentred"],
-            "commit": ["abc", "def"],
-            "truth": ["final_vintage", "final_vintage"],
-            "n_cells": [20, 20],
-            "coverage_50": [0.3, 0.5],
-            "coverage_90": [0.6, 0.9],
-            "mae_median": [12.0, 6.0],
-            "share_below_reported": [0.2, 0.0],
-            "divergent_share": [0.0, 0.0],
-            "max_rhat": [None, 1.01],
-            "step_size": [None, 0.05],
-        }
-    )
-    path = tmp_path / "nowcast-recovery.csv"
-    rows.to_csv(path, index=False)
-    text = report._nowcast_recovery_section(path)
-    assert text.startswith("### Nowcasts of partly reported weeks")
-    assert "recentred" in text
-    assert "final_vintage" not in text  # truths get plain labels
-    assert "final vintage" in text
-
-
-def test_nowcast_recovery_lead_follows_the_results() -> None:
-    path = ROOT / "results" / "nowcast-recovery.csv"
-    text = report._nowcast_recovery_section(path)
-    rows = pd.read_csv(path)
-    final = rows.loc[rows["truth"] == "final_vintage"]
-    fresh = final.loc[final["version"] == "fresh", "mae_median"]
-    recentred = final.loc[final["version"] == "recentred", "mae_median"]
-    # The lead states the error of each version as the results give it.
-    for value in [*fresh, *recentred]:
-        assert f"{value:.1f}" in text
-
-
 def _scores() -> pd.DataFrame:
     base = pd.DataFrame(
         {

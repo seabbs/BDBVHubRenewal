@@ -93,8 +93,6 @@ Real forecasts scored against each later real vintage, as reported at each.
 
 --8<-- "recovery-section.md"
 
---8<-- "nowcast-recovery.md"
-
 ## Simulated scenarios
 
 Three scenarios copy the real 2026-10-24 data and differ only in Rt after the data, which falls by a quarter, holds or rises by a quarter.
