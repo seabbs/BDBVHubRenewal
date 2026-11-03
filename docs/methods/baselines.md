@@ -9,6 +9,67 @@ The renewal models are on the [Renewal models](model.md) page.
 `randomwalk` is the same walk with no nowcast.
 Both run at province and zone level ([Health zones](#health-zones)), and national is the sum of the provinces.
 
+## Structure
+
+`randomwalknowcast` nowcasts each recent week and walks forward from each nowcast draw.
+
+```mermaid
+flowchart TD
+    subgraph TRI["Reporting triangle, per place p"]
+        SNAP["Daily onsets N<sub>p,r</sub>(t)<br/>by onset day and release r"]
+        PAIR["Release pairs (r, r + 1)<br/>gap s ≤ D = 42 days"]
+    end
+    DEL["Daily delay g<sub>p</sub>(j) ≥ 0<br/>weighted non-negative<br/>least squares<br/><i>own or parent by age</i>"]
+    G["Growth to final G<sub>p</sub>(a)<br/>share reported 1 / G<sub>p</sub>(a)"]
+    MU["Nowcast mean μ<sub>p</sub>(w)<br/>Σ<sub>t ∈ w</sub> N<sub>p,o</sub>(t) G<sub>p</sub>(c<sub>o</sub> − t)"]
+    RETRO["Earlier releases r &lt; o<br/>nowcast to release o"]
+    OBS["Observation model<br/>by weeks back k<br/>size φ<sub>p,k</sub>, removal b<sub>p,k</sub>"]
+    X["Nowcast draw X<sub>p,i</sub>(w)<br/>max(0, Y<sub>p,o</sub> + A − B)<br/>A ~ NB(μ<sub>p</sub> − Y<sub>p,o</sub>, φ<sub>p,k</sub>)<br/>B ~ Poisson(b<sub>p,k</sub> Y<sub>p,o</sub>)"]
+    SIG["Walk spread σ<sub>p</sub><br/>changes in log(1 + Y<sub>p,o</sub>)"]
+    W["Walk on log(1 + λ<sub>i</sub>)<br/>from X<sub>p,i</sub>(w<sub>0</sub>) in sample i<br/>Poisson counts"]
+    NAT["National = sum of provinces<br/>sample by sample"]
+
+    SNAP --> PAIR
+    PAIR --> DEL
+    DEL --> G
+    G --> MU
+    SNAP --> MU
+    TRI --> RETRO
+    RETRO --> OBS
+    MU --> X
+    OBS --> X
+    X --> W
+    SIG --> W
+    W --> NAT
+```
+
+`randomwalk` uses the same delay only to find its start week.
+
+```mermaid
+flowchart TD
+    subgraph TRI["Reporting triangle, per place p"]
+        SNAP["Daily onsets N<sub>p,r</sub>(t)<br/>by onset day and release r"]
+        PAIR["Release pairs (r, r + 1)<br/>gap s ≤ D = 42 days"]
+    end
+    DEL["Daily delay g<sub>p</sub>(j)<br/>and growth to final G<sub>p</sub>(a)"]
+    PI["Share reported π<sub>p</sub>(w)<br/>mean of 1 / G<sub>p</sub>(c<sub>o</sub> − t)"]
+    W0["Start week w<sub>0</sub><br/>latest with π<sub>p</sub>(w) ≥ 0.95"]
+    Y["Reported Y<sub>p,o</sub>(w<sub>0</sub>)"]
+    SIG["Walk spread σ<sub>p</sub><br/>changes in log(1 + Y<sub>p,o</sub>)"]
+    W["Walk on log(1 + λ<sub>i</sub>)<br/>from Y<sub>p,o</sub>(w<sub>0</sub>)<br/>Poisson counts<br/>floored at Y<sub>p,o</sub>(w)<br/>in weeks with data"]
+    NAT["National = sum of provinces<br/>sample by sample"]
+
+    SNAP --> PAIR
+    PAIR --> DEL
+    DEL --> PI
+    PI --> W0
+    W0 --> Y
+    SNAP --> Y
+    Y --> W
+    SIG --> W
+    W --> NAT
+```
+
 ## Daily release snapshots
 
 Both models use the daily onsets of each hub release.
