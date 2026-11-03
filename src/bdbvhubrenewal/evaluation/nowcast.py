@@ -6,19 +6,31 @@ The models forecast from the releases up to the origin only
 (`bdbvhubrenewal.forecasters.randomwalk`).
 Weeks back $k$ count from the week holding the origin's cut-off, so
 forecast weeks have $k < 0$.
-Three targets are scored.
+Two targets are scored.
 
-**Next release.** The count the later release $o'$ shows for each hub
-week up to `MAX_WEEKS_BACK` back from the origin's cut-off week.
-`randomwalknowcast` predicts it by chaining the origin's days over the
-actual gap to $o'$ only (`forecasters.chain.retro_plan`), with the
-spread of the origin.
-The prediction is scored only when the steps stand in for the gap within
-`Settings.max_mismatch` days, as for the errors behind the spread.
-A forecast dropped for one model is dropped for all.
-Other models forecast the final count, not the count at the next
-release, so they are not scored on this target, and the origin listing
-says so.
+**Reported.** The count each later release $o'$ shows for every week
+it covers.
+Every model forecasts the final count $X$, so its samples are mapped to
+the count expected at $o'$ (`expected_reported`).
+The chain ladder fitted at the origin (`forecasters.chain`) gives
+$\pi_o$, the share of a week's final count reported at the origin, and
+$\pi_{o'}$, the share reported at the cut-off of $o'$
+(`reported_share`).
+With $R_o$ the count reported at the origin,
+
+$$
+\hat{y}_{o'} = R_o + q \, (X - R_o), \qquad
+q = \frac{\pi_{o'} - \pi_o}{1 - \pi_o},
+$$
+
+so $q$ is the share of the count outstanding at the origin that $o'$ is
+expected to report.
+The map is the same for every model, applies sample by sample and keeps
+their order.
+For a model whose final count is the chain nowcast, it gives the chain
+over the gap to $o'$.
+An origin with no pair of releases within the delay window has no chain,
+so no model is scored on this target from it.
 
 **Complete weeks.** The count the latest release shows for the weeks it
 reports in full, decided from the releases alone and never from a
@@ -27,13 +39,8 @@ By default a week is complete when it is at least `COMPLETE_WEEKS` weeks
 old at the latest release and grew by less than `COMPLETE_GROWTH`
 between the last two releases.
 
-**Latest release.** The count the latest release shows for every week,
-forecast weeks included. Recent weeks are still incomplete there, so
-this target favours forecasts that are low, and it is the only one that
-scores forecast weeks before they are complete.
-
 Stored forecasts of models too slow to run here, such as the renewal
-models, are scored on the complete and latest targets.
+models, and hub team forecasts are scored on both targets.
 
 A floor, the count as reported at the origin, is scored on the same
 targets.
@@ -47,6 +54,7 @@ and every table counts its forecasts, $n$.
 
 from __future__ import annotations
 
+import datetime as dt
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -54,12 +62,9 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.dates import epiweek_end
-from bdbvhubrenewal.data.snapshots import (
-    release_cutoff,
-    snapshot_arrays,
-    week_sum,
-)
+from bdbvhubrenewal.baselinenowcast import chain_growth, exact_plan
+from bdbvhubrenewal.data.dates import as_date, epiweek_end
+from bdbvhubrenewal.data.snapshots import release_cutoff
 from bdbvhubrenewal.evaluation.scoring import SCORE_COLUMNS, score_forecasts
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
@@ -73,13 +78,10 @@ from bdbvhubrenewal.forecasters.chain import (
     MissingSnapshots,
     Origin,
     Settings,
-    grow,
-    retro_plan,
 )
 from bdbvhubrenewal.forecasters.randomwalk import (
     RandomWalk,
     RandomWalkNowcast,
-    frame,
 )
 
 __all__ = [
@@ -91,9 +93,11 @@ __all__ = [
     "ReleaseBacktest",
     "clock_sensitivity",
     "complete_weeks",
+    "expected_reported",
     "pooled_summary",
     "relative_wis",
     "release_backtest",
+    "reported_share",
     "summarise",
     "weeks_back_from_cutoff",
 ]
@@ -104,10 +108,10 @@ BASELINE = "as reported"
 """Name of the floor: the count reported at the origin, as a forecast."""
 
 MAX_WEEKS_BACK = 3
-"""Last week back from the origin's week scored on the next release."""
+"""Last week back from the origin's week kept in the quantiles."""
 
 MAX_WEEKS_AHEAD = 4
-"""Last forecast week after the origin's week scored on the latest release."""
+"""Last forecast week after the origin's week scored and kept."""
 
 COMPLETE_WEEKS = 4
 """Weeks a week must be old at the latest release to count as complete."""
@@ -118,8 +122,8 @@ COMPLETE_GROWTH = 0.02
 NEAR_ZERO = 5.0
 """Places whose weekly count never reaches this are near zero."""
 
-NO_NEXT = "not scored: no next-release prediction"
-"""Why a model that forecasts the final count has no next release score."""
+NO_CHAIN = "no delay pair at the origin, so no reported target"
+"""Why a stored forecast has no score on the reported target."""
 
 _LEVELS = (0.05, 0.25, 0.5, 0.75, 0.95)
 _KEYS = (
@@ -146,9 +150,8 @@ class ReleaseBacktest:
         the weeks up to four back, with the count reported at the origin
         and the truth where there is one.
     origins : pandas.DataFrame
-        One row per origin and model: `status`, `reason`, the days by
-        which the chain steps differ from the gap to each later release
-        and the number of forecasts scored on each target.
+        One row per origin and model: `status`, `reason` and the number
+        of forecasts scored on each target.
     fits : pandas.DataFrame
         Each model's fit summaries from `ForecastModel.fit_diagnostics`.
     """
@@ -252,47 +255,124 @@ def weeks_back_from_cutoff(
     return back.astype(int).set_axis(weeks.index)
 
 
-def expected_point(
-    origin: Origin, daily: pd.DataFrame, later: str, locations: Sequence[str]
-) -> tuple[np.ndarray, int]:
-    """Return the count expected at a later release, by hub week.
+def reported_share(
+    origin: Origin, cutoff: dt.date, weeks: Sequence[str]
+) -> pd.DataFrame:
+    r"""Return the share of each week's final count reported by a cut-off.
+
+    Under the delay fitted at the origin, a day of age $a$ at the cut-off
+    has $1 / G(a)$ of its final count reported, with $G$ the growth to
+    $D$ along the steps of the origin's latest pair, as for
+    `forecasters.chain.final_plan`.
+    Days after the cut-off have none, and a week's share is the mean
+    over its seven days.
+    At the origin's own cut-off this is `Origin.complete`.
 
     Parameters
     ----------
     origin : Origin
-        The fit at the origin.
-    daily : pandas.DataFrame
-        Daily onsets by release, including `later`.
-    later : str
-        The later release.
-    locations : sequence of str
-        The task's places.
+        The fit at the origin. Only its delay factors are used.
+    cutoff : datetime.date
+        The cut-off of the release.
+    weeks : sequence of str
+        Hub week ends.
 
     Returns
     -------
-    tuple
-        The mean weekly count the later release shows for the days up to
-        the origin's cut-off, `[L, W]` over the origin's weeks, and the
-        days by which the chain steps differ from the gap.
-
-    Raises
-    ------
-    ValueError
-        If the releases or places differ from the origin's.
+    pandas.DataFrame
+        Columns `location`, `target_end_date` and `share`, for every
+        node of the origin.
     """
-    big = snapshot_arrays(daily, later, tuple(locations))
+    fit, settings, snap = origin.fit, origin.settings, origin.snap
+    d = settings.max_delay
+    last = len(fit.pairs) - 1
+    slot = int(fit.pair_step[last])
+    ages = np.maximum(np.arange(d) + settings.clock_shift, 0)
+    g = np.array(
+        chain_growth(
+            fit.factors,
+            exact_plan(ages, int(fit.steps[slot]), slot, d),
+        )
+    )
+    # A chain with a zero factor revises the day to nothing, so it counts
+    # as fully reported, as in `build_origin`.
+    by_age = np.concatenate(
+        [1.0 / np.where(g > 0, g, 1.0), np.ones((g.shape[0], 1))], axis=1
+    )
+    first = snap.days[0].date()
+    rows = []
+    for w in weeks:
+        days = [as_date(str(w)) - dt.timedelta(days=i) for i in range(7)]
+        age = np.array([(cutoff - day).days for day in days])
+        seen = (age >= 0) & np.array([day >= first for day in days])
+        daily = np.where(seen[None, :], by_age[:, np.clip(age, 0, d)], 0.0)
+        rows.append(
+            pd.DataFrame(
+                {
+                    "location": snap.locations,
+                    "target_end_date": str(w),
+                    "share": daily.mean(axis=1),
+                }
+            )
+        )
+    return pd.concat(rows, ignore_index=True)
+
+
+def expected_reported(
+    samples: pd.DataFrame,
+    origin: Origin,
+    reported: pd.DataFrame,
+    cutoff: dt.date,
+) -> pd.DataFrame:
+    r"""Map samples of the final count to the count expected by a cut-off.
+
+    Each sample $X$ becomes $R_o + q (X - R_o)$, floored at 0, with $R_o$
+    the count reported at the origin and $q$ the share of the count
+    outstanding at the origin that the delay expects to be reported by
+    `cutoff` (`reported_share`).
+    A week the delay counts complete at the origin takes $q = 1$ at any
+    later cut-off, so the forecast final count stands.
+
+    Parameters
+    ----------
+    samples : pandas.DataFrame
+        Columns `location`, `target_end_date`, `sample` and `value`.
+    origin : Origin
+        The fit at the origin.
+    reported : pandas.DataFrame
+        Columns `location`, `target_end_date` and `reported`, the counts
+        at the origin. Weeks not in it have 0 reported.
+    cutoff : datetime.date
+        The cut-off of the later release.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The samples with mapped values, for the origin's nodes only.
+    """
+    keys = ["location", "target_end_date"]
     snap = origin.snap
-    if (
-        big.locations != snap.locations
-        or big.releases[: len(snap.releases)] != snap.releases
-    ):
-        raise ValueError("Releases or places differ from the origin's.")
-    p = big.releases.index(later)
-    plan, mismatch = retro_plan(big, origin.o, p, origin.fit, origin.settings)
-    counts = big.counts[:, origin.o, :]
-    growth = grow(origin.fit, plan)
-    point = week_sum(big, counts * growth)
-    return point[:, : snap.n_weeks], mismatch
+    weeks = sorted(str(w) for w in samples["target_end_date"].unique())
+    start = snap.days[snap.cut[origin.o]].date()
+    now = reported_share(origin, start, weeks)
+    then = reported_share(origin, cutoff, weeks)
+    share = now.merge(then, on=keys, suffixes=("_o", "_l"))
+    left = 1.0 - share["share_o"]
+    gain = (share["share_l"] - share["share_o"]) / left.where(left > 0, 1.0)
+    full = 1.0 if cutoff > start else 0.0
+    share["q"] = np.where(left > 1e-9, gain.clip(0.0, 1.0), full)
+    out = samples.astype({"target_end_date": str}).merge(
+        share[[*keys, "q"]], on=keys
+    )
+    out = out.merge(
+        reported[[*keys, "reported"]].astype({"target_end_date": str}),
+        on=keys,
+        how="left",
+    )
+    r = out.pop("reported").fillna(0.0)
+    q = out.pop("q")
+    out["value"] = np.maximum(r + q * (out["value"] - r), 0.0)
+    return out[list(samples.columns)]
 
 
 def _reported(
@@ -358,7 +438,7 @@ def release_backtest(
     complete_rule: str = "growth",
     complete_after: int = COMPLETE_WEEKS,
 ) -> ReleaseBacktest:
-    """Run the random walk models from every real release and score them.
+    """Forecast from every real release and score on both targets.
 
     Parameters
     ----------
@@ -369,12 +449,12 @@ def release_backtest(
     target : pandas.DataFrame
         The tidy target table.
     models : sequence of str or ForecastModel
-        Registered model names, or models. `randomwalknowcast` also gives
-        the next release prediction from the chain.
+        Registered model names, or models, run here.
     stored : pandas.DataFrame, optional
-        Samples of other models with columns `model`, `vintage`,
-        `location`, `target_end_date`, `sample` and `value`. They are
-        scored on the complete and latest targets.
+        Samples of the final count from other models, such as the renewal
+        models or hub teams, with columns `model`, `vintage`, `location`,
+        `target_end_date`, `sample` and `value`. Places other than the
+        task's and national are dropped.
     complete_rule, complete_after : str, int
         The `rule` and `weeks` of `complete_weeks`.
 
@@ -401,39 +481,23 @@ def release_backtest(
     origin_rows: list[dict[str, object]] = []
     fit_rows: list[pd.DataFrame] = []
 
-    def final(
-        samples: pd.DataFrame, name: str, origin: str, kept: bool = False
-    ) -> None:
-        if origin < latest:
-            for tgt in ("complete", "latest"):
-                frames.append(
-                    _label(samples, name, origin, tgt, latest, daily).assign(
-                        stored=kept
-                    )
-                )
-
     for task in sorted(tasks, key=lambda t: t.vintage):
         if task.kind != "real":
             continue
+        if task.daily_history is None or task.daily_history.empty:
+            raise MissingSnapshots(
+                f"The task for {task.vintage} has no daily release snapshots."
+            )
         later = [v for v in releases if v > task.vintage]
+        finals: dict[str, tuple[pd.DataFrame, bool]] = {}
         made: dict[str, np.ndarray] = {}
         for name, model in built.items():
-            chained = isinstance(model, RandomWalkNowcast)
             row: dict[str, object] = {
                 "origin": task.vintage,
                 "model": name,
                 "status": "ran" if later else "no later release",
                 "reason": "",
-                "next": "chain over the gap" if chained else NO_NEXT,
-                "n_next": 0,
-                "n_complete": 0,
-                "n_latest": 0,
             }
-            if task.daily_history is None or task.daily_history.empty:
-                raise MissingSnapshots(
-                    f"{name} needs daily release snapshots, and the task "
-                    f"for {task.vintage} has none."
-                )
             try:
                 samples = add_national(model.forecast(task))
             except MissingSnapshots:
@@ -459,66 +523,56 @@ def release_backtest(
                 fits.insert(0, "model", name)
                 fits.insert(1, "origin", task.vintage)
                 fit_rows.append(fits)
-            final(samples, name, task.vintage)
-            if chained:
-                assert isinstance(model, RandomWalkNowcast)
-                origin = model.origin_at(task, errors=True)
-                for o2 in later:
-                    nxt = _next_release(model, origin, task, daily, o2, row)
-                    if nxt is not None:
-                        frames.append(
-                            _label(nxt, name, task.vintage, "next", o2, daily)
-                        )
+            finals[name] = (samples, False)
             origin_rows.append(row)
-        if stored is not None and later:
-            rows = stored.loc[stored["vintage"].astype(str) == task.vintage]
+        if not later:
+            continue
+        chain: Origin | None
+        try:
+            chain = RandomWalk().origin_at(task, errors=False)
+        except ModelUnavailableError as err:
+            log.warning("No chain at %s: %s", task.vintage, err)
+            chain = None
+        if stored is not None:
+            places = {*task.locations, NATIONAL}
+            rows = stored.loc[
+                (stored["vintage"].astype(str) == task.vintage)
+                & stored["location"].isin(places)
+            ]
             for stored_name, grp in rows.groupby("model"):
                 keep = grp[["location", "target_end_date", "sample", "value"]]
-                final(keep, str(stored_name), task.vintage, kept=True)
+                finals[str(stored_name)] = (keep, True)
                 origin_rows.append(
                     {
                         "origin": task.vintage,
                         "model": str(stored_name),
                         "status": "stored",
-                        "reason": "",
-                        "next": NO_NEXT,
+                        "reason": "" if chain is not None else NO_CHAIN,
                     }
                 )
-        if made and task.vintage < latest:
-            floor = _reported(real, task.vintage, task)
-            final(floor, BASELINE, task.vintage)
+        if made:
+            finals[BASELINE] = (_reported(real, task.vintage, task), False)
+        reported = _truth(real, task.vintage).rename(
+            columns={"truth": "reported"}
+        )
+        for name, (samples, kept) in finals.items():
+            frames.append(
+                _label(samples, name, task.vintage, "complete", latest, daily)
+                .assign(stored=kept)
+            )  # fmt: skip
+            if chain is None:
+                continue
             for o2 in later:
+                cut = release_cutoff(daily, o2)
+                pred = expected_reported(samples, chain, reported, cut)
                 frames.append(
-                    _label(floor, BASELINE, task.vintage, "next", o2, daily)
-                )
+                    _label(pred, name, task.vintage, "reported", o2, daily)
+                    .assign(stored=kept)
+                )  # fmt: skip
     done = complete_weeks(
         target, daily, latest, rule=complete_rule, weeks=complete_after
     )
     return _score(frames, origin_rows, fit_rows, real, done)
-
-
-def _next_release(
-    model: RandomWalkNowcast,
-    origin: Origin,
-    task: ForecastTask,
-    daily: pd.DataFrame,
-    later: str,
-    row: dict[str, object],
-) -> pd.DataFrame | None:
-    """Return the prediction of the count at a later release, or None."""
-    try:
-        point, miss = expected_point(origin, daily, later, task.locations)
-    except ModelUnavailableError as err:
-        log.warning(
-            "%s has no count expected at %s: %s", model.name, later, err
-        )
-        row[f"unavailable_{later}"] = str(err)
-        return None
-    row[f"mismatch_{later}"] = miss
-    if miss > origin.settings.max_mismatch:
-        return None
-    traj, weeks = model.trajectories(origin, task, point)
-    return add_national(frame(task, weeks, traj, model.rows(origin, task)))
 
 
 def _score(
@@ -563,9 +617,7 @@ def _score(
     for (target, truth_v), grp in samples.groupby(["target", "truth_vintage"]):
         truth = _truth(real, str(truth_v))
         grp = grp.assign(horizon=grp["weeks_back"])
-        if target == "next":
-            grp = grp.loc[grp["weeks_back"].between(0, MAX_WEEKS_BACK)]
-        elif target == "latest":
+        if target == "reported":
             grp = grp.loc[grp["weeks_back"] >= -MAX_WEEKS_AHEAD]
         else:
             grp = grp.merge(
@@ -626,7 +678,7 @@ def _score(
         origins = origins.drop(
             columns=[c for c in origins if str(c).startswith("n_")]
         ).merge(counts, on=["model", "origin"], how="left")
-        for c in ("n_next", "n_complete", "n_latest"):
+        for c in ("n_reported", "n_complete"):
             origins[c] = origins.get(c, 0)
             origins[c] = origins[c].fillna(0).astype(int)
     if not scores.empty:

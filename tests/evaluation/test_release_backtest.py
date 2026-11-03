@@ -21,12 +21,13 @@ from bdbvhubrenewal.evaluation.nowcast import (
     relative_wis,
     release_backtest,
     reported_share,
+    stored_finals,
     summarise,
     weeks_back_from_cutoff,
 )
 from bdbvhubrenewal.forecasters import get_model
-from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
 from bdbvhubrenewal.forecasters.chain import MissingSnapshots
+from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
 
 
 @pytest.fixture(scope="module")
@@ -88,7 +89,9 @@ def test_reported_target_scores_forecast_weeks_the_release_covers(
 
 
 @pytest.fixture(scope="module")
-def origin_1017(delays: pd.DataFrame, target: pd.DataFrame, daily: pd.DataFrame):  # type: ignore[no-untyped-def]
+def origin_1017(
+    delays: pd.DataFrame, target: pd.DataFrame, daily: pd.DataFrame
+):  # type: ignore[no-untyped-def]
     real = target.loc[target["kind"] == "real"]
     task = make_tasks(
         real.loc[real["vintage"] == "2026-10-17"],
@@ -102,7 +105,7 @@ def origin_1017(delays: pd.DataFrame, target: pd.DataFrame, daily: pd.DataFrame)
 def test_reported_share_matches_the_origin_and_grows_with_time(
     origin_1017,  # type: ignore[no-untyped-def]
 ) -> None:
-    task, origin = origin_1017
+    _, origin = origin_1017
     snap = origin.snap
     cut = snap.days[snap.cut[origin.o]].date()
     weeks = list(snap.week_ends)
@@ -115,7 +118,8 @@ def test_reported_share_matches_the_origin_and_grows_with_time(
     later = reported_share(origin, cut + pd.Timedelta(days=8), weeks)
     both = now.merge(later, on=["location", "target_end_date"])
     assert (both["share_y"] >= both["share_x"] - 1e-12).all()
-    far = reported_share(origin, cut + pd.Timedelta(days=400), weeks)
+    # Every full week is reported in full long after.
+    far = reported_share(origin, cut + pd.Timedelta(days=400), weeks[1:])
     assert np.allclose(far["share"], 1.0)
     # A week after the cut-off has nothing reported.
     ahead = reported_share(origin, cut, ["2026-11-07"])
@@ -330,3 +334,40 @@ def test_identical_samples_from_two_models_stop_the_run() -> None:
     check_distinct(
         pd.concat([a, dataclasses.replace(b) if False else b.assign(value=4.0)])
     )
+
+
+def test_stored_finals_take_final_counts_and_match_hub_rounds() -> None:
+    row = {"location": "CD", "target_end_date": "2026-10-24", "sample": 1}
+    forecasts = pd.DataFrame(
+        [
+            {**row, "model": "renewal", "kind": "real",
+             "vintage": "2026-10-17", "value": 5.0, "as_of": np.nan},
+            {**row, "model": "renewal", "kind": "real",
+             "vintage": "2026-10-17", "value": 4.0, "as_of": "2026-10-24"},
+            {**row, "model": "randomwalk", "kind": "real",
+             "vintage": "2026-10-17", "value": 3.0, "as_of": np.nan},
+        ]
+    )  # fmt: skip
+    hub = pd.DataFrame(
+        [
+            {**row, "model": "team", "source": "hub",
+             "reference_date": "2026-10-31", "value": 7.0},
+            {**row, "model": "team", "source": "hub",
+             "reference_date": "2026-12-05", "value": 8.0},
+        ]
+    )  # fmt: skip
+    got = stored_finals(
+        forecasts,
+        hub,
+        ["2026-10-17", "2026-10-24", "2026-11-01"],
+        exclude=("randomwalk",),
+    )
+    assert list(got.columns) == [
+        "model", "vintage", "location", "target_end_date", "sample", "value",
+    ]  # fmt: skip
+    got = got.set_index("model")
+    # The vintage-matched row is not a final count, and the round with no
+    # serving vintage is dropped.
+    assert got.loc["renewal", "value"] == 5.0
+    assert got.loc["team", "vintage"] == "2026-10-24"
+    assert len(got) == 2
