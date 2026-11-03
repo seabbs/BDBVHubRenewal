@@ -4,7 +4,7 @@
 Each real vintage before the truth vintage is forecast by `randomwalk` and
 `randomwalknowcast` on each zone's own release snapshots (`zone_task`),
 for every zone with cases at the vintage.
-The zone delay, Skellam spread and walk spread are each the zone's own
+The zone delay, observation model and walk spread are each the zone's own
 where it has at least 10 cases a week, else its province's, else
 national (`pooling`).
 Each model is scored as it runs, and again with its zone samples made to

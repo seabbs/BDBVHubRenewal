@@ -8,12 +8,12 @@ least `min_level` cases a week.
 A parent's counts are the sum of its children's, so the parent is not
 in its own pool unless no child qualifies.
 A node counts as qualifying when its level is at least `min_level`, and
-for the Skellam spread also when its own estimate has at least `min_err`
+for the observation model also when its own estimate has at least `min_err`
 errors.
 A qualifying node uses its own estimate.
 Otherwise it uses the pooled estimate of its nearest ancestor that
 qualifies, else the country's pooled estimate.
-The delay, the spread of the walk and the Skellam spread all use this
+The delay, the spread of the walk and the observation model all use this
 rule with one threshold.
 """
 

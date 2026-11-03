@@ -42,7 +42,7 @@ A zero denominator follows baselinenowcast, so that $F_{p,s}(x) = 1 + (\sum N_{p
 The parent of a province is the country, whose counts are the sum of its provinces.
 Only onset days within $1.5 D = 63$ days of the cut-off of the latest release used contribute to the sums, as baselinenowcast's default `n_history_delay`, and a retrospective fit uses the cut-off of its own release.
 Before the sums, each day's increments between its releases go through baselinenowcast's `preprocess_negative_values`, so a downward revision is set to zero and taken from the earlier increments of that day and no factor falls below 1.
-This applies to the delay only, because the Skellam spread below still allows negative revisions.
+This applies to the delay only, because the removals below still allow negative revisions.
 The preprocessing runs along releases for each onset day, where baselinenowcast runs it along the delay columns of a reporting triangle.
 
 At the latest release $o$, $s_o$ is the step of its latest in-window pair.
@@ -63,41 +63,41 @@ $G_p(a)$ is the growth of a day's count from age $a$ to final, and $1 / G_p(a)$ 
 
 Every observed day is nowcast, with no handover and no minimum count.
 The nowcast mean of day $t$ is $N_{p,o}(t)\, G_p(c_o - t)$, summed to hub weeks as $\mu_p(w)$.
-With $\text{rem} = \mu_p(w) - Y_{p,o}(w)$ the change still to come, the final count is Skellam on the remaining count,
+With $\text{rem} = \mu_p(w) - Y_{p,o}(w) \ge 0$ the count still to come, the final count is new reports minus removals, as in epinowcast,
 
 $$
 X_{p,i}(w) = \max\big\{0,\ Y_{p,o}(w) + A - B\big\},
 \qquad
-A \sim \text{Poisson}\big(\text{rem}^+ + \rho_{p,k}\,|\text{rem}|\big),
+A \sim \text{NB}\big(\text{rem},\ \phi_{p,k}\big),
 \qquad
-B \sim \text{Poisson}\big(\text{rem}^- + \rho_{p,k}\,|\text{rem}|\big),
+B \sim \text{Poisson}\big(b_{p,k}\, Y_{p,o}(w)\big).
 $$
 
-with $\text{rem}^+ = \max(\text{rem}, 0)$ and $\text{rem}^- = \max(-\text{rem}, 0)$.
-Before the floor the mean is $\mu_p(w)$ and the variance is $|\text{rem}|(1 + 2\rho_{p,k})$, so counts can be revised down and a week with nothing left to report has no spread.
-The Skellam is plugged into baselinenowcast's uncertainty interface, as a fit by horizon (`fit_skellam`, in place of `fit_nb`) and a sampler (`sample_skellam`, in place of `sample_nb`) with the same arguments.
+$A$ is baselinenowcast's negative binomial on the remaining count, with mean $\text{rem}$ and size $\phi_{p,k}$, drawn with the port's `sample_nb`.
+$B$ removes a share $b_{p,k}$ of the count reported, so counts can be revised down.
+Before the floor the mean is $\mu_p(w) - b_{p,k} Y_{p,o}(w)$.
 Sample $i$ is one draw of $X_{p,i}(w)$ per week.
 
-**Spread.**
+**Fit.**
 For each earlier release $r < o$ with an in-window pair, a nowcast $\hat y_p(w)$ is made from the data up to $r$, with the delay of $r$.
 It is chained over the gap $c_o - c_r$ only.
 Each remaining part of the gap takes the step of the in-window pair at $r$ nearest to it, ties to the latest pair, and ages are never interpolated.
 The release is kept when the steps differ from the gap by at most 1 day.
-The target is $y_p(w)$, the count of $w$ at release $o$ on days up to $c_r$.
-For weeks back $k$ with a day younger than $D$ at $r$, and where $Y_{p,r}(w) > 0$ or $\hat y_p(w) > 0$,
+For weeks back $k$ with a day younger than $D$ at $r$, and where $Y_{p,r}(w) > 0$ or $\hat y_p(w) > 0$, each onset day up to $c_r$ is compared between releases $r$ and $o$.
+Its rises sum to the new reports $A_{p,r}(w)$ and its falls to the removals $B_{p,r}(w)$.
+With $\widehat{\text{rem}} = \hat y_p(w) - Y_{p,r}(w)$,
 
 $$
-e = y_p(w) - \hat y_p(w),
+\phi_{p,k} = \arg\max_\phi \sum \log \text{NB}\big(A_{p,r}(w);\ \widehat{\text{rem}},\ \phi\big),
 \qquad
-\text{rem} = \hat y_p(w) - Y_{p,r}(w),
-\qquad
-\rho_{p,k} = \max\Big(0,\ \frac{\sum (e^2 - |\text{rem}|)}{\sum 2|\text{rem}|}\Big),
+b_{p,k} = \frac{\sum B_{p,r}(w)}{\sum Y_{p,r}(w)},
 $$
 
 summed over the kept releases.
-Weeks without a $\rho_{p,k}$ have $\rho = 0$, which assumes no error beyond the Skellam remainder.
-The spread is fitted per horizon from the retrospective errors, as `fit_by_horizon` does in baselinenowcast.
-Baselinenowcast 0.2.2 has a negative binomial observation model, and the Skellam replaces it so that counts can be revised down.
+$\phi_{p,k}$ is fitted with the port's `fit_nb` through `fit_by_horizon`, as baselinenowcast does, on $[0.1, 1000]$.
+A week with $\widehat{\text{rem}} = 0$ says nothing about $\phi$, so it is left out of that fit.
+$b_{p,k}$ is the Poisson maximum likelihood estimate of the removals.
+An estimate with fewer than 2 errors at $k$ has $\phi_{p,k} = 1000$, the Poisson end of the range.
 
 ## Own or pooled estimates
 
@@ -105,14 +105,13 @@ The delay $F_{p,s}(x)$ is own or parent by age.
 A place uses its own factor at age $x$ when its denominator $\sum N_{p,r}(t)$, summed over the pooled pairs, is at least 10 cases.
 Otherwise it uses the factor of its parent at that age (zone, province, country).
 The country uses its own factor.
-The spread $\rho_{p,k}$ and the spread of the walk $\sigma_p$ use one rule with a threshold of 10 cases a week and 2 errors.
+The observation model $(\phi_{p,k}, b_{p,k})$ and the spread of the walk $\sigma_p$ use one rule with a threshold of 10 cases a week and 2 errors.
 $\ell_p$ is the mean of $Y_{p,r}(w)$ over weeks 3 to 6 back, in cases a week.
 A place with $\ell_p \ge 10$ uses its own estimate.
-For $\rho_{p,k}$ it also needs at least 2 errors at $k$.
+For $(\phi_{p,k}, b_{p,k})$ it also needs at least 2 errors at $k$.
 Otherwise it uses the pooled estimate of its nearest parent that meets the same rule, and otherwise the country's.
 A pooled estimate uses the errors and weekly changes of the place's children with $\ell \ge 10$ together.
 A place's counts are the sum of its children's, so the place itself is pooled only when none of its children has $\ell \ge 10$.
-If the estimate used has fewer than 2 errors at $k$, $\rho_{p,k} = 0$.
 
 ## Walk
 

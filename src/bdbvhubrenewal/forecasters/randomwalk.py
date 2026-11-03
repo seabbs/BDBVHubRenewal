@@ -17,8 +17,8 @@ Weeks up to the start are returned as reported.
 Later weeks are walk draws, floored at the count reported.
 
 `RandomWalkNowcast` (`randomwalknowcast`) nowcasts every day with data and
-sums to hub weeks with a Skellam observation model on the remaining
-count (`skellam`).
+sums to hub weeks, with negative binomial new reports on the remaining
+count minus Poisson removals of the count reported (`obs`).
 Each sample then starts the walk from its own nowcast of the latest week
 whose seven days are all on or before the cut-off.
 If the week holding the cut-off is partial, its days after the cut-off
@@ -27,7 +27,7 @@ add Poisson draws from that week's walk rate.
 The spread of the walk is the standard deviation of the weekly changes of
 $\log(1 + y)$ in reported counts, over the weeks ending at the start of
 `randomwalk`.
-The delay, the Skellam spread and the walk spread each use their own
+The delay, the observation model and the walk spread each use their own
 estimate where a place has at least 10 cases a week, and otherwise the
 pooled estimate of the nearest parent that does (`pooling`).
 National is the sum of provinces by sample.
@@ -60,7 +60,7 @@ from bdbvhubrenewal.forecasters.chain import (
     Settings,
     build_origin,
 )
-from bdbvhubrenewal.forecasters.skellam import sample_skellam
+from bdbvhubrenewal.forecasters.obs import sample_count
 from bdbvhubrenewal.forecasters.walk import random_walk
 
 __all__ = ["RandomWalk", "RandomWalkNowcast"]
@@ -171,19 +171,19 @@ class RandomWalk:
     ) -> None:
         rows: list[dict[str, object]] = []
         for loc, i in zip(task.locations, self.rows(origin, task), strict=True):
-            rho_n = None if origin.rho_n is None else int(origin.rho_n[i, 0])
-            rho_src = (
+            n_err = None if origin.obs_n is None else int(origin.obs_n[i, 0])
+            obs_src = (
                 None
-                if origin.rho_source is None
-                else _label(origin, int(origin.rho_source[i, 0]))
+                if origin.obs_source is None
+                else _label(origin, int(origin.obs_source[i, 0]))
             )
             rows.append(
                 {
                     "location": loc,
                     "start_week": origin.snap.week_ends[int(start[i])],
-                    "n_err": rho_n,
+                    "n_err": n_err,
                     "delay_source": _delay_label(origin, i),
-                    "rho_source": rho_src,
+                    "obs_source": obs_src,
                     "sigma_source": _label(origin, int(origin.sigma_source[i])),
                 }
             )
@@ -294,7 +294,7 @@ class RandomWalkNowcast(RandomWalk):
         Parameters
         ----------
         origin : Origin
-            The fit at the task's vintage, with its Skellam spread.
+            The fit at the task's vintage, with its observation model.
         task : ForecastTask
             The task.
         point : numpy.ndarray
@@ -309,28 +309,33 @@ class RandomWalkNowcast(RandomWalk):
             week to the last target, and those weeks.
         """
         snap = origin.snap
-        assert origin.rho is not None
+        assert origin.size is not None
+        assert origin.removal is not None
         weeks = _timeline(origin, task)
         n_data, n_all, n = snap.n_weeks, len(weeks), task.n_samples
         n_loc = len(snap.locations)
-        k_n = origin.rho.shape[1]
+        k_n = origin.size.shape[1]
         back = snap.cut_week(origin.o) - np.arange(n_data)
-        use = (back >= 0) & (back < k_n)
-        rho = np.where(
-            use[None, :], origin.rho[:, np.clip(back, 0, k_n - 1)], 0.0
-        )
+        k = np.clip(back, 0, k_n - 1)
+        # Weeks older than the fitted ones are final, with no removals.
+        b = np.where(back < k_n, origin.removal[:, k], 0.0)
         key_x, key_walk, key_part = jax.random.split(_key(task), 3)
-        mean = jnp.asarray(point, jnp.float32)
-        reported = jnp.asarray(origin.reported, jnp.float32)
-        shape = (n, *mean.shape)
-        # The port's sampler interface: draw the remaining count, then add
-        # the count reported and floor at 0.
-        drawn = sample_skellam(
-            key_x,
-            jnp.broadcast_to(mean - reported, shape),
-            jnp.asarray(rho, jnp.float32),
+        shape = (n, *point.shape)
+        reported = jnp.broadcast_to(
+            jnp.asarray(origin.reported, jnp.float32), shape
         )
-        nowcast = np.asarray(jnp.maximum(reported + drawn, 0.0), np.float64)
+        nowcast = np.asarray(
+            sample_count(
+                key_x,
+                reported,
+                jnp.maximum(jnp.asarray(point, jnp.float32) - reported, 0.0),
+                jnp.broadcast_to(
+                    jnp.asarray(origin.size[:, k], jnp.float32), shape
+                ),
+                jnp.broadcast_to(jnp.asarray(b, jnp.float32), shape),
+            ),
+            np.float64,
+        )
         w0 = origin.start_nowcast
         lam, y = _walks(key_walk, nowcast[:, :, w0].T, origin.sigma, n_all)
         cut = int(snap.cut[origin.o])

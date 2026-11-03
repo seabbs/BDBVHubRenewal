@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import dataclasses
-import logging
 from pathlib import Path
 
 import numpy as np
@@ -22,6 +21,7 @@ from bdbvhubrenewal.forecasters.chain import (
     retro_plan,
     weeks_back,
 )
+from bdbvhubrenewal.forecasters.obs import MAX_SIZE
 
 PLACES = ("CD-HU", "CD-IT", "CD-NK", "CD-TO")
 
@@ -155,32 +155,40 @@ def test_only_the_10_17_to_10_24_retrospective_is_kept(snap24) -> None:
     assert errors.releases == ["2026-10-17"]
     strict = retro_errors(snap24, 3, Settings(max_mismatch=0))
     assert strict.releases == []
-    assert strict.n.sum() == 0
+    assert strict.valid.shape[0] == 0
 
 
-def test_the_spread_pools_three_errors_at_10_24(origin24) -> None:
+def test_new_reports_minus_removals_is_the_realised_change(snap24) -> None:
+    errors = retro_errors(snap24, 3, Settings())
+    later = weekly_sums(snap24, 3, upto=int(snap24.cut[2]))
+    cols = snap24.cut_week(2) - np.arange(errors.valid.shape[2])
+    net = errors.added[0] - errors.removed[0]
+    want = later[:, cols] - errors.reported[0]
+    assert net[errors.valid[0]] == pytest.approx(want[errors.valid[0]])
+    assert (errors.added >= 0).all()
+    assert (errors.removed >= 0).all()
+
+
+def test_the_fit_pools_three_errors_at_10_24(origin24) -> None:
     loc = origin24.snap.locations.index("CD")
-    assert origin24.rho is not None
-    assert origin24.rho_n is not None
-    assert origin24.rho[loc, :4] == pytest.approx(
-        [1.5490, 16.6763, 7.1786, 87.9480], rel=1e-3
-    )
+    assert origin24.size is not None
+    assert origin24.removal is not None
+    assert origin24.obs_n is not None
     # Haut-Uele, Ituri and North Kivu give an error each. CD is their sum,
     # so it is not in its own pool.
-    assert origin24.rho_n[loc, :4].tolist() == [3, 3, 3, 3]
+    assert origin24.obs_n[loc, :4].tolist() == [3, 3, 3, 3]
+    assert (origin24.size[loc, :4] > 0.1).all()
+    assert (origin24.size[loc, :4] < 1000).all()
+    assert (origin24.removal >= 0).all()
 
 
-def test_no_errors_is_poisson_and_says_so(
-    daily: pd.DataFrame, caplog: pytest.LogCaptureFixture
-) -> None:
+def test_no_errors_is_poisson(daily: pd.DataFrame) -> None:
     snap = snapshot_arrays(daily, "2026-10-17", ("CD-IT", "CD-NK"))
-    with caplog.at_level(logging.INFO):
-        origin = build_origin(snap, Settings(), errors=True)
-    assert origin.rho is not None
-    assert origin.rho_n is not None
-    assert (origin.rho == 0).all()
-    assert (origin.rho_n == 0).all()
-    assert "Poisson-Skellam" in caplog.text
+    origin = build_origin(snap, Settings(), errors=True)
+    assert origin.obs_n is not None
+    assert (origin.obs_n == 0).all()
+    assert (origin.size == MAX_SIZE).all()
+    assert (origin.removal == 0).all()
 
 
 def test_a_factor_is_own_by_age_with_10_cases_else_the_parent(
@@ -249,10 +257,10 @@ def test_weeks_back_count_from_the_cutoff_week(daily: pd.DataFrame) -> None:
     # The newest data week (ages 0-6) is k = 0, with no empty week at k = 0.
     assert weeks_back(snap, o, 42) == 6
     errors = retro_errors(snap, o, Settings())
-    assert errors.n[:, 0].sum() > 0
+    assert errors.valid[:, :, 0].sum() > 0
     origin = build_origin(snap, Settings(), errors=True)
-    assert origin.rho is not None
-    assert origin.rho[:, 0].max() > 0
+    assert origin.size is not None
+    assert origin.size[:, 0].min() < MAX_SIZE
 
 
 def test_a_later_clock_ages_the_origin_days_and_lowers_the_nowcast(

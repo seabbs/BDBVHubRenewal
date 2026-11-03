@@ -29,8 +29,8 @@ The submission pull request embeds [`plot_nowcast`][bdbvhubrenewal.reporting.plo
 
 ## Delay and spread
 
-The growth to final of each onset day by its age at the latest release, and the Skellam spread by weeks back.
+The growth to final of each onset day by its age at the latest release, and the observation model by weeks back.
 A place using its parent's estimate is labelled with the parent.
 
-![Growth to final by age and the Skellam spread by weeks back at the latest release.](figures/delay-check.svg#only-light)
-![Growth to final by age and the Skellam spread by weeks back at the latest release.](figures/delay-check-dark.svg#only-dark)
+![Growth to final by age, and the dispersion of new reports and the removal rate by weeks back, at the latest release.](figures/delay-check.svg#only-light)
+![Growth to final by age, and the dispersion of new reports and the removal rate by weeks back, at the latest release.](figures/delay-check-dark.svg#only-dark)

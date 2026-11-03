@@ -3,7 +3,7 @@
 
 - `base`: `ForecastTask`, the `ForecastModel` protocol and the registry.
 - `randomwalk`: the random walk baseline, and random walk on a nowcast,
-  with `chain` (the daily chain ladder), `pooling`, `skellam` and `walk`.
+  with `chain` (the daily chain ladder), `pooling`, `obs` and `walk`.
 - `renewal`: the renewal variants, the adapter from a `ForecastTask` to
   the PyRenew model in `bdbvhubrenewal.model`.
 - `zones`: health-zone forecasts split from any model's province samples.

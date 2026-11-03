@@ -787,8 +787,9 @@ def plot_delay_check(
     -------
     matplotlib.figure.Figure
         Left, the growth $G$ from each age in days to final, chained over
-        the release gap, on a log scale. Right, the Skellam spread
-        $\rho_k$ by weeks back with the number of errors behind it.
+        the release gap, on a log scale. Middle, the dispersion
+        $1 / \phi_k$ of the new reports by weeks back, with the number of
+        errors behind it. Right, the removal rate $b_k$.
         A place's label says at how many ages it uses its own delay
         factor and not its parent's.
     """
@@ -797,14 +798,15 @@ def plot_delay_check(
 
     snap = snapshot_arrays(daily, vintage, tuple(locations))
     origin = build_origin(snap, Settings(), errors=True)
-    assert origin.rho is not None
-    assert origin.rho_n is not None
+    assert origin.size is not None
+    assert origin.removal is not None
+    assert origin.obs_n is not None
     ink = THEMES[mode]
     palette = MODEL_COLOURS[mode]
     age = int(snap.cut[origin.o]) - np.arange(snap.week.size)
     seen = (age >= 0) & (age < origin.settings.max_delay)
-    fig, (left, right) = plt.subplots(
-        1, 2, figsize=(7.2, 3.2), layout="constrained"
+    fig, (left, mid, right) = plt.subplots(
+        1, 3, figsize=(9.6, 3.2), layout="constrained"
     )
     drawn: set[tuple[float, ...]] = set()
     for i, loc in enumerate(locations):
@@ -820,27 +822,24 @@ def plot_delay_check(
             lw=1.2,
             label=f"{loc} ({kind})",
         )
-        row = tuple(np.round(origin.rho[j], 6))
+        row = tuple(np.round([*origin.size[j], *origin.removal[j]], 6))
         if row not in drawn:
             drawn.add(row)
-            k = np.arange(origin.rho.shape[1])
-            right.plot(
-                k,
-                origin.rho[j],
-                "o-",
-                color=colour,
-                ms=3,
-                lw=1,
-                label=f"{loc} and places using it",
-            )
+            k = np.arange(origin.size.shape[1])
+            style = {"color": colour, "ms": 3, "lw": 1}
+            label = f"{loc} and places using it"
+            mid.plot(k, 1 / origin.size[j], "o-", label=label, **style)
+            right.plot(k, origin.removal[j], "o-", **style)
     left.set_yscale("log")
     left.set_xlabel("Age of the onset day (days)")
     left.set_ylabel("Growth to final")
-    right.set_xlabel("Weeks back")
-    right.set_ylabel("Skellam spread")
-    n_err = int(origin.rho_n.max())
-    right.set_title(f"At most {n_err} errors behind a spread", fontsize=8)
-    right.legend(fontsize=7, frameon=False)
+    for ax in (mid, right):
+        ax.set_xlabel("Weeks back")
+    mid.set_ylabel("Dispersion of new reports, 1 / size")
+    right.set_ylabel("Removal rate")
+    n_err = int(origin.obs_n.max())
+    mid.set_title(f"At most {n_err} errors behind a fit", fontsize=8)
+    mid.legend(fontsize=7, frameon=False)
     left.axhline(1, color=ink["muted"], lw=0.8, ls=":")
     left.legend(fontsize=7, frameon=False)
     return fig

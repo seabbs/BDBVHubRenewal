@@ -43,8 +43,8 @@ the count expected at $o$ for days up to $c_r$.
 It chains over the gap $c_o - c_r$ only, using the nearest earlier pair's
 factor for each remaining part of the gap.
 Only plans within `max_mismatch` days of the gap are kept.
-The errors by weeks back give the Skellam spread on the remaining count
-(`skellam`).
+Its new reports and removals by weeks back fit the observation model
+(`obs`).
 """
 
 from __future__ import annotations
@@ -66,13 +66,13 @@ from bdbvhubrenewal.baselinenowcast import (
 )
 from bdbvhubrenewal.data.snapshots import SnapshotArrays, week_sum, weekly_sums
 from bdbvhubrenewal.forecasters.base import ModelUnavailableError
+from bdbvhubrenewal.forecasters.obs import MAX_SIZE, fit_sizes, rate
 from bdbvhubrenewal.forecasters.pooling import (
     MIN_ERRORS,
     MIN_LEVEL,
     pool_matrix,
     source_index,
 )
-from bdbvhubrenewal.forecasters.skellam import rho_from_sums, rho_sums
 
 __all__ = [
     "MissingSnapshots",
@@ -112,7 +112,7 @@ class Settings:
         Cases a week for a place to use its own spreads, and cases in the
         pooled denominator of an age for it to use its own delay factor.
     min_errors : int
-        Errors at a horizon for a Skellam spread.
+        Errors at a horizon to fit the observation model.
     level_weeks : tuple of int
         First and last weeks back averaged for a place's level.
     max_mismatch : int
@@ -410,19 +410,28 @@ def grow(fit: DelayFit, plan: ChainPlan) -> np.ndarray:
 
 @dataclass
 class Errors:
-    """Retrospective errors by place and weeks back, summed over releases.
+    """Retrospective nowcasts by release, place and weeks back.
 
     Attributes
     ----------
-    num, den, n : numpy.ndarray
-        The sums behind the Skellam spread, `[L, K]`.
+    added, removed : numpy.ndarray
+        New reports and removals between each release and the origin,
+        `[R, L, K]`.
+    remaining : numpy.ndarray
+        Nowcast of the count still to come, `[R, L, K]`.
+    reported : numpy.ndarray
+        Count reported at each release, `[R, L, K]`.
+    valid : numpy.ndarray
+        Whether each cell is an error, `[R, L, K]`.
     releases : list of str
         Releases that gave errors.
     """
 
-    num: np.ndarray
-    den: np.ndarray
-    n: np.ndarray
+    added: np.ndarray
+    removed: np.ndarray
+    remaining: np.ndarray
+    reported: np.ndarray
+    valid: np.ndarray
     releases: list[str] = field(default_factory=list)
 
 
@@ -445,9 +454,8 @@ def retro_errors(snap: SnapshotArrays, o: int, settings: Settings) -> Errors:
     """
     n_loc = len(snap.locations)
     k_n = weeks_back(snap, o, settings.max_delay)
-    out = Errors(
-        np.zeros((n_loc, k_n)), np.zeros((n_loc, k_n)), np.zeros((n_loc, k_n))
-    )
+    cells: list[tuple[np.ndarray, ...]] = []
+    releases: list[str] = []
     for r in range(1, o):
         fit = fit_delay(snap, r, settings)
         if fit is None:
@@ -463,17 +471,15 @@ def retro_errors(snap: SnapshotArrays, o: int, settings: Settings) -> Errors:
         safe = np.clip(cols, 0, None)
         obs = weekly_sums(snap, r)[:, safe]
         pred = week_sum(snap, counts * g)[:, safe]
-        tgt = weekly_sums(snap, o, upto=int(snap.cut[r]))[:, safe]
+        upto = np.arange(snap.week.size) <= snap.cut[r]
+        change = (snap.counts[:, o, :] - counts) * upto
+        added = week_sum(snap, np.maximum(change, 0.0))[:, safe]
+        removed = week_sum(snap, np.maximum(-change, 0.0))[:, safe]
         valid = take[None, :] & ((obs > 0) | (pred > 0))
-        # The remaining count: realised and nowcast.
-        num, den, n = rho_sums(
-            (tgt - obs)[None], (pred - obs)[None], valid[None], axis=0
-        )
-        out.num += num
-        out.den += den
-        out.n += n
-        out.releases.append(snap.releases[r])
-    return out
+        cells.append((added, removed, pred - obs, obs, valid))
+        releases.append(snap.releases[r])
+    c = np.array(cells, dtype=float).reshape(-1, 5, n_loc, k_n)
+    return Errors(c[:, 0], c[:, 1], c[:, 2], c[:, 3], c[:, 4] > 0, releases)
 
 
 @dataclass
@@ -507,13 +513,15 @@ class Origin:
         `source_index`.
     errors : Errors or None
         Retrospective errors, or None where they were not asked for.
-    rho : numpy.ndarray or None
-        Skellam spread $\rho_k$ of each place by weeks back from the
-        cut-off week, `[L, K]`.
-    rho_n : numpy.ndarray or None
-        Errors behind each spread, `[L, K]`.
-    rho_source : numpy.ndarray or None
-        Index of the estimate behind each spread, `[L, K]`.
+    size : numpy.ndarray or None
+        Negative binomial size $\phi_k$ of the new reports of each place
+        by weeks back from the cut-off week, `[L, K]`.
+    removal : numpy.ndarray or None
+        Removal rate $b_k$, `[L, K]`.
+    obs_n : numpy.ndarray or None
+        Errors behind each fit, `[L, K]`.
+    obs_source : numpy.ndarray or None
+        Index of the estimate behind each fit, `[L, K]`.
     """
 
     snap: SnapshotArrays
@@ -528,9 +536,10 @@ class Origin:
     sigma: np.ndarray
     sigma_source: np.ndarray
     errors: Errors | None = None
-    rho: np.ndarray | None = None
-    rho_n: np.ndarray | None = None
-    rho_source: np.ndarray | None = None
+    size: np.ndarray | None = None
+    removal: np.ndarray | None = None
+    obs_n: np.ndarray | None = None
+    obs_source: np.ndarray | None = None
 
     @property
     def start_nowcast(self) -> int:
@@ -557,7 +566,7 @@ def build_origin(
     settings : Settings
         Settings.
     errors : bool
-        Whether to estimate the Skellam spread.
+        Whether to fit the observation model.
 
     Returns
     -------
@@ -633,32 +642,43 @@ def _walk_spreads(
 
 
 def _add_spread(origin: Origin) -> None:
-    """Estimate the Skellam spread by weeks back, with the one rule."""
+    """Fit the observation model by weeks back, with the one rule.
+
+    Each place's own estimate uses its errors, and its pooled estimate
+    the errors of the places in its pool. The size is fitted only for
+    the estimates some place uses.
+    """
     snap, settings = origin.snap, origin.settings
     errors = retro_errors(snap, origin.o, settings)
-    k_n = errors.n.shape[1]
+    n_loc = len(snap.locations)
     pool = pool_matrix(origin.fit.level, snap.parent, settings.min_level)
-    own = rho_from_sums(errors.num, errors.den)
-    n_pooled = pool @ errors.n
-    pooled = rho_from_sums(pool @ errors.num, pool @ errors.den)
+    member = np.concatenate([np.eye(n_loc), pool]) > 0  # [2L, L]
+    # A cell with nothing nowcast to come says nothing about the size.
+    fit = errors.valid & (errors.remaining > 0)
+    n = np.einsum("el,rlk->ek", member, fit, dtype=int)
+    removed = np.einsum("el,rlk->ek", member, errors.removed * errors.valid)
+    reported = np.einsum("el,rlk->ek", member, errors.reported * errors.valid)
     source = source_index(
         origin.fit.level,
         snap.parent,
-        errors.n,
-        n_pooled,
+        n[:n_loc],
+        n[n_loc:],
         settings.min_level,
         settings.min_errors,
     )
-    k = np.arange(k_n)[None, :]
-    rho = np.concatenate([own, pooled])[source, k]
-    n_used = np.concatenate([errors.n, n_pooled])[source, k]
-    rho = np.where(n_used >= settings.min_errors, rho, 0.0)
-    origin.errors, origin.rho, origin.rho_n, origin.rho_source = (
-        errors, rho, n_used, source,
-    )  # fmt: skip
-    if errors.n.sum() == 0:
-        log.info(
-            "No retrospective errors at %s, so the spread is 0 and the "
-            "observation model is Poisson-Skellam.",
-            snap.releases[origin.o],
+    size = np.full(n.shape, MAX_SIZE)
+    for e in np.unique(source):
+        keep = fit & member[e][None, :, None]
+        k_n = keep.shape[-1]
+        size[e] = fit_sizes(
+            np.where(keep, errors.added, 0.0).reshape(-1, k_n),
+            np.where(keep, errors.remaining, 0.0).reshape(-1, k_n),
         )
+    k = np.arange(n.shape[1])[None, :]
+    n_used = n[source, k]
+    origin.errors = errors
+    origin.size = np.where(
+        n_used >= settings.min_errors, size[source, k], MAX_SIZE
+    )
+    origin.removal = rate(removed, reported)[source, k]
+    origin.obs_n, origin.obs_source = n_used, source
