@@ -10,7 +10,9 @@ Rules, for the round whose window is open now:
 
 - The round must be open in the hub's `tasks.json`.
 - Submit once per round: a round the ledger records as submitted (its
-  hub PR exists) is left alone. A manual dispatch can resubmit.
+  hub PR exists) is left alone, unless the model code on main changed
+  since the commit it was submitted from (`CODE_PATHS`). Then the run
+  updates the round's PR. A manual dispatch can always resubmit.
 - Run when the hub data changed since this round last ran (a new round,
   or a data fix during the window, which updates the round's PR).
 - On a new round, only run on *fresh* data: an `as_of` no earlier round
@@ -33,7 +35,7 @@ import io
 import json
 import sys
 import urllib.request
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -50,6 +52,8 @@ from .hubdata import TARGET, max_as_of
 from .window import current_window, parse_now, window_for
 
 HUB = "InsightNet-US/BDBV-Modeling-Hub"
+CODE_PATHS = ("src", "config", "ci/policy.toml", "uv.lock", "ci/steps")
+"""Paths of this repo whose change since a round's submission resubmits it."""
 WATCHED = (
     "target-data/time-series.csv",
     "auxiliary-data/daily-confirmed-case.csv",
@@ -174,9 +178,18 @@ class Decision:
     round_open: bool
     new_for_round: bool
     fresh: bool
+    code_changed: bool
     data_commit: str
     hub_ref: str
     as_of: str
+
+
+def code_changed(commit: str, runner: Runner = subprocess_runner) -> bool:
+    """Whether `CODE_PATHS` differ between `commit` and `HEAD`."""
+    diff = runner(
+        ["git", "diff", "--name-only", commit, "HEAD", "--", *CODE_PATHS]
+    )
+    return bool(diff.stdout.strip())
 
 
 def empty_state() -> dict[str, Any]:
@@ -194,8 +207,12 @@ def decide(
     ignore_window: bool = False,
     reference_date: str | None = None,
     stale_fallback_hours: float = 24.0,
+    changed_since: Callable[[str], bool] = code_changed,
 ) -> Decision:
-    """Apply the run rules in the module docstring."""
+    """Apply the run rules in the module docstring.
+
+    `changed_since` says whether the model code changed since a commit.
+    """
     win = (
         window_for(dt.date.fromisoformat(reference_date))
         if reference_date
@@ -218,6 +235,9 @@ def decide(
         if version.as_of
         else version.data_commit not in earlier_commits
     )
+    submitted = entry is not None and entry.get("status") == "submitted"
+    code_commit = (entry or {}).get("code_commit", "")
+    code = submitted and bool(code_commit) and changed_since(code_commit)
     window_open = win.is_open(now)
     hours_left = round(win.hours_left(now), 2)
     round_open = ref in open_reference_dates(tasks)
@@ -232,6 +252,7 @@ def decide(
             round_open=round_open,
             new_for_round=new_for_round,
             fresh=fresh,
+            code_changed=code,
             data_commit=version.data_commit,
             hub_ref=version.hub_ref,
             as_of=version.as_of,
@@ -243,7 +264,9 @@ def decide(
         return out(False, f"{ref} is not an open round in the hub's tasks.json")
     if force:
         return out(True, "forced by manual dispatch")
-    if entry is not None and entry.get("status") == "submitted":
+    if code:
+        return out(True, f"model code changed since {ref} was submitted")
+    if submitted:
         return out(False, f"{ref} already has a hub PR")
     if not new_for_round:
         return out(False, f"no new hub data since {ref} last ran")
@@ -270,6 +293,7 @@ def record(
     produced_by: str = "",
     pr_url: str = "",
     run: str = "",
+    code_commit: str = "",
     now: dt.datetime | None = None,
 ) -> dict[str, Any]:
     """Return the ledger with this round's outcome recorded."""
@@ -283,6 +307,7 @@ def record(
         "produced_by": produced_by,
         "pr_url": pr_url,
         "run": run,
+        "code_commit": code_commit,
         "updated": (now or dt.datetime.now(dt.UTC)).isoformat(),
     }
     history.append({k: v for k, v in entry.items() if k != "history"})
@@ -326,6 +351,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     rec.add_argument("--produced-by", default="")
     rec.add_argument("--pr-url", default="")
     rec.add_argument("--run", default="")
+    rec.add_argument("--code-commit", default="")
     args = p.parse_args(argv)
 
     state = read_json(args.state) if args.state.exists() else empty_state()
@@ -341,6 +367,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 produced_by=args.produced_by,
                 pr_url=args.pr_url,
                 run=args.run,
+                code_commit=args.code_commit,
             ),
         )
         return 0

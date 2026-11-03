@@ -19,7 +19,8 @@ on:
   schedule:
     - cron: '0 23 * * 6'  # Saturday 23:00 UTC, as the window opens
     # One check each morning in the window. A round is submitted once
-    # (detect), so a check after its PR opened stops at once. Tuesday
+    # (detect), so a check after its PR opened stops at once, unless the
+    # model code on main changed since, which updates the PR. Tuesday
     # 06:00 UTC leaves 17 hours to the close: the fits take about an
     # hour, each fit's timeout stops 45 minutes short of the close
     # (ci/policy.toml [timing]), and the organisers have the US working
@@ -87,7 +88,11 @@ jobs:
       as_of: ${{ steps.detect.outputs.as_of }}
       dry_run: ${{ steps.mode.outputs.dry_run }}
     steps:
+      # Full history, to diff the model code against the commit a round
+      # was submitted from.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v7
       - name: Decide dry run or live
         id: mode

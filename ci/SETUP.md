@@ -146,6 +146,8 @@ Time a real fit with a dry run on a past vintage (see above), and read the `Fit 
 The chain runs prepare (random walk), then every renewal fit in parallel, then the gate.
 Scheduled runs check once each morning, at 06:00 UTC on Sunday, Monday and Tuesday, after the Saturday 23:00 UTC run as the window opens.
 A round is submitted once: when the ledger records its PR, later scheduled runs stop, and a manual dispatch resubmits.
+The exception is a change to the model code on main (`src/`, `config/`, `ci/policy.toml`, `uv.lock` or `ci/steps/`) since the commit the ledger records for the round.
+A scheduled run in the window then reruns and updates the round's PR.
 From the Tuesday 06:00 UTC check there are about 17 hours to the close, which also leaves the organisers the US working day to approve the PR's checks.
 Every fit job's timeout leaves `reserve_minutes` (45) before the close for the gate and the pull request.
 So a fit that runs to its timeout still reaches the fallback or random walk before the close.

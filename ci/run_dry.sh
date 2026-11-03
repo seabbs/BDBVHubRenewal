@@ -287,7 +287,7 @@ ledger() {
   git -C "$repo" remote add origin "$origin"
   for run in 101 102; do
     (cd "$repo" && WORK="$ROOT/fallback" GITHUB_RUN_ID=$run \
-      REFERENCE_DATE=2026-11-07 DATA_COMMIT=dddd AS_OF=2026-10-31 \
+      REFERENCE_DATE=2026-11-07 DATA_COMMIT=dddd AS_OF=2026-10-31 GITHUB_SHA=cccc \
       ACTION=created PR_URL=https://example/pr/1 PRODUCED_BY="renewalsp" \
       "$CI_DIR/steps/record.sh" > /dev/null)
   done
@@ -296,7 +296,7 @@ ledger() {
   echo "$files" | grep -q "archive/2026-11-07/102/provenance.json" \
     || { echo "FAIL: ledger archive"; echo "$files"; return 1; }
   git -C "$origin" show submission-ledger:state.json \
-    | python3 -c "import json,sys; r=json.load(sys.stdin)['rounds']['2026-11-07']; assert r['status']=='submitted' and len(r['history'])==2"
+    | python3 -c "import json,sys; r=json.load(sys.stdin)['rounds']['2026-11-07']; assert r['status']=='submitted' and r['code_commit']=='cccc' and len(r['history'])==2"
   echo "=== ledger ===" && echo "ok: state.json and archive/2026-11-07/{101,102} on submission-ledger"
 
   # freeze.sh, with a `gh` that says the round's pull request merged:

@@ -10,7 +10,7 @@ It submits only the hub models opted in ([Opting in](opting-in.md)), and pushes 
 
 | job | what it does |
 | --- | --- |
-| `detect` | Stops unless the open round has new hub data, or if its PR is already open or merged (a manual dispatch resubmits). |
+| `detect` | Stops unless the open round has new hub data, or if its PR is already open or merged. A change to the model code on main since the round's PR reruns it and updates the PR, as does a manual dispatch. |
 | `freeze` | Freezes the page of every round whose pull request has merged. |
 | `prepare` | Pins the data, builds `randomwalk` and `randomwalknowcast`, and decides which hub models run. |
 | `baseline` | The baseline hub model: checks and submits `randomwalknowcast`, or skips the round if it is ruled out. |

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,7 @@ from submission_ci.common import read_json
 from submission_ci.detect_new_vintage import (
     DataVersion,
     GhHubSource,
+    code_changed,
     decide,
     empty_state,
     main,
@@ -110,6 +112,59 @@ def test_submitted_round_is_left_to_a_manual_dispatch() -> None:
     assert decide(s, V, TASKS, MONDAY, force=True).should_run
 
 
+SUBMITTED = state_with(
+    **{
+        "2026_11_07": {
+            "data_commit": V.data_commit,
+            "as_of": V.as_of,
+            "status": "submitted",
+            "code_commit": "f" * 40,
+        }
+    }
+)
+
+
+def test_model_code_change_updates_a_submitted_round() -> None:
+    d = decide(SUBMITTED, V, TASKS, MONDAY, changed_since=lambda _: True)
+    assert d.should_run and d.code_changed and "model code" in d.reason
+    d = decide(SUBMITTED, V, TASKS, MONDAY, changed_since=lambda _: False)
+    assert not d.should_run and "already has a hub PR" in d.reason
+
+
+def test_model_code_change_outside_window_does_not_run() -> None:
+    friday = dt.datetime(2026, 11, 6, 10, tzinfo=dt.UTC)
+    d = decide(SUBMITTED, V, TASKS, friday, changed_since=lambda _: True)
+    assert not d.should_run
+
+
+def test_code_changed_compares_model_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    def git(*args: str) -> str:
+        return subprocess.run(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    git("init", "-q")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "m.py").write_text("a = 1\n")
+    (tmp_path / "README.md").write_text("x\n")
+    git("add", "-A")
+    git("commit", "-q", "-m", "one")
+    first = git("rev-parse", "HEAD")
+    (tmp_path / "README.md").write_text("y\n")
+    git("commit", "-q", "-am", "docs")
+    assert not code_changed(first)
+    (tmp_path / "src" / "m.py").write_text("a = 2\n")
+    git("commit", "-q", "-am", "model")
+    assert code_changed(first)
+
+
 def test_tuesday_morning_check_falls_back_to_the_latest_data() -> None:
     s = state_with(
         **{"2026_10_31": {"data_commit": "c" * 40, "as_of": V.as_of}}
@@ -147,9 +202,10 @@ def test_record_keeps_history() -> None:
         as_of="x",
         status="submitted",
         produced_by="main model",
+        code_commit="c",
     )
     entry = s["rounds"]["2026-11-07"]
-    assert entry["data_commit"] == "b"
+    assert entry["data_commit"] == "b" and entry["code_commit"] == "c"
     assert [h["status"] for h in entry["history"]] == ["failed", "submitted"]
 
 

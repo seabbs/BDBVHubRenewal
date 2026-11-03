@@ -6,11 +6,12 @@
 #   LEDGER_BRANCH  default submission-ledger
 #   REFERENCE_DATE, DATA_COMMIT, AS_OF, ACTION, PR_URL, PRODUCED_BY,
 #   SKIPPED, RUN   from the earlier jobs
+#   GITHUB_SHA     the commit the round was submitted from
 #   BASELINE_GATE  baseline's gate folder, when it ran
 # shellcheck source=ci/steps/lib.sh
 source "$(dirname "$0")/lib.sh"
 
-: "${REFERENCE_DATE:?}" "${DATA_COMMIT:?}"
+: "${REFERENCE_DATE:?}" "${DATA_COMMIT:?}" "${GITHUB_SHA:?}"
 LEDGER_BRANCH=${LEDGER_BRANCH:-submission-ledger}
 ledger="$WORK/ledger"
 rm -rf "$ledger"
@@ -32,7 +33,7 @@ fi
 sci detect-new-vintage record --state "$ledger/state.json" \
   --reference-date "$REFERENCE_DATE" --data-commit "$DATA_COMMIT" \
   --as-of "${AS_OF:-}" --status "$status" --produced-by "${PRODUCED_BY:-}" \
-  --pr-url "${PR_URL:-}" --run "${RUN:-}"
+  --pr-url "${PR_URL:-}" --run "${RUN:-}" --code-commit "$GITHUB_SHA"
 
 archive="$ledger/archive/$REFERENCE_DATE/${GITHUB_RUN_ID:-local}"
 # The gate's small files: provenance, PR body, the selected file and plot.
