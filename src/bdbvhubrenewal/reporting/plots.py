@@ -1264,11 +1264,13 @@ def plot_submission(
         A grid with one panel per location.
     """
     from bdbvhubrenewal.data import load_target
+    from bdbvhubrenewal.data.zones import province_of
 
     target = load_target(data_dir) if target is None else target
     fc = read_submission(submission, vintage)
+    provinces = fc["location"].map(province_of) == fc["location"]
     sizes = (
-        fc.loc[fc["location"] != "CD"]
+        fc.loc[provinces & (fc["location"] != "CD")]
         .groupby("location")["value"]
         .median()
         .sort_values(ascending=False)

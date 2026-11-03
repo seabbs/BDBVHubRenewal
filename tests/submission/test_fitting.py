@@ -11,6 +11,7 @@ import pytest
 
 from bdbvhubrenewal.cli import main
 from bdbvhubrenewal.data import coherence_summary, national_coherence
+from bdbvhubrenewal.reporting.plots import plot_submission
 from bdbvhubrenewal.submission.fitting import (
     list_configs,
     randomwalk_config,
@@ -124,6 +125,10 @@ def test_plot_submission_and_validate(tmp_path: Path) -> None:
     assert main(["plot-submission", "--submission", str(csv), "--out",
                  str(png)]) == 0  # fmt: skip
     assert 0 < png.stat().st_size < 1_000_000
+    # Zones have no data bars, so only national and provinces are shown.
+    fig = plot_submission(csv, "2026-10-24")
+    shown = [ax.get_title().split("(")[1].split(")")[0] for ax in fig.axes]
+    assert all(loc.count("-") <= 1 for loc in shown)
     # The committed hub config follows the hub, so it lists the round.
     code = main(["validate", "--hub", str(ROOT / "data"), "--skip-window",
                  "--metadata-dir", "hub/model-metadata", str(csv)])  # fmt: skip
