@@ -749,7 +749,8 @@ def _completeness_note(k: int) -> str:
     return (
         f"Complete weeks are those that ended at least {k} weeks before the "
         "truth vintage.\n"
-        "Scores on complete weeks are the primary scores.\n"
+        "They are a check on the release scores, which score every model "
+        "on the count each later release reports.\n"
         "Vintage-matched scores compare each model's prediction of the "
         "counts as reported by the truth vintage with that vintage, so "
         "they cover every week.\n"

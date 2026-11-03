@@ -5,17 +5,15 @@ Scoring, and the evaluations.
 
 ## Scoring
 
-Each forecast week is scored against a later real vintage, as reported at that vintage.
-Recent weeks are still incomplete in the truth, so forecasts from real vintages are re-scored against each newer real vintage ([Backtest](../backtest.md#scores-by-truth-vintage)).
+Every model is scored on the count each later real release reports, with its final-count forecast turned into a forecast of that count ([Real releases](#real-releases)).
+A final count is never scored against a count still being reported.
+The development backtest scores complete weeks against each later real vintage as a secondary check ([Backtest](../backtest.md#scores-by-truth-vintage)).
 Simulated forecasts are scored against the simulated final counts.
 
 | Score set | Forecast | Weeks scored |
 |---|---|---|
 | Complete weeks | Final count | Weeks ended at least $K = 3$ weeks before the truth vintage. These can still grow in later vintages. |
-| All weeks | Final count | Every week in the truth vintage. |
 | Vintage-matched | Count as reported by the truth vintage | Every week, so recent weeks compare like with like. |
-
-The [real releases](#real-releases) evaluation scores the random walk models on their own targets.
 
 **Vintage-matched.** The renewal variants draw reported counts from the same posterior draws as the final counts.
 
@@ -51,32 +49,33 @@ Each vintage is a forecast task, and every registered model forecasts every task
 | Development backtest | Real up to the latest model choice date | Latest real vintage, and every later real vintage for real forecasts |
 | Recovery check | Simulated | Simulated final counts |
 | Rolling held-out evaluation | Real vintages after each model choice | Every later real vintage |
-| Real releases | Every real release with a later release | The count the next release shows, and the latest release's count for its complete weeks |
-| Comparison with hub forecasts | Real where one serves the round | Latest real vintage |
+| Real releases | Every real release with a later release | The count each later release shows, and the latest release's count for its complete weeks |
+| Comparison with hub forecasts | Real where one serves the round | Latest real vintage, complete weeks |
 
 ## Real releases
 
 Each real release with a later release is an origin.
-The models forecast from the releases up to the origin only.
+The random walk models forecast from the releases up to the origin only.
+The renewal models' stored forecasts from the origin, and hub teams' forecasts for the round the origin serves, are scored with them.
 An origin with no pair of releases whose step is within the delay window, $D = 42$ days, has no delay factor and no forecast.
 It is listed with no forecasts and nothing replaces it.
 Two targets are scored.
 
-**Next release.** The count the next release $o'$ shows for each of the four latest hub weeks.
-`randomwalknowcast` predicts it by chaining the origin's days over the gap $c_{o'} - c_o$ between the cut-offs only, taking for each part of the gap the factor of the nearest earlier pair and never interpolating ages.
-Its Skellam spread is the origin's.
-The prediction is scored only when the chained steps differ from the gap by at most 1 day, as for the errors behind the spread.
-`randomwalk` has no chain between releases, so its forecast samples serve for both targets.
+**Reported.** The count each later release $o'$ shows for every forecast week it reports.
+Every model forecasts the final count $X_w$ of week $w$.
+Day $t$ is $a = c_{o'} - t$ days old at the cut-off of $o'$, and the share of its final count reported then is $\pi(a) = 1 / G(a)$, with $G(a)$ the growth from age $a$ to $D$ chained with the delay factors and step of the origin ([Baseline models](baselines.md#nowcast)).
+Days after the cut-off have $\pi = 0$.
+The week's share is $\pi_w = \frac{1}{7} \sum_{t \in w} \pi(c_{o'} - t)$, and each sample is thinned to $X'_w \sim \text{Binomial}(X_w, \pi_w)$.
+Only the delay fitted at the origin is used.
 
 **Complete weeks.** The count the latest release shows for the weeks it reports in full.
-A week is complete when $\pi \ge 0.95$ under the delay estimate of the latest release, with $\pi$ the estimated share of the week's final count reported ([Baseline models](baselines.md#random-walk)).
-Forecast weeks are scored only on this target.
+A week is complete when it is at least 4 weeks old at the latest release and grew by less than 2% since the release before.
 
-The floor is the count reported at the origin, scored on the same targets as a forecast with no spread.
+The floor is the count reported at the origin, scored on both targets as a forecast with no spread.
 Scores are WIS, 50% and 90% coverage and bias, by model, origin, weeks back from the origin's week and place.
+Relative WIS is against `randomwalk` on the forecasts both made, by origin, for national and the provinces pooled, and by place.
 Every table counts its forecasts, $n$.
-Each forecast row records the model, the start week of the walk, the number of errors behind the Skellam spread and the source of the delay, the spread and the walk.
-The run stops if a model has no snapshots or two models give identical samples.
+The run stops if a model has no snapshots or two models run here give identical samples.
 
 The weekly cross-check runs the snapshot chain ladder on hub weeks from the latest two releases with cut-offs a week apart, with a step of one week and national factors for every place.
 It checks the daily ladder for consistency on weekly data.

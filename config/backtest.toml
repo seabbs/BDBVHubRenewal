@@ -15,11 +15,10 @@ seed = 20261027
 # runs use every vintage up to the latest choice date, and each real
 # vintage after a choice is held out and scored by `--evaluate-holdout`
 # under the model chosen then. With no choice, every vintage is development.
-# Every week is scored, against each later real vintage as reported then.
+# Complete weeks are scored against each later real vintage.
 model_choice = "results/model-choice.yml"
 # A truth week counts as complete if it ended at least this many weeks
 # before the truth vintage.
-# Scores on complete weeks are the primary scores for the model choice.
 complete_after_weeks = 3
 
 [sampler]

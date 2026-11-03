@@ -3,7 +3,7 @@
 Forecasts made at past vintages, scored against the latest data.
 { .page-subtitle }
 
-Scores on complete weeks are the primary scores ([Evaluation](methods/evaluation.md#scoring)).
+The main comparison scores every model on the count each later release reports, and complete weeks are a secondary check ([Evaluation](methods/evaluation.md#scoring)).
 Weeks still being reported are shaded, with hollow points.
 
 --8<-- "release-backtest.md"
@@ -76,7 +76,7 @@ Horizons −4 to −1 are nowcasts, 0 is the reference week and 1 to 3 are forec
 
 ## Scores by truth vintage
 
-Real forecasts scored against each later real vintage, as reported at each.
+Complete weeks of real forecasts scored against each later real vintage.
 
 ![Mean WIS of each real forecast vintage against each later truth vintage.](figures/scores-by-truth.svg#only-light)
 ![Mean WIS of each real forecast vintage against each later truth vintage.](figures/scores-by-truth-dark.svg#only-dark)

@@ -461,7 +461,7 @@ def release_backtest(
             {
                 "origin": task.vintage,
                 "model": name,
-                "status": "ran",
+                "status": "scored",
                 "reason": "",
             }
             for name in forecasts
