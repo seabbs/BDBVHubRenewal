@@ -44,7 +44,7 @@ jobs:
           use-public-rspm: true
       - name: Install baselinenowcast 0.2.2
         run: |
-          install.packages("remotes")
+          install.packages(c("remotes", "zoo"))
           # 0.2.2 is not on CRAN yet: the commit that set the version.
           remotes::install_github(
             "epinowcast/baselinenowcast@999d1ad50e27921a4078175d6315bbd655878888"
