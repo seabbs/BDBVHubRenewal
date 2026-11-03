@@ -11,7 +11,7 @@ How the models are built in code and sampled is on the [Implementation](implemen
 `renewalsp` fits a renewal model to each province on its own.
 `renewal` fits the provinces together, pools them and links them by importation.
 `renewalbvd` is `renewal` with a down-weighted likelihood term on the Rt of BVDOutbreakSize.
-`seabbs-renewal` submits the first of `renewalbvd`, `renewalsp` and `renewal`, in that order, to pass its checks.
+`seabbs-renewal` submits the first of `renewalbvd`, `renewalsp`, `renewal`, `randomwalknowcast` and `randomwalk`, in that order, to pass its checks ([Submission workflow](../submission/workflow.md#renewal-chain)).
 The sections below build up from `renewalsp`, and each gives only the maths it adds.
 Every time-varying part is a weekly random walk or AR(1), so it stays near constant unless the data show change.
 

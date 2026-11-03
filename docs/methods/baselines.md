@@ -74,6 +74,7 @@ flowchart TD
 
 Both models use the daily onsets of each hub release.
 $N_{p,r}(t)$ is the known plus imputed onsets in province $p$ on day $t$ at release $r$, which sum over a hub week to the weekly target.
+A forecast is made from the vintage of its date, whose latest release is $o$.
 Release $r$ has a cut-off $c_r$, the cut-off the release states where it gives one and otherwise its latest onset day over all places.
 Day $t \le c_r$ is observed at $r$ and is $a = c_r - t$ days old.
 Cells after the cut-off are not observed.
@@ -157,7 +158,7 @@ $\phi_{p,k}$ is fitted by maximum likelihood on $[0.1, 1000]$, one size per $k$,
 A week with $\widehat{\text{rem}} = 0$ says nothing about $\phi$, so it is left out of that fit.
 The weeks in the fit of $\phi_{p,k}$ are the errors at $k$.
 $b_{p,k}$ is the Poisson maximum likelihood estimate of the removals.
-An estimate with fewer than 3 errors at $k$ has $\phi_{p,k} = 1000$, the Poisson end of the range.
+Where the estimate chosen by the [pooling rule](#own-or-pooled-estimates) has fewer than 3 errors at $k$, $\phi_{p,k} = 1000$, the Poisson end of the range.
 
 ## Own or pooled estimates
 
@@ -171,6 +172,7 @@ $\ell_p$ is the mean of $Y_{p,o}(w)$ over weeks 3 to 6 back, in cases a week.
 A place with $\ell_p \ge 10$ uses its own estimate.
 For $\phi_{p,k}$ it also needs at least 3 errors at $k$.
 Otherwise it uses the pooled estimate of its nearest parent that meets the same rule, and otherwise the country's.
+Only that last fallback can have fewer than 3 errors at $k$.
 A pooled estimate uses the errors and weekly changes of the place's children with $\ell \ge 10$ together.
 A place's counts are the sum of its children's, so the place itself is pooled only when none of its children has $\ell \ge 10$.
 
