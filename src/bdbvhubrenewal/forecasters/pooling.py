@@ -26,7 +26,7 @@ __all__ = ["MIN_ERRORS", "MIN_LEVEL", "pool_matrix", "source_index"]
 MIN_LEVEL = 10.0
 """Cases a week at which a node uses its own estimates."""
 
-MIN_ERRORS = 4
+MIN_ERRORS = 3
 """Errors at a horizon needed for a spread."""
 
 
