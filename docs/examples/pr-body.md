@@ -7,17 +7,17 @@ Model: BVDOutbreakSize-informed renewal model (`renewalbvd`), the first model in
 
 ![Nowcast and forecast for 2026-11-07](https://raw.githubusercontent.com/seabbs-bot/BDBV-Modeling-Hub/4a8fca762876fcda5b674afbacae90a11db77ec1/plots/seabbs-renewal/2026-11-07/41691221605.png)
 
-National (`CD`) submitted samples:
-
-| week ending | median | 90% interval |
-| --- | --- | --- |
-| 2026-10-17 | 467 | 440 to 504 |
-| 2026-10-24 | 541 | 495 to 598 |
-| 2026-10-31 | 565 | 477 to 663 |
-| 2026-11-07 | 562 | 403 to 744 |
-| 2026-11-14 | 582 | 383 to 861 |
-| 2026-11-21 | 612 | 352 to 925 |
-| 2026-11-28 | 566 | 308 to 936 |
+|  | reported, mean of last 2 complete weeks | nowcast, week ending 2026-10-31 | forecast, week ending 2026-11-07 | forecast / reported |
+| --- | --- | --- | --- | --- |
+| DRC | 458 | 565 (477 to 663) | 562 (403 to 744) | 1.23 |
+| Bas Uele | 2.5 | 0 (0 to 3) | 1 (0 to 4) | 0.40 |
+| Haut Uele | 30 | 24.5 (14 to 37) | 25 (11 to 46) | 0.83 |
+| Ituri | 242 | 320 (258 to 385) | 304 (206 to 442) | 1.25 |
+| Nord Kivu | 172 | 192 (160 to 249) | 196 (144 to 286) | 1.15 |
+| Nord Ubangi | 1 | 0 (0 to 2) | 0 (0 to 2) | 0.00 |
+| Sud Kivu | 0 | 0 (0 to 1) | 0 (0 to 1) | n/a |
+| Sud Ubangi | 1 | 0 (0 to 2) | 0 (0 to 2) | 0.00 |
+| Tshopo | 9 | 18 (11 to 27.1) | 21 (10 to 36.2) | 2.33 |
 
 | check | status |
 | --- | --- |
@@ -30,6 +30,18 @@ National (`CD`) submitted samples:
 This round in our docs: https://samabbott.co.uk/BDBVHubRenewal/submission/rounds/2026-11-07/
 
 <details><summary>Details</summary>
+
+**National (`CD`) by week**
+
+| week ending | median | 90% interval |
+| --- | --- | --- |
+| 2026-10-17 | 467 | 440 to 504 |
+| 2026-10-24 | 541 | 495 to 598 |
+| 2026-10-31 | 565 | 477 to 663 |
+| 2026-11-07 | 562 | 403 to 744 |
+| 2026-11-14 | 582 | 383 to 861 |
+| 2026-11-21 | 612 | 352 to 925 |
+| 2026-11-28 | 566 | 308 to 936 |
 
 **Convergence**
 
