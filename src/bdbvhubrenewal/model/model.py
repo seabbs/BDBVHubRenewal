@@ -126,9 +126,6 @@ class ModelConfig:
         Importation kernel between modelled provinces: fixed gravity,
         gravity with a learnt decay and destination weights
         (`LearntKernel`), or none.
-    kernel_flows : bool
-        With `coupling="learnt"`, add a multivariate normal on the log
-        flows (as BVDOutbreakSize).
     delay : {"hazard", "gamma", "lognormal"}
         Nonparametric hazard delay or a censored parametric family.
     depletion : bool
@@ -145,28 +142,6 @@ class ModelConfig:
         Share $\nu$ of each province at risk, which depletion uses.
         `None` (default) estimates it with a log-normal prior; a number
         fixes it.
-    rt_weighting : {"equal", "cases", "sqrt_cases"}
-        Province Rt deviations sum to zero with equal weights, weighted by
-        cumulative cases in the vintage, so the national Rt walk is the
-        case-weighted log Rt, or by their square root, which tempers how
-        far the largest province pins the national walk.
-    outbreak_threshold : float or None
-        A province is an outbreak province in a week when its cases over
-        the last `outbreak_window` weeks reach this many, and sporadic
-        otherwise (`outbreak_classes`). Sporadic weeks have no Rt
-        deviation (national Rt plus imports); the province stays in the
-        coupled renewal and can switch either way. The case-weighted
-        basis covers the outbreak provinces at each time. `None`
-        (default) makes every province with cases an outbreak province.
-    outbreak_window : int
-        Weeks of cases the class looks back over.
-    import_rt : {"destination", "origin"}
-        Imports grow at the destination's Rt (default) or arrive at the
-        origin's, as BVDOutbreakSize relocates infections.
-    seeding : {"first_case", "primary"}
-        Seed each province over its first case week, or only the first
-        province with cases, with importation seeding the rest (as
-        BVDOutbreakSize).
     bvd : bool
         Add BVDOutbreakSize Rt as a tempered pseudo-observation
         (`RtPseudoObservation`), when the vintage carries it.
@@ -196,18 +171,12 @@ class ModelConfig:
     streams: Literal["split", "total"] = "split"
     truncation: bool = True
     coupling: Literal["gravity", "learnt", "none"] = "gravity"
-    kernel_flows: bool = False
     delay: Literal["hazard", "gamma", "lognormal"] = "hazard"
     depletion: bool = True
     active: Literal["cases", "all"] = "cases"
     inactive: Literal["imports", "none"] = "imports"
     report_inactive: bool = True
     effective_population: float | None = None
-    seeding: Literal["first_case", "primary"] = "first_case"
-    rt_weighting: Literal["equal", "cases", "sqrt_cases"] = "equal"
-    outbreak_threshold: float | None = None
-    outbreak_window: int = 6
-    import_rt: Literal["destination", "origin"] = "destination"
     bvd: bool = False
     bvd_alpha: float = 0.5
     dmax: int = 60
@@ -230,8 +199,6 @@ _SIMPLE: dict[str, Any] = {
     "depletion": False,
     "inactive": "none",
 }
-LEARNT = ModelConfig(coupling="learnt")
-"""Main model with a learnt gravity kernel."""
 LADDER: dict[str, ModelConfig] = {
     "S0 national renewal": ModelConfig(national=True, **_SIMPLE),
     "S1 + provinces (pooled Rt)": ModelConfig(**_SIMPLE),
@@ -399,40 +366,6 @@ def _nb_noise(stream: str) -> NegativeBinomialNoise:
     )
 
 
-def outbreak_classes(
-    weekly: np.ndarray, window: int, threshold: float | None
-) -> np.ndarray | None:
-    r"""Outbreak provinces by week: recent cases at or above a threshold.
-
-    A province is an outbreak province in week $w$ when its cases over
-    weeks $w - W + 1, \dots, w$ reach $N$. Recent weeks are part
-    reported, so a province can look quieter at the cut-off than it will
-    once its cases are in.
-
-    Parameters
-    ----------
-    weekly : numpy.ndarray
-        Cases by onset week, `(n_weeks, P)`, NaN for none.
-    window : int
-        $W$, in weeks.
-    threshold : float or None
-        $N$.
-
-    Returns
-    -------
-    numpy.ndarray or None
-        Boolean `(n_weeks, P)`, or `None` with no threshold.
-    """
-    if threshold is None:
-        return None
-    cases = np.nan_to_num(np.asarray(weekly, dtype=float))
-    total = np.cumsum(cases, axis=0)
-    lagged = np.vstack([np.zeros((window, cases.shape[1])), total])[
-        : cases.shape[0]
-    ]
-    return np.asarray(total - lagged >= threshold)
-
-
 def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     """Build the province model for one vintage.
 
@@ -455,27 +388,12 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         if data.distances is None or data.all_populations is None:
             raise ValueError("A learnt kernel needs distances and populations.")
         kernel = LearntKernel(
-            "kernel",
-            data.distances,
-            data.all_populations,
-            n_prov,
-            flows=config.kernel_flows,
+            "kernel", data.distances, data.all_populations, n_prov
         )
     if kernel is None:
         importation = None
     else:
         importation = DistributionalVariable("importation", dist.Beta(1, 100))
-
-    weekly = data.known + data.imputed
-    totals = np.nansum(weekly, axis=0)
-    outbreak = outbreak_classes(
-        weekly, config.outbreak_window, config.outbreak_threshold
-    )
-    primary = (
-        int(np.argmin(data.seed_days))
-        if config.seeding == "primary" and data.seed_days is not None
-        else None
-    )
 
     builder = PyrenewBuilder()
     builder.configure_latent(
@@ -488,20 +406,11 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             "I0",
             DistributionalVariable(
                 "initial_onsets",
-                dist.LogNormal(0.0, 1.5).expand(
-                    [1 if primary is not None else n_prov]
-                ),
+                dist.LogNormal(0.0, 1.5).expand([n_prov]),
             ),
             AffineTransform(0.0, 1 / (ALPHA0 * data.populations)),
         ),
-        log_rt_time_0_rv=PooledInitialValue(
-            "log_rt0",
-            n_prov,
-            0.0,
-            0.5,
-            0.3,
-            active=None if outbreak is None else outbreak.any(axis=0),
-        ),
+        log_rt_time_0_rv=PooledInitialValue("log_rt0", n_prov, 0.0, 0.5, 0.3),
         baseline_rt_process=_named_walk(
             "rt_sd",
             0.2,
@@ -515,14 +424,6 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         importation_rv=importation,
         deplete=config.depletion,
         seed_days=data.seed_days,
-        primary=primary,
-        deviation_weights={
-            "equal": None,
-            "cases": totals + 1.0,
-            "sqrt_cases": np.sqrt(totals) + 1.0,
-        }[config.rt_weighting],
-        outbreak=outbreak,
-        import_rt=config.import_rt,
         rt_observation=RtPseudoObservation(alpha=config.bvd_alpha, **data.bvd)
         if config.bvd and data.bvd is not None
         else None,

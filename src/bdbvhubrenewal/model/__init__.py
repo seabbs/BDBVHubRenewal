@@ -37,8 +37,6 @@ from .renewal import (
     LearntKernel,
     MetapopulationInfections,
     coupled_renewal,
-    flow_pair_basis,
-    importation_flow_factor,
     mixing_matrix,
 )
 from .rt import (
@@ -67,11 +65,9 @@ __all__ = [
     "censored_pmf",
     "coupled_renewal",
     "fit",
-    "flow_pair_basis",
     "forecast_trajectories",
     "generation_interval",
     "hazard_to_pmf",
-    "importation_flow_factor",
     "mixing_matrix",
     "model_args",
     "onset_expectations",

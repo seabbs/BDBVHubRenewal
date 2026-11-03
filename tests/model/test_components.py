@@ -370,75 +370,7 @@ def test_generation_interval_matches_bvdoutbreaksize():
     assert (s.gi_mean, s.gi_sd) == (GI_MEAN, GI_SD)
 
 
-def test_case_weighted_basis_is_orthonormal_and_orthogonal_to_weights():
-    from bdbvhubrenewal.model.rt import sum_to_zero_basis
-
-    w = np.array([6000.0, 2000.0, 400.0, 90.0])
-    q = sum_to_zero_basis(4, w)
-    np.testing.assert_allclose(q.T @ q, np.eye(3), atol=1e-10)
-    np.testing.assert_allclose(w @ q, 0.0, atol=1e-8)
-    plain = sum_to_zero_basis(4)
-    np.testing.assert_allclose(plain.sum(axis=0), 0.0, atol=1e-10)
-
-
-def test_basis_over_outbreak_provinces_leaves_sporadic_rows_zero():
-    from bdbvhubrenewal.model.rt import sum_to_zero_basis
-
-    w = np.array([6000.0, 3.0, 400.0, 12.0])
-    active = np.array([True, False, True, False])
-    q = sum_to_zero_basis(4, w, active)
-    assert q.shape == (4, 1)
-    np.testing.assert_allclose(q[~active], 0.0)
-    np.testing.assert_allclose(q.T @ q, np.eye(1), atol=1e-10)
-    np.testing.assert_allclose(w @ q, 0.0, atol=1e-8)
-
-
-def test_pooled_walk_holds_sporadic_provinces_at_the_national_value():
-    weekly = WeeklyTemporalProcess(
-        NonCentredRandomWalk(DeterministicVariable("sd", 0.1)), start_dow=6
-    )
-    active = np.array([True, False, True, True])
-    base, groups = seeded(
-        lambda: pooled_walk(
-            weekly,
-            weekly,
-            jnp.array([0.1, 0.9, 0.2, 0.3]),
-            30,
-            4,
-            "x",
-            6,
-            np.array([5.0, 1.0, 2.0, 3.0]),
-            active,
-        )
-    )
-    np.testing.assert_allclose(groups[:, 1], base[:, 0], atol=1e-6)
-    w = np.array([5.0, 2.0, 3.0])
-    np.testing.assert_allclose((groups[:, active] - base) @ w, 0.0, atol=1e-5)
-    # A single outbreak province leaves everyone on the national walk.
-    _, alone = seeded(
-        lambda: pooled_walk(
-            weekly, weekly, 0.1, 30, 3, "y", 6,
-            active=np.array([True, False, False]),
-        )
-    )  # fmt: skip
-    np.testing.assert_allclose(alone, np.repeat(alone[:, :1], 3, 1))
-
-
-def _origin_renewal(init, rt, g, w):
-    """Reference loop with imports at the origin's Rt, no depletion."""
-    rev = np.flip(g)
-    hist = np.asarray(init[-len(g) :], dtype=float)
-    out, imported = [], []
-    off = w - np.diag(np.diag(w))
-    for r in rt:
-        force = rev @ hist
-        out.append(w @ (r * force))
-        imported.append(off @ (r * force))
-        hist = np.vstack([hist[1:], out[-1]])
-    return np.array(out), np.array(imported)
-
-
-def test_imports_at_the_origin_rt_and_imported_infections():
+def test_imported_infections_are_part_of_the_total():
     rng = np.random.default_rng(4)
     g = generation_interval()
     p = 3
@@ -448,91 +380,18 @@ def test_imports_at_the_origin_rt_and_imported_infections():
     I0 = rng.uniform(0, 1e-5, (len(g), p))
     rt = rng.uniform(0.6, 1.8, (60, p))
     s0 = np.ones(p)
-    x, _, imp = coupled_renewal(
-        jnp.asarray(I0), jnp.asarray(rt), jnp.asarray(g), jnp.asarray(w),
-        jnp.asarray(s0), deplete=False, import_rt="origin",
-    )  # fmt: skip
-    ref, ref_imp = _origin_renewal(I0, rt, g, w)
-    np.testing.assert_allclose(np.asarray(x), ref, rtol=1e-4)
-    np.testing.assert_allclose(np.asarray(imp), ref_imp, rtol=1e-4)
-    # With one Rt for all, origin and destination agree.
-    flat = np.repeat(rt[:, :1], p, 1)
-    args = (jnp.asarray(I0), jnp.asarray(flat), jnp.asarray(g))
-    xd, _, _ = coupled_renewal(
-        *args, jnp.asarray(w), jnp.asarray(s0), deplete=False
-    )
-    xo, _, _ = coupled_renewal(
-        *args, jnp.asarray(w), jnp.asarray(s0), deplete=False,
-        import_rt="origin",
-    )  # fmt: skip
-    np.testing.assert_allclose(np.asarray(xd), np.asarray(xo), rtol=1e-5)
     # Imported infections are part of the total, and none without coupling.
-    xdep, _, impdep = coupled_renewal(
+    x, _, imp = coupled_renewal(
         jnp.asarray(I0), jnp.asarray(rt), jnp.asarray(g), jnp.asarray(w),
         jnp.asarray(s0) * 0.05, deplete=True, pool=0.05,
     )  # fmt: skip
-    assert np.all(np.asarray(impdep) <= np.asarray(xdep) + 1e-12)
-    assert float(np.asarray(impdep).sum()) > 0
+    assert np.all(np.asarray(imp) <= np.asarray(x) + 1e-12)
+    assert float(np.asarray(imp).sum()) > 0
     _, _, none = coupled_renewal(
         jnp.asarray(I0), jnp.asarray(rt), jnp.asarray(g), jnp.eye(p),
         jnp.asarray(s0), deplete=False,
     )  # fmt: skip
     np.testing.assert_allclose(np.asarray(none), 0.0)
-
-
-def test_pooled_walk_masks_deviations_by_time():
-    weekly = WeeklyTemporalProcess(
-        NonCentredRandomWalk(DeterministicVariable("sd", 0.3)), start_dow=6
-    )
-    mask = np.ones((28, 4), bool)
-    mask[:14, 3] = False  # Starts sporadic, becomes an outbreak.
-    mask[14:, 1] = False  # Goes quiet.
-    w = np.array([5.0, 1.0, 2.0, 3.0])
-    base, groups = seeded(
-        lambda: pooled_walk(
-            weekly, weekly, jnp.array([0.1, 0.9, 0.2, 0.3]), 28, 4, "x", 6,
-            w, mask,
-        )
-    )  # fmt: skip
-    dev = np.asarray(groups - base)
-    np.testing.assert_allclose(dev[~mask], 0.0, atol=1e-6)
-    np.testing.assert_allclose((dev * mask) @ w, 0.0, atol=1e-5)
-    assert np.abs(dev[mask]).max() > 1e-3
-
-
-def test_flow_pair_basis_is_double_centred():
-    from bdbvhubrenewal.model import flow_pair_basis
-
-    n = 5
-    sym, anti = flow_pair_basis(n)
-    assert sym.shape == (n * n, n * (n - 3) // 2)
-    assert anti.shape == (n * n, (n - 1) * (n - 2) // 2)
-    for basis, sign in ((sym, 1.0), (anti, -1.0)):
-        np.testing.assert_allclose(
-            basis.T @ basis, np.eye(basis.shape[1]), atol=1e-9
-        )
-        for col in basis.T:
-            m = col.reshape(n, n)
-            np.testing.assert_allclose(np.diag(m), 0.0, atol=1e-12)
-            np.testing.assert_allclose(m.sum(axis=0), 0.0, atol=1e-9)
-            np.testing.assert_allclose(m.sum(axis=1), 0.0, atol=1e-9)
-            np.testing.assert_allclose(m, sign * m.T, atol=1e-9)
-
-
-def test_flow_factor_gives_flow_variance_and_reciprocity():
-    from bdbvhubrenewal.model import flow_pair_basis, importation_flow_factor
-
-    n = 5
-    sym, anti = flow_pair_basis(n)
-    cov = np.asarray(importation_flow_factor(sym, anti, 0.7, 0.4))
-    cov = cov @ cov.T
-    off = ~np.eye(n, dtype=bool).reshape(-1)
-    # On average over flows, as BVDOutbreakSize scales the two parts.
-    np.testing.assert_allclose(np.diag(cov)[off].mean(), 0.49, rtol=1e-6)
-    np.testing.assert_allclose(np.diag(cov)[~off], 0.0, atol=1e-12)
-    rev = np.arange(n * n).reshape(n, n).T.reshape(-1)
-    pairs = cov[np.arange(n * n), rev][off]
-    np.testing.assert_allclose(pairs.mean(), 0.4 * 0.49, rtol=1e-6)
 
 
 def _quad_censored_pmf(family, mean, cv, dmax):

@@ -120,32 +120,12 @@ SAMPLER = {
     "max_tree_depth": 10,
     "target_accept": 0.9,
 }
-_R1 = dataclasses.replace(pr.MAIN, rt_weighting="cases")
-_R2 = dataclasses.replace(_R1, coupling="learnt", kernel_flows=True)
-_R3 = dataclasses.replace(_R2, seeding="primary")
-_R4 = dataclasses.replace(_R3, outbreak_threshold=20, outbreak_window=6)
 RUNGS: dict[str, pr.ModelConfig | str] = {
     **pr.model.LADDER,
-    "R1 case-weighted Rt": _R1,
-    "R1s sqrt case-weighted Rt": dataclasses.replace(
-        pr.MAIN, rt_weighting="sqrt_cases"
-    ),
-    "R2a R1 + learnt destination weights": dataclasses.replace(
-        _R1, coupling="learnt"
-    ),
-    "R2 R2a + MVN log flows": _R2,
-    "R3 R2 + primary seeding": _R3,
-    "R4 R3 + sporadic class (N=20, W=6)": _R4,
-    "R4 sensitivity N=10": dataclasses.replace(_R4, outbreak_threshold=10),
-    "R4 sensitivity N=50": dataclasses.replace(_R4, outbreak_threshold=50),
-    "R5 R4 + imports at the origin's Rt": dataclasses.replace(
-        _R4, import_rt="origin"
-    ),
     "renewalbvd": pr.BVD,
     "renewalsp": "renewalsp",
 }
-"""Rungs in order: the build steps (S5 is `renewal`), the R steps on
-importation and sporadic provinces, then the variants."""
+"""Rungs in order: the build steps (S5 is `renewal`), then the variants."""
 
 DESCRIPTIONS = {
     "randomwalk": "The last complete week carried forward, as the reference.",
@@ -160,23 +140,6 @@ DESCRIPTIONS = {
     "S4 + coupling and importation": "Gravity importation between provinces "
     "and an importation-only part for provinces with no cases.",
     "S5 + depletion (main)": "Susceptible depletion; this is `renewal`.",
-    "R1 case-weighted Rt": "Province Rt deviations sum to zero weighted by "
-    "cases, so the national walk is the case-weighted Rt.",
-    "R1s sqrt case-weighted Rt": "As R1 with weights the square root of "
-    "cases, so the largest province pins the national walk less.",
-    "R2a R1 + learnt destination weights": "Gravity with a learnt distance "
-    "decay and sum-to-zero destination log weights, holding each origin's "
-    "export total.",
-    "R2 R2a + MVN log flows": "A multivariate normal on the log flows on "
-    "top, as BVDOutbreakSize.",
-    "R3 R2 + primary seeding": "Only Ituri is seeded; importation seeds every "
-    "other province.",
-    "R4 R3 + sporadic class (N=20, W=6)": "Provinces with under 20 cases in "
-    "the last 6 weeks follow national Rt plus imports.",
-    "R4 sensitivity N=10": "As R4 with a threshold of 10.",
-    "R4 sensitivity N=50": "As R4 with a threshold of 50.",
-    "R5 R4 + imports at the origin's Rt": "Imported transmission arrives at "
-    "the origin's Rt, as BVDOutbreakSize, not the destination's.",
     "renewalbvd": "BVDOutbreakSize Rt as a tempered pseudo-observation.",
     "renewalsp": "An independent single-patch renewal per location, the "
     "nation included.",
@@ -549,11 +512,10 @@ def province_crps(samples, truth, locations) -> dict[str, float]:
 
 
 def province_extras(run, locations, timing=()) -> dict:
-    """Import share, class, destination weight and first-case timing.
+    """Import share and first-case timing.
 
     The import share is the posterior median share of a province's
-    infections up to the cut-off that came from importation. The class
-    is whether it is an outbreak province in the last data week. The
+    infections up to the cut-off that came from importation. The
     first-case lag is the first day the posterior median cumulative
     infections reach one, less the first day of the first case week.
     """
@@ -569,25 +531,10 @@ def province_extras(run, locations, timing=()) -> dict:
         share = imp.sum(1) / np.maximum(x.sum(1), 1e-12)
     else:
         share = None
-    classes = pr.model.outbreak_classes(
-        data.known + data.imputed,
-        model.config.outbreak_window,
-        model.config.outbreak_threshold,
-    )
-    weights = (
-        np.median(np.asarray(smp["kernel_destination_weights"]), axis=0)
-        if "kernel_destination_weights" in smp
-        else None
-    )
     cum = np.median(np.cumsum(x, axis=1), axis=0)
     for i, loc in enumerate(data.names):
-        if loc in locations:
-            if share is not None:
-                out[f"import_share_{loc}"] = float(np.median(share[:, i]))
-            if classes is not None:
-                out[f"outbreak_{loc}"] = float(classes[-1, i])
-            if weights is not None:
-                out[f"dest_weight_{loc}"] = float(weights[i])
+        if loc in locations and share is not None:
+            out[f"import_share_{loc}"] = float(np.median(share[:, i]))
         if loc in timing and data.seed_days is not None:
             hit = np.nonzero(cum[:, i] >= 1.0)[0]
             first = int(hit[0]) if hit.size else np.nan
@@ -643,9 +590,9 @@ def summarise_origins(results) -> dict:
         elif numbers and len(numbers) == len(values):
             out[f"real_{k}"] = float(np.nanmean(numbers))
     per_origin = ("crps_national", "crps_province", "seconds", "max_rhat")
-    focus = ("crps_CD-", "median_ahead1_", "import_share_", "outbreak_",
-             "dest_weight_", "first_case_lag_", "depth_share_chain",
-             "step_size_chain", "min_ess")  # fmt: skip
+    focus = ("crps_CD-", "median_ahead1_", "import_share_",
+             "first_case_lag_", "depth_share_chain", "step_size_chain",
+             "min_ess")  # fmt: skip
     for origin, r in results:
         tag = origin.replace("-", "")
         for k in r:

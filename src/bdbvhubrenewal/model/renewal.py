@@ -7,8 +7,6 @@ different renewal step. Rt, seeding and the output contract are unchanged.
 
 from __future__ import annotations
 
-import math
-
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -69,7 +67,6 @@ def coupled_renewal(
     deplete: bool = True,
     pool: Array | float = 1.0,
     seeding: Array | None = None,
-    import_rt: str = "destination",
 ) -> tuple[Array, Array, Array]:
     r"""Run a per-capita renewal with importation and depletion.
 
@@ -82,11 +79,6 @@ def coupled_renewal(
 
     $$x_p(t) = S_p(t) \{1 - e^{-y_p(t) / \nu}\}, \qquad
     S_p(t + 1) = S_p(t) - x_p(t) = S_p(t) e^{-y_p(t) / \nu},$$
-
-    With `import_rt="origin"` imports arrive at the origin's Rt instead,
-    $y_p(t) = \sum_q W_{pq} R_q(t) \sum_{\tau \ge 1} x_q(t - \tau)
-    g(\tau)$, as BVDOutbreakSize relocates infections (`renewal.jl`), so
-    a low destination Rt does not switch its imports off.
 
     with $S_p$ the susceptibles per resident, starting from $\nu$ less
     the seed, so cumulative infections never exceed the pool. This is
@@ -123,8 +115,6 @@ def coupled_renewal(
     seeding : Array, optional
         Seed infections per resident added to $y_p(t)$, `(n, P)`, for
         provinces seeded after the start.
-    import_rt : {"destination", "origin"}
-        Whose Rt multiplies imported transmission.
 
     Returns
     -------
@@ -134,8 +124,6 @@ def coupled_renewal(
         importation, `(n, P)`: the off-diagonal part of $y$ as a share of
         $y$, times the infections.
     """
-    if import_rt not in ("destination", "origin"):
-        raise ValueError(f"Unknown import_rt {import_rt!r}.")
     off = mixing - jnp.diag(jnp.diag(mixing))
     rev_g = jnp.flip(jnp.asarray(gen_int))
     history = I0[-rev_g.shape[0] :]
@@ -155,12 +143,8 @@ def coupled_renewal(
         hist, log_share = carry
         r_t, seed_t = inputs
         force = rev_g @ hist
-        if import_rt == "origin":
-            imported = off @ (r_t * force)
-            y = mixing @ (r_t * force) + seed_t
-        else:
-            imported = r_t * (off @ force)
-            y = r_t * (mixing @ force) + seed_t
+        imported = r_t * (off @ force)
+        y = r_t * (mixing @ force) + seed_t
         share = jnp.exp(log_share)
         if deplete:
             x = -pool * share * jnp.expm1(-y / pool)
@@ -193,16 +177,6 @@ class LearntKernel(RandomVariable):
     destination weights). With $\kappa = 0$ and $w = 0$ it is the gravity
     kernel. All on the log scale (`log_softmax`).
 
-    With `flows`, the log flows between modelled provinces also get a
-    multivariate normal deviation $W = L\zeta$, $\zeta \sim N(0, I)$
-    (non-centred), with $L$ from `importation_flow_factor`: double-centred
-    flows with $\sigma_\text{flow} \sim N^+(0, 0.5)$ and reciprocity
-    $(\rho + 1)/2 \sim \text{Beta}(2, 2)$, as BVDOutbreakSize (#1030 and
-    later). The flow basis, its scaling and these priors are copied from
-    there; BVDOutbreakSize's destination effect inside the factor and its
-    correlation with per-origin importation are not, as the destination
-    weights above take that role and $\varepsilon$ is shared.
-
     `sample` returns the kernel between modelled provinces. The kernel
     from them to provinces with no cases (gravity with the learnt decay,
     no weights) is kept as `import_kernel` for `OnsetStreams` in the
@@ -222,8 +196,6 @@ class LearntKernel(RandomVariable):
         Prior median of the decay.
     weight_sd : float, optional
         Scale of the half-normal prior on $\sigma_w$.
-    flows : bool, optional
-        Add the multivariate normal on the log flows.
     """
 
     def __init__(
@@ -234,11 +206,8 @@ class LearntKernel(RandomVariable):
         n_active: int,
         decay_km: float = 300.0,
         weight_sd: float = 0.5,
-        flows: bool = False,
     ) -> None:
         super().__init__(name=name)
-        self.flows = flows
-        self.symmetric, self.antisymmetric = flow_pair_basis(n_active)
         self.distances = jnp.asarray(distances)
         self.log_pop = jnp.log(jnp.asarray(populations))
         self.n_active = n_active
@@ -277,28 +246,8 @@ class LearntKernel(RandomVariable):
             w = sd * (jnp.asarray(sum_to_zero_basis(p)) @ z)
         else:
             w = jnp.zeros(1)
-        flow = jnp.zeros((p, p))
-        ds, da = self.symmetric.shape[1], self.antisymmetric.shape[1]
-        if self.flows and ds + da > 0:
-            sd_flow = numpyro.sample(
-                f"{self.name}_flow_sd", dist.HalfNormal(0.5)
-            )
-            z = numpyro.sample(
-                f"{self.name}_flow_z", dist.Normal(0.0, 1.0).expand([ds + da])
-            )
-            rho = jnp.asarray(-1.0)
-            if ds > 0:
-                unit = numpyro.sample(
-                    f"{self.name}_reciprocity_unit", dist.Beta(2.0, 2.0)
-                )
-                rho = 2 * unit - 1
-            factor = importation_flow_factor(
-                self.symmetric, self.antisymmetric, sd_flow, rho
-            )
-            flow = (factor @ z).reshape(p, p)
-            numpyro.deterministic(f"{self.name}_log_flow_deviation", flow)
         numpyro.deterministic(f"{self.name}_destination_weights", w)
-        active = jax.nn.log_softmax(base[:p, :p] + w[None, :] + flow, axis=1)
+        active = jax.nn.log_softmax(base[:p, :p] + w[None, :], axis=1)
         kernel = jnp.exp(active)
         numpyro.deterministic(f"{self.name}_kernel", kernel)
         if base.shape[0] > p:
@@ -306,90 +255,6 @@ class LearntKernel(RandomVariable):
                 :, p:
             ]
         return kernel
-
-
-def _orthonormal_complement(constraints: np.ndarray, m: int) -> np.ndarray:
-    """Orthonormal basis of the complement of the rows' span in R^m."""
-    _, sv, vt = np.linalg.svd(constraints, full_matrices=True)
-    rank = int((sv > 1e-9 * sv.max()).sum())
-    return np.asarray(vt[rank:].T, dtype=float).reshape(m, m - rank)
-
-
-def flow_pair_basis(n: int) -> tuple[np.ndarray, np.ndarray]:
-    r"""Orthonormal bases of the double-centred flows between `n` provinces.
-
-    As BVDOutbreakSize `flow_pair_basis`. A double-centred flow matrix has
-    a zero diagonal and zero row and column sums. The symmetric part moves
-    $q \to p$ and $p \to q$ together and has $n(n - 3)/2$ directions; the
-    antisymmetric part moves them in opposite directions and has
-    $(n - 1)(n - 2)/2$. Column $j$ reshapes (row-major) to an `(n, n)`
-    matrix with rows as origins.
-
-    Returns
-    -------
-    tuple of numpy.ndarray
-        Symmetric and antisymmetric bases, `(n * n, d)` each.
-    """
-    idx = np.arange(n * n).reshape(n, n)
-    rows = []
-    for p in range(n):
-        for cells in ([idx[p, p]], idx[p, :], idx[:, p]):
-            v = np.zeros(n * n)
-            v[cells] = 1.0
-            rows.append(v)
-
-    def swapped(sign: float) -> list[np.ndarray]:
-        out = []
-        for q in range(n):
-            for p in range(q):
-                v = np.zeros(n * n)
-                v[idx[p, q]] += 1.0
-                v[idx[q, p]] += sign
-                out.append(v)
-        return out
-
-    bases = []
-    for sign in (-1.0, 1.0):
-        basis = _orthonormal_complement(np.array(rows + swapped(sign)), n * n)
-        basis[np.diag(idx)] = 0.0
-        bases.append(basis)
-    return bases[0], bases[1]
-
-
-def importation_flow_factor(
-    symmetric: ArrayLike,
-    antisymmetric: ArrayLike,
-    sd_flow: ArrayLike,
-    reciprocity: ArrayLike,
-) -> Array:
-    r"""Factor $L$ of the normal prior on the log flow deviations.
-
-    The flow term of BVDOutbreakSize `importation_flow_factor`: the
-    double-centred flows (`flow_pair_basis`) scaled so each flow has
-    variance $\sigma_\text{flow}^2$ on average and correlation $\rho$ with
-    its reverse, $L L^\top = \sigma_\text{flow}^2 R(\rho)$. The
-    destination effect of BVDOutbreakSize's factor is left out here: the
-    learnt destination weights of `LearntKernel` carry it. Rows are flows
-    $q \to p$ at `q * n + p`; diagonal rows are zero.
-
-    Returns
-    -------
-    Array
-        `(n * n, d)`.
-    """
-    sym, anti = jnp.asarray(symmetric), jnp.asarray(antisymmetric)
-    n2 = sym.shape[0]
-    n = math.isqrt(n2)
-    pairs = n * (n - 1) // 2
-    ds, da = sym.shape[1], anti.shape[1]
-    parts = []
-    if ds > 0:
-        parts.append(sd_flow * jnp.sqrt((1 + reciprocity) * pairs / ds) * sym)
-    if da > 0:
-        parts.append(sd_flow * jnp.sqrt((1 - reciprocity) * pairs / da) * anti)
-    if not parts:
-        return jnp.zeros((n2, 0))
-    return jnp.concatenate(parts, axis=1)
 
 
 class MetapopulationInfections(SubpopulationInfections):
@@ -432,22 +297,6 @@ class MetapopulationInfections(SubpopulationInfections):
         that week, plus whatever importation brings. Infections are dated
         by onset, so seeding the week before would put onsets where the
         data have none. `None` seeds every province at the start.
-    deviation_weights : array_like, optional
-        Case counts by province. Rt deviations then sum to zero weighted
-        by them, so the national Rt walk is the case-weighted log Rt.
-    outbreak : array_like, optional
-        Outbreak provinces by week of the data, `(n_weeks, P)` boolean. A
-        province is sporadic in the weeks it is not: no Rt deviation
-        (national Rt), so its infections come from national Rt applied to
-        its own and imported infections. The seeding weeks take the first
-        data week's class and the forecast the last. `None` makes every
-        province an outbreak province throughout.
-    primary : int, optional
-        Seed only this province (the first with cases); every other
-        province starts empty and is seeded by importation, as
-        BVDOutbreakSize. `None` seeds each province.
-    import_rt : {"destination", "origin"}
-        Whose Rt multiplies imported transmission (`coupled_renewal`).
     **kwargs
         Passed to `SubpopulationInfections` (without infection feedback).
     """
@@ -461,20 +310,10 @@ class MetapopulationInfections(SubpopulationInfections):
         effective_population_rv: RandomVariable | None = None,
         rt_observation: RtPseudoObservation | None = None,
         seed_days: Array | None = None,
-        deviation_weights: Array | None = None,
-        outbreak: Array | None = None,
-        primary: int | None = None,
-        import_rt: str = "destination",
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
-        self.outbreak = None if outbreak is None else np.asarray(outbreak, bool)
-        self.primary = primary
-        self.import_rt = import_rt
         self.seed_days = None if seed_days is None else np.asarray(seed_days)
-        self.deviation_weights = (
-            None if deviation_weights is None else np.asarray(deviation_weights)
-        )
         self.rt_observation = rt_observation
         if deplete and effective_population_rv is None:
             raise ValueError("Depletion needs effective_population_rv.")
@@ -486,15 +325,6 @@ class MetapopulationInfections(SubpopulationInfections):
         self.kernel = kernel
         self.importation_rv = importation_rv
         self.deplete = deplete
-
-    def _daily_outbreak(self, n_init: int, n_total: int) -> np.ndarray | None:
-        """Weekly outbreak classes on the daily model axis."""
-        if self.outbreak is None:
-            return None
-        week = np.clip(
-            (np.arange(n_total) - n_init) // 7, 0, self.outbreak.shape[0] - 1
-        )
-        return self.outbreak[week]
 
     def sample(
         self,
@@ -522,8 +352,6 @@ class MetapopulationInfections(SubpopulationInfections):
             pop.n_subpops,
             "log_rt",
             first_day_dow,
-            self.deviation_weights,
-            self._daily_outbreak(n_init, n_total),
         )
         rt = jnp.exp(log_rt)
         gen_int = self.gen_int_rv()
@@ -560,13 +388,6 @@ class MetapopulationInfections(SubpopulationInfections):
             days = np.arange(rt.shape[0] - n_init)[:, None]
             window = (days >= self.seed_days) & (days < self.seed_days + 7)
             seeding = jnp.asarray(window & (self.seed_days > 0)) * I0[None, :]
-        if self.primary is not None:
-            # Only the primary province is seeded. The others start empty
-            # (PyRenew needs a positive start) and importation seeds them.
-            others = jnp.asarray(np.arange(pop.n_subpops) != self.primary)
-            I0_all = jnp.where(others[None, :], 1e-12, I0_all)
-            if seeding is not None:
-                seeding = jnp.where(others[None, :], 0.0, seeding)
         pool: Array | float = 1.0
         if self.deplete:
             if self.effective_population_rv is None:
@@ -582,7 +403,6 @@ class MetapopulationInfections(SubpopulationInfections):
             self.deplete,
             pool,
             seeding,
-            self.import_rt,
         )
         infections = jnp.vstack([I0_all, post])
         aggregate = infections @ pop.fractions
