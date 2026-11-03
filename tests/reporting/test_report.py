@@ -88,8 +88,8 @@ def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
     assert "teamA-weekly" in scores
     assert "relative_wis" in scores
     figures = (gen / "comparison-figures.md").read_text()
-    assert "2026-10-17" in figures
-    assert (fig / "comparison-2026-10-17.svg").exists()
+    assert "2026-10-24" in figures
+    assert (fig / "comparison-2026-10-24.svg").exists()
     assert (
         "BDBV Modeling Hub" in (gen / "comparison-attribution.md").read_text()
     )
