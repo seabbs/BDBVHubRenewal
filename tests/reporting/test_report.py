@@ -180,8 +180,7 @@ def test_lopo_section_hidden_without_results(tmp_path: Path) -> None:
     assert "CD-IT" in text
 
 
-def test_zone_section_hidden_without_results(tmp_path: Path) -> None:
-    assert report._zone_section(tmp_path / "missing.csv") == ""
+def test_zone_section() -> None:
     text = report._zone_section(ROOT / "results" / "zone-scores.csv")
     assert text.startswith("## Health zones")
     assert "randomwalknowcast (summed to provinces)" in text
@@ -189,8 +188,7 @@ def test_zone_section_hidden_without_results(tmp_path: Path) -> None:
 
 
 def test_ladder_page(tmp_path: Path) -> None:
-    # Nothing is shown without results, and no progress wording.
-    assert report._ladder_page(tmp_path / "missing.csv") == ""
+    # No progress wording.
     ladder = pd.DataFrame(
         {
             "step": [0, 1],
@@ -398,7 +396,6 @@ def test_sampler_section() -> None:
 
 
 def test_development_log(tmp_path: Path) -> None:
-    assert report._development_log(tmp_path / "missing.csv") == ""
     log = pd.DataFrame(
         {
             "date": ["2026-10-10", "2026-10-28"],
@@ -454,11 +451,8 @@ def test_forecast_tabs() -> None:
     assert report._forecast_tabs([], {"CD": "DRC"}) == ""
 
 
-def test_recovery_section(tmp_path: Path) -> None:
-    assert report._recovery_section(tmp_path / "missing.csv") == ""
-    path = tmp_path / "recovery-scores.csv"
-    _scores().assign(kind="simulated").to_csv(path, index=False)
-    text = report._recovery_section(path)
+def test_recovery_section() -> None:
+    text = report._recovery_section()
     assert text.startswith("## Recovery on simulated vintages")
     assert "recovery-wis-horizon.svg" in text
 
@@ -476,6 +470,9 @@ def _scenario_scores() -> pd.DataFrame:
                                 "scenario": scenario,
                                 "vintage": "2026-10-24",
                                 "location": location,
+                                "level": "national"
+                                if location == "CD"
+                                else "province",
                                 "horizon": horizon,
                                 "wis": 10.0 + horizon,
                                 "log_wis": 0.5,
@@ -487,10 +484,6 @@ def _scenario_scores() -> pd.DataFrame:
                             }
                         )
     return pd.DataFrame(rows)
-
-
-def test_scenario_scores_hidden_without_results(tmp_path: Path) -> None:
-    assert report._scenario_scores(tmp_path / "missing.csv") == ""
 
 
 def test_scenario_scores_table(tmp_path: Path) -> None:

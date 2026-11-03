@@ -256,9 +256,6 @@ def _release_section(
     paths = {
         n: res / f"nowcast-{n}.csv" for n in ("scores", "quantiles", "origins")
     }
-    if not all(p.exists() and p.stat().st_size > 2 for p in paths.values()):
-        _write(gen / "release-backtest.md", "")
-        return
     scores = pd.read_csv(paths["scores"])
     quantiles = pd.read_csv(paths["quantiles"])
     origins = pd.read_csv(paths["origins"]).fillna("")
@@ -448,13 +445,12 @@ def _nowcast_forecasts(
         frames.append(keep)
         have |= set(keep["model"])
     backtest = res / "forecasts.csv.gz"
-    if backtest.exists():
-        rows = pd.read_csv(backtest, dtype={"as_of": object})
-        if "as_of" in rows:
-            rows = rows.loc[rows["as_of"].isna()]
-        rows = rows.loc[(rows["kind"] == "real") & ~rows["model"].isin(have)]
-        for _, grp in rows.groupby("model"):
-            frames.append(grp.loc[grp["vintage"] == grp["vintage"].max()])
+    rows = pd.read_csv(backtest, dtype={"as_of": object})
+    if "as_of" in rows:
+        rows = rows.loc[rows["as_of"].isna()]
+    rows = rows.loc[(rows["kind"] == "real") & ~rows["model"].isin(have)]
+    for _, grp in rows.groupby("model"):
+        frames.append(grp.loc[grp["vintage"] == grp["vintage"].max()])
     return pd.concat(frames, ignore_index=True)
 
 
@@ -545,11 +541,7 @@ def _evidence_link(evidence: object) -> str:
 
 def _development_log(path: Path) -> str:
     """Return the development log as a table, newest first."""
-    if not path.exists() or path.stat().st_size <= 1:
-        return ""
     log = pd.read_csv(path, dtype=str).fillna("")
-    if log.empty:
-        return ""
     log = log.iloc[::-1].sort_values("date", ascending=False, kind="stable")
     log["evidence"] = log["evidence"].map(_evidence_link)
     log.columns = [c.capitalize() for c in log.columns]
@@ -564,8 +556,6 @@ def _ladder_label(column: str) -> str:
 
 def _ladder_page(path: Path) -> str:
     """Return the Model building tables from the ladder results."""
-    if not path.exists() or path.stat().st_size <= 1:
-        return ""
     ladder = pd.read_csv(path)
     if "step" in ladder:
         ladder = ladder.sort_values("step")
@@ -607,12 +597,8 @@ def _lopo_section(path: Path) -> str:
 
 
 def _zone_section(path: Path) -> str:
-    """Return the health-zone section, or nothing without results."""
-    if not path.exists() or path.stat().st_size <= 1:
-        return ""
+    """Return the health-zone section."""
     scores = pd.read_csv(path, low_memory=False)
-    if scores.empty:
-        return ""
     cols = ["n", "wis", "log_wis", "coverage_50", "coverage_90", "bias"]
     table = summarise_scores(scores, by=("model",)).merge(
         zone_relative_skill(scores)[["model", "relative_wis"]], on="model"
@@ -884,12 +870,8 @@ def _forecast_tabs(
     )
 
 
-def _recovery_section(path: Path) -> str:
-    """Return the recovery section, or nothing without results."""
-    if not path.exists() or path.stat().st_size <= 1:
-        return ""
-    if pd.read_csv(path).empty:
-        return ""
+def _recovery_section() -> str:
+    """Return the recovery section."""
     alt = "Mean WIS by horizon on simulated vintages."
     return (
         "## Recovery on simulated vintages\n\n"
@@ -909,16 +891,8 @@ def _without_baseline(
 
 
 def _scenario_scores(path: Path) -> str:
-    """Return mean scores on the simulated scenarios, or nothing."""
-    if not path.exists() or path.stat().st_size <= 1:
-        return ""
+    """Return mean scores on the simulated scenarios."""
     scores = pd.read_csv(path, low_memory=False)
-    if scores.empty:
-        return ""
-    if "level" not in scores:
-        scores["level"] = scores["location"].map(
-            lambda x: "national" if x == "CD" else "province"
-        )
     views = {
         "final data, complete weeks": (scores["truth_view"] == "final")
         & scores["complete"],
@@ -951,10 +925,8 @@ def _scenario_scores(path: Path) -> str:
     return "\n".join(tables)
 
 
-def _scenario_figure(path: Path) -> str:
-    """Return the scenario figure links, or nothing without results."""
-    if not _scenario_scores(path):
-        return ""
+def _scenario_figure() -> str:
+    """Return the scenario figure links."""
     alt = "Mean WIS by horizon on the simulated scenarios."
     return _metric_tabs("scenario-wis-horizon", alt)
 
@@ -1071,109 +1043,107 @@ def _backtest_page(
     dev_path = res / "backtest-scores.csv"
     k = config.complete_after_weeks
     explorer_scores = None
-    if dev_path.exists():
-        views = _score_views(pd.read_csv(dev_path))
-        primary = views["complete weeks"]
-        scores = primary
-        for by in ("horizon", "location"):
-            for metric in ("wis", "log_wis", "coverage_90", "bias"):
-                save_light_dark(
-                    partial(
-                        plot_scores, scores, by=by, metric=metric, models=names
-                    ),
-                    fig / f"scores-{metric.replace('_', '-')}-{by}.svg",
-                )
+    views = _score_views(pd.read_csv(dev_path))
+    primary = views["complete weeks"]
+    scores = primary
+    for by in ("horizon", "location"):
+        for metric in ("wis", "log_wis", "coverage_90", "bias"):
             save_light_dark(
-                partial(plot_relative_skill, primary, by=by, models=names),
-                fig / f"relative-wis-{by}.svg",
+                partial(
+                    plot_scores, scores, by=by, metric=metric, models=names
+                ),
+                fig / f"scores-{metric.replace('_', '-')}-{by}.svg",
             )
-        truth_v = ", ".join(sorted(set(scores["truth_vintage"].astype(str))))
-        _write(
-            gen / "backtest-truth.md",
-            f"Scores are against the **{truth_v}** vintage, as reported "
-            "then.\n\n"
-            + _dropdown(
-                _completeness_note(k)
-                + _lag_prior_note(views["all weeks as reported"]),
-                "Scoring notes",
-            ),
-        )
-        _write(
-            gen / "scores-overall.md",
-            _dropdown(_score_tables(views), "Score tables"),
-        )
-        _summary_figure(fig, gen, primary, names)
-        _write(
-            gen / "relative-section.md",
-            _relative_section(primary)
-            + _dropdown(_other_relative(views), "Other score sets"),
-        )
-        _write(gen / "backtest-findings.md", _backtest_findings(primary))
-        explorer_scores = primary.loc[primary["kind"] == "real"]
-        by_loc = summarise_scores(primary, by=("model", "kind", "location"))
-        _write(
-            gen / "scores-location.md",
-            _table(
-                by_loc[
-                    [
-                        "model",
-                        "kind",
-                        "location",
-                        "n",
-                        "wis",
-                        "log_wis",
-                        "coverage_50",
-                        "coverage_90",
-                        "bias",
-                    ]
-                ]
-            ),
-        )
-    by_truth_path = res / "backtest-scores-by-truth.csv"
-    if by_truth_path.exists():
-        truth_views = _score_views(pd.read_csv(by_truth_path))
-        by_truth = truth_views["complete weeks"]
         save_light_dark(
-            partial(plot_scores_by_truth, by_truth, models=names),
-            fig / "scores-by-truth.svg",
+            partial(plot_relative_skill, primary, by=by, models=names),
+            fig / f"relative-wis-{by}.svg",
         )
-        table = pd.concat(
-            [
-                summarise_scores(
-                    rows, by=("model", "vintage", "truth_vintage")
-                ).assign(scores=name)
-                for name, rows in truth_views.items()
-                if name in SCORE_SETS and not rows.empty
-            ],
-            ignore_index=True,
-        )
-        _write(
-            gen / "scores-by-truth.md",
-            _table(
-                table[
-                    [
-                        "scores",
-                        "model",
-                        "vintage",
-                        "truth_vintage",
-                        "n",
-                        "wis",
-                        "log_wis",
-                        "coverage_90",
-                        "bias",
-                    ]
+    truth_v = ", ".join(sorted(set(scores["truth_vintage"].astype(str))))
+    _write(
+        gen / "backtest-truth.md",
+        f"Scores are against the **{truth_v}** vintage, as reported "
+        "then.\n\n"
+        + _dropdown(
+            _completeness_note(k)
+            + _lag_prior_note(views["all weeks as reported"]),
+            "Scoring notes",
+        ),
+    )
+    _write(
+        gen / "scores-overall.md",
+        _dropdown(_score_tables(views), "Score tables"),
+    )
+    _summary_figure(fig, gen, primary, names)
+    _write(
+        gen / "relative-section.md",
+        _relative_section(primary)
+        + _dropdown(_other_relative(views), "Other score sets"),
+    )
+    _write(gen / "backtest-findings.md", _backtest_findings(primary))
+    explorer_scores = primary.loc[primary["kind"] == "real"]
+    by_loc = summarise_scores(primary, by=("model", "kind", "location"))
+    _write(
+        gen / "scores-location.md",
+        _table(
+            by_loc[
+                [
+                    "model",
+                    "kind",
+                    "location",
+                    "n",
+                    "wis",
+                    "log_wis",
+                    "coverage_50",
+                    "coverage_90",
+                    "bias",
                 ]
-            ),
-        )
-        weeks = sorted(set(by_truth["target_end_date"].astype(str)))
-        changes = truth_changes(target, locations=(NATIONAL,))
-        changes = changes.loc[changes["target_end_date"].isin(weeks)]
-        wide = changes.pivot_table(
-            index="target_end_date", columns="truth_vintage", values="truth"
-        )
-        wide.columns = [f"as reported {c}" for c in wide.columns]
-        wide = wide.astype("Int64").astype(str).replace("<NA>", "")
-        _write(gen / "truth-changes.md", _table(wide.reset_index()))
+            ]
+        ),
+    )
+    by_truth_path = res / "backtest-scores-by-truth.csv"
+    truth_views = _score_views(pd.read_csv(by_truth_path))
+    by_truth = truth_views["complete weeks"]
+    save_light_dark(
+        partial(plot_scores_by_truth, by_truth, models=names),
+        fig / "scores-by-truth.svg",
+    )
+    table = pd.concat(
+        [
+            summarise_scores(
+                rows, by=("model", "vintage", "truth_vintage")
+            ).assign(scores=name)
+            for name, rows in truth_views.items()
+            if name in SCORE_SETS and not rows.empty
+        ],
+        ignore_index=True,
+    )
+    _write(
+        gen / "scores-by-truth.md",
+        _table(
+            table[
+                [
+                    "scores",
+                    "model",
+                    "vintage",
+                    "truth_vintage",
+                    "n",
+                    "wis",
+                    "log_wis",
+                    "coverage_90",
+                    "bias",
+                ]
+            ]
+        ),
+    )
+    weeks = sorted(set(by_truth["target_end_date"].astype(str)))
+    changes = truth_changes(target, locations=(NATIONAL,))
+    changes = changes.loc[changes["target_end_date"].isin(weeks)]
+    wide = changes.pivot_table(
+        index="target_end_date", columns="truth_vintage", values="truth"
+    )
+    wide.columns = [f"as reported {c}" for c in wide.columns]
+    wide = wide.astype("Int64").astype(str).replace("<NA>", "")
+    _write(gen / "truth-changes.md", _table(wide.reset_index()))
     fc_path = out / "forecasts.csv.gz"
     shown: list[str] = []
     if fc_path.exists():
@@ -1234,42 +1204,33 @@ def _backtest_page(
     fits_path = res / "backtest-fits.csv"
     _write(
         gen / "backtest-sampler.md",
-        _sampler_section(pd.read_csv(fits_path), _submission_sampler())
-        if fits_path.exists()
-        else "",
+        _sampler_section(pd.read_csv(fits_path), _submission_sampler()),
     )
     rec_path = res / "recovery-scores.csv"
-    _write(gen / "recovery-section.md", _recovery_section(rec_path))
-    if rec_path.exists():
-        rscores = pd.read_csv(rec_path)
-        save_light_dark(
-            lambda mode: plot_scores(
-                rscores, by="horizon", models=names, mode=mode
-            ),
-            fig / "recovery-wis-horizon.svg",
-        )
+    _write(gen / "recovery-section.md", _recovery_section())
+    rscores = pd.read_csv(rec_path)
+    save_light_dark(
+        lambda mode: plot_scores(
+            rscores, by="horizon", models=names, mode=mode
+        ),
+        fig / "recovery-wis-horizon.svg",
+    )
     scen_path = res / "scenario-scores.csv.gz"
     _write(gen / "scenario-scores.md", _scenario_scores(scen_path))
-    _write(gen / "scenario-figure.md", _scenario_figure(scen_path))
-    if scen_path.exists() and scen_path.stat().st_size > 1:
-        sscores = pd.read_csv(scen_path, low_memory=False)
-        if not sscores.empty:
-            _save_metric_figures(
-                fig,
-                "scenario-wis-horizon",
-                partial(
-                    plot_scenarios,
-                    sscores,
-                    models=[
-                        *names,
-                        *(
-                            m
-                            for m in sscores["model"].unique()
-                            if m not in names
-                        ),
-                    ],
-                ),
-            )
+    _write(gen / "scenario-figure.md", _scenario_figure())
+    sscores = pd.read_csv(scen_path, low_memory=False)
+    _save_metric_figures(
+        fig,
+        "scenario-wis-horizon",
+        partial(
+            plot_scenarios,
+            sscores,
+            models=[
+                *names,
+                *(m for m in sscores["model"].unique() if m not in names),
+            ],
+        ),
+    )
 
 
 _HELDOUT_SECTIONS = (
