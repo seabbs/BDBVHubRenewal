@@ -37,32 +37,32 @@ export FORECAST_DATE=${FORECAST_DATE:-${NOW%%T*}}
 # name | FAKE_SCENARIOS | expected selection ("skip" for a skipped round)
 #   | extra environment (optional) | text the PR body must hold (optional)
 SCENARIOS=(
-  "main|bvd=pass|bvd||All checks passed."
-  "chosenrandomwalk|bvd=pass|randomwalk|MODEL=randomwalk|Shadow candidates"
+  "main|bvd=pass|bvd||Signed off by Sam Abbott (@seabbs)."
+  "chosenrandomwalk|bvd=pass|randomwalk|MODEL=randomwalk|Model: random walk baseline"
   "bvdrelease|bvd=pass|bvd||used BVDOutbreakSize release \`results-3180\` (data to 2026-10-23, joint R-hat 1.041, limit 1.1)."
-  "coherence|bvd=pass|bvd|FAKE_COHERENCE_GAP=2026-10-24:2|Handled: national (CD) differs from the sum of the provinces"
+  "coherence|bvd=pass|bvd|FAKE_COHERENCE_GAP=2026-10-24:2|Data coherence"
   "warn|bvd=warn|bvd"
-  "ppcwarn|bvd=ppcwarn|bvd||All checks passed, with warnings on ppc."
-  "ppcfail|bvd=ppcfail|bvd||All checks passed, with warnings on ppc."
-  "noppc|bvd=noppc|bvd||All checks passed, with warnings on ppc."
+  "ppcwarn|bvd=ppcwarn|bvd||Posterior predictive checks | WARN"
+  "ppcfail|bvd=ppcfail|bvd||Posterior predictive checks"
+  "noppc|bvd=noppc|bvd||Posterior predictive checks"
   # A wildly high forecast is ruled out by the plausibility check, and
   # the chain moves on.
   "implausible|bvd=implausible|renewalsp||was ruled out (plausible: "
-  "wild|bvd=implausible,renewalsp=implausible|main||Fallback model used (province renewal model"
-  "latestream|bvd=latestream|bvd||Handled: delays: no delay data for this vintage"
-  "fallback|bvd=fail|renewalsp||Fallback model used (single-patch renewal model"
+  "wild|bvd=implausible,renewalsp=implausible|main||Model: province renewal model"
+  "latestream|bvd=latestream|bvd"
+  "fallback|bvd=fail|renewalsp||Model: single-patch renewal model"
   # Tuesday 21:00 UTC, two hours before the close: the fit timeouts are
   # cut so the gate still runs in time.
-  "late|bvd=fail|renewalsp|NOW=2026-11-03T21:00:00+00:00|Fallback model used ("
-  "randomwalknowcast|bvd=fail,renewalsp=fail,main=fail|randomwalknowcast||Fallback model used (random walk on a nowcast)"
+  "late|bvd=fail|renewalsp|NOW=2026-11-03T21:00:00+00:00|Model: single-patch renewal model"
+  "randomwalknowcast|bvd=fail,renewalsp=fail,main=fail|randomwalknowcast||Model: random walk on a nowcast"
   "randomwalk|bvd=fail,renewalsp=crash,main=fail,randomwalknowcast=negative|randomwalk"
   "skip|bvd=fail,renewalsp=fail,main=fail,randomwalknowcast=negative,randomwalk=negative|skip"
   # A chosen model further down the chain starts it there; the
   # candidates before it are shadows.
-  "singlepatch|bvd=pass|renewalsp|MODEL=renewalsp|Shadow candidates"
-  "singlepatchfallback|bvd=pass,renewalsp=fail|main|MODEL=renewalsp|Fallback model used (province renewal model"
-  "chosenrenewal|bvd=pass,renewalsp=pass|main|MODEL=renewal|Shadow candidates"
-  "chosenrenewalfallback|main=fail|randomwalknowcast|MODEL=renewal|Fallback model used (random walk on a nowcast)"
+  "singlepatch|bvd=pass|renewalsp|MODEL=renewalsp|Model: single-patch renewal model"
+  "singlepatchfallback|bvd=pass,renewalsp=fail|main|MODEL=renewalsp|Model: province renewal model"
+  "chosenrenewal|bvd=pass,renewalsp=pass|main|MODEL=renewal|Model: province renewal model"
+  "chosenrenewalfallback|main=fail|randomwalknowcast|MODEL=renewal|Model: random walk on a nowcast"
 )
 
 sci() { uv run --quiet --project "$CI_DIR" "$@"; }
@@ -194,8 +194,9 @@ EOF
   if grep -v '^pr list' "$WORK/gh.log" 2> /dev/null; then
     echo "FAIL: dry run made gh calls other than a PR lookup"; return 1
   fi
-  # Short enough to scan: at most six visible lines outside <details>,
-  # the docs link for the round, and the footer last.
+  # Short enough to scan: at most eight visible lines outside the one
+  # <details> block and the tables, the docs link for the round, and the
+  # footer last.
   local shown
   shown=$(python3 - "$WORK/gate/pr-body.md" << 'EOF'
 import sys
@@ -204,12 +205,12 @@ for line in open(sys.argv[1]):
     depth += line.count("<details>") - line.count("</details>")
     if "<details>" in line or "</details>" in line:
         continue
-    if depth == 0 and line.strip() and not line.startswith("<!--"):
+    if depth == 0 and line.strip() and not line.startswith(("<!--", "|")):
         n += 1
 print(n)
 EOF
 )
-  [ "$shown" -le 6 ] || { echo "FAIL: $name PR body shows $shown lines"; return 1; }
+  [ "$shown" -le 8 ] || { echo "FAIL: $name PR body shows $shown lines"; return 1; }
   grep -q "^This round in our docs: .*/submission/rounds/$REFERENCE_DATE/" \
     "$WORK/gate/pr-body.md" || { echo "FAIL: $name has no docs link"; return 1; }
   tail -n 1 "$WORK/gate/pr-body.md" | grep -q "@seabbs"
@@ -367,11 +368,8 @@ baseline_track() {
     [ "$status" = 0 ] || { echo "FAIL: baseline $case"; cat "$WORK/track.log"; return 1; }
     selected=$(python3 -c "import json;print(json.load(open('$gate/provenance.json'))['selected'])")
     want=randomwalknowcast
-    grep -q "All checks passed" "$gate/pr-body.md" \
+    grep -qF "Model: random walk on a nowcast (\`randomwalknowcast\`)." "$gate/pr-body.md" \
       || { echo "FAIL: baseline body"; head -5 "$gate/pr-body.md"; return 1; }
-    if grep -q "Fallback model used" "$gate/pr-body.md"; then
-      echo "FAIL: baseline body names a fallback"; return 1
-    fi
     [ "$selected" = "$want" ] \
       || { echo "FAIL: baseline $case selected $selected"; return 1; }
     grep -q "CD-IT-01" "$(find "$gate/selected/submission" -name '*.csv' | head -n 1)" \

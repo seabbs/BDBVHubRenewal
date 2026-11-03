@@ -4,7 +4,6 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-import pytest
 from conftest import POLICY, REF, make_samples, write_json, write_samples
 from test_check_coherence import GAP, coherence
 from test_check_ppc import ppc
@@ -12,6 +11,7 @@ from test_check_ppc import ppc
 from submission_ci.build_pr_body import (
     FOOTER,
     MAX_BODY,
+    SIGN_OFF,
     build,
     main,
     marker,
@@ -79,26 +79,21 @@ def gate(
 
 
 def body(g: Path, **kw: Any) -> str:
-    from submission_ci.common import read_json
-
     args: dict[str, Any] = {
         "provenance": read_json(g / "provenance.json"),
         "selected_dir": g / "selected",
         "reference_date": REF,
         "model_id": "seabbs-renewal",
-        "hub_ref": "a" * 40,
-        "data_commit": "b" * 40,
         "as_of": "2026-10-31",
         "plot_url": "https://raw.githubusercontent.com/o/r/sha/p.png",
         "validation": "pass",
-        "source_sha": "c" * 40,
     }
     args.update(kw)
     return build(**args)
 
 
 def visible(text: str) -> list[str]:
-    """Non-blank lines outside the collapsed sections, bar the marker."""
+    """Non-blank lines outside the collapsed block, bar the marker."""
     lines, depth = [], 0
     for line in text.splitlines():
         depth += line.count("<details>") - line.count("</details>")
@@ -109,131 +104,109 @@ def visible(text: str) -> list[str]:
     return lines
 
 
-def test_body_has_required_parts(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("GITHUB_REPOSITORY", "seabbs/x")
-    monkeypatch.setenv("GITHUB_RUN_ID", "42")
+def test_body_is_short_and_signed_off(tmp_path: Path) -> None:
     text = body(gate(tmp_path))
     assert text.startswith(marker("seabbs-renewal", REF))
     shown = visible(text)
-    assert len(shown) <= 6, shown
     assert shown[0] == (
-        f"Automated submission of `seabbs-renewal` for {REF}, from "
-        "data as of 2026-10-31, for 4 locations."
+        f"Submission of `seabbs-renewal` for {REF}, from data as of "
+        "2026-10-31, for 4 locations."
     )
-    assert shown[1] == "All checks passed."
-    assert shown[2].startswith("![Nowcast and forecast") and "p.png" in text
-    assert shown[3] == f"This round in our docs: {round_url(REF)}"
+    assert shown[1] == SIGN_OFF == "Signed off by Sam Abbott (@seabbs)."
+    assert shown[2] == "Model: main model (`renewal`)."
+    assert shown[3].startswith("![Nowcast and forecast") and "p.png" in text
+    assert "| week ending | median | 90% interval |" in shown
+    for row in (
+        "| Convergence | PASS |",
+        "| Forecast checks | PASS |",
+        "| Hub validation | PASS |",
+        "| Data coherence | N/A |",
+    ):
+        assert row in shown
+    assert f"This round in our docs: {round_url(REF)}" in shown
     assert shown[-1] == FOOTER
-    assert "| Convergence | PASS (max R-hat 1.004" in text
-    assert "| Hub validation | PASS |" in text
-    assert "renewal (`main`), version 0.2.0" in text
-    assert "bbbbbbbbbb" in text and "actions/runs/42" in text
-    assert "<summary>National summary</summary>" in text
-    assert "<summary>Provenance</summary>" in text
-    # One sampled fit converged: no chain section, but convergence.
-    assert "<summary>Fallback chain</summary>" not in text
-    assert "<summary>Convergence</summary>" in text
+    assert "Dry run" not in text
+    assert text.count("<details>") == 1
+    assert "<summary>Details</summary>" in text
+    assert "**Convergence**" in text and "**Forecast checks**" in text
 
 
-def test_warnings_are_stated(tmp_path: Path) -> None:
-    text = body(
-        gate(
-            tmp_path, status="warn", warnings=["growth: CD-IT grows 2.5 times"]
-        )
-    )
-    assert visible(text)[1] == "All checks passed, with warnings on growth."
-    assert "(growth flagged)" in text
-    assert "- WARN growth: x" in text
+def test_dry_run_note_and_no_relative_plot(tmp_path: Path) -> None:
+    text = body(gate(tmp_path), dry_run=True, plot_url="nowcast.png")
+    assert "Dry run: nothing was pushed." in visible(text)
+    assert "nowcast.png" not in text
 
 
-def test_fallback_is_named_with_why(tmp_path: Path) -> None:
-    g = gate(tmp_path, produced_by="random walk baseline")
+def test_cascade_model_named_with_why(tmp_path: Path) -> None:
+    g = gate(tmp_path, produced_by="single-patch renewal model")
     prov = read_json(g / "provenance.json")
     prov.update(
-        kind="randomwalk",
-        selected="randomwalk",
+        kind="fallback",
+        selected="renewalsp",
         attempts=[
             {
-                "id": "main",
-                "label": "main model",
+                "id": "bvd",
+                "label": "BVDOutbreakSize-informed renewal model",
                 "status": "fail",
                 "reasons": ["convergence: max R-hat is 1.4"],
             },
             {
-                "id": "randomwalk",
-                "label": "random walk baseline",
+                "id": "renewalsp",
+                "label": "single-patch renewal model",
                 "status": "pass",
-                "validation": "pass",
                 "reasons": [],
             },
         ],
     )
-    write_json(g / "provenance.json", prov)
-    text = body(g)
-    assert visible(text)[1] == (
-        "Fallback model used (random walk baseline): main model was ruled "
-        "out (convergence: max R-hat is 1.4)."
+    prov["run"]["model"] = "renewalsp"
+    text = body(g, provenance=prov)
+    assert visible(text)[2] == (
+        "Model: single-patch renewal model (`renewalsp`), because "
+        "BVDOutbreakSize-informed renewal model was ruled out (convergence: "
+        "max R-hat is 1.4)."
     )
-    assert "<summary>Fallback chain</summary>" in text
-    assert "| random walk baseline | submitted |  |" in text
 
 
-def test_handled_line_leads(tmp_path: Path) -> None:
-    g = gate(tmp_path)
+def test_first_model_in_the_chain(tmp_path: Path) -> None:
+    g = gate(tmp_path, produced_by="BVDOutbreakSize-informed renewal model")
     prov = read_json(g / "provenance.json")
-    prov["handled"] = [
-        "delays: used the 2026-10-17 vintage, the latest available",
-    ]
-    write_json(g / "provenance.json", prov)
-    shown = visible(body(g))
-    assert shown[1] == "All checks passed."
-    assert shown[2] == (
-        "Handled: delays: used the 2026-10-17 vintage, the latest available."
+    prov.update(
+        selected="bvd",
+        attempts=[
+            {"id": "bvd", "label": "x", "status": "pass", "reasons": []},
+            {"id": "renewalsp", "label": "y", "status": "not needed"},
+        ],
     )
-    assert shown[3].startswith("![Nowcast")
-    assert len(shown) == 6
-    assert "Handled:" not in body(gate(tmp_path / "plain"))
+    prov["run"]["model"] = "renewalbvd"
+    assert visible(body(g, provenance=prov))[2] == (
+        "Model: BVDOutbreakSize-informed renewal model (`renewalbvd`), the "
+        "first model in our chain and the first to clear its checks."
+    )
 
 
-def test_dry_run_note(tmp_path: Path) -> None:
-    line = visible(body(gate(tmp_path), dry_run=True))[1]
-    assert line == "All checks passed. Dry run: nothing was pushed."
+def test_warnings_show_as_status_only(tmp_path: Path) -> None:
+    text = body(gate(tmp_path, status="warn"))
+    assert "| Forecast checks | WARN |" in visible(text)
+    assert "WARN growth: x" in text
 
 
 def test_long_body_is_truncated(tmp_path: Path) -> None:
     g = gate(tmp_path)
-    (g / "selected" / "checks.md").write_text("x" * (MAX_BODY + 10))
+    checks = read_json(g / "selected" / "checks.json")
+    checks["checks"][0].update(status="warn", summary="x" * (MAX_BODY + 10))
+    write_json(g / "selected" / "checks.json", checks)
     text = body(g)
     assert len(text) <= MAX_BODY and text.rstrip().endswith(FOOTER)
 
 
 def test_cli(tmp_path: Path) -> None:
     g = gate(tmp_path)
-    assert (
-        main(
-            [
-                "--gate",
-                str(g),
-                "--reference-date",
-                REF,
-                "--model-id",
-                "m",
-                "--hub-ref",
-                "a",
-                "--data-commit",
-                "b",
-                "--plot-url",
-                "p.png",
-                "--docs",
-                "https://example.org/docs/",
-                "--out",
-                str(tmp_path / "o"),
-            ]
-        )
-        == 0
-    )
+    args = [
+        "--gate", str(g), "--reference-date", REF, "--model-id", "m",
+        "--plot-url", "p.png", "--docs", "https://example.org/docs/",
+        "--out", str(tmp_path / "o"),
+    ]  # fmt: skip
+    assert main(args) == 0
     assert (
         tmp_path / "o" / "pr-title.txt"
     ).read_text() == f"m submission for {REF}"
@@ -242,127 +215,28 @@ def test_cli(tmp_path: Path) -> None:
     assert f"https://example.org/docs/submission/rounds/{REF}/" in out
 
 
-def test_data_coherence_reported_once(tmp_path: Path) -> None:
+def test_data_coherence_status(tmp_path: Path) -> None:
     g = gate(tmp_path)
     write_json(
         g / "selected" / "coherence-summary.json",
         asdict(assess(coherence([GAP]))),
     )
     text = body(g)
-    shown = visible(text)
-    assert shown[1] == "All checks passed."
-    assert shown[2] == (
-        "Handled: national (CD) differs from the sum of the provinces in 1 "
-        "week (total stream, largest gap 2); modelled as an unassigned "
-        "national component."
-    )
-    assert len(shown) <= 6
-    assert text.count("| Data coherence | Handled (national (CD) differs") == 1
-    assert text.count("<summary>Data coherence</summary>") == 1
-    assert "| 2026-10-24 | total | 50 | 48 | 2 |" in text
-    assert "unassigned national component" in text
+    assert any(line.startswith("| Data coherence | ") for line in visible(text))
 
 
-def test_data_coherence_na_without_file(tmp_path: Path) -> None:
-    text = body(gate(tmp_path))
-    assert "| Data coherence | N/A (not checked) |" in text
-    assert "<summary>Data coherence</summary>" not in text
-
-
-def test_ppc_row_and_province_details(tmp_path: Path) -> None:
+def test_ppc_status_and_details(tmp_path: Path) -> None:
     g = gate(tmp_path)
     sel = g / "selected"
     write_json(tmp_path / "ppc.json", ppc("ppcwarn"))
     summarise("main", tmp_path / "ppc.json", sel, sampled=True, lim=POLICY.ppc)
     text = body(g)
-    assert (
-        "| Posterior predictive checks | WARN (90% coverage 0.57 overall, "
-        "0.67 last 4 weeks; 50% coverage" in text
-    )
-    assert "<summary>Posterior predictive checks</summary>" in text
-    assert "| all provinces | " in text
+    assert "| Posterior predictive checks | WARN |" in visible(text)
+    assert "**Posterior predictive checks**" in text
     assert "| CD-IT |" in text
-    assert "\n\nPIT: KS distance" in text
 
 
-def test_ppc_row_without_posterior(tmp_path: Path) -> None:
-    g = gate(tmp_path)
-    (g / "selected" / "fit-summary.json").unlink()
-    assert "| Posterior predictive checks | N/A (no posterior) |" in body(g)
-    write_json(
-        g / "selected" / "ppc-summary.json",
-        {"status": "skip", "reason": "the model has no sampler"},
-    )
-    assert (
-        "| Posterior predictive checks | N/A (the model has no sampler) |"
-        in body(g)
-    )
-
-
-def test_body_reports_shadow_candidates(tmp_path: Path) -> None:
-    from submission_ci.common import read_json
-
-    g = gate(tmp_path)
-    prov = read_json(g / "provenance.json")
-    prov["shadows"] = [
-        {
-            "id": "bvd",
-            "label": "BVDOutbreakSize-informed variant",
-            "fit": {"status": "pass", "headline": {"max_rhat": 1.01}},
-            "ppc": None,
-        }
-    ]
-    text = body(g, provenance=prov)
-    assert "Shadow candidates (fitted and checked, not submitted)" in text
-    assert "BVDOutbreakSize-informed variant" in text
-    # Collapsed, so not on the visible lines.
-    assert not any("BVDOutbreakSize" in line for line in visible(text))
-
-
-def test_body_reports_the_bvd_release(tmp_path: Path) -> None:
-    from submission_ci.common import read_json
-
-    g = gate(tmp_path)
-    prov = read_json(g / "provenance.json")
-    release = {
-        "tag": "results-3180",
-        "as_of": "2026-10-23",
-        "joint_max_rhat": 1.041,
-        "max_rhat": 1.1,
-        "skipped": [
-            {"tag": "results-3190", "reason": "joint R-hat 1.230 is above 1.1"}
-        ],
-    }
-    prov["shadows"] = [
-        {
-            "id": "bvd",
-            "label": "BVDOutbreakSize-informed variant",
-            "fit": {
-                "status": "pass",
-                "headline": {"max_rhat": 1.01},
-                "bvd": release,
-            },
-            "ppc": None,
-        }
-    ]
-    text = body(g, provenance=prov)
-    assert (
-        "BVDOutbreakSize-informed variant used BVDOutbreakSize release "
-        "`results-3180` (data to 2026-10-23, joint R-hat 1.041, limit 1.1)."
-    ) in text
-    assert "Skipped `results-3190`: joint R-hat 1.230 is above 1.1." in text
-    assert not any("results-3180" in line for line in visible(text))
-    prov["shadows"][0]["fit"]["bvd"] = {"tag": None}
-    text = body(g, provenance=prov)
-    assert (
-        "BVDOutbreakSize-informed variant used no BVDOutbreakSize release: "
-        "none qualified, so it ran as the main model."
-    ) in text
-
-
-def test_convergence_section_reports_the_bvd_release(tmp_path: Path) -> None:
-    from submission_ci.common import read_json
-
+def test_convergence_details_report_the_bvd_release(tmp_path: Path) -> None:
     g = gate(tmp_path)
     fit = read_json(g / "selected" / "fit-summary.json")
     fit["bvd"] = {
@@ -378,4 +252,4 @@ def test_convergence_section_reports_the_bvd_release(tmp_path: Path) -> None:
         "The model used BVDOutbreakSize release `results-3180` (data to "
         "2026-10-23, joint R-hat 1.041, limit 1.1)."
     ) in text
-    assert "Skipped" not in text
+    assert not any("results-3180" in line for line in visible(text))

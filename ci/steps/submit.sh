@@ -26,8 +26,7 @@ else
 fi
 
 body=(--gate "$gate" --reference-date "$REFERENCE_DATE"
-  --model-id "$MODEL_ID" --hub-ref "$HUB_REF" --data-commit "$DATA_COMMIT"
-  --as-of "${AS_OF:-}" --plot-url "$plot_url" --source-sha "${SOURCE_SHA:-}"
+  --model-id "$MODEL_ID" --as-of "${AS_OF:-}" --plot-url "$plot_url"
   --out "$gate")
 if [ "$DRY_RUN" = "true" ]; then
   body+=(--dry-run)
