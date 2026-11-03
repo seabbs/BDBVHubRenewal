@@ -63,7 +63,6 @@ Chains run vectorised.
 Without other settings, NUTS runs 4 chains of 1000 warm-up and 1000 draws, with target acceptance 0.9 and maximum tree depth 10.
 Chains start from the median of 15 prior draws.
 Submission and backtest fits take their settings from `ci/policy.toml` and `config/backtest.toml`.
-The submission refit uses smaller steps (target acceptance 0.95) and inits drawn uniformly on $(-1, 1)$ on the unconstrained scale.
 
 The parameterisation is as follows.
 

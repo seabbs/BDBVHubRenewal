@@ -1,0 +1,202 @@
+# A fixture: the chain as it was on 2026-11-03, with a main model, its
+# refit, a fallback, a shadow and the random walks, to test every path
+# through the selection. The repository chain is ../policy.toml.
+# Fallback chain and gate thresholds for automated hub submissions.
+# seabbs-renewal walks this chain for the model in `[submission] model`
+# of config/hub.toml. A variant with its own leg (renewalsp, renewalbvd)
+# heads it, followed by the random walks. Only seabbs-rwnowcast has no
+# fallback (ci/steps/track.sh).
+
+[policy]
+# One refit of the main model, only when `main` is past the convergence
+# retry thresholds or was ruled out. No other refits, to stay fast; the
+# content-hash fit cache is reused across re-runs.
+retry_budget = 1
+
+# Minutes the chain plans with. Measured on the 2026-10-24 vintage
+# (jax-review-1, vectorised chains on 2 cores of archie) at 4 chains x
+# 2000 iterations: main 130 and the retry 134 minutes of sampling. Nearly
+# every draw reaches the maximum tree depth, so cost follows iterations,
+# and the 2 x 1000 used below take about a quarter: 35 to 45 minutes. The single-patch
+# fallback took 21 minutes at 2 x 1000 for all six streams. Hosted
+# runners are 1.2 to 1.5 times slower, so each main fit job takes about
+# 1 to 1.5 hours with setup (to be re-measured). The fallback fits beside
+# main and random walk is built in `prepare`, so only the retry runs
+# after main.
+[timing]
+# GitHub's 360-minute job cap, less a margin.
+fit_cap_minutes = 350
+# Kept free before the window closes for triage, the gate (hubValidations)
+# and the pull request. Every fit job's timeout stops this short of the
+# close, so the gate always runs in time with the fallback or randomwalk.
+reserve_minutes = 45
+# What a refit needs on a hosted runner: 45 minutes x 1.5, plus setup,
+# with margin. With less time than this plus the reserve left
+# after main, the refit is skipped and the chain moves on to the fallback.
+retry_minutes = 105
+# The shortest timeout a fit job gets, however late it starts.
+min_fit_minutes = 30
+
+[cache]
+# Everything a fit depends on in the main repo, listed once. The fit
+# cache key hashes these with the hub data commit and the candidate's
+# config and sampler settings.
+inputs = ["src", "config", "pyproject.toml", "uv.lock"]
+
+[[candidates]]
+id = "main"
+kind = "main"
+config = "main"
+stage = "primary"
+label = "main model"
+# Sam (2026-10-28): 2 chains of 500 warm-up and 500 draws for every fit.
+sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.8, max_tree_depth = 10, seed = 1, chain_method = "vectorized" }
+
+[[candidates]]
+id = "retry-1"
+kind = "retry"
+config = "main"
+stage = "retry"
+label = "main model, refitted (smaller steps, jittered inits)"
+# The same iterations as `main` (2 x 1000), with smaller steps (target
+# acceptance 0.95) and jittered inits. Main fits reach the maximum tree
+# depth on nearly every draw, so cost follows iterations: 134 against
+# main's 130 minutes on archie at the old 4 x 2000. `max_tree_depth` is
+# set per candidate here.
+sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.95, max_tree_depth = 10, seed = 2, init = "jitter", chain_method = "vectorized" }
+
+# The fallback is the single-patch model: an independent renewal fit for
+# each province with cases and for the country, with no pooling or
+# coupling. It fits fast (21 minutes on the 2026-10-24 vintage), so it
+# runs beside `main`, not after it, as the standby.
+[[candidates]]
+id = "renewalsp"
+kind = "fallback"
+config = "renewalsp"
+model = "renewalsp"
+stage = "primary"
+label = "single-patch model (independent renewal fits, no pooling or coupling)"
+sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.9, max_tree_depth = 10, seed = 1, chain_method = "vectorized" }
+
+# A shadow: fitted and checked weekly with the primary stage, never
+# submitted, until the model choice picks it.
+[[candidates]]
+id = "bvd"
+kind = "shadow"
+config = "bvd"
+model = "renewalbvd"
+stage = "primary"
+label = "BVDOutbreakSize-informed variant (shadow, not submitted)"
+sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.9, max_tree_depth = 10, seed = 1, chain_method = "vectorized" }
+
+# Random walk on a nowcast (no MCMC). Like random walk it needs no fit and
+# is built in `prepare`.
+[[candidates]]
+id = "randomwalknowcast"
+kind = "randomwalk"
+config = "randomwalknowcast"
+model = "randomwalknowcast"
+stage = "baseline"
+label = "random walk on a nowcast"
+
+[[candidates]]
+id = "randomwalk"
+kind = "randomwalk"
+config = "randomwalk"
+stage = "baseline"
+label = "random walk baseline"
+
+# Convergence thresholds. `retry` and `warn` are the fail and warn
+# defaults of BVDOutbreakSize's gate (docs/fits/convergence.jl): past
+# `retry` the main model is refitted once, and the refit is accepted
+# unless it is clearly broken (`fail`), which alone rules a fit out.
+# Each can be overridden by an environment variable or repo variable:
+# BDBV_CONVERGENCE_{FAIL,RETRY,WARN}_{RHAT,ESS_BULK,ESS_TAIL,DIVERGENT}.
+[convergence.fail]
+rhat = 1.5
+ess_bulk = 10
+ess_tail = 10
+divergent_fraction = 0.2
+
+[convergence.retry]
+rhat = 1.1
+ess_bulk = 25
+ess_tail = 25
+divergent_fraction = 0.05
+
+[convergence.warn]
+rhat = 1.05
+ess_bulk = 100
+ess_tail = 100
+divergent_fraction = 0.01
+
+# Posterior predictive checks on the fit's ppc.json (check_ppc.py).
+# Coverage is the share of observed counts inside the predictive
+# interval of `level`, for `stream`, over every in-sample week and over
+# the last `recent_weeks` complete weeks. A model with no posterior is
+# n/a. Each value can be overridden by an environment variable or repo
+# variable BDBV_PPC_<KEY>, for example BDBV_PPC_COVERAGE_WARN.
+# Posterior predictive checks: reported only, never gated. Below
+# `coverage_warn` the PR warns; below `coverage_fail` it calls the
+# coverage poor. Model choice comes from the backtest.
+[ppc]
+stream = "total"
+level = 0.9
+coverage_warn = 0.70
+coverage_fail = 0.50
+recent_weeks = 4
+# Kolmogorov-Smirnov distance of the randomised PIT from uniform. It
+# only warns, and only with enough rows to say anything.
+pit_ks_warn = 0.2
+pit_min_rows = 20
+
+# Plausibility and consistency checks on the forecast file. Ratios are
+# symmetric: a ratio r is breached when the value is above r times or
+# below 1/r times the reference. A threshold of 0 turns a level off.
+# The format checks (schema, values, samples) and `plausible` fail; the
+# national sum is rebuilt by construction, and the other checks warn.
+[checks]
+samples = 100
+horizon_weeks = 3          # target end dates required after the reference date
+nowcast_weeks = 4          # back weeks required up to the reference date
+national = "CD"
+# National is rebuilt as the sum of the provinces plus the unassigned
+# component (national.json, or the data's national gap without it), so
+# it is exact by construction.
+sum_tolerance = 1e-9       # absolute (or 1e-12 relative)
+# Plausibility, which rules a candidate out. For each location with data,
+# against the largest of its last `plausible_recent_weeks` observed weeks
+# (floored at `plausible_floor`), every week from the nowcast to the last
+# horizon must have a median under `plausible_median_ratio` times it and a
+# 97.5% quantile under `plausible_q975_ratio` times it, and, where that
+# maximum is at least the floor, a median above it over
+# `plausible_low_ratio`.
+plausible_recent_weeks = 4
+plausible_floor = 20
+plausible_median_ratio = 5.0
+plausible_q975_ratio = 15.0
+plausible_low_ratio = 20.0
+# Upper bound on any trajectory: the 95th centile of a week, relative to
+# the largest weekly count the location has ever had (floored).
+bound_floor = 20
+bound_warn = 5
+bound_fail = 0
+# Week-on-week growth of the median trajectory over the forecast weeks.
+growth_warn = 2.0
+growth_fail = 0
+# Median of the submitted back weeks against the observed counts in the
+# last complete weeks (weeks ending at least `complete_lag_weeks` before
+# the data vintage). Counts are offset by `ratio_offset` first.
+complete_lag_weeks = 4
+complete_weeks = 2
+ratio_offset = 5
+observed_warn = 2.0
+observed_fail = 0
+# Median of the forecast weeks against the random walk baseline. A
+# departure is flagged, never failed.
+baseline_warn = 3.0
+baseline_fail = 0
+# Median of the weeks shared with last week's submission. Revisions are
+# expected, so this only warns.
+previous_warn = 2.0
+previous_fail = 0

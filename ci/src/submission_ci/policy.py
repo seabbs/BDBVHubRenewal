@@ -103,46 +103,25 @@ class Policy:
         return [c for c in [*self.chain(), *shadows] if c.stage == name]
 
     def for_model(self, model: str, only: bool = False) -> Policy:
-        """The policy for the model chosen in the model choice record.
+        """The chain from the candidate of `model` on.
 
-        With a baseline chosen (`randomwalknowcast` or `randomwalk`), the
-        chain starts at that baseline. Every candidate before it is still
-        fitted and checked, as a shadow, and the retry is dropped. Any
-        other choice keeps the policy as it is.
+        Candidates before it are still fitted and checked, as shadows,
+        and the retry is dropped. A model with no candidate keeps the
+        policy as it is.
 
-        A renewal variant with its own leg (`renewalsp`, `renewalbvd`)
-        heads the chain, followed by the random walks, since the `main`
-        leg always fits the pooled renewal config. The main model and its
-        refit are then shadows.
-
-        With `only`, the chain is that baseline alone, for a hub model
+        With `only`, the chain is that candidate alone, for a hub model
         that must never be submitted as anything else. The others are
         still built as shadows, as references for the checks, and are
         never selected.
         """
-        baselines = [c for c in self.chain() if c.kind == "randomwalk"]
-        names = [c.model or c.id for c in baselines]
+        chain = self.chain()
+        names = [c.model or c.id for c in chain]
         if model not in names:
             if only:
-                raise ValueError(f"{model!r} is not a baseline model")
-            legs = [c for c in self.candidates if model and c.model == model]
-            if not legs:
-                return self
-            head = replace(legs[0], kind="fallback")
-            rest = [
-                c
-                if c.kind in ("fallback", "randomwalk", "shadow")
-                else replace(c, kind="shadow")
-                for c in self.candidates
-                if c.id != head.id and c.kind != "retry"
-            ]
-            others = [c for c in rest if c.kind == "fallback"]
-            rest = [
-                replace(c, kind="shadow") if c in others else c for c in rest
-            ]
-            return replace(self, candidates=[head, *rest])
+                raise ValueError(f"{model!r} has no candidate")
+            return self
         start = names.index(model)
-        kept = {c.id for c in baselines[start : start + 1 if only else None]}
+        kept = {c.id for c in chain[start : start + 1 if only else None]}
         cands = [
             c if c.id in kept else replace(c, kind="shadow")
             for c in self.candidates

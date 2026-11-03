@@ -1,14 +1,14 @@
 # Fallback chain and gate thresholds for automated hub submissions.
-# seabbs-renewal walks this chain for the model in `[submission] model`
-# of config/hub.toml. A variant with its own leg (renewalsp, renewalbvd)
-# heads it, followed by the random walks. Only seabbs-rwnowcast has no
-# fallback (ci/steps/track.sh).
+# seabbs-renewal walks the candidates in order, from the most to the
+# least complex renewal model, then the random walks, and submits the
+# first that passes its checks. `[submission] model` in config/hub.toml
+# says where the chain starts. Only seabbs-rwnowcast has no fallback
+# (ci/steps/track.sh).
 
 [policy]
-# One refit of the main model, only when `main` is past the convergence
-# retry thresholds or was ruled out. No other refits, to stay fast; the
-# content-hash fit cache is reused across re-runs.
-retry_budget = 1
+# No refits: a candidate past the convergence thresholds is ruled out and
+# the chain moves on. The content-hash fit cache is reused across re-runs.
+retry_budget = 0
 
 # Minutes the chain plans with. Measured on the 2026-10-24 vintage
 # (jax-review-1, vectorised chains on 2 cores of archie) at 4 chains x
@@ -40,50 +40,32 @@ min_fit_minutes = 30
 # config and sampler settings.
 inputs = ["src", "config", "pyproject.toml", "uv.lock"]
 
-[[candidates]]
-id = "main"
-kind = "main"
-config = "main"
-stage = "primary"
-label = "main model"
 # Sam (2026-10-28): 2 chains of 500 warm-up and 500 draws for every fit.
-sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.8, max_tree_depth = 10, seed = 1, chain_method = "vectorized" }
-
 [[candidates]]
-id = "retry-1"
-kind = "retry"
-config = "main"
-stage = "retry"
-label = "main model, refitted (smaller steps, jittered inits)"
-# The same iterations as `main` (2 x 1000), with smaller steps (target
-# acceptance 0.95) and jittered inits. Main fits reach the maximum tree
-# depth on nearly every draw, so cost follows iterations: 134 against
-# main's 130 minutes on archie at the old 4 x 2000. `max_tree_depth` is
-# set per candidate here.
-sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.95, max_tree_depth = 10, seed = 2, init = "jitter", chain_method = "vectorized" }
+id = "bvd"
+kind = "main"
+config = "bvd"
+model = "renewalbvd"
+stage = "primary"
+label = "BVDOutbreakSize-informed renewal model"
+sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.9, max_tree_depth = 10, seed = 1, chain_method = "vectorized" }
 
-# The fallback is the single-patch model: an independent renewal fit for
-# each province with cases and for the country, with no pooling or
-# coupling. It fits fast (21 minutes on the 2026-10-24 vintage), so it
-# runs beside `main`, not after it, as the standby.
 [[candidates]]
 id = "renewalsp"
 kind = "fallback"
 config = "renewalsp"
 model = "renewalsp"
 stage = "primary"
-label = "single-patch model (independent renewal fits, no pooling or coupling)"
+label = "single-patch renewal model (independent fits, no pooling or coupling)"
 sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.9, max_tree_depth = 10, seed = 1, chain_method = "vectorized" }
 
-# A shadow: fitted and checked weekly with the primary stage, never
-# submitted, until the model choice picks it.
 [[candidates]]
-id = "bvd"
-kind = "shadow"
-config = "bvd"
-model = "renewalbvd"
+id = "main"
+kind = "fallback"
+config = "main"
+model = "renewal"
 stage = "primary"
-label = "BVDOutbreakSize-informed variant (shadow, not submitted)"
+label = "province renewal model"
 sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.9, max_tree_depth = 10, seed = 1, chain_method = "vectorized" }
 
 # Random walk on a nowcast (no MCMC). Like random walk it needs no fit and
@@ -103,19 +85,11 @@ config = "randomwalk"
 stage = "baseline"
 label = "random walk baseline"
 
-# Convergence thresholds. `retry` and `warn` are the fail and warn
-# defaults of BVDOutbreakSize's gate (docs/fits/convergence.jl): past
-# `retry` the main model is refitted once, and the refit is accepted
-# unless it is clearly broken (`fail`), which alone rules a fit out.
-# Each can be overridden by an environment variable or repo variable:
-# BDBV_CONVERGENCE_{FAIL,RETRY,WARN}_{RHAT,ESS_BULK,ESS_TAIL,DIVERGENT}.
+# Convergence thresholds, the same for every candidate. Past `fail`
+# (BVDOutbreakSize's failure threshold, docs/fits/convergence.jl) a fit
+# is ruled out and the chain moves on; past `warn` it is reported only.
+# A value strictly past a threshold breaches it.
 [convergence.fail]
-rhat = 1.5
-ess_bulk = 10
-ess_tail = 10
-divergent_fraction = 0.2
-
-[convergence.retry]
 rhat = 1.1
 ess_bulk = 25
 ess_tail = 25

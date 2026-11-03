@@ -5,9 +5,10 @@
 
 [submission]
 model_abbr = "renewal"
-# The model this id carries first; the chain in ci/policy.toml may fall
-# back from it. Without it, the latest entry of results/model-choice.yml.
-model = "renewal"
+# Where the chain in ci/policy.toml starts: renewalbvd, then renewalsp,
+# then renewal, then the random walks. Without it, the latest entry of
+# results/model-choice.yml.
+model = "renewalbvd"
 # Opt in: `true` submits this model each round (DRY_RUN still applies).
 submit = true
 

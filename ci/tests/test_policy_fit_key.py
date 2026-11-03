@@ -16,6 +16,8 @@ from submission_ci.policy import (
 from submission_ci.window import minutes_left
 
 POLICY_PATH = Path(__file__).parents[1] / "policy.toml"
+# A chain with a refit, for the retry paths.
+FIXTURE = Path(__file__).parent / "chain_policy.toml"
 
 # Measured on archie (jax-review-1, 2026-10-24 vintage, vectorised chains
 # on 2 cores): main 130 and retry 134 minutes of sampling at 4 chains x
@@ -74,7 +76,7 @@ def test_key_changes_with_data_and_settings() -> None:
 
 
 def test_matrix_has_distinct_keys(tmp_path: Path) -> None:
-    pol = load_policy(POLICY_PATH)
+    pol = load_policy(FIXTURE)
     root = repo(tmp_path)
     entries = matrix(pol, "retry", root, "hub")
     assert [e["id"] for e in entries] == ["retry-1"]
@@ -98,7 +100,7 @@ def test_retry_fits_the_time_budget(tmp_path: Path) -> None:
     # The last Tuesday start leaves about 540 minutes for main and the
     # retry in turn, and each job is capped at 350. A retry costing no
     # more than main, with no deeper trees, keeps both within the window.
-    pol = load_policy(POLICY_PATH)
+    pol = load_policy(FIXTURE)
     root = repo(tmp_path)
     main = json.loads(matrix(pol, "primary", root, "hub")[0]["sampler"])
     retry = json.loads(matrix(pol, "retry", root, "hub")[0]["sampler"])
@@ -109,16 +111,14 @@ def test_retry_fits_the_time_budget(tmp_path: Path) -> None:
     assert retry["num_chains"] <= 4
 
 
-def test_chain_stays_within_the_three_models(tmp_path: Path) -> None:
-    # Sam (2026-10-28): renewal, its refit, then the independent
-    # single-patch fits (renewalsp) fitted beside main as the standby,
-    # then randomwalk. renewalbvd is a shadow. No separate fallback
-    # configuration.
+def test_chain_runs_from_most_to_least_complex(tmp_path: Path) -> None:
+    # Sam (2026-11-03): renewalbvd, renewalsp, renewal, then the random
+    # walks, with no refit. Each fitted leg names the model it runs.
     pol = load_policy(POLICY_PATH)
     assert [(c.id, c.kind) for c in pol.chain()] == [
-        ("main", "main"),
-        ("retry-1", "retry"),
+        ("bvd", "main"),
         ("renewalsp", "fallback"),
+        ("main", "fallback"),
         ("randomwalknowcast", "randomwalk"),
         ("randomwalk", "randomwalk"),
     ]
@@ -127,17 +127,14 @@ def test_chain_stays_within_the_three_models(tmp_path: Path) -> None:
         "randomwalknowcast",
         "randomwalk",
     ]
-    assert pol.get("randomwalknowcast").model == "randomwalknowcast"
-    assert "fallback" not in {c.config for c in pol.candidates}
     root = repo(tmp_path)
     primary = {e["id"]: e for e in matrix(pol, "primary", root, "hub")}
-    assert list(primary) == ["main", "renewalsp", "bvd"]
-    # The model each leg runs: the chosen model unless the candidate
-    # names its own.
-    assert primary["main"]["model"] == ""
-    assert primary["renewalsp"]["model"] == "renewalsp"
-    assert primary["bvd"]["model"] == "renewalbvd"
-    assert matrix(pol, "retry", root, "hub")[0]["model"] == ""
+    assert {k: e["model"] for k, e in primary.items()} == {
+        "bvd": "renewalbvd",
+        "renewalsp": "renewalsp",
+        "main": "renewal",
+    }
+    assert matrix(pol, "retry", root, "hub") == []
 
 
 def test_baseline_choices_keep_the_chain_from_that_baseline() -> None:
@@ -156,23 +153,19 @@ def test_baseline_choices_keep_the_chain_from_that_baseline() -> None:
 
 def test_ci_sampler_settings(tmp_path: Path) -> None:
     # Sam (2026-10-28): 2 chains of 500 warm-up and 500 draws for every
-    # fitted candidate; the retry differs by its target acceptance and
-    # jittered inits.
+    # fitted candidate, all with the same settings.
     pol = load_policy(POLICY_PATH)
     root = repo(tmp_path)
-    fitted = [
-        *matrix(pol, "primary", root, "hub"),
-        *matrix(pol, "retry", root, "hub"),
+    samplers = [
+        json.loads(e["sampler"]) for e in matrix(pol, "primary", root, "hub")
     ]
-    for e in fitted:
-        s = json.loads(e["sampler"])
-        assert (s["num_chains"], s["num_warmup"], s["num_samples"]) == (
-            2,
-            500,
-            500,
-        ), e["id"]
-    retry = json.loads(matrix(pol, "retry", root, "hub")[0]["sampler"])
-    assert retry["target_accept"] == 0.95 and retry["init"] == "jitter"
+    assert len(samplers) == 3
+    assert all(s == samplers[0] for s in samplers)
+    assert (
+        samplers[0]["num_chains"],
+        samplers[0]["num_warmup"],
+        samplers[0]["num_samples"],
+    ) == (2, 500, 500)
 
 
 def test_policy_validation(tmp_path: Path) -> None:
@@ -186,25 +179,10 @@ def test_policy_validation(tmp_path: Path) -> None:
 
 
 def test_retry_budget_caps_retries(tmp_path: Path) -> None:
-    text = POLICY_PATH.read_text().replace(
-        "retry_budget = 2", "retry_budget = 1"
-    )
+    text = FIXTURE.read_text().replace("retry_budget = 2", "retry_budget = 1")
     p = tmp_path / "p.toml"
     p.write_text(text)
     assert [c.id for c in load_policy(p).stage("retry")] == ["retry-1"]
-
-
-def test_shadow_candidates_are_fitted_but_never_in_the_chain(
-    tmp_path: Path,
-) -> None:
-    pol = load_policy(POLICY_PATH)
-    shadows = [c for c in pol.candidates if c.kind == "shadow"]
-    assert [c.id for c in shadows] == ["bvd"]
-    assert all(c.id != "bvd" for c in pol.chain())
-    root = repo(tmp_path)
-    primary = [e["id"] for e in matrix(pol, "primary", root, "hub")]
-    assert "bvd" in primary
-    assert primary[0] == "main"
 
 
 def test_randomwalk_chosen_makes_the_renewal_candidates_shadows(
@@ -214,12 +192,8 @@ def test_randomwalk_chosen_makes_the_renewal_candidates_shadows(
     assert [c.id for c in pol.chain()] == ["randomwalk"]
     root = repo(tmp_path)
     primary = [e["id"] for e in matrix(pol, "primary", root, "hub")]
-    assert primary == ["main", "renewalsp", "bvd"]
-    assert matrix(pol, "retry", root, "hub") == []
+    assert primary == ["bvd", "renewalsp", "main"]
     assert all(c.kind == "shadow" for c in pol.candidates if c.id in primary)
-    # Any other choice keeps the full chain.
-    full = load_policy(POLICY_PATH).for_model("renewal")
-    assert next(c.id for c in full.chain()) == "main"
 
 
 def test_timing_defaults() -> None:

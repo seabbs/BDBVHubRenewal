@@ -11,7 +11,10 @@ from submission_ci.common import read_json
 from submission_ci.policy import load_policy
 from submission_ci.select_candidate import main, run_select, triage
 
-POLICY = load_policy(Path(__file__).parents[1] / "policy.toml")
+# Every path through the selection, on a fixture chain with a refit.
+FIXTURE = Path(__file__).parent / "chain_policy.toml"
+POLICY = load_policy(FIXTURE)
+REPO_POLICY = load_policy(Path(__file__).parents[1] / "policy.toml")
 
 
 def candidate(
@@ -331,7 +334,7 @@ def test_cli_exit_code_on_skip(
     monkeypatch.setenv("GITHUB_OUTPUT", str(out))
     c = tmp_path / "c"
     chain(c, main=("fail", "fail"), randomwalk=(None, "fail"))
-    policy = str(Path(__file__).parents[1] / "policy.toml")
+    policy = str(FIXTURE)
     rc = main(
         [
             "select",
@@ -413,43 +416,43 @@ def test_baseline_track_skips_when_the_model_did_not_run(
     assert "could not run" in prov["reason"]
 
 
-def test_renewal_track_keeps_its_fallbacks() -> None:
-    # Sam (2026-11-02): seabbs-renewal may fall back, as before. Only
-    # seabbs-rwnowcast carries its own model or nothing.
-    pol = POLICY.for_model("renewal")
+def test_repository_chain_runs_from_most_to_least_complex() -> None:
+    # Sam (2026-11-03): renewalbvd, renewalsp, renewal, then the
+    # baselines, with no refit.
+    assert [(c.id, c.model) for c in REPO_POLICY.chain()] == [
+        ("bvd", "renewalbvd"),
+        ("renewalsp", "renewalsp"),
+        ("main", "renewal"),
+        ("randomwalknowcast", "randomwalknowcast"),
+        ("randomwalk", ""),
+    ]
+    assert REPO_POLICY.stage("retry") == []
+    assert REPO_POLICY.for_model("renewalbvd") == REPO_POLICY
+
+
+def test_a_chosen_model_starts_the_chain() -> None:
+    # The chain runs on from the chosen model; those before it are
+    # shadows.
+    pol = REPO_POLICY.for_model("renewalsp")
     assert [c.id for c in pol.chain()] == [
+        "renewalsp",
         "main",
-        "retry-1",
-        "renewalsp",
         "randomwalknowcast",
         "randomwalk",
     ]
-
-
-def test_a_chosen_variant_heads_the_chain() -> None:
-    # The `main` leg always fits the pooled renewal config, so a chosen
-    # renewalsp runs as its own leg, first, then the random walks. The
-    # main model and its refit are shadows.
-    pol = POLICY.for_model("renewalsp")
-    assert [c.id for c in pol.chain()] == [
-        "renewalsp",
-        "randomwalknowcast",
-        "randomwalk",
-    ]
-    assert pol.get("main").kind == "shadow"
-    assert pol.stage("retry") == []
-    assert {c.id for c in pol.stage("primary")} == {"main", "renewalsp", "bvd"}
+    assert pol.get("bvd").kind == "shadow"
+    assert {c.id for c in pol.stage("primary")} == {"bvd", "renewalsp", "main"}
 
 
 def test_a_chosen_variant_falls_back_to_the_random_walk(
     tmp_path: Path,
 ) -> None:
-    pol = POLICY.for_model("renewalsp")
+    pol = REPO_POLICY.for_model("renewal")
     c = tmp_path / "c"
     chain(
         c,
-        main=("pass", "pass"),
-        renewalsp=("fail", "pass"),
+        bvd=("pass", "pass"),
+        main=("fail", "pass"),
         randomwalknowcast=(None, "pass"),
         randomwalk=(None, "pass"),
     )
@@ -458,9 +461,8 @@ def test_a_chosen_variant_falls_back_to_the_random_walk(
 
 
 def test_no_refit_when_the_chain_has_none(tmp_path: Path) -> None:
-    # A chain headed by renewalsp has no retry leg, so a failed fit is
-    # not refitted: the chain moves on.
-    pol = POLICY.for_model("renewalsp")
+    # The repository chain has no retry leg, so a failed fit is not
+    # refitted: the chain moves on.
     c = tmp_path / "c"
-    chain(c, renewalsp=("fail", "pass"))
-    assert not triage(pol, c)
+    chain(c, bvd=("fail", "pass"))
+    assert not triage(REPO_POLICY, c)

@@ -204,9 +204,8 @@ FIT_VARIANTS: Final[dict[str, str]] = {
     "renewalsp": "renewalsp",
     "bvd": "renewalbvd",
 }
-"""The variant each fit configuration of the CI runs. The chain is `main`,
-a retry, then `renewalsp`, then randomwalk. `bvd` is a shadow candidate:
-fitted weekly, never submitted until it is chosen."""
+"""The variant each fit configuration of the CI runs. The chain is `bvd`,
+`renewalsp`, `main`, then the random walks (`ci/policy.toml`)."""
 
 
 def model_config(variant: Variant) -> Any:

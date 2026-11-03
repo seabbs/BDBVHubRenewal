@@ -30,12 +30,12 @@ def test_repository_config_names_both_hub_models() -> None:
     assert base.model_id == "seabbs-rwnowcast"
     assert base.model == "randomwalknowcast"
     # Sam opted seabbs-rwnowcast in for the 2026-11-07 round (2026-10-28),
-    # and seabbs-renewal, carrying renewal, from 2026-11-02. DRY_RUN still
-    # applies.
+    # and seabbs-renewal from 2026-11-02. Its chain starts at renewalbvd
+    # (2026-11-03). DRY_RUN still applies.
     assert base.submit
     assert base.runs
     assert tracks["renewal"].submit
-    assert tracks["renewal"].model == "renewal"
+    assert tracks["renewal"].model == "renewalbvd"
 
 
 def test_opted_in_baseline_runs_without_a_model_choice(tmp_path: Path) -> None:

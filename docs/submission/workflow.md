@@ -14,8 +14,7 @@ It submits only the hub models opted in ([Opting in](opting-in.md)), and pushes 
 | `freeze` | Freezes the page of every round whose pull request has merged. |
 | `prepare` | Pins the data, builds `randomwalk` and `randomwalknowcast`, and decides which hub models run. |
 | `baseline` | The baseline hub model: checks and submits `randomwalknowcast`, or skips the round if it is ruled out. |
-| `fit` | The renewal hub model: fits `main`, `renewalsp` and the `bvd` shadow in parallel. |
-| `triage`, `retry` | Refits `main` once if needed and if the window leaves time. |
+| `fit` | The renewal hub model: fits `bvd`, `renewalsp` and `main` in parallel. |
 | `gate`, `submit` | Walks the chain, validates, and opens or updates the pull request. |
 | `record` | Live runs only: writes the round to the `submission-ledger` branch. |
 | `outcome` | Fails the run if a round was skipped or a job broke. |
@@ -24,30 +23,33 @@ It submits only the hub models opted in ([Opting in](opting-in.md)), and pushes 
 
 The first candidate that clears the checks is submitted, under `seabbs-renewal`.
 
-1. `main`: the renewal model.
-2. `retry-1`: one refit with target acceptance 0.95 and jittered inits.
-3. `renewalsp`: independent single-patch fits, fitted beside `main`.
+The chain runs from the most to the least complex renewal model, then the random walks.
+
+1. `bvd`: `renewalbvd`, the renewal model informed by BVDOutbreakSize Rt.
+2. `renewalsp`: independent single-patch fits.
+3. `main`: `renewal`, the province renewal model.
 4. `randomwalknowcast`: random walk on a nowcast.
 5. `randomwalk`.
 
-Every fit is 2 chains of 500 warm-up and 500 draws.
-Fit timeouts and the retry are set against the window's close (`[timing]` in `ci/policy.toml`).
+`[submission] model` in `config/hub.toml` says where the chain starts.
+Every fit is 2 chains of 500 warm-up and 500 draws, with no refit.
+Fit timeouts are set against the window's close (`[timing]` in `ci/policy.toml`).
 
 ## Checks
 
 An invalid file, a clearly broken fit or a forecast far from the recent data rules a candidate out.
 Thresholds are in `ci/policy.toml`.
 
-| check | rules out | refits once | warns |
-| --- | --- | --- | --- |
-| max R-hat | > 1.5 | > 1.1 | > 1.05 |
-| min bulk and tail ESS | < 10 | < 25 | < 100 |
-| divergent share | > 20% | > 5% | > 1% |
-| 90% predictive coverage | | | < 0.70 |
-| schema, values, 100 samples per trajectory | any | | |
-| hub validation (Python and hubValidations) | any error | | |
-| plausible (median and 97.5% quantile against the recent maximum) | any | | |
-| bounds, growth, against observed, random walk and last week | | | yes |
+| check | rules out | warns |
+| --- | --- | --- |
+| max R-hat | > 1.1 | > 1.05 |
+| min bulk and tail ESS | < 25 | < 100 |
+| divergent share | > 5% | > 1% |
+| 90% predictive coverage | | < 0.70 |
+| schema, values, 100 samples per trajectory | any | |
+| hub validation (Python and hubValidations) | any error | |
+| plausible (median and 97.5% quantile against the recent maximum) | any | |
+| bounds, growth, against observed, random walk and last week | | yes |
 
 The national rows are rebuilt as the sum of the provinces plus the unassigned component.
 The [hub specification](hub-spec.md) lists the hub's rules.
