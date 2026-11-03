@@ -8,7 +8,7 @@ How the [models](model.md) are built in code, computed and sampled.
 The model extends [PyRenew](https://github.com/CDCgov/PyRenew), pinned to a commit, and runs in JAX with NumPyro.
 Its code is in [`bdbvhubrenewal.model`][bdbvhubrenewal.model] and the variants are in [`forecasters.renewal`][bdbvhubrenewal.forecasters.renewal].
 The model is configured by `ModelConfig`.
-The model figure is built from `docs/diagrams/model_dag.tex` by `scripts/build_diagrams.sh`.
+The model diagram is a mermaid block in `docs/methods/model.md`.
 
 ## PyRenew and what is built here
 
@@ -18,7 +18,7 @@ The model figure is built from `docs/diagrams/model_dag.tex` by `scripts/build_d
 | Renewal with importation and depletion | `SubpopulationInfections`, subclassed | `coupled_renewal`. |
 | Ascertainment $\alpha(s)$ | `IndependentAscertainment` with a temporal process | None. |
 | Onset-to-report delay $f_s(d)$ | None | `HazardDelay`. |
-| Missing onsets $\pi_p(t)$ | None | `MissingOnsetFraction`, built from the same pooled walk as $R_p$. |
+| Missing onsets $\pi_p(t)$ | None | `MissingOnsetFraction`, a pooled walk of the same form as $R_p$ with its own parameters. |
 | Known and imputed onsets | `BaseObservationProcess`, `NegativeBinomialNoise` | `OnsetStreams`. |
 | BVDOutbreakSize Rt | None | `RtPseudoObservation`. |
 | Provinces with no cases | None | An importation-only component. |
@@ -57,14 +57,16 @@ The tests check the renewal and the imputation against a NumPy reference, `tests
 
 ## Sampling
 
-Fits use NumPyro's NUTS through PyRenew's `PyrenewBuilder` and `MultiSignalModel`.
+PyRenew's `PyrenewBuilder` builds each model as a `MultiSignalModel`, and NumPyro's NUTS fits it.
 Chains run vectorised.
 Without other settings, NUTS runs 4 chains of 1000 warm-up and 1000 draws, with target acceptance 0.9 and maximum tree depth 10.
 Chains start from the median of 15 prior draws.
-Submission and backtest fits take their settings from `ci/policy.toml` and `config/backtest.toml`.
+Submission fits take their settings from `ci/policy.toml`, which override JSON settings in `BDBV_RENEWAL_SAMPLER`.
+Backtest and leave-one-province-out fits take theirs from `config/backtest.toml` when `BDBV_RENEWAL_SAMPLER` is unset.
 
 The parameterisation is as follows.
 
 - Every walk, the pooled $\log R(t)$ included, samples its steps non-centred, as standard normals scaled by the step SD.
 - Province deviations sum to zero through an orthonormal basis $Q$ of the sum-to-zero subspace, so the $P - 1$ free processes are unconstrained.
-- The starting offsets of the deviations are sampled centred.
+- The starting offsets of the $\log R$ deviations are sampled centred, and those of the missing-onset fraction non-centred.
+- Walk steps after the fit axis are not sampled by NUTS. They are drawn from the prior given each posterior draw when forecasting.

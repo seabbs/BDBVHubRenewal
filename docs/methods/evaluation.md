@@ -6,7 +6,7 @@ Scoring, and the evaluations.
 ## Scoring
 
 Every model is scored on the count each later real release reports, with its final-count forecast turned into a forecast of that count ([Real releases](#real-releases)).
-A final count is never scored against a count still being reported.
+The release scores never compare a final count with a count still being reported.
 The development backtest scores complete weeks against each later real vintage as a secondary check ([Backtest](../backtest.md#scores-by-truth-vintage)).
 Simulated forecasts are scored against the simulated final counts.
 
@@ -16,6 +16,7 @@ Simulated forecasts are scored against the simulated final counts.
 | Vintage-matched | Count as reported by the truth vintage | Every week, so recent weeks compare like with like. |
 
 **Vintage-matched.** The renewal variants draw reported counts from the same posterior draws as the final counts.
+A further set of complete weeks leaves out origins with no earlier pair of delay files, whose publication lag comes from a prior.
 
 ## Scores
 
@@ -46,17 +47,19 @@ Each vintage is a forecast task, and every registered model forecasts every task
 
 | Run | Vintages | Truth |
 |---|---|---|
-| Development backtest | Real up to the latest model choice date | Latest real vintage, and every later real vintage for real forecasts |
+| Development backtest | Real up to the latest model choice date, except the latest real vintage | Latest real vintage, and every later real vintage for real forecasts |
 | Recovery check | Simulated | Simulated final counts |
+| Simulated scenarios | The four weekly simulated vintages up to the latest real vintage, from outbreaks calibrated to it with Rt after the data scaled by 0.75, 1 or 1.25 | Simulated final counts, and the counts as reported two weeks after each vintage |
 | Rolling held-out evaluation | Real vintages after each model choice | Every later real vintage |
-| Real releases | Every real release with a later release | The count each later release shows, and the latest release's count for its complete weeks |
+| Real releases | Every real release up to the latest model choice date with a later release | The count each later release shows, and the latest release's count for its complete weeks |
 | Comparison with hub forecasts | Real where one serves the round | Latest real vintage, complete weeks |
 
 ## Real releases
 
-Each real release with a later release is an origin.
+Each real release up to the latest model choice date with a later release is an origin.
 The random walk models forecast from the releases up to the origin only.
-The renewal models' stored forecasts from the origin, and hub teams' forecasts for the round the origin serves, are scored with them.
+The renewal models' stored forecasts from the origin are scored with them.
+So are hub teams' forecasts for a round, at the latest release serving it.
 An origin with no pair of releases whose gap is within the delay window, $D = 42$ days, has no delay factor and no forecast.
 It is listed with no forecasts and nothing replaces it.
 Two targets are scored.
@@ -76,13 +79,13 @@ Only the delay fitted at the origin is used.
 Its mean is the growth over the gap to $o'$ for `randomwalknowcast`, and the floor maps to itself.
 
 **Complete weeks.** The count the latest release shows for the weeks it reports in full.
-A week is complete when it is at least 4 weeks old at the latest release and grew by less than 2% since the release before.
+A week is complete when it is at least 4 weeks back from the week holding the latest release's cut-off and grew by less than 2% since the release before.
 
 The floor is the count reported at the origin, scored on both targets as a forecast with no spread.
 Scores are WIS, 50% and 90% coverage and bias, by model, origin, weeks back from the origin's week and place.
-Relative WIS is against `randomwalk` on the forecasts both made, by origin, for national and the provinces pooled, and by place.
+Relative WIS is against `randomwalk` on the forecasts both made, for national and the provinces pooled, over all origins and by origin, and by origin and place.
 Every table counts its forecasts, $n$.
-The run stops if a model has no snapshots or two models run here give identical samples.
+The run stops if an origin has no release snapshots or two models run here give identical samples.
 
 The weekly cross-check runs the snapshot chain ladder on hub weeks from the latest two releases with cut-offs a week apart, with a gap of one week and the national delay for every place.
 It checks the daily ladder for consistency on weekly data.
@@ -92,14 +95,15 @@ It is drawn over the `randomwalknowcast` intervals at the later release.
 
 Each model choice is logged with its date, and the development set rolls forward with them.
 Development runs use every vintage up to the latest choice date.
-Each real vintage after a choice is forecast by the model chosen then and by `randomwalk`, with the code at the time of the run.
+Each real vintage after a choice is forecast by the model chosen then, the latest choice dated before it.
+It is also forecast by `randomwalk` and `randomwalknowcast`, and by default every other registered model, with the code at the time of the run.
 Each forecast is scored when the next vintage arrives and re-scored as newer ones do.
 
 ## Leave-one-province-out
 
 One province's likelihood is masked while it stays in the model, so coupling still acts on it.
-Its onsets are scored against the latest real vintage.
-It runs on development vintages, for models that support the mask, so not `renewalsp` or `randomwalk`.
+Its onsets are scored on every week against the latest real vintage.
+It runs on development vintages for the models that support the mask, `renewal` and `renewalbvd`.
 
 ## Health zones
 
@@ -110,7 +114,6 @@ Each model is scored as it runs, and again with its zone samples made to sum to 
 Each real vintage before the latest is forecast, and origins with no pair of releases within the delay window are skipped, as for provinces.
 Zones are scored on every week against the zone counts as reported at the latest real vintage.
 Relative WIS is against `randomwalk` run at zone level.
-`bdbvhubrenewal zone-backtest` runs it and writes `results/zone-scores.csv`.
 
 ## Comparison with hub forecasts
 
