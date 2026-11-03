@@ -14,8 +14,8 @@ It is the reference for the interface, and `ci/run_dry.sh` runs the whole workfl
 | `bdbvhubrenewal nowcast --model random walk --vintage <as_of> --out <dir>` | exists | `prepare` (random walk candidate and baseline) |
 | `bdbvhubrenewal metadata --model <model> --out <dir>` | exists | `gate` |
 | `scripts/validate-hub.R <hub> <csv> <yml>`, with `CHECK_WINDOW=true` | exists | `gate`, through `ci/steps/validate_hub.sh` |
-| `bdbvhubrenewal fit ...` | done (`bdbvhubrenewal.submission.fitting`; `main` runs the chosen renewal model and `renewalsp` the single-patch model, `bdbvhubrenewal.forecasters.renewal`) | `fit`, `retry` |
-| `nowcast --config <c> --fit <dir>` | done | `fit`, `retry` |
+| `bdbvhubrenewal fit ...` | done (`bdbvhubrenewal.submission.fitting`; `main` runs the chosen renewal model and `renewalsp` the single-patch model, `bdbvhubrenewal.forecasters.renewal`) | `fit` |
+| `nowcast --config <c> --fit <dir>` | done | `fit` |
 | `bdbvhubrenewal plot-submission ...` | done, `plots.plot_submission` | every candidate |
 | `bdbvhubrenewal plot-ppc --ppc <ppc.json> --out <png>` | done, a thin wrapper on `ppc.plot_ppc` | candidates whose `ppc.json` is available |
 | `bdbvhubrenewal --version` | done | `run.json`, the PR body |
@@ -38,7 +38,6 @@ bdbvhubrenewal fit --model renewal|renewalsp --config main|renewalsp --vintage <
   `renewalsp` is the single-patch model: an independent renewal fit for each province with cases and for the country, with no pooling or coupling.
   Each matrix leg passes its own config.
 - `--sampler-json` is the candidate's `sampler` table from `ci/policy.toml`.
-  The retries differ only in it.
 - `--vintage` is a real `as_of`, or `latest`.
 - Write `<fit dir>/diagnostics.json` (below) whether or not the fit converged.
   Exit non-zero only if the fit could not run.
@@ -303,7 +302,6 @@ Suggested additions:
 Thresholds are in `ci/policy.toml`, and the policy is described on the docs' Submissions page.
 In short, problems are handled rather than failed on:
 
-- **fail** (rules a candidate out): a file the hub would reject (schema, values, samples, hubValidations) or a clearly broken fit (R-hat above 1.5, ESS below 10, divergent draws above 20%), or no diagnostics from a sampled fit;
-- **refit once**: the main model past BVDOutbreakSize's fail thresholds (R-hat 1.1, ESS 25, divergent draws 5%), with the refit preferred unless it is clearly broken;
+- **fail** (rules a candidate out): a file the hub would reject (schema, values, samples, hubValidations) or a fit past BVDOutbreakSize's failure thresholds (R-hat 1.1, ESS 25, divergent draws 5%), or no diagnostics from a sampled fit;
 - **handled** (on the PR's `Handled:` line): the national rows rebuilt as the sum of the provinces plus the unassigned component; a gap between the national data and the provinces; a data stream taken from an earlier vintage (`handled.json` beside the hub file);
 - **warn** (reported only): posterior predictive checks, plausibility checks, missing locations or weeks, and BVDOutbreakSize's warn thresholds.

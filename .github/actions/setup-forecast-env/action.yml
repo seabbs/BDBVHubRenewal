@@ -1,7 +1,7 @@
 name: Set up the forecast environment
 description: >-
   Install uv and the main repo's locked environment, and restore JAX's
-  persistent compilation cache so a refit does not recompile the model.
+  persistent compilation cache so a re-run does not recompile the model.
 
 inputs:
   sync:
@@ -16,7 +16,7 @@ runs:
         enable-cache: true
     # JAX caches compiled XLA programs on disk. Keyed on the lock file
     # and model source, so a change to either compiles afresh, while a
-    # retry or a re-run in the same week reuses the compiled model.
+    # re-run in the same week reuses the compiled model.
     - name: Restore the JAX compilation cache
       uses: actions/cache@v6
       with:

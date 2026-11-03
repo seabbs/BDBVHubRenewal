@@ -5,16 +5,18 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import make_samples, write_json, write_samples
+from conftest import (
+    POLICY,
+    POLICY_PATH,
+    make_samples,
+    write_json,
+    write_samples,
+)
 
 from submission_ci.common import read_json
-from submission_ci.policy import load_policy
-from submission_ci.select_candidate import main, run_select, triage
+from submission_ci.select_candidate import main, run_select
 
-# Every path through the selection, on a fixture chain with a refit.
-FIXTURE = Path(__file__).parent / "chain_policy.toml"
-POLICY = load_policy(FIXTURE)
-REPO_POLICY = load_policy(Path(__file__).parents[1] / "policy.toml")
+BVD = "BVDOutbreakSize-informed renewal model"
 
 
 def candidate(
@@ -41,20 +43,15 @@ def candidate(
             },
         )
     if fit is not None:
-        loose = fit == "loose"
-        fit = "warn" if loose else fit
         write_json(
             d / "fit-summary.json",
             {
                 "status": fit,
-                "retry": loose,
                 "failures": ["max R-hat is 1.4, past the failure threshold 1.1"]
                 if fit == "fail"
                 else [],
                 "warnings": [
-                    "max R-hat is 1.2, past the retry threshold 1.1"
-                    if loose
-                    else "min bulk ESS is 80, past the warning threshold 100"
+                    "min bulk ESS is 80, past the warning threshold 100"
                 ]
                 if fit == "warn"
                 else [],
@@ -94,163 +91,113 @@ def always(status: str):  # type: ignore[no-untyped-def]
     return run
 
 
-def test_chain_order_and_budget() -> None:
-    assert [c.id for c in POLICY.chain()] == [
-        "main",
-        "retry-1",
-        "renewalsp",
-        "randomwalknowcast",
-        "randomwalk",
+def test_chain_runs_from_most_to_least_complex() -> None:
+    # Sam (2026-11-03): renewalbvd, renewalsp, renewal, then the
+    # baselines, with no refit.
+    assert [(c.id, c.model) for c in POLICY.chain()] == [
+        ("bvd", "renewalbvd"),
+        ("renewalsp", "renewalsp"),
+        ("main", "renewal"),
+        ("randomwalknowcast", "randomwalknowcast"),
+        ("randomwalk", ""),
     ]
     assert [c.id for c in POLICY.stage("primary")] == [
-        "main",
-        "renewalsp",
         "bvd",
+        "renewalsp",
+        "main",
     ]
-    assert [c.id for c in POLICY.stage("retry")] == ["retry-1"]
+    assert POLICY.for_model("renewalbvd") == POLICY
 
 
-def test_main_passes(tmp_path: Path) -> None:
+def test_first_candidate_passes(tmp_path: Path) -> None:
     c = tmp_path / "c"
     chain(
         c,
-        main=("pass", "pass"),
+        bvd=("pass", "pass"),
         renewalsp=("pass", "pass"),
         randomwalk=(None, "pass"),
     )
-    assert not triage(POLICY, c)
-    prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=False)
-    assert prov["selected"] == "main" and prov["status"] == "pass"
-    assert prov["reason"] == "The main model cleared every check."
+    prov = run_select(POLICY, c, tmp_path / "g", always("pass"))
+    assert prov["selected"] == "bvd" and prov["status"] == "pass"
+    assert prov["reason"] == f"The {BVD} cleared every check."
     assert (tmp_path / "g" / "selected" / "submission").is_dir()
     states = {a["id"]: a["status"] for a in prov["attempts"]}
-    assert (
-        states["renewalsp"] == "not needed"
-        and states["retry-1"] == "not needed"
-    )
+    assert states["renewalsp"] == "not needed"
 
 
-def test_main_warns_and_is_submitted_with_warning(tmp_path: Path) -> None:
+def test_warnings_are_submitted_with_the_candidate(tmp_path: Path) -> None:
     c = tmp_path / "c"
-    chain(c, main=("warn", "warn"), randomwalk=(None, "pass"))
-    prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=False)
-    assert prov["selected"] == "main" and prov["status"] == "warn"
+    chain(c, bvd=("warn", "warn"), randomwalk=(None, "pass"))
+    prov = run_select(POLICY, c, tmp_path / "g", always("pass"))
+    assert prov["selected"] == "bvd" and prov["status"] == "warn"
     assert any("convergence" in w for w in prov["warnings"])
     assert any("growth" in w for w in prov["warnings"])
 
 
-def test_retry_passes(tmp_path: Path) -> None:
+def test_a_failed_fit_moves_down_the_chain(tmp_path: Path) -> None:
+    # No refit: past the convergence failure thresholds the chain moves
+    # straight on.
     c = tmp_path / "c"
     chain(
         c,
-        main=("fail", "pass"),
-        retry_1=("pass", "pass"),
+        bvd=("fail", "pass"),
         renewalsp=("pass", "pass"),
         randomwalk=(None, "pass"),
     )
-    assert triage(POLICY, c)
-    t = POLICY.timing
-    assert triage(POLICY, c, minutes_left=t.retry_minutes + t.reserve_minutes)
-    # Too close to the window's end for a refit: go down the chain.
-    assert not triage(POLICY, c, minutes_left=t.retry_minutes)
-    prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=True)
-    assert prov["selected"] == "retry-1"
-    assert prov["produced_by"].startswith("main model, refitted")
+    prov = run_select(POLICY, c, tmp_path / "g", always("pass"))
+    assert prov["selected"] == "renewalsp" and prov["kind"] == "fallback"
     assert (
-        "Main model was ruled out (convergence: max R-hat is 1.4"
-        in prov["reason"]
+        f"{BVD} was ruled out (convergence: max R-hat is 1.4" in prov["reason"]
     )
-
-
-def test_loose_main_is_refitted_once(tmp_path: Path) -> None:
-    c = tmp_path / "c"
-    chain(
-        c,
-        main=("loose", "pass"),
-        retry_1=("pass", "pass"),
-        renewalsp=("pass", "pass"),
-        randomwalk=(None, "pass"),
-    )
-    assert triage(POLICY, c)
-    prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=True)
-    assert prov["selected"] == "retry-1"
-    assert prov["handled"][0] == (
-        "main model refitted once (max R-hat is 1.2, past the retry "
-        "threshold 1.1)"
-    )
-
-
-def test_loose_main_is_kept_when_the_refit_is_broken(tmp_path: Path) -> None:
-    c = tmp_path / "c"
-    chain(
-        c,
-        main=("loose", "pass"),
-        retry_1=("fail", "pass"),
-        renewalsp=("pass", "pass"),
-        randomwalk=(None, "pass"),
-    )
-    prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=True)
-    assert prov["selected"] == "main"
-    assert prov["handled"][0].startswith(
-        "main model kept after one refit did not help"
-    )
-
-
-def test_loose_main_without_a_refit_is_accepted(tmp_path: Path) -> None:
-    c = tmp_path / "c"
-    chain(c, main=("loose", "pass"), randomwalk=(None, "pass"))
-    prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=False)
-    assert prov["selected"] == "main"
-    assert prov["handled"][0].startswith("accepted without a refit")
 
 
 def test_predictive_and_plausibility_never_rule_out(tmp_path: Path) -> None:
     c = tmp_path / "c"
-    candidate(c, "main", checks="warn", ppc="fail")
+    candidate(c, "bvd", checks="warn", ppc="fail")
     candidate(c, "randomwalk", fit=None)
-    prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=False)
-    assert prov["selected"] == "main"
+    prov = run_select(POLICY, c, tmp_path / "g", always("pass"))
+    assert prov["selected"] == "bvd"
     assert any(w.startswith("ppc:") for w in prov["warnings"])
 
 
 def test_handled_notes_are_collected(tmp_path: Path) -> None:
     c = tmp_path / "c"
-    candidate(c, "main")
+    candidate(c, "bvd")
     write_json(
-        c / "main" / "submission" / "handled.json",
+        c / "bvd" / "submission" / "handled.json",
         ["delays: used the 2026-10-17 vintage, the latest available"],
     )
-    checks = read_json(c / "main" / "checks.json")
+    checks = read_json(c / "bvd" / "checks.json")
     write_json(
-        c / "main" / "checks.json",
+        c / "bvd" / "checks.json",
         {**checks, "handled": ["national (CD) rebuilt as the sum"]},
     )
-    prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=False)
+    prov = run_select(POLICY, c, tmp_path / "g", always("pass"))
     assert prov["handled"] == [
         "delays: used the 2026-10-17 vintage, the latest available",
         "national (CD) rebuilt as the sum",
     ]
 
 
-def test_main_crash_triggers_retry(tmp_path: Path) -> None:
+def test_a_crashed_fit_moves_down_the_chain(tmp_path: Path) -> None:
     c = tmp_path / "c"
-    candidate(c, "main", fit="error", submission=False)
-    assert triage(POLICY, c)
-    (tmp_path / "empty").mkdir()
-    assert triage(POLICY, tmp_path / "empty")  # main never produced output
+    candidate(c, "bvd", fit="error", submission=False)
+    chain(c, renewalsp=("pass", "pass"))
+    prov = run_select(POLICY, c, tmp_path / "g", always("pass"))
+    assert prov["selected"] == "renewalsp"
 
 
-def test_fallback_is_used(tmp_path: Path) -> None:
+def test_each_renewal_model_in_turn(tmp_path: Path) -> None:
     c = tmp_path / "c"
     chain(
         c,
-        main=("fail", "pass"),
-        retry_1=("pass", "fail"),
-        renewalsp=("pass", "pass"),
+        bvd=("fail", "pass"),
+        renewalsp=("pass", "fail"),
+        main=("pass", "pass"),
         randomwalk=(None, "pass"),
     )
-    prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=True)
-    assert prov["selected"] == "renewalsp" and prov["kind"] == "fallback"
+    prov = run_select(POLICY, c, tmp_path / "g", always("pass"))
+    assert prov["selected"] == "main" and prov["kind"] == "fallback"
     assert "growth" in prov["reason"]
 
 
@@ -258,13 +205,13 @@ def test_randomwalknowcast_before_randomwalk(tmp_path: Path) -> None:
     c = tmp_path / "c"
     chain(
         c,
-        main=("fail", "pass"),
-        retry_1=("fail", "pass"),
+        bvd=("fail", "pass"),
         renewalsp=("pass", "fail"),
+        main=("fail", "pass"),
         randomwalknowcast=(None, "pass"),
         randomwalk=(None, "pass"),
     )
-    prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=True)
+    prov = run_select(POLICY, c, tmp_path / "g", always("pass"))
     assert prov["selected"] == "randomwalknowcast"
     assert prov["kind"] == "randomwalk"
 
@@ -273,12 +220,12 @@ def test_randomwalk_is_the_last_resort(tmp_path: Path) -> None:
     c = tmp_path / "c"
     chain(
         c,
-        main=("fail", "pass"),
-        retry_1=("fail", "pass"),
+        bvd=("fail", "pass"),
         renewalsp=("pass", "fail"),
+        main=("fail", "pass"),
         randomwalk=(None, "pass"),
     )
-    prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=True)
+    prov = run_select(POLICY, c, tmp_path / "g", always("pass"))
     assert prov["selected"] == "randomwalk"
     assert prov["produced_by"] == "random walk baseline"
 
@@ -287,12 +234,12 @@ def test_everything_fails_round_skipped(tmp_path: Path) -> None:
     c = tmp_path / "c"
     chain(
         c,
-        main=("fail", "pass"),
-        retry_1=("fail", "pass"),
+        bvd=("fail", "pass"),
         renewalsp=("pass", "fail"),
+        main=("fail", "pass"),
         randomwalk=(None, "fail"),
     )
-    prov = run_select(POLICY, c, tmp_path / "g", always("pass"), retried=True)
+    prov = run_select(POLICY, c, tmp_path / "g", always("pass"))
     assert prov["selected"] is None and prov["status"] == "skip"
     assert prov["reason"].startswith("Every candidate was ruled out")
     md = (tmp_path / "g" / "provenance.md").read_text()
@@ -303,7 +250,7 @@ def test_hub_validation_failure_moves_down_the_chain(tmp_path: Path) -> None:
     c = tmp_path / "c"
     chain(
         c,
-        main=("pass", "pass"),
+        bvd=("pass", "pass"),
         renewalsp=("pass", "pass"),
         randomwalk=(None, "pass"),
     )
@@ -314,16 +261,16 @@ def test_hub_validation_failure_moves_down_the_chain(tmp_path: Path) -> None:
         log.write_text("x")
         return "fail" if len(seen) == 1 else "pass"
 
-    prov = run_select(POLICY, c, tmp_path / "g", validate, retried=False)
-    assert seen == ["main", "renewalsp"]
+    prov = run_select(POLICY, c, tmp_path / "g", validate)
+    assert seen == ["bvd", "renewalsp"]
     assert prov["selected"] == "renewalsp"
     assert "hub validation failed" in prov["reason"]
 
 
 def test_no_validator_marks_skip(tmp_path: Path) -> None:
     c = tmp_path / "c"
-    chain(c, main=("pass", "pass"))
-    prov = run_select(POLICY, c, tmp_path / "g", None, retried=False)
+    chain(c, bvd=("pass", "pass"))
+    prov = run_select(POLICY, c, tmp_path / "g", None)
     assert prov["attempts"][0]["validation"] == "skip"
 
 
@@ -333,13 +280,11 @@ def test_cli_exit_code_on_skip(
     out = tmp_path / "out"
     monkeypatch.setenv("GITHUB_OUTPUT", str(out))
     c = tmp_path / "c"
-    chain(c, main=("fail", "fail"), randomwalk=(None, "fail"))
-    policy = str(FIXTURE)
+    chain(c, bvd=("fail", "fail"), randomwalk=(None, "fail"))
     rc = main(
         [
-            "select",
             "--policy",
-            policy,
+            str(POLICY_PATH),
             "--candidates",
             str(c),
             "--out",
@@ -351,8 +296,6 @@ def test_cli_exit_code_on_skip(
     assert rc == 3
     assert "skipped=true" in out.read_text()
     assert read_json(tmp_path / "g" / "provenance.json")["selected"] is None
-    rc = main(["triage", "--policy", policy, "--candidates", str(c)])
-    assert rc == 0 and "need_retry=true" in out.read_text()
 
 
 def test_randomwalk_chosen_never_selects_a_shadow(tmp_path: Path) -> None:
@@ -360,24 +303,23 @@ def test_randomwalk_chosen_never_selects_a_shadow(tmp_path: Path) -> None:
     c = tmp_path / "c"
     chain(
         c,
-        main=("pass", "pass"),
+        bvd=("pass", "pass"),
         renewalsp=("pass", "pass"),
         randomwalk=(None, "pass"),
     )
-    assert not triage(pol, c)
-    prov = run_select(pol, c, tmp_path / "g", always("pass"), retried=False)
+    prov = run_select(pol, c, tmp_path / "g", always("pass"))
     assert prov["selected"] == "randomwalk"
 
 
 def test_provenance_lists_the_shadow_candidates(tmp_path: Path) -> None:
     pol = POLICY.for_model("randomwalk")
     c = tmp_path / "c"
-    chain(c, main=("pass", "pass"), randomwalk=(None, "pass"))
-    prov = run_select(pol, c, tmp_path / "g", always("pass"), retried=False)
+    chain(c, bvd=("pass", "pass"), randomwalk=(None, "pass"))
+    prov = run_select(pol, c, tmp_path / "g", always("pass"))
     shadows = {s["id"]: s for s in prov["shadows"]}
-    assert set(shadows) == {"main", "renewalsp", "bvd", "randomwalknowcast"}
-    assert shadows["main"]["fit"] is not None
-    assert shadows["bvd"]["fit"] is None
+    assert set(shadows) == {"bvd", "renewalsp", "main", "randomwalknowcast"}
+    assert shadows["bvd"]["fit"] is not None
+    assert shadows["main"]["fit"] is None
 
 
 def test_baseline_track_never_falls_back_to_randomwalk(
@@ -389,13 +331,7 @@ def test_baseline_track_never_falls_back_to_randomwalk(
     c = tmp_path / "c"
     chain(c, randomwalknowcast=(None, "fail"), randomwalk=(None, "pass"))
     prov = run_select(
-        pol,
-        c,
-        tmp_path / "g",
-        always("pass"),
-        retried=False,
-        shadows=False,
-        only=True,
+        pol, c, tmp_path / "g", always("pass"), shadows=False, only=True
     )
     assert prov["selected"] is None
     assert "no other model is submitted in its place" in prov["reason"]
@@ -410,30 +346,16 @@ def test_baseline_track_skips_when_the_model_did_not_run(
     c = tmp_path / "c"
     chain(c, randomwalk=(None, "pass"))
     prov = run_select(
-        pol, c, tmp_path / "g", always("pass"), False, False, only=True
+        pol, c, tmp_path / "g", always("pass"), shadows=False, only=True
     )
     assert prov["selected"] is None
     assert "could not run" in prov["reason"]
 
 
-def test_repository_chain_runs_from_most_to_least_complex() -> None:
-    # Sam (2026-11-03): renewalbvd, renewalsp, renewal, then the
-    # baselines, with no refit.
-    assert [(c.id, c.model) for c in REPO_POLICY.chain()] == [
-        ("bvd", "renewalbvd"),
-        ("renewalsp", "renewalsp"),
-        ("main", "renewal"),
-        ("randomwalknowcast", "randomwalknowcast"),
-        ("randomwalk", ""),
-    ]
-    assert REPO_POLICY.stage("retry") == []
-    assert REPO_POLICY.for_model("renewalbvd") == REPO_POLICY
-
-
 def test_a_chosen_model_starts_the_chain() -> None:
     # The chain runs on from the chosen model; those before it are
     # shadows.
-    pol = REPO_POLICY.for_model("renewalsp")
+    pol = POLICY.for_model("renewalsp")
     assert [c.id for c in pol.chain()] == [
         "renewalsp",
         "main",
@@ -447,7 +369,7 @@ def test_a_chosen_model_starts_the_chain() -> None:
 def test_a_chosen_variant_falls_back_to_the_random_walk(
     tmp_path: Path,
 ) -> None:
-    pol = REPO_POLICY.for_model("renewal")
+    pol = POLICY.for_model("renewal")
     c = tmp_path / "c"
     chain(
         c,
@@ -456,13 +378,5 @@ def test_a_chosen_variant_falls_back_to_the_random_walk(
         randomwalknowcast=(None, "pass"),
         randomwalk=(None, "pass"),
     )
-    prov = run_select(pol, c, tmp_path / "g", always("pass"), False, False)
+    prov = run_select(pol, c, tmp_path / "g", always("pass"), shadows=False)
     assert prov["selected"] == "randomwalknowcast"
-
-
-def test_no_refit_when_the_chain_has_none(tmp_path: Path) -> None:
-    # The repository chain has no retry leg, so a failed fit is not
-    # refitted: the chain moves on.
-    c = tmp_path / "c"
-    chain(c, bvd=("fail", "pass"))
-    assert not triage(REPO_POLICY, c)

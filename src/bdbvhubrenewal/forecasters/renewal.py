@@ -21,7 +21,7 @@ This module reads only `ModelConfig`, `MAIN`, `BVD`, `build_model`,
 `model_args`, `model.EXTRA_FIELDS`, `forecast_trajectories` and
 `adapter.vintage_from_tables` from the subpackage, so a new model version
 drops in if it keeps those. Sampling is here (`run_nuts`), so the CI's
-sampler table, including jittered inits, applies in full.
+sampler table applies in full.
 """
 
 from __future__ import annotations
@@ -57,7 +57,6 @@ __all__ = [
     "DEFAULT_SAMPLER",
     "FIT_VARIANTS",
     "HUB_MODEL",
-    "JITTER_RADIUS",
     "SAMPLER_ENV",
     "SINGLE_PATCH_MIN_CASES",
     "SINGLE_PATCH_WEEKS",
@@ -248,16 +247,10 @@ def sampler_settings(
     return {**DEFAULT_SAMPLER, **env, **dict(overrides or {})}
 
 
-JITTER_RADIUS: Final = 1.0
-"""Half-width of the uniform jittered inits, on the unconstrained scale."""
-
-
 def init_strategy(sampler: Mapping[str, Any]) -> Any:
     """Return NumPyro's init strategy for a sampler table.
 
-    `init = "jitter"` (the CI's retry) starts each chain at its own
-    uniform draw within `JITTER_RADIUS` of zero on the unconstrained
-    scale. Otherwise chains start at the prior median, as in BVDOutbreakSize.
+    Chains start at the prior median, as in BVDOutbreakSize.
 
     Parameters
     ----------
@@ -274,14 +267,12 @@ def init_strategy(sampler: Mapping[str, Any]) -> Any:
     ValueError
         On an unknown `init`.
     """
-    from numpyro.infer import init_to_median, init_to_uniform
+    from numpyro.infer import init_to_median
 
     init = sampler.get("init", "median")
-    if init == "jitter":
-        return init_to_uniform(radius=JITTER_RADIUS)
     if init == "median":
         return init_to_median(num_samples=15)
-    raise ValueError(f"Unknown init {init!r}: use 'median' or 'jitter'.")
+    raise ValueError(f"Unknown init {init!r}: use 'median'.")
 
 
 def nuts_kernel(model_fn: Any, sampler: Mapping[str, Any]) -> Any:

@@ -5,7 +5,7 @@ name: Submit to the BDBV hub
 # CI: the gate below decides, and the PR body says what was submitted
 # and why. See ci/SETUP.md and ci/INTEGRATION.md.
 #
-#   detect -> prepare -> fit (main, renewalsp, bvd) -> triage -> [retry] ->
+#   detect -> prepare -> fit (bvd, renewalsp, main) ->
 #   gate (select + hubValidations) -> submit -> record -> outcome
 #
 # DRY_RUN is true unless the repo variable DRY_RUN is `false` or a manual
@@ -20,11 +20,10 @@ on:
     - cron: '0 23 * * 6'       # Saturday 23:00 UTC, as the window opens
     - cron: '0 2-23/3 * * 0,1' # every 3 hours on Sunday and Monday
     # Tuesday until 14:00 UTC, which leaves 540 minutes to the close for
-    # prepare, the main fit (about 1 to 1.5 hours, renewalsp beside
-    # it), one retry of about the same length, and the gate. Each fit's
-    # timeout stops 45 minutes short of the close, and the retry runs only
-    # if it can finish in time (ci/policy.toml [timing]), so even a late
-    # failure reaches the fallback or random walk before the close.
+    # prepare, the fits (about 1 to 1.5 hours, in parallel) and the gate.
+    # Each fit's timeout stops 45 minutes short of the close
+    # (ci/policy.toml [timing]), so even a late failure reaches the
+    # fallback or random walk before the close.
     - cron: '0 2-14/3 * * 2'
     # Outside the window, only to freeze the pages of merged rounds.
     - cron: '0 6 * * 3-5'
@@ -215,78 +214,15 @@ jobs:
     uses: ./.github/workflows/fit-candidates.yml
     with:
       matrix: ${{ needs.prepare.outputs.matrix }}
-      stage: primary
-      reference_date: ${{ needs.detect.outputs.reference_date }}
-      expected_locations: ${{ vars.EXPECTED_LOCATIONS }}
-
-  triage:
-    name: Decide on retries
-    needs: [detect, prepare, fit]
-    if: >-
-      ${{ !cancelled() && needs.prepare.result == 'success' &&
-      needs.prepare.outputs.renewal == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      need_retry: ${{ steps.triage.outputs.need_retry }}
-      matrix: ${{ steps.matrix.outputs.matrix }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v7
-      - uses: actions/download-artifact@v8
-        with:
-          name: inputs
-          path: ${{ env.WORK }}
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: candidate-*
-          path: ${{ env.WORK }}/candidates
-      # download-artifact puts each artefact in a directory named after
-      # it; the candidate id is the name without the prefix.
-      - name: Lay out the candidates
-        run: ci/steps/unpack_candidates.sh
-      # No refit when too little of the window is left for it and the
-      # gate: the chain then moves on to the single-patch fallback.
-      - name: Triage
-        id: triage
-        env:
-          REFERENCE_DATE: ${{ needs.detect.outputs.reference_date }}
-          IGNORE_WINDOW: ${{ inputs.ignore_window }}
-        run: |
-          source ci/steps/lib.sh
-          # shellcheck disable=SC2046
-          uv run --project "$CI_DIR" python -m submission_ci.select_candidate \
-            triage --policy "$CI_DIR/policy.toml" --candidates "$WORK/candidates" \
-            --model "$MODEL" $(deadline_args)
-      - name: List the retries
-        id: matrix
-        if: steps.triage.outputs.need_retry == 'true'
-        env:
-          HUB_REF: ${{ needs.detect.outputs.hub_ref }}
-          REFERENCE_DATE: ${{ needs.detect.outputs.reference_date }}
-          IGNORE_WINDOW: ${{ inputs.ignore_window }}
-        run: |
-          source ci/steps/lib.sh
-          # shellcheck disable=SC2046
-          uv run --project "$CI_DIR" python -m submission_ci.policy \
-            --policy "$CI_DIR/policy.toml" --stage retry --hub-ref "$HUB_REF" \
-            --model "$MODEL" $(deadline_args)
-
-  retry:
-    name: Fit retries
-    needs: [detect, triage]
-    if: ${{ !cancelled() && needs.triage.outputs.need_retry == 'true' }}
-    uses: ./.github/workflows/fit-candidates.yml
-    with:
-      matrix: ${{ needs.triage.outputs.matrix }}
-      stage: retry
       reference_date: ${{ needs.detect.outputs.reference_date }}
       expected_locations: ${{ vars.EXPECTED_LOCATIONS }}
 
   gate:
     name: Select and validate
-    needs: [detect, triage, retry]
-    if: ${{ !cancelled() && needs.triage.result == 'success' }}
+    needs: [detect, prepare, fit]
+    if: >-
+      ${{ !cancelled() && needs.prepare.result == 'success' &&
+      needs.prepare.outputs.renewal == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     outputs:
@@ -346,7 +282,6 @@ jobs:
         id: select
         continue-on-error: true
         env:
-          RETRIED: ${{ needs.triage.outputs.need_retry }}
           # The Python checks (hub_validate) always run; HUB_VALIDATIONS
           # turns off only the R hubValidations step.
           VALIDATE: 'true'
@@ -571,7 +506,7 @@ jobs:
 
   outcome:
     name: Submission outcome
-    needs: [detect, prepare, fit, triage, retry, gate, submit, baseline, record]
+    needs: [detect, prepare, fit, gate, submit, baseline, record]
     if: ${{ always() && needs.detect.outputs.should_run == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5

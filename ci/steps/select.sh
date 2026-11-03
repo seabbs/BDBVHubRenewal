@@ -2,7 +2,6 @@
 # Walk the fallback chain over the candidates in $WORK/candidates and
 # write $WORK/gate (provenance and the selected candidate).
 #
-#   RETRIED=true         the retry stage ran
 #   VALIDATE=true|false  run the hub validation hook (default true)
 #   NO_SHADOWS=true      leave the shadow candidates out (track.sh)
 #   ONLY_MODEL=true      submit $MODEL or nothing, never another candidate
@@ -11,11 +10,8 @@
 # shellcheck source=ci/steps/lib.sh
 source "$(dirname "$0")/lib.sh"
 
-args=(select --policy "$POLICY" --candidates "$WORK/candidates" --model "$MODEL"
+args=(--policy "$POLICY" --candidates "$WORK/candidates" --model "$MODEL"
   --out "$WORK/gate")
-if [ "${RETRIED:-false}" = "true" ]; then
-  args+=(--retried)
-fi
 if [ "${NO_SHADOWS:-false}" = "true" ]; then
   args+=(--no-shadows)
 fi

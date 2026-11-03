@@ -5,7 +5,16 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import AS_OF, HUB, REF, make_samples, weeks, write_samples
+from conftest import (
+    AS_OF,
+    HUB,
+    POLICY,
+    POLICY_PATH,
+    REF,
+    make_samples,
+    weeks,
+    write_samples,
+)
 
 from submission_ci.check_forecast import main, repair_national, run_checks
 from submission_ci.common import read_json
@@ -20,6 +29,7 @@ def statuses(path: Path, **kwargs: Any) -> dict[str, str]:
     checks = run_checks(
         path,
         reference_date=REF,
+        settings=POLICY.checks,
         observed=OBS,
         expected_locations=LOCS,
         tasks=TASKS,
@@ -97,6 +107,7 @@ def _checks(path: Path, **kwargs: Any) -> dict[str, Any]:
     checks = run_checks(
         path,
         reference_date=REF,
+        settings=POLICY.checks,
         observed=OBS,
         expected_locations=LOCS,
         tasks=TASKS,
@@ -196,6 +207,8 @@ def test_cli_reads_national_sidecar(tmp_path: Path) -> None:
         REF,
         "--observed",
         str(HUB / "time-series.csv"),
+        "--policy",
+        str(POLICY_PATH),
         "--out",
         str(tmp_path / "o"),
         "--national-sidecar",
@@ -285,18 +298,18 @@ def test_location_not_in_tasks_fails(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("growth", "status"), [(1.5, "pass"), (2.5, "warn"), (5.0, "fail")]
+    ("growth", "status"), [(1.5, "pass"), (2.5, "warn"), (5.0, "warn")]
 )
 def test_growth_levels(tmp_path: Path, growth: float, status: str) -> None:
     assert statuses(sub(tmp_path, growth=growth))["growth"] == status
 
 
-def test_bounds_fail_on_explosion(tmp_path: Path) -> None:
-    assert statuses(sub(tmp_path, growth=8.0))["bounds"] == "fail"
+def test_bounds_warn_on_explosion(tmp_path: Path) -> None:
+    assert statuses(sub(tmp_path, growth=8.0))["bounds"] == "warn"
 
 
 @pytest.mark.parametrize(
-    ("scale", "status"), [(1.0, "pass"), (3.0, "warn"), (8.0, "fail")]
+    ("scale", "status"), [(1.0, "pass"), (3.0, "warn"), (8.0, "warn")]
 )
 def test_observed_levels(tmp_path: Path, scale: float, status: str) -> None:
     levels = {
@@ -333,6 +346,8 @@ def test_cli_writes_report(tmp_path: Path) -> None:
         REF,
         "--observed",
         str(HUB / "time-series.csv"),
+        "--policy",
+        str(POLICY_PATH),
         "--tasks",
         str(HUB / "tasks.json"),
         "--out",
@@ -362,6 +377,8 @@ def test_cli_missing_file_is_error(tmp_path: Path) -> None:
                 REF,
                 "--observed",
                 str(HUB / "time-series.csv"),
+                "--policy",
+                str(POLICY_PATH),
                 "--out",
                 str(tmp_path),
             ]
@@ -400,7 +417,8 @@ def with_zones(rows: list[list[Any]], skip: str = "", off: float = 0.0) -> None:
 def test_zones_required_and_present(tmp_path: Path) -> None:
     f = sub(tmp_path, mutate=with_zones)
     checks = {c.name: c for c in run_checks(
-        f, reference_date=REF, observed=read_observed(HUB / "time-series.csv"),
+        f, reference_date=REF,
+        settings=POLICY.checks, observed=read_observed(HUB / "time-series.csv"),
         require_zones=True,
     )}  # fmt: skip
     assert checks["zones"].status == "pass"
@@ -412,18 +430,21 @@ def test_missing_zones_fail_when_required(tmp_path: Path) -> None:
     obs = read_observed(HUB / "time-series.csv")
     none = sub(tmp_path)
     check = {c.name: c for c in run_checks(
-        none, reference_date=REF, observed=obs, require_zones=True
+        none, reference_date=REF,
+        settings=POLICY.checks, observed=obs, require_zones=True
     )}["zones"]  # fmt: skip
     assert check.status == "fail"
     part = sub(tmp_path / "p", mutate=lambda r: with_zones(r, skip="CD-NK"))
     check = {c.name: c for c in run_checks(
-        part, reference_date=REF, observed=obs, require_zones=True
+        part, reference_date=REF,
+        settings=POLICY.checks, observed=obs, require_zones=True
     )}["zones"]  # fmt: skip
     assert check.status == "fail"
     assert "CD-NK" in check.summary
     # Not required: no zones is fine.
     check = {c.name: c for c in run_checks(
-        none, reference_date=REF, observed=obs
+        none, reference_date=REF,
+        settings=POLICY.checks, observed=obs
     )}["zones"]  # fmt: skip
     assert check.status == "skip"
 
@@ -431,7 +452,8 @@ def test_missing_zones_fail_when_required(tmp_path: Path) -> None:
 def test_zones_that_do_not_add_up_warn(tmp_path: Path) -> None:
     f = sub(tmp_path, mutate=lambda r: with_zones(r, off=1.0))
     check = {c.name: c for c in run_checks(
-        f, reference_date=REF, observed=read_observed(HUB / "time-series.csv"),
+        f, reference_date=REF,
+        settings=POLICY.checks, observed=read_observed(HUB / "time-series.csv"),
         require_zones=True,
     )}["zones"]  # fmt: skip
     assert check.status == "warn"
@@ -455,6 +477,7 @@ def test_heavy_upper_tail_is_ruled_out(tmp_path: Path) -> None:
 
     checks = {c.name: c for c in run_checks(
         sub(tmp_path, mutate=mutate, national=False), reference_date=REF,
+        settings=POLICY.checks,
         observed=read_observed(HUB / "time-series.csv"),
     )}  # fmt: skip
     assert checks["plausible"].status == "fail"
@@ -464,7 +487,7 @@ def test_heavy_upper_tail_is_ruled_out(tmp_path: Path) -> None:
 def test_collapse_to_near_zero_is_ruled_out(tmp_path: Path) -> None:
     low = {"CD-IT": 1.0, "CD-NK": 80.0, "CD-HU": 15.0}
     checks = {c.name: c for c in run_checks(
-        sub(tmp_path, levels=low), reference_date=REF,
+        sub(tmp_path, levels=low), reference_date=REF, settings=POLICY.checks,
         observed=read_observed(HUB / "time-series.csv"),
     )}  # fmt: skip
     assert checks["plausible"].status == "fail"
@@ -472,10 +495,14 @@ def test_collapse_to_near_zero_is_ruled_out(tmp_path: Path) -> None:
 
 
 def test_plausible_thresholds_are_settings(tmp_path: Path) -> None:
-    loose = {"plausible_median_ratio": 1e6, "plausible_q975_ratio": 1e9}
+    loose = {
+        **POLICY.checks,
+        "plausible_median_ratio": 1e6,
+        "plausible_q975_ratio": 1e9,
+    }
     checks = {c.name: c for c in run_checks(
-        sub(tmp_path, growth=8.0), reference_date=REF,
-        observed=read_observed(HUB / "time-series.csv"), settings=loose,
+        sub(tmp_path, growth=8.0), reference_date=REF, settings=loose,
+        observed=read_observed(HUB / "time-series.csv"),
     )}  # fmt: skip
     assert checks["plausible"].status == "pass"
 
@@ -507,6 +534,7 @@ def test_forecast_date_must_be_valid_and_not_after_reference(
         for c in run_checks(
             path,
             reference_date=REF,
+            settings=POLICY.checks,
             observed=OBS,
             expected_locations=LOCS,
             tasks=TASKS,

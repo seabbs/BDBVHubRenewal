@@ -37,7 +37,7 @@ Fit timeouts are set against the window's close (`[timing]` in `ci/policy.toml`)
 
 ## Checks
 
-An invalid file, a clearly broken fit or a forecast far from the recent data rules a candidate out.
+An invalid file, a fit past the convergence failure thresholds or a forecast far from the recent data rules a candidate out.
 Thresholds are in `ci/policy.toml`.
 
 | check | rules out | warns |

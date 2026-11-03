@@ -156,9 +156,7 @@ def status_line(
     if coherence is not None and coherence.status == "warn":
         names.append("data coherence")
     why = _first_reason(provenance)
-    if kind == "retry" and why:
-        head = f"Main model refitted once: {why[0].lower()}{why[1:]}."
-    elif kind in ("fallback", "randomwalk") and not _first_choice(provenance):
+    if kind in ("fallback", "randomwalk") and not _first_choice(provenance):
         head = (
             f"Fallback model used ({provenance['produced_by']})"
             + (f": {why[0].lower()}{why[1:]}" if why else "")
@@ -213,15 +211,8 @@ def _checks_section(
 
 
 def _why(a: Mapping[str, Any]) -> str:
-    """Why an attempt was passed over: its first reason, or its refit."""
-    if a.get("reasons"):
-        return str(a["reasons"][0])
-    if a.get("retry"):
-        return next(
-            (str(w) for w in a.get("warnings", []) if "retry threshold" in w),
-            "refitted once",
-        )
-    return ""
+    """Why an attempt was passed over: its first reason."""
+    return str(a["reasons"][0]) if a.get("reasons") else ""
 
 
 def _chain_section(provenance: Mapping[str, Any]) -> str:

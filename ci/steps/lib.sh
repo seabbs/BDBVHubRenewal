@@ -106,7 +106,7 @@ xla_flags_for() {
   echo "${rest:+$rest }--xla_force_host_platform_device_count=$n"
 }
 
-# The round's window, so fit timeouts and the retry leave the gate time
+# The round's window, so fit timeouts leave the gate time
 # before it closes (ci/policy.toml [timing]). Word-split on purpose.
 deadline_args() {
   local args="--reference-date ${REFERENCE_DATE:-}"

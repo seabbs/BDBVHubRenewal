@@ -5,32 +5,26 @@
 # says where the chain starts. Only seabbs-rwnowcast has no fallback
 # (ci/steps/track.sh).
 
-[policy]
-# No refits: a candidate past the convergence thresholds is ruled out and
-# the chain moves on. The content-hash fit cache is reused across re-runs.
-retry_budget = 0
+# There are no refits: a candidate past the convergence thresholds is
+# ruled out and the chain moves on. The content-hash fit cache is reused
+# across re-runs.
 
 # Minutes the chain plans with. Measured on the 2026-10-24 vintage
 # (jax-review-1, vectorised chains on 2 cores of archie) at 4 chains x
-# 2000 iterations: main 130 and the retry 134 minutes of sampling. Nearly
+# 2000 iterations: 130 minutes of sampling for the main model. Nearly
 # every draw reaches the maximum tree depth, so cost follows iterations,
 # and the 2 x 1000 used below take about a quarter: 35 to 45 minutes. The single-patch
 # fallback took 21 minutes at 2 x 1000 for all six streams. Hosted
 # runners are 1.2 to 1.5 times slower, so each main fit job takes about
-# 1 to 1.5 hours with setup (to be re-measured). The fallback fits beside
-# main and random walk is built in `prepare`, so only the retry runs
-# after main.
+# 1 to 1.5 hours with setup (to be re-measured). Every renewal candidate
+# fits in parallel and random walk is built in `prepare`.
 [timing]
 # GitHub's 360-minute job cap, less a margin.
 fit_cap_minutes = 350
-# Kept free before the window closes for triage, the gate (hubValidations)
+# Kept free before the window closes for the gate (hubValidations)
 # and the pull request. Every fit job's timeout stops this short of the
 # close, so the gate always runs in time with the fallback or randomwalk.
 reserve_minutes = 45
-# What a refit needs on a hosted runner: 45 minutes x 1.5, plus setup,
-# with margin. With less time than this plus the reserve left
-# after main, the refit is skipped and the chain moves on to the fallback.
-retry_minutes = 105
 # The shortest timeout a fit job gets, however late it starts.
 min_fit_minutes = 30
 
@@ -105,8 +99,7 @@ divergent_fraction = 0.01
 # Coverage is the share of observed counts inside the predictive
 # interval of `level`, for `stream`, over every in-sample week and over
 # the last `recent_weeks` complete weeks. A model with no posterior is
-# n/a. Each value can be overridden by an environment variable or repo
-# variable BDBV_PPC_<KEY>, for example BDBV_PPC_COVERAGE_WARN.
+# n/a.
 # Posterior predictive checks: reported only, never gated. Below
 # `coverage_warn` the PR warns; below `coverage_fail` it calls the
 # coverage poor. Model choice comes from the backtest.
@@ -123,9 +116,9 @@ pit_min_rows = 20
 
 # Plausibility and consistency checks on the forecast file. Ratios are
 # symmetric: a ratio r is breached when the value is above r times or
-# below 1/r times the reference. A threshold of 0 turns a level off.
+# below 1/r times the reference.
 # The format checks (schema, values, samples) and `plausible` fail; the
-# national sum is rebuilt by construction, and the other checks warn.
+# national sum is rebuilt by construction, and the other checks only warn.
 [checks]
 samples = 100
 horizon_weeks = 3          # target end dates required after the reference date
@@ -151,10 +144,8 @@ plausible_low_ratio = 20.0
 # the largest weekly count the location has ever had (floored).
 bound_floor = 20
 bound_warn = 5
-bound_fail = 0
 # Week-on-week growth of the median trajectory over the forecast weeks.
 growth_warn = 2.0
-growth_fail = 0
 # Median of the submitted back weeks against the observed counts in the
 # last complete weeks (weeks ending at least `complete_lag_weeks` before
 # the data vintage). Counts are offset by `ratio_offset` first.
@@ -162,12 +153,9 @@ complete_lag_weeks = 4
 complete_weeks = 2
 ratio_offset = 5
 observed_warn = 2.0
-observed_fail = 0
 # Median of the forecast weeks against the random walk baseline. A
 # departure is flagged, never failed.
 baseline_warn = 3.0
-baseline_fail = 0
 # Median of the weeks shared with last week's submission. Revisions are
 # expected, so this only warns.
 previous_warn = 2.0
-previous_fail = 0

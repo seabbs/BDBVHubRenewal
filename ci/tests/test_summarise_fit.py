@@ -3,38 +3,30 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import diagnostics, write_json
+from conftest import POLICY, POLICY_PATH, diagnostics, write_json
 
 from submission_ci.common import read_json
-from submission_ci.summarise_fit import (
-    DEFAULT_THRESHOLDS,
-    check_fit,
-    headline,
-    main,
-    markdown,
-    thresholds,
-)
+from submission_ci.summarise_fit import check_fit, headline, main, markdown
 
-LIMITS = thresholds()
+LIMITS = POLICY.convergence
 
 
-def test_defaults_match_bvdoutbreaksize() -> None:
-    # docs/fits/convergence.jl in BVDOutbreakSize: its fail level is the
-    # retry level here, and only a clearly broken fit fails.
-    assert DEFAULT_THRESHOLDS["retry"] == {
+def test_policy_matches_bvdoutbreaksize() -> None:
+    # docs/fits/convergence.jl in BVDOutbreakSize: past its failure
+    # thresholds a fit is ruled out.
+    assert set(LIMITS) == {"fail", "warn"}
+    assert LIMITS["fail"] == {
         "rhat": 1.1,
-        "ess_bulk": 25.0,
-        "ess_tail": 25.0,
+        "ess_bulk": 25,
+        "ess_tail": 25,
         "divergent_fraction": 0.05,
     }
-    assert DEFAULT_THRESHOLDS["warn"] == {
+    assert LIMITS["warn"] == {
         "rhat": 1.05,
-        "ess_bulk": 100.0,
-        "ess_tail": 100.0,
+        "ess_bulk": 100,
+        "ess_tail": 100,
         "divergent_fraction": 0.01,
     }
-    fail = DEFAULT_THRESHOLDS["fail"]
-    assert fail["rhat"] > 1.1 and fail["ess_bulk"] < 25
 
 
 def test_headline_skips_undefined_entries() -> None:
@@ -51,19 +43,14 @@ def test_headline_skips_undefined_entries() -> None:
         ({"rhat": 1.07}, "warn"),
         ({"ess": 60}, "warn"),
         ({"div": 80}, "warn"),  # 2% of draws
-        ({"rhat": 1.3}, "warn-retry"),
-        ({"ess": 20}, "warn-retry"),
-        ({"div": 400}, "warn-retry"),  # 10% of draws
-        ({"rhat": 1.6}, "fail"),
-        ({"ess": 5}, "fail"),
-        ({"div": 1000}, "fail"),  # 25% of draws
+        ({"rhat": 1.3}, "fail"),
+        ({"ess": 20}, "fail"),
+        ({"div": 400}, "fail"),  # 10% of draws
     ],
 )
 def test_verdict_levels(kwargs: dict[str, float], status: str) -> None:
     c = check_fit("main", diagnostics(**kwargs), LIMITS)  # type: ignore[arg-type]
-    want, _, retry = status.partition("-")
-    assert c.status == want
-    assert c.retry is bool(retry)
+    assert c.status == status
 
 
 def test_missing_diagnostics_is_an_error() -> None:
@@ -82,24 +69,11 @@ def test_failure_lists_culprits() -> None:
     md = markdown([c], LIMITS)
     assert "Worst-mixing parameters" in md and "**fail**" in md
     assert "1.800" in md  # R-hat to three decimals
-    assert "Refit once" in md
-
-
-def test_env_overrides_and_rejects_nonfinite(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("BDBV_CONVERGENCE_FAIL_RHAT", "1.05")
-    assert thresholds()["fail"]["rhat"] == 1.05
-    monkeypatch.setenv("BDBV_CONVERGENCE_FAIL_RHAT", "inf")
-    with pytest.raises(ValueError, match="finite"):
-        thresholds()
-    monkeypatch.setenv("BDBV_CONVERGENCE_FAIL_RHAT", "abc")
-    with pytest.raises(ValueError, match="not a number"):
-        thresholds()
+    assert "Ruled out (fall back)" in md
 
 
 def test_policy_thresholds_apply() -> None:
-    lim = thresholds({"fail": {"rhat": 1.02}})
+    lim = {**LIMITS, "fail": {**LIMITS["fail"], "rhat": 1.02}}
     assert check_fit("m", diagnostics(rhat=1.03), lim).status == "fail"
 
 
@@ -115,6 +89,8 @@ def test_cli_exit_codes_and_outputs(
             [
                 "--id",
                 "m",
+                "--policy",
+                str(POLICY_PATH),
                 "--diagnostics",
                 str(good),
                 "--out",
@@ -128,6 +104,8 @@ def test_cli_exit_codes_and_outputs(
             [
                 "--id",
                 "m",
+                "--policy",
+                str(POLICY_PATH),
                 "--diagnostics",
                 str(bad),
                 "--out",
@@ -141,6 +119,8 @@ def test_cli_exit_codes_and_outputs(
             [
                 "--id",
                 "m",
+                "--policy",
+                str(POLICY_PATH),
                 "--diagnostics",
                 str(tmp_path / "nope.json"),
                 "--out",
@@ -154,6 +134,8 @@ def test_cli_exit_codes_and_outputs(
             [
                 "--id",
                 "m",
+                "--policy",
+                str(POLICY_PATH),
                 "--diagnostics",
                 str(bad),
                 "--out",
@@ -165,7 +147,7 @@ def test_cli_exit_codes_and_outputs(
     )
     data = read_json(tmp_path / "b" / "fit-summary.json")
     assert (
-        data["status"] == "fail" and data["thresholds"]["retry"]["rhat"] == 1.1
+        data["status"] == "fail" and data["thresholds"]["fail"]["rhat"] == 1.1
     )
     assert "Fit convergence" in summary.read_text()
 
@@ -196,7 +178,16 @@ def test_bvd_release_is_carried_into_the_summary(tmp_path: Path) -> None:
     write_json(path, diagnostics() | {"bvd": release})
     assert (
         main(
-            ["--id", "bvd", "--diagnostics", str(path), "--out", str(tmp_path)]
+            [
+                "--id",
+                "bvd",
+                "--diagnostics",
+                str(path),
+                "--out",
+                str(tmp_path),
+                "--policy",
+                str(POLICY_PATH),
+            ]
         )
         == 0
     )

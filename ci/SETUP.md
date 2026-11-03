@@ -11,10 +11,8 @@ It is safe to install as is, because `DRY_RUN` is on until you turn it off.
 | --- | --- |
 | `detect` | Runs on schedule from Saturday 23:00 UTC (Sunday 00:00 Kinshasa) to Tuesday. It compares the hub's newest data commit and `as_of` with the ledger and stops unless there is new data for the open round. |
 | `prepare` | Pins the hub data at one commit and builds the random walk candidate, which is also the baseline for the checks. |
-| `fit` | A matrix over the primary candidates (`main`, the single-patch fallback `renewalsp` and the `bvd` shadow), fitted in parallel. Each fit is cached under a content hash of the model source, the hub commit and its sampler settings. |
-| `triage` | Says whether `main` needs its one refit (past the convergence retry thresholds, or ruled out). |
-| `retry` | Only if `main` needs it: one refit with smaller steps and jittered inits, costing about as much as `main`, and only with time left for it before the window closes. |
-| `gate` | Walks the chain `main` → `retry-1` → `renewalsp` → `randomwalk`, handling problems rather than failing on them. A candidate is ruled out only if its fit is clearly broken or its file is invalid (format checks or hubValidations). |
+| `fit` | A matrix over the renewal candidates (`bvd`, `renewalsp` and `main`), fitted in parallel. Each fit is cached under a content hash of the model source, the hub commit and its sampler settings. |
+| `gate` | Walks the chain `bvd` → `renewalsp` → `main` → `randomwalknowcast` → `randomwalk`. A candidate is ruled out if its fit is past the convergence failure thresholds, its forecast is far from the recent data, or its file is invalid (format checks or hubValidations). |
 | `submit` | Publishes the plot, builds the PR body, and opens or updates the PR. A dry run prints the body instead. |
 | `record` | Live runs only. Writes the outcome to `state.json` on the `submission-ledger` branch and archives the round's files there. |
 | `outcome` | Fails the run if the round was skipped or a job broke, so you are notified. |
@@ -73,8 +71,6 @@ Settings → Secrets and variables → Actions → **Variables**:
 | `EXPECTED_LOCATIONS` | none | For example `CD,CD-IT,CD-NK,CD-HU,CD-TO`. The coverage check fails if any is missing. |
 | `HUB_VALIDATIONS` | on | `false` skips the R hubValidations step and keeps the Python checks. |
 | `FIT_RUNNER` | `ubuntu-latest` | Runner label for the fit jobs (see Runtimes). |
-| `BDBV_CONVERGENCE_{FAIL,RETRY,WARN}_{RHAT,ESS_BULK,ESS_TAIL,DIVERGENT}` | `ci/policy.toml` | Override a convergence threshold. |
-| `BDBV_PPC_{COVERAGE_WARN,COVERAGE_FAIL,LEVEL,RECENT_WEEKS,PIT_KS_WARN,PIT_MIN_ROWS}` | `ci/policy.toml` `[ppc]` | Override a posterior predictive check threshold. |
 
 ### 4. Repository settings
 
@@ -140,22 +136,17 @@ Scheduled starts can be late by minutes, or dropped when GitHub is busy.
 The 3-hourly schedule covers that.
 
 Every fit runs 2 chains of 500 warm-up and 500 draws (`ci/policy.toml`).
-On the 2026-10-24 vintage, with vectorised chains on 2 cores of archie, 4 chains of 1000 warm-up and 1000 draws took 130 minutes of sampling for the main fit and 134 for the retry.
+On the 2026-10-24 vintage, with vectorised chains on 2 cores of archie, 4 chains of 1000 warm-up and 1000 draws took 130 minutes of sampling for the main fit.
 Nearly every draw reaches the maximum tree depth, so cost follows the number of NUTS iterations, and the current settings take about a quarter of that, 35 to 45 minutes.
 The single-patch fallback (`renewalsp`) took 21 minutes of sampling for its six independent fits (the country and five provinces), so it is ready before the main fit.
 Hosted runners are 1.2 to 1.5 times slower, so each fit job takes about 1 to 1.5 hours with setup.
 These times are to be re-measured on the current model.
 Time a real fit with a dry run on a past vintage (see above), and read the `Fit took N s` line in the job summary.
 
-The whole chain runs in sequence: prepare (random walk), then main with the single-patch fallback beside it, then at most one retry, then the gate.
+The chain runs prepare (random walk), then every renewal fit in parallel, then the gate.
 From the last Tuesday start at 14:00 UTC there are 540 minutes to the close.
-A main fit of normal length leaves time for the retry.
-Two rules keep the chain inside the window when a fit runs late:
-
-- Every fit job's timeout leaves `reserve_minutes` (45) before the close for the gate and the pull request.
-- The retry runs only when `retry_minutes` (105) plus that reserve are left after the main fit. Otherwise the chain moves on to the fallback, which is already fitted, and the job summary says so.
-
-So a main fit that runs to its timeout still reaches the fallback or random walk before the close.
+Every fit job's timeout leaves `reserve_minutes` (45) before the close for the gate and the pull request.
+So a fit that runs to its timeout still reaches the fallback or random walk before the close.
 `max_tree_depth` is set per candidate in `ci/policy.toml`.
 
 If fits come close to the cap:
@@ -167,7 +158,7 @@ If fits come close to the cap:
    The coupled main model cannot.
 3. Start earlier.
    Data usually land on Friday or Saturday, and the window opens Sunday.
-   The last scheduled start on Tuesday is 14:00 UTC, which leaves 540 minutes before the window closes for the main fit, one retry of about the same length, and the gate.
+   The last scheduled start on Tuesday is 14:00 UTC, which leaves 540 minutes before the window closes for the fits and the gate.
 4. Use a bigger machine through `FIT_RUNNER`.
    GitHub's larger runners need a paid Team or Enterprise organisation, for example if the repo moves to `epiforecasts`.
    A self-hosted runner works too.
@@ -176,9 +167,8 @@ If fits come close to the cap:
 ## The fallback chain
 
 The chain is set in `ci/policy.toml`.
-It should rarely move past the main model.
 Problems are handled where they can be, and the PR body leads with a `Handled:` line saying what was handled and how.
-For example: "Handled: main model refitted once (max R-hat is 1.2, past the retry threshold 1.1)."
+For example: "Handled: delays: used the 2026-10-17 vintage, the latest available."
 When a fallback is used, the status line names it and why, for example "Fallback model used (random walk baseline): main model was ruled out (convergence: min bulk ESS is 8, past the failure threshold 10)."
 The same text goes to `provenance.json` in the `gate` artefact, to the job summary and to the ledger.
 A round is skipped only if even random walk fails hub validation.
@@ -186,13 +176,13 @@ A round is skipped only if even random walk fails hub validation.
 A suggested general line for the model metadata's `methods_long`:
 
 > Submissions are produced automatically each week.
-> If the main model's fit does not converge, we refit it once with more conservative sampler settings and, only if both are clearly broken, submit independent single-patch renewal fits for each province and the country, or a random walk baseline.
+> If a renewal model's fit does not converge, we submit the next, simpler renewal model, and a random walk baseline if none converges.
 > Each submission's pull request states which was used and why.
 
 ## Where this approach comes from
 
 - **Fit monitoring and the matrix.** These follow `epiforecasts/BVDOutbreakSize`: `docs.yml`, `docs/fits/convergence.jl`, `docs/fits/check_convergence.jl` and `scripts/fetch_fits.sh`.
-  That means the same fail and warn thresholds, two levels, environment overrides that must be finite, and treating a fit that cannot be judged as a failure.
+  That means the same fail and warn thresholds, two levels, and treating a fit that cannot be judged as a failure.
   It also means one matrix job per fit, content-hash fit caches with separate restore and save, a once-a-minute progress heartbeat, short-lived fit artefacts, and a report in the job summary.
 - **Fork and PR mechanics.** These follow `epiforecasts/cityforecasts` (`bin/submit_to_hub.sh` and `.github/workflows/submit-to-hub.yaml`).
   That means a classic PAT, a branch per round cut from the hub's `main`, a force push, finding the open PR by head branch and fork owner, and `gh pr create --head owner:branch`.

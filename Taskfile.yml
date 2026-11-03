@@ -136,7 +136,7 @@ tasks:
       - uv run --quiet --project ci submission-preflight {{.CLI_ARGS}}
 
   ci-dry:
-    desc: "Dry run of the submission workflow on fixture data (all scenarios, or one: task ci-dry -- retry)"
+    desc: "Dry run of the submission workflow on fixture data (all scenarios, or one: task ci-dry -- fallback)"
     cmds:
       - ci/run_dry.sh {{.CLI_ARGS}}
 

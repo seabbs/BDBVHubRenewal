@@ -14,9 +14,12 @@ from typing import Any
 import pytest
 
 from submission_ci.common import CommandError, CommandResult, subprocess_runner
+from submission_ci.policy import load_policy
 
 FIXTURES = Path(__file__).parents[1] / "fixtures"
 HUB = FIXTURES / "hub"
+POLICY_PATH = Path(__file__).parents[1] / "policy.toml"
+POLICY = load_policy(POLICY_PATH)
 REF = "2026-11-07"
 AS_OF = "2026-10-31"
 FORECAST_DATE = "2026-11-02"

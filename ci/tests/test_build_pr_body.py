@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import REF, make_samples, write_json, write_samples
+from conftest import POLICY, REF, make_samples, write_json, write_samples
 from test_check_coherence import GAP, coherence
 from test_check_ppc import ppc
 
@@ -180,34 +180,17 @@ def test_fallback_is_named_with_why(tmp_path: Path) -> None:
     assert "| random walk baseline | submitted |  |" in text
 
 
-def test_retry_is_named(tmp_path: Path) -> None:
-    g = gate(tmp_path, produced_by="main model, retry 1")
-    prov = read_json(g / "provenance.json")
-    prov.update(kind="retry", selected="retry-1", attempts=[
-        {"id": "main", "label": "main model", "status": "fail",
-         "reasons": ["convergence: max R-hat is 1.4"]},
-    ])  # fmt: skip
-    write_json(g / "provenance.json", prov)
-    assert visible(body(g))[1].startswith(
-        "Main model refitted once: main model was ruled out"
-    )
-
-
 def test_handled_line_leads(tmp_path: Path) -> None:
     g = gate(tmp_path)
     prov = read_json(g / "provenance.json")
     prov["handled"] = [
-        "main model refitted once (max R-hat is 1.2, past the retry "
-        "threshold 1.1)",
         "delays: used the 2026-10-17 vintage, the latest available",
     ]
     write_json(g / "provenance.json", prov)
     shown = visible(body(g))
     assert shown[1] == "All checks passed."
     assert shown[2] == (
-        "Handled: main model refitted once (max R-hat is 1.2, past the "
-        "retry threshold 1.1); delays: used the 2026-10-17 vintage, the "
-        "latest available."
+        "Handled: delays: used the 2026-10-17 vintage, the latest available."
     )
     assert shown[3].startswith("![Nowcast")
     assert len(shown) == 6
@@ -290,7 +273,7 @@ def test_ppc_row_and_province_details(tmp_path: Path) -> None:
     g = gate(tmp_path)
     sel = g / "selected"
     write_json(tmp_path / "ppc.json", ppc("ppcwarn"))
-    summarise("main", tmp_path / "ppc.json", sel, sampled=True)
+    summarise("main", tmp_path / "ppc.json", sel, sampled=True, lim=POLICY.ppc)
     text = body(g)
     assert (
         "| Posterior predictive checks | WARN (90% coverage 0.57 overall, "

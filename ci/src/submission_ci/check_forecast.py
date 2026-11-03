@@ -36,7 +36,7 @@ Plausibility (`plausible` fails; the others warn):
   `observed`     the median of the last complete weeks is near what was
                  observed.
 
-Consistency (warn by default):
+Consistency (warn):
   `baseline`     forecast median against the random walk baseline.
   `previous`     shared weeks against last week's submission.
 """
@@ -75,34 +75,9 @@ from .hubdata import (
     read_observed,
     read_samples,
 )
+from .policy import load_policy
 
 MAX_DETAILS = 8
-DEFAULTS: dict[str, Any] = {
-    "samples": 100,
-    "horizon_weeks": 3,
-    "nowcast_weeks": 4,
-    "national": "CD",
-    "sum_tolerance": 1e-9,
-    "bound_floor": 20,
-    "bound_warn": 5,
-    "bound_fail": 20,
-    "growth_warn": 2.0,
-    "growth_fail": 4.0,
-    "complete_lag_weeks": 4,
-    "complete_weeks": 2,
-    "ratio_offset": 5,
-    "observed_warn": 2.0,
-    "observed_fail": 5.0,
-    "baseline_warn": 3.0,
-    "baseline_fail": 0,
-    "previous_warn": 2.0,
-    "previous_fail": 0,
-    "plausible_recent_weeks": 4,
-    "plausible_floor": 20,
-    "plausible_median_ratio": 5.0,
-    "plausible_q975_ratio": 15.0,
-    "plausible_low_ratio": 20.0,
-}
 
 
 @dataclass
@@ -115,17 +90,9 @@ class Check:
     details: list[str] = field(default_factory=list)
 
 
-def _level(ratio: float, warn: float, fail: float) -> str:
-    """Status of a ratio against symmetric warn and fail levels."""
-
-    def out(limit: float) -> bool:
-        return limit > 0 and (ratio > limit or ratio < 1 / limit)
-
-    if out(fail):
-        return "fail"
-    if out(warn):
-        return "warn"
-    return "pass"
+def _level(ratio: float, warn: float) -> str:
+    """Status of a ratio against a symmetric warn level."""
+    return "warn" if ratio > warn or ratio < 1 / warn else "pass"
 
 
 def _week(ref: dt.date, k: int) -> str:
@@ -492,9 +459,7 @@ def repair_national(
     )
 
 
-def check_bounds(
-    s: Samples, obs: Observed, floor: float, warn: float, fail: float
-) -> Check:
+def check_bounds(s: Samples, obs: Observed, floor: float, warn: float) -> Check:
     """95th centile of each week against the largest observed week."""
     found: list[tuple[str, str]] = []
     for loc in s.locations:
@@ -505,14 +470,9 @@ def check_bounds(
             default=0.0,
         )
         ratio = top / cap
-        status = (
-            "fail"
-            if fail and ratio > fail
-            else ("warn" if warn and ratio > warn else "pass")
-        )
         found.append(
             (
-                status,
+                "warn" if ratio > warn else "pass",
                 f"{loc}: 95th centile {fmt(top)} is {fmt(ratio)} times the "
                 f"bound base {fmt(cap)}",
             )
@@ -592,7 +552,6 @@ def check_growth(
     horizon: int,
     offset: float,
     warn: float,
-    fail: float,
 ) -> Check:
     """Week-on-week growth of the median across the forecast weeks."""
     weeks = [_week(ref, k) for k in range(0, horizon + 1)]
@@ -609,7 +568,7 @@ def check_growth(
             ratio = (m1 + offset) / (m0 + offset)
             found.append(
                 (
-                    _level(ratio, warn, fail),
+                    _level(ratio, warn),
                     f"{loc}: median grows {fmt(ratio)} times from {w0} to {w1}",
                 )
             )
@@ -623,7 +582,6 @@ def _ratio_check(
     weeks_for: Any,
     offset: float,
     warn: float,
-    fail: float,
     what: str,
 ) -> Check:
     found: list[tuple[str, str]] = []
@@ -637,7 +595,7 @@ def _ratio_check(
         ratio = (ours + offset) / (theirs + offset)
         found.append(
             (
-                _level(ratio, warn, fail),
+                _level(ratio, warn),
                 f"{loc}: median {fmt(ours)} against {what} {fmt(theirs)} "
                 f"over {weeks[0]} to {weeks[-1]} (ratio {fmt(ratio)})",
             )
@@ -654,7 +612,6 @@ def check_observed(
     n: int,
     offset: float,
     warn: float,
-    fail: float,
 ) -> Check:
     """Median of the last complete weeks against the observed counts."""
     cutoff = (
@@ -672,7 +629,6 @@ def check_observed(
         weeks_for,
         offset,
         warn,
-        fail,
         f"observed ({obs.as_of})",
     )
 
@@ -691,14 +647,13 @@ def check_against(
     weeks_for: Any,
     offset: float,
     warn: float,
-    fail: float,
     what: str,
 ) -> Check:
     """Medians against another set of samples."""
     if other is None:
         return Check(name, "skip", f"no {what} to compare with")
     return _ratio_check(
-        name, s, _median_table(other), weeks_for, offset, warn, fail, what
+        name, s, _median_table(other), weeks_for, offset, warn, what
     )
 
 
@@ -749,57 +704,53 @@ def run_checks(
     baseline: Path | None = None,
     previous: Path | None = None,
     kind: str = "main",
-    settings: Mapping[str, Any] | None = None,
+    settings: Mapping[str, Any],
     national_sidecar: Mapping[str, Any] | None = None,
     sidecar_error: str = "",
     require_zones: bool = False,
 ) -> list[Check]:
     """Run every check on one candidate file."""
-    c = {**DEFAULTS, **(settings or {})}
     s = read_samples(submission)
     ref = dt.date.fromisoformat(reference_date)
-    off = float(c["ratio_offset"])
-    horizon = int(c["horizon_weeks"])
+    off = float(settings["ratio_offset"])
+    horizon = int(settings["horizon_weeks"])
     forecast_weeks = {_week(ref, k) for k in range(1, horizon + 1)}
     out = [
         check_schema(s, reference_date, submission.name, tasks),
         check_values(s),
-        check_samples(s, int(c["samples"])),
+        check_samples(s, int(settings["samples"])),
         check_coverage(
-            s, ref, expected_locations, horizon, int(c["nowcast_weeks"])
+            s, ref, expected_locations, horizon, int(settings["nowcast_weeks"])
         ),
-        check_zones(s, require_zones, float(c["sum_tolerance"])),
+        check_zones(s, require_zones, float(settings["sum_tolerance"])),
         check_national_sum(
             s,
-            str(c["national"]),
-            float(c["sum_tolerance"]),
+            str(settings["national"]),
+            float(settings["sum_tolerance"]),
             national_sidecar,
             sidecar_error,
         ),
         check_bounds(
             s,
             observed,
-            float(c["bound_floor"]),
-            float(c["bound_warn"]),
-            float(c["bound_fail"]),
+            float(settings["bound_floor"]),
+            float(settings["bound_warn"]),
         ),
-        check_plausible(s, observed, ref, horizon, c),
+        check_plausible(s, observed, ref, horizon, settings),
         check_growth(
             s,
             ref,
             horizon,
             off,
-            float(c["growth_warn"]),
-            float(c["growth_fail"]),
+            float(settings["growth_warn"]),
         ),
         check_observed(
             s,
             observed,
-            int(c["complete_lag_weeks"]),
-            int(c["complete_weeks"]),
+            int(settings["complete_lag_weeks"]),
+            int(settings["complete_weeks"]),
             off,
-            float(c["observed_warn"]),
-            float(c["observed_fail"]),
+            float(settings["observed_warn"]),
         ),
     ]
     if kind == "randomwalk":
@@ -816,8 +767,7 @@ def run_checks(
                     w for w in s.weeks(loc) if w in forecast_weeks
                 ),
                 off,
-                float(c["baseline_warn"]),
-                float(c["baseline_fail"]),
+                float(settings["baseline_warn"]),
                 "random walk baseline",
             )
         )
@@ -828,8 +778,7 @@ def run_checks(
             read_samples(previous) if previous and previous.exists() else None,
             s.weeks,
             off,
-            float(c["previous_warn"]),
-            float(c["previous_fail"]),
+            float(settings["previous_warn"]),
             "last week's submission",
         )
     )
@@ -884,7 +833,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="coherence.json of the data, for the unassigned part when "
         "there is no national.json (optional)",
     )
-    p.add_argument("--policy", type=Path, default=None)
+    p.add_argument("--policy", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--no-fail", action="store_true")
     p.add_argument(
@@ -893,11 +842,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Rule the file out if a province has no health zone rows",
     )
     args = p.parse_args(argv)
-    settings = None
-    if args.policy:
-        from .policy import load_policy
-
-        settings = load_policy(args.policy).checks
+    settings = load_policy(args.policy).checks
     sidecar, sidecar_error = None, ""
     handled: list[str] = []
     if args.national_sidecar and args.national_sidecar.exists():
@@ -915,7 +860,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 gap = gap_by_week(assess(read_json(args.coherence)))
             except ValueError:
                 gap = {}
-        national = str((settings or DEFAULTS).get("national", "CD"))
+        national = str(settings["national"])
         note = repair_national(args.submission, national, sidecar, gap)
         if note:
             handled.append(note)

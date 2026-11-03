@@ -1,21 +1,13 @@
 """The fallback chain and the thresholds, read from `policy.toml`.
 
-The chain is an ordered list of candidates. The first candidate that
-clears every check is submitted:
+The chain is an ordered list of candidates, and the first that clears
+every check is submitted. It runs through the renewal models from the
+most to the least complex, then `randomwalknowcast` (random walk on a
+nowcast) and `randomwalk` (the random walk baseline, built from the data
+alone). There are no refits.
 
-1. `main`: the main model with the default sampler settings.
-2. `retry-1`: one refit of the main model with smaller steps and
-   jittered inits, only when `main` is past the convergence
-   retry thresholds or was ruled out (`retry_budget`, 1 by default), and
-   only when there is time for it before the window closes (`[timing]`).
-3. `renewalsp`: the single-patch model (independent renewal fits for each
-   province with cases and the country), fitted beside `main`.
-4. `randomwalknowcast`: random walk on a nowcast, with no fit.
-5. `randomwalk`: the random walk baseline, built from the data alone.
-
-Stage `primary` candidates fit in parallel straight away. Stage `retry`
-candidates fit only when the primary `main` fails. Stage `baseline`
-candidates need no fit.
+Stage `primary` candidates fit in parallel straight away. Stage
+`baseline` candidates need no fit.
 
 Every fit job's timeout leaves `reserve_minutes` before the window
 closes for the gate and the pull request, so the chain can always reach
@@ -36,11 +28,11 @@ from .common import set_outputs
 from .fit_key import fit_key, source_hash
 from .window import minutes_left, parse_now
 
-KINDS = ("main", "retry", "fallback", "randomwalk", "shadow")
+KINDS = ("main", "fallback", "randomwalk", "shadow")
 """A `shadow` candidate is fitted and checked with its stage but is never
 part of the chain, so it is never submitted. It lets a variant run weekly
 before it is chosen."""
-STAGES = ("primary", "retry", "baseline")
+STAGES = ("primary", "baseline")
 
 
 @dataclass(frozen=True)
@@ -65,10 +57,9 @@ class Candidate:
 class Timing:
     """Minutes the chain plans with (`[timing]` in `policy.toml`)."""
 
-    fit_cap_minutes: int = 350
-    reserve_minutes: int = 45
-    retry_minutes: int = 240
-    min_fit_minutes: int = 30
+    fit_cap_minutes: int
+    reserve_minutes: int
+    min_fit_minutes: int
 
 
 @dataclass(frozen=True)
@@ -76,26 +67,15 @@ class Policy:
     """The parsed policy file."""
 
     candidates: list[Candidate]
-    retry_budget: int
     cache_inputs: list[str]
     convergence: dict[str, dict[str, float]]
     checks: dict[str, Any]
-    ppc: dict[str, Any] = field(default_factory=dict)
-    timing: Timing = field(default_factory=Timing)
+    ppc: dict[str, Any]
+    timing: Timing
 
     def chain(self) -> list[Candidate]:
-        """Candidates in submission order, with retries cut to budget."""
-        out: list[Candidate] = []
-        retries = 0
-        for c in self.candidates:
-            if c.kind == "shadow":
-                continue
-            if c.kind == "retry":
-                retries += 1
-                if retries > self.retry_budget:
-                    continue
-            out.append(c)
-        return out
+        """Candidates in submission order."""
+        return [c for c in self.candidates if c.kind != "shadow"]
 
     def stage(self, name: str) -> list[Candidate]:
         """Candidates fitted in one stage, shadows included."""
@@ -105,8 +85,8 @@ class Policy:
     def for_model(self, model: str, only: bool = False) -> Policy:
         """The chain from the candidate of `model` on.
 
-        Candidates before it are still fitted and checked, as shadows,
-        and the retry is dropped. A model with no candidate keeps the
+        Candidates before it are still fitted and checked, as shadows.
+        A model with no candidate keeps the
         policy as it is.
 
         With `only`, the chain is that candidate alone, for a hub model
@@ -125,7 +105,6 @@ class Policy:
         cands = [
             c if c.id in kept else replace(c, kind="shadow")
             for c in self.candidates
-            if c.kind != "retry"
         ]
         return replace(self, candidates=cands)
 
@@ -141,13 +120,13 @@ def load_policy(path: Path | str) -> Policy:
     """Read and check `policy.toml`."""
     raw = tomllib.loads(Path(path).read_text(encoding="utf-8"))
     cands = []
-    for c in raw.get("candidates", []):
+    for c in raw["candidates"]:
         cand = Candidate(
             id=c["id"],
             kind=c["kind"],
-            config=c.get("config", c["kind"]),
-            stage=c.get("stage", "primary"),
-            label=c.get("label", c["id"]),
+            config=c["config"],
+            stage=c["stage"],
+            label=c["label"],
             sampler=dict(c.get("sampler", {})),
             model=c.get("model", ""),
         )
@@ -161,15 +140,13 @@ def load_policy(path: Path | str) -> Policy:
         raise ValueError("candidate ids must be unique")
     if not cands or cands[0].kind != "main":
         raise ValueError("the first candidate must be the main model")
-    pol = raw.get("policy", {})
     return Policy(
         candidates=cands,
-        retry_budget=int(pol.get("retry_budget", 1)),
-        cache_inputs=list(raw.get("cache", {}).get("inputs", [])),
-        convergence=raw.get("convergence", {}),
-        checks=raw.get("checks", {}),
-        ppc=raw.get("ppc", {}),
-        timing=Timing(**{k: int(v) for k, v in raw.get("timing", {}).items()}),
+        cache_inputs=list(raw["cache"]["inputs"]),
+        convergence=raw["convergence"],
+        checks=raw["checks"],
+        ppc=raw["ppc"],
+        timing=Timing(**{k: int(v) for k, v in raw["timing"].items()}),
     )
 
 
@@ -185,14 +162,6 @@ def fit_timeout(policy: Policy, minutes_left: float | None) -> int:
         return t.fit_cap_minutes
     room = int(minutes_left) - t.reserve_minutes
     return max(t.min_fit_minutes, min(t.fit_cap_minutes, room))
-
-
-def retry_fits(policy: Policy, minutes_left: float | None) -> bool:
-    """Whether a refit can finish and still leave the gate its time."""
-    if minutes_left is None:
-        return True
-    t = policy.timing
-    return minutes_left >= t.retry_minutes + t.reserve_minutes
 
 
 def matrix(

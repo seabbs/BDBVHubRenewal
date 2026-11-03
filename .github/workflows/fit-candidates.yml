@@ -1,10 +1,9 @@
 name: Fit candidates
 
-# Reusable: fit and check one stage of the fallback chain, one matrix
-# leg per candidate, as BVDOutbreakSize's docs.yml fits one model per
-# matrix job. Called by submit.yml for the primary stage (main model,
-# single-patch fallback and shadows, in parallel) and, only if the main model failed, for
-# the retry stage.
+# Reusable: fit and check the fitted candidates of the fallback chain,
+# one matrix leg per candidate, as BVDOutbreakSize's docs.yml fits one
+# model per matrix job. Called by submit.yml for the primary stage, with
+# every renewal candidate and shadow in parallel.
 #
 # Each fit is content-addressed: the cache key hashes the model source,
 # the hub data commit and the candidate's config and sampler settings
@@ -16,9 +15,6 @@ on:
     inputs:
       matrix:
         description: Matrix JSON from `submission_ci.policy` (an `include` list)
-        type: string
-        required: true
-      stage:
         type: string
         required: true
       reference_date:
@@ -43,27 +39,6 @@ env:
   # pinned to the hub commit, shipped in the `inputs` artefact.
   BDBV_DATA_DIR: output/ci/inputs/data
   BDBV_RAW_DIR: output/ci/raw
-  # Convergence thresholds: ci/policy.toml unless a repo variable is set,
-  # so tightening the gate is a variable, not a code change.
-  BDBV_CONVERGENCE_FAIL_RHAT: ${{ vars.BDBV_CONVERGENCE_FAIL_RHAT }}
-  BDBV_CONVERGENCE_FAIL_ESS_BULK: ${{ vars.BDBV_CONVERGENCE_FAIL_ESS_BULK }}
-  BDBV_CONVERGENCE_FAIL_ESS_TAIL: ${{ vars.BDBV_CONVERGENCE_FAIL_ESS_TAIL }}
-  BDBV_CONVERGENCE_FAIL_DIVERGENT: ${{ vars.BDBV_CONVERGENCE_FAIL_DIVERGENT }}
-  BDBV_CONVERGENCE_RETRY_RHAT: ${{ vars.BDBV_CONVERGENCE_RETRY_RHAT }}
-  BDBV_CONVERGENCE_RETRY_ESS_BULK: ${{ vars.BDBV_CONVERGENCE_RETRY_ESS_BULK }}
-  BDBV_CONVERGENCE_RETRY_ESS_TAIL: ${{ vars.BDBV_CONVERGENCE_RETRY_ESS_TAIL }}
-  BDBV_CONVERGENCE_RETRY_DIVERGENT: ${{ vars.BDBV_CONVERGENCE_RETRY_DIVERGENT }}
-  BDBV_CONVERGENCE_WARN_RHAT: ${{ vars.BDBV_CONVERGENCE_WARN_RHAT }}
-  BDBV_CONVERGENCE_WARN_ESS_BULK: ${{ vars.BDBV_CONVERGENCE_WARN_ESS_BULK }}
-  BDBV_CONVERGENCE_WARN_ESS_TAIL: ${{ vars.BDBV_CONVERGENCE_WARN_ESS_TAIL }}
-  BDBV_CONVERGENCE_WARN_DIVERGENT: ${{ vars.BDBV_CONVERGENCE_WARN_DIVERGENT }}
-  # Posterior predictive check thresholds, likewise (ci/policy.toml [ppc]).
-  BDBV_PPC_COVERAGE_WARN: ${{ vars.BDBV_PPC_COVERAGE_WARN }}
-  BDBV_PPC_COVERAGE_FAIL: ${{ vars.BDBV_PPC_COVERAGE_FAIL }}
-  BDBV_PPC_LEVEL: ${{ vars.BDBV_PPC_LEVEL }}
-  BDBV_PPC_RECENT_WEEKS: ${{ vars.BDBV_PPC_RECENT_WEEKS }}
-  BDBV_PPC_PIT_KS_WARN: ${{ vars.BDBV_PPC_PIT_KS_WARN }}
-  BDBV_PPC_PIT_MIN_ROWS: ${{ vars.BDBV_PPC_PIT_MIN_ROWS }}
 
 jobs:
   fit:

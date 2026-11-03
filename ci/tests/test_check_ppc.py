@@ -7,17 +7,22 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import AS_OF, FIXTURES, diagnostics, write_json
+from conftest import (
+    AS_OF,
+    FIXTURES,
+    POLICY,
+    POLICY_PATH,
+    diagnostics,
+    write_json,
+)
 
 from submission_ci.check_ppc import (
     check_ppc,
     is_sampled,
-    limits,
     main,
     pit_summary,
 )
 from submission_ci.common import read_json
-from submission_ci.policy import load_policy
 from submission_ci.select_candidate import assess
 
 _spec = importlib.util.spec_from_file_location(
@@ -27,8 +32,7 @@ assert _spec is not None and _spec.loader is not None
 fake = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(fake)
 
-POLICY = load_policy(Path(__file__).parents[1] / "policy.toml")
-LIMITS = limits(POLICY.ppc)
+LIMITS = POLICY.ppc
 
 
 def ppc(scenario: str = "pass") -> dict[str, Any]:
@@ -38,6 +42,7 @@ def ppc(scenario: str = "pass") -> dict[str, Any]:
 
 def run(tmp_path: Path, payload: Any, *extra: str) -> dict[str, Any]:
     args = ["--id", "main", "--out", str(tmp_path / "o")]
+    args += ["--policy", str(POLICY_PATH)]
     path = tmp_path / "ppc.json"
     if payload is not None:
         if isinstance(payload, str):
@@ -85,17 +90,6 @@ def test_very_low_coverage_only_warns() -> None:
     assert any("poor (below 0.5)" in m for m in c.warnings)
 
 
-def test_env_overrides_thresholds(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("BDBV_PPC_COVERAGE_WARN", "0.5")
-    monkeypatch.setenv("BDBV_PPC_COVERAGE_FAIL", "0.2")
-    monkeypatch.setenv("BDBV_PPC_PIT_KS_WARN", "0.9")
-    lim = limits(POLICY.ppc)
-    assert check_ppc("main", ppc("ppcwarn"), lim).status == "pass"
-    monkeypatch.setenv("BDBV_PPC_COVERAGE_FAIL", "inf")
-    with pytest.raises(ValueError, match="finite"):
-        limits(POLICY.ppc)
-
-
 def test_unavailable_is_na(tmp_path: Path) -> None:
     na = {"schema_version": 1, "available": False, "reason": "no posterior"}
     data = run(tmp_path, na)
@@ -129,6 +123,7 @@ def test_unreadable_file_warns(tmp_path: Path) -> None:
 def test_cli_report_and_exit_codes(tmp_path: Path) -> None:
     path = write_json(tmp_path / "ppc.json", ppc("ppcfail"))
     args = ["--id", "main", "--ppc", str(path), "--out", str(tmp_path / "o")]
+    args += ["--policy", str(POLICY_PATH)]
     assert main(args) == 0
     assert main([*args, "--no-fail"]) == 0
     md = (tmp_path / "o" / "ppc-summary.md").read_text()
@@ -138,6 +133,7 @@ def test_cli_report_and_exit_codes(tmp_path: Path) -> None:
     data = read_json(tmp_path / "o" / "ppc-summary.json")
     assert data["headline"].startswith("90% coverage")
     missing = ["--id", "m", "--ppc", str(tmp_path / "none.json")]
+    missing += ["--policy", str(POLICY_PATH)]
     assert main([*missing, "--out", str(tmp_path / "e")]) == 0
 
 

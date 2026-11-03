@@ -2,13 +2,13 @@
 
 It implements the interface in INTEGRATION.md on fixture data, so the
 step scripts run end to end without the model. Behaviour per candidate
-is set by `FAKE_SCENARIOS`, e.g. `main=fail,retry-1=pass`, read with the
+is set by `FAKE_SCENARIOS`, e.g. `bvd=fail,renewalsp=pass`, read with the
 candidate id the step script exports as `CAND_ID`. Scenarios:
 
   pass         converged fit, plausible forecast
   warn         converged but past the warning thresholds
-  loose        past the retry thresholds (R-hat 1.2), not broken
-  fail         clearly broken (bulk ESS 8, R-hat 1.4, divergences)
+  fail         past the failure thresholds (bulk ESS 8, R-hat 1.4,
+               divergences)
   implausible  converged, but the forecast explodes
   crash        the fit command fails
   negative     the nowcast writes a negative value (format check)
@@ -162,9 +162,7 @@ def cmd_fit(args: argparse.Namespace) -> int:
     draws = int(sampler.get("num_samples", 1000))
     rhat, ess, div = {
         "warn": (1.07, 80.0, 15),
-        # Past the retry thresholds (refit once), not clearly broken.
-        "loose": (1.2, 40.0, 80),
-        # Clearly broken: almost no effective draws.
+        # Past the failure thresholds: almost no effective draws.
         "fail": (1.4, 8.0, 400),
     }.get(sc, (1.004, 900.0, 0))
     params = [

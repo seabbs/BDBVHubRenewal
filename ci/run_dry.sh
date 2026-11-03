@@ -2,11 +2,11 @@
 # Local dry run of the submission workflow, end to end, on fixture data.
 #
 #   ci/run_dry.sh              every scenario, with assertions
-#   ci/run_dry.sh retry        one scenario, printing its PR body
+#   ci/run_dry.sh fallback     one scenario, printing its PR body
 #
 # It runs the same step scripts as .github/workflows/submit.yml, in the
 # same order: detect -> prepare (random walk) -> primary candidates ->
-# triage -> retries -> select -> submit (DRY_RUN=true). The model is the
+# select -> submit (DRY_RUN=true). The model is the
 # fixture CLI (fixtures/fake_bdbvhubrenewal.py) and `gh`/`git` are never
 # called for writing. Outputs go to a new $TMPDIR/submission-ci-dry.XXXXXX/
 # <scenario>/ for each run, so concurrent dry runs never share files.
@@ -37,34 +37,33 @@ export FORECAST_DATE=${FORECAST_DATE:-${NOW%%T*}}
 # name | FAKE_SCENARIOS | expected selection ("skip" for a skipped round)
 #   | extra environment (optional) | text the PR body must hold (optional)
 SCENARIOS=(
-  "main|main=pass|main||All checks passed."
-  "chosenrandomwalk|main=pass|randomwalk|MODEL=randomwalk|Shadow candidates"
-  "bvdrelease|main=pass|main||used BVDOutbreakSize release \`results-3180\` (data to 2026-10-23, joint R-hat 1.041, limit 1.1)."
-  "coherence|main=pass|main|FAKE_COHERENCE_GAP=2026-10-24:2|Handled: national (CD) differs from the sum of the provinces"
-  "warn|main=warn|main"
-  "ppcwarn|main=ppcwarn|main||All checks passed, with warnings on ppc."
-  "ppcfail|main=ppcfail|main||All checks passed, with warnings on ppc."
-  "noppc|main=noppc|main||All checks passed, with warnings on ppc."
-  # A wildly high forecast is ruled out by the plausibility check: the
-  # main model is refitted, and if that is wild too the chain moves on.
-  "implausible|main=implausible|retry-1||main model was ruled out (plausible: "
-  "wild|main=implausible,retry-1=implausible|renewalsp||Fallback model used (single-patch model"
-  "national|main=badnational|main||Handled: national (CD) rebuilt as the sum of the provinces"
-  "latestream|main=latestream|main||Handled: delays: no delay data for this vintage"
-  "loose|main=loose,retry-1=pass|retry-1||Handled: main model refitted once (max R-hat is 1.2"
-  "loosekept|main=loose,retry-1=fail|main||Handled: main model kept after one refit did not help"
-  "retry|main=fail,retry-1=pass|retry-1||Main model refitted once: main model was ruled out"
-  "fallback|main=fail,retry-1=fail|renewalsp||Fallback model used (single-patch model"
-  # Tuesday 21:00 UTC, two hours before the close: no time to refit, so
-  # a failed main model goes straight to the single-patch fallback.
-  "late|main=fail,retry-1=pass|renewalsp|NOW=2026-11-03T21:00:00+00:00|Fallback model used ("
-  "randomwalknowcast|main=fail,retry-1=fail,renewalsp=fail|randomwalknowcast||Fallback model used (random walk on a nowcast)"
-  "randomwalk|main=fail,retry-1=crash,renewalsp=fail,randomwalknowcast=negative|randomwalk"
-  "skip|main=fail,retry-1=fail,renewalsp=fail,randomwalknowcast=negative,randomwalk=negative|skip"
-  # A chosen variant with its own leg heads the chain, then the random
-  # walks: renewalsp, else randomwalknowcast.
-  "singlepatch|main=pass|renewalsp|MODEL=renewalsp|Shadow candidates"
-  "singlepatchfallback|main=pass,renewalsp=fail|randomwalknowcast|MODEL=renewalsp|Fallback model used (random walk on a nowcast)"
+  "main|bvd=pass|bvd||All checks passed."
+  "chosenrandomwalk|bvd=pass|randomwalk|MODEL=randomwalk|Shadow candidates"
+  "bvdrelease|bvd=pass|bvd||used BVDOutbreakSize release \`results-3180\` (data to 2026-10-23, joint R-hat 1.041, limit 1.1)."
+  "coherence|bvd=pass|bvd|FAKE_COHERENCE_GAP=2026-10-24:2|Handled: national (CD) differs from the sum of the provinces"
+  "warn|bvd=warn|bvd"
+  "ppcwarn|bvd=ppcwarn|bvd||All checks passed, with warnings on ppc."
+  "ppcfail|bvd=ppcfail|bvd||All checks passed, with warnings on ppc."
+  "noppc|bvd=noppc|bvd||All checks passed, with warnings on ppc."
+  # A wildly high forecast is ruled out by the plausibility check, and
+  # the chain moves on.
+  "implausible|bvd=implausible|renewalsp||was ruled out (plausible: "
+  "wild|bvd=implausible,renewalsp=implausible|main||Fallback model used (province renewal model"
+  "latestream|bvd=latestream|bvd||Handled: delays: no delay data for this vintage"
+  "national|bvd=badnational|bvd||Handled: national (CD) rebuilt as the sum of the provinces"
+  "fallback|bvd=fail|renewalsp||Fallback model used (single-patch renewal model"
+  # Tuesday 21:00 UTC, two hours before the close: the fit timeouts are
+  # cut so the gate still runs in time.
+  "late|bvd=fail|renewalsp|NOW=2026-11-03T21:00:00+00:00|Fallback model used ("
+  "randomwalknowcast|bvd=fail,renewalsp=fail,main=fail|randomwalknowcast||Fallback model used (random walk on a nowcast)"
+  "randomwalk|bvd=fail,renewalsp=crash,main=fail,randomwalknowcast=negative|randomwalk"
+  "skip|bvd=fail,renewalsp=fail,main=fail,randomwalknowcast=negative,randomwalk=negative|skip"
+  # A chosen model further down the chain starts it there; the
+  # candidates before it are shadows.
+  "singlepatch|bvd=pass|renewalsp|MODEL=renewalsp|Shadow candidates"
+  "singlepatchfallback|bvd=pass,renewalsp=fail|main|MODEL=renewalsp|Fallback model used (province renewal model"
+  "chosenrenewal|bvd=pass,renewalsp=pass|main|MODEL=renewal|Shadow candidates"
+  "chosenrenewalfallback|main=fail|randomwalknowcast|MODEL=renewal|Fallback model used (random walk on a nowcast)"
 )
 
 sci() { uv run --quiet --project "$CI_DIR" "$@"; }
@@ -94,9 +93,10 @@ run_scenario() {
   export WORK="$ROOT/$name"
   export FAKE_SCENARIOS=$scenarios
   export FAKE_COHERENCE_GAP="" FAKE_CHOSEN_MODEL=""
-  # Most scenarios walk the main model's chain; `singlepatch*` choose
-  # renewalsp. `own_model` checks what config/hub.toml resolves to.
-  export MODEL=renewal
+  # As in production, `prepare` resolves the model from config/hub.toml
+  # (renewalbvd), so the chain starts at bvd. A scenario may choose
+  # another model with MODEL=.
+  unset MODEL
   local kv
   for kv in $extra; do export "${kv?}"; done
   export GH_LOG="$WORK/gh.log"
@@ -144,16 +144,6 @@ EOF
   }
   run_stage primary
 
-  # 4. Triage, then the retry matrix only if `main` was ruled out.
-  local retried=false
-  if sci python -m submission_ci.select_candidate triage --model "$model" \
-      --policy "$CI_DIR/policy.toml" --candidates "$WORK/candidates" \
-      --reference-date "$REFERENCE_DATE" --now "$NOW" \
-      | grep -q need_retry=true; then
-    run_stage retry
-    retried=true
-  fi
-
   # As downloaded by actions/download-artifact: one `candidate-<id>`
   # directory per artefact, laid out again by unpack_candidates.sh.
   for d in "$WORK"/candidates/*; do
@@ -168,9 +158,9 @@ EOF
   model_id=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1]))['model_id'])" \
     "$WORK/inputs/context.json")
 
-  # 5. Select, with a stand-in for hubValidations (`gate` job).
+  # 4. Select, with a stand-in for hubValidations (`gate` job).
   local status=0
-  RETRIED=$retried HUB_PATH="$FIX/hub" METADATA="$FIX/hub/$model_id.yml" \
+  HUB_PATH="$FIX/hub" METADATA="$FIX/hub/$model_id.yml" \
     HUB_VALIDATOR="true" "$CI_DIR/steps/select.sh" > "$WORK/select.log" \
     || status=$?
   local got
@@ -185,8 +175,8 @@ EOF
   timeout=$(python3 -c "import json, sys; print(sorted({e['timeout'] for e in json.load(open(sys.argv[1]))['include']}))" \
     "$WORK/matrix-primary.json")
   case "$name" in
-    late) [ "$timeout" = "['75']" ] && [ "$retried" = false ] \
-      || { echo "FAIL: late timeouts $timeout, retried $retried"; return 1; } ;;
+    late) [ "$timeout" = "['75']" ] \
+      || { echo "FAIL: late timeouts $timeout"; return 1; } ;;
     *) [ "$timeout" = "['350']" ] \
       || { echo "FAIL: $name timeouts $timeout"; return 1; } ;;
   esac
@@ -196,7 +186,7 @@ EOF
     return 0
   fi
 
-  # 6. Submit, dry run: build the body and print the planned PR.
+  # 5. Submit, dry run: build the body and print the planned PR.
   DRY_RUN=true FORK=seabbs-bot/BDBV-Modeling-Hub METADATA="$FIX/hub/$model_id.yml" MODEL_ID="$model_id" \
     "$CI_DIR/steps/submit.sh" > "$WORK/submit.log" 2>&1 \
     || { echo "FAIL: submit"; cat "$WORK/submit.log"; return 1; }
@@ -243,7 +233,11 @@ resubmission() {
   local src prev rel out
   src=$(find "$ROOT/main/gate/selected/submission" -name '*.csv' | head -n 1)
   [ -n "$src" ] || { echo "FAIL: resubmission needs the main scenario"; return 1; }
-  rel="model-output/$(basename "$(dirname "$src")")/$(basename "$src")"
+  # The hub files it under the submitting id, not the model's own.
+  local mid
+  mid=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1]))['model_id'])" \
+    "$ROOT/main/inputs/context.json")
+  rel="model-output/$mid/$(basename "$src" | sed "s/-seabbs-.*\.csv$/-$mid.csv/")"
   prev="$ROOT/prev-hub"
   mkdir -p "$prev/$(dirname "$rel")"
   hub_copy() {
@@ -262,7 +256,7 @@ with open(sys.argv[2], "w", newline="") as fh:
 EOF
   }
   hub_copy 2026-10-31
-  run_scenario resubmit "main=pass" main "PREVIOUS_CHECKOUT=$prev" || return 1
+  run_scenario resubmit "bvd=pass" bvd "PREVIOUS_CHECKOUT=$prev" || return 1
   out=$(find "$ROOT/resubmit/gate/selected/submission" -name '*.csv' | head -n 1)
   python3 - "$prev/$rel" "$out" << 'EOF' || { echo "FAIL: resubmission file"; return 1; }
 import csv, sys
@@ -279,22 +273,22 @@ EOF
   # The hub's file already has today's forecast date, so nothing can be
   # appended, every candidate fails and the round is skipped.
   hub_copy 2026-11-02
-  run_scenario resubmit-same-date "main=pass" skip "PREVIOUS_CHECKOUT=$prev" \
+  run_scenario resubmit-same-date "bvd=pass" skip "PREVIOUS_CHECKOUT=$prev" \
     || return 1
 }
 
 ledger() {
   # record.sh against a throwaway repo with a local `origin`: the round
-  # from the `retry` scenario is written to the ledger branch, twice.
+  # from the `fallback` scenario is written to the ledger branch, twice.
   local repo="$ROOT/ledger-repo" origin="$ROOT/ledger-origin.git"
   rm -rf "$repo" "$origin"
   git init -q --bare "$origin"
   git init -q -b main "$repo"
   git -C "$repo" remote add origin "$origin"
   for run in 101 102; do
-    (cd "$repo" && WORK="$ROOT/retry" GITHUB_RUN_ID=$run \
+    (cd "$repo" && WORK="$ROOT/fallback" GITHUB_RUN_ID=$run \
       REFERENCE_DATE=2026-11-07 DATA_COMMIT=dddd AS_OF=2026-10-31 \
-      ACTION=created PR_URL=https://example/pr/1 PRODUCED_BY="retry 1" \
+      ACTION=created PR_URL=https://example/pr/1 PRODUCED_BY="renewalsp" \
       "$CI_DIR/steps/record.sh" > /dev/null)
   done
   local files

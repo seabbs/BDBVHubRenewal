@@ -3,22 +3,17 @@
 Each candidate directory (`<candidates>/<id>/`) holds what its matrix
 job produced: `fit-summary.json` and `ppc-summary.json` (none for
 random walk), `checks.json`, `run.json` and the hub file under
-`submission/`. Problems are handled rather than failed on, so the chain
-rarely moves past the main model. A candidate is ruled out when its fit
-is clearly broken, its forecast is far from the recent data
+`submission/`. A candidate is ruled out when its fit is past the
+convergence failure thresholds, its forecast is far from the recent data
 (`plausible`), or its file would be invalid on the hub (forecast format
 checks, then the hub's own rules through the `--validate-cmd` hook,
 hubValidations in CI). Posterior predictive checks are reported, never
 gated.
 
-A main model past the convergence retry thresholds is refitted once
-(`retry-1`). The refit is preferred if it is not clearly broken;
-otherwise the original is kept if it is not. Either way the PR says so
-under `Handled:`. If nothing is left the round is skipped.
+If nothing is left the round is skipped.
 
-`triage` runs after the primary stage and says whether the refit is
-needed. `select` writes `provenance.json` and `provenance.md` and copies
-the chosen files to `<out>/selected/`.
+`select` writes `provenance.json` and `provenance.md` and copies the
+chosen files to `<out>/selected/`.
 """
 
 from __future__ import annotations
@@ -44,14 +39,7 @@ from .common import (
     write_json,
     write_text,
 )
-from .policy import (
-    Candidate,
-    Policy,
-    add_deadline_args,
-    deadline_minutes,
-    load_policy,
-    retry_fits,
-)
+from .policy import Candidate, Policy, load_policy
 
 Validator = Callable[[Path, Path], str]  # (submission, log) -> status
 
@@ -71,7 +59,6 @@ class Attempt:
     reasons: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     handled: list[str] = field(default_factory=list)
-    retry: bool = False
 
 
 def _submission(cdir: Path) -> Path | None:
@@ -93,7 +80,6 @@ def assess(c: Candidate, cdir: Path) -> Attempt:
     elif fit_path.exists():
         fit = read_json(fit_path)
         a.fit = fit["status"]
-        a.retry = bool(fit.get("retry"))
         a.reasons += [f"convergence: {m}" for m in fit.get("failures", [])]
         a.warnings += [f"convergence: {m}" for m in fit.get("warnings", [])]
     else:
@@ -140,33 +126,6 @@ def assess(c: Candidate, cdir: Path) -> Attempt:
     return a
 
 
-def triage(
-    policy: Policy, root: Path, minutes_left: float | None = None
-) -> bool:
-    """Whether the main model gets its one refit.
-
-    It does when its fit is past the retry thresholds, or when it was
-    ruled out, and there is still time to refit before the window closes
-    (`minutes_left`, None for no limit). Without that time the chain
-    moves on to the single-patch fallback, fitted beside the main model.
-    """
-    if not policy.stage("retry"):
-        return False
-    main = policy.chain()[0]
-    a = assess(main, root / main.id)
-    need = a.retry or blocks_status(a.status)
-    if need and not retry_fits(policy, minutes_left):
-        assert minutes_left is not None
-        t = policy.timing
-        append_summary(
-            f"Not refitted: {int(minutes_left)} minutes left before the "
-            f"window closes, and a refit needs about {t.retry_minutes} "
-            f"plus {t.reserve_minutes} for the gate."
-        )
-        return False
-    return need
-
-
 def blocks_status(status: str) -> bool:
     """Whether an attempt status rules the candidate out."""
     return status in ("missing", "not run") or blocks(status)
@@ -204,69 +163,21 @@ def _validate(a: Attempt, cdir: Path, validate: Validator | None) -> bool:
     return True
 
 
-def _fit_note(a: Attempt) -> str:
-    return next(
-        (w.removeprefix("convergence: ") for w in a.warnings
-         if "retry threshold" in w),
-        "convergence past the retry thresholds",
-    )  # fmt: skip
-
-
 def select(
-    policy: Policy,
-    root: Path,
-    validate: Validator | None,
-    retried: bool,
+    policy: Policy, root: Path, validate: Validator | None
 ) -> tuple[Attempt | None, list[Attempt]]:
     """Return the chosen attempt (or None) and every attempt."""
     attempts: list[Attempt] = []
     chosen: Attempt | None = None
-    deferred: Attempt | None = None  # a main fit waiting on its refit
     for c in policy.chain():
         if chosen is not None:
             attempts.append(Attempt(c.id, c.kind, c.label, status="not needed"))
             continue
-        if c.kind == "retry" and not retried:
-            attempts.append(Attempt(c.id, c.kind, c.label, status="not needed"))
-            continue
         a = assess(c, root / c.id)
         attempts.append(a)
-        if c.kind == "retry" and deferred is not None:
-            why = _fit_note(deferred)
-            if not blocks_status(a.status) and _validate(
-                a, root / c.id, validate
-            ):
-                a.handled.insert(0, f"main model refitted once ({why})")
-                chosen = a
-                continue
-            if _validate(deferred, root / deferred.id, validate):
-                deferred.handled.insert(
-                    0,
-                    f"main model kept after one refit did not help ({why})",
-                )
-                chosen = deferred
-                deferred.status = "warn"
-            deferred = None
+        if blocks_status(a.status) or not _validate(a, root / c.id, validate):
             continue
-        if blocks_status(a.status):
-            continue
-        if c.kind == "main" and a.retry and retried:
-            deferred = a
-            continue
-        if not _validate(a, root / c.id, validate):
-            continue
-        if a.retry:
-            a.handled.insert(0, f"accepted without a refit ({_fit_note(a)})")
         chosen = a
-    if (
-        chosen is None
-        and deferred is not None
-        and _validate(deferred, root / deferred.id, validate)
-    ):
-        deferred.handled.insert(
-            0, f"main model kept; its refit did not run ({_fit_note(deferred)})"
-        )
-        chosen = deferred
     return chosen, attempts
 
 
@@ -349,7 +260,6 @@ def run_select(
     root: Path,
     out: Path,
     validate: Validator | None,
-    retried: bool,
     shadows: bool = True,
     only: bool = False,
 ) -> dict[str, Any]:
@@ -359,7 +269,7 @@ def run_select(
     its own whose run fits none of them. `only` marks a chain of one model
     with no fallback, so a skip says so.
     """
-    chosen, attempts = select(policy, root, validate, retried)
+    chosen, attempts = select(policy, root, validate)
     prov: dict[str, Any] = {
         "selected": chosen.id if chosen else None,
         "kind": chosen.kind if chosen else None,
@@ -394,37 +304,26 @@ def run_select(
 def main(argv: Sequence[str] | None = None) -> int:
     """Command line entry point.
 
-    `select` exits 0 when a candidate was chosen and 3 when the round is
-    skipped, so the workflow can fail loudly on a skip.
+    Exits 0 when a candidate was chosen and 3 when the round is skipped,
+    so the workflow can fail loudly on a skip.
     """
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    sub = p.add_subparsers(dest="cmd", required=True)
-    for name in ("triage", "select"):
-        s = sub.add_parser(name)
-        s.add_argument("--policy", type=Path, required=True)
-        s.add_argument("--candidates", type=Path, required=True)
-        s.add_argument("--model", default="", help="The chosen model")
-        s.add_argument(
-            "--only-model",
-            action="store_true",
-            help="Submit --model or nothing: no fallback to another model",
-        )
-    add_deadline_args(sub.choices["triage"])
-    sel = sub.choices["select"]
-    sel.add_argument("--out", type=Path, required=True)
-    sel.add_argument("--validate-cmd", default="")
-    sel.add_argument("--retried", action="store_true")
-    sel.add_argument(
+    p.add_argument("--policy", type=Path, required=True)
+    p.add_argument("--candidates", type=Path, required=True)
+    p.add_argument("--model", default="", help="The chosen model")
+    p.add_argument(
+        "--only-model",
+        action="store_true",
+        help="Submit --model or nothing: no fallback to another model",
+    )
+    p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--validate-cmd", default="")
+    p.add_argument(
         "--no-shadows", action="store_true", help="Leave shadows out"
     )
     args = p.parse_args(argv)
-    only = bool(getattr(args, "only_model", False))
+    only = args.only_model
     policy = load_policy(args.policy).for_model(args.model, only=only)
-    if args.cmd == "triage":
-        need = triage(policy, args.candidates, deadline_minutes(args))
-        set_outputs({"need_retry": need})
-        print(f"need_retry={str(need).lower()}")
-        return 0
     validate = (
         command_validator(args.validate_cmd) if args.validate_cmd else None
     )
@@ -433,7 +332,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.candidates,
         args.out,
         validate,
-        args.retried,
         shadows=not args.no_shadows,
         only=only,
     )

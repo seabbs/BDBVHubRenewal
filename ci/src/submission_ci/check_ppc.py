@@ -13,9 +13,7 @@ other stream:
   intervals are too narrow, less too wide) and the mean PIT (below 0.5
   means the model predicts too high, above too low).
 
-Thresholds are in `policy.toml` under `[ppc]`, each overridable by an
-environment variable `BDBV_PPC_<KEY>` (for example
-`BDBV_PPC_COVERAGE_WARN`):
+Thresholds are in `policy.toml` under `[ppc]`:
 
 - `warn` when the coverage of the `level` interval (0.9), overall or
   over the last `recent_weeks` complete weeks, is below `coverage_warn`
@@ -49,33 +47,13 @@ from .common import (
     write_json,
     write_text,
 )
-from .summarise_fit import _env_number
+from .policy import load_policy
 
-DEFAULTS: dict[str, Any] = {
-    "stream": "total",
-    "level": 0.9,
-    "coverage_warn": 0.70,
-    "coverage_fail": 0.50,
-    "recent_weeks": 4,
-    "pit_ks_warn": 0.2,
-    "pit_min_rows": 20,
-}
 STREAMS = ("total", "observed", "imputed")
 # Descriptive cut-offs for the PIT shape. Reported, never gated.
 OUTER_NARROW = 0.3  # share in the outer deciles above which: too narrow
 OUTER_WIDE = 0.1  # and below which: too wide
 MEAN_BIAS = 0.15  # mean PIT further than this from 0.5: biased
-
-
-def limits(base: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    """Thresholds from `base` (or the defaults) with env overrides."""
-    out = {**DEFAULTS, **(base or {})}
-    for key, value in out.items():
-        if isinstance(value, int | float):
-            out[key] = _env_number(f"BDBV_PPC_{key.upper()}", float(value))
-    out["recent_weeks"] = int(out["recent_weeks"])
-    out["pit_min_rows"] = int(out["pit_min_rows"])
-    return out
 
 
 def _pct(level: float) -> int:
@@ -382,10 +360,9 @@ def summarise(
     out_dir: Path,
     *,
     sampled: bool,
-    base: Mapping[str, Any] | None = None,
+    lim: Mapping[str, Any],
 ) -> PPCCheck:
     """Gate one fit and write `ppc-summary.{md,json}` to `out_dir`."""
-    lim = limits(base)
     ppc, error = None, ""
     if ppc_path.exists():
         try:
@@ -429,20 +406,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--ppc", type=Path, required=True)
     p.add_argument("--diagnostics", type=Path, default=None)
     p.add_argument("--out", type=Path, required=True)
-    p.add_argument("--policy", type=Path, default=None)
+    p.add_argument("--policy", type=Path, required=True)
     p.add_argument("--no-fail", action="store_true")
     args = p.parse_args(argv)
-    base = None
-    if args.policy:
-        from .policy import load_policy
-
-        base = load_policy(args.policy).ppc
     check = summarise(
         args.id,
         args.ppc,
         args.out,
         sampled=is_sampled(args.kind, args.diagnostics),
-        base=base,
+        lim=load_policy(args.policy).ppc,
     )
     append_summary((args.out / "ppc-summary.md").read_text())
     set_outputs({"status": check.status, "available": check.available})

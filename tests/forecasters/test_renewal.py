@@ -312,19 +312,12 @@ def test_init_strategy_follows_the_sampler_table() -> None:
     from numpyro.infer import NUTS
 
     median = rn.init_strategy({})
-    jitter = rn.init_strategy({"init": "jitter"})
     assert median.func.__name__ == "init_to_median"
-    assert jitter.func.__name__ == "init_to_uniform"
-    assert jitter.keywords["radius"] == rn.JITTER_RADIUS
     with pytest.raises(ValueError, match="init"):
         rn.init_strategy({"init": "nope"})
-    kernel = rn.nuts_kernel(
-        lambda: None, {**rn.DEFAULT_SAMPLER, "init": "jitter"}
-    )
+    kernel = rn.nuts_kernel(lambda: None, rn.DEFAULT_SAMPLER)
     assert isinstance(kernel, NUTS)
-    assert kernel._init_strategy is jitter or (
-        kernel._init_strategy.func is jitter.func
-    )
+    assert kernel._init_strategy.func is median.func
 
 
 def test_unassigned_adds_the_national_data_gap(task: ForecastTask) -> None:

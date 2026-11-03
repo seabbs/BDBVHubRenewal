@@ -4,14 +4,9 @@ A port of BVDOutbreakSize's convergence gate (`docs/fits/convergence.jl`
 and `check_convergence.jl`) to the `diagnostics.json` the main repo
 writes (see INTEGRATION.md):
 
-- three thresholds per diagnostic. *retry* is BVDOutbreakSize's failure
-  threshold: a fit past it is refitted once, and the refit is accepted
-  unless it is clearly broken. *fail* marks a clearly broken fit (R-hat
-  far above 1.1, almost no effective draws, or many divergences), the
-  only convergence result that rules a candidate out. *warn* is
-  BVDOutbreakSize's warning threshold, reported only. Each has an
-  environment override (`BDBV_CONVERGENCE_{FAIL,RETRY,WARN}_RHAT` and so
-  on), which must be finite;
+- two thresholds per diagnostic, BVDOutbreakSize's. A fit past *fail*
+  is ruled out and the chain moves on; past *warn* it is reported only.
+  Both are in `policy.toml` under `[convergence]`;
 - a diagnostic that cannot be computed is reported as `n/a` and neither
   fails nor warns;
 - a missing or malformed diagnostics file is an `error`, which gates
@@ -25,7 +20,6 @@ from __future__ import annotations
 
 import argparse
 import math
-import os
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -42,69 +36,9 @@ from .common import (
     write_json,
     write_text,
 )
+from .policy import load_policy
 
 MARKER = "<!-- bdbv-fit-convergence -->"
-DIAGNOSTICS = ("rhat", "ess_bulk", "ess_tail", "divergent_fraction")
-LEVELS = ("fail", "retry", "warn")
-DEFAULT_THRESHOLDS: dict[str, dict[str, float]] = {
-    "fail": {
-        "rhat": 1.5,
-        "ess_bulk": 10.0,
-        "ess_tail": 10.0,
-        "divergent_fraction": 0.2,
-    },
-    "retry": {
-        "rhat": 1.1,
-        "ess_bulk": 25.0,
-        "ess_tail": 25.0,
-        "divergent_fraction": 0.05,
-    },
-    "warn": {
-        "rhat": 1.05,
-        "ess_bulk": 100.0,
-        "ess_tail": 100.0,
-        "divergent_fraction": 0.01,
-    },
-}
-_ENV = {
-    "rhat": "RHAT",
-    "ess_bulk": "ESS_BULK",
-    "ess_tail": "ESS_TAIL",
-    "divergent_fraction": "DIVERGENT",
-}
-
-
-def _env_number(name: str, default: float) -> float:
-    value = os.environ.get(name, "").strip()
-    if not value:
-        return default
-    try:
-        n = float(value)
-    except ValueError:
-        raise ValueError(
-            f'{name} is "{value}", which is not a number'
-        ) from None
-    if not math.isfinite(n):
-        raise ValueError(f'{name} is "{value}"; a threshold has to be finite')
-    return n
-
-
-def thresholds(
-    base: Mapping[str, Mapping[str, float]] | None = None,
-) -> dict[str, dict[str, float]]:
-    """Thresholds from `base` (or the defaults) with env overrides."""
-    out: dict[str, dict[str, float]] = {}
-    for level in LEVELS:
-        src = dict(DEFAULT_THRESHOLDS[level])
-        if base and level in base:
-            src.update({k: float(v) for k, v in base[level].items()})
-        out[level] = {
-            k: _env_number(
-                f"BDBV_CONVERGENCE_{level.upper()}_{_ENV[k]}", src[k]
-            )
-            for k in DIAGNOSTICS
-        }
-    return out
 
 
 def _finite(x: Any) -> float:
@@ -122,7 +56,6 @@ class FitCheck:
     id: str
     status: str
     applicable: bool
-    retry: bool = False
     headline: dict[str, float] = field(default_factory=dict)
     failures: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
@@ -160,12 +93,11 @@ def headline(diag: Mapping[str, Any]) -> dict[str, float]:
 
 def verdict(
     head: Mapping[str, float], limits: Mapping[str, Mapping[str, float]]
-) -> tuple[str, list[str], list[str], bool]:
-    """Status, messages and whether to refit, for the headline diagnostics.
+) -> tuple[str, list[str], list[str]]:
+    """Status and messages for the headline diagnostics.
 
-    Past the *fail* threshold the fit is clearly broken (`fail`). Past
-    the *retry* threshold it is a `warn` that asks for one refit. Past
-    the *warn* threshold it is a `warn` only.
+    Past the *fail* threshold the fit is ruled out (`fail`). Past the
+    *warn* threshold it is a `warn` only.
     """
     checks = (
         ("max R-hat", head["max_rhat"], "rhat", True),
@@ -180,7 +112,6 @@ def verdict(
     )
     failures: list[str] = []
     warnings: list[str] = []
-    retry = False
     for name, value, key, higher_is_worse in checks:
         if math.isnan(value):
             continue
@@ -195,19 +126,13 @@ def verdict(
                 f"{name} is {fmt(value)}, past the failure threshold "
                 f"{fmt(limits['fail'][key])}"
             )
-        elif breaches(limits["retry"][key]):
-            retry = True
-            warnings.append(
-                f"{name} is {fmt(value)}, past the retry threshold "
-                f"{fmt(limits['retry'][key])}"
-            )
         elif breaches(limits["warn"][key]):
             warnings.append(
                 f"{name} is {fmt(value)}, past the warning threshold "
                 f"{fmt(limits['warn'][key])}"
             )
     status = "fail" if failures else ("warn" if warnings else "pass")
-    return status, failures, warnings, retry and not failures
+    return status, failures, warnings
 
 
 def _label(p: Mapping[str, Any]) -> str:
@@ -277,7 +202,7 @@ def check_fit(
     if diag.get("sampler", "nuts") == "none":
         return FitCheck(fit_id, "skip", False)
     head = headline(diag)
-    status, failures, warnings, retry = verdict(head, limits)
+    status, failures, warnings = verdict(head, limits)
     # Warnings the model records itself, such as a prior standing in for
     # the publication lag.
     warnings = warnings + [str(w) for w in diag.get("warnings", [])]
@@ -287,7 +212,6 @@ def check_fit(
         fit_id,
         status,
         True,
-        retry=retry,
         headline=head,
         failures=failures,
         warnings=warnings,
@@ -303,7 +227,7 @@ def check_fit(
 _PHRASE = {
     "pass": "cleared the convergence thresholds",
     "warn": "converged, with diagnostics past the warning thresholds",
-    "fail": "is clearly broken",
+    "fail": "is past the failure thresholds",
     "error": "could not be judged",
     "skip": "has no sampler, so convergence does not apply",
 }
@@ -433,14 +357,12 @@ def markdown(
                 )
             )
             lines.append("\n</details>\n")
-    f, r, w = limits["fail"], limits["retry"], limits["warn"]
+    f, w = limits["fail"], limits["warn"]
     lines.append(
-        f"Thresholds. Clearly broken (fall back): R-hat above "
+        f"Thresholds. Ruled out (fall back): R-hat above "
         f"{fmt(f['rhat'])}, bulk ESS below {fmt(f['ess_bulk'])}, tail ESS "
         f"below {fmt(f['ess_tail'])}, divergences above "
-        f"{fmt(f['divergent_fraction'])} of draws. Refit once: "
-        f"{fmt(r['rhat'])}, {fmt(r['ess_bulk'])}, {fmt(r['ess_tail'])}, "
-        f"{fmt(r['divergent_fraction'])}. Warn: {fmt(w['rhat'])}, "
+        f"{fmt(f['divergent_fraction'])} of draws. Warn: {fmt(w['rhat'])}, "
         f"{fmt(w['ess_bulk'])}, {fmt(w['ess_tail'])}, "
         f"{fmt(w['divergent_fraction'])}."
     )
@@ -451,10 +373,9 @@ def summarise(
     fit_id: str,
     diagnostics: Path,
     out_dir: Path,
-    base: Mapping[str, Mapping[str, float]] | None = None,
+    limits: Mapping[str, Mapping[str, float]],
 ) -> FitCheck:
     """Gate one fit and write `fit-summary.{md,json}` to `out_dir`."""
-    limits = thresholds(base)
     try:
         diag = read_json(diagnostics) if diagnostics.exists() else None
     except ValueError:
@@ -487,15 +408,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--id", required=True)
     p.add_argument("--diagnostics", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
-    p.add_argument("--policy", type=Path, default=None)
+    p.add_argument("--policy", type=Path, required=True)
     p.add_argument("--no-fail", action="store_true")
     args = p.parse_args(argv)
-    base = None
-    if args.policy:
-        from .policy import load_policy
-
-        base = load_policy(args.policy).convergence
-    check = summarise(args.id, args.diagnostics, args.out, base)
+    limits = load_policy(args.policy).convergence
+    check = summarise(args.id, args.diagnostics, args.out, limits)
     append_summary((args.out / "fit-summary.md").read_text())
     set_outputs({"status": check.status})
     print(f"{args.id}: {check.status}")
