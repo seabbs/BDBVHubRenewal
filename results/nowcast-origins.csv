@@ -1,9 +1,22 @@
-origin,model,status,reason,mismatch_2026-10-24,mismatch_2026-11-01,n_complete,n_next
-2026-08-18,randomwalk,no forecast,No pair of releases up to 2026-08-18 has a step of at most 42 days.,,,0,0
-2026-08-18,randomwalknowcast,no forecast,No pair of releases up to 2026-08-18 has a step of at most 42 days.,,,0,0
-2026-10-09,randomwalk,no forecast,No pair of releases up to 2026-10-09 has a step of at most 42 days.,,,0,0
-2026-10-09,randomwalknowcast,no forecast,No pair of releases up to 2026-10-09 has a step of at most 42 days.,,,0,0
-2026-10-17,randomwalk,ran,,,,26,32
-2026-10-17,randomwalknowcast,ran,,1.0,3.0,26,32
-2026-10-24,randomwalk,ran,,,,20,36
-2026-10-24,randomwalknowcast,ran,,,1.0,20,36
+origin,model,status,reason,n_complete,n_reported
+2026-08-18,randomwalk,no forecast,No pair of releases up to 2026-08-18 has a step of at most 42 days.,0,0
+2026-08-18,randomwalknowcast,no forecast,No pair of releases up to 2026-08-18 has a step of at most 42 days.,0,0
+2026-08-18,renewal,stored,"no delay pair at the origin, so no reported target",55,0
+2026-08-18,renewalbvd,stored,"no delay pair at the origin, so no reported target",55,0
+2026-08-18,renewalsp,stored,"no delay pair at the origin, so no reported target",55,0
+2026-10-09,randomwalk,no forecast,No pair of releases up to 2026-10-09 has a step of at most 42 days.,0,0
+2026-10-09,randomwalknowcast,no forecast,No pair of releases up to 2026-10-09 has a step of at most 42 days.,0,0
+2026-10-09,renewal,stored,"no delay pair at the origin, so no reported target",17,0
+2026-10-09,renewalbvd,stored,"no delay pair at the origin, so no reported target",17,0
+2026-10-09,renewalsp,stored,"no delay pair at the origin, so no reported target",17,0
+2026-10-17,randomwalk,ran,,13,88
+2026-10-17,randomwalknowcast,ran,,13,88
+2026-10-17,renewal,stored,,13,88
+2026-10-17,renewalbvd,stored,,13,88
+2026-10-17,renewalsp,stored,,13,88
+2026-10-24,randomwalk,ran,,6,45
+2026-10-24,randomwalknowcast,ran,,6,45
+2026-10-24,ACCIDDA-Chromantis,stored,,15,54
+2026-10-24,CEPH-Rtrend_BDBV,stored,,0,9
+2026-10-24,MOBS-GLEAM_BDBV,stored,,0,5
+2026-10-24,OHTJHU-BM,stored,,13,48
