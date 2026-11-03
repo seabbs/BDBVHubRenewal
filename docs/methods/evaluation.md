@@ -30,7 +30,7 @@ $$
 
 Positive bias is overprediction.
 Relative WIS is a ratio of means against a baseline $b$ over the forecasts both made, and below 1 beats it.
-The baseline is `randomwalk` in the backtests and `randomwalknowcast` in the comparison with hub forecasts.
+The baseline is `randomwalk`.
 Coverage is whether $y$ falls in the central 50% and 90% sample intervals.
 
 ## Backtest design
@@ -111,6 +111,7 @@ Relative WIS is against `randomwalk` run at zone level.
 
 For each hub reference date, our unfitted models forecast from the latest real vintage serving the round.
 Fitted models use their stored backtest or held-out forecasts for the same round.
+Where we submitted to a round, our submitted files replace these forecasts.
 Every model is scored on the weeks it forecast as for [real releases](#real-releases), from the vintage serving the round.
-WIS is relative to `randomwalknowcast` on the weeks both forecast, on the [comparison page](../comparison.md).
+WIS is relative to `randomwalk` on the weeks both forecast, on the [comparison page](../comparison.md).
 A round is pending until a later real release exists.
