@@ -22,7 +22,7 @@ def _ledger(root: Path) -> Path:
         "rounds": {
             REF: {
                 "status": "submitted",
-                "produced_by": "main model (stand-in)",
+                "produced_by": "main model",
                 "as_of": "2026-10-24",
                 "pr_url": "https://github.com/o/r/pull/1",
                 "run": "https://github.com/o/r/actions/runs/9",
@@ -42,8 +42,7 @@ def _ledger(root: Path) -> Path:
         json.dumps(
             {
                 "selected": "main",
-                "stand_in": "the `main` config runs the random walk baseline",
-                "reason": "The main model (stand-in) cleared every check.",
+                "reason": "The main model cleared every check.",
                 "attempts": [
                     {"id": "main", "label": "main model", "status": "pass"},
                     {"id": "retry-1", "label": "r", "status": "not needed"},
@@ -80,7 +79,6 @@ def test_round_pages(tmp_path: Path) -> None:
     assert (rounds / f"{REF}.png").read_bytes() == b"png 10"
     assert "<https://github.com/o/r/pull/1>" in page
     assert "randomwalk (`main`)" in page
-    assert '!!! note "Stand-in"' in page
     assert "| 2026-11-07 | 15 |" in page
     assert "| main model | submitted |  |" in page
     assert "| r |" not in page

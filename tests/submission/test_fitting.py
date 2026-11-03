@@ -12,7 +12,6 @@ import pytest
 from bdbvhubrenewal.cli import main
 from bdbvhubrenewal.data import coherence_summary, national_coherence
 from bdbvhubrenewal.submission.fitting import (
-    get_config,
     list_configs,
     randomwalk_config,
     register_config,
@@ -35,31 +34,15 @@ def in_root(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     os.chdir(old)
 
 
-@pytest.fixture
-def stand_in() -> str:
-    register_config(
-        randomwalk_config("standin", stand_in="a test stand-in"), replace=True
-    )
-    return "standin"
-
-
 def test_main_runs_the_renewal_model() -> None:
     names = {c.name for c in list_configs()}
     assert {"main", "renewalsp", "randomwalk"} <= names
     assert "fallback" not in names
-    for name in ("main", "renewalsp", "randomwalk"):
-        assert get_config(name).stand_in is None
 
 
-def test_register_config_needs_replace() -> None:
+def test_register_config_refuses_a_taken_name() -> None:
     with pytest.raises(ValueError, match="already registered"):
         register_config(randomwalk_config("main"))
-    old = get_config("main")
-    try:
-        new = register_config(randomwalk_config("main"), replace=True)
-        assert get_config("main") is new
-    finally:
-        register_config(old, replace=True)
 
 
 def test_version(capsys: pytest.CaptureFixture[str]) -> None:
@@ -68,17 +51,16 @@ def test_version(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 @pytest.mark.usefixtures("in_root")
-def test_fit_then_nowcast_from_the_fit(tmp_path: Path, stand_in: str) -> None:
+def test_fit_then_nowcast_from_the_fit(tmp_path: Path) -> None:
     fit = tmp_path / "fit"
     sampler = '{"num_chains": 4, "seed": 1}'
-    args = ["--model", "randomwalk", "--config", stand_in, "--vintage"]
+    args = ["--model", "randomwalk", "--config", "randomwalk", "--vintage"]
     assert main(["fit", *args, "2026-10-17", "--sampler-json", sampler,
                  "--out", str(fit)]) == 0  # fmt: skip
     diag = json.loads((fit / "diagnostics.json").read_text())
     assert diag["sampler"] == "none"
     assert diag["status"] == "not-applicable"
-    assert diag["config"] == stand_in
-    assert diag["stand_in"] == "a test stand-in"
+    assert diag["config"] == "randomwalk"
     assert json.loads((fit / "ppc.json").read_text())["available"] is False
     assert json.loads((fit / "fit.json").read_text())["sampler"]["seed"] == 1
     assert (fit / "progress.log").read_text()
@@ -312,8 +294,6 @@ def test_randomwalknowcast_has_its_own_hub_id(
 def test_randomwalknowcast_config_runs_the_nowcast_model(
     tmp_path: Path,
 ) -> None:
-    config = get_config("randomwalknowcast")
-    assert config.stand_in is None
     fit = tmp_path / "fit"
     args = ["--config", "randomwalknowcast", "--vintage", "2026-10-17"]
     assert main(["fit", *args, "--out", str(fit)]) == 0

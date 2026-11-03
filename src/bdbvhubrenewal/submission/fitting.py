@@ -105,11 +105,6 @@ class FitConfig:
         `fit(task, sampler, fit_dir) -> diagnostics record`.
     forecast : callable
         `forecast(task, fit_dir) -> Forecast`.
-    stand_in : str or None
-        If set, this configuration stands in for one not built yet, and
-        the text says so, as a fragment that reads after "Stand-in:".
-        It is recorded in `fit.json` and in the diagnostics, and printed
-        by the CLI.
     model : str or None
         The registered model the configuration runs, for configurations
         that run one. The submission adds health zones by it.
@@ -119,23 +114,19 @@ class FitConfig:
     description: str
     fit: FitFn
     forecast: ForecastFn
-    stand_in: str | None = None
     model: str | None = None
 
 
 _CONFIGS: dict[str, FitConfig] = {}
 
 
-def register_config(config: FitConfig, *, replace: bool = False) -> FitConfig:
+def register_config(config: FitConfig) -> FitConfig:
     """Add a fit configuration.
 
     Parameters
     ----------
     config : FitConfig
         The configuration.
-    replace : bool
-        Allow replacing one of the same name, as the model integration
-        does for the `main` stand-in.
 
     Returns
     -------
@@ -145,9 +136,9 @@ def register_config(config: FitConfig, *, replace: bool = False) -> FitConfig:
     Raises
     ------
     ValueError
-        If the name is taken and `replace` is False.
+        If the name is taken.
     """
-    if config.name in _CONFIGS and not replace:
+    if config.name in _CONFIGS:
         raise ValueError(f"Fit config {config.name!r} is already registered.")
     _CONFIGS[config.name] = config
     return config
@@ -229,9 +220,7 @@ def _ppc_not_available(model: str, config: str, reason: str) -> dict[str, Any]:
     }
 
 
-def randomwalk_config(
-    name: str, stand_in: str | None = None, model: str = "randomwalk"
-) -> FitConfig:
+def randomwalk_config(name: str, model: str = "randomwalk") -> FitConfig:
     """Build a fit configuration that runs a registered sample-free model.
 
     There is nothing to fit. `fit` records the task and writes
@@ -242,8 +231,6 @@ def randomwalk_config(
     ----------
     name : str
         The configuration name.
-    stand_in : str, optional
-        Set when the configuration stands in for one not built yet.
     model : str
         The registered model to run.
 
@@ -261,10 +248,7 @@ def randomwalk_config(
         _write_json(
             fit_dir / "ppc.json", _ppc_not_available(model, name, reason)
         )
-        diag = no_sampler_diagnostics(model, name, reason)
-        if stand_in:
-            diag["stand_in"] = stand_in
-        return diag
+        return no_sampler_diagnostics(model, name, reason)
 
     def forecast(task: ForecastTask, fit_dir: Path) -> Forecast:
         del fit_dir
@@ -275,7 +259,6 @@ def randomwalk_config(
         description=f"{model} model, nothing to fit",
         fit=fit,
         forecast=forecast,
-        stand_in=stand_in,
         model=model,
     )
 
@@ -312,7 +295,7 @@ def run_fit(
     """Fit a configuration and write the fit directory.
 
     Writes `fit.json` (the configuration, model, vintage, reference date,
-    sampler settings and any stand-in note), `diagnostics.json` and
+    sampler settings), `diagnostics.json` and
     `progress.log`. The diagnostics are written whether or not the fit
     converged; the CI's gate judges them.
 
@@ -352,7 +335,6 @@ def run_fit(
             "model": model,
             "config": config.name,
             "description": config.description,
-            "stand_in": config.stand_in,
             "vintage": task.vintage,
             "reference_date": task.reference_date.isoformat(),
             "sampler": dict(sampler),
@@ -401,7 +383,7 @@ def run_forecast(
         The forecast task.
     fit_dir : pathlib.Path or str, optional
         The fit directory written by `run_fit`. Required unless the
-        configuration needs no fit, which the random walk stand-ins do not.
+        configuration needs no fit, as the random walk configurations do not.
 
     Returns
     -------

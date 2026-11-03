@@ -71,36 +71,12 @@ class Attempt:
     reasons: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     handled: list[str] = field(default_factory=list)
-    stand_in: str = ""
     retry: bool = False
-
-    @property
-    def name(self) -> str:
-        """The label, marked when the candidate runs a stand-in model."""
-        return f"{self.label} (stand-in)" if self.stand_in else self.label
 
 
 def _submission(cdir: Path) -> Path | None:
     files = sorted((cdir / "submission").glob("**/*.csv"))
     return files[0] if files else None
-
-
-def stand_in(cdir: Path) -> str:
-    """What a candidate stands in with, from `run.json` or diagnostics.
-
-    The main CLI writes `"stand_in": "<text>"` when a config runs a
-    stand-in model, such as random walk until the renewal model is
-    integrated. Empty when the candidate is the real thing.
-    """
-    for name in ("run.json", "diagnostics.json"):
-        path = cdir / name
-        try:
-            value = read_json(path).get("stand_in") if path.exists() else None
-        except (ValueError, AttributeError):
-            value = None
-        if value:
-            return str(value)
-    return ""
 
 
 def assess(c: Candidate, cdir: Path) -> Attempt:
@@ -110,7 +86,6 @@ def assess(c: Candidate, cdir: Path) -> Attempt:
         a.status = "missing"
         a.reasons.append("no output (the job did not run or did not finish)")
         return a
-    a.stand_in = stand_in(cdir)
     statuses = []
     fit_path = cdir / "fit-summary.json"
     if c.kind == "randomwalk" and not fit_path.exists():
@@ -300,10 +275,10 @@ def _reason(
 ) -> str:
     """One sentence on why this candidate produced the submission."""
     before = [a for a in attempts if a.reasons and a is not chosen]
-    why = "; ".join(f"{a.name} was ruled out ({a.reasons[0]})" for a in before)
+    why = "; ".join(f"{a.label} was ruled out ({a.reasons[0]})" for a in before)
     if chosen is None and only:
         return (
-            f"{attempts[0].name} could not run or was ruled out "
+            f"{attempts[0].label} could not run or was ruled out "
             f"({why or 'no output'}). This round is skipped for this model: "
             "no other model is submitted in its place."
         )
@@ -311,15 +286,9 @@ def _reason(
         return "Every candidate was ruled out: " + (why or "none ran") + "."
     if not before:
         if chosen.warnings:
-            return f"The {chosen.name} cleared every check, with warnings."
-        return f"The {chosen.name} cleared every check."
-    return f"{why[0].upper()}{why[1:]}. The {chosen.name} cleared the checks."
-
-
-def stand_in_line(text: str) -> str:
-    """The sentence that states a stand-in, in bold, ending in a stop."""
-    text = text.strip()
-    return f"**Stand-in:** {text}{'' if text.endswith('.') else '.'}"
+            return f"The {chosen.label} cleared every check, with warnings."
+        return f"The {chosen.label} cleared every check."
+    return f"{why[0].upper()}{why[1:]}. The {chosen.label} cleared the checks."
 
 
 def provenance_markdown(prov: dict[str, Any]) -> str:
@@ -329,12 +298,10 @@ def provenance_markdown(prov: dict[str, Any]) -> str:
         if prov["selected"]
         else f"## Round skipped\n\n{prov['reason']}\n"
     )
-    if prov.get("stand_in"):
-        head += f"\n{stand_in_line(prov['stand_in'])}\n"
     rows = [
         [
             f"`{a['id']}`",
-            a["label"] + (" (stand-in)" if a.get("stand_in") else ""),
+            a["label"],
             STATUS_LABEL.get(a["fit"], a["fit"]),
             STATUS_LABEL.get(a.get("ppc", "n/a"), a.get("ppc", "n/a")),
             STATUS_LABEL.get(a["checks"], a["checks"]),
@@ -396,8 +363,7 @@ def run_select(
     prov: dict[str, Any] = {
         "selected": chosen.id if chosen else None,
         "kind": chosen.kind if chosen else None,
-        "produced_by": chosen.name if chosen else "nothing (round skipped)",
-        "stand_in": chosen.stand_in if chosen else "",
+        "produced_by": chosen.label if chosen else "nothing (round skipped)",
         "status": (
             ("warn" if chosen.warnings or chosen.status == "warn" else "pass")
             if chosen

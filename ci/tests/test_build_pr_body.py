@@ -8,7 +8,6 @@ import pytest
 from conftest import REF, make_samples, write_json, write_samples
 from test_check_coherence import GAP, coherence
 from test_check_ppc import ppc
-from test_select_candidate import STAND_IN
 
 from submission_ci.build_pr_body import (
     FOOTER,
@@ -315,17 +314,6 @@ def test_ppc_row_without_posterior(tmp_path: Path) -> None:
         "| Posterior predictive checks | N/A (the model has no sampler) |"
         in body(g)
     )
-
-
-def test_stand_in_is_stated(tmp_path: Path) -> None:
-    g = gate(tmp_path, produced_by="main model (stand-in)")
-    prov = read_json(g / "provenance.json")
-    prov["run"]["model"] = "randomwalk"
-    write_json(g / "provenance.json", {**prov, "stand_in": STAND_IN})
-    assert visible(body(g))[1] == (
-        "All checks passed. Stand-in: randomwalk runs as the `main` model."
-    )
-    assert "Stand-in" not in body(gate(tmp_path / "real"))
 
 
 def test_body_reports_shadow_candidates(tmp_path: Path) -> None:

@@ -16,8 +16,6 @@ candidate id the step script exports as `CAND_ID`. Scenarios:
                of the observations (PPC warns)
   ppcfail      converged, but they cover about 30% (PPC fails)
   noppc        converged, but the fit writes no ppc.json (PPC error)
-  standin      the config runs a stand-in (random walk): no sampler, no
-               posterior, and `stand_in` in diagnostics.json and fit.json
 
 Unknown candidates default to `pass`. `randomwalk=implausible` breaks
 the random walk baseline too, which is how the dry run reaches a skip.
@@ -143,24 +141,6 @@ def cmd_fit(args: argparse.Namespace) -> int:
     if sc == "crash":
         print("fake fit: crashed", file=sys.stderr)
         return 1
-    if sc == "standin":
-        text = (
-            f"the `{args.config}` config runs the random walk baseline in "
-            "place of the model"
-        )
-        diag = {"schema_version": 1, "sampler": "none", "stand_in": text}
-        ppc = {
-            "schema_version": 1,
-            "available": False,
-            "reason": "the stand-in has no posterior",
-        }
-        for name, data in (
-            ("diagnostics.json", diag),
-            ("fit.json", {"stand_in": text}),
-            ("ppc.json", ppc),
-        ):
-            (out / name).write_text(json.dumps(data))
-        return 0
     rng = random.Random(1)
     sampler = json.loads(args.sampler_json or "{}")
     chains = int(sampler.get("num_chains", 4))

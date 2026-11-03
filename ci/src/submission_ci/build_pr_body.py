@@ -168,12 +168,6 @@ def status_line(
         head = "All checks passed."
     if names:
         head = head[:-1] + f", with warnings on {', '.join(names)}."
-    run = provenance.get("run") or {}
-    if provenance.get("stand_in"):
-        head += (
-            f" Stand-in: {run.get('model', 'randomwalk')} runs as the "
-            f"`{run.get('config', 'main')}` model."
-        )
     if dry_run:
         head += " Dry run: nothing was pushed."
     return head

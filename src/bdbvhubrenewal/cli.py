@@ -625,8 +625,6 @@ def _fit(args: argparse.Namespace) -> int:
     except (KeyError, ValueError, OSError) as err:
         print(f"ERROR: {err}", file=sys.stderr)
         return 1
-    if config.stand_in:
-        print(f"Stand-in: {config.stand_in}.")
     diag = result.diagnostics
     print(
         f"Fitted config {config.name!r} on vintage {task.vintage} "
@@ -913,8 +911,6 @@ def _nowcast(args: argparse.Namespace) -> int:
         task, handled = _task(args)
         if args.config:
             config = get_config(args.config)
-            if config.stand_in:
-                print(f"Stand-in: {config.stand_in}.")
             result = run_forecast(config, task, args.fit)
         else:
             samples = get_model(args.model).forecast(task)

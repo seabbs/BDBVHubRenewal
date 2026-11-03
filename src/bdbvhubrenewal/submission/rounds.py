@@ -136,12 +136,6 @@ def round_page(
     lines += ["| | |", "| --- | --- |"]
     lines += [f"| {k} | {v} |" for k, v in facts]
     lines.append("")
-    if prov.get("stand_in"):
-        lines.append(
-            f'!!! note "Stand-in"\n    {prov["stand_in"][0].upper()}'
-            f"{prov['stand_in'][1:]}."
-        )
-        lines.append("")
     if prov.get("reason"):
         lines += [str(prov["reason"]), ""]
     if image:

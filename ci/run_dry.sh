@@ -42,7 +42,6 @@ SCENARIOS=(
   "bvdrelease|main=pass|main||used BVDOutbreakSize release \`results-3180\` (data to 2026-10-23, joint R-hat 1.041, limit 1.1)."
   "coherence|main=pass|main|FAKE_COHERENCE_GAP=2026-10-24:2|Handled: national (CD) differs from the sum of the provinces"
   "warn|main=warn|main"
-  "standin|main=standin|main||Stand-in: "
   "ppcwarn|main=ppcwarn|main||All checks passed, with warnings on ppc."
   "ppcfail|main=ppcfail|main||All checks passed, with warnings on ppc."
   "noppc|main=noppc|main||All checks passed, with warnings on ppc."

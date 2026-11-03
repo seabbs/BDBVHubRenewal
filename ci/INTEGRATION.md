@@ -181,10 +181,6 @@ The PR body adds the commit SHA itself.
   The other fields are reported, not gated.
 - `worst_rhat` lists the ten parameter elements with the highest R-hat, as BVDOutbreakSize does.
 - A model with no sampler, such as random walk, writes `{"schema_version": 1, "sampler": "none"}`.
-- A config that runs a stand-in model, such as a config running random walk in place of a model not yet built, adds `"stand_in": "<text>"`.
-  It can also go in `<fit dir>/fit.json`.
-  `candidate.sh` copies it into `run.json`.
-  The chain table, the job summary and the PR body then mark the candidate "(stand-in)", and the PR body states the text in a bold **Stand-in:** line under "Produced by".
 - A missing or unreadable file is an `error`, and gates as a failure.
 
 With NumPyro and ArviZ:

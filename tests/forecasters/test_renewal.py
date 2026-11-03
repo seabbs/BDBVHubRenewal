@@ -19,7 +19,7 @@ from bdbvhubrenewal.forecasters import (
     list_models,
 )
 from bdbvhubrenewal.forecasters import renewal as rn
-from bdbvhubrenewal.submission.fitting import Forecast, get_config
+from bdbvhubrenewal.submission.fitting import Forecast
 from bdbvhubrenewal.submission.hub import model_abbr_for
 
 pytest.importorskip("pyrenew")
@@ -53,14 +53,12 @@ def test_variants_are_registered_as_fitted_models() -> None:
 
 
 def test_fit_configs_run_the_renewal_model() -> None:
-    assert get_config("main").stand_in is None
     assert rn.VARIANTS["renewal"].base == "MAIN"
     assert rn.FIT_VARIANTS == {
         "main": "renewal",
         "renewalsp": "renewalsp",
         "bvd": "renewalbvd",
     }
-    assert get_config("bvd").stand_in is None
 
 
 def test_model_config_applies_overrides() -> None:
