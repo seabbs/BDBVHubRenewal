@@ -9,6 +9,7 @@
     "CD-NK"
   ],
   "hub_ids": {
+    "renewal": "seabbs-renewal",
     "randomwalknowcast": "seabbs-rwnowcast",
     "randomwalk": "seabbs-randomwalk"
   },

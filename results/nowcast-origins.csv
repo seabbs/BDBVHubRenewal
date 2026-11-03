@@ -1,9 +1,24 @@
-origin,model,status,reason,mismatch_2026-10-24,mismatch_2026-11-01,n_complete,n_next
-2026-08-18,randomwalk,no forecast,No pair of releases up to 2026-08-18 has a step of at most 42 days.,,,0,0
-2026-08-18,randomwalknowcast,no forecast,No pair of releases up to 2026-08-18 has a step of at most 42 days.,,,0,0
-2026-10-09,randomwalk,no forecast,No pair of releases up to 2026-10-09 has a step of at most 42 days.,,,0,0
-2026-10-09,randomwalknowcast,no forecast,No pair of releases up to 2026-10-09 has a step of at most 42 days.,,,0,0
-2026-10-17,randomwalk,ran,,,,26,32
-2026-10-17,randomwalknowcast,ran,,1.0,3.0,26,32
-2026-10-24,randomwalk,ran,,,,20,36
-2026-10-24,randomwalknowcast,ran,,,1.0,20,36
+origin,model,status,reason,n_reported,n_complete
+2026-08-18,randomwalk,no forecast,No pair of releases up to 2026-08-18 has a step of at most 42 days.,0,0
+2026-08-18,randomwalknowcast,no forecast,No pair of releases up to 2026-08-18 has a step of at most 42 days.,0,0
+2026-08-18,renewal,no forecast,No pair of releases up to 2026-08-18 has a step of at most 42 days.,0,0
+2026-08-18,renewalbvd,no forecast,No pair of releases up to 2026-08-18 has a step of at most 42 days.,0,0
+2026-08-18,renewalsp,no forecast,No pair of releases up to 2026-08-18 has a step of at most 42 days.,0,0
+2026-10-09,randomwalk,no forecast,No pair of releases up to 2026-10-09 has a step of at most 42 days.,0,0
+2026-10-09,randomwalknowcast,no forecast,No pair of releases up to 2026-10-09 has a step of at most 42 days.,0,0
+2026-10-09,renewal,no forecast,No pair of releases up to 2026-10-09 has a step of at most 42 days.,0,0
+2026-10-09,renewalbvd,no forecast,No pair of releases up to 2026-10-09 has a step of at most 42 days.,0,0
+2026-10-09,renewalsp,no forecast,No pair of releases up to 2026-10-09 has a step of at most 42 days.,0,0
+2026-10-17,randomwalk,scored,,88,13
+2026-10-17,randomwalknowcast,scored,,88,13
+2026-10-17,renewal,scored,,88,13
+2026-10-17,renewalbvd,scored,,88,13
+2026-10-17,renewalsp,scored,,88,13
+2026-10-17,as reported,scored,,88,13
+2026-10-24,randomwalk,scored,,45,6
+2026-10-24,randomwalknowcast,scored,,45,6
+2026-10-24,ACCIDDA-Chromantis,scored,,54,15
+2026-10-24,CEPH-Rtrend_BDBV,scored,,9,0
+2026-10-24,MOBS-GLEAM_BDBV,scored,,5,0
+2026-10-24,OHTJHU-BM,scored,,48,13
+2026-10-24,as reported,scored,,45,6
