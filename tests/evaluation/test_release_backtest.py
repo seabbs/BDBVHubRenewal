@@ -16,7 +16,7 @@ from bdbvhubrenewal.evaluation.backtest import (
 from bdbvhubrenewal.evaluation.nowcast import (
     BASELINE,
     complete_weeks,
-    expected_reported,
+    draw_reported,
     relative_wis,
     release_backtest,
     reported_share,
@@ -237,21 +237,38 @@ def test_share_is_zero_after_the_cutoff_and_one_when_old(
     assert (share.xs("2026-10-31", level=1) < 1).all()
 
 
-def test_map_keeps_the_reported_count_and_adds_the_expected_share() -> None:
-    keys = {
-        "location": "CD",
-        "target_end_date": ["2026-10-17", "2026-10-24", "2026-10-31"],
-    }
-    samples = pd.DataFrame(
-        {**keys, "sample": 1, "value": [100.0, 100.0, 100.0]}
+def test_draw_keeps_the_reported_count_and_thins_the_outstanding_count() -> (
+    None
+):
+    weeks = ["2026-10-17", "2026-10-24", "2026-10-31"]
+    n = 4000
+    keys = {"location": "CD", "target_end_date": np.repeat(weeks, n)}
+    samples = pd.DataFrame({**keys, "sample": np.tile(np.arange(n), 3)})
+    samples["value"] = 100.0
+    reported = pd.DataFrame(
+        {
+            "location": "CD",
+            "target_end_date": weeks[:2],
+            "reported": [100.0, 40.0],
+        }
     )
-    reported = pd.DataFrame({**keys, "reported": [100.0, 40.0, 20.0]})[:2]
-    now = pd.DataFrame({**keys, "share": [1.0, 0.4, 0.0]})
-    then = pd.DataFrame({**keys, "share": [1.0, 0.7, 0.5]})
-    out = expected_reported(samples, reported, now, then)
-    # Complete at the origin: the final count stands. Part reported: the
-    # outstanding 60 is half reported. After the origin: X times the share.
-    assert out["value"].tolist() == pytest.approx([100.0, 70.0, 50.0])
-    floor = samples.assign(value=[100.0, 40.0, 0.0])
-    out = expected_reported(floor, reported, now, then)
-    assert out["value"].tolist() == pytest.approx([100.0, 40.0, 0.0])
+    now = pd.DataFrame(
+        {"location": "CD", "target_end_date": weeks, "share": [1.0, 0.4, 0.0]}
+    )
+    then = now.assign(share=[1.0, 0.7, 0.5])
+    out = draw_reported(samples, reported, now, then, np.random.default_rng(1))
+    got = out.groupby("target_end_date")["value"]
+    # Complete at the origin: the final count stands. Part reported: half
+    # of the outstanding 60 arrives. After the origin: half of 100.
+    assert got.mean().tolist() == pytest.approx([100.0, 70.0, 50.0], abs=0.5)
+    assert got.var().tolist() == pytest.approx([0.0, 15.0, 25.0], rel=0.1)
+    assert (out.loc[out["target_end_date"] == weeks[1], "value"] >= 40).all()
+    floor = samples.assign(value=np.repeat([100.0, 40.0, 0.0], n))
+    out = draw_reported(floor, reported, now, then, np.random.default_rng(1))
+    assert out.groupby("target_end_date")["value"].unique().map(
+        list
+    ).tolist() == [
+        [100.0],
+        [40.0],
+        [0.0],
+    ]

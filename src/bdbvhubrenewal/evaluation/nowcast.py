@@ -13,13 +13,14 @@ Two targets are scored.
 **Reported.** The count each later release $o'$ shows, for every week
 of the forecast that $o'$ reports.
 Every model forecasts the final count $X$ of a week.
-Its samples are mapped to the count expected at $o'$,
-$R_o + q (X - R_o)$, with $R_o$ the count reported at the origin and
+Of the count $X - R_o$ outstanding at the origin, with $R_o$ the count
+reported there, $o'$ reports a draw from
+$\text{Binomial}(X - R_o, q)$, with
 $q = (\pi_{o'} - \pi_o) / (1 - \pi_o)$, where $\pi$ is the share of the
 week's final count reported by a cut-off under the delay fitted at the
-origin (`reported_share`, `expected_reported`).
-For the chain nowcast this is the chain over the gap to $o'$, and the
-floor maps to itself.
+origin (`reported_share`, `draw_reported`).
+Its mean is the chain over the gap to $o'$ for the chain nowcast, and
+the floor maps to itself.
 
 **Complete weeks.** The count the latest release shows for the weeks it
 reports in full, decided from the releases alone and never from a
@@ -72,7 +73,7 @@ __all__ = [
     "COMPLETE_WEEKS",
     "ReleaseBacktest",
     "complete_weeks",
-    "expected_reported",
+    "draw_reported",
     "relative_wis",
     "release_backtest",
     "reported_share",
@@ -169,19 +170,21 @@ def reported_share(
     )
 
 
-def expected_reported(
+def draw_reported(
     samples: pd.DataFrame,
     reported: pd.DataFrame,
     now: pd.DataFrame,
     then: pd.DataFrame,
+    rng: np.random.Generator,
 ) -> pd.DataFrame:
-    r"""Map samples of the final count to the count expected at a release.
+    r"""Draw the count a later release reports from samples of the final count.
 
-    Each sample $X$ becomes $R_o + q (X - R_o)$, with $R_o$ the count
-    reported at the origin and
-    $q = (\pi_{o'} - \pi_o) / (1 - \pi_o)$ the share of the count
-    outstanding at the origin that the later release $o'$ is expected to
-    report. A week fully reported at the origin has $q = 1$.
+    Of the count $X - R_o$ outstanding at the origin, with $R_o$ the count
+    reported there, the later release $o'$ reports a binomial draw with
+    probability $q = (\pi_{o'} - \pi_o) / (1 - \pi_o)$, the share it is
+    expected to report. Each sample becomes
+    $R_o + \text{Binomial}(X - R_o, q)$, with the sign carried when
+    $X < R_o$. A week fully reported at the origin has $q = 1$.
 
     Parameters
     ----------
@@ -192,11 +195,13 @@ def expected_reported(
         at the origin. Weeks not in it have 0 reported.
     now, then : pandas.DataFrame
         `reported_share` at the origin's cut-off and the later one's.
+    rng : numpy.random.Generator
+        Random numbers.
 
     Returns
     -------
     pandas.DataFrame
-        The samples of the places and weeks in `now`, mapped.
+        The samples of the places and weeks in `now`, drawn.
     """
     keys = ["location", "target_end_date"]
     share = now.merge(then, on=keys, suffixes=("_o", "_l"))
@@ -206,7 +211,8 @@ def expected_reported(
         pi_l - pi_o, 1.0 - pi_o, out=np.ones(len(rows)), where=pi_o < 1.0
     ).clip(0.0, 1.0)
     r = rows.pop("reported").fillna(0.0)
-    rows["value"] = r + q * (rows["value"] - r)
+    left = np.round(rows["value"] - r).astype(np.int64)
+    rows["value"] = r + np.sign(left) * rng.binomial(np.abs(left), q)
     return rows
 
 
@@ -452,10 +458,11 @@ def release_backtest(
         reported = _truth(real, task.vintage).rename(
             columns={"truth": "reported"}
         )
+        rng = task.rng()
         for o2 in later:
             then = reported_share(origin, _cutoff(daily, o2), weeks)
             for name, samples in forecasts.items():
-                mapped = expected_reported(samples, reported, now, then)
+                mapped = draw_reported(samples, reported, now, then, rng)
                 frames.append(
                     _label(mapped, name, task.vintage, "reported", o2, daily)
                 )

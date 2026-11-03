@@ -65,15 +65,15 @@ Two targets are scored.
 Every model forecasts the final count $X$ of week $w$.
 Day $t$ is $a = c - t$ days old at a cut-off $c$, and the share of its final count reported then is $\pi(a) = 1 / G(a)$, with $G(a)$ the growth from age $a$ to $D$ under the daily delay of the origin ([Baseline models](baselines.md#delay)).
 Days after the cut-off have $\pi = 0$, and a week's share $\pi_w$ is the mean over its seven days.
-With $R_o$ the count reported at the origin, each sample is mapped to the count expected at $o'$,
+With $R_o$ the count reported at the origin, the count outstanding there, $X - R_o$, is thinned binomially, so each sample becomes a draw of the count reported at $o'$,
 
 $$
-R_o + q \, (X - R_o), \qquad q = \frac{\pi_w(c_{o'}) - \pi_w(c_o)}{1 - \pi_w(c_o)},
+R_o + \text{Binomial}(X - R_o, q), \qquad q = \frac{\pi_w(c_{o'}) - \pi_w(c_o)}{1 - \pi_w(c_o)},
 $$
 
-and a week fully reported at the origin has $q = 1$.
+with the sign carried when $X < R_o$, and a week fully reported at the origin has $q = 1$.
 Only the delay fitted at the origin is used.
-For `randomwalknowcast` this is the growth over the gap to $o'$, and the floor maps to itself.
+Its mean is the growth over the gap to $o'$ for `randomwalknowcast`, and the floor maps to itself.
 
 **Complete weeks.** The count the latest release shows for the weeks it reports in full.
 A week is complete when it is at least 4 weeks old at the latest release and grew by less than 2% since the release before.
