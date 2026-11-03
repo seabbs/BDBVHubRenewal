@@ -1,6 +1,6 @@
-run_at: '2026-11-03T13:10:41+00:00'
+run_at: '2026-11-03T14:46:56+00:00'
 model_choice: results/model-choice.yml
-model_choice_sha256: a308dbe769aaebff5a1eae139f138fb20c5f5113c4f6c0c97d913682843fe8d4
+model_choice_sha256: 8113d40d74cb8650e3ba17900001d593a74e2183b64862e6f57896e7874e13ae
 choices:
 - date: '2026-10-28'
   model: randomwalknowcast
