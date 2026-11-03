@@ -77,7 +77,6 @@ __all__ = [
     "lopo_tasks",
     "make_tasks",
     "merge_by_model",
-    "order_tasks",
     "real_vintages",
     "recovery_tasks",
     "run_development",
@@ -89,7 +88,6 @@ __all__ = [
     "score_by_truth_vintage",
     "score_development",
     "score_tasks",
-    "shard_tasks",
     "truth_changes",
     "truth_from_vintage",
     "uses_lag_prior",
@@ -383,53 +381,6 @@ def uses_lag_prior(task: ForecastTask) -> bool:
     return publication_lag_pmf(task.delay_history, task.vintage) is None
 
 
-def order_tasks(tasks: Sequence[ForecastTask]) -> list[ForecastTask]:
-    """Order tasks by kind, real first, then by vintage.
-
-    Parameters
-    ----------
-    tasks : sequence of ForecastTask
-        The tasks.
-
-    Returns
-    -------
-    list of ForecastTask
-        The same tasks, reordered.
-    """
-    return sorted(tasks, key=lambda t: (t.kind != "real", t.kind, t.vintage))
-
-
-def shard_tasks(
-    tasks: Sequence[ForecastTask], index: int, count: int
-) -> list[ForecastTask]:
-    """Return every `count`-th task from `index`, to split a run.
-
-    Parameters
-    ----------
-    tasks : sequence of ForecastTask
-        All the tasks.
-    index : int
-        This shard, from 0.
-    count : int
-        Number of shards.
-
-    Returns
-    -------
-    list of ForecastTask
-        The shard's tasks. The shards cover every task once.
-    """
-    return list(tasks)[index::count]
-
-
-def _cache_path(cache: Path, model: str, task: ForecastTask) -> Path:
-    mask = f"_mask-{'-'.join(task.mask)}" if task.mask else ""
-    return cache / f"{model}_{task.kind}_{task.vintage}{mask}.csv.gz"
-
-
-def _fits_path(path: Path) -> Path:
-    return path.with_name(path.name.replace(".csv.gz", ".fits.csv"))
-
-
 def _fit_rows(model: ForecastModel, task: ForecastTask) -> pd.DataFrame:
     """Return the model's summary of each fit it made for the task."""
     rows = getattr(model, "fit_diagnostics", None) or []
@@ -479,7 +430,6 @@ def check_distinct(forecasts: pd.DataFrame) -> None:
 def run_forecasts(
     models: Sequence[ForecastModel],
     tasks: Iterable[ForecastTask],
-    cache: Path | str | None = None,
     fits: list[pd.DataFrame] | None = None,
 ) -> pd.DataFrame:
     """Run every model on every task, adding the national total.
@@ -496,13 +446,9 @@ def run_forecasts(
         Models to run.
     tasks : iterable of ForecastTask
         Tasks to run them on.
-    cache : pathlib.Path or str, optional
-        A directory with one file per model and task. A task with a file
-        is read from it, and every new forecast is written to it at once,
-        so a long run can be resumed or split (`shard_tasks`).
     fits : list, optional
         Collects a table of each model's fit summaries per task, for
-        models that set `fit_diagnostics` (cached with the forecasts).
+        models that set `fit_diagnostics`.
 
     Returns
     -------
@@ -511,9 +457,6 @@ def run_forecasts(
         `location`, `target_end_date`, `sample`, `value`, `as_of`
         (missing for final counts) and `lag_prior` (`uses_lag_prior`).
     """
-    store = None if cache is None else Path(cache)
-    if store is not None:
-        store.mkdir(parents=True, exist_ok=True)
     frames = []
     for task in tasks:
         for model in models:
@@ -524,17 +467,6 @@ def run_forecasts(
                     f"{model.name} needs daily release snapshots, and the "
                     f"{task.kind} task for {task.vintage} has none."
                 )
-            path = (
-                None if store is None else _cache_path(store, model.name, task)
-            )
-            if path is not None and path.exists():
-                frames.append(pd.read_csv(path, dtype={"as_of": object}))
-                fit_path = path.with_name(
-                    path.name.replace(".csv.gz", ".fits.csv")
-                )
-                if fits is not None and fit_path.exists():
-                    fits.append(pd.read_csv(fit_path, dtype={"masked": str}))
-                continue
             if hasattr(model, "fit_diagnostics"):
                 model.fit_diagnostics = []
             try:
@@ -561,11 +493,6 @@ def run_forecasts(
             samples.insert(1, "kind", task.kind)
             samples.insert(2, "vintage", task.vintage)
             samples.insert(3, "reference_date", task.reference_date.isoformat())
-            if path is not None:
-                if not table.empty:
-                    table.to_csv(_fits_path(path), index=False)
-                # Written last, so a file means the task is complete.
-                samples.to_csv(path, index=False)
             frames.append(samples)
     if not frames:
         return pd.DataFrame(columns=FORECAST_COLUMNS)
@@ -848,7 +775,6 @@ def run_development(
     delays: pd.DataFrame,
     config: BacktestConfig,
     *,
-    cache: Path | str | None = None,
     fits: list[pd.DataFrame] | None = None,
     daily: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -868,8 +794,6 @@ def run_development(
         The tidy delay table.
     config : BacktestConfig
         Settings.
-    cache : pathlib.Path or str, optional
-        Forecast cache, as for `run_forecasts`.
     fits : list, optional
         Collects fit summaries, as for `run_forecasts`.
     daily : pandas.DataFrame, optional
@@ -881,7 +805,7 @@ def run_development(
         The forecasts and the scores.
     """
     tasks = development_tasks(target, delays, config, daily=daily)
-    forecasts = run_forecasts(models, tasks, cache, fits)
+    forecasts = run_forecasts(models, tasks, fits)
     return forecasts, score_development(forecasts, target, config)
 
 
@@ -948,7 +872,6 @@ def run_lopo(
     config: BacktestConfig,
     *,
     provinces: Sequence[str] | None = None,
-    cache: Path | str | None = None,
     fits: list[pd.DataFrame] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Leave one province out: forecast it with its counts masked.
@@ -974,8 +897,6 @@ def run_lopo(
     provinces : sequence of str, optional
         Provinces to mask, one at a time. Defaults to every province with
         cases in each task.
-    cache : pathlib.Path or str, optional
-        Forecast cache, as for `run_forecasts`.
     fits : list, optional
         Collects fit summaries, as for `run_forecasts`.
 
@@ -996,7 +917,7 @@ def run_lopo(
     frames = []
     for task in lopo_tasks(target, delays, config, provinces=provinces):
         prov = task.mask[0]
-        samples = run_forecasts(able, [task], cache, fits)
+        samples = run_forecasts(able, [task], fits)
         kept = samples.loc[samples["location"] == prov].copy()
         kept.insert(4, "masked", prov)
         frames.append(kept)
@@ -1049,7 +970,6 @@ def run_recovery(
     models: Sequence[ForecastModel],
     config: BacktestConfig,
     settings: SimulationSettings | None = None,
-    cache: Path | str | None = None,
     fits: list[pd.DataFrame] | None = None,
     lags: Mapping[int, int] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -1063,8 +983,6 @@ def run_recovery(
         Settings, including `simulated_dates`.
     settings : SimulationSettings, optional
         The simulated scenario. Defaults to `turning_point`.
-    cache : pathlib.Path or str, optional
-        Forecast cache, as for `run_forecasts`.
     fits : list, optional
         Collects fit summaries, as for `run_forecasts`.
     lags : mapping of int to int, optional
@@ -1077,7 +995,7 @@ def run_recovery(
     """
     outbreak = simulate_outbreak(settings)
     tasks = recovery_tasks(config, settings, lags)
-    forecasts = run_forecasts(models, tasks, cache, fits)
+    forecasts = run_forecasts(models, tasks, fits)
     end = outbreak.settings.start + dt.timedelta(days=outbreak.settings.n_days)
     scores = score_tasks(forecasts, outbreak.truth(), end.isoformat())
     scores["truth_vintage"] = "simulated"

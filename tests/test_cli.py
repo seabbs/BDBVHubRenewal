@@ -223,41 +223,6 @@ def test_cli_backtest_no_fit_skips_fitted_models(tmp_path: Path) -> None:
     assert "randomwalk" in unfitted
 
 
-@pytest.mark.usefixtures("in_root")
-def test_cli_backtest_shards_into_a_cache(tmp_path: Path) -> None:
-    res, out, cache = tmp_path / "res", tmp_path / "out", tmp_path / "cache"
-    base = ["backtest", "--no-recovery",
-            "--results", str(res), "--output", str(out),
-            "--models", "randomwalk", "--cache", str(cache)]  # fmt: skip
-    # A shard only fills the cache.
-    assert main([*base, "--shard", "0/2"]) == 0
-    assert main([*base, "--shard", "1/2"]) == 0
-    assert list(cache.glob("*.csv.gz"))
-    assert not (res / "backtest-scores.csv").exists()
-    # Without a shard every task comes from the cache and is scored.
-    assert main(base) == 0
-    scores = pd.read_csv(res / "backtest-scores.csv")
-    assert set(scores["model"]) == {"randomwalk"}
-    assert not (res / "recovery-scores.csv").exists()
-
-
-@pytest.mark.usefixtures("in_root")
-def test_cli_recovery_only_uses_the_cache(tmp_path: Path) -> None:
-    res, out, cache = tmp_path / "res", tmp_path / "out", tmp_path / "cache"
-    base = ["backtest", "--recovery-only", "--results", str(res),
-            "--output", str(out), "--models", "randomwalk",
-            "--cache", str(cache)]  # fmt: skip
-    assert main([*base, "--shard", "0/2"]) == 0
-    assert main([*base, "--shard", "1/2"]) == 0
-    assert list(cache.glob("randomwalk_simulated_*.csv.gz"))
-    assert not (res / "recovery-scores.csv").exists()
-    assert main(base) == 0
-    scores = pd.read_csv(res / "recovery-scores.csv")
-    assert set(scores["kind"]) == {"simulated"}
-    # The development results are left alone.
-    assert not (res / "backtest-scores.csv").exists()
-
-
 def test_host_devices_cover_the_chains(monkeypatch: pytest.MonkeyPatch) -> None:
     from bdbvhubrenewal.cli import host_devices
 

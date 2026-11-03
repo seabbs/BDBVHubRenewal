@@ -308,16 +308,6 @@ def build_parser() -> argparse.ArgumentParser:
         "the docs can show fitted variants without refitting them.",
     )
     back.add_argument(
-        "--no-recovery",
-        action="store_true",
-        help="Skip the recovery check on simulated vintages.",
-    )
-    back.add_argument(
-        "--recovery-only",
-        action="store_true",
-        help="Run only the recovery check on simulated vintages.",
-    )
-    back.add_argument(
         "--scenarios-only",
         action="store_true",
         help="Run only the scenarios calibrated to the real data.",
@@ -333,19 +323,6 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Simulated vintages to forecast from. Defaults to the four "
         "weeks up to the scenario vintage.",
-    )
-    back.add_argument(
-        "--cache",
-        default=None,
-        help="Directory with one forecast file per model and task. Tasks "
-        "with a file are read from it, so a run can be resumed or split.",
-    )
-    back.add_argument(
-        "--shard",
-        default=None,
-        metavar="I/N",
-        help="Forecast only shard I of N of the development tasks into "
-        "--cache, without scoring. Run once more without it to score.",
     )
     back.add_argument(
         "--no-fit",
@@ -667,33 +644,6 @@ def _backtest(args: argparse.Namespace) -> int:
         print(f"Held-out scores: {len(scores)} rows in {results}.")
         return 0
     models = [get_model(n) for n in names]
-    if args.shard:
-        if not args.cache:
-            print("ERROR: --shard needs --cache.", file=sys.stderr)
-            return 1
-        index, count = (int(x) for x in args.shard.split("/"))
-        if args.recovery_only:
-            tasks = bt.recovery_tasks(
-                config, lags=cutoff_lags(load_daily(args.data))
-            )
-        elif args.lopo:
-            models = [m for m in models if getattr(m, "supports_mask", False)]
-            tasks = bt.lopo_tasks(
-                target,
-                delays,
-                config,
-            )
-        else:
-            tasks = bt.development_tasks(
-                target,
-                delays,
-                config,
-                daily=load_daily(args.data),
-            )
-        mine = bt.shard_tasks(bt.order_tasks(tasks), index, count)
-        bt.run_forecasts(models, mine, args.cache)
-        print(f"Shard {args.shard}: {len(mine)} tasks in {args.cache}.")
-        return 0
     fits: list[pd.DataFrame] = []
     if args.scenarios_only:
         as_of = args.scenario_as_of or bt.real_vintages(target)[-1]
@@ -718,29 +668,12 @@ def _backtest(args: argparse.Namespace) -> int:
             bt.merge_by_model(path, table).to_csv(path, index=False)
         print(f"Scenarios: {len(sscores)} scored forecasts in {results}.")
         return 0
-    if args.recovery_only:
-        rforecasts, rscores = bt.run_recovery(
-            models,
-            config,
-            cache=args.cache,
-            fits=fits,
-            lags=cutoff_lags(load_daily(args.data)),
-        )
-        for table, path in (
-            (rforecasts, output / "recovery-forecasts.csv.gz"),
-            (rscores, results / "recovery-scores.csv"),
-        ):
-            bt.merge_by_model(path, table).to_csv(path, index=False)
-        _write_fits(fits, results / "recovery-fits.csv")
-        print(f"Recovery: {len(rscores)} scored forecasts in {results}.")
-        return 0
     if args.lopo:
         lopo_fc, lopo_scores = bt.run_lopo(
             models,
             target,
             delays,
             config,
-            cache=args.cache,
             fits=fits,
         )
         lopo_fc.to_csv(output / "lopo-forecasts.csv.gz", index=False)
@@ -753,7 +686,6 @@ def _backtest(args: argparse.Namespace) -> int:
         target,
         delays,
         config,
-        cache=args.cache,
         fits=fits,
         daily=load_daily(args.data),
     )
@@ -773,20 +705,17 @@ def _backtest(args: argparse.Namespace) -> int:
         (by_truth, results / "backtest-scores-by-truth.csv"),
     ):
         table.to_csv(path, index=False)
-    recovery = ""
-    if not args.no_recovery:
-        rforecasts, rscores = bt.run_recovery(
-            models, config, lags=cutoff_lags(load_daily(args.data))
-        )
-        for table, path in (
-            (rforecasts, output / "recovery-forecasts.csv.gz"),
-            (rscores, results / "recovery-scores.csv"),
-        ):
-            bt.merge_by_model(path, table).to_csv(path, index=False)
-        recovery = f"; recovery: {len(rscores)}"
+    rforecasts, rscores = bt.run_recovery(
+        models, config, lags=cutoff_lags(load_daily(args.data))
+    )
+    for table, path in (
+        (rforecasts, output / "recovery-forecasts.csv.gz"),
+        (rscores, results / "recovery-scores.csv"),
+    ):
+        bt.merge_by_model(path, table).to_csv(path, index=False)
     print(
-        f"Development: {len(scores)} scored forecasts{recovery}. "
-        f"Written to {results}."
+        f"Development: {len(scores)} scored forecasts; recovery: "
+        f"{len(rscores)}. Written to {results}."
     )
     return 0
 

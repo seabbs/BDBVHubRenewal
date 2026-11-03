@@ -13,10 +13,6 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 | `backtest --evaluate-holdout` | Score every held-out vintage under the model chosen at the time, with the other models alongside. |
 | `backtest --no-fit` | Run only the models with no fit. Fitted models' rows in `results/` are kept, and their held-out forecasts are scored again. The docs build uses this, so it never fits a model. |
 | `backtest --lopo` | Leave one province out: forecast each province with its counts masked, for the variants that take a mask. |
-| `backtest --cache DIR` | Keep one forecast file per model and task in `DIR`, and read tasks already there, so a run can be resumed. |
-| `backtest --shard I/N` | With `--cache`, forecast only shard `I` of `N` of the tasks, without scoring. A run without it then scores the whole cache. |
-| `backtest --no-recovery` | Skip the recovery check on simulated vintages. |
-| `backtest --recovery-only` | Run only the recovery check, with `--cache` and `--shard` as for the backtest. |
 | `backtest --scenarios-only` | Run only the scenarios calibrated to the real data, from `--scenario-as-of` and `--scenario-dates`. |
 | `bvd` | Cache the BVDOutbreakSize releases each vintage may use. |
 | `compare-hub [--fetch]` | Score our retrospective forecasts and the hub's submitted ones on the same truth and weeks. |
@@ -50,7 +46,7 @@ task docs               # build the site into _site/
 The fitted models use the `[sampler]` settings in `config/backtest.toml`, the same as the submission's main fit.
 `BDBV_RENEWAL_SAMPLER` overrides them, for example `'{"num_chains": 2, "num_warmup": 300, "num_samples": 300}'`.
 Each forecast of a renewal variant is a fit.
-`--cache` and `--shard` split a run over several processes, and `--models` runs some models and keeps the others' rows in `results/`, which is committed.
+`--models` runs some models and keeps the others' rows in `results/`, which is committed.
 The docs build runs only the random walk models and reads the fitted models from there.
 
 The comparison with hub forecasts downloads other teams' files, so it is run on its own:

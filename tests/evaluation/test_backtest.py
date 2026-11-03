@@ -14,7 +14,6 @@ from bdbvhubrenewal.evaluation.backtest import (
     load_config,
     lopo_tasks,
     make_tasks,
-    order_tasks,
     recovery_tasks,
     run_development,
     run_forecasts,
@@ -23,7 +22,6 @@ from bdbvhubrenewal.evaluation.backtest import (
     saturdays,
     score_by_truth_vintage,
     score_tasks,
-    shard_tasks,
     truth_changes,
 )
 from bdbvhubrenewal.forecasters import get_model
@@ -365,37 +363,6 @@ class _Counting:
         return get_model("flat").forecast(task)
 
 
-def test_run_forecasts_reuses_cached_tasks(
-    target: pd.DataFrame,
-    delays: pd.DataFrame,
-    config: BacktestConfig,
-    tmp_path: Path,
-) -> None:
-    tasks = make_tasks(
-        target.loc[target["vintage"] >= "2026-10-17"], delays, config
-    )
-    model = _Counting()
-    first = run_forecasts([model], tasks, cache=tmp_path)
-    assert model.calls == len(tasks)
-    assert len(list(tmp_path.glob("*.csv.gz"))) == len(tasks)
-    again = run_forecasts([model], tasks, cache=tmp_path)
-    assert model.calls == len(tasks)
-    pd.testing.assert_frame_equal(
-        first.reset_index(drop=True), again.reset_index(drop=True),
-        check_dtype=False,
-    )  # fmt: skip
-
-
-def test_shard_tasks_splits_every_task_once(
-    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
-) -> None:
-    tasks = make_tasks(target, delays, config)
-    shards = [shard_tasks(tasks, i, 3) for i in range(3)]
-    assert sum(len(s) for s in shards) == len(tasks)
-    seen = [t.vintage for s in shards for t in s]
-    assert sorted(seen) == sorted(t.vintage for t in tasks)
-
-
 class _Fitted(_Counting):
     def forecast(self, task):  # type: ignore[no-untyped-def]
         self.fit_diagnostics = [{"fit": "all", "max_rhat": 1.01}]
@@ -406,41 +373,31 @@ def test_run_forecasts_collects_fit_summaries(
     target: pd.DataFrame,
     delays: pd.DataFrame,
     config: BacktestConfig,
-    tmp_path: Path,
 ) -> None:
     tasks = make_tasks(
         target.loc[target["vintage"] >= "2026-10-17"], delays, config
     )
     fits: list[pd.DataFrame] = []
-    run_forecasts([_Fitted()], tasks, cache=tmp_path, fits=fits)
+    run_forecasts([_Fitted()], tasks, fits=fits)
     table = pd.concat(fits)
     assert set(table["vintage"]) == {t.vintage for t in tasks}
     assert (table["max_rhat"] == 1.01).all()
-    # Read back from the cache with the forecasts.
-    again: list[pd.DataFrame] = []
-    run_forecasts([_Counting()], tasks, cache=tmp_path, fits=again)
-    assert len(pd.concat(again)) == len(table)
 
 
 class _Masking(_Counting):
     supports_mask = True
 
 
-def test_lopo_reuses_the_cache(
+def test_lopo_scores_only_the_masked_province(
     target: pd.DataFrame,
     delays: pd.DataFrame,
     config: BacktestConfig,
-    tmp_path: Path,
 ) -> None:
     model = _Masking()
     kwargs = {"provinces": ("CD-IT",)}
-    run_lopo([model], target, delays, config, cache=tmp_path, **kwargs)
+    again, scores = run_lopo([model], target, delays, config, **kwargs)
     calls = model.calls
     assert calls > 0
-    again, scores = run_lopo(
-        [model], target, delays, config, cache=tmp_path, **kwargs
-    )
-    assert model.calls == calls
     assert set(again["masked"]) == {"CD-IT"}
     assert set(again["location"]) == {"CD-IT"}
     assert len(scores) > 0
@@ -474,20 +431,6 @@ def test_backtest_sampler_comes_from_the_config(
     monkeypatch.setenv(SAMPLER_ENV, '{"num_warmup": 50}')
     apply_sampler(cfg)
     assert sampler_settings()["num_warmup"] == 50
-
-
-def test_order_tasks_sorts_by_vintage(
-    target: pd.DataFrame, delays: pd.DataFrame
-) -> None:
-    config = load_config(ROOT / "config" / "backtest.toml")
-    from bdbvhubrenewal.evaluation.backtest import development_tasks
-
-    tasks = development_tasks(target, delays, config)
-    ordered = order_tasks(tasks)
-    assert sorted(t.vintage for t in ordered) == sorted(
-        t.vintage for t in tasks
-    )
-    assert [t.vintage for t in ordered] == sorted(t.vintage for t in tasks)
 
 
 def test_scenarios_are_scored_final_and_as_of(
