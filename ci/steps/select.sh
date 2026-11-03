@@ -30,5 +30,7 @@ if [ "$status" = 0 ]; then
   for f in $(find "$WORK/gate/selected/submission" -name '*.csv' | sort); do
     append_previous "$f"
   done
+  # The reported counts, for the PR body's summary against recent weeks.
+  cp "$WORK/inputs/time-series.csv" "$WORK/gate/time-series.csv"
 fi
 exit "$status"

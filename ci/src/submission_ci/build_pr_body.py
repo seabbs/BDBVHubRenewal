@@ -1,16 +1,20 @@
 """Write the body and title of the hub pull request.
 
 The hub's organisers read the body, so it is short: what was submitted,
-Sam's sign-off, the model in one sentence, the national median and 90%
-interval, a checks table with one status per check, the round's page in
-our docs and the bot footer. Convergence, posterior predictive checks
-and the forecast checks sit in one collapsed Details block. The full
+Sam's sign-off, the model in one sentence, a summary of national and
+each province with cases against their recent reported level, a checks
+table with one status per check, the round's page in our docs and the
+bot footer. The national weekly table, convergence, posterior predictive
+checks and the forecast checks sit in one collapsed Details block. The full
 reports stay in the job summary and the run's artefacts.
 """
 
 from __future__ import annotations
 
 import argparse
+import csv
+import datetime as dt
+import tomllib
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -25,7 +29,7 @@ from .common import (
     run_url,
     write_text,
 )
-from .hubdata import quantile, read_samples
+from .hubdata import quantile, read_observed, read_samples
 
 MAX_BODY = 60000  # GitHub's limit is 65536 characters
 HUB = "InsightNet-US/BDBV-Modeling-Hub"
@@ -208,6 +212,76 @@ def _forecast_section(checks: Mapping[str, Any]) -> str:
     return _section("Forecast checks", "\n".join(lines))
 
 
+def _names(observed: Path) -> dict[str, str]:
+    with observed.open(newline="", encoding="utf-8") as fh:
+        return {r["location"]: r["location_name"] for r in csv.DictReader(fh)}
+
+
+def summary_table(
+    submission: Path,
+    observed: Path,
+    as_of: str,
+    reference_date: str,
+    lag: int,
+    n: int,
+) -> str:
+    """National and each province with cases: recent level, nowcast, forecast.
+
+    The recent level is the mean of the last `n` weeks reported in full
+    (ending at least `lag` weeks before the data vintage), as the gate's
+    `observed` check uses. The nowcast is the newest reported week and the
+    forecast the reference date's week, as median and 90% interval.
+    """
+    s = read_samples(submission)
+    obs = read_observed(observed, as_of or None)
+    names = _names(observed)
+    cutoff = (
+        dt.date.fromisoformat(obs.as_of) - dt.timedelta(days=7 * lag)
+    ).isoformat()
+    places = [
+        "CD",
+        *sorted(
+            loc
+            for loc in s.locations
+            if loc.count("-") == 1 and sum(obs.counts.get(loc, {}).values()) > 0
+        ),
+    ]
+
+    def interval(v: list[float]) -> str:
+        return (
+            f"{fmt(quantile(v, 0.5))} ({fmt(quantile(v, 0.05))} to "
+            f"{fmt(quantile(v, 0.95))})"
+        )
+
+    rows = []
+    for loc in places:
+        counts = obs.counts.get(loc, {})
+        done = sorted(w for w in counts if w <= cutoff)[-n:]
+        recent = sum(counts[w] for w in done) / len(done) if done else 0.0
+        newest = max(counts)
+        fc = s.week_values(loc, reference_date)
+        rows.append(
+            [
+                names.get(loc, loc),
+                fmt(recent),
+                interval(s.week_values(loc, newest)),
+                interval(fc),
+                f"{quantile(fc, 0.5) / recent:.2f}" if recent else "n/a",
+            ]
+        )
+    newest = max(obs.counts["CD"])
+    return markdown_table(
+        [
+            "",
+            f"reported, mean of last {n} complete weeks",
+            f"nowcast, week ending {newest}",
+            f"forecast, week ending {reference_date}",
+            "forecast / reported",
+        ],
+        rows,
+    )
+
+
 def model_line(provenance: Mapping[str, Any]) -> str:
     """The submitted model in one sentence, and why it was the one."""
     run = provenance.get("run") or {}
@@ -253,9 +327,10 @@ def _details(
     fit: Mapping[str, Any] | None,
     ppc: Mapping[str, Any] | None,
     checks: Mapping[str, Any],
+    national: str = "",
 ) -> str:
-    """Convergence, posterior predictive and forecast checks, collapsed."""
-    parts = []
+    """The national weekly table and the checks' detail, collapsed."""
+    parts = [f"**National (`CD`) by week**\n\n{national}"] if national else []
     for title_, block in (
         ("Convergence", _convergence_section(fit)),
         ("Posterior predictive checks", _ppc_section(ppc)),
@@ -278,6 +353,9 @@ def build(
     as_of: str,
     plot_url: str,
     validation: str,
+    observed: Path | None = None,
+    complete_lag_weeks: int = 4,
+    complete_weeks: int = 2,
     dry_run: bool = False,
     docs: str = DOCS,
 ) -> str:
@@ -304,12 +382,21 @@ def build(
         out.append(
             f"![Nowcast and forecast for {reference_date}]({plot_url})\n"
         )
-    nat = national_table(sub)
-    if nat:
-        out.append(f"National (`CD`) submitted samples:\n\n{nat}\n")
+    if observed is not None:
+        out.append(
+            summary_table(
+                sub,
+                observed,
+                as_of,
+                reference_date,
+                complete_lag_weeks,
+                complete_weeks,
+            )
+            + "\n"
+        )
     out.append(checks_table(fit, ppc, checks, validation, coherence) + "\n")
     out.append(f"This round in our docs: {round_url(reference_date, docs)}\n")
-    details = _details(fit, ppc, checks)
+    details = _details(fit, ppc, checks, national_table(sub))
     if details:
         out.append(details)
     out.append(FOOTER)
@@ -350,12 +437,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         default="",
         help="defaults to the selected attempt's result",
     )
+    p.add_argument(
+        "--observed", type=Path, default=None, help="time-series.csv"
+    )
+    p.add_argument("--policy", type=Path, default=None, help="policy.toml")
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--docs", default=DOCS, help="base URL of the docs site")
     p.add_argument("--out", type=Path, required=True)
     args = p.parse_args(argv)
     prov = read_json(args.gate / "provenance.json")
     validation = args.validation or selected_validation(prov)
+    checks_cfg = (
+        tomllib.loads(args.policy.read_text())["checks"] if args.policy else {}
+    )
     body = build(
         provenance=prov,
         selected_dir=args.gate / "selected",
@@ -364,6 +458,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         as_of=args.as_of,
         plot_url=args.plot_url,
         validation=validation,
+        observed=args.observed,
+        complete_lag_weeks=int(checks_cfg.get("complete_lag_weeks", 4)),
+        complete_weeks=int(checks_cfg.get("complete_weeks", 2)),
         dry_run=args.dry_run,
         docs=args.docs,
     )

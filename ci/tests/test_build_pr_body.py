@@ -4,7 +4,15 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from conftest import POLICY, REF, make_samples, write_json, write_samples
+from conftest import (
+    HUB,
+    POLICY,
+    POLICY_PATH,
+    REF,
+    make_samples,
+    write_json,
+    write_samples,
+)
 from test_check_coherence import GAP, coherence
 from test_check_ppc import ppc
 
@@ -16,6 +24,7 @@ from submission_ci.build_pr_body import (
     main,
     marker,
     round_url,
+    summary_table,
 )
 from submission_ci.check_coherence import assess
 from submission_ci.check_ppc import summarise
@@ -115,7 +124,7 @@ def test_body_is_short_and_signed_off(tmp_path: Path) -> None:
     assert shown[1] == SIGN_OFF == "Signed off by Sam Abbott (@seabbs)."
     assert shown[2] == "Model: main model (`renewal`)."
     assert shown[3].startswith("![Nowcast and forecast") and "p.png" in text
-    assert "| week ending | median | 90% interval |" in shown
+    assert "| week ending | median | 90% interval |" in text
     for row in (
         "| Convergence | PASS |",
         "| Forecast checks | PASS |",
@@ -204,6 +213,8 @@ def test_cli(tmp_path: Path) -> None:
     args = [
         "--gate", str(g), "--reference-date", REF, "--model-id", "m",
         "--plot-url", "p.png", "--docs", "https://example.org/docs/",
+        "--observed", str(HUB / "time-series.csv"),
+        "--policy", str(POLICY_PATH), "--as-of", "2026-10-31",
         "--out", str(tmp_path / "o"),
     ]  # fmt: skip
     assert main(args) == 0
@@ -213,6 +224,7 @@ def test_cli(tmp_path: Path) -> None:
     out = (tmp_path / "o" / "pr-body.md").read_text()
     assert "| Hub validation | PASS |" in out
     assert f"https://example.org/docs/submission/rounds/{REF}/" in out
+    assert "forecast / reported" in out
 
 
 def test_data_coherence_status(tmp_path: Path) -> None:
@@ -253,3 +265,39 @@ def test_convergence_details_report_the_bvd_release(tmp_path: Path) -> None:
         "2026-10-23, joint R-hat 1.041, limit 1.1)."
     ) in text
     assert not any("results-3180" in line for line in visible(text))
+
+
+def test_summary_table_compares_to_recent_reports(tmp_path: Path) -> None:
+    g = gate(tmp_path)
+    sub = next((g / "selected" / "submission").glob("**/*.csv"))
+    obs = HUB / "time-series.csv"
+    table = summary_table(sub, obs, "2026-10-31", REF, lag=4, n=2)
+    lines = table.splitlines()
+    assert "reported, mean of last 2 complete weeks" in lines[0]
+    assert f"forecast, week ending {REF}" in lines[0]
+    assert "forecast / reported" in lines[0]
+    names = [line.split("|")[1].strip() for line in lines[2:]]
+    assert names[0] == "DRC" and set(names[1:]) == {
+        "Haut Uele",
+        "Ituri",
+        "Nord Kivu",
+    }
+    ituri = next(line for line in lines if "| Ituri |" in line)
+    # Weeks ending on or before 2026-10-03 are complete at 2026-10-31.
+    cells = [c.strip() for c in ituri.split("|")[1:-1]]
+    recent = float(cells[1])
+    assert recent > 0 and " to " in cells[2] and " to " in cells[3]
+    median = float(cells[3].split(" ")[0])
+    assert float(cells[4]) == round(median / recent, 2)
+
+
+def test_summary_table_sits_above_the_fold(tmp_path: Path) -> None:
+    text = body(
+        gate(tmp_path),
+        observed=HUB / "time-series.csv",
+        as_of="2026-10-31",
+    )
+    shown = visible(text)
+    assert any(line.startswith("|  | reported, mean of last") for line in shown)
+    assert "**National (`CD`) by week**" in text
+    assert not any("| week ending | median |" in line for line in shown)

@@ -27,7 +27,7 @@ fi
 
 body=(--gate "$gate" --reference-date "$REFERENCE_DATE"
   --model-id "$MODEL_ID" --as-of "${AS_OF:-}" --plot-url "$plot_url"
-  --out "$gate")
+  --observed "$gate/time-series.csv" --policy "$POLICY" --out "$gate")
 if [ "$DRY_RUN" = "true" ]; then
   body+=(--dry-run)
 fi
