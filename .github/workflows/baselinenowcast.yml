@@ -58,5 +58,4 @@ jobs:
           Rscript scripts/snapshot_fixtures.R
       - name: Fail if the fixtures changed
         run: |
-          git diff --exit-code tests/data/baselinenowcast \
-            tests/baselinenowcast/fixtures
+          git diff --exit-code -- tests/baselinenowcast/fixtures
