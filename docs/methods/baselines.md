@@ -110,7 +110,9 @@ $\ell_p$ is the mean of $Y_{p,r}(w)$ over weeks 3 to 6 back, in cases a week.
 A place with $\ell_p \ge 10$ uses its own estimate.
 For $\rho_{p,k}$ it also needs at least 2 errors at $k$.
 Otherwise it uses the pooled estimate of its nearest parent that meets the same rule, and otherwise the country's.
-A pooled estimate uses the errors and weekly changes of the place and its children with $\ell \ge 10$ together.
+A pooled estimate uses the errors and weekly changes of the place's children with $\ell \ge 10$ together.
+A place's counts are the sum of its children's, so the place itself is left out of its pool and no case counts twice.
+A place with no such child pools alone.
 If the estimate used has fewer than 2 errors at $k$, $\rho_{p,k} = 0$.
 
 ## Walk

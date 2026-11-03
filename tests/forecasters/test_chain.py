@@ -158,15 +158,16 @@ def test_only_the_10_17_to_10_24_retrospective_is_kept(snap24) -> None:
     assert strict.n.sum() == 0
 
 
-def test_the_spread_pools_four_errors_at_10_24(origin24) -> None:
+def test_the_spread_pools_three_errors_at_10_24(origin24) -> None:
     loc = origin24.snap.locations.index("CD")
     assert origin24.rho is not None
     assert origin24.rho_n is not None
     assert origin24.rho[loc, :4] == pytest.approx(
-        [0.7006, 8.4005, 4.8158, 85.9253], rel=1e-3
+        [1.5490, 16.6763, 7.1786, 87.9480], rel=1e-3
     )
-    # CD, Haut-Uele, Ituri and North Kivu give an error each.
-    assert origin24.rho_n[loc, :4].tolist() == [4, 4, 4, 4]
+    # Haut-Uele, Ituri and North Kivu give an error each. The country is
+    # their sum, so it is not pooled with them.
+    assert origin24.rho_n[loc, :4].tolist() == [3, 3, 3, 3]
 
 
 def test_no_errors_is_poisson_and_says_so(
