@@ -31,21 +31,6 @@ class RtPseudoObservation(RandomVariable):
     so this is a `RandomVariable` that the latent process calls, as it
     holds both Rt and infections. Its sites are `{name}_log_rt_model`,
     `{name}_z` and `{name}_rt_obs`.
-
-    Parameters
-    ----------
-    name : str
-        Prefix for the sites.
-    alpha : float
-        Tempering, in [0, 1].
-    day : int
-        $s_b$ as a day index from the first data day.
-    groups : array_like
-        Boolean membership, `(G, P)`.
-    values, scales : array_like
-        Log-scale summaries and their SDs, `(G,)`.
-    kinds : array_like
-        0 for the national level, 1 for a deviation from it, `(G,)`.
     """
 
     def __init__(
@@ -58,13 +43,71 @@ class RtPseudoObservation(RandomVariable):
         scales: ArrayLike,
         kinds: ArrayLike,
     ) -> None:
+        """Initialize the pseudo-observation.
+
+        Parameters
+        ----------
+        name
+            Prefix for the sites.
+        alpha
+            Tempering, in [0, 1].
+        day
+            $s_b$ as a day index from the first data day.
+        groups
+            Boolean membership, `(G, P)`.
+        values
+            Log-scale summaries, `(G,)`.
+        scales
+            Their SDs, positive, `(G,)`.
+        kinds
+            0 for the national level, 1 for a deviation from it, `(G,)`.
+
+        Raises
+        ------
+        ValueError
+            If `alpha` is outside [0, 1], `day` is negative, the shapes do
+            not match, a scale is not positive or a kind is not 0 or 1.
+        """
+        groups = jnp.asarray(groups, dtype=float)
+        values = jnp.asarray(values, dtype=float)
+        scales = jnp.asarray(scales, dtype=float)
+        kinds = jnp.asarray(kinds, dtype=int)
+        if not 0.0 <= float(alpha) <= 1.0:
+            raise ValueError(f"alpha must be in [0, 1], got {alpha}.")
+        if int(day) < 0:
+            raise ValueError(f"day must be non-negative, got {day}.")
+        if groups.ndim != 2:
+            raise ValueError(
+                f"groups must have shape (G, P), got {groups.shape}."
+            )
+        n_groups = groups.shape[0]
+        for label, x in (
+            ("values", values),
+            ("scales", scales),
+            ("kinds", kinds),
+        ):
+            if x.shape != (n_groups,):
+                raise ValueError(
+                    f"{label} must have shape ({n_groups},), got {x.shape}."
+                )
+        if bool(jnp.any(scales <= 0)):
+            raise ValueError("scales must be positive.")
+        if not bool(jnp.all((kinds == 0) | (kinds == 1))):
+            raise ValueError("kinds must be 0 (national) or 1 (deviation).")
         super().__init__(name=name)
         self.alpha = float(alpha)
         self.day = int(day)
-        self.groups = jnp.asarray(groups, dtype=float)
-        self.values = jnp.asarray(values, dtype=float)
-        self.scales = jnp.asarray(scales, dtype=float)
-        self.kinds = jnp.asarray(kinds, dtype=int)
+        self.groups = groups
+        self.values = values
+        self.scales = scales
+        self.kinds = kinds
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return (
+            f"RtPseudoObservation(name={self.name!r}, alpha={self.alpha}, "
+            f"day={self.day}, n_groups={self.groups.shape[0]})"
+        )
 
     def log_group_rt(
         self,
@@ -80,18 +123,18 @@ class RtPseudoObservation(RandomVariable):
 
         Parameters
         ----------
-        rt : jax.Array
+        rt
             Daily Rt by province.
-        infections : jax.Array
+        infections
             Daily infections per resident by province.
-        n_init : int
+        n_init
             Seeding days at the start of the axis.
-        fractions : jax.Array, optional
+        fractions
             Population share of each province.
 
         Returns
         -------
-        tuple of Array
+        tuple[Array, Array]
             `(G,)` group values and the national scalar.
         """
         week = n_init + 7 * (self.day // 7)
@@ -117,13 +160,13 @@ class RtPseudoObservation(RandomVariable):
 
         Parameters
         ----------
-        rt : jax.Array
+        rt
             Daily Rt by province.
-        infections : jax.Array
+        infections
             Daily infections per resident by province.
-        n_init : int
+        n_init
             Seeding days at the start of the axis.
-        fractions : jax.Array, optional
+        fractions
             Population share of each province.
         **kwargs
             Ignored, for the PyRenew interface.

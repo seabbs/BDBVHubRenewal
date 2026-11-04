@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
 from jax.typing import ArrayLike
@@ -29,6 +30,18 @@ class CompositionNoise(ABC):
     Defines how counts in each category are distributed given the
     category probabilities and the total of each row.
     """
+
+    @abstractmethod
+    def validate(self) -> None:
+        """
+        Check the noise parameters.
+
+        Raises
+        ------
+        ValueError
+            If a parameter is out of range.
+        """
+        pass  # pragma: no cover
 
     @abstractmethod
     def sample(
@@ -71,6 +84,10 @@ class MultinomialNoise(CompositionNoise):
     def __repr__(self) -> str:
         """Return string representation."""
         return "MultinomialNoise()"
+
+    @staticmethod
+    def validate() -> None:
+        """MultinomialNoise always passes validation."""
 
     def sample(
         self,
@@ -134,7 +151,17 @@ class DirichletMultinomialNoise(CompositionNoise):
         ----------
         concentration_rv
             Concentration (must be > 0).
+
+        Raises
+        ------
+        TypeError
+            If ``concentration_rv`` is not a ``RandomVariable``.
         """
+        if not isinstance(concentration_rv, RandomVariable):
+            raise TypeError(
+                "concentration_rv must be a RandomVariable, got "
+                f"{type(concentration_rv).__name__}."
+            )
         self.concentration_rv = concentration_rv
 
     def __repr__(self) -> str:
@@ -143,6 +170,22 @@ class DirichletMultinomialNoise(CompositionNoise):
             "DirichletMultinomialNoise("
             f"concentration_rv={self.concentration_rv!r})"
         )
+
+    def validate(self) -> None:
+        """
+        Check that the concentration is positive.
+
+        Raises
+        ------
+        ValueError
+            If the concentration is not positive.
+        """
+        concentration = jnp.asarray(self.concentration_rv())
+        if jnp.any(concentration <= 0):
+            raise ValueError(
+                "DirichletMultinomialNoise: concentration must be positive, "
+                f"got {concentration}"
+            )
 
     def sample(
         self,
