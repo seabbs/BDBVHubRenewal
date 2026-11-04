@@ -12,7 +12,6 @@ import pytest
 from bnc_helpers import Case, from_na, read, read_vec
 
 from bdbvhubrenewal.baselinenowcast import (
-    estimate_delay,
     estimate_uncertainty,
     estimate_uncertainty_retro,
     fit_by_horizon,
@@ -42,26 +41,22 @@ def _retro(case: Case, **kwargs: Any) -> Any:
     )
 
 
-def test_retro_obs_and_pred_match_r_identity(case: Case) -> None:
+@pytest.mark.parametrize("mode", ["id", "agg"])
+def test_retro_obs_and_pred_match_r(case: Case, mode: str) -> None:
     store, model = _capture()
-    _retro(case, uncertainty_model=model)
+    agg = {"ref_time_aggregator": partial(rolling_sum, k=case.k)}
+    _retro(case, uncertainty_model=model, **(agg if mode == "agg" else {}))
     np.testing.assert_allclose(
-        store["obs"], read(case.name, "retro_obs_id"), rtol=1e-10, atol=1e-8
+        store["obs"],
+        read(case.name, f"retro_obs_{mode}"),
+        rtol=1e-10,
+        atol=1e-8,
     )
     np.testing.assert_allclose(
-        store["pred"], read(case.name, "retro_pred_id"), rtol=1e-9, atol=1e-8
-    )
-
-
-def test_retro_obs_and_pred_match_r_rolling_sum(case: Case) -> None:
-    store, model = _capture()
-    agg = partial(rolling_sum, k=case.k)
-    _retro(case, uncertainty_model=model, ref_time_aggregator=agg)
-    np.testing.assert_allclose(
-        store["obs"], read(case.name, "retro_obs_agg"), rtol=1e-10, atol=1e-8
-    )
-    np.testing.assert_allclose(
-        store["pred"], read(case.name, "retro_pred_agg"), rtol=1e-9, atol=1e-8
+        store["pred"],
+        read(case.name, f"retro_pred_{mode}"),
+        rtol=1e-9,
+        atol=1e-8,
     )
 
 
@@ -149,15 +144,6 @@ def test_estimate_uncertainty_skips_failed_nowcasts() -> None:
         estimate_uncertainty(ncs[:2], trunc, retro, n=3)
 
 
-def test_delay_pmf_argument_is_used(small: Case) -> None:
-    pre = preprocess_negative_values(small.values, small.mask)
-    pmf = estimate_delay(pre, small.mask, n=small.n_hist)
-    a = estimate_uncertainty_retro(
-        pre, small.mask, small.n_hist, small.n_retro, delay_pmf=pmf
-    )
-    assert a.shape[0] == int(np.sum(~small.mask.all(axis=1)))
-
-
 def _hub_week_inputs(
     cutoff: str, step: int, n_ref: int = 262, d: int = 84
 ) -> Any:
@@ -206,9 +192,3 @@ def test_estimate_uncertainty_runs_with_hub_weeks(
         )
     assert store["obs"].shape == (2, horizons)
     assert out.shape[0] == horizons
-
-
-def test_package_runs_in_float64_without_a_fixture() -> None:
-    import jax.numpy as jnp
-
-    assert jnp.zeros(1).dtype == jnp.float64

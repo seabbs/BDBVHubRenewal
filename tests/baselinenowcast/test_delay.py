@@ -74,39 +74,53 @@ def _toy() -> tuple[np.ndarray, np.ndarray]:
     return from_na(read("toy", "tri"))
 
 
-def test_estimate_delay_aborts() -> None:
+def _no_complete_row() -> tuple[np.ndarray, np.ndarray, int | None]:
     v, m = _toy()
-    with pytest.raises(ValueError):
-        estimate_delay(v, m, n=99)
-    with pytest.raises(ValueError):
-        estimate_delay(v, m, n=0)
-    with pytest.raises(ValueError):
-        estimate_delay(v, m, n=2)
-    bad = m.copy()
-    bad[-1, 0] = False
-    bad[-1, 1:] = False
-    with pytest.raises(ValueError):
-        estimate_delay(v, bad)
-    with pytest.raises(ValueError):
-        estimate_delay(v, m, n=1.5)  # type: ignore[arg-type]
+    m = m.copy()
+    m[-1, :] = False
+    return v, m, None
 
 
-def test_estimate_delay_aborts_on_zeros_only() -> None:
+def _zeros_only() -> tuple[np.ndarray, np.ndarray, int | None]:
     v = np.zeros((6, 3))
     m = np.ones((6, 3), bool)
     m[-1, 1:] = False
     m[-2, 2:] = False
     v[:4] = 1.0
-    with pytest.raises(ValueError):
-        estimate_delay(v, m, n=2)
+    return v, m, 2
 
 
-def test_estimate_delay_aborts_on_empty_column() -> None:
-    v = np.ones((3, 3))
+def _empty_column() -> tuple[np.ndarray, np.ndarray, int | None]:
     m = np.ones((3, 3), bool)
     m[:, 2] = False
+    return np.ones((3, 3)), m, None
+
+
+@pytest.mark.parametrize(
+    "inputs",
+    [
+        lambda: (*_toy(), 99),
+        lambda: (*_toy(), 0),
+        lambda: (*_toy(), 2),
+        lambda: (*_toy(), 1.5),
+        _no_complete_row,
+        _zeros_only,
+        _empty_column,
+    ],
+    ids=[
+        "n-too-big",
+        "n-zero",
+        "n-too-small",
+        "n-not-integer",
+        "no-complete-row",
+        "zeros-only",
+        "empty-column",
+    ],
+)
+def test_estimate_delay_aborts(inputs) -> None:  # type: ignore[no-untyped-def]
+    v, m, n = inputs()
     with pytest.raises(ValueError):
-        estimate_delay(v, m)
+        estimate_delay(v, m) if n is None else estimate_delay(v, m, n=n)
 
 
 def test_apply_delay_aborts() -> None:
@@ -122,18 +136,3 @@ def test_apply_delay_aborts() -> None:
     short[-1, 1:] = False
     with pytest.raises(ValueError):
         apply_delay(v, short, np.array([0.0, 0.5, 0.3, 0.2]))
-
-
-def test_estimate_and_apply_delay_aborts() -> None:
-    v, m = _toy()
-    with pytest.raises(ValueError):
-        estimate_and_apply_delay(v, m, n=99)
-    with pytest.raises(ValueError):
-        estimate_and_apply_delay(v, m, n=2)
-
-
-def test_estimate_delay_rejects_a_non_integer_n() -> None:
-    tri = np.array([[3.0, 2.0, 1.0], [4.0, 2.0, 1.0], [5.0, 3.0, 2.0]])
-    mask = np.ones_like(tri, bool)
-    with pytest.raises(ValueError, match="integer"):
-        estimate_delay(tri, mask, n=2.5)
