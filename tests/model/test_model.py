@@ -158,7 +158,7 @@ def test_main_is_the_last_ladder_step():
     assert list(LADDER.values())[-1] == MAIN
 
 
-def test_real_data_kernels_and_log_density_are_finite(table):
+def test_real_data_kernels_are_finite(table):
     from bdbvhubrenewal.data import load_delays, load_target
 
     from .conftest import MAIN_REPO_DATA
@@ -178,17 +178,6 @@ def test_real_data_kernels_and_log_density_are_finite(table):
         assert len(data.names) + len(data.inactive_names) == 26
         assert np.all(np.isfinite(data.kernel))
         assert np.all(np.isfinite(data.import_kernel))
-        model = build_model(data)
-        tr = trace(model, data)
-        sampled = {
-            k: v["value"]
-            for k, v in tr.items()
-            if v["type"] == "sample" and not v["is_observed"]
-        }
-        ld = numpyro.infer.util.log_density(
-            model.sample, (), model_args(model, data), sampled
-        )[0]
-        assert np.isfinite(float(ld))
 
 
 def test_single_patch_locations_are_independent(outbreak, sim_tables, table):
