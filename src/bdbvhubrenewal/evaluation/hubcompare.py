@@ -68,6 +68,7 @@ __all__ = [
     "load_team_metadata",
     "match_vintage",
     "our_forecasts",
+    "overall_comparison",
     "own_hub_ids",
     "resolve_baseline",
     "score_comparison",
@@ -668,6 +669,50 @@ def summarise_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
         "bias",
     ]
     return out[cols].sort_values([*by, "wis"]).reset_index(drop=True)
+
+
+def overall_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
+    """Summarise every model over all rounds, nationally and below.
+
+    Parameters
+    ----------
+    scores : pandas.DataFrame
+        Output of `score_comparison`.
+    baseline : str
+        Model that WIS is relative to.
+
+    Returns
+    -------
+    pandas.DataFrame
+        On the reported target and the forecasts the baseline also made,
+        one row per `scale` (`national`, `provinces` or `zones`) and
+        `model`, with `hub` (a hub team's), `n`, `relative_wis`,
+        `coverage_50` and `coverage_90`.
+    """
+    match = ["reference_date", "truth_vintage", "location", "target_end_date"]
+    depth = scores["location"].str.count("-")
+    rep = scores.loc[scores["target"] == "reported"].assign(
+        scale=depth.map({0: "national", 1: "provinces"}).fillna("zones")
+    )
+    rep = rep.merge(rep.loc[rep["model"] == baseline, match], on=match)
+    rel = relative_skill(
+        rep, baseline, by=("scale",), metrics=("wis",), match_on=match
+    )
+    keys = ["scale", "model"]
+    cover = (
+        rep.assign(hub=rep["source"] == "hub")
+        .groupby(keys)
+        .agg(
+            hub=("hub", "all"),
+            coverage_50=("coverage_50", "mean"),
+            coverage_90=("coverage_90", "mean"),
+        )
+        .reset_index()
+    )
+    out = rel.merge(cover, on=keys)
+    return out[
+        [*keys, "hub", "n", "relative_wis", "coverage_50", "coverage_90"]
+    ]
 
 
 def forecast_quantiles(forecasts: pd.DataFrame) -> pd.DataFrame:

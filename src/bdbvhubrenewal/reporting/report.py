@@ -45,6 +45,7 @@ from bdbvhubrenewal.evaluation.heldout import load_model_choices
 from bdbvhubrenewal.evaluation.hubcompare import (
     attribution,
     forecast_quantiles,
+    overall_comparison,
     summarise_comparison,
 )
 from bdbvhubrenewal.evaluation.nowcast import BASELINE, relative_wis
@@ -1250,6 +1251,41 @@ def _teams_table(teams: pd.DataFrame, hub_ids: Mapping[str, str]) -> str:
     return table.to_markdown(index=False) + "\n"
 
 
+def _overall_table(
+    scores: pd.DataFrame, baseline: str, hub_ids: Mapping[str, str]
+) -> str:
+    """Tabulate every model over all scored rounds, by scale."""
+    overall = overall_comparison(scores, baseline)
+    overall["model"] = [
+        comparison_label(m, "hub" if hub else "real", hub_ids)
+        for m, hub in zip(overall["model"], overall["hub"], strict=True)
+    ]
+    have = set(overall["scale"])
+    scales = [s for s in ("national", "provinces", "zones") if s in have]
+    names = {
+        "relative_wis": "rel. WIS",
+        "n": "n",
+        "coverage_50": "50%",
+        "coverage_90": "90%",
+    }
+    long = overall.melt(
+        id_vars=["model", "scale"], value_vars=list(names), var_name="metric"
+    )
+    long["column"] = long["scale"] + " " + long["metric"].map(names)
+    wide = long.pivot(index="model", columns="column", values="value")
+    order = [f"{s} {n}" for s in scales for n in names.values()]
+    wide = wide[order].sort_values(order[0]).round(2).reset_index()
+    wide = wide.astype(object).where(wide.notna(), "")
+    missing = sorted({"national", "provinces", "zones"} - have)
+    gap = f" There are no scores for {' or '.join(missing)}." if missing else ""
+    return (
+        "Over every scored round, on the count each later release reported "
+        f"and on the forecasts `{baseline}` also made, by scale.{gap}\n"
+        "n counts forecasts, so a model with fewer forecasts was scored on "
+        "fewer weeks or places.\n\n" + _table(wide)
+    )
+
+
 def _comparison_page(
     fig: Path,
     gen: Path,
@@ -1308,6 +1344,7 @@ def _comparison_page(
     _write(gen / "comparison-summary.md", "")
     parts = []
     if not scores.empty:
+        parts.append(_overall_table(scores, baseline, hub_ids))
         table = summarise_comparison(scores, baseline)
         table = _without_baseline(table, baseline)
         table["target"] = table["target"].map(_TARGET_LABELS)

@@ -278,6 +278,37 @@ def test_summarise_comparison(
     assert {"coverage_50", "coverage_90", "bias", "wis"} <= set(table.columns)
 
 
+def test_overall_comparison_by_scale(
+    tmp_path: Path,
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+) -> None:
+    from bdbvhubrenewal.evaluation.hubcompare import overall_comparison
+
+    _write_hub(tmp_path)
+    forecasts = pd.concat(
+        [load_hub_submissions(tmp_path), _ours(target, delays, daily)]
+    )
+    scores, _ = score_comparison(forecasts, target, delays, _CONFIG, daily)
+    out = overall_comparison(scores, "flat").set_index(["scale", "model"])
+    assert set(out.index.get_level_values("scale")) <= {
+        "national",
+        "provinces",
+        "zones",
+    }
+    assert (out.xs("flat", level="model")["relative_wis"] == 1).all()
+    assert (
+        out.loc[out["hub"]]
+        .index.get_level_values("model")
+        .isin(["teamA-weekly", "teamB-late"])
+        .all()
+    )
+    # Same counts as the round summary, which also matches the baseline.
+    late = out.xs("teamB-late", level="model")["n"].sum()
+    assert late == 8
+
+
 def test_forecast_quantiles(tmp_path: Path) -> None:
     _write_hub(tmp_path)
     q = forecast_quantiles(load_hub_submissions(tmp_path))
