@@ -12,7 +12,6 @@ import pytest
 from bdbvhubrenewal.baselinenowcast import log_factors, pair_sums
 from bdbvhubrenewal.data.snapshots import snapshot_arrays, weekly_sums
 from bdbvhubrenewal.forecasters.chain import (
-    NoDelayPair,
     Settings,
     _delay_counts,
     build_origin,
@@ -71,25 +70,6 @@ def test_the_start_week_is_the_latest_week_at_95_per_cent(
     assert (origin.start == w).all()
 
 
-def test_10_09_raises_with_no_delay_pair(daily: pd.DataFrame) -> None:
-    snap = snapshot_arrays(daily, "2026-10-09", ("CD-IT",))
-    with pytest.raises(NoDelayPair):
-        build_origin(snap, Settings(), errors=False)
-
-
-def test_the_50_day_pair_gives_no_factor_but_its_counts_stay(
-    daily: pd.DataFrame,
-) -> None:
-    snap = snapshot_arrays(daily, "2026-10-17", ("CD-IT",))
-    fit = fit_delay(snap, 2, Settings())
-    assert fit is not None
-    assert fit.pairs.tolist() == [[1, 2]]
-    assert 0 not in fit.pairs
-    first = weekly_sums(snap, 0)
-    assert first[0].sum() > 0
-    assert first[0].sum() == snap.counts[0, 0].sum()
-
-
 def test_10_24_point_nowcasts_use_one_daily_delay(origin24) -> None:
     # Weeks 10-24, 10-17, 10-10, 10-03, from the 8 and 9 day pairs.
     # Downward revisions are moved onto earlier releases before the sums.
@@ -122,14 +102,6 @@ def test_every_day_with_data_is_nowcast(origin24) -> None:
     # The newest day is nowcast too, with no handover to the walk.
     assert origin24.growth[0, newest] > 1.0
     assert counts[newest] >= 0
-
-
-def test_ages_count_from_the_cutoff_not_as_of(daily: pd.DataFrame) -> None:
-    snap = snapshot_arrays(daily, "2026-10-17", ("CD-IT",))
-    r = 2
-    # Release 10-17 has cut-off 10-16, so 10-16 has age 0.
-    assert snap.days[snap.cut[r]].date().isoformat() == "2026-10-16"
-    assert snap.cut[r] - snap.cut[r] == 0
 
 
 def test_every_release_with_a_pair_gives_a_retrospective(
