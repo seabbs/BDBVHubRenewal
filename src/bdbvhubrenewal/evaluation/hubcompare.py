@@ -204,13 +204,13 @@ def own_hub_ids(path: Path | str = "config/hub.toml") -> dict[str, str]:
         `{"renewalbvd": "seabbs-renewal", "randomwalknowcast":
         "seabbs-rwnowcast"}`.
     """
-    from bdbvhubrenewal.submission.hub import model_abbr_for, model_id
+    from bdbvhubrenewal.submission.hub import model_id
 
     raw = tomllib.loads(Path(path).read_text())
     tables = {raw["submission"]["model"]: raw["submission"]}
     tables |= raw.get("models", {})
     return {
-        name: model_id(model_abbr_for(name, path))
+        name: model_id(table["model_abbr"])
         for name, table in tables.items()
         if table["submit"]
     }
@@ -679,15 +679,15 @@ def overall_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
     scores : pandas.DataFrame
         Output of `score_comparison`.
     baseline : str
-        Model that WIS is relative to.
+        Model that WIS and log WIS are relative to.
 
     Returns
     -------
     pandas.DataFrame
         On the reported target and the forecasts the baseline also made,
         one row per `scale` (`national`, `provinces` or `zones`) and
-        `model`, with `hub` (a hub team's), `n`, `relative_wis`,
-        `coverage_50` and `coverage_90`.
+        `model`, with `hub` (a hub team's), `n`, `rel_wis`, `rel_log_wis`,
+        `coverage_50`, `coverage_90` and `bias`, as `OVERALL_METRICS`.
     """
     match = ["reference_date", "truth_vintage", "location", "target_end_date"]
     depth = scores["location"].str.count("-")
@@ -696,7 +696,13 @@ def overall_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
     )
     rep = rep.merge(rep.loc[rep["model"] == baseline, match], on=match)
     rel = relative_skill(
-        rep, baseline, by=("scale",), metrics=("wis",), match_on=match
+        rep,
+        baseline,
+        by=("scale",),
+        metrics=("wis", "log_wis"),
+        match_on=match,
+    ).rename(
+        columns={"relative_wis": "rel_wis", "relative_log_wis": "rel_log_wis"}
     )
     keys = ["scale", "model"]
     cover = (
@@ -706,12 +712,22 @@ def overall_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
             hub=("hub", "all"),
             coverage_50=("coverage_50", "mean"),
             coverage_90=("coverage_90", "mean"),
+            bias=("bias", "mean"),
         )
         .reset_index()
     )
     out = rel.merge(cover, on=keys)
     return out[
-        [*keys, "hub", "n", "relative_wis", "coverage_50", "coverage_90"]
+        [
+            *keys,
+            "hub",
+            "n",
+            "rel_wis",
+            "rel_log_wis",
+            "coverage_50",
+            "coverage_90",
+            "bias",
+        ]
     ]
 
 

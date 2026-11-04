@@ -44,6 +44,7 @@ __all__ = [
 ]
 
 SCHEMA_VERSION: Final = 1
+"""Version of the `ppc.json` layout."""
 STREAMS: Final = ("observed", "imputed", "total")
 """Known onsets, the hub's imputed onsets, and their sum."""
 

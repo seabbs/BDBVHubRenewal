@@ -10,21 +10,37 @@ import yaml
 
 from bdbvhubrenewal.submission.hub import (
     HUB_COLUMNS,
-    load_hub_round,
     model_id,
     render_model_metadata,
     run_date,
     to_hub_table,
-    validate_model_id,
-    validate_model_metadata,
-    validate_submission,
-    validate_submission_file,
     write_model_metadata,
     write_submission,
 )
+from bdbvhubrenewal.submission.validate import (
+    Hub,
+    validate_metadata,
+    validate_submission,
+)
+
+ROOT = Path(__file__).resolve().parents[2]
+FIXTURES = Path(__file__).parent / "hub_validation" / "fixtures"
+HUB = Hub.load(FIXTURES / "hub-snapshot")
+"""The pinned hub config, in which the round of 2026-10-31 is open."""
+METADATA = ROOT / "hub" / "model-metadata"
+MID = "seabbs-renewal"
 
 FORECAST_DATE = "2026-10-20"
 """On or before every reference date these tests use."""
+
+
+def _failures(table: pd.DataFrame, root: Path) -> list[str]:
+    """Write a table to the hub layout and list the checks it fails."""
+    path = write_submission(table, root, MID)
+    rep = validate_submission(
+        path, HUB, metadata_dirs=[METADATA], skip_window=True
+    )
+    return [c.check for c in rep.failed]
 
 
 def _table(samples: pd.DataFrame, ref: str, **kw: object) -> pd.DataFrame:
@@ -43,110 +59,27 @@ def _samples(n: int = 100) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-@pytest.fixture
-def hub_round(tasks_json: Path):  # type: ignore[no-untyped-def]
-    return load_hub_round(tasks_json)
-
-
-def test_load_hub_round(hub_round) -> None:  # type: ignore[no-untyped-def]
-    assert hub_round.n_samples == 100
-    assert hub_round.compound_taskid_set == (
-        "reference_date",
-        "location",
-        "target",
-    )
-    assert "CD-IT" in hub_round.locations
-    assert (hub_round.window_start, hub_round.window_end) == (-6, -4)
-
-
-def test_to_hub_table_is_valid(hub_round) -> None:  # type: ignore[no-untyped-def]
+def test_to_hub_table_is_valid(tmp_path: Path) -> None:
     table = _table(_samples(), "2026-10-31")
     assert tuple(table.columns) == HUB_COLUMNS
     assert (table["value"] == 10).all()
-    errors = validate_submission(
-        table,
-        hub_round,
-        file_name="2026-10-31-seabbs-randomwalk.csv",
-        mid="seabbs-randomwalk",
-    )
-    assert errors == []
+    assert _failures(table, tmp_path) == []
 
 
-def test_round_trip_through_csv(hub_round, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+def test_submission_path(tmp_path: Path) -> None:
     table = _table(_samples(), "2026-10-31")
     path = write_submission(table, tmp_path, "seabbs-randomwalk")
     assert path.name == "2026-10-31-seabbs-randomwalk.csv"
     assert path.parent.name == "seabbs-randomwalk"
-    back = pd.read_csv(path)
-    assert validate_submission(back, hub_round) == []
-
-
-@pytest.mark.parametrize(
-    ("change", "message"),
-    [
-        (lambda t: t.iloc[1:], "exactly 100 samples"),
-        (lambda t: t.assign(value=-1), "non-negative"),
-        (lambda t: t.assign(location="CD-XX"), "Unknown locations"),
-        (lambda t: t.assign(target_end_date="2026-10-30"), "not Saturdays"),
-        (lambda t: t.assign(target_end_date="2026-11-28"), "outside"),
-        (lambda t: t.assign(output_type="quantile"), "Output type"),
-        (lambda t: t.assign(reference_date="2026-10-24"), "not an open round"),
-        (lambda t: t.drop(columns="target"), "Columns"),
-        (lambda t: t.assign(output_type_id=1.5), "integers"),
-    ],
-)
-def test_validation_catches_problems(hub_round, change, message: str) -> None:  # type: ignore[no-untyped-def]
-    table = change(_table(_samples(), "2026-10-31"))
-    errors = validate_submission(table, hub_round)
-    assert any(message in e for e in errors), errors
-
-
-def test_validation_catches_ragged_trajectories(hub_round) -> None:  # type: ignore[no-untyped-def]
-    table = _table(_samples(), "2026-10-31")
-    # Move one sample's week so samples cover different week sets.
-    mask = (
-        (table["location"] == "CD-IT")
-        & (table["output_type_id"] == 1)
-        & (table["target_end_date"] == "2026-11-07")
-    )
-    table.loc[mask, "target_end_date"] = "2026-11-14"
-    errors = validate_submission(table, hub_round)
-    assert any("same weeks" in e for e in errors)
-
-
-def test_validation_window(hub_round) -> None:  # type: ignore[no-untyped-def]
-    table = _table(_samples(), "2026-10-31", forecast_date="2026-10-26")
-    tz = dt.UTC
-    inside = dt.datetime(2026, 10, 26, 12, tzinfo=tz)
-    late = dt.datetime(2026, 10, 28, 12, tzinfo=tz)
-    assert validate_submission(table, hub_round, submitted_at=inside) == []
-    assert validate_submission(table, hub_round, submitted_at=late)
-
-
-def test_backtest_dates_skip_round_checks(hub_round) -> None:  # type: ignore[no-untyped-def]
-    samples = _samples().assign(
-        target_end_date=lambda d: d["target_end_date"].map(
-            {
-                "2026-10-24": "2026-08-15",
-                "2026-10-31": "2026-08-22",
-                "2026-11-07": "2026-08-29",
-            }
-        )
-    )
-    table = _table(samples, "2026-08-22", forecast_date="2026-08-20")
-    assert validate_submission(table, hub_round, check_round=False) == []
 
 
 def test_model_ids() -> None:
     assert model_id("randomwalk") == "seabbs-randomwalk"
     with pytest.raises(ValueError, match="letters"):
         model_id("bad-name")
-    assert validate_model_id("seabbs-renewal") == []
-    assert validate_model_id("a-b-c")
-    assert validate_model_id("seabbs-waytoolongmodelname")
 
 
-def test_metadata_is_valid(schema_json: Path, tmp_path: Path) -> None:
+def test_metadata_is_valid(tmp_path: Path) -> None:
     record = render_model_metadata(
         "randomwalk",
         model_name="RandomWalk baseline",
@@ -156,20 +89,14 @@ def test_metadata_is_valid(schema_json: Path, tmp_path: Path) -> None:
     )
     path = write_model_metadata(record, tmp_path)
     assert path.name == "seabbs-randomwalk.yml"
+    assert validate_metadata(path, HUB).valid
     back = yaml.safe_load(path.read_text())
-    assert validate_model_metadata(back, schema_json, path.name) == []
     assert "language model" not in back["model_details"]["methods_long"]
     # Sam's HPRU funding, in the schema's `team_funding` field.
     assert "NIHR207404" in back["team_funding"]
-    bad = {**back, "license": "MIT"}
-    assert validate_model_metadata(bad, schema_json)
-    assert validate_model_metadata(back, schema_json, "wrong.yml")
 
 
 # Gaps found by the hub validation bundle -----------------------------------
-
-FIXTURES = Path(__file__).parent / "hub_validation" / "fixtures"
-SNAPSHOT_TASKS = FIXTURES / "hub-snapshot" / "hub-config" / "tasks.json"
 
 
 def _provinces(n: int = 100, value: float = 10.4) -> pd.DataFrame:
@@ -183,75 +110,19 @@ def _provinces(n: int = 100, value: float = 10.4) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def test_validation_needs_same_ids_in_every_location(hub_round) -> None:  # type: ignore[no-untyped-def]
-    table = _table(_provinces(), "2026-10-31")
-    mask = (table["location"] == "CD-IT") & (table["output_type_id"] == 1)
-    table.loc[mask, "output_type_id"] = 101
-    errors = validate_submission(table, hub_round)
-    assert any("same sample ids" in e for e in errors), errors
-
-
-def test_unique_ids_need_same_weeks_everywhere(hub_round) -> None:  # type: ignore[no-untyped-def]
-    table = _table(_provinces(), "2026-10-31")
-    offset = (table["location"] == "CD-NK") * 100
-    offset += (table["location"] == "CD") * 200
-    table["output_type_id"] += offset
-    assert validate_submission(table, hub_round) == []
-    ragged = table.loc[
-        ~(
-            (table["location"] == "CD-NK")
-            & (table["target_end_date"] == "2026-11-07")
-        )
-    ]
-    errors = validate_submission(ragged, hub_round)
-    assert any("same weeks in every location" in e for e in errors), errors
-
-
-def test_reused_ids_allow_different_weeks_by_location(hub_round) -> None:  # type: ignore[no-untyped-def]
-    table = _table(_provinces(), "2026-10-31")
-    table = table.loc[
-        ~(
-            (table["location"] == "CD-NK")
-            & (table["target_end_date"] == "2026-11-07")
-        )
-    ]
-    assert validate_submission(table, hub_round) == []
-
-
-def test_validation_checks_directory_and_metadata(
-    hub_round,  # type: ignore[no-untyped-def]
+def test_validation_needs_same_ids_in_every_location(
     tmp_path: Path,
 ) -> None:
     table = _table(_provinces(), "2026-10-31")
-    name = "2026-10-31-seabbs-randomwalk.csv"
-    mid = "seabbs-randomwalk"
-    errors = validate_submission(
-        table, hub_round, file_name=name, mid=mid, dir_name="seabbs-x"
-    )
-    assert any("directory" in e for e in errors), errors
-    errors = validate_submission(
-        table, hub_round, file_name=name, mid=mid, metadata_dir=tmp_path
-    )
-    assert any("metadata" in e.lower() for e in errors), errors
-    (tmp_path / f"{mid}.yml").write_text("team_abbr: seabbs\n")
-    assert (
-        validate_submission(
-            table,
-            hub_round,
-            file_name=name,
-            mid=mid,
-            dir_name=mid,
-            metadata_dir=tmp_path,
-        )
-        == []
-    )
+    mask = (table["location"] == "CD-IT") & (table["output_type_id"] == 1)
+    table.loc[mask, "output_type_id"] = 101
+    assert _failures(table, tmp_path) == ["spl_compound_taskid_set"]
 
 
 def test_model_abbreviations_at_most_14_characters() -> None:
     assert model_id("a" * 14) == f"seabbs-{'a' * 14}"
     with pytest.raises(ValueError, match="14"):
         model_id("a" * 15)
-    assert validate_model_id(f"seabbs-{'a' * 15}")
 
 
 def test_writer_makes_national_the_sum_of_provinces() -> None:
@@ -319,13 +190,12 @@ def _round2_fixtures() -> list[dict[str, object]]:
 @pytest.mark.parametrize("fx", _round2_fixtures(), ids=lambda f: str(f["case"]))
 def test_in_package_check_agrees_with_bundle_fixtures(fx) -> None:  # type: ignore[no-untyped-def]
     path = FIXTURES.parent / str(fx["path"])
-    hub_round = load_hub_round(SNAPSHOT_TASKS)
     meta = [
         FIXTURES / "constructed" / "model-metadata",
         FIXTURES / "real" / "model-metadata",
     ]
-    errors = validate_submission_file(path, hub_round, metadata_dirs=meta)
-    assert (errors == []) is bool(fx["valid_py"]), errors
+    rep = validate_submission(path, HUB, metadata_dirs=meta, skip_window=True)
+    assert rep.valid is bool(fx["valid_py"]), rep.failed
 
 
 # forecast_date ---------------------------------------------------------------
@@ -344,39 +214,3 @@ def test_forecast_date_defaults_to_the_run_date_in_utc() -> None:
         2026, 10, 26, 23, 30, tzinfo=dt.timezone(dt.timedelta(hours=-5))
     )
     assert run_date(late) == dt.date(2026, 10, 27)
-
-
-@pytest.mark.parametrize(
-    ("change", "message"),
-    [
-        (lambda t: t.drop(columns="forecast_date"), "Columns"),
-        (lambda t: t.assign(forecast_date="20/10/2026"), "YYYY-MM-DD"),
-        (lambda t: t.assign(forecast_date=""), "YYYY-MM-DD"),
-        (lambda t: t.assign(forecast_date="2026-11-01"), "on or before"),
-        (
-            lambda t: t.assign(
-                forecast_date=lambda d: d["forecast_date"].where(
-                    d["output_type_id"] <= 50, "2026-10-21"
-                )
-            ),
-            "exactly one new",
-        ),
-    ],
-)
-def test_validation_catches_forecast_date_problems(
-    hub_round, change, message: str
-) -> None:  # type: ignore[no-untyped-def]
-    table = change(_table(_samples(), "2026-10-31"))
-    errors = validate_submission(table, hub_round)
-    assert any(message in e for e in errors), errors
-
-
-def test_new_forecast_date_must_be_within_a_day_of_submission(
-    hub_round,
-) -> None:  # type: ignore[no-untyped-def]
-    table = _table(_samples(), "2026-10-31", forecast_date="2026-10-26")
-    ok = dt.datetime(2026, 10, 27, 12, tzinfo=dt.UTC)
-    assert validate_submission(table, hub_round, submitted_at=ok) == []
-    stale = _table(_samples(), "2026-10-31", forecast_date="2026-10-24")
-    errors = validate_submission(stale, hub_round, submitted_at=ok)
-    assert any("within 1 day" in e for e in errors), errors

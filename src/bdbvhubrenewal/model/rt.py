@@ -85,6 +85,19 @@ class NonCentredRandomWalk:
     ) -> Array:
         """Sample trajectories.
 
+        Parameters
+        ----------
+        n_timepoints : int
+            Days to sample.
+        initial_value : float or array_like, optional
+            Starting value of each process. Defaults to 0.
+        n_processes : int, default 1
+            Number of independent walks.
+        name_prefix : str, default "rw"
+            Prefix of the sample site names.
+        first_day_dow : int, optional
+            Weekday of the first day, passed by PyRenew.
+
         Returns
         -------
         ArrayLike
@@ -176,6 +189,11 @@ class PooledInitialValue(RandomVariable):
     def sample(self, **kwargs: object) -> Array:
         """Sample one starting value per province.
 
+        Parameters
+        ----------
+        **kwargs
+            Ignored, for the PyRenew interface.
+
         Returns
         -------
         ArrayLike
@@ -230,6 +248,11 @@ def split_initial_value(
 
 def sum_to_zero_basis(n: int) -> np.ndarray:
     r"""Orthonormal basis of $\{\delta \in R^n : \sum_p \delta_p = 0\}$.
+
+    Parameters
+    ----------
+    n : int
+        Dimension.
 
     Returns
     -------
@@ -340,6 +363,17 @@ class MissingOnsetFraction(RandomVariable):
         **kwargs: object,
     ) -> Array:
         r"""Sample $\pi_p(t)$.
+
+        Parameters
+        ----------
+        n_timepoints : int
+            Days to sample.
+        n_groups : int
+            Number of provinces.
+        first_day_dow : int, optional
+            Weekday of the first day, passed by PyRenew.
+        **kwargs
+            Ignored, for the PyRenew interface.
 
         Returns
         -------

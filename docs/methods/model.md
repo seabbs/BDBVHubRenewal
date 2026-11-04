@@ -41,7 +41,7 @@ flowchart TD
     DEL["Onset-to-report delay<br/>f<sub>s</sub>(d)<br/>hazard shifted by γ(s),<br/>a weekly walk on onset day<br/><i>renewal: shared</i>"]
     MISS["Share reported<br/>without onset π<sub>p</sub>(t)<br/>weekly walk"]
     subgraph OB["Data streams at vintage T"]
-        KN["Known onsets<br/>onsets × delay to report<br/>× share with an onset"]
+        KN["Known onsets<br/>onsets × delay to report<br/>× share with an onset<br/>× published by T"]
         IM["Hub-imputed onsets<br/>reports without an onset,<br/>spread back by the hub's<br/>published delays"]
         DC["Known-onset delays<br/>by onset week and delay"]
     end
@@ -140,11 +140,12 @@ $b$ is a weekly random walk with start $\mathcal{N}(-2, 1)$ and step SD $\mathca
 
 ### Known onsets
 
-A case reported by the cut-off $T$ is in the vintage at $T$.
+A case reported on day $t$ is in the vintage published at $T$ with probability $c(t) = F_\ell(T - t)$, with $F_\ell$ the cdf of the report-to-publication lag.
+The lag is uniform on 0 to 3 days.
 Expected known onsets, right truncated by vintage, are
 
 $$
-\mathrm{known}_{p,T}(s) = \lambda_p(s) \sum_{d \le T - s} f_s(d)\, \{1 - \pi_p(s + d)\}.
+\mathrm{known}_{p,T}(s) = \lambda_p(s) \sum_{d} f_s(d)\, \{1 - \pi_p(s + d)\}\, c(s + d).
 $$
 
 ### Hub imputation
@@ -155,7 +156,7 @@ We model that procedure, bias included:
 $$
 M_p(t) = \pi_p(t) \sum_s \lambda_p(s)\, f_s(t - s),
 \qquad
-\mathrm{imputed}_{p,T}(s) = \sum_{t = s}^{T} \hat f_T(t - s)\, M_p(t).
+\mathrm{imputed}_{p,T}(s) = \sum_{t = s}^{T} \hat f_T(t - s)\, c(t)\, M_p(t).
 $$
 
 $M_p(t)$ are the cases reported on day $t$ without an onset.

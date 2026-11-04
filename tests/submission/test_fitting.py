@@ -239,12 +239,13 @@ def test_nowcast_notes_what_it_handled(tmp_path: Path) -> None:
 
 @pytest.mark.usefixtures("in_root")
 def test_submission_id_is_one_config_value(tmp_path: Path) -> None:
-    from bdbvhubrenewal.submission.hub import submission_model_abbr
+    from bdbvhubrenewal.submission.hub import model_abbr_for
 
-    assert submission_model_abbr(ROOT / "config" / "hub.toml") == "renewal"
+    hub_toml = ROOT / "config" / "hub.toml"
+    assert model_abbr_for("renewalbvd", hub_toml) == "renewal"
     cfg = tmp_path / "hub.toml"
     cfg.write_text('[submission]\nmodel_abbr = "other"\n')
-    assert submission_model_abbr(cfg) == "other"
+    assert model_abbr_for("renewalsp", cfg) == "other"
 
 
 @pytest.mark.usefixtures("in_root")
@@ -351,7 +352,8 @@ def test_committed_renewal_metadata_is_one_of_the_variants(
     tmp_path: Path,
 ) -> None:
     # seabbs-renewal.yml is the metadata of the variant chosen for
-    # submission. After a choice, regenerate it (see MODEL_METADATA).
+    # submission. After a choice, regenerate it (see
+    # bdbvhubrenewal.submission.metadata).
     path = ROOT / "hub" / "model-metadata" / "seabbs-renewal.yml"
     rendered = {}
     for variant in ("renewal", "renewalsp", "renewalbvd"):

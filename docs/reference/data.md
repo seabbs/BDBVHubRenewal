@@ -1,6 +1,6 @@
 # Data
 
-The hub data, dates, simulated vintages, delays, release snapshots and BVDOutbreakSize releases.
+Load the hub data, build forecast vintages and simulate outbreaks to test models on. See [Getting started](../getting-started.ipynb) for a worked example.
 { .page-subtitle }
 
 ::: bdbvhubrenewal.data

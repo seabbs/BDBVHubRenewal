@@ -158,7 +158,7 @@ def write_explorer(path: Path, data: Mapping[str, object]) -> None:
     path.write_text(json.dumps(data, separators=(",", ":")))
 
 
-def explorer_html(src: str, title: str) -> str:
+def explorer_html(src: str, title: str, all_rounds: bool = False) -> str:
     """Return the page element the explorer script fills.
 
     Parameters
@@ -167,9 +167,12 @@ def explorer_html(src: str, title: str) -> str:
         URL of the JSON file, relative to the page.
     title : str
         Accessible name of the explorer.
+    all_rounds : bool
+        Start with all rounds pooled, rather than the latest round.
     """
+    start = ' data-round="all"' if all_rounds else ""
     return (
-        f'<div class="explorer" data-src="{src}" role="group" '
+        f'<div class="explorer" data-src="{src}"{start} role="group" '
         f'aria-label="{title}">\n'
         "<noscript>The explorer needs JavaScript.</noscript>\n"
         "</div>\n"

@@ -1,7 +1,8 @@
 # The hub model id of the renewal track: <team_abbr>-<model_abbr>.
 # It does not follow the internal model keys (renewal, renewalsp,
 # renewalbvd): whichever model the chain submits, the hub sees this id.
-# Read by `bdbvhubrenewal.hub.submission_model_abbr`.
+# Read by `bdbvhubrenewal.submission.hub.model_abbr_for` and
+# `submission_ci.tracks`.
 
 [submission]
 model_abbr = "renewal"
@@ -13,7 +14,8 @@ submit = true
 
 # Further hub models, each submitted under its own id every round, apart
 # from the chain above. The hub allows no hyphen in an abbreviation and
-# fewer than 16 characters. Read by `bdbvhubrenewal.hub.model_abbr_for`.
+# fewer than 16 characters. Read by
+# `bdbvhubrenewal.submission.hub.model_abbr_for`.
 # The random walk on a daily nowcast of the recent weeks.
 [models.randomwalknowcast]
 model_abbr = "rwnowcast"

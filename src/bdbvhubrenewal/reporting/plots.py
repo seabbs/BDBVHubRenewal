@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, Final, cast
 
@@ -30,7 +31,14 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.ticker import MaxNLocator
 
-from bdbvhubrenewal.data import imputed_share, newly_missing, revision_table
+from bdbvhubrenewal.data import (
+    downward_summary,
+    imputed_by_release,
+    imputed_share,
+    newly_missing,
+    release_updates,
+    revision_table,
+)
 from bdbvhubrenewal.data.delays import delay_summary
 
 __all__ = [
@@ -43,8 +51,10 @@ __all__ = [
     "plot_delay_check",
     "plot_delay_distribution",
     "plot_delays_over_time",
+    "plot_downward_updates",
     "plot_forecasts",
     "plot_hub_round",
+    "plot_imputed_by_release",
     "plot_imputed_share",
     "plot_location_grid",
     "plot_newly_missing",
@@ -381,6 +391,139 @@ def plot_imputed_share(
     return fig
 
 
+def plot_imputed_by_release(
+    target: pd.DataFrame, mode: str = "light"
+) -> Figure:
+    """Plot the share of all cases with an imputed onset in each release.
+
+    Parameters
+    ----------
+    target : pandas.DataFrame
+        Real target rows.
+    mode : str
+        `"light"` or `"dark"`.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        One line for the country and one per province with cases.
+    """
+    share = imputed_by_release(target)
+    names = _names(target)
+    palette = MODEL_COLOURS[mode]
+    fig, ax = plt.subplots(figsize=(7.2, 3.6), layout="constrained")
+    for i, loc in enumerate(_locations_by_size(target)):
+        r = share.loc[share["location"] == loc]
+        national = loc == "CD"
+        ax.plot(
+            pd.to_datetime(r["vintage"]),
+            r["imputed_share"],
+            marker="o",
+            ms=4,
+            lw=2.5 if national else 1.2,
+            color=THEMES[mode]["data"] if national else palette[(i - 1) % 8],
+            label=f"{names.get(loc, loc)} ({loc})",
+        )
+    ax.set_ylim(0, 1)
+    ax.set_xlabel("Release")
+    ax.set_ylabel("Share of cases with an imputed onset")
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
+    fig.legend(loc="outside right center", fontsize=8)
+    return fig
+
+
+AGE_BINS: Final = (0, 1, 2, 3, 4, 8, 16)
+"""Lower edges of the onset-week age groups for downward updates."""
+
+
+def plot_downward_updates(
+    target: pd.DataFrame, zones: pd.DataFrame, mode: str = "light"
+) -> Figure:
+    """Plot how often and how much counts fell between releases.
+
+    Parameters
+    ----------
+    target : pandas.DataFrame
+        Real target rows.
+    zones : pandas.DataFrame
+        Health zone counts, with columns `vintage`, `location`,
+        `target_end_date` and `total`.
+    mode : str
+        `"light"` or `"dark"`.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Columns for the country, the provinces and the health zones, and
+        rows for the share of place-weeks that fell and the falls as a
+        share of all change, by the week's age at the earlier release.
+        One line per pair of consecutive releases.
+    """
+    nat = target["location"] == "CD"
+    updates = pd.concat(
+        [
+            release_updates(target.loc[nat]).assign(scale="Country"),
+            release_updates(target.loc[~nat]).assign(scale="Provinces"),
+            release_updates(zones).assign(scale="Health zones"),
+        ]
+    )
+    edges = list(AGE_BINS)
+    labels = [
+        str(lo) if hi - lo == 1 else f"{lo}-{hi - 1}"
+        for lo, hi in pairwise(edges)
+    ] + [f"{edges[-1]}+"]
+    updates["age"] = pd.cut(
+        updates["weeks_before"],
+        [*edges, np.inf],
+        right=False,
+        labels=labels,
+    )
+    updates["pair"] = updates["previous"] + " to " + updates["vintage"]
+    summary = downward_summary(updates, ("scale", "pair", "age"))
+    pairs = sorted(summary["pair"].unique())
+    palette = MODEL_COLOURS[mode]
+    scales = ["Country", "Provinces", "Health zones"]
+    fig, axes = plt.subplots(
+        2,
+        3,
+        figsize=(9.6, 5.2),
+        sharex=True,
+        sharey="row",
+        squeeze=False,
+        layout="constrained",
+    )
+    x = np.arange(len(labels))
+    for col, scale in enumerate(scales):
+        for i, pair in enumerate(pairs):
+            pick = (summary["scale"] == scale) & (summary["pair"] == pair)
+            r = summary.loc[pick].set_index("age").reindex(labels)
+            for row, metric in enumerate(("share_fell", "downward_share")):
+                axes[row][col].plot(
+                    x,
+                    r[metric],
+                    marker="o",
+                    ms=4,
+                    lw=1.2,
+                    color=palette[i % len(palette)],
+                    label=pair,
+                )
+        axes[0][col].set_title(scale)
+        axes[1][col].set_xticks(x, labels)
+        axes[1][col].set_xlabel("Weeks old at the earlier release")
+    axes[0][0].set_ylabel("Share of place-weeks\nthat fell")
+    axes[1][0].set_ylabel("Falls as a share\nof all change")
+    handles, names = axes[0][0].get_legend_handles_labels()
+    fig.legend(
+        handles,
+        names,
+        loc="outside lower center",
+        ncol=len(pairs),
+        title="Releases compared",
+        title_fontsize=8,
+    )
+    return fig
+
+
 def plot_newly_missing(target: pd.DataFrame, mode: str = "light") -> Figure:
     """Plot cases added between vintages, split by onset status.
 
@@ -711,6 +854,19 @@ def plot_location_grid(
     matplotlib.figure.Figure
         Per panel, the data at the origin (dashed), the later data
         (solid) and each model's trajectories, intervals and median.
+
+    Examples
+    --------
+    >>> from bdbvhubrenewal.reporting.plots import (
+    ...     plot_location_grid, save_light_dark
+    ... )
+    >>> fig = plot_location_grid(forecasts, real, ["CD", "CD-IT"])
+    >>> save_light_dark(
+    ...     lambda mode: plot_location_grid(
+    ...         forecasts, real, ["CD"], mode=mode
+    ...     ),
+    ...     "figures/grid.svg",
+    ... )
     """
     fc = forecasts
     if max_horizon is not None:
@@ -893,6 +1049,12 @@ def plot_forecasts(
         One panel per reference date: data at the time (dashed), later
         data (solid) and each model's sample trajectories, 50% and 90%
         intervals and median.
+
+    Examples
+    --------
+    >>> from bdbvhubrenewal.reporting.plots import plot_forecasts
+    >>> fig = plot_forecasts(forecasts, real, "CD")  # from `run_forecasts`
+    >>> fig.savefig("national.png")
     """
     fc = forecasts.loc[
         (forecasts["location"] == location) & (forecasts["kind"] == kind)
@@ -1152,7 +1314,20 @@ def comparison_colours(
 
 
 def hub_styles(teams: Sequence[str], mode: str) -> dict[str, tuple[str, str]]:
-    """Give each hub team a grey and a marker, fixed by its sorted place."""
+    """Give each hub team a grey and a marker, fixed by its sorted place.
+
+    Parameters
+    ----------
+    teams : sequence of str
+        Hub team names.
+    mode : str
+        `"light"` or `"dark"`.
+
+    Returns
+    -------
+    dict of str to tuple of str
+        Each team's colour and marker.
+    """
     greys = HUB_GREYS[mode]
     markers = "os^Dv"
     return {

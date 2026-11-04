@@ -112,3 +112,10 @@ def test_explorer_hides_models_until_switched_on() -> None:
             "dark": "#dddddd",
         },
     ]
+
+
+def test_explorer_html_can_start_with_all_rounds() -> None:
+    assert 'data-round="all"' in explorer.explorer_html(
+        "x.json", "Forecasts", all_rounds=True
+    )
+    assert "data-round" not in explorer.explorer_html("x.json", "Forecasts")

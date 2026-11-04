@@ -151,7 +151,25 @@ class RandomWalk:
     needs_snapshots: ClassVar[bool] = True
 
     def origin_at(self, task: ForecastTask, errors: bool) -> Origin:
-        """Return the fit at the task's vintage, with errors if asked."""
+        """Fit the delays and the walk at the task's vintage.
+
+        Parameters
+        ----------
+        task : ForecastTask
+            The task. Its `daily_history` holds the release snapshots.
+        errors : bool
+            Also fit the nowcast errors, which `RandomWalkNowcast` needs.
+
+        Returns
+        -------
+        Origin
+            The fit at the task's vintage.
+
+        Raises
+        ------
+        MissingSnapshots
+            If the task has no release snapshots.
+        """
         daily = task.daily_history
         if daily is None or daily.empty:
             raise MissingSnapshots(
@@ -162,7 +180,20 @@ class RandomWalk:
         return build_origin(snap, self.settings, errors)
 
     def rows(self, origin: Origin, task: ForecastTask) -> list[int]:
-        """Return the origin's row of each of the task's places."""
+        """Return the origin's row of each of the task's places.
+
+        Parameters
+        ----------
+        origin : Origin
+            The fit, from `origin_at`.
+        task : ForecastTask
+            The task.
+
+        Returns
+        -------
+        list of int
+            Row indices, in the order of `task.locations`.
+        """
         pos = {c: i for i, c in enumerate(origin.snap.locations)}
         return [pos[c] for c in task.locations]
 
@@ -209,6 +240,12 @@ class RandomWalk:
             If the task has no snapshots, no pair of releases within
             the delay window, or a place with no week that is 95 per cent
             complete (`NoCompleteWeek`).
+
+        Examples
+        --------
+        >>> from bdbvhubrenewal.forecasters import get_model
+        >>> samples = get_model("randomwalk").forecast(task)
+        >>> samples.groupby(["location", "target_end_date"])["value"].median()
         """
         origin = self.origin_at(task, errors=False)
         weeks = _timeline(origin, task)

@@ -25,6 +25,7 @@ from ._checks import (
 )
 
 Triangle = tuple[Array, np.ndarray]
+"""A reporting triangle and its mask: values, and True where observed."""
 
 
 @jax.jit
@@ -58,6 +59,20 @@ def preprocess_negative_values(
     because of an upstream indexing slip.
     Non-integer inputs therefore differ from R.
     Unobserved cells stay zero.
+
+    Parameters
+    ----------
+    triangle : array_like
+        Reporting triangle, reference times by delays.
+    mask : array_like of bool
+        True where a cell is observed.
+    validate : bool, default True
+        Check the triangle and mask first.
+
+    Returns
+    -------
+    jax.Array
+        The triangle with no negative cells.
     """
     values, m = coerce(triangle, mask)
     if validate:
@@ -73,9 +88,22 @@ def truncate_to_rows(
 ) -> list[Triangle]:
     """Drop 1..n rows from the bottom (R truncate.R:182).
 
-    ``n`` defaults to the number of rows without a missing cell minus
-    one.
-    Element ``t - 1`` of the result has its last ``t`` rows removed.
+    Parameters
+    ----------
+    triangle : array_like
+        Reporting triangle, reference times by delays.
+    mask : array_like of bool
+        True where a cell is observed.
+    n : int, optional
+        Most rows to drop. Defaults to the number of rows without a
+        missing cell minus one.
+    validate : bool, default True
+        Check the triangle and mask first.
+
+    Returns
+    -------
+    list of Triangle
+        Element ``t - 1`` has its last ``t`` rows removed.
     """
     values, m = coerce(triangle, mask)
     if validate:
@@ -124,6 +152,22 @@ def apply_reporting_structure(
     A scalar structure is expanded to groups of that many delays.
     Values under the new False cells are zero in
     ``triangle * mask``.
+
+    Parameters
+    ----------
+    triangle : array_like
+        Reporting triangle, reference times by delays.
+    mask : array_like of bool
+        True where a cell is observed.
+    structure : int or array_like of int, default 1
+        Delays added per row, from the last row up.
+    validate : bool, default True
+        Check the triangle and mask first.
+
+    Returns
+    -------
+    numpy.ndarray of bool
+        The new mask.
     """
     _, m = coerce(triangle, mask)
     if validate:
@@ -154,8 +198,17 @@ def get_reporting_structure(mask: Any) -> float | np.ndarray:
     """Infer the reporting structure of a triangle.
 
     R reporting_triangle-getters.R:331.
-    Returns 0 when nothing is missing, a scalar when the structure is a
-    regular grouping and a vector otherwise.
+
+    Parameters
+    ----------
+    mask : array_like of bool
+        True where a cell is observed.
+
+    Returns
+    -------
+    float or numpy.ndarray
+        0 when nothing is missing, a scalar when the structure is a
+        regular grouping and a vector otherwise.
     """
     m = np.asarray(mask, dtype=bool)
     n_row_nas = n_unobserved_rows(m)
@@ -195,7 +248,24 @@ def allocate_reference_times(
     """Split reference times between delay and uncertainty estimation.
 
     R allocate_reference_times.R:57.
-    Returns ``(n_history_delay, n_retrospective_nowcasts)``.
+
+    Parameters
+    ----------
+    mask : array_like of bool
+        True where a cell is observed.
+    scale_factor : float, default 3
+        Reference times to use, as a multiple of the maximum delay.
+    prop_delay : float, default 0.5
+        Share of them used to estimate the delay.
+    n_min_retro_nowcasts : int, default 2
+        Fewest retrospective nowcasts to leave for the uncertainty.
+    validate : bool, default True
+        Check the mask first.
+
+    Returns
+    -------
+    tuple of int
+        ``(n_history_delay, n_retrospective_nowcasts)``.
     """
     m = np.asarray(mask, dtype=bool)
     if validate:
@@ -255,6 +325,20 @@ def rolling_sum(
     A window with any unobserved cell is unobserved.
     Use ``functools.partial(rolling_sum, k=7)`` as a
     ``ref_time_aggregator``.
+
+    Parameters
+    ----------
+    values : jax.Array
+        Matrix with reference times as rows.
+    mask : jax.Array or numpy.ndarray of bool
+        True where a cell is observed.
+    k : int
+        Window length in rows.
+
+    Returns
+    -------
+    tuple
+        The summed values and their mask, each with ``k - 1`` fewer rows.
     """
     v = jnp.asarray(values)
     m = np.asarray(mask, dtype=bool)
@@ -270,7 +354,20 @@ def rolling_sum(
 def identity(
     values: Array, mask: Array | np.ndarray
 ) -> tuple[Array, np.ndarray]:
-    """Return the input unchanged, the default ``ref_time_aggregator``."""
+    """Return the input unchanged, the default ``ref_time_aggregator``.
+
+    Parameters
+    ----------
+    values : jax.Array
+        Matrix with reference times as rows.
+    mask : jax.Array or numpy.ndarray of bool
+        True where a cell is observed.
+
+    Returns
+    -------
+    tuple
+        ``(values, mask)``.
+    """
     return jnp.asarray(values), np.asarray(mask, dtype=bool)
 
 
@@ -278,5 +375,15 @@ def row_sums(x: Array) -> Array:
     """Row sums, the default ``delay_aggregator``.
 
     Unobserved cells are zero so this equals ``rowSums(na.rm = TRUE)``.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Matrix with reference times as rows.
+
+    Returns
+    -------
+    jax.Array
+        One sum per row.
     """
     return jnp.sum(jnp.asarray(x), axis=1)

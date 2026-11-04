@@ -10,8 +10,15 @@ authors:
     orcid: https://orcid.org/0000-0001-8057-8037
 abstract: >-
   Weekly nowcasts and forecasts of confirmed Bundibugyo virus disease cases
-  for the BDBV Modeling Hub, by province and nationally, with the data
-  tools, backtest and automated submission workflow behind them.
+  in the Democratic Republic of the Congo for the BDBV Modeling Hub,
+  nationally, by province and by health zone, with the data tools, backtest
+  and automated submission workflow behind them. Two hub models are
+  submitted. seabbs-rwnowcast is baselinenowcast with a random walk on top.
+  seabbs-renewal carries one of three renewal models of daily onsets with a
+  learnt reporting delay and the hub's imputation of missing onsets:
+  renewalsp, fitted to each province on its own; renewal, with pooled Rt and
+  gravity importation between provinces; and renewalbvd, which adds the Rt
+  estimates of BVDOutbreakSize.
 keywords:
   - epidemiology
   - forecasting
@@ -19,6 +26,16 @@ keywords:
   - hubverse
   - Bundibugyo virus disease
 license: MIT
-version: 0.1.0
+doi: 10.5281/zenodo.23942616
 repository-code: "https://github.com/seabbs/BDBVHubRenewal"
 url: "https://samabbott.co.uk/BDBVHubRenewal/"
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.23942616
+    description: Zenodo concept DOI, all versions
+  - type: url
+    value: "https://samabbott.co.uk/BDBVHubRenewal/"
+    description: Documentation
+  - type: url
+    value: "https://github.com/InsightNet-US/BDBV-Modeling-Hub"
+    description: BDBV Modeling Hub

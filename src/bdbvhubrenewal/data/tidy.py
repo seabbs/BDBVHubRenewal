@@ -35,8 +35,9 @@ import json
 import os
 import re
 import urllib.request
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from importlib.resources import files
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, Final
 
@@ -56,7 +57,9 @@ __all__ = [
     "build_tidy_data",
     "coherence_summary",
     "delays_for_vintage",
+    "downward_summary",
     "fetch_hub_data",
+    "imputed_by_release",
     "imputed_share",
     "load_daily",
     "load_daily_zones",
@@ -67,6 +70,7 @@ __all__ = [
     "load_target",
     "national_coherence",
     "newly_missing",
+    "release_updates",
     "revision_table",
     "tidy_daily",
     "tidy_delays",
@@ -810,23 +814,34 @@ def _data_dir(data_dir: Path | str | None) -> Path:
 
 
 def load_target(data_dir: Path | str | None = None) -> pd.DataFrame:
-    """Load the tidy target table written by `build_tidy_data`.
+    """Load the weekly target table, one row per release, location and week.
 
     Parameters
     ----------
     data_dir : pathlib.Path or str, optional
-        Directory holding the tidy tables. Defaults to `data/`.
+        Directory holding the tidy tables written by `build_tidy_data`
+        (`bdbvhubrenewal data`). Defaults to `data/`.
 
     Returns
     -------
     pandas.DataFrame
-        See `tidy_target`.
+        Columns `kind`, `vintage` (the release's as-of date),
+        `location`, `location_name`, `target_end_date` (the Saturday
+        ending the week), `observed`, `imputed` and `total`, as in
+        `tidy_target`.
+
+    Examples
+    --------
+    >>> from bdbvhubrenewal.data import load_target, vintages
+    >>> target = load_target()
+    >>> latest = vintages(target, kind="real")[-1]
+    >>> target.loc[target["vintage"] == latest].head()
     """
     return pd.read_csv(_data_dir(data_dir) / "target.csv", dtype={"kind": str})
 
 
 def load_daily(data_dir: Path | str | None = None) -> pd.DataFrame:
-    """Load the tidy daily onsets table. See `tidy_daily`.
+    """Load the daily onsets of each release, for the country and provinces.
 
     Parameters
     ----------
@@ -836,15 +851,20 @@ def load_daily(data_dir: Path | str | None = None) -> pd.DataFrame:
     Returns
     -------
     pandas.DataFrame
-        See `tidy_daily`.
+        Columns `vintage`, `location`, `onset_date`, `observed` and
+        `imputed`, as in `tidy_daily`. Only days with a case are present.
+
+    Examples
+    --------
+    >>> from bdbvhubrenewal.data import load_daily
+    >>> daily = load_daily()
+    >>> daily.groupby("vintage")["observed"].sum().tail()
     """
     return pd.read_csv(_data_dir(data_dir) / "daily.csv")
 
 
 def load_daily_zones(data_dir: Path | str | None = None) -> pd.DataFrame:
-    """Load the tidy daily onsets of the health zones.
-
-    See `tidy_daily` with `level="zone"`.
+    """Load the daily onsets of each release by health zone.
 
     Parameters
     ----------
@@ -854,13 +874,14 @@ def load_daily_zones(data_dir: Path | str | None = None) -> pd.DataFrame:
     Returns
     -------
     pandas.DataFrame
-        See `tidy_daily`.
+        As `load_daily`, with health zone codes in `location`
+        (`tidy_daily` with `level="zone"`).
     """
     return pd.read_csv(_data_dir(data_dir) / "daily_zones.csv.gz")
 
 
 def load_delays(data_dir: Path | str | None = None) -> pd.DataFrame:
-    """Load the tidy delay line data. See `tidy_delays`.
+    """Load the onset-to-report delays of each release.
 
     Parameters
     ----------
@@ -870,13 +891,22 @@ def load_delays(data_dir: Path | str | None = None) -> pd.DataFrame:
     Returns
     -------
     pandas.DataFrame
-        See `tidy_delays`.
+        One row per case with a known onset: `vintage`, `location`,
+        `location_name`, `onset_week` and `delay` in days, as in
+        `tidy_delays`. Use `delays_for_vintage` to pick the rows a
+        forecast at one release may see.
+
+    Examples
+    --------
+    >>> from bdbvhubrenewal.data import delays_for_vintage, load_delays
+    >>> delays, note = delays_for_vintage(load_delays(), "2026-10-17")
+    >>> delays["delay"].describe()
     """
     return pd.read_csv(_data_dir(data_dir) / "delays.csv.gz")
 
 
 def load_locations(data_dir: Path | str | None = None) -> pd.DataFrame:
-    """Load the tidy locations table. See `tidy_locations`.
+    """Load the hub's locations: the country and its provinces.
 
     Parameters
     ----------
@@ -886,13 +916,13 @@ def load_locations(data_dir: Path | str | None = None) -> pd.DataFrame:
     Returns
     -------
     pandas.DataFrame
-        See `tidy_locations`.
+        One row per location, as in `tidy_locations`.
     """
     return pd.read_csv(_data_dir(data_dir) / "locations.csv")
 
 
 def load_health_zones(data_dir: Path | str | None = None) -> pd.DataFrame:
-    """Load the tidy health zone table. See `tidy_health_zones`.
+    """Load the hub's weekly health zone counts.
 
     Parameters
     ----------
@@ -902,7 +932,7 @@ def load_health_zones(data_dir: Path | str | None = None) -> pd.DataFrame:
     Returns
     -------
     pandas.DataFrame
-        See `tidy_health_zones`.
+        One row per release, zone and week, as in `tidy_health_zones`.
     """
     return pd.read_csv(_data_dir(data_dir) / "health_zones.csv.gz")
 
@@ -1048,3 +1078,132 @@ def revision_table(
         out["reference_total"] > 0
     )
     return out.reset_index(drop=True)
+
+
+def imputed_by_release(target: pd.DataFrame) -> pd.DataFrame:
+    """Return the share of all cases with an imputed onset in each release.
+
+    Parameters
+    ----------
+    target : pandas.DataFrame
+        A target table.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `vintage`, `location`, `imputed`, `total` and
+        `imputed_share`, summed over onset weeks, for places with cases.
+    """
+    out = target.groupby(["vintage", "location"], as_index=False)[
+        ["imputed", "total"]
+    ].sum()
+    out = out.loc[out["total"] > 0].reset_index(drop=True)
+    out["imputed_share"] = out["imputed"] / out["total"]
+    return out
+
+
+def release_updates(counts: pd.DataFrame) -> pd.DataFrame:
+    """Return how each week's count changed between consecutive releases.
+
+    Parameters
+    ----------
+    counts : pandas.DataFrame
+        Columns `vintage`, `location`, `target_end_date` and `total`.
+        A place and week missing from a release has no cases in it, as in
+        the health zone table.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per release after the first, place and week of the earlier
+        release that has cases in either, with `vintage` (the later
+        release), `previous`, `location`, `target_end_date`,
+        `weeks_before` (whole weeks from the week to the earlier release's
+        epi week), `previous_total`, `total` and `change`.
+    """
+    keys = ["location", "target_end_date"]
+    releases = sorted(counts["vintage"].unique())
+    frames: list[pd.DataFrame] = []
+    for prev, vin in pairwise(releases):
+        old = counts.loc[counts["vintage"] == prev, [*keys, "total"]]
+        new = counts.loc[
+            (counts["vintage"] == vin)
+            & counts["target_end_date"].between(
+                old["target_end_date"].min(), old["target_end_date"].max()
+            ),
+            [*keys, "total"],
+        ]
+        pair = old.merge(
+            new, on=keys, how="outer", suffixes=("_previous", "")
+        ).fillna({"total_previous": 0, "total": 0})
+        pair = pair.loc[(pair["total_previous"] > 0) | (pair["total"] > 0)]
+        frames.append(
+            pair.rename(columns={"total_previous": "previous_total"}).assign(
+                vintage=vin, previous=prev
+            )
+        )
+    out = pd.concat(frames, ignore_index=True)
+    out[["previous_total", "total"]] = out[["previous_total", "total"]].astype(
+        "int64"
+    )
+    out["change"] = out["total"] - out["previous_total"]
+    release_week = pd.to_datetime(
+        pd.Series([epiweek_end(v).isoformat() for v in out["previous"]])
+    )
+    gap = release_week - pd.to_datetime(out["target_end_date"])
+    out["weeks_before"] = (gap.dt.days // 7).to_numpy()
+    cols = [
+        "vintage",
+        "previous",
+        *keys,
+        "weeks_before",
+        "previous_total",
+        "total",
+        "change",
+    ]
+    return out[cols]
+
+
+def downward_summary(updates: pd.DataFrame, by: Sequence[str]) -> pd.DataFrame:
+    """Summarise how often and how much counts fell between releases.
+
+    Parameters
+    ----------
+    updates : pandas.DataFrame
+        Output of `release_updates`.
+    by : sequence of str
+        Columns to summarise within, such as `("location",)`.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The `by` columns with `weeks` (place-weeks compared), `fell`,
+        `share_fell`, `cases_down` and `cases_up` (summed falls and rises),
+        `downward_share` (`cases_down` over the summed absolute change)
+        and `largest_fall`.
+    """
+    down = (-updates["change"]).clip(lower=0)
+    up = updates["change"].clip(lower=0)
+    frame = updates.assign(
+        fell=updates["change"] < 0, cases_down=down, cases_up=up
+    )
+    out = frame.groupby(list(by)).agg(
+        weeks=("change", "size"),
+        fell=("fell", "sum"),
+        cases_down=("cases_down", "sum"),
+        cases_up=("cases_up", "sum"),
+        largest_fall=("cases_down", "max"),
+    )
+    out["share_fell"] = out["fell"] / out["weeks"]
+    moved = out["cases_down"] + out["cases_up"]
+    out["downward_share"] = out["cases_down"] / moved.where(moved > 0)
+    cols = [
+        "weeks",
+        "fell",
+        "share_fell",
+        "cases_down",
+        "cases_up",
+        "downward_share",
+        "largest_fall",
+    ]
+    return out[cols].reset_index()

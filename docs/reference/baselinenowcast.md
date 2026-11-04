@@ -1,6 +1,6 @@
 # Baselinenowcast
 
-The JAX port of baselinenowcast 0.2.2 and its extension for unobserved cells.
+Nowcast reported counts from a reporting triangle, as the random walk nowcast does. See [Getting started](../getting-started.ipynb) for a worked example.
 { .page-subtitle }
 
 ::: bdbvhubrenewal.baselinenowcast

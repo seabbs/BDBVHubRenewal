@@ -63,7 +63,18 @@ def fit_sizes(
 
 
 def rate(num: np.ndarray, den: np.ndarray) -> np.ndarray:
-    """Return `num / den`, 0 where `den` is 0."""
+    """Return `num / den`, 0 where `den` is 0.
+
+    Parameters
+    ----------
+    num, den : numpy.ndarray
+        Numerator and denominator, broadcast together.
+
+    Returns
+    -------
+    numpy.ndarray
+        The ratio.
+    """
     return np.where(den > 0, num / np.where(den > 0, den, 1.0), 0.0)
 
 

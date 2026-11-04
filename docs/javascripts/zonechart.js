@@ -1,22 +1,18 @@
-// Zone chart: pick a province then a zone to see its nowcast and forecast
-// fan over the reported counts, with its scores by release.
+// Zone chart: pick a province then a zone to see each model's nowcast and
+// forecast fan over the reported counts, with its scores by origin. Model
+// tick boxes come from toggles.js.
 (function () {
   "use strict";
   var NS = "http://www.w3.org/2000/svg";
   var DAY = 864e5;
   var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep",
     "Oct", "Nov", "Dec"];
+  var T = window.bdbvToggles;
+  var h = T.h;
 
   function el(tag, attrs, parent) {
     var n = document.createElementNS(NS, tag);
     Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]); });
-    if (parent) parent.appendChild(n);
-    return n;
-  }
-  function h(tag, attrs, parent, text) {
-    var n = document.createElement(tag);
-    Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]); });
-    if (text !== undefined) n.textContent = text;
     if (parent) parent.appendChild(n);
     return n;
   }
@@ -38,6 +34,8 @@
       h("option", { value: p.id }, selProv, p.name + " (" + p.id + ")");
     });
     var selZone = h("select", {}, h("label", {}, controls, "Zone "));
+    var keys = T.legend(root, d.models, function () { draw(); });
+    var note = h("p", { class: "explorer-note" }, root);
     var figure = h("div", { class: "explorer-figure" }, root);
     var table = h("div", { class: "explorer-table" }, root);
 
@@ -49,20 +47,35 @@
     selProv.addEventListener("change", function () { fillZones(); draw(); });
     selZone.addEventListener("change", draw);
 
+    function ticked() {
+      return d.models.map(function (_, i) { return i; })
+        .filter(function (i) { return keys.on[i]; });
+    }
+
     function draw() {
+      keys.paint();
       var zone = selZone.value;
       var data = d.data[zone] || [];
-      var q = d.q[zone] || [];
+      var all = d.q[zone] || [];
+      var on = ticked();
+      var none = d.models.filter(function (m) { return !m.fan; })
+        .map(function (m) { return m.name; });
+      note.textContent = none.length ?
+        "No zone forecast at the " + d.release + " release from " + none.join(", ") + "." : "";
+      var q = all.filter(function (r) { return keys.on[r[0]]; });
       var ref = day(d.reference_date);
-      var x0 = Math.min(day(data[0][0]), day(q[0][0])) - 4 * DAY;
-      var x1 = day(q[q.length - 1][0]) + 4 * DAY;
+      var x0 = day(data[0][0]) - 4 * DAY;
+      var x1 = ref + 4 * DAY;
       var ymax = 1;
       data.forEach(function (p) { ymax = Math.max(ymax, p[1]); });
-      q.forEach(function (r) { ymax = Math.max(ymax, r[5]); });
+      q.forEach(function (r) {
+        ymax = Math.max(ymax, r[6]);
+        x1 = Math.max(x1, day(r[1]) + 4 * DAY);
+      });
       ymax *= 1.05;
-      var W = 760, H = 300, L = 44, R = 10, T = 10, B = 28;
+      var W = 760, H = 300, L = 44, R = 10, Tp = 10, B = 28;
       function X(t) { return L + (t - x0) / (x1 - x0) * (W - L - R); }
-      function Y(v) { return T + (1 - v / ymax) * (H - T - B); }
+      function Y(v) { return Tp + (1 - v / ymax) * (H - Tp - B); }
       figure.textContent = "";
       var svg = el("svg", { viewBox: "0 0 " + W + " " + H, role: "img",
         "aria-label": "Nowcast and forecast for " + zone }, figure);
@@ -77,19 +90,24 @@
         el("text", { x: X(t), y: H - 8, "text-anchor": "middle", class: "explorer-tick" },
           svg).textContent = dt.getUTCDate() + " " + MONTHS[dt.getUTCMonth()];
       }
-      function band(lo, hi, cls) {
-        var top = q.map(function (r) { return X(day(r[0])) + "," + Y(r[hi]); });
-        var bot = q.slice().reverse().map(function (r) { return X(day(r[0])) + "," + Y(r[lo]); });
-        el("polygon", { points: top.concat(bot).join(" "), class: cls }, svg);
-      }
-      band(1, 5, "zonechart-band90");
-      band(2, 4, "zonechart-band50");
-      el("polyline", { fill: "none", class: "zonechart-median",
-        points: q.map(function (r) { return X(day(r[0])) + "," + Y(r[3]); }).join(" ") }, svg);
-      q.forEach(function (r) {
-        var c = el("circle", { cx: X(day(r[0])), cy: Y(r[3]), r: 6, fill: "transparent" }, svg);
-        el("title", {}, c).textContent = "Week ending " + r[0] + ": median " + r[3] +
-          ", 50% " + r[2] + " to " + r[4] + ", 90% " + r[1] + " to " + r[5];
+      on.forEach(function (m) {
+        var own = q.filter(function (r) { return r[0] === m; });
+        if (!own.length) return;
+        var c = keys.colour(m);
+        function band(lo, hi, op) {
+          var top = own.map(function (r) { return X(day(r[1])) + "," + Y(r[hi]); });
+          var bot = own.slice().reverse().map(function (r) { return X(day(r[1])) + "," + Y(r[lo]); });
+          el("polygon", { points: top.concat(bot).join(" "), fill: c, "fill-opacity": op }, svg);
+        }
+        band(2, 6, 0.12);
+        band(3, 5, 0.22);
+        el("polyline", { fill: "none", stroke: c, "stroke-width": 2,
+          points: own.map(function (r) { return X(day(r[1])) + "," + Y(r[4]); }).join(" ") }, svg);
+        own.forEach(function (r) {
+          var p = el("circle", { cx: X(day(r[1])), cy: Y(r[4]), r: 6, fill: "transparent" }, svg);
+          el("title", {}, p).textContent = d.models[m].name + ", week ending " + r[1] +
+            ": median " + r[4] + ", 50% " + r[3] + " to " + r[5] + ", 90% " + r[2] + " to " + r[6];
+        });
       });
       el("polyline", { class: "explorer-data", fill: "none",
         points: data.map(function (p) { return X(day(p[0])) + "," + Y(p[1]); }).join(" ") }, svg);
@@ -97,34 +115,38 @@
         var c = el("circle", { cx: X(day(p[0])), cy: Y(p[1]), r: 2.8, class: "explorer-point" }, svg);
         el("title", {}, c).textContent = p[0] + ": " + p[1] + " reported (" + d.release + ")";
       });
-      el("line", { x1: X(ref), x2: X(ref), y1: T, y2: H - B, class: "explorer-ref" }, svg);
-      drawTable(zone);
+      el("line", { x1: X(ref), x2: X(ref), y1: Tp, y2: H - B, class: "explorer-ref" }, svg);
+      drawTable(zone, on);
     }
 
-    function drawTable(zone) {
+    function drawTable(zone, on) {
       table.textContent = "";
       var s = d.scores[zone] || [];
-      if (!s.length) {
-        h("p", { class: "explorer-note" }, table, "No release scores for this zone yet.");
-        return;
-      }
       var tbl = h("table", {}, table);
       var head = h("tr", {}, h("thead", {}, tbl));
       ["Origin", "Model", "n", "Relative WIS", "50% coverage", "90% coverage"]
         .forEach(function (c) { h("th", {}, head, c); });
       var body = h("tbody", {}, tbl);
-      s.forEach(function (r) {
-        var tr = h("tr", {}, body);
-        h("td", {}, tr, r[0]);
-        h("td", {}, tr, r[1]);
-        h("td", {}, tr, String(r[2]));
-        h("td", {}, tr, fmt(r[3], 2));
-        h("td", {}, tr, fmt(r[4], 2));
-        h("td", {}, tr, fmt(r[5], 2));
+      d.origins.forEach(function (o) {
+        on.forEach(function (m) {
+          var tr = h("tr", {}, body);
+          h("td", {}, tr, o);
+          h("td", {}, tr, d.models[m].name);
+          var r = s.filter(function (x) { return x[0] === o && x[1] === m; })[0];
+          if (!r) {
+            h("td", { colspan: 4 }, tr, "No zone forecast scored");
+            return;
+          }
+          h("td", {}, tr, String(r[2]));
+          h("td", {}, tr, fmt(r[3], 2));
+          h("td", {}, tr, fmt(r[4], 2));
+          h("td", {}, tr, fmt(r[5], 2));
+        });
       });
     }
     fillZones();
     draw();
+    T.onTheme(draw);
   }
 
   function start() {

@@ -3,11 +3,7 @@
 Forecasts from vintages after each model choice, scored as later data arrive.
 { .page-subtitle }
 
-The development set rolls forward with the model choices in `results/model-choice.yml`.
-Development runs use every vintage up to the latest choice date.
-Each real vintage after a choice is held out, forecast by the model chosen then and by `randomwalk`, and scored on the count each later release reports.
-Weeks still being reported are shaded in the plots, with hollow points.
-The design is on the [Evaluation methods page](methods/evaluation.md#rolling-held-out-evaluation).
+The model choices are in `results/model-choice.yml` ([design](methods/evaluation.md#rolling-held-out-evaluation)).
 
 --8<-- "heldout-choices.md"
 

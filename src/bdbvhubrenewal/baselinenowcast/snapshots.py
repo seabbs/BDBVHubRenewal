@@ -34,6 +34,7 @@ from jax import Array
 from scipy.optimize import nnls
 
 Aggregator = Callable[[Array, np.ndarray], tuple[Array, np.ndarray]]
+"""Aggregates reference times: `(values, mask)` to `(values, mask)`."""
 
 
 @partial(jax.jit, static_argnames="max_delay")
@@ -70,7 +71,24 @@ def pair_sums(
     release r + 1.
     Cells not observed in both releases, or outside the days, are
     skipped and add 0.
-    Both are ``(n_loc, n_pair, max_delay)``.
+
+    Parameters
+    ----------
+    counts : array_like
+        Counts by location, release and day.
+    observed : array_like of bool
+        True where a count is observed, the same shape.
+    cut : array_like of int
+        Each release's cut-off day.
+    pairs : array_like of int
+        First release index of each pair.
+    max_delay : int
+        Ages to use.
+
+    Returns
+    -------
+    tuple of jax.Array
+        ``(num, den)``, each ``(n_loc, n_pair, max_delay)``.
     """
     c = jnp.asarray(counts)
     return _pair_sums(
@@ -97,9 +115,17 @@ def log_factors(num: Any, den: Any, gaps: Any) -> np.ndarray:
     non-negative least squares fit.
     With a gap of 1 only, $g(a)$ is the log of the chain ladder factor.
 
-    ``num`` and ``den`` are ``(n_loc, n_pair, max_delay)`` from
-    ``pair_sums``, and ``gaps`` holds each pair's gap.
-    Returns $g$, ``(n_loc, max_delay)``.
+    Parameters
+    ----------
+    num, den : array_like
+        ``(n_loc, n_pair, max_delay)``, from `pair_sums`.
+    gaps : array_like of int
+        Each pair's gap in days.
+
+    Returns
+    -------
+    numpy.ndarray
+        $g$, ``(n_loc, max_delay)``.
     """
     num, den = np.asarray(num, float), np.asarray(den, float)
     gaps = np.asarray(gaps, int)
@@ -126,9 +152,18 @@ def log_factors(num: Any, den: Any, gaps: Any) -> np.ndarray:
 def growth(g: Any, start: Any, stop: Any) -> np.ndarray:
     r"""Growth $\exp \sum_{j=\mathrm{start}}^{\mathrm{stop}-1} g(j)$.
 
-    ``start`` and ``stop`` are ages that broadcast together, clipped to
-    ``0 .. max_delay``, so growth from ``max_delay`` on is 1.
-    Returns ``(n_loc, *shape)``.
+    Parameters
+    ----------
+    g : array_like
+        Daily log factors, ``(n_loc, max_delay)``, from `log_factors`.
+    start, stop : array_like of int
+        Ages that broadcast together, clipped to ``0 .. max_delay``, so
+        growth from ``max_delay`` on is 1.
+
+    Returns
+    -------
+    numpy.ndarray
+        ``(n_loc, *shape)``.
     """
     g = np.asarray(g, float)
     d = g.shape[1]
@@ -145,7 +180,18 @@ def window_pairs(cut: Any, max_delay: int) -> tuple[np.ndarray, np.ndarray]:
 
     A longer step has no age inside the window to attach a factor to.
     Its releases stay in the data and in the counts.
-    Returns the first release index and the step of each pair.
+
+    Parameters
+    ----------
+    cut : array_like of int
+        Each release's cut-off day.
+    max_delay : int
+        Longest step kept, in days.
+
+    Returns
+    -------
+    tuple of numpy.ndarray
+        The first release index and the step of each pair.
     """
     steps = np.diff(np.asarray(cut, dtype=int))
     keep = np.flatnonzero((steps >= 1) & (steps <= max_delay))
@@ -162,6 +208,18 @@ def hub_week_matrix(
     No onset day is dropped.
     The last week keeps only the days present, so the cut-off week is
     partial unless the last day is a Saturday.
+
+    Parameters
+    ----------
+    first_onset : datetime.date or str
+        Date of the first day.
+    n_days : int
+        Number of days.
+
+    Returns
+    -------
+    tuple of numpy.ndarray
+        The matrix, weeks by days, and the weeks' Saturdays.
     """
     start = np.datetime64(first_onset, "D")
     days = start + np.arange(n_days)
@@ -180,6 +238,16 @@ def hub_weeks(first_onset: Any) -> Aggregator:
     It builds the week matrix from the number of rows of the matrix it
     is given, whose last row is that matrix's cut-off day.
     An aggregated cell is unobserved if any of its inputs is.
+
+    Parameters
+    ----------
+    first_onset : datetime.date or str
+        Date of the first onset day.
+
+    Returns
+    -------
+    Aggregator
+        The aggregator.
     """
 
     def aggregate(values: Array, mask: np.ndarray) -> tuple[Array, np.ndarray]:

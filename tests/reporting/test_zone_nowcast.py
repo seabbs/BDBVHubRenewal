@@ -62,7 +62,8 @@ def _samples() -> pd.DataFrame:
 def _scores() -> pd.DataFrame:
     rows = []
     for model, wis in (
-        ("randomwalk", 2.0),
+        ("randomwalk", 3.0),
+        ("randomwalk (summed to provinces)", 2.0),
         (ZONE_MODEL + " (summed to provinces)", 1.0),
     ):
         rows.append(
@@ -74,6 +75,8 @@ def _scores() -> pd.DataFrame:
                 "location": "CD-IT-01",
                 "target_end_date": "2026-10-24",
                 "wis": wis,
+                "log_wis": wis,
+                "bias": 0.0,
                 "coverage_50": 1.0,
                 "coverage_90": 1.0,
             }
@@ -105,18 +108,33 @@ def test_zone_table_has_the_newest_weeks_and_scores() -> None:
     assert table.loc[table["zone"] == "CD-NK-02", "n"].isna().all()
 
 
+COLOURS = {
+    "randomwalk": ("#111111", "#eeeeee"),
+    ZONE_MODEL: ("#222222", "#dddddd"),
+    "renewalbvd": ("#333333", "#cccccc"),
+}
+
+
 def test_zone_chart_data_is_json_with_the_biggest_first() -> None:
     counts = zone_counts(_daily(), V, "2026-10-10", NAMES)
-    data = zone_chart_data(_samples(), counts, _scores(), NAMES)
+    data = zone_chart_data(_samples(), counts, _scores(), NAMES, COLOURS)
     json.dumps(data)
     assert [p["id"] for p in data["provinces"]] == ["CD-NK", "CD-IT"]
     assert data["provinces"][0]["name"] == "Nord Kivu"
     assert data["data"]["CD-IT-01"][1] == ["2026-10-17", 2]
     assert len(data["q"]["CD-NK-02"]) == 3
-    [row] = data["scores"]["CD-IT-01"]
-    assert row[:4] == [
-        "2026-10-24",
-        ZONE_MODEL + " (summed to provinces)",
-        1,
-        0.5,
+    assert data["q"]["CD-NK-02"][0][0] == 1
+    assert data["origins"] == ["2026-10-24"]
+    # Scores are the summed forms, relative to randomwalk summed.
+    assert sorted(data["scores"]["CD-IT-01"]) == [
+        ["2026-10-24", 0, 1, 1.0, 1.0, 1.0],
+        ["2026-10-24", 1, 1, 0.5, 1.0, 1.0],
     ]
+
+
+def test_zone_chart_data_marks_models_without_zone_samples() -> None:
+    counts = zone_counts(_daily(), V, "2026-10-10", NAMES)
+    data = zone_chart_data(_samples(), counts, _scores(), NAMES, COLOURS)
+    fans = {m["name"]: m["fan"] for m in data["models"]}
+    assert fans == {"randomwalk": False, ZONE_MODEL: True, "renewalbvd": False}
+    assert data["models"][2]["dark"] == "#cccccc"

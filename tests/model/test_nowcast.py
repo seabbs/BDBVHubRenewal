@@ -59,6 +59,66 @@ def test_masked_provinces_do_not_see_their_counts(sim_vintage, config):
     np.testing.assert_array_equal(a["province"], b["province"])
 
 
+def test_publication_lag_mixes_cut_offs():
+    rng = np.random.default_rng(4)
+    n, dmax, cutoff = 70, 20, 60
+    args = (
+        jnp.asarray(rng.gamma(5, 4, (n, 2))),
+        jnp.asarray(rng.dirichlet(np.ones(dmax + 1), n)),
+        jnp.asarray(rng.uniform(0.05, 0.3, (n, 2))),
+        jnp.asarray(rng.dirichlet(np.ones(dmax + 1))),
+    )
+    lag = np.array([0.1, 0.2, 0.3, 0.4])
+    out = onset_expectations(*args, cutoff, publication_lag=jnp.asarray(lag))
+    # Reports are published by T with probability F(T - t), so the
+    # expectations mix those at cut-offs T - l with weights p(l).
+    parts = [onset_expectations(*args, cutoff - k) for k in range(4)]
+    for key in ("known", "imputed", "triangle", "known_final"):
+        mixed = sum(q * p[key] for q, p in zip(lag, parts, strict=True))
+        np.testing.assert_allclose(out[key], mixed, rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(
+        onset_expectations(*args, cutoff, publication_lag=jnp.ones(1))["known"],
+        parts[0]["known"],
+    )
+
+
+def test_publication_lag_is_fixed_by_default(sim_vintage):
+    # Delay-file lags mix late reports with onsets recorded later, so the
+    # default stays a fixed uniform lag on 0..3 days.
+    for cfg in (MAIN,):
+        assert cfg.publication_lag == "fixed"
+        model = build_model(sim_vintage, cfg)
+        np.testing.assert_allclose(
+            model.observations["onsets"].publication_lag, np.full(4, 0.25)
+        )
+
+
+def test_model_takes_the_empirical_publication_lag(sim_vintage):
+    lag = np.r_[np.full(10, 0.08), np.zeros(50), 0.2]
+    data = dataclasses.replace(sim_vintage, publication_lag_pmf=lag)
+    for base in (MAIN,):
+        cfg = dataclasses.replace(base, publication_lag="empirical")
+        model = build_model(data, cfg)
+        obs = model.observations["onsets"]
+        np.testing.assert_allclose(obs.publication_lag, lag)
+        assert "onsets_publication_lag" not in prior_latent(model, data, 2)
+    # With no estimate, a fixed long-tail prior pmf stands in: 85% on
+    # 0..3 days and 15% spread over 4..60.
+    model = build_model(
+        dataclasses.replace(sim_vintage, publication_lag_pmf=None),
+        dataclasses.replace(MAIN, publication_lag="empirical"),
+    )
+    prior = np.asarray(model.observations["onsets"].publication_lag)
+    assert prior.shape == (61,)
+    assert prior[:4].sum() == pytest.approx(0.85)
+    assert prior[4:].sum() == pytest.approx(0.15)
+    est = build_model(
+        sim_vintage, dataclasses.replace(MAIN, publication_lag="estimated")
+    )
+    prior = prior_latent(est, sim_vintage, n=5)
+    assert prior["onsets_publication_lag"].shape == (5, 4)
+
+
 def test_dirichlet_multinomial_delays(sim_vintage):
     cfg = dataclasses.replace(MAIN, delay_counts="dirichlet-multinomial")
     args = model_args(build_model(sim_vintage, MAIN), sim_vintage)
@@ -108,8 +168,9 @@ def test_weekly_blocks_match_the_dense_expectations(final, daily):
         n - 10,
         final,
     )
-    dense = onset_expectations(*args)
-    blocks = onset_expectations(*args, weekly=True)
+    lag = jnp.asarray([0.4, 0.3, 0.2, 0.1])
+    dense = onset_expectations(*args, publication_lag=lag)
+    blocks = onset_expectations(*args, publication_lag=lag, weekly=True)
     for key, value in dense.items():
         np.testing.assert_allclose(blocks[key], value, rtol=1e-5, atol=1e-6)
 

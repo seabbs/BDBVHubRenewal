@@ -1,24 +1,17 @@
 // Score chart: one summary table as lines or grouped bars, a tab per
-// metric and a checkbox per model, drawn as SVG in the site's theme.
+// metric and a checkbox per model (toggles.js), drawn as SVG in the site's
+// theme.
 (function () {
   "use strict";
   var NS = "http://www.w3.org/2000/svg";
+  var T = window.bdbvToggles;
+  var h = T.h;
 
   function el(tag, attrs, parent) {
     var n = document.createElementNS(NS, tag);
     Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]); });
     if (parent) parent.appendChild(n);
     return n;
-  }
-  function h(tag, attrs, parent, text) {
-    var n = document.createElement(tag);
-    Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]); });
-    if (text !== undefined) n.textContent = text;
-    if (parent) parent.appendChild(n);
-    return n;
-  }
-  function dark() {
-    return document.body.getAttribute("data-md-color-scheme") === "slate";
   }
   function nice(span) {
     var p = Math.pow(10, Math.floor(Math.log10(span / 5)));
@@ -35,28 +28,19 @@
 
   function build(root, d) {
     root.textContent = "";
-    var state = { metric: 0, on: d.models.map(function (m) { return m.on; }) };
+    var state = { metric: 0 };
     var tabs = h("div", { class: "scorechart-tabs", role: "tablist" }, root);
     var buttons = d.metrics.map(function (m, i) {
       var b = h("button", { type: "button", role: "tab" }, tabs, m.label);
       b.addEventListener("click", function () { state.metric = i; draw(); });
       return b;
     });
-    var legend = h("div", { class: "scorechart-legend" }, root);
-    var swatches = d.models.map(function (m, i) {
-      var l = h("label", { class: "scorechart-key" }, legend);
-      var cb = h("input", { type: "checkbox" }, l);
-      cb.checked = m.on;
-      var sw = h("span", { class: "scorechart-swatch" }, l);
-      h("span", {}, l, m.name);
-      cb.addEventListener("change", function () { state.on[i] = cb.checked; draw(); });
-      return sw;
-    });
+    var keys = T.legend(root, d.models, function () { draw(); });
+    state.on = keys.on;
     var figure = h("div", { class: "scorechart-figure" }, root);
 
     function draw() {
-      var mode = dark() ? "dark" : "light";
-      swatches.forEach(function (sw, i) { sw.style.background = d.models[i][mode]; });
+      keys.paint();
       buttons.forEach(function (b, i) {
         b.setAttribute("aria-selected", i === state.metric ? "true" : "false");
       });
@@ -103,7 +87,7 @@
           ": " + metric.label + " " + (+r[col].toFixed(3)) + ", n " + r[2];
       }
       shown.forEach(function (m, k) {
-        var c = d.models[m][mode];
+        var c = keys.colour(m);
         var own = rows.filter(function (r) { return r[0] === m; })
           .sort(function (a, b) { return a[1] - b[1]; });
         if (d.kind === "bar") {
@@ -126,8 +110,7 @@
       });
     }
     draw();
-    new MutationObserver(draw).observe(document.body,
-      { attributes: true, attributeFilter: ["data-md-color-scheme"] });
+    T.onTheme(draw);
   }
 
   function start() {

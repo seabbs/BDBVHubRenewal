@@ -86,6 +86,10 @@ class ForecastTask:
         date $T$ here, the counts it predicts will be reported by $T$ for
         the weeks ending on or before $T$, in rows with `as_of` $= T$.
         Scoring compares them with vintage $T$ as reported.
+    delay_history : pandas.DataFrame or None
+        Delay rows of every vintage of this kind on or before `vintage`,
+        from which `data.releases.publication_lag_pmf` estimates the
+        report to publication lag. None if there are none.
     target_history : pandas.DataFrame or None
         Target rows of every vintage of this kind on or before `vintage`,
         from which a model can learn how totals are revised. None if there
@@ -109,6 +113,7 @@ class ForecastTask:
     seed: int = 0
     mask: tuple[str, ...] = ()
     report_by: tuple[str, ...] = ()
+    delay_history: pd.DataFrame | None = None
     target_history: pd.DataFrame | None = None
     daily_history: pd.DataFrame | None = None
 
@@ -223,6 +228,17 @@ def register_model(
     ------
     ValueError
         If `name` is already registered and `replace` is False.
+
+    Examples
+    --------
+    >>> from dataclasses import dataclass
+    >>> from bdbvhubrenewal.forecasters import register_model
+    >>> @dataclass
+    ... class Flat:
+    ...     name: str = "flat"
+    ...     def forecast(self, task):
+    ...         ...  # return rows with columns SAMPLE_COLUMNS
+    >>> spec = register_model("flat", Flat, "A flat line.")
     """
     if name in _REGISTRY and not replace:
         raise ValueError(f"Model {name!r} is already registered.")
@@ -248,6 +264,14 @@ def get_model(name: str) -> ForecastModel:
     ------
     KeyError
         If no model has that name.
+
+    Examples
+    --------
+    >>> from bdbvhubrenewal.forecasters import get_model, list_models
+    >>> [spec.name for spec in list_models()]
+    ['randomwalk', 'randomwalknowcast', 'renewal', 'renewalbvd', 'renewalsp']
+    >>> model = get_model("randomwalknowcast")
+    >>> samples = model.forecast(task)  # a ForecastTask, see `make_tasks`
     """
     if name not in _REGISTRY:
         raise KeyError(f"No model {name!r}. Known: {sorted(_REGISTRY)}.")
@@ -261,6 +285,12 @@ def list_models() -> list[ModelSpec]:
     -------
     list of ModelSpec
         The registry entries.
+
+    Examples
+    --------
+    >>> from bdbvhubrenewal.forecasters import list_models
+    >>> for spec in list_models():
+    ...     print(spec.name, spec.description)
     """
     return sorted(_REGISTRY.values(), key=lambda s: (not s.baseline, s.name))
 

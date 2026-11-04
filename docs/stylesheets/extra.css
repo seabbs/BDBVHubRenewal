@@ -207,27 +207,41 @@
   font-size: 11px;
 }
 
-/* Zone chart, in the static zone figures' colour. */
+/* Zone chart. */
 .zonechart {
-  --zonechart-colour: #2a78d6;
   margin: 1em 0;
 }
 
-[data-md-color-scheme="slate"] .zonechart {
-  --zonechart-colour: #3987e5;
+/* Table filter. */
+.tablefilter-controls {
+  margin: 0.6em 0;
+  font-size: 0.8rem;
+  align-items: center;
 }
 
-.zonechart-band90 {
-  fill: var(--zonechart-colour);
-  opacity: 0.2;
+.tablefilter input,
+.tablefilter select {
+  font: inherit;
+  color: var(--md-default-fg-color);
+  background: var(--md-default-bg-color);
+  border: 1px solid var(--md-default-fg-color--lighter);
+  border-radius: 4px;
+  padding: 0.2em 0.4em;
 }
 
-.zonechart-band50 {
-  fill: var(--zonechart-colour);
-  opacity: 0.35;
+.tablefilter-count {
+  color: var(--md-default-fg-color--light);
 }
 
-.zonechart-median {
-  stroke: var(--zonechart-colour);
-  stroke-width: 2;
+.tablefilter-sort {
+  cursor: pointer;
+  user-select: none;
+}
+
+.tablefilter-sort[aria-sort="ascending"]::after {
+  content: " ▲";
+}
+
+.tablefilter-sort[aria-sort="descending"]::after {
+  content: " ▼";
 }

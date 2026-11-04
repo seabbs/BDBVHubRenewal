@@ -1,6 +1,6 @@
 # Evaluation
 
-Scoring, the backtest, the real-release evaluation, held-out evaluation, posterior predictive checks and the hub comparison.
+Score forecasts, run the backtest and compare models with each other and with the hub. See [Getting started](../getting-started.ipynb) for a worked example.
 { .page-subtitle }
 
 ::: bdbvhubrenewal.evaluation

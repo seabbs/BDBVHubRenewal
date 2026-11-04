@@ -23,12 +23,15 @@ import yaml
 from matplotlib.figure import Figure
 
 from bdbvhubrenewal.data import (
+    downward_summary,
     load_daily,
     load_daily_zones,
     load_delays,
+    load_health_zones,
     load_target,
     national_coherence,
     newly_missing,
+    release_updates,
 )
 from bdbvhubrenewal.data.dates import reference_date_for_vintage
 from bdbvhubrenewal.data.delays import delay_summary
@@ -47,7 +50,9 @@ from bdbvhubrenewal.evaluation.heldout import load_model_choices
 from bdbvhubrenewal.evaluation.hubcompare import (
     attribution,
     forecast_quantiles,
+    load_comparison_config,
     overall_comparison,
+    stored_forecasts,
     summarise_comparison,
 )
 from bdbvhubrenewal.evaluation.nowcast import BASELINE, relative_wis
@@ -67,6 +72,7 @@ from bdbvhubrenewal.reporting.explorer import (
 from bdbvhubrenewal.reporting.nowcast_plots import (
     plot_relative_overall,
     plot_release_nowcasts,
+    plot_truth_changes,
 )
 from bdbvhubrenewal.reporting.plots import (
     comparison_colours,
@@ -75,8 +81,10 @@ from bdbvhubrenewal.reporting.plots import (
     plot_delay_check,
     plot_delay_distribution,
     plot_delays_over_time,
+    plot_downward_updates,
     plot_forecasts,
     plot_hub_round,
+    plot_imputed_by_release,
     plot_imputed_share,
     plot_location_grid,
     plot_newly_missing,
@@ -90,10 +98,13 @@ from bdbvhubrenewal.reporting.plots import (
     save_light_dark,
 )
 from bdbvhubrenewal.reporting.scorechart import (
+    OVERALL_METRICS,
+    SCORE_METRICS,
     score_chart_data,
     score_chart_html,
     write_score_chart,
 )
+from bdbvhubrenewal.reporting.tables import filter_table
 from bdbvhubrenewal.reporting.zone_nowcast import (
     ZONE_MODEL,
     zone_chart_data,
@@ -173,9 +184,19 @@ def make_report(
         fig / "imputed-share.svg",
     )
     save_light_dark(
+        lambda mode: plot_imputed_by_release(real, mode=mode),
+        fig / "imputed-by-release.svg",
+    )
+    save_light_dark(
         lambda mode: plot_newly_missing(real, mode=mode),
         fig / "newly-missing.svg",
     )
+    zones = load_health_zones(data_dir)
+    save_light_dark(
+        lambda mode: plot_downward_updates(real, zones, mode=mode),
+        fig / "downward-updates.svg",
+    )
+    _write(gen / "downward-updates.md", _downward_table(real, zones))
     save_light_dark(
         lambda mode: plot_delay_distribution(latest_delays, mode=mode),
         fig / "delay-distribution.svg",
@@ -241,7 +262,7 @@ def make_report(
     forecasts_now = _nowcast_forecasts(tasks, latest, res)
     _nowcast_page(fig, gen, target, forecasts_now, names, config, latest)
     _zone_nowcast_section(
-        fig, gen, res, data_dir, target, tasks[0], forecasts_now, config
+        fig, gen, res, data_dir, target, tasks[0], forecasts_now, config, names
     )
     groups = _nowcast_groups(target, sorted(set(forecasts_now["location"])))
     save_light_dark(
@@ -264,6 +285,44 @@ _TARGET_LABELS: Final = {
     "reported": "Reported by each later release",
     "complete": "Complete weeks",
 }
+
+
+def _downward_table(real: pd.DataFrame, zones: pd.DataFrame) -> str:
+    """Tabulate falls between consecutive releases, by place."""
+    nat = real["location"] == NATIONAL
+    names = _location_names(real)
+    provinces = release_updates(real.loc[~nat])
+    each = provinces.assign(
+        place=[f"{names.get(p, p)} ({p})" for p in provinces["location"]]
+    ).sort_values("place")
+    updates = pd.concat(
+        [
+            release_updates(real.loc[nat]).assign(place="Country"),
+            provinces.assign(place="Provinces"),
+            each,
+            release_updates(zones).assign(place="Health zones"),
+        ]
+    )
+    table = downward_summary(updates, ("place",)).set_index("place")
+    table = table.loc[list(dict.fromkeys(updates["place"]))]
+    table[["share_fell", "downward_share"]] = table[
+        ["share_fell", "downward_share"]
+    ].round(3)
+    table = table.astype(object).where(table.notna(), "")
+    return _table(
+        table.reset_index().rename(
+            columns={
+                "place": "Place",
+                "weeks": "Place-weeks",
+                "fell": "Fell",
+                "share_fell": "Share that fell",
+                "cases_down": "Cases removed",
+                "cases_up": "Cases added",
+                "downward_share": "Removed share of all change",
+                "largest_fall": "Largest fall",
+            }
+        )
+    )
 
 
 def _ours(frame: pd.DataFrame, names: Sequence[str]) -> pd.DataFrame:
@@ -317,25 +376,19 @@ def _release_section(
     _write(
         gen / "release-headline.md",
         "## Overall\n\n"
-        "Each release with a later release is an origin.\n"
-        "Every model is scored on the count each later release reports, "
-        "with the count outstanding at the origin in each final-count "
-        "forecast thinned binomially by the share expected to arrive by "
-        "then under the delay fitted at the origin.\n"
-        "Complete weeks are scored against the latest release "
-        "([Evaluation](methods/evaluation.md#real-releases)).\n"
-        "Relative WIS is against `randomwalk` on the forecasts both made, "
-        "and every row counts them, $n$.\n"
-        "Zones have only the random walk models, run on each zone, and "
-        "only the reported target "
-        "([Health zones](methods/evaluation.md#health-zones)).\n\n"
-        "![Relative WIS and 90% coverage of each model on the counts each "
-        "later release reported, by pool.](figures/relative-overall.svg"
-        "#only-light)\n"
-        "![Relative WIS and 90% coverage of each model on the counts each "
-        "later release reported, by pool.](figures/relative-overall-dark.svg"
-        "#only-dark)\n\n"
-        "Scores by target and pool, over every origin.\n\n" + _table(overall),
+        "Scores against what each later release reported "
+        "([how scoring works](methods/evaluation.md#real-releases), "
+        "[metrics](methods/evaluation.md#scores)).\n\n"
+        "![Relative WIS, relative log WIS, 50% and 90% coverage and bias "
+        "of each model on the counts each later release reported, by "
+        "pool.](figures/relative-overall.svg#only-light)\n"
+        "![Relative WIS, relative log WIS, 50% and 90% coverage and bias "
+        "of each model on the counts each later release reported, by "
+        "pool.](figures/relative-overall-dark.svg#only-dark)\n\n"
+        + _dropdown(
+            filter_table(_table(overall), ["target", "pool", "model"]),
+            "Scores by target and pool, over every origin",
+        ),
     )
     _write(
         gen / "release-nowcasts.md",
@@ -470,20 +523,43 @@ def _zone_nowcast_section(
     task: ForecastTask,
     forecasts: pd.DataFrame,
     config: BacktestConfig,
+    names: list[str],
 ) -> None:
-    """Write the Nowcast page's health-zone section at the latest release."""
+    """Write the Nowcast page's health-zone section at the latest release.
+
+    The random walk models are run on the zones here. The fitted models'
+    zone samples are taken from the stored forecasts of the comparison, as
+    for the hub rounds, where there are some for the release.
+    """
     daily_zones = load_daily_zones(data_dir)
     zones = hub_zones(Path(data_dir) / "hub-config" / "tasks.json")
+    quick = [s.name for s in list_models() if not s.fitted]
     prov = forecasts.loc[
-        (forecasts["model"] == ZONE_MODEL)
-        & (forecasts["vintage"] == task.vintage)
+        (forecasts["vintage"] == task.vintage)
         & (forecasts["location"] != NATIONAL)
     ]
-    samples = zone_nowcast(task, prov, daily_zones, zones)
-    names = _location_names(target)
+    ran = [
+        zone_nowcast(m, task, prov.loc[prov["model"] == m], daily_zones, zones)
+        for m in quick
+    ]
+    ref = str(task.reference_date)
+    stored = stored_forecasts(
+        load_comparison_config().stored, [ref], exclude=quick
+    )
+    stored = stored.loc[stored["location"].isin(zones)]
+    stored = stored.assign(
+        vintage=task.vintage,
+        horizon=(
+            pd.to_datetime(stored["target_end_date"]) - pd.Timestamp(ref)
+        ).dt.days
+        // 7,
+    )
+    every = pd.concat([*ran, stored], ignore_index=True)
+    samples = every.loc[every["model"] == ZONE_MODEL]
+    labels = _location_names(target)
     start = pd.Timestamp(task.reference_date) - pd.Timedelta(weeks=12)
     counts = zone_counts(
-        daily_zones, task.vintage, start.strftime("%Y-%m-%d"), names
+        daily_zones, task.vintage, start.strftime("%Y-%m-%d"), labels
     )
     scores = pd.read_csv(res / "zone-scores.csv", low_memory=False)
     tabs = []
@@ -508,7 +584,7 @@ def _zone_nowcast_section(
             ),
             path,
         )
-        label = names.get(prov_id, prov_id)
+        label = labels.get(prov_id, prov_id)
         alt = f"Zone nowcasts in {label} at {task.vintage}."
         tabs.append(
             f'=== "{label}"\n\n'
@@ -517,30 +593,40 @@ def _zone_nowcast_section(
         )
     write_explorer(
         fig / "zonechart.json",
-        zone_chart_data(samples, counts, scores, names),
+        zone_chart_data(
+            every,
+            counts,
+            scores,
+            labels,
+            {
+                m: (
+                    model_colour(m, names, "light"),
+                    model_colour(m, names, "dark"),
+                )
+                for m in names
+            },
+        ),
     )
     _write(
         gen / "zone-nowcast.md",
         "## Health zones\n\n"
-        f"`{ZONE_MODEL}` run on each zone and summed to its province, as "
-        f"submitted, at the {task.vintage} release, for zones with cases in "
-        "the 12 weeks before the reference date.\n"
-        "A week with no onsets in a zone has a count of 0.\n"
-        "Scores are on the zone count each later release reported, relative "
-        "to `randomwalk` "
+        f"Zone nowcasts and forecasts of each model at the {task.vintage} "
+        "release, for zones with cases in the 12 weeks before the reference "
+        "date "
         "([Health zones](methods/evaluation.md#health-zones)).\n\n"
+        "Pick a province and a zone to see its nowcast and forecast "
+        "with its scores by origin.\n\n"
+        '<div class="zonechart" data-src="../figures/zonechart.json" '
+        'role="group" aria-label="Zone nowcast and forecast">\n'
+        "<noscript>The zone chart needs JavaScript.</noscript>\n"
+        "</div>\n\n"
+        f"`{ZONE_MODEL}` by province.\n\n"
         + "\n".join(tabs)
         + "\n"
         + _dropdown(
             _table(zone_table(samples, counts, scores)),
             "Newest weeks by zone",
-        )
-        + "\nPick a province and a zone to see its nowcast and forecast "
-        "with its scores by origin.\n\n"
-        '<div class="zonechart" data-src="../figures/zonechart.json" '
-        'role="group" aria-label="Zone nowcast and forecast">\n'
-        "<noscript>The zone chart needs JavaScript.</noscript>\n"
-        "</div>\n",
+        ),
     )
 
 
@@ -743,12 +829,9 @@ def _zone_section(path: Path) -> str:
     by.columns = [f"week {int(h)}" for h in by.columns]
     return (
         "## Health zones\n\n"
-        "`randomwalk` and `randomwalknowcast` are run on each zone with "
-        "cases (see [Evaluation](methods/evaluation.md#health-zones)).\n"
-        "Models marked summed to provinces have their zone samples made to "
-        "sum to the province samples, as in the submitted file.\n"
-        "Scores are on the zone count each later release reports.\n"
-        "Relative WIS is against `randomwalk`, and below 1 is better.\n\n"
+        "`randomwalk` and `randomwalknowcast` on each zone with cases, as "
+        "run and summed to provinces "
+        "([Health zones](methods/evaluation.md#health-zones)).\n\n"
         + _table(table[["model", *cols, "relative_wis"]])
         + "\n\nRelative WIS by week, with 0 the week of the reference "
         "date.\n\n" + _table(by.reset_index())
@@ -833,15 +916,6 @@ _RELEASE_MATCH: Final = [
 """Columns that identify one forecast scored against one release."""
 
 
-_SCORE_METRICS: Final = {
-    "wis": ("WIS", None),
-    "log_wis": ("Log WIS", None),
-    "coverage_90": ("90% coverage", 0.9),
-    "bias": ("Bias", 0.0),
-}
-"""Metrics of the interactive score charts, with their reference lines."""
-
-
 def _score_chart(
     fig: Path,
     gen: Path,
@@ -854,7 +928,7 @@ def _score_chart(
     The static WIS figure is shown without JavaScript.
     """
     grp = scores.groupby(["model", by])
-    table = grp[list(_SCORE_METRICS)].mean()
+    table = grp[list(SCORE_METRICS)].mean()
     table.insert(0, "n", grp.size())
     table = table.reset_index()
     if by == "location":
@@ -873,7 +947,7 @@ def _score_chart(
         score_chart_data(
             table,
             by,
-            _SCORE_METRICS,
+            SCORE_METRICS,
             names,
             x_label="Horizon" if by == "horizon" else "Place",
             kind="line" if by == "horizon" else "bar",
@@ -941,16 +1015,16 @@ def _forecast_tabs(
                 f"        ![{alt}](figures/{slug}-dark.svg#only-dark)\n"
             )
     static = _dropdown(
-        "Forecasts from the real origins: 100 sample trajectories, 50% and "
-        "90% intervals and the median, with the data at the time (dashed) "
-        "and the latest release (solid).\n\n" + "\n".join(tabs),
+        "Forecasts from the real origins "
+        "([reading the figures](methods/evaluation.md#reading-the-figures))."
+        "\n\n" + "\n".join(tabs),
         "Sample trajectories",
     )
     if explorer_src is None:
         return "## Forecasts against later data\n\n" + static
     return (
         "## Forecasts against later data\n\n"
-        + explorer_html(explorer_src, "Backtest forecasts")
+        + explorer_html(explorer_src, "Backtest forecasts", all_rounds=True)
         + "\n"
         + static
     )
@@ -1017,19 +1091,40 @@ def _scenario_figure() -> str:
     return _metric_tabs("scenario-wis-horizon", alt)
 
 
-def _submission_sampler(path: Path = Path("ci/policy.toml")) -> dict[str, Any]:
-    """Return the main candidate's sampler settings from the CI policy."""
+def _submission_samplers(
+    path: Path = Path("ci/policy.toml"),
+) -> dict[str, dict[str, Any]]:
+    """Return each fitted candidate's sampler settings from the CI policy."""
     policy = tomllib.loads(path.read_text())
-    main = next(c for c in policy["candidates"] if c["id"] == "main")
-    return dict(main["sampler"])
+    return {
+        c["model"]: dict(c["sampler"])
+        for c in policy["candidates"]
+        if "sampler" in c
+    }
 
 
-def _settings_text(chains: int, warmup: int, draws: int) -> str:
-    return f"{chains} chains of {warmup} warm-up and {draws} draws"
+def _backtest_sampler(
+    path: Path = Path("config/backtest.toml"),
+) -> dict[str, Any]:
+    """Return the backtest's sampler settings."""
+    return dict(tomllib.loads(path.read_text())["sampler"])
 
 
-def _sampler_section(fits: pd.DataFrame, submission: Mapping[str, Any]) -> str:
-    """Say how long the backtest fits were and how well they converged."""
+def _settings_text(sampler: Mapping[str, Any]) -> str:
+    return (
+        f"{int(sampler['num_chains'])} chains of "
+        f"{int(sampler['num_warmup'])} warm-up and "
+        f"{int(sampler['num_samples'])} draws at a target acceptance of "
+        f"{sampler['target_accept']}"
+    )
+
+
+def _sampler_section(
+    fits: pd.DataFrame,
+    backtest: Mapping[str, Any],
+    submission: Mapping[str, Mapping[str, Any]],
+) -> str:
+    """Give the backtest and submission sampler settings and convergence."""
     keys = ["num_chains", "num_warmup", "num_samples"]
     fits = (
         fits.dropna(subset=keys)
@@ -1038,17 +1133,9 @@ def _sampler_section(fits: pd.DataFrame, submission: Mapping[str, Any]) -> str:
     )
     if fits.empty:
         return ""
-    used = fits[keys].drop_duplicates().astype(int).to_numpy()
-    runs = " or ".join(_settings_text(*row) for row in used)
-    target = tuple(int(submission[k]) for k in keys)
-    sub = _settings_text(*target)
-    if len(used) == 1 and tuple(used[0]) == target:
-        compare = f"This is the same as the submission fit, {sub}.\n"
-    else:
-        compare = (
-            f"The submission fit uses {sub}, so backtest fits are shorter "
-            "than the submission fit.\n"
-        )
+    sub = "".join(
+        f"- `{m}`: {_settings_text(s)}\n" for m, s in submission.items()
+    )
     by = fits.groupby("model")
     table = pd.DataFrame(
         {
@@ -1064,14 +1151,13 @@ def _sampler_section(fits: pd.DataFrame, submission: Mapping[str, Any]) -> str:
     ).reset_index()
     return (
         "## Sampler\n\n"
-        f"Backtest fits use {runs}.\n"
-        + compare
+        f"Backtest fits use {_settings_text(backtest)}.\n"
+        "Submission fits use\n\n"
+        + sub
         + "\n"
         + _dropdown(
-            "A per-location model has one fit per location with enough "
-            "cases.\n"
-            "R-hat is the largest over a fit's parameters, and the depth cap "
-            "share is the share of draws at the maximum tree depth.\n\n"
+            "Columns are as on the "
+            "[Implementation](methods/implementation.md#sampling) page.\n\n"
             + _table(table, digits=3),
             "Convergence by model",
         )
@@ -1114,7 +1200,24 @@ def _backtest_page(
     )
     wide.columns = [f"as reported {c}" for c in wide.columns]
     wide = wide.astype("Int64").astype(str).replace("<NA>", "")
-    _write(gen / "truth-changes.md", _table(wide.reset_index()))
+    save_light_dark(
+        partial(
+            plot_truth_changes,
+            target,
+            _location_names(target),
+        ),
+        fig / "truth-changes.svg",
+    )
+    alt = (
+        "Weekly counts by onset week in each release, and the change from "
+        "the previous release, by place."
+    )
+    _write(
+        gen / "truth-changes.md",
+        f"![{alt}](figures/truth-changes.svg#only-light)\n"
+        f"![{alt}](figures/truth-changes-dark.svg#only-dark)\n\n"
+        + _dropdown(_table(wide.reset_index()), "National counts by release"),
+    )
     fc_path = out / "forecasts.csv.gz"
     shown: list[str] = []
     if fc_path.exists():
@@ -1184,7 +1287,9 @@ def _backtest_page(
     fits_path = res / "backtest-fits.csv"
     _write(
         gen / "backtest-sampler.md",
-        _sampler_section(pd.read_csv(fits_path), _submission_sampler()),
+        _sampler_section(
+            pd.read_csv(fits_path), _backtest_sampler(), _submission_samplers()
+        ),
     )
     rec_path = res / "recovery-scores.csv"
     _write(gen / "recovery-section.md", _recovery_section())
@@ -1445,11 +1550,7 @@ def _overall_table(
         score_chart_data(
             overall,
             "scale",
-            {
-                "relative_wis": (f"WIS relative to {baseline}", 1.0),
-                "coverage_50": ("50% coverage", 0.5),
-                "coverage_90": ("90% coverage", 0.9),
-            },
+            OVERALL_METRICS,
             [*ours, *sorted(hub)],
             default_on=[*sorted(hub), *(m for m in ours if m in shown)],
             x_label="Scale",
@@ -1463,10 +1564,12 @@ def _overall_table(
     have = set(overall["scale"])
     scales = [s for s in ("national", "provinces", "zones") if s in have]
     names = {
-        "relative_wis": "rel. WIS",
+        "rel_wis": "rel. WIS",
+        "rel_log_wis": "rel. log WIS",
         "n": "n",
         "coverage_50": "50%",
         "coverage_90": "90%",
+        "bias": "bias",
     }
     long = overall.melt(
         id_vars=["model", "scale"], value_vars=list(names), var_name="metric"
@@ -1483,8 +1586,6 @@ def _overall_table(
         + "\n"
         + "Over every scored round, on the count each later release reported "
         f"and on the forecasts `{baseline}` also made, by scale.{gap}\n"
-        "n counts forecasts, so a model with fewer forecasts was scored on "
-        "fewer weeks or places.\n"
         "Our other models can be switched on in the key.\n\n" + _table(wide)
     )
 
@@ -1519,9 +1620,6 @@ def _comparison_page(
     truth, k = summary["truth_vintage"], summary["complete_after_weeks"]
     baseline = summary["baseline"]
     hub_ids = summary.get("hub_ids", {})
-    note = ""
-    if baseline != summary["preferred_baseline"]:
-        note = f" (`{summary['preferred_baseline']}` once it is registered)"
     quantiles = pd.read_csv(cmp_dir / "quantiles.csv.gz")
     hub = quantiles["source"] == "hub"
     colours = comparison_colours(
@@ -1535,12 +1633,10 @@ def _comparison_page(
     rounds = ", ".join(sorted(set(sent.astype(str)))) or "none yet"
     _write(
         gen / "comparison-lead.md",
-        "Every model is scored on the count each later release reported, "
-        "from the release serving its round, with the complete weeks of "
-        f"the **{truth}** release as a secondary check "
-        "([Evaluation](methods/evaluation.md#real-releases)).\n"
-        f"Relative WIS divides by `{baseline}`{note} on the weeks both "
-        "forecast.\n"
+        "Scores against what each later release reported, from the "
+        "release serving each round "
+        "([how scoring works]"
+        "(methods/evaluation.md#comparison-with-hub-forecasts)).\n"
         "A model shown with a hub id is what we submitted under that id "
         f"for the rounds we submitted ({rounds}), and the model's own "
         "forecast for earlier rounds.\n",

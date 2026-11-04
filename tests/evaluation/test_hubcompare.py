@@ -297,7 +297,9 @@ def test_overall_comparison_by_scale(
         "provinces",
         "zones",
     }
-    assert (out.xs("flat", level="model")["relative_wis"] == 1).all()
+    flat = out.xs("flat", level="model")
+    assert (flat[["rel_wis", "rel_log_wis"]] == 1).all().all()
+    assert out["bias"].between(-1, 1).all()
     assert (
         out.loc[out["hub"]]
         .index.get_level_values("model")

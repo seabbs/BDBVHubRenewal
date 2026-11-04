@@ -151,7 +151,18 @@ def fit_nb(x: Any, mu: Any) -> Array:
     R estimate_uncertainty.R:445.
     Minimises the negative log likelihood on [0.1, 1000] with Brent's
     method, as ``optimize`` does.
-    Returns NaN for empty input.
+
+    Parameters
+    ----------
+    x : array_like
+        Observed counts.
+    mu : array_like
+        Their predicted means.
+
+    Returns
+    -------
+    jax.Array
+        The size, or NaN for empty input.
     """
     xa = jnp.atleast_1d(jnp.asarray(x))
     mua = jnp.atleast_1d(jnp.asarray(mu, dtype=xa.dtype))
@@ -187,7 +198,20 @@ def fit_by_horizon(obs: Any, pred: Any, fit_model: FitModel = fit_nb) -> Array:
     """Fit one uncertainty parameter per horizon (column).
 
     R estimate_uncertainty.R:291.
-    Rows are retrospective nowcasts and columns are horizons.
+
+    Parameters
+    ----------
+    obs : array_like
+        Observed counts, retrospective nowcasts by horizons.
+    pred : array_like
+        Their predictions, the same shape.
+    fit_model : FitModel, default fit_nb
+        Fits one column.
+
+    Returns
+    -------
+    jax.Array
+        One parameter per horizon.
     """
     o, p = _check_obs_and_pred(obs, pred)
     return jnp.stack(
@@ -250,12 +274,32 @@ def estimate_uncertainty(
     """Estimate uncertainty parameters per horizon.
 
     R estimate_uncertainty.R:71.
-    ``point_nowcast_matrices`` may hold ``None`` for failed nowcasts.
-    The triangles are ``(triangle, mask)`` pairs.
-    ``ref_time_aggregator(values, mask)`` returns aggregated values and
-    mask, where a cell is unobserved if any input cell is.
-    ``delay_aggregator(values)`` sums over delays, with unobserved
-    cells already zero.
+
+    Parameters
+    ----------
+    point_nowcast_matrices : sequence of array_like or None
+        Retrospective point nowcasts, ``None`` for failed ones.
+    truncated_reporting_triangles : sequence of Triangle
+        The ``(triangle, mask)`` pairs those nowcasts were made from.
+    retro_reporting_triangles : sequence of Triangle
+        The same rows as later observed.
+    n : int, optional
+        Nowcasts to use. Defaults to all.
+    uncertainty_model : callable, default fit_by_horizon
+        Fits the parameters from observed and predicted counts.
+    ref_time_aggregator : RefTimeAggregator, default identity
+        ``ref_time_aggregator(values, mask)`` returns aggregated values
+        and mask, where a cell is unobserved if any input cell is.
+    delay_aggregator : DelayAggregator, default row_sums
+        ``delay_aggregator(values)`` sums over delays, with unobserved
+        cells already zero.
+    validate : bool, default True
+        Check the inputs first.
+
+    Returns
+    -------
+    jax.Array
+        One parameter per horizon.
     """
     if n is None:
         n = len(point_nowcast_matrices)
@@ -407,10 +451,32 @@ def estimate_uncertainty_retro(
     Truncates the last ``n_retrospective_nowcasts`` rows one at a time,
     applies the reporting structure, nowcasts each and compares with
     what was later observed.
-    ``structure=None`` uses ``get_reporting_structure``.
     A retrospective nowcast that raises ``ValueError`` is skipped
     (R's ``.safelydoesit``).
-    ``kwargs`` go to ``estimate_uncertainty``.
+
+    Parameters
+    ----------
+    triangle : array_like
+        Reporting triangle, reference times by delays.
+    mask : array_like of bool
+        True where a cell is observed.
+    n_history_delay : int
+        Rows used to estimate each delay.
+    n_retrospective_nowcasts : int
+        Retrospective nowcasts to make.
+    structure : int or array_like, optional
+        Reporting structure. Defaults to `get_reporting_structure`.
+    delay_pmf : array_like, optional
+        A delay to use instead of estimating one for each nowcast.
+    validate : bool, default True
+        Check the triangle and mask first.
+    **kwargs
+        Passed to `estimate_uncertainty`.
+
+    Returns
+    -------
+    jax.Array
+        One parameter per horizon.
     """
     values, m = coerce(triangle, mask)
     if validate:

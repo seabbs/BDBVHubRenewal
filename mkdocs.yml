@@ -49,12 +49,15 @@ nav:
   - API reference:
       - reference/index.md
       - Data: reference/data.md
-      - Model: reference/model.md
-      - Baselinenowcast: reference/baselinenowcast.md
-      - Forecasters: reference/forecasters.md
+      - Models:
+          - Forecasters: reference/forecasters.md
+          - Renewal model: reference/model.md
+          - Baselinenowcast: reference/baselinenowcast.md
       - Evaluation: reference/evaluation.md
-      - Submission: reference/submission.md
-      - Reporting: reference/reporting.md
+      - Reporting:
+          - Figures and tables: reference/reporting.md
+          - Submission: reference/submission.md
+      - CLI: reference/cli.md
 
 theme:
   name: material
@@ -105,6 +108,8 @@ extra_css:
 
 extra_javascript:
   - javascripts/mathjax.js
+  - javascripts/toggles.js
+  - javascripts/tablefilter.js
   - javascripts/explorer.js
   - javascripts/scorechart.js
   - javascripts/zonechart.js

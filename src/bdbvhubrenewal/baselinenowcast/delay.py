@@ -116,6 +116,22 @@ def estimate_delay(
     """Estimate the delay pmf from the last ``n`` rows.
 
     R estimate_delay.R:51.
+
+    Parameters
+    ----------
+    triangle : array_like
+        Reporting triangle, reference times by delays.
+    mask : array_like of bool
+        True where a cell is observed.
+    n : int, optional
+        Rows to use. Defaults to all rows.
+    validate : bool, default True
+        Check the triangle and mask first.
+
+    Returns
+    -------
+    jax.Array
+        Probability of each delay, summing to 1.
     """
     values, m = coerce(triangle, mask)
     if validate:
@@ -167,7 +183,22 @@ def apply_delay(
 
     Rows are independent, so only the rows with a missing cell are
     passed to the kernel.
-    The result has no missing cells.
+
+    Parameters
+    ----------
+    triangle : array_like
+        Reporting triangle, reference times by delays.
+    mask : array_like of bool
+        True where a cell is observed.
+    delay_pmf : array_like
+        Probability of each delay, as from `estimate_delay`.
+    validate : bool, default True
+        Check the triangle and mask first.
+
+    Returns
+    -------
+    jax.Array
+        The point nowcast matrix, with no missing cells.
     """
     values, m = coerce(triangle, mask)
     if validate:
@@ -197,6 +228,24 @@ def estimate_and_apply_delay(
     """Estimate the delay (unless given) and nowcast.
 
     R estimate_and_apply_delay.R:44.
+
+    Parameters
+    ----------
+    triangle : array_like
+        Reporting triangle, reference times by delays.
+    mask : array_like of bool
+        True where a cell is observed.
+    n : int, optional
+        Rows used to estimate the delay. Defaults to all rows.
+    delay_pmf : array_like, optional
+        A delay to use instead of estimating one.
+    validate : bool, default True
+        Check the triangle and mask first.
+
+    Returns
+    -------
+    jax.Array
+        The point nowcast matrix, as from `apply_delay`.
     """
     values, m = coerce(triangle, mask)
     if validate:

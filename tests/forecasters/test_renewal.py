@@ -530,6 +530,55 @@ def test_chain_method_defaults_to_vectorized(
     assert seen["chain_method"] == "sequential"
 
 
+def test_inputs_carry_the_publication_lag_from_earlier_files(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
+    from bdbvhubrenewal.forecasters.renewal import vintage_inputs
+    from bdbvhubrenewal.model import MAIN
+
+    tasks = {
+        t.vintage: t
+        for t in make_tasks(
+            target.loc[target["kind"] == "real"],
+            delays.assign(kind="real"),
+            BacktestConfig(seed=3),
+        )
+    }
+    late = vintage_inputs(tasks["2026-10-17"], MAIN)
+    assert late.publication_lag_pmf is not None
+    assert late.publication_lag_pmf.sum() == pytest.approx(1.0)
+    assert vintage_inputs(tasks["2026-10-09"], MAIN).publication_lag_pmf is None
+
+
+def test_lag_source_warns_when_the_prior_stands_in(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
+    from bdbvhubrenewal.forecasters.renewal import (
+        lag_warnings,
+        vintage_inputs,
+    )
+    from bdbvhubrenewal.model import MAIN
+
+    tasks = {
+        t.vintage: t
+        for t in make_tasks(
+            target.loc[target["kind"] == "real"],
+            delays.assign(kind="real"),
+            BacktestConfig(seed=3),
+        )
+    }
+    empirical = replace(MAIN, publication_lag="empirical")
+    early = vintage_inputs(tasks["2026-10-09"], empirical)
+    late = vintage_inputs(tasks["2026-10-17"], empirical)
+    (warning,) = lag_warnings([early], empirical)
+    assert warning.startswith("publication_lag:")
+    assert lag_warnings([late], empirical) == []
+    # The default fixed lag never warns.
+    assert lag_warnings([early], MAIN) == []
+
+
 def test_report_cutoffs_are_days_from_the_model_start(
     task: ForecastTask,
 ) -> None:

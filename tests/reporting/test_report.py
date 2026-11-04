@@ -288,18 +288,28 @@ def test_sampler_section() -> None:
             "divergent_share": [0.0, 0.01, 0.0],
         }
     )
-    submission = {"num_chains": 4, "num_warmup": 1000, "num_samples": 1000}
-    text = report._sampler_section(fits, submission)
-    assert "2 chains of 300 warm-up and 300 draws" in text
-    assert "4 chains of 1000 warm-up and 1000 draws" in text
-    assert "shorter than the submission fit" in text
+    backtest = {
+        "num_chains": 2,
+        "num_warmup": 300,
+        "num_samples": 300,
+        "target_accept": 0.8,
+    }
+    submission = {
+        "renewal": {**backtest, "target_accept": 0.9},
+        "renewalbvd": {**backtest, "num_samples": 1000, "target_accept": 0.95},
+    }
+    text = report._sampler_section(fits, backtest, submission)
+    assert (
+        "Backtest fits use 2 chains of 300 warm-up and 300 draws at a "
+        "target acceptance of 0.8." in text
+    )
+    assert (
+        "- `renewalbvd`: 2 chains of 300 warm-up and 1000 draws at a "
+        "target acceptance of 0.95" in text
+    )
+    assert "same as" not in text
     assert "renewalsp" in text
-    assert report._sampler_section(fits.iloc[:0], submission) == ""
-    # With the submission's settings the text says they match.
-    same = {"num_chains": 2, "num_warmup": 300, "num_samples": 300}
-    text = report._sampler_section(fits, same)
-    assert "the same as the submission fit" in text
-    assert "shorter" not in text
+    assert report._sampler_section(fits.iloc[:0], backtest, submission) == ""
 
 
 def test_development_log(tmp_path: Path) -> None:

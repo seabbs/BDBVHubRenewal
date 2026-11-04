@@ -19,7 +19,7 @@ The model diagrams are mermaid blocks in `docs/methods/model.md`.
 | Ascertainment $\alpha(s)$ | `IndependentAscertainment` with a temporal process | None. |
 | Onset-to-report delay $f_s(d)$ | None | `HazardDelay`. |
 | Missing onsets $\pi_p(t)$ | None | `MissingOnsetFraction`, a pooled walk of the same form as $R_p$ with its own parameters. |
-| Known and imputed onsets | `BaseObservationProcess`, `NegativeBinomialNoise` | `OnsetStreams`. |
+| Known and imputed onsets | `BaseObservationProcess`, `NegativeBinomialNoise`, `compute_prop_already_reported` for the publication lag | `OnsetStreams`. |
 | BVDOutbreakSize Rt | None | `RtPseudoObservation`. |
 | Provinces with no cases | None | An importation-only component. |
 
@@ -75,11 +75,14 @@ The tests check the renewal and the imputation against a NumPy reference, `tests
 ## Sampling
 
 PyRenew's `PyrenewBuilder` builds each model as a `MultiSignalModel`, and NumPyro's NUTS fits it.
-Chains run vectorised.
+Chains run vectorised unless a fit's settings say otherwise.
+Backtest fits (`config/backtest.toml`) and CI submission fits (`ci/policy.toml`) both run their chains in parallel.
 Without other settings, NUTS runs 4 chains of 1000 warm-up and 1000 draws, with target acceptance 0.9 and maximum tree depth 10.
 Chains start from the median of 15 prior draws.
 Submission fits take their settings from `ci/policy.toml`, which override JSON settings in `BDBV_RENEWAL_SAMPLER`.
 Backtest and leave-one-province-out fits take theirs from `config/backtest.toml` when `BDBV_RENEWAL_SAMPLER` is unset.
+A per-location model has one fit per location with enough cases.
+Each fit reports its largest R-hat over parameters and the share of draws at the maximum tree depth.
 
 The parameterisation is as follows.
 

@@ -404,6 +404,19 @@ def release_backtest(
         If a task has no release snapshots.
     ValueError
         If two models give identical samples for a task.
+
+    Examples
+    --------
+    Score stored forecasts against the counts later releases reported.
+
+    >>> from bdbvhubrenewal.evaluation.nowcast import (
+    ...     relative_wis, release_backtest
+    ... )
+    >>> result = release_backtest(
+    ...     [task], daily, target, models=(), stored=forecasts
+    ... )
+    >>> scores = result.scores.query("target == 'reported'")
+    >>> relative_wis(scores)
     """
     real = target.loc[target["kind"] == "real"]
     releases = sorted(str(v) for v in real["vintage"].unique())
@@ -619,23 +632,40 @@ def relative_wis(
     -------
     pandas.DataFrame
         One row per cell and model, over the forecasts the baseline also
-        made: `n`, `wis`, `base_wis`, `rel_wis` and the coverage of the
-        50% and 90% intervals.
+        made: `n`, `wis`, `base_wis`, `rel_wis`, `rel_log_wis` (mean log
+        WIS over the baseline's), the coverage of the 50% and 90%
+        intervals and the mean `bias`.
     """
     match = ["target", "origin", "truth_vintage", "location", "target_end_date"]
-    base = scores.loc[scores["model"] == baseline, [*match, "wis"]]
-    pair = scores.merge(base.rename(columns={"wis": "base_wis"}), on=match)
+    base = scores.loc[scores["model"] == baseline, [*match, "wis", "log_wis"]]
+    pair = scores.merge(
+        base.rename(columns={"wis": "base_wis", "log_wis": "base_log_wis"}),
+        on=match,
+    )
     out = (
         pair.groupby([*by, "model"])
         .agg(
             n=("wis", "size"),
             wis=("wis", "mean"),
             base_wis=("base_wis", "mean"),
+            log_wis=("log_wis", "mean"),
+            base_log_wis=("base_log_wis", "mean"),
             coverage_50=("coverage_50", "mean"),
             coverage_90=("coverage_90", "mean"),
+            bias=("bias", "mean"),
         )
         .reset_index()
     )
     out["rel_wis"] = out["wis"] / out["base_wis"]
-    order = ["n", "wis", "base_wis", "rel_wis", "coverage_50", "coverage_90"]
+    out["rel_log_wis"] = out["log_wis"] / out["base_log_wis"]
+    order = [
+        "n",
+        "wis",
+        "base_wis",
+        "rel_wis",
+        "rel_log_wis",
+        "coverage_50",
+        "coverage_90",
+        "bias",
+    ]
     return out[[*by, "model", *order]]

@@ -288,3 +288,56 @@ def test_load_daily_zones_reads_the_tidy_file(tmp_path: Path) -> None:
         }
     ).to_csv(tmp_path / "daily_zones.csv.gz", index=False)
     assert list(load_daily_zones(tmp_path)["location"]) == ["CD-IT-01"]
+
+
+def test_release_updates_count_a_vanished_row_as_a_fall() -> None:
+    from bdbvhubrenewal.data import release_updates
+
+    counts = pd.DataFrame(
+        {
+            "vintage": ["2026-10-17"] * 3 + ["2026-10-24"] * 2,
+            "location": ["A", "B", "A", "A", "A"],
+            "target_end_date": [
+                "2026-10-03",
+                "2026-10-03",
+                "2026-10-10",
+                "2026-10-03",
+                "2026-10-17",
+            ],
+            "total": [5, 2, 3, 4, 6],
+        }
+    )
+    out = release_updates(counts).set_index(["location", "target_end_date"])
+    # B's row is gone, so it fell to zero; A's 10-10 row also fell to zero.
+    assert out.loc[("B", "2026-10-03"), "change"] == -2
+    assert out.loc[("A", "2026-10-10"), "change"] == -3
+    assert out.loc[("A", "2026-10-03"), "change"] == -1
+    # A week first published in the later release is not an update.
+    assert ("A", "2026-10-17") not in out.index
+    assert out.loc[("A", "2026-10-10"), "weeks_before"] == 1
+    assert set(out["previous"]) == {"2026-10-17"}
+
+
+def test_downward_summary_shares() -> None:
+    from bdbvhubrenewal.data import downward_summary
+
+    updates = pd.DataFrame(
+        {"location": ["A", "A", "A", "B"], "change": [-3, 1, 0, 6]}
+    )
+    out = downward_summary(updates, by=("location",)).set_index("location")
+    assert out.loc["A", "weeks"] == 3
+    assert out.loc["A", "fell"] == 1
+    assert out.loc["A", "cases_down"] == 3
+    assert out.loc["A", "downward_share"] == pytest.approx(0.75)
+    assert out.loc["B", "downward_share"] == 0
+    assert out.loc["A", "largest_fall"] == 3
+
+
+def test_imputed_by_release(target: pd.DataFrame) -> None:
+    from bdbvhubrenewal.data import imputed_by_release
+
+    out = imputed_by_release(target)
+    cd = out.loc[out["location"] == "CD"]
+    assert len(cd) == target["vintage"].nunique()
+    assert cd["imputed_share"].between(0, 1).all()
+    assert (out["total"] > 0).all()

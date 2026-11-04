@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""Write and check hub submissions and model metadata.
+"""Write hub submissions and model metadata.
 
 A submission is a CSV with columns `reference_date`, `forecast_date`,
 `target`, `target_end_date`, `location`, `output_type`, `output_type_id`
@@ -12,34 +12,23 @@ The round `BDBV 2026 nowcasting and forecasting` takes exactly 100
 samples for each `(reference_date, location, target)`, and each sample
 index covers the same target weeks within a location.
 
-`validate_submission` mirrors the checks `hubValidations` runs on a pull
-request, so problems show up before a PR is opened.
+`submission.validate` checks the written files as `hubValidations` does.
 The authoritative check is still `hubValidations` (`task validate-hub`).
 """
 
 from __future__ import annotations
 
 import datetime as dt
-import json
-import math
 import re
 import tomllib
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Final
 
-import jsonschema
 import pandas as pd
 import yaml
 
-from bdbvhubrenewal.data.dates import (
-    HUB_TIMEZONE,
-    as_date,
-    is_saturday,
-    submission_window,
-)
-from bdbvhubrenewal.submission.validate import forecast_date_problems
+from bdbvhubrenewal.data.dates import as_date
 
 __all__ = [
     "HUB_COLUMNS",
@@ -48,19 +37,12 @@ __all__ = [
     "ROUND_NAME",
     "SUBMISSION_CONFIG",
     "TEAM_ABBR",
-    "HubRound",
-    "load_hub_round",
     "model_abbr_for",
     "model_id",
     "render_model_metadata",
     "run_date",
-    "submission_model_abbr",
     "submission_path",
     "to_hub_table",
-    "validate_model_id",
-    "validate_model_metadata",
-    "validate_submission",
-    "validate_submission_file",
     "write_model_metadata",
     "write_submission",
 ]
@@ -94,129 +76,17 @@ _ID_PART = re.compile(r"^[A-Za-z0-9_]{1,14}$")
 NATIONAL: Final = "CD"
 """Location code of the whole country."""
 
-
-@dataclass(frozen=True)
-class HubRound:
-    """The task configuration of one round, read from `tasks.json`.
-
-    Attributes
-    ----------
-    round_name : str
-        Name of the round.
-    reference_dates : tuple of str
-        Accepted reference dates.
-    target_end_dates : tuple of str
-        Accepted target end dates.
-    locations : frozenset of str
-        Accepted location codes.
-    targets : tuple of str
-        Accepted targets.
-    n_samples : int
-        Samples required per compound task (minimum equals maximum here).
-    compound_taskid_set : tuple of str
-        Task ids that a sample index is shared within.
-    window_start : int
-        First day of the submission window, relative to the reference date.
-    window_end : int
-        Last day of the submission window, relative to the reference date.
-    """
-
-    round_name: str
-    reference_dates: tuple[str, ...]
-    target_end_dates: tuple[str, ...]
-    locations: frozenset[str]
-    targets: tuple[str, ...]
-    n_samples: int
-    compound_taskid_set: tuple[str, ...]
-    window_start: int
-    window_end: int
-
-
-def _options(task: Mapping[str, Any]) -> list[str]:
-    values = (task.get("required") or []) + (task.get("optional") or [])
-    return [str(v) for v in values]
-
-
-def load_hub_round(
-    tasks_json: Path | str, round_name: str = ROUND_NAME
-) -> HubRound:
-    """Read the configuration of a round from the hub's `tasks.json`.
-
-    Parameters
-    ----------
-    tasks_json : pathlib.Path or str
-        Path to `hub-config/tasks.json`.
-    round_name : str
-        The round to read.
-
-    Returns
-    -------
-    HubRound
-        The round's settings.
-
-    Raises
-    ------
-    ValueError
-        If the round is not found or has no sample output type.
-    """
-    config = json.loads(Path(tasks_json).read_text())
-    for rnd in config["rounds"]:
-        if rnd.get("round_name") != round_name:
-            continue
-        task = rnd["model_tasks"][0]
-        ids = task["task_ids"]
-        sample = task["output_type"].get(OUTPUT_TYPE)
-        if sample is None:
-            raise ValueError(f"Round {round_name!r} takes no samples.")
-        params = sample["output_type_id_params"]
-        if params["min_samples_per_task"] != params["max_samples_per_task"]:
-            raise ValueError("Expected a fixed number of samples per task.")
-        due = rnd["submissions_due"]
-        return HubRound(
-            round_name=round_name,
-            reference_dates=tuple(_options(ids["reference_date"])),
-            target_end_dates=tuple(_options(ids["target_end_date"])),
-            locations=frozenset(_options(ids["location"])),
-            targets=tuple(_options(ids["target"])),
-            n_samples=int(params["min_samples_per_task"]),
-            compound_taskid_set=tuple(params["compound_taskid_set"]),
-            window_start=int(due["start"]),
-            window_end=int(due["end"]),
-        )
-    raise ValueError(f"Round {round_name!r} not found in {tasks_json}.")
-
-
 SUBMISSION_CONFIG: Final = Path("config/hub.toml")
 """Where the submitted model abbreviation is set."""
-
-
-def submission_model_abbr(path: Path | str = SUBMISSION_CONFIG) -> str:
-    """Return the model abbreviation every submission uses.
-
-    It is one value in `config/hub.toml`, not derived from a model key,
-    so every renewal variant and every fallback submits under one id.
-
-    Parameters
-    ----------
-    path : pathlib.Path or str
-        The configuration file.
-
-    Returns
-    -------
-    str
-        The abbreviation, such as `"renewal"`.
-    """
-    with Path(path).open("rb") as fh:
-        config = tomllib.load(fh)
-    return str(config["submission"]["model_abbr"])
 
 
 def model_abbr_for(model: str, path: Path | str = SUBMISSION_CONFIG) -> str:
     """Return the hub abbreviation a model submits under.
 
     A model with its own entry under `[models]` in `config/hub.toml` is a
-    hub model of its own. Every other model submits under the renewal
-    abbreviation (`submission_model_abbr`).
+    hub model of its own. Every other model submits under the
+    `[submission]` abbreviation, one value not derived from a model key,
+    so every renewal variant and every fallback submits under one id.
 
     Parameters
     ----------
@@ -262,29 +132,6 @@ def model_id(model_abbr: str, team_abbr: str = TEAM_ABBR) -> str:
                 f"{part!r} must be 1 to 14 letters, digits or underscores."
             )
     return f"{team_abbr}-{model_abbr}"
-
-
-def validate_model_id(value: str) -> list[str]:
-    """Check a model id against the hub's naming rules.
-
-    Parameters
-    ----------
-    value : str
-        A model id such as `"seabbs-randomwalk"`.
-
-    Returns
-    -------
-    list of str
-        Problems found. Empty if the id is valid.
-    """
-    parts = value.split("-")
-    if len(parts) != 2:
-        return [f"Model id {value!r} must be `team-model` with one hyphen."]
-    return [
-        f"{part!r} in {value!r} must be 1 to 14 letters, digits or underscores."
-        for part in parts
-        if not _ID_PART.match(part)
-    ]
 
 
 def to_hub_table(
@@ -343,6 +190,15 @@ def to_hub_table(
         If a province or zone does not have sample ids `1..n_samples`, a
         sample lacks a week, locations cover different weeks, or the
         zones do not sum to their provinces.
+
+    Examples
+    --------
+    >>> from bdbvhubrenewal.submission.hub import (
+    ...     model_id, to_hub_table, write_submission
+    ... )
+    >>> samples = forecasts.query("model == 'randomwalknowcast'")
+    >>> table = to_hub_table(samples, task.reference_date)
+    >>> write_submission(table, "output/submission", model_id("rwnowcast"))
     """
     ref = as_date(reference_date).isoformat()
     fdate = as_date(forecast_date or run_date()).isoformat()
@@ -446,16 +302,19 @@ def submission_path(
     return Path(root) / "model-output" / mid / f"{ref}-{mid}.csv"
 
 
-def _records(table: pd.DataFrame) -> list[dict[str, str]]:
-    """Return the rows of a table as text, as the hub's script reads them."""
-    return [
-        {str(k): str(v) for k, v in row.items()}
-        for row in table.to_dict("records")
-    ]
-
-
 def run_date(now: dt.datetime | None = None) -> dt.date:
-    """Return the date a run opens its PR on, in UTC."""
+    """Return the date a run opens its PR on, in UTC.
+
+    Parameters
+    ----------
+    now : datetime.datetime, optional
+        The time of the run. Defaults to now.
+
+    Returns
+    -------
+    datetime.date
+        The UTC date.
+    """
     moment = now or dt.datetime.now(dt.UTC)
     return moment.astimezone(dt.UTC).date()
 
@@ -490,277 +349,6 @@ def write_submission(
     path.parent.mkdir(parents=True, exist_ok=True)
     table.to_csv(path, index=False)
     return path
-
-
-def _check_file_name(file_name: str, mid: str | None) -> list[str]:
-    match = re.match(r"^(\d{4}-\d{2}-\d{2})-(.+)\.csv$", file_name)
-    if match is None:
-        return [f"File name {file_name!r} is not `YYYY-MM-DD-team-model.csv`."]
-    errors = validate_model_id(match.group(2))
-    if mid is not None and match.group(2) != mid:
-        errors.append(f"File name model id {match.group(2)!r} is not {mid!r}.")
-    return errors
-
-
-def _file_model_id(file_name: str) -> str | None:
-    match = re.match(r"^\d{4}-\d{2}-\d{2}-(.+)\.csv$", file_name)
-    return match.group(1) if match else None
-
-
-def _check_id_scheme(df: pd.DataFrame) -> list[str]:
-    """Check sample ids the way hubValidations reads them.
-
-    hubValidations treats all rows sharing an `output_type_id` as one
-    sample. With ids reused across locations, every location must use the
-    same ids. With ids unique to a location, every location must cover the
-    same weeks. Mixing the two fails either way
-    (docs/submission/hub-spec.md, s. 4).
-    """
-    ids = df.groupby("location")["output_type_id"].apply(frozenset)
-    if len(ids) < 2:
-        return []
-    shared = frozenset.intersection(*ids)
-    if shared:
-        if len(set(ids)) > 1:
-            return [
-                "Sample ids are reused across locations, so every location "
-                "must use the same sample ids."
-            ]
-        return []
-    if any(a & b for a in ids for b in ids if a is not b):
-        return [
-            "Sample ids are partly shared between locations; use the same "
-            "sample ids in every location."
-        ]
-    weeks = df.groupby("location")["target_end_date"].apply(frozenset)
-    if len(set(weeks)) > 1:
-        return [
-            "Sample ids are unique to each location, so hubValidations "
-            "needs the same weeks in every location."
-        ]
-    return []
-
-
-def validate_submission(
-    table: pd.DataFrame,
-    hub_round: HubRound,
-    *,
-    file_name: str | None = None,
-    mid: str | None = None,
-    check_round: bool = True,
-    submitted_at: dt.datetime | None = None,
-    dir_name: str | None = None,
-    metadata_dir: Path | str | None = None,
-    metadata_dirs: Sequence[Path | str] = (),
-) -> list[str]:
-    """Check a submission table against the round's rules.
-
-    The checks mirror `hubValidations::validate_submission`: file name,
-    columns, round id, task id values, output type, sample counts and
-    the sample structure, value type and range, and the submission
-    window.
-    The hub's own `forecast_date` rules run first: the column is present
-    and parseable and on or before `reference_date`.
-    The remaining checks run without `forecast_date`.
-
-    Parameters
-    ----------
-    table : pandas.DataFrame
-        The submission, as written or as read back from CSV.
-    hub_round : HubRound
-        The round's configuration.
-    file_name : str, optional
-        The file's name, checked against the reference date and model id.
-    mid : str, optional
-        The expected model id.
-    check_round : bool
-        Whether to require the reference date and target end dates to be
-        listed in `tasks.json`. Turn off for backtests of past dates the
-        hub never opened.
-    submitted_at : datetime.datetime, optional
-        If given, check that this time is inside the submission window
-        and that the new forecast date is within a day of its date in
-        the hub's timezone.
-    dir_name : str, optional
-        Name of the directory holding the file, which must equal the
-        model id in the file name.
-    metadata_dir, metadata_dirs : pathlib.Path or str, optional
-        If given, `<model_id>.yml` (or `.yaml`) must exist in one of them.
-
-    Returns
-    -------
-    list of str
-        Problems found. Empty if the table is valid.
-    """
-    errors: list[str] = []
-    cols = list(table.columns)
-    if sorted(cols) != sorted(HUB_COLUMNS):
-        return [f"Columns {cols} are not {list(HUB_COLUMNS)}."]
-    if table.empty:
-        return ["The submission has no rows."]
-    if table.isna().any().any():
-        errors.append("The submission has missing values.")
-    df = table.astype({"reference_date": str, "target_end_date": str})
-    today = (
-        None
-        if submitted_at is None
-        else submitted_at.astimezone(HUB_TIMEZONE).date()
-    )
-    problems, _ = forecast_date_problems(_records(df), cols, today=today)
-    if problems:
-        return [*errors, *(message for _, message in problems)]
-    df = df.drop(columns="forecast_date")
-
-    refs = df["reference_date"].unique()
-    if len(refs) != 1:
-        return [*errors, f"Expected one reference date, found {list(refs)}."]
-    ref = str(refs[0])
-    if not is_saturday(ref):
-        errors.append(f"Reference date {ref} is not a Saturday.")
-    if check_round and ref not in hub_round.reference_dates:
-        errors.append(f"Reference date {ref} is not an open round.")
-    if file_name is not None:
-        errors.extend(_check_file_name(file_name, mid))
-        if not file_name.startswith(ref):
-            errors.append(f"File name {file_name} does not match {ref}.")
-    file_mid = _file_model_id(file_name) if file_name else mid
-    if dir_name is not None and file_mid is not None and dir_name != file_mid:
-        errors.append(
-            f"The directory {dir_name!r} must be named after the model id "
-            f"{file_mid!r}."
-        )
-    dirs = [*metadata_dirs, *([metadata_dir] if metadata_dir else [])]
-    if dirs and file_mid is not None:
-        found = any(
-            (Path(d) / f"{file_mid}.{ext}").exists()
-            for d in dirs
-            for ext in ("yml", "yaml")
-        )
-        if not found:
-            errors.append(f"No model metadata file {file_mid}.yml found.")
-
-    bad_targets = sorted(set(df["target"]) - set(hub_round.targets))
-    if bad_targets:
-        errors.append(f"Unknown targets {bad_targets}.")
-    bad_locs = sorted(set(df["location"]) - hub_round.locations)
-    if bad_locs:
-        errors.append(f"Unknown locations {bad_locs}.")
-    if set(df["output_type"]) != {OUTPUT_TYPE}:
-        errors.append(f"Output type must be {OUTPUT_TYPE!r}.")
-
-    weeks = sorted(set(df["target_end_date"]))
-    not_sat = [w for w in weeks if not is_saturday(w)]
-    if not_sat:
-        errors.append(f"Target end dates {not_sat} are not Saturdays.")
-    last = (as_date(ref) + dt.timedelta(days=21)).isoformat()
-    first = min(hub_round.target_end_dates, default="0000-00-00")
-    out_of_range = [w for w in weeks if w > last or w < first]
-    if out_of_range:
-        errors.append(
-            f"Target end dates {out_of_range} are outside {first} to {last}."
-        )
-    if check_round:
-        unlisted = sorted(set(weeks) - set(hub_round.target_end_dates))
-        if unlisted:
-            errors.append(f"Target end dates {unlisted} are not accepted.")
-
-    ids = pd.to_numeric(df["output_type_id"], errors="coerce")
-    if ids.isna().any() or not (ids == ids.round()).all():
-        errors.append("Sample ids (`output_type_id`) must be integers.")
-        return errors
-    values = pd.to_numeric(df["value"], errors="coerce")
-    if values.isna().any() or not values.map(math.isfinite).all():
-        errors.append("Values must be finite numbers.")
-    elif (values < 0).any():
-        errors.append("Values must be non-negative.")
-
-    keys = ["reference_date", "location", "target", "target_end_date"]
-    if df.duplicated([*keys, "output_type_id"]).any():
-        errors.append("Duplicate rows for a task and sample id.")
-    compound = list(hub_round.compound_taskid_set)
-    n_per = df.groupby([*compound, "target_end_date"])["output_type_id"]
-    counts = n_per.nunique()
-    wrong = counts[counts != hub_round.n_samples]
-    if not wrong.empty:
-        errors.append(
-            f"{len(wrong)} tasks do not have exactly {hub_round.n_samples} "
-            "samples."
-        )
-    # Each sample index must cover the same weeks within a compound task.
-    weeks_per_sample = df.groupby([*compound, "output_type_id"])[
-        "target_end_date"
-    ].apply(lambda s: tuple(sorted(s)))
-    if weeks_per_sample.groupby(level=compound).nunique().max() > 1:
-        errors.append(
-            "Within a location, every sample must cover the same weeks."
-        )
-    errors.extend(_check_id_scheme(df))
-
-    if submitted_at is not None:
-        start, end = submission_window(ref)
-        when = submitted_at.astimezone(HUB_TIMEZONE)
-        if not (start <= when <= end):
-            errors.append(
-                f"Submission time {when.isoformat()} is outside the window "
-                f"{start.isoformat()} to {end.isoformat()}."
-            )
-    return errors
-
-
-def validate_submission_file(
-    path: Path | str,
-    hub_round: HubRound,
-    *,
-    metadata_dirs: Sequence[Path | str] = (),
-    check_round: bool = True,
-    submitted_at: dt.datetime | None = None,
-) -> list[str]:
-    """Check a submission file where it sits.
-
-    Reads the CSV and runs `validate_submission` with its file name, the
-    name of its directory and, if `metadata_dirs` is given, a check that
-    the model's metadata exists.
-
-    Parameters
-    ----------
-    path : pathlib.Path or str
-        The submission, at `.../<model_id>/<reference_date>-<model_id>.csv`.
-    hub_round : HubRound
-        The round's configuration.
-    metadata_dirs : sequence of pathlib.Path or str
-        Directories searched for `<model_id>.yml`.
-    check_round : bool
-        As for `validate_submission`.
-    submitted_at : datetime.datetime, optional
-        As for `validate_submission`.
-
-    Returns
-    -------
-    list of str
-        Problems found. Empty if the file is valid.
-    """
-    p = Path(path)
-    try:
-        text = pd.read_csv(p, dtype=str, keep_default_na=False)
-    except (OSError, ValueError, pd.errors.ParserError) as err:
-        return [f"Could not read {p}: {err}"]
-    table = text.copy()
-    if "value" in table.columns:
-        table["value"] = pd.to_numeric(table["value"], errors="coerce")
-    if "output_type_id" in table.columns:
-        ids = table["output_type_id"].astype(str)
-        if not ids.str.fullmatch(r"-?\d+").all():
-            return ["Sample ids (`output_type_id`) must be integers."]
-        table["output_type_id"] = ids.astype("int64")
-    return validate_submission(
-        table,
-        hub_round,
-        file_name=p.name,
-        dir_name=p.parent.name,
-        metadata_dirs=metadata_dirs,
-        check_round=check_round,
-        submitted_at=submitted_at,
-    )
 
 
 # --------------------------------------------------------------------------
@@ -855,42 +443,6 @@ def render_model_metadata(
     ):
         record[key] = base[key]
     return record
-
-
-def validate_model_metadata(
-    record: Mapping[str, Any],
-    schema_json: Path | str,
-    file_name: str | None = None,
-) -> list[str]:
-    """Check a metadata record against the hub's JSON schema.
-
-    Parameters
-    ----------
-    record : mapping
-        The metadata, as rendered or read from YAML.
-    schema_json : pathlib.Path or str
-        Path to `hub-config/model-metadata-schema.json`.
-    file_name : str, optional
-        The YAML file name, which must be `<team_abbr>-<model_abbr>.yml`.
-
-    Returns
-    -------
-    list of str
-        Problems found. Empty if the record is valid.
-    """
-    schema = json.loads(Path(schema_json).read_text())
-    validator = jsonschema.Draft202012Validator(
-        schema, format_checker=jsonschema.FormatChecker()
-    )
-    errors = [
-        f"{'/'.join(str(p) for p in e.absolute_path) or '<root>'}: {e.message}"
-        for e in validator.iter_errors(dict(record))
-    ]
-    if file_name is not None:
-        expected = f"{record.get('team_abbr')}-{record.get('model_abbr')}"
-        if Path(file_name).stem != expected:
-            errors.append(f"File name {file_name} is not {expected}.yml.")
-    return errors
 
 
 def write_model_metadata(

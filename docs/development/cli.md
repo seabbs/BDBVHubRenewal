@@ -57,15 +57,17 @@ uv run bdbvhubrenewal compare-hub --fetch
 
 `bdbvhubrenewal nowcast` writes `model-output/<model_id>/<reference_date>-<model_id>.csv` under `output/submission/`.
 The model id is `seabbs-` plus the model's `model_abbr` in `config/hub.toml`.
-It checks the file with `validate_submission`, which mirrors the hub's checks:
+When the reference date is an open round in `tasks.json`, it checks the file with `submission.validate`, the Python port of the hub's checks:
 
 - column names and order free, no extra columns;
-- one reference date, a Saturday, listed in `tasks.json` for live rounds;
+- one reference date, listed in `tasks.json`;
 - known locations, the one target and `sample` output only;
-- target weeks are Saturdays from 2026-02-14 to three weeks after the reference date;
+- target weeks listed in `tasks.json`;
 - exactly 100 samples per location, and every sample covers the same weeks;
-- integer sample ids, finite non-negative values, no duplicate rows;
-- the submission window, Sunday to Tuesday in Kinshasa time, when a time is given.
+- integer sample ids, finite non-negative values, no duplicate rows.
+
+It skips the submission window and the model metadata, which `bdbvhubrenewal metadata` checks.
+For any other reference date it prints a note and skips the checks.
 
 `task validate-hub` then runs the hub's own `hubValidations::validate_submission()` in R against a fresh clone of the hub.
 
@@ -74,6 +76,4 @@ It checks the file with `validate_submission`, which mirrors the hub's checks:
 !!! note "Sample ids"
     Sample ids run from 1 to 100 and are shared across locations, so `hubValidations` reads samples as joint across locations.
 
-## Reference
-
-::: bdbvhubrenewal.cli
+The [CLI reference](../reference/cli.md) documents `main` and `build_parser`.

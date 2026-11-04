@@ -22,6 +22,7 @@ from bdbvhubrenewal.data.delays import hub_delay_pmf
 from .model import MAIN, ModelConfig, Vintage
 
 NATIONAL = "CD"
+"""Location code of the whole country."""
 START_COUNT = 5
 """The week grid starts one week before national weekly onsets first
 reach this count. Earlier weeks are returned as observed."""
@@ -44,6 +45,11 @@ def province_centres() -> pd.DataFrame:
 
 def province_distances(locations: tuple[str, ...]) -> np.ndarray:
     """Great-circle distances in km between province centres.
+
+    Parameters
+    ----------
+    locations : tuple of str
+        Province codes.
 
     Returns
     -------
@@ -78,6 +84,15 @@ def gravity_kernel(
     with populations $N$ from
     `table` and great-circle distances $D$ between the centres in
     `province_centres()`, which cover all 26 provinces.
+
+    Parameters
+    ----------
+    locations : tuple of str
+        Province codes.
+    table : pandas.DataFrame
+        Locations with a population column, as from `load_locations`.
+    decay_km : float, default 300.0
+        Distance scale of the decay.
 
     Returns
     -------
@@ -128,7 +143,9 @@ BVD_PROVINCES = {
 BVD_SHIFT = 6
 """Days from BVD's infection-time Rt to our onset-time Rt (incubation)."""
 BVD_TAU_MIN = 0.05
+"""Floor on the SD of a BVD patch's deviation from the national log Rt."""
 Z90 = 1.6448536
+"""Standard normal 95% quantile, to turn a 90% interval into an SD."""
 
 
 def bvd_rows(
@@ -144,6 +161,15 @@ def bvd_rows(
     of the time series at `as_of`. Each patch carries the time series'
     own national row as its reference, so the deviation uses one table.
     Pooled patches (`pooled = 1`) share one row and list their members.
+
+    Parameters
+    ----------
+    estimates : pandas.DataFrame
+        `province_estimates.csv`.
+    timeseries : pandas.DataFrame
+        `province_timeseries.csv`.
+    draws : pandas.DataFrame, optional
+        `posterior_draws.csv`.
 
     Returns
     -------
@@ -214,6 +240,17 @@ def bvd_inputs(
     Groups with no modelled member are dropped. Leaving a province out
     drops the national term and its patch, since both carry its data.
 
+    Parameters
+    ----------
+    rows : pandas.DataFrame
+        Rows from `bvd_rows`.
+    names : list of str
+        Modelled province codes, in model order.
+    start : datetime.date
+        First day of the model axis.
+    masked : tuple of str
+        Provinces left out of the fit.
+
     Returns
     -------
     dict or None
@@ -272,6 +309,7 @@ def vintage_from_tables(
     horizon_weeks: int = 3,
     masked: tuple[str, ...] = (),
     bvd: pd.DataFrame | None = None,
+    publication_lag: np.ndarray | None = None,
 ) -> Vintage:
     """Build a `Vintage` from the target and delay rows of one vintage.
 
@@ -302,6 +340,9 @@ def vintage_from_tables(
     bvd : pandas.DataFrame, optional
         BVDOutbreakSize rows from `bvd_rows` for the release chosen for
         this vintage (`ForecastTask.auxiliary["bvd"]`).
+    publication_lag : numpy.ndarray, optional
+        Empirical report to publication lag pmf
+        (`data.releases.publication_lag_pmf`).
 
     Returns
     -------
@@ -413,6 +454,7 @@ def vintage_from_tables(
         else table.set_index("location")
         .loc[list(active + idle), "population"]
         .to_numpy(float),
+        publication_lag_pmf=publication_lag,
     )
 
 
@@ -430,6 +472,17 @@ def idle_draws(
     Weekly counts are Poisson with rate $\lambda \sim
     \text{Gamma}(1/2 + \sum y, w)$ over the $w$ weeks seen (Jeffreys
     prior), so each trajectory has one rate.
+
+    Parameters
+    ----------
+    counts : numpy.ndarray
+        Weekly counts seen so far.
+    n_weeks : int
+        Weeks to draw.
+    n : int
+        Number of draws.
+    rng : numpy.random.Generator
+        Random number generator.
 
     Returns
     -------

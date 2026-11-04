@@ -100,7 +100,18 @@ def _read(path: Path) -> dict[str, Any]:
 
 
 def gh_pr_state(url: str) -> str:
-    """Return a pull request's state (open, closed or merged) from `gh`."""
+    """Return a pull request's state from `gh`.
+
+    Parameters
+    ----------
+    url : str
+        The pull request URL.
+
+    Returns
+    -------
+    str
+        `open`, `closed` or `merged`.
+    """
     out = subprocess.run(
         ["gh", "pr", "view", url, "--json", "state", "-q", ".state"],
         capture_output=True,

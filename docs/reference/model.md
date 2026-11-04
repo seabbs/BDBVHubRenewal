@@ -1,6 +1,6 @@
-# Model
+# Renewal model
 
-The PyRenew renewal model.
+The PyRenew renewal model the renewal forecasters fit and sample from. See [Getting started](../getting-started.ipynb) for a worked example.
 { .page-subtitle }
 
 ::: bdbvhubrenewal.model

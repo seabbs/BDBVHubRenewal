@@ -44,7 +44,7 @@ from bdbvhubrenewal.data.dates import (
     epiweek_end,
     reference_date_for_vintage,
 )
-from bdbvhubrenewal.data.releases import cutoff_lags
+from bdbvhubrenewal.data.releases import cutoff_lags, publication_lag_pmf
 from bdbvhubrenewal.data.simulate import (
     SCENARIO_RT_SCALE,
     SimulatedOutbreak,
@@ -87,6 +87,7 @@ __all__ = [
     "score_tasks",
     "truth_changes",
     "truth_from_vintage",
+    "uses_lag_prior",
 ]
 
 log = logging.getLogger(__name__)
@@ -99,6 +100,7 @@ FORECAST_COLUMNS = (
     *SAMPLE_COLUMNS,
     "as_of",
     "horizon",
+    "lag_prior",
 )
 """Columns of `run_forecasts` output, which is empty if no model could run."""
 
@@ -308,6 +310,28 @@ def make_tasks(
     -------
     list of ForecastTask
         Tasks ordered by kind and vintage.
+
+    Examples
+    --------
+    >>> import dataclasses
+    >>> from bdbvhubrenewal.data import (
+    ...     delays_for_vintage, load_daily, load_delays, load_target
+    ... )
+    >>> from bdbvhubrenewal.evaluation import backtest as bt
+    >>> target = load_target()
+    >>> real = target.loc[target["kind"] == "real"]
+    >>> config = dataclasses.replace(
+    ...     bt.load_config("config/backtest.toml"), min_horizon=-6
+    ... )
+    >>> vintage = "2026-10-17"
+    >>> task = bt.make_tasks(
+    ...     real.loc[real["vintage"] == vintage],
+    ...     delays_for_vintage(load_delays(), vintage)[0],
+    ...     config,
+    ...     history=real,
+    ...     daily=load_daily(),
+    ... )[0]
+    >>> task.reference_date, task.target_end_dates[-1]
     """
     tasks = []
     source = target if history is None else history
@@ -317,13 +341,18 @@ def make_tasks(
             same &= source["kind"] == kind
         past_target = source.loc[same]
         ref = reference_date_for_vintage(str(vintage))
-        dly = None
+        dly, history = None, None
         if delays is not None:
             mask = delays["vintage"] == vintage
             if "kind" in delays.columns:
                 mask &= delays["kind"] == kind
             sel = delays.loc[mask]
             dly = sel if not sel.empty else None
+            same = delays["vintage"] <= vintage
+            if "kind" in delays.columns:
+                same &= delays["kind"] == kind
+            past = delays.loc[same]
+            history = past if not past.empty else None
         tasks.append(
             ForecastTask(
                 vintage=str(vintage),
@@ -331,6 +360,7 @@ def make_tasks(
                 kind=str(kind),
                 target=rows.reset_index(drop=True),
                 delays=dly,
+                delay_history=history,
                 target_history=past_target if not past_target.empty else None,
                 daily_history=_daily_for(daily, str(kind), str(vintage)),
                 locations=forecast_locations(rows),
@@ -345,6 +375,29 @@ def make_tasks(
             )
         )
     return tasks
+
+
+def uses_lag_prior(task: ForecastTask) -> bool:
+    """Whether a task has no publication lag estimate of its own.
+
+    The lag is estimated from pairs of delay files on or before the
+    vintage (`bdbvhubrenewal.data.releases.publication_lag_pmf`).
+    Without one, the renewal models use a prior whose shape was set from
+    later delay files, so these origins see some later data.
+
+    Parameters
+    ----------
+    task : ForecastTask
+        The task.
+
+    Returns
+    -------
+    bool
+        True if no pair of delay files is available.
+    """
+    if task.delay_history is None:
+        return True
+    return publication_lag_pmf(task.delay_history, task.vintage) is None
 
 
 def _fit_rows(model: ForecastModel, task: ForecastTask) -> pd.DataFrame:
@@ -421,7 +474,15 @@ def run_forecasts(
     pandas.DataFrame
         Columns `model`, `kind`, `vintage`, `reference_date`, `horizon`,
         `location`, `target_end_date`, `sample`, `value`, `as_of`
-        (missing for final counts).
+        (missing for final counts) and `lag_prior` (`uses_lag_prior`).
+
+    Examples
+    --------
+    >>> from bdbvhubrenewal.evaluation.backtest import run_forecasts
+    >>> from bdbvhubrenewal.forecasters import get_model
+    >>> models = [get_model("randomwalk"), get_model("randomwalknowcast")]
+    >>> forecasts = run_forecasts(models, [task])  # tasks from `make_tasks`
+    >>> forecasts.groupby("model")["sample"].nunique()
     """
     frames = []
     for task in tasks:
@@ -450,6 +511,7 @@ def run_forecasts(
             if "as_of" not in samples:
                 samples["as_of"] = np.nan
             samples = add_national(samples)
+            samples["lag_prior"] = uses_lag_prior(task)
             ref = pd.Timestamp(task.reference_date)
             samples["horizon"] = (
                 pd.to_datetime(samples["target_end_date"]) - ref
@@ -551,7 +613,8 @@ def score_tasks(
     -------
     pandas.DataFrame
         Output of `bdbvhubrenewal.evaluation.scoring.score_forecasts`, with
-        `truth_vintage`, `scoring` and `complete` columns.
+        `truth_vintage`, `scoring` and `complete` columns, and
+        `lag_prior` if the forecasts have it.
     """
     keep = forecasts["vintage"] < truth_date
     as_of = (
@@ -573,6 +636,9 @@ def score_tasks(
     if not frames:
         return pd.DataFrame()
     out = pd.concat(frames, ignore_index=True)
+    if "lag_prior" in forecasts:
+        flags = forecasts.groupby(["kind", "vintage"])["lag_prior"].first()
+        out = out.merge(flags.reset_index(), on=["kind", "vintage"], how="left")
     out["truth_vintage"] = truth_date
     age = pd.Timestamp(truth_date) - pd.to_datetime(out["target_end_date"])
     out["complete"] = age.dt.days >= 7 * complete_after_weeks
