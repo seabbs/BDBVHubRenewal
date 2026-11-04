@@ -20,7 +20,8 @@ $$
 $$
 
 It splits into dispersion, overprediction and underprediction.
-Log WIS applies it to $\log(1 + y)$ and $\log(1 + x)$, so it measures relative error and small provinces count.
+WIS on the log scale is the WIS of the transformed target, $\text{WIS}(\log(1 + x), \log(1 + y))$, never the log of WIS.
+It measures relative error, so small provinces count.
 
 $$
 \text{Bias} = 1 - \big(P(X \le y) + P(X \le y - 1)\big),
@@ -30,7 +31,7 @@ $$
 
 Positive bias is overprediction.
 Relative WIS is a ratio of means against a baseline $b$ over the forecasts both made, and below 1 beats it.
-Relative log WIS is the same ratio of mean log WIS.
+Relative WIS on the log scale is the same ratio of mean WIS on the log scale.
 The baseline is `randomwalk`.
 Coverage is whether $y$ falls in the central 50% and 90% sample intervals.
 

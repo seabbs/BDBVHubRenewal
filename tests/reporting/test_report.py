@@ -467,7 +467,7 @@ def test_dropdown_wraps_and_indents() -> None:
 def test_metric_tabs_have_wis_and_log_wis() -> None:
     text = report._metric_tabs("x", "WIS by horizon.")
     assert '=== "WIS"' in text
-    assert '=== "Log WIS"' in text
+    assert '=== "WIS on the log scale"' in text
     assert "figures/x-log-wis.svg#only-light" in text
 
 

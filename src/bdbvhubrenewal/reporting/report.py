@@ -379,10 +379,12 @@ def _release_section(
         "Scores against what each later release reported "
         "([how scoring works](methods/evaluation.md#real-releases), "
         "[metrics](methods/evaluation.md#scores)).\n\n"
-        "![Relative WIS, relative log WIS, 50% and 90% coverage and bias "
+        "![Relative WIS, relative WIS on the log scale, 50% and 90% coverage "
+        "and bias "
         "of each model on the counts each later release reported, by "
         "pool.](figures/relative-overall.svg#only-light)\n"
-        "![Relative WIS, relative log WIS, 50% and 90% coverage and bias "
+        "![Relative WIS, relative WIS on the log scale, 50% and 90% coverage "
+        "and bias "
         "of each model on the counts each later release reported, by "
         "pool.](figures/relative-overall-dark.svg#only-dark)\n\n"
         + _dropdown(
@@ -880,7 +882,10 @@ def _backtest_findings(scores: pd.DataFrame) -> str:
     )
 
 
-_METRIC_TABS: Final = (("wis", "WIS", ""), ("log_wis", "Log WIS", "-log-wis"))
+_METRIC_TABS: Final = (
+    ("wis", "WIS", ""),
+    ("log_wis", "WIS on the log scale", "-log-wis"),
+)
 """Score metrics shown as tabs, with their tab label and file suffix."""
 
 
@@ -1074,7 +1079,7 @@ def _scenario_scores(path: Path) -> str:
             .rename(
                 columns={
                     "wis": "mean WIS",
-                    "log_wis": "mean log WIS",
+                    "log_wis": "mean WIS on the log scale",
                     "coverage_50": "50% coverage",
                     "coverage_90": "90% coverage",
                     "bias": "mean bias",
@@ -1565,7 +1570,7 @@ def _overall_table(
     scales = [s for s in ("national", "provinces", "zones") if s in have]
     names = {
         "rel_wis": "rel. WIS",
-        "rel_log_wis": "rel. log WIS",
+        "rel_log_wis": "rel. WIS, log scale",
         "n": "n",
         "coverage_50": "50%",
         "coverage_90": "90%",

@@ -27,7 +27,7 @@ __all__ = [
 
 OVERALL_METRICS: Mapping[str, tuple[str, float | None]] = {
     "rel_wis": ("Relative WIS", 1.0),
-    "rel_log_wis": ("Relative log WIS", 1.0),
+    "rel_log_wis": ("Relative WIS on the log scale", 1.0),
     "coverage_50": ("50% coverage", 0.5),
     "coverage_90": ("90% coverage", 0.9),
     "bias": ("Bias", 0.0),
@@ -37,7 +37,7 @@ the line of a perfect or baseline score. Bias is in -1 to 1."""
 
 SCORE_METRICS: Mapping[str, tuple[str, float | None]] = {
     "wis": ("WIS", None),
-    "log_wis": ("Log WIS", None),
+    "log_wis": ("WIS on the log scale", None),
     "coverage_50": ("50% coverage", 0.5),
     "coverage_90": ("90% coverage", 0.9),
     "bias": ("Bias", 0.0),

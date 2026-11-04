@@ -180,7 +180,7 @@
       });
       var tbl = h("table", {}, table);
       var head = h("tr", {}, h("thead", {}, tbl));
-      ["Model", "Weeks", "WIS", "Relative WIS", "Log WIS", "Relative log WIS",
+      ["Model", "Weeks", "WIS", "Relative WIS", "WIS, log scale", "Relative WIS, log scale",
         "50% coverage", "90% coverage", "Bias"]
         .forEach(function (c) { h("th", {}, head, c); });
       var body = h("tbody", {}, tbl);
