@@ -36,6 +36,8 @@ A model with no snapshots stops the run.
 
 Scores are WIS, coverage and bias (`bdbvhubrenewal.evaluation.scoring`)
 and every table counts its forecasts, $n$.
+The energy score is scored from the same drawn samples, one per origin,
+release, target and scale.
 """
 
 from __future__ import annotations
@@ -51,7 +53,11 @@ import pandas as pd
 from bdbvhubrenewal.baselinenowcast import growth
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
 from bdbvhubrenewal.data.snapshots import release_cutoff
-from bdbvhubrenewal.evaluation.scoring import SCORE_COLUMNS, score_forecasts
+from bdbvhubrenewal.evaluation.scoring import (
+    SCORE_COLUMNS,
+    energy_scores,
+    score_forecasts,
+)
 from bdbvhubrenewal.forecasters.base import (
     ForecastModel,
     ForecastTask,
@@ -115,6 +121,9 @@ class ReleaseBacktest:
     quantiles : pandas.DataFrame
         The 5, 25, 50, 75 and 95% quantiles of every forecast, with the
         count reported at the origin and the truth where there is one.
+    energy : pandas.DataFrame
+        `energy_scores` by `origin`, `target`, `truth_vintage` and
+        `scale`, on the cells every model of the origin forecasts.
     origins : pandas.DataFrame
         One row per origin and model: `status`, `reason` and the number
         of forecasts scored on each target.
@@ -124,6 +133,7 @@ class ReleaseBacktest:
 
     scores: pd.DataFrame
     quantiles: pd.DataFrame
+    energy: pd.DataFrame
     origins: pd.DataFrame
     fits: pd.DataFrame
 
@@ -525,20 +535,21 @@ def _score(
         origin_rows, columns=["origin", "model", "status", "reason"]
     )
     if not frames:
-        return ReleaseBacktest(pd.DataFrame(), pd.DataFrame(), origins, fits)
+        empty = pd.DataFrame()
+        return ReleaseBacktest(empty, empty, empty, origins, fits)
     samples = pd.concat(frames, ignore_index=True)
     complete = done.loc[done["complete"], ["location", "target_end_date"]]
-    scored = []
+    scored, energy = [], []
     for (tgt, truth_v), grp in samples.groupby(["target", "truth_vintage"]):
         if tgt == "complete":
             grp = grp.merge(complete, on=["location", "target_end_date"])
+        truth = _truth(real, str(truth_v))
         s = score_forecasts(
-            grp.assign(horizon=grp["weeks_back"]),
-            _truth(real, str(truth_v)),
-            keys=_KEYS,
+            grp.assign(horizon=grp["weeks_back"]), truth, keys=_KEYS
         )
         s["weeks_back"] = s.pop("horizon")
         scored.append(s)
+        energy.append(energy_scores(grp, truth, unit=_KEYS[1:4]))
     scores = pd.concat(scored, ignore_index=True)
     flags = done.rename(columns={"complete": "complete_at_latest"})
     scores = scores.merge(
@@ -558,7 +569,13 @@ def _score(
     origins[["n_reported", "n_complete"]] = (
         origins[["n_reported", "n_complete"]].fillna(0).astype(int)
     )
-    return ReleaseBacktest(scores, _quantiles(samples, real), origins, fits)
+    return ReleaseBacktest(
+        scores,
+        _quantiles(samples, real),
+        pd.concat(energy, ignore_index=True),
+        origins,
+        fits,
+    )
 
 
 def _quantiles(samples: pd.DataFrame, real: pd.DataFrame) -> pd.DataFrame:
