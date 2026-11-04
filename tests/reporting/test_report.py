@@ -259,30 +259,6 @@ def test_development_log(tmp_path: Path) -> None:
     )
 
 
-def test_backtest_findings() -> None:
-    rows = []
-    for model, wis, cov in (
-        ("randomwalk", 20.0, 0.6),
-        ("renewal", 10.0, 0.9),
-        ("renewalsp", 15.0, 0.8),
-    ):
-        rows.append(
-            _scores().assign(
-                model=model,
-                wis=wis,
-                coverage_90=cov,
-                origin="2026-10-09",
-                target="reported",
-            )
-        )
-    primary = pd.concat(rows)
-    text = report._backtest_findings(primary)
-    assert "renewal 0.50" in text
-    assert "renewalsp 0.75" in text
-    assert "randomwalk 0.60" in text
-    assert report._backtest_findings(rows[0]) == ""
-
-
 def test_forecast_tabs() -> None:
     text = report._forecast_tabs(["randomwalk", "renewal"], {"CD": "DRC"})
     assert text.startswith("## Forecasts by place")
@@ -428,13 +404,6 @@ def test_summary_covers_only_forecasts_randomwalk_made(tmp_path: Path) -> None:
     assert f"the origins {origins}" in text
     assert "   n |" in text
     assert "nan" not in text.lower()
-
-
-def test_backtest_findings_name_the_reported_target() -> None:
-    scores = report._release_scores(ROOT / "results")
-    text = report._backtest_findings(scores)
-    assert text.startswith("On the counts each later release reported")
-    assert "randomwalknowcast" in text
 
 
 def test_missing_builds_name_submitted_rounds_without_a_main_build() -> None:

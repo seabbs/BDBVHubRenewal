@@ -28,10 +28,6 @@ Pick a place to narrow the table.
 
 --8<-- "backtest-forecasts.md"
 
-## Findings
-
---8<-- "backtest-findings.md"
-
 --8<-- "release-nowcasts.md"
 
 --8<-- "backtest-sampler.md"

@@ -1037,25 +1037,6 @@ def _with_horizon(scores: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def _backtest_findings(scores: pd.DataFrame) -> str:
-    """One or two sentences on the reported target over every origin."""
-    rel = relative_wis(scores.loc[scores["target"] == "reported"])
-    if rel["model"].nunique() < 2:
-        return ""
-    rel = rel.set_index("model")
-    others = [m for m in rel.index if m != "randomwalk"]
-    wis = ", ".join(f"{m} {rel.loc[m, 'rel_wis']:.2f}" for m in others)
-    cover = ", ".join(
-        f"{m} {rel.loc[m, 'coverage_90']:.2f}" for m in [*others, "randomwalk"]
-    )
-    origins = scores["origin"].nunique()
-    return (
-        f"On the counts each later release reported, from {origins} "
-        f"origins, mean WIS relative to random walk is {wis}.\n"
-        f"90% interval coverage is {cover}.\n"
-    )
-
-
 _METRIC_TABS: Final = (
     ("wis", "WIS", ""),
     ("log_wis", "WIS on the log scale", "-log-wis"),
@@ -1356,7 +1337,6 @@ def _backtest_page(
         fig / "scores-horizon.svg",
     )
     _horizon_table(gen, reported, names)
-    _write(gen / "backtest-findings.md", _backtest_findings(scores))
     save_light_dark(
         partial(plot_scores_by_truth, reported, models=names),
         fig / "scores-by-truth.svg",
