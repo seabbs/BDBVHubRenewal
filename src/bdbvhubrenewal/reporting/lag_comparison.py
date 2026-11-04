@@ -21,9 +21,8 @@ import pandas as pd
 from matplotlib.figure import Figure
 
 from bdbvhubrenewal.evaluation.nowcast import relative_wis
-from bdbvhubrenewal.forecasters import list_models
 
-from .plots import HUB_GREYS, model_colour, save_light_dark, theme
+from .plots import HUB_GREYS, MODEL_COLOURS, save_light_dark, theme
 
 __all__ = [
     "ARMS",
@@ -157,7 +156,6 @@ def plot_lag_fans(
     samples: pd.DataFrame,
     target: pd.DataFrame,
     origins: Sequence[str],
-    models: Sequence[str],
     names: dict[str, str],
     arm: str,
     mode: str = "light",
@@ -173,8 +171,6 @@ def plot_lag_fans(
         The tidy target table, for the counts each release reported.
     origins : sequence of str
         Origins, one per column.
-    models : sequence of str
-        Registered models in registry order, for the colours.
     names : dict
         Location code to name.
     arm : str
@@ -222,7 +218,7 @@ def plot_lag_fans(
                         "target_end_date"
                     )
                     t = pd.to_datetime(fan["target_end_date"])
-                    colour = model_colour(model, models, mode)
+                    colour = page_colour(model, mode)
                     ax.fill_between(
                         t, fan["q5"], fan["q95"], color=colour, alpha=0.15,
                         lw=0,
@@ -241,9 +237,12 @@ def plot_lag_fans(
                     ax.set_title(f"Origin {origin}", fontsize=9)
                 if col == 0:
                     ax.set_ylabel(names.get(place, place))
-                if row == len(PLACES) - 1:
-                    ax.legend(frameon=False, fontsize=6, loc="upper left")
-        fig.tight_layout()
+        handles, labels = axes[-1, 0].get_legend_handles_labels()
+        fig.legend(
+            handles, labels, loc="lower center", ncol=len(labels),
+            frameon=False, fontsize=8,
+        )  # fmt: skip
+        fig.tight_layout(rect=(0, 0.04, 1, 1))
     return fig
 
 
@@ -261,7 +260,6 @@ def plot_lag_scores(table: pd.DataFrame, mode: str = "light") -> Figure:
     -------
     matplotlib.figure.Figure
     """
-    models = [s.name for s in list_models()]
     cells = (
         table[["origin", "truth_vintage"]]
         .drop_duplicates()
@@ -285,7 +283,7 @@ def plot_lag_scores(table: pd.DataFrame, mode: str = "light") -> Figure:
                 )
                 ax.bar(
                     x + (i - (len(arms) - 1) / 2) * width, rows[col],
-                    width=width, color=model_colour(model, models, mode),
+                    width=width, color=page_colour(model, mode),
                     label=model,
                 )  # fmt: skip
             ax.axhline(ref, color=ink["muted"], lw=0.8, ls="--")
@@ -307,6 +305,30 @@ CALIBRATION_MODELS: Final = (
 
 NEWEST: Final = (0, 3)
 """Weeks back from the reference week counted as the newest."""
+
+PAGE_MODELS: Final = (*ARMS, "renewalsp", "renewalbvd", "randomwalknowcast")
+"""Every model on the page, in the order of its colours."""
+
+
+def page_colour(model: str, mode: str = "light") -> str:
+    """Return a model's colour on this page.
+
+    The page gives its models the first colours of `MODEL_COLOURS` in
+    `PAGE_MODELS` order, so the versions of `renewal` are told apart.
+
+    Parameters
+    ----------
+    model : str
+        A model in `PAGE_MODELS`.
+    mode : str
+        `"light"` or `"dark"`.
+
+    Returns
+    -------
+    str
+        A hex colour.
+    """
+    return MODEL_COLOURS[mode][PAGE_MODELS.index(model)]
 
 
 def newest_weeks(quantiles: pd.DataFrame) -> pd.DataFrame:
@@ -392,7 +414,6 @@ def plot_calibration(rows: pd.DataFrame, mode: str = "light") -> Figure:
     -------
     matplotlib.figure.Figure
     """
-    models = [s.name for s in list_models()]
     table = calibration_table(rows, ("weeks_back",))
     panels = (
         ("coverage_50", "50% coverage", 0.5),
@@ -409,7 +430,7 @@ def plot_calibration(rows: pd.DataFrame, mode: str = "light") -> Figure:
                     continue
                 ax.plot(
                     line["weeks_back"], line[col], marker="o", lw=1.4,
-                    color=model_colour(model, models, mode), label=model,
+                    color=page_colour(model, mode), label=model,
                 )  # fmt: skip
             if ref is not None:
                 ax.axhline(ref, color=ink["muted"], lw=0.8, ls="--")
@@ -494,14 +515,22 @@ def make_lag_comparison(
     scores = pd.read_csv(res / "nowcast-scores.csv")
     scored = sorted(scores.loc[scores["model"].isin(ARMS), "origin"].unique())
     origins = [*scored, latest["vintage"].max()]
-    models = [s.name for s in list_models()]
-    for arm in ARMS[1:]:
+    fitted = [a for a in ARMS[1:] if a in set(samples["model"])]
+    tabs = []
+    for arm in fitted:
         save_light_dark(
             lambda mode, arm=arm: plot_lag_fans(
-                samples, target, origins, models, names, arm, mode
+                samples, target, origins, names, arm, mode
             ),
             fig_dir / f"lag-fans-{arm}.svg",
         )
+        alt = f"Forecasts of {REFERENCE} and {arm} with each later release."
+        tabs.append(
+            f'=== "{arm}"\n\n'
+            f"    ![{alt}](figures/lag-fans-{arm}.svg#only-light)\n"
+            f"    ![{alt}](figures/lag-fans-{arm}-dark.svg#only-dark)\n"
+        )
+    (gen_dir / "lag-fans.md").write_text("\n".join(tabs))
 
     rel = relative_wis(
         scores.loc[scores["target"] == "reported"],

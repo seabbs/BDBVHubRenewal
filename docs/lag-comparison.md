@@ -45,20 +45,7 @@ The pairs differ, from 4% to 24% at 0 days, and late rows also come from onsets 
 Each version's median, 50% and 90% intervals at each origin beside `renewal`'s, with the counts of the origin's release and every later one.
 The last origin has no later release yet.
 
-=== "renewalnolag"
-
-    ![Forecasts of renewal and renewalnolag at each origin, with each later release.](figures/lag-fans-renewalnolag.svg#only-light)
-    ![Forecasts of renewal and renewalnolag at each origin, with each later release.](figures/lag-fans-renewalnolag-dark.svg#only-dark)
-
-=== "renewalplace"
-
-    ![Forecasts of renewal and renewalplace at each origin, with each later release.](figures/lag-fans-renewalplace.svg#only-light)
-    ![Forecasts of renewal and renewalplace at each origin, with each later release.](figures/lag-fans-renewalplace-dark.svg#only-dark)
-
-=== "renewalfixdelay"
-
-    ![Forecasts of renewal and renewalfixdelay at each origin, with each later release.](figures/lag-fans-renewalfixdelay.svg#only-light)
-    ![Forecasts of renewal and renewalfixdelay at each origin, with each later release.](figures/lag-fans-renewalfixdelay-dark.svg#only-dark)
+--8<-- "lag-fans.md"
 
 ## Scores by release
 
@@ -102,14 +89,35 @@ Small provinces with few cases cover trivially and are in the tables only.
 
     --8<-- "lag-calibration-overall.md"
 
---8<-- "lag-findings-calibration.md"
+In Congo, Ituri and North Kivu the renewal models cover the newest weeks too rarely, and nearly every miss is above the interval.
+At 2 and 3 weeks back, the median nowcast of `renewal` expected 154 of the 358 and 63 of the 201 cases later releases added, and its 90% intervals are 7 to 9% of the median wide.
+So the nowcasts are too low more than too narrow.
+At 1 to 3 weeks back, 80 to 100% of what later releases added was known-onset reports, and imputed counts added 10 to 25%.
+A lag of 0 to 3 days barely changes a week that is 2 or 3 weeks old, so the lag is not the cause and a learnt lag on 0 to 7 days would not fix it.
+The likely cause is the delay's tail for recent onsets, from a walk $\gamma(s)$ that is too stiff or from reports that arrive in batches the latest release does not show.
+Fitting what each release added, as proposed, would fit the model to exactly this miss.
+`renewalnolag` is worse at every week back, and in the newest two weeks it expected 45% and 29% of what was added.
+Coverage is against later releases, which are themselves incomplete, so against final counts it would be lower still.
+There are 9 cells per week back in these places.
 
 ## Convergence
 
-Two chains of 500 warm-up and 500 draws, target acceptance 0.8.
+Two chains of 500 warm-up and 500 draws, target acceptance 0.8 and tree depth 10, the backtest settings.
+Every fit is on the same code: `renewal`'s walks sampled as before the PyRenew `ARProcess` change, which was reverted, and each release cut at its last report day ([Data](methods/data.md#vintages)).
+Earlier fits on the `ARProcess` walk gave the same picture and are not shown.
 
 --8<-- "lag-convergence.md"
 
+Every fit runs at the tree depth limit on 96 to 100% of draws.
+`renewal` at 2026-11-01 is the weakest.
+Its two chains settle on different starting offsets of the province log R deviations, with R-hat 1.054 and bulk ESS 35 for those offsets and all 39 divergent draws in one chain.
+The reporting parameters converge well in every fit.
+These offsets are sampled centred, so the proposed fix is to sample them non-centred, a change to the model for Sam.
+
 ## Result
 
---8<-- "lag-findings.md"
+With the lag `renewal` scores better than without it at every origin and release, relative WIS 0.91, 0.95 and 2.12 against 1.32, 1.96 and 3.72, and its 90% coverage is higher, 0.71 to 0.85 against 0.62 to 0.75.
+Without the lag the newest weeks are nowcast far too low.
+So reports do reach releases late, as the release check shows, and removing the lag is not supported.
+The newest weeks are still too low with the lag, from the delay's tail rather than the lag, and that is what the province delay, the fixed delay and fitting every release are to test.
+`renewalplace` and `renewalfixdelay` are added to this page when their fits are run.
