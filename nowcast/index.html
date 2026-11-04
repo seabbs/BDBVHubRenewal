@@ -3536,6 +3536,76 @@
 </tbody>
 </table>
 </details>
+<p>The <a href="../methods/evaluation/#energy-score">energy score</a> scores all zones together at each origin, relative to <code>randomwalk</code> over the releases scored.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">model</th>
+<th style="text-align: left;">origin</th>
+<th style="text-align: right;">n_energy</th>
+<th style="text-align: right;">rel_energy</th>
+<th style="text-align: right;">rel_log_energy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: left;">2026-10-24</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td style="text-align: left;">randomwalk (summed to provinces)</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">0.94</td>
+<td style="text-align: right;">0.96</td>
+</tr>
+<tr>
+<td style="text-align: left;">randomwalk (summed to provinces)</td>
+<td style="text-align: left;">2026-10-24</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.89</td>
+<td style="text-align: right;">0.93</td>
+</tr>
+<tr>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">1.03</td>
+<td style="text-align: right;">1.02</td>
+</tr>
+<tr>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: left;">2026-10-24</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1.16</td>
+<td style="text-align: right;">1.16</td>
+</tr>
+<tr>
+<td style="text-align: left;">randomwalknowcast (summed to provinces)</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">1.04</td>
+<td style="text-align: right;">1.01</td>
+</tr>
+<tr>
+<td style="text-align: left;">randomwalknowcast (summed to provinces)</td>
+<td style="text-align: left;">2026-10-24</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1.17</td>
+<td style="text-align: right;">1.14</td>
+</tr>
+</tbody>
+</table>
 <h2 id="delay-and-spread">Delay and spread<a class="headerlink" href="#delay-and-spread" title="Permanent link">&para;</a></h2>
 <p>The growth to final of each onset day by its age at the latest release, and the observation model by weeks back.
 A place using its parent's estimate is labelled with the parent.
@@ -3676,6 +3746,8 @@ How both are fitted is on the <a href="../methods/baselines/#nowcast">Baseline m
         <script src="../javascripts/zoom.js"></script>
       
         <script src="../javascripts/summarise.js"></script>
+      
+        <script src="../javascripts/energy.js"></script>
       
         <script src="../javascripts/tablefilter.js"></script>
       

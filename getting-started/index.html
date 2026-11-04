@@ -2164,7 +2164,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </style>
 <div class="jupyter-wrapper">
 <div class="jp-Notebook" data-jp-theme-light="true" data-jp-theme-name="JupyterLab Light">
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=6854d1ee">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=39c5e649">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2179,7 +2179,7 @@ This page is a notebook, and <code>task getting-started</code> runs it again.</p
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=61b8c9ca">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=5dfb1270">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2193,7 +2193,7 @@ This page is a notebook, and <code>task getting-started</code> runs it again.</p
 </div>
 </div>
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=897363b0">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=be5e6dea">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2222,6 +2222,7 @@ This page is a notebook, and <code>task getting-started</code> runs it again.</p
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">bdbvhubrenewal.evaluation</span><span class="w"> </span><span class="kn">import</span> <span class="n">backtest</span> <span class="k">as</span> <span class="n">bt</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">bdbvhubrenewal.evaluation.nowcast</span><span class="w"> </span><span class="kn">import</span> <span class="n">relative_wis</span><span class="p">,</span> <span class="n">release_backtest</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">bdbvhubrenewal.evaluation.scoring</span><span class="w"> </span><span class="kn">import</span> <span class="n">relative_skill</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">bdbvhubrenewal.forecasters</span><span class="w"> </span><span class="kn">import</span> <span class="n">NATIONAL</span><span class="p">,</span> <span class="n">get_model</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">bdbvhubrenewal.reporting.plots</span><span class="w"> </span><span class="kn">import</span> <span class="n">plot_location_grid</span><span class="p">,</span> <span class="n">save_light_dark</span>
 
@@ -2242,6 +2243,7 @@ from bdbvhubrenewal.data import (
 )
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.evaluation.nowcast import relative_wis, release_backtest
+from bdbvhubrenewal.evaluation.scoring import relative_skill
 from bdbvhubrenewal.forecasters import NATIONAL, get_model
 from bdbvhubrenewal.reporting.plots import plot_location_grid, save_light_dark
 
@@ -2256,7 +2258,7 @@ sorted(real["vintage"].unique())</div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=701b0d89">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=2ea25e7f">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2272,7 +2274,7 @@ Its reference date is the next Saturday, 2026-10-24, and the forecast weeks run 
 </div>
 </div>
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=54090eba">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=83405e4d">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2298,9 +2300,9 @@ Its reference date is the next Saturday, 2026-10-24, and the forecast weeks run 
 <span class="p">)</span>
 <span class="n">origin_delays</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">delays_for_vintage</span><span class="p">(</span><span class="n">delays</span><span class="p">,</span> <span class="n">ORIGIN</span><span class="p">)</span>
 <span class="n">origin</span> <span class="o">=</span> <span class="n">real</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">real</span><span class="p">[</span><span class="s2">"vintage"</span><span class="p">]</span> <span class="o">==</span> <span class="n">ORIGIN</span><span class="p">]</span>
-<span class="n">task</span> <span class="o">=</span> <span class="n">bt</span><span class="o">.</span><span class="n">make_tasks</span><span class="p">(</span>
-    <span class="n">origin</span><span class="p">,</span> <span class="n">origin_delays</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">history</span><span class="o">=</span><span class="n">real</span><span class="p">,</span> <span class="n">daily</span><span class="o">=</span><span class="n">daily</span>
-<span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">task</span> <span class="o">=</span> <span class="n">bt</span><span class="o">.</span><span class="n">make_tasks</span><span class="p">(</span><span class="n">origin</span><span class="p">,</span> <span class="n">origin_delays</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">history</span><span class="o">=</span><span class="n">real</span><span class="p">,</span> <span class="n">daily</span><span class="o">=</span><span class="n">daily</span><span class="p">)[</span>
+    <span class="mi">0</span>
+<span class="p">]</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">vintage</span><span class="p">,</span> <span class="n">task</span><span class="o">.</span><span class="n">reference_date</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">locations</span><span class="p">),</span> <span class="s2">"provinces"</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">target_end_dates</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">"to"</span><span class="p">,</span> <span class="n">task</span><span class="o">.</span><span class="n">target_end_dates</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
 </pre></div>
@@ -2312,9 +2314,9 @@ config = dataclasses.replace(
 )
 origin_delays, _ = delays_for_vintage(delays, ORIGIN)
 origin = real.loc[real["vintage"] == ORIGIN]
-task = bt.make_tasks(
-    origin, origin_delays, config, history=real, daily=daily
-)[0]
+task = bt.make_tasks(origin, origin_delays, config, history=real, daily=daily)[
+    0
+]
 print(task.vintage, task.reference_date, len(task.locations), "provinces")
 print(task.target_end_dates[0], "to", task.target_end_dates[-1])</div>
 </div>
@@ -2323,7 +2325,7 @@ print(task.target_end_dates[0], "to", task.target_end_dates[-1])</div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=3fb0fa6b">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=a1c12d7b">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2339,7 +2341,7 @@ print(task.target_end_dates[0], "to", task.target_end_dates[-1])</div>
 </div>
 </div>
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=2fc6dfdf">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=4839e100">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2370,7 +2372,7 @@ forecasts.groupby("model")["sample"].nunique()</div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=f8e009b0">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=bea563e0">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2386,7 +2388,7 @@ The panels are the national total and the three provinces with the most cases.
 </div>
 </div>
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=ca88d43a">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=eaaeab30">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2471,7 +2473,7 @@ panels</div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=ef62c63a">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=ee8e5654">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2483,7 +2485,7 @@ panels</div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=e027703b">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=c668e125">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2496,7 +2498,7 @@ panels</div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=d05d0fbf">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=98c93304">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2512,7 +2514,7 @@ The table gives each model's mean WIS relative to <code>randomwalk</code>, for t
 </div>
 </div>
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=07c28f6e">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=87aeffe5">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2530,10 +2532,8 @@ The table gives each model's mean WIS relative to <code>randomwalk</code>, for t
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">scores</span> <span class="o">=</span> <span class="n">release_backtest</span><span class="p">(</span>
-    <span class="p">[</span><span class="n">task</span><span class="p">],</span> <span class="n">daily</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">models</span><span class="o">=</span><span class="p">(),</span> <span class="n">stored</span><span class="o">=</span><span class="n">forecasts</span>
-<span class="p">)</span><span class="o">.</span><span class="n">scores</span>
-<span class="n">scores</span> <span class="o">=</span> <span class="n">scores</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">scores</span><span class="p">[</span><span class="s2">"target"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"reported"</span><span class="p">]</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">result</span> <span class="o">=</span> <span class="n">release_backtest</span><span class="p">([</span><span class="n">task</span><span class="p">],</span> <span class="n">daily</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">models</span><span class="o">=</span><span class="p">(),</span> <span class="n">stored</span><span class="o">=</span><span class="n">forecasts</span><span class="p">)</span>
+<span class="n">scores</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">scores</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">result</span><span class="o">.</span><span class="n">scores</span><span class="p">[</span><span class="s2">"target"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"reported"</span><span class="p">]</span>
 <span class="n">scores</span> <span class="o">=</span> <span class="n">scores</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span>
     <span class="n">level</span><span class="o">=</span><span class="n">scores</span><span class="p">[</span><span class="s2">"location"</span><span class="p">]</span><span class="o">.</span><span class="n">map</span><span class="p">(</span>
         <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="s2">"National"</span> <span class="k">if</span> <span class="n">x</span> <span class="o">==</span> <span class="n">NATIONAL</span> <span class="k">else</span> <span class="s2">"Province"</span>
@@ -2541,10 +2541,8 @@ The table gives each model's mean WIS relative to <code>randomwalk</code>, for t
 <span class="p">)</span>
 <span class="n">relative_wis</span><span class="p">(</span><span class="n">scores</span><span class="p">,</span> <span class="n">by</span><span class="o">=</span><span class="p">[</span><span class="s2">"level"</span><span class="p">])</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-5">scores = release_backtest(
-    [task], daily, target, models=(), stored=forecasts
-).scores
-scores = scores.loc[scores["target"] == "reported"]
+<div class="clipboard-copy-txt" id="cell-5">result = release_backtest([task], daily, target, models=(), stored=forecasts)
+scores = result.scores.loc[result.scores["target"] == "reported"]
 scores = scores.assign(
     level=scores["location"].map(
         lambda x: "National" if x == NATIONAL else "Province"
@@ -2557,7 +2555,59 @@ relative_wis(scores, by=["level"]).round(2)</div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=34f1b404">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=bc2b3170">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p>The <a href="../methods/evaluation/#energy-score">energy score</a> scores each scale's forecast of every place and week at once, from the same samples.
+The table gives it and its log version relative to <code>randomwalk</code>, with <span class="arithmatex">\(n\)</span> the releases scored.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=91f3c6d2">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="CodeMirror cm-s-jupyter">
+<div class="zeroclipboard-container">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-6">
+<div>
+<span class="notice" hidden="">Copied!</span>
+<svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
+<path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+<path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
+</clipboard-copy>
+</div>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">energy</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">energy</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">result</span><span class="o">.</span><span class="n">energy</span><span class="p">[</span><span class="s2">"target"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"reported"</span><span class="p">]</span>
+<span class="n">relative_skill</span><span class="p">(</span>
+    <span class="n">energy</span><span class="p">,</span>
+    <span class="n">by</span><span class="o">=</span><span class="p">(</span><span class="s2">"scale"</span><span class="p">,),</span>
+    <span class="n">metrics</span><span class="o">=</span><span class="p">(</span><span class="s2">"energy"</span><span class="p">,</span> <span class="s2">"log_energy"</span><span class="p">),</span>
+    <span class="n">match_on</span><span class="o">=</span><span class="p">(</span><span class="s2">"origin"</span><span class="p">,</span> <span class="s2">"truth_vintage"</span><span class="p">),</span>
+<span class="p">)</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+</pre></div>
+<div class="clipboard-copy-txt" id="cell-6">energy = result.energy.loc[result.energy["target"] == "reported"]
+relative_skill(
+    energy,
+    by=("scale",),
+    metrics=("energy", "log_energy"),
+    match_on=("origin", "truth_vintage"),
+).round(2)</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=862cc343">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2671,6 +2721,8 @@ It needs a sampler and is described on the <a href="../methods/model/">Renewal m
         <script src="../javascripts/zoom.js"></script>
       
         <script src="../javascripts/summarise.js"></script>
+      
+        <script src="../javascripts/energy.js"></script>
       
         <script src="../javascripts/tablefilter.js"></script>
       

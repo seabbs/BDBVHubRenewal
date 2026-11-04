@@ -1976,6 +1976,48 @@
 <p>Forecasts from vintages of a <a href="../methods/data/#simulated-vintages">simulated outbreak</a>, scored against the known final counts.</p>
 <p><img alt="Mean WIS by horizon on simulated vintages." src="../figures/recovery-wis-horizon.svg#only-light" />
 <img alt="Mean WIS by horizon on simulated vintages." src="../figures/recovery-wis-horizon-dark.svg#only-dark" /></p>
+<p>Mean <a href="../methods/evaluation/#energy-score">energy score</a>, each scale's places and weeks scored as one forecast per vintage.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">scale</th>
+<th style="text-align: left;">model</th>
+<th style="text-align: right;">n</th>
+<th style="text-align: right;">mean energy score</th>
+<th style="text-align: right;">mean energy score on the log scale</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">15</td>
+<td style="text-align: right;">80.34</td>
+<td style="text-align: right;">1.11</td>
+</tr>
+<tr>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">15</td>
+<td style="text-align: right;">76.76</td>
+<td style="text-align: right;">0.75</td>
+</tr>
+<tr>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">15</td>
+<td style="text-align: right;">71.61</td>
+<td style="text-align: right;">2.34</td>
+</tr>
+<tr>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">15</td>
+<td style="text-align: right;">71.81</td>
+<td style="text-align: right;">2.44</td>
+</tr>
+</tbody>
+</table>
 <h2 id="simulated-scenarios">Simulated scenarios<a class="headerlink" href="#simulated-scenarios" title="Permanent link">&para;</a></h2>
 <p>Three simulated outbreaks copied from the 2026-10-24 data, with Rt after the data falling by a quarter, holding or rising by a quarter (<a href="../methods/evaluation/#backtest-design">design</a>).</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">WIS</label><label for="__tabbed_1_2">WIS on the log scale</label></div>
@@ -2446,6 +2488,326 @@
 </tr>
 </tbody>
 </table>
+<p><strong>Energy score against final data, complete weeks</strong></p>
+<p>Mean <a href="../methods/evaluation/#energy-score">energy score</a>, each scale's places and weeks scored as one forecast per vintage.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">scenario</th>
+<th style="text-align: left;">scale</th>
+<th style="text-align: left;">model</th>
+<th style="text-align: right;">n</th>
+<th style="text-align: right;">mean energy score</th>
+<th style="text-align: right;">mean energy score on the log scale</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">calibrated_falling</td>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">538.39</td>
+<td style="text-align: right;">2.06</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_falling</td>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">122.6</td>
+<td style="text-align: right;">0.64</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_falling</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">350.97</td>
+<td style="text-align: right;">3.98</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_falling</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">106.19</td>
+<td style="text-align: right;">3.97</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_falling</td>
+<td style="text-align: left;">zones</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">134.68</td>
+<td style="text-align: right;">9.79</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_falling</td>
+<td style="text-align: left;">zones</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">48.43</td>
+<td style="text-align: right;">7.03</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_flat</td>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">236.25</td>
+<td style="text-align: right;">0.59</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_flat</td>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">87.6</td>
+<td style="text-align: right;">0.28</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_flat</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">197.65</td>
+<td style="text-align: right;">4.47</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_flat</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">96.71</td>
+<td style="text-align: right;">5.25</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_flat</td>
+<td style="text-align: left;">zones</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">95.18</td>
+<td style="text-align: right;">7.42</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_flat</td>
+<td style="text-align: left;">zones</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">58.62</td>
+<td style="text-align: right;">7.78</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_rising</td>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">344.64</td>
+<td style="text-align: right;">0.63</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_rising</td>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">173.7</td>
+<td style="text-align: right;">0.29</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_rising</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">219.43</td>
+<td style="text-align: right;">5.84</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_rising</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">216.68</td>
+<td style="text-align: right;">4.48</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_rising</td>
+<td style="text-align: left;">zones</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">165.77</td>
+<td style="text-align: right;">9.06</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_rising</td>
+<td style="text-align: left;">zones</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">154.1</td>
+<td style="text-align: right;">7.9</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Energy score against the data as of 2 weeks later</strong></p>
+<p>Mean <a href="../methods/evaluation/#energy-score">energy score</a>, each scale's places and weeks scored as one forecast per vintage.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">scenario</th>
+<th style="text-align: left;">scale</th>
+<th style="text-align: left;">model</th>
+<th style="text-align: right;">n</th>
+<th style="text-align: right;">mean energy score</th>
+<th style="text-align: right;">mean energy score on the log scale</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">calibrated_falling</td>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">524.98</td>
+<td style="text-align: right;">2.86</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_falling</td>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">153.21</td>
+<td style="text-align: right;">1.46</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_falling</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">334.71</td>
+<td style="text-align: right;">4.23</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_falling</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">108.01</td>
+<td style="text-align: right;">2.88</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_falling</td>
+<td style="text-align: left;">zones</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">126.87</td>
+<td style="text-align: right;">9.85</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_falling</td>
+<td style="text-align: left;">zones</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">44.69</td>
+<td style="text-align: right;">5.88</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_flat</td>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">431.21</td>
+<td style="text-align: right;">2.07</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_flat</td>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">190.24</td>
+<td style="text-align: right;">1.38</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_flat</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">273.18</td>
+<td style="text-align: right;">3.75</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_flat</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">128.15</td>
+<td style="text-align: right;">3.12</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_flat</td>
+<td style="text-align: left;">zones</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">109.25</td>
+<td style="text-align: right;">8.28</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_flat</td>
+<td style="text-align: left;">zones</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">54.12</td>
+<td style="text-align: right;">6.32</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_rising</td>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">317.2</td>
+<td style="text-align: right;">1.25</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_rising</td>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">458.14</td>
+<td style="text-align: right;">1.49</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_rising</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">213.04</td>
+<td style="text-align: right;">3.25</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_rising</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">285.33</td>
+<td style="text-align: right;">3.13</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_rising</td>
+<td style="text-align: left;">zones</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">85.34</td>
+<td style="text-align: right;">7.07</td>
+</tr>
+<tr>
+<td style="text-align: left;">calibrated_rising</td>
+<td style="text-align: left;">zones</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">122.72</td>
+<td style="text-align: right;">7.53</td>
+</tr>
+</tbody>
+</table>
 </details>
 
 
@@ -2581,6 +2943,8 @@
         <script src="../javascripts/zoom.js"></script>
       
         <script src="../javascripts/summarise.js"></script>
+      
+        <script src="../javascripts/energy.js"></script>
       
         <script src="../javascripts/tablefilter.js"></script>
       

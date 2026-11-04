@@ -735,6 +735,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Scores">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#energy-score" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Energy score
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2020,6 +2037,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Scores">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#energy-score" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Energy score
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2150,6 +2184,23 @@ Relative WIS is a ratio of means against a baseline <span class="arithmatex">\(b
 Relative WIS on the log scale is the same ratio of mean WIS on the log scale.
 The baseline is <code>randomwalk</code>.
 Coverage is whether <span class="arithmatex">\(y\)</span> falls in the central 50% and 90% sample intervals.</p>
+<h3 id="energy-score">Energy score<a class="headerlink" href="#energy-score" title="Permanent link">&para;</a></h3>
+<p>The energy score scores one forecast of a vector <span class="arithmatex">\(\mathbf{y}\)</span>.
+For an origin, a release and a scale, <span class="arithmatex">\(\mathbf{y}\)</span> holds every place at that scale in every scored week, and national holds the weeks only.
+It uses only the place-week cells that every compared model forecasts.
+Sample <span class="arithmatex">\(i\)</span> of a model is its draws with sample index <span class="arithmatex">\(i\)</span>, <span class="arithmatex">\(\mathbf{X}_i\)</span>.
+We use the fair form over <span class="arithmatex">\(m\)</span> samples,</p>
+<div class="arithmatex">\[
+\text{ES}(F, \mathbf{y}) = \frac{1}{m} \sum_{i} \lVert \mathbf{X}_i - \mathbf{y} \rVert - \frac{1}{2m(m - 1)} \sum_{i \ne j} \lVert \mathbf{X}_i - \mathbf{X}_j \rVert.
+\]</div>
+<p>The energy score on the log scale is the energy score of <span class="arithmatex">\(\log(1 + \mathbf{y})\)</span> against <span class="arithmatex">\(\log(1 + \mathbf{X}_i)\)</span>, never the log of the score.
+Relative energy scores are ratios of means against <code>randomwalk</code> over the origins and releases both have, and <span class="arithmatex">\(n\)</span> counts those.
+The score rewards a joint pattern across places only where draws are joint.
+<code>renewal</code> and <code>renewalbvd</code> draws are joint across provinces, one posterior draw per sample index.
+<code>renewalsp</code> fits each province on its own, so its draws are independent across provinces.
+Zones split each province draw, so zones are joint within a province for every renewal model.
+<code>randomwalk</code> and <code>randomwalknowcast</code> draw each place independently.
+Hub teams' samples are joint across weeks within a place only, as the hub's sample format sets, so pairing their indices across places scores them as independent across places.</p>
 <h2 id="backtest-design">Backtest design<a class="headerlink" href="#backtest-design" title="Permanent link">&para;</a></h2>
 <p>Each vintage is a forecast task, and every registered model forecasts every task.</p>
 <table>
@@ -2389,6 +2440,8 @@ A round is pending until a later real release exists.</p>
         <script src="../../javascripts/zoom.js"></script>
       
         <script src="../../javascripts/summarise.js"></script>
+      
+        <script src="../../javascripts/energy.js"></script>
       
         <script src="../../javascripts/tablefilter.js"></script>
       
