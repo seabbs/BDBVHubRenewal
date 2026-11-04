@@ -32,8 +32,8 @@ from scipy import stats
 from .composition_noise import DirichletMultinomialNoise, MultinomialNoise
 from .delays import (
     FixedTimeVarying,
-    HazardDelay,
 )
+from .hazard_delay import HazardDelay
 from .observation import MissingOnsetFraction, OnsetStreams
 from .pooled import PooledInitialValue
 from .renewal import Importation, MetapopulationInfections
@@ -542,6 +542,12 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         delay = HazardDelay(
             "delay",
             config.dmax,
+            DistributionalVariable("delay_hazard0", dist.Normal(-2.0, 1.0)),
+            # Real fits put the step SD at about 0.2 (2026-10-24: 90% CrI
+            # 0.16 to 0.25), in the tail of a scale of 0.1, hence 0.4.
+            NonCentredRandomWalk(
+                DistributionalVariable("delay_smooth_sd", dist.HalfNormal(0.4))
+            ),
             _named_walk("delay_sd", 0.15, fit_weeks(data, config)),
         )
     imports = None

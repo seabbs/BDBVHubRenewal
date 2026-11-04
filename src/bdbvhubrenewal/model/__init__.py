@@ -5,7 +5,8 @@
 - `pooled`: pooled group values and sum-to-zero group deviations.
 - `renewal`: the coupled renewal with importation (`Importation`),
   seeding and depletion.
-- `delays`: the generation interval and the onset-to-report delay.
+- `hazard_delay`: a delay pmf that varies with the reference day.
+- `delays`: the censored parametric pmf and a fixed time-varying delay.
 - `observation`: the known and imputed onset streams, the missing-onset
   fraction, the hub's imputation and importation-only zeros.
 - `composition_noise`: multinomial and Dirichlet-multinomial noise for
@@ -21,10 +22,9 @@ The package imports without JAX until this subpackage is imported.
 
 from .delays import (
     FixedTimeVarying,
-    HazardDelay,
     censored_pmf,
-    hazard_to_pmf,
 )
+from .hazard_delay import HazardDelay, hazard_to_pmf
 from .model import (
     BVD,
     MAIN,
