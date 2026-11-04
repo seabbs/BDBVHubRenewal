@@ -1861,8 +1861,8 @@ The model diagrams are mermaid blocks in <code>docs/methods/model.md</code>.</p>
 <tbody>
 <tr>
 <td>Pooled <span class="arithmatex">\(R_p(t)\)</span></td>
-<td><code>SubpopulationInfections</code>, <code>WeeklyTemporalProcess</code></td>
-<td><code>NonCentredRandomWalk</code>.</td>
+<td><code>SubpopulationInfections</code>, <code>WeeklyTemporalProcess</code>, <code>ARProcess</code> for the steps</td>
+<td><code>NonCentredRandomWalk</code>, for the frozen seeding weeks, the separate forecast steps and their reversion.</td>
 </tr>
 <tr>
 <td>Renewal with importation and depletion</td>
@@ -1901,6 +1901,22 @@ The model diagrams are mermaid blocks in <code>docs/methods/model.md</code>.</p>
 </tr>
 </tbody>
 </table>
+<p>PyRenew pieces that give a different model, or that would only rename one line, are not used.</p>
+<ul>
+<li>The <code>RandomWalk</code> temporal process puts the step SD in the step distribution, so it is centred in the SD.</li>
+<li><code>AR1</code> draws its first state from the stationary distribution, and <code>DifferencedAR1</code> is AR(1) on the differences.
+  Here walks start at a fixed value and stay there over the seeding weeks.</li>
+<li><code>SubpopulationInfections</code> samples one deviation process per province and subtracts their mean, which leaves a direction the data do not identify.
+  Here the <span class="arithmatex">\(P - 1\)</span> coordinates on the sum-to-zero basis <span class="arithmatex">\(Q\)</span> are sampled.</li>
+<li><code>HierarchicalNormalPrior</code> has no sum-to-zero constraint.
+  On the basis coordinates it is the same prior, but it would replace one sample statement.</li>
+<li><code>GammaGroupSdPrior</code> gives each province its own SD with a floor, where here the provinces share one half-normal SD.</li>
+<li><code>CountObservation</code> and <code>SubpopulationCounts</code> take one fixed delay pmf and one truncation pmf.
+  Here the delay varies with onset day, and known and imputed onsets are separate streams.</li>
+<li><code>MobilitySubpopulationInfections</code>, added to PyRenew after the pinned commit, uses a fixed mobility matrix, <span class="arithmatex">\(R\)</span> by location and depletion capped at the susceptibles.
+  Here the kernel is learnt and depletion is exponential in the pool <span class="arithmatex">\(\nu\)</span>.</li>
+</ul>
+<p>PyRenew has no delay that varies with time, no Dirichlet-multinomial count and no pseudo-observation of <span class="arithmatex">\(R\)</span>.</p>
 <h2 id="baseline-models">Baseline models<a class="headerlink" href="#baseline-models" title="Permanent link">&para;</a></h2>
 <p>The baselines are in <a class="autorefs autorefs-internal" title="            bdbvhubrenewal.forecasters.randomwalk" href="../../reference/forecasters/#bdbvhubrenewal.forecasters.randomwalk"><code>forecasters.randomwalk</code></a> and <a class="autorefs autorefs-internal" title="            bdbvhubrenewal.forecasters.chain" href="../../reference/forecasters/#bdbvhubrenewal.forecasters.chain"><code>forecasters.chain</code></a>, on a JAX port of baselinenowcast 0.2.2 in <a class="autorefs autorefs-internal" title="            bdbvhubrenewal.baselinenowcast" href="../../reference/baselinenowcast/#bdbvhubrenewal.baselinenowcast"><code>bdbvhubrenewal.baselinenowcast</code></a>.
 The port is checked against fixtures from the R package, and has one named extension, the chain ladder of release snapshots, which skips unobserved cells and fits one daily delay shared by pairs of any gap.
