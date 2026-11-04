@@ -254,7 +254,7 @@ $$
 with $\ell(p)$ the level of $p$ (province or zone) and one $\tau_\ell$ for each level and parameter.
 $\theta$ is $\log g_p(j)$ for each age $j$, $\log \sigma_p$, and $\log \phi_{p,k}$ and $\log b_{p,k}$ for each week back $k$.
 The country's values have priors $\mathcal{N}(-3, 2^2)$, $\mathcal{N}(\log 0.2, 1)$, $\mathcal{N}(0, 1.5^2)$ and $\mathcal{N}(\log 0.005, 1.5^2)$.
-A place's counts are the sum of its children's, so only the places forecast (the provinces, or the zones at zone level) enter the likelihood, and their parents are latent centres.
+A place's counts are the sum of its children's, so for the walk spread and the nowcast uncertainty only the places forecast (the provinces, or the zones at zone level) enter the likelihood, and their parents are latent centres.
 
 - **Delay.** For each gap $s$ and age $x$ with $\sum N_{p,r}(t) > 0$, the increment is Poisson,
 
@@ -264,6 +264,9 @@ A place's counts are the sum of its children's, so only the places forecast (the
 
   with the sums, window and preprocessing of the [delay](#delay).
   With one place and a gap of 1 its maximum likelihood estimate is baselinenowcast's chain ladder factor.
+  A place's increments at age $x$ enter only where its denominator there, summed over the pairs, is at least 10 cases, the threshold of the [own-or-pooled rule](#own-or-pooled-estimates), and the country's always do.
+  Below it a day often has no cases at one release and some at the next, which a factor cannot give, so the few days with cases would give too fast a delay.
+  Those ages take their parent's value through the pooling, as in `randomwalknowcast`.
   It is fitted at the origin and at each earlier release that gives errors.
 - **Walk spread.** The weekly changes of $\log\{1 + Y_{p,o}(w)\}$ over the [walk](#walk) window are $\mathcal{N}(0, \sigma_p^2)$.
   A change between two weeks with no cases sits at the walk's floor, so it is left out.

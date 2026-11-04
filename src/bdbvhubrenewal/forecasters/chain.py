@@ -76,6 +76,7 @@ __all__ = [
     "delay_sums",
     "final_growth",
     "levels",
+    "own_ages",
     "retro_errors",
     "walk_changes",
     "weeks_back",
@@ -278,6 +279,32 @@ def delay_sums(
     return pairs, np.asarray(num), np.asarray(den), gaps
 
 
+def own_ages(
+    den: np.ndarray, parent: np.ndarray, settings: Settings
+) -> np.ndarray:
+    """Return where each place's own data fit its delay, by age.
+
+    Parameters
+    ----------
+    den : numpy.ndarray
+        Denominators from `delay_sums`, `[L, P, D]`.
+    parent : numpy.ndarray
+        Parent of each place, -1 for the country, `[L]`.
+    settings : Settings
+        Settings.
+
+    Returns
+    -------
+    numpy.ndarray
+        `[L, D]`, true where the denominator at an age, summed over the
+        pairs, is at least `Settings.min_level` cases. The country is
+        always true.
+    """
+    own = den.sum(axis=1) >= settings.min_level
+    own[parent < 0] = True
+    return np.asarray(own)
+
+
 def fit_delay(
     snap: SnapshotArrays, r: int, settings: Settings
 ) -> DelayFit | None:
@@ -302,8 +329,7 @@ def fit_delay(
         return None
     pairs, num, den, gaps = sums
     g = log_factors(num, den, gaps)
-    own = den.sum(axis=1) >= settings.min_level
-    own[snap.parent < 0] = True
+    own = own_ages(den, snap.parent, settings)
     # Nodes are sorted by code length, so a parent precedes its children.
     for n in range(g.shape[0]):
         p = snap.parent[n]

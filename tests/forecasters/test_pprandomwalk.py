@@ -96,6 +96,18 @@ def test_pooled_delay_is_close_to_the_chain_ladder_for_a_large_place(
     assert 0.8 < ratio < 1.25
 
 
+def test_pooled_delay_fits_own_data_where_randomwalknowcast_does(
+    origins: tuple[Origin, Origin],
+) -> None:
+    pooled, own = origins
+    np.testing.assert_array_equal(pooled.fit.own, own.fit.own)
+    # The country fits every age, so its newest full week, which leans
+    # on the young ages, is nowcast as the chain ladder does.
+    week = own.start_nowcast
+    ratio = pooled.point[0, week] / own.point[0, week]
+    assert 0.85 < ratio < 1.15
+
+
 def test_pooling_shrinks_a_removal_rate_from_one_revision(
     origins: tuple[Origin, Origin],
 ) -> None:
@@ -116,6 +128,7 @@ def test_diagnostics_hold_each_fit(
     assert {r["fit"] for r in fits} >= {"spread and errors"}
     assert any(str(r["fit"]).startswith("delay at") for r in fits)
     assert all("worst_rhat" in r for r in fits)
+    assert all("median_steps" in r and "step_size" in r for r in fits)
     tau = {str(r["fit"])[:5]: r for r in fits}
     assert "delay_tau_1" in tau["delay"]
     assert "sigma_tau_1" in tau["sprea"]

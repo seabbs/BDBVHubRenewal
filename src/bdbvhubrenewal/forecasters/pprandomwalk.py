@@ -20,15 +20,23 @@ $$
 
 with $\ell(n)$ the level of $n$ (province or zone) and one $\tau$ per
 level for each parameter.
-A parent's counts are the sum of its children's, so only the task's
-places, the leaves, enter the likelihood and their ancestors are latent
-centres.
+A parent's counts are the sum of its children's, so for the walk spread
+and the nowcast uncertainty only the task's places, the leaves, enter
+the likelihood and their ancestors are latent centres.
 
 - **Delay.** $g_n(j) = \exp \eta_n(j)$ with $\eta$ pooled by age $j$.
   The increment of each gap and age between the releases of a pair,
   as `chain.delay_sums` gives it, is Poisson with mean
   $\mathrm{den} \cdot (\exp \sum_{j \in \text{span}} g_n(j) - 1)$, the
   model whose maximum likelihood estimate is the chain ladder.
+  As in `randomwalknowcast` (`chain.own_ages`), a place's own increments
+  at an age enter only where its denominator there, summed over the
+  pairs, is at least `Settings.min_level` cases, and the country's
+  always do.
+  Below that a day often has no cases at one release and some at the
+  next, which a factor cannot give, so the place's few days with cases
+  would speak for all of them and give too fast a delay.
+  Those ages take their parent's value, through the pooling.
   It is fitted at the origin and at each earlier release, whose nowcasts
   give the errors of the observation model.
 - **Walk spread.** $\log \sigma_n$ pooled, with the weekly changes of
@@ -69,6 +77,7 @@ from bdbvhubrenewal.forecasters.chain import (
     build_origin,
     delay_sums,
     levels,
+    own_ages,
     retro_errors,
     walk_changes,
     weeks_back,
@@ -219,13 +228,16 @@ def _nb(mean: jax.Array, size: jax.Array) -> dist.Distribution:
 
 
 def delay_model(
-    tree: Tree, inc: np.ndarray, den: np.ndarray, span: np.ndarray
+    tree: Tree,
+    inc: np.ndarray,
+    den: np.ndarray,
+    span: np.ndarray,
+    keep: np.ndarray,
 ) -> None:
-    """Pooled daily delay fitted to the release-pair increments."""
+    """Pooled daily delay fitted to the release-pair increments in `keep`."""
     eta = tree.sample("delay", -3.0, 2.0, (span.shape[1],))
     g = jnp.exp(eta)
     mean = den * jnp.expm1(g @ jnp.asarray(span).T)
-    keep = tree.leaf[:, None] & (den > 0)
     with numpyro.handlers.mask(mask=keep):
         numpyro.sample(
             "delay_obs", dist.Poisson(mean + 1e-8), obs=np.round(inc)
@@ -288,15 +300,22 @@ def _run(
         chain_method="sequential",
         progress_bar=False,
     )
-    mcmc.run(key, **data, extra_fields=("diverging",))
+    mcmc.run(
+        key,
+        **data,
+        extra_fields=("diverging", "num_steps", "adapt_state.step_size"),
+    )
     draws = mcmc.get_samples(group_by_chain=True)
+    extra = mcmc.get_extra_fields()
     stats = summary(draws)
     rhat = max(float(np.nanmax(s["r_hat"])) for s in stats.values())
     ess = min(float(np.nanmin(s["n_eff"])) for s in stats.values())
     info = {
         "worst_rhat": rhat,
         "min_ess": ess,
-        "divergences": int(mcmc.get_extra_fields()["diverging"].sum()),
+        "divergences": int(extra["diverging"].sum()),
+        "median_steps": float(np.median(extra["num_steps"])),
+        "step_size": float(np.median(extra["adapt_state.step_size"])),
     }
     flat = mcmc.get_samples()
     for name, value in flat.items():
@@ -372,6 +391,8 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
                 return None
             pairs, num, den, gaps = sums
             inc, d_sum, span = _gap_sums(num, den, gaps)
+            own = own_ages(den, s.parent, st)
+            rows = np.tile(own, (1, d_sum.shape[1] // own.shape[1]))
             draws, info = _run(
                 delay_model,
                 jax.random.fold_in(key, r),
@@ -380,14 +401,12 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
                 inc=inc,
                 den=d_sum,
                 span=span,
+                keep=rows & (d_sum > 0),
             )
             self.fits.append({"fit": f"delay at {s.releases[r]}", **info})
             g = np.exp(_median_of(tree, draws, "delay"))
             n = len(s.locations)
-            level = levels(s, r, st)
-            return DelayFit(
-                pairs, g, level, np.arange(n), np.ones(g.shape, bool)
-            )
+            return DelayFit(pairs, g, levels(s, r, st), np.arange(n), own)
 
         origin = build_origin(snap, self.settings, False, delay)
         self._pool_spreads(
