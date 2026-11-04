@@ -332,8 +332,8 @@ class OnsetStreams(BaseObservationProcess):
     Expected confirmed onsets are
     $\lambda_p(s) = \alpha(s) \sum_\tau h(\tau) I_p(s - \tau)$,
     with $I_p$ the latent infections, $h$ the infection-to-onset pmf
-    (`temporal_pmf_rv`, a point mass at 0 when infections are dated by
-    onset) and $\alpha$ the time-varying ascertainment.
+    (`temporal_pmf_rv`, the incubation period) and $\alpha$ the
+    time-varying ascertainment.
     `onset_expectations` gives the two streams.
     Each is summed to weeks and scored with its own negative binomial.
     The delays of known-onset cases, pooled over provinces and tabulated
@@ -446,22 +446,27 @@ class OnsetStreams(BaseObservationProcess):
     def _predicted_obs(self, infections: Array) -> Array:
         """Convolve infections with the infection-to-onset pmf.
 
-        As PyRenew's `CountObservation`, column by column with timeline
-        alignment, so the first `lookback_days()` days are NaN.
+        Column by column, aligned so day $t$ of the output is day $t$ of
+        the input, with no infections before the axis. The seeding days
+        feed the weekly sums, so they are partial sums rather than NaN.
+
+        Parameters
+        ----------
+        infections : Array
+            Infections by province, `(n_total, P)`.
 
         Returns
         -------
         Array
             Expected infections by onset day, the shape of `infections`.
         """
-        pmf = self.temporal_pmf_rv()
-        return jnp.asarray(
-            jax.vmap(
-                lambda col: self._convolve_delay_with_alignment(col, pmf)[0],
-                in_axes=1,
-                out_axes=1,
-            )(infections)
-        )
+        pmf = jnp.asarray(self.temporal_pmf_rv())
+        n = infections.shape[0]
+        return jax.vmap(
+            lambda col: jnp.convolve(col, pmf, mode="full")[:n],
+            in_axes=1,
+            out_axes=1,
+        )(infections)
 
     def validate_data(
         self,
