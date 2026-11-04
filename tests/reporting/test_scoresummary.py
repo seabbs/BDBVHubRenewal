@@ -168,3 +168,15 @@ def test_browser_energy_matches_relative_energy(pool: str) -> None:
         assert row["n"] == exp["n_energy"] == 2
         for col in ("energy", "log_energy"):
             assert row["rel"][col] == pytest.approx(exp[f"rel_{col}"], abs=1e-3)
+
+
+def test_a_zero_baseline_gives_no_relative_score() -> None:
+    scores = _scores()
+    base = (scores["model"] == "randomwalk") & (scores["location"] == "CD")
+    scores.loc[base, ["wis", "log_wis"]] = 0.0
+    data = summary_rows(scores, MODELS, COLOURS, {})
+    got = _node(data, "function (r) { return r[3] === 0; }")
+    assert data["places"][0]["id"] == "CD"
+    assert all(r["rel"]["wis"] is None for r in got)
+    rel = relative_wis(scores.loc[scores["location"] == "CD"])
+    assert rel["rel_wis"].isna().all()

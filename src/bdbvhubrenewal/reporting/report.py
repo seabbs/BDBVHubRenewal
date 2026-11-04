@@ -74,6 +74,7 @@ from bdbvhubrenewal.reporting.explorer import (
     write_explorer,
 )
 from bdbvhubrenewal.reporting.nowcast_plots import (
+    plot_place_summary,
     plot_relative_overall,
     plot_release_nowcasts,
     plot_truth_changes,
@@ -332,6 +333,28 @@ def _downward_table(real: pd.DataFrame, zones: pd.DataFrame) -> str:
     )
 
 
+def _model_colours(
+    models: Sequence[str], registry: Sequence[str] | None = None
+) -> dict[str, tuple[str, str]]:
+    """Each model's light and dark colour, by its place in the registry.
+
+    A model outside the registry, such as the as-reported floor, is grey.
+    """
+    registry = list(registry or models)
+    muted = THEMES["light"]["muted"], THEMES["dark"]["muted"]
+    return {
+        m: (
+            (
+                model_colour(m, registry, "light"),
+                model_colour(m, registry, "dark"),
+            )
+            if m in registry
+            else muted
+        )
+        for m in models
+    }
+
+
 def _ours(frame: pd.DataFrame, names: Sequence[str]) -> pd.DataFrame:
     """Keep our models and the as-reported floor, without the hub teams."""
     return frame.loc[frame["model"].isin([*names, BASELINE])]
@@ -376,26 +399,36 @@ def _release_section(
     by_place = relative_wis(scores, ("target", "origin", "location"))
     reported = overall.loc[overall["target"] == _TARGET_LABELS["reported"]]
     ours = [*names, BASELINE]
-    muted = THEMES["light"]["muted"], THEMES["dark"]["muted"]
+    colours = _model_colours(ours, names)
+    rep = pooled.loc[pooled["target"] == _TARGET_LABELS["reported"]]
     write_score_chart(
         fig / "scoresummary-backtest.json",
         summary_rows(
-            pooled.loc[pooled["target"] == _TARGET_LABELS["reported"]],
+            rep,
             ours,
-            {
-                m: (
-                    (
-                        model_colour(m, names, "light"),
-                        model_colour(m, names, "dark"),
-                    )
-                    if m in names
-                    else muted
-                )
-                for m in ours
-            },
+            colours,
             _location_names(real),
             default_on=[m for m in ours if m != "randomwalk"],
             energy=energy.loc[energy["target"] == _TARGET_LABELS["reported"]],
+        ),
+    )
+    save_light_dark(
+        partial(
+            plot_place_summary,
+            relative_wis(rep, ("pool", "location")),
+            ours,
+            colours,
+            _location_names(real),
+        ),
+        fig / "scores-place.svg",
+    )
+    _write(
+        gen / "scoresummary-place.md",
+        summary_html(
+            "../figures/scoresummary-backtest.json",
+            "Scores by place",
+            view="place",
+            static="../figures/scores-place.svg",
         ),
     )
     save_light_dark(
@@ -986,30 +1019,42 @@ def _horizon_chart(
     fig: Path,
     gen: Path,
     scores: pd.DataFrame,
-    names: Sequence[str],
+    models: Sequence[str],
+    colours: Mapping[str, tuple[str, str]],
+    stem: str,
 ) -> None:
     """Write an interactive chart of mean scores by horizon, and its fallback.
 
-    The static WIS figure is shown without JavaScript.
+    Writes `figures/{stem}.json`, the static WIS figure `figures/{stem}.svg`,
+    shown without JavaScript, and `generated/{stem}.md`.
     """
     grp = scores.groupby(["model", "horizon"])
     table = grp[list(SCORE_METRICS)].mean()
     table.insert(0, "n", grp.size())
     table = table.reset_index()
     save_light_dark(
-        partial(plot_scores, scores, by="horizon", metric="wis", models=names),
-        fig / "scores-wis-horizon.svg",
+        partial(
+            plot_scores,
+            scores,
+            by="horizon",
+            metric="wis",
+            models=models,
+            colours=colours,
+        ),
+        fig / f"{stem}.svg",
     )
     write_score_chart(
-        fig / "scorechart-horizon.json",
-        score_chart_data(table, "horizon", SCORE_METRICS, names),
+        fig / f"{stem}.json",
+        score_chart_data(
+            table, "horizon", SCORE_METRICS, models, colours=colours
+        ),
     )
     _write(
-        gen / "scorechart-horizon.md",
+        gen / f"{stem}.md",
         score_chart_html(
-            "../figures/scorechart-horizon.json",
+            f"../figures/{stem}.json",
             "Mean scores by horizon",
-            static="../figures/scores-wis-horizon.svg",
+            static=f"../figures/{stem}.svg",
         ),
     )
 
@@ -1262,21 +1307,8 @@ def _backtest_page(
     k = config.complete_after_weeks
     scores = _ours(_release_scores(res), names)
     reported = scores.loc[scores["target"] == "reported"]
-    _horizon_chart(fig, gen, reported, names)
-    save_light_dark(
-        partial(
-            plot_scores, reported, by="location", metric="wis", models=names
-        ),
-        fig / "scores-wis-location.svg",
-    )
-    _write(
-        gen / "scoresummary-place.md",
-        summary_html(
-            "../figures/scoresummary-backtest.json",
-            "Scores by place",
-            view="place",
-            static="../figures/scores-wis-location.svg",
-        ),
+    _horizon_chart(
+        fig, gen, reported, names, _model_colours(names), "scorechart-horizon"
     )
     _horizon_table(gen, reported, names)
     _write(gen / "backtest-findings.md", _backtest_findings(scores))

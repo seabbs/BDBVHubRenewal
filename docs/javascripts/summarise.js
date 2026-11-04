@@ -38,7 +38,8 @@
         var out = { model: m, n: a.n, mean: {}, rel: {} };
         d.metrics.forEach(function (met, i) {
           out.mean[met.key] = a.sum[i] / a.n;
-          if (met.relative) out.rel[met.key] = a.sum[i] / a.bsum[i];
+          // A zero baseline gives no relative score, as in Python.
+          if (met.relative) out.rel[met.key] = a.bsum[i] > 0 ? a.sum[i] / a.bsum[i] : null;
         });
         return out;
       });
