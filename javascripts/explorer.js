@@ -2,10 +2,6 @@
 (function () {
   "use strict";
   var NS = "http://www.w3.org/2000/svg";
-  var PALETTE = [
-    "#4c78d8", "#e8743b", "#2ca58d", "#c0509a",
-    "#9a7fd1", "#d9a521", "#5ab0d6", "#a0522d",
-  ];
   var DAY = 864e5;
 
   function el(tag, attrs, parent) {
@@ -20,6 +16,9 @@
     if (text !== undefined) n.textContent = text;
     if (parent) parent.appendChild(n);
     return n;
+  }
+  function dark() {
+    return document.body.getAttribute("data-md-color-scheme") === "slate";
   }
   function day(s) { return Date.parse(s + "T00:00:00Z"); }
   function mean(a) { return a.reduce(function (x, y) { return x + y; }, 0) / a.length; }
@@ -59,18 +58,18 @@
     var figure = h("div", { class: "explorer-figure" }, root);
     var table = h("div", { class: "explorer-table" }, root);
 
-    d.models.forEach(function (m, i) {
+    var swatches = d.models.map(function (m, i) {
       var l = h("label", { class: "explorer-key" }, legend);
       var cb = h("input", { type: "checkbox" }, l);
       cb.checked = m.on;
       state.off[i] = !m.on;
       var sw = h("span", { class: "explorer-swatch" }, l);
-      sw.style.background = PALETTE[i % PALETTE.length];
       h("span", {}, l, m.label);
       cb.addEventListener("change", function () {
         state.off[i] = !cb.checked;
         draw();
       });
+      return sw;
     });
     selLoc.addEventListener("change", function () { state.loc = selLoc.value; draw(); });
     selRound.addEventListener("change", function () {
@@ -79,6 +78,8 @@
     });
 
     function draw() {
+      var mode = dark() ? "dark" : "light";
+      swatches.forEach(function (sw, i) { sw.style.background = d.models[i][mode]; });
       var rounds = state.round === "all"
         ? d.rounds.map(function (_, i) { return i; }) : [state.round];
       var models = d.models.map(function (_, i) { return i; })
@@ -130,7 +131,7 @@
         var slot = models.indexOf(r[0]) * rounds.length + rounds.indexOf(r[1]);
         var t0 = day(r[3]) + (slot - (slots - 1) / 2) * width;
         var xx = X(t0);
-        var c = PALETTE[r[0] % PALETTE.length];
+        var c = d.models[r[0]][mode];
         var op = rounds.length > 1 ? 0.7 : 1;
         var tip = d.models[r[0]].label + ", round " + d.rounds[r[1]] + ", week ending " + r[3] +
           ": median " + r[6] + ", 50% " + r[5] + " to " + r[7] + ", 90% " + r[4] + " to " + r[8];
@@ -209,6 +210,8 @@
       });
     }
     draw();
+    new MutationObserver(draw).observe(document.body,
+      { attributes: true, attributeFilter: ["data-md-color-scheme"] });
   }
 
   function start() {
