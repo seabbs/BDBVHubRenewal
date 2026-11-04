@@ -2,7 +2,8 @@
 r"""A delay pmf that varies with the reference day, through a logit hazard.
 
 `HazardDelay` returns a matrix $f_s(d)$ of shape
-`(n_timepoints, dmax + 1)`, the delay pmf for events on day $s$.
+`(n_timepoints, dmax + 1)`, the delay pmf for events on day $s$, or one
+for each place, `(n_places, n_timepoints, dmax + 1)`, with place shifts.
 """
 
 from __future__ import annotations
@@ -59,6 +60,8 @@ class HazardDelay(RandomVariable):
     over the reference day $s$, starting at 0, that shifts all hazards
     together (proportional odds). The pmf follows from `hazard_to_pmf`.
     When $\gamma$ has a small innovation SD, the delay is near constant.
+    With `place_rv`, each place $p$ adds its own shift $u_p$,
+    $\operatorname{logit} h_{p,s}(d) = \beta(d) + \gamma(s) + u_p$.
     The shape $\beta$, the shift $\gamma$ and the mean delay by day
     are recorded as `{name}_beta`, `{name}_shift` and `{name}_mean`.
     """
@@ -70,6 +73,7 @@ class HazardDelay(RandomVariable):
         hazard0_rv: RandomVariable,
         shape_process: TemporalProcess,
         time_process: TemporalProcess,
+        place_rv: RandomVariable | None = None,
     ) -> None:
         r"""Initialize the delay.
 
@@ -85,6 +89,9 @@ class HazardDelay(RandomVariable):
             Process for $\beta(d)$ over delays $0..D - 1$.
         time_process
             Process for $\gamma(s)$ over reference days.
+        place_rv
+            Shifts $u_p$ of each place, shape `(n_places,)`. `None` gives
+            one delay shared by every place.
 
         Raises
         ------
@@ -98,6 +105,7 @@ class HazardDelay(RandomVariable):
         self.hazard0_rv = hazard0_rv
         self.shape_process = shape_process
         self.time_process = time_process
+        self.place_rv = place_rv
 
     def __repr__(self) -> str:
         """Return string representation."""
@@ -105,7 +113,8 @@ class HazardDelay(RandomVariable):
             f"HazardDelay(name={self.name!r}, dmax={self.dmax}, "
             f"hazard0_rv={self.hazard0_rv!r}, "
             f"shape_process={self.shape_process!r}, "
-            f"time_process={self.time_process!r})"
+            f"time_process={self.time_process!r}, "
+            f"place_rv={self.place_rv!r})"
         )
 
     def sample(
@@ -128,7 +137,8 @@ class HazardDelay(RandomVariable):
         Returns
         -------
         Array
-            Shape `(n_timepoints, dmax + 1)`.
+            Shape `(n_timepoints, dmax + 1)`, or `(n_places, n_timepoints,
+            dmax + 1)` with `place_rv`.
         """
         beta0 = self.hazard0_rv()
         beta = self.shape_process.sample(
@@ -155,10 +165,12 @@ class HazardDelay(RandomVariable):
             # week and repeat it.
             gamma = gamma[::7]
         logit = beta[None, :] + gamma
+        if self.place_rv is not None:
+            logit = logit[None] + self.place_rv()[:, None, None]
         pmf = hazard_to_pmf(logit)
         mean = pmf @ jnp.arange(self.dmax + 1)
         if weekly:
-            pmf = jnp.repeat(pmf, 7, axis=0)[:n_timepoints]
-            mean = jnp.repeat(mean, 7, axis=0)[:n_timepoints]
+            pmf = jnp.repeat(pmf, 7, axis=-2)[..., :n_timepoints, :]
+            mean = jnp.repeat(mean, 7, axis=-1)[..., :n_timepoints]
         numpyro.deterministic(f"{self.name}_mean", mean)
         return pmf

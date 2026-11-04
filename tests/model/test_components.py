@@ -37,7 +37,7 @@ from .numpy_reference import (
 )
 
 
-def _hazard(name, time_process):
+def _hazard(name, time_process, place_rv=None):
     """HazardDelay on delays 0..30 with the model's priors."""
     return HazardDelay(
         name,
@@ -47,6 +47,7 @@ def _hazard(name, time_process):
             DistributionalVariable(f"{name}_smooth_sd", dist.HalfNormal(0.4))
         ),
         time_process,
+        place_rv,
     )
 
 
@@ -256,6 +257,18 @@ def test_constant_process_fixes_the_delay_over_onset_time():
         lambda: _hazard("d", weekly)(n_timepoints=70, first_day_dow=6)
     )
     np.testing.assert_array_equal(pmf, jnp.broadcast_to(pmf[0], pmf.shape))
+
+
+def test_hazard_delay_gives_each_place_its_own_shift():
+    weekly = WeeklyTemporalProcess(
+        NonCentredRandomWalk(DeterministicVariable("sd", 0.1)), start_dow=6
+    )
+    places = DeterministicVariable("u", jnp.array([-0.5, 0.0, 0.2, 0.3]))
+    delay = _hazard("d", weekly, places)
+    pmf = seeded(lambda: delay(n_timepoints=35, first_day_dow=6))
+    assert pmf.shape == (4, 35, 31)
+    np.testing.assert_allclose(pmf.sum(axis=-1), 1.0, rtol=1e-5)
+    assert not np.allclose(pmf[0], pmf[1])
 
 
 def test_fixed_inputs_pad_with_last_row():

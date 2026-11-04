@@ -44,6 +44,7 @@ def test_variants_are_registered_as_fitted_models() -> None:
         "renewalbvd",
         "renewalnolag",
         "renewalfixdelay",
+        "renewalplace",
     }
     # The single patch fits each province on its own data only, so it
     # cannot forecast a province with its data held out.

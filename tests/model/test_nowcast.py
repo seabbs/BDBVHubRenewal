@@ -13,7 +13,10 @@ from numpyro.infer import Predictive
 
 from bdbvhubrenewal.model import MAIN, build_model, model_args
 from bdbvhubrenewal.model.model import forecast_trajectories
-from bdbvhubrenewal.model.observation import onset_expectations
+from bdbvhubrenewal.model.observation import (
+    onset_expectations,
+    onset_expectations_by_place,
+)
 
 
 def prior_latent(model, data, n=20):
@@ -173,6 +176,35 @@ def test_weekly_blocks_match_the_dense_expectations(final, daily):
     blocks = onset_expectations(*args, publication_lag=lag, weekly=True)
     for key, value in dense.items():
         np.testing.assert_allclose(blocks[key], value, rtol=1e-5, atol=1e-6)
+
+
+@pytest.mark.parametrize("weekly", [False, True])
+def test_by_place_with_one_delay_matches_the_shared_delay(weekly):
+    rng = np.random.default_rng(6)
+    n_w, dmax, n_prov = 10, 20, 3
+    n = 7 * n_w
+    delay = np.repeat(rng.dirichlet(np.ones(dmax + 1), n_w), 7, axis=0)
+    onsets = jnp.asarray(rng.gamma(5, 4, (n, n_prov)))
+    missing = jnp.asarray(rng.uniform(0.05, 0.3, (n, n_prov)))
+    rest = (jnp.asarray(rng.dirichlet(np.ones(dmax + 1))), n - 10, True)
+    lag = jnp.asarray([0.4, 0.3, 0.2, 0.1])
+    shared = onset_expectations(
+        onsets, jnp.asarray(delay), missing, *rest, lag, weekly
+    )
+    places = onset_expectations_by_place(
+        onsets,
+        jnp.asarray(np.broadcast_to(delay, (n_prov, *delay.shape))),
+        missing,
+        *rest,
+        lag,
+        weekly,
+    )
+    assert places["triangle"].shape == (n, n_prov, dmax + 1)
+    np.testing.assert_allclose(
+        places["triangle"].sum(axis=1), shared["triangle"], rtol=1e-5
+    )
+    for key in ("known", "imputed", "known_final", "imputed_final"):
+        np.testing.assert_allclose(places[key], shared[key], rtol=1e-5)
 
 
 def test_model_log_density_is_the_same_with_weekly_blocks(sim_vintage, config):

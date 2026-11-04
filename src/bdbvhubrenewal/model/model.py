@@ -188,6 +188,10 @@ class ModelConfig:
     delay_over_time : bool
         Let the delay shift with onset week through the weekly walk
         $\gamma(s)$, or hold it fixed over time ($\gamma = 0$).
+    delay_by_place : bool
+        Give each province its own shift of the delay hazard, sum-to-zero
+        offsets partially pooled towards the shared delay, and score the
+        delay counts by province rather than pooled.
     delay_counts : {"multinomial", "dirichlet-multinomial"}
         Likelihood of the delay file's counts given the weekly totals.
         The Dirichlet-multinomial (default) has $1/\sqrt{\psi} \sim
@@ -212,6 +216,7 @@ class ModelConfig:
     )
     max_publication_lag: int = 3
     delay_over_time: bool = True
+    delay_by_place: bool = False
     delay_counts: Literal["multinomial", "dirichlet-multinomial"] = (
         "dirichlet-multinomial"
     )
@@ -257,7 +262,8 @@ class Vintage:
         Weekly onset counts, `(n_weeks, P)`, NaN where unobserved.
     delay_counts : numpy.ndarray
         Known-onset cases by onset week and delay, pooled over provinces,
-        `(n_weeks, dmax + 1)`.
+        `(n_weeks, dmax + 1)`, or by province, `(n_weeks, P, dmax + 1)`,
+        with `ModelConfig.delay_by_place`.
     hub_delay_pmf : numpy.ndarray
         The hub's imputation delay pmf for this release, `(dmax + 1,)`.
     populations : numpy.ndarray
@@ -578,6 +584,15 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             _named_walk("delay_sd", 0.15, fit_weeks(data, config))
             if config.delay_over_time
             else WeeklyTemporalProcess(ConstantProcess(), start_dow=SUNDAY),
+            PooledInitialValue(
+                "delay_place",
+                n_prov,
+                DeterministicVariable("delay_place_mean", 0.0),
+                DistributionalVariable("delay_place_sd", dist.HalfNormal(0.5)),
+                centred=False,
+            )
+            if config.delay_by_place
+            else None,
         )
     imports = None
     if config.inactive == "imports" and data.import_kernel is not None:
@@ -671,8 +686,8 @@ def model_args(
     n_weeks = data.n_weeks + horizon
 
     def pad(x: np.ndarray) -> Array:
-        lead = np.full((n_init // 7, x.shape[1]), np.nan)
-        tail = np.full((horizon, x.shape[1]), np.nan)
+        lead = np.full((n_init // 7, *x.shape[1:]), np.nan)
+        tail = np.full((horizon, *x.shape[1:]), np.nan)
         return jnp.asarray(np.vstack([lead, x, tail]))
 
     obs: dict[str, Any] = {
