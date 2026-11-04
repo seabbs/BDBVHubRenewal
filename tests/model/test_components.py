@@ -35,6 +35,19 @@ from .numpy_reference import (
 )
 
 
+def _hazard(name, time_process):
+    """HazardDelay on delays 0..30 with the model's priors."""
+    return HazardDelay(
+        name,
+        30,
+        DistributionalVariable(f"{name}_hazard0", dist.Normal(-2.0, 1.0)),
+        NonCentredRandomWalk(
+            DistributionalVariable(f"{name}_smooth_sd", dist.HalfNormal(0.4))
+        ),
+        time_process,
+    )
+
+
 def uniform_kernel(n):
     """Row-normalised kernel with equal flows and a zero diagonal."""
     return (np.ones((n, n)) - np.eye(n)) / (n - 1)
@@ -204,7 +217,7 @@ def test_missing_fraction_and_hazard_delay_shapes():
     )
     out = seeded(lambda: pi(n_timepoints=35, n_groups=4, first_day_dow=6))
     assert out.shape == (35, 4) and bool(jnp.all((out > 0) & (out < 1)))
-    delay = HazardDelay("delay", 30, weekly)
+    delay = _hazard("delay", weekly)
     pmf = seeded(lambda: delay(n_timepoints=35, first_day_dow=6))
     assert pmf.shape == (35, 31)
     np.testing.assert_allclose(pmf.sum(axis=1), 1.0, rtol=1e-5)
@@ -231,9 +244,7 @@ def test_near_constant_when_innovation_sd_is_small():
     weekly = WeeklyTemporalProcess(
         NonCentredRandomWalk(DeterministicVariable("sd", 1e-6)), start_dow=6
     )
-    pmf = seeded(
-        lambda: HazardDelay("d", 30, weekly)(n_timepoints=70, first_day_dow=6)
-    )
+    pmf = seeded(lambda: _hazard("d", weekly)(n_timepoints=70, first_day_dow=6))
     np.testing.assert_allclose(pmf[0], pmf[-1], atol=1e-5)
 
 
@@ -350,7 +361,7 @@ def test_hazard_delay_on_weekly_rows_matches_daily(dow):
     )
 
     def run(process):
-        delay = HazardDelay("delay", 30, process)
+        delay = _hazard("delay", process)
         return seeded(lambda: delay(n_timepoints=40, first_day_dow=dow), 4)
 
     np.testing.assert_allclose(run(weekly), run(_Daily(weekly)), rtol=1e-6)
@@ -362,7 +373,7 @@ def test_hazard_delay_smoothness_prior_allows_real_fits():
     weekly = WeeklyTemporalProcess(
         NonCentredRandomWalk(DeterministicVariable("sd", 0.1)), start_dow=6
     )
-    delay = HazardDelay("delay", 30, weekly)
+    delay = _hazard("delay", weekly)
     with numpyro.handlers.trace() as tr:
         seeded(lambda: delay(n_timepoints=14, first_day_dow=6))
     assert float(tr["delay_smooth_sd"]["fn"].scale) == pytest.approx(0.4)
