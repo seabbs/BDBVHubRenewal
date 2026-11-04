@@ -900,12 +900,13 @@ def _compare_hub(args: argparse.Namespace) -> int:
         hc.load_hub_submissions(cfg.submitted),
         hub_ids,
     )
-    scores, pending = hc.score_comparison(
+    scores, energy, pending = hc.score_comparison(
         forecasts, target, delays, config, daily
     )
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     scores.to_csv(out / "scores.csv", index=False)
+    energy.to_csv(out / "energy.csv", index=False)
     pending.to_csv(out / "pending.csv", index=False)
     hc.forecast_quantiles(forecasts).to_csv(
         out / "quantiles.csv.gz", index=False

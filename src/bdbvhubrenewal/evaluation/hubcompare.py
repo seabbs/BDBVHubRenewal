@@ -50,6 +50,7 @@ from bdbvhubrenewal.evaluation.backtest import (
 from bdbvhubrenewal.evaluation.nowcast import BASELINE, release_backtest
 from bdbvhubrenewal.evaluation.scoring import (
     relative_skill,
+    scale_of,
     summarise_scores,
 )
 from bdbvhubrenewal.forecasters import get_model, list_models
@@ -562,7 +563,7 @@ def score_comparison(
     delays: pd.DataFrame,
     config: BacktestConfig,
     daily: pd.DataFrame,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Score every model on the count each later real vintage reports.
 
     Parameters
@@ -580,8 +581,10 @@ def score_comparison(
     -------
     tuple of pandas.DataFrame
         The scores (`ReleaseBacktest.scores` with `reference_date`,
-        `source` and `horizon`), and the pending rounds with columns
-        `reference_date`, `vintage` and `models`.
+        `source` and `horizon`), the energy scores
+        (`ReleaseBacktest.energy` over every model of a round, with
+        `reference_date` and `source`), and the pending rounds with
+        columns `reference_date`, `vintage` and `models`.
     """
     real = target.loc[target["kind"] == "real"]
     vintages = sorted(set(real["vintage"]))
@@ -605,22 +608,28 @@ def score_comparison(
         pending, columns=["reference_date", "vintage", "models"]
     )
     if not tasks:
-        return pd.DataFrame(), pending_rounds
+        return pd.DataFrame(), pd.DataFrame(), pending_rounds
     samples = pd.concat(stored, ignore_index=True)
-    scores = release_backtest(
-        tasks, daily, target, models=(), stored=samples
-    ).scores
-    scores = scores.loc[scores["model"] != BASELINE]
-    sources = samples[["model", "vintage", "source"]].drop_duplicates()
-    scores = scores.merge(
-        sources.rename(columns={"vintage": "origin"}), on=["model", "origin"]
+    result = release_backtest(
+        tasks,
+        daily,
+        target,
+        models=(),
+        stored=samples,
+        compare=set(samples["model"]),
     )
+    sources = samples[["model", "vintage", "source"]].drop_duplicates()
+    sources = sources.rename(columns={"vintage": "origin"})
+    scores = result.scores.loc[result.scores["model"] != BASELINE]
+    scores = scores.merge(sources, on=["model", "origin"])
     scores["reference_date"] = scores["origin"].map(rounds)
     scores["horizon"] = (
         pd.to_datetime(scores["target_end_date"])
         - pd.to_datetime(scores["reference_date"])
     ).dt.days // 7
-    return scores.reset_index(drop=True), pending_rounds
+    energy = result.energy.merge(sources, on=["model", "origin"])
+    energy["reference_date"] = energy["origin"].map(rounds)
+    return scores.reset_index(drop=True), energy, pending_rounds
 
 
 def summarise_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
@@ -671,15 +680,17 @@ def summarise_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
     return out[cols].sort_values([*by, "wis"]).reset_index(drop=True)
 
 
-def overall_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
+def overall_comparison(
+    scores: pd.DataFrame, energy: pd.DataFrame, baseline: str
+) -> pd.DataFrame:
     """Summarise every model over all rounds, nationally and below.
 
     Parameters
     ----------
-    scores : pandas.DataFrame
-        Output of `score_comparison`.
+    scores, energy : pandas.DataFrame
+        The scores and energy scores of `score_comparison`.
     baseline : str
-        Model that WIS and log WIS are relative to.
+        Model that every relative score divides by.
 
     Returns
     -------
@@ -687,12 +698,13 @@ def overall_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
         On the reported target and the forecasts the baseline also made,
         one row per `scale` (`national`, `provinces` or `zones`) and
         `model`, with `hub` (a hub team's), `n`, `rel_wis`, `rel_log_wis`,
-        `coverage_50`, `coverage_90` and `bias`, as `OVERALL_METRICS`.
+        `coverage_50`, `coverage_90`, `bias`, and `n_energy` (rounds and
+        releases), `rel_energy` and `rel_log_energy`, as
+        `OVERALL_METRICS`.
     """
     match = ["reference_date", "truth_vintage", "location", "target_end_date"]
-    depth = scores["location"].str.count("-")
     rep = scores.loc[scores["target"] == "reported"].assign(
-        scale=depth.map({0: "national", 1: "provinces"}).fillna("zones")
+        scale=scale_of(scores["location"])
     )
     rep = rep.merge(rep.loc[rep["model"] == baseline, match], on=match)
     rel = relative_skill(
@@ -701,9 +713,14 @@ def overall_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
         by=("scale",),
         metrics=("wis", "log_wis"),
         match_on=match,
-    ).rename(
-        columns={"relative_wis": "rel_wis", "relative_log_wis": "rel_log_wis"}
     )
+    joint = relative_skill(
+        energy.loc[energy["target"] == "reported"],
+        baseline,
+        by=("scale",),
+        metrics=("energy", "log_energy"),
+        match_on=("reference_date", "truth_vintage"),
+    ).rename(columns={"n": "n_energy"})
     keys = ["scale", "model"]
     cover = (
         rep.assign(hub=rep["source"] == "hub")
@@ -716,7 +733,8 @@ def overall_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
         )
         .reset_index()
     )
-    out = rel.merge(cover, on=keys)
+    out = rel.merge(cover, on=keys).merge(joint, on=keys, how="left")
+    out = out.rename(columns=lambda c: c.replace("relative_", "rel_"))
     return out[
         [
             *keys,
@@ -727,6 +745,9 @@ def overall_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
             "coverage_50",
             "coverage_90",
             "bias",
+            "n_energy",
+            "rel_energy",
+            "rel_log_energy",
         ]
     ]
 

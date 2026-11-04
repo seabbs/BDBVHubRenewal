@@ -230,7 +230,7 @@ def test_score_comparison_scores_each_later_release(
     forecasts = pd.concat(
         [load_hub_submissions(tmp_path), _ours(target, delays, daily)]
     )
-    scores, pending = score_comparison(
+    scores, energy, pending = score_comparison(
         forecasts, target, delays, _CONFIG, daily
     )
     assert pending.empty
@@ -245,6 +245,10 @@ def test_score_comparison_scores_each_later_release(
     late = reported.loc[reported["model"] == "teamB-late"]
     assert set(late["target_end_date"]) == set(WEEKS[2:])
     assert set(scores.loc[scores["model"] == "flat", "source"]) == {"real"}
+    # The energy score compares every model of a round on shared cells.
+    assert set(energy["model"]) == {"teamA-weekly", "teamB-late", "flat"}
+    unit = ["reference_date", "target", "truth_vintage", "scale"]
+    assert (energy.groupby(unit)["n_cells"].nunique() == 1).all()
 
 
 def test_score_comparison_waits_for_later_data(
@@ -252,7 +256,7 @@ def test_score_comparison_waits_for_later_data(
 ) -> None:
     hub = _hub_rows(ref="2026-11-07").assign(model="teamA-weekly")
     hub = hub.rename(columns={"output_type_id": "sample"}).assign(source="hub")
-    scores, pending = score_comparison(hub, target, delays, _CONFIG, daily)
+    scores, _, pending = score_comparison(hub, target, delays, _CONFIG, daily)
     assert scores.empty
     assert list(pending["reference_date"]) == ["2026-11-07"]
     assert pending["vintage"].iloc[0] == "2026-11-01"
@@ -268,7 +272,7 @@ def test_summarise_comparison(
     forecasts = pd.concat(
         [load_hub_submissions(tmp_path), _ours(target, delays, daily)]
     )
-    scores, _ = score_comparison(forecasts, target, delays, _CONFIG, daily)
+    scores, _, _ = score_comparison(forecasts, target, delays, _CONFIG, daily)
     table = summarise_comparison(scores, "flat")
     rows = table.loc[table["target"] == "reported"].set_index("model")
     assert rows.loc["flat", "relative_wis"] == pytest.approx(1)
@@ -290,15 +294,20 @@ def test_overall_comparison_by_scale(
     forecasts = pd.concat(
         [load_hub_submissions(tmp_path), _ours(target, delays, daily)]
     )
-    scores, _ = score_comparison(forecasts, target, delays, _CONFIG, daily)
-    out = overall_comparison(scores, "flat").set_index(["scale", "model"])
+    scores, energy, _ = score_comparison(
+        forecasts, target, delays, _CONFIG, daily
+    )
+    out = overall_comparison(scores, energy, "flat")
+    out = out.set_index(["scale", "model"])
     assert set(out.index.get_level_values("scale")) <= {
         "national",
         "provinces",
         "zones",
     }
     flat = out.xs("flat", level="model")
-    assert (flat[["rel_wis", "rel_log_wis"]] == 1).all().all()
+    rel = ["rel_wis", "rel_log_wis", "rel_energy", "rel_log_energy"]
+    assert (flat[rel] == 1).all().all()
+    assert (flat["n_energy"] > 0).all()
     assert out["bias"].between(-1, 1).all()
     assert (
         out.loc[out["hub"]]
