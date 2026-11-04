@@ -16,7 +16,7 @@ class RtPseudoObservation(RandomVariable):
 
     For groups $G$ of provinces (the nation, or BVDOutbreakSize patches)
     and the day $s_b$ of the external estimate, the model's group Rt is
-    onset weighted over the week of $s_b$,
+    infection weighted over the week of $s_b$,
 
     $$R_G(s_b) = \frac{\sum_{p \in G} I_p R_p(s_b)}{\sum_{p \in G} I_p},$$
 
