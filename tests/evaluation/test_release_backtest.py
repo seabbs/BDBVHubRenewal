@@ -336,3 +336,39 @@ def test_draw_keeps_the_reported_count_and_thins_the_outstanding_count() -> (
         [40.0],
         [0.0],
     ]
+
+
+def test_a_models_reported_scores_do_not_depend_on_other_models(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    real = target.loc[target["kind"] == "real"]
+    tasks = make_tasks(
+        real.loc[real["vintage"] == "2026-10-17"],
+        delays.assign(kind="real"),
+        BacktestConfig(n_samples=20, seed=3),
+        daily=daily,
+    )
+    weeks = list(tasks[0].target_end_dates)
+    stored = pd.DataFrame(
+        {
+            "model": "flat",
+            "vintage": "2026-10-17",
+            "location": "CD-IT",
+            "target_end_date": np.repeat(weeks, 20),
+            "sample": np.tile(np.arange(1, 21), len(weeks)),
+            "value": 100.0,
+        }
+    )
+
+    def reported(out: pd.DataFrame) -> pd.DataFrame:
+        keep = out.loc[
+            out["model"].isin(["randomwalk", BASELINE])
+            & (out["target"] == "reported")
+        ]
+        return keep.sort_values(list(keep.columns)).reset_index(drop=True)
+
+    alone = release_backtest(tasks, daily, target, models=("randomwalk",))
+    both = release_backtest(
+        tasks, daily, target, models=("randomwalk",), stored=stored
+    )
+    pd.testing.assert_frame_equal(reported(alone.scores), reported(both.scores))

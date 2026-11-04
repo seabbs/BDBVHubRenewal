@@ -487,11 +487,13 @@ def release_backtest(
         reported = _truth(real, task.vintage).rename(
             columns={"truth": "reported"}
         )
-        rng = task.rng()
+        # Each model draws from its own stream, so its scores do not depend
+        # on which other models run.
+        rngs = {name: task.rng(name) for name in forecasts}
         for o2 in later:
             then = reported_share(origin, _cutoff(daily, o2), weeks)
             for name, samples in forecasts.items():
-                mapped = draw_reported(samples, reported, now, then, rng)
+                mapped = draw_reported(samples, reported, now, then, rngs[name])
                 frames.append(
                     _label(mapped, name, task.vintage, "reported", o2, daily)
                 )

@@ -10,6 +10,7 @@ So adding a model variant is one class and one `register_model` call.
 from __future__ import annotations
 
 import datetime as dt
+import zlib
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
@@ -117,16 +118,24 @@ class ForecastTask:
     target_history: pd.DataFrame | None = None
     daily_history: pd.DataFrame | None = None
 
-    def rng(self) -> np.random.Generator:
+    def rng(self, *keys: str) -> np.random.Generator:
         """Return a random generator seeded from the task.
+
+        Parameters
+        ----------
+        *keys : str
+            Names that give their own stream, such as a model name, so
+            draws for one name do not depend on draws for another.
 
         Returns
         -------
         numpy.random.Generator
-            Seeded from `seed` and the vintage, so tasks differ.
+            Seeded from `seed`, the vintage and each key's CRC-32, so tasks
+            and keys differ.
         """
         offset = as_date(self.vintage).toordinal()
-        return np.random.default_rng([self.seed, offset])
+        names = [zlib.crc32(k.encode()) for k in keys]
+        return np.random.default_rng([self.seed, offset, *names])
 
 
 @runtime_checkable

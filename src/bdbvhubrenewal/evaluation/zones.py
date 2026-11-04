@@ -176,7 +176,8 @@ def zone_backtest(
         reported = counts.rename(columns={"total": "reported"})[
             ["location", "target_end_date", "reported"]
         ]
-        rng = task.rng()
+        # Each model draws from its own stream, as in release_backtest.
+        rngs = {name: task.rng(name) for name in forecasts}
         for later in (v for v in vintages if v > vintage):
             then = reported_share(origin, _cutoff(daily, later), weeks)
             truth = _zone_truth(
@@ -184,7 +185,9 @@ def zone_backtest(
             )
             drawn = pd.concat(
                 [
-                    draw_reported(samples, reported, now, then, rng).assign(
+                    draw_reported(
+                        samples, reported, now, then, rngs[name]
+                    ).assign(
                         model=name,
                         origin=vintage,
                         target="reported",
