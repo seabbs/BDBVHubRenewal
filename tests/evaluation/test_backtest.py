@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -9,6 +10,7 @@ from bdbvhubrenewal.data.releases import cutoff_lags
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     development_tasks,
+    energy_tasks,
     forecast_weeks,
     load_config,
     lopo_tasks,
@@ -99,6 +101,24 @@ def test_score_tasks_marks_complete_weeks() -> None:
     done = dict(zip(scores["target_end_date"], scores["complete"], strict=True))
     assert done == {"2026-09-26": True, "2026-10-03": True, "2026-10-10": False}
     assert set(scores["scoring"]) == {"as reported"}
+
+
+def test_energy_tasks_score_complete_weeks_as_one_vector() -> None:
+    truth = pd.DataFrame(
+        {
+            "location": "CD",
+            "target_end_date": ["2026-09-26", "2026-10-03", "2026-10-10"],
+            "truth": [11.0, 21.0, 25.0],
+        }
+    )
+    forecasts = _forecast_rows(None)
+    every = energy_tasks(forecasts, truth, "2026-10-24")
+    done = energy_tasks(forecasts, truth, "2026-10-24", complete_after_weeks=3)
+    assert list(every["n_cells"]) == [3]
+    assert list(done["n_cells"]) == [2]
+    # Two samples (10, 20) and (12, 22) against (11, 21).
+    spread = np.hypot(2.0, 2.0) / 2
+    assert done["energy"].iloc[0] == pytest.approx(np.hypot(1, 1) - spread)
 
 
 def test_score_tasks_scores_vintage_matched_rows() -> None:

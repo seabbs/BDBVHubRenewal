@@ -47,7 +47,11 @@ from bdbvhubrenewal.evaluation.backtest import (
     make_tasks,
     run_forecasts,
 )
-from bdbvhubrenewal.evaluation.nowcast import BASELINE, release_backtest
+from bdbvhubrenewal.evaluation.nowcast import (
+    BASELINE,
+    relative_energy,
+    release_backtest,
+)
 from bdbvhubrenewal.evaluation.scoring import (
     relative_skill,
     scale_of,
@@ -714,13 +718,9 @@ def overall_comparison(
         metrics=("wis", "log_wis"),
         match_on=match,
     )
-    joint = relative_skill(
-        energy.loc[energy["target"] == "reported"],
-        baseline,
-        by=("scale",),
-        metrics=("energy", "log_energy"),
-        match_on=("reference_date", "truth_vintage"),
-    ).rename(columns={"n": "n_energy"})
+    joint = relative_energy(
+        energy.loc[energy["target"] == "reported"], ("scale",), baseline
+    )
     keys = ["scale", "model"]
     cover = (
         rep.assign(hub=rep["source"] == "hub")
@@ -734,7 +734,9 @@ def overall_comparison(
         .reset_index()
     )
     out = rel.merge(cover, on=keys).merge(joint, on=keys, how="left")
-    out = out.rename(columns=lambda c: c.replace("relative_", "rel_"))
+    out = out.rename(
+        columns={"relative_wis": "rel_wis", "relative_log_wis": "rel_log_wis"}
+    )
     return out[
         [
             *keys,

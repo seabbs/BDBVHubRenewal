@@ -647,7 +647,10 @@ def score_tasks(
 
 
 def energy_tasks(
-    forecasts: pd.DataFrame, truth: pd.DataFrame, truth_date: str
+    forecasts: pd.DataFrame,
+    truth: pd.DataFrame,
+    truth_date: str,
+    complete_after_weeks: int = 0,
 ) -> pd.DataFrame:
     """Score the final-count forecasts of `score_tasks` with the energy score.
 
@@ -660,6 +663,9 @@ def energy_tasks(
     truth_date : str
         The date of the truth data. Forecasts made at or after it are
         dropped.
+    complete_after_weeks : int
+        $K$: only weeks that ended at least this many weeks before
+        `truth_date` are scored, the `complete` weeks of `score_tasks`.
 
     Returns
     -------
@@ -670,8 +676,10 @@ def energy_tasks(
     keep = forecasts["vintage"] < truth_date
     if "as_of" in forecasts:
         keep &= forecasts["as_of"].isna()
+    age = pd.Timestamp(truth_date) - pd.to_datetime(truth["target_end_date"])
+    done = truth.loc[age.dt.days >= 7 * complete_after_weeks]
     out = energy_scores(
-        forecasts.loc[keep], truth, unit=("kind", "vintage", "reference_date")
+        forecasts.loc[keep], done, unit=("kind", "vintage", "reference_date")
     )
     out["truth_vintage"] = truth_date
     return out
@@ -1081,7 +1089,7 @@ def run_scenarios(
             score_tasks(forecasts, final, end, k).assign(truth_view="final")
         ]
         energy = [
-            energy_tasks(forecasts, final, end).assign(truth_view="final")
+            energy_tasks(forecasts, final, end, k).assign(truth_view="final")
         ]
         for date in dates:
             later = (

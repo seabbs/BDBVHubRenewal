@@ -56,6 +56,7 @@ from bdbvhubrenewal.data.snapshots import release_cutoff
 from bdbvhubrenewal.evaluation.scoring import (
     SCORE_COLUMNS,
     energy_scores,
+    relative_skill,
     score_forecasts,
 )
 from bdbvhubrenewal.forecasters.base import (
@@ -80,6 +81,7 @@ __all__ = [
     "ReleaseBacktest",
     "complete_weeks",
     "draw_reported",
+    "relative_energy",
     "relative_wis",
     "release_backtest",
     "reported_share",
@@ -692,3 +694,42 @@ def relative_wis(
         "bias",
     ]
     return out[[*by, "model", *order]]
+
+
+def relative_energy(
+    energy: pd.DataFrame,
+    by: Sequence[str] = ("target", "scale"),
+    baseline: str = "randomwalk",
+) -> pd.DataFrame:
+    """Divide each model's mean energy score by the baseline's.
+
+    Parameters
+    ----------
+    energy : pandas.DataFrame
+        `ReleaseBacktest.energy`.
+    by : sequence of str
+        Columns of a cell other than `model`. Origins and releases are
+        matched within it.
+    baseline : str
+        The model to divide by.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per cell and model, over the origins and releases the
+        baseline also has: `n_energy`, `rel_energy` and `rel_log_energy`.
+    """
+    rel = relative_skill(
+        energy,
+        baseline,
+        by=by,
+        metrics=("energy", "log_energy"),
+        match_on=("origin", "truth_vintage"),
+    )
+    return rel.rename(
+        columns={
+            "n": "n_energy",
+            "relative_energy": "rel_energy",
+            "relative_log_energy": "rel_log_energy",
+        }
+    )

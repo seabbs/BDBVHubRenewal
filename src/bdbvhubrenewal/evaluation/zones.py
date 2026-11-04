@@ -308,7 +308,11 @@ def scenario_zone_scores(
             truth_view="final"
         )
     ]
-    energy = [energy_tasks(forecasts, final, end).assign(truth_view="final")]
+    energy = [
+        energy_tasks(forecasts, final, end, complete_after_weeks).assign(
+            truth_view="final"
+        )
+    ]
     view = f"as of {later_weeks} weeks later"
     for task in tasks:
         later = (
