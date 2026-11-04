@@ -18,7 +18,18 @@ from jax import Array
 from jax.typing import ArrayLike
 from pyrenew.latent.temporal_processes import TemporalProcess
 from pyrenew.metaclass import RandomVariable
-from pyrenew.process import ARProcess
+
+
+def _damped_sum(phi: ArrayLike, steps: Array) -> Array:
+    r"""Return $y_j = \sum_{i \le j} \phi^{j - i} s_i$ by a matrix product.
+
+    Lower-triangular with powers of $\phi$ (all ones for a random walk),
+    which is faster than a scan or `cumsum` on CPU.
+    """
+    m = steps.shape[0]
+    lag = jnp.arange(m)[:, None] - jnp.arange(m)[None, :]
+    weights = jnp.where(lag >= 0, phi ** jnp.maximum(lag, 0), 0.0)
+    return weights @ steps
 
 
 class NonCentredRandomWalk:
@@ -29,15 +40,15 @@ class NonCentredRandomWalk:
 
     with $\phi = 1$ (random walk, the prior of PyRenew's `RandomWalk`)
     or $\phi = 2^{-1/h}$ for a half-life $h$ steps from `half_life_rv`
-    (mean-reverting towards 0, for province deviations). The steps are
-    PyRenew's `ARProcess`, non-centred, with $\sigma z_t$ at the site
-    `{prefix}_z` and $z_t$ at `{prefix}_z_decentered`. The first `frozen`
-    steps are zero, so nothing moves before the data begin.
+    (mean-reverting towards 0, for province deviations). PyRenew samples
+    the steps one site per step in a scan; here they are one vectorised
+    site. The first `frozen` steps are zero, so nothing moves before the
+    data begin.
 
     Fit and forecast axes. With `n_fit` set, only the first `n_fit`
     points are sampled as the main site, which is all the fit sees. A
     longer axis (forecast mode) adds a separate `{prefix}_z_future` site
-    of steps that `Predictive` draws from the prior given
+    of standardised steps that `Predictive` draws from the prior given
     the posterior, so steps with no data never enter NUTS (no funnel).
 
     `forecast_half_life` $h_f$ makes the steps past the fit axis AR(1),
@@ -120,28 +131,27 @@ class NonCentredRandomWalk:
             if self.half_life_rv is None
             else 0.5 ** (1.0 / self.half_life_rv())
         )
-        ar = ARProcess(name_prefix)
-        free = ar(
-            noise_name=f"{name_prefix}_z",
-            n=n_free + 1,
-            autoreg=jnp.atleast_1d(phi),
-            init_vals=x0[None, :],
-            noise_sd=sd,
+        z = numpyro.sample(
+            f"{name_prefix}_z",
+            dist.Normal(0.0, 1.0).expand([n_free, n_processes]),
         )
-        past = jnp.vstack([jnp.repeat(x0[None, :], frozen, axis=0), free])
+        free = _damped_sum(phi, sd * z)
+        decay = phi ** jnp.arange(1, n_free + 1)[:, None]
+        past = jnp.vstack(
+            [jnp.repeat(x0[None, :], frozen + 1, axis=0), decay * x0 + free]
+        )
         n_future = n_timepoints - n_past
         if n_future == 0:
             return past
+        z_future = numpyro.sample(
+            f"{name_prefix}_z_future",
+            dist.Normal(0.0, 1.0).expand([n_future, n_processes]),
+        )
         if self.forecast_half_life is not None:
             phi = 0.5 ** (1.0 / self.forecast_half_life)
-        future = ar(
-            noise_name=f"{name_prefix}_z_future",
-            n=n_future + 1,
-            autoreg=jnp.atleast_1d(phi),
-            init_vals=past[-1:],
-            noise_sd=sd,
-        )
-        return jnp.vstack([past, future[1:]])
+        decay = phi ** jnp.arange(1, n_future + 1)[:, None]
+        future = decay * past[-1] + _damped_sum(phi, sd * z_future)
+        return jnp.vstack([past, future])
 
 
 class PooledInitialValue(RandomVariable):

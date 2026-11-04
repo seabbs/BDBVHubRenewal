@@ -14,7 +14,7 @@ The model diagrams are mermaid blocks in `docs/methods/model.md`.
 
 | Component | PyRenew piece | Built here |
 |---|---|---|
-| Pooled $R_p(t)$ | `SubpopulationInfections`, `WeeklyTemporalProcess`, `ARProcess` for the steps | `NonCentredRandomWalk`, for the frozen seeding weeks, the separate forecast steps and their reversion. |
+| Pooled $R_p(t)$ | `SubpopulationInfections`, `WeeklyTemporalProcess` | `NonCentredRandomWalk`, for the frozen seeding weeks, the separate forecast steps and their reversion. |
 | Renewal with importation and depletion | `SubpopulationInfections`, subclassed | `coupled_renewal`. |
 | Ascertainment $\alpha(s)$ | `IndependentAscertainment` with a temporal process | None. |
 | Onset-to-report delay $f_s(d)$ | None | `HazardDelay`. |
@@ -23,9 +23,10 @@ The model diagrams are mermaid blocks in `docs/methods/model.md`.
 | BVDOutbreakSize Rt | None | `RtPseudoObservation`. |
 | Provinces with no cases | None | An importation-only component. |
 
-PyRenew pieces that give a different model, or that would only rename one line, are not used.
+PyRenew pieces that give a different model, sample less well, or would only rename one line, are not used.
 
 - The `RandomWalk` temporal process puts the step SD in the step distribution, so it is centred in the SD.
+- `ARProcess` gives the same walk, log density and gradient, but NUTS needs more tree steps with it, so the walk samples its steps as one vectorised site.
 - `AR1` draws its first state from the stationary distribution, and `DifferencedAR1` is AR(1) on the differences.
   Here walks start at a fixed value and stay there over the seeding weeks.
 - `SubpopulationInfections` samples one deviation process per province and subtracts their mean, which leaves a direction the data do not identify.
@@ -39,6 +40,15 @@ PyRenew pieces that give a different model, or that would only rename one line, 
   Here the kernel is learnt and depletion is exponential in the pool $\nu$.
 
 PyRenew has no delay that varies with time, no Dirichlet-multinomial count and no pseudo-observation of $R$.
+
+The table compares the two ways of sampling the walk steps on the recovery fit of the simulated outbreak, with 2 chains of 300 warm-up and 300 draws.
+
+| Walk steps | Seed | Time | Mean tree steps | Share at the depth cap |
+|---|---|---|---|---|
+| One vectorised site | 0 | 668 s | 511 | 0% |
+| One vectorised site | 1 | 971 s | 761 | 49% |
+| `ARProcess` | 0 | 2198 s | 1017 | 99% |
+| `ARProcess` | 1 | 2364 s | 1008 | 97% |
 
 ## Baseline models
 

@@ -70,7 +70,7 @@ def test_float32_log_density_matches_float64(real_fit_point, inv_sqrt_phi):
     data, model, params = real_fit_point
     if inv_sqrt_phi is not None:
         params = {**params, "inv_sqrt_phi_known": np.float32(inv_sqrt_phi)}
-    site = "log_rt_baseline_z_decentered"
+    site = "log_rt_baseline_z"
     steps = np.linspace(-0.02, 0.02, 21)
     lp32 = log_density_curve(model, data, params, site, steps, jnp.float32)
     with enable_x64():
