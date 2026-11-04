@@ -412,3 +412,20 @@ def test_own_hub_ids() -> None:
     # Only models set to submit have a hub id.
     off = [m for m, t in track.get("models", {}).items() if not t["submit"]]
     assert not set(off) & set(ids)
+
+
+def test_comparison_colours_are_fixed_per_model() -> None:
+    from bdbvhubrenewal.reporting.plots import (
+        HUB_GREYS,
+        MODEL_COLOURS,
+        comparison_colours,
+    )
+
+    teams = ["teamA", "teamB"]
+    got = comparison_colours({"randomwalk (ours)": "randomwalk"}, teams)
+    first = (MODEL_COLOURS["light"][0], MODEL_COLOURS["dark"][0])
+    assert got["randomwalk (ours)"] == first
+    assert {got[t][0] for t in teams} <= set(HUB_GREYS["light"])
+    assert {got[t][1] for t in teams} <= set(HUB_GREYS["dark"])
+    # A team keeps its grey whichever of our models are shown.
+    assert comparison_colours({}, teams)["teamB"] == got["teamB"]

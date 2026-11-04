@@ -67,6 +67,7 @@ from bdbvhubrenewal.reporting.nowcast_plots import (
     plot_release_nowcasts,
 )
 from bdbvhubrenewal.reporting.plots import (
+    comparison_colours,
     comparison_label,
     plot_delay_check,
     plot_delay_distribution,
@@ -1307,14 +1308,56 @@ def _teams_table(teams: pd.DataFrame, hub_ids: Mapping[str, str]) -> str:
 
 
 def _overall_table(
-    scores: pd.DataFrame, baseline: str, hub_ids: Mapping[str, str]
+    fig: Path,
+    scores: pd.DataFrame,
+    baseline: str,
+    hub_ids: Mapping[str, str],
+    teams: Sequence[str],
 ) -> str:
-    """Tabulate every model over all scored rounds, by scale."""
+    """Chart and tabulate every model over all scored rounds, by scale.
+
+    The chart starts with the hub teams, our submitted models and the
+    baseline. Our other models can be switched on. `teams` are every hub
+    team in the round figures, so a team has the same grey in both.
+    """
     overall = overall_comparison(scores, baseline)
+    raw = list(overall["model"])
     overall["model"] = [
         comparison_label(m, "hub" if hub else "real", hub_ids)
         for m, hub in zip(overall["model"], overall["hub"], strict=True)
     ]
+    hub = overall.loc[overall["hub"], "model"].drop_duplicates()
+    ours = dict(
+        zip(
+            overall.loc[~overall["hub"], "model"],
+            [n for n, h in zip(raw, overall["hub"], strict=True) if not h],
+            strict=True,
+        )
+    )
+    registry = [spec.name for spec in list_models()]
+    ours = dict(sorted(ours.items(), key=lambda lm: registry.index(lm[1])))
+    colours = comparison_colours(ours, teams)
+    shown = {comparison_label(m, "real", hub_ids) for m in [*hub_ids, baseline]}
+    write_score_chart(
+        fig / "scorechart-comparison.json",
+        score_chart_data(
+            overall,
+            "scale",
+            {
+                "relative_wis": (f"WIS relative to {baseline}", 1.0),
+                "coverage_50": ("50% coverage", 0.5),
+                "coverage_90": ("90% coverage", 0.9),
+            },
+            [*ours, *sorted(hub)],
+            default_on=[*sorted(hub), *(m for m in ours if m in shown)],
+            x_label="Scale",
+            kind="bar",
+            colours=colours,
+        ),
+    )
+    chart = score_chart_html(
+        "../figures/scorechart-comparison.json", "Overall comparison scores"
+    )
     have = set(overall["scale"])
     scales = [s for s in ("national", "provinces", "zones") if s in have]
     names = {
@@ -1334,10 +1377,13 @@ def _overall_table(
     missing = sorted({"national", "provinces", "zones"} - have)
     gap = f" There are no scores for {' or '.join(missing)}." if missing else ""
     return (
-        "Over every scored round, on the count each later release reported "
+        chart
+        + "\n"
+        + "Over every scored round, on the count each later release reported "
         f"and on the forecasts `{baseline}` also made, by scale.{gap}\n"
         "n counts forecasts, so a model with fewer forecasts was scored on "
-        "fewer weeks or places.\n\n" + _table(wide)
+        "fewer weeks or places.\n"
+        "Our other models can be switched on in the key.\n\n" + _table(wide)
     )
 
 
@@ -1399,7 +1445,17 @@ def _comparison_page(
     _write(gen / "comparison-summary.md", "")
     parts = []
     if not scores.empty:
-        parts.append(_overall_table(scores, baseline, hub_ids))
+        parts.append(
+            _overall_table(
+                fig,
+                scores,
+                baseline,
+                hub_ids,
+                sorted(
+                    set(quantiles.loc[quantiles["source"] == "hub", "model"])
+                ),
+            )
+        )
         table = summarise_comparison(scores, baseline)
         table = _without_baseline(table, baseline)
         table["target"] = table["target"].map(_TARGET_LABELS)

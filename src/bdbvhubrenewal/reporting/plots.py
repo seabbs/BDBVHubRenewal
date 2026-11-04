@@ -36,7 +36,9 @@ from bdbvhubrenewal.data.delays import delay_summary
 __all__ = [
     "MODEL_COLOURS",
     "THEMES",
+    "comparison_colours",
     "comparison_label",
+    "hub_styles",
     "model_colour",
     "plot_delay_check",
     "plot_delay_distribution",
@@ -1115,7 +1117,41 @@ def comparison_label(
     return f"{model} ({tag})"
 
 
-def _hub_styles(teams: Sequence[str], mode: str) -> dict[str, tuple[str, str]]:
+def comparison_colours(
+    ours: Mapping[str, str], teams: Sequence[str]
+) -> dict[str, tuple[str, str]]:
+    """Return the light and dark colour of each model in the comparison.
+
+    Parameters
+    ----------
+    ours : mapping of str to str
+        Label of each of our models to its registry name.
+    teams : sequence of str
+        Every hub team.
+
+    Returns
+    -------
+    dict
+        Label to its light and dark colour: ours in `MODEL_COLOURS` by
+        registry order, the hub teams in the greys of `hub_styles`.
+    """
+    from bdbvhubrenewal.forecasters.base import list_models
+
+    registry = [s.name for s in list_models()]
+    light, dark = MODEL_COLOURS["light"], MODEL_COLOURS["dark"]
+    out = {
+        lab: (
+            light[registry.index(m) % len(light)],
+            dark[registry.index(m) % len(dark)],
+        )
+        for lab, m in ours.items()
+    }
+    grey = {mode: hub_styles(teams, mode) for mode in ("light", "dark")}
+    out |= {t: (grey["light"][t][0], grey["dark"][t][0]) for t in teams}
+    return out
+
+
+def hub_styles(teams: Sequence[str], mode: str) -> dict[str, tuple[str, str]]:
     """Give each hub team a grey and a marker, fixed by its sorted place."""
     greys = HUB_GREYS[mode]
     markers = "os^Dv"
@@ -1175,7 +1211,7 @@ def plot_hub_round(
     from bdbvhubrenewal.forecasters.base import list_models
 
     registry = [s.name for s in list_models()]
-    styles = _hub_styles(
+    styles = hub_styles(
         sorted(set(quantiles.loc[quantiles["source"] == "hub", "model"])), mode
     )
     q = quantiles.loc[quantiles["reference_date"].astype(str) == reference_date]
