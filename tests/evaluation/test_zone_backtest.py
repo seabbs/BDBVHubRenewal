@@ -20,7 +20,7 @@ DATA = Path(__file__).resolve().parents[2] / "data"
 @pytest.fixture(scope="module")
 def result(
     target: pd.DataFrame, delays: pd.DataFrame
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     return zone_backtest(
         target,
         delays,
@@ -31,14 +31,16 @@ def result(
 
 
 @pytest.fixture(scope="module")
-def scores(result: tuple[pd.DataFrame, pd.DataFrame]) -> pd.DataFrame:
+def scores(
+    result: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
+) -> pd.DataFrame:
     return result[0]
 
 
 def test_energy_scores_every_zone_and_week_as_one_vector(
-    result: tuple[pd.DataFrame, pd.DataFrame],
+    result: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
 ) -> None:
-    scores, energy = result
+    scores, energy, _ = result
     assert set(energy["scale"]) == {"zones"}
     assert set(energy["model"]) == set(scores["model"])
     unit = ["origin", "target", "truth_vintage"]
@@ -88,3 +90,15 @@ def test_relative_skill_is_against_the_zone_randomwalk(
     mine = by.loc[by["model"] == "randomwalknowcast"].set_index("horizon")
     assert (mine["relative_wis"] > 0).all()
     assert mine.index.min() == -4
+
+
+def test_zone_forecasts_are_the_summed_forms_by_origin(
+    result: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
+) -> None:
+    scores, _, forecasts = result
+    assert set(forecasts["model"]) == {"randomwalk", "randomwalknowcast"}
+    assert set(forecasts["origin"]) == set(scores["origin"])
+    assert (forecasts["location"].str.count("-") == 2).all()
+    # The summed forms are the ones scored under the SUMMED names.
+    summed = scores.loc[scores["model"].str.endswith(SUMMED)]
+    assert set(forecasts["location"]) == set(summed["location"])

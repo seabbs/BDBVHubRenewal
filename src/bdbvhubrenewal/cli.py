@@ -215,6 +215,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     zb.add_argument("--out", default="results/zone-scores.csv")
     zb.add_argument("--energy-out", default="results/zone-energy.csv")
+    zb.add_argument("--quantiles-out", default="results/zone-quantiles.csv")
+    zb.add_argument("--draws-out", default="results/zone-draws.csv.gz")
 
     fit = sub.add_parser(
         "fit", help="Fit a configuration and write its diagnostics."
@@ -704,13 +706,15 @@ def _print_failed(failed: list[Check]) -> int:
 
 
 def _zone_backtest(args: argparse.Namespace) -> int:
+    from bdbvhubrenewal.evaluation.hubcompare import forecast_quantiles
     from bdbvhubrenewal.evaluation.zones import (
         zone_backtest,
         zone_relative_skill,
     )
+    from bdbvhubrenewal.reporting.explorer import draw_subset
 
     hub_config = Path(args.data) / "hub-config" / "tasks.json"
-    scores, energy = zone_backtest(
+    scores, energy, forecasts = zone_backtest(
         load_target(args.data),
         load_delays(args.data),
         load_daily(args.data),
@@ -722,6 +726,14 @@ def _zone_backtest(args: argparse.Namespace) -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     scores.to_csv(out, index=False)
     energy.to_csv(args.energy_out, index=False)
+    # The zone forecasts as submitted, for the Backtest explorer: their
+    # plotted quantiles and a fixed subset of draws for the trajectories.
+    forecast_quantiles(forecasts.assign(source="ours")).to_csv(
+        args.quantiles_out, index=False
+    )
+    draw_subset(forecasts).drop(columns="draw").to_csv(
+        args.draws_out, index=False
+    )
     rel = zone_relative_skill(scores, by=("horizon",))
     print(rel.round(3).to_string(index=False))
     print(f"Wrote {out} ({len(scores)} scores).")

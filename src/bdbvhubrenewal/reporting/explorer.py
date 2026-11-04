@@ -17,6 +17,7 @@ from bdbvhubrenewal.forecasters import NATIONAL
 __all__ = [
     "TRAJECTORY_DRAWS",
     "compact",
+    "draw_subset",
     "explorer_data",
     "explorer_html",
     "trajectories",
@@ -35,6 +36,36 @@ def compact(value: float) -> float | int:
     """Round a sample value to 0.1, as a whole number where it is one."""
     v = round(float(value), 1)
     return int(v) if v.is_integer() else v
+
+
+def draw_subset(
+    samples: pd.DataFrame, n: int = TRAJECTORY_DRAWS
+) -> pd.DataFrame:
+    """Keep each model's `n` lowest sample ids, in every round and place.
+
+    Where a model's draws are joint across places (ours), a kept draw
+    stays joint. Hub draws are joint across weeks within a place only.
+
+    Parameters
+    ----------
+    samples : pandas.DataFrame
+        Samples with `model` and `sample`.
+    n : int
+        Draws kept per model.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The rows of the kept draws, with `draw`, 0 to n - 1.
+    """
+    ids = samples.groupby("model")["sample"].apply(lambda x: sorted(set(x))[:n])
+    rank = {(m, s): k for m, keep in ids.items() for k, s in enumerate(keep)}
+    draw = [
+        rank.get((m, s), -1)
+        for m, s in zip(samples["model"], samples["sample"], strict=True)
+    ]
+    out = samples.assign(draw=draw)
+    return out.loc[out["draw"] >= 0]
 
 
 def trajectories(
@@ -62,18 +93,8 @@ def trajectories(
         n - 1), `start` (the first week) and `values`, the draw's weekly
         values in week order.
     """
-    ids = samples.groupby("model")["sample"].apply(lambda x: sorted(set(x))[:n])
-    keep = samples.loc[
-        [
-            s in set(ids[m])
-            for m, s in zip(samples["model"], samples["sample"], strict=True)
-        ]
-    ]
+    keep = draw_subset(samples, n)
     keep = keep.assign(
-        draw=[
-            ids[m].index(s)
-            for m, s in zip(keep["model"], keep["sample"], strict=True)
-        ],
         reference_date=keep["reference_date"].astype(str),
         target_end_date=keep["target_end_date"].astype(str),
     ).sort_values("target_end_date")

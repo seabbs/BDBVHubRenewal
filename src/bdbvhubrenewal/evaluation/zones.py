@@ -104,7 +104,7 @@ def zone_backtest(
     zones: tuple[str, ...],
     models: Sequence[str] = ("randomwalk", "randomwalknowcast"),
     config: BacktestConfig | None = None,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Score the random walk models run at zone level on later releases.
 
     Parameters
@@ -134,12 +134,15 @@ def zone_backtest(
         vintage, zone and week. Each model appears under its name and
         again under its name with `SUMMED`.
         Then `energy_scores` of every model's zones by `origin`, `target`
-        and `truth_vintage`, from the same drawn samples.
+        and `truth_vintage`, from the same drawn samples. Then the zone
+        forecasts made to sum to the provinces, as submitted, under each
+        model's name: `model`, `origin`, `reference_date`, `location`,
+        `target_end_date`, `sample` and `value`.
     """
     config = config or BacktestConfig()
     real = target.loc[target["kind"] == "real"]
     vintages = real_vintages(real)
-    frames, energy = [], []
+    frames, energy, kept = [], [], []
     for vintage in vintages[:-1]:
         task = make_tasks(
             real.loc[real["vintage"] == vintage], delays, config, daily=daily
@@ -160,6 +163,13 @@ def zone_backtest(
             forecasts[name] = direct
             forecasts[name + SUMMED] = reconcile_zones(
                 direct, prov, task, counts, active
+            )
+            kept.append(
+                forecasts[name + SUMMED].assign(
+                    model=name,
+                    origin=vintage,
+                    reference_date=task.reference_date.isoformat(),
+                )
             )
         weeks = sorted(set(direct["target_end_date"]))
         now = reported_share(origin, _cutoff(daily, vintage), weeks)
@@ -190,6 +200,17 @@ def zone_backtest(
     return (
         pd.concat(frames, ignore_index=True),
         pd.concat(energy, ignore_index=True),
+        pd.concat(kept, ignore_index=True)[
+            [
+                "model",
+                "origin",
+                "reference_date",
+                "location",
+                "target_end_date",
+                "sample",
+                "value",
+            ]
+        ],
     )
 
 
