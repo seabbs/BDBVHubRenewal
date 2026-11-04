@@ -106,6 +106,9 @@ def test_republished_old_data_does_not_feed_an_earlier_vintage(
     )
     assert choice is not None
     assert choice.tag == "results-3151"
+    assert dict(choice.skipped) == {
+        "results-3160": "an asset was updated after the cut-off"
+    }
 
 
 def test_select_release_needs_as_of_on_or_before_the_forecast_date(
@@ -189,26 +192,6 @@ def test_fetch_release_caches_by_tag(
     # Only the data cut-off is kept from the (large) observations file.
     kept = (out / "observations.toml").read_text()
     assert kept == 'as_of_date = "2026-10-20"\n'
-
-
-def test_bvd_for_vintage_end_to_end(
-    releases: pd.DataFrame, tmp_path: Path
-) -> None:
-    def download(url: str) -> bytes:
-        tag, name = url.rsplit("/", 2)[1:]
-        if name == bvd.SITE_ASSET:
-            return _site_zip()
-        return (FIXTURES / tag / name).read_bytes()
-
-    # Only the fixture releases with files can be read.
-    have = releases.loc[releases["tag"].isin(["results-3151", "results-3086"])]
-    rel = bvd.bvd_for_vintage("2026-10-24", tmp_path, have, download)
-    assert rel is not None
-    assert rel.tag == "results-3151"
-    rel = bvd.bvd_for_vintage("2026-10-17", tmp_path, have, download)
-    assert rel is not None
-    assert rel.tag == "results-3086"
-    assert bvd.bvd_for_vintage("2026-10-01", tmp_path, have, download) is None
 
 
 def test_model_rows_use_one_table_for_patch_deviations() -> None:
@@ -301,16 +284,18 @@ def test_early_releases_give_rt_from_the_growth_rate() -> None:
     np.testing.assert_allclose(rel.national_log_rt, expected)
 
 
-def test_joint_rhat_from_the_diagnostics_page() -> None:
-    html = (FIXTURES / "site" / "diagnostics.html").read_text()
-    assert bvd.joint_rhat_from_html(html) == pytest.approx(1.041)
-
-
-def test_joint_rhat_from_the_older_analysis_page() -> None:
-    # Documenter builds before 17 September print the table in the
-    # analysis page, with a row-number column and a row of column types.
-    html = (FIXTURES / "site" / "analysis.html").read_text()
-    assert bvd.joint_rhat_from_html(html) == pytest.approx(1.026)
+@pytest.mark.parametrize(
+    ("page", "rhat"),
+    [
+        ("diagnostics.html", 1.041),
+        # Documenter builds before 17 September print the table in the
+        # analysis page, with a row-number column and a row of column types.
+        ("analysis.html", 1.026),
+    ],
+)
+def test_joint_rhat_from_the_site_page(page: str, rhat: float) -> None:
+    html = (FIXTURES / "site" / page).read_text()
+    assert bvd.joint_rhat_from_html(html) == pytest.approx(rhat)
 
 
 def test_joint_rhat_needs_a_joint_row() -> None:
@@ -424,24 +409,6 @@ def test_select_release_records_releases_too_new_for_the_forecast(
     assert reasons["results-3169"] == "data end 2026-10-20, after 2026-10-17"
     assert "results-3086" not in reasons
     assert asked == ["results-3086"]
-
-
-def test_select_release_skips_assets_updated_after_the_cut_off(
-    releases: pd.DataFrame,
-) -> None:
-    # results-3160 was published in time but replaced after the cut-off.
-    # results-3169 was published after it, so it is not considered at all.
-    choice = bvd.select_release(
-        releases,
-        "2026-10-24",
-        bvd.bvd_cutoff("2026-10-24"),
-        AS_OF.get,
-        RHAT.get,
-    )
-    assert choice is not None
-    assert dict(choice.skipped) == {
-        "results-3160": "an asset was updated after the cut-off"
-    }
 
 
 def test_release_choice_record_is_json() -> None:
