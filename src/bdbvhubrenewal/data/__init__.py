@@ -3,7 +3,7 @@
 
 - `tidy`: download the hub's data streams and tidy and load them.
 - `dates`: epi weeks, reference dates and submission windows.
-- `releases`: release cut-offs and the publication lag of the renewal models.
+- `releases`: release cut-offs.
 - `simulate`: simulated outbreaks published as vintages.
 - `delays`: empirical onset-to-report delays.
 - `snapshots`: daily release snapshots as arrays on the onset clock.
