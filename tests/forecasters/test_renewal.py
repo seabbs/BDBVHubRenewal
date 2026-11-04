@@ -244,6 +244,12 @@ def _fake_run(task: ForecastTask, variant: rn.Variant) -> rn.RenewalRun:
         extra=extra,
         seconds=1.5,
         cpu_seconds=2.9,
+        delay=rn.delay_summary(
+            rng.normal(-1, 0.1, size=(n, 20)),
+            rng.normal(0, 0.1, size=(n, 14)),
+            data.start_date,
+            13,
+        ),
     )
 
 
@@ -274,6 +280,14 @@ def test_fit_renewal_writes_the_ci_contract(
     )
     assert len(record["worst_rhat"]) <= 10
     assert {p["name"] for p in record["parameters"]} == {"sd", "z"}
+    delay = pd.read_csv(tmp_path / rn.DELAY_SUMMARY_FILE)
+    assert set(delay["location"]) == {"pooled"}
+    assert set(delay["model"]) == {"renewal"}
+    assert set(delay["quantity"]) == {
+        "reported_share",
+        "median_delay",
+        "share_within_7",
+    }
     ppc = json.loads((tmp_path / "ppc.json").read_text())
     assert ppc["available"] is True
     assert ppc["config"] == "main"
@@ -555,11 +569,14 @@ def test_lag_source_warns_when_the_prior_stands_in(
 def test_report_cutoffs_are_days_from_the_model_start(
     task: ForecastTask,
 ) -> None:
-    task = replace(task, report_by=("2026-10-24", "2026-10-31"))
+    task = replace(task, report_by=("2026-10-24", "2026-11-01"))
     data = rn.vintage_inputs(task, rn.model_config(rn.VARIANTS["renewal"]))
     cuts = rn.report_cutoffs(task, data)
     start = pd.Timestamp(data.start_date)
-    assert cuts == {(pd.Timestamp(d) - start).days: d for d in task.report_by}
+    # Each later release is cut at its last report day: 10-24 for the
+    # label 10-24, published a day early, and 10-31 for 11-01 (hub #90).
+    last = {"2026-10-24": "2026-10-24", "2026-11-01": "2026-10-31"}
+    assert cuts == {(pd.Timestamp(last[d]) - start).days: d for d in last}
 
 
 @pytest.mark.parametrize("name", ["renewal", "renewalsp"])
@@ -600,3 +617,52 @@ def test_forecast_records_a_summary_of_each_fit(
     assert row["max_rhat"] > 0.9
     assert row["depth_share"] == 0.0
     assert row["divergent_share"] == 0.0
+
+
+def test_delay_summary_reads_shares_and_medians_by_onset_week() -> None:
+    import datetime as dt
+
+    from bdbvhubrenewal.forecasters.renewal import delay_summary
+
+    draws, dmax, days = 200, 20, 21
+    # A constant hazard of 0.5 on every delay, shifted later in the last
+    # week so its delays are longer.
+    beta = np.zeros((draws, dmax))
+    shift = np.zeros((draws, days))
+    shift[:, 14:] = -2.0
+    # The axis starts on a Sunday, so its weeks end on days 6, 13, 20.
+    out = delay_summary(beta, shift, dt.date(2026, 10, 4), days - 1)
+    weeks = out.loc[out["quantity"] == "median_delay"]
+    assert list(weeks["x"]) == ["2026-10-10", "2026-10-17", "2026-10-24"]
+    # With hazard h, P(delay <= d) = 1 - (1 - h)^(d + 1). For h = 0.5 the
+    # median is day 0; for h = sigmoid(-2) it is day 5.
+    assert list(weeks["q50"]) == [0.0, 0.0, 5.0]
+    share = out.loc[out["quantity"] == "share_within_7", "q50"].to_numpy()
+    assert share[0] == pytest.approx(1 - 0.5**8)
+    assert share[2] < share[0]
+    cum = out.loc[out["kind"] == "cumulative"]
+    assert len(cum) == dmax + 1
+    assert cum["q50"].iloc[-1] == pytest.approx(1.0)
+    assert cum["q50"].is_monotonic_increasing
+
+
+def test_the_model_cut_off_is_the_release_s_last_report_day(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    import datetime as dt
+
+    config = rn.model_config(rn.VARIANTS["renewal"])
+    for label, last in (
+        ("2026-10-24", "2026-10-24"),
+        ("2026-11-01", "2026-10-31"),
+    ):
+        rows = target.loc[target["vintage"] == label]
+        task = make_tasks(rows, delays, BacktestConfig(n_samples=20, seed=3))[0]
+        data = rn.vintage_inputs(task, config)
+        # The cut-off and the last data week end on the last report day,
+        # so 11-01, extracted a day after its last report, adds no empty
+        # week (hub issue #90).
+        cut = data.start_date + dt.timedelta(days=data.cutoff)
+        end = data.start_date + dt.timedelta(days=7 * data.n_weeks - 1)
+        assert cut.isoformat() == last
+        assert end == rn._saturday(last)

@@ -5,5 +5,7 @@ CEPH-Rtrend_BDBV,CEPH Lab at Indiana University,Rtrend Bundibugyo (Ebola),CC-BY-
 MOBS-GLEAM_BDBV,MOBS Lab at Northeastern University,Bundibugyo (Ebola) Gleam,CC-BY-4.0,https://epistorm.github.io/EBV2026/
 NTUCPH-LLM,National Taiwan University College of Public Health,AI Expert Panel,CC-BY-4.0,
 OHTJHU-BM,One Health Trust - Johns Hopkins University,Timeseries Foundation Model Ensemble with Delay Nowcast (bare minimum),CC0-1.0,https://github.com/CDDEP-DC/bdbv-fm
+UQPSU-national_level,University of Queensland and Penn State University,national_level,CC-BY-4.0,https://github.com/luzvpascal/EbolaSMC
 UQPSU-oldSchool,University of Queensland and Penn State University,oldSchool,CC-BY-4.0,https://github.com/luzvpascal/EbolaSMC
 pedro-zonemix,Pedro Pinto,Health-zone nowcast and forecast ensemble,CC-BY-4.0,
+seabbs-renewal,seabbs,Province renewal model with BVD Rt (PyRenew),CC-BY-4.0,https://samabbott.co.uk/BDBVHubRenewal/

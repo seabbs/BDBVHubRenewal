@@ -3,6 +3,7 @@ from __future__ import annotations
 import pandas as pd
 
 from bdbvhubrenewal.reporting.nowcast_plots import (
+    plot_place_summary,
     plot_relative_overall,
     plot_truth_changes,
 )
@@ -61,3 +62,22 @@ def test_plot_truth_changes_has_a_pair_of_panels_per_place_with_cases() -> None:
     assert len(shown) == 2
     assert shown[0].get_title() == "DRC"
     assert len(shown[0].get_lines()) == 2
+
+
+def test_plot_place_summary_has_a_row_per_place_by_scale() -> None:
+    table = pd.DataFrame(
+        {
+            "pool": ["provinces", "provinces", "zones", "national"],
+            "location": ["CD-NK", "CD-IT", "CD-IT-01", "CD"],
+            "model": ["a", "a", "a", "a"],
+            "rel_wis": [0.8, 1.2, 0.9, 1.0],
+        }
+    )
+    fig = plot_place_summary(
+        table, ["a"], {"a": ("#000000", "#ffffff")}, {"CD-IT": "Ituri"}
+    )
+    provinces, zones = fig.axes
+    assert provinces.get_title() == "Provinces"
+    labels = [t.get_text() for t in provinces.get_yticklabels()]
+    assert labels == ["CD-NK", "Ituri"]
+    assert zones.get_title() == "Health zones"

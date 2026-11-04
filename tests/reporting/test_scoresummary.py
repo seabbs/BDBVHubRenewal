@@ -42,6 +42,7 @@ def _scores() -> pd.DataFrame:
                             "truth_vintage": release,
                             "location": loc,
                             "target_end_date": week,
+                            "horizon": -1 if week == "2026-10-10" else 0,
                             "wis": rng.gamma(2, 5),
                             "log_wis": rng.gamma(2, 0.1),
                             "coverage_50": float(rng.random() < 0.5),
@@ -168,3 +169,26 @@ def test_browser_energy_matches_relative_energy(pool: str) -> None:
         assert row["n"] == exp["n_energy"] == 2
         for col in ("energy", "log_energy"):
             assert row["rel"][col] == pytest.approx(exp[f"rel_{col}"], abs=1e-3)
+
+
+def test_a_zero_baseline_gives_no_relative_score() -> None:
+    scores = _scores()
+    base = (scores["model"] == "randomwalk") & (scores["location"] == "CD")
+    scores.loc[base, ["wis", "log_wis"]] = 0.0
+    data = summary_rows(scores, MODELS, COLOURS, {})
+    got = _node(data, "function (r) { return r[3] === 0; }")
+    assert data["places"][0]["id"] == "CD"
+    assert all(r["rel"]["wis"] is None for r in got)
+    rel = relative_wis(scores.loc[scores["location"] == "CD"])
+    assert rel["rel_wis"].isna().all()
+
+
+def test_browser_summary_by_horizon_matches_relative_wis() -> None:
+    scores = _scores()
+    data = summary_rows(scores, MODELS, COLOURS, {})
+    got = _node(data, "function (r, i) { return d.horizons[i] === 0; }")
+    want = relative_wis(scores, by=("horizon",)).set_index(["horizon", "model"])
+    for row in got:
+        exp = want.loc[(0, MODELS[row["model"]])]
+        assert row["n"] == exp["n"]
+        assert row["rel"]["wis"] == pytest.approx(exp["rel_wis"], abs=1e-3)

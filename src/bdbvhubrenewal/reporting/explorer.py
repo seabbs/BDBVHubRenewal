@@ -9,28 +9,101 @@ from __future__ import annotations
 import json
 from collections.abc import Collection, Mapping
 from pathlib import Path
-from typing import Final
 
 import pandas as pd
 
 from bdbvhubrenewal.forecasters import NATIONAL
 
-__all__ = ["explorer_data", "explorer_html", "write_explorer"]
+__all__ = [
+    "TRAJECTORY_DRAWS",
+    "compact",
+    "draw_subset",
+    "explorer_data",
+    "explorer_html",
+    "trajectories",
+    "write_explorer",
+]
 
 QUANTILE_COLUMNS = ("q05", "q25", "q50", "q75", "q95")
 """Interval columns of the forecast quantiles."""
 
-SCORE_COLUMNS: Final[Mapping[str, tuple[str, str | None]]] = {
-    "wis": ("WIS", "Relative WIS"),
-    "log_wis": ("WIS, log scale", "Relative WIS, log scale"),
-    "coverage_50": ("50% coverage", None),
-    "coverage_90": ("90% coverage", None),
-    "bias": ("Bias", None),
-}
-"""Score columns in the explorer's table, with each label and the label of
-its value relative to the baseline, if shown. WIS on the log scale is the
-WIS of log(1 + counts), and its relative value divides mean log-scale WIS,
-never a log of WIS."""
+
+TRAJECTORY_DRAWS = 50
+"""Sample trajectories embedded per model, round and place."""
+
+
+def compact(value: float) -> float | int:
+    """Round a sample value to 0.1, as a whole number where it is one."""
+    v = round(float(value), 1)
+    return int(v) if v.is_integer() else v
+
+
+def draw_subset(
+    samples: pd.DataFrame, n: int = TRAJECTORY_DRAWS
+) -> pd.DataFrame:
+    """Keep each model's `n` lowest sample ids, in every round and place.
+
+    Where a model's draws are joint across places (ours), a kept draw
+    stays joint. Hub draws are joint across weeks within a place only.
+
+    Parameters
+    ----------
+    samples : pandas.DataFrame
+        Samples with `model` and `sample`.
+    n : int
+        Draws kept per model.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The rows of the kept draws, with `draw`, 0 to n - 1.
+    """
+    ids = samples.groupby("model")["sample"].apply(lambda x: sorted(set(x))[:n])
+    rank = {(m, s): k for m, keep in ids.items() for k, s in enumerate(keep)}
+    draw = [
+        rank.get((m, s), -1)
+        for m, s in zip(samples["model"], samples["sample"], strict=True)
+    ]
+    out = samples.assign(draw=draw)
+    return out.loc[out["draw"] >= 0]
+
+
+def trajectories(
+    samples: pd.DataFrame, n: int = TRAJECTORY_DRAWS
+) -> pd.DataFrame:
+    """Keep a fixed subset of each model's sample trajectories.
+
+    Each model keeps its `n` lowest sample ids, the same ids in every
+    round and place, so where a model's draws are joint across places
+    (ours) a kept draw stays joint. Hub draws are joint across weeks
+    within a place only, and are not linked across places here either.
+
+    Parameters
+    ----------
+    samples : pandas.DataFrame
+        Columns `model`, `reference_date`, `location`, `target_end_date`,
+        `sample` and `value`.
+    n : int
+        Draws kept per model.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per model, round, place and kept draw, with `draw` (0 to
+        n - 1), `start` (the first week) and `values`, the draw's weekly
+        values in week order.
+    """
+    keep = draw_subset(samples, n)
+    keep = keep.assign(
+        reference_date=keep["reference_date"].astype(str),
+        target_end_date=keep["target_end_date"].astype(str),
+    ).sort_values("target_end_date")
+    keys = ["model", "reference_date", "location", "draw"]
+    return (
+        keep.groupby(keys)
+        .agg(start=("target_end_date", "first"), values=("value", list))
+        .reset_index()
+    )
 
 
 def _level(location: str, provinces: set[str]) -> str:
@@ -45,10 +118,9 @@ def explorer_data(
     names: Mapping[str, str],
     complete_after_weeks: int,
     colours: Mapping[str, tuple[str, str]],
-    baseline: str | None = None,
-    scores: pd.DataFrame | None = None,
     truth_vintage: str | None = None,
     hidden: Collection[str] = (),
+    samples: pd.DataFrame | None = None,
 ) -> dict[str, object]:
     """Collect what the explorer draws.
 
@@ -66,22 +138,20 @@ def explorer_data(
     colours : mapping of str to (str, str)
         Model label to its light and dark colour, as in the static
         figures.
-    baseline : str, optional
-        Model label that relative WIS divides by.
-    scores : pandas.DataFrame, optional
-        Complete-week scores with `model` (the label shown),
-        `reference_date`, `location`, `target_end_date` and the
-        `SCORE_COLUMNS`.
     truth_vintage : str, optional
         Defaults to the latest real vintage.
     hidden : collection of str
         Model labels switched off until the reader switches them on.
+    samples : pandas.DataFrame, optional
+        Sample draws with `model` (the label shown), as `trajectories`
+        takes them. Models without samples are drawn as bands only.
 
     Returns
     -------
     dict
-        JSON-ready lists. Rows of `q` and `scores` index into `models`
-        and `rounds`.
+        JSON-ready lists. Rows of `q` and `traj` (model, round, place,
+        draw, first week, then the weekly values) index into `models` and
+        `rounds`; each model says whether it has trajectories.
     """
     real = target.loc[target["kind"] == "real"]
     truth_v = truth_vintage or str(real["vintage"].max())
@@ -117,10 +187,25 @@ def explorer_data(
             ["m", "r", "location", "target_end_date", *QUANTILE_COLUMNS]
         ].itertuples(index=False)
     ]
-    out: dict[str, object] = {
+    traj: list[list[object]] = []
+    if samples is not None:
+        t = trajectories(samples.loc[samples["model"].isin(models)])
+        t = t.loc[t["reference_date"].isin(rounds) & t["location"].isin(locs)]
+        traj = [
+            [
+                models.index(m),
+                rounds.index(r),
+                loc,
+                int(k),
+                start,
+                *(compact(v) for v in vals),
+            ]
+            for m, r, loc, k, start, vals in t.itertuples(index=False)
+        ]
+    have = {r[0] for r in traj}
+    return {
         "truth_vintage": truth_v,
         "complete_through": cut.date().isoformat(),
-        "baseline": models.index(baseline) if baseline in models else None,
         "locations": [
             {
                 "id": loc,
@@ -137,32 +222,14 @@ def explorer_data(
                 "on": m not in hidden,
                 "light": colours[m][0],
                 "dark": colours[m][1],
+                "trajectories": i in have,
             }
-            for m in models
+            for i, m in enumerate(models)
         ],
         "data": data,
         "q": rows,
-        "score_columns": [
-            {"key": key, "label": label, "relative": relative}
-            for key, (label, relative) in SCORE_COLUMNS.items()
-        ],
-        "scores": [],
+        "traj": traj,
     }
-    if scores is not None and not scores.empty:
-        s = scores.loc[scores["model"].isin(models)]
-        s = s.assign(
-            m=s["model"].map(models.index),
-            r=s["reference_date"]
-            .astype(str)
-            .map({r: i for i, r in enumerate(rounds)}),
-        ).dropna(subset=["r"])
-        out["scores"] = [
-            [int(m), int(r), loc, str(d), *(round(float(v), 3) for v in vals)]
-            for m, r, loc, d, *vals in s[
-                ["m", "r", "location", "target_end_date", *SCORE_COLUMNS]
-            ].itertuples(index=False)
-        ]
-    return out
 
 
 def write_explorer(path: Path, data: Mapping[str, object]) -> None:
@@ -171,7 +238,9 @@ def write_explorer(path: Path, data: Mapping[str, object]) -> None:
     path.write_text(json.dumps(data, separators=(",", ":")))
 
 
-def explorer_html(src: str, title: str, all_rounds: bool = False) -> str:
+def explorer_html(
+    src: str, title: str, all_rounds: bool = False, summary: str | None = None
+) -> str:
     """Return the page element the explorer script fills.
 
     Parameters
@@ -182,8 +251,13 @@ def explorer_html(src: str, title: str, all_rounds: bool = False) -> str:
         Accessible name of the explorer.
     all_rounds : bool
         Start with all rounds pooled, rather than the latest round.
+    summary : str, optional
+        URL of the page's `summary_rows` JSON, whose rounds are the
+        explorer's. The table summarises it for the selection.
     """
     start = ' data-round="all"' if all_rounds else ""
+    if summary is not None:
+        start += f' data-summary="{summary}"'
     return (
         f'<div class="explorer" data-src="{src}"{start} role="group" '
         f'aria-label="{title}">\n'

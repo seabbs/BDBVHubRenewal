@@ -51,7 +51,6 @@ from bdbvhubrenewal.evaluation.hubcompare import (
     attribution,
     forecast_quantiles,
     load_comparison_config,
-    overall_comparison,
     stored_forecasts,
     summarise_comparison,
 )
@@ -61,7 +60,7 @@ from bdbvhubrenewal.evaluation.nowcast import (
     relative_wis,
 )
 from bdbvhubrenewal.evaluation.scoring import summarise_scores
-from bdbvhubrenewal.evaluation.zones import zone_relative_skill
+from bdbvhubrenewal.evaluation.zones import SUMMED, zone_relative_skill
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastTask,
@@ -75,6 +74,7 @@ from bdbvhubrenewal.reporting.explorer import (
 )
 from bdbvhubrenewal.reporting.lag_comparison import make_lag_comparison
 from bdbvhubrenewal.reporting.nowcast_plots import (
+    plot_place_summary,
     plot_relative_overall,
     plot_release_nowcasts,
     plot_truth_changes,
@@ -106,9 +106,6 @@ from bdbvhubrenewal.reporting.plots import (
 from bdbvhubrenewal.reporting.scorechart import (
     ENERGY_METRICS,
     OVERALL_METRICS,
-    SCORE_METRICS,
-    score_chart_data,
-    score_chart_html,
     write_score_chart,
 )
 from bdbvhubrenewal.reporting.scoresummary import summary_html, summary_rows
@@ -259,7 +256,7 @@ def make_report(
     # Backtest, held-out and comparison pages.
     names = [s.name for s in list_models()]
     _release_section(fig, gen, res, real, names)
-    _backtest_page(fig, gen, res, out, config, target, names)
+    _backtest_page(fig, gen, res, out, config, target, names, data_dir)
     _heldout_page(fig, gen, res, target, names, config)
     _comparison_page(fig, gen, Path(hub_comparison), target)
 
@@ -337,6 +334,28 @@ def _downward_table(real: pd.DataFrame, zones: pd.DataFrame) -> str:
     )
 
 
+def _model_colours(
+    models: Sequence[str], registry: Sequence[str] | None = None
+) -> dict[str, tuple[str, str]]:
+    """Each model's light and dark colour, by its place in the registry.
+
+    A model outside the registry, such as the as-reported floor, is grey.
+    """
+    registry = list(registry or models)
+    muted = THEMES["light"]["muted"], THEMES["dark"]["muted"]
+    return {
+        m: (
+            (
+                model_colour(m, registry, "light"),
+                model_colour(m, registry, "dark"),
+            )
+            if m in registry
+            else muted
+        )
+        for m in models
+    }
+
+
 def _ours(frame: pd.DataFrame, names: Sequence[str]) -> pd.DataFrame:
     """Keep our models and the as-reported floor, without the hub teams."""
     return frame.loc[frame["model"].isin([*names, BASELINE])]
@@ -353,13 +372,14 @@ def _release_section(
     paths = {
         n: res / f"nowcast-{n}.csv" for n in ("scores", "quantiles", "origins")
     }
-    scores = _ours(pd.read_csv(paths["scores"]), names)
+    scores = _ours(_with_horizon(pd.read_csv(paths["scores"])), names)
     quantiles = _ours(pd.read_csv(paths["quantiles"]), names)
     origins = _ours(pd.read_csv(paths["origins"]).fillna(""), names)
     national = scores["location"] == NATIONAL
     scores["pool"] = national.map({True: "national", False: "provinces"})
-    zones = pd.read_csv(res / "zone-scores.csv", low_memory=False)
-    zones = zones.loc[zones["model"].isin(set(scores["model"]))]
+    zones = _as_submitted(
+        pd.read_csv(res / "zone-scores.csv", low_memory=False)
+    )
     pooled = pd.concat([scores, zones.assign(pool="zones")])
     pooled["target"] = pooled["target"].map(_TARGET_LABELS)
     energy = _ours(
@@ -381,26 +401,56 @@ def _release_section(
     by_place = relative_wis(scores, ("target", "origin", "location"))
     reported = overall.loc[overall["target"] == _TARGET_LABELS["reported"]]
     ours = [*names, BASELINE]
-    muted = THEMES["light"]["muted"], THEMES["dark"]["muted"]
+    colours = _model_colours(ours, names)
+    rep = pooled.loc[pooled["target"] == _TARGET_LABELS["reported"]]
+    # Rounds are named by their reference date, as in the explorer.
+    rep = rep.assign(
+        origin=rep["origin"].map(lambda v: str(reference_date_for_vintage(v)))
+    )
     write_score_chart(
         fig / "scoresummary-backtest.json",
         summary_rows(
-            pooled.loc[pooled["target"] == _TARGET_LABELS["reported"]],
+            rep,
             ours,
-            {
-                m: (
-                    (
-                        model_colour(m, names, "light"),
-                        model_colour(m, names, "dark"),
-                    )
-                    if m in names
-                    else muted
-                )
-                for m in ours
-            },
+            colours,
             _location_names(real),
             default_on=[m for m in ours if m != "randomwalk"],
             energy=energy.loc[energy["target"] == _TARGET_LABELS["reported"]],
+        ),
+    )
+    save_light_dark(
+        partial(
+            plot_place_summary,
+            relative_wis(rep, ("pool", "location")),
+            ours,
+            colours,
+            _location_names(real),
+        ),
+        fig / "scores-place.svg",
+    )
+    _write(
+        gen / "scoresummary-horizon.md",
+        summary_html(
+            "../figures/scoresummary-backtest.json",
+            "Scores by horizon",
+            view="horizon",
+            static="../figures/scores-horizon.svg",
+        ),
+    )
+    _write(
+        gen / "scores-location.md",
+        filter_table(
+            _table(relative_wis(pooled, ("target", "pool", "location"))),
+            ["target", "pool", "model"],
+        ),
+    )
+    _write(
+        gen / "scoresummary-place.md",
+        summary_html(
+            "../figures/scoresummary-backtest.json",
+            "Scores by place",
+            view="place",
+            static="../figures/scores-place.svg",
         ),
     )
     save_light_dark(
@@ -876,10 +926,66 @@ def _lopo_section(path: Path) -> str:
     )
 
 
+def _zone_truth_changes(
+    fig: Path, data_dir: Path | str, target: pd.DataFrame
+) -> str:
+    """Chart each province's zone counts by release, a tab per province.
+
+    Each release's zone counts are taken over the latest release's last
+    16 weeks, with 0 for a week with no onsets.
+    """
+    daily_zones = load_daily_zones(data_dir)
+    real = target.loc[target["kind"] == "real"]
+    names = _location_names(target)
+    end = pd.Timestamp(real["target_end_date"].max())
+    start = (end - pd.Timedelta(weeks=16)).strftime("%Y-%m-%d")
+    zones = pd.concat(
+        [
+            zone_counts(daily_zones, v, start, names)
+            for v in sorted(set(real["vintage"].astype(str)))
+            if (daily_zones["vintage"].astype(str) == v).any()
+        ],
+        ignore_index=True,
+    )
+    tabs = []
+    by_prov = zones.loc[zones["vintage"] == zones["vintage"].max()]
+    order = by_prov.groupby("province")["total"].sum()
+    for prov in order.sort_values(ascending=False, kind="stable").index:
+        path = fig / f"truth-changes-{str(prov).lower()}.svg"
+        save_light_dark(
+            partial(
+                plot_truth_changes,
+                zones.loc[zones["province"] == prov],
+                {},
+            ),
+            path,
+        )
+        label = names.get(str(prov), str(prov))
+        alt = f"Zone counts in {label} by onset week in each release."
+        tabs.append(
+            f'=== "{label}"\n\n'
+            f"    ![{alt}](figures/{path.name}#only-light)\n"
+            f"    ![{alt}](figures/{path.stem}-dark.svg#only-dark)\n"
+        )
+    return "\n".join(tabs)
+
+
+def _as_submitted(zones: pd.DataFrame) -> pd.DataFrame:
+    """Keep the zone rows made to sum to the provinces, as submitted.
+
+    They are named by their model, so `randomwalk` is the summed
+    baseline.
+    """
+    summed = zones.loc[zones["model"].str.endswith(SUMMED)]
+    return summed.assign(model=summed["model"].str.removesuffix(SUMMED))
+
+
 def _zone_section(path: Path, energy_path: Path) -> str:
-    """Return the health-zone section."""
-    scores = pd.read_csv(path, low_memory=False)
-    joint = relative_energy(pd.read_csv(energy_path), by=("scale",))
+    """Return the health-zone table, closed, in the submitted form."""
+    scores = _as_submitted(pd.read_csv(path, low_memory=False))
+    joint = relative_energy(
+        _as_submitted(pd.read_csv(energy_path)), by=("scale",)
+    )
     cols = ["n", "wis", "log_wis", "coverage_50", "coverage_90", "bias"]
     energy = ["n_energy", "rel_energy", "rel_log_energy"]
     table = (
@@ -889,20 +995,9 @@ def _zone_section(path: Path, energy_path: Path) -> str:
         )
         .merge(joint[["model", *energy]], on="model")
     )
-    by = zone_relative_skill(scores, by=("horizon",)).pivot(
-        index="model", columns="horizon", values="relative_wis"
-    )
-    by.columns = [f"week {int(h)}" for h in by.columns]
-    return (
-        "## Health zones\n\n"
-        "`randomwalk` and `randomwalknowcast` on each zone with cases, as "
-        "run and summed to provinces "
-        "([Health zones](methods/evaluation.md#health-zones)).\n"
-        "The [energy score](methods/evaluation.md#energy-score) takes every "
-        "zone and week as one forecast per origin and release.\n\n"
-        + _table(table[["model", *cols, "relative_wis", *energy]])
-        + "\n\nRelative WIS by week, with 0 the week of the reference "
-        "date.\n\n" + _table(by.reset_index())
+    return _dropdown(
+        _table(table[["model", *cols, "relative_wis", *energy]]),
+        "Health zones, over every origin",
     )
 
 
@@ -987,38 +1082,6 @@ _RELEASE_MATCH: Final = [
 """Columns that identify one forecast scored against one release."""
 
 
-def _horizon_chart(
-    fig: Path,
-    gen: Path,
-    scores: pd.DataFrame,
-    names: Sequence[str],
-) -> None:
-    """Write an interactive chart of mean scores by horizon, and its fallback.
-
-    The static WIS figure is shown without JavaScript.
-    """
-    grp = scores.groupby(["model", "horizon"])
-    table = grp[list(SCORE_METRICS)].mean()
-    table.insert(0, "n", grp.size())
-    table = table.reset_index()
-    save_light_dark(
-        partial(plot_scores, scores, by="horizon", metric="wis", models=names),
-        fig / "scores-wis-horizon.svg",
-    )
-    write_score_chart(
-        fig / "scorechart-horizon.json",
-        score_chart_data(table, "horizon", SCORE_METRICS, names),
-    )
-    _write(
-        gen / "scorechart-horizon.md",
-        score_chart_html(
-            "../figures/scorechart-horizon.json",
-            "Mean scores by horizon",
-            static="../figures/scores-wis-horizon.svg",
-        ),
-    )
-
-
 def _horizon_table(
     gen: Path,
     reported: pd.DataFrame,
@@ -1077,10 +1140,15 @@ def _forecast_tabs(
         "Sample trajectories",
     )
     if explorer_src is None:
-        return "## Forecasts against later data\n\n" + static
+        return "## Forecasts by place\n\n" + static
     return (
-        "## Forecasts against later data\n\n"
-        + explorer_html(explorer_src, "Backtest forecasts", all_rounds=True)
+        "## Forecasts by place\n\n"
+        + explorer_html(
+            explorer_src,
+            "Backtest forecasts",
+            all_rounds=True,
+            summary="../figures/scoresummary-backtest.json",
+        )
         + "\n"
         + static
     )
@@ -1263,32 +1331,19 @@ def _backtest_page(
     config: BacktestConfig,
     target: pd.DataFrame,
     names: list[str],
+    data_dir: Path | str,
 ) -> None:
     k = config.complete_after_weeks
     scores = _ours(_release_scores(res), names)
     reported = scores.loc[scores["target"] == "reported"]
-    _horizon_chart(fig, gen, reported, names)
     save_light_dark(
         partial(
-            plot_scores, reported, by="location", metric="wis", models=names
+            plot_scores, reported, by="horizon", metric="wis", models=names
         ),
-        fig / "scores-wis-location.svg",
-    )
-    _write(
-        gen / "scoresummary-place.md",
-        summary_html(
-            "../figures/scoresummary-backtest.json",
-            "Scores by place",
-            view="place",
-            static="../figures/scores-wis-location.svg",
-        ),
+        fig / "scores-horizon.svg",
     )
     _horizon_table(gen, reported, names)
     _write(gen / "backtest-findings.md", _backtest_findings(scores))
-    _write(
-        gen / "scores-location.md",
-        _table(relative_wis(scores, ("target", "location"))),
-    )
     save_light_dark(
         partial(plot_scores_by_truth, reported, models=names),
         fig / "scores-by-truth.svg",
@@ -1321,6 +1376,9 @@ def _backtest_page(
         gen / "truth-changes.md",
         f"![{alt}](figures/truth-changes.svg#only-light)\n"
         f"![{alt}](figures/truth-changes-dark.svg#only-dark)\n\n"
+        "Health zones, by province.\n\n"
+        + _zone_truth_changes(fig, data_dir, target)
+        + "\n"
         + _dropdown(_table(wide.reset_index()), "National counts by release"),
     )
     fc_path = out / "forecasts.csv.gz"
@@ -1350,8 +1408,6 @@ def _backtest_page(
     if shown:
         quantiles = forecast_quantiles(real_fc.assign(source="ours"))
         quantiles = quantiles.assign(ours=True)
-        rounds = real_fc[["vintage", "reference_date"]].drop_duplicates()
-        complete = scores.loc[scores["target"] == "complete"]
         write_explorer(
             fig / "explorer-backtest.json",
             explorer_data(
@@ -1366,8 +1422,7 @@ def _backtest_page(
                     )
                     for m in shown
                 },
-                baseline="randomwalk",
-                scores=complete.merge(rounds, on="vintage"),
+                samples=real_fc,
             ),
         )
         explorer_src = "../figures/explorer-backtest.json"
@@ -1629,108 +1684,6 @@ def _teams_table(teams: pd.DataFrame, hub_ids: Mapping[str, str]) -> str:
     return table.to_markdown(index=False) + "\n"
 
 
-def _overall_table(
-    fig: Path,
-    scores: pd.DataFrame,
-    energy: pd.DataFrame,
-    baseline: str,
-    hub_ids: Mapping[str, str],
-    colours: Mapping[str, tuple[str, str]],
-) -> str:
-    """Chart and tabulate every model over all scored rounds, by scale.
-
-    The chart starts with the hub teams, our submitted models and the
-    baseline. Our other models can be switched on. `colours` are those of
-    the round figures and the explorer, so a model has one colour in all.
-    """
-    overall = overall_comparison(scores, energy, baseline)
-    metrics = {**OVERALL_METRICS, **ENERGY_METRICS}
-    raw = list(overall["model"])
-    overall["model"] = [
-        comparison_label(m, "hub" if hub else "real", hub_ids)
-        for m, hub in zip(overall["model"], overall["hub"], strict=True)
-    ]
-    hub = overall.loc[overall["hub"], "model"].drop_duplicates()
-    ours = dict(
-        zip(
-            overall.loc[~overall["hub"], "model"],
-            [n for n, h in zip(raw, overall["hub"], strict=True) if not h],
-            strict=True,
-        )
-    )
-    registry = [spec.name for spec in list_models()]
-    ours = dict(sorted(ours.items(), key=lambda lm: registry.index(lm[1])))
-    shown = {comparison_label(m, "real", hub_ids) for m in hub_ids}
-    models = [*ours, *sorted(hub)]
-    save_light_dark(
-        partial(
-            plot_relative_overall,
-            overall,
-            models,
-            baseline,
-            x="scale",
-            metrics=metrics,
-            colours=colours,
-        ),
-        fig / "comparison-overall.svg",
-    )
-    write_score_chart(
-        fig / "scorechart-comparison.json",
-        score_chart_data(
-            overall,
-            "scale",
-            metrics,
-            models,
-            default_on=[*sorted(hub), *(m for m in ours if m in shown)],
-            x_label="Scale",
-            kind="bar",
-            colours=colours,
-        ),
-    )
-    chart = score_chart_html(
-        "../figures/scorechart-comparison.json",
-        "Overall comparison scores",
-        static="../figures/comparison-overall.svg",
-    )
-    have = set(overall["scale"])
-    scales = [s for s in ("national", "provinces", "zones") if s in have]
-    names = {
-        "rel_wis": "rel. WIS",
-        "rel_log_wis": "rel. WIS, log scale",
-        "n": "n",
-        "coverage_50": "50%",
-        "coverage_90": "90%",
-        "bias": "bias",
-        "rel_energy": "rel. energy",
-        "rel_log_energy": "rel. energy, log scale",
-        "n_energy": "n energy",
-    }
-    long = overall.melt(
-        id_vars=["model", "scale"], value_vars=list(names), var_name="metric"
-    )
-    long["column"] = long["scale"] + " " + long["metric"].map(names)
-    wide = long.pivot(index="model", columns="column", values="value")
-    order = [f"{s} {n}" for s in scales for n in names.values()]
-    wide = wide[order].sort_values(order[0]).round(2).reset_index()
-    wide = wide.astype(object).where(wide.notna(), "")
-    missing = sorted({"national", "provinces", "zones"} - have)
-    gap = f" There are no scores for {' or '.join(missing)}." if missing else ""
-    return (
-        chart
-        + "\n"
-        + "Over every scored round, on the count each later release reported "
-        f"and on the forecasts `{baseline}` also made, by scale.{gap}\n"
-        "Our other models and randomwalk can be switched on in the key.\n"
-        "randomwalk stays the reference for the relative scores either way.\n"
-        "The [energy score](methods/evaluation.md#energy-score) scores each "
-        "scale as one forecast per round and release, on the places and weeks "
-        "every model forecast, so a team that covers few places shrinks "
-        "that set for all.\n"
-        "Hub teams' samples are joint across weeks within a place only.\n\n"
-        + _table(wide)
-    )
-
-
 def _comparison_page(
     fig: Path,
     gen: Path,
@@ -1743,6 +1696,9 @@ def _comparison_page(
         for name in (
             "comparison-lead.md",
             "comparison-scores.md",
+            "comparison-horizon.md",
+            "comparison-place.md",
+            "comparison-rounds.md",
             "comparison-teams.md",
             "comparison-figures.md",
         ):
@@ -1773,8 +1729,8 @@ def _comparison_page(
     rounds = ", ".join(sorted(set(sent.astype(str)))) or "none yet"
     _write(
         gen / "comparison-lead.md",
-        "Scores against what each later release reported, from the "
-        "release serving each round "
+        "Scores on the weeks the latest release reports in full, from "
+        "the release serving each round "
         "([how scoring works]"
         "(methods/evaluation.md#comparison-with-hub-forecasts)).\n"
         "A model shown with a hub id is what we submitted under that id "
@@ -1788,18 +1744,18 @@ def _comparison_page(
         else pd.DataFrame()
     )
     pending = pd.read_csv(cmp_dir / "pending.csv")
+    _comparison_summary(
+        fig,
+        gen,
+        scores,
+        pd.read_csv(cmp_dir / "energy.csv"),
+        baseline,
+        hub_ids,
+        colours,
+        _location_names(target),
+    )
     parts = []
     if not scores.empty:
-        parts.append(
-            _overall_table(
-                fig,
-                scores,
-                pd.read_csv(cmp_dir / "energy.csv"),
-                baseline,
-                hub_ids,
-                colours,
-            )
-        )
         table = summarise_comparison(scores, baseline)
         table = _without_baseline(table, baseline)
         table["target"] = table["target"].map(_TARGET_LABELS)
@@ -1819,7 +1775,7 @@ def _comparison_page(
             "published.\n"
         )
     _write(
-        gen / "comparison-scores.md",
+        gen / "comparison-rounds.md",
         "\n".join(p for p in parts if p) or "No round has a score yet.\n",
     )
     teams = pd.read_csv(cmp_dir / "teams.csv")
@@ -1842,15 +1798,6 @@ def _comparison_page(
             "model",
         ]
     )
-    explorer_scores = None
-    if not scores.empty:
-        done = scores.loc[scores["target"] == "complete"]
-        explorer_scores = done.assign(
-            model=[
-                comparison_label(m, src, hub_ids)
-                for m, src in zip(done["model"], done["source"], strict=True)
-            ]
-        )
     write_explorer(
         fig / "explorer-comparison.json",
         explorer_data(
@@ -1859,10 +1806,11 @@ def _comparison_page(
             _location_names(target),
             k,
             colours,
-            baseline=_baseline_label(baseline, labelled),
-            scores=explorer_scores,
             truth_vintage=truth,
             hidden=hidden,
+            samples=_label_comparison(
+                pd.read_csv(cmp_dir / "samples.csv.gz"), hub_ids
+            ),
         ),
     )
     tabs = []
@@ -1889,9 +1837,151 @@ def _comparison_page(
         )
     _write(
         gen / "comparison-figures.md",
-        explorer_html("../figures/explorer-comparison.json", "Hub forecasts")
+        explorer_html(
+            "../figures/explorer-comparison.json",
+            "Hub forecasts",
+            all_rounds=True,
+            summary="../figures/scoresummary-comparison.json",
+        )
         + "\n"
         + _dropdown("\n".join(tabs), "Static figures by round"),
+    )
+
+
+def _comparison_summary(
+    fig: Path,
+    gen: Path,
+    scores: pd.DataFrame,
+    energy: pd.DataFrame,
+    baseline: str,
+    hub_ids: Mapping[str, str],
+    colours: Mapping[str, tuple[str, str]],
+    names: Mapping[str, str],
+) -> None:
+    """Write the Overall and By place summaries of the complete weeks.
+
+    They are the Backtest page's summaries, on the hub rounds. The hub
+    teams and our submitted models are ticked at first, and randomwalk is
+    the reference for relative scores.
+    """
+    if scores.empty:
+        for name in (
+            "comparison-scores.md",
+            "comparison-horizon.md",
+            "comparison-place.md",
+        ):
+            _write(gen / name, "No round has a score yet.\n")
+        return
+    done = _label_comparison(
+        scores.loc[scores["target"] == "complete"], hub_ids
+    )
+    rows = done.assign(
+        kind="real",
+        vintage=done["origin"],
+        origin=done["reference_date"],
+        pool=done["location"]
+        .str.count("-")
+        .map({0: "national", 1: "provinces", 2: "zones"}),
+    )
+    base = _baseline_label(baseline, rows)
+    hub = sorted(set(rows.loc[rows["source"] == "hub", "model"]))
+    registry = [spec.name for spec in list_models()]
+    ours = sorted(
+        set(rows.loc[rows["source"] != "hub", "model"]),
+        key=lambda label: registry.index(label.split(" (")[0]),
+    )
+    models = [*ours, *hub]
+    sent = {comparison_label(m, "real", hub_ids) for m in hub_ids}
+    write_score_chart(
+        fig / "scoresummary-comparison.json",
+        summary_rows(
+            rows,
+            models,
+            colours,
+            names,
+            baseline=base,
+            default_on=[*hub, *(m for m in ours if m in sent)],
+            energy=_label_comparison(
+                energy.loc[energy["target"] == "complete"], hub_ids
+            ).assign(origin=lambda e: e["reference_date"]),
+        ),
+    )
+    overall = relative_wis(rows, ("pool",), baseline=base)
+    save_light_dark(
+        partial(
+            plot_relative_overall,
+            overall,
+            models,
+            base,
+            colours=colours,
+        ),
+        fig / "comparison-overall.svg",
+    )
+    _write(
+        gen / "comparison-scores.md",
+        "Scores on the complete weeks "
+        "([metrics](methods/evaluation.md#scores)).\n\n"
+        + summary_html(
+            "../figures/scoresummary-comparison.json",
+            "Overall scores by scale",
+            static="../figures/comparison-overall.svg",
+        )
+        + "\n"
+        + _dropdown(
+            filter_table(_table(overall), ["pool", "model"]),
+            "Scores by scale, over every round",
+        ),
+    )
+    save_light_dark(
+        partial(
+            plot_scores,
+            rows,
+            by="horizon",
+            metric="wis",
+            models=models,
+            colours=colours,
+        ),
+        fig / "comparison-horizon.svg",
+    )
+    _write(
+        gen / "comparison-horizon.md",
+        summary_html(
+            "../figures/scoresummary-comparison.json",
+            "Scores by horizon",
+            view="horizon",
+            static="../figures/comparison-horizon.svg",
+        ),
+    )
+    save_light_dark(
+        partial(
+            plot_place_summary,
+            relative_wis(rows, ("pool", "location"), baseline=base),
+            models,
+            colours,
+            names,
+        ),
+        fig / "comparison-place.svg",
+    )
+    _write(
+        gen / "comparison-place.md",
+        summary_html(
+            "../figures/scoresummary-comparison.json",
+            "Scores by place",
+            view="place",
+            static="../figures/comparison-place.svg",
+        ),
+    )
+
+
+def _label_comparison(
+    frame: pd.DataFrame, hub_ids: Mapping[str, str]
+) -> pd.DataFrame:
+    """Name each row's model as the comparison shows it."""
+    return frame.assign(
+        model=[
+            comparison_label(m, src, hub_ids)
+            for m, src in zip(frame["model"], frame["source"], strict=True)
+        ]
     )
 
 

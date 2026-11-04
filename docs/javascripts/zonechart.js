@@ -35,6 +35,7 @@
       h("option", { value: p.id }, selProv, p.name + " (" + p.id + ")");
     });
     var selZone = h("select", {}, h("label", {}, controls, "Zone "));
+    var view = T.viewSelect(controls, true, function () { draw(); });
     var zoom = Z.create(controls, function () { draw(); });
     var keys = T.legend(root, d.models, function () { draw(); });
     var note = h("p", { class: "explorer-note" }, root);
@@ -76,9 +77,23 @@
       data.forEach(function (p) {
         if (Z.visible(zoom, day(p[0]))) ymax = Math.max(ymax, p[1]);
       });
-      q.forEach(function (r) {
-        if (Z.visible(zoom, day(r[1]))) ymax = Math.max(ymax, r[6]);
+      var traj = view.value !== "traj" ? [] : (d.traj[zone] || []).filter(function (t) {
+        return keys.on[t[0]];
       });
+      if (view.value === "traj") {
+        traj.forEach(function (t) {
+          for (var k = 3; k < t.length; k++) {
+            if (Z.visible(zoom, day(t[2]) + (k - 3) * 7 * DAY)) ymax = Math.max(ymax, t[k]);
+          }
+        });
+        q.forEach(function (r) {
+          if (Z.visible(zoom, day(r[1]))) ymax = Math.max(ymax, r[4]);
+        });
+      } else {
+        q.forEach(function (r) {
+          if (Z.visible(zoom, day(r[1]))) ymax = Math.max(ymax, r[6]);
+        });
+      }
       var yr = Z.yRange(zoom, 0, ymax * 1.05, "");
       var y0 = yr[0], y1 = yr[1];
       var W = 760, H = 300, L = 44, R = 10, Tp = 10, B = 28;
@@ -111,8 +126,19 @@
           var bot = own.slice().reverse().map(function (r) { return X(day(r[1])) + "," + Y(r[lo]); });
           el("polygon", { points: top.concat(bot).join(" "), fill: c, "fill-opacity": op }, plot);
         }
-        band(2, 6, 0.12);
-        band(3, 5, 0.22);
+        if (view.value === "traj") {
+          traj.filter(function (t) { return t[0] === m; }).forEach(function (t) {
+            var pts = [];
+            for (var k = 3; k < t.length; k++) {
+              pts.push(X(day(t[2]) + (k - 3) * 7 * DAY) + "," + Y(t[k]));
+            }
+            el("polyline", { points: pts.join(" "), fill: "none", stroke: c,
+              "stroke-width": 0.8, "stroke-opacity": 0.18 }, plot);
+          });
+        } else {
+          band(2, 6, 0.12);
+          band(3, 5, 0.22);
+        }
         el("polyline", { fill: "none", stroke: c, "stroke-width": 2,
           points: own.map(function (r) { return X(day(r[1])) + "," + Y(r[4]); }).join(" ") }, plot);
         own.forEach(function (r) {

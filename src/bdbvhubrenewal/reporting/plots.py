@@ -1590,6 +1590,7 @@ def plot_scores(
     metric: str = "wis",
     models: Sequence[str] | None = None,
     mode: str = "light",
+    colours: Mapping[str, tuple[str, str]] | None = None,
 ) -> Figure:
     """Plot mean scores by horizon or location, one panel per vintage kind.
 
@@ -1606,6 +1607,8 @@ def plot_scores(
         Models in registry order.
     mode : str
         `"light"` or `"dark"`.
+    colours : mapping of str to (str, str), optional
+        Model to its light and dark colour. Defaults to `model_colour`.
 
     Returns
     -------
@@ -1626,7 +1629,11 @@ def plot_scores(
         for i, m in enumerate(models):
             if m not in mean.columns:
                 continue
-            col = model_colour(m, models, mode)
+            col = (
+                colours[m][0 if mode == "light" else 1]
+                if colours
+                else model_colour(m, models, mode)
+            )
             if by == "horizon":
                 ax.plot(
                     mean.index,

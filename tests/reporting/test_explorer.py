@@ -38,48 +38,25 @@ def _inputs() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
             "total": [7, 4],
         }
     )
-    scores = pd.DataFrame(
-        {
-            "model": ["a (ours)", "hub"],
-            "reference_date": "2026-10-31",
-            "location": "CD",
-            "target_end_date": "2026-10-17",
-            "wis": [1.0, 2.0],
-            "log_wis": [0.1, 0.2],
-            "coverage_50": 1.0,
-            "coverage_90": 1.0,
-            "bias": 0.0,
-        }
-    )
-    return quantiles, target, scores
+    return quantiles, target
 
 
 def test_explorer_data_levels_and_rows() -> None:
-    quantiles, target, scores = _inputs()
+    quantiles, target = _inputs()
     data = explorer_data = explorer.explorer_data(
-        quantiles,
-        target,
-        {"CD": "DRC"},
-        3,
-        COLOURS,
-        baseline="hub",
-        scores=scores,
+        quantiles, target, {"CD": "DRC"}, 3, COLOURS
     )
     levels = {loc["id"]: loc["level"] for loc in data["locations"]}  # type: ignore[attr-defined]
     assert levels == {"CD": "National", "CD-IT": "Province", "CD-IT-01": "Zone"}
     assert data["complete_through"] == "2026-10-03"
-    assert data["baseline"] == 1
     assert len(data["q"]) == 6  # type: ignore[arg-type]
-    assert len(data["scores"]) == 2  # type: ignore[arg-type]
     assert data["data"]["CD"] == [["2026-10-17", 7]]  # type: ignore[index]
     assert explorer_data is data
 
 
-def test_explorer_without_scores(tmp_path: Path) -> None:
-    quantiles, target, _ = _inputs()
+def test_write_explorer_makes_the_folder(tmp_path: Path) -> None:
+    quantiles, target = _inputs()
     data = explorer.explorer_data(quantiles, target, {}, 3, COLOURS)
-    assert data["scores"] == []
-    assert data["baseline"] is None
     path = tmp_path / "sub" / "x.json"
     explorer.write_explorer(path, data)
     assert json.loads(path.read_text())["rounds"] == ["2026-10-31"]
@@ -92,7 +69,7 @@ def test_explorer_html_names_the_data() -> None:
 
 
 def test_explorer_hides_models_until_switched_on() -> None:
-    quantiles, target, _ = _inputs()
+    quantiles, target = _inputs()
     data = explorer.explorer_data(
         quantiles, target, {}, 3, COLOURS, hidden=["a (ours)"]
     )
@@ -103,6 +80,7 @@ def test_explorer_hides_models_until_switched_on() -> None:
             "on": False,
             "light": "#111111",
             "dark": "#eeeeee",
+            "trajectories": False,
         },
         {
             "name": "hub",
@@ -110,6 +88,7 @@ def test_explorer_hides_models_until_switched_on() -> None:
             "on": True,
             "light": "#222222",
             "dark": "#dddddd",
+            "trajectories": False,
         },
     ]
 
@@ -121,16 +100,49 @@ def test_explorer_html_can_start_with_all_rounds() -> None:
     assert "data-round" not in explorer.explorer_html("x.json", "Forecasts")
 
 
-def test_explorer_score_columns_name_their_label() -> None:
-    quantiles, target, scores = _inputs()
-    data = explorer.explorer_data(
-        quantiles, target, {}, 3, COLOURS, scores=scores
+def test_explorer_html_names_the_summary_it_tabulates() -> None:
+    html = explorer.explorer_html("x.json", "Forecasts", summary="s.json")
+    assert 'data-summary="s.json"' in html
+
+
+def test_trajectories_keep_the_same_draws_in_every_place() -> None:
+    samples = pd.DataFrame(
+        [
+            {
+                "model": "a (ours)",
+                "reference_date": "2026-10-31",
+                "location": loc,
+                "target_end_date": week,
+                "sample": k,
+                "value": float(k),
+            }
+            for loc in ("CD", "CD-IT")
+            for week in ("2026-10-24", "2026-10-31")
+            for k in (7, 3, 9)
+        ]
     )
-    cols = data["score_columns"]
-    log_wis = {
-        "key": "log_wis",
-        "label": "WIS, log scale",
-        "relative": "Relative WIS, log scale",
-    }
-    assert cols[1] == log_wis  # type: ignore[index]
-    assert len(data["scores"][0]) == 4 + len(cols)  # type: ignore[index, arg-type]
+    t = explorer.trajectories(samples, n=2)
+    assert set(t["draw"]) == {0, 1}
+    # Draw 0 is sample 3 everywhere, so it is joint across places.
+    first = t.loc[t["draw"] == 0]
+    assert [list(v) for v in first["values"]] == [[3.0, 3.0], [3.0, 3.0]]
+    assert set(first["start"]) == {"2026-10-24"}
+
+
+def test_explorer_marks_models_with_trajectories() -> None:
+    quantiles, target = _inputs()
+    samples = pd.DataFrame(
+        {
+            "model": "a (ours)",
+            "reference_date": "2026-10-31",
+            "location": "CD",
+            "target_end_date": ["2026-10-24", "2026-10-31"],
+            "sample": 1,
+            "value": [5.0, 6.0],
+        }
+    )
+    data = explorer.explorer_data(
+        quantiles, target, {}, 3, COLOURS, samples=samples
+    )
+    assert [m["trajectories"] for m in data["models"]] == [True, False]  # type: ignore[attr-defined]
+    assert data["traj"] == [[0, 0, "CD", 0, "2026-10-24", 5.0, 6.0]]

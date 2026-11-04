@@ -657,9 +657,10 @@ def relative_wis(
     -------
     pandas.DataFrame
         One row per cell and model, over the forecasts the baseline also
-        made: `n`, `wis`, `base_wis`, `rel_wis`, `rel_log_wis` (mean log
-        WIS over the baseline's), the coverage of the 50% and 90%
-        intervals and the mean `bias`.
+        made: `n`, `wis`, `base_wis`, `rel_wis`, `rel_log_wis` (mean WIS
+        on the log scale over the baseline's), missing where the baseline's
+        mean is 0, the coverage of the 50% and 90% intervals and the mean
+        `bias`.
     """
     match = ["target", "origin", "truth_vintage", "location", "target_end_date"]
     base = scores.loc[scores["model"] == baseline, [*match, "wis", "log_wis"]]
@@ -681,8 +682,11 @@ def relative_wis(
         )
         .reset_index()
     )
-    out["rel_wis"] = out["wis"] / out["base_wis"]
-    out["rel_log_wis"] = out["log_wis"] / out["base_log_wis"]
+    # A zero baseline gives no relative score.
+    out["rel_wis"] = out["wis"] / out["base_wis"].where(out["base_wis"] > 0)
+    out["rel_log_wis"] = out["log_wis"] / out["base_log_wis"].where(
+        out["base_log_wis"] > 0
+    )
     order = [
         "n",
         "wis",

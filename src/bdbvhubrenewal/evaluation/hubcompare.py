@@ -42,6 +42,7 @@ import pandas as pd
 import yaml
 
 from bdbvhubrenewal.data.dates import as_date, reference_date_for_vintage
+from bdbvhubrenewal.data.zones import weekly_zone_counts
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     make_tasks,
@@ -49,15 +50,14 @@ from bdbvhubrenewal.evaluation.backtest import (
 )
 from bdbvhubrenewal.evaluation.nowcast import (
     BASELINE,
-    relative_energy,
     release_backtest,
 )
 from bdbvhubrenewal.evaluation.scoring import (
     relative_skill,
-    scale_of,
     summarise_scores,
 )
 from bdbvhubrenewal.forecasters import get_model, list_models
+from bdbvhubrenewal.forecasters.zones import zone_task
 
 __all__ = [
     "ATTRIBUTION",
@@ -73,14 +73,15 @@ __all__ = [
     "load_team_metadata",
     "match_vintage",
     "our_forecasts",
-    "overall_comparison",
     "own_hub_ids",
     "resolve_baseline",
     "score_comparison",
     "stored_forecasts",
     "submission_dir",
     "summarise_comparison",
+    "trajectory_samples",
     "with_submissions",
+    "zone_truth",
 ]
 
 WEEKLY_TARGET: Final = "wk inc confirmed cases"
@@ -473,10 +474,16 @@ def our_forecasts(
     delays: pd.DataFrame,
     config: BacktestConfig,
     models: Sequence[str],
+    daily: pd.DataFrame,
+    daily_zones: pd.DataFrame,
+    zones: Sequence[str],
     min_horizon: int | None = None,
-    daily: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Run our models for hub rounds from the matching vintages.
+
+    Each model runs on the country and provinces, and again on the health
+    zones with cases at the vintage, as the zone backtest runs them. Only
+    the zones are kept from the zone run, as it also gives the country.
 
     Parameters
     ----------
@@ -487,12 +494,16 @@ def our_forecasts(
     config : BacktestConfig
         Horizons, samples and seed.
     models : sequence of str
-        Registered model names.
+        Registered model names that run at zone level.
+    daily : pandas.DataFrame
+        Daily onsets by release of the country and provinces.
+    daily_zones : pandas.DataFrame
+        Daily onsets by release of the health zones (`load_daily_zones`).
+    zones : sequence of str
+        The hub's zone codes (`hub_zones`).
     min_horizon : int, optional
         First week, in weeks from the reference date, to cover the weeks
         the hub forecasts did. Defaults to `config.min_horizon`.
-    daily : pandas.DataFrame, optional
-        Daily onsets by release, which the random walk models need.
 
     Returns
     -------
@@ -511,7 +522,20 @@ def our_forecasts(
         if vintage is None or not built:
             continue
         rows = real.loc[real["vintage"] == vintage]
-        fc = run_forecasts(built, make_tasks(rows, delays, config, daily=daily))
+        tasks = make_tasks(rows, delays, config, daily=daily)
+        counts = weekly_zone_counts(daily_zones, vintage)
+        here = tuple(z for z in zones if z in set(counts["location"]))
+        history = pd.concat([daily, daily_zones])
+        zone = run_forecasts(
+            built, [zone_task(t, counts, here, history) for t in tasks]
+        )
+        fc = pd.concat(
+            [
+                run_forecasts(built, tasks),
+                zone.loc[zone["location"].isin(here)],
+            ],
+            ignore_index=True,
+        )
         fc["source"] = "real"
         frames.append(fc)
     if not frames:
@@ -561,12 +585,54 @@ def stored_forecasts(
     return fc.rename(columns={"kind": "source"})[list(SAMPLE_COLUMNS)]
 
 
+def zone_truth(
+    zones: pd.DataFrame, codes: Sequence[str], target: pd.DataFrame
+) -> pd.DataFrame:
+    """Return health zone counts by release in the target's layout.
+
+    Parameters
+    ----------
+    zones : pandas.DataFrame
+        Zone counts with `vintage`, `location`, `target_end_date` and
+        `total` (`load_health_zones`). A zone and week missing from a
+        release has no cases in it.
+    codes : sequence of str
+        The hub's zone codes (`hub_zones`).
+    target : pandas.DataFrame
+        The tidy target table. Each real release's weeks set its grid.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `kind` (`real`), `vintage`, `location`, `target_end_date`
+        and `total`, for every zone and week of each release.
+    """
+    keys = ["location", "target_end_date"]
+    frames = []
+    real = target.loc[target["kind"] == "real"]
+    for vintage, rows in real.groupby("vintage"):
+        grid = pd.MultiIndex.from_product(
+            [list(codes), sorted(set(rows["target_end_date"]))], names=keys
+        )
+        have = zones.loc[zones["vintage"] == vintage].set_index(keys)["total"]
+        frames.append(
+            have.reindex(grid, fill_value=0)
+            .rename("total")
+            .reset_index()
+            .assign(kind="real", vintage=vintage)
+        )
+    return pd.concat(frames, ignore_index=True)[
+        ["kind", "vintage", *keys, "total"]
+    ]
+
+
 def score_comparison(
     forecasts: pd.DataFrame,
     target: pd.DataFrame,
     delays: pd.DataFrame,
     config: BacktestConfig,
     daily: pd.DataFrame,
+    zones: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Score every model on the count each later real vintage reports.
 
@@ -580,6 +646,9 @@ def score_comparison(
         Settings of the tasks the rounds are scored from.
     daily : pandas.DataFrame
         Daily onsets by release, as for `make_tasks`.
+    zones : pandas.DataFrame
+        Health zone counts by release in the target's layout
+        (`zone_truth`), so zone forecasts are scored too.
 
     Returns
     -------
@@ -617,7 +686,7 @@ def score_comparison(
     result = release_backtest(
         tasks,
         daily,
-        target,
+        pd.concat([target, zones]),
         models=(),
         stored=samples,
         compare=set(samples["model"]),
@@ -684,74 +753,34 @@ def summarise_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
     return out[cols].sort_values([*by, "wis"]).reset_index(drop=True)
 
 
-def overall_comparison(
-    scores: pd.DataFrame, energy: pd.DataFrame, baseline: str
+def trajectory_samples(
+    forecasts: pd.DataFrame, teams: pd.DataFrame, n: int
 ) -> pd.DataFrame:
-    """Summarise every model over all rounds, nationally and below.
+    """Keep the draws the forecast explorer shows as trajectories.
 
     Parameters
     ----------
-    scores, energy : pandas.DataFrame
-        The scores and energy scores of `score_comparison`.
-    baseline : str
-        Model that every relative score divides by.
+    forecasts : pandas.DataFrame
+        Samples with `SAMPLE_COLUMNS`.
+    teams : pandas.DataFrame
+        Hub team metadata (`load_team_metadata`), with `model` and
+        `license`. Only hub teams under `OPEN_LICENCES` keep draws, as
+        only their files may be redistributed.
+    n : int
+        Draws kept per model: its `n` lowest sample ids.
 
     Returns
     -------
     pandas.DataFrame
-        On the reported target and the forecasts the baseline also made,
-        one row per `scale` (`national`, `provinces` or `zones`) and
-        `model`, with `hub` (a hub team's), `n`, `rel_wis`, `rel_log_wis`,
-        `coverage_50`, `coverage_90`, `bias`, and `n_energy` (rounds and
-        releases), `rel_energy` and `rel_log_energy`, as
-        `OVERALL_METRICS`.
+        The rows of `forecasts` kept, for our models and the openly
+        licensed hub teams.
     """
-    match = ["reference_date", "truth_vintage", "location", "target_end_date"]
-    rep = scores.loc[scores["target"] == "reported"].assign(
-        scale=scale_of(scores["location"])
-    )
-    rep = rep.merge(rep.loc[rep["model"] == baseline, match], on=match)
-    rel = relative_skill(
-        rep,
-        baseline,
-        by=("scale",),
-        metrics=("wis", "log_wis"),
-        match_on=match,
-    )
-    joint = relative_energy(
-        energy.loc[energy["target"] == "reported"], ("scale",), baseline
-    )
-    keys = ["scale", "model"]
-    cover = (
-        rep.assign(hub=rep["source"] == "hub")
-        .groupby(keys)
-        .agg(
-            hub=("hub", "all"),
-            coverage_50=("coverage_50", "mean"),
-            coverage_90=("coverage_90", "mean"),
-            bias=("bias", "mean"),
-        )
-        .reset_index()
-    )
-    out = rel.merge(cover, on=keys).merge(joint, on=keys, how="left")
-    out = out.rename(
-        columns={"relative_wis": "rel_wis", "relative_log_wis": "rel_log_wis"}
-    )
-    return out[
-        [
-            *keys,
-            "hub",
-            "n",
-            "rel_wis",
-            "rel_log_wis",
-            "coverage_50",
-            "coverage_90",
-            "bias",
-            "n_energy",
-            "rel_energy",
-            "rel_log_energy",
-        ]
+    open_teams = set(teams.loc[teams["license"].isin(OPEN_LICENCES), "model"])
+    keep = forecasts.loc[
+        (forecasts["source"] != "hub") | forecasts["model"].isin(open_teams)
     ]
+    rank = keep.groupby("model")["sample"].rank(method="dense")
+    return keep.loc[rank <= n, list(SAMPLE_COLUMNS)].reset_index(drop=True)
 
 
 def forecast_quantiles(forecasts: pd.DataFrame) -> pd.DataFrame:

@@ -149,6 +149,10 @@ class HazardDelay(RandomVariable):
             name_prefix=f"{self.name}_time",
             first_day_dow=first_day_dow,
         )
+        # Recorded for the delay summaries written after a fit
+        # (`delay_summary`); they change nothing in the model.
+        numpyro.deterministic(f"{self.name}_beta", beta)
+        numpyro.deterministic(f"{self.name}_shift", gamma)
         weekly = (
             isinstance(self.time_process, WeeklyTemporalProcess)
             and first_day_dow == self.time_process.start_dow

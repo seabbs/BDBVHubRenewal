@@ -5,17 +5,11 @@ Forecasts made at past vintages, scored on what each later release reported.
 
 --8<-- "release-headline.md"
 
---8<-- "backtest-findings.md"
-
---8<-- "backtest-forecasts.md"
-
---8<-- "release-nowcasts.md"
-
 ## By horizon
 
-By weeks from the reference week ([horizon](methods/evaluation.md#reading-the-figures)).
+By weeks from the reference week ([horizon](methods/evaluation.md#reading-the-figures)), at the scale chosen.
 
---8<-- "scorechart-horizon.md"
+--8<-- "scoresummary-horizon.md"
 
 --8<-- "backtest-summary.md"
 
@@ -26,9 +20,19 @@ Pick a place to narrow the table.
 
 --8<-- "scoresummary-place.md"
 
-??? note "Tables"
+??? note "Scores by target, scale and place, over every origin"
 
     --8<-- "scores-location.md"
+
+--8<-- "zone-section.md"
+
+--8<-- "backtest-forecasts.md"
+
+## Findings
+
+--8<-- "backtest-findings.md"
+
+--8<-- "release-nowcasts.md"
 
 --8<-- "backtest-sampler.md"
 
@@ -48,5 +52,3 @@ Each origin's forecasts scored on the counts each later release reported.
     --8<-- "truth-changes.md"
 
 --8<-- "lopo-section.md"
-
---8<-- "zone-section.md"

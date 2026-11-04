@@ -13,6 +13,8 @@ This module owns everything around it:
   unassigned national component;
 - `ppc_rows`, `parameter_diagnostics`, `chain_diagnostics`: the CI's
   `ppc.json` and `diagnostics.json`;
+- `delay_summary` and `fit_delays`: each fit's learnt delay, written as
+  `delay-summary.csv` beside its forecasts;
 - `fit_renewal` and `forecast_renewal`: the `fit` and `forecast` of the
   `main` and `bvd` fit configurations
   (`bdbvhubrenewal.submission.fitting`).
@@ -42,6 +44,7 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
+from bdbvhubrenewal.data.releases import last_report
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -55,6 +58,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "DEFAULT_SAMPLER",
+    "DELAY_SUMMARY_FILE",
     "FIT_VARIANTS",
     "HUB_MODEL",
     "SAMPLER_ENV",
@@ -70,8 +74,10 @@ __all__ = [
     "bvd_rows",
     "chain_diagnostics",
     "data_gap",
+    "delay_summary",
     "ebfmi",
     "engine",
+    "fit_delays",
     "fit_renewal",
     "fit_summary",
     "forecast_renewal",
@@ -378,7 +384,8 @@ def horizon_weeks(task: ForecastTask) -> int:
         At least one.
     """
     last = max(_saturday(d) for d in task.target_end_dates)
-    return max(1, (last - _saturday(task.vintage)).days // 7)
+    cut = last_report(task.vintage, task.kind)
+    return max(1, (last - _saturday(cut)).days // 7)
 
 
 def _weeks(first: dt.date, n: int) -> list[str]:
@@ -609,11 +616,12 @@ def report_cutoffs(task: ForecastTask, data: Any) -> dict[int, str]:
     Returns
     -------
     dict
-        The vintage date (ISO) by its day on the model axis, the `as_of`
-        cut-offs of `forecast_trajectories`.
+        The vintage date (ISO) by its last report day on the model axis
+        (`data.releases.last_report`), the `as_of` cut-offs of
+        `forecast_trajectories`.
     """
     return {
-        (dt.date.fromisoformat(d) - data.start_date).days: d
+        (last_report(d, task.kind) - data.start_date).days: d
         for d in task.report_by
     }
 
@@ -783,6 +791,136 @@ def ebfmi(energy: NDArray[np.float64]) -> float:
     """
     e = np.asarray(energy, dtype=float)
     return float(np.sum(np.diff(e) ** 2) / np.sum((e - e.mean()) ** 2))
+
+
+DELAY_SUMMARY_FILE: Final = "delay-summary.csv"
+"""The learnt delay of each fit, written beside its forecasts."""
+
+_DELAY_QUANTILES: Final = (0.05, 0.5, 0.95)
+
+
+def delay_summary(
+    beta: NDArray[np.floating],
+    shift: NDArray[np.floating],
+    first_day: dt.date,
+    last_day: int,
+) -> pd.DataFrame:
+    r"""Summarise a fit's onset-to-report delay over posterior draws.
+
+    The delay pmf of onset day $s$ is `hazard_to_pmf` of
+    $\beta(d) + \gamma(s)$, as in `HazardDelay`, from the recorded
+    `delay_beta` and `delay_shift` draws.
+
+    Parameters
+    ----------
+    beta : numpy.ndarray
+        `delay_beta` draws, `(draws, dmax)`.
+    shift : numpy.ndarray
+        `delay_shift` draws, `(draws, days)`, on the model axis.
+    first_day : datetime.date
+        Date of the model axis's first day.
+    last_day : int
+        Index on the axis of the last onset day at the vintage.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `kind`, `x`, `quantity` and `q5`, `q50`, `q95` over the
+        draws. `kind` `"cumulative"` has, by delay day `x`, the share
+        reported by then (`reported_share`) for onsets in the last week.
+        `kind` `"onset_week"` has, by onset week ending `x`, the median
+        delay in days (`median_delay`) and the share reported within 7
+        days (`share_within_7`).
+    """
+    import jax.numpy as jnp
+
+    from bdbvhubrenewal.model.delays import hazard_to_pmf
+
+    days = pd.date_range(first_day, periods=last_day + 1, freq="D")
+    # The last day of each onset week (to Saturday) up to the vintage.
+    week_end = days + pd.to_timedelta((5 - days.dayofweek) % 7, unit="D")
+    last = (
+        pd.Series(np.arange(len(days)), index=week_end).groupby(level=0).max()
+    )
+    logit = beta[:, None, :] + shift[:, last.to_numpy()][:, :, None]
+    cdf = np.cumsum(np.asarray(hazard_to_pmf(jnp.asarray(logit))), axis=-1)
+    qs = list(_DELAY_QUANTILES)
+
+    def rows(
+        values: NDArray[np.floating], x: list[Any], kind: str, name: str
+    ) -> pd.DataFrame:
+        q = np.quantile(values, qs, axis=0)
+        return pd.DataFrame(
+            {
+                "kind": kind,
+                "x": x,
+                "quantity": name,
+                "q5": q[0],
+                "q50": q[1],
+                "q95": q[2],
+            }
+        )
+
+    weeks = [d.date().isoformat() for d in last.index]
+    return pd.concat(
+        [
+            rows(
+                cdf[:, -1, :],
+                list(range(cdf.shape[-1])),
+                "cumulative",
+                "reported_share",
+            ),
+            rows(
+                (cdf >= 0.5).argmax(axis=-1).astype(float),
+                weeks,
+                "onset_week",
+                "median_delay",
+            ),
+            rows(cdf[:, :, 7], weeks, "onset_week", "share_within_7"),
+        ],
+        ignore_index=True,
+    )
+
+
+def fit_delays(fit: RenewalFit, task: ForecastTask) -> pd.DataFrame:
+    """Return the delay summaries of a fit's runs, as one table.
+
+    Parameters
+    ----------
+    fit : RenewalFit
+        The fit.
+    task : ForecastTask
+        Its task.
+
+    Returns
+    -------
+    pandas.DataFrame
+        `delay_summary` rows with `model`, `vintage` and `location`:
+        `"pooled"` for a fit of every province, else the province.
+    """
+    return pd.concat(
+        [
+            run.delay.assign(
+                model=run.variant.name,
+                vintage=task.vintage,
+                location="pooled" if key == "all" else key,
+            )
+            for key, run in fit.runs.items()
+        ],
+        ignore_index=True,
+    )[
+        [
+            "model",
+            "vintage",
+            "location",
+            "kind",
+            "x",
+            "quantity",
+            "q5",
+            "q50",
+            "q95",
+        ]
+    ]
 
 
 def fit_summary(run: RenewalRun, sampler: Mapping[str, Any]) -> dict[str, Any]:
@@ -969,6 +1107,8 @@ class RenewalRun:
     cpu_seconds : float
         Process CPU time over the same span, across all threads. Near
         `num_chains` times `seconds` when the chains run in parallel.
+    delay : pandas.DataFrame
+        `delay_summary` of the fit.
     bvd : dict or None
         The BVDOutbreakSize release used (`bvd_record`), for a variant
         with the BVD term.
@@ -981,6 +1121,7 @@ class RenewalRun:
     extra: Mapping[str, Any]
     seconds: float
     cpu_seconds: float
+    delay: pd.DataFrame
     bvd: Mapping[str, Any] | None = None
 
 
@@ -1025,6 +1166,8 @@ class RenewalModel:
         the national sum, so it cannot.
     name : str
         The variant name.
+    delay_summary : pandas.DataFrame or None
+        `fit_delays` of the last `forecast`.
     """
 
     variant: Variant
@@ -1035,6 +1178,7 @@ class RenewalModel:
     fit_diagnostics: list[dict[str, Any]] = field(
         init=False, default_factory=list
     )
+    delay_summary: pd.DataFrame | None = field(init=False, default=None)
 
     def __post_init__(self) -> None:
         """Name the model after its variant and say if it takes a mask."""
@@ -1109,8 +1253,26 @@ class RenewalModel:
             k: np.asarray(v)
             for k, v in model.mcmc.get_extra_fields(group_by_chain=True).items()
         }
+        posterior = model.mcmc.get_samples()
+        n_init = model.latent.n_initialization_points
+        beta = np.asarray(posterior["delay_beta"])
+        delay = delay_summary(
+            beta,
+            # The shift is one column, as the model adds it to every delay.
+            np.asarray(posterior["delay_shift"]).reshape(len(beta), -1),
+            data.start_date - dt.timedelta(days=n_init),
+            n_init + data.cutoff,
+        )
         return RenewalRun(
-            self.variant, data, draws, trace, extra, seconds, cpu_seconds, used
+            self.variant,
+            data,
+            draws,
+            trace,
+            extra,
+            seconds,
+            cpu_seconds,
+            delay,
+            used,
         )
 
     def forecast_fit(self, task: ForecastTask) -> RenewalFit:
@@ -1210,6 +1372,7 @@ class RenewalModel:
         >>> model.fit_diagnostics  # divergences and R-hat of the fit
         """
         fit = self.forecast_fit(task)
+        self.delay_summary = fit_delays(fit, task)
         self.fit_diagnostics = [
             {"fit": key, **fit_summary(run, self.sampler)}
             for key, run in fit.runs.items()
@@ -1242,8 +1405,8 @@ def fit_renewal(
     """Fit a variant for the CI and write the fit directory.
 
     Trajectories are drawn here, so `forecast_renewal` only reads them.
-    Writes `samples.csv.gz`, `unassigned.csv.gz` (if any),
-    `trajectories.json` and `ppc.json`. `run_fit` writes the returned
+    Writes `samples.csv.gz`, `delay-summary.csv`, `unassigned.csv.gz`
+    (if any), `trajectories.json` and `ppc.json`. `run_fit` writes the returned
     record to `diagnostics.json`.
 
     Parameters
@@ -1275,6 +1438,7 @@ def fit_renewal(
     model = RenewalModel(VARIANTS[variant], settings, out / "progress.log")
     fit = model.forecast_fit(task)
     fit.samples.to_csv(out / SAMPLES_FILE, index=False)
+    fit_delays(fit, task).to_csv(out / DELAY_SUMMARY_FILE, index=False)
     if fit.unassigned is not None:
         fit.unassigned.to_csv(out / UNASSIGNED_FILE, index=False)
     pairs = [

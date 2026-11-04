@@ -9,6 +9,7 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.artist import Artist
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
@@ -21,6 +22,7 @@ from bdbvhubrenewal.reporting.plots import (
 from bdbvhubrenewal.reporting.scorechart import OVERALL_METRICS
 
 __all__ = [
+    "plot_place_summary",
     "plot_relative_overall",
     "plot_release_nowcasts",
     "plot_truth_changes",
@@ -293,5 +295,92 @@ def plot_truth_changes(
         title_fontsize=8,
         loc="outside lower center",
         ncols=len(releases),
+    )
+    return fig
+
+
+def plot_place_summary(
+    table: pd.DataFrame,
+    models: Sequence[str],
+    colours: Mapping[str, tuple[str, str]],
+    names: Mapping[str, str],
+    metric: str = "rel_wis",
+    label: str = "Relative WIS",
+    ref: float | None = 1.0,
+    mode: str = "light",
+) -> Figure:
+    """Plot one score per place and model, a row per place, by scale.
+
+    Parameters
+    ----------
+    table : pandas.DataFrame
+        `relative_wis` output by `pool` and `location`.
+    models : sequence of str
+        Models in order. Those absent from a place are skipped.
+    colours : mapping of str to (str, str)
+        Model to its light and dark colour.
+    names : mapping of str to str
+        Place names by id. Places not named show their code.
+    metric : str
+        The column plotted.
+    label : str
+        Its axis label.
+    ref : float, optional
+        A dotted line at this value.
+    mode : str
+        `"light"` or `"dark"`.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        A panel per scale below national (provinces, health zones), with
+        a row per place, by name, and a dot per model.
+    """
+    ink = THEMES[mode]
+    pick = 0 if mode == "light" else 1
+    titles = {"provinces": "Provinces", "zones": "Health zones"}
+    pools = [p for p in titles if p in set(table["pool"])]
+    rows = [table.loc[table["pool"] == p, "location"].nunique() for p in pools]
+    fig, axes = plt.subplots(
+        1,
+        len(pools),
+        figsize=(4.4 * len(pools), 0.9 + 0.2 * max(rows)),
+        squeeze=False,
+        layout="constrained",
+    )
+    for ax, pool in zip(axes[0], pools, strict=True):
+        sub = table.loc[table["pool"] == pool]
+        places = sorted(set(sub["location"]), key=lambda x: names.get(x, x))
+        y = {loc: i for i, loc in enumerate(places)}
+        for m in models:
+            own = sub.loc[sub["model"] == m]
+            if own.empty:
+                continue
+            ax.plot(
+                own[metric],
+                own["location"].map(y),
+                "o",
+                ms=4,
+                color=colours[m][pick],
+                label=m,
+            )
+        if ref is not None:
+            ax.axvline(ref, color=ink["muted"], lw=1, ls=":")
+        ax.set_yticks(range(len(places)), [names.get(p, p) for p in places])
+        ax.set_ylim(len(places) - 0.5, -0.5)
+        ax.set_title(titles[pool], fontsize=9)
+        ax.set_xlabel(label)
+        ax.set_axisbelow(True)
+    handles: dict[str, Artist] = {}
+    for ax in axes[0]:
+        for hd, lb in zip(*ax.get_legend_handles_labels(), strict=True):
+            handles.setdefault(lb, hd)
+    labels = [m for m in models if m in handles]
+    fig.legend(
+        [handles[m] for m in labels],
+        labels,
+        fontsize=7,
+        loc="outside lower center",
+        ncols=min(len(labels), 5),
     )
     return fig

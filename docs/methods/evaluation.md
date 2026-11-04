@@ -132,12 +132,11 @@ It runs on development vintages for the models that support the mask, `renewal` 
 Zones use the same models as provinces.
 A week with no onsets in a zone has a count of 0.
 Each zone takes its delay and spreads by the rules of the [Baseline models](baselines.md#own-or-pooled-estimates) page.
-Each model is scored as it runs, and again with its zone samples made to sum to its province samples, as in the submitted file.
+Each model's zone samples are made to sum to its province samples, as in the submitted file, and are scored in that form.
 Each real vintage before the latest is forecast, and origins with no pair of releases within the delay window are skipped, as for provinces.
 Zones are scored on the reported target as for [real releases](#real-releases), with the zone delays fitted at the origin, so a zone count is never scored against a count still being reported.
-Relative WIS is against `randomwalk` run at zone level.
-The Nowcast page shows the summed forms, relative to `randomwalk` summed.
-There the fitted models' zone samples at the latest release are those of their stored fits, where they have one.
+Relative WIS is against `randomwalk` in the same form.
+On the Nowcast page the fitted models' zone samples at the latest release are those of their stored fits, where they have one.
 
 ## Comparison with hub forecasts
 

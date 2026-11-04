@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from bdbvhubrenewal.data import load_daily_zones
+from bdbvhubrenewal.data.zones import hub_zones
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig
 from bdbvhubrenewal.evaluation.hubcompare import (
     ATTRIBUTION,
@@ -30,6 +32,15 @@ ROOT = Path(__file__).resolve().parents[2]
 
 pytestmark = pytest.mark.usefixtures("flat_model")
 WEEKS = ["2026-09-19", "2026-09-26", "2026-10-03", "2026-10-10"]
+DAILY_ZONES = load_daily_zones(ROOT / "data")
+ZONES = hub_zones(ROOT / "data" / "hub-config" / "tasks.json")
+NO_ZONES = pd.DataFrame(
+    {
+        **{c: pd.Series(dtype=str) for c in ("kind", "vintage", "location")},
+        "target_end_date": pd.Series(dtype=str),
+        "total": pd.Series(dtype="int64"),
+    }
+)
 
 
 def _hub_rows(
@@ -103,8 +114,10 @@ def _ours(
         delays,
         config,
         ["flat"],
+        daily,
+        DAILY_ZONES,
+        ZONES,
         min_horizon=-4,
-        daily=daily,
     )
 
 
@@ -172,11 +185,17 @@ def test_our_forecasts_cover_the_hub_weeks(
         delays,
         config,
         ["flat"],
+        daily,
+        DAILY_ZONES,
+        ZONES,
         min_horizon=-5,
-        daily=daily,
     )
     assert set(fc["model"]) == {"flat"}
     assert set(fc["source"]) == {"real"}
+    # The model runs at zone level too.
+    assert (fc["location"].str.count("-") == 2).any()
+    keys = ["model", "location", "target_end_date", "sample"]
+    assert not fc.duplicated(keys).any()
     assert fc["horizon"].min() == -5
     assert fc["horizon"].max() == 3
 
@@ -231,7 +250,7 @@ def test_score_comparison_scores_each_later_release(
         [load_hub_submissions(tmp_path), _ours(target, delays, daily)]
     )
     scores, energy, pending = score_comparison(
-        forecasts, target, delays, _CONFIG, daily
+        forecasts, target, delays, _CONFIG, daily, NO_ZONES
     )
     assert pending.empty
     assert set(scores["model"]) == {"teamA-weekly", "teamB-late", "flat"}
@@ -251,12 +270,55 @@ def test_score_comparison_scores_each_later_release(
     assert (energy.groupby(unit)["n_cells"].nunique() == 1).all()
 
 
+def test_zone_truth_fills_missing_zone_weeks_with_zero(
+    target: pd.DataFrame,
+) -> None:
+    from bdbvhubrenewal.evaluation.hubcompare import zone_truth
+
+    zones = pd.DataFrame(
+        {
+            "vintage": "2026-10-24",
+            "location": ["CD-IT-01"],
+            "target_end_date": ["2026-10-10"],
+            "total": [3],
+        }
+    )
+    out = zone_truth(zones, ("CD-IT-01", "CD-IT-02"), target)
+    week = out.loc[out["vintage"] == "2026-10-24"].set_index(
+        ["location", "target_end_date"]
+    )["total"]
+    assert week[("CD-IT-01", "2026-10-10")] == 3
+    assert week[("CD-IT-02", "2026-10-10")] == 0
+    assert set(out["kind"]) == {"real"}
+    assert set(out["vintage"]) == set(target["vintage"])
+
+
+def test_score_comparison_scores_hub_zones(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    from bdbvhubrenewal.evaluation.hubcompare import zone_truth
+
+    hub = _hub_rows().assign(model="teamA-weekly", source="hub")
+    zone = hub.loc[hub["location"] == "CD-IT"].assign(location="CD-IT-01")
+    hub = pd.concat([hub, zone]).rename(columns={"output_type_id": "sample"})
+    real = target.loc[target["kind"] == "real"]
+    counts = real.loc[real["location"] == "CD-IT"].assign(location="CD-IT-01")
+    zones = zone_truth(counts, ("CD-IT-01",), target)
+    scores, _, _ = score_comparison(hub, target, delays, _CONFIG, daily, zones)
+    assert "CD-IT-01" in set(scores["location"])
+    assert {"reported", "complete"} >= set(
+        scores.loc[scores["location"] == "CD-IT-01", "target"]
+    )
+
+
 def test_score_comparison_waits_for_later_data(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
     hub = _hub_rows(ref="2026-11-07").assign(model="teamA-weekly")
     hub = hub.rename(columns={"output_type_id": "sample"}).assign(source="hub")
-    scores, _, pending = score_comparison(hub, target, delays, _CONFIG, daily)
+    scores, _, pending = score_comparison(
+        hub, target, delays, _CONFIG, daily, NO_ZONES
+    )
     assert scores.empty
     assert list(pending["reference_date"]) == ["2026-11-07"]
     assert pending["vintage"].iloc[0] == "2026-11-01"
@@ -272,7 +334,9 @@ def test_summarise_comparison(
     forecasts = pd.concat(
         [load_hub_submissions(tmp_path), _ours(target, delays, daily)]
     )
-    scores, _, _ = score_comparison(forecasts, target, delays, _CONFIG, daily)
+    scores, _, _ = score_comparison(
+        forecasts, target, delays, _CONFIG, daily, NO_ZONES
+    )
     table = summarise_comparison(scores, "flat")
     rows = table.loc[table["target"] == "reported"].set_index("model")
     assert rows.loc["flat", "relative_wis"] == pytest.approx(1)
@@ -282,42 +346,28 @@ def test_summarise_comparison(
     assert {"coverage_50", "coverage_90", "bias", "wis"} <= set(table.columns)
 
 
-def test_overall_comparison_by_scale(
-    tmp_path: Path,
-    target: pd.DataFrame,
-    delays: pd.DataFrame,
-    daily: pd.DataFrame,
-) -> None:
-    from bdbvhubrenewal.evaluation.hubcompare import overall_comparison
+def test_trajectory_samples_keep_open_teams_and_first_draws() -> None:
+    from bdbvhubrenewal.evaluation.hubcompare import trajectory_samples
 
-    _write_hub(tmp_path)
-    forecasts = pd.concat(
-        [load_hub_submissions(tmp_path), _ours(target, delays, daily)]
+    rows = [
+        {
+            "model": m,
+            "source": src,
+            "reference_date": "2026-10-24",
+            "location": "CD",
+            "target_end_date": "2026-10-10",
+            "sample": i,
+            "value": 1.0,
+        }
+        for m, src in (("ours", "real"), ("open", "hub"), ("closed", "hub"))
+        for i in (3, 1, 2)
+    ]
+    teams = pd.DataFrame(
+        {"model": ["open", "closed"], "license": ["CC-BY-4.0", "other"]}
     )
-    scores, energy, _ = score_comparison(
-        forecasts, target, delays, _CONFIG, daily
-    )
-    out = overall_comparison(scores, energy, "flat")
-    out = out.set_index(["scale", "model"])
-    assert set(out.index.get_level_values("scale")) <= {
-        "national",
-        "provinces",
-        "zones",
-    }
-    flat = out.xs("flat", level="model")
-    rel = ["rel_wis", "rel_log_wis", "rel_energy", "rel_log_energy"]
-    assert (flat[rel] == 1).all().all()
-    assert (flat["n_energy"] > 0).all()
-    assert out["bias"].between(-1, 1).all()
-    assert (
-        out.loc[out["hub"]]
-        .index.get_level_values("model")
-        .isin(["teamA-weekly", "teamB-late"])
-        .all()
-    )
-    # Same counts as the round summary, which also matches the baseline.
-    late = out.xs("teamB-late", level="model")["n"].sum()
-    assert late == 8
+    out = trajectory_samples(pd.DataFrame(rows), teams, 2)
+    assert set(out["model"]) == {"ours", "open"}
+    assert set(out["sample"]) == {1, 2}
 
 
 def test_forecast_quantiles(tmp_path: Path) -> None:

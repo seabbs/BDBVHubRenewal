@@ -69,6 +69,7 @@ from bdbvhubrenewal.forecasters.base import (
     list_models,
 )
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
+from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 from bdbvhubrenewal.forecasters.zones import ZoneAllocator, zone_forecast
 from bdbvhubrenewal.submission.fitting import (
     Forecast,
@@ -214,6 +215,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     zb.add_argument("--out", default="results/zone-scores.csv")
     zb.add_argument("--energy-out", default="results/zone-energy.csv")
+    zb.add_argument("--quantiles-out", default="results/zone-quantiles.csv")
+    zb.add_argument("--draws-out", default="results/zone-draws.csv.gz")
 
     fit = sub.add_parser(
         "fit", help="Fit a configuration and write its diagnostics."
@@ -505,15 +508,18 @@ def _backtest(args: argparse.Namespace) -> int:
         _write_fits(fits, results / "lopo-fits.csv")
         print(f"Leave one province out: {len(lopo_scores)} scored forecasts.")
         return 0
+    learnt: list[pd.DataFrame] = []
     forecasts = bt.run_development(
         models,
         target,
         delays,
         config,
         fits=fits,
+        learnt=learnt,
         daily=load_daily(args.data),
     )
     _write_fits(fits, results / "backtest-fits.csv")
+    _write_fits(learnt, output / DELAY_SUMMARY_FILE)
     # Rows of models not run here are kept, so the fitted variants can be
     # run apart from the others, and every model is scored again.
     forecasts = bt.merge_by_model(output / "forecasts.csv.gz", forecasts)
@@ -700,13 +706,15 @@ def _print_failed(failed: list[Check]) -> int:
 
 
 def _zone_backtest(args: argparse.Namespace) -> int:
+    from bdbvhubrenewal.evaluation.hubcompare import forecast_quantiles
     from bdbvhubrenewal.evaluation.zones import (
         zone_backtest,
         zone_relative_skill,
     )
+    from bdbvhubrenewal.reporting.explorer import draw_subset
 
     hub_config = Path(args.data) / "hub-config" / "tasks.json"
-    scores, energy = zone_backtest(
+    scores, energy, forecasts = zone_backtest(
         load_target(args.data),
         load_delays(args.data),
         load_daily(args.data),
@@ -718,6 +726,14 @@ def _zone_backtest(args: argparse.Namespace) -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     scores.to_csv(out, index=False)
     energy.to_csv(args.energy_out, index=False)
+    # The zone forecasts as submitted, for the Backtest explorer: their
+    # plotted quantiles and a fixed subset of draws for the trajectories.
+    forecast_quantiles(forecasts.assign(source="ours")).to_csv(
+        args.quantiles_out, index=False
+    )
+    draw_subset(forecasts).drop(columns="draw").to_csv(
+        args.draws_out, index=False
+    )
     rel = zone_relative_skill(scores, by=("horizon",))
     print(rel.round(3).to_string(index=False))
     print(f"Wrote {out} ({len(scores)} scores).")
@@ -865,6 +881,7 @@ def _bvd(args: argparse.Namespace) -> int:  # pragma: no cover - network
 
 def _compare_hub(args: argparse.Namespace) -> int:
     from bdbvhubrenewal.evaluation import hubcompare as hc
+    from bdbvhubrenewal.reporting.explorer import TRAJECTORY_DRAWS
 
     cfg = hc.load_comparison_config(args.config)
     hub_dir, cache = Path(args.hub_dir), Path(args.cache_dir)
@@ -880,16 +897,19 @@ def _compare_hub(args: argparse.Namespace) -> int:
         pd.to_datetime(hub["target_end_date"])
         - pd.to_datetime(hub["reference_date"])
     ).dt.days // 7
+    codes = hub_zones(Path(args.data) / "hub-config" / "tasks.json")
     ours = hc.our_forecasts(
         rounds,
         target,
         delays,
         config,
         live,
+        daily,
+        load_daily_zones(args.data),
+        codes,
         min_horizon=min(int(horizons.min()), config.min_horizon)
         if len(hub)
         else None,
-        daily=daily,
     )
     stored = hc.stored_forecasts(
         cfg.stored if args.stored is None else args.stored,
@@ -904,8 +924,9 @@ def _compare_hub(args: argparse.Namespace) -> int:
         hc.load_hub_submissions(cfg.submitted),
         hub_ids,
     )
+    zones = hc.zone_truth(load_health_zones(args.data), codes, target)
     scores, energy, pending = hc.score_comparison(
-        forecasts, target, delays, config, daily
+        forecasts, target, delays, config, daily, zones
     )
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -918,6 +939,9 @@ def _compare_hub(args: argparse.Namespace) -> int:
     teams = hc.load_team_metadata(hub_dir)
     teams.loc[teams["model"].isin(set(hub["model"]))].to_csv(
         out / "teams.csv", index=False
+    )
+    hc.trajectory_samples(forecasts, teams, TRAJECTORY_DRAWS).to_csv(
+        out / "samples.csv.gz", index=False
     )
     manifest = hub_dir / "manifest.json"
     accessed = dt.date.today().isoformat()
