@@ -2033,7 +2033,7 @@
 <h1 id="comparison-with-hub-forecasts">Comparison with hub forecasts<a class="headerlink" href="#comparison-with-hub-forecasts" title="Permanent link">&para;</a></h1>
 <p class="page-subtitle">Our models and the forecasts submitted to the hub's weekly round, scored on the same data.</p>
 <p>Scores on the weeks the latest release reports in full, from the release serving each round (<a href="../methods/evaluation/#comparison-with-hub-forecasts">how scoring works</a>).
-A model shown with a hub id is what we submitted under that id for the rounds we submitted (2026-11-07), and the model's own forecast for earlier rounds.</p>
+A series marked submitted is the file we sent to a round, and one marked main build is the current main branch's forecast for every round, so a round we did not submit to shows only the main build.</p>
 <h2 id="overall">Overall<a class="headerlink" href="#overall" title="Permanent link">&para;</a></h2>
 <p>Scores on the complete weeks (<a href="../methods/evaluation/#scores">metrics</a>).</p>
 <div class="scoresummary" data-src="../figures/scoresummary-comparison.json" data-view="overall" role="group" aria-label="Overall scores by scale">
@@ -2097,7 +2097,7 @@ A model shown with a hub id is what we submitted under that id for the rounds we
 </tr>
 <tr>
 <td style="text-align: left;">national</td>
-<td style="text-align: left;">randomwalk (ours)</td>
+<td style="text-align: left;">randomwalk (main build)</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: right;">11.26</td>
 <td style="text-align: right;">11.26</td>
@@ -2109,7 +2109,7 @@ A model shown with a hub id is what we submitted under that id for the rounds we
 </tr>
 <tr>
 <td style="text-align: left;">national</td>
-<td style="text-align: left;">randomwalknowcast (seabbs-rwnowcast)</td>
+<td style="text-align: left;">randomwalknowcast (main build)</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: right;">3.07</td>
 <td style="text-align: right;">11.26</td>
@@ -2157,7 +2157,7 @@ A model shown with a hub id is what we submitted under that id for the rounds we
 </tr>
 <tr>
 <td style="text-align: left;">provinces</td>
-<td style="text-align: left;">pprandomwalknowcast (ours)</td>
+<td style="text-align: left;">pprandomwalknowcast (main build)</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: right;">0.64</td>
 <td style="text-align: right;">0.97</td>
@@ -2169,7 +2169,7 @@ A model shown with a hub id is what we submitted under that id for the rounds we
 </tr>
 <tr>
 <td style="text-align: left;">provinces</td>
-<td style="text-align: left;">randomwalk (ours)</td>
+<td style="text-align: left;">randomwalk (main build)</td>
 <td style="text-align: right;">21</td>
 <td style="text-align: right;">1.37</td>
 <td style="text-align: right;">1.37</td>
@@ -2181,7 +2181,7 @@ A model shown with a hub id is what we submitted under that id for the rounds we
 </tr>
 <tr>
 <td style="text-align: left;">provinces</td>
-<td style="text-align: left;">randomwalknowcast (seabbs-rwnowcast)</td>
+<td style="text-align: left;">randomwalknowcast (main build)</td>
 <td style="text-align: right;">21</td>
 <td style="text-align: right;">0.51</td>
 <td style="text-align: right;">1.37</td>
@@ -2193,7 +2193,7 @@ A model shown with a hub id is what we submitted under that id for the rounds we
 </tr>
 <tr>
 <td style="text-align: left;">provinces</td>
-<td style="text-align: left;">renewal (ours)</td>
+<td style="text-align: left;">renewal (main build)</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: right;">0.6</td>
 <td style="text-align: right;">0.97</td>
@@ -2205,7 +2205,7 @@ A model shown with a hub id is what we submitted under that id for the rounds we
 </tr>
 <tr>
 <td style="text-align: left;">provinces</td>
-<td style="text-align: left;">renewalbvd (seabbs-renewal)</td>
+<td style="text-align: left;">renewalbvd (main build)</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: right;">0.6</td>
 <td style="text-align: right;">0.97</td>
@@ -2217,7 +2217,7 @@ A model shown with a hub id is what we submitted under that id for the rounds we
 </tr>
 <tr>
 <td style="text-align: left;">provinces</td>
-<td style="text-align: left;">renewalsp (ours)</td>
+<td style="text-align: left;">renewalsp (main build)</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: right;">1.26</td>
 <td style="text-align: right;">0.97</td>
@@ -2265,7 +2265,7 @@ A model shown with a hub id is what we submitted under that id for the rounds we
 </tr>
 <tr>
 <td style="text-align: left;">zones</td>
-<td style="text-align: left;">randomwalk (ours)</td>
+<td style="text-align: left;">randomwalk (main build)</td>
 <td style="text-align: right;">177</td>
 <td style="text-align: right;">0.35</td>
 <td style="text-align: right;">0.35</td>
@@ -2277,7 +2277,7 @@ A model shown with a hub id is what we submitted under that id for the rounds we
 </tr>
 <tr>
 <td style="text-align: left;">zones</td>
-<td style="text-align: left;">randomwalknowcast (seabbs-rwnowcast)</td>
+<td style="text-align: left;">randomwalknowcast (main build)</td>
 <td style="text-align: right;">177</td>
 <td style="text-align: right;">0.08</td>
 <td style="text-align: right;">0.35</td>
@@ -2307,8 +2307,8 @@ Pick a place to narrow the table.</p>
 <h2 id="forecasts-by-place">Forecasts by place<a class="headerlink" href="#forecasts-by-place" title="Permanent link">&para;</a></h2>
 <p>Choose a location and a round.
 Forecasts are against the counts in the latest release, named in the key (<a href="../methods/evaluation/#reading-the-figures">reading the figures</a>).
-The static figures show our submitted models and randomwalk above the hub teams.
-randomwalk and our other models, such as the unsubmitted 2026-11-07 renewal and renewalsp candidates, start switched off and can be switched on in the key.</p>
+The static figures show our submitted series, the main builds of the models we submit and randomwalk above the hub teams.
+randomwalk and our other main builds, such as the 2026-11-07 renewal and renewalsp candidates, start switched off and can be switched on in the key.</p>
 <div class="explorer" data-src="../figures/explorer-comparison.json" data-round="all" data-summary="../figures/scoresummary-comparison.json" role="group" aria-label="Hub forecasts">
 <noscript>The explorer needs JavaScript.</noscript>
 </div>
@@ -2352,7 +2352,7 @@ randomwalk and our other models, such as the unsubmitted 2026-11-07 renewal and 
 <tr>
 <td style="text-align: left;">2026-10-31</td>
 <td style="text-align: left;">Complete weeks</td>
-<td style="text-align: left;">randomwalknowcast (seabbs-rwnowcast)</td>
+<td style="text-align: left;">randomwalknowcast (main build)</td>
 <td style="text-align: left;">real</td>
 <td style="text-align: right;">200</td>
 <td style="text-align: right;">0.16</td>
@@ -2408,7 +2408,7 @@ randomwalk and our other models, such as the unsubmitted 2026-11-07 renewal and 
 <tr>
 <td style="text-align: left;">2026-10-31</td>
 <td style="text-align: left;">Complete weeks</td>
-<td style="text-align: left;">renewal (ours)</td>
+<td style="text-align: left;">renewal (main build)</td>
 <td style="text-align: left;">real</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: right;">0.6</td>
@@ -2422,7 +2422,7 @@ randomwalk and our other models, such as the unsubmitted 2026-11-07 renewal and 
 <tr>
 <td style="text-align: left;">2026-10-31</td>
 <td style="text-align: left;">Complete weeks</td>
-<td style="text-align: left;">renewalbvd (seabbs-renewal)</td>
+<td style="text-align: left;">renewalbvd (main build)</td>
 <td style="text-align: left;">real</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: right;">0.6</td>
@@ -2436,7 +2436,7 @@ randomwalk and our other models, such as the unsubmitted 2026-11-07 renewal and 
 <tr>
 <td style="text-align: left;">2026-10-31</td>
 <td style="text-align: left;">Complete weeks</td>
-<td style="text-align: left;">pprandomwalknowcast (ours)</td>
+<td style="text-align: left;">pprandomwalknowcast (main build)</td>
 <td style="text-align: left;">real</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: right;">0.64</td>
@@ -2450,7 +2450,7 @@ randomwalk and our other models, such as the unsubmitted 2026-11-07 renewal and 
 <tr>
 <td style="text-align: left;">2026-10-31</td>
 <td style="text-align: left;">Complete weeks</td>
-<td style="text-align: left;">renewalsp (ours)</td>
+<td style="text-align: left;">renewalsp (main build)</td>
 <td style="text-align: left;">real</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: right;">1.26</td>
@@ -2492,7 +2492,7 @@ randomwalk and our other models, such as the unsubmitted 2026-11-07 renewal and 
 <tr>
 <td style="text-align: left;">2026-10-31</td>
 <td style="text-align: left;">Reported by each later release</td>
-<td style="text-align: left;">randomwalknowcast (seabbs-rwnowcast)</td>
+<td style="text-align: left;">randomwalknowcast (main build)</td>
 <td style="text-align: left;">real</td>
 <td style="text-align: right;">63</td>
 <td style="text-align: right;">7.44</td>
@@ -2520,7 +2520,7 @@ randomwalk and our other models, such as the unsubmitted 2026-11-07 renewal and 
 <tr>
 <td style="text-align: left;">2026-10-31</td>
 <td style="text-align: left;">Reported by each later release</td>
-<td style="text-align: left;">renewalsp (ours)</td>
+<td style="text-align: left;">renewalsp (main build)</td>
 <td style="text-align: left;">real</td>
 <td style="text-align: right;">45</td>
 <td style="text-align: right;">9.86</td>
@@ -2534,7 +2534,7 @@ randomwalk and our other models, such as the unsubmitted 2026-11-07 renewal and 
 <tr>
 <td style="text-align: left;">2026-10-31</td>
 <td style="text-align: left;">Reported by each later release</td>
-<td style="text-align: left;">renewalbvd (seabbs-renewal)</td>
+<td style="text-align: left;">renewalbvd (main build)</td>
 <td style="text-align: left;">real</td>
 <td style="text-align: right;">45</td>
 <td style="text-align: right;">10.41</td>
@@ -2548,7 +2548,7 @@ randomwalk and our other models, such as the unsubmitted 2026-11-07 renewal and 
 <tr>
 <td style="text-align: left;">2026-10-31</td>
 <td style="text-align: left;">Reported by each later release</td>
-<td style="text-align: left;">renewal (ours)</td>
+<td style="text-align: left;">renewal (main build)</td>
 <td style="text-align: left;">real</td>
 <td style="text-align: right;">45</td>
 <td style="text-align: right;">10.58</td>
@@ -2562,7 +2562,7 @@ randomwalk and our other models, such as the unsubmitted 2026-11-07 renewal and 
 <tr>
 <td style="text-align: left;">2026-10-31</td>
 <td style="text-align: left;">Reported by each later release</td>
-<td style="text-align: left;">pprandomwalknowcast (ours)</td>
+<td style="text-align: left;">pprandomwalknowcast (main build)</td>
 <td style="text-align: left;">real</td>
 <td style="text-align: right;">45</td>
 <td style="text-align: right;">12.32</td>
@@ -2604,6 +2604,7 @@ randomwalk and our other models, such as the unsubmitted 2026-11-07 renewal and 
 </tbody>
 </table>
 </details>
+<p><code>renewalbvd (main build)</code> has no forecast for the 2026-11-07 round yet, so its n leaves that round out until a backtest or held-out run covers it.</p>
 <p>The 2026-11-07 round was made from the 2026-11-01 data, so it is scored once later data are published.</p>
 <h2 id="hub-models">Hub models<a class="headerlink" href="#hub-models" title="Permanent link">&para;</a></h2>
 <details class="note">
