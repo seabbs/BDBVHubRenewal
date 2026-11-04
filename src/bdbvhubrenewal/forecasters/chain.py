@@ -41,6 +41,7 @@ Its new reports and removals by weeks back fit the observation model
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import jax.numpy as jnp
@@ -64,12 +65,20 @@ from bdbvhubrenewal.forecasters.pooling import (
 )
 
 __all__ = [
+    "DelayFit",
+    "DelayFn",
+    "Errors",
     "MissingSnapshots",
     "NoDelayPair",
     "Origin",
     "Settings",
     "build_origin",
+    "delay_sums",
     "final_growth",
+    "levels",
+    "retro_errors",
+    "walk_changes",
+    "weeks_back",
 ]
 
 log = logging.getLogger(__name__)
@@ -230,6 +239,45 @@ def _delay_counts(snap: SnapshotArrays, r: int) -> np.ndarray:
     return out
 
 
+def delay_sums(
+    snap: SnapshotArrays, r: int, settings: Settings
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray] | None:
+    """Return the pair sums the delay is fitted to at release `r`.
+
+    Parameters
+    ----------
+    snap : SnapshotArrays
+        The arrays.
+    r : int
+        Release index. Pairs of later releases are not used.
+    settings : Settings
+        Settings.
+
+    Returns
+    -------
+    tuple of numpy.ndarray or None
+        The in-window pairs `[P, 2]`, `num` and `den` from `pair_sums`
+        `[L, P, D]`, and each pair's gap `[P]`, or None with no
+        in-window pair.
+    """
+    pairs = _pairs_at(snap, r, settings.max_delay)
+    if pairs.size == 0:
+        return None
+    counts = _delay_counts(snap, r)
+    day = np.arange(snap.week.size)
+    window = day > int(snap.cut[r]) - settings.history_delay
+    observed = snap.observed & window[None, :]
+    gaps = snap.cut[pairs[:, 1]] - snap.cut[pairs[:, 0]]
+    num, den = pair_sums(
+        jnp.asarray(counts),
+        jnp.asarray(observed),
+        jnp.asarray(snap.cut),
+        jnp.asarray(pairs[:, 0]),
+        settings.max_delay,
+    )
+    return pairs, np.asarray(num), np.asarray(den), gaps
+
+
 def fit_delay(
     snap: SnapshotArrays, r: int, settings: Settings
 ) -> DelayFit | None:
@@ -249,23 +297,12 @@ def fit_delay(
     DelayFit or None
         The factors, or None with no in-window pair.
     """
-    pairs = _pairs_at(snap, r, settings.max_delay)
-    if pairs.size == 0:
+    sums = delay_sums(snap, r, settings)
+    if sums is None:
         return None
-    counts = _delay_counts(snap, r)
-    day = np.arange(snap.week.size)
-    window = day > int(snap.cut[r]) - settings.history_delay
-    observed = snap.observed & window[None, :]
-    gaps = snap.cut[pairs[:, 1]] - snap.cut[pairs[:, 0]]
-    num, den = pair_sums(
-        jnp.asarray(counts),
-        jnp.asarray(observed),
-        jnp.asarray(snap.cut),
-        jnp.asarray(pairs[:, 0]),
-        settings.max_delay,
-    )
+    pairs, num, den, gaps = sums
     g = log_factors(num, den, gaps)
-    own = np.array(den).sum(axis=1) >= settings.min_level
+    own = den.sum(axis=1) >= settings.min_level
     own[snap.parent < 0] = True
     # Nodes are sorted by code length, so a parent precedes its children.
     for n in range(g.shape[0]):
@@ -330,7 +367,13 @@ class Errors:
     releases: list[str] = field(default_factory=list)
 
 
-def retro_errors(snap: SnapshotArrays, o: int, settings: Settings) -> Errors:
+DelayFn = Callable[[SnapshotArrays, int, Settings], DelayFit | None]
+"""Fits the delay at a release, as `fit_delay`."""
+
+
+def retro_errors(
+    snap: SnapshotArrays, o: int, settings: Settings, delay: DelayFn = fit_delay
+) -> Errors:
     """Collect the errors of nowcasts made at earlier releases.
 
     Parameters
@@ -341,6 +384,8 @@ def retro_errors(snap: SnapshotArrays, o: int, settings: Settings) -> Errors:
         The origin release.
     settings : Settings
         Settings.
+    delay : callable
+        Fits the delay at each earlier release.
 
     Returns
     -------
@@ -352,7 +397,7 @@ def retro_errors(snap: SnapshotArrays, o: int, settings: Settings) -> Errors:
     cells: list[tuple[np.ndarray, ...]] = []
     releases: list[str] = []
     for r in range(1, o):
-        fit = fit_delay(snap, r, settings)
+        fit = delay(snap, r, settings)
         if fit is None:
             continue
         counts = snap.counts[:, r, :]
@@ -447,7 +492,10 @@ class Origin:
 
 
 def build_origin(
-    snap: SnapshotArrays, settings: Settings, errors: bool
+    snap: SnapshotArrays,
+    settings: Settings,
+    errors: bool,
+    delay: DelayFn = fit_delay,
 ) -> Origin:
     """Fit the delay and the walk spread at the latest release.
 
@@ -459,6 +507,8 @@ def build_origin(
         Settings.
     errors : bool
         Whether to fit the observation model.
+    delay : callable
+        Fits the delay at a release.
 
     Returns
     -------
@@ -471,7 +521,7 @@ def build_origin(
         If no pair of releases has a step within the delay window.
     """
     o = len(snap.releases) - 1
-    fit = fit_delay(snap, o, settings)
+    fit = delay(snap, o, settings)
     if fit is None:
         raise NoDelayPair(
             f"No pair of releases up to {snap.releases[o]} has a step of at "
@@ -499,6 +549,33 @@ def build_origin(
     return origin
 
 
+def walk_changes(
+    reported: np.ndarray, start: np.ndarray, settings: Settings
+) -> list[np.ndarray]:
+    """Return each place's weekly changes of log(1 + y) up to its start week.
+
+    Parameters
+    ----------
+    reported : numpy.ndarray
+        Weekly reported counts, `[L, W]`.
+    start : numpy.ndarray
+        Start week of each place, `[L]`.
+    settings : Settings
+        Settings, for `walk_weeks`.
+
+    Returns
+    -------
+    list of numpy.ndarray
+        The changes of each place over the `walk_weeks` weeks ending at
+        its start week.
+    """
+    diffs = []
+    for n in range(reported.shape[0]):
+        lo = max(int(start[n]) - settings.walk_weeks + 1, 0)
+        diffs.append(np.diff(np.log1p(reported[n, lo : int(start[n]) + 1])))
+    return diffs
+
+
 def _walk_spreads(
     reported: np.ndarray,
     start: np.ndarray,
@@ -508,11 +585,7 @@ def _walk_spreads(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Return each place's own and pooled spread of the weekly log changes."""
     n_loc = reported.shape[0]
-    diffs = []
-    for n in range(n_loc):
-        lo = max(int(start[n]) - settings.walk_weeks + 1, 0)
-        x = np.log1p(reported[n, lo : int(start[n]) + 1])
-        diffs.append(np.diff(x))
+    diffs = walk_changes(reported, start, settings)
 
     def sd(x: np.ndarray) -> float:
         return float(np.std(x, ddof=1)) if x.size >= 2 else 0.0
