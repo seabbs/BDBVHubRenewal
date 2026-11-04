@@ -40,6 +40,7 @@ from .renewal import (
     mixing_matrix,
 )
 from .rt import (
+    ConstantProcess,
     MissingOnsetFraction,
     NonCentredRandomWalk,
     PooledInitialValue,
@@ -49,6 +50,7 @@ from .rt import (
 __all__ = [
     "BVD",
     "MAIN",
+    "ConstantProcess",
     "FixedTimeVarying",
     "HazardDelay",
     "LearntKernel",

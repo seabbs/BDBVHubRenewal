@@ -43,6 +43,7 @@ def test_variants_are_registered_as_fitted_models() -> None:
         "renewalsp",
         "renewalbvd",
         "renewalnolag",
+        "renewalfixdelay",
     }
     # Only the backtest models: no fallback and no unused options.
     for name in ("fallback", "renewalhold", "renewalpo"):

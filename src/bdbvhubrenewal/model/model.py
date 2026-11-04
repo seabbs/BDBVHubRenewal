@@ -40,6 +40,7 @@ from .renewal import (
     MetapopulationInfections,
 )
 from .rt import (
+    ConstantProcess,
     MissingOnsetFraction,
     NonCentredRandomWalk,
     PooledInitialValue,
@@ -170,6 +171,9 @@ class ModelConfig:
         imputed, so it overstates late reporting of the total.
     max_publication_lag : int
         $L$, in days (the model default).
+    delay_over_time : bool
+        Let the delay shift with onset week through the weekly walk
+        $\gamma(s)$, or hold it fixed over time ($\gamma = 0$).
     delay_counts : {"multinomial", "dirichlet-multinomial"}
         Likelihood of the delay file's counts given the weekly totals.
         The Dirichlet-multinomial (default) has $1/\sqrt{\psi} \sim
@@ -194,6 +198,7 @@ class ModelConfig:
         "fixed"
     )
     max_publication_lag: int = 3
+    delay_over_time: bool = True
     delay_counts: Literal["multinomial", "dirichlet-multinomial"] = (
         "dirichlet-multinomial"
     )
@@ -495,7 +500,11 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         )
 
     if missing is not None:
-        delay_time = _named_walk("delay_sd", 0.15, fit_weeks(data, config))
+        delay_time = (
+            _named_walk("delay_sd", 0.15, fit_weeks(data, config))
+            if config.delay_over_time
+            else WeeklyTemporalProcess(ConstantProcess(), start_dow=SUNDAY)
+        )
         if config.delay in ("gamma", "lognormal"):
             delay = ParametricDelay(
                 "delay", config.dmax, delay_time, config.delay

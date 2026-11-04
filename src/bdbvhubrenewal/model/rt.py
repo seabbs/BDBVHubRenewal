@@ -144,6 +144,46 @@ class NonCentredRandomWalk:
         return jnp.vstack([past, future[1:]])
 
 
+class ConstantProcess:
+    """A temporal process held at its starting value, with no parameters.
+
+    It stands in for a walk to fix a time-varying part, such as the
+    delay's shift over onset day.
+    """
+
+    def sample(
+        self,
+        n_timepoints: int,
+        initial_value: float | ArrayLike | None = None,
+        n_processes: int = 1,
+        name_prefix: str = "constant",
+        *,
+        first_day_dow: int | None = None,
+    ) -> Array:
+        """Return the starting value at every time point.
+
+        Parameters
+        ----------
+        n_timepoints : int
+            Time points to return.
+        initial_value : float or array_like, optional
+            Value of each process. Defaults to 0.
+        n_processes : int, default 1
+            Number of processes.
+        name_prefix : str, default "constant"
+            Unused, as nothing is sampled.
+        first_day_dow : int, optional
+            Unused, for the PyRenew interface.
+
+        Returns
+        -------
+        Array
+            Shape `(n_timepoints, n_processes)`.
+        """
+        x0 = jnp.asarray(0.0 if initial_value is None else initial_value)
+        return jnp.broadcast_to(x0, (n_timepoints, n_processes))
+
+
 class PooledInitialValue(RandomVariable):
     r"""Starting values for each province drawn around a national value.
 
