@@ -97,6 +97,7 @@ from bdbvhubrenewal.reporting.plots import (
     save_light_dark,
 )
 from bdbvhubrenewal.reporting.scorechart import (
+    OVERALL_METRICS,
     score_chart_data,
     score_chart_html,
     write_score_chart,
@@ -1539,13 +1540,7 @@ def _overall_table(
         score_chart_data(
             overall,
             "scale",
-            {
-                "relative_wis": (f"WIS relative to {baseline}", 1.0),
-                "relative_log_wis": (f"Log WIS relative to {baseline}", 1.0),
-                "coverage_50": ("50% coverage", 0.5),
-                "coverage_90": ("90% coverage", 0.9),
-                "bias": ("Bias", 0.0),
-            },
+            OVERALL_METRICS,
             [*ours, *sorted(hub)],
             default_on=[*sorted(hub), *(m for m in ours if m in shown)],
             x_label="Scale",
@@ -1559,8 +1554,8 @@ def _overall_table(
     have = set(overall["scale"])
     scales = [s for s in ("national", "provinces", "zones") if s in have]
     names = {
-        "relative_wis": "rel. WIS",
-        "relative_log_wis": "rel. log WIS",
+        "rel_wis": "rel. WIS",
+        "rel_log_wis": "rel. log WIS",
         "n": "n",
         "coverage_50": "50%",
         "coverage_90": "90%",

@@ -686,8 +686,8 @@ def overall_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
     pandas.DataFrame
         On the reported target and the forecasts the baseline also made,
         one row per `scale` (`national`, `provinces` or `zones`) and
-        `model`, with `hub` (a hub team's), `n`, `relative_wis`,
-        `relative_log_wis`, `coverage_50`, `coverage_90` and `bias`.
+        `model`, with `hub` (a hub team's), `n`, `rel_wis`, `rel_log_wis`,
+        `coverage_50`, `coverage_90` and `bias`, as `OVERALL_METRICS`.
     """
     match = ["reference_date", "truth_vintage", "location", "target_end_date"]
     depth = scores["location"].str.count("-")
@@ -701,6 +701,8 @@ def overall_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
         by=("scale",),
         metrics=("wis", "log_wis"),
         match_on=match,
+    ).rename(
+        columns={"relative_wis": "rel_wis", "relative_log_wis": "rel_log_wis"}
     )
     keys = ["scale", "model"]
     cover = (
@@ -720,8 +722,8 @@ def overall_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
             *keys,
             "hub",
             "n",
-            "relative_wis",
-            "relative_log_wis",
+            "rel_wis",
+            "rel_log_wis",
             "coverage_50",
             "coverage_90",
             "bias",
