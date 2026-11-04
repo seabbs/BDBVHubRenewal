@@ -7,7 +7,7 @@ import pandas as pd
 
 from bdbvhubrenewal.reporting.zone_nowcast import (
     ZONE_MODEL,
-    zone_chart_data,
+    place_chart_data,
     zone_counts,
     zone_table,
 )
@@ -115,31 +115,52 @@ COLOURS = {
 }
 
 
-def test_zone_chart_data_is_json_with_the_biggest_first() -> None:
-    counts = zone_counts(_daily(), V, "2026-10-10", NAMES)
-    data = zone_chart_data(_samples(), counts, _scores(), NAMES, COLOURS)
+def _all_scales() -> tuple[pd.DataFrame, pd.DataFrame]:
+    zones = zone_counts(_daily(), V, "2026-10-10", NAMES)
+    national = pd.DataFrame(
+        {
+            "location": ["CD", "CD-IT", "CD-NK"],
+            "target_end_date": "2026-10-17",
+            "total": [7, 2, 5],
+        }
+    )
+    counts = pd.concat(
+        [national, zones[["location", "target_end_date", "total"]]],
+        ignore_index=True,
+    )
+    big = _samples().loc[lambda x: x["location"] == "CD-NK-02"]
+    samples = pd.concat(
+        [_samples(), big.assign(location="CD"), big.assign(location="CD-NK")],
+        ignore_index=True,
+    )
+    return samples, counts
+
+
+def test_place_chart_data_orders_scales_then_cases() -> None:
+    samples, counts = _all_scales()
+    data = place_chart_data(samples, counts, NAMES, COLOURS)
     json.dumps(data)
-    assert [p["id"] for p in data["provinces"]] == ["CD-NK", "CD-IT"]
-    assert data["provinces"][0]["name"] == "Nord Kivu"
+    places = [(p["id"], p["scale"]) for p in data["places"]]
+    assert places == [
+        ("CD", "national"),
+        ("CD-NK", "provinces"),
+        ("CD-IT", "provinces"),
+        ("CD-NK-02", "zones"),
+        ("CD-IT-01", "zones"),
+    ]
+    assert data["places"][1]["name"] == "Nord Kivu"
+    assert data["places"][3]["province"] == "CD-NK"
     assert data["data"]["CD-IT-01"][1] == ["2026-10-17", 2]
-    assert len(data["q"]["CD-NK-02"]) == 3
-    assert data["q"]["CD-NK-02"][0][0] == 1
+    assert len(data["q"]["CD"]) == 3
     # All 20 draws are kept (under 50), each over the three weeks.
     traj = data["traj"]["CD-NK-02"]
     assert len(traj) == 20
     assert traj[0][:3] == [1, 0, "2026-10-24"]
-    assert len(traj[0]) == 3 + 3
-    assert data["origins"] == ["2026-10-24"]
-    # Scores are the summed forms, relative to randomwalk summed.
-    assert sorted(data["scores"]["CD-IT-01"]) == [
-        ["2026-10-24", 0, 1, 1.0, 1.0, 1.0],
-        ["2026-10-24", 1, 1, 0.5, 1.0, 1.0],
-    ]
 
 
-def test_zone_chart_data_marks_models_without_zone_samples() -> None:
-    counts = zone_counts(_daily(), V, "2026-10-10", NAMES)
-    data = zone_chart_data(_samples(), counts, _scores(), NAMES, COLOURS)
+def test_place_chart_data_marks_models_without_samples() -> None:
+    samples, counts = _all_scales()
+    data = place_chart_data(samples, counts, NAMES, COLOURS)
     fans = {m["name"]: m["fan"] for m in data["models"]}
     assert fans == {"randomwalk": False, ZONE_MODEL: True, "renewalbvd": False}
     assert data["models"][2]["dark"] == "#cccccc"

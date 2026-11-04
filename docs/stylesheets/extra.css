@@ -65,7 +65,7 @@
 }
 
 .explorer select,
-.zonechart select {
+.nowcastchart select {
   font: inherit;
   color: var(--md-default-fg-color);
   background: var(--md-default-bg-color);
@@ -185,8 +185,8 @@
   font-size: 11px;
 }
 
-/* Zone chart. */
-.zonechart {
+/* Nowcast chart. */
+.nowcastchart {
   margin: 1em 0;
 }
 

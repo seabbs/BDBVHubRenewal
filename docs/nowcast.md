@@ -7,19 +7,24 @@ The current nowcast and forecast from the latest vintage.
 
 --8<-- "latest-submission.md"
 
-Each model is shown from its latest origin ([reading the figures](methods/evaluation.md#reading-the-figures)).
+--8<-- "nowcast-picker.md"
 
 ## Nowcast
 
 The weeks before the reference date, estimated for reporting delays.
+Each model is shown from its latest origin ([reading the figures](methods/evaluation.md#reading-the-figures)).
 
---8<-- "nowcast-only-tabs.md"
+??? note "Nowcast by model and province"
+
+    --8<-- "nowcast-only-tabs.md"
 
 ## Nowcast and forecast
 
 The same nowcast with the reference week and the weeks after it.
 
---8<-- "nowcast-tabs.md"
+??? note "Nowcast and forecast by model and province"
+
+    --8<-- "nowcast-tabs.md"
 
 The submission pull request embeds [`plot_nowcast`][bdbvhubrenewal.reporting.plots.plot_nowcast].
 

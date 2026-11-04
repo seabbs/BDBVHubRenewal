@@ -1,6 +1,7 @@
-// Zone chart: pick a province then a zone to see each model's nowcast and
-// forecast fan over the reported counts, with its scores by origin. Model
-// tick boxes come from toggles.js.
+// Nowcast chart: pick a scale and a place (for a zone, its province first)
+// to see each model's nowcast and forecast over the reported counts, as
+// bands or trajectories, with its scores (summarise.js) for the rounds
+// chosen. Model tick boxes come from toggles.js.
 (function () {
   "use strict";
   var NS = "http://www.w3.org/2000/svg";
@@ -23,18 +24,31 @@
   function init(root) {
     fetch(root.dataset.src)
       .then(function (r) { return r.json(); })
-      .then(function (d) { build(root, d); })
-      .catch(function () { root.textContent = "The zone data could not be loaded."; });
+      .then(function (d) {
+        return fetch(root.dataset.summary).then(function (r) { return r.json(); })
+          .then(function (summary) { build(root, d, summary); });
+      })
+      .catch(function () { root.textContent = "The nowcast data could not be loaded."; });
   }
 
-  function build(root, d) {
+  function build(root, d, summary) {
     root.textContent = "";
     var controls = h("div", { class: "explorer-controls" }, root);
-    var selProv = h("select", {}, h("label", {}, controls, "Province "));
-    d.provinces.forEach(function (p) {
-      h("option", { value: p.id }, selProv, p.name + " (" + p.id + ")");
+    var scales = [["national", "National"], ["provinces", "Provinces"], ["zones", "Health zones"]]
+      .filter(function (s) { return d.places.some(function (p) { return p.scale === s[0]; }); });
+    var selScale = h("select", {}, h("label", {}, controls, "Scale "));
+    scales.forEach(function (s) { h("option", { value: s[0] }, selScale, s[1]); });
+    var provLabel = h("label", {}, controls, "Province ");
+    var selProv = h("select", {}, provLabel);
+    d.places.filter(function (p) { return p.scale === "provinces"; }).forEach(function (p) {
+      if (d.places.some(function (z) { return z.province === p.id; })) {
+        h("option", { value: p.id }, selProv, p.name);
+      }
     });
-    var selZone = h("select", {}, h("label", {}, controls, "Zone "));
+    var selZone = h("select", {}, h("label", {}, controls, "Place "));
+    var selRound = h("select", {}, h("label", {}, controls, "Scores for "));
+    h("option", { value: "all" }, selRound, "All rounds");
+    summary.origins.forEach(function (o, i) { h("option", { value: i }, selRound, o); });
     var view = T.viewSelect(controls, true, function () { draw(); });
     var zoom = Z.create(controls, function () { draw(); });
     var keys = T.legend(root, d.models, function () { draw(); });
@@ -43,12 +57,19 @@
     var table = h("div", { class: "explorer-table" }, root);
 
     function fillZones() {
+      var zones = selScale.value === "zones";
+      provLabel.hidden = !zones;
       selZone.textContent = "";
-      d.zones.filter(function (z) { return z.province === selProv.value; })
-        .forEach(function (z) { h("option", { value: z.id }, selZone, z.id); });
+      d.places.filter(function (p) {
+        return p.scale === selScale.value && (!zones || p.province === selProv.value);
+      }).forEach(function (p) {
+        h("option", { value: p.id }, selZone, zones ? p.id : p.name);
+      });
     }
+    selScale.addEventListener("change", function () { fillZones(); draw(); });
     selProv.addEventListener("change", function () { fillZones(); draw(); });
     selZone.addEventListener("change", draw);
+    selRound.addEventListener("change", draw);
 
     function ticked() {
       return d.models.map(function (_, i) { return i; })
@@ -64,7 +85,7 @@
       var none = d.models.filter(function (m) { return !m.fan; })
         .map(function (m) { return m.name; });
       note.textContent = none.length ?
-        "No zone forecast at the " + d.release + " release from " + none.join(", ") + "." : "";
+        "No forecast at the " + d.release + " release from " + none.join(", ") + "." : "";
       var q = all.filter(function (r) { return keys.on[r[0]]; });
       var ref = day(d.reference_date);
       var x0 = day(data[0][0]) - 4 * DAY;
@@ -103,7 +124,8 @@
       var svg = el("svg", { viewBox: "0 0 " + W + " " + H, role: "img",
         "aria-label": "Nowcast and forecast for " + zone }, figure);
       var span = y1 - y0;
-      var step = span > 200 ? 50 : span > 80 ? 20 : span > 40 ? 10 : span > 15 ? 5 : span > 6 ? 2 : 1;
+      // Whole counts, so the step is at least 1.
+      var step = Math.max(1, Z.nice(span));
       for (var v = Math.ceil(y0 / step) * step; v <= y1; v += step) {
         el("line", { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: "explorer-grid" }, svg);
         el("text", { x: L - 6, y: Y(v) + 4, "text-anchor": "end",
@@ -160,28 +182,24 @@
 
     function drawTable(zone, on) {
       table.textContent = "";
-      var s = d.scores[zone] || [];
-      var tbl = h("table", {}, table);
-      var head = h("tr", {}, h("thead", {}, tbl));
-      ["Origin", "Model", "n", "Relative WIS", "50% coverage", "90% coverage"]
-        .forEach(function (c) { h("th", {}, head, c); });
-      var body = h("tbody", {}, tbl);
-      d.origins.forEach(function (o) {
-        on.forEach(function (m) {
-          var tr = h("tr", {}, body);
-          h("td", {}, tr, o);
-          h("td", {}, tr, d.models[m].name);
-          var r = s.filter(function (x) { return x[0] === o && x[1] === m; })[0];
-          if (!r) {
-            h("td", { colspan: 4 }, tr, "No zone forecast scored");
-            return;
-          }
-          h("td", {}, tr, String(r[2]));
-          h("td", {}, tr, fmt(r[3], 2));
-          h("td", {}, tr, fmt(r[4], 2));
-          h("td", {}, tr, fmt(r[5], 2));
-        });
+      var place = summary.places.map(function (p) { return p.id; }).indexOf(zone);
+      var round = selRound.value === "all" ? null : +selRound.value;
+      var res = window.bdbvSummarise(summary, function (r) {
+        return r[3] === place && (round === null || r[1] === round);
       });
+      var names = d.models.map(function (m) { return m.name; });
+      var ticked = function (m) {
+        var i = names.indexOf(summary.models[m].name);
+        return i < 0 || on.indexOf(i) >= 0;
+      };
+      var scored = res.map(function (r) { return summary.models[r.model].name; });
+      var missing = on.map(function (i) { return names[i]; })
+        .filter(function (n) { return scored.indexOf(n) < 0; });
+      if (missing.length) {
+        h("p", { class: "explorer-note" }, table,
+          "No forecast scored here for: " + missing.join(", ") + ".");
+      }
+      window.bdbvSummaryTable(table, summary, res, ticked);
     }
     fillZones();
     draw();
@@ -189,7 +207,7 @@
   }
 
   function start() {
-    document.querySelectorAll(".zonechart[data-src]").forEach(init);
+    document.querySelectorAll(".nowcastchart[data-src]").forEach(init);
   }
   if (typeof document$ !== "undefined") document$.subscribe(start);
   else document.addEventListener("DOMContentLoaded", start);

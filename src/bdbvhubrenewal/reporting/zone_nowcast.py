@@ -3,9 +3,9 @@
 
 The random walk models are run on each zone and summed to its provinces
 (`zone_forecast`), as in the submitted file. The page shows the zones
-with cases in the recent weeks: an interactive fan per zone and model
-with its release scores, then static grids by province and a table of
-the newest weeks for `randomwalknowcast`.
+with cases in the recent weeks in the Nowcast page's picker, beside the
+country and provinces (`place_chart_data`), then static grids by
+province and a table of the newest weeks for `randomwalknowcast`.
 A week with no onsets in a zone has a count of 0.
 """
 
@@ -25,7 +25,7 @@ from bdbvhubrenewal.reporting.explorer import compact, trajectories
 
 __all__ = [
     "ZONE_MODEL",
-    "zone_chart_data",
+    "place_chart_data",
     "zone_counts",
     "zone_nowcast",
     "zone_table",
@@ -213,23 +213,26 @@ def zone_table(
     )
 
 
-def zone_chart_data(
+def place_chart_data(
     samples: pd.DataFrame,
     counts: pd.DataFrame,
-    scores: pd.DataFrame,
-    names: dict[str, str],
+    names: Mapping[str, str],
     colours: Mapping[str, tuple[str, str]],
 ) -> dict[str, object]:
-    """Return the data `docs/javascripts/zonechart.js` draws.
+    """Return the data `docs/javascripts/nowcastchart.js` draws.
 
     Parameters
     ----------
     samples : pandas.DataFrame
-        Zone samples of any of the models, at one release.
-    counts, scores : pandas.DataFrame
-        As `zone_table`.
-    names : dict of str to str
-        Province code to name.
+        Samples of any of the models at one release, for the country, the
+        provinces and the zones, with `model`, `vintage`,
+        `reference_date`, `location`, `target_end_date`, `sample` and
+        `value`.
+    counts : pandas.DataFrame
+        Weekly counts at the release, `location`, `target_end_date` and
+        `total`, for every place shown.
+    names : mapping of str to str
+        Place names by id. Zones not named show their code.
     colours : mapping of str to (str, str)
         Every model we fit, in order, to its light and dark colour.
 
@@ -237,36 +240,26 @@ def zone_chart_data(
     -------
     dict
         `release`, `reference_date`, `models` (name, light and dark
-        colour, shown at first, and whether it has zone samples at the
-        release), `origins` with zone scores, `provinces` (code and name)
-        and `zones` (code and province), each by recent cases, most first,
-        and per zone `data` (week, count), `q` (model index, week, q5,
-        q25, q50, q75, q95), `traj` (model index, draw, first week, then
-        the weekly values of a fixed subset of draws, the same in every
-        zone) and `scores` (origin, model index, n, relative WIS, 50% and
-        90% coverage). Scores are those summed to provinces,
-        relative to randomwalk summed to provinces.
+        colour, shown at first, and whether it has samples at the
+        release), `places` (id, name, `scale` and, for a zone, its
+        `province`), each scale by recent cases, most first, and per place
+        `data` (week, count), `q` (model index, week, q5, q25, q50, q75,
+        q95) and `traj` (model index, draw, first week, then the weekly
+        values of a fixed subset of draws, the same in every place).
     """
     models = list(colours)
     size = counts.groupby("location")["total"].sum()
-    shown = list(size.sort_values(ascending=False, kind="stable").index)
     fans = set(samples["model"])
+
+    def scale(loc: str) -> str:
+        return {0: "national", 1: "provinces"}.get(loc.count("-"), "zones")
+
+    order = {"national": 0, "provinces": 1, "zones": 2}
+    shown = sorted(size.index, key=lambda x: (order[scale(x)], -size[x]))
+    keep = samples.loc[samples["location"].isin(shown)]
     q = pd.concat(
-        [
-            _quantiles(grp.loc[grp["location"].isin(shown)]).assign(model=m)
-            for m, grp in samples.groupby("model")
-        ]
+        [_quantiles(grp).assign(model=m) for m, grp in keep.groupby("model")]
     )
-    rel = relative_wis(
-        scores.loc[scores["target"] == "reported"],
-        by=("location", "origin"),
-        baseline=ZONE_BASELINE + SUMMED,
-    )
-    rel = rel.loc[rel["model"].str.endswith(SUMMED)]
-    rel = rel.assign(model=rel["model"].str.removesuffix(SUMMED))
-    rel = rel.loc[rel["model"].isin(models)]
-    by_prov = size.groupby(size.index.map(province_of)).sum()
-    provinces = list(by_prov.sort_values(ascending=False, kind="stable").index)
 
     def _num(v: float) -> float:
         return float(np.round(v, 3))
@@ -284,12 +277,18 @@ def zone_chart_data(
             }
             for m in models
         ],
-        "origins": sorted(set(rel["origin"].astype(str))),
-        "provinces": [
-            {"id": str(p), "name": names.get(str(p), str(p))} for p in provinces
-        ],
-        "zones": [
-            {"id": str(z), "province": province_of(str(z))} for z in shown
+        "places": [
+            {
+                "id": str(p),
+                "name": names.get(str(p), str(p)),
+                "scale": scale(str(p)),
+                **(
+                    {"province": province_of(str(p))}
+                    if scale(str(p)) == "zones"
+                    else {}
+                ),
+            }
+            for p in shown
         ],
         "data": {
             str(z): [
@@ -316,22 +315,6 @@ def zone_chart_data(
                 for m, _, _, k, start, vals in g.itertuples(index=False)
                 if m in models
             ]
-            for z, g in trajectories(
-                samples.loc[samples["location"].isin(shown)]
-            ).groupby("location")
-        },
-        "scores": {
-            str(z): [
-                [
-                    str(r["origin"]),
-                    models.index(r["model"]),
-                    int(r["n"]),
-                    _num(r["rel_wis"]),
-                    _num(r["coverage_50"]),
-                    _num(r["coverage_90"]),
-                ]
-                for r in g.to_dict("records")
-            ]
-            for z, g in rel.groupby("location")
+            for z, g in trajectories(keep).groupby("location")
         },
     }

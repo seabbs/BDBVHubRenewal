@@ -113,8 +113,15 @@
     svg.addEventListener("dblclick", function () { reset(z); });
   }
 
+  // A round tick step giving about five ticks over span.
+  function nice(span) {
+    var p = Math.pow(10, Math.floor(Math.log10(span / 5)));
+    var f = span / 5 / p;
+    return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * p;
+  }
+
   window.bdbvZoom = {
     create: create, xRange: xRange, visible: visible, yRange: yRange,
-    clip: clip, attach: attach,
+    clip: clip, attach: attach, nice: nice,
   };
 })();
