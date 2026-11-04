@@ -539,7 +539,7 @@ def merge_by_model(path: Path | str, new: pd.DataFrame) -> pd.DataFrame:
 
     The fitted variants are slow, so they are run apart from the others,
     for example on a bigger machine. A run replaces the rows of the
-    models it ran and keeps the rest.
+    models it ran and keeps the rest, so a run of no model keeps them all.
 
     Parameters
     ----------
@@ -554,14 +554,17 @@ def merge_by_model(path: Path | str, new: pd.DataFrame) -> pd.DataFrame:
         The kept rows of other models, then `new`.
     """
     path = Path(path)
-    if not path.exists() or "model" not in new:
+    if not path.exists():
         return new
     # An empty table still has a gzip header, so the size cannot tell.
     try:
         old = pd.read_csv(path)
     except pd.errors.EmptyDataError:
         return new
-    if "model" not in old:
+    # A run of no model replaces nothing.
+    if new.empty:
+        return old
+    if "model" not in old or "model" not in new:
         return new
     kept = old.loc[~old["model"].isin(set(new["model"]))]
     if kept.empty:

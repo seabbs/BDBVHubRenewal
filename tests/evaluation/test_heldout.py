@@ -293,3 +293,6 @@ def test_merge_by_model_replaces_only_the_models_run(tmp_path: Path) -> None:
     assert merge_by_model(tmp_path / "missing.csv", new) is new
     # A rerun of every model in the file replaces it.
     assert merge_by_model(path, old) is old
+    # A run of no model, as `score_tasks` returns it, keeps every row.
+    empty = pd.DataFrame(columns=["truth_vintage"])
+    pd.testing.assert_frame_equal(merge_by_model(path, empty), old)
