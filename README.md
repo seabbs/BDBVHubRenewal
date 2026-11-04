@@ -25,6 +25,10 @@ Two hub models are submitted, `seabbs-rwnowcast` and `seabbs-renewal`.
 It runs at province and zone level, and the national value is the sum of the provinces.
 `randomwalk` is the same walk with no nowcast, kept for comparison.
 `seabbs-renewal` carries one of the renewal models, `renewalbvd`, `renewalsp` or `renewal`, through the chain in `ci/policy.toml`.
+The renewal models are renewal models of daily symptom onsets, built on [PyRenew](https://github.com/CDCgov/PyRenew), with a learnt onset-to-report delay and the hub's imputation of missing onsets in the model.
+`renewalsp` fits each province on its own.
+`renewal` fits the provinces together, with a pooled Rt and importation between provinces through a gravity kernel.
+`renewalbvd` is `renewal` with the Rt estimates of [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) added to the fit.
 See the [documentation](https://samabbott.co.uk/BDBVHubRenewal/) for the methods and results.
 
 ## Installation
@@ -39,7 +43,7 @@ uv sync
 
 ## Usage
 
-The [Getting started](https://samabbott.co.uk/BDBVHubRenewal/getting-started/) page forecasts, plots and scores the two baselines in Python.
+The [Getting started](https://samabbott.co.uk/BDBVHubRenewal/getting-started/) page forecasts, plots and scores both baselines, `randomwalknowcast` and `randomwalk`, in Python.
 
 ## Data
 
@@ -53,7 +57,22 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Citing
 
-To cite this software, use [CITATION.cff](CITATION.cff), or the "Cite this repository" button on GitHub.
+<!-- Zenodo DOI badge: replace XXXXXXX with the record number after the first release. -->
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
+
+Abbott S (2026). BDBVHubRenewal: renewal-model nowcasts and forecasts for the BDBV Modeling Hub. Version 0.1.0. <https://github.com/seabbs/BDBVHubRenewal>.
+
+```bibtex
+@software{abbott_bdbvhubrenewal,
+  author = {Abbott, Sam},
+  title = {{BDBVHubRenewal}: renewal-model nowcasts and forecasts for the {BDBV} Modeling Hub},
+  year = {2026},
+  version = {0.1.0},
+  url = {https://github.com/seabbs/BDBVHubRenewal}
+}
+```
+
+The metadata are in [CITATION.cff](CITATION.cff), which GitHub shows as the "Cite this repository" button.
 
 ## Funding
 
