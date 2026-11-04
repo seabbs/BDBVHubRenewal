@@ -35,6 +35,25 @@ Relative WIS on the log scale is the same ratio of mean WIS on the log scale.
 The baseline is `randomwalk`.
 Coverage is whether $y$ falls in the central 50% and 90% sample intervals.
 
+### Energy score
+
+The energy score scores one forecast of a vector $\mathbf{y}$.
+For an origin, a release and a scale, $\mathbf{y}$ holds every place at that scale in every scored week, and national holds the weeks only.
+It uses only the place-week cells that every compared model forecasts.
+Sample $i$ of a model is its draws with sample index $i$, $\mathbf{X}_i$.
+We use the fair form over $m$ samples,
+
+$$
+\text{ES}(F, \mathbf{y}) = \frac{1}{m} \sum_{i} \lVert \mathbf{X}_i - \mathbf{y} \rVert - \frac{1}{2m(m - 1)} \sum_{i \ne j} \lVert \mathbf{X}_i - \mathbf{X}_j \rVert.
+$$
+
+The energy score on the log scale is the energy score of $\log(1 + \mathbf{y})$ against $\log(1 + \mathbf{X}_i)$, never the log of the score.
+Relative energy scores are ratios of means against `randomwalk` over the origins and releases both have, and $n$ counts those.
+The score rewards a joint pattern across places only where draws are joint.
+The renewal models' draws are joint across places, one posterior draw per sample index, and their zones split each province draw.
+`randomwalk` and `randomwalknowcast` draw each place independently.
+Hub teams' samples are joint across weeks within a place only, as the hub's sample format sets, so pairing their indices across places scores them as independent across places.
+
 ## Backtest design
 
 Each vintage is a forecast task, and every registered model forecasts every task.
