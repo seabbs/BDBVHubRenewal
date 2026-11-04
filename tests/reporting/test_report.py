@@ -187,8 +187,12 @@ def test_lopo_section_hidden_without_results(tmp_path: Path) -> None:
 
 
 def test_zone_section() -> None:
-    text = report._zone_section(ROOT / "results" / "zone-scores.csv")
+    text = report._zone_section(
+        ROOT / "results" / "zone-scores.csv",
+        ROOT / "results" / "zone-energy.csv",
+    )
     assert text.startswith("## Health zones")
+    assert "rel_energy" in text
     assert "randomwalknowcast (summed to provinces)" in text
     assert "week 0" in text
 
@@ -382,9 +386,19 @@ def test_forecast_tabs() -> None:
 
 
 def test_recovery_section() -> None:
-    text = report._recovery_section()
+    energy = pd.DataFrame(
+        {
+            "scale": ["national", "national"],
+            "model": ["randomwalk", "randomwalk"],
+            "energy": [4.0, 6.0],
+            "log_energy": [0.25, 0.75],
+        }
+    )
+    text = report._recovery_section(energy)
     assert text.startswith("## Recovery on simulated vintages")
     assert "recovery-wis-horizon.svg" in text
+    assert "mean energy score" in text
+    assert "| national | randomwalk |   2 |" in text
 
 
 def _scenario_scores() -> pd.DataFrame:
@@ -419,7 +433,19 @@ def _scenario_scores() -> pd.DataFrame:
 def test_scenario_scores_table(tmp_path: Path) -> None:
     path = tmp_path / "scenario-scores.csv"
     _scenario_scores().to_csv(path, index=False)
-    text = report._scenario_scores(path)
+    energy = tmp_path / "scenario-energy.csv"
+    pd.DataFrame(
+        {
+            "scenario": "calibrated_falling",
+            "scale": "national",
+            "model": "randomwalk",
+            "truth_view": ["final", "as of 2 weeks later"],
+            "energy": [3.0, 5.0],
+            "log_energy": [0.3, 0.5],
+        }
+    ).to_csv(energy, index=False)
+    text = report._scenario_scores(path, energy)
+    assert "Energy score against final data, complete weeks" in text
     assert "final data, complete weeks" in text
     assert "as of 2 weeks later" in text
     assert "calibrated_falling" in text

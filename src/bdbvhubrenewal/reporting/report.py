@@ -55,7 +55,11 @@ from bdbvhubrenewal.evaluation.hubcompare import (
     stored_forecasts,
     summarise_comparison,
 )
-from bdbvhubrenewal.evaluation.nowcast import BASELINE, relative_wis
+from bdbvhubrenewal.evaluation.nowcast import (
+    BASELINE,
+    relative_energy,
+    relative_wis,
+)
 from bdbvhubrenewal.evaluation.scoring import summarise_scores
 from bdbvhubrenewal.evaluation.zones import zone_relative_skill
 from bdbvhubrenewal.forecasters.base import (
@@ -99,6 +103,7 @@ from bdbvhubrenewal.reporting.plots import (
     save_light_dark,
 )
 from bdbvhubrenewal.reporting.scorechart import (
+    ENERGY_METRICS,
     OVERALL_METRICS,
     SCORE_METRICS,
     score_chart_data,
@@ -352,7 +357,20 @@ def _release_section(
     zones = zones.loc[zones["model"].isin(set(scores["model"]))]
     pooled = pd.concat([scores, zones.assign(pool="zones")])
     pooled["target"] = pooled["target"].map(_TARGET_LABELS)
-    overall = relative_wis(pooled, ("target", "pool"))
+    energy = _ours(
+        pd.concat(
+            [
+                pd.read_csv(res / "nowcast-energy.csv"),
+                pd.read_csv(res / "zone-energy.csv"),
+            ]
+        ),
+        names,
+    )
+    energy["target"] = energy["target"].map(_TARGET_LABELS)
+    joint = relative_energy(energy).rename(columns={"scale": "pool"})
+    overall = relative_wis(pooled, ("target", "pool")).merge(
+        joint, on=["target", "pool", "model"], how="left"
+    )
     by_pool = relative_wis(pooled, ("target", "pool", "origin"))
     scores["target"] = scores["target"].map(_TARGET_LABELS)
     by_place = relative_wis(scores, ("target", "origin", "location"))
@@ -384,6 +402,7 @@ def _release_section(
             plot_relative_overall,
             reported,
             [n for n in names if n in set(reported["model"])],
+            metrics={**OVERALL_METRICS, **ENERGY_METRICS},
         ),
         fig / "relative-overall.svg",
     )
@@ -402,7 +421,10 @@ def _release_section(
         "## Overall\n\n"
         "Scores against what each later release reported "
         "([how scoring works](methods/evaluation.md#real-releases), "
-        "[metrics](methods/evaluation.md#scores)).\n\n"
+        "[metrics](methods/evaluation.md#scores)).\n"
+        "The [energy score](methods/evaluation.md#energy-score) scores each "
+        "scale's places and weeks as one forecast per origin and release, "
+        "so its $n$ counts those.\n\n"
         + summary_html(
             "../figures/scoresummary-backtest.json",
             "Overall scores by scale",
@@ -840,12 +862,18 @@ def _lopo_section(path: Path) -> str:
     )
 
 
-def _zone_section(path: Path) -> str:
+def _zone_section(path: Path, energy_path: Path) -> str:
     """Return the health-zone section."""
     scores = pd.read_csv(path, low_memory=False)
+    joint = relative_energy(pd.read_csv(energy_path), by=("scale",))
     cols = ["n", "wis", "log_wis", "coverage_50", "coverage_90", "bias"]
-    table = summarise_scores(scores, by=("model",)).merge(
-        zone_relative_skill(scores)[["model", "relative_wis"]], on="model"
+    energy = ["n_energy", "rel_energy", "rel_log_energy"]
+    table = (
+        summarise_scores(scores, by=("model",))
+        .merge(
+            zone_relative_skill(scores)[["model", "relative_wis"]], on="model"
+        )
+        .merge(joint[["model", *energy]], on="model")
     )
     by = zone_relative_skill(scores, by=("horizon",)).pivot(
         index="model", columns="horizon", values="relative_wis"
@@ -855,8 +883,10 @@ def _zone_section(path: Path) -> str:
         "## Health zones\n\n"
         "`randomwalk` and `randomwalknowcast` on each zone with cases, as "
         "run and summed to provinces "
-        "([Health zones](methods/evaluation.md#health-zones)).\n\n"
-        + _table(table[["model", *cols, "relative_wis"]])
+        "([Health zones](methods/evaluation.md#health-zones)).\n"
+        "The [energy score](methods/evaluation.md#energy-score) takes every "
+        "zone and week as one forecast per origin and release.\n\n"
+        + _table(table[["model", *cols, "relative_wis", *energy]])
         + "\n\nRelative WIS by week, with 0 the week of the reference "
         "date.\n\n" + _table(by.reset_index())
     )
@@ -1042,7 +1072,31 @@ def _forecast_tabs(
     )
 
 
-def _recovery_section() -> str:
+def _energy_means(energy: pd.DataFrame, by: Sequence[str]) -> str:
+    """Tabulate the mean energy scores, with $n$ the vectors scored."""
+    table = (
+        energy.groupby([*by, "model"], sort=False)
+        .agg(
+            n=("energy", "size"),
+            energy=("energy", "mean"),
+            log_energy=("log_energy", "mean"),
+        )
+        .reset_index()
+        .rename(
+            columns={
+                "energy": "mean energy score",
+                "log_energy": "mean energy score on the log scale",
+            }
+        )
+    )
+    return (
+        "Mean [energy score](methods/evaluation.md#energy-score), each "
+        "scale's places and weeks scored as one forecast per vintage.\n\n"
+        + _table(table)
+    )
+
+
+def _recovery_section(energy: pd.DataFrame) -> str:
     """Return the recovery section."""
     alt = "Mean WIS by horizon on simulated vintages."
     return (
@@ -1051,7 +1105,8 @@ def _recovery_section() -> str:
         "(methods/data.md#simulated-vintages), scored against the known "
         "final counts.\n\n"
         f"![{alt}](figures/recovery-wis-horizon.svg#only-light)\n"
-        f"![{alt}](figures/recovery-wis-horizon-dark.svg#only-dark)\n"
+        f"![{alt}](figures/recovery-wis-horizon-dark.svg#only-dark)\n\n"
+        + _energy_means(energy, ["scale"])
     )
 
 
@@ -1062,9 +1117,10 @@ def _without_baseline(
     return rel.loc[rel["model"] != baseline].reset_index(drop=True)
 
 
-def _scenario_scores(path: Path) -> str:
+def _scenario_scores(path: Path, energy_path: Path) -> str:
     """Return mean scores on the simulated scenarios."""
     scores = pd.read_csv(path, low_memory=False)
+    energy = pd.read_csv(energy_path)
     views = {
         "final data, complete weeks": (scores["truth_view"] == "final")
         & scores["complete"],
@@ -1094,6 +1150,15 @@ def _scenario_scores(path: Path) -> str:
             )
         )
         tables.append(f"**Scored against {label}**\n\n" + _table(table))
+    final = energy["truth_view"] == "final"
+    for label, keep in (
+        ("final data, complete weeks", final),
+        ("as of 2 weeks later", ~final),
+    ):
+        tables.append(
+            f"**Energy score against {label}**\n\n"
+            + _energy_means(energy.loc[keep], ["scenario", "scale"])
+        )
     return "\n".join(tables)
 
 
@@ -1304,7 +1369,10 @@ def _backtest_page(
         ),
     )
     _write(gen / "lopo-section.md", _lopo_section(res / "lopo-scores.csv"))
-    _write(gen / "zone-section.md", _zone_section(res / "zone-scores.csv"))
+    _write(
+        gen / "zone-section.md",
+        _zone_section(res / "zone-scores.csv", res / "zone-energy.csv"),
+    )
     _write(gen / "ladder.md", _ladder_page(res / "ladder.csv"))
     _write(
         gen / "development-log.md",
@@ -1318,7 +1386,10 @@ def _backtest_page(
         ),
     )
     rec_path = res / "recovery-scores.csv"
-    _write(gen / "recovery-section.md", _recovery_section())
+    _write(
+        gen / "recovery-section.md",
+        _recovery_section(pd.read_csv(res / "recovery-energy.csv")),
+    )
     rscores = pd.read_csv(rec_path)
     save_light_dark(
         lambda mode: plot_scores(
@@ -1327,7 +1398,10 @@ def _backtest_page(
         fig / "recovery-wis-horizon.svg",
     )
     scen_path = res / "scenario-scores.csv.gz"
-    _write(gen / "scenario-scores.md", _scenario_scores(scen_path))
+    _write(
+        gen / "scenario-scores.md",
+        _scenario_scores(scen_path, res / "scenario-energy.csv"),
+    )
     _write(gen / "scenario-figure.md", _scenario_figure())
     sscores = pd.read_csv(scen_path, low_memory=False)
     _save_metric_figures(
@@ -1544,6 +1618,7 @@ def _teams_table(teams: pd.DataFrame, hub_ids: Mapping[str, str]) -> str:
 def _overall_table(
     fig: Path,
     scores: pd.DataFrame,
+    energy: pd.DataFrame,
     baseline: str,
     hub_ids: Mapping[str, str],
     colours: Mapping[str, tuple[str, str]],
@@ -1554,7 +1629,8 @@ def _overall_table(
     baseline. Our other models can be switched on. `colours` are those of
     the round figures and the explorer, so a model has one colour in all.
     """
-    overall = overall_comparison(scores, baseline)
+    overall = overall_comparison(scores, energy, baseline)
+    metrics = {**OVERALL_METRICS, **ENERGY_METRICS}
     raw = list(overall["model"])
     overall["model"] = [
         comparison_label(m, "hub" if hub else "real", hub_ids)
@@ -1579,6 +1655,7 @@ def _overall_table(
             models,
             baseline,
             x="scale",
+            metrics=metrics,
             colours=colours,
         ),
         fig / "comparison-overall.svg",
@@ -1588,7 +1665,7 @@ def _overall_table(
         score_chart_data(
             overall,
             "scale",
-            OVERALL_METRICS,
+            metrics,
             models,
             default_on=[*sorted(hub), *(m for m in ours if m in shown)],
             x_label="Scale",
@@ -1610,6 +1687,9 @@ def _overall_table(
         "coverage_50": "50%",
         "coverage_90": "90%",
         "bias": "bias",
+        "rel_energy": "rel. energy",
+        "rel_log_energy": "rel. energy, log scale",
+        "n_energy": "n energy",
     }
     long = overall.melt(
         id_vars=["model", "scale"], value_vars=list(names), var_name="metric"
@@ -1627,7 +1707,12 @@ def _overall_table(
         + "Over every scored round, on the count each later release reported "
         f"and on the forecasts `{baseline}` also made, by scale.{gap}\n"
         "Our other models and randomwalk can be switched on in the key.\n"
-        "randomwalk stays the reference for the relative scores either way.\n\n"
+        "randomwalk stays the reference for the relative scores either way.\n"
+        "The [energy score](methods/evaluation.md#energy-score) scores each "
+        "scale as one forecast per round and release, on the places and weeks "
+        "every model forecast, so a team that covers few places shrinks "
+        "that set for all.\n"
+        "Hub teams' samples are joint across weeks within a place only.\n\n"
         + _table(wide)
     )
 
@@ -1695,6 +1780,7 @@ def _comparison_page(
             _overall_table(
                 fig,
                 scores,
+                pd.read_csv(cmp_dir / "energy.csv"),
                 baseline,
                 hub_ids,
                 colours,

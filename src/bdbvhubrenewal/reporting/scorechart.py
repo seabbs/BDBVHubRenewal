@@ -18,6 +18,7 @@ import pandas as pd
 from bdbvhubrenewal.reporting.plots import model_colour
 
 __all__ = [
+    "ENERGY_METRICS",
     "OVERALL_METRICS",
     "SCORE_METRICS",
     "score_chart_data",
@@ -34,6 +35,13 @@ OVERALL_METRICS: Mapping[str, tuple[str, float | None]] = {
 }
 """Columns of `relative_wis` in the overall figures, with each label and
 the line of a perfect or baseline score. Bias is in -1 to 1."""
+
+ENERGY_METRICS: Mapping[str, tuple[str, float | None]] = {
+    "rel_energy": ("Relative energy score", 1.0),
+    "rel_log_energy": ("Relative energy score, log scale", 1.0),
+}
+"""Columns of `relative_energy` in the overall figures. The energy score
+is one score per scale, so it has no per-place or per-horizon view."""
 
 SCORE_METRICS: Mapping[str, tuple[str, float | None]] = {
     "wis": ("WIS", None),
