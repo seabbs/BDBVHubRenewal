@@ -180,8 +180,9 @@ def censored_pmf(
     reference the error is at most $3 \times 10^{-5}$ for means of 2 to 15
     days and cv 0.3 to 2. Truncated at `dmax` and renormalised, as
     `primarycensored::dpcens(..., D = dmax + 1)`.
-    `bdbvhubrenewal.model.model.generation_interval` uses the same form
-    in float64, once.
+    The simulator (`bdbvhubrenewal.data.simulate`) draws its delays with
+    it; `bdbvhubrenewal.model.model.generation_interval` uses the same
+    form in float64, once.
 
     Parameters
     ----------
@@ -239,87 +240,6 @@ def censored_pmf(
     pmf = jnp.where(right, second(q), second(g))
     pmf = jnp.maximum(pmf, 1e-12)
     return pmf / pmf.sum()
-
-
-class ParametricDelay(RandomVariable):
-    r"""Censored parametric delay with a time-varying mean.
-
-    $$\log \mu(s) = \log \mu_0 + \gamma(s),$$
-
-    with a fixed coefficient of variation $c$ and the pmf from
-    `censored_pmf` for the chosen family.
-
-    Parameters
-    ----------
-    name : str
-        Prefix for the sample sites.
-    dmax : int
-        Maximum delay $D$.
-    time_process : TemporalProcess
-        Process for $\gamma(s)$, starting at 0.
-    family : {"gamma", "lognormal"}, optional
-        Delay family.
-    mean_loc, mean_scale : float, optional
-        Log-normal prior on $\mu_0$ (median and log SD).
-    """
-
-    def __init__(
-        self,
-        name: str,
-        dmax: int,
-        time_process: TemporalProcess,
-        family: str = "gamma",
-        mean_loc: float = 8.0,
-        mean_scale: float = 0.5,
-    ) -> None:
-        super().__init__(name=name)
-        self.dmax = dmax
-        self.time_process = time_process
-        self.family = family
-        self.mean_loc = mean_loc
-        self.mean_scale = mean_scale
-
-    def sample(
-        self,
-        n_timepoints: int,
-        first_day_dow: int | None = None,
-        **kwargs: object,
-    ) -> Array:
-        """Sample the delay matrix.
-
-        Parameters
-        ----------
-        n_timepoints : int
-            Days to sample.
-        first_day_dow : int, optional
-            Weekday of the first day, passed by PyRenew.
-        **kwargs
-            Ignored, for the PyRenew interface.
-
-        Returns
-        -------
-        ArrayLike
-            Shape `(n_timepoints, dmax + 1)`.
-        """
-        mu0 = numpyro.sample(
-            f"{self.name}_mean0",
-            dist.LogNormal(jnp.log(self.mean_loc), self.mean_scale),
-        )
-        cv = numpyro.sample(f"{self.name}_cv", dist.LogNormal(0.0, 0.3))
-        gamma = self.time_process.sample(
-            n_timepoints=n_timepoints,
-            initial_value=0.0,
-            name_prefix=f"{self.name}_time",
-            first_day_dow=first_day_dow,
-        )[:, 0]
-        mean = mu0 * jnp.exp(gamma)
-        pmf = jax.vmap(lambda m: censored_pmf(self.family, m, cv, self.dmax))(
-            mean
-        )
-        numpyro.deterministic(
-            f"{self.name}_mean", pmf @ jnp.arange(self.dmax + 1)
-        )
-        return pmf
 
 
 class FixedTimeVarying(RandomVariable):
