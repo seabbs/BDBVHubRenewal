@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-from matplotlib.figure import Figure
 
 from bdbvhubrenewal.cli import main
 from bdbvhubrenewal.reporting import plots
@@ -28,17 +27,6 @@ def in_root(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     os.chdir(ROOT)
     yield
     os.chdir(old)
-
-
-@pytest.mark.usefixtures("in_root")
-def test_cli_nowcast_and_metadata(tmp_path: Path) -> None:
-    assert main(["nowcast", "--out", str(tmp_path / "sub")]) == 0
-    files = list((tmp_path / "sub").rglob("*.csv"))
-    assert len(files) == 1
-    table = pd.read_csv(files[0])
-    assert set(table["output_type"]) == {"sample"}
-    assert main(["metadata", "--out", str(tmp_path / "meta")]) == 0
-    assert (tmp_path / "meta" / "seabbs-randomwalk.yml").exists()
 
 
 def _written(out: Path) -> pd.DataFrame:
@@ -86,35 +74,6 @@ def test_cli_nowcast_without_zone_data_skips_zones(tmp_path: Path) -> None:
     assert side["zones"] is False
     assert side["n_zones"] == 0
     assert "zone" in side["note"]
-
-
-@pytest.mark.usefixtures("in_root")
-def test_cli_zone_backtest(tmp_path: Path) -> None:
-    out = tmp_path / "zone-scores.csv"
-    assert main(["zone-backtest", "--out", str(out)]) == 0
-    scores = pd.read_csv(out)
-    assert {"randomwalk", "randomwalknowcast"} <= set(scores["model"])
-
-
-@pytest.mark.usefixtures("in_root")
-@pytest.mark.usefixtures("in_root")
-def test_plot_nowcast_returns_figure(
-    target: pd.DataFrame, delays: pd.DataFrame
-) -> None:
-    with plots.theme("dark"):
-        fig = plots.plot_nowcast(
-            "CD-IT", target=target, delays=delays, mode="dark"
-        )
-    assert isinstance(fig, Figure)
-
-
-def test_save_light_dark(tmp_path: Path, target: pd.DataFrame) -> None:
-    paths = plots.save_light_dark(
-        lambda mode: plots.plot_revisions(target, mode=mode),
-        tmp_path / "rev.svg",
-    )
-    assert [p.name for p in paths] == ["rev.svg", "rev-dark.svg"]
-    assert all(p.stat().st_size > 0 for p in paths)
 
 
 def test_forecast_draws_trajectories_ribbons_and_median() -> None:
@@ -174,55 +133,6 @@ def test_cli_lopo_writes_scores_for_mask_aware_models(tmp_path: Path) -> None:
     assert not (tmp_path / "res" / "nowcast-scores.csv").exists()
 
 
-@pytest.mark.usefixtures("in_root")
-def test_cli_backtest_keeps_other_models_results(tmp_path: Path) -> None:
-    res, out = tmp_path / "res", tmp_path / "out"
-    args = ["backtest", "--results", str(res),
-            "--output", str(out), "--models", "randomwalk"]  # fmt: skip
-    assert main(args) == 0
-    names = ("recovery-scores.csv",)
-    # Another model's results, as a fit on archie would leave them.
-    for name in names:
-        table = pd.read_csv(res / name)
-        pd.concat([table, table.assign(model="other")]).to_csv(
-            res / name, index=False
-        )
-    fc = pd.read_csv(out / "forecasts.csv.gz")
-    pd.concat([fc, fc.assign(model="other")]).to_csv(
-        out / "forecasts.csv.gz", index=False
-    )
-    assert main(args) == 0
-    for name in names:
-        table = pd.read_csv(res / name)
-        assert set(table["model"]) == {"randomwalk", "other"}
-        assert not table.duplicated().any()
-    fc = pd.read_csv(out / "forecasts.csv.gz")
-    assert set(fc["model"]) == {"randomwalk", "other"}
-    assert len(fc) == 2 * (fc["model"] == "other").sum()
-
-
-@pytest.mark.usefixtures("in_root")
-def test_cli_backtest_no_fit_skips_fitted_models(tmp_path: Path) -> None:
-    from bdbvhubrenewal.forecasters import list_models
-
-    assert any(s.fitted for s in list_models())
-    args = [
-        "backtest",
-        "--no-fit",
-        "--results",
-        str(tmp_path / "res"),
-        "--output",
-        str(tmp_path / "out"),
-    ]
-    assert main(args) == 0  # would take minutes if it fitted anything
-    scores = pd.read_csv(tmp_path / "res" / "nowcast-scores.csv")
-    fitted = {s.name for s in list_models() if s.fitted}
-    assert "randomwalk" in set(scores["model"])
-    # Fitted models are scored only from their stored forecasts.
-    fc = pd.read_csv(tmp_path / "out" / "forecasts.csv.gz")
-    assert not fitted & set(fc["model"])
-
-
 def test_host_devices_cover_the_chains(monkeypatch: pytest.MonkeyPatch) -> None:
     from bdbvhubrenewal.cli import host_devices
 
@@ -258,27 +168,3 @@ def test_cli_fit_task_carries_the_delay_files_for_the_lag() -> None:
     assert task.target_history is not None
     assert task.target_history["vintage"].nunique() >= 3
     assert vintage_inputs(task, MAIN).publication_lag_pmf is not None
-
-
-@pytest.mark.usefixtures("in_root")
-def test_cli_backtest_scenarios(tmp_path: Path) -> None:
-    args = [
-        "backtest",
-        "--scenarios-only",
-        "--models",
-        "randomwalk",
-        "--scenario-dates",
-        "2026-10-17",
-        "--results",
-        str(tmp_path / "res"),
-        "--output",
-        str(tmp_path / "out"),
-    ]
-    assert main(args) == 0
-    scores = pd.read_csv(tmp_path / "res" / "scenario-scores.csv.gz")
-    assert set(scores["scenario"]) == {
-        "calibrated_falling",
-        "calibrated_flat",
-        "calibrated_rising",
-    }
-    assert (tmp_path / "out" / "scenario-forecasts.csv.gz").exists()

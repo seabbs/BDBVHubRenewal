@@ -19,6 +19,7 @@ exclude_docs: |
 
 nav:
   - Home: index.md
+  - Setup: setup.md
   - Getting started: getting-started.ipynb
   - Methods:
       - Data: methods/data.md
@@ -110,9 +111,13 @@ extra_css:
 extra_javascript:
   - javascripts/mathjax.js
   - javascripts/toggles.js
+  - javascripts/zoom.js
+  - javascripts/summarise.js
+  - javascripts/energy.js
   - javascripts/tablefilter.js
   - javascripts/explorer.js
   - javascripts/scorechart.js
+  - javascripts/scoresummary.js
   - javascripts/zonechart.js
   - https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js
 

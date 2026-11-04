@@ -18,7 +18,9 @@ DATA = Path(__file__).resolve().parents[2] / "data"
 
 
 @pytest.fixture(scope="module")
-def scores(target: pd.DataFrame, delays: pd.DataFrame) -> pd.DataFrame:
+def result(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     return zone_backtest(
         target,
         delays,
@@ -26,6 +28,24 @@ def scores(target: pd.DataFrame, delays: pd.DataFrame) -> pd.DataFrame:
         load_daily_zones(DATA),
         hub_zones(DATA / "hub-config" / "tasks.json"),
     )
+
+
+@pytest.fixture(scope="module")
+def scores(result: tuple[pd.DataFrame, pd.DataFrame]) -> pd.DataFrame:
+    return result[0]
+
+
+def test_energy_scores_every_zone_and_week_as_one_vector(
+    result: tuple[pd.DataFrame, pd.DataFrame],
+) -> None:
+    scores, energy = result
+    assert set(energy["scale"]) == {"zones"}
+    assert set(energy["model"]) == set(scores["model"])
+    unit = ["origin", "target", "truth_vintage"]
+    cells = scores.groupby([*unit, "model"]).size().groupby(unit).max()
+    got = energy.groupby(unit)["n_cells"].agg(["min", "max"])
+    assert (got["min"] == got["max"]).all()
+    assert got["max"].equals(cells.rename("max"))
 
 
 def test_both_baselines_are_scored_at_zone_level(

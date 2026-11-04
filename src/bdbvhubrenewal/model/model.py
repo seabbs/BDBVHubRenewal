@@ -79,7 +79,7 @@ def generation_interval(
     uses lags 1 to $L$, so lag 0 (about 0.05% of the mass) is dropped and
     the rest renormalised, as BVDOutbreakSize left-truncates its
     generation interval at one day. Computed once, in float64.
-    Matches `primarycensored::dpcens(..., D = L + 1)`.
+    Matches `primarycensored::dpcens(1:L, ..., L = 1, D = L + 1)`.
 
     Parameters
     ----------

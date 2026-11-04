@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
 from pathlib import Path
 
 import pandas as pd
@@ -85,30 +84,63 @@ def test_heldout_needs_flag_and_choice(
         run_heldout(target, delays, config, evaluate_holdout=True, daily=daily)
 
 
-def test_heldout_scores_each_forecast_under_its_model(
+@pytest.fixture(scope="module")
+def rw_run(
     target: pd.DataFrame,
     delays: pd.DataFrame,
     daily: pd.DataFrame,
-    config: BacktestConfig,
-    tmp_path: Path,
+    tmp_path_factory: pytest.TempPathFactory,
+) -> tuple[BacktestConfig, pd.DataFrame, Path]:
+    """One held-out run with randomwalk chosen and a second cheap model."""
+    from bdbvhubrenewal.forecasters import RandomWalk, register_model
+    from bdbvhubrenewal.forecasters.base import _REGISTRY
+
+    tmp = tmp_path_factory.mktemp("heldout")
+    config = BacktestConfig(
+        n_samples=100,
+        seed=1,
+        development_until="2026-10-10",
+        model_choice=_randomwalk_choice(tmp),
+        simulated_dates=("2026-08-01", "2026-09-05"),
+    )
+    register_model(
+        "shadow",
+        lambda: RandomWalk(name="shadow"),
+        "A second cheap model.",
+        replace=True,
+    )
+    try:
+        scores = run_heldout(
+            target,
+            delays,
+            config,
+            evaluate_holdout=True,
+            out_dir=tmp / "out",
+            models=("shadow",),
+            daily=daily,
+        )
+    finally:
+        _REGISTRY.pop("shadow")
+    return config, scores, tmp / "out"
+
+
+def test_heldout_scores_each_forecast_under_its_model(
+    rw_run: tuple[BacktestConfig, pd.DataFrame, Path],
 ) -> None:
-    config.model_choice.write_text(
-        "choices:\n  - {date: 2026-10-10, model: randomwalk}\n"
-    )
-    out = tmp_path / "out"
-    scores = run_heldout(
-        target, delays, config, evaluate_holdout=True, out_dir=out, daily=daily
-    )
+    _, scores, out = rw_run
     # The 2026-10-17 and 2026-10-24 forecasts have later data.
     assert set(scores["origin"]) == {"2026-10-17", "2026-10-24"}
     assert set(scores["truth_vintage"]) == {"2026-10-24", "2026-11-01"}
+    # Each score records the model chosen at the time.
     assert set(scores["chosen_model"]) == {"randomwalk"}
-    # Both baselines and the floor are scored on every held-out vintage,
-    # on the count each later vintage reports.
+    # Both baselines, the floor and the other variants asked for are
+    # scored on every held-out vintage, on the count each later vintage
+    # reports.
     assert set(scores["model"]) == {
         "as reported",
         "randomwalk",
         "randomwalknowcast",
+        "shadow",
     }
     assert "reported" in set(scores["target"])
     record = yaml.safe_load((out / "heldout-run.yml").read_text())
@@ -124,96 +156,20 @@ def test_heldout_scores_each_forecast_under_its_model(
     }
 
 
-def test_heldout_scores_both_baselines_beside_a_fitted_choice(
-    target: pd.DataFrame,
-    delays: pd.DataFrame,
-    daily: pd.DataFrame,
-    config: BacktestConfig,
-    tmp_path: Path,
-) -> None:
-    config.model_choice.write_text(
-        "choices:\n  - {date: 2026-10-10, model: renewal}\n"
-    )
-    scores = run_heldout(
-        target,
-        delays,
-        config,
-        evaluate_holdout=True,
-        out_dir=tmp_path,
-        fit=False,
-        daily=daily,
-    )
-    assert set(scores["model"]) == {
-        "as reported",
-        "randomwalk",
-        "randomwalknowcast",
-    }
-    assert set(scores["chosen_model"]) == {"renewal"}
-
-
-def test_heldout_also_runs_the_other_variants(
-    target: pd.DataFrame,
-    delays: pd.DataFrame,
-    daily: pd.DataFrame,
-    config: BacktestConfig,
-    tmp_path: Path,
-) -> None:
-    from bdbvhubrenewal.forecasters import RandomWalk, register_model
-    from bdbvhubrenewal.forecasters.base import _REGISTRY
-
-    register_model(
-        "shadow",
-        lambda: RandomWalk(name="shadow"),
-        "A second cheap model.",
-        replace=True,
-    )
-    config.model_choice.write_text(
-        "choices:\n  - {date: 2026-10-10, model: randomwalk}\n"
-    )
-    scores = run_heldout(
-        target,
-        delays,
-        config,
-        evaluate_holdout=True,
-        out_dir=tmp_path,
-        models=("shadow",),
-        daily=daily,
-    )
-    try:
-        assert set(scores["model"]) == {
-            "as reported",
-            "randomwalk",
-            "randomwalknowcast",
-            "shadow",
-        }
-        # Each score still records the model chosen at the time.
-        assert set(scores["chosen_model"]) == {"randomwalk"}
-    finally:
-        _REGISTRY.pop("shadow")
-
-
 def test_heldout_keeps_and_rescores_other_models_forecasts(
     target: pd.DataFrame,
     delays: pd.DataFrame,
     daily: pd.DataFrame,
-    config: BacktestConfig,
+    rw_run: tuple[BacktestConfig, pd.DataFrame, Path],
     tmp_path: Path,
 ) -> None:
-    config.model_choice.write_text(
-        "choices:\n  - {date: 2026-10-10, model: randomwalk}\n"
-    )
-    run_heldout(
-        target,
-        delays,
-        config,
-        evaluate_holdout=True,
-        out_dir=tmp_path,
-        daily=daily,
-    )
+    config, _, out = rw_run
     path = tmp_path / "heldout-forecasts.csv.gz"
-    fc = pd.read_csv(path)
+    fc = pd.read_csv(out / "heldout-forecasts.csv.gz")
+    fc = fc.loc[fc["model"] != "shadow"]
     # A fitted variant's forecasts, as a run on archie would leave them.
-    pd.concat([fc, fc.assign(model="other")]).to_csv(path, index=False)
+    other = fc.loc[fc["model"] == "randomwalk"].assign(model="other")
+    pd.concat([fc, other]).to_csv(path, index=False)
     scores = run_heldout(
         target,
         delays,
@@ -240,6 +196,7 @@ def test_heldout_without_fits_reads_committed_forecasts(
     delays: pd.DataFrame,
     daily: pd.DataFrame,
     config: BacktestConfig,
+    rw_run: tuple[BacktestConfig, pd.DataFrame, Path],
     tmp_path: Path,
 ) -> None:
     from bdbvhubrenewal.forecasters import RandomWalk, register_model
@@ -258,15 +215,8 @@ def test_heldout_without_fits_reads_committed_forecasts(
             "choices:\n  - {date: 2026-10-10, model: slowfit}\n"
         )
         # Committed forecasts of the fitted model, as archie leaves them.
-        fc = run_heldout(
-            target,
-            delays,
-            replace(config, model_choice=_randomwalk_choice(tmp_path)),
-            evaluate_holdout=True,
-            out_dir=tmp_path / "seed",
-            daily=daily,
-        )
-        seeded = pd.read_csv(tmp_path / "seed" / "heldout-forecasts.csv.gz")
+        seeded = pd.read_csv(rw_run[2] / "heldout-forecasts.csv.gz")
+        seeded = seeded.loc[seeded["model"] == "randomwalk"]
         out = tmp_path / "out"
         out.mkdir()
         seeded.assign(model="slowfit", chosen_model="slowfit").to_csv(
@@ -283,7 +233,6 @@ def test_heldout_without_fits_reads_committed_forecasts(
         )
     finally:
         _REGISTRY.pop("slowfit")
-    assert not fc.empty
     assert set(scores["model"]) == {
         "as reported",
         "randomwalk",
@@ -329,3 +278,18 @@ def test_merge_by_model_reads_an_empty_gzipped_file(tmp_path: Path) -> None:
     pd.DataFrame().to_csv(path, index=False)
     new = pd.DataFrame({"model": ["randomwalk"], "value": [1.0]})
     pd.testing.assert_frame_equal(merge_by_model(path, new), new)
+
+
+def test_merge_by_model_replaces_only_the_models_run(tmp_path: Path) -> None:
+    path = tmp_path / "forecasts.csv.gz"
+    old = pd.DataFrame({"model": ["randomwalk", "other"], "value": [1.0, 2.0]})
+    old.to_csv(path, index=False)
+    new = pd.DataFrame({"model": ["randomwalk"], "value": [3.0]})
+    merged = merge_by_model(path, new)
+    assert sorted(zip(merged["model"], merged["value"], strict=True)) == [
+        ("other", 2.0),
+        ("randomwalk", 3.0),
+    ]
+    assert merge_by_model(tmp_path / "missing.csv", new) is new
+    # A rerun of every model in the file replaces it.
+    assert merge_by_model(path, old) is old

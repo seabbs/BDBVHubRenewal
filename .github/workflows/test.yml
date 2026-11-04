@@ -2,9 +2,9 @@ name: Tests
 
 on:
   schedule:
-    # Weekly, Monday 05:00 UTC, so the slow model fit tests run even
-    # when nothing is pushed.
+    # Weekly, Monday 05:00 UTC, with the slow parameter recovery fit.
     - cron: '0 5 * * 1'
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
@@ -51,7 +51,8 @@ jobs:
       - run: uv sync --frozen
       - name: Tests
         run: >-
-          uv run pytest -q --cov=bdbvhubrenewal --cov-report=term-missing
+          uv run pytest -q --durations=50 --cov=bdbvhubrenewal
+          --cov-report=term-missing
           --cov-report=xml
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
@@ -60,16 +61,21 @@ jobs:
           flags: package
           use_oidc: true
           fail_ci_if_error: false
-      # Real model fits take minutes, so they run on main and weekly,
-      # not on pull requests.
-      - name: Model fit tests (tiny real fits)
-        if: github.event_name != 'pull_request'
-        run: uv run pytest -q -m slow
+      # The recovery fit takes about 12 minutes, so it runs weekly and
+      # on demand. The tiny fit below runs on every push.
+      - name: Parameter recovery fit
+        if: >-
+          github.event_name == 'schedule' ||
+          github.event_name == 'workflow_dispatch'
+        run: uv run pytest -q -m slow --durations=0
       - name: Backtest and nowcast smoke test
+        timeout-minutes: 15
         # The renewal variants are fitted per vintage, so the smoke test
-        # runs random walk only. The full backtest runs on archie.
+        # runs random walk, and renewal with --no-fit, which would take
+        # hours if it fitted. The full backtest runs on archie.
         run: |
-          uv run bdbvhubrenewal backtest --models randomwalk --output output/backtest --results output/results
+          uv run bdbvhubrenewal backtest --models randomwalk renewal --no-fit \
+            --output output/backtest --results output/results
           uv run bdbvhubrenewal nowcast
           uv run bdbvhubrenewal metadata --out output/metadata
       - name: Fit and forecast as the submission CI does (a tiny fit)

@@ -302,6 +302,17 @@ ledger() {
     | python3 -c "import json,sys; r=json.load(sys.stdin)['rounds']['2026-11-07']; m=r['models']; assert r['status']=='submitted' and r['code_commit']=='cccc' and len(r['history'])==2 and m['seabbs-renewal']['status']=='submitted' and m['seabbs-renewal']['archive']=='archive/2026-11-07/102' and m['seabbs-rwnowcast']['status']=='skipped'"
   echo "=== ledger ===" && echo "ok: state.json and archive/2026-11-07/{101,102} on submission-ledger"
 
+  # freeze.sh, with a `gh` that says the round's pull request is open:
+  # nothing is frozen.
+  mkdir -p "$ROOT/open-bin"
+  printf '#!/usr/bin/env bash\necho OPEN\n' > "$ROOT/open-bin/gh"
+  chmod +x "$ROOT/open-bin/gh"
+  (cd "$repo" && PATH="$ROOT/open-bin:$PATH" WORK="$ROOT/freeze" \
+    "$CI_DIR/steps/freeze.sh" > "$ROOT/freeze-open.log" 2>&1) \
+    || { echo "FAIL: freeze with an open PR"; cat "$ROOT/freeze-open.log"; return 1; }
+  grep -q "Froze 0" "$ROOT/freeze-open.log" \
+    || { echo "FAIL: froze with an open PR"; cat "$ROOT/freeze-open.log"; return 1; }
+
   # freeze.sh, with a `gh` that says the round's pull request merged:
   # the page is frozen once, and a second run leaves it alone.
   mkdir -p "$ROOT/merged-bin"
@@ -321,6 +332,29 @@ ledger() {
   grep -q "Froze 0" "$ROOT/freeze-2.log" \
     || { echo "FAIL: second freeze"; cat "$ROOT/freeze-2.log"; return 1; }
   echo "ok: pages/2026-11-07.md frozen once on submission-ledger"
+
+  # release.sh, with a `gh` that says the pull request merged and the tag
+  # is new, and logs what it is asked to do: a dry run only prints, and a
+  # live run makes one release at the recorded commit.
+  mkdir -p "$ROOT/release-bin"
+  cat > "$ROOT/release-bin/gh" << EOF
+#!/usr/bin/env bash
+echo "\$*" >> "$ROOT/release-gh.log"
+case "\$1" in pr) echo MERGED ;; api) exit 1 ;; esac
+EOF
+  chmod +x "$ROOT/release-bin/gh"
+  local dry
+  for dry in true false; do
+    rm -f "$ROOT/release-gh.log"
+    (cd "$repo" && PATH="$ROOT/release-bin:$PATH" WORK="$ROOT/release" \
+      DRY_RUN=$dry "$CI_DIR/steps/release.sh" > "$ROOT/release-$dry.log" 2>&1) \
+      || { echo "FAIL: release dry_run=$dry"; cat "$ROOT/release-$dry.log"; return 1; }
+  done
+  grep -q "would release round-2026-11-07 at cccc" "$ROOT/release-true.log" \
+    || { echo "FAIL: release dry run"; cat "$ROOT/release-true.log"; return 1; }
+  [ "$(grep -c '^release create round-2026-11-07 .*--target cccc' "$ROOT/release-gh.log")" = 1 ] \
+    || { echo "FAIL: live release"; cat "$ROOT/release-gh.log"; return 1; }
+  echo "ok: round-2026-11-07 printed on a dry run, released once on a live one"
 }
 
 baseline_track() {

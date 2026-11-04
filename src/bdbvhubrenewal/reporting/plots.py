@@ -1726,7 +1726,8 @@ def plot_score_summary(
     axes[0].axhline(1, color=ink["muted"], lw=1, ls=":")
     axes[1].axhline(0.9, color=ink["muted"], lw=1, ls=":")
     axes[0].set_ylabel(
-        f"{'Log WIS' if metric == 'log_wis' else 'WIS'} relative to {baseline}"
+        f"{'WIS on the log scale' if metric == 'log_wis' else 'WIS'} "
+        f"relative to {baseline}"
     )
     axes[1].set_ylabel("90% interval coverage")
     for ax in axes:
@@ -1858,5 +1859,5 @@ _METRIC_LABELS: Final[dict[str, str]] = {
     "coverage_90": "90% interval coverage",
     "bias": "Mean bias",
     "relative_wis": "WIS relative to randomwalk",
-    "relative_log_wis": "Log WIS relative to randomwalk",
+    "relative_log_wis": "WIS on the log scale relative to randomwalk",
 }

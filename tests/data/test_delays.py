@@ -6,7 +6,6 @@ import pytest
 
 from bdbvhubrenewal.data.delays import (
     EmpiricalDelayModel,
-    ParametricDelay,
     delay_summary,
     empirical_pmf,
 )
@@ -36,14 +35,3 @@ def test_empirical_model_shrinks_small_provinces(delays: pd.DataFrame) -> None:
 def test_delay_summary(delays: pd.DataFrame) -> None:
     s = delay_summary(delays, by=("vintage",))
     assert list(s.columns) == ["vintage", "n", "mean", "median", "q90"]
-
-
-@pytest.mark.parametrize("family", ["gamma", "lognormal", "weibull"])
-def test_parametric_delay_mean(family: str) -> None:
-    pmf = ParametricDelay(family, 6.0, 4.0).pmf(max_delay=80)  # type: ignore[arg-type]
-    assert pmf.sum() == pytest.approx(1)
-    # Daily censoring of a uniform onset adds about half a day.
-    mean = np.sum(np.arange(pmf.size) * pmf)
-    assert mean == pytest.approx(6.0, abs=0.7)
-    weekly = ParametricDelay(family, 6.0, 4.0).pmf(80, primary_window=7)  # type: ignore[arg-type]
-    assert np.sum(np.arange(weekly.size) * weekly) > mean

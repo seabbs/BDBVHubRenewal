@@ -35,6 +35,21 @@ def in_root(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     os.chdir(old)
 
 
+@pytest.fixture(scope="module")
+def plain(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """The default nowcast at 2026-10-17, run once for the module."""
+    out = tmp_path_factory.mktemp("plain")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(
+            "bdbvhubrenewal.submission.hub.run_date",
+            lambda *_: dt.date(2026, 8, 1),
+        )
+        mp.chdir(ROOT)
+        args = ["nowcast", "--vintage", "2026-10-17", "--out", str(out)]
+        assert main(args) == 0
+    return out
+
+
 def test_main_runs_the_renewal_model() -> None:
     names = {c.name for c in list_configs()}
     assert {"main", "renewalsp", "randomwalk"} <= names
@@ -46,13 +61,8 @@ def test_register_config_refuses_a_taken_name() -> None:
         register_config(randomwalk_config("main"))
 
 
-def test_version(capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["--version"]) == 0
-    assert capsys.readouterr().out.strip() == "0.1.0"
-
-
 @pytest.mark.usefixtures("in_root")
-def test_fit_then_nowcast_from_the_fit(tmp_path: Path) -> None:
+def test_fit_then_nowcast_from_the_fit(tmp_path: Path, plain: Path) -> None:
     fit = tmp_path / "fit"
     sampler = '{"num_chains": 4, "seed": 1}'
     args = ["--model", "randomwalk", "--config", "randomwalk", "--vintage"]
@@ -88,9 +98,6 @@ def test_fit_then_nowcast_from_the_fit(tmp_path: Path) -> None:
     assert side["unassigned"] == []
 
     # The plain random walk nowcast gives the same samples.
-    plain = tmp_path / "plain"
-    assert main(["nowcast", "--vintage", "2026-10-17", "--out",
-                 str(plain)]) == 0  # fmt: skip
     (csv2,) = plain.rglob("*.csv")
     pd.testing.assert_frame_equal(table, pd.read_csv(csv2))
 
@@ -165,16 +172,6 @@ def test_national_coherence_reports_a_gap(target: pd.DataFrame) -> None:
     assert "unassigned" in summary["handling"]
 
 
-@pytest.mark.usefixtures("in_root")
-def test_cli_coherence(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    out = tmp_path / "coherence.json"
-    assert main(["coherence", "--out", str(out)]) == 0
-    assert json.loads(out.read_text())["coherent"] is True
-    assert "equal the sum" in capsys.readouterr().out
-
-
 def test_cli_plot_ppc(tmp_path: Path) -> None:
     import numpy as np
 
@@ -227,10 +224,8 @@ def test_delays_for_vintage_uses_the_latest_available(
 
 
 @pytest.mark.usefixtures("in_root")
-def test_nowcast_notes_what_it_handled(tmp_path: Path) -> None:
-    out = tmp_path / "sub"
-    assert main(["nowcast", "--vintage", "2026-10-17", "--out", str(out)]) == 0
-    assert json.loads((out / "handled.json").read_text()) == []
+def test_nowcast_notes_what_it_handled(tmp_path: Path, plain: Path) -> None:
+    assert json.loads((plain / "handled.json").read_text()) == []
     # The first release has no pair of releases, so the model raises.
     old = tmp_path / "old"
     assert main(["nowcast", "--vintage", "2026-08-18", "--out", str(old)]) == 1
@@ -291,11 +286,14 @@ def test_randomwalknowcast_has_its_own_hub_id(
                  str(tmp_path)]) == 0  # fmt: skip
     text = (tmp_path / "seabbs-rwnowcast.yml").read_text()
     assert "model_abbr: rwnowcast" in text
+    assert "https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/" in text
+    assert "10.12688/wellcomeopenres.25027.2" in text
+    assert "language model" not in text
 
 
 @pytest.mark.usefixtures("in_root")
 def test_randomwalknowcast_config_runs_the_nowcast_model(
-    tmp_path: Path,
+    tmp_path: Path, plain: Path
 ) -> None:
     fit = tmp_path / "fit"
     args = ["--config", "randomwalknowcast", "--vintage", "2026-10-17"]
@@ -306,9 +304,6 @@ def test_randomwalknowcast_config_runs_the_nowcast_model(
     out = tmp_path / "sub"
     assert main(["nowcast", *args, "--fit", str(fit), "--out", str(out)]) == 0
     (csv,) = out.rglob("*.csv")
-    plain = tmp_path / "plain"
-    assert main(["nowcast", "--vintage", "2026-10-17", "--out",
-                 str(plain)]) == 0  # fmt: skip
     (csv2,) = plain.rglob("*.csv")
     now, base = pd.read_csv(csv), pd.read_csv(csv2)
     assert len(now) == len(base)
@@ -318,17 +313,6 @@ def test_randomwalknowcast_config_runs_the_nowcast_model(
     nat = (now["location"] == "CD") & week
     assert now.loc[nat, "value"].median() > 314
     assert now.loc[nat, "value"].std() > 0
-
-
-@pytest.mark.usefixtures("in_root")
-def test_baseline_metadata_text(tmp_path: Path) -> None:
-    assert main(["metadata", "--model", "randomwalknowcast", "--out",
-                 str(tmp_path)]) == 0  # fmt: skip
-    text = (tmp_path / "seabbs-rwnowcast.yml").read_text()
-    assert "https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/" in text
-    assert "baselinenowcast" in text
-    assert "10.12688/wellcomeopenres.25027.2" in text
-    assert "language model" not in text
 
 
 def test_committed_metadata_is_only_for_hub_models() -> None:

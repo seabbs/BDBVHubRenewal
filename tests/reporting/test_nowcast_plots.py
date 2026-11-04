@@ -24,7 +24,7 @@ def test_plot_relative_overall_skips_models_missing_from_a_pool() -> None:
     shown = [ax for ax in fig.axes if ax.get_visible()]
     assert [ax.get_ylabel() for ax in shown] == [
         "Relative WIS to randomwalk",
-        "Relative log WIS to randomwalk",
+        "Relative WIS on the log scale to randomwalk",
         "50% coverage",
         "90% coverage",
         "Bias",

@@ -966,6 +966,9 @@ class RenewalRun:
         NUTS extra fields by chain.
     seconds : float
         Sampling time.
+    cpu_seconds : float
+        Process CPU time over the same span, across all threads. Near
+        `num_chains` times `seconds` when the chains run in parallel.
     bvd : dict or None
         The BVDOutbreakSize release used (`bvd_record`), for a variant
         with the BVD term.
@@ -977,6 +980,7 @@ class RenewalRun:
     trace: Mapping[str, Any]
     extra: Mapping[str, Any]
     seconds: float
+    cpu_seconds: float
     bvd: Mapping[str, Any] | None = None
 
 
@@ -1078,12 +1082,16 @@ class RenewalModel:
         model = pr.build_model(data, config)
         s = self.sampler
         self._log(f"variant={self.name} sampling start")
-        start = time.perf_counter()
+        start, cpu_start = time.perf_counter(), time.process_time()
         run_nuts(model, data, {"seed": task.seed, **s})
         # Pulling the draws to the host waits for the sampler.
         np.asarray(next(iter(model.mcmc.get_samples().values())))
         seconds = time.perf_counter() - start
-        self._log(f"variant={self.name} sampling done seconds={seconds:.0f}")
+        cpu_seconds = time.process_time() - cpu_start
+        self._log(
+            f"variant={self.name} sampling done seconds={seconds:.0f} "
+            f"cpu_seconds={cpu_seconds:.0f}"
+        )
         draws = pr.forecast_trajectories(
             model,
             data,
@@ -1102,7 +1110,7 @@ class RenewalModel:
             for k, v in model.mcmc.get_extra_fields(group_by_chain=True).items()
         }
         return RenewalRun(
-            self.variant, data, draws, trace, extra, seconds, bvd=used
+            self.variant, data, draws, trace, extra, seconds, cpu_seconds, used
         )
 
     def forecast_fit(self, task: ForecastTask) -> RenewalFit:
@@ -1326,6 +1334,9 @@ def fit_renewal(
         "num_samples": chains[0]["draws"] if chains else 0,
         "max_tree_depth": depth,
         "sampling_seconds": round(sum(r.seconds for r in fit.runs.values()), 1),
+        "sampling_cpu_seconds": round(
+            sum(r.cpu_seconds for r in fit.runs.values()), 1
+        ),
         "parameters": params,
         "chains": chains,
         "worst_rhat": worst_rhat(params),

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -91,6 +92,14 @@ def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
     figures = (gen / "comparison-figures.md").read_text()
     assert "2026-10-24" in figures
     assert (fig / "comparison-2026-10-24.svg").exists()
+    # The overall chart is the headline, with its static figure as the
+    # fallback, and randomwalk starts off as the relative reference.
+    assert not (gen / "comparison-summary.md").exists()
+    assert "comparison-overall.svg" in scores
+    chart = json.loads((fig / "scorechart-comparison.json").read_text())
+    on = {m["name"]: m["on"] for m in chart["models"]}
+    assert on["randomwalk (ours)"] is False
+    assert on["teamA-weekly"] is True
     assert (
         "BDBV Modeling Hub" in (gen / "comparison-attribution.md").read_text()
     )
@@ -178,8 +187,12 @@ def test_lopo_section_hidden_without_results(tmp_path: Path) -> None:
 
 
 def test_zone_section() -> None:
-    text = report._zone_section(ROOT / "results" / "zone-scores.csv")
+    text = report._zone_section(
+        ROOT / "results" / "zone-scores.csv",
+        ROOT / "results" / "zone-energy.csv",
+    )
     assert text.startswith("## Health zones")
+    assert "rel_energy" in text
     assert "randomwalknowcast (summed to provinces)" in text
     assert "week 0" in text
 
@@ -373,9 +386,19 @@ def test_forecast_tabs() -> None:
 
 
 def test_recovery_section() -> None:
-    text = report._recovery_section()
+    energy = pd.DataFrame(
+        {
+            "scale": ["national", "national"],
+            "model": ["randomwalk", "randomwalk"],
+            "energy": [4.0, 6.0],
+            "log_energy": [0.25, 0.75],
+        }
+    )
+    text = report._recovery_section(energy)
     assert text.startswith("## Recovery on simulated vintages")
     assert "recovery-wis-horizon.svg" in text
+    assert "mean energy score" in text
+    assert "| national | randomwalk |   2 |" in text
 
 
 def _scenario_scores() -> pd.DataFrame:
@@ -410,7 +433,19 @@ def _scenario_scores() -> pd.DataFrame:
 def test_scenario_scores_table(tmp_path: Path) -> None:
     path = tmp_path / "scenario-scores.csv"
     _scenario_scores().to_csv(path, index=False)
-    text = report._scenario_scores(path)
+    energy = tmp_path / "scenario-energy.csv"
+    pd.DataFrame(
+        {
+            "scenario": "calibrated_falling",
+            "scale": "national",
+            "model": "randomwalk",
+            "truth_view": ["final", "as of 2 weeks later"],
+            "energy": [3.0, 5.0],
+            "log_energy": [0.3, 0.5],
+        }
+    ).to_csv(energy, index=False)
+    text = report._scenario_scores(path, energy)
+    assert "Energy score against final data, complete weeks" in text
     assert "final data, complete weeks" in text
     assert "as of 2 weeks later" in text
     assert "calibrated_falling" in text
@@ -467,7 +502,7 @@ def test_dropdown_wraps_and_indents() -> None:
 def test_metric_tabs_have_wis_and_log_wis() -> None:
     text = report._metric_tabs("x", "WIS by horizon.")
     assert '=== "WIS"' in text
-    assert '=== "Log WIS"' in text
+    assert '=== "WIS on the log scale"' in text
     assert "figures/x-log-wis.svg#only-light" in text
 
 

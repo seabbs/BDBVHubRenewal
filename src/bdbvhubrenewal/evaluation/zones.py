@@ -14,6 +14,8 @@ Zones are scored on the zone count each later real vintage reports, with
 the final-count samples drawn as for provinces
 (`bdbvhubrenewal.evaluation.nowcast.draw_reported`) under the zone delays
 fitted at the origin.
+The energy score takes every zone and week of an origin and release as
+one vector, from the same drawn samples.
 """
 
 from __future__ import annotations
@@ -30,12 +32,17 @@ from bdbvhubrenewal.data.snapshots import release_cutoff
 from bdbvhubrenewal.data.zones import weekly_zone_counts
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
+    energy_tasks,
     make_tasks,
     real_vintages,
     score_tasks,
 )
 from bdbvhubrenewal.evaluation.nowcast import draw_reported, reported_share
-from bdbvhubrenewal.evaluation.scoring import relative_skill, score_forecasts
+from bdbvhubrenewal.evaluation.scoring import (
+    energy_scores,
+    relative_skill,
+    score_forecasts,
+)
 from bdbvhubrenewal.forecasters.base import (
     ForecastTask,
     ModelUnavailableError,
@@ -97,7 +104,7 @@ def zone_backtest(
     zones: tuple[str, ...],
     models: Sequence[str] = ("randomwalk", "randomwalknowcast"),
     config: BacktestConfig | None = None,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Score the random walk models run at zone level on later releases.
 
     Parameters
@@ -120,17 +127,19 @@ def zone_backtest(
 
     Returns
     -------
-    pandas.DataFrame
-        `score_forecasts` output with `model`, `origin`, `target`
-        (`"reported"`), `truth_vintage` and `horizon` in weeks from the
-        reference date, one row per model, origin, later vintage, zone and
-        week. Each model appears under its name and again under its name
-        with `SUMMED`.
+    tuple of pandas.DataFrame
+        The scores, `score_forecasts` output with `model`, `origin`,
+        `target` (`"reported"`), `truth_vintage` and `horizon` in weeks
+        from the reference date, one row per model, origin, later
+        vintage, zone and week. Each model appears under its name and
+        again under its name with `SUMMED`.
+        Then `energy_scores` of every model's zones by `origin`, `target`
+        and `truth_vintage`, from the same drawn samples.
     """
     config = config or BacktestConfig()
     real = target.loc[target["kind"] == "real"]
     vintages = real_vintages(real)
-    frames = []
+    frames, energy = [], []
     for vintage in vintages[:-1]:
         task = make_tasks(
             real.loc[real["vintage"] == vintage], delays, config, daily=daily
@@ -163,17 +172,25 @@ def zone_backtest(
             truth = _zone_truth(
                 weekly_zone_counts(daily_zones, later), direct, later
             )
-            for name, samples in forecasts.items():
-                drawn = draw_reported(samples, reported, now, then, rng)
-                drawn = drawn.assign(
-                    model=name,
-                    origin=vintage,
-                    target="reported",
-                    truth_vintage=later,
-                    horizon=_weeks(drawn, task),
-                )
-                frames.append(score_forecasts(drawn, truth, keys=_KEYS))
-    return pd.concat(frames, ignore_index=True)
+            drawn = pd.concat(
+                [
+                    draw_reported(samples, reported, now, then, rng).assign(
+                        model=name,
+                        origin=vintage,
+                        target="reported",
+                        truth_vintage=later,
+                    )
+                    for name, samples in forecasts.items()
+                ],
+                ignore_index=True,
+            )
+            drawn["horizon"] = _weeks(drawn, task)
+            frames.append(score_forecasts(drawn, truth, keys=_KEYS))
+            energy.append(energy_scores(drawn, truth, unit=_KEYS[1:4]))
+    return (
+        pd.concat(frames, ignore_index=True),
+        pd.concat(energy, ignore_index=True),
+    )
 
 
 def _weeks(samples: pd.DataFrame, task: ForecastTask) -> pd.Series:
@@ -236,7 +253,7 @@ def scenario_zone_scores(
     later_weeks: int,
     complete_after_weeks: int = 0,
     allocator: ZoneAllocator | None = None,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Score allocated zone forecasts on a scenario.
 
     As `zone_backtest`, with the simulated zone counts
@@ -264,8 +281,9 @@ def scenario_zone_scores(
 
     Returns
     -------
-    pandas.DataFrame
-        `score_tasks` output with `truth_view`.
+    tuple of pandas.DataFrame
+        `score_tasks` output with `truth_view`, and `energy_tasks` output
+        with `truth_view`.
     """
     allocator = allocator or ZoneAllocator()
     zones = tuple(sorted({z for _, z, _ in outbreak.settings.zone_shares}))
@@ -290,6 +308,12 @@ def scenario_zone_scores(
             truth_view="final"
         )
     ]
+    energy = [
+        energy_tasks(forecasts, final, end, complete_after_weeks).assign(
+            truth_view="final"
+        )
+    ]
+    view = f"as of {later_weeks} weeks later"
     for task in tasks:
         later = (
             as_date(task.vintage) + dt.timedelta(weeks=later_weeks)
@@ -298,8 +322,12 @@ def scenario_zone_scores(
         truth = _zone_truth(outbreak.zone_vintage(later), rows, later)
         scores.append(
             score_tasks(rows, truth, later, complete_after_weeks).assign(
-                truth_view=f"as of {later_weeks} weeks later"
+                truth_view=view
             )
         )
+        energy.append(energy_tasks(rows, truth, later).assign(truth_view=view))
     out = pd.concat(scores, ignore_index=True)
-    return out.loc[out["scoring"] == "as reported"].reset_index(drop=True)
+    return (
+        out.loc[out["scoring"] == "as reported"].reset_index(drop=True),
+        pd.concat(energy, ignore_index=True),
+    )

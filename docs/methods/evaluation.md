@@ -20,7 +20,8 @@ $$
 $$
 
 It splits into dispersion, overprediction and underprediction.
-Log WIS applies it to $\log(1 + y)$ and $\log(1 + x)$, so it measures relative error and small provinces count.
+WIS on the log scale is the WIS of the transformed target, $\text{WIS}(\log(1 + x), \log(1 + y))$, never the log of WIS.
+It measures relative error, so small provinces count.
 
 $$
 \text{Bias} = 1 - \big(P(X \le y) + P(X \le y - 1)\big),
@@ -30,9 +31,30 @@ $$
 
 Positive bias is overprediction.
 Relative WIS is a ratio of means against a baseline $b$ over the forecasts both made, and below 1 beats it.
-Relative log WIS is the same ratio of mean log WIS.
+Relative WIS on the log scale is the same ratio of mean WIS on the log scale.
 The baseline is `randomwalk`.
 Coverage is whether $y$ falls in the central 50% and 90% sample intervals.
+
+### Energy score
+
+The energy score scores one forecast of a vector $\mathbf{y}$.
+For an origin, a release and a scale, $\mathbf{y}$ holds every place at that scale in every scored week, and national holds the weeks only.
+It uses only the place-week cells that every compared model forecasts.
+Sample $i$ of a model is its draws with sample index $i$, $\mathbf{X}_i$.
+We use the fair form over $m$ samples,
+
+$$
+\text{ES}(F, \mathbf{y}) = \frac{1}{m} \sum_{i} \lVert \mathbf{X}_i - \mathbf{y} \rVert - \frac{1}{2m(m - 1)} \sum_{i \ne j} \lVert \mathbf{X}_i - \mathbf{X}_j \rVert.
+$$
+
+The energy score on the log scale is the energy score of $\log(1 + \mathbf{y})$ against $\log(1 + \mathbf{X}_i)$, never the log of the score.
+Relative energy scores are ratios of means against `randomwalk` over the origins and releases both have, and $n$ counts those.
+The score rewards a joint pattern across places only where draws are joint.
+`renewal` and `renewalbvd` draws are joint across provinces, one posterior draw per sample index.
+`renewalsp` fits each province on its own, so its draws are independent across provinces.
+Zones split each province draw, so zones are joint within a province for every renewal model.
+`randomwalk` and `randomwalknowcast` draw each place independently.
+Hub teams' samples are joint across weeks within a place only, as the hub's sample format sets, so pairing their indices across places scores them as independent across places.
 
 ## Backtest design
 

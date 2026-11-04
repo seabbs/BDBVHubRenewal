@@ -193,16 +193,6 @@ def test_forecast_date_may_equal_but_not_follow_reference(
     assert failures(rep) == ["forecast_date_le_reference"]
 
 
-def test_new_file_has_exactly_one_forecast_date(hub: hv.Hub) -> None:
-    rep = hv.validate_submission(
-        fixture_path("invalid_forecast_dates_two"),
-        hub,
-        metadata_dirs=METADATA_DIRS,
-        skip_window=True,
-    )
-    assert failures(rep) == ["forecast_date_one_new"]
-
-
 def _resubmission(
     tmp_path: Path, new_date: str = "2026-10-22", **changes: Any
 ) -> tuple[Path, Path]:

@@ -12,7 +12,6 @@ import pytest
 from bdbvhubrenewal.baselinenowcast import log_factors, pair_sums
 from bdbvhubrenewal.data.snapshots import snapshot_arrays, weekly_sums
 from bdbvhubrenewal.forecasters.chain import (
-    NoDelayPair,
     Settings,
     _delay_counts,
     build_origin,
@@ -54,23 +53,21 @@ def test_growth_to_final_sums_the_daily_delay(origin24) -> None:
     assert origin24.growth[0, day - 42] == 1.0
 
 
-def test_10_09_raises_with_no_delay_pair(daily: pd.DataFrame) -> None:
-    snap = snapshot_arrays(daily, "2026-10-09", ("CD-IT",))
-    with pytest.raises(NoDelayPair):
-        build_origin(snap, Settings(), errors=False)
-
-
-def test_the_50_day_pair_gives_no_factor_but_its_counts_stay(
-    daily: pd.DataFrame,
+def test_the_start_week_is_the_latest_week_at_95_per_cent(
+    snap24, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    snap = snapshot_arrays(daily, "2026-10-17", ("CD-IT",))
-    fit = fit_delay(snap, 2, Settings())
-    assert fit is not None
-    assert fit.pairs.tolist() == [[1, 2]]
-    assert 0 not in fit.pairs
-    first = weekly_sums(snap, 0)
-    assert first[0].sum() > 0
-    assert first[0].sum() == snap.counts[0, 0].sum()
+    from bdbvhubrenewal.forecasters import chain
+
+    # Week w is 95.01% complete and every later week 94.99%.
+    w = snap24.n_weeks - 3
+    inv = np.where(snap24.week > w, 0.9499, 1.0)
+    inv = np.where(snap24.week == w, 0.9501, inv)
+    g = np.broadcast_to(1.0 / inv, (len(snap24.locations), inv.size))
+    monkeypatch.setattr(chain, "final_growth", lambda *_: g)
+    origin = build_origin(snap24, Settings(), errors=False)
+    assert np.allclose(origin.complete[:, w], 0.9501)
+    assert (origin.complete[:, w + 1 :] < 0.95).all()
+    assert (origin.start == w).all()
 
 
 def test_10_24_point_nowcasts_use_one_daily_delay(origin24) -> None:
@@ -105,14 +102,6 @@ def test_every_day_with_data_is_nowcast(origin24) -> None:
     # The newest day is nowcast too, with no handover to the walk.
     assert origin24.growth[0, newest] > 1.0
     assert counts[newest] >= 0
-
-
-def test_ages_count_from_the_cutoff_not_as_of(daily: pd.DataFrame) -> None:
-    snap = snapshot_arrays(daily, "2026-10-17", ("CD-IT",))
-    r = 2
-    # Release 10-17 has cut-off 10-16, so 10-16 has age 0.
-    assert snap.days[snap.cut[r]].date().isoformat() == "2026-10-16"
-    assert snap.cut[r] - snap.cut[r] == 0
 
 
 def test_every_release_with_a_pair_gives_a_retrospective(

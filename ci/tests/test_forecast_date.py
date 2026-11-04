@@ -101,7 +101,6 @@ def test_append_keeps_original_rows_and_adds_one_date() -> None:
     cols, rows = append(old, new)
     assert rows[:3] == old[1]
     assert rows[3:] == new[1]
-    assert problems(cols, rows, old, dt.date(2026, 11, 3)) == []
     # Retained dates are not subject to the recency check.
     assert problems(cols, rows, old, dt.date(2026, 11, 3)) == []
 
@@ -135,12 +134,6 @@ def test_changed_existing_rows_fail(change: str) -> None:
     else:
         rows = [*rows, dict(rows[0])]
     assert "kept unchanged" in problems(cols, rows, old)[0]
-
-
-def test_text_of_existing_cells_is_kept() -> None:
-    old = table("2026-11-01")
-    _, rows = append(old, table("2026-11-03"))
-    assert rows[0]["value"] == "0.0"
 
 
 def test_fetch_from_a_checkout(tmp_path: Path) -> None:

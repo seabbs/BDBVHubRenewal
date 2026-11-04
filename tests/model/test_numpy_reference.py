@@ -4,7 +4,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.delays import ParametricDelay, hub_delay_pmf
+from bdbvhubrenewal.data.delays import hub_delay_pmf
+from bdbvhubrenewal.model import censored_pmf, generation_interval
 
 from .numpy_reference import (
     delay_matrix,
@@ -20,7 +21,10 @@ def test_known_plus_missing_equals_reports() -> None:
     n = 60
     confirmed = np.linspace(5, 50, n)
     pmfs = np.array(
-        [ParametricDelay("gamma", 5 + s / 20, 4).pmf(20) for s in range(n)]
+        [
+            censored_pmf("gamma", 5 + s / 20, 4 / (5 + s / 20), 20)
+            for s in range(n)
+        ]
     )
     missing = np.linspace(0.05, 0.3, n)
     cutoff = 45
@@ -50,7 +54,7 @@ def test_to_onset_weeks() -> None:
 
 
 def test_renewal_constant_r_one_is_flat() -> None:
-    gi = ParametricDelay("gamma", 15, 9).pmf(60)
+    gi = np.concatenate([[0.0], generation_interval(15, 9, 60)])
     days = 300
     seed = np.zeros((1, days))
     seed[0, :60] = 10
@@ -60,7 +64,7 @@ def test_renewal_constant_r_one_is_flat() -> None:
 
 
 def test_renewal_depletion_bounds_outbreak() -> None:
-    gi = ParametricDelay("gamma", 15, 9).pmf(60)
+    gi = np.concatenate([[0.0], generation_interval(15, 9, 60)])
     seed = np.zeros((1, 400))
     seed[0, 0] = 10
     inf, sus = renewal(np.full((1, 400), 2.0), gi, seed, np.array([1000.0]))

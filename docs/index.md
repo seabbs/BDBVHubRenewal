@@ -16,6 +16,7 @@ Each week `randomwalknowcast` is submitted as `seabbs-rwnowcast` and the first r
 
 | Section | What it holds |
 |---|---|
+| [Setup](setup.md) | Install the package and run it from a script, a REPL or a notebook. |
 | [Getting started](getting-started.ipynb) | Forecast, plot and score the two baselines in Python. |
 | Methods | [Data](methods/data.md), [Baseline models](methods/baselines.md), [Renewal models](methods/model.md), [Evaluation](methods/evaluation.md) and [Implementation](methods/implementation.md). |
 | Results | [Data](data.md), [nowcast](nowcast.md), [backtest](backtest.md), [simulation checks](simulation.md), [held-out evaluation](heldout.md) and [comparison with hub forecasts](comparison.md). |

@@ -36,6 +36,8 @@ def real_vintage(table, config):
 
 
 def log_density_curve(model, data, params, site, steps, dtype):
+    # Jitted, as NUTS runs it; compiled once per dtype.
+    @jax.jit
     def one(t):
         p = {k: jnp.asarray(v, dtype) for k, v in params.items()}
         p[site] = p[site].at[-1].add(t)
@@ -43,39 +45,11 @@ def log_density_curve(model, data, params, site, steps, dtype):
             model.sample, (), model_args(model, data), p
         )[0]
 
-    return np.array([float(one(t)) for t in steps])
+    return np.array([float(one(jnp.asarray(t, dtype))) for t in steps])
 
 
-@pytest.mark.skipif(not MAIN_REPO_DATA.exists(), reason="main repo data absent")
-@pytest.mark.parametrize("config", [MAIN], ids=["main"])
-def test_float32_log_density_matches_float64(table, config):
-    data = real_vintage(table, config)
-    model = build_model(data, config)
-    with numpyro.handlers.seed(rng_seed=3), numpyro.handlers.trace() as tr:
-        model.sample(**model_args(model, data))
-    params = {
-        k: np.asarray(v["value"])
-        for k, v in tr.items()
-        if v["type"] == "sample" and not v["is_observed"]
-    }
-    site = "log_rt_baseline_z_decentered"
-    steps = np.linspace(-0.02, 0.02, 21)
-    lp32 = log_density_curve(model, data, params, site, steps, jnp.float32)
-    with enable_x64():
-        lp64 = log_density_curve(model, data, params, site, steps, jnp.float64)
-    rel = np.max(np.abs(lp32 - lp64) / np.abs(lp64))
-    noise = np.std(np.diff(lp32, 2) - np.diff(lp64, 2))
-    print(f"\nrelative error {rel:.2e}, second-difference noise {noise:.2e}")
-    assert jax.numpy.isfinite(lp32).all()
-    assert rel < 1e-4
-    assert noise < 0.05
-
-
-@pytest.mark.skipif(not MAIN_REPO_DATA.exists(), reason="main repo data absent")
-@pytest.mark.parametrize("x", [3e-2, 3e-4])
-def test_float32_density_stays_smooth_near_poisson(table, x):
-    # As 1/sqrt(phi) goes to zero the negative binomial approaches Poisson;
-    # the concentration cap keeps its float32 density smooth there.
+@pytest.fixture(scope="module")
+def real_fit_point(table):
     data = real_vintage(table, MAIN)
     model = build_model(data, MAIN)
     with numpyro.handlers.seed(rng_seed=3), numpyro.handlers.trace() as tr:
@@ -85,11 +59,26 @@ def test_float32_density_stays_smooth_near_poisson(table, x):
         for k, v in tr.items()
         if v["type"] == "sample" and not v["is_observed"]
     }
-    params["inv_sqrt_phi_known"] = np.float32(x)
-    site = "log_rt_baseline_z_decentered"
+    return data, model, params
+
+
+@pytest.mark.skipif(not MAIN_REPO_DATA.exists(), reason="main repo data absent")
+@pytest.mark.parametrize("inv_sqrt_phi", [None, 3e-2, 3e-4])
+def test_float32_log_density_matches_float64(real_fit_point, inv_sqrt_phi):
+    # As 1/sqrt(phi) goes to zero the negative binomial approaches Poisson;
+    # the concentration cap keeps its float32 density smooth there.
+    data, model, params = real_fit_point
+    if inv_sqrt_phi is not None:
+        params = {**params, "inv_sqrt_phi_known": np.float32(inv_sqrt_phi)}
+    site = "log_rt_baseline_z"
     steps = np.linspace(-0.02, 0.02, 21)
     lp32 = log_density_curve(model, data, params, site, steps, jnp.float32)
     with enable_x64():
         lp64 = log_density_curve(model, data, params, site, steps, jnp.float64)
+    rel = np.max(np.abs(lp32 - lp64) / np.abs(lp64))
     noise = np.std(np.diff(lp32, 2) - np.diff(lp64, 2))
+    print(f"\nrelative error {rel:.2e}, second-difference noise {noise:.2e}")
+    assert np.isfinite(lp32).all()
     assert noise < 0.05
+    if inv_sqrt_phi is None:
+        assert rel < 1e-4

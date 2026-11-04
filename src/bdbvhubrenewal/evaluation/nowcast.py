@@ -36,13 +36,15 @@ A model with no snapshots stops the run.
 
 Scores are WIS, coverage and bias (`bdbvhubrenewal.evaluation.scoring`)
 and every table counts its forecasts, $n$.
+The energy score is scored from the same drawn samples, one per origin,
+release, target and scale.
 """
 
 from __future__ import annotations
 
 import datetime as dt
 import logging
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -51,7 +53,12 @@ import pandas as pd
 from bdbvhubrenewal.baselinenowcast import growth
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
 from bdbvhubrenewal.data.snapshots import release_cutoff
-from bdbvhubrenewal.evaluation.scoring import SCORE_COLUMNS, score_forecasts
+from bdbvhubrenewal.evaluation.scoring import (
+    SCORE_COLUMNS,
+    energy_scores,
+    relative_skill,
+    score_forecasts,
+)
 from bdbvhubrenewal.forecasters.base import (
     ForecastModel,
     ForecastTask,
@@ -74,6 +81,7 @@ __all__ = [
     "ReleaseBacktest",
     "complete_weeks",
     "draw_reported",
+    "relative_energy",
     "relative_wis",
     "release_backtest",
     "reported_share",
@@ -115,6 +123,9 @@ class ReleaseBacktest:
     quantiles : pandas.DataFrame
         The 5, 25, 50, 75 and 95% quantiles of every forecast, with the
         count reported at the origin and the truth where there is one.
+    energy : pandas.DataFrame
+        `energy_scores` by `origin`, `target`, `truth_vintage` and
+        `scale`, on the cells every model of the origin forecasts.
     origins : pandas.DataFrame
         One row per origin and model: `status`, `reason` and the number
         of forecasts scored on each target.
@@ -124,6 +135,7 @@ class ReleaseBacktest:
 
     scores: pd.DataFrame
     quantiles: pd.DataFrame
+    energy: pd.DataFrame
     origins: pd.DataFrame
     fits: pd.DataFrame
 
@@ -374,6 +386,7 @@ def release_backtest(
     stored: pd.DataFrame | None = None,
     complete_rule: str = "growth",
     complete_after: int = COMPLETE_WEEKS,
+    compare: Collection[str] | None = None,
 ) -> ReleaseBacktest:
     """Forecast from every real release and score every model.
 
@@ -392,6 +405,9 @@ def release_backtest(
         `vintage`, `location`, `target_end_date`, `sample` and `value`.
     complete_rule, complete_after : str, int
         The `rule` and `weeks` of `complete_weeks`.
+    compare : collection of str, optional
+        Models the energy score compares, on the cells they all forecast.
+        All models if None. Other models get no energy score.
 
     Returns
     -------
@@ -495,7 +511,7 @@ def release_backtest(
     done = complete_weeks(
         target, daily, latest, rule=complete_rule, weeks=complete_after
     )
-    return _score(frames, origin_rows, fit_rows, real, done)
+    return _score(frames, origin_rows, fit_rows, real, done, compare)
 
 
 def _check_distinct(forecasts: dict[str, pd.DataFrame], vintage: str) -> None:
@@ -517,6 +533,7 @@ def _score(
     fit_rows: list[pd.DataFrame],
     real: pd.DataFrame,
     done: pd.DataFrame,
+    compare: Collection[str] | None,
 ) -> ReleaseBacktest:
     fits = (
         pd.concat(fit_rows, ignore_index=True) if fit_rows else pd.DataFrame()
@@ -525,20 +542,22 @@ def _score(
         origin_rows, columns=["origin", "model", "status", "reason"]
     )
     if not frames:
-        return ReleaseBacktest(pd.DataFrame(), pd.DataFrame(), origins, fits)
+        empty = pd.DataFrame()
+        return ReleaseBacktest(empty, empty, empty, origins, fits)
     samples = pd.concat(frames, ignore_index=True)
     complete = done.loc[done["complete"], ["location", "target_end_date"]]
-    scored = []
+    scored, energy = [], []
     for (tgt, truth_v), grp in samples.groupby(["target", "truth_vintage"]):
         if tgt == "complete":
             grp = grp.merge(complete, on=["location", "target_end_date"])
+        truth = _truth(real, str(truth_v))
         s = score_forecasts(
-            grp.assign(horizon=grp["weeks_back"]),
-            _truth(real, str(truth_v)),
-            keys=_KEYS,
+            grp.assign(horizon=grp["weeks_back"]), truth, keys=_KEYS
         )
         s["weeks_back"] = s.pop("horizon")
         scored.append(s)
+        pool = grp if compare is None else grp[grp["model"].isin(compare)]
+        energy.append(energy_scores(pool, truth, unit=_KEYS[1:4]))
     scores = pd.concat(scored, ignore_index=True)
     flags = done.rename(columns={"complete": "complete_at_latest"})
     scores = scores.merge(
@@ -558,7 +577,13 @@ def _score(
     origins[["n_reported", "n_complete"]] = (
         origins[["n_reported", "n_complete"]].fillna(0).astype(int)
     )
-    return ReleaseBacktest(scores, _quantiles(samples, real), origins, fits)
+    return ReleaseBacktest(
+        scores,
+        _quantiles(samples, real),
+        pd.concat(energy, ignore_index=True),
+        origins,
+        fits,
+    )
 
 
 def _quantiles(samples: pd.DataFrame, real: pd.DataFrame) -> pd.DataFrame:
@@ -669,3 +694,42 @@ def relative_wis(
         "bias",
     ]
     return out[[*by, "model", *order]]
+
+
+def relative_energy(
+    energy: pd.DataFrame,
+    by: Sequence[str] = ("target", "scale"),
+    baseline: str = "randomwalk",
+) -> pd.DataFrame:
+    """Divide each model's mean energy score by the baseline's.
+
+    Parameters
+    ----------
+    energy : pandas.DataFrame
+        `ReleaseBacktest.energy`.
+    by : sequence of str
+        Columns of a cell other than `model`. Origins and releases are
+        matched within it.
+    baseline : str
+        The model to divide by.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per cell and model, over the origins and releases the
+        baseline also has: `n_energy`, `rel_energy` and `rel_log_energy`.
+    """
+    rel = relative_skill(
+        energy,
+        baseline,
+        by=by,
+        metrics=("energy", "log_energy"),
+        match_on=("origin", "truth_vintage"),
+    )
+    return rel.rename(
+        columns={
+            "n": "n_energy",
+            "relative_energy": "rel_energy",
+            "relative_log_energy": "rel_log_energy",
+        }
+    )

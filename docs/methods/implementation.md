@@ -14,7 +14,7 @@ The model diagrams are mermaid blocks in `docs/methods/model.md`.
 
 | Component | PyRenew piece | Built here |
 |---|---|---|
-| Pooled $R_p(t)$ | `SubpopulationInfections`, `WeeklyTemporalProcess`, `ARProcess` for the steps | `NonCentredRandomWalk`, for the frozen seeding weeks, the separate forecast steps and their reversion. |
+| Pooled $R_p(t)$ | `SubpopulationInfections`, `WeeklyTemporalProcess` | `NonCentredRandomWalk`, for the frozen seeding weeks, the separate forecast steps and their reversion. |
 | Renewal with importation and depletion | `SubpopulationInfections`, subclassed | `coupled_renewal`. |
 | Ascertainment $\alpha(s)$ | `IndependentAscertainment` with a temporal process | None. |
 | Onset-to-report delay $f_s(d)$ | None | `HazardDelay`. |
@@ -23,9 +23,10 @@ The model diagrams are mermaid blocks in `docs/methods/model.md`.
 | BVDOutbreakSize Rt | None | `RtPseudoObservation`. |
 | Provinces with no cases | None | An importation-only component. |
 
-PyRenew pieces that give a different model, or that would only rename one line, are not used.
+PyRenew pieces that give a different model, sample less well, or would only rename one line, are not used.
 
 - The `RandomWalk` temporal process puts the step SD in the step distribution, so it is centred in the SD.
+- `ARProcess` gives the same walk, log density and gradient, but NUTS needs more tree steps with it, so the walk samples its steps as one vectorised site.
 - `AR1` draws its first state from the stationary distribution, and `DifferencedAR1` is AR(1) on the differences.
   Here walks start at a fixed value and stay there over the seeding weeks.
 - `SubpopulationInfections` samples one deviation process per province and subtracts their mean, which leaves a direction the data do not identify.
@@ -39,6 +40,15 @@ PyRenew pieces that give a different model, or that would only rename one line, 
   Here the kernel is learnt and depletion is exponential in the pool $\nu$.
 
 PyRenew has no delay that varies with time, no Dirichlet-multinomial count and no pseudo-observation of $R$.
+
+The table compares the two ways of sampling the walk steps on the recovery fit of the simulated outbreak, with 2 chains of 300 warm-up and 300 draws.
+
+| Walk steps | Seed | Time | Mean tree steps | Share at the depth cap |
+|---|---|---|---|---|
+| One vectorised site | 0 | 668 s | 511 | 0% |
+| One vectorised site | 1 | 971 s | 761 | 49% |
+| `ARProcess` | 0 | 2198 s | 1017 | 99% |
+| `ARProcess` | 1 | 2364 s | 1008 | 97% |
 
 ## Baseline models
 
@@ -66,6 +76,8 @@ The model runs in single precision (float32), JAX's default.
 - Depletion is carried on $\log S$, which needs no subtraction, and $1 - e^{-y}$ is computed with `expm1`.
 - The generation interval is double interval censored in closed form, $G(d + 1) - 2G(d) + G(d - 1)$ with the Gamma's integrated cdf.
   It is computed once, in float64, and matches primarycensored.
+- Parametric delays (the gamma and log-normal options and the simulator) use the same closed form, truncated at their maximum delay and renormalised as primarycensored's $D$.
+  In float32 they are within $3 \times 10^{-5}$ of primarycensored, and within $10^{-8}$ in float64.
 - The negative binomial concentration is capped at $\phi \le 1000$, which is Poisson for these counts.
   The Dirichlet-multinomial concentration is capped at $\psi \le 10^4$.
 - The hub imputation sums are products of banded $7 \times 7k$ blocks for each onset week, so the cost grows with the number of weeks and not its square.

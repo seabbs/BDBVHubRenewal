@@ -70,6 +70,23 @@ def test_every_model_is_scored_on_each_later_release(
     assert (rep["weeks_back"] < 0).any()
 
 
+def test_energy_scores_each_scale_on_the_same_samples(
+    result,  # type: ignore[no-untyped-def]
+) -> None:
+    e = result.energy
+    unit = ["origin", "target", "truth_vintage", "scale"]
+    assert set(e["scale"]) == {"national", "provinces"}
+    assert set(e["model"]) == {"randomwalk", "randomwalknowcast", BASELINE}
+    # One vector per unit, the same cells for every model.
+    assert (e.groupby(unit)["n_cells"].nunique() == 1).all()
+    assert (e.groupby(unit)["model"].nunique() == 3).all()
+    # The vector holds every scored cell of the scale.
+    s = result.scores.loc[result.scores["model"] == "randomwalk"]
+    nat = s.loc[s["location"] == "CD"].groupby(unit[:3]).size()
+    got = e.loc[(e["model"] == "randomwalk") & (e["scale"] == "national")]
+    assert got.set_index(unit[:3])["n_cells"].equals(nat.rename("n_cells"))
+
+
 def test_complete_weeks_come_from_later_releases_only(
     target: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
@@ -191,6 +208,22 @@ def test_stored_forecasts_are_scored_on_both_targets(
         & (out.quantiles["target"] == "reported")
     ]
     assert (rep.loc[rep["weeks_back"] >= 6, "q50"] == 100).all()
+    # flat covers two provinces, so the energy score's shared cells do too,
+    # unless it is left out of the compared models.
+    prov = out.energy.loc[out.energy["scale"] == "provinces"]
+    assert set(prov["model"]) == {"flat", "randomwalk", BASELINE}
+    cells = prov.groupby("truth_vintage")["n_cells"].max()
+    ours = release_backtest(
+        tasks,
+        daily,
+        target,
+        models=("randomwalk",),
+        stored=stored,
+        compare=("randomwalk", BASELINE),
+    ).energy
+    ours = ours.loc[ours["scale"] == "provinces"]
+    assert "flat" not in set(ours["model"])
+    assert (ours.groupby("truth_vintage")["n_cells"].max() > cells).all()
 
 
 def test_quantiles_carry_the_reported_count_and_truth(

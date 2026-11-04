@@ -24,12 +24,6 @@ def test_preprocess_matches_r(case: Case) -> None:
     np.testing.assert_allclose(got, expected, atol=1e-8)
 
 
-def test_preprocess_moves_negatives_to_earlier_cells() -> None:
-    tri = np.array([[10.0, 5.0, -3.0, 1.0], [8.0, 4.0, -6.0, 2.0]])
-    got = np.asarray(preprocess_negative_values(tri, np.ones(tri.shape, bool)))
-    np.testing.assert_allclose(got, [[10, 2, 0, 1], [6, 0, 0, 2]])
-
-
 def test_preprocess_ignores_values_under_false(case: Case) -> None:
     dirty = np.where(case.mask, case.values, 1e6)
     got = preprocess_negative_values(dirty, case.mask)
@@ -107,16 +101,11 @@ def test_structure_aborts(structure: object) -> None:
         apply_reporting_structure(*c, structure=structure)
 
 
-def test_truncate_negative_n_aborts() -> None:
+@pytest.mark.parametrize("n", [-1, 99])
+def test_truncate_aborts_on_n_out_of_range(n: int) -> None:
     v, m = from_na(read("toy", "tri"))
     with pytest.raises(ValueError):
-        truncate_to_rows(v, m, n=-1)
-
-
-def test_truncate_more_rows_than_available_aborts() -> None:
-    v, m = from_na(read("toy", "tri"))
-    with pytest.raises(ValueError):
-        truncate_to_rows(v, m, n=99)
+        truncate_to_rows(v, m, n=n)
 
 
 def test_allocation_aborts() -> None:

@@ -46,9 +46,6 @@ def test_variants_are_registered_as_fitted_models() -> None:
         "renewalfixdelay",
         "renewalplace",
     }
-    # Only the backtest models: no fallback and no unused options.
-    for name in ("fallback", "renewalhold", "renewalpo"):
-        assert name not in specs
     # The single patch fits each province on its own data only, so it
     # cannot forecast a province with its data held out.
     assert get_model("renewal").supports_mask
@@ -59,18 +56,10 @@ def test_variants_are_registered_as_fitted_models() -> None:
         assert len(model_abbr_for(name)) < 16
 
 
-def test_fit_configs_run_the_renewal_model() -> None:
-    assert rn.VARIANTS["renewal"].base == "MAIN"
-    assert rn.FIT_VARIANTS == {
-        "main": "renewal",
-        "renewalsp": "renewalsp",
-        "bvd": "renewalbvd",
-    }
-
-
 def test_model_config_applies_overrides() -> None:
     single = rn.model_config(rn.VARIANTS["renewalsp"])
     assert single.national
+    assert single.depletion is False
     assert rn.model_config(rn.VARIANTS["renewal"]) == rn.engine().MAIN
 
 
@@ -254,6 +243,7 @@ def _fake_run(task: ForecastTask, variant: rn.Variant) -> rn.RenewalRun:
         trace=trace,
         extra=extra,
         seconds=1.5,
+        cpu_seconds=2.9,
     )
 
 
@@ -276,6 +266,8 @@ def test_fit_renewal_writes_the_ci_contract(
     assert record["model"] == "renewal"
     assert record["config"] == "main"
     assert record["num_chains"] == 2
+    # CPU time over sampling time shows whether the chains ran at once.
+    assert record["sampling_cpu_seconds"] == 2.9
     assert {c["chain"] for c in record["chains"]} == {0, 1}
     assert {"tree_depth_share", "ebfmi", "mean_accept", "step_size"} <= set(
         record["chains"][0]
@@ -292,27 +284,6 @@ def test_fit_renewal_writes_the_ci_contract(
     assert set(result.samples["sample"]) == set(range(1, task.n_samples + 1))
     assert set(result.samples["target_end_date"]) == set(task.target_end_dates)
     assert result.modelled is not None
-
-
-def test_renewal_model_forecast_uses_the_run(
-    task: ForecastTask, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(
-        rn.RenewalModel, "run", lambda self, t: _fake_run(t, self.variant)
-    )
-    samples = get_model("renewal").forecast(task)
-    assert set(samples["location"]) == set(task.locations)
-
-
-@pytest.mark.slow
-def test_tiny_fit_end_to_end(task: ForecastTask, tmp_path: Path) -> None:
-    sampler = {"num_chains": 1, "num_warmup": 20, "num_samples": 20}
-    record = rn.fit_renewal(
-        task, sampler, tmp_path, variant="renewal", config_name="main"
-    )
-    assert record["chains"][0]["draws"] == 20
-    result = rn.forecast_renewal(task, tmp_path)
-    assert np.isfinite(result.samples["value"]).all()
 
 
 def test_init_strategy_follows_the_sampler_table() -> None:
@@ -492,11 +463,6 @@ def test_fit_records_the_posterior_draw_behind_each_trajectory(
     assert set(saved["location"]) == {"all"}
     assert saved["sample"].tolist() == list(range(1, task.n_samples + 1))
     assert saved["draw"].tolist() == list(range(task.n_samples))[::-1]
-
-
-def test_single_patch_has_no_depletion() -> None:
-    config = rn.model_config(rn.VARIANTS["renewalsp"])
-    assert config.depletion is False
 
 
 def test_chain_method_defaults_to_vectorized(

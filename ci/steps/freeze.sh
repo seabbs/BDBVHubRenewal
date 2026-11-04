@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Freeze the docs page of every submitted round whose hub pull request has
-# merged. The page is written once to `pages/` on the ledger branch, and
+# Freeze the docs page of every submitted round once each hub model's pull
+# request is merged or closed, as for its release (release.sh). The page is written once to `pages/` on the ledger branch, and
 # later docs builds copy it as it is. Runs on every trigger, whether or
 # not there is new data.
 #
@@ -21,23 +21,29 @@ if ! git fetch -q --depth 1 origin "$LEDGER_BRANCH" 2> /dev/null; then
 fi
 git worktree add -q --detach "$ledger" FETCH_HEAD
 
-# Submitted rounds with a pull request and no frozen page yet.
+# Rounds with no frozen page yet, and the pull request of each submitted
+# hub model.
 pending=$(python3 - "$ledger" << 'PY'
 import json, pathlib, sys
 root = pathlib.Path(sys.argv[1])
 rounds = json.loads((root / "state.json").read_text()).get("rounds", {})
 for ref, r in sorted(rounds.items()):
-    if (r.get("status") == "submitted" and r.get("pr_url")
-            and not (root / "pages" / f"{ref}.md").exists()):
-        print(ref, r["pr_url"])
+    urls = [m["pr_url"] for m in r.get("models", {}).values()
+            if m.get("status") == "submitted" and m.get("pr_url")]
+    if urls and not (root / "pages" / f"{ref}.md").exists():
+        print(ref, *urls)
 PY
 )
 
 frozen=0
-while read -r ref url; do
+while read -r ref urls; do
   [ -n "$ref" ] || continue
-  state=$(gh pr view "$url" --json state -q .state 2> /dev/null || echo unknown)
-  if [ "$state" = MERGED ]; then
+  done_all=true
+  for url in $urls; do
+    state=$(gh pr view "$url" --json state -q .state 2> /dev/null || echo unknown)
+    case "$state" in MERGED | CLOSED) ;; *) done_all=false ;; esac
+  done
+  if [ "$done_all" = true ]; then
     cli freeze-round --ledger "$ledger" --round "$ref"
     frozen=$((frozen + 1))
   fi

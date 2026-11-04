@@ -17,7 +17,7 @@ delays are biased short.
 The model phase adds a parametric estimator that handles both.
 Each delay is in whole days from the onset day to the report day, so it
 is double interval censored at daily resolution, with pmf $p_\theta(d)$
-from `ParametricDelay.pmf`.
+from `bdbvhubrenewal.model.delays.censored_pmf`.
 Only the onset week $W$ (days $W-6$ to $W$) is published, so right
 truncation at vintage $T$ is averaged over the onset day:
 
@@ -36,14 +36,11 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Final, Literal, Protocol
+from typing import Final, Protocol
 
 import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
-from scipy import stats
-from scipy.optimize import brentq
-from scipy.special import gamma as gamma_fn
 
 __all__ = [
     "DEFAULT_MAX_DELAY",
@@ -51,7 +48,6 @@ __all__ = [
     "DelayModel",
     "EmpiricalDelayFit",
     "EmpiricalDelayModel",
-    "ParametricDelay",
     "delay_summary",
     "empirical_pmf",
     "hub_delay_pmf",
@@ -59,8 +55,6 @@ __all__ = [
 
 DEFAULT_MAX_DELAY: Final = 60
 """Longest delay kept, in days. Longer delays are dropped (about 0.3%)."""
-
-Family = Literal["gamma", "lognormal", "weibull"]
 
 
 def empirical_pmf(
@@ -301,80 +295,6 @@ class EmpiricalDelayModel:
                     n * counts + self.prior_weight * centre
                 ) / (n + self.prior_weight)
         return EmpiricalDelayFit(pooled, by_cell, self.max_delay)
-
-
-@dataclass(frozen=True)
-class ParametricDelay:
-    """A continuous delay discretised to days with primary censoring.
-
-    Attributes
-    ----------
-    family : {"gamma", "lognormal", "weibull"}
-        The distribution family.
-    mean : float
-        Mean delay in days.
-    sd : float
-        Standard deviation in days.
-    """
-
-    family: Family
-    mean: float
-    sd: float
-
-    def _dist(self) -> stats.rv_continuous:
-        m, s = self.mean, self.sd
-        if m <= 0 or s <= 0:
-            raise ValueError("Mean and SD must be positive.")
-        if self.family == "gamma":
-            shape = (m / s) ** 2
-            return stats.gamma(a=shape, scale=s**2 / m)
-        if self.family == "lognormal":
-            sdlog = np.sqrt(np.log1p((s / m) ** 2))
-            return stats.lognorm(
-                s=sdlog, scale=np.exp(np.log(m) - sdlog**2 / 2)
-            )
-        if self.family == "weibull":
-            cv = s / m
-
-            def cv_gap(k: float) -> float:
-                ratio = gamma_fn(1 + 2 / k) / gamma_fn(1 + 1 / k) ** 2
-                return float(np.sqrt(ratio - 1) - cv)
-
-            k = float(brentq(cv_gap, 0.05, 50.0))
-            return stats.weibull_min(c=k, scale=m / gamma_fn(1 + 1 / k))
-        raise ValueError(f"Unknown family {self.family!r}.")
-
-    def pmf(
-        self, max_delay: int = DEFAULT_MAX_DELAY, primary_window: int = 1
-    ) -> NDArray[np.float64]:
-        """Return the censored daily pmf.
-
-        The onset is uniform over a window of `primary_window` days
-        (1 for a known onset day, 7 for a known onset week) and the
-        report is censored to its day.
-        The pmf is truncated at `max_delay` and renormalised.
-
-        Parameters
-        ----------
-        max_delay : int
-            Longest delay.
-        primary_window : int
-            Width of the onset window in days.
-
-        Returns
-        -------
-        numpy.ndarray
-            Probabilities for delays 0 to `max_delay`.
-        """
-        dist = self._dist()
-        # Integrate the onset position over a fine grid within its window.
-        u = (np.arange(200) + 0.5) / 200 * primary_window
-        d = np.arange(max_delay + 1)[:, None]
-        upper = np.clip(d + 1 - u, 0, None)
-        lower = np.clip(d - u, 0, None)
-        raw = (dist.cdf(upper) - dist.cdf(lower)).mean(axis=1)
-        probs = np.asarray(raw, dtype=np.float64)
-        return np.asarray(probs / probs.sum(), dtype=np.float64)
 
 
 def hub_delay_pmf(

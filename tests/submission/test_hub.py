@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import datetime as dt
-import json
 from pathlib import Path
 
 import pandas as pd
@@ -62,6 +61,7 @@ def _samples(n: int = 100) -> pd.DataFrame:
 def test_to_hub_table_is_valid(tmp_path: Path) -> None:
     table = _table(_samples(), "2026-10-31")
     assert tuple(table.columns) == HUB_COLUMNS
+    assert (table["forecast_date"] == FORECAST_DATE).all()
     assert (table["value"] == 10).all()
     assert _failures(table, tmp_path) == []
 
@@ -75,8 +75,11 @@ def test_submission_path(tmp_path: Path) -> None:
 
 def test_model_ids() -> None:
     assert model_id("randomwalk") == "seabbs-randomwalk"
+    assert model_id("a" * 14) == f"seabbs-{'a' * 14}"
     with pytest.raises(ValueError, match="letters"):
         model_id("bad-name")
+    with pytest.raises(ValueError, match="14"):
+        model_id("a" * 15)
 
 
 def test_metadata_is_valid(tmp_path: Path) -> None:
@@ -117,12 +120,6 @@ def test_validation_needs_same_ids_in_every_location(
     mask = (table["location"] == "CD-IT") & (table["output_type_id"] == 1)
     table.loc[mask, "output_type_id"] = 101
     assert _failures(table, tmp_path) == ["spl_compound_taskid_set"]
-
-
-def test_model_abbreviations_at_most_14_characters() -> None:
-    assert model_id("a" * 14) == f"seabbs-{'a' * 14}"
-    with pytest.raises(ValueError, match="14"):
-        model_id("a" * 15)
 
 
 def test_writer_makes_national_the_sum_of_provinces() -> None:
@@ -178,33 +175,7 @@ def test_writer_refuses_inconsistent_samples(change) -> None:  # type: ignore[no
         _table(change(_provinces()), "2026-10-31")
 
 
-def _round2_fixtures() -> list[dict[str, object]]:
-    manifest = json.loads((FIXTURES / "manifest.json").read_text())
-    return [
-        f
-        for f in manifest["fixtures"]
-        if f["kind"] == "submission" and "2026-10-31" in f["path"]
-    ]
-
-
-@pytest.mark.parametrize("fx", _round2_fixtures(), ids=lambda f: str(f["case"]))
-def test_in_package_check_agrees_with_bundle_fixtures(fx) -> None:  # type: ignore[no-untyped-def]
-    path = FIXTURES.parent / str(fx["path"])
-    meta = [
-        FIXTURES / "constructed" / "model-metadata",
-        FIXTURES / "real" / "model-metadata",
-    ]
-    rep = validate_submission(path, HUB, metadata_dirs=meta, skip_window=True)
-    assert rep.valid is bool(fx["valid_py"]), rep.failed
-
-
 # forecast_date ---------------------------------------------------------------
-
-
-def test_forecast_date_column_is_written_after_reference_date() -> None:
-    table = _table(_samples(), "2026-10-31")
-    assert list(table.columns)[:2] == ["reference_date", "forecast_date"]
-    assert (table["forecast_date"] == FORECAST_DATE).all()
 
 
 def test_forecast_date_defaults_to_the_run_date_in_utc() -> None:

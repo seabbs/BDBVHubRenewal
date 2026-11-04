@@ -1,6 +1,6 @@
 # API reference
 
-The Python API of `bdbvhubrenewal`, grouped by task. See [Getting started](../getting-started.ipynb) for a worked example.
+The Python API of `bdbvhubrenewal`, grouped by task. See [Setup](../setup.md) to install it and [Getting started](../getting-started.ipynb) for a worked example.
 { .page-subtitle }
 
 | Task | Pages | Start with |

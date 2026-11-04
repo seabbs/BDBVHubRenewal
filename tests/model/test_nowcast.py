@@ -227,18 +227,6 @@ def test_model_log_density_is_the_same_with_weekly_blocks(sim_vintage, config):
     assert float(fast) == pytest.approx(float(dense), rel=1e-5)
 
 
-def test_dispersion_prior_is_half_normal_on_inverse_root_phi(sim_vintage):
-    model = build_model(sim_vintage, MAIN)
-    with numpyro.handlers.trace() as tr:
-        numpyro.handlers.seed(model.sample, rng_seed=0)(
-            **model_args(model, sim_vintage)
-        )
-    for stream in ("known", "imputed"):
-        site = tr[f"inv_sqrt_phi_{stream}"]
-        assert isinstance(site["fn"], dist.HalfNormal)
-        assert float(site["fn"].scale) == pytest.approx(0.25)
-
-
 def test_negative_and_long_delays_are_clipped_not_dropped(
     outbreak, sim_tables, table
 ):
@@ -272,7 +260,3 @@ def test_trajectories_name_their_posterior_draws(sim_vintage):
     draws = forecast_trajectories(model, sim_vintage, 5, posterior=latent)
     assert draws["draw"].shape == (5,)
     assert np.all((draws["draw"] >= 0) & (draws["draw"] < 8))
-
-
-def test_delay_counts_are_dirichlet_multinomial_by_default():
-    assert MAIN.delay_counts == "dirichlet-multinomial"

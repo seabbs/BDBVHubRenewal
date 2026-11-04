@@ -60,7 +60,7 @@ from bdbvhubrenewal.evaluation.heldout import (
     load_model_choices,
     run_heldout,
 )
-from bdbvhubrenewal.evaluation.nowcast import release_backtest
+from bdbvhubrenewal.evaluation.nowcast import BASELINE, release_backtest
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastTask,
@@ -213,6 +213,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--models", nargs="*", default=["randomwalk", "randomwalknowcast"]
     )
     zb.add_argument("--out", default="results/zone-scores.csv")
+    zb.add_argument("--energy-out", default="results/zone-energy.csv")
 
     fit = sub.add_parser(
         "fit", help="Fit a configuration and write its diagnostics."
@@ -473,7 +474,7 @@ def _backtest(args: argparse.Namespace) -> int:
             (as_date(as_of) - dt.timedelta(weeks=k)).isoformat()
             for k in (3, 2, 1, 0)
         ]
-        sforecasts, sscores = bt.run_scenarios(
+        sforecasts, sscores, senergy = bt.run_scenarios(
             models,
             config,
             target,
@@ -486,6 +487,7 @@ def _backtest(args: argparse.Namespace) -> int:
         for table, path in (
             (sforecasts, output / "scenario-forecasts.csv.gz"),
             (sscores, results / "scenario-scores.csv.gz"),
+            (senergy, results / "scenario-energy.csv"),
         ):
             bt.merge_by_model(path, table).to_csv(path, index=False)
         print(f"Scenarios: {len(sscores)} scored forecasts in {results}.")
@@ -517,12 +519,13 @@ def _backtest(args: argparse.Namespace) -> int:
     forecasts = bt.merge_by_model(output / "forecasts.csv.gz", forecasts)
     _release_backtest(args, config, target, delays, results, forecasts)
     forecasts.to_csv(output / "forecasts.csv.gz", index=False)
-    rforecasts, rscores = bt.run_recovery(
+    rforecasts, rscores, renergy = bt.run_recovery(
         models, config, lags=cutoff_lags(load_daily(args.data))
     )
     for table, path in (
         (rforecasts, output / "recovery-forecasts.csv.gz"),
         (rscores, results / "recovery-scores.csv"),
+        (renergy, results / "recovery-energy.csv"),
     ):
         bt.merge_by_model(path, table).to_csv(path, index=False)
     print(
@@ -554,11 +557,16 @@ def _release_backtest(
         if not config.is_heldout(t.vintage)
     ]
     out = release_backtest(
-        tasks, daily, target, stored=_stored_samples(args, target, forecasts)
+        tasks,
+        daily,
+        target,
+        stored=_stored_samples(args, target, forecasts),
+        compare=[*(s.name for s in list_models()), BASELINE],
     )
     for name, table in (
         ("scores", out.scores),
         ("quantiles", out.quantiles),
+        ("energy", out.energy),
         ("origins", out.origins),
         ("fits", out.fits),
     ):
@@ -698,7 +706,7 @@ def _zone_backtest(args: argparse.Namespace) -> int:
     )
 
     hub_config = Path(args.data) / "hub-config" / "tasks.json"
-    scores = zone_backtest(
+    scores, energy = zone_backtest(
         load_target(args.data),
         load_delays(args.data),
         load_daily(args.data),
@@ -709,6 +717,7 @@ def _zone_backtest(args: argparse.Namespace) -> int:
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     scores.to_csv(out, index=False)
+    energy.to_csv(args.energy_out, index=False)
     rel = zone_relative_skill(scores, by=("horizon",))
     print(rel.round(3).to_string(index=False))
     print(f"Wrote {out} ({len(scores)} scores).")
@@ -895,12 +904,13 @@ def _compare_hub(args: argparse.Namespace) -> int:
         hc.load_hub_submissions(cfg.submitted),
         hub_ids,
     )
-    scores, pending = hc.score_comparison(
+    scores, energy, pending = hc.score_comparison(
         forecasts, target, delays, config, daily
     )
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     scores.to_csv(out / "scores.csv", index=False)
+    energy.to_csv(out / "energy.csv", index=False)
     pending.to_csv(out / "pending.csv", index=False)
     hc.forecast_quantiles(forecasts).to_csv(
         out / "quantiles.csv.gz", index=False

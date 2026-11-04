@@ -3,22 +3,14 @@
   "use strict";
   var NS = "http://www.w3.org/2000/svg";
   var DAY = 864e5;
+  var T = window.bdbvToggles;
+  var h = T.h;
 
   function el(tag, attrs, parent) {
     var n = document.createElementNS(NS, tag);
     Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]); });
     if (parent) parent.appendChild(n);
     return n;
-  }
-  function h(tag, attrs, parent, text) {
-    var n = document.createElement(tag);
-    Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]); });
-    if (text !== undefined) n.textContent = text;
-    if (parent) parent.appendChild(n);
-    return n;
-  }
-  function dark() {
-    return document.body.getAttribute("data-md-color-scheme") === "slate";
   }
   function day(s) { return Date.parse(s + "T00:00:00Z"); }
   function mean(a) { return a.reduce(function (x, y) { return x + y; }, 0) / a.length; }
@@ -36,7 +28,6 @@
     var state = {
       loc: d.locations[0].id,
       round: root.dataset.round === "all" ? "all" : d.rounds.length - 1,
-      off: {},
     };
     var controls = h("div", { class: "explorer-controls" }, root);
     var lab1 = h("label", {}, controls, "Location ");
@@ -54,23 +45,12 @@
     d.rounds.forEach(function (r, i) { h("option", { value: i }, selRound, r); });
     h("option", { value: "all" }, selRound, "All rounds");
     selRound.value = String(state.round);
-    var legend = h("div", { class: "explorer-legend" }, root);
+    var zoom = window.bdbvZoom.create(controls, function () { draw(); });
+    var Z = window.bdbvZoom;
+    var legend = T.legend(root, d.models, draw);
     var figure = h("div", { class: "explorer-figure" }, root);
     var table = h("div", { class: "explorer-table" }, root);
 
-    var swatches = d.models.map(function (m, i) {
-      var l = h("label", { class: "explorer-key" }, legend);
-      var cb = h("input", { type: "checkbox" }, l);
-      cb.checked = m.on;
-      state.off[i] = !m.on;
-      var sw = h("span", { class: "explorer-swatch" }, l);
-      h("span", {}, l, m.label);
-      cb.addEventListener("change", function () {
-        state.off[i] = !cb.checked;
-        draw();
-      });
-      return sw;
-    });
     selLoc.addEventListener("change", function () { state.loc = selLoc.value; draw(); });
     selRound.addEventListener("change", function () {
       state.round = selRound.value === "all" ? "all" : +selRound.value;
@@ -78,14 +58,13 @@
     });
 
     function draw() {
-      var mode = dark() ? "dark" : "light";
-      swatches.forEach(function (sw, i) { sw.style.background = d.models[i][mode]; });
+      legend.paint();
       var rounds = state.round === "all"
         ? d.rounds.map(function (_, i) { return i; }) : [state.round];
       var models = d.models.map(function (_, i) { return i; })
-        .filter(function (i) { return !state.off[i]; });
+        .filter(function (i) { return legend.on[i]; });
       var rows = d.q.filter(function (r) {
-        return r[2] === state.loc && rounds.indexOf(r[1]) >= 0 && !state.off[r[0]];
+        return r[2] === state.loc && rounds.indexOf(r[1]) >= 0 && legend.on[r[0]];
       });
       var data = d.data[state.loc] || [];
       var first = day(d.rounds[rounds[0]]) - 8 * 7 * DAY;
@@ -94,31 +73,41 @@
       var pts = data.filter(function (p) {
         return day(p[0]) >= first && day(p[0]) <= lastWeek;
       });
+      var xr = Z.xRange(zoom, first - 3 * DAY, lastWeek + 4 * DAY);
+      var x0 = xr[0], x1 = xr[1];
       var ymax = 1;
-      pts.forEach(function (p) { ymax = Math.max(ymax, p[1]); });
-      rows.forEach(function (r) { ymax = Math.max(ymax, r[8]); });
-      ymax *= 1.05;
+      pts.forEach(function (p) {
+        if (Z.visible(zoom, day(p[0]))) ymax = Math.max(ymax, p[1]);
+      });
+      rows.forEach(function (r) {
+        if (Z.visible(zoom, day(r[3]))) ymax = Math.max(ymax, r[8]);
+      });
+      var yr = Z.yRange(zoom, 0, ymax * 1.05, "");
+      var y0 = yr[0], y1 = yr[1];
       var W = 760, H = 340, L = 52, R = 10, T = 10, B = 28;
-      var x0 = first - 3 * DAY, x1 = lastWeek + 4 * DAY;
       function X(t) { return L + (t - x0) / (x1 - x0) * (W - L - R); }
-      function Y(v) { return T + (1 - v / ymax) * (H - T - B); }
+      function Y(v) { return T + (1 - (v - y0) / (y1 - y0)) * (H - T - B); }
       figure.textContent = "";
       var svg = el("svg", { viewBox: "0 0 " + W + " " + H, role: "img",
         "aria-label": "Forecasts by week for the selected location" }, figure);
+      var plot = Z.clip(svg, { L: L, R: R, T: T, B: B, W: W, H: H });
       var cut = day(d.complete_through);
       if (cut < x1) {
         var sx = Math.max(X(cut + 3.5 * DAY), L);
         el("rect", { x: sx, y: T, width: W - R - sx, height: H - T - B,
-          class: "explorer-shade" }, svg);
+          class: "explorer-shade" }, plot);
       }
-      var step = ymax > 1000 ? 500 : ymax > 400 ? 100 : ymax > 100 ? 50 : ymax > 40 ? 10 : 5;
-      for (var v = 0; v <= ymax; v += step) {
+      var span = y1 - y0;
+      var step = span > 1000 ? 500 : span > 400 ? 100 : span > 100 ? 50 : span > 40 ? 10 :
+        span > 15 ? 5 : span > 6 ? 2 : 1;
+      for (var v = Math.ceil(y0 / step) * step; v <= y1; v += step) {
         el("line", { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: "explorer-grid" }, svg);
         var t = el("text", { x: L - 6, y: Y(v) + 4, "text-anchor": "end",
           class: "explorer-tick" }, svg);
         t.textContent = v;
       }
-      for (var tt = x0; tt <= x1; tt += 14 * DAY) {
+      var tstep = (x1 - x0) > 70 * DAY ? 14 * DAY : 7 * DAY;
+      for (var tt = x0; tt <= x1; tt += tstep) {
         var dt = new Date(tt);
         var tx = el("text", { x: X(tt), y: H - 8, "text-anchor": "middle",
           class: "explorer-tick" }, svg);
@@ -131,11 +120,11 @@
         var slot = models.indexOf(r[0]) * rounds.length + rounds.indexOf(r[1]);
         var t0 = day(r[3]) + (slot - (slots - 1) / 2) * width;
         var xx = X(t0);
-        var c = d.models[r[0]][mode];
+        var c = legend.colour(r[0]);
         var op = rounds.length > 1 ? 0.7 : 1;
-        var tip = d.models[r[0]].label + ", round " + d.rounds[r[1]] + ", week ending " + r[3] +
+        var tip = d.models[r[0]].name + ", round " + d.rounds[r[1]] + ", week ending " + r[3] +
           ": median " + r[6] + ", 50% " + r[5] + " to " + r[7] + ", 90% " + r[4] + " to " + r[8];
-        var g = el("g", { opacity: op }, svg);
+        var g = el("g", { opacity: op }, plot);
         el("title", {}, g).textContent = tip;
         el("line", { x1: xx, x2: xx, y1: Y(r[4]), y2: Y(r[8]), stroke: c, "stroke-width": 1 }, g);
         el("line", { x1: xx, x2: xx, y1: Y(r[5]), y2: Y(r[7]), stroke: c, "stroke-width": 3 }, g);
@@ -143,20 +132,21 @@
       });
       if (pts.length) {
         el("polyline", { class: "explorer-data", fill: "none",
-          points: pts.map(function (p) { return X(day(p[0])) + "," + Y(p[1]); }).join(" ") }, svg);
+          points: pts.map(function (p) { return X(day(p[0])) + "," + Y(p[1]); }).join(" ") }, plot);
         pts.forEach(function (p) {
           var done = day(p[0]) <= cut;
           var c = el("circle", { cx: X(day(p[0])), cy: Y(p[1]), r: 2.8,
-            class: done ? "explorer-point" : "explorer-point hollow" }, svg);
+            class: done ? "explorer-point" : "explorer-point hollow" }, plot);
           el("title", {}, c).textContent = p[0] + ": " + p[1] + " cases (" + d.truth_vintage + ")";
         });
       }
       rounds.forEach(function (ri) {
         var rx = X(day(d.rounds[ri]));
         if (rx >= L && rx <= W - R) {
-          el("line", { x1: rx, x2: rx, y1: T, y2: H - B, class: "explorer-ref" }, svg);
+          el("line", { x1: rx, x2: rx, y1: T, y2: H - B, class: "explorer-ref" }, plot);
         }
       });
+      Z.attach(zoom, svg, { L: L, R: R, T: T, B: B, W: W, H: H, x: [x0, x1], y: [y0, y1] });
       drawTable(rounds);
     }
 
@@ -173,45 +163,44 @@
       var by = {};
       s.forEach(function (r) { (by[r[0]] = by[r[0]] || []).push(r); });
       var key = function (r) { return r[1] + "|" + r[3]; };
-      var base = {}, baseLog = {};
-      (by[d.baseline] || []).forEach(function (r) {
-        base[key(r)] = r[4];
-        baseLog[key(r)] = r[5];
-      });
+      // Score values follow d.score_columns from index 4. A relative score
+      // divides the mean of the embedded per-forecast column by the
+      // baseline's mean on the same forecasts, so log WIS stays the WIS of
+      // log counts and is never a log taken here.
+      var cols = d.score_columns;
+      var base = {};
+      (by[d.baseline] || []).forEach(function (r) { base[key(r)] = r; });
       var tbl = h("table", {}, table);
       var head = h("tr", {}, h("thead", {}, tbl));
-      ["Model", "Weeks", "WIS", "Relative WIS", "Log WIS", "Relative log WIS",
-        "50% coverage", "90% coverage", "Bias"]
-        .forEach(function (c) { h("th", {}, head, c); });
+      var names = ["Model", "Weeks"];
+      cols.forEach(function (c) {
+        names.push(c.label);
+        if (c.relative) names.push(c.relative);
+      });
+      names.forEach(function (c) { h("th", {}, head, c); });
       var body = h("tbody", {}, tbl);
       Object.keys(by).map(Number).forEach(function (m) {
-        if (state.off[m]) return;
+        if (!legend.on[m]) return;
         var rs = by[m];
-        var rel = "", relLog = "";
-        if (d.baseline !== null && m !== d.baseline) {
-          var both = rs.filter(function (r) { return key(r) in base; });
-          if (both.length) {
-            rel = fmt(mean(both.map(function (r) { return r[4]; })) /
-              mean(both.map(function (r) { return base[key(r)]; })), 2);
-            relLog = fmt(mean(both.map(function (r) { return r[5]; })) /
-              mean(both.map(function (r) { return baseLog[key(r)]; })), 2);
-          }
-        }
+        var both = rs.filter(function (r) { return key(r) in base; });
         var tr = h("tr", {}, body);
-        h("td", {}, tr, d.models[m].label);
+        h("td", {}, tr, d.models[m].name);
         h("td", {}, tr, String(rs.length));
-        h("td", {}, tr, fmt(mean(rs.map(function (r) { return r[4]; })), 1));
-        h("td", {}, tr, rel);
-        h("td", {}, tr, fmt(mean(rs.map(function (r) { return r[5]; })), 2));
-        h("td", {}, tr, relLog);
-        h("td", {}, tr, fmt(mean(rs.map(function (r) { return r[6]; })), 2));
-        h("td", {}, tr, fmt(mean(rs.map(function (r) { return r[7]; })), 2));
-        h("td", {}, tr, fmt(mean(rs.map(function (r) { return r[8]; })), 2));
+        cols.forEach(function (c, k) {
+          var at = 4 + k;
+          h("td", {}, tr, fmt(mean(rs.map(function (r) { return r[at]; })), 2));
+          if (!c.relative) return;
+          var rel = "";
+          if (d.baseline !== null && m !== d.baseline && both.length) {
+            rel = fmt(mean(both.map(function (r) { return r[at]; })) /
+              mean(both.map(function (r) { return base[key(r)][at]; })), 2);
+          }
+          h("td", {}, tr, rel);
+        });
       });
     }
     draw();
-    new MutationObserver(draw).observe(document.body,
-      { attributes: true, attributeFilter: ["data-md-color-scheme"] });
+    T.onTheme(draw);
   }
 
   function start() {

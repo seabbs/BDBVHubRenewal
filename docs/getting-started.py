@@ -18,11 +18,10 @@
 #
 # Forecast with two baselines, plot them and score them.
 #
-# This page is a notebook.
-# `task getting-started` runs it again and writes the outputs into `docs/getting-started.ipynb`.
-# The code calls the same library functions as the command line.
-# `task setup` installs the package.
+# Every figure and table below comes from the Python code shown above it, which calls the package's functions directly.
+# [Setup](../setup/) installs the package and shows how to run this code in a REPL, a notebook or a script.
 # The tidy data in `data/` are committed, so nothing needs downloading.
+# This page is a notebook, and `task getting-started` runs it again.
 
 # %% [markdown]
 # ## Load the data
@@ -43,6 +42,7 @@ from bdbvhubrenewal.data import (
 )
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.evaluation.nowcast import relative_wis, release_backtest
+from bdbvhubrenewal.evaluation.scoring import relative_skill
 from bdbvhubrenewal.forecasters import NATIONAL, get_model
 from bdbvhubrenewal.reporting.plots import plot_location_grid, save_light_dark
 
@@ -70,9 +70,9 @@ config = dataclasses.replace(
 )
 origin_delays, _ = delays_for_vintage(delays, ORIGIN)
 origin = real.loc[real["vintage"] == ORIGIN]
-task = bt.make_tasks(
-    origin, origin_delays, config, history=real, daily=daily
-)[0]
+task = bt.make_tasks(origin, origin_delays, config, history=real, daily=daily)[
+    0
+]
 print(task.vintage, task.reference_date, len(task.locations), "provinces")
 print(task.target_end_dates[0], "to", task.target_end_dates[-1])
 
@@ -153,10 +153,8 @@ panels
 # `as reported` uses the data at the origin as the forecast.
 
 # %%
-scores = release_backtest(
-    [task], daily, target, models=(), stored=forecasts
-).scores
-scores = scores.loc[scores["target"] == "reported"]
+result = release_backtest([task], daily, target, models=(), stored=forecasts)
+scores = result.scores.loc[result.scores["target"] == "reported"]
 scores = scores.assign(
     level=scores["location"].map(
         lambda x: "National" if x == NATIONAL else "Province"
@@ -165,8 +163,22 @@ scores = scores.assign(
 relative_wis(scores, by=["level"]).round(2)
 
 # %% [markdown]
+# The [energy score](../methods/evaluation/#energy-score) scores each scale's forecast of every place and week at once, from the same samples.
+# The table gives it and its log version relative to `randomwalk`, with $n$ the releases scored.
+
+# %%
+energy = result.energy.loc[result.energy["target"] == "reported"]
+relative_skill(
+    energy,
+    by=("scale",),
+    metrics=("energy", "log_energy"),
+    match_on=("origin", "truth_vintage"),
+).round(2)
+
+# %% [markdown]
 # ## Next steps
 #
+# The [API reference](../reference/) documents every function used here, grouped by task.
 # The [CLI page](../development/cli/) lists the commands the submission workflow runs.
 # They fetch the data, run the backtest, forecast from the latest vintage and write the hub file.
 #

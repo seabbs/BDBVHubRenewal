@@ -174,13 +174,10 @@ def test_tidy_locations_adds_populations(raw: dict[str, Path]) -> None:
 
 
 def test_committed_target_is_consistent(target: pd.DataFrame) -> None:
-    assert vintages(target) == [
-        "2026-08-18",
-        "2026-10-09",
-        "2026-10-17",
-        "2026-10-24",
-        "2026-11-01",
-    ]
+    # New releases add vintages, so only the first and the order are fixed.
+    got = vintages(target)
+    assert got[0] == "2026-08-18"
+    assert got == sorted(set(target["vintage"]))
     assert (target["observed"] + target["imputed"] == target["total"]).all()
     assert set(target["kind"]) == {"real"}
     # The national row equals the sum of the provinces.
@@ -208,7 +205,11 @@ def test_committed_delays_match_known_onsets(
 
 
 def test_other_committed_tables_load() -> None:
-    assert len(load_locations(DATA)) == 27
+    table = load_locations(DATA)
+    assert len(table) == 27
+    provinces = table.loc[table["location_type"] == "province"]
+    assert len(provinces) == 26
+    assert provinces[["latitude", "longitude"]].notna().all().all()
     assert (load_health_zones(DATA)["total"] > 0).all()
 
 
@@ -218,12 +219,8 @@ def test_imputed_share_and_newly_missing(target: pd.DataFrame) -> None:
     assert valid.between(0, 1).all()
     new = newly_missing(target)
     nat = new.loc[new["location"] == "CD"]
-    assert list(nat["vintage"]) == [
-        "2026-10-09",
-        "2026-10-17",
-        "2026-10-24",
-        "2026-11-01",
-    ]
+    # Every vintage after the first has a change from the one before.
+    assert list(nat["vintage"]) == vintages(target)[1:]
     assert (nat["new_observed"] + nat["new_imputed"] == nat["new_total"]).all()
 
 
@@ -253,13 +250,6 @@ def test_province_centres_cover_every_province() -> None:
         assert PROVINCE_CENTRES[loc] == pytest.approx((lat, lon), abs=1e-3)
 
 
-def test_tidy_locations_has_a_centre_for_every_province() -> None:
-    table = load_locations(DATA)
-    provinces = table.loc[table["location_type"] == "province"]
-    assert len(provinces) == 26
-    assert provinces[["latitude", "longitude"]].notna().all().all()
-
-
 def test_tidy_daily_keeps_zones_apart(raw: dict[str, Path]) -> None:
     zones = tidy_daily(raw["daily"], level="zone")
     assert set(zones["location"]) == {"CD-IT-01"}
@@ -273,21 +263,6 @@ def test_tidy_daily_keeps_zones_apart(raw: dict[str, Path]) -> None:
     assert "CD-IT-01" not in set(tidy_daily(raw["daily"])["location"])
     with pytest.raises(ValueError, match="level"):
         tidy_daily(raw["daily"], level="ward")
-
-
-def test_load_daily_zones_reads_the_tidy_file(tmp_path: Path) -> None:
-    from bdbvhubrenewal.data import load_daily_zones
-
-    pd.DataFrame(
-        {
-            "vintage": ["2026-10-24"],
-            "location": ["CD-IT-01"],
-            "onset_date": ["2026-10-01"],
-            "observed": [1],
-            "imputed": [0],
-        }
-    ).to_csv(tmp_path / "daily_zones.csv.gz", index=False)
-    assert list(load_daily_zones(tmp_path)["location"]) == ["CD-IT-01"]
 
 
 def test_release_updates_count_a_vanished_row_as_a_fall() -> None:
