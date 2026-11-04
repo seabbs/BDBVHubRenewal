@@ -59,7 +59,7 @@ class HazardDelay(RandomVariable):
     over the reference day $s$, starting at 0, that shifts all hazards
     together (proportional odds). The pmf follows from `hazard_to_pmf`.
     When $\gamma$ has a small innovation SD, the delay is near constant.
-    The shape $\\beta$, the shift $\\gamma$ and the mean delay by day
+    The shape $\beta$, the shift $\gamma$ and the mean delay by day
     are recorded as `{name}_beta`, `{name}_shift` and `{name}_mean`.
     """
 
