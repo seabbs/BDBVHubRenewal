@@ -54,6 +54,23 @@ def test_growth_to_final_sums_the_daily_delay(origin24) -> None:
     assert origin24.growth[0, day - 42] == 1.0
 
 
+def test_the_start_week_is_the_latest_week_at_95_per_cent(
+    snap24, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bdbvhubrenewal.forecasters import chain
+
+    # Week w is 95.01% complete and every later week 94.99%.
+    w = snap24.n_weeks - 3
+    inv = np.where(snap24.week > w, 0.9499, 1.0)
+    inv = np.where(snap24.week == w, 0.9501, inv)
+    g = np.broadcast_to(1.0 / inv, (len(snap24.locations), inv.size))
+    monkeypatch.setattr(chain, "final_growth", lambda *_: g)
+    origin = build_origin(snap24, Settings(), errors=False)
+    assert np.allclose(origin.complete[:, w], 0.9501)
+    assert (origin.complete[:, w + 1 :] < 0.95).all()
+    assert (origin.start == w).all()
+
+
 def test_10_09_raises_with_no_delay_pair(daily: pd.DataFrame) -> None:
     snap = snapshot_arrays(daily, "2026-10-09", ("CD-IT",))
     with pytest.raises(NoDelayPair):
