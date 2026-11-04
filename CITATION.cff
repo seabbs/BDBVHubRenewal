@@ -26,10 +26,13 @@ keywords:
   - hubverse
   - Bundibugyo virus disease
 license: MIT
-version: 0.1.0
+doi: 10.5281/zenodo.23942616
 repository-code: "https://github.com/seabbs/BDBVHubRenewal"
 url: "https://samabbott.co.uk/BDBVHubRenewal/"
 identifiers:
+  - type: doi
+    value: 10.5281/zenodo.23942616
+    description: Zenodo concept DOI, all versions
   - type: url
     value: "https://samabbott.co.uk/BDBVHubRenewal/"
     description: Documentation

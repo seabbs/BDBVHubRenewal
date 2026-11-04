@@ -13,8 +13,9 @@ GitHub turns it into the "Cite this repository" button on the repository page.
   author = {Abbott, Sam},
   title = {{BDBVHubRenewal}: renewal-model nowcasts and forecasts for the {BDBV} Modeling Hub},
   year = {2026},
-  version = {0.1.0},
-  url = {https://github.com/seabbs/BDBVHubRenewal}
+  publisher = {Zenodo},
+  doi = {10.5281/zenodo.23942616},
+  url = {https://doi.org/10.5281/zenodo.23942616}
 }
 ```
 

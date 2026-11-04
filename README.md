@@ -11,6 +11,7 @@
 [![Pages](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/pages.yml/badge.svg)](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/pages.yml)
 [![codecov](https://codecov.io/gh/seabbs/BDBVHubRenewal/branch/main/graph/badge.svg)](https://codecov.io/gh/seabbs/BDBVHubRenewal)
 [![licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+[![DOI](https://zenodo.org/badge/1435982169.svg)](https://doi.org/10.5281/zenodo.23942616)
 
 | Component | Tests | Lint | Coverage |
 | --- | --- | --- | --- |
@@ -63,21 +64,22 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Citing
 
-<!-- Zenodo DOI badge: replace XXXXXXX with the record number after the first release. -->
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
+[![DOI](https://zenodo.org/badge/1435982169.svg)](https://doi.org/10.5281/zenodo.23942616)
 
-Abbott S (2026). BDBVHubRenewal: renewal-model nowcasts and forecasts for the BDBV Modeling Hub. Version 0.1.0. <https://github.com/seabbs/BDBVHubRenewal>.
+Abbott S (2026). BDBVHubRenewal: renewal-model nowcasts and forecasts for the BDBV Modeling Hub. Zenodo. <https://doi.org/10.5281/zenodo.23942616>.
 
 ```bibtex
 @software{abbott_bdbvhubrenewal,
   author = {Abbott, Sam},
   title = {{BDBVHubRenewal}: renewal-model nowcasts and forecasts for the {BDBV} Modeling Hub},
   year = {2026},
-  version = {0.1.0},
-  url = {https://github.com/seabbs/BDBVHubRenewal}
+  publisher = {Zenodo},
+  doi = {10.5281/zenodo.23942616},
+  url = {https://doi.org/10.5281/zenodo.23942616}
 }
 ```
 
+The DOI covers all versions, and each release has its own DOI on Zenodo.
 The metadata are in [CITATION.cff](CITATION.cff), which GitHub shows as the "Cite this repository" button.
 
 ## Funding
