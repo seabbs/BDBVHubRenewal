@@ -21,6 +21,7 @@ from bdbvhubrenewal.model import (
     coupled_renewal,
     generation_interval,
     hazard_to_pmf,
+    incubation_period,
     mixing_matrix,
     onset_expectations,
     pooled_walk,
@@ -309,6 +310,11 @@ DPCENS = pd.read_csv(Path(__file__).parent / "fixtures" / "dpcens.csv")
 def test_generation_interval_matches_primarycensored():
     ref = DPCENS[DPCENS["case"] == "gi"]
     np.testing.assert_allclose(generation_interval(), ref["p"], atol=1e-8)
+
+
+def test_incubation_period_matches_primarycensored():
+    ref = DPCENS[DPCENS["case"] == "incubation"]
+    np.testing.assert_allclose(incubation_period(), ref["p"], atol=1e-8)
 
 
 @pytest.mark.parametrize(
