@@ -1,8 +1,9 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-r"""Province renewal with importation and susceptible depletion.
+r"""Subpopulation renewal coupled by importation, with susceptible depletion.
 
 `MetapopulationInfections` is PyRenew's `SubpopulationInfections` with a
-different renewal step. Rt, seeding and the output contract are unchanged.
+coupled renewal step (`coupled_renewal`) and the mixing matrix from an
+`Importation` component.
 """
 
 from __future__ import annotations
@@ -19,7 +20,6 @@ from pyrenew.math import r_approx_from_R
 from pyrenew.metaclass import RandomVariable
 
 from .rt import pooled_walk
-from .rt_observation import RtPseudoObservation
 
 
 def mixing_matrix(
@@ -36,12 +36,12 @@ def mixing_matrix(
 
     Parameters
     ----------
-    kernel : Array
+    kernel
         Row-normalised kernel with zero diagonal, shape `(P, P)`.
-    importation : Array
+    importation
         Share $\varepsilon$ of transmission sent to other provinces, a
         scalar or one per origin.
-    fractions : Array
+    fractions
         Population fractions, shape `(P,)`.
 
     Returns
@@ -96,20 +96,20 @@ def coupled_renewal(
 
     Parameters
     ----------
-    I0 : Array
+    I0
         Per-capita infections in the seeding period, shape `(n_init, P)`.
         All rows count towards depletion; the last `len(gen_int)` rows
         start the renewal.
-    rt : Array
+    rt
         Reproduction numbers after seeding, shape `(n, P)`.
-    gen_int : Array
+    gen_int
         Generation interval pmf, element 0 at lag 1 (PyRenew convention).
-    mixing : Array
+    mixing
         Mixing matrix $W$, shape `(P, P)`.
-    pool : Array, optional
+    pool
         Effective share of the population at risk, $\nu$. `None`
         turns depletion off.
-    seeding : Array, optional
+    seeding
         Seed infections per resident added to $y_p(t)$, `(n, P)`, for
         provinces seeded after the start.
 
@@ -172,33 +172,50 @@ class Importation(RandomVariable):
     rows are origins, zero diagonal), $\varepsilon$ from `share_rv` and
     the population fractions $f$ passed at sample time. It plays the
     part of PyRenew's `mobility_matrix_rv`, as one component the latent
-    process calls, so a fixed and a learnt kernel compose alike.
-
-    Parameters
-    ----------
-    name : str
-        Name of the component.
-    kernel_rv : RandomVariable
-        Returns $K$, shape `(P, P)`. A fixed kernel is a
-        `DeterministicVariable`.
-    share_rv : RandomVariable
-        Returns $\varepsilon$, the share of transmission sent to other
-        provinces.
+    process calls, so the kernel may be fixed or random.
     """
 
     def __init__(
         self, name: str, kernel_rv: RandomVariable, share_rv: RandomVariable
     ) -> None:
+        r"""Initialize the importation component.
+
+        Parameters
+        ----------
+        name
+            Name of the component.
+        kernel_rv
+            Returns $K$, shape `(P, P)`. A fixed kernel is a
+            `DeterministicVariable`.
+        share_rv
+            Returns $\varepsilon$, the share of transmission sent to
+            other provinces.
+
+        Raises
+        ------
+        TypeError
+            If `kernel_rv` or `share_rv` is not a `RandomVariable`.
+        """
+        for label, rv in (("kernel_rv", kernel_rv), ("share_rv", share_rv)):
+            if not isinstance(rv, RandomVariable):
+                raise TypeError(f"{label} must be a RandomVariable.")
         super().__init__(name=name)
         self.kernel_rv = kernel_rv
         self.share_rv = share_rv
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return (
+            f"Importation(name={self.name!r}, kernel_rv={self.kernel_rv!r}, "
+            f"share_rv={self.share_rv!r})"
+        )
 
     def sample(self, fractions: ArrayLike, **kwargs: object) -> Array:
         """Sample the mixing matrix.
 
         Parameters
         ----------
-        fractions : array_like
+        fractions
             Population share of each province, `(P,)`.
         **kwargs
             Ignored, for the PyRenew interface.
@@ -232,25 +249,6 @@ class MetapopulationInfections(SubpopulationInfections):
     (`effective_population_rv`) of each province is at risk, and it is
     that pool that depletes. Because $\nu$ only enters through depletion,
     it does not trade off against the seed or the ascertainment.
-
-    Parameters
-    ----------
-    mixing_rv : Importation, optional
-        Returns the mixing matrix $W$ given the population fractions.
-        `None` turns coupling off.
-    effective_population_rv : RandomVariable, optional
-        $\nu$. `None` turns susceptible depletion off.
-    rt_observation : RtPseudoObservation, optional
-        External Rt estimates as a tempered pseudo-observation.
-    seed_days : array_like, optional
-        First day (from the first data day) of each province's first
-        case week. Provinces with a day after 0 start (almost) empty and
-        get their seed, the `I0_rv` level, as a constant daily input over
-        that week, plus whatever importation brings. Infections are dated
-        by onset, so seeding the week before would put onsets where the
-        data have none. `None` seeds every province at the start.
-    **kwargs
-        Passed to `SubpopulationInfections` (without infection feedback).
     """
 
     def __init__(
@@ -258,10 +256,35 @@ class MetapopulationInfections(SubpopulationInfections):
         *,
         mixing_rv: RandomVariable | None = None,
         effective_population_rv: RandomVariable | None = None,
-        rt_observation: RtPseudoObservation | None = None,
-        seed_days: Array | None = None,
+        rt_observation: RandomVariable | None = None,
+        seed_days: ArrayLike | None = None,
         **kwargs: object,
     ) -> None:
+        r"""Initialize the coupled infections process.
+
+        Parameters
+        ----------
+        mixing_rv
+            Returns the mixing matrix $W$ given the population fractions
+            (`Importation`). `None` turns coupling off.
+        effective_population_rv
+            $\nu$. `None` turns susceptible depletion off.
+        rt_observation
+            Called with Rt, infections, the seeding length and the
+            fractions, to add an observation of Rt
+            (`RtPseudoObservation`). `None` adds none.
+        seed_days
+            First day (from the first data day) of each province's first
+            case week. Provinces with a day after 0 start (almost) empty
+            and get their seed, the `I0_rv` level, as a constant daily
+            input over that week, plus whatever importation brings.
+            Infections are dated by onset, so seeding the week before
+            would put onsets where the data have none. `None` seeds every
+            province at the start.
+        **kwargs
+            Passed to `SubpopulationInfections` (without infection
+            feedback).
+        """
         super().__init__(**kwargs)
         self.mixing_rv = mixing_rv
         self.effective_population_rv = effective_population_rv
@@ -351,11 +374,11 @@ class MetapopulationInfections(SubpopulationInfections):
 
         Parameters
         ----------
-        n_days_post_init : int
+        n_days_post_init
             Days after the seeding period.
-        subpop_fractions : jax.Array, optional
+        subpop_fractions
             Population share of each province.
-        first_day_dow : int, optional
+        first_day_dow
             Weekday of the first day, passed by PyRenew.
         **kwargs
             Ignored, for the PyRenew interface.
