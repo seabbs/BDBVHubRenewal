@@ -598,8 +598,9 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     builder.add_observation(
         OnsetStreams(
             name="onsets",
-            # Infections are dated by onset.
-            temporal_pmf_rv=DeterministicPMF("infection_to_onset", np.ones(1)),
+            temporal_pmf_rv=DeterministicPMF(
+                "infection_to_onset", incubation_period()
+            ),
             ascertainment_rate_rv=ascertainment.for_signal("onsets"),
             missing_fraction_rv=missing,
             delay_rv=delay,

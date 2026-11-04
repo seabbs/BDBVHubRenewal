@@ -7,7 +7,7 @@ import numpyro
 import numpyro.distributions as dist
 import pandas as pd
 import pytest
-from pyrenew.deterministic import DeterministicVariable
+from pyrenew.deterministic import DeterministicPMF, DeterministicVariable
 from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
 from pyrenew.randomvariable import DistributionalVariable
 
@@ -319,9 +319,11 @@ def test_incubation_period_matches_primarycensored():
 
 @pytest.mark.parametrize(
     ("family", "mean", "cv"),
-    DPCENS.loc[DPCENS["case"] == "delay", ["family", "mean", "cv"]]
-    .drop_duplicates()
-    .itertuples(index=False),
+    list(
+        DPCENS.loc[DPCENS["case"] == "delay", ["family", "mean", "cv"]]
+        .drop_duplicates()
+        .itertuples(index=False)
+    ),
 )
 def test_censored_pmf_matches_primarycensored(family, mean, cv):
     ref = DPCENS[
@@ -337,6 +339,26 @@ def test_censored_pmf_matches_primarycensored(family, mean, cv):
     with jax.enable_x64(False):
         ours32 = np.asarray(censored_pmf(family, mean, cv, 60))
     np.testing.assert_allclose(ours32, ref["p"], atol=3e-5)
+
+
+def test_onsets_are_infections_convolved_with_the_incubation_period():
+    from bdbvhubrenewal.model.observation import OnsetStreams
+
+    eta = incubation_period()
+    streams = OnsetStreams(
+        "onsets",
+        DeterministicPMF("incubation", eta),
+        DeterministicVariable("alpha", 1.0),
+        None,
+        FixedTimeVarying("delay", np.ones((1, 1))),
+        None,
+    )
+    x = np.random.default_rng(3).gamma(2.0, 1.0, (80, 2))
+    expected = np.stack([np.convolve(c, eta)[:80] for c in x.T], axis=1)
+    np.testing.assert_allclose(
+        streams._predicted_obs(jnp.asarray(x)), expected, rtol=1e-5
+    )
+    assert streams.lookback_days() == len(eta) - 1
 
 
 def test_idle_provinces_are_zero_up_to_the_cutoff():
