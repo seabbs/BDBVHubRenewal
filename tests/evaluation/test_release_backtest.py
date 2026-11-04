@@ -70,6 +70,23 @@ def test_every_model_is_scored_on_each_later_release(
     assert (rep["weeks_back"] < 0).any()
 
 
+def test_energy_scores_each_scale_on_the_same_samples(
+    result,  # type: ignore[no-untyped-def]
+) -> None:
+    e = result.energy
+    unit = ["origin", "target", "truth_vintage", "scale"]
+    assert set(e["scale"]) == {"national", "provinces"}
+    assert set(e["model"]) == {"randomwalk", "randomwalknowcast", BASELINE}
+    # One vector per unit, the same cells for every model.
+    assert (e.groupby(unit)["n_cells"].nunique() == 1).all()
+    assert (e.groupby(unit)["model"].nunique() == 3).all()
+    # The vector holds every scored cell of the scale.
+    s = result.scores.loc[result.scores["model"] == "randomwalk"]
+    nat = s.loc[s["location"] == "CD"].groupby(unit[:3]).size()
+    got = e.loc[(e["model"] == "randomwalk") & (e["scale"] == "national")]
+    assert got.set_index(unit[:3])["n_cells"].equals(nat.rename("n_cells"))
+
+
 def test_complete_weeks_come_from_later_releases_only(
     target: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
