@@ -15,12 +15,13 @@ The model diagrams are mermaid blocks in `docs/methods/model.md`.
 | Component | PyRenew piece | Built here |
 |---|---|---|
 | Pooled $R_p(t)$ | `SubpopulationInfections`, `WeeklyTemporalProcess` | `NonCentredRandomWalk`, for the frozen seeding weeks, the separate forecast steps and their reversion. |
-| Renewal with importation and depletion | `SubpopulationInfections`, subclassed | `coupled_renewal`. |
+| Renewal with importation and depletion | `SubpopulationInfections`, subclassed with the steps of `BaseSubpopulationInfections` | `coupled_renewal`, called from `_infections_from_rt`, and `Importation`, which gives the mixing matrix as PyRenew's `mobility_matrix_rv` does. |
 | Ascertainment $\alpha(s)$ | `IndependentAscertainment` with a temporal process | None. |
 | Onset-to-report delay $f_s(d)$ | None | `HazardDelay`. |
 | Missing onsets $\pi_p(t)$ | None | `MissingOnsetFraction`, a pooled walk of the same form as $R_p$ with its own parameters. |
-| Known and imputed onsets | `BaseObservationProcess`, `NegativeBinomialNoise`, `compute_prop_already_reported` for the publication lag | `OnsetStreams`. |
-| BVDOutbreakSize Rt | None | `RtPseudoObservation`. |
+| Known and imputed onsets | `BaseObservationProcess` with `temporal_pmf_rv` for the infection-to-onset pmf (a point mass at 0), `NegativeBinomialNoise`, `compute_prop_already_reported` for the publication lag | `OnsetStreams`. |
+| Delays of known-onset cases | None | `DirichletMultinomialNoise`, a noise model in the form of PyRenew's `CountNoise` for counts by delay given weekly totals. |
+| BVDOutbreakSize Rt | None | `RtPseudoObservation`, a `RandomVariable` the latent process calls, as it holds both $R$ and infections. |
 | Provinces with no cases | None | An importation-only component. |
 
 PyRenew pieces that give a different model, sample less well, or would only rename one line, are not used.
@@ -37,7 +38,7 @@ PyRenew pieces that give a different model, sample less well, or would only rena
 - `CountObservation` and `SubpopulationCounts` take one fixed delay pmf and one truncation pmf.
   Here the delay varies with onset day, and known and imputed onsets are separate streams.
 - `MobilitySubpopulationInfections`, added to PyRenew after the pinned commit, uses a fixed mobility matrix, $R$ by location and depletion capped at the susceptibles.
-  Here the kernel is learnt and depletion is exponential in the pool $\nu$.
+  Here a share of transmission is sent from each origin through a fixed gravity kernel, and depletion is exponential in the pool $\nu$.
 
 PyRenew has no delay that varies with time, no Dirichlet-multinomial count and no pseudo-observation of $R$.
 
@@ -76,7 +77,7 @@ The model runs in single precision (float32), JAX's default.
 - Depletion is carried on $\log S$, which needs no subtraction, and $1 - e^{-y}$ is computed with `expm1`.
 - The generation interval is double interval censored in closed form, $G(d + 1) - 2G(d) + G(d - 1)$ with the Gamma's integrated cdf.
   It is computed once, in float64, and matches primarycensored.
-- Parametric delays (the gamma and log-normal options and the simulator) use the same closed form, truncated at their maximum delay and renormalised as primarycensored's $D$.
+- The simulator's delays use the same closed form, truncated at their maximum delay and renormalised as primarycensored's $D$.
   In float32 they are within $3 \times 10^{-5}$ of primarycensored, and within $10^{-8}$ in float64.
 - The negative binomial concentration is capped at $\phi \le 1000$, which is Poisson for these counts.
   The Dirichlet-multinomial concentration is capped at $\psi \le 10^4$.
