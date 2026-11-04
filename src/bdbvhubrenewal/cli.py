@@ -213,6 +213,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--models", nargs="*", default=["randomwalk", "randomwalknowcast"]
     )
     zb.add_argument("--out", default="results/zone-scores.csv")
+    zb.add_argument("--energy-out", default="results/zone-energy.csv")
 
     fit = sub.add_parser(
         "fit", help="Fit a configuration and write its diagnostics."
@@ -703,7 +704,7 @@ def _zone_backtest(args: argparse.Namespace) -> int:
     )
 
     hub_config = Path(args.data) / "hub-config" / "tasks.json"
-    scores = zone_backtest(
+    scores, energy = zone_backtest(
         load_target(args.data),
         load_delays(args.data),
         load_daily(args.data),
@@ -714,6 +715,7 @@ def _zone_backtest(args: argparse.Namespace) -> int:
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     scores.to_csv(out, index=False)
+    energy.to_csv(args.energy_out, index=False)
     rel = zone_relative_skill(scores, by=("horizon",))
     print(rel.round(3).to_string(index=False))
     print(f"Wrote {out} ({len(scores)} scores).")

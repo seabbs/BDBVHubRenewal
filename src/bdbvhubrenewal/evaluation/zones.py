@@ -14,6 +14,8 @@ Zones are scored on the zone count each later real vintage reports, with
 the final-count samples drawn as for provinces
 (`bdbvhubrenewal.evaluation.nowcast.draw_reported`) under the zone delays
 fitted at the origin.
+The energy score takes every zone and week of an origin and release as
+one vector, from the same drawn samples.
 """
 
 from __future__ import annotations
@@ -35,7 +37,11 @@ from bdbvhubrenewal.evaluation.backtest import (
     score_tasks,
 )
 from bdbvhubrenewal.evaluation.nowcast import draw_reported, reported_share
-from bdbvhubrenewal.evaluation.scoring import relative_skill, score_forecasts
+from bdbvhubrenewal.evaluation.scoring import (
+    energy_scores,
+    relative_skill,
+    score_forecasts,
+)
 from bdbvhubrenewal.forecasters.base import (
     ForecastTask,
     ModelUnavailableError,
@@ -97,7 +103,7 @@ def zone_backtest(
     zones: tuple[str, ...],
     models: Sequence[str] = ("randomwalk", "randomwalknowcast"),
     config: BacktestConfig | None = None,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Score the random walk models run at zone level on later releases.
 
     Parameters
@@ -120,17 +126,19 @@ def zone_backtest(
 
     Returns
     -------
-    pandas.DataFrame
-        `score_forecasts` output with `model`, `origin`, `target`
-        (`"reported"`), `truth_vintage` and `horizon` in weeks from the
-        reference date, one row per model, origin, later vintage, zone and
-        week. Each model appears under its name and again under its name
-        with `SUMMED`.
+    tuple of pandas.DataFrame
+        The scores, `score_forecasts` output with `model`, `origin`,
+        `target` (`"reported"`), `truth_vintage` and `horizon` in weeks
+        from the reference date, one row per model, origin, later
+        vintage, zone and week. Each model appears under its name and
+        again under its name with `SUMMED`.
+        Then `energy_scores` of every model's zones by `origin`, `target`
+        and `truth_vintage`, from the same drawn samples.
     """
     config = config or BacktestConfig()
     real = target.loc[target["kind"] == "real"]
     vintages = real_vintages(real)
-    frames = []
+    frames, energy = [], []
     for vintage in vintages[:-1]:
         task = make_tasks(
             real.loc[real["vintage"] == vintage], delays, config, daily=daily
@@ -163,17 +171,25 @@ def zone_backtest(
             truth = _zone_truth(
                 weekly_zone_counts(daily_zones, later), direct, later
             )
-            for name, samples in forecasts.items():
-                drawn = draw_reported(samples, reported, now, then, rng)
-                drawn = drawn.assign(
-                    model=name,
-                    origin=vintage,
-                    target="reported",
-                    truth_vintage=later,
-                    horizon=_weeks(drawn, task),
-                )
-                frames.append(score_forecasts(drawn, truth, keys=_KEYS))
-    return pd.concat(frames, ignore_index=True)
+            drawn = pd.concat(
+                [
+                    draw_reported(samples, reported, now, then, rng).assign(
+                        model=name,
+                        origin=vintage,
+                        target="reported",
+                        truth_vintage=later,
+                    )
+                    for name, samples in forecasts.items()
+                ],
+                ignore_index=True,
+            )
+            drawn["horizon"] = _weeks(drawn, task)
+            frames.append(score_forecasts(drawn, truth, keys=_KEYS))
+            energy.append(energy_scores(drawn, truth, unit=_KEYS[1:4]))
+    return (
+        pd.concat(frames, ignore_index=True),
+        pd.concat(energy, ignore_index=True),
+    )
 
 
 def _weeks(samples: pd.DataFrame, task: ForecastTask) -> pd.Series:
