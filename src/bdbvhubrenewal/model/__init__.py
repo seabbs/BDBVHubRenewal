@@ -31,7 +31,7 @@ from .model import (
     generation_interval,
     model_args,
 )
-from .observation import OnsetStreams, RtPseudoObservation, onset_expectations
+from .observation import OnsetStreams, onset_expectations
 from .renewal import (
     Importation,
     MetapopulationInfections,
@@ -44,6 +44,7 @@ from .rt import (
     PooledInitialValue,
     pooled_walk,
 )
+from .rt_observation import RtPseudoObservation
 
 __all__ = [
     "BVD",

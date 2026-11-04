@@ -29,17 +29,19 @@ from pyrenew.observation import NegativeBinomialNoise
 from pyrenew.randomvariable import DistributionalVariable, TransformedVariable
 from scipy import stats
 
+from .composition_noise import DirichletMultinomialNoise, MultinomialNoise
 from .delays import (
     FixedTimeVarying,
     HazardDelay,
 )
-from .observation import OnsetStreams, RtPseudoObservation
+from .observation import OnsetStreams
 from .renewal import Importation, MetapopulationInfections
 from .rt import (
     MissingOnsetFraction,
     NonCentredRandomWalk,
     PooledInitialValue,
 )
+from .rt_observation import RtPseudoObservation
 
 SUNDAY = 6
 """Weekday number of Sunday (Monday is 0), the first day of a hub week."""
@@ -371,6 +373,29 @@ def _nb_noise(stream: str) -> NegativeBinomialNoise:
     )
 
 
+def _dm_noise() -> DirichletMultinomialNoise:
+    r"""Dirichlet-multinomial with $1 / \sqrt{\psi} \sim$ HalfNormal(0.1).
+
+    The concentration is $\psi = 1 / (x^2 + 10^{-4})$ with
+    $x = 1/\sqrt\psi$, capped at $10^4$: near the multinomial the
+    float32 log density is noisy enough to stall NUTS step-size
+    adaptation.
+    """
+    inv_sqrt = DistributionalVariable(
+        "delay_overdispersion", dist.HalfNormal(0.1)
+    )
+    capped = ComposeTransform(
+        [
+            PowerTransform(2.0),
+            AffineTransform(1e-4, 1.0),
+            PowerTransform(-1.0),
+        ]
+    )
+    return DirichletMultinomialNoise(
+        TransformedVariable("delay_concentration", inv_sqrt, capped)
+    )
+
+
 def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     """Build the province model for one vintage.
 
@@ -513,6 +538,8 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     builder.add_observation(
         OnsetStreams(
             name="onsets",
+            # Infections are dated by onset.
+            temporal_pmf_rv=DeterministicPMF("infection_to_onset", np.ones(1)),
             ascertainment_rate_rv=ascertainment.for_signal("onsets"),
             missing_fraction_rv=missing,
             delay_rv=delay,
@@ -521,11 +548,9 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             import_scale_rv=imports,
             start_dow=SUNDAY,
             publication_lag=lag,
-            delay_overdispersion_rv=DistributionalVariable(
-                "delay_overdispersion", dist.HalfNormal(0.1)
-            )
+            delay_noise=_dm_noise()
             if config.delay_counts == "dirichlet-multinomial"
-            else None,
+            else MultinomialNoise(),
             # The axis starts on a Sunday with whole weeks.
             weekly_axis=True,
         )
