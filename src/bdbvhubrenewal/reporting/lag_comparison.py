@@ -1,10 +1,11 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """Figures and tables of the Reporting lag comparison page.
 
-The page compares `renewal`, with a report-to-publication lag uniform on 0
-to 3 days, with `renewalnolag`, which has none. It shows the release check
-behind the lag, both arms' forecasts against later releases, their scores
-by release and their convergence.
+The page compares `renewal` with versions that each change one part of
+its reporting model: no lag from report to publication, a delay for each
+province and a delay fixed over time. It shows the release check behind
+the lag, each version's forecasts against later releases, scores by
+release, convergence and the coverage of the newest weeks.
 """
 
 from __future__ import annotations
@@ -33,8 +34,11 @@ __all__ = [
     "plot_late_reports",
 ]
 
-ARMS: Final = ("renewal", "renewalnolag")
-"""The models compared: with the lag, and without it."""
+REFERENCE: Final = "renewal"
+"""The current model, which every other version changes in one part."""
+
+ARMS: Final = ("renewal", "renewalnolag", "renewalplace", "renewalfixdelay")
+"""The models compared, the reference first."""
 
 PLACES: Final = ("CD", "CD-IT", "CD-NK")
 """Places shown in the fans."""
@@ -155,9 +159,10 @@ def plot_lag_fans(
     origins: Sequence[str],
     models: Sequence[str],
     names: dict[str, str],
+    arm: str,
     mode: str = "light",
 ) -> Figure:
-    """Plot each arm's forecasts with the counts of each later release.
+    """Plot one version's forecasts and the reference's with each release.
 
     Parameters
     ----------
@@ -172,6 +177,8 @@ def plot_lag_fans(
         Registered models in registry order, for the colours.
     names : dict
         Location code to name.
+    arm : str
+        The version shown beside `REFERENCE`.
     mode : str
         `"light"` or `"dark"`.
 
@@ -179,7 +186,8 @@ def plot_lag_fans(
     -------
     matplotlib.figure.Figure
     """
-    quant = _quantiles(samples.loc[samples["model"].isin(ARMS)])
+    shown = (REFERENCE, arm)
+    quant = _quantiles(samples.loc[samples["model"].isin(shown)])
     real = target.loc[target["kind"] == "real"]
     with theme(mode) as ink:
         fig, axes = plt.subplots(
@@ -209,21 +217,21 @@ def plot_lag_fans(
                         color=ink["data"] if last else greys[k % len(greys)],
                         label=f"Release {vintage}",
                     )  # fmt: skip
-                for model in ARMS:
-                    arm = cell.loc[cell["model"] == model].sort_values(
+                for model in shown:
+                    fan = cell.loc[cell["model"] == model].sort_values(
                         "target_end_date"
                     )
-                    t = pd.to_datetime(arm["target_end_date"])
+                    t = pd.to_datetime(fan["target_end_date"])
                     colour = model_colour(model, models, mode)
                     ax.fill_between(
-                        t, arm["q5"], arm["q95"], color=colour, alpha=0.15,
+                        t, fan["q5"], fan["q95"], color=colour, alpha=0.15,
                         lw=0,
                     )  # fmt: skip
                     ax.fill_between(
-                        t, arm["q25"], arm["q75"], color=colour, alpha=0.3,
+                        t, fan["q25"], fan["q75"], color=colour, alpha=0.3,
                         lw=0,
                     )  # fmt: skip
-                    ax.plot(t, arm["q50"], color=colour, lw=1.6, label=model)
+                    ax.plot(t, fan["q50"], color=colour, lw=1.6, label=model)
                 ax.axvline(
                     pd.Timestamp(origin), color=ink["muted"], lw=0.8, ls=":"
                 )
@@ -266,16 +274,19 @@ def plot_lag_scores(table: pd.DataFrame, mode: str = "light") -> Figure:
         ("coverage_50", "50% coverage", 0.5),
         ("coverage_90", "90% coverage", 0.9),
     )
+    arms = [a for a in ARMS if a in set(table["model"])]
+    width = 0.8 / len(arms)
     with theme(mode) as ink:
-        fig, axes = plt.subplots(1, 3, figsize=(10, 3.4))
+        fig, axes = plt.subplots(1, 3, figsize=(11, 3.6))
         for ax, (col, title, ref) in zip(axes, panels, strict=True):
-            for i, model in enumerate(ARMS):
+            for i, model in enumerate(arms):
                 rows = cells.merge(
                     table.loc[table["model"] == model], how="left"
                 )
                 ax.bar(
-                    x + (i - 0.5) * 0.38, rows[col], width=0.38,
-                    color=model_colour(model, models, mode), label=model,
+                    x + (i - (len(arms) - 1) / 2) * width, rows[col],
+                    width=width, color=model_colour(model, models, mode),
+                    label=model,
                 )  # fmt: skip
             ax.axhline(ref, color=ink["muted"], lw=0.8, ls="--")
             ax.set_xticks(x, labels, fontsize=7)
@@ -484,12 +495,13 @@ def make_lag_comparison(
     scored = sorted(scores.loc[scores["model"].isin(ARMS), "origin"].unique())
     origins = [*scored, latest["vintage"].max()]
     models = [s.name for s in list_models()]
-    save_light_dark(
-        lambda mode: plot_lag_fans(
-            samples, target, origins, models, names, mode
-        ),
-        fig_dir / "lag-fans.svg",
-    )
+    for arm in ARMS[1:]:
+        save_light_dark(
+            lambda mode, arm=arm: plot_lag_fans(
+                samples, target, origins, models, names, arm, mode
+            ),
+            fig_dir / f"lag-fans-{arm}.svg",
+        )
 
     rel = relative_wis(
         scores.loc[scores["target"] == "reported"],
