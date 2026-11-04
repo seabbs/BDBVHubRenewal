@@ -7,6 +7,8 @@ import pandas as pd
 
 from bdbvhubrenewal.reporting import explorer
 
+COLOURS = {"a (ours)": ("#111111", "#eeeeee"), "hub": ("#222222", "#dddddd")}
+
 
 def _inputs() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     rows = []
@@ -59,6 +61,7 @@ def test_explorer_data_levels_and_rows() -> None:
         target,
         {"CD": "DRC"},
         3,
+        COLOURS,
         baseline="hub",
         scores=scores,
     )
@@ -74,7 +77,7 @@ def test_explorer_data_levels_and_rows() -> None:
 
 def test_explorer_without_scores(tmp_path: Path) -> None:
     quantiles, target, _ = _inputs()
-    data = explorer.explorer_data(quantiles, target, {}, 3)
+    data = explorer.explorer_data(quantiles, target, {}, 3, COLOURS)
     assert data["scores"] == []
     assert data["baseline"] is None
     path = tmp_path / "sub" / "x.json"
@@ -90,8 +93,22 @@ def test_explorer_html_names_the_data() -> None:
 
 def test_explorer_hides_models_until_switched_on() -> None:
     quantiles, target, _ = _inputs()
-    data = explorer.explorer_data(quantiles, target, {}, 3, hidden=["a (ours)"])
+    data = explorer.explorer_data(
+        quantiles, target, {}, 3, COLOURS, hidden=["a (ours)"]
+    )
     assert data["models"] == [
-        {"label": "a (ours)", "ours": True, "on": False},
-        {"label": "hub", "ours": False, "on": True},
+        {
+            "label": "a (ours)",
+            "ours": True,
+            "on": False,
+            "light": "#111111",
+            "dark": "#eeeeee",
+        },
+        {
+            "label": "hub",
+            "ours": False,
+            "on": True,
+            "light": "#222222",
+            "dark": "#dddddd",
+        },
     ]

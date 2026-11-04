@@ -98,13 +98,10 @@ jobs:
           docs/getting-started.py
       - name: Build the site into _site
         run: uv run mkdocs build --strict
-      # Pages serves the branch as it is, without Jekyll.
-      - run: touch _site/.nojekyll
       - uses: actions/upload-artifact@v7
         with:
           name: site
           path: _site
-          include-hidden-files: true
 
   deploy:
     needs: build
@@ -119,6 +116,9 @@ jobs:
         with:
           name: site
           path: _site
+      # Pages serves the branch as it is, without Jekyll. Only the root
+      # needs this: a preview's copy would survive its removal.
+      - run: touch _site/.nojekyll
       - uses: JamesIves/github-pages-deploy-action@fa24774553152dd7873cd16ebd8d959b010c5445 # v4.9.0
         with:
           folder: _site

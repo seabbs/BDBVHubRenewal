@@ -30,7 +30,7 @@ bdbvhubrenewal fit --model renewal|renewalsp --config main|renewalsp --vintage <
   --out <fit dir>
 ```
 
-- `--model` is the model chosen in `results/model-choice.yml` (`bdbvhubrenewal chosen-model`), unless the candidate names its own in `ci/policy.toml` (`model`), as the single-patch fallback and the `bvd` shadow do.
+- `--model` is `[submission] model` in `config/hub.toml`, unless the candidate names its own in `ci/policy.toml` (`model`), as the single-patch fallback and the `bvd` shadow do.
   The hub id is set apart in `config/hub.toml` (`bdbvhubrenewal hub-id`), `seabbs-renewal`.
   `epiforecasts-renewal` is already a different hub model.
 - `--config` selects the model configuration.
@@ -58,7 +58,7 @@ bdbvhubrenewal nowcast --model renewal --config main --fit <fit dir> \
 
 - Write one hub file anywhere under `--out`.
   The existing layout, `model-output/<model_id>/<reference_date>-<model_id>.csv`, is fine.
-  The PR always files it as `model-output/$HUB_MODEL_ID/<reference_date>-$HUB_MODEL_ID.csv`, so random walk can stand in for the main model.
+  The PR always files it as `model-output/<model_id>/<reference_date>-<model_id>.csv` under the submission id, so random walk can stand in for the main model.
 - Include the national row `CD`, as the sum of the province trajectories by sample index, plus any national cases the model does not assign to a province.
   Use the same sample ids across locations.
   National sample k must equal the sum of province sample k plus that sample's unassigned cases, for every week.

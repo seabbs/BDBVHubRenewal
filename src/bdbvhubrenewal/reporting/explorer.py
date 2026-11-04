@@ -34,6 +34,7 @@ def explorer_data(
     target: pd.DataFrame,
     names: Mapping[str, str],
     complete_after_weeks: int,
+    colours: Mapping[str, tuple[str, str]],
     baseline: str | None = None,
     scores: pd.DataFrame | None = None,
     truth_vintage: str | None = None,
@@ -52,6 +53,9 @@ def explorer_data(
         Location names by id.
     complete_after_weeks : int
         Weeks before the truth vintage after which a week is complete.
+    colours : mapping of str to (str, str)
+        Model label to its light and dark colour, as in the static
+        figures.
     baseline : str, optional
         Model label that relative WIS divides by.
     scores : pandas.DataFrame, optional
@@ -117,7 +121,13 @@ def explorer_data(
         ],
         "rounds": rounds,
         "models": [
-            {"label": m, "ours": m in ours, "on": m not in hidden}
+            {
+                "label": m,
+                "ours": m in ours,
+                "on": m not in hidden,
+                "light": colours[m][0],
+                "dark": colours[m][1],
+            }
             for m in models
         ],
         "data": data,

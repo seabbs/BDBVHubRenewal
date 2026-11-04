@@ -437,7 +437,6 @@ def main() -> int:
     pp = sub.add_parser("plot-ppc")
     pp.add_argument("--ppc", required=True)
     pp.add_argument("--out", required=True)
-    sub.add_parser("chosen-model")
     b = sub.add_parser("bvd")
     b.add_argument("--vintages", nargs="*", default=None)
     hid = sub.add_parser("hub-id")
@@ -463,9 +462,6 @@ def main() -> int:
         "plot-submission": cmd_plot,
         "plot-ppc": cmd_plot,
         "coherence": cmd_coherence,
-        "chosen-model": lambda _a: (
-            print(os.environ.get("FAKE_CHOSEN_MODEL") or "renewal") or 0
-        ),
         "bvd": lambda _a: 0,
         "hub-id": lambda a: (
             print(

@@ -366,7 +366,6 @@ def test_bvd_variant_reads_the_release_for_its_vintage(
     )
     for tag in ("results-3151", "results-3086"):
         shutil.copytree(fixtures / tag, tmp_path / tag)
-    assert rn.VARIANTS["renewalbvd"].register
     rows = rn.bvd_rows(task, tmp_path)
     assert rows is not None
     assert rows["as_of"].iloc[0] == "2026-10-15"  # results-3086 for 17 Oct

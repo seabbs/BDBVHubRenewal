@@ -443,11 +443,6 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="A model with its own hub id (`[models]` in config/hub.toml).",
     )
-    cho = sub.add_parser(
-        "chosen-model",
-        help="Print the model chosen in the model choice record.",
-    )
-    cho.add_argument("--backtest-config", default="config/backtest.toml")
 
     cmp = sub.add_parser(
         "compare-hub", help="Compare our forecasts with hub submissions."
@@ -1013,19 +1008,6 @@ def _bvd(args: argparse.Namespace) -> int:  # pragma: no cover - network
     return 0
 
 
-def _chosen_model(args: argparse.Namespace) -> int:
-    from bdbvhubrenewal.evaluation.heldout import load_model_choices
-
-    choices = load_model_choices(
-        bt.load_config(args.backtest_config).model_choice
-    )
-    if not choices:
-        print("ERROR: no model has been chosen.", file=sys.stderr)
-        return 1
-    print(choices[-1].model)
-    return 0
-
-
 def _compare_hub(args: argparse.Namespace) -> int:
     from bdbvhubrenewal.evaluation import hubcompare as hc
 
@@ -1165,8 +1147,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         print(model_id(abbr))
         return 0
-    if args.command == "chosen-model":
-        return _chosen_model(args)
     if args.command == "compare-hub":
         return _compare_hub(args)
     if args.command == "freeze-round":

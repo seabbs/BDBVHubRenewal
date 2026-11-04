@@ -10,8 +10,7 @@ Two prerequisites cannot be checked from here: the token's scopes (the
 secret's value is never readable) and the hub organisers' approval of
 the bot's first pull request. `render` lists them at the end.
 
-The model and hub id follow the same rule as `submit.yml`: the
-repository variables `HUB_MODEL` and `HUB_MODEL_ID` when set, otherwise
+The model and hub id follow the same rule as `submit.yml`:
 `[submission] model` in `config/hub.toml` and the id of the first model
 there with `submit = true`. Only models with `submit = true` need metadata.
 """
@@ -418,9 +417,8 @@ def check_metadata(metadata_dir: Path, model_id: str) -> Check:
     return Check("metadata", "ok", f"{path} names `{model_id}`")
 
 
-def check_model(configured: str, override: str = "") -> Check:
+def check_model(model: str) -> Check:
     """The model the renewal track submits, as `submit.yml` resolves it."""
-    model = override or configured
     if not model:
         return Check(
             "model",
@@ -428,8 +426,7 @@ def check_model(configured: str, override: str = "") -> Check:
             "no `[submission] model` in config/hub.toml",
             "Set `[submission] model` in config/hub.toml.",
         )
-    source = "HUB_MODEL" if override else "config/hub.toml"
-    return Check("model", "ok", f"submits `{model}` ({source})")
+    return Check("model", "ok", f"submits `{model}` (config/hub.toml)")
 
 
 def check_registered(runner: Runner, hub: str, model_id: str) -> Check:
@@ -532,7 +529,7 @@ def run_checks(runner: Runner, s: Settings) -> list[Check]:
     checks = [check_gh(runner), check_hub(runner, s.hub)]
     values, mode = read_variables(runner, s.repo)
     fork = values.get("HUB_FORK") or s.fork_default
-    model_id = values.get("HUB_MODEL_ID") or s.model_id_default
+    model_id = s.model_id_default
     checks += check_fork(runner, fork, s.hub)
     checks.append(check_environment(runner, s.repo))
     checks += check_secret(runner, s.repo, s.now)
@@ -552,7 +549,7 @@ def run_checks(runner: Runner, s: Settings) -> list[Check]:
                 name=f"hub model id {other}",
             ),
         ]
-    checks.append(check_model(s.configured_model, values.get("HUB_MODEL", "")))
+    checks.append(check_model(s.configured_model))
     if s.opted_in:
         checks.append(Check("opt-in", "ok", "submits " + ", ".join(s.opted_in)))
     else:
