@@ -14,7 +14,7 @@ import numpyro
 from jax import Array
 from jax.typing import ArrayLike
 from pyrenew.latent import SubpopulationInfections
-from pyrenew.latent.base import LatentSample
+from pyrenew.latent.base import LatentSample, PopulationStructure
 from pyrenew.math import r_approx_from_R
 from pyrenew.metaclass import RandomVariable
 
@@ -63,9 +63,7 @@ def coupled_renewal(
     rt: Array,
     gen_int: Array,
     mixing: Array,
-    susceptible0: Array,
-    deplete: bool = True,
-    pool: Array | float = 1.0,
+    pool: Array | float | None = None,
     seeding: Array | None = None,
 ) -> tuple[Array, Array, Array]:
     r"""Run a per-capita renewal with importation and depletion.
@@ -88,30 +86,29 @@ def coupled_renewal(
     rates near 1e-6, which makes the gradient noisy and stalls NUTS.
     To first order in $y$ it is the linear-depletion renewal $x = S y / \nu$
     (the NumPy reference in `tests/model/numpy_reference.py`). Without
-    depletion $x_p(t) = y_p(t)$.
+    a pool there is no depletion and $x_p(t) = y_p(t)$.
 
-    PyRenew's renewal scan (`compute_infections_from_rt`) runs each
-    column on its own and its feedback term only looks back one
-    generation interval, so it cannot carry transfer between provinces
-    or cumulative depletion. Hence this scan.
+    PyRenew's renewal scans (`compute_infections_from_rt` and, after the
+    pinned commit, `compute_infections_from_rt_with_mobility`) carry no
+    transfer between provinces with depletion of a pool $\nu$. Hence
+    this scan, written as theirs: a pure function of the seed, $R$ and
+    the generation interval, called from the latent process.
 
     Parameters
     ----------
     I0 : Array
         Per-capita infections in the seeding period, shape `(n_init, P)`.
-        Only the last `len(gen_int)` rows are used.
+        All rows count towards depletion; the last `len(gen_int)` rows
+        start the renewal.
     rt : Array
         Reproduction numbers after seeding, shape `(n, P)`.
     gen_int : Array
         Generation interval pmf, element 0 at lag 1 (PyRenew convention).
     mixing : Array
         Mixing matrix $W$, shape `(P, P)`.
-    susceptible0 : Array
-        Susceptibles per resident after seeding, shape `(P,)`.
-    deplete : bool, optional
-        Apply susceptible depletion.
     pool : Array, optional
-        Effective share of the population at risk, $\nu$.
+        Effective share of the population at risk, $\nu$. `None`
+        turns depletion off.
     seeding : Array, optional
         Seed infections per resident added to $y_p(t)$, `(n, P)`, for
         provinces seeded after the start.
@@ -130,9 +127,11 @@ def coupled_renewal(
     # The susceptible share of the pool is carried on the log scale:
     # S(t + 1) = S(t) exp(-y / nu) exactly, so log S needs no subtraction
     # of nearly equal numbers, and 1 - exp(-y / nu) is taken by expm1.
-    log_share0 = jnp.log(jnp.clip(susceptible0 / pool, 1e-30, 1.0))
-    if not deplete:
-        log_share0 = jnp.zeros_like(log_share0)
+    if pool is None:
+        log_share0 = jnp.zeros(rt.shape[1:])
+    else:
+        susceptible0 = jnp.clip(pool - I0.sum(axis=0), 0.0, pool)
+        log_share0 = jnp.log(jnp.clip(susceptible0 / pool, 1e-30, 1.0))
 
     if seeding is None:
         seeding = jnp.zeros_like(rt)
@@ -146,11 +145,11 @@ def coupled_renewal(
         imported = r_t * (off @ force)
         y = r_t * (mixing @ force) + seed_t
         share = jnp.exp(log_share)
-        if deplete:
+        if pool is None:
+            x = y
+        else:
             x = -pool * share * jnp.expm1(-y / pool)
             log_share = log_share - y / pool
-        else:
-            x = y
         hist = jnp.concatenate([hist[1:], x[None, :]])
         from_imports = x * jnp.where(
             y > 0, imported / jnp.where(y > 0, y, 1), 0
@@ -163,103 +162,53 @@ def coupled_renewal(
     return x, r_eff, from_imports
 
 
-class LearntKernel(RandomVariable):
-    r"""Gravity importation kernel with a learnt decay and destination weights.
+class Importation(RandomVariable):
+    r"""Per-capita mixing matrix from an importation kernel and share.
 
-    $$\log K_{qp} = \log N_p - D_{qp} / (300\,\text{km} \cdot e^{\kappa})
-    + w_p + c_q, \qquad \kappa \sim N(0, 1),$$
+    $$W = (1 - \varepsilon) I + \varepsilon
+    \operatorname{diag}(1/f) K^\top \operatorname{diag}(f),$$
 
-    with $w = \sigma_w Q z$ on the sum-to-zero basis (destinations
-    among the modelled provinces only), $z \sim N(0, 1)$,
-    $\sigma_w \sim N^+(0, 0.5)$, and $c_q$ normalising each origin's
-    row to one, which holds its export total, so the importation scale
-    stays with $\varepsilon$ (BVDOutbreakSize #1030, decay and
-    destination weights). With $\kappa = 0$ and $w = 0$ it is the gravity
-    kernel. All on the log scale (`log_softmax`).
-
-    `sample` returns the kernel between modelled provinces. The kernel
-    from them to provinces with no cases (gravity with the learnt decay,
-    no weights) is kept as `import_kernel` for `OnsetStreams` in the
-    same model run.
+    from `mixing_matrix`, with $K$ from `kernel_rv` (row-normalised,
+    rows are origins, zero diagonal), $\varepsilon$ from `share_rv` and
+    the population fractions $f$ passed at sample time. It plays the
+    part of PyRenew's `mobility_matrix_rv`, as one component the latent
+    process calls, so a fixed and a learnt kernel compose alike.
 
     Parameters
     ----------
     name : str
-        Prefix for the sample sites.
-    distances : array_like
-        Distances in km between all provinces, modelled first, `(P+Q, P+Q)`.
-    populations : array_like
-        Populations, `(P + Q,)`.
-    n_active : int
-        Number of modelled provinces $P$.
-    decay_km : float, optional
-        Prior median of the decay.
-    weight_sd : float, optional
-        Scale of the half-normal prior on $\sigma_w$.
+        Name of the component.
+    kernel_rv : RandomVariable
+        Returns $K$, shape `(P, P)`. A fixed kernel is a
+        `DeterministicVariable`.
+    share_rv : RandomVariable
+        Returns $\varepsilon$, the share of transmission sent to other
+        provinces.
     """
 
     def __init__(
-        self,
-        name: str,
-        distances: ArrayLike,
-        populations: ArrayLike,
-        n_active: int,
-        decay_km: float = 300.0,
-        weight_sd: float = 0.5,
+        self, name: str, kernel_rv: RandomVariable, share_rv: RandomVariable
     ) -> None:
         super().__init__(name=name)
-        self.distances = jnp.asarray(distances)
-        self.log_pop = jnp.log(jnp.asarray(populations))
-        self.n_active = n_active
-        self.decay_km = decay_km
-        self.weight_sd = weight_sd
-        self.import_kernel: Array | None = None
+        self.kernel_rv = kernel_rv
+        self.share_rv = share_rv
 
-    def sample(self, **kwargs: object) -> Array:
-        """Sample the kernel between modelled provinces.
+    def sample(self, fractions: ArrayLike, **kwargs: object) -> Array:
+        """Sample the mixing matrix.
 
         Parameters
         ----------
+        fractions : array_like
+            Population share of each province, `(P,)`.
         **kwargs
             Ignored, for the PyRenew interface.
 
         Returns
         -------
         Array
-            Row-normalised, zero diagonal, `(P, P)`.
+            $W$, shape `(P, P)`.
         """
-        import numpyro.distributions as dist
-
-        from .rt import sum_to_zero_basis
-
-        p = self.n_active
-        log_decay = numpyro.sample(
-            f"{self.name}_log_decay", dist.Normal(0.0, 1.0)
-        )
-        base = self.log_pop[None, :] - self.distances / (
-            self.decay_km * jnp.exp(log_decay)
-        )
-        self_flow = jnp.eye(base.shape[0], dtype=bool)
-        base = jnp.where(self_flow, -jnp.inf, base)
-        if p > 1:
-            sd = numpyro.sample(
-                f"{self.name}_weight_sd", dist.HalfNormal(self.weight_sd)
-            )
-            z = numpyro.sample(
-                f"{self.name}_weight_z", dist.Normal(0.0, 1.0).expand([p - 1])
-            )
-            w = sd * (jnp.asarray(sum_to_zero_basis(p)) @ z)
-        else:
-            w = jnp.zeros(1)
-        numpyro.deterministic(f"{self.name}_destination_weights", w)
-        active = jax.nn.log_softmax(base[:p, :p] + w[None, :], axis=1)
-        kernel = jnp.exp(active)
-        numpyro.deterministic(f"{self.name}_kernel", kernel)
-        if base.shape[0] > p:
-            self.import_kernel = jnp.exp(jax.nn.log_softmax(base[:p], axis=1))[
-                :, p:
-            ]
-        return kernel
+        return mixing_matrix(self.kernel_rv(), self.share_rv(), fractions)
 
 
 class MetapopulationInfections(SubpopulationInfections):
@@ -267,14 +216,16 @@ class MetapopulationInfections(SubpopulationInfections):
 
     Rt follows `SubpopulationInfections`: a national temporal process
     plus sum-to-zero province deviations,
-    $\log R_p(t) = \log R(t) + \delta_p(t)$.
+    $\log R_p(t) = \log R(t) + \delta_p(t)$, here sampled on the
+    sum-to-zero basis (`pooled_walk`).
     Seeding is PyRenew's exponential seeding at the initial growth rate,
     but anchored so that `I0_rv` is the level on the first data day
     rather than the first seeding day.
-    The renewal step is replaced by `coupled_renewal`, which sends a share
-    $\varepsilon$ of transmission to other provinces through a
-    row-normalised kernel and depletes each province's effective
-    susceptible pool.
+    The renewal is `coupled_renewal`, which sends a share $\varepsilon$
+    of transmission to other provinces through the mixing matrix of
+    `mixing_rv` and depletes each province's effective susceptible pool.
+    `sample` runs the steps of PyRenew's `BaseSubpopulationInfections`
+    (after the pinned commit), with the renewal in `_infections_from_rt`.
 
     Infections are per resident, so the population fractions passed at
     sample time set the transfer weights. Only a share $\nu$
@@ -284,15 +235,11 @@ class MetapopulationInfections(SubpopulationInfections):
 
     Parameters
     ----------
-    kernel : Array, LearntKernel or None
-        Row-normalised importation kernel (rows are origins), fixed or
-        learnt. `None` turns coupling off.
-    importation_rv : RandomVariable or None
-        Importation share $\varepsilon$. Needed when `kernel` is given.
-    deplete : bool
-        Apply susceptible depletion.
+    mixing_rv : Importation, optional
+        Returns the mixing matrix $W$ given the population fractions.
+        `None` turns coupling off.
     effective_population_rv : RandomVariable, optional
-        $\nu$. Needed with depletion.
+        $\nu$. `None` turns susceptible depletion off.
     rt_observation : RtPseudoObservation, optional
         External Rt estimates as a tempered pseudo-observation.
     seed_days : array_like, optional
@@ -309,27 +256,89 @@ class MetapopulationInfections(SubpopulationInfections):
     def __init__(
         self,
         *,
-        kernel: Array | None = None,
-        importation_rv: RandomVariable | None = None,
-        deplete: bool = True,
+        mixing_rv: RandomVariable | None = None,
         effective_population_rv: RandomVariable | None = None,
         rt_observation: RtPseudoObservation | None = None,
         seed_days: Array | None = None,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
-        self.seed_days = None if seed_days is None else np.asarray(seed_days)
-        self.rt_observation = rt_observation
-        if deplete and effective_population_rv is None:
-            raise ValueError("Depletion needs effective_population_rv.")
+        self.mixing_rv = mixing_rv
         self.effective_population_rv = effective_population_rv
-        if (kernel is None) != (importation_rv is None):
-            raise ValueError("kernel and importation_rv go together.")
-        if kernel is not None and not isinstance(kernel, RandomVariable):
-            kernel = jnp.asarray(kernel)
-        self.kernel = kernel
-        self.importation_rv = importation_rv
-        self.deplete = deplete
+        self.rt_observation = rt_observation
+        self.seed_days = None if seed_days is None else np.asarray(seed_days)
+
+    def _initial_infections(
+        self, I0: Array, rt0: Array, gen_int: Array, n_days: int
+    ) -> tuple[Array, Array | None]:
+        """Seed infections, and the later seeding input of late provinces.
+
+        The seed `I0` is set on the first data day and projected back
+        over the seeding period at the initial growth rate. The rate is
+        clipped so a steep early decline cannot project a seed larger
+        than the pool. Late provinces start from 1e-6 of their seed
+        level (PyRenew needs a positive start) and take the seed over
+        their first case week.
+
+        Returns
+        -------
+        tuple
+            Infections per resident over the seeding period,
+            `(n_init, P)`, and the seeding input after it, `(n_days, P)`,
+            or None.
+        """
+        n_init = self.n_initialization_points
+        r0 = r_approx_from_R(R=rt0, g=gen_int, n_newton_steps=4)
+        r_seed = jnp.clip(r0, -0.05, 0.3)
+        I0_all = I0[None, :] * jnp.exp(
+            r_seed[None, :] * (jnp.arange(n_init) - n_init)[:, None]
+        )
+        if self.seed_days is None:
+            return I0_all, None
+        late = jnp.asarray(self.seed_days > 0)
+        I0_all = jnp.where(late[None, :], 1e-6 * I0_all, I0_all)
+        days = np.arange(n_days)[:, None]
+        window = (days >= self.seed_days) & (days < self.seed_days + 7)
+        seeding = jnp.asarray(window & late) * I0[None, :]
+        return I0_all, seeding
+
+    def _infections_from_rt(
+        self,
+        rt_raw: Array,
+        I0: Array,
+        gen_int: Array,
+        pop: PopulationStructure,
+        seeding: Array | None = None,
+    ) -> tuple[Array, Array]:
+        r"""Infections and adjusted Rt after seeding, by `coupled_renewal`.
+
+        Records the infections from importation as `infections_imported`.
+
+        Returns
+        -------
+        tuple of Array
+            Infections per resident and $R_p(t) S_p(t) / \nu$, both
+            `(n_days, P)`.
+        """
+        mixing = (
+            jnp.eye(pop.n_subpops)
+            if self.mixing_rv is None
+            else self.mixing_rv(fractions=pop.fractions)
+        )
+        pool = (
+            None
+            if self.effective_population_rv is None
+            else self.effective_population_rv()
+        )
+        post, r_eff, imported = coupled_renewal(
+            I0, rt_raw, gen_int, mixing, pool, seeding
+        )
+        with numpyro.handlers.scope(prefix=self.name, divider="::"):
+            numpyro.deterministic(
+                "infections_imported",
+                jnp.vstack([jnp.zeros_like(I0), imported]),
+            )
+        return post, r_eff
 
     def sample(
         self,
@@ -359,66 +368,23 @@ class MetapopulationInfections(SubpopulationInfections):
         """
         pop = self._parse_and_validate_fractions(subpop_fractions)
         n_init = self.n_initialization_points
-        n_total = n_init + n_days_post_init
         log_rt_baseline, log_rt = pooled_walk(
             self.baseline_rt_process,
             self.subpop_rt_deviation_process,
             self.log_rt_time_0_rv(),
-            n_total,
+            n_init + n_days_post_init,
             pop.n_subpops,
             "log_rt",
             first_day_dow,
         )
         rt = jnp.exp(log_rt)
         gen_int = self.gen_int_rv()
-
         I0 = self._validate_and_prepare_I0(jnp.asarray(self.I0_rv()), pop)
-        r0 = r_approx_from_R(R=rt[0], g=gen_int, n_newton_steps=4)
-        # The seed is set on the first data day and projected back over
-        # the seeding period at the initial growth rate. The rate is
-        # clipped so a steep early decline cannot project a seed larger
-        # than the pool.
-        r_seed = jnp.clip(r0, -0.05, 0.3)
-        I0_all = I0[None, :] * jnp.exp(
-            r_seed[None, :] * (jnp.arange(n_init) - n_init)[:, None]
+        I0_all, seeding = self._initial_infections(
+            I0, rt[0], gen_int, n_days_post_init
         )
-
-        if self.kernel is None:
-            mixing = jnp.eye(pop.n_subpops)
-        else:
-            kernel = (
-                self.kernel()
-                if isinstance(self.kernel, RandomVariable)
-                else self.kernel
-            )
-            if self.importation_rv is None:
-                raise ValueError("A kernel needs importation_rv.")
-            mixing = mixing_matrix(kernel, self.importation_rv(), pop.fractions)
-        seeding = None
-        if self.seed_days is not None:
-            late = jnp.asarray(self.seed_days > 0)
-            # Late provinces start from 1e-6 of their seed level (PyRenew
-            # needs a positive start) and take the seed over their first
-            # case week.
-            I0_all = jnp.where(late[None, :], 1e-6 * I0_all, I0_all)
-            days = np.arange(rt.shape[0] - n_init)[:, None]
-            window = (days >= self.seed_days) & (days < self.seed_days + 7)
-            seeding = jnp.asarray(window & (self.seed_days > 0)) * I0[None, :]
-        pool: Array | float = 1.0
-        if self.deplete:
-            if self.effective_population_rv is None:
-                raise ValueError("Depletion needs effective_population_rv.")
-            pool = self.effective_population_rv()
-        susceptible0 = jnp.clip(pool - I0_all.sum(axis=0), 0.0, pool)
-        post, r_eff, imported = coupled_renewal(
-            I0_all,
-            rt[n_init:],
-            gen_int,
-            mixing,
-            susceptible0,
-            self.deplete,
-            pool,
-            seeding,
+        post, r_eff = self._infections_from_rt(
+            rt[n_init:], I0_all, gen_int, pop, seeding
         )
         infections = jnp.vstack([I0_all, post])
         aggregate = infections @ pop.fractions
@@ -429,10 +395,11 @@ class MetapopulationInfections(SubpopulationInfections):
             numpyro.deterministic(
                 "rt_subpop_adjusted", jnp.vstack([rt[:n_init], r_eff])
             )
-            numpyro.deterministic(
-                "infections_imported",
-                jnp.vstack([jnp.zeros_like(I0_all), imported]),
-            )
         if self.rt_observation is not None:
-            self.rt_observation.sample(rt, infections, n_init, pop.fractions)
+            self.rt_observation(
+                rt=rt,
+                infections=infections,
+                n_init=n_init,
+                fractions=pop.fractions,
+            )
         return LatentSample(aggregate=aggregate, all_subpops=infections)

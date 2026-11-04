@@ -56,7 +56,6 @@ def test_active_set_follows_the_data(outbreak, sim_tables, table):
         *LADDER.values(),
         ModelConfig(delay="gamma"),
         ModelConfig(delay="lognormal"),
-        ModelConfig(coupling="learnt"),
     ],
 )
 def test_model_sites_and_shapes(outbreak, sim_tables, table, cfg):
@@ -192,25 +191,6 @@ def test_real_data_kernels_and_log_density_are_finite(table):
             model.sample, (), model_args(model, data), sampled
         )[0]
         assert np.isfinite(float(ld))
-
-
-def test_learnt_kernel_is_gravity_at_prior_centre(sim_vintage):
-    from bdbvhubrenewal.model import LearntKernel
-
-    data = sim_vintage
-    k = LearntKernel("k", data.distances, data.all_populations, 4)
-    sub = numpyro.handlers.substitute(
-        k.sample,
-        data={
-            "k_log_decay": 0.0,
-            "k_weight_z": np.zeros(3),
-            "k_weight_sd": 0.3,
-        },
-    )
-    kernel = np.asarray(sub())
-    np.testing.assert_allclose(kernel, data.kernel, rtol=1e-4, atol=1e-6)
-    np.testing.assert_allclose(kernel.sum(axis=1), 1.0, rtol=1e-5)
-    assert k.import_kernel.shape == (4, 2)
 
 
 def test_single_patch_locations_are_independent(outbreak, sim_tables, table):

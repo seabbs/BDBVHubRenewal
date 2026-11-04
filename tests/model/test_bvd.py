@@ -63,6 +63,7 @@ def test_pseudo_observation_density_is_analytic():
     rt = jnp.full((70, 2), 1.2).at[:, 1].set(0.8)
     inf = jnp.ones((70, 2)).at[:, 1].set(3.0)
     obs = RtPseudoObservation(
+        "bvd",
         0.5,
         14,
         [[True, True], [False, True]],
@@ -129,7 +130,7 @@ def test_group_rt_weights_by_counts_not_per_resident():
     # resident it has ten times the onsets and dominates national Rt.
     rt = jnp.ones((70, 2)).at[:, 1].set(2.0)
     per_resident = jnp.ones((70, 2))
-    obs = RtPseudoObservation(1.0, 14, [[True, True]], [0.0], [0.1], [0])
+    obs = RtPseudoObservation("bvd", 1.0, 14, [[True, True]], [0.0], [0.1], [0])
     group, national = obs.log_group_rt(
         rt, per_resident, 14, jnp.array([10 / 11, 1 / 11])
     )
