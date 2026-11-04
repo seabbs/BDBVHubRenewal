@@ -126,6 +126,37 @@ def test_relative_wis_is_against_randomwalk(
         assert rel.loc[(tgt, "randomwalk"), "rel_wis"] == pytest.approx(1.0)
 
 
+def test_relative_wis_uses_only_matched_baseline_forecasts() -> None:
+    def row(model: str, week: str, wis: float) -> dict[str, object]:
+        return {
+            "model": model,
+            "target": "reported",
+            "origin": "2026-10-17",
+            "truth_vintage": "2026-10-24",
+            "location": "CD",
+            "target_end_date": week,
+            "wis": wis,
+            "log_wis": wis / 10,
+            "coverage_50": 1.0,
+            "coverage_90": 1.0,
+            "bias": 0.5,
+        }
+
+    scores = pd.DataFrame(
+        [
+            row("randomwalk", "2026-10-17", 2.0),
+            row("a", "2026-10-17", 1.0),
+            # No randomwalk forecast for this week, so it is left out.
+            row("a", "2026-10-24", 100.0),
+        ]
+    )
+    rel = relative_wis(scores).set_index("model")
+    assert rel.loc["a", "n"] == 1
+    assert rel.loc["a", "rel_wis"] == pytest.approx(0.5)
+    assert rel.loc["a", "rel_log_wis"] == pytest.approx(0.5)
+    assert rel.loc["a", "bias"] == pytest.approx(0.5)
+
+
 def test_stored_forecasts_are_scored_on_both_targets(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:

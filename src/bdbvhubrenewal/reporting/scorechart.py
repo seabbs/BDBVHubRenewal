@@ -17,7 +17,22 @@ import pandas as pd
 
 from bdbvhubrenewal.reporting.plots import model_colour
 
-__all__ = ["score_chart_data", "score_chart_html", "write_score_chart"]
+__all__ = [
+    "OVERALL_METRICS",
+    "score_chart_data",
+    "score_chart_html",
+    "write_score_chart",
+]
+
+OVERALL_METRICS: Mapping[str, tuple[str, float | None]] = {
+    "rel_wis": ("Relative WIS", 1.0),
+    "rel_log_wis": ("Relative log WIS", 1.0),
+    "coverage_50": ("50% coverage", 0.5),
+    "coverage_90": ("90% coverage", 0.9),
+    "bias": ("Bias", 0.0),
+}
+"""Columns of `relative_wis` in the overall figures, with each label and
+the line of a perfect or baseline score. Bias is in -1 to 1."""
 
 
 def score_chart_data(

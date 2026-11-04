@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 import matplotlib.dates as mdates
 import numpy as np
@@ -17,6 +17,7 @@ from bdbvhubrenewal.reporting.plots import (
     _date_axis,
     _grid,
 )
+from bdbvhubrenewal.reporting.scorechart import OVERALL_METRICS
 
 __all__ = ["plot_release_nowcasts"]
 
@@ -124,50 +125,71 @@ def plot_relative_overall(
     models: Sequence[str],
     baseline: str = "randomwalk",
     mode: str = "light",
+    x: str = "pool",
+    metrics: Mapping[str, tuple[str, float | None]] = OVERALL_METRICS,
+    colours: Mapping[str, tuple[str, str]] | None = None,
 ) -> Figure:
-    """Plot each model's relative WIS and 90% coverage by pool.
+    """Plot each model's overall scores by pool, a panel per metric.
 
     Parameters
     ----------
     table : pandas.DataFrame
-        `relative_wis` output by `pool`, for one target.
+        `relative_wis` output by `x`, for one target.
     models : sequence of str
         Models in registry order. Those absent from a pool are skipped.
     baseline : str
-        The model WIS is relative to.
+        The model WIS is relative to, named in the labels.
     mode : str
         `"light"` or `"dark"`.
+    x : str
+        The column of the groups, `national`, `provinces` and `zones`.
+    metrics : mapping of str to (str, float or None)
+        Metric column to its label and reference line, as
+        `OVERALL_METRICS`.
+    colours : mapping of str to (str, str), optional
+        Model to its light and dark colour. Defaults to the registry
+        colours by position in `models`.
 
     Returns
     -------
     matplotlib.figure.Figure
-        Two panels of bars grouped by pool. The first has relative WIS,
-        with a line at 1. The second has 90% interval coverage, with a
-        line at 0.9.
+        A panel of bars grouped by pool per metric, each with a dotted line
+        at its reference.
     """
     ink = THEMES[mode]
     palette = MODEL_COLOURS[mode]
-    have_pools = set(table["pool"])
+    pick = 0 if mode == "light" else 1
+    have_pools = set(table[x])
     pools = [p for p in ("national", "provinces", "zones") if p in have_pools]
-    fig, axes = _grid(2, 2, width=3.8, height=2.8)
+    fig, axes = _grid(len(metrics), 3, width=3.4, height=2.6)
     width = 0.8 / len(models)
     for i, m in enumerate(models):
-        rows = table.loc[table["model"] == m].set_index("pool")
+        rows = table.loc[table["model"] == m].set_index(x)
         have = [p for p in pools if p in rows.index]
         shift = (i - (len(models) - 1) / 2) * width
-        x = [pools.index(p) + shift for p in have]
-        colour = palette[i % len(palette)]
-        axes[0].bar(x, rows.loc[have, "rel_wis"], width, color=colour, label=m)
-        axes[1].bar(x, rows.loc[have, "coverage_90"], width, color=colour)
-    axes[0].axhline(1, color=ink["muted"], lw=1, ls=":")
-    axes[1].axhline(0.9, color=ink["muted"], lw=1, ls=":")
-    axes[0].set_ylabel(f"WIS relative to {baseline}")
-    axes[1].set_ylabel("90% interval coverage")
-    axes[1].set_ylim(0, 1)
-    for ax in axes:
+        at = [pools.index(p) + shift for p in have]
+        colour = colours[m][pick] if colours else palette[i % len(palette)]
+        for ax, key in zip(axes, metrics, strict=True):
+            ax.bar(at, rows.loc[have, key], width, color=colour, label=m)
+    for ax, (key, (label, ref)) in zip(axes, metrics.items(), strict=True):
+        if ref is not None:
+            ax.axhline(ref, color=ink["muted"], lw=1, ls=":")
+        if key.startswith("rel_"):
+            label = f"{label} to {baseline}"
+        if key.startswith("coverage"):
+            ax.set_ylim(0, 1)
+        if key == "bias":
+            ax.set_ylim(-1, 1)
+        ax.set_ylabel(label)
         ax.set_axisbelow(True)
         ax.set_xticks(range(len(pools)), [p.capitalize() for p in pools])
+        ax.set_xlim(-0.5, len(pools) - 0.5)
+    handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(
-        fontsize=7, loc="outside lower center", ncols=min(len(models), 5)
+        handles,
+        labels,
+        fontsize=7,
+        loc="outside lower center",
+        ncols=min(len(models), 5),
     )
     return fig

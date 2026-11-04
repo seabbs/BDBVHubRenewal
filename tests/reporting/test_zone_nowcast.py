@@ -75,6 +75,8 @@ def _scores() -> pd.DataFrame:
                 "location": "CD-IT-01",
                 "target_end_date": "2026-10-24",
                 "wis": wis,
+                "log_wis": wis,
+                "bias": 0.0,
                 "coverage_50": 1.0,
                 "coverage_90": 1.0,
             }
