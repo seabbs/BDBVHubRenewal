@@ -45,6 +45,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import epiweek_end
+from bdbvhubrenewal.data.releases import release_id
 
 __all__ = [
     "COHERENCE_HANDLING",
@@ -398,6 +399,7 @@ def tidy_daily(daily_csv: Path | str, level: str = "province") -> pd.DataFrame:
     wide = wide.rename(
         columns={"as_of": "vintage", "target_end_date": "onset_date"}
     )
+    wide["vintage"] = wide["vintage"].map(release_id)
     wide.columns.name = None
     out = wide[["vintage", "location", "onset_date", "observed", "imputed"]]
     out = out.astype({"observed": "int64", "imputed": "int64"})
@@ -440,6 +442,7 @@ def tidy_target(
         & ts["location_type"].isin(["country", "province"])
     ]
     ts = ts.rename(columns={"as_of": "vintage", "observation": "total"})
+    ts["vintage"] = ts["vintage"].map(release_id)
     split = _weekly_split(daily)
     out = ts.merge(
         split, on=["vintage", "location", "target_end_date"], how="left"
@@ -496,6 +499,7 @@ def tidy_health_zones(time_series_csv: Path | str) -> pd.DataFrame:
     ].copy()
     hz["province"] = hz["location"].str.slice(0, 5)
     hz = hz.rename(columns={"as_of": "vintage", "observation": "total"})
+    hz["vintage"] = hz["vintage"].map(release_id)
     cols = [
         "vintage",
         "location",
@@ -571,7 +575,7 @@ def tidy_delays(
         frames.append(
             pd.DataFrame(
                 {
-                    "vintage": vintage,
+                    "vintage": release_id(vintage),
                     "location": loc,
                     "location_name": loc.map(names),
                     "onset_week": df["week_ending"].astype(str),
