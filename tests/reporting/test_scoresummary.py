@@ -9,6 +9,7 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.evaluation.nowcast import relative_energy, relative_wis
+from bdbvhubrenewal.evaluation.scoring import relative_skill
 from bdbvhubrenewal.reporting.scoresummary import summary_html, summary_rows
 
 SUMMARISE = Path(__file__).parents[2] / "docs" / "javascripts" / "summarise.js"
@@ -192,3 +193,35 @@ def test_browser_summary_by_horizon_matches_relative_wis() -> None:
         exp = want.loc[(0, MODELS[row["model"]])]
         assert row["n"] == exp["n"]
         assert row["rel"]["wis"] == pytest.approx(exp["rel_wis"], abs=1e-3)
+
+
+def test_browser_relative_scores_are_mean_over_mean_like_relative_skill() -> (
+    None
+):
+    # randomwalk has no forecast for one place and week, so the browser and
+    # relative_skill both leave it out and divide mean by mean. The mean of
+    # per-forecast ratios would differ.
+    scores = _scores()
+    data = summary_rows(scores, MODELS, COLOURS, {})
+    got = _node(data, "function () { return true; }")
+    want = relative_skill(
+        scores,
+        metrics=("wis", "log_wis"),
+        match_on=("origin", "truth_vintage", "location", "target_end_date"),
+    ).set_index("model")
+    pair = scores.merge(
+        scores.loc[scores["model"] == "randomwalk"],
+        on=["origin", "truth_vintage", "location", "target_end_date"],
+        suffixes=("", "_base"),
+    )
+    ratios = (pair["wis"] / pair["wis_base"]).groupby(pair["model"]).mean()
+    for row in got:
+        model = MODELS[row["model"]]
+        exp = want.loc[model]
+        assert row["n"] == exp["n"]
+        assert row["rel"]["wis"] == pytest.approx(exp["relative_wis"], abs=1e-6)
+        assert row["rel"]["log_wis"] == pytest.approx(
+            exp["relative_log_wis"], abs=1e-6
+        )
+        if model != "randomwalk":
+            assert row["rel"]["wis"] != pytest.approx(ratios[model], abs=1e-3)

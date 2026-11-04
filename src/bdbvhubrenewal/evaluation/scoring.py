@@ -420,6 +420,7 @@ def relative_skill(
         "location",
         "target_end_date",
     ),
+    means: Sequence[str] = (),
 ) -> pd.DataFrame:
     """Return each model's mean score divided by the baseline's.
 
@@ -438,19 +439,28 @@ def relative_skill(
         Scores to compare.
     match_on : sequence of str
         Columns that identify the same forecast across models.
+    means : sequence of str
+        Columns to average over the same forecasts, for the model and the
+        baseline.
 
     Returns
     -------
     pandas.DataFrame
-        Columns `model`, the `by` columns, `n` and `relative_<metric>`
-        for each metric. The baseline has 1.
+        Columns `model`, the `by` columns, `n`, each `means` column and
+        its baseline mean `base_<column>`, and `relative_<metric>` for
+        each metric: the model's mean over the baseline's, missing where
+        the baseline's mean is 0. The baseline has 1.
     """
     match = list(dict.fromkeys([*match_on, *by]))
-    base = scores.loc[scores["model"] == baseline, [*match, *metrics]]
+    cols = list(dict.fromkeys([*metrics, *means]))
+    base = scores.loc[scores["model"] == baseline, [*match, *cols]]
     merged = scores.merge(base, on=match, suffixes=("", "_base"))
     group = ["model", *by]
     grp = merged.groupby(group)
     out = grp.size().rename("n").to_frame()
+    for c in means:
+        out[c] = grp[c].mean()
+        out[f"base_{c}"] = grp[f"{c}_base"].mean()
     for m in metrics:
         num = grp[m].mean()
         den = grp[f"{m}_base"].mean()

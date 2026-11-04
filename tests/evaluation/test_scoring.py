@@ -148,3 +148,36 @@ def test_energy_scores_share_cells_and_scale() -> None:
     assert es.loc[("national", "better"), "n_cells"] == 2
     assert set(es.columns) >= {"energy", "log_energy", "n_samples"}
     assert (es["log_energy"] < es["energy"]).all()
+
+
+def test_relative_skill_is_mean_over_mean_on_the_matched_set() -> None:
+    # The model has no forecast for week 3, so it is left out of both
+    # means. Mean over mean is (1 + 9) / (2 + 3) = 2, not the mean of the
+    # ratios (0.5 + 3) / 2.
+    keys = {"kind": "real", "vintage": "v", "reference_date": "r"}
+    scores = pd.DataFrame(
+        [
+            {
+                **keys,
+                "model": m,
+                "location": "CD",
+                "target_end_date": w,
+                "wis": v,
+                "log_wis": v,
+                "bias": b,
+            }
+            for m, w, v, b in (
+                ("randomwalk", "1", 2.0, 0.0),
+                ("randomwalk", "2", 3.0, 0.0),
+                ("randomwalk", "3", 100.0, 0.0),
+                ("a", "1", 1.0, 0.2),
+                ("a", "2", 9.0, 0.4),
+            )
+        ]
+    )
+    rel = relative_skill(scores, means=("wis", "bias")).set_index("model")
+    assert rel.loc["a", "relative_wis"] == pytest.approx(2.0)
+    assert rel.loc["a", "n"] == 2
+    assert rel.loc["a", "wis"] == pytest.approx(5.0)
+    assert rel.loc["a", "base_wis"] == pytest.approx(2.5)
+    assert rel.loc["a", "bias"] == pytest.approx(0.3)

@@ -662,31 +662,17 @@ def relative_wis(
         mean is 0, the coverage of the 50% and 90% intervals and the mean
         `bias`.
     """
-    match = ["target", "origin", "truth_vintage", "location", "target_end_date"]
-    base = scores.loc[scores["model"] == baseline, [*match, "wis", "log_wis"]]
-    pair = scores.merge(
-        base.rename(columns={"wis": "base_wis", "log_wis": "base_log_wis"}),
-        on=match,
+    match = ("target", "origin", "truth_vintage", "location", "target_end_date")
+    rel = relative_skill(
+        scores,
+        baseline,
+        by=by,
+        match_on=match,
+        means=("wis", "log_wis", "coverage_50", "coverage_90", "bias"),
     )
-    out = (
-        pair.groupby([*by, "model"])
-        .agg(
-            n=("wis", "size"),
-            wis=("wis", "mean"),
-            base_wis=("base_wis", "mean"),
-            log_wis=("log_wis", "mean"),
-            base_log_wis=("base_log_wis", "mean"),
-            coverage_50=("coverage_50", "mean"),
-            coverage_90=("coverage_90", "mean"),
-            bias=("bias", "mean"),
-        )
-        .reset_index()
-    )
-    # A zero baseline gives no relative score.
-    out["rel_wis"] = out["wis"] / out["base_wis"].where(out["base_wis"] > 0)
-    out["rel_log_wis"] = out["log_wis"] / out["base_log_wis"].where(
-        out["base_log_wis"] > 0
-    )
+    out = rel.rename(
+        columns={"relative_wis": "rel_wis", "relative_log_wis": "rel_log_wis"}
+    ).sort_values([*by, "model"])
     order = [
         "n",
         "wis",
@@ -697,7 +683,7 @@ def relative_wis(
         "coverage_90",
         "bias",
     ]
-    return out[[*by, "model", *order]]
+    return out[[*by, "model", *order]].reset_index(drop=True)
 
 
 def relative_energy(
