@@ -341,7 +341,8 @@ def test_backtest_sampler_comes_from_the_config(
         "max_tree_depth": 10,
         "chain_method": "parallel",
     }
-    monkeypatch.delenv(SAMPLER_ENV, raising=False)
+    # setenv, not delenv, so the variable apply_sampler writes is undone.
+    monkeypatch.setenv(SAMPLER_ENV, "")
     apply_sampler(cfg)
     assert sampler_settings()["num_warmup"] == 500
     # Settings already in the environment win.
