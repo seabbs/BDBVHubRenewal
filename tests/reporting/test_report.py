@@ -87,16 +87,16 @@ def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
     assert "teamA-weekly" in teams
     assert "CC0-1.0" in teams
     assert "teamA-weekly" in scores
-    assert "relative_wis" in scores
     figures = (gen / "comparison-figures.md").read_text()
     assert "2026-10-24" in figures
     assert (fig / "comparison-2026-10-24.svg").exists()
-    # The overall chart is the headline, with its static figure as the
-    # fallback, and randomwalk starts off as the relative reference.
-    assert not (gen / "comparison-summary.md").exists()
+    # The Backtest summaries lead, with the static figure as the fallback,
+    # and randomwalk starts off as the relative reference.
+    assert "scoresummary-comparison.json" in scores
     assert "comparison-overall.svg" in scores
-    chart = json.loads((fig / "scorechart-comparison.json").read_text())
-    on = {m["name"]: m["on"] for m in chart["models"]}
+    assert 'data-view="place"' in (gen / "comparison-place.md").read_text()
+    data = json.loads((fig / "scoresummary-comparison.json").read_text())
+    on = {m["name"]: m["on"] for m in data["models"]}
     assert on["randomwalk (ours)"] is False
     assert on["teamA-weekly"] is True
     assert (

@@ -50,12 +50,10 @@ from bdbvhubrenewal.evaluation.backtest import (
 )
 from bdbvhubrenewal.evaluation.nowcast import (
     BASELINE,
-    relative_energy,
     release_backtest,
 )
 from bdbvhubrenewal.evaluation.scoring import (
     relative_skill,
-    scale_of,
     summarise_scores,
 )
 from bdbvhubrenewal.forecasters import get_model, list_models
@@ -75,7 +73,6 @@ __all__ = [
     "load_team_metadata",
     "match_vintage",
     "our_forecasts",
-    "overall_comparison",
     "own_hub_ids",
     "resolve_baseline",
     "score_comparison",
@@ -484,7 +481,8 @@ def our_forecasts(
     """Run our models for hub rounds from the matching vintages.
 
     Each model runs on the country and provinces, and again on the health
-    zones with cases at the vintage, as the zone backtest runs them.
+    zones with cases at the vintage, as the zone backtest runs them. Only
+    the zones are kept from the zone run, as it also gives the country.
 
     Parameters
     ----------
@@ -527,8 +525,16 @@ def our_forecasts(
         counts = weekly_zone_counts(daily_zones, vintage)
         here = tuple(z for z in zones if z in set(counts["location"]))
         history = pd.concat([daily, daily_zones])
-        tasks += [zone_task(t, counts, here, history) for t in tasks]
-        fc = run_forecasts(built, tasks)
+        zone = run_forecasts(
+            built, [zone_task(t, counts, here, history) for t in tasks]
+        )
+        fc = pd.concat(
+            [
+                run_forecasts(built, tasks),
+                zone.loc[zone["location"].isin(here)],
+            ],
+            ignore_index=True,
+        )
         fc["source"] = "real"
         frames.append(fc)
     if not frames:
@@ -744,76 +750,6 @@ def summarise_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
         "bias",
     ]
     return out[cols].sort_values([*by, "wis"]).reset_index(drop=True)
-
-
-def overall_comparison(
-    scores: pd.DataFrame, energy: pd.DataFrame, baseline: str
-) -> pd.DataFrame:
-    """Summarise every model over all rounds, nationally and below.
-
-    Parameters
-    ----------
-    scores, energy : pandas.DataFrame
-        The scores and energy scores of `score_comparison`.
-    baseline : str
-        Model that every relative score divides by.
-
-    Returns
-    -------
-    pandas.DataFrame
-        On the reported target and the forecasts the baseline also made,
-        one row per `scale` (`national`, `provinces` or `zones`) and
-        `model`, with `hub` (a hub team's), `n`, `rel_wis`, `rel_log_wis`,
-        `coverage_50`, `coverage_90`, `bias`, and `n_energy` (rounds and
-        releases), `rel_energy` and `rel_log_energy`, as
-        `OVERALL_METRICS`.
-    """
-    match = ["reference_date", "truth_vintage", "location", "target_end_date"]
-    rep = scores.loc[scores["target"] == "reported"].assign(
-        scale=scale_of(scores["location"])
-    )
-    rep = rep.merge(rep.loc[rep["model"] == baseline, match], on=match)
-    rel = relative_skill(
-        rep,
-        baseline,
-        by=("scale",),
-        metrics=("wis", "log_wis"),
-        match_on=match,
-    )
-    joint = relative_energy(
-        energy.loc[energy["target"] == "reported"], ("scale",), baseline
-    )
-    keys = ["scale", "model"]
-    cover = (
-        rep.assign(hub=rep["source"] == "hub")
-        .groupby(keys)
-        .agg(
-            hub=("hub", "all"),
-            coverage_50=("coverage_50", "mean"),
-            coverage_90=("coverage_90", "mean"),
-            bias=("bias", "mean"),
-        )
-        .reset_index()
-    )
-    out = rel.merge(cover, on=keys).merge(joint, on=keys, how="left")
-    out = out.rename(
-        columns={"relative_wis": "rel_wis", "relative_log_wis": "rel_log_wis"}
-    )
-    return out[
-        [
-            *keys,
-            "hub",
-            "n",
-            "rel_wis",
-            "rel_log_wis",
-            "coverage_50",
-            "coverage_90",
-            "bias",
-            "n_energy",
-            "rel_energy",
-            "rel_log_energy",
-        ]
-    ]
 
 
 def forecast_quantiles(forecasts: pd.DataFrame) -> pd.DataFrame:

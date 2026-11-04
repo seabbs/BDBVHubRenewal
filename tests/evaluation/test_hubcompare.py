@@ -194,6 +194,8 @@ def test_our_forecasts_cover_the_hub_weeks(
     assert set(fc["source"]) == {"real"}
     # The model runs at zone level too.
     assert (fc["location"].str.count("-") == 2).any()
+    keys = ["model", "location", "target_end_date", "sample"]
+    assert not fc.duplicated(keys).any()
     assert fc["horizon"].min() == -5
     assert fc["horizon"].max() == 3
 
@@ -342,44 +344,6 @@ def test_summarise_comparison(
     # each scored against two later releases.
     assert rows.loc["teamB-late", "n"] == 8
     assert {"coverage_50", "coverage_90", "bias", "wis"} <= set(table.columns)
-
-
-def test_overall_comparison_by_scale(
-    tmp_path: Path,
-    target: pd.DataFrame,
-    delays: pd.DataFrame,
-    daily: pd.DataFrame,
-) -> None:
-    from bdbvhubrenewal.evaluation.hubcompare import overall_comparison
-
-    _write_hub(tmp_path)
-    forecasts = pd.concat(
-        [load_hub_submissions(tmp_path), _ours(target, delays, daily)]
-    )
-    scores, energy, _ = score_comparison(
-        forecasts, target, delays, _CONFIG, daily, NO_ZONES
-    )
-    out = overall_comparison(scores, energy, "flat")
-    out = out.set_index(["scale", "model"])
-    assert set(out.index.get_level_values("scale")) <= {
-        "national",
-        "provinces",
-        "zones",
-    }
-    flat = out.xs("flat", level="model")
-    rel = ["rel_wis", "rel_log_wis", "rel_energy", "rel_log_energy"]
-    assert (flat[rel] == 1).all().all()
-    assert (flat["n_energy"] > 0).all()
-    assert out["bias"].between(-1, 1).all()
-    assert (
-        out.loc[out["hub"]]
-        .index.get_level_values("model")
-        .isin(["teamA-weekly", "teamB-late"])
-        .all()
-    )
-    # Same counts as the round summary, which also matches the baseline.
-    late = out.xs("teamB-late", level="model")["n"].sum()
-    assert late == 8
 
 
 def test_forecast_quantiles(tmp_path: Path) -> None:
