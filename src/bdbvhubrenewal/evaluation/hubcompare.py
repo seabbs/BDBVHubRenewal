@@ -81,6 +81,7 @@ __all__ = [
     "submission_dir",
     "summarise_comparison",
     "with_submissions",
+    "zone_truth",
 ]
 
 WEEKLY_TARGET: Final = "wk inc confirmed cases"
@@ -561,12 +562,54 @@ def stored_forecasts(
     return fc.rename(columns={"kind": "source"})[list(SAMPLE_COLUMNS)]
 
 
+def zone_truth(
+    zones: pd.DataFrame, codes: Sequence[str], target: pd.DataFrame
+) -> pd.DataFrame:
+    """Return health zone counts by release in the target's layout.
+
+    Parameters
+    ----------
+    zones : pandas.DataFrame
+        Zone counts with `vintage`, `location`, `target_end_date` and
+        `total` (`load_health_zones`). A zone and week missing from a
+        release has no cases in it.
+    codes : sequence of str
+        The hub's zone codes (`hub_zones`).
+    target : pandas.DataFrame
+        The tidy target table. Each real release's weeks set its grid.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `kind` (`real`), `vintage`, `location`, `target_end_date`
+        and `total`, for every zone and week of each release.
+    """
+    keys = ["location", "target_end_date"]
+    frames = []
+    real = target.loc[target["kind"] == "real"]
+    for vintage, rows in real.groupby("vintage"):
+        grid = pd.MultiIndex.from_product(
+            [list(codes), sorted(set(rows["target_end_date"]))], names=keys
+        )
+        have = zones.loc[zones["vintage"] == vintage].set_index(keys)["total"]
+        frames.append(
+            have.reindex(grid, fill_value=0)
+            .rename("total")
+            .reset_index()
+            .assign(kind="real", vintage=vintage)
+        )
+    return pd.concat(frames, ignore_index=True)[
+        ["kind", "vintage", *keys, "total"]
+    ]
+
+
 def score_comparison(
     forecasts: pd.DataFrame,
     target: pd.DataFrame,
     delays: pd.DataFrame,
     config: BacktestConfig,
     daily: pd.DataFrame,
+    zones: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Score every model on the count each later real vintage reports.
 
@@ -580,6 +623,9 @@ def score_comparison(
         Settings of the tasks the rounds are scored from.
     daily : pandas.DataFrame
         Daily onsets by release, as for `make_tasks`.
+    zones : pandas.DataFrame
+        Health zone counts by release in the target's layout
+        (`zone_truth`), so zone forecasts are scored too.
 
     Returns
     -------
@@ -617,7 +663,7 @@ def score_comparison(
     result = release_backtest(
         tasks,
         daily,
-        target,
+        pd.concat([target, zones]),
         models=(),
         stored=samples,
         compare=set(samples["model"]),

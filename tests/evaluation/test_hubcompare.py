@@ -30,6 +30,13 @@ ROOT = Path(__file__).resolve().parents[2]
 
 pytestmark = pytest.mark.usefixtures("flat_model")
 WEEKS = ["2026-09-19", "2026-09-26", "2026-10-03", "2026-10-10"]
+NO_ZONES = pd.DataFrame(
+    {
+        **{c: pd.Series(dtype=str) for c in ("kind", "vintage", "location")},
+        "target_end_date": pd.Series(dtype=str),
+        "total": pd.Series(dtype="int64"),
+    }
+)
 
 
 def _hub_rows(
@@ -231,7 +238,7 @@ def test_score_comparison_scores_each_later_release(
         [load_hub_submissions(tmp_path), _ours(target, delays, daily)]
     )
     scores, energy, pending = score_comparison(
-        forecasts, target, delays, _CONFIG, daily
+        forecasts, target, delays, _CONFIG, daily, NO_ZONES
     )
     assert pending.empty
     assert set(scores["model"]) == {"teamA-weekly", "teamB-late", "flat"}
@@ -251,12 +258,55 @@ def test_score_comparison_scores_each_later_release(
     assert (energy.groupby(unit)["n_cells"].nunique() == 1).all()
 
 
+def test_zone_truth_fills_missing_zone_weeks_with_zero(
+    target: pd.DataFrame,
+) -> None:
+    from bdbvhubrenewal.evaluation.hubcompare import zone_truth
+
+    zones = pd.DataFrame(
+        {
+            "vintage": "2026-10-24",
+            "location": ["CD-IT-01"],
+            "target_end_date": ["2026-10-10"],
+            "total": [3],
+        }
+    )
+    out = zone_truth(zones, ("CD-IT-01", "CD-IT-02"), target)
+    week = out.loc[out["vintage"] == "2026-10-24"].set_index(
+        ["location", "target_end_date"]
+    )["total"]
+    assert week[("CD-IT-01", "2026-10-10")] == 3
+    assert week[("CD-IT-02", "2026-10-10")] == 0
+    assert set(out["kind"]) == {"real"}
+    assert set(out["vintage"]) == set(target["vintage"])
+
+
+def test_score_comparison_scores_hub_zones(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    from bdbvhubrenewal.evaluation.hubcompare import zone_truth
+
+    hub = _hub_rows().assign(model="teamA-weekly", source="hub")
+    zone = hub.loc[hub["location"] == "CD-IT"].assign(location="CD-IT-01")
+    hub = pd.concat([hub, zone]).rename(columns={"output_type_id": "sample"})
+    real = target.loc[target["kind"] == "real"]
+    counts = real.loc[real["location"] == "CD-IT"].assign(location="CD-IT-01")
+    zones = zone_truth(counts, ("CD-IT-01",), target)
+    scores, _, _ = score_comparison(hub, target, delays, _CONFIG, daily, zones)
+    assert "CD-IT-01" in set(scores["location"])
+    assert {"reported", "complete"} >= set(
+        scores.loc[scores["location"] == "CD-IT-01", "target"]
+    )
+
+
 def test_score_comparison_waits_for_later_data(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
     hub = _hub_rows(ref="2026-11-07").assign(model="teamA-weekly")
     hub = hub.rename(columns={"output_type_id": "sample"}).assign(source="hub")
-    scores, _, pending = score_comparison(hub, target, delays, _CONFIG, daily)
+    scores, _, pending = score_comparison(
+        hub, target, delays, _CONFIG, daily, NO_ZONES
+    )
     assert scores.empty
     assert list(pending["reference_date"]) == ["2026-11-07"]
     assert pending["vintage"].iloc[0] == "2026-11-01"
@@ -272,7 +322,9 @@ def test_summarise_comparison(
     forecasts = pd.concat(
         [load_hub_submissions(tmp_path), _ours(target, delays, daily)]
     )
-    scores, _, _ = score_comparison(forecasts, target, delays, _CONFIG, daily)
+    scores, _, _ = score_comparison(
+        forecasts, target, delays, _CONFIG, daily, NO_ZONES
+    )
     table = summarise_comparison(scores, "flat")
     rows = table.loc[table["target"] == "reported"].set_index("model")
     assert rows.loc["flat", "relative_wis"] == pytest.approx(1)
@@ -295,7 +347,7 @@ def test_overall_comparison_by_scale(
         [load_hub_submissions(tmp_path), _ours(target, delays, daily)]
     )
     scores, energy, _ = score_comparison(
-        forecasts, target, delays, _CONFIG, daily
+        forecasts, target, delays, _CONFIG, daily, NO_ZONES
     )
     out = overall_comparison(scores, energy, "flat")
     out = out.set_index(["scale", "model"])

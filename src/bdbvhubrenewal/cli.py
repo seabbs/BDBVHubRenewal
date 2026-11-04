@@ -904,8 +904,13 @@ def _compare_hub(args: argparse.Namespace) -> int:
         hc.load_hub_submissions(cfg.submitted),
         hub_ids,
     )
+    zones = hc.zone_truth(
+        load_health_zones(args.data),
+        hub_zones(Path(args.data) / "hub-config" / "tasks.json"),
+        target,
+    )
     scores, energy, pending = hc.score_comparison(
-        forecasts, target, delays, config, daily
+        forecasts, target, delays, config, daily, zones
     )
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
