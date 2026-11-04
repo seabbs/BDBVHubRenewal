@@ -759,6 +759,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#partially-pooled-variant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Partially pooled variant
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#limitations" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2111,6 +2122,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#partially-pooled-variant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Partially pooled variant
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#limitations" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2147,7 +2169,7 @@
 
 
 <h1 id="baseline-models">Baseline models<a class="headerlink" href="#baseline-models" title="Permanent link">&para;</a></h1>
-<p class="page-subtitle"><code>randomwalknowcast</code> and <code>randomwalk</code>, its comparison model.</p>
+<p class="page-subtitle"><code>randomwalknowcast</code>, its partially pooled variant <code>pprandomwalknowcast</code>, and <code>randomwalk</code>, their comparison model.</p>
 <p>The data and notation are on the <a href="../data/#target-and-notation">Data methods page</a>.
 The renewal models are on the <a href="../model/">Renewal models</a> page.
 <code>randomwalknowcast</code> is baselinenowcast<sup id="fnref:bnc-paper"><a class="footnote-ref" href="#fn:bnc-paper">1</a></sup><sup id="fnref:bnc-package"><a class="footnote-ref" href="#fn:bnc-package">2</a></sup> with a random walk on top.
@@ -2335,6 +2357,37 @@ y^{(k)}_z(w) \approx Y^{(k)}(w)\, \frac{x^{(k)}_z(w)}{\sum_{z'} x^{(k)}_{z'}(w)}
 \]</div>
 <p>Largest remainders make the values whole numbers that sum to <span class="arithmatex">\(Y^{(k)}(w)\)</span>.
 Where every <span class="arithmatex">\(x^{(k)}_z(w)\)</span> is 0 the split uses the Dirichlet mean shares of the <a href="../model/#split-of-province-samples">Renewal models</a> page.</p>
+<h2 id="partially-pooled-variant">Partially pooled variant<a class="headerlink" href="#partially-pooled-variant" title="Permanent link">&para;</a></h2>
+<p><code>pprandomwalknowcast</code> is <code>randomwalknowcast</code> with the delay <span class="arithmatex">\(g_p\)</span>, the walk spread <span class="arithmatex">\(\sigma_p\)</span>, the size <span class="arithmatex">\(\phi_{p,k}\)</span> and the removal rate <span class="arithmatex">\(b_{p,k}\)</span> partially pooled over zones, provinces and the country, in place of the <a href="#own-or-pooled-estimates">own-or-pooled rule</a>.
+The nowcast draws, the walk and the zone reconciliation are the same.
+Each is fitted in numpyro with NUTS (2 chains of 500 warm-up and 500 draws, target acceptance 0.9).</p>
+<p>Each parameter <span class="arithmatex">\(\theta\)</span> of place <span class="arithmatex">\(p\)</span> is its parent's plus an offset for the place's level,</p>
+<div class="arithmatex">\[
+\theta_p = \theta_{\mathrm{pa}(p)} + \tau_{\ell(p)}\, z_p,
+\qquad
+z_p \sim \mathcal{N}(0, 1),
+\qquad
+\tau_\ell \sim \mathcal{N}^+(0, 0.5^2),
+\]</div>
+<p>with <span class="arithmatex">\(\ell(p)\)</span> the level of <span class="arithmatex">\(p\)</span> (province or zone) and one <span class="arithmatex">\(\tau_\ell\)</span> for each level and parameter.
+<span class="arithmatex">\(\theta\)</span> is <span class="arithmatex">\(\log g_p(j)\)</span> for each age <span class="arithmatex">\(j\)</span>, <span class="arithmatex">\(\log \sigma_p\)</span>, and <span class="arithmatex">\(\log \phi_{p,k}\)</span> and <span class="arithmatex">\(\log b_{p,k}\)</span> for each week back <span class="arithmatex">\(k\)</span>.
+The country's values have priors <span class="arithmatex">\(\mathcal{N}(-3, 2^2)\)</span>, <span class="arithmatex">\(\mathcal{N}(\log 0.2, 1)\)</span>, <span class="arithmatex">\(\mathcal{N}(0, 1.5^2)\)</span> and <span class="arithmatex">\(\mathcal{N}(\log 0.005, 1.5^2)\)</span>.
+A place's counts are the sum of its children's, so only the places forecast (the provinces, or the zones at zone level) enter the likelihood, and their parents are latent centres.</p>
+<ul>
+<li><strong>Delay.</strong> For each gap <span class="arithmatex">\(s\)</span> and age <span class="arithmatex">\(x\)</span> with <span class="arithmatex">\(\sum N_{p,r}(t) &gt; 0\)</span>, the increment is Poisson,</li>
+</ul>
+<p>$$
+  \sum N_{p,r+1}(t) - \sum N_{p,r}(t) \sim \text{Poisson}\Big(\sum N_{p,r}(t)\, \big(e^{\sum_{j=x}^{x+s-1} g_p(j)} - 1\big)\Big),
+  $$</p>
+<p>with the sums, window and preprocessing of the <a href="#delay">delay</a>.
+  With one place and a gap of 1 its maximum likelihood estimate is baselinenowcast's chain ladder factor.
+  It is fitted at the origin and at each earlier release that gives errors.
+- <strong>Walk spread.</strong> The weekly changes of <span class="arithmatex">\(\log\{1 + Y_{p,o}(w)\}\)</span> over the <a href="#walk">walk</a> window are <span class="arithmatex">\(\mathcal{N}(0, \sigma_p^2)\)</span>.
+  A change between two weeks with no cases sits at the walk's floor, so it is left out.
+- <strong>Nowcast uncertainty.</strong> The new reports <span class="arithmatex">\(A_{p,r}(w)\)</span> are <span class="arithmatex">\(\text{NB}(\widehat{\text{rem}}, \phi_{p,k})\)</span> and the removals <span class="arithmatex">\(B_{p,r}(w)\)</span> are <span class="arithmatex">\(\text{Poisson}(b_{p,k} Y_{p,r}(w))\)</span>, on the errors of <a href="#nowcast">the fit</a>, made with the pooled delay of each earlier release.</p>
+<p>The posterior medians of <span class="arithmatex">\(g_p\)</span>, <span class="arithmatex">\(\sigma_p\)</span>, <span class="arithmatex">\(\phi_{p,k}\)</span> (kept in <span class="arithmatex">\([0.1, 1000]\)</span>) and <span class="arithmatex">\(b_{p,k}\)</span> replace the estimates of <code>randomwalknowcast</code>.
+So the forecasts carry the pooled point estimates, not their posterior spread.
+It is scored on the real releases at province and zone level, but not on the simulated recovery check, whose 15 vintages of 45 to 101 releases each would take about 1000 NUTS fits.</p>
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
 <p>While the release history in the delay window is shorter than <span class="arithmatex">\(D\)</span>, no chain to the final count can be checked against a final count.
 Each delay factor rests on one onset day per age per pair, and the youngest ages rest on few cases even nationally.
@@ -2343,7 +2396,8 @@ The chain ladder treats reporting speed as fixed by age and step, but speed and 
 The observation model is learnt from the earlier releases, which may be few.
 Counts include the hub's imputed onsets, which are re-drawn as cases gain onsets, so changes between releases mix reporting with imputation.
 Places are sampled independently, so a shock to a whole release is not shared, and the national band is a sum of independent provincial bands.
-The walk has no drift, and its spread comes from 8 weekly changes, which for small places include Poisson noise.</p>
+The walk has no drift, and its spread comes from 8 weekly changes, which for small places include Poisson noise.
+<code>pprandomwalknowcast</code> plugs in posterior medians, so the uncertainty in its pooled estimates does not widen its forecasts.</p>
 <div class="footnote">
 <hr />
 <ol>
