@@ -163,40 +163,40 @@
       var by = {};
       s.forEach(function (r) { (by[r[0]] = by[r[0]] || []).push(r); });
       var key = function (r) { return r[1] + "|" + r[3]; };
-      var base = {}, baseLog = {};
-      (by[d.baseline] || []).forEach(function (r) {
-        base[key(r)] = r[4];
-        baseLog[key(r)] = r[5];
-      });
+      // Score values follow d.score_columns from index 4. A relative score
+      // divides the mean of the embedded per-forecast column by the
+      // baseline's mean on the same forecasts, so log WIS stays the WIS of
+      // log counts and is never a log taken here.
+      var cols = d.score_columns;
+      var base = {};
+      (by[d.baseline] || []).forEach(function (r) { base[key(r)] = r; });
       var tbl = h("table", {}, table);
       var head = h("tr", {}, h("thead", {}, tbl));
-      ["Model", "Weeks", "WIS", "Relative WIS", "WIS, log scale", "Relative WIS, log scale",
-        "50% coverage", "90% coverage", "Bias"]
-        .forEach(function (c) { h("th", {}, head, c); });
+      var names = ["Model", "Weeks"];
+      cols.forEach(function (c) {
+        names.push(c.label);
+        if (c.relative) names.push(c.relative);
+      });
+      names.forEach(function (c) { h("th", {}, head, c); });
       var body = h("tbody", {}, tbl);
       Object.keys(by).map(Number).forEach(function (m) {
         if (!legend.on[m]) return;
         var rs = by[m];
-        var rel = "", relLog = "";
-        if (d.baseline !== null && m !== d.baseline) {
-          var both = rs.filter(function (r) { return key(r) in base; });
-          if (both.length) {
-            rel = fmt(mean(both.map(function (r) { return r[4]; })) /
-              mean(both.map(function (r) { return base[key(r)]; })), 2);
-            relLog = fmt(mean(both.map(function (r) { return r[5]; })) /
-              mean(both.map(function (r) { return baseLog[key(r)]; })), 2);
-          }
-        }
+        var both = rs.filter(function (r) { return key(r) in base; });
         var tr = h("tr", {}, body);
         h("td", {}, tr, d.models[m].name);
         h("td", {}, tr, String(rs.length));
-        h("td", {}, tr, fmt(mean(rs.map(function (r) { return r[4]; })), 1));
-        h("td", {}, tr, rel);
-        h("td", {}, tr, fmt(mean(rs.map(function (r) { return r[5]; })), 2));
-        h("td", {}, tr, relLog);
-        h("td", {}, tr, fmt(mean(rs.map(function (r) { return r[6]; })), 2));
-        h("td", {}, tr, fmt(mean(rs.map(function (r) { return r[7]; })), 2));
-        h("td", {}, tr, fmt(mean(rs.map(function (r) { return r[8]; })), 2));
+        cols.forEach(function (c, k) {
+          var at = 4 + k;
+          h("td", {}, tr, fmt(mean(rs.map(function (r) { return r[at]; })), 2));
+          if (!c.relative) return;
+          var rel = "";
+          if (d.baseline !== null && m !== d.baseline && both.length) {
+            rel = fmt(mean(both.map(function (r) { return r[at]; })) /
+              mean(both.map(function (r) { return base[key(r)][at]; })), 2);
+          }
+          h("td", {}, tr, rel);
+        });
       });
     }
     draw();

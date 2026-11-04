@@ -7,8 +7,6 @@ Our models and the forecasts submitted to the hub's weekly round, scored on the 
 
 ## Scores
 
---8<-- "comparison-summary.md"
-
 --8<-- "comparison-scores.md"
 
 ## Forecasts
@@ -16,7 +14,7 @@ Our models and the forecasts submitted to the hub's weekly round, scored on the 
 Choose a location and a round.
 Forecasts are against the counts in the latest release, named in the key ([reading the figures](methods/evaluation.md#reading-the-figures)).
 The static figures show our submitted models and randomwalk above the hub teams.
-Our other models, such as the unsubmitted 2026-11-07 renewal and renewalsp candidates, start switched off and can be switched on in the key.
+randomwalk and our other models, such as the unsubmitted 2026-11-07 renewal and renewalsp candidates, start switched off and can be switched on in the key.
 
 --8<-- "comparison-figures.md"
 

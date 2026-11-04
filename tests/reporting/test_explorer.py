@@ -119,3 +119,18 @@ def test_explorer_html_can_start_with_all_rounds() -> None:
         "x.json", "Forecasts", all_rounds=True
     )
     assert "data-round" not in explorer.explorer_html("x.json", "Forecasts")
+
+
+def test_explorer_score_columns_name_their_label() -> None:
+    quantiles, target, scores = _inputs()
+    data = explorer.explorer_data(
+        quantiles, target, {}, 3, COLOURS, scores=scores
+    )
+    cols = data["score_columns"]
+    log_wis = {
+        "key": "log_wis",
+        "label": "WIS, log scale",
+        "relative": "Relative WIS, log scale",
+    }
+    assert cols[1] == log_wis  # type: ignore[index]
+    assert len(data["scores"][0]) == 4 + len(cols)  # type: ignore[index, arg-type]

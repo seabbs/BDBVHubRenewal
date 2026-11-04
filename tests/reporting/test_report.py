@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -91,6 +92,14 @@ def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
     figures = (gen / "comparison-figures.md").read_text()
     assert "2026-10-24" in figures
     assert (fig / "comparison-2026-10-24.svg").exists()
+    # The overall chart is the headline, with its static figure as the
+    # fallback, and randomwalk starts off as the relative reference.
+    assert not (gen / "comparison-summary.md").exists()
+    assert "comparison-overall.svg" in scores
+    chart = json.loads((fig / "scorechart-comparison.json").read_text())
+    on = {m["name"]: m["on"] for m in chart["models"]}
+    assert on["randomwalk (ours)"] is False
+    assert on["teamA-weekly"] is True
     assert (
         "BDBV Modeling Hub" in (gen / "comparison-attribution.md").read_text()
     )

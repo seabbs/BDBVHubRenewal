@@ -1549,14 +1549,26 @@ def _overall_table(
     )
     registry = [spec.name for spec in list_models()]
     ours = dict(sorted(ours.items(), key=lambda lm: registry.index(lm[1])))
-    shown = {comparison_label(m, "real", hub_ids) for m in [*hub_ids, baseline]}
+    shown = {comparison_label(m, "real", hub_ids) for m in hub_ids}
+    models = [*ours, *sorted(hub)]
+    save_light_dark(
+        partial(
+            plot_relative_overall,
+            overall,
+            models,
+            baseline,
+            x="scale",
+            colours=colours,
+        ),
+        fig / "comparison-overall.svg",
+    )
     write_score_chart(
         fig / "scorechart-comparison.json",
         score_chart_data(
             overall,
             "scale",
             OVERALL_METRICS,
-            [*ours, *sorted(hub)],
+            models,
             default_on=[*sorted(hub), *(m for m in ours if m in shown)],
             x_label="Scale",
             kind="bar",
@@ -1564,7 +1576,9 @@ def _overall_table(
         ),
     )
     chart = score_chart_html(
-        "../figures/scorechart-comparison.json", "Overall comparison scores"
+        "../figures/scorechart-comparison.json",
+        "Overall comparison scores",
+        static="../figures/comparison-overall.svg",
     )
     have = set(overall["scale"])
     scales = [s for s in ("national", "provinces", "zones") if s in have]
@@ -1591,7 +1605,9 @@ def _overall_table(
         + "\n"
         + "Over every scored round, on the count each later release reported "
         f"and on the forecasts `{baseline}` also made, by scale.{gap}\n"
-        "Our other models can be switched on in the key.\n\n" + _table(wide)
+        "Our other models and randomwalk can be switched on in the key.\n"
+        "randomwalk stays the reference for the relative scores either way.\n\n"
+        + _table(wide)
     )
 
 
@@ -1609,7 +1625,6 @@ def _comparison_page(
             "comparison-scores.md",
             "comparison-teams.md",
             "comparison-figures.md",
-            "comparison-summary.md",
         ):
             _write(gen / name, missing)
         _write(
@@ -1653,7 +1668,6 @@ def _comparison_page(
         else pd.DataFrame()
     )
     pending = pd.read_csv(cmp_dir / "pending.csv")
-    _write(gen / "comparison-summary.md", "")
     parts = []
     if not scores.empty:
         parts.append(
@@ -1677,7 +1691,6 @@ def _comparison_page(
             if not table.empty
             else ""
         )
-        _comparison_summary(fig, gen, scores, baseline, hub_ids)
     for row in pending.itertuples(index=False):
         parts.append(
             f"The {row.reference_date} round was made from the "
@@ -1704,7 +1717,7 @@ def _comparison_page(
     )
     hidden = set(
         labelled.loc[
-            labelled["ours"] & ~quantiles["model"].isin([*hub_ids, baseline]),
+            labelled["ours"] & ~quantiles["model"].isin(list(hub_ids)),
             "model",
         ]
     )
@@ -1770,45 +1783,4 @@ def _baseline_label(baseline: str, quantiles: pd.DataFrame) -> str:
             if m.startswith(f"{baseline} (")
         ),
         baseline,
-    )
-
-
-def _comparison_summary(
-    fig: Path,
-    gen: Path,
-    scores: pd.DataFrame,
-    baseline: str,
-    hub_ids: Mapping[str, str],
-) -> None:
-    """Write relative WIS and coverage on the counts later releases reported."""
-    done = scores.loc[scores["target"] == "reported"]
-    labelled = done.assign(
-        model=[
-            comparison_label(m, src, hub_ids)
-            for m, src in zip(done["model"], done["source"], strict=True)
-        ]
-    )
-    base = _baseline_label(baseline, labelled)
-    if base not in set(labelled["model"]):
-        return
-    _save_metric_figures(
-        fig,
-        "comparison-summary",
-        partial(
-            plot_score_summary,
-            labelled,
-            baseline=base,
-            models=list(
-                dict.fromkeys(
-                    comparison_label(m, src, hub_ids)
-                    for m, src in zip(
-                        scores["model"], scores["source"], strict=True
-                    )
-                )
-            ),
-        ),
-    )
-    alt = f"WIS relative to {baseline} and 90% coverage, by horizon."
-    _write(
-        gen / "comparison-summary.md", _metric_tabs("comparison-summary", alt)
     )

@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from collections.abc import Collection, Mapping
 from pathlib import Path
+from typing import Final
 
 import pandas as pd
 
@@ -19,8 +20,17 @@ __all__ = ["explorer_data", "explorer_html", "write_explorer"]
 QUANTILE_COLUMNS = ("q05", "q25", "q50", "q75", "q95")
 """Interval columns of the forecast quantiles."""
 
-SCORE_COLUMNS = ("wis", "log_wis", "coverage_50", "coverage_90", "bias")
-"""Score columns shown in the explorer's table."""
+SCORE_COLUMNS: Final[Mapping[str, tuple[str, str | None]]] = {
+    "wis": ("WIS", "Relative WIS"),
+    "log_wis": ("WIS, log scale", "Relative WIS, log scale"),
+    "coverage_50": ("50% coverage", None),
+    "coverage_90": ("90% coverage", None),
+    "bias": ("Bias", None),
+}
+"""Score columns in the explorer's table, with each label and the label of
+its value relative to the baseline, if shown. WIS on the log scale is the
+WIS of log(1 + counts), and its relative value divides mean log-scale WIS,
+never a log of WIS."""
 
 
 def _level(location: str, provinces: set[str]) -> str:
@@ -132,7 +142,10 @@ def explorer_data(
         ],
         "data": data,
         "q": rows,
-        "score_columns": list(SCORE_COLUMNS),
+        "score_columns": [
+            {"key": key, "label": label, "relative": relative}
+            for key, (label, relative) in SCORE_COLUMNS.items()
+        ],
         "scores": [],
     }
     if scores is not None and not scores.empty:
