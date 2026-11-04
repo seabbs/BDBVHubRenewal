@@ -18,6 +18,8 @@ run <- function(case, family, mean, cv, x, L, D) {
 }
 # Generation interval on lags 1..42: left truncated at a day.
 run("gi", "gamma", 15.3, 9.3 / 15.3, 1:42, L = 1, D = 43)
+# Incubation period on 0..28 (MacNeil et al. 2010, as BVDOutbreakSize).
+run("incubation", "lognormal", 6.3, 3.5 / 6.3, 0:28, L = -Inf, D = 29)
 # Onset-to-report delays on 0..60.
 for (family in c("gamma", "lognormal")) {
   for (mean in c(2, 5, 8, 15)) {
