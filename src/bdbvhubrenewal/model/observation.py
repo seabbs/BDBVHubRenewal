@@ -31,6 +31,7 @@ import numpyro
 import numpyro.distributions as dist
 from jax import Array
 from jax.typing import ArrayLike
+from pyrenew.convolve import compute_prop_already_reported
 from pyrenew.deterministic import DeterministicPMF
 from pyrenew.metaclass import RandomVariable
 from pyrenew.observation.base import BaseObservationProcess
@@ -39,6 +40,11 @@ from pyrenew.observation.types import ObservationSample
 from pyrenew.time import daily_to_weekly
 
 _FLOOR = 1e-6
+
+
+#: Publication lag pmf with all mass at lag 0: every report is published
+#: on its report day.
+NO_LAG = jnp.ones(1)
 
 
 def backsample(missing: Array, pmf: Array) -> Array:
@@ -107,34 +113,6 @@ def unskew(b: Array, k: int) -> Array:
     return flat.reshape(n, width + 1)[:, :k]
 
 
-def published_by(n: int, lag_pmf: Array | None) -> Array:
-    r"""Probability that a report on day $t$ is published by day $n - 1$.
-
-    $c(t) = F_\ell(n - 1 - t)$, with $F_\ell$ the cdf of the report to
-    publication lag pmf on $0..L$, so only the last $L$ days are partly
-    published.
-
-    Parameters
-    ----------
-    n : int
-        Number of report days, the last being the cut-off. Static.
-    lag_pmf : Array or None
-        Lag pmf on $0..L$. `None` is no lag.
-
-    Returns
-    -------
-    Array
-        Shape `(n,)`.
-    """
-    if lag_pmf is None:
-        return jnp.ones(n)
-    cdf = jnp.cumsum(jnp.asarray(lag_pmf))[::-1]
-    k = cdf.shape[0]
-    if n >= k:
-        return jnp.concatenate([jnp.ones(n - k), cdf])
-    return cdf[k - n :]
-
-
 def onset_expectations(
     onsets: Array,
     delay: Array,
@@ -142,7 +120,7 @@ def onset_expectations(
     hub_delay: Array,
     cutoff: int,
     final: bool = True,
-    publication_lag: Array | None = None,
+    publication_lag: ArrayLike = NO_LAG,
     weekly: bool = False,
 ) -> dict[str, Array]:
     r"""Compute expected known and imputed onsets by the cut-off and eventually.
@@ -150,7 +128,8 @@ def onset_expectations(
     With $A_{st} = f_s(t - s)$ the onset-by-report-day delay matrix and
     $H_{st} = \hat f(t - s)$ the hub's back-sampling matrix, both banded
     and of shape `(n, n + D)`, and $\pi$ extended to report days past the
-    end (last row repeated), and $c$ from `published_by`:
+    end (last row repeated), and $c$ the share of reports published by
+    $T$ (PyRenew's `compute_prop_already_reported`):
 
     - known by $T$: $\lambda \odot (A_{:, \le T} (c (1 - \pi))_{\le T})$;
     - missing by report day: $M = \pi \odot A^\top \lambda$;
@@ -176,8 +155,8 @@ def onset_expectations(
         Also compute the final counts. Fitting does not need them, and
         skipping them saves about a fifth of the gradient cost.
     publication_lag : Array, optional
-        Pmf of the report to publication lag on $0..L$. `None` publishes
-        every report on its report day.
+        Pmf of the report to publication lag on $0..L$. The default, all
+        mass at lag 0, publishes every report on its report day.
     weekly : bool, optional
         The axis starts on a week boundary and has whole weeks. Then
         `_weekly_blocks` gives the same values at a cost linear, not
@@ -204,7 +183,8 @@ def onset_expectations(
     h = skew(jnp.broadcast_to(hub_delay, (n, n_d)), width)
     t1 = cutoff + 1
     a_t = a[:, :t1]
-    c = published_by(t1, publication_lag)[:, None]
+    c = compute_prop_already_reported(jnp.asarray(publication_lag), t1, 0)
+    c = c[:, None]
     seen = c * keep[:t1]
     known = onsets * (a_t @ seen)
     missing_by_t = c * pi_ext[:t1] * (a_t.T @ onsets)
@@ -264,7 +244,7 @@ def _weekly_blocks(
     hub_delay: Array,
     cutoff: int,
     final: bool,
-    publication_lag: Array | None,
+    publication_lag: ArrayLike,
 ) -> dict[str, Array]:
     r"""`onset_expectations` on an axis of whole weeks.
 
@@ -295,7 +275,10 @@ def _weekly_blocks(
     keep = 1 - pi_ext
     t1 = cutoff + 1
     c = jnp.concatenate(
-        [published_by(t1, publication_lag), jnp.zeros(width - t1)]
+        [
+            compute_prop_already_reported(jnp.asarray(publication_lag), t1, 0),
+            jnp.zeros(width - t1),
+        ]
     )[:, None]
 
     def ahead(blocks: Array, x: Array) -> Array:
@@ -381,7 +364,7 @@ class OnsetStreams(BaseObservationProcess):
     publication_lag : RandomVariable or array_like, optional
         Pmf of the lag from report to publication in a vintage, on
         $0..L$: a random variable to estimate it, or a fixed pmf.
-        `None` is no lag.
+        The default, all mass at lag 0, is no lag.
     delay_overdispersion_rv : RandomVariable, optional
         $1 / \sqrt{\psi}$, with $\psi$ capped at $10^4$. If given, the
         delay counts are Dirichlet-multinomial with concentration
@@ -404,7 +387,7 @@ class OnsetStreams(BaseObservationProcess):
         import_scale_rv: RandomVariable | None = None,
         start_dow: int = 6,
         kernel_rv: RandomVariable | None = None,
-        publication_lag: RandomVariable | Array | None = None,
+        publication_lag: RandomVariable | ArrayLike = NO_LAG,
         delay_overdispersion_rv: RandomVariable | None = None,
         weekly_axis: bool = False,
     ) -> None:

@@ -491,7 +491,7 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         )
 
     n_lag = config.max_publication_lag + 1
-    lag: DistributionalVariable | np.ndarray | None = None
+    lag: DistributionalVariable | np.ndarray = np.ones(1)
     if config.publication_lag == "estimated":
         lag = DistributionalVariable(
             "onsets_publication_lag", dist.Dirichlet(np.ones(n_lag))
