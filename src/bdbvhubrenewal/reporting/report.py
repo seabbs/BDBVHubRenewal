@@ -75,6 +75,7 @@ from bdbvhubrenewal.reporting.nowcast_plots import (
     plot_truth_changes,
 )
 from bdbvhubrenewal.reporting.plots import (
+    THEMES,
     comparison_colours,
     comparison_label,
     model_colour,
@@ -104,6 +105,7 @@ from bdbvhubrenewal.reporting.scorechart import (
     score_chart_html,
     write_score_chart,
 )
+from bdbvhubrenewal.reporting.scoresummary import summary_html, summary_rows
 from bdbvhubrenewal.reporting.tables import filter_table
 from bdbvhubrenewal.reporting.zone_nowcast import (
     ZONE_MODEL,
@@ -355,6 +357,28 @@ def _release_section(
     scores["target"] = scores["target"].map(_TARGET_LABELS)
     by_place = relative_wis(scores, ("target", "origin", "location"))
     reported = overall.loc[overall["target"] == _TARGET_LABELS["reported"]]
+    ours = [*names, BASELINE]
+    muted = THEMES["light"]["muted"], THEMES["dark"]["muted"]
+    write_score_chart(
+        fig / "scoresummary-backtest.json",
+        summary_rows(
+            pooled.loc[pooled["target"] == _TARGET_LABELS["reported"]],
+            ours,
+            {
+                m: (
+                    (
+                        model_colour(m, names, "light"),
+                        model_colour(m, names, "dark"),
+                    )
+                    if m in names
+                    else muted
+                )
+                for m in ours
+            },
+            _location_names(real),
+            default_on=[m for m in ours if m != "randomwalk"],
+        ),
+    )
     save_light_dark(
         partial(
             plot_relative_overall,
@@ -379,14 +403,12 @@ def _release_section(
         "Scores against what each later release reported "
         "([how scoring works](methods/evaluation.md#real-releases), "
         "[metrics](methods/evaluation.md#scores)).\n\n"
-        "![Relative WIS, relative WIS on the log scale, 50% and 90% coverage "
-        "and bias "
-        "of each model on the counts each later release reported, by "
-        "pool.](figures/relative-overall.svg#only-light)\n"
-        "![Relative WIS, relative WIS on the log scale, 50% and 90% coverage "
-        "and bias "
-        "of each model on the counts each later release reported, by "
-        "pool.](figures/relative-overall-dark.svg#only-dark)\n\n"
+        + summary_html(
+            "../figures/scoresummary-backtest.json",
+            "Overall scores by scale",
+            static="../figures/relative-overall.svg",
+        )
+        + "\n"
         + _dropdown(
             filter_table(_table(overall), ["target", "pool", "model"]),
             "Scores by target and pool, over every origin",
@@ -921,49 +943,34 @@ _RELEASE_MATCH: Final = [
 """Columns that identify one forecast scored against one release."""
 
 
-def _score_chart(
+def _horizon_chart(
     fig: Path,
     gen: Path,
     scores: pd.DataFrame,
-    by: str,
     names: Sequence[str],
 ) -> None:
-    """Write an interactive chart of mean scores by `by`, and its fallback.
+    """Write an interactive chart of mean scores by horizon, and its fallback.
 
     The static WIS figure is shown without JavaScript.
     """
-    grp = scores.groupby(["model", by])
+    grp = scores.groupby(["model", "horizon"])
     table = grp[list(SCORE_METRICS)].mean()
     table.insert(0, "n", grp.size())
     table = table.reset_index()
-    if by == "location":
-        size = scores.groupby("location")["truth"].sum()
-        order = list(size.sort_values(ascending=False).index)
-        table = table.sort_values(
-            "location", key=lambda col: col.map(order.index)
-        )
-    stem = f"scores-wis-{by}"
     save_light_dark(
-        partial(plot_scores, scores, by=by, metric="wis", models=names),
-        fig / f"{stem}.svg",
+        partial(plot_scores, scores, by="horizon", metric="wis", models=names),
+        fig / "scores-wis-horizon.svg",
     )
     write_score_chart(
-        fig / f"scorechart-{by}.json",
-        score_chart_data(
-            table,
-            by,
-            SCORE_METRICS,
-            names,
-            x_label="Horizon" if by == "horizon" else "Place",
-            kind="line" if by == "horizon" else "bar",
-        ),
+        fig / "scorechart-horizon.json",
+        score_chart_data(table, "horizon", SCORE_METRICS, names),
     )
     _write(
-        gen / f"scorechart-{by}.md",
+        gen / "scorechart-horizon.md",
         score_chart_html(
-            f"../figures/scorechart-{by}.json",
-            f"Mean scores by {'horizon' if by == 'horizon' else 'place'}",
-            static=f"../figures/{stem}.svg",
+            "../figures/scorechart-horizon.json",
+            "Mean scores by horizon",
+            static="../figures/scores-wis-horizon.svg",
         ),
     )
 
@@ -1181,8 +1188,22 @@ def _backtest_page(
     k = config.complete_after_weeks
     scores = _ours(_release_scores(res), names)
     reported = scores.loc[scores["target"] == "reported"]
-    for by in ("horizon", "location"):
-        _score_chart(fig, gen, reported, by, names)
+    _horizon_chart(fig, gen, reported, names)
+    save_light_dark(
+        partial(
+            plot_scores, reported, by="location", metric="wis", models=names
+        ),
+        fig / "scores-wis-location.svg",
+    )
+    _write(
+        gen / "scoresummary-place.md",
+        summary_html(
+            "../figures/scoresummary-backtest.json",
+            "Scores by place",
+            view="place",
+            static="../figures/scores-wis-location.svg",
+        ),
+    )
     _horizon_table(gen, reported, names)
     _write(gen / "backtest-findings.md", _backtest_findings(scores))
     _write(

@@ -16,7 +16,7 @@ import pandas as pd
 
 from bdbvhubrenewal.forecasters import NATIONAL
 
-__all__ = ["SUMMARY_METRICS", "summary_rows"]
+__all__ = ["SUMMARY_METRICS", "summary_html", "summary_rows"]
 
 SUMMARY_METRICS: tuple[tuple[str, str, float | None, bool], ...] = (
     ("wis", "WIS", None, True),
@@ -131,3 +131,36 @@ def summary_rows(
         ],
         "rows": rows,
     }
+
+
+def summary_html(
+    src: str, title: str, view: str = "overall", static: str | None = None
+) -> str:
+    """Return the page element `docs/javascripts/scoresummary.js` fills.
+
+    Parameters
+    ----------
+    src : str
+        URL of the `summary_rows` JSON, relative to the page.
+    title : str
+        Accessible name of the summary.
+    view : str
+        `"overall"` for one group of bars for the chosen scale, or
+        `"place"` for one group per place and a place picker.
+    static : str, optional
+        Path of a static SVG, relative to the page, shown without
+        JavaScript. Its `-dark` twin is shown in the dark theme.
+    """
+    fallback = "The interactive summary needs JavaScript."
+    if static is not None:
+        dark = static.removesuffix(".svg") + "-dark.svg"
+        fallback = (
+            f'<img src="{static}#only-light" alt="{title}">'
+            f'<img src="{dark}#only-dark" alt="{title}">'
+        )
+    return (
+        f'<div class="scoresummary" data-src="{src}" data-view="{view}" '
+        f'role="group" aria-label="{title}">\n'
+        f"<noscript>{fallback}</noscript>\n"
+        "</div>\n"
+    )

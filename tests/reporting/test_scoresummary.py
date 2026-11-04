@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.evaluation.nowcast import relative_wis
-from bdbvhubrenewal.reporting.scoresummary import summary_rows
+from bdbvhubrenewal.reporting.scoresummary import summary_html, summary_rows
 
 SUMMARISE = Path(__file__).parents[2] / "docs" / "javascripts" / "summarise.js"
 MODELS = ["randomwalk", "a", "b"]
@@ -106,3 +106,9 @@ def test_summary_rows_index_every_key() -> None:
     }
     assert len(data["rows"][0]) == 5 + len(data["metrics"])
     json.dumps(data)
+
+
+def test_summary_html_names_the_view_and_fallback() -> None:
+    html = summary_html("x.json", "Scores", view="place", static="a.svg")
+    assert 'data-view="place"' in html
+    assert "a-dark.svg#only-dark" in html

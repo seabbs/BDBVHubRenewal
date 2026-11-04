@@ -19,9 +19,12 @@ By weeks from the reference week ([horizon](methods/evaluation.md#reading-the-fi
 
 --8<-- "backtest-summary.md"
 
-## By province
+## By place
 
---8<-- "scorechart-location.md"
+Scores at each place, at the scale chosen.
+Pick a place to narrow the table.
+
+--8<-- "scoresummary-place.md"
 
 ??? note "Tables"
 

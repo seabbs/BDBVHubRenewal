@@ -1,6 +1,7 @@
 // Score chart: one summary table as lines or grouped bars, a tab per
 // metric and a checkbox per model (toggles.js), drawn as SVG in the site's
-// theme.
+// theme. Other scripts build one with bdbvScoreChart.build and give it new
+// rows with update, keeping the tab, ticks and zoom.
 (function () {
   "use strict";
   var NS = "http://www.w3.org/2000/svg";
@@ -27,7 +28,8 @@
       .catch(function () { root.textContent = "The chart data could not be loaded."; });
   }
 
-  function build(root, d) {
+  // onDraw(metric index, ticks), if given, runs after each draw.
+  function build(root, d, onDraw) {
     root.textContent = "";
     var state = { metric: 0 };
     var tabs = h("div", { class: "scorechart-tabs", role: "tablist" }, root);
@@ -65,7 +67,8 @@
         hi = yr[1];
         step = nice(hi - lo);
       }
-      var W = 760, H = 320, L = 52, R = 10, T = 10, B = 40;
+      var many = d.x.filter(function (_, i) { return Z.visible(zoom, i); }).length > 12;
+      var W = 760, H = many ? 380 : 320, L = 52, R = 10, T = 10, B = many ? 100 : 40;
       var bw = (W - L - R) / (xr[1] - xr[0]);
       function X(i) { return L + (i - xr[0]) * bw; }
       function Y(v) { return T + (1 - (v - lo) / (hi - lo)) * (H - T - B); }
@@ -80,8 +83,11 @@
       }
       d.x.forEach(function (x, i) {
         if (!Z.visible(zoom, i)) return;
-        var tx = el("text", { x: X(i), y: H - 22, "text-anchor": "middle",
-          class: "scorechart-tick" }, svg);
+        var tx = many ?
+          el("text", { x: X(i), y: H - B + 12, "text-anchor": "end", class: "scorechart-tick",
+            transform: "rotate(-60 " + X(i) + " " + (H - B + 12) + ")" }, svg) :
+          el("text", { x: X(i), y: H - 22, "text-anchor": "middle",
+            class: "scorechart-tick" }, svg);
         tx.textContent = x;
       });
       var lab = el("text", { x: L + (W - L - R) / 2, y: H - 4, "text-anchor": "middle",
@@ -122,10 +128,20 @@
       });
       Z.attach(zoom, svg, { L: L, R: R, T: T, B: B, W: W, H: H, x: xr, y: [lo, hi] },
         metric.key);
+      if (onDraw) onDraw(state.metric, state.on);
     }
     draw();
     T.onTheme(draw);
+    return {
+      update: function (rows, x) {
+        d.rows = rows;
+        d.x = x;
+        draw();
+      },
+    };
   }
+
+  window.bdbvScoreChart = { build: build };
 
   function start() {
     document.querySelectorAll(".scorechart[data-src]").forEach(init);
