@@ -1,6 +1,6 @@
 # Baseline models
 
-`randomwalknowcast` and `randomwalk`, its comparison model.
+`randomwalknowcast`, its partially pooled variant `pprandomwalknowcast`, and `randomwalk`, their comparison model.
 { .page-subtitle }
 
 The data and notation are on the [Data methods page](data.md#target-and-notation).
@@ -235,6 +235,43 @@ $$
 Largest remainders make the values whole numbers that sum to $Y^{(k)}(w)$.
 Where every $x^{(k)}_z(w)$ is 0 the split uses the Dirichlet mean shares of the [Renewal models](model.md#split-of-province-samples) page.
 
+## Partially pooled variant
+
+`pprandomwalknowcast` is `randomwalknowcast` with the delay $g_p$, the walk spread $\sigma_p$, the size $\phi_{p,k}$ and the removal rate $b_{p,k}$ partially pooled over zones, provinces and the country, in place of the [own-or-pooled rule](#own-or-pooled-estimates).
+The nowcast draws, the walk and the zone reconciliation are the same.
+Each is fitted in numpyro with NUTS (2 chains of 500 warm-up and 500 draws, target acceptance 0.9).
+
+Each parameter $\theta$ of place $p$ is its parent's plus an offset for the place's level,
+
+$$
+\theta_p = \theta_{\mathrm{pa}(p)} + \tau_{\ell(p)}\, z_p,
+\qquad
+z_p \sim \mathcal{N}(0, 1),
+\qquad
+\tau_\ell \sim \mathcal{N}^+(0, 0.5^2),
+$$
+
+with $\ell(p)$ the level of $p$ (province or zone) and one $\tau_\ell$ for each level and parameter.
+$\theta$ is $\log g_p(j)$ for each age $j$, $\log \sigma_p$, and $\log \phi_{p,k}$ and $\log b_{p,k}$ for each week back $k$.
+The country's values have priors $\mathcal{N}(-3, 2^2)$, $\mathcal{N}(\log 0.2, 1)$, $\mathcal{N}(0, 1.5^2)$ and $\mathcal{N}(\log 0.005, 1.5^2)$.
+A place's counts are the sum of its children's, so only the places forecast (the provinces, or the zones at zone level) enter the likelihood, and their parents are latent centres.
+
+- **Delay.** For each gap $s$ and age $x$ with $\sum N_{p,r}(t) > 0$, the increment is Poisson,
+
+  $$
+  \sum N_{p,r+1}(t) - \sum N_{p,r}(t) \sim \text{Poisson}\Big(\sum N_{p,r}(t)\, \big(e^{\sum_{j=x}^{x+s-1} g_p(j)} - 1\big)\Big),
+  $$
+
+  with the sums, window and preprocessing of the [delay](#delay).
+  With one place and a gap of 1 its maximum likelihood estimate is baselinenowcast's chain ladder factor.
+  It is fitted at the origin and at each earlier release that gives errors.
+- **Walk spread.** The weekly changes of $\log\{1 + Y_{p,o}(w)\}$ over the [walk](#walk) window are $\mathcal{N}(0, \sigma_p^2)$.
+  A change between two weeks with no cases sits at the walk's floor, so it is left out.
+- **Nowcast uncertainty.** The new reports $A_{p,r}(w)$ are $\text{NB}(\widehat{\text{rem}}, \phi_{p,k})$ and the removals $B_{p,r}(w)$ are $\text{Poisson}(b_{p,k} Y_{p,r}(w))$, on the errors of [the fit](#nowcast), made with the pooled delay of each earlier release.
+
+The posterior medians of $g_p$, $\sigma_p$, $\phi_{p,k}$ (kept in $[0.1, 1000]$) and $b_{p,k}$ replace the estimates of `randomwalknowcast`.
+So the forecasts carry the pooled point estimates, not their posterior spread.
+
 ## Limitations
 
 While the release history in the delay window is shorter than $D$, no chain to the final count can be checked against a final count.
@@ -245,6 +282,7 @@ The observation model is learnt from the earlier releases, which may be few.
 Counts include the hub's imputed onsets, which are re-drawn as cases gain onsets, so changes between releases mix reporting with imputation.
 Places are sampled independently, so a shock to a whole release is not shared, and the national band is a sum of independent provincial bands.
 The walk has no drift, and its spread comes from 8 weekly changes, which for small places include Poisson noise.
+`pprandomwalknowcast` plugs in posterior medians, so the uncertainty in its pooled estimates does not widen its forecasts.
 
 [^bnc-paper]: Johnson KE, Tang M, Tyszka E, Nemcova B, Wolffram D, Ergas R, Reich NG, Funk S, Mellor J, Bracher J, Abbott S (2025). Baseline nowcasting methods for handling delays in epidemiological data. Wellcome Open Research. [doi:10.12688/wellcomeopenres.25027.2](https://doi.org/10.12688/wellcomeopenres.25027.2).
 [^bnc-package]: Johnson KE, Tyszka E, Bracher J, Funk S, Abbott S (2025). baselinenowcast: Methods for baseline nowcasting right-truncated epidemiological data. <https://github.com/epinowcast/baselinenowcast/>.
