@@ -44,6 +44,7 @@ nav:
       - CLI: development/cli.md
       - Model development:
           - Model building: model-development/model-building.md
+          - Publication lag: model-development/publication-lag.md
           - Development log: model-development/log.md
       - Citation and licence: citation.md
   - API reference:
