@@ -15,6 +15,7 @@ from collections.abc import Mapping, Sequence
 import pandas as pd
 
 from bdbvhubrenewal.forecasters import NATIONAL
+from bdbvhubrenewal.reporting.legend import starts_on
 
 __all__ = ["ENERGY_SUMMARY", "SUMMARY_METRICS", "summary_html", "summary_rows"]
 
@@ -128,7 +129,7 @@ def summary_rows(
                 "name": m,
                 "light": colours[m][0],
                 "dark": colours[m][1],
-                "on": m in on,
+                "on": starts_on(m, on),
             }
             for m in shown
         ],

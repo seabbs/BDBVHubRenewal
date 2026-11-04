@@ -22,6 +22,7 @@ from bdbvhubrenewal.evaluation.zones import SUMMED, ZONE_BASELINE
 from bdbvhubrenewal.forecasters import ForecastTask, get_model
 from bdbvhubrenewal.forecasters.zones import zone_forecast
 from bdbvhubrenewal.reporting.explorer import compact, trajectories
+from bdbvhubrenewal.reporting.legend import starts_on
 
 __all__ = [
     "ZONE_MODEL",
@@ -272,7 +273,7 @@ def place_chart_data(
                 "name": m,
                 "light": colours[m][0],
                 "dark": colours[m][1],
-                "on": m in fans,
+                "on": starts_on(m, fans),
                 "fan": m in fans,
             }
             for m in models

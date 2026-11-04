@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from bdbvhubrenewal.reporting.legend import starts_on
+
 __all__ = [
     "TRAJECTORY_DRAWS",
     "compact",
@@ -199,6 +201,7 @@ def explorer_data(
             for m, r, loc, k, start, vals in t.itertuples(index=False)
         ]
     have = {r[0] for r in traj}
+    on = set(models) - set(hidden)
     return {
         "truth_vintage": truth_v,
         "complete_through": cut.date().isoformat(),
@@ -215,7 +218,7 @@ def explorer_data(
             {
                 "name": m,
                 "ours": m in ours,
-                "on": m not in hidden,
+                "on": starts_on(m, on),
                 "light": colours[m][0],
                 "dark": colours[m][1],
                 "trajectories": i in have,

@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from bdbvhubrenewal.reporting.legend import starts_on
 from bdbvhubrenewal.reporting.plots import model_colour
 
 __all__ = [
@@ -127,7 +128,7 @@ def score_chart_data(
                 "name": m,
                 "light": colours[m][0],
                 "dark": colours[m][1],
-                "on": m in on,
+                "on": starts_on(m, on),
             }
             for m in shown
         ],
