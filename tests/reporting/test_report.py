@@ -163,7 +163,7 @@ def test_make_report_writes_every_page(
     fig = tmp_path / "fig"
     for name in (
         "target.svg",
-        "scorechart-horizon.svg",
+        "scores-horizon.svg",
         "scores-place.svg",
         "scores-by-truth-dark.svg",
         "forecasts-randomwalk-cd.svg",

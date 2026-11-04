@@ -106,7 +106,6 @@ from bdbvhubrenewal.reporting.plots import (
 from bdbvhubrenewal.reporting.scorechart import (
     ENERGY_METRICS,
     OVERALL_METRICS,
-    SCORE_METRICS,
     score_chart_data,
     score_chart_html,
     write_score_chart,
@@ -371,7 +370,7 @@ def _release_section(
     paths = {
         n: res / f"nowcast-{n}.csv" for n in ("scores", "quantiles", "origins")
     }
-    scores = _ours(pd.read_csv(paths["scores"]), names)
+    scores = _ours(_with_horizon(pd.read_csv(paths["scores"])), names)
     quantiles = _ours(pd.read_csv(paths["quantiles"]), names)
     origins = _ours(pd.read_csv(paths["origins"]).fillna(""), names)
     national = scores["location"] == NATIONAL
@@ -421,6 +420,15 @@ def _release_section(
             _location_names(real),
         ),
         fig / "scores-place.svg",
+    )
+    _write(
+        gen / "scoresummary-horizon.md",
+        summary_html(
+            "../figures/scoresummary-backtest.json",
+            "Scores by horizon",
+            view="horizon",
+            static="../figures/scores-horizon.svg",
+        ),
     )
     _write(
         gen / "scoresummary-place.md",
@@ -1015,50 +1023,6 @@ _RELEASE_MATCH: Final = [
 """Columns that identify one forecast scored against one release."""
 
 
-def _horizon_chart(
-    fig: Path,
-    gen: Path,
-    scores: pd.DataFrame,
-    models: Sequence[str],
-    colours: Mapping[str, tuple[str, str]],
-    stem: str,
-) -> None:
-    """Write an interactive chart of mean scores by horizon, and its fallback.
-
-    Writes `figures/{stem}.json`, the static WIS figure `figures/{stem}.svg`,
-    shown without JavaScript, and `generated/{stem}.md`.
-    """
-    grp = scores.groupby(["model", "horizon"])
-    table = grp[list(SCORE_METRICS)].mean()
-    table.insert(0, "n", grp.size())
-    table = table.reset_index()
-    save_light_dark(
-        partial(
-            plot_scores,
-            scores,
-            by="horizon",
-            metric="wis",
-            models=models,
-            colours=colours,
-        ),
-        fig / f"{stem}.svg",
-    )
-    write_score_chart(
-        fig / f"{stem}.json",
-        score_chart_data(
-            table, "horizon", SCORE_METRICS, models, colours=colours
-        ),
-    )
-    _write(
-        gen / f"{stem}.md",
-        score_chart_html(
-            f"../figures/{stem}.json",
-            "Mean scores by horizon",
-            static=f"../figures/{stem}.svg",
-        ),
-    )
-
-
 def _horizon_table(
     gen: Path,
     reported: pd.DataFrame,
@@ -1307,8 +1271,11 @@ def _backtest_page(
     k = config.complete_after_weeks
     scores = _ours(_release_scores(res), names)
     reported = scores.loc[scores["target"] == "reported"]
-    _horizon_chart(
-        fig, gen, reported, names, _model_colours(names), "scorechart-horizon"
+    save_light_dark(
+        partial(
+            plot_scores, reported, by="horizon", metric="wis", models=names
+        ),
+        fig / "scores-horizon.svg",
     )
     _horizon_table(gen, reported, names)
     _write(gen / "backtest-findings.md", _backtest_findings(scores))

@@ -64,8 +64,8 @@ def summary_rows(
     ----------
     scores : pandas.DataFrame
         One row per forecast scored against one release, with `model`,
-        `origin`, `truth_vintage`, `location`, `target_end_date` and the
-        metric columns.
+        `origin`, `truth_vintage`, `location`, `target_end_date`,
+        `horizon` (weeks from the reference date) and the metric columns.
     models : sequence of str
         Models in order. Rows of other models are left out.
     colours : mapping of str to (str, str)
@@ -89,9 +89,10 @@ def summary_rows(
         `baseline` (its index), `metrics` (key, label, ref, relative),
         `origins`, `releases`, `weeks`, `pools` (id and label, in order),
         `places` (id, name, pool) and `rows`: model, origin, release,
-        place and week indices, then each metric. With `energy`, also
-        `energy`: `metrics` (key and label) and `rows` of model, origin,
-        release and pool indices, then each energy score.
+        place and week indices, then each metric, and `horizons`, each
+        row's horizon. With `energy`, also `energy`: `metrics` (key and
+        label) and `rows` of model, origin, release and pool indices, then
+        each energy score.
     """
     shown = [m for m in models if m in set(scores["model"])]
     s = scores.loc[scores["model"].isin(shown)]
@@ -113,6 +114,7 @@ def summary_rows(
         "target_end_date": {w: i for i, w in enumerate(weeks)},
     }
     cols = s[[*idx, *keys]].astype(dict.fromkeys(idx, str))
+    horizons = [int(h) for h in s["horizon"]]
     rows = [
         [
             *(idx[c][v] for c, v in zip(idx, r[: len(idx)], strict=True)),
@@ -143,6 +145,7 @@ def summary_rows(
             {"id": p, "name": names.get(p, p), "pool": _pool(p)} for p in places
         ],
         "rows": rows,
+        "horizons": horizons,
     }
     if energy is not None:
         out["energy"] = _energy_rows(energy, idx, pools)
@@ -191,8 +194,9 @@ def summary_html(
     title : str
         Accessible name of the summary.
     view : str
-        `"overall"` for one group of bars for the chosen scale, or
-        `"place"` for one group per place and a place picker.
+        `"overall"` for one group of bars for the chosen scale, `"place"`
+        for one group per place and a place picker, or `"horizon"` for a
+        line per model by horizon.
     static : str, optional
         Path of a static SVG, relative to the page, shown without
         JavaScript. Its `-dark` twin is shown in the dark theme.

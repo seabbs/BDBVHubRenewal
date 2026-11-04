@@ -2,7 +2,8 @@
 // browser for the selected scale, round and models, as a score chart
 // (scorechart.js) and a table. data-view="overall" draws one group of bars
 // for the scale; data-view="place" draws one group per place, and a place
-// picker narrows the table.
+// picker narrows the table; data-view="horizon" draws a line per model by
+// horizon.
 (function () {
   "use strict";
   var h = window.bdbvToggles.h;
@@ -25,6 +26,7 @@
   function build(root, d, view) {
     root.textContent = "";
     var byPlace = view === "place";
+    var byHorizon = view === "horizon";
     var controls = h("div", { class: "explorer-controls" }, root);
     var selScale = h("select", {}, h("label", {}, controls, "Scale "));
     d.pools.forEach(function (p) {
@@ -63,12 +65,15 @@
       return d.places.map(function (p, i) { return { i: i, p: p }; })
         .filter(function (x) { return x.p.pool === selScale.value; });
     }
-    function keep(placeSet) {
+    function keep(placeSet, horizon) {
       var round = selRound.value === "all" ? null : +selRound.value;
-      return function (r) {
-        return placeSet[r[3]] && (round === null || r[1] === round);
+      return function (r, i) {
+        return placeSet[r[3]] && (round === null || r[1] === round) &&
+          (horizon === undefined || d.horizons[i] === horizon);
       };
     }
+    var horizons = d.horizons.filter(function (v, i, a) { return a.indexOf(v) === i; })
+      .sort(function (a, b) { return a - b; });
     function set(list) {
       var s = {};
       list.forEach(function (x) { s[x.i] = true; });
@@ -83,6 +88,18 @@
 
     // Rows for the chart: [model, x index, n, ...one value per metric].
     function chartRows() {
+      if (byHorizon) {
+        var all = set(places());
+        var hrows = [];
+        horizons.forEach(function (hz, xi) {
+          summarise(d, keep(all, hz)).forEach(function (s) {
+            hrows.push([s.model, xi, s.n].concat(d.metrics.map(function (m) {
+              return value(s, m);
+            })));
+          });
+        });
+        return { rows: hrows, x: horizons };
+      }
       var groups = byPlace ? places().map(function (x) { return [x]; }) : [places()];
       var x = byPlace ? groups.map(function (g) { return g[0].p.name; }) :
         [selScale.options[selScale.selectedIndex].text];
@@ -145,8 +162,8 @@
     fillPlaces();
     var first = chartRows();
     var chart = window.bdbvScoreChart.build(chartDiv, {
-      kind: "bar",
-      x_label: byPlace ? "Place" : "Scale",
+      kind: byHorizon ? "line" : "bar",
+      x_label: byHorizon ? "Horizon" : byPlace ? "Place" : "Scale",
       x: first.x,
       models: d.models,
       metrics: metrics,
