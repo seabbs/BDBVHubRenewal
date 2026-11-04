@@ -97,3 +97,27 @@ def test_delay_check_draws_growth_dispersion_and_removals(
     assert len(mid.get_lines()) >= 1
     assert len(right.get_lines()) >= 1
     plt.close(fig)
+
+
+def test_plot_downward_updates_has_three_scales() -> None:
+    target = _target(["2026-10-24", "2026-10-31"])
+    target = pd.concat(
+        [target, target.assign(location="CD-IT", location_name="Ituri")]
+    )
+    zones = target.loc[target["location"] == "CD-IT"].assign(
+        location="CD-IT-01"
+    )
+    fig = plots.plot_downward_updates(target, zones, mode="dark")
+    titles = [ax.get_title() for ax in fig.axes[:3]]
+    assert titles == ["Country", "Provinces", "Health zones"]
+    assert fig.legends[0].get_texts()[0].get_text() == (
+        "2026-10-24 to 2026-10-31"
+    )
+    plt.close(fig)
+
+
+def test_plot_imputed_by_release_one_line_per_place() -> None:
+    target = _target(["2026-10-24", "2026-10-31"]).assign(imputed=2)
+    fig = plots.plot_imputed_by_release(target)
+    assert len(fig.axes[0].lines) == 1
+    plt.close(fig)
