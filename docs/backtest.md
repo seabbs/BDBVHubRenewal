@@ -22,9 +22,11 @@ Pick a place to narrow the table.
 
 --8<-- "scoresummary-place.md"
 
-??? note "Tables"
+??? note "Scores by target, scale and place, over every origin"
 
     --8<-- "scores-location.md"
+
+--8<-- "zone-section.md"
 
 --8<-- "backtest-forecasts.md"
 
@@ -48,5 +50,3 @@ Each origin's forecasts scored on the counts each later release reported.
     --8<-- "truth-changes.md"
 
 --8<-- "lopo-section.md"
-
---8<-- "zone-section.md"

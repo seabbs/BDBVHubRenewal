@@ -60,7 +60,7 @@ from bdbvhubrenewal.evaluation.nowcast import (
     relative_wis,
 )
 from bdbvhubrenewal.evaluation.scoring import summarise_scores
-from bdbvhubrenewal.evaluation.zones import zone_relative_skill
+from bdbvhubrenewal.evaluation.zones import SUMMED, zone_relative_skill
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastTask,
@@ -255,7 +255,7 @@ def make_report(
     # Backtest, held-out and comparison pages.
     names = [s.name for s in list_models()]
     _release_section(fig, gen, res, real, names)
-    _backtest_page(fig, gen, res, out, config, target, names)
+    _backtest_page(fig, gen, res, out, config, target, names, data_dir)
     _heldout_page(fig, gen, res, target, names, config)
     _comparison_page(fig, gen, Path(hub_comparison), target)
 
@@ -372,8 +372,9 @@ def _release_section(
     origins = _ours(pd.read_csv(paths["origins"]).fillna(""), names)
     national = scores["location"] == NATIONAL
     scores["pool"] = national.map({True: "national", False: "provinces"})
-    zones = pd.read_csv(res / "zone-scores.csv", low_memory=False)
-    zones = zones.loc[zones["model"].isin(set(scores["model"]))]
+    zones = _as_submitted(
+        pd.read_csv(res / "zone-scores.csv", low_memory=False)
+    )
     pooled = pd.concat([scores, zones.assign(pool="zones")])
     pooled["target"] = pooled["target"].map(_TARGET_LABELS)
     energy = _ours(
@@ -429,6 +430,13 @@ def _release_section(
             "Scores by horizon",
             view="horizon",
             static="../figures/scores-horizon.svg",
+        ),
+    )
+    _write(
+        gen / "scores-location.md",
+        filter_table(
+            _table(relative_wis(pooled, ("target", "pool", "location"))),
+            ["target", "pool", "model"],
         ),
     )
     _write(
@@ -913,10 +921,66 @@ def _lopo_section(path: Path) -> str:
     )
 
 
+def _zone_truth_changes(
+    fig: Path, data_dir: Path | str, target: pd.DataFrame
+) -> str:
+    """Chart each province's zone counts by release, a tab per province.
+
+    Each release's zone counts are taken over the latest release's last
+    16 weeks, with 0 for a week with no onsets.
+    """
+    daily_zones = load_daily_zones(data_dir)
+    real = target.loc[target["kind"] == "real"]
+    names = _location_names(target)
+    end = pd.Timestamp(real["target_end_date"].max())
+    start = (end - pd.Timedelta(weeks=16)).strftime("%Y-%m-%d")
+    zones = pd.concat(
+        [
+            zone_counts(daily_zones, v, start, names)
+            for v in sorted(set(real["vintage"].astype(str)))
+            if (daily_zones["vintage"].astype(str) == v).any()
+        ],
+        ignore_index=True,
+    )
+    tabs = []
+    by_prov = zones.loc[zones["vintage"] == zones["vintage"].max()]
+    order = by_prov.groupby("province")["total"].sum()
+    for prov in order.sort_values(ascending=False, kind="stable").index:
+        path = fig / f"truth-changes-{str(prov).lower()}.svg"
+        save_light_dark(
+            partial(
+                plot_truth_changes,
+                zones.loc[zones["province"] == prov],
+                {},
+            ),
+            path,
+        )
+        label = names.get(str(prov), str(prov))
+        alt = f"Zone counts in {label} by onset week in each release."
+        tabs.append(
+            f'=== "{label}"\n\n'
+            f"    ![{alt}](figures/{path.name}#only-light)\n"
+            f"    ![{alt}](figures/{path.stem}-dark.svg#only-dark)\n"
+        )
+    return "\n".join(tabs)
+
+
+def _as_submitted(zones: pd.DataFrame) -> pd.DataFrame:
+    """Keep the zone rows made to sum to the provinces, as submitted.
+
+    They are named by their model, so `randomwalk` is the summed
+    baseline.
+    """
+    summed = zones.loc[zones["model"].str.endswith(SUMMED)]
+    return summed.assign(model=summed["model"].str.removesuffix(SUMMED))
+
+
 def _zone_section(path: Path, energy_path: Path) -> str:
-    """Return the health-zone section."""
-    scores = pd.read_csv(path, low_memory=False)
-    joint = relative_energy(pd.read_csv(energy_path), by=("scale",))
+    """Return the health-zone table, closed, in the submitted form."""
+    scores = _as_submitted(pd.read_csv(path, low_memory=False))
+    joint = relative_energy(
+        _as_submitted(pd.read_csv(energy_path)), by=("scale",)
+    )
     cols = ["n", "wis", "log_wis", "coverage_50", "coverage_90", "bias"]
     energy = ["n_energy", "rel_energy", "rel_log_energy"]
     table = (
@@ -926,20 +990,9 @@ def _zone_section(path: Path, energy_path: Path) -> str:
         )
         .merge(joint[["model", *energy]], on="model")
     )
-    by = zone_relative_skill(scores, by=("horizon",)).pivot(
-        index="model", columns="horizon", values="relative_wis"
-    )
-    by.columns = [f"week {int(h)}" for h in by.columns]
-    return (
-        "## Health zones\n\n"
-        "`randomwalk` and `randomwalknowcast` on each zone with cases, as "
-        "run and summed to provinces "
-        "([Health zones](methods/evaluation.md#health-zones)).\n"
-        "The [energy score](methods/evaluation.md#energy-score) takes every "
-        "zone and week as one forecast per origin and release.\n\n"
-        + _table(table[["model", *cols, "relative_wis", *energy]])
-        + "\n\nRelative WIS by week, with 0 the week of the reference "
-        "date.\n\n" + _table(by.reset_index())
+    return _dropdown(
+        _table(table[["model", *cols, "relative_wis", *energy]]),
+        "Health zones, over every origin",
     )
 
 
@@ -1273,6 +1326,7 @@ def _backtest_page(
     config: BacktestConfig,
     target: pd.DataFrame,
     names: list[str],
+    data_dir: Path | str,
 ) -> None:
     k = config.complete_after_weeks
     scores = _ours(_release_scores(res), names)
@@ -1285,10 +1339,6 @@ def _backtest_page(
     )
     _horizon_table(gen, reported, names)
     _write(gen / "backtest-findings.md", _backtest_findings(scores))
-    _write(
-        gen / "scores-location.md",
-        _table(relative_wis(scores, ("target", "location"))),
-    )
     save_light_dark(
         partial(plot_scores_by_truth, reported, models=names),
         fig / "scores-by-truth.svg",
@@ -1321,6 +1371,9 @@ def _backtest_page(
         gen / "truth-changes.md",
         f"![{alt}](figures/truth-changes.svg#only-light)\n"
         f"![{alt}](figures/truth-changes-dark.svg#only-dark)\n\n"
+        "Health zones, by province.\n\n"
+        + _zone_truth_changes(fig, data_dir, target)
+        + "\n"
         + _dropdown(_table(wide.reset_index()), "National counts by release"),
     )
     fc_path = out / "forecasts.csv.gz"
