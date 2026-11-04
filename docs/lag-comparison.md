@@ -114,6 +114,15 @@ Its two chains settle on different starting offsets of the province log R deviat
 The reporting parameters converge well in every fit.
 These offsets are sampled centred, so the proposed fix is to sample them non-centred, a change to the model for Sam.
 
+The sampler analysis in `SPEED-REPORT.md` places the deep trees in the non-centred Rt walk steps.
+Neighbouring steps are strongly correlated there, with a condition number of about 1e6 that a diagonal mass matrix cannot remove.
+The delay walk γ(s) is at about 1e4 on the same measure.
+`renewalfixdelay` drops γ(s), and at 2026-11-01 it converges far better than `renewal` on the same code and seed, with R-hat 1.008, bulk ESS 193 and 1.8% divergent draws against 1.054, 35 and 3.9%.
+Its chains do not split on the starting offsets, which reach R-hat 1.005.
+It still runs at the tree depth limit on 98% of draws.
+So γ(s) may add to the hard geometry, but the deep trees remain without it, as the Rt walk analysis predicts.
+This is one origin and one seed.
+
 ## Result
 
 With the lag `renewal` scores better than without it at every origin and release, relative WIS 0.91, 0.95 and 2.12 against 1.32, 1.96 and 3.72, and its 90% coverage is higher, 0.71 to 0.85 against 0.62 to 0.75.
