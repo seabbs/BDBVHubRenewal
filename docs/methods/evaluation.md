@@ -50,7 +50,9 @@ $$
 The energy score on the log scale is the energy score of $\log(1 + \mathbf{y})$ against $\log(1 + \mathbf{X}_i)$, never the log of the score.
 Relative energy scores are ratios of means against `randomwalk` over the origins and releases both have, and $n$ counts those.
 The score rewards a joint pattern across places only where draws are joint.
-The renewal models' draws are joint across places, one posterior draw per sample index, and their zones split each province draw.
+`renewal` and `renewalbvd` draws are joint across provinces, one posterior draw per sample index.
+`renewalsp` fits each province on its own, so its draws are independent across provinces.
+Zones split each province draw, so zones are joint within a province for every renewal model.
 `randomwalk` and `randomwalknowcast` draw each place independently.
 Hub teams' samples are joint across weeks within a place only, as the hub's sample format sets, so pairing their indices across places scores them as independent across places.
 
