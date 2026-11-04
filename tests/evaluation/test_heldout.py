@@ -290,3 +290,5 @@ def test_merge_by_model_replaces_only_the_models_run(tmp_path: Path) -> None:
         ("randomwalk", 3.0),
     ]
     assert merge_by_model(tmp_path / "missing.csv", new) is new
+    # A rerun of every model in the file replaces it.
+    assert merge_by_model(path, old) is old

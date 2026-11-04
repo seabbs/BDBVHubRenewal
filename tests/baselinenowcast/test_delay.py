@@ -136,3 +136,11 @@ def test_apply_delay_aborts() -> None:
     short[-1, 1:] = False
     with pytest.raises(ValueError):
         apply_delay(v, short, np.array([0.0, 0.5, 0.3, 0.2]))
+
+
+def test_estimate_and_apply_delay_aborts() -> None:
+    v, m = _toy()
+    with pytest.raises(ValueError):
+        estimate_and_apply_delay(v, m, n=99)
+    with pytest.raises(ValueError):
+        estimate_and_apply_delay(v, m, n=2)
