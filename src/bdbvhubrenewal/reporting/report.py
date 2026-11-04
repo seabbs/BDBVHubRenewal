@@ -71,6 +71,7 @@ from bdbvhubrenewal.reporting.nowcast_plots import (
 from bdbvhubrenewal.reporting.plots import (
     comparison_colours,
     comparison_label,
+    model_colour,
     plot_delay_check,
     plot_delay_distribution,
     plot_delays_over_time,
@@ -1150,6 +1151,13 @@ def _backtest_page(
                 target,
                 labels,
                 k,
+                {
+                    m: (
+                        model_colour(m, names, "light"),
+                        model_colour(m, names, "dark"),
+                    )
+                    for m in shown
+                },
                 baseline="randomwalk",
                 scores=complete.merge(rounds, on="vintage"),
             ),
@@ -1407,13 +1415,13 @@ def _overall_table(
     scores: pd.DataFrame,
     baseline: str,
     hub_ids: Mapping[str, str],
-    teams: Sequence[str],
+    colours: Mapping[str, tuple[str, str]],
 ) -> str:
     """Chart and tabulate every model over all scored rounds, by scale.
 
     The chart starts with the hub teams, our submitted models and the
-    baseline. Our other models can be switched on. `teams` are every hub
-    team in the round figures, so a team has the same grey in both.
+    baseline. Our other models can be switched on. `colours` are those of
+    the round figures and the explorer, so a model has one colour in all.
     """
     overall = overall_comparison(scores, baseline)
     raw = list(overall["model"])
@@ -1431,7 +1439,6 @@ def _overall_table(
     )
     registry = [spec.name for spec in list_models()]
     ours = dict(sorted(ours.items(), key=lambda lm: registry.index(lm[1])))
-    colours = comparison_colours(ours, teams)
     shown = {comparison_label(m, "real", hub_ids) for m in [*hub_ids, baseline]}
     write_score_chart(
         fig / "scorechart-comparison.json",
@@ -1516,6 +1523,14 @@ def _comparison_page(
     if baseline != summary["preferred_baseline"]:
         note = f" (`{summary['preferred_baseline']}` once it is registered)"
     quantiles = pd.read_csv(cmp_dir / "quantiles.csv.gz")
+    hub = quantiles["source"] == "hub"
+    colours = comparison_colours(
+        {
+            comparison_label(m, "real", hub_ids): m
+            for m in quantiles.loc[~hub, "model"].unique()
+        },
+        sorted(set(quantiles.loc[hub, "model"])),
+    )
     sent = quantiles.loc[quantiles["source"] == "submitted", "reference_date"]
     rounds = ", ".join(sorted(set(sent.astype(str)))) or "none yet"
     _write(
@@ -1546,9 +1561,7 @@ def _comparison_page(
                 scores,
                 baseline,
                 hub_ids,
-                sorted(
-                    set(quantiles.loc[quantiles["source"] == "hub", "model"])
-                ),
+                colours,
             )
         )
         table = summarise_comparison(scores, baseline)
@@ -1610,6 +1623,7 @@ def _comparison_page(
             target,
             _location_names(target),
             k,
+            colours,
             baseline=_baseline_label(baseline, labelled),
             scores=explorer_scores,
             truth_vintage=truth,
