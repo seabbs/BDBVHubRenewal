@@ -67,6 +67,7 @@ jobs:
         if: github.event_name != 'pull_request'
         run: uv run pytest -q -m slow --durations=0
       - name: Backtest and nowcast smoke test
+        timeout-minutes: 15
         # The renewal variants are fitted per vintage, so the smoke test
         # runs random walk, and renewal with --no-fit, which would take
         # hours if it fitted. The full backtest runs on archie.
