@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from bdbvhubrenewal.data import load_daily_zones
+from bdbvhubrenewal.data.zones import hub_zones
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig
 from bdbvhubrenewal.evaluation.hubcompare import (
     ATTRIBUTION,
@@ -30,6 +32,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 pytestmark = pytest.mark.usefixtures("flat_model")
 WEEKS = ["2026-09-19", "2026-09-26", "2026-10-03", "2026-10-10"]
+DAILY_ZONES = load_daily_zones(ROOT / "data")
+ZONES = hub_zones(ROOT / "data" / "hub-config" / "tasks.json")
 NO_ZONES = pd.DataFrame(
     {
         **{c: pd.Series(dtype=str) for c in ("kind", "vintage", "location")},
@@ -110,8 +114,10 @@ def _ours(
         delays,
         config,
         ["flat"],
+        daily,
+        DAILY_ZONES,
+        ZONES,
         min_horizon=-4,
-        daily=daily,
     )
 
 
@@ -179,11 +185,15 @@ def test_our_forecasts_cover_the_hub_weeks(
         delays,
         config,
         ["flat"],
+        daily,
+        DAILY_ZONES,
+        ZONES,
         min_horizon=-5,
-        daily=daily,
     )
     assert set(fc["model"]) == {"flat"}
     assert set(fc["source"]) == {"real"}
+    # The model runs at zone level too.
+    assert (fc["location"].str.count("-") == 2).any()
     assert fc["horizon"].min() == -5
     assert fc["horizon"].max() == 3
 

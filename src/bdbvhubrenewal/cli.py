@@ -880,16 +880,19 @@ def _compare_hub(args: argparse.Namespace) -> int:
         pd.to_datetime(hub["target_end_date"])
         - pd.to_datetime(hub["reference_date"])
     ).dt.days // 7
+    codes = hub_zones(Path(args.data) / "hub-config" / "tasks.json")
     ours = hc.our_forecasts(
         rounds,
         target,
         delays,
         config,
         live,
+        daily,
+        load_daily_zones(args.data),
+        codes,
         min_horizon=min(int(horizons.min()), config.min_horizon)
         if len(hub)
         else None,
-        daily=daily,
     )
     stored = hc.stored_forecasts(
         cfg.stored if args.stored is None else args.stored,
@@ -904,11 +907,7 @@ def _compare_hub(args: argparse.Namespace) -> int:
         hc.load_hub_submissions(cfg.submitted),
         hub_ids,
     )
-    zones = hc.zone_truth(
-        load_health_zones(args.data),
-        hub_zones(Path(args.data) / "hub-config" / "tasks.json"),
-        target,
-    )
+    zones = hc.zone_truth(load_health_zones(args.data), codes, target)
     scores, energy, pending = hc.score_comparison(
         forecasts, target, delays, config, daily, zones
     )

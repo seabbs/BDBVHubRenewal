@@ -42,6 +42,7 @@ import pandas as pd
 import yaml
 
 from bdbvhubrenewal.data.dates import as_date, reference_date_for_vintage
+from bdbvhubrenewal.data.zones import weekly_zone_counts
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     make_tasks,
@@ -58,6 +59,7 @@ from bdbvhubrenewal.evaluation.scoring import (
     summarise_scores,
 )
 from bdbvhubrenewal.forecasters import get_model, list_models
+from bdbvhubrenewal.forecasters.zones import zone_task
 
 __all__ = [
     "ATTRIBUTION",
@@ -474,10 +476,15 @@ def our_forecasts(
     delays: pd.DataFrame,
     config: BacktestConfig,
     models: Sequence[str],
+    daily: pd.DataFrame,
+    daily_zones: pd.DataFrame,
+    zones: Sequence[str],
     min_horizon: int | None = None,
-    daily: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Run our models for hub rounds from the matching vintages.
+
+    Each model runs on the country and provinces, and again on the health
+    zones with cases at the vintage, as the zone backtest runs them.
 
     Parameters
     ----------
@@ -488,12 +495,16 @@ def our_forecasts(
     config : BacktestConfig
         Horizons, samples and seed.
     models : sequence of str
-        Registered model names.
+        Registered model names that run at zone level.
+    daily : pandas.DataFrame
+        Daily onsets by release of the country and provinces.
+    daily_zones : pandas.DataFrame
+        Daily onsets by release of the health zones (`load_daily_zones`).
+    zones : sequence of str
+        The hub's zone codes (`hub_zones`).
     min_horizon : int, optional
         First week, in weeks from the reference date, to cover the weeks
         the hub forecasts did. Defaults to `config.min_horizon`.
-    daily : pandas.DataFrame, optional
-        Daily onsets by release, which the random walk models need.
 
     Returns
     -------
@@ -512,7 +523,12 @@ def our_forecasts(
         if vintage is None or not built:
             continue
         rows = real.loc[real["vintage"] == vintage]
-        fc = run_forecasts(built, make_tasks(rows, delays, config, daily=daily))
+        tasks = make_tasks(rows, delays, config, daily=daily)
+        counts = weekly_zone_counts(daily_zones, vintage)
+        here = tuple(z for z in zones if z in set(counts["location"]))
+        history = pd.concat([daily, daily_zones])
+        tasks += [zone_task(t, counts, here, history) for t in tasks]
+        fc = run_forecasts(built, tasks)
         fc["source"] = "real"
         frames.append(fc)
     if not frames:
