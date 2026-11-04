@@ -128,8 +128,6 @@ BVD_PROVINCES = {
     "nord_ubangi": "CD-NU",
 }
 """BVDOutbreakSize patch keys to hub province codes."""
-BVD_SHIFT = 6
-"""Days from BVD's infection-time Rt to our onset-time Rt (incubation)."""
 BVD_TAU_MIN = 0.05
 """Floor on the SD of a BVD patch's deviation from the national log Rt."""
 Z90 = 1.6448536
@@ -245,7 +243,7 @@ def bvd_inputs(
         `day`, `groups`, `values`, `scales` and `kinds` for
         `RtPseudoObservation`, or None if nothing is left.
     """
-    day = (pd.Timestamp(rows["as_of"].iloc[0]).date() - start).days + BVD_SHIFT
+    day = (pd.Timestamp(rows["as_of"].iloc[0]).date() - start).days
     groups, values, scales, kinds = [], [], [], []
     for row in rows.to_dict("records"):
         log_mean, log_sd = float(row["log_mean"]), float(row["log_sd"])
