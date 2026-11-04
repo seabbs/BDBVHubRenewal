@@ -27,7 +27,6 @@ register_model("my_model", MyModel, "One line describing it.")
 
 Import the module in `bdbvhubrenewal/forecasters/__init__.py`.
 The backtest, the [Backtest](../backtest.md) and [Nowcast](../nowcast.md) pages, `compare-hub` and `nowcast --model my_model` then include it.
-Once it is chosen for submission, an entry in `results/model-choice.yml` adds it to the [held-out evaluation](../heldout.md).
 The backtest adds the national total, the horizons and the vintage kind.
 
 For the leave-one-province-out check, set `supports_mask = True` and drop the provinces in `task.mask` from the likelihood while still forecasting them.

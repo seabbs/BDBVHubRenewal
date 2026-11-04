@@ -32,7 +32,6 @@ nav:
       - Nowcast: nowcast.md
       - Backtest: backtest.md
       - Simulation checks: simulation.md
-      - Held-out evaluation: heldout.md
       - Comparison with hub forecasts: comparison.md
   - Submission:
       - Submission log: submission/rounds/index.md
