@@ -9,6 +9,8 @@ Write and check hub files and model metadata, and build the submitted round page
 
 ::: bdbvhubrenewal.submission.hub
 
+::: bdbvhubrenewal.submission.metadata
+
 ::: bdbvhubrenewal.submission.validate
     options:
       members:
