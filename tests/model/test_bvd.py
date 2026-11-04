@@ -16,7 +16,7 @@ from bdbvhubrenewal.model.inputs import (
     bvd_rows,
     vintage_from_tables,
 )
-from bdbvhubrenewal.model.observation import RtPseudoObservation
+from bdbvhubrenewal.model.rt_observation import RtPseudoObservation
 
 from .conftest import SIM_LOCATIONS, VINTAGE_DAYS, vintage_date
 from .test_model import trace
