@@ -143,7 +143,7 @@ def family_table(delays: pd.DataFrame, cuts: dict) -> pd.DataFrame:
                 lambda w, top=top: uniform(top, w),
                 True,
             )
-            for top in (1, 2, 3)
+            for top in (1, 2, 3, 4, 5)
         ]
         for name, make, free in families:
             value, tail, bs = fit(make, free, pairs)
@@ -170,18 +170,35 @@ def tail_profile(pairs: list[Pair]) -> pd.DataFrame:
     return out
 
 
-def total_growth(daily: pd.DataFrame, delays: pd.DataFrame) -> pd.DataFrame:
+def tail_by_pair(pairs: list[Pair], names: list[str]) -> pd.DataFrame:
+    """Tail weight fitted to each pair alone and with each pair left out."""
+    rows = []
+    subsets = [([k], names[k]) for k in range(len(pairs))]
+    subsets += [
+        ([j for j in range(len(pairs)) if j != k], f"without {names[k]}")
+        for k in range(len(pairs))
+    ]
+    for keep, label in subsets:
+        _, tail, _ = fit(
+            lambda w: uniform(3, w), True, [pairs[k] for k in keep]
+        )
+        rows.append({"pairs": label, "tail": round(tail, 3)})
+    return pd.DataFrame(rows)
+
+
+def total_growth(
+    daily: pd.DataFrame, delays: pd.DataFrame, weeks: tuple[int, int] = (8, 99)
+) -> pd.DataFrame:
     r"""National total of each onset week, earlier over later release.
 
     The prediction averages, over the days $s$ of the week,
     $\sum_d f(d) F(T_k - s - d) / \sum_d f(d) F(T_{k+1} - s - d)$, with
-    $f$ the latest delay file's pmf for onset weeks at least 8 weeks old.
+    $f$ the latest delay file's pmf for onset weeks `weeks` old (at least
+    8 by default).
     """
     latest = delays.vintage.max()
-    old = delays[
-        (delays.vintage == latest)
-        & (delays.onset_week < latest - pd.Timedelta(weeks=8))
-    ]
+    age = (latest - delays.onset_week).dt.days // 7
+    old = delays[(delays.vintage == latest) & age.between(weeks[0], weeks[1])]
     f = np.bincount(old.delay.clip(0, DMAX), minlength=DMAX + 1)
     f = f / f.sum()
     cd = daily[daily.location == "CD"].copy()
@@ -215,6 +232,66 @@ def total_growth(daily: pd.DataFrame, delays: pd.DataFrame) -> pd.DataFrame:
                 row[name] = reported(pmf, a, week) / reported(pmf, b, week)
             rows.append(row)
     return pd.DataFrame(rows).round(3)
+
+
+def coverage(delays: pd.DataFrame) -> pd.DataFrame:
+    r"""Coverage of the stored nowcasts of weeks 0 to 3 back, and with the tail.
+
+    Uses the backtest's nowcasts of what each later release reported
+    (`results/nowcast-quantiles.csv`) for Ituri, North Kivu and national.
+    The tail column rescales each quantile by
+    $\{P_w(V) / P_w(T)\} / \{P_u(V) / P_u(T)\}$, with $P(T)$ the share of
+    an onset week's cases published by $T$ under the tail ($w$) or the
+    current lag ($u$), from the same fixed delay pmf as `total_growth`.
+    That is an approximation to refitting with the tail.
+    """
+    latest = delays.vintage.max()
+    old = delays[
+        (delays.vintage == latest)
+        & (delays.onset_week < latest - pd.Timedelta(weeks=8))
+    ]
+    f = np.bincount(old.delay.clip(0, DMAX), minlength=DMAX + 1)
+    f = f / f.sum()
+
+    def published(pmf: np.ndarray, release: str, week: str) -> float:
+        end = pd.Timestamp(week)
+        days = pd.date_range(end - pd.Timedelta(days=6), end)
+        lags = np.arange(DMAX + 1)
+        return np.mean(
+            [
+                (f * cdf_at(pmf, (pd.Timestamp(release) - s).days - lags)).sum()
+                for s in days
+            ]
+        )
+
+    q = pd.read_csv("results/nowcast-quantiles.csv")
+    q = q[
+        (q.target == "reported")
+        & q.weeks_back.between(0, 3)
+        & q.location.isin(["CD", "CD-IT", "CD-NK"])
+        & q.model.isin(["renewal", "renewalbvd", "renewalsp"])
+    ].copy()
+    tail, now = LAGS["uniform 0..3 + tail"], LAGS["uniform 0..3"]
+    q["scale"] = [
+        published(tail, v, w)
+        / published(tail, o, w)
+        / (published(now, v, w) / published(now, o, w))
+        for o, v, w in zip(
+            q.origin, q.truth_vintage, q.target_end_date, strict=True
+        )
+    ]
+    rows = []
+    for (model, back), g in q.groupby(["model", "weeks_back"]):
+        row = {"model": model, "weeks back": back, "n": len(g)}
+        for label, k in [("current", 1.0), ("tail", g.scale)]:
+            lo5, lo25 = g.q5 * k, g.q25 * k
+            hi75, hi95, mid = g.q75 * k, g.q95 * k, g.q50 * k
+            row[f"{label} 50%"] = ((g.truth >= lo25) & (g.truth <= hi75)).mean()
+            row[f"{label} 90%"] = ((g.truth >= lo5) & (g.truth <= hi95)).mean()
+            row[f"{label} above 95%"] = (g.truth > hi95).mean()
+            row[f"{label} 90% width"] = ((hi95 - lo5) / mid).mean()
+        rows.append(row)
+    return pd.DataFrame(rows).round(2)
 
 
 def plot_pairs(pairs: list[Pair], table: pd.DataFrame, names: list[str]):
@@ -324,6 +401,7 @@ def main() -> None:
     table.to_csv(OUT / "lag-fits.csv", index=False)
     print(table.to_string())
     pairs = release_pairs(delays, cuts["release date"])
+    names = [f"{a:%m-%d} to {b:%m-%d}" for a, b in itertools.pairwise(releases)]
     profile = tail_profile(pairs)
     profile.to_csv(OUT / "tail-profile.csv", index=False)
     inside = profile.loc[profile.nll <= 1.92, "tail"]
@@ -331,10 +409,18 @@ def main() -> None:
     growth = total_growth(daily, delays)
     growth.to_csv(OUT / "total-check.csv", index=False)
     print(growth.to_string())
-    names = [f"{a:%m-%d} to {b:%m-%d}" for a, b in itertools.pairwise(releases)]
+    recent = total_growth(daily, delays, (3, 6))
+    recent.to_csv(OUT / "total-check-recent-delay.csv", index=False)
+    print(recent.to_string())
+    by_pair = tail_by_pair(pairs, names)
+    by_pair.to_csv(OUT / "tail-by-pair.csv", index=False)
+    print(by_pair.to_string())
     plot_pairs(pairs, table, names)
     plot_totals(growth)
     plot_prototype()
+    cover = coverage(delays)
+    cover.to_csv(OUT / "coverage.csv", index=False)
+    print(cover.to_string())
 
 
 if __name__ == "__main__":
