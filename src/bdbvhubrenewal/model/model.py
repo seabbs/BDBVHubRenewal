@@ -348,51 +348,69 @@ def fit_weeks(data: Vintage, config: ModelConfig) -> int:
     return data.n_weeks
 
 
+def capped_concentration(
+    name: str, inv_sqrt_rv: DistributionalVariable, floor: float
+) -> TransformedVariable:
+    r"""Concentration $1 / (x^2 + c)$ from $x = 1 / \sqrt{\text{conc}}$.
+
+    The prior on $x$ shrinks towards the Poisson or multinomial limit, as
+    EpiNow2's `obs_opts`, and the floor $c$ caps the concentration at
+    $1 / c$: as the concentration grows the float32 log density loses
+    precision, which stalls NUTS.
+
+    Parameters
+    ----------
+    name : str
+        Name of the concentration.
+    inv_sqrt_rv : DistributionalVariable
+        $x$.
+    floor : float
+        $c$.
+
+    Returns
+    -------
+    TransformedVariable
+        The concentration.
+    """
+    capped = ComposeTransform(
+        [PowerTransform(2.0), AffineTransform(floor, 1.0), PowerTransform(-1.0)]
+    )
+    return TransformedVariable(name, inv_sqrt_rv, capped)
+
+
 def _nb_noise(stream: str) -> NegativeBinomialNoise:
     r"""Negative binomial with $1 / \sqrt{\phi} \sim$ HalfNormal(0.25).
 
-    As EpiNow2 (`obs_opts`): the prior shrinks towards Poisson. The
-    concentration is $\phi = 1 / (x^2 + 10^{-3})$ with $x = 1/\sqrt\phi$,
-    so it stays at or below 1000. The float32 negative binomial log
-    density loses precision as $\phi \to \infty$ (second-difference noise
-    1.5 at $x = 3 \times 10^{-4}$ on real data), which stalls NUTS; at
-    $\phi = 1000$ it is Poisson for these counts.
+    $\phi \le 1000$: the float32 negative binomial log density loses
+    precision as $\phi \to \infty$ (second-difference noise 1.5 at
+    $x = 3 \times 10^{-4}$ on real data), and at $\phi = 1000$ it is
+    Poisson for these counts.
     """
-    inv_sqrt = DistributionalVariable(
-        f"inv_sqrt_phi_{stream}", dist.HalfNormal(0.25)
-    )
-    capped = ComposeTransform(
-        [
-            PowerTransform(2.0),
-            AffineTransform(PHI_FLOOR, 1.0),
-            PowerTransform(-1.0),
-        ]
-    )
     return NegativeBinomialNoise(
-        TransformedVariable(f"phi_{stream}", inv_sqrt, capped)
+        capped_concentration(
+            f"phi_{stream}",
+            DistributionalVariable(
+                f"inv_sqrt_phi_{stream}", dist.HalfNormal(0.25)
+            ),
+            PHI_FLOOR,
+        )
     )
 
 
 def _dm_noise() -> DirichletMultinomialNoise:
     r"""Dirichlet-multinomial with $1 / \sqrt{\psi} \sim$ HalfNormal(0.1).
 
-    The concentration is $\psi = 1 / (x^2 + 10^{-4})$ with
-    $x = 1/\sqrt\psi$, capped at $10^4$: near the multinomial the
-    float32 log density is noisy enough to stall NUTS step-size
-    adaptation.
+    $\psi \le 10^4$, so that the pooled delays of thousands of cases do
+    not make the delay overconfident.
     """
-    inv_sqrt = DistributionalVariable(
-        "delay_overdispersion", dist.HalfNormal(0.1)
-    )
-    capped = ComposeTransform(
-        [
-            PowerTransform(2.0),
-            AffineTransform(1e-4, 1.0),
-            PowerTransform(-1.0),
-        ]
-    )
     return DirichletMultinomialNoise(
-        TransformedVariable("delay_concentration", inv_sqrt, capped)
+        capped_concentration(
+            "delay_concentration",
+            DistributionalVariable(
+                "delay_overdispersion", dist.HalfNormal(0.1)
+            ),
+            1e-4,
+        )
     )
 
 
