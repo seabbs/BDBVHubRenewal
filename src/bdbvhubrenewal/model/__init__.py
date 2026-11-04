@@ -3,10 +3,15 @@
 
 - `rt`: non-centred random walks, pooled initial values and sum-to-zero
   province deviations.
-- `renewal`: the coupled renewal with importation, seeding and depletion.
+- `renewal`: the coupled renewal with importation (`Importation`),
+  seeding and depletion.
 - `delays`: the generation interval and the onset-to-report delay.
 - `observation`: the known and imputed onset streams, the hub's
-  imputation, importation-only zeros and the BVDOutbreakSize term.
+  imputation and importation-only zeros.
+- `composition_noise`: multinomial and Dirichlet-multinomial noise for
+  counts by category given totals (the delay counts).
+- `rt_observation`: external Rt estimates as a tempered
+  pseudo-observation (the BVDOutbreakSize term).
 - `model`: `ModelConfig`, the configurations, building, fitting and
   forecasting.
 - `inputs`: model inputs (`Vintage`) from the tidy hub tables.

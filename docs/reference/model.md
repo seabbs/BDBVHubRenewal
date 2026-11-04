@@ -15,6 +15,10 @@ The PyRenew renewal model the renewal forecasters fit and sample from. See [Gett
 
 ::: bdbvhubrenewal.model.observation
 
+::: bdbvhubrenewal.model.composition_noise
+
+::: bdbvhubrenewal.model.rt_observation
+
 ::: bdbvhubrenewal.model.model
 
 ::: bdbvhubrenewal.model.inputs
