@@ -673,6 +673,14 @@ def _zone_nowcast_section(
         + _dropdown(
             _table(zone_table(samples, counts, scores)),
             "Newest weeks by zone",
+        )
+        + "\nThe [energy score](methods/evaluation.md#energy-score) scores "
+        "all zones together at each origin, relative to `randomwalk` over "
+        "the releases scored.\n\n"
+        + _table(
+            relative_energy(
+                pd.read_csv(res / "zone-energy.csv"), by=("origin",)
+            )
         ),
     )
 
@@ -1154,7 +1162,7 @@ def _scenario_scores(path: Path, energy_path: Path) -> str:
     final = energy["truth_view"] == "final"
     for label, keep in (
         ("final data, complete weeks", final),
-        ("as of 2 weeks later", ~final),
+        ("the data as of 2 weeks later", ~final),
     ):
         tables.append(
             f"**Energy score against {label}**\n\n"
