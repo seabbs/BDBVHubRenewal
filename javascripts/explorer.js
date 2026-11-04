@@ -115,8 +115,8 @@
           class: "explorer-shade" }, plot);
       }
       var span = y1 - y0;
-      var step = span > 1000 ? 500 : span > 400 ? 100 : span > 100 ? 50 : span > 40 ? 10 :
-        span > 15 ? 5 : span > 6 ? 2 : 1;
+      // Whole counts, so the step is at least 1.
+      var step = Math.max(1, Z.nice(span));
       for (var v = Math.ceil(y0 / step) * step; v <= y1; v += step) {
         el("line", { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: "explorer-grid" }, svg);
         var t = el("text", { x: L - 6, y: Y(v) + 4, "text-anchor": "end",

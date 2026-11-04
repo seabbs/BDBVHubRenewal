@@ -878,34 +878,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../heldout/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Held-out evaluation
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../comparison/" class="md-nav__link">
         
   
@@ -1979,7 +1951,6 @@
 </code></pre></div>
 <p>Import the module in <code>bdbvhubrenewal/forecasters/__init__.py</code>.
 The backtest, the <a href="../../backtest/">Backtest</a> and <a href="../../nowcast/">Nowcast</a> pages, <code>compare-hub</code> and <code>nowcast --model my_model</code> then include it.
-Once it is chosen for submission, an entry in <code>results/model-choice.yml</code> adds it to the <a href="../../heldout/">held-out evaluation</a>.
 The backtest adds the national total, the horizons and the vintage kind.</p>
 <p>For the leave-one-province-out check, set <code>supports_mask = True</code> and drop the provinces in <code>task.mask</code> from the likelihood while still forecasting them.</p>
 <h2 id="renewal-variants">Renewal variants<a class="headerlink" href="#renewal-variants" title="Permanent link">&para;</a></h2>
@@ -2136,7 +2107,7 @@ Run them apart and commit what they write to <code>results/</code>:</p>
       
         <script src="../../javascripts/scoresummary.js"></script>
       
-        <script src="../../javascripts/zonechart.js"></script>
+        <script src="../../javascripts/nowcastchart.js"></script>
       
         <script src="https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
       

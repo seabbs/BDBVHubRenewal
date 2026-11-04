@@ -15,11 +15,7 @@
     if (parent) parent.appendChild(n);
     return n;
   }
-  function nice(span) {
-    var p = Math.pow(10, Math.floor(Math.log10(span / 5)));
-    var f = span / 5 / p;
-    return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * p;
-  }
+  var nice = Z.nice;
 
   function init(root) {
     fetch(root.dataset.src)
