@@ -105,6 +105,7 @@ extra_css:
 
 extra_javascript:
   - javascripts/mathjax.js
+  - javascripts/toggles.js
   - javascripts/explorer.js
   - javascripts/scorechart.js
   - javascripts/zonechart.js

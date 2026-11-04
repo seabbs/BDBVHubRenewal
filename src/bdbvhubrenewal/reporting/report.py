@@ -47,7 +47,9 @@ from bdbvhubrenewal.evaluation.heldout import load_model_choices
 from bdbvhubrenewal.evaluation.hubcompare import (
     attribution,
     forecast_quantiles,
+    load_comparison_config,
     overall_comparison,
+    stored_forecasts,
     summarise_comparison,
 )
 from bdbvhubrenewal.evaluation.nowcast import BASELINE, relative_wis
@@ -241,7 +243,7 @@ def make_report(
     forecasts_now = _nowcast_forecasts(tasks, latest, res)
     _nowcast_page(fig, gen, target, forecasts_now, names, config, latest)
     _zone_nowcast_section(
-        fig, gen, res, data_dir, target, tasks[0], forecasts_now, config
+        fig, gen, res, data_dir, target, tasks[0], forecasts_now, config, names
     )
     groups = _nowcast_groups(target, sorted(set(forecasts_now["location"])))
     save_light_dark(
@@ -460,20 +462,43 @@ def _zone_nowcast_section(
     task: ForecastTask,
     forecasts: pd.DataFrame,
     config: BacktestConfig,
+    names: list[str],
 ) -> None:
-    """Write the Nowcast page's health-zone section at the latest release."""
+    """Write the Nowcast page's health-zone section at the latest release.
+
+    The random walk models are run on the zones here. The fitted models'
+    zone samples are taken from the stored forecasts of the comparison, as
+    for the hub rounds, where there are some for the release.
+    """
     daily_zones = load_daily_zones(data_dir)
     zones = hub_zones(Path(data_dir) / "hub-config" / "tasks.json")
+    quick = [s.name for s in list_models() if not s.fitted]
     prov = forecasts.loc[
-        (forecasts["model"] == ZONE_MODEL)
-        & (forecasts["vintage"] == task.vintage)
+        (forecasts["vintage"] == task.vintage)
         & (forecasts["location"] != NATIONAL)
     ]
-    samples = zone_nowcast(task, prov, daily_zones, zones)
-    names = _location_names(target)
+    ran = [
+        zone_nowcast(m, task, prov.loc[prov["model"] == m], daily_zones, zones)
+        for m in quick
+    ]
+    ref = str(task.reference_date)
+    stored = stored_forecasts(
+        load_comparison_config().stored, [ref], exclude=quick
+    )
+    stored = stored.loc[stored["location"].isin(zones)]
+    stored = stored.assign(
+        vintage=task.vintage,
+        horizon=(
+            pd.to_datetime(stored["target_end_date"]) - pd.Timestamp(ref)
+        ).dt.days
+        // 7,
+    )
+    every = pd.concat([*ran, stored], ignore_index=True)
+    samples = every.loc[every["model"] == ZONE_MODEL]
+    labels = _location_names(target)
     start = pd.Timestamp(task.reference_date) - pd.Timedelta(weeks=12)
     counts = zone_counts(
-        daily_zones, task.vintage, start.strftime("%Y-%m-%d"), names
+        daily_zones, task.vintage, start.strftime("%Y-%m-%d"), labels
     )
     scores = pd.read_csv(res / "zone-scores.csv", low_memory=False)
     tabs = []
@@ -498,7 +523,7 @@ def _zone_nowcast_section(
             ),
             path,
         )
-        label = names.get(prov_id, prov_id)
+        label = labels.get(prov_id, prov_id)
         alt = f"Zone nowcasts in {label} at {task.vintage}."
         tabs.append(
             f'=== "{label}"\n\n'
@@ -507,27 +532,40 @@ def _zone_nowcast_section(
         )
     write_explorer(
         fig / "zonechart.json",
-        zone_chart_data(samples, counts, scores, names),
+        zone_chart_data(
+            every,
+            counts,
+            scores,
+            labels,
+            {
+                m: (
+                    model_colour(m, names, "light"),
+                    model_colour(m, names, "dark"),
+                )
+                for m in names
+            },
+        ),
     )
     _write(
         gen / "zone-nowcast.md",
         "## Health zones\n\n"
-        f"`{ZONE_MODEL}` run on each zone and summed to its province, as "
-        f"submitted, at the {task.vintage} release, for zones with cases in "
-        "the 12 weeks before the reference date "
+        f"Zone nowcasts and forecasts of each model at the {task.vintage} "
+        "release, for zones with cases in the 12 weeks before the reference "
+        "date "
         "([Health zones](methods/evaluation.md#health-zones)).\n\n"
+        "Pick a province and a zone to see its nowcast and forecast "
+        "with its scores by origin.\n\n"
+        '<div class="zonechart" data-src="../figures/zonechart.json" '
+        'role="group" aria-label="Zone nowcast and forecast">\n'
+        "<noscript>The zone chart needs JavaScript.</noscript>\n"
+        "</div>\n\n"
+        f"`{ZONE_MODEL}` by province.\n\n"
         + "\n".join(tabs)
         + "\n"
         + _dropdown(
             _table(zone_table(samples, counts, scores)),
             "Newest weeks by zone",
-        )
-        + "\nPick a province and a zone to see its nowcast and forecast "
-        "with its scores by origin.\n\n"
-        '<div class="zonechart" data-src="../figures/zonechart.json" '
-        'role="group" aria-label="Zone nowcast and forecast">\n'
-        "<noscript>The zone chart needs JavaScript.</noscript>\n"
-        "</div>\n",
+        ),
     )
 
 

@@ -1,16 +1,17 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """Health-zone nowcasts at the latest release, for the Nowcast page.
 
-`randomwalknowcast` is run on each zone and summed to its provinces
+The random walk models are run on each zone and summed to its provinces
 (`zone_forecast`), as in the submitted file. The page shows the zones
-with cases in the recent weeks: static grids by province, a table of the
-newest weeks and an interactive fan per zone with its release scores.
+with cases in the recent weeks: an interactive fan per zone and model
+with its release scores, then static grids by province and a table of
+the newest weeks for `randomwalknowcast`.
 A week with no onsets in a zone has a count of 0.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping
 
 import numpy as np
 import pandas as pd
@@ -37,6 +38,7 @@ _QCOLS = ("q5", "q25", "q50", "q75", "q95")
 
 
 def zone_nowcast(
+    model: str,
     task: ForecastTask,
     province_samples: pd.DataFrame,
     daily_zones: pd.DataFrame,
@@ -46,10 +48,12 @@ def zone_nowcast(
 
     Parameters
     ----------
+    model : str
+        A registered model.
     task : ForecastTask
         The province task at the latest release.
     province_samples : pandas.DataFrame
-        `ZONE_MODEL`'s province samples for `task`.
+        `model`'s province samples for `task`.
     daily_zones : pandas.DataFrame
         The daily zone table (`load_daily_zones`).
     zones : tuple of str
@@ -63,7 +67,7 @@ def zone_nowcast(
     """
     counts = weekly_zone_counts(daily_zones, task.vintage)
     samples = zone_forecast(
-        get_model(ZONE_MODEL),
+        get_model(model),
         task,
         province_samples[["location", "target_end_date", "sample", "value"]],
         counts,
@@ -73,7 +77,7 @@ def zone_nowcast(
     ref = pd.Timestamp(task.reference_date)
     weeks = (pd.to_datetime(samples["target_end_date"]) - ref).dt.days // 7
     return samples.assign(
-        model=ZONE_MODEL,
+        model=model,
         kind="real",
         vintage=task.vintage,
         reference_date=str(task.reference_date),
@@ -164,7 +168,8 @@ def zone_table(
     pandas.DataFrame
         One row per zone and week: the reported count, the median and 90%
         interval, then `ZONE_MODEL`'s relative WIS against randomwalk over
-        every origin, its 90% coverage and `n`, blank where unscored.
+        every origin, both summed to provinces, its 90% coverage and `n`,
+        blank where unscored.
     """
     now = samples.loc[samples["horizon"] < 0]
     newest = sorted(set(now["target_end_date"]))[-weeks:]
@@ -176,7 +181,7 @@ def zone_table(
     rel = relative_wis(
         scores.loc[scores["target"] == "reported"],
         by=("location",),
-        baseline=ZONE_BASELINE,
+        baseline=ZONE_BASELINE + SUMMED,
     )
     rel = rel.loc[rel["model"] == ZONE_MODEL + SUMMED]
     rows = rows.merge(
@@ -212,36 +217,50 @@ def zone_chart_data(
     counts: pd.DataFrame,
     scores: pd.DataFrame,
     names: dict[str, str],
-    models: Sequence[str] = (ZONE_MODEL + SUMMED, ZONE_MODEL),
+    colours: Mapping[str, tuple[str, str]],
 ) -> dict[str, object]:
     """Return the data `docs/javascripts/zonechart.js` draws.
 
     Parameters
     ----------
-    samples, counts, scores : pandas.DataFrame
+    samples : pandas.DataFrame
+        Zone samples of any of the models, at one release.
+    counts, scores : pandas.DataFrame
         As `zone_table`.
     names : dict of str to str
         Province code to name.
-    models : sequence of str
-        Zone score models shown in the table, against randomwalk.
+    colours : mapping of str to (str, str)
+        Every model we fit, in order, to its light and dark colour.
 
     Returns
     -------
     dict
-        `release`, `reference_date`, `provinces` (code and name) and
-        `zones` (code and province), each by recent cases, most first,
-        and per zone `data` (week, count), `q` (week, q5, q25, q50, q75,
-        q95) and `scores` (origin, model, n, relative WIS, 50% and 90%
-        coverage).
+        `release`, `reference_date`, `models` (name, light and dark
+        colour, shown at first, and whether it has zone samples at the
+        release), `origins` with zone scores, `provinces` (code and name)
+        and `zones` (code and province), each by recent cases, most first,
+        and per zone `data` (week, count), `q` (model index, week, q5,
+        q25, q50, q75, q95) and `scores` (origin, model index, n, relative
+        WIS, 50% and 90% coverage). Scores are those summed to provinces,
+        relative to randomwalk summed to provinces.
     """
+    models = list(colours)
     size = counts.groupby("location")["total"].sum()
     shown = list(size.sort_values(ascending=False, kind="stable").index)
-    q = _quantiles(samples.loc[samples["location"].isin(shown)])
+    fans = set(samples["model"])
+    q = pd.concat(
+        [
+            _quantiles(grp.loc[grp["location"].isin(shown)]).assign(model=m)
+            for m, grp in samples.groupby("model")
+        ]
+    )
     rel = relative_wis(
         scores.loc[scores["target"] == "reported"],
         by=("location", "origin"),
-        baseline=ZONE_BASELINE,
+        baseline=ZONE_BASELINE + SUMMED,
     )
+    rel = rel.loc[rel["model"].str.endswith(SUMMED)]
+    rel = rel.assign(model=rel["model"].str.removesuffix(SUMMED))
     rel = rel.loc[rel["model"].isin(models)]
     by_prov = size.groupby(size.index.map(province_of)).sum()
     provinces = list(by_prov.sort_values(ascending=False, kind="stable").index)
@@ -252,6 +271,17 @@ def zone_chart_data(
     return {
         "release": str(samples["vintage"].iloc[0]),
         "reference_date": str(samples["reference_date"].iloc[0]),
+        "models": [
+            {
+                "name": m,
+                "light": colours[m][0],
+                "dark": colours[m][1],
+                "on": m in fans,
+                "fan": m in fans,
+            }
+            for m in models
+        ],
+        "origins": sorted(set(rel["origin"].astype(str))),
         "provinces": [
             {"id": str(p), "name": names.get(str(p), str(p))} for p in provinces
         ],
@@ -267,8 +297,13 @@ def zone_chart_data(
         },
         "q": {
             str(z): [
-                [str(r["target_end_date"]), *(_num(r[c]) for c in _QCOLS)]
+                [
+                    models.index(r["model"]),
+                    str(r["target_end_date"]),
+                    *(_num(r[c]) for c in _QCOLS),
+                ]
                 for r in g.to_dict("records")
+                if r["model"] in models
             ]
             for z, g in q.groupby("location")
         },
@@ -276,7 +311,7 @@ def zone_chart_data(
             str(z): [
                 [
                     str(r["origin"]),
-                    str(r["model"]),
+                    models.index(r["model"]),
                     int(r["n"]),
                     _num(r["rel_wis"]),
                     _num(r["coverage_50"]),
