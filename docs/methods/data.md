@@ -32,6 +32,8 @@ Province populations are the Institut National de la Statistique's 2019 figures 
 ## Vintages
 
 Each hub release is a vintage, labelled by its `as_of` date and of kind `real` or `simulated`.
+From the 2026-11-01 release on, `as_of` is the extraction date, a day after the last reported case, while earlier releases were labelled by the last reported case ([hub issue 90](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/90)).
+We keep each release's published label, map a rewritten label back to it, and take its last report day as the extraction date less a day.
 Recent weeks are revised in later releases, so each forecast is made from one vintage and scored on the counts later releases report.
 
 ## Release snapshots
