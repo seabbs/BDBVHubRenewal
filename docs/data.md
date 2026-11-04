@@ -49,9 +49,36 @@ The renewal model forecasts it as an unassigned component ([Forecasts](methods/m
   </figcaption>
 </figure>
 
+## Negative updates
+
+A count falls when a release reports fewer cases for a place and onset week than the release before it.
+Each release is compared with the one before it, on the weeks of the earlier release with cases in either.
+A health zone missing from a release has no cases, so a zone that disappears counts as a fall to zero.
+
+<figure class="doc-figure" markdown="span">
+  ![Share of place-weeks that fell and cases removed as a share of all change between consecutive releases, by the onset week's age at the earlier release, for the country, provinces and health zones.](figures/downward-updates.svg#only-light)
+  ![Share of place-weeks that fell and cases removed as a share of all change between consecutive releases, by the onset week's age at the earlier release, for the country, provinces and health zones.](figures/downward-updates-dark.svg#only-dark)
+  <figcaption markdown="1">
+    Share of place-weeks that fell (top) and cases removed as a share of all change (bottom), by the onset week's age at the earlier release.
+    The 2026-08-18 to 2026-10-09 comparison spans seven weeks and the others one week.
+    No national or province count fell while its onset week was less than three weeks old.
+    Most falls came between the 2026-10-17 and 2026-10-24 releases, mainly in Nord Kivu.
+  </figcaption>
+</figure>
+
+Over all releases, 8 of 102 national weeks fell, 25 of 357 province weeks and 85 of 2738 health zone weeks.
+Falls removed 24 cases nationally against 2684 added, 1% of all change.
+They were 2% of all change for provinces and 4% for health zones.
+No fall was larger than 8 cases.
+
+??? note "Tables"
+
+    --8<-- "downward-updates.md"
+
 ## Missing onsets
 
 The hub publishes, for every vintage, the cases in each province and onset week with an imputed onset.
+How the hub imputes them is on the [methods page](methods/model.md#hub-imputation).
 
 <figure class="doc-figure" markdown="span">
   ![Share of each week's cases with an imputed onset, by province and vintage, with point size by the week's count.](figures/imputed-share.svg#only-light)
@@ -60,6 +87,17 @@ The hub publishes, for every vintage, the cases in each province and onset week 
     Imputed share of cases by onset week, by vintage.
     Point size grows with the week's count.
     It varies over time and between provinces.
+  </figcaption>
+</figure>
+
+<figure class="doc-figure" markdown="span">
+  ![Share of all cases with an imputed onset in each release, for the country and each province with cases.](figures/imputed-by-release.svg#only-light)
+  ![Share of all cases with an imputed onset in each release, for the country and each province with cases.](figures/imputed-by-release-dark.svg#only-dark)
+  <figcaption markdown="1">
+    Share of all cases with an imputed onset in each release.
+    Nationally it stays between 15% and 17%.
+    In Nord Kivu it fell from 24% to 14% between the 2026-10-17 and 2026-10-24 releases, as cases gained an onset.
+    Sud Ubangi's few cases all have an imputed onset.
   </figcaption>
 </figure>
 

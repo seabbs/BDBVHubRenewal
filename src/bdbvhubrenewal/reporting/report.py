@@ -23,12 +23,15 @@ import yaml
 from matplotlib.figure import Figure
 
 from bdbvhubrenewal.data import (
+    downward_summary,
     load_daily,
     load_daily_zones,
     load_delays,
+    load_health_zones,
     load_target,
     national_coherence,
     newly_missing,
+    release_updates,
 )
 from bdbvhubrenewal.data.dates import reference_date_for_vintage
 from bdbvhubrenewal.data.delays import delay_summary
@@ -77,8 +80,10 @@ from bdbvhubrenewal.reporting.plots import (
     plot_delay_check,
     plot_delay_distribution,
     plot_delays_over_time,
+    plot_downward_updates,
     plot_forecasts,
     plot_hub_round,
+    plot_imputed_by_release,
     plot_imputed_share,
     plot_location_grid,
     plot_newly_missing,
@@ -176,9 +181,19 @@ def make_report(
         fig / "imputed-share.svg",
     )
     save_light_dark(
+        lambda mode: plot_imputed_by_release(real, mode=mode),
+        fig / "imputed-by-release.svg",
+    )
+    save_light_dark(
         lambda mode: plot_newly_missing(real, mode=mode),
         fig / "newly-missing.svg",
     )
+    zones = load_health_zones(data_dir)
+    save_light_dark(
+        lambda mode: plot_downward_updates(real, zones, mode=mode),
+        fig / "downward-updates.svg",
+    )
+    _write(gen / "downward-updates.md", _downward_table(real, zones))
     save_light_dark(
         lambda mode: plot_delay_distribution(latest_delays, mode=mode),
         fig / "delay-distribution.svg",
@@ -267,6 +282,44 @@ _TARGET_LABELS: Final = {
     "reported": "Reported by each later release",
     "complete": "Complete weeks",
 }
+
+
+def _downward_table(real: pd.DataFrame, zones: pd.DataFrame) -> str:
+    """Tabulate falls between consecutive releases, by place."""
+    nat = real["location"] == NATIONAL
+    names = _location_names(real)
+    provinces = release_updates(real.loc[~nat])
+    each = provinces.assign(
+        place=[f"{names.get(p, p)} ({p})" for p in provinces["location"]]
+    ).sort_values("place")
+    updates = pd.concat(
+        [
+            release_updates(real.loc[nat]).assign(place="Country"),
+            provinces.assign(place="Provinces"),
+            each,
+            release_updates(zones).assign(place="Health zones"),
+        ]
+    )
+    table = downward_summary(updates, ("place",)).set_index("place")
+    table = table.loc[list(dict.fromkeys(updates["place"]))]
+    table[["share_fell", "downward_share"]] = table[
+        ["share_fell", "downward_share"]
+    ].round(3)
+    table = table.astype(object).where(table.notna(), "")
+    return _table(
+        table.reset_index().rename(
+            columns={
+                "place": "Place",
+                "weeks": "Place-weeks",
+                "fell": "Fell",
+                "share_fell": "Share that fell",
+                "cases_down": "Cases removed",
+                "cases_up": "Cases added",
+                "downward_share": "Removed share of all change",
+                "largest_fall": "Largest fall",
+            }
+        )
+    )
 
 
 def _ours(frame: pd.DataFrame, names: Sequence[str]) -> pd.DataFrame:
