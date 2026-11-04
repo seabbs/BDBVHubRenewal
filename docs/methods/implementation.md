@@ -75,7 +75,8 @@ The tests check the renewal and the imputation against a NumPy reference, `tests
 ## Sampling
 
 PyRenew's `PyrenewBuilder` builds each model as a `MultiSignalModel`, and NumPyro's NUTS fits it.
-Chains run vectorised.
+Chains run vectorised unless a fit's settings say otherwise.
+Backtest fits (`config/backtest.toml`) and CI submission fits (`ci/policy.toml`) both run their chains in parallel.
 Without other settings, NUTS runs 4 chains of 1000 warm-up and 1000 draws, with target acceptance 0.9 and maximum tree depth 10.
 Chains start from the median of 15 prior draws.
 Submission fits take their settings from `ci/policy.toml`, which override JSON settings in `BDBV_RENEWAL_SAMPLER`.
