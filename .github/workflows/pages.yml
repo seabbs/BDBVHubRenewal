@@ -1,8 +1,8 @@
 name: Pages
 
 # Builds the site on pull requests, publishes it as a preview at
-# pr-preview/pr-N/ and comments the link, and removes the preview when the
-# pull request closes. Builds and deploys the site from main.
+# pr-preview/pr-N/ and comments the link (pr-preview-cleanup.yml removes
+# it when the pull request closes). Builds and deploys the site from main.
 # Both deploy to the gh-pages branch, which Pages serves.
 on:
   push:
@@ -19,7 +19,6 @@ on:
       - 'uv.lock'
       - '.github/workflows/pages.yml'
   pull_request:
-    types: [opened, reopened, synchronize, closed]
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
@@ -43,7 +42,6 @@ concurrency:
 
 jobs:
   build:
-    if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -126,15 +124,13 @@ jobs:
           clean-exclude: pr-preview/
           force: false
 
-  # Runs after a successful build, and on close (when build is skipped) to
-  # remove the preview. Only for branches of this repository: a fork's
-  # token cannot write, and it never gets secrets.
+  # Only for branches of this repository: a fork's token cannot write, and
+  # it never gets secrets.
   preview:
     needs: build
     if: >-
-      !cancelled() && github.event_name == 'pull_request'
+      github.event_name == 'pull_request'
       && github.event.pull_request.head.repo.full_name == github.repository
-      && needs.build.result != 'failure'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -143,7 +139,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
-        if: github.event.action != 'closed'
         with:
           name: site
           path: _site
