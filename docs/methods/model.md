@@ -191,6 +191,22 @@ Provinces are linked by importation through $W$, and provinces with no cases by 
 Known-onset delays are pooled over provinces.
 Leaving a province out removes its known and imputed terms and its delays but keeps it in the latent process.
 
+```mermaid
+flowchart TD
+    LR["Pooled log R(t)<br/>weekly random walk"]
+    DV["Province deviations δ<sub>p</sub>(t)<br/>sum-to-zero AR(1)"]
+    RP["log R<sub>p</sub>(t) = log R(t) + δ<sub>p</sub>(t)"]
+    K["Gravity kernel<br/>K<sub>qp</sub> ∝ N<sub>p</sub> exp(−D<sub>qp</sub> / 300 km)"]
+    W["Importation<br/>W = (1 − ε) I + ε diag(1/N) K<sup>T</sup> diag(N)"]
+    CORE["<b>Renewal core</b><br/>see above<br/>with a share at risk ν"]
+
+    LR --> RP
+    DV --> RP
+    K --> W
+    RP --> CORE
+    W --> CORE
+```
+
 ### Pooled reproduction number
 
 $$
@@ -251,6 +267,24 @@ In the forecast they draw Poisson importations after the cut-off, which spread a
 Every renewal model takes from the BVDOutbreakSize main model its generation interval, the prior on the half-life of the province deviations and the sum-to-zero basis for them.
 `renewalbvd` also takes the Rt estimates of one [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) release, chosen as on the [Data methods page](data.md#bvdoutbreaksize-estimates).
 Without such a release `renewalbvd` is `renewal`.
+
+```mermaid
+flowchart TD
+    REL["BVDOutbreakSize release<br/>data cut-off a<sub>b</sub>"]
+    NAT["National log Rt draws<br/>mean μ<sub>N</sub>, SD σ<sub>N</sub>"]
+    PAT["Patch medians and<br/>90% intervals"]
+    AL["Aligned to onset day<br/>s<sub>b</sub> = a<sub>b</sub> + 6"]
+    CORE["<b>Renewal core, pooled</b><br/>see above<br/>infection-weighted R<sub>N</sub>(s<sub>b</sub>), R<sub>k</sub>(s<sub>b</sub>)"]
+    LK["Normal terms<br/>down-weighted, ζ = 0.5"]
+
+    REL --> NAT
+    REL --> PAT
+    NAT --> AL
+    PAT --> AL
+    AL --> LK
+    CORE --> LK
+```
+
 From the release it takes the posterior draws of the national $\log R$ and, where the release has province estimates, each patch's median and 90% interval with the hub provinces the patch covers.
 With $a_b$ the release's data cut-off, the estimates are aligned to onset day $s_b = a_b + 6$, as BVDOutbreakSize dates Rt by infection.
 The fit axis extends to the end of the week of $s_b$ when that week is after the data.
