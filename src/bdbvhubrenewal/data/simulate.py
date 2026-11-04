@@ -3,11 +3,13 @@ r"""Simulate province outbreaks and publish them as hub-style vintages.
 
 The simulator draws from the model's own components with known
 parameters, so recovery can be checked and there is one implementation
-of the maths. Expected daily onsets come from the model's renewal
+of the maths. Expected daily infections come from the model's renewal
 (`bdbvhubrenewal.model.renewal.coupled_renewal`), with its generation
 interval, gravity kernel, importation and depletion of the effective
 population, for $\log R_p(t) = \log R(t) + \delta_p$ with a national
 $R(t)$ that turns and fixed province offsets $\delta_p$.
+Expected onsets are infections convolved with the model's incubation
+period (`bdbvhubrenewal.model.model.incubation_period`).
 Confirmed cases are Poisson with mean $\alpha(t)$ times expected onsets.
 Each is reported after a double censored Gamma delay
 (`bdbvhubrenewal.model.censored.censored_pmf`) whose mean $\mu(t)$
@@ -45,8 +47,10 @@ from bdbvhubrenewal.model.inputs import (
 from bdbvhubrenewal.model.model import (
     GI_MEAN,
     GI_SD,
+    INCUBATION_MEAN,
     PRIOR_PUBLICATION_LAG,
     generation_interval,
+    incubation_period,
 )
 from bdbvhubrenewal.model.renewal import coupled_renewal, mixing_matrix
 
@@ -121,7 +125,7 @@ class SimulationSettings:
     seed : int
         Random seed.
     rt_paths, seed_curves : tuple of tuple of float, optional
-        Daily Rt and seed onsets by province, `(P, n_days)`, in place of
+        Daily Rt and seed infections by province, `(P, n_days)`, in place of
         the turning-point Rt and single seeds (`calibrated_settings`).
     delay_pmfs : tuple of tuple of float, optional
         Delay pmf on 0..60 days by onset day, in place of the Gamma delay.
@@ -579,7 +583,13 @@ def simulate_outbreak(
         pool=nu,
         seeding=jnp.asarray(seeding),
     )
-    onsets = (np.asarray(x, float) * pop).T
+    # Onsets follow infections after the incubation period, as in the model.
+    eta = incubation_period()
+    infections = np.asarray(x, float)
+    onsets = (
+        np.stack([np.convolve(col, eta)[:n_days] for col in infections.T])
+        * pop[:, None]
+    )
     # Share of the pool still susceptible: R_eff / R, 1 where R is 0.
     sus = np.divide(
         np.asarray(r_eff, float).T, rt, out=np.ones_like(rt), where=rt > 0
@@ -763,17 +773,18 @@ def calibrated_settings(
 ) -> SimulationSettings:
     r"""Build a scenario calibrated to the real data of one vintage.
 
-    Each province's expected confirmed onsets follow its real weekly
-    totals at `as_of`, spread over the days of each week and smoothed,
-    up to `settled_weeks` before `as_of` (later weeks are still being
-    reported). Rt is the ratio of onsets to the force of infection under
-    the model's generation interval, $R_p(t) = \lambda_p(t) / \sum_s g(s)
-    \lambda_p(t - s)$, capped at `RT_CAP`, and onsets beyond what that
-    explains (first cases and reintroductions) are seeds, so the model's
-    renewal reproduces the real curve. After that Rt is the
+    Each province's expected infections follow its real weekly onset
+    totals at `as_of`, spread over the days of each week, smoothed and
+    moved earlier by the mean incubation period, up to `settled_weeks`
+    before `as_of` (later weeks are still being reported). Rt is the
+    ratio of infections to the force of infection under the model's
+    generation interval, $R_p(t) = \lambda_p(t) /
+    \sum_s g(s) \lambda_p(t - s)$, capped at `RT_CAP`, and infections
+    beyond what that explains (first cases and reintroductions) are seeds,
+    so the model's renewal reproduces the real curve. After that Rt is the
     mean of its last three weeks times `SCENARIO_RT_SCALE[name]`, for
     `weeks_after` weeks past `as_of`. Ascertainment is 1, importation and
-    depletion are off, so the curve is the confirmed onsets themselves.
+    depletion are off, so confirmed onsets follow the real curve.
 
     The delay is the real delay by onset week (`_weekly_delay_pmfs`),
     the missing-onset share is the real imputed share by onset week moved
@@ -825,6 +836,8 @@ def calibrated_settings(
     n_data = (settled - pd.Timestamp(start)).days + 1
     locs = tuple(str(c) for c in wide.columns)
     g = generation_interval()
+    lead = round(INCUBATION_MEAN)
+    n_inf = n_data - lead
     rt_rows, seed_rows = [], []
     for loc in locs:
         daily = np.zeros(n_days)
@@ -833,9 +846,11 @@ def calibrated_settings(
             if day0 >= 0 and day0 + 7 <= n_data:
                 daily[day0 : day0 + 7] = total / 7
         daily = np.convolve(daily, np.ones(7) / 7, mode="same")[:n_days]
+        # Infections lead onsets by the mean incubation period.
+        daily = np.r_[daily[lead:], np.zeros(lead)]
         seeds = np.zeros(n_days)
         rt = np.zeros(n_days)
-        for t in range(n_data):
+        for t in range(n_inf):
             past = daily[max(0, t - g.size) : t][::-1]
             force = float(g[: past.size] @ past)
             # Rt up to RT_CAP carries the curve, and onsets beyond what
@@ -843,10 +858,10 @@ def calibrated_settings(
             # seeds, so the renewal gives back the real curve.
             rt[t] = min(daily[t] / force, RT_CAP) if force > 1e-6 else 0.0
             seeds[t] = max(daily[t] - rt[t] * force, 0.0)
-        recent = rt[n_data - 21 : n_data]
+        recent = rt[n_inf - 21 : n_inf]
         recent = recent[recent > 0]
         level = float(np.mean(recent)) if recent.size else 0.0
-        rt[n_data:] = level * SCENARIO_RT_SCALE[name]
+        rt[n_inf:] = level * SCENARIO_RT_SCALE[name]
         rt_rows.append(tuple(rt))
         seed_rows.append(tuple(seeds))
 
