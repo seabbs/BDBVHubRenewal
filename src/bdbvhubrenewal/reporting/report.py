@@ -24,6 +24,7 @@ from matplotlib.figure import Figure
 
 from bdbvhubrenewal.data import (
     load_daily,
+    load_daily_zones,
     load_delays,
     load_target,
     national_coherence,
@@ -33,6 +34,7 @@ from bdbvhubrenewal.data.dates import reference_date_for_vintage
 from bdbvhubrenewal.data.delays import delay_summary
 from bdbvhubrenewal.data.simulate import simulate_outbreak
 from bdbvhubrenewal.data.tidy import COHERENCE_STREAMS
+from bdbvhubrenewal.data.zones import hub_zones
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     check_distinct,
@@ -90,6 +92,13 @@ from bdbvhubrenewal.reporting.scorechart import (
     score_chart_data,
     score_chart_html,
     write_score_chart,
+)
+from bdbvhubrenewal.reporting.zone_nowcast import (
+    ZONE_MODEL,
+    zone_chart_data,
+    zone_counts,
+    zone_nowcast,
+    zone_table,
 )
 
 __all__ = ["make_report"]
@@ -230,6 +239,9 @@ def make_report(
     tasks = make_tasks(rows, delays, config, history=real, daily=daily)
     forecasts_now = _nowcast_forecasts(tasks, latest, res)
     _nowcast_page(fig, gen, target, forecasts_now, names, config, latest)
+    _zone_nowcast_section(
+        fig, gen, res, data_dir, target, tasks[0], forecasts_now, config
+    )
     groups = _nowcast_groups(target, sorted(set(forecasts_now["location"])))
     save_light_dark(
         partial(
@@ -445,6 +457,89 @@ def _nowcast_page(
         gen / "nowcast-meta.md",
         f"Latest vintage **{latest}**, models "
         f"{', '.join(f'`{n}`' for n in shown)}.\n",
+    )
+
+
+def _zone_nowcast_section(
+    fig: Path,
+    gen: Path,
+    res: Path,
+    data_dir: Path | str,
+    target: pd.DataFrame,
+    task: ForecastTask,
+    forecasts: pd.DataFrame,
+    config: BacktestConfig,
+) -> None:
+    """Write the Nowcast page's health-zone section at the latest release."""
+    daily_zones = load_daily_zones(data_dir)
+    zones = hub_zones(Path(data_dir) / "hub-config" / "tasks.json")
+    prov = forecasts.loc[
+        (forecasts["model"] == ZONE_MODEL)
+        & (forecasts["vintage"] == task.vintage)
+        & (forecasts["location"] != NATIONAL)
+    ]
+    samples = zone_nowcast(task, prov, daily_zones, zones)
+    names = _location_names(target)
+    start = pd.Timestamp(task.reference_date) - pd.Timedelta(weeks=12)
+    counts = zone_counts(
+        daily_zones, task.vintage, start.strftime("%Y-%m-%d"), names
+    )
+    scores = pd.read_csv(res / "zone-scores.csv", low_memory=False)
+    tabs = []
+    by_prov = counts.groupby("province")["total"].sum()
+    for key in by_prov.sort_values(ascending=False, kind="stable").index:
+        grp = counts.loc[counts["province"] == key]
+        prov_id = str(key)
+        locs = sorted(set(grp["location"]))
+        path = fig / f"zone-nowcast-{prov_id.lower()}.svg"
+        save_light_dark(
+            partial(
+                plot_location_grid,
+                samples,
+                counts,
+                locs,
+                models=[ZONE_MODEL],
+                truth_vintage=task.vintage,
+                max_horizon=-1,
+                weeks_before=12,
+                ncol=4,
+                complete_after_weeks=config.complete_after_weeks,
+            ),
+            path,
+        )
+        label = names.get(prov_id, prov_id)
+        alt = f"Zone nowcasts in {label} at {task.vintage}."
+        tabs.append(
+            f'=== "{label}"\n\n'
+            f"    ![{alt}](figures/{path.name}#only-light)\n"
+            f"    ![{alt}](figures/{path.stem}-dark.svg#only-dark)\n"
+        )
+    write_explorer(
+        fig / "zonechart.json",
+        zone_chart_data(samples, counts, scores, names),
+    )
+    _write(
+        gen / "zone-nowcast.md",
+        "## Health zones\n\n"
+        f"`{ZONE_MODEL}` run on each zone and summed to its province, as "
+        f"submitted, at the {task.vintage} release, for zones with cases in "
+        "the 12 weeks before the reference date.\n"
+        "A week with no onsets in a zone has a count of 0.\n"
+        "Scores are on the zone count each later release reported, relative "
+        "to `randomwalk` "
+        "([Health zones](methods/evaluation.md#health-zones)).\n\n"
+        + "\n".join(tabs)
+        + "\n"
+        + _dropdown(
+            _table(zone_table(samples, counts, scores)),
+            "Newest weeks by zone",
+        )
+        + "\nPick a province and a zone to see its nowcast and forecast "
+        "with its scores by origin.\n\n"
+        '<div class="zonechart" data-src="../figures/zonechart.json" '
+        'role="group" aria-label="Zone nowcast and forecast">\n'
+        "<noscript>The zone chart needs JavaScript.</noscript>\n"
+        "</div>\n",
     )
 
 

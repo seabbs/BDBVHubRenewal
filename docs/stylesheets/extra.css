@@ -64,7 +64,8 @@
   gap: 0.5em 1.5em;
 }
 
-.explorer select {
+.explorer select,
+.zonechart select {
   font: inherit;
   color: var(--md-default-fg-color);
   background: var(--md-default-bg-color);
@@ -204,4 +205,29 @@
 .scorechart-tick {
   fill: var(--md-default-fg-color--light);
   font-size: 11px;
+}
+
+/* Zone chart, in the static zone figures' colour. */
+.zonechart {
+  --zonechart-colour: #2a78d6;
+  margin: 1em 0;
+}
+
+[data-md-color-scheme="slate"] .zonechart {
+  --zonechart-colour: #3987e5;
+}
+
+.zonechart-band90 {
+  fill: var(--zonechart-colour);
+  opacity: 0.2;
+}
+
+.zonechart-band50 {
+  fill: var(--zonechart-colour);
+  opacity: 0.35;
+}
+
+.zonechart-median {
+  stroke: var(--zonechart-colour);
+  stroke-width: 2;
 }

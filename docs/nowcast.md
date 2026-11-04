@@ -27,6 +27,8 @@ The same nowcast with the reference week and the weeks after it.
 
 The submission pull request embeds [`plot_nowcast`][bdbvhubrenewal.reporting.plots.plot_nowcast].
 
+--8<-- "zone-nowcast.md"
+
 ## Delay and spread
 
 The growth to final of each onset day by its age at the latest release, and the observation model by weeks back.

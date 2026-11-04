@@ -142,6 +142,7 @@ def test_make_report_writes_every_page(
         "heldout-status.md",
         "comparison-scores.md",
         "nowcast-tabs.md",
+        "zone-nowcast.md",
     ):
         assert (gen / name).exists(), name
     # Hub teams are shown on the comparison page only.

@@ -1,0 +1,289 @@
+# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+"""Health-zone nowcasts at the latest release, for the Nowcast page.
+
+`randomwalknowcast` is run on each zone and summed to its provinces
+(`zone_forecast`), as in the submitted file. The page shows the zones
+with cases in the recent weeks: static grids by province, a table of the
+newest weeks and an interactive fan per zone with its release scores.
+A week with no onsets in a zone has a count of 0.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+import numpy as np
+import pandas as pd
+
+from bdbvhubrenewal.data.zones import province_of, weekly_zone_counts
+from bdbvhubrenewal.evaluation.nowcast import relative_wis
+from bdbvhubrenewal.evaluation.zones import SUMMED, ZONE_BASELINE
+from bdbvhubrenewal.forecasters import ForecastTask, get_model
+from bdbvhubrenewal.forecasters.zones import zone_forecast
+
+__all__ = [
+    "ZONE_MODEL",
+    "zone_chart_data",
+    "zone_counts",
+    "zone_nowcast",
+    "zone_table",
+]
+
+ZONE_MODEL = "randomwalknowcast"
+"""The model shown for the zones, as submitted."""
+
+_QUANTILES = (0.05, 0.25, 0.5, 0.75, 0.95)
+_QCOLS = ("q5", "q25", "q50", "q75", "q95")
+
+
+def zone_nowcast(
+    task: ForecastTask,
+    province_samples: pd.DataFrame,
+    daily_zones: pd.DataFrame,
+    zones: tuple[str, ...],
+) -> pd.DataFrame:
+    """Forecast every zone at the task's release, summed to the provinces.
+
+    Parameters
+    ----------
+    task : ForecastTask
+        The province task at the latest release.
+    province_samples : pandas.DataFrame
+        `ZONE_MODEL`'s province samples for `task`.
+    daily_zones : pandas.DataFrame
+        The daily zone table (`load_daily_zones`).
+    zones : tuple of str
+        The hub's zone codes (`hub_zones`).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Zone samples with `model`, `kind`, `vintage`, `reference_date` and
+        `horizon` in weeks from the reference date, as `run_forecasts`.
+    """
+    counts = weekly_zone_counts(daily_zones, task.vintage)
+    samples = zone_forecast(
+        get_model(ZONE_MODEL),
+        task,
+        province_samples[["location", "target_end_date", "sample", "value"]],
+        counts,
+        zones,
+        daily_zones,
+    )
+    ref = pd.Timestamp(task.reference_date)
+    weeks = (pd.to_datetime(samples["target_end_date"]) - ref).dt.days // 7
+    return samples.assign(
+        model=ZONE_MODEL,
+        kind="real",
+        vintage=task.vintage,
+        reference_date=str(task.reference_date),
+        horizon=weeks,
+    )
+
+
+def zone_counts(
+    daily_zones: pd.DataFrame,
+    vintage: str,
+    start: str,
+    names: dict[str, str],
+) -> pd.DataFrame:
+    """Weekly zone counts at a release, for zones with cases since `start`.
+
+    Parameters
+    ----------
+    daily_zones : pandas.DataFrame
+        The daily zone table (`load_daily_zones`).
+    vintage : str
+        The release.
+    start : str
+        The first week ending shown, ISO format.
+    names : dict of str to str
+        Province code to name.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Target-like rows (`kind`, `vintage`, `location`, `location_name`,
+        `target_end_date`, `total`) from `start` to the release's last
+        week, with 0 for weeks with no onsets, and `province`.
+    """
+    counts = weekly_zone_counts(daily_zones, vintage)
+    recent = counts.loc[counts["target_end_date"] >= start]
+    shown = sorted(set(recent["location"]))
+    weeks = pd.date_range(start, counts["target_end_date"].max(), freq="7D")
+    grid = pd.MultiIndex.from_product(
+        [shown, weeks.strftime("%Y-%m-%d")],
+        names=["location", "target_end_date"],
+    )
+    out = (
+        counts.set_index(["location", "target_end_date"])["total"]
+        .reindex(grid, fill_value=0)
+        .reset_index()
+    )
+    province = out["location"].map(province_of)
+    return out.assign(
+        kind="real",
+        vintage=vintage,
+        province=province,
+        location_name=province.map(names).fillna(province)
+        + " "
+        + out["location"].str[-2:],
+    )
+
+
+def _quantiles(samples: pd.DataFrame) -> pd.DataFrame:
+    grp = samples.groupby(["location", "target_end_date"])["value"]
+    out = pd.concat(
+        {c: grp.quantile(p) for c, p in zip(_QCOLS, _QUANTILES, strict=True)},
+        axis=1,
+    )
+    return out.reset_index()
+
+
+def zone_table(
+    samples: pd.DataFrame,
+    counts: pd.DataFrame,
+    scores: pd.DataFrame,
+    weeks: int = 2,
+) -> pd.DataFrame:
+    """Tabulate the newest nowcast weeks and the release scores by zone.
+
+    Parameters
+    ----------
+    samples : pandas.DataFrame
+        `zone_nowcast` output.
+    counts : pandas.DataFrame
+        `zone_counts` output.
+    scores : pandas.DataFrame
+        The zone release scores (`zone_backtest`).
+    weeks : int
+        Newest weeks before the reference date shown.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per zone and week: the reported count, the median and 90%
+        interval, then `ZONE_MODEL`'s relative WIS against randomwalk over
+        every origin, its 90% coverage and `n`, blank where unscored.
+    """
+    now = samples.loc[samples["horizon"] < 0]
+    newest = sorted(set(now["target_end_date"]))[-weeks:]
+    q = _quantiles(now.loc[now["target_end_date"].isin(newest)])
+    rows = q.merge(
+        counts[["location", "province", "target_end_date", "total"]],
+        on=["location", "target_end_date"],
+    )
+    rel = relative_wis(
+        scores.loc[scores["target"] == "reported"],
+        by=("location",),
+        baseline=ZONE_BASELINE,
+    )
+    rel = rel.loc[rel["model"] == ZONE_MODEL + SUMMED]
+    rows = rows.merge(
+        rel[["location", "rel_wis", "coverage_90", "n"]],
+        on="location",
+        how="left",
+    )
+    interval = (
+        rows["q5"].round().astype(int).astype(str)
+        + " to "
+        + rows["q95"].round().astype(int).astype(str)
+    )
+    out = pd.DataFrame(
+        {
+            "province": rows["province"],
+            "zone": rows["location"],
+            "week ending": rows["target_end_date"],
+            "reported": rows["total"],
+            "median": rows["q50"].round().astype(int),
+            "90% interval": interval,
+            "relative WIS": rows["rel_wis"].round(2),
+            "90% coverage": rows["coverage_90"].round(2),
+            "n": rows["n"].astype("Int64"),
+        }
+    )
+    return out.sort_values(["province", "zone", "week ending"]).reset_index(
+        drop=True
+    )
+
+
+def zone_chart_data(
+    samples: pd.DataFrame,
+    counts: pd.DataFrame,
+    scores: pd.DataFrame,
+    names: dict[str, str],
+    models: Sequence[str] = (ZONE_MODEL + SUMMED, ZONE_MODEL),
+) -> dict[str, object]:
+    """Return the data `docs/javascripts/zonechart.js` draws.
+
+    Parameters
+    ----------
+    samples, counts, scores : pandas.DataFrame
+        As `zone_table`.
+    names : dict of str to str
+        Province code to name.
+    models : sequence of str
+        Zone score models shown in the table, against randomwalk.
+
+    Returns
+    -------
+    dict
+        `release`, `reference_date`, `provinces` (code and name) and
+        `zones` (code and province), each by recent cases, most first,
+        and per zone `data` (week, count), `q` (week, q5, q25, q50, q75,
+        q95) and `scores` (origin, model, n, relative WIS, 50% and 90%
+        coverage).
+    """
+    size = counts.groupby("location")["total"].sum()
+    shown = list(size.sort_values(ascending=False, kind="stable").index)
+    q = _quantiles(samples.loc[samples["location"].isin(shown)])
+    rel = relative_wis(
+        scores.loc[scores["target"] == "reported"],
+        by=("location", "origin"),
+        baseline=ZONE_BASELINE,
+    )
+    rel = rel.loc[rel["model"].isin(models)]
+    by_prov = size.groupby(size.index.map(province_of)).sum()
+    provinces = list(by_prov.sort_values(ascending=False, kind="stable").index)
+
+    def _num(v: float) -> float:
+        return float(np.round(v, 3))
+
+    return {
+        "release": str(samples["vintage"].iloc[0]),
+        "reference_date": str(samples["reference_date"].iloc[0]),
+        "provinces": [
+            {"id": str(p), "name": names.get(str(p), str(p))} for p in provinces
+        ],
+        "zones": [
+            {"id": str(z), "province": province_of(str(z))} for z in shown
+        ],
+        "data": {
+            str(z): [
+                [str(w), int(n)]
+                for w, n in zip(g["target_end_date"], g["total"], strict=True)
+            ]
+            for z, g in counts.groupby("location")
+        },
+        "q": {
+            str(z): [
+                [str(r["target_end_date"]), *(_num(r[c]) for c in _QCOLS)]
+                for r in g.to_dict("records")
+            ]
+            for z, g in q.groupby("location")
+        },
+        "scores": {
+            str(z): [
+                [
+                    str(r["origin"]),
+                    str(r["model"]),
+                    int(r["n"]),
+                    _num(r["rel_wis"]),
+                    _num(r["coverage_50"]),
+                    _num(r["coverage_90"]),
+                ]
+                for r in g.to_dict("records")
+            ]
+            for z, g in rel.groupby("location")
+        },
+    }
