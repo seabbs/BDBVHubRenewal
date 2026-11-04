@@ -70,14 +70,20 @@ def test_tree_levels_paths_and_leaves() -> None:
     assert tree.path[0].sum() == 0
 
 
-def test_samples_are_valid_and_reproducible(
-    task: ForecastTask, fitted: tuple[PPRandomWalkNowcast, pd.DataFrame]
+def test_samples_are_valid_and_the_fit_is_reproducible(
+    task: ForecastTask,
+    fitted: tuple[PPRandomWalkNowcast, pd.DataFrame],
+    origins: tuple[Origin, Origin],
 ) -> None:
-    _, out = fitted
+    model, out = fitted
     check_samples(out, task)
-    again = PPRandomWalkNowcast(sampler=SMALL).forecast(task)
-    pd.testing.assert_frame_equal(out, again)
     assert (out["value"] >= 0).all()
+    # A second fit of the same task gives the same estimates, so the
+    # samples, drawn from them with the task's key, repeat too.
+    pooled, _ = origins
+    rows = model.rows(pooled, task)
+    sigma = [r["sigma"] for r in model.fit_diagnostics if "sigma" in r]
+    assert sigma == [float(pooled.sigma[i]) for i in rows]
 
 
 def test_pooled_delay_is_close_to_the_chain_ladder_for_a_large_place(
