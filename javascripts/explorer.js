@@ -97,8 +97,18 @@
       var bandsOnly = d.models.filter(function (m, i) {
         return legend.on[i] && !m.trajectories;
       }).map(function (m) { return m.name; });
-      note.textContent = view.value === "traj" && bandsOnly.length ?
-        "Bands only, as no samples are embedded: " + bandsOnly.join(", ") + "." : "";
+      var have = {};
+      rows.forEach(function (r) { have[r[0]] = true; });
+      var absent = d.models.filter(function (m, i) { return legend.on[i] && !have[i]; })
+        .map(function (m) { return m.name; });
+      var notes = [];
+      if (absent.length) {
+        notes.push("No forecast here for the rounds chosen from: " + absent.join(", ") + ".");
+      }
+      if (view.value === "traj" && bandsOnly.length) {
+        notes.push("Bands only, as no samples are embedded: " + bandsOnly.join(", ") + ".");
+      }
+      note.textContent = notes.join(" ");
       var yr = Z.yRange(zoom, 0, ymax * 1.05, "");
       var y0 = yr[0], y1 = yr[1];
       var W = 760, H = 340, L = 52, R = 10, T = 10, B = 28;
