@@ -329,3 +329,16 @@ def test_merge_by_model_reads_an_empty_gzipped_file(tmp_path: Path) -> None:
     pd.DataFrame().to_csv(path, index=False)
     new = pd.DataFrame({"model": ["randomwalk"], "value": [1.0]})
     pd.testing.assert_frame_equal(merge_by_model(path, new), new)
+
+
+def test_merge_by_model_replaces_only_the_models_run(tmp_path: Path) -> None:
+    path = tmp_path / "forecasts.csv.gz"
+    old = pd.DataFrame({"model": ["randomwalk", "other"], "value": [1.0, 2.0]})
+    old.to_csv(path, index=False)
+    new = pd.DataFrame({"model": ["randomwalk"], "value": [3.0]})
+    merged = merge_by_model(path, new)
+    assert sorted(zip(merged["model"], merged["value"], strict=True)) == [
+        ("other", 2.0),
+        ("randomwalk", 3.0),
+    ]
+    assert merge_by_model(tmp_path / "missing.csv", new) is new
