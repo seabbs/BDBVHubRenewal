@@ -122,13 +122,15 @@ On the same code and seed it compares with `renewal` as follows.
 
 | Origin | Model | Max R-hat | Min bulk ESS | Divergent |
 |---|---|---|---|---|
+| 2026-10-17 | `renewal` | 1.031 | 54 | 0.2% |
+| 2026-10-17 | `renewalfixdelay` | 1.036 | 100 | 0.4% |
 | 2026-10-24 | `renewal` | 1.021 | 203 | 0.5% |
 | 2026-10-24 | `renewalfixdelay` | 1.014 | 150 | 1.0% |
 | 2026-11-01 | `renewal` | 1.054 | 35 | 3.9% |
 | 2026-11-01 | `renewalfixdelay` | 1.008 | 193 | 1.8% |
 
 At 2026-11-01 the fixed delay converges far better, and its chains do not split on the starting offsets, which reach R-hat 1.005.
-At 2026-10-24 it is no better than `renewal`.
+At 2026-10-17 and 2026-10-24 it is not clearly better than `renewal`, with ESS higher at one origin and lower at the other.
 So the gain at 2026-11-01 may be specific to that origin.
 Both still run at the tree depth limit on 98 to 99% of draws, so the deep trees remain without γ(s), as the Rt walk analysis predicts.
 Each origin has one seed.
