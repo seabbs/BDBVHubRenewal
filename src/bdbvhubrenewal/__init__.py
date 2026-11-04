@@ -40,7 +40,7 @@ from bdbvhubrenewal.forecasters import (
     register_model,
 )
 from bdbvhubrenewal.reporting.plots import plot_nowcast
-from bdbvhubrenewal.submission.hub import to_hub_table, validate_submission
+from bdbvhubrenewal.submission.hub import to_hub_table
 
 __all__ = [
     "BacktestConfig",
@@ -61,6 +61,5 @@ __all__ = [
     "score_forecasts",
     "submission",
     "to_hub_table",
-    "validate_submission",
 ]
 __version__ = "0.1.0"

@@ -192,7 +192,7 @@ Required (S L121–129):
 
 Optional: `model_version`, `website_url` (uri), `repo_url` (uri), `citation`, `team_funding`, `ensemble_of_hub_models` (boolean).
 
-Checks run by `validate_model_metadata` (tested): the extension is `yml` or `yaml`, the contents match the schema, and the file name equals `<team_abbr>-<model_abbr>`.
+Checks run by `submission.validate.validate_metadata` (tested): the extension is `yml` or `yaml`, the contents match the schema, and the file name equals `<team_abbr>-<model_abbr>`.
 hubValidations enforces `format: email` (tested, `invalid_bad_email`).
 
 ## 7. Round rules

@@ -77,18 +77,23 @@ from bdbvhubrenewal.submission.fitting import (
     run_forecast,
 )
 from bdbvhubrenewal.submission.hub import (
+    ROUND_NAME,
     SUBMISSION_CONFIG,
-    load_hub_round,
     model_abbr_for,
     model_id,
     render_model_metadata,
     to_hub_table,
-    validate_model_metadata,
-    validate_submission_file,
     write_model_metadata,
     write_submission,
 )
 from bdbvhubrenewal.submission.metadata import MODEL_METADATA
+from bdbvhubrenewal.submission.validate import (
+    Check,
+    Hub,
+    validate_metadata,
+    validate_submission,
+)
+from bdbvhubrenewal.submission.validate import main as validate_main
 
 __all__ = ["build_parser", "host_devices", "main"]
 
@@ -256,7 +261,7 @@ def build_parser() -> argparse.ArgumentParser:
     _abbr_args(meta)
     meta.add_argument("--out", default="hub/model-metadata")
     meta.add_argument(
-        "--schema", default=f"{data_dir}/hub-config/model-metadata-schema.json"
+        "--data", default=data_dir, help="Data directory with hub-config/."
     )
 
     bvd = sub.add_parser(
@@ -663,18 +668,27 @@ def _nowcast(args: argparse.Namespace) -> int:
     (Path(args.out) / "zones.json").write_text(json.dumps(zone_record) + "\n")
     for note in handled:
         print(f"Handled: {note}")
-    hub_round = load_hub_round(hub_config)
-    open_round = task.reference_date.isoformat() in hub_round.reference_dates
-    errors = validate_submission_file(path, hub_round, check_round=open_round)
     print(f"Wrote {path} ({len(table)} rows, locations incl. {NATIONAL}).")
-    if not open_round:
+    hub = Hub.load(args.data)
+    rnd = hub.find_round(task.reference_date.isoformat())
+    if rnd is None or rnd.name != ROUND_NAME:
         print(
             f"Note: reference date {task.reference_date} is not an open round "
-            "in tasks.json, so round checks were skipped."
+            "in tasks.json, so the hub's checks were skipped."
         )
-    for e in errors:
-        print(f"ERROR: {e}", file=sys.stderr)
-    return 1 if errors else 0
+        return 0
+    report = validate_submission(path, hub, skip_window=True)
+    # `metadata` writes and checks the model metadata.
+    return _print_failed(
+        [c for c in report.failed if c.check != "metadata_exists"]
+    )
+
+
+def _print_failed(failed: list[Check]) -> int:
+    """Print failed hub checks as `ERROR:` lines, and return 1 if any."""
+    for c in failed:
+        print(f"ERROR: {c.check}: {c.message}", file=sys.stderr)
+    return 1 if failed else 0
 
 
 def _zone_backtest(args: argparse.Namespace) -> int:
@@ -807,11 +821,8 @@ def _metadata(args: argparse.Namespace) -> int:
         data_inputs=text["data_inputs"],
     )
     path = write_model_metadata(record, args.out)
-    errors = validate_model_metadata(record, args.schema, path.name)
     print(f"Wrote {path}.")
-    for e in errors:
-        print(f"ERROR: {e}", file=sys.stderr)
-    return 1 if errors else 0
+    return _print_failed(validate_metadata(path, Hub.load(args.data)).failed)
 
 
 def _bvd(args: argparse.Namespace) -> int:  # pragma: no cover - network
@@ -952,8 +963,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     logging.getLogger("jax").setLevel(logging.WARNING)
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv[:1] == ["validate"]:
-        from bdbvhubrenewal.submission.validate import main as validate_main
-
         return validate_main(argv[1:])
     parser = build_parser()
     args = parser.parse_args(argv)
