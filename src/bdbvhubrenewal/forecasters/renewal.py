@@ -1174,6 +1174,15 @@ class RenewalModel:
         pandas.DataFrame
             Columns `SAMPLE_COLUMNS`. With `task.report_by`, also `as_of`
             rows (`RenewalFit.as_reported`).
+
+        Examples
+        --------
+        Fitting takes minutes per task on a CPU.
+
+        >>> from bdbvhubrenewal.forecasters import get_model
+        >>> model = get_model("renewal")
+        >>> samples = model.forecast(task)
+        >>> model.fit_diagnostics  # divergences and R-hat of the fit
         """
         fit = self.forecast_fit(task)
         self.fit_diagnostics = [

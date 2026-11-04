@@ -42,9 +42,11 @@ from pyrenew.time import daily_to_weekly
 _FLOOR = 1e-6
 
 
-#: Publication lag pmf with all mass at lag 0: every report is published
-#: on its report day.
 NO_LAG = jnp.ones(1)
+"""Publication lag pmf with all mass at lag 0.
+
+Every report is published on its report day.
+"""
 
 
 def backsample(missing: Array, pmf: Array) -> Array:
@@ -90,6 +92,13 @@ def skew(x: Array, width: int) -> Array:
     Pad, flatten and reshape, so the adjoint is also a reshape and needs
     no scatter. Requires `width >= n + D` for `x` of shape `(n, D + 1)`.
 
+    Parameters
+    ----------
+    x : jax.Array
+        Shape `(n, D + 1)`.
+    width : int
+        Columns of the output, at least `n + D`.
+
     Returns
     -------
     Array
@@ -102,6 +111,13 @@ def skew(x: Array, width: int) -> Array:
 
 def unskew(b: Array, k: int) -> Array:
     """Inverse of `skew`: `out[s, d] = b[s, s + d]` for `d < k`.
+
+    Parameters
+    ----------
+    b : jax.Array
+        A skewed matrix, as from `skew`.
+    k : int
+        Columns to return.
 
     Returns
     -------
@@ -407,11 +423,23 @@ class OnsetStreams(BaseObservationProcess):
         self.weekly_axis = weekly_axis
 
     def lookback_days(self) -> int:
-        """Return 0: the latent process is already dated by onset."""
+        """Return 0: the latent process is already dated by onset.
+
+        Returns
+        -------
+        int
+            Always 0.
+        """
         return 0
 
     def infection_resolution(self) -> str:
-        """Return `"subpop"`."""
+        """Return the resolution of the infections the process reads.
+
+        Returns
+        -------
+        str
+            Always `"subpop"`, one series per province.
+        """
         return "subpop"
 
     def _predicted_obs(self, infections: Array) -> Array:
@@ -428,6 +456,19 @@ class OnsetStreams(BaseObservationProcess):
         **kwargs: object,
     ) -> None:
         """Check the cut-off and the shapes of the weekly data.
+
+        Parameters
+        ----------
+        n_total : int
+            Days on the model axis.
+        n_subpops : int
+            Number of provinces.
+        cutoff : int, optional
+            Day index of the data cut-off.
+        known, imputed : jax.Array, optional
+            Weekly known-onset and imputed-onset counts.
+        **kwargs
+            Ignored, for the PyRenew interface.
 
         Raises
         ------
@@ -745,6 +786,17 @@ class RtPseudoObservation:
         Infections are per resident, so the weights are scaled by the
         population `fractions` to be proportional to counts.
 
+        Parameters
+        ----------
+        rt : jax.Array
+            Daily Rt by province.
+        infections : jax.Array
+            Daily infections per resident by province.
+        n_init : int
+            Seeding days at the start of the axis.
+        fractions : jax.Array, optional
+            Population share of each province.
+
         Returns
         -------
         tuple of Array
@@ -768,7 +820,19 @@ class RtPseudoObservation:
         n_init: int,
         fractions: Array | None = None,
     ) -> None:
-        """Add the pseudo-likelihood and record its diagnostics."""
+        """Add the pseudo-likelihood and record its diagnostics.
+
+        Parameters
+        ----------
+        rt : jax.Array
+            Daily Rt by province.
+        infections : jax.Array
+            Daily infections per resident by province.
+        n_init : int
+            Seeding days at the start of the axis.
+        fractions : jax.Array, optional
+            Population share of each province.
+        """
         group, national = self.log_group_rt(rt, infections, n_init, fractions)
         model = jnp.where(self.kinds == 0, group, group - national)
         numpyro.deterministic("bvd_log_rt_model", model)

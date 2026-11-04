@@ -218,6 +218,11 @@ class LearntKernel(RandomVariable):
     def sample(self, **kwargs: object) -> Array:
         """Sample the kernel between modelled provinces.
 
+        Parameters
+        ----------
+        **kwargs
+            Ignored, for the PyRenew interface.
+
         Returns
         -------
         Array
@@ -334,6 +339,17 @@ class MetapopulationInfections(SubpopulationInfections):
         **kwargs: object,
     ) -> LatentSample:
         """Sample per-capita infections for each province.
+
+        Parameters
+        ----------
+        n_days_post_init : int
+            Days after the seeding period.
+        subpop_fractions : jax.Array, optional
+            Population share of each province.
+        first_day_dow : int, optional
+            Weekday of the first day, passed by PyRenew.
+        **kwargs
+            Ignored, for the PyRenew interface.
 
         Returns
         -------

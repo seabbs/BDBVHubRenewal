@@ -107,6 +107,15 @@ class HazardDelay(RandomVariable):
     ) -> Array:
         """Sample the delay matrix.
 
+        Parameters
+        ----------
+        n_timepoints : int
+            Days to sample.
+        first_day_dow : int, optional
+            Weekday of the first day, passed by PyRenew.
+        **kwargs
+            Ignored, for the PyRenew interface.
+
         Returns
         -------
         ArrayLike
@@ -274,6 +283,15 @@ class ParametricDelay(RandomVariable):
     ) -> Array:
         """Sample the delay matrix.
 
+        Parameters
+        ----------
+        n_timepoints : int
+            Days to sample.
+        first_day_dow : int, optional
+            Weekday of the first day, passed by PyRenew.
+        **kwargs
+            Ignored, for the PyRenew interface.
+
         Returns
         -------
         ArrayLike
@@ -322,6 +340,13 @@ class FixedTimeVarying(RandomVariable):
 
     def sample(self, n_timepoints: int, **kwargs: object) -> Array:
         """Return the input padded or cut to `n_timepoints` rows.
+
+        Parameters
+        ----------
+        n_timepoints : int
+            Rows to return.
+        **kwargs
+            Ignored, for the PyRenew interface.
 
         Returns
         -------

@@ -46,10 +46,12 @@ from .rt import (
 )
 
 SUNDAY = 6
+"""Weekday number of Sunday (Monday is 0), the first day of a hub week."""
 GEN_INT_LENGTH = 42
 """Lags of the generation interval, about its 98.5% quantile (a whole
 number of weeks, as the model axis starts this many days early)."""
 GI_MEAN = 15.3
+"""Gamma generation interval mean in days. See `GI_SD`."""
 GI_SD = 9.3
 """Gamma generation interval mean and SD in days, BVDOutbreakSize's prior
 means (from the NEJM serial interval). After double censoring, dropping
@@ -57,6 +59,7 @@ lag 0 and truncating at 42 days the effective mean is 14.8 and SD 8.4."""
 PHI_FLOOR = 1e-3
 """Added to $1/\\phi$ so the concentration stays at or below 1000."""
 ALPHA0 = 0.6
+"""Ascertainment that turns the seed's expected onsets into infections."""
 FORECAST_RT_HALF_LIFE = 2.0
 """Half-life in weeks with which the pooled log Rt reverts towards 0
 (Rt of 1) past the data weeks."""
@@ -76,6 +79,13 @@ def generation_interval(
     the rest renormalised, as BVDOutbreakSize left-truncates its
     generation interval at one day. Computed once, in float64.
     Matches `primarycensored::dpcens(..., D = L + 1)`.
+
+    Parameters
+    ----------
+    mean, sd : float
+        Gamma mean and SD in days. Default to `GI_MEAN` and `GI_SD`.
+    length : int
+        Longest lag in days. Defaults to `GEN_INT_LENGTH`.
 
     Returns
     -------
@@ -190,6 +200,7 @@ class ModelConfig:
 
 
 MAIN = ModelConfig()
+"""The main model configuration, with every default of `ModelConfig`."""
 BVD = ModelConfig(bvd=True)
 """Main model informed by BVDOutbreakSize Rt (`hubrenewalbvd`)."""
 _SIMPLE: dict[str, Any] = {
@@ -330,6 +341,13 @@ def fit_weeks(data: Vintage, config: ModelConfig) -> int:
     The BVD pseudo-observation sits on $s_b$, which can fall after the
     cut-off; the fit axis then runs to the end of that week (with no
     data) so the observation informs Rt there.
+
+    Parameters
+    ----------
+    data : Vintage
+        The model inputs at one vintage.
+    config : ModelConfig
+        The model configuration.
 
     Returns
     -------
@@ -548,6 +566,19 @@ def model_args(
     of the forecast horizon. Weekly data are padded with NaN for the
     seeding weeks and the horizon.
 
+    Parameters
+    ----------
+    model : MultiSignalModel
+        The model, from `build_model`.
+    data : Vintage
+        The model inputs at one vintage.
+    forecast : bool, default False
+        Extend the axis by the horizon and pass the data as the vintage,
+        not as observations, to draw forecasts.
+    as_of : int, optional
+        With `forecast`, a later cut-off in days from `start_date`, to
+        draw counts as reported by it.
+
     Returns
     -------
     dict
@@ -626,6 +657,23 @@ def fit(
 
     As `MultiSignalModel.run`, but keeping `EXTRA_FIELDS` for the
     diagnostics. Chains run in parallel when devices allow.
+
+    Parameters
+    ----------
+    model : MultiSignalModel
+        The model, from `build_model`.
+    data : Vintage
+        The model inputs at one vintage.
+    num_warmup, num_samples : int, default 500
+        Warm-up and kept iterations per chain.
+    num_chains : int, default 1
+        Number of chains.
+    seed : int, default 0
+        Random seed.
+    target_accept : float, default 0.9
+        NUTS target acceptance probability.
+    max_tree_depth : int, default 10
+        NUTS maximum tree depth.
 
     Returns
     -------
@@ -714,6 +762,22 @@ def forecast_trajectories(
     so national counts are the sum over provinces within a trajectory.
     Provinces with no cases get `seed_from_imports` draws when the model
     has the importation component.
+
+    Parameters
+    ----------
+    model : MultiSignalModel
+        A fitted model, from `fit`.
+    data : Vintage
+        The model inputs it was fitted to.
+    n_trajectories : int, default 100
+        Number of trajectories.
+    seed : int, default 1
+        Random seed.
+    posterior : dict, optional
+        Posterior draws to use instead of `model.mcmc`.
+    as_of : sequence of int
+        Later cut-offs, in days from `start_date`, to draw counts as
+        reported by.
 
     Returns
     -------
