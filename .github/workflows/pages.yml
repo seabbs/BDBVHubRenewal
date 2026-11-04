@@ -85,6 +85,16 @@ jobs:
         run: |
           uv run bdbvhubrenewal compare-hub --fetch
           uv run bdbvhubrenewal report --ledger output/ledger
+      - name: Check hub teams are shown on the comparison page only
+        run: |
+          bad=0
+          while read -r name; do
+            if grep -q -e OHTJHU -e Chromantis "docs/generated/$name"; then
+              echo "::error::docs/generated/$name names a hub team"
+              bad=1
+            fi
+          done < <(grep -o -- '--8<-- "[^"]*"' docs/backtest.md | cut -d'"' -f2)
+          exit "$bad"
       # As `task getting-started`. The notebook and its figures are built
       # here, not committed. The filter keeps a tqdm notice about
       # ipywidgets out of the published outputs.

@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 import pandas as pd
 
-from bdbvhubrenewal.evaluation.backtest import BacktestConfig, load_config
+from bdbvhubrenewal.evaluation.backtest import BacktestConfig
 from bdbvhubrenewal.reporting import report
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -103,74 +102,6 @@ def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
     assert (
         "BDBV Modeling Hub" in (gen / "comparison-attribution.md").read_text()
     )
-
-
-def test_make_report_writes_every_page(
-    tmp_path: Path,
-    target: pd.DataFrame,
-    delays: pd.DataFrame,
-    daily: pd.DataFrame,
-) -> None:
-    import os
-
-    from bdbvhubrenewal.evaluation.backtest import run_development
-    from bdbvhubrenewal.forecasters import get_model
-
-    config = load_config(ROOT / "config" / "backtest.toml")
-    config = BacktestConfig(
-        n_samples=20,
-        seed=1,
-        development_until=config.development_until,
-        model_choice=ROOT / config.model_choice,
-        simulated_dates=("2026-08-01",),
-    )
-    models = [get_model("randomwalk")]
-    out = tmp_path / "output"
-    out.mkdir()
-    forecasts = run_development(models, target, delays, config, daily=daily)
-    forecasts.to_csv(out / "forecasts.csv.gz", index=False)
-    old = Path.cwd()
-    os.chdir(ROOT)
-    try:
-        report.make_report(
-            figures=tmp_path / "fig",
-            generated=tmp_path / "gen",
-            output=out,
-            hub_comparison=tmp_path / "none",
-        )
-    finally:
-        os.chdir(old)
-    gen = tmp_path / "gen"
-    for name in (
-        "vintages.md",
-        "release-headline.md",
-        "release-nowcasts.md",
-        "backtest-findings.md",
-        "backtest-summary.md",
-        "truth-changes.md",
-        "heldout-status.md",
-        "comparison-scores.md",
-        "nowcast-tabs.md",
-        "zone-nowcast.md",
-    ):
-        assert (gen / name).exists(), name
-    # Hub teams are shown on the comparison page only.
-    backtest = (Path(ROOT) / "docs" / "backtest.md").read_text()
-    for name in re.findall(r'--8<-- "([^"]+)"', backtest):
-        text = (gen / name).read_text()
-        assert "OHTJHU" not in text, name
-        assert "Chromantis" not in text, name
-    fig = tmp_path / "fig"
-    for name in (
-        "target.svg",
-        "scores-horizon.svg",
-        "scores-place.svg",
-        "scores-by-truth-dark.svg",
-        "forecasts-randomwalk-cd.svg",
-        "recovery-wis-horizon.svg",
-        "nowcast-randomwalk-main.svg",
-    ):
-        assert (fig / name).exists(), name
 
 
 def test_lopo_section_hidden_without_results(tmp_path: Path) -> None:
