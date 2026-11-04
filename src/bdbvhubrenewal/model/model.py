@@ -34,14 +34,11 @@ from .delays import (
     FixedTimeVarying,
     HazardDelay,
 )
-from .observation import OnsetStreams
+from .observation import MissingOnsetFraction, OnsetStreams
+from .pooled import PooledInitialValue
 from .renewal import Importation, MetapopulationInfections
-from .rt import (
-    MissingOnsetFraction,
-    NonCentredRandomWalk,
-    PooledInitialValue,
-)
 from .rt_observation import RtPseudoObservation
+from .temporal import NonCentredRandomWalk
 
 SUNDAY = 6
 """Weekday number of Sunday (Monday is 0), the first day of a hub week."""
@@ -292,6 +289,24 @@ class Vintage:
         return int(self.known.shape[1])
 
 
+def _pooled(
+    name: str,
+    n_groups: int,
+    loc: float,
+    scale: float,
+    pooling_sd: float,
+    centred: bool = True,
+) -> PooledInitialValue:
+    r"""Group values around $\mu \sim N(m, s)$, spread $N^+(0, \tau)$."""
+    return PooledInitialValue(
+        name,
+        n_groups,
+        DistributionalVariable(f"{name}_mean", dist.Normal(loc, scale)),
+        DistributionalVariable(f"{name}_sd", dist.HalfNormal(pooling_sd)),
+        centred=centred,
+    )
+
+
 def _named_walk(
     name: str,
     sd: float,
@@ -465,7 +480,7 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             ),
             AffineTransform(0.0, 1 / (ALPHA0 * data.populations)),
         ),
-        log_rt_time_0_rv=PooledInitialValue("log_rt0", n_prov, 0.0, 0.5, 0.3),
+        log_rt_time_0_rv=_pooled("log_rt0", n_prov, 0.0, 0.5, 0.3),
         baseline_rt_process=_named_walk(
             "rt_sd",
             0.2,
@@ -518,9 +533,7 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             "missing_fraction",
             # Non-centred: the imputed share pins these offsets only
             # weakly, and centred they form a funnel (R-hat 1.68).
-            PooledInitialValue(
-                "logit_pi0", n_prov, -2.0, 1.0, 0.5, centred=False
-            ),
+            _pooled("logit_pi0", n_prov, -2.0, 1.0, 0.5, centred=False),
             _named_walk("pi_sd", 0.3, fit_weeks(data, config)),
             _named_walk("pi_dev_sd", 0.1, fit_weeks(data, config)),
         )

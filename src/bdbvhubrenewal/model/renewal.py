@@ -19,7 +19,7 @@ from pyrenew.latent.base import LatentSample, PopulationStructure
 from pyrenew.math import r_approx_from_R
 from pyrenew.metaclass import RandomVariable
 
-from .rt import pooled_walk
+from .pooled import pooled_walk
 
 
 def mixing_matrix(
