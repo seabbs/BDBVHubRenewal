@@ -3,7 +3,7 @@
 # Ruff and mypy run from the locked uv environments, so they match CI.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       # Downloaded, generated and fixture files are left as they are.
       - id: end-of-file-fixer
