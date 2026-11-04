@@ -26,7 +26,8 @@ on:
     # (ci/policy.toml [timing]), and the organisers have the US working
     # day to approve the PR's checks.
     - cron: '0 6 * * 0-2'
-    # Outside the window, only to freeze the pages of merged rounds.
+    # Outside the window, only to freeze the pages of merged rounds and
+    # release closed rounds.
     - cron: '0 6 * * 3-5'
   workflow_dispatch:
     inputs:
@@ -155,6 +156,22 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run pages.yml --ref main -R "$GITHUB_REPOSITORY"
+
+  release:
+    name: Release closed rounds
+    needs: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - name: Release rounds whose window closed and PRs are done
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ needs.detect.outputs.dry_run }}
+        run: ci/steps/release.sh
 
   prepare:
     name: Pin inputs and build the random walk candidate
