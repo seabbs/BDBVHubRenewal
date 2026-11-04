@@ -72,7 +72,6 @@ Where this page and the hub differ, the hub's text decides.
 
 This repository sets `forecast_date` to the day the PR is opened (the run date in UTC).
 UTC is within a day of Kinshasa, so the recency check holds.
-`bdbvhubrenewal nowcast` takes `--forecast-date` to set another day.
 After a candidate is chosen, the CI reads the hub's file for the round from raw GitHub (read only) and appends to it.
 It does so for the model id that is submitted, so a fallback model appends to the file of the submitting id.
 `bdbvhubrenewal validate` (`submission/validate.py`) checks each rule above, with `--previous` for the hub's copy, and `--skip-window` also skips the recency check.

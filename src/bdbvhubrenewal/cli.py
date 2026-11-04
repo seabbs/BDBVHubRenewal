@@ -9,7 +9,6 @@ Commands:
   the leave-one-province-out check.
 - `nowcast`: forecast from a real vintage, write the hub file and check it.
   With `--config` (and `--fit`), forecast from a fit configuration.
-  The health zones are added unless `--no-zones` is given.
 - `zone-backtest`: score the random walk models run at zone level.
 - `fit`: fit a configuration and write the fit directory and its
   `diagnostics.json`, for the submission CI.
@@ -92,6 +91,10 @@ from bdbvhubrenewal.submission.hub import (
 )
 
 __all__ = ["build_parser", "host_devices", "main"]
+
+MIN_HORIZON = -6
+"""First week forecast, in weeks from the reference date: 7 weeks up to
+it, which the CI's `observed` and `coverage` checks need."""
 
 _RENEWAL_OBSERVATION = (
     "Confirmed onsets follow a time-varying ascertainment. The "
@@ -360,18 +363,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--fit", default=None, help="Fit directory written by `fit`."
     )
     now.add_argument("--out", default="output/submission")
-    now.add_argument("--hub-config", default=None)
-    now.add_argument(
-        "--forecast-date",
-        default=None,
-        help="Day the PR is opened, YYYY-MM-DD. Default: today (UTC).",
-    )
-    now.add_argument(
-        "--no-zones",
-        dest="zones",
-        action="store_false",
-        help="Leave the health zones out of the hub file.",
-    )
 
     zb = sub.add_parser(
         "zone-backtest", help="Score the random walk models at zone level."
@@ -380,7 +371,6 @@ def build_parser() -> argparse.ArgumentParser:
     zb.add_argument(
         "--models", nargs="*", default=["randomwalk", "randomwalknowcast"]
     )
-    zb.add_argument("--hub-config", default=None)
     zb.add_argument("--out", default="results/zone-scores.csv")
 
     fit = sub.add_parser(
@@ -520,14 +510,6 @@ def _task_args(p: argparse.ArgumentParser, data_dir: str) -> None:
     )
     p.add_argument("--data", default=data_dir)
     p.add_argument("--backtest-config", default="config/backtest.toml")
-    p.add_argument(
-        "--min-horizon",
-        type=int,
-        default=-6,
-        help="First week, in weeks from the reference date. The default "
-        "submits 7 weeks up to the reference date, which the CI's "
-        "`observed` and `coverage` checks need.",
-    )
 
 
 def _version() -> str:
@@ -552,7 +534,7 @@ def _vintage(target_vintages: Sequence[str], vintage: str | None) -> str:
 def _task(args: argparse.Namespace) -> tuple[ForecastTask, list[str]]:
     """Build the forecast task, and notes on any stream that stood in."""
     config = dataclasses.replace(
-        bt.load_config(args.backtest_config), min_horizon=args.min_horizon
+        bt.load_config(args.backtest_config), min_horizon=MIN_HORIZON
     )
     target, delays = load_target(args.data), load_delays(args.data)
     real = target.loc[target["kind"] == "real"]
@@ -792,7 +774,7 @@ def _zones(
     args: argparse.Namespace,
     task: ForecastTask,
     samples: pd.DataFrame,
-    hub_config: str,
+    hub_config: Path,
 ) -> tuple[pd.DataFrame | None, str]:
     """Forecast the zones to sum to the provinces, or say why not.
 
@@ -800,8 +782,6 @@ def _zones(
     province samples. Any other model's province samples are split across
     the zones by the allocator.
     """
-    if not args.zones:
-        return None, ""
     try:
         daily = load_daily_zones(args.data)
     except OSError:
@@ -818,9 +798,7 @@ def _zones(
 
 
 def _nowcast(args: argparse.Namespace) -> int:
-    hub_config = args.hub_config or str(
-        Path(args.data) / "hub-config" / "tasks.json"
-    )
+    hub_config = Path(args.data) / "hub-config" / "tasks.json"
     try:
         task, handled = _task(args)
         if args.config:
@@ -838,7 +816,6 @@ def _nowcast(args: argparse.Namespace) -> int:
             task.reference_date,
             unassigned=result.unassigned,
             zones=zones,
-            forecast_date=args.forecast_date,
         )
         path = write_submission(table, args.out, model_id(_abbr(args)))
     except (KeyError, ValueError, OSError) as err:
@@ -873,9 +850,7 @@ def _zone_backtest(args: argparse.Namespace) -> int:
         zone_relative_skill,
     )
 
-    hub_config = args.hub_config or str(
-        Path(args.data) / "hub-config" / "tasks.json"
-    )
+    hub_config = Path(args.data) / "hub-config" / "tasks.json"
     scores = zone_backtest(
         load_target(args.data),
         load_delays(args.data),

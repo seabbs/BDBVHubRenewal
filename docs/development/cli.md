@@ -16,7 +16,7 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 | `backtest --scenarios-only` | Run only the scenarios calibrated to the real data, from `--scenario-as-of` and `--scenario-dates`. |
 | `bvd` | Cache the BVDOutbreakSize releases each vintage may use. |
 | `compare-hub [--fetch]` | Score our retrospective forecasts and the hub's submitted ones on the same truth and weeks. |
-| `nowcast` | Forecast from a real vintage, write the hub file and check it. With `--config` and `--fit`, forecast from a fit configuration. The health zones are added unless `--no-zones` is given. |
+| `nowcast` | Forecast from a real vintage, write the hub file and check it. With `--config` and `--fit`, forecast from a fit configuration. |
 | `zone-backtest` | Score `randomwalk` and `randomwalknowcast` run at zone level on the real vintages. |
 | `fit` | Fit a configuration and write the fit directory and its diagnostics, for the submission CI. |
 | `plot-submission` | Plot a submitted hub file. |

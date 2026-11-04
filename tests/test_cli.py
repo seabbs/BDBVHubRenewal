@@ -69,8 +69,6 @@ def test_cli_nowcast_writes_coherent_zones(tmp_path: Path) -> None:
     assert (summed.reindex(want.index) == want).all()
     nat = table.loc[level == 0].set_index(keys)["value"]
     assert (nat == provs.groupby(keys)["value"].sum().reindex(nat.index)).all()
-    assert main(["nowcast", "--no-zones", "--out", str(tmp_path / "p")]) == 0
-    assert (_written(tmp_path / "p")["location"].str.count("-") < 2).all()
 
 
 @pytest.mark.usefixtures("in_root")
@@ -253,7 +251,6 @@ def test_cli_fit_task_carries_the_delay_files_for_the_lag() -> None:
         vintage="latest",
         data="data",
         backtest_config="config/backtest.toml",
-        min_horizon=-6,
     )
     task, _ = _task(args)
     assert task.delay_history is not None
