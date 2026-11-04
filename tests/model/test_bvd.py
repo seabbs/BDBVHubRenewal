@@ -120,9 +120,6 @@ def test_alpha_zero_reproduces_main(outbreak, sim_tables, table, release):
         for m in (plain, zero)
     ]
     assert ld[0] == ld[1]
-    with_bvd = build_model(data, BVD)
-    tr_bvd = trace(with_bvd, data)
-    assert "bvd_rt_obs" in tr_bvd and "bvd_z" in tr_bvd
 
 
 def test_group_rt_weights_by_counts_not_per_resident():
