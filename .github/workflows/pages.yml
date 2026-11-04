@@ -1,7 +1,9 @@
 name: Pages
 
-# Builds the site on pull requests as a check, and builds and deploys it
-# from main.
+# Builds the site on pull requests, publishes it as a preview at
+# pr-preview/pr-N/ and comments the link, and removes the preview when the
+# pull request closes. Builds and deploys the site from main.
+# Both deploy to the gh-pages branch, which Pages serves.
 on:
   push:
     branches: [main]
@@ -17,6 +19,7 @@ on:
       - 'uv.lock'
       - '.github/workflows/pages.yml'
   pull_request:
+    types: [opened, reopened, synchronize, closed]
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
@@ -40,6 +43,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -94,22 +98,55 @@ jobs:
           docs/getting-started.py
       - name: Build the site into _site
         run: uv run mkdocs build --strict
-      - uses: actions/upload-pages-artifact@v5
-        if: github.event_name != 'pull_request'
+      # Pages serves the branch as it is, without Jekyll.
+      - run: touch _site/.nojekyll
+      - uses: actions/upload-artifact@v7
         with:
+          name: site
           path: _site
+          include-hidden-files: true
 
   deploy:
     needs: build
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      contents: write
+    concurrency: gh-pages
     steps:
-      - uses: actions/configure-pages@v6
-      - id: deployment
-        uses: actions/deploy-pages@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: site
+          path: _site
+      - uses: JamesIves/github-pages-deploy-action@fa24774553152dd7873cd16ebd8d959b010c5445 # v4.9.0
+        with:
+          folder: _site
+          branch: gh-pages
+          clean-exclude: pr-preview/
+          force: false
+
+  # Runs after a successful build, and on close (when build is skipped) to
+  # remove the preview.
+  preview:
+    needs: build
+    if: >-
+      !cancelled() && github.event_name == 'pull_request'
+      && needs.build.result != 'failure'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    concurrency: preview-${{ github.ref }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        if: github.event.action != 'closed'
+        with:
+          name: site
+          path: _site
+      - uses: rossjrw/pr-preview-action@873417d2df72380da1f3978378fb58560bcde976 # v1.8.2
+        with:
+          source-dir: _site
+          preview-branch: gh-pages
+          umbrella-dir: pr-preview
