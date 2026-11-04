@@ -42,6 +42,7 @@ from bdbvhubrenewal.data import (
 )
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.evaluation.nowcast import relative_wis, release_backtest
+from bdbvhubrenewal.evaluation.scoring import relative_skill
 from bdbvhubrenewal.forecasters import NATIONAL, get_model
 from bdbvhubrenewal.reporting.plots import plot_location_grid, save_light_dark
 
@@ -69,9 +70,9 @@ config = dataclasses.replace(
 )
 origin_delays, _ = delays_for_vintage(delays, ORIGIN)
 origin = real.loc[real["vintage"] == ORIGIN]
-task = bt.make_tasks(
-    origin, origin_delays, config, history=real, daily=daily
-)[0]
+task = bt.make_tasks(origin, origin_delays, config, history=real, daily=daily)[
+    0
+]
 print(task.vintage, task.reference_date, len(task.locations), "provinces")
 print(task.target_end_dates[0], "to", task.target_end_dates[-1])
 
@@ -152,16 +153,27 @@ panels
 # `as reported` uses the data at the origin as the forecast.
 
 # %%
-scores = release_backtest(
-    [task], daily, target, models=(), stored=forecasts
-).scores
-scores = scores.loc[scores["target"] == "reported"]
+result = release_backtest([task], daily, target, models=(), stored=forecasts)
+scores = result.scores.loc[result.scores["target"] == "reported"]
 scores = scores.assign(
     level=scores["location"].map(
         lambda x: "National" if x == NATIONAL else "Province"
     )
 )
 relative_wis(scores, by=["level"]).round(2)
+
+# %% [markdown]
+# The [energy score](../methods/evaluation/#energy-score) scores each scale's forecast of every place and week at once, from the same samples.
+# The table gives it and its log version relative to `randomwalk`, with $n$ the releases scored.
+
+# %%
+energy = result.energy.loc[result.energy["target"] == "reported"]
+relative_skill(
+    energy,
+    by=("scale",),
+    metrics=("energy", "log_energy"),
+    match_on=("origin", "truth_vintage"),
+).round(2)
 
 # %% [markdown]
 # ## Next steps
