@@ -16,7 +16,7 @@ task docs       # the site, built in strict mode
 ```
 
 `task test` leaves out the model fit tests (marked `slow`).
-The CI runs them on every push to main.
+The CI runs them weekly and on demand.
 Any change to `src/bdbvhubrenewal/model/`, the simulator or the renewal forecaster needs `task test-all` to pass first.
 
 ## Commits

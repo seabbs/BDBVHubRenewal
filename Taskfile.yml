@@ -16,7 +16,7 @@ tasks:
       - uv run pytest -q --cov=bdbvhubrenewal
 
   test-slow:
-    desc: Run the model fit tests (tiny real fits)
+    desc: Run the parameter recovery fit (marked slow)
     cmds:
       - uv run pytest -q -m slow
 
