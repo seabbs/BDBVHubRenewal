@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-r"""Delay pmfs: the censored parametric pmf and a fixed time-varying input.
+r"""A fixed time-varying delay input.
 
 `FixedTimeVarying` returns a matrix $f_s(d)$ of shape
 `(n_timepoints, dmax + 1)`, the delay pmf for cases with onset on day $s$.
