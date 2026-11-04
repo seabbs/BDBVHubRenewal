@@ -35,10 +35,7 @@ from .delays import (
     ParametricDelay,
 )
 from .observation import OnsetStreams, RtPseudoObservation
-from .renewal import (
-    LearntKernel,
-    MetapopulationInfections,
-)
+from .renewal import Importation, MetapopulationInfections
 from .rt import (
     MissingOnsetFraction,
     NonCentredRandomWalk,
@@ -132,10 +129,9 @@ class ModelConfig:
     truncation : bool
         Right truncation by vintage. For the total stream it uses the
         hub's delay pmf as a fixed reporting delay.
-    coupling : {"gravity", "learnt", "none"}
-        Importation kernel between modelled provinces: fixed gravity,
-        gravity with a learnt decay and destination weights
-        (`LearntKernel`), or none.
+    coupling : {"gravity", "none"}
+        Importation between modelled provinces through the fixed gravity
+        kernel, or none.
     delay : {"hazard", "gamma", "lognormal"}
         Nonparametric hazard delay or a censored parametric family.
     depletion : bool
@@ -180,7 +176,7 @@ class ModelConfig:
     national: bool = False
     streams: Literal["split", "total"] = "split"
     truncation: bool = True
-    coupling: Literal["gravity", "learnt", "none"] = "gravity"
+    coupling: Literal["gravity", "none"] = "gravity"
     delay: Literal["hazard", "gamma", "lognormal"] = "hazard"
     depletion: bool = True
     active: Literal["cases", "all"] = "cases"
@@ -261,9 +257,6 @@ class Vintage:
         stays in the latent process and is still predicted).
     seed_days : numpy.ndarray or None
         Day (from `start_date`) of each province's first case week.
-    distances, all_populations : numpy.ndarray or None
-        Distances (km) and populations of modelled then idle provinces,
-        for the learnt kernel.
     bvd : dict or None
         External Rt summaries: `day` (index of $s_b$ from the first data
         day), `groups` `(G, P)`, `values`, `scales` and `kinds` `(G,)`.
@@ -287,8 +280,6 @@ class Vintage:
     import_kernel: np.ndarray | None = None
     fit_mask: np.ndarray | None = None
     bvd: dict[str, Any] | None = None
-    distances: np.ndarray | None = None
-    all_populations: np.ndarray | None = None
     seed_days: np.ndarray | None = None
     publication_lag_pmf: np.ndarray | None = None
 
@@ -400,18 +391,25 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         Model with one observation, `onsets`.
     """
     n_prov = data.n_provinces
-    single = n_prov == 1
-    kernel = None if config.coupling == "none" or single else data.kernel
-    if kernel is not None and config.coupling == "learnt":
-        if data.distances is None or data.all_populations is None:
-            raise ValueError("A learnt kernel needs distances and populations.")
-        kernel = LearntKernel(
-            "kernel", data.distances, data.all_populations, n_prov
+    mixing = None
+    if config.coupling == "gravity" and data.kernel is not None:
+        mixing = Importation(
+            "mixing",
+            DeterministicVariable("kernel", data.kernel),
+            DistributionalVariable("importation", dist.Beta(1, 100)),
         )
-    if kernel is None:
-        importation = None
-    else:
-        importation = DistributionalVariable("importation", dist.Beta(1, 100))
+
+    effective_population = None
+    if config.depletion:
+        effective_population = (
+            DistributionalVariable(
+                "effective_population", dist.LogNormal(np.log(0.05), 0.75)
+            )
+            if config.effective_population is None
+            else DeterministicVariable(
+                "effective_population", config.effective_population
+            )
+        )
 
     builder = PyrenewBuilder()
     builder.configure_latent(
@@ -438,20 +436,14 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         subpop_rt_deviation_process=_named_walk(
             "rt_dev_sd", 0.1, fit_weeks(data, config), ar=True
         ),
-        kernel=kernel,
-        importation_rv=importation,
-        deplete=config.depletion,
+        mixing_rv=mixing,
+        effective_population_rv=effective_population,
         seed_days=data.seed_days,
-        rt_observation=RtPseudoObservation(alpha=config.bvd_alpha, **data.bvd)
+        rt_observation=RtPseudoObservation(
+            "bvd", alpha=config.bvd_alpha, **data.bvd
+        )
         if config.bvd and data.bvd is not None
         else None,
-        effective_population_rv=DeterministicVariable(
-            "effective_population", config.effective_population
-        )
-        if config.effective_population is not None
-        else DistributionalVariable(
-            "effective_population", dist.LogNormal(np.log(0.05), 0.75)
-        ),
     )
 
     # Only the product of ascertainment and the effective population is
@@ -533,7 +525,6 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             known_noise=_nb_noise("known"),
             imputed_noise=None if missing is None else _nb_noise("imputed"),
             import_scale_rv=imports,
-            kernel_rv=kernel if isinstance(kernel, LearntKernel) else None,
             start_dow=SUNDAY,
             publication_lag=lag,
             delay_overdispersion_rv=DistributionalVariable(

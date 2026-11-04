@@ -34,7 +34,7 @@ from .model import (
 )
 from .observation import OnsetStreams, RtPseudoObservation, onset_expectations
 from .renewal import (
-    LearntKernel,
+    Importation,
     MetapopulationInfections,
     coupled_renewal,
     mixing_matrix,
@@ -51,7 +51,7 @@ __all__ = [
     "MAIN",
     "FixedTimeVarying",
     "HazardDelay",
-    "LearntKernel",
+    "Importation",
     "MetapopulationInfections",
     "MissingOnsetFraction",
     "ModelConfig",
