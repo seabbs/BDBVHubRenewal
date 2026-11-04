@@ -286,6 +286,8 @@ _RELEASE_MODELS: Final = (
     "renewalsp",
     "renewalbvd",
     "renewalnolag",
+    "renewalplace",
+    "renewalfixdelay",
 )
 _TARGET_LABELS: Final = {
     "reported": "Reported by each later release",
