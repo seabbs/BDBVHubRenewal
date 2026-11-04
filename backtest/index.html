@@ -1910,14 +1910,8 @@
 
 <h1 id="backtest">Backtest<a class="headerlink" href="#backtest" title="Permanent link">&para;</a></h1>
 <p class="page-subtitle">Forecasts made at past vintages, scored on what each later release reported.</p>
-<p>Every model is scored on the count each later release reports, and complete weeks are a secondary check (<a href="../methods/evaluation/#scoring">Evaluation</a>).
-Weeks still being reported are shaded, with hollow points.</p>
 <h2 id="overall">Overall<a class="headerlink" href="#overall" title="Permanent link">&para;</a></h2>
-<p>Each release with a later release is an origin.
-Every model is scored on the count each later release reports, with the count outstanding at the origin in each final-count forecast thinned binomially by the share expected to arrive by then under the delay fitted at the origin.
-Complete weeks are scored against the latest release (<a href="../methods/evaluation/#real-releases">Evaluation</a>).
-Relative WIS is against <code>randomwalk</code> on the forecasts both made, and every row counts them, <span class="arithmatex">\(n\)</span>.
-Zones have only the random walk models, run on each zone, and only the reported target (<a href="../methods/evaluation/#health-zones">Health zones</a>).</p>
+<p>Scores against what each later release reported (<a href="../methods/evaluation/#real-releases">how scoring works</a>).</p>
 <p><img alt="Relative WIS and 90% coverage of each model on the counts each later release reported, by pool." src="../figures/relative-overall.svg#only-light" />
 <img alt="Relative WIS and 90% coverage of each model on the counts each later release reported, by pool." src="../figures/relative-overall-dark.svg#only-dark" /></p>
 <p>Scores by target and pool, over every origin.</p>
@@ -2233,7 +2227,7 @@ Zones have only the random walk models, run on each zone, and only the reported 
 
 <details class="note">
 <summary>Sample trajectories</summary>
-<p>Forecasts from the real origins: 100 sample trajectories, 50% and 90% intervals and the median, with the data at the time (dashed) and the latest release (solid).</p>
+<p>Forecasts from the real origins (<a href="../methods/evaluation/#reading-the-figures">reading the figures</a>).</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:5"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><input id="__tabbed_1_5" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">randomwalk</label><label for="__tabbed_1_2">randomwalknowcast</label><label for="__tabbed_1_3">renewal</label><label for="__tabbed_1_4">renewalbvd</label><label for="__tabbed_1_5">renewalsp</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -5352,8 +5346,7 @@ Zones have only the random walk models, run on each zone, and only the reported 
 </table>
 </details>
 <h2 id="by-horizon">By horizon<a class="headerlink" href="#by-horizon" title="Permanent link">&para;</a></h2>
-<p>Scores on the count each later release reported.
-Horizons −4 to −1 are nowcasts, 0 is the reference week and 1 to 3 are forecasts.</p>
+<p>By weeks from the reference week (<a href="../methods/evaluation/#reading-the-figures">horizon</a>).</p>
 <div class="scorechart" data-src="../figures/scorechart-horizon.json" role="group" aria-label="Mean scores by horizon">
 <noscript><img src="../figures/scores-wis-horizon.svg#only-light" alt="Mean scores by horizon"><img src="../figures/scores-wis-horizon-dark.svg#only-dark" alt="Mean scores by horizon"></noscript>
 </div>
@@ -5680,7 +5673,6 @@ Horizons after the latest release have no score yet.</p>
 </table>
 </details>
 <h2 id="by-province">By province<a class="headerlink" href="#by-province" title="Permanent link">&para;</a></h2>
-<p>Scores on the count each later release reported.</p>
 <div class="scorechart" data-src="../figures/scorechart-location.json" role="group" aria-label="Mean scores by place">
 <noscript><img src="../figures/scores-wis-location.svg#only-light" alt="Mean scores by place"><img src="../figures/scores-wis-location-dark.svg#only-dark" alt="Mean scores by place"></noscript>
 </div>
@@ -6898,8 +6890,7 @@ Horizons after the latest release have no score yet.</p>
 This is the same as the submission fit, 2 chains of 500 warm-up and 500 draws.</p>
 <details class="note">
 <summary>Convergence by model</summary>
-<p>A per-location model has one fit per location with enough cases.
-R-hat is the largest over a fit's parameters, and the depth cap share is the share of draws at the maximum tree depth.</p>
+<p>Columns are as on the <a href="../methods/implementation/#sampling">Implementation</a> page.</p>
 <table>
 <thead>
 <tr>
@@ -7387,10 +7378,7 @@ R-hat is the largest over a fit's parameters, and the depth cap share is the sha
 </table>
 </details>
 <h2 id="health-zones">Health zones<a class="headerlink" href="#health-zones" title="Permanent link">&para;</a></h2>
-<p><code>randomwalk</code> and <code>randomwalknowcast</code> are run on each zone with cases (see <a href="../methods/evaluation/#health-zones">Evaluation</a>).
-Models marked summed to provinces have their zone samples made to sum to the province samples, as in the submitted file.
-Scores are on the zone count each later release reports.
-Relative WIS is against <code>randomwalk</code>, and below 1 is better.</p>
+<p><code>randomwalk</code> and <code>randomwalknowcast</code> on each zone with cases, as run and summed to provinces (<a href="../methods/evaluation/#health-zones">Health zones</a>).</p>
 <table>
 <thead>
 <tr>

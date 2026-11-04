@@ -1824,11 +1824,7 @@
 <p class="page-subtitle">The current nowcast and forecast from the latest vintage.</p>
 <p>Latest vintage <strong>2026-11-01</strong>, models <code>randomwalk</code>, <code>randomwalknowcast</code>, <code>renewal</code>, <code>renewalbvd</code>, <code>renewalsp</code>.</p>
 <p><strong>Latest submission:</strong> <a href="../submission/rounds/2026-11-07/">round 2026-11-07</a>: seabbs-renewal submitted (BVDOutbreakSize-informed renewal model), seabbs-rwnowcast submitted (random walk on a nowcast). <a href="../submission/rounds/">Submission log</a>.</p>
-<p>Each model is shown from its latest origin.
-Lines are the data at the origin (dashed, shown when the origin is not the latest vintage) and as later reported (solid), with 100 sample trajectories, 50% and 90% bands and the median for each model.
-The dotted line is the reference date and weeks still being reported are shaded, with hollow points.
-The vertical axis ends at the top of the 90% band.
-The baselines run on the daily release snapshots, and the page stops if one has none or two models give the same samples.</p>
+<p>Each model is shown from its latest origin (<a href="../methods/evaluation/#reading-the-figures">reading the figures</a>).</p>
 <h2 id="nowcast_1">Nowcast<a class="headerlink" href="#nowcast_1" title="Permanent link">&para;</a></h2>
 <p>The weeks before the reference date, estimated for reporting delays.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:5"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><input id="__tabbed_1_5" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">randomwalk</label><label for="__tabbed_1_2">randomwalknowcast</label><label for="__tabbed_1_3">renewal</label><label for="__tabbed_1_4">renewalbvd</label><label for="__tabbed_1_5">renewalsp</label></div>
@@ -1989,9 +1985,7 @@ The baselines run on the daily release snapshots, and the page stops if one has 
 </div>
 <p>The submission pull request embeds <a class="autorefs autorefs-internal" title="            plot_nowcast" href="../reference/reporting/#bdbvhubrenewal.reporting.plots.plot_nowcast"><code>plot_nowcast</code></a>.</p>
 <h2 id="health-zones">Health zones<a class="headerlink" href="#health-zones" title="Permanent link">&para;</a></h2>
-<p><code>randomwalknowcast</code> run on each zone and summed to its province, as submitted, at the 2026-11-01 release, for zones with cases in the 12 weeks before the reference date.
-A week with no onsets in a zone has a count of 0.
-Scores are on the zone count each later release reported, relative to <code>randomwalk</code> (<a href="../methods/evaluation/#health-zones">Health zones</a>).</p>
+<p><code>randomwalknowcast</code> run on each zone and summed to its province, as submitted, at the 2026-11-01 release, for zones with cases in the 12 weeks before the reference date (<a href="../methods/evaluation/#health-zones">Health zones</a>).</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="13:7"><input checked="checked" id="__tabbed_13_1" name="__tabbed_13" type="radio" /><input id="__tabbed_13_2" name="__tabbed_13" type="radio" /><input id="__tabbed_13_3" name="__tabbed_13" type="radio" /><input id="__tabbed_13_4" name="__tabbed_13" type="radio" /><input id="__tabbed_13_5" name="__tabbed_13" type="radio" /><input id="__tabbed_13_6" name="__tabbed_13" type="radio" /><input id="__tabbed_13_7" name="__tabbed_13" type="radio" /><div class="tabbed-labels"><label for="__tabbed_13_1">Ituri</label><label for="__tabbed_13_2">Nord Kivu</label><label for="__tabbed_13_3">Haut Uele</label><label for="__tabbed_13_4">Tshopo</label><label for="__tabbed_13_5">Bas Uele</label><label for="__tabbed_13_6">Nord Ubangi</label><label for="__tabbed_13_7">Sud Ubangi</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">

@@ -1975,7 +1975,9 @@ Chains run vectorised.
 Without other settings, NUTS runs 4 chains of 1000 warm-up and 1000 draws, with target acceptance 0.9 and maximum tree depth 10.
 Chains start from the median of 15 prior draws.
 Submission fits take their settings from <code>ci/policy.toml</code>, which override JSON settings in <code>BDBV_RENEWAL_SAMPLER</code>.
-Backtest and leave-one-province-out fits take theirs from <code>config/backtest.toml</code> when <code>BDBV_RENEWAL_SAMPLER</code> is unset.</p>
+Backtest and leave-one-province-out fits take theirs from <code>config/backtest.toml</code> when <code>BDBV_RENEWAL_SAMPLER</code> is unset.
+A per-location model has one fit per location with enough cases.
+Each fit reports its largest R-hat over parameters and the share of draws at the maximum tree depth.</p>
 <p>The parameterisation is as follows.</p>
 <ul>
 <li>Every walk, the pooled <span class="arithmatex">\(\log R(t)\)</span> included, samples its steps non-centred, as standard normals scaled by the step SD.</li>

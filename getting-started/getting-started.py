@@ -81,7 +81,7 @@ print(task.target_end_dates[0], "to", task.target_end_dates[-1])
 #
 # `get_model` returns a model from the registry by name.
 # `randomwalk` carries the last complete week forward with random walk noise on the log scale.
-# `randomwalknowcast` first nowcasts every day with data for reporting delays, sums the days to hub weeks, then does the same.
+# `randomwalknowcast` nowcasts the recent weeks first ([Baseline models](../methods/baselines/)).
 # `randomwalknowcast` is the baseline we submit to the hub as `seabbs-rwnowcast`.
 # `run_forecasts` runs each model, checks the samples, adds the national total and returns 100 trajectories per location.
 
@@ -95,7 +95,7 @@ forecasts.groupby("model")["sample"].nunique()
 #
 # Recent weeks are still being reported, so the weeks before the reference date are nowcasts.
 # The first figure keeps only those weeks, to show what the nowcast adds to the data at the origin.
-# Each panel shows the data at the origin (dashed), the data as later reported (solid), 100 trajectories, the 50% and 90% intervals and the median.
+# Each panel shows the data at the origin and as later reported, with the forecast fans ([reading the figures](../methods/evaluation/#reading-the-figures)).
 # The panels are the national total and the three provinces with the most cases.
 # `save_light_dark` writes a light and a dark version of each figure.
 
@@ -146,11 +146,10 @@ panels
 # %% [markdown]
 # ## Score
 #
-# Each forecast is scored on what each later release reported.
+# Each forecast is scored on what each later release reported ([how scoring works](../methods/evaluation/#real-releases)).
 # `release_backtest` maps the forecast of final counts to the counts a later release would report, using the reporting delays fitted at the origin.
 # It scores the mapped samples with the weighted interval score (WIS) and interval coverage.
-# The table gives each model's mean WIS relative to `randomwalk` on the same forecasts, for the national total and over the provinces.
-# Values below 1 favour the model.
+# The table gives each model's mean WIS relative to `randomwalk`, for the national total and over the provinces.
 # `as reported` uses the data at the origin as the forecast.
 
 # %%
