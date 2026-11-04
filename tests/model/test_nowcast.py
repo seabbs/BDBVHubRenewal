@@ -130,7 +130,7 @@ def test_dirichlet_multinomial_delays(sim_vintage):
             run = numpyro.handlers.substitute(run, values)
         with numpyro.handlers.trace() as tr:
             run(**args)
-        return tr, tr["onsets_delays"]["fn"]
+        return tr, tr["onsets_delays"]["fn"].base_dist
 
     tr, dm = delay_site(cfg)
     assert isinstance(dm, dist.DirichletMultinomial)

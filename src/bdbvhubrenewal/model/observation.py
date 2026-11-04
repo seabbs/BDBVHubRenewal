@@ -39,8 +39,6 @@ from pyrenew.observation.noise import CountNoise
 from pyrenew.observation.types import ObservationSample
 from pyrenew.time import daily_to_weekly
 
-from .distributions import ObservedCellsDirichletMultinomial
-
 _FLOOR = 1e-6
 
 
@@ -680,24 +678,29 @@ class OnsetStreams(BaseObservationProcess):
         observed. One site keeps one concentration draw per stream.
         Where `centre` is not NaN, row 1 is instead the final count,
         centred on `centre` plus the count expected after the cut-off.
-        When fitting, row 1 is unobserved and adds nothing, so only row 0
-        is scored, and row 1 of the returned draws is zero.
         """
-        site = self._sample_site_name(f"{stream}_obs")
+        rest = final - by_cutoff
+        if centre is not None:
+            rest = jnp.where(jnp.isnan(centre), rest, centre + rest)
+        predicted = jnp.maximum(jnp.stack([by_cutoff, rest]), _FLOOR)
         if obs is None:
-            rest = final - by_cutoff
-            if centre is not None:
-                rest = jnp.where(jnp.isnan(centre), rest, centre + rest)
-            predicted = jnp.maximum(jnp.stack([by_cutoff, rest]), _FLOOR)
-            return cast(Array, noise.sample(site, predicted))
+            return cast(
+                Array,
+                noise.sample(
+                    self._sample_site_name(f"{stream}_obs"), predicted
+                ),
+            )
+        obs = jnp.stack([obs, jnp.full_like(obs, jnp.nan)])
         mask = ~jnp.isnan(obs)
-        seen = noise.sample(
-            site,
-            jnp.maximum(by_cutoff, _FLOOR),
-            obs=jnp.where(mask, obs, 0.0),
-            mask=mask,
+        return cast(
+            Array,
+            noise.sample(
+                self._sample_site_name(f"{stream}_obs"),
+                predicted,
+                obs=jnp.where(mask, obs, 0.0),
+                mask=mask,
+            ),
         )
-        return jnp.stack([seen, jnp.zeros_like(seen)])
 
     def _score_delays(self, triangle: Array, counts: Array) -> None:
         totals = counts.sum(axis=1)
@@ -712,13 +715,13 @@ class OnsetStreams(BaseObservationProcess):
             # Capped at 1e4: near the multinomial the float32 log density
             # is noisy enough to stall NUTS step-size adaptation.
             psi = 1 / (jnp.square(self.delay_overdispersion_rv()) + 1e-4)
-            counts_dist = ObservedCellsDirichletMultinomial(
+            counts_dist = dist.DirichletMultinomial(
                 concentration=psi * probs, total_count=totals
             )
-        # A week with no counts adds exactly 0, so no mask is needed.
-        numpyro.sample(
-            self._sample_site_name("delays"), counts_dist, obs=counts
-        )
+        with numpyro.handlers.mask(mask=totals > 0):
+            numpyro.sample(
+                self._sample_site_name("delays"), counts_dist, obs=counts
+            )
 
 
 class RtPseudoObservation:

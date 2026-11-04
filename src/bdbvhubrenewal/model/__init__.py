@@ -7,7 +7,6 @@
 - `delays`: the generation interval and the onset-to-report delay.
 - `observation`: the known and imputed onset streams, the hub's
   imputation, importation-only zeros and the BVDOutbreakSize term.
-- `distributions`: a Dirichlet-multinomial scored on its non-zero cells.
 - `model`: `ModelConfig`, the configurations, building, fitting and
   forecasting.
 - `inputs`: model inputs (`Vintage`) from the tidy hub tables.
