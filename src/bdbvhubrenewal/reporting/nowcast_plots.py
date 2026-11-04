@@ -14,10 +14,10 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
 from bdbvhubrenewal.reporting.plots import (
-    MODEL_COLOURS,
     THEMES,
     _date_axis,
     _grid,
+    model_colour,
 )
 from bdbvhubrenewal.reporting.scorechart import OVERALL_METRICS
 
@@ -72,7 +72,6 @@ def plot_release_nowcasts(
         len(origins) * len(locations), len(locations), width=3.4, height=2.6
     )
     ink = THEMES[mode]
-    palette = MODEL_COLOURS[mode]
     shades = np.linspace(0.4, 1.0, len(releases["vintage"].unique()))
     # Each model's bars sit side by side within the week.
     width, mid = 5.6 / len(models), (len(models) - 1) / 2
@@ -105,7 +104,8 @@ def plot_release_nowcasts(
                     & (final["location"] == loc)
                     & (final["model"] == m)
                 ]
-                _draw_bars(ax, rows, palette[m_i], (m_i - mid) * width)
+                colour = model_colour(m, models, mode)
+                _draw_bars(ax, rows, colour, (m_i - mid) * width)
             ax.set_title(f"{loc}, origin {origin}")
             _date_axis(ax)
             ax.xaxis.set_major_locator(
@@ -114,8 +114,9 @@ def plot_release_nowcasts(
             ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
     axes[0].set_ylabel("Cases by onset week")
     handles, labels = axes[0].get_legend_handles_labels()
-    for m_i, m in enumerate(models):
-        handles.append(axes[0].plot([], [], color=palette[m_i], lw=4)[0])
+    for m in models:
+        colour = model_colour(m, models, mode)
+        handles.append(axes[0].plot([], [], color=colour, lw=4)[0])
         labels.append(f"{m} (50% and 90%)")
     fig.legend(
         handles,
@@ -164,7 +165,6 @@ def plot_relative_overall(
         at its reference.
     """
     ink = THEMES[mode]
-    palette = MODEL_COLOURS[mode]
     pick = 0 if mode == "light" else 1
     have_pools = set(table[x])
     pools = [p for p in ("national", "provinces", "zones") if p in have_pools]
@@ -175,7 +175,7 @@ def plot_relative_overall(
         have = [p for p in pools if p in rows.index]
         shift = (i - (len(models) - 1) / 2) * width
         at = [pools.index(p) + shift for p in have]
-        colour = colours[m][pick] if colours else palette[i % len(palette)]
+        colour = colours[m][pick] if colours else model_colour(m, models, mode)
         for ax, key in zip(axes, metrics, strict=True):
             ax.bar(at, rows.loc[have, key], width, color=colour, label=m)
     for ax, (key, (label, ref)) in zip(axes, metrics.items(), strict=True):

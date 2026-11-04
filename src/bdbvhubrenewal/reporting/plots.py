@@ -3,8 +3,9 @@
 
 Every function returns a matplotlib `Figure` and takes `theme`, `"light"`
 or `"dark"`, so the docs can show both.
-Models get colours from `MODEL_COLOURS` in registry order, so a model
-keeps its colour when others are added.
+Models get fixed colours from `MODEL_COLOURS` through `MODEL_INDEX`, so a
+model has the same colour on every page and keeps it when others are
+added.
 The vintage kind is always shown, in a panel title or the legend.
 
 The submission phase can call `plot_nowcast(location=..., vintage=...)`
@@ -43,6 +44,7 @@ from bdbvhubrenewal.data.delays import delay_summary
 
 __all__ = [
     "MODEL_COLOURS",
+    "MODEL_INDEX",
     "THEMES",
     "comparison_colours",
     "comparison_label",
@@ -113,6 +115,16 @@ MODEL_COLOURS: Final[dict[str, tuple[str, ...]]] = {
 }
 """Categorical colours in fixed order (checked for colour vision deficiency)."""
 
+MODEL_INDEX: Final[dict[str, int]] = {
+    "randomwalk": 0,
+    "randomwalknowcast": 1,
+    "renewal": 2,
+    "renewalbvd": 3,
+    "renewalsp": 4,
+    "pprandomwalknowcast": 5,
+}
+"""Each model's place in `MODEL_COLOURS`. A new model takes the next index."""
+
 HUB_GREYS: Final[dict[str, tuple[str, ...]]] = {
     "light": ("#5f5e5a", "#898781", "#b4b2a9"),
     "dark": ("#c3c2b7", "#898781", "#5f5e5a"),
@@ -123,14 +135,17 @@ _KIND_MARKERS: Final = {"real": "o", "simulated": "^"}
 
 
 def model_colour(name: str, models: Sequence[str], mode: str = "light") -> str:
-    """Return a model's colour from its position in the model list.
+    """Return a model's fixed colour.
+
+    A model in `MODEL_INDEX` has its own colour. Others, such as test
+    stand-ins, take the next colours in their order in `models`.
 
     Parameters
     ----------
     name : str
         The model.
     models : sequence of str
-        All models, in registry order.
+        All models shown.
     mode : str
         `"light"` or `"dark"`.
 
@@ -140,7 +155,10 @@ def model_colour(name: str, models: Sequence[str], mode: str = "light") -> str:
         A hex colour.
     """
     palette = MODEL_COLOURS[mode]
-    return palette[list(models).index(name) % len(palette)]
+    if name in MODEL_INDEX:
+        return palette[MODEL_INDEX[name] % len(palette)]
+    others = [m for m in models if m not in MODEL_INDEX]
+    return palette[(len(MODEL_INDEX) + others.index(name)) % len(palette)]
 
 
 @contextmanager
@@ -1300,11 +1318,10 @@ def comparison_colours(
     from bdbvhubrenewal.forecasters.base import list_models
 
     registry = [s.name for s in list_models()]
-    light, dark = MODEL_COLOURS["light"], MODEL_COLOURS["dark"]
     out = {
         lab: (
-            light[registry.index(m) % len(light)],
-            dark[registry.index(m) % len(dark)],
+            model_colour(m, registry, "light"),
+            model_colour(m, registry, "dark"),
         )
         for lab, m in ours.items()
     }
@@ -1400,11 +1417,10 @@ def plot_hub_round(
             for m, s in zip(q["model"], q["source"], strict=True)
         ]
     )
-    palette = MODEL_COLOURS[mode]
     ours = q.loc[~hub, ["model", "label"]].drop_duplicates()
     rows = [
         {
-            lab: (palette[registry.index(m) % len(palette)], "o")
+            lab: (model_colour(m, registry, mode), "o")
             for m, lab in sorted(
                 ours.itertuples(index=False),
                 key=lambda ml: registry.index(ml[0]),

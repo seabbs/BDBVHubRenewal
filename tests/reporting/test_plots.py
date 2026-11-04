@@ -121,3 +121,21 @@ def test_plot_imputed_by_release_one_line_per_place() -> None:
     fig = plots.plot_imputed_by_release(target)
     assert len(fig.axes[0].lines) == 1
     plt.close(fig)
+
+
+def test_model_colours_are_fixed_by_name() -> None:
+    from bdbvhubrenewal.forecasters import list_models
+
+    registered = {s.name for s in list_models()}
+    assert registered <= set(plots.MODEL_INDEX)
+    assert len(set(plots.MODEL_INDEX.values())) == len(plots.MODEL_INDEX)
+    # The same colour whichever models are shown with it.
+    for mode in ("light", "dark"):
+        alone = plots.model_colour("renewal", ["renewal"], mode)
+        among = plots.model_colour("renewal", sorted(registered), mode)
+        assert alone == among == plots.MODEL_COLOURS[mode][2]
+    # A stand-in outside the registry takes the next free colour.
+    assert (
+        plots.model_colour("flat", ["flat"])
+        == plots.MODEL_COLOURS["light"][len(plots.MODEL_INDEX)]
+    )
