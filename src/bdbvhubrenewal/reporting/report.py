@@ -317,18 +317,8 @@ def _release_section(
     _write(
         gen / "release-headline.md",
         "## Overall\n\n"
-        "Each release with a later release is an origin.\n"
-        "Every model is scored on the count each later release reports, "
-        "with the count outstanding at the origin in each final-count "
-        "forecast thinned binomially by the share expected to arrive by "
-        "then under the delay fitted at the origin.\n"
-        "Complete weeks are scored against the latest release "
-        "([Evaluation](methods/evaluation.md#real-releases)).\n"
-        "Relative WIS is against `randomwalk` on the forecasts both made, "
-        "and every row counts them, $n$.\n"
-        "Zones have only the random walk models, run on each zone, and "
-        "only the reported target "
-        "([Health zones](methods/evaluation.md#health-zones)).\n\n"
+        "Scores against what each later release reported "
+        "([how scoring works](methods/evaluation.md#real-releases)).\n\n"
         "![Relative WIS and 90% coverage of each model on the counts each "
         "later release reported, by pool.](figures/relative-overall.svg"
         "#only-light)\n"
@@ -524,10 +514,7 @@ def _zone_nowcast_section(
         "## Health zones\n\n"
         f"`{ZONE_MODEL}` run on each zone and summed to its province, as "
         f"submitted, at the {task.vintage} release, for zones with cases in "
-        "the 12 weeks before the reference date.\n"
-        "A week with no onsets in a zone has a count of 0.\n"
-        "Scores are on the zone count each later release reported, relative "
-        "to `randomwalk` "
+        "the 12 weeks before the reference date "
         "([Health zones](methods/evaluation.md#health-zones)).\n\n"
         + "\n".join(tabs)
         + "\n"
@@ -743,12 +730,9 @@ def _zone_section(path: Path) -> str:
     by.columns = [f"week {int(h)}" for h in by.columns]
     return (
         "## Health zones\n\n"
-        "`randomwalk` and `randomwalknowcast` are run on each zone with "
-        "cases (see [Evaluation](methods/evaluation.md#health-zones)).\n"
-        "Models marked summed to provinces have their zone samples made to "
-        "sum to the province samples, as in the submitted file.\n"
-        "Scores are on the zone count each later release reports.\n"
-        "Relative WIS is against `randomwalk`, and below 1 is better.\n\n"
+        "`randomwalk` and `randomwalknowcast` on each zone with cases, as "
+        "run and summed to provinces "
+        "([Health zones](methods/evaluation.md#health-zones)).\n\n"
         + _table(table[["model", *cols, "relative_wis"]])
         + "\n\nRelative WIS by week, with 0 the week of the reference "
         "date.\n\n" + _table(by.reset_index())
@@ -941,9 +925,9 @@ def _forecast_tabs(
                 f"        ![{alt}](figures/{slug}-dark.svg#only-dark)\n"
             )
     static = _dropdown(
-        "Forecasts from the real origins: 100 sample trajectories, 50% and "
-        "90% intervals and the median, with the data at the time (dashed) "
-        "and the latest release (solid).\n\n" + "\n".join(tabs),
+        "Forecasts from the real origins "
+        "([reading the figures](methods/evaluation.md#reading-the-figures))."
+        "\n\n" + "\n".join(tabs),
         "Sample trajectories",
     )
     if explorer_src is None:
@@ -1068,10 +1052,8 @@ def _sampler_section(fits: pd.DataFrame, submission: Mapping[str, Any]) -> str:
         + compare
         + "\n"
         + _dropdown(
-            "A per-location model has one fit per location with enough "
-            "cases.\n"
-            "R-hat is the largest over a fit's parameters, and the depth cap "
-            "share is the share of draws at the maximum tree depth.\n\n"
+            "Columns are as on the "
+            "[Implementation](methods/implementation.md#sampling) page.\n\n"
             + _table(table, digits=3),
             "Convergence by model",
         )
@@ -1483,8 +1465,6 @@ def _overall_table(
         + "\n"
         + "Over every scored round, on the count each later release reported "
         f"and on the forecasts `{baseline}` also made, by scale.{gap}\n"
-        "n counts forecasts, so a model with fewer forecasts was scored on "
-        "fewer weeks or places.\n"
         "Our other models can be switched on in the key.\n\n" + _table(wide)
     )
 
@@ -1519,9 +1499,6 @@ def _comparison_page(
     truth, k = summary["truth_vintage"], summary["complete_after_weeks"]
     baseline = summary["baseline"]
     hub_ids = summary.get("hub_ids", {})
-    note = ""
-    if baseline != summary["preferred_baseline"]:
-        note = f" (`{summary['preferred_baseline']}` once it is registered)"
     quantiles = pd.read_csv(cmp_dir / "quantiles.csv.gz")
     hub = quantiles["source"] == "hub"
     colours = comparison_colours(
@@ -1535,12 +1512,10 @@ def _comparison_page(
     rounds = ", ".join(sorted(set(sent.astype(str)))) or "none yet"
     _write(
         gen / "comparison-lead.md",
-        "Every model is scored on the count each later release reported, "
-        "from the release serving its round, with the complete weeks of "
-        f"the **{truth}** release as a secondary check "
-        "([Evaluation](methods/evaluation.md#real-releases)).\n"
-        f"Relative WIS divides by `{baseline}`{note} on the weeks both "
-        "forecast.\n"
+        "Scores against what each later release reported, from the "
+        "release serving each round "
+        "([how scoring works]"
+        "(methods/evaluation.md#comparison-with-hub-forecasts)).\n"
         "A model shown with a hub id is what we submitted under that id "
         f"for the rounds we submitted ({rounds}), and the model's own "
         "forecast for earlier rounds.\n",

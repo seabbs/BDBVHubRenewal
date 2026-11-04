@@ -3,9 +3,6 @@
 Forecasts made at past vintages, scored on what each later release reported.
 { .page-subtitle }
 
-Every model is scored on the count each later release reports, and complete weeks are a secondary check ([Evaluation](methods/evaluation.md#scoring)).
-Weeks still being reported are shaded, with hollow points.
-
 --8<-- "release-headline.md"
 
 --8<-- "backtest-findings.md"
@@ -16,16 +13,13 @@ Weeks still being reported are shaded, with hollow points.
 
 ## By horizon
 
-Scores on the count each later release reported.
-Horizons −4 to −1 are nowcasts, 0 is the reference week and 1 to 3 are forecasts.
+By weeks from the reference week ([horizon](methods/evaluation.md#reading-the-figures)).
 
 --8<-- "scorechart-horizon.md"
 
 --8<-- "backtest-summary.md"
 
 ## By province
-
-Scores on the count each later release reported.
 
 --8<-- "scorechart-location.md"
 

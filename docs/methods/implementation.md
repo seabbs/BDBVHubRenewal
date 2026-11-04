@@ -80,6 +80,8 @@ Without other settings, NUTS runs 4 chains of 1000 warm-up and 1000 draws, with 
 Chains start from the median of 15 prior draws.
 Submission fits take their settings from `ci/policy.toml`, which override JSON settings in `BDBV_RENEWAL_SAMPLER`.
 Backtest and leave-one-province-out fits take theirs from `config/backtest.toml` when `BDBV_RENEWAL_SAMPLER` is unset.
+A per-location model has one fit per location with enough cases.
+Each fit reports its largest R-hat over parameters and the share of draws at the maximum tree depth.
 
 The parameterisation is as follows.
 

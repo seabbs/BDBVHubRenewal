@@ -41,7 +41,7 @@ Each vintage is a forecast task, and every registered model forecasts every task
 |---|---|---|
 | Development backtest | Real up to the latest model choice date, except the latest real vintage | As for real releases |
 | Recovery check | Simulated | Simulated final counts |
-| Simulated scenarios | The four weekly simulated vintages up to the latest real vintage, from outbreaks calibrated to it with Rt after the data scaled by 0.75, 1 or 1.25 | Simulated final counts, and the counts as reported two weeks after each vintage |
+| Simulated scenarios | The four weekly simulated vintages up to the latest real vintage, from outbreaks calibrated to it with Rt after the data scaled by 0.75, 1 or 1.25 | Complete weeks of the simulated final counts, and the counts as reported two weeks after each vintage |
 | Rolling held-out evaluation | Real vintages after each model choice | As for real releases |
 | Real releases | Every real release up to the latest model choice date with a later release | The count each later release shows, and the latest release's count for its complete weeks |
 | Comparison with hub forecasts | Real where one serves the round | As for real releases |
@@ -76,8 +76,18 @@ A week is complete when it is at least 4 weeks back from the week holding the la
 The floor is the count reported at the origin, scored on both targets as a forecast with no spread.
 Scores are WIS, 50% and 90% coverage and bias, by model, origin, weeks back from the origin's week and place.
 Relative WIS is against `randomwalk` on the forecasts both made, for national and the provinces pooled, over all origins and by origin, and by origin and place.
-Every table counts its forecasts, $n$.
+Every table counts its forecasts, $n$, so a model with fewer forecasts was scored on fewer weeks or places.
 The run stops if an origin has no release snapshots or two models run here give identical samples.
+
+## Reading the figures
+
+Fans show 100 sample trajectories, the 50% and 90% bands and the median.
+In point-and-line figures, points are medians, thick lines 50% intervals and thin lines 90% intervals.
+The data at the origin are dashed, shown when the origin is not the latest vintage, and the data as later reported are solid.
+The dotted vertical line is the reference date.
+Weeks still being reported are shaded, with hollow points.
+The vertical axis of a fan ends at the top of its 90% band.
+Horizon is weeks from the reference week, so negative horizons are nowcasts, 0 is the reference week and positive horizons are forecasts.
 
 ## Rolling held-out evaluation
 
@@ -97,6 +107,7 @@ It runs on development vintages for the models that support the mask, `renewal` 
 
 `randomwalk` and `randomwalknowcast` run on each zone's own release snapshots, for every zone with cases at the vintage.
 Zones use the same models as provinces.
+A week with no onsets in a zone has a count of 0.
 Each zone takes its delay and spreads by the rules of the [Baseline models](baselines.md#own-or-pooled-estimates) page.
 Each model is scored as it runs, and again with its zone samples made to sum to its province samples, as in the submitted file.
 Each real vintage before the latest is forecast, and origins with no pair of releases within the delay window are skipped, as for provinces.

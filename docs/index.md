@@ -8,15 +8,9 @@ Two hub models are submitted, `seabbs-rwnowcast` and `seabbs-renewal`.
 
 ## Models
 
-`randomwalknowcast` is baselinenowcast ([Johnson et al. 2025](https://doi.org/10.12688/wellcomeopenres.25027.2), Wellcome Open Research) with a random walk on top.
-It nowcasts the hub's daily release snapshots with a JAX port of baselinenowcast 0.2.2 and carries each nowcast forward with a random walk.
-It runs at province and zone level, and the national value is the sum of the provinces ([Baseline models](methods/baselines.md)).
-`randomwalk` runs the same walk from the latest week judged complete, with no nowcast.
-It is a comparison model and is not submitted.
-The renewal models (`renewal`, `renewalsp` and `renewalbvd`) are built on [PyRenew](https://github.com/CDCgov/PyRenew) and fit the hub's known and imputed onsets, modelling the hub's imputation ([Renewal models](methods/model.md)).
-
-Each week the [submission](submission/workflow.md) submits `randomwalknowcast` as `seabbs-rwnowcast`, and skips the round if it fails its checks.
-It submits one renewal model as `seabbs-renewal`, taking the first in the chain in `ci/policy.toml` that passes its checks.
+`randomwalknowcast` is baselinenowcast ([Johnson et al. 2025](https://doi.org/10.12688/wellcomeopenres.25027.2), Wellcome Open Research) with a random walk on top, and `randomwalk` is the same walk with no nowcast ([Baseline models](methods/baselines.md)).
+The renewal models (`renewal`, `renewalsp` and `renewalbvd`) are built on [PyRenew](https://github.com/CDCgov/PyRenew) and fit the hub's known and imputed onsets ([Renewal models](methods/model.md)).
+Each week `randomwalknowcast` is submitted as `seabbs-rwnowcast` and the first renewal model to pass its checks as `seabbs-renewal` ([Submission workflow](submission/workflow.md)).
 
 ## Pages
 
