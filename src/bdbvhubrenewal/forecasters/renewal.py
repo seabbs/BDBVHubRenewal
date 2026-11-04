@@ -814,7 +814,7 @@ def delay_summary(
     """
     import jax.numpy as jnp
 
-    from bdbvhubrenewal.model.delays import hazard_to_pmf
+    from bdbvhubrenewal.model.hazard_delay import hazard_to_pmf
 
     days = pd.date_range(first_day, periods=last_day + 1, freq="D")
     # The last day of each onset week (to Saturday) up to the vintage.
