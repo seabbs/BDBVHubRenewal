@@ -22,13 +22,13 @@ import datetime as dt
 import json
 import re
 import sys
-import tomllib
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
 from .common import Runner, subprocess_runner
+from .tracks import load_tracks
 
 ENVIRONMENT = "hub-submission"
 SECRET = "HUB_SUBMIT_TOKEN"
@@ -39,8 +39,6 @@ TOKEN_WARN_DAYS = 80
 # The schema allows 16 characters; the hub READMEs ask for fewer than 16.
 ABBR = re.compile(r"^[a-zA-Z0-9_+]{1,15}$")
 BOT = "seabbs-bot"
-TEAM = "seabbs"
-ABBR_DEFAULT = "renewal"
 
 LABEL = {
     "ok": "OK",
@@ -83,7 +81,7 @@ class Settings:
     opted_in: tuple[str, ...] = ()
     """Hub models with `submit = true` in `config/hub.toml`."""
     configured_model: str = ""
-    """`[submission] model` in `config/hub.toml`, if set."""
+    """`[submission] model` in `config/hub.toml`."""
 
 
 def _api(runner: Runner, path: str) -> tuple[bool, Any]:
@@ -419,13 +417,6 @@ def check_metadata(metadata_dir: Path, model_id: str) -> Check:
 
 def check_model(model: str) -> Check:
     """The model the renewal track submits, as `submit.yml` resolves it."""
-    if not model:
-        return Check(
-            "model",
-            "missing",
-            "no `[submission] model` in config/hub.toml",
-            "Set `[submission] model` in config/hub.toml.",
-        )
     return Check("model", "ok", f"submits `{model}` (config/hub.toml)")
 
 
@@ -481,26 +472,9 @@ def check_cron_owner(runner: Runner, workflow_file: Path) -> Check:
     return Check("cron owner", "ok", f"{name} gets scheduled-run failures")
 
 
-def hub_model_id(path: Path) -> str:
-    """`<team>-<model_abbr>` from `config/hub.toml`, as the CLI's `hub-id`."""
-    if not path.exists():
-        return f"{TEAM}-{ABBR_DEFAULT}"
-    with path.open("rb") as fh:
-        abbr = tomllib.load(fh)["submission"]["model_abbr"]
-    return f"{TEAM}-{abbr}"
-
-
 def other_model_ids(path: Path) -> tuple[str, ...]:
     """Opted-in hub ids in `config/hub.toml` other than the first."""
     return opted_in(path)[1:]
-
-
-def configured_model(path: Path) -> str:
-    """`[submission] model` in `config/hub.toml`, or empty."""
-    if not path.exists():
-        return ""
-    with path.open("rb") as fh:
-        return str(tomllib.load(fh).get("submission", {}).get("model", ""))
 
 
 def submitting_model_id(path: Path) -> str:
@@ -509,19 +483,12 @@ def submitting_model_id(path: Path) -> str:
     With none opted in, the `[submission]` id.
     """
     chosen = opted_in(path)
-    return chosen[0] if chosen else hub_model_id(path)
+    return chosen[0] if chosen else load_tracks(path)[0].model_id
 
 
 def opted_in(path: Path) -> tuple[str, ...]:
     """Hub ids of the models with `submit = true` in `config/hub.toml`."""
-    if not path.exists():
-        return ()
-    with path.open("rb") as fh:
-        cfg = tomllib.load(fh)
-    entries = [cfg.get("submission", {}), *cfg.get("models", {}).values()]
-    return tuple(
-        f"{TEAM}-{e['model_abbr']}" for e in entries if e.get("submit")
-    )
+    return tuple(t.model_id for t in load_tracks(path) if t.submit)
 
 
 def run_checks(runner: Runner, s: Settings) -> list[Check]:
@@ -629,7 +596,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         model_id_default=submitting_model_id(args.hub_config),
         other_model_ids=other_model_ids(args.hub_config),
         opted_in=opted_in(args.hub_config),
-        configured_model=configured_model(args.hub_config),
+        configured_model=load_tracks(args.hub_config)[0].model,
         metadata_dir=args.metadata_dir,
         workflow_file=args.workflow_file,
         now=now,

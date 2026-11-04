@@ -54,7 +54,6 @@ __all__ = [
     "model_id",
     "render_model_metadata",
     "run_date",
-    "submission_model_abbr",
     "submission_path",
     "to_hub_table",
     "validate_model_id",
@@ -190,33 +189,13 @@ SUBMISSION_CONFIG: Final = Path("config/hub.toml")
 """Where the submitted model abbreviation is set."""
 
 
-def submission_model_abbr(path: Path | str = SUBMISSION_CONFIG) -> str:
-    """Return the model abbreviation every submission uses.
-
-    It is one value in `config/hub.toml`, not derived from a model key,
-    so every renewal variant and every fallback submits under one id.
-
-    Parameters
-    ----------
-    path : pathlib.Path or str
-        The configuration file.
-
-    Returns
-    -------
-    str
-        The abbreviation, such as `"renewal"`.
-    """
-    with Path(path).open("rb") as fh:
-        config = tomllib.load(fh)
-    return str(config["submission"]["model_abbr"])
-
-
 def model_abbr_for(model: str, path: Path | str = SUBMISSION_CONFIG) -> str:
     """Return the hub abbreviation a model submits under.
 
     A model with its own entry under `[models]` in `config/hub.toml` is a
-    hub model of its own. Every other model submits under the renewal
-    abbreviation (`submission_model_abbr`).
+    hub model of its own. Every other model submits under the
+    `[submission]` abbreviation, one value not derived from a model key,
+    so every renewal variant and every fallback submits under one id.
 
     Parameters
     ----------

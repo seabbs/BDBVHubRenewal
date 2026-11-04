@@ -204,13 +204,13 @@ def own_hub_ids(path: Path | str = "config/hub.toml") -> dict[str, str]:
         `{"renewalbvd": "seabbs-renewal", "randomwalknowcast":
         "seabbs-rwnowcast"}`.
     """
-    from bdbvhubrenewal.submission.hub import model_abbr_for, model_id
+    from bdbvhubrenewal.submission.hub import model_id
 
     raw = tomllib.loads(Path(path).read_text())
     tables = {raw["submission"]["model"]: raw["submission"]}
     tables |= raw.get("models", {})
     return {
-        name: model_id(model_abbr_for(name, path))
+        name: model_id(table["model_abbr"])
         for name, table in tables.items()
         if table["submit"]
     }

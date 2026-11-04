@@ -264,24 +264,6 @@ def test_configured_model_is_what_submits(settings: Settings) -> None:
     assert check.detail == "submits `renewal` (config/hub.toml)"
 
 
-def test_no_configured_model_is_missing(settings: Settings) -> None:
-    none = replace(settings, configured_model="")
-    check = {c.name: c for c in run_checks(ready_runner(), none)}["model"]
-    assert check.status == "missing"
-
-
-def test_configured_model_is_read_from_hub_config(tmp_path: Path) -> None:
-    from submission_ci.preflight import configured_model
-
-    path = tmp_path / "hub.toml"
-    path.write_text('[submission]\nmodel_abbr = "renewal"\n')
-    assert configured_model(path) == ""
-    path.write_text(
-        '[submission]\nmodel_abbr = "renewal"\nmodel = "renewalbvd"\n'
-    )
-    assert configured_model(path) == "renewalbvd"
-
-
 def test_unregistered_model_id_is_reported(settings: Settings) -> None:
     runner = ready_runner(
         **{f"repos/{HUB}/contents/model-metadata/{MID}.yml": None}
@@ -379,7 +361,8 @@ def test_default_hub_id_is_the_submitting_model(tmp_path: Path) -> None:
 
     path = tmp_path / "hub.toml"
     path.write_text(
-        '[submission]\nmodel_abbr = "renewal"\nsubmit = false\n'
+        '[submission]\nmodel_abbr = "renewal"\nmodel = "renewal"\n'
+        "submit = false\n"
         '[models.randomwalknowcast]\nmodel_abbr = "rwnowcast"\n'
         "submit = true\n"
         '[models.randomwalk]\nmodel_abbr = "randomwalk"\nsubmit = false\n'
@@ -389,14 +372,15 @@ def test_default_hub_id_is_the_submitting_model(tmp_path: Path) -> None:
     # Models that are not opted in need no metadata.
     assert other_model_ids(path) == ()
     path.write_text(
-        '[submission]\nmodel_abbr = "renewal"\nsubmit = true\n'
+        '[submission]\nmodel_abbr = "renewal"\nmodel = "renewal"\n'
+        "submit = true\n"
         '[models.randomwalknowcast]\nmodel_abbr = "rwnowcast"\n'
         "submit = true\n"
         '[models.randomwalk]\nmodel_abbr = "randomwalk"\nsubmit = false\n'
     )
     assert submitting_model_id(path) == "seabbs-renewal"
     assert other_model_ids(path) == ("seabbs-rwnowcast",)
-    path.write_text('[submission]\nmodel_abbr = "renewal"\n')
+    path.write_text('[submission]\nmodel_abbr = "renewal"\nmodel = "renewal"\n')
     assert submitting_model_id(path) == "seabbs-renewal"
 
 
@@ -405,7 +389,7 @@ def test_print_submitting(
 ) -> None:
     path = tmp_path / "hub.toml"
     path.write_text(
-        '[submission]\nmodel_abbr = "renewal"\n'
+        '[submission]\nmodel_abbr = "renewal"\nmodel = "renewal"\n'
         '[models.a]\nmodel_abbr = "rwnowcast"\nsubmit = true\n'
     )
     assert main(["--hub-config", str(path), "--print-submitting"]) == 0
