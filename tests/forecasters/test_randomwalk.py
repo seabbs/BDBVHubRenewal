@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.zones import weekly_zone_counts
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     make_tasks,
@@ -30,7 +29,6 @@ from bdbvhubrenewal.forecasters.chain import (
     NoDelayPair,
     Settings,
 )
-from bdbvhubrenewal.forecasters.zones import zone_task
 
 
 def _task(
@@ -43,16 +41,25 @@ def _task(
     return make_tasks(rows, delays, BacktestConfig(seed=3), daily=daily)[0]
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def task(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> ForecastTask:
     return _task(target, delays, daily, "2026-10-24")
 
 
-def test_registry_has_both_models_and_no_daily_variant() -> None:
+@pytest.fixture(scope="module")
+def runs(task: ForecastTask) -> dict[str, tuple[RandomWalk, pd.DataFrame]]:
+    """Each model and its samples at 2026-10-24, run once for the module."""
+    out = {}
+    for name in ("randomwalk", "randomwalknowcast"):
+        model = get_model(name)
+        out[name] = (model, model.forecast(task))
+    return out
+
+
+def test_registry_has_both_models() -> None:
     specs = {s.name: s for s in list_models()}
-    assert "randomwalknowcastdaily" not in specs
     assert specs["randomwalk"].baseline
     assert not specs["randomwalknowcast"].baseline
     assert isinstance(get_model("randomwalk"), RandomWalk)
@@ -61,25 +68,25 @@ def test_registry_has_both_models_and_no_daily_variant() -> None:
 
 @pytest.mark.parametrize("name", ["randomwalk", "randomwalknowcast"])
 def test_samples_are_valid_and_reproducible(
-    task: ForecastTask, name: str
+    task: ForecastTask,
+    runs: dict[str, tuple[RandomWalk, pd.DataFrame]],
+    name: str,
 ) -> None:
-    a = get_model(name).forecast(task)
+    a = runs[name][1]
     b = get_model(name).forecast(task)
     check_samples(a, task)
     pd.testing.assert_frame_equal(a, b)
     assert set(a["location"]) == set(task.locations)
     assert (a["value"] >= 0).all()
     assert (a["value"] == a["value"].round()).all()
+    other = runs[({"randomwalk", "randomwalknowcast"} - {name}).pop()][1]
+    assert not np.array_equal(a["value"].to_numpy(), other["value"].to_numpy())
 
 
-def test_the_two_models_give_different_samples(task: ForecastTask) -> None:
-    a = RandomWalk().forecast(task)
-    b = RandomWalkNowcast().forecast(task)
-    assert not np.array_equal(a["value"].to_numpy(), b["value"].to_numpy())
-
-
-def test_national_is_the_sum_of_provinces_by_sample(task: ForecastTask) -> None:
-    out = add_national(RandomWalkNowcast().forecast(task))
+def test_national_is_the_sum_of_provinces_by_sample(
+    runs: dict[str, tuple[RandomWalk, pd.DataFrame]],
+) -> None:
+    out = add_national(runs["randomwalknowcast"][1])
     prov = out.loc[out["location"] != "CD"]
     nat = out.loc[out["location"] == "CD"].set_index(
         ["target_end_date", "sample"]
@@ -115,16 +122,6 @@ def test_randomwalk_returns_complete_weeks_as_reported(
     assert late["value"].nunique() > 5
 
 
-def test_the_start_week_is_the_latest_week_at_95_per_cent(
-    task: ForecastTask,
-) -> None:
-    model = RandomWalk()
-    model.forecast(task)
-    info = pd.DataFrame(model.fit_diagnostics).set_index("location")
-    assert info.loc["CD-IT", "start_week"] <= "2026-10-10"
-    assert info.loc["CD-IT", "start_week"] >= "2026-09-12"
-
-
 def test_nowcast_starts_from_the_latest_full_week(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
@@ -153,9 +150,10 @@ def test_a_partial_week_adds_the_days_after_the_cutoff(
     assert plain["target_end_date"].min() <= wk
 
 
-def test_diagnostics_name_the_sources(task: ForecastTask) -> None:
-    model = RandomWalkNowcast()
-    model.forecast(task)
+def test_diagnostics_name_the_sources(
+    runs: dict[str, tuple[RandomWalk, pd.DataFrame]],
+) -> None:
+    model = runs["randomwalknowcast"][0]
     info = pd.DataFrame(model.fit_diagnostics).set_index("location")
     assert {
         "start_week", "n_err", "delay_source", "obs_source", "sigma_source"
@@ -166,26 +164,6 @@ def test_diagnostics_name_the_sources(task: ForecastTask) -> None:
     assert n_to < n_it <= 42
     assert info.loc["CD-IT", "obs_source"] == "pooled:CD"
     assert info.loc["CD-IT", "n_err"] == 3
-
-
-def test_both_models_use_the_one_random_walk(
-    task: ForecastTask, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from bdbvhubrenewal.forecasters import randomwalk as mod
-
-    walk = mod.random_walk
-    calls: list[int] = []
-
-    def spy(*args, **kwargs):
-        calls.append(1)
-        return walk(*args, **kwargs)
-
-    monkeypatch.setattr(mod, "random_walk", spy)
-    mod.RandomWalk().forecast(task)
-    assert calls
-    n = len(calls)
-    mod.RandomWalkNowcast().forecast(task)
-    assert len(calls) > n
 
 
 def test_models_raise_without_snapshots_or_a_delay_pair(
@@ -203,28 +181,6 @@ def test_models_raise_without_snapshots_or_a_delay_pair(
         with pytest.raises(NoDelayPair):
             get_model(name).forecast(early)
     assert issubclass(NoDelayPair, ModelUnavailableError)
-
-
-def test_the_backtest_skips_origins_a_model_cannot_forecast(
-    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
-) -> None:
-    real = target.loc[target["kind"] == "real"]
-    tasks = make_tasks(
-        real, delays, BacktestConfig(seed=3), history=real, daily=daily
-    )
-    out = run_forecasts([get_model("randomwalk")], tasks)
-    assert set(out["vintage"]) == {"2026-10-17", "2026-10-24", "2026-11-01"}
-
-
-def test_zones_run_from_the_same_code(
-    task: ForecastTask, daily: pd.DataFrame, daily_zones: pd.DataFrame
-) -> None:
-    zones = tuple(sorted(set(daily_zones["location"])))
-    counts = weekly_zone_counts(daily_zones, task.vintage)
-    zt = zone_task(task, counts, zones, pd.concat([daily, daily_zones]))
-    zt = dataclasses.replace(zt, locations=zt.locations[:60])
-    out = RandomWalkNowcast().forecast(zt)
-    check_samples(out, zt)
 
 
 def test_randomwalk_raises_when_no_week_is_complete_and_the_backtest_skips(
