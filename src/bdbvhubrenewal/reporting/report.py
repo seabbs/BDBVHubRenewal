@@ -1541,8 +1541,10 @@ def _overall_table(
             "scale",
             {
                 "relative_wis": (f"WIS relative to {baseline}", 1.0),
+                "relative_log_wis": (f"Log WIS relative to {baseline}", 1.0),
                 "coverage_50": ("50% coverage", 0.5),
                 "coverage_90": ("90% coverage", 0.9),
+                "bias": ("Bias", 0.0),
             },
             [*ours, *sorted(hub)],
             default_on=[*sorted(hub), *(m for m in ours if m in shown)],
@@ -1558,9 +1560,11 @@ def _overall_table(
     scales = [s for s in ("national", "provinces", "zones") if s in have]
     names = {
         "relative_wis": "rel. WIS",
+        "relative_log_wis": "rel. log WIS",
         "n": "n",
         "coverage_50": "50%",
         "coverage_90": "90%",
+        "bias": "bias",
     }
     long = overall.melt(
         id_vars=["model", "scale"], value_vars=list(names), var_name="metric"
