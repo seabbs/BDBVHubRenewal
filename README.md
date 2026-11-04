@@ -17,18 +17,24 @@
 | Package (`src/`) | [![Tests](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/test.yml/badge.svg)](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/test.yml) | [![Lint](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/lint.yml/badge.svg)](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/lint.yml) | [![package coverage](https://codecov.io/gh/seabbs/BDBVHubRenewal/branch/main/graph/badge.svg?flag=package)](https://codecov.io/gh/seabbs/BDBVHubRenewal?flags%5B0%5D=package) |
 | Submission CI (`ci/`) | [![Submission CI tests](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/submission-ci-tests.yml/badge.svg)](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/submission-ci-tests.yml) | [![Lint](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/lint.yml/badge.svg)](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/lint.yml) | [![ci coverage](https://codecov.io/gh/seabbs/BDBVHubRenewal/branch/main/graph/badge.svg?flag=ci)](https://codecov.io/gh/seabbs/BDBVHubRenewal?flags%5B0%5D=ci) |
 
-Forecasts of weekly confirmed Bundibugyo virus disease cases in the Democratic Republic of the Congo for the [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub).
-Forecasts are made nationally, by province and by health zone.
+The [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub) collects weekly nowcasts and short-term forecasts of confirmed Bundibugyo virus disease cases in the 2026 outbreak in the Democratic Republic of the Congo.
+Participating teams submit sample trajectories of cases by week of symptom onset, nationally, by province and by health zone.
+The hub is run by Insight Net centres (ACCIDDA and epiEngage), the Kinshasa School of Public Health and the Institut National de Santé Publique.
+
+We submit two models to the hub.
+`seabbs-rwnowcast` is a baseline forecast adjusted for reporting delays.
+`seabbs-renewal` is a simple renewal model that extends our earlier modelling of this outbreak in [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize).
+We compare both with models that lack that input, a random walk with no delay adjustment and renewal models without the BVDOutbreakSize Rt.
 The package, `bdbvhubrenewal`, fits the models, scores them and writes the hub submission files.
-Two hub models are submitted, `seabbs-rwnowcast` and `seabbs-renewal`.
-`seabbs-rwnowcast` is `randomwalknowcast`, baselinenowcast ([Johnson et al. 2025](https://doi.org/10.12688/wellcomeopenres.25027.2), Wellcome Open Research), ported to JAX, with a random walk on top.
-It runs at province and zone level, and the national value is the sum of the provinces.
-`randomwalk` is the same walk with no nowcast, kept for comparison.
-`seabbs-renewal` carries one of the renewal models, `renewalbvd`, `renewalsp` or `renewal`, through the chain in `ci/policy.toml`.
-The renewal models are renewal models of daily symptom onsets, built on [PyRenew](https://github.com/CDCgov/PyRenew), with a learnt onset-to-report delay and the hub's imputation of missing onsets in the model.
+
+`seabbs-rwnowcast` is `randomwalknowcast`, baselinenowcast ([Johnson et al. 2025](https://doi.org/10.12688/wellcomeopenres.25027.2)) ported to JAX, with a random walk on top.
+It runs by province and health zone, and the national value is the sum of the provinces.
+`randomwalk` is the same walk with no nowcast.
+The renewal models are built on [PyRenew](https://github.com/CDCgov/PyRenew) and model daily symptom onsets, with a learnt onset-to-report delay and the hub's imputation of missing onsets.
 `renewalsp` fits each province on its own.
 `renewal` fits the provinces together, with a pooled Rt and importation between provinces through a gravity kernel.
-`renewalbvd` is `renewal` with the Rt estimates of [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) added to the fit.
+`renewalbvd` is `renewal` with the BVDOutbreakSize Rt estimates added to the fit.
+`seabbs-renewal` submits the first model in the chain in `ci/policy.toml` that passes its checks, starting with `renewalbvd`.
 See the [documentation](https://samabbott.co.uk/BDBVHubRenewal/) for the methods and results.
 
 ## Installation
