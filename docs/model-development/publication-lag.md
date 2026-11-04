@@ -120,9 +120,35 @@ The latest-release negative binomial, centred as now, already handles that.
 
 ## Prototype at the 2026-11-01 release
 
-PROTOTYPE_RESULTS
+The main renewal model was fitted twice to the 11-01 release, once with the current lag and once with the tail fixed at 0.105.
+The tail fit plugs the estimate in through the `empirical` path (`scripts/publication_lag_fit.py`), so it is a plug-in, not the joint model proposed above.
+Both use the submission sampler, 2 chains of 500 warm-up and 500 draws at target acceptance 0.9, on main at 44fd569.
+
+| Place | Week ending | Reported at 11-01 | Uniform 0..3 | Uniform 0..3 + tail |
+|---|---|---|---|---|
+| Ituri | 10-24 | 209 | 301 (270 to 346) | 329 (296 to 375) |
+| Ituri | 10-31 | 94 | 354 (274 to 455) | 385 (297 to 523) |
+| North Kivu | 10-24 | 142 | 201 (176 to 229) | 219 (187 to 253) |
+| North Kivu | 10-31 | 47 | 191 (151 to 250) | 216 (163 to 290) |
+| National | 10-24 | 381 | 546 (504 to 610) | 598 (540 to 672) |
+| National | 10-31 | 150 | 597 (482 to 715) | 662 (532 to 814) |
+
+Medians with 90% intervals of final counts.
+
+| Diagnostic | Uniform 0..3 | Uniform 0..3 + tail |
+|---|---|---|
+| Worst R-hat (site) | 1.054 (`rt_sd`) | 1.080 (`rt_sd`) |
+| Lowest bulk / tail ESS | 96 / 163 | 63 / 140 |
+| Divergences | 4 of 1000 | 3 of 1000 |
+
+The tail raises the two newest weeks by 8 to 13%, the opposite direction to removing the lag.
+Neither 10-31 nowcast can be scored until later releases.
+The worst-mixing site is `rt_sd` in both fits.
+The tail fit mixes a little worse there, which two chains cannot separate from noise.
+
+![Nowcasts of the two newest weeks at the 11-01 release with each lag.](publication-lag/prototype-nowcasts.png)
 
 ## Next steps
 
 - Implement the pair term in `OnsetStreams` with $w$ and $b_k$ as above, and test that it recovers $w$ in simulated releases.
-- Score the change at origin 2026-10-24 against the 11-01 release, where both versions can be compared on reported counts.
+- Score the change at origin 2026-10-24 against the 11-01 release, where both versions can be compared on reported counts, before adopting it.

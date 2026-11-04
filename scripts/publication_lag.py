@@ -271,6 +271,38 @@ def plot_totals(growth: pd.DataFrame) -> None:
     fig.savefig(OUT / "total-growth.png", dpi=150, facecolor="white")
 
 
+def plot_prototype() -> None:
+    """Nowcasts of the two prototype fits, from `prototype-nowcasts.csv`."""
+    nc = pd.read_csv(OUT / "prototype-nowcasts.csv")
+    places = {"CD-IT": "Ituri", "CD-NK": "North Kivu", "CD": "National"}
+    fig, axes = plt.subplots(1, 3, figsize=(11, 3.4))
+    for ax, (loc, title) in zip(axes, places.items(), strict=True):
+        g = nc[nc.location == loc]
+        for j, (lag, name) in enumerate(
+            [("uniform", "uniform 0..3"), ("tail", "uniform 0..3 + tail")]
+        ):
+            h = g[g.lag == lag]
+            x = np.arange(len(h)) + (j - 0.5) * 0.2
+            ax.errorbar(
+                x,
+                h["median"],
+                yerr=[h["median"] - h.q05, h.q95 - h["median"]],
+                fmt="o",
+                color=COLOURS[name],
+                label=f"{name} (median, 90%)",
+            )
+        rep = g[g.lag == "uniform"]
+        ax.plot(np.arange(len(rep)), rep.reported, "kx", label="reported")
+        ax.set_xticks(np.arange(len(rep)), [w[5:] for w in rep.week])
+        ax.set_title(title, fontsize=10)
+        ax.set_xlabel("Onset week ending")
+        ax.set_ylim(bottom=0)
+    axes[0].set_ylabel("Cases, release 2026-11-01")
+    axes[0].legend(fontsize=8, frameon=False, loc="lower left")
+    fig.tight_layout()
+    fig.savefig(OUT / "prototype-nowcasts.png", dpi=150, facecolor="white")
+
+
 def main() -> None:
     """Write the tables and figures."""
     OUT.mkdir(parents=True, exist_ok=True)
@@ -302,6 +334,7 @@ def main() -> None:
     names = [f"{a:%m-%d} to {b:%m-%d}" for a, b in itertools.pairwise(releases)]
     plot_pairs(pairs, table, names)
     plot_totals(growth)
+    plot_prototype()
 
 
 if __name__ == "__main__":
