@@ -36,14 +36,14 @@ def real_vintage(table, config):
 
 
 def log_density_curve(model, data, params, site, steps, dtype):
-    # Jitted, as NUTS runs it; compiled once per dtype.
+    # Jitted over concrete data, as NUTS runs it; compiled once per dtype.
+    args = model_args(model, data)
+
     @jax.jit
     def one(t):
         p = {k: jnp.asarray(v, dtype) for k, v in params.items()}
         p[site] = p[site].at[-1].add(t)
-        return numpyro.infer.util.log_density(
-            model.sample, (), model_args(model, data), p
-        )[0]
+        return numpyro.infer.util.log_density(model.sample, (), args, p)[0]
 
     return np.array([float(one(jnp.asarray(t, dtype))) for t in steps])
 
