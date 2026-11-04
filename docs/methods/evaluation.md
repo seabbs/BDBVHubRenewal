@@ -118,7 +118,7 @@ Each model choice is logged with its date, and the development set rolls forward
 Development runs use every vintage up to the latest choice date.
 Each real vintage after a choice is forecast by the model chosen then, the latest choice dated before it.
 It is also forecast by `randomwalk` and `randomwalknowcast`, and by default every other registered model, with the code at the time of the run.
-Each forecast is scored as for [real releases](#real-releases), first when the next release arrives and again as newer ones do.
+The run supplies the fitted models' forecasts to the [Nowcast](../nowcast.md) and [Comparison](../comparison.md) pages, and has no page of its own.
 
 ## Leave-one-province-out
 

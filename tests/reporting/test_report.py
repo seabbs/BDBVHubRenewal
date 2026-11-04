@@ -5,45 +5,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from bdbvhubrenewal.evaluation.backtest import BacktestConfig
 from bdbvhubrenewal.reporting import report
 
 ROOT = Path(__file__).resolve().parents[2]
-
-
-def test_heldout_page(
-    tmp_path: Path,
-    target: pd.DataFrame,
-    delays: pd.DataFrame,
-    daily: pd.DataFrame,
-) -> None:
-    from bdbvhubrenewal.evaluation.heldout import run_heldout
-
-    record = tmp_path / "model-choice.yml"
-    record.write_text(
-        "choices:\n"
-        "  - date: 2026-10-10\n"
-        "    model: randomwalk\n"
-        "    summary: A test choice.\n"
-    )
-    config = BacktestConfig(model_choice=record, development_until="2026-10-10")
-    res = tmp_path / "res"
-    run_heldout(
-        target, delays, config, evaluate_holdout=True, out_dir=res, daily=daily
-    )
-    gen, fig = tmp_path / "gen", tmp_path / "fig"
-    report._heldout_page(fig, gen, res, target, ["randomwalk"], config)
-    choices = (gen / "heldout-choices.md").read_text()
-    assert choices.startswith("## Model choices")
-    assert "2026-10-17" in choices
-    status = (gen / "heldout-status.md").read_text()
-    assert "next vintage" in status
-    assert (fig / "heldout-cd.svg").exists()
-    # Without a run or a record.
-    empty = BacktestConfig(model_choice=tmp_path / "none.yml")
-    report._heldout_page(fig, gen, tmp_path, target, ["randomwalk"], empty)
-    assert (gen / "heldout-choices.md").read_text() == ""
-    assert (gen / "heldout-status.md").read_text() == ""
 
 
 def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
@@ -405,33 +369,6 @@ def test_plot_scenarios() -> None:
         _scenario_scores(), models=["randomwalk", "randomwalknowcast"]
     )
     assert len(fig.axes) == 2  # one panel per scenario
-
-
-def test_heldout_page_before_any_held_out_vintage(
-    tmp_path: Path, target: pd.DataFrame
-) -> None:
-    record = tmp_path / "model-choice.yml"
-    record.write_text(
-        "choices:\n  - {date: 2026-12-31, model: randomwalknowcast}\n"
-    )
-    res = tmp_path / "res"
-    res.mkdir()
-    (res / "heldout-run.yml").write_text(
-        "run_at: '2026-12-31T00:00:00+00:00'\nscored: []\npending: []\n"
-        "latest_vintage: '2026-10-24'\n"
-    )
-    (res / "heldout-scores.csv").write_text("\n")
-    (res / "heldout-forecasts.csv.gz").write_text("\n")
-    config = BacktestConfig(model_choice=record, development_until="2026-12-31")
-    gen, fig = tmp_path / "gen", tmp_path / "fig"
-    report._heldout_page(fig, gen, res, target, ["randomwalk"], config)
-    assert "randomwalknowcast" in (gen / "heldout-choices.md").read_text()
-    for name in (
-        "heldout-status.md",
-        "heldout-scores.md",
-        "heldout-forecasts.md",
-    ):
-        assert (gen / name).read_text() == ""
 
 
 def test_dropdown_wraps_and_indents() -> None:

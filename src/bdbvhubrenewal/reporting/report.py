@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import Any, Final
 
 import pandas as pd
-import yaml
 from matplotlib.figure import Figure
 
 from bdbvhubrenewal.data import (
@@ -46,7 +45,6 @@ from bdbvhubrenewal.evaluation.backtest import (
     run_forecasts,
     truth_changes,
 )
-from bdbvhubrenewal.evaluation.heldout import load_model_choices
 from bdbvhubrenewal.evaluation.hubcompare import (
     attribution,
     forecast_quantiles,
@@ -95,7 +93,6 @@ from bdbvhubrenewal.reporting.plots import (
     plot_newly_missing,
     plot_revisions,
     plot_scenarios,
-    plot_score_summary,
     plot_scores,
     plot_scores_by_truth,
     plot_simulation,
@@ -252,11 +249,10 @@ def make_report(
         fig / "simulation.svg",
     )
 
-    # Backtest, held-out and comparison pages.
+    # Backtest and comparison pages.
     names = [s.name for s in list_models()]
     _release_section(fig, gen, res, real, names)
     _backtest_page(fig, gen, res, out, config, target, names, data_dir)
-    _heldout_page(fig, gen, res, target, names, config)
     _comparison_page(fig, gen, Path(hub_comparison), target)
 
     # Nowcast page: latest real vintage, every registered model.
@@ -1480,163 +1476,6 @@ def _backtest_page(
             ],
         ),
     )
-
-
-_HELDOUT_SECTIONS = (
-    ("heldout-choices.md", "Model choices"),
-    ("heldout-status.md", "Status"),
-    ("heldout-scores.md", "Scores"),
-    ("heldout-forecasts.md", "Forecasts against later data"),
-)
-"""Held-out snippets and their headings, shown only with content."""
-
-
-def _heldout_page(
-    fig: Path,
-    gen: Path,
-    res: Path,
-    target: pd.DataFrame,
-    names: list[str],
-    config: BacktestConfig,
-) -> None:
-    _heldout_snippets(fig, gen, res, target, names, config)
-    for name, title in _HELDOUT_SECTIONS:
-        path = gen / name
-        body = path.read_text() if path.exists() else ""
-        _write(path, f"## {title}\n\n{body}" if body.strip() else "")
-
-
-def _heldout_snippets(
-    fig: Path,
-    gen: Path,
-    res: Path,
-    target: pd.DataFrame,
-    names: list[str],
-    config: BacktestConfig,
-) -> None:
-    choices = load_model_choices(config.model_choice)
-    if choices:
-        table = pd.DataFrame(
-            {
-                "date": [c.date for c in choices],
-                "model": [f"`{c.model}`" for c in choices],
-                "why": [c.summary for c in choices],
-            }
-        )
-        held = [
-            v
-            for v in sorted(
-                set(target.loc[target["kind"] == "real", "vintage"])
-            )
-            if v > choices[0].date
-        ]
-        _write(
-            gen / "heldout-choices.md",
-            _table(table)
-            + (
-                f"\nVintages after {choices[0].date} are held out: "
-                + ", ".join(held)
-                + ".\n"
-                if held
-                else ""
-            ),
-        )
-    else:
-        _write(gen / "heldout-choices.md", "")
-    run_path = res / "heldout-run.yml"
-    if not run_path.exists():
-        for name in ("heldout-status.md", "heldout-scores.md"):
-            _write(gen / name, "")
-        _write(gen / "heldout-forecasts.md", "")
-        return
-    run = yaml.safe_load(run_path.read_text())
-    if not [*run.get("scored", []), *run.get("pending", [])]:
-        # No vintage after the choice yet: nothing is held out.
-        for name in ("heldout-status.md", "heldout-scores.md"):
-            _write(gen / name, "")
-        _write(gen / "heldout-forecasts.md", "")
-        return
-    scores_path = res / "heldout-scores.csv"
-    scores = (
-        pd.read_csv(scores_path)
-        if scores_path.stat().st_size > 1
-        else pd.DataFrame()
-    )
-    rows = []
-    for entry in [*run["scored"], *run["pending"]]:
-        v = str(entry["vintage"])
-        truths = (
-            sorted(set(scores.loc[scores["origin"] == v, "truth_vintage"]))
-            if not scores.empty
-            else []
-        )
-        rows.append(
-            {
-                "vintage": v,
-                "reference_date": reference_date_for_vintage(v).isoformat(),
-                "model chosen": entry["model"],
-                "scored against": ", ".join(map(str, truths))
-                or "with the next vintage",
-            }
-        )
-    status = pd.DataFrame(rows).sort_values("vintage")
-    _write(
-        gen / "heldout-status.md",
-        f"Last run {run['run_at']} on vintages up to "
-        f"**{run['latest_vintage']}**.\n\n"
-        + _dropdown(_table(status), "Vintages"),
-    )
-    if scores.empty:
-        _write(gen / "heldout-scores.md", "")
-    else:
-        scores = _with_horizon(scores)
-        reported = scores.loc[scores["target"] == "reported"]
-        tables = (
-            _table(
-                relative_wis(
-                    scores,
-                    ("target", "chosen_model", "origin", "truth_vintage"),
-                )
-            )
-            + "\nBy horizon, over provinces and the national total:\n\n"
-            + _table(relative_wis(scores, ("target", "origin", "horizon")))
-        )
-        alt = "Held-out WIS by horizon."
-        make = partial(plot_score_summary, reported, models=names)
-        _save_metric_figures(fig, "heldout-scores", make)
-        _write(
-            gen / "heldout-scores.md",
-            _metric_tabs("heldout-scores", alt) + "\n" + _dropdown(tables),
-        )
-    fc_path = res / "heldout-forecasts.csv.gz"
-    if not fc_path.exists():
-        _write(gen / "heldout-forecasts.md", "")
-        return
-    forecasts = pd.read_csv(fc_path)
-    models = [n for n in names if n in set(forecasts["model"])]
-    tabs = []
-    loc_names = _location_names(target)
-    for loc in (NATIONAL, "CD-IT", "CD-NK"):
-        slug = loc.lower()
-        save_light_dark(
-            partial(
-                plot_forecasts,
-                forecasts,
-                target,
-                loc,
-                models=models,
-                complete_after_weeks=config.complete_after_weeks,
-            ),
-            fig / f"heldout-{slug}.svg",
-        )
-        label = f"{loc_names.get(loc, loc)} ({loc})"
-        alt = f"Held-out forecasts against later data, {label}."
-        tabs.append(
-            f'=== "{label}"\n\n'
-            f"    ![{alt}](figures/heldout-{slug}.svg#only-light)\n"
-            f"    ![{alt}](figures/heldout-{slug}-dark.svg#only-dark)\n"
-        )
-    _write(gen / "heldout-forecasts.md", "\n".join(tabs))
 
 
 def _location_names(target: pd.DataFrame) -> dict[str, str]:

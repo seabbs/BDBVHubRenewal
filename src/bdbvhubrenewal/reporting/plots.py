@@ -30,7 +30,6 @@ import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
-from matplotlib.ticker import MaxNLocator
 
 from bdbvhubrenewal.data import (
     downward_summary,
@@ -62,7 +61,6 @@ __all__ = [
     "plot_newly_missing",
     "plot_nowcast",
     "plot_revisions",
-    "plot_score_summary",
     "plot_scores",
     "plot_scores_by_truth",
     "plot_simulation",
@@ -1677,88 +1675,6 @@ def plot_scores(
         ax.set_xlabel(by.capitalize())
     axes[0].set_ylabel(_METRIC_LABELS.get(metric, metric))
     axes[0].legend()
-    return fig
-
-
-def plot_score_summary(
-    scores: pd.DataFrame,
-    baseline: str = "randomwalk",
-    by: str = "horizon",
-    models: Sequence[str] | None = None,
-    mode: str = "light",
-    metric: str = "wis",
-) -> Figure:
-    """Plot WIS relative to a baseline and 90% coverage by model.
-
-    Parameters
-    ----------
-    scores : pandas.DataFrame
-        Output of `score_forecasts`, already limited to the scores shown.
-    baseline : str
-        The reference model.
-    by : str
-        Column to plot against, such as `"horizon"`.
-    models : sequence of str, optional
-        Models in registry order.
-    mode : str
-        `"light"` or `"dark"`.
-    metric : str
-        `"wis"` or `"log_wis"`.
-
-    Returns
-    -------
-    matplotlib.figure.Figure
-        Two panels. The first has each model's mean WIS divided by the
-        baseline's, with a line at 1. The second has the share of 90%
-        intervals holding the data, with a line at 0.9.
-    """
-    from bdbvhubrenewal.evaluation.scoring import relative_skill
-
-    models = list(models or scores["model"].unique())
-    ink = THEMES[mode]
-    match = [
-        c
-        for c in (
-            "kind",
-            "vintage",
-            "reference_date",
-            "truth_vintage",
-            "location",
-            "target_end_date",
-        )
-        if c in scores
-    ]
-    rel = relative_skill(
-        scores, baseline=baseline, by=(by,), metrics=(metric,), match_on=match
-    )
-    cover = scores.groupby(["model", by])["coverage_90"].mean().reset_index()
-    fig, axes = _grid(2, 2, width=3.8, height=2.6)
-    for m in models:
-        colour = model_colour(m, models, mode)
-        if m != baseline:
-            r = rel.loc[rel["model"] == m].sort_values(by)
-            axes[0].plot(
-                r[by],
-                r[f"relative_{metric}"],
-                color=colour,
-                marker="o",
-                label=m,
-            )
-        c = cover.loc[cover["model"] == m].sort_values(by)
-        axes[1].plot(c[by], c["coverage_90"], color=colour, marker="o", label=m)
-    axes[0].axhline(1, color=ink["muted"], lw=1, ls=":")
-    axes[1].axhline(0.9, color=ink["muted"], lw=1, ls=":")
-    axes[0].set_ylabel(
-        f"{'WIS on the log scale' if metric == 'log_wis' else 'WIS'} "
-        f"relative to {baseline}"
-    )
-    axes[1].set_ylabel("90% interval coverage")
-    for ax in axes:
-        ax.set_xlabel(by.capitalize())
-        if by == "horizon":
-            ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-    axes[0].legend(fontsize=7)
-    axes[1].legend(fontsize=7)
     return fig
 
 
