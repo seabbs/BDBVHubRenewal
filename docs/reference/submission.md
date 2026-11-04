@@ -9,6 +9,8 @@ The hub file writer and checks, metadata, fit configurations and rounds.
 
 ::: bdbvhubrenewal.submission.hub
 
+::: bdbvhubrenewal.submission.metadata
+
 ::: bdbvhubrenewal.submission.validate
 
 ::: bdbvhubrenewal.submission.fitting

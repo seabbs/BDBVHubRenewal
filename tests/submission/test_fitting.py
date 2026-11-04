@@ -351,7 +351,8 @@ def test_committed_renewal_metadata_is_one_of_the_variants(
     tmp_path: Path,
 ) -> None:
     # seabbs-renewal.yml is the metadata of the variant chosen for
-    # submission. After a choice, regenerate it (see MODEL_METADATA).
+    # submission. After a choice, regenerate it (see
+    # bdbvhubrenewal.submission.metadata).
     path = ROOT / "hub" / "model-metadata" / "seabbs-renewal.yml"
     rendered = {}
     for variant in ("renewal", "renewalsp", "renewalbvd"):
