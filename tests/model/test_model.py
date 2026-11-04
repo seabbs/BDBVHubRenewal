@@ -54,8 +54,6 @@ def test_active_set_follows_the_data(outbreak, sim_tables, table):
     "cfg",
     [
         *LADDER.values(),
-        ModelConfig(delay="gamma"),
-        ModelConfig(delay="lognormal"),
     ],
 )
 def test_model_sites_and_shapes(outbreak, sim_tables, table, cfg):

@@ -18,7 +18,6 @@ The package imports without JAX until this subpackage is imported.
 from .delays import (
     FixedTimeVarying,
     HazardDelay,
-    ParametricDelay,
     censored_pmf,
     hazard_to_pmf,
 )
@@ -58,7 +57,6 @@ __all__ = [
     "ModelConfig",
     "NonCentredRandomWalk",
     "OnsetStreams",
-    "ParametricDelay",
     "PooledInitialValue",
     "RtPseudoObservation",
     "Vintage",
