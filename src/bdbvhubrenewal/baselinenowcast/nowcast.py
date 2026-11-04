@@ -49,10 +49,61 @@ def baselinenowcast(
 ) -> Array:
     """Nowcast a reporting triangle.
 
-    Returns the point nowcast per reference time for
-    ``output_type="point"`` (row sums of the filled triangle) and
-    draws of shape ``(draws, n_aggregated)`` for ``"samples"``, which
-    needs ``key``.
+    Estimates the delay and its uncertainty from the triangle, fills
+    the unobserved cells and, for samples, draws the counts still to
+    be reported.
+
+    Parameters
+    ----------
+    triangle : array_like
+        Reporting triangle, reference times by delays.
+    mask : array_like of bool
+        True where a cell is observed.
+    key : jax.Array, optional
+        Random key. Needed for ``output_type="samples"``.
+    scale_factor, prop_delay : float
+        Passed to `allocate_reference_times`.
+    output_type : {"samples", "point"}, default "samples"
+        Draws, or the point nowcast.
+    draws : int, default 1000
+        Number of draws.
+    uncertainty_model : callable, default fit_by_horizon
+        Fits the uncertainty parameters.
+    uncertainty_sampler : Sampler, default sample_nb
+        Draws counts given a mean and the parameters.
+    delay_pmf, uncertainty_params : array_like, optional
+        Use these instead of estimating them.
+    preprocess : callable or None, default preprocess_negative_values
+        Applied to the triangle first.
+    structure : int or array_like, optional
+        Reporting structure. Defaults to `get_reporting_structure`.
+    ref_time_aggregator : RefTimeAggregator, default identity
+        Aggregates reference times, such as `rolling_sum`.
+    delay_aggregator : DelayAggregator, default row_sums
+        Sums over delays.
+    validate : bool, default True
+        Check the triangle and mask first.
+
+    Returns
+    -------
+    jax.Array
+        For ``"point"``, the point nowcast per reference time (row sums
+        of the filled triangle). For ``"samples"``, draws of shape
+        ``(draws, n_aggregated)``.
+
+    Examples
+    --------
+    >>> import jax
+    >>> import numpy as np
+    >>> from bdbvhubrenewal.baselinenowcast import baselinenowcast
+    >>> rng = np.random.default_rng(1)
+    >>> triangle = rng.poisson(10, size=(20, 4)).astype(float)
+    >>> mask = np.add.outer(np.arange(20), np.arange(4)) < 20
+    >>> draws = baselinenowcast(
+    ...     triangle * mask, mask, key=jax.random.key(1), draws=100
+    ... )
+    >>> draws.shape
+    (100, 20)
     """
     values, m = coerce(triangle, mask)
     if validate:

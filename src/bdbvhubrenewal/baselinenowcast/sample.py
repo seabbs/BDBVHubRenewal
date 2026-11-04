@@ -20,6 +20,7 @@ from .triangle import identity, row_sums
 from .uncertainty import DelayAggregator, RefTimeAggregator
 
 Sampler = Callable[[Array, Array, Array], Array]
+"""Draws counts: `sampler(key, mean, uncertainty_params)`."""
 
 
 def sample_nb(key: Array, pred: Any, uncertainty_params: Any) -> Array:
@@ -27,7 +28,20 @@ def sample_nb(key: Array, pred: Any, uncertainty_params: Any) -> Array:
 
     R sample_distrib.R:18 (``rnbinom(size, mu)``), drawn as a gamma
     mixed Poisson.
-    ``uncertainty_params`` has length 1 or matches ``pred``.
+
+    Parameters
+    ----------
+    key : jax.Array
+        Random key.
+    pred : array_like
+        Means.
+    uncertainty_params : array_like
+        Sizes, of length 1 or matching ``pred``.
+
+    Returns
+    -------
+    jax.Array
+        One draw per mean.
     """
     mu = jnp.asarray(pred, dtype=jnp.result_type(pred, jnp.float32))
     size = jnp.asarray(uncertainty_params, dtype=mu.dtype)
@@ -140,10 +154,33 @@ def sample_prediction(
 ) -> Array:
     """One draw of the counts still to be reported (R sample_predictions.R:55).
 
-    Returns a vector over aggregated reference times with zeros for
-    rows that are fully observed.
     The last ``n`` of the uncertainty parameters are used, as R's
     ``tail``, most recent horizon first.
+
+    Parameters
+    ----------
+    key : jax.Array
+        Random key.
+    point_nowcast_matrix : array_like
+        The filled triangle, as from `apply_delay`.
+    triangle : array_like
+        Reporting triangle, reference times by delays.
+    mask : array_like of bool
+        True where a cell is observed.
+    uncertainty_params : array_like
+        One parameter per horizon.
+    uncertainty_sampler : Sampler, default sample_nb
+        Draws counts given a mean and the parameters.
+    ref_time_aggregator : RefTimeAggregator, default identity
+        Aggregates reference times.
+    delay_aggregator : DelayAggregator, default row_sums
+        Sums over delays.
+
+    Returns
+    -------
+    jax.Array
+        One value per aggregated reference time, zero for rows that are
+        fully observed.
     """
     prep = _prepare(
         point_nowcast_matrix,
@@ -163,7 +200,26 @@ def combine_obs_with_pred(
     ref_time_aggregator: RefTimeAggregator = identity,
     delay_aggregator: DelayAggregator = row_sums,
 ) -> Array:
-    """Observed totals plus predicted counts (R sample_predictions.R:189)."""
+    """Observed totals plus predicted counts (R sample_predictions.R:189).
+
+    Parameters
+    ----------
+    predicted_counts : array_like
+        Counts still to be reported, as from `sample_prediction`.
+    triangle : array_like
+        Reporting triangle, reference times by delays.
+    mask : array_like of bool
+        True where a cell is observed.
+    ref_time_aggregator : RefTimeAggregator, default identity
+        Aggregates reference times.
+    delay_aggregator : DelayAggregator, default row_sums
+        Sums over delays.
+
+    Returns
+    -------
+    jax.Array
+        One total per aggregated reference time.
+    """
     values, m = coerce(triangle, mask)
     agg, _ = ref_time_aggregator(values, m)
     return delay_aggregator(agg) + jnp.asarray(predicted_counts)
@@ -179,7 +235,32 @@ def sample_nowcast(
     ref_time_aggregator: RefTimeAggregator = identity,
     delay_aggregator: DelayAggregator = row_sums,
 ) -> Array:
-    """One nowcast draw over aggregated reference times (R :312)."""
+    """One nowcast draw over aggregated reference times (R :312).
+
+    Parameters
+    ----------
+    key : jax.Array
+        Random key.
+    point_nowcast_matrix : array_like
+        The filled triangle, as from `apply_delay`.
+    triangle : array_like
+        Reporting triangle, reference times by delays.
+    mask : array_like of bool
+        True where a cell is observed.
+    uncertainty_params : array_like
+        One parameter per horizon.
+    uncertainty_sampler : Sampler, default sample_nb
+        Draws counts given a mean and the parameters.
+    ref_time_aggregator : RefTimeAggregator, default identity
+        Aggregates reference times.
+    delay_aggregator : DelayAggregator, default row_sums
+        Sums over delays.
+
+    Returns
+    -------
+    jax.Array
+        One total per aggregated reference time.
+    """
     prep = _prepare(
         point_nowcast_matrix,
         triangle,
@@ -202,12 +283,38 @@ def sample_nowcasts(
     ref_time_aggregator: RefTimeAggregator = identity,
     delay_aggregator: DelayAggregator = row_sums,
 ) -> Array:
-    """Draws of the nowcast, shape ``(draws, n_aggregated)`` (R :372).
+    """Draws of the nowcast (R :372).
 
     Draws are ``vmap``ped over split keys.
     With a rolling aggregator the leading rows R pads with NA are
     dropped, so the columns are the last ``n_aggregated`` reference
     times.
+
+    Parameters
+    ----------
+    key : jax.Array
+        Random key.
+    point_nowcast_matrix : array_like
+        The filled triangle, as from `apply_delay`.
+    triangle : array_like
+        Reporting triangle, reference times by delays.
+    mask : array_like of bool
+        True where a cell is observed.
+    uncertainty_params : array_like
+        One parameter per horizon.
+    draws : int, default 1000
+        Number of draws.
+    uncertainty_sampler : Sampler, default sample_nb
+        Draws counts given a mean and the parameters.
+    ref_time_aggregator : RefTimeAggregator, default identity
+        Aggregates reference times.
+    delay_aggregator : DelayAggregator, default row_sums
+        Sums over delays.
+
+    Returns
+    -------
+    jax.Array
+        Shape ``(draws, n_aggregated)``.
     """
     if draws < 1:
         raise ValueError("`draws` must be at least 1")
