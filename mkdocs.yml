@@ -109,6 +109,7 @@ extra_css:
 extra_javascript:
   - javascripts/mathjax.js
   - javascripts/toggles.js
+  - javascripts/zoom.js
   - javascripts/tablefilter.js
   - javascripts/explorer.js
   - javascripts/scorechart.js

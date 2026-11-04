@@ -245,3 +245,37 @@
 .tablefilter-sort[aria-sort="descending"]::after {
   content: " ▼";
 }
+
+/* Drag-to-zoom. */
+svg.zoomable {
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+}
+
+.zoom-brush {
+  fill: var(--md-accent-fg-color);
+  fill-opacity: 0.15;
+  stroke: var(--md-accent-fg-color);
+  stroke-width: 1;
+}
+
+.zoom-reset {
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--md-default-fg-color);
+  background: var(--md-default-bg-color);
+  border: 1px solid var(--md-default-fg-color--lighter);
+  border-radius: 4px;
+  padding: 0.15em 0.6em;
+  cursor: pointer;
+}
+
+.scorechart-tabs .zoom-reset {
+  margin: auto 0 auto auto;
+  font-weight: 400;
+  color: var(--md-default-fg-color);
+  border: 1px solid var(--md-default-fg-color--lighter);
+  border-radius: 4px;
+  padding: 0.15em 0.6em;
+}
