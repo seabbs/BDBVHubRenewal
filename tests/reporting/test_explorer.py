@@ -98,14 +98,14 @@ def test_explorer_hides_models_until_switched_on() -> None:
     )
     assert data["models"] == [
         {
-            "label": "a (ours)",
+            "name": "a (ours)",
             "ours": True,
             "on": False,
             "light": "#111111",
             "dark": "#eeeeee",
         },
         {
-            "label": "hub",
+            "name": "hub",
             "ours": False,
             "on": True,
             "light": "#222222",

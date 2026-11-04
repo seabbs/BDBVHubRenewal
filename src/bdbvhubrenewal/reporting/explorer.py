@@ -122,7 +122,7 @@ def explorer_data(
         "rounds": rounds,
         "models": [
             {
-                "label": m,
+                "name": m,
                 "ours": m in ours,
                 "on": m not in hidden,
                 "light": colours[m][0],

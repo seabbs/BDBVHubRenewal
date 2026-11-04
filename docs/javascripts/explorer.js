@@ -3,22 +3,14 @@
   "use strict";
   var NS = "http://www.w3.org/2000/svg";
   var DAY = 864e5;
+  var T = window.bdbvToggles;
+  var h = T.h;
 
   function el(tag, attrs, parent) {
     var n = document.createElementNS(NS, tag);
     Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]); });
     if (parent) parent.appendChild(n);
     return n;
-  }
-  function h(tag, attrs, parent, text) {
-    var n = document.createElement(tag);
-    Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]); });
-    if (text !== undefined) n.textContent = text;
-    if (parent) parent.appendChild(n);
-    return n;
-  }
-  function dark() {
-    return document.body.getAttribute("data-md-color-scheme") === "slate";
   }
   function day(s) { return Date.parse(s + "T00:00:00Z"); }
   function mean(a) { return a.reduce(function (x, y) { return x + y; }, 0) / a.length; }
@@ -36,7 +28,6 @@
     var state = {
       loc: d.locations[0].id,
       round: root.dataset.round === "all" ? "all" : d.rounds.length - 1,
-      off: {},
     };
     var controls = h("div", { class: "explorer-controls" }, root);
     var lab1 = h("label", {}, controls, "Location ");
@@ -56,23 +47,10 @@
     selRound.value = String(state.round);
     var zoom = window.bdbvZoom.create(controls, function () { draw(); });
     var Z = window.bdbvZoom;
-    var legend = h("div", { class: "explorer-legend" }, root);
+    var legend = T.legend(root, d.models, draw);
     var figure = h("div", { class: "explorer-figure" }, root);
     var table = h("div", { class: "explorer-table" }, root);
 
-    var swatches = d.models.map(function (m, i) {
-      var l = h("label", { class: "explorer-key" }, legend);
-      var cb = h("input", { type: "checkbox" }, l);
-      cb.checked = m.on;
-      state.off[i] = !m.on;
-      var sw = h("span", { class: "explorer-swatch" }, l);
-      h("span", {}, l, m.label);
-      cb.addEventListener("change", function () {
-        state.off[i] = !cb.checked;
-        draw();
-      });
-      return sw;
-    });
     selLoc.addEventListener("change", function () { state.loc = selLoc.value; draw(); });
     selRound.addEventListener("change", function () {
       state.round = selRound.value === "all" ? "all" : +selRound.value;
@@ -80,14 +58,13 @@
     });
 
     function draw() {
-      var mode = dark() ? "dark" : "light";
-      swatches.forEach(function (sw, i) { sw.style.background = d.models[i][mode]; });
+      legend.paint();
       var rounds = state.round === "all"
         ? d.rounds.map(function (_, i) { return i; }) : [state.round];
       var models = d.models.map(function (_, i) { return i; })
-        .filter(function (i) { return !state.off[i]; });
+        .filter(function (i) { return legend.on[i]; });
       var rows = d.q.filter(function (r) {
-        return r[2] === state.loc && rounds.indexOf(r[1]) >= 0 && !state.off[r[0]];
+        return r[2] === state.loc && rounds.indexOf(r[1]) >= 0 && legend.on[r[0]];
       });
       var data = d.data[state.loc] || [];
       var first = day(d.rounds[rounds[0]]) - 8 * 7 * DAY;
@@ -143,9 +120,9 @@
         var slot = models.indexOf(r[0]) * rounds.length + rounds.indexOf(r[1]);
         var t0 = day(r[3]) + (slot - (slots - 1) / 2) * width;
         var xx = X(t0);
-        var c = d.models[r[0]][mode];
+        var c = legend.colour(r[0]);
         var op = rounds.length > 1 ? 0.7 : 1;
-        var tip = d.models[r[0]].label + ", round " + d.rounds[r[1]] + ", week ending " + r[3] +
+        var tip = d.models[r[0]].name + ", round " + d.rounds[r[1]] + ", week ending " + r[3] +
           ": median " + r[6] + ", 50% " + r[5] + " to " + r[7] + ", 90% " + r[4] + " to " + r[8];
         var g = el("g", { opacity: op }, plot);
         el("title", {}, g).textContent = tip;
@@ -198,7 +175,7 @@
         .forEach(function (c) { h("th", {}, head, c); });
       var body = h("tbody", {}, tbl);
       Object.keys(by).map(Number).forEach(function (m) {
-        if (state.off[m]) return;
+        if (!legend.on[m]) return;
         var rs = by[m];
         var rel = "", relLog = "";
         if (d.baseline !== null && m !== d.baseline) {
@@ -211,7 +188,7 @@
           }
         }
         var tr = h("tr", {}, body);
-        h("td", {}, tr, d.models[m].label);
+        h("td", {}, tr, d.models[m].name);
         h("td", {}, tr, String(rs.length));
         h("td", {}, tr, fmt(mean(rs.map(function (r) { return r[4]; })), 1));
         h("td", {}, tr, rel);
@@ -223,8 +200,7 @@
       });
     }
     draw();
-    new MutationObserver(draw).observe(document.body,
-      { attributes: true, attributeFilter: ["data-md-color-scheme"] });
+    T.onTheme(draw);
   }
 
   function start() {
