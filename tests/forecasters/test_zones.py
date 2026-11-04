@@ -27,14 +27,16 @@ from bdbvhubrenewal.forecasters.zones import (
     zone_forecast,
     zone_task,
 )
-from bdbvhubrenewal.submission.hub import (
-    load_hub_round,
-    to_hub_table,
-    validate_submission_file,
-    write_submission,
-)
+from bdbvhubrenewal.submission.hub import to_hub_table, write_submission
+from bdbvhubrenewal.submission.validate import Hub, validate_submission
 
-DATA = Path(__file__).resolve().parents[2] / "data"
+ROOT = Path(__file__).resolve().parents[2]
+DATA = ROOT / "data"
+SNAPSHOT = ROOT / "tests/submission/hub_validation/fixtures/hub-snapshot"
+HUB = Hub.load(SNAPSHOT)
+"""The pinned hub config."""
+OPEN_VINTAGE = "2026-10-24"
+"""A vintage whose reference date, 2026-10-31, is open in `HUB`."""
 
 
 @pytest.fixture(scope="module")
@@ -47,17 +49,49 @@ def zones() -> tuple[str, ...]:
     return hub_zones(DATA / "hub-config" / "tasks.json")
 
 
+def _task(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    vintage: str,
+) -> ForecastTask:
+    rows = target.loc[target["vintage"] == vintage]
+    return make_tasks(rows, delays, BacktestConfig(seed=3), daily=daily)[0]
+
+
 @pytest.fixture
 def task(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> ForecastTask:
-    rows = target.loc[target["vintage"] == "2026-10-17"]
-    return make_tasks(rows, delays, BacktestConfig(seed=3), daily=daily)[0]
+    return _task(target, delays, daily, "2026-10-17")
 
 
 @pytest.fixture
 def counts(daily_zones: pd.DataFrame) -> pd.DataFrame:
     return weekly_zone_counts(daily_zones, "2026-10-17")
+
+
+@pytest.fixture
+def open_task(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> ForecastTask:
+    return _task(target, delays, daily, OPEN_VINTAGE)
+
+
+@pytest.fixture
+def open_counts(daily_zones: pd.DataFrame) -> pd.DataFrame:
+    return weekly_zone_counts(daily_zones, OPEN_VINTAGE)
+
+
+def _hub_failures(path: Path) -> list[str]:
+    """The hub's checks a written submission fails."""
+    rep = validate_submission(
+        path,
+        HUB,
+        metadata_dirs=[ROOT / "hub" / "model-metadata"],
+        skip_window=True,
+    )
+    return [f"{c.check}: {c.message}" for c in rep.failed]
 
 
 def _alloc(
@@ -271,18 +305,17 @@ def test_zone_task_is_a_zero_filled_randomwalk_task(
 
 
 def test_hub_table_with_zones_validates(
-    task: ForecastTask,
-    counts: pd.DataFrame,
+    open_task: ForecastTask,
+    open_counts: pd.DataFrame,
     zones: tuple[str, ...],
-    tasks_json: Path,
     tmp_path: Path,
 ) -> None:
-    prov, alloc = _alloc(task, counts, zones)
+    prov, alloc = _alloc(open_task, open_counts, zones)
     table = to_hub_table(
         prov,
-        task.reference_date,
+        open_task.reference_date,
         zones=alloc,
-        forecast_date=task.reference_date,
+        forecast_date=open_task.reference_date,
     )
     nat = table.loc[table["location"] == "CD"]
     provs = table.loc[table["location"].str.len() == 5]
@@ -291,10 +324,8 @@ def test_hub_table_with_zones_validates(
     # The national value is the sum of the provinces, not of the zones.
     assert (got.reindex(summed.index) == summed).all()
     assert set(alloc["location"]) <= set(table["location"])
-    hub_round = load_hub_round(tasks_json)
-    assert set(table["location"]) <= hub_round.locations
     path = write_submission(table, tmp_path, "seabbs-renewal")
-    assert validate_submission_file(path, hub_round, check_round=False) == []
+    assert _hub_failures(path) == []
 
 
 def test_hub_table_rejects_incoherent_zones(
@@ -394,19 +425,17 @@ def test_reconcile_falls_back_to_the_allocator_shares(
 
 
 def test_zone_hub_table_validates_and_sums_up_the_hierarchy(
-    task: ForecastTask,
-    counts: pd.DataFrame,
+    open_task: ForecastTask,
+    open_counts: pd.DataFrame,
     zones: tuple[str, ...],
     daily_zones: pd.DataFrame,
-    tasks_json: Path,
     tmp_path: Path,
 ) -> None:
     model = RandomWalkNowcast()
-    prov = model.forecast(task)
-    got = zone_forecast(model, task, prov, counts, zones, daily_zones)
-    table = to_hub_table(
-        prov, task.reference_date, zones=got, forecast_date=task.reference_date
-    )
+    prov = model.forecast(open_task)
+    got = zone_forecast(model, open_task, prov, open_counts, zones, daily_zones)
+    ref = open_task.reference_date
+    table = to_hub_table(prov, ref, zones=got, forecast_date=ref)
     zone_rows = table.loc[table["location"].str.count("-") == 2]
     by_prov = (
         zone_rows.assign(location=zone_rows["location"].str[:5])
@@ -418,6 +447,5 @@ def test_zone_hub_table_validates_and_sums_up_the_hierarchy(
         ["location", "output_type_id", "target_end_date"]
     )
     assert (by_prov == want["value"].reindex(by_prov.index)).all()
-    hub_round = load_hub_round(tasks_json)
     path = write_submission(table, tmp_path, "seabbs-rwnowcast")
-    assert validate_submission_file(path, hub_round, check_round=False) == []
+    assert _hub_failures(path) == []
