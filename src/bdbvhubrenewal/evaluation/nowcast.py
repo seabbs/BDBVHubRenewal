@@ -44,7 +44,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -384,6 +384,7 @@ def release_backtest(
     stored: pd.DataFrame | None = None,
     complete_rule: str = "growth",
     complete_after: int = COMPLETE_WEEKS,
+    compare: Collection[str] | None = None,
 ) -> ReleaseBacktest:
     """Forecast from every real release and score every model.
 
@@ -402,6 +403,9 @@ def release_backtest(
         `vintage`, `location`, `target_end_date`, `sample` and `value`.
     complete_rule, complete_after : str, int
         The `rule` and `weeks` of `complete_weeks`.
+    compare : collection of str, optional
+        Models the energy score compares, on the cells they all forecast.
+        All models if None. Other models get no energy score.
 
     Returns
     -------
@@ -505,7 +509,7 @@ def release_backtest(
     done = complete_weeks(
         target, daily, latest, rule=complete_rule, weeks=complete_after
     )
-    return _score(frames, origin_rows, fit_rows, real, done)
+    return _score(frames, origin_rows, fit_rows, real, done, compare)
 
 
 def _check_distinct(forecasts: dict[str, pd.DataFrame], vintage: str) -> None:
@@ -527,6 +531,7 @@ def _score(
     fit_rows: list[pd.DataFrame],
     real: pd.DataFrame,
     done: pd.DataFrame,
+    compare: Collection[str] | None,
 ) -> ReleaseBacktest:
     fits = (
         pd.concat(fit_rows, ignore_index=True) if fit_rows else pd.DataFrame()
@@ -549,7 +554,8 @@ def _score(
         )
         s["weeks_back"] = s.pop("horizon")
         scored.append(s)
-        energy.append(energy_scores(grp, truth, unit=_KEYS[1:4]))
+        pool = grp if compare is None else grp[grp["model"].isin(compare)]
+        energy.append(energy_scores(pool, truth, unit=_KEYS[1:4]))
     scores = pd.concat(scored, ignore_index=True)
     flags = done.rename(columns={"complete": "complete_at_latest"})
     scores = scores.merge(

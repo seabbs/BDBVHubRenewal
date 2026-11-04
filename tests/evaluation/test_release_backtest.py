@@ -208,6 +208,22 @@ def test_stored_forecasts_are_scored_on_both_targets(
         & (out.quantiles["target"] == "reported")
     ]
     assert (rep.loc[rep["weeks_back"] >= 6, "q50"] == 100).all()
+    # flat covers two provinces, so the energy score's shared cells do too,
+    # unless it is left out of the compared models.
+    prov = out.energy.loc[out.energy["scale"] == "provinces"]
+    assert set(prov["model"]) == {"flat", "randomwalk", BASELINE}
+    cells = prov.groupby("truth_vintage")["n_cells"].max()
+    ours = release_backtest(
+        tasks,
+        daily,
+        target,
+        models=("randomwalk",),
+        stored=stored,
+        compare=("randomwalk", BASELINE),
+    ).energy
+    ours = ours.loc[ours["scale"] == "provinces"]
+    assert "flat" not in set(ours["model"])
+    assert (ours.groupby("truth_vintage")["n_cells"].max() > cells).all()
 
 
 def test_quantiles_carry_the_reported_count_and_truth(

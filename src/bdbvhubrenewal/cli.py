@@ -60,7 +60,7 @@ from bdbvhubrenewal.evaluation.heldout import (
     load_model_choices,
     run_heldout,
 )
-from bdbvhubrenewal.evaluation.nowcast import release_backtest
+from bdbvhubrenewal.evaluation.nowcast import BASELINE, release_backtest
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastTask,
@@ -554,11 +554,16 @@ def _release_backtest(
         if not config.is_heldout(t.vintage)
     ]
     out = release_backtest(
-        tasks, daily, target, stored=_stored_samples(args, target, forecasts)
+        tasks,
+        daily,
+        target,
+        stored=_stored_samples(args, target, forecasts),
+        compare=[*(s.name for s in list_models()), BASELINE],
     )
     for name, table in (
         ("scores", out.scores),
         ("quantiles", out.quantiles),
+        ("energy", out.energy),
         ("origins", out.origins),
         ("fits", out.fits),
     ):
