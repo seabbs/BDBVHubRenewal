@@ -2037,16 +2037,17 @@ The docs build runs only the random walk models and reads the fitted models from
 <h2 id="hub-files">Hub files<a class="headerlink" href="#hub-files" title="Permanent link">&para;</a></h2>
 <p><code>bdbvhubrenewal nowcast</code> writes <code>model-output/&lt;model_id&gt;/&lt;reference_date&gt;-&lt;model_id&gt;.csv</code> under <code>output/submission/</code>.
 The model id is <code>seabbs-</code> plus the model's <code>model_abbr</code> in <code>config/hub.toml</code>.
-It checks the file with <code>validate_submission</code>, which mirrors the hub's checks:</p>
+When the reference date is an open round in <code>tasks.json</code>, it checks the file with <code>submission.validate</code>, the Python port of the hub's checks:</p>
 <ul>
 <li>column names and order free, no extra columns;</li>
-<li>one reference date, a Saturday, listed in <code>tasks.json</code> for live rounds;</li>
+<li>one reference date, listed in <code>tasks.json</code>;</li>
 <li>known locations, the one target and <code>sample</code> output only;</li>
-<li>target weeks are Saturdays from 2026-02-14 to three weeks after the reference date;</li>
+<li>target weeks listed in <code>tasks.json</code>;</li>
 <li>exactly 100 samples per location, and every sample covers the same weeks;</li>
-<li>integer sample ids, finite non-negative values, no duplicate rows;</li>
-<li>the submission window, Sunday to Tuesday in Kinshasa time, when a time is given.</li>
+<li>integer sample ids, finite non-negative values, no duplicate rows.</li>
 </ul>
+<p>It skips the submission window and the model metadata, which <code>bdbvhubrenewal metadata</code> checks.
+For any other reference date it prints a note and skips the checks.</p>
 <p><code>task validate-hub</code> then runs the hub's own <code>hubValidations::validate_submission()</code> in R against a fresh clone of the hub.</p>
 <p><code>bdbvhubrenewal metadata</code> writes <code>hub/model-metadata/&lt;model id&gt;.yml</code> and checks it against the hub's schema.</p>
 <div class="admonition note">

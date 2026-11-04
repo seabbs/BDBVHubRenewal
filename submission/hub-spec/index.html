@@ -2479,7 +2479,7 @@ This passes under either reading and matches the joint meaning hubValidations gi
 </tbody>
 </table>
 <p>Optional: <code>model_version</code>, <code>website_url</code> (uri), <code>repo_url</code> (uri), <code>citation</code>, <code>team_funding</code>, <code>ensemble_of_hub_models</code> (boolean).</p>
-<p>Checks run by <code>validate_model_metadata</code> (tested): the extension is <code>yml</code> or <code>yaml</code>, the contents match the schema, and the file name equals <code>&lt;team_abbr&gt;-&lt;model_abbr&gt;</code>.
+<p>Checks run by <code>submission.validate.validate_metadata</code> (tested): the extension is <code>yml</code> or <code>yaml</code>, the contents match the schema, and the file name equals <code>&lt;team_abbr&gt;-&lt;model_abbr&gt;</code>.
 hubValidations enforces <code>format: email</code> (tested, <code>invalid_bad_email</code>).</p>
 <h2 id="7-round-rules">7. Round rules<a class="headerlink" href="#7-round-rules" title="Permanent link">&para;</a></h2>
 <ul>
