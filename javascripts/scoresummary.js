@@ -2,18 +2,55 @@
 // browser for the selected scale, round and models, as a score chart
 // (scorechart.js) and a table. data-view="overall" draws one group of bars
 // for the scale; data-view="place" draws one group per place, and a place
-// picker narrows the table.
+// picker narrows the table; data-view="horizon" draws a line per model by
+// horizon.
 (function () {
   "use strict";
   var h = window.bdbvToggles.h;
   var summarise = window.bdbvSummarise;
   var summariseEnergy = window.bdbvSummariseEnergy;
 
-  function fmt(v, dp) { return v === undefined || isNaN(v) ? "" : v.toFixed(dp); }
+  function fmt(v, dp) { return v === null || v === undefined || isNaN(v) ? "–" : v.toFixed(dp); }
   // Lower-case the first letter of a label, but not of an acronym (WIS).
   function lower(s) {
     return /^[A-Z]{2}/.test(s) ? s : s.charAt(0).toLowerCase() + s.slice(1);
   }
+
+  // Tabulate summaries s of data d in container, for the models isOn(m):
+  // n, the mean of each metric and, for relative metrics, the relative one.
+  // extra columns ({label, dp, get(e)}) read extraFor(model), if given.
+  function summaryTable(container, d, s, isOn, extra, extraFor) {
+    extra = extra || [];
+    if (!s.length) {
+      h("p", { class: "explorer-note" }, container,
+        "No scores yet for this selection. Rounds are scored once later data are published.");
+      return;
+    }
+    var cols = [];
+    d.metrics.forEach(function (m) {
+      cols.push({ label: m.label, get: function (x) { return x.mean[m.key]; } });
+      if (m.relative) {
+        cols.push({ label: "Relative " + lower(m.label),
+          get: function (x) { return x.rel[m.key]; } });
+      }
+    });
+    var tbl = h("table", {}, container);
+    var head = h("tr", {}, h("thead", {}, tbl));
+    ["Model", "n"].concat(cols.map(function (c) { return c.label; }))
+      .concat(extra.map(function (c) { return c.label; }))
+      .forEach(function (c) { h("th", {}, head, c); });
+    var body = h("tbody", {}, tbl);
+    s.forEach(function (r) {
+      if (!isOn(r.model)) return;
+      var tr = h("tr", {}, body);
+      h("td", {}, tr, d.models[r.model].name);
+      h("td", {}, tr, String(r.n));
+      cols.forEach(function (c) { h("td", {}, tr, fmt(c.get(r), 3)); });
+      var e = extra.length ? extraFor(r.model) : null;
+      extra.forEach(function (c) { h("td", {}, tr, e ? fmt(c.get(e), c.dp) : "–"); });
+    });
+  }
+  window.bdbvSummaryTable = summaryTable;
 
   function init(root) {
     fetch(root.dataset.src)
@@ -25,6 +62,7 @@
   function build(root, d, view) {
     root.textContent = "";
     var byPlace = view === "place";
+    var byHorizon = view === "horizon";
     var controls = h("div", { class: "explorer-controls" }, root);
     var selScale = h("select", {}, h("label", {}, controls, "Scale "));
     d.pools.forEach(function (p) {
@@ -46,8 +84,9 @@
         { key: m.key, label: m.label, ref: m.ref };
     });
     function value(s, m) { return m.relative ? s.rel[m.key] : s.mean[m.key]; }
-    // Energy scores: one per scale, so overall view only.
-    var energy = !byPlace && d.energy ? d.energy.metrics : [];
+    // The energy score is defined only for a whole scale, so it is left
+    // out by place and by horizon.
+    var energy = view === "overall" && d.energy ? d.energy.metrics : [];
     energy.forEach(function (m) {
       metrics.push({ key: "rel_" + m.key, label: "Relative " + lower(m.label), ref: 1 });
     });
@@ -63,12 +102,15 @@
       return d.places.map(function (p, i) { return { i: i, p: p }; })
         .filter(function (x) { return x.p.pool === selScale.value; });
     }
-    function keep(placeSet) {
+    function keep(placeSet, horizon) {
       var round = selRound.value === "all" ? null : +selRound.value;
-      return function (r) {
-        return placeSet[r[3]] && (round === null || r[1] === round);
+      return function (r, i) {
+        return placeSet[r[3]] && (round === null || r[1] === round) &&
+          (horizon === undefined || d.horizons[i] === horizon);
       };
     }
+    var horizons = d.horizons.filter(function (v, i, a) { return a.indexOf(v) === i; })
+      .sort(function (a, b) { return a - b; });
     function set(list) {
       var s = {};
       list.forEach(function (x) { s[x.i] = true; });
@@ -83,6 +125,18 @@
 
     // Rows for the chart: [model, x index, n, ...one value per metric].
     function chartRows() {
+      if (byHorizon) {
+        var all = set(places());
+        var hrows = [];
+        horizons.forEach(function (hz, xi) {
+          summarise(d, keep(all, hz)).forEach(function (s) {
+            hrows.push([s.model, xi, s.n].concat(d.metrics.map(function (m) {
+              return value(s, m);
+            })));
+          });
+        });
+        return { rows: hrows, x: horizons };
+      }
       var groups = byPlace ? places().map(function (x) { return [x]; }) : [places()];
       var x = byPlace ? groups.map(function (g) { return g[0].p.name; }) :
         [selScale.options[selScale.selectedIndex].text];
@@ -100,13 +154,6 @@
       return { rows: rows, x: x };
     }
 
-    var cols = [];
-    d.metrics.forEach(function (m) {
-      cols.push({ label: m.label, get: function (s) { return s.mean[m.key]; } });
-      if (m.relative) {
-        cols.push({ label: "Relative " + lower(m.label), get: function (s) { return s.rel[m.key]; } });
-      }
-    });
     var jointCols = [{ label: "n energy", dp: 0, get: function (e) { return e.n; } }];
     energy.forEach(function (m) {
       jointCols.push({ label: m.label, dp: 3, get: function (e) { return e.mean[m.key]; } });
@@ -115,38 +162,18 @@
     function drawTable(_, on) {
       var chosen = byPlace && selPlace.value !== "all" ?
         [{ i: +selPlace.value }] : places();
-      var s = summarise(d, keep(set(chosen)));
       var j = energy.length ? joint() : null;
       table.textContent = "";
-      if (!s.length) {
-        h("p", { class: "explorer-note" }, table, "No scores for this selection.");
-        return;
-      }
-      var tbl = h("table", {}, table);
-      var head = h("tr", {}, h("thead", {}, tbl));
-      ["Model", "n"].concat(cols.map(function (c) { return c.label; }))
-        .concat(j ? jointCols.map(function (c) { return c.label; }) : [])
-        .forEach(function (c) { h("th", {}, head, c); });
-      var body = h("tbody", {}, tbl);
-      s.forEach(function (r) {
-        if (!on[r.model]) return;
-        var tr = h("tr", {}, body);
-        h("td", {}, tr, d.models[r.model].name);
-        h("td", {}, tr, String(r.n));
-        cols.forEach(function (c) { h("td", {}, tr, fmt(c.get(r), 3)); });
-        if (j) {
-          jointCols.forEach(function (c) {
-            h("td", {}, tr, j[r.model] ? fmt(c.get(j[r.model]), c.dp) : "");
-          });
-        }
-      });
+      summaryTable(table, d, summarise(d, keep(set(chosen))),
+        function (m) { return on[m]; },
+        j ? jointCols : [], function (m) { return j && j[m]; });
     }
 
     fillPlaces();
     var first = chartRows();
     var chart = window.bdbvScoreChart.build(chartDiv, {
-      kind: "bar",
-      x_label: byPlace ? "Place" : "Scale",
+      kind: byHorizon ? "line" : "bar",
+      x_label: byHorizon ? "Horizon" : byPlace ? "Place" : "Scale",
       x: first.x,
       models: d.models,
       metrics: metrics,

@@ -8,17 +8,18 @@
 
   // d.rows: [model, origin, release, place, week, ...one value per metric]
   // d.metrics: [{key, label, ref, relative}]
-  // keep(row) selects the rows; returns one entry per model with rows.
+  // keep(row, index) selects the rows; returns one entry per model with
+  // rows.
   function summarise(d, keep) {
     var nm = d.metrics.length;
     var base = {};
     function key(r) { return r[1] + "|" + r[2] + "|" + r[3] + "|" + r[4]; }
-    d.rows.forEach(function (r) {
-      if (r[0] === d.baseline && keep(r)) base[key(r)] = r;
+    d.rows.forEach(function (r, i) {
+      if (r[0] === d.baseline && keep(r, i)) base[key(r)] = r;
     });
     var acc = {};
-    d.rows.forEach(function (r) {
-      if (!keep(r)) return;
+    d.rows.forEach(function (r, i) {
+      if (!keep(r, i)) return;
       var b = base[key(r)];
       if (!b) return;
       var a = acc[r[0]];
@@ -38,7 +39,8 @@
         var out = { model: m, n: a.n, mean: {}, rel: {} };
         d.metrics.forEach(function (met, i) {
           out.mean[met.key] = a.sum[i] / a.n;
-          if (met.relative) out.rel[met.key] = a.sum[i] / a.bsum[i];
+          // A zero baseline gives no relative score, as in Python.
+          if (met.relative) out.rel[met.key] = a.bsum[i] > 0 ? a.sum[i] / a.bsum[i] : null;
         });
         return out;
       });

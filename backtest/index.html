@@ -898,28 +898,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#forecasts-against-later-data" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Forecasts against later data
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#nowcasts-from-the-real-releases" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Nowcasts from the real releases
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#by-horizon" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -935,6 +913,28 @@
     <span class="md-ellipsis">
       
         By place
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#forecasts-against-later-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forecasts against later data
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nowcasts-from-the-real-releases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nowcasts from the real releases
       
     </span>
   </a>
@@ -2001,28 +2001,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#forecasts-against-later-data" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Forecasts against later data
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#nowcasts-from-the-real-releases" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Nowcasts from the real releases
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#by-horizon" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2038,6 +2016,28 @@
     <span class="md-ellipsis">
       
         By place
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#forecasts-against-later-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forecasts against later data
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nowcasts-from-the-real-releases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nowcasts from the real releases
       
     </span>
   </a>
@@ -2556,8 +2556,1830 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 </details>
 <p>On the counts each later release reported, from 2 origins, mean WIS relative to random walk is as reported 4.52, randomwalknowcast 1.30, renewal 1.20, renewalbvd 1.19, renewalsp 1.18.
 90% interval coverage is as reported 0.44, randomwalknowcast 0.77, renewal 0.79, renewalbvd 0.80, renewalsp 0.80, randomwalk 0.83.</p>
+<h2 id="by-horizon">By horizon<a class="headerlink" href="#by-horizon" title="Permanent link">&para;</a></h2>
+<p>By weeks from the reference week (<a href="../methods/evaluation/#reading-the-figures">horizon</a>), at the scale chosen.</p>
+<div class="scoresummary" data-src="../figures/scoresummary-backtest.json" data-view="horizon" role="group" aria-label="Scores by horizon">
+<noscript><img src="../figures/scores-horizon.svg#only-light" alt="Scores by horizon"><img src="../figures/scores-horizon-dark.svg#only-dark" alt="Scores by horizon"></noscript>
+</div>
+
+<details class="note">
+<summary>Summary table</summary>
+<p>Mean WIS divided by that of random walk, and interval coverage, on the counts each later release reported, over the forecasts both made from the origins 2026-10-17, 2026-10-24.
+Horizons after the latest release have no score yet.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">horizon</th>
+<th style="text-align: left;">model</th>
+<th style="text-align: right;">n</th>
+<th style="text-align: right;">wis</th>
+<th style="text-align: right;">base_wis</th>
+<th style="text-align: right;">rel_wis</th>
+<th style="text-align: right;">rel_log_wis</th>
+<th style="text-align: right;">coverage_50</th>
+<th style="text-align: right;">coverage_90</th>
+<th style="text-align: right;">bias</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">-4</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">7.66</td>
+<td style="text-align: right;">7.66</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.68</td>
+<td style="text-align: right;">0.72</td>
+<td style="text-align: right;">-0.18</td>
+</tr>
+<tr>
+<td style="text-align: right;">-3</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">7.01</td>
+<td style="text-align: right;">7.01</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.6</td>
+<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">-0.1</td>
+</tr>
+<tr>
+<td style="text-align: right;">-2</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">7.74</td>
+<td style="text-align: right;">7.74</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.52</td>
+<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">-0.13</td>
+</tr>
+<tr>
+<td style="text-align: right;">-1</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">7.93</td>
+<td style="text-align: right;">7.93</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.68</td>
+<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">-0.01</td>
+</tr>
+<tr>
+<td style="text-align: right;">0</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">7.27</td>
+<td style="text-align: right;">7.27</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.64</td>
+<td style="text-align: right;">0.92</td>
+<td style="text-align: right;">-0.01</td>
+</tr>
+<tr>
+<td style="text-align: right;">1</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">7.81</td>
+<td style="text-align: right;">7.81</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">-0.16</td>
+</tr>
+<tr>
+<td style="text-align: right;">-4</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">5.79</td>
+<td style="text-align: right;">7.66</td>
+<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">0.72</td>
+<td style="text-align: right;">0.8</td>
+<td style="text-align: right;">-0.14</td>
+</tr>
+<tr>
+<td style="text-align: right;">-3</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">5.48</td>
+<td style="text-align: right;">7.01</td>
+<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">0.55</td>
+<td style="text-align: right;">0.6</td>
+<td style="text-align: right;">0.8</td>
+<td style="text-align: right;">-0.17</td>
+</tr>
+<tr>
+<td style="text-align: right;">-2</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">13.77</td>
+<td style="text-align: right;">7.74</td>
+<td style="text-align: right;">1.78</td>
+<td style="text-align: right;">0.77</td>
+<td style="text-align: right;">0.56</td>
+<td style="text-align: right;">0.68</td>
+<td style="text-align: right;">-0.14</td>
+</tr>
+<tr>
+<td style="text-align: right;">-1</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">17.58</td>
+<td style="text-align: right;">7.93</td>
+<td style="text-align: right;">2.22</td>
+<td style="text-align: right;">0.77</td>
+<td style="text-align: right;">0.56</td>
+<td style="text-align: right;">0.68</td>
+<td style="text-align: right;">-0.23</td>
+</tr>
+<tr>
+<td style="text-align: right;">0</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">8.22</td>
+<td style="text-align: right;">7.27</td>
+<td style="text-align: right;">1.13</td>
+<td style="text-align: right;">0.81</td>
+<td style="text-align: right;">0.64</td>
+<td style="text-align: right;">0.84</td>
+<td style="text-align: right;">0.02</td>
+</tr>
+<tr>
+<td style="text-align: right;">1</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">3.97</td>
+<td style="text-align: right;">7.81</td>
+<td style="text-align: right;">0.51</td>
+<td style="text-align: right;">0.48</td>
+<td style="text-align: right;">0.62</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-0.07</td>
+</tr>
+<tr>
+<td style="text-align: right;">-4</td>
+<td style="text-align: left;">renewal</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">5.14</td>
+<td style="text-align: right;">7.66</td>
+<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.98</td>
+<td style="text-align: right;">0.72</td>
+<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">-0.09</td>
+</tr>
+<tr>
+<td style="text-align: right;">-3</td>
+<td style="text-align: left;">renewal</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">7.04</td>
+<td style="text-align: right;">7.01</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.71</td>
+<td style="text-align: right;">0.6</td>
+<td style="text-align: right;">0.72</td>
+<td style="text-align: right;">-0.33</td>
+</tr>
+<tr>
+<td style="text-align: right;">-2</td>
+<td style="text-align: left;">renewal</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">12.06</td>
+<td style="text-align: right;">7.74</td>
+<td style="text-align: right;">1.56</td>
+<td style="text-align: right;">0.68</td>
+<td style="text-align: right;">0.56</td>
+<td style="text-align: right;">0.72</td>
+<td style="text-align: right;">-0.12</td>
+</tr>
+<tr>
+<td style="text-align: right;">-1</td>
+<td style="text-align: left;">renewal</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">13.41</td>
+<td style="text-align: right;">7.93</td>
+<td style="text-align: right;">1.69</td>
+<td style="text-align: right;">0.73</td>
+<td style="text-align: right;">0.52</td>
+<td style="text-align: right;">0.8</td>
+<td style="text-align: right;">0.04</td>
+</tr>
+<tr>
+<td style="text-align: right;">0</td>
+<td style="text-align: left;">renewal</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">8.26</td>
+<td style="text-align: right;">7.27</td>
+<td style="text-align: right;">1.14</td>
+<td style="text-align: right;">0.79</td>
+<td style="text-align: right;">0.64</td>
+<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.03</td>
+</tr>
+<tr>
+<td style="text-align: right;">1</td>
+<td style="text-align: left;">renewal</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">6.92</td>
+<td style="text-align: right;">7.81</td>
+<td style="text-align: right;">0.89</td>
+<td style="text-align: right;">0.81</td>
+<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-0.05</td>
+</tr>
+<tr>
+<td style="text-align: right;">-4</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">5.09</td>
+<td style="text-align: right;">7.66</td>
+<td style="text-align: right;">0.66</td>
+<td style="text-align: right;">0.94</td>
+<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">-0.09</td>
+</tr>
+<tr>
+<td style="text-align: right;">-3</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">6.91</td>
+<td style="text-align: right;">7.01</td>
+<td style="text-align: right;">0.99</td>
+<td style="text-align: right;">0.7</td>
+<td style="text-align: right;">0.6</td>
+<td style="text-align: right;">0.72</td>
+<td style="text-align: right;">-0.32</td>
+</tr>
+<tr>
+<td style="text-align: right;">-2</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">11.87</td>
+<td style="text-align: right;">7.74</td>
+<td style="text-align: right;">1.53</td>
+<td style="text-align: right;">0.68</td>
+<td style="text-align: right;">0.56</td>
+<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">-0.11</td>
+</tr>
+<tr>
+<td style="text-align: right;">-1</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">13.25</td>
+<td style="text-align: right;">7.93</td>
+<td style="text-align: right;">1.67</td>
+<td style="text-align: right;">0.74</td>
+<td style="text-align: right;">0.6</td>
+<td style="text-align: right;">0.8</td>
+<td style="text-align: right;">0.07</td>
+</tr>
+<tr>
+<td style="text-align: right;">0</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">8.51</td>
+<td style="text-align: right;">7.27</td>
+<td style="text-align: right;">1.17</td>
+<td style="text-align: right;">0.85</td>
+<td style="text-align: right;">0.6</td>
+<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.05</td>
+</tr>
+<tr>
+<td style="text-align: right;">1</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">6.97</td>
+<td style="text-align: right;">7.81</td>
+<td style="text-align: right;">0.89</td>
+<td style="text-align: right;">0.82</td>
+<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-0.04</td>
+</tr>
+<tr>
+<td style="text-align: right;">-4</td>
+<td style="text-align: left;">renewalsp</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">5.08</td>
+<td style="text-align: right;">7.66</td>
+<td style="text-align: right;">0.66</td>
+<td style="text-align: right;">2.27</td>
+<td style="text-align: right;">0.68</td>
+<td style="text-align: right;">0.8</td>
+<td style="text-align: right;">-0.28</td>
+</tr>
+<tr>
+<td style="text-align: right;">-3</td>
+<td style="text-align: left;">renewalsp</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">6.15</td>
+<td style="text-align: right;">7.01</td>
+<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">1.11</td>
+<td style="text-align: right;">0.56</td>
+<td style="text-align: right;">0.64</td>
+<td style="text-align: right;">-0.34</td>
+</tr>
+<tr>
+<td style="text-align: right;">-2</td>
+<td style="text-align: left;">renewalsp</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">10.52</td>
+<td style="text-align: right;">7.74</td>
+<td style="text-align: right;">1.36</td>
+<td style="text-align: right;">0.72</td>
+<td style="text-align: right;">0.56</td>
+<td style="text-align: right;">0.72</td>
+<td style="text-align: right;">-0.13</td>
+</tr>
+<tr>
+<td style="text-align: right;">-1</td>
+<td style="text-align: left;">renewalsp</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">12.57</td>
+<td style="text-align: right;">7.93</td>
+<td style="text-align: right;">1.59</td>
+<td style="text-align: right;">0.71</td>
+<td style="text-align: right;">0.64</td>
+<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">-0.02</td>
+</tr>
+<tr>
+<td style="text-align: right;">0</td>
+<td style="text-align: left;">renewalsp</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">9.73</td>
+<td style="text-align: right;">7.27</td>
+<td style="text-align: right;">1.34</td>
+<td style="text-align: right;">0.92</td>
+<td style="text-align: right;">0.68</td>
+<td style="text-align: right;">0.92</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: right;">1</td>
+<td style="text-align: left;">renewalsp</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">9.78</td>
+<td style="text-align: right;">7.81</td>
+<td style="text-align: right;">1.25</td>
+<td style="text-align: right;">1.12</td>
+<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-0.09</td>
+</tr>
+</tbody>
+</table>
+</details>
+<h2 id="by-place">By place<a class="headerlink" href="#by-place" title="Permanent link">&para;</a></h2>
+<p>Scores at each place, at the scale chosen.
+Pick a place to narrow the table.</p>
+<div class="scoresummary" data-src="../figures/scoresummary-backtest.json" data-view="place" role="group" aria-label="Scores by place">
+<noscript><img src="../figures/scores-place.svg#only-light" alt="Scores by place"><img src="../figures/scores-place-dark.svg#only-dark" alt="Scores by place"></noscript>
+</div>
+
+<details class="note">
+<summary>Tables</summary>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">target</th>
+<th style="text-align: left;">location</th>
+<th style="text-align: left;">model</th>
+<th style="text-align: right;">n</th>
+<th style="text-align: right;">wis</th>
+<th style="text-align: right;">base_wis</th>
+<th style="text-align: right;">rel_wis</th>
+<th style="text-align: right;">rel_log_wis</th>
+<th style="text-align: right;">coverage_50</th>
+<th style="text-align: right;">coverage_90</th>
+<th style="text-align: right;">bias</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD</td>
+<td style="text-align: left;">as reported</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">44</td>
+<td style="text-align: right;">44</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">-1</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">44</td>
+<td style="text-align: right;">44</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">-1</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">28.88</td>
+<td style="text-align: right;">44</td>
+<td style="text-align: right;">0.66</td>
+<td style="text-align: right;">0.64</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">-1</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD</td>
+<td style="text-align: left;">renewal</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">22.13</td>
+<td style="text-align: right;">44</td>
+<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">0.49</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">-0.98</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">21.73</td>
+<td style="text-align: right;">44</td>
+<td style="text-align: right;">0.49</td>
+<td style="text-align: right;">0.48</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">-1</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD</td>
+<td style="text-align: left;">renewalsp</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">23.37</td>
+<td style="text-align: right;">44</td>
+<td style="text-align: right;">0.53</td>
+<td style="text-align: right;">0.52</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">-1</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-BU</td>
+<td style="text-align: left;">as reported</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.03</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-BU</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0.03</td>
+<td style="text-align: right;">0.03</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.11</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-BU</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0.03</td>
+<td style="text-align: right;">0.03</td>
+<td style="text-align: right;">1.17</td>
+<td style="text-align: right;">1.24</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.16</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-BU</td>
+<td style="text-align: left;">renewal</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0.07</td>
+<td style="text-align: right;">0.03</td>
+<td style="text-align: right;">2.36</td>
+<td style="text-align: right;">3.77</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.04</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-BU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0.06</td>
+<td style="text-align: right;">0.03</td>
+<td style="text-align: right;">2.34</td>
+<td style="text-align: right;">3.75</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.02</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-BU</td>
+<td style="text-align: left;">renewalsp</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0.87</td>
+<td style="text-align: right;">0.03</td>
+<td style="text-align: right;">31.46</td>
+<td style="text-align: right;">58.03</td>
+<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">-0.23</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-HU</td>
+<td style="text-align: left;">as reported</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">1.33</td>
+<td style="text-align: right;">1.55</td>
+<td style="text-align: right;">0.86</td>
+<td style="text-align: right;">1.03</td>
+<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">-0.33</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-HU</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">1.55</td>
+<td style="text-align: right;">1.55</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.33</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-HU</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0.62</td>
+<td style="text-align: right;">1.55</td>
+<td style="text-align: right;">0.4</td>
+<td style="text-align: right;">0.43</td>
+<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.15</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-HU</td>
+<td style="text-align: left;">renewal</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">1.55</td>
+<td style="text-align: right;">0.43</td>
+<td style="text-align: right;">0.47</td>
+<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.2</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-HU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0.7</td>
+<td style="text-align: right;">1.55</td>
+<td style="text-align: right;">0.45</td>
+<td style="text-align: right;">0.49</td>
+<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.17</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-HU</td>
+<td style="text-align: left;">renewalsp</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0.73</td>
+<td style="text-align: right;">1.55</td>
+<td style="text-align: right;">0.47</td>
+<td style="text-align: right;">0.54</td>
+<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">-0.13</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-IT</td>
+<td style="text-align: left;">as reported</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">38</td>
+<td style="text-align: right;">38</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">-1</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-IT</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">38</td>
+<td style="text-align: right;">38</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">-1</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-IT</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">29.28</td>
+<td style="text-align: right;">38</td>
+<td style="text-align: right;">0.77</td>
+<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">-1</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-IT</td>
+<td style="text-align: left;">renewal</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">25.53</td>
+<td style="text-align: right;">38</td>
+<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.66</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">-1</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-IT</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">25.4</td>
+<td style="text-align: right;">38</td>
+<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.65</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">-1</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-IT</td>
+<td style="text-align: left;">renewalsp</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">24.28</td>
+<td style="text-align: right;">38</td>
+<td style="text-align: right;">0.64</td>
+<td style="text-align: right;">0.62</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">-1</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-NK</td>
+<td style="text-align: left;">as reported</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">-1</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-NK</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">-1</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-NK</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">0.13</td>
+<td style="text-align: right;">0.13</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-0.44</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-NK</td>
+<td style="text-align: left;">renewal</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1.47</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">0.25</td>
+<td style="text-align: right;">0.24</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-0.11</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-NK</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1.64</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">0.27</td>
+<td style="text-align: right;">0.27</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-0.11</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-NK</td>
+<td style="text-align: left;">renewalsp</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1.95</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">0.32</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-0.04</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-NU</td>
+<td style="text-align: left;">as reported</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">nan</td>
+<td style="text-align: right;">nan</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-NU</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">nan</td>
+<td style="text-align: right;">nan</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-NU</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">nan</td>
+<td style="text-align: right;">nan</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.08</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-NU</td>
+<td style="text-align: left;">renewal</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.02</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">nan</td>
+<td style="text-align: right;">nan</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.13</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-NU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.02</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">nan</td>
+<td style="text-align: right;">nan</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.11</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-NU</td>
+<td style="text-align: left;">renewalsp</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1.67</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">nan</td>
+<td style="text-align: right;">nan</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">-1</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-SK</td>
+<td style="text-align: left;">as reported</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-SK</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.05</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-SK</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-SK</td>
+<td style="text-align: left;">renewal</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.01</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-SK</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-SK</td>
+<td style="text-align: left;">renewalsp</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1.68</td>
+<td style="text-align: right;">1.68</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.1</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-SU</td>
+<td style="text-align: left;">as reported</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.04</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-SU</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0.04</td>
+<td style="text-align: right;">0.04</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.16</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-SU</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">0.04</td>
+<td style="text-align: right;">0.19</td>
+<td style="text-align: right;">0.2</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.07</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-SU</td>
+<td style="text-align: left;">renewal</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0.19</td>
+<td style="text-align: right;">0.04</td>
+<td style="text-align: right;">4.83</td>
+<td style="text-align: right;">6.65</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-0.01</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-SU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0.18</td>
+<td style="text-align: right;">0.04</td>
+<td style="text-align: right;">4.78</td>
+<td style="text-align: right;">6.69</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-0.01</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-SU</td>
+<td style="text-align: left;">renewalsp</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0.79</td>
+<td style="text-align: right;">0.04</td>
+<td style="text-align: right;">20.39</td>
+<td style="text-align: right;">36.61</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">-0.93</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-TO</td>
+<td style="text-align: left;">as reported</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">1.33</td>
+<td style="text-align: right;">1.33</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">0.67</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-TO</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">1.33</td>
+<td style="text-align: right;">1.33</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">0.67</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-TO</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">1.81</td>
+<td style="text-align: right;">1.33</td>
+<td style="text-align: right;">1.36</td>
+<td style="text-align: right;">1.33</td>
+<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">0.68</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-TO</td>
+<td style="text-align: left;">renewal</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">1.52</td>
+<td style="text-align: right;">1.33</td>
+<td style="text-align: right;">1.14</td>
+<td style="text-align: right;">1.27</td>
+<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.69</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-TO</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">1.5</td>
+<td style="text-align: right;">1.33</td>
+<td style="text-align: right;">1.13</td>
+<td style="text-align: right;">1.25</td>
+<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.68</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">CD-TO</td>
+<td style="text-align: left;">renewalsp</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">1.77</td>
+<td style="text-align: right;">1.33</td>
+<td style="text-align: right;">1.33</td>
+<td style="text-align: right;">1.47</td>
+<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">0.72</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD</td>
+<td style="text-align: left;">as reported</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">141.56</td>
+<td style="text-align: right;">25.65</td>
+<td style="text-align: right;">5.52</td>
+<td style="text-align: right;">20.17</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">-1</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">25.65</td>
+<td style="text-align: right;">25.65</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.31</td>
+<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">-0.5</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">29.31</td>
+<td style="text-align: right;">25.65</td>
+<td style="text-align: right;">1.14</td>
+<td style="text-align: right;">1.29</td>
+<td style="text-align: right;">0.31</td>
+<td style="text-align: right;">0.44</td>
+<td style="text-align: right;">-0.52</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD</td>
+<td style="text-align: left;">renewal</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">29.86</td>
+<td style="text-align: right;">25.65</td>
+<td style="text-align: right;">1.16</td>
+<td style="text-align: right;">1.25</td>
+<td style="text-align: right;">0.19</td>
+<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">-0.62</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">29.47</td>
+<td style="text-align: right;">25.65</td>
+<td style="text-align: right;">1.15</td>
+<td style="text-align: right;">1.24</td>
+<td style="text-align: right;">0.19</td>
+<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">-0.58</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD</td>
+<td style="text-align: left;">renewalsp</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">30.66</td>
+<td style="text-align: right;">25.65</td>
+<td style="text-align: right;">1.2</td>
+<td style="text-align: right;">1.33</td>
+<td style="text-align: right;">0.25</td>
+<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">-0.69</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-BU</td>
+<td style="text-align: left;">as reported</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.36</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-BU</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">0.36</td>
+<td style="text-align: right;">0.36</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.46</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-BU</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">0.36</td>
+<td style="text-align: right;">0.03</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.06</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-BU</td>
+<td style="text-align: left;">renewal</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">0.13</td>
+<td style="text-align: right;">0.36</td>
+<td style="text-align: right;">0.36</td>
+<td style="text-align: right;">0.37</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.25</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-BU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">0.13</td>
+<td style="text-align: right;">0.36</td>
+<td style="text-align: right;">0.36</td>
+<td style="text-align: right;">0.37</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.25</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-BU</td>
+<td style="text-align: left;">renewalsp</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">0.26</td>
+<td style="text-align: right;">0.36</td>
+<td style="text-align: right;">0.73</td>
+<td style="text-align: right;">0.61</td>
+<td style="text-align: right;">0.94</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.26</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-HU</td>
+<td style="text-align: left;">as reported</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">7.12</td>
+<td style="text-align: right;">1.74</td>
+<td style="text-align: right;">4.1</td>
+<td style="text-align: right;">7.88</td>
+<td style="text-align: right;">0.19</td>
+<td style="text-align: right;">0.19</td>
+<td style="text-align: right;">-0.81</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-HU</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">1.74</td>
+<td style="text-align: right;">1.74</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.33</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-HU</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">1.65</td>
+<td style="text-align: right;">1.74</td>
+<td style="text-align: right;">0.95</td>
+<td style="text-align: right;">1.09</td>
+<td style="text-align: right;">0.56</td>
+<td style="text-align: right;">0.94</td>
+<td style="text-align: right;">-0.26</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-HU</td>
+<td style="text-align: left;">renewal</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">1.28</td>
+<td style="text-align: right;">1.74</td>
+<td style="text-align: right;">0.74</td>
+<td style="text-align: right;">0.77</td>
+<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.02</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-HU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">1.3</td>
+<td style="text-align: right;">1.74</td>
+<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">0.8</td>
+<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.05</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-HU</td>
+<td style="text-align: left;">renewalsp</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">1.32</td>
+<td style="text-align: right;">1.74</td>
+<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">0.77</td>
+<td style="text-align: right;">0.69</td>
+<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">-0.13</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-IT</td>
+<td style="text-align: left;">as reported</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">70.69</td>
+<td style="text-align: right;">17.34</td>
+<td style="text-align: right;">4.08</td>
+<td style="text-align: right;">13.4</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">-1</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-IT</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">17.34</td>
+<td style="text-align: right;">17.34</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.25</td>
+<td style="text-align: right;">0.81</td>
+<td style="text-align: right;">-0.45</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-IT</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">18.7</td>
+<td style="text-align: right;">17.34</td>
+<td style="text-align: right;">1.08</td>
+<td style="text-align: right;">0.99</td>
+<td style="text-align: right;">0.25</td>
+<td style="text-align: right;">0.62</td>
+<td style="text-align: right;">0.04</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-IT</td>
+<td style="text-align: left;">renewal</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">17.17</td>
+<td style="text-align: right;">17.34</td>
+<td style="text-align: right;">0.99</td>
+<td style="text-align: right;">1.02</td>
+<td style="text-align: right;">0.19</td>
+<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">-0.24</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-IT</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">17.32</td>
+<td style="text-align: right;">17.34</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1.06</td>
+<td style="text-align: right;">0.25</td>
+<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">-0.24</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-IT</td>
+<td style="text-align: left;">renewalsp</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">19.32</td>
+<td style="text-align: right;">17.34</td>
+<td style="text-align: right;">1.11</td>
+<td style="text-align: right;">1.3</td>
+<td style="text-align: right;">0.38</td>
+<td style="text-align: right;">0.62</td>
+<td style="text-align: right;">-0.43</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-NK</td>
+<td style="text-align: left;">as reported</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">60.5</td>
+<td style="text-align: right;">15.23</td>
+<td style="text-align: right;">3.97</td>
+<td style="text-align: right;">12.03</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">-1</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-NK</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">15.23</td>
+<td style="text-align: right;">15.23</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.38</td>
+<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">-0.49</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-NK</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">30.16</td>
+<td style="text-align: right;">15.23</td>
+<td style="text-align: right;">1.98</td>
+<td style="text-align: right;">2.27</td>
+<td style="text-align: right;">0.12</td>
+<td style="text-align: right;">0.38</td>
+<td style="text-align: right;">-0.81</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-NK</td>
+<td style="text-align: left;">renewal</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">24.94</td>
+<td style="text-align: right;">15.23</td>
+<td style="text-align: right;">1.64</td>
+<td style="text-align: right;">1.67</td>
+<td style="text-align: right;">0.19</td>
+<td style="text-align: right;">0.38</td>
+<td style="text-align: right;">-0.76</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-NK</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">24.55</td>
+<td style="text-align: right;">15.23</td>
+<td style="text-align: right;">1.61</td>
+<td style="text-align: right;">1.64</td>
+<td style="text-align: right;">0.19</td>
+<td style="text-align: right;">0.38</td>
+<td style="text-align: right;">-0.76</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-NK</td>
+<td style="text-align: left;">renewalsp</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">19.02</td>
+<td style="text-align: right;">15.23</td>
+<td style="text-align: right;">1.25</td>
+<td style="text-align: right;">1.28</td>
+<td style="text-align: right;">0.25</td>
+<td style="text-align: right;">0.62</td>
+<td style="text-align: right;">-0.67</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-NU</td>
+<td style="text-align: left;">as reported</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-NU</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.06</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-NU</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">0.13</td>
+<td style="text-align: right;">0.05</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.01</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-NU</td>
+<td style="text-align: left;">renewal</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">0.03</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">4.85</td>
+<td style="text-align: right;">4.62</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.12</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-NU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">0.03</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">6.12</td>
+<td style="text-align: right;">5.78</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.15</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-NU</td>
+<td style="text-align: left;">renewalsp</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">0.13</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">25.03</td>
+<td style="text-align: right;">15.54</td>
+<td style="text-align: right;">0.8</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-0.14</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-SK</td>
+<td style="text-align: left;">as reported</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-SK</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.07</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-SK</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">0.1</td>
+<td style="text-align: right;">0.1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.01</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-SK</td>
+<td style="text-align: left;">renewal</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">0.2</td>
+<td style="text-align: right;">0.2</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.02</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-SK</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">0.24</td>
+<td style="text-align: right;">0.24</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.02</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-SK</td>
+<td style="text-align: left;">renewalsp</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">0.59</td>
+<td style="text-align: right;">0.6</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.06</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-SU</td>
+<td style="text-align: left;">as reported</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.15</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-SU</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">0.15</td>
+<td style="text-align: right;">0.15</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.33</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-SU</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.15</td>
+<td style="text-align: right;">0.02</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.03</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-SU</td>
+<td style="text-align: left;">renewal</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">0.07</td>
+<td style="text-align: right;">0.15</td>
+<td style="text-align: right;">0.44</td>
+<td style="text-align: right;">0.42</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.11</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-SU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">0.07</td>
+<td style="text-align: right;">0.15</td>
+<td style="text-align: right;">0.44</td>
+<td style="text-align: right;">0.41</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.13</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-SU</td>
+<td style="text-align: left;">renewalsp</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">0.13</td>
+<td style="text-align: right;">0.15</td>
+<td style="text-align: right;">0.85</td>
+<td style="text-align: right;">0.93</td>
+<td style="text-align: right;">0.94</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-0.18</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-TO</td>
+<td style="text-align: left;">as reported</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">3.5</td>
+<td style="text-align: right;">2.18</td>
+<td style="text-align: right;">1.6</td>
+<td style="text-align: right;">2.43</td>
+<td style="text-align: right;">0.19</td>
+<td style="text-align: right;">0.19</td>
+<td style="text-align: right;">-0.56</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-TO</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">2.18</td>
+<td style="text-align: right;">2.18</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.25</td>
+<td style="text-align: right;">0.31</td>
+<td style="text-align: right;">-0.52</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-TO</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">1.61</td>
+<td style="text-align: right;">2.18</td>
+<td style="text-align: right;">0.74</td>
+<td style="text-align: right;">0.47</td>
+<td style="text-align: right;">0.56</td>
+<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">0.38</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-TO</td>
+<td style="text-align: left;">renewal</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">1.75</td>
+<td style="text-align: right;">2.18</td>
+<td style="text-align: right;">0.8</td>
+<td style="text-align: right;">0.51</td>
+<td style="text-align: right;">0.38</td>
+<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.42</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-TO</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">1.92</td>
+<td style="text-align: right;">2.18</td>
+<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.56</td>
+<td style="text-align: right;">0.44</td>
+<td style="text-align: right;">0.94</td>
+<td style="text-align: right;">0.43</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">CD-TO</td>
+<td style="text-align: left;">renewalsp</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">2.98</td>
+<td style="text-align: right;">2.18</td>
+<td style="text-align: right;">1.36</td>
+<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">0.44</td>
+<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">0.58</td>
+</tr>
+</tbody>
+</table>
+</details>
 <h2 id="forecasts-against-later-data">Forecasts against later data<a class="headerlink" href="#forecasts-against-later-data" title="Permanent link">&para;</a></h2>
-<div class="explorer" data-src="../figures/explorer-backtest.json" data-round="all" role="group" aria-label="Backtest forecasts">
+<div class="explorer" data-src="../figures/explorer-backtest.json" data-round="all" data-summary="../figures/scoresummary-backtest.json" role="group" aria-label="Backtest forecasts">
 <noscript>The explorer needs JavaScript.</noscript>
 </div>
 
@@ -4227,8 +6049,8 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
 <td style="text-align: right;">0</td>
-<td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;">nan</td>
+<td style="text-align: right;">nan</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.08</td>
@@ -4241,8 +6063,8 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.02</td>
 <td style="text-align: right;">0</td>
-<td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;">nan</td>
+<td style="text-align: right;">nan</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.13</td>
@@ -4255,8 +6077,8 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.02</td>
 <td style="text-align: right;">0</td>
-<td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;">nan</td>
+<td style="text-align: right;">nan</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.11</td>
@@ -4269,8 +6091,8 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1.67</td>
 <td style="text-align: right;">0</td>
-<td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;">nan</td>
+<td style="text-align: right;">nan</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">-1</td>
@@ -6145,1828 +7967,6 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: left;"></td>
 <td style="text-align: right;">45</td>
 <td style="text-align: right;">6</td>
-</tr>
-</tbody>
-</table>
-</details>
-<h2 id="by-horizon">By horizon<a class="headerlink" href="#by-horizon" title="Permanent link">&para;</a></h2>
-<p>By weeks from the reference week (<a href="../methods/evaluation/#reading-the-figures">horizon</a>).</p>
-<div class="scorechart" data-src="../figures/scorechart-horizon.json" role="group" aria-label="Mean scores by horizon">
-<noscript><img src="../figures/scores-wis-horizon.svg#only-light" alt="Mean scores by horizon"><img src="../figures/scores-wis-horizon-dark.svg#only-dark" alt="Mean scores by horizon"></noscript>
-</div>
-
-<details class="note">
-<summary>Summary table</summary>
-<p>Mean WIS divided by that of random walk, and interval coverage, on the counts each later release reported, over the forecasts both made from the origins 2026-10-17, 2026-10-24.
-Horizons after the latest release have no score yet.</p>
-<table>
-<thead>
-<tr>
-<th style="text-align: right;">horizon</th>
-<th style="text-align: left;">model</th>
-<th style="text-align: right;">n</th>
-<th style="text-align: right;">wis</th>
-<th style="text-align: right;">base_wis</th>
-<th style="text-align: right;">rel_wis</th>
-<th style="text-align: right;">rel_log_wis</th>
-<th style="text-align: right;">coverage_50</th>
-<th style="text-align: right;">coverage_90</th>
-<th style="text-align: right;">bias</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align: right;">-4</td>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">7.66</td>
-<td style="text-align: right;">7.66</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.68</td>
-<td style="text-align: right;">0.72</td>
-<td style="text-align: right;">-0.18</td>
-</tr>
-<tr>
-<td style="text-align: right;">-3</td>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">7.01</td>
-<td style="text-align: right;">7.01</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.6</td>
-<td style="text-align: right;">0.76</td>
-<td style="text-align: right;">-0.1</td>
-</tr>
-<tr>
-<td style="text-align: right;">-2</td>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">7.74</td>
-<td style="text-align: right;">7.74</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.52</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">-0.13</td>
-</tr>
-<tr>
-<td style="text-align: right;">-1</td>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">7.93</td>
-<td style="text-align: right;">7.93</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.68</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">-0.01</td>
-</tr>
-<tr>
-<td style="text-align: right;">0</td>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">7.27</td>
-<td style="text-align: right;">7.27</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.64</td>
-<td style="text-align: right;">0.92</td>
-<td style="text-align: right;">-0.01</td>
-</tr>
-<tr>
-<td style="text-align: right;">1</td>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">7.81</td>
-<td style="text-align: right;">7.81</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.5</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">-0.16</td>
-</tr>
-<tr>
-<td style="text-align: right;">-4</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">5.79</td>
-<td style="text-align: right;">7.66</td>
-<td style="text-align: right;">0.76</td>
-<td style="text-align: right;">0.78</td>
-<td style="text-align: right;">0.72</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">-0.14</td>
-</tr>
-<tr>
-<td style="text-align: right;">-3</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">5.48</td>
-<td style="text-align: right;">7.01</td>
-<td style="text-align: right;">0.78</td>
-<td style="text-align: right;">0.55</td>
-<td style="text-align: right;">0.6</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">-0.17</td>
-</tr>
-<tr>
-<td style="text-align: right;">-2</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">13.77</td>
-<td style="text-align: right;">7.74</td>
-<td style="text-align: right;">1.78</td>
-<td style="text-align: right;">0.77</td>
-<td style="text-align: right;">0.56</td>
-<td style="text-align: right;">0.68</td>
-<td style="text-align: right;">-0.14</td>
-</tr>
-<tr>
-<td style="text-align: right;">-1</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">17.58</td>
-<td style="text-align: right;">7.93</td>
-<td style="text-align: right;">2.22</td>
-<td style="text-align: right;">0.77</td>
-<td style="text-align: right;">0.56</td>
-<td style="text-align: right;">0.68</td>
-<td style="text-align: right;">-0.23</td>
-</tr>
-<tr>
-<td style="text-align: right;">0</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">8.22</td>
-<td style="text-align: right;">7.27</td>
-<td style="text-align: right;">1.13</td>
-<td style="text-align: right;">0.81</td>
-<td style="text-align: right;">0.64</td>
-<td style="text-align: right;">0.84</td>
-<td style="text-align: right;">0.02</td>
-</tr>
-<tr>
-<td style="text-align: right;">1</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">3.97</td>
-<td style="text-align: right;">7.81</td>
-<td style="text-align: right;">0.51</td>
-<td style="text-align: right;">0.48</td>
-<td style="text-align: right;">0.62</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">-0.07</td>
-</tr>
-<tr>
-<td style="text-align: right;">-4</td>
-<td style="text-align: left;">renewal</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">5.14</td>
-<td style="text-align: right;">7.66</td>
-<td style="text-align: right;">0.67</td>
-<td style="text-align: right;">0.98</td>
-<td style="text-align: right;">0.72</td>
-<td style="text-align: right;">0.76</td>
-<td style="text-align: right;">-0.09</td>
-</tr>
-<tr>
-<td style="text-align: right;">-3</td>
-<td style="text-align: left;">renewal</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">7.04</td>
-<td style="text-align: right;">7.01</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.71</td>
-<td style="text-align: right;">0.6</td>
-<td style="text-align: right;">0.72</td>
-<td style="text-align: right;">-0.33</td>
-</tr>
-<tr>
-<td style="text-align: right;">-2</td>
-<td style="text-align: left;">renewal</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">12.06</td>
-<td style="text-align: right;">7.74</td>
-<td style="text-align: right;">1.56</td>
-<td style="text-align: right;">0.68</td>
-<td style="text-align: right;">0.56</td>
-<td style="text-align: right;">0.72</td>
-<td style="text-align: right;">-0.12</td>
-</tr>
-<tr>
-<td style="text-align: right;">-1</td>
-<td style="text-align: left;">renewal</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">13.41</td>
-<td style="text-align: right;">7.93</td>
-<td style="text-align: right;">1.69</td>
-<td style="text-align: right;">0.73</td>
-<td style="text-align: right;">0.52</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">0.04</td>
-</tr>
-<tr>
-<td style="text-align: right;">0</td>
-<td style="text-align: left;">renewal</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">8.26</td>
-<td style="text-align: right;">7.27</td>
-<td style="text-align: right;">1.14</td>
-<td style="text-align: right;">0.79</td>
-<td style="text-align: right;">0.64</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">0.03</td>
-</tr>
-<tr>
-<td style="text-align: right;">1</td>
-<td style="text-align: left;">renewal</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">6.92</td>
-<td style="text-align: right;">7.81</td>
-<td style="text-align: right;">0.89</td>
-<td style="text-align: right;">0.81</td>
-<td style="text-align: right;">0.5</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">-0.05</td>
-</tr>
-<tr>
-<td style="text-align: right;">-4</td>
-<td style="text-align: left;">renewalbvd</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">5.09</td>
-<td style="text-align: right;">7.66</td>
-<td style="text-align: right;">0.66</td>
-<td style="text-align: right;">0.94</td>
-<td style="text-align: right;">0.76</td>
-<td style="text-align: right;">0.76</td>
-<td style="text-align: right;">-0.09</td>
-</tr>
-<tr>
-<td style="text-align: right;">-3</td>
-<td style="text-align: left;">renewalbvd</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">6.91</td>
-<td style="text-align: right;">7.01</td>
-<td style="text-align: right;">0.99</td>
-<td style="text-align: right;">0.7</td>
-<td style="text-align: right;">0.6</td>
-<td style="text-align: right;">0.72</td>
-<td style="text-align: right;">-0.32</td>
-</tr>
-<tr>
-<td style="text-align: right;">-2</td>
-<td style="text-align: left;">renewalbvd</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">11.87</td>
-<td style="text-align: right;">7.74</td>
-<td style="text-align: right;">1.53</td>
-<td style="text-align: right;">0.68</td>
-<td style="text-align: right;">0.56</td>
-<td style="text-align: right;">0.76</td>
-<td style="text-align: right;">-0.11</td>
-</tr>
-<tr>
-<td style="text-align: right;">-1</td>
-<td style="text-align: left;">renewalbvd</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">13.25</td>
-<td style="text-align: right;">7.93</td>
-<td style="text-align: right;">1.67</td>
-<td style="text-align: right;">0.74</td>
-<td style="text-align: right;">0.6</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">0.07</td>
-</tr>
-<tr>
-<td style="text-align: right;">0</td>
-<td style="text-align: left;">renewalbvd</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">8.51</td>
-<td style="text-align: right;">7.27</td>
-<td style="text-align: right;">1.17</td>
-<td style="text-align: right;">0.85</td>
-<td style="text-align: right;">0.6</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">0.05</td>
-</tr>
-<tr>
-<td style="text-align: right;">1</td>
-<td style="text-align: left;">renewalbvd</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">6.97</td>
-<td style="text-align: right;">7.81</td>
-<td style="text-align: right;">0.89</td>
-<td style="text-align: right;">0.82</td>
-<td style="text-align: right;">0.5</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">-0.04</td>
-</tr>
-<tr>
-<td style="text-align: right;">-4</td>
-<td style="text-align: left;">renewalsp</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">5.08</td>
-<td style="text-align: right;">7.66</td>
-<td style="text-align: right;">0.66</td>
-<td style="text-align: right;">2.27</td>
-<td style="text-align: right;">0.68</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">-0.28</td>
-</tr>
-<tr>
-<td style="text-align: right;">-3</td>
-<td style="text-align: left;">renewalsp</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">6.15</td>
-<td style="text-align: right;">7.01</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">1.11</td>
-<td style="text-align: right;">0.56</td>
-<td style="text-align: right;">0.64</td>
-<td style="text-align: right;">-0.34</td>
-</tr>
-<tr>
-<td style="text-align: right;">-2</td>
-<td style="text-align: left;">renewalsp</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">10.52</td>
-<td style="text-align: right;">7.74</td>
-<td style="text-align: right;">1.36</td>
-<td style="text-align: right;">0.72</td>
-<td style="text-align: right;">0.56</td>
-<td style="text-align: right;">0.72</td>
-<td style="text-align: right;">-0.13</td>
-</tr>
-<tr>
-<td style="text-align: right;">-1</td>
-<td style="text-align: left;">renewalsp</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">12.57</td>
-<td style="text-align: right;">7.93</td>
-<td style="text-align: right;">1.59</td>
-<td style="text-align: right;">0.71</td>
-<td style="text-align: right;">0.64</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">-0.02</td>
-</tr>
-<tr>
-<td style="text-align: right;">0</td>
-<td style="text-align: left;">renewalsp</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">9.73</td>
-<td style="text-align: right;">7.27</td>
-<td style="text-align: right;">1.34</td>
-<td style="text-align: right;">0.92</td>
-<td style="text-align: right;">0.68</td>
-<td style="text-align: right;">0.92</td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td style="text-align: right;">1</td>
-<td style="text-align: left;">renewalsp</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">9.78</td>
-<td style="text-align: right;">7.81</td>
-<td style="text-align: right;">1.25</td>
-<td style="text-align: right;">1.12</td>
-<td style="text-align: right;">0.5</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">-0.09</td>
-</tr>
-</tbody>
-</table>
-</details>
-<h2 id="by-place">By place<a class="headerlink" href="#by-place" title="Permanent link">&para;</a></h2>
-<p>Scores at each place, at the scale chosen.
-Pick a place to narrow the table.</p>
-<div class="scoresummary" data-src="../figures/scoresummary-backtest.json" data-view="place" role="group" aria-label="Scores by place">
-<noscript><img src="../figures/scores-wis-location.svg#only-light" alt="Scores by place"><img src="../figures/scores-wis-location-dark.svg#only-dark" alt="Scores by place"></noscript>
-</div>
-
-<details class="note">
-<summary>Tables</summary>
-<table>
-<thead>
-<tr>
-<th style="text-align: left;">target</th>
-<th style="text-align: left;">location</th>
-<th style="text-align: left;">model</th>
-<th style="text-align: right;">n</th>
-<th style="text-align: right;">wis</th>
-<th style="text-align: right;">base_wis</th>
-<th style="text-align: right;">rel_wis</th>
-<th style="text-align: right;">rel_log_wis</th>
-<th style="text-align: right;">coverage_50</th>
-<th style="text-align: right;">coverage_90</th>
-<th style="text-align: right;">bias</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD</td>
-<td style="text-align: left;">as reported</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">44</td>
-<td style="text-align: right;">44</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">-1</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD</td>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">44</td>
-<td style="text-align: right;">44</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">-1</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">28.88</td>
-<td style="text-align: right;">44</td>
-<td style="text-align: right;">0.66</td>
-<td style="text-align: right;">0.64</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">-1</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD</td>
-<td style="text-align: left;">renewal</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">22.13</td>
-<td style="text-align: right;">44</td>
-<td style="text-align: right;">0.5</td>
-<td style="text-align: right;">0.49</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">-0.98</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD</td>
-<td style="text-align: left;">renewalbvd</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">21.73</td>
-<td style="text-align: right;">44</td>
-<td style="text-align: right;">0.49</td>
-<td style="text-align: right;">0.48</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">-1</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD</td>
-<td style="text-align: left;">renewalsp</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">23.37</td>
-<td style="text-align: right;">44</td>
-<td style="text-align: right;">0.53</td>
-<td style="text-align: right;">0.52</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">-1</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-BU</td>
-<td style="text-align: left;">as reported</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.03</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-BU</td>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">0.03</td>
-<td style="text-align: right;">0.03</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.11</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-BU</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">0.03</td>
-<td style="text-align: right;">0.03</td>
-<td style="text-align: right;">1.17</td>
-<td style="text-align: right;">1.24</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.16</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-BU</td>
-<td style="text-align: left;">renewal</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">0.07</td>
-<td style="text-align: right;">0.03</td>
-<td style="text-align: right;">2.36</td>
-<td style="text-align: right;">3.77</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.04</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-BU</td>
-<td style="text-align: left;">renewalbvd</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">0.06</td>
-<td style="text-align: right;">0.03</td>
-<td style="text-align: right;">2.34</td>
-<td style="text-align: right;">3.75</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.02</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-BU</td>
-<td style="text-align: left;">renewalsp</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">0.87</td>
-<td style="text-align: right;">0.03</td>
-<td style="text-align: right;">31.46</td>
-<td style="text-align: right;">58.03</td>
-<td style="text-align: right;">0.67</td>
-<td style="text-align: right;">0.67</td>
-<td style="text-align: right;">-0.23</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-HU</td>
-<td style="text-align: left;">as reported</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">1.33</td>
-<td style="text-align: right;">1.55</td>
-<td style="text-align: right;">0.86</td>
-<td style="text-align: right;">1.03</td>
-<td style="text-align: right;">0.67</td>
-<td style="text-align: right;">0.67</td>
-<td style="text-align: right;">-0.33</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-HU</td>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">1.55</td>
-<td style="text-align: right;">1.55</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.33</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-HU</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">0.62</td>
-<td style="text-align: right;">1.55</td>
-<td style="text-align: right;">0.4</td>
-<td style="text-align: right;">0.43</td>
-<td style="text-align: right;">0.67</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.15</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-HU</td>
-<td style="text-align: left;">renewal</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">0.67</td>
-<td style="text-align: right;">1.55</td>
-<td style="text-align: right;">0.43</td>
-<td style="text-align: right;">0.47</td>
-<td style="text-align: right;">0.67</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.2</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-HU</td>
-<td style="text-align: left;">renewalbvd</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">0.7</td>
-<td style="text-align: right;">1.55</td>
-<td style="text-align: right;">0.45</td>
-<td style="text-align: right;">0.49</td>
-<td style="text-align: right;">0.67</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.17</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-HU</td>
-<td style="text-align: left;">renewalsp</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">0.73</td>
-<td style="text-align: right;">1.55</td>
-<td style="text-align: right;">0.47</td>
-<td style="text-align: right;">0.54</td>
-<td style="text-align: right;">0.67</td>
-<td style="text-align: right;">0.67</td>
-<td style="text-align: right;">-0.13</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-IT</td>
-<td style="text-align: left;">as reported</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">38</td>
-<td style="text-align: right;">38</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">-1</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-IT</td>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">38</td>
-<td style="text-align: right;">38</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">-1</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-IT</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">29.28</td>
-<td style="text-align: right;">38</td>
-<td style="text-align: right;">0.77</td>
-<td style="text-align: right;">0.76</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">-1</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-IT</td>
-<td style="text-align: left;">renewal</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">25.53</td>
-<td style="text-align: right;">38</td>
-<td style="text-align: right;">0.67</td>
-<td style="text-align: right;">0.66</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">-1</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-IT</td>
-<td style="text-align: left;">renewalbvd</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">25.4</td>
-<td style="text-align: right;">38</td>
-<td style="text-align: right;">0.67</td>
-<td style="text-align: right;">0.65</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">-1</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-IT</td>
-<td style="text-align: left;">renewalsp</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">24.28</td>
-<td style="text-align: right;">38</td>
-<td style="text-align: right;">0.64</td>
-<td style="text-align: right;">0.62</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">-1</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-NK</td>
-<td style="text-align: left;">as reported</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">-1</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-NK</td>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">-1</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-NK</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.78</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">0.13</td>
-<td style="text-align: right;">0.13</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">-0.44</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-NK</td>
-<td style="text-align: left;">renewal</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1.47</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">0.25</td>
-<td style="text-align: right;">0.24</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">-0.11</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-NK</td>
-<td style="text-align: left;">renewalbvd</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1.64</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">0.27</td>
-<td style="text-align: right;">0.27</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">-0.11</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-NK</td>
-<td style="text-align: left;">renewalsp</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1.95</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">0.33</td>
-<td style="text-align: right;">0.32</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">-0.04</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-NU</td>
-<td style="text-align: left;">as reported</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">nan</td>
-<td style="text-align: right;">nan</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-NU</td>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">nan</td>
-<td style="text-align: right;">nan</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-NU</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.01</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.08</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-NU</td>
-<td style="text-align: left;">renewal</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.02</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.13</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-NU</td>
-<td style="text-align: left;">renewalbvd</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.02</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.11</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-NU</td>
-<td style="text-align: left;">renewalsp</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1.67</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">-1</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-SK</td>
-<td style="text-align: left;">as reported</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-SK</td>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.05</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-SK</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-SK</td>
-<td style="text-align: left;">renewal</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.01</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-SK</td>
-<td style="text-align: left;">renewalbvd</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-SK</td>
-<td style="text-align: left;">renewalsp</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">0.01</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">1.68</td>
-<td style="text-align: right;">1.68</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.1</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-SU</td>
-<td style="text-align: left;">as reported</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.04</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-SU</td>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">0.04</td>
-<td style="text-align: right;">0.04</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.16</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-SU</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">0.01</td>
-<td style="text-align: right;">0.04</td>
-<td style="text-align: right;">0.19</td>
-<td style="text-align: right;">0.2</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.07</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-SU</td>
-<td style="text-align: left;">renewal</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">0.19</td>
-<td style="text-align: right;">0.04</td>
-<td style="text-align: right;">4.83</td>
-<td style="text-align: right;">6.65</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">-0.01</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-SU</td>
-<td style="text-align: left;">renewalbvd</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">0.18</td>
-<td style="text-align: right;">0.04</td>
-<td style="text-align: right;">4.78</td>
-<td style="text-align: right;">6.69</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">-0.01</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-SU</td>
-<td style="text-align: left;">renewalsp</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">0.79</td>
-<td style="text-align: right;">0.04</td>
-<td style="text-align: right;">20.39</td>
-<td style="text-align: right;">36.61</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.33</td>
-<td style="text-align: right;">-0.93</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-TO</td>
-<td style="text-align: left;">as reported</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">1.33</td>
-<td style="text-align: right;">1.33</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.33</td>
-<td style="text-align: right;">0.33</td>
-<td style="text-align: right;">0.67</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-TO</td>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">1.33</td>
-<td style="text-align: right;">1.33</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.33</td>
-<td style="text-align: right;">0.33</td>
-<td style="text-align: right;">0.67</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-TO</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">1.81</td>
-<td style="text-align: right;">1.33</td>
-<td style="text-align: right;">1.36</td>
-<td style="text-align: right;">1.33</td>
-<td style="text-align: right;">0.33</td>
-<td style="text-align: right;">0.33</td>
-<td style="text-align: right;">0.68</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-TO</td>
-<td style="text-align: left;">renewal</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">1.52</td>
-<td style="text-align: right;">1.33</td>
-<td style="text-align: right;">1.14</td>
-<td style="text-align: right;">1.27</td>
-<td style="text-align: right;">0.33</td>
-<td style="text-align: right;">0.67</td>
-<td style="text-align: right;">0.69</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-TO</td>
-<td style="text-align: left;">renewalbvd</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">1.5</td>
-<td style="text-align: right;">1.33</td>
-<td style="text-align: right;">1.13</td>
-<td style="text-align: right;">1.25</td>
-<td style="text-align: right;">0.33</td>
-<td style="text-align: right;">0.67</td>
-<td style="text-align: right;">0.68</td>
-</tr>
-<tr>
-<td style="text-align: left;">complete</td>
-<td style="text-align: left;">CD-TO</td>
-<td style="text-align: left;">renewalsp</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: right;">1.77</td>
-<td style="text-align: right;">1.33</td>
-<td style="text-align: right;">1.33</td>
-<td style="text-align: right;">1.47</td>
-<td style="text-align: right;">0.33</td>
-<td style="text-align: right;">0.33</td>
-<td style="text-align: right;">0.72</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD</td>
-<td style="text-align: left;">as reported</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">141.56</td>
-<td style="text-align: right;">25.65</td>
-<td style="text-align: right;">5.52</td>
-<td style="text-align: right;">20.17</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">-1</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD</td>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">25.65</td>
-<td style="text-align: right;">25.65</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.31</td>
-<td style="text-align: right;">0.75</td>
-<td style="text-align: right;">-0.5</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">29.31</td>
-<td style="text-align: right;">25.65</td>
-<td style="text-align: right;">1.14</td>
-<td style="text-align: right;">1.29</td>
-<td style="text-align: right;">0.31</td>
-<td style="text-align: right;">0.44</td>
-<td style="text-align: right;">-0.52</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD</td>
-<td style="text-align: left;">renewal</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">29.86</td>
-<td style="text-align: right;">25.65</td>
-<td style="text-align: right;">1.16</td>
-<td style="text-align: right;">1.25</td>
-<td style="text-align: right;">0.19</td>
-<td style="text-align: right;">0.5</td>
-<td style="text-align: right;">-0.62</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD</td>
-<td style="text-align: left;">renewalbvd</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">29.47</td>
-<td style="text-align: right;">25.65</td>
-<td style="text-align: right;">1.15</td>
-<td style="text-align: right;">1.24</td>
-<td style="text-align: right;">0.19</td>
-<td style="text-align: right;">0.5</td>
-<td style="text-align: right;">-0.58</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD</td>
-<td style="text-align: left;">renewalsp</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">30.66</td>
-<td style="text-align: right;">25.65</td>
-<td style="text-align: right;">1.2</td>
-<td style="text-align: right;">1.33</td>
-<td style="text-align: right;">0.25</td>
-<td style="text-align: right;">0.5</td>
-<td style="text-align: right;">-0.69</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-BU</td>
-<td style="text-align: left;">as reported</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.36</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-BU</td>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">0.36</td>
-<td style="text-align: right;">0.36</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.46</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-BU</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">0.01</td>
-<td style="text-align: right;">0.36</td>
-<td style="text-align: right;">0.03</td>
-<td style="text-align: right;">0.01</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.06</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-BU</td>
-<td style="text-align: left;">renewal</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">0.13</td>
-<td style="text-align: right;">0.36</td>
-<td style="text-align: right;">0.36</td>
-<td style="text-align: right;">0.37</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.25</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-BU</td>
-<td style="text-align: left;">renewalbvd</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">0.13</td>
-<td style="text-align: right;">0.36</td>
-<td style="text-align: right;">0.36</td>
-<td style="text-align: right;">0.37</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.25</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-BU</td>
-<td style="text-align: left;">renewalsp</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">0.26</td>
-<td style="text-align: right;">0.36</td>
-<td style="text-align: right;">0.73</td>
-<td style="text-align: right;">0.61</td>
-<td style="text-align: right;">0.94</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.26</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-HU</td>
-<td style="text-align: left;">as reported</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">7.12</td>
-<td style="text-align: right;">1.74</td>
-<td style="text-align: right;">4.1</td>
-<td style="text-align: right;">7.88</td>
-<td style="text-align: right;">0.19</td>
-<td style="text-align: right;">0.19</td>
-<td style="text-align: right;">-0.81</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-HU</td>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">1.74</td>
-<td style="text-align: right;">1.74</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.75</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.33</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-HU</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">1.65</td>
-<td style="text-align: right;">1.74</td>
-<td style="text-align: right;">0.95</td>
-<td style="text-align: right;">1.09</td>
-<td style="text-align: right;">0.56</td>
-<td style="text-align: right;">0.94</td>
-<td style="text-align: right;">-0.26</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-HU</td>
-<td style="text-align: left;">renewal</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">1.28</td>
-<td style="text-align: right;">1.74</td>
-<td style="text-align: right;">0.74</td>
-<td style="text-align: right;">0.77</td>
-<td style="text-align: right;">0.75</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.02</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-HU</td>
-<td style="text-align: left;">renewalbvd</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">1.3</td>
-<td style="text-align: right;">1.74</td>
-<td style="text-align: right;">0.75</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">0.75</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.05</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-HU</td>
-<td style="text-align: left;">renewalsp</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">1.32</td>
-<td style="text-align: right;">1.74</td>
-<td style="text-align: right;">0.76</td>
-<td style="text-align: right;">0.77</td>
-<td style="text-align: right;">0.69</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">-0.13</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-IT</td>
-<td style="text-align: left;">as reported</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">70.69</td>
-<td style="text-align: right;">17.34</td>
-<td style="text-align: right;">4.08</td>
-<td style="text-align: right;">13.4</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">-1</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-IT</td>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">17.34</td>
-<td style="text-align: right;">17.34</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.25</td>
-<td style="text-align: right;">0.81</td>
-<td style="text-align: right;">-0.45</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-IT</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">18.7</td>
-<td style="text-align: right;">17.34</td>
-<td style="text-align: right;">1.08</td>
-<td style="text-align: right;">0.99</td>
-<td style="text-align: right;">0.25</td>
-<td style="text-align: right;">0.62</td>
-<td style="text-align: right;">0.04</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-IT</td>
-<td style="text-align: left;">renewal</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">17.17</td>
-<td style="text-align: right;">17.34</td>
-<td style="text-align: right;">0.99</td>
-<td style="text-align: right;">1.02</td>
-<td style="text-align: right;">0.19</td>
-<td style="text-align: right;">0.5</td>
-<td style="text-align: right;">-0.24</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-IT</td>
-<td style="text-align: left;">renewalbvd</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">17.32</td>
-<td style="text-align: right;">17.34</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1.06</td>
-<td style="text-align: right;">0.25</td>
-<td style="text-align: right;">0.5</td>
-<td style="text-align: right;">-0.24</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-IT</td>
-<td style="text-align: left;">renewalsp</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">19.32</td>
-<td style="text-align: right;">17.34</td>
-<td style="text-align: right;">1.11</td>
-<td style="text-align: right;">1.3</td>
-<td style="text-align: right;">0.38</td>
-<td style="text-align: right;">0.62</td>
-<td style="text-align: right;">-0.43</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-NK</td>
-<td style="text-align: left;">as reported</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">60.5</td>
-<td style="text-align: right;">15.23</td>
-<td style="text-align: right;">3.97</td>
-<td style="text-align: right;">12.03</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">-1</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-NK</td>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">15.23</td>
-<td style="text-align: right;">15.23</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.38</td>
-<td style="text-align: right;">0.75</td>
-<td style="text-align: right;">-0.49</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-NK</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">30.16</td>
-<td style="text-align: right;">15.23</td>
-<td style="text-align: right;">1.98</td>
-<td style="text-align: right;">2.27</td>
-<td style="text-align: right;">0.12</td>
-<td style="text-align: right;">0.38</td>
-<td style="text-align: right;">-0.81</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-NK</td>
-<td style="text-align: left;">renewal</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">24.94</td>
-<td style="text-align: right;">15.23</td>
-<td style="text-align: right;">1.64</td>
-<td style="text-align: right;">1.67</td>
-<td style="text-align: right;">0.19</td>
-<td style="text-align: right;">0.38</td>
-<td style="text-align: right;">-0.76</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-NK</td>
-<td style="text-align: left;">renewalbvd</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">24.55</td>
-<td style="text-align: right;">15.23</td>
-<td style="text-align: right;">1.61</td>
-<td style="text-align: right;">1.64</td>
-<td style="text-align: right;">0.19</td>
-<td style="text-align: right;">0.38</td>
-<td style="text-align: right;">-0.76</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-NK</td>
-<td style="text-align: left;">renewalsp</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">19.02</td>
-<td style="text-align: right;">15.23</td>
-<td style="text-align: right;">1.25</td>
-<td style="text-align: right;">1.28</td>
-<td style="text-align: right;">0.25</td>
-<td style="text-align: right;">0.62</td>
-<td style="text-align: right;">-0.67</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-NU</td>
-<td style="text-align: left;">as reported</td>
-<td style="text-align: right;">5</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.01</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-NU</td>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">5</td>
-<td style="text-align: right;">0.01</td>
-<td style="text-align: right;">0.01</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.06</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-NU</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">5</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.01</td>
-<td style="text-align: right;">0.13</td>
-<td style="text-align: right;">0.05</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.01</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-NU</td>
-<td style="text-align: left;">renewal</td>
-<td style="text-align: right;">5</td>
-<td style="text-align: right;">0.03</td>
-<td style="text-align: right;">0.01</td>
-<td style="text-align: right;">4.85</td>
-<td style="text-align: right;">4.62</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.12</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-NU</td>
-<td style="text-align: left;">renewalbvd</td>
-<td style="text-align: right;">5</td>
-<td style="text-align: right;">0.03</td>
-<td style="text-align: right;">0.01</td>
-<td style="text-align: right;">6.12</td>
-<td style="text-align: right;">5.78</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.15</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-NU</td>
-<td style="text-align: left;">renewalsp</td>
-<td style="text-align: right;">5</td>
-<td style="text-align: right;">0.13</td>
-<td style="text-align: right;">0.01</td>
-<td style="text-align: right;">25.03</td>
-<td style="text-align: right;">15.54</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">-0.14</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-SK</td>
-<td style="text-align: left;">as reported</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.01</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-SK</td>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">0.01</td>
-<td style="text-align: right;">0.01</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.07</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-SK</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.01</td>
-<td style="text-align: right;">0.1</td>
-<td style="text-align: right;">0.1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.01</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-SK</td>
-<td style="text-align: left;">renewal</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.01</td>
-<td style="text-align: right;">0.2</td>
-<td style="text-align: right;">0.2</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.02</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-SK</td>
-<td style="text-align: left;">renewalbvd</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.01</td>
-<td style="text-align: right;">0.24</td>
-<td style="text-align: right;">0.24</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.02</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-SK</td>
-<td style="text-align: left;">renewalsp</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">0.01</td>
-<td style="text-align: right;">0.01</td>
-<td style="text-align: right;">0.59</td>
-<td style="text-align: right;">0.6</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.06</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-SU</td>
-<td style="text-align: left;">as reported</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.15</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-SU</td>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">0.15</td>
-<td style="text-align: right;">0.15</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.33</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-SU</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.15</td>
-<td style="text-align: right;">0.02</td>
-<td style="text-align: right;">0.01</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.03</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-SU</td>
-<td style="text-align: left;">renewal</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">0.07</td>
-<td style="text-align: right;">0.15</td>
-<td style="text-align: right;">0.44</td>
-<td style="text-align: right;">0.42</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.11</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-SU</td>
-<td style="text-align: left;">renewalbvd</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">0.07</td>
-<td style="text-align: right;">0.15</td>
-<td style="text-align: right;">0.44</td>
-<td style="text-align: right;">0.41</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.13</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-SU</td>
-<td style="text-align: left;">renewalsp</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">0.13</td>
-<td style="text-align: right;">0.15</td>
-<td style="text-align: right;">0.85</td>
-<td style="text-align: right;">0.93</td>
-<td style="text-align: right;">0.94</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">-0.18</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-TO</td>
-<td style="text-align: left;">as reported</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">3.5</td>
-<td style="text-align: right;">2.18</td>
-<td style="text-align: right;">1.6</td>
-<td style="text-align: right;">2.43</td>
-<td style="text-align: right;">0.19</td>
-<td style="text-align: right;">0.19</td>
-<td style="text-align: right;">-0.56</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-TO</td>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">2.18</td>
-<td style="text-align: right;">2.18</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.25</td>
-<td style="text-align: right;">0.31</td>
-<td style="text-align: right;">-0.52</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-TO</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">1.61</td>
-<td style="text-align: right;">2.18</td>
-<td style="text-align: right;">0.74</td>
-<td style="text-align: right;">0.47</td>
-<td style="text-align: right;">0.56</td>
-<td style="text-align: right;">0.75</td>
-<td style="text-align: right;">0.38</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-TO</td>
-<td style="text-align: left;">renewal</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">1.75</td>
-<td style="text-align: right;">2.18</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">0.51</td>
-<td style="text-align: right;">0.38</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">0.42</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-TO</td>
-<td style="text-align: left;">renewalbvd</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">1.92</td>
-<td style="text-align: right;">2.18</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">0.56</td>
-<td style="text-align: right;">0.44</td>
-<td style="text-align: right;">0.94</td>
-<td style="text-align: right;">0.43</td>
-</tr>
-<tr>
-<td style="text-align: left;">reported</td>
-<td style="text-align: left;">CD-TO</td>
-<td style="text-align: left;">renewalsp</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">2.98</td>
-<td style="text-align: right;">2.18</td>
-<td style="text-align: right;">1.36</td>
-<td style="text-align: right;">0.78</td>
-<td style="text-align: right;">0.44</td>
-<td style="text-align: right;">0.75</td>
-<td style="text-align: right;">0.58</td>
 </tr>
 </tbody>
 </table>
