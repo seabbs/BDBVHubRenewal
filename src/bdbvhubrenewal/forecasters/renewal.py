@@ -151,8 +151,6 @@ class Variant:
         `MAIN` or `BVD`, the configuration in `bdbvhubrenewal.model`.
     overrides : mapping
         `ModelConfig` fields to change.
-    register : bool
-        Register it as a model for the backtest.
     per_location : bool
         Fit each province on its own series, with no pooling or coupling.
         National is their sum plus the unassigned part.
@@ -162,7 +160,6 @@ class Variant:
     description: str
     base: str = "MAIN"
     overrides: Mapping[str, Any] = field(default_factory=dict)
-    register: bool = True
     per_location: bool = False
 
 
@@ -1387,10 +1384,9 @@ def _factory(variant: Variant) -> RenewalModel:
 
 
 for _variant in VARIANTS.values():
-    if _variant.register:
-        register_model(
-            _variant.name,
-            partial(_factory, _variant),
-            _variant.description,
-            fitted=True,
-        )
+    register_model(
+        _variant.name,
+        partial(_factory, _variant),
+        _variant.description,
+        fitted=True,
+    )
