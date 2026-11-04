@@ -8,6 +8,7 @@
   var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep",
     "Oct", "Nov", "Dec"];
   var T = window.bdbvToggles;
+  var Z = window.bdbvZoom;
   var h = T.h;
 
   function el(tag, attrs, parent) {
@@ -34,6 +35,7 @@
       h("option", { value: p.id }, selProv, p.name + " (" + p.id + ")");
     });
     var selZone = h("select", {}, h("label", {}, controls, "Zone "));
+    var zoom = Z.create(controls, function () { draw(); });
     var keys = T.legend(root, d.models, function () { draw(); });
     var note = h("p", { class: "explorer-note" }, root);
     var figure = h("div", { class: "explorer-figure" }, root);
@@ -66,30 +68,40 @@
       var ref = day(d.reference_date);
       var x0 = day(data[0][0]) - 4 * DAY;
       var x1 = ref + 4 * DAY;
+      q.forEach(function (r) { x1 = Math.max(x1, day(r[1]) + 4 * DAY); });
+      var xr = Z.xRange(zoom, x0, x1);
+      x0 = xr[0];
+      x1 = xr[1];
       var ymax = 1;
-      data.forEach(function (p) { ymax = Math.max(ymax, p[1]); });
-      q.forEach(function (r) {
-        ymax = Math.max(ymax, r[6]);
-        x1 = Math.max(x1, day(r[1]) + 4 * DAY);
+      data.forEach(function (p) {
+        if (Z.visible(zoom, day(p[0]))) ymax = Math.max(ymax, p[1]);
       });
-      ymax *= 1.05;
+      q.forEach(function (r) {
+        if (Z.visible(zoom, day(r[1]))) ymax = Math.max(ymax, r[6]);
+      });
+      var yr = Z.yRange(zoom, 0, ymax * 1.05, "");
+      var y0 = yr[0], y1 = yr[1];
       var W = 760, H = 300, L = 44, R = 10, Tp = 10, B = 28;
       function X(t) { return L + (t - x0) / (x1 - x0) * (W - L - R); }
-      function Y(v) { return Tp + (1 - v / ymax) * (H - Tp - B); }
+      function Y(v) { return Tp + (1 - (v - y0) / (y1 - y0)) * (H - Tp - B); }
       figure.textContent = "";
       var svg = el("svg", { viewBox: "0 0 " + W + " " + H, role: "img",
         "aria-label": "Nowcast and forecast for " + zone }, figure);
-      var step = ymax > 200 ? 50 : ymax > 80 ? 20 : ymax > 40 ? 10 : ymax > 15 ? 5 : ymax > 6 ? 2 : 1;
-      for (var v = 0; v <= ymax; v += step) {
+      var span = y1 - y0;
+      var step = span > 200 ? 50 : span > 80 ? 20 : span > 40 ? 10 : span > 15 ? 5 : span > 6 ? 2 : 1;
+      for (var v = Math.ceil(y0 / step) * step; v <= y1; v += step) {
         el("line", { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: "explorer-grid" }, svg);
         el("text", { x: L - 6, y: Y(v) + 4, "text-anchor": "end",
           class: "explorer-tick" }, svg).textContent = v;
       }
-      for (var t = ref; t >= x0; t -= 28 * DAY) {
+      var tstep = (x1 - x0) > 70 * DAY ? 28 * DAY : 7 * DAY;
+      var tfirst = ref - Math.floor((ref - x0) / tstep) * tstep;
+      for (var t = tfirst; t <= x1; t += tstep) {
         var dt = new Date(t);
         el("text", { x: X(t), y: H - 8, "text-anchor": "middle", class: "explorer-tick" },
           svg).textContent = dt.getUTCDate() + " " + MONTHS[dt.getUTCMonth()];
       }
+      var plot = Z.clip(svg, { L: L, R: R, T: Tp, B: B, W: W, H: H });
       on.forEach(function (m) {
         var own = q.filter(function (r) { return r[0] === m; });
         if (!own.length) return;
@@ -97,25 +109,26 @@
         function band(lo, hi, op) {
           var top = own.map(function (r) { return X(day(r[1])) + "," + Y(r[hi]); });
           var bot = own.slice().reverse().map(function (r) { return X(day(r[1])) + "," + Y(r[lo]); });
-          el("polygon", { points: top.concat(bot).join(" "), fill: c, "fill-opacity": op }, svg);
+          el("polygon", { points: top.concat(bot).join(" "), fill: c, "fill-opacity": op }, plot);
         }
         band(2, 6, 0.12);
         band(3, 5, 0.22);
         el("polyline", { fill: "none", stroke: c, "stroke-width": 2,
-          points: own.map(function (r) { return X(day(r[1])) + "," + Y(r[4]); }).join(" ") }, svg);
+          points: own.map(function (r) { return X(day(r[1])) + "," + Y(r[4]); }).join(" ") }, plot);
         own.forEach(function (r) {
-          var p = el("circle", { cx: X(day(r[1])), cy: Y(r[4]), r: 6, fill: "transparent" }, svg);
+          var p = el("circle", { cx: X(day(r[1])), cy: Y(r[4]), r: 6, fill: "transparent" }, plot);
           el("title", {}, p).textContent = d.models[m].name + ", week ending " + r[1] +
             ": median " + r[4] + ", 50% " + r[3] + " to " + r[5] + ", 90% " + r[2] + " to " + r[6];
         });
       });
       el("polyline", { class: "explorer-data", fill: "none",
-        points: data.map(function (p) { return X(day(p[0])) + "," + Y(p[1]); }).join(" ") }, svg);
+        points: data.map(function (p) { return X(day(p[0])) + "," + Y(p[1]); }).join(" ") }, plot);
       data.forEach(function (p) {
-        var c = el("circle", { cx: X(day(p[0])), cy: Y(p[1]), r: 2.8, class: "explorer-point" }, svg);
+        var c = el("circle", { cx: X(day(p[0])), cy: Y(p[1]), r: 2.8, class: "explorer-point" }, plot);
         el("title", {}, c).textContent = p[0] + ": " + p[1] + " reported (" + d.release + ")";
       });
-      el("line", { x1: X(ref), x2: X(ref), y1: Tp, y2: H - B, class: "explorer-ref" }, svg);
+      el("line", { x1: X(ref), x2: X(ref), y1: Tp, y2: H - B, class: "explorer-ref" }, plot);
+      Z.attach(zoom, svg, { L: L, R: R, T: Tp, B: B, W: W, H: H, x: [x0, x1], y: [y0, y1] });
       drawTable(zone, on);
     }
 

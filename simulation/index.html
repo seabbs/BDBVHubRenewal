@@ -1932,15 +1932,15 @@
 <img alt="Mean WIS by horizon on simulated vintages." src="../figures/recovery-wis-horizon-dark.svg#only-dark" /></p>
 <h2 id="simulated-scenarios">Simulated scenarios<a class="headerlink" href="#simulated-scenarios" title="Permanent link">&para;</a></h2>
 <p>Three simulated outbreaks copied from the 2026-10-24 data, with Rt after the data falling by a quarter, holding or rising by a quarter (<a href="../methods/evaluation/#backtest-design">design</a>).</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">WIS</label><label for="__tabbed_1_2">Log WIS</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">WIS</label><label for="__tabbed_1_2">WIS on the log scale</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <p><img alt="Mean WIS by horizon on the simulated scenarios." src="../figures/scenario-wis-horizon.svg#only-light" />
 <img alt="Mean WIS by horizon on the simulated scenarios." src="../figures/scenario-wis-horizon-dark.svg#only-dark" /></p>
 </div>
 <div class="tabbed-block">
-<p><img alt="Mean Log WIS by horizon on the simulated scenarios." src="../figures/scenario-wis-horizon-log-wis.svg#only-light" />
-<img alt="Mean Log WIS by horizon on the simulated scenarios." src="../figures/scenario-wis-horizon-log-wis-dark.svg#only-dark" /></p>
+<p><img alt="Mean WIS on the log scale by horizon on the simulated scenarios." src="../figures/scenario-wis-horizon-log-wis.svg#only-light" />
+<img alt="Mean WIS on the log scale by horizon on the simulated scenarios." src="../figures/scenario-wis-horizon-log-wis-dark.svg#only-dark" /></p>
 </div>
 </div>
 </div>
@@ -1954,7 +1954,7 @@
 <th style="text-align: left;">level</th>
 <th style="text-align: left;">model</th>
 <th style="text-align: right;">mean WIS</th>
-<th style="text-align: right;">mean log WIS</th>
+<th style="text-align: right;">mean WIS on the log scale</th>
 <th style="text-align: right;">50% coverage</th>
 <th style="text-align: right;">90% coverage</th>
 <th style="text-align: right;">mean bias</th>
@@ -2181,7 +2181,7 @@
 <th style="text-align: left;">level</th>
 <th style="text-align: left;">model</th>
 <th style="text-align: right;">mean WIS</th>
-<th style="text-align: right;">mean log WIS</th>
+<th style="text-align: right;">mean WIS on the log scale</th>
 <th style="text-align: right;">50% coverage</th>
 <th style="text-align: right;">90% coverage</th>
 <th style="text-align: right;">mean bias</th>
@@ -2531,6 +2531,8 @@
         <script src="../javascripts/mathjax.js"></script>
       
         <script src="../javascripts/toggles.js"></script>
+      
+        <script src="../javascripts/zoom.js"></script>
       
         <script src="../javascripts/tablefilter.js"></script>
       

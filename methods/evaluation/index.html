@@ -2092,7 +2092,8 @@ With sample quantiles <span class="arithmatex">\(q_\tau\)</span> at 23 levels, <
 \text{WIS}(F, y) = \frac{1}{K + 1/2} \sum_{\tau} \left(\mathbb{1}\{y &lt; q_\tau\} - \tau\right)\left(q_\tau - y\right), \qquad K = 11.
 \]</div>
 <p>It splits into dispersion, overprediction and underprediction.
-Log WIS applies it to <span class="arithmatex">\(\log(1 + y)\)</span> and <span class="arithmatex">\(\log(1 + x)\)</span>, so it measures relative error and small provinces count.</p>
+WIS on the log scale is the WIS of the transformed target, <span class="arithmatex">\(\text{WIS}(\log(1 + x), \log(1 + y))\)</span>, never the log of WIS.
+It measures relative error, so small provinces count.</p>
 <div class="arithmatex">\[
 \text{Bias} = 1 - \big(P(X \le y) + P(X \le y - 1)\big),
 \qquad
@@ -2100,7 +2101,7 @@ Log WIS applies it to <span class="arithmatex">\(\log(1 + y)\)</span> and <span 
 \]</div>
 <p>Positive bias is overprediction.
 Relative WIS is a ratio of means against a baseline <span class="arithmatex">\(b\)</span> over the forecasts both made, and below 1 beats it.
-Relative log WIS is the same ratio of mean log WIS.
+Relative WIS on the log scale is the same ratio of mean WIS on the log scale.
 The baseline is <code>randomwalk</code>.
 Coverage is whether <span class="arithmatex">\(y\)</span> falls in the central 50% and 90% sample intervals.</p>
 <h2 id="backtest-design">Backtest design<a class="headerlink" href="#backtest-design" title="Permanent link">&para;</a></h2>
@@ -2338,6 +2339,8 @@ A round is pending until a later real release exists.</p>
         <script src="../../javascripts/mathjax.js"></script>
       
         <script src="../../javascripts/toggles.js"></script>
+      
+        <script src="../../javascripts/zoom.js"></script>
       
         <script src="../../javascripts/tablefilter.js"></script>
       

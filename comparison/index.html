@@ -1951,15 +1951,15 @@
 <p>Scores against what each later release reported, from the release serving each round (<a href="../methods/evaluation/#comparison-with-hub-forecasts">how scoring works</a>).
 A model shown with a hub id is what we submitted under that id for the rounds we submitted (2026-11-07), and the model's own forecast for earlier rounds.</p>
 <h2 id="scores">Scores<a class="headerlink" href="#scores" title="Permanent link">&para;</a></h2>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">WIS</label><label for="__tabbed_1_2">Log WIS</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">WIS</label><label for="__tabbed_1_2">WIS on the log scale</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <p><img alt="WIS relative to randomwalk and 90% coverage, by horizon." src="../figures/comparison-summary.svg#only-light" />
 <img alt="WIS relative to randomwalk and 90% coverage, by horizon." src="../figures/comparison-summary-dark.svg#only-dark" /></p>
 </div>
 <div class="tabbed-block">
-<p><img alt="Log WIS relative to randomwalk and 90% coverage, by horizon." src="../figures/comparison-summary-log-wis.svg#only-light" />
-<img alt="Log WIS relative to randomwalk and 90% coverage, by horizon." src="../figures/comparison-summary-log-wis-dark.svg#only-dark" /></p>
+<p><img alt="WIS on the log scale relative to randomwalk and 90% coverage, by horizon." src="../figures/comparison-summary-log-wis.svg#only-light" />
+<img alt="WIS on the log scale relative to randomwalk and 90% coverage, by horizon." src="../figures/comparison-summary-log-wis-dark.svg#only-dark" /></p>
 </div>
 </div>
 </div>
@@ -1974,13 +1974,13 @@ Our other models can be switched on in the key.</p>
 <tr>
 <th style="text-align: left;">model</th>
 <th style="text-align: right;">national rel. WIS</th>
-<th style="text-align: right;">national rel. log WIS</th>
+<th style="text-align: right;">national rel. WIS, log scale</th>
 <th style="text-align: right;">national n</th>
 <th style="text-align: right;">national 50%</th>
 <th style="text-align: right;">national 90%</th>
 <th style="text-align: right;">national bias</th>
 <th style="text-align: right;">provinces rel. WIS</th>
-<th style="text-align: right;">provinces rel. log WIS</th>
+<th style="text-align: right;">provinces rel. WIS, log scale</th>
 <th style="text-align: right;">provinces n</th>
 <th style="text-align: right;">provinces 50%</th>
 <th style="text-align: right;">provinces 90%</th>
@@ -2620,6 +2620,8 @@ The hub data credit is:</p>
         <script src="../javascripts/mathjax.js"></script>
       
         <script src="../javascripts/toggles.js"></script>
+      
+        <script src="../javascripts/zoom.js"></script>
       
         <script src="../javascripts/tablefilter.js"></script>
       

@@ -54,6 +54,8 @@
     d.rounds.forEach(function (r, i) { h("option", { value: i }, selRound, r); });
     h("option", { value: "all" }, selRound, "All rounds");
     selRound.value = String(state.round);
+    var zoom = window.bdbvZoom.create(controls, function () { draw(); });
+    var Z = window.bdbvZoom;
     var legend = h("div", { class: "explorer-legend" }, root);
     var figure = h("div", { class: "explorer-figure" }, root);
     var table = h("div", { class: "explorer-table" }, root);
@@ -94,31 +96,41 @@
       var pts = data.filter(function (p) {
         return day(p[0]) >= first && day(p[0]) <= lastWeek;
       });
+      var xr = Z.xRange(zoom, first - 3 * DAY, lastWeek + 4 * DAY);
+      var x0 = xr[0], x1 = xr[1];
       var ymax = 1;
-      pts.forEach(function (p) { ymax = Math.max(ymax, p[1]); });
-      rows.forEach(function (r) { ymax = Math.max(ymax, r[8]); });
-      ymax *= 1.05;
+      pts.forEach(function (p) {
+        if (Z.visible(zoom, day(p[0]))) ymax = Math.max(ymax, p[1]);
+      });
+      rows.forEach(function (r) {
+        if (Z.visible(zoom, day(r[3]))) ymax = Math.max(ymax, r[8]);
+      });
+      var yr = Z.yRange(zoom, 0, ymax * 1.05, "");
+      var y0 = yr[0], y1 = yr[1];
       var W = 760, H = 340, L = 52, R = 10, T = 10, B = 28;
-      var x0 = first - 3 * DAY, x1 = lastWeek + 4 * DAY;
       function X(t) { return L + (t - x0) / (x1 - x0) * (W - L - R); }
-      function Y(v) { return T + (1 - v / ymax) * (H - T - B); }
+      function Y(v) { return T + (1 - (v - y0) / (y1 - y0)) * (H - T - B); }
       figure.textContent = "";
       var svg = el("svg", { viewBox: "0 0 " + W + " " + H, role: "img",
         "aria-label": "Forecasts by week for the selected location" }, figure);
+      var plot = Z.clip(svg, { L: L, R: R, T: T, B: B, W: W, H: H });
       var cut = day(d.complete_through);
       if (cut < x1) {
         var sx = Math.max(X(cut + 3.5 * DAY), L);
         el("rect", { x: sx, y: T, width: W - R - sx, height: H - T - B,
-          class: "explorer-shade" }, svg);
+          class: "explorer-shade" }, plot);
       }
-      var step = ymax > 1000 ? 500 : ymax > 400 ? 100 : ymax > 100 ? 50 : ymax > 40 ? 10 : 5;
-      for (var v = 0; v <= ymax; v += step) {
+      var span = y1 - y0;
+      var step = span > 1000 ? 500 : span > 400 ? 100 : span > 100 ? 50 : span > 40 ? 10 :
+        span > 15 ? 5 : span > 6 ? 2 : 1;
+      for (var v = Math.ceil(y0 / step) * step; v <= y1; v += step) {
         el("line", { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: "explorer-grid" }, svg);
         var t = el("text", { x: L - 6, y: Y(v) + 4, "text-anchor": "end",
           class: "explorer-tick" }, svg);
         t.textContent = v;
       }
-      for (var tt = x0; tt <= x1; tt += 14 * DAY) {
+      var tstep = (x1 - x0) > 70 * DAY ? 14 * DAY : 7 * DAY;
+      for (var tt = x0; tt <= x1; tt += tstep) {
         var dt = new Date(tt);
         var tx = el("text", { x: X(tt), y: H - 8, "text-anchor": "middle",
           class: "explorer-tick" }, svg);
@@ -135,7 +147,7 @@
         var op = rounds.length > 1 ? 0.7 : 1;
         var tip = d.models[r[0]].label + ", round " + d.rounds[r[1]] + ", week ending " + r[3] +
           ": median " + r[6] + ", 50% " + r[5] + " to " + r[7] + ", 90% " + r[4] + " to " + r[8];
-        var g = el("g", { opacity: op }, svg);
+        var g = el("g", { opacity: op }, plot);
         el("title", {}, g).textContent = tip;
         el("line", { x1: xx, x2: xx, y1: Y(r[4]), y2: Y(r[8]), stroke: c, "stroke-width": 1 }, g);
         el("line", { x1: xx, x2: xx, y1: Y(r[5]), y2: Y(r[7]), stroke: c, "stroke-width": 3 }, g);
@@ -143,20 +155,21 @@
       });
       if (pts.length) {
         el("polyline", { class: "explorer-data", fill: "none",
-          points: pts.map(function (p) { return X(day(p[0])) + "," + Y(p[1]); }).join(" ") }, svg);
+          points: pts.map(function (p) { return X(day(p[0])) + "," + Y(p[1]); }).join(" ") }, plot);
         pts.forEach(function (p) {
           var done = day(p[0]) <= cut;
           var c = el("circle", { cx: X(day(p[0])), cy: Y(p[1]), r: 2.8,
-            class: done ? "explorer-point" : "explorer-point hollow" }, svg);
+            class: done ? "explorer-point" : "explorer-point hollow" }, plot);
           el("title", {}, c).textContent = p[0] + ": " + p[1] + " cases (" + d.truth_vintage + ")";
         });
       }
       rounds.forEach(function (ri) {
         var rx = X(day(d.rounds[ri]));
         if (rx >= L && rx <= W - R) {
-          el("line", { x1: rx, x2: rx, y1: T, y2: H - B, class: "explorer-ref" }, svg);
+          el("line", { x1: rx, x2: rx, y1: T, y2: H - B, class: "explorer-ref" }, plot);
         }
       });
+      Z.attach(zoom, svg, { L: L, R: R, T: T, B: B, W: W, H: H, x: [x0, x1], y: [y0, y1] });
       drawTable(rounds);
     }
 
@@ -180,7 +193,7 @@
       });
       var tbl = h("table", {}, table);
       var head = h("tr", {}, h("thead", {}, tbl));
-      ["Model", "Weeks", "WIS", "Relative WIS", "Log WIS", "Relative log WIS",
+      ["Model", "Weeks", "WIS", "Relative WIS", "WIS, log scale", "Relative WIS, log scale",
         "50% coverage", "90% coverage", "Bias"]
         .forEach(function (c) { h("th", {}, head, c); });
       var body = h("tbody", {}, tbl);
