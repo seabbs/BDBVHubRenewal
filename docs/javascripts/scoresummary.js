@@ -84,8 +84,9 @@
         { key: m.key, label: m.label, ref: m.ref };
     });
     function value(s, m) { return m.relative ? s.rel[m.key] : s.mean[m.key]; }
-    // Energy scores: one per scale, so overall view only.
-    var energy = !byPlace && d.energy ? d.energy.metrics : [];
+    // The energy score is defined only for a whole scale, so it is left
+    // out by place and by horizon.
+    var energy = view === "overall" && d.energy ? d.energy.metrics : [];
     energy.forEach(function (m) {
       metrics.push({ key: "rel_" + m.key, label: "Relative " + lower(m.label), ref: 1 });
     });
