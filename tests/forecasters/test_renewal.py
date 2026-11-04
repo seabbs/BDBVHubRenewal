@@ -38,7 +38,12 @@ def test_variants_are_registered_as_fitted_models() -> None:
         model = get_model(name)
         assert isinstance(model, ForecastModel)
         assert model.name == name
-    assert set(rn.VARIANTS) == {"renewal", "renewalsp", "renewalbvd"}
+    assert set(rn.VARIANTS) == {
+        "renewal",
+        "renewalsp",
+        "renewalbvd",
+        "renewalnolag",
+    }
     # Only the backtest models: no fallback and no unused options.
     for name in ("fallback", "renewalhold", "renewalpo"):
         assert name not in specs

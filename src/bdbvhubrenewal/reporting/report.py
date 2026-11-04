@@ -69,6 +69,7 @@ from bdbvhubrenewal.reporting.explorer import (
     explorer_html,
     write_explorer,
 )
+from bdbvhubrenewal.reporting.lag_comparison import make_lag_comparison
 from bdbvhubrenewal.reporting.nowcast_plots import (
     plot_relative_overall,
     plot_release_nowcasts,
@@ -271,6 +272,9 @@ def make_report(
         ),
         fig / "delay-check.svg",
     )
+    make_lag_comparison(
+        fig, gen, res, target, delays, daily, _location_names(real)
+    )
 
 
 _RELEASE_PLACES: Final = ("CD", "CD-IT", "CD-NK")
@@ -280,6 +284,7 @@ _RELEASE_MODELS: Final = (
     "renewal",
     "renewalsp",
     "renewalbvd",
+    "renewalnolag",
 )
 _TARGET_LABELS: Final = {
     "reported": "Reported by each later release",

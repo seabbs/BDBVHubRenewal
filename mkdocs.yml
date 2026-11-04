@@ -33,6 +33,7 @@ nav:
       - Simulation checks: simulation.md
       - Held-out evaluation: heldout.md
       - Comparison with hub forecasts: comparison.md
+      - Reporting lag comparison: lag-comparison.md
   - Submission:
       - Submission log: submission/rounds/index.md
       - Opting in: submission/opting-in.md

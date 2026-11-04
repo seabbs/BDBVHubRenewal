@@ -191,6 +191,12 @@ VARIANTS: Final[dict[str, Variant]] = {
             "pseudo-observation.",
             base="BVD",
         ),
+        Variant(
+            "renewalnolag",
+            "renewal with no lag from report to publication, so a case "
+            "reported by the cut-off is in that release.",
+            overrides={"publication_lag": "none"},
+        ),
     )
 }
 """Model variants, by name."""
