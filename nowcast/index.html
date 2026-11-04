@@ -1556,6 +1556,86 @@
   
   
   
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_3" id="__nav_7_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Models
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Models
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/forecasters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Forecasters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
     <li class="md-nav__item">
       <a href="../reference/model/" class="md-nav__link">
         
@@ -1564,7 +1644,7 @@
   <span class="md-ellipsis">
     
   
-    Model
+    Renewal model
   
 
     
@@ -1606,29 +1686,9 @@
 
               
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../reference/forecasters/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Forecasters
-  
-
-    
-  </span>
-  
-  
-
-      </a>
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -1649,6 +1709,86 @@
     
   
     Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_5" id="__nav_7_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reporting
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reporting
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/reporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Figures and tables
   
 
     
@@ -1690,6 +1830,14 @@
 
               
             
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
               
                 
   
@@ -1697,14 +1845,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../reference/reporting/" class="md-nav__link">
+      <a href="../reference/cli/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Reporting
+    CLI
   
 
     
@@ -1985,7 +2133,13 @@
 </div>
 <p>The submission pull request embeds <a class="autorefs autorefs-internal" title="            plot_nowcast" href="../reference/reporting/#bdbvhubrenewal.reporting.plots.plot_nowcast"><code>plot_nowcast</code></a>.</p>
 <h2 id="health-zones">Health zones<a class="headerlink" href="#health-zones" title="Permanent link">&para;</a></h2>
-<p><code>randomwalknowcast</code> run on each zone and summed to its province, as submitted, at the 2026-11-01 release, for zones with cases in the 12 weeks before the reference date (<a href="../methods/evaluation/#health-zones">Health zones</a>).</p>
+<p>Zone nowcasts and forecasts of each model at the 2026-11-01 release, for zones with cases in the 12 weeks before the reference date (<a href="../methods/evaluation/#health-zones">Health zones</a>).</p>
+<p>Pick a province and a zone to see its nowcast and forecast with its scores by origin.</p>
+<div class="zonechart" data-src="../figures/zonechart.json" role="group" aria-label="Zone nowcast and forecast">
+<noscript>The zone chart needs JavaScript.</noscript>
+</div>
+
+<p><code>randomwalknowcast</code> by province.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="13:7"><input checked="checked" id="__tabbed_13_1" name="__tabbed_13" type="radio" /><input id="__tabbed_13_2" name="__tabbed_13" type="radio" /><input id="__tabbed_13_3" name="__tabbed_13" type="radio" /><input id="__tabbed_13_4" name="__tabbed_13" type="radio" /><input id="__tabbed_13_5" name="__tabbed_13" type="radio" /><input id="__tabbed_13_6" name="__tabbed_13" type="radio" /><input id="__tabbed_13_7" name="__tabbed_13" type="radio" /><div class="tabbed-labels"><label for="__tabbed_13_1">Ituri</label><label for="__tabbed_13_2">Nord Kivu</label><label for="__tabbed_13_3">Haut Uele</label><label for="__tabbed_13_4">Tshopo</label><label for="__tabbed_13_5">Bas Uele</label><label for="__tabbed_13_6">Nord Ubangi</label><label for="__tabbed_13_7">Sud Ubangi</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -2042,7 +2196,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.29</td>
+<td style="text-align: right;">0.33</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2053,7 +2207,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.29</td>
+<td style="text-align: right;">0.33</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2064,7 +2218,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.6</td>
+<td style="text-align: right;">0.1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2075,7 +2229,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.6</td>
+<td style="text-align: right;">0.1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2108,7 +2262,7 @@
 <td style="text-align: right;">2</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">1 to 6</td>
-<td style="text-align: right;">1.24</td>
+<td style="text-align: right;">1.4</td>
 <td style="text-align: right;">0.69</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2119,7 +2273,7 @@
 <td style="text-align: right;">4</td>
 <td style="text-align: right;">44</td>
 <td style="text-align: left;">10 to 136</td>
-<td style="text-align: right;">1.24</td>
+<td style="text-align: right;">1.4</td>
 <td style="text-align: right;">0.69</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2130,7 +2284,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.13</td>
+<td style="text-align: right;">0.18</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2141,7 +2295,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.13</td>
+<td style="text-align: right;">0.18</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2152,7 +2306,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.06</td>
+<td style="text-align: right;">0.1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2163,7 +2317,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.06</td>
+<td style="text-align: right;">0.1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2174,7 +2328,7 @@
 <td style="text-align: right;">3</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">3 to 10</td>
-<td style="text-align: right;">1.25</td>
+<td style="text-align: right;">1.04</td>
 <td style="text-align: right;">0.81</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2185,7 +2339,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">1.25</td>
+<td style="text-align: right;">1.04</td>
 <td style="text-align: right;">0.81</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2196,7 +2350,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.07</td>
+<td style="text-align: right;">0.13</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2207,7 +2361,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.07</td>
+<td style="text-align: right;">0.13</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2218,7 +2372,7 @@
 <td style="text-align: right;">6</td>
 <td style="text-align: right;">9</td>
 <td style="text-align: left;">5 to 18</td>
-<td style="text-align: right;">0.24</td>
+<td style="text-align: right;">0.61</td>
 <td style="text-align: right;">0.94</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2229,7 +2383,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.24</td>
+<td style="text-align: right;">0.61</td>
 <td style="text-align: right;">0.94</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2240,7 +2394,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.69</td>
+<td style="text-align: right;">1.17</td>
 <td style="text-align: right;">0.88</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2251,7 +2405,7 @@
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">10</td>
 <td style="text-align: left;">1 to 53</td>
-<td style="text-align: right;">0.69</td>
+<td style="text-align: right;">1.17</td>
 <td style="text-align: right;">0.88</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2262,7 +2416,7 @@
 <td style="text-align: right;">7</td>
 <td style="text-align: right;">10</td>
 <td style="text-align: left;">6 to 20</td>
-<td style="text-align: right;">0.73</td>
+<td style="text-align: right;">0.83</td>
 <td style="text-align: right;">0.88</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2273,7 +2427,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.73</td>
+<td style="text-align: right;">0.83</td>
 <td style="text-align: right;">0.88</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2284,7 +2438,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.15</td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2295,7 +2449,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.15</td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2306,7 +2460,7 @@
 <td style="text-align: right;">12</td>
 <td style="text-align: right;">14</td>
 <td style="text-align: left;">7 to 32</td>
-<td style="text-align: right;">1.32</td>
+<td style="text-align: right;">1.29</td>
 <td style="text-align: right;">0.69</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2317,7 +2471,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">1.32</td>
+<td style="text-align: right;">1.29</td>
 <td style="text-align: right;">0.69</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2328,7 +2482,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.09</td>
+<td style="text-align: right;">0.12</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2339,7 +2493,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.09</td>
+<td style="text-align: right;">0.12</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2350,7 +2504,7 @@
 <td style="text-align: right;">2</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">1 to 7</td>
-<td style="text-align: right;">4.98</td>
+<td style="text-align: right;">4.21</td>
 <td style="text-align: right;">0.81</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2361,7 +2515,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">4.98</td>
+<td style="text-align: right;">4.21</td>
 <td style="text-align: right;">0.81</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2372,7 +2526,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.06</td>
+<td style="text-align: right;">0.08</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2383,7 +2537,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.06</td>
+<td style="text-align: right;">0.08</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2394,7 +2548,7 @@
 <td style="text-align: right;">49</td>
 <td style="text-align: right;">52</td>
 <td style="text-align: left;">32 to 110</td>
-<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.66</td>
 <td style="text-align: right;">0.88</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2405,7 +2559,7 @@
 <td style="text-align: right;">21</td>
 <td style="text-align: right;">40</td>
 <td style="text-align: left;">7 to 149</td>
-<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.66</td>
 <td style="text-align: right;">0.88</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2416,7 +2570,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.48</td>
+<td style="text-align: right;">0.65</td>
 <td style="text-align: right;">0.88</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2427,7 +2581,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.48</td>
+<td style="text-align: right;">0.65</td>
 <td style="text-align: right;">0.88</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2438,7 +2592,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.06</td>
+<td style="text-align: right;">0.08</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2449,7 +2603,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.06</td>
+<td style="text-align: right;">0.08</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2460,7 +2614,7 @@
 <td style="text-align: right;">4</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">3 to 12</td>
-<td style="text-align: right;">1.19</td>
+<td style="text-align: right;">1.15</td>
 <td style="text-align: right;">0.88</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2471,7 +2625,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">1.19</td>
+<td style="text-align: right;">1.15</td>
 <td style="text-align: right;">0.88</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2482,7 +2636,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">1.58</td>
+<td style="text-align: right;">1.13</td>
 <td style="text-align: right;">0.88</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2493,7 +2647,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">1.58</td>
+<td style="text-align: right;">1.13</td>
 <td style="text-align: right;">0.88</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2504,7 +2658,7 @@
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">1 to 4</td>
-<td style="text-align: right;">0.24</td>
+<td style="text-align: right;">0.34</td>
 <td style="text-align: right;">0.81</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2515,7 +2669,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.24</td>
+<td style="text-align: right;">0.34</td>
 <td style="text-align: right;">0.81</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2526,7 +2680,7 @@
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">1 to 3</td>
-<td style="text-align: right;">0.55</td>
+<td style="text-align: right;">0.85</td>
 <td style="text-align: right;">0.81</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2537,7 +2691,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.55</td>
+<td style="text-align: right;">0.85</td>
 <td style="text-align: right;">0.81</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2548,7 +2702,7 @@
 <td style="text-align: right;">5</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">3 to 18</td>
-<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">0.63</td>
 <td style="text-align: right;">0.88</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2559,7 +2713,7 @@
 <td style="text-align: right;">4</td>
 <td style="text-align: right;">9</td>
 <td style="text-align: left;">1 to 50</td>
-<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">0.63</td>
 <td style="text-align: right;">0.88</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2592,7 +2746,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.56</td>
+<td style="text-align: right;">0.59</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2603,7 +2757,7 @@
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">0 to 9</td>
-<td style="text-align: right;">0.56</td>
+<td style="text-align: right;">0.59</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2614,7 +2768,7 @@
 <td style="text-align: right;">11</td>
 <td style="text-align: right;">14</td>
 <td style="text-align: left;">8 to 36</td>
-<td style="text-align: right;">2.05</td>
+<td style="text-align: right;">1.72</td>
 <td style="text-align: right;">0.81</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2625,7 +2779,7 @@
 <td style="text-align: right;">9</td>
 <td style="text-align: right;">18</td>
 <td style="text-align: left;">3 to 162</td>
-<td style="text-align: right;">2.05</td>
+<td style="text-align: right;">1.72</td>
 <td style="text-align: right;">0.81</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2636,7 +2790,7 @@
 <td style="text-align: right;">53</td>
 <td style="text-align: right;">89</td>
 <td style="text-align: left;">53 to 174</td>
-<td style="text-align: right;">1.28</td>
+<td style="text-align: right;">1.11</td>
 <td style="text-align: right;">0.38</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2647,7 +2801,7 @@
 <td style="text-align: right;">31</td>
 <td style="text-align: right;">76</td>
 <td style="text-align: left;">17 to 366</td>
-<td style="text-align: right;">1.28</td>
+<td style="text-align: right;">1.11</td>
 <td style="text-align: right;">0.38</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2658,7 +2812,7 @@
 <td style="text-align: right;">9</td>
 <td style="text-align: right;">11</td>
 <td style="text-align: left;">6 to 23</td>
-<td style="text-align: right;">1.48</td>
+<td style="text-align: right;">1.16</td>
 <td style="text-align: right;">0.88</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2669,7 +2823,7 @@
 <td style="text-align: right;">3</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">1 to 29</td>
-<td style="text-align: right;">1.48</td>
+<td style="text-align: right;">1.16</td>
 <td style="text-align: right;">0.88</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2680,7 +2834,7 @@
 <td style="text-align: right;">2</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">1 to 6</td>
-<td style="text-align: right;">1.04</td>
+<td style="text-align: right;">1.07</td>
 <td style="text-align: right;">0.88</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2691,7 +2845,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">1.04</td>
+<td style="text-align: right;">1.07</td>
 <td style="text-align: right;">0.88</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2702,7 +2856,7 @@
 <td style="text-align: right;">3</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">2 to 7</td>
-<td style="text-align: right;">0.19</td>
+<td style="text-align: right;">0.3</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2713,7 +2867,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.19</td>
+<td style="text-align: right;">0.3</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2724,7 +2878,7 @@
 <td style="text-align: right;">14</td>
 <td style="text-align: right;">16</td>
 <td style="text-align: left;">9 to 34</td>
-<td style="text-align: right;">2.45</td>
+<td style="text-align: right;">1.42</td>
 <td style="text-align: right;">0.69</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2735,7 +2889,7 @@
 <td style="text-align: right;">10</td>
 <td style="text-align: right;">19</td>
 <td style="text-align: left;">3 to 77</td>
-<td style="text-align: right;">2.45</td>
+<td style="text-align: right;">1.42</td>
 <td style="text-align: right;">0.69</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2746,7 +2900,7 @@
 <td style="text-align: right;">4</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">2 to 13</td>
-<td style="text-align: right;">1.43</td>
+<td style="text-align: right;">1.15</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2757,7 +2911,7 @@
 <td style="text-align: right;">2</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">1 to 28</td>
-<td style="text-align: right;">1.43</td>
+<td style="text-align: right;">1.15</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2768,7 +2922,7 @@
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">1 to 3</td>
-<td style="text-align: right;">1.41</td>
+<td style="text-align: right;">1.05</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2779,7 +2933,7 @@
 <td style="text-align: right;">3</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">1 to 74</td>
-<td style="text-align: right;">1.41</td>
+<td style="text-align: right;">1.05</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2790,7 +2944,7 @@
 <td style="text-align: right;">38</td>
 <td style="text-align: right;">42</td>
 <td style="text-align: left;">24 to 78</td>
-<td style="text-align: right;">0.93</td>
+<td style="text-align: right;">1.22</td>
 <td style="text-align: right;">0.88</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2801,7 +2955,7 @@
 <td style="text-align: right;">8</td>
 <td style="text-align: right;">15</td>
 <td style="text-align: left;">3 to 61</td>
-<td style="text-align: right;">0.93</td>
+<td style="text-align: right;">1.22</td>
 <td style="text-align: right;">0.88</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2812,7 +2966,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">1.61</td>
+<td style="text-align: right;">1.59</td>
 <td style="text-align: right;">0.69</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2823,7 +2977,7 @@
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">0 to 41</td>
-<td style="text-align: right;">1.61</td>
+<td style="text-align: right;">1.59</td>
 <td style="text-align: right;">0.69</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2834,7 +2988,7 @@
 <td style="text-align: right;">57</td>
 <td style="text-align: right;">71</td>
 <td style="text-align: left;">44 to 217</td>
-<td style="text-align: right;">2</td>
+<td style="text-align: right;">1.42</td>
 <td style="text-align: right;">0.25</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2845,7 +2999,7 @@
 <td style="text-align: right;">23</td>
 <td style="text-align: right;">67</td>
 <td style="text-align: left;">20 to 193</td>
-<td style="text-align: right;">2</td>
+<td style="text-align: right;">1.42</td>
 <td style="text-align: right;">0.25</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2878,7 +3032,7 @@
 <td style="text-align: right;">5</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">3 to 18</td>
-<td style="text-align: right;">0.6</td>
+<td style="text-align: right;">0.8</td>
 <td style="text-align: right;">0.75</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2889,7 +3043,7 @@
 <td style="text-align: right;">4</td>
 <td style="text-align: right;">13</td>
 <td style="text-align: left;">2 to 90</td>
-<td style="text-align: right;">0.6</td>
+<td style="text-align: right;">0.8</td>
 <td style="text-align: right;">0.75</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2900,7 +3054,7 @@
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">1 to 4</td>
-<td style="text-align: right;">0.04</td>
+<td style="text-align: right;">0.05</td>
 <td style="text-align: right;">0.94</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2911,7 +3065,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.04</td>
+<td style="text-align: right;">0.05</td>
 <td style="text-align: right;">0.94</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2922,7 +3076,7 @@
 <td style="text-align: right;">15</td>
 <td style="text-align: right;">17</td>
 <td style="text-align: left;">9 to 51</td>
-<td style="text-align: right;">0.45</td>
+<td style="text-align: right;">0.58</td>
 <td style="text-align: right;">0.94</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2933,7 +3087,7 @@
 <td style="text-align: right;">9</td>
 <td style="text-align: right;">22</td>
 <td style="text-align: left;">4 to 114</td>
-<td style="text-align: right;">0.45</td>
+<td style="text-align: right;">0.58</td>
 <td style="text-align: right;">0.94</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2944,7 +3098,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.17</td>
+<td style="text-align: right;">0.23</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2955,7 +3109,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.17</td>
+<td style="text-align: right;">0.23</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2988,7 +3142,7 @@
 <td style="text-align: right;">5</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">3 to 23</td>
-<td style="text-align: right;">0.72</td>
+<td style="text-align: right;">0.77</td>
 <td style="text-align: right;">0.69</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -2999,7 +3153,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.72</td>
+<td style="text-align: right;">0.77</td>
 <td style="text-align: right;">0.69</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3010,7 +3164,7 @@
 <td style="text-align: right;">14</td>
 <td style="text-align: right;">16</td>
 <td style="text-align: left;">8 to 41</td>
-<td style="text-align: right;">1.74</td>
+<td style="text-align: right;">1.53</td>
 <td style="text-align: right;">0.56</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3021,7 +3175,7 @@
 <td style="text-align: right;">6</td>
 <td style="text-align: right;">14</td>
 <td style="text-align: left;">3 to 65</td>
-<td style="text-align: right;">1.74</td>
+<td style="text-align: right;">1.53</td>
 <td style="text-align: right;">0.56</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3032,7 +3186,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.07</td>
+<td style="text-align: right;">0.09</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3043,7 +3197,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.07</td>
+<td style="text-align: right;">0.09</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3054,7 +3208,7 @@
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">1 to 6</td>
-<td style="text-align: right;">1.59</td>
+<td style="text-align: right;">1.72</td>
 <td style="text-align: right;">0.56</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3065,7 +3219,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">1.59</td>
+<td style="text-align: right;">1.72</td>
 <td style="text-align: right;">0.56</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3076,7 +3230,7 @@
 <td style="text-align: right;">3</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">1 to 10</td>
-<td style="text-align: right;">0.64</td>
+<td style="text-align: right;">0.83</td>
 <td style="text-align: right;">0.75</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3087,7 +3241,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.64</td>
+<td style="text-align: right;">0.83</td>
 <td style="text-align: right;">0.75</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3098,7 +3252,7 @@
 <td style="text-align: right;">13</td>
 <td style="text-align: right;">15</td>
 <td style="text-align: left;">9 to 41</td>
-<td style="text-align: right;">0.85</td>
+<td style="text-align: right;">0.81</td>
 <td style="text-align: right;">0.44</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3109,7 +3263,7 @@
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">0 to 14</td>
-<td style="text-align: right;">0.85</td>
+<td style="text-align: right;">0.81</td>
 <td style="text-align: right;">0.44</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3120,7 +3274,7 @@
 <td style="text-align: right;">21</td>
 <td style="text-align: right;">23</td>
 <td style="text-align: left;">12 to 62</td>
-<td style="text-align: right;">0.91</td>
+<td style="text-align: right;">0.76</td>
 <td style="text-align: right;">0.81</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3131,7 +3285,7 @@
 <td style="text-align: right;">3</td>
 <td style="text-align: right;">9</td>
 <td style="text-align: left;">1 to 84</td>
-<td style="text-align: right;">0.91</td>
+<td style="text-align: right;">0.76</td>
 <td style="text-align: right;">0.81</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3142,7 +3296,7 @@
 <td style="text-align: right;">5</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">3 to 16</td>
-<td style="text-align: right;">1.87</td>
+<td style="text-align: right;">1.75</td>
 <td style="text-align: right;">0.69</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3153,7 +3307,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">1.87</td>
+<td style="text-align: right;">1.75</td>
 <td style="text-align: right;">0.69</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3164,7 +3318,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.12</td>
+<td style="text-align: right;">0.08</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">5</td>
 </tr>
@@ -3175,7 +3329,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.12</td>
+<td style="text-align: right;">0.08</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">5</td>
 </tr>
@@ -3208,7 +3362,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">2.69</td>
+<td style="text-align: right;">2.99</td>
 <td style="text-align: right;">0.81</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3219,7 +3373,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">2.69</td>
+<td style="text-align: right;">2.99</td>
 <td style="text-align: right;">0.81</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3230,7 +3384,7 @@
 <td style="text-align: right;">8</td>
 <td style="text-align: right;">10</td>
 <td style="text-align: left;">7 to 19</td>
-<td style="text-align: right;">0.6</td>
+<td style="text-align: right;">0.59</td>
 <td style="text-align: right;">0.75</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3241,7 +3395,7 @@
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">1 to 10</td>
-<td style="text-align: right;">0.6</td>
+<td style="text-align: right;">0.59</td>
 <td style="text-align: right;">0.75</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3252,7 +3406,7 @@
 <td style="text-align: right;">2</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">1 to 7</td>
-<td style="text-align: right;">1.78</td>
+<td style="text-align: right;">1.81</td>
 <td style="text-align: right;">0.88</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3263,7 +3417,7 @@
 <td style="text-align: right;">3</td>
 <td style="text-align: right;">8</td>
 <td style="text-align: left;">3 to 22</td>
-<td style="text-align: right;">1.78</td>
+<td style="text-align: right;">1.81</td>
 <td style="text-align: right;">0.88</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3274,7 +3428,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">1.09</td>
+<td style="text-align: right;">1.2</td>
 <td style="text-align: right;">0.75</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3285,7 +3439,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">1.09</td>
+<td style="text-align: right;">1.2</td>
 <td style="text-align: right;">0.75</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3296,7 +3450,7 @@
 <td style="text-align: right;">2</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">1 to 6</td>
-<td style="text-align: right;">0.77</td>
+<td style="text-align: right;">0.72</td>
 <td style="text-align: right;">0.88</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3307,7 +3461,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.77</td>
+<td style="text-align: right;">0.72</td>
 <td style="text-align: right;">0.88</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3318,7 +3472,7 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.32</td>
+<td style="text-align: right;">0.47</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
@@ -3329,18 +3483,13 @@
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.32</td>
+<td style="text-align: right;">0.47</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">16</td>
 </tr>
 </tbody>
 </table>
 </details>
-<p>Pick a province and a zone to see its nowcast and forecast with its scores by origin.</p>
-<div class="zonechart" data-src="../figures/zonechart.json" role="group" aria-label="Zone nowcast and forecast">
-<noscript>The zone chart needs JavaScript.</noscript>
-</div>
-
 <h2 id="delay-and-spread">Delay and spread<a class="headerlink" href="#delay-and-spread" title="Permanent link">&para;</a></h2>
 <p>The growth to final of each onset day by its age at the latest release, and the observation model by weeks back.
 A place using its parent's estimate is labelled with the parent.
@@ -3475,6 +3624,10 @@ How both are fitted is on the <a href="../methods/baselines/#nowcast">Baseline m
       <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="../javascripts/toggles.js"></script>
+      
+        <script src="../javascripts/tablefilter.js"></script>
       
         <script src="../javascripts/explorer.js"></script>
       

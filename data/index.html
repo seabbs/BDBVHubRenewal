@@ -829,6 +829,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#negative-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Negative updates
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#missing-onsets" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1589,6 +1600,86 @@
   
   
   
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_3" id="__nav_7_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Models
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Models
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/forecasters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Forecasters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
     <li class="md-nav__item">
       <a href="../reference/model/" class="md-nav__link">
         
@@ -1597,7 +1688,7 @@
   <span class="md-ellipsis">
     
   
-    Model
+    Renewal model
   
 
     
@@ -1639,29 +1730,9 @@
 
               
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../reference/forecasters/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Forecasters
-  
-
-    
-  </span>
-  
-  
-
-      </a>
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -1682,6 +1753,86 @@
     
   
     Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_5" id="__nav_7_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reporting
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reporting
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/reporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Figures and tables
   
 
     
@@ -1723,6 +1874,14 @@
 
               
             
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
               
                 
   
@@ -1730,14 +1889,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../reference/reporting/" class="md-nav__link">
+      <a href="../reference/cli/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Reporting
+    CLI
   
 
     
@@ -1822,6 +1981,17 @@
     <span class="md-ellipsis">
       
         Revisions of recent weeks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#negative-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Negative updates
       
     </span>
   </a>
@@ -2038,8 +2208,157 @@ The renewal model forecasts it as an unassigned component (<a href="../methods/m
     Weeks three back are still revised by 3 to 13%.
   </figcaption>
 </figure>
+<h2 id="negative-updates">Negative updates<a class="headerlink" href="#negative-updates" title="Permanent link">&para;</a></h2>
+<p>A count falls when a release reports fewer cases for a place and onset week than the release before it.
+Each release is compared with the one before it, on the weeks of the earlier release with cases in either.
+A health zone missing from a release has no cases, so a zone that disappears counts as a fall to zero.</p>
+<figure class="doc-figure">
+  <img alt="Share of place-weeks that fell and cases removed as a share of all change between consecutive releases, by the onset week's age at the earlier release, for the country, provinces and health zones." src="../figures/downward-updates.svg#only-light" />
+  <img alt="Share of place-weeks that fell and cases removed as a share of all change between consecutive releases, by the onset week's age at the earlier release, for the country, provinces and health zones." src="../figures/downward-updates-dark.svg#only-dark" />
+<br />
+<figcaption>
+    Share of place-weeks that fell (top) and cases removed as a share of all change (bottom), by the onset week's age at the earlier release.
+    The 2026-08-18 to 2026-10-09 comparison spans seven weeks and the others one week.
+    No national or province count fell while its onset week was less than three weeks old.
+    Most falls came between the 2026-10-17 and 2026-10-24 releases, mainly in Nord Kivu.
+  </figcaption>
+</figure>
+<p>Over all releases, 8 of 102 national weeks fell, 25 of 357 province weeks and 85 of 2738 health zone weeks.
+Falls removed 24 cases nationally against 2684 added, 1% of all change.
+They were 2% of all change for provinces and 4% for health zones.
+No fall was larger than 8 cases.</p>
+<details class="note">
+<summary>Tables</summary>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Place</th>
+<th style="text-align: right;">Place-weeks</th>
+<th style="text-align: right;">Fell</th>
+<th style="text-align: right;">Share that fell</th>
+<th style="text-align: right;">Cases removed</th>
+<th style="text-align: right;">Cases added</th>
+<th style="text-align: right;">Removed share of all change</th>
+<th style="text-align: right;">Largest fall</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">Country</td>
+<td style="text-align: right;">102</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">0.078</td>
+<td style="text-align: right;">24</td>
+<td style="text-align: right;">2684</td>
+<td style="text-align: right;">0.009</td>
+<td style="text-align: right;">8</td>
+</tr>
+<tr>
+<td style="text-align: left;">Provinces</td>
+<td style="text-align: right;">357</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">0.07</td>
+<td style="text-align: right;">45</td>
+<td style="text-align: right;">2705</td>
+<td style="text-align: right;">0.016</td>
+<td style="text-align: right;">8</td>
+</tr>
+<tr>
+<td style="text-align: left;">Bas Uele (CD-BU)</td>
+<td style="text-align: right;">27</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">Haut Uele (CD-HU)</td>
+<td style="text-align: right;">63</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">0.127</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">141</td>
+<td style="text-align: right;">0.054</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td style="text-align: left;">Ituri (CD-IT)</td>
+<td style="text-align: right;">99</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">0.02</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">1539</td>
+<td style="text-align: right;">0.001</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td style="text-align: left;">Nord Kivu (CD-NK)</td>
+<td style="text-align: right;">92</td>
+<td style="text-align: right;">12</td>
+<td style="text-align: right;">0.13</td>
+<td style="text-align: right;">30</td>
+<td style="text-align: right;">960</td>
+<td style="text-align: right;">0.03</td>
+<td style="text-align: right;">8</td>
+</tr>
+<tr>
+<td style="text-align: left;">Nord Ubangi (CD-NU)</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">Sud Kivu (CD-SK)</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">Sud Ubangi (CD-SU)</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">Tshopo (CD-TO)</td>
+<td style="text-align: right;">60</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0.05</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">56</td>
+<td style="text-align: right;">0.082</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr>
+<td style="text-align: left;">Health zones</td>
+<td style="text-align: right;">2738</td>
+<td style="text-align: right;">85</td>
+<td style="text-align: right;">0.031</td>
+<td style="text-align: right;">111</td>
+<td style="text-align: right;">2771</td>
+<td style="text-align: right;">0.039</td>
+<td style="text-align: right;">4</td>
+</tr>
+</tbody>
+</table>
+</details>
 <h2 id="missing-onsets">Missing onsets<a class="headerlink" href="#missing-onsets" title="Permanent link">&para;</a></h2>
-<p>The hub publishes, for every vintage, the cases in each province and onset week with an imputed onset.</p>
+<p>The hub publishes, for every vintage, the cases in each province and onset week with an imputed onset.
+How the hub imputes them is on the <a href="../methods/model/#hub-imputation">methods page</a>.</p>
 <figure class="doc-figure">
   <img alt="Share of each week's cases with an imputed onset, by province and vintage, with point size by the week's count." src="../figures/imputed-share.svg#only-light" />
   <img alt="Share of each week's cases with an imputed onset, by province and vintage, with point size by the week's count." src="../figures/imputed-share-dark.svg#only-dark" />
@@ -2048,6 +2367,17 @@ The renewal model forecasts it as an unassigned component (<a href="../methods/m
     Imputed share of cases by onset week, by vintage.
     Point size grows with the week's count.
     It varies over time and between provinces.
+  </figcaption>
+</figure>
+<figure class="doc-figure">
+  <img alt="Share of all cases with an imputed onset in each release, for the country and each province with cases." src="../figures/imputed-by-release.svg#only-light" />
+  <img alt="Share of all cases with an imputed onset in each release, for the country and each province with cases." src="../figures/imputed-by-release-dark.svg#only-dark" />
+<br />
+<figcaption>
+    Share of all cases with an imputed onset in each release.
+    Nationally it stays between 15% and 17%.
+    In Nord Kivu it fell from 24% to 14% between the 2026-10-17 and 2026-10-24 releases, as cases gained an onset.
+    Sud Ubangi's few cases all have an imputed onset.
   </figcaption>
 </figure>
 <p>The change between vintages approximates the cases reported without an onset.
@@ -2338,6 +2668,10 @@ They set the zone series of the random walk baselines and the zone shares that s
       <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="../javascripts/toggles.js"></script>
+      
+        <script src="../javascripts/tablefilter.js"></script>
       
         <script src="../javascripts/explorer.js"></script>
       
