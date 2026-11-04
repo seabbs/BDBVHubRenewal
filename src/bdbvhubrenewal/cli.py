@@ -69,6 +69,7 @@ from bdbvhubrenewal.forecasters.base import (
     list_models,
 )
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
+from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 from bdbvhubrenewal.forecasters.zones import ZoneAllocator, zone_forecast
 from bdbvhubrenewal.submission.fitting import (
     Forecast,
@@ -505,15 +506,18 @@ def _backtest(args: argparse.Namespace) -> int:
         _write_fits(fits, results / "lopo-fits.csv")
         print(f"Leave one province out: {len(lopo_scores)} scored forecasts.")
         return 0
+    learnt: list[pd.DataFrame] = []
     forecasts = bt.run_development(
         models,
         target,
         delays,
         config,
         fits=fits,
+        learnt=learnt,
         daily=load_daily(args.data),
     )
     _write_fits(fits, results / "backtest-fits.csv")
+    _write_fits(learnt, output / DELAY_SUMMARY_FILE)
     # Rows of models not run here are kept, so the fitted variants can be
     # run apart from the others, and every model is scored again.
     forecasts = bt.merge_by_model(output / "forecasts.csv.gz", forecasts)

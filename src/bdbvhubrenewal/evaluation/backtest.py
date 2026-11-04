@@ -451,6 +451,7 @@ def run_forecasts(
     models: Sequence[ForecastModel],
     tasks: Iterable[ForecastTask],
     fits: list[pd.DataFrame] | None = None,
+    learnt: list[pd.DataFrame] | None = None,
 ) -> pd.DataFrame:
     """Run every model on every task, adding the national total.
 
@@ -469,6 +470,9 @@ def run_forecasts(
     fits : list, optional
         Collects a table of each model's fit summaries per task, for
         models that set `fit_diagnostics`.
+    learnt : list, optional
+        Collects each fit's learnt delay per task, for models that set
+        `delay_summary`.
 
     Returns
     -------
@@ -508,6 +512,9 @@ def run_forecasts(
             table = _fit_rows(model, task)
             if fits is not None and not table.empty:
                 fits.append(table)
+            delay = getattr(model, "delay_summary", None)
+            if learnt is not None and delay is not None:
+                learnt.append(delay.assign(kind=task.kind))
             check_samples(samples, task)
             if "as_of" not in samples:
                 samples["as_of"] = np.nan
@@ -805,6 +812,7 @@ def run_development(
     config: BacktestConfig,
     *,
     fits: list[pd.DataFrame] | None = None,
+    learnt: list[pd.DataFrame] | None = None,
     daily: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Forecast from the development vintages.
@@ -826,6 +834,8 @@ def run_development(
         Settings.
     fits : list, optional
         Collects fit summaries, as for `run_forecasts`.
+    learnt : list, optional
+        Collects learnt delays, as for `run_forecasts`.
     daily : pandas.DataFrame, optional
         Daily onsets by release, as for `development_tasks`.
 
@@ -835,7 +845,7 @@ def run_development(
         Output of `run_forecasts`.
     """
     tasks = development_tasks(target, delays, config, daily=daily)
-    return run_forecasts(models, tasks, fits)
+    return run_forecasts(models, tasks, fits, learnt)
 
 
 def lopo_tasks(

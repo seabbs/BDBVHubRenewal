@@ -202,6 +202,23 @@ def test_missing_fraction_and_hazard_delay_shapes():
     np.testing.assert_allclose(pmf.sum(axis=1), 1.0, rtol=1e-5)
 
 
+def test_hazard_delay_records_its_shape_and_shift():
+    weekly = WeeklyTemporalProcess(
+        NonCentredRandomWalk(DeterministicVariable("sd", 0.1)), start_dow=6
+    )
+    delay = HazardDelay("delay", 30, weekly)
+    with numpyro.handlers.trace() as tr, numpyro.handlers.seed(rng_seed=0):
+        pmf = delay(n_timepoints=35, first_day_dow=6)
+    beta = tr["delay_beta"]["value"]
+    shift = tr["delay_shift"]["value"]
+    assert beta.shape == (30,)
+    assert shift.shape[0] == 35
+    # The pmf is the hazard pmf of shape plus shift on each day.
+    np.testing.assert_allclose(
+        pmf[10], hazard_to_pmf(beta + shift[10].squeeze()), rtol=1e-5
+    )
+
+
 def test_near_constant_when_innovation_sd_is_small():
     weekly = WeeklyTemporalProcess(
         NonCentredRandomWalk(DeterministicVariable("sd", 1e-6)), start_dow=6
