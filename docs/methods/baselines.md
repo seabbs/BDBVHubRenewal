@@ -266,7 +266,9 @@ A place's counts are the sum of its children's, so for the walk spread and the n
   With one place and a gap of 1 its maximum likelihood estimate is baselinenowcast's chain ladder factor.
   A place's increments at age $x$ enter only where its denominator there, summed over the pairs, is at least 10 cases, the threshold of the [own-or-pooled rule](#own-or-pooled-estimates), and the country's always do.
   Below it a day often has no cases at one release and some at the next, which a factor cannot give, so the few days with cases would give too fast a delay.
-  Those ages take their parent's value through the pooling, as in `randomwalknowcast`.
+  Those ages take their parent's value through the pooling.
+  The rule and threshold are those `randomwalknowcast` uses to choose between a place's own factor and its parent's, applied here to which increments enter the likelihood.
+  A parent's increments are its children's summed, so a case at an age where both fit their own enters the likelihood once for each level.
   It is fitted at the origin and at each earlier release that gives errors.
 - **Walk spread.** The weekly changes of $\log\{1 + Y_{p,o}(w)\}$ over the [walk](#walk) window are $\mathcal{N}(0, \sigma_p^2)$.
   A change between two weeks with no cases sits at the walk's floor, so it is left out.

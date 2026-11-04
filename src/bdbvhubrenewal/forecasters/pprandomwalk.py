@@ -37,6 +37,8 @@ the likelihood and their ancestors are latent centres.
   next, which a factor cannot give, so the place's few days with cases
   would speak for all of them and give too fast a delay.
   Those ages take their parent's value, through the pooling.
+  A parent's increments are its children's summed, so a case at an age
+  where both fit their own enters the likelihood once for each level.
   It is fitted at the origin and at each earlier release, whose nowcasts
   give the errors of the observation model.
 - **Walk spread.** $\log \sigma_n$ pooled, with the weekly changes of
