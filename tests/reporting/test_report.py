@@ -132,10 +132,11 @@ def test_zone_section() -> None:
         ROOT / "results" / "zone-scores.csv",
         ROOT / "results" / "zone-energy.csv",
     )
-    assert text.startswith("## Health zones")
+    assert text.startswith('??? note "Health zones')
     assert "rel_energy" in text
-    assert "randomwalknowcast (summed to provinces)" in text
-    assert "week 0" in text
+    # Only the submitted form, under the model's name.
+    assert "summed to provinces" not in text
+    assert "| randomwalknowcast " in text
 
 
 def test_ladder_page(tmp_path: Path) -> None:
@@ -320,7 +321,7 @@ def test_backtest_findings() -> None:
 
 def test_forecast_tabs() -> None:
     text = report._forecast_tabs(["randomwalk", "renewal"], {"CD": "DRC"})
-    assert text.startswith("## Forecasts against later data")
+    assert text.startswith("## Forecasts by place")
     assert '=== "renewal"' in text
     assert "figures/forecasts-renewal-cd.svg#only-light" in text
     assert report._forecast_tabs([], {"CD": "DRC"}) == ""

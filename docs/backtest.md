@@ -5,8 +5,6 @@ Forecasts made at past vintages, scored on what each later release reported.
 
 --8<-- "release-headline.md"
 
---8<-- "backtest-findings.md"
-
 ## By horizon
 
 By weeks from the reference week ([horizon](methods/evaluation.md#reading-the-figures)), at the scale chosen.
@@ -29,6 +27,10 @@ Pick a place to narrow the table.
 --8<-- "zone-section.md"
 
 --8<-- "backtest-forecasts.md"
+
+## Findings
+
+--8<-- "backtest-findings.md"
 
 --8<-- "release-nowcasts.md"
 

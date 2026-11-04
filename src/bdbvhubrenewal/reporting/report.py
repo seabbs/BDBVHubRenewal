@@ -1135,9 +1135,9 @@ def _forecast_tabs(
         "Sample trajectories",
     )
     if explorer_src is None:
-        return "## Forecasts against later data\n\n" + static
+        return "## Forecasts by place\n\n" + static
     return (
-        "## Forecasts against later data\n\n"
+        "## Forecasts by place\n\n"
         + explorer_html(
             explorer_src,
             "Backtest forecasts",
