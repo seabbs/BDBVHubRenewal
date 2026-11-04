@@ -11,7 +11,9 @@ origin,model,status,reason,n_reported,n_complete
 2026-10-17,randomwalknowcast,scored,,88,13
 2026-10-17,renewal,scored,,88,13
 2026-10-17,renewalbvd,scored,,88,13
+2026-10-17,renewalfixdelay,scored,,88,13
 2026-10-17,renewalnolag,scored,,88,13
+2026-10-17,renewalplace,scored,,88,13
 2026-10-17,renewalsp,scored,,88,13
 2026-10-17,as reported,scored,,88,13
 2026-10-24,randomwalk,scored,,45,6
@@ -22,6 +24,8 @@ origin,model,status,reason,n_reported,n_complete
 2026-10-24,OHTJHU-BM,scored,,48,13
 2026-10-24,renewal,scored,,45,6
 2026-10-24,renewalbvd,scored,,45,6
+2026-10-24,renewalfixdelay,scored,,45,6
 2026-10-24,renewalnolag,scored,,45,6
+2026-10-24,renewalplace,scored,,45,6
 2026-10-24,renewalsp,scored,,45,6
 2026-10-24,as reported,scored,,45,6

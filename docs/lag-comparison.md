@@ -108,8 +108,8 @@ Earlier fits on the `ARProcess` walk gave the same picture and are not shown.
 
 --8<-- "lag-convergence.md"
 
-Every fit runs at the tree depth limit on 96 to 100% of draws.
-`renewal` at 2026-11-01 is the weakest.
+Every fit runs at the tree depth limit on 95 to 100% of draws.
+`renewal` at 2026-11-01 is the weakest `renewal` fit.
 Its two chains settle on different starting offsets of the province log R deviations, with R-hat 1.054 and bulk ESS 35 for those offsets and all 39 divergent draws in one chain.
 The reporting parameters converge well in every fit.
 These offsets are sampled centred, so the proposed fix is to sample them non-centred, a change to the model for Sam.
@@ -118,35 +118,33 @@ An analysis of the posterior curvature at the mode places the deep trees in the 
 Neighbouring steps are strongly correlated there, with a condition number of about 1e6 that a diagonal mass matrix cannot remove.
 The delay walk γ(s) is at about 1e4 on the same measure.
 `renewalfixdelay` drops γ(s).
-On the same code and seed it compares with `renewal` as follows.
-
-| Origin | Model | Max R-hat | Min bulk ESS | Divergent |
-|---|---|---|---|---|
-| 2026-10-17 | `renewal` | 1.031 | 54 | 0.2% |
-| 2026-10-17 | `renewalfixdelay` | 1.036 | 100 | 0.4% |
-| 2026-10-24 | `renewal` | 1.021 | 203 | 0.5% |
-| 2026-10-24 | `renewalfixdelay` | 1.014 | 150 | 1.0% |
-| 2026-11-01 | `renewal` | 1.054 | 35 | 3.9% |
-| 2026-11-01 | `renewalfixdelay` | 1.008 | 193 | 1.8% |
-
-At 2026-11-01 the fixed delay converges far better, and its chains do not split on the starting offsets, which reach R-hat 1.005.
-At 2026-10-17 and 2026-10-24 it is not clearly better than `renewal`, with ESS higher at one origin and lower at the other.
+At 2026-11-01 it converges far better than `renewal`, with R-hat 1.008, bulk ESS 193 and 1.8% divergent draws against 1.054, 35 and 3.9%, and its chains do not split on the starting offsets.
+At 2026-10-17 and 2026-10-24 it is not clearly better, with bulk ESS 100 against 54 and 150 against 203.
 So the gain at 2026-11-01 may be specific to that origin.
-Both still run at the tree depth limit on 98 to 99% of draws, so the deep trees remain without γ(s), as the Rt walk analysis predicts.
+It still runs at the tree depth limit on 98 to 100% of draws, so the deep trees remain without γ(s), as the Rt walk analysis predicts.
 Each origin has one seed.
 
-`renewalplace` at 2026-11-01 is the weakest fit of all, with R-hat 1.068 and bulk ESS 14, both on the Rt walk scale `rt_sd`.
-A bulk ESS below 25 is past the convergence rule-out in the submission chain, so as fitted here `renewalplace` would be ruled out.
+`renewalplace` takes about twice as long as `renewal` at every origin, 68 to 77 minutes against 32 to 37.
+Its divergent draws are 4.7% against 0.2% at 2026-10-17, 2.8% against 0.5% at 2026-10-24 and 0.5% against 3.9% at 2026-11-01.
+At 2026-11-01 it is the weakest fit of all, with R-hat 1.068 and bulk ESS 14, both on the Rt walk scale `rt_sd`.
+A bulk ESS below 25 is past the convergence rule-out in the submission chain, so that fit would be ruled out.
 These fits use the backtest sampler, not the submission one.
-The province delay parameters themselves converge, with R-hat at most 1.008 and bulk ESS above 360.
-The data give the province effects little room, with a pooling standard deviation of median 0.18 (90% interval 0.07 to 0.44) on the logit hazard.
+The province delay parameters themselves converge at 2026-11-01, with R-hat at most 1.008 and bulk ESS above 360.
+The data give the province effects little room there, with a pooling standard deviation of median 0.18 (90% interval 0.07 to 0.44) on the logit hazard.
 Every province effect's 90% interval spans or touches zero.
-So at this origin the province delay costs Rt walk mixing and finds little difference between provinces.
 
 ## Result
 
-With the lag `renewal` scores better than without it at every origin and release, relative WIS 0.91, 0.95 and 2.12 against 1.32, 1.96 and 3.72, and its 90% coverage is higher, 0.71 to 0.85 against 0.62 to 0.75.
+With the lag `renewal` scores better than without it at every origin and release, relative WIS 0.91, 0.95 and 2.12 against 1.32, 1.97 and 3.72, and its 90% coverage is higher, 0.71 to 0.85 against 0.62 to 0.75.
 Without the lag the newest weeks are nowcast far too low.
 So reports do reach releases late, as the release check shows, and removing the lag is not supported.
-The newest weeks are still too low with the lag, from the delay's tail rather than the lag, and that is what the province delay, the fixed delay and fitting every release are to test.
-`renewalplace` and `renewalfixdelay` are added to this page when their fits are run.
+The newest weeks are still too low with the lag, from the delay's tail rather than the lag.
+
+Neither delay change clearly improves on `renewal`.
+`renewalplace` scores relative WIS 0.97, 0.97 and 1.95 against `renewal`'s 0.91, 0.95 and 2.12, with 90% coverage 0.73 to 0.79 against 0.71 to 0.85.
+It finds little difference between provinces, doubles the fit time and at 2026-11-01 would be ruled out on ESS.
+So the province delay is not supported by these releases, and `renewalbvd` and `renewalsp` are not fitted with it.
+`renewalfixdelay` scores 0.85, 1.27 and 2.08, better at two of the three and worse from 2026-10-17 to 2026-11-01, with 90% coverage 0.73 to 0.82.
+Its nowcasts of the newest weeks are lower than `renewal`'s, most at 2026-11-01, where its national median for the week ending 2026-10-31 is 624 against 814.
+So the weekly walk γ(s) moves the newest weeks, and the scores do not settle whether it helps.
+Each comparison has three origins and one seed per fit.
