@@ -85,6 +85,11 @@ from bdbvhubrenewal.reporting.plots import (
     plot_target,
     save_light_dark,
 )
+from bdbvhubrenewal.reporting.scorechart import (
+    score_chart_data,
+    score_chart_html,
+    write_score_chart,
+)
 
 __all__ = ["make_report"]
 
@@ -731,6 +736,62 @@ _RELEASE_MATCH: Final = [
 """Columns that identify one forecast scored against one release."""
 
 
+_SCORE_METRICS: Final = {
+    "wis": ("WIS", None),
+    "log_wis": ("Log WIS", None),
+    "coverage_90": ("90% coverage", 0.9),
+    "bias": ("Bias", 0.0),
+}
+"""Metrics of the interactive score charts, with their reference lines."""
+
+
+def _score_chart(
+    fig: Path,
+    gen: Path,
+    scores: pd.DataFrame,
+    by: str,
+    names: Sequence[str],
+) -> None:
+    """Write an interactive chart of mean scores by `by`, and its fallback.
+
+    The static WIS figure is shown without JavaScript.
+    """
+    grp = scores.groupby(["model", by])
+    table = grp[list(_SCORE_METRICS)].mean()
+    table.insert(0, "n", grp.size())
+    table = table.reset_index()
+    if by == "location":
+        size = scores.groupby("location")["truth"].sum()
+        order = list(size.sort_values(ascending=False).index)
+        table = table.sort_values(
+            "location", key=lambda col: col.map(order.index)
+        )
+    stem = f"scores-wis-{by}"
+    save_light_dark(
+        partial(plot_scores, scores, by=by, metric="wis", models=names),
+        fig / f"{stem}.svg",
+    )
+    write_score_chart(
+        fig / f"scorechart-{by}.json",
+        score_chart_data(
+            table,
+            by,
+            _SCORE_METRICS,
+            names,
+            x_label="Horizon" if by == "horizon" else "Place",
+            kind="line" if by == "horizon" else "bar",
+        ),
+    )
+    _write(
+        gen / f"scorechart-{by}.md",
+        score_chart_html(
+            f"../figures/scorechart-{by}.json",
+            f"Mean scores by {'horizon' if by == 'horizon' else 'place'}",
+            static=f"../figures/{stem}.svg",
+        ),
+    )
+
+
 def _horizon_table(
     gen: Path,
     reported: pd.DataFrame,
@@ -785,7 +846,7 @@ def _forecast_tabs(
     static = _dropdown(
         "Forecasts from the real origins: 100 sample trajectories, 50% and "
         "90% intervals and the median, with the data at the time (dashed) "
-        "and the latest data (solid).\n\n" + "\n".join(tabs),
+        "and the latest release (solid).\n\n" + "\n".join(tabs),
         "Sample trajectories",
     )
     if explorer_src is None:
@@ -933,13 +994,7 @@ def _backtest_page(
     scores = _ours(_release_scores(res), names)
     reported = scores.loc[scores["target"] == "reported"]
     for by in ("horizon", "location"):
-        for metric in ("wis", "log_wis", "coverage_90", "bias"):
-            save_light_dark(
-                partial(
-                    plot_scores, reported, by=by, metric=metric, models=names
-                ),
-                fig / f"scores-{metric.replace('_', '-')}-{by}.svg",
-            )
+        _score_chart(fig, gen, reported, by, names)
     _horizon_table(gen, reported, names)
     _write(gen / "backtest-findings.md", _backtest_findings(scores))
     _write(

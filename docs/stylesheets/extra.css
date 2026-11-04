@@ -136,3 +136,72 @@
 .explorer-note {
   color: var(--md-default-fg-color--light);
 }
+
+/* Score charts. */
+.scorechart {
+  margin: 1em 0;
+}
+
+.scorechart-tabs {
+  display: flex;
+  gap: 1em;
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.scorechart-tabs button {
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--md-default-fg-color--light);
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 0.6em 0.2em;
+  cursor: pointer;
+}
+
+.scorechart-tabs button[aria-selected="true"] {
+  color: var(--md-default-fg-color);
+  border-bottom-color: currentcolor;
+}
+
+.scorechart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3em 1em;
+  margin: 0.6em 0;
+  font-size: 0.8rem;
+}
+
+.scorechart-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  cursor: pointer;
+}
+
+.scorechart-swatch {
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  border-radius: 2px;
+}
+
+.scorechart-figure svg {
+  width: 100%;
+  height: auto;
+}
+
+.scorechart-grid {
+  stroke: var(--md-default-fg-color--lightest);
+}
+
+.scorechart-ref {
+  stroke: var(--md-default-fg-color--light);
+  stroke-dasharray: 2 3;
+}
+
+.scorechart-tick {
+  fill: var(--md-default-fg-color--light);
+  font-size: 11px;
+}

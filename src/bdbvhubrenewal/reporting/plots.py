@@ -1169,7 +1169,7 @@ def plot_hub_round(
     -------
     matplotlib.figure.Figure
         Per week and model, the median (point), 50% interval (thick line)
-        and 90% interval (thin line), side by side, over the latest data,
+        and 90% interval (thin line), side by side, over the latest release,
         with the legend below the panels.
     """
     from bdbvhubrenewal.forecasters.base import list_models
