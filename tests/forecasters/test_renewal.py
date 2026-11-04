@@ -38,7 +38,12 @@ def test_variants_are_registered_as_fitted_models() -> None:
         model = get_model(name)
         assert isinstance(model, ForecastModel)
         assert model.name == name
-    assert set(rn.VARIANTS) == {"renewal", "renewalsp", "renewalbvd"}
+    assert set(rn.VARIANTS) == {
+        "renewal",
+        "renewalsp",
+        "renewalbvd",
+        "renewalnolag",
+    }
     # The single patch fits each province on its own data only, so it
     # cannot forecast a province with its data held out.
     assert get_model("renewal").supports_mask
