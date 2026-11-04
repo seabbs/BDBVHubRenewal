@@ -1,6 +1,13 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""Release cut-offs and the renewal model's report to publication lag.
+"""Release dates, cut-offs and the renewal model's report to publication lag.
 
+A hub release is labelled by its `as_of` date. From the 2026-11-01
+release on, `as_of` is the extraction date, one day after the last
+reported case. Earlier releases were labelled one day early, by the last
+reported case (hub issue #90). `release_id` maps a label, as published or
+as the hub may rewrite it, to the label we key releases by, so results,
+the submission ledger and rounds keep their keys.
+`extraction_date` and `last_report` give a release's dates from either.
 `cutoff_lags` gives the days from a release to its data cut-off by
 weekday, for simulated releases.
 `publication_lag_pmf` estimates, from pairs of delay files, the lag from a
@@ -18,7 +25,100 @@ import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date
 
-__all__ = ["MAX_PUBLICATION_LAG", "cutoff_lags", "publication_lag_pmf"]
+__all__ = [
+    "MAX_PUBLICATION_LAG",
+    "ORIGINAL_AS_OF",
+    "cutoff_lags",
+    "extraction_date",
+    "last_report",
+    "publication_lag_pmf",
+    "release_id",
+]
+
+# Hub issue InsightNet-US/BDBV-Modeling-Hub#90: these labels are a day early.
+ORIGINAL_AS_OF: frozenset[str] = frozenset(
+    {"2026-08-18", "2026-10-09", "2026-10-17", "2026-10-24"}
+)
+"""`as_of` labels of the releases published before 2026-11-01, which are
+the last reported case's date, not the extraction date."""
+
+
+def release_id(as_of: dt.date | str) -> str:
+    """Return the label we key a hub release by.
+
+    A label in `ORIGINAL_AS_OF` is kept. If the hub rewrites one to its
+    extraction date, a day later, it maps back. Other labels are kept.
+
+    Parameters
+    ----------
+    as_of : datetime.date or str
+        The release's `as_of`, as published or as rewritten.
+
+    Returns
+    -------
+    str
+        The release's label, ISO formatted.
+
+    Examples
+    --------
+    >>> release_id("2026-10-25"), release_id("2026-11-01")
+    ('2026-10-24', '2026-11-01')
+    """
+    day = as_date(as_of)
+    before = (day - dt.timedelta(days=1)).isoformat()
+    return before if before in ORIGINAL_AS_OF else day.isoformat()
+
+
+def extraction_date(as_of: dt.date | str) -> dt.date:
+    """Return the date a hub release was extracted.
+
+    Parameters
+    ----------
+    as_of : datetime.date or str
+        The release's `as_of`, as published or as rewritten.
+
+    Returns
+    -------
+    datetime.date
+        A day after the label for a release in `ORIGINAL_AS_OF`, else the
+        label.
+
+    Examples
+    --------
+    >>> extraction_date("2026-10-24"), extraction_date("2026-11-01")
+    (datetime.date(2026, 10, 25), datetime.date(2026, 11, 1))
+    """
+    label = release_id(as_of)
+    late = label in ORIGINAL_AS_OF
+    return as_date(label) + dt.timedelta(days=int(late))
+
+
+def last_report(as_of: dt.date | str, kind: str = "real") -> dt.date:
+    """Return the last report day in a release, its data cut-off.
+
+    A simulated release's label is its last report day. A hub release's
+    last report is the day before its extraction.
+
+    Parameters
+    ----------
+    as_of : datetime.date or str
+        The release's `as_of` label.
+    kind : str, optional
+        `"real"` for a hub release, else the label is the cut-off.
+
+    Returns
+    -------
+    datetime.date
+        The last report day.
+
+    Examples
+    --------
+    >>> last_report("2026-10-24"), last_report("2026-11-01")
+    (datetime.date(2026, 10, 24), datetime.date(2026, 10, 31))
+    """
+    if kind != "real":
+        return as_date(as_of)
+    return extraction_date(as_of) - dt.timedelta(days=1)
 
 
 def cutoff_lags(daily: pd.DataFrame) -> dict[int, int]:

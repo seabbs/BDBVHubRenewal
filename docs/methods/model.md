@@ -80,7 +80,7 @@ Provinces with no cases get no forecast.
 
 The data weeks start one week before weekly onsets, summed over the modelled provinces, first reach 5, or their peak if lower.
 In `renewalsp` the modelled province is $p$ alone, so each fit has its own axis.
-The data weeks end with the week that holds the vintage date $T$.
+The data weeks end with the week that holds $T$, the release's last report day ([Data](data.md#vintages)).
 The model axis starts 42 days (6 weeks) earlier, the length of the generation interval, for seeding.
 Every weekly walk is held at its starting value over the 6 seeding weeks and the first data week.
 The fit axis is the data weeks.
