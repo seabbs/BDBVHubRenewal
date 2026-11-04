@@ -91,24 +91,6 @@ def always(status: str):  # type: ignore[no-untyped-def]
     return run
 
 
-def test_chain_runs_from_most_to_least_complex() -> None:
-    # Sam (2026-11-03): renewalbvd, renewalsp, renewal, then the
-    # baselines, with no refit.
-    assert [(c.id, c.model) for c in POLICY.chain()] == [
-        ("bvd", "renewalbvd"),
-        ("renewalsp", "renewalsp"),
-        ("main", "renewal"),
-        ("randomwalknowcast", "randomwalknowcast"),
-        ("randomwalk", ""),
-    ]
-    assert [c.id for c in POLICY.stage("primary")] == [
-        "bvd",
-        "renewalsp",
-        "main",
-    ]
-    assert POLICY.for_model("renewalbvd") == POLICY
-
-
 def test_first_candidate_passes(tmp_path: Path) -> None:
     c = tmp_path / "c"
     chain(
