@@ -17,6 +17,14 @@ epiforecasts/BVDOutbreakSize (`src/scoring.jl`).
 - **Coverage** of the central 50% and 90% sample intervals.
 - **Bias** $1 - (P(X \le y) + P(X \le y - 1))$ for counts, in $[-1, 1]$.
   Positive means overprediction.
+- **Energy score** of a vector forecast, in the fair form over $m$ samples,
+  $$\text{ES}(F, \mathbf{y}) = \frac{1}{m}\sum_i \|\mathbf{X}_i - \mathbf{y}\|
+  - \frac{1}{2m(m-1)}\sum_{i \ne j} \|\mathbf{X}_i - \mathbf{X}_j\|.$$
+  The vector is every place at one scale by every scored week, for one
+  origin, so the score rewards getting the joint pattern right.
+  The sample index is the joint draw.
+- **Log energy score**: the energy score of $\log(1 + \mathbf{y})$ against
+  $\log(1 + \mathbf{X})$.
 
 `relative_skill` divides a model's mean score by the baseline's mean score
 over the forecasts both made.
@@ -30,6 +38,7 @@ from typing import Final
 import numpy as np
 import pandas as pd
 from numpy.typing import ArrayLike, NDArray
+from scipy.spatial.distance import pdist
 
 __all__ = [
     "QUANTILE_LEVELS",
@@ -37,7 +46,10 @@ __all__ = [
     "bias_sample",
     "coverage_sample",
     "crps_sample",
+    "energy_sample",
+    "energy_scores",
     "relative_skill",
+    "scale_of",
     "score_forecasts",
     "score_sample",
     "summarise_scores",
@@ -139,6 +151,101 @@ def crps_sample(obs: float, samples: ArrayLike) -> float:
     weights = 2 * np.arange(1, n + 1) - n - 1
     spread = np.sum(weights * x) / n**2
     return float(mae - spread)
+
+
+def energy_sample(obs: ArrayLike, samples: ArrayLike) -> float:
+    r"""Return the fair energy score of a sample forecast of a vector.
+
+    Parameters
+    ----------
+    obs : array-like
+        The observed vector, length $d$.
+    samples : array-like
+        Joint samples, shape `[m, d]` with $m \ge 2$.
+
+    Returns
+    -------
+    float
+        The energy score. In one dimension it is the fair CRPS.
+    """
+    y = np.asarray(obs, dtype=np.float64)
+    x = np.asarray(samples, dtype=np.float64)
+    m = x.shape[0]
+    fit = np.mean(np.linalg.norm(x - y, axis=1))
+    spread = np.sum(pdist(x)) / (m * (m - 1))
+    return float(fit - spread)
+
+
+def scale_of(location: pd.Series) -> pd.Series:
+    """Return `national`, `provinces` or `zones` for each location code.
+
+    Parameters
+    ----------
+    location : pandas.Series
+        Location codes, such as `CD`, `CD-IT` and `CD-IT-10`.
+
+    Returns
+    -------
+    pandas.Series
+        The scale of each code.
+    """
+    depth = location.str.count("-")
+    return depth.map({0: "national", 1: "provinces"}).fillna("zones")
+
+
+def energy_scores(
+    samples: pd.DataFrame, truth: pd.DataFrame, unit: Sequence[str]
+) -> pd.DataFrame:
+    """Score every model's joint forecast of each scale with the energy score.
+
+    Within one `unit` and scale, the vector is the place-week cells that
+    every model in the unit forecasts and the truth has. Each model's
+    samples are its rows with the same `sample` index.
+
+    Parameters
+    ----------
+    samples : pandas.DataFrame
+        The `unit` columns, `model`, `location`, `target_end_date`,
+        `sample` and `value`.
+    truth : pandas.DataFrame
+        Columns `location`, `target_end_date` and `truth`, plus any
+        columns it should be matched on.
+    unit : sequence of str
+        Columns that identify one forecast of every scale, such as an
+        origin and the release scored against.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per unit, `scale` and `model`: `n_cells`, `n_samples`,
+        `energy` and `log_energy`.
+    """
+    unit = list(unit)
+    cell = ["location", "target_end_date"]
+    on = [c for c in truth.columns if c != "truth"]
+    rows = samples.merge(truth, on=on)
+    rows["scale"] = scale_of(rows["location"])
+    out: list[dict[str, object]] = []
+    for key, grp in rows.groupby([*unit, "scale"], sort=True):
+        have = grp[["model", *cell]].drop_duplicates()
+        count = have.groupby(cell).size()
+        shared = count[count == have["model"].nunique()].index
+        grp = grp.set_index(cell).loc[shared].reset_index()
+        y = grp.drop_duplicates(cell).set_index(cell)["truth"]
+        for model, own in grp.groupby("model"):
+            x = own.pivot(index="sample", columns=cell, values="value")
+            obs = y.reindex(x.columns).to_numpy()
+            out.append(
+                {
+                    **dict(zip([*unit, "scale"], key, strict=True)),
+                    "model": model,
+                    "n_cells": x.shape[1],
+                    "n_samples": x.shape[0],
+                    "energy": energy_sample(obs, x),
+                    "log_energy": energy_sample(np.log1p(obs), np.log1p(x)),
+                }
+            )
+    return pd.DataFrame(out)
 
 
 def coverage_sample(obs: float, samples: ArrayLike, level: float) -> bool:
