@@ -32,7 +32,6 @@ from scipy import stats
 from .delays import (
     FixedTimeVarying,
     HazardDelay,
-    ParametricDelay,
 )
 from .observation import OnsetStreams, RtPseudoObservation
 from .renewal import Importation, MetapopulationInfections
@@ -132,8 +131,6 @@ class ModelConfig:
     coupling : {"gravity", "none"}
         Importation between modelled provinces through the fixed gravity
         kernel, or none.
-    delay : {"hazard", "gamma", "lognormal"}
-        Nonparametric hazard delay or a censored parametric family.
     depletion : bool
         Susceptible depletion in the renewal.
     active : {"cases", "all"}
@@ -177,7 +174,6 @@ class ModelConfig:
     streams: Literal["split", "total"] = "split"
     truncation: bool = True
     coupling: Literal["gravity", "none"] = "gravity"
-    delay: Literal["hazard", "gamma", "lognormal"] = "hazard"
     depletion: bool = True
     active: Literal["cases", "all"] = "cases"
     inactive: Literal["imports", "none"] = "imports"
@@ -487,13 +483,11 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         )
 
     if missing is not None:
-        delay_time = _named_walk("delay_sd", 0.15, fit_weeks(data, config))
-        if config.delay in ("gamma", "lognormal"):
-            delay = ParametricDelay(
-                "delay", config.dmax, delay_time, config.delay
-            )
-        else:
-            delay = HazardDelay("delay", config.dmax, delay_time)
+        delay = HazardDelay(
+            "delay",
+            config.dmax,
+            _named_walk("delay_sd", 0.15, fit_weeks(data, config)),
+        )
     imports = None
     if config.inactive == "imports" and data.import_kernel is not None:
         imports = DistributionalVariable(
