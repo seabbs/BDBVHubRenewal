@@ -12,6 +12,7 @@ from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
 from pyrenew.randomvariable import DistributionalVariable
 
 from bdbvhubrenewal.model import (
+    ConstantProcess,
     FixedTimeVarying,
     HazardDelay,
     MissingOnsetFraction,
@@ -247,6 +248,14 @@ def test_near_constant_when_innovation_sd_is_small():
     )
     pmf = seeded(lambda: _hazard("d", weekly)(n_timepoints=70, first_day_dow=6))
     np.testing.assert_allclose(pmf[0], pmf[-1], atol=1e-5)
+
+
+def test_constant_process_fixes_the_delay_over_onset_time():
+    weekly = WeeklyTemporalProcess(ConstantProcess(), start_dow=6)
+    pmf = seeded(
+        lambda: _hazard("d", weekly)(n_timepoints=70, first_day_dow=6)
+    )
+    np.testing.assert_array_equal(pmf, jnp.broadcast_to(pmf[0], pmf.shape))
 
 
 def test_fixed_inputs_pad_with_last_row():

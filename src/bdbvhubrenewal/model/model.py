@@ -39,7 +39,7 @@ from .observation import MissingOnsetFraction, OnsetStreams
 from .pooled import PooledInitialValue
 from .renewal import Importation, MetapopulationInfections
 from .rt_observation import RtPseudoObservation
-from .temporal import NonCentredRandomWalk
+from .temporal import ConstantProcess, NonCentredRandomWalk
 
 SUNDAY = 6
 """Weekday number of Sunday (Monday is 0), the first day of a hub week."""
@@ -185,6 +185,9 @@ class ModelConfig:
         imputed, so it overstates late reporting of the total.
     max_publication_lag : int
         $L$, in days (the model default).
+    delay_over_time : bool
+        Let the delay shift with onset week through the weekly walk
+        $\gamma(s)$, or hold it fixed over time ($\gamma = 0$).
     delay_counts : {"multinomial", "dirichlet-multinomial"}
         Likelihood of the delay file's counts given the weekly totals.
         The Dirichlet-multinomial (default) has $1/\sqrt{\psi} \sim
@@ -208,6 +211,7 @@ class ModelConfig:
         "fixed"
     )
     max_publication_lag: int = 3
+    delay_over_time: bool = True
     delay_counts: Literal["multinomial", "dirichlet-multinomial"] = (
         "dirichlet-multinomial"
     )
@@ -571,7 +575,9 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             NonCentredRandomWalk(
                 DistributionalVariable("delay_smooth_sd", dist.HalfNormal(0.4))
             ),
-            _named_walk("delay_sd", 0.15, fit_weeks(data, config)),
+            _named_walk("delay_sd", 0.15, fit_weeks(data, config))
+            if config.delay_over_time
+            else WeeklyTemporalProcess(ConstantProcess(), start_dow=SUNDAY),
         )
     imports = None
     if config.inactive == "imports" and data.import_kernel is not None:

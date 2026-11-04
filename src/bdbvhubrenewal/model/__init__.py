@@ -52,11 +52,12 @@ from .renewal import (
     mixing_matrix,
 )
 from .rt_observation import RtPseudoObservation
-from .temporal import NonCentredRandomWalk
+from .temporal import ConstantProcess, NonCentredRandomWalk
 
 __all__ = [
     "BVD",
     "MAIN",
+    "ConstantProcess",
     "FixedTimeVarying",
     "HazardDelay",
     "Importation",

@@ -1,5 +1,6 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""A non-centred random walk or AR(1) with separate fit and forecast steps."""
+"""A non-centred random walk or AR(1) with separate fit and forecast steps,
+and a constant process that stands in for one."""
 
 from __future__ import annotations
 
@@ -170,3 +171,45 @@ class NonCentredRandomWalk(TemporalProcess):
         decay = phi ** jnp.arange(1, n_future + 1)[:, None]
         future = decay * past[-1] + _damped_sum(phi, sd * z_future)
         return jnp.vstack([past, future])
+
+
+class ConstantProcess(TemporalProcess):
+    """A temporal process held at its starting value, with no parameters.
+
+    It stands in for a walk to fix a time-varying part, such as the
+    delay's shift over onset day.
+    """
+
+    step_size: int = 1
+
+    def sample(
+        self,
+        n_timepoints: int,
+        initial_value: float | ArrayLike | None = None,
+        n_processes: int = 1,
+        name_prefix: str = "constant",
+        *,
+        first_day_dow: int | None = None,
+    ) -> Array:
+        """Return the starting value at every time point.
+
+        Parameters
+        ----------
+        n_timepoints
+            Number of time points.
+        initial_value
+            Value of each process. Defaults to 0.
+        n_processes
+            Number of processes.
+        name_prefix
+            Unused, as nothing is sampled.
+        first_day_dow
+            Unused. See `pyrenew.latent.TemporalProcess`.
+
+        Returns
+        -------
+        Array
+            Shape `(n_timepoints, n_processes)`.
+        """
+        x0 = jnp.asarray(0.0 if initial_value is None else initial_value)
+        return jnp.broadcast_to(x0, (n_timepoints, n_processes))

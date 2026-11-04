@@ -203,6 +203,11 @@ VARIANTS: Final[dict[str, Variant]] = {
             "reported by the cut-off is in that release.",
             overrides={"publication_lag": "none"},
         ),
+        Variant(
+            "renewalfixdelay",
+            "renewal with a delay fixed over onset time, with no weekly walk.",
+            overrides={"delay_over_time": False},
+        ),
     )
 }
 """Model variants, by name."""
