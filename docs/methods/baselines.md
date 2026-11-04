@@ -271,6 +271,7 @@ A place's counts are the sum of its children's, so only the places forecast (the
 
 The posterior medians of $g_p$, $\sigma_p$, $\phi_{p,k}$ (kept in $[0.1, 1000]$) and $b_{p,k}$ replace the estimates of `randomwalknowcast`.
 So the forecasts carry the pooled point estimates, not their posterior spread.
+It is scored on the real releases at province and zone level, but not on the simulated recovery check, whose 15 vintages of 45 to 101 releases each would take about 1000 NUTS fits.
 
 ## Limitations
 
