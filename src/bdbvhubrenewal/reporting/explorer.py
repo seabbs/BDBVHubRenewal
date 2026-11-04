@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 from collections.abc import Collection, Mapping
 from pathlib import Path
-from typing import Final
 
 import pandas as pd
 
@@ -19,18 +18,6 @@ __all__ = ["explorer_data", "explorer_html", "write_explorer"]
 
 QUANTILE_COLUMNS = ("q05", "q25", "q50", "q75", "q95")
 """Interval columns of the forecast quantiles."""
-
-SCORE_COLUMNS: Final[Mapping[str, tuple[str, str | None]]] = {
-    "wis": ("WIS", "Relative WIS"),
-    "log_wis": ("WIS, log scale", "Relative WIS, log scale"),
-    "coverage_50": ("50% coverage", None),
-    "coverage_90": ("90% coverage", None),
-    "bias": ("Bias", None),
-}
-"""Score columns in the explorer's table, with each label and the label of
-its value relative to the baseline, if shown. WIS on the log scale is the
-WIS of log(1 + counts), and its relative value divides mean log-scale WIS,
-never a log of WIS."""
 
 
 def _level(location: str, provinces: set[str]) -> str:
@@ -45,8 +32,6 @@ def explorer_data(
     names: Mapping[str, str],
     complete_after_weeks: int,
     colours: Mapping[str, tuple[str, str]],
-    baseline: str | None = None,
-    scores: pd.DataFrame | None = None,
     truth_vintage: str | None = None,
     hidden: Collection[str] = (),
 ) -> dict[str, object]:
@@ -66,12 +51,6 @@ def explorer_data(
     colours : mapping of str to (str, str)
         Model label to its light and dark colour, as in the static
         figures.
-    baseline : str, optional
-        Model label that relative WIS divides by.
-    scores : pandas.DataFrame, optional
-        Complete-week scores with `model` (the label shown),
-        `reference_date`, `location`, `target_end_date` and the
-        `SCORE_COLUMNS`.
     truth_vintage : str, optional
         Defaults to the latest real vintage.
     hidden : collection of str
@@ -80,8 +59,7 @@ def explorer_data(
     Returns
     -------
     dict
-        JSON-ready lists. Rows of `q` and `scores` index into `models`
-        and `rounds`.
+        JSON-ready lists. Rows of `q` index into `models` and `rounds`.
     """
     real = target.loc[target["kind"] == "real"]
     truth_v = truth_vintage or str(real["vintage"].max())
@@ -120,7 +98,6 @@ def explorer_data(
     out: dict[str, object] = {
         "truth_vintage": truth_v,
         "complete_through": cut.date().isoformat(),
-        "baseline": models.index(baseline) if baseline in models else None,
         "locations": [
             {
                 "id": loc,
@@ -142,26 +119,7 @@ def explorer_data(
         ],
         "data": data,
         "q": rows,
-        "score_columns": [
-            {"key": key, "label": label, "relative": relative}
-            for key, (label, relative) in SCORE_COLUMNS.items()
-        ],
-        "scores": [],
     }
-    if scores is not None and not scores.empty:
-        s = scores.loc[scores["model"].isin(models)]
-        s = s.assign(
-            m=s["model"].map(models.index),
-            r=s["reference_date"]
-            .astype(str)
-            .map({r: i for i, r in enumerate(rounds)}),
-        ).dropna(subset=["r"])
-        out["scores"] = [
-            [int(m), int(r), loc, str(d), *(round(float(v), 3) for v in vals)]
-            for m, r, loc, d, *vals in s[
-                ["m", "r", "location", "target_end_date", *SCORE_COLUMNS]
-            ].itertuples(index=False)
-        ]
     return out
 
 
@@ -171,7 +129,9 @@ def write_explorer(path: Path, data: Mapping[str, object]) -> None:
     path.write_text(json.dumps(data, separators=(",", ":")))
 
 
-def explorer_html(src: str, title: str, all_rounds: bool = False) -> str:
+def explorer_html(
+    src: str, title: str, all_rounds: bool = False, summary: str | None = None
+) -> str:
     """Return the page element the explorer script fills.
 
     Parameters
@@ -182,8 +142,13 @@ def explorer_html(src: str, title: str, all_rounds: bool = False) -> str:
         Accessible name of the explorer.
     all_rounds : bool
         Start with all rounds pooled, rather than the latest round.
+    summary : str, optional
+        URL of the page's `summary_rows` JSON, whose rounds are the
+        explorer's. The table summarises it for the selection.
     """
     start = ' data-round="all"' if all_rounds else ""
+    if summary is not None:
+        start += f' data-summary="{summary}"'
     return (
         f'<div class="explorer" data-src="{src}"{start} role="group" '
         f'aria-label="{title}">\n'

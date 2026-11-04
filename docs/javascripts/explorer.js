@@ -1,4 +1,6 @@
-// Forecast explorer: draws SVG from a JSON file, in the site's theme.
+// Forecast explorer: draws SVG from a JSON file, in the site's theme. With
+// data-summary, the table summarises the page's per-forecast scores
+// (summarise.js) for the location, rounds and models chosen.
 (function () {
   "use strict";
   var NS = "http://www.w3.org/2000/svg";
@@ -13,17 +15,16 @@
     return n;
   }
   function day(s) { return Date.parse(s + "T00:00:00Z"); }
-  function mean(a) { return a.reduce(function (x, y) { return x + y; }, 0) / a.length; }
-  function fmt(v, d) { return v === null || isNaN(v) ? "" : v.toFixed(d); }
 
   function init(root) {
-    fetch(root.dataset.src)
-      .then(function (r) { return r.json(); })
-      .then(function (d) { build(root, d); })
+    var get = function (src) { return fetch(src).then(function (r) { return r.json(); }); };
+    Promise.all([get(root.dataset.src),
+      root.dataset.summary ? get(root.dataset.summary) : null])
+      .then(function (both) { build(root, both[0], both[1]); })
       .catch(function () { root.textContent = "The explorer data could not be loaded."; });
   }
 
-  function build(root, d) {
+  function build(root, d, summary) {
     root.textContent = "";
     var state = {
       loc: d.locations[0].id,
@@ -152,51 +153,20 @@
 
     function drawTable(rounds) {
       table.textContent = "";
-      var s = d.scores.filter(function (r) {
-        return r[2] === state.loc && rounds.indexOf(r[1]) >= 0;
+      if (!summary) return;
+      var place = summary.places.map(function (p) { return p.id; }).indexOf(state.loc);
+      var origins = {};
+      rounds.forEach(function (ri) {
+        var o = summary.origins.indexOf(d.rounds[ri]);
+        if (o >= 0) origins[o] = true;
       });
-      if (!s.length) {
-        h("p", { class: "explorer-note" }, table,
-          "No scores yet for this selection. Rounds are scored once later data are published.");
-        return;
-      }
-      var by = {};
-      s.forEach(function (r) { (by[r[0]] = by[r[0]] || []).push(r); });
-      var key = function (r) { return r[1] + "|" + r[3]; };
-      // Score values follow d.score_columns from index 4. A relative score
-      // divides the mean of the embedded per-forecast column by the
-      // baseline's mean on the same forecasts, so log WIS stays the WIS of
-      // log counts and is never a log taken here.
-      var cols = d.score_columns;
-      var base = {};
-      (by[d.baseline] || []).forEach(function (r) { base[key(r)] = r; });
-      var tbl = h("table", {}, table);
-      var head = h("tr", {}, h("thead", {}, tbl));
-      var names = ["Model", "Weeks"];
-      cols.forEach(function (c) {
-        names.push(c.label);
-        if (c.relative) names.push(c.relative);
+      var s = window.bdbvSummarise(summary, function (r) {
+        return r[3] === place && origins[r[1]];
       });
-      names.forEach(function (c) { h("th", {}, head, c); });
-      var body = h("tbody", {}, tbl);
-      Object.keys(by).map(Number).forEach(function (m) {
-        if (!legend.on[m]) return;
-        var rs = by[m];
-        var both = rs.filter(function (r) { return key(r) in base; });
-        var tr = h("tr", {}, body);
-        h("td", {}, tr, d.models[m].name);
-        h("td", {}, tr, String(rs.length));
-        cols.forEach(function (c, k) {
-          var at = 4 + k;
-          h("td", {}, tr, fmt(mean(rs.map(function (r) { return r[at]; })), 2));
-          if (!c.relative) return;
-          var rel = "";
-          if (d.baseline !== null && m !== d.baseline && both.length) {
-            rel = fmt(mean(both.map(function (r) { return r[at]; })) /
-              mean(both.map(function (r) { return base[key(r)][at]; })), 2);
-          }
-          h("td", {}, tr, rel);
-        });
+      var names = d.models.map(function (m) { return m.name; });
+      window.bdbvSummaryTable(table, summary, s, function (m) {
+        var i = names.indexOf(summary.models[m].name);
+        return i < 0 || legend.on[i];
       });
     }
     draw();

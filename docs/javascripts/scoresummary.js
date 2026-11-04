@@ -16,6 +16,42 @@
     return /^[A-Z]{2}/.test(s) ? s : s.charAt(0).toLowerCase() + s.slice(1);
   }
 
+  // Tabulate summaries s of data d in container, for the models isOn(m):
+  // n, the mean of each metric and, for relative metrics, the relative one.
+  // extra columns ({label, dp, get(e)}) read extraFor(model), if given.
+  function summaryTable(container, d, s, isOn, extra, extraFor) {
+    extra = extra || [];
+    if (!s.length) {
+      h("p", { class: "explorer-note" }, container,
+        "No scores yet for this selection. Rounds are scored once later data are published.");
+      return;
+    }
+    var cols = [];
+    d.metrics.forEach(function (m) {
+      cols.push({ label: m.label, get: function (x) { return x.mean[m.key]; } });
+      if (m.relative) {
+        cols.push({ label: "Relative " + lower(m.label),
+          get: function (x) { return x.rel[m.key]; } });
+      }
+    });
+    var tbl = h("table", {}, container);
+    var head = h("tr", {}, h("thead", {}, tbl));
+    ["Model", "n"].concat(cols.map(function (c) { return c.label; }))
+      .concat(extra.map(function (c) { return c.label; }))
+      .forEach(function (c) { h("th", {}, head, c); });
+    var body = h("tbody", {}, tbl);
+    s.forEach(function (r) {
+      if (!isOn(r.model)) return;
+      var tr = h("tr", {}, body);
+      h("td", {}, tr, d.models[r.model].name);
+      h("td", {}, tr, String(r.n));
+      cols.forEach(function (c) { h("td", {}, tr, fmt(c.get(r), 3)); });
+      var e = extra.length ? extraFor(r.model) : null;
+      extra.forEach(function (c) { h("td", {}, tr, e ? fmt(c.get(e), c.dp) : "–"); });
+    });
+  }
+  window.bdbvSummaryTable = summaryTable;
+
   function init(root) {
     fetch(root.dataset.src)
       .then(function (r) { return r.json(); })
@@ -117,13 +153,6 @@
       return { rows: rows, x: x };
     }
 
-    var cols = [];
-    d.metrics.forEach(function (m) {
-      cols.push({ label: m.label, get: function (s) { return s.mean[m.key]; } });
-      if (m.relative) {
-        cols.push({ label: "Relative " + lower(m.label), get: function (s) { return s.rel[m.key]; } });
-      }
-    });
     var jointCols = [{ label: "n energy", dp: 0, get: function (e) { return e.n; } }];
     energy.forEach(function (m) {
       jointCols.push({ label: m.label, dp: 3, get: function (e) { return e.mean[m.key]; } });
@@ -132,31 +161,11 @@
     function drawTable(_, on) {
       var chosen = byPlace && selPlace.value !== "all" ?
         [{ i: +selPlace.value }] : places();
-      var s = summarise(d, keep(set(chosen)));
       var j = energy.length ? joint() : null;
       table.textContent = "";
-      if (!s.length) {
-        h("p", { class: "explorer-note" }, table, "No scores for this selection.");
-        return;
-      }
-      var tbl = h("table", {}, table);
-      var head = h("tr", {}, h("thead", {}, tbl));
-      ["Model", "n"].concat(cols.map(function (c) { return c.label; }))
-        .concat(j ? jointCols.map(function (c) { return c.label; }) : [])
-        .forEach(function (c) { h("th", {}, head, c); });
-      var body = h("tbody", {}, tbl);
-      s.forEach(function (r) {
-        if (!on[r.model]) return;
-        var tr = h("tr", {}, body);
-        h("td", {}, tr, d.models[r.model].name);
-        h("td", {}, tr, String(r.n));
-        cols.forEach(function (c) { h("td", {}, tr, fmt(c.get(r), 3)); });
-        if (j) {
-          jointCols.forEach(function (c) {
-            h("td", {}, tr, j[r.model] ? fmt(c.get(j[r.model]), c.dp) : "");
-          });
-        }
-      });
+      summaryTable(table, d, summarise(d, keep(set(chosen))),
+        function (m) { return on[m]; },
+        j ? jointCols : [], function (m) { return j && j[m]; });
     }
 
     fillPlaces();

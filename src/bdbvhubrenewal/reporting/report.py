@@ -400,6 +400,10 @@ def _release_section(
     ours = [*names, BASELINE]
     colours = _model_colours(ours, names)
     rep = pooled.loc[pooled["target"] == _TARGET_LABELS["reported"]]
+    # Rounds are named by their reference date, as in the explorer.
+    rep = rep.assign(
+        origin=rep["origin"].map(lambda v: str(reference_date_for_vintage(v)))
+    )
     write_score_chart(
         fig / "scoresummary-backtest.json",
         summary_rows(
@@ -1084,7 +1088,12 @@ def _forecast_tabs(
         return "## Forecasts against later data\n\n" + static
     return (
         "## Forecasts against later data\n\n"
-        + explorer_html(explorer_src, "Backtest forecasts", all_rounds=True)
+        + explorer_html(
+            explorer_src,
+            "Backtest forecasts",
+            all_rounds=True,
+            summary="../figures/scoresummary-backtest.json",
+        )
         + "\n"
         + static
     )
@@ -1344,8 +1353,6 @@ def _backtest_page(
     if shown:
         quantiles = forecast_quantiles(real_fc.assign(source="ours"))
         quantiles = quantiles.assign(ours=True)
-        rounds = real_fc[["vintage", "reference_date"]].drop_duplicates()
-        complete = scores.loc[scores["target"] == "complete"]
         write_explorer(
             fig / "explorer-backtest.json",
             explorer_data(
@@ -1360,8 +1367,6 @@ def _backtest_page(
                     )
                     for m in shown
                 },
-                baseline="randomwalk",
-                scores=complete.merge(rounds, on="vintage"),
             ),
         )
         explorer_src = "../figures/explorer-backtest.json"
@@ -1836,15 +1841,6 @@ def _comparison_page(
             "model",
         ]
     )
-    explorer_scores = None
-    if not scores.empty:
-        done = scores.loc[scores["target"] == "complete"]
-        explorer_scores = done.assign(
-            model=[
-                comparison_label(m, src, hub_ids)
-                for m, src in zip(done["model"], done["source"], strict=True)
-            ]
-        )
     write_explorer(
         fig / "explorer-comparison.json",
         explorer_data(
@@ -1853,8 +1849,6 @@ def _comparison_page(
             _location_names(target),
             k,
             colours,
-            baseline=_baseline_label(baseline, labelled),
-            scores=explorer_scores,
             truth_vintage=truth,
             hidden=hidden,
         ),
