@@ -21,7 +21,8 @@ $$
 
 It splits into dispersion, overprediction and underprediction.
 WIS on the log scale is the WIS of the transformed target, $\text{WIS}(\log(1 + x), \log(1 + y))$, never the log of WIS.
-It measures relative error, so small provinces count.
+WIS on the natural scale is dominated by the places with the most cases.
+On the log scale it approximates a score of the relative error, close to a score of the growth rate, so every place counts on a similar footing[^bosse].
 
 $$
 \text{Bias} = 1 - \big(P(X \le y) + P(X \le y - 1)\big),
@@ -146,3 +147,5 @@ Where we submitted to a round, our submitted file is a series of its own beside 
 Every model is scored on the weeks it forecast as for [real releases](#real-releases), from the vintage serving the round.
 WIS is relative to `randomwalk` on the weeks both forecast, on the [comparison page](../comparison.md).
 A round is pending until a later real release exists.
+
+[^bosse]: Bosse NI, Abbott S, Cori A, van Leeuwen E, Bracher J, Funk S (2023). Scoring epidemiological forecasts on transformed scales. PLOS Computational Biology 19(8): e1011393. [doi:10.1371/journal.pcbi.1011393](https://doi.org/10.1371/journal.pcbi.1011393).
