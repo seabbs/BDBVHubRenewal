@@ -21,6 +21,7 @@ from bdbvhubrenewal.evaluation.nowcast import relative_wis
 from bdbvhubrenewal.evaluation.zones import SUMMED, ZONE_BASELINE
 from bdbvhubrenewal.forecasters import ForecastTask, get_model
 from bdbvhubrenewal.forecasters.zones import zone_forecast
+from bdbvhubrenewal.reporting.explorer import compact, trajectories
 
 __all__ = [
     "ZONE_MODEL",
@@ -240,8 +241,10 @@ def zone_chart_data(
         release), `origins` with zone scores, `provinces` (code and name)
         and `zones` (code and province), each by recent cases, most first,
         and per zone `data` (week, count), `q` (model index, week, q5,
-        q25, q50, q75, q95) and `scores` (origin, model index, n, relative
-        WIS, 50% and 90% coverage). Scores are those summed to provinces,
+        q25, q50, q75, q95), `traj` (model index, draw, first week, then
+        the weekly values of a fixed subset of draws, the same in every
+        zone) and `scores` (origin, model index, n, relative WIS, 50% and
+        90% coverage). Scores are those summed to provinces,
         relative to randomwalk summed to provinces.
     """
     models = list(colours)
@@ -306,6 +309,16 @@ def zone_chart_data(
                 if r["model"] in models
             ]
             for z, g in q.groupby("location")
+        },
+        "traj": {
+            str(z): [
+                [models.index(m), int(k), start, *(compact(v) for v in vals)]
+                for m, _, _, k, start, vals in g.itertuples(index=False)
+                if m in models
+            ]
+            for z, g in trajectories(
+                samples.loc[samples["location"].isin(shown)]
+            ).groupby("location")
         },
         "scores": {
             str(z): [

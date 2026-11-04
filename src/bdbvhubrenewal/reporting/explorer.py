@@ -14,10 +14,75 @@ import pandas as pd
 
 from bdbvhubrenewal.forecasters import NATIONAL
 
-__all__ = ["explorer_data", "explorer_html", "write_explorer"]
+__all__ = [
+    "TRAJECTORY_DRAWS",
+    "compact",
+    "explorer_data",
+    "explorer_html",
+    "trajectories",
+    "write_explorer",
+]
 
 QUANTILE_COLUMNS = ("q05", "q25", "q50", "q75", "q95")
 """Interval columns of the forecast quantiles."""
+
+
+TRAJECTORY_DRAWS = 50
+"""Sample trajectories embedded per model, round and place."""
+
+
+def compact(value: float) -> float | int:
+    """Round a sample value to 0.1, as a whole number where it is one."""
+    v = round(float(value), 1)
+    return int(v) if v.is_integer() else v
+
+
+def trajectories(
+    samples: pd.DataFrame, n: int = TRAJECTORY_DRAWS
+) -> pd.DataFrame:
+    """Keep a fixed subset of each model's sample trajectories.
+
+    Each model keeps its `n` lowest sample ids, the same ids in every
+    round and place, so where a model's draws are joint across places
+    (ours) a kept draw stays joint. Hub draws are joint across weeks
+    within a place only, and are not linked across places here either.
+
+    Parameters
+    ----------
+    samples : pandas.DataFrame
+        Columns `model`, `reference_date`, `location`, `target_end_date`,
+        `sample` and `value`.
+    n : int
+        Draws kept per model.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per model, round, place and kept draw, with `draw` (0 to
+        n - 1), `start` (the first week) and `values`, the draw's weekly
+        values in week order.
+    """
+    ids = samples.groupby("model")["sample"].apply(lambda x: sorted(set(x))[:n])
+    keep = samples.loc[
+        [
+            s in set(ids[m])
+            for m, s in zip(samples["model"], samples["sample"], strict=True)
+        ]
+    ]
+    keep = keep.assign(
+        draw=[
+            ids[m].index(s)
+            for m, s in zip(keep["model"], keep["sample"], strict=True)
+        ],
+        reference_date=keep["reference_date"].astype(str),
+        target_end_date=keep["target_end_date"].astype(str),
+    ).sort_values("target_end_date")
+    keys = ["model", "reference_date", "location", "draw"]
+    return (
+        keep.groupby(keys)
+        .agg(start=("target_end_date", "first"), values=("value", list))
+        .reset_index()
+    )
 
 
 def _level(location: str, provinces: set[str]) -> str:
@@ -34,6 +99,7 @@ def explorer_data(
     colours: Mapping[str, tuple[str, str]],
     truth_vintage: str | None = None,
     hidden: Collection[str] = (),
+    samples: pd.DataFrame | None = None,
 ) -> dict[str, object]:
     """Collect what the explorer draws.
 
@@ -55,11 +121,16 @@ def explorer_data(
         Defaults to the latest real vintage.
     hidden : collection of str
         Model labels switched off until the reader switches them on.
+    samples : pandas.DataFrame, optional
+        Sample draws with `model` (the label shown), as `trajectories`
+        takes them. Models without samples are drawn as bands only.
 
     Returns
     -------
     dict
-        JSON-ready lists. Rows of `q` index into `models` and `rounds`.
+        JSON-ready lists. Rows of `q` and `traj` (model, round, place,
+        draw, first week, then the weekly values) index into `models` and
+        `rounds`; each model says whether it has trajectories.
     """
     real = target.loc[target["kind"] == "real"]
     truth_v = truth_vintage or str(real["vintage"].max())
@@ -95,7 +166,23 @@ def explorer_data(
             ["m", "r", "location", "target_end_date", *QUANTILE_COLUMNS]
         ].itertuples(index=False)
     ]
-    out: dict[str, object] = {
+    traj: list[list[object]] = []
+    if samples is not None:
+        t = trajectories(samples.loc[samples["model"].isin(models)])
+        t = t.loc[t["reference_date"].isin(rounds) & t["location"].isin(locs)]
+        traj = [
+            [
+                models.index(m),
+                rounds.index(r),
+                loc,
+                int(k),
+                start,
+                *(compact(v) for v in vals),
+            ]
+            for m, r, loc, k, start, vals in t.itertuples(index=False)
+        ]
+    have = {r[0] for r in traj}
+    return {
         "truth_vintage": truth_v,
         "complete_through": cut.date().isoformat(),
         "locations": [
@@ -114,13 +201,14 @@ def explorer_data(
                 "on": m not in hidden,
                 "light": colours[m][0],
                 "dark": colours[m][1],
+                "trajectories": i in have,
             }
-            for m in models
+            for i, m in enumerate(models)
         ],
         "data": data,
         "q": rows,
+        "traj": traj,
     }
-    return out
 
 
 def write_explorer(path: Path, data: Mapping[str, object]) -> None:

@@ -43,5 +43,16 @@
       { attributes: true, attributeFilter: ["data-md-color-scheme"] });
   }
 
-  window.bdbvToggles = { h: h, legend: legend, onTheme: onTheme };
+  // A Bands / Trajectories select, Bands first. Its value is "bands" or
+  // "traj". Without trajectories it is not shown and stays on bands.
+  function viewSelect(controls, has, onChange) {
+    if (!has) return { value: "bands" };
+    var sel = h("select", {}, h("label", {}, controls, "Show "));
+    h("option", { value: "bands" }, sel, "Bands");
+    h("option", { value: "traj" }, sel, "Trajectories");
+    sel.addEventListener("change", onChange);
+    return sel;
+  }
+
+  window.bdbvToggles = { h: h, legend: legend, onTheme: onTheme, viewSelect: viewSelect };
 })();

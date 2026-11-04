@@ -1367,6 +1367,7 @@ def _backtest_page(
                     )
                     for m in shown
                 },
+                samples=real_fc,
             ),
         )
         explorer_src = "../figures/explorer-backtest.json"

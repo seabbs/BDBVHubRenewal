@@ -46,9 +46,12 @@
     d.rounds.forEach(function (r, i) { h("option", { value: i }, selRound, r); });
     h("option", { value: "all" }, selRound, "All rounds");
     selRound.value = String(state.round);
+    var hasTraj = d.models.some(function (m) { return m.trajectories; });
+    var view = T.viewSelect(controls, hasTraj, function () { draw(); });
     var zoom = window.bdbvZoom.create(controls, function () { draw(); });
     var Z = window.bdbvZoom;
     var legend = T.legend(root, d.models, draw);
+    var note = h("p", { class: "explorer-note" }, root);
     var figure = h("div", { class: "explorer-figure" }, root);
     var table = h("div", { class: "explorer-table" }, root);
 
@@ -83,6 +86,19 @@
       rows.forEach(function (r) {
         if (Z.visible(zoom, day(r[3]))) ymax = Math.max(ymax, r[8]);
       });
+      var traj = view.value !== "traj" ? [] : d.traj.filter(function (t) {
+        return t[2] === state.loc && rounds.indexOf(t[1]) >= 0 && legend.on[t[0]];
+      });
+      traj.forEach(function (t) {
+        for (var k = 5; k < t.length; k++) {
+          if (Z.visible(zoom, day(t[4]) + (k - 5) * 7 * DAY)) ymax = Math.max(ymax, t[k]);
+        }
+      });
+      var bandsOnly = d.models.filter(function (m, i) {
+        return legend.on[i] && !m.trajectories;
+      }).map(function (m) { return m.name; });
+      note.textContent = view.value === "traj" && bandsOnly.length ?
+        "Bands only, as no samples are embedded: " + bandsOnly.join(", ") + "." : "";
       var yr = Z.yRange(zoom, 0, ymax * 1.05, "");
       var y0 = yr[0], y1 = yr[1];
       var W = 760, H = 340, L = 52, R = 10, T = 10, B = 28;
@@ -117,7 +133,27 @@
       }
       var slots = Math.max(models.length * rounds.length, 1);
       var width = Math.min(5.5 * DAY, 5.5 * DAY) / slots;
+      var asTraj = function (m) { return view.value === "traj" && d.models[m].trajectories; };
+      traj.forEach(function (t) {
+        var pts = [];
+        for (var k = 5; k < t.length; k++) {
+          pts.push(X(day(t[4]) + (k - 5) * 7 * DAY) + "," + Y(t[k]));
+        }
+        el("polyline", { points: pts.join(" "), fill: "none", stroke: legend.colour(t[0]),
+          "stroke-width": 0.8, "stroke-opacity": rounds.length > 1 ? 0.1 : 0.18 }, plot);
+      });
+      models.forEach(function (m) {
+        if (!asTraj(m)) return;
+        rounds.forEach(function (ri) {
+          var own = rows.filter(function (r) { return r[0] === m && r[1] === ri; })
+            .sort(function (a, b) { return day(a[3]) - day(b[3]); });
+          el("polyline", { fill: "none", stroke: legend.colour(m), "stroke-width": 2,
+            points: own.map(function (r) { return X(day(r[3])) + "," + Y(r[6]); }).join(" ") },
+            plot);
+        });
+      });
       rows.forEach(function (r) {
+        if (asTraj(r[0])) return;
         var slot = models.indexOf(r[0]) * rounds.length + rounds.indexOf(r[1]);
         var t0 = day(r[3]) + (slot - (slots - 1) / 2) * width;
         var xx = X(t0);

@@ -80,6 +80,7 @@ def test_explorer_hides_models_until_switched_on() -> None:
             "on": False,
             "light": "#111111",
             "dark": "#eeeeee",
+            "trajectories": False,
         },
         {
             "name": "hub",
@@ -87,6 +88,7 @@ def test_explorer_hides_models_until_switched_on() -> None:
             "on": True,
             "light": "#222222",
             "dark": "#dddddd",
+            "trajectories": False,
         },
     ]
 
@@ -101,3 +103,46 @@ def test_explorer_html_can_start_with_all_rounds() -> None:
 def test_explorer_html_names_the_summary_it_tabulates() -> None:
     html = explorer.explorer_html("x.json", "Forecasts", summary="s.json")
     assert 'data-summary="s.json"' in html
+
+
+def test_trajectories_keep_the_same_draws_in_every_place() -> None:
+    samples = pd.DataFrame(
+        [
+            {
+                "model": "a (ours)",
+                "reference_date": "2026-10-31",
+                "location": loc,
+                "target_end_date": week,
+                "sample": k,
+                "value": float(k),
+            }
+            for loc in ("CD", "CD-IT")
+            for week in ("2026-10-24", "2026-10-31")
+            for k in (7, 3, 9)
+        ]
+    )
+    t = explorer.trajectories(samples, n=2)
+    assert set(t["draw"]) == {0, 1}
+    # Draw 0 is sample 3 everywhere, so it is joint across places.
+    first = t.loc[t["draw"] == 0]
+    assert [list(v) for v in first["values"]] == [[3.0, 3.0], [3.0, 3.0]]
+    assert set(first["start"]) == {"2026-10-24"}
+
+
+def test_explorer_marks_models_with_trajectories() -> None:
+    quantiles, target = _inputs()
+    samples = pd.DataFrame(
+        {
+            "model": "a (ours)",
+            "reference_date": "2026-10-31",
+            "location": "CD",
+            "target_end_date": ["2026-10-24", "2026-10-31"],
+            "sample": 1,
+            "value": [5.0, 6.0],
+        }
+    )
+    data = explorer.explorer_data(
+        quantiles, target, {}, 3, COLOURS, samples=samples
+    )
+    assert [m["trajectories"] for m in data["models"]] == [True, False]  # type: ignore[attr-defined]
+    assert data["traj"] == [[0, 0, "CD", 0, "2026-10-24", 5.0, 6.0]]

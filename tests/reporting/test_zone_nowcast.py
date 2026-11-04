@@ -124,6 +124,11 @@ def test_zone_chart_data_is_json_with_the_biggest_first() -> None:
     assert data["data"]["CD-IT-01"][1] == ["2026-10-17", 2]
     assert len(data["q"]["CD-NK-02"]) == 3
     assert data["q"]["CD-NK-02"][0][0] == 1
+    # All 20 draws are kept (under 50), each over the three weeks.
+    traj = data["traj"]["CD-NK-02"]
+    assert len(traj) == 20
+    assert traj[0][:3] == [1, 0, "2026-10-24"]
+    assert len(traj[0]) == 3 + 3
     assert data["origins"] == ["2026-10-24"]
     # Scores are the summed forms, relative to randomwalk summed.
     assert sorted(data["scores"]["CD-IT-01"]) == [
