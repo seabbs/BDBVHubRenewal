@@ -1,0 +1,3 @@
+model,kind,vintage,masked,fit,num_chains,num_warmup,num_samples,max_tree_depth,seconds,max_rhat,min_ess_bulk,divergent_share,depth_share
+renewal,real,2026-11-01,,all,2,500,500,10,1983.5436054650345,1.0541440732067822,34.893750530304104,0.039,0.961
+renewalnolag,real,2026-11-01,,all,2,500,500,10,1915.7186970629846,1.0179364213956053,117.32059601328822,0.004,0.996

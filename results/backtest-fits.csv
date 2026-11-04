@@ -1,7 +1,4 @@
 model,kind,vintage,masked,fit,num_chains,num_warmup,num_samples,max_tree_depth,seconds,max_rhat,min_ess_bulk,divergent_share,depth_share,location,start_week,n_err,delay_source,rho_source,sigma_source,obs_source
-renewal,real,2026-08-18,,all,2.0,500.0,500.0,10.0,1386.742818648927,1.0538219671734297,29.355215517993763,0.0,0.0,,,,,,,
-renewal,real,2026-10-09,,all,2.0,500.0,500.0,10.0,2639.908955658786,1.0238212753739095,135.2396742521105,0.003,0.713,,,,,,,
-renewal,real,2026-10-17,,all,2.0,500.0,500.0,10.0,2719.6158805498853,1.072954505853244,35.58730445061878,0.002,0.499,,,,,,,
 renewalbvd,real,2026-08-18,,all,2.0,500.0,500.0,10.0,1277.6368439132348,1.0391147669209002,28.041210821609894,0.001,0.001,,,,,,,
 renewalbvd,real,2026-10-09,,all,2.0,500.0,500.0,10.0,2630.8012603884563,1.0246891960083544,90.69683216459929,0.004,0.996,,,,,,,
 renewalbvd,real,2026-10-17,,all,2.0,500.0,500.0,10.0,2839.0697591118515,1.0783204846222547,24.030986343000095,0.001,0.999,,,,,,,
@@ -29,13 +26,13 @@ randomwalk,real,2026-10-17,,,,,,,,,,,,CD-NK,2026-09-26,,own at 36 of 42 ages,,ow
 randomwalk,real,2026-10-17,,,,,,,,,,,,CD-SK,2026-09-26,,own at 0 of 42 ages,,pooled:CD,
 randomwalk,real,2026-10-17,,,,,,,,,,,,CD-SU,2026-09-26,,own at 0 of 42 ages,,pooled:CD,
 randomwalk,real,2026-10-17,,,,,,,,,,,,CD-TO,2026-09-26,,own at 0 of 42 ages,,pooled:CD,
-randomwalknowcast,real,2026-10-17,,,,,,,,,,,,CD-BU,2026-10-10,0,own at 0 of 42 ages,,pooled:CD,pooled:CD
-randomwalknowcast,real,2026-10-17,,,,,,,,,,,,CD-HU,2026-10-10,0,own at 0 of 42 ages,,own:CD-HU,pooled:CD
-randomwalknowcast,real,2026-10-17,,,,,,,,,,,,CD-IT,2026-10-10,0,own at 37 of 42 ages,,own:CD-IT,pooled:CD
-randomwalknowcast,real,2026-10-17,,,,,,,,,,,,CD-NK,2026-10-10,0,own at 36 of 42 ages,,own:CD-NK,pooled:CD
-randomwalknowcast,real,2026-10-17,,,,,,,,,,,,CD-SK,2026-10-10,0,own at 0 of 42 ages,,pooled:CD,pooled:CD
-randomwalknowcast,real,2026-10-17,,,,,,,,,,,,CD-SU,2026-10-10,0,own at 0 of 42 ages,,pooled:CD,pooled:CD
-randomwalknowcast,real,2026-10-17,,,,,,,,,,,,CD-TO,2026-10-10,0,own at 0 of 42 ages,,pooled:CD,pooled:CD
+randomwalknowcast,real,2026-10-17,,,,,,,,,,,,CD-BU,2026-10-10,0.0,own at 0 of 42 ages,,pooled:CD,pooled:CD
+randomwalknowcast,real,2026-10-17,,,,,,,,,,,,CD-HU,2026-10-10,0.0,own at 0 of 42 ages,,own:CD-HU,pooled:CD
+randomwalknowcast,real,2026-10-17,,,,,,,,,,,,CD-IT,2026-10-10,0.0,own at 37 of 42 ages,,own:CD-IT,pooled:CD
+randomwalknowcast,real,2026-10-17,,,,,,,,,,,,CD-NK,2026-10-10,0.0,own at 36 of 42 ages,,own:CD-NK,pooled:CD
+randomwalknowcast,real,2026-10-17,,,,,,,,,,,,CD-SK,2026-10-10,0.0,own at 0 of 42 ages,,pooled:CD,pooled:CD
+randomwalknowcast,real,2026-10-17,,,,,,,,,,,,CD-SU,2026-10-10,0.0,own at 0 of 42 ages,,pooled:CD,pooled:CD
+randomwalknowcast,real,2026-10-17,,,,,,,,,,,,CD-TO,2026-10-10,0.0,own at 0 of 42 ages,,pooled:CD,pooled:CD
 randomwalk,real,2026-10-24,,,,,,,,,,,,CD-BU,2026-09-26,,own at 0 of 42 ages,,pooled:CD,
 randomwalk,real,2026-10-24,,,,,,,,,,,,CD-HU,2026-09-26,,own at 10 of 42 ages,,own:CD-HU,
 randomwalk,real,2026-10-24,,,,,,,,,,,,CD-IT,2026-09-26,,own at 40 of 42 ages,,own:CD-IT,
@@ -44,11 +41,15 @@ randomwalk,real,2026-10-24,,,,,,,,,,,,CD-NU,2026-09-26,,own at 0 of 42 ages,,poo
 randomwalk,real,2026-10-24,,,,,,,,,,,,CD-SK,2026-09-26,,own at 0 of 42 ages,,pooled:CD,
 randomwalk,real,2026-10-24,,,,,,,,,,,,CD-SU,2026-09-26,,own at 0 of 42 ages,,pooled:CD,
 randomwalk,real,2026-10-24,,,,,,,,,,,,CD-TO,2026-09-26,,own at 0 of 42 ages,,pooled:CD,
-randomwalknowcast,real,2026-10-24,,,,,,,,,,,,CD-BU,2026-10-24,3,own at 0 of 42 ages,,pooled:CD,pooled:CD
-randomwalknowcast,real,2026-10-24,,,,,,,,,,,,CD-HU,2026-10-24,3,own at 10 of 42 ages,,own:CD-HU,pooled:CD
-randomwalknowcast,real,2026-10-24,,,,,,,,,,,,CD-IT,2026-10-24,3,own at 40 of 42 ages,,own:CD-IT,pooled:CD
-randomwalknowcast,real,2026-10-24,,,,,,,,,,,,CD-NK,2026-10-24,3,own at 39 of 42 ages,,own:CD-NK,pooled:CD
-randomwalknowcast,real,2026-10-24,,,,,,,,,,,,CD-NU,2026-10-24,3,own at 0 of 42 ages,,pooled:CD,pooled:CD
-randomwalknowcast,real,2026-10-24,,,,,,,,,,,,CD-SK,2026-10-24,3,own at 0 of 42 ages,,pooled:CD,pooled:CD
-randomwalknowcast,real,2026-10-24,,,,,,,,,,,,CD-SU,2026-10-24,3,own at 0 of 42 ages,,pooled:CD,pooled:CD
-randomwalknowcast,real,2026-10-24,,,,,,,,,,,,CD-TO,2026-10-24,3,own at 0 of 42 ages,,pooled:CD,pooled:CD
+randomwalknowcast,real,2026-10-24,,,,,,,,,,,,CD-BU,2026-10-24,3.0,own at 0 of 42 ages,,pooled:CD,pooled:CD
+randomwalknowcast,real,2026-10-24,,,,,,,,,,,,CD-HU,2026-10-24,3.0,own at 10 of 42 ages,,own:CD-HU,pooled:CD
+randomwalknowcast,real,2026-10-24,,,,,,,,,,,,CD-IT,2026-10-24,3.0,own at 40 of 42 ages,,own:CD-IT,pooled:CD
+randomwalknowcast,real,2026-10-24,,,,,,,,,,,,CD-NK,2026-10-24,3.0,own at 39 of 42 ages,,own:CD-NK,pooled:CD
+randomwalknowcast,real,2026-10-24,,,,,,,,,,,,CD-NU,2026-10-24,3.0,own at 0 of 42 ages,,pooled:CD,pooled:CD
+randomwalknowcast,real,2026-10-24,,,,,,,,,,,,CD-SK,2026-10-24,3.0,own at 0 of 42 ages,,pooled:CD,pooled:CD
+randomwalknowcast,real,2026-10-24,,,,,,,,,,,,CD-SU,2026-10-24,3.0,own at 0 of 42 ages,,pooled:CD,pooled:CD
+randomwalknowcast,real,2026-10-24,,,,,,,,,,,,CD-TO,2026-10-24,3.0,own at 0 of 42 ages,,pooled:CD,pooled:CD
+renewal,real,2026-10-17,,all,2.0,500.0,500.0,10.0,2248.391333389969,1.030901683128486,54.45434086989678,0.002,0.998,,,,,,,
+renewal,real,2026-10-24,,all,2.0,500.0,500.0,10.0,1946.4914922459866,1.0209898386106129,202.76993427705088,0.005,0.995,,,,,,,
+renewalnolag,real,2026-10-17,,all,2.0,500.0,500.0,10.0,2349.216177536,1.0352658499814835,93.52869290442769,0.0,1.0,,,,,,,
+renewalnolag,real,2026-10-24,,all,2.0,500.0,500.0,10.0,1894.9461126319948,1.024961084293258,98.86318448294841,0.002,0.998,,,,,,,
