@@ -1419,14 +1419,39 @@ def _backtest_page(
     labels = _location_names(target)
     explorer_src = None
     if shown:
-        quantiles = forecast_quantiles(real_fc.assign(source="ours"))
-        quantiles = quantiles.assign(ours=True)
+        # The zone backtest's forecasts, as submitted, join the explorer.
+        zone_q = pd.read_csv(res / "zone-quantiles.csv")
+        zone_draws = pd.read_csv(res / "zone-draws.csv.gz")
+        quantiles = pd.concat(
+            [
+                forecast_quantiles(real_fc.assign(source="ours")),
+                zone_q.loc[zone_q["model"].isin(shown)],
+            ],
+            ignore_index=True,
+        ).assign(ours=True)
+        # The latest release's zone counts are the zones' data.
+        latest = str(target.loc[target["kind"] == "real", "vintage"].max())
+        zone_data = zone_counts(
+            load_daily_zones(data_dir),
+            latest,
+            str(zone_q["target_end_date"].min()),
+            labels,
+        )
         write_explorer(
             fig / "explorer-backtest.json",
             explorer_data(
                 quantiles,
-                target,
-                labels,
+                pd.concat([target, zone_data], ignore_index=True),
+                {
+                    **labels,
+                    **dict(
+                        zip(
+                            zone_data["location"],
+                            zone_data["location_name"],
+                            strict=True,
+                        )
+                    ),
+                },
                 k,
                 {
                     m: (
@@ -1435,7 +1460,10 @@ def _backtest_page(
                     )
                     for m in shown
                 },
-                samples=real_fc,
+                samples=pd.concat(
+                    [real_fc, zone_draws.loc[zone_draws["model"].isin(shown)]],
+                    ignore_index=True,
+                ),
             ),
         )
         explorer_src = "../figures/explorer-backtest.json"

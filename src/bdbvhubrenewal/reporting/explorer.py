@@ -12,8 +12,6 @@ from pathlib import Path
 
 import pandas as pd
 
-from bdbvhubrenewal.forecasters import NATIONAL
-
 __all__ = [
     "TRAJECTORY_DRAWS",
     "compact",
@@ -106,10 +104,9 @@ def trajectories(
     )
 
 
-def _level(location: str, provinces: set[str]) -> str:
-    if location == NATIONAL:
-        return "National"
-    return "Province" if location in provinces else "Zone"
+def _level(location: str) -> str:
+    """National, Province or Zone, from the depth of the hub code."""
+    return ("National", "Province", "Zone")[location.count("-")]
 
 
 def explorer_data(
@@ -155,7 +152,6 @@ def explorer_data(
     """
     real = target.loc[target["kind"] == "real"]
     truth_v = truth_vintage or str(real["vintage"].max())
-    provinces = set(real["location"]) - {NATIONAL}
     models = list(dict.fromkeys(quantiles["model"]))
     ours = set(quantiles.loc[quantiles["ours"], "model"])
     rounds = sorted(set(quantiles["reference_date"].astype(str)))
@@ -165,7 +161,7 @@ def explorer_data(
         if loc in set(quantiles["location"])
     ]
     order = {"National": 0, "Province": 1, "Zone": 2}
-    locs.sort(key=lambda x: (order[_level(x, provinces)], names.get(x, x)))
+    locs.sort(key=lambda x: (order[_level(x)], names.get(x, x)))
     latest = real.loc[real["vintage"] == truth_v]
     data = {
         loc: [
@@ -210,7 +206,7 @@ def explorer_data(
             {
                 "id": loc,
                 "name": names.get(loc, loc),
-                "level": _level(loc, provinces),
+                "level": _level(loc),
             }
             for loc in locs
         ],
