@@ -3,6 +3,7 @@ import jax.numpy as jnp
 import numpy as np
 import numpyro.distributions as dist
 import pytest
+
 from bdbvhubrenewal.model.distributions import ObservedCellsDirichletMultinomial
 
 
