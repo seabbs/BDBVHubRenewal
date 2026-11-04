@@ -105,22 +105,10 @@ def gravity_kernel(
         If a province has no centre or population, or the kernel is not
         finite.
     """
-    centres = province_centres().set_index("location").reindex(list(locations))
     pops = table.set_index("location")["population"].reindex(list(locations))
-    if (
-        centres[["latitude", "longitude"]].isna().any().any()
-        or pops.isna().any()
-    ):
-        raise ValueError("Missing province centre or population.")
-    lat = np.radians(centres["latitude"].to_numpy(float))
-    lon = np.radians(centres["longitude"].to_numpy(float))
-    a = (
-        np.sin((lat[:, None] - lat[None, :]) / 2) ** 2
-        + np.cos(lat[:, None])
-        * np.cos(lat[None, :])
-        * np.sin((lon[:, None] - lon[None, :]) / 2) ** 2
-    )
-    dist = 2 * 6371 * np.arcsin(np.sqrt(a))
+    if pops.isna().any():
+        raise ValueError("Missing province population.")
+    dist = province_distances(locations)
     k = pops.to_numpy(float)[None, :] * np.exp(-dist / decay_km)
     np.fill_diagonal(k, 0.0)
     k = k / k.sum(axis=1, keepdims=True)
@@ -443,17 +431,9 @@ def vintage_from_tables(
         bvd=None
         if bvd is None or config.national
         else bvd_inputs(bvd, names, start, masked),
-        distances=None
-        if config.national
-        else province_distances(active + idle),
         seed_days=None
         if config.national
         else 7 * np.argmax(totals > 0, axis=0),
-        all_populations=None
-        if config.national
-        else table.set_index("location")
-        .loc[list(active + idle), "population"]
-        .to_numpy(float),
         publication_lag_pmf=publication_lag,
     )
 

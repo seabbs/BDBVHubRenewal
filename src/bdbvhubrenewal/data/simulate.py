@@ -577,7 +577,6 @@ def simulate_outbreak(
         jnp.asarray(rt.T),
         jnp.asarray(gi),
         mixing,
-        jnp.full(n_loc, nu),
         pool=nu,
         seeding=jnp.asarray(seeding),
     )
