@@ -1,145 +1,145 @@
 kind,vintage,reference_date,scale,model,n_cells,n_samples,energy,log_energy,truth_vintage,truth_view,scenario
-simulated,2026-10-03,2026-10-10,national,randomwalk,8,100,577.8943405887376,1.8809595827874703,2027-01-02,final,calibrated_falling
-simulated,2026-10-03,2026-10-10,national,randomwalknowcast,8,100,224.60752251057198,0.910052579396185,2027-01-02,final,calibrated_falling
-simulated,2026-10-03,2026-10-10,provinces,randomwalk,56,100,348.7215983078807,3.1773433479982125,2027-01-02,final,calibrated_falling
-simulated,2026-10-03,2026-10-10,provinces,randomwalknowcast,56,100,206.4244792762383,3.934527760773215,2027-01-02,final,calibrated_falling
-simulated,2026-10-10,2026-10-17,national,randomwalk,8,100,575.0472494367392,2.0279906032970314,2027-01-02,final,calibrated_falling
-simulated,2026-10-10,2026-10-17,national,randomwalknowcast,8,100,116.61229551614096,0.5483148550638214,2027-01-02,final,calibrated_falling
-simulated,2026-10-10,2026-10-17,provinces,randomwalk,56,100,374.886574709899,3.868372982668428,2027-01-02,final,calibrated_falling
-simulated,2026-10-10,2026-10-17,provinces,randomwalknowcast,56,100,89.26088846987469,3.34190184340968,2027-01-02,final,calibrated_falling
-simulated,2026-10-17,2026-10-24,national,randomwalk,8,100,561.7638226877788,2.2025292453731735,2027-01-02,final,calibrated_falling
-simulated,2026-10-17,2026-10-24,national,randomwalknowcast,8,100,79.45163183270081,0.4749218341281364,2027-01-02,final,calibrated_falling
-simulated,2026-10-17,2026-10-24,provinces,randomwalk,56,100,378.33762627769823,4.45053789234125,2027-01-02,final,calibrated_falling
-simulated,2026-10-17,2026-10-24,provinces,randomwalknowcast,56,100,68.9990521776906,3.723902522488519,2027-01-02,final,calibrated_falling
-simulated,2026-10-24,2026-10-31,national,randomwalk,8,100,438.8620746389492,2.1327254242951734,2027-01-02,final,calibrated_falling
-simulated,2026-10-24,2026-10-31,national,randomwalknowcast,8,100,69.73040309969844,0.6080173085437073,2027-01-02,final,calibrated_falling
-simulated,2026-10-24,2026-10-31,provinces,randomwalk,56,100,301.9494363810122,4.412391573180304,2027-01-02,final,calibrated_falling
-simulated,2026-10-24,2026-10-31,provinces,randomwalknowcast,56,100,60.06702181507883,4.87602600640829,2027-01-02,final,calibrated_falling
-simulated,2026-10-03,2026-10-10,national,randomwalk,6,100,545.465520403103,2.4867716971026184,2026-10-17,as of 2 weeks later,calibrated_falling
-simulated,2026-10-03,2026-10-10,national,randomwalknowcast,6,100,249.7175395366782,1.6769320092020195,2026-10-17,as of 2 weeks later,calibrated_falling
-simulated,2026-10-03,2026-10-10,provinces,randomwalk,42,100,323.73714041174605,3.9263757055839976,2026-10-17,as of 2 weeks later,calibrated_falling
-simulated,2026-10-03,2026-10-10,provinces,randomwalknowcast,42,100,204.21635122481985,3.008347820649485,2026-10-17,as of 2 weeks later,calibrated_falling
-simulated,2026-10-10,2026-10-17,national,randomwalk,6,100,561.203492008977,2.937012729569609,2026-10-24,as of 2 weeks later,calibrated_falling
-simulated,2026-10-10,2026-10-17,national,randomwalknowcast,6,100,173.19839642184797,1.7504043134287046,2026-10-24,as of 2 weeks later,calibrated_falling
-simulated,2026-10-10,2026-10-17,provinces,randomwalk,42,100,359.65277760102634,4.347607757793159,2026-10-24,as of 2 weeks later,calibrated_falling
-simulated,2026-10-10,2026-10-17,provinces,randomwalknowcast,42,100,98.4181682719827,3.1161436599405254,2026-10-24,as of 2 weeks later,calibrated_falling
-simulated,2026-10-17,2026-10-24,national,randomwalk,6,100,556.3421291388216,3.045008633420484,2026-10-31,as of 2 weeks later,calibrated_falling
-simulated,2026-10-17,2026-10-24,national,randomwalknowcast,6,100,125.67058369078238,1.4114354579228907,2026-10-31,as of 2 weeks later,calibrated_falling
-simulated,2026-10-17,2026-10-24,provinces,randomwalk,42,100,367.0880734658116,4.491472251397791,2026-10-31,as of 2 weeks later,calibrated_falling
-simulated,2026-10-17,2026-10-24,provinces,randomwalknowcast,42,100,80.62876544656669,2.7663122537945464,2026-10-31,as of 2 weeks later,calibrated_falling
-simulated,2026-10-24,2026-10-31,national,randomwalk,6,100,436.9180893049786,2.9699846060566424,2026-11-07,as of 2 weeks later,calibrated_falling
-simulated,2026-10-24,2026-10-31,national,randomwalknowcast,6,100,64.24925994634478,1.0120552575767108,2026-11-07,as of 2 weeks later,calibrated_falling
-simulated,2026-10-24,2026-10-31,provinces,randomwalk,42,100,288.37498251878577,4.135327196018569,2026-11-07,as of 2 weeks later,calibrated_falling
-simulated,2026-10-24,2026-10-31,provinces,randomwalknowcast,42,100,48.756937941315826,2.6459734095991068,2026-11-07,as of 2 weeks later,calibrated_falling
-simulated,2026-10-03,2026-10-10,zones,randomwalk,520,100,138.94000933911707,9.096255982737617,2027-01-02,final,calibrated_falling
-simulated,2026-10-03,2026-10-10,zones,randomwalknowcast,520,100,79.02084093994878,7.429133680633001,2027-01-02,final,calibrated_falling
-simulated,2026-10-10,2026-10-17,zones,randomwalk,520,100,138.13554753221902,9.728575299874233,2027-01-02,final,calibrated_falling
-simulated,2026-10-10,2026-10-17,zones,randomwalknowcast,520,100,45.30697723222022,6.6607159554966024,2027-01-02,final,calibrated_falling
-simulated,2026-10-17,2026-10-24,zones,randomwalk,520,100,145.14946122158466,10.29129364978038,2027-01-02,final,calibrated_falling
-simulated,2026-10-17,2026-10-24,zones,randomwalknowcast,520,100,34.975566567833305,6.626570057323461,2027-01-02,final,calibrated_falling
-simulated,2026-10-24,2026-10-31,zones,randomwalk,520,100,116.50921239911257,10.04857851899568,2027-01-02,final,calibrated_falling
-simulated,2026-10-24,2026-10-31,zones,randomwalknowcast,520,100,34.43520655943491,7.397501445250848,2027-01-02,final,calibrated_falling
-simulated,2026-10-03,2026-10-10,zones,randomwalk,390,100,129.09115222797237,9.344426766536817,2026-10-17,as of 2 weeks later,calibrated_falling
-simulated,2026-10-03,2026-10-10,zones,randomwalknowcast,390,100,75.90658881337086,7.106152900895849,2026-10-17,as of 2 weeks later,calibrated_falling
-simulated,2026-10-10,2026-10-17,zones,randomwalk,390,100,132.63137334921183,10.20789170744184,2026-10-24,as of 2 weeks later,calibrated_falling
-simulated,2026-10-10,2026-10-17,zones,randomwalknowcast,390,100,44.47621790661084,6.148661156938786,2026-10-24,as of 2 weeks later,calibrated_falling
-simulated,2026-10-17,2026-10-24,zones,randomwalk,390,100,138.46207753353133,10.09822253967647,2026-10-31,as of 2 weeks later,calibrated_falling
-simulated,2026-10-17,2026-10-24,zones,randomwalknowcast,390,100,35.235947742985765,5.283618933088436,2026-10-31,as of 2 weeks later,calibrated_falling
-simulated,2026-10-24,2026-10-31,zones,randomwalk,390,100,107.30975395256766,9.755457917215157,2026-11-07,as of 2 weeks later,calibrated_falling
-simulated,2026-10-24,2026-10-31,zones,randomwalknowcast,390,100,23.127487039343812,4.980664674514584,2026-11-07,as of 2 weeks later,calibrated_falling
-simulated,2026-10-03,2026-10-10,national,randomwalk,8,100,281.2110412515332,0.6781605589375639,2027-01-02,final,calibrated_flat
-simulated,2026-10-03,2026-10-10,national,randomwalknowcast,8,100,111.22135230067815,0.3395761582265894,2027-01-02,final,calibrated_flat
-simulated,2026-10-03,2026-10-10,provinces,randomwalk,56,100,191.0347461715687,3.7010990886354342,2027-01-02,final,calibrated_flat
-simulated,2026-10-03,2026-10-10,provinces,randomwalknowcast,56,100,95.16113999700045,6.1714318967203035,2027-01-02,final,calibrated_flat
-simulated,2026-10-10,2026-10-17,national,randomwalk,8,100,328.09691586671795,0.8021282444194227,2027-01-02,final,calibrated_flat
-simulated,2026-10-10,2026-10-17,national,randomwalknowcast,8,100,73.09865586533775,0.21379394386397904,2027-01-02,final,calibrated_flat
-simulated,2026-10-10,2026-10-17,provinces,randomwalk,56,100,242.9868415432505,4.350264777919322,2027-01-02,final,calibrated_flat
-simulated,2026-10-10,2026-10-17,provinces,randomwalknowcast,56,100,96.19465158597646,3.4721623348972646,2027-01-02,final,calibrated_flat
-simulated,2026-10-17,2026-10-24,national,randomwalk,8,100,231.893399043408,0.6112792489964357,2027-01-02,final,calibrated_flat
-simulated,2026-10-17,2026-10-24,national,randomwalknowcast,8,100,78.09974619788235,0.26441170584935847,2027-01-02,final,calibrated_flat
-simulated,2026-10-17,2026-10-24,provinces,randomwalk,56,100,207.11671552654795,4.391597424600142,2027-01-02,final,calibrated_flat
-simulated,2026-10-17,2026-10-24,provinces,randomwalknowcast,56,100,93.51909606226323,7.3029152023722865,2027-01-02,final,calibrated_flat
-simulated,2026-10-24,2026-10-31,national,randomwalk,8,100,103.8114427974314,0.2843663191067892,2027-01-02,final,calibrated_flat
-simulated,2026-10-24,2026-10-31,national,randomwalknowcast,8,100,87.97333184434717,0.3105605379830746,2027-01-02,final,calibrated_flat
-simulated,2026-10-24,2026-10-31,provinces,randomwalk,56,100,149.44432768715157,5.444536506859368,2027-01-02,final,calibrated_flat
-simulated,2026-10-24,2026-10-31,provinces,randomwalknowcast,56,100,101.9533384020346,4.041129922121072,2027-01-02,final,calibrated_flat
-simulated,2026-10-03,2026-10-10,national,randomwalk,6,100,476.3319867002922,2.113579074166408,2026-10-17,as of 2 weeks later,calibrated_flat
-simulated,2026-10-03,2026-10-10,national,randomwalknowcast,6,100,187.00375741664146,1.2761178474022736,2026-10-17,as of 2 weeks later,calibrated_flat
-simulated,2026-10-03,2026-10-10,provinces,randomwalk,42,100,282.7921988690118,4.339479366365068,2026-10-17,as of 2 weeks later,calibrated_flat
-simulated,2026-10-03,2026-10-10,provinces,randomwalknowcast,42,100,130.66588395396238,3.531975798335307,2026-10-17,as of 2 weeks later,calibrated_flat
-simulated,2026-10-10,2026-10-17,national,randomwalk,6,100,531.5132411222203,2.358133148331064,2026-10-24,as of 2 weeks later,calibrated_flat
-simulated,2026-10-10,2026-10-17,national,randomwalknowcast,6,100,233.17983976683047,1.6215060291457457,2026-10-24,as of 2 weeks later,calibrated_flat
-simulated,2026-10-10,2026-10-17,provinces,randomwalk,42,100,338.91126670143245,3.5406914929748297,2026-10-24,as of 2 weeks later,calibrated_flat
-simulated,2026-10-10,2026-10-17,provinces,randomwalknowcast,42,100,160.19166688944836,2.5420810743937348,2026-10-24,as of 2 weeks later,calibrated_flat
-simulated,2026-10-17,2026-10-24,national,randomwalk,6,100,452.8653242382907,2.200044227678272,2026-10-31,as of 2 weeks later,calibrated_flat
-simulated,2026-10-17,2026-10-24,national,randomwalknowcast,6,100,180.1687058190641,1.3873778967713524,2026-10-31,as of 2 weeks later,calibrated_flat
-simulated,2026-10-17,2026-10-24,provinces,randomwalk,42,100,290.48377615857646,3.9954471222725805,2026-10-31,as of 2 weeks later,calibrated_flat
-simulated,2026-10-17,2026-10-24,provinces,randomwalknowcast,42,100,122.91926244881066,3.893299041881865,2026-10-31,as of 2 weeks later,calibrated_flat
-simulated,2026-10-24,2026-10-31,national,randomwalk,6,100,264.14329617761007,1.6189466389452531,2026-11-07,as of 2 weeks later,calibrated_flat
-simulated,2026-10-24,2026-10-31,national,randomwalknowcast,6,100,160.61226397415334,1.2330499820372713,2026-11-07,as of 2 weeks later,calibrated_flat
-simulated,2026-10-24,2026-10-31,provinces,randomwalk,42,100,180.53284535896904,3.134468795293672,2026-11-07,as of 2 weeks later,calibrated_flat
-simulated,2026-10-24,2026-10-31,provinces,randomwalknowcast,42,100,98.82420008390149,2.5097514558968146,2026-11-07,as of 2 weeks later,calibrated_flat
-simulated,2026-10-03,2026-10-10,zones,randomwalk,520,100,95.03837632937766,6.916166223440745,2027-01-02,final,calibrated_flat
-simulated,2026-10-03,2026-10-10,zones,randomwalknowcast,520,100,53.265549665864484,8.200639915947178,2027-01-02,final,calibrated_flat
-simulated,2026-10-10,2026-10-17,zones,randomwalk,520,100,105.92981367823111,7.688360442799074,2027-01-02,final,calibrated_flat
-simulated,2026-10-10,2026-10-17,zones,randomwalknowcast,520,100,50.985570957568584,6.769453220909349,2027-01-02,final,calibrated_flat
-simulated,2026-10-17,2026-10-24,zones,randomwalk,520,100,88.98229309368696,7.466054182757968,2027-01-02,final,calibrated_flat
-simulated,2026-10-17,2026-10-24,zones,randomwalknowcast,520,100,56.63540698361966,9.005733234408485,2027-01-02,final,calibrated_flat
-simulated,2026-10-24,2026-10-31,zones,randomwalk,520,100,90.75389437016418,7.624048933822988,2027-01-02,final,calibrated_flat
-simulated,2026-10-24,2026-10-31,zones,randomwalknowcast,520,100,73.59133547127027,7.15965779640015,2027-01-02,final,calibrated_flat
-simulated,2026-10-03,2026-10-10,zones,randomwalk,390,100,119.9906734268813,8.765506814043496,2026-10-17,as of 2 weeks later,calibrated_flat
-simulated,2026-10-03,2026-10-10,zones,randomwalknowcast,390,100,58.331230199282274,6.444413643762301,2026-10-17,as of 2 weeks later,calibrated_flat
-simulated,2026-10-10,2026-10-17,zones,randomwalk,390,100,133.15990449347254,9.374746438687833,2026-10-24,as of 2 weeks later,calibrated_flat
-simulated,2026-10-10,2026-10-17,zones,randomwalknowcast,390,100,60.80650866757182,6.8288218975837385,2026-10-24,as of 2 weeks later,calibrated_flat
-simulated,2026-10-17,2026-10-24,zones,randomwalk,390,100,109.25317354221917,8.342418308952341,2026-10-31,as of 2 weeks later,calibrated_flat
-simulated,2026-10-17,2026-10-24,zones,randomwalknowcast,390,100,52.79590128251264,6.472213727282951,2026-10-31,as of 2 weeks later,calibrated_flat
-simulated,2026-10-24,2026-10-31,zones,randomwalk,390,100,74.59446132218214,6.651312560918781,2026-11-07,as of 2 weeks later,calibrated_flat
-simulated,2026-10-24,2026-10-31,zones,randomwalknowcast,390,100,44.56529617164982,5.5420584945020686,2026-11-07,as of 2 weeks later,calibrated_flat
-simulated,2026-10-03,2026-10-10,national,randomwalk,8,100,126.35823694509503,0.26499970033384945,2027-01-02,final,calibrated_rising
-simulated,2026-10-03,2026-10-10,national,randomwalknowcast,8,100,98.55228060864684,0.19313848488032753,2027-01-02,final,calibrated_rising
-simulated,2026-10-03,2026-10-10,provinces,randomwalk,48,100,122.92264032761543,2.042057056809313,2027-01-02,final,calibrated_rising
-simulated,2026-10-03,2026-10-10,provinces,randomwalknowcast,48,100,90.65516066082407,2.6568403407858265,2027-01-02,final,calibrated_rising
-simulated,2026-10-10,2026-10-17,national,randomwalk,8,100,144.29428230484194,0.28882826107214965,2027-01-02,final,calibrated_rising
-simulated,2026-10-10,2026-10-17,national,randomwalknowcast,8,100,188.20232060297633,0.3684915783258891,2027-01-02,final,calibrated_rising
-simulated,2026-10-10,2026-10-17,provinces,randomwalk,56,100,129.34034733306694,5.748233424582844,2027-01-02,final,calibrated_rising
-simulated,2026-10-10,2026-10-17,provinces,randomwalknowcast,56,100,194.23549286873578,5.811042442663698,2027-01-02,final,calibrated_rising
-simulated,2026-10-17,2026-10-24,national,randomwalk,8,100,411.53544200957293,0.774519769365339,2027-01-02,final,calibrated_rising
-simulated,2026-10-17,2026-10-24,national,randomwalknowcast,8,100,166.76077241826562,0.2560320867286238,2027-01-02,final,calibrated_rising
-simulated,2026-10-17,2026-10-24,provinces,randomwalk,56,100,242.39248235376277,6.903550152376829,2027-01-02,final,calibrated_rising
-simulated,2026-10-17,2026-10-24,provinces,randomwalknowcast,56,100,237.3705473046229,5.448499409580033,2027-01-02,final,calibrated_rising
-simulated,2026-10-24,2026-10-31,national,randomwalk,8,100,696.3606350406359,1.185286462186755,2027-01-02,final,calibrated_rising
-simulated,2026-10-24,2026-10-31,national,randomwalknowcast,8,100,241.27937386706407,0.32822078356311085,2027-01-02,final,calibrated_rising
-simulated,2026-10-24,2026-10-31,provinces,randomwalk,56,100,383.0687170550814,8.680998946956286,2027-01-02,final,calibrated_rising
-simulated,2026-10-24,2026-10-31,provinces,randomwalknowcast,56,100,344.4483683643226,4.021410613925754,2027-01-02,final,calibrated_rising
-simulated,2026-10-03,2026-10-10,national,randomwalk,6,100,430.5847959196574,1.5090820493892294,2026-10-17,as of 2 weeks later,calibrated_rising
-simulated,2026-10-03,2026-10-10,national,randomwalknowcast,6,100,327.27366052662285,1.2901849881127834,2026-10-17,as of 2 weeks later,calibrated_rising
-simulated,2026-10-03,2026-10-10,provinces,randomwalk,36,100,239.14082847959295,3.255992787866785,2026-10-17,as of 2 weeks later,calibrated_rising
-simulated,2026-10-03,2026-10-10,provinces,randomwalknowcast,36,100,210.18745136963028,2.2433641290936515,2026-10-17,as of 2 weeks later,calibrated_rising
-simulated,2026-10-10,2026-10-17,national,randomwalk,6,100,367.6957421075918,1.42507001929006,2026-10-24,as of 2 weeks later,calibrated_rising
-simulated,2026-10-10,2026-10-17,national,randomwalknowcast,6,100,281.01319369829145,1.2238699891495544,2026-10-24,as of 2 weeks later,calibrated_rising
-simulated,2026-10-10,2026-10-17,provinces,randomwalk,42,100,258.5313654175228,2.626026269076461,2026-10-24,as of 2 weeks later,calibrated_rising
-simulated,2026-10-10,2026-10-17,provinces,randomwalknowcast,42,100,211.26365494269814,2.977236530649882,2026-10-24,as of 2 weeks later,calibrated_rising
-simulated,2026-10-17,2026-10-24,national,randomwalk,6,100,249.5222308018616,1.1390977289349562,2026-10-31,as of 2 weeks later,calibrated_rising
-simulated,2026-10-17,2026-10-24,national,randomwalknowcast,6,100,586.7996009255686,1.7468316708238534,2026-10-31,as of 2 weeks later,calibrated_rising
-simulated,2026-10-17,2026-10-24,provinces,randomwalk,42,100,198.28342644320014,3.2129910997080886,2026-10-31,as of 2 weeks later,calibrated_rising
-simulated,2026-10-17,2026-10-24,provinces,randomwalknowcast,42,100,312.7119384397894,4.453290869495705,2026-10-31,as of 2 weeks later,calibrated_rising
-simulated,2026-10-24,2026-10-31,national,randomwalk,6,100,220.98679853663194,0.9308747938545736,2026-11-07,as of 2 weeks later,calibrated_rising
-simulated,2026-10-24,2026-10-31,national,randomwalknowcast,6,100,637.4852218247004,1.7142692581791972,2026-11-07,as of 2 weeks later,calibrated_rising
-simulated,2026-10-24,2026-10-31,provinces,randomwalk,42,100,156.21050597513351,3.8919562936693888,2026-11-07,as of 2 weeks later,calibrated_rising
-simulated,2026-10-24,2026-10-31,provinces,randomwalknowcast,42,100,407.1484998489092,2.864700035727037,2026-11-07,as of 2 weeks later,calibrated_rising
-simulated,2026-10-03,2026-10-10,zones,randomwalk,512,100,78.60225022476415,6.833123603721447,2027-01-02,final,calibrated_rising
-simulated,2026-10-03,2026-10-10,zones,randomwalknowcast,512,100,65.52886862295038,6.719500033580658,2027-01-02,final,calibrated_rising
-simulated,2026-10-10,2026-10-17,zones,randomwalk,520,100,87.88228336741606,8.276369663051529,2027-01-02,final,calibrated_rising
-simulated,2026-10-10,2026-10-17,zones,randomwalknowcast,520,100,111.86311616380677,8.838638120665284,2027-01-02,final,calibrated_rising
-simulated,2026-10-17,2026-10-24,zones,randomwalk,520,100,164.1679243582195,9.82026789397271,2027-01-02,final,calibrated_rising
-simulated,2026-10-17,2026-10-24,zones,randomwalknowcast,520,100,162.24729935196927,8.624396361403083,2027-01-02,final,calibrated_rising
-simulated,2026-10-24,2026-10-31,zones,randomwalk,520,100,332.44719424981383,11.294420437060285,2027-01-02,final,calibrated_rising
-simulated,2026-10-24,2026-10-31,zones,randomwalknowcast,520,100,276.75969542486405,7.420123209689146,2027-01-02,final,calibrated_rising
-simulated,2026-10-03,2026-10-10,zones,randomwalk,384,100,101.55808819258954,7.840510498645689,2026-10-17,as of 2 weeks later,calibrated_rising
-simulated,2026-10-03,2026-10-10,zones,randomwalknowcast,384,100,87.45108434674773,6.478051051035645,2026-10-17,as of 2 weeks later,calibrated_rising
-simulated,2026-10-10,2026-10-17,zones,randomwalk,390,100,99.72363427423889,7.0580854115757985,2026-10-24,as of 2 weeks later,calibrated_rising
-simulated,2026-10-10,2026-10-17,zones,randomwalknowcast,390,100,84.21906641155911,7.104636928169367,2026-10-24,as of 2 weeks later,calibrated_rising
-simulated,2026-10-17,2026-10-24,zones,randomwalk,390,100,74.35284539720803,6.574131870477395,2026-10-31,as of 2 weeks later,calibrated_rising
-simulated,2026-10-17,2026-10-24,zones,randomwalknowcast,390,100,138.48864803709102,8.965185460794812,2026-10-31,as of 2 weeks later,calibrated_rising
-simulated,2026-10-24,2026-10-31,zones,randomwalk,390,100,65.7429846185227,6.799283077322179,2026-11-07,as of 2 weeks later,calibrated_rising
-simulated,2026-10-24,2026-10-31,zones,randomwalknowcast,390,100,180.73788174392223,7.581181478279524,2026-11-07,as of 2 weeks later,calibrated_rising
+simulated,2026-10-11,2026-10-17,national,randomwalk,8,100,597.5778170920091,1.9154359016801157,2027-01-10,final,calibrated_falling
+simulated,2026-10-11,2026-10-17,national,randomwalknowcast,8,100,117.99932005010369,0.6456943820248964,2027-01-10,final,calibrated_falling
+simulated,2026-10-11,2026-10-17,provinces,randomwalk,64,100,388.54167568012645,4.532660032494403,2027-01-10,final,calibrated_falling
+simulated,2026-10-11,2026-10-17,provinces,randomwalknowcast,64,100,96.4729149088296,7.068603047920145,2027-01-10,final,calibrated_falling
+simulated,2026-10-18,2026-10-24,national,randomwalk,8,100,657.6973826304572,2.2741771260850583,2027-01-10,final,calibrated_falling
+simulated,2026-10-18,2026-10-24,national,randomwalknowcast,8,100,93.71110191255428,0.5023114181027052,2027-01-10,final,calibrated_falling
+simulated,2026-10-18,2026-10-24,provinces,randomwalk,64,100,466.165556395879,5.436319722338615,2027-01-10,final,calibrated_falling
+simulated,2026-10-18,2026-10-24,provinces,randomwalknowcast,64,100,78.90432005532709,5.56653330561751,2027-01-10,final,calibrated_falling
+simulated,2026-10-25,2026-10-31,national,randomwalk,8,100,580.3160055469015,2.265280271891883,2027-01-10,final,calibrated_falling
+simulated,2026-10-25,2026-10-31,national,randomwalknowcast,8,100,80.58192316584473,0.4544850065381463,2027-01-10,final,calibrated_falling
+simulated,2026-10-25,2026-10-31,provinces,randomwalk,64,100,397.0763874192427,5.835080226083689,2027-01-10,final,calibrated_falling
+simulated,2026-10-25,2026-10-31,provinces,randomwalknowcast,64,100,98.29734109319992,5.025124196745624,2027-01-10,final,calibrated_falling
+simulated,2026-11-01,2026-11-07,national,randomwalk,8,100,462.42398791389337,2.0489251514092475,2027-01-10,final,calibrated_falling
+simulated,2026-11-01,2026-11-07,national,randomwalknowcast,8,100,50.47116468855242,0.3416792087010301,2027-01-10,final,calibrated_falling
+simulated,2026-11-01,2026-11-07,provinces,randomwalk,64,100,304.62050140309407,7.239939590321359,2027-01-10,final,calibrated_falling
+simulated,2026-11-01,2026-11-07,provinces,randomwalknowcast,64,100,67.65899634928597,6.785173775959105,2027-01-10,final,calibrated_falling
+simulated,2026-10-11,2026-10-17,national,randomwalk,6,100,578.5602295208386,2.5023833598378626,2026-10-25,as of 2 weeks later,calibrated_falling
+simulated,2026-10-11,2026-10-17,national,randomwalknowcast,6,100,98.81239240805114,0.8732468492935945,2026-10-25,as of 2 weeks later,calibrated_falling
+simulated,2026-10-11,2026-10-17,provinces,randomwalk,48,100,359.51702715978115,3.7395555415485715,2026-10-25,as of 2 weeks later,calibrated_falling
+simulated,2026-10-11,2026-10-17,provinces,randomwalknowcast,48,100,78.46671908030594,4.216343750050752,2026-10-25,as of 2 weeks later,calibrated_falling
+simulated,2026-10-18,2026-10-24,national,randomwalk,6,100,626.7496190112084,2.831090252740408,2026-11-01,as of 2 weeks later,calibrated_falling
+simulated,2026-10-18,2026-10-24,national,randomwalknowcast,6,100,107.55407033984092,1.1591374984974188,2026-11-01,as of 2 weeks later,calibrated_falling
+simulated,2026-10-18,2026-10-24,provinces,randomwalk,48,100,418.66401601801346,4.389201158010714,2026-11-01,as of 2 weeks later,calibrated_falling
+simulated,2026-10-18,2026-10-24,provinces,randomwalknowcast,48,100,69.52655407140796,3.6395179249359724,2026-11-01,as of 2 weeks later,calibrated_falling
+simulated,2026-10-25,2026-10-31,national,randomwalk,6,100,563.937828997868,3.0350579355851686,2026-11-08,as of 2 weeks later,calibrated_falling
+simulated,2026-10-25,2026-10-31,national,randomwalknowcast,6,100,119.54820927992161,1.4716815851060254,2026-11-08,as of 2 weeks later,calibrated_falling
+simulated,2026-10-25,2026-10-31,provinces,randomwalk,48,100,363.8927358755587,5.059220228534168,2026-11-08,as of 2 weeks later,calibrated_falling
+simulated,2026-10-25,2026-10-31,provinces,randomwalknowcast,48,100,92.89438753451151,3.4102890898266196,2026-11-08,as of 2 weeks later,calibrated_falling
+simulated,2026-11-01,2026-11-07,national,randomwalk,6,100,470.8587633420416,2.964222644956418,2026-11-15,as of 2 weeks later,calibrated_falling
+simulated,2026-11-01,2026-11-07,national,randomwalknowcast,6,100,91.40362045656627,1.36242725598593,2026-11-15,as of 2 weeks later,calibrated_falling
+simulated,2026-11-01,2026-11-07,provinces,randomwalk,48,100,280.3620036697977,6.268977763236013,2026-11-15,as of 2 weeks later,calibrated_falling
+simulated,2026-11-01,2026-11-07,provinces,randomwalknowcast,48,100,61.05466847102521,3.886880307900861,2026-11-15,as of 2 weeks later,calibrated_falling
+simulated,2026-10-11,2026-10-17,zones,randomwalk,528,100,141.89579173406545,10.274902316416803,2027-01-10,final,calibrated_falling
+simulated,2026-10-11,2026-10-17,zones,randomwalknowcast,528,100,48.620388886427186,8.628026158966968,2027-01-10,final,calibrated_falling
+simulated,2026-10-18,2026-10-24,zones,randomwalk,528,100,172.8208655441973,11.611196145359976,2027-01-10,final,calibrated_falling
+simulated,2026-10-18,2026-10-24,zones,randomwalknowcast,528,100,43.39455852419059,8.077258730278759,2027-01-10,final,calibrated_falling
+simulated,2026-10-25,2026-10-31,zones,randomwalk,528,100,157.68603336103507,11.35756251151963,2027-01-10,final,calibrated_falling
+simulated,2026-10-25,2026-10-31,zones,randomwalknowcast,528,100,51.433766882358995,7.395233315512218,2027-01-10,final,calibrated_falling
+simulated,2026-11-01,2026-11-07,zones,randomwalk,528,100,124.33158207939923,12.17960866470479,2027-01-10,final,calibrated_falling
+simulated,2026-11-01,2026-11-07,zones,randomwalknowcast,528,100,42.50687660130407,8.016653485551945,2027-01-10,final,calibrated_falling
+simulated,2026-10-11,2026-10-17,zones,randomwalk,396,100,131.02069506340095,9.984317832813254,2026-10-25,as of 2 weeks later,calibrated_falling
+simulated,2026-10-11,2026-10-17,zones,randomwalknowcast,396,100,39.85020448074737,6.048717507205692,2026-10-25,as of 2 weeks later,calibrated_falling
+simulated,2026-10-18,2026-10-24,zones,randomwalk,396,100,156.1404441019381,10.958429550414543,2026-11-01,as of 2 weeks later,calibrated_falling
+simulated,2026-10-18,2026-10-24,zones,randomwalknowcast,396,100,37.07953476157877,6.446802685016521,2026-11-01,as of 2 weeks later,calibrated_falling
+simulated,2026-10-25,2026-10-31,zones,randomwalk,396,100,141.19803789252438,11.254752070085722,2026-11-08,as of 2 weeks later,calibrated_falling
+simulated,2026-10-25,2026-10-31,zones,randomwalknowcast,396,100,41.774806747421884,6.476141983209088,2026-11-08,as of 2 weeks later,calibrated_falling
+simulated,2026-11-01,2026-11-07,zones,randomwalk,396,100,108.47261194367067,11.35886576877116,2026-11-15,as of 2 weeks later,calibrated_falling
+simulated,2026-11-01,2026-11-07,zones,randomwalknowcast,396,100,28.41218610809394,6.036917697634274,2026-11-15,as of 2 weeks later,calibrated_falling
+simulated,2026-10-11,2026-10-17,national,randomwalk,8,100,321.9074156641252,0.7568160455737752,2027-01-10,final,calibrated_flat
+simulated,2026-10-11,2026-10-17,national,randomwalknowcast,8,100,195.7399299720991,0.771215186585054,2027-01-10,final,calibrated_flat
+simulated,2026-10-11,2026-10-17,provinces,randomwalk,56,100,234.43214424735572,3.8203131271802824,2027-01-10,final,calibrated_flat
+simulated,2026-10-11,2026-10-17,provinces,randomwalknowcast,56,100,123.92148093282975,4.287961121298164,2027-01-10,final,calibrated_flat
+simulated,2026-10-18,2026-10-24,national,randomwalk,8,100,192.24615478550393,0.4889654477071066,2027-01-10,final,calibrated_flat
+simulated,2026-10-18,2026-10-24,national,randomwalknowcast,8,100,168.6487062877788,0.41844975519316496,2027-01-10,final,calibrated_flat
+simulated,2026-10-18,2026-10-24,provinces,randomwalk,64,100,185.23316884928835,5.81762226905185,2027-01-10,final,calibrated_flat
+simulated,2026-10-18,2026-10-24,provinces,randomwalknowcast,64,100,150.92926321443434,5.083098186087319,2027-01-10,final,calibrated_flat
+simulated,2026-10-25,2026-10-31,national,randomwalk,8,100,139.12769595083205,0.3675956742846391,2027-01-10,final,calibrated_flat
+simulated,2026-10-25,2026-10-31,national,randomwalknowcast,8,100,134.7296856670141,0.3654354546986127,2027-01-10,final,calibrated_flat
+simulated,2026-10-25,2026-10-31,provinces,randomwalk,64,100,161.94558808326858,5.960690602909487,2027-01-10,final,calibrated_flat
+simulated,2026-10-25,2026-10-31,provinces,randomwalknowcast,64,100,147.1408448235499,6.660439898511013,2027-01-10,final,calibrated_flat
+simulated,2026-11-01,2026-11-07,national,randomwalk,8,100,181.1705802779429,0.4754274677414475,2027-01-10,final,calibrated_flat
+simulated,2026-11-01,2026-11-07,national,randomwalknowcast,8,100,238.73267956648516,0.9042145085422922,2027-01-10,final,calibrated_flat
+simulated,2026-11-01,2026-11-07,provinces,randomwalk,64,100,267.5064165645995,7.659749897495386,2027-01-10,final,calibrated_flat
+simulated,2026-11-01,2026-11-07,provinces,randomwalknowcast,64,100,155.90582550931583,8.520238271617123,2027-01-10,final,calibrated_flat
+simulated,2026-10-11,2026-10-17,national,randomwalk,6,100,479.7779265373118,1.748332359889536,2026-10-25,as of 2 weeks later,calibrated_flat
+simulated,2026-10-11,2026-10-17,national,randomwalknowcast,6,100,110.67581225190041,0.6518662655408969,2026-10-25,as of 2 weeks later,calibrated_flat
+simulated,2026-10-11,2026-10-17,provinces,randomwalk,42,100,287.18621221578314,3.2462489522350344,2026-10-25,as of 2 weeks later,calibrated_flat
+simulated,2026-10-11,2026-10-17,provinces,randomwalknowcast,42,100,79.98342701561963,1.9649425157026448,2026-10-25,as of 2 weeks later,calibrated_flat
+simulated,2026-10-18,2026-10-24,national,randomwalk,6,100,395.2084301941804,1.7767287883023506,2026-11-01,as of 2 weeks later,calibrated_flat
+simulated,2026-10-18,2026-10-24,national,randomwalknowcast,6,100,319.3094106014021,1.551760240882769,2026-11-01,as of 2 weeks later,calibrated_flat
+simulated,2026-10-18,2026-10-24,provinces,randomwalk,48,100,246.9623539460725,3.18940286694113,2026-11-01,as of 2 weeks later,calibrated_flat
+simulated,2026-10-18,2026-10-24,provinces,randomwalknowcast,48,100,178.92943674673754,3.831534283199048,2026-11-01,as of 2 weeks later,calibrated_flat
+simulated,2026-10-25,2026-10-31,national,randomwalk,6,100,350.57215228994335,1.5955573007765005,2026-11-08,as of 2 weeks later,calibrated_flat
+simulated,2026-10-25,2026-10-31,national,randomwalknowcast,6,100,247.156689290617,1.2230531608969053,2026-11-08,as of 2 weeks later,calibrated_flat
+simulated,2026-10-25,2026-10-31,provinces,randomwalk,48,100,211.44777357690475,3.3501322857357256,2026-11-08,as of 2 weeks later,calibrated_flat
+simulated,2026-10-25,2026-10-31,provinces,randomwalknowcast,48,100,165.56552647682778,3.943503420341368,2026-11-08,as of 2 weeks later,calibrated_flat
+simulated,2026-11-01,2026-11-07,national,randomwalk,6,100,405.11273577821976,1.6206634528559045,2026-11-15,as of 2 weeks later,calibrated_flat
+simulated,2026-11-01,2026-11-07,national,randomwalknowcast,6,100,88.39933922743971,0.5567911038569602,2026-11-15,as of 2 weeks later,calibrated_flat
+simulated,2026-11-01,2026-11-07,provinces,randomwalk,48,100,274.8849422968107,4.094126356424942,2026-11-15,as of 2 weeks later,calibrated_flat
+simulated,2026-11-01,2026-11-07,provinces,randomwalknowcast,48,100,67.9497556502379,4.279339893994736,2026-11-15,as of 2 weeks later,calibrated_flat
+simulated,2026-10-11,2026-10-17,zones,randomwalk,520,100,103.14757778581179,7.664706411810979,2027-01-10,final,calibrated_flat
+simulated,2026-10-11,2026-10-17,zones,randomwalknowcast,520,100,62.7538145246744,8.196248783449061,2027-01-10,final,calibrated_flat
+simulated,2026-10-18,2026-10-24,zones,randomwalk,528,100,92.95592116330288,8.174151524510533,2027-01-10,final,calibrated_flat
+simulated,2026-10-18,2026-10-24,zones,randomwalknowcast,528,100,82.64900920136995,7.300872236601013,2027-01-10,final,calibrated_flat
+simulated,2026-10-25,2026-10-31,zones,randomwalk,528,100,98.78831207817797,8.397600733870583,2027-01-10,final,calibrated_flat
+simulated,2026-10-25,2026-10-31,zones,randomwalknowcast,528,100,90.61850455012507,8.890349940280721,2027-01-10,final,calibrated_flat
+simulated,2026-11-01,2026-11-07,zones,randomwalk,528,100,172.38762056053733,10.079303512863437,2027-01-10,final,calibrated_flat
+simulated,2026-11-01,2026-11-07,zones,randomwalknowcast,528,100,139.45071854375357,10.578136738221335,2027-01-10,final,calibrated_flat
+simulated,2026-10-11,2026-10-17,zones,randomwalk,390,100,115.04982364371695,8.586518572899859,2026-10-25,as of 2 weeks later,calibrated_flat
+simulated,2026-10-11,2026-10-17,zones,randomwalknowcast,390,100,36.53284520036323,5.67781980204743,2026-10-25,as of 2 weeks later,calibrated_flat
+simulated,2026-10-18,2026-10-24,zones,randomwalk,396,100,102.04935233824371,7.687522562180066,2026-11-01,as of 2 weeks later,calibrated_flat
+simulated,2026-10-18,2026-10-24,zones,randomwalknowcast,396,100,83.20781884593912,7.197816523006763,2026-11-01,as of 2 weeks later,calibrated_flat
+simulated,2026-10-25,2026-10-31,zones,randomwalk,396,100,90.45238008054181,7.322014540299723,2026-11-08,as of 2 weeks later,calibrated_flat
+simulated,2026-10-25,2026-10-31,zones,randomwalknowcast,396,100,73.98563954098368,6.800783939870969,2026-11-08,as of 2 weeks later,calibrated_flat
+simulated,2026-11-01,2026-11-07,zones,randomwalk,396,100,119.88132448873077,8.273805446264639,2026-11-15,as of 2 weeks later,calibrated_flat
+simulated,2026-11-01,2026-11-07,zones,randomwalknowcast,396,100,37.060733692826204,6.481208635700277,2026-11-15,as of 2 weeks later,calibrated_flat
+simulated,2026-10-11,2026-10-17,national,randomwalk,8,100,209.45578431432523,0.40765200337942364,2027-01-10,final,calibrated_rising
+simulated,2026-10-11,2026-10-17,national,randomwalknowcast,8,100,316.0029459209145,0.8630600762825043,2027-01-10,final,calibrated_rising
+simulated,2026-10-11,2026-10-17,provinces,randomwalk,56,100,185.87570506426107,4.615623539380476,2027-01-10,final,calibrated_rising
+simulated,2026-10-11,2026-10-17,provinces,randomwalknowcast,56,100,193.2508770699441,3.4588127480874715,2027-01-10,final,calibrated_rising
+simulated,2026-10-18,2026-10-24,national,randomwalk,8,100,178.4677313071598,0.35244141635729614,2027-01-10,final,calibrated_rising
+simulated,2026-10-18,2026-10-24,national,randomwalknowcast,8,100,211.62099168328996,0.4704406649623125,2027-01-10,final,calibrated_rising
+simulated,2026-10-18,2026-10-24,provinces,randomwalk,64,100,207.8740621150194,7.898123790376191,2027-01-10,final,calibrated_rising
+simulated,2026-10-18,2026-10-24,provinces,randomwalknowcast,64,100,178.79783914241176,7.1484012796523615,2027-01-10,final,calibrated_rising
+simulated,2026-10-25,2026-10-31,national,randomwalk,8,100,359.2633182980004,0.5992486759794262,2027-01-10,final,calibrated_rising
+simulated,2026-10-25,2026-10-31,national,randomwalknowcast,8,100,393.0673976151447,0.6870280896391399,2027-01-10,final,calibrated_rising
+simulated,2026-10-25,2026-10-31,provinces,randomwalk,64,100,240.53189420733995,9.36720302388829,2027-01-10,final,calibrated_rising
+simulated,2026-10-25,2026-10-31,provinces,randomwalknowcast,64,100,230.31490081218368,4.265243297817127,2027-01-10,final,calibrated_rising
+simulated,2026-11-01,2026-11-07,national,randomwalk,8,100,618.8627419366387,0.78599779951173,2027-01-10,final,calibrated_rising
+simulated,2026-11-01,2026-11-07,national,randomwalknowcast,8,100,516.6183945377046,0.6712859758946005,2027-01-10,final,calibrated_rising
+simulated,2026-11-01,2026-11-07,provinces,randomwalk,64,100,503.6088337106021,8.044315225694806,2027-01-10,final,calibrated_rising
+simulated,2026-11-01,2026-11-07,provinces,randomwalknowcast,64,100,443.64109644866744,9.05845746403067,2027-01-10,final,calibrated_rising
+simulated,2026-10-11,2026-10-17,national,randomwalk,6,100,478.61197893815034,1.478553031336247,2026-10-25,as of 2 weeks later,calibrated_rising
+simulated,2026-10-11,2026-10-17,national,randomwalknowcast,6,100,138.5307294896859,0.6184770267034871,2026-10-25,as of 2 weeks later,calibrated_rising
+simulated,2026-10-11,2026-10-17,provinces,randomwalk,42,100,309.3166205432918,2.693181964789432,2026-10-25,as of 2 weeks later,calibrated_rising
+simulated,2026-10-11,2026-10-17,provinces,randomwalknowcast,42,100,99.91827765908218,1.8246120174764417,2026-10-25,as of 2 weeks later,calibrated_rising
+simulated,2026-10-18,2026-10-24,national,randomwalk,6,100,409.8341730672016,1.37575872156864,2026-11-01,as of 2 weeks later,calibrated_rising
+simulated,2026-10-18,2026-10-24,national,randomwalknowcast,6,100,190.80898248179932,0.8554469971271199,2026-11-01,as of 2 weeks later,calibrated_rising
+simulated,2026-10-18,2026-10-24,provinces,randomwalk,48,100,269.80630196354184,3.522616046280757,2026-11-01,as of 2 weeks later,calibrated_rising
+simulated,2026-10-18,2026-10-24,provinces,randomwalknowcast,48,100,122.25306713764056,3.8974538768840716,2026-11-01,as of 2 weeks later,calibrated_rising
+simulated,2026-10-25,2026-10-31,national,randomwalk,6,100,221.55180799037592,0.7956965036811563,2026-11-08,as of 2 weeks later,calibrated_rising
+simulated,2026-10-25,2026-10-31,national,randomwalknowcast,6,100,179.08557845819556,0.6697388763226922,2026-11-08,as of 2 weeks later,calibrated_rising
+simulated,2026-10-25,2026-10-31,provinces,randomwalk,48,100,165.50904109738744,3.350359061571696,2026-11-08,as of 2 weeks later,calibrated_rising
+simulated,2026-10-25,2026-10-31,provinces,randomwalknowcast,48,100,109.96523380770759,1.7547241201306658,2026-11-08,as of 2 weeks later,calibrated_rising
+simulated,2026-11-01,2026-11-07,national,randomwalk,6,100,284.27688920605783,0.8685051596585759,2026-11-15,as of 2 weeks later,calibrated_rising
+simulated,2026-11-01,2026-11-07,national,randomwalknowcast,6,100,259.0547743241649,0.8978360000091264,2026-11-15,as of 2 weeks later,calibrated_rising
+simulated,2026-11-01,2026-11-07,provinces,randomwalk,48,100,199.8351117361815,3.8673993272782647,2026-11-15,as of 2 weeks later,calibrated_rising
+simulated,2026-11-01,2026-11-07,provinces,randomwalknowcast,48,100,160.69772055504114,4.2689828764702575,2026-11-15,as of 2 weeks later,calibrated_rising
+simulated,2026-10-11,2026-10-17,zones,randomwalk,520,100,86.5619183338984,7.782098663168224,2027-01-10,final,calibrated_rising
+simulated,2026-10-11,2026-10-17,zones,randomwalknowcast,520,100,84.50321796844463,8.537344294872685,2027-01-10,final,calibrated_rising
+simulated,2026-10-18,2026-10-24,zones,randomwalk,528,100,132.49551543507334,9.838878431834214,2027-01-10,final,calibrated_rising
+simulated,2026-10-18,2026-10-24,zones,randomwalknowcast,528,100,123.07207394802582,10.14478818921667,2027-01-10,final,calibrated_rising
+simulated,2026-10-25,2026-10-31,zones,randomwalk,528,100,234.64228431860045,10.92690674480018,2027-01-10,final,calibrated_rising
+simulated,2026-10-25,2026-10-31,zones,randomwalknowcast,528,100,195.59958952743781,8.075293087016366,2027-01-10,final,calibrated_rising
+simulated,2026-11-01,2026-11-07,zones,randomwalk,528,100,464.3929234085691,10.278140626047735,2027-01-10,final,calibrated_rising
+simulated,2026-11-01,2026-11-07,zones,randomwalknowcast,528,100,462.3602214970295,10.462044150575231,2027-01-10,final,calibrated_rising
+simulated,2026-10-11,2026-10-17,zones,randomwalk,390,100,120.08454501620037,7.492577620093645,2026-10-25,as of 2 weeks later,calibrated_rising
+simulated,2026-10-11,2026-10-17,zones,randomwalknowcast,390,100,46.210613746517296,5.231828896142724,2026-10-25,as of 2 weeks later,calibrated_rising
+simulated,2026-10-18,2026-10-24,zones,randomwalk,396,100,105.74940000065051,7.617669185524389,2026-11-01,as of 2 weeks later,calibrated_rising
+simulated,2026-10-18,2026-10-24,zones,randomwalknowcast,396,100,57.74112494967845,6.994738522427841,2026-11-01,as of 2 weeks later,calibrated_rising
+simulated,2026-10-25,2026-10-31,zones,randomwalk,396,100,72.1721323062669,6.185942093885383,2026-11-08,as of 2 weeks later,calibrated_rising
+simulated,2026-10-25,2026-10-31,zones,randomwalknowcast,396,100,55.50753970468023,5.073000734994313,2026-11-08,as of 2 weeks later,calibrated_rising
+simulated,2026-11-01,2026-11-07,zones,randomwalk,396,100,95.49567994896461,7.1278341785771815,2026-11-15,as of 2 weeks later,calibrated_rising
+simulated,2026-11-01,2026-11-07,zones,randomwalknowcast,396,100,75.33455522466637,7.248092068033566,2026-11-15,as of 2 weeks later,calibrated_rising

@@ -7,7 +7,7 @@ Forecasts from simulated vintages, where the final counts are known.
 
 ## Simulated scenarios
 
-Three simulated outbreaks copied from the 2026-10-24 data, with Rt after the data falling by a quarter, holding or rising by a quarter ([design](methods/evaluation.md#backtest-design)).
+Three simulated outbreaks copied from the 2026-11-01 data, with Rt after the data falling by a quarter, holding or rising by a quarter ([design](methods/evaluation.md#backtest-design)).
 
 --8<-- "scenario-figure.md"
 
