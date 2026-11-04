@@ -1588,6 +1588,12 @@ def _comparison_page(
         ],
         ours=quantiles["source"] != "hub",
     )
+    hidden = set(
+        labelled.loc[
+            labelled["ours"] & ~quantiles["model"].isin([*hub_ids, baseline]),
+            "model",
+        ]
+    )
     explorer_scores = None
     if not scores.empty:
         done = scores.loc[scores["target"] == "complete"]
@@ -1607,6 +1613,7 @@ def _comparison_page(
             baseline=_baseline_label(baseline, labelled),
             scores=explorer_scores,
             truth_vintage=truth,
+            hidden=hidden,
         ),
     )
     tabs = []

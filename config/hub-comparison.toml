@@ -15,6 +15,9 @@ stored = [
   "results/heldout-forecasts.csv.gz",
   "results/forecasts.csv.gz",
   "output/backtest/forecasts.csv.gz",
+  # Candidates fitted for the 2026-11-07 round but not submitted (run
+  # 41691221605).
+  "data/candidate-forecasts.csv.gz",
 ]
 # What we submitted to the hub, as model-output/<hub id>/*.csv.gz. It
 # takes the place of our forecasts for the rounds we submitted.

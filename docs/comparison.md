@@ -16,7 +16,7 @@ Our models and the forecasts submitted to the hub's weekly round, scored on the 
 Choose a location and a round.
 Points are medians, thick lines 50% intervals and thin lines 90% intervals, against the counts in the latest release, named in the key, with weeks still being reported shaded and hollow.
 The static figures show our submitted models and randomwalk above the hub teams.
-Models can be switched off in the key.
+Our other models, such as the unsubmitted 2026-11-07 renewal and renewalsp candidates, start switched off and can be switched on in the key.
 
 --8<-- "comparison-figures.md"
 

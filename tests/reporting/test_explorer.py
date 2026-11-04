@@ -86,3 +86,12 @@ def test_explorer_html_names_the_data() -> None:
     html = explorer.explorer_html("../figures/x.json", "Forecasts")
     assert 'data-src="../figures/x.json"' in html
     assert 'class="explorer"' in html
+
+
+def test_explorer_hides_models_until_switched_on() -> None:
+    quantiles, target, _ = _inputs()
+    data = explorer.explorer_data(quantiles, target, {}, 3, hidden=["a (ours)"])
+    assert data["models"] == [
+        {"label": "a (ours)", "ours": True, "on": False},
+        {"label": "hub", "ours": False, "on": True},
+    ]

@@ -61,7 +61,9 @@
 
     d.models.forEach(function (m, i) {
       var l = h("label", { class: "explorer-key" }, legend);
-      var cb = h("input", { type: "checkbox", checked: "" }, l);
+      var cb = h("input", { type: "checkbox" }, l);
+      cb.checked = m.on;
+      state.off[i] = !m.on;
       var sw = h("span", { class: "explorer-swatch" }, l);
       sw.style.background = PALETTE[i % PALETTE.length];
       h("span", {}, l, m.label);

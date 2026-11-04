@@ -7,7 +7,7 @@ SVG from a JSON file, so it works in a static site and follows the theme.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from pathlib import Path
 
 import pandas as pd
@@ -37,6 +37,7 @@ def explorer_data(
     baseline: str | None = None,
     scores: pd.DataFrame | None = None,
     truth_vintage: str | None = None,
+    hidden: Collection[str] = (),
 ) -> dict[str, object]:
     """Collect what the explorer draws.
 
@@ -59,6 +60,8 @@ def explorer_data(
         `SCORE_COLUMNS`.
     truth_vintage : str, optional
         Defaults to the latest real vintage.
+    hidden : collection of str
+        Model labels switched off until the reader switches them on.
 
     Returns
     -------
@@ -113,7 +116,10 @@ def explorer_data(
             for loc in locs
         ],
         "rounds": rounds,
-        "models": [{"label": m, "ours": m in ours} for m in models],
+        "models": [
+            {"label": m, "ours": m in ours, "on": m not in hidden}
+            for m in models
+        ],
         "data": data,
         "q": rows,
         "score_columns": list(SCORE_COLUMNS),
