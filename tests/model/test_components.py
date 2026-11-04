@@ -4,10 +4,12 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import numpyro
+import numpyro.distributions as dist
 import pandas as pd
 import pytest
 from pyrenew.deterministic import DeterministicVariable
 from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
+from pyrenew.randomvariable import DistributionalVariable
 
 from bdbvhubrenewal.model import (
     FixedTimeVarying,
@@ -190,7 +192,15 @@ def test_missing_fraction_and_hazard_delay_shapes():
         NonCentredRandomWalk(DeterministicVariable("sd", 0.1)), start_dow=6
     )
     pi = MissingOnsetFraction(
-        "pi", PooledInitialValue("pi0", 4, -2.0, 0.5, 0.3), weekly, weekly
+        "pi",
+        PooledInitialValue(
+            "pi0",
+            4,
+            DistributionalVariable("pi0_mean", dist.Normal(-2.0, 0.5)),
+            DistributionalVariable("pi0_sd", dist.HalfNormal(0.3)),
+        ),
+        weekly,
+        weekly,
     )
     out = seeded(lambda: pi(n_timepoints=35, n_groups=4, first_day_dow=6))
     assert out.shape == (35, 4) and bool(jnp.all((out > 0) & (out < 1)))

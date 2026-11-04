@@ -20,7 +20,7 @@ from pyrenew.latent.temporal_processes import (
 from pyrenew.metaclass import RandomVariable
 from pyrenew.randomvariable import DistributionalVariable
 
-from .rt import NonCentredRandomWalk
+from .temporal import NonCentredRandomWalk
 
 
 def hazard_to_pmf(logit_hazard: Array) -> Array:

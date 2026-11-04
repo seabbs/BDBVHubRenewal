@@ -7,7 +7,9 @@ The PyRenew renewal model the renewal forecasters fit and sample from. See [Gett
     options:
       members: false
 
-::: bdbvhubrenewal.model.rt
+::: bdbvhubrenewal.model.temporal
+
+::: bdbvhubrenewal.model.pooled
 
 ::: bdbvhubrenewal.model.renewal
 
