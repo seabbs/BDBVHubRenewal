@@ -98,6 +98,7 @@ from bdbvhubrenewal.reporting.plots import (
 )
 from bdbvhubrenewal.reporting.scorechart import (
     OVERALL_METRICS,
+    SCORE_METRICS,
     score_chart_data,
     score_chart_html,
     write_score_chart,
@@ -914,15 +915,6 @@ _RELEASE_MATCH: Final = [
 """Columns that identify one forecast scored against one release."""
 
 
-_SCORE_METRICS: Final = {
-    "wis": ("WIS", None),
-    "log_wis": ("Log WIS", None),
-    "coverage_90": ("90% coverage", 0.9),
-    "bias": ("Bias", 0.0),
-}
-"""Metrics of the interactive score charts, with their reference lines."""
-
-
 def _score_chart(
     fig: Path,
     gen: Path,
@@ -935,7 +927,7 @@ def _score_chart(
     The static WIS figure is shown without JavaScript.
     """
     grp = scores.groupby(["model", by])
-    table = grp[list(_SCORE_METRICS)].mean()
+    table = grp[list(SCORE_METRICS)].mean()
     table.insert(0, "n", grp.size())
     table = table.reset_index()
     if by == "location":
@@ -954,7 +946,7 @@ def _score_chart(
         score_chart_data(
             table,
             by,
-            _SCORE_METRICS,
+            SCORE_METRICS,
             names,
             x_label="Horizon" if by == "horizon" else "Place",
             kind="line" if by == "horizon" else "bar",
@@ -1031,7 +1023,7 @@ def _forecast_tabs(
         return "## Forecasts against later data\n\n" + static
     return (
         "## Forecasts against later data\n\n"
-        + explorer_html(explorer_src, "Backtest forecasts")
+        + explorer_html(explorer_src, "Backtest forecasts", all_rounds=True)
         + "\n"
         + static
     )
