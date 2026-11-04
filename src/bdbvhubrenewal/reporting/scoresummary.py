@@ -16,7 +16,7 @@ import pandas as pd
 
 from bdbvhubrenewal.forecasters import NATIONAL
 
-__all__ = ["SUMMARY_METRICS", "summary_html", "summary_rows"]
+__all__ = ["ENERGY_SUMMARY", "SUMMARY_METRICS", "summary_html", "summary_rows"]
 
 SUMMARY_METRICS: tuple[tuple[str, str, float | None, bool], ...] = (
     ("wis", "WIS", None, True),
@@ -27,6 +27,13 @@ SUMMARY_METRICS: tuple[tuple[str, str, float | None, bool], ...] = (
 )
 """Score column, label, reference line and whether it is also shown
 relative to the baseline, whose reference is then 1."""
+
+ENERGY_SUMMARY: tuple[tuple[str, str], ...] = (
+    ("energy", "Energy score"),
+    ("log_energy", "Energy score on the log scale"),
+)
+"""Energy score columns and labels. There is one score per model, origin,
+release and pool, so they show in the overall view only."""
 
 _POOLS = {
     "national": "National",
@@ -49,6 +56,7 @@ def summary_rows(
     baseline: str = "randomwalk",
     metrics: Sequence[tuple[str, str, float | None, bool]] = SUMMARY_METRICS,
     default_on: Sequence[str] | None = None,
+    energy: pd.DataFrame | None = None,
 ) -> dict[str, object]:
     """Return the per-forecast rows and their labels for one target.
 
@@ -70,6 +78,9 @@ def summary_rows(
         As `SUMMARY_METRICS`.
     default_on : sequence of str, optional
         Models ticked at first. Defaults to all.
+    energy : pandas.DataFrame, optional
+        Energy scores (`energy_scores`) with `model`, `origin`,
+        `truth_vintage`, `scale` and the `ENERGY_SUMMARY` columns.
 
     Returns
     -------
@@ -78,7 +89,9 @@ def summary_rows(
         `baseline` (its index), `metrics` (key, label, ref, relative),
         `origins`, `releases`, `weeks`, `pools` (id and label, in order),
         `places` (id, name, pool) and `rows`: model, origin, release,
-        place and week indices, then each metric.
+        place and week indices, then each metric. With `energy`, also
+        `energy`: `metrics` (key and label) and `rows` of model, origin,
+        release and pool indices, then each energy score.
     """
     shown = [m for m in models if m in set(scores["model"])]
     s = scores.loc[scores["model"].isin(shown)]
@@ -107,7 +120,7 @@ def summary_rows(
         ]
         for r in cols.itertuples(index=False)
     ]
-    return {
+    out: dict[str, object] = {
         "models": [
             {
                 "name": m,
@@ -130,6 +143,39 @@ def summary_rows(
             {"id": p, "name": names.get(p, p), "pool": _pool(p)} for p in places
         ],
         "rows": rows,
+    }
+    if energy is not None:
+        out["energy"] = _energy_rows(energy, idx, pools)
+    return out
+
+
+def _energy_rows(
+    energy: pd.DataFrame,
+    idx: Mapping[str, Mapping[str, int]],
+    pools: Sequence[str],
+) -> dict[str, object]:
+    """Index the energy scores into the summary's models, rounds and pools."""
+    e = energy.loc[
+        energy["model"].isin(set(idx["model"]))
+        & energy["origin"].astype(str).isin(set(idx["origin"]))
+        & energy["truth_vintage"].astype(str).isin(set(idx["truth_vintage"]))
+        & energy["scale"].isin(set(pools))
+    ]
+    keys = [k for k, _ in ENERGY_SUMMARY]
+    return {
+        "metrics": [{"key": k, "label": label} for k, label in ENERGY_SUMMARY],
+        "rows": [
+            [
+                idx["model"][m],
+                idx["origin"][str(o)],
+                idx["truth_vintage"][str(r)],
+                pools.index(p),
+                *(round(float(v), 6) for v in vals),
+            ]
+            for m, o, r, p, *vals in e[
+                ["model", "origin", "truth_vintage", "scale", *keys]
+            ].itertuples(index=False)
+        ],
     }
 
 

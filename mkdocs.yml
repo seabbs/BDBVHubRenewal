@@ -112,6 +112,7 @@ extra_javascript:
   - javascripts/toggles.js
   - javascripts/zoom.js
   - javascripts/summarise.js
+  - javascripts/energy.js
   - javascripts/tablefilter.js
   - javascripts/explorer.js
   - javascripts/scorechart.js

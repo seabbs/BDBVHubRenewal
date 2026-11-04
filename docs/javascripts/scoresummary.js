@@ -7,6 +7,7 @@
   "use strict";
   var h = window.bdbvToggles.h;
   var summarise = window.bdbvSummarise;
+  var summariseEnergy = window.bdbvSummariseEnergy;
 
   function fmt(v, dp) { return v === undefined || isNaN(v) ? "" : v.toFixed(dp); }
   // Lower-case the first letter of a label, but not of an acronym (WIS).
@@ -45,6 +46,18 @@
         { key: m.key, label: m.label, ref: m.ref };
     });
     function value(s, m) { return m.relative ? s.rel[m.key] : s.mean[m.key]; }
+    // Energy scores: one per scale, so overall view only.
+    var energy = !byPlace && d.energy ? d.energy.metrics : [];
+    energy.forEach(function (m) {
+      metrics.push({ key: "rel_" + m.key, label: "Relative " + lower(m.label), ref: 1 });
+    });
+    function joint() {
+      var pool = d.pools.map(function (p) { return p.id; }).indexOf(selScale.value);
+      var round = selRound.value === "all" ? null : +selRound.value;
+      return summariseEnergy(d, function (r) {
+        return r[3] === pool && (round === null || r[1] === round);
+      });
+    }
 
     function places() {
       return d.places.map(function (p, i) { return { i: i, p: p }; })
@@ -74,10 +87,13 @@
       var x = byPlace ? groups.map(function (g) { return g[0].p.name; }) :
         [selScale.options[selScale.selectedIndex].text];
       var rows = [];
+      var j = energy.length ? joint() : {};
       groups.forEach(function (g, xi) {
         summarise(d, keep(set(g))).forEach(function (s) {
           rows.push([s.model, xi, s.n].concat(d.metrics.map(function (m) {
             return value(s, m);
+          }), energy.map(function (m) {
+            return j[s.model] ? j[s.model].rel[m.key] : null;
           })));
         });
       });
@@ -91,10 +107,16 @@
         cols.push({ label: "Relative " + lower(m.label), get: function (s) { return s.rel[m.key]; } });
       }
     });
+    var jointCols = [{ label: "n energy", dp: 0, get: function (e) { return e.n; } }];
+    energy.forEach(function (m) {
+      jointCols.push({ label: m.label, dp: 3, get: function (e) { return e.mean[m.key]; } });
+      jointCols.push({ label: "Relative " + lower(m.label), dp: 3, get: function (e) { return e.rel[m.key]; } });
+    });
     function drawTable(_, on) {
       var chosen = byPlace && selPlace.value !== "all" ?
         [{ i: +selPlace.value }] : places();
       var s = summarise(d, keep(set(chosen)));
+      var j = energy.length ? joint() : null;
       table.textContent = "";
       if (!s.length) {
         h("p", { class: "explorer-note" }, table, "No scores for this selection.");
@@ -103,6 +125,7 @@
       var tbl = h("table", {}, table);
       var head = h("tr", {}, h("thead", {}, tbl));
       ["Model", "n"].concat(cols.map(function (c) { return c.label; }))
+        .concat(j ? jointCols.map(function (c) { return c.label; }) : [])
         .forEach(function (c) { h("th", {}, head, c); });
       var body = h("tbody", {}, tbl);
       s.forEach(function (r) {
@@ -111,6 +134,11 @@
         h("td", {}, tr, d.models[r.model].name);
         h("td", {}, tr, String(r.n));
         cols.forEach(function (c) { h("td", {}, tr, fmt(c.get(r), 3)); });
+        if (j) {
+          jointCols.forEach(function (c) {
+            h("td", {}, tr, j[r.model] ? fmt(c.get(j[r.model]), c.dp) : "");
+          });
+        }
       });
     }
 

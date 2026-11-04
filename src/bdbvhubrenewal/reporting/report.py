@@ -395,6 +395,7 @@ def _release_section(
             },
             _location_names(real),
             default_on=[m for m in ours if m != "randomwalk"],
+            energy=energy.loc[energy["target"] == _TARGET_LABELS["reported"]],
         ),
     )
     save_light_dark(

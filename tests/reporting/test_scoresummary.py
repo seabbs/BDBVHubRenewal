@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.evaluation.nowcast import relative_wis
+from bdbvhubrenewal.evaluation.nowcast import relative_energy, relative_wis
 from bdbvhubrenewal.reporting.scoresummary import summary_html, summary_rows
 
 SUMMARISE = Path(__file__).parents[2] / "docs" / "javascripts" / "summarise.js"
@@ -112,3 +112,59 @@ def test_summary_html_names_the_view_and_fallback() -> None:
     html = summary_html("x.json", "Scores", view="place", static="a.svg")
     assert 'data-view="place"' in html
     assert "a-dark.svg#only-dark" in html
+
+
+ENERGY_JS = SUMMARISE.with_name("energy.js")
+
+
+def _energy() -> pd.DataFrame:
+    rng = np.random.default_rng(4)
+    rows = [
+        {
+            "model": model,
+            "origin": origin,
+            "truth_vintage": release,
+            "scale": scale,
+            "energy": rng.gamma(2, 5),
+            "log_energy": rng.gamma(2, 0.1),
+        }
+        for model in MODELS
+        for origin, release in (
+            ("2026-10-17", "2026-10-24"),
+            ("2026-10-17", "2026-11-01"),
+            ("2026-10-24", "2026-11-01"),
+        )
+        for scale in ("national", "provinces", "zones")
+        # randomwalk misses one release, so it is not matched.
+        if not (model == "randomwalk" and release == "2026-10-24")
+    ]
+    return pd.DataFrame(rows)
+
+
+@pytest.mark.parametrize("pool", ["national", "provinces", "zones"])
+def test_browser_energy_matches_relative_energy(pool: str) -> None:
+    energy = _energy()
+    data = summary_rows(_scores(), MODELS, COLOURS, {}, energy=energy)
+    ids = [p["id"] for p in data["pools"]]
+    script = (
+        f"const s = require({json.dumps(str(ENERGY_JS))});"
+        "const d = JSON.parse(require('fs').readFileSync(0, 'utf8'));"
+        f"const keep = function (r) {{ return r[3] === {ids.index(pool)}; }};"
+        "process.stdout.write(JSON.stringify(s(d, keep)));"
+    )
+    got = json.loads(
+        subprocess.run(
+            ["node", "-e", script],
+            input=json.dumps(data),
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+    )
+    want = relative_energy(energy, by=("scale",)).set_index(["scale", "model"])
+    assert len(got) == len(MODELS)
+    for m, row in got.items():
+        exp = want.loc[(pool, MODELS[int(m)])]
+        assert row["n"] == exp["n_energy"] == 2
+        for col in ("energy", "log_energy"):
+            assert row["rel"][col] == pytest.approx(exp[f"rel_{col}"], abs=1e-3)
