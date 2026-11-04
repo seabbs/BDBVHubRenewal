@@ -310,6 +310,28 @@ def make_tasks(
     -------
     list of ForecastTask
         Tasks ordered by kind and vintage.
+
+    Examples
+    --------
+    >>> import dataclasses
+    >>> from bdbvhubrenewal.data import (
+    ...     delays_for_vintage, load_daily, load_delays, load_target
+    ... )
+    >>> from bdbvhubrenewal.evaluation import backtest as bt
+    >>> target = load_target()
+    >>> real = target.loc[target["kind"] == "real"]
+    >>> config = dataclasses.replace(
+    ...     bt.load_config("config/backtest.toml"), min_horizon=-6
+    ... )
+    >>> vintage = "2026-10-17"
+    >>> task = bt.make_tasks(
+    ...     real.loc[real["vintage"] == vintage],
+    ...     delays_for_vintage(load_delays(), vintage)[0],
+    ...     config,
+    ...     history=real,
+    ...     daily=load_daily(),
+    ... )[0]
+    >>> task.reference_date, task.target_end_dates[-1]
     """
     tasks = []
     source = target if history is None else history
@@ -453,6 +475,14 @@ def run_forecasts(
         Columns `model`, `kind`, `vintage`, `reference_date`, `horizon`,
         `location`, `target_end_date`, `sample`, `value`, `as_of`
         (missing for final counts) and `lag_prior` (`uses_lag_prior`).
+
+    Examples
+    --------
+    >>> from bdbvhubrenewal.evaluation.backtest import run_forecasts
+    >>> from bdbvhubrenewal.forecasters import get_model
+    >>> models = [get_model("randomwalk"), get_model("randomwalknowcast")]
+    >>> forecasts = run_forecasts(models, [task])  # tasks from `make_tasks`
+    >>> forecasts.groupby("model")["sample"].nunique()
     """
     frames = []
     for task in tasks:

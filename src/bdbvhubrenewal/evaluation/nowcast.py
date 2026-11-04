@@ -404,6 +404,19 @@ def release_backtest(
         If a task has no release snapshots.
     ValueError
         If two models give identical samples for a task.
+
+    Examples
+    --------
+    Score stored forecasts against the counts later releases reported.
+
+    >>> from bdbvhubrenewal.evaluation.nowcast import (
+    ...     relative_wis, release_backtest
+    ... )
+    >>> result = release_backtest(
+    ...     [task], daily, target, models=(), stored=forecasts
+    ... )
+    >>> scores = result.scores.query("target == 'reported'")
+    >>> relative_wis(scores)
     """
     real = target.loc[target["kind"] == "real"]
     releases = sorted(str(v) for v in real["vintage"].unique())

@@ -343,6 +343,15 @@ def to_hub_table(
         If a province or zone does not have sample ids `1..n_samples`, a
         sample lacks a week, locations cover different weeks, or the
         zones do not sum to their provinces.
+
+    Examples
+    --------
+    >>> from bdbvhubrenewal.submission.hub import (
+    ...     model_id, to_hub_table, write_submission
+    ... )
+    >>> samples = forecasts.query("model == 'randomwalknowcast'")
+    >>> table = to_hub_table(samples, task.reference_date)
+    >>> write_submission(table, "output/submission", model_id("rwnowcast"))
     """
     ref = as_date(reference_date).isoformat()
     fdate = as_date(forecast_date or run_date()).isoformat()
@@ -455,7 +464,18 @@ def _records(table: pd.DataFrame) -> list[dict[str, str]]:
 
 
 def run_date(now: dt.datetime | None = None) -> dt.date:
-    """Return the date a run opens its PR on, in UTC."""
+    """Return the date a run opens its PR on, in UTC.
+
+    Parameters
+    ----------
+    now : datetime.datetime, optional
+        The time of the run. Defaults to now.
+
+    Returns
+    -------
+    datetime.date
+        The UTC date.
+    """
     moment = now or dt.datetime.now(dt.UTC)
     return moment.astimezone(dt.UTC).date()
 

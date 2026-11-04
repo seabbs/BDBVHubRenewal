@@ -711,6 +711,19 @@ def plot_location_grid(
     matplotlib.figure.Figure
         Per panel, the data at the origin (dashed), the later data
         (solid) and each model's trajectories, intervals and median.
+
+    Examples
+    --------
+    >>> from bdbvhubrenewal.reporting.plots import (
+    ...     plot_location_grid, save_light_dark
+    ... )
+    >>> fig = plot_location_grid(forecasts, real, ["CD", "CD-IT"])
+    >>> save_light_dark(
+    ...     lambda mode: plot_location_grid(
+    ...         forecasts, real, ["CD"], mode=mode
+    ...     ),
+    ...     "figures/grid.svg",
+    ... )
     """
     fc = forecasts
     if max_horizon is not None:
@@ -893,6 +906,12 @@ def plot_forecasts(
         One panel per reference date: data at the time (dashed), later
         data (solid) and each model's sample trajectories, 50% and 90%
         intervals and median.
+
+    Examples
+    --------
+    >>> from bdbvhubrenewal.reporting.plots import plot_forecasts
+    >>> fig = plot_forecasts(forecasts, real, "CD")  # from `run_forecasts`
+    >>> fig.savefig("national.png")
     """
     fc = forecasts.loc[
         (forecasts["location"] == location) & (forecasts["kind"] == kind)
@@ -1152,7 +1171,20 @@ def comparison_colours(
 
 
 def hub_styles(teams: Sequence[str], mode: str) -> dict[str, tuple[str, str]]:
-    """Give each hub team a grey and a marker, fixed by its sorted place."""
+    """Give each hub team a grey and a marker, fixed by its sorted place.
+
+    Parameters
+    ----------
+    teams : sequence of str
+        Hub team names.
+    mode : str
+        `"light"` or `"dark"`.
+
+    Returns
+    -------
+    dict of str to tuple of str
+        Each team's colour and marker.
+    """
     greys = HUB_GREYS[mode]
     markers = "os^Dv"
     return {

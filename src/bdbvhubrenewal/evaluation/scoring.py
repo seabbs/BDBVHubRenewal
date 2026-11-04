@@ -242,6 +242,22 @@ def score_forecasts(
     pandas.DataFrame
         One row per forecast with a truth value: the keys, `horizon`,
         `truth`, `n_samples` and `SCORE_COLUMNS`.
+
+    Examples
+    --------
+    Score against the latest release, with `forecasts` from `run_forecasts`.
+
+    >>> from bdbvhubrenewal.data import load_target, vintages
+    >>> from bdbvhubrenewal.evaluation.scoring import (
+    ...     score_forecasts, summarise_scores
+    ... )
+    >>> real = load_target().query("kind == 'real'")
+    >>> latest = real.loc[real["vintage"] == vintages(real)[-1]]
+    >>> truth = latest.rename(columns={"total": "truth"})[
+    ...     ["location", "target_end_date", "truth"]
+    ... ]
+    >>> scores = score_forecasts(forecasts, truth)
+    >>> summarise_scores(scores, by=["model"])
     """
     keys = list(keys)
     on = [c for c in truth.columns if c != "truth"]

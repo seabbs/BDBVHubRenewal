@@ -1097,6 +1097,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     -------
     int
         Exit status.
+
+    Examples
+    --------
+    From the shell, download the data, forecast with the random walk
+    nowcast and write its hub file under `output/submission/`:
+
+        bdbvhubrenewal data
+        bdbvhubrenewal nowcast --model randomwalknowcast --vintage latest
+        bdbvhubrenewal <command> --help
+
+    The same from Python:
+
+    >>> from bdbvhubrenewal.cli import main
+    >>> main(["nowcast", "--model", "randomwalknowcast", "--vintage", "latest"])
     """
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     # JAX logs its backend search at INFO, which is noise here.

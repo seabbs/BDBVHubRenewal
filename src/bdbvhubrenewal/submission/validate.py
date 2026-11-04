@@ -68,6 +68,16 @@ class Check:
 
 @dataclass
 class Report:
+    """The checks run on one file.
+
+    Attributes
+    ----------
+    file : str
+        The file checked.
+    checks : list of Check
+        Each check's outcome, in the order run.
+    """
+
     file: str
     checks: list[Check] = field(default_factory=list)
 
@@ -79,6 +89,26 @@ class Report:
         halt: bool = False,
         fail_message: str | None = None,
     ) -> bool:
+        """Record a check that passes when `ok` is true.
+
+        Parameters
+        ----------
+        check : str
+            Check name, as in hubValidations.
+        ok : bool
+            Whether the check passed.
+        message : str
+            Message to record.
+        halt : bool, default False
+            Record a failure as `error`, which stops later checks.
+        fail_message : str, optional
+            Message to record instead when the check fails.
+
+        Returns
+        -------
+        bool
+            `ok`.
+        """
         status = "pass" if ok else ("error" if halt else "fail")
         self.checks.append(
             Check(check, status, message if ok else fail_message or message)
@@ -86,17 +116,49 @@ class Report:
         return ok
 
     def skip(self, check: str, message: str) -> None:
+        """Record a check that was not run.
+
+        Parameters
+        ----------
+        check : str
+            Check name.
+        message : str
+            Why it was skipped.
+        """
         self.checks.append(Check(check, "skip", message))
 
     def warn(self, check: str, message: str) -> None:
+        """Record a warning, which does not fail the file.
+
+        Parameters
+        ----------
+        check : str
+            Check name.
+        message : str
+            The warning.
+        """
         self.checks.append(Check(check, "warn", message))
 
     @property
     def failed(self) -> list[Check]:
+        """The checks with status `fail` or `error`.
+
+        Returns
+        -------
+        list of Check
+            The failed checks.
+        """
         return [c for c in self.checks if c.status in ("fail", "error")]
 
     @property
     def valid(self) -> bool:
+        """Whether no check failed.
+
+        Returns
+        -------
+        bool
+            True if the file passes.
+        """
         return not self.failed
 
 
@@ -199,6 +261,20 @@ def _parse_output_type(name: str, cfg: dict[str, Any]) -> OutputType:
 
 @dataclass
 class Hub:
+    """The hub's configuration, read from a local clone.
+
+    Attributes
+    ----------
+    path : pathlib.Path
+        Root of the clone.
+    rounds : list of Round
+        The rounds in `hub-config/tasks.json`.
+    admin : dict
+        `hub-config/admin.json`.
+    metadata_schema : dict or None
+        `hub-config/model-metadata-schema.json`, if present.
+    """
+
     path: Path
     rounds: list[Round]
     admin: dict[str, Any]
@@ -206,6 +282,25 @@ class Hub:
 
     @classmethod
     def load(cls, path: str | Path) -> Hub:
+        """Read the hub configuration from a clone.
+
+        Parameters
+        ----------
+        path : str or pathlib.Path
+            Root of a clone of the hub repository.
+
+        Returns
+        -------
+        Hub
+            The configuration.
+
+        Examples
+        --------
+        >>> from bdbvhubrenewal.submission.validate import Hub, validate_file
+        >>> hub = Hub.load("../BDBV-Modeling-Hub")
+        >>> report = validate_file("model-output/x/2026-11-07-x.csv", hub)
+        >>> report.valid, [c.check for c in report.failed]
+        """
         p = Path(path)
         tasks = json.loads((p / "hub-config" / "tasks.json").read_text())
         admin = json.loads((p / "hub-config" / "admin.json").read_text())
@@ -240,19 +335,52 @@ class Hub:
 
     @property
     def timezone(self) -> ZoneInfo:
+        """The hub's time zone, from `admin.json`.
+
+        Returns
+        -------
+        zoneinfo.ZoneInfo
+            The time zone, UTC if none is set.
+        """
         return ZoneInfo(self.admin.get("timezone", "UTC"))
 
     @property
     def file_formats(self) -> list[str]:
+        """The file formats the hub accepts.
+
+        Returns
+        -------
+        list of str
+            Such as `["csv"]`.
+        """
         return list(self.admin.get("file_format", ["csv"]))
 
     def find_round(self, round_id: str) -> Round | None:
+        """Find the round a round id belongs to.
+
+        Parameters
+        ----------
+        round_id : str
+            Round id, the reference date.
+
+        Returns
+        -------
+        Round or None
+            The round, or None if no round has that id.
+        """
         for r in self.rounds:
             if round_id in r.round_ids:
                 return r
         return None
 
     def all_round_ids(self) -> list[str]:
+        """List every round id in the configuration.
+
+        Returns
+        -------
+        list of str
+            Round ids, sorted within each round.
+        """
         out: list[str] = []
         for r in self.rounds:
             out += sorted(r.round_ids)
@@ -265,6 +393,18 @@ class Hub:
 
         Matches hubValidations: the window opens at 00:00:00 on the start
         day and closes at 23:59:59 on the end day.
+
+        Parameters
+        ----------
+        rnd : Round
+            The round, from `find_round`.
+        round_id : str
+            Round id, the reference date.
+
+        Returns
+        -------
+        tuple of datetime.datetime
+            Opening and closing times.
         """
         due = rnd.submissions_due
         tz = self.timezone
@@ -518,11 +658,30 @@ def validate_submission(
 ) -> Report:
     """Run all model-output checks on one file.
 
-    The hub's `forecast_date` checks run first. `previous` is the file now
-    on the hub's main branch at the same path, if any. The window check
-    and the check that the new forecast date is recent are both skipped
-    with `skip_window`. The standard checks then see only the new rows,
-    without `forecast_date`, as in the hub's own workflow.
+    The hub's `forecast_date` checks run first. The standard checks then
+    see only the new rows, without `forecast_date`, as in the hub's own
+    workflow.
+
+    Parameters
+    ----------
+    file : str or pathlib.Path
+        The model-output CSV.
+    hub : Hub
+        The hub configuration.
+    metadata_dirs : iterable of pathlib.Path
+        Directories to look for the model's metadata in.
+    now : datetime.datetime, optional
+        Time to check the submission window against. Defaults to now.
+    skip_window : bool, default False
+        Skip the window check and the check that the new forecast date
+        is recent.
+    previous : str or pathlib.Path, optional
+        The file now on the hub's main branch at the same path, if any.
+
+    Returns
+    -------
+    Report
+        The checks and their outcomes.
     """
     fp = Path(file)
     rep = Report(str(file))
@@ -1094,7 +1253,20 @@ def _schema_errors(x: Any, s: Any, path: str = "") -> list[str]:
 
 
 def validate_metadata(file: str | Path, hub: Hub) -> Report:
-    """Run the model metadata checks on one YAML file."""
+    """Run the model metadata checks on one YAML file.
+
+    Parameters
+    ----------
+    file : str or pathlib.Path
+        The metadata file.
+    hub : Hub
+        The hub configuration, with its metadata schema.
+
+    Returns
+    -------
+    Report
+        The checks and their outcomes.
+    """
     fp = Path(file)
     rep = Report(str(file))
     if not rep.add(
@@ -1142,6 +1314,22 @@ def validate_metadata(file: str | Path, hub: Hub) -> Report:
 
 
 def validate_file(file: str | Path, hub: Hub, **kw: Any) -> Report:
+    """Check a model-output CSV or a model metadata YAML file.
+
+    Parameters
+    ----------
+    file : str or pathlib.Path
+        The file. A `.yml` or `.yaml` file is checked as metadata.
+    hub : Hub
+        The hub configuration.
+    **kw
+        Passed to `validate_submission`.
+
+    Returns
+    -------
+    Report
+        The checks and their outcomes.
+    """
     if Path(file).suffix in (".yml", ".yaml"):
         return validate_metadata(file, hub)
     return validate_submission(file, hub, **kw)
