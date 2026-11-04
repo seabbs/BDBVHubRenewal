@@ -44,6 +44,7 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
+from bdbvhubrenewal.data.releases import last_report
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -366,7 +367,8 @@ def horizon_weeks(task: ForecastTask) -> int:
         At least one.
     """
     last = max(_saturday(d) for d in task.target_end_dates)
-    return max(1, (last - _saturday(task.vintage)).days // 7)
+    cut = last_report(task.vintage, task.kind)
+    return max(1, (last - _saturday(cut)).days // 7)
 
 
 def _weeks(first: dt.date, n: int) -> list[str]:
@@ -597,11 +599,12 @@ def report_cutoffs(task: ForecastTask, data: Any) -> dict[int, str]:
     Returns
     -------
     dict
-        The vintage date (ISO) by its day on the model axis, the `as_of`
-        cut-offs of `forecast_trajectories`.
+        The vintage date (ISO) by its last report day on the model axis
+        (`data.releases.last_report`), the `as_of` cut-offs of
+        `forecast_trajectories`.
     """
     return {
-        (dt.date.fromisoformat(d) - data.start_date).days: d
+        (last_report(d, task.kind) - data.start_date).days: d
         for d in task.report_by
     }
 
