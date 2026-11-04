@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -235,24 +236,6 @@ def test_live_mode_is_ok(settings: Settings) -> None:
     assert "live" in check.detail
 
 
-def test_variables_override_model_and_id(settings: Settings) -> None:
-    runner = ready_runner(
-        **{
-            f"repos/{REPO}/actions/variables": {
-                "variables": [
-                    {"name": "HUB_MODEL", "value": "randomwalk"},
-                    {"name": "HUB_MODEL_ID", "value": "seabbs-other"},
-                    {"name": "EXPECTED_LOCATIONS", "value": "CD"},
-                ]
-            }
-        }
-    )
-    checks = {c.name: c for c in run_checks(runner, settings)}
-    assert "seabbs-other" in checks["metadata"].detail
-    assert checks["metadata"].status == "missing"
-    assert checks["model"].detail == "submits `randomwalk` (HUB_MODEL)"
-
-
 def test_metadata_name_mismatch_is_missing(settings: Settings) -> None:
     (settings.metadata_dir / f"{MID}.yml").write_text(
         "team_abbr: seabbs\nmodel_abbr: hubrenewal\n"
@@ -269,14 +252,8 @@ def test_metadata_abbr_too_long_is_missing(settings: Settings) -> None:
     (settings.metadata_dir / f"{mid}.yml").write_text(
         "team_abbr: seabbs\nmodel_abbr: abcdefghijklmnop\n"
     )
-    runner = ready_runner(
-        **{
-            f"repos/{REPO}/actions/variables": {
-                "variables": [{"name": "HUB_MODEL_ID", "value": mid}]
-            }
-        }
-    )
-    check = {c.name: c for c in run_checks(runner, settings)}["metadata"]
+    long_id = replace(settings, model_id_default=mid)
+    check = {c.name: c for c in run_checks(ready_runner(), long_id)}["metadata"]
     assert check.status == "missing"
     assert "16" in check.detail
 
@@ -288,8 +265,6 @@ def test_configured_model_is_what_submits(settings: Settings) -> None:
 
 
 def test_no_configured_model_is_missing(settings: Settings) -> None:
-    from dataclasses import replace
-
     none = replace(settings, configured_model="")
     check = {c.name: c for c in run_checks(ready_runner(), none)}["model"]
     assert check.status == "missing"
@@ -385,8 +360,6 @@ def test_second_hub_model_is_checked(settings: Settings) -> None:
 
 
 def test_opt_in_is_reported(settings: Settings) -> None:
-    from dataclasses import replace
-
     none = replace(settings, opted_in=())
     check = {c.name: c for c in run_checks(ready_runner(), none)}["opt-in"]
     assert check.status == "warn"

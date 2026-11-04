@@ -25,7 +25,6 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 | `validate` | Run the hub's checks on files. |
 | `metadata` | Write and check a model's metadata YAML. |
 | `hub-id` | Print the hub model id that submissions use. |
-| `chosen-model` | Print the model chosen in `results/model-choice.yml`. |
 | `freeze-round` | Write a round's docs page to the ledger once its pull request has merged. |
 | `report` | Make the docs figures and tables. |
 

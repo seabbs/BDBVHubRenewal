@@ -15,6 +15,7 @@ def write(path: Path, renewal: bool, baseline: bool) -> Path:
     path.write_text(
         "[submission]\n"
         'model_abbr = "renewal"\n'
+        'model = "renewalsp"\n'
         f"submit = {str(renewal).lower()}\n"
         "[models.randomwalknowcast]\n"
         'model_abbr = "rwnowcast"\n'
@@ -24,7 +25,7 @@ def write(path: Path, renewal: bool, baseline: bool) -> Path:
 
 
 def test_repository_config_names_both_hub_models() -> None:
-    tracks = {t.name: t for t in load_tracks(HUB_TOML, chosen="")}
+    tracks = {t.name: t for t in load_tracks(HUB_TOML)}
     assert tracks["renewal"].model_id == "seabbs-renewal"
     base = tracks["rwnowcast"]
     assert base.model_id == "seabbs-rwnowcast"
@@ -38,26 +39,12 @@ def test_repository_config_names_both_hub_models() -> None:
     assert tracks["renewal"].model == "renewalbvd"
 
 
-def test_opted_in_baseline_runs_without_a_model_choice(tmp_path: Path) -> None:
+def test_opted_in_baseline_runs_alone(tmp_path: Path) -> None:
     cfg = write(tmp_path / "hub.toml", renewal=False, baseline=True)
-    tracks = {t.name: t for t in load_tracks(cfg, chosen="")}
+    tracks = {t.name: t for t in load_tracks(cfg)}
     assert tracks["rwnowcast"].runs
     assert not tracks["renewal"].runs
     assert "not opted in" in tracks["renewal"].reason
-
-
-def test_renewal_needs_a_model_choice(tmp_path: Path) -> None:
-    cfg = write(tmp_path / "hub.toml", renewal=True, baseline=False)
-    renewal = next(
-        t for t in load_tracks(cfg, chosen="") if t.name == "renewal"
-    )
-    assert not renewal.runs
-    assert "no model choice" in renewal.reason
-    renewal = next(
-        t for t in load_tracks(cfg, chosen="renewal") if t.name == "renewal"
-    )
-    assert renewal.runs
-    assert renewal.model == "renewal"
 
 
 def test_cli_sets_one_output_per_track(
@@ -66,33 +53,18 @@ def test_cli_sets_one_output_per_track(
     cfg = write(tmp_path / "hub.toml", renewal=False, baseline=True)
     out = tmp_path / "out"
     monkeypatch.setenv("GITHUB_OUTPUT", str(out))
-    assert main(["--hub-config", str(cfg), "--chosen", ""]) == 0
+    assert main(["--hub-config", str(cfg)]) == 0
     text = out.read_text()
     assert "renewal=false" in text
     assert "baseline=true" in text
     assert "baseline_id=seabbs-rwnowcast" in text
 
 
-def test_renewal_skips_without_opt_in_even_with_a_choice(
+def test_renewal_skips_without_opt_in(
     tmp_path: Path,
 ) -> None:
     path = write(tmp_path / "hub.toml", renewal=False, baseline=True)
-    tracks = {t.name: t for t in load_tracks(path, chosen="randomwalknowcast")}
+    tracks = {t.name: t for t in load_tracks(path)}
     assert not tracks["renewal"].runs
     assert tracks["renewal"].reason == "not opted in (`submit = false`)"
     assert tracks["rwnowcast"].runs
-
-
-def test_renewal_carries_its_own_model_not_the_choice(tmp_path: Path) -> None:
-    # The renewal id names its model: `[submission] model` wins
-    # over the model choice record, which names the baseline.
-    cfg = write(tmp_path / "hub.toml", renewal=True, baseline=True)
-    cfg.write_text(
-        cfg.read_text().replace(
-            'model_abbr = "renewal"\n',
-            'model_abbr = "renewal"\nmodel = "renewal"\n',
-        )
-    )
-    tracks = {t.name: t for t in load_tracks(cfg, chosen="randomwalknowcast")}
-    assert tracks["renewal"].runs
-    assert tracks["renewal"].model == "renewal"

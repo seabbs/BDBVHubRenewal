@@ -248,14 +248,11 @@ def test_submission_id_is_one_config_value(tmp_path: Path) -> None:
 
 
 @pytest.mark.usefixtures("in_root")
-def test_cli_hub_id_and_chosen_model(
+def test_cli_hub_id(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     assert main(["hub-id"]) == 0
     assert capsys.readouterr().out.strip() == "seabbs-renewal"
-    assert main(["chosen-model"]) == 0
-    # The latest entry of results/model-choice.yml.
-    assert capsys.readouterr().out.strip() == "randomwalknowcast"
 
 
 @pytest.mark.usefixtures("in_root")

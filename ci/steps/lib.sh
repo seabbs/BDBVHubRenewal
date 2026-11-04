@@ -8,8 +8,7 @@
 #   WORK           where every output of the run goes (default output/ci)
 #   FORECAST_CLI   the main repo's CLI (default `uv run bdbvhubrenewal`)
 #   MODEL          main repo model name (default: `[submission] model` in
-#                  config/hub.toml, else the latest entry of
-#                  results/model-choice.yml, `bdbvhubrenewal chosen-model`)
+#                  config/hub.toml)
 #   MODEL_ID       hub model id (default: config/hub.toml,
 #                  `bdbvhubrenewal hub-id`)
 
@@ -75,14 +74,10 @@ append_previous() {
 # Before `prepare`: the chosen model and the configured hub id, from the
 # main repo. Called by `prepare` and by the gate's metadata step.
 resolve_model() {
-  # The renewal id's own model (`[submission] model` in config/hub.toml),
-  # else the latest model choice. Neither leaves MODEL empty: the renewal
-  # chain is then skipped (submission_ci.tracks), and the baseline runs
-  # regardless.
+  # The renewal id's model: `[submission] model` in config/hub.toml.
   [ -n "$MODEL" ] || MODEL=$(python3 -c 'import sys, tomllib
-print(tomllib.load(open(sys.argv[1], "rb"))["submission"].get("model", ""))' \
-    "${HUB_TOML:-$CI_DIR/../config/hub.toml}" 2> /dev/null || true)
-  [ -n "$MODEL" ] || MODEL=$(cli chosen-model 2> /dev/null || true)
+print(tomllib.load(open(sys.argv[1], "rb"))["submission"]["model"])' \
+    "${HUB_TOML:-$CI_DIR/../config/hub.toml}")
   [ -n "$MODEL_ID" ] || MODEL_ID=$(cli hub-id)
 }
 
