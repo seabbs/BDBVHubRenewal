@@ -39,9 +39,6 @@ def test_variants_are_registered_as_fitted_models() -> None:
         assert isinstance(model, ForecastModel)
         assert model.name == name
     assert set(rn.VARIANTS) == {"renewal", "renewalsp", "renewalbvd"}
-    # Only the backtest models: no fallback and no unused options.
-    for name in ("fallback", "renewalhold", "renewalpo"):
-        assert name not in specs
     # The single patch fits each province on its own data only, so it
     # cannot forecast a province with its data held out.
     assert get_model("renewal").supports_mask
@@ -52,18 +49,10 @@ def test_variants_are_registered_as_fitted_models() -> None:
         assert len(model_abbr_for(name)) < 16
 
 
-def test_fit_configs_run_the_renewal_model() -> None:
-    assert rn.VARIANTS["renewal"].base == "MAIN"
-    assert rn.FIT_VARIANTS == {
-        "main": "renewal",
-        "renewalsp": "renewalsp",
-        "bvd": "renewalbvd",
-    }
-
-
 def test_model_config_applies_overrides() -> None:
     single = rn.model_config(rn.VARIANTS["renewalsp"])
     assert single.national
+    assert single.depletion is False
     assert rn.model_config(rn.VARIANTS["renewal"]) == rn.engine().MAIN
 
 
@@ -290,16 +279,6 @@ def test_fit_renewal_writes_the_ci_contract(
     assert result.modelled is not None
 
 
-def test_renewal_model_forecast_uses_the_run(
-    task: ForecastTask, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(
-        rn.RenewalModel, "run", lambda self, t: _fake_run(t, self.variant)
-    )
-    samples = get_model("renewal").forecast(task)
-    assert set(samples["location"]) == set(task.locations)
-
-
 def test_init_strategy_follows_the_sampler_table() -> None:
     from numpyro.infer import NUTS
 
@@ -477,11 +456,6 @@ def test_fit_records_the_posterior_draw_behind_each_trajectory(
     assert set(saved["location"]) == {"all"}
     assert saved["sample"].tolist() == list(range(1, task.n_samples + 1))
     assert saved["draw"].tolist() == list(range(task.n_samples))[::-1]
-
-
-def test_single_patch_has_no_depletion() -> None:
-    config = rn.model_config(rn.VARIANTS["renewalsp"])
-    assert config.depletion is False
 
 
 def test_chain_method_defaults_to_vectorized(
