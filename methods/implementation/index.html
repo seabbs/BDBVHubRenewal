@@ -2055,7 +2055,7 @@ The model diagrams are mermaid blocks in <code>docs/methods/model.md</code>.</p>
 <tbody>
 <tr>
 <td>Pooled <span class="arithmatex">\(R_p(t)\)</span></td>
-<td><code>SubpopulationInfections</code>, <code>WeeklyTemporalProcess</code>, <code>ARProcess</code> for the steps</td>
+<td><code>SubpopulationInfections</code>, <code>WeeklyTemporalProcess</code></td>
 <td><code>NonCentredRandomWalk</code>, for the frozen seeding weeks, the separate forecast steps and their reversion.</td>
 </tr>
 <tr>
@@ -2095,9 +2095,10 @@ The model diagrams are mermaid blocks in <code>docs/methods/model.md</code>.</p>
 </tr>
 </tbody>
 </table>
-<p>PyRenew pieces that give a different model, or that would only rename one line, are not used.</p>
+<p>PyRenew pieces that give a different model, sample less well, or would only rename one line, are not used.</p>
 <ul>
 <li>The <code>RandomWalk</code> temporal process puts the step SD in the step distribution, so it is centred in the SD.</li>
+<li><code>ARProcess</code> gives the same walk, log density and gradient, but NUTS needs more tree steps with it, so the walk samples its steps as one vectorised site.</li>
 <li><code>AR1</code> draws its first state from the stationary distribution, and <code>DifferencedAR1</code> is AR(1) on the differences.
   Here walks start at a fixed value and stay there over the seeding weeks.</li>
 <li><code>SubpopulationInfections</code> samples one deviation process per province and subtracts their mean, which leaves a direction the data do not identify.
@@ -2111,6 +2112,48 @@ The model diagrams are mermaid blocks in <code>docs/methods/model.md</code>.</p>
   Here the kernel is learnt and depletion is exponential in the pool <span class="arithmatex">\(\nu\)</span>.</li>
 </ul>
 <p>PyRenew has no delay that varies with time, no Dirichlet-multinomial count and no pseudo-observation of <span class="arithmatex">\(R\)</span>.</p>
+<p>The table compares the two ways of sampling the walk steps on the recovery fit of the simulated outbreak, with 2 chains of 300 warm-up and 300 draws.</p>
+<table>
+<thead>
+<tr>
+<th>Walk steps</th>
+<th>Seed</th>
+<th>Time</th>
+<th>Mean tree steps</th>
+<th>Share at the depth cap</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>One vectorised site</td>
+<td>0</td>
+<td>668 s</td>
+<td>511</td>
+<td>0%</td>
+</tr>
+<tr>
+<td>One vectorised site</td>
+<td>1</td>
+<td>971 s</td>
+<td>761</td>
+<td>49%</td>
+</tr>
+<tr>
+<td><code>ARProcess</code></td>
+<td>0</td>
+<td>2198 s</td>
+<td>1017</td>
+<td>99%</td>
+</tr>
+<tr>
+<td><code>ARProcess</code></td>
+<td>1</td>
+<td>2364 s</td>
+<td>1008</td>
+<td>97%</td>
+</tr>
+</tbody>
+</table>
 <h2 id="baseline-models">Baseline models<a class="headerlink" href="#baseline-models" title="Permanent link">&para;</a></h2>
 <p>The baselines are in <a class="autorefs autorefs-internal" title="            bdbvhubrenewal.forecasters.randomwalk" href="../../reference/forecasters/#bdbvhubrenewal.forecasters.randomwalk"><code>forecasters.randomwalk</code></a> and <a class="autorefs autorefs-internal" title="            bdbvhubrenewal.forecasters.chain" href="../../reference/forecasters/#bdbvhubrenewal.forecasters.chain"><code>forecasters.chain</code></a>, on a JAX port of baselinenowcast 0.2.2 in <a class="autorefs autorefs-internal" title="            bdbvhubrenewal.baselinenowcast" href="../../reference/baselinenowcast/#bdbvhubrenewal.baselinenowcast"><code>bdbvhubrenewal.baselinenowcast</code></a>.
 The port is checked against fixtures from the R package, and has one named extension, the chain ladder of release snapshots, which skips unobserved cells and fits one daily delay shared by pairs of any gap.
