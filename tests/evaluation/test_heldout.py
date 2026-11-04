@@ -168,7 +168,8 @@ def test_heldout_keeps_and_rescores_other_models_forecasts(
     fc = pd.read_csv(out / "heldout-forecasts.csv.gz")
     fc = fc.loc[fc["model"] != "shadow"]
     # A fitted variant's forecasts, as a run on archie would leave them.
-    pd.concat([fc, fc.assign(model="other")]).to_csv(path, index=False)
+    other = fc.loc[fc["model"] == "randomwalk"].assign(model="other")
+    pd.concat([fc, other]).to_csv(path, index=False)
     scores = run_heldout(
         target,
         delays,
