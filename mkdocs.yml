@@ -49,12 +49,15 @@ nav:
   - API reference:
       - reference/index.md
       - Data: reference/data.md
-      - Model: reference/model.md
-      - Baselinenowcast: reference/baselinenowcast.md
-      - Forecasters: reference/forecasters.md
+      - Models:
+          - Forecasters: reference/forecasters.md
+          - Renewal model: reference/model.md
+          - Baselinenowcast: reference/baselinenowcast.md
       - Evaluation: reference/evaluation.md
-      - Submission: reference/submission.md
-      - Reporting: reference/reporting.md
+      - Reporting:
+          - Figures and tables: reference/reporting.md
+          - Submission: reference/submission.md
+      - CLI: reference/cli.md
 
 theme:
   name: material

@@ -1,6 +1,6 @@
 # Submission
 
-The hub file writer and checks, metadata, fit configurations and rounds.
+Write and check hub files and model metadata, and build the submitted round pages. See [Getting started](../getting-started.ipynb) for a worked example.
 { .page-subtitle }
 
 ::: bdbvhubrenewal.submission
@@ -10,6 +10,14 @@ The hub file writer and checks, metadata, fit configurations and rounds.
 ::: bdbvhubrenewal.submission.hub
 
 ::: bdbvhubrenewal.submission.validate
+    options:
+      members:
+        - Check
+        - Report
+        - Hub
+        - validate_file
+        - validate_submission
+        - validate_metadata
 
 ::: bdbvhubrenewal.submission.fitting
 
