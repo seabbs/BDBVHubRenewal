@@ -82,7 +82,6 @@ from bdbvhubrenewal.submission.hub import (
     model_abbr_for,
     model_id,
     render_model_metadata,
-    submission_model_abbr,
     to_hub_table,
     validate_model_metadata,
     validate_submission_file,
@@ -279,7 +278,7 @@ def build_parser() -> argparse.ArgumentParser:
     hid.add_argument("--hub-toml", default=str(SUBMISSION_CONFIG))
     hid.add_argument(
         "--model",
-        default=None,
+        default="",
         help="A model with its own hub id (`[models]` in config/hub.toml).",
     )
 
@@ -976,12 +975,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "bvd":  # pragma: no cover - network
         return _bvd(args)
     if args.command == "hub-id":
-        abbr = (
-            model_abbr_for(args.model, args.hub_toml)
-            if args.model
-            else submission_model_abbr(args.hub_toml)
-        )
-        print(model_id(abbr))
+        print(model_id(model_abbr_for(args.model, args.hub_toml)))
         return 0
     if args.command == "compare-hub":
         return _compare_hub(args)
