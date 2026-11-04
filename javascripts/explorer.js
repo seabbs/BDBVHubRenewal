@@ -35,7 +35,7 @@
     root.textContent = "";
     var state = {
       loc: d.locations[0].id,
-      round: d.rounds.length - 1,
+      round: root.dataset.round === "all" ? "all" : d.rounds.length - 1,
       off: {},
     };
     var controls = h("div", { class: "explorer-controls" }, root);
