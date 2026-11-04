@@ -20,8 +20,8 @@ This module owns everything around it:
 This module reads only `ModelConfig`, `MAIN`, `BVD`, `build_model`,
 `model_args`, `model.EXTRA_FIELDS`, `forecast_trajectories` and
 `adapter.vintage_from_tables` from the subpackage, so a new model version
-drops in if it keeps those. Sampling is here (`run_nuts`), so the CI's
-sampler table applies in full.
+drops in if it keeps those. Inference is here (`run_inference`), so the
+CI's sampler table applies in full.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ from dataclasses import dataclass, field, replace
 from functools import partial
 from pathlib import Path
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, NamedTuple
 
 import numpy as np
 import pandas as pd
@@ -82,7 +82,7 @@ __all__ = [
     "parameter_diagnostics",
     "ppc_rows",
     "report_cutoffs",
-    "run_nuts",
+    "run_inference",
     "sampler_settings",
     "samples_table",
     "vintage_inputs",
@@ -107,8 +107,12 @@ DEFAULT_SAMPLER: Final[Mapping[str, Any]] = {
     # Parallel chains (pmap over host devices) leak memory on Linux CPU
     # with JAX 0.12; vectorized chains stay flat, about a third slower.
     "chain_method": "vectorized",
+    # "nuts", or "svi" for the approximate fit (`run_inference`).
+    "method": "nuts",
+    "svi_steps": 10000,
+    "svi_learning_rate": 0.01,
 }
-"""NUTS settings when neither the CI nor `SAMPLER_ENV` gives them."""
+"""Inference settings when neither the CI nor `SAMPLER_ENV` gives them."""
 
 SINGLE_PATCH_MIN_CASES: Final = 20
 """Fewest cases in the last `SINGLE_PATCH_WEEKS` data weeks for a province
@@ -297,8 +301,35 @@ def nuts_kernel(model_fn: Any, sampler: Mapping[str, Any]) -> Any:
     )
 
 
-def run_nuts(model: Any, data: Any, sampler: Mapping[str, Any]) -> Any:
-    """Fit a built model by NUTS, keeping the fields the diagnostics need.
+class Posterior(NamedTuple):
+    """Posterior draws of a fit (`run_inference`).
+
+    Attributes
+    ----------
+    draws : dict
+        Draws of every latent site, `(n_draws, ...)`.
+    trace : dict
+        The same sites by chain, `(n_chains, n_draws, ...)`, for the
+        convergence diagnostics. Empty for SVI, which has none.
+    extra : dict
+        NUTS extra fields by chain. Empty for SVI.
+    """
+
+    draws: dict[str, Any]
+    trace: dict[str, Any]
+    extra: dict[str, Any]
+
+
+def run_inference(
+    model: Any, data: Any, sampler: Mapping[str, Any]
+) -> Posterior:
+    """Fit a built model by the sampler table's `method`.
+
+    `nuts` runs NUTS (`nuts_kernel`). `svi` is the approximate fit:
+    stochastic variational inference with NumPyro's
+    `AutoLowRankMultivariateNormal` guide, started where the chains
+    start (`init_strategy`), `svi_steps` Adam steps at
+    `svi_learning_rate`, then `num_samples` draws from the guide.
 
     Parameters
     ----------
@@ -311,12 +342,19 @@ def run_nuts(model: Any, data: Any, sampler: Mapping[str, Any]) -> Any:
 
     Returns
     -------
-    pyrenew.model.MultiSignalModel
-        The model, with `model.mcmc` holding the posterior.
+    Posterior
+        The draws, and for NUTS the fields the diagnostics need.
+
+    Raises
+    ------
+    ValueError
+        On an unknown `method`.
     """
     import jax
+    import numpyro
     from jax import random
-    from numpyro.infer import MCMC
+    from numpyro.infer import MCMC, SVI, Trace_ELBO
+    from numpyro.infer.autoguide import AutoLowRankMultivariateNormal
 
     # Each fit compiles its own model, so cached executables from earlier
     # fits never help and exhaust LLVM memory over many locations.
@@ -326,7 +364,31 @@ def run_nuts(model: Any, data: Any, sampler: Mapping[str, Any]) -> Any:
     model.validate_data(
         **{k: v for k, v in args.items() if k != "population_size"}
     )
-    model.mcmc = MCMC(
+    key = random.key(int(sampler["seed"]))
+    method = sampler["method"]
+    if method == "svi":
+        guide = AutoLowRankMultivariateNormal(
+            model.sample, init_loc_fn=init_strategy(sampler)
+        )
+        svi = SVI(
+            model.sample,
+            guide,
+            numpyro.optim.Adam(float(sampler["svi_learning_rate"])),
+            Trace_ELBO(),
+        )
+        fitted = svi.run(
+            key, int(sampler["svi_steps"]), progress_bar=False, **args
+        )
+        draws = guide.sample_posterior(
+            random.fold_in(key, 1),
+            fitted.params,
+            sample_shape=(int(sampler["num_samples"]),),
+            **args,
+        )
+        return Posterior(dict(draws), {}, {})
+    if method != "nuts":
+        raise ValueError(f"Unknown method {method!r}: use 'nuts' or 'svi'.")
+    mcmc = MCMC(
         nuts_kernel(model.sample, sampler),
         num_warmup=int(sampler["num_warmup"]),
         num_samples=int(sampler["num_samples"]),
@@ -334,12 +396,16 @@ def run_nuts(model: Any, data: Any, sampler: Mapping[str, Any]) -> Any:
         chain_method=str(sampler.get("chain_method", "vectorized")),
         progress_bar=False,
     )
-    model.mcmc.run(
-        random.key(int(sampler["seed"])),
-        extra_fields=pr.model.EXTRA_FIELDS,
-        **args,
+    mcmc.run(key, extra_fields=pr.model.EXTRA_FIELDS, **args)
+    by_chain = mcmc.get_samples(group_by_chain=True)
+    return Posterior(
+        mcmc.get_samples(),
+        {k: np.asarray(by_chain[k]) for k in mcmc.last_state.z},
+        {
+            k: np.asarray(v)
+            for k, v in mcmc.get_extra_fields(group_by_chain=True).items()
+        },
     )
-    return model
 
 
 def _saturday(day: str | dt.date) -> dt.date:
@@ -804,8 +870,10 @@ def fit_summary(run: RenewalRun, sampler: Mapping[str, Any]) -> dict[str, Any]:
         "seconds": float(run.seconds),
         "max_rhat": max(rhat, default=float("nan")),
         "min_ess_bulk": min(ess, default=float("nan")),
-        "divergent_share": sum(c["divergences"] for c in chains) / draws,
-        "depth_share": hits / draws,
+        "divergent_share": sum(c["divergences"] for c in chains) / draws
+        if draws
+        else float("nan"),
+        "depth_share": hits / draws if draws else float("nan"),
     }
 
 
@@ -829,8 +897,11 @@ def chain_diagnostics(
         One row per chain: `chain`, `draws`, `divergences`, and
         `step_size`, `tree_depth_hits` (draws at the cap),
         `tree_depth_share`, `mean_accept` and `ebfmi` when available.
+        Empty without NUTS fields (SVI).
     """
     x = {k: np.asarray(v) for k, v in extra.items()}
+    if "diverging" not in x:
+        return []
     diverging = x["diverging"]
     chains = []
     for c in range(diverging.shape[0]):
@@ -944,11 +1015,11 @@ class RenewalRun:
     draws : dict
         `forecast_trajectories` output.
     trace : dict
-        Sampled sites by chain.
+        Sampled sites by chain, empty for SVI.
     extra : dict
-        NUTS extra fields by chain.
+        NUTS extra fields by chain, empty for SVI.
     seconds : float
-        Sampling time.
+        Fitting time.
     bvd : dict or None
         The BVDOutbreakSize release used (`bvd_record`), for a variant
         with the BVD term.
@@ -1062,9 +1133,9 @@ class RenewalModel:
         s = self.sampler
         self._log(f"variant={self.name} sampling start")
         start = time.perf_counter()
-        run_nuts(model, data, {"seed": task.seed, **s})
+        post = run_inference(model, data, {"seed": task.seed, **s})
         # Pulling the draws to the host waits for the sampler.
-        np.asarray(next(iter(model.mcmc.get_samples().values())))
+        np.asarray(next(iter(post.draws.values())))
         seconds = time.perf_counter() - start
         self._log(f"variant={self.name} sampling done seconds={seconds:.0f}")
         draws = pr.forecast_trajectories(
@@ -1072,20 +1143,17 @@ class RenewalModel:
             data,
             task.n_samples,
             seed=task.seed,
+            posterior=post.draws,
             as_of=tuple(report_cutoffs(task, data)),
         )
-        by_chain = model.mcmc.get_samples(group_by_chain=True)
-        trace = {
-            k: np.asarray(by_chain[k])
-            for k in model.mcmc.last_state.z
-            if k in by_chain
-        }
-        extra = {
-            k: np.asarray(v)
-            for k, v in model.mcmc.get_extra_fields(group_by_chain=True).items()
-        }
         return RenewalRun(
-            self.variant, data, draws, trace, extra, seconds, bvd=used
+            self.variant,
+            data,
+            draws,
+            post.trace,
+            post.extra,
+            seconds,
+            bvd=used,
         )
 
     def forecast_fit(self, task: ForecastTask) -> RenewalFit:
@@ -1295,7 +1363,7 @@ def fit_renewal(
         "model": HUB_MODEL,
         "config": config_name,
         "variant": variant,
-        "sampler": "nuts",
+        "sampler": settings["method"],
         "num_chains": len(chains),
         "num_samples": chains[0]["draws"] if chains else 0,
         "max_tree_depth": depth,

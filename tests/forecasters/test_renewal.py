@@ -507,6 +507,16 @@ def test_chain_method_defaults_to_vectorized(
         def run(self, *args: Any, **kw: Any) -> None:
             del args, kw
 
+        last_state = type("State", (), {"z": {}})
+
+        def get_samples(self, **kw: Any) -> dict:
+            del kw
+            return {}
+
+        def get_extra_fields(self, **kw: Any) -> dict:
+            del kw
+            return {}
+
     class FakeModel:
         def validate_data(self, **kw: Any) -> None:
             del kw
@@ -522,11 +532,13 @@ def test_chain_method_defaults_to_vectorized(
     monkeypatch.setattr(rn.engine(), "model_args", lambda *_: {})
     settings = rn.sampler_settings()
     assert settings["chain_method"] == "vectorized"
-    rn.run_nuts(FakeModel(), None, settings)
+    rn.run_inference(FakeModel(), None, settings)
     assert seen["chain_method"] == "vectorized"
     # Each fit compiles its own model, so earlier executables are dropped.
     assert cleared == [True]
-    rn.run_nuts(FakeModel(), None, {**settings, "chain_method": "sequential"})
+    rn.run_inference(
+        FakeModel(), None, {**settings, "chain_method": "sequential"}
+    )
     assert seen["chain_method"] == "sequential"
 
 

@@ -315,3 +315,18 @@ def test_as_reported_draws_match_the_vintage_at_its_own_cutoff(sim_vintage):
         np.median(two_weeks, 0)[: n - 1]
         <= np.median(draws["national"], 0)[: n - 1] * 1.25 + 3
     )
+
+
+def test_svi_gives_guide_draws_and_no_sampler_diagnostics(sim_vintage):
+    from bdbvhubrenewal.forecasters import renewal as rn
+
+    model = build_model(sim_vintage)
+    sampler = rn.sampler_settings(
+        {"method": "svi", "svi_steps": 50, "num_samples": 7}
+    )
+    post = rn.run_inference(model, sim_vintage, sampler)
+    assert post.trace == {} and post.extra == {}
+    assert post.draws["rt_sd"].shape == (7,)
+    assert rn.chain_diagnostics(post.extra, 10) == []
+    with pytest.raises(ValueError, match="Unknown method"):
+        rn.run_inference(model, sim_vintage, {**sampler, "method": "x"})
