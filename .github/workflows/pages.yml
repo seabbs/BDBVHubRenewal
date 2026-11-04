@@ -127,11 +127,13 @@ jobs:
           force: false
 
   # Runs after a successful build, and on close (when build is skipped) to
-  # remove the preview.
+  # remove the preview. Only for branches of this repository: a fork's
+  # token cannot write, and it never gets secrets.
   preview:
     needs: build
     if: >-
       !cancelled() && github.event_name == 'pull_request'
+      && github.event.pull_request.head.repo.full_name == github.repository
       && needs.build.result != 'failure'
     runs-on: ubuntu-latest
     permissions:
