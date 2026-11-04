@@ -19,6 +19,7 @@ exclude_docs: |
 
 nav:
   - Home: index.md
+  - Setup: setup.md
   - Getting started: getting-started.ipynb
   - Methods:
       - Data: methods/data.md

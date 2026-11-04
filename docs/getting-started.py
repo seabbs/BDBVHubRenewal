@@ -18,11 +18,10 @@
 #
 # Forecast with two baselines, plot them and score them.
 #
-# This page is a notebook.
-# `task getting-started` runs it again and writes the outputs into `docs/getting-started.ipynb`.
-# The code calls the same library functions as the command line.
-# `task setup` installs the package.
+# Every figure and table below comes from the Python code shown above it, which calls the package's functions directly.
+# [Setup](../setup/) installs the package and shows how to run this code in a REPL, a notebook or a script.
 # The tidy data in `data/` are committed, so nothing needs downloading.
+# This page is a notebook, and `task getting-started` runs it again.
 
 # %% [markdown]
 # ## Load the data
@@ -167,6 +166,7 @@ relative_wis(scores, by=["level"]).round(2)
 # %% [markdown]
 # ## Next steps
 #
+# The [API reference](../reference/) documents every function used here, grouped by task.
 # The [CLI page](../development/cli/) lists the commands the submission workflow runs.
 # They fetch the data, run the backtest, forecast from the latest vintage and write the hub file.
 #
