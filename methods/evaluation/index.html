@@ -2145,7 +2145,8 @@ With sample quantiles <span class="arithmatex">\(q_\tau\)</span> at 23 levels, <
 \]</div>
 <p>It splits into dispersion, overprediction and underprediction.
 WIS on the log scale is the WIS of the transformed target, <span class="arithmatex">\(\text{WIS}(\log(1 + x), \log(1 + y))\)</span>, never the log of WIS.
-It measures relative error, so small provinces count.</p>
+WIS on the natural scale is dominated by the places with the most cases.
+On the log scale it approximates a score of the relative error, close to a score of the growth rate, so every place counts on a similar footing<sup id="fnref:bosse"><a class="footnote-ref" href="#fn:bosse">1</a></sup>.</p>
 <div class="arithmatex">\[
 \text{Bias} = 1 - \big(P(X \le y) + P(X \le y - 1)\big),
 \qquad
@@ -2277,6 +2278,14 @@ Where we submitted to a round, our submitted file is a series of its own beside 
 Every model is scored on the weeks it forecast as for <a href="#real-releases">real releases</a>, from the vintage serving the round.
 WIS is relative to <code>randomwalk</code> on the weeks both forecast, on the <a href="../../comparison/">comparison page</a>.
 A round is pending until a later real release exists.</p>
+<div class="footnote">
+<hr />
+<ol>
+<li id="fn:bosse">
+<p>Bosse NI, Abbott S, Cori A, van Leeuwen E, Bracher J, Funk S (2023). Scoring epidemiological forecasts on transformed scales. PLOS Computational Biology 19(8): e1011393. <a href="https://doi.org/10.1371/journal.pcbi.1011393">doi:10.1371/journal.pcbi.1011393</a>.&#160;<a class="footnote-backref" href="#fnref:bosse" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+</li>
+</ol>
+</div>
 
 
 

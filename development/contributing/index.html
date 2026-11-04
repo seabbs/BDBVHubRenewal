@@ -1876,7 +1876,7 @@
 </tr>
 <tr>
 <td><code>task test-slow</code></td>
-<td>Run the tiny real model fits.</td>
+<td>Run the parameter recovery fit.</td>
 </tr>
 <tr>
 <td><code>task lint</code></td>
@@ -1897,6 +1897,7 @@
 </tbody>
 </table>
 <p>Pre-commit hooks run the same checks on each commit.
+The docs build, not pytest coverage, runs the reporting code end to end.
 New behaviour comes with a test, and docs follow UK English with one sentence per line.
 The docs read generated tables, so build them with <code>task docs</code>, not <code>mkdocs build</code>.
 New models are added as on <a href="../adding-a-model/">Adding a model</a>.</p>

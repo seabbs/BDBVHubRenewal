@@ -2522,6 +2522,19 @@ Each province has its own deviations <span class="arithmatex">\(\delta_p\)</span
 Provinces are linked by importation through <span class="arithmatex">\(W\)</span>, and provinces with no cases by <span class="arithmatex">\(\mu_q\)</span>.
 Known-onset delays are pooled over provinces.
 Leaving a province out removes its known and imputed terms and its delays but keeps it in the latent process.</p>
+<pre class="mermaid"><code>flowchart TD
+    LR["Pooled log R(t)&lt;br/&gt;weekly random walk"]
+    DV["Province deviations δ&lt;sub&gt;p&lt;/sub&gt;(t)&lt;br/&gt;sum-to-zero AR(1)"]
+    RP["log R&lt;sub&gt;p&lt;/sub&gt;(t) = log R(t) + δ&lt;sub&gt;p&lt;/sub&gt;(t)"]
+    K["Gravity kernel&lt;br/&gt;K&lt;sub&gt;qp&lt;/sub&gt; ∝ N&lt;sub&gt;p&lt;/sub&gt; exp(−D&lt;sub&gt;qp&lt;/sub&gt; / 300 km)"]
+    W["Importation&lt;br/&gt;W = (1 − ε) I + ε diag(1/N) K&lt;sup&gt;T&lt;/sup&gt; diag(N)"]
+    CORE["&lt;b&gt;Renewal core&lt;/b&gt;&lt;br/&gt;see above&lt;br/&gt;with a share at risk ν"]
+
+    LR --&gt; RP
+    DV --&gt; RP
+    K --&gt; W
+    RP --&gt; CORE
+    W --&gt; CORE</code></pre>
 <h3 id="pooled-reproduction-number">Pooled reproduction number<a class="headerlink" href="#pooled-reproduction-number" title="Permanent link">&para;</a></h3>
 <div class="arithmatex">\[
 \log R_p(t) = \log R(t) + \delta_p(t).
@@ -2566,8 +2579,22 @@ In the forecast they draw Poisson importations after the cut-off, which spread a
 <h2 id="bvdoutbreaksize-informed">BVDOutbreakSize-informed (<code>renewalbvd</code>)<a class="headerlink" href="#bvdoutbreaksize-informed" title="Permanent link">&para;</a></h2>
 <p>Every renewal model takes from the BVDOutbreakSize main model its generation interval, the prior on the half-life of the province deviations and the sum-to-zero basis for them.
 <code>renewalbvd</code> also takes the Rt estimates of one <a href="https://github.com/epiforecasts/BVDOutbreakSize">BVDOutbreakSize</a> release, chosen as on the <a href="../data/#bvdoutbreaksize-estimates">Data methods page</a>.
-Without such a release <code>renewalbvd</code> is <code>renewal</code>.
-From the release it takes the posterior draws of the national <span class="arithmatex">\(\log R\)</span> and, where the release has province estimates, each patch's median and 90% interval with the hub provinces the patch covers.
+Without such a release <code>renewalbvd</code> is <code>renewal</code>.</p>
+<pre class="mermaid"><code>flowchart TD
+    REL["BVDOutbreakSize release&lt;br/&gt;data cut-off a&lt;sub&gt;b&lt;/sub&gt;"]
+    NAT["National log Rt draws&lt;br/&gt;mean μ&lt;sub&gt;N&lt;/sub&gt;, SD σ&lt;sub&gt;N&lt;/sub&gt;"]
+    PAT["Patch medians and&lt;br/&gt;90% intervals"]
+    AL["Aligned to onset day&lt;br/&gt;s&lt;sub&gt;b&lt;/sub&gt; = a&lt;sub&gt;b&lt;/sub&gt; + 6"]
+    CORE["&lt;b&gt;Renewal core, pooled&lt;/b&gt;&lt;br/&gt;see above&lt;br/&gt;infection-weighted R&lt;sub&gt;N&lt;/sub&gt;(s&lt;sub&gt;b&lt;/sub&gt;), R&lt;sub&gt;k&lt;/sub&gt;(s&lt;sub&gt;b&lt;/sub&gt;)"]
+    LK["Normal terms&lt;br/&gt;down-weighted, ζ = 0.5"]
+
+    REL --&gt; NAT
+    REL --&gt; PAT
+    NAT --&gt; AL
+    PAT --&gt; AL
+    AL --&gt; LK
+    CORE --&gt; LK</code></pre>
+<p>From the release it takes the posterior draws of the national <span class="arithmatex">\(\log R\)</span> and, where the release has province estimates, each patch's median and 90% interval with the hub provinces the patch covers.
 With <span class="arithmatex">\(a_b\)</span> the release's data cut-off, the estimates are aligned to onset day <span class="arithmatex">\(s_b = a_b + 6\)</span>, as BVDOutbreakSize dates Rt by infection.
 The fit axis extends to the end of the week of <span class="arithmatex">\(s_b\)</span> when that week is after the data.
 For the nation <span class="arithmatex">\(N\)</span> and each patch <span class="arithmatex">\(k\)</span> with a modelled province, the model's Rt is weighted by infections over the data week that holds <span class="arithmatex">\(s_b\)</span>,</p>

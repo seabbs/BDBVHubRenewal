@@ -117,10 +117,6 @@
 }
 
 /* Score charts. */
-.scorechart {
-  margin: 1em 0;
-}
-
 .scorechart-tabs {
   display: flex;
   gap: 1em;

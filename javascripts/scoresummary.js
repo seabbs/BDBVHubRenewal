@@ -74,6 +74,8 @@
     d.origins.forEach(function (o, i) { h("option", { value: i }, selRound, o); });
     var selPlace = null;
     if (byPlace) selPlace = h("select", {}, h("label", {}, controls, "Table for "));
+    h("p", { class: "explorer-note" }, root, "Relative scores divide by " +
+      d.models[d.baseline].name + " on the same forecasts.");
     var chartDiv = h("div", {}, root);
     var table = h("div", { class: "explorer-table" }, root);
 

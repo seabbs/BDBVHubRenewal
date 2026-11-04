@@ -17,13 +17,6 @@
   }
   var nice = Z.nice;
 
-  function init(root) {
-    fetch(root.dataset.src)
-      .then(function (r) { return r.json(); })
-      .then(function (d) { build(root, d); })
-      .catch(function () { root.textContent = "The chart data could not be loaded."; });
-  }
-
   // onDraw(metric index, ticks), if given, runs after each draw.
   function build(root, d, onDraw) {
     root.textContent = "";
@@ -138,10 +131,4 @@
   }
 
   window.bdbvScoreChart = { build: build };
-
-  function start() {
-    document.querySelectorAll(".scorechart[data-src]").forEach(init);
-  }
-  if (typeof document$ !== "undefined") document$.subscribe(start);
-  else document.addEventListener("DOMContentLoaded", start);
 })();
