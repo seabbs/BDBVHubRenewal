@@ -97,27 +97,28 @@ with standard normal steps $z(t)$, sampled non-centred, and a start $\mathcal{N}
 
 ### Renewal
 
-The renewal runs on infections per resident, dated by onset:
+The renewal runs on infections per resident, dated by infection:
 
 $$
 x_p(t) = R_p(t) \sum_{\tau \ge 1} x_p(t - \tau)\, g(\tau).
 $$
 
 $g$ is BVDOutbreakSize's Gamma generation interval (mean 15.3, SD 9.3 days), double interval censored as $G(d + 1) - 2G(d) + G(d - 1)$ with $G$ the integrated cdf, on lags 1 to 42 and renormalised (mean 14.8, SD 8.4 days), as primarycensored's `dpcens(1:42, L = 1, D = 43)`[^pcens][^park].
-Seeds are expected confirmed onsets per day, $e_p \sim \text{LogNormal}(0, 1.5^2)$, or $I_{0,p} = e_p / (\alpha_0 N_p)$ infections per resident on the first data day.
+Seeds are $e_p \sim \text{LogNormal}(0, 1.5^2)$ expected confirmed infections per day, or $I_{0,p} = e_p / (\alpha_0 N_p)$ infections per resident, on the first data day.
 The seed is projected back over the seeding weeks at the growth rate implied by $R_p$ and $g$, clipped to $[-0.05, 0.3]$ per day.
 
 ### Ascertainment
 
-Expected confirmed onsets are
+Onsets follow infections after the incubation period $\eta$, and expected confirmed onsets are
 
 $$
-\lambda_p(s) = \alpha(s)\, N_p\, x_p(s),
+\lambda_p(s) = \alpha(s)\, N_p \sum_{u = 0}^{28} x_p(s - u)\, \eta(u),
 \qquad
 \operatorname{logit} \alpha(s) = \operatorname{logit} \alpha_0 + a(s),
 $$
 
 with $N_p$ the province population, $\alpha_0 = 0.6$ fixed and $a$ a weekly random walk from zero with step SD $\mathcal{N}^+(0, 0.03^2)$.
+$\eta$ is BVDOutbreakSize's log-normal incubation period for Bundibugyo virus disease (mean 6.3, SD 3.5 days)[^macneil], double interval censored in the same way on lags 0 to 28, its 99.9% quantile, as `dpcens(0:28, plnorm, D = 29)`.
 
 ### Delays
 
@@ -286,7 +287,7 @@ flowchart TD
 ```
 
 From the release it takes the posterior draws of the national $\log R$ and, where the release has province estimates, each patch's median and 90% interval with the hub provinces the patch covers.
-With $a_b$ the release's data cut-off, the estimates are aligned to onset day $s_b = a_b + 6$, as BVDOutbreakSize dates Rt by infection.
+With $a_b$ the release's data cut-off, the estimates are aligned to $s_b = a_b$, as both models date Rt by infection.
 The fit axis extends to the end of the week of $s_b$ when that week is after the data.
 For the nation $N$ and each patch $k$ with a modelled province, the model's Rt is weighted by infections over the data week that holds $s_b$,
 
@@ -349,3 +350,5 @@ A sample below the published total is drawn from the published zone counts witho
 [^pcens]: Abbott S, Brand S, Azam J, Pearson C, Funk S, Charniga K. primarycensored: Primary Event Censored Distributions. [doi:10.5281/zenodo.13632838](https://doi.org/10.5281/zenodo.13632838).
 
 [^park]: Park SW, Akhmetzhanov AR, Charniga K, Cori A, Davies NG, Dushoff J, Funk S, Gostic K, Grenfell B, Linton NM, Lipsitch M, Lison A, Overton CE, Ward T, Abbott S (2024). Estimating epidemiological delay distributions for infectious diseases. [doi:10.1101/2024.01.12.24301247](https://doi.org/10.1101/2024.01.12.24301247).
+
+[^macneil]: MacNeil A, Farnon EC, Wamala J, Okware S, Cannon DL, Reed Z, Towner JS, Tappero JW, Lutwama J, Downing R, Nichol ST, Ksiazek TG, Rollin PE (2010). Proportion of deaths and clinical features in Bundibugyo Ebola virus infection, Uganda. Emerging Infectious Diseases 16(12):1969-1972. [doi:10.3201/eid1612.100627](https://doi.org/10.3201/eid1612.100627).
