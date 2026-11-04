@@ -174,9 +174,21 @@ def test_truth_changes(target: pd.DataFrame) -> None:
 
 
 def test_recovery_on_simulated_vintages(config: BacktestConfig) -> None:
-    _, scores = run_recovery([get_model("flat")], config)
+    _, scores, energy = run_recovery([get_model("flat")], config)
     assert set(scores["kind"]) == {"simulated"}
     assert len(scores) > 0
+    # One energy score per vintage and scale, over every scored cell.
+    assert set(energy["scale"]) == {"national", "provinces"}
+    unit = ["vintage", "scale"]
+    scale = (
+        scores["location"].str.count("-").map({0: "national", 1: "provinces"})
+    )
+    cells = scores.assign(scale=scale).groupby(unit).size()
+    assert (
+        energy.set_index(unit)["n_cells"]
+        .sort_index()
+        .equals(cells.rename("n_cells").sort_index())
+    )
 
 
 class _MaskAware:
@@ -359,7 +371,7 @@ def test_scenarios_are_scored_final_and_as_of(
 
     data = Path(__file__).resolve().parents[2] / "data"
     zones = load_health_zones(data)
-    forecasts, scores = run_scenarios(
+    forecasts, scores, energy = run_scenarios(
         [get_model("flat")],
         config,
         target,
@@ -383,6 +395,8 @@ def test_scenarios_are_scored_final_and_as_of(
     assert zone["location"].str.count("-").eq(2).all()
     assert set(zone["truth_view"]) == {"final", "as of 2 weeks later"}
     assert set(scores["level"]) == {"national", "province", "zone"}
+    assert set(energy["scale"]) == {"national", "provinces", "zones"}
+    assert set(energy["truth_view"]) == {"final", "as of 2 weeks later"}
 
 
 def test_tasks_carry_the_daily_releases_up_to_their_vintage(

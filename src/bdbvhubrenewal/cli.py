@@ -474,7 +474,7 @@ def _backtest(args: argparse.Namespace) -> int:
             (as_date(as_of) - dt.timedelta(weeks=k)).isoformat()
             for k in (3, 2, 1, 0)
         ]
-        sforecasts, sscores = bt.run_scenarios(
+        sforecasts, sscores, senergy = bt.run_scenarios(
             models,
             config,
             target,
@@ -487,6 +487,7 @@ def _backtest(args: argparse.Namespace) -> int:
         for table, path in (
             (sforecasts, output / "scenario-forecasts.csv.gz"),
             (sscores, results / "scenario-scores.csv.gz"),
+            (senergy, results / "scenario-energy.csv"),
         ):
             bt.merge_by_model(path, table).to_csv(path, index=False)
         print(f"Scenarios: {len(sscores)} scored forecasts in {results}.")
@@ -518,12 +519,13 @@ def _backtest(args: argparse.Namespace) -> int:
     forecasts = bt.merge_by_model(output / "forecasts.csv.gz", forecasts)
     _release_backtest(args, config, target, delays, results, forecasts)
     forecasts.to_csv(output / "forecasts.csv.gz", index=False)
-    rforecasts, rscores = bt.run_recovery(
+    rforecasts, rscores, renergy = bt.run_recovery(
         models, config, lags=cutoff_lags(load_daily(args.data))
     )
     for table, path in (
         (rforecasts, output / "recovery-forecasts.csv.gz"),
         (rscores, results / "recovery-scores.csv"),
+        (renergy, results / "recovery-energy.csv"),
     ):
         bt.merge_by_model(path, table).to_csv(path, index=False)
     print(

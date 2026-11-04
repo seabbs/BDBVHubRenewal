@@ -32,6 +32,7 @@ from bdbvhubrenewal.data.snapshots import release_cutoff
 from bdbvhubrenewal.data.zones import weekly_zone_counts
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
+    energy_tasks,
     make_tasks,
     real_vintages,
     score_tasks,
@@ -252,7 +253,7 @@ def scenario_zone_scores(
     later_weeks: int,
     complete_after_weeks: int = 0,
     allocator: ZoneAllocator | None = None,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Score allocated zone forecasts on a scenario.
 
     As `zone_backtest`, with the simulated zone counts
@@ -280,8 +281,9 @@ def scenario_zone_scores(
 
     Returns
     -------
-    pandas.DataFrame
-        `score_tasks` output with `truth_view`.
+    tuple of pandas.DataFrame
+        `score_tasks` output with `truth_view`, and `energy_tasks` output
+        with `truth_view`.
     """
     allocator = allocator or ZoneAllocator()
     zones = tuple(sorted({z for _, z, _ in outbreak.settings.zone_shares}))
@@ -306,6 +308,8 @@ def scenario_zone_scores(
             truth_view="final"
         )
     ]
+    energy = [energy_tasks(forecasts, final, end).assign(truth_view="final")]
+    view = f"as of {later_weeks} weeks later"
     for task in tasks:
         later = (
             as_date(task.vintage) + dt.timedelta(weeks=later_weeks)
@@ -314,8 +318,12 @@ def scenario_zone_scores(
         truth = _zone_truth(outbreak.zone_vintage(later), rows, later)
         scores.append(
             score_tasks(rows, truth, later, complete_after_weeks).assign(
-                truth_view=f"as of {later_weeks} weeks later"
+                truth_view=view
             )
         )
+        energy.append(energy_tasks(rows, truth, later).assign(truth_view=view))
     out = pd.concat(scores, ignore_index=True)
-    return out.loc[out["scoring"] == "as reported"].reset_index(drop=True)
+    return (
+        out.loc[out["scoring"] == "as reported"].reset_index(drop=True),
+        pd.concat(energy, ignore_index=True),
+    )
