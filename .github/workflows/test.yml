@@ -51,7 +51,8 @@ jobs:
       - run: uv sync --frozen
       - name: Tests
         run: >-
-          uv run pytest -q --cov=bdbvhubrenewal --cov-report=term-missing
+          uv run pytest -q --durations=50 --cov=bdbvhubrenewal
+          --cov-report=term-missing
           --cov-report=xml
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
@@ -64,7 +65,7 @@ jobs:
       # not on pull requests.
       - name: Model fit tests (tiny real fits)
         if: github.event_name != 'pull_request'
-        run: uv run pytest -q -m slow
+        run: uv run pytest -q -m slow --durations=0
       - name: Backtest and nowcast smoke test
         # The renewal variants are fitted per vintage, so the smoke test
         # runs random walk only. The full backtest runs on archie.
