@@ -5,7 +5,6 @@ import pandas as pd
 from bdbvhubrenewal.evaluation.nowcast import BASELINE
 from bdbvhubrenewal.reporting import explorer
 from bdbvhubrenewal.reporting.legend import starts_on
-from bdbvhubrenewal.reporting.scorechart import score_chart_data
 from bdbvhubrenewal.reporting.scoresummary import summary_rows
 from bdbvhubrenewal.reporting.zone_nowcast import place_chart_data
 
@@ -39,13 +38,6 @@ def test_every_interactive_starts_with_as_reported_off() -> None:
         {},
         baseline=BASELINE,
         metrics=[("wis", "WIS", None, True)],
-    )
-    chart = score_chart_data(
-        scores.assign(n=1),
-        "horizon",
-        {"wis": ("WIS", None)},
-        MODELS,
-        colours=COLOURS,
     )
     quantiles = pd.DataFrame(
         [
@@ -87,5 +79,5 @@ def test_every_interactive_starts_with_as_reported_off() -> None:
     )
     counts = target.drop(columns=["kind", "vintage"])
     place = place_chart_data(samples, counts, {}, COLOURS)
-    for data in (summary, chart, explore, place):
+    for data in (summary, explore, place):
         assert _on(data) == {BASELINE: False, "renewal": True}
