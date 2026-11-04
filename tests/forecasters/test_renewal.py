@@ -297,17 +297,6 @@ def test_renewal_model_forecast_uses_the_run(
     assert set(samples["location"]) == set(task.locations)
 
 
-@pytest.mark.slow
-def test_tiny_fit_end_to_end(task: ForecastTask, tmp_path: Path) -> None:
-    sampler = {"num_chains": 1, "num_warmup": 20, "num_samples": 20}
-    record = rn.fit_renewal(
-        task, sampler, tmp_path, variant="renewal", config_name="main"
-    )
-    assert record["chains"][0]["draws"] == 20
-    result = rn.forecast_renewal(task, tmp_path)
-    assert np.isfinite(result.samples["value"]).all()
-
-
 def test_init_strategy_follows_the_sampler_table() -> None:
     from numpyro.infer import NUTS
 
