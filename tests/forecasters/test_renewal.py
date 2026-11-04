@@ -247,6 +247,7 @@ def _fake_run(task: ForecastTask, variant: rn.Variant) -> rn.RenewalRun:
         trace=trace,
         extra=extra,
         seconds=1.5,
+        cpu_seconds=2.9,
     )
 
 
@@ -269,6 +270,8 @@ def test_fit_renewal_writes_the_ci_contract(
     assert record["model"] == "renewal"
     assert record["config"] == "main"
     assert record["num_chains"] == 2
+    # CPU time over sampling time shows whether the chains ran at once.
+    assert record["sampling_cpu_seconds"] == 2.9
     assert {c["chain"] for c in record["chains"]} == {0, 1}
     assert {"tree_depth_share", "ebfmi", "mean_accept", "step_size"} <= set(
         record["chains"][0]
