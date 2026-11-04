@@ -91,7 +91,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       - name: Decide dry run or live
         id: mode
         env:
@@ -339,7 +339,7 @@ jobs:
       MODEL_ID: ${{ needs.gate.outputs.model_id }}
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       - uses: actions/download-artifact@v8
         with:
           name: gate
@@ -491,7 +491,7 @@ jobs:
       REFERENCE_DATE: ${{ needs.detect.outputs.reference_date }}
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       - uses: actions/download-artifact@v8
         if: needs.prepare.outputs.renewal == 'true'
         continue-on-error: true
