@@ -10,7 +10,7 @@ population, for $\log R_p(t) = \log R(t) + \delta_p$ with a national
 $R(t)$ that turns and fixed province offsets $\delta_p$.
 Confirmed cases are Poisson with mean $\alpha(t)$ times expected onsets.
 Each is reported after a double censored Gamma delay
-(`bdbvhubrenewal.model.delays.censored_pmf`) whose mean $\mu(t)$
+(`bdbvhubrenewal.model.censored.censored_pmf`) whose mean $\mu(t)$
 changes over time, has no onset with probability $\pi$ at its report
 day, and is published after a lag of 0 to 3 days.
 
@@ -36,7 +36,7 @@ from numpy.typing import NDArray
 from bdbvhubrenewal.data import PROVINCE_POPULATIONS
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
 from bdbvhubrenewal.forecasters.base import NATIONAL
-from bdbvhubrenewal.model.delays import censored_pmf
+from bdbvhubrenewal.model.censored import censored_pmf
 from bdbvhubrenewal.model.inputs import (
     gravity_kernel as model_gravity_kernel,
 )
