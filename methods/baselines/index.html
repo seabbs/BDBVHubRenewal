@@ -2344,7 +2344,7 @@ z_p \sim \mathcal{N}(0, 1),
 <p>with <span class="arithmatex">\(\ell(p)\)</span> the level of <span class="arithmatex">\(p\)</span> (province or zone) and one <span class="arithmatex">\(\tau_\ell\)</span> for each level and parameter.
 <span class="arithmatex">\(\theta\)</span> is <span class="arithmatex">\(\log g_p(j)\)</span> for each age <span class="arithmatex">\(j\)</span>, <span class="arithmatex">\(\log \sigma_p\)</span>, and <span class="arithmatex">\(\log \phi_{p,k}\)</span> and <span class="arithmatex">\(\log b_{p,k}\)</span> for each week back <span class="arithmatex">\(k\)</span>.
 The country's values have priors <span class="arithmatex">\(\mathcal{N}(-3, 2^2)\)</span>, <span class="arithmatex">\(\mathcal{N}(\log 0.2, 1)\)</span>, <span class="arithmatex">\(\mathcal{N}(0, 1.5^2)\)</span> and <span class="arithmatex">\(\mathcal{N}(\log 0.005, 1.5^2)\)</span>.
-A place's counts are the sum of its children's, so only the places forecast (the provinces, or the zones at zone level) enter the likelihood, and their parents are latent centres.</p>
+A place's counts are the sum of its children's, so for the walk spread and the nowcast uncertainty only the places forecast (the provinces, or the zones at zone level) enter the likelihood, and their parents are latent centres.</p>
 <ul>
 <li><strong>Delay.</strong> For each gap <span class="arithmatex">\(s\)</span> and age <span class="arithmatex">\(x\)</span> with <span class="arithmatex">\(\sum N_{p,r}(t) &gt; 0\)</span>, the increment is Poisson,</li>
 </ul>
@@ -2353,6 +2353,11 @@ A place's counts are the sum of its children's, so only the places forecast (the
   $$</p>
 <p>with the sums, window and preprocessing of the <a href="#delay">delay</a>.
   With one place and a gap of 1 its maximum likelihood estimate is baselinenowcast's chain ladder factor.
+  A place's increments at age <span class="arithmatex">\(x\)</span> enter only where its denominator there, summed over the pairs, is at least 10 cases, the threshold of the <a href="#own-or-pooled-estimates">own-or-pooled rule</a>, and the country's always do.
+  Below it a day often has no cases at one release and some at the next, which a factor cannot give, so the few days with cases would give too fast a delay.
+  Those ages take their parent's value through the pooling.
+  The rule and threshold are those <code>randomwalknowcast</code> uses to choose between a place's own factor and its parent's, applied here to which increments enter the likelihood.
+  A parent's increments are its children's summed, so a case at an age where both fit their own enters the likelihood once for each level.
   It is fitted at the origin and at each earlier release that gives errors.
 - <strong>Walk spread.</strong> The weekly changes of <span class="arithmatex">\(\log\{1 + Y_{p,o}(w)\}\)</span> over the <a href="#walk">walk</a> window are <span class="arithmatex">\(\mathcal{N}(0, \sigma_p^2)\)</span>.
   A change between two weeks with no cases sits at the walk's floor, so it is left out.
