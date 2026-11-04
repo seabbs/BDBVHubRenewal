@@ -173,7 +173,20 @@ releases fell."""
 
 
 def release_dates(first: dt.date | str, last: dt.date | str) -> list[str]:
-    """List the release days from `first` to `last`, ISO format."""
+    """List the release days from `first` to `last`.
+
+    Releases fall on `RELEASE_WEEKDAYS`, as the real releases did.
+
+    Parameters
+    ----------
+    first, last : datetime.date or str
+        First and last day, inclusive.
+
+    Returns
+    -------
+    list of str
+        ISO dates of the release days.
+    """
     days = pd.date_range(as_date(first), as_date(last), freq="D")
     return [
         d.date().isoformat() for d in days if d.weekday() in RELEASE_WEEKDAYS

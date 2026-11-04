@@ -133,11 +133,33 @@ class SnapshotArrays:
         return len(self.week_ends)
 
     def asof_week(self, r: int) -> int:
-        """Return the hub week index holding release `r`'s as-of date."""
+        """Return the hub week index holding release `r`'s as-of date.
+
+        Parameters
+        ----------
+        r : int
+            Release index.
+
+        Returns
+        -------
+        int
+            Index into the hub weeks.
+        """
         return int(self.week[self.asof[r]])
 
     def cut_week(self, r: int) -> int:
-        """Return the hub week index holding release `r`'s cut-off."""
+        """Return the hub week index holding release `r`'s cut-off.
+
+        Parameters
+        ----------
+        r : int
+            Release index.
+
+        Returns
+        -------
+        int
+            Index into the hub weeks.
+        """
         return int(self.week[self.cut[r]])
 
 
@@ -229,7 +251,20 @@ def snapshot_arrays(
 
 
 def week_sum(snap: SnapshotArrays, x: np.ndarray) -> np.ndarray:
-    """Sum `[L, T]` day values to hub weeks, `[L, W]`."""
+    """Sum day values to hub weeks.
+
+    Parameters
+    ----------
+    snap : SnapshotArrays
+        The snapshots, whose `week` maps each day to its hub week.
+    x : numpy.ndarray
+        Day values, shape `[L, T]`.
+
+    Returns
+    -------
+    numpy.ndarray
+        Week sums, shape `[L, W]`.
+    """
     onehot = np.zeros((snap.week.size, snap.n_weeks))
     onehot[np.arange(snap.week.size), snap.week] = 1.0
     return np.asarray(x @ onehot)
