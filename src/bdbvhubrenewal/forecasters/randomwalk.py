@@ -170,6 +170,9 @@ class RandomWalk:
         MissingSnapshots
             If the task has no release snapshots.
         """
+        # Each origin compiles its own triangle shapes, so cached executables
+        # from earlier origins never help and exhaust LLVM memory over a run.
+        jax.clear_caches()  # type: ignore[no-untyped-call]
         daily = task.daily_history
         if daily is None or daily.empty:
             raise MissingSnapshots(
