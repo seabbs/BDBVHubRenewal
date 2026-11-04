@@ -142,7 +142,7 @@ On the Nowcast page the fitted models' zone samples at the latest release are th
 
 For each hub reference date, our unfitted models forecast from the latest real vintage serving the round.
 Fitted models use their stored backtest or held-out forecasts for the same round.
-Where we submitted to a round, our submitted files replace these forecasts.
+Where we submitted to a round, our submitted file is a series of its own beside these main-build forecasts.
 Every model is scored on the weeks it forecast as for [real releases](#real-releases), from the vintage serving the round.
 WIS is relative to `randomwalk` on the weeks both forecast, on the [comparison page](../comparison.md).
 A round is pending until a later real release exists.

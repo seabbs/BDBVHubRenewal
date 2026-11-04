@@ -70,7 +70,7 @@ def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
     assert (fig / "comparison-place.svg").exists()
     data = json.loads((fig / "scoresummary-comparison.json").read_text())
     on = {m["name"]: m["on"] for m in data["models"]}
-    assert on["randomwalk (ours)"] is False
+    assert on["randomwalk (main build)"] is False
     assert on["teamA-weekly"] is True
     assert (
         "BDBV Modeling Hub" in (gen / "comparison-attribution.md").read_text()
@@ -435,3 +435,17 @@ def test_backtest_findings_name_the_reported_target() -> None:
     text = report._backtest_findings(scores)
     assert text.startswith("On the counts each later release reported")
     assert "randomwalknowcast" in text
+
+
+def test_missing_builds_name_submitted_rounds_without_a_main_build() -> None:
+    quantiles = pd.DataFrame(
+        {
+            "model": ["seabbs-r", "renewalbvd", "seabbs-r"],
+            "source": ["submitted", "real", "submitted"],
+            "reference_date": ["2026-10-31", "2026-10-31", "2026-11-07"],
+        }
+    )
+    lines = report._missing_builds(quantiles, {"renewalbvd": "seabbs-r"})
+    assert len(lines) == 1
+    assert "renewalbvd (main build)" in lines[0]
+    assert "2026-11-07" in lines[0]

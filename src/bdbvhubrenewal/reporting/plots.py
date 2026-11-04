@@ -1269,9 +1269,7 @@ def plot_nowcast(
     return fig
 
 
-def comparison_label(
-    model: str, source: str, hub_ids: Mapping[str, str] | None = None
-) -> str:
+def comparison_label(model: str, source: str) -> str:
     """Label a model in the hub comparison.
 
     Parameters
@@ -1279,39 +1277,42 @@ def comparison_label(
     model : str
         Hub model id or our registry name.
     source : str
-        `hub`, or the kind of vintage our forecast used.
-    hub_ids : mapping, optional
-        Hub ids of our models that submit under their own id.
+        `hub`, `submitted` (our file in the hub, by hub id), or the kind of
+        vintage our main build used.
 
     Returns
     -------
     str
-        The hub id for submitted forecasts. Ours are `<model> (<hub id>)`
-        if they have their own hub id, else `<model> (ours)`.
+        A hub team's id, `<hub id> (submitted)` or `<model> (main build)`.
     """
     if source == "hub":
         return model
-    tag = (hub_ids or {}).get(model, "ours")
-    return f"{model} ({tag})"
+    if source == "submitted":
+        return f"{model} (submitted)"
+    return f"{model} (main build)"
 
 
 def comparison_colours(
-    ours: Mapping[str, str], teams: Sequence[str]
+    ours: Mapping[str, str], submitted: Sequence[str], teams: Sequence[str]
 ) -> dict[str, tuple[str, str]]:
     """Return the light and dark colour of each model in the comparison.
 
     Parameters
     ----------
     ours : mapping of str to str
-        Label of each of our models to its registry name.
+        Label of each of our main builds to its registry name.
+    submitted : sequence of str
+        Labels of our submitted series, coloured in sorted order after the
+        registry's colours.
     teams : sequence of str
         Every hub team.
 
     Returns
     -------
     dict
-        Label to its light and dark colour: ours in `MODEL_COLOURS` by
-        registry order, the hub teams in the greys of `hub_styles`.
+        Label to its light and dark colour: our main builds in
+        `MODEL_COLOURS` by registry order, our submitted series next, and
+        the hub teams in the greys of `hub_styles`.
     """
     from bdbvhubrenewal.forecasters.base import list_models
 
@@ -1322,6 +1323,14 @@ def comparison_colours(
             model_colour(m, registry, "dark"),
         )
         for lab, m in ours.items()
+    }
+    light, dark = MODEL_COLOURS["light"], MODEL_COLOURS["dark"]
+    out |= {
+        lab: (
+            light[(len(registry) + i) % len(light)],
+            dark[(len(registry) + i) % len(dark)],
+        )
+        for i, lab in enumerate(sorted(submitted))
     }
     grey = {mode: hub_styles(teams, mode) for mode in ("light", "dark")}
     out |= {t: (grey["light"][t][0], grey["dark"][t][0]) for t in teams}
@@ -1355,18 +1364,18 @@ def plot_hub_round(
     quantiles: pd.DataFrame,
     target: pd.DataFrame,
     reference_date: str,
+    colours: Mapping[str, tuple[str, str]],
     locations: Sequence[str] = ("CD",),
     complete_after_weeks: int = 3,
     weeks_before: int = 8,
     mode: str = "light",
-    hub_ids: Mapping[str, str] | None = None,
     shown: Sequence[str] | None = None,
 ) -> Figure:
     """Plot our and the hub teams' intervals for one round against the data.
 
-    Our models are in the top row, each in its `MODEL_COLOURS` colour by
-    registry order, and the hub teams in the bottom row, in greys with a
-    marker each. Colours and markers do not depend on the round.
+    Our series are in the top row, in their `comparison_colours`, and the
+    hub teams in the bottom row, in greys with a marker each. Colours and
+    markers do not depend on the round.
 
     Parameters
     ----------
@@ -1386,10 +1395,13 @@ def plot_hub_round(
         Weeks of data shown before the reference date.
     mode : str
         `"light"` or `"dark"`.
-    hub_ids : mapping, optional
-        Hub ids of our models, for their labels (`comparison_label`).
+    colours : mapping of str to (str, str)
+        Our series' labels (`comparison_label`) to their light and dark
+        colour, in the order drawn. Every series of ours in the round
+        needs one.
     shown : sequence of str, optional
-        Our models to draw. Defaults to all of ours in the round.
+        Labels of our series to draw. Defaults to all of ours in the
+        round.
 
     Returns
     -------
@@ -1398,32 +1410,24 @@ def plot_hub_round(
         and 90% interval (thin line), side by side, over the latest release,
         with the legend below the panels.
     """
-    from bdbvhubrenewal.forecasters.base import list_models
-
-    registry = [s.name for s in list_models()]
     styles = hub_styles(
         sorted(set(quantiles.loc[quantiles["source"] == "hub", "model"])), mode
     )
     q = quantiles.loc[quantiles["reference_date"].astype(str) == reference_date]
-    hub = q["source"] == "hub"
-    if shown is not None:
-        q = q.loc[hub | q["model"].isin(list(shown))]
-        hub = q["source"] == "hub"
     q = q.assign(
         label=[
-            comparison_label(m, s, hub_ids)
+            comparison_label(m, s)
             for m, s in zip(q["model"], q["source"], strict=True)
         ]
     )
-    ours = q.loc[~hub, ["model", "label"]].drop_duplicates()
+    hub = q["source"] == "hub"
+    if shown is not None:
+        q = q.loc[hub | q["label"].isin(list(shown))]
+        hub = q["source"] == "hub"
+    here = set(q.loc[~hub, "label"])
+    pick = 0 if mode == "light" else 1
     rows = [
-        {
-            lab: (model_colour(m, registry, mode), "o")
-            for m, lab in sorted(
-                ours.itertuples(index=False),
-                key=lambda ml: registry.index(ml[0]),
-            )
-        },
+        {lab: (c[pick], "o") for lab, c in colours.items() if lab in here},
         {lab: styles[lab] for lab in sorted(set(q.loc[hub, "label"]))},
     ]
     locs = [loc for loc in locations if loc in set(q["location"])]

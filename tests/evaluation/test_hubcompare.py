@@ -26,7 +26,7 @@ from bdbvhubrenewal.evaluation.hubcompare import (
     submission_dir,
     summarise_comparison,
 )
-from bdbvhubrenewal.reporting.plots import plot_hub_round
+from bdbvhubrenewal.reporting.plots import comparison_colours, plot_hub_round
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -390,7 +390,12 @@ def test_plot_hub_round(
         [load_hub_submissions(tmp_path), _ours(target, delays, daily)]
     )
     q = forecast_quantiles(forecasts)
-    fig = plot_hub_round(q, target, "2026-10-24", locations=("CD", "CD-IT"))
+    colours = comparison_colours(
+        {"flat (main build)": "randomwalk"}, [], ["teamA-weekly", "teamB-late"]
+    )
+    fig = plot_hub_round(
+        q, target, "2026-10-24", colours, locations=("CD", "CD-IT")
+    )
     # Ours above the hub teams, one column per location.
     assert len(fig.axes) == 4
     labels = [t.get_text() for t in fig.legends[0].get_texts()]
@@ -405,7 +410,7 @@ def test_plot_hub_round(
     )
     both = pd.concat([q, later])
     again = plot_hub_round(
-        both, target, "2026-10-31", locations=("CD", "CD-IT")
+        both, target, "2026-10-31", colours, locations=("CD", "CD-IT")
     )
     again_lines = {ln.get_label(): ln for ln in again.axes[2].get_lines()}
     assert (
@@ -413,7 +418,7 @@ def test_plot_hub_round(
     )
 
 
-def test_with_submissions_replaces_our_rounds() -> None:
+def test_with_submissions_keeps_main_builds_beside_submissions() -> None:
     from bdbvhubrenewal.evaluation.hubcompare import with_submissions
 
     def rows(model: str, source: str, ref: str, value: float) -> pd.DataFrame:
@@ -440,26 +445,25 @@ def test_with_submissions_replaces_our_rounds() -> None:
     )
     submitted = rows("seabbs-rwnowcast", "hub", "2026-11-07", 5.0)
     out = with_submissions(forecasts, submitted, ids)
-    got = out.groupby(["model", "reference_date"])["value"].first()
+    got = out.groupby(["model", "source", "reference_date"])["value"].first()
+    # The hub's copy of our file goes, and the main build stays.
     assert got.to_dict() == {
-        ("randomwalknowcast", "2026-10-31"): 1.0,
-        ("randomwalknowcast", "2026-11-07"): 5.0,
-        ("teamA", "2026-11-07"): 4.0,
+        ("randomwalknowcast", "real", "2026-10-31"): 1.0,
+        ("randomwalknowcast", "real", "2026-11-07"): 2.0,
+        ("seabbs-rwnowcast", "submitted", "2026-11-07"): 5.0,
+        ("teamA", "hub", "2026-11-07"): 4.0,
     }
-    sources = out.groupby("reference_date")["source"].unique()
-    assert "submitted" in sources["2026-11-07"]
 
 
 def test_comparison_label_names_our_hub_models() -> None:
     from bdbvhubrenewal.reporting.plots import comparison_label
 
-    ids = {"randomwalknowcast": "seabbs-rwnowcast"}
     assert (
-        comparison_label("randomwalknowcast", "real", ids)
-        == "randomwalknowcast (seabbs-rwnowcast)"
+        comparison_label("seabbs-rwnowcast", "submitted")
+        == "seabbs-rwnowcast (submitted)"
     )
-    assert comparison_label("randomwalk", "real", ids) == "randomwalk (ours)"
-    assert comparison_label("OHTJHU-BM", "hub", ids) == "OHTJHU-BM"
+    assert comparison_label("randomwalk", "real") == "randomwalk (main build)"
+    assert comparison_label("OHTJHU-BM", "hub") == "OHTJHU-BM"
 
 
 def test_own_hub_ids() -> None:
@@ -483,10 +487,16 @@ def test_comparison_colours_are_fixed_per_model() -> None:
     )
 
     teams = ["teamA", "teamB"]
-    got = comparison_colours({"randomwalk (ours)": "randomwalk"}, teams)
+    got = comparison_colours(
+        {"randomwalk (main build)": "randomwalk"},
+        ["seabbs-x (submitted)"],
+        teams,
+    )
     first = (MODEL_COLOURS["light"][0], MODEL_COLOURS["dark"][0])
-    assert got["randomwalk (ours)"] == first
+    assert got["randomwalk (main build)"] == first
+    # A submitted series has a colour of its own, after the registry's.
+    assert got["seabbs-x (submitted)"] not in {first, got["teamA"]}
     assert {got[t][0] for t in teams} <= set(HUB_GREYS["light"])
     assert {got[t][1] for t in teams} <= set(HUB_GREYS["dark"])
     # A team keeps its grey whichever of our models are shown.
-    assert comparison_colours({}, teams)["teamB"] == got["teamB"]
+    assert comparison_colours({}, [], teams)["teamB"] == got["teamB"]

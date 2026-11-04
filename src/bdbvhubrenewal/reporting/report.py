@@ -1601,25 +1601,32 @@ def _comparison_page(
     baseline = summary["baseline"]
     hub_ids = summary.get("hub_ids", {})
     quantiles = pd.read_csv(cmp_dir / "quantiles.csv.gz")
-    hub = quantiles["source"] == "hub"
-    colours = comparison_colours(
-        {
-            comparison_label(m, "real", hub_ids): m
-            for m in quantiles.loc[~hub, "model"].unique()
-        },
-        sorted(set(quantiles.loc[hub, "model"])),
+    source = quantiles["source"]
+    registry = [spec.name for spec in list_models()]
+    built = sorted(
+        set(quantiles.loc[~source.isin(["hub", "submitted"]), "model"]),
+        key=registry.index,
     )
-    sent = quantiles.loc[quantiles["source"] == "submitted", "reference_date"]
-    rounds = ", ".join(sorted(set(sent.astype(str)))) or "none yet"
+    submitted = sorted(set(quantiles.loc[source == "submitted", "model"]))
+    colours = comparison_colours(
+        {comparison_label(m, "real"): m for m in built},
+        [comparison_label(m, "submitted") for m in submitted],
+        sorted(set(quantiles.loc[source == "hub", "model"])),
+    )
+    on = [
+        *(comparison_label(m, "submitted") for m in submitted),
+        *(comparison_label(m, "real") for m in hub_ids if m in built),
+    ]
     _write(
         gen / "comparison-lead.md",
         "Scores on the weeks the latest release reports in full, from "
         "the release serving each round "
         "([how scoring works]"
         "(methods/evaluation.md#comparison-with-hub-forecasts)).\n"
-        "A model shown with a hub id is what we submitted under that id "
-        f"for the rounds we submitted ({rounds}), and the model's own "
-        "forecast for earlier rounds.\n",
+        "A series marked submitted is the file we sent to a round, and one "
+        "marked main build is the current main branch's forecast for every "
+        "round, so a round we did not submit to shows only the main "
+        "build.\n",
     )
     scores_path = cmp_dir / "scores.csv"
     scores = (
@@ -1634,7 +1641,7 @@ def _comparison_page(
         scores,
         pd.read_csv(cmp_dir / "energy.csv"),
         baseline,
-        hub_ids,
+        on,
         colours,
         _location_names(target),
     )
@@ -1644,7 +1651,7 @@ def _comparison_page(
         table = _without_baseline(table, baseline)
         table["target"] = table["target"].map(_TARGET_LABELS)
         table["model"] = [
-            comparison_label(m, s, hub_ids)
+            comparison_label(m, s)
             for m, s in zip(table["model"], table["source"], strict=True)
         ]
         parts.append(
@@ -1652,6 +1659,7 @@ def _comparison_page(
             if not table.empty
             else ""
         )
+    parts += _missing_builds(quantiles, hub_ids)
     for row in pending.itertuples(index=False):
         parts.append(
             f"The {row.reference_date} round was made from the "
@@ -1667,21 +1675,8 @@ def _comparison_page(
         gen / "comparison-teams.md",
         _dropdown(_teams_table(teams, hub_ids), "Teams"),
     )
-    labelled = quantiles.assign(
-        model=[
-            comparison_label(m, src, hub_ids)
-            for m, src in zip(
-                quantiles["model"], quantiles["source"], strict=True
-            )
-        ],
-        ours=quantiles["source"] != "hub",
-    )
-    hidden = set(
-        labelled.loc[
-            labelled["ours"] & ~quantiles["model"].isin(list(hub_ids)),
-            "model",
-        ]
-    )
+    labelled = _label_comparison(quantiles).assign(ours=source != "hub")
+    hidden = set(labelled.loc[labelled["ours"], "model"]) - set(on)
     write_explorer(
         fig / "explorer-comparison.json",
         explorer_data(
@@ -1692,9 +1687,7 @@ def _comparison_page(
             colours,
             truth_vintage=truth,
             hidden=hidden,
-            samples=_label_comparison(
-                pd.read_csv(cmp_dir / "samples.csv.gz"), hub_ids
-            ),
+            samples=_label_comparison(pd.read_csv(cmp_dir / "samples.csv.gz")),
         ),
     )
     tabs = []
@@ -1708,8 +1701,8 @@ def _comparison_page(
                 ref,
                 locations=tuple(summary["locations"]),
                 complete_after_weeks=k,
-                hub_ids=hub_ids,
-                shown=[*hub_ids, baseline],
+                colours=colours,
+                shown=[*on, comparison_label(baseline, "real")],
             ),
             fig / f"{stem}.svg",
         )
@@ -1738,15 +1731,16 @@ def _comparison_summary(
     scores: pd.DataFrame,
     energy: pd.DataFrame,
     baseline: str,
-    hub_ids: Mapping[str, str],
+    on: Sequence[str],
     colours: Mapping[str, tuple[str, str]],
     names: Mapping[str, str],
 ) -> None:
-    """Write the Overall and By place summaries of the complete weeks.
+    """Write the Overall, By horizon and By place summaries.
 
-    They are the Backtest page's summaries, on the hub rounds. The hub
-    teams and our submitted models are ticked at first, and randomwalk is
-    the reference for relative scores.
+    They are the Backtest page's summaries, on the complete weeks of the
+    hub rounds. The hub teams and our series in `on` are ticked at first,
+    and randomwalk is the reference for relative scores. Our series come
+    in the order of `colours`.
     """
     if scores.empty:
         for name in (
@@ -1756,9 +1750,7 @@ def _comparison_summary(
         ):
             _write(gen / name, "No round has a score yet.\n")
         return
-    done = _label_comparison(
-        scores.loc[scores["target"] == "complete"], hub_ids
-    )
+    done = _label_comparison(scores.loc[scores["target"] == "complete"])
     rows = done.assign(
         kind="real",
         vintage=done["origin"],
@@ -1769,13 +1761,9 @@ def _comparison_summary(
     )
     base = _baseline_label(baseline, rows)
     hub = sorted(set(rows.loc[rows["source"] == "hub", "model"]))
-    registry = [spec.name for spec in list_models()]
-    ours = sorted(
-        set(rows.loc[rows["source"] != "hub", "model"]),
-        key=lambda label: registry.index(label.split(" (")[0]),
-    )
+    have = set(rows.loc[rows["source"] != "hub", "model"])
+    ours = [label for label in colours if label in have]
     models = [*ours, *hub]
-    sent = {comparison_label(m, "real", hub_ids) for m in hub_ids}
     write_score_chart(
         fig / "scoresummary-comparison.json",
         summary_rows(
@@ -1784,9 +1772,9 @@ def _comparison_summary(
             colours,
             names,
             baseline=base,
-            default_on=[*hub, *(m for m in ours if m in sent)],
+            default_on=[*hub, *(m for m in ours if m in on)],
             energy=_label_comparison(
-                energy.loc[energy["target"] == "complete"], hub_ids
+                energy.loc[energy["target"] == "complete"]
             ).assign(origin=lambda e: e["reference_date"]),
         ),
     )
@@ -1857,16 +1845,37 @@ def _comparison_summary(
     )
 
 
-def _label_comparison(
-    frame: pd.DataFrame, hub_ids: Mapping[str, str]
-) -> pd.DataFrame:
+def _label_comparison(frame: pd.DataFrame) -> pd.DataFrame:
     """Name each row's model as the comparison shows it."""
     return frame.assign(
         model=[
-            comparison_label(m, src, hub_ids)
+            comparison_label(m, src)
             for m, src in zip(frame["model"], frame["source"], strict=True)
         ]
     )
+
+
+def _missing_builds(
+    quantiles: pd.DataFrame, hub_ids: Mapping[str, str]
+) -> list[str]:
+    """Say which submitted rounds have no main build of the same model yet.
+
+    Their main build's n leaves those rounds out.
+    """
+    lines = []
+    for name, hub_id in hub_ids.items():
+        rounds = quantiles.loc[quantiles["model"] == hub_id, "reference_date"]
+        built = quantiles.loc[
+            (quantiles["model"] == name) & (quantiles["source"] != "hub"),
+            "reference_date",
+        ]
+        for ref in sorted(set(rounds.astype(str)) - set(built.astype(str))):
+            lines.append(
+                f"`{comparison_label(name, 'real')}` has no forecast for the "
+                f"{ref} round yet, so its n leaves that round out until a "
+                "backtest or held-out run covers it.\n"
+            )
+    return lines
 
 
 def _baseline_label(baseline: str, quantiles: pd.DataFrame) -> str:

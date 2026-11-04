@@ -227,12 +227,13 @@ def with_submissions(
     submitted: pd.DataFrame,
     hub_ids: Mapping[str, str],
 ) -> pd.DataFrame:
-    """Put what we submitted in place of our forecasts for those rounds.
+    """Add what we submitted beside our main-build forecasts.
 
     Parameters
     ----------
     forecasts : pandas.DataFrame
-        Samples with `SAMPLE_COLUMNS`.
+        Samples with `SAMPLE_COLUMNS`: the hub's, which hold a copy of our
+        submissions, and our main builds.
     submitted : pandas.DataFrame
         Our submissions, from `load_hub_submissions`, by hub id.
     hub_ids : mapping
@@ -241,20 +242,14 @@ def with_submissions(
     Returns
     -------
     pandas.DataFrame
-        `forecasts` without our model's rows for each round it submitted
-        or the hub's copy of them, and the submitted rows under the model
-        name with `source` `submitted`.
+        `forecasts` without the hub's copy of our submissions, and the
+        submitted rows under their hub id with `source` `submitted`. Our
+        main builds stay for every round.
     """
-    names = {hub_id: name for name, hub_id in hub_ids.items()}
-    sub = submitted.assign(
-        model=submitted["model"].map(names), source="submitted"
-    )
-    done = sub[["model", "reference_date"]].drop_duplicates()
-    keep = forecasts.loc[~forecasts["model"].isin(list(names))].merge(
-        done, on=["model", "reference_date"], how="left", indicator=True
-    )
-    keep = keep.loc[keep["_merge"] == "left_only"].drop(columns="_merge")
-    return pd.concat([keep, sub[list(SAMPLE_COLUMNS)]], ignore_index=True)
+    ours = list(hub_ids.values())
+    copy = (forecasts["source"] == "hub") & forecasts["model"].isin(ours)
+    sub = submitted.assign(source="submitted")[list(SAMPLE_COLUMNS)]
+    return pd.concat([forecasts.loc[~copy], sub], ignore_index=True)
 
 
 def attribution(accessed: str) -> str:
