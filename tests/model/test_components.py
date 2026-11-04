@@ -180,7 +180,7 @@ def test_forecast_reverts_towards_zero():
             forecast_half_life=half_life,
         )
         z = jnp.array([[1.0e6], [1.0e6], [1.0e6]])
-        with numpyro.handlers.condition(data={"rw_z": z}):
+        with numpyro.handlers.condition(data={"rw_z_decentered": z}):
             return seeded(lambda: rw.sample(40, initial_value=0.0))
 
     free = walk(None)
