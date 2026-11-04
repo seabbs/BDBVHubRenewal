@@ -11,6 +11,7 @@ origin,model,status,reason,n_reported,n_complete
 2026-10-09,renewalsp,no forecast,No pair of releases up to 2026-10-09 has a step of at most 42 days.,0,0
 2026-10-17,randomwalk,scored,,88,13
 2026-10-17,randomwalknowcast,scored,,88,13
+2026-10-17,pprandomwalknowcast,scored,,88,13
 2026-10-17,renewal,scored,,88,13
 2026-10-17,renewalbvd,scored,,88,13
 2026-10-17,renewalsp,scored,,88,13
@@ -21,6 +22,7 @@ origin,model,status,reason,n_reported,n_complete
 2026-10-24,CEPH-Rtrend_BDBV,scored,,9,0
 2026-10-24,MOBS-GLEAM_BDBV,scored,,5,0
 2026-10-24,OHTJHU-BM,scored,,48,13
+2026-10-24,pprandomwalknowcast,scored,,45,6
 2026-10-24,renewal,scored,,45,6
 2026-10-24,renewalbvd,scored,,45,6
 2026-10-24,renewalsp,scored,,45,6
