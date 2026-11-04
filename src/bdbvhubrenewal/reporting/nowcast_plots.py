@@ -6,6 +6,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 
 import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
@@ -19,7 +20,11 @@ from bdbvhubrenewal.reporting.plots import (
 )
 from bdbvhubrenewal.reporting.scorechart import OVERALL_METRICS
 
-__all__ = ["plot_release_nowcasts"]
+__all__ = [
+    "plot_relative_overall",
+    "plot_release_nowcasts",
+    "plot_truth_changes",
+]
 
 
 def _draw_bars(ax: Axes, rows: pd.DataFrame, colour: str, shift: float) -> None:
@@ -191,5 +196,102 @@ def plot_relative_overall(
         fontsize=7,
         loc="outside lower center",
         ncols=min(len(models), 5),
+    )
+    return fig
+
+
+def plot_truth_changes(
+    target: pd.DataFrame,
+    names: Mapping[str, str],
+    weeks: int = 16,
+    mode: str = "light",
+) -> Figure:
+    """Plot each place's weekly counts in every release and their changes.
+
+    Parameters
+    ----------
+    target : pandas.DataFrame
+        Real target rows with every release.
+    names : mapping of str to str
+        Place names by id.
+    weeks : int
+        Weeks shown, up to the latest release's last week.
+    mode : str
+        `"light"` or `"dark"`.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Per place with cases in the weeks shown, most first, the count by
+        onset week with one line per release,
+        from the oldest (faint) to the newest (strong), and under it the
+        change from the previous release by week, with a line at 0.
+    """
+    ink = THEMES[mode]
+    real = target.loc[target["kind"] == "real"]
+    releases = sorted(set(real["vintage"]))
+    shades = np.linspace(0.3, 1.0, len(releases))
+    # Newer releases are stronger: darker on light, lighter on dark.
+    cmap = plt.get_cmap("Blues")
+    colours = [cmap(v if mode == "light" else 1.25 - v) for v in shades]
+    end = pd.to_datetime(real["target_end_date"]).max()
+    start = end - pd.Timedelta(weeks=weeks)
+    wide = real.assign(
+        target_end_date=pd.to_datetime(real["target_end_date"])
+    ).pivot_table(
+        index=["location", "target_end_date"],
+        columns="vintage",
+        values="total",
+    )
+    recent = wide.loc[wide.index.get_level_values(1) > start]
+    latest = recent[releases[-1]].groupby(level=0).sum()
+    latest = latest.loc[latest > 0].sort_values(ascending=False, kind="stable")
+    locations = list(latest.index)
+    ncol = min(4, len(locations))
+    nrow = int(np.ceil(len(locations) / ncol))
+    fig, axes = plt.subplots(
+        2 * nrow,
+        ncol,
+        figsize=(3.4 * ncol, 3.6 * nrow),
+        squeeze=False,
+        layout="constrained",
+        gridspec_kw={"height_ratios": [2, 1] * nrow},
+    )
+    for k in range(nrow * ncol):
+        row, col = 2 * (k // ncol), k % ncol
+        top, low = axes[row, col], axes[row + 1, col]
+        if k >= len(locations):
+            top.set_visible(False)
+            low.set_visible(False)
+            continue
+        loc = locations[k]
+        rows = wide.loc[loc]
+        rows = rows.loc[rows.index > start]
+        change = rows.diff(axis=1)
+        for i, vin in enumerate(releases):
+            top.plot(
+                rows.index, rows[vin], color=colours[i], lw=1.4, label=str(vin)
+            )
+            if i:
+                low.plot(rows.index, change[vin], color=colours[i], lw=1.2)
+        low.axhline(0, color=ink["muted"], lw=1, ls=":")
+        top.set_title(names.get(loc, loc), fontsize=9)
+        top.set_xticklabels([])
+        for ax in (top, low):
+            ax.set_xlim(start, end + pd.Timedelta(days=3))
+            ax.xaxis.set_major_locator(mdates.MonthLocator())
+            ax.xaxis.set_major_formatter(mdates.DateFormatter("%b"))
+        if k % ncol == 0:
+            top.set_ylabel("Count by onset week")
+            low.set_ylabel("Change")
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    fig.legend(
+        handles,
+        labels,
+        title="Release",
+        fontsize=7,
+        title_fontsize=8,
+        loc="outside lower center",
+        ncols=len(releases),
     )
     return fig

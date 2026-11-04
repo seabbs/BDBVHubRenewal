@@ -72,6 +72,7 @@ from bdbvhubrenewal.reporting.explorer import (
 from bdbvhubrenewal.reporting.nowcast_plots import (
     plot_relative_overall,
     plot_release_nowcasts,
+    plot_truth_changes,
 )
 from bdbvhubrenewal.reporting.plots import (
     comparison_colours,
@@ -1199,7 +1200,24 @@ def _backtest_page(
     )
     wide.columns = [f"as reported {c}" for c in wide.columns]
     wide = wide.astype("Int64").astype(str).replace("<NA>", "")
-    _write(gen / "truth-changes.md", _table(wide.reset_index()))
+    save_light_dark(
+        partial(
+            plot_truth_changes,
+            target,
+            _location_names(target),
+        ),
+        fig / "truth-changes.svg",
+    )
+    alt = (
+        "Weekly counts by onset week in each release, and the change from "
+        "the previous release, by place."
+    )
+    _write(
+        gen / "truth-changes.md",
+        f"![{alt}](figures/truth-changes.svg#only-light)\n"
+        f"![{alt}](figures/truth-changes-dark.svg#only-dark)\n\n"
+        + _dropdown(_table(wide.reset_index()), "National counts by release"),
+    )
     fc_path = out / "forecasts.csv.gz"
     shown: list[str] = []
     if fc_path.exists():

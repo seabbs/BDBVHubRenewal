@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import pandas as pd
 
-from bdbvhubrenewal.reporting.nowcast_plots import plot_relative_overall
+from bdbvhubrenewal.reporting.nowcast_plots import (
+    plot_relative_overall,
+    plot_truth_changes,
+)
 
 
 def test_plot_relative_overall_skips_models_missing_from_a_pool() -> None:
@@ -35,3 +38,26 @@ def test_plot_relative_overall_skips_models_missing_from_a_pool() -> None:
     ]
     assert cover.get_ylim() == (0, 1)
     assert shown[4].get_ylim() == (-1, 1)
+
+
+def test_plot_truth_changes_has_a_pair_of_panels_per_place_with_cases() -> None:
+    weeks = ["2026-10-10", "2026-10-17", "2026-10-24"]
+    rows = [
+        {
+            "kind": "real",
+            "vintage": vintage,
+            "location": loc,
+            "target_end_date": week,
+            "total": total,
+        }
+        for vintage, extra in (("2026-10-24", 0), ("2026-11-01", 5))
+        for loc, base in (("CD", 10), ("CD-SK", 0))
+        for week in weeks
+        for total in [base + extra if base else 0]
+    ]
+    fig = plot_truth_changes(pd.DataFrame(rows), {"CD": "DRC"})
+    shown = [ax for ax in fig.axes if ax.get_visible()]
+    # CD-SK has no cases, so only DRC has its counts and changes.
+    assert len(shown) == 2
+    assert shown[0].get_title() == "DRC"
+    assert len(shown[0].get_lines()) == 2
