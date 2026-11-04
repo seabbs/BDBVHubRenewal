@@ -32,6 +32,7 @@ import numpyro.distributions as dist
 from jax import Array
 from jax.typing import ArrayLike
 from pyrenew.convolve import compute_prop_already_reported
+from pyrenew.latent.temporal_processes import TemporalProcess
 from pyrenew.metaclass import RandomVariable
 from pyrenew.observation.base import BaseObservationProcess
 from pyrenew.observation.noise import CountNoise
@@ -39,6 +40,7 @@ from pyrenew.observation.types import ObservationSample
 from pyrenew.time import daily_to_weekly
 
 from .composition_noise import CompositionNoise, MultinomialNoise
+from .pooled import pooled_walk
 
 _FLOOR = 1e-6
 
@@ -720,3 +722,73 @@ class OnsetStreams(BaseObservationProcess):
         self.delay_noise.sample(
             self._sample_site_name("delays"), probs, totals, obs=counts
         )
+
+
+class MissingOnsetFraction(RandomVariable):
+    r"""Time-varying probability that a case is reported without an onset.
+
+    $$\operatorname{logit} \pi_p(t) = b(t) + \delta_p(t),$$
+
+    from `pooled_walk`, indexed by report day $t$. With small innovation
+    SDs it stays near its starting values, so it reduces to a constant
+    $\pi_p$ when the data show no change.
+
+    Parameters
+    ----------
+    name : str
+        Prefix for the sample sites.
+    initial_rv : RandomVariable
+        Starting logit values, scalar or one per province.
+    baseline_process, deviation_process : TemporalProcess
+        Temporal processes for the national and province parts.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        initial_rv: RandomVariable,
+        baseline_process: TemporalProcess,
+        deviation_process: TemporalProcess,
+    ) -> None:
+        super().__init__(name=name)
+        self.initial_rv = initial_rv
+        self.baseline_process = baseline_process
+        self.deviation_process = deviation_process
+
+    def sample(
+        self,
+        n_timepoints: int,
+        n_groups: int,
+        first_day_dow: int | None = None,
+        **kwargs: object,
+    ) -> Array:
+        r"""Sample $\pi_p(t)$.
+
+        Parameters
+        ----------
+        n_timepoints : int
+            Days to sample.
+        n_groups : int
+            Number of provinces.
+        first_day_dow : int, optional
+            Weekday of the first day, passed by PyRenew.
+        **kwargs
+            Ignored, for the PyRenew interface.
+
+        Returns
+        -------
+        ArrayLike
+            Shape `(n_timepoints, n_groups)`, values in (0, 1).
+        """
+        _, logit_pi = pooled_walk(
+            self.baseline_process,
+            self.deviation_process,
+            self.initial_rv(),
+            n_timepoints,
+            n_groups,
+            self.name,
+            first_day_dow,
+        )
+        pi = jax.nn.sigmoid(logit_pi)
+        numpyro.deterministic(self.name, pi)
+        return pi

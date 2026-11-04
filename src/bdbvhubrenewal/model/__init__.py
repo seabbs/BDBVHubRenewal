@@ -1,13 +1,13 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """The province renewal model, built on PyRenew (JAX, NumPyro).
 
-- `rt`: non-centred random walks, pooled initial values and sum-to-zero
-  province deviations.
+- `temporal`: a non-centred random walk or AR(1) temporal process.
+- `pooled`: pooled group values and sum-to-zero group deviations.
 - `renewal`: the coupled renewal with importation (`Importation`),
   seeding and depletion.
 - `delays`: the generation interval and the onset-to-report delay.
-- `observation`: the known and imputed onset streams, the hub's
-  imputation and importation-only zeros.
+- `observation`: the known and imputed onset streams, the missing-onset
+  fraction, the hub's imputation and importation-only zeros.
 - `composition_noise`: multinomial and Dirichlet-multinomial noise for
   counts by category given totals (the delay counts).
 - `distributions`: a Dirichlet-multinomial scored on its non-zero cells.
@@ -37,20 +37,20 @@ from .model import (
     generation_interval,
     model_args,
 )
-from .observation import OnsetStreams, onset_expectations
+from .observation import (
+    MissingOnsetFraction,
+    OnsetStreams,
+    onset_expectations,
+)
+from .pooled import PooledInitialValue, pooled_walk
 from .renewal import (
     Importation,
     MetapopulationInfections,
     coupled_renewal,
     mixing_matrix,
 )
-from .rt import (
-    MissingOnsetFraction,
-    NonCentredRandomWalk,
-    PooledInitialValue,
-    pooled_walk,
-)
 from .rt_observation import RtPseudoObservation
+from .temporal import NonCentredRandomWalk
 
 __all__ = [
     "BVD",
