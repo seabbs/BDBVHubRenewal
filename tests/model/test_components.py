@@ -226,6 +226,17 @@ def test_constant_process_fixes_the_delay_over_onset_time():
     np.testing.assert_array_equal(pmf, jnp.broadcast_to(pmf[0], pmf.shape))
 
 
+def test_hazard_delay_gives_each_place_its_own_shift():
+    weekly = WeeklyTemporalProcess(
+        NonCentredRandomWalk(DeterministicVariable("sd", 0.1)), start_dow=6
+    )
+    delay = HazardDelay("d", 30, weekly, n_places=4)
+    pmf = seeded(lambda: delay(n_timepoints=35, first_day_dow=6))
+    assert pmf.shape == (4, 35, 31)
+    np.testing.assert_allclose(pmf.sum(axis=-1), 1.0, rtol=1e-5)
+    assert not np.allclose(pmf[0], pmf[1])
+
+
 def test_fixed_inputs_pad_with_last_row():
     fixed = FixedTimeVarying("x", np.arange(6.0).reshape(3, 2))
     out = fixed(n_timepoints=5)

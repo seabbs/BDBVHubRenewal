@@ -223,6 +223,51 @@ def onset_expectations(
     }
 
 
+def onset_expectations_by_place(
+    onsets: Array,
+    delay: Array,
+    missing: Array,
+    hub_delay: Array,
+    cutoff: int,
+    final: bool = True,
+    publication_lag: ArrayLike = NO_LAG,
+    weekly: bool = False,
+) -> dict[str, Array]:
+    r"""`onset_expectations` with a delay for each province.
+
+    Each province is computed with its own delay $f_{p,s}$, so the
+    triangle stays by province.
+
+    Parameters
+    ----------
+    onsets : Array
+        $\lambda_p(s)$, shape `(n, P)`.
+    delay : Array
+        $f_{p,s}(d)$, shape `(P, n, D + 1)`.
+    missing : Array
+        $\pi_p(t)$ by report day, shape `(n, P)`.
+    hub_delay, cutoff, final, publication_lag, weekly
+        As `onset_expectations`.
+
+    Returns
+    -------
+    dict
+        As `onset_expectations`, with `triangle` of shape `(n, P, D + 1)`.
+    """
+
+    def one(lam: Array, f: Array, pi: Array) -> dict[str, Array]:
+        return onset_expectations(
+            lam[:, None], f, pi[:, None], hub_delay, cutoff, final,
+            publication_lag, weekly,
+        )  # fmt: skip
+
+    out = jax.vmap(one, in_axes=(1, 0, 1))(onsets, delay, missing)
+    streams = ("known", "imputed", "known_final", "imputed_final")
+    return {k: out[k][..., 0].T for k in streams} | {
+        "triangle": jnp.moveaxis(out["triangle"], 0, 1)
+    }
+
+
 def _windows(x: Array, n_w: int, k: int) -> Array:
     """`out[w, i] = x[7w + i]` for `i < 7k`, from stacked reshapes.
 
@@ -486,7 +531,11 @@ class OnsetStreams(BaseObservationProcess):
                 )
 
     def _weekly(self, x: Array, first_day_dow: int) -> Array:
-        return jnp.asarray(daily_to_weekly(x, first_day_dow, self.start_dow))
+        flat = x.reshape(x.shape[0], -1)
+        weekly = jnp.asarray(
+            daily_to_weekly(flat, first_day_dow, self.start_dow)
+        )
+        return weekly.reshape(weekly.shape[0], *x.shape[1:])
 
     def sample(
         self,
@@ -520,7 +569,8 @@ class OnsetStreams(BaseObservationProcess):
             where unobserved.
         delay_counts : Array, optional
             Known-onset cases by onset week and delay, pooled over
-            provinces, `(n_weeks, D + 1)`.
+            provinces, `(n_weeks, D + 1)`, or by province,
+            `(n_weeks, P, D + 1)`, with a delay for each province.
         inactive : Array, optional
             Weekly total counts in provinces with no cases, `(n_weeks, Q)`.
         import_kernel : Array, optional
@@ -559,7 +609,12 @@ class OnsetStreams(BaseObservationProcess):
         lag = self.publication_lag
         if isinstance(lag, RandomVariable):
             lag = lag()
-        exp = onset_expectations(
+        expectations = (
+            onset_expectations
+            if delay.ndim == 2
+            else onset_expectations_by_place
+        )
+        exp = expectations(
             onsets,
             delay,
             pi,
@@ -571,7 +626,7 @@ class OnsetStreams(BaseObservationProcess):
         )
         weekly = {k: self._weekly(v, first_day_dow) for k, v in exp.items()}
         if as_of is not None:
-            later = onset_expectations(
+            later = expectations(
                 onsets,
                 delay,
                 pi,
@@ -703,12 +758,12 @@ class OnsetStreams(BaseObservationProcess):
         )
 
     def _score_delays(self, triangle: Array, counts: Array) -> None:
-        totals = counts.sum(axis=1)
+        totals = counts.sum(axis=-1)
         probs = triangle / jnp.maximum(
-            triangle.sum(axis=1, keepdims=True), 1e-12
+            triangle.sum(axis=-1, keepdims=True), 1e-12
         )
         probs = jnp.maximum(probs, 1e-12)
-        probs = probs / probs.sum(axis=1, keepdims=True)
+        probs = probs / probs.sum(axis=-1, keepdims=True)
         if self.delay_overdispersion_rv is None:
             counts_dist = dist.Multinomial(total_count=totals, probs=probs)
         else:

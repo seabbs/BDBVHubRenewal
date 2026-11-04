@@ -79,6 +79,15 @@ class HazardDelay(RandomVariable):
         Scale of the half-normal prior on the step SD of $\beta$. Real
         fits put the step SD at about 0.2 (2026-10-24: 90% CrI 0.16 to
         0.25), in the tail of a scale of 0.1, so the default is 0.4.
+    n_places : int, optional
+        Give each of this many places its own shift $u_p$, partially
+        pooled towards the shared delay,
+        $\operatorname{logit} h_{p,s}(d) = \beta(d) + \gamma(s) + u_p$
+        with $u_p = \sigma_u z_p$, $z_p \sim N(0, 1)$ and
+        $\sigma_u \sim \text{HalfNormal}(\text{place\_sd})$. The delay
+        is then `(n_places, n_timepoints, dmax + 1)`.
+    place_sd : float, optional
+        Scale of the half-normal prior on $\sigma_u$.
     """
 
     def __init__(
@@ -88,10 +97,14 @@ class HazardDelay(RandomVariable):
         time_process: TemporalProcess,
         hazard0_loc: float = -2.0,
         smoothness_sd: float = 0.4,
+        n_places: int | None = None,
+        place_sd: float = 0.5,
     ) -> None:
         super().__init__(name=name)
         self.dmax = dmax
         self.time_process = time_process
+        self.n_places = n_places
+        self.place_sd = place_sd
         self.shape_process = NonCentredRandomWalk(
             DistributionalVariable(
                 f"{name}_smooth_sd", dist.HalfNormal(smoothness_sd)
@@ -119,7 +132,8 @@ class HazardDelay(RandomVariable):
         Returns
         -------
         ArrayLike
-            Shape `(n_timepoints, dmax + 1)`.
+            Shape `(n_timepoints, dmax + 1)`, or `(n_places, n_timepoints,
+            dmax + 1)` with places.
         """
         beta0 = numpyro.sample(
             f"{self.name}_hazard0", dist.Normal(self.hazard0_loc, 1.0)
@@ -144,11 +158,20 @@ class HazardDelay(RandomVariable):
             # week and repeat it.
             gamma = gamma[::7]
         logit = beta[None, :] + gamma
+        if self.n_places is not None:
+            sd = numpyro.sample(
+                f"{self.name}_place_sd", dist.HalfNormal(self.place_sd)
+            )
+            z = numpyro.sample(
+                f"{self.name}_place_z",
+                dist.Normal(0.0, 1.0).expand([self.n_places]).to_event(1),
+            )
+            logit = logit[None] + (sd * z)[:, None, None]
         pmf = hazard_to_pmf(logit)
         mean = pmf @ jnp.arange(self.dmax + 1)
         if weekly:
-            pmf = jnp.repeat(pmf, 7, axis=0)[:n_timepoints]
-            mean = jnp.repeat(mean, 7, axis=0)[:n_timepoints]
+            pmf = jnp.repeat(pmf, 7, axis=-2)[..., :n_timepoints, :]
+            mean = jnp.repeat(mean, 7, axis=-1)[..., :n_timepoints]
         numpyro.deterministic(f"{self.name}_mean", mean)
         return pmf
 

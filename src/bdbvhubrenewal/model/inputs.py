@@ -383,7 +383,8 @@ def vintage_from_tables(
         )
         return out.fillna(0).to_numpy(dtype=float)
 
-    counts = np.zeros((n_weeks, config.dmax + 1))
+    places = list(active) if config.delay_by_place else [None]
+    counts = np.zeros((n_weeks, len(places), config.dmax + 1))
     pmf = np.full(config.dmax + 1, 1 / (config.dmax + 1))
     if delays is not None and len(delays):
         pmf = hub_delay_pmf(delays, config.dmax)
@@ -407,7 +408,14 @@ def vintage_from_tables(
         )
         ok = (week >= 0) & (week < n_weeks)
         delay = np.clip(keep["delay"].to_numpy(), 0, config.dmax)
-        np.add.at(counts, (week[ok], delay[ok]), 1)
+        place = (
+            keep["location"].map({p: i for i, p in enumerate(places)})
+            if config.delay_by_place
+            else pd.Series(0, index=keep.index)
+        ).to_numpy(dtype=int)
+        np.add.at(counts, (week[ok], place[ok], delay[ok]), 1)
+    if not config.delay_by_place:
+        counts = counts[:, 0]
 
     known, imputed = grid("observed", active), grid("imputed", active)
     totals = known + imputed

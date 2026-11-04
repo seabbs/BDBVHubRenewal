@@ -202,6 +202,12 @@ VARIANTS: Final[dict[str, Variant]] = {
             "renewal with a delay fixed over onset time, with no weekly walk.",
             overrides={"delay_over_time": False},
         ),
+        Variant(
+            "renewalplace",
+            "renewal with a delay for each province, partially pooled "
+            "towards the shared delay.",
+            overrides={"delay_by_place": True},
+        ),
     )
 }
 """Model variants, by name."""
