@@ -78,7 +78,13 @@ def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
         )
         == 0
     )
-    for name in ("scores.csv", "quantiles.csv.gz", "teams.csv", "summary.json"):
+    for name in (
+        "scores.csv",
+        "quantiles.csv.gz",
+        "samples.csv.gz",
+        "teams.csv",
+        "summary.json",
+    ):
         assert (out / name).exists(), name
     report._comparison_page(fig, gen, out, target)
     teams = (gen / "comparison-teams.md").read_text()
@@ -95,6 +101,9 @@ def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
     assert "scoresummary-comparison.json" in scores
     assert "comparison-overall.svg" in scores
     assert 'data-view="place"' in (gen / "comparison-place.md").read_text()
+    horizon = (gen / "comparison-horizon.md").read_text()
+    assert 'data-view="horizon"' in horizon
+    assert (fig / "comparison-place.svg").exists()
     data = json.loads((fig / "scoresummary-comparison.json").read_text())
     on = {m["name"]: m["on"] for m in data["models"]}
     assert on["randomwalk (ours)"] is False

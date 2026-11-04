@@ -9,6 +9,12 @@ Our models and the forecasts submitted to the hub's weekly round, scored on the 
 
 --8<-- "comparison-scores.md"
 
+## By horizon
+
+By weeks from the reference week ([horizon](methods/evaluation.md#reading-the-figures)), at the scale chosen.
+
+--8<-- "comparison-horizon.md"
+
 ## By place
 
 Scores at each place, at the scale chosen.

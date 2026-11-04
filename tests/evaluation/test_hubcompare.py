@@ -346,6 +346,30 @@ def test_summarise_comparison(
     assert {"coverage_50", "coverage_90", "bias", "wis"} <= set(table.columns)
 
 
+def test_trajectory_samples_keep_open_teams_and_first_draws() -> None:
+    from bdbvhubrenewal.evaluation.hubcompare import trajectory_samples
+
+    rows = [
+        {
+            "model": m,
+            "source": src,
+            "reference_date": "2026-10-24",
+            "location": "CD",
+            "target_end_date": "2026-10-10",
+            "sample": i,
+            "value": 1.0,
+        }
+        for m, src in (("ours", "real"), ("open", "hub"), ("closed", "hub"))
+        for i in (3, 1, 2)
+    ]
+    teams = pd.DataFrame(
+        {"model": ["open", "closed"], "license": ["CC-BY-4.0", "other"]}
+    )
+    out = trajectory_samples(pd.DataFrame(rows), teams, 2)
+    assert set(out["model"]) == {"ours", "open"}
+    assert set(out["sample"]) == {1, 2}
+
+
 def test_forecast_quantiles(tmp_path: Path) -> None:
     _write_hub(tmp_path)
     q = forecast_quantiles(load_hub_submissions(tmp_path))

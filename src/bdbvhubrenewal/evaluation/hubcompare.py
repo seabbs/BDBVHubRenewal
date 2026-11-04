@@ -79,6 +79,7 @@ __all__ = [
     "stored_forecasts",
     "submission_dir",
     "summarise_comparison",
+    "trajectory_samples",
     "with_submissions",
     "zone_truth",
 ]
@@ -750,6 +751,36 @@ def summarise_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
         "bias",
     ]
     return out[cols].sort_values([*by, "wis"]).reset_index(drop=True)
+
+
+def trajectory_samples(
+    forecasts: pd.DataFrame, teams: pd.DataFrame, n: int
+) -> pd.DataFrame:
+    """Keep the draws the forecast explorer shows as trajectories.
+
+    Parameters
+    ----------
+    forecasts : pandas.DataFrame
+        Samples with `SAMPLE_COLUMNS`.
+    teams : pandas.DataFrame
+        Hub team metadata (`load_team_metadata`), with `model` and
+        `license`. Only hub teams under `OPEN_LICENCES` keep draws, as
+        only their files may be redistributed.
+    n : int
+        Draws kept per model: its `n` lowest sample ids.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The rows of `forecasts` kept, for our models and the openly
+        licensed hub teams.
+    """
+    open_teams = set(teams.loc[teams["license"].isin(OPEN_LICENCES), "model"])
+    keep = forecasts.loc[
+        (forecasts["source"] != "hub") | forecasts["model"].isin(open_teams)
+    ]
+    rank = keep.groupby("model")["sample"].rank(method="dense")
+    return keep.loc[rank <= n, list(SAMPLE_COLUMNS)].reset_index(drop=True)
 
 
 def forecast_quantiles(forecasts: pd.DataFrame) -> pd.DataFrame:

@@ -865,6 +865,7 @@ def _bvd(args: argparse.Namespace) -> int:  # pragma: no cover - network
 
 def _compare_hub(args: argparse.Namespace) -> int:
     from bdbvhubrenewal.evaluation import hubcompare as hc
+    from bdbvhubrenewal.reporting.explorer import TRAJECTORY_DRAWS
 
     cfg = hc.load_comparison_config(args.config)
     hub_dir, cache = Path(args.hub_dir), Path(args.cache_dir)
@@ -922,6 +923,9 @@ def _compare_hub(args: argparse.Namespace) -> int:
     teams = hc.load_team_metadata(hub_dir)
     teams.loc[teams["model"].isin(set(hub["model"]))].to_csv(
         out / "teams.csv", index=False
+    )
+    hc.trajectory_samples(forecasts, teams, TRAJECTORY_DRAWS).to_csv(
+        out / "samples.csv.gz", index=False
     )
     manifest = hub_dir / "manifest.json"
     accessed = dt.date.today().isoformat()

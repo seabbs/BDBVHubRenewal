@@ -105,8 +105,6 @@ from bdbvhubrenewal.reporting.plots import (
 from bdbvhubrenewal.reporting.scorechart import (
     ENERGY_METRICS,
     OVERALL_METRICS,
-    score_chart_data,
-    score_chart_html,
     write_score_chart,
 )
 from bdbvhubrenewal.reporting.scoresummary import summary_html, summary_rows
@@ -1640,6 +1638,7 @@ def _comparison_page(
         for name in (
             "comparison-lead.md",
             "comparison-scores.md",
+            "comparison-horizon.md",
             "comparison-place.md",
             "comparison-rounds.md",
             "comparison-teams.md",
@@ -1751,6 +1750,9 @@ def _comparison_page(
             colours,
             truth_vintage=truth,
             hidden=hidden,
+            samples=_label_comparison(
+                pd.read_csv(cmp_dir / "samples.csv.gz"), hub_ids
+            ),
         ),
     )
     tabs = []
@@ -1777,7 +1779,12 @@ def _comparison_page(
         )
     _write(
         gen / "comparison-figures.md",
-        explorer_html("../figures/explorer-comparison.json", "Hub forecasts")
+        explorer_html(
+            "../figures/explorer-comparison.json",
+            "Hub forecasts",
+            all_rounds=True,
+            summary="../figures/scoresummary-comparison.json",
+        )
         + "\n"
         + _dropdown("\n".join(tabs), "Static figures by round"),
     )
@@ -1800,13 +1807,19 @@ def _comparison_summary(
     the reference for relative scores.
     """
     if scores.empty:
-        for name in ("comparison-scores.md", "comparison-place.md"):
+        for name in (
+            "comparison-scores.md",
+            "comparison-horizon.md",
+            "comparison-place.md",
+        ):
             _write(gen / name, "No round has a score yet.\n")
         return
     done = _label_comparison(
         scores.loc[scores["target"] == "complete"], hub_ids
     )
     rows = done.assign(
+        kind="real",
+        vintage=done["origin"],
         origin=done["reference_date"],
         pool=done["location"]
         .str.count("-")
@@ -1861,12 +1874,43 @@ def _comparison_summary(
             "Scores by scale, over every round",
         ),
     )
+    save_light_dark(
+        partial(
+            plot_scores,
+            rows,
+            by="horizon",
+            metric="wis",
+            models=models,
+            colours=colours,
+        ),
+        fig / "comparison-horizon.svg",
+    )
+    _write(
+        gen / "comparison-horizon.md",
+        summary_html(
+            "../figures/scoresummary-comparison.json",
+            "Scores by horizon",
+            view="horizon",
+            static="../figures/comparison-horizon.svg",
+        ),
+    )
+    save_light_dark(
+        partial(
+            plot_place_summary,
+            relative_wis(rows, ("pool", "location"), baseline=base),
+            models,
+            colours,
+            names,
+        ),
+        fig / "comparison-place.svg",
+    )
     _write(
         gen / "comparison-place.md",
         summary_html(
             "../figures/scoresummary-comparison.json",
             "Scores by place",
             view="place",
+            static="../figures/comparison-place.svg",
         ),
     )
 
