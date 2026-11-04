@@ -30,6 +30,7 @@ $$
 
 Positive bias is overprediction.
 Relative WIS is a ratio of means against a baseline $b$ over the forecasts both made, and below 1 beats it.
+Relative log WIS is the same ratio of mean log WIS.
 The baseline is `randomwalk`.
 Coverage is whether $y$ falls in the central 50% and 90% sample intervals.
 
@@ -113,6 +114,8 @@ Each model is scored as it runs, and again with its zone samples made to sum to 
 Each real vintage before the latest is forecast, and origins with no pair of releases within the delay window are skipped, as for provinces.
 Zones are scored on the reported target as for [real releases](#real-releases), with the zone delays fitted at the origin, so a zone count is never scored against a count still being reported.
 Relative WIS is against `randomwalk` run at zone level.
+The Nowcast page shows the summed forms, relative to `randomwalk` summed.
+There the fitted models' zone samples at the latest release are those of their stored fits, where they have one.
 
 ## Comparison with hub forecasts
 

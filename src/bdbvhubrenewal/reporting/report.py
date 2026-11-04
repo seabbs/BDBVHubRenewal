@@ -96,6 +96,7 @@ from bdbvhubrenewal.reporting.scorechart import (
     score_chart_html,
     write_score_chart,
 )
+from bdbvhubrenewal.reporting.tables import filter_table
 from bdbvhubrenewal.reporting.zone_nowcast import (
     ZONE_MODEL,
     zone_chart_data,
@@ -320,14 +321,18 @@ def _release_section(
         gen / "release-headline.md",
         "## Overall\n\n"
         "Scores against what each later release reported "
-        "([how scoring works](methods/evaluation.md#real-releases)).\n\n"
-        "![Relative WIS and 90% coverage of each model on the counts each "
-        "later release reported, by pool.](figures/relative-overall.svg"
-        "#only-light)\n"
-        "![Relative WIS and 90% coverage of each model on the counts each "
-        "later release reported, by pool.](figures/relative-overall-dark.svg"
-        "#only-dark)\n\n"
-        "Scores by target and pool, over every origin.\n\n" + _table(overall),
+        "([how scoring works](methods/evaluation.md#real-releases), "
+        "[metrics](methods/evaluation.md#scores)).\n\n"
+        "![Relative WIS, relative log WIS, 50% and 90% coverage and bias "
+        "of each model on the counts each later release reported, by "
+        "pool.](figures/relative-overall.svg#only-light)\n"
+        "![Relative WIS, relative log WIS, 50% and 90% coverage and bias "
+        "of each model on the counts each later release reported, by "
+        "pool.](figures/relative-overall-dark.svg#only-dark)\n\n"
+        + _dropdown(
+            filter_table(_table(overall), ["target", "pool", "model"]),
+            "Scores by target and pool, over every origin",
+        ),
     )
     _write(
         gen / "release-nowcasts.md",
@@ -1039,19 +1044,40 @@ def _scenario_figure() -> str:
     return _metric_tabs("scenario-wis-horizon", alt)
 
 
-def _submission_sampler(path: Path = Path("ci/policy.toml")) -> dict[str, Any]:
-    """Return the main candidate's sampler settings from the CI policy."""
+def _submission_samplers(
+    path: Path = Path("ci/policy.toml"),
+) -> dict[str, dict[str, Any]]:
+    """Return each fitted candidate's sampler settings from the CI policy."""
     policy = tomllib.loads(path.read_text())
-    main = next(c for c in policy["candidates"] if c["id"] == "main")
-    return dict(main["sampler"])
+    return {
+        c["model"]: dict(c["sampler"])
+        for c in policy["candidates"]
+        if "sampler" in c
+    }
 
 
-def _settings_text(chains: int, warmup: int, draws: int) -> str:
-    return f"{chains} chains of {warmup} warm-up and {draws} draws"
+def _backtest_sampler(
+    path: Path = Path("config/backtest.toml"),
+) -> dict[str, Any]:
+    """Return the backtest's sampler settings."""
+    return dict(tomllib.loads(path.read_text())["sampler"])
 
 
-def _sampler_section(fits: pd.DataFrame, submission: Mapping[str, Any]) -> str:
-    """Say how long the backtest fits were and how well they converged."""
+def _settings_text(sampler: Mapping[str, Any]) -> str:
+    return (
+        f"{int(sampler['num_chains'])} chains of "
+        f"{int(sampler['num_warmup'])} warm-up and "
+        f"{int(sampler['num_samples'])} draws at a target acceptance of "
+        f"{sampler['target_accept']}"
+    )
+
+
+def _sampler_section(
+    fits: pd.DataFrame,
+    backtest: Mapping[str, Any],
+    submission: Mapping[str, Mapping[str, Any]],
+) -> str:
+    """Give the backtest and submission sampler settings and convergence."""
     keys = ["num_chains", "num_warmup", "num_samples"]
     fits = (
         fits.dropna(subset=keys)
@@ -1060,17 +1086,9 @@ def _sampler_section(fits: pd.DataFrame, submission: Mapping[str, Any]) -> str:
     )
     if fits.empty:
         return ""
-    used = fits[keys].drop_duplicates().astype(int).to_numpy()
-    runs = " or ".join(_settings_text(*row) for row in used)
-    target = tuple(int(submission[k]) for k in keys)
-    sub = _settings_text(*target)
-    if len(used) == 1 and tuple(used[0]) == target:
-        compare = f"This is the same as the submission fit, {sub}.\n"
-    else:
-        compare = (
-            f"The submission fit uses {sub}, so backtest fits are shorter "
-            "than the submission fit.\n"
-        )
+    sub = "".join(
+        f"- `{m}`: {_settings_text(s)}\n" for m, s in submission.items()
+    )
     by = fits.groupby("model")
     table = pd.DataFrame(
         {
@@ -1086,8 +1104,9 @@ def _sampler_section(fits: pd.DataFrame, submission: Mapping[str, Any]) -> str:
     ).reset_index()
     return (
         "## Sampler\n\n"
-        f"Backtest fits use {runs}.\n"
-        + compare
+        f"Backtest fits use {_settings_text(backtest)}.\n"
+        "Submission fits use\n\n"
+        + sub
         + "\n"
         + _dropdown(
             "Columns are as on the "
@@ -1204,7 +1223,9 @@ def _backtest_page(
     fits_path = res / "backtest-fits.csv"
     _write(
         gen / "backtest-sampler.md",
-        _sampler_section(pd.read_csv(fits_path), _submission_sampler()),
+        _sampler_section(
+            pd.read_csv(fits_path), _backtest_sampler(), _submission_samplers()
+        ),
     )
     rec_path = res / "recovery-scores.csv"
     _write(gen / "recovery-section.md", _recovery_section())
