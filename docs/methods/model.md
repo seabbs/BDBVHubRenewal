@@ -37,7 +37,8 @@ flowchart TD
         GI["Generation interval g(τ)"]
         INF["Infections per resident x<sub>p</sub>(t)"]
     end
-    ONS["Expected cases<br/>by onset day<br/>λ<sub>p</sub>(s) = α(s) N<sub>p</sub> x<sub>p</sub>(s)"]
+    ONS["Expected cases<br/>by onset day<br/>λ<sub>p</sub>(s) = α(s) N<sub>p</sub> (x<sub>p</sub> ∗ η)(s)"]
+    INC["Incubation period η(u)<br/>log-normal, 0 to 28 days"]
     DEL["Onset-to-report delay<br/>f<sub>s</sub>(d)<br/>hazard shifted by γ(s),<br/>a weekly walk on onset day<br/><i>renewal: shared</i>"]
     MISS["Share reported<br/>without onset π<sub>p</sub>(t)<br/>weekly walk"]
     subgraph OB["Data streams at vintage T"]
@@ -55,6 +56,7 @@ flowchart TD
     RT --> INF
     GI --> INF
     INF --> ONS
+    INC --> ONS
     ONS --> OB
     DEL --> OB
     MISS --> OB
@@ -276,7 +278,7 @@ flowchart TD
     REL["BVDOutbreakSize release<br/>data cut-off a<sub>b</sub>"]
     NAT["National log Rt draws<br/>mean μ<sub>N</sub>, SD σ<sub>N</sub>"]
     PAT["Patch medians and<br/>90% intervals"]
-    AL["Aligned to onset day<br/>s<sub>b</sub> = a<sub>b</sub> + 6"]
+    AL["Aligned to infection day<br/>s<sub>b</sub> = a<sub>b</sub>"]
     CORE["<b>Renewal core, pooled</b><br/>see above<br/>infection-weighted R<sub>N</sub>(s<sub>b</sub>), R<sub>k</sub>(s<sub>b</sub>)"]
     LK["Normal terms<br/>down-weighted, ζ = 0.5"]
 
