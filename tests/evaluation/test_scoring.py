@@ -10,6 +10,8 @@ from bdbvhubrenewal.evaluation.scoring import (
     bias_sample,
     coverage_sample,
     crps_sample,
+    energy_sample,
+    energy_scores,
     relative_skill,
     score_forecasts,
     wis_sample,
@@ -97,3 +99,52 @@ def test_score_forecasts_and_relative_skill() -> None:
     rel = relative_skill(scores).set_index("model")
     assert rel.loc["randomwalk", "relative_wis"] == pytest.approx(1.0)
     assert rel.loc["better", "relative_wis"] < 1
+
+
+def test_energy_matches_hand_case() -> None:
+    # ||X - y||: 4 and 3, mean 3.5. Fair spread: (5 + 5) / (2 * 2 * 1) = 2.5.
+    samples = np.array([[0.0, 0.0], [3.0, 4.0]])
+    assert energy_sample(np.array([0.0, 4.0]), samples) == pytest.approx(1.0)
+
+
+def test_energy_matches_scoringrules_fair() -> None:
+    rng = np.random.default_rng(5)
+    samples = rng.poisson(20, (50, 6)).astype(float)
+    obs = rng.poisson(20, 6).astype(float)
+    want = float(sr.es_ensemble(obs, samples, estimator="fair"))
+    assert energy_sample(obs, samples) == pytest.approx(want)
+
+
+def test_energy_scores_share_cells_and_scale() -> None:
+    rng = np.random.default_rng(6)
+    rows = []
+    places = {"randomwalk": ("CD", "CD-IT", "CD-NK"), "better": ("CD", "CD-IT")}
+    for model, locs in places.items():
+        for loc in locs:
+            for week in ("2026-09-05", "2026-09-12"):
+                for i, v in enumerate(rng.poisson(30, 40)):
+                    rows.append(
+                        {
+                            "model": model,
+                            "origin": "2026-08-18",
+                            "location": loc,
+                            "target_end_date": week,
+                            "sample": i + 1,
+                            "value": v,
+                        }
+                    )
+    truth = pd.DataFrame(
+        {
+            "location": ["CD", "CD", "CD-IT", "CD-IT", "CD-NK", "CD-NK"],
+            "target_end_date": ["2026-09-05", "2026-09-12"] * 3,
+            "truth": [30, 30, 20, 20, 10, 10],
+        }
+    )
+    es = energy_scores(pd.DataFrame(rows), truth, unit=("origin",))
+    es = es.set_index(["scale", "model"])
+    # CD-NK is only in one model, so provinces score CD-IT's two weeks.
+    assert es.loc[("provinces", "better"), "n_cells"] == 2
+    assert es.loc[("provinces", "randomwalk"), "n_cells"] == 2
+    assert es.loc[("national", "better"), "n_cells"] == 2
+    assert set(es.columns) >= {"energy", "log_energy", "n_samples"}
+    assert (es["log_energy"] < es["energy"]).all()
