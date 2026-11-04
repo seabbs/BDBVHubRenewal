@@ -371,8 +371,6 @@ class OnsetStreams(BaseObservationProcess):
     known_noise, imputed_noise : CountNoise
         PyRenew noise models for the two streams (`known_noise` for the
         single stream).
-    kernel_rv : LearntKernel, optional
-        Learnt kernel whose `import_kernel` replaces the fixed one.
     import_scale_rv : RandomVariable, optional
         Scale $\kappa$ of importations into provinces with no cases,
         $\mu_q(s) = \kappa \sum_p K_{pq} \lambda_p(s)$, scored with a
@@ -404,7 +402,6 @@ class OnsetStreams(BaseObservationProcess):
         imputed_noise: CountNoise | None = None,
         import_scale_rv: RandomVariable | None = None,
         start_dow: int = 6,
-        kernel_rv: RandomVariable | None = None,
         publication_lag: RandomVariable | ArrayLike = NO_LAG,
         delay_overdispersion_rv: RandomVariable | None = None,
         weekly_axis: bool = False,
@@ -418,7 +415,6 @@ class OnsetStreams(BaseObservationProcess):
         self.known_noise = known_noise
         self.imputed_noise = imputed_noise
         self.import_scale_rv = import_scale_rv
-        self.kernel_rv = kernel_rv
         self.start_dow = start_dow
         self.publication_lag = publication_lag
         self.delay_overdispersion_rv = delay_overdispersion_rv
@@ -627,9 +623,6 @@ class OnsetStreams(BaseObservationProcess):
                 self._score_delays(
                     weekly["triangle"], jnp.asarray(delay_counts)
                 )
-        if self.kernel_rv is not None and import_kernel is not None:
-            # Gravity flows to idle provinces with the learnt decay.
-            import_kernel = self.kernel_rv.import_kernel
         if self.import_scale_rv is not None and import_kernel is not None:
             self._score_imports(
                 onsets, jnp.asarray(import_kernel), inactive, first_day_dow
@@ -721,7 +714,7 @@ class OnsetStreams(BaseObservationProcess):
         )
 
 
-class RtPseudoObservation:
+class RtPseudoObservation(RandomVariable):
     r"""External Rt estimates as a tempered pseudo-observation.
 
     For groups $G$ of provinces (the nation, or BVDOutbreakSize patches)
@@ -737,12 +730,15 @@ class RtPseudoObservation:
 
     This is a power prior on the external summary with tempering
     $\alpha$. With $\alpha = 0$ nothing is added, so the model is
-    unchanged. PyRenew has no observation process on a latent Rt, hence
-    this small class; it is called from the latent process, which holds
-    both Rt and infections.
+    unchanged. PyRenew routes only infections to observation processes,
+    so this is a `RandomVariable` that the latent process calls, as it
+    holds both Rt and infections. Its sites are `{name}_log_rt_model`,
+    `{name}_z` and `{name}_rt_obs`.
 
     Parameters
     ----------
+    name : str
+        Prefix for the sites.
     alpha : float
         Tempering, in [0, 1].
     day : int
@@ -757,6 +753,7 @@ class RtPseudoObservation:
 
     def __init__(
         self,
+        name: str,
         alpha: float,
         day: int,
         groups: ArrayLike,
@@ -764,6 +761,7 @@ class RtPseudoObservation:
         scales: ArrayLike,
         kinds: ArrayLike,
     ) -> None:
+        super().__init__(name=name)
         self.alpha = float(alpha)
         self.day = int(day)
         self.groups = jnp.asarray(groups, dtype=float)
@@ -816,6 +814,7 @@ class RtPseudoObservation:
         infections: Array,
         n_init: int,
         fractions: Array | None = None,
+        **kwargs: object,
     ) -> None:
         """Add the pseudo-likelihood and record its diagnostics.
 
@@ -829,14 +828,18 @@ class RtPseudoObservation:
             Seeding days at the start of the axis.
         fractions : jax.Array, optional
             Population share of each province.
+        **kwargs
+            Ignored, for the PyRenew interface.
         """
         group, national = self.log_group_rt(rt, infections, n_init, fractions)
         model = jnp.where(self.kinds == 0, group, group - national)
-        numpyro.deterministic("bvd_log_rt_model", model)
-        numpyro.deterministic("bvd_z", (self.values - model) / self.scales)
+        numpyro.deterministic(f"{self.name}_log_rt_model", model)
+        numpyro.deterministic(
+            f"{self.name}_z", (self.values - model) / self.scales
+        )
         if self.alpha > 0:
             numpyro.sample(
-                "bvd_rt_obs",
+                f"{self.name}_rt_obs",
                 dist.Normal(model, self.scales / jnp.sqrt(self.alpha)),
                 obs=self.values,
             )

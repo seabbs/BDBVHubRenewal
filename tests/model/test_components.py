@@ -125,8 +125,7 @@ def test_coupled_renewal_matches_reference(deplete):
         jnp.asarray(rt),
         jnp.asarray(g),
         mixing_matrix(jnp.asarray(k), 0.05, jnp.asarray(f)),
-        jnp.asarray(1 - seed[:, :n_init].sum(axis=1) / pops),
-        deplete=deplete,
+        pool=1.0 if deplete else None,
     )
     # Exact without depletion. With it, PyRenew's exponential depletion
     # matches the reference's linear form to first order (small y).
@@ -141,11 +140,10 @@ def test_depletion_bounds_attack_rate():
     I0 = jnp.full((len(g), 2), 1e-4)
     rt = jnp.full((400, 2), 3.0)
     w = jnp.eye(2)
-    s0 = 1 - I0.sum(axis=0)
-    x, r_eff, _ = coupled_renewal(I0, rt, g, w, s0, deplete=True)
+    x, r_eff, _ = coupled_renewal(I0, rt, g, w, pool=1.0)
     assert float(x.sum(axis=0).max() + I0.sum(axis=0).max()) <= 1.0 + 1e-6
     assert float(r_eff[-1].max()) < 1.0
-    x_free, _, _ = coupled_renewal(I0, rt, g, w, s0, deplete=False)
+    x_free, _, _ = coupled_renewal(I0, rt, g, w)
     assert float(x_free.sum()) > 1e3
 
 
@@ -382,17 +380,15 @@ def test_imported_infections_are_part_of_the_total():
     w = np.asarray(mixing_matrix(jnp.asarray(k), 0.05, jnp.asarray(f)))
     I0 = rng.uniform(0, 1e-5, (len(g), p))
     rt = rng.uniform(0.6, 1.8, (60, p))
-    s0 = np.ones(p)
     # Imported infections are part of the total, and none without coupling.
     x, _, imp = coupled_renewal(
         jnp.asarray(I0), jnp.asarray(rt), jnp.asarray(g), jnp.asarray(w),
-        jnp.asarray(s0) * 0.05, deplete=True, pool=0.05,
+        pool=0.05,
     )  # fmt: skip
     assert np.all(np.asarray(imp) <= np.asarray(x) + 1e-12)
     assert float(np.asarray(imp).sum()) > 0
     _, _, none = coupled_renewal(
         jnp.asarray(I0), jnp.asarray(rt), jnp.asarray(g), jnp.eye(p),
-        jnp.asarray(s0), deplete=False,
     )  # fmt: skip
     np.testing.assert_allclose(np.asarray(none), 0.0)
 
