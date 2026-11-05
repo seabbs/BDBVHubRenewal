@@ -367,7 +367,9 @@ def hub_delay_pmf(
         return float(special.gammainc(q**-2, q**-2 * np.exp(q * w)))
 
     def mass(k: int) -> float:
-        return integrate.quad(lambda u: cdf(k + u) - cdf(k - 1 + u), 0, 1)[0]
+        return float(
+            integrate.quad(lambda u: cdf(k + u) - cdf(k - 1 + u), 0, 1)[0]
+        )
 
-    pmf = np.array([mass(k) for k in range(max_delay + 1)])
-    return pmf / pmf.sum()
+    pmf = np.array([mass(k) for k in range(max_delay + 1)], dtype=float)
+    return np.asarray(pmf / pmf.sum(), dtype=float)
