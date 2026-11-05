@@ -1,5 +1,6 @@
 import dataclasses, sys, pickle
 import numpy as np, pandas as pd
+import variants  # noqa
 from bdbvhubrenewal.data import delays_for_vintage, load_daily, load_delays, load_target
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.forecasters import get_model
@@ -10,7 +11,7 @@ target = load_target(); real = target.loc[target["kind"] == "real"]
 daily = load_daily(); delays = load_delays()
 cfg = dataclasses.replace(bt.load_config("config/backtest.toml"), n_samples=n)
 res = {}
-for v in ["2026-10-17", "2026-10-24"]:
+for v in sys.argv[3].split(","):
     task = bt.make_tasks(real.loc[real["vintage"] == v], delays_for_vintage(delays, v)[0], cfg, history=real, daily=daily)[0]
     for name in ["randomwalk", "randomwalknowcast"]:
         m = get_model(name)
