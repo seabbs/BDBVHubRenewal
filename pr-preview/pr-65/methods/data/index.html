@@ -2110,10 +2110,13 @@ Province populations are the Institut National de la Statistique's 2019 figures 
 <h2 id="vintages">Vintages<a class="headerlink" href="#vintages" title="Permanent link">&para;</a></h2>
 <p>Each hub release is a vintage, labelled by its <code>as_of</code> date and of kind <code>real</code> or <code>simulated</code>.
 From the 2026-11-01 release on, <code>as_of</code> is the extraction date, a day after the last reported case.
-Earlier releases were labelled by the last reported case (<a href="https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/90">hub issue 90</a>).
+The hub states that earlier releases were labelled by the last reported case (<a href="https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/90">hub issue 90</a>).
 We keep each release's published label and map a rewritten label back to it.
-A release's data cut-off is its last report day.
-For a real release it is the label up to 2026-10-24 and the label less a day from 2026-11-01 on.
+A release's data cut-off is its last report day, as its data prove it.
+A case with onset on day <span class="arithmatex">\(t\)</span> was reported on or after <span class="arithmatex">\(t\)</span>, and a delay row with onset week ending <span class="arithmatex">\(W\)</span> and delay <span class="arithmatex">\(d\)</span> was reported on or after <span class="arithmatex">\(W - 6 + d\)</span>.
+The cut-off of a real release is the latest of these days over its daily onsets and delay rows.
+This gives 2026-10-08 for the release labelled 2026-10-09 and 2026-10-16 for the release labelled 2026-10-17, so the data do not bear out the hub's description of those labels.
+Between releases 66 to 83 cases with a known onset were added per day, so a day with no report is unlikely, and a cut-off on the label would add a day with no reports to each of these releases.
 A simulated release states its cut-off.
 The models, the scoring and the zone stage all use this cut-off.
 Recent weeks are revised in later releases, so each forecast is made from one vintage and scored on the counts later releases report.</p>
