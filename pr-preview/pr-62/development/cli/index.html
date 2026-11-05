@@ -2090,7 +2090,7 @@ It keeps the current key's file and the newest good fit of older code for each m
 A fit that fails is stored as failed, and is fitted again only when its inputs change or a dispatch sets <code>retry_failed</code>.
 On a pull request the workflow only lists the fits the change needs.
 Only <code>main</code> writes to <code>fit-store</code>.
-To test a branch, dispatch the workflow on it with <code>store_branch</code> set to a scratch branch, and <code>models</code> to limit it.
+To test a branch, dispatch the workflow on it with <code>store_branch</code> set to a name starting <code>fit-store-scratch</code>, and <code>models</code> to limit it. Any other <code>store_branch</code> stops the run.
 When fits are stored, the workflow rebuilds the docs.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>task<span class="w"> </span>fit-store-plan<span class="w">  </span><span class="c1"># the fits the store lacks for this code and data</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>task<span class="w"> </span>fit-store<span class="w">       </span><span class="c1"># load the stored fits into results/</span>
