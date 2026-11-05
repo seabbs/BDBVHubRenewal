@@ -215,6 +215,7 @@ module = [
   "numpyro.*",
   "pyrenew",
   "pyrenew.*",
+  "huggingface_hub",
   "torch",
   "toto.*",
 ]
