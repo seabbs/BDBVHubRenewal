@@ -526,8 +526,8 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         MetapopulationInfections,
         name="latent",
         gen_int_rv=DeterministicPMF("gen_int", generation_interval()),
-        # The seed is the expected confirmed infections per day at the
-        # start, turned into infections per resident.
+        # The seed is the infections per day that will be confirmed, on
+        # the first data day, turned into infections per resident.
         I0_rv=TransformedVariable(
             "I0",
             DistributionalVariable(
