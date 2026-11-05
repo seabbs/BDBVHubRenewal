@@ -253,9 +253,7 @@ def test_near_constant_when_innovation_sd_is_small():
 
 def test_constant_process_fixes_the_delay_over_onset_time():
     weekly = WeeklyTemporalProcess(ConstantProcess(), start_dow=6)
-    pmf = seeded(
-        lambda: _hazard("d", weekly)(n_timepoints=70, first_day_dow=6)
-    )
+    pmf = seeded(lambda: _hazard("d", weekly)(n_timepoints=70, first_day_dow=6))
     np.testing.assert_array_equal(pmf, jnp.broadcast_to(pmf[0], pmf.shape))
 
 

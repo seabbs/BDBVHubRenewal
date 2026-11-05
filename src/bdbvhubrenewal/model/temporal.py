@@ -1,6 +1,9 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""A non-centred random walk or AR(1) with separate fit and forecast steps,
-and a constant process that stands in for one."""
+"""Temporal processes: a non-centred walk and a constant stand-in.
+
+`NonCentredRandomWalk` is a random walk or AR(1) with separate fit and
+forecast steps. `ConstantProcess` holds a process at its starting value.
+"""
 
 from __future__ import annotations
 
