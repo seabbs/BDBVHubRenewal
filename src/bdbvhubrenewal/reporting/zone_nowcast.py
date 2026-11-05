@@ -198,6 +198,7 @@ def place_chart_data(
     counts: pd.DataFrame,
     names: Mapping[str, str],
     colours: Mapping[str, tuple[str, str]],
+    complete_after_weeks: int,
 ) -> dict[str, object]:
     """Return the data `docs/javascripts/nowcastchart.js` draws.
 
@@ -215,11 +216,14 @@ def place_chart_data(
         Place names by id. Zones not named show their code.
     colours : mapping of str to (str, str)
         Every model we fit, in order, to its light and dark colour.
+    complete_after_weeks : int
+        Weeks before the release after which a week is complete.
 
     Returns
     -------
     dict
-        `release`, `reference_date`, `models` (name, light and dark
+        `release`, `reference_date`, `complete_through` (the last week
+        end that is complete), `models` (name, light and dark
         colour, shown at first, and whether it has samples at the
         release), `places` (id, name, `scale` and, for a zone, its
         `province`), each scale by recent cases, most first, and per place
@@ -244,9 +248,12 @@ def place_chart_data(
     def _num(v: float) -> float:
         return float(np.round(v, 3))
 
+    release = str(samples["vintage"].iloc[0])
+    cut = pd.Timestamp(release) - pd.Timedelta(weeks=complete_after_weeks)
     return {
-        "release": str(samples["vintage"].iloc[0]),
+        "release": release,
         "reference_date": str(samples["reference_date"].iloc[0]),
+        "complete_through": cut.date().isoformat(),
         "models": [
             {
                 "name": m,

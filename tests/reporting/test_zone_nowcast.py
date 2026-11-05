@@ -111,7 +111,7 @@ def _all_scales() -> tuple[pd.DataFrame, pd.DataFrame]:
 
 def test_place_chart_data_orders_scales_then_cases() -> None:
     samples, counts = _all_scales()
-    data = place_chart_data(samples, counts, NAMES, COLOURS)
+    data = place_chart_data(samples, counts, NAMES, COLOURS, 2)
     json.dumps(data)
     places = [(p["id"], p["scale"]) for p in data["places"]]
     assert places == [
@@ -124,6 +124,7 @@ def test_place_chart_data_orders_scales_then_cases() -> None:
     assert data["places"][1]["name"] == "Nord Kivu"
     assert data["places"][3]["province"] == "CD-NK"
     assert data["data"]["CD-IT-01"][1] == ["2026-10-17", 2]
+    assert data["complete_through"] == "2026-10-18"
     assert len(data["q"]["CD"]) == 3
     # All 20 draws are kept (under 50), each over the three weeks.
     traj = data["traj"]["CD-NK-02"]
@@ -133,7 +134,7 @@ def test_place_chart_data_orders_scales_then_cases() -> None:
 
 def test_place_chart_data_marks_models_without_samples() -> None:
     samples, counts = _all_scales()
-    data = place_chart_data(samples, counts, NAMES, COLOURS)
+    data = place_chart_data(samples, counts, NAMES, COLOURS, 2)
     fans = {m["name"]: m["fan"] for m in data["models"]}
     assert fans == {"randomwalk": False, ZONE_MODEL: True, "renewalbvd": False}
     assert data["models"][2]["dark"] == "#cccccc"
