@@ -68,9 +68,8 @@
       var old = holder.querySelector("input[type=search]");
       var query = old ? old.value : "";
       holder.textContent = "";
-      note.textContent = "Recent is the mean of the weeks ending " + last.join(" and ") +
-        " as reported at the " + d.release + " release. The ratio is log((median + 1) / (recent + 1)) " +
-        "for the week chosen: 0 is no change, 0.69 doubling and -0.69 halving.";
+      note.textContent = "Recent weeks: " + last.join(" and ") + ", as reported at the " +
+        d.release + " release.";
       var block = h("div", { class: "tablefilter zonereview-table", "data-filters": "Scale,Province" }, holder);
       var table = h("table", {}, block);
       var head = h("tr", {}, h("thead", {}, table));
