@@ -105,6 +105,7 @@ from bdbvhubrenewal.reporting.scorechart import (
     write_score_chart,
 )
 from bdbvhubrenewal.reporting.scoresummary import summary_html, summary_rows
+from bdbvhubrenewal.reporting.store_note import write_store_note
 from bdbvhubrenewal.reporting.tables import filter_table
 from bdbvhubrenewal.reporting.zone_nowcast import (
     ZONE_MODEL,
@@ -172,6 +173,7 @@ def make_report(
     real = target.loc[target["kind"] == "real"]
     latest = real["vintage"].max()
     latest_delays = delays.loc[delays["vintage"] == delays["vintage"].max()]
+    write_store_note(res, gen)
 
     # Data page.
     save_light_dark(

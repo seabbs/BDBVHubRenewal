@@ -537,8 +537,8 @@ def run_forecasts(
 def merge_by_model(path: Path | str, new: pd.DataFrame) -> pd.DataFrame:
     """Merge a run's rows into a results file, keeping other models' rows.
 
-    The fitted variants are slow, so they are run apart from the others,
-    for example on a bigger machine. A run replaces the rows of the
+    The fitted variants are slow, so their rows come from the fit store
+    (`bdbvhubrenewal.evaluation.store`). A run replaces the rows of the
     models it ran and keeps the rest, so a run of no model keeps them all.
 
     Parameters
