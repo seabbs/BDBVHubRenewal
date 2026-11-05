@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.delays import hub_delay_pmf
-from bdbvhubrenewal.data.releases import last_report
+from bdbvhubrenewal.data.releases import release_cutoff
 
 from .model import (
     MAIN,
@@ -309,13 +309,13 @@ def vintage_from_tables(
     The active set is the provinces in `locations` with any case in this
     vintage (every province if `config.active == "all"`). The week grid
     starts one week before national weekly onsets first reach
-    `START_COUNT` and ends with the week holding the vintage's last report
-    day (`data.releases.last_report`), which is also the cut-off.
+    `START_COUNT` and ends with the week holding the vintage's cut-off,
+    its last report day (`data.releases.release_cutoff`).
 
     Parameters
     ----------
     target : pandas.DataFrame
-        Rows as in `bdbvhubrenewal.data.tidy_target`.
+        Rows as in `bdbvhubrenewal.data.load_target`, with `cutoff`.
     delays : pandas.DataFrame or None
         Delay rows (`location`, `onset_week`, `delay`) at this vintage.
     vintage : str
@@ -365,7 +365,7 @@ def vintage_from_tables(
     big = int(np.argmax(counts_by_week >= threshold))
     first = _saturday(str(national.index[max(0, big - 1)]))
     start = first - dt.timedelta(days=6)
-    cutoff = (last_report(vintage, str(rows["kind"].iloc[0])) - start).days
+    cutoff = (release_cutoff(target, vintage) - start).days
     n_weeks = cutoff // 7 + 1
     weeks = [
         (first + dt.timedelta(weeks=i)).isoformat() for i in range(n_weeks)

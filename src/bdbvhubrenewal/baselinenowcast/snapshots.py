@@ -14,8 +14,8 @@ Axes.
 ``counts`` is ``(n_loc, n_release, n_day)``, the count of onset day t
 in release r.
 ``observed`` is ``(n_release, n_day)``, True where day t has data in
-release r, and ``cut[r]`` is the index of the latest onset day of
-release r.
+release r, and ``cut[r]`` is the index of the cut-off of release r,
+its last report day (``bdbvhubrenewal.data.releases.release_cutoff``).
 The age of day t in release r is ``cut[r] - t``.
 Pair p is releases ``(pairs[p], pairs[p] + 1)`` with step
 ``cut[r + 1] - cut[r]``.
