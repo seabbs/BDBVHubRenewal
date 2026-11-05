@@ -13,7 +13,7 @@ name: Fit store
 
 on:
   push:
-    branches: [main]
+    branches: [main, fit-store-ci]
     paths:
       - 'src/bdbvhubrenewal/baselinenowcast/**'
       - 'src/bdbvhubrenewal/data/**'
