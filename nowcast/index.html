@@ -2010,7 +2010,13 @@
 
 <h1 id="nowcast">Nowcast<a class="headerlink" href="#nowcast" title="Permanent link">&para;</a></h1>
 <p class="page-subtitle">The current nowcast and forecast from the latest vintage.</p>
-<p>Latest vintage <strong>2026-11-01</strong>, models <code>randomwalk</code>, <code>pprandomwalknowcast</code>, <code>randomwalknowcast</code>, <code>renewal</code>, <code>renewalbvd</code>, <code>renewalsp</code>.</p>
+<p>Fitted models' results come from the <a href="https://github.com/seabbs/BDBVHubRenewal/tree/fit-store">fit store</a>, fitted at <a href="https://github.com/seabbs/BDBVHubRenewal/commit/66f983b6d88316978b5062ab460407d089db290c"><code>66f983b</code></a>.</p>
+<div class="admonition note">
+<p class="admonition-title">Fits still running</p>
+<p>Fits for this build's code (<a href="https://github.com/seabbs/BDBVHubRenewal/commit/bc5c7d1a19e012cdbc4cb432c44e05f44586e2e9"><code>bc5c7d1</code></a>) are still <a href="https://github.com/seabbs/BDBVHubRenewal/actions/workflows/fit-store.yml">running</a>.
+Not shown until fitted: <code>renewal</code> at 2026-08-18 and 2026-10-09 and 2026-10-17 and 2026-10-24 and 2026-11-01; <code>renewalbvd</code> at 2026-08-18 and 2026-10-09 and 2026-10-17 and 2026-10-24 and 2026-11-01; <code>renewalsp</code> at 2026-08-18 and 2026-10-09 and 2026-10-17 and 2026-10-24 and 2026-11-01.</p>
+</div>
+<p>Latest vintage <strong>2026-11-01</strong>, models <code>randomwalk</code>, <code>pprandomwalknowcast</code>, <code>randomwalknowcast</code>.</p>
 <p><strong>Latest submission:</strong> <a href="../submission/rounds/2026-11-07/">round 2026-11-07</a>: seabbs-renewal submitted (BVDOutbreakSize-informed renewal model), seabbs-rwnowcast submitted (random walk on a nowcast). <a href="../submission/rounds/">Submission log</a>.</p>
 <h2 id="by-place">By place<a class="headerlink" href="#by-place" title="Permanent link">&para;</a></h2>
 <p>Each model's nowcast and forecast at the 2026-11-01 release, for the country, the provinces and the zones with cases in the 12 weeks before the reference date (<a href="../methods/evaluation/#health-zones">Health zones</a>).
@@ -2024,7 +2030,7 @@ The table summarises each model's scores at the place over the rounds chosen.</p
 Each model is shown from its latest origin (<a href="../methods/evaluation/#reading-the-figures">reading the figures</a>).</p>
 <details class="note">
 <summary>Nowcast by model and province</summary>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:6"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><input id="__tabbed_1_5" name="__tabbed_1" type="radio" /><input id="__tabbed_1_6" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">randomwalk</label><label for="__tabbed_1_2">pprandomwalknowcast</label><label for="__tabbed_1_3">randomwalknowcast</label><label for="__tabbed_1_4">renewal</label><label for="__tabbed_1_5">renewalbvd</label><label for="__tabbed_1_6">renewalsp</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">randomwalk</label><label for="__tabbed_1_2">pprandomwalknowcast</label><label for="__tabbed_1_3">randomwalknowcast</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">National and main provinces</label><label for="__tabbed_2_2">Other provinces</label></div>
@@ -2041,7 +2047,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 </div>
 </div>
 <div class="tabbed-block">
-<p>From the 2026-10-24 vintage.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">National and main provinces</label><label for="__tabbed_3_2">Other provinces</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -2069,51 +2074,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 </div>
 </div>
 </div>
-<div class="tabbed-block">
-<p>From the 2026-10-24 vintage.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="5:2"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1">National and main provinces</label><label for="__tabbed_5_2">Other provinces</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<p><img alt="Nowcast from renewal: national and main provinces." src="../figures/nowcast-only-renewal-main.svg#only-light" />
-<img alt="Nowcast from renewal: national and main provinces." src="../figures/nowcast-only-renewal-main-dark.svg#only-dark" /></p>
-</div>
-<div class="tabbed-block">
-<p><img alt="Nowcast from renewal: other provinces." src="../figures/nowcast-only-renewal-other.svg#only-light" />
-<img alt="Nowcast from renewal: other provinces." src="../figures/nowcast-only-renewal-other-dark.svg#only-dark" /></p>
-</div>
-</div>
-</div>
-</div>
-<div class="tabbed-block">
-<p>From the 2026-10-24 vintage.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="6:2"><input checked="checked" id="__tabbed_6_1" name="__tabbed_6" type="radio" /><input id="__tabbed_6_2" name="__tabbed_6" type="radio" /><div class="tabbed-labels"><label for="__tabbed_6_1">National and main provinces</label><label for="__tabbed_6_2">Other provinces</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<p><img alt="Nowcast from renewalbvd: national and main provinces." src="../figures/nowcast-only-renewalbvd-main.svg#only-light" />
-<img alt="Nowcast from renewalbvd: national and main provinces." src="../figures/nowcast-only-renewalbvd-main-dark.svg#only-dark" /></p>
-</div>
-<div class="tabbed-block">
-<p><img alt="Nowcast from renewalbvd: other provinces." src="../figures/nowcast-only-renewalbvd-other.svg#only-light" />
-<img alt="Nowcast from renewalbvd: other provinces." src="../figures/nowcast-only-renewalbvd-other-dark.svg#only-dark" /></p>
-</div>
-</div>
-</div>
-</div>
-<div class="tabbed-block">
-<p>From the 2026-10-24 vintage.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="7:2"><input checked="checked" id="__tabbed_7_1" name="__tabbed_7" type="radio" /><input id="__tabbed_7_2" name="__tabbed_7" type="radio" /><div class="tabbed-labels"><label for="__tabbed_7_1">National and main provinces</label><label for="__tabbed_7_2">Other provinces</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<p><img alt="Nowcast from renewalsp: national and main provinces." src="../figures/nowcast-only-renewalsp-main.svg#only-light" />
-<img alt="Nowcast from renewalsp: national and main provinces." src="../figures/nowcast-only-renewalsp-main-dark.svg#only-dark" /></p>
-</div>
-<div class="tabbed-block">
-<p><img alt="Nowcast from renewalsp: other provinces." src="../figures/nowcast-only-renewalsp-other.svg#only-light" />
-<img alt="Nowcast from renewalsp: other provinces." src="../figures/nowcast-only-renewalsp-other-dark.svg#only-dark" /></p>
-</div>
-</div>
-</div>
-</div>
 </div>
 </div>
 </details>
@@ -2121,10 +2081,10 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <p>The same nowcast with the reference week and the weeks after it.</p>
 <details class="note">
 <summary>Nowcast and forecast by model and province</summary>
-<div class="tabbed-set tabbed-alternate" data-tabs="8:6"><input checked="checked" id="__tabbed_8_1" name="__tabbed_8" type="radio" /><input id="__tabbed_8_2" name="__tabbed_8" type="radio" /><input id="__tabbed_8_3" name="__tabbed_8" type="radio" /><input id="__tabbed_8_4" name="__tabbed_8" type="radio" /><input id="__tabbed_8_5" name="__tabbed_8" type="radio" /><input id="__tabbed_8_6" name="__tabbed_8" type="radio" /><div class="tabbed-labels"><label for="__tabbed_8_1">randomwalk</label><label for="__tabbed_8_2">pprandomwalknowcast</label><label for="__tabbed_8_3">randomwalknowcast</label><label for="__tabbed_8_4">renewal</label><label for="__tabbed_8_5">renewalbvd</label><label for="__tabbed_8_6">renewalsp</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="5:3"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><input id="__tabbed_5_3" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1">randomwalk</label><label for="__tabbed_5_2">pprandomwalknowcast</label><label for="__tabbed_5_3">randomwalknowcast</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="tabbed-set tabbed-alternate" data-tabs="9:2"><input checked="checked" id="__tabbed_9_1" name="__tabbed_9" type="radio" /><input id="__tabbed_9_2" name="__tabbed_9" type="radio" /><div class="tabbed-labels"><label for="__tabbed_9_1">National and main provinces</label><label for="__tabbed_9_2">Other provinces</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="6:2"><input checked="checked" id="__tabbed_6_1" name="__tabbed_6" type="radio" /><input id="__tabbed_6_2" name="__tabbed_6" type="radio" /><div class="tabbed-labels"><label for="__tabbed_6_1">National and main provinces</label><label for="__tabbed_6_2">Other provinces</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <p><img alt="Nowcast and forecast from randomwalk: national and main provinces." src="../figures/nowcast-randomwalk-main.svg#only-light" />
@@ -2138,8 +2098,7 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 </div>
 </div>
 <div class="tabbed-block">
-<p>From the 2026-10-24 vintage.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="10:2"><input checked="checked" id="__tabbed_10_1" name="__tabbed_10" type="radio" /><input id="__tabbed_10_2" name="__tabbed_10" type="radio" /><div class="tabbed-labels"><label for="__tabbed_10_1">National and main provinces</label><label for="__tabbed_10_2">Other provinces</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="7:2"><input checked="checked" id="__tabbed_7_1" name="__tabbed_7" type="radio" /><input id="__tabbed_7_2" name="__tabbed_7" type="radio" /><div class="tabbed-labels"><label for="__tabbed_7_1">National and main provinces</label><label for="__tabbed_7_2">Other provinces</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <p><img alt="Nowcast and forecast from pprandomwalknowcast: national and main provinces." src="../figures/nowcast-pprandomwalknowcast-main.svg#only-light" />
@@ -2153,7 +2112,7 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 </div>
 </div>
 <div class="tabbed-block">
-<div class="tabbed-set tabbed-alternate" data-tabs="11:2"><input checked="checked" id="__tabbed_11_1" name="__tabbed_11" type="radio" /><input id="__tabbed_11_2" name="__tabbed_11" type="radio" /><div class="tabbed-labels"><label for="__tabbed_11_1">National and main provinces</label><label for="__tabbed_11_2">Other provinces</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="8:2"><input checked="checked" id="__tabbed_8_1" name="__tabbed_8" type="radio" /><input id="__tabbed_8_2" name="__tabbed_8" type="radio" /><div class="tabbed-labels"><label for="__tabbed_8_1">National and main provinces</label><label for="__tabbed_8_2">Other provinces</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <p><img alt="Nowcast and forecast from randomwalknowcast: national and main provinces." src="../figures/nowcast-randomwalknowcast-main.svg#only-light" />
@@ -2166,51 +2125,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 </div>
 </div>
 </div>
-<div class="tabbed-block">
-<p>From the 2026-10-24 vintage.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="12:2"><input checked="checked" id="__tabbed_12_1" name="__tabbed_12" type="radio" /><input id="__tabbed_12_2" name="__tabbed_12" type="radio" /><div class="tabbed-labels"><label for="__tabbed_12_1">National and main provinces</label><label for="__tabbed_12_2">Other provinces</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<p><img alt="Nowcast and forecast from renewal: national and main provinces." src="../figures/nowcast-renewal-main.svg#only-light" />
-<img alt="Nowcast and forecast from renewal: national and main provinces." src="../figures/nowcast-renewal-main-dark.svg#only-dark" /></p>
-</div>
-<div class="tabbed-block">
-<p><img alt="Nowcast and forecast from renewal: other provinces." src="../figures/nowcast-renewal-other.svg#only-light" />
-<img alt="Nowcast and forecast from renewal: other provinces." src="../figures/nowcast-renewal-other-dark.svg#only-dark" /></p>
-</div>
-</div>
-</div>
-</div>
-<div class="tabbed-block">
-<p>From the 2026-10-24 vintage.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="13:2"><input checked="checked" id="__tabbed_13_1" name="__tabbed_13" type="radio" /><input id="__tabbed_13_2" name="__tabbed_13" type="radio" /><div class="tabbed-labels"><label for="__tabbed_13_1">National and main provinces</label><label for="__tabbed_13_2">Other provinces</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<p><img alt="Nowcast and forecast from renewalbvd: national and main provinces." src="../figures/nowcast-renewalbvd-main.svg#only-light" />
-<img alt="Nowcast and forecast from renewalbvd: national and main provinces." src="../figures/nowcast-renewalbvd-main-dark.svg#only-dark" /></p>
-</div>
-<div class="tabbed-block">
-<p><img alt="Nowcast and forecast from renewalbvd: other provinces." src="../figures/nowcast-renewalbvd-other.svg#only-light" />
-<img alt="Nowcast and forecast from renewalbvd: other provinces." src="../figures/nowcast-renewalbvd-other-dark.svg#only-dark" /></p>
-</div>
-</div>
-</div>
-</div>
-<div class="tabbed-block">
-<p>From the 2026-10-24 vintage.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="14:2"><input checked="checked" id="__tabbed_14_1" name="__tabbed_14" type="radio" /><input id="__tabbed_14_2" name="__tabbed_14" type="radio" /><div class="tabbed-labels"><label for="__tabbed_14_1">National and main provinces</label><label for="__tabbed_14_2">Other provinces</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<p><img alt="Nowcast and forecast from renewalsp: national and main provinces." src="../figures/nowcast-renewalsp-main.svg#only-light" />
-<img alt="Nowcast and forecast from renewalsp: national and main provinces." src="../figures/nowcast-renewalsp-main-dark.svg#only-dark" /></p>
-</div>
-<div class="tabbed-block">
-<p><img alt="Nowcast and forecast from renewalsp: other provinces." src="../figures/nowcast-renewalsp-other.svg#only-light" />
-<img alt="Nowcast and forecast from renewalsp: other provinces." src="../figures/nowcast-renewalsp-other-dark.svg#only-dark" /></p>
-</div>
-</div>
-</div>
-</div>
 </div>
 </div>
 </details>
@@ -2219,7 +2133,7 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <details class="note">
 <summary>Zone nowcasts by province</summary>
 <p><code>randomwalknowcast</code> by province.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="15:7"><input checked="checked" id="__tabbed_15_1" name="__tabbed_15" type="radio" /><input id="__tabbed_15_2" name="__tabbed_15" type="radio" /><input id="__tabbed_15_3" name="__tabbed_15" type="radio" /><input id="__tabbed_15_4" name="__tabbed_15" type="radio" /><input id="__tabbed_15_5" name="__tabbed_15" type="radio" /><input id="__tabbed_15_6" name="__tabbed_15" type="radio" /><input id="__tabbed_15_7" name="__tabbed_15" type="radio" /><div class="tabbed-labels"><label for="__tabbed_15_1">Ituri</label><label for="__tabbed_15_2">Nord Kivu</label><label for="__tabbed_15_3">Haut Uele</label><label for="__tabbed_15_4">Tshopo</label><label for="__tabbed_15_5">Bas Uele</label><label for="__tabbed_15_6">Nord Ubangi</label><label for="__tabbed_15_7">Sud Ubangi</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="9:7"><input checked="checked" id="__tabbed_9_1" name="__tabbed_9" type="radio" /><input id="__tabbed_9_2" name="__tabbed_9" type="radio" /><input id="__tabbed_9_3" name="__tabbed_9" type="radio" /><input id="__tabbed_9_4" name="__tabbed_9" type="radio" /><input id="__tabbed_9_5" name="__tabbed_9" type="radio" /><input id="__tabbed_9_6" name="__tabbed_9" type="radio" /><input id="__tabbed_9_7" name="__tabbed_9" type="radio" /><div class="tabbed-labels"><label for="__tabbed_9_1">Ituri</label><label for="__tabbed_9_2">Nord Kivu</label><label for="__tabbed_9_3">Haut Uele</label><label for="__tabbed_9_4">Tshopo</label><label for="__tabbed_9_5">Bas Uele</label><label for="__tabbed_9_6">Nord Ubangi</label><label for="__tabbed_9_7">Sud Ubangi</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <p><img alt="Zone nowcasts in Ituri at 2026-11-01." src="../figures/zone-nowcast-cd-it.svg#only-light" />

@@ -2032,6 +2032,12 @@
 
 <h1 id="comparison-with-hub-forecasts">Comparison with hub forecasts<a class="headerlink" href="#comparison-with-hub-forecasts" title="Permanent link">&para;</a></h1>
 <p class="page-subtitle">Our models and the forecasts submitted to the hub's weekly round, scored on the same data.</p>
+<p>Fitted models' results come from the <a href="https://github.com/seabbs/BDBVHubRenewal/tree/fit-store">fit store</a>, fitted at <a href="https://github.com/seabbs/BDBVHubRenewal/commit/66f983b6d88316978b5062ab460407d089db290c"><code>66f983b</code></a>.</p>
+<div class="admonition note">
+<p class="admonition-title">Fits still running</p>
+<p>Fits for this build's code (<a href="https://github.com/seabbs/BDBVHubRenewal/commit/bc5c7d1a19e012cdbc4cb432c44e05f44586e2e9"><code>bc5c7d1</code></a>) are still <a href="https://github.com/seabbs/BDBVHubRenewal/actions/workflows/fit-store.yml">running</a>.
+Not shown until fitted: <code>renewal</code> at 2026-08-18 and 2026-10-09 and 2026-10-17 and 2026-10-24 and 2026-11-01; <code>renewalbvd</code> at 2026-08-18 and 2026-10-09 and 2026-10-17 and 2026-10-24 and 2026-11-01; <code>renewalsp</code> at 2026-08-18 and 2026-10-09 and 2026-10-17 and 2026-10-24 and 2026-11-01.</p>
+</div>
 <p>Scores on the weeks the latest release reports in full, from the release serving each round (<a href="../methods/evaluation/#comparison-with-hub-forecasts">how scoring works</a>).
 A series marked submitted is the file we sent to a round, and one marked main build is the current main branch's forecast for every round, so a round we did not submit to shows only the main build.</p>
 <h2 id="overall">Overall<a class="headerlink" href="#overall" title="Permanent link">&para;</a></h2>
@@ -2165,7 +2171,7 @@ A series marked submitted is the file we sent to a round, and one marked main bu
 <td style="text-align: right;">0.76</td>
 <td style="text-align: right;">0.83</td>
 <td style="text-align: right;">0.83</td>
-<td style="text-align: right;">0.3</td>
+<td style="text-align: right;">0.31</td>
 </tr>
 <tr>
 <td style="text-align: left;">provinces</td>
@@ -2190,42 +2196,6 @@ A series marked submitted is the file we sent to a round, and one marked main bu
 <td style="text-align: right;">0.86</td>
 <td style="text-align: right;">0.95</td>
 <td style="text-align: right;">-0.03</td>
-</tr>
-<tr>
-<td style="text-align: left;">provinces</td>
-<td style="text-align: left;">renewal (main build)</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">0.6</td>
-<td style="text-align: right;">0.97</td>
-<td style="text-align: right;">0.62</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.83</td>
-<td style="text-align: right;">0.83</td>
-<td style="text-align: right;">0.34</td>
-</tr>
-<tr>
-<td style="text-align: left;">provinces</td>
-<td style="text-align: left;">renewalbvd (main build)</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">0.6</td>
-<td style="text-align: right;">0.97</td>
-<td style="text-align: right;">0.62</td>
-<td style="text-align: right;">0.97</td>
-<td style="text-align: right;">0.83</td>
-<td style="text-align: right;">0.83</td>
-<td style="text-align: right;">0.33</td>
-</tr>
-<tr>
-<td style="text-align: left;">provinces</td>
-<td style="text-align: left;">renewalsp (main build)</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">1.26</td>
-<td style="text-align: right;">0.97</td>
-<td style="text-align: right;">1.31</td>
-<td style="text-align: right;">8.07</td>
-<td style="text-align: right;">0.33</td>
-<td style="text-align: right;">0.5</td>
-<td style="text-align: right;">-0.22</td>
 </tr>
 <tr>
 <td style="text-align: left;">zones</td>
@@ -2408,34 +2378,6 @@ randomwalk and our other main builds, such as the 2026-11-07 renewal and renewal
 <tr>
 <td style="text-align: left;">2026-10-31</td>
 <td style="text-align: left;">Complete weeks</td>
-<td style="text-align: left;">renewal (main build)</td>
-<td style="text-align: left;">real</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">0.6</td>
-<td style="text-align: right;">0.05</td>
-<td style="text-align: right;">0.62</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.83</td>
-<td style="text-align: right;">0.83</td>
-<td style="text-align: right;">0.34</td>
-</tr>
-<tr>
-<td style="text-align: left;">2026-10-31</td>
-<td style="text-align: left;">Complete weeks</td>
-<td style="text-align: left;">renewalbvd (main build)</td>
-<td style="text-align: left;">real</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">0.6</td>
-<td style="text-align: right;">0.05</td>
-<td style="text-align: right;">0.62</td>
-<td style="text-align: right;">0.97</td>
-<td style="text-align: right;">0.83</td>
-<td style="text-align: right;">0.83</td>
-<td style="text-align: right;">0.33</td>
-</tr>
-<tr>
-<td style="text-align: left;">2026-10-31</td>
-<td style="text-align: left;">Complete weeks</td>
 <td style="text-align: left;">pprandomwalknowcast (main build)</td>
 <td style="text-align: left;">real</td>
 <td style="text-align: right;">6</td>
@@ -2445,21 +2387,7 @@ randomwalk and our other main builds, such as the 2026-11-07 renewal and renewal
 <td style="text-align: right;">0.76</td>
 <td style="text-align: right;">0.83</td>
 <td style="text-align: right;">0.83</td>
-<td style="text-align: right;">0.3</td>
-</tr>
-<tr>
-<td style="text-align: left;">2026-10-31</td>
-<td style="text-align: left;">Complete weeks</td>
-<td style="text-align: left;">renewalsp (main build)</td>
-<td style="text-align: left;">real</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">1.26</td>
-<td style="text-align: right;">0.4</td>
-<td style="text-align: right;">1.31</td>
-<td style="text-align: right;">8.07</td>
-<td style="text-align: right;">0.33</td>
-<td style="text-align: right;">0.5</td>
-<td style="text-align: right;">-0.22</td>
+<td style="text-align: right;">0.31</td>
 </tr>
 <tr>
 <td style="text-align: left;">2026-10-31</td>
@@ -2520,57 +2448,15 @@ randomwalk and our other main builds, such as the 2026-11-07 renewal and renewal
 <tr>
 <td style="text-align: left;">2026-10-31</td>
 <td style="text-align: left;">Reported by each later release</td>
-<td style="text-align: left;">renewalsp (main build)</td>
-<td style="text-align: left;">real</td>
-<td style="text-align: right;">45</td>
-<td style="text-align: right;">9.81</td>
-<td style="text-align: right;">0.09</td>
-<td style="text-align: right;">1.97</td>
-<td style="text-align: right;">0.84</td>
-<td style="text-align: right;">0.67</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">-0.23</td>
-</tr>
-<tr>
-<td style="text-align: left;">2026-10-31</td>
-<td style="text-align: left;">Reported by each later release</td>
-<td style="text-align: left;">renewalbvd (main build)</td>
-<td style="text-align: left;">real</td>
-<td style="text-align: right;">45</td>
-<td style="text-align: right;">10.4</td>
-<td style="text-align: right;">0.08</td>
-<td style="text-align: right;">2.09</td>
-<td style="text-align: right;">0.77</td>
-<td style="text-align: right;">0.64</td>
-<td style="text-align: right;">0.71</td>
-<td style="text-align: right;">-0.22</td>
-</tr>
-<tr>
-<td style="text-align: left;">2026-10-31</td>
-<td style="text-align: left;">Reported by each later release</td>
-<td style="text-align: left;">renewal (main build)</td>
-<td style="text-align: left;">real</td>
-<td style="text-align: right;">45</td>
-<td style="text-align: right;">10.67</td>
-<td style="text-align: right;">0.08</td>
-<td style="text-align: right;">2.14</td>
-<td style="text-align: right;">0.77</td>
-<td style="text-align: right;">0.64</td>
-<td style="text-align: right;">0.71</td>
-<td style="text-align: right;">-0.22</td>
-</tr>
-<tr>
-<td style="text-align: left;">2026-10-31</td>
-<td style="text-align: left;">Reported by each later release</td>
 <td style="text-align: left;">pprandomwalknowcast (main build)</td>
 <td style="text-align: left;">real</td>
 <td style="text-align: right;">45</td>
-<td style="text-align: right;">10.95</td>
+<td style="text-align: right;">10.89</td>
 <td style="text-align: right;">0.11</td>
-<td style="text-align: right;">2.2</td>
-<td style="text-align: right;">0.98</td>
+<td style="text-align: right;">2.18</td>
+<td style="text-align: right;">0.97</td>
 <td style="text-align: right;">0.64</td>
-<td style="text-align: right;">0.82</td>
+<td style="text-align: right;">0.8</td>
 <td style="text-align: right;">-0.25</td>
 </tr>
 <tr>
@@ -2635,6 +2521,13 @@ randomwalk and our other main builds, such as the 2026-11-07 renewal and renewal
 <td style="text-align: left;"><a href="https://github.com/InsightNet-US/BDBV-Modeling-Hub/blob/main/model-metadata/ACCIDDA-insightcast.yml">ACCIDDA-insightcast.yml</a></td>
 </tr>
 <tr>
+<td style="text-align: left;">BDBVHub-hub-models</td>
+<td style="text-align: left;">BDBVHub baseline model</td>
+<td style="text-align: left;"><code>BDBVHub-baseline</code></td>
+<td style="text-align: left;">CC-BY-4.0</td>
+<td style="text-align: left;"><a href="https://github.com/InsightNet-US/BDBV-Modeling-Hub/blob/main/model-metadata/BDBVHub-baseline.yml">BDBVHub-baseline.yml</a></td>
+</tr>
+<tr>
 <td style="text-align: left;">CEPH Lab at Indiana University</td>
 <td style="text-align: left;">Rtrend Bundibugyo (Ebola)</td>
 <td style="text-align: left;"><code>CEPH-Rtrend_BDBV</code></td>
@@ -2682,7 +2575,7 @@ randomwalk and our other main builds, such as the 2026-11-07 renewal and renewal
 <p>Model outputs are credited to these teams, as in their hub metadata.
 The hub data credit is:</p>
 <blockquote>
-<p>Surveillance data: Institut National de Santé Publique (INSP) and the Incident Management Support Team (IMST), Democratic Republic of the Congo. Processed by the Atlantic Coast Center for Infectious Disease Dynamics and Analytics (ACCIDDA) and the Kinshasa School of Public Health, University of Kinshasa, and distributed through the BDBV Modeling Hub, https://github.com/InsightNet-US/BDBV-Modeling-Hub, accessed 2026-11-04.</p>
+<p>Surveillance data: Institut National de Santé Publique (INSP) and the Incident Management Support Team (IMST), Democratic Republic of the Congo. Processed by the Atlantic Coast Center for Infectious Disease Dynamics and Analytics (ACCIDDA) and the Kinshasa School of Public Health, University of Kinshasa, and distributed through the BDBV Modeling Hub, https://github.com/InsightNet-US/BDBV-Modeling-Hub, accessed 2026-11-05.</p>
 </blockquote>
 
 

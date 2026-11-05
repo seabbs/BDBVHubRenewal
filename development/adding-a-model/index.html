@@ -1957,10 +1957,7 @@ The backtest adds the national total, the horizons and the vintage kind.</p>
 <p>A new renewal variant is one entry in <code>VARIANTS</code> in <a class="autorefs autorefs-internal" title="            bdbvhubrenewal.forecasters.renewal" href="../../reference/forecasters/#bdbvhubrenewal.forecasters.renewal"><code>forecasters.renewal</code></a>.
 It names a base <code>ModelConfig</code> and the fields it changes.
 Fitted variants are not run by the docs build or the smoke tests.
-Run them apart and commit what they write to <code>results/</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nv">BDBV_RENEWAL_SAMPLER</span><span class="o">=</span><span class="s1">'{"num_chains": 2, "num_warmup": 300, "num_samples": 300}'</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>task<span class="w"> </span>backtest<span class="w"> </span>--<span class="w"> </span>--models<span class="w"> </span>renewal
-</code></pre></div>
+The <a href="../cli/#fit-store">fit store</a> fits them once a variant is on <code>main</code>.</p>
 <p>A run with <code>--models</code> replaces only those models' rows, and <code>BDBV_RENEWAL_SAMPLER</code> sets the NUTS settings.</p>
 
 
