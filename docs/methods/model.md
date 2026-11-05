@@ -18,7 +18,7 @@ Every time-varying part is a weekly random walk or AR(1), so it stays near const
 ```mermaid
 flowchart TD
     SP["<b>renewalsp</b><br/>each province on its own<br/>Rt walk<br/>generation interval<br/>onsets and delay<br/>missing onsets<br/>three data streams"]
-    RN["<b>renewal</b><br/>provinces fitted together<br/>+ pooled log R walk<br/>+ sum-to-zero AR(1)<br/>province deviations<br/>+ importation<br/>+ share at risk<br/>+ shared delay<br/>+ shared ascertainment<br/>+ zeros in provinces<br/>with no cases"]
+    RN["<b>renewal</b><br/>provinces fitted together<br/>+ pooled log R walk<br/>+ sum-to-zero AR(1)<br/>province deviations<br/>+ importation<br/>+ share at risk<br/>+ delay pooled<br/>by province<br/>+ shared ascertainment<br/>+ zeros in provinces<br/>with no cases"]
     BV["<b>renewalbvd</b><br/>+ BVDOutbreakSize Rt,<br/>down-weighted (ζ = 0.5)"]
 
     SP -- "pool the provinces" --> RN
@@ -39,7 +39,7 @@ flowchart TD
     end
     ONS["Expected cases<br/>by onset day<br/>λ<sub>p</sub>(s) = α(s) N<sub>p</sub> (x<sub>p</sub> ∗ η)(s)"]
     INC["Incubation period η(u)<br/>log-normal, uncertain mean and SD,<br/>0 to 28 days"]
-    DEL["Onset-to-report delay<br/>f<sub>s</sub>(d)<br/>hazard shifted by γ(s),<br/>a weekly walk on onset day<br/><i>renewal: shared</i>"]
+    DEL["Onset-to-report delay<br/>f<sub>s</sub>(d)<br/>hazard shifted by γ(s),<br/>a weekly walk on onset day<br/><i>renewal: pooled by province</i>"]
     MISS["Share reported<br/>without onset π<sub>p</sub>(t)<br/>weekly walk"]
     subgraph OB["Data streams at vintage T"]
         KN["Known onsets<br/>onsets × delay to report<br/>× share with an onset<br/>× published by T"]
@@ -149,7 +149,8 @@ $b$ is a weekly random walk with start $\mathcal{N}(-2, 1)$ and step SD $\mathca
 ### Known onsets
 
 A case reported on day $t$ is in the vintage published at $T$ with probability $c(t) = F_\ell(T - t)$, with $F_\ell$ the cdf of the report-to-publication lag.
-The lag is uniform on 0 to 3 days.
+The lag is the gap between a case's report and its first appearance in a release.
+Its pmf on 0 to 7 days has a Dirichlet(1, ..., 1) prior and is learnt from consecutive releases (see Likelihood).
 Expected known onsets, right truncated by vintage, are
 
 $$
@@ -179,6 +180,13 @@ We refit both, so $F_T$ is the fit the hub used for release $T$.
 - Known-onset delays, by onset week and delay on 0 to 60 days, are Dirichlet-multinomial given each week's total.
   Their probabilities come from $\lambda$, $f$, $\pi$ and $c$, with $1/\sqrt{\psi} \sim \text{HalfNormal}(0.1)$ and $\psi$ capped at $10^4$.
   Delays below 0 count as 0 and delays above 60 as 60.
+- Each delay-file row (location, onset week and delay) of release $k + 1$ was already in release $k$ with probability
+  $$q = (1 - b_k) \frac{\sum_u F_\ell(T_k - t_u)}{\sum_u F_\ell(T_{k+1} - t_u)},$$
+  averaged over the onset days $u$ of the row's week, with $t_u$ the report day for onset $u$ and $T_k$ release $k$'s last report day.
+  $b_k \sim \text{Beta}(1, 19)$ is the share of rows that appear late whatever their age, such as onsets recorded later for cases first counted as imputed.
+  The kept rows of each cell are beta-binomial with mean $q$ and concentration $1/\phi^2$, $\phi \sim \mathcal{N}^+(0, 0.5^2)$.
+  Rows up to 60 days old at release $k$ enter.
+  This term conditions on the later release, so it informs $F_\ell$ only.
 
 ### Forecasts
 
@@ -195,10 +203,10 @@ The national trajectory is the sum of the provinces plus an unassigned component
 ## Partially pooled (`renewal`) { #partially-pooled }
 
 `renewal` fits every province with cases in one model, on the axis set by their summed onsets.
-The provinces share the trend $\log R(t)$, the deviation SD $\sigma_\delta$ and half-life $h$, the start spread $\sigma_v$, ascertainment $\alpha$, the delay $f_s$, the trend $b$ of the missing-onset share, the share at risk $\nu$ and the importation share $\varepsilon$.
+The provinces share the trend $\log R(t)$, the deviation SD $\sigma_\delta$ and half-life $h$, the start spread $\sigma_v$, ascertainment $\alpha$, the publication lag, the trend $b$ of the missing-onset share, the share at risk $\nu$ and the importation share $\varepsilon$.
 Each province has its own deviations $\delta_p$ and $\omega_p$ and its own seed.
 Provinces are linked by importation through $W$, and provinces with no cases by $\mu_q$.
-Known-onset delays are pooled over provinces.
+Each province has its own delay, pooled towards the national delay.
 Leaving a province out removes its known and imputed terms and its delays but keeps it in the latent process.
 
 ```mermaid
@@ -256,6 +264,19 @@ Provinces with cases in the first data week are seeded at the start.
 Later provinces start at $10^{-6}$ of that level and add $I_{0,p}$ to $y_p(t)$ each day for 7 days.
 These 7 days start 5 days before the province's first case week.
 That lead puts the most onsets of a week of seeded infections in the first case week (67%, with 9% before it) at the prior mean incubation period.
+
+### Province delays
+
+Each province's delay hazard adds a sum-to-zero offset $u_p$ and a sum-to-zero weekly walk $\zeta_p(s)$ to the national shift $\gamma(s)$, on the basis $Q$:
+
+$$
+\operatorname{logit} h_{p,s}(d) = \beta(d) + \gamma(s) + u_p + \zeta_p(s).
+$$
+
+The offsets have spread $\mathcal{N}^+(0, 0.5^2)$ and the walks start at 0 with step SD $\mathcal{N}^+(0, 0.1^2)$, both sampled non-centred.
+So each province's delay follows the national one over time, with its own level and its own drift, each shrunk towards the national delay by a learnt spread.
+Known-onset delays are scored by province.
+Health zones take their province's delay, since the delay files list provinces only.
 
 ### Missing-onset deviations
 
