@@ -215,18 +215,19 @@ def test_a_silent_place_waits_for_its_first_introduction() -> None:
 
     from bdbvhubrenewal.forecasters.randomwalk import _walks
 
+    # Silent places keep their own spread of 0, whatever the pooled one.
     origin = SimpleNamespace(
         silent=np.array([False, True, True]),
         intro=np.array([0.5, 0.0, 0.3]),
-        sigma=np.array([0.2, 0.2, 0.0]),
+        sigma=np.array([0.0, 0.2, 0.5]),
     )
     x0 = np.full((3, 4000), 20.0)
     lam, y = _walks(jax.random.key(1), x0, origin, 4)
     # A place with cases walks from its start as before.
-    assert lam[0].mean() > 15
+    assert lam[0].mean() == pytest.approx(20.0)
     # No introduction can come with a probability of 0.
     assert (y[1] == 0).all()
-    # With sigma 0 the rate is 1 from the first introduction, so the
+    # The rate is 1 from the first introduction, so the
     # share of samples started by week h is 1 - 0.7^(h + 1).
     started = (lam[2] > 0).mean(axis=0)
     np.testing.assert_allclose(started, 1 - 0.7 ** np.arange(1, 5), atol=0.03)

@@ -26,7 +26,7 @@ flowchart TD
     OBS["Observation model<br/>by weeks back k<br/>size φ<sub>p,k</sub>, removal b<sub>p,k</sub>"]
     X["Nowcast draw X<sub>p,i</sub>(w)<br/>max(0, Y<sub>p,o</sub> + A − B)<br/>A ~ NB(μ<sub>p</sub> − Y<sub>p,o</sub>, φ<sub>p,k</sub>)<br/>B ~ Poisson(b<sub>p,k</sub> Y<sub>p,o</sub>)"]
     SIG["Walk spread σ<sub>p</sub><br/>changes in log(1 + Y<sub>p,o</sub>)"]
-    W["Walk on log(1 + λ<sub>i</sub>)<br/>from X<sub>p,i</sub>(w<sub>0</sub>) in sample i<br/>silent places from 1 case<br/>at their first introduction<br/>Poisson counts"]
+    W["Walk on log(1 + λ<sub>i</sub>)<br/>from X<sub>p,i</sub>(w<sub>0</sub>) in sample i<br/>silent places at 1 case a week<br/>from their first introduction<br/>Poisson counts"]
     NAT["National = sum of provinces<br/>sample by sample"]
 
     SNAP --> PAIR
@@ -56,7 +56,7 @@ flowchart TD
     W0["Start week w<sub>0</sub><br/>latest with π<sub>p</sub>(w) ≥ 0.95"]
     Y["Reported Y<sub>p,o</sub>(w<sub>0</sub>)"]
     SIG["Walk spread σ<sub>p</sub><br/>changes in log(1 + Y<sub>p,o</sub>)"]
-    W["Walk on log(1 + λ<sub>i</sub>)<br/>from Y<sub>p,o</sub>(w<sub>0</sub>)<br/>silent places from 1 case<br/>at their first introduction<br/>Poisson counts<br/>floored at Y<sub>p,o</sub>(w)<br/>in weeks with data"]
+    W["Walk on log(1 + λ<sub>i</sub>)<br/>from Y<sub>p,o</sub>(w<sub>0</sub>)<br/>silent places at 1 case a week<br/>from their first introduction<br/>Poisson counts<br/>floored at Y<sub>p,o</sub>(w)<br/>in weeks with data"]
     NAT["National = sum of provinces<br/>sample by sample"]
 
     SNAP --> PAIR
@@ -211,7 +211,8 @@ Steps are summed within a sample, so each sample is one trajectory.
 A place with no case reported in the 9 weeks up to the cut-off week is silent.
 A silent place is 0 until its first introduction, which comes in each week with probability $q_p$.
 In both models this holds from the week after the start week of `randomwalk`, so `randomwalknowcast` does not nowcast a silent place's recent weeks.
-From that week its walk starts at $x_i = 1$, with the spread $\sigma_p$, and the introduction week has at least 1 case.
+From that week its rate is 1 case a week, and the introduction week has at least 1 case.
+Its walk keeps its own spread, which is 0 over its silent weeks.
 $q_p$ is the share of weeks with a case among the weeks that follow 9 weeks with none, over the place and its siblings (the zones of its province, or the provinces of the country), in weeks up to the start week of `randomwalk`.
 It is estimated at each origin from the counts reported then.
 National is the sum of the provinces, sample by sample.

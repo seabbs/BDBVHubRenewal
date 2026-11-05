@@ -32,7 +32,8 @@ estimate where a place has at least 10 cases a week, and otherwise the
 pooled estimate of the nearest parent that does (`pooling`).
 A place with no case in the latest `walk_weeks` weeks is 0 until its first
 introduction, a geometric number of weeks in with its pooled weekly
-probability, and its walk starts there from 1 case.
+probability, and has a rate of 1 case a week from there, as its own
+spread over its silent weeks is 0.
 In both models this runs from the week after the `randomwalk` start week,
 so a silent place's recent weeks are not nowcast.
 National is the sum of provinces by sample.
@@ -105,14 +106,17 @@ def _walks(
     weekly probability, and is 0 before it.
     The introduction week has at least that case, as `introductions`
     counts a week with a case.
+    It keeps its own spread, 0 from its silent weeks, so after its
+    introduction its rate stays at 1 case a week.
     """
     k_walk, k_intro = jax.random.split(key)
     x0 = np.where(origin.silent[:, None], 1.0, x0)
+    sigma = np.where(origin.silent, 0.0, origin.sigma)
     keys = jax.random.split(k_walk, x0.shape[0])
     lam, y = jax.vmap(lambda k, x, s: random_walk(k, x, s, h))(
         keys,
         jnp.asarray(x0, jnp.float32),
-        jnp.asarray(origin.sigma, jnp.float32),
+        jnp.asarray(sigma, jnp.float32),
     )
     u = np.asarray(jax.random.uniform(k_intro, x0.shape), dtype=np.float64)
     # A probability of 0 gives an introduction that never comes.
