@@ -192,6 +192,8 @@ $$
 $$
 
 Steps are summed within a sample, so each sample is one trajectory.
+The floor binds only where $\lambda_i$ would fall below 0, so away from 0 the standard deviation of $\log\{1 + \lambda_i(w_0 + h)\}$ is $\sqrt{\operatorname{Var}\log(1 + x_i) + h \sigma_p^2}$.
+It grows with the square root of $h$ from the spread of the start, which is 0 for `randomwalk` and the nowcast spread for `randomwalknowcast`, so a wide nowcast leaves a forecast band that widens slowly.
 National is the sum of the provinces, sample by sample.
 
 $\sigma_p$ is the sample standard deviation of the weekly changes of $\log\{1 + Y_{p,o}(w)\}$ over the 9 weeks ending at the start week of `randomwalk`, so up to 8 changes.
