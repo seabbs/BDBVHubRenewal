@@ -205,9 +205,6 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
-        with:
-          sparse-checkout: scripts/fit-store.sh
-          sparse-checkout-cone-mode: false
       - uses: actions/download-artifact@v8
         with:
           pattern: fit-*
