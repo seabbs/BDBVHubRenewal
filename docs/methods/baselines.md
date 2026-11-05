@@ -138,7 +138,7 @@ $$
 
 and the last column is the nowcast mean $\mu_p(w)$.
 The $+1$ is baselinenowcast's.
-It gives a week with 0 reported a mean of about $1 / F_{p,0}(w) - 1$, and it adds less to a week the more complete it is.
+It gives a week with 0 reported the mean $1 / F_{p,0}(w) - 1 - \sum_{j \ge 1} (F_{p,j}(w) - F_{p,j-1}(w)) / F_{p,j}(w)$, about 2 to 3 cases at $F_{p,0}(w) = 0.22$, and it adds less to a week the more complete it is.
 With $\text{rem} = \mu_p(w) - Y_{p,o}(w) \ge 0$ the count still to come, the final count is new reports minus removals, as in epinowcast,
 
 $$
@@ -211,7 +211,7 @@ Steps are summed within a sample, so each sample is one trajectory.
 A place with no case reported in the 9 weeks up to the cut-off week is silent.
 A silent place is 0 until its first introduction, which comes in each week with probability $q_p$.
 In both models this holds from the week after the start week of `randomwalk`, so `randomwalknowcast` does not nowcast a silent place's recent weeks.
-From that week its walk starts at $x_i = 1$, with the spread $\sigma_p$.
+From that week its walk starts at $x_i = 1$, with the spread $\sigma_p$, and the introduction week has at least 1 case.
 $q_p$ is the share of weeks with a case among the weeks that follow 9 weeks with none, over the place and its siblings (the zones of its province, or the provinces of the country), in weeks up to the start week of `randomwalk`.
 It is estimated at each origin from the counts reported then.
 National is the sum of the provinces, sample by sample.

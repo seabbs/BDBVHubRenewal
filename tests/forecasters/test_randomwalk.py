@@ -231,6 +231,9 @@ def test_a_silent_place_waits_for_its_first_introduction() -> None:
     started = (lam[2] > 0).mean(axis=0)
     np.testing.assert_allclose(started, 1 - 0.7 ** np.arange(1, 5), atol=0.03)
     assert set(np.unique(lam[2])) <= {0.0, 1.0}
+    # The introduction week carries a case, so the share of samples with a
+    # case by week 0 is the introduction probability.
+    assert (y[2, :, 0] > 0).mean() == pytest.approx(0.3, abs=0.03)
 
 
 def test_a_silent_place_is_not_nowcast(runs) -> None:

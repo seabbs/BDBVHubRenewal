@@ -103,6 +103,8 @@ def _walks(
     A silent place starts its walk from 1 case at its first
     introduction, a geometric number of weeks in with the place's
     weekly probability, and is 0 before it.
+    The introduction week has at least that case, as `introductions`
+    counts a week with a case.
     """
     k_walk, k_intro = jax.random.split(key)
     x0 = np.where(origin.silent[:, None], 1.0, x0)
@@ -124,7 +126,8 @@ def _walks(
         moved = np.take_along_axis(np.asarray(x, dtype=np.float64), at, axis=2)
         return np.where(lag >= 0, moved, 0.0)
 
-    return shift(lam), shift(y)
+    first_case = origin.silent[:, None, None] & (lag == 0)
+    return shift(lam), np.where(first_case, np.maximum(shift(y), 1.0), shift(y))
 
 
 def frame(
