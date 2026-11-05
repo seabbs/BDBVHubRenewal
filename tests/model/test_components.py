@@ -37,7 +37,7 @@ from .numpy_reference import (
 )
 
 
-def _hazard(name, time_process):
+def _hazard(name, time_process, n_groups=1):
     """HazardDelay on delays 0..30 with the model's priors."""
     return HazardDelay(
         name,
@@ -47,6 +47,19 @@ def _hazard(name, time_process):
             DistributionalVariable(f"{name}_smooth_sd", dist.HalfNormal(0.4))
         ),
         time_process,
+        PooledInitialValue(
+            f"{name}_offset",
+            n_groups,
+            DeterministicVariable(f"{name}_offset_mean", 0.0),
+            DistributionalVariable(f"{name}_offset_sd", dist.HalfNormal(0.5)),
+            centred=False,
+        ),
+        WeeklyTemporalProcess(
+            NonCentredRandomWalk(
+                DistributionalVariable(f"{name}_dev_sd", dist.HalfNormal(0.1))
+            ),
+            start_dow=6,
+        ),
     )
 
 
@@ -221,8 +234,31 @@ def test_missing_fraction_and_hazard_delay_shapes():
     assert out.shape == (35, 4) and bool(jnp.all((out > 0) & (out < 1)))
     delay = _hazard("delay", weekly)
     pmf = seeded(lambda: delay(n_timepoints=35, first_day_dow=6))
-    assert pmf.shape == (35, 31)
-    np.testing.assert_allclose(pmf.sum(axis=1), 1.0, rtol=1e-5)
+    assert pmf.shape == (1, 35, 31)
+    np.testing.assert_allclose(pmf.sum(axis=-1), 1.0, rtol=1e-5)
+
+
+def test_province_delays_pool_around_the_national_delay():
+    weekly = WeeklyTemporalProcess(
+        NonCentredRandomWalk(DeterministicVariable("sd", 0.1)), start_dow=6
+    )
+    delay = _hazard("delay", weekly, n_groups=4)
+    with numpyro.handlers.trace() as tr, numpyro.handlers.seed(rng_seed=1):
+        pmf = delay(n_timepoints=35, n_groups=4, first_day_dow=6)
+    assert pmf.shape == (4, 35, 31)
+    np.testing.assert_allclose(pmf.sum(axis=-1), 1.0, rtol=1e-5)
+    shift = tr["delay_shift"]["value"]
+    national = tr["delay_national_shift"]["value"]
+    assert shift.shape == (35, 4)
+    # Offsets and drifts sum to zero, so the provinces average to national.
+    np.testing.assert_allclose(shift.mean(axis=1), national[:, 0], atol=1e-5)
+    # Each province drifts apart from the others over time.
+    spread = shift - shift.mean(axis=1, keepdims=True)
+    assert not np.allclose(spread[0], spread[-1])
+    beta = tr["delay_beta"]["value"]
+    np.testing.assert_allclose(
+        pmf[2, 10], hazard_to_pmf(beta + shift[10, 2]), rtol=1e-5
+    )
 
 
 def test_hazard_delay_records_its_shape_and_shift():
@@ -238,7 +274,7 @@ def test_hazard_delay_records_its_shape_and_shift():
     assert shift.shape[0] == 35
     # The pmf is the hazard pmf of shape plus shift on each day.
     np.testing.assert_allclose(
-        pmf[10], hazard_to_pmf(beta + shift[10].squeeze()), rtol=1e-5
+        pmf[0, 10], hazard_to_pmf(beta + shift[10].squeeze()), rtol=1e-5
     )
 
 
@@ -247,7 +283,7 @@ def test_near_constant_when_innovation_sd_is_small():
         NonCentredRandomWalk(DeterministicVariable("sd", 1e-6)), start_dow=6
     )
     pmf = seeded(lambda: _hazard("d", weekly)(n_timepoints=70, first_day_dow=6))
-    np.testing.assert_allclose(pmf[0], pmf[-1], atol=1e-5)
+    np.testing.assert_allclose(pmf[0, 0], pmf[0, -1], atol=1e-5)
 
 
 def test_fixed_inputs_pad_with_last_row():

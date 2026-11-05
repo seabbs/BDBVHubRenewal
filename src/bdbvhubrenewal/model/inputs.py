@@ -302,7 +302,7 @@ def vintage_from_tables(
     horizon_weeks: int = 3,
     masked: tuple[str, ...] = (),
     bvd: pd.DataFrame | None = None,
-    publication_lag: np.ndarray | None = None,
+    release_pairs: dict[str, np.ndarray] | None = None,
 ) -> Vintage:
     """Build a `Vintage` from the target and delay rows of one vintage.
 
@@ -334,9 +334,9 @@ def vintage_from_tables(
     bvd : pandas.DataFrame, optional
         BVDOutbreakSize rows from `bvd_rows` for the release chosen for
         this vintage (`ForecastTask.auxiliary["bvd"]`).
-    publication_lag : numpy.ndarray, optional
-        Empirical report to publication lag pmf
-        (`data.releases.publication_lag_pmf`).
+    release_pairs : dict, optional
+        Rows of each earlier delay file and how many the file before it
+        had (`data.releases.release_pairs`).
 
     Returns
     -------
@@ -377,7 +377,9 @@ def vintage_from_tables(
         )
         return out.fillna(0).to_numpy(dtype=float)
 
-    counts = np.zeros((n_weeks, config.dmax + 1))
+    # One delay table per modelled province, or one for a national fit.
+    n_places = 1 if config.national else len(active)
+    counts = np.zeros((n_weeks, n_places, config.dmax + 1))
     if delays is not None and len(delays):
         # Known onsets count every case, so negative delays go to 0 and
         # delays past dmax to dmax, the last cell of the hazard pmf,
@@ -399,7 +401,12 @@ def vintage_from_tables(
         )
         ok = (week >= 0) & (week < n_weeks)
         delay = np.clip(keep["delay"].to_numpy(), 0, config.dmax)
-        np.add.at(counts, (week[ok], delay[ok]), 1)
+        place = (
+            np.zeros(len(keep), dtype=int)
+            if config.national
+            else keep["location"].map(active.index).to_numpy(dtype=int)
+        )
+        np.add.at(counts, (week[ok], place[ok], delay[ok]), 1)
 
     known, imputed = grid("observed", active), grid("imputed", active)
     totals = known + imputed
@@ -436,7 +443,7 @@ def vintage_from_tables(
         if bvd is None or config.national
         else bvd_inputs(bvd, names, start, masked),
         seed_days=None if config.national else _seed_days(totals),
-        publication_lag_pmf=publication_lag,
+        release_pairs=release_pairs,
     )
 
 

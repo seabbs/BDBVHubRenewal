@@ -1,8 +1,9 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 r"""A delay pmf that varies with the reference day, through a logit hazard.
 
-`HazardDelay` returns a matrix $f_s(d)$ of shape
-`(n_timepoints, dmax + 1)`, the delay pmf for events on day $s$.
+`HazardDelay` returns $f_{p,s}(d)$ of shape
+`(n_groups, n_timepoints, dmax + 1)`, the delay pmf of group $p$ for
+events on day $s$.
 """
 
 from __future__ import annotations
@@ -16,6 +17,8 @@ from pyrenew.latent.temporal_processes import (
     WeeklyTemporalProcess,
 )
 from pyrenew.metaclass import RandomVariable
+
+from .pooled import pooled_walk
 
 
 def hazard_to_pmf(logit_hazard: Array) -> Array:
@@ -50,17 +53,24 @@ def hazard_to_pmf(logit_hazard: Array) -> Array:
 
 
 class HazardDelay(RandomVariable):
-    r"""Nonparametric delay with a smooth baseline and a time shift.
+    r"""Nonparametric delay with a smooth baseline and pooled time shifts.
 
-    $$\operatorname{logit} h_s(d) = \beta(d) + \gamma(s),$$
+    $$\operatorname{logit} h_{p,s}(d) = \beta(d) + \gamma(s) + \delta_p
+    + \eta_p(s),$$
 
     where $\beta$ is a temporal process over delay $d$ starting at
-    $\beta(0)$ (a smoothness prior) and $\gamma$ is a temporal process
-    over the reference day $s$, starting at 0, that shifts all hazards
-    together (proportional odds). The pmf follows from `hazard_to_pmf`.
-    When $\gamma$ has a small innovation SD, the delay is near constant.
-    The shape $\beta$, the shift $\gamma$ and the mean delay by day
-    are recorded as `{name}_beta`, `{name}_shift` and `{name}_mean`.
+    $\beta(0)$ (a smoothness prior), $\gamma$ is the national temporal
+    process over the reference day $s$, starting at 0, $\delta_p$ is
+    group $p$'s offset and $\eta_p$ its own walk around $\gamma$, starting
+    at 0. The offsets and walks sum to zero over groups and share a
+    learnt spread each (`pooled_walk`), so each group's delay is pooled
+    towards the national one and $\gamma$ stays identified. All hazards
+    of a group and day shift together (proportional odds). The pmf
+    follows from `hazard_to_pmf`. With one group, $\delta$ and $\eta$
+    are zero. The shape $\beta$, the national shift $\gamma$, each
+    group's shift $\gamma + \delta_p + \eta_p$ and each group's mean
+    delay by day are recorded as `{name}_beta`, `{name}_national_shift`,
+    `{name}_shift` and `{name}_mean`.
     """
 
     def __init__(
@@ -70,6 +80,8 @@ class HazardDelay(RandomVariable):
         hazard0_rv: RandomVariable,
         shape_process: TemporalProcess,
         time_process: TemporalProcess,
+        offset_rv: RandomVariable,
+        group_process: TemporalProcess,
     ) -> None:
         r"""Initialize the delay.
 
@@ -85,19 +97,27 @@ class HazardDelay(RandomVariable):
             Process for $\beta(d)$ over delays $0..D - 1$.
         time_process
             Process for $\gamma(s)$ over reference days.
+        offset_rv
+            Offsets $\delta_p$, shape `(n_groups,)`
+            (`PooledInitialValue` with mean 0).
+        group_process
+            Process for the sum-to-zero coordinates of $\eta_p(s)$.
 
         Raises
         ------
         TypeError
-            If `hazard0_rv` is not a `RandomVariable`.
+            If `hazard0_rv` or `offset_rv` is not a `RandomVariable`.
         """
-        if not isinstance(hazard0_rv, RandomVariable):
-            raise TypeError("hazard0_rv must be a RandomVariable.")
+        for label, rv in (("hazard0_rv", hazard0_rv), ("offset_rv", offset_rv)):
+            if not isinstance(rv, RandomVariable):
+                raise TypeError(f"{label} must be a RandomVariable.")
         super().__init__(name=name)
         self.dmax = dmax
         self.hazard0_rv = hazard0_rv
         self.shape_process = shape_process
         self.time_process = time_process
+        self.offset_rv = offset_rv
+        self.group_process = group_process
 
     def __repr__(self) -> str:
         """Return string representation."""
@@ -105,21 +125,26 @@ class HazardDelay(RandomVariable):
             f"HazardDelay(name={self.name!r}, dmax={self.dmax}, "
             f"hazard0_rv={self.hazard0_rv!r}, "
             f"shape_process={self.shape_process!r}, "
-            f"time_process={self.time_process!r})"
+            f"time_process={self.time_process!r}, "
+            f"offset_rv={self.offset_rv!r}, "
+            f"group_process={self.group_process!r})"
         )
 
     def sample(
         self,
         n_timepoints: int,
+        n_groups: int = 1,
         first_day_dow: int | None = None,
         **kwargs: object,
     ) -> Array:
-        """Sample the delay matrix.
+        """Sample the delay of each group by day.
 
         Parameters
         ----------
         n_timepoints
             Days to sample.
+        n_groups
+            Number of groups, such as provinces.
         first_day_dow
             Weekday of the first day, passed by PyRenew.
         **kwargs
@@ -128,7 +153,7 @@ class HazardDelay(RandomVariable):
         Returns
         -------
         Array
-            Shape `(n_timepoints, dmax + 1)`.
+            Shape `(n_groups, n_timepoints, dmax + 1)`.
         """
         beta0 = self.hazard0_rv()
         beta = self.shape_process.sample(
@@ -136,29 +161,33 @@ class HazardDelay(RandomVariable):
             initial_value=beta0,
             name_prefix=f"{self.name}_shape",
         )[:, 0]
-        gamma = self.time_process.sample(
-            n_timepoints=n_timepoints,
-            initial_value=0.0,
-            name_prefix=f"{self.name}_time",
-            first_day_dow=first_day_dow,
+        gamma, shift = pooled_walk(
+            self.time_process,
+            self.group_process,
+            self.offset_rv(),
+            n_timepoints,
+            n_groups,
+            f"{self.name}_time",
+            first_day_dow,
         )
         # Recorded for the delay summaries written after a fit
         # (`delay_summary`); they change nothing in the model.
         numpyro.deterministic(f"{self.name}_beta", beta)
-        numpyro.deterministic(f"{self.name}_shift", gamma)
+        numpyro.deterministic(f"{self.name}_national_shift", gamma)
+        numpyro.deterministic(f"{self.name}_shift", shift)
         weekly = (
             isinstance(self.time_process, WeeklyTemporalProcess)
             and first_day_dow == self.time_process.start_dow
         )
         if weekly:
-            # The shift is constant within weeks, so compute one row per
-            # week and repeat it.
-            gamma = gamma[::7]
-        logit = beta[None, :] + gamma
+            # The shifts are constant within weeks, so compute one row
+            # per week and repeat it.
+            shift = shift[::7]
+        logit = beta[None, None, :] + shift.T[:, :, None]
         pmf = hazard_to_pmf(logit)
         mean = pmf @ jnp.arange(self.dmax + 1)
         if weekly:
-            pmf = jnp.repeat(pmf, 7, axis=0)[:n_timepoints]
-            mean = jnp.repeat(mean, 7, axis=0)[:n_timepoints]
+            pmf = jnp.repeat(pmf, 7, axis=1)[:, :n_timepoints]
+            mean = jnp.repeat(mean, 7, axis=1)[:, :n_timepoints]
         numpyro.deterministic(f"{self.name}_mean", mean)
         return pmf

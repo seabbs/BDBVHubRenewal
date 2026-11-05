@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data.dates import epiweek_end
-from bdbvhubrenewal.data.releases import cutoff_lags, publication_lag_pmf
+from bdbvhubrenewal.data.releases import cutoff_lags
 from bdbvhubrenewal.data.simulate import (
     SimulationSettings,
     release_dates,
@@ -171,47 +171,6 @@ def _rows(
             "delay": delays,
         }
     )
-
-
-def test_publication_lag_pmf_from_rows_new_in_later_vintages() -> None:
-
-    old = _rows("2026-10-10", ["2026-09-05"] * 5, [3] * 5)
-    # Two rows reported long ago appear late, three recent ones on time.
-    new = pd.concat(
-        [
-            old.assign(vintage="2026-10-17", cutoff="2026-10-17"),
-            _rows("2026-10-17", ["2026-07-04", "2026-07-04"], [2, 2]),
-            _rows("2026-10-17", ["2026-10-17"] * 3, [0, 0, 0]),
-        ]
-    )
-    later = _rows("2026-10-24", ["2026-10-24"], [0])
-    pmf = publication_lag_pmf(pd.concat([old, new, later]), "2026-10-17")
-    assert pmf is not None
-    assert pmf.shape == (181,)
-    assert pmf.sum() == pytest.approx(1.0)
-    # Report dates about 100 days old keep their lag: the real files have
-    # 8-9% of new rows more than 60 days late.
-    assert pmf[90:110].sum() == pytest.approx(0.4, abs=0.05)
-    assert pmf[-1] == 0
-    assert pmf[:7].sum() == pytest.approx(0.6, abs=0.05)
-    # The 10-24 file is after the forecast date, so it is not used.
-    assert publication_lag_pmf(pd.concat([old, new]), "2026-10-17") == (
-        pytest.approx(pmf)
-    )
-    # With no earlier pair there is no estimate.
-    assert publication_lag_pmf(pd.concat([old, new]), "2026-10-10") is None
-    # Publication runs between the cut-offs, not the labels, so cut-offs
-    # a day earlier shorten the lags (less than a day, as lags below 0
-    # are not feasible).
-    early = pd.concat([old, new]).assign(
-        cutoff=lambda d: (
-            pd.to_datetime(d["vintage"]) - pd.Timedelta(days=1)
-        ).dt.strftime("%Y-%m-%d")
-    )
-    shifted = publication_lag_pmf(early, "2026-10-17")
-    assert shifted is not None
-    lags = np.arange(pmf.size)
-    assert 0.5 < lags @ pmf - lags @ shifted < 1
 
 
 def test_unused_options_leave_the_default_outbreak_unchanged() -> None:

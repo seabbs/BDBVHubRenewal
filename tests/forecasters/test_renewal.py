@@ -237,11 +237,14 @@ def _fake_run(task: ForecastTask, variant: rn.Variant) -> rn.RenewalRun:
         extra=extra,
         seconds=1.5,
         cpu_seconds=2.9,
-        delay=rn.delay_summary(
-            rng.normal(-1, 0.1, size=(n, 20)),
-            rng.normal(0, 0.1, size=(n, 14)),
-            data.start_date,
-            13,
+        delay=pd.concat(
+            rn.delay_summary(
+                rng.normal(-1, 0.1, size=(n, 20)),
+                rng.normal(0, 0.1, size=(n, 14)),
+                data.start_date,
+                13,
+            ).assign(place=place)
+            for place in data.names
         ),
     )
 
@@ -274,7 +277,8 @@ def test_fit_renewal_writes_the_ci_contract(
     assert len(record["worst_rhat"]) <= 10
     assert {p["name"] for p in record["parameters"]} == {"sd", "z"}
     delay = pd.read_csv(tmp_path / rn.DELAY_SUMMARY_FILE)
-    assert set(delay["location"]) == {"pooled"}
+    # One delay for each modelled province.
+    assert set(delay["location"]) <= set(task.locations)
     assert set(delay["model"]) == {"renewal"}
     assert set(delay["quantity"]) == {
         "reported_share",
@@ -510,7 +514,7 @@ def test_chain_method_defaults_to_vectorized(
     assert seen["chain_method"] == "sequential"
 
 
-def test_inputs_carry_the_publication_lag_from_earlier_files(
+def test_inputs_carry_the_release_pairs_of_earlier_files(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
     from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
@@ -526,37 +530,10 @@ def test_inputs_carry_the_publication_lag_from_earlier_files(
         )
     }
     late = vintage_inputs(tasks["2026-10-17"], MAIN)
-    assert late.publication_lag_pmf is not None
-    assert late.publication_lag_pmf.sum() == pytest.approx(1.0)
-    assert vintage_inputs(tasks["2026-10-09"], MAIN).publication_lag_pmf is None
-
-
-def test_lag_source_warns_when_the_prior_stands_in(
-    target: pd.DataFrame, delays: pd.DataFrame
-) -> None:
-    from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
-    from bdbvhubrenewal.forecasters.renewal import (
-        lag_warnings,
-        vintage_inputs,
-    )
-    from bdbvhubrenewal.model import MAIN
-
-    tasks = {
-        t.vintage: t
-        for t in make_tasks(
-            target.loc[target["kind"] == "real"],
-            delays.assign(kind="real"),
-            BacktestConfig(seed=3),
-        )
-    }
-    empirical = replace(MAIN, publication_lag="empirical")
-    early = vintage_inputs(tasks["2026-10-09"], empirical)
-    late = vintage_inputs(tasks["2026-10-17"], empirical)
-    (warning,) = lag_warnings([early], empirical)
-    assert warning.startswith("publication_lag:")
-    assert lag_warnings([late], empirical) == []
-    # The default fixed lag never warns.
-    assert lag_warnings([early], MAIN) == []
+    assert late.release_pairs is not None
+    # One pair of delay files, 10-09 and 10-17.
+    assert late.release_pairs["pair"].shape[1] == 1
+    assert vintage_inputs(tasks["2026-10-09"], MAIN).release_pairs is None
 
 
 def test_report_cutoffs_are_days_from_the_model_start(
