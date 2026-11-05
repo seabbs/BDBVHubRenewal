@@ -418,3 +418,18 @@ def test_missing_builds_name_submitted_rounds_without_a_main_build() -> None:
     assert len(lines) == 1
     assert "renewalbvd (main build)" in lines[0]
     assert "2026-11-07" in lines[0]
+
+
+def test_scored_on_counts_pairs_and_forecasts() -> None:
+    rows = pd.DataFrame(
+        {
+            "model": ["randomwalk"] * 3 + ["renewal"],
+            "origin": ["a", "a", "b", "a"],
+            "truth_vintage": ["b", "c", "c", "b"],
+            "pool": ["national", "provinces", "provinces", "national"],
+        }
+    )
+    assert report._scored_on(rows) == (
+        "They rest on 3 origin and release pairs, with randomwalk scored on "
+        "1 national, 2 provincial forecasts.\n"
+    )

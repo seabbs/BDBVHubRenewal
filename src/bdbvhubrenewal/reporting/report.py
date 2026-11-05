@@ -469,7 +469,8 @@ def _release_section(
         "Scores against what each later release reported "
         "([how scoring works](methods/evaluation.md#real-releases), "
         "[metrics](methods/evaluation.md#scores)).\n"
-        "The [energy score](methods/evaluation.md#energy-score) scores each "
+        + _scored_on(rep)
+        + "The [energy score](methods/evaluation.md#energy-score) scores each "
         "scale's places and weeks as one forecast per origin and release, "
         "so its $n$ counts those.\n\n"
         + summary_html(
@@ -505,6 +506,24 @@ def _release_section(
             + _table(origins),
             "Tables",
         ),
+    )
+
+
+def _scored_on(reported: pd.DataFrame, baseline: str = "randomwalk") -> str:
+    """Say how many origin and release pairs and forecasts are scored."""
+    pairs = reported[["origin", "truth_vintage"]].drop_duplicates()
+    n = reported.loc[reported["model"] == baseline].groupby("pool").size()
+    scales = {
+        "national": "national",
+        "provinces": "provincial",
+        "zones": "health zone",
+    }
+    counts = ", ".join(
+        f"{n[p]} {label}" for p, label in scales.items() if p in n
+    )
+    return (
+        f"They rest on {len(pairs)} origin and release pairs, with "
+        f"{baseline} scored on {counts} forecasts.\n"
     )
 
 
