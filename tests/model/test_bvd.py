@@ -53,7 +53,7 @@ def test_bvd_inputs_map_and_mask(release):
     out = bvd_inputs(release, names, start)
     assert out["groups"].shape == (4, 3)  # national plus three patches
     assert out["kinds"].tolist() == [0, 1, 1, 1]
-    assert out["day"] == (dt.date(2026, 10, 20) - start).days + 6
+    assert out["day"] == (dt.date(2026, 10, 20) - start).days
     assert np.all(out["scales"] >= 0.05)
     masked = bvd_inputs(release, names, start, masked=("CD-NK",))
     assert masked["kinds"].tolist() == [1, 1]
@@ -142,8 +142,8 @@ def test_fit_axis_reaches_the_bvd_day(outbreak, sim_tables, table, release):
     day = VINTAGE_DAYS[-1]
     target, delays = sim_tables[day]
     rows = release.copy()
-    # BVD's as_of a few days after ours puts s_b in a later week.
-    rows["as_of"] = vintage_date(outbreak, day + 3)
+    # BVD's as_of a week after ours puts s_b in a later week.
+    rows["as_of"] = vintage_date(outbreak, day + 7)
     data = vintage_from_tables(
         target, delays, vintage_date(outbreak, day), SIM_LOCATIONS, table,
         BVD, bvd=rows,

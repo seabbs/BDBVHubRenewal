@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final, Literal
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import numpyro.distributions as dist
@@ -27,8 +28,8 @@ from pyrenew.latent.temporal_processes import (
 from pyrenew.model import MultiSignalModel, PyrenewBuilder
 from pyrenew.observation import NegativeBinomialNoise
 from pyrenew.randomvariable import DistributionalVariable, TransformedVariable
-from scipy import stats
 
+from .censored import CensoredPMF, censored_pmf
 from .composition_noise import DirichletMultinomialNoise, MultinomialNoise
 from .delays import (
     FixedTimeVarying,
@@ -51,6 +52,20 @@ GI_SD = 9.3
 """Gamma generation interval mean and SD in days, BVDOutbreakSize's prior
 means (from the NEJM serial interval). After double censoring, dropping
 lag 0 and truncating at 42 days the effective mean is 14.8 and SD 8.4."""
+INCUBATION_MEAN = 6.3
+"""Log-normal incubation period prior mean in days, Bundibugyo virus disease
+in Uganda in 2007 (MacNeil et al. 2010, n = 24), as BVDOutbreakSize uses."""
+INCUBATION_MEAN_SD = 0.54
+"""Prior SD of the incubation period mean, BVDOutbreakSize's, which gives
+MacNeil et al.'s 95% CI of 5.2 to 7.3 days."""
+INCUBATION_SD = 3.5
+"""Log-normal incubation period prior SD in days, BVDOutbreakSize's (MacNeil
+et al. give no interval on the spread)."""
+INCUBATION_SD_SD = 0.8
+"""Prior SD of the incubation period SD, BVDOutbreakSize's."""
+INCUBATION_LENGTH = 28
+"""Longest incubation period in days, its 99.9% quantile at the prior means
+rounded up."""
 PHI_FLOOR = 1e-3
 """Added to $1/\\phi$ so the concentration stays at or below 1000."""
 ALPHA0 = 0.6
@@ -65,14 +80,10 @@ def generation_interval(
 ) -> np.ndarray:
     r"""Double interval censored Gamma generation interval on lags 1..length.
 
-    The daily pmf on $0..L$ is primarycensored's with a uniform primary
-    over a day and daily secondary censoring,
-    $f(d) = G(d + 1) - 2 G(d) + G(d - 1)$ with
-    $G(x) = x F(x; k, \theta) - k \theta F(x; k + 1, \theta)$ for
-    $x > 0$ (the analytic Gamma form), truncated at $L$. The renewal
-    uses lags 1 to $L$, so lag 0 (about 0.05% of the mass) is dropped and
-    the rest renormalised, as BVDOutbreakSize left-truncates its
-    generation interval at one day. Computed once, in float64.
+    The daily pmf on $0..L$ from `censored_pmf`, truncated at $L$. The
+    renewal uses lags 1 to $L$, so lag 0 (about 0.05% of the mass) is
+    dropped and the rest renormalised, as BVDOutbreakSize left-truncates
+    its generation interval at one day. Computed once, in float64.
     Matches `primarycensored::dpcens(1:L, ..., L = 1, D = L + 1)`.
 
     Parameters
@@ -87,20 +98,38 @@ def generation_interval(
     numpy.ndarray
         Pmf on lags 1..length (PyRenew order, element 0 at lag 1).
     """
-    shape, scale = (mean / sd) ** 2, sd**2 / mean
-
-    def integrated_cdf(x: np.ndarray) -> np.ndarray:
-        x = np.maximum(x, 0.0)
-        return np.asarray(
-            x * stats.gamma.cdf(x, shape, scale=scale)
-            - shape * scale * stats.gamma.cdf(x, shape + 1, scale=scale),
-            dtype=float,
-        )
-
-    d = np.arange(length + 1, dtype=float)
-    pmf = integrated_cdf(d + 1) - 2 * integrated_cdf(d) + integrated_cdf(d - 1)
-    pmf = np.maximum(pmf, 0.0)[1:]
+    with jax.enable_x64():
+        pmf = np.asarray(censored_pmf("gamma", mean, sd / mean, length))[1:]
     return np.asarray(pmf / pmf.sum(), dtype=float)
+
+
+def incubation_period(
+    mean: float = INCUBATION_MEAN,
+    sd: float = INCUBATION_SD,
+    length: int = INCUBATION_LENGTH,
+) -> np.ndarray:
+    r"""Double interval censored log-normal incubation period on 0..length.
+
+    The daily pmf from infection to onset, from `censored_pmf`, truncated
+    at $L$ and renormalised. Computed once, in float64.
+    Matches `primarycensored::dpcens(0:L, plnorm, D = L + 1)`.
+
+    Parameters
+    ----------
+    mean, sd : float
+        Log-normal mean and SD in days. Default to `INCUBATION_MEAN` and
+        `INCUBATION_SD`.
+    length : int
+        Longest lag in days. Defaults to `INCUBATION_LENGTH`.
+
+    Returns
+    -------
+    numpy.ndarray
+        Pmf on lags 0..length.
+    """
+    with jax.enable_x64():
+        pmf = np.asarray(censored_pmf("lognormal", mean, sd / mean, length))
+    return np.asarray(pmf, dtype=float)
 
 
 PRIOR_PUBLICATION_LAG: Final[tuple[float, ...]] = tuple(
@@ -575,8 +604,24 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     builder.add_observation(
         OnsetStreams(
             name="onsets",
-            # Infections are dated by onset.
-            temporal_pmf_rv=DeterministicPMF("infection_to_onset", np.ones(1)),
+            temporal_pmf_rv=CensoredPMF(
+                "infection_to_onset",
+                "lognormal",
+                # BVDOutbreakSize's priors (onset_incidence_model).
+                DistributionalVariable(
+                    "incubation_mean",
+                    dist.TruncatedNormal(
+                        INCUBATION_MEAN, INCUBATION_MEAN_SD, low=1.0
+                    ),
+                ),
+                DistributionalVariable(
+                    "incubation_sd",
+                    dist.TruncatedNormal(
+                        INCUBATION_SD, INCUBATION_SD_SD, low=1.0
+                    ),
+                ),
+                INCUBATION_LENGTH,
+            ),
             ascertainment_rate_rv=ascertainment.for_signal("onsets"),
             missing_fraction_rv=missing,
             delay_rv=delay,
