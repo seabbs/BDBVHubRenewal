@@ -213,7 +213,7 @@ def test_sampler_section() -> None:
         "renewalbvd": {**base, "num_samples": 1000, "target_accept": 0.95},
     }
     text = report._sampler_section(fits, settings)
-    assert "Backtest and submission fits use the same settings" in text
+    assert "Stored fits use these settings" in text
     assert (
         "- `renewalbvd`: 2 chains of 300 warm-up and 1000 draws at a "
         "target acceptance of 0.95" in text

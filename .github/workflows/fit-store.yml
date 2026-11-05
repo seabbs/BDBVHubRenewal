@@ -27,6 +27,7 @@ on:
       - 'config/backtest.toml'
       - 'ci/policy.toml'
       - 'uv.lock'
+      - '.python-version'
       - 'scripts/fit-store.sh'
       - '.github/workflows/fit-store.yml'
   # A pull request only plans, so its summary says how many fits the
@@ -42,6 +43,7 @@ on:
       - 'config/backtest.toml'
       - 'ci/policy.toml'
       - 'uv.lock'
+      - '.python-version'
       - 'scripts/fit-store.sh'
       - '.github/workflows/fit-store.yml'
   # New hub releases: a check with nothing new ends after `plan`.
@@ -65,10 +67,11 @@ on:
         default: false
 
 # A running refit is never cancelled: a push while it runs queues one
-# run, and a newer push replaces that queued run. Pull requests have
-# their own group and cancel their superseded plans.
+# run, and a newer push replaces that queued run. Pull requests, scratch
+# stores and other branches have their own groups, so they never replace
+# a queued main run; pull requests cancel their superseded plans.
 concurrency:
-  group: fit-store-${{ github.event_name == 'pull_request' && github.ref || inputs.store_branch || 'fit-store' }}
+  group: fit-store-${{ github.event_name == 'pull_request' && github.ref || inputs.store_branch || (github.ref == 'refs/heads/main' && 'main' || github.ref) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -88,6 +91,11 @@ jobs:
       count: ${{ steps.plan.outputs.count }}
       write: ${{ steps.guard.outputs.write }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # Main writes fit-store; a branch writes only a scratch store
+      # (fit-store-scratch*); pull requests and other branch runs plan.
       - name: Decide whether this run may write a store
         id: guard
         env:
@@ -95,19 +103,9 @@ jobs:
           REF: ${{ github.ref }}
           SCRATCH: ${{ inputs.store_branch }}
         run: |
-          write=false
-          if [ "$EVENT" != pull_request ]; then
-            if [ "$REF" = refs/heads/main ] && [ -z "$SCRATCH" ]; then
-              write=true
-            elif [ -n "$SCRATCH" ] && [ "$SCRATCH" != fit-store ]; then
-              write=true
-            fi
-          fi
+          write=$(scripts/fit-store.sh guard "$EVENT" "$REF" "$SCRATCH")
           echo "write=$write" >> "$GITHUB_OUTPUT"
           echo "Writes $FIT_STORE_BRANCH: $write" >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
       - uses: ./.github/actions/setup-forecast-env
       # The latest hub releases, and the BVDOutbreakSize release each
       # may use. Every fit job reads these files, so all fit the same data.
@@ -144,8 +142,10 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: steps.guard.outputs.write == 'true' && steps.plan.outputs.count != '0'
         with:
-          name: keys
-          path: keys.json
+          name: plan
+          path: |
+            keys.json
+            matrix.json
           retention-days: 3
 
   # As fit-candidates.yml: one job per fit, chains in parallel
@@ -181,8 +181,10 @@ jobs:
           ORIGIN: ${{ matrix.origin }}
           KEY: ${{ matrix.key }}
         run: |
-          uv run bdbvhubrenewal fit-store fit --model "$MODEL" \
-            --origin "$ORIGIN" --store new || true
+          if ! uv run bdbvhubrenewal fit-store fit --model "$MODEL" \
+            --origin "$ORIGIN" --store new; then
+            echo "::warning::$MODEL at $ORIGIN failed; stored as failed"
+          fi
           test -f "new/$MODEL/$ORIGIN/$KEY.json.gz"
       - uses: actions/upload-artifact@v7
         with:
@@ -212,8 +214,8 @@ jobs:
           merge-multiple: true
       - uses: actions/download-artifact@v8
         with:
-          name: keys
-      - run: scripts/fit-store.sh push new keys.json
+          name: plan
+      - run: scripts/fit-store.sh push new keys.json matrix.json
 
   pages:
     name: Rebuild the docs from the store

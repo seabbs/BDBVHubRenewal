@@ -75,16 +75,19 @@ def store_note(
     if not (stale or absent):
         return "\n".join(lines) + "\n"
     code = f"this build's code ({_commit(build)})" if build else "this code"
-    body = [f"Not yet fitted for {code}: {_pairs(stale + absent)}."]
-    if failed:
-        body.append(f"The fit failed for {_pairs(failed)}.")
-    if running:
+    pending = [s for s in stale + absent if not s["failed"]]
+    body = []
+    if pending:
+        body.append(f"Not yet fitted for {code}: {_pairs(pending)}.")
+    if pending and running:
         body.append(f"A [Fit store run]({running}) is fitting them.")
+    if failed:
+        body.append(f"The fit for {code} failed for {_pairs(failed)}.")
     if stale:
         body.append(f"Fits of older code are shown for {_pairs(stale)}.")
     if absent:
         body.append(f"Not shown: {_pairs(absent)}.")
-    lines += ["", '!!! note "Fits not yet made for this code"', ""]
+    lines += ["", '!!! note "Fits not made for this code"', ""]
     lines += [f"    {b}" for b in body]
     return "\n".join(lines) + "\n"
 

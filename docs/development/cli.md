@@ -68,7 +68,7 @@ It keeps the current key's file and the newest good fit of older code for each m
 A fit that fails is stored as failed, and is fitted again only when its inputs change or a dispatch sets `retry_failed`.
 On a pull request the workflow only lists the fits the change needs.
 Only `main` writes to `fit-store`.
-To test a branch, dispatch the workflow on it with `store_branch` set to a scratch branch, and `models` to limit it.
+To test a branch, dispatch the workflow on it with `store_branch` set to a name starting `fit-store-scratch`, and `models` to limit it. Any other `store_branch` stops the run.
 When fits are stored, the workflow rebuilds the docs.
 
 ```bash

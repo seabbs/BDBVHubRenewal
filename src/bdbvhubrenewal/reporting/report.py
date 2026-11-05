@@ -10,6 +10,7 @@ Backtest and Nowcast pages without changes here.
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import json
 from collections.abc import Callable, Mapping, Sequence
@@ -57,7 +58,7 @@ from bdbvhubrenewal.evaluation.nowcast import (
     relative_wis,
 )
 from bdbvhubrenewal.evaluation.scoring import summarise_scores
-from bdbvhubrenewal.evaluation.store import samplers
+from bdbvhubrenewal.evaluation.store import samplers, stored_models
 from bdbvhubrenewal.evaluation.zones import SUMMED, zone_relative_skill
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
@@ -1228,6 +1229,20 @@ def _scenario_figure() -> str:
     return _metric_tabs("scenario-wis-horizon", alt)
 
 
+def _fit_settings() -> dict[str, dict[str, Any]]:
+    """Return each stored model's sampler settings.
+
+    The renewal variants use their table in `ci/policy.toml`; a model with
+    none (`pprandomwalknowcast`) uses its own.
+    """
+    settings = samplers()
+    for name in stored_models():
+        if name not in settings:
+            model: Any = get_model(name)
+            settings[name] = dataclasses.asdict(model.sampler)
+    return settings
+
+
 def _settings_text(sampler: Mapping[str, Any]) -> str:
     return (
         f"{int(sampler['num_chains'])} chains of "
@@ -1267,7 +1282,8 @@ def _sampler_section(
     ).reset_index()
     return (
         "## Sampler\n\n"
-        "Backtest and submission fits use the same settings:\n\n"
+        "Stored fits use these settings. "
+        "The renewal variants use the submission's.\n\n"
         + sub
         + "\n"
         + _dropdown(
@@ -1427,7 +1443,7 @@ def _backtest_page(
     fits_path = res / "backtest-fits.csv"
     _write(
         gen / "backtest-sampler.md",
-        _sampler_section(pd.read_csv(fits_path), samplers()),
+        _sampler_section(pd.read_csv(fits_path), _fit_settings()),
     )
     rec_path = res / "recovery-scores.csv"
     _write(

@@ -51,10 +51,12 @@ import pandas as pd
 from bdbvhubrenewal.data import load_daily, load_delays, load_target
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
+    _fit_rows,
     load_config,
     make_tasks,
     merge_by_model,
     run_forecasts,
+    uses_lag_prior,
 )
 from bdbvhubrenewal.evaluation.heldout import (
     load_model_choices,
@@ -191,7 +193,8 @@ def code_digest(root: Path | str = ".") -> str:
 
     Python files in `CODE_INPUTS` are hashed as syntax trees without
     docstrings, so comments and docstrings do not change the key; other
-    files by their bytes. `run_forecasts` is hashed the same way.
+    files by their bytes. `run_forecasts` and the backtest helpers it
+    calls are hashed the same way, with the Python minor version.
     The dependencies are `uv export --no-dev --all-extras` of `uv.lock`.
 
     Parameters
@@ -218,7 +221,9 @@ def code_digest(root: Path | str = ".") -> str:
             digest.update(_strip(path.read_text()).encode())
         else:
             digest.update(path.read_bytes())
-    digest.update(_strip(inspect.getsource(run_forecasts)).encode())
+    for func in (run_forecasts, _fit_rows, uses_lag_prior):
+        digest.update(_strip(inspect.getsource(func)).encode())
+    digest.update(repr(sys.version_info[:2]).encode())
     deps = subprocess.run(
         [
             "uv",

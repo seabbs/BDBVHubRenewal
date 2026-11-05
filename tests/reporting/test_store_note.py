@@ -30,10 +30,10 @@ def test_fits_not_made_are_listed() -> None:
         _row("2026-10-17", "old", False, failed=True),
     ]
     note = store_note(status, "b" * 40)
-    assert '!!! note "Fits not yet made for this code"' in note
+    assert '!!! note "Fits not made for this code"' in note
     assert "bbbbbbb" in note
-    assert "renewal` at 2026-10-17 and 2026-10-24 and 2026-11-01." in note
-    assert "The fit failed for `renewal` at 2026-10-17." in note
+    assert "`renewal` at 2026-10-24 and 2026-11-01." in note
+    assert "failed for `renewal` at 2026-10-17." in note
     assert "older code are shown for `renewal` at 2026-10-17 and" in note
     assert "Not shown: `renewal` at 2026-11-01." in note
     assert "run" not in note
