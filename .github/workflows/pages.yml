@@ -82,12 +82,20 @@ jobs:
       # results are committed. Only this step makes them.
       # `task results` runs the same commands locally; keep the two in step.
       # It reads only these inputs, so an unchanged hash reuses its outputs.
-      # Every output goes to results/, so only results/ is cached.
+      # Only the files this step writes are cached, so a hit cannot replace
+      # the committed records or the fit store's own files in results/.
       - name: Restore the backtest outputs
         id: backtest
         uses: actions/cache@v6
         with:
-          path: results
+          path: |
+            results/backtest-fits.csv
+            results/forecasts.csv.gz
+            results/heldout-*
+            results/nowcast-*
+            results/recovery-*
+            results/scenario-*
+            results/zone-*
           key: backtest-${{ hashFiles('src/**', 'config/**', 'data/**', 'results/**', 'uv.lock', '.github/workflows/pages.yml') }}
       - name: Backtest
         if: steps.backtest.outputs.cache-hit != 'true'
