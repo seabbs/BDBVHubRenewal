@@ -432,8 +432,8 @@ def test_scored_on_counts_pairs_and_forecasts() -> None:
         }
     )
     assert report._scored_on(rows) == (
-        "They rest on 3 origin and release pairs, with randomwalk scored on "
-        "1 national and 2 provincial forecasts.\n"
+        "These scores come from 3 origin and release pairs.\n"
+        "randomwalk has 1 national and 2 provincial forecasts scored.\n"
         "The renewal models are not scored at health zones.\n"
     )
 
