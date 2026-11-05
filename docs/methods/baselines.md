@@ -100,7 +100,9 @@ $$
 $$
 
 summed over the in-window pairs of gap $s$ and over days $t$ of age $x$ at $r$ that both releases observe.
-$g_p$ is the non-negative least squares fit of all these equations, each weighted by its denominator $\sum N_{p,r}(t)$, with no smoothing over age.
+$g_p$ is the non-negative least squares fit of all these equations, each weighted by its denominator $\sum N_{p,r}(t)$.
+Ages share one factor in blocks: from age 0, each block takes ages until their denominator, summed over the pairs, reaches 10 cases, and ages left at the end join the last block.
+So no factor rests on fewer than 10 cases.
 With a gap of 1 only, $\exp g_p(x)$ is baselinenowcast's chain ladder factor.
 Cells a release does not observe are skipped, not filled, and a gap and age with a zero denominator give no equation.
 The parent of a province is the country, whose counts are the sum of its provinces.

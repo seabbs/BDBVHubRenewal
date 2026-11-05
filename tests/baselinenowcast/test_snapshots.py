@@ -6,9 +6,11 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pandas as pd
+import pytest
 from bnc_helpers import read, read_ints, read_vec
 
 from bdbvhubrenewal.baselinenowcast import (
+    age_blocks,
     fill_row,
     growth,
     hub_week_matrix,
@@ -210,3 +212,20 @@ def test_fill_row_matches_r_apply_delay_on_zero_rows() -> None:
             for b in range(a, cdf.size)
         ]
         np.testing.assert_allclose(got, want[row, a:], rtol=1e-12)
+
+
+def test_age_blocks_pool_ages_until_they_reach_the_count() -> None:
+    den = np.array([[0.0, 3, 5, 16, 10, 2, 1]])
+    np.testing.assert_array_equal(age_blocks(den, 10), [0, 0, 0, 0, 1, 1, 1])
+    # 0 gives one block per age.
+    np.testing.assert_array_equal(age_blocks(den, 0), np.arange(7))
+
+
+def test_ages_in_a_block_share_one_factor() -> None:
+    # Ages 0 and 1 have 2 and 3 cases, so they share a factor.
+    den = np.array([[[2.0, 3.0, 20.0, 20.0]]])
+    num = den * np.exp([[[0.6, 0.2, 0.1, 0.0]]])
+    g = log_factors(num, den, [1], min_count=5)[0]
+    assert g[0] == g[1]
+    # The shared factor is the denominator-weighted mean of the log ratios.
+    assert g[0] == pytest.approx((2 * 0.6 + 3 * 0.2) / 5)
