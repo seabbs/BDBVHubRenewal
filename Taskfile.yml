@@ -173,6 +173,7 @@ tasks:
   plots:
     desc: Make the docs figures and tables from the backtest results
     cmds:
+      - task: fit-store
       - uv run bdbvhubrenewal compare-hub
       - uv run bdbvhubrenewal report
 

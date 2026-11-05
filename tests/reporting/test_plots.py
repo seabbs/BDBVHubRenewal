@@ -164,3 +164,38 @@ def test_variants_are_hatched_and_hollow() -> None:
     assert plots.bar_style("#123456", "6 3")["facecolor"] == "none"
     assert plots.point_style("#123456", "")["mfc"] == "#123456"
     assert plots.point_style("#123456", "6 3")["mfc"] == "none"
+
+
+def _learnt(model: str, vintage: str, location: str) -> pd.DataFrame:
+    days = [
+        {"x": str(d), "quantity": "reported_share", "q50": d / 10}
+        for d in range(11)
+    ]
+    weeks = [{"x": w, "quantity": "median_delay", "q50": 6.0} for w in WEEKS]
+    rows = pd.DataFrame(days + weeks)
+    return rows.assign(
+        model=model,
+        vintage=vintage,
+        location=location,
+        q5=rows["q50"] * 0.9,
+        q95=rows["q50"] * 1.1,
+    )
+
+
+def test_renewal_delay_draws_each_fit_at_its_latest_origin() -> None:
+    learnt = pd.concat(
+        [
+            _learnt("renewal", "2026-10-24", "pooled"),
+            _learnt("renewal", "2026-11-01", "pooled"),
+            _learnt("renewalsp", "2026-11-01", "CD-IT"),
+            _learnt("renewalsp", "2026-11-01", "CD-NK"),
+        ],
+        ignore_index=True,
+    )
+    fig = plots.plot_renewal_delay(learnt, {"CD-IT": "Ituri"})
+    top, bottom = fig.axes
+    labels = [line.get_label() for line in bottom.lines]
+    assert labels == ["renewal", "renewalsp, Ituri", "renewalsp, CD-NK"]
+    assert len(top.lines) == 3
+    assert top.get_title() == "Fits at 2026-11-01"
+    plt.close(fig)

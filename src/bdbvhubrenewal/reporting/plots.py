@@ -63,6 +63,7 @@ __all__ = [
     "plot_location_grid",
     "plot_newly_missing",
     "plot_nowcast",
+    "plot_renewal_delay",
     "plot_revisions",
     "plot_scores",
     "plot_scores_by_truth",
@@ -758,6 +759,74 @@ def plot_delays_over_time(
     ax2.set_yscale("log")
     _date_axis(ax2)
     ax.set_title(f"Delay data of the {latest['vintage'].max()} vintage")
+    return fig
+
+
+def plot_renewal_delay(
+    summary: pd.DataFrame,
+    names: Mapping[str, str] | None = None,
+    mode: str = "light",
+) -> Figure:
+    """Plot the renewal models' learnt delay at their latest origin.
+
+    Parameters
+    ----------
+    summary : pandas.DataFrame
+        `delay-summary.csv` rows (`bdbvhubrenewal.forecasters.renewal.
+        delay_summary` with `model`, `vintage` and `location`).
+    names : mapping, optional
+        Location names by code, for the single-patch fits' labels.
+    mode : str
+        `"light"` or `"dark"`.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Top: the share of onsets in the last week reported by each day
+        since onset. Bottom: the median delay by onset week. One line and
+        90% band per fit: pooled over provinces, or one per province for a
+        single-patch model.
+    """
+    names = dict(names or {})
+    latest = summary.groupby("model")["vintage"].transform("max")
+    rows = summary.loc[summary["vintage"] == latest]
+    models = list(dict.fromkeys(rows["model"]))
+    fig, (top, bottom) = plt.subplots(
+        2, 1, figsize=(7.2, 6), layout="constrained"
+    )
+    for model in models:
+        fits = rows.loc[rows["model"] == model, "location"].unique()
+        colour = model_colour(model, models, mode)
+        for i, loc in enumerate(fits):
+            fit = rows.loc[(rows["model"] == model) & (rows["location"] == loc)]
+            dash = mpl_dash(list(DASHES.values())[i % len(DASHES)])
+            label = model
+            if loc != "pooled":
+                label = f"{model}, {names.get(loc, loc)}"
+            for ax, quantity, to_x in (
+                (top, "reported_share", pd.to_numeric),
+                (bottom, "median_delay", pd.to_datetime),
+            ):
+                q = fit.loc[fit["quantity"] == quantity]
+                xs = to_x(q["x"])
+                ax.fill_between(xs, q["q5"], q["q95"], color=colour, alpha=0.1)
+                ax.plot(xs, q["q50"], color=colour, linestyle=dash, label=label)
+    vintage = ", ".join(sorted(rows["vintage"].astype(str).unique()))
+    top.set_title(f"Fits at {vintage}")
+    top.set_xlabel("Days since onset")
+    top.set_ylabel("Share reported, last onset week")
+    top.set_ylim(0, 1)
+    bottom.set_ylabel("Median delay (days)")
+    _date_axis(bottom)
+    handles, labels = bottom.get_legend_handles_labels()
+    fig.legend(
+        handles,
+        labels,
+        loc="outside lower center",
+        ncol=3,
+        fontsize=7,
+        frameon=False,
+    )
     return fig
 
 
