@@ -168,3 +168,14 @@ def test_cli_fit_task_carries_the_delay_files_for_the_lag() -> None:
     assert task.target_history is not None
     assert task.target_history["vintage"].nunique() >= 3
     assert vintage_inputs(task, MAIN).publication_lag_pmf is not None
+
+
+def test_zone_backtest_defaults_to_the_committed_zone_models() -> None:
+    from bdbvhubrenewal.cli import build_parser
+
+    args = build_parser().parse_args(["zone-backtest"])
+    scores = pd.read_csv(ROOT / "results" / "zone-scores.csv")
+    committed = {
+        m.removesuffix(" (summed to provinces)") for m in scores["model"]
+    }
+    assert set(args.models) == committed
