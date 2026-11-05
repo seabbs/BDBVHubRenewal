@@ -4,10 +4,12 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import numpyro
+import numpyro.distributions as dist
 import pandas as pd
 import pytest
 from pyrenew.deterministic import DeterministicVariable
 from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
+from pyrenew.randomvariable import DistributionalVariable
 
 from bdbvhubrenewal.model import (
     FixedTimeVarying,
@@ -31,6 +33,19 @@ from .numpy_reference import (
     expected_missing_by_report,
     renewal,
 )
+
+
+def _hazard(name, time_process):
+    """HazardDelay on delays 0..30 with the model's priors."""
+    return HazardDelay(
+        name,
+        30,
+        DistributionalVariable(f"{name}_hazard0", dist.Normal(-2.0, 1.0)),
+        NonCentredRandomWalk(
+            DistributionalVariable(f"{name}_smooth_sd", dist.HalfNormal(0.4))
+        ),
+        time_process,
+    )
 
 
 def uniform_kernel(n):
@@ -125,8 +140,7 @@ def test_coupled_renewal_matches_reference(deplete):
         jnp.asarray(rt),
         jnp.asarray(g),
         mixing_matrix(jnp.asarray(k), 0.05, jnp.asarray(f)),
-        jnp.asarray(1 - seed[:, :n_init].sum(axis=1) / pops),
-        deplete=deplete,
+        pool=1.0 if deplete else None,
     )
     # Exact without depletion. With it, PyRenew's exponential depletion
     # matches the reference's linear form to first order (small y).
@@ -141,11 +155,10 @@ def test_depletion_bounds_attack_rate():
     I0 = jnp.full((len(g), 2), 1e-4)
     rt = jnp.full((400, 2), 3.0)
     w = jnp.eye(2)
-    s0 = 1 - I0.sum(axis=0)
-    x, r_eff, _ = coupled_renewal(I0, rt, g, w, s0, deplete=True)
+    x, r_eff, _ = coupled_renewal(I0, rt, g, w, pool=1.0)
     assert float(x.sum(axis=0).max() + I0.sum(axis=0).max()) <= 1.0 + 1e-6
     assert float(r_eff[-1].max()) < 1.0
-    x_free, _, _ = coupled_renewal(I0, rt, g, w, s0, deplete=False)
+    x_free, _, _ = coupled_renewal(I0, rt, g, w)
     assert float(x_free.sum()) > 1e3
 
 
@@ -192,11 +205,19 @@ def test_missing_fraction_and_hazard_delay_shapes():
         NonCentredRandomWalk(DeterministicVariable("sd", 0.1)), start_dow=6
     )
     pi = MissingOnsetFraction(
-        "pi", PooledInitialValue("pi0", 4, -2.0, 0.5, 0.3), weekly, weekly
+        "pi",
+        PooledInitialValue(
+            "pi0",
+            4,
+            DistributionalVariable("pi0_mean", dist.Normal(-2.0, 0.5)),
+            DistributionalVariable("pi0_sd", dist.HalfNormal(0.3)),
+        ),
+        weekly,
+        weekly,
     )
     out = seeded(lambda: pi(n_timepoints=35, n_groups=4, first_day_dow=6))
     assert out.shape == (35, 4) and bool(jnp.all((out > 0) & (out < 1)))
-    delay = HazardDelay("delay", 30, weekly)
+    delay = _hazard("delay", weekly)
     pmf = seeded(lambda: delay(n_timepoints=35, first_day_dow=6))
     assert pmf.shape == (35, 31)
     np.testing.assert_allclose(pmf.sum(axis=1), 1.0, rtol=1e-5)
@@ -206,7 +227,7 @@ def test_hazard_delay_records_its_shape_and_shift():
     weekly = WeeklyTemporalProcess(
         NonCentredRandomWalk(DeterministicVariable("sd", 0.1)), start_dow=6
     )
-    delay = HazardDelay("delay", 30, weekly)
+    delay = _hazard("delay", weekly)
     with numpyro.handlers.trace() as tr, numpyro.handlers.seed(rng_seed=0):
         pmf = delay(n_timepoints=35, first_day_dow=6)
     beta = tr["delay_beta"]["value"]
@@ -223,9 +244,7 @@ def test_near_constant_when_innovation_sd_is_small():
     weekly = WeeklyTemporalProcess(
         NonCentredRandomWalk(DeterministicVariable("sd", 1e-6)), start_dow=6
     )
-    pmf = seeded(
-        lambda: HazardDelay("d", 30, weekly)(n_timepoints=70, first_day_dow=6)
-    )
+    pmf = seeded(lambda: _hazard("d", weekly)(n_timepoints=70, first_day_dow=6))
     np.testing.assert_allclose(pmf[0], pmf[-1], atol=1e-5)
 
 
@@ -342,7 +361,7 @@ def test_hazard_delay_on_weekly_rows_matches_daily(dow):
     )
 
     def run(process):
-        delay = HazardDelay("delay", 30, process)
+        delay = _hazard("delay", process)
         return seeded(lambda: delay(n_timepoints=40, first_day_dow=dow), 4)
 
     np.testing.assert_allclose(run(weekly), run(_Daily(weekly)), rtol=1e-6)
@@ -354,7 +373,7 @@ def test_hazard_delay_smoothness_prior_allows_real_fits():
     weekly = WeeklyTemporalProcess(
         NonCentredRandomWalk(DeterministicVariable("sd", 0.1)), start_dow=6
     )
-    delay = HazardDelay("delay", 30, weekly)
+    delay = _hazard("delay", weekly)
     with numpyro.handlers.trace() as tr:
         seeded(lambda: delay(n_timepoints=14, first_day_dow=6))
     assert float(tr["delay_smooth_sd"]["fn"].scale) == pytest.approx(0.4)
@@ -382,17 +401,15 @@ def test_imported_infections_are_part_of_the_total():
     w = np.asarray(mixing_matrix(jnp.asarray(k), 0.05, jnp.asarray(f)))
     I0 = rng.uniform(0, 1e-5, (len(g), p))
     rt = rng.uniform(0.6, 1.8, (60, p))
-    s0 = np.ones(p)
     # Imported infections are part of the total, and none without coupling.
     x, _, imp = coupled_renewal(
         jnp.asarray(I0), jnp.asarray(rt), jnp.asarray(g), jnp.asarray(w),
-        jnp.asarray(s0) * 0.05, deplete=True, pool=0.05,
+        pool=0.05,
     )  # fmt: skip
     assert np.all(np.asarray(imp) <= np.asarray(x) + 1e-12)
     assert float(np.asarray(imp).sum()) > 0
     _, _, none = coupled_renewal(
         jnp.asarray(I0), jnp.asarray(rt), jnp.asarray(g), jnp.eye(p),
-        jnp.asarray(s0), deplete=False,
     )  # fmt: skip
     np.testing.assert_allclose(np.asarray(none), 0.0)
 

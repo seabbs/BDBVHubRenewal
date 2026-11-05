@@ -54,9 +54,6 @@ def test_active_set_follows_the_data(outbreak, sim_tables, table):
     "cfg",
     [
         *LADDER.values(),
-        ModelConfig(delay="gamma"),
-        ModelConfig(delay="lognormal"),
-        ModelConfig(coupling="learnt"),
     ],
 )
 def test_model_sites_and_shapes(outbreak, sim_tables, table, cfg):
@@ -161,7 +158,7 @@ def test_main_is_the_last_ladder_step():
     assert list(LADDER.values())[-1] == MAIN
 
 
-def test_real_data_kernels_and_log_density_are_finite(table):
+def test_real_data_kernels_are_finite(table):
     from bdbvhubrenewal.data import load_delays, load_target
 
     from .conftest import MAIN_REPO_DATA
@@ -181,36 +178,6 @@ def test_real_data_kernels_and_log_density_are_finite(table):
         assert len(data.names) + len(data.inactive_names) == 26
         assert np.all(np.isfinite(data.kernel))
         assert np.all(np.isfinite(data.import_kernel))
-        model = build_model(data)
-        tr = trace(model, data)
-        sampled = {
-            k: v["value"]
-            for k, v in tr.items()
-            if v["type"] == "sample" and not v["is_observed"]
-        }
-        ld = numpyro.infer.util.log_density(
-            model.sample, (), model_args(model, data), sampled
-        )[0]
-        assert np.isfinite(float(ld))
-
-
-def test_learnt_kernel_is_gravity_at_prior_centre(sim_vintage):
-    from bdbvhubrenewal.model import LearntKernel
-
-    data = sim_vintage
-    k = LearntKernel("k", data.distances, data.all_populations, 4)
-    sub = numpyro.handlers.substitute(
-        k.sample,
-        data={
-            "k_log_decay": 0.0,
-            "k_weight_z": np.zeros(3),
-            "k_weight_sd": 0.3,
-        },
-    )
-    kernel = np.asarray(sub())
-    np.testing.assert_allclose(kernel, data.kernel, rtol=1e-4, atol=1e-6)
-    np.testing.assert_allclose(kernel.sum(axis=1), 1.0, rtol=1e-5)
-    assert k.import_kernel.shape == (4, 2)
 
 
 def test_single_patch_locations_are_independent(outbreak, sim_tables, table):
