@@ -431,7 +431,9 @@ class OnsetStreams(BaseObservationProcess):
         int
             The length of the infection-to-onset pmf less one.
         """
-        return int(jnp.size(self.temporal_pmf_rv())) - 1
+        # Only the shape is needed, so a random pmf is traced, not sampled.
+        pmf = jax.eval_shape(numpyro.handlers.seed(self.temporal_pmf_rv, 0))
+        return int(pmf.shape[0]) - 1
 
     def infection_resolution(self) -> str:
         """Return the resolution of the infections the process reads.

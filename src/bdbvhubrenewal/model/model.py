@@ -29,7 +29,7 @@ from pyrenew.model import MultiSignalModel, PyrenewBuilder
 from pyrenew.observation import NegativeBinomialNoise
 from pyrenew.randomvariable import DistributionalVariable, TransformedVariable
 
-from .censored import censored_pmf
+from .censored import CensoredPMF, censored_pmf
 from .composition_noise import DirichletMultinomialNoise, MultinomialNoise
 from .delays import (
     FixedTimeVarying,
@@ -53,13 +53,19 @@ GI_SD = 9.3
 means (from the NEJM serial interval). After double censoring, dropping
 lag 0 and truncating at 42 days the effective mean is 14.8 and SD 8.4."""
 INCUBATION_MEAN = 6.3
-"""Log-normal incubation period mean in days, Bundibugyo virus disease in
-Uganda in 2007 (MacNeil et al. 2010, n = 24), as BVDOutbreakSize uses."""
+"""Log-normal incubation period prior mean in days, Bundibugyo virus disease
+in Uganda in 2007 (MacNeil et al. 2010, n = 24), as BVDOutbreakSize uses."""
+INCUBATION_MEAN_SD = 0.54
+"""Prior SD of the incubation period mean, BVDOutbreakSize's, which gives
+MacNeil et al.'s 95% CI of 5.2 to 7.3 days."""
 INCUBATION_SD = 3.5
-"""Log-normal incubation period SD in days, BVDOutbreakSize's prior mean
-(MacNeil et al. give no interval on the spread)."""
+"""Log-normal incubation period prior SD in days, BVDOutbreakSize's (MacNeil
+et al. give no interval on the spread)."""
+INCUBATION_SD_SD = 0.8
+"""Prior SD of the incubation period SD, BVDOutbreakSize's."""
 INCUBATION_LENGTH = 28
-"""Longest incubation period in days, its 99.9% quantile rounded up."""
+"""Longest incubation period in days, its 99.9% quantile at the prior means
+rounded up."""
 PHI_FLOOR = 1e-3
 """Added to $1/\\phi$ so the concentration stays at or below 1000."""
 ALPHA0 = 0.6
@@ -598,8 +604,23 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     builder.add_observation(
         OnsetStreams(
             name="onsets",
-            temporal_pmf_rv=DeterministicPMF(
-                "infection_to_onset", incubation_period()
+            temporal_pmf_rv=CensoredPMF(
+                "infection_to_onset",
+                "lognormal",
+                # BVDOutbreakSize's priors (onset_incidence_model).
+                DistributionalVariable(
+                    "incubation_mean",
+                    dist.TruncatedNormal(
+                        INCUBATION_MEAN, INCUBATION_MEAN_SD, low=1.0
+                    ),
+                ),
+                DistributionalVariable(
+                    "incubation_sd",
+                    dist.TruncatedNormal(
+                        INCUBATION_SD, INCUBATION_SD_SD, low=1.0
+                    ),
+                ),
+                INCUBATION_LENGTH,
             ),
             ascertainment_rate_rv=ascertainment.for_signal("onsets"),
             missing_fraction_rv=missing,

@@ -4,7 +4,8 @@ r"""Double interval censored daily pmfs of continuous delays.
 A delay $X$ from a primary event, uniform over a day, to a secondary
 event recorded to its day has the pmf of primarycensored
 (`dpcens(..., pwindow = 1, swindow = 1)`), here in closed form for the
-Gamma and log-normal.
+Gamma and log-normal. `CensoredPMF` gives that pmf as a PyRenew random
+variable with a random mean and SD.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import jax
 import jax.numpy as jnp
 from jax import Array
 from jax.typing import ArrayLike
+from pyrenew.metaclass import RandomVariable
 
 
 def censored_pmf(
@@ -95,3 +97,75 @@ def censored_pmf(
     pmf = jnp.where(right, second(q), second(g))
     pmf = jnp.maximum(pmf, 1e-12)
     return pmf / pmf.sum()
+
+
+class CensoredPMF(RandomVariable):
+    """Double interval censored daily pmf with a random mean and SD.
+
+    Returns `censored_pmf` on 0..dmax at the sampled mean and SD, so the
+    delay's uncertainty enters the model through `mean_rv` and `sd_rv`.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        family: str,
+        mean_rv: RandomVariable,
+        sd_rv: RandomVariable,
+        dmax: int,
+    ) -> None:
+        """Initialize the pmf.
+
+        Parameters
+        ----------
+        name
+            Name of the pmf.
+        family
+            Delay family, `"gamma"` or `"lognormal"`.
+        mean_rv, sd_rv
+            Mean and SD of the delay in days.
+        dmax
+            Maximum delay, so the pmf has `dmax + 1` entries.
+
+        Raises
+        ------
+        TypeError
+            If `mean_rv` or `sd_rv` is not a `RandomVariable`.
+        ValueError
+            If `family` is not `"gamma"` or `"lognormal"`.
+        """
+        if not isinstance(mean_rv, RandomVariable) or not isinstance(
+            sd_rv, RandomVariable
+        ):
+            raise TypeError("mean_rv and sd_rv must be RandomVariables.")
+        if family not in ("gamma", "lognormal"):
+            raise ValueError("family must be 'gamma' or 'lognormal'.")
+        super().__init__(name=name)
+        self.family = family
+        self.mean_rv = mean_rv
+        self.sd_rv = sd_rv
+        self.dmax = dmax
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return (
+            f"CensoredPMF(name={self.name!r}, family={self.family!r}, "
+            f"mean_rv={self.mean_rv!r}, sd_rv={self.sd_rv!r}, "
+            f"dmax={self.dmax})"
+        )
+
+    def sample(self, **kwargs: object) -> Array:
+        """Sample the mean and SD and return the pmf.
+
+        Parameters
+        ----------
+        **kwargs
+            Ignored.
+
+        Returns
+        -------
+        Array
+            Pmf on 0..dmax.
+        """
+        mean = self.mean_rv()
+        return censored_pmf(self.family, mean, self.sd_rv() / mean, self.dmax)

@@ -22,7 +22,7 @@
 The package imports without JAX until this subpackage is imported.
 """
 
-from .censored import censored_pmf
+from .censored import CensoredPMF, censored_pmf
 from .delays import (
     FixedTimeVarying,
 )
@@ -57,6 +57,7 @@ from .temporal import NonCentredRandomWalk
 __all__ = [
     "BVD",
     "MAIN",
+    "CensoredPMF",
     "FixedTimeVarying",
     "HazardDelay",
     "Importation",
