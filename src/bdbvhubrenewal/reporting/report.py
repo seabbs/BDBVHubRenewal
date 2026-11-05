@@ -522,8 +522,8 @@ def _scored_on(reported: pd.DataFrame, baseline: str = "randomwalk") -> str:
     counts = [f"{n[p]} {label}" for p, label in scales.items() if p in n]
     listed = ", ".join(counts[:-1]) + " and " if len(counts) > 1 else ""
     return (
-        f"They rest on {len(pairs)} origin and release pairs, with "
-        f"{baseline} scored on {listed}{counts[-1]} forecasts.\n"
+        f"These scores come from {len(pairs)} origin and release pairs.\n"
+        f"{baseline} has {listed}{counts[-1]} forecasts scored.\n"
         "The renewal models are not scored at health zones.\n"
     )
 
