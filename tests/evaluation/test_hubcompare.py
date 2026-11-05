@@ -391,7 +391,7 @@ def test_plot_hub_round(
     )
     q = forecast_quantiles(forecasts)
     colours = comparison_colours(
-        {"flat (main build)": "randomwalk"}, [], ["teamA-weekly", "teamB-late"]
+        {"flat (main build)": "randomwalk"}, {}, ["teamA-weekly", "teamB-late"]
     )
     fig = plot_hub_round(
         q, target, "2026-10-24", colours, locations=("CD", "CD-IT")
@@ -481,26 +481,27 @@ def test_own_hub_ids() -> None:
 
 def test_comparison_colours_are_fixed_per_model() -> None:
     from bdbvhubrenewal.reporting.plots import (
+        DASHES,
         HUB_GREYS,
         MODEL_COLOURS,
-        MODEL_STYLE,
         comparison_colours,
-        model_style,
     )
 
     teams = ["teamA", "teamB"]
     got = comparison_colours(
         {"randomwalk (main build)": "randomwalk"},
-        ["seabbs-x (submitted)"],
+        {"seabbs-x (submitted)": "randomwalknowcast"},
         teams,
     )
     first = (MODEL_COLOURS["light"][0], MODEL_COLOURS["dark"][0], "")
     assert got["randomwalk (main build)"] == first
-    # Submitted series are red, a colour no model uses.
-    red = (MODEL_COLOURS["light"][7], MODEL_COLOURS["dark"][7])
-    assert got["seabbs-x (submitted)"][:2] == red
-    assert red not in {model_style(m, [])[:2] for m in MODEL_STYLE}
+    # A submitted series takes the colour of the model it submits, dashed.
+    assert got["seabbs-x (submitted)"] == (
+        MODEL_COLOURS["light"][1],
+        MODEL_COLOURS["dark"][1],
+        DASHES["dashed"],
+    )
     assert {got[t][0] for t in teams} <= set(HUB_GREYS["light"])
     assert {got[t][1] for t in teams} <= set(HUB_GREYS["dark"])
     # A team keeps its grey whichever of our models are shown.
-    assert comparison_colours({}, [], teams)["teamB"] == got["teamB"]
+    assert comparison_colours({}, {}, teams)["teamB"] == got["teamB"]

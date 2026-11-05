@@ -45,6 +45,7 @@ __all__ = [
     "MODEL_COLOURS",
     "MODEL_STYLE",
     "THEMES",
+    "bar_style",
     "comparison_colours",
     "comparison_label",
     "hub_styles",
@@ -67,6 +68,7 @@ __all__ = [
     "plot_scores_by_truth",
     "plot_simulation",
     "plot_target",
+    "point_style",
     "save_light_dark",
     "theme",
 ]
@@ -140,9 +142,6 @@ longer be told apart. `None` is the data ink, for the as-reported floor.
 """
 
 _FREE_SLOT: Final = 1 + max(s for s, _ in MODEL_STYLE.values() if s is not None)
-
-_SUBMITTED_SLOT: Final = 7
-"""Red, for our submitted comparison series, whatever models are added."""
 
 HUB_GREYS: Final[dict[str, tuple[str, ...]]] = {
     "light": ("#5f5e5a", "#898781", "#b4b2a9"),
@@ -223,6 +222,22 @@ def model_style(name: str, models: Sequence[str]) -> tuple[str, str, str]:
 def mpl_dash(dash: str) -> str | tuple[int, tuple[float, ...]]:
     """Turn an SVG dash into a matplotlib line style."""
     return (0, tuple(float(v) for v in dash.split())) if dash else "-"
+
+
+def bar_style(colour: str, dash: str) -> dict[str, Any]:
+    """Bar keywords: filled when solid, hatched in the colour otherwise.
+
+    Bars cannot show a dash, so a variant is hatched to keep it apart
+    from its parent.
+    """
+    if not dash:
+        return {"color": colour}
+    return {"facecolor": "none", "edgecolor": colour, "hatch": "////"}
+
+
+def point_style(colour: str, dash: str) -> dict[str, Any]:
+    """Marker keywords: filled when solid, hollow otherwise."""
+    return {"color": colour, "mfc": "none" if dash else colour}
 
 
 @contextmanager
@@ -1370,7 +1385,9 @@ def comparison_label(model: str, source: str) -> str:
 
 
 def comparison_colours(
-    ours: Mapping[str, str], submitted: Sequence[str], teams: Sequence[str]
+    ours: Mapping[str, str],
+    submitted: Mapping[str, str],
+    teams: Sequence[str],
 ) -> dict[str, tuple[str, str, str]]:
     """Return the light colour, dark colour and dash of each comparison series.
 
@@ -1378,9 +1395,9 @@ def comparison_colours(
     ----------
     ours : mapping of str to str
         Label of each of our main builds to its registry name.
-    submitted : sequence of str
-        Labels of our submitted series. They share red, each with its own
-        dash in sorted order.
+    submitted : mapping of str to str
+        Label of each of our submitted series to the registry name of the
+        model it submits, whose colour it takes, dashed.
     teams : sequence of str
         Every hub team.
 
@@ -1388,22 +1405,17 @@ def comparison_colours(
     -------
     dict
         Label to its light colour, dark colour and SVG dash: our main
-        builds in their `model_style`, our submitted series next, and the
-        hub teams solid in the greys of `hub_styles`.
+        builds in their `model_style`, our submitted series in their
+        model's colour dashed, and the hub teams solid in the greys of
+        `hub_styles`.
     """
     from bdbvhubrenewal.forecasters.base import list_models
 
     registry = [s.name for s in list_models()]
     out = {lab: model_style(m, registry) for lab, m in ours.items()}
-    light, dark = MODEL_COLOURS["light"], MODEL_COLOURS["dark"]
-    dashes = list(DASHES.values())
     out |= {
-        lab: (
-            light[_SUBMITTED_SLOT],
-            dark[_SUBMITTED_SLOT],
-            dashes[i % len(dashes)],
-        )
-        for i, lab in enumerate(sorted(submitted))
+        lab: (*model_style(m, registry)[:2], DASHES["dashed"])
+        for lab, m in submitted.items()
     }
     grey = {mode: hub_styles(teams, mode) for mode in ("light", "dark")}
     out |= {t: (grey["light"][t][0], grey["dark"][t][0], "") for t in teams}
@@ -1500,8 +1512,12 @@ def plot_hub_round(
     here = set(q.loc[~hub, "label"])
     pick = 0 if mode == "light" else 1
     rows = [
-        {lab: (c[pick], "o") for lab, c in colours.items() if lab in here},
-        {lab: styles[lab] for lab in sorted(set(q.loc[hub, "label"]))},
+        {
+            lab: (c[pick], "o", c[2])
+            for lab, c in colours.items()
+            if lab in here
+        },
+        {lab: (*styles[lab], "") for lab in sorted(set(q.loc[hub, "label"]))},
     ]
     locs = [loc for loc in locations if loc in set(q["location"])]
     real = target.loc[target["kind"] == "real"]
@@ -1539,14 +1555,23 @@ def plot_hub_round(
                 zorder=3,
             )
             width = 5.0 / max(len(style), 1)
-            for k, (lab, (colour, marker)) in enumerate(style.items()):
+            for k, (lab, (colour, marker, dash)) in enumerate(style.items()):
                 m = ql.loc[ql["label"] == lab]
                 offset = pd.Timedelta(days=(k - (len(style) - 1) / 2) * width)
                 xm = pd.to_datetime(m["target_end_date"]) + offset
-                ax.vlines(xm, m["q05"], m["q95"], color=colour, lw=1, alpha=0.7)
-                ax.vlines(xm, m["q25"], m["q75"], color=colour, lw=3)
+                ls = mpl_dash(dash)
+                ax.vlines(
+                    xm, m["q05"], m["q95"], color=colour, lw=1, alpha=0.7, ls=ls
+                )
+                ax.vlines(xm, m["q25"], m["q75"], color=colour, lw=3, ls=ls)
                 ax.plot(
-                    xm, m["q50"], marker, color=colour, ms=3, ls="", label=lab
+                    xm,
+                    m["q50"],
+                    marker,
+                    ms=4,
+                    ls="",
+                    label=lab,
+                    **point_style(colour, dash),
                 )
             ax.axvline(mdates.date2num(ref), color=ink["muted"], lw=0.8, ls=":")
             _shade_incomplete(ax, cut, mode)
@@ -1737,7 +1762,13 @@ def plot_scores(
                     label=m,
                 )
             else:
-                ax.bar(x + i * width, mean[m], width, color=col, label=m)
+                ax.bar(
+                    x + i * width,
+                    mean[m],
+                    width,
+                    label=m,
+                    **bar_style(col, dash),
+                )
         if by != "horizon":
             ax.set_xticks(
                 x + width * (len(models) - 1) / 2,

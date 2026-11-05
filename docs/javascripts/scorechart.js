@@ -95,6 +95,7 @@
       }
       shown.forEach(function (m, k) {
         var c = keys.colour(m);
+        var fill = keys.dash(m) ? T.hatch(svg, c) : c;
         var own = rows.filter(function (r) { return r[0] === m; })
           .sort(function (a, b) { return a[1] - b[1]; });
         if (d.kind === "bar") {
@@ -103,7 +104,7 @@
             var x = X(r[1]) - bw * 0.4 + k * w;
             var y0 = Y(Math.max(lo, 0)), y1 = Y(r[col]);
             var bar = el("rect", { x: x, y: Math.min(y0, y1), width: w,
-              height: Math.abs(y0 - y1), fill: c }, plot);
+              height: Math.abs(y0 - y1), fill: fill, stroke: c }, plot);
             el("title", {}, bar).textContent = tip(r);
           });
         } else {

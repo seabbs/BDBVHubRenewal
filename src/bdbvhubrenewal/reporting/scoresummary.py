@@ -86,7 +86,7 @@ def summary_rows(
     Returns
     -------
     dict
-        `models` (name, light, dark, dash colour, ticked at first),
+        `models` (name, light and dark colour, dash, ticked at first),
         `baseline` (its index), `metrics` (key, label, ref, relative),
         `origins`, `releases`, `weeks`, `pools` (id and label, in order),
         `places` (id, name, pool) and `rows`: model, origin, release,

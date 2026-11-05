@@ -127,7 +127,7 @@ def test_model_styles_are_fixed_by_name() -> None:
     from bdbvhubrenewal.forecasters import list_models
 
     registered = {s.name for s in list_models()}
-    assert registered <= set(plots.MODEL_STYLE)
+    assert set(plots.MODEL_STYLE) == registered | {"as reported"}
     # Each colour and dash pair belongs to one model.
     pairs = list(plots.MODEL_STYLE.values())
     assert len(set(pairs)) == len(pairs)
@@ -156,3 +156,11 @@ def test_model_styles_are_fixed_by_name() -> None:
 def test_mpl_dash_reads_the_svg_dash() -> None:
     assert plots.mpl_dash("") == "-"
     assert plots.mpl_dash("6 3") == (0, (6.0, 3.0))
+
+
+def test_variants_are_hatched_and_hollow() -> None:
+    assert plots.bar_style("#123456", "") == {"color": "#123456"}
+    assert plots.bar_style("#123456", "6 3")["hatch"]
+    assert plots.bar_style("#123456", "6 3")["facecolor"] == "none"
+    assert plots.point_style("#123456", "")["mfc"] == "#123456"
+    assert plots.point_style("#123456", "6 3")["mfc"] == "none"

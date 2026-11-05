@@ -56,6 +56,24 @@
     };
   }
 
+  // Bars cannot show a dash, so a dashed model's bars are hatched in its
+  // colour. Adds the pattern to the chart's <defs> and returns the fill.
+  var hatches = 0;
+  function hatch(svg, colour) {
+    var defs = svg.querySelector("defs");
+    if (!defs) defs = svg.insertBefore(document.createElementNS(NS, "defs"), svg.firstChild);
+    var id = "bdbv-hatch-" + (hatches += 1);
+    var p = document.createElementNS(NS, "pattern");
+    [["id", id], ["patternUnits", "userSpaceOnUse"], ["width", 6], ["height", 6],
+      ["patternTransform", "rotate(45)"]].forEach(function (a) { p.setAttribute(a[0], a[1]); });
+    var line = document.createElementNS(NS, "line");
+    [["x1", 0], ["y1", 0], ["x2", 0], ["y2", 6], ["stroke", colour],
+      ["stroke-width", 3]].forEach(function (a) { line.setAttribute(a[0], a[1]); });
+    p.appendChild(line);
+    defs.appendChild(p);
+    return "url(#" + id + ")";
+  }
+
   function onTheme(draw) {
     new MutationObserver(draw).observe(document.body,
       { attributes: true, attributeFilter: ["data-md-color-scheme"] });
@@ -72,5 +90,6 @@
     return sel;
   }
 
-  window.bdbvToggles = { h: h, legend: legend, onTheme: onTheme, viewSelect: viewSelect };
+  window.bdbvToggles = { h: h, legend: legend, hatch: hatch, onTheme: onTheme,
+    viewSelect: viewSelect };
 })();

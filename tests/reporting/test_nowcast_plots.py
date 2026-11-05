@@ -74,7 +74,7 @@ def test_plot_place_summary_has_a_row_per_place_by_scale() -> None:
         }
     )
     fig = plot_place_summary(
-        table, ["a"], {"a": ("#000000", "#ffffff")}, {"CD-IT": "Ituri"}
+        table, ["a"], {"a": ("#000000", "#ffffff", "")}, {"CD-IT": "Ituri"}
     )
     provinces, zones = fig.axes
     assert provinces.get_title() == "Provinces"

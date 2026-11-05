@@ -324,12 +324,9 @@ def _downward_table(real: pd.DataFrame, zones: pd.DataFrame) -> str:
     )
 
 
-def _model_colours(
-    models: Sequence[str], registry: Sequence[str] | None = None
-) -> dict[str, tuple[str, str, str]]:
+def _model_colours(models: Sequence[str]) -> dict[str, tuple[str, str, str]]:
     """Each model's light colour, dark colour and dash, from `model_style`."""
-    registry = list(registry or models)
-    return {m: model_style(m, registry) for m in models}
+    return {m: model_style(m, models) for m in models}
 
 
 def _ours(frame: pd.DataFrame, names: Sequence[str]) -> pd.DataFrame:
@@ -377,7 +374,7 @@ def _release_section(
     by_place = relative_wis(scores, ("target", "origin", "location"))
     reported = overall.loc[overall["target"] == _TARGET_LABELS["reported"]]
     ours = [*names, BASELINE]
-    colours = _model_colours(ours, names)
+    colours = _model_colours(ours)
     rep = pooled.loc[pooled["target"] == _TARGET_LABELS["reported"]]
     # Rounds are named by their reference date, as in the explorer.
     rep = rep.assign(
@@ -1567,9 +1564,10 @@ def _comparison_page(
         key=registry.index,
     )
     submitted = sorted(set(quantiles.loc[source == "submitted", "model"]))
+    submits = {hub_id: m for m, hub_id in hub_ids.items()}
     colours = comparison_colours(
         {comparison_label(m, "real"): m for m in built},
-        [comparison_label(m, "submitted") for m in submitted],
+        {comparison_label(h, "submitted"): submits[h] for h in submitted},
         sorted(set(quantiles.loc[source == "hub", "model"])),
     )
     on = [

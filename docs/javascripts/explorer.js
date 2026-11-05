@@ -168,14 +168,18 @@
         var t0 = day(r[3]) + (slot - (slots - 1) / 2) * width;
         var xx = X(t0);
         var c = legend.colour(r[0]);
+        var dash = legend.dash(r[0]);
         var op = rounds.length > 1 ? 0.7 : 1;
         var tip = d.models[r[0]].name + ", round " + d.rounds[r[1]] + ", week ending " + r[3] +
           ": median " + r[6] + ", 50% " + r[5] + " to " + r[7] + ", 90% " + r[4] + " to " + r[8];
         var g = el("g", { opacity: op }, plot);
         el("title", {}, g).textContent = tip;
-        el("line", { x1: xx, x2: xx, y1: Y(r[4]), y2: Y(r[8]), stroke: c, "stroke-width": 1 }, g);
-        el("line", { x1: xx, x2: xx, y1: Y(r[5]), y2: Y(r[7]), stroke: c, "stroke-width": 3 }, g);
-        el("circle", { cx: xx, cy: Y(r[6]), r: 2.5, fill: c }, g);
+        el("line", { x1: xx, x2: xx, y1: Y(r[4]), y2: Y(r[8]), stroke: c, "stroke-width": 1,
+          "stroke-dasharray": dash }, g);
+        el("line", { x1: xx, x2: xx, y1: Y(r[5]), y2: Y(r[7]), stroke: c, "stroke-width": 3,
+          "stroke-dasharray": dash }, g);
+        // A dashed model's median is hollow, so it differs from its parent.
+        el("circle", { cx: xx, cy: Y(r[6]), r: 2.5, fill: dash ? "none" : c, stroke: c }, g);
       });
       if (pts.length) {
         el("polyline", { class: "explorer-data", fill: "none",
