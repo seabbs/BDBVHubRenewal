@@ -109,9 +109,9 @@ def test_zone_table_has_the_newest_weeks_and_scores() -> None:
 
 
 COLOURS = {
-    "randomwalk": ("#111111", "#eeeeee"),
-    ZONE_MODEL: ("#222222", "#dddddd"),
-    "renewalbvd": ("#333333", "#cccccc"),
+    "randomwalk": ("#111111", "#eeeeee", ""),
+    ZONE_MODEL: ("#222222", "#dddddd", ""),
+    "renewalbvd": ("#333333", "#cccccc", "6 3"),
 }
 
 
@@ -164,3 +164,4 @@ def test_place_chart_data_marks_models_without_samples() -> None:
     fans = {m["name"]: m["fan"] for m in data["models"]}
     assert fans == {"randomwalk": False, ZONE_MODEL: True, "renewalbvd": False}
     assert data["models"][2]["dark"] == "#cccccc"
+    assert data["models"][2]["dash"] == "6 3"
