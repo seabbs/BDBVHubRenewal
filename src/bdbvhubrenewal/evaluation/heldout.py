@@ -281,7 +281,7 @@ def run_heldout(
             rows, delays, config, real_vintages(real), real, daily=daily
         )
         fc = run_forecasts([get_model(n) for n in names], task)
-        fc.insert(1, "chosen_model", row.model)
+        fc.insert(1, "chosen_model", str(row.model))
         frames.append(fc)
         tasks += task
     out = Path(out_dir)
