@@ -31,7 +31,6 @@
 # `load_delays` reads the reporting delays the hub published, which the renewal models use.
 
 # %%
-import gzip
 import json
 from pathlib import Path
 
@@ -54,7 +53,8 @@ sorted(real["vintage"].unique())
 # %% [markdown]
 # ## Build the forecast task
 #
-# The origin is the newest release that a later release can score, and the later release is the newest.
+# The origin is the second newest release.
+# The newest release scores it.
 # The task holds what a model sees at the origin, including the daily onsets of every release up to it, and the weeks to forecast.
 # Its reference date is the Saturday after the origin, and the forecast weeks run from four weeks before it to three weeks after it.
 # `origin_tasks` builds the task of every real origin as the fit store fits it, so the baselines and the stored renewal fit see the same task.
@@ -102,8 +102,8 @@ baselines.groupby("model")["sample"].nunique()
 # ## Load the stored renewal fit
 #
 # `bdbvhubrenewal fit-store load` (`task fit-store`) fetches the store and records the fit it uses for each model and origin in `results/fit-store.json`.
-# That is the fit for this code and data, or, while that fit is still running, the newest fit of older code.
-# Each stored fit is a gzipped JSON file, so plain Python reads it.
+# That is the fit for this code and data, or, until that fit is made, the newest fit of older code.
+# Each stored fit is a gzipped JSON file, which `read_fit` reads into tables.
 # Its `forecasts` table has the same columns as the baselines' forecasts.
 
 # %%
@@ -111,12 +111,11 @@ status = json.loads(Path("results/fit-store.json").read_text())
 entry = next(
     s for s in status if s["model"] == "renewal" and s["origin"] == ORIGIN
 )
+assert entry["used"], f"The fit store has no renewal fit at {ORIGIN}."
 path = Path("output/fit-store/renewal") / ORIGIN / f"{entry['used']}.json.gz"
-stored = json.loads(gzip.decompress(path.read_bytes()))
-renewal = pd.DataFrame(
-    stored["forecasts"]["data"], columns=stored["forecasts"]["columns"]
-)
-print("fitted at commit", stored["meta"]["commit"][:7])
+stored = store.read_fit(path)
+renewal = stored.forecasts
+print("fitted at commit", stored.meta["commit"][:7])
 print("fit of this code" if entry["current"] else "fit of older code")
 forecasts = pd.concat([baselines, renewal], ignore_index=True)
 forecasts.groupby("model")["sample"].nunique()

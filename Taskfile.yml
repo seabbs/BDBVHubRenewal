@@ -51,6 +51,7 @@ tasks:
 
   fit-store:
     desc: Load the fitted models' stored fits into results/ (fetches the fit-store branch)
+    run: once
     cmds:
       - rm -rf output/fit-store
       - scripts/fit-store.sh fetch output/fit-store

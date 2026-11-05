@@ -149,6 +149,9 @@ markdown_extensions:
 plugins:
   - search
   - mkdocs-jupyter:
+      # Only the executed notebook. The .py source would also render to
+      # getting-started/ and replace it with a page without outputs.
+      include: ["*.ipynb"]
       execute: false
       include_source: true
       ignore_h1_titles: false
