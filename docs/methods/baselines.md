@@ -122,7 +122,7 @@ There is no growth past $D$, so an equation whose ages run past $D$ puts that gr
 
 ## Nowcast
 
-Each hub week is a reference time of a weekly reporting triangle, with a column every 7 days after $c_o$.
+Each hub week is a reference time of a weekly reporting triangle, with a column every 7 days after $c_o$ and a last one at $c_o + D$, where $F = 1$.
 The share of week $w$ reported by column $j$ is
 
 $$
@@ -211,8 +211,8 @@ Steps are summed within a sample, so each sample is one trajectory.
 A place with no case reported in the 9 weeks up to the cut-off week is silent.
 A silent place is 0 until its first introduction, which comes in each week with probability $q_p$.
 In both models this holds from the week after the start week of `randomwalk`, so `randomwalknowcast` does not nowcast a silent place's recent weeks.
-From that week its rate is 1 case a week, and the introduction week has at least 1 case.
-Its walk keeps its own spread, which is 0 over its silent weeks.
+A silent place's walk has spread 0, so from its introduction its rate stays at 1 case a week.
+The introduction week has at least 1 case.
 $q_p$ is the share of weeks with a case among the weeks that follow 9 weeks with none, over the place and its siblings (the zones of its province, or the provinces of the country), in weeks up to the start week of `randomwalk`.
 It is estimated at each origin from the counts reported then.
 National is the sum of the provinces, sample by sample.
