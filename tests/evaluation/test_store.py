@@ -14,26 +14,23 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture
-def fitted_flat(monkeypatch: pytest.MonkeyPatch) -> str:
+def fitted_flat(flat_model: str, monkeypatch: pytest.MonkeyPatch) -> str:
     """Register the test stand-in as a fitted model, the only one stored."""
-    from conftest import FlatModel
-
     from bdbvhubrenewal.forecasters import base
 
-    monkeypatch.setattr(base, "_REGISTRY", {})
-    monkeypatch.setitem(
-        base._REGISTRY,
-        "flatfit",
-        base.ModelSpec(
-            "flatfit", lambda: _named(FlatModel()), "Fitted.", fitted=True
-        ),
+    factory = base._REGISTRY[flat_model].factory
+
+    def make() -> object:
+        model = factory()
+        model.name = "flatfit"
+        return model
+
+    monkeypatch.setattr(
+        base,
+        "_REGISTRY",
+        {"flatfit": base.ModelSpec("flatfit", make, "Fitted.", fitted=True)},
     )
     return "flatfit"
-
-
-def _named(model: object) -> object:
-    model.name = "flatfit"  # type: ignore[attr-defined]
-    return model
 
 
 @pytest.fixture
