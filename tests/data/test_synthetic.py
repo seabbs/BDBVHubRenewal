@@ -142,7 +142,6 @@ def test_simulated_onsets_follow_the_model_renewal(outbreak) -> None:  # type: i
         jnp.asarray(rt),
         jnp.asarray(g),
         w,
-        jnp.full(len(pop), nu),
         pool=nu,
         seeding=jnp.asarray(seeding),
     )

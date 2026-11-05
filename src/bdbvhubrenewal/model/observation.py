@@ -32,14 +32,15 @@ import numpyro.distributions as dist
 from jax import Array
 from jax.typing import ArrayLike
 from pyrenew.convolve import compute_prop_already_reported
-from pyrenew.deterministic import DeterministicPMF
+from pyrenew.latent.temporal_processes import TemporalProcess
 from pyrenew.metaclass import RandomVariable
 from pyrenew.observation.base import BaseObservationProcess
 from pyrenew.observation.noise import CountNoise
 from pyrenew.observation.types import ObservationSample
 from pyrenew.time import daily_to_weekly
 
-from .distributions import ObservedCellsDirichletMultinomial
+from .composition_noise import CompositionNoise, MultinomialNoise
+from .pooled import pooled_walk
 
 _FLOOR = 1e-6
 
@@ -328,22 +329,23 @@ def _weekly_blocks(
 class OnsetStreams(BaseObservationProcess):
     r"""Known and hub-imputed weekly onsets for each province.
 
-    Expected confirmed onsets are $\lambda_p(s) = \alpha(s) I_p(s)$,
-    with $I_p$ the latent infections dated by onset and $\alpha$ the
-    time-varying ascertainment. `onset_expectations` gives the two streams.
+    Expected confirmed onsets are
+    $\lambda_p(s) = \alpha(s) \sum_\tau h(\tau) I_p(s - \tau)$,
+    with $I_p$ the latent infections, $h$ the infection-to-onset pmf
+    (`temporal_pmf_rv`, a point mass at 0 when infections are dated by
+    onset) and $\alpha$ the time-varying ascertainment.
+    `onset_expectations` gives the two streams.
     Each is summed to weeks and scored with its own negative binomial.
     The delays of known-onset cases, pooled over provinces and tabulated
-    by onset week and delay, are scored with a multinomial given the
-    weekly totals,
+    by onset week and delay, are scored given the weekly totals
+    (`delay_noise`) with probabilities
 
     $$P(d \mid w) = \frac{\sum_{s \in w} \sum_p \kappa_p(s, d)
     c(s + d)}{\sum_{s \in w} \sum_{d'} \sum_p \kappa_p(s, d') c(s + d')},$$
 
     with the same publication weights $c$ as the known stream, so the
-    two truncate alike.
-
-    which is the conditional part of the Poisson reporting triangle, so
-    it does not double count the known stream.
+    two truncate alike. This is the conditional part of the Poisson
+    reporting triangle, so it does not double count the known stream.
     Each stream's site, `{name}_known_obs` and `{name}_imputed_obs`, has
     two rows: the vintage counts and the counts still to be reported
     after the cut-off, which are never observed and so are drawn by
@@ -360,6 +362,8 @@ class OnsetStreams(BaseObservationProcess):
     ----------
     name : str
         Prefix for all sites.
+    temporal_pmf_rv : RandomVariable
+        Infection-to-onset pmf $h$ on lags $0..H$.
     ascertainment_rate_rv : RandomVariable
         $\alpha$, scalar or one value per day of the model axis.
     missing_fraction_rv : RandomVariable or None
@@ -371,8 +375,6 @@ class OnsetStreams(BaseObservationProcess):
     known_noise, imputed_noise : CountNoise
         PyRenew noise models for the two streams (`known_noise` for the
         single stream).
-    kernel_rv : LearntKernel, optional
-        Learnt kernel whose `import_kernel` replaces the fixed one.
     import_scale_rv : RandomVariable, optional
         Scale $\kappa$ of importations into provinces with no cases,
         $\mu_q(s) = \kappa \sum_p K_{pq} \lambda_p(s)$, scored with a
@@ -383,11 +385,9 @@ class OnsetStreams(BaseObservationProcess):
         Pmf of the lag from report to publication in a vintage, on
         $0..L$: a random variable to estimate it, or a fixed pmf.
         The default, all mass at lag 0, is no lag.
-    delay_overdispersion_rv : RandomVariable, optional
-        $1 / \sqrt{\psi}$, with $\psi$ capped at $10^4$. If given, the
-        delay counts are Dirichlet-multinomial with concentration
-        $\psi P(d \mid w)$ instead of multinomial, so that the pooled
-        delays of thousands of cases do not make the delay overconfident.
+    delay_noise : CompositionNoise, optional
+        Noise model of the delay counts given the weekly totals.
+        Defaults to `MultinomialNoise`.
     weekly_axis : bool, optional
         The model axis starts on `start_dow` with whole weeks, so the
         expectations can use per-week blocks (`onset_expectations` with
@@ -397,6 +397,7 @@ class OnsetStreams(BaseObservationProcess):
     def __init__(
         self,
         name: str,
+        temporal_pmf_rv: RandomVariable,
         ascertainment_rate_rv: RandomVariable,
         missing_fraction_rv: RandomVariable | None,
         delay_rv: RandomVariable,
@@ -404,35 +405,33 @@ class OnsetStreams(BaseObservationProcess):
         imputed_noise: CountNoise | None = None,
         import_scale_rv: RandomVariable | None = None,
         start_dow: int = 6,
-        kernel_rv: RandomVariable | None = None,
         publication_lag: RandomVariable | ArrayLike = NO_LAG,
-        delay_overdispersion_rv: RandomVariable | None = None,
+        delay_noise: CompositionNoise | None = None,
         weekly_axis: bool = False,
     ) -> None:
-        super().__init__(
-            name, DeterministicPMF(f"{name}_identity", jnp.ones(1))
-        )
+        super().__init__(name, temporal_pmf_rv)
         self.ascertainment_rate_rv = ascertainment_rate_rv
         self.missing_fraction_rv = missing_fraction_rv
         self.delay_rv = delay_rv
         self.known_noise = known_noise
         self.imputed_noise = imputed_noise
         self.import_scale_rv = import_scale_rv
-        self.kernel_rv = kernel_rv
         self.start_dow = start_dow
         self.publication_lag = publication_lag
-        self.delay_overdispersion_rv = delay_overdispersion_rv
+        self.delay_noise = (
+            MultinomialNoise() if delay_noise is None else delay_noise
+        )
         self.weekly_axis = weekly_axis
 
     def lookback_days(self) -> int:
-        """Return 0: the latent process is already dated by onset.
+        """Return the days of infections before an onset that it needs.
 
         Returns
         -------
         int
-            Always 0.
+            The length of the infection-to-onset pmf less one.
         """
-        return 0
+        return int(jnp.size(self.temporal_pmf_rv())) - 1
 
     def infection_resolution(self) -> str:
         """Return the resolution of the infections the process reads.
@@ -445,8 +444,24 @@ class OnsetStreams(BaseObservationProcess):
         return "subpop"
 
     def _predicted_obs(self, infections: Array) -> Array:
-        """Return infections unchanged; see `onset_expectations`."""
-        return infections
+        """Convolve infections with the infection-to-onset pmf.
+
+        As PyRenew's `CountObservation`, column by column with timeline
+        alignment, so the first `lookback_days()` days are NaN.
+
+        Returns
+        -------
+        Array
+            Expected infections by onset day, the shape of `infections`.
+        """
+        pmf = self.temporal_pmf_rv()
+        return jnp.asarray(
+            jax.vmap(
+                lambda col: self._convolve_delay_with_alignment(col, pmf)[0],
+                in_axes=1,
+                out_axes=1,
+            )(infections)
+        )
 
     def validate_data(
         self,
@@ -548,7 +563,7 @@ class OnsetStreams(BaseObservationProcess):
         n, n_prov = infections.shape
         alpha = jnp.asarray(self.ascertainment_rate_rv())
         alpha = alpha[:, None] if alpha.ndim == 1 else alpha
-        onsets = alpha * infections
+        onsets = alpha * self._predicted_obs(infections)
         delay = self.delay_rv(n_timepoints=n, first_day_dow=first_day_dow)
         if self.weekly_axis and (n % 7 or first_day_dow != self.start_dow):
             raise ValueError("Week blocks need an axis of whole weeks.")
@@ -627,9 +642,6 @@ class OnsetStreams(BaseObservationProcess):
                 self._score_delays(
                     weekly["triangle"], jnp.asarray(delay_counts)
                 )
-        if self.kernel_rv is not None and import_kernel is not None:
-            # Gravity flows to idle provinces with the learnt decay.
-            import_kernel = self.kernel_rv.import_kernel
         if self.import_scale_rv is not None and import_kernel is not None:
             self._score_imports(
                 onsets, jnp.asarray(import_kernel), inactive, first_day_dow
@@ -706,137 +718,77 @@ class OnsetStreams(BaseObservationProcess):
         )
         probs = jnp.maximum(probs, 1e-12)
         probs = probs / probs.sum(axis=1, keepdims=True)
-        if self.delay_overdispersion_rv is None:
-            counts_dist = dist.Multinomial(total_count=totals, probs=probs)
-        else:
-            # Capped at 1e4: near the multinomial the float32 log density
-            # is noisy enough to stall NUTS step-size adaptation.
-            psi = 1 / (jnp.square(self.delay_overdispersion_rv()) + 1e-4)
-            counts_dist = ObservedCellsDirichletMultinomial(
-                concentration=psi * probs, total_count=totals
-            )
         # A week with no counts adds exactly 0, so no mask is needed.
-        numpyro.sample(
-            self._sample_site_name("delays"), counts_dist, obs=counts
+        self.delay_noise.sample(
+            self._sample_site_name("delays"), probs, totals, obs=counts
         )
 
 
-class RtPseudoObservation:
-    r"""External Rt estimates as a tempered pseudo-observation.
+class MissingOnsetFraction(RandomVariable):
+    r"""Time-varying probability that a case is reported without an onset.
 
-    For groups $G$ of provinces (the nation, or BVDOutbreakSize patches)
-    and the day $s_b$ of the external estimate, the model's group Rt is
-    onset weighted over the week of $s_b$,
+    $$\operatorname{logit} \pi_p(t) = b(t) + \delta_p(t),$$
 
-    $$R_G(s_b) = \frac{\sum_{p \in G} I_p R_p(s_b)}{\sum_{p \in G} I_p},$$
-
-    and the summaries enter as
-
-    $$\mu_N \sim N(\log R_N(s_b), \sigma_N / \sqrt{\alpha}), \qquad
-    d_k \sim N(\log R_k(s_b) - \log R_N(s_b), \tau_k / \sqrt{\alpha}).$$
-
-    This is a power prior on the external summary with tempering
-    $\alpha$. With $\alpha = 0$ nothing is added, so the model is
-    unchanged. PyRenew has no observation process on a latent Rt, hence
-    this small class; it is called from the latent process, which holds
-    both Rt and infections.
+    from `pooled_walk`, indexed by report day $t$. With small innovation
+    SDs it stays near its starting values, so it reduces to a constant
+    $\pi_p$ when the data show no change.
 
     Parameters
     ----------
-    alpha : float
-        Tempering, in [0, 1].
-    day : int
-        $s_b$ as a day index from the first data day.
-    groups : array_like
-        Boolean membership, `(G, P)`.
-    values, scales : array_like
-        Log-scale summaries and their SDs, `(G,)`.
-    kinds : array_like
-        0 for the national level, 1 for a deviation from it, `(G,)`.
+    name : str
+        Prefix for the sample sites.
+    initial_rv : RandomVariable
+        Starting logit values, scalar or one per province.
+    baseline_process, deviation_process : TemporalProcess
+        Temporal processes for the national and province parts.
     """
 
     def __init__(
         self,
-        alpha: float,
-        day: int,
-        groups: ArrayLike,
-        values: ArrayLike,
-        scales: ArrayLike,
-        kinds: ArrayLike,
+        name: str,
+        initial_rv: RandomVariable,
+        baseline_process: TemporalProcess,
+        deviation_process: TemporalProcess,
     ) -> None:
-        self.alpha = float(alpha)
-        self.day = int(day)
-        self.groups = jnp.asarray(groups, dtype=float)
-        self.values = jnp.asarray(values, dtype=float)
-        self.scales = jnp.asarray(scales, dtype=float)
-        self.kinds = jnp.asarray(kinds, dtype=int)
-
-    def log_group_rt(
-        self,
-        rt: Array,
-        infections: Array,
-        n_init: int,
-        fractions: Array | None = None,
-    ) -> tuple[Array, Array]:
-        """Return log $R_G(s_b)$ for each group and for the nation.
-
-        Infections are per resident, so the weights are scaled by the
-        population `fractions` to be proportional to counts.
-
-        Parameters
-        ----------
-        rt : jax.Array
-            Daily Rt by province.
-        infections : jax.Array
-            Daily infections per resident by province.
-        n_init : int
-            Seeding days at the start of the axis.
-        fractions : jax.Array, optional
-            Population share of each province.
-
-        Returns
-        -------
-        tuple of Array
-            `(G,)` group values and the national scalar.
-        """
-        week = n_init + 7 * (self.day // 7)
-        w = infections[week : week + 7].sum(axis=0)
-        if fractions is not None:
-            w = w * fractions
-        r = rt[n_init + self.day]
-
-        def log_rt(member: Array) -> Array:
-            return jnp.log((member * w * r).sum(-1) / (member * w).sum(-1))
-
-        return log_rt(self.groups), log_rt(jnp.ones_like(w))
+        super().__init__(name=name)
+        self.initial_rv = initial_rv
+        self.baseline_process = baseline_process
+        self.deviation_process = deviation_process
 
     def sample(
         self,
-        rt: Array,
-        infections: Array,
-        n_init: int,
-        fractions: Array | None = None,
-    ) -> None:
-        """Add the pseudo-likelihood and record its diagnostics.
+        n_timepoints: int,
+        n_groups: int,
+        first_day_dow: int | None = None,
+        **kwargs: object,
+    ) -> Array:
+        r"""Sample $\pi_p(t)$.
 
         Parameters
         ----------
-        rt : jax.Array
-            Daily Rt by province.
-        infections : jax.Array
-            Daily infections per resident by province.
-        n_init : int
-            Seeding days at the start of the axis.
-        fractions : jax.Array, optional
-            Population share of each province.
+        n_timepoints : int
+            Days to sample.
+        n_groups : int
+            Number of provinces.
+        first_day_dow : int, optional
+            Weekday of the first day, passed by PyRenew.
+        **kwargs
+            Ignored, for the PyRenew interface.
+
+        Returns
+        -------
+        ArrayLike
+            Shape `(n_timepoints, n_groups)`, values in (0, 1).
         """
-        group, national = self.log_group_rt(rt, infections, n_init, fractions)
-        model = jnp.where(self.kinds == 0, group, group - national)
-        numpyro.deterministic("bvd_log_rt_model", model)
-        numpyro.deterministic("bvd_z", (self.values - model) / self.scales)
-        if self.alpha > 0:
-            numpyro.sample(
-                "bvd_rt_obs",
-                dist.Normal(model, self.scales / jnp.sqrt(self.alpha)),
-                obs=self.values,
-            )
+        _, logit_pi = pooled_walk(
+            self.baseline_process,
+            self.deviation_process,
+            self.initial_rv(),
+            n_timepoints,
+            n_groups,
+            self.name,
+            first_day_dow,
+        )
+        pi = jax.nn.sigmoid(logit_pi)
+        numpyro.deterministic(self.name, pi)
+        return pi
