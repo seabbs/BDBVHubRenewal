@@ -308,12 +308,10 @@ def plot_place_summary(
     metric: str = "rel_wis",
     label: str = "Relative WIS",
     ref: float | None = 1.0,
+    log: bool = True,
     mode: str = "light",
 ) -> Figure:
     """Plot one score per place and model, a row per place, by scale.
-
-    The axis is on the log scale, so places whose scores are near zero do
-    not set it, and scores of 0 are left out.
 
     Parameters
     ----------
@@ -331,6 +329,10 @@ def plot_place_summary(
         Its axis label.
     ref : float, optional
         A dotted line at this value.
+    log : bool
+        Put the axis on the log scale, for relative scores, so places
+        whose scores are near zero do not set it. Scores of 0 are then
+        left out.
     mode : str
         `"light"` or `"dark"`.
 
@@ -357,7 +359,9 @@ def plot_place_summary(
         places = sorted(set(sub["location"]), key=lambda x: names.get(x, x))
         y = {loc: i for i, loc in enumerate(places)}
         for m in models:
-            own = sub.loc[(sub["model"] == m) & (sub[metric] > 0)]
+            own = sub.loc[sub["model"] == m]
+            if log:
+                own = own.loc[own[metric] > 0]
             if own.empty:
                 continue
             ax.plot(
@@ -370,8 +374,9 @@ def plot_place_summary(
             )
         if ref is not None:
             ax.axvline(ref, color=ink["muted"], lw=1, ls=":")
-        ax.set_xscale("log")
-        ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
+        if log:
+            ax.set_xscale("log")
+            ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
         ax.set_yticks(range(len(places)), [names.get(p, p) for p in places])
         ax.set_ylim(len(places) - 0.5, -0.5)
         ax.set_title(titles[pool], fontsize=9)
