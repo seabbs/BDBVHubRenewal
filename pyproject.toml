@@ -83,7 +83,8 @@ default-groups = ["dev"]
 
 # toto-ts pins its whole development stack (numpy 1.26, which has no
 # Python 3.13 wheels, pandas 2.2, lightning, jupyter), and gluonts caps
-# pandas below 3. Both are given the imports inference uses.
+# pandas below 3. Both are given the imports inference uses, with
+# lightning for gluonts' torch module.
 [[tool.uv.dependency-metadata]]
 name = "toto-ts"
 version = "0.2.0"
@@ -92,6 +93,7 @@ requires-dist = [
   "einops>=0.7",
   "jaxtyping>=0.2.29",
   "gluonts>=0.16.2",
+  "lightning>=2.3",
   "rotary-embedding-torch>=0.8.6",
   "huggingface-hub>=0.23",
   "safetensors>=0.4",
