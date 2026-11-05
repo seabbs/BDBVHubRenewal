@@ -130,17 +130,13 @@ MODEL_STYLE: Final[dict[str, tuple[int | None, str]]] = {
     "renewalbvd": (3, "solid"),
     "renewalsp": (4, "solid"),
     "pprandomwalknowcast": (5, "solid"),
-    "fm_delay": (6, "solid"),
-    "renewalnolag": (2, "dashed"),
-    "renewalplace": (2, "dotted"),
-    "renewalfixdelay": (2, "dashdot"),
     "as reported": (None, "dotted"),
 }
 """Each model's place in `MODEL_COLOURS` and its dash in `DASHES`.
 
-Main models have a colour of their own. Variants of a model share its
-colour with a dash, since past eight colours some pairs can no longer be
-told apart. `None` is the data ink, for the as-reported floor.
+A new main model takes the next free colour; a variant takes its parent's
+colour with the next dash, since past eight colours some pairs can no
+longer be told apart. `None` is the data ink, for the as-reported floor.
 """
 
 _FREE_SLOT: Final = 1 + max(s for s, _ in MODEL_STYLE.values() if s is not None)

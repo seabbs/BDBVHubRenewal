@@ -140,11 +140,6 @@ def test_model_styles_are_fixed_by_name() -> None:
         alone = plots.model_colour("renewal", ["renewal"], mode)
         among = plots.model_colour("renewal", sorted(registered), mode)
         assert alone == among == plots.MODEL_COLOURS[mode][2]
-    assert plots.model_style("renewalnolag", []) == (
-        plots.MODEL_COLOURS["light"][2],
-        plots.MODEL_COLOURS["dark"][2],
-        plots.DASHES["dashed"],
-    )
     # The as-reported floor is the data ink, dotted.
     assert plots.model_style("as reported", []) == (
         plots.THEMES["light"]["data"],
