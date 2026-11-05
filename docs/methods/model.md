@@ -123,6 +123,8 @@ with $N_p$ the province population, $\alpha_0 = 0.6$ fixed and $a$ a weekly rand
 $\eta$ is a log-normal incubation period for Bundibugyo virus disease with [BVDOutbreakSize's priors](https://github.com/epiforecasts/BVDOutbreakSize/blob/main/src/models/priors.jl) (`onset_incidence_model`) on its mean $\mu_\eta \sim \mathcal{N}(6.3, 0.54^2)$ and SD $\sigma_\eta \sim \mathcal{N}(3.5, 0.8^2)$, both truncated below at 1 day.
 The mean prior reproduces the 95% CI of 5.2 to 7.3 days from the 2007 Uganda outbreak[^macneil], and the SD prior is centred on the spread that estimate implies.
 Each draw of $\eta$ is double interval censored in the same way on lags 0 to 28, the 99.9% quantile at the prior means, as `dpcens(0:28, plnorm, D = 29)`.
+BVDOutbreakSize keeps lags 0 to 15 of its incubation period, up to its 98% quantile.
+We keep lags 0 to 28.
 
 ### Delays
 
@@ -250,7 +252,9 @@ $$
   $S_p$ starts at $\nu$ less the seed, so infections never exceed $\nu N_p$.
 
 Provinces with cases in the first data week are seeded at the start.
-Later provinces start at $10^{-6}$ of that level and add $I_{0,p}$ to $y_p(t)$ each day of their first case week.
+Later provinces start at $10^{-6}$ of that level and add $I_{0,p}$ to $y_p(t)$ each day for 7 days.
+These 7 days start 5 days before the province's first case week.
+That lead puts the most onsets of a week of seeded infections in the first case week (67%, with 9% before it) at the prior mean incubation period.
 
 ### Missing-onset deviations
 

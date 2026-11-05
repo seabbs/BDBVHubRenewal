@@ -20,7 +20,13 @@ import pandas as pd
 from bdbvhubrenewal.data.delays import hub_delay_pmf
 from bdbvhubrenewal.data.releases import last_report
 
-from .model import MAIN, ModelConfig, Vintage
+from .model import (
+    MAIN,
+    ModelConfig,
+    Vintage,
+    incubation_period,
+    seed_lead,
+)
 
 NATIONAL = "CD"
 """Location code of the whole country."""
@@ -429,11 +435,20 @@ def vintage_from_tables(
         bvd=None
         if bvd is None or config.national
         else bvd_inputs(bvd, names, start, masked),
-        seed_days=None
-        if config.national
-        else 7 * np.argmax(totals > 0, axis=0),
+        seed_days=None if config.national else _seed_days(totals),
         publication_lag_pmf=publication_lag,
     )
+
+
+def _seed_days(totals: np.ndarray) -> np.ndarray:
+    """Day each province's seeding starts, from its weekly case totals.
+
+    Provinces with cases in the first data week start at day 0. Later
+    provinces start `seed_lead` days before their first case week, since
+    infections precede onsets by the incubation period.
+    """
+    first = 7 * np.argmax(totals > 0, axis=0)
+    return np.where(first > 0, first - seed_lead(incubation_period()), 0)
 
 
 RENEWALSP = ModelConfig(

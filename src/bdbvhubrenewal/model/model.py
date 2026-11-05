@@ -132,6 +132,31 @@ def incubation_period(
     return np.asarray(pmf, dtype=float)
 
 
+def seed_lead(incubation: np.ndarray) -> int:
+    """Days to seed a late province before its first case week.
+
+    The lead that puts the most onsets in the first case week from a week
+    of constant seeding: the argmax over $L$ of the mass of the week-long
+    seed convolved with the incubation pmf on days $L$ to $L + 6$ after
+    the seed starts. At the prior mean incubation period it is 5 days,
+    with 67% of onsets in the week and 9% before it.
+
+    Parameters
+    ----------
+    incubation : numpy.ndarray
+        Incubation pmf on lags 0..H.
+
+    Returns
+    -------
+    int
+        The lead in days, at most 6 so the seed starts after the
+        previous case week began.
+    """
+    onsets = np.convolve(np.full(7, 1 / 7), incubation)
+    in_week = [onsets[lead : lead + 7].sum() for lead in range(7)]
+    return int(np.argmax(in_week))
+
+
 PRIOR_PUBLICATION_LAG: Final[tuple[float, ...]] = tuple(
     [0.85 / 4] * 4 + [0.15 / 57] * 57
 )
@@ -280,7 +305,9 @@ class Vintage:
         Boolean `(P,)`. False switches a province's likelihood off (it
         stays in the latent process and is still predicted).
     seed_days : numpy.ndarray or None
-        Day (from `start_date`) of each province's first case week.
+        Day (from `start_date`) each province's seeding starts: 0 for
+        provinces with cases in the first data week, else `seed_lead` days
+        before the first case week.
     bvd : dict or None
         External Rt summaries: `day` (index of $s_b$ from the first data
         day), `groups` `(G, P)`, `values`, `scales` and `kinds` `(G,)`.
@@ -499,12 +526,12 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         MetapopulationInfections,
         name="latent",
         gen_int_rv=DeterministicPMF("gen_int", generation_interval()),
-        # The seed is the expected confirmed onsets per day at the start,
-        # turned into infections per resident.
+        # The seed is the expected confirmed infections per day at the
+        # start, turned into infections per resident.
         I0_rv=TransformedVariable(
             "I0",
             DistributionalVariable(
-                "initial_onsets",
+                "initial_infections",
                 dist.LogNormal(0.0, 1.5).expand([n_prov]),
             ),
             AffineTransform(0.0, 1 / (ALPHA0 * data.populations)),
@@ -810,6 +837,8 @@ def seed_from_imports(
     $\ell_q(t) \sim \text{Poisson}\big(R(t) \sum_\tau g(\tau)
     y_q(t - \tau)\big)$ with $y = m + \ell$. Susceptible depletion is
     ignored because these provinces have had no cases.
+    $R(t)$ is dated by infection and $y$ by onset, so local spread here
+    runs about an incubation period early. Their counts are near zero.
 
     Parameters
     ----------
@@ -854,6 +883,8 @@ def forecast_trajectories(
     so national counts are the sum over provinces within a trajectory.
     Provinces with no cases get `seed_from_imports` draws when the model
     has the importation component.
+    Those draws use the national Rt, dated by infection, on an onset-dated
+    import series.
 
     Parameters
     ----------

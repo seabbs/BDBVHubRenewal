@@ -274,13 +274,13 @@ class MetapopulationInfections(SubpopulationInfections):
             fractions, to add an observation of Rt
             (`RtPseudoObservation`). `None` adds none.
         seed_days
-            First day (from the first data day) of each province's first
-            case week. Provinces with a day after 0 start (almost) empty
-            and get their seed, the `I0_rv` level, as a constant daily
-            input over that week, plus whatever importation brings.
-            Infections are dated by onset, so seeding the week before
-            would put onsets where the data have none. `None` seeds every
-            province at the start.
+            Day (from the first data day) each province's seeding starts.
+            Provinces with a day after 0 start (almost) empty and get
+            their seed, the `I0_rv` level, as a constant daily input over
+            the 7 days from it, plus whatever importation brings. The
+            day leads the first case week by the incubation period
+            (`model.seed_lead`). `None` seeds every province at the
+            start.
         **kwargs
             Passed to `SubpopulationInfections` (without infection
             feedback).
@@ -301,7 +301,7 @@ class MetapopulationInfections(SubpopulationInfections):
         clipped so a steep early decline cannot project a seed larger
         than the pool. Late provinces start from 1e-6 of their seed
         level (PyRenew needs a positive start) and take the seed over
-        their first case week.
+        the 7 days from their seed day.
 
         Returns
         -------
