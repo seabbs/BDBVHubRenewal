@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""Build the health zone boundaries the Nowcast page's zone map draws.
+r"""Build the health zone boundaries the Nowcast page's zone map draws.
 
 The boundaries are the Ministry of Health (DSNIS) health zones on the
 Humanitarian Data Exchange, "DRC Health Zone and Health Area boundaries"
@@ -13,8 +13,8 @@ code as `location`.
 
 Usage::
 
-    uv run --with pyshp --with shapely python scripts/zone_boundaries.py \\
-        rdc_zones-de-sante.zip health-zone-code-mapping.csv \\
+    uv run --with pyshp --with shapely python scripts/zone_boundaries.py \
+        rdc_zones-de-sante.zip health-zone-code-mapping.csv \
         docs/assets/zone-boundaries.geojson
 """
 
@@ -69,7 +69,8 @@ def rounded(geom: object) -> object:
 
 
 def main(zip_path: str, mapping_csv: str, out: str) -> None:
-    with open(mapping_csv, newline="") as fh:
+    """Write the hub's zones from the HDX zip as GeoJSON to `out`."""
+    with Path(mapping_csv).open(newline="") as fh:
         codes = {r["Pcode"]: r["location"] for r in csv.DictReader(fh)}
     reader = read_shapes(Path(zip_path))
     field = pcode_field(reader)
