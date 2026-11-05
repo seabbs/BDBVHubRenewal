@@ -1,6 +1,7 @@
 // Nowcast chart: pick a scale and a place (for a zone, its province first)
 // to see each model's latest nowcast and forecast over the reported counts,
 // as bands or trajectories. Model tick boxes come from toggles.js.
+// bdbvNowcastShow(id) picks a place and scrolls the chart into view.
 (function () {
   "use strict";
   var NS = "http://www.w3.org/2000/svg";
@@ -170,6 +171,16 @@
       Z.attach(zoom, svg, { L: L, R: R, T: Tp, B: B, W: W, H: H, x: [x0, x1], y: [y0, y1] });
     }
 
+    window.bdbvNowcastShow = function (id) {
+      var p = d.places.filter(function (x) { return x.id === id; })[0];
+      if (!p) return;
+      selScale.value = p.scale;
+      if (p.province) selProv.value = p.province;
+      fillZones();
+      selZone.value = id;
+      draw();
+      root.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
     fillZones();
     draw();
     T.onTheme(draw);

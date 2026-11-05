@@ -183,6 +183,7 @@
 
 /* Nowcast chart. */
 .nowcastchart {
+  scroll-margin-top: 4rem;
   margin: 1em 0;
 }
 
@@ -218,6 +219,39 @@
 
 .tablefilter-sort[aria-sort="descending"]::after {
   content: " ▼";
+}
+
+/* Zone review. */
+.zonereview-table {
+  overflow-x: auto;
+}
+
+.md-typeset .zonereview-table table {
+  font-size: 0.7rem;
+}
+
+.md-typeset .zonereview-table td,
+.md-typeset .zonereview-table th {
+  white-space: nowrap;
+  padding: 0.4em 0.6em;
+}
+
+.zonereview-link {
+  font: inherit;
+  color: var(--md-typeset-a-color);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.zonereview-up {
+  background: rgba(214, 69, 65, 0.2);
+}
+
+.zonereview-down {
+  background: rgba(57, 135, 229, 0.2);
 }
 
 /* Drag-to-zoom. */

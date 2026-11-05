@@ -627,6 +627,12 @@ def _nowcast_page(
     )
 
 
+def _zone_names(data_dir: Path | str) -> dict[str, str]:
+    """Each health zone's name, as the hub's time series gives it."""
+    zones = load_health_zones(data_dir)
+    return dict(zip(zones["location"], zones["location_name"], strict=True))
+
+
 def _zone_nowcast_section(
     fig: Path,
     gen: Path,
@@ -728,8 +734,9 @@ def _zone_nowcast_section(
                 [above, counts[["location", "target_end_date", "total"]]],
                 ignore_index=True,
             ),
-            labels,
+            {**labels, **_zone_names(data_dir)},
             _model_colours(names),
+            config.complete_after_weeks,
         ),
     )
     _write(
@@ -744,6 +751,19 @@ def _zone_nowcast_section(
         '<div class="nowcastchart" data-src="../figures/nowcastchart.json" '
         'role="group" aria-label="Nowcast and forecast by place">\n'
         "<noscript>The nowcast chart needs JavaScript.</noscript>\n"
+        "</div>\n",
+    )
+    _write(
+        gen / "zone-review.md",
+        "## Zone review\n\n"
+        "Each place's recent reported level beside one model's latest "
+        "nowcast and forecast, to find places whose forecast is out of "
+        "line with their data.\n"
+        "Sort by the ratio to see the largest rises and falls.\n"
+        "Pick a place to see it in the chart above.\n\n"
+        '<div class="zonereview" data-src="../figures/nowcastchart.json" '
+        'role="group" aria-label="Zone review">\n'
+        "<noscript>The zone review needs JavaScript.</noscript>\n"
         "</div>\n",
     )
     _write(
