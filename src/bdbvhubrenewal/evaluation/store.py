@@ -113,15 +113,22 @@ def samplers(policy: Path | str = "ci/policy.toml") -> dict[str, Any]:
     Returns
     -------
     dict
-        Sampler table by model name. A fitted model with no candidate
-        (`pprandomwalknowcast`) is absent and uses its own settings.
+        Sampler table by model name. A renewal variant no candidate runs
+        takes the table of its base's model (`renewal` or `renewalbvd`),
+        so the versions of `renewal` are fitted alike. Another fitted model
+        with no candidate (`pprandomwalknowcast`) is absent and uses its
+        own settings.
     """
+    from bdbvhubrenewal.forecasters.renewal import VARIANTS
+
     raw = tomllib.loads(Path(policy).read_text())
-    return {
+    table = {
         c["model"]: dict(c["sampler"])
         for c in raw["candidates"]
         if "model" in c and "sampler" in c
     }
+    base = {"MAIN": "renewal", "BVD": "renewalbvd"}
+    return {name: table[base[v.base]] for name, v in VARIANTS.items()} | table
 
 
 def code_digest(root: Path | str = ".") -> str:
