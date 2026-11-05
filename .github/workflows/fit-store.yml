@@ -1,0 +1,150 @@
+name: Fit store
+
+# Fits each fitted model once per real origin and stores the result on
+# the fit-store branch, one file per fit, keyed by a hash of everything
+# the fit depends on (bdbvhubrenewal.evaluation.store): the model code
+# and settings, the model's sampler table in ci/policy.toml, uv.lock and
+# the releases up to the origin. `plan` lists the keys the store lacks,
+# so only those are fitted: a code change refits every origin, and a new
+# hub release adds one fit per model. Pages reads the store and never
+# fits; this workflow rebuilds it when fits are stored.
+#
+#   plan -> fit (one job per missing fit) -> pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/bdbvhubrenewal/baselinenowcast/**'
+      - 'src/bdbvhubrenewal/data/**'
+      - 'src/bdbvhubrenewal/evaluation/backtest.py'
+      - 'src/bdbvhubrenewal/evaluation/store.py'
+      - 'src/bdbvhubrenewal/forecasters/**'
+      - 'src/bdbvhubrenewal/model/**'
+      - 'config/backtest.toml'
+      - 'ci/policy.toml'
+      - 'uv.lock'
+      - '.github/workflows/fit-store.yml'
+  # A pull request only plans, so its summary says how many fits the
+  # change will cost on main.
+  pull_request:
+    paths:
+      - 'src/bdbvhubrenewal/baselinenowcast/**'
+      - 'src/bdbvhubrenewal/data/**'
+      - 'src/bdbvhubrenewal/evaluation/backtest.py'
+      - 'src/bdbvhubrenewal/evaluation/store.py'
+      - 'src/bdbvhubrenewal/forecasters/**'
+      - 'src/bdbvhubrenewal/model/**'
+      - 'config/backtest.toml'
+      - 'ci/policy.toml'
+      - 'uv.lock'
+      - '.github/workflows/fit-store.yml'
+  # New hub releases: a check with nothing new ends after `plan`.
+  schedule:
+    - cron: '30 */6 * * *'
+  workflow_dispatch:
+
+# A push supersedes a running refit, which is cancelled; fits already
+# stored are kept. A scheduled check waits for the running one.
+# Pull requests have their own group.
+concurrency:
+  group: fit-store-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+
+permissions:
+  contents: read
+
+env:
+  STORE: output/fit-store
+
+jobs:
+  plan:
+    name: List the fits the store lacks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      count: ${{ steps.plan.outputs.count }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-forecast-env
+      # The latest hub releases, and the BVDOutbreakSize release each
+      # may use. Every fit job reads these files, so all fit the same data.
+      - name: Refresh the hub data
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          uv run bdbvhubrenewal data
+          uv run bdbvhubrenewal bvd
+      - run: scripts/fit-store.sh fetch "$STORE"
+      - name: Plan
+        id: plan
+        run: |
+          uv run bdbvhubrenewal fit-store plan --store "$STORE" \
+            --out matrix.json | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "matrix=$(cat matrix.json)" >> "$GITHUB_OUTPUT"
+          echo "count=$(jq '.include | length' matrix.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v7
+        if: >-
+          steps.plan.outputs.count != '0'
+          && github.event_name != 'pull_request'
+        with:
+          name: data
+          path: |
+            data
+            !data/raw
+          retention-days: 3
+
+  # As fit-candidates.yml: one job per fit, chains in parallel
+  # (`chain_method` in each sampler table).
+  fit:
+    name: Fit ${{ matrix.model }} at ${{ matrix.origin }}
+    needs: plan
+    if: >-
+      needs.plan.outputs.count != '0'
+      && github.event_name != 'pull_request'
+    runs-on: ${{ vars.FIT_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 350
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-forecast-env
+      - uses: actions/download-artifact@v8
+        with:
+          name: data
+          path: data
+      # A fit that raises is stored as failed, so it is not retried
+      # until its inputs change. One that times out is retried next run.
+      - name: Fit
+        timeout-minutes: 330
+        env:
+          MODEL: ${{ matrix.model }}
+          ORIGIN: ${{ matrix.origin }}
+          KEY: ${{ matrix.key }}
+        run: |
+          uv run bdbvhubrenewal fit-store fit --model "$MODEL" \
+            --origin "$ORIGIN" --store new
+          test -f "new/$MODEL/$ORIGIN/$KEY.json.gz"
+      # Each fit is stored when it ends, so a cancelled run keeps it.
+      - name: Store
+        if: always()
+        run: scripts/fit-store.sh push new
+
+  pages:
+    name: Rebuild the docs from the store
+    needs: [plan, fit]
+    if: >-
+      always() && needs.plan.outputs.count != '0'
+      && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --ref main -R "$GITHUB_REPOSITORY"

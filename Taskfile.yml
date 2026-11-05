@@ -49,9 +49,24 @@ tasks:
     cmds:
       - uv run bdbvhubrenewal bvd {{.CLI_ARGS}}
 
-  backtest:
-    desc: Run the development backtest, the real-release evaluation and the recovery check (simulated)
+  fit-store:
+    desc: Load the fitted models' stored fits into results/ (fetches the fit-store branch)
     cmds:
+      - rm -rf output/fit-store
+      - scripts/fit-store.sh fetch output/fit-store
+      - uv run bdbvhubrenewal fit-store load --store output/fit-store
+
+  fit-store-plan:
+    desc: List the fits the store lacks for this code and data
+    cmds:
+      - rm -rf output/fit-store
+      - scripts/fit-store.sh fetch output/fit-store
+      - uv run bdbvhubrenewal fit-store plan --store output/fit-store
+
+  backtest:
+    desc: Run the development backtest, the real-release evaluation and the recovery check (simulated), with the fitted models from the fit store
+    cmds:
+      - task: fit-store
       - uv run bdbvhubrenewal backtest {{.CLI_ARGS}}
 
   backtest-lopo:
@@ -72,6 +87,7 @@ tasks:
   backtest-heldout:
     desc: Score every held-out vintage under the model chosen at the time (needs results/model-choice.yml)
     cmds:
+      - task: fit-store
       - uv run bdbvhubrenewal backtest --evaluate-holdout
 
   nowcast:
