@@ -10,3 +10,5 @@
 - `rwn-places-11-01.png`: the named places, main against the PR.
 
 `earlier-base-e334212b/` holds the comparison arms run on the previous main (e334212b): main, R rule on daily rows, R rule on weekly rows, x/F plus introductions, weekly rows plus introductions (before the quiet-state rule), and that version with ancestor estimates. `variants.py` holds the patches behind those arms.
+
+`introduction-week-arms/` compares giving the introduction week its case with estimating the probability as the case rate over P(y > 0), both on main a5ad8b92.
