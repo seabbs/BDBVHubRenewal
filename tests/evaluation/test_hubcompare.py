@@ -496,10 +496,10 @@ def test_comparison_colours_are_fixed_per_model() -> None:
     )
     first = (MODEL_COLOURS["light"][0], MODEL_COLOURS["dark"][0], "")
     assert got["randomwalk (main build)"] == first
-    # A submitted series has a colour no model uses.
-    assert got["seabbs-x (submitted)"][:2] not in {
-        model_style(m, [])[:2] for m in MODEL_STYLE
-    }
+    # Submitted series are red, a colour no model uses.
+    red = (MODEL_COLOURS["light"][7], MODEL_COLOURS["dark"][7])
+    assert got["seabbs-x (submitted)"][:2] == red
+    assert red not in {model_style(m, [])[:2] for m in MODEL_STYLE}
     assert {got[t][0] for t in teams} <= set(HUB_GREYS["light"])
     assert {got[t][1] for t in teams} <= set(HUB_GREYS["dark"])
     # A team keeps its grey whichever of our models are shown.

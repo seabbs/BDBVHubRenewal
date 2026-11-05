@@ -141,6 +141,9 @@ longer be told apart. `None` is the data ink, for the as-reported floor.
 
 _FREE_SLOT: Final = 1 + max(s for s, _ in MODEL_STYLE.values() if s is not None)
 
+_SUBMITTED_SLOT: Final = 7
+"""Red, for our submitted comparison series, whatever models are added."""
+
 HUB_GREYS: Final[dict[str, tuple[str, ...]]] = {
     "light": ("#5f5e5a", "#898781", "#b4b2a9"),
     "dark": ("#c3c2b7", "#898781", "#5f5e5a"),
@@ -1376,8 +1379,8 @@ def comparison_colours(
     ours : mapping of str to str
         Label of each of our main builds to its registry name.
     submitted : sequence of str
-        Labels of our submitted series. They share the first colour after
-        `MODEL_STYLE`'s, each with its own dash in sorted order.
+        Labels of our submitted series. They share red, each with its own
+        dash in sorted order.
     teams : sequence of str
         Every hub team.
 
@@ -1395,7 +1398,11 @@ def comparison_colours(
     light, dark = MODEL_COLOURS["light"], MODEL_COLOURS["dark"]
     dashes = list(DASHES.values())
     out |= {
-        lab: (light[_FREE_SLOT], dark[_FREE_SLOT], dashes[i % len(dashes)])
+        lab: (
+            light[_SUBMITTED_SLOT],
+            dark[_SUBMITTED_SLOT],
+            dashes[i % len(dashes)],
+        )
         for i, lab in enumerate(sorted(submitted))
     }
     grey = {mode: hub_styles(teams, mode) for mode in ("light", "dark")}
