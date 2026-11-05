@@ -39,9 +39,17 @@ release snapshots (`zone_task`), with the zone, then province, then
 national pooling of `pooling`.
 Their zone samples are then made to sum to the province samples
 (`reconcile_zones`).
-Province sample $Y^{(k)}(w)$ is apportioned over the zones in proportion
-to the zone model's own sample $x^{(k)}_z(w)$, by largest remainders, so
-the values are whole numbers that sum exactly to $Y^{(k)}(w)$:
+The zone walks are independent, so first each zone's trajectories are
+reordered to the ranks of the province's, ranked by their sum over the
+weeks: the $k$-th largest zone trajectory goes with the $k$-th largest
+province trajectory.
+Each zone keeps its own trajectories, and a zone's share of the
+province no longer drifts down with horizon as independent skewed walks
+would make it.
+Province sample $Y^{(k)}(w)$ is then apportioned over the zones in
+proportion to the reordered zone samples $x^{(k)}_z(w)$, by largest
+remainders, so the values are whole numbers that sum exactly to
+$Y^{(k)}(w)$:
 
 $$
 y^{(k)}_z(w) \approx
@@ -286,6 +294,18 @@ def _apportion(total: np.ndarray, weights: np.ndarray) -> np.ndarray:
     return out
 
 
+def _pair_by_rank(total: np.ndarray, weights: np.ndarray) -> np.ndarray:
+    """Reorder each zone's trajectories to the ranks of the province's.
+
+    `total` is `[S, W]` and `weights` `[S, W, Z]`. Trajectories are ranked
+    by their sum over the weeks, and each zone keeps its own, whole: its
+    k-th largest goes with the k-th largest province trajectory.
+    """
+    rank = np.argsort(np.argsort(total.sum(axis=1), kind="stable"))
+    order = np.argsort(weights.sum(axis=1), axis=0, kind="stable")
+    return np.take_along_axis(weights, order[:, None, :], axis=0)[rank]
+
+
 def reconcile_zones(
     zone_samples: pd.DataFrame,
     province_samples: pd.DataFrame,
@@ -297,7 +317,8 @@ def reconcile_zones(
     """Make zone samples sum to their province samples.
 
     Each province sample is apportioned over the province's zones in
-    proportion to the zone model's own sample of the same id and week.
+    proportion to the zone model's samples of the same week, with whole
+    trajectories paired with the province's by rank.
 
     Parameters
     ----------
@@ -354,6 +375,7 @@ def reconcile_zones(
                     .fillna(0.0)
                     .to_numpy()
                 )
+        weight = _pair_by_rank(totals, weight)
         fallback = allocator.alpha(counts, mine, task.vintage)
         empty = weight.sum(axis=-1) <= 0
         weight[empty] = fallback

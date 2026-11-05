@@ -226,7 +226,9 @@ Later weeks are walk draws.
 `randomwalk` and `randomwalknowcast` run on each zone's own release snapshots with the same code as for provinces.
 The hierarchy is zone, province, country, and each zone takes its delay, size and walk spread by the rules [above](#own-or-pooled-estimates).
 Zone samples sum to their province's samples, sample by sample and week by week.
-Province sample $Y^{(k)}(w)$ is apportioned over the zones in proportion to the zone model's own sample $x^{(k)}_z(w)$ of the same id and week:
+The zone walks are independent, so each zone's trajectories are first reordered to the ranks of the province's, ranked by their sum over the weeks, the $k$-th largest with the $k$-th largest.
+Each zone keeps its own trajectories, and its share of the province does not drift down with horizon.
+Province sample $Y^{(k)}(w)$ is then apportioned over the zones in proportion to the reordered zone samples $x^{(k)}_z(w)$:
 
 $$
 y^{(k)}_z(w) \approx Y^{(k)}(w)\, \frac{x^{(k)}_z(w)}{\sum_{z'} x^{(k)}_{z'}(w)}.
