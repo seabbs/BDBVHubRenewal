@@ -254,6 +254,21 @@
   text-align: left;
 }
 
+.zonereview-map {
+  margin: 1em 0;
+}
+
+.zonereview-zone {
+  stroke: var(--md-default-fg-color--lighter);
+  stroke-width: 0.5;
+  cursor: pointer;
+}
+
+.zonereview-zone:hover {
+  stroke: var(--md-default-fg-color);
+  stroke-width: 1.5;
+}
+
 .zonereview-up {
   background: rgba(214, 69, 65, 0.2);
 }
