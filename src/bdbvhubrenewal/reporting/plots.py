@@ -103,6 +103,8 @@ MODEL_COLOURS: Final[dict[str, tuple[str, ...]]] = {
         "#008300",
         "#6250d6",
         "#e34948",
+        "#8f5b34",
+        "#0095b6",
     ),
     "dark": (
         "#3987e5",
@@ -113,6 +115,8 @@ MODEL_COLOURS: Final[dict[str, tuple[str, ...]]] = {
         "#008300",
         "#9085e9",
         "#e66767",
+        "#b9845a",
+        "#2bb7d6",
     ),
 }
 """Categorical colours in fixed order (checked for colour vision deficiency)."""
@@ -132,13 +136,20 @@ MODEL_STYLE: Final[dict[str, tuple[int | None, str]]] = {
     "renewalbvd": (3, "solid"),
     "renewalsp": (4, "solid"),
     "pprandomwalknowcast": (5, "solid"),
+    "renewalnolag": (6, "solid"),
+    "renewallearntlag": (7, "solid"),
+    "renewalfixdelay": (8, "solid"),
+    "renewalplace": (9, "solid"),
     "as reported": (None, "dotted"),
 }
 """Each model's place in `MODEL_COLOURS` and its dash in `DASHES`.
 
 A new main model takes the next free colour; a variant takes its parent's
 colour with the next dash, since past eight colours some pairs can no
-longer be told apart. `None` is the data ink, for the as-reported floor.
+longer be told apart. The versions of `renewal` on the Reporting model
+comparison page are the exception: each has a colour of its own, as they
+are read against each other there. `None` is the data ink, for the
+as-reported floor.
 """
 
 _FREE_SLOT: Final = 1 + max(s for s, _ in MODEL_STYLE.values() if s is not None)

@@ -304,7 +304,7 @@ def test_learnt_lag_is_fitted_to_the_release_pairs(sim_vintage):
     assert {"publication_lag_mean", "release_pairs_background"} <= set(latent)
     args = model_args(model, data)
     assert "release_pairs" in args["onsets"]
-    values = {k: v[0] for k, v in latent.items()}
+    values = {k: v[0] for k, v in latent.items() if k != "release_pairs_kept"}
 
     def density(kept):
         args["onsets"]["release_pairs"] = _pairs(kept)

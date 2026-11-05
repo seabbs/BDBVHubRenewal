@@ -22,7 +22,7 @@ from matplotlib.figure import Figure
 
 from bdbvhubrenewal.evaluation.nowcast import relative_wis
 
-from .plots import HUB_GREYS, MODEL_COLOURS, save_light_dark, theme
+from .plots import HUB_GREYS, model_colour, save_light_dark, theme
 
 __all__ = [
     "ARMS",
@@ -36,7 +36,13 @@ __all__ = [
 REFERENCE: Final = "renewal"
 """The current model, which every other version changes in one part."""
 
-ARMS: Final = ("renewal", "renewalnolag", "renewalplace", "renewalfixdelay")
+ARMS: Final = (
+    "renewal",
+    "renewalnolag",
+    "renewallearntlag",
+    "renewalplace",
+    "renewalfixdelay",
+)
 """The models compared, the reference first."""
 
 PLACES: Final = ("CD", "CD-IT", "CD-NK")
@@ -297,6 +303,7 @@ def plot_lag_scores(table: pd.DataFrame, mode: str = "light") -> Figure:
 CALIBRATION_MODELS: Final = (
     "renewal",
     "renewalnolag",
+    "renewallearntlag",
     "renewalsp",
     "renewalbvd",
     "randomwalknowcast",
@@ -313,8 +320,8 @@ PAGE_MODELS: Final = (*ARMS, "renewalsp", "renewalbvd", "randomwalknowcast")
 def page_colour(model: str, mode: str = "light") -> str:
     """Return a model's colour on this page.
 
-    The page gives its models the first colours of `MODEL_COLOURS` in
-    `PAGE_MODELS` order, so the versions of `renewal` are told apart.
+    Each model keeps its colour from every other page (`model_colour`),
+    and each version of `renewal` has its own.
 
     Parameters
     ----------
@@ -328,7 +335,7 @@ def page_colour(model: str, mode: str = "light") -> str:
     str
         A hex colour.
     """
-    return MODEL_COLOURS[mode][PAGE_MODELS.index(model)]
+    return model_colour(model, PAGE_MODELS, mode)
 
 
 def newest_weeks(quantiles: pd.DataFrame) -> pd.DataFrame:

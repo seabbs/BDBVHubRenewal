@@ -149,7 +149,8 @@ def test_model_styles_are_fixed_by_name() -> None:
     # A stand-in outside the table takes the first colour it leaves free.
     used = {s for s, _ in pairs if s is not None}
     flat = plots.model_colour("flat", ["flat"])
-    assert flat == plots.MODEL_COLOURS["light"][max(used) + 1]
+    palette = plots.MODEL_COLOURS["light"]
+    assert flat == palette[(max(used) + 1) % len(palette)]
     assert plots.model_dash("flat") == ""
 
 

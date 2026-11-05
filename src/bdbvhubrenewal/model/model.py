@@ -25,11 +25,12 @@ from pyrenew.latent.temporal_processes import (
     TemporalProcess,
     WeeklyTemporalProcess,
 )
+from pyrenew.metaclass import RandomVariable
 from pyrenew.model import MultiSignalModel, PyrenewBuilder
 from pyrenew.observation import NegativeBinomialNoise
 from pyrenew.randomvariable import DistributionalVariable, TransformedVariable
 
-from .censored import censored_pmf
+from .censored import CensoredDelayPMF, censored_pmf
 from .composition_noise import DirichletMultinomialNoise, MultinomialNoise
 from .delays import (
     FixedTimeVarying,
@@ -37,6 +38,7 @@ from .delays import (
 from .hazard_delay import HazardDelay
 from .observation import MissingOnsetFraction, OnsetStreams
 from .pooled import PooledInitialValue
+from .publication_lag import ReleasePairLikelihood
 from .renewal import Importation, MetapopulationInfections
 from .rt_observation import RtPseudoObservation
 from .temporal import ConstantProcess, NonCentredRandomWalk
@@ -126,6 +128,12 @@ def incubation_period(
     return np.asarray(pmf, dtype=float)
 
 
+LEARNT_MAX_LAG: Final = 14
+"""Longest report to publication lag of the learnt lag, in days. Rows
+later than this at the earlier release of a pair count towards each
+pair's background share instead (`ReleasePairLikelihood`)."""
+
+
 PRIOR_PUBLICATION_LAG: Final[tuple[float, ...]] = tuple(
     [0.85 / 4] * 4 + [0.15 / 57] * 57
 )
@@ -174,7 +182,7 @@ class ModelConfig:
         Its tempering. 0 gives the model without it, exactly.
     dmax : int
         Maximum onset-to-report delay in days.
-    publication_lag : {"empirical", "estimated", "fixed", "none"}
+    publication_lag : {"empirical", "estimated", "fixed", "learnt", "none"}
         Lag from report to publication in a vintage: the empirical pmf
         on $0..180$ days from rows new in earlier delay files
         (`Vintage.publication_lag_pmf`), a Dirichlet simplex on $0..L$,
@@ -183,6 +191,9 @@ class ModelConfig:
         delay files. It is not the default: late rows in the delay files
         are mostly onsets recorded later for cases already counted as
         imputed, so it overstates late reporting of the total.
+        Learnt is a censored log-normal on $0..$`LEARNT_MAX_LAG` fitted to
+        which rows each delay file kept of the last
+        (`Vintage.release_pairs`, `ReleasePairLikelihood`).
     max_publication_lag : int
         $L$, in days (the model default).
     delay_over_time : bool
@@ -211,9 +222,9 @@ class ModelConfig:
     bvd: bool = False
     bvd_alpha: float = 0.5
     dmax: int = 60
-    publication_lag: Literal["empirical", "estimated", "fixed", "none"] = (
-        "fixed"
-    )
+    publication_lag: Literal[
+        "empirical", "estimated", "fixed", "learnt", "none"
+    ] = "fixed"
     max_publication_lag: int = 3
     delay_over_time: bool = True
     delay_by_place: bool = False
@@ -291,6 +302,9 @@ class Vintage:
     publication_lag_pmf : numpy.ndarray or None
         Empirical report to publication lag pmf on $0..180$ days
         (`data.releases.publication_lag_pmf`), or None.
+    release_pairs : dict or None
+        Rows of each earlier delay file and how many the file before it
+        had (`data.releases.release_pairs`), or None.
     """
 
     start_date: dt.date
@@ -310,6 +324,7 @@ class Vintage:
     bvd: dict[str, Any] | None = None
     seed_days: np.ndarray | None = None
     publication_lag_pmf: np.ndarray | None = None
+    release_pairs: dict[str, np.ndarray] | None = None
 
     @property
     def n_weeks(self) -> int:
@@ -601,13 +616,35 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         )
 
     n_lag = config.max_publication_lag + 1
-    lag: DistributionalVariable | np.ndarray = np.ones(1)
+    lag: RandomVariable | np.ndarray = np.ones(1)
+    pairs = None
     if config.publication_lag == "estimated":
         lag = DistributionalVariable(
             "onsets_publication_lag", dist.Dirichlet(np.ones(n_lag))
         )
     elif config.publication_lag == "fixed":
         lag = np.full(n_lag, 1 / n_lag)
+    elif config.publication_lag == "learnt":
+        # Prior median 2 days; the release pairs put most rows within 3
+        # days and about a tenth at 4 to 14 (data.releases.release_pairs).
+        lag = CensoredDelayPMF(
+            "publication_lag",
+            "lognormal",
+            LEARNT_MAX_LAG,
+            DistributionalVariable(
+                "publication_lag_mean", dist.LogNormal(np.log(2.0), 0.75)
+            ),
+            DistributionalVariable(
+                "publication_lag_cv", dist.LogNormal(0.0, 0.5)
+            ),
+        )
+        pairs = ReleasePairLikelihood(
+            "release_pairs",
+            dist.Beta(1.0, 19.0),
+            DistributionalVariable(
+                "release_pairs_overdispersion", dist.HalfNormal(0.5)
+            ),
+        )
     elif config.publication_lag == "empirical":
         lag = np.asarray(
             PRIOR_PUBLICATION_LAG
@@ -635,6 +672,7 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             else MultinomialNoise(),
             # The axis starts on a Sunday with whole weeks.
             weekly_axis=True,
+            pair_likelihood=pairs,
         )
     )
     model = builder.build()
@@ -715,6 +753,13 @@ def model_args(
         }
         if use_imports and data.inactive is not None:
             obs["inactive"] = pad(data.inactive)
+        if (
+            model.observations["onsets"].pair_likelihood is not None
+            and data.release_pairs is not None
+        ):
+            obs["release_pairs"] = {
+                k: jnp.asarray(v) for k, v in data.release_pairs.items()
+            }
     pops = np.asarray(data.populations, dtype=float)
     return {
         "n_days_post_init": 7 * n_weeks,

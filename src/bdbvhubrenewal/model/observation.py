@@ -41,6 +41,7 @@ from pyrenew.time import daily_to_weekly
 
 from .composition_noise import CompositionNoise, MultinomialNoise
 from .pooled import pooled_walk
+from .publication_lag import ReleasePairLikelihood
 
 _FLOOR = 1e-6
 
@@ -439,6 +440,9 @@ class OnsetStreams(BaseObservationProcess):
         The model axis starts on `start_dow` with whole weeks, so the
         expectations can use per-week blocks (`onset_expectations` with
         `weekly`).
+    pair_likelihood : ReleasePairLikelihood, optional
+        Fit `publication_lag` to which rows each delay file kept of the
+        last (`release_pairs`).
     """
 
     def __init__(
@@ -455,6 +459,7 @@ class OnsetStreams(BaseObservationProcess):
         publication_lag: RandomVariable | ArrayLike = NO_LAG,
         delay_noise: CompositionNoise | None = None,
         weekly_axis: bool = False,
+        pair_likelihood: ReleasePairLikelihood | None = None,
     ) -> None:
         super().__init__(name, temporal_pmf_rv)
         self.ascertainment_rate_rv = ascertainment_rate_rv
@@ -469,6 +474,7 @@ class OnsetStreams(BaseObservationProcess):
             MultinomialNoise() if delay_noise is None else delay_noise
         )
         self.weekly_axis = weekly_axis
+        self.pair_likelihood = pair_likelihood
 
     def lookback_days(self) -> int:
         """Return the days of infections before an onset that it needs.
@@ -575,6 +581,7 @@ class OnsetStreams(BaseObservationProcess):
         forecast: bool = False,
         vintage: Array | None = None,
         as_of: int | None = None,
+        release_pairs: dict[str, Array] | None = None,
     ) -> ObservationSample:
         """Score or sample the two onset streams.
 
@@ -611,6 +618,9 @@ class OnsetStreams(BaseObservationProcess):
             "final" draws are then the counts as reported by it (the
             vintage counts plus the cases reported between the two
             cut-offs), for scoring against a later vintage as reported.
+        release_pairs : dict, optional
+            Rows of each delay file and how many the previous file had
+            (`data.releases.release_pairs`), scored by `pair_likelihood`.
 
         Returns
         -------
@@ -704,6 +714,8 @@ class OnsetStreams(BaseObservationProcess):
                 self._score_delays(
                     weekly["triangle"], jnp.asarray(delay_counts)
                 )
+        if self.pair_likelihood is not None and release_pairs is not None:
+            self.pair_likelihood.score(lag, release_pairs)
         if self.import_scale_rv is not None and import_kernel is not None:
             self._score_imports(
                 onsets, jnp.asarray(import_kernel), inactive, first_day_dow

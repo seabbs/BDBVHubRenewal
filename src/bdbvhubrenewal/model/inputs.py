@@ -297,6 +297,7 @@ def vintage_from_tables(
     masked: tuple[str, ...] = (),
     bvd: pd.DataFrame | None = None,
     publication_lag: np.ndarray | None = None,
+    release_pairs: dict[str, np.ndarray] | None = None,
 ) -> Vintage:
     """Build a `Vintage` from the target and delay rows of one vintage.
 
@@ -331,6 +332,9 @@ def vintage_from_tables(
     publication_lag : numpy.ndarray, optional
         Empirical report to publication lag pmf
         (`data.releases.publication_lag_pmf`).
+    release_pairs : dict, optional
+        Rows of each earlier delay file and how many the file before it
+        had (`data.releases.release_pairs`).
 
     Returns
     -------
@@ -441,6 +445,7 @@ def vintage_from_tables(
         if config.national
         else 7 * np.argmax(totals > 0, axis=0),
         publication_lag_pmf=publication_lag,
+        release_pairs=release_pairs,
     )
 
 

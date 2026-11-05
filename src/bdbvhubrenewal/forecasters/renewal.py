@@ -204,6 +204,12 @@ VARIANTS: Final[dict[str, Variant]] = {
             overrides={"publication_lag": "none"},
         ),
         Variant(
+            "renewallearntlag",
+            "renewal with the lag from report to publication learnt from "
+            "which rows each release kept of the last.",
+            overrides={"publication_lag": "learnt"},
+        ),
+        Variant(
             "renewalfixdelay",
             "renewal with a delay fixed over onset time, with no weekly walk.",
             overrides={"delay_over_time": False},
@@ -503,12 +509,13 @@ def vintage_inputs(
         The model inputs.
     """
     from bdbvhubrenewal.data import load_locations
-    from bdbvhubrenewal.data.releases import publication_lag_pmf
+    from bdbvhubrenewal.data.releases import publication_lag_pmf, release_pairs
     from bdbvhubrenewal.model.inputs import vintage_from_tables
 
-    lag = None
+    lag, pairs = None, None
     if task.delay_history is not None:
         lag = publication_lag_pmf(task.delay_history, task.vintage)
+        pairs = release_pairs(task.delay_history, task.vintage, task.kind)
     return vintage_from_tables(
         task.target,
         task.delays,
@@ -520,6 +527,7 @@ def vintage_inputs(
         tuple(task.mask),
         bvd=bvd,
         publication_lag=lag,
+        release_pairs=pairs,
     )
 
 

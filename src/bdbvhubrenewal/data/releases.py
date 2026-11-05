@@ -13,6 +13,9 @@ weekday, for simulated releases.
 `publication_lag_pmf` estimates, from pairs of delay files, the lag from a
 case's report to its first publication, which the renewal models mix into
 their onset expectations.
+`release_pairs` tabulates, for each pair of consecutive delay files, which
+rows of the later file were already in the earlier one, the data that
+`renewallearntlag` fits its lag to.
 """
 
 from __future__ import annotations
@@ -33,6 +36,7 @@ __all__ = [
     "last_report",
     "publication_lag_pmf",
     "release_id",
+    "release_pairs",
 ]
 
 # Hub issue InsightNet-US/BDBV-Modeling-Hub#90: these labels are a day early.
@@ -224,3 +228,89 @@ def publication_lag_pmf(
     if mass.sum() == 0:
         return None
     return mass / mass.sum()
+
+
+MAX_PAIR_AGE = 60
+"""Oldest report age at the earlier release of a pair kept by
+`release_pairs`, in days, the renewal models' maximum delay."""
+
+
+def release_pairs(
+    delays: pd.DataFrame,
+    as_of: dt.date | str,
+    kind: str = "real",
+    max_age: int = MAX_PAIR_AGE,
+) -> dict[str, np.ndarray] | None:
+    r"""Rows of each delay file and whether the previous file had them.
+
+    For each pair of consecutive delay files $k$ and $k + 1$ on or before
+    `as_of`, every row cell (location, onset week, delay) of file $k + 1$
+    is counted with how many of its rows file $k$ already had. A row with
+    onset week ending $W$ and delay $d$ was reported on $W - u + d$ for
+    an onset $u = 0..6$ days before $W$, so its report age at a release
+    with last report day $T$ is $T - W + u - d$. Cells that no onset day
+    could have reported by $T_k$, or that are older than `max_age` at
+    $T_k$ for every onset day, are left out.
+
+    Parameters
+    ----------
+    delays : pandas.DataFrame
+        Delay rows of several releases, with `vintage`, `location`,
+        `onset_week` and `delay`.
+    as_of : datetime.date or str
+        The forecast date. Later files are not used.
+    kind : str, optional
+        Release kind, for `last_report`.
+    max_age : int, optional
+        Oldest report age kept, in days.
+
+    Returns
+    -------
+    dict or None
+        `before` and `after`, report ages at $T_k$ and $T_{k + 1}$ by
+        onset day, `(n, 7)`; `kept` and `total` rows of each cell,
+        `(n,)`; and `pair`, the one-hot pair of each cell, `(n, K)`.
+        None if no pair of files is available.
+    """
+    day = as_date(as_of).isoformat()
+    vintages = sorted(str(v) for v in delays["vintage"].unique() if v <= day)
+    key = ["location", "onset_week", "delay"]
+    parts = []
+    for a, b in itertools.pairwise(vintages):
+        seen = delays.loc[delays["vintage"] == a].groupby(key).size()
+        rows = (
+            delays.loc[delays["vintage"] == b]
+            .groupby(key)
+            .size()
+            .reset_index(name="total")
+        )
+        had = rows.set_index(key).index.map(seen).fillna(0).to_numpy()
+        report = (
+            pd.to_datetime(rows["onset_week"]).to_numpy()[:, None]
+            - np.arange(7)[None, :] * np.timedelta64(1, "D")
+            + rows["delay"].to_numpy()[:, None] * np.timedelta64(1, "D")
+        )
+
+        def age(release: str, report: np.ndarray = report) -> np.ndarray:
+            cut = np.datetime64(last_report(release, kind), "D")
+            return ((cut - report) / np.timedelta64(1, "D")).astype(int)
+
+        before = age(a)
+        keep = (before.max(axis=1) >= 0) & (before.min(axis=1) <= max_age)
+        total = rows["total"].to_numpy()
+        parts.append(
+            {
+                "before": before[keep],
+                "after": age(b)[keep],
+                "kept": np.minimum(had, total)[keep],
+                "total": total[keep],
+            }
+        )
+    if not parts:
+        return None
+    out = {k: np.concatenate([p[k] for p in parts]) for k in parts[0]}
+    out["kept"] = out["kept"].astype(float)
+    out["total"] = out["total"].astype(float)
+    sizes = [len(p["total"]) for p in parts]
+    out["pair"] = np.repeat(np.eye(len(parts)), sizes, axis=0)
+    return out

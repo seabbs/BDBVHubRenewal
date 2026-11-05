@@ -43,6 +43,7 @@ def test_variants_are_registered_as_fitted_models() -> None:
         "renewalsp",
         "renewalbvd",
         "renewalnolag",
+        "renewallearntlag",
         "renewalfixdelay",
         "renewalplace",
     }
@@ -536,6 +537,8 @@ def test_inputs_carry_the_publication_lag_from_earlier_files(
     assert late.publication_lag_pmf is not None
     assert late.publication_lag_pmf.sum() == pytest.approx(1.0)
     assert vintage_inputs(tasks["2026-10-09"], MAIN).publication_lag_pmf is None
+    assert late.release_pairs is not None
+    assert late.release_pairs["pair"].shape[1] == 1
 
 
 def test_lag_source_warns_when_the_prior_stands_in(

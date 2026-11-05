@@ -4,15 +4,17 @@ r"""Double interval censored daily pmfs of continuous delays.
 A delay $X$ from a primary event, uniform over a day, to a secondary
 event recorded to its day has the pmf of primarycensored
 (`dpcens(..., pwindow = 1, swindow = 1)`), here in closed form for the
-Gamma and log-normal.
+Gamma and log-normal. `CensoredDelayPMF` samples its parameters.
 """
 
 from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
+import numpyro
 from jax import Array
 from jax.typing import ArrayLike
+from pyrenew.metaclass import RandomVariable
 
 
 def censored_pmf(
@@ -95,3 +97,72 @@ def censored_pmf(
     pmf = jnp.where(right, second(q), second(g))
     pmf = jnp.maximum(pmf, 1e-12)
     return pmf / pmf.sum()
+
+
+class CensoredDelayPMF(RandomVariable):
+    r"""A daily double interval censored delay pmf with sampled parameters.
+
+    `censored_pmf` of `family` with mean and coefficient of variation
+    from `mean_rv` and `cv_rv`, truncated at `dmax`, recorded as
+    `{name}`.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        family: str,
+        dmax: int,
+        mean_rv: RandomVariable,
+        cv_rv: RandomVariable,
+    ) -> None:
+        """Initialize the pmf.
+
+        Parameters
+        ----------
+        name
+            Name of the recorded pmf.
+        family
+            `"gamma"` or `"lognormal"`.
+        dmax
+            Maximum delay.
+        mean_rv, cv_rv
+            Mean (days) and coefficient of variation.
+
+        Raises
+        ------
+        TypeError
+            If `mean_rv` or `cv_rv` is not a `RandomVariable`.
+        """
+        for label, rv in (("mean_rv", mean_rv), ("cv_rv", cv_rv)):
+            if not isinstance(rv, RandomVariable):
+                raise TypeError(f"{label} must be a RandomVariable.")
+        super().__init__(name=name)
+        self.family = family
+        self.dmax = dmax
+        self.mean_rv = mean_rv
+        self.cv_rv = cv_rv
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return (
+            f"CensoredDelayPMF(name={self.name!r}, family={self.family!r}, "
+            f"dmax={self.dmax}, mean_rv={self.mean_rv!r}, "
+            f"cv_rv={self.cv_rv!r})"
+        )
+
+    def sample(self, **kwargs: object) -> Array:
+        """Sample the pmf.
+
+        Parameters
+        ----------
+        **kwargs
+            Ignored, for the PyRenew interface.
+
+        Returns
+        -------
+        Array
+            Pmf on 0..dmax.
+        """
+        pmf = censored_pmf(self.family, self.mean_rv(), self.cv_rv(), self.dmax)
+        numpyro.deterministic(self.name, pmf)
+        return pmf
