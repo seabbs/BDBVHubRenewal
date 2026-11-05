@@ -516,15 +516,15 @@ def _scored_on(reported: pd.DataFrame, baseline: str = "randomwalk") -> str:
     n = reported.loc[reported["model"] == baseline].groupby("pool").size()
     scales = {
         "national": "national",
-        "provinces": "provincial",
+        "provinces": "province",
         "zones": "health zone",
     }
     counts = [f"{n[p]} {label}" for p, label in scales.items() if p in n]
     listed = ", ".join(counts[:-1]) + " and " if len(counts) > 1 else ""
     return (
-        f"These scores come from {len(pairs)} origin and release pairs.\n"
-        f"{baseline} has {listed}{counts[-1]} forecasts scored.\n"
-        "The renewal models are not scored at health zones.\n"
+        f"Scored on {len(pairs)} origin and release pairs.\n"
+        f"{baseline} has {listed}{counts[-1]} forecasts.\n"
+        "The renewal models have no health zone forecasts.\n"
     )
 
 
@@ -756,11 +756,12 @@ def _zone_nowcast_section(
     _write(
         gen / "zone-review.md",
         "## Zone review\n\n"
-        "Each place's recent reported level beside one model's latest "
-        "nowcast and forecast, to find places whose forecast is out of "
-        "line with their data.\n"
-        "Sort by the ratio to see the largest rises and falls.\n"
-        "Pick a place to see it in the chart above.\n\n"
+        "One row per place with a forecast from the chosen model.\n"
+        "Recent is the mean count of the last two complete weeks.\n"
+        "Each week column gives the median and 90% interval.\n"
+        "Ratio is log((median + 1) / (recent + 1)) for the chosen week.\n"
+        "A ratio of 0.69 is double the recent count and -0.69 is half.\n"
+        "Click a place to show it in the By place chart.\n\n"
         '<div class="zonereview" data-src="../figures/nowcastchart.json" '
         'role="group" aria-label="Zone review">\n'
         "<noscript>The zone review needs JavaScript.</noscript>\n"
