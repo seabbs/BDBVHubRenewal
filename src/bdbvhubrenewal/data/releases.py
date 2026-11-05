@@ -105,7 +105,8 @@ def last_report_days(daily: pd.DataFrame, delays: pd.DataFrame) -> pd.Series:
     )
     report = report.groupby(delays["vintage"]).max()
     last = pd.concat([onset, report.reindex(onset.index)], axis=1).max(axis=1)
-    return last.dt.strftime("%Y-%m-%d").rename("cutoff")
+    out: pd.Series = last.dt.strftime("%Y-%m-%d").rename("cutoff")
+    return out
 
 
 def with_cutoffs(table: pd.DataFrame, cutoffs: pd.Series) -> pd.DataFrame:
