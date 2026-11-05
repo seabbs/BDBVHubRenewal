@@ -455,9 +455,7 @@ def test_single_patch_fits_each_location_on_its_own(
     # count it has already reported in a week.
     reported = rows.set_index(["location", "target_end_date"])["total"]
     idle = fit.samples.loc[fit.samples["location"].isin(few)]
-    floor = idle.set_index(["location", "target_end_date"]).index.map(
-        reported
-    )
+    floor = idle.set_index(["location", "target_end_date"]).index.map(reported)
     assert (idle["value"].to_numpy() >= floor.fillna(0).to_numpy()).all()
     assert floor.fillna(0).max() > 0
 
