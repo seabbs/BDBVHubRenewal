@@ -1,15 +1,18 @@
 name: Fit store
 
 # Fits each fitted model once per real origin and stores the result on
-# the fit-store branch, one file per fit, keyed by a hash of everything
-# the fit depends on (bdbvhubrenewal.evaluation.store): the model code
-# and settings, the model's sampler table in ci/policy.toml, uv.lock and
-# the releases up to the origin. `plan` lists the keys the store lacks,
-# so only those are fitted: a code change refits every origin, and a new
-# hub release adds one fit per model. Pages reads the store and never
-# fits; this workflow rebuilds it when fits are stored.
+# the fit-store branch, one file per fit, keyed by a hash of what reaches
+# the fit (bdbvhubrenewal.evaluation.store.fit_key). `plan` lists the
+# keys the store lacks, so only those are fitted: a model code change
+# refits every origin, and a new hub release adds one fit per model.
+# Pages reads the store and never fits; this workflow rebuilds it when
+# fits are stored.
 #
-#   plan -> fit (one job per missing fit) -> pages
+#   plan -> fit (read-only, one job per missing fit) -> store -> pages
+#
+# Only `store` can write, and it runs no project code. Fits are written
+# to fit-store from main only. A dispatch from another branch must name
+# a scratch store branch (`store_branch`), for testing.
 
 on:
   push:
@@ -24,6 +27,7 @@ on:
       - 'config/backtest.toml'
       - 'ci/policy.toml'
       - 'uv.lock'
+      - 'scripts/fit-store.sh'
       - '.github/workflows/fit-store.yml'
   # A pull request only plans, so its summary says how many fits the
   # change will cost on main.
@@ -38,24 +42,41 @@ on:
       - 'config/backtest.toml'
       - 'ci/policy.toml'
       - 'uv.lock'
+      - 'scripts/fit-store.sh'
       - '.github/workflows/fit-store.yml'
   # New hub releases: a check with nothing new ends after `plan`.
   schedule:
     - cron: '30 */6 * * *'
   workflow_dispatch:
+    inputs:
+      store_branch:
+        description: >-
+          Store branch to write (blank for fit-store, from main only; any
+          other name is a scratch store for testing a branch)
+        type: string
+        default: ''
+      models:
+        description: Fit only these models (space-separated; blank for all)
+        type: string
+        default: ''
+      retry_failed:
+        description: Fit again the fits stored as failed
+        type: boolean
+        default: false
 
-# A push supersedes a running refit, which is cancelled; fits already
-# stored are kept. A scheduled check waits for the running one.
-# Pull requests have their own group.
+# A running refit is never cancelled: a push while it runs queues one
+# run, and a newer push replaces that queued run. Pull requests have
+# their own group and cancel their superseded plans.
 concurrency:
-  group: fit-store-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+  group: fit-store-${{ github.event_name == 'pull_request' && github.ref || inputs.store_branch || 'fit-store' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 env:
   STORE: output/fit-store
+  FIT_STORE_BRANCH: ${{ inputs.store_branch || 'fit-store' }}
 
 jobs:
   plan:
@@ -65,8 +86,28 @@ jobs:
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       count: ${{ steps.plan.outputs.count }}
+      write: ${{ steps.guard.outputs.write }}
     steps:
+      - name: Decide whether this run may write a store
+        id: guard
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          SCRATCH: ${{ inputs.store_branch }}
+        run: |
+          write=false
+          if [ "$EVENT" != pull_request ]; then
+            if [ "$REF" = refs/heads/main ] && [ -z "$SCRATCH" ]; then
+              write=true
+            elif [ -n "$SCRATCH" ] && [ "$SCRATCH" != fit-store ]; then
+              write=true
+            fi
+          fi
+          echo "write=$write" >> "$GITHUB_OUTPUT"
+          echo "Writes $FIT_STORE_BRANCH: $write" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-forecast-env
       # The latest hub releases, and the BVDOutbreakSize release each
       # may use. Every fit job reads these files, so all fit the same data.
@@ -76,49 +117,63 @@ jobs:
         run: |
           uv run bdbvhubrenewal data
           uv run bdbvhubrenewal bvd
-      - run: scripts/fit-store.sh fetch "$STORE"
+      - name: Fetch the store
+        run: scripts/fit-store.sh fetch "$STORE"
       - name: Plan
         id: plan
+        env:
+          MODELS: ${{ inputs.models }}
+          RETRY: ${{ inputs.retry_failed }}
         run: |
-          uv run bdbvhubrenewal fit-store plan --store "$STORE" \
-            --out matrix.json | tee -a "$GITHUB_STEP_SUMMARY"
+          args=(--store "$STORE" --out matrix.json --keys keys.json)
+          # shellcheck disable=SC2206
+          [ -n "$MODELS" ] && args+=(--models $MODELS)
+          [ "$RETRY" = true ] && args+=(--retry-failed)
+          uv run bdbvhubrenewal fit-store plan "${args[@]}" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
           echo "matrix=$(cat matrix.json)" >> "$GITHUB_OUTPUT"
           echo "count=$(jq '.include | length' matrix.json)" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v7
-        if: >-
-          steps.plan.outputs.count != '0'
-          && github.event_name != 'pull_request'
+        if: steps.guard.outputs.write == 'true' && steps.plan.outputs.count != '0'
         with:
           name: data
           path: |
             data
             !data/raw
           retention-days: 3
+      - uses: actions/upload-artifact@v7
+        if: steps.guard.outputs.write == 'true' && steps.plan.outputs.count != '0'
+        with:
+          name: keys
+          path: keys.json
+          retention-days: 3
 
   # As fit-candidates.yml: one job per fit, chains in parallel
-  # (`chain_method` in each sampler table).
+  # (`chain_method` in each sampler table). Read-only: the fit is handed
+  # to `store` as an artefact.
   fit:
     name: Fit ${{ matrix.model }} at ${{ matrix.origin }}
     needs: plan
-    if: >-
-      needs.plan.outputs.count != '0'
-      && github.event_name != 'pull_request'
+    if: needs.plan.outputs.write == 'true' && needs.plan.outputs.count != '0'
     runs-on: ${{ vars.FIT_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 350
-    permissions:
-      contents: write
     strategy:
       fail-fast: false
+      # Leaves runners for the submission workflow.
+      max-parallel: 12
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-forecast-env
       - uses: actions/download-artifact@v8
         with:
           name: data
           path: data
-      # A fit that raises is stored as failed, so it is not retried
-      # until its inputs change. One that times out is retried next run.
+      # A fit that raises is stored as failed and is not retried until
+      # its inputs change or a dispatch sets retry_failed. One that times
+      # out is retried next run.
       - name: Fit
         timeout-minutes: 330
         env:
@@ -127,19 +182,49 @@ jobs:
           KEY: ${{ matrix.key }}
         run: |
           uv run bdbvhubrenewal fit-store fit --model "$MODEL" \
-            --origin "$ORIGIN" --store new
+            --origin "$ORIGIN" --store new || true
           test -f "new/$MODEL/$ORIGIN/$KEY.json.gz"
-      # Each fit is stored when it ends, so a cancelled run keeps it.
-      - name: Store
-        if: always()
-        run: scripts/fit-store.sh push new
+      - uses: actions/upload-artifact@v7
+        with:
+          name: fit-${{ matrix.model }}-${{ matrix.origin }}
+          path: new
+          retention-days: 3
+
+  # The only job that writes. It runs no project code: it merges the
+  # fits' files into the store branch, prunes keys no longer needed and
+  # pushes once.
+  store:
+    name: Store the fits
+    needs: [plan, fit]
+    if: >-
+      always() && needs.plan.outputs.write == 'true'
+      && needs.plan.outputs.count != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts/fit-store.sh
+          sparse-checkout-cone-mode: false
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: fit-*
+          path: new
+          merge-multiple: true
+      - uses: actions/download-artifact@v8
+        with:
+          name: keys
+      - run: scripts/fit-store.sh push new keys.json
 
   pages:
     name: Rebuild the docs from the store
-    needs: [plan, fit]
+    needs: [plan, store]
     if: >-
-      always() && needs.plan.outputs.count != '0'
-      && github.event_name != 'pull_request'
+      always() && needs.plan.result == 'success'
+      && needs.store.result == 'success'
+      && github.ref == 'refs/heads/main' && inputs.store_branch == ''
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # The fit store branch (`bdbvhubrenewal.evaluation.store`).
 #
-#   scripts/fit-store.sh fetch DIR   copy the branch's files into DIR
-#                                    (empty if the branch does not exist)
-#   scripts/fit-store.sh push DIR    commit DIR's files on top of the
-#                                    branch and push, retrying when
-#                                    another fit job pushed first
+#   scripts/fit-store.sh fetch DIR        copy the branch's files into DIR
+#                                         (empty if there is no branch)
+#   scripts/fit-store.sh push DIR KEYS    add DIR's fits to the branch,
+#                                         prune it and push
 #
-# Each fit is its own file, so concurrent pushes never touch the same
-# path and a retry on the new tip always applies.
+# KEYS is the JSON list of current keys, `<model>/<origin>/<key>`, that
+# `fit-store plan --keys` writes. For each of those pairs the push keeps
+# the current key's file and the newest good fit of older code, and
+# deletes the rest. FIT_STORE_BRANCH names the branch (default
+# fit-store). Uses git and Python's standard library only.
 set -euo pipefail
 
 action=$1
@@ -27,6 +29,7 @@ case "$action" in
     fi
     ;;
   push)
+    keys=$(cd "$(dirname "$3")" && pwd)/$(basename "$3")
     files=$(cd "$dir" && find . -name '*.json.gz' | sort)
     if [ -z "$files" ]; then
       echo "No stored fits to push."
@@ -42,7 +45,33 @@ case "$action" in
         git -C "$work" switch -q --orphan "$branch-new"
       fi
       cp -R "$dir"/. "$work"/
+      python3 - "$work" "$keys" << 'EOF'
+import gzip
+import json
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+for entry in json.loads(Path(sys.argv[2]).read_text()):
+    model, origin, key = entry.split("/")
+    older = []
+    for path in (root / model / origin).glob("*.json.gz"):
+        if path.name == f"{key}.json.gz":
+            continue
+        meta = json.loads(gzip.decompress(path.read_bytes()))["meta"]
+        older.append((meta["status"] == "ok", meta["fitted_at"], path))
+    good = sorted(f for f in older if f[0])
+    keep = good[-1][2] if good else None
+    for _, _, path in older:
+        if path != keep:
+            path.unlink()
+EOF
       git -C "$work" add -A
+      if git -C "$work" diff --cached --quiet; then
+        git worktree remove --force "$work"
+        echo "Nothing to store."
+        exit 0
+      fi
       git -C "$work" \
         -c user.name='github-actions[bot]' \
         -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
@@ -60,7 +89,7 @@ case "$action" in
     exit 1
     ;;
   *)
-    echo "usage: $0 fetch|push DIR" >&2
+    echo "usage: $0 fetch DIR | push DIR KEYS" >&2
     exit 2
     ;;
 esac
