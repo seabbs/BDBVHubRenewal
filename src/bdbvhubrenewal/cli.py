@@ -211,7 +211,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     zb.add_argument("--data", default=data_dir)
     zb.add_argument(
-        "--models", nargs="*", default=["randomwalk", "randomwalknowcast"]
+        "--models",
+        nargs="*",
+        default=["randomwalk", "randomwalknowcast", "pprandomwalknowcast"],
     )
     zb.add_argument("--out", default="results/zone-scores.csv")
     zb.add_argument("--energy-out", default="results/zone-energy.csv")

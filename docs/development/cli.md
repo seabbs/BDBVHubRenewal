@@ -17,7 +17,7 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 | `bvd` | Cache the BVDOutbreakSize releases each vintage may use. |
 | `compare-hub [--fetch]` | Score our retrospective forecasts and the hub's submitted ones on the same truth and weeks. |
 | `nowcast` | Forecast from a real vintage, write the hub file and check it. With `--config` and `--fit`, forecast from a fit configuration. |
-| `zone-backtest` | Score `randomwalk` and `randomwalknowcast` run at zone level on the real vintages. |
+| `zone-backtest` | Score `randomwalk`, `randomwalknowcast` and `pprandomwalknowcast` run at zone level on the real vintages. |
 | `fit` | Fit a configuration and write the fit directory and its diagnostics, for the submission CI. |
 | `plot-submission` | Plot a submitted hub file. |
 | `plot-ppc` | Plot a fit's posterior predictive checks (`ppc.json`). |
