@@ -62,8 +62,13 @@ def test_code_digest_follows_the_inputs(tmp_path: Path) -> None:
 
 def test_samplers_come_from_the_policy() -> None:
     table = store.samplers(ROOT / "ci" / "policy.toml")
-    assert set(table) == {"renewal", "renewalbvd", "renewalsp"}
+    assert {"renewal", "renewalbvd", "renewalsp"} <= set(table)
     assert table["renewalbvd"]["num_samples"] == 1000
+    # A variant no candidate runs takes the sampler of its base's model,
+    # so the reporting comparison fits each version as renewal is fitted.
+    for name in ("renewalnolag", "renewallearntlag", "renewalplace"):
+        assert table[name] == table["renewal"]
+    assert "pprandomwalknowcast" not in table
 
 
 def test_a_new_release_keeps_older_keys(
