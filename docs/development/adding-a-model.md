@@ -36,11 +36,6 @@ For the leave-one-province-out check, set `supports_mask = True` and drop the pr
 A new renewal variant is one entry in `VARIANTS` in [`forecasters.renewal`][bdbvhubrenewal.forecasters.renewal].
 It names a base `ModelConfig` and the fields it changes.
 Fitted variants are not run by the docs build or the smoke tests.
-Run them apart and commit what they write to `results/`:
-
-```bash
-BDBV_RENEWAL_SAMPLER='{"num_chains": 2, "num_warmup": 300, "num_samples": 300}' \
-  task backtest -- --models renewal
-```
+The [fit store](cli.md#fit-store) fits them once a variant is on `main`.
 
 A run with `--models` replaces only those models' rows, and `BDBV_RENEWAL_SAMPLER` sets the NUTS settings.
