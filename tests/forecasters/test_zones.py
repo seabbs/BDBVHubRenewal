@@ -22,6 +22,7 @@ from bdbvhubrenewal.forecasters import (
 from bdbvhubrenewal.forecasters.zones import (
     ZoneAllocator,
     _apportion,
+    _pair_by_rank,
     check_zone_coherence,
     reconcile_zones,
     zone_forecast,
@@ -369,6 +370,18 @@ def test_apportion_sums_to_the_total_in_whole_numbers() -> None:
     assert out[1, 1].tolist() == [1, 3, 6]
     assert out[0, 1].tolist() == [0, 0, 0]
     assert out[0, 0].tolist() == [3, 2, 2]
+
+
+def test_pair_by_rank_keeps_zone_trajectories_in_the_province_order() -> None:
+    rng = np.random.default_rng(1)
+    total = rng.permutation(40).reshape(20, 2)
+    weights = rng.lognormal(0.0, 1.0, (20, 2, 3))
+    out = _pair_by_rank(total, weights)
+    order = np.argsort(total.sum(axis=1), kind="stable")
+    for z in range(3):
+        rows = {tuple(r) for r in weights[:, :, z]}
+        assert {tuple(r) for r in out[:, :, z]} == rows
+        assert (np.diff(out[order, :, z].sum(axis=1)) >= 0).all()
 
 
 def _zone_model_inputs(
