@@ -26,7 +26,7 @@ Backtest forecasts cover $h = -4, \dots, 3$.
 | `auxiliary-data/health-zone-code-mapping.csv` | Health zone codes mapped to P-codes and DHIS2 codes. | Static |
 | `hub-config/*.json` | Rounds, tasks, output types, hub settings and the metadata schema. | Copied at download |
 
-The hub does not publish deaths, suspected cases, counts by report date, the imputation code or populations.
+The hub does not publish deaths, suspected cases, counts by report date or populations.
 Province populations are the Institut National de la Statistique's 2019 figures (*Annuaire statistique RDC 2020*), and province centres the WorldPop-weighted centres of BVDOutbreakSize.
 
 ## Vintages
