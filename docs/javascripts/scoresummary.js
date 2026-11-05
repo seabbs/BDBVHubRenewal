@@ -79,10 +79,11 @@
     var chartDiv = h("div", {}, root);
     var table = h("div", { class: "explorer-table" }, root);
 
-    // Chart metrics: a relative metric shows the model over the baseline.
+    // Chart metrics: a relative metric shows the model over the baseline,
+    // on a log axis so that places with near-zero scores do not set it.
     var metrics = d.metrics.map(function (m) {
       return m.relative ?
-        { key: "rel_" + m.key, label: "Relative " + lower(m.label), ref: 1 } :
+        { key: "rel_" + m.key, label: "Relative " + lower(m.label), ref: 1, log: true } :
         { key: m.key, label: m.label, ref: m.ref };
     });
     function value(s, m) { return m.relative ? s.rel[m.key] : s.mean[m.key]; }
@@ -90,7 +91,7 @@
     // out by place and by horizon.
     var energy = view === "overall" && d.energy ? d.energy.metrics : [];
     energy.forEach(function (m) {
-      metrics.push({ key: "rel_" + m.key, label: "Relative " + lower(m.label), ref: 1 });
+      metrics.push({ key: "rel_" + m.key, label: "Relative " + lower(m.label), ref: 1, log: true });
     });
     function joint() {
       var pool = d.pools.map(function (p) { return p.id; }).indexOf(selScale.value);

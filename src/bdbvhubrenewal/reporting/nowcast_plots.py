@@ -12,6 +12,7 @@ import pandas as pd
 from matplotlib.artist import Artist
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from matplotlib.ticker import FuncFormatter
 
 from bdbvhubrenewal.reporting.plots import (
     THEMES,
@@ -311,6 +312,9 @@ def plot_place_summary(
 ) -> Figure:
     """Plot one score per place and model, a row per place, by scale.
 
+    The axis is on the log scale, so places whose scores are near zero do
+    not set it, and scores of 0 are left out.
+
     Parameters
     ----------
     table : pandas.DataFrame
@@ -353,7 +357,7 @@ def plot_place_summary(
         places = sorted(set(sub["location"]), key=lambda x: names.get(x, x))
         y = {loc: i for i, loc in enumerate(places)}
         for m in models:
-            own = sub.loc[sub["model"] == m]
+            own = sub.loc[(sub["model"] == m) & (sub[metric] > 0)]
             if own.empty:
                 continue
             ax.plot(
@@ -366,6 +370,8 @@ def plot_place_summary(
             )
         if ref is not None:
             ax.axvline(ref, color=ink["muted"], lw=1, ls=":")
+        ax.set_xscale("log")
+        ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
         ax.set_yticks(range(len(places)), [names.get(p, p) for p in places])
         ax.set_ylim(len(places) - 0.5, -0.5)
         ax.set_title(titles[pool], fontsize=9)
