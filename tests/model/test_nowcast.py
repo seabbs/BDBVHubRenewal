@@ -260,3 +260,57 @@ def test_trajectories_name_their_posterior_draws(sim_vintage):
     draws = forecast_trajectories(model, sim_vintage, 5, posterior=latent)
     assert draws["draw"].shape == (5,)
     assert np.all((draws["draw"] >= 0) & (draws["draw"] < 8))
+
+
+def _pairs(kept):
+    """Two release pairs of three rows, ages over the seven onset days."""
+    before = np.array([np.arange(-2, 5), np.arange(3, 10), np.arange(20, 27)])
+    return {
+        "before": jnp.asarray(np.vstack([before, before])),
+        "after": jnp.asarray(np.vstack([before + 7, before + 8])),
+        "kept": jnp.asarray(kept, dtype=float),
+        "total": jnp.full(6, 10.0),
+        "pair": jnp.asarray(np.repeat(np.eye(2), 3, axis=0)),
+    }
+
+
+def test_kept_share_is_the_published_share_at_each_release():
+    from bdbvhubrenewal.model.publication_lag import kept_share
+
+    pmf = jnp.asarray([0.5, 0.2, 0.1, 0.1, 0.1])
+    pairs = _pairs(np.zeros(6))
+    background = jnp.asarray([0.1, 0.0])
+    share = kept_share(pmf, background, pairs)
+    cdf = np.cumsum(pmf)
+
+    def published(ages):
+        return np.where(ages < 0, 0.0, cdf[np.clip(ages, 0, 4)]).sum()
+
+    first = np.arange(-2, 5)
+    expected = 0.9 * published(first) / published(first + 7)
+    assert float(share[0]) == pytest.approx(expected, rel=1e-6)
+    # Rows old at both releases were all published by the earlier one.
+    assert float(share[2]) == pytest.approx(0.9)
+    assert float(share[5]) == pytest.approx(1.0)
+
+
+def test_learnt_lag_is_fitted_to_the_release_pairs(sim_vintage):
+    from numpyro.infer.util import log_density
+
+    learnt = dataclasses.replace(MAIN, publication_lag="learnt")
+    data = dataclasses.replace(sim_vintage, release_pairs=_pairs(np.full(6, 9)))
+    model = build_model(data, learnt)
+    latent = prior_latent(model, data, 1)
+    assert {"publication_lag_mean", "release_pairs_background"} <= set(latent)
+    args = model_args(model, data)
+    assert "release_pairs" in args["onsets"]
+    values = {k: v[0] for k, v in latent.items()}
+
+    def density(kept):
+        args["onsets"]["release_pairs"] = _pairs(kept)
+        return float(log_density(model.sample, (), args, values)[0])
+
+    assert density(np.full(6, 9)) != pytest.approx(density(np.full(6, 2)))
+    # The fixed lag has no pair term.
+    fixed = build_model(data, MAIN)
+    assert "release_pairs" not in model_args(fixed, data)["onsets"]

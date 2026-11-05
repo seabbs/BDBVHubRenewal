@@ -506,3 +506,19 @@ def test_censored_pmf_is_close_in_float32(family, cv, mean):
     assert np.max(np.abs(ours - ref)) < 4e-5
     big = ref > 1e-4
     assert np.max(np.abs(ours[big] / ref[big] - 1)) < 2e-2
+
+
+def test_censored_delay_pmf_samples_the_censored_pmf():
+    from bdbvhubrenewal.model.censored import CensoredDelayPMF, censored_pmf
+
+    lag = CensoredDelayPMF(
+        "lag",
+        "lognormal",
+        14,
+        DeterministicVariable("mean", 2.0),
+        DeterministicVariable("cv", 1.5),
+    )
+    pmf = seeded(lag)
+    np.testing.assert_allclose(
+        pmf, censored_pmf("lognormal", 2.0, 1.5, 14), rtol=1e-6
+    )
