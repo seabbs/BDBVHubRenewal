@@ -28,7 +28,13 @@ def _commit(sha: str) -> str:
 
 
 def _pairs(rows: Sequence[Mapping[str, Any]]) -> str:
-    return ", ".join(f"`{r['model']}` at {r['origin']}" for r in rows)
+    """List fits by model: `renewal` at 2026-10-24 and 2026-11-01."""
+    origins: dict[str, list[str]] = {}
+    for r in rows:
+        origins.setdefault(str(r["model"]), []).append(str(r["origin"]))
+    return "; ".join(
+        f"`{m}` at {' and '.join(sorted(o))}" for m, o in origins.items()
+    )
 
 
 def store_note(
@@ -70,12 +76,12 @@ def store_note(
     if pending:
         body.append(
             f"Fits for {code} are still [running]"
-            f"({REPO}/actions/workflows/fit-store.yml): {_pairs(pending)}."
+            f"({REPO}/actions/workflows/fit-store.yml)."
         )
     if failed:
         body.append(f"The fit for {code} failed: {_pairs(failed)}.")
     if stale:
-        body.append(f"Older fits are shown for {_pairs(stale)}.")
+        body.append(f"Fits of older code are shown for {_pairs(stale)}.")
     if absent:
         body.append(f"Not shown until fitted: {_pairs(absent)}.")
     title = "Fits still running" if pending else "A fit failed"

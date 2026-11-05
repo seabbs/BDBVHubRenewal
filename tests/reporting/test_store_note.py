@@ -35,9 +35,12 @@ def test_missing_and_older_fits_are_said_plainly() -> None:
     assert '!!! note "Fits still running"' in note
     assert "bbbbbbb" in note
     assert "still [running]" in note
-    assert "`renewal` at 2026-11-01" in note
+    assert "Not shown until fitted: `renewal` at 2026-11-01." in note
     assert "failed: `renewal` at 2026-10-17" in note
-    assert "Older fits are shown for `renewal` at 2026-10-24" in note
+    assert (
+        "older code are shown for `renewal` at 2026-10-17 and 2026-10-24"
+        in note
+    )
 
 
 def test_no_record_says_no_fits(tmp_path: Path) -> None:
