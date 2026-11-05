@@ -3,9 +3,9 @@ import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
 S = sys.argv[1]
 P = {"CD-HU": "Haut-Uele", "CD-NK": "North Kivu", "CD-HU-11": "Rungu", "CD-HU-07": "Isiro", "CD-HU-12": "Wamba",
      "CD-TO-02": "Bafwasende", "CD-IT-22": "Logo", "CD-NK-26": "Mutwanga", "CD-NK-20": "Lubero", "CD-NK-30": "Pinga"}
-res = {v: pickle.load(open(f"{S}/zonesall_{v}.pkl", "rb"))[("2026-11-01", "randomwalknowcast")] for v in ["before", "intro"]}
-col = {"before": "#eb6834", "intro": "#2a78d6"}
-lab = {"before": "main", "intro": "this PR"}
+res = {v: pickle.load(open(f"{S}/zonesall_{v}.pkl", "rb"))[("2026-11-01", "randomwalknowcast")] for v in ["before", "ci"]}
+col = {"before": "#eb6834", "ci": "#2a78d6"}
+lab = {"before": "main", "ci": "this PR"}
 fig, ax = plt.subplots(2, 5, figsize=(15, 5.6))
 for a, (z, nm) in zip(ax.ravel(), P.items()):
     x0 = res["before"]; ix = x0["locs"].index(z) if z in x0["locs"] else None

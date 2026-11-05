@@ -71,75 +71,147 @@ randomwalknowcast,Haut-Uele,3,before,"62 [15, 193]",25 29 18 5
 randomwalknowcast,North Kivu,-1,before,"164 [63, 417]",158 182 142 47
 randomwalknowcast,North Kivu,0,before,"152 [57, 391]",158 182 142 47
 randomwalknowcast,North Kivu,3,before,"170 [47, 497]",158 182 142 47
-randomwalk,Rungu,-1,intro,"1 [0, 5]",1 1 0 1
-randomwalk,Rungu,0,intro,"0 [0, 6]",1 1 0 1
-randomwalk,Rungu,3,intro,"0 [0, 8]",1 1 0 1
-randomwalk,Isiro,-1,intro,"2 [0, 13]",4 5 3 0
-randomwalk,Isiro,0,intro,"2 [0, 15]",4 5 3 0
-randomwalk,Isiro,3,intro,"2 [0, 18]",4 5 3 0
-randomwalk,Wamba,-1,intro,"5 [0, 18]",8 19 7 0
-randomwalk,Wamba,0,intro,"5 [0, 21]",8 19 7 0
-randomwalk,Wamba,3,intro,"4 [0, 19]",8 19 7 0
-randomwalk,Bafwasende,-1,intro,"1 [0, 14]",11 3 0 0
-randomwalk,Bafwasende,0,intro,"1 [0, 20]",11 3 0 0
-randomwalk,Bafwasende,3,intro,"0 [0, 33]",11 3 0 0
-randomwalk,Logo,-1,intro,"1 [0, 2]",0 0 0 1
-randomwalk,Logo,0,intro,"0 [0, 3]",0 0 0 1
-randomwalk,Logo,3,intro,"0 [0, 4]",0 0 0 1
-randomwalk,Mutwanga,-1,intro,"6 [1, 47]",8 14 13 1
-randomwalk,Mutwanga,0,intro,"5 [0, 44]",8 14 13 1
-randomwalk,Mutwanga,3,intro,"3 [0, 72]",8 14 13 1
-randomwalk,Pinga,-1,intro,"0 [0, 0]",0 0 0 0
-randomwalk,Pinga,0,intro,"0 [0, 0]",0 0 0 0
-randomwalk,Pinga,3,intro,"0 [0, 1]",0 0 0 0
-randomwalk,Lubero,-1,intro,"6 [0, 40]",5 3 5 0
-randomwalk,Lubero,0,intro,"6 [0, 50]",5 3 5 0
-randomwalk,Lubero,3,intro,"3 [0, 58]",5 3 5 0
-randomwalk,Makoro,-1,intro,"0 [0, 0]",0 0 0 0
-randomwalk,Makoro,0,intro,"0 [0, 0]",0 0 0 0
-randomwalk,Makoro,3,intro,"0 [0, 1]",0 0 0 0
-randomwalk,Binza,-1,intro,"0 [0, 0]",0 0 0 0
-randomwalk,Binza,0,intro,"0 [0, 0]",0 0 0 0
-randomwalk,Binza,3,intro,"0 [0, 1]",0 0 0 0
-randomwalk,Haut-Uele,-1,intro,"25 [14, 41]",25 29 18 5
-randomwalk,Haut-Uele,0,intro,"25 [15, 43]",25 29 18 5
-randomwalk,Haut-Uele,3,intro,"24 [13, 46]",25 29 18 5
-randomwalk,North Kivu,-1,intro,"222 [84, 446]",158 182 142 47
-randomwalk,North Kivu,0,intro,"218 [80, 498]",158 182 142 47
-randomwalk,North Kivu,3,intro,"226 [51, 665]",158 182 142 47
-randomwalknowcast,Rungu,-1,intro,"2 [0, 7]",1 1 0 1
-randomwalknowcast,Rungu,0,intro,"3 [0, 13]",1 1 0 1
-randomwalknowcast,Rungu,3,intro,"2 [0, 18]",1 1 0 1
-randomwalknowcast,Isiro,-1,intro,"1 [0, 4]",4 5 3 0
-randomwalknowcast,Isiro,0,intro,"1 [0, 6]",4 5 3 0
-randomwalknowcast,Isiro,3,intro,"0 [0, 7]",4 5 3 0
-randomwalknowcast,Wamba,-1,intro,"0 [0, 5]",8 19 7 0
-randomwalknowcast,Wamba,0,intro,"0 [0, 6]",8 19 7 0
-randomwalknowcast,Wamba,3,intro,"1 [0, 9]",8 19 7 0
-randomwalknowcast,Bafwasende,-1,intro,"1 [0, 2]",11 3 0 0
-randomwalknowcast,Bafwasende,0,intro,"1 [0, 4]",11 3 0 0
-randomwalknowcast,Bafwasende,3,intro,"0 [0, 8]",11 3 0 0
-randomwalknowcast,Logo,-1,intro,"2 [0, 21]",0 0 0 1
-randomwalknowcast,Logo,0,intro,"2 [0, 16]",0 0 0 1
-randomwalknowcast,Logo,3,intro,"1 [0, 32]",0 0 0 1
-randomwalknowcast,Mutwanga,-1,intro,"3 [1, 23]",8 14 13 1
-randomwalknowcast,Mutwanga,0,intro,"4 [0, 39]",8 14 13 1
-randomwalknowcast,Mutwanga,3,intro,"4 [0, 57]",8 14 13 1
-randomwalknowcast,Pinga,-1,intro,"1 [0, 8]",0 0 0 0
-randomwalknowcast,Pinga,0,intro,"0 [0, 0]",0 0 0 0
-randomwalknowcast,Pinga,3,intro,"0 [0, 0]",0 0 0 0
-randomwalknowcast,Lubero,-1,intro,"1 [0, 10]",5 3 5 0
-randomwalknowcast,Lubero,0,intro,"1 [0, 13]",5 3 5 0
-randomwalknowcast,Lubero,3,intro,"1 [0, 32]",5 3 5 0
-randomwalknowcast,Makoro,-1,intro,"1 [0, 4]",0 0 0 0
-randomwalknowcast,Makoro,0,intro,"0 [0, 0]",0 0 0 0
-randomwalknowcast,Makoro,3,intro,"0 [0, 0]",0 0 0 0
-randomwalknowcast,Binza,-1,intro,"1 [0, 7]",0 0 0 0
-randomwalknowcast,Binza,0,intro,"0 [0, 0]",0 0 0 0
-randomwalknowcast,Binza,3,intro,"0 [0, 1]",0 0 0 0
-randomwalknowcast,Haut-Uele,-1,intro,"22 [10, 46]",25 29 18 5
-randomwalknowcast,Haut-Uele,0,intro,"22 [8, 50]",25 29 18 5
-randomwalknowcast,Haut-Uele,3,intro,"22 [7, 56]",25 29 18 5
-randomwalknowcast,North Kivu,-1,intro,"225 [94, 469]",158 182 142 47
-randomwalknowcast,North Kivu,0,intro,"222 [85, 576]",158 182 142 47
-randomwalknowcast,North Kivu,3,intro,"195 [64, 698]",158 182 142 47
+randomwalk,Rungu,-1,ai,"1 [0, 5]",1 1 0 1
+randomwalk,Rungu,0,ai,"0 [0, 6]",1 1 0 1
+randomwalk,Rungu,3,ai,"0 [0, 8]",1 1 0 1
+randomwalk,Isiro,-1,ai,"2 [0, 13]",4 5 3 0
+randomwalk,Isiro,0,ai,"2 [0, 15]",4 5 3 0
+randomwalk,Isiro,3,ai,"2 [0, 18]",4 5 3 0
+randomwalk,Wamba,-1,ai,"5 [0, 18]",8 19 7 0
+randomwalk,Wamba,0,ai,"5 [0, 21]",8 19 7 0
+randomwalk,Wamba,3,ai,"4 [0, 19]",8 19 7 0
+randomwalk,Bafwasende,-1,ai,"1 [0, 14]",11 3 0 0
+randomwalk,Bafwasende,0,ai,"1 [0, 20]",11 3 0 0
+randomwalk,Bafwasende,3,ai,"0 [0, 33]",11 3 0 0
+randomwalk,Logo,-1,ai,"1 [0, 2]",0 0 0 1
+randomwalk,Logo,0,ai,"0 [0, 3]",0 0 0 1
+randomwalk,Logo,3,ai,"0 [0, 4]",0 0 0 1
+randomwalk,Mutwanga,-1,ai,"6 [1, 47]",8 14 13 1
+randomwalk,Mutwanga,0,ai,"5 [0, 44]",8 14 13 1
+randomwalk,Mutwanga,3,ai,"3 [0, 72]",8 14 13 1
+randomwalk,Pinga,-1,ai,"0 [0, 0]",0 0 0 0
+randomwalk,Pinga,0,ai,"0 [0, 0]",0 0 0 0
+randomwalk,Pinga,3,ai,"0 [0, 1]",0 0 0 0
+randomwalk,Lubero,-1,ai,"6 [0, 40]",5 3 5 0
+randomwalk,Lubero,0,ai,"6 [0, 50]",5 3 5 0
+randomwalk,Lubero,3,ai,"3 [0, 58]",5 3 5 0
+randomwalk,Makoro,-1,ai,"0 [0, 0]",0 0 0 0
+randomwalk,Makoro,0,ai,"0 [0, 0]",0 0 0 0
+randomwalk,Makoro,3,ai,"0 [0, 1]",0 0 0 0
+randomwalk,Binza,-1,ai,"0 [0, 0]",0 0 0 0
+randomwalk,Binza,0,ai,"0 [0, 0]",0 0 0 0
+randomwalk,Binza,3,ai,"0 [0, 1]",0 0 0 0
+randomwalk,Haut-Uele,-1,ai,"25 [14, 41]",25 29 18 5
+randomwalk,Haut-Uele,0,ai,"25 [15, 43]",25 29 18 5
+randomwalk,Haut-Uele,3,ai,"24 [13, 46]",25 29 18 5
+randomwalk,North Kivu,-1,ai,"222 [84, 446]",158 182 142 47
+randomwalk,North Kivu,0,ai,"218 [80, 498]",158 182 142 47
+randomwalk,North Kivu,3,ai,"226 [51, 665]",158 182 142 47
+randomwalknowcast,Rungu,-1,ai,"10 [1, 53]",1 1 0 1
+randomwalknowcast,Rungu,0,ai,"10 [0, 65]",1 1 0 1
+randomwalknowcast,Rungu,3,ai,"7 [0, 76]",1 1 0 1
+randomwalknowcast,Isiro,-1,ai,"0 [0, 0]",4 5 3 0
+randomwalknowcast,Isiro,0,ai,"0 [0, 2]",4 5 3 0
+randomwalknowcast,Isiro,3,ai,"0 [0, 2]",4 5 3 0
+randomwalknowcast,Wamba,-1,ai,"0 [0, 0]",8 19 7 0
+randomwalknowcast,Wamba,0,ai,"0 [0, 1]",8 19 7 0
+randomwalknowcast,Wamba,3,ai,"0 [0, 3]",8 19 7 0
+randomwalknowcast,Bafwasende,-1,ai,"0 [0, 0]",11 3 0 0
+randomwalknowcast,Bafwasende,0,ai,"0 [0, 1]",11 3 0 0
+randomwalknowcast,Bafwasende,3,ai,"0 [0, 3]",11 3 0 0
+randomwalknowcast,Logo,-1,ai,"2 [0, 39]",0 0 0 1
+randomwalknowcast,Logo,0,ai,"2 [0, 35]",0 0 0 1
+randomwalknowcast,Logo,3,ai,"1 [0, 47]",0 0 0 1
+randomwalknowcast,Mutwanga,-1,ai,"2 [0, 13]",8 14 13 1
+randomwalknowcast,Mutwanga,0,ai,"2 [0, 22]",8 14 13 1
+randomwalknowcast,Mutwanga,3,ai,"1 [0, 27]",8 14 13 1
+randomwalknowcast,Pinga,-1,ai,"0 [0, 1]",0 0 0 0
+randomwalknowcast,Pinga,0,ai,"0 [0, 1]",0 0 0 0
+randomwalknowcast,Pinga,3,ai,"0 [0, 3]",0 0 0 0
+randomwalknowcast,Lubero,-1,ai,"0 [0, 0]",5 3 5 0
+randomwalknowcast,Lubero,0,ai,"0 [0, 2]",5 3 5 0
+randomwalknowcast,Lubero,3,ai,"0 [0, 11]",5 3 5 0
+randomwalknowcast,Makoro,-1,ai,"0 [0, 0]",0 0 0 0
+randomwalknowcast,Makoro,0,ai,"0 [0, 0]",0 0 0 0
+randomwalknowcast,Makoro,3,ai,"0 [0, 1]",0 0 0 0
+randomwalknowcast,Binza,-1,ai,"0 [0, 0]",0 0 0 0
+randomwalknowcast,Binza,0,ai,"0 [0, 1]",0 0 0 0
+randomwalknowcast,Binza,3,ai,"0 [0, 2]",0 0 0 0
+randomwalknowcast,Haut-Uele,-1,ai,"58 [14, 168]",25 29 18 5
+randomwalknowcast,Haut-Uele,0,ai,"59 [13, 174]",25 29 18 5
+randomwalknowcast,Haut-Uele,3,ai,"54 [14, 185]",25 29 18 5
+randomwalknowcast,North Kivu,-1,ai,"164 [63, 417]",158 182 142 47
+randomwalknowcast,North Kivu,0,ai,"147 [58, 457]",158 182 142 47
+randomwalknowcast,North Kivu,3,ai,"150 [42, 636]",158 182 142 47
+randomwalk,Rungu,-1,ci,"1 [0, 5]",1 1 0 1
+randomwalk,Rungu,0,ci,"0 [0, 6]",1 1 0 1
+randomwalk,Rungu,3,ci,"0 [0, 8]",1 1 0 1
+randomwalk,Isiro,-1,ci,"2 [0, 13]",4 5 3 0
+randomwalk,Isiro,0,ci,"2 [0, 15]",4 5 3 0
+randomwalk,Isiro,3,ci,"2 [0, 18]",4 5 3 0
+randomwalk,Wamba,-1,ci,"5 [0, 18]",8 19 7 0
+randomwalk,Wamba,0,ci,"5 [0, 21]",8 19 7 0
+randomwalk,Wamba,3,ci,"4 [0, 19]",8 19 7 0
+randomwalk,Bafwasende,-1,ci,"1 [0, 14]",11 3 0 0
+randomwalk,Bafwasende,0,ci,"1 [0, 20]",11 3 0 0
+randomwalk,Bafwasende,3,ci,"0 [0, 33]",11 3 0 0
+randomwalk,Logo,-1,ci,"1 [0, 2]",0 0 0 1
+randomwalk,Logo,0,ci,"0 [0, 3]",0 0 0 1
+randomwalk,Logo,3,ci,"0 [0, 4]",0 0 0 1
+randomwalk,Mutwanga,-1,ci,"6 [1, 47]",8 14 13 1
+randomwalk,Mutwanga,0,ci,"5 [0, 44]",8 14 13 1
+randomwalk,Mutwanga,3,ci,"3 [0, 72]",8 14 13 1
+randomwalk,Pinga,-1,ci,"0 [0, 0]",0 0 0 0
+randomwalk,Pinga,0,ci,"0 [0, 0]",0 0 0 0
+randomwalk,Pinga,3,ci,"0 [0, 1]",0 0 0 0
+randomwalk,Lubero,-1,ci,"6 [0, 40]",5 3 5 0
+randomwalk,Lubero,0,ci,"6 [0, 50]",5 3 5 0
+randomwalk,Lubero,3,ci,"3 [0, 58]",5 3 5 0
+randomwalk,Makoro,-1,ci,"0 [0, 0]",0 0 0 0
+randomwalk,Makoro,0,ci,"0 [0, 0]",0 0 0 0
+randomwalk,Makoro,3,ci,"0 [0, 1]",0 0 0 0
+randomwalk,Binza,-1,ci,"0 [0, 0]",0 0 0 0
+randomwalk,Binza,0,ci,"0 [0, 0]",0 0 0 0
+randomwalk,Binza,3,ci,"0 [0, 1]",0 0 0 0
+randomwalk,Haut-Uele,-1,ci,"25 [14, 41]",25 29 18 5
+randomwalk,Haut-Uele,0,ci,"25 [15, 43]",25 29 18 5
+randomwalk,Haut-Uele,3,ci,"24 [13, 46]",25 29 18 5
+randomwalk,North Kivu,-1,ci,"222 [84, 446]",158 182 142 47
+randomwalk,North Kivu,0,ci,"218 [80, 498]",158 182 142 47
+randomwalk,North Kivu,3,ci,"226 [51, 665]",158 182 142 47
+randomwalknowcast,Rungu,-1,ci,"3 [0, 10]",1 1 0 1
+randomwalknowcast,Rungu,0,ci,"3 [0, 12]",1 1 0 1
+randomwalknowcast,Rungu,3,ci,"2 [0, 17]",1 1 0 1
+randomwalknowcast,Isiro,-1,ci,"1 [0, 4]",4 5 3 0
+randomwalknowcast,Isiro,0,ci,"1 [0, 6]",4 5 3 0
+randomwalknowcast,Isiro,3,ci,"0 [0, 7]",4 5 3 0
+randomwalknowcast,Wamba,-1,ci,"1 [0, 6]",8 19 7 0
+randomwalknowcast,Wamba,0,ci,"0 [0, 6]",8 19 7 0
+randomwalknowcast,Wamba,3,ci,"1 [0, 9]",8 19 7 0
+randomwalknowcast,Bafwasende,-1,ci,"1 [0, 4]",11 3 0 0
+randomwalknowcast,Bafwasende,0,ci,"1 [0, 3]",11 3 0 0
+randomwalknowcast,Bafwasende,3,ci,"0 [0, 8]",11 3 0 0
+randomwalknowcast,Logo,-1,ci,"2 [0, 22]",0 0 0 1
+randomwalknowcast,Logo,0,ci,"2 [0, 16]",0 0 0 1
+randomwalknowcast,Logo,3,ci,"1 [0, 32]",0 0 0 1
+randomwalknowcast,Mutwanga,-1,ci,"4 [1, 28]",8 14 13 1
+randomwalknowcast,Mutwanga,0,ci,"4 [0, 37]",8 14 13 1
+randomwalknowcast,Mutwanga,3,ci,"3 [0, 55]",8 14 13 1
+randomwalknowcast,Pinga,-1,ci,"0 [0, 1]",0 0 0 0
+randomwalknowcast,Pinga,0,ci,"0 [0, 1]",0 0 0 0
+randomwalknowcast,Pinga,3,ci,"0 [0, 2]",0 0 0 0
+randomwalknowcast,Lubero,-1,ci,"1 [0, 12]",5 3 5 0
+randomwalknowcast,Lubero,0,ci,"1 [0, 13]",5 3 5 0
+randomwalknowcast,Lubero,3,ci,"1 [0, 31]",5 3 5 0
+randomwalknowcast,Makoro,-1,ci,"0 [0, 0]",0 0 0 0
+randomwalknowcast,Makoro,0,ci,"0 [0, 0]",0 0 0 0
+randomwalknowcast,Makoro,3,ci,"0 [0, 1]",0 0 0 0
+randomwalknowcast,Binza,-1,ci,"0 [0, 1]",0 0 0 0
+randomwalknowcast,Binza,0,ci,"0 [0, 0]",0 0 0 0
+randomwalknowcast,Binza,3,ci,"0 [0, 1]",0 0 0 0
+randomwalknowcast,Haut-Uele,-1,ci,"22 [10, 46]",25 29 18 5
+randomwalknowcast,Haut-Uele,0,ci,"22 [8, 50]",25 29 18 5
+randomwalknowcast,Haut-Uele,3,ci,"22 [7, 56]",25 29 18 5
+randomwalknowcast,North Kivu,-1,ci,"225 [94, 469]",158 182 142 47
+randomwalknowcast,North Kivu,0,ci,"222 [85, 576]",158 182 142 47
+randomwalknowcast,North Kivu,3,ci,"195 [64, 698]",158 182 142 47

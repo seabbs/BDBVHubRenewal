@@ -3,7 +3,11 @@ before,randomwalk,direct,124,0.718
 before,randomwalk,rec,124,0.306
 before,randomwalknowcast,direct,124,0.185
 before,randomwalknowcast,rec,124,0.161
-intro,randomwalk,direct,124,0.105
-intro,randomwalk,rec,124,0.016
-intro,randomwalknowcast,direct,124,0.0
-intro,randomwalknowcast,rec,124,0.0
+ai,randomwalk,direct,124,0.105
+ai,randomwalk,rec,124,0.016
+ai,randomwalknowcast,direct,124,0.145
+ai,randomwalknowcast,rec,124,0.121
+ci,randomwalk,direct,124,0.105
+ci,randomwalk,rec,124,0.016
+ci,randomwalknowcast,direct,124,0.145
+ci,randomwalknowcast,rec,124,0.081
