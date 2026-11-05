@@ -2105,10 +2105,12 @@ Backtest forecasts cover <span class="arithmatex">\(h = -4, \dots, 3\)</span>.</
 </tr>
 </tbody>
 </table>
-<p>The hub does not publish deaths, suspected cases, counts by report date, the imputation code or populations.
+<p>The hub does not publish deaths, suspected cases, counts by report date or populations.
 Province populations are the Institut National de la Statistique's 2019 figures (<em>Annuaire statistique RDC 2020</em>), and province centres the WorldPop-weighted centres of BVDOutbreakSize.</p>
 <h2 id="vintages">Vintages<a class="headerlink" href="#vintages" title="Permanent link">&para;</a></h2>
 <p>Each hub release is a vintage, labelled by its <code>as_of</code> date and of kind <code>real</code> or <code>simulated</code>.
+From the 2026-11-01 release on, <code>as_of</code> is the extraction date, a day after the last reported case, while earlier releases were labelled by the last reported case (<a href="https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/90">hub issue 90</a>).
+We keep each release's published label, map a rewritten label back to it, and take its last report day as the extraction date less a day.
 Recent weeks are revised in later releases, so each forecast is made from one vintage and scored on the counts later releases report.</p>
 <h2 id="release-snapshots">Release snapshots<a class="headerlink" href="#release-snapshots" title="Permanent link">&para;</a></h2>
 <p><code>auxiliary-data/daily-confirmed-case.csv</code> holds, for each release, the daily onsets known at that release.
@@ -2304,6 +2306,8 @@ Their use is on the <a href="../model/#bvdoutbreaksize-informed">Renewal models 
         <script src="../../javascripts/scoresummary.js"></script>
       
         <script src="../../javascripts/nowcastchart.js"></script>
+      
+        <script src="../../javascripts/zonereview.js"></script>
       
         <script src="https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
       

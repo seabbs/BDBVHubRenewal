@@ -2438,7 +2438,7 @@ Provinces with no cases get no forecast.</p>
 <h3 id="time-axis">Time axis<a class="headerlink" href="#time-axis" title="Permanent link">&para;</a></h3>
 <p>The data weeks start one week before weekly onsets, summed over the modelled provinces, first reach 5, or their peak if lower.
 In <code>renewalsp</code> the modelled province is <span class="arithmatex">\(p\)</span> alone, so each fit has its own axis.
-The data weeks end with the week that holds the vintage date <span class="arithmatex">\(T\)</span>.
+The data weeks end with the week that holds <span class="arithmatex">\(T\)</span>, the release's last report day (<a href="../data/#vintages">Data</a>).
 The model axis starts 42 days (6 weeks) earlier, the length of the generation interval, for seeding.
 Every weekly walk is held at its starting value over the 6 seeding weeks and the first data week.
 The fit axis is the data weeks.</p>
@@ -2488,7 +2488,7 @@ Expected known onsets, right truncated by vintage, are</p>
 \mathrm{known}_{p,T}(s) = \lambda_p(s) \sum_{d} f_s(d)\, \{1 - \pi_p(s + d)\}\, c(s + d).
 \]</div>
 <h3 id="hub-imputation">Hub imputation<a class="headerlink" href="#hub-imputation" title="Permanent link">&para;</a></h3>
-<p>The hub gives each case reported without an onset one by subtracting a delay drawn from its published delays (<a href="https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/61">hub issue 61</a>).
+<p>The hub gives each case reported without an onset one by subtracting a delay drawn from a fit to its published delays (<a href="https://github.com/InsightNet-US/BDBV-Modeling-Hub/blob/main/auxiliary-data/imputation-details.md">imputation details</a>).
 We model that procedure, bias included:</p>
 <div class="arithmatex">\[
 M_p(t) = \pi_p(t) \sum_s \lambda_p(s)\, f_s(t - s),
@@ -2496,8 +2496,10 @@ M_p(t) = \pi_p(t) \sum_s \lambda_p(s)\, f_s(t - s),
 \mathrm{imputed}_{p,T}(s) = \sum_{t = s}^{T} \hat f_T(t - s)\, c(t)\, M_p(t).
 \]</div>
 <p><span class="arithmatex">\(M_p(t)\)</span> are the cases reported on day <span class="arithmatex">\(t\)</span> without an onset.
-<span class="arithmatex">\(\hat f_T\)</span> is the empirical pmf of all delays published at <span class="arithmatex">\(T\)</span>, pooled and on 0 to 60 days, and is data.
-Pooling and the handling of negative and long delays are assumed.</p>
+The hub draws a report hour from <span class="arithmatex">\(\mathrm{Unif}(0, 24)\)</span> and subtracts a generalised gamma delay in hours fitted to the non-negative delays published at 2026-10-17.
+<span class="arithmatex">\(\hat f_T\)</span> is the daily pmf this implies, <span class="arithmatex">\(\hat f_T(k) = \int_0^1 \{F_T(k + u) - F_T(k - 1 + u)\}\, du\)</span> with <span class="arithmatex">\(F_T\)</span> the delay cdf in days, on 0 to 60 days, and is data.
+Up to the 2026-10-24 release the hub fitted the delays as exact, and from 2026-11-01 as double interval censored (<a href="https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/75">hub issue 75</a>).
+We refit both, so <span class="arithmatex">\(F_T\)</span> is the fit the hub used for release <span class="arithmatex">\(T\)</span>.</p>
 <h3 id="likelihood">Likelihood<a class="headerlink" href="#likelihood" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Weekly <span class="arithmatex">\(\mathrm{known}_{p,T}\)</span> and <span class="arithmatex">\(\mathrm{imputed}_{p,T}\)</span> are negative binomial, each stream with <span class="arithmatex">\(1/\sqrt{\phi} \sim \text{HalfNormal}(0.25)\)</span> and <span class="arithmatex">\(\phi\)</span> capped at 1000.</li>
@@ -2799,6 +2801,8 @@ m \sim \text{Multinomial}\big(Y^{(k)}(w) - O(w),\ \theta^{(k)}\big).
         <script src="../../javascripts/scoresummary.js"></script>
       
         <script src="../../javascripts/nowcastchart.js"></script>
+      
+        <script src="../../javascripts/zonereview.js"></script>
       
         <script src="https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
       

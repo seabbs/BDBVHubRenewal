@@ -2032,8 +2032,8 @@ The model diagrams are mermaid blocks in <code>docs/methods/model.md</code>.</p>
 </tr>
 <tr>
 <td>Renewal with importation and depletion</td>
-<td><code>SubpopulationInfections</code>, subclassed</td>
-<td><code>coupled_renewal</code>.</td>
+<td><code>SubpopulationInfections</code>, subclassed with the steps of <code>BaseSubpopulationInfections</code></td>
+<td><code>coupled_renewal</code>, called from <code>_infections_from_rt</code>, and <code>Importation</code>, which gives the mixing matrix as PyRenew's <code>mobility_matrix_rv</code> does.</td>
 </tr>
 <tr>
 <td>Ascertainment <span class="arithmatex">\(\alpha(s)\)</span></td>
@@ -2052,13 +2052,18 @@ The model diagrams are mermaid blocks in <code>docs/methods/model.md</code>.</p>
 </tr>
 <tr>
 <td>Known and imputed onsets</td>
-<td><code>BaseObservationProcess</code>, <code>NegativeBinomialNoise</code>, <code>compute_prop_already_reported</code> for the publication lag</td>
+<td><code>BaseObservationProcess</code> with <code>temporal_pmf_rv</code> for the infection-to-onset pmf (a point mass at 0), <code>NegativeBinomialNoise</code>, <code>compute_prop_already_reported</code> for the publication lag</td>
 <td><code>OnsetStreams</code>.</td>
+</tr>
+<tr>
+<td>Delays of known-onset cases</td>
+<td>None</td>
+<td><code>DirichletMultinomialNoise</code>, a noise model in the form of PyRenew's <code>CountNoise</code> for counts by delay given weekly totals.</td>
 </tr>
 <tr>
 <td>BVDOutbreakSize Rt</td>
 <td>None</td>
-<td><code>RtPseudoObservation</code>.</td>
+<td><code>RtPseudoObservation</code>, a <code>RandomVariable</code> the latent process calls, as it holds both <span class="arithmatex">\(R\)</span> and infections.</td>
 </tr>
 <tr>
 <td>Provinces with no cases</td>
@@ -2081,7 +2086,7 @@ The model diagrams are mermaid blocks in <code>docs/methods/model.md</code>.</p>
 <li><code>CountObservation</code> and <code>SubpopulationCounts</code> take one fixed delay pmf and one truncation pmf.
   Here the delay varies with onset day, and known and imputed onsets are separate streams.</li>
 <li><code>MobilitySubpopulationInfections</code>, added to PyRenew after the pinned commit, uses a fixed mobility matrix, <span class="arithmatex">\(R\)</span> by location and depletion capped at the susceptibles.
-  Here the kernel is learnt and depletion is exponential in the pool <span class="arithmatex">\(\nu\)</span>.</li>
+  Here a share of transmission is sent from each origin through a fixed gravity kernel, and depletion is exponential in the pool <span class="arithmatex">\(\nu\)</span>.</li>
 </ul>
 <p>PyRenew has no delay that varies with time, no Dirichlet-multinomial count and no pseudo-observation of <span class="arithmatex">\(R\)</span>.</p>
 <p>The table compares the two ways of sampling the walk steps on the recovery fit of the simulated outbreak, with 2 chains of 300 warm-up and 300 draws.</p>
@@ -2173,7 +2178,7 @@ Pandas only builds the inputs and the output frames.</p>
 <li>Depletion is carried on <span class="arithmatex">\(\log S\)</span>, which needs no subtraction, and <span class="arithmatex">\(1 - e^{-y}\)</span> is computed with <code>expm1</code>.</li>
 <li>The generation interval is double interval censored in closed form, <span class="arithmatex">\(G(d + 1) - 2G(d) + G(d - 1)\)</span> with the Gamma's integrated cdf.
   It is computed once, in float64, and matches primarycensored.</li>
-<li>Parametric delays (the gamma and log-normal options and the simulator) use the same closed form, truncated at their maximum delay and renormalised as primarycensored's <span class="arithmatex">\(D\)</span>.
+<li>The simulator's delays use the same closed form, truncated at their maximum delay and renormalised as primarycensored's <span class="arithmatex">\(D\)</span>.
   In float32 they are within <span class="arithmatex">\(3 \times 10^{-5}\)</span> of primarycensored, and within <span class="arithmatex">\(10^{-8}\)</span> in float64.</li>
 <li>The negative binomial concentration is capped at <span class="arithmatex">\(\phi \le 1000\)</span>, which is Poisson for these counts.
   The Dirichlet-multinomial concentration is capped at <span class="arithmatex">\(\psi \le 10^4\)</span>.</li>
@@ -2343,6 +2348,8 @@ Each fit reports its largest R-hat over parameters and the share of draws at the
         <script src="../../javascripts/scoresummary.js"></script>
       
         <script src="../../javascripts/nowcastchart.js"></script>
+      
+        <script src="../../javascripts/zonereview.js"></script>
       
         <script src="https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
       

@@ -2255,7 +2255,7 @@ Horizon is weeks from the reference week, so negative horizons are nowcasts, 0 i
 <p>Each model choice is logged with its date, and the development set rolls forward with them.
 Development runs use every vintage up to the latest choice date.
 Each real vintage after a choice is forecast by the model chosen then, the latest choice dated before it.
-It is also forecast by <code>randomwalk</code> and <code>randomwalknowcast</code>, and by default every other registered model, with the code at the time of the run.
+It is also forecast by <code>randomwalk</code> and <code>randomwalknowcast</code>, and by every fitted model from its stored fit.
 The run supplies the fitted models' forecasts to the <a href="../../nowcast/">Nowcast</a> and <a href="../../comparison/">Comparison</a> pages, and has no page of its own.</p>
 <h2 id="leave-one-province-out">Leave-one-province-out<a class="headerlink" href="#leave-one-province-out" title="Permanent link">&para;</a></h2>
 <p>One province's likelihood is masked while it stays in the model, so coupling still acts on it.
@@ -2432,6 +2432,8 @@ A round is pending until a later real release exists.</p>
         <script src="../../javascripts/scoresummary.js"></script>
       
         <script src="../../javascripts/nowcastchart.js"></script>
+      
+        <script src="../../javascripts/zonereview.js"></script>
       
         <script src="https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
       

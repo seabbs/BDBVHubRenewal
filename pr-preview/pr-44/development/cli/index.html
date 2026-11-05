@@ -1268,6 +1268,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#fit-store" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fit store
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#hub-files" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1910,6 +1921,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#fit-store" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fit store
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#hub-files" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1963,15 +1985,11 @@
 </tr>
 <tr>
 <td><code>backtest</code></td>
-<td>Run the development backtest, the evaluation on the real releases (<code>results/nowcast-*.csv</code>) and the recovery check. With <code>--models</code>, only those models run and the others' rows in <code>results/</code> are kept.</td>
+<td>Run the development backtest, the evaluation on the real releases (<code>results/nowcast-*.csv</code>) and the recovery check. Fitted models are never run: their rows in <code>results/</code> come from the fit store and are kept. With <code>--models</code>, only those models run and the others' rows are kept.</td>
 </tr>
 <tr>
 <td><code>backtest --evaluate-holdout</code></td>
 <td>Score every held-out vintage under the model chosen at the time, with the other models alongside.</td>
-</tr>
-<tr>
-<td><code>backtest --no-fit</code></td>
-<td>Run only the models with no fit. Fitted models' rows in <code>results/</code> are kept, and their held-out forecasts are scored again. The docs build uses this, so it never fits a model.</td>
 </tr>
 <tr>
 <td><code>backtest --lopo</code></td>
@@ -1996,6 +2014,10 @@
 <tr>
 <td><code>zone-backtest</code></td>
 <td>Score <code>randomwalk</code> and <code>randomwalknowcast</code> run at zone level on the real vintages.</td>
+</tr>
+<tr>
+<td><code>fit-store plan</code>, <code>fit</code>, <code>load</code></td>
+<td>List the fits the fit store lacks, make one, or load the stored fits into <code>results/</code>.</td>
 </tr>
 <tr>
 <td><code>fit</code></td>
@@ -2044,13 +2066,28 @@
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>task<span class="w"> </span>backtest-heldout<span class="w">   </span><span class="c1"># score the held-out vintages</span>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>task<span class="w"> </span>docs<span class="w">               </span><span class="c1"># build the site into _site/</span>
 </code></pre></div>
-<p>The fitted models use the <code>[sampler]</code> settings in <code>config/backtest.toml</code>, the same as the submission's main fit.
-<code>BDBV_RENEWAL_SAMPLER</code> overrides them, for example <code>'{"num_chains": 2, "num_warmup": 300, "num_samples": 300}'</code>.
-Each forecast of a renewal variant is a fit.
-<code>--models</code> runs some models and keeps the others' rows in <code>results/</code>, which is committed.
-The docs build runs only the random walk models and reads the fitted models from there.</p>
+<p><code>--models</code> runs some models and keeps the others' rows in <code>results/</code>.</p>
+<h2 id="fit-store">Fit store<a class="headerlink" href="#fit-store" title="Permanent link">&para;</a></h2>
+<p>Each forecast of a fitted model is a fit, so the backtest and the docs build never run them.
+The Fit store workflow (<code>.github/workflows/fit-store.yml</code>) fits each fitted model once at each real origin and commits the result to the <code>fit-store</code> branch, as <code>&lt;model&gt;/&lt;origin&gt;/&lt;key&gt;.json.gz</code>.
+The key hashes the model and forecaster code, <code>config/backtest.toml</code>, <code>uv.lock</code>, the model's sampler table in <code>ci/policy.toml</code> and the releases up to the origin.
+The renewal variants use the sampler of the submission candidate that runs them; <code>pprandomwalknowcast</code> uses its own.
+A code or sampler change refits every origin, and a new hub release adds one fit per model.
+The workflow runs on pushes to <code>main</code> that change these inputs, and every 6 hours for new hub releases.
+A push cancels a running refit, and fits already stored are kept.
+A fit that fails is stored as failed and is not retried until its inputs change.
+On a pull request it only lists the fits the change would need.
+When it stores fits it rebuilds the docs.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>task<span class="w"> </span>fit-store-plan<span class="w">  </span><span class="c1"># the fits the store lacks for this code and data</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>task<span class="w"> </span>fit-store<span class="w">       </span><span class="c1"># load the stored fits into results/</span>
+</code></pre></div>
+<p><code>task backtest</code> loads the store first.
+Where the store has no fit for the current key, <code>load</code> uses the newest stored fit of that model and origin.
+Each page with fitted-model results says which commits its fits come from, and which fits for the current code are still running.
+A full refit is 20 fits (4 models at 5 origins), run in parallel: about 50 minutes of wall time and 8 runner-hours.
+A new release adds 4 fits, about 2 runner-hours.</p>
 <p>The comparison with hub forecasts downloads other teams' files, so it is run on its own:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>uv<span class="w"> </span>run<span class="w"> </span>bdbvhubrenewal<span class="w"> </span>compare-hub<span class="w"> </span>--fetch
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>uv<span class="w"> </span>run<span class="w"> </span>bdbvhubrenewal<span class="w"> </span>compare-hub<span class="w"> </span>--fetch
 </code></pre></div>
 <h2 id="hub-files">Hub files<a class="headerlink" href="#hub-files" title="Permanent link">&para;</a></h2>
 <p><code>bdbvhubrenewal nowcast</code> writes <code>model-output/&lt;model_id&gt;/&lt;reference_date&gt;-&lt;model_id&gt;.csv</code> under <code>output/submission/</code>.
@@ -2219,6 +2256,8 @@ For any other reference date it prints a note and skips the checks.</p>
         <script src="../../javascripts/scoresummary.js"></script>
       
         <script src="../../javascripts/nowcastchart.js"></script>
+      
+        <script src="../../javascripts/zonereview.js"></script>
       
         <script src="https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
       
