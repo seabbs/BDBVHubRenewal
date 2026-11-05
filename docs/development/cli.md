@@ -38,10 +38,13 @@ task backtest-lopo      # leave one province out
 task backtest-scenarios # simulated scenarios calibrated to the real data
 task backtest-zones     # random walk models at health-zone level
 task backtest-heldout   # score the held-out vintages
+task results            # every derived file in results/, as the Pages build makes them
 task docs               # build the site into _site/
 ```
 
 `--models` runs some models and keeps the others' rows in `results/`.
+The files in `results/` are not committed, apart from `development-log.csv`, `ladder.csv` and `model-choice.yml`.
+The Pages build makes the rest with the steps of `task results`, from the code, the data and the fit store.
 
 ## Fit store
 

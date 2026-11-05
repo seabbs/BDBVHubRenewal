@@ -69,6 +69,14 @@ tasks:
       - task: fit-store
       - uv run bdbvhubrenewal backtest {{.CLI_ARGS}}
 
+  results:
+    desc: Make every derived file in results/ as the Pages build does (the backtest, held-out, zone and scenario runs)
+    cmds:
+      - task: backtest
+      - uv run bdbvhubrenewal backtest --evaluate-holdout
+      - uv run bdbvhubrenewal zone-backtest
+      - uv run bdbvhubrenewal backtest --scenarios-only
+
   backtest-lopo:
     desc: Leave one province out on the development vintages, for the variants that take a mask
     cmds:
@@ -186,6 +194,7 @@ tasks:
   docs:
     desc: Build the docs site into _site/
     cmds:
+      - task: results
       - task: plots
       - task: getting-started
       - uv run mkdocs build --strict

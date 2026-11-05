@@ -8,6 +8,7 @@ import pandas as pd
 from bdbvhubrenewal.reporting import report
 
 ROOT = Path(__file__).resolve().parents[2]
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
@@ -93,8 +94,8 @@ def test_lopo_section_hidden_without_results(tmp_path: Path) -> None:
 
 def test_zone_section() -> None:
     text = report._zone_section(
-        ROOT / "results" / "zone-scores.csv",
-        ROOT / "results" / "zone-energy.csv",
+        FIXTURES / "zone-scores.csv",
+        FIXTURES / "zone-energy.csv",
     )
     assert text.startswith('??? note "Health zones')
     assert "rel_energy" in text
@@ -393,7 +394,7 @@ def test_release_scores_horizon_is_weeks_from_the_reference_date(
 
 
 def test_summary_covers_only_forecasts_randomwalk_made(tmp_path: Path) -> None:
-    scores = report._release_scores(ROOT / "results")
+    scores = report._release_scores(FIXTURES)
     reported = scores.loc[scores["target"] == "reported"]
     gen = tmp_path / "gen"
     gen.mkdir()

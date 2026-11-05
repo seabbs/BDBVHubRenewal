@@ -13,6 +13,7 @@ from bdbvhubrenewal.cli import main
 from bdbvhubrenewal.reporting import plots
 
 ROOT = Path(__file__).resolve().parents[1]
+FIXTURES = ROOT / "tests" / "reporting" / "fixtures"
 
 
 @pytest.fixture
@@ -99,7 +100,7 @@ def test_forecast_draws_trajectories_ribbons_and_median() -> None:
 
 
 def test_plot_scores_by_truth() -> None:
-    scores = pd.read_csv(ROOT / "results" / "nowcast-scores.csv")
+    scores = pd.read_csv(FIXTURES / "nowcast-scores.csv")
     scores = scores.rename(columns={"origin": "vintage"})
     fig = plots.plot_scores_by_truth(scores, models=["randomwalk"])
     assert len(fig.axes) == 1
@@ -168,14 +169,3 @@ def test_cli_fit_task_carries_the_delay_files_for_the_lag() -> None:
     assert task.target_history is not None
     assert task.target_history["vintage"].nunique() >= 3
     assert vintage_inputs(task, MAIN).publication_lag_pmf is not None
-
-
-def test_zone_backtest_defaults_to_the_committed_zone_models() -> None:
-    from bdbvhubrenewal.cli import build_parser
-
-    args = build_parser().parse_args(["zone-backtest"])
-    scores = pd.read_csv(ROOT / "results" / "zone-scores.csv")
-    committed = {
-        m.removesuffix(" (summed to provinces)") for m in scores["model"]
-    }
-    assert set(args.models) == committed

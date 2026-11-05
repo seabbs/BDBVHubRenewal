@@ -24,6 +24,9 @@ docs/assets/getting-started/
 # mkdocs-jupyter execution cache.
 .cache/
 docs/figures/*.json
-# Written by `fit-store load` from the fit-store branch.
-results/fit-store.json
-results/delay-summary.csv
+# Derived results: made by the Pages build (`task results` locally) from
+# the code, the data and the fit store. Only these records are committed.
+results/*
+!results/development-log.csv
+!results/ladder.csv
+!results/model-choice.yml
