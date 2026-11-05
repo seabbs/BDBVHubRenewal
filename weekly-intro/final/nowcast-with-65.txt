@@ -1,0 +1,5 @@
+National nowcast of week 10-31 at 11-01 (natnow.py). #65 is asof-one-cutoff; "#63+#65" is a local merge of the two branches.
+main(daily) weeks ['2026-10-17', '2026-10-24', '2026-10-31'] CD point [483. 564. 676.] sum of provinces [489. 571. 623.] g0 national 0.62
+#65(daily) weeks ['2026-10-17', '2026-10-24', '2026-10-31'] CD point [489. 598. 907.] sum of provinces [498. 607. 844.] g0 national 1.59
+#63(weekly) weeks ['2026-10-17', '2026-10-24', '2026-10-31'] CD point [482. 570. 688.] sum of provinces [488. 575. 667.] g0 national 0.62
+#63+#65(weekly) weeks ['2026-10-17', '2026-10-24', '2026-10-31'] CD point [489. 601. 795.] sum of provinces [497. 609. 806.] g0 national 1.59
