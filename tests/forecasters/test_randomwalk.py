@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -207,3 +208,26 @@ def test_places_with_no_falls_of_their_own_have_no_removals(
         i = locs.index(code)
         assert (origin.removal[i] == 0).all()
         assert (values[:, i, u] >= origin.reported[i, u]).all()
+
+
+def test_a_silent_place_waits_for_its_first_introduction() -> None:
+    import jax
+
+    from bdbvhubrenewal.forecasters.randomwalk import _walks
+
+    origin = SimpleNamespace(
+        silent=np.array([False, True, True]),
+        intro=np.array([0.5, 0.0, 0.3]),
+        sigma=np.array([0.2, 0.2, 0.0]),
+    )
+    x0 = np.full((3, 4000), 20.0)
+    lam, y = _walks(jax.random.key(1), x0, origin, 4)
+    # A place with cases walks from its start as before.
+    assert lam[0].mean() > 15
+    # No introduction can come with a probability of 0.
+    assert (y[1] == 0).all()
+    # With sigma 0 the rate is 1 from the first introduction, so the
+    # share of samples started by week h is 1 - 0.7^(h + 1).
+    started = (lam[2] > 0).mean(axis=0)
+    np.testing.assert_allclose(started, 1 - 0.7 ** np.arange(1, 5), atol=0.03)
+    assert set(np.unique(lam[2])) <= {0.0, 1.0}

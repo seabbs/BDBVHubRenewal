@@ -21,12 +21,12 @@ flowchart TD
     end
     DEL["Daily delay g<sub>p</sub>(j) ≥ 0<br/>weighted non-negative<br/>least squares<br/><i>own or parent by age</i>"]
     G["Growth to final G<sub>p</sub>(a)<br/>share reported 1 / G<sub>p</sub>(a)"]
-    MU["Nowcast mean μ<sub>p</sub>(w)<br/>Σ<sub>t ∈ w</sub> N<sub>p,o</sub>(t) G<sub>p</sub>(c<sub>o</sub> − t)"]
+    MU["Nowcast mean μ<sub>p</sub>(w)<br/>apply_delay on weekly rows<br/>shares F<sub>p,j</sub>(w) from G<sub>p</sub>"]
     RETRO["Earlier releases r &lt; o<br/>nowcast to release o"]
     OBS["Observation model<br/>by weeks back k<br/>size φ<sub>p,k</sub>, removal b<sub>p,k</sub>"]
     X["Nowcast draw X<sub>p,i</sub>(w)<br/>max(0, Y<sub>p,o</sub> + A − B)<br/>A ~ NB(μ<sub>p</sub> − Y<sub>p,o</sub>, φ<sub>p,k</sub>)<br/>B ~ Poisson(b<sub>p,k</sub> Y<sub>p,o</sub>)"]
     SIG["Walk spread σ<sub>p</sub><br/>changes in log(1 + Y<sub>p,o</sub>)"]
-    W["Walk on log(1 + λ<sub>i</sub>)<br/>from X<sub>p,i</sub>(w<sub>0</sub>) in sample i<br/>Poisson counts"]
+    W["Walk on log(1 + λ<sub>i</sub>)<br/>from X<sub>p,i</sub>(w<sub>0</sub>) in sample i<br/>silent places from 1 case<br/>at their first introduction<br/>Poisson counts"]
     NAT["National = sum of provinces<br/>sample by sample"]
 
     SNAP --> PAIR
@@ -56,7 +56,7 @@ flowchart TD
     W0["Start week w<sub>0</sub><br/>latest with π<sub>p</sub>(w) ≥ 0.95"]
     Y["Reported Y<sub>p,o</sub>(w<sub>0</sub>)"]
     SIG["Walk spread σ<sub>p</sub><br/>changes in log(1 + Y<sub>p,o</sub>)"]
-    W["Walk on log(1 + λ<sub>i</sub>)<br/>from Y<sub>p,o</sub>(w<sub>0</sub>)<br/>Poisson counts<br/>floored at Y<sub>p,o</sub>(w)<br/>in weeks with data"]
+    W["Walk on log(1 + λ<sub>i</sub>)<br/>from Y<sub>p,o</sub>(w<sub>0</sub>)<br/>silent places from 1 case<br/>at their first introduction<br/>Poisson counts<br/>floored at Y<sub>p,o</sub>(w)<br/>in weeks with data"]
     NAT["National = sum of provinces<br/>sample by sample"]
 
     SNAP --> PAIR
@@ -122,8 +122,23 @@ There is no growth past $D$, so an equation whose ages run past $D$ puts that gr
 
 ## Nowcast
 
-Every observed day is nowcast, with no handover and no minimum count.
-The nowcast mean of day $t$ is $N_{p,o}(t)\, G_p(c_o - t)$, summed to hub weeks as $\mu_p(w)$.
+Each hub week is a reference time of a weekly reporting triangle, with a column every 7 days after $c_o$.
+The share of week $w$ reported by column $j$ is
+
+$$
+F_{p,j}(w) = \frac{1}{n_w} \sum_{t \in w,\ t \le c_o} \frac{1}{G_p(c_o - t + 7j)},
+$$
+
+with $n_w$ the days of $w$ observed at $o$.
+baselinenowcast's `apply_delay` fills the row from $x_0 = Y_{p,o}(w)$, adding at each column
+
+$$
+x_j = x_{j-1} + \frac{x_{j-1} + 1 - F_{p,j-1}(w)}{F_{p,j-1}(w)} \big(F_{p,j}(w) - F_{p,j-1}(w)\big),
+$$
+
+and the last column is the nowcast mean $\mu_p(w)$.
+The $+1$ is baselinenowcast's.
+It gives a week with 0 reported a mean of about $1 / F_{p,0}(w) - 1$, and it adds less to a week the more complete it is.
 With $\text{rem} = \mu_p(w) - Y_{p,o}(w) \ge 0$ the count still to come, the final count is new reports minus removals, as in epinowcast,
 
 $$
@@ -142,7 +157,7 @@ Sample $i$ is one draw of $X_{p,i}(w)$ per week.
 
 **Fit.**
 For each earlier release $r < o$ with an in-window pair among the releases up to $r$, a nowcast $\hat y_p(w)$ is made from the data up to $r$, with the delay of $r$.
-Each day grows over the gap $c_o - c_r$ by $\exp \sum_{j=a}^{a+c_o-c_r-1} g_p(j)$, with the $g_p$ of $r$.
+It is the same weekly fill from $c_r$, with the $g_p$ of $r$ and the shares taken relative to the count at $c_o$, so its last column is at $c_o$.
 For weeks back $k$ with a day younger than $D$ at $r$, and where $Y_{p,r}(w) > 0$ or $\hat y_p(w) > 0$, the count of $w$ on days up to $c_r$ is compared between releases $r$ and $o$.
 A rise is the new reports $A_{p,r}(w)$ and a fall the removals $B_{p,r}(w)$, so both are weekly, as the forecast is.
 With $\widehat{\text{rem}} = \hat y_p(w) - Y_{p,r}(w)$,
@@ -192,6 +207,12 @@ $$
 $$
 
 Steps are summed within a sample, so each sample is one trajectory.
+
+A place with no case reported in the 9 weeks up to the cut-off week is silent.
+A silent place is 0 until its first introduction, which comes in each week with probability $q_p$.
+From that week its walk starts at $x_i = 1$, with the spread $\sigma_p$.
+$q_p$ is the share of weeks with a case among the weeks that follow 9 weeks with none, over the place and its siblings (the zones of its province, or the provinces of the country), in weeks up to the start week of `randomwalk`.
+It is estimated at each origin from the counts reported then.
 National is the sum of the provinces, sample by sample.
 
 $\sigma_p$ is the sample standard deviation of the weekly changes of $\log\{1 + Y_{p,o}(w)\}$ over the 9 weeks ending at the start week of `randomwalk`, so up to 8 changes.
