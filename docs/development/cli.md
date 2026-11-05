@@ -64,8 +64,9 @@ task fit-store       # load the stored fits into results/
 `task backtest` loads the store first.
 Where the store has no fit for the current key, `load` uses the newest stored fit of that model and origin.
 Each page with fitted-model results says which commits its fits come from, and which fits for the current code are still running.
-A full refit is 20 fits (4 models at 5 origins), run in parallel: about 50 minutes of wall time and 8 runner-hours.
-A new release adds 4 fits, about 2 runner-hours.
+A full refit is 20 fits (4 models at 5 origins), run in parallel: 43 minutes of wall time and 5.3 runner-hours.
+The slowest fit is `renewalbvd` (21 to 39 minutes).
+A new release adds 4 fits: about 40 minutes and 1.3 runner-hours.
 
 The comparison with hub forecasts downloads other teams' files, so it is run on its own:
 
