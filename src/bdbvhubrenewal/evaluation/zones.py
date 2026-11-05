@@ -27,8 +27,8 @@ from collections.abc import Sequence
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date
+from bdbvhubrenewal.data.releases import release_cutoff
 from bdbvhubrenewal.data.simulate import SimulatedOutbreak
-from bdbvhubrenewal.data.snapshots import release_cutoff
 from bdbvhubrenewal.data.zones import weekly_zone_counts
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
@@ -313,7 +313,8 @@ def scenario_zone_scores(
     zones = tuple(sorted({z for _, z, _ in outbreak.settings.zone_shares}))
     frames = []
     for task in tasks:
-        counts = outbreak.zone_vintage(task.vintage)
+        lag = (as_date(task.vintage) - as_date(task.cutoff)).days
+        counts = outbreak.zone_vintage(task.vintage, cutoff_lag=lag)
         for name in models:
             try:
                 prov = get_model(name).forecast(task)

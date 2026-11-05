@@ -510,6 +510,6 @@ def zone_task(
         target=target,
         locations=mine,
         mask=(),
-        report_by=(),
+        report_by={},
         daily_history=history,
     )

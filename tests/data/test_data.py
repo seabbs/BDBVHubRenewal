@@ -222,6 +222,8 @@ def test_imputed_share_and_newly_missing(target: pd.DataFrame) -> None:
     # Every vintage after the first has a change from the one before.
     assert list(nat["vintage"]) == vintages(target)[1:]
     assert (nat["new_observed"] + nat["new_imputed"] == nat["new_total"]).all()
+    # Days between the releases' last report days, 10-24 to 10-31.
+    assert nat.set_index("vintage").loc["2026-11-01", "days"] == 7
 
 
 def test_revision_table_latest_is_one(target: pd.DataFrame) -> None:
@@ -229,6 +231,12 @@ def test_revision_table_latest_is_one(target: pd.DataFrame) -> None:
     latest = rev.loc[rev["vintage"] == rev["vintage"].max()]
     assert latest["fraction"].dropna().eq(1).all()
     assert (latest["weeks_before"] >= 0).all()
+    # Weeks count from the cut-off's week: 11-01 was cut on 10-31.
+    newest = rev.loc[rev["vintage"] == "2026-11-01"]
+    assert (
+        newest.set_index("target_end_date").loc["2026-10-31"]["weeks_before"]
+        == 0
+    )
 
 
 def test_province_centres_cover_every_province() -> None:
@@ -280,6 +288,7 @@ def test_release_updates_count_a_vanished_row_as_a_fall() -> None:
                 "2026-10-17",
             ],
             "total": [5, 2, 3, 4, 6],
+            "cutoff": ["2026-10-16"] * 3 + ["2026-10-24"] * 2,
         }
     )
     out = release_updates(counts).set_index(["location", "target_end_date"])
