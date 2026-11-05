@@ -262,7 +262,7 @@ def make_report(
     forecasts_now = _nowcast_forecasts(tasks, latest, res)
     _nowcast_page(fig, gen, target, forecasts_now, names, config, latest)
     _zone_nowcast_section(
-        fig, gen, res, data_dir, target, tasks[0], forecasts_now, config, names
+        fig, gen, data_dir, target, tasks[0], forecasts_now, config, names
     )
     groups = _nowcast_groups(target, sorted(set(forecasts_now["location"])))
     save_light_dark(
@@ -629,7 +629,6 @@ def _nowcast_page(
 def _zone_nowcast_section(
     fig: Path,
     gen: Path,
-    res: Path,
     data_dir: Path | str,
     target: pd.DataFrame,
     task: ForecastTask,
@@ -682,7 +681,6 @@ def _zone_nowcast_section(
     counts = zone_counts(
         daily_zones, task.vintage, start.strftime("%Y-%m-%d"), labels
     )
-    scores = pd.read_csv(res / "zone-scores.csv", low_memory=False)
     tabs = []
     by_prov = counts.groupby("province")["total"].sum()
     for key in by_prov.sort_values(ascending=False, kind="stable").index:
@@ -756,17 +754,8 @@ def _zone_nowcast_section(
         )
         + "\n"
         + _dropdown(
-            _table(zone_table(samples, counts, scores)),
+            _table(zone_table(samples, counts)),
             "Newest weeks by zone",
-        )
-        + "\nThe [energy score](methods/evaluation.md#energy-score) scores "
-        "all zones together at each origin, relative to `randomwalk` over "
-        "the releases scored.\n\n"
-        + _table(
-            relative_energy(
-                _as_submitted(pd.read_csv(res / "zone-energy.csv")),
-                by=("origin",),
-            )
         ),
     )
 

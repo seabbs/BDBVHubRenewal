@@ -17,8 +17,6 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.zones import province_of, weekly_zone_counts
-from bdbvhubrenewal.evaluation.nowcast import relative_wis
-from bdbvhubrenewal.evaluation.zones import SUMMED, ZONE_BASELINE
 from bdbvhubrenewal.forecasters import ForecastTask, get_model
 from bdbvhubrenewal.forecasters.zones import zone_forecast
 from bdbvhubrenewal.reporting.explorer import compact, trajectories
@@ -149,10 +147,9 @@ def _quantiles(samples: pd.DataFrame) -> pd.DataFrame:
 def zone_table(
     samples: pd.DataFrame,
     counts: pd.DataFrame,
-    scores: pd.DataFrame,
     weeks: int = 2,
 ) -> pd.DataFrame:
-    """Tabulate the newest nowcast weeks and the release scores by zone.
+    """Tabulate the newest nowcast weeks by zone.
 
     Parameters
     ----------
@@ -160,18 +157,14 @@ def zone_table(
         `zone_nowcast` output.
     counts : pandas.DataFrame
         `zone_counts` output.
-    scores : pandas.DataFrame
-        The zone release scores (`zone_backtest`).
     weeks : int
         Newest weeks before the reference date shown.
 
     Returns
     -------
     pandas.DataFrame
-        One row per zone and week: the reported count, the median and 90%
-        interval, then `ZONE_MODEL`'s relative WIS against randomwalk over
-        every origin, both summed to provinces, its 90% coverage and `n`,
-        blank where unscored.
+        One row per zone and week: the reported count, and the median and
+        90% interval.
     """
     now = samples.loc[samples["horizon"] < 0]
     newest = sorted(set(now["target_end_date"]))[-weeks:]
@@ -179,17 +172,6 @@ def zone_table(
     rows = q.merge(
         counts[["location", "province", "target_end_date", "total"]],
         on=["location", "target_end_date"],
-    )
-    rel = relative_wis(
-        scores.loc[scores["target"] == "reported"],
-        by=("location",),
-        baseline=ZONE_BASELINE + SUMMED,
-    )
-    rel = rel.loc[rel["model"] == ZONE_MODEL + SUMMED]
-    rows = rows.merge(
-        rel[["location", "rel_wis", "coverage_90", "n"]],
-        on="location",
-        how="left",
     )
     interval = (
         rows["q5"].round().astype(int).astype(str)
@@ -204,9 +186,6 @@ def zone_table(
             "reported": rows["total"],
             "median": rows["q50"].round().astype(int),
             "90% interval": interval,
-            "relative WIS": rows["rel_wis"].round(2),
-            "90% coverage": rows["coverage_90"].round(2),
-            "n": rows["n"].astype("Int64"),
         }
     )
     return out.sort_values(["province", "zone", "week ending"]).reset_index(

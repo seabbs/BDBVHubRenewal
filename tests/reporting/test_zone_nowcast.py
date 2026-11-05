@@ -59,31 +59,6 @@ def _samples() -> pd.DataFrame:
     )
 
 
-def _scores() -> pd.DataFrame:
-    rows = []
-    for model, wis in (
-        ("randomwalk", 3.0),
-        ("randomwalk (summed to provinces)", 2.0),
-        (ZONE_MODEL + " (summed to provinces)", 1.0),
-    ):
-        rows.append(
-            {
-                "model": model,
-                "origin": "2026-10-24",
-                "target": "reported",
-                "truth_vintage": V,
-                "location": "CD-IT-01",
-                "target_end_date": "2026-10-24",
-                "wis": wis,
-                "log_wis": wis,
-                "bias": 0.0,
-                "coverage_50": 1.0,
-                "coverage_90": 1.0,
-            }
-        )
-    return pd.DataFrame(rows)
-
-
 def test_zone_counts_fill_quiet_weeks_with_zero() -> None:
     counts = zone_counts(_daily(), V, "2026-10-10", NAMES)
     # CD-NK-03 has no cases since the start, so it is left out.
@@ -99,13 +74,11 @@ def test_zone_counts_fill_quiet_weeks_with_zero() -> None:
     assert set(it["location_name"]) == {"Ituri 01"}
 
 
-def test_zone_table_has_the_newest_weeks_and_scores() -> None:
+def test_zone_table_has_the_newest_weeks_and_no_scores() -> None:
     counts = zone_counts(_daily(), V, "2026-10-10", NAMES)
-    table = zone_table(_samples(), counts, _scores())
+    table = zone_table(_samples(), counts)
     assert set(table["week ending"]) == {"2026-10-24", "2026-10-31"}
-    it = table.loc[table["zone"] == "CD-IT-01"]
-    assert it["relative WIS"].tolist() == [0.5, 0.5]
-    assert table.loc[table["zone"] == "CD-NK-02", "n"].isna().all()
+    assert "relative WIS" not in table
 
 
 COLOURS = {
