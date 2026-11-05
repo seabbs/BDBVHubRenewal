@@ -162,8 +162,13 @@ def test_make_tasks_asks_for_later_vintages(
     vintages = ("2026-08-18", "2026-10-09", "2026-10-17", "2026-10-24")
     tasks = make_tasks(target, delays, config, report_by=vintages)
     by = {t.vintage: t.report_by for t in tasks}
-    assert by["2026-08-18"] == vintages[1:]
-    assert by["2026-10-24"] == ()
+    # Each later release with its cut-off, its last report day.
+    assert by["2026-08-18"] == {
+        "2026-10-09": "2026-10-08",
+        "2026-10-17": "2026-10-16",
+        "2026-10-24": "2026-10-24",
+    }
+    assert by["2026-10-24"] == {}
 
 
 def test_origins_without_a_lag_estimate_are_marked(

@@ -14,6 +14,7 @@ def _target(vintages: list[str]) -> pd.DataFrame:
         {
             "kind": "real",
             "vintage": v,
+            "cutoff": v,
             "location": "CD",
             "location_name": "DRC",
             "target_end_date": w,

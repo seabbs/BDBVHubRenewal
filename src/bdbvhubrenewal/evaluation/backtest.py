@@ -44,7 +44,11 @@ from bdbvhubrenewal.data.dates import (
     epiweek_end,
     reference_date_for_vintage,
 )
-from bdbvhubrenewal.data.releases import cutoff_lags, publication_lag_pmf
+from bdbvhubrenewal.data.releases import (
+    cutoff_lags,
+    publication_lag_pmf,
+    release_cutoff,
+)
 from bdbvhubrenewal.data.simulate import (
     SCENARIO_RT_SCALE,
     SimulatedOutbreak,
@@ -305,7 +309,8 @@ def make_tasks(
         Horizons, samples and seed.
     report_by : sequence of str
         Truth vintage dates. Each real task asks for the counts as
-        reported by those after its own vintage.
+        reported by those after its own vintage, at their cut-offs, which
+        `history` (or `target`) holds.
     history : pandas.DataFrame, optional
         Target rows to take each task's `target_history` from. Defaults
         to `target`.
@@ -345,10 +350,8 @@ def make_tasks(
     tasks = []
     source = target if history is None else history
     for (kind, vintage), rows in target.groupby(["kind", "vintage"]):
-        same = source["vintage"] <= vintage
-        if "kind" in source.columns:
-            same &= source["kind"] == kind
-        past_target = source.loc[same]
+        mine = source["kind"] == kind
+        past_target = source.loc[mine & (source["vintage"] <= vintage)]
         ref = reference_date_for_vintage(str(vintage))
         dly, history = None, None
         if delays is not None:
@@ -367,6 +370,7 @@ def make_tasks(
                 vintage=str(vintage),
                 reference_date=ref,
                 kind=str(kind),
+                cutoff=release_cutoff(rows, str(vintage)).isoformat(),
                 target=rows.reset_index(drop=True),
                 delays=dly,
                 delay_history=history,
@@ -376,11 +380,11 @@ def make_tasks(
                 target_end_dates=forecast_weeks(ref, config),
                 n_samples=config.n_samples,
                 seed=config.seed,
-                report_by=(
-                    ()
-                    if kind == "simulated"
-                    else tuple(sorted(d for d in report_by if d > str(vintage)))
-                ),
+                report_by={
+                    d: release_cutoff(source.loc[mine], d).isoformat()
+                    for d in sorted(report_by)
+                    if kind != "simulated" and d > str(vintage)
+                },
             )
         )
     return tasks

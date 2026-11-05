@@ -75,7 +75,7 @@ flowchart TD
 Both models use the daily onsets of each hub release.
 $N_{p,r}(t)$ is the known plus imputed onsets in province $p$ on day $t$ at release $r$, which sum over a hub week to the weekly target.
 A forecast is made from the vintage of its date, whose latest release is $o$.
-Release $r$ has a cut-off $c_r$, the cut-off the release states where it gives one and otherwise its latest onset day over all places.
+Release $r$ has a cut-off $c_r$, its last report day ([Data](data.md#vintages)).
 Day $t \le c_r$ is observed at $r$ and is $a = c_r - t$ days old.
 Cells after the cut-off are not observed.
 Hub weeks run Sunday to Saturday and are labelled by the Saturday.
@@ -305,7 +305,7 @@ It is scored on the real releases at province and zone level, but not on the sim
 
 While the release history in the delay window is shorter than $D$, no chain to the final count can be checked against a final count.
 Each delay factor rests on one onset day per age per pair, and the youngest ages rest on few cases even nationally.
-The onset clock assumes a constant lag from the latest onset day to extraction, but the lag varies between releases.
+The cut-off is the latest report day the data prove, which can be earlier than the true last report day.
 The chain ladder treats reporting speed as fixed by age and step, but speed and backlogs vary between releases.
 The observation model is learnt from the earlier releases, which may be few.
 Counts include the hub's imputed onsets, which are re-drawn as cases gain onsets, so changes between releases mix reporting with imputation.
