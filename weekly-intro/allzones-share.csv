@@ -1,0 +1,9 @@
+variant,model,kind,silent,share_q95_gt3
+before,randomwalk,direct,124,0.718
+before,randomwalk,rec,124,0.306
+before,randomwalknowcast,direct,124,0.185
+before,randomwalknowcast,rec,124,0.161
+intro,randomwalk,direct,124,0.105
+intro,randomwalk,rec,124,0.016
+intro,randomwalknowcast,direct,124,0.0
+intro,randomwalknowcast,rec,124,0.0
