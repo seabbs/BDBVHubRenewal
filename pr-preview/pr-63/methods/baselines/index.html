@@ -2161,7 +2161,7 @@ Both run at province and zone level (<a href="#health-zones">Health zones</a>), 
     OBS["Observation model&lt;br/&gt;by weeks back k&lt;br/&gt;size φ&lt;sub&gt;p,k&lt;/sub&gt;, removal b&lt;sub&gt;p,k&lt;/sub&gt;"]
     X["Nowcast draw X&lt;sub&gt;p,i&lt;/sub&gt;(w)&lt;br/&gt;max(0, Y&lt;sub&gt;p,o&lt;/sub&gt; + A − B)&lt;br/&gt;A ~ NB(μ&lt;sub&gt;p&lt;/sub&gt; − Y&lt;sub&gt;p,o&lt;/sub&gt;, φ&lt;sub&gt;p,k&lt;/sub&gt;)&lt;br/&gt;B ~ Poisson(b&lt;sub&gt;p,k&lt;/sub&gt; Y&lt;sub&gt;p,o&lt;/sub&gt;)"]
     SIG["Walk spread σ&lt;sub&gt;p&lt;/sub&gt;&lt;br/&gt;changes in log(1 + Y&lt;sub&gt;p,o&lt;/sub&gt;)"]
-    W["Walk on log(1 + λ&lt;sub&gt;i&lt;/sub&gt;)&lt;br/&gt;from X&lt;sub&gt;p,i&lt;/sub&gt;(w&lt;sub&gt;0&lt;/sub&gt;) in sample i&lt;br/&gt;silent places from 1 case&lt;br/&gt;at their first introduction&lt;br/&gt;Poisson counts"]
+    W["Walk on log(1 + λ&lt;sub&gt;i&lt;/sub&gt;)&lt;br/&gt;from X&lt;sub&gt;p,i&lt;/sub&gt;(w&lt;sub&gt;0&lt;/sub&gt;) in sample i&lt;br/&gt;silent places at 1 case a week&lt;br/&gt;from their first introduction&lt;br/&gt;Poisson counts"]
     NAT["National = sum of provinces&lt;br/&gt;sample by sample"]
 
     SNAP --&gt; PAIR
@@ -2187,7 +2187,7 @@ Both run at province and zone level (<a href="#health-zones">Health zones</a>), 
     W0["Start week w&lt;sub&gt;0&lt;/sub&gt;&lt;br/&gt;latest with π&lt;sub&gt;p&lt;/sub&gt;(w) ≥ 0.95"]
     Y["Reported Y&lt;sub&gt;p,o&lt;/sub&gt;(w&lt;sub&gt;0&lt;/sub&gt;)"]
     SIG["Walk spread σ&lt;sub&gt;p&lt;/sub&gt;&lt;br/&gt;changes in log(1 + Y&lt;sub&gt;p,o&lt;/sub&gt;)"]
-    W["Walk on log(1 + λ&lt;sub&gt;i&lt;/sub&gt;)&lt;br/&gt;from Y&lt;sub&gt;p,o&lt;/sub&gt;(w&lt;sub&gt;0&lt;/sub&gt;)&lt;br/&gt;silent places from 1 case&lt;br/&gt;at their first introduction&lt;br/&gt;Poisson counts&lt;br/&gt;floored at Y&lt;sub&gt;p,o&lt;/sub&gt;(w)&lt;br/&gt;in weeks with data"]
+    W["Walk on log(1 + λ&lt;sub&gt;i&lt;/sub&gt;)&lt;br/&gt;from Y&lt;sub&gt;p,o&lt;/sub&gt;(w&lt;sub&gt;0&lt;/sub&gt;)&lt;br/&gt;silent places at 1 case a week&lt;br/&gt;from their first introduction&lt;br/&gt;Poisson counts&lt;br/&gt;floored at Y&lt;sub&gt;p,o&lt;/sub&gt;(w)&lt;br/&gt;in weeks with data"]
     NAT["National = sum of provinces&lt;br/&gt;sample by sample"]
 
     SNAP --&gt; PAIR
@@ -2312,7 +2312,8 @@ For <span class="arithmatex">\(h \ge 1\)</span>,</p>
 <p>A place with no case reported in the 9 weeks up to the cut-off week is silent.
 A silent place is 0 until its first introduction, which comes in each week with probability <span class="arithmatex">\(q_p\)</span>.
 In both models this holds from the week after the start week of <code>randomwalk</code>, so <code>randomwalknowcast</code> does not nowcast a silent place's recent weeks.
-From that week its walk starts at <span class="arithmatex">\(x_i = 1\)</span>, with the spread <span class="arithmatex">\(\sigma_p\)</span>, and the introduction week has at least 1 case.
+From that week its rate is 1 case a week, and the introduction week has at least 1 case.
+Its walk keeps its own spread, which is 0 over its silent weeks.
 <span class="arithmatex">\(q_p\)</span> is the share of weeks with a case among the weeks that follow 9 weeks with none, over the place and its siblings (the zones of its province, or the provinces of the country), in weeks up to the start week of <code>randomwalk</code>.
 It is estimated at each origin from the counts reported then.
 National is the sum of the provinces, sample by sample.</p>
