@@ -158,7 +158,7 @@
           var own = rows.filter(function (r) { return r[0] === m && r[1] === ri; })
             .sort(function (a, b) { return day(a[3]) - day(b[3]); });
           el("polyline", { fill: "none", stroke: legend.colour(m), "stroke-width": 2,
-            points: own.map(function (r) { return X(day(r[3])) + "," + Y(r[6]); }).join(" ") },
+            "stroke-dasharray": legend.dash(m), points: own.map(function (r) { return X(day(r[3])) + "," + Y(r[6]); }).join(" ") },
             plot);
         });
       });

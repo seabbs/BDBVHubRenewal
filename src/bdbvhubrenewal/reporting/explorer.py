@@ -116,7 +116,7 @@ def explorer_data(
     target: pd.DataFrame,
     names: Mapping[str, str],
     complete_after_weeks: int,
-    colours: Mapping[str, tuple[str, str]],
+    colours: Mapping[str, tuple[str, str, str]],
     truth_vintage: str | None = None,
     hidden: Collection[str] = (),
     samples: pd.DataFrame | None = None,
@@ -134,9 +134,9 @@ def explorer_data(
         Location names by id.
     complete_after_weeks : int
         Weeks before the truth vintage after which a week is complete.
-    colours : mapping of str to (str, str)
-        Model label to its light and dark colour, as in the static
-        figures.
+    colours : mapping of str to (str, str, str)
+        Model label to its light colour, dark colour and dash, as in the
+        static figures.
     truth_vintage : str, optional
         Defaults to the latest real vintage.
     hidden : collection of str
@@ -221,6 +221,7 @@ def explorer_data(
                 "on": starts_on(m, on),
                 "light": colours[m][0],
                 "dark": colours[m][1],
+                "dash": colours[m][2],
                 "trajectories": i in have,
             }
             for i, m in enumerate(models)

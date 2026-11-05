@@ -9,7 +9,7 @@ from bdbvhubrenewal.reporting.scoresummary import summary_rows
 from bdbvhubrenewal.reporting.zone_nowcast import place_chart_data
 
 MODELS = [BASELINE, "renewal"]
-COLOURS = dict.fromkeys(MODELS, ("#000000", "#ffffff"))
+COLOURS = dict.fromkeys(MODELS, ("#000000", "#ffffff", ""))
 
 
 def _on(data: dict[str, object]) -> dict[str, bool]:

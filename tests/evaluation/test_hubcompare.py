@@ -483,7 +483,9 @@ def test_comparison_colours_are_fixed_per_model() -> None:
     from bdbvhubrenewal.reporting.plots import (
         HUB_GREYS,
         MODEL_COLOURS,
+        MODEL_STYLE,
         comparison_colours,
+        model_style,
     )
 
     teams = ["teamA", "teamB"]
@@ -492,10 +494,12 @@ def test_comparison_colours_are_fixed_per_model() -> None:
         ["seabbs-x (submitted)"],
         teams,
     )
-    first = (MODEL_COLOURS["light"][0], MODEL_COLOURS["dark"][0])
+    first = (MODEL_COLOURS["light"][0], MODEL_COLOURS["dark"][0], "")
     assert got["randomwalk (main build)"] == first
-    # A submitted series has a colour of its own, after the registry's.
-    assert got["seabbs-x (submitted)"] not in {first, got["teamA"]}
+    # A submitted series has a colour no model uses.
+    assert got["seabbs-x (submitted)"][:2] not in {
+        model_style(m, [])[:2] for m in MODEL_STYLE
+    }
     assert {got[t][0] for t in teams} <= set(HUB_GREYS["light"])
     assert {got[t][1] for t in teams} <= set(HUB_GREYS["dark"])
     # A team keeps its grey whichever of our models are shown.

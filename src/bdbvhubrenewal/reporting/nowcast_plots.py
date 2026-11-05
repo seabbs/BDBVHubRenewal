@@ -135,7 +135,7 @@ def plot_relative_overall(
     mode: str = "light",
     x: str = "pool",
     metrics: Mapping[str, tuple[str, float | None]] = OVERALL_METRICS,
-    colours: Mapping[str, tuple[str, str]] | None = None,
+    colours: Mapping[str, tuple[str, str, str]] | None = None,
 ) -> Figure:
     """Plot each model's overall scores by pool, a panel per metric.
 
@@ -154,9 +154,9 @@ def plot_relative_overall(
     metrics : mapping of str to (str, float or None)
         Metric column to its label and reference line, as
         `OVERALL_METRICS`.
-    colours : mapping of str to (str, str), optional
-        Model to its light and dark colour. Defaults to the registry
-        colours by position in `models`.
+    colours : mapping of str to (str, str, str), optional
+        Model to its light colour, dark colour and dash. Defaults to the
+        registry colours by position in `models`.
 
     Returns
     -------
@@ -302,7 +302,7 @@ def plot_truth_changes(
 def plot_place_summary(
     table: pd.DataFrame,
     models: Sequence[str],
-    colours: Mapping[str, tuple[str, str]],
+    colours: Mapping[str, tuple[str, str, str]],
     names: Mapping[str, str],
     metric: str = "rel_wis",
     label: str = "Relative WIS",
@@ -317,8 +317,8 @@ def plot_place_summary(
         `relative_wis` output by `pool` and `location`.
     models : sequence of str
         Models in order. Those absent from a place are skipped.
-    colours : mapping of str to (str, str)
-        Model to its light and dark colour.
+    colours : mapping of str to (str, str, str)
+        Model to its light colour, dark colour and dash.
     names : mapping of str to str
         Place names by id. Places not named show their code.
     metric : str

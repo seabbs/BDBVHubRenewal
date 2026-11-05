@@ -108,6 +108,7 @@
           });
         } else {
           el("polyline", { fill: "none", stroke: c, "stroke-width": 2,
+            "stroke-dasharray": keys.dash(m),
             points: own.map(function (r) { return X(r[1]) + "," + Y(r[col]); }).join(" ") }, plot);
           own.forEach(function (r) {
             var p = el("circle", { cx: X(r[1]), cy: Y(r[col]), r: 3.5, fill: c }, plot);

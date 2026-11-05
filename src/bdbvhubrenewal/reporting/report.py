@@ -77,10 +77,9 @@ from bdbvhubrenewal.reporting.nowcast_plots import (
     plot_truth_changes,
 )
 from bdbvhubrenewal.reporting.plots import (
-    THEMES,
     comparison_colours,
     comparison_label,
-    model_colour,
+    model_style,
     plot_delay_check,
     plot_delay_distribution,
     plot_delays_over_time,
@@ -327,24 +326,10 @@ def _downward_table(real: pd.DataFrame, zones: pd.DataFrame) -> str:
 
 def _model_colours(
     models: Sequence[str], registry: Sequence[str] | None = None
-) -> dict[str, tuple[str, str]]:
-    """Each model's light and dark colour, by its place in the registry.
-
-    A model outside the registry, such as the as-reported floor, is grey.
-    """
+) -> dict[str, tuple[str, str, str]]:
+    """Each model's light colour, dark colour and dash, from `model_style`."""
     registry = list(registry or models)
-    muted = THEMES["light"]["muted"], THEMES["dark"]["muted"]
-    return {
-        m: (
-            (
-                model_colour(m, registry, "light"),
-                model_colour(m, registry, "dark"),
-            )
-            if m in registry
-            else muted
-        )
-        for m in models
-    }
+    return {m: model_style(m, registry) for m in models}
 
 
 def _ours(frame: pd.DataFrame, names: Sequence[str]) -> pd.DataFrame:
@@ -1433,13 +1418,7 @@ def _backtest_page(
                     ),
                 },
                 k,
-                {
-                    m: (
-                        model_colour(m, names, "light"),
-                        model_colour(m, names, "dark"),
-                    )
-                    for m in shown
-                },
+                {m: model_style(m, names) for m in shown},
                 samples=pd.concat(
                     [real_fc, zone_draws.loc[zone_draws["model"].isin(shown)]],
                     ignore_index=True,
@@ -1712,7 +1691,7 @@ def _comparison_summary(
     energy: pd.DataFrame,
     baseline: str,
     on: Sequence[str],
-    colours: Mapping[str, tuple[str, str]],
+    colours: Mapping[str, tuple[str, str, str]],
     names: Mapping[str, str],
 ) -> None:
     """Write the Overall, By horizon and By place summaries.
