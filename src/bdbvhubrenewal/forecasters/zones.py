@@ -41,8 +41,10 @@ Their zone samples are then made to sum to the province samples
 (`reconcile_zones`).
 The zone walks are independent, so first each zone's trajectories are
 reordered to the ranks of the province's, ranked by their sum over the
-weeks: the $k$-th largest zone trajectory goes with the $k$-th largest
-province trajectory.
+weeks, as in the Schaake shuffle (Clark et al. 2004,
+https://doi.org/10.1175/1525-7541(2004)005<0243:TSSAMF>2.0.CO;2):
+the $k$-th largest zone trajectory goes with the $k$-th largest province
+trajectory.
 Each zone keeps its own trajectories, and a zone's share of the
 province no longer drifts down with horizon as independent skewed walks
 would make it.

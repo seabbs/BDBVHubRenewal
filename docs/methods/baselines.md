@@ -227,6 +227,7 @@ Later weeks are walk draws.
 The hierarchy is zone, province, country, and each zone takes its delay, size and walk spread by the rules [above](#own-or-pooled-estimates).
 Zone samples sum to their province's samples, sample by sample and week by week.
 The zone walks are independent, so each zone's trajectories are first reordered to the ranks of the province's, ranked by their sum over the weeks, the $k$-th largest with the $k$-th largest.
+This is the Schaake shuffle ([Clark et al. 2004](https://doi.org/10.1175/1525-7541(2004)005<0243:TSSAMF>2.0.CO;2)), with the province samples as the template.
 Each zone keeps its own trajectories, and its share of the province does not drift down with horizon.
 Province sample $Y^{(k)}(w)$ is then apportioned over the zones in proportion to the reordered zone samples $x^{(k)}_z(w)$:
 
