@@ -210,6 +210,7 @@ Steps are summed within a sample, so each sample is one trajectory.
 
 A place with no case reported in the 9 weeks up to the cut-off week is silent.
 A silent place is 0 until its first introduction, which comes in each week with probability $q_p$.
+In both models this holds from the week after the start week of `randomwalk`, so `randomwalknowcast` does not nowcast a silent place's recent weeks.
 From that week its walk starts at $x_i = 1$, with the spread $\sigma_p$.
 $q_p$ is the share of weeks with a case among the weeks that follow 9 weeks with none, over the place and its siblings (the zones of its province, or the provinces of the country), in weeks up to the start week of `randomwalk`.
 It is estimated at each origin from the counts reported then.

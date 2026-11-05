@@ -231,3 +231,15 @@ def test_a_silent_place_waits_for_its_first_introduction() -> None:
     started = (lam[2] > 0).mean(axis=0)
     np.testing.assert_allclose(started, 1 - 0.7 ** np.arange(1, 5), atol=0.03)
     assert set(np.unique(lam[2])) <= {0.0, 1.0}
+
+
+def test_a_silent_place_is_not_nowcast(runs) -> None:
+    # Sud-Kivu has no case in the 9 weeks to 2026-10-24, so after its start
+    # week it follows its introductions, nowcast weeks included.
+    _, samples = runs["randomwalknowcast"]
+    sk = samples.loc[samples["location"] == "CD-SK"]
+    by_week = sk.groupby("target_end_date")["value"]
+    # The weekly introduction probability is about 0.06, so most samples
+    # stay at 0 in every week and none starts above a few cases.
+    assert (by_week.apply(lambda v: (v == 0).mean()) > 0.7).all()
+    assert by_week.median().max() == 0

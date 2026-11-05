@@ -33,6 +33,8 @@ pooled estimate of the nearest parent that does (`pooling`).
 A place with no case in the latest `walk_weeks` weeks is 0 until its first
 introduction, a geometric number of weeks in with its pooled weekly
 probability, and its walk starts there from 1 case.
+In both models this runs from the week after the `randomwalk` start week,
+so a silent place's recent weeks are not nowcast.
 National is the sum of provinces by sample.
 Each model raises if the task has no snapshots or no pair of releases
 within the delay window.
@@ -419,6 +421,11 @@ class RandomWalkNowcast(RandomWalk):
                 values[:, :, u] = y[:, :, u - w0 - 1].T
                 if u == w0 + 1 and miss > 0 and u < n_data:
                     values[:, :, u] = nowcast[:, :, u] + part.T
+        # A silent place follows its introductions from the week after its
+        # start week, as in `randomwalk`, so its nowcast weeks too.
+        for loc in np.flatnonzero(origin.silent):
+            s = int(origin.start[loc])
+            values[:, loc, s + 1 :] = y[loc, :, : n_all - s - 1]
         return values, weeks
 
 
