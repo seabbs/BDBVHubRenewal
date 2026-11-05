@@ -45,16 +45,31 @@ task docs               # build the site into _site/
 
 ## Fit store
 
-Each forecast of a fitted model is a fit, so the backtest and the docs build never run them.
-The Fit store workflow (`.github/workflows/fit-store.yml`) fits each fitted model once at each real origin and commits the result to the `fit-store` branch, as `<model>/<origin>/<key>.json.gz`.
-The key hashes the model and forecaster code, `config/backtest.toml`, `uv.lock`, the model's sampler table in `ci/policy.toml` and the releases up to the origin.
-The renewal variants use the sampler of the submission candidate that runs them; `pprandomwalknowcast` uses its own.
-A code or sampler change refits every origin, and a new hub release adds one fit per model.
+The backtest and the docs build never fit a model.
+The Fit store workflow (`.github/workflows/fit-store.yml`) fits each fitted model once at each real origin.
+Each fit is one file on the `fit-store` branch, `<model>/<origin>/<key>.json.gz`.
+The key hashes:
+
+- the task at the origin, which holds only the releases up to it;
+- the model as built, including its variant and sampler settings;
+- the BVDOutbreakSize release, for `renewalbvd`;
+- the code of `forecasters`, `model`, `data`, `baselinenowcast`, `evaluation/store.py` and `run_forecasts`, without docstrings or comments;
+- the runtime dependencies in `uv.lock`.
+
+The renewal variants use the sampler table of the submission candidate that runs them, in `ci/policy.toml`.
+`pprandomwalknowcast` uses its own.
+A model code or sampler change refits every origin.
+A new hub release adds one fit per model.
+
 The workflow runs on pushes to `main` that change these inputs, and every 6 hours for new hub releases.
-A push cancels a running refit, and fits already stored are kept.
-A fit that fails is stored as failed and is not retried until its inputs change.
-On a pull request it only lists the fits the change would need.
-When it stores fits it rebuilds the docs.
+A push never cancels a running refit: the latest push waits and runs after it.
+The fit jobs are read-only, and one job with no project code pushes their files and prunes the branch.
+It keeps the current key's file and the newest good fit of older code for each model and origin.
+A fit that fails is stored as failed, and is fitted again only when its inputs change or a dispatch sets `retry_failed`.
+On a pull request the workflow only lists the fits the change needs.
+Only `main` writes to `fit-store`.
+To test a branch, dispatch the workflow on it with `store_branch` set to a scratch branch, and `models` to limit it.
+When fits are stored, the workflow rebuilds the docs.
 
 ```bash
 task fit-store-plan  # the fits the store lacks for this code and data
@@ -63,10 +78,16 @@ task fit-store       # load the stored fits into results/
 
 `task backtest` loads the store first.
 Where the store has no fit for the current key, `load` uses the newest stored fit of that model and origin.
-Each page with fitted-model results says which commits its fits come from, and which fits for the current code are still running.
-A full refit is 20 fits (4 models at 5 origins), run in parallel: 43 minutes of wall time and 5.3 runner-hours.
-The slowest fit is `renewalbvd` (21 to 39 minutes).
+Pages with fitted-model results list the commits of their fits and the fits not yet made.
+A full refit is 20 fits (4 models at 5 origins): 43 minutes and 5.3 runner-hours, with the slowest fit 39 minutes (`renewalbvd`).
 A new release adds 4 fits: about 40 minutes and 1.3 runner-hours.
+
+To fit a model locally, for example a new variant:
+
+```bash
+uv run bdbvhubrenewal fit-store fit --model renewal --origin 2026-10-24 --store output/fit-store
+uv run bdbvhubrenewal fit-store load --store output/fit-store
+```
 
 The comparison with hub forecasts downloads other teams' files, so it is run on its own:
 

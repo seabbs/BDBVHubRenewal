@@ -27,3 +27,6 @@ docs/figures/*.json
 # Written by `fit-store load` from the fit-store branch.
 results/fit-store.json
 results/delay-summary.csv
+results/forecasts.csv.gz
+results/heldout-forecasts.csv.gz
+results/backtest-fits.csv

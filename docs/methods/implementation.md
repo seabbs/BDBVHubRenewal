@@ -89,11 +89,13 @@ The tests check the renewal and the imputation against a NumPy reference, `tests
 
 PyRenew's `PyrenewBuilder` builds each model as a `MultiSignalModel`, and NumPyro's NUTS fits it.
 Chains run vectorised unless a fit's settings say otherwise.
-Backtest fits (`config/backtest.toml`) and CI submission fits (`ci/policy.toml`) both run their chains in parallel.
+Stored backtest fits and CI submission fits run their chains in parallel.
 Without other settings, NUTS runs 4 chains of 1000 warm-up and 1000 draws, with target acceptance 0.9 and maximum tree depth 10.
 Chains start from the median of 15 prior draws.
-Submission fits take their settings from `ci/policy.toml`, which override JSON settings in `BDBV_RENEWAL_SAMPLER`.
-Backtest and leave-one-province-out fits take theirs from `config/backtest.toml` when `BDBV_RENEWAL_SAMPLER` is unset.
+Submission fits and the [fit store](../development/cli.md#fit-store)'s backtest fits take each model's settings from its candidate in `ci/policy.toml`.
+`renewal` and `renewalsp` use 2 chains of 500 warm-up and 500 draws at target acceptance 0.9.
+`renewalbvd` uses 1000 draws at 0.95.
+Leave-one-province-out fits take theirs from `[sampler]` in `config/backtest.toml` when `BDBV_RENEWAL_SAMPLER` is unset.
 A per-location model has one fit per location with enough cases.
 Each fit reports its largest R-hat over parameters and the share of draws at the maximum tree depth.
 
