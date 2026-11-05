@@ -8,3 +8,4 @@ This branch is not for merging.
 - `figs.py` draws one grid of flagged places per model.
 - `diag_rw.py` prints the random walk origin (delay growth, start week, nowcast) for chosen places.
 - `diag_rec.py` compares the zone walks with the province walk before reconciliation.
+- `flags2.py` is the flag rule calibrated to Sam's places (collapse, blow-up, no cases ever), writing `flags2.csv`; `figs2.py` draws Sam's places per model and Mutwanga against the other hub teams.

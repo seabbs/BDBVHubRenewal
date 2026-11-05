@@ -1,0 +1,115 @@
+model,location,name,flag,level,recent_max,rep_1024,rep_1031,med,lo,hi,med_h3,hi_h3
+pprandomwalknowcast,CD-HU-01,Aba,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,6.0,0.0,7.0
+pprandomwalknowcast,CD-HU-02,Boma Mangbetu,blow-up,2.0,4.0,2.0,4.0,34.5,4.0,146.14999999999998,18.0,193.14999999999998
+pprandomwalknowcast,CD-HU-03,Doruma,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,2.0,0.0,9.0
+pprandomwalknowcast,CD-HU-05,Faradje,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,2.049999999999997,0.0,8.049999999999997
+pprandomwalknowcast,CD-HU-07,Isiro,collapse,4.5,5.0,3.0,0.0,0.0,0.0,3.049999999999997,0.0,4.049999999999997
+pprandomwalknowcast,CD-HU-08,Makoro,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,4.049999999999997,0.0,7.0
+pprandomwalknowcast,CD-HU-10,Pawa,collapse,6.5,11.0,6.0,0.0,0.0,0.0,4.049999999999997,0.0,8.249999999999986
+pprandomwalknowcast,CD-HU-11,Rungu,blow-up,1.0,1.0,0.0,1.0,7.0,0.0,48.19999999999999,4.0,69.04999999999994
+pprandomwalknowcast,CD-HU-12,Wamba,collapse,13.5,19.0,7.0,0.0,0.0,0.0,5.0,0.0,4.049999999999997
+pprandomwalknowcast,CD-IT-01,Adi,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,4.0,0.0,4.0
+pprandomwalknowcast,CD-IT-05,Aru,collapse,12.0,12.0,12.0,0.0,0.0,0.0,4.049999999999997,0.0,12.199999999999989
+pprandomwalknowcast,CD-IT-07,Bambu,collapse,5.5,10.0,2.0,0.0,0.0,0.0,2.049999999999997,0.0,6.0
+pprandomwalknowcast,CD-IT-08,Biringi,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,3.049999999999997,0.0,4.049999999999997
+pprandomwalknowcast,CD-IT-13,Fataki,collapse,4.0,4.0,4.0,0.0,0.0,0.0,5.049999999999997,0.0,7.099999999999994
+pprandomwalknowcast,CD-IT-18,Komanda,collapse,5.0,7.0,1.0,0.0,0.0,0.0,2.0,0.0,3.049999999999997
+pprandomwalknowcast,CD-IT-19,Laybo,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,4.0,0.0,14.049999999999997
+pprandomwalknowcast,CD-IT-20,Linga,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,2.0,0.0,9.0
+pprandomwalknowcast,CD-IT-22,Logo,blow-up,0.0,1.0,0.0,1.0,7.0,0.0,67.14999999999999,5.0,107.74999999999996
+pprandomwalknowcast,CD-IT-28,Mongbwalu,collapse,5.0,7.0,2.0,0.0,0.0,0.0,3.049999999999997,0.0,5.0
+pprandomwalknowcast,CD-IT-29,Nia Nia,collapse,9.0,12.0,3.0,0.0,0.0,0.0,1.0499999999999972,0.0,7.1499999999999915
+pprandomwalknowcast,CD-IT-31,Nyankunde,blow-up,4.0,4.0,4.0,2.0,4.0,0.0,47.05,2.0,33.599999999999966
+pprandomwalknowcast,CD-IT-32,Nyarambe,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,3.0,0.0,11.149999999999991
+pprandomwalknowcast,CD-IT-33,Rethy,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,3.0,0.0,6.0
+pprandomwalknowcast,CD-IT-34,Rimba,blow-up,2.5,3.0,1.0,3.0,7.0,0.0,80.1,4.0,92.89999999999995
+pprandomwalknowcast,CD-IT-36,Tchomia,blow-up,2.0,2.0,0.0,1.0,3.0,0.0,29.34999999999998,3.0,40.0
+pprandomwalknowcast,CD-NK-01,Alimbongo,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,5.049999999999997
+pprandomwalknowcast,CD-NK-02,Bambo,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,3.0,0.0,4.049999999999997
+pprandomwalknowcast,CD-NK-04,Biena,blow-up,1.5,3.0,0.0,1.0,3.0,0.0,34.099999999999994,2.0,43.84999999999995
+pprandomwalknowcast,CD-NK-05,Binza,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,5.049999999999997,0.0,22.19999999999999
+pprandomwalknowcast,CD-NK-06,Birambizo,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,3.0,0.0,5.049999999999997
+pprandomwalknowcast,CD-NK-09,Itebero,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,3.0,0.0,7.099999999999994
+pprandomwalknowcast,CD-NK-11,Kamango,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,4.099999999999994,0.0,10.049999999999997
+pprandomwalknowcast,CD-NK-12,Karisimbi,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,3.049999999999997,0.0,9.049999999999997
+pprandomwalknowcast,CD-NK-16,Kibirizi,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,3.0,0.0,8.0
+pprandomwalknowcast,CD-NK-17,Kibua,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,2.049999999999997,0.0,9.049999999999997
+pprandomwalknowcast,CD-NK-18,Kirotshe,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,5.0,0.0,7.099999999999994
+pprandomwalknowcast,CD-NK-20,Lubero,collapse,5.0,6.0,5.0,0.0,0.0,0.0,3.0,0.0,16.0
+pprandomwalknowcast,CD-NK-25,Musienene,collapse,4.5,15.0,3.0,0.0,0.0,0.0,2.0,0.0,8.0
+pprandomwalknowcast,CD-NK-26,Mutwanga,collapse,13.0,14.0,13.0,1.0,1.0,0.0,16.049999999999997,0.0,19.599999999999966
+pprandomwalknowcast,CD-NK-27,Mweso,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,4.049999999999997,0.0,7.099999999999994
+pprandomwalknowcast,CD-NK-29,Oicha,collapse,21.0,21.0,21.0,3.0,7.0,1.0,69.14999999999993,5.5,80.34999999999998
+pprandomwalknowcast,CD-NK-30,Pinga,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,5.0,0.0,10.049999999999997
+pprandomwalknowcast,CD-NK-32,Rwanguba,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,3.049999999999997,0.0,6.049999999999997
+pprandomwalknowcast,CD-NK-33,Vuhovi,collapse,8.0,12.0,5.0,0.0,0.0,0.0,4.0,0.0,7.0
+pprandomwalknowcast,CD-NK-34,Walikale,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,3.0,0.0,4.0
+pprandomwalknowcast,CD-TO-02,Bafwasende,collapse,7.0,11.0,0.0,0.0,0.0,0.0,1.0,0.0,2.0
+pprandomwalknowcast,CD-TO-08,Kabondo,collapse,8.0,8.0,8.0,1.0,2.0,0.0,10.199999999999989,1.0,15.049999999999997
+pprandomwalknowcast,CD-TO-19,Yahisuli,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,2.0
+randomwalk,CD-HU-01,Aba,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,4.0,0.0,7.0
+randomwalk,CD-HU-12,Wamba,collapse,13.5,19.0,7.0,0.0,4.0,1.0,16.049999999999997,3.0,13.049999999999997
+randomwalk,CD-IT-05,Aru,collapse,12.0,12.0,12.0,0.0,1.0,0.0,4.049999999999997,1.0,11.199999999999989
+randomwalk,CD-IT-13,Fataki,collapse,4.0,4.0,4.0,0.0,1.0,0.0,10.049999999999997,1.0,7.1499999999999915
+randomwalk,CD-IT-25,Mambasa,collapse,13.0,16.0,11.0,9.0,4.0,0.0,22.099999999999994,3.0,25.049999999999997
+randomwalk,CD-NK-01,Alimbongo,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,5.099999999999994,0.0,8.149999999999991
+randomwalk,CD-NK-02,Bambo,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,5.099999999999994,0.0,9.149999999999991
+randomwalk,CD-NK-05,Binza,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,4.199999999999989,0.0,6.049999999999997
+randomwalk,CD-NK-06,Birambizo,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,5.049999999999997,0.0,12.049999999999997
+randomwalk,CD-NK-11,Kamango,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,6.0,0.0,9.0
+randomwalk,CD-NK-12,Karisimbi,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,4.0,0.0,3.049999999999997
+randomwalk,CD-NK-13,Katoyi,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,4.049999999999997,0.0,6.049999999999997
+randomwalk,CD-NK-16,Kibirizi,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,5.049999999999997,0.0,5.0
+randomwalk,CD-NK-17,Kibua,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,4.049999999999997,0.0,7.0
+randomwalk,CD-NK-18,Kirotshe,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,5.049999999999997,0.0,16.099999999999994
+randomwalk,CD-NK-24,Masisi,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,5.0,0.0,4.0
+randomwalk,CD-NK-27,Mweso,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,5.049999999999997,0.0,5.1499999999999915
+randomwalk,CD-NK-28,Nyiragongo,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,3.049999999999997,0.0,5.1499999999999915
+randomwalk,CD-NK-29,Oicha,collapse,21.0,21.0,21.0,3.0,7.0,0.0,82.39999999999998,4.5,90.1
+randomwalk,CD-NK-30,Pinga,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,3.0,0.0,7.049999999999997
+randomwalk,CD-NK-31,Rutshuru,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,3.049999999999997,0.0,8.0
+randomwalk,CD-NK-33,Vuhovi,collapse,8.0,12.0,5.0,0.0,2.0,0.0,17.299999999999983,1.0,35.39999999999992
+randomwalk,CD-NK-34,Walikale,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,3.0999999999999943,0.0,6.0
+randomwalk,CD-TO-01,Bafwagbogbo,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,6.049999999999997,0.0,11.0
+randomwalk,CD-TO-02,Bafwasende,collapse,7.0,11.0,0.0,0.0,0.0,0.0,14.0,0.0,22.099999999999994
+randomwalk,CD-TO-03,Banalia,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,4.049999999999997,0.0,10.049999999999997
+randomwalk,CD-TO-04,Basali,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,2.0,0.0,3.0999999999999943
+randomwalk,CD-TO-06,Bengamisa,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,2.0,0.0,5.049999999999997
+randomwalk,CD-TO-08,Kabondo,collapse,8.0,8.0,8.0,1.0,0.0,0.0,3.049999999999997,0.0,6.099999999999994
+randomwalk,CD-TO-09,Lowa,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,4.0,0.0,6.199999999999989
+randomwalk,CD-TO-13,Opala,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,4.0,0.0,4.0
+randomwalk,CD-TO-14,Opienge,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,2.0,0.0,5.199999999999989
+randomwalk,CD-TO-16,Ubundu,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,3.049999999999997,0.0,7.299999999999983
+randomwalk,CD-TO-18,Yabaondo,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,4.049999999999997
+randomwalk,CD-TO-19,Yahisuli,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,9.0
+randomwalk,CD-TO-20,Yahuma,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,7.0,0.0,5.049999999999997
+randomwalk,CD-TO-21,Yakusu,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,2.0,0.0,6.099999999999994
+randomwalk,CD-TO-23,Yalimbongo,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,3.049999999999997,0.0,3.049999999999997
+randomwalknowcast,CD-HU-02,Boma Mangbetu,blow-up,2.0,4.0,2.0,4.0,42.0,7.0,143.14999999999998,26.0,172.29999999999998
+randomwalknowcast,CD-HU-07,Isiro,collapse,4.5,5.0,3.0,0.0,0.0,0.0,3.0,0.0,4.0
+randomwalknowcast,CD-HU-08,Makoro,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,2.049999999999997,0.0,4.0
+randomwalknowcast,CD-HU-10,Pawa,collapse,6.5,11.0,6.0,0.0,0.0,0.0,4.0,0.0,10.049999999999997
+randomwalknowcast,CD-HU-11,Rungu,blow-up,1.0,1.0,0.0,1.0,8.0,1.0,57.14999999999999,6.0,68.19999999999999
+randomwalknowcast,CD-HU-12,Wamba,collapse,13.5,19.0,7.0,0.0,0.0,0.0,1.0,0.0,2.0999999999999943
+randomwalknowcast,CD-IT-05,Aru,collapse,12.0,12.0,12.0,0.0,0.0,0.0,3.049999999999997,0.0,5.1499999999999915
+randomwalknowcast,CD-IT-07,Bambu,collapse,5.5,10.0,2.0,0.0,0.0,0.0,2.0,0.0,2.0
+randomwalknowcast,CD-IT-13,Fataki,collapse,4.0,4.0,4.0,0.0,0.0,0.0,3.049999999999997,0.0,5.0
+randomwalknowcast,CD-IT-18,Komanda,collapse,5.0,7.0,1.0,0.0,0.0,0.0,1.0,0.0,2.0
+randomwalknowcast,CD-IT-22,Logo,blow-up,0.0,1.0,0.0,1.0,2.0,0.0,77.24999999999999,2.0,75.44999999999992
+randomwalknowcast,CD-IT-27,Mangala,collapse,15.5,19.0,9.0,3.0,4.0,0.0,23.0,3.5,29.099999999999994
+randomwalknowcast,CD-IT-28,Mongbwalu,collapse,5.0,7.0,2.0,0.0,0.0,0.0,1.0,0.0,4.249999999999986
+randomwalknowcast,CD-IT-29,Nia Nia,collapse,9.0,12.0,3.0,0.0,0.0,0.0,1.0,0.0,5.099999999999994
+randomwalknowcast,CD-IT-34,Rimba,blow-up,2.5,3.0,1.0,3.0,5.0,0.0,67.34999999999992,3.0,123.8499999999999
+randomwalknowcast,CD-IT-35,Rwampara,collapse,38.0,38.0,38.0,8.0,12.5,2.0,76.89999999999995,11.0,107.44999999999997
+randomwalknowcast,CD-IT-36,Tchomia,blow-up,2.0,2.0,0.0,1.0,2.0,0.0,33.39999999999998,1.0,27.399999999999977
+randomwalknowcast,CD-NK-04,Biena,blow-up,1.5,3.0,0.0,1.0,3.0,0.0,38.05,2.5,53.099999999999994
+randomwalknowcast,CD-NK-05,Binza,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,2.0,0.0,9.099999999999994
+randomwalknowcast,CD-NK-11,Kamango,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,3.049999999999997,0.0,8.099999999999994
+randomwalknowcast,CD-NK-20,Lubero,collapse,5.0,6.0,5.0,0.0,0.0,0.0,3.0,0.0,7.0
+randomwalknowcast,CD-NK-25,Musienene,collapse,4.5,15.0,3.0,0.0,0.0,0.0,1.0,0.0,6.099999999999994
+randomwalknowcast,CD-NK-26,Mutwanga,collapse,13.0,14.0,13.0,1.0,1.0,0.0,18.34999999999998,0.0,15.299999999999983
+randomwalknowcast,CD-NK-29,Oicha,collapse,21.0,21.0,21.0,3.0,6.0,0.9500000000000002,63.19999999999999,6.0,86.1
+randomwalknowcast,CD-NK-30,Pinga,no cases ever,0.0,0.0,0.0,0.0,0.0,0.0,2.049999999999997,0.0,5.0
+randomwalknowcast,CD-NK-33,Vuhovi,collapse,8.0,12.0,5.0,0.0,0.0,0.0,2.0,0.0,4.0
+randomwalknowcast,CD-TO-02,Bafwasende,collapse,7.0,11.0,0.0,0.0,0.0,0.0,1.0,0.0,2.0
+randomwalknowcast,CD-TO-08,Kabondo,collapse,8.0,8.0,8.0,1.0,2.0,0.0,11.0,1.0,15.0
