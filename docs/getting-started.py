@@ -16,11 +16,11 @@
 # %% [markdown]
 # # Getting started
 #
-# Forecast with two baselines, plot them and score them.
+# Forecast with two baselines, load the renewal model's stored fit at the same origin, then plot and score all three.
 #
 # Every figure and table below comes from the Python code shown above it, which calls the package's functions directly.
 # [Setup](../setup/) installs the package and shows how to run this code in a REPL, a notebook or a script.
-# The tidy data in `data/` are committed, so nothing needs downloading.
+# The tidy data in `data/` are committed, and `task fit-store` fetches the stored renewal fit.
 # This page is a notebook, and `task getting-started` runs it again.
 
 # %% [markdown]
@@ -31,16 +31,15 @@
 # `load_delays` reads the reporting delays the hub published, which the renewal models use.
 
 # %%
-import dataclasses
+import gzip
+import json
 from pathlib import Path
 
-from bdbvhubrenewal.data import (
-    delays_for_vintage,
-    load_daily,
-    load_delays,
-    load_target,
-)
+import pandas as pd
+
+from bdbvhubrenewal.data import load_daily, load_delays, load_target
 from bdbvhubrenewal.evaluation import backtest as bt
+from bdbvhubrenewal.evaluation import store
 from bdbvhubrenewal.evaluation.nowcast import relative_wis, release_backtest
 from bdbvhubrenewal.evaluation.scoring import relative_skill
 from bdbvhubrenewal.forecasters import NATIONAL, get_model
@@ -55,29 +54,22 @@ sorted(real["vintage"].unique())
 # %% [markdown]
 # ## Build the forecast task
 #
-# The origin is the vintage 2026-10-17.
-# The latest vintage, 2026-11-01, holds the same weeks as they were reported afterwards.
+# The origin is the newest release that a later release can score, and the later release is the newest.
 # The task holds what a model sees at the origin, including the daily onsets of every release up to it, and the weeks to forecast.
-# Its reference date is the next Saturday, 2026-10-24, and the forecast weeks run from six weeks before it to three weeks after it.
-# `min_horizon=-6` asks for the six weeks before the reference date as well, as the submission does.
+# Its reference date is the Saturday after the origin, and the forecast weeks run from four weeks before it to three weeks after it.
+# `origin_tasks` builds the task of every real origin as the fit store fits it, so the baselines and the stored renewal fit see the same task.
 
 # %%
-ORIGIN = "2026-10-17"
-LATER = "2026-11-01"
+ORIGIN, LATER = bt.real_vintages(target)[-2:]
 
-config = dataclasses.replace(
-    bt.load_config("config/backtest.toml"), min_horizon=-6
-)
-origin_delays, _ = delays_for_vintage(delays, ORIGIN)
-origin = real.loc[real["vintage"] == ORIGIN]
-task = bt.make_tasks(origin, origin_delays, config, history=real, daily=daily)[
-    0
-]
+config = bt.load_config("config/backtest.toml")
+task = store.origin_tasks(target, delays, config, daily)[ORIGIN]
 print(task.vintage, task.reference_date, len(task.locations), "provinces")
 print(task.target_end_dates[0], "to", task.target_end_dates[-1])
+print("scored on", LATER)
 
 # %% [markdown]
-# ## Forecast
+# ## Forecast with the baselines
 #
 # `get_model` returns a model from the registry by name.
 # `randomwalk` carries the last complete week forward with random walk noise on the log scale.
@@ -87,7 +79,46 @@ print(task.target_end_dates[0], "to", task.target_end_dates[-1])
 
 # %%
 models = [get_model("randomwalk"), get_model("randomwalknowcast")]
-forecasts = bt.run_forecasts(models, [task])
+baselines = bt.run_forecasts(models, [task])
+baselines.groupby("model")["sample"].nunique()
+
+# %% [markdown]
+# ## Fit the renewal model
+#
+# The [renewal model](../methods/model/) is fitted by MCMC (NUTS), which takes about half an hour, so this page does not fit it.
+# The [fit store](../development/cli/#fit-store) fits it in CI at every real origin and stores the result.
+# This is how it is fitted, with the sampler settings of the submission:
+#
+# ```python
+# fitted = store.fit(
+#     "renewal", task, store.code_digest(), store.samplers()["renewal"]
+# )
+# store.write_fit("output/fit-store", fitted)
+# ```
+#
+# The page loads the stored fit instead.
+
+# %% [markdown]
+# ## Load the stored renewal fit
+#
+# `bdbvhubrenewal fit-store load` (`task fit-store`) fetches the store and records the fit it uses for each model and origin in `results/fit-store.json`.
+# That is the fit for this code and data, or, while that fit is still running, the newest fit of older code.
+# Each stored fit is a gzipped JSON file, so plain Python reads it.
+# Its `forecasts` table has the same columns as the baselines' forecasts.
+
+# %%
+status = json.loads(Path("results/fit-store.json").read_text())
+entry = next(
+    s for s in status if s["model"] == "renewal" and s["origin"] == ORIGIN
+)
+path = Path("output/fit-store/renewal") / ORIGIN / f"{entry['used']}.json.gz"
+stored = json.loads(gzip.decompress(path.read_bytes()))
+renewal = pd.DataFrame(
+    stored["forecasts"]["data"], columns=stored["forecasts"]["columns"]
+)
+print("fitted at commit", stored["meta"]["commit"][:7])
+print("fit of this code" if entry["current"] else "fit of older code")
+forecasts = pd.concat([baselines, renewal], ignore_index=True)
 forecasts.groupby("model")["sample"].nunique()
 
 # %% [markdown]
@@ -132,16 +163,16 @@ save("forecast")
 panels
 
 # %% [markdown]
-# ![Nowcasts from randomwalk and randomwalknowcast at 2026-10-17 against the data as later reported.](../assets/getting-started/nowcast.svg#only-light)
-# ![Nowcasts from randomwalk and randomwalknowcast at 2026-10-17 against the data as later reported.](../assets/getting-started/nowcast-dark.svg#only-dark)
+# ![Nowcasts from randomwalk, randomwalknowcast and renewal at the origin against the data as later reported.](../assets/getting-started/nowcast.svg#only-light)
+# ![Nowcasts from randomwalk, randomwalknowcast and renewal at the origin against the data as later reported.](../assets/getting-started/nowcast-dark.svg#only-dark)
 
 # %% [markdown]
 # ## Plot the forecast
 #
 # The second figure adds the reference week and the three forecast weeks.
 #
-# ![Nowcasts and forecasts from randomwalk and randomwalknowcast at 2026-10-17 against the data as later reported.](../assets/getting-started/forecast.svg#only-light)
-# ![Nowcasts and forecasts from randomwalk and randomwalknowcast at 2026-10-17 against the data as later reported.](../assets/getting-started/forecast-dark.svg#only-dark)
+# ![Nowcasts and forecasts from randomwalk, randomwalknowcast and renewal at the origin against the data as later reported.](../assets/getting-started/forecast.svg#only-light)
+# ![Nowcasts and forecasts from randomwalk, randomwalknowcast and renewal at the origin against the data as later reported.](../assets/getting-started/forecast-dark.svg#only-dark)
 
 # %% [markdown]
 # ## Score
@@ -181,6 +212,3 @@ relative_skill(
 # The [API reference](../reference/) documents every function used here, grouped by task.
 # The [CLI page](../development/cli/) lists the commands the submission workflow runs.
 # They fetch the data, run the backtest, forecast from the latest vintage and write the hub file.
-#
-# The renewal model is not fitted here.
-# It needs a sampler and is described on the [Renewal models page](../methods/model/).

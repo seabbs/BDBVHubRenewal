@@ -179,6 +179,7 @@ tasks:
   getting-started:
     desc: Run the Getting started notebook again and save its outputs
     cmds:
+      - task: fit-store
       - >-
         uv run --group docs jupytext --to ipynb --execute --run-path .
         docs/getting-started.py
