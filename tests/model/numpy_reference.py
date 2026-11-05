@@ -24,8 +24,8 @@ $$M(t) = \pi(t)\,\rho(t).$$
 
 **The hub's imputation.**
 The hub gives each missing-onset case an onset by subtracting a delay
-drawn from $\hat g_T$, the empirical pmf of all published delays in the
-vintage, pooled over provinces and onset weeks.
+drawn from $\hat g_T$, the daily pmf of its imputation delay at the
+release (`hub_delay_pmf`).
 The expected imputed onsets on day $s$ are
 $$I_T(s) = \sum_{t \le T} M(t)\, \hat g_T(t - s).$$
 This is the expected back-sampling allocation (as in, for example,

@@ -16,8 +16,9 @@ day, and is published after a lag of 0 to 3 days.
 
 `SimulatedOutbreak.vintage` publishes what the hub would show at a date:
 known onsets by onset week, missing onsets given an onset by subtracting
-a delay drawn from the pooled known delays reported so far (the hub's
-back-sampling), their total, and the delay line data.
+a delay drawn from the hub's imputation delay at that date
+(`bdbvhubrenewal.data.delays.hub_delay_pmf`), their total, and the
+delay line data.
 `SimulatedOutbreak.truth` is the final total once every case is reported.
 """
 
@@ -35,6 +36,7 @@ from numpy.typing import NDArray
 
 from bdbvhubrenewal.data import PROVINCE_POPULATIONS
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
+from bdbvhubrenewal.data.delays import hub_delay_pmf
 from bdbvhubrenewal.forecasters.base import NATIONAL
 from bdbvhubrenewal.model.delays import censored_pmf
 from bdbvhubrenewal.model.inputs import (
@@ -317,11 +319,8 @@ class SimulatedOutbreak:
         has_onset = seen["onset_known_date"] <= cut
         known = seen.loc[has_onset]
         missing = seen.loc[~has_onset]
-        delays = (known["report_date"] - known["onset_date"]).dt.days.to_numpy()
-        if delays.size:
-            draws = rng.choice(delays, size=len(missing), replace=True)
-        else:
-            draws = np.zeros(len(missing), dtype=int)
+        pmf = hub_delay_pmf(day)
+        draws = rng.choice(pmf.size, size=len(missing), p=pmf)
         imputed_onset = missing["report_date"] - pd.to_timedelta(
             draws, unit="D"
         )
