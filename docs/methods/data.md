@@ -33,11 +33,13 @@ Province populations are the Institut National de la Statistique's 2019 figures 
 
 Each hub release is a vintage, labelled by its `as_of` date and of kind `real` or `simulated`.
 From the 2026-11-01 release on, `as_of` is the extraction date, a day after the last reported case.
-Earlier releases were labelled by the last reported case ([hub issue 90](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/90)).
+The hub states that earlier releases were labelled by the last reported case ([hub issue 90](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/90)).
 We keep each release's published label and map a rewritten label back to it.
 A release's data cut-off is its last report day, as its data prove it.
 A case with onset on day $t$ was reported on or after $t$, and a delay row with onset week ending $W$ and delay $d$ was reported on or after $W - 6 + d$.
 The cut-off of a real release is the latest of these days over its daily onsets and delay rows.
+This gives 2026-10-08 for the release labelled 2026-10-09 and 2026-10-16 for the release labelled 2026-10-17, so the data do not bear out the hub's description of those labels.
+Between releases 66 to 83 cases with a known onset were added per day, so a day with no report is unlikely, and a cut-off on the label would add a day with no reports to each of these releases.
 A simulated release states its cut-off.
 The models, the scoring and the zone stage all use this cut-off.
 Recent weeks are revised in later releases, so each forecast is made from one vintage and scored on the counts later releases report.
