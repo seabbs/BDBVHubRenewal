@@ -743,8 +743,8 @@ def _zone_nowcast_section(
         gen / "nowcast-picker.md",
         "## By place\n\n"
         f"Each model's nowcast and forecast at the {task.vintage} release, "
-        "for the country, the provinces and the zones with cases in the 12 "
-        "weeks before the reference date "
+        "for the country and every province and health zone with a "
+        "forecast or with cases in the 12 weeks before the reference date "
         "([Health zones](methods/evaluation.md#health-zones)).\n"
         "The latest nowcast has no score yet.\n"
         "Scores by origin are on the [Backtest](backtest.md) page.\n\n"

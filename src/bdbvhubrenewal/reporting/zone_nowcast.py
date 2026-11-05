@@ -211,7 +211,7 @@ def place_chart_data(
         `value`.
     counts : pandas.DataFrame
         Weekly counts at the release, `location`, `target_end_date` and
-        `total`, for every place shown.
+        `total`. A place with samples but no counts is shown with no data.
     names : mapping of str to str
         Place names by id. Zones not named show their code.
     colours : mapping of str to (str, str)
@@ -232,7 +232,11 @@ def place_chart_data(
         values of a fixed subset of draws, the same in every place).
     """
     models = list(colours)
-    size = counts.groupby("location")["total"].sum()
+    # Places with forecasts but no cases are shown too, with no data.
+    places = sorted(set(counts["location"]) | set(samples["location"]))
+    size = (
+        counts.groupby("location")["total"].sum().reindex(places, fill_value=0)
+    )
     fans = set(samples["model"])
 
     def scale(loc: str) -> str:

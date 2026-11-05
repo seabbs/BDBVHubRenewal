@@ -138,3 +138,18 @@ def test_place_chart_data_marks_models_without_samples() -> None:
     fans = {m["name"]: m["fan"] for m in data["models"]}
     assert fans == {"randomwalk": False, ZONE_MODEL: True, "renewalbvd": False}
     assert data["models"][2]["dark"] == "#cccccc"
+
+
+def test_place_chart_data_keeps_forecast_places_without_cases() -> None:
+    samples, counts = _all_scales()
+    quiet = samples.loc[samples["location"] == "CD-NK-02"]
+    samples = pd.concat([samples, quiet.assign(location="CD-NK-30")])
+    data = place_chart_data(samples, counts, NAMES, COLOURS, 2)
+    assert data["places"][-1] == {
+        "id": "CD-NK-30",
+        "name": "CD-NK-30",
+        "scale": "zones",
+        "province": "CD-NK",
+    }
+    assert "CD-NK-30" not in data["data"]
+    assert len(data["q"]["CD-NK-30"]) == 3

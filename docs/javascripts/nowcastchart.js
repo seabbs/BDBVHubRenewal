@@ -80,7 +80,8 @@
         "No forecast at the " + d.release + " release from " + none.join(", ") + "." : "";
       var q = all.filter(function (r) { return keys.on[r[0]]; });
       var ref = day(d.reference_date);
-      var x0 = day(data[0][0]) - 4 * DAY;
+      // A place with no cases has no data, so its axis starts 12 weeks back.
+      var x0 = (data.length ? day(data[0][0]) : ref - 84 * DAY) - 4 * DAY;
       var x1 = ref + 4 * DAY;
       q.forEach(function (r) { x1 = Math.max(x1, day(r[1]) + 4 * DAY); });
       var xr = Z.xRange(zoom, x0, x1);
