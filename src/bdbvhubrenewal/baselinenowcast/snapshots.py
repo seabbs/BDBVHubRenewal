@@ -100,7 +100,41 @@ def pair_sums(
     )
 
 
-def log_factors(num: Any, den: Any, gaps: Any) -> np.ndarray:
+def age_blocks(den: Any, min_count: float) -> np.ndarray:
+    """Group ages from 0 into blocks of at least ``min_count`` cases.
+
+    Each block takes ages until their denominator, summed over the
+    pairs, reaches ``min_count``.
+    Ages left over at the end join the last block.
+
+    Parameters
+    ----------
+    den : array_like
+        Denominators of one place, ``(n_pair, max_delay)``.
+    min_count : float
+        Cases a block needs.
+
+    Returns
+    -------
+    numpy.ndarray
+        Block of each age, ``(max_delay,)``.
+    """
+    total = np.asarray(den, float).sum(axis=0)
+    block = np.zeros(total.size, dtype=int)
+    b, run = 0, 0.0
+    for a, x in enumerate(total):
+        block[a] = b
+        run += x
+        if run >= min_count:
+            b, run = b + 1, 0.0
+    if run < min_count and b > 0:
+        block[block == b] = b - 1
+    return block
+
+
+def log_factors(
+    num: Any, den: Any, gaps: Any, min_count: float = 0.0
+) -> np.ndarray:
     r"""Daily log development factors shared by all pairs (extension E1).
 
     A day of age $a$ at release $r$ is age $a + s$ at release $r + 1$,
@@ -114,6 +148,8 @@ def log_factors(num: Any, den: Any, gaps: Any) -> np.ndarray:
     weighted by $\sum \mathrm{den}$, and $g \ge 0$ is the
     non-negative least squares fit.
     With a gap of 1 only, $g(a)$ is the log of the chain ladder factor.
+    Ages share one factor within each block of `age_blocks`, so no
+    factor rests on fewer than ``min_count`` cases.
 
     Parameters
     ----------
@@ -121,6 +157,8 @@ def log_factors(num: Any, den: Any, gaps: Any) -> np.ndarray:
         ``(n_loc, n_pair, max_delay)``, from `pair_sums`.
     gaps : array_like of int
         Each pair's gap in days.
+    min_count : float, default 0
+        Cases each block of ages needs. 0 gives one factor per age.
 
     Returns
     -------
@@ -145,7 +183,10 @@ def log_factors(num: Any, den: Any, gaps: Any) -> np.ndarray:
         seen = w > 0
         y = np.log(np.where(seen, n_sum[n].ravel() / np.where(seen, w, 1), 1))
         root = np.sqrt(w)
-        g[n] = nnls(rows * root[:, None], y * root)[0]
+        block = age_blocks(den[n], min_count)
+        shared = (block[:, None] == np.arange(block.max() + 1)).astype(float)
+        theta = nnls(rows @ shared * root[:, None], y * root)[0]
+        g[n] = shared @ theta
     return g
 
 

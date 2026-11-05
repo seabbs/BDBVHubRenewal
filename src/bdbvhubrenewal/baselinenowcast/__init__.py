@@ -17,6 +17,7 @@ from .sample import (
     sample_prediction,
 )
 from .snapshots import (
+    age_blocks,
     fill_row,
     growth,
     hub_week_matrix,
@@ -43,6 +44,7 @@ from .uncertainty import (
 )
 
 __all__ = [
+    "age_blocks",
     "allocate_reference_times",
     "apply_delay",
     "apply_reporting_structure",
