@@ -36,6 +36,8 @@ on:
 
 permissions:
   contents: read
+  # To say on the pages whether a Fit store run is in progress.
+  actions: read
 
 concurrency:
   group: pages-${{ github.ref }}
@@ -95,7 +97,12 @@ jobs:
       - name: Compare with hub forecasts, then the docs figures and tables
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
+          FIT_STORE_RUN=$(gh run list -R "$GITHUB_REPOSITORY" \
+            -w fit-store.yml -b main -s in_progress -L 1 \
+            --json url -q '.[0].url // ""')
+          export FIT_STORE_RUN
           uv run bdbvhubrenewal compare-hub --fetch
           uv run bdbvhubrenewal report --ledger output/ledger
       - name: Check hub teams are shown on the comparison page only

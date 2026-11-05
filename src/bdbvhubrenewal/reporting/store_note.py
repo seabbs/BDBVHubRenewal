@@ -38,7 +38,9 @@ def _pairs(rows: Sequence[Mapping[str, Any]]) -> str:
 
 
 def store_note(
-    status: Sequence[Mapping[str, Any]], build: str | None = None
+    status: Sequence[Mapping[str, Any]],
+    build: str | None = None,
+    running: str | None = None,
 ) -> str:
     """Write the note for a page.
 
@@ -48,12 +50,14 @@ def store_note(
         The `fit-store load` record, one entry per (model, origin).
     build : str, optional
         The commit this site is built from.
+    running : str, optional
+        The URL of a Fit store run in progress, if there is one.
 
     Returns
     -------
     str
         Markdown: the fit commits, then an admonition listing the fits
-        not stored for this build's code, if there are any.
+        not made for this build's code, if there are any.
     """
     used = sorted({str(s["commit"]) for s in status if s["commit"]})
     if not used:
@@ -68,30 +72,28 @@ def store_note(
     stale = [s for s in status if s["used"] and not s["current"]]
     absent = [s for s in status if not s["used"]]
     failed = [s for s in status if s["failed"]]
-    pending = [s for s in stale + absent if not s["failed"]]
-    if not (pending or failed):
+    if not (stale or absent):
         return "\n".join(lines) + "\n"
     code = f"this build's code ({_commit(build)})" if build else "this code"
-    body = []
-    if pending:
-        body.append(
-            f"Fits for {code} are still [running]"
-            f"({REPO}/actions/workflows/fit-store.yml)."
-        )
+    body = [f"Not yet fitted for {code}: {_pairs(stale + absent)}."]
     if failed:
-        body.append(f"The fit for {code} failed: {_pairs(failed)}.")
+        body.append(f"The fit failed for {_pairs(failed)}.")
+    if running:
+        body.append(f"A [Fit store run]({running}) is fitting them.")
     if stale:
         body.append(f"Fits of older code are shown for {_pairs(stale)}.")
     if absent:
-        body.append(f"Not shown until fitted: {_pairs(absent)}.")
-    title = "Fits still running" if pending else "A fit failed"
-    lines += ["", f'!!! note "{title}"', ""]
+        body.append(f"Not shown: {_pairs(absent)}.")
+    lines += ["", '!!! note "Fits not yet made for this code"', ""]
     lines += [f"    {b}" for b in body]
     return "\n".join(lines) + "\n"
 
 
 def write_store_note(results: Path | str, generated: Path | str) -> None:
     """Write `fit-store.md` from the results' store record.
+
+    The build commit is `$GITHUB_SHA` and a Fit store run in progress is
+    `$FIT_STORE_RUN`, which the Pages workflow sets.
 
     Parameters
     ----------
@@ -104,4 +106,10 @@ def write_store_note(results: Path | str, generated: Path | str) -> None:
     status = json.loads(path.read_text()) if path.exists() else []
     out = Path(generated) / "fit-store.md"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(store_note(status, os.environ.get("GITHUB_SHA")))
+    out.write_text(
+        store_note(
+            status,
+            os.environ.get("GITHUB_SHA"),
+            os.environ.get("FIT_STORE_RUN") or None,
+        )
+    )
