@@ -16,7 +16,7 @@
 # %% [markdown]
 # # Getting started
 #
-# Forecast with two baselines, plot them and score them.
+# Forecast with two baselines and a renewal model, plot them and score them.
 #
 # This page is a notebook.
 # `task getting-started` runs it again and writes the outputs into `docs/getting-started.ipynb`.
@@ -44,6 +44,7 @@ from bdbvhubrenewal.data import (
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.evaluation.nowcast import relative_wis, release_backtest
 from bdbvhubrenewal.forecasters import NATIONAL, get_model
+from bdbvhubrenewal.forecasters.renewal import sampler_settings
 from bdbvhubrenewal.reporting.plots import plot_location_grid, save_light_dark
 
 target = load_target("data")
@@ -83,10 +84,16 @@ print(task.target_end_dates[0], "to", task.target_end_dates[-1])
 # `randomwalk` carries the last complete week forward with random walk noise on the log scale.
 # `randomwalknowcast` first nowcasts every day with data for reporting delays, sums the days to hub weeks, then does the same.
 # `randomwalknowcast` is the baseline we submit to the hub as `seabbs-rwnowcast`.
+# `renewal` is the province renewal model of the [Renewal models page](../methods/model/).
+# The submission fits it by NUTS, which takes about an hour.
+# Here `method="svi"` in its sampler table fits it approximately, by stochastic variational inference (SVI), in a few minutes.
+# The [Implementation page](../methods/implementation/#approximate-fit) compares the two fits.
 # `run_forecasts` runs each model, checks the samples, adds the national total and returns 100 trajectories per location.
 
 # %%
-models = [get_model("randomwalk"), get_model("randomwalknowcast")]
+renewal = get_model("renewal")
+renewal.sampler = sampler_settings({"method": "svi"})
+models = [get_model("randomwalk"), get_model("randomwalknowcast"), renewal]
 forecasts = bt.run_forecasts(models, [task])
 forecasts.groupby("model")["sample"].nunique()
 
@@ -132,16 +139,16 @@ save("forecast")
 panels
 
 # %% [markdown]
-# ![Nowcasts from randomwalk and randomwalknowcast at 2026-10-17 against the data as later reported.](../assets/getting-started/nowcast.svg#only-light)
-# ![Nowcasts from randomwalk and randomwalknowcast at 2026-10-17 against the data as later reported.](../assets/getting-started/nowcast-dark.svg#only-dark)
+# ![Nowcasts from randomwalk, randomwalknowcast and renewal at 2026-10-17 against the data as later reported.](../assets/getting-started/nowcast.svg#only-light)
+# ![Nowcasts from randomwalk, randomwalknowcast and renewal at 2026-10-17 against the data as later reported.](../assets/getting-started/nowcast-dark.svg#only-dark)
 
 # %% [markdown]
 # ## Plot the forecast
 #
 # The second figure adds the reference week and the three forecast weeks.
 #
-# ![Nowcasts and forecasts from randomwalk and randomwalknowcast at 2026-10-17 against the data as later reported.](../assets/getting-started/forecast.svg#only-light)
-# ![Nowcasts and forecasts from randomwalk and randomwalknowcast at 2026-10-17 against the data as later reported.](../assets/getting-started/forecast-dark.svg#only-dark)
+# ![Nowcasts and forecasts from randomwalk, randomwalknowcast and renewal at 2026-10-17 against the data as later reported.](../assets/getting-started/forecast.svg#only-light)
+# ![Nowcasts and forecasts from randomwalk, randomwalknowcast and renewal at 2026-10-17 against the data as later reported.](../assets/getting-started/forecast-dark.svg#only-dark)
 
 # %% [markdown]
 # ## Score
@@ -170,6 +177,4 @@ relative_wis(scores, by=["level"]).round(2)
 #
 # The [CLI page](../development/cli/) lists the commands the submission workflow runs.
 # They fetch the data, run the backtest, forecast from the latest vintage and write the hub file.
-#
-# The renewal model is not fitted here.
-# It needs a sampler and is described on the [Renewal models page](../methods/model/).
+
