@@ -110,6 +110,9 @@ from bdbvhubrenewal.reporting.plots import (
     plot_target,
     save_light_dark,
 )
+from bdbvhubrenewal.reporting.reporting_comparison import (
+    make_reporting_comparison,
+)
 from bdbvhubrenewal.reporting.scorechart import (
     ENERGY_METRICS,
     OVERALL_METRICS,
@@ -183,6 +186,9 @@ def make_report(
     latest = real["vintage"].max()
     latest_delays = delays.loc[delays["vintage"] == delays["vintage"].max()]
     write_store_note(res, gen)
+    make_reporting_comparison(
+        fig, gen, res / "reporting-comparison", target, _location_names(real)
+    )
 
     # Data page.
     save_light_dark(
