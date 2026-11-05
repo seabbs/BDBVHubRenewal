@@ -33,7 +33,7 @@ nav:
       - Backtest: backtest.md
       - Simulation checks: simulation.md
       - Comparison with hub forecasts: comparison.md
-      - Reporting lag comparison: lag-comparison.md
+      - Reporting model comparison: reporting-comparison.md
   - Submission:
       - Submission log: submission/rounds/index.md
       - Opting in: submission/opting-in.md
