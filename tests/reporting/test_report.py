@@ -276,8 +276,10 @@ def test_recovery_section() -> None:
             "log_energy": [0.25, 0.75],
         }
     )
-    text = report._recovery_section(energy)
+    text = report._recovery_section("summary.json", energy)
     assert text.startswith("## Recovery on simulated vintages")
+    for view in ("overall", "horizon", "place"):
+        assert f'data-src="summary.json" data-view="{view}"' in text
     assert "recovery-wis-horizon.svg" in text
     assert "mean energy score" in text
     assert "| national | randomwalk |   2 |" in text
@@ -433,3 +435,22 @@ def test_scored_on_counts_pairs_and_forecasts() -> None:
         "They rest on 3 origin and release pairs, with randomwalk scored on "
         "1 national, 2 provincial forecasts.\n"
     )
+
+
+def test_scenario_section_has_the_shared_widgets_per_scenario(
+    tmp_path: Path,
+) -> None:
+    text = report._scenario_section(
+        tmp_path, ROOT / "results", ["randomwalk", "randomwalknowcast"], {}
+    )
+    for section in ("Overall", "By horizon", "By place", "Forecasts by place"):
+        assert f"### {section}" in text
+    for key, title in report._SCENARIOS.items():
+        assert text.count(f'=== "{title}"') == 4
+        summary = json.loads(
+            (tmp_path / f"scoresummary-scenario-{key}.json").read_text()
+        )
+        explorer = json.loads(
+            (tmp_path / f"explorer-scenario-{key}.json").read_text()
+        )
+        assert explorer["rounds"] == summary["origins"]
