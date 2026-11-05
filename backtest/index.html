@@ -2054,12 +2054,11 @@
 
 <h1 id="backtest">Backtest<a class="headerlink" href="#backtest" title="Permanent link">&para;</a></h1>
 <p class="page-subtitle">Forecasts made at past vintages, scored on what each later release reported.</p>
-<p>Fitted models' results come from the <a href="https://github.com/seabbs/BDBVHubRenewal/tree/fit-store">fit store</a>, fitted at <a href="https://github.com/seabbs/BDBVHubRenewal/commit/66f983b6d88316978b5062ab460407d089db290c"><code>66f983b</code></a>.</p>
+<p>Fitted models' results come from the <a href="https://github.com/seabbs/BDBVHubRenewal/tree/fit-store">fit store</a>, fitted at <a href="https://github.com/seabbs/BDBVHubRenewal/commit/66f983b6d88316978b5062ab460407d089db290c"><code>66f983b</code></a>, <a href="https://github.com/seabbs/BDBVHubRenewal/commit/a5ad8b922b24da5e68f78f04aec6a167ec60eed6"><code>a5ad8b9</code></a>.</p>
 <div class="admonition note">
 <p class="admonition-title">Fits still running</p>
 <p>Fits for this build's code (<a href="https://github.com/seabbs/BDBVHubRenewal/commit/a5ad8b922b24da5e68f78f04aec6a167ec60eed6"><code>a5ad8b9</code></a>) are still <a href="https://github.com/seabbs/BDBVHubRenewal/actions/workflows/fit-store.yml">running</a>.
-Fits of older code are shown for <code>pprandomwalknowcast</code> at 2026-08-18 and 2026-10-09 and 2026-10-17 and 2026-10-24 and 2026-11-01; <code>renewal</code> at 2026-10-09 and 2026-10-17 and 2026-10-24 and 2026-11-01; <code>renewalsp</code> at 2026-08-18 and 2026-10-09 and 2026-10-17 and 2026-10-24 and 2026-11-01.
-Not shown until fitted: <code>renewalbvd</code> at 2026-08-18 and 2026-10-09 and 2026-10-17 and 2026-10-24 and 2026-11-01; <code>renewal</code> at 2026-08-18.</p>
+Fits of older code are shown for <code>renewal</code> at 2026-10-09 and 2026-10-17 and 2026-10-24 and 2026-11-01; <code>renewalbvd</code> at 2026-08-18 and 2026-10-09 and 2026-10-17 and 2026-10-24 and 2026-11-01; <code>renewalsp</code> at 2026-08-18 and 2026-10-09 and 2026-10-17 and 2026-11-01.</p>
 </div>
 <h2 id="overall">Overall<a class="headerlink" href="#overall" title="Permanent link">&para;</a></h2>
 <p>Scores against what each later release reported (<a href="../methods/evaluation/#real-releases">how scoring works</a>, <a href="../methods/evaluation/#scores">metrics</a>).
@@ -2174,6 +2173,22 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <tr>
 <td style="text-align: left;">Complete weeks</td>
 <td style="text-align: left;">national</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">22.09</td>
+<td style="text-align: right;">44</td>
+<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">0.49</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">-1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.54</td>
+<td style="text-align: right;">0.53</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">national</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">22.11</td>
@@ -2270,6 +2285,22 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <tr>
 <td style="text-align: left;">Complete weeks</td>
 <td style="text-align: left;">provinces</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">18</td>
+<td style="text-align: right;">1.93</td>
+<td style="text-align: right;">2.94</td>
+<td style="text-align: right;">0.66</td>
+<td style="text-align: right;">1.29</td>
+<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">0.89</td>
+<td style="text-align: right;">0.08</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">0.7</td>
+<td style="text-align: right;">1.28</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">provinces</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">18</td>
 <td style="text-align: right;">2.42</td>
@@ -2281,7 +2312,7 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: right;">-0.31</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: right;">0.71</td>
-<td style="text-align: right;">7.85</td>
+<td style="text-align: right;">7.87</td>
 </tr>
 <tr>
 <td style="text-align: left;">Reported by each later release</td>
@@ -2366,18 +2397,34 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <tr>
 <td style="text-align: left;">Reported by each later release</td>
 <td style="text-align: left;">national</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">30.06</td>
+<td style="text-align: right;">25.81</td>
+<td style="text-align: right;">1.16</td>
+<td style="text-align: right;">1.28</td>
+<td style="text-align: right;">0.19</td>
+<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">-0.6</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">1.23</td>
+<td style="text-align: right;">1.39</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">national</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">16</td>
-<td style="text-align: right;">27.9</td>
+<td style="text-align: right;">28.96</td>
 <td style="text-align: right;">25.81</td>
-<td style="text-align: right;">1.08</td>
-<td style="text-align: right;">1.16</td>
+<td style="text-align: right;">1.12</td>
+<td style="text-align: right;">1.21</td>
 <td style="text-align: right;">0.19</td>
-<td style="text-align: right;">0.56</td>
+<td style="text-align: right;">0.5</td>
 <td style="text-align: right;">-0.65</td>
 <td style="text-align: right;">3</td>
-<td style="text-align: right;">1.16</td>
-<td style="text-align: right;">1.26</td>
+<td style="text-align: right;">1.2</td>
+<td style="text-align: right;">1.31</td>
 </tr>
 <tr>
 <td style="text-align: left;">Reported by each later release</td>
@@ -2462,18 +2509,34 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <tr>
 <td style="text-align: left;">Reported by each later release</td>
 <td style="text-align: left;">provinces</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">117</td>
+<td style="text-align: right;">6.17</td>
+<td style="text-align: right;">5.05</td>
+<td style="text-align: right;">1.22</td>
+<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.83</td>
+<td style="text-align: right;">-0.01</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">1.36</td>
+<td style="text-align: right;">0.72</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">provinces</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">117</td>
-<td style="text-align: right;">5.69</td>
+<td style="text-align: right;">5.74</td>
 <td style="text-align: right;">5.05</td>
-<td style="text-align: right;">1.13</td>
-<td style="text-align: right;">0.91</td>
+<td style="text-align: right;">1.14</td>
+<td style="text-align: right;">0.9</td>
 <td style="text-align: right;">0.62</td>
 <td style="text-align: right;">0.87</td>
 <td style="text-align: right;">-0.12</td>
 <td style="text-align: right;">3</td>
-<td style="text-align: right;">1.26</td>
-<td style="text-align: right;">0.86</td>
+<td style="text-align: right;">1.28</td>
+<td style="text-align: right;">0.85</td>
 </tr>
 <tr>
 <td style="text-align: left;">Reported by each later release</td>
@@ -2843,36 +2906,108 @@ Horizons after the latest release have no score yet.</p>
 </tr>
 <tr>
 <td style="text-align: right;">-4</td>
-<td style="text-align: left;">renewalsp</td>
+<td style="text-align: left;">renewalbvd</td>
 <td style="text-align: right;">25</td>
-<td style="text-align: right;">5.09</td>
+<td style="text-align: right;">5.18</td>
 <td style="text-align: right;">7.67</td>
-<td style="text-align: right;">0.66</td>
-<td style="text-align: right;">3.07</td>
+<td style="text-align: right;">0.68</td>
+<td style="text-align: right;">0.94</td>
+<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">-0.1</td>
+</tr>
+<tr>
+<td style="text-align: right;">-3</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">6.92</td>
+<td style="text-align: right;">6.99</td>
+<td style="text-align: right;">0.99</td>
+<td style="text-align: right;">0.72</td>
+<td style="text-align: right;">0.6</td>
+<td style="text-align: right;">0.72</td>
+<td style="text-align: right;">-0.32</td>
+</tr>
+<tr>
+<td style="text-align: right;">-2</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">12.04</td>
+<td style="text-align: right;">7.73</td>
+<td style="text-align: right;">1.56</td>
+<td style="text-align: right;">0.7</td>
+<td style="text-align: right;">0.56</td>
+<td style="text-align: right;">0.72</td>
+<td style="text-align: right;">-0.11</td>
+</tr>
+<tr>
+<td style="text-align: right;">-1</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">13.4</td>
+<td style="text-align: right;">7.91</td>
+<td style="text-align: right;">1.69</td>
+<td style="text-align: right;">0.78</td>
 <td style="text-align: right;">0.56</td>
 <td style="text-align: right;">0.8</td>
-<td style="text-align: right;">-0.36</td>
+<td style="text-align: right;">0.08</td>
+</tr>
+<tr>
+<td style="text-align: right;">0</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">8.39</td>
+<td style="text-align: right;">7.37</td>
+<td style="text-align: right;">1.14</td>
+<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.6</td>
+<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.06</td>
+</tr>
+<tr>
+<td style="text-align: right;">1</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">6.87</td>
+<td style="text-align: right;">7.79</td>
+<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.79</td>
+<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-0.06</td>
+</tr>
+<tr>
+<td style="text-align: right;">-4</td>
+<td style="text-align: left;">renewalsp</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">5.07</td>
+<td style="text-align: right;">7.67</td>
+<td style="text-align: right;">0.66</td>
+<td style="text-align: right;">2.98</td>
+<td style="text-align: right;">0.56</td>
+<td style="text-align: right;">0.8</td>
+<td style="text-align: right;">-0.35</td>
 </tr>
 <tr>
 <td style="text-align: right;">-3</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">25</td>
-<td style="text-align: right;">6.04</td>
+<td style="text-align: right;">6.01</td>
 <td style="text-align: right;">6.99</td>
 <td style="text-align: right;">0.86</td>
 <td style="text-align: right;">2.03</td>
 <td style="text-align: right;">0.44</td>
 <td style="text-align: right;">0.68</td>
-<td style="text-align: right;">-0.44</td>
+<td style="text-align: right;">-0.43</td>
 </tr>
 <tr>
 <td style="text-align: right;">-2</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">25</td>
-<td style="text-align: right;">10.17</td>
+<td style="text-align: right;">10.41</td>
 <td style="text-align: right;">7.73</td>
-<td style="text-align: right;">1.32</td>
-<td style="text-align: right;">0.64</td>
+<td style="text-align: right;">1.35</td>
+<td style="text-align: right;">0.65</td>
 <td style="text-align: right;">0.56</td>
 <td style="text-align: right;">0.8</td>
 <td style="text-align: right;">-0.14</td>
@@ -2881,24 +3016,24 @@ Horizons after the latest release have no score yet.</p>
 <td style="text-align: right;">-1</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">25</td>
-<td style="text-align: right;">12.48</td>
+<td style="text-align: right;">13.09</td>
 <td style="text-align: right;">7.91</td>
-<td style="text-align: right;">1.58</td>
-<td style="text-align: right;">0.59</td>
+<td style="text-align: right;">1.65</td>
+<td style="text-align: right;">0.6</td>
 <td style="text-align: right;">0.6</td>
 <td style="text-align: right;">0.88</td>
-<td style="text-align: right;">-0.02</td>
+<td style="text-align: right;">-0.03</td>
 </tr>
 <tr>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">25</td>
-<td style="text-align: right;">8.32</td>
+<td style="text-align: right;">8.47</td>
 <td style="text-align: right;">7.37</td>
-<td style="text-align: right;">1.13</td>
-<td style="text-align: right;">0.74</td>
+<td style="text-align: right;">1.15</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">0.68</td>
-<td style="text-align: right;">0.96</td>
+<td style="text-align: right;">0.92</td>
 <td style="text-align: right;">0.02</td>
 </tr>
 <tr>
@@ -3018,6 +3153,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Complete weeks</td>
 <td style="text-align: left;">national</td>
 <td style="text-align: left;">CD</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">22.09</td>
+<td style="text-align: right;">44</td>
+<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">0.49</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">-1</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">CD</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">22.11</td>
@@ -3097,6 +3246,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.04</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">CD-BU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0.06</td>
+<td style="text-align: right;">0.03</td>
+<td style="text-align: right;">2.3</td>
+<td style="text-align: right;">3.7</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.02</td>
 </tr>
 <tr>
 <td style="text-align: left;">Complete weeks</td>
@@ -3186,6 +3349,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Complete weeks</td>
 <td style="text-align: left;">provinces</td>
 <td style="text-align: left;">CD-HU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0.65</td>
+<td style="text-align: right;">1.55</td>
+<td style="text-align: right;">0.42</td>
+<td style="text-align: right;">0.46</td>
+<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.17</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">CD-HU</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: right;">0.74</td>
@@ -3194,7 +3371,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0.55</td>
 <td style="text-align: right;">0.67</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">-0.08</td>
+<td style="text-align: right;">-0.07</td>
 </tr>
 <tr>
 <td style="text-align: left;">Complete weeks</td>
@@ -3262,6 +3439,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">38</td>
 <td style="text-align: right;">0.68</td>
 <td style="text-align: right;">0.66</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">-1</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">CD-IT</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">25.9</td>
+<td style="text-align: right;">38</td>
+<td style="text-align: right;">0.68</td>
+<td style="text-align: right;">0.67</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">-1</td>
@@ -3354,6 +3545,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Complete weeks</td>
 <td style="text-align: left;">provinces</td>
 <td style="text-align: left;">CD-NK</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1.64</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">0.27</td>
+<td style="text-align: right;">0.27</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-0.15</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">CD-NK</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1.73</td>
@@ -3438,6 +3643,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Complete weeks</td>
 <td style="text-align: left;">provinces</td>
 <td style="text-align: left;">CD-NU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.02</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">nan</td>
+<td style="text-align: right;">nan</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.11</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">CD-NU</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1.67</td>
@@ -3509,6 +3728,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">provinces</td>
 <td style="text-align: left;">CD-SK</td>
 <td style="text-align: left;">renewal</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">CD-SK</td>
+<td style="text-align: left;">renewalbvd</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
@@ -3606,6 +3839,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Complete weeks</td>
 <td style="text-align: left;">provinces</td>
 <td style="text-align: left;">CD-SU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0.19</td>
+<td style="text-align: right;">0.04</td>
+<td style="text-align: right;">4.96</td>
+<td style="text-align: right;">6.9</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-0.03</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">CD-SU</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: right;">0.79</td>
@@ -3690,12 +3937,26 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Complete weeks</td>
 <td style="text-align: left;">provinces</td>
 <td style="text-align: left;">CD-TO</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">1.49</td>
+<td style="text-align: right;">1.33</td>
+<td style="text-align: right;">1.11</td>
+<td style="text-align: right;">1.24</td>
+<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.69</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">CD-TO</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">3</td>
-<td style="text-align: right;">1.75</td>
+<td style="text-align: right;">1.73</td>
 <td style="text-align: right;">1.33</td>
-<td style="text-align: right;">1.31</td>
-<td style="text-align: right;">1.43</td>
+<td style="text-align: right;">1.29</td>
+<td style="text-align: right;">1.42</td>
 <td style="text-align: right;">0.33</td>
 <td style="text-align: right;">0.67</td>
 <td style="text-align: right;">0.71</td>
@@ -3774,14 +4035,28 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Reported by each later release</td>
 <td style="text-align: left;">national</td>
 <td style="text-align: left;">CD</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">30.06</td>
+<td style="text-align: right;">25.81</td>
+<td style="text-align: right;">1.16</td>
+<td style="text-align: right;">1.28</td>
+<td style="text-align: right;">0.19</td>
+<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">-0.6</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">CD</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">16</td>
-<td style="text-align: right;">27.9</td>
+<td style="text-align: right;">28.96</td>
 <td style="text-align: right;">25.81</td>
-<td style="text-align: right;">1.08</td>
-<td style="text-align: right;">1.16</td>
+<td style="text-align: right;">1.12</td>
+<td style="text-align: right;">1.21</td>
 <td style="text-align: right;">0.19</td>
-<td style="text-align: right;">0.56</td>
+<td style="text-align: right;">0.5</td>
 <td style="text-align: right;">-0.65</td>
 </tr>
 <tr>
@@ -3850,6 +4125,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0.34</td>
 <td style="text-align: right;">0.45</td>
 <td style="text-align: right;">0.44</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.27</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">CD-BU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">0.15</td>
+<td style="text-align: right;">0.34</td>
+<td style="text-align: right;">0.44</td>
+<td style="text-align: right;">0.45</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.27</td>
@@ -3942,15 +4231,29 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Reported by each later release</td>
 <td style="text-align: left;">provinces</td>
 <td style="text-align: left;">CD-HU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">1.32</td>
+<td style="text-align: right;">1.7</td>
+<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">0.83</td>
+<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.03</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">CD-HU</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">16</td>
-<td style="text-align: right;">1.36</td>
+<td style="text-align: right;">1.34</td>
 <td style="text-align: right;">1.7</td>
-<td style="text-align: right;">0.8</td>
+<td style="text-align: right;">0.79</td>
 <td style="text-align: right;">0.81</td>
 <td style="text-align: right;">0.75</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">-0.09</td>
+<td style="text-align: right;">-0.08</td>
 </tr>
 <tr>
 <td style="text-align: left;">Reported by each later release</td>
@@ -4026,12 +4329,26 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Reported by each later release</td>
 <td style="text-align: left;">provinces</td>
 <td style="text-align: left;">CD-IT</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">17.36</td>
+<td style="text-align: right;">17.36</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1.03</td>
+<td style="text-align: right;">0.25</td>
+<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">-0.22</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">CD-IT</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">16</td>
-<td style="text-align: right;">19.47</td>
+<td style="text-align: right;">19.61</td>
 <td style="text-align: right;">17.36</td>
-<td style="text-align: right;">1.12</td>
-<td style="text-align: right;">1.26</td>
+<td style="text-align: right;">1.13</td>
+<td style="text-align: right;">1.27</td>
 <td style="text-align: right;">0.38</td>
 <td style="text-align: right;">0.62</td>
 <td style="text-align: right;">-0.39</td>
@@ -4110,15 +4427,29 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Reported by each later release</td>
 <td style="text-align: left;">provinces</td>
 <td style="text-align: left;">CD-NK</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">24.43</td>
+<td style="text-align: right;">15.2</td>
+<td style="text-align: right;">1.61</td>
+<td style="text-align: right;">1.64</td>
+<td style="text-align: right;">0.19</td>
+<td style="text-align: right;">0.38</td>
+<td style="text-align: right;">-0.76</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">CD-NK</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">16</td>
-<td style="text-align: right;">17.63</td>
+<td style="text-align: right;">17.97</td>
 <td style="text-align: right;">15.2</td>
-<td style="text-align: right;">1.16</td>
-<td style="text-align: right;">1.16</td>
+<td style="text-align: right;">1.18</td>
+<td style="text-align: right;">1.18</td>
 <td style="text-align: right;">0.19</td>
 <td style="text-align: right;">0.62</td>
-<td style="text-align: right;">-0.65</td>
+<td style="text-align: right;">-0.66</td>
 </tr>
 <tr>
 <td style="text-align: left;">Reported by each later release</td>
@@ -4194,15 +4525,29 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Reported by each later release</td>
 <td style="text-align: left;">provinces</td>
 <td style="text-align: left;">CD-NU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">0.04</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">6.85</td>
+<td style="text-align: right;">6.83</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.16</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">CD-NU</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">5</td>
-<td style="text-align: right;">0.14</td>
+<td style="text-align: right;">0.12</td>
 <td style="text-align: right;">0.01</td>
-<td style="text-align: right;">22.88</td>
-<td style="text-align: right;">15.23</td>
+<td style="text-align: right;">20.19</td>
+<td style="text-align: right;">13.67</td>
 <td style="text-align: right;">0.8</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">-0.14</td>
+<td style="text-align: right;">-0.12</td>
 </tr>
 <tr>
 <td style="text-align: left;">Reported by each later release</td>
@@ -4278,11 +4623,25 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Reported by each later release</td>
 <td style="text-align: left;">provinces</td>
 <td style="text-align: left;">CD-SK</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">0.18</td>
+<td style="text-align: right;">0.18</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.02</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">CD-SK</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">16</td>
 <td style="text-align: right;">0.01</td>
 <td style="text-align: right;">0.01</td>
-<td style="text-align: right;">0.59</td>
+<td style="text-align: right;">0.6</td>
 <td style="text-align: right;">0.61</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
@@ -4362,15 +4721,29 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Reported by each later release</td>
 <td style="text-align: left;">provinces</td>
 <td style="text-align: left;">CD-SU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">0.07</td>
+<td style="text-align: right;">0.15</td>
+<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">0.48</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.14</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">CD-SU</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">16</td>
-<td style="text-align: right;">0.14</td>
+<td style="text-align: right;">0.13</td>
 <td style="text-align: right;">0.15</td>
-<td style="text-align: right;">0.92</td>
-<td style="text-align: right;">1.01</td>
+<td style="text-align: right;">0.89</td>
+<td style="text-align: right;">0.98</td>
 <td style="text-align: right;">0.81</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">-0.19</td>
+<td style="text-align: right;">-0.18</td>
 </tr>
 <tr>
 <td style="text-align: left;">Reported by each later release</td>
@@ -4446,15 +4819,29 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Reported by each later release</td>
 <td style="text-align: left;">provinces</td>
 <td style="text-align: left;">CD-TO</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">1.79</td>
+<td style="text-align: right;">2.19</td>
+<td style="text-align: right;">0.82</td>
+<td style="text-align: right;">0.53</td>
+<td style="text-align: right;">0.38</td>
+<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.42</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">CD-TO</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">16</td>
-<td style="text-align: right;">2.52</td>
+<td style="text-align: right;">2.5</td>
 <td style="text-align: right;">2.19</td>
-<td style="text-align: right;">1.15</td>
-<td style="text-align: right;">0.66</td>
+<td style="text-align: right;">1.14</td>
+<td style="text-align: right;">0.65</td>
 <td style="text-align: right;">0.44</td>
 <td style="text-align: right;">0.94</td>
-<td style="text-align: right;">0.59</td>
+<td style="text-align: right;">0.58</td>
 </tr>
 <tr>
 <td style="text-align: left;">Reported by each later release</td>
@@ -7301,7 +7688,7 @@ Pick a place to narrow the table.</p>
 <details class="note">
 <summary>Sample trajectories</summary>
 <p>Forecasts from the real origins (<a href="../methods/evaluation/#reading-the-figures">reading the figures</a>).</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:5"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><input id="__tabbed_1_5" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">randomwalk</label><label for="__tabbed_1_2">pprandomwalknowcast</label><label for="__tabbed_1_3">randomwalknowcast</label><label for="__tabbed_1_4">renewal</label><label for="__tabbed_1_5">renewalsp</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:6"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><input id="__tabbed_1_5" name="__tabbed_1" type="radio" /><input id="__tabbed_1_6" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">randomwalk</label><label for="__tabbed_1_2">pprandomwalknowcast</label><label for="__tabbed_1_3">randomwalknowcast</label><label for="__tabbed_1_4">renewal</label><label for="__tabbed_1_5">renewalbvd</label><label for="__tabbed_1_6">renewalsp</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="tabbed-set tabbed-alternate" data-tabs="2:3"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><input id="__tabbed_2_3" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">DRC (CD)</label><label for="__tabbed_2_2">Ituri (CD-IT)</label><label for="__tabbed_2_3">Nord Kivu (CD-NK)</label></div>
@@ -7377,6 +7764,24 @@ Pick a place to narrow the table.</p>
 </div>
 <div class="tabbed-block">
 <div class="tabbed-set tabbed-alternate" data-tabs="6:3"><input checked="checked" id="__tabbed_6_1" name="__tabbed_6" type="radio" /><input id="__tabbed_6_2" name="__tabbed_6" type="radio" /><input id="__tabbed_6_3" name="__tabbed_6" type="radio" /><div class="tabbed-labels"><label for="__tabbed_6_1">DRC (CD)</label><label for="__tabbed_6_2">Ituri (CD-IT)</label><label for="__tabbed_6_3">Nord Kivu (CD-NK)</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p><img alt="renewalbvd forecasts against later data, DRC (CD)." src="../figures/forecasts-renewalbvd-cd.svg#only-light" />
+<img alt="renewalbvd forecasts against later data, DRC (CD)." src="../figures/forecasts-renewalbvd-cd-dark.svg#only-dark" /></p>
+</div>
+<div class="tabbed-block">
+<p><img alt="renewalbvd forecasts against later data, Ituri (CD-IT)." src="../figures/forecasts-renewalbvd-cd-it.svg#only-light" />
+<img alt="renewalbvd forecasts against later data, Ituri (CD-IT)." src="../figures/forecasts-renewalbvd-cd-it-dark.svg#only-dark" /></p>
+</div>
+<div class="tabbed-block">
+<p><img alt="renewalbvd forecasts against later data, Nord Kivu (CD-NK)." src="../figures/forecasts-renewalbvd-cd-nk.svg#only-light" />
+<img alt="renewalbvd forecasts against later data, Nord Kivu (CD-NK)." src="../figures/forecasts-renewalbvd-cd-nk-dark.svg#only-dark" /></p>
+</div>
+</div>
+</div>
+</div>
+<div class="tabbed-block">
+<div class="tabbed-set tabbed-alternate" data-tabs="7:3"><input checked="checked" id="__tabbed_7_1" name="__tabbed_7" type="radio" /><input id="__tabbed_7_2" name="__tabbed_7" type="radio" /><input id="__tabbed_7_3" name="__tabbed_7" type="radio" /><div class="tabbed-labels"><label for="__tabbed_7_1">DRC (CD)</label><label for="__tabbed_7_2">Ituri (CD-IT)</label><label for="__tabbed_7_3">Nord Kivu (CD-NK)</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <p><img alt="renewalsp forecasts against later data, DRC (CD)." src="../figures/forecasts-renewalsp-cd.svg#only-light" />
@@ -7497,6 +7902,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Complete weeks</td>
 <td style="text-align: left;">national</td>
 <td style="text-align: left;">2026-10-17</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">22.09</td>
+<td style="text-align: right;">44</td>
+<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">0.49</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">-1</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">2026-10-17</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">22.11</td>
@@ -7576,6 +7995,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0.75</td>
 <td style="text-align: right;">0.92</td>
 <td style="text-align: right;">-0.03</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">12</td>
+<td style="text-align: right;">2.6</td>
+<td style="text-align: right;">3.92</td>
+<td style="text-align: right;">0.66</td>
+<td style="text-align: right;">1.54</td>
+<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">0.92</td>
+<td style="text-align: right;">-0.04</td>
 </tr>
 <tr>
 <td style="text-align: left;">Complete weeks</td>
@@ -7665,12 +8098,26 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Complete weeks</td>
 <td style="text-align: left;">provinces</td>
 <td style="text-align: left;">2026-10-24</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">0.58</td>
+<td style="text-align: right;">0.97</td>
+<td style="text-align: right;">0.6</td>
+<td style="text-align: right;">0.98</td>
+<td style="text-align: right;">0.83</td>
+<td style="text-align: right;">0.83</td>
+<td style="text-align: right;">0.33</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">2026-10-24</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">6</td>
-<td style="text-align: right;">1.3</td>
+<td style="text-align: right;">1.29</td>
 <td style="text-align: right;">0.97</td>
-<td style="text-align: right;">1.34</td>
-<td style="text-align: right;">8.1</td>
+<td style="text-align: right;">1.33</td>
+<td style="text-align: right;">8.09</td>
 <td style="text-align: right;">0.33</td>
 <td style="text-align: right;">0.5</td>
 <td style="text-align: right;">-0.21</td>
@@ -7744,6 +8191,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0.09</td>
 <td style="text-align: right;">0.64</td>
 <td style="text-align: right;">-0.51</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">11</td>
+<td style="text-align: right;">21.93</td>
+<td style="text-align: right;">30.2</td>
+<td style="text-align: right;">0.73</td>
+<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">0.18</td>
+<td style="text-align: right;">0.64</td>
+<td style="text-align: right;">-0.49</td>
 </tr>
 <tr>
 <td style="text-align: left;">Reported by each later release</td>
@@ -7833,14 +8294,28 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Reported by each later release</td>
 <td style="text-align: left;">national</td>
 <td style="text-align: left;">2026-10-24</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">47.96</td>
+<td style="text-align: right;">16.15</td>
+<td style="text-align: right;">2.97</td>
+<td style="text-align: right;">3.19</td>
+<td style="text-align: right;">0.2</td>
+<td style="text-align: right;">0.2</td>
+<td style="text-align: right;">-0.85</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">2026-10-24</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">5</td>
-<td style="text-align: right;">39</td>
+<td style="text-align: right;">42.39</td>
 <td style="text-align: right;">16.15</td>
-<td style="text-align: right;">2.42</td>
-<td style="text-align: right;">2.52</td>
+<td style="text-align: right;">2.62</td>
+<td style="text-align: right;">2.77</td>
 <td style="text-align: right;">0.2</td>
-<td style="text-align: right;">0.4</td>
+<td style="text-align: right;">0.2</td>
 <td style="text-align: right;">-0.86</td>
 </tr>
 <tr>
@@ -7912,6 +8387,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0.65</td>
 <td style="text-align: right;">0.84</td>
 <td style="text-align: right;">0.05</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">77</td>
+<td style="text-align: right;">6.18</td>
+<td style="text-align: right;">5.84</td>
+<td style="text-align: right;">1.06</td>
+<td style="text-align: right;">0.79</td>
+<td style="text-align: right;">0.65</td>
+<td style="text-align: right;">0.86</td>
+<td style="text-align: right;">0.07</td>
 </tr>
 <tr>
 <td style="text-align: left;">Reported by each later release</td>
@@ -8001,15 +8490,29 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Reported by each later release</td>
 <td style="text-align: left;">provinces</td>
 <td style="text-align: left;">2026-10-24</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">40</td>
+<td style="text-align: right;">6.16</td>
+<td style="text-align: right;">3.53</td>
+<td style="text-align: right;">1.75</td>
+<td style="text-align: right;">0.66</td>
+<td style="text-align: right;">0.7</td>
+<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">-0.15</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">provinces</td>
+<td style="text-align: left;">2026-10-24</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">40</td>
-<td style="text-align: right;">5.86</td>
+<td style="text-align: right;">6.03</td>
 <td style="text-align: right;">3.53</td>
-<td style="text-align: right;">1.66</td>
+<td style="text-align: right;">1.71</td>
 <td style="text-align: right;">0.75</td>
 <td style="text-align: right;">0.72</td>
 <td style="text-align: right;">0.85</td>
-<td style="text-align: right;">-0.13</td>
+<td style="text-align: right;">-0.14</td>
 </tr>
 <tr>
 <td style="text-align: left;">Reported by each later release</td>
@@ -8190,6 +8693,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Complete weeks</td>
 <td style="text-align: left;">2026-10-17</td>
 <td style="text-align: left;">CD</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">22.09</td>
+<td style="text-align: right;">44</td>
+<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">0.49</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">-1</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: left;">CD</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">22.11</td>
@@ -8269,6 +8786,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.02</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: left;">CD-BU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">0.09</td>
+<td style="text-align: right;">0.03</td>
+<td style="text-align: right;">3.33</td>
+<td style="text-align: right;">5.24</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.01</td>
 </tr>
 <tr>
 <td style="text-align: left;">Complete weeks</td>
@@ -8358,6 +8889,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Complete weeks</td>
 <td style="text-align: left;">2026-10-17</td>
 <td style="text-align: left;">CD-HU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">0.69</td>
+<td style="text-align: right;">0.97</td>
+<td style="text-align: right;">0.71</td>
+<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-0.1</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: left;">CD-HU</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: right;">0.97</td>
@@ -8434,6 +8979,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">38</td>
 <td style="text-align: right;">0.68</td>
 <td style="text-align: right;">0.66</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">-1</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: left;">CD-IT</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">25.9</td>
+<td style="text-align: right;">38</td>
+<td style="text-align: right;">0.68</td>
+<td style="text-align: right;">0.67</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">-1</td>
@@ -8526,6 +9085,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Complete weeks</td>
 <td style="text-align: left;">2026-10-17</td>
 <td style="text-align: left;">CD-NK</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1.64</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">0.27</td>
+<td style="text-align: right;">0.27</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-0.15</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: left;">CD-NK</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1.73</td>
@@ -8597,6 +9170,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-10-17</td>
 <td style="text-align: left;">CD-SK</td>
 <td style="text-align: left;">renewal</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: left;">CD-SK</td>
+<td style="text-align: left;">renewalbvd</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
@@ -8694,6 +9281,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Complete weeks</td>
 <td style="text-align: left;">2026-10-17</td>
 <td style="text-align: left;">CD-SU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">0.18</td>
+<td style="text-align: right;">0.03</td>
+<td style="text-align: right;">6.07</td>
+<td style="text-align: right;">8.81</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-0.09</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: left;">CD-SU</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: right;">0.85</td>
@@ -8770,6 +9371,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0.5</td>
 <td style="text-align: right;">1.72</td>
 <td style="text-align: right;">2.16</td>
+<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.54</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: left;">CD-TO</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">1.76</td>
+<td style="text-align: right;">2.19</td>
 <td style="text-align: right;">0.5</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.54</td>
@@ -8862,6 +9477,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Complete weeks</td>
 <td style="text-align: left;">2026-10-24</td>
 <td style="text-align: left;">CD-BU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.03</td>
+<td style="text-align: right;">0.08</td>
+<td style="text-align: right;">0.09</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.03</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">2026-10-24</td>
+<td style="text-align: left;">CD-BU</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">2.2</td>
@@ -8946,15 +9575,29 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Complete weeks</td>
 <td style="text-align: left;">2026-10-24</td>
 <td style="text-align: left;">CD-HU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.56</td>
+<td style="text-align: right;">2.72</td>
+<td style="text-align: right;">0.21</td>
+<td style="text-align: right;">0.23</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.72</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">2026-10-24</td>
+<td style="text-align: left;">CD-HU</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.28</td>
+<td style="text-align: right;">0.29</td>
 <td style="text-align: right;">2.72</td>
-<td style="text-align: right;">0.1</td>
 <td style="text-align: right;">0.11</td>
+<td style="text-align: right;">0.12</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.52</td>
+<td style="text-align: right;">0.53</td>
 </tr>
 <tr>
 <td style="text-align: left;">Complete weeks</td>
@@ -9025,6 +9668,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.12</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">2026-10-24</td>
+<td style="text-align: left;">CD-NU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.02</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">nan</td>
+<td style="text-align: right;">nan</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.11</td>
 </tr>
 <tr>
 <td style="text-align: left;">Complete weeks</td>
@@ -9101,6 +9758,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-10-24</td>
 <td style="text-align: left;">CD-SK</td>
 <td style="text-align: left;">renewal</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">2026-10-24</td>
+<td style="text-align: left;">CD-SK</td>
+<td style="text-align: left;">renewalbvd</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0.01</td>
@@ -9198,6 +9869,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Complete weeks</td>
 <td style="text-align: left;">2026-10-24</td>
 <td style="text-align: left;">CD-SU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.21</td>
+<td style="text-align: right;">0.06</td>
+<td style="text-align: right;">3.76</td>
+<td style="text-align: right;">4.8</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.1</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">2026-10-24</td>
+<td style="text-align: left;">CD-SU</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.67</td>
@@ -9282,12 +9967,26 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Complete weeks</td>
 <td style="text-align: left;">2026-10-24</td>
 <td style="text-align: left;">CD-TO</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">2.7</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0.9</td>
+<td style="text-align: right;">0.9</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td style="text-align: left;">Complete weeks</td>
+<td style="text-align: left;">2026-10-24</td>
+<td style="text-align: left;">CD-TO</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">2.98</td>
+<td style="text-align: right;">2.92</td>
 <td style="text-align: right;">3</td>
-<td style="text-align: right;">0.99</td>
-<td style="text-align: right;">0.98</td>
+<td style="text-align: right;">0.97</td>
+<td style="text-align: right;">0.97</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
@@ -9361,6 +10060,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0.09</td>
 <td style="text-align: right;">0.64</td>
 <td style="text-align: right;">-0.51</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: left;">CD</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">11</td>
+<td style="text-align: right;">21.93</td>
+<td style="text-align: right;">30.2</td>
+<td style="text-align: right;">0.73</td>
+<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">0.18</td>
+<td style="text-align: right;">0.64</td>
+<td style="text-align: right;">-0.49</td>
 </tr>
 <tr>
 <td style="text-align: left;">Reported by each later release</td>
@@ -9442,6 +10155,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0.36</td>
 <td style="text-align: right;">0.56</td>
 <td style="text-align: right;">0.55</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.31</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: left;">CD-BU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">11</td>
+<td style="text-align: right;">0.2</td>
+<td style="text-align: right;">0.36</td>
+<td style="text-align: right;">0.54</td>
+<td style="text-align: right;">0.56</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.31</td>
@@ -9534,6 +10261,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Reported by each later release</td>
 <td style="text-align: left;">2026-10-17</td>
 <td style="text-align: left;">CD-HU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">11</td>
+<td style="text-align: right;">1.51</td>
+<td style="text-align: right;">1.64</td>
+<td style="text-align: right;">0.92</td>
+<td style="text-align: right;">0.98</td>
+<td style="text-align: right;">0.73</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.09</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: left;">CD-HU</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">11</td>
 <td style="text-align: right;">1.51</td>
@@ -9613,6 +10354,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0.27</td>
 <td style="text-align: right;">0.64</td>
 <td style="text-align: right;">-0.04</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: left;">CD-IT</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">11</td>
+<td style="text-align: right;">16.64</td>
+<td style="text-align: right;">20.47</td>
+<td style="text-align: right;">0.81</td>
+<td style="text-align: right;">0.79</td>
+<td style="text-align: right;">0.27</td>
+<td style="text-align: right;">0.64</td>
+<td style="text-align: right;">0</td>
 </tr>
 <tr>
 <td style="text-align: left;">Reported by each later release</td>
@@ -9702,6 +10457,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Reported by each later release</td>
 <td style="text-align: left;">2026-10-17</td>
 <td style="text-align: left;">CD-NK</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">11</td>
+<td style="text-align: right;">22.71</td>
+<td style="text-align: right;">16.35</td>
+<td style="text-align: right;">1.39</td>
+<td style="text-align: right;">1.41</td>
+<td style="text-align: right;">0.27</td>
+<td style="text-align: right;">0.45</td>
+<td style="text-align: right;">-0.67</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: left;">CD-NK</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">11</td>
 <td style="text-align: right;">19.53</td>
@@ -9781,6 +10550,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.03</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: left;">CD-SK</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">11</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">0.18</td>
+<td style="text-align: right;">0.18</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.02</td>
 </tr>
 <tr>
 <td style="text-align: left;">Reported by each later release</td>
@@ -9870,6 +10653,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Reported by each later release</td>
 <td style="text-align: left;">2026-10-17</td>
 <td style="text-align: left;">CD-SU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">11</td>
+<td style="text-align: right;">0.09</td>
+<td style="text-align: right;">0.16</td>
+<td style="text-align: right;">0.59</td>
+<td style="text-align: right;">0.58</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.16</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: left;">CD-SU</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">11</td>
 <td style="text-align: right;">0.17</td>
@@ -9948,6 +10745,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0.72</td>
 <td style="text-align: right;">0.27</td>
 <td style="text-align: right;">0.82</td>
+<td style="text-align: right;">0.58</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: left;">CD-TO</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">11</td>
+<td style="text-align: right;">2.1</td>
+<td style="text-align: right;">1.92</td>
+<td style="text-align: right;">1.09</td>
+<td style="text-align: right;">0.7</td>
+<td style="text-align: right;">0.27</td>
+<td style="text-align: right;">0.91</td>
 <td style="text-align: right;">0.58</td>
 </tr>
 <tr>
@@ -10038,14 +10849,28 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Reported by each later release</td>
 <td style="text-align: left;">2026-10-24</td>
 <td style="text-align: left;">CD</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">47.96</td>
+<td style="text-align: right;">16.15</td>
+<td style="text-align: right;">2.97</td>
+<td style="text-align: right;">3.19</td>
+<td style="text-align: right;">0.2</td>
+<td style="text-align: right;">0.2</td>
+<td style="text-align: right;">-0.85</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">2026-10-24</td>
+<td style="text-align: left;">CD</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">5</td>
-<td style="text-align: right;">39</td>
+<td style="text-align: right;">42.39</td>
 <td style="text-align: right;">16.15</td>
-<td style="text-align: right;">2.42</td>
-<td style="text-align: right;">2.52</td>
+<td style="text-align: right;">2.62</td>
+<td style="text-align: right;">2.77</td>
 <td style="text-align: right;">0.2</td>
-<td style="text-align: right;">0.4</td>
+<td style="text-align: right;">0.2</td>
 <td style="text-align: right;">-0.86</td>
 </tr>
 <tr>
@@ -10114,6 +10939,20 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0.3</td>
 <td style="text-align: right;">0.17</td>
 <td style="text-align: right;">0.18</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.18</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">2026-10-24</td>
+<td style="text-align: left;">CD-BU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">0.05</td>
+<td style="text-align: right;">0.3</td>
+<td style="text-align: right;">0.18</td>
+<td style="text-align: right;">0.19</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.18</td>
@@ -10206,15 +11045,29 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Reported by each later release</td>
 <td style="text-align: left;">2026-10-24</td>
 <td style="text-align: left;">CD-HU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">0.9</td>
+<td style="text-align: right;">1.83</td>
+<td style="text-align: right;">0.49</td>
+<td style="text-align: right;">0.52</td>
+<td style="text-align: right;">0.8</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-0.1</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">2026-10-24</td>
+<td style="text-align: left;">CD-HU</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">5</td>
-<td style="text-align: right;">1.03</td>
+<td style="text-align: right;">0.98</td>
 <td style="text-align: right;">1.83</td>
-<td style="text-align: right;">0.56</td>
-<td style="text-align: right;">0.69</td>
+<td style="text-align: right;">0.53</td>
+<td style="text-align: right;">0.68</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.16</td>
+<td style="text-align: right;">0.17</td>
 </tr>
 <tr>
 <td style="text-align: left;">Reported by each later release</td>
@@ -10290,15 +11143,29 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Reported by each later release</td>
 <td style="text-align: left;">2026-10-24</td>
 <td style="text-align: left;">CD-IT</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">18.95</td>
+<td style="text-align: right;">10.52</td>
+<td style="text-align: right;">1.8</td>
+<td style="text-align: right;">1.99</td>
+<td style="text-align: right;">0.2</td>
+<td style="text-align: right;">0.2</td>
+<td style="text-align: right;">-0.7</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">2026-10-24</td>
+<td style="text-align: left;">CD-IT</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">5</td>
-<td style="text-align: right;">30.66</td>
+<td style="text-align: right;">31.11</td>
 <td style="text-align: right;">10.52</td>
-<td style="text-align: right;">2.92</td>
-<td style="text-align: right;">3.21</td>
+<td style="text-align: right;">2.96</td>
+<td style="text-align: right;">3.26</td>
 <td style="text-align: right;">0.2</td>
 <td style="text-align: right;">0.2</td>
-<td style="text-align: right;">-0.82</td>
+<td style="text-align: right;">-0.8</td>
 </tr>
 <tr>
 <td style="text-align: left;">Reported by each later release</td>
@@ -10374,15 +11241,29 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Reported by each later release</td>
 <td style="text-align: left;">2026-10-24</td>
 <td style="text-align: left;">CD-NK</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">28.24</td>
+<td style="text-align: right;">12.67</td>
+<td style="text-align: right;">2.23</td>
+<td style="text-align: right;">2.3</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.2</td>
+<td style="text-align: right;">-0.96</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">2026-10-24</td>
+<td style="text-align: left;">CD-NK</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">5</td>
-<td style="text-align: right;">13.46</td>
+<td style="text-align: right;">14.51</td>
 <td style="text-align: right;">12.67</td>
+<td style="text-align: right;">1.15</td>
 <td style="text-align: right;">1.06</td>
-<td style="text-align: right;">0.96</td>
 <td style="text-align: right;">0.2</td>
 <td style="text-align: right;">0.8</td>
-<td style="text-align: right;">-0.73</td>
+<td style="text-align: right;">-0.76</td>
 </tr>
 <tr>
 <td style="text-align: left;">Reported by each later release</td>
@@ -10458,15 +11339,29 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Reported by each later release</td>
 <td style="text-align: left;">2026-10-24</td>
 <td style="text-align: left;">CD-NU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">0.04</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">6.85</td>
+<td style="text-align: right;">6.83</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.16</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">2026-10-24</td>
+<td style="text-align: left;">CD-NU</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">5</td>
-<td style="text-align: right;">0.14</td>
+<td style="text-align: right;">0.12</td>
 <td style="text-align: right;">0.01</td>
-<td style="text-align: right;">22.88</td>
-<td style="text-align: right;">15.23</td>
+<td style="text-align: right;">20.19</td>
+<td style="text-align: right;">13.67</td>
 <td style="text-align: right;">0.8</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">-0.14</td>
+<td style="text-align: right;">-0.12</td>
 </tr>
 <tr>
 <td style="text-align: left;">Reported by each later release</td>
@@ -10542,15 +11437,29 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Reported by each later release</td>
 <td style="text-align: left;">2026-10-24</td>
 <td style="text-align: left;">CD-SK</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">0.17</td>
+<td style="text-align: right;">0.17</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.02</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">2026-10-24</td>
+<td style="text-align: left;">CD-SK</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0.01</td>
-<td style="text-align: right;">0.69</td>
-<td style="text-align: right;">0.69</td>
+<td style="text-align: right;">0.71</td>
+<td style="text-align: right;">0.71</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.05</td>
+<td style="text-align: right;">0.04</td>
 </tr>
 <tr>
 <td style="text-align: left;">Reported by each later release</td>
@@ -10626,15 +11535,29 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Reported by each later release</td>
 <td style="text-align: left;">2026-10-24</td>
 <td style="text-align: left;">CD-SU</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">0.03</td>
+<td style="text-align: right;">0.13</td>
+<td style="text-align: right;">0.24</td>
+<td style="text-align: right;">0.22</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.12</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">2026-10-24</td>
+<td style="text-align: left;">CD-SU</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">5</td>
-<td style="text-align: right;">0.06</td>
+<td style="text-align: right;">0.04</td>
 <td style="text-align: right;">0.13</td>
-<td style="text-align: right;">0.44</td>
-<td style="text-align: right;">0.48</td>
+<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">0.36</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">-0.08</td>
+<td style="text-align: right;">-0.07</td>
 </tr>
 <tr>
 <td style="text-align: left;">Reported by each later release</td>
@@ -10710,15 +11633,29 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">Reported by each later release</td>
 <td style="text-align: left;">2026-10-24</td>
 <td style="text-align: left;">CD-TO</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">1.1</td>
+<td style="text-align: right;">2.78</td>
+<td style="text-align: right;">0.39</td>
+<td style="text-align: right;">0.26</td>
+<td style="text-align: right;">0.6</td>
+<td style="text-align: right;">0.8</td>
+<td style="text-align: right;">0.07</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reported by each later release</td>
+<td style="text-align: left;">2026-10-24</td>
+<td style="text-align: left;">CD-TO</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">5</td>
-<td style="text-align: right;">1.34</td>
+<td style="text-align: right;">1.27</td>
 <td style="text-align: right;">2.78</td>
-<td style="text-align: right;">0.48</td>
-<td style="text-align: right;">0.29</td>
+<td style="text-align: right;">0.46</td>
+<td style="text-align: right;">0.28</td>
 <td style="text-align: right;">0.8</td>
 <td style="text-align: right;">0.8</td>
-<td style="text-align: right;">0.53</td>
+<td style="text-align: right;">0.49</td>
 </tr>
 </tbody>
 </table>
@@ -10753,6 +11690,22 @@ Pick a place to narrow the table.</p>
 </tr>
 <tr>
 <td style="text-align: left;">2026-08-18</td>
+<td style="text-align: left;">renewal</td>
+<td style="text-align: left;">no forecast</td>
+<td style="text-align: left;">No pair of releases up to 2026-08-18 has a step of at most 42 days.</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">2026-08-18</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: left;">no forecast</td>
+<td style="text-align: left;">No pair of releases up to 2026-08-18 has a step of at most 42 days.</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">2026-08-18</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: left;">no forecast</td>
 <td style="text-align: left;">No pair of releases up to 2026-08-18 has a step of at most 42 days.</td>
@@ -10778,6 +11731,14 @@ Pick a place to narrow the table.</p>
 <tr>
 <td style="text-align: left;">2026-10-09</td>
 <td style="text-align: left;">renewal</td>
+<td style="text-align: left;">no forecast</td>
+<td style="text-align: left;">No pair of releases up to 2026-10-09 has a step of at most 42 days.</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">2026-10-09</td>
+<td style="text-align: left;">renewalbvd</td>
 <td style="text-align: left;">no forecast</td>
 <td style="text-align: left;">No pair of releases up to 2026-10-09 has a step of at most 42 days.</td>
 <td style="text-align: right;">0</td>
@@ -10818,6 +11779,14 @@ Pick a place to narrow the table.</p>
 <tr>
 <td style="text-align: left;">2026-10-17</td>
 <td style="text-align: left;">renewal</td>
+<td style="text-align: left;">scored</td>
+<td style="text-align: left;"></td>
+<td style="text-align: right;">88</td>
+<td style="text-align: right;">13</td>
+</tr>
+<tr>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: left;">renewalbvd</td>
 <td style="text-align: left;">scored</td>
 <td style="text-align: left;"></td>
 <td style="text-align: right;">88</td>
@@ -10866,6 +11835,14 @@ Pick a place to narrow the table.</p>
 <tr>
 <td style="text-align: left;">2026-10-24</td>
 <td style="text-align: left;">renewal</td>
+<td style="text-align: left;">scored</td>
+<td style="text-align: left;"></td>
+<td style="text-align: right;">45</td>
+<td style="text-align: right;">6</td>
+</tr>
+<tr>
+<td style="text-align: left;">2026-10-24</td>
+<td style="text-align: left;">renewalbvd</td>
 <td style="text-align: left;">scored</td>
 <td style="text-align: left;"></td>
 <td style="text-align: right;">45</td>
@@ -10916,20 +11893,29 @@ Submission fits use</p>
 <tbody>
 <tr>
 <td style="text-align: left;">renewal</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: right;">1.041</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">1.036</td>
 <td style="text-align: right;">1.048</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0.998</td>
 <td style="text-align: right;">0.002</td>
 </tr>
 <tr>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">1.008</td>
+<td style="text-align: right;">1.023</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.898</td>
+<td style="text-align: right;">0.005</td>
+</tr>
+<tr>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">19</td>
-<td style="text-align: right;">1.01</td>
+<td style="text-align: right;">1.008</td>
 <td style="text-align: right;">1.029</td>
 <td style="text-align: right;">0</td>
-<td style="text-align: right;">0.428</td>
+<td style="text-align: right;">0.415</td>
 <td style="text-align: right;">0.005</td>
 </tr>
 </tbody>
@@ -11033,6 +12019,20 @@ Submission fits use</p>
 <td style="text-align: left;">complete</td>
 <td style="text-align: left;">2026-10-17</td>
 <td style="text-align: left;">2026-11-01</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">13</td>
+<td style="text-align: right;">4.1</td>
+<td style="text-align: right;">7</td>
+<td style="text-align: right;">0.59</td>
+<td style="text-align: right;">1.31</td>
+<td style="text-align: right;">0.69</td>
+<td style="text-align: right;">0.85</td>
+<td style="text-align: right;">-0.11</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: left;">2026-11-01</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">13</td>
 <td style="text-align: right;">4.45</td>
@@ -11117,12 +12117,26 @@ Submission fits use</p>
 <td style="text-align: left;">complete</td>
 <td style="text-align: left;">2026-10-24</td>
 <td style="text-align: left;">2026-11-01</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">0.58</td>
+<td style="text-align: right;">0.97</td>
+<td style="text-align: right;">0.6</td>
+<td style="text-align: right;">0.98</td>
+<td style="text-align: right;">0.83</td>
+<td style="text-align: right;">0.83</td>
+<td style="text-align: right;">0.33</td>
+</tr>
+<tr>
+<td style="text-align: left;">complete</td>
+<td style="text-align: left;">2026-10-24</td>
+<td style="text-align: left;">2026-11-01</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">6</td>
-<td style="text-align: right;">1.3</td>
+<td style="text-align: right;">1.29</td>
 <td style="text-align: right;">0.97</td>
-<td style="text-align: right;">1.34</td>
-<td style="text-align: right;">8.1</td>
+<td style="text-align: right;">1.33</td>
+<td style="text-align: right;">8.09</td>
 <td style="text-align: right;">0.33</td>
 <td style="text-align: right;">0.5</td>
 <td style="text-align: right;">-0.21</td>
@@ -11196,6 +12210,20 @@ Submission fits use</p>
 <td style="text-align: right;">0.62</td>
 <td style="text-align: right;">0.8</td>
 <td style="text-align: right;">0.04</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: left;">2026-10-24</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">40</td>
+<td style="text-align: right;">6.26</td>
+<td style="text-align: right;">6.45</td>
+<td style="text-align: right;">0.97</td>
+<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.62</td>
+<td style="text-align: right;">0.82</td>
+<td style="text-align: right;">0.06</td>
 </tr>
 <tr>
 <td style="text-align: left;">reported</td>
@@ -11285,6 +12313,20 @@ Submission fits use</p>
 <td style="text-align: left;">reported</td>
 <td style="text-align: left;">2026-10-17</td>
 <td style="text-align: left;">2026-11-01</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">48</td>
+<td style="text-align: right;">9.72</td>
+<td style="text-align: right;">10.92</td>
+<td style="text-align: right;">0.89</td>
+<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">0.56</td>
+<td style="text-align: right;">0.83</td>
+<td style="text-align: right;">-0.05</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">2026-10-17</td>
+<td style="text-align: left;">2026-11-01</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">48</td>
 <td style="text-align: right;">9.77</td>
@@ -11369,15 +12411,29 @@ Submission fits use</p>
 <td style="text-align: left;">reported</td>
 <td style="text-align: left;">2026-10-24</td>
 <td style="text-align: left;">2026-11-01</td>
+<td style="text-align: left;">renewalbvd</td>
+<td style="text-align: right;">45</td>
+<td style="text-align: right;">10.81</td>
+<td style="text-align: right;">4.93</td>
+<td style="text-align: right;">2.19</td>
+<td style="text-align: right;">0.81</td>
+<td style="text-align: right;">0.64</td>
+<td style="text-align: right;">0.71</td>
+<td style="text-align: right;">-0.23</td>
+</tr>
+<tr>
+<td style="text-align: left;">reported</td>
+<td style="text-align: left;">2026-10-24</td>
+<td style="text-align: left;">2026-11-01</td>
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">45</td>
-<td style="text-align: right;">9.55</td>
+<td style="text-align: right;">10.07</td>
 <td style="text-align: right;">4.93</td>
-<td style="text-align: right;">1.94</td>
+<td style="text-align: right;">2.04</td>
 <td style="text-align: right;">0.86</td>
 <td style="text-align: right;">0.67</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">-0.21</td>
+<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">-0.22</td>
 </tr>
 </tbody>
 </table>
@@ -11387,7 +12443,7 @@ Submission fits use</p>
 <p><img alt="Weekly counts by onset week in each release, and the change from the previous release, by place." src="../figures/truth-changes.svg#only-light" />
 <img alt="Weekly counts by onset week in each release, and the change from the previous release, by place." src="../figures/truth-changes-dark.svg#only-dark" /></p>
 <p>Health zones, by province.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="7:7"><input checked="checked" id="__tabbed_7_1" name="__tabbed_7" type="radio" /><input id="__tabbed_7_2" name="__tabbed_7" type="radio" /><input id="__tabbed_7_3" name="__tabbed_7" type="radio" /><input id="__tabbed_7_4" name="__tabbed_7" type="radio" /><input id="__tabbed_7_5" name="__tabbed_7" type="radio" /><input id="__tabbed_7_6" name="__tabbed_7" type="radio" /><input id="__tabbed_7_7" name="__tabbed_7" type="radio" /><div class="tabbed-labels"><label for="__tabbed_7_1">Ituri</label><label for="__tabbed_7_2">Nord Kivu</label><label for="__tabbed_7_3">Haut Uele</label><label for="__tabbed_7_4">Tshopo</label><label for="__tabbed_7_5">Bas Uele</label><label for="__tabbed_7_6">Nord Ubangi</label><label for="__tabbed_7_7">Sud Ubangi</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="8:7"><input checked="checked" id="__tabbed_8_1" name="__tabbed_8" type="radio" /><input id="__tabbed_8_2" name="__tabbed_8" type="radio" /><input id="__tabbed_8_3" name="__tabbed_8" type="radio" /><input id="__tabbed_8_4" name="__tabbed_8" type="radio" /><input id="__tabbed_8_5" name="__tabbed_8" type="radio" /><input id="__tabbed_8_6" name="__tabbed_8" type="radio" /><input id="__tabbed_8_7" name="__tabbed_8" type="radio" /><div class="tabbed-labels"><label for="__tabbed_8_1">Ituri</label><label for="__tabbed_8_2">Nord Kivu</label><label for="__tabbed_8_3">Haut Uele</label><label for="__tabbed_8_4">Tshopo</label><label for="__tabbed_8_5">Bas Uele</label><label for="__tabbed_8_6">Nord Ubangi</label><label for="__tabbed_8_7">Sud Ubangi</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <p><img alt="Zone counts in Ituri by onset week in each release." src="../figures/truth-changes-cd-it.svg#only-light" />
