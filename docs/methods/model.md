@@ -150,7 +150,7 @@ $$
 
 ### Hub imputation
 
-The hub gives each case reported without an onset one by subtracting a delay drawn from its published delays ([hub issue 61](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/61)).
+The hub gives each case reported without an onset one by subtracting a delay drawn from a fit to its published delays ([imputation details](https://github.com/InsightNet-US/BDBV-Modeling-Hub/blob/main/auxiliary-data/imputation-details.md)).
 We model that procedure, bias included:
 
 $$
@@ -160,8 +160,10 @@ M_p(t) = \pi_p(t) \sum_s \lambda_p(s)\, f_s(t - s),
 $$
 
 $M_p(t)$ are the cases reported on day $t$ without an onset.
-$\hat f_T$ is the empirical pmf of all delays published at $T$, pooled and on 0 to 60 days, and is data.
-Pooling and the handling of negative and long delays are assumed.
+The hub draws a report hour from $\mathrm{Unif}(0, 24)$ and subtracts a generalised gamma delay in hours fitted to the non-negative delays published at 2026-10-17.
+$\hat f_T$ is the daily pmf this implies, $\hat f_T(k) = \int_0^1 \{F_T(k + u) - F_T(k - 1 + u)\}\, du$ with $F_T$ the delay cdf in days, on 0 to 60 days, and is data.
+Up to the 2026-10-24 release the hub fitted the delays as exact, and from 2026-11-01 as double interval censored ([hub issue 75](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/75)).
+We refit both, so $F_T$ is the fit the hub used for release $T$.
 
 ### Likelihood
 

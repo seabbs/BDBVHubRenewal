@@ -4,7 +4,7 @@ r"""Known and hub-imputed onsets by province, with right truncation.
 Let $\lambda_p(s)$ be expected confirmed cases with onset on day $s$,
 $f_s(d)$ the onset-to-report delay, $\pi_p(t)$ the probability that a case
 reported on day $t$ has no onset, $T$ the vintage cut-off and $\hat f$
-the hub's empirical delay for that vintage. Then
+the hub's imputation delay for that release. Then
 
 $$\kappa_p(s, d) = \lambda_p(s) f_s(d) \{1 - \pi_p(s + d)\}$$
 
@@ -167,7 +167,7 @@ def onset_expectations(
     missing : Array
         $\pi_p(t)$ by report day, shape `(n, P)`.
     hub_delay : Array
-        The hub's empirical pmf $\hat f$.
+        The hub's imputation pmf $\hat f$.
     cutoff : int
         Cut-off day $T$ on the same axis. Static.
     final : bool, optional

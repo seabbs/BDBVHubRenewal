@@ -232,7 +232,7 @@ class Vintage:
         Known-onset cases by onset week and delay, pooled over provinces,
         `(n_weeks, dmax + 1)`.
     hub_delay_pmf : numpy.ndarray
-        The hub's empirical delay pmf for this vintage, `(dmax + 1,)`.
+        The hub's imputation delay pmf for this release, `(dmax + 1,)`.
     populations : numpy.ndarray
         Province populations, `(P,)`.
     kernel : numpy.ndarray or None

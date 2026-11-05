@@ -374,9 +374,7 @@ def vintage_from_tables(
         return out.fillna(0).to_numpy(dtype=float)
 
     counts = np.zeros((n_weeks, config.dmax + 1))
-    pmf = np.full(config.dmax + 1, 1 / (config.dmax + 1))
     if delays is not None and len(delays):
-        pmf = hub_delay_pmf(delays, config.dmax)
         # Known onsets count every case, so negative delays go to 0 and
         # delays past dmax to dmax, the last cell of the hazard pmf,
         # rather than leaving the delay counts short of the known stream.
@@ -421,7 +419,7 @@ def vintage_from_tables(
         known=known,
         imputed=imputed,
         delay_counts=counts,
-        hub_delay_pmf=pmf,
+        hub_delay_pmf=hub_delay_pmf(vintage, config.dmax),
         populations=pops.to_numpy(dtype=float),
         kernel=kernel,
         horizon_weeks=horizon_weeks,
