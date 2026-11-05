@@ -1,6 +1,7 @@
 // Nowcast chart: pick a scale and a place (for a zone, its province first)
 // to see each model's latest nowcast and forecast over the reported counts,
 // as bands or trajectories. Model tick boxes come from toggles.js.
+// bdbvNowcastShow(id) picks a place and scrolls the chart into view.
 (function () {
   "use strict";
   var NS = "http://www.w3.org/2000/svg";
@@ -79,7 +80,8 @@
         "No forecast at the " + d.release + " release from " + none.join(", ") + "." : "";
       var q = all.filter(function (r) { return keys.on[r[0]]; });
       var ref = day(d.reference_date);
-      var x0 = day(data[0][0]) - 4 * DAY;
+      // A place with no cases has no data, so its axis starts 12 weeks back.
+      var x0 = (data.length ? day(data[0][0]) : ref - 84 * DAY) - 4 * DAY;
       var x1 = ref + 4 * DAY;
       q.forEach(function (r) { x1 = Math.max(x1, day(r[1]) + 4 * DAY); });
       var xr = Z.xRange(zoom, x0, x1);
@@ -170,6 +172,16 @@
       Z.attach(zoom, svg, { L: L, R: R, T: Tp, B: B, W: W, H: H, x: [x0, x1], y: [y0, y1] });
     }
 
+    window.bdbvNowcastShow = function (id) {
+      var p = d.places.filter(function (x) { return x.id === id; })[0];
+      if (!p) return;
+      selScale.value = p.scale;
+      if (p.province) selProv.value = p.province;
+      fillZones();
+      selZone.value = id;
+      draw();
+      root.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
     fillZones();
     draw();
     T.onTheme(draw);

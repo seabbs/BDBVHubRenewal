@@ -1,11 +1,16 @@
 // Table filter: a text search, a select per named column and sortable
-// headers for each table inside a `.tablefilter` block. Without
-// JavaScript the table is a plain table.
+// headers for each table inside a `.tablefilter` block. A cell's
+// `data-sort` value, where given, is what it sorts by. Without JavaScript
+// the table is a plain table. Scripts that build a table call
+// bdbvTableFilter(block).
 (function () {
   "use strict";
   var h = window.bdbvToggles.h;
 
   function text(cell) { return cell.textContent.trim(); }
+  function key(cell) {
+    return cell.dataset.sort !== undefined ? cell.dataset.sort : text(cell);
+  }
   function num(s) { return s === "" ? NaN : Number(s); }
 
   function init(root) {
@@ -61,7 +66,7 @@
         heads.forEach(function (o) { o.setAttribute("aria-sort", "none"); });
         th.setAttribute("aria-sort", sorted.dir > 0 ? "ascending" : "descending");
         rows.sort(function (a, b) {
-          var x = text(a.cells[col]), y = text(b.cells[col]);
+          var x = key(a.cells[col]), y = key(b.cells[col]);
           var nx = num(x), ny = num(y);
           var c = isNaN(nx) || isNaN(ny) ? x.localeCompare(y) : nx - ny;
           return c * sorted.dir;
@@ -71,6 +76,8 @@
     });
     apply();
   }
+
+  window.bdbvTableFilter = init;
 
   function start() {
     document.querySelectorAll(".tablefilter").forEach(init);

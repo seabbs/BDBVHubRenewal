@@ -627,6 +627,12 @@ def _nowcast_page(
     )
 
 
+def _zone_names(data_dir: Path | str) -> dict[str, str]:
+    """Each health zone's name, as the hub's time series gives it."""
+    zones = load_health_zones(data_dir)
+    return dict(zip(zones["location"], zones["location_name"], strict=True))
+
+
 def _zone_nowcast_section(
     fig: Path,
     gen: Path,
@@ -728,22 +734,37 @@ def _zone_nowcast_section(
                 [above, counts[["location", "target_end_date", "total"]]],
                 ignore_index=True,
             ),
-            labels,
+            {**labels, **_zone_names(data_dir)},
             _model_colours(names),
+            config.complete_after_weeks,
         ),
     )
     _write(
         gen / "nowcast-picker.md",
         "## By place\n\n"
         f"Each model's nowcast and forecast at the {task.vintage} release, "
-        "for the country, the provinces and the zones with cases in the 12 "
-        "weeks before the reference date "
+        "for the country and every province and health zone with a "
+        "forecast or with cases in the 12 weeks before the reference date "
         "([Health zones](methods/evaluation.md#health-zones)).\n"
         "The latest nowcast has no score yet.\n"
         "Scores by origin are on the [Backtest](backtest.md) page.\n\n"
         '<div class="nowcastchart" data-src="../figures/nowcastchart.json" '
         'role="group" aria-label="Nowcast and forecast by place">\n'
         "<noscript>The nowcast chart needs JavaScript.</noscript>\n"
+        "</div>\n",
+    )
+    _write(
+        gen / "zone-review.md",
+        "## Zone review\n\n"
+        "One row per place with a forecast from the chosen model.\n"
+        "Recent is the mean count of the last two complete weeks.\n"
+        "Each week column gives the median and 90% interval.\n"
+        "Ratio is log((median + 1) / (recent + 1)) for the chosen week.\n"
+        "A ratio of 0.69 is double the recent count and -0.69 is half.\n"
+        "Click a place to show it in the By place chart.\n\n"
+        '<div class="zonereview" data-src="../figures/nowcastchart.json" '
+        'role="group" aria-label="Zone review">\n'
+        "<noscript>The zone review needs JavaScript.</noscript>\n"
         "</div>\n",
     )
     _write(
