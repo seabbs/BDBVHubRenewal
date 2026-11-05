@@ -18,7 +18,8 @@
   }
   var nice = Z.nice;
 
-  // Ticks of 1, 2 and 5 times a power of 10 between 10^lo and 10^hi.
+  // Ticks of 1, 2 and 5 times a power of 10 between 10^lo and 10^hi, or
+  // round steps where the range is too narrow to hold two of them.
   function logTicks(lo, hi) {
     var out = [];
     for (var p = Math.floor(lo); p <= Math.ceil(hi); p++) {
@@ -27,6 +28,10 @@
         if (Math.log10(v) >= lo && Math.log10(v) <= hi) out.push(v);
       });
     }
+    if (out.length >= 2) return out;
+    var a = Math.pow(10, lo), b = Math.pow(10, hi), step = nice(b - a);
+    out = [];
+    for (var v = Math.ceil(a / step) * step; v <= b; v += step) out.push(v);
     return out;
   }
 
