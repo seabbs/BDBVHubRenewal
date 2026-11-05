@@ -74,7 +74,7 @@ def test_plot_place_summary_has_a_row_per_place_by_scale() -> None:
         }
     )
     fig = plot_place_summary(
-        table, ["a"], {"a": ("#000000", "#ffffff")}, {"CD-IT": "Ituri"}
+        table, ["a"], {"a": ("#000000", "#ffffff", "")}, {"CD-IT": "Ituri"}
     )
     provinces, zones = fig.axes
     assert provinces.get_title() == "Provinces"
@@ -92,13 +92,15 @@ def test_plot_place_summary_is_on_a_log_axis_without_zeros() -> None:
             "rel_wis": [1.3, 0.0, 27.0],
         }
     )
-    fig = plot_place_summary(table, ["a"], {"a": ("#000000", "#ffffff")}, {})
+    fig = plot_place_summary(
+        table, ["a"], {"a": ("#000000", "#ffffff", "")}, {}
+    )
     (ax,) = fig.axes
     assert ax.get_xscale() == "log"
     (dots,) = ax.get_lines()[:1]
     assert list(dots.get_xdata()) == [1.3, 27.0]
     linear = plot_place_summary(
-        table, ["a"], {"a": ("#000000", "#ffffff")}, {}, log=False
+        table, ["a"], {"a": ("#000000", "#ffffff", "")}, {}, log=False
     )
     assert linear.axes[0].get_xscale() == "linear"
     assert len(linear.axes[0].get_lines()[0].get_xdata()) == 3

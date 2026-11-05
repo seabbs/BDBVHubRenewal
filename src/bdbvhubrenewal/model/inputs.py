@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.delays import hub_delay_pmf
+from bdbvhubrenewal.data.releases import last_report
 
 from .model import MAIN, ModelConfig, Vintage
 
@@ -105,22 +106,10 @@ def gravity_kernel(
         If a province has no centre or population, or the kernel is not
         finite.
     """
-    centres = province_centres().set_index("location").reindex(list(locations))
     pops = table.set_index("location")["population"].reindex(list(locations))
-    if (
-        centres[["latitude", "longitude"]].isna().any().any()
-        or pops.isna().any()
-    ):
-        raise ValueError("Missing province centre or population.")
-    lat = np.radians(centres["latitude"].to_numpy(float))
-    lon = np.radians(centres["longitude"].to_numpy(float))
-    a = (
-        np.sin((lat[:, None] - lat[None, :]) / 2) ** 2
-        + np.cos(lat[:, None])
-        * np.cos(lat[None, :])
-        * np.sin((lon[:, None] - lon[None, :]) / 2) ** 2
-    )
-    dist = 2 * 6371 * np.arcsin(np.sqrt(a))
+    if pops.isna().any():
+        raise ValueError("Missing province population.")
+    dist = province_distances(locations)
     k = pops.to_numpy(float)[None, :] * np.exp(-dist / decay_km)
     np.fill_diagonal(k, 0.0)
     k = k / k.sum(axis=1, keepdims=True)
@@ -316,7 +305,8 @@ def vintage_from_tables(
     The active set is the provinces in `locations` with any case in this
     vintage (every province if `config.active == "all"`). The week grid
     starts one week before national weekly onsets first reach
-    `START_COUNT` and ends with the week holding the vintage date.
+    `START_COUNT` and ends with the week holding the vintage's last report
+    day (`data.releases.last_report`), which is also the cut-off.
 
     Parameters
     ----------
@@ -371,7 +361,7 @@ def vintage_from_tables(
     big = int(np.argmax(counts_by_week >= threshold))
     first = _saturday(str(national.index[max(0, big - 1)]))
     start = first - dt.timedelta(days=6)
-    cutoff = (pd.Timestamp(vintage).date() - start).days
+    cutoff = (last_report(vintage, str(rows["kind"].iloc[0])) - start).days
     n_weeks = cutoff // 7 + 1
     weeks = [
         (first + dt.timedelta(weeks=i)).isoformat() for i in range(n_weeks)
@@ -384,9 +374,7 @@ def vintage_from_tables(
         return out.fillna(0).to_numpy(dtype=float)
 
     counts = np.zeros((n_weeks, config.dmax + 1))
-    pmf = np.full(config.dmax + 1, 1 / (config.dmax + 1))
     if delays is not None and len(delays):
-        pmf = hub_delay_pmf(delays, config.dmax)
         # Known onsets count every case, so negative delays go to 0 and
         # delays past dmax to dmax, the last cell of the hazard pmf,
         # rather than leaving the delay counts short of the known stream.
@@ -431,7 +419,7 @@ def vintage_from_tables(
         known=known,
         imputed=imputed,
         delay_counts=counts,
-        hub_delay_pmf=pmf,
+        hub_delay_pmf=hub_delay_pmf(vintage, config.dmax),
         populations=pops.to_numpy(dtype=float),
         kernel=kernel,
         horizon_weeks=horizon_weeks,
@@ -443,17 +431,9 @@ def vintage_from_tables(
         bvd=None
         if bvd is None or config.national
         else bvd_inputs(bvd, names, start, masked),
-        distances=None
-        if config.national
-        else province_distances(active + idle),
         seed_days=None
         if config.national
         else 7 * np.argmax(totals > 0, axis=0),
-        all_populations=None
-        if config.national
-        else table.set_index("location")
-        .loc[list(active + idle), "population"]
-        .to_numpy(float),
         publication_lag_pmf=publication_lag,
     )
 

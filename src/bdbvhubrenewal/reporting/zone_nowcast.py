@@ -197,7 +197,7 @@ def place_chart_data(
     samples: pd.DataFrame,
     counts: pd.DataFrame,
     names: Mapping[str, str],
-    colours: Mapping[str, tuple[str, str]],
+    colours: Mapping[str, tuple[str, str, str]],
     complete_after_weeks: int,
 ) -> dict[str, object]:
     """Return the data `docs/javascripts/nowcastchart.js` draws.
@@ -214,8 +214,9 @@ def place_chart_data(
         `total`. A place with samples but no counts is shown with no data.
     names : mapping of str to str
         Place names by id. Zones not named show their code.
-    colours : mapping of str to (str, str)
-        Every model we fit, in order, to its light and dark colour.
+    colours : mapping of str to (str, str, str)
+        Every model we fit, in order, to its light colour, dark colour
+        and dash.
     complete_after_weeks : int
         Weeks before the release after which a week is complete.
 
@@ -224,7 +225,7 @@ def place_chart_data(
     dict
         `release`, `reference_date`, `complete_through` (the last week
         end that is complete), `models` (name, light and dark
-        colour, shown at first, and whether it has samples at the
+        colour, dash, shown at first, and whether it has samples at the
         release), `places` (id, name, `scale` and, for a zone, its
         `province`), each scale by recent cases, most first, and per place
         `data` (week, count), `q` (model index, week, q5, q25, q50, q75,
@@ -263,6 +264,7 @@ def place_chart_data(
                 "name": m,
                 "light": colours[m][0],
                 "dark": colours[m][1],
+                "dash": colours[m][2],
                 "on": starts_on(m, fans),
                 "fan": m in fans,
             }

@@ -7,7 +7,10 @@ import pandas as pd
 
 from bdbvhubrenewal.reporting import explorer
 
-COLOURS = {"a (ours)": ("#111111", "#eeeeee"), "hub": ("#222222", "#dddddd")}
+COLOURS = {
+    "a (ours)": ("#111111", "#eeeeee", "6 3"),
+    "hub": ("#222222", "#dddddd", ""),
+}
 
 
 def _inputs() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
@@ -80,6 +83,7 @@ def test_explorer_hides_models_until_switched_on() -> None:
             "on": False,
             "light": "#111111",
             "dark": "#eeeeee",
+            "dash": "6 3",
             "trajectories": False,
         },
         {
@@ -88,6 +92,7 @@ def test_explorer_hides_models_until_switched_on() -> None:
             "on": True,
             "light": "#222222",
             "dark": "#dddddd",
+            "dash": "",
             "trajectories": False,
         },
     ]

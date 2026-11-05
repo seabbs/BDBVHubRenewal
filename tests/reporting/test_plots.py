@@ -123,19 +123,44 @@ def test_plot_imputed_by_release_one_line_per_place() -> None:
     plt.close(fig)
 
 
-def test_model_colours_are_fixed_by_name() -> None:
+def test_model_styles_are_fixed_by_name() -> None:
     from bdbvhubrenewal.forecasters import list_models
 
     registered = {s.name for s in list_models()}
-    assert registered <= set(plots.MODEL_INDEX)
-    assert len(set(plots.MODEL_INDEX.values())) == len(plots.MODEL_INDEX)
-    # The same colour whichever models are shown with it.
+    assert set(plots.MODEL_STYLE) == registered | {"as reported"}
+    # Each colour and dash pair belongs to one model.
+    pairs = list(plots.MODEL_STYLE.values())
+    assert len(set(pairs)) == len(pairs)
+    # Main models have a colour of their own; variants share it, dashed.
+    solid = [s for s, d in pairs if d == "solid"]
+    assert len(set(solid)) == len(solid)
+    assert {d for _, d in pairs} <= set(plots.DASHES)
+    # The same style whichever models are shown with it.
     for mode in ("light", "dark"):
         alone = plots.model_colour("renewal", ["renewal"], mode)
         among = plots.model_colour("renewal", sorted(registered), mode)
         assert alone == among == plots.MODEL_COLOURS[mode][2]
-    # A stand-in outside the registry takes the next free colour.
-    assert (
-        plots.model_colour("flat", ["flat"])
-        == plots.MODEL_COLOURS["light"][len(plots.MODEL_INDEX)]
+    # The as-reported floor is the data ink, dotted.
+    assert plots.model_style("as reported", []) == (
+        plots.THEMES["light"]["data"],
+        plots.THEMES["dark"]["data"],
+        plots.DASHES["dotted"],
     )
+    # A stand-in outside the table takes the first colour it leaves free.
+    used = {s for s, _ in pairs if s is not None}
+    flat = plots.model_colour("flat", ["flat"])
+    assert flat == plots.MODEL_COLOURS["light"][max(used) + 1]
+    assert plots.model_dash("flat") == ""
+
+
+def test_mpl_dash_reads_the_svg_dash() -> None:
+    assert plots.mpl_dash("") == "-"
+    assert plots.mpl_dash("6 3") == (0, (6.0, 3.0))
+
+
+def test_variants_are_hatched_and_hollow() -> None:
+    assert plots.bar_style("#123456", "") == {"color": "#123456"}
+    assert plots.bar_style("#123456", "6 3")["hatch"]
+    assert plots.bar_style("#123456", "6 3")["facecolor"] == "none"
+    assert plots.point_style("#123456", "")["mfc"] == "#123456"
+    assert plots.point_style("#123456", "6 3")["mfc"] == "none"

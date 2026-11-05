@@ -155,6 +155,7 @@
           band(3, 5, 0.22);
         }
         el("polyline", { fill: "none", stroke: c, "stroke-width": 2,
+          "stroke-dasharray": keys.dash(m),
           points: own.map(function (r) { return X(day(r[1])) + "," + Y(r[4]); }).join(" ") }, plot);
         own.forEach(function (r) {
           var p = el("circle", { cx: X(day(r[1])), cy: Y(r[4]), r: 6, fill: "transparent" }, plot);

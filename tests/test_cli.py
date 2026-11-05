@@ -88,7 +88,7 @@ def test_forecast_draws_trajectories_ribbons_and_median() -> None:
         }
     )
     fig, ax = plt.subplots()
-    plots._draw_forecast(ax, samples, "C0", "randomwalk")
+    plots._draw_forecast(ax, samples, "C0", "", "randomwalk")
     # One faint line per sample, plus the median.
     faint = [ln for ln in ax.lines if (ln.get_alpha() or 1) < 0.5]
     assert len(faint) == 100

@@ -29,21 +29,16 @@ from pyrenew.observation import NegativeBinomialNoise
 from pyrenew.randomvariable import DistributionalVariable, TransformedVariable
 from scipy import stats
 
+from .composition_noise import DirichletMultinomialNoise, MultinomialNoise
 from .delays import (
     FixedTimeVarying,
-    HazardDelay,
-    ParametricDelay,
 )
-from .observation import OnsetStreams, RtPseudoObservation
-from .renewal import (
-    LearntKernel,
-    MetapopulationInfections,
-)
-from .rt import (
-    MissingOnsetFraction,
-    NonCentredRandomWalk,
-    PooledInitialValue,
-)
+from .hazard_delay import HazardDelay
+from .observation import MissingOnsetFraction, OnsetStreams
+from .pooled import PooledInitialValue
+from .renewal import Importation, MetapopulationInfections
+from .rt_observation import RtPseudoObservation
+from .temporal import NonCentredRandomWalk
 
 SUNDAY = 6
 """Weekday number of Sunday (Monday is 0), the first day of a hub week."""
@@ -132,12 +127,9 @@ class ModelConfig:
     truncation : bool
         Right truncation by vintage. For the total stream it uses the
         hub's delay pmf as a fixed reporting delay.
-    coupling : {"gravity", "learnt", "none"}
-        Importation kernel between modelled provinces: fixed gravity,
-        gravity with a learnt decay and destination weights
-        (`LearntKernel`), or none.
-    delay : {"hazard", "gamma", "lognormal"}
-        Nonparametric hazard delay or a censored parametric family.
+    coupling : {"gravity", "none"}
+        Importation between modelled provinces through the fixed gravity
+        kernel, or none.
     depletion : bool
         Susceptible depletion in the renewal.
     active : {"cases", "all"}
@@ -180,8 +172,7 @@ class ModelConfig:
     national: bool = False
     streams: Literal["split", "total"] = "split"
     truncation: bool = True
-    coupling: Literal["gravity", "learnt", "none"] = "gravity"
-    delay: Literal["hazard", "gamma", "lognormal"] = "hazard"
+    coupling: Literal["gravity", "none"] = "gravity"
     depletion: bool = True
     active: Literal["cases", "all"] = "cases"
     inactive: Literal["imports", "none"] = "imports"
@@ -241,7 +232,7 @@ class Vintage:
         Known-onset cases by onset week and delay, pooled over provinces,
         `(n_weeks, dmax + 1)`.
     hub_delay_pmf : numpy.ndarray
-        The hub's empirical delay pmf for this vintage, `(dmax + 1,)`.
+        The hub's imputation delay pmf for this release, `(dmax + 1,)`.
     populations : numpy.ndarray
         Province populations, `(P,)`.
     kernel : numpy.ndarray or None
@@ -261,9 +252,6 @@ class Vintage:
         stays in the latent process and is still predicted).
     seed_days : numpy.ndarray or None
         Day (from `start_date`) of each province's first case week.
-    distances, all_populations : numpy.ndarray or None
-        Distances (km) and populations of modelled then idle provinces,
-        for the learnt kernel.
     bvd : dict or None
         External Rt summaries: `day` (index of $s_b$ from the first data
         day), `groups` `(G, P)`, `values`, `scales` and `kinds` `(G,)`.
@@ -287,8 +275,6 @@ class Vintage:
     import_kernel: np.ndarray | None = None
     fit_mask: np.ndarray | None = None
     bvd: dict[str, Any] | None = None
-    distances: np.ndarray | None = None
-    all_populations: np.ndarray | None = None
     seed_days: np.ndarray | None = None
     publication_lag_pmf: np.ndarray | None = None
 
@@ -301,6 +287,24 @@ class Vintage:
     def n_provinces(self) -> int:
         """Number of provinces."""
         return int(self.known.shape[1])
+
+
+def _pooled(
+    name: str,
+    n_groups: int,
+    loc: float,
+    scale: float,
+    pooling_sd: float,
+    centred: bool = True,
+) -> PooledInitialValue:
+    r"""Group values around $\mu \sim N(m, s)$, spread $N^+(0, \tau)$."""
+    return PooledInitialValue(
+        name,
+        n_groups,
+        DistributionalVariable(f"{name}_mean", dist.Normal(loc, scale)),
+        DistributionalVariable(f"{name}_sd", dist.HalfNormal(pooling_sd)),
+        centred=centred,
+    )
 
 
 def _named_walk(
@@ -359,28 +363,69 @@ def fit_weeks(data: Vintage, config: ModelConfig) -> int:
     return data.n_weeks
 
 
+def capped_concentration(
+    name: str, inv_sqrt_rv: DistributionalVariable, floor: float
+) -> TransformedVariable:
+    r"""Concentration $1 / (x^2 + c)$ from $x = 1 / \sqrt{\text{conc}}$.
+
+    The prior on $x$ shrinks towards the Poisson or multinomial limit, as
+    EpiNow2's `obs_opts`, and the floor $c$ caps the concentration at
+    $1 / c$: as the concentration grows the float32 log density loses
+    precision, which stalls NUTS.
+
+    Parameters
+    ----------
+    name : str
+        Name of the concentration.
+    inv_sqrt_rv : DistributionalVariable
+        $x$.
+    floor : float
+        $c$.
+
+    Returns
+    -------
+    TransformedVariable
+        The concentration.
+    """
+    capped = ComposeTransform(
+        [PowerTransform(2.0), AffineTransform(floor, 1.0), PowerTransform(-1.0)]
+    )
+    return TransformedVariable(name, inv_sqrt_rv, capped)
+
+
 def _nb_noise(stream: str) -> NegativeBinomialNoise:
     r"""Negative binomial with $1 / \sqrt{\phi} \sim$ HalfNormal(0.25).
 
-    As EpiNow2 (`obs_opts`): the prior shrinks towards Poisson. The
-    concentration is $\phi = 1 / (x^2 + 10^{-3})$ with $x = 1/\sqrt\phi$,
-    so it stays at or below 1000. The float32 negative binomial log
-    density loses precision as $\phi \to \infty$ (second-difference noise
-    1.5 at $x = 3 \times 10^{-4}$ on real data), which stalls NUTS; at
-    $\phi = 1000$ it is Poisson for these counts.
+    $\phi \le 1000$: the float32 negative binomial log density loses
+    precision as $\phi \to \infty$ (second-difference noise 1.5 at
+    $x = 3 \times 10^{-4}$ on real data), and at $\phi = 1000$ it is
+    Poisson for these counts.
     """
-    inv_sqrt = DistributionalVariable(
-        f"inv_sqrt_phi_{stream}", dist.HalfNormal(0.25)
-    )
-    capped = ComposeTransform(
-        [
-            PowerTransform(2.0),
-            AffineTransform(PHI_FLOOR, 1.0),
-            PowerTransform(-1.0),
-        ]
-    )
     return NegativeBinomialNoise(
-        TransformedVariable(f"phi_{stream}", inv_sqrt, capped)
+        capped_concentration(
+            f"phi_{stream}",
+            DistributionalVariable(
+                f"inv_sqrt_phi_{stream}", dist.HalfNormal(0.25)
+            ),
+            PHI_FLOOR,
+        )
+    )
+
+
+def _dm_noise() -> DirichletMultinomialNoise:
+    r"""Dirichlet-multinomial with $1 / \sqrt{\psi} \sim$ HalfNormal(0.1).
+
+    $\psi \le 10^4$, so that the pooled delays of thousands of cases do
+    not make the delay overconfident.
+    """
+    return DirichletMultinomialNoise(
+        capped_concentration(
+            "delay_concentration",
+            DistributionalVariable(
+                "delay_overdispersion", dist.HalfNormal(0.1)
+            ),
+            1e-4,
+        )
     )
 
 
@@ -400,18 +445,25 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         Model with one observation, `onsets`.
     """
     n_prov = data.n_provinces
-    single = n_prov == 1
-    kernel = None if config.coupling == "none" or single else data.kernel
-    if kernel is not None and config.coupling == "learnt":
-        if data.distances is None or data.all_populations is None:
-            raise ValueError("A learnt kernel needs distances and populations.")
-        kernel = LearntKernel(
-            "kernel", data.distances, data.all_populations, n_prov
+    mixing = None
+    if config.coupling == "gravity" and data.kernel is not None:
+        mixing = Importation(
+            "mixing",
+            DeterministicVariable("kernel", data.kernel),
+            DistributionalVariable("importation", dist.Beta(1, 100)),
         )
-    if kernel is None:
-        importation = None
-    else:
-        importation = DistributionalVariable("importation", dist.Beta(1, 100))
+
+    effective_population = None
+    if config.depletion:
+        effective_population = (
+            DistributionalVariable(
+                "effective_population", dist.LogNormal(np.log(0.05), 0.75)
+            )
+            if config.effective_population is None
+            else DeterministicVariable(
+                "effective_population", config.effective_population
+            )
+        )
 
     builder = PyrenewBuilder()
     builder.configure_latent(
@@ -428,7 +480,7 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             ),
             AffineTransform(0.0, 1 / (ALPHA0 * data.populations)),
         ),
-        log_rt_time_0_rv=PooledInitialValue("log_rt0", n_prov, 0.0, 0.5, 0.3),
+        log_rt_time_0_rv=_pooled("log_rt0", n_prov, 0.0, 0.5, 0.3),
         baseline_rt_process=_named_walk(
             "rt_sd",
             0.2,
@@ -438,20 +490,14 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         subpop_rt_deviation_process=_named_walk(
             "rt_dev_sd", 0.1, fit_weeks(data, config), ar=True
         ),
-        kernel=kernel,
-        importation_rv=importation,
-        deplete=config.depletion,
+        mixing_rv=mixing,
+        effective_population_rv=effective_population,
         seed_days=data.seed_days,
-        rt_observation=RtPseudoObservation(alpha=config.bvd_alpha, **data.bvd)
+        rt_observation=RtPseudoObservation(
+            "bvd", alpha=config.bvd_alpha, **data.bvd
+        )
         if config.bvd and data.bvd is not None
         else None,
-        effective_population_rv=DeterministicVariable(
-            "effective_population", config.effective_population
-        )
-        if config.effective_population is not None
-        else DistributionalVariable(
-            "effective_population", dist.LogNormal(np.log(0.05), 0.75)
-        ),
     )
 
     # Only the product of ascertainment and the effective population is
@@ -487,21 +533,23 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             "missing_fraction",
             # Non-centred: the imputed share pins these offsets only
             # weakly, and centred they form a funnel (R-hat 1.68).
-            PooledInitialValue(
-                "logit_pi0", n_prov, -2.0, 1.0, 0.5, centred=False
-            ),
+            _pooled("logit_pi0", n_prov, -2.0, 1.0, 0.5, centred=False),
             _named_walk("pi_sd", 0.3, fit_weeks(data, config)),
             _named_walk("pi_dev_sd", 0.1, fit_weeks(data, config)),
         )
 
     if missing is not None:
-        delay_time = _named_walk("delay_sd", 0.15, fit_weeks(data, config))
-        if config.delay in ("gamma", "lognormal"):
-            delay = ParametricDelay(
-                "delay", config.dmax, delay_time, config.delay
-            )
-        else:
-            delay = HazardDelay("delay", config.dmax, delay_time)
+        delay = HazardDelay(
+            "delay",
+            config.dmax,
+            DistributionalVariable("delay_hazard0", dist.Normal(-2.0, 1.0)),
+            # Real fits put the step SD at about 0.2 (2026-10-24: 90% CrI
+            # 0.16 to 0.25), in the tail of a scale of 0.1, hence 0.4.
+            NonCentredRandomWalk(
+                DistributionalVariable("delay_smooth_sd", dist.HalfNormal(0.4))
+            ),
+            _named_walk("delay_sd", 0.15, fit_weeks(data, config)),
+        )
     imports = None
     if config.inactive == "imports" and data.import_kernel is not None:
         imports = DistributionalVariable(
@@ -527,20 +575,19 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     builder.add_observation(
         OnsetStreams(
             name="onsets",
+            # Infections are dated by onset.
+            temporal_pmf_rv=DeterministicPMF("infection_to_onset", np.ones(1)),
             ascertainment_rate_rv=ascertainment.for_signal("onsets"),
             missing_fraction_rv=missing,
             delay_rv=delay,
             known_noise=_nb_noise("known"),
             imputed_noise=None if missing is None else _nb_noise("imputed"),
             import_scale_rv=imports,
-            kernel_rv=kernel if isinstance(kernel, LearntKernel) else None,
             start_dow=SUNDAY,
             publication_lag=lag,
-            delay_overdispersion_rv=DistributionalVariable(
-                "delay_overdispersion", dist.HalfNormal(0.1)
-            )
+            delay_noise=_dm_noise()
             if config.delay_counts == "dirichlet-multinomial"
-            else None,
+            else MultinomialNoise(),
             # The axis starts on a Sunday with whole weeks.
             weekly_axis=True,
         )

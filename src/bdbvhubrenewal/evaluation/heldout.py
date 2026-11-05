@@ -206,7 +206,6 @@ def run_heldout(
     evaluate_holdout: bool = False,
     out_dir: Path | str = "results",
     models: Sequence[str] = (),
-    fit: bool = True,
     daily: pd.DataFrame,
 ) -> pd.DataFrame:
     """Forecast and score every held-out vintage under its chosen model.
@@ -232,10 +231,6 @@ def run_heldout(
         Other registered models to forecast and score alongside, such as
         the variants not chosen. Their scores keep `chosen_model`, so
         they compare with the choice but are not mistaken for it.
-    fit : bool
-        Run fitted models. If False, as in the docs build, fitted models
-        are not run, even when chosen: their forecasts come only from the
-        existing `heldout-forecasts.csv.gz`, and are scored again.
     daily : pandas.DataFrame
         Daily onsets by release, as for `make_tasks`.
 
@@ -274,8 +269,9 @@ def run_heldout(
     tasks = []
     for row in pairs.itertuples(index=False):
         names = list(dict.fromkeys([str(row.model), *_baselines(), *models]))
-        if not fit:
-            names = [n for n in names if n not in fitted]
+        # Fitted models are never run here, even when chosen: their
+        # forecasts come from the fit store (`evaluation.store.load`).
+        names = [n for n in names if n not in fitted]
         rows = real.loc[real["vintage"] == row.vintage]
         task = make_tasks(
             rows, delays, config, real_vintages(real), real, daily=daily
@@ -285,8 +281,8 @@ def run_heldout(
         frames.append(fc)
         tasks += task
     out = Path(out_dir)
-    # Forecasts of models not run here, such as fitted variants run on a
-    # bigger machine, are kept and scored again.
+    # Forecasts of models not run here, the fitted ones from the fit
+    # store, are kept and scored again.
     chosen = dict(zip(pairs["vintage"], pairs["model"], strict=True))
     if frames:
         forecasts = merge_by_model(

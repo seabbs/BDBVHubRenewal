@@ -562,11 +562,14 @@ def test_lag_source_warns_when_the_prior_stands_in(
 def test_report_cutoffs_are_days_from_the_model_start(
     task: ForecastTask,
 ) -> None:
-    task = replace(task, report_by=("2026-10-24", "2026-10-31"))
+    task = replace(task, report_by=("2026-10-24", "2026-11-01"))
     data = rn.vintage_inputs(task, rn.model_config(rn.VARIANTS["renewal"]))
     cuts = rn.report_cutoffs(task, data)
     start = pd.Timestamp(data.start_date)
-    assert cuts == {(pd.Timestamp(d) - start).days: d for d in task.report_by}
+    # Each later release is cut at its last report day: 10-24 for the
+    # label 10-24, published a day early, and 10-31 for 11-01 (hub #90).
+    last = {"2026-10-24": "2026-10-24", "2026-11-01": "2026-10-31"}
+    assert cuts == {(pd.Timestamp(last[d]) - start).days: d for d in last}
 
 
 @pytest.mark.parametrize("name", ["renewal", "renewalsp"])
@@ -634,3 +637,25 @@ def test_delay_summary_reads_shares_and_medians_by_onset_week() -> None:
     assert len(cum) == dmax + 1
     assert cum["q50"].iloc[-1] == pytest.approx(1.0)
     assert cum["q50"].is_monotonic_increasing
+
+
+def test_the_model_cut_off_is_the_release_s_last_report_day(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    import datetime as dt
+
+    config = rn.model_config(rn.VARIANTS["renewal"])
+    for label, last in (
+        ("2026-10-24", "2026-10-24"),
+        ("2026-11-01", "2026-10-31"),
+    ):
+        rows = target.loc[target["vintage"] == label]
+        task = make_tasks(rows, delays, BacktestConfig(n_samples=20, seed=3))[0]
+        data = rn.vintage_inputs(task, config)
+        # The cut-off and the last data week end on the last report day,
+        # so 11-01, extracted a day after its last report, adds no empty
+        # week (hub issue #90).
+        cut = data.start_date + dt.timedelta(days=data.cutoff)
+        end = data.start_date + dt.timedelta(days=7 * data.n_weeks - 1)
+        assert cut.isoformat() == last
+        assert end == rn._saturday(last)

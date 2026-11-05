@@ -3,6 +3,8 @@
 The current nowcast and forecast from the latest vintage.
 { .page-subtitle }
 
+--8<-- "fit-store.md"
+
 --8<-- "nowcast-meta.md"
 
 --8<-- "latest-submission.md"

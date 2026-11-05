@@ -18,7 +18,12 @@ from bdbvhubrenewal.reporting.plots import (
     THEMES,
     _date_axis,
     _grid,
+    bar_style,
     model_colour,
+    model_dash,
+    model_style,
+    mpl_dash,
+    point_style,
 )
 from bdbvhubrenewal.reporting.scorechart import OVERALL_METRICS
 
@@ -30,11 +35,14 @@ __all__ = [
 ]
 
 
-def _draw_bars(ax: Axes, rows: pd.DataFrame, colour: str, shift: float) -> None:
+def _draw_bars(
+    ax: Axes, rows: pd.DataFrame, colour: str, dash: str, shift: float
+) -> None:
     x = mdates.date2num(pd.to_datetime(rows["target_end_date"])) + shift
-    ax.vlines(x, rows["q5"], rows["q95"], color=colour, lw=1.2)
-    ax.vlines(x, rows["q25"], rows["q75"], color=colour, lw=4)
-    ax.plot(x, rows["q50"], "o", color=colour, ms=3)
+    ls = mpl_dash(dash)
+    ax.vlines(x, rows["q5"], rows["q95"], color=colour, lw=1.2, ls=ls)
+    ax.vlines(x, rows["q25"], rows["q75"], color=colour, lw=4, ls=ls)
+    ax.plot(x, rows["q50"], "o", ms=3, **point_style(colour, dash))
 
 
 def plot_release_nowcasts(
@@ -106,7 +114,7 @@ def plot_release_nowcasts(
                     & (final["model"] == m)
                 ]
                 colour = model_colour(m, models, mode)
-                _draw_bars(ax, rows, colour, (m_i - mid) * width)
+                _draw_bars(ax, rows, colour, model_dash(m), (m_i - mid) * width)
             ax.set_title(f"{loc}, origin {origin}")
             _date_axis(ax)
             ax.xaxis.set_major_locator(
@@ -117,7 +125,8 @@ def plot_release_nowcasts(
     handles, labels = axes[0].get_legend_handles_labels()
     for m in models:
         colour = model_colour(m, models, mode)
-        handles.append(axes[0].plot([], [], color=colour, lw=4)[0])
+        dash = mpl_dash(model_dash(m))
+        handles.append(axes[0].plot([], [], color=colour, lw=4, ls=dash)[0])
         labels.append(f"{m} (50% and 90%)")
     fig.legend(
         handles,
@@ -136,7 +145,7 @@ def plot_relative_overall(
     mode: str = "light",
     x: str = "pool",
     metrics: Mapping[str, tuple[str, float | None]] = OVERALL_METRICS,
-    colours: Mapping[str, tuple[str, str]] | None = None,
+    colours: Mapping[str, tuple[str, str, str]] | None = None,
 ) -> Figure:
     """Plot each model's overall scores by pool, a panel per metric.
 
@@ -155,9 +164,9 @@ def plot_relative_overall(
     metrics : mapping of str to (str, float or None)
         Metric column to its label and reference line, as
         `OVERALL_METRICS`.
-    colours : mapping of str to (str, str), optional
-        Model to its light and dark colour. Defaults to the registry
-        colours by position in `models`.
+    colours : mapping of str to (str, str, str), optional
+        Model to its light colour, dark colour and dash. Defaults to each
+        model's `model_style`.
 
     Returns
     -------
@@ -176,9 +185,15 @@ def plot_relative_overall(
         have = [p for p in pools if p in rows.index]
         shift = (i - (len(models) - 1) / 2) * width
         at = [pools.index(p) + shift for p in have]
-        colour = colours[m][pick] if colours else model_colour(m, models, mode)
+        style = colours[m] if colours else model_style(m, models)
         for ax, key in zip(axes, metrics, strict=True):
-            ax.bar(at, rows.loc[have, key], width, color=colour, label=m)
+            ax.bar(
+                at,
+                rows.loc[have, key],
+                width,
+                label=m,
+                **bar_style(style[pick], style[2]),
+            )
     for ax, (key, (label, ref)) in zip(axes, metrics.items(), strict=True):
         if ref is not None:
             ax.axhline(ref, color=ink["muted"], lw=1, ls=":")
@@ -303,7 +318,7 @@ def plot_truth_changes(
 def plot_place_summary(
     table: pd.DataFrame,
     models: Sequence[str],
-    colours: Mapping[str, tuple[str, str]],
+    colours: Mapping[str, tuple[str, str, str]],
     names: Mapping[str, str],
     metric: str = "rel_wis",
     label: str = "Relative WIS",
@@ -319,8 +334,8 @@ def plot_place_summary(
         `relative_wis` output by `pool` and `location`.
     models : sequence of str
         Models in order. Those absent from a place are skipped.
-    colours : mapping of str to (str, str)
-        Model to its light and dark colour.
+    colours : mapping of str to (str, str, str)
+        Model to its light colour, dark colour and dash.
     names : mapping of str to str
         Place names by id. Places not named show their code.
     metric : str
@@ -369,8 +384,9 @@ def plot_place_summary(
                 own["location"].map(y),
                 "o",
                 ms=4,
-                color=colours[m][pick],
+                ls="",
                 label=m,
+                **point_style(colours[m][pick], colours[m][2]),
             )
         if ref is not None:
             ax.axvline(ref, color=ink["muted"], lw=1, ls=":")
