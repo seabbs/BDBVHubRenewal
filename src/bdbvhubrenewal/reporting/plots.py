@@ -132,6 +132,7 @@ MODEL_STYLE: Final[dict[str, tuple[int | None, str]]] = {
     "renewalbvd": (3, "solid"),
     "renewalsp": (4, "solid"),
     "pprandomwalknowcast": (5, "solid"),
+    "fm_delay": (6, "solid"),
     "as reported": (None, "dotted"),
 }
 """Each model's place in `MODEL_COLOURS` and its dash in `DASHES`.

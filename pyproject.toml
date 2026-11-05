@@ -42,6 +42,10 @@ classifiers = [
 model = [
   "pyrenew @ git+https://github.com/CDCgov/PyRenew@e16093b0d20c918f282032123c19691a568f114a",
 ]
+# Toto 1.0 for `fm_delay` (`bdbvhubrenewal.forecasters.foundation`).
+# Brings torch, built for CUDA 12.6 on Linux so drivers from 525 on
+# can use the GPU. The package imports without it.
+toto = ["toto-ts==0.2.0", "torch>=2.7"]
 
 [project.urls]
 Homepage = "https://samabbott.co.uk/BDBVHubRenewal/"
@@ -76,6 +80,42 @@ docs = [
 
 [tool.uv]
 default-groups = ["dev"]
+
+# toto-ts pins its whole development stack (numpy 1.26, which has no
+# Python 3.13 wheels, pandas 2.2, lightning, jupyter), and gluonts caps
+# pandas below 3. Both are given the imports inference uses.
+[[tool.uv.dependency-metadata]]
+name = "toto-ts"
+version = "0.2.0"
+requires-dist = [
+  "torch>=2.7",
+  "einops>=0.7",
+  "jaxtyping>=0.2.29",
+  "gluonts>=0.16.2",
+  "rotary-embedding-torch>=0.8.6",
+  "huggingface-hub>=0.23",
+  "safetensors>=0.4",
+]
+
+[[tool.uv.dependency-metadata]]
+name = "gluonts"
+version = "0.17.0"
+requires-dist = [
+  "numpy>=1.24,<3",
+  "pandas>=1.4",
+  "pydantic>=1.7,<3",
+  "toolz~=0.10",
+  "tqdm~=4.23",
+  "typing-extensions~=4.0",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu126", marker = "sys_platform == 'linux'" }]
 
 [tool.uv.build-backend]
 module-name = "bdbvhubrenewal"
@@ -173,6 +213,8 @@ module = [
   "numpyro.*",
   "pyrenew",
   "pyrenew.*",
+  "torch",
+  "toto.*",
 ]
 ignore_missing_imports = true
 

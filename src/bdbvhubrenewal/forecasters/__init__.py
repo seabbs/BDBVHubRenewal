@@ -8,6 +8,8 @@
   estimates (numpyro).
 - `renewal`: the renewal variants, the adapter from a `ForecastTask` to
   the PyRenew model in `bdbvhubrenewal.model`.
+- `foundation`: Toto 1.0 used zero-shot on the reporting delays
+  (an optional dependency).
 - `zones`: health-zone forecasts split from any model's province samples.
 
 Importing this package registers the built-in models.
@@ -28,6 +30,7 @@ from bdbvhubrenewal.forecasters.base import (
     list_models,
     register_model,
 )
+from bdbvhubrenewal.forecasters.foundation import FMDelay
 from bdbvhubrenewal.forecasters.pprandomwalk import PPRandomWalkNowcast
 from bdbvhubrenewal.forecasters.randomwalk import (
     RandomWalk,
@@ -39,6 +42,7 @@ __all__ = [
     "NATIONAL",
     "SAMPLE_COLUMNS",
     "VARIANTS",
+    "FMDelay",
     "ForecastModel",
     "ForecastTask",
     "ModelSpec",
