@@ -79,16 +79,16 @@ jobs:
       # The backtest runs only the models with no fit, keeps the stored
       # rows and scores them again against the latest vintage. The zone
       # and scenario backtests run the random walks only. None of these
-      # results are committed: this step is their one source.
+      # results are committed. Only this step makes them.
+      # `task results` runs the same commands locally; keep the two in step.
       # It reads only these inputs, so an unchanged hash reuses its outputs.
+      # Every output goes to results/, so only results/ is cached.
       - name: Restore the backtest outputs
         id: backtest
         uses: actions/cache@v6
         with:
-          path: |
-            results
-            output
-          key: backtest-${{ hashFiles('src/**', 'config/**', 'data/**', 'results/**', 'uv.lock') }}
+          path: results
+          key: backtest-${{ hashFiles('src/**', 'config/**', 'data/**', 'results/**', 'uv.lock', '.github/workflows/pages.yml') }}
       - name: Backtest
         if: steps.backtest.outputs.cache-hit != 'true'
         run: |

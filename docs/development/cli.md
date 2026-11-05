@@ -39,7 +39,8 @@ task backtest-scenarios # simulated scenarios calibrated to the real data
 task backtest-zones     # random walk models at health-zone level
 task backtest-heldout   # score the held-out vintages
 task results            # every derived file in results/, as the Pages build makes them
-task docs               # build the site into _site/
+task docs               # build the site into _site/ (runs task results, about 25 min)
+task serve              # serve the site (run task results once first)
 ```
 
 `--models` runs some models and keeps the others' rows in `results/`.
