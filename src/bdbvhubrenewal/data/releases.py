@@ -12,9 +12,9 @@ derives it from the data, whatever the label, and every tidy table
 carries it as a `cutoff` column, which `release_cutoff` reads.
 `cutoff_lags` gives the days from a release to its cut-off by weekday,
 for simulated releases.
-`publication_lag_pmf` estimates, from pairs of delay files, the lag from a
-case's report to its first publication, which the renewal models mix into
-their onset expectations.
+`release_pairs` tabulates, for each pair of consecutive delay files, which
+rows of the later file were already in the earlier one, the data the
+renewal models learn their report to publication lag from.
 """
 
 from __future__ import annotations
@@ -28,13 +28,13 @@ import pandas as pd
 from bdbvhubrenewal.data.dates import as_date
 
 __all__ = [
-    "MAX_PUBLICATION_LAG",
+    "MAX_PAIR_AGE",
     "ORIGINAL_AS_OF",
     "cutoff_lags",
     "last_report_days",
-    "publication_lag_pmf",
     "release_cutoff",
     "release_id",
+    "release_pairs",
 ]
 
 ORIGINAL_AS_OF: frozenset[str] = frozenset(
@@ -147,77 +147,89 @@ def cutoff_lags(daily: pd.DataFrame) -> dict[int, int]:
     return {w: int(seen.get(w, fill)) for w in range(7)}
 
 
-MAX_PUBLICATION_LAG = 180
-"""Longest report to publication lag kept in `publication_lag_pmf`, in days.
-Between the real files 8-9% of new rows were over 60 days late and none
-over 180."""
+MAX_PAIR_AGE = 60
+"""Oldest report age at the earlier release of a pair kept by
+`release_pairs`, in days, the renewal models' maximum delay."""
 
 
-def publication_lag_pmf(
+def release_pairs(
     delays: pd.DataFrame,
     as_of: dt.date | str,
-    max_lag: int = MAX_PUBLICATION_LAG,
-) -> np.ndarray | None:
-    r"""Empirical pmf of the lag from report to first publication.
+    max_age: int = MAX_PAIR_AGE,
+) -> dict[str, np.ndarray] | None:
+    r"""Rows of each delay file and whether the previous file had them.
 
-    For each pair of consecutive delay vintages $V_1 < V_2$ on or before
-    `as_of`, with cut-offs $C_1 < C_2$ (`release_cutoff`), the rows of
-    $V_2$ beyond those of $V_1$ (by location, onset week and delay) were
-    first published in $(C_1, C_2]$. A row with onset week $W$ and delay
-    $d$ was reported on $W - u + d$ for an onset $u$ days before $W$, so
-    with $u$ uniform on $0..6$ and publication uniform over the days of
-    $(C_1, C_2]$ its lag is spread over $C_1 + j - (W - u + d)$, the
-    feasible (non-negative) ones only, and lags past `max_lag` go to the
-    last cell. Pairs whose later vintage is after `as_of` are not used, so
-    a backtest does not see later files.
+    For each pair of consecutive delay files $k$ and $k + 1$ on or before
+    `as_of`, every row cell (location, onset week, delay) of file $k + 1$
+    is counted with how many of its rows file $k$ already had. A row with
+    onset week ending $W$ and delay $d$ was reported on $W - u + d$ for
+    an onset $u = 0..6$ days before $W$, so its report age at a release
+    with last report day $T$ is $T - W + u - d$. Cells that no onset day
+    could have reported by $T_k$, or that are older than `max_age` at
+    $T_k$ for every onset day, are left out.
 
     Parameters
     ----------
     delays : pandas.DataFrame
-        Delay rows of several vintages, with `vintage` and `cutoff`.
+        Delay rows of several releases, with `vintage`, `cutoff`,
+        `location`, `onset_week` and `delay`.
     as_of : datetime.date or str
-        The forecast date.
-    max_lag : int
-        Last lag cell, in days.
+        The forecast date. Later files are not used.
+    max_age : int, optional
+        Oldest report age kept, in days.
 
     Returns
     -------
-    numpy.ndarray or None
-        Pmf on `0..max_lag`, or None if no pair is available.
+    dict or None
+        `before` and `after`, report ages at $T_k$ and $T_{k + 1}$ by
+        onset day, `(n, 7)`; `kept` and `total` rows of each cell,
+        `(n,)`; and `pair`, the one-hot pair of each cell, `(n, K)`.
+        None if no pair of files is available.
     """
     day = as_date(as_of).isoformat()
     vintages = sorted(str(v) for v in delays["vintage"].unique() if v <= day)
     key = ["location", "onset_week", "delay"]
-    mass = np.zeros(max_lag + 1)
+    parts = []
     for a, b in itertools.pairwise(vintages):
-        before = delays.loc[delays["vintage"] == a].groupby(key).size()
-        after = delays.loc[delays["vintage"] == b].groupby(key).size()
-        change = after.sub(before, fill_value=0).clip(lower=0)
-        added = change[change > 0].reset_index(name="n")
-        if added.empty:
-            continue
-        v1 = pd.Timestamp(release_cutoff(delays, a))
-        gap = (pd.Timestamp(release_cutoff(delays, b)) - v1).days
-        onset = pd.to_datetime(pd.Series(added["onset_week"]))
-        week = (onset - v1).dt.days.to_numpy()
-        count = np.asarray(added["n"], dtype=float)
-        delay = np.asarray(added["delay"], dtype=int)
-        # Lag for publication day j in 1..gap and onset u days before W.
-        lag = (
-            np.arange(1, gap + 1)[None, :, None]
-            - week[:, None, None]
-            + np.arange(7)[None, None, :]
-            - delay[:, None, None]
+        seen = delays.loc[delays["vintage"] == a].groupby(key).size()
+        rows = (
+            delays.loc[delays["vintage"] == b]
+            .groupby(key)
+            .size()
+            .reset_index(name="total")
         )
-        keep = lag >= 0
-        # Each row's count is spread over its feasible lags.
-        per_row = count / np.maximum(keep.sum(axis=(1, 2)), 1)
-        weight = np.broadcast_to(per_row[:, None, None], lag.shape)
-        mass += np.bincount(
-            np.minimum(lag[keep], max_lag),
-            weights=weight[keep],
-            minlength=max_lag + 1,
+        had = seen.reindex(
+            pd.MultiIndex.from_frame(rows[key]), fill_value=0
+        ).to_numpy()
+        # Report day of each row for an onset 0 to 6 days before the end
+        # of its onset week, as days since the epoch.
+        report = (
+            pd.to_datetime(rows["onset_week"]).to_numpy().astype("datetime64[D]")
+            .astype(int)[:, None]
+            - np.arange(7)[None, :]
+            + rows["delay"].to_numpy()[:, None]
+        )  # fmt: skip
+
+        def age(release: str, report: np.ndarray = report) -> np.ndarray:
+            cut = np.datetime64(release_cutoff(delays, release), "D").astype(int)
+            return np.asarray(cut - report, dtype=int)
+
+        before = age(a)
+        keep = (before.max(axis=1) >= 0) & (before.min(axis=1) <= max_age)
+        total = rows["total"].to_numpy()
+        parts.append(
+            {
+                "before": before[keep],
+                "after": age(b)[keep],
+                "kept": np.minimum(had, total)[keep],
+                "total": total[keep],
+            }
         )
-    if mass.sum() == 0:
+    if not parts:
         return None
-    return mass / mass.sum()
+    out = {k: np.concatenate([p[k] for p in parts]) for k in parts[0]}
+    out["kept"] = out["kept"].astype(float)
+    out["total"] = out["total"].astype(float)
+    sizes = [len(p["total"]) for p in parts]
+    out["pair"] = np.repeat(np.eye(len(parts)), sizes, axis=0)
+    return out

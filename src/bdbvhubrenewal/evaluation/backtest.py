@@ -44,11 +44,7 @@ from bdbvhubrenewal.data.dates import (
     epiweek_end,
     reference_date_for_vintage,
 )
-from bdbvhubrenewal.data.releases import (
-    cutoff_lags,
-    publication_lag_pmf,
-    release_cutoff,
-)
+from bdbvhubrenewal.data.releases import cutoff_lags, release_cutoff
 from bdbvhubrenewal.data.simulate import (
     SCENARIO_RT_SCALE,
     SimulatedOutbreak,
@@ -92,7 +88,6 @@ __all__ = [
     "score_tasks",
     "truth_changes",
     "truth_from_vintage",
-    "uses_lag_prior",
 ]
 
 log = logging.getLogger(__name__)
@@ -105,7 +100,6 @@ FORECAST_COLUMNS = (
     *SAMPLE_COLUMNS,
     "as_of",
     "horizon",
-    "lag_prior",
 )
 """Columns of `run_forecasts` output, which is empty if no model could run."""
 
@@ -390,29 +384,6 @@ def make_tasks(
     return tasks
 
 
-def uses_lag_prior(task: ForecastTask) -> bool:
-    """Whether a task has no publication lag estimate of its own.
-
-    The lag is estimated from pairs of delay files on or before the
-    vintage (`bdbvhubrenewal.data.releases.publication_lag_pmf`).
-    Without one, the renewal models use a prior whose shape was set from
-    later delay files, so these origins see some later data.
-
-    Parameters
-    ----------
-    task : ForecastTask
-        The task.
-
-    Returns
-    -------
-    bool
-        True if no pair of delay files is available.
-    """
-    if task.delay_history is None:
-        return True
-    return publication_lag_pmf(task.delay_history, task.vintage) is None
-
-
 def _fit_rows(model: ForecastModel, task: ForecastTask) -> pd.DataFrame:
     """Return the model's summary of each fit it made for the task."""
     rows = getattr(model, "fit_diagnostics", None) or []
@@ -490,8 +461,8 @@ def run_forecasts(
     -------
     pandas.DataFrame
         Columns `model`, `kind`, `vintage`, `reference_date`, `horizon`,
-        `location`, `target_end_date`, `sample`, `value`, `as_of`
-        (missing for final counts) and `lag_prior` (`uses_lag_prior`).
+        `location`, `target_end_date`, `sample`, `value` and `as_of`
+        (missing for final counts).
 
     Examples
     --------
@@ -531,7 +502,6 @@ def run_forecasts(
             if "as_of" not in samples:
                 samples["as_of"] = np.nan
             samples = add_national(samples)
-            samples["lag_prior"] = uses_lag_prior(task)
             ref = pd.Timestamp(task.reference_date)
             samples["horizon"] = (
                 pd.to_datetime(samples["target_end_date"]) - ref
@@ -636,8 +606,7 @@ def score_tasks(
     -------
     pandas.DataFrame
         Output of `bdbvhubrenewal.evaluation.scoring.score_forecasts`, with
-        `truth_vintage`, `scoring` and `complete` columns, and
-        `lag_prior` if the forecasts have it.
+        `truth_vintage`, `scoring` and `complete` columns.
     """
     keep = forecasts["vintage"] < truth_date
     as_of = (
@@ -659,9 +628,6 @@ def score_tasks(
     if not frames:
         return pd.DataFrame()
     out = pd.concat(frames, ignore_index=True)
-    if "lag_prior" in forecasts:
-        flags = forecasts.groupby(["kind", "vintage"])["lag_prior"].first()
-        out = out.merge(flags.reset_index(), on=["kind", "vintage"], how="left")
     out["truth_vintage"] = truth_date
     age = pd.Timestamp(truth_date) - pd.to_datetime(out["target_end_date"])
     out["complete"] = age.dt.days >= 7 * complete_after_weeks

@@ -29,6 +29,7 @@ from __future__ import annotations
 import datetime as dt
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from typing import Final
 
 import jax
 import jax.numpy as jnp
@@ -49,7 +50,6 @@ from bdbvhubrenewal.model.model import (
     GI_MEAN,
     GI_SD,
     INCUBATION_MEAN,
-    PRIOR_PUBLICATION_LAG,
     generation_interval,
     incubation_period,
 )
@@ -68,6 +68,14 @@ MAX_SIM_DELAY = 120
 
 def _logistic(x: NDArray[np.float64]) -> NDArray[np.float64]:
     return np.asarray(1 / (1 + np.exp(-x)), dtype=np.float64)
+
+
+SIMULATED_PUBLICATION_LAG: Final[tuple[float, ...]] = tuple(
+    [0.85 / 4] * 4 + [0.15 / 57] * 57
+)
+"""Report to publication lag pmf of simulated releases on 0..60 days: 85%
+within 3 days and 15% spread over 4 to 60 days, as in the real delay
+files (29% of rows new between 10-09 and 10-17 were over 6 days late)."""
 
 
 @dataclass(frozen=True)
@@ -113,9 +121,9 @@ class SimulationSettings:
         Coefficient of variation of the delay.
     publication_lag : tuple of float
         Pmf of the days from report to publication in a vintage, from 0.
-        The default is the model's `PRIOR_PUBLICATION_LAG`: 85% uniform
-        on 0..3 days and 15% uniform on 4..60 days, a tail of late
-        entries as in the real delay files.
+        The default is `SIMULATED_PUBLICATION_LAG`: 85% uniform on 0..3
+        days and 15% uniform on 4..60 days, a tail of late entries as in
+        the real delay files.
     backfill_share : float
         Share of cases reported with no onset whose onset is recorded
         later.
@@ -159,7 +167,7 @@ class SimulationSettings:
     missing: tuple[float, float, float] = (0.05, 0.25, 0.12)
     delay_mean: tuple[float, float] = (12.0, 6.0)
     delay_cv: float = 1.0
-    publication_lag: tuple[float, ...] = PRIOR_PUBLICATION_LAG
+    publication_lag: tuple[float, ...] = SIMULATED_PUBLICATION_LAG
     backfill_share: float = 0.3
     backfill_delay: tuple[int, int] = (7, 42)
     gi_mean: float = GI_MEAN

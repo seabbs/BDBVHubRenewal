@@ -93,8 +93,9 @@ class ForecastTask:
         $T$ as reported.
     delay_history : pandas.DataFrame or None
         Delay rows of every vintage of this kind on or before `vintage`,
-        from which `data.releases.publication_lag_pmf` estimates the
-        report to publication lag. None if there are none.
+        from which `data.releases.release_pairs` gives the rows each file
+        kept of the last, which the renewal models learn their report to
+        publication lag from. None if there are none.
     target_history : pandas.DataFrame or None
         Target rows of every vintage of this kind on or before `vintage`,
         from which a model can learn how totals are revised. None if there

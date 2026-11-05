@@ -34,7 +34,7 @@ def test_vintage_shapes(sim_vintage):
     assert v.known.shape == v.imputed.shape == (v.n_weeks, 4)
     assert v.inactive.shape == (v.n_weeks, 2)
     assert v.import_kernel.shape == (4, 2)
-    assert v.delay_counts.shape == (v.n_weeks, 61)
+    assert v.delay_counts.shape == (v.n_weeks, 4, 61)
     assert v.start_date.weekday() == 6
     assert v.cutoff // 7 + 1 == v.n_weeks
     np.testing.assert_allclose(v.hub_delay_pmf.sum(), 1.0)

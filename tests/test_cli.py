@@ -168,7 +168,7 @@ def test_cli_fit_task_carries_the_delay_files_for_the_lag() -> None:
     assert task.delay_history["vintage"].nunique() >= 2
     assert task.target_history is not None
     assert task.target_history["vintage"].nunique() >= 3
-    assert vintage_inputs(task, MAIN).publication_lag_pmf is not None
+    assert vintage_inputs(task, MAIN).release_pairs is not None
 
 
 @pytest.mark.usefixtures("in_root")
