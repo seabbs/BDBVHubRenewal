@@ -333,6 +333,28 @@ def test_run_forecasts_collects_fit_summaries(
     assert (table["max_rhat"] == 1.01).all()
 
 
+class _LearntDelay(_Counting):
+    def forecast(self, task):  # type: ignore[no-untyped-def]
+        self.delay_summary = pd.DataFrame(
+            {"kind": ["cumulative", "onset_week"], "vintage": task.vintage}
+        )
+        return super().forecast(task)
+
+
+def test_run_forecasts_keeps_the_learnt_delay_kind(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    config: BacktestConfig,
+) -> None:
+    tasks = make_tasks(
+        target.loc[target["vintage"] >= "2026-10-17"], delays, config
+    )
+    learnt: list[pd.DataFrame] = []
+    run_forecasts([_LearntDelay()], tasks, learnt=learnt)
+    table = pd.concat(learnt)
+    assert set(table["kind"]) == {"cumulative", "onset_week"}
+
+
 class _Masking(_Counting):
     supports_mask = True
 
