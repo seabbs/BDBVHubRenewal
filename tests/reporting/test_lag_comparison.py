@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.reporting.lag_comparison import (
     calibration_table,
     late_reports,
     newest_weeks,
+    plot_learnt_lag,
 )
 
 
@@ -59,3 +62,22 @@ def test_newest_weeks_flags_truths_above_the_interval():
     assert table.loc[0, "added"] == 36
     assert table.loc[0, "added_median"] == 16
     assert table.loc[0, "width_90"] == 1.0
+
+
+def test_learnt_lag_is_drawn_for_each_origin_beside_the_fixed_lag():
+    lags = np.arange(15)
+    pmf = np.exp(-lags / 2) / np.exp(-lags / 2).sum()
+    table = pd.concat(
+        pd.DataFrame(
+            {"vintage": v, "lag": lags, "q5": pmf / 2, "q50": pmf, "q95": pmf}
+        )
+        for v in ("2026-10-17", "2026-10-24")
+    )
+    fig = plot_learnt_lag(table)
+    labels = [line.get_label() for line in fig.axes[0].lines]
+    assert labels == [
+        "renewallearntlag, origin 2026-10-17",
+        "renewallearntlag, origin 2026-10-24",
+        "renewal, uniform 0 to 3",
+    ]
+    plt.close(fig)

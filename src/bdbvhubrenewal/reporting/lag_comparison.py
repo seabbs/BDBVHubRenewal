@@ -1,11 +1,12 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""Figures and tables of the Reporting lag comparison page.
+"""Figures and tables of the Reporting model comparison page.
 
 The page compares `renewal` with versions that each change one part of
-its reporting model: no lag from report to publication, a delay for each
-province and a delay fixed over time. It shows the release check behind
-the lag, each version's forecasts against later releases, scores by
-release, convergence and the coverage of the newest weeks.
+its reporting model: no lag from report to publication, a lag learnt
+from the releases, a delay for each province and a delay fixed over
+time. It shows the release check behind the lag, the learnt lag, each
+version's forecasts against later releases, scores by release, scale and
+place, convergence and the coverage of the newest weeks.
 """
 
 from __future__ import annotations
@@ -31,6 +32,7 @@ __all__ = [
     "plot_lag_fans",
     "plot_lag_scores",
     "plot_late_reports",
+    "plot_learnt_lag",
 ]
 
 REFERENCE: Final = "renewal"
@@ -46,7 +48,13 @@ ARMS: Final = (
 """The models compared, the reference first."""
 
 PLACES: Final = ("CD", "CD-IT", "CD-NK")
-"""Places shown in the fans."""
+"""Places shown in the fans and the place scores."""
+
+SCORE_COLUMNS: Final = ("rel_wis", "rel_log_wis", "bias", "coverage_90")
+"""Scores in the scale and place tables."""
+
+FIXED_LAG: Final = 3
+"""`renewal`'s lag is uniform on 0 to this many days."""
 
 DAYS_BEFORE: Final = (
     ("0", (0, 0)),
@@ -145,6 +153,57 @@ def plot_late_reports(table: pd.DataFrame, mode: str = "light") -> Figure:
         ax.set_ylabel("Missed that release (%)")
         ax.set_ylim(bottom=0)
         ax.legend(frameon=False, fontsize=8)
+        fig.tight_layout()
+    return fig
+
+
+def plot_learnt_lag(table: pd.DataFrame, mode: str = "light") -> Figure:
+    """Plot the learnt lag at each origin against `renewal`'s fixed lag.
+
+    Parameters
+    ----------
+    table : pandas.DataFrame
+        `vintage`, `lag` (days) and the lag pmf's `q5`, `q50` and `q95`
+        across posterior draws.
+    mode : str
+        `"light"` or `"dark"`.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+    """
+    with theme(mode) as ink:
+        fig, ax = plt.subplots(figsize=(7, 3.6))
+        greys = HUB_GREYS[mode]
+        origins = sorted(table["vintage"].unique())
+        for i, origin in enumerate(origins):
+            rows = table.loc[table["vintage"] == origin].sort_values("lag")
+            last = i == len(origins) - 1
+            colour = (
+                page_colour("renewallearntlag", mode)
+                if last
+                else greys[i % len(greys)]
+            )
+            ax.fill_between(
+                rows["lag"], rows["q5"], rows["q95"], color=colour,
+                alpha=0.25 if last else 0.12, lw=0, step="mid",
+            )  # fmt: skip
+            ax.step(
+                rows["lag"], rows["q50"], where="mid", color=colour,
+                lw=1.8 if last else 1.0,
+                label=f"renewallearntlag, origin {origin}",
+            )  # fmt: skip
+        lags = np.arange(int(table["lag"].max()) + 1)
+        fixed = np.where(lags <= FIXED_LAG, 1 / (FIXED_LAG + 1), 0.0)
+        ax.step(
+            lags, fixed, where="mid", color=page_colour(REFERENCE, mode),
+            lw=1.4, ls="--", label=f"renewal, uniform 0 to {FIXED_LAG}",
+        )  # fmt: skip
+        ax.set_xlabel("Days from report to publication")
+        ax.set_ylabel("Probability")
+        ax.set_ylim(bottom=0)
+        ax.legend(frameon=False, fontsize=8)
+        ax.tick_params(colors=ink["ink"])
         fig.tight_layout()
     return fig
 
@@ -301,9 +360,7 @@ def plot_lag_scores(table: pd.DataFrame, mode: str = "light") -> Figure:
 
 
 CALIBRATION_MODELS: Final = (
-    "renewal",
-    "renewalnolag",
-    "renewallearntlag",
+    *ARMS,
     "renewalsp",
     "renewalbvd",
     "randomwalknowcast",
@@ -544,6 +601,40 @@ def make_lag_comparison(
         by=("origin", "truth_vintage"),
     )
     rel = rel.loc[rel["model"].isin(ARMS)]
+    reported = scores.loc[scores["target"] == "reported"]
+    scale = reported.assign(
+        scale=np.where(
+            reported["location"] == PLACES[0], "national", "province"
+        )
+    )
+    by_scale = relative_wis(scale, by=("scale",))
+    by_place = relative_wis(
+        reported.loc[reported["location"].isin(PLACES)], by=("location",)
+    )
+    for stem, table, key in (
+        ("scale", by_scale, "scale"),
+        ("places", by_place, "location"),
+    ):
+        table = table.loc[table["model"].isin(ARMS)]
+        (gen_dir / f"lag-scores-{stem}.md").write_text(
+            _table(
+                table[[key, "model", "n", *SCORE_COLUMNS]]
+                .replace({"location": names})
+                .rename(
+                    columns={
+                        "location": "place",
+                        "rel_wis": "relative WIS",
+                        "rel_log_wis": "relative WIS, log scale",
+                        "coverage_90": "90% coverage",
+                    }
+                )
+            )
+            + "\n"
+        )
+    lag = pd.read_csv(res / "lag-comparison" / "learnt-lag.csv")
+    save_light_dark(
+        lambda mode: plot_learnt_lag(lag, mode), fig_dir / "lag-learnt.svg"
+    )
     save_light_dark(
         lambda mode: plot_lag_scores(rel, mode), fig_dir / "lag-scores.svg"
     )
