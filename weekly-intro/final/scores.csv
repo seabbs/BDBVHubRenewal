@@ -1,0 +1,13 @@
+version,model,check,n,wis,log_wis,coverage_90
+main,randomwalk,recovery,446,13.836,0.367,0.978
+main,randomwalk,release,133,7.55,0.123,0.85
+main,randomwalk,zone,1045,1.266,0.181,0.901
+main,randomwalknowcast,recovery,446,11.651,0.317,0.897
+main,randomwalknowcast,release,133,9.762,0.09,0.774
+main,randomwalknowcast,zone,1045,1.336,0.185,0.85
+pr,randomwalk,recovery,446,14.214,0.372,0.975
+pr,randomwalk,release,133,7.201,0.123,0.865
+pr,randomwalk,zone,1045,1.261,0.18,0.906
+pr,randomwalknowcast,recovery,446,10.168,0.223,0.987
+pr,randomwalknowcast,release,133,9.561,0.111,0.782
+pr,randomwalknowcast,zone,1045,1.268,0.174,0.875

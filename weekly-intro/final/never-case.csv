@@ -1,0 +1,7 @@
+version,model,never_case_zones,share_weeks_above_0,largest_draw,zones_expecting_3_5_or_more
+main,randomwalk,112,0.133,1339.0,32
+main,randomwalknowcast,112,0.086,210.0,1
+main,pprandomwalknowcast,112,0.106,240.0,31
+pr,randomwalk,112,0.052,124.0,0
+pr,randomwalknowcast,112,0.052,61.0,0
+pr,pprandomwalknowcast,112,0.058,165.0,0

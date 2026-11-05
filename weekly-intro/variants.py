@@ -73,3 +73,58 @@ if V == "OLDNOW":
         grow = growth(g, age, age + gap)
         return week_sum(snap, np.where(snap.observed[r][None, :], snap.counts[:, r, :] * grow, 0.0))
     chain.week_nowcast = week_nowcast
+
+if V == "anc":
+    def source_index(level, parent, n_own=None, n_pooled=None, min_level=10.0, min_err=3):
+        """A place below the rule uses its nearest qualifying ancestor's own estimate."""
+        level = np.asarray(level, dtype=float); parent = np.asarray(parent, dtype=int)
+        n = level.size
+        big = (level >= min_level)[:, None]
+        ok = big if n_own is None else big & (np.asarray(n_own) >= min_err)
+        out = np.empty((n, ok.shape[1]), dtype=int)
+        for node in range(n):
+            root = node
+            while parent[root] >= 0:
+                root = parent[root]
+            for k in range(ok.shape[1]):
+                a = node
+                while a >= 0 and not ok[a, k]:
+                    a = parent[a]
+                out[node, k] = a if a >= 0 else root
+        return out[:, 0] if n_own is None else out
+    chain.source_index = source_index
+
+if V == "ancnb":
+    from bdbvhubrenewal.forecasters import pooling as _pool
+    _orig = _pool.source_index
+    def source_index(level, parent, n_own=None, n_pooled=None, min_level=10.0, min_err=3):
+        """Only the NB size: a place below the rule uses its nearest qualifying ancestor's own size."""
+        if n_own is None:
+            return _orig(level, parent, min_level=min_level)
+        level = np.asarray(level, dtype=float); parent = np.asarray(parent, dtype=int)
+        ok = (level >= min_level)[:, None] & (np.asarray(n_own) >= min_err)
+        out = np.empty(ok.shape, dtype=int)
+        for node in range(level.size):
+            root = node
+            while parent[root] >= 0:
+                root = parent[root]
+            for k in range(ok.shape[1]):
+                a = node
+                while a >= 0 and not ok[a, k]:
+                    a = parent[a]
+                out[node, k] = a if a >= 0 else root
+        return out
+    chain.source_index = source_index
+
+if V == "noquiet":
+    import dataclasses as _dc
+    _orig_add, _orig_retro = chain._add_spread, chain.retro_errors
+    _mask = {}
+    def _retro(snap, o, settings, delay=chain.fit_delay):
+        e = _orig_retro(snap, o, settings, delay)
+        return _dc.replace(e, valid=e.valid & ~_mask["silent"][None, :, None])
+    def _add(origin):
+        _mask["silent"] = origin.silent
+        return _orig_add(origin)
+    chain.retro_errors = _retro
+    chain._add_spread = _add
