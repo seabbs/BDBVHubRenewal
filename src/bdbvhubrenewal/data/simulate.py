@@ -37,6 +37,7 @@ from numpy.typing import NDArray
 from bdbvhubrenewal.data import PROVINCE_POPULATIONS
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
 from bdbvhubrenewal.data.delays import hub_delay_pmf
+from bdbvhubrenewal.data.releases import release_cutoff
 from bdbvhubrenewal.forecasters.base import NATIONAL
 from bdbvhubrenewal.model.delays import censored_pmf
 from bdbvhubrenewal.model.inputs import (
@@ -243,8 +244,9 @@ class SimulatedOutbreak:
         Returns
         -------
         tuple of pandas.DataFrame
-            The target rows (as `bdbvhubrenewal.data.tidy_target`, with
-            `kind = "simulated"`) and the delay line data.
+            The target rows (as `bdbvhubrenewal.data.load_target`, with
+            `kind = "simulated"`) and the delay line data, each with
+            `cutoff`, the release less `cutoff_lag`.
         """
         day = as_date(as_of)
         known, missing, imputed_onset = self._published(day, rng, cutoff_lag)
@@ -275,6 +277,8 @@ class SimulatedOutbreak:
         tab["location_name"] = tab["location"]
         tab["kind"] = "simulated"
         tab["vintage"] = day.isoformat()
+        cut = (day - dt.timedelta(days=cutoff_lag)).isoformat()
+        tab["cutoff"] = cut
         cols = [
             "kind",
             "vintage",
@@ -284,10 +288,12 @@ class SimulatedOutbreak:
             "observed",
             "imputed",
             "total",
+            "cutoff",
         ]
         delay_rows = pd.DataFrame(
             {
                 "vintage": day.isoformat(),
+                "cutoff": cut,
                 "location": known["location"].to_numpy(),
                 "location_name": known["location"].to_numpy(),
                 "onset_week": [
@@ -327,7 +333,10 @@ class SimulatedOutbreak:
         return known, missing, imputed_onset
 
     def zone_vintage(
-        self, as_of: dt.date | str, rng: np.random.Generator | None = None
+        self,
+        as_of: dt.date | str,
+        rng: np.random.Generator | None = None,
+        cutoff_lag: int = 0,
     ) -> pd.DataFrame:
         """Publish the health zone totals the hub would show at a date.
 
@@ -340,16 +349,19 @@ class SimulatedOutbreak:
             The vintage date.
         rng : numpy.random.Generator, optional
             As for `vintage`.
+        cutoff_lag : int
+            As for `vintage`.
 
         Returns
         -------
         pandas.DataFrame
             Rows as `bdbvhubrenewal.data.load_health_zones`: `vintage`,
             `location`, `location_name`, `province`, `target_end_date`,
-            with `observed` (known onsets) and `imputed` beside `total`.
+            with `observed` (known onsets) and `imputed` beside `total`,
+            and `cutoff`.
         """
         day = as_date(as_of)
-        known, missing, imputed_onset = self._published(day, rng)
+        known, missing, imputed_onset = self._published(day, rng, cutoff_lag)
         onset = pd.concat([known["onset_date"], imputed_onset])
         both = pd.concat([known, missing])
         week = onset.map(lambda x: epiweek_end(x.date()).isoformat())
@@ -371,6 +383,7 @@ class SimulatedOutbreak:
         out = out.loc[out["location"] != ""]
         out["location_name"] = out["location"]
         out["vintage"] = day.isoformat()
+        out["cutoff"] = (day - dt.timedelta(days=cutoff_lag)).isoformat()
         cols = [
             "vintage",
             "location",
@@ -380,6 +393,7 @@ class SimulatedOutbreak:
             "observed",
             "imputed",
             "total",
+            "cutoff",
         ]
         return out[cols].reset_index(drop=True)
 
@@ -716,7 +730,7 @@ three weeks of the data period, for each calibrated scenario."""
 
 
 def _weekly_delay_pmfs(
-    delays: pd.DataFrame, weeks: list[str], as_of: str, dmax: int = 60
+    delays: pd.DataFrame, weeks: list[str], cutoff: str, dmax: int = 60
 ) -> np.ndarray:
     """Delay pmf by onset week, completed for right truncation.
 
@@ -726,7 +740,7 @@ def _weekly_delay_pmfs(
     truncation.
     """
     rows = delays.loc[(delays["delay"] >= 0) & (delays["delay"] <= dmax)]
-    full = pd.to_datetime(rows["onset_week"]) <= pd.Timestamp(as_of) - (
+    full = pd.to_datetime(rows["onset_week"]) <= pd.Timestamp(cutoff) - (
         pd.Timedelta(days=dmax + 7)
     )
     base = np.bincount(rows.loc[full, "delay"], minlength=dmax + 1) + 0.5
@@ -743,7 +757,7 @@ def _weekly_delay_pmfs(
         lo, hi = max(0, w - 2), min(len(weeks), w + 3)
         c = counts[lo:hi].sum(axis=0) + base
         cap = int(
-            np.clip((pd.Timestamp(as_of) - pd.Timestamp(week)).days, 0, dmax)
+            np.clip((pd.Timestamp(cutoff) - pd.Timestamp(week)).days, 0, dmax)
         )
         tail = base[cap + 1 :].sum()
         out[w, : cap + 1] = (1 - tail) * c[: cap + 1] / c[: cap + 1].sum()
@@ -765,14 +779,14 @@ def calibrated_settings(
 
     Each province's expected confirmed onsets follow its real weekly
     totals at `as_of`, spread over the days of each week and smoothed,
-    up to `settled_weeks` before `as_of` (later weeks are still being
+    up to `settled_weeks` before its cut-off (later weeks are still being
     reported). Rt is the ratio of onsets to the force of infection under
     the model's generation interval, $R_p(t) = \lambda_p(t) / \sum_s g(s)
     \lambda_p(t - s)$, capped at `RT_CAP`, and onsets beyond what that
     explains (first cases and reintroductions) are seeds, so the model's
     renewal reproduces the real curve. After that Rt is the
     mean of its last three weeks times `SCENARIO_RT_SCALE[name]`, for
-    `weeks_after` weeks past `as_of`. Ascertainment is 1, importation and
+    `weeks_after` weeks past the cut-off. Ascertainment is 1, importation and
     depletion are off, so the curve is the confirmed onsets themselves.
 
     The delay is the real delay by onset week (`_weekly_delay_pmfs`),
@@ -792,9 +806,9 @@ def calibrated_settings(
     name : {"falling", "flat", "rising"}
         Rt after the data.
     weeks_after : int
-        Weeks simulated past `as_of`.
+        Weeks simulated past the cut-off.
     settled_weeks : int
-        Weeks before `as_of` treated as still being reported.
+        Weeks before the cut-off treated as still being reported.
     seed : int
         Random seed.
 
@@ -819,7 +833,7 @@ def calibrated_settings(
         str(wide.index[int((wide.sum(axis=1) > 0).argmax())])
     )
     start = (first_week - pd.Timedelta(days=13)).date()
-    end = pd.Timestamp(as_of)
+    end = pd.Timestamp(release_cutoff(real, as_of))
     n_days = (end - pd.Timestamp(start)).days + 1 + 7 * weeks_after
     settled = end - pd.Timedelta(weeks=settled_weeks)
     n_data = (settled - pd.Timestamp(start)).days + 1
@@ -855,7 +869,7 @@ def calibrated_settings(
         for k in range(-1, n_days // 7 + 1)
     ]
     pmfs = _weekly_delay_pmfs(
-        delays.loc[delays["vintage"] == as_of], weeks, as_of
+        delays.loc[delays["vintage"] == as_of], weeks, end.date().isoformat()
     )
     daily_pmfs = np.repeat(pmfs, 7, axis=0)[:n_days]
     mean_delay = round(float(pmfs[:-1].mean(axis=0) @ np.arange(61)))

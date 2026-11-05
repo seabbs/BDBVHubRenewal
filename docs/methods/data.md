@@ -32,15 +32,21 @@ Province populations are the Institut National de la Statistique's 2019 figures 
 ## Vintages
 
 Each hub release is a vintage, labelled by its `as_of` date and of kind `real` or `simulated`.
-From the 2026-11-01 release on, `as_of` is the extraction date, a day after the last reported case, while earlier releases were labelled by the last reported case ([hub issue 90](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/90)).
-We keep each release's published label, map a rewritten label back to it, and take its last report day as the extraction date less a day.
+From the 2026-11-01 release on, `as_of` is the extraction date, a day after the last reported case.
+Earlier releases were labelled by the last reported case ([hub issue 90](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/90)).
+We keep each release's published label and map a rewritten label back to it.
+A release's data cut-off is its last report day, as its data prove it.
+A case with onset on day $t$ was reported on or after $t$, and a delay row with onset week ending $W$ and delay $d$ was reported on or after $W - 6 + d$.
+The cut-off of a real release is the latest of these days over its daily onsets and delay rows.
+A simulated release states its cut-off.
+The models, the scoring and the zone stage all use this cut-off.
 Recent weeks are revised in later releases, so each forecast is made from one vintage and scored on the counts later releases report.
 
 ## Release snapshots
 
 `auxiliary-data/daily-confirmed-case.csv` holds, for each release, the daily onsets known at that release.
 The count of a day is its known plus imputed onsets, and the counts of a week sum to the hub's weekly target.
-A release has an `as_of` date and a data cut-off, its latest onset day over all places, or the cut-off a simulated release states.
+A release has an `as_of` date and a data cut-off ([Vintages](#vintages)).
 A release observes the days up to its cut-off, and a day in range with no row counts 0.
 The age of day $t$ at release $r$ is the cut-off minus $t$, the onset clock.
 Counts of a day are compared across releases on this clock.

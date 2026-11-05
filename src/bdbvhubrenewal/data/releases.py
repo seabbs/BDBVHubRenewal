@@ -1,15 +1,17 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""Release dates, cut-offs and the renewal model's report to publication lag.
+"""Release labels, cut-offs and the renewal model's report to publication lag.
 
 A hub release is labelled by its `as_of` date. From the 2026-11-01
 release on, `as_of` is the extraction date, one day after the last
-reported case. Earlier releases were labelled one day early, by the last
+reported case. Earlier releases were labelled a day earlier, by the last
 reported case (hub issue #90). `release_id` maps a label, as published or
 as the hub may rewrite it, to the label we key releases by, so results,
 the submission ledger and rounds keep their keys.
-`extraction_date` and `last_report` give a release's dates from either.
-`cutoff_lags` gives the days from a release to its data cut-off by
-weekday, for simulated releases.
+A release's data cut-off is its last report day. `last_report_days`
+derives it from the data, whatever the label, and every tidy table
+carries it as a `cutoff` column, which `release_cutoff` reads.
+`cutoff_lags` gives the days from a release to its cut-off by weekday,
+for simulated releases.
 `publication_lag_pmf` estimates, from pairs of delay files, the lag from a
 case's report to its first publication, which the renewal models mix into
 their onset expectations.
@@ -29,25 +31,27 @@ __all__ = [
     "MAX_PUBLICATION_LAG",
     "ORIGINAL_AS_OF",
     "cutoff_lags",
-    "extraction_date",
-    "last_report",
+    "last_report_days",
     "publication_lag_pmf",
+    "release_cutoff",
     "release_id",
+    "with_cutoffs",
 ]
 
-# Hub issue InsightNet-US/BDBV-Modeling-Hub#90: these labels are a day early.
+# Hub issue InsightNet-US/BDBV-Modeling-Hub#90: the hub may rewrite these.
 ORIGINAL_AS_OF: frozenset[str] = frozenset(
     {"2026-08-18", "2026-10-09", "2026-10-17", "2026-10-24"}
 )
-"""`as_of` labels of the releases published before 2026-11-01, which are
-the last reported case's date, not the extraction date."""
+"""`as_of` labels of the releases published before 2026-11-01, which the
+hub may rewrite a day later. They key results, the submission ledger and
+rounds, so a rewritten label maps back to them."""
 
 
 def release_id(as_of: dt.date | str) -> str:
     """Return the label we key a hub release by.
 
-    A label in `ORIGINAL_AS_OF` is kept. If the hub rewrites one to its
-    extraction date, a day later, it maps back. Other labels are kept.
+    A label in `ORIGINAL_AS_OF` is kept. If the hub rewrites one a day
+    later, it maps back. Other labels are kept.
 
     Parameters
     ----------
@@ -69,84 +73,95 @@ def release_id(as_of: dt.date | str) -> str:
     return before if before in ORIGINAL_AS_OF else day.isoformat()
 
 
-def extraction_date(as_of: dt.date | str) -> dt.date:
-    """Return the date a hub release was extracted.
+def last_report_days(daily: pd.DataFrame, delays: pd.DataFrame) -> pd.Series:
+    r"""Return each release's last report day, as its data prove it.
+
+    A case with onset on day $t$ was reported on or after $t$. A delay row
+    with onset week ending $W$ and delay $d$ was reported on or after
+    $W - 6 + d$. A release's last report day is the latest of these
+    over its daily onsets and its delay rows.
 
     Parameters
     ----------
-    as_of : datetime.date or str
-        The release's `as_of`, as published or as rewritten.
+    daily : pandas.DataFrame
+        Daily onsets by release, with `vintage` and `onset_date`.
+    delays : pandas.DataFrame
+        Delay rows by release, with `vintage`, `onset_week` and `delay`.
+        A release may have none.
+
+    Returns
+    -------
+    pandas.Series
+        The last report day (ISO) by release label, for every release in
+        `daily`.
+    """
+    onset = pd.to_datetime(daily["onset_date"]).groupby(daily["vintage"]).max()
+    report = (
+        pd.to_datetime(delays["onset_week"])
+        - pd.Timedelta(days=6)
+        + pd.to_timedelta(delays["delay"], unit="D")
+    )
+    report = report.groupby(delays["vintage"]).max()
+    last = pd.concat([onset, report.reindex(onset.index)], axis=1).max(axis=1)
+    return last.dt.strftime("%Y-%m-%d").rename("cutoff")
+
+
+def with_cutoffs(table: pd.DataFrame, cutoffs: pd.Series) -> pd.DataFrame:
+    """Add each row's release cut-off as a `cutoff` column.
+
+    Parameters
+    ----------
+    table : pandas.DataFrame
+        Rows with a `vintage` column.
+    cutoffs : pandas.Series
+        Cut-off by release label (`last_report_days`).
+
+    Returns
+    -------
+    pandas.DataFrame
+        A copy of `table` with `cutoff`.
+    """
+    return table.assign(cutoff=table["vintage"].map(cutoffs))
+
+
+def release_cutoff(rows: pd.DataFrame, release: str) -> dt.date:
+    """Return a release's data cut-off, its last report day.
+
+    Parameters
+    ----------
+    rows : pandas.DataFrame
+        Rows with `vintage` and `cutoff` columns (`with_cutoffs`).
+    release : str
+        The release label.
 
     Returns
     -------
     datetime.date
-        A day after the label for a release in `ORIGINAL_AS_OF`, else the
-        label.
-
-    Examples
-    --------
-    >>> extraction_date("2026-10-24"), extraction_date("2026-11-01")
-    (datetime.date(2026, 10, 25), datetime.date(2026, 11, 1))
+        The cut-off.
     """
-    label = release_id(as_of)
-    late = label in ORIGINAL_AS_OF
-    return as_date(label) + dt.timedelta(days=int(late))
-
-
-def last_report(as_of: dt.date | str, kind: str = "real") -> dt.date:
-    """Return the last report day in a release, its data cut-off.
-
-    A simulated release's label is its last report day. A hub release's
-    last report is the day before its extraction.
-
-    Parameters
-    ----------
-    as_of : datetime.date or str
-        The release's `as_of` label.
-    kind : str, optional
-        `"real"` for a hub release, else the label is the cut-off.
-
-    Returns
-    -------
-    datetime.date
-        The last report day.
-
-    Examples
-    --------
-    >>> last_report("2026-10-24"), last_report("2026-11-01")
-    (datetime.date(2026, 10, 24), datetime.date(2026, 10, 31))
-    """
-    if kind != "real":
-        return as_date(as_of)
-    return extraction_date(as_of) - dt.timedelta(days=1)
+    cut = rows.loc[rows["vintage"] == release, "cutoff"]
+    return as_date(str(cut.iloc[0]))
 
 
 def cutoff_lags(daily: pd.DataFrame) -> dict[int, int]:
     """Days from release to data cut-off, by release weekday.
 
-    The cut-off of a real release is its latest onset day. A weekday with
-    no real release takes the median over the releases.
+    A weekday with no real release takes the median over the releases.
 
     Parameters
     ----------
     daily : pandas.DataFrame
-        Real daily rows with `vintage` and `onset_date`
-        (`bdbvhubrenewal.data.tidy_daily`).
+        Real daily rows with `vintage` and `cutoff`.
 
     Returns
     -------
     dict of int to int
         Lag in days for every weekday, 0 (Monday) to 6.
     """
-    last = pd.to_datetime(daily.groupby("vintage")["onset_date"].max())
-    lag = (
-        pd.to_datetime(pd.Series(last.index, index=last.index)) - last
-    ).dt.days
-    lag = lag.sort_index()
-    weekday = pd.to_datetime(
-        pd.Series(lag.index, index=lag.index)
-    ).dt.day_of_week
-    seen = lag.groupby(weekday).last()
+    cut = daily.groupby("vintage")["cutoff"].first().sort_index()
+    label = pd.to_datetime(pd.Series(cut.index, index=cut.index))
+    lag = (label - pd.to_datetime(cut)).dt.days
+    seen = lag.groupby(label.dt.day_of_week).last()
     fill = int(np.median(lag.to_numpy()))
     return {w: int(seen.get(w, fill)) for w in range(7)}
 
@@ -165,19 +180,20 @@ def publication_lag_pmf(
     r"""Empirical pmf of the lag from report to first publication.
 
     For each pair of consecutive delay vintages $V_1 < V_2$ on or before
-    `as_of`, the rows of $V_2$ beyond those of $V_1$ (by location, onset
-    week and delay) were first published in $(V_1, V_2]$. A row with
-    onset week $W$ and delay $d$ was reported on $W - u + d$ for an onset
-    $u$ days before $W$, so with $u$ uniform on $0..6$ and publication
-    uniform over the days of $(V_1, V_2]$ its lag is spread over
-    $V_1 + j - (W - u + d)$, the feasible (non-negative) ones only, and
-    lags past `max_lag` go to the last cell. Pairs whose later vintage is after
-    `as_of` are not used, so a backtest does not see later files.
+    `as_of`, with cut-offs $C_1 < C_2$ (`release_cutoff`), the rows of
+    $V_2$ beyond those of $V_1$ (by location, onset week and delay) were
+    first published in $(C_1, C_2]$. A row with onset week $W$ and delay
+    $d$ was reported on $W - u + d$ for an onset $u$ days before $W$, so
+    with $u$ uniform on $0..6$ and publication uniform over the days of
+    $(C_1, C_2]$ its lag is spread over $C_1 + j - (W - u + d)$, the
+    feasible (non-negative) ones only, and lags past `max_lag` go to the
+    last cell. Pairs whose later vintage is after `as_of` are not used, so
+    a backtest does not see later files.
 
     Parameters
     ----------
     delays : pandas.DataFrame
-        Delay rows of several vintages, with a `vintage` column.
+        Delay rows of several vintages, with `vintage` and `cutoff`.
     as_of : datetime.date or str
         The forecast date.
     max_lag : int
@@ -199,8 +215,8 @@ def publication_lag_pmf(
         added = change[change > 0].reset_index(name="n")
         if added.empty:
             continue
-        v1, v2 = pd.Timestamp(a), pd.Timestamp(b)
-        gap = (v2 - v1).days
+        v1 = pd.Timestamp(release_cutoff(delays, a))
+        gap = (pd.Timestamp(release_cutoff(delays, b)) - v1).days
         onset = pd.to_datetime(pd.Series(added["onset_week"]))
         week = (onset - v1).dt.days.to_numpy()
         count = np.asarray(added["n"], dtype=float)
