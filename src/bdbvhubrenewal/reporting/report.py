@@ -519,12 +519,12 @@ def _scored_on(reported: pd.DataFrame, baseline: str = "randomwalk") -> str:
         "provinces": "provincial",
         "zones": "health zone",
     }
-    counts = ", ".join(
-        f"{n[p]} {label}" for p, label in scales.items() if p in n
-    )
+    counts = [f"{n[p]} {label}" for p, label in scales.items() if p in n]
+    listed = ", ".join(counts[:-1]) + " and " if len(counts) > 1 else ""
     return (
         f"They rest on {len(pairs)} origin and release pairs, with "
-        f"{baseline} scored on {counts} forecasts.\n"
+        f"{baseline} scored on {listed}{counts[-1]} forecasts.\n"
+        "The renewal models are not scored at health zones.\n"
     )
 
 
@@ -1209,10 +1209,11 @@ def _recovery_section(src: str, energy: pd.DataFrame) -> str:
         "Forecasts from vintages of a [simulated outbreak]"
         "(methods/data.md#simulated-vintages), scored against the known "
         "final counts.\n\n"
+        + "### Overall\n\n"
         + views["overall"]
-        + "\n"
+        + "\n### By horizon\n\n"
         + views["horizon"]
-        + "\n"
+        + "\n### By place\n\n"
         + views["place"]
         + "\n"
         + _dropdown(
