@@ -78,6 +78,6 @@ def test_every_interactive_starts_with_as_reported_off() -> None:
         ]
     )
     counts = target.drop(columns=["kind", "vintage"])
-    place = place_chart_data(samples, counts, {}, COLOURS)
+    place = place_chart_data(samples, counts, {}, COLOURS, 2)
     for data in (summary, explore, place):
         assert _on(data) == {BASELINE: False, "renewal": True}
