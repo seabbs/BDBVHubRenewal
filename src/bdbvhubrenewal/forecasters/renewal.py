@@ -674,12 +674,24 @@ def data_gap(task: ForecastTask, samples: pd.DataFrame) -> pd.DataFrame | None:
 def _idle_samples(
     task: ForecastTask, loc: str, rows: pd.DataFrame
 ) -> pd.DataFrame:
-    """Draws for a location with too few cases for its own fit."""
+    """Draws for a location with too few cases for its own fit.
+
+    A week's draws are never below the count already reported for it.
+    """
     from bdbvhubrenewal.model.inputs import idle_draws
 
-    counts = rows.loc[rows["location"] == loc, "total"].to_numpy(dtype=float)
+    own = rows.loc[rows["location"] == loc]
+    counts = own["total"].to_numpy(dtype=float)
     n, weeks = task.n_samples, list(task.target_end_dates)
-    draws = idle_draws(counts, len(weeks), n, task.rng())
+    reported = (
+        own.groupby("target_end_date")["total"]
+        .sum()
+        .reindex(weeks, fill_value=0)
+        .to_numpy(dtype=float)
+    )
+    draws = np.maximum(
+        idle_draws(counts, len(weeks), n, task.rng()), reported[None, :]
+    )
     return pd.DataFrame(
         {
             "location": loc,
