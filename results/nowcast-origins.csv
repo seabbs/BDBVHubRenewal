@@ -1,14 +1,8 @@
 origin,model,status,reason,n_reported,n_complete
 2026-08-18,randomwalk,no forecast,No pair of releases up to 2026-08-18 has a step of at most 42 days.,0,0
 2026-08-18,randomwalknowcast,no forecast,No pair of releases up to 2026-08-18 has a step of at most 42 days.,0,0
-2026-08-18,renewal,no forecast,No pair of releases up to 2026-08-18 has a step of at most 42 days.,0,0
-2026-08-18,renewalbvd,no forecast,No pair of releases up to 2026-08-18 has a step of at most 42 days.,0,0
-2026-08-18,renewalsp,no forecast,No pair of releases up to 2026-08-18 has a step of at most 42 days.,0,0
 2026-10-09,randomwalk,no forecast,No pair of releases up to 2026-10-09 has a step of at most 42 days.,0,0
 2026-10-09,randomwalknowcast,no forecast,No pair of releases up to 2026-10-09 has a step of at most 42 days.,0,0
-2026-10-09,renewal,no forecast,No pair of releases up to 2026-10-09 has a step of at most 42 days.,0,0
-2026-10-09,renewalbvd,no forecast,No pair of releases up to 2026-10-09 has a step of at most 42 days.,0,0
-2026-10-09,renewalsp,no forecast,No pair of releases up to 2026-10-09 has a step of at most 42 days.,0,0
 2026-10-17,randomwalk,scored,,88,13
 2026-10-17,randomwalknowcast,scored,,88,13
 2026-10-17,pprandomwalknowcast,scored,,88,13
