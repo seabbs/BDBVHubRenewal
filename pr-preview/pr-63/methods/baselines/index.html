@@ -2240,7 +2240,7 @@ G_p(a) = 1 \text{ for } a \ge D,
 <p>and <span class="arithmatex">\(1 / G_p(a)\)</span> is the share of it reported.
 There is no growth past <span class="arithmatex">\(D\)</span>, so an equation whose ages run past <span class="arithmatex">\(D\)</span> puts that growth on its ages below <span class="arithmatex">\(D\)</span>.</p>
 <h2 id="nowcast">Nowcast<a class="headerlink" href="#nowcast" title="Permanent link">&para;</a></h2>
-<p>Each hub week is a reference time of a weekly reporting triangle, with a column every 7 days after <span class="arithmatex">\(c_o\)</span>.
+<p>Each hub week is a reference time of a weekly reporting triangle, with a column every 7 days after <span class="arithmatex">\(c_o\)</span> and a last one at <span class="arithmatex">\(c_o + D\)</span>, where <span class="arithmatex">\(F = 1\)</span>.
 The share of week <span class="arithmatex">\(w\)</span> reported by column <span class="arithmatex">\(j\)</span> is</p>
 <div class="arithmatex">\[
 F_{p,j}(w) = \frac{1}{n_w} \sum_{t \in w,\ t \le c_o} \frac{1}{G_p(c_o - t + 7j)},
@@ -2312,8 +2312,8 @@ For <span class="arithmatex">\(h \ge 1\)</span>,</p>
 <p>A place with no case reported in the 9 weeks up to the cut-off week is silent.
 A silent place is 0 until its first introduction, which comes in each week with probability <span class="arithmatex">\(q_p\)</span>.
 In both models this holds from the week after the start week of <code>randomwalk</code>, so <code>randomwalknowcast</code> does not nowcast a silent place's recent weeks.
-From that week its rate is 1 case a week, and the introduction week has at least 1 case.
-Its walk keeps its own spread, which is 0 over its silent weeks.
+A silent place's walk has spread 0, so from its introduction its rate stays at 1 case a week.
+The introduction week has at least 1 case.
 <span class="arithmatex">\(q_p\)</span> is the share of weeks with a case among the weeks that follow 9 weeks with none, over the place and its siblings (the zones of its province, or the provinces of the country), in weeks up to the start week of <code>randomwalk</code>.
 It is estimated at each origin from the counts reported then.
 National is the sum of the provinces, sample by sample.</p>
