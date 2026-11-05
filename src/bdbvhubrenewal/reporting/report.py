@@ -721,10 +721,9 @@ def _zone_nowcast_section(
         "for the country, the provinces and the zones with cases in the 12 "
         "weeks before the reference date "
         "([Health zones](methods/evaluation.md#health-zones)).\n"
-        "The table summarises each model's scores at the place over the "
-        "rounds chosen.\n\n"
+        "The latest nowcast has no score yet.\n"
+        "Scores by origin are on the [Backtest](backtest.md) page.\n\n"
         '<div class="nowcastchart" data-src="../figures/nowcastchart.json" '
-        'data-summary="../figures/scoresummary-backtest.json" '
         'role="group" aria-label="Nowcast and forecast by place">\n'
         "<noscript>The nowcast chart needs JavaScript.</noscript>\n"
         "</div>\n",
