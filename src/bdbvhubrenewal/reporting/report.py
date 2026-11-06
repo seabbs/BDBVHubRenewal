@@ -66,7 +66,7 @@ from bdbvhubrenewal.evaluation.nowcast import (
 )
 from bdbvhubrenewal.evaluation.scoring import summarise_scores
 from bdbvhubrenewal.evaluation.store import samplers, stored_models
-from bdbvhubrenewal.evaluation.zones import SUMMED, zone_relative_skill
+from bdbvhubrenewal.evaluation.zones import SUMMED
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastTask,
@@ -536,8 +536,8 @@ def _scored_on(reported: pd.DataFrame, baseline: str = "randomwalk") -> str:
     counts = [f"{n[p]} {label}" for p, label in scales.items() if p in n]
     listed = ", ".join(counts[:-1]) + " and " if len(counts) > 1 else ""
     return (
-        f"Scored on {len(pairs)} origin and release pairs.\n"
-        f"{baseline} has {listed}{counts[-1]} forecasts.\n"
+        f"The scores cover {len(pairs)} origin and release pairs.\n"
+        f"The {baseline} baseline has {listed}{counts[-1]} forecasts.\n"
         "The renewal models are not scored at health zones.\n"
     )
 
@@ -711,19 +711,21 @@ def _zone_nowcast_section(
         fig / "zone-map.geojson",
         zone_boundaries(release.choice.tag, hub_commit),
     )
-    write_explorer(
-        fig / "nowcastchart.json",
-        place_chart_data(
-            every,
-            pd.concat(
-                [above, counts[["location", "target_end_date", "total"]]],
-                ignore_index=True,
-            ),
-            {**labels, **zone_names(hub_commit)},
-            _model_colours(names),
-            config.complete_after_weeks,
-        ),
+    weekly = pd.concat(
+        [above, counts[["location", "target_end_date", "total"]]],
+        ignore_index=True,
     )
+    chart = place_chart_data(
+        every,
+        weekly,
+        {**labels, **zone_names(hub_commit)},
+        _model_colours(names),
+        config.complete_after_weeks,
+    )
+    write_explorer(fig / "nowcastchart.json", chart)
+    # The two latest complete weeks, as the zone review takes them.
+    weeks = weekly["target_end_date"].astype(str)
+    recent = sorted(set(weeks[weeks <= str(chart["complete_through"])]))[-2:]
     _write(
         gen / "nowcast-picker.md",
         "## By place\n\n"
@@ -751,7 +753,8 @@ def _zone_nowcast_section(
         "</div>\n\n"
         "### Zone review\n\n"
         "One row per place with a forecast from the chosen model.\n"
-        "Recent is the mean count of the last two complete weeks.\n"
+        f"Recent is the mean count of the weeks ending {recent[0]} and "
+        f"{recent[1]}, as reported at the {task.vintage} release.\n"
         "Each week column gives the median and 90% interval.\n"
         "Ratio is log((median + 1) / (recent + 1)) for the chosen week.\n"
         "A ratio of 0.69 is double the recent count and -0.69 is half.\n"
@@ -1309,7 +1312,7 @@ def _scenario_section(
     """Return the scenario summaries and explorer, a tab per scenario.
 
     Forecasts are scored against the final simulated counts of complete
-    weeks, which are also the explorer's data, so every week is complete.
+    weeks. The explorer draws every week of those counts, all complete.
     """
     scores = pd.read_csv(res / "scenario-scores.csv.gz", low_memory=False)
     scores = scores.loc[(scores["truth_view"] == "final") & scores["complete"]]
@@ -1318,6 +1321,7 @@ def _scenario_section(
     samples = pd.read_csv(
         res / "scenario-forecasts.csv.gz", dtype={"as_of": object}
     )
+    final = pd.read_csv(res / "scenario-truth.csv")
     sections: dict[str, list[str]] = {
         "Overall": [],
         "By horizon": [],
@@ -1337,11 +1341,10 @@ def _scenario_section(
         views = _summary_views(src, f"({title})")
         drawn = samples.loc[samples["scenario"] == key]
         shown = [m for m in names if m in set(drawn["model"])]
-        truth = own[["truth_vintage", "location", "target_end_date", "truth"]]
         target = (
-            truth.drop_duplicates()
-            .rename(columns={"truth_vintage": "vintage", "truth": "total"})
-            .assign(kind="real")
+            final.loc[final["scenario"] == key]
+            .rename(columns={"truth": "total"})
+            .assign(kind="real", vintage=own["truth_vintage"].iloc[0])
         )
         write_explorer(
             fig / f"explorer-scenario-{key}.json",
