@@ -1,0 +1,296 @@
+/* Wider content for score tables. */
+.md-grid {
+  max-width: 1280px;
+}
+
+/* Keep long display equations scrollable on small screens. */
+.md-typeset div.arithmatex {
+  overflow-x: auto;
+}
+
+/* Short subtitle line under a page's H1. */
+.md-typeset .page-subtitle {
+  margin-top: -0.6em;
+  font-size: 1.05rem;
+  color: var(--md-default-fg-color--light);
+}
+
+/* Wordmark as the home page H1. */
+.md-typeset h1 .title-logo {
+  height: 44px;
+  width: auto;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+/* Figures: full width, with a muted caption. */
+.md-typeset figure.doc-figure {
+  margin: 1.5em 0;
+}
+
+.md-typeset figure.doc-figure img {
+  width: 100%;
+  max-width: 100%;
+}
+
+.md-typeset figure.doc-figure figcaption {
+  max-width: 100%;
+  font-style: normal;
+  color: var(--md-default-fg-color--light);
+}
+
+.md-typeset figure.doc-figure > br {
+  display: none;
+}
+
+/* Images inside content tabs fill the tab. */
+.md-typeset .tabbed-block img {
+  width: 100%;
+}
+
+/* Wide tables scroll rather than squash. */
+.md-typeset table:not([class]) {
+  font-size: 0.7rem;
+}
+
+/* Forecast explorer. */
+.explorer {
+  margin: 1em 0;
+}
+
+.explorer-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em 1.5em;
+}
+
+.explorer select,
+.nowcastchart select {
+  font: inherit;
+  color: var(--md-default-fg-color);
+  background: var(--md-default-bg-color);
+  border: 1px solid var(--md-default-fg-color--lighter);
+  border-radius: 4px;
+  padding: 0.2em 0.4em;
+}
+
+.explorer-figure svg {
+  width: 100%;
+  height: auto;
+}
+
+.explorer-grid {
+  stroke: var(--md-default-fg-color--lightest);
+}
+
+.explorer-tick {
+  fill: var(--md-default-fg-color--light);
+  font-size: 11px;
+}
+
+.explorer-shade {
+  fill: var(--md-default-fg-color--lightest);
+  opacity: 0.6;
+}
+
+.explorer-data {
+  stroke: var(--md-default-fg-color);
+  stroke-width: 1.2;
+}
+
+.explorer-point {
+  fill: var(--md-default-fg-color);
+}
+
+.explorer-point.hollow {
+  fill: var(--md-default-bg-color);
+  stroke: var(--md-default-fg-color);
+}
+
+.explorer-ref {
+  stroke: var(--md-default-fg-color--light);
+  stroke-dasharray: 2 3;
+}
+
+.explorer-note {
+  color: var(--md-default-fg-color--light);
+}
+
+/* Score charts. */
+.scorechart-tabs {
+  display: flex;
+  gap: 1em;
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.scorechart-tabs button {
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--md-default-fg-color--light);
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 0.6em 0.2em;
+  cursor: pointer;
+}
+
+.scorechart-tabs button[aria-selected="true"] {
+  color: var(--md-default-fg-color);
+  border-bottom-color: currentcolor;
+}
+
+.scorechart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3em 1em;
+  margin: 0.6em 0;
+  font-size: 0.8rem;
+}
+
+.scorechart-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  cursor: pointer;
+}
+
+.scorechart-swatch {
+  display: inline-block;
+  width: 1.8em;
+  height: 0.6em;
+}
+
+.scorechart-figure svg {
+  width: 100%;
+  height: auto;
+}
+
+.scorechart-grid {
+  stroke: var(--md-default-fg-color--lightest);
+}
+
+.scorechart-ref {
+  stroke: var(--md-default-fg-color--light);
+  stroke-dasharray: 2 3;
+}
+
+.scorechart-tick {
+  fill: var(--md-default-fg-color--light);
+  font-size: 11px;
+}
+
+/* Nowcast chart. */
+.nowcastchart {
+  scroll-margin-top: 4rem;
+  margin: 1em 0;
+}
+
+/* Table filter. */
+.tablefilter-controls {
+  margin: 0.6em 0;
+  font-size: 0.8rem;
+  align-items: center;
+}
+
+.tablefilter input,
+.tablefilter select {
+  font: inherit;
+  color: var(--md-default-fg-color);
+  background: var(--md-default-bg-color);
+  border: 1px solid var(--md-default-fg-color--lighter);
+  border-radius: 4px;
+  padding: 0.2em 0.4em;
+}
+
+.tablefilter-count {
+  color: var(--md-default-fg-color--light);
+}
+
+.tablefilter-sort {
+  cursor: pointer;
+  user-select: none;
+}
+
+.tablefilter-sort[aria-sort="ascending"]::after {
+  content: " ▲";
+}
+
+.tablefilter-sort[aria-sort="descending"]::after {
+  content: " ▼";
+}
+
+/* Zone review. */
+.zonereview-table {
+  overflow-x: auto;
+}
+
+.md-typeset .zonereview-table table {
+  font-size: 0.7rem;
+}
+
+.md-typeset .zonereview-table td,
+.md-typeset .zonereview-table th {
+  white-space: nowrap;
+  padding: 0.4em 0.6em;
+}
+
+.md-typeset .zonereview-table td:first-child,
+.md-typeset .zonereview-table th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--md-default-bg-color);
+}
+
+.zonereview-link {
+  font: inherit;
+  color: var(--md-typeset-a-color);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.zonereview-up {
+  background: rgba(214, 69, 65, 0.2);
+}
+
+.zonereview-down {
+  background: rgba(57, 135, 229, 0.2);
+}
+
+/* Drag-to-zoom. */
+svg.zoomable {
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+}
+
+.zoom-brush {
+  fill: var(--md-accent-fg-color);
+  fill-opacity: 0.15;
+  stroke: var(--md-accent-fg-color);
+  stroke-width: 1;
+}
+
+.zoom-reset {
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--md-default-fg-color);
+  background: var(--md-default-bg-color);
+  border: 1px solid var(--md-default-fg-color--lighter);
+  border-radius: 4px;
+  padding: 0.15em 0.6em;
+  cursor: pointer;
+}
+
+.scorechart-tabs .zoom-reset {
+  margin: auto 0 auto auto;
+  font-weight: 400;
+  color: var(--md-default-fg-color);
+  border: 1px solid var(--md-default-fg-color--lighter);
+  border-radius: 4px;
+  padding: 0.15em 0.6em;
+}
