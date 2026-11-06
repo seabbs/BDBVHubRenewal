@@ -568,7 +568,7 @@ def test_report_cutoffs_are_days_from_the_model_start(
     cuts = rn.report_cutoffs(task, data)
     start = pd.Timestamp(data.start_date)
     # Each later release is cut at its last report day: 10-24 for the
-    # label 10-24, published a day early, and 10-31 for 11-01 (hub #90).
+    # label 10-24, published a day early, and 10-31 for 11-01.
     last = {"2026-10-24": "2026-10-24", "2026-11-01": "2026-10-31"}
     assert cuts == {(pd.Timestamp(last[d]) - start).days: d for d in last}
 
@@ -659,7 +659,7 @@ def test_the_model_cut_off_is_the_release_s_last_report_day(
         data = rn.vintage_inputs(task, config)
         # The cut-off and the last data week end on the last report day,
         # so 11-01, extracted a day after its last report, adds no empty
-        # week (hub issue #90).
+        # week.
         cut = data.start_date + dt.timedelta(days=data.cutoff)
         end = data.start_date + dt.timedelta(days=7 * data.n_weeks - 1)
         assert cut.isoformat() == last
