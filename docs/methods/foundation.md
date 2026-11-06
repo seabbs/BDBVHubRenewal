@@ -4,7 +4,7 @@
 { .page-subtitle }
 
 The data and notation are on the [Data methods page](data.md#target-and-notation).
-`fm_delay` is a candidate, not submitted ([issue #20](https://github.com/seabbs/BDBVHubRenewal/issues/20)).
+`fm_delay` is a candidate, not submitted.
 
 ## Model
 

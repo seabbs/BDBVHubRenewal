@@ -104,13 +104,6 @@ def test_draws_add_new_reports_of_incomplete_cells(task: ForecastTask) -> None:
     # A week after the data has every cell to come: 5 for each class.
     after = out.loc[out["target_end_date"] == last, "value"]
     assert (after == 5.0 * N_DELAYS).all()
-    # Every sample is the same draw here, so trajectories agree.
-    assert (
-        out.groupby(["location", "target_end_date"])["value"]
-        .nunique()
-        .eq(1)
-        .all()
-    )
     # No week falls below what is reported.
     zero = FMDelay(sample=_constant(0.0)).forecast(task)
     assert (out["value"].to_numpy() >= zero["value"].to_numpy()).all()

@@ -200,8 +200,6 @@ def _toto(device: str) -> Any:
     from toto.inference.forecaster import TotoForecaster
     from toto.model.toto import Toto
 
-    # Toto's `from_pretrained` passes arguments huggingface_hub 1.0 dropped,
-    # so the checkpoint is downloaded and loaded from its folder.
     path = snapshot_download(TOTO_MODEL, revision=TOTO_REVISION)
     toto = Toto.load_from_checkpoint(path, map_location=device)
     return TotoForecaster(toto.model)
