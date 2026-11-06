@@ -199,7 +199,7 @@ hubValidations enforces `format: email` (tested, `invalid_bad_email`).
 
 - Two rounds share `round_id: reference_date` (T L4–140 and L141–243).
   Round 1, `BVBD 2026 cumulative outbreak size estimate`, is closed in practice but its reference dates stay in `T` (MO L234–250).
-  Its window is −7 to +28 days (T L135–139), so round-1 dates up to 2026-10-12 still pass the window check until 2026-11-09.
+  Its window is −7 to +28 days around each reference date (T L135–139).
 - A file belongs to the round whose reference dates include its date.
   The two lists do not overlap.
 - One model task per round, so `spl_mt_unique` is trivial here.
@@ -254,7 +254,7 @@ Real submissions copied from the hub:
 
 | file | source commit | note |
 |---|---|---|
-| `model-output/OHTJHU-BM/2026-10-31-OHTJHU-BM.csv` | `d1ddf9d` | the only round-2 file; passed hub CI; 62 locations, 9 weeks, reused ids |
+| `model-output/OHTJHU-BM/2026-10-31-OHTJHU-BM.csv` | `d1ddf9d` | the only round-2 file at `d1ddf9d`, written before the hub added `forecast_date`; 62 locations, 9 weeks, reused ids |
 | `model-output/epiforecasts-renewal/2026-10-12-epiforecasts-renewal.csv` | `6b9254a` | round 1, quantile, mean and median |
 | `model-output/MOBS-GLEAM_BDBV/2026-06-28-MOBS-GLEAM_BDBV.csv` | `01f8a71` | round 1, columns out of order |
 | `model-metadata/OHTJHU-BM.yml` | `d1ddf9d` | |

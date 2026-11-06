@@ -503,7 +503,7 @@
         "path": "model-output/OHTJHU-BM/2026-10-31-OHTJHU-BM.csv",
         "commit": "d1ddf9d70a04dd969ea42aba7aab3b7bbe7a3890"
       },
-      "description": "The only round-2 (sample) submission; passed hub CI. 62 locations, 9 weeks, ids 1-100 reused per location. Written before the hub added the forecast_date column, so the Python validator rejects it for that.",
+      "description": "The only round-2 (sample) submission at d1ddf9d. 62 locations, 9 weeks, ids 1-100 reused per location. Written before the hub added the forecast_date column, so the Python validator rejects it for that.",
       "valid_py": false,
       "valid_r": true
     },

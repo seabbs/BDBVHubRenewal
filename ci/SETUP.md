@@ -84,7 +84,7 @@ Settings → Secrets and variables → Actions → **Variables**:
 The first PR from `seabbs-bot` is a first-time contribution from a fork.
 The hub's validation workflow will wait for a maintainer to click **Approve and run**.
 Ask Justin Lessler or Claire Smith to approve it, and say that weekly bot PRs will follow.
-The open questions for the organisers in `seabbs/EpidemicDates` also apply here.
+The [open questions for the organisers](https://github.com/seabbs/EpidemicDates/issues/3) also apply here.
 
 ## Switching off DRY_RUN
 
