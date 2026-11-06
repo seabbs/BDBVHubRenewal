@@ -53,14 +53,12 @@ tasks:
     desc: Load the fitted models' stored fits into results/ (fetches the fit-store branch)
     run: once
     cmds:
-      - rm -rf output/fit-store
       - scripts/fit-store.sh fetch output/fit-store
       - uv run bdbvhubrenewal fit-store load --store output/fit-store
 
   fit-store-plan:
     desc: List the fits the store lacks for this code and data
     cmds:
-      - rm -rf output/fit-store
       - scripts/fit-store.sh fetch output/fit-store
       - uv run bdbvhubrenewal fit-store plan --store output/fit-store
 

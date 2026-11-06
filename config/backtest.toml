@@ -22,11 +22,10 @@ model_choice = "results/model-choice.yml"
 complete_after_weeks = 3
 
 [sampler]
-# NUTS settings of every fitted model in the backtest and leave one
-# province out. Chains and warm-up are as in the submission fits
-# (ci/policy.toml), but target acceptance is 0.8, against 0.9 there
-# (0.95 for renewalbvd, which also draws 1000).
-# Settings in BDBV_RENEWAL_SAMPLER win over these.
+# NUTS settings of leave-one-province-out fits only. Stored backtest
+# fits use each model's sampler table in ci/policy.toml
+# (bdbvhubrenewal.evaluation.store). Settings in BDBV_RENEWAL_SAMPLER win
+# over these.
 num_chains = 2
 num_warmup = 500
 num_samples = 500
