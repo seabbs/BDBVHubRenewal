@@ -225,3 +225,10 @@ def test_browser_relative_scores_are_mean_over_mean_like_relative_skill() -> (
         )
         if model != "randomwalk":
             assert row["rel"]["wis"] != pytest.approx(ratios[model], abs=1e-3)
+
+
+def test_summary_html_offers_a_map_only_when_given_one() -> None:
+    assert 'data-map="m.geojson"' in summary_html(
+        "x.json", "Scores", view="place", map_src="m.geojson"
+    )
+    assert "data-map" not in summary_html("x.json", "Scores", view="place")

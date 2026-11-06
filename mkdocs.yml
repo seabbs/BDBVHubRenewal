@@ -109,6 +109,7 @@ extra_css:
 extra_javascript:
   - javascripts/mathjax.js
   - javascripts/toggles.js
+  - javascripts/placemap.js
   - javascripts/zoom.js
   - javascripts/summarise.js
   - javascripts/energy.js

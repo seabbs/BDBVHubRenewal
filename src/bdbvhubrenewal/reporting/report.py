@@ -66,7 +66,7 @@ from bdbvhubrenewal.evaluation.nowcast import (
 )
 from bdbvhubrenewal.evaluation.scoring import summarise_scores
 from bdbvhubrenewal.evaluation.store import samplers, stored_models
-from bdbvhubrenewal.evaluation.zones import SUMMED, zone_relative_skill
+from bdbvhubrenewal.evaluation.zones import SUMMED
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastTask,
@@ -457,6 +457,7 @@ def _release_section(
             "Scores by place",
             view="place",
             static="../figures/scores-place.svg",
+            map_src=ZONE_MAP,
         ),
     )
     save_light_dark(
@@ -540,6 +541,10 @@ def _scored_on(reported: pd.DataFrame, baseline: str = "randomwalk") -> str:
         f"{baseline} has {listed}{counts[-1]} forecasts.\n"
         "The renewal models are not scored at health zones.\n"
     )
+
+
+ZONE_MAP: Final = "../figures/zone-map.geojson"
+"""The health zone boundaries the interactive maps draw, from a page."""
 
 
 _NOWCAST_GROUPS: Final = (
@@ -735,6 +740,7 @@ def _zone_nowcast_section(
         "Scores by origin are on the [Backtest](backtest.md) page.\n\n"
         '<div class="nowcastchart" id="nowcast-place" '
         'data-src="../figures/nowcastchart.json" '
+        f'data-map="{ZONE_MAP}" '
         'role="group" aria-label="Nowcast and forecast by place">\n'
         "<noscript>The nowcast chart needs JavaScript.</noscript>\n"
         "</div>\n",
@@ -743,9 +749,22 @@ def _zone_nowcast_section(
         gen / "zone-nowcast.md",
         "## Health zones\n\n"
         "Each model's nowcast and forecast in one health zone.\n"
-        "Pick the province, then the zone.\n\n"
+        "Pick the province and the zone, or click a zone on the map.\n"
+        "The map colours each zone by log((median + 1) / (recent + 1)) for "
+        "the model and week chosen above the map.\n"
+        "The zone review below has its own model and week.\n"
+        "Recent is the mean count of the last two complete weeks.\n"
+        "The panel under the map gives the numbers for the zone picked.\n"
+        "Katoyi (CD-NK-13) is not on the map: its code in the hub mapping "
+        "does not match the boundary file.\n"
+        "Zone boundaries are from [BVDOutbreakSize]"
+        f"(https://github.com/{BVD_REPO}/blob/{release.choice.tag}/"
+        f"{BOUNDARIES_PATH}) at {release.choice.tag}, from the Ministry of "
+        "Health boundaries on the [Humanitarian Data Exchange]"
+        "(https://data.humdata.org/dataset/drc-health-data).\n\n"
         '<div class="nowcastchart" id="nowcast-zones" data-scale="zones" '
         'data-src="../figures/nowcastchart.json" '
+        f'data-map="{ZONE_MAP}" data-map-on="true" '
         'role="group" aria-label="Nowcast and forecast by health zone">\n'
         "<noscript>The nowcast chart needs JavaScript.</noscript>\n"
         "</div>\n\n"
@@ -755,17 +774,9 @@ def _zone_nowcast_section(
         "Each week column gives the median and 90% interval.\n"
         "Ratio is log((median + 1) / (recent + 1)) for the chosen week.\n"
         "A ratio of 0.69 is double the recent count and -0.69 is half.\n"
-        "Click a place to show it in the chart above.\n"
-        "The map colours each zone by the same ratio.\n"
-        "Katoyi (CD-NK-13) is not on the map: its code in the hub mapping "
-        "does not match the boundary file.\n"
-        "Zone boundaries are from [BVDOutbreakSize]"
-        f"(https://github.com/{BVD_REPO}/blob/{release.choice.tag}/"
-        f"{BOUNDARIES_PATH}) at {release.choice.tag}, from the Ministry of "
-        "Health boundaries on the [Humanitarian Data Exchange]"
-        "(https://data.humdata.org/dataset/drc-health-data).\n\n"
+        "Click a place to show it in the chart above.\n\n"
         '<div class="zonereview" data-src="../figures/nowcastchart.json" '
-        'data-map="../figures/zone-map.geojson" data-chart="nowcast-zones" '
+        'data-chart="nowcast-zones" '
         'role="group" aria-label="Zone review">\n'
         "<noscript>The zone review needs JavaScript.</noscript>\n"
         "</div>\n",
@@ -1942,6 +1953,7 @@ def _comparison_summary(
             "Scores by place",
             view="place",
             static="../figures/comparison-place.svg",
+            map_src=ZONE_MAP,
         ),
     )
 
