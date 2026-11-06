@@ -105,6 +105,14 @@ FORECAST_COLUMNS = (
 )
 """Columns of `run_forecasts` output, which is empty if no model could run."""
 
+_FORECAST_DTYPES = {
+    "sample": "int64",
+    "value": "float64",
+    "as_of": "float64",
+    "horizon": "int64",
+    "lag_prior": "bool",
+}
+
 
 @dataclass(frozen=True)
 class BacktestConfig:
@@ -530,7 +538,7 @@ def run_forecasts(
             samples.insert(3, "reference_date", task.reference_date.isoformat())
             frames.append(samples)
     if not frames:
-        return pd.DataFrame(columns=FORECAST_COLUMNS)
+        return pd.DataFrame(columns=FORECAST_COLUMNS).astype(_FORECAST_DTYPES)
     return pd.concat(frames, ignore_index=True)
 
 
