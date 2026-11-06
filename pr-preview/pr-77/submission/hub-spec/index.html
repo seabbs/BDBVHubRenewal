@@ -1,0 +1,2857 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Nowcasts and forecasts of confirmed Bundibugyo virus disease cases for the BDBV Modeling Hub, from baselinenowcast with a random walk, with renewal model candidates, data tools and a backtest.">
+      
+      
+        <meta name="author" content="Sam Abbott">
+      
+      
+        <link rel="canonical" href="https://samabbott.co.uk/BDBVHubRenewal/submission/hub-spec/">
+      
+      
+        <link rel="prev" href="../workflow/">
+      
+      
+        <link rel="next" href="../../development/contributing/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>Hub specification - BDBVHubRenewal</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="white" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#bdbv-modeling-hub-submission-specification" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="BDBVHubRenewal" class="md-header__button md-logo" aria-label="BDBVHubRenewal" data-md-component="logo">
+      
+  <img src="../../assets/logo-mark.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            BDBVHubRenewal
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Hub specification
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="white" data-md-color-accent="blue"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="blue"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/seabbs/BDBVHubRenewal" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    seabbs/BDBVHubRenewal
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../setup/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Setup
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../methods/data/" class="md-tabs__link">
+          
+  
+  
+  Methods
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../data/" class="md-tabs__link">
+          
+  
+  
+  Results
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../rounds/" class="md-tabs__link">
+          
+  
+  
+  Submission
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../development/contributing/" class="md-tabs__link">
+          
+  
+  
+  Development
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+  API reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="BDBVHubRenewal" class="md-nav__button md-logo" aria-label="BDBVHubRenewal" data-md-component="logo">
+      
+  <img src="../../assets/logo-mark.svg" alt="logo">
+
+    </a>
+    BDBVHubRenewal
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/seabbs/BDBVHubRenewal" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    seabbs/BDBVHubRenewal
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Methods
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Methods
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../methods/data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../methods/baselines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Baseline models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../methods/model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Renewal models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../methods/evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../methods/implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Results
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Results
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../nowcast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nowcast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backtest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backtest
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../simulation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulation checks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparison with hub forecasts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Submission
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Submission
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rounds/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Submission log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../opting-in/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Opting in
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hub specification
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hub specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-file-path-and-name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. File path and name
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-columns-and-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Columns and types
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2a-forecast_date" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2a. forecast_date
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-task-ids" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Task ids
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Task ids">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#reference_date-round-id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        reference_date (round id)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#location" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        location
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#target" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        target
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#target_end_date" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        target_end_date
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-output-type-sample" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Output type sample
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Output type sample">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sample-indices-in-hubvalidations-tested" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sample indices in hubValidations (tested)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-submission-window" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Submission window
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-model-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Model metadata
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-round-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Round rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-ambiguities-and-inconsistencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Ambiguities and inconsistencies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-fixtures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Fixtures
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/adding-a-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adding a model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_4" id="__nav_7_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Model development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../model-development/model-building/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model building
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../model-development/log/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../citation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Citation and licence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_8_3" id="__nav_8_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Models
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Models
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/forecasters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Forecasters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Renewal model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/baselinenowcast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Baselinenowcast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_8_5" id="__nav_8_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reporting
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reporting
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/reporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Figures and tables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/submission/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Submission
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-file-path-and-name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. File path and name
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-columns-and-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Columns and types
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2a-forecast_date" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2a. forecast_date
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-task-ids" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Task ids
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Task ids">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#reference_date-round-id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        reference_date (round id)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#location" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        location
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#target" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        target
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#target_end_date" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        target_end_date
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-output-type-sample" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Output type sample
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Output type sample">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sample-indices-in-hubvalidations-tested" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sample indices in hubValidations (tested)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-submission-window" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Submission window
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-model-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Model metadata
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-round-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Round rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-ambiguities-and-inconsistencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Ambiguities and inconsistencies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-fixtures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Fixtures
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/seabbs/BDBVHubRenewal/edit/main/docs/submission/hub-spec.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="bdbv-modeling-hub-submission-specification">BDBV Modeling Hub submission specification<a class="headerlink" href="#bdbv-modeling-hub-submission-specification" title="Permanent link">&para;</a></h1>
+<p>This spec covers the round <code>BDBV 2026 nowcasting and forecasting</code> of <a href="https://github.com/InsightNet-US/BDBV-Modeling-Hub">InsightNet-US/BDBV-Modeling-Hub</a>.
+It was derived from the hub at commit <a href="https://github.com/InsightNet-US/BDBV-Modeling-Hub/tree/88478a33b6f81dc717eec16d3ec0417c8f0d5588"><code>88478a3</code></a> (2026-10-27).
+Line references are to that commit and use these short names.</p>
+<ul>
+<li><code>T</code> is <code>hub-config/tasks.json</code>.</li>
+<li><code>A</code> is <code>hub-config/admin.json</code>.</li>
+<li><code>S</code> is <code>hub-config/model-metadata-schema.json</code>.</li>
+<li><code>MO</code> is <code>model-output/README.md</code>.</li>
+<li><code>MM</code> is <code>model-metadata/README.md</code>.</li>
+<li><code>W</code> is <code>.github/workflows/validate-submission.yaml</code>.</li>
+</ul>
+<p>Where the config and the README differ, the config is what CI enforces.
+Behaviour marked "tested" was checked by running hubValidations 3.0.0 (the version the hub's CI installed on 2026-10-27) on the fixtures in <code>tests/submission/hub_validation/fixtures/</code>.
+A pinned copy of the three config files is in <code>tests/submission/hub_validation/fixtures/hub-snapshot/hub-config/</code>.</p>
+<h2 id="1-file-path-and-name">1. File path and name<a class="headerlink" href="#1-file-path-and-name" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Path: <code>model-output/&lt;model_id&gt;/&lt;reference_date&gt;-&lt;model_id&gt;.csv</code> (MO L26–36, L54–66).</li>
+<li><code>model_id</code> is <code>&lt;team_abbr&gt;-&lt;model_abbr&gt;</code>, joined by one hyphen.
+  The metadata file is <code>model-metadata/&lt;model_id&gt;.yml</code> (MO L43–45).</li>
+<li><code>reference_date</code> is <code>YYYY-MM-DD</code> and must equal the <code>reference_date</code> column (MO L64, L90).</li>
+<li>Format: <code>csv</code> only (A L14).</li>
+<li>The directory name must equal the <code>model_id</code> in the file name (hubValidations <code>file_location</code>, tested).</li>
+<li><code>team_abbr</code> and <code>model_abbr</code> match <code>^[a-zA-Z0-9_+]+$</code> with at most 16 characters each (S L11–26).</li>
+<li>One file per model per round (hubValidations <code>file_n</code>).
+  A resubmission in the same forecast week keeps the file name and appends rows (section 2a).</li>
+</ul>
+<h2 id="2-columns-and-types">2. Columns and types<a class="headerlink" href="#2-columns-and-types" title="Permanent link">&para;</a></h2>
+<p>Exactly these eight columns, in any order, and no others (MO README, tested with <code>invalid_extra_column</code>, <code>invalid_missing_column</code> and <code>valid_reordered_columns</code>).</p>
+<table>
+<thead>
+<tr>
+<th>column</th>
+<th>type</th>
+<th>rule</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>reference_date</code></td>
+<td>date <code>YYYY-MM-DD</code></td>
+<td>a single value per file, equal to the file name date</td>
+</tr>
+<tr>
+<td><code>forecast_date</code></td>
+<td>date <code>YYYY-MM-DD</code></td>
+<td>on or before <code>reference_date</code> in every row, see section 2a</td>
+</tr>
+<tr>
+<td><code>target</code></td>
+<td>string</td>
+<td><code>wk inc confirmed cases</code></td>
+</tr>
+<tr>
+<td><code>target_end_date</code></td>
+<td>date <code>YYYY-MM-DD</code></td>
+<td>one of the listed Saturdays</td>
+</tr>
+<tr>
+<td><code>location</code></td>
+<td>string</td>
+<td>one of 546 listed codes</td>
+</tr>
+<tr>
+<td><code>output_type</code></td>
+<td>string</td>
+<td><code>sample</code></td>
+</tr>
+<tr>
+<td><code>output_type_id</code></td>
+<td>integer</td>
+<td>sample index</td>
+</tr>
+<tr>
+<td><code>value</code></td>
+<td>double</td>
+<td>finite, <code>&gt;= 0</code>, not missing</td>
+</tr>
+</tbody>
+</table>
+<p>The task id columns are <code>reference_date</code>, <code>location</code>, <code>target</code> and <code>target_end_date</code> (T L147–205).
+<code>forecast_date</code> is not a task id.
+There is no <code>horizon</code> column.</p>
+<h2 id="2a-forecast_date">2a. <code>forecast_date</code><a class="headerlink" href="#2a-forecast_date" title="Permanent link">&para;</a></h2>
+<p>The hub announced this column after the commit above.
+The rules here follow the hub's <code>model-output/README.md</code> and <code>src/validate-submission.R</code> as read on 2026-11-02.
+Where this page and the hub differ, the hub's text decides.</p>
+<ul>
+<li>Every row has a nonblank, valid calendar date in exactly <code>YYYY-MM-DD</code>.
+  <code>NA</code>, timestamps and other formats are rejected.</li>
+<li>Each row's <code>forecast_date</code> is on or before its <code>reference_date</code>.</li>
+<li>A new file has exactly one <code>forecast_date</code> in all rows.
+  It is within one day of the date when validation runs in Africa/Kinshasa.
+  The hub takes the day once per run, so a later rerun can fail.</li>
+<li>A resubmission appends rows to the file on the hub's <code>main</code> branch at the same path.
+  Every existing row is kept unchanged, including duplicate rows.
+  Row and column order may change.
+  The parsed cell text must not change, so <code>1.0</code> does not become <code>1</code>.</li>
+<li>A resubmission adds rows with exactly one <code>forecast_date</code> that is not in the existing file.
+  No new rows, rows added to an existing date and several new dates all fail.
+  Retained dates are not checked for recency.</li>
+<li>A resubmission does not extend the submission window.</li>
+<li>The hub copies only the new rows, without <code>forecast_date</code>, into a temporary hub and runs hubValidations on them.
+  The 100 samples per task are counted for each forecast date.
+  Calling <code>hubValidations::validate_submission()</code> on the file directly rejects the column.</li>
+</ul>
+<p>This repository sets <code>forecast_date</code> to the day the PR is opened (the run date in UTC).
+UTC is within a day of Kinshasa, so the recency check holds.
+After a candidate is chosen, the CI reads the hub's file for the round from raw GitHub (read only) and appends to it.
+It does so for the model id that is submitted, so a fallback model appends to the file of the submitting id.
+<code>bdbvhubrenewal validate</code> (<code>submission/validate.py</code>) checks each rule above, with <code>--previous</code> for the hub's copy, and <code>--skip-window</code> also skips the recency check.
+The R wrapper drops the column and, given the hub's copy, the retained rows, as the hub's script does.
+If the hub's copy has no <code>forecast_date</code> column it cannot be appended to, as in the hub's script.
+If the hub's file already holds the run date, the candidate fails and the round is skipped until a later day.</p>
+<h2 id="3-task-ids">3. Task ids<a class="headerlink" href="#3-task-ids" title="Permanent link">&para;</a></h2>
+<h3 id="reference_date-round-id"><code>reference_date</code> (round id)<a class="headerlink" href="#reference_date-round-id" title="Permanent link">&para;</a></h3>
+<ul>
+<li>The round id comes from the <code>reference_date</code> column (<code>round_id_from_variable: true</code>, <code>round_id: "reference_date"</code>, T L142–143).</li>
+<li>Accepted values: <code>optional: ["2026-10-31"]</code> at this commit (T L148–151).</li>
+<li>It is the Saturday ending the epi week in which the file is submitted (MO L84–90).</li>
+<li>A workflow proposes the next Saturday every Saturday at 08:00 Kinshasa time and opens a PR for human review (<code>.github/workflows/advance-weekly-dates.yaml</code>).
+  A file for a date not yet merged into <code>T</code> fails <code>round_id_valid</code> (tested, <code>invalid_unknown_round</code>).</li>
+</ul>
+<h3 id="location"><code>location</code><a class="headerlink" href="#location" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>required: null</code>, <code>optional:</code> 546 codes (T L152–155).
+  These are exactly the codes in <code>auxiliary-data/locations.csv</code>: <code>CD</code>, 26 provinces <code>CD-XX</code> and 519 health zones <code>CD-XX-NN</code>.</li>
+<li>No location is required, so any subset may be submitted (MO L128).</li>
+</ul>
+<h3 id="target"><code>target</code><a class="headerlink" href="#target" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>optional: ["wk inc confirmed cases"]</code> (T L156–159).</li>
+<li>Definition: confirmed cases with symptom onset in the Sunday to Saturday epi week ending on <code>target_end_date</code> (T L224–233).
+  The final revised value in <code>target-data/time-series.csv</code> is the target.
+  <code>target_type: continuous</code>, <code>is_step_ahead: true</code>, <code>time_unit: week</code>.</li>
+</ul>
+<h3 id="target_end_date"><code>target_end_date</code><a class="headerlink" href="#target_end_date" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>optional:</code> the Saturdays <code>2026-02-14</code> to <code>2026-11-21</code> (T L160–205).</li>
+<li>The list is extended by one week each time a reference date is added (MO L102).</li>
+<li>The README rule is any epi week from <code>2026-02-14</code> up to <code>reference_date + 21 days</code> (MO L102).
+  The config enforces this only through the list.
+  For <code>2026-10-31</code> the last listed date is exactly <code>reference_date + 3 weeks</code>.</li>
+<li>Not every week is required (MO L102).</li>
+<li>Horizon in weeks is <code>(target_end_date - reference_date) / 7</code>.
+  It ranges from <code>-37</code> (2026-02-14) to <code>+3</code> for the 2026-10-31 round.</li>
+</ul>
+<h2 id="4-output-type-sample">4. Output type <code>sample</code><a class="headerlink" href="#4-output-type-sample" title="Permanent link">&para;</a></h2>
+<p>Config (T L207–221):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">"sample"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">"output_type_id_params"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"integer"</span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="nt">"min_samples_per_task"</span><span class="p">:</span><span class="w"> </span><span class="mi">100</span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span><span class="nt">"max_samples_per_task"</span><span class="p">:</span><span class="w"> </span><span class="mi">100</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span><span class="nt">"compound_taskid_set"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"reference_date"</span><span class="p">,</span><span class="w"> </span><span class="s2">"location"</span><span class="p">,</span><span class="w"> </span><span class="s2">"target"</span><span class="p">]</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="p">},</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span><span class="nt">"value"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"double"</span><span class="p">,</span><span class="w"> </span><span class="nt">"minimum"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">},</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span><span class="nt">"is_required"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="p">}</span>
+</code></pre></div>
+<ul>
+<li><code>output_type</code> must be <code>sample</code> (MO L130–132).</li>
+<li><code>output_type_id</code> is an integer sample index (T L210, MO L136).</li>
+<li>Because <code>target_end_date</code> is not in <code>compound_taskid_set</code>, one sample index is one joint trajectory over all <code>target_end_date</code>s for its location (MO L138).</li>
+<li>Each <code>(reference_date, location, target)</code> has exactly 100 distinct sample indices (T L211–212, MO L136).</li>
+<li>Each sample index has exactly one row per <code>target_end_date</code> submitted for its location (MO L138).</li>
+<li><code>value</code> is a non-negative double (T L215–218).
+  Non-integer values pass (tested, <code>valid_noninteger_values</code>).</li>
+<li>No duplicate <code>(task ids, output_type, output_type_id)</code> rows (<code>rows_unique</code>).</li>
+</ul>
+<h3 id="sample-indices-in-hubvalidations-tested">Sample indices in hubValidations (tested)<a class="headerlink" href="#sample-indices-in-hubvalidations-tested" title="Permanent link">&para;</a></h3>
+<p>The README says ids may be reused across locations (<code>1</code> to <code>100</code> in each) or unique across the file (MO L138).
+hubValidations 3.0.0 treats all rows sharing an <code>output_type_id</code> as one sample and infers the compound task id set from the data.
+The two schemes then behave differently.</p>
+<ul>
+<li><strong>Reused ids</strong> (as in the only accepted round-2 file, <code>OHTJHU-BM</code>).
+  A configured compound task id that varies within a sample is dropped, so the inferred set is <code>[reference_date, target]</code>.
+  hubValidations accepts this as "coarser" than the configured set.
+  Each id is then a draw that is joint across locations.
+  Every id must cover the identical set of <code>(location, target_end_date)</code> pairs (<code>spl_non_compound_tid</code>).
+  So every location must use the same 100 ids, and every id must have the full week set for each location.
+  Different locations may cover different weeks (tested, <code>location_week_sets_differ</code> is valid).</li>
+<li><strong>Unique ids per location.</strong>
+  The inferred set is the configured one.
+  Every sample must cover the identical set of <code>target_end_date</code>s, so <strong>all locations must cover the same weeks</strong> (tested, <code>location_week_sets_differ_unique_ids</code> fails <code>spl_non_compound_tid</code>).
+  This is stricter than the README.</li>
+<li>Mixing the two fails <code>spl_compound_taskid_set</code> (tested, <code>invalid_samples_101</code>).</li>
+<li>99 samples in one location with reused ids fails <code>spl_non_compound_tid</code>, not <code>spl_n</code> (tested, <code>invalid_samples_99</code>).</li>
+<li>A missing week in one trajectory fails <code>spl_non_compound_tid</code> (tested, <code>invalid_ragged_trajectory</code>).</li>
+</ul>
+<p><strong>Recommended layout:</strong> reuse ids <code>1..100</code> in every location, use the same set of weeks for every location, and make sample <code>k</code> of <code>CD</code> the sum of sample <code>k</code> of the provinces.
+This passes under either reading and matches the joint meaning hubValidations gives reused ids.</p>
+<h2 id="5-submission-window">5. Submission window<a class="headerlink" href="#5-submission-window" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>submissions_due: {relative_to: reference_date, start: -6, end: -4}</code> (T L238–242).</li>
+<li>Time zone <code>Africa/Kinshasa</code> (A L15), which is WAT, UTC+1, with no daylight saving.</li>
+<li>hubValidations opens the window at 00:00:00 on the start day and closes it at 23:59:59 on the end day, in hub time.
+  For <code>2026-10-31</code> that is Sunday 2026-10-25 00:00:00 WAT (2026-10-24 23:00 UTC) to Tuesday 2026-10-27 23:59:59 WAT (22:59:59 UTC).</li>
+<li>The check compares the clock at the time the CI job runs (<code>validate_pr(..., skip_submit_window_check = FALSE)</code>, W).
+  A re-run or a new push after the window closes fails.</li>
+<li><code>validate_pr</code> defaults to <code>file_modification_check = "error"</code> with <code>allow_submit_window_mods = TRUE</code>.
+  So a submitted file can be changed or deleted only inside its window.</li>
+</ul>
+<h2 id="6-model-metadata">6. Model metadata<a class="headerlink" href="#6-model-metadata" title="Permanent link">&para;</a></h2>
+<p>Schema (S), with <code>additionalProperties: true</code> at the top level (S L120).</p>
+<p>Required (S L121–129):</p>
+<table>
+<thead>
+<tr>
+<th>field</th>
+<th>rule</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>team_name</code></td>
+<td>string</td>
+</tr>
+<tr>
+<td><code>team_abbr</code></td>
+<td>string, <code>^[a-zA-Z0-9_+]+$</code>, at most 16 characters</td>
+</tr>
+<tr>
+<td><code>model_name</code></td>
+<td>string</td>
+</tr>
+<tr>
+<td><code>model_abbr</code></td>
+<td>string, <code>^[a-zA-Z0-9_+]+$</code>, at most 16 characters</td>
+</tr>
+<tr>
+<td><code>model_contributors</code></td>
+<td>array of objects with <code>name</code>, <code>affiliation</code>, <code>orcid</code> (<code>^\d{4}-\d{4}-\d{4}-[\dX]{4}$</code>), <code>email</code> (format email), <code>twitter</code>; no sub-field is required</td>
+</tr>
+<tr>
+<td><code>license</code></td>
+<td>one of <code>CC0-1.0</code>, <code>CC-BY-4.0</code>, <code>CC-BY_SA-4.0</code>, <code>PPDL</code>, <code>ODC-by</code>, <code>ODbL</code>, <code>OGL-3.0</code></td>
+</tr>
+<tr>
+<td><code>model_details</code></td>
+<td>object with required <code>data_inputs</code> (string) and <code>methods</code> (string, at most 200 characters); optional <code>methods_long</code>; no other keys</td>
+</tr>
+</tbody>
+</table>
+<p>Optional: <code>model_version</code>, <code>website_url</code> (uri), <code>repo_url</code> (uri), <code>citation</code>, <code>team_funding</code>, <code>ensemble_of_hub_models</code> (boolean).</p>
+<p>Checks run by <code>submission.validate.validate_metadata</code> (tested): the extension is <code>yml</code> or <code>yaml</code>, the contents match the schema, and the file name equals <code>&lt;team_abbr&gt;-&lt;model_abbr&gt;</code>.
+hubValidations enforces <code>format: email</code> (tested, <code>invalid_bad_email</code>).</p>
+<h2 id="7-round-rules">7. Round rules<a class="headerlink" href="#7-round-rules" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Two rounds share <code>round_id: reference_date</code> (T L4–140 and L141–243).
+  Round 1, <code>BVBD 2026 cumulative outbreak size estimate</code>, is closed in practice but its reference dates stay in <code>T</code> (MO L234–250).
+  Its window is −7 to +28 days (T L135–139), so round-1 dates up to 2026-10-12 still pass the window check until 2026-11-09.</li>
+<li>A file belongs to the round whose reference dates include its date.
+  The two lists do not overlap.</li>
+<li>One model task per round, so <code>spl_mt_unique</code> is trivial here.</li>
+</ul>
+<h2 id="8-ambiguities-and-inconsistencies">8. Ambiguities and inconsistencies<a class="headerlink" href="#8-ambiguities-and-inconsistencies" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Reused versus unique sample ids.</strong>
+   The README allows both, but with unique ids hubValidations also requires every location to cover the same weeks.
+   See section 4.</li>
+<li><strong>Joint meaning of reused ids.</strong>
+   <code>compound_taskid_set</code> says samples are independent across locations, but reusing ids makes hubValidations treat them as joint across locations.
+   Nothing says whether the hub will use cross-location joint structure (for example to aggregate health zones).</li>
+<li><strong>Sample id type is not enforced.</strong>
+   The config says <code>integer</code>, but <code>100.5</code> passes hubValidations 3.0.0 because the hub-wide <code>output_type_id</code> column is typed <code>double</code> (round 1 has quantile levels).
+   <code>submission/validate.py</code> fails it as <code>spl_id_type</code>.</li>
+<li><strong>Horizon rule is README-only.</strong>
+   "Up to three weeks after the reference date" is enforced only by the length of the <code>target_end_date</code> list.
+   If the list ever runs ahead of the reference dates, later weeks would pass.
+   <code>submission/validate.py</code> warns (<code>readme_horizon</code>) but does not fail.</li>
+<li><strong>Values need not be integers.</strong>
+   The target is a count, but <code>value</code> is <code>double</code>.</li>
+<li><strong>Target wording.</strong>
+   The target says "laboratory-confirmed cases", but the observed counts include onsets imputed by back-sampling a delay (target-data README).</li>
+<li><strong>Timing of new reference dates.</strong>
+   The next <code>reference_date</code> is proposed on Saturday at 08:00 WAT by a bot PR that needs human review.
+   If it is not merged before a submission, <code>round_id_valid</code> fails.</li>
+<li><strong>Window check time.</strong>
+   The check uses the time the CI job runs, not the PR opening time.
+   A late re-run fails, and whether maintainers merge such PRs is not stated.</li>
+<li><strong>Name lengths.</strong>
+    MO L35 says team and model "less than 15 characters", MO L66 says "less than 16" and S allows up to 16.
+    MM says team and model names under 50 characters, which S does not enforce.
+    Use at most 14 characters for each abbreviation to satisfy all three.</li>
+<li><strong>Required contributor fields.</strong>
+    MM says name, affiliation and email are required for each contributor.
+    S requires none of them (tested, <code>valid_no_email</code> passes).</li>
+<li><strong>Schema quirk.</strong>
+    In S L53 <code>"additionalProperties": false</code> sits inside the contributor <code>properties</code>.
+    It is read as a property named <code>additionalProperties</code>, so contributor objects may carry any extra keys.</li>
+<li><strong>License wording.</strong>
+    MM suggests <code>cc-by-4.0</code> in lower case, which fails the enum (tested, <code>invalid_license_lowercase</code>).
+    The enum entry <code>CC-BY_SA-4.0</code> looks like a typo for <code>CC-BY-SA-4.0</code>.</li>
+<li><strong>Metadata README leftovers.</strong>
+    MM mentions influenza hospital admissions and links to FluSight's licence list.
+    These are template text.</li>
+</ol>
+<h2 id="9-fixtures">9. Fixtures<a class="headerlink" href="#9-fixtures" title="Permanent link">&para;</a></h2>
+<p><code>tests/submission/hub_validation/fixtures/manifest.json</code> lists every fixture, its expected failing checks for Python and R and, for real files, the source path and commit.</p>
+<p>Real submissions copied from the hub:</p>
+<table>
+<thead>
+<tr>
+<th>file</th>
+<th>source commit</th>
+<th>note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model-output/OHTJHU-BM/2026-10-31-OHTJHU-BM.csv</code></td>
+<td><code>d1ddf9d</code></td>
+<td>the only round-2 file; passed hub CI; 62 locations, 9 weeks, reused ids</td>
+</tr>
+<tr>
+<td><code>model-output/epiforecasts-renewal/2026-10-12-epiforecasts-renewal.csv</code></td>
+<td><code>6b9254a</code></td>
+<td>round 1, quantile, mean and median</td>
+</tr>
+<tr>
+<td><code>model-output/MOBS-GLEAM_BDBV/2026-06-28-MOBS-GLEAM_BDBV.csv</code></td>
+<td><code>01f8a71</code></td>
+<td>round 1, columns out of order</td>
+</tr>
+<tr>
+<td><code>model-metadata/OHTJHU-BM.yml</code></td>
+<td><code>d1ddf9d</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>model-metadata/epiforecasts-renewal.yml</code></td>
+<td><code>4174b51</code></td>
+<td>contributors without email</td>
+</tr>
+<tr>
+<td><code>model-metadata/MOBS-GLEAM_BDBV.yml</code></td>
+<td><code>ae5ffd8</code></td>
+<td>block-style list</td>
+</tr>
+</tbody>
+</table>
+<p>Constructed fixtures are written by <code>tests/submission/hub_validation/make_fixtures.py</code>.
+Each invalid file changes one thing in <code>valid_basic</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../workflow/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Workflow">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Workflow
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../../development/contributing/" class="md-footer__link md-footer__link--next" aria-label="Next: Contributing">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Contributing
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2026 Sam Abbott. MIT licence.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/seabbs/BDBVHubRenewal" target="_blank" rel="noopener" title="Source on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/seabbs/BDBVHubRenewal/issues" target="_blank" rel="noopener" title="Issue tracker" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 8h-2.81c-.45-.8-1.07-1.5-1.82-2L17 4.41 15.59 3l-2.17 2.17a6 6 0 0 0-2.83 0L8.41 3 7 4.41 8.62 6c-.75.5-1.36 1.21-1.81 2H4v2h2.09c-.06.33-.09.66-.09 1v1H4v2h2v1c0 .34.03.67.09 1H4v2h2.81A5.99 5.99 0 0 0 15 20.18c.91-.52 1.67-1.28 2.19-2.18H20v-2h-2.09c.06-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.03-.67-.09-1H20zm-4 7a4 4 0 0 1-4 4 4 4 0 0 1-4-4v-4a4 4 0 0 1 4-4 4 4 0 0 1 4 4zm-2-5v2h-4v-2zm-4 4h4v2h-4z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit", "content.tabs.link", "toc.follow"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+        <script src="../../javascripts/mathjax.js"></script>
+      
+        <script src="../../javascripts/toggles.js"></script>
+      
+        <script src="../../javascripts/zoom.js"></script>
+      
+        <script src="../../javascripts/summarise.js"></script>
+      
+        <script src="../../javascripts/energy.js"></script>
+      
+        <script src="../../javascripts/tablefilter.js"></script>
+      
+        <script src="../../javascripts/explorer.js"></script>
+      
+        <script src="../../javascripts/scorechart.js"></script>
+      
+        <script src="../../javascripts/scoresummary.js"></script>
+      
+        <script src="../../javascripts/nowcastchart.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
+      
+    
+  <script data-mkdocs-jupyter-mathjax="{&quot;url&quot;: &quot;https://cdn.jsdelivr.net/npm/mathjax@4.1.3/tex-mml-chtml.js&quot;, &quot;version&quot;: 4}">
+/* Shared by full pages and Material's instant navigation. */
+(() => {
+  const config = JSON.parse(document.currentScript.dataset.mkdocsJupyterMathjax);
+  if (window.mkdocsJupyterMathJax) return;
+
+  let loading;
+  let queue = Promise.resolve();
+  let previous = [];
+
+  const ready = async () => {
+    if (!loading) {
+      loading = (async () => {
+        let math = window.MathJax;
+        if (!math?.typesetPromise) {
+          const url = new URL(config.url, document.baseURI).href;
+          const existing = Array.from(document.scripts).find(script =>
+            script.src && (script.src === url || script.id === 'MathJax-script' ||
+              (/mathjax/i.test(script.src) &&
+               /\/(?:MathJax|latest|(?:tex|mml)(?:-mml)?-(?:chtml|svg))\.js(?:[?#]|$)/i.test(script.src))));
+          if (existing) {
+            if (!math?.startup?.promise) {
+              await new Promise((resolve, reject) => {
+                existing.addEventListener('load', resolve, { once: true });
+                existing.addEventListener('error', reject, { once: true });
+              });
+            }
+          } else {
+            // Keep site macros, delimiters and startup hooks when supplied.
+            const options = math || {};
+            window.MathJax = {
+              ...options,
+              loader: {
+                ...options.loader,
+                load: Array.from(new Set(['ui/safe', ...(options.loader?.load || [])]))
+              },
+              startup: { typeset: false, ...options.startup },
+              tex: {
+                tags: 'ams',
+                useLabelIds: true,
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true,
+                processEnvironments: true,
+                ...options.tex
+              }
+            };
+            await new Promise((resolve, reject) => {
+              const script = document.createElement('script');
+              script.src = config.url;
+              script.id = 'MathJax-script';
+              script.async = true;
+              script.onload = resolve;
+              script.onerror = reject;
+              document.head.appendChild(script);
+            });
+          }
+        }
+        math = window.MathJax;
+        await math.startup.promise;
+        return math;
+      })();
+    }
+    const math = await loading;
+    // A site owner can extend the v3 queue again on each navigation.
+    await math.startup.promise;
+    return math;
+  };
+
+  const unrendered = node => {
+    if (node.matches('mjx-container')) return [];
+    if (!node.querySelector('mjx-container')) return [node];
+    // In v3, scanning generated assistive MathML again produces nested output.
+    return Array.from(node.children).flatMap(unrendered);
+  };
+
+  const refresh = () => {
+    // A separate chain also serializes v3, without changing v4's startup promise.
+    queue = queue.then(async () => {
+      const notebooks = Array.from(document.querySelectorAll('.jupyter-wrapper'));
+      if (!notebooks.length && !previous.length) return;
+      if (notebooks.length === previous.length &&
+          notebooks.every((node, index) => node === previous[index])) return;
+      const math = await ready();
+      if (previous.length) {
+        math.typesetClear(previous);
+        math.texReset();
+      }
+      previous = notebooks.filter(node => node.isConnected);
+      const pending = previous.flatMap(unrendered);
+      if (pending.length) await math.typesetPromise(pending);
+    }).catch(error => console.error('mkdocs-jupyter: MathJax rendering failed', error));
+    return queue;
+  };
+
+  window.mkdocsJupyterMathJax = { refresh };
+  const start = () => {
+    if (typeof document$ !== 'undefined') document$.subscribe(refresh);
+    else refresh();
+  };
+  // Theme bundles and user-provided MathJax scripts can follow notebook content.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start, { once: true });
+  } else start();
+})();
+
+</script>
+</body>
+</html>
