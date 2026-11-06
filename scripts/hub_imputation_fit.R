@@ -4,8 +4,8 @@
 # The hub fits a generalised gamma in hours to the delays published at
 # 2026-10-17 (auxiliary-data/imputation-details.md). Releases before
 # 2026-11-01 used flexsurv with status 1, so each delay is exact; from
-# 2026-11-01 it is double interval censored with primarycensored (hub
-# issue 75, PR 88). Run from the repo root:
+# 2026-11-01 it is double interval censored with primarycensored.
+# Run from the repo root:
 #
 #   Rscript scripts/hub_imputation_fit.R
 

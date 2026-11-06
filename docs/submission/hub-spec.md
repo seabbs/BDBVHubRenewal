@@ -254,7 +254,7 @@ Real submissions copied from the hub:
 
 | file | source commit | note |
 |---|---|---|
-| `model-output/OHTJHU-BM/2026-10-31-OHTJHU-BM.csv` | `d1ddf9d` | the only round-2 file; passed hub CI on PR #64; 62 locations, 9 weeks, reused ids |
+| `model-output/OHTJHU-BM/2026-10-31-OHTJHU-BM.csv` | `d1ddf9d` | the only round-2 file; passed hub CI; 62 locations, 9 weeks, reused ids |
 | `model-output/epiforecasts-renewal/2026-10-12-epiforecasts-renewal.csv` | `6b9254a` | round 1, quantile, mean and median |
 | `model-output/MOBS-GLEAM_BDBV/2026-06-28-MOBS-GLEAM_BDBV.csv` | `01f8a71` | round 1, columns out of order |
 | `model-metadata/OHTJHU-BM.yml` | `d1ddf9d` | |
