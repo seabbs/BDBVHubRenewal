@@ -129,6 +129,14 @@ def _walks(
     return shift(lam), np.where(first_case, np.maximum(shift(y), 1.0), shift(y))
 
 
+def _reliable(origin: Origin) -> np.ndarray:
+    """Return the weeks whose nowcast can start the walk, `[L, W]`."""
+    settings = origin.settings
+    return (origin.complete >= settings.start_share) & (
+        origin.reported >= settings.start_count
+    )
+
+
 def _intro_from(origin: Origin, start: np.ndarray, h: int) -> np.ndarray:
     """Return each place's weekly introduction probability after `start`.
 
@@ -427,15 +435,10 @@ class RandomWalkNowcast(RandomWalk):
         # Each place walks from its latest week with enough of it reported
         # and enough cases for its nowcast to be reliable, else from its
         # `randomwalk` start week. A silent place has no such week.
-        settings = origin.settings
         cw = snap.cut_week(origin.o)
         cut = int(snap.cut[origin.o])
         seen_days = np.flatnonzero(snap.week == cw).max() - cut
-        reliable = (
-            (origin.complete >= settings.start_share)
-            & (origin.reported >= settings.start_count)
-            & (np.arange(n_data) <= cw)
-        )
+        reliable = _reliable(origin) & (np.arange(n_data) <= cw)
         latest = n_data - 1 - np.argmax(reliable[:, ::-1], axis=1)
         w0 = np.where(reliable.any(axis=1), latest, origin.start)
         w0 = np.where(origin.silent, origin.start, w0)
