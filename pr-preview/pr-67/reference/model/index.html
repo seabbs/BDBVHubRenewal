@@ -5695,7 +5695,7 @@ the site <code>{name}_offsets</code>; non-centred, <span class="arithmatex">\(\e
     <div class="doc doc-contents ">
 
         <p>Split starting values into a national value and province deviations.</p>
-<p>Mirrors <code>SubpopulationInfections._split_initial_log_rt</code>: a scalar gives
+<p>Mirrors <code>BaseSubpopulationInfections._split_initial_log_rt</code>: a scalar gives
 zero deviations, a vector gives its mean and the centred deviations.</p>
 
 
@@ -5800,7 +5800,7 @@ zero deviations, a vector gives its mean and the centred deviations.</p>
 <a id="bdbvhubrenewal.model.pooled.split_initial_value--source--__codelineno-0-112" name="bdbvhubrenewal.model.pooled.split_initial_value--source--__codelineno-0-112"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">ArrayLike</span><span class="p">,</span> <span class="n">ArrayLike</span><span class="p">]:</span>
 <a id="bdbvhubrenewal.model.pooled.split_initial_value--source--__codelineno-0-113" name="bdbvhubrenewal.model.pooled.split_initial_value--source--__codelineno-0-113"></a><span class="w">    </span><span class="sd">"""Split starting values into a national value and province deviations.</span>
 <a id="bdbvhubrenewal.model.pooled.split_initial_value--source--__codelineno-0-114" name="bdbvhubrenewal.model.pooled.split_initial_value--source--__codelineno-0-114"></a>
-<a id="bdbvhubrenewal.model.pooled.split_initial_value--source--__codelineno-0-115" name="bdbvhubrenewal.model.pooled.split_initial_value--source--__codelineno-0-115"></a><span class="sd">    Mirrors `SubpopulationInfections._split_initial_log_rt`: a scalar gives</span>
+<a id="bdbvhubrenewal.model.pooled.split_initial_value--source--__codelineno-0-115" name="bdbvhubrenewal.model.pooled.split_initial_value--source--__codelineno-0-115"></a><span class="sd">    Mirrors `BaseSubpopulationInfections._split_initial_log_rt`: a scalar gives</span>
 <a id="bdbvhubrenewal.model.pooled.split_initial_value--source--__codelineno-0-116" name="bdbvhubrenewal.model.pooled.split_initial_value--source--__codelineno-0-116"></a><span class="sd">    zero deviations, a vector gives its mean and the centred deviations.</span>
 <a id="bdbvhubrenewal.model.pooled.split_initial_value--source--__codelineno-0-117" name="bdbvhubrenewal.model.pooled.split_initial_value--source--__codelineno-0-117"></a>
 <a id="bdbvhubrenewal.model.pooled.split_initial_value--source--__codelineno-0-118" name="bdbvhubrenewal.model.pooled.split_initial_value--source--__codelineno-0-118"></a><span class="sd">    Parameters</span>
@@ -18164,8 +18164,8 @@ precision, which stalls NUTS.</p>
 <a id="bdbvhubrenewal.model.model.build_model--source--__codelineno-0-526" name="bdbvhubrenewal.model.model.build_model--source--__codelineno-0-526"></a>        <span class="n">MetapopulationInfections</span><span class="p">,</span>
 <a id="bdbvhubrenewal.model.model.build_model--source--__codelineno-0-527" name="bdbvhubrenewal.model.model.build_model--source--__codelineno-0-527"></a>        <span class="n">name</span><span class="o">=</span><span class="s2">"latent"</span><span class="p">,</span>
 <a id="bdbvhubrenewal.model.model.build_model--source--__codelineno-0-528" name="bdbvhubrenewal.model.model.build_model--source--__codelineno-0-528"></a>        <span class="n">gen_int_rv</span><span class="o">=</span><span class="n">DeterministicPMF</span><span class="p">(</span><span class="s2">"gen_int"</span><span class="p">,</span> <span class="n">generation_interval</span><span class="p">()),</span>
-<a id="bdbvhubrenewal.model.model.build_model--source--__codelineno-0-529" name="bdbvhubrenewal.model.model.build_model--source--__codelineno-0-529"></a>        <span class="c1"># The seed is the expected confirmed infections per day at the</span>
-<a id="bdbvhubrenewal.model.model.build_model--source--__codelineno-0-530" name="bdbvhubrenewal.model.model.build_model--source--__codelineno-0-530"></a>        <span class="c1"># start, turned into infections per resident.</span>
+<a id="bdbvhubrenewal.model.model.build_model--source--__codelineno-0-529" name="bdbvhubrenewal.model.model.build_model--source--__codelineno-0-529"></a>        <span class="c1"># The seed is the infections per day that will be confirmed, on</span>
+<a id="bdbvhubrenewal.model.model.build_model--source--__codelineno-0-530" name="bdbvhubrenewal.model.model.build_model--source--__codelineno-0-530"></a>        <span class="c1"># the first data day, turned into infections per resident.</span>
 <a id="bdbvhubrenewal.model.model.build_model--source--__codelineno-0-531" name="bdbvhubrenewal.model.model.build_model--source--__codelineno-0-531"></a>        <span class="n">I0_rv</span><span class="o">=</span><span class="n">TransformedVariable</span><span class="p">(</span>
 <a id="bdbvhubrenewal.model.model.build_model--source--__codelineno-0-532" name="bdbvhubrenewal.model.model.build_model--source--__codelineno-0-532"></a>            <span class="s2">"I0"</span><span class="p">,</span>
 <a id="bdbvhubrenewal.model.model.build_model--source--__codelineno-0-533" name="bdbvhubrenewal.model.model.build_model--source--__codelineno-0-533"></a>            <span class="n">DistributionalVariable</span><span class="p">(</span>
