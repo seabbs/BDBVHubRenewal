@@ -172,6 +172,7 @@ $$
 $M_p(t)$ are the cases reported on day $t$ without an onset.
 The hub draws a report hour from $\mathrm{Unif}(0, 24)$ and subtracts a generalised gamma delay in hours fitted to the non-negative delays published at 2026-10-17.
 $\hat f_T$ is the daily pmf this implies, $\hat f_T(k) = \int_0^1 \{F_T(k + u) - F_T(k - 1 + u)\}\, du$ with $F_T$ the delay cdf in days, on 0 to 60 days, and is data.
+It is the double interval censored pmf, computed in closed form from the generalised gamma's partial first moment.
 Up to the 2026-10-24 release the hub fitted the delays as exact, and from 2026-11-01 as double interval censored ([hub issue 75](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/75)).
 We refit both, so $F_T$ is the fit the hub used for release $T$.
 

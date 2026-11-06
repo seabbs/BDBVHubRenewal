@@ -75,8 +75,8 @@ Pandas only builds the inputs and the output frames.
 The model runs in single precision (float32), JAX's default.
 
 - Depletion is carried on $\log S$, which needs no subtraction, and $1 - e^{-y}$ is computed with `expm1`.
-- The generation interval and the incubation period are double interval censored in closed form, $G(d + 1) - 2G(d) + G(d - 1)$ with the integrated cdf (`model.censored`).
-  The generation interval is computed once, in float64, and the incubation period in float32 at each draw of its mean and SD (`CensoredPMF`); both match primarycensored.
+- The generation interval, the incubation period and the hub's imputation delay are double interval censored in closed form, $G(d + 1) - 2G(d) + G(d - 1)$ with the integrated cdf (`model.censored`).
+  The generation interval and the hub's delay are computed once, in float64, and the incubation period in float32 at each draw of its mean and SD (`CensoredPMF`); all match primarycensored.
 - The simulator's delays use the same closed form, truncated at their maximum delay and renormalised as primarycensored's $D$.
   In float32 they are within $3 \times 10^{-5}$ of primarycensored, and within $10^{-8}$ in float64.
 - The negative binomial concentration is capped at $\phi \le 1000$, which is Poisson for these counts.
