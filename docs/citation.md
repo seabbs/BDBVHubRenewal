@@ -19,6 +19,13 @@ GitHub turns it into the "Cite this repository" button on the repository page.
 }
 ```
 
+## Archived results
+
+Each hub release we fit gets a [GitHub release](https://github.com/seabbs/BDBVHubRenewal/releases) named `results-<hub release>`, made once every stored fit at that release is of the current code.
+It holds every model's forecast at the release in the hub's format, for the country, provinces and health zones, with the scores, the fit summaries, the data and the rendered site.
+Each code release `vX.Y.Z` gets `results-vX.Y.Z` in the same form.
+Each submitted round's code is released as `round-<reference date>`, which Zenodo archives with a DOI.
+
 ## Citing the data
 
 The data come from the [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub).

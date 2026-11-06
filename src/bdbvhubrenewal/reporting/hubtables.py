@@ -6,9 +6,8 @@ not, is archived with each hub release. For each model `hub_tables`
 gives the hub sample table, with the country, the provinces and the
 health zones, as `bdbvhubrenewal nowcast` writes it for a submission,
 and the same forecast as hub quantiles.
-A random walk model with no fit is run on the zones and summed to the
-provinces; any other model's province samples are split across the
-zones by `ZoneAllocator`, so no model is fitted here.
+The zones come from `zone_samples`, as in a submission, which fits no
+model.
 """
 
 from __future__ import annotations
@@ -22,11 +21,9 @@ import pandas as pd
 
 from bdbvhubrenewal.data.tidy import write_csv
 from bdbvhubrenewal.data.zones import weekly_zone_counts
-from bdbvhubrenewal.forecasters import ForecastTask, get_model, list_models
+from bdbvhubrenewal.forecasters import ForecastTask
 from bdbvhubrenewal.forecasters.base import NATIONAL, SAMPLE_COLUMNS
-from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
-from bdbvhubrenewal.forecasters.zones import ZoneAllocator, zone_forecast
-from bdbvhubrenewal.submission.hub import to_hub_table
+from bdbvhubrenewal.submission.hub import to_hub_table, zone_samples
 
 __all__ = [
     "HUB_QUANTILE_LEVELS",
@@ -112,17 +109,12 @@ def hub_tables(
     rows = forecasts.loc[forecasts["vintage"] == task.vintage]
     if "as_of" in rows:
         rows = rows.loc[rows["as_of"].isna()]
-    fitted = {s.name for s in list_models() if s.fitted}
     out = {}
     for name, own in rows.groupby("model"):
         provinces = own.loc[own["location"] != NATIONAL, list(SAMPLE_COLUMNS)]
-        model = get_model(str(name))
-        if isinstance(model, RandomWalk) and name not in fitted:
-            split = zone_forecast(
-                model, task, provinces, counts, zones, daily_zones
-            )
-        else:
-            split = ZoneAllocator().allocate(provinces, task, counts, zones)
+        split = zone_samples(
+            str(name), task, provinces, counts, zones, daily_zones
+        )
         out[str(name)] = to_hub_table(
             provinces,
             task.reference_date,

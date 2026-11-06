@@ -49,9 +49,9 @@ concurrency:
 
 jobs:
   build:
+    # A code release builds only for a version tag.
+    if: github.event_name != 'release' || startsWith(github.ref_name, 'v')
     runs-on: ubuntu-latest
-    outputs:
-      release: ${{ steps.release.outputs.tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # uv and its cache, and JAX's persistent compilation cache.
@@ -147,25 +147,16 @@ jobs:
         with:
           name: site
           path: _site
-      # A results release holds every model's results, once per hub
-      # release (when every stored fit at it is of this code) and once per
-      # code release (scripts/results-release.sh).
-      - name: Decide the results release
-        id: release
-        if: >-
-          (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')
-          || github.event_name == 'release'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: scripts/results-release.sh tag >> "$GITHUB_OUTPUT"
-      - name: Collect the release files
-        if: steps.release.outputs.tag != ''
-        run: scripts/results-release.sh collect output/release
+      # The results and data the `release` job may publish.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: steps.release.outputs.tag != ''
+        if: github.event_name != 'pull_request'
         with:
-          name: release
-          path: output/release
+          name: results
+          path: |
+            results
+            data
+            !data/raw
+          retention-days: 3
 
   deploy:
     needs: build
@@ -214,26 +205,38 @@ jobs:
           preview-branch: gh-pages
           umbrella-dir: pr-preview
 
-  # Runs no project code: it zips the site and publishes the build's
-  # files.
+  # A results release holds every model's results: once per hub release,
+  # when every stored fit at it is of this code, and once per code
+  # release (scripts/results-release.sh). Apart from the deploy, so a
+  # failure here never holds the site back. Runs no project code.
   release:
     needs: build
-    if: needs.build.outputs.release != ''
+    if: >-
+      (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')
+      || github.event_name == 'release'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: release
-          path: output/release
+          name: results
+          path: build
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: site
           path: _site
-      - env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.build.outputs.release }}
-        run: scripts/results-release.sh publish "$TAG" output/release _site
+      - name: Decide the release
+        id: release
+        run: scripts/results-release.sh tag build/results >> "$GITHUB_OUTPUT"
+      - name: Publish
+        if: steps.release.outputs.tag != ''
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          scripts/results-release.sh collect build output/release
+          scripts/results-release.sh publish "$TAG" output/release _site
