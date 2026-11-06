@@ -72,6 +72,11 @@
   }
 
   function build(root, d, geo) {
+    // Open a place in the linked chart, once that chart has loaded.
+    function show(id) {
+      var charts = window.bdbvNowcastCharts || {};
+      if (charts[root.dataset.chart]) charts[root.dataset.chart](id);
+    }
     root.textContent = "";
     var complete = {};
     Object.keys(d.data).forEach(function (k) {
@@ -124,7 +129,7 @@
           (r ? ": median " + Math.round(r.median) + ", recent " + r.recent.toFixed(1) +
             ", ratio " + r.ratio.toFixed(2) : ": no forecast");
         path.addEventListener("click", function () {
-          window.bdbvNowcastCharts[root.dataset.chart](s.id);
+          show(s.id);
         });
       });
       // Key: the colour scale from -2 to 2.
@@ -184,7 +189,7 @@
         var b = h("button", { type: "button", class: "zonereview-link" },
           h("td", {}, tr), p.scale === "zones" ? p.name + " (" + p.id + ")" : p.name);
         b.addEventListener("click", function () {
-          window.bdbvNowcastCharts[root.dataset.chart](p.id);
+          show(p.id);
         });
         h("td", {}, tr, SCALES[p.scale]);
         h("td", {}, tr, p.province ? names[p.province] || p.province : "");
