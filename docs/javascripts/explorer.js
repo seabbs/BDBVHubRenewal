@@ -3,17 +3,11 @@
 // (summarise.js) for the location, rounds and models chosen.
 (function () {
   "use strict";
-  var NS = "http://www.w3.org/2000/svg";
   var DAY = 864e5;
   var T = window.bdbvToggles;
   var h = T.h;
+  var el = T.el;
 
-  function el(tag, attrs, parent) {
-    var n = document.createElementNS(NS, tag);
-    Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]); });
-    if (parent) parent.appendChild(n);
-    return n;
-  }
   function day(s) { return Date.parse(s + "T00:00:00Z"); }
 
   function init(root) {

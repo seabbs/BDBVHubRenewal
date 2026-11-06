@@ -326,7 +326,7 @@ svg.zoomable {
 .placemap-picked {
   fill: none;
   stroke: var(--md-default-fg-color);
-  stroke-width: 2;
+  stroke-width: 4;
   pointer-events: none;
 }
 
