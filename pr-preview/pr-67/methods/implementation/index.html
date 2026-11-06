@@ -2032,7 +2032,7 @@ The model diagrams are mermaid blocks in <code>docs/methods/model.md</code>.</p>
 </tr>
 <tr>
 <td>Renewal with importation and depletion</td>
-<td><code>SubpopulationInfections</code>, subclassed with the steps of <code>BaseSubpopulationInfections</code></td>
+<td><code>BaseSubpopulationInfections</code>, subclassed</td>
 <td><code>coupled_renewal</code>, called from <code>_infections_from_rt</code>, and <code>Importation</code>, which gives the mixing matrix as PyRenew's <code>mobility_matrix_rv</code> does.</td>
 </tr>
 <tr>
@@ -2085,7 +2085,7 @@ The model diagrams are mermaid blocks in <code>docs/methods/model.md</code>.</p>
 <li><code>GammaGroupSdPrior</code> gives each province its own SD with a floor, where here the provinces share one half-normal SD.</li>
 <li><code>CountObservation</code> and <code>SubpopulationCounts</code> take one fixed delay pmf and one truncation pmf.
   Here the delay varies with onset day, and known and imputed onsets are separate streams.</li>
-<li><code>MobilitySubpopulationInfections</code>, added to PyRenew after the pinned commit, uses a fixed mobility matrix, <span class="arithmatex">\(R\)</span> by location and depletion capped at the susceptibles.
+<li><code>MobilitySubpopulationInfections</code> uses a fixed mobility matrix, <span class="arithmatex">\(R\)</span> by location and depletion capped at the susceptibles.
   Here a share of transmission is sent from each origin through a fixed gravity kernel, and depletion is exponential in the pool <span class="arithmatex">\(\nu\)</span>.</li>
 </ul>
 <p>PyRenew has no delay that varies with time, no Dirichlet-multinomial count and no pseudo-observation of <span class="arithmatex">\(R\)</span>.</p>
