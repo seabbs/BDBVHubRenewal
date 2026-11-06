@@ -147,9 +147,11 @@ def log_factors(
     $\log(\sum \mathrm{num} / \sum \mathrm{den}) = \sum g$,
     weighted by $\sum \mathrm{den}$, and $g \ge 0$ is the
     non-negative least squares fit.
-    With a gap of 1 only, $g(a)$ is the log of the chain ladder factor.
-    Ages share one factor within each block of `age_blocks`, so no
-    factor rests on fewer than ``min_count`` cases.
+    Ages share one factor within each block of `age_blocks`, so each
+    factor is fitted to at least ``min_count`` cases.
+    With a gap of 1 only, a block's factor is the denominator-weighted
+    mean of its ages' log ratios, so $g(a)$ of an age in its own block is
+    the log of the chain ladder factor.
 
     Parameters
     ----------

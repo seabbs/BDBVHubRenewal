@@ -90,7 +90,7 @@ A model raises if the vintage has no snapshots or no in-window pair.
 
 ## Delay
 
-The delay follows baselinenowcast[^bnc-paper][^bnc-package] on the daily snapshots, with one extension.
+The delay follows baselinenowcast[^bnc-paper][^bnc-package] on the daily snapshots, with two extensions.
 Releases are batched reports of one daily delay.
 With $g_p(j) \ge 0$ the daily log development factor at age $j$, and $g_p(j) = 0$ for $j \ge D$, a day of age $x$ at release $r$ grows to release $r + 1$ by $\exp \sum_{j=x}^{x+s-1} g_p(j)$.
 For each gap $s$ and age $x = 0, \dots, D - 1$,
@@ -101,9 +101,10 @@ $$
 
 summed over the in-window pairs of gap $s$ and over days $t$ of age $x$ at $r$ that both releases observe.
 $g_p$ is the non-negative least squares fit of all these equations, each weighted by its denominator $\sum N_{p,r}(t)$.
-Ages share one factor in blocks: from age 0, each block takes ages until their denominator, summed over the pairs, reaches 10 cases, and ages left at the end join the last block.
-So no factor rests on fewer than 10 cases.
-With a gap of 1 only, $\exp g_p(x)$ is baselinenowcast's chain ladder factor.
+Ages share one factor in blocks.
+From age 0, a block takes ages until their denominator, summed over the pairs, reaches 10 cases.
+Ages left at the end join the last block, so each factor is fitted to at least 10 cases.
+With a gap of 1 only, a block's factor is the denominator-weighted mean of its ages' log ratios, so $\exp g_p(x)$ of an age in its own block is baselinenowcast's chain ladder factor.
 Cells a release does not observe are skipped, not filled, and a gap and age with a zero denominator give no equation.
 The parent of a province is the country, whose counts are the sum of its provinces.
 Only onset days less than $1.5 D = 63$ days before the cut-off of the latest release used contribute to the sums, as baselinenowcast's default `n_history_delay`, and a retrospective fit uses the cut-off of its own release.
