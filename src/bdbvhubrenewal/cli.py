@@ -73,6 +73,7 @@ from bdbvhubrenewal.forecasters.base import (
     list_models,
 )
 from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
+from bdbvhubrenewal.forecasters.zones import zones_for_model
 from bdbvhubrenewal.submission.fitting import (
     Forecast,
     get_config,
@@ -88,7 +89,6 @@ from bdbvhubrenewal.submission.hub import (
     to_hub_table,
     write_model_metadata,
     write_submission,
-    zone_samples,
 )
 from bdbvhubrenewal.submission.metadata import MODEL_METADATA
 from bdbvhubrenewal.submission.validate import (
@@ -671,7 +671,7 @@ def _zones(
 ) -> tuple[pd.DataFrame | None, str]:
     """Forecast the zones to sum to the provinces, or say why not.
 
-    The zones come from `zone_samples`.
+    The zones come from `zones_for_model`.
     """
     try:
         daily = load_daily_zones(args.data)
@@ -681,7 +681,7 @@ def _zones(
     if counts.empty:
         return None, f"no zone data for {task.vintage}, so no health zones"
     name = get_config(args.config).model if args.config else args.model
-    zones = zone_samples(
+    zones = zones_for_model(
         name, task, samples, counts, hub_zones(hub_config), daily
     )
     return zones, ""

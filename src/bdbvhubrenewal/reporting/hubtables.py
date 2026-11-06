@@ -6,8 +6,8 @@ not, is archived with each hub release. For each model `hub_tables`
 gives the hub sample table, with the country, the provinces and the
 health zones, as `bdbvhubrenewal nowcast` writes it for a submission,
 and the same forecast as hub quantiles.
-The zones come from `zone_samples`, as in a submission, which fits no
-model.
+The zones come from `zones_for_model`, as in a submission, which fits
+no model.
 """
 
 from __future__ import annotations
@@ -23,7 +23,8 @@ from bdbvhubrenewal.data.tidy import write_csv
 from bdbvhubrenewal.data.zones import weekly_zone_counts
 from bdbvhubrenewal.forecasters import ForecastTask
 from bdbvhubrenewal.forecasters.base import NATIONAL, SAMPLE_COLUMNS
-from bdbvhubrenewal.submission.hub import to_hub_table, zone_samples
+from bdbvhubrenewal.forecasters.zones import zones_for_model
+from bdbvhubrenewal.submission.hub import to_hub_table
 
 __all__ = [
     "HUB_QUANTILE_LEVELS",
@@ -112,7 +113,7 @@ def hub_tables(
     out = {}
     for name, own in rows.groupby("model"):
         provinces = own.loc[own["location"] != NATIONAL, list(SAMPLE_COLUMNS)]
-        split = zone_samples(
+        split = zones_for_model(
             str(name), task, provinces, counts, zones, daily_zones
         )
         out[str(name)] = to_hub_table(

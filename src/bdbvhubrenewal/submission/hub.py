@@ -23,16 +23,13 @@ import re
 import tomllib
 from collections.abc import Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final
+from typing import Any, Final
 
 import pandas as pd
 import yaml
 
 from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.tidy import write_csv
-
-if TYPE_CHECKING:
-    from bdbvhubrenewal.forecasters import ForecastTask
 
 __all__ = [
     "HUB_COLUMNS",
@@ -49,7 +46,6 @@ __all__ = [
     "to_hub_table",
     "write_model_metadata",
     "write_submission",
-    "zone_samples",
 ]
 
 HUB_COLUMNS: Final = (
@@ -137,52 +133,6 @@ def model_id(model_abbr: str, team_abbr: str = TEAM_ABBR) -> str:
                 f"{part!r} must be 1 to 14 letters, digits or underscores."
             )
     return f"{team_abbr}-{model_abbr}"
-
-
-def zone_samples(
-    name: str | None,
-    task: ForecastTask,
-    samples: pd.DataFrame,
-    counts: pd.DataFrame,
-    zones: tuple[str, ...],
-    daily_zones: pd.DataFrame,
-) -> pd.DataFrame:
-    """Return health-zone samples that sum to a model's province samples.
-
-    A random walk model with no fit is run on the zones and summed to the
-    provinces. Any other model's province samples, a fitted model's
-    included, are split across the zones by `ZoneAllocator`, so no model
-    is fitted here.
-
-    Parameters
-    ----------
-    name : str or None
-        The registered model, None for a fit configuration with none.
-    task : ForecastTask
-        The province task.
-    samples : pandas.DataFrame
-        The model's province samples for `task`.
-    counts : pandas.DataFrame
-        Weekly zone counts at the task's vintage (`weekly_zone_counts`).
-    zones : tuple of str
-        The hub's zone codes.
-    daily_zones : pandas.DataFrame
-        The daily zone table (`load_daily_zones`).
-
-    Returns
-    -------
-    pandas.DataFrame
-        Zone samples with `SAMPLE_COLUMNS`.
-    """
-    from bdbvhubrenewal.forecasters import get_model, list_models
-    from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
-    from bdbvhubrenewal.forecasters.zones import ZoneAllocator, zone_forecast
-
-    fitted = {s.name for s in list_models() if s.fitted}
-    model = None if name is None else get_model(name)
-    if isinstance(model, RandomWalk) and name not in fitted:
-        return zone_forecast(model, task, samples, counts, zones, daily_zones)
-    return ZoneAllocator().allocate(samples, task, counts, zones)
 
 
 def to_hub_table(
