@@ -14,11 +14,10 @@ abstract: >-
   nationally, by province and by health zone, with the data tools, backtest
   and automated submission workflow behind them. Two hub models are
   submitted. seabbs-rwnowcast is baselinenowcast with a random walk on top.
-  seabbs-renewal carries one of three renewal models of daily onsets with a
+  seabbs-renewal carries one of two renewal models of daily onsets with a
   learnt reporting delay and the hub's imputation of missing onsets:
-  renewalsp, fitted to each province on its own; renewal, with pooled Rt and
-  gravity importation between provinces; and renewalbvd, which adds the Rt
-  estimates of BVDOutbreakSize.
+  renewal, with pooled Rt and gravity importation between provinces; and
+  renewalbvd, which adds the Rt estimates of BVDOutbreakSize.
 keywords:
   - epidemiology
   - forecasting

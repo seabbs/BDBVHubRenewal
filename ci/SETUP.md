@@ -11,8 +11,8 @@ It is safe to install as is, because `DRY_RUN` is on until you turn it off.
 | --- | --- |
 | `detect` | Runs on schedule from Saturday 23:00 UTC (Sunday 00:00 Kinshasa) to Tuesday. It compares the hub's newest data commit and `as_of` with the ledger and stops unless there is new data for the open round. |
 | `prepare` | Pins the hub data at one commit and builds the random walk candidate, which is also the baseline for the checks. |
-| `fit` | A matrix over the renewal candidates (`bvd`, `renewalsp` and `main`), fitted in parallel. Each fit is cached under a content hash of the model source, the hub commit and its sampler settings. |
-| `gate` | Walks the chain `bvd` → `renewalsp` → `main` → `randomwalknowcast` → `randomwalk`. A candidate is ruled out if its fit is past the convergence failure thresholds, its forecast is far from the recent data, or its file is invalid (format checks or hubValidations). |
+| `fit` | A matrix over the renewal candidates (`bvd` and `main`), fitted in parallel. Each fit is cached under a content hash of the model source, the hub commit and its sampler settings. |
+| `gate` | Walks the chain `bvd` → `main` → `randomwalknowcast` → `randomwalk`. A candidate is ruled out if its fit is past the convergence failure thresholds, its forecast is far from the recent data, or its file is invalid (format checks or hubValidations). |
 | `submit` | Publishes the plot, builds the PR body, and opens or updates the PR. A dry run prints the body instead. |
 | `record` | Live runs only. Writes the outcome to `state.json` on the `submission-ledger` branch and archives the round's files there. |
 | `outcome` | Fails the run if the round was skipped or a job broke, so you are notified. |
@@ -135,7 +135,7 @@ If a morning check is dropped, the next morning's check runs the round, and a ma
 
 Every fit runs 2 chains of 500 warm-up in parallel (`ci/policy.toml`).
 `renewalbvd` takes 1000 draws at target acceptance 0.95, and the other candidates 500 at 0.9.
-On hosted runners with the 2026-11-01 vintage, sampling took 29 minutes for `renewalbvd`, 27 for `renewalsp` and 25 for `renewal`, against 37, 41 and 16 minutes with vectorised chains and 500 `renewalbvd` draws.
+On hosted runners with the 2026-11-01 vintage, sampling took 29 minutes for `renewalbvd` and 25 for `renewal`, against 37 and 16 minutes with vectorised chains and 500 `renewalbvd` draws.
 Nearly every `renewalbvd` and `renewal` draw reaches the maximum tree depth, so cost follows the number of NUTS iterations.
 The candidates fit in separate jobs at the same time, so the fit stage takes about 30 minutes.
 Time a real fit with a dry run on a past vintage (see above), and read the `Fit took N s` line in the job summary.
@@ -154,13 +154,10 @@ If fits come close to the cap:
 
 1. Make each fit cheaper.
    Use fewer warm-up iterations or draws, start from last week's posterior, and keep the JAX compilation cache warm (`setup-forecast-env` restores it).
-2. Split the matrix further where the model allows.
-   The single-patch fallback fits each province on its own, so it can fit per province group as separate legs.
-   The coupled main model cannot.
-3. Start earlier.
+2. Start earlier.
    Data usually land on Friday or Saturday, and the window opens Sunday.
    The last scheduled start on Tuesday is 06:00 UTC, which leaves about 17 hours before the window closes for the fits and the gate.
-4. Use a bigger machine through `FIT_RUNNER`.
+3. Use a bigger machine through `FIT_RUNNER`.
    GitHub's larger runners need a paid Team or Enterprise organisation, for example if the repo moves to `epiforecasts`.
    A self-hosted runner works too.
    The workflow only runs on `schedule` and `workflow_dispatch`, never on fork pull requests, so a self-hosted runner on this public repo is not exposed to outside code.

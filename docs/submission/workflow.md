@@ -15,7 +15,7 @@ It submits only the hub models opted in ([Opting in](opting-in.md)), and pushes 
 | `release` | Makes a GitHub release `round-<reference date>` of every round whose window has closed and whose hub pull requests are all merged or closed, at the commit it was submitted from. Zenodo archives each release with a DOI. |
 | `prepare` | Pins the data, builds `randomwalk` and `randomwalknowcast`, and decides which hub models run. |
 | `baseline` | The baseline hub model: checks and submits `randomwalknowcast`, or skips the round if it is ruled out. |
-| `fit` | The renewal hub model: fits `bvd`, `renewalsp` and `main` in parallel. |
+| `fit` | The renewal hub model: fits `bvd` and `main` in parallel. |
 | `gate`, `submit` | Walks the chain, validates, and opens or updates the pull request. |
 | `record` | Live runs only: writes the round, and each hub model's submission under its id, to the `submission-ledger` branch. |
 | `outcome` | Fails the run if a round was skipped or a job broke. |
@@ -27,10 +27,9 @@ The first candidate that clears the checks is submitted, under `seabbs-renewal`.
 The chain runs from the most to the least complex renewal model, then the random walks.
 
 1. `bvd`: `renewalbvd`, the renewal model informed by BVDOutbreakSize Rt.
-2. `renewalsp`: independent single-patch fits.
-3. `main`: `renewal`, the province renewal model.
-4. `randomwalknowcast`: random walk on a nowcast.
-5. `randomwalk`.
+2. `main`: `renewal`, the province renewal model.
+3. `randomwalknowcast`: random walk on a nowcast.
+4. `randomwalk`.
 
 `[submission] model` in `config/hub.toml` says where the chain starts.
 Every fit is 2 chains of 500 warm-up, run in parallel, with no refit.

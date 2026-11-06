@@ -14,7 +14,7 @@ It is the reference for the interface, and `ci/run_dry.sh` runs the whole workfl
 | `bdbvhubrenewal nowcast --model random walk --vintage <as_of> --out <dir>` | exists | `prepare` (random walk candidate and baseline) |
 | `bdbvhubrenewal metadata --model <model> --out <dir>` | exists | `gate` |
 | `scripts/validate-hub.R <hub> <csv> <yml>`, with `CHECK_WINDOW=true` | exists | `gate`, through `ci/steps/validate_hub.sh` |
-| `bdbvhubrenewal fit ...` | done (`bdbvhubrenewal.submission.fitting`; `main` runs the chosen renewal model and `renewalsp` the single-patch model, `bdbvhubrenewal.forecasters.renewal`) | `fit` |
+| `bdbvhubrenewal fit ...` | done (`bdbvhubrenewal.submission.fitting`; `main` runs `renewal` and `bvd` runs `renewalbvd`, `bdbvhubrenewal.forecasters.renewal`) | `fit` |
 | `nowcast --config <c> --fit <dir>` | done | `fit` |
 | `bdbvhubrenewal plot-submission ...` | done, `plots.plot_submission` | every candidate |
 | `bdbvhubrenewal plot-ppc --ppc <ppc.json> --out <png>` | done, a thin wrapper on `ppc.plot_ppc` | candidates whose `ppc.json` is available |
@@ -24,18 +24,17 @@ It is the reference for the interface, and `ci/run_dry.sh` runs the whole workfl
 ### `bdbvhubrenewal fit`
 
 ```sh
-bdbvhubrenewal fit --model renewal|renewalsp --config main|renewalsp --vintage <as_of> \
+bdbvhubrenewal fit --model renewal|renewalbvd --config main|bvd --vintage <as_of> \
   --sampler-json '{"num_chains": 4, "num_warmup": 1000, "num_samples": 1000,
                    "target_accept": 0.8, "max_tree_depth": 10, "seed": 1}' \
   --out <fit dir>
 ```
 
-- `--model` is `[submission] model` in `config/hub.toml`, unless the candidate names its own in `ci/policy.toml` (`model`), as the single-patch fallback and the `bvd` shadow do.
+- `--model` is `[submission] model` in `config/hub.toml`, unless the candidate names its own in `ci/policy.toml` (`model`), as `main` and `bvd` do.
   The hub id is set apart in `config/hub.toml` (`bdbvhubrenewal hub-id`), `seabbs-renewal`.
   `epiforecasts-renewal` is already a different hub model.
 - `--config` selects the model configuration.
-  `main` is the full model.
-  `renewalsp` is the single-patch model: an independent renewal fit for each province with cases and for the country, with no pooling or coupling.
+  `main` is the province renewal model and `bvd` adds the BVDOutbreakSize Rt term.
   Each matrix leg passes its own config.
 - `--sampler-json` is the candidate's `sampler` table from `ci/policy.toml`.
 - `--vintage` is a real `as_of`, or `latest`.

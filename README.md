@@ -32,7 +32,6 @@ The package, `bdbvhubrenewal`, fits the models, scores them and writes the hub s
 It runs by province and health zone, and the national value is the sum of the provinces.
 `randomwalk` is the same walk with no nowcast.
 The renewal models are built on [PyRenew](https://github.com/CDCgov/PyRenew) and model daily symptom onsets, with a learnt onset-to-report delay and the hub's imputation of missing onsets.
-`renewalsp` fits each province on its own.
 `renewal` fits the provinces together, with a pooled Rt and importation between provinces through a gravity kernel.
 `renewalbvd` is `renewal` with the BVDOutbreakSize Rt estimates added to the fit.
 `seabbs-renewal` submits the first model in the chain in `ci/policy.toml` that passes its checks, starting with `renewalbvd`.
