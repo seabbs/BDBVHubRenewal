@@ -45,6 +45,7 @@ SMALL_MAX = 5
 """Largest recent weekly count of a small place."""
 
 _METRICS = {"wis": "WIS", "log_wis": "log WIS", "coverage_90": "90% coverage"}
+_ORDER = ("silent", "small", "larger", "none", "collapse", "blow-up")
 
 
 def _last_week(origin: pd.Series) -> pd.Series:
@@ -167,4 +168,11 @@ def check_summary(
             .assign(split=split)
         )
     out = pd.concat(parts, ignore_index=True).rename(columns=_METRICS)
-    return out[["scale", "split", "group", "model", "n", *_METRICS.values()]]
+    order = {g: i for i, g in enumerate(_ORDER)}
+    out = out.sort_values(
+        ["scale", "split", "group", "model"],
+        key=lambda c: c.map(order) if c.name == "group" else c,
+        kind="stable",
+    )
+    cols = ["scale", "split", "group", "model", "n", *_METRICS.values()]
+    return out[cols].reset_index(drop=True)
