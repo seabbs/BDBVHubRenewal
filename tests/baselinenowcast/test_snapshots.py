@@ -9,6 +9,7 @@ import pandas as pd
 from bnc_helpers import read, read_ints, read_vec
 
 from bdbvhubrenewal.baselinenowcast import (
+    fill_row,
     growth,
     hub_week_matrix,
     hub_weeks,
@@ -196,3 +197,16 @@ def test_the_delay_is_never_negative() -> None:
     g = log_factors(num, den, [1])
     # Age 1 fell from 5 to 4, which is no removal in the delay.
     np.testing.assert_allclose(g[0], [np.log(2), 0, 0])
+
+
+def test_fill_row_matches_r_apply_delay_on_zero_rows() -> None:
+    tri, pmf = read("zeros", "tri"), read_vec("zeros", "pmf")
+    want = np.cumsum(read("zeros", "apply"), axis=1)
+    cdf = np.cumsum(pmf)
+    for row in np.flatnonzero(np.isnan(tri).any(axis=1)):
+        a = int(np.flatnonzero(~np.isnan(tri[row])).max())
+        got = [
+            fill_row(np.nansum(tri[row]), cdf[a : b + 1])
+            for b in range(a, cdf.size)
+        ]
+        np.testing.assert_allclose(got, want[row, a:], rtol=1e-12)

@@ -66,7 +66,7 @@ jobs:
       matrix: ${{ steps.plan.outputs.matrix }}
       count: ${{ steps.plan.outputs.count }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-forecast-env
       # The latest hub releases, and the BVDOutbreakSize release each
       # may use. Every fit job reads these files, so all fit the same data.
@@ -84,7 +84,7 @@ jobs:
             --out matrix.json | tee -a "$GITHUB_STEP_SUMMARY"
           echo "matrix=$(cat matrix.json)" >> "$GITHUB_OUTPUT"
           echo "count=$(jq '.include | length' matrix.json)" >> "$GITHUB_OUTPUT"
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: >-
           steps.plan.outputs.count != '0'
           && github.event_name != 'pull_request'
@@ -111,9 +111,9 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-forecast-env
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: data
           path: data

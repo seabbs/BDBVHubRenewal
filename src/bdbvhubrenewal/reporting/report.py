@@ -33,10 +33,12 @@ from bdbvhubrenewal.data import (
     newly_missing,
     release_updates,
 )
+from bdbvhubrenewal.data.bvd import BVD_REPO, bvd_for_vintage
 from bdbvhubrenewal.data.dates import reference_date_for_vintage
 from bdbvhubrenewal.data.delays import delay_summary
 from bdbvhubrenewal.data.simulate import simulate_outbreak
 from bdbvhubrenewal.data.tidy import COHERENCE_STREAMS
+from bdbvhubrenewal.data.zone_map import BOUNDARIES_PATH, zone_boundaries
 from bdbvhubrenewal.data.zones import hub_zones
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
@@ -750,6 +752,14 @@ def _zone_nowcast_section(
         "<noscript>The nowcast chart needs JavaScript.</noscript>\n"
         "</div>\n",
     )
+    release = bvd_for_vintage(task.vintage, Path(data_dir) / "bvd")
+    if release is None or release.choice is None:
+        raise ValueError(f"No BVDOutbreakSize release for {task.vintage}.")
+    sources = json.loads((Path(data_dir) / "sources.json").read_text())
+    write_explorer(
+        fig / "zone-map.geojson",
+        zone_boundaries(release.choice.tag, sources["commit"]),
+    )
     _write(
         gen / "zone-review.md",
         "## Zone review\n\n"
@@ -758,8 +768,15 @@ def _zone_nowcast_section(
         "Each week column gives the median and 90% interval.\n"
         "Ratio is log((median + 1) / (recent + 1)) for the chosen week.\n"
         "A ratio of 0.69 is double the recent count and -0.69 is half.\n"
-        "Click a place to show it in the By place chart.\n\n"
+        "Click a place to show it in the By place chart.\n"
+        "The map colours each zone by the same ratio.\n"
+        "Zone boundaries are from [BVDOutbreakSize]"
+        f"(https://github.com/{BVD_REPO}/blob/{release.choice.tag}/"
+        f"{BOUNDARIES_PATH}) at {release.choice.tag}, from the Ministry of "
+        "Health boundaries on the [Humanitarian Data Exchange]"
+        "(https://data.humdata.org/dataset/drc-health-data).\n\n"
         '<div class="zonereview" data-src="../figures/nowcastchart.json" '
+        'data-map="../figures/zone-map.geojson" '
         'role="group" aria-label="Zone review">\n'
         "<noscript>The zone review needs JavaScript.</noscript>\n"
         "</div>\n",

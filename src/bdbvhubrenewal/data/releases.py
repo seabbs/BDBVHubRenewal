@@ -4,7 +4,8 @@
 A hub release is labelled by its `as_of` date. From the 2026-11-01
 release on, `as_of` is the extraction date, one day after the last
 reported case. Earlier releases were labelled one day early, by the last
-reported case (hub issue #90). `release_id` maps a label, as published or
+reported case (https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/90).
+`release_id` maps a label, as published or
 as the hub may rewrite it, to the label we key releases by, so results,
 the submission ledger and rounds keep their keys.
 `extraction_date` and `last_report` give a release's dates from either.
@@ -35,7 +36,8 @@ __all__ = [
     "release_id",
 ]
 
-# Hub issue InsightNet-US/BDBV-Modeling-Hub#90: these labels are a day early.
+# These labels are a day early
+# (https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/90).
 ORIGINAL_AS_OF: frozenset[str] = frozenset(
     {"2026-08-18", "2026-10-09", "2026-10-17", "2026-10-24"}
 )

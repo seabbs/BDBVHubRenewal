@@ -175,6 +175,35 @@ def growth(g: Any, start: Any, stop: Any) -> np.ndarray:
     return np.exp(total[:, b] - total[:, a])
 
 
+def fill_row(x: Any, cdf: Any) -> np.ndarray:
+    r"""Return a row's count by its last column, as R's ``apply_delay``.
+
+    Each later column $j$ adds $(x_{j-1} + 1 - F_{j-1}) / F_{j-1}\,
+    (F_j - F_{j-1})$, with $x_{j-1}$ the count up to column $j - 1$
+    (R ``.calc_modified_expectation``).
+    The $+1$ gives a row with nothing reported yet a positive count.
+
+    Parameters
+    ----------
+    x : array_like
+        Count reported by the first column.
+    cdf : array_like
+        Share reported by each column, the first that of ``x``, on the
+        last axis. It broadcasts with ``x`` on the others.
+
+    Returns
+    -------
+    numpy.ndarray
+        The count by the last column.
+    """
+    cdf = np.asarray(cdf, float)
+    total = np.asarray(x, float)
+    for j in range(1, cdf.shape[-1]):
+        prev = cdf[..., j - 1]
+        total = total + (total + 1 - prev) / prev * (cdf[..., j] - prev)
+    return total
+
+
 def window_pairs(cut: Any, max_delay: int) -> tuple[np.ndarray, np.ndarray]:
     """Pairs whose step is at most ``max_delay``, and their steps.
 

@@ -462,6 +462,13 @@ def _backtest(args: argparse.Namespace) -> int:
         # The fitted models' real forecasts come from the fit store.
         stored = set(store.stored_models())
         names = [n for n in names if n not in stored]
+        if not names:
+            print(
+                "ERROR: fitted models come from the fit store: run "
+                "`task fit-store`.",
+                file=sys.stderr,
+            )
+            return 1
     results, output = Path(args.results), Path(args.output)
     results.mkdir(parents=True, exist_ok=True)
     output.mkdir(parents=True, exist_ok=True)
@@ -682,10 +689,7 @@ def _stored_samples(
     hub["vintage"] = [
         hc.match_vintage(r, vintages) for r in hub["reference_date"]
     ]
-    stored = pd.concat([ours[cols], hub.dropna(subset=["vintage"])[cols]])
-    # With no development forecasts, `ours` is an empty table of object
-    # columns, which would make every column of the concatenation object.
-    return stored.astype({"sample": "int64", "value": "float64"})
+    return pd.concat([ours[cols], hub.dropna(subset=["vintage"])[cols]])
 
 
 def _write_fits(fits: list[pd.DataFrame], path: Path) -> None:

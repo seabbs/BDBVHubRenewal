@@ -16,6 +16,7 @@ from bdbvhubrenewal.forecasters.chain import (
     _delay_counts,
     build_origin,
     fit_delay,
+    introductions,
     retro_errors,
     weeks_back,
 )
@@ -74,23 +75,23 @@ def test_10_24_point_nowcasts_use_one_daily_delay(origin24) -> None:
     # Weeks 10-24, 10-17, 10-10, 10-03, from the 8 and 9 day pairs.
     # Downward revisions are moved onto earlier releases before the sums.
     assert _weeks(origin24, "CD") == pytest.approx(
-        [373.0, 369.3, 489.5, 515.6], abs=0.06
+        [368.5, 373.4, 488.4, 515.9], abs=0.06
     )
     # Tshopo has under 10 cases a week, so uses the national delay.
     assert _weeks(origin24, "CD-TO") == pytest.approx(
-        [19.6, 11.5, 21.4, 18.4], abs=0.06
+        [10.1, 11.5, 21.3, 18.4], abs=0.06
     )
 
 
 def test_provinces_use_own_factors_where_they_have_10_cases(origin24) -> None:
     assert _weeks(origin24, "CD-IT") == pytest.approx(
-        [239.8, 180.1, 282.7, 253.1], abs=0.06
+        [212.7, 181.3, 282.6, 253.1], abs=0.06
     )
     assert _weeks(origin24, "CD-NK") == pytest.approx(
-        [84.0, 146.2, 155.1, 213.7], abs=0.06
+        [118.5, 149.5, 154.6, 214.2], abs=0.06
     )
     assert _weeks(origin24, "CD-HU") == pytest.approx(
-        [10.5, 30.5, 27.6, 29.7], abs=0.06
+        [17.7, 30.7, 27.7, 29.9], abs=0.06
     )
 
 
@@ -314,3 +315,26 @@ def test_no_nowcast_is_below_the_reported_count_at_11_01(
         origin = build_origin(snap, Settings(), errors=False)
         short = origin.reported - origin.point
         assert short.max() <= 1e-3, (name, float(short.max()))
+
+
+def test_introductions_pool_siblings_after_k_silent_weeks() -> None:
+    # Country, then three provinces; k = 3 silent weeks before a week at risk.
+    reported = np.array(
+        [
+            [0, 0, 0, 0, 1, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [5, 5, 5, 5, 5, 5, 5, 5, 5],
+            [0, 0, 0, 1, 0, 0, 0, 0, 0],
+        ],
+        dtype=float,
+    )
+    p = introductions(reported, np.full(4, 8), np.array([-1, 0, 0, 0]), 3)
+    # Provinces: 6 + 0 + 3 weeks at risk and 1 first case.
+    np.testing.assert_allclose(p[1:], 1 / 9)
+    # The country is its own group: 3 weeks at risk, 1 first case.
+    assert p[0] == pytest.approx(1 / 3)
+    # Weeks after the start week do not count.
+    late = introductions(
+        reported, np.array([8, 8, 8, 2]), np.array([-1, 0, 0, 0]), 3
+    )
+    np.testing.assert_allclose(late[1:], 0.0)
