@@ -7,14 +7,13 @@ returns a `DelayFit`.
 A `DelayFit` gives a daily pmf for any province and onset week, so a
 model can use delays that vary by place and time.
 
-`EmpiricalDelayModel` is implemented now.
-It takes the empirical pmf over a rolling window of onset weeks and
-shrinks each province towards the pooled pmf, so small provinces and
-recent weeks stay stable.
+`EmpiricalDelayModel` takes the empirical pmf over a rolling window of
+onset weeks and shrinks each province towards the pooled pmf, so small
+provinces and recent weeks stay stable.
 It ignores right truncation and the weekly censoring of onset, so recent
 delays are biased short.
 
-The model phase adds a parametric estimator that handles both.
+The renewal models fit a parametric delay that handles both.
 Each delay is in whole days from the onset day to the report day, so it
 is double interval censored at daily resolution, with pmf $p_\theta(d)$
 from `bdbvhubrenewal.model.delays.censored_pmf`.
@@ -65,8 +64,8 @@ DEFAULT_MAX_DELAY: Final = 60
 HUB_DOUBLE_CENSORED_FROM: Final = dt.date(2026, 11, 1)
 """First release whose imputation delay fit is double interval censored.
 
-The 2026-11-01 release was published after hub PR 88 and the earlier
-releases in that commit are unchanged, so they keep the exact fit.
+The hub changed its fit with the 2026-11-01 release and left the earlier
+releases unchanged, so they keep the exact fit.
 """
 
 HUB_GENGAMMA: Final = {
@@ -337,7 +336,7 @@ def hub_delay_pmf(
     the double interval censored pmf, here by quadrature.
     The generalised gamma is fitted to the delays published at 2026-10-17
     as exact before `HUB_DOUBLE_CENSORED_FROM` and as double interval
-    censored from then on (hub issue 75), with the parameters in
+    censored from then on, with the parameters in
     `HUB_GENGAMMA`. Truncated at `max_delay` and renormalised.
 
     Parameters

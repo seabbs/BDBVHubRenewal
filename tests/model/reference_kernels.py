@@ -2,7 +2,7 @@
 
 The package uses the banded-matrix `onset_expectations` and the
 matrix-product `hazard_to_pmf`, which are faster under autodiff. These
-are the direct versions they replaced, kept to test against.
+are the direct versions, to test against.
 """
 
 import jax
