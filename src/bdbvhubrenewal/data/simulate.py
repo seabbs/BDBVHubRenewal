@@ -797,8 +797,7 @@ def calibrated_settings(
     beyond what that explains (first cases and reintroductions) are seeds,
     so the model's renewal reproduces the real curve. After that Rt is the
     mean of its last three weeks times `SCENARIO_RT_SCALE[name]`, for
-    `weeks_after` weeks past the cut-off. Ascertainment is 1, importation
-   
+    `weeks_after` weeks past the cut-off. Ascertainment is 1, importation and
     depletion are off, so confirmed onsets follow the real curve.
 
     The delay is the real delay by onset week (`_weekly_delay_pmfs`),
