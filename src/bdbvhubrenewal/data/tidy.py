@@ -45,11 +45,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import epiweek_end
-from bdbvhubrenewal.data.releases import (
-    last_report_days,
-    release_id,
-    with_cutoffs,
-)
+from bdbvhubrenewal.data.releases import last_report_days, release_id
 
 __all__ = [
     "COHERENCE_HANDLING",
@@ -655,7 +651,8 @@ def build_tidy_data(
         "health_zones": tidy_health_zones(series),
     }
     tables = {"locations": locations} | {
-        name: with_cutoffs(table, cutoffs) for name, table in by_release.items()
+        name: table.assign(cutoff=table["vintage"].map(cutoffs))
+        for name, table in by_release.items()
     }
     files = {
         "locations": "locations.csv",

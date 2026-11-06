@@ -3,9 +3,8 @@
 
 A hub release is labelled by its `as_of` date. From the 2026-11-01
 release on, `as_of` is the extraction date, one day after the last
-reported case. Earlier releases were labelled a day earlier, by the last
-reported case (https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/90).
-`release_id` maps a label, as published or
+reported case. The hub states that earlier releases were labelled by the
+last reported case. `release_id` maps a label, as published or
 as the hub may rewrite it, to the label we key releases by, so results,
 the submission ledger and rounds keep their keys.
 A release's data cut-off is its last report day. `last_report_days`
@@ -36,11 +35,8 @@ __all__ = [
     "publication_lag_pmf",
     "release_cutoff",
     "release_id",
-    "with_cutoffs",
 ]
 
-# The hub may rewrite these labels
-# (https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/90).
 ORIGINAL_AS_OF: frozenset[str] = frozenset(
     {"2026-08-18", "2026-10-09", "2026-10-17", "2026-10-24"}
 )
@@ -109,31 +105,13 @@ def last_report_days(daily: pd.DataFrame, delays: pd.DataFrame) -> pd.Series:
     return out
 
 
-def with_cutoffs(table: pd.DataFrame, cutoffs: pd.Series) -> pd.DataFrame:
-    """Add each row's release cut-off as a `cutoff` column.
-
-    Parameters
-    ----------
-    table : pandas.DataFrame
-        Rows with a `vintage` column.
-    cutoffs : pandas.Series
-        Cut-off by release label (`last_report_days`).
-
-    Returns
-    -------
-    pandas.DataFrame
-        A copy of `table` with `cutoff`.
-    """
-    return table.assign(cutoff=table["vintage"].map(cutoffs))
-
-
 def release_cutoff(rows: pd.DataFrame, release: str) -> dt.date:
     """Return a release's data cut-off, its last report day.
 
     Parameters
     ----------
     rows : pandas.DataFrame
-        Rows with `vintage` and `cutoff` columns (`with_cutoffs`).
+        Rows with `vintage` and `cutoff` columns (`data.load_target`).
     release : str
         The release label.
 

@@ -18,7 +18,7 @@ REWRITTEN = {
     "2026-10-18": "2026-10-17",
     "2026-10-25": "2026-10-24",
 }
-"""Each original label as the hub would rewrite it (hub issue #90)."""
+"""Each published label as the hub would rewrite it, a day later."""
 
 
 def test_a_rewritten_time_series_maps_to_the_same_releases(target):
