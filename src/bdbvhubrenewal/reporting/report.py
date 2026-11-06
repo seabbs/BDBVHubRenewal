@@ -66,6 +66,7 @@ from bdbvhubrenewal.forecasters.base import (
     get_model,
     list_models,
 )
+from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 from bdbvhubrenewal.reporting.explorer import (
     explorer_data,
     explorer_html,
@@ -78,10 +79,10 @@ from bdbvhubrenewal.reporting.nowcast_plots import (
     plot_truth_changes,
 )
 from bdbvhubrenewal.reporting.plots import (
-    THEMES,
+    baseline_share,
     comparison_colours,
     comparison_label,
-    model_colour,
+    model_style,
     plot_delay_check,
     plot_delay_distribution,
     plot_delays_over_time,
@@ -92,6 +93,7 @@ from bdbvhubrenewal.reporting.plots import (
     plot_imputed_share,
     plot_location_grid,
     plot_newly_missing,
+    plot_renewal_delay,
     plot_revisions,
     plot_scenarios,
     plot_scores,
@@ -106,6 +108,7 @@ from bdbvhubrenewal.reporting.scorechart import (
     write_score_chart,
 )
 from bdbvhubrenewal.reporting.scoresummary import summary_html, summary_rows
+from bdbvhubrenewal.reporting.store_note import write_store_note
 from bdbvhubrenewal.reporting.tables import filter_table
 from bdbvhubrenewal.reporting.zone_nowcast import (
     ZONE_MODEL,
@@ -173,6 +176,7 @@ def make_report(
     real = target.loc[target["kind"] == "real"]
     latest = real["vintage"].max()
     latest_delays = delays.loc[delays["vintage"] == delays["vintage"].max()]
+    write_store_note(res, gen)
 
     # Data page.
     save_light_dark(
@@ -272,6 +276,16 @@ def make_report(
         ),
         fig / "delay-check.svg",
     )
+    # Written by `fit-store load` from the stored fits.
+    learnt = pd.read_csv(res / DELAY_SUMMARY_FILE)
+    fitted = sorted(set(learnt["location"]) - {"pooled"})
+    baseline = baseline_share(
+        daily, str(learnt["vintage"].max()), [NATIONAL, *fitted]
+    )
+    save_light_dark(
+        partial(plot_renewal_delay, learnt, baseline, _location_names(real)),
+        fig / "renewal-delay.svg",
+    )
 
 
 _RELEASE_PLACES: Final = ("CD", "CD-IT", "CD-NK")
@@ -326,26 +340,9 @@ def _downward_table(real: pd.DataFrame, zones: pd.DataFrame) -> str:
     )
 
 
-def _model_colours(
-    models: Sequence[str], registry: Sequence[str] | None = None
-) -> dict[str, tuple[str, str]]:
-    """Each model's light and dark colour, by its place in the registry.
-
-    A model outside the registry, such as the as-reported floor, is grey.
-    """
-    registry = list(registry or models)
-    muted = THEMES["light"]["muted"], THEMES["dark"]["muted"]
-    return {
-        m: (
-            (
-                model_colour(m, registry, "light"),
-                model_colour(m, registry, "dark"),
-            )
-            if m in registry
-            else muted
-        )
-        for m in models
-    }
+def _model_colours(models: Sequence[str]) -> dict[str, tuple[str, str, str]]:
+    """Each model's light colour, dark colour and dash, from `model_style`."""
+    return {m: model_style(m, models) for m in models}
 
 
 def _ours(frame: pd.DataFrame, names: Sequence[str]) -> pd.DataFrame:
@@ -393,7 +390,7 @@ def _release_section(
     by_place = relative_wis(scores, ("target", "origin", "location"))
     reported = overall.loc[overall["target"] == _TARGET_LABELS["reported"]]
     ours = [*names, BASELINE]
-    colours = _model_colours(ours, names)
+    colours = _model_colours(ours)
     rep = pooled.loc[pooled["target"] == _TARGET_LABELS["reported"]]
     # Rounds are named by their reference date, as in the explorer.
     rep = rep.assign(
@@ -524,7 +521,7 @@ def _scored_on(reported: pd.DataFrame, baseline: str = "randomwalk") -> str:
     return (
         f"Scored on {len(pairs)} origin and release pairs.\n"
         f"{baseline} has {listed}{counts[-1]} forecasts.\n"
-        "The renewal models have no health zone forecasts.\n"
+        "The renewal models are not scored at health zones.\n"
     )
 
 
@@ -1310,7 +1307,7 @@ def _simulated_summary(
         summary_rows(
             scores.assign(origin=scores["reference_date"]),
             models,
-            _model_colours(models, names),
+            _model_colours(models),
             labels,
             default_on=[m for m in models if m != "randomwalk"],
             energy=energy.assign(origin=energy["reference_date"]),
@@ -1383,7 +1380,7 @@ def _scenario_section(
                 target,
                 labels,
                 0,
-                _model_colours(shown, names),
+                _model_colours(shown),
                 samples=drawn,
             ),
         )
@@ -1593,13 +1590,7 @@ def _backtest_page(
                     ),
                 },
                 k,
-                {
-                    m: (
-                        model_colour(m, names, "light"),
-                        model_colour(m, names, "dark"),
-                    )
-                    for m in shown
-                },
+                {m: model_style(m, names) for m in shown},
                 samples=pd.concat(
                     [real_fc, zone_draws.loc[zone_draws["model"].isin(shown)]],
                     ignore_index=True,
@@ -1758,9 +1749,10 @@ def _comparison_page(
         key=registry.index,
     )
     submitted = sorted(set(quantiles.loc[source == "submitted", "model"]))
+    submits = {hub_id: m for m, hub_id in hub_ids.items()}
     colours = comparison_colours(
         {comparison_label(m, "real"): m for m in built},
-        [comparison_label(m, "submitted") for m in submitted],
+        {comparison_label(h, "submitted"): submits[h] for h in submitted},
         sorted(set(quantiles.loc[source == "hub", "model"])),
     )
     on = [
@@ -1882,7 +1874,7 @@ def _comparison_summary(
     energy: pd.DataFrame,
     baseline: str,
     on: Sequence[str],
-    colours: Mapping[str, tuple[str, str]],
+    colours: Mapping[str, tuple[str, str, str]],
     names: Mapping[str, str],
 ) -> None:
     """Write the Overall, By horizon and By place summaries.

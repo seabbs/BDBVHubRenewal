@@ -70,17 +70,19 @@ A province with cases but too few for its own fit, $y_w$ in each of its $n_w$ da
 $$
 \lambda_p \sim \text{Gamma}\Big(\tfrac{1}{2} + \sum_w y_w,\ n_w\Big),
 \qquad
-\tilde y_p(w) \sim \text{Poisson}(\lambda_p),
+\tilde y_p(w) = \max\{y_w, z_p(w)\},
+\qquad
+z_p(w) \sim \text{Poisson}(\lambda_p),
 $$
 
-with one $\lambda_p$ per trajectory.
+with one $\lambda_p$ per trajectory and $y_w$ the count reported at the origin (0 for weeks without data), as in `randomwalk`.
 Provinces with no cases get no forecast.
 
 ### Time axis
 
 The data weeks start one week before weekly onsets, summed over the modelled provinces, first reach 5, or their peak if lower.
 In `renewalsp` the modelled province is $p$ alone, so each fit has its own axis.
-The data weeks end with the week that holds the vintage date $T$.
+The data weeks end with the week that holds $T$, the release's last report day ([Data](data.md#vintages)).
 The model axis starts 42 days (6 weeks) earlier, the length of the generation interval, for seeding.
 Every weekly walk is held at its starting value over the 6 seeding weeks and the first data week.
 The fit axis is the data weeks.
@@ -150,7 +152,7 @@ $$
 
 ### Hub imputation
 
-The hub gives each case reported without an onset one by subtracting a delay drawn from its published delays ([hub issue 61](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/61)).
+The hub gives each case reported without an onset one by subtracting a delay drawn from a fit to its published delays ([imputation details](https://github.com/InsightNet-US/BDBV-Modeling-Hub/blob/main/auxiliary-data/imputation-details.md)).
 We model that procedure, bias included:
 
 $$
@@ -160,8 +162,10 @@ M_p(t) = \pi_p(t) \sum_s \lambda_p(s)\, f_s(t - s),
 $$
 
 $M_p(t)$ are the cases reported on day $t$ without an onset.
-$\hat f_T$ is the empirical pmf of all delays published at $T$, pooled and on 0 to 60 days, and is data.
-Pooling and the handling of negative and long delays are assumed.
+The hub draws a report hour from $\mathrm{Unif}(0, 24)$ and subtracts a generalised gamma delay in hours fitted to the non-negative delays published at 2026-10-17.
+$\hat f_T$ is the daily pmf this implies, $\hat f_T(k) = \int_0^1 \{F_T(k + u) - F_T(k - 1 + u)\}\, du$ with $F_T$ the delay cdf in days, on 0 to 60 days, and is data.
+Up to the 2026-10-24 release the hub fitted the delays as exact, and from 2026-11-01 as double interval censored ([hub issue 75](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/75)).
+We refit both, so $F_T$ is the fit the hub used for release $T$.
 
 ### Likelihood
 

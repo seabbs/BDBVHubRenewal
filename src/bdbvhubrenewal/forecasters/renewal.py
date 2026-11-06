@@ -44,6 +44,8 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
+from bdbvhubrenewal.data.releases import last_report
+from bdbvhubrenewal.data.tidy import write_csv
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -366,7 +368,8 @@ def horizon_weeks(task: ForecastTask) -> int:
         At least one.
     """
     last = max(_saturday(d) for d in task.target_end_dates)
-    return max(1, (last - _saturday(task.vintage)).days // 7)
+    cut = last_report(task.vintage, task.kind)
+    return max(1, (last - _saturday(cut)).days // 7)
 
 
 def _weeks(first: dt.date, n: int) -> list[str]:
@@ -597,11 +600,12 @@ def report_cutoffs(task: ForecastTask, data: Any) -> dict[int, str]:
     Returns
     -------
     dict
-        The vintage date (ISO) by its day on the model axis, the `as_of`
-        cut-offs of `forecast_trajectories`.
+        The vintage date (ISO) by its last report day on the model axis
+        (`data.releases.last_report`), the `as_of` cut-offs of
+        `forecast_trajectories`.
     """
     return {
-        (dt.date.fromisoformat(d) - data.start_date).days: d
+        (last_report(d, task.kind) - data.start_date).days: d
         for d in task.report_by
     }
 
@@ -671,12 +675,24 @@ def data_gap(task: ForecastTask, samples: pd.DataFrame) -> pd.DataFrame | None:
 def _idle_samples(
     task: ForecastTask, loc: str, rows: pd.DataFrame
 ) -> pd.DataFrame:
-    """Draws for a location with too few cases for its own fit."""
+    """Draws for a location with too few cases for its own fit.
+
+    A week's draws are never below the count already reported for it.
+    """
     from bdbvhubrenewal.model.inputs import idle_draws
 
-    counts = rows.loc[rows["location"] == loc, "total"].to_numpy(dtype=float)
+    own = rows.loc[rows["location"] == loc]
+    counts = own["total"].to_numpy(dtype=float)
     n, weeks = task.n_samples, list(task.target_end_dates)
-    draws = idle_draws(counts, len(weeks), n, task.rng())
+    reported = (
+        own.groupby("target_end_date")["total"]
+        .sum()
+        .reindex(weeks, fill_value=0)
+        .to_numpy(dtype=float)
+    )
+    draws = np.maximum(
+        idle_draws(counts, len(weeks), n, task.rng()), reported[None, :]
+    )
     return pd.DataFrame(
         {
             "location": loc,
@@ -809,12 +825,13 @@ def delay_summary(
         draws. `kind` `"cumulative"` has, by delay day `x`, the share
         reported by then (`reported_share`) for onsets in the last week.
         `kind` `"onset_week"` has, by onset week ending `x`, the median
-        delay in days (`median_delay`) and the share reported within 7
-        days (`share_within_7`).
+        delay in days (`median_delay`), the mean delay in days
+        (`mean_delay`) and the share reported within 7 days
+        (`share_within_7`).
     """
     import jax.numpy as jnp
 
-    from bdbvhubrenewal.model.delays import hazard_to_pmf
+    from bdbvhubrenewal.model.hazard_delay import hazard_to_pmf
 
     days = pd.date_range(first_day, periods=last_day + 1, freq="D")
     # The last day of each onset week (to Saturday) up to the vintage.
@@ -857,6 +874,7 @@ def delay_summary(
                 "median_delay",
             ),
             rows(cdf[:, :, 7], weeks, "onset_week", "share_within_7"),
+            rows((1 - cdf).sum(axis=-1), weeks, "onset_week", "mean_delay"),
         ],
         ignore_index=True,
     )
@@ -1417,10 +1435,10 @@ def fit_renewal(
     task = replace(task, seed=int(settings.get("seed", task.seed)))
     model = RenewalModel(VARIANTS[variant], settings, out / "progress.log")
     fit = model.forecast_fit(task)
-    fit.samples.to_csv(out / SAMPLES_FILE, index=False)
-    fit_delays(fit, task).to_csv(out / DELAY_SUMMARY_FILE, index=False)
+    write_csv(fit.samples, out / SAMPLES_FILE)
+    write_csv(fit_delays(fit, task), out / DELAY_SUMMARY_FILE)
     if fit.unassigned is not None:
-        fit.unassigned.to_csv(out / UNASSIGNED_FILE, index=False)
+        write_csv(fit.unassigned, out / UNASSIGNED_FILE)
     pairs = [
         pd.DataFrame(
             {
@@ -1433,8 +1451,8 @@ def fit_renewal(
         if "draw" in run.draws
     ]
     if pairs:
-        pd.concat(pairs, ignore_index=True).to_csv(
-            out / TRAJECTORY_DRAW_FILE, index=False
+        write_csv(
+            pd.concat(pairs, ignore_index=True), out / TRAJECTORY_DRAW_FILE
         )
     modelled = sorted(set(fit.samples["location"]))
     (out / TRAJECTORIES_FILE).write_text(

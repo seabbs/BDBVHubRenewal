@@ -3,6 +3,8 @@
 Forecasts made at past vintages, scored on what each later release reported.
 { .page-subtitle }
 
+--8<-- "fit-store.md"
+
 --8<-- "release-headline.md"
 
 ## By horizon

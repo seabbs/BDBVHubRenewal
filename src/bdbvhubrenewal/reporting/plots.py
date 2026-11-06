@@ -3,9 +3,8 @@
 
 Every function returns a matplotlib `Figure` and takes `theme`, `"light"`
 or `"dark"`, so the docs can show both.
-Models get fixed colours from `MODEL_COLOURS` through `MODEL_INDEX`, so a
-model has the same colour on every page and keeps it when others are
-added.
+Models get a fixed colour and dash from `MODEL_STYLE`, so a model looks
+the same on every page and keeps its look when others are added.
 The vintage kind is always shown, in a panel title or the legend.
 
 The submission phase can call `plot_nowcast(location=..., vintage=...)`
@@ -40,15 +39,21 @@ from bdbvhubrenewal.data import (
     revision_table,
 )
 from bdbvhubrenewal.data.delays import delay_summary
+from bdbvhubrenewal.forecasters.base import NATIONAL
 
 __all__ = [
+    "DASHES",
     "MODEL_COLOURS",
-    "MODEL_INDEX",
+    "MODEL_STYLE",
     "THEMES",
+    "bar_style",
+    "baseline_share",
     "comparison_colours",
     "comparison_label",
     "hub_styles",
     "model_colour",
+    "model_dash",
+    "model_style",
     "plot_delay_check",
     "plot_delay_distribution",
     "plot_delays_over_time",
@@ -60,11 +65,13 @@ __all__ = [
     "plot_location_grid",
     "plot_newly_missing",
     "plot_nowcast",
+    "plot_renewal_delay",
     "plot_revisions",
     "plot_scores",
     "plot_scores_by_truth",
     "plot_simulation",
     "plot_target",
+    "point_style",
     "save_light_dark",
     "theme",
 ]
@@ -113,15 +120,31 @@ MODEL_COLOURS: Final[dict[str, tuple[str, ...]]] = {
 }
 """Categorical colours in fixed order (checked for colour vision deficiency)."""
 
-MODEL_INDEX: Final[dict[str, int]] = {
-    "randomwalk": 0,
-    "randomwalknowcast": 1,
-    "renewal": 2,
-    "renewalbvd": 3,
-    "renewalsp": 4,
-    "pprandomwalknowcast": 5,
+DASHES: Final[dict[str, str]] = {
+    "solid": "",
+    "dashed": "6 3",
+    "dotted": "1.5 2.5",
+    "dashdot": "6 3 1.5 3",
 }
-"""Each model's place in `MODEL_COLOURS`. A new model takes the next index."""
+"""Line dash patterns as SVG `stroke-dasharray` values, solid first."""
+
+MODEL_STYLE: Final[dict[str, tuple[int | None, str]]] = {
+    "randomwalk": (0, "solid"),
+    "randomwalknowcast": (1, "solid"),
+    "renewal": (2, "solid"),
+    "renewalbvd": (3, "solid"),
+    "renewalsp": (4, "solid"),
+    "pprandomwalknowcast": (5, "solid"),
+    "as reported": (None, "dotted"),
+}
+"""Each model's place in `MODEL_COLOURS` and its dash in `DASHES`.
+
+A new main model takes the next free colour; a variant takes its parent's
+colour with the next dash, since past eight colours some pairs can no
+longer be told apart. `None` is the data ink, for the as-reported floor.
+"""
+
+_FREE_SLOT: Final = 1 + max(s for s, _ in MODEL_STYLE.values() if s is not None)
 
 HUB_GREYS: Final[dict[str, tuple[str, ...]]] = {
     "light": ("#5f5e5a", "#898781", "#b4b2a9"),
@@ -135,8 +158,9 @@ _KIND_MARKERS: Final = {"real": "o", "simulated": "^"}
 def model_colour(name: str, models: Sequence[str], mode: str = "light") -> str:
     """Return a model's fixed colour.
 
-    A model in `MODEL_INDEX` has its own colour. Others, such as test
-    stand-ins, take the next colours in their order in `models`.
+    A model in `MODEL_STYLE` has its own colour. Others, such as test
+    stand-ins, take the colours after the last one `MODEL_STYLE` uses, in
+    their order in `models`.
 
     Parameters
     ----------
@@ -153,10 +177,70 @@ def model_colour(name: str, models: Sequence[str], mode: str = "light") -> str:
         A hex colour.
     """
     palette = MODEL_COLOURS[mode]
-    if name in MODEL_INDEX:
-        return palette[MODEL_INDEX[name] % len(palette)]
-    others = [m for m in models if m not in MODEL_INDEX]
-    return palette[(len(MODEL_INDEX) + others.index(name)) % len(palette)]
+    if name in MODEL_STYLE:
+        slot = MODEL_STYLE[name][0]
+        return THEMES[mode]["data"] if slot is None else palette[slot]
+    others = [m for m in models if m not in MODEL_STYLE]
+    return palette[(_FREE_SLOT + others.index(name)) % len(palette)]
+
+
+def model_dash(name: str) -> str:
+    """Return a model's dash as an SVG `stroke-dasharray`, empty if solid.
+
+    Parameters
+    ----------
+    name : str
+        The model.
+
+    Returns
+    -------
+    str
+        A value of `DASHES`.
+    """
+    return DASHES[MODEL_STYLE.get(name, (None, "solid"))[1]]
+
+
+def model_style(name: str, models: Sequence[str]) -> tuple[str, str, str]:
+    """Return a model's light colour, dark colour and dash.
+
+    Parameters
+    ----------
+    name : str
+        The model.
+    models : sequence of str
+        All models shown, as for `model_colour`.
+
+    Returns
+    -------
+    tuple of str
+        Light colour, dark colour and SVG dash.
+    """
+    return (
+        model_colour(name, models, "light"),
+        model_colour(name, models, "dark"),
+        model_dash(name),
+    )
+
+
+def mpl_dash(dash: str) -> str | tuple[int, tuple[float, ...]]:
+    """Turn an SVG dash into a matplotlib line style."""
+    return (0, tuple(float(v) for v in dash.split())) if dash else "-"
+
+
+def bar_style(colour: str, dash: str) -> dict[str, Any]:
+    """Bar keywords: filled when solid, hatched in the colour otherwise.
+
+    Bars cannot show a dash, so a variant is hatched to keep it apart
+    from its parent.
+    """
+    if not dash:
+        return {"color": colour}
+    return {"facecolor": "none", "edgecolor": colour, "hatch": "////"}
+
+
+def point_style(colour: str, dash: str) -> dict[str, Any]:
+    """Marker keywords: filled when solid, hollow otherwise."""
+    return {"color": colour, "mfc": "none" if dash else colour}
 
 
 @contextmanager
@@ -680,6 +764,152 @@ def plot_delays_over_time(
     return fig
 
 
+def baseline_share(
+    daily: pd.DataFrame, vintage: str, locations: Sequence[str]
+) -> pd.DataFrame:
+    """Return randomwalknowcast's share reported by age at one release.
+
+    The share is one over the growth to final of `plot_delay_check`.
+
+    Parameters
+    ----------
+    daily : pandas.DataFrame
+        Daily onsets by release, as for `make_tasks`.
+    vintage : str
+        The release.
+    locations : sequence of str
+        Places.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `location`, `age` (days since onset) and `share`.
+    """
+    from bdbvhubrenewal.data.snapshots import snapshot_arrays
+    from bdbvhubrenewal.forecasters.chain import Settings, build_origin
+
+    snap = snapshot_arrays(daily, vintage, tuple(locations))
+    origin = build_origin(snap, Settings(), errors=False)
+    age = int(snap.cut[origin.o]) - np.arange(snap.week.size)
+    seen = (age >= 0) & (age < origin.settings.max_delay)
+    return pd.concat(
+        [
+            pd.DataFrame(
+                {
+                    "location": loc,
+                    "age": age[seen],
+                    "share": 1 / origin.growth[j, seen],
+                }
+            ).sort_values("age")
+            for j, loc in enumerate(snap.locations)
+        ],
+        ignore_index=True,
+    )
+
+
+def plot_renewal_delay(
+    summary: pd.DataFrame,
+    baseline: pd.DataFrame,
+    names: Mapping[str, str] | None = None,
+    mode: str = "light",
+) -> Figure:
+    """Plot the renewal models' learnt delay at their latest origin.
+
+    Parameters
+    ----------
+    summary : pandas.DataFrame
+        `delay-summary.csv` rows (`bdbvhubrenewal.forecasters.renewal.
+        delay_summary` with `model`, `vintage` and `location`).
+    baseline : pandas.DataFrame
+        `baseline_share` at the same release, with the country as
+        `NATIONAL` for the fits pooled over provinces.
+    names : mapping, optional
+        Location names by code.
+    mode : str
+        `"light"` or `"dark"`.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        A row per fit: pooled over provinces, then each province a
+        single-patch model fits. Left: the share of onsets in the last week
+        reported by each day since onset, to the day before the longest
+        delay, with randomwalknowcast's share for the same place. Right:
+        the mean delay by onset week. Lines are medians and bands 90%
+        intervals.
+    """
+    names = dict(names or {})
+    ink = THEMES[mode]
+    latest = summary.groupby("model")["vintage"].transform("max")
+    rows = summary.loc[summary["vintage"] == latest]
+    models = list(dict.fromkeys(rows["model"]))
+    places = list(dict.fromkeys(rows["location"]))
+    places.sort(key=lambda p: (p != "pooled", names.get(p, p)))
+    fig, axes = plt.subplots(
+        len(places),
+        2,
+        figsize=(7.2, 2.1 * len(places)),
+        squeeze=False,
+        layout="constrained",
+    )
+    last_day = int(pd.to_numeric(rows["x"], errors="coerce").max())
+    for (left, right), place in zip(axes, places, strict=True):
+        here = rows.loc[rows["location"] == place]
+        fitted = list(dict.fromkeys(here["model"]))
+        where = NATIONAL if place == "pooled" else place
+        title = (
+            "All provinces" if place == "pooled" else names.get(place, place)
+        )
+        left.set_title(f"{title}: {', '.join(fitted)}", fontsize=8, loc="left")
+        base = baseline.loc[baseline["location"] == where]
+        left.plot(
+            base["age"],
+            base["share"],
+            color=ink["data"],
+            ls="--",
+            lw=1,
+            label="randomwalknowcast",
+        )
+        lines = []
+        for model in fitted:
+            fit = here.loc[here["model"] == model]
+            colour = model_colour(model, models, mode)
+            share = fit.loc[fit["quantity"] == "reported_share"]
+            day = pd.to_numeric(share["x"])
+            share = share.loc[day < last_day]
+            day = day.loc[share.index]
+            delay = fit.loc[fit["quantity"] == "mean_delay"]
+            week = pd.to_datetime(delay["x"])
+            for ax, x, q in ((left, day, share), (right, week, delay)):
+                ax.fill_between(x, q["q5"], q["q95"], color=colour, alpha=0.12)
+                lines.append((ax, x, q["q50"], colour, model))
+        # Later models are drawn first and wider, so a line that coincides
+        # with another stays visible under it.
+        width = {m: 1.2 + 1.2 * i for i, m in enumerate(fitted)}
+        for ax, x, y, colour, model in reversed(lines):
+            ax.plot(x, y, color=colour, lw=width[model], label=model)
+        left.set_ylim(0, 1)
+        left.set_ylabel("Share reported")
+        right.set_ylabel("Mean delay (days)")
+        _date_axis(right)
+    axes[-1][0].set_xlabel("Days since onset, last onset week")
+    vintage = ", ".join(sorted(rows["vintage"].astype(str).unique()))
+    fig.suptitle(f"Fits at {vintage}", fontsize=9)
+    handles: dict[str, Any] = {}
+    for ax in axes[:, 0]:
+        for h, label in zip(*ax.get_legend_handles_labels(), strict=True):
+            handles.setdefault(label, h)
+    fig.legend(
+        list(handles.values()),
+        list(handles),
+        loc="outside lower center",
+        ncol=len(handles),
+        fontsize=7,
+        frameon=False,
+    )
+    return fig
+
+
 def plot_simulation(parameters: pd.DataFrame, mode: str = "light") -> Figure:
     """Plot the true parameters of a simulated outbreak.
 
@@ -789,9 +1019,12 @@ def _plot_data(
 
 
 def _draw_forecast(
-    ax: Axes, samples: pd.DataFrame, colour: str, label: str
+    ax: Axes, samples: pd.DataFrame, colour: str, dash: str, label: str
 ) -> None:
-    """Draw sample trajectories, 50% and 90% ribbons and the median."""
+    """Draw sample trajectories, 50% and 90% ribbons and the median.
+
+    The median takes the model's dash, an SVG `stroke-dasharray`.
+    """
     paths = samples.pivot_table(
         index="target_end_date", columns="sample", values="value"
     ).sort_index()
@@ -801,7 +1034,9 @@ def _draw_forecast(
     q = _bands(samples)
     ax.fill_between(q.index, q[0.05], q[0.95], color=colour, alpha=0.18, lw=0)
     ax.fill_between(q.index, q[0.25], q[0.75], color=colour, alpha=0.35, lw=0)
-    ax.plot(q.index, q[0.5], color=colour, lw=1.5, label=label)
+    ax.plot(
+        q.index, q[0.5], color=colour, ls=mpl_dash(dash), lw=1.5, label=label
+    )
 
 
 def _fit_y(ax: Axes, samples: pd.DataFrame, shown: Sequence[float]) -> None:
@@ -931,7 +1166,9 @@ def plot_location_grid(
         for m in models:
             s = fc.loc[(fc["location"] == loc) & (fc["model"] == m)]
             if not s.empty:
-                _draw_forecast(ax, s, model_colour(m, models, mode), m)
+                _draw_forecast(
+                    ax, s, model_colour(m, models, mode), model_dash(m), m
+                )
                 _fit_y(ax, s, top)
         ax.axvline(mdates.date2num(ref), color=ink["muted"], lw=0.8, ls=":")
         _shade_incomplete(ax, cut, mode)
@@ -1127,7 +1364,9 @@ def plot_forecasts(
         for m in models:
             s = f_ref.loc[f_ref["model"] == m]
             if not s.empty:
-                _draw_forecast(ax, s, model_colour(m, models, mode), m)
+                _draw_forecast(
+                    ax, s, model_colour(m, models, mode), model_dash(m), m
+                )
                 _fit_y(ax, s, top)
                 drawn = True
         if not drawn:
@@ -1255,7 +1494,9 @@ def plot_nowcast(
             )
     for m in models:
         s = fc.loc[fc["model"] == m]
-        _draw_forecast(ax, s, model_colour(m, list(models), mode), m)
+        _draw_forecast(
+            ax, s, model_colour(m, list(models), mode), model_dash(m), m
+        )
     ax.axvline(mdates.date2num(ref), color=ink["muted"], lw=0.8, ls=":")
     _shade_incomplete(ax, cut, mode)
     names = _names(rows)
@@ -1293,47 +1534,40 @@ def comparison_label(model: str, source: str) -> str:
 
 
 def comparison_colours(
-    ours: Mapping[str, str], submitted: Sequence[str], teams: Sequence[str]
-) -> dict[str, tuple[str, str]]:
-    """Return the light and dark colour of each model in the comparison.
+    ours: Mapping[str, str],
+    submitted: Mapping[str, str],
+    teams: Sequence[str],
+) -> dict[str, tuple[str, str, str]]:
+    """Return the light colour, dark colour and dash of each comparison series.
 
     Parameters
     ----------
     ours : mapping of str to str
         Label of each of our main builds to its registry name.
-    submitted : sequence of str
-        Labels of our submitted series, coloured in sorted order after the
-        registry's colours.
+    submitted : mapping of str to str
+        Label of each of our submitted series to the registry name of the
+        model it submits, whose colour it takes, dashed.
     teams : sequence of str
         Every hub team.
 
     Returns
     -------
     dict
-        Label to its light and dark colour: our main builds in
-        `MODEL_COLOURS` by registry order, our submitted series next, and
-        the hub teams in the greys of `hub_styles`.
+        Label to its light colour, dark colour and SVG dash: our main
+        builds in their `model_style`, our submitted series in their
+        model's colour dashed, and the hub teams solid in the greys of
+        `hub_styles`.
     """
     from bdbvhubrenewal.forecasters.base import list_models
 
     registry = [s.name for s in list_models()]
-    out = {
-        lab: (
-            model_colour(m, registry, "light"),
-            model_colour(m, registry, "dark"),
-        )
-        for lab, m in ours.items()
-    }
-    light, dark = MODEL_COLOURS["light"], MODEL_COLOURS["dark"]
+    out = {lab: model_style(m, registry) for lab, m in ours.items()}
     out |= {
-        lab: (
-            light[(len(registry) + i) % len(light)],
-            dark[(len(registry) + i) % len(dark)],
-        )
-        for i, lab in enumerate(sorted(submitted))
+        lab: (*model_style(m, registry)[:2], DASHES["dashed"])
+        for lab, m in submitted.items()
     }
     grey = {mode: hub_styles(teams, mode) for mode in ("light", "dark")}
-    out |= {t: (grey["light"][t][0], grey["dark"][t][0]) for t in teams}
+    out |= {t: (grey["light"][t][0], grey["dark"][t][0], "") for t in teams}
     return out
 
 
@@ -1364,7 +1598,7 @@ def plot_hub_round(
     quantiles: pd.DataFrame,
     target: pd.DataFrame,
     reference_date: str,
-    colours: Mapping[str, tuple[str, str]],
+    colours: Mapping[str, tuple[str, str, str]],
     locations: Sequence[str] = ("CD",),
     complete_after_weeks: int = 3,
     weeks_before: int = 8,
@@ -1395,10 +1629,10 @@ def plot_hub_round(
         Weeks of data shown before the reference date.
     mode : str
         `"light"` or `"dark"`.
-    colours : mapping of str to (str, str)
-        Our series' labels (`comparison_label`) to their light and dark
-        colour, in the order drawn. Every series of ours in the round
-        needs one.
+    colours : mapping of str to (str, str, str)
+        Our series' labels (`comparison_label`) to their light
+        colour, dark colour and dash, in the order drawn. Every series of
+        ours in the round needs one.
     shown : sequence of str, optional
         Labels of our series to draw. Defaults to all of ours in the
         round.
@@ -1427,8 +1661,12 @@ def plot_hub_round(
     here = set(q.loc[~hub, "label"])
     pick = 0 if mode == "light" else 1
     rows = [
-        {lab: (c[pick], "o") for lab, c in colours.items() if lab in here},
-        {lab: styles[lab] for lab in sorted(set(q.loc[hub, "label"]))},
+        {
+            lab: (c[pick], "o", c[2])
+            for lab, c in colours.items()
+            if lab in here
+        },
+        {lab: (*styles[lab], "") for lab in sorted(set(q.loc[hub, "label"]))},
     ]
     locs = [loc for loc in locations if loc in set(q["location"])]
     real = target.loc[target["kind"] == "real"]
@@ -1466,14 +1704,23 @@ def plot_hub_round(
                 zorder=3,
             )
             width = 5.0 / max(len(style), 1)
-            for k, (lab, (colour, marker)) in enumerate(style.items()):
+            for k, (lab, (colour, marker, dash)) in enumerate(style.items()):
                 m = ql.loc[ql["label"] == lab]
                 offset = pd.Timedelta(days=(k - (len(style) - 1) / 2) * width)
                 xm = pd.to_datetime(m["target_end_date"]) + offset
-                ax.vlines(xm, m["q05"], m["q95"], color=colour, lw=1, alpha=0.7)
-                ax.vlines(xm, m["q25"], m["q75"], color=colour, lw=3)
+                ls = mpl_dash(dash)
+                ax.vlines(
+                    xm, m["q05"], m["q95"], color=colour, lw=1, alpha=0.7, ls=ls
+                )
+                ax.vlines(xm, m["q25"], m["q75"], color=colour, lw=3, ls=ls)
                 ax.plot(
-                    xm, m["q50"], marker, color=colour, ms=3, ls="", label=lab
+                    xm,
+                    m["q50"],
+                    marker,
+                    ms=4,
+                    ls="",
+                    label=lab,
+                    **point_style(colour, dash),
                 )
             ax.axvline(mdates.date2num(ref), color=ink["muted"], lw=0.8, ls=":")
             _shade_incomplete(ax, cut, mode)
@@ -1608,7 +1855,7 @@ def plot_scores(
     metric: str = "wis",
     models: Sequence[str] | None = None,
     mode: str = "light",
-    colours: Mapping[str, tuple[str, str]] | None = None,
+    colours: Mapping[str, tuple[str, str, str]] | None = None,
 ) -> Figure:
     """Plot mean scores by horizon or location, one panel per vintage kind.
 
@@ -1625,8 +1872,9 @@ def plot_scores(
         Models in registry order.
     mode : str
         `"light"` or `"dark"`.
-    colours : mapping of str to (str, str), optional
-        Model to its light and dark colour. Defaults to `model_colour`.
+    colours : mapping of str to (str, str, str), optional
+        Model to its light colour, dark colour and dash. Defaults to
+        `model_style`.
 
     Returns
     -------
@@ -1647,22 +1895,29 @@ def plot_scores(
         for i, m in enumerate(models):
             if m not in mean.columns:
                 continue
-            col = (
-                colours[m][0 if mode == "light" else 1]
+            col, dash = (
+                (colours[m][0 if mode == "light" else 1], colours[m][2])
                 if colours
-                else model_colour(m, models, mode)
+                else (model_colour(m, models, mode), model_dash(m))
             )
             if by == "horizon":
                 ax.plot(
                     mean.index,
                     mean[m],
                     color=col,
+                    ls=mpl_dash(dash),
                     marker=_KIND_MARKERS[kind],
                     ms=5,
                     label=m,
                 )
             else:
-                ax.bar(x + i * width, mean[m], width, color=col, label=m)
+                ax.bar(
+                    x + i * width,
+                    mean[m],
+                    width,
+                    label=m,
+                    **bar_style(col, dash),
+                )
         if by != "horizon":
             ax.set_xticks(
                 x + width * (len(models) - 1) / 2,

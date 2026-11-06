@@ -52,7 +52,7 @@ def _pool(location: str) -> str:
 def summary_rows(
     scores: pd.DataFrame,
     models: Sequence[str],
-    colours: Mapping[str, tuple[str, str]],
+    colours: Mapping[str, tuple[str, str, str]],
     names: Mapping[str, str],
     baseline: str = "randomwalk",
     metrics: Sequence[tuple[str, str, float | None, bool]] = SUMMARY_METRICS,
@@ -69,8 +69,8 @@ def summary_rows(
         `horizon` (weeks from the reference date) and the metric columns.
     models : sequence of str
         Models in order. Rows of other models are left out.
-    colours : mapping of str to (str, str)
-        Model to its light and dark colour.
+    colours : mapping of str to (str, str, str)
+        Model to its light colour, dark colour and dash.
     names : mapping of str to str
         Place names by id. Zones not named show their code.
     baseline : str
@@ -86,7 +86,7 @@ def summary_rows(
     Returns
     -------
     dict
-        `models` (name, light and dark colour, ticked at first),
+        `models` (name, light and dark colour, dash, ticked at first),
         `baseline` (its index), `metrics` (key, label, ref, relative),
         `origins`, `releases`, `weeks`, `pools` (id and label, in order),
         `places` (id, name, pool) and `rows`: model, origin, release,
@@ -129,6 +129,7 @@ def summary_rows(
                 "name": m,
                 "light": colours[m][0],
                 "dark": colours[m][1],
+                "dash": colours[m][2],
                 "on": starts_on(m, on),
             }
             for m in shown

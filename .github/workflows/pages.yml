@@ -15,6 +15,7 @@ on:
       - 'data/**'
       - 'config/**'
       - 'results/**'
+      - 'scripts/fit-store.sh'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/pages.yml'
@@ -27,6 +28,7 @@ on:
       - 'data/**'
       - 'config/**'
       - 'results/**'
+      - 'scripts/fit-store.sh'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/pages.yml'
@@ -59,26 +61,54 @@ jobs:
           if git fetch -q --depth 1 origin submission-ledger; then
             git archive FETCH_HEAD | tar -x -C output/ledger
           fi
-      # Pages never fits a model. The fitted renewal variants are run apart
-      # (on archie) and their forecasts and scores committed in results/.
-      # `--no-fit` runs only the models with no fit, keeps those rows, and
-      # scores the committed held-out forecasts again against the latest
-      # vintage, even for a chosen fitted model.
-      # The backtest reads only these inputs (the fitted variants' rows
-      # come from results/), so an unchanged hash reuses its outputs.
+      # The latest hub releases, as the Fit store workflow fits them.
+      - name: Refresh the hub data
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          uv run bdbvhubrenewal data
+          uv run bdbvhubrenewal bvd
+      # Pages never fits a model. The fitted models' forecasts come from
+      # the fit store (fit-store.yml), which reruns this build when it has
+      # stored new fits. `load` writes them into results/ with a record of
+      # the fits used, which each page with their results states.
+      - name: Load the stored fits
+        run: |
+          scripts/fit-store.sh fetch output/fit-store
+          uv run bdbvhubrenewal fit-store load --store output/fit-store
+      # The backtest runs only the models with no fit, keeps the stored
+      # rows and scores them again against the latest vintage. The zone
+      # and scenario backtests run the random walks only. None of these
+      # results are committed. Only this step makes them.
+      # `task results` runs the same commands locally; keep the two in step.
+      # Tables are written with a fixed gzip time, so the key changes only
+      # when what it reads changes. It leaves out Python caches, the raw
+      # downloads and data/sources.json, which records when they were made.
+      # Only the files this step writes are cached, so a hit cannot replace
+      # the committed records or the fit store's own files in results/.
       - name: Restore the backtest outputs
         id: backtest
         uses: actions/cache@v6
         with:
           path: |
-            results
-            output
-          key: backtest-${{ hashFiles('src/**', 'config/**', 'data/**', 'results/**', 'uv.lock') }}
+            results/backtest-fits.csv
+            results/forecasts.csv.gz
+            results/heldout-*
+            results/nowcast-*
+            results/recovery-*
+            results/scenario-*
+            results/zone-*
+          key: >-
+            backtest-${{ hashFiles('src/**', '!**/__pycache__/**',
+            'config/**', 'data/**', '!data/raw/**', '!data/sources.json',
+            'results/**', 'uv.lock', '.github/workflows/pages.yml') }}
       - name: Backtest
         if: steps.backtest.outputs.cache-hit != 'true'
         run: |
-          uv run bdbvhubrenewal backtest --no-fit
-          uv run bdbvhubrenewal backtest --evaluate-holdout --no-fit
+          uv run bdbvhubrenewal backtest
+          uv run bdbvhubrenewal backtest --evaluate-holdout
+          uv run bdbvhubrenewal zone-backtest
+          uv run bdbvhubrenewal backtest --scenarios-only
       - name: Compare with hub forecasts, then the docs figures and tables
         env:
           GITHUB_TOKEN: ${{ github.token }}

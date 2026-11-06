@@ -9,11 +9,10 @@
 # ruled out and the chain moves on. The content-hash fit cache is reused
 # across re-runs.
 
-# Minutes the chain plans with. Measured on hosted runners on the
-# 2026-11-01 vintage (2026-11-03), with the two chains of each fit in
-# parallel (run 41736611138) against vectorised (run 41691221605):
-# renewalbvd 29 min of sampling at 500 + 1000 draws (37 min vectorised
-# at 500 + 500), renewalsp 27 min (41 min), renewal 25 min (16 min).
+# Minutes the chain plans with. On hosted runners, at the 2026-11-01
+# vintage with the two chains of each fit in parallel, sampling takes
+# 29 min for renewalbvd (500 + 1000 draws), 27 min for renewalsp and
+# 25 min for renewal.
 # Nearly every renewalbvd and renewal draw reaches the maximum tree
 # depth, so cost follows iterations. Every renewal candidate fits in its
 # own job at the same time, and random walk is built in `prepare`, so
@@ -34,10 +33,9 @@ min_fit_minutes = 30
 # config and sampler settings.
 inputs = ["src", "config", "pyproject.toml", "uv.lock"]
 
-# Every fit: 2 chains of 500 warm-up, run in parallel (Sam, 2026-10-28;
-# parallel from 2026-11-03). renewalbvd draws 1000 at target acceptance
-# 0.95 to clear its tail ESS and divergence warnings (Sam, 2026-11-03);
-# the others draw 500 at 0.9.
+# Every fit: 2 chains of 500 warm-up, run in parallel. renewalbvd draws
+# 1000 at target acceptance 0.95 to clear its tail ESS and divergence
+# warnings; the others draw 500 at 0.9.
 [[candidates]]
 id = "bvd"
 kind = "main"

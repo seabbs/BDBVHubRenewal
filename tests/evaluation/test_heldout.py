@@ -167,7 +167,7 @@ def test_heldout_keeps_and_rescores_other_models_forecasts(
     path = tmp_path / "heldout-forecasts.csv.gz"
     fc = pd.read_csv(out / "heldout-forecasts.csv.gz")
     fc = fc.loc[fc["model"] != "shadow"]
-    # A fitted variant's forecasts, as a run on archie would leave them.
+    # A fitted variant's forecasts, as `fit-store load` leaves them.
     other = fc.loc[fc["model"] == "randomwalk"].assign(model="other")
     pd.concat([fc, other]).to_csv(path, index=False)
     scores = run_heldout(
@@ -214,7 +214,7 @@ def test_heldout_without_fits_reads_committed_forecasts(
         config.model_choice.write_text(
             "choices:\n  - {date: 2026-10-10, model: slowfit}\n"
         )
-        # Committed forecasts of the fitted model, as archie leaves them.
+        # Stored forecasts of the fitted model, as `fit-store load` writes them.
         seeded = pd.read_csv(rw_run[2] / "heldout-forecasts.csv.gz")
         seeded = seeded.loc[seeded["model"] == "randomwalk"]
         out = tmp_path / "out"
@@ -228,7 +228,6 @@ def test_heldout_without_fits_reads_committed_forecasts(
             config,
             evaluate_holdout=True,
             out_dir=out,
-            fit=False,
             daily=daily,
         )
     finally:

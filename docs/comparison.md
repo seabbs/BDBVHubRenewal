@@ -3,6 +3,8 @@
 Our models and the forecasts submitted to the hub's weekly round, scored on the same data.
 { .page-subtitle }
 
+--8<-- "fit-store.md"
+
 --8<-- "comparison-lead.md"
 
 ## Overall

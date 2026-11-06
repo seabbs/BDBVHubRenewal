@@ -9,15 +9,15 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 | Command | What it does |
 |---|---|
 | `data` | Download the hub data and write the tidy tables to `data/`. |
-| `backtest` | Run the development backtest, the evaluation on the real releases (`results/nowcast-*.csv`) and the recovery check. With `--models`, only those models run and the others' rows in `results/` are kept. |
+| `backtest` | Run the development backtest, the evaluation on the real releases (`results/nowcast-*.csv`) and the recovery check. Fitted models are never run: their rows in `results/` come from the fit store and are kept. With `--models`, only those models run and the others' rows are kept. |
 | `backtest --evaluate-holdout` | Score every held-out vintage under the model chosen at the time, with the other models alongside. |
-| `backtest --no-fit` | Run only the models with no fit. Fitted models' rows in `results/` are kept, and their held-out forecasts are scored again. The docs build uses this, so it never fits a model. |
 | `backtest --lopo` | Leave one province out: forecast each province with its counts masked, for the variants that take a mask. |
 | `backtest --scenarios-only` | Run only the scenarios calibrated to the real data, from `--scenario-as-of` and `--scenario-dates`. |
 | `bvd` | Cache the BVDOutbreakSize releases each vintage may use. |
 | `compare-hub [--fetch]` | Score our retrospective forecasts and the hub's submitted ones on the same truth and weeks. |
 | `nowcast` | Forecast from a real vintage, write the hub file and check it. With `--config` and `--fit`, forecast from a fit configuration. |
-| `zone-backtest` | Score `randomwalk` and `randomwalknowcast` run at zone level on the real vintages. |
+| `zone-backtest` | Score `randomwalk`, `randomwalknowcast` and `pprandomwalknowcast` run at zone level on the real vintages. |
+| `fit-store plan`, `fit`, `load` | List the fits the fit store lacks, make one, or load the stored fits into `results/`. |
 | `fit` | Fit a configuration and write the fit directory and its diagnostics, for the submission CI. |
 | `plot-submission` | Plot a submitted hub file. |
 | `plot-ppc` | Plot a fit's posterior predictive checks (`ppc.json`). |
@@ -38,14 +38,38 @@ task backtest-lopo      # leave one province out
 task backtest-scenarios # simulated scenarios calibrated to the real data
 task backtest-zones     # random walk models at health-zone level
 task backtest-heldout   # score the held-out vintages
-task docs               # build the site into _site/
+task results            # every derived file in results/, as the Pages build makes them
+task docs               # build the site into _site/ (runs task results, about 25 min)
+task serve              # serve the site (run task results once first)
 ```
 
-The fitted models use the `[sampler]` settings in `config/backtest.toml`, the same as the submission's main fit.
-`BDBV_RENEWAL_SAMPLER` overrides them, for example `'{"num_chains": 2, "num_warmup": 300, "num_samples": 300}'`.
-Each forecast of a renewal variant is a fit.
-`--models` runs some models and keeps the others' rows in `results/`, which is committed.
-The docs build runs only the random walk models and reads the fitted models from there.
+`--models` runs some models and keeps the others' rows in `results/`.
+The files in `results/` are not committed, apart from `development-log.csv`, `ladder.csv` and `model-choice.yml`.
+The Pages build makes the rest with the steps of `task results`, from the code, the data and the fit store.
+
+## Fit store
+
+Each forecast of a fitted model is a fit, so the backtest and the docs build never run them.
+The Fit store workflow (`.github/workflows/fit-store.yml`) fits each fitted model once at each real origin and commits the result to the `fit-store` branch, as `<model>/<origin>/<key>.json.gz`.
+The key hashes the model and forecaster code, `config/backtest.toml`, `uv.lock`, the model's sampler table in `ci/policy.toml` and the releases up to the origin.
+The renewal variants use the sampler of the submission candidate that runs them; `pprandomwalknowcast` uses its own.
+A code or sampler change refits every origin, and a new hub release adds one fit per model.
+The workflow runs on pushes to `main` that change these inputs, and every 6 hours for new hub releases.
+A push cancels a running refit, and fits already stored are kept.
+A fit that fails is stored as failed and is not retried until its inputs change.
+On a pull request it only lists the fits the change would need.
+When it stores fits it rebuilds the docs.
+
+```bash
+task fit-store-plan  # the fits the store lacks for this code and data
+task fit-store       # load the stored fits into results/
+```
+
+`task backtest` loads the store first.
+Where the store has no fit for the current key, `load` uses the newest stored fit of that model and origin.
+Each page with fitted-model results says which commits its fits come from, and which fits for the current code are still running.
+A full refit is 20 fits (4 models at 5 origins), run in parallel: about 50 minutes of wall time and 8 runner-hours.
+A new release adds 4 fits, about 2 runner-hours.
 
 The comparison with hub forecasts downloads other teams' files, so it is run on its own:
 

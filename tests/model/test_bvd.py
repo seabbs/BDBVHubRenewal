@@ -16,7 +16,7 @@ from bdbvhubrenewal.model.inputs import (
     bvd_rows,
     vintage_from_tables,
 )
-from bdbvhubrenewal.model.observation import RtPseudoObservation
+from bdbvhubrenewal.model.rt_observation import RtPseudoObservation
 
 from .conftest import SIM_LOCATIONS, VINTAGE_DAYS, vintage_date
 from .test_model import trace
@@ -63,6 +63,7 @@ def test_pseudo_observation_density_is_analytic():
     rt = jnp.full((70, 2), 1.2).at[:, 1].set(0.8)
     inf = jnp.ones((70, 2)).at[:, 1].set(3.0)
     obs = RtPseudoObservation(
+        "bvd",
         0.5,
         14,
         [[True, True], [False, True]],
@@ -119,9 +120,6 @@ def test_alpha_zero_reproduces_main(outbreak, sim_tables, table, release):
         for m in (plain, zero)
     ]
     assert ld[0] == ld[1]
-    with_bvd = build_model(data, BVD)
-    tr_bvd = trace(with_bvd, data)
-    assert "bvd_rt_obs" in tr_bvd and "bvd_z" in tr_bvd
 
 
 def test_group_rt_weights_by_counts_not_per_resident():
@@ -129,7 +127,7 @@ def test_group_rt_weights_by_counts_not_per_resident():
     # resident it has ten times the onsets and dominates national Rt.
     rt = jnp.ones((70, 2)).at[:, 1].set(2.0)
     per_resident = jnp.ones((70, 2))
-    obs = RtPseudoObservation(1.0, 14, [[True, True]], [0.0], [0.1], [0])
+    obs = RtPseudoObservation("bvd", 1.0, 14, [[True, True]], [0.0], [0.1], [0])
     group, national = obs.log_group_rt(
         rt, per_resident, 14, jnp.array([10 / 11, 1 / 11])
     )

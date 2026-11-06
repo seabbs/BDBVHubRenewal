@@ -12,6 +12,8 @@ Commands:
 - `zone-backtest`: score the random walk models run at zone level.
 - `fit`: fit a configuration and write the fit directory and its
   `diagnostics.json`, for the submission CI.
+- `fit-store`: list the fitted models' fits the store lacks, make one, or
+  load the stored fits into the results (`evaluation.store`).
 - `plot-submission`: plot a submitted hub file.
 - `plot-ppc`: plot a fit's posterior predictive checks (`ppc.json`).
 - `coherence`: compare the national data with the sum of the provinces.
@@ -53,8 +55,10 @@ from bdbvhubrenewal.data import (
 )
 from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.releases import cutoff_lags
+from bdbvhubrenewal.data.tidy import write_csv
 from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
 from bdbvhubrenewal.evaluation import backtest as bt
+from bdbvhubrenewal.evaluation import store
 from bdbvhubrenewal.evaluation.heldout import (
     HeldOutError,
     load_model_choices,
@@ -151,8 +155,8 @@ def build_parser() -> argparse.ArgumentParser:
     back.add_argument(
         "--output",
         default="results",
-        help="Where the forecasts go. They are committed in results/, so "
-        "the docs can show fitted variants without refitting them.",
+        help="Where the forecasts go. The fitted models' rows there come "
+        "from the fit store (`fit-store load`) and are kept.",
     )
     back.add_argument(
         "--scenarios-only",
@@ -170,12 +174,6 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Simulated vintages to forecast from. Defaults to the four "
         "weeks up to the scenario vintage.",
-    )
-    back.add_argument(
-        "--no-fit",
-        action="store_true",
-        help="Never run fitted models. Their rows in results/ are kept and "
-        "the held-out forecasts are scored again. The docs build uses this.",
     )
     back.add_argument(
         "--lopo",
@@ -211,7 +209,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     zb.add_argument("--data", default=data_dir)
     zb.add_argument(
-        "--models", nargs="*", default=["randomwalk", "randomwalknowcast"]
+        "--models",
+        nargs="*",
+        default=["randomwalk", "randomwalknowcast", "pprandomwalknowcast"],
     )
     zb.add_argument("--out", default="results/zone-scores.csv")
     zb.add_argument("--energy-out", default="results/zone-energy.csv")
@@ -230,6 +230,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Sampler settings as JSON (a candidate's `sampler` table).",
     )
     fit.add_argument("--out", required=True, help="Fit directory.")
+
+    fst = sub.add_parser(
+        "fit-store", help="Plan, make or load the fitted models' stored fits."
+    )
+    fst.add_argument("action", choices=["plan", "fit", "load"])
+    fst.add_argument("--store", default="output/fit-store")
+    fst.add_argument("--data", default=data_dir)
+    fst.add_argument("--config", default="config/backtest.toml")
+    fst.add_argument("--policy", default="ci/policy.toml")
+    fst.add_argument("--model", help="With `fit`: the model to fit.")
+    fst.add_argument("--origin", help="With `fit`: the real origin.")
+    fst.add_argument(
+        "--out",
+        default=None,
+        help="With `plan`: write the missing fits as a matrix JSON here.",
+    )
+    fst.add_argument("--results", default="results")
 
     plot = sub.add_parser("plot-submission", help="Plot a submitted hub file.")
     plot.add_argument("--submission", required=True)
@@ -441,9 +458,17 @@ def _backtest(args: argparse.Namespace) -> int:
     host_devices(int(sampler_settings()["num_chains"]))
     target, delays = load_target(args.data), load_delays(args.data)
     names = _models(args.models)
-    if args.no_fit:
-        fitted = {s.name for s in list_models() if s.fitted}
-        names = [n for n in names if n not in fitted]
+    if not args.lopo:
+        # The fitted models' real forecasts come from the fit store.
+        stored = set(store.stored_models())
+        names = [n for n in names if n not in stored]
+        if not names:
+            print(
+                "ERROR: fitted models come from the fit store: run "
+                "`task fit-store`.",
+                file=sys.stderr,
+            )
+            return 1
     results, output = Path(args.results), Path(args.output)
     results.mkdir(parents=True, exist_ok=True)
     output.mkdir(parents=True, exist_ok=True)
@@ -461,7 +486,6 @@ def _backtest(args: argparse.Namespace) -> int:
                 evaluate_holdout=True,
                 out_dir=results,
                 models=names,
-                fit=not args.no_fit,
                 daily=load_daily(args.data),
             )
         except HeldOutError as err:
@@ -492,7 +516,7 @@ def _backtest(args: argparse.Namespace) -> int:
             (sscores, results / "scenario-scores.csv.gz"),
             (senergy, results / "scenario-energy.csv"),
         ):
-            bt.merge_by_model(path, table).to_csv(path, index=False)
+            write_csv(bt.merge_by_model(path, table), path)
         print(f"Scenarios: {len(sscores)} scored forecasts in {results}.")
         return 0
     if args.lopo:
@@ -503,8 +527,8 @@ def _backtest(args: argparse.Namespace) -> int:
             config,
             fits=fits,
         )
-        lopo_fc.to_csv(output / "lopo-forecasts.csv.gz", index=False)
-        lopo_scores.to_csv(results / "lopo-scores.csv", index=False)
+        write_csv(lopo_fc, output / "lopo-forecasts.csv.gz")
+        write_csv(lopo_scores, results / "lopo-scores.csv")
         _write_fits(fits, results / "lopo-fits.csv")
         print(f"Leave one province out: {len(lopo_scores)} scored forecasts.")
         return 0
@@ -524,7 +548,7 @@ def _backtest(args: argparse.Namespace) -> int:
     # run apart from the others, and every model is scored again.
     forecasts = bt.merge_by_model(output / "forecasts.csv.gz", forecasts)
     _release_backtest(args, config, target, delays, results, forecasts)
-    forecasts.to_csv(output / "forecasts.csv.gz", index=False)
+    write_csv(forecasts, output / "forecasts.csv.gz")
     rforecasts, rscores, renergy = bt.run_recovery(
         models, config, lags=cutoff_lags(load_daily(args.data))
     )
@@ -533,12 +557,65 @@ def _backtest(args: argparse.Namespace) -> int:
         (rscores, results / "recovery-scores.csv"),
         (renergy, results / "recovery-energy.csv"),
     ):
-        bt.merge_by_model(path, table).to_csv(path, index=False)
+        write_csv(bt.merge_by_model(path, table), path)
     print(
         f"Development: {len(forecasts)} forecast rows; recovery: "
         f"{len(rscores)}. Written to {results}."
     )
     return 0
+
+
+def _fit_store(args: argparse.Namespace) -> int:
+    """Plan, make or load stored fits (`bdbvhubrenewal.evaluation.store`)."""
+    config = bt.load_config(args.config)
+    tasks = store.origin_tasks(
+        load_target(args.data),
+        load_delays(args.data),
+        config,
+        load_daily(args.data),
+    )
+    code, sampler = store.code_digest(), store.samplers(args.policy)
+    models = store.stored_models()
+    if args.action == "plan":
+        missing = store.plan(tasks, models, code, sampler, args.store)
+        for m in missing:
+            print(f"Missing: {m['model']} at {m['origin']} ({m['key']}).")
+        print(f"{len(missing)} of {len(tasks) * len(models)} fits to make.")
+        if args.out:
+            Path(args.out).write_text(json.dumps({"include": missing}))
+        return 0
+    if args.action == "load":
+        status = store.load(
+            args.store, tasks, models, code, sampler, config, args.results
+        )
+        for s in status:
+            state = "current" if s.current else "missing"
+            if s.used and not s.current:
+                state = f"older fit {s.used}"
+            if s.failed:
+                state += ", current fit failed"
+            print(f"{s.model} at {s.origin}: {state}.")
+        return 0
+    if args.model not in models or args.origin not in tasks:
+        print(
+            f"ERROR: fit needs --model in {models} and --origin in "
+            f"{list(tasks)}.",
+            file=sys.stderr,
+        )
+        return 1
+    model_sampler = sampler.get(args.model, {})
+    host_devices(int(model_sampler.get("num_chains", 1)))
+    task = tasks[args.origin]
+    try:
+        stored = store.fit(args.model, task, code, model_sampler)
+    except Exception as err:
+        # Stored as failed, so the plan does not retry it until its
+        # inputs change.
+        stored = store.failed(args.model, task, code, model_sampler, err)
+        print(f"ERROR: {err!r}", file=sys.stderr)
+    path = store.write_fit(args.store, stored)
+    print(f"Wrote {path}.")
+    return 0 if stored.meta["status"] == "ok" else 1
 
 
 def _release_backtest(
@@ -576,7 +653,7 @@ def _release_backtest(
         ("origins", out.origins),
         ("fits", out.fits),
     ):
-        table.to_csv(results / f"nowcast-{name}.csv", index=False)
+        write_csv(table, results / f"nowcast-{name}.csv")
     print(f"Release backtest: {len(out.scores)} scored forecasts.")
 
 
@@ -619,7 +696,7 @@ def _write_fits(fits: list[pd.DataFrame], path: Path) -> None:
     """Merge the fit summaries of a run into a results file."""
     if fits:
         table = pd.concat(fits, ignore_index=True)
-        bt.merge_by_model(path, table).to_csv(path, index=False)
+        write_csv(bt.merge_by_model(path, table), path)
 
 
 def _zones(
@@ -724,16 +801,14 @@ def _zone_backtest(args: argparse.Namespace) -> int:
     )
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    scores.to_csv(out, index=False)
-    energy.to_csv(args.energy_out, index=False)
+    write_csv(scores, out)
+    write_csv(energy, args.energy_out)
     # The zone forecasts as submitted, for the Backtest explorer: their
     # plotted quantiles and a fixed subset of draws for the trajectories.
-    forecast_quantiles(forecasts.assign(source="ours")).to_csv(
-        args.quantiles_out, index=False
+    write_csv(
+        forecast_quantiles(forecasts.assign(source="ours")), args.quantiles_out
     )
-    draw_subset(forecasts).drop(columns="draw").to_csv(
-        args.draws_out, index=False
-    )
+    write_csv(draw_subset(forecasts).drop(columns="draw"), args.draws_out)
     rel = zone_relative_skill(scores, by=("horizon",))
     print(rel.round(3).to_string(index=False))
     print(f"Wrote {out} ({len(scores)} scores).")
@@ -930,18 +1005,17 @@ def _compare_hub(args: argparse.Namespace) -> int:
     )
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    scores.to_csv(out / "scores.csv", index=False)
-    energy.to_csv(out / "energy.csv", index=False)
-    pending.to_csv(out / "pending.csv", index=False)
-    hc.forecast_quantiles(forecasts).to_csv(
-        out / "quantiles.csv.gz", index=False
-    )
+    write_csv(scores, out / "scores.csv")
+    write_csv(energy, out / "energy.csv")
+    write_csv(pending, out / "pending.csv")
+    write_csv(hc.forecast_quantiles(forecasts), out / "quantiles.csv.gz")
     teams = hc.load_team_metadata(hub_dir)
-    teams.loc[teams["model"].isin(set(hub["model"]))].to_csv(
-        out / "teams.csv", index=False
+    write_csv(
+        teams.loc[teams["model"].isin(set(hub["model"]))], out / "teams.csv"
     )
-    hc.trajectory_samples(forecasts, teams, TRAJECTORY_DRAWS).to_csv(
-        out / "samples.csv.gz", index=False
+    write_csv(
+        hc.trajectory_samples(forecasts, teams, TRAJECTORY_DRAWS),
+        out / "samples.csv.gz",
     )
     manifest = hub_dir / "manifest.json"
     accessed = dt.date.today().isoformat()
@@ -1015,6 +1089,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if args.command == "fit":
         return _fit(args)
+    if args.command == "fit-store":
+        return _fit_store(args)
     if args.command == "plot-submission":
         return _plot_submission(args)
     if args.command == "coherence":

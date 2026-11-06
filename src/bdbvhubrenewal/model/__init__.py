@@ -1,12 +1,19 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """The province renewal model, built on PyRenew (JAX, NumPyro).
 
-- `rt`: non-centred random walks, pooled initial values and sum-to-zero
-  province deviations.
-- `renewal`: the coupled renewal with importation, seeding and depletion.
-- `delays`: the generation interval and the onset-to-report delay.
-- `observation`: the known and imputed onset streams, the hub's
-  imputation, importation-only zeros and the BVDOutbreakSize term.
+- `temporal`: a non-centred random walk or AR(1) temporal process.
+- `pooled`: pooled group values and sum-to-zero group deviations.
+- `renewal`: the coupled renewal with importation (`Importation`),
+  seeding and depletion.
+- `hazard_delay`: a delay pmf that varies with the reference day.
+- `delays`: the censored parametric pmf and a fixed time-varying delay.
+- `observation`: the known and imputed onset streams, the missing-onset
+  fraction, the hub's imputation and importation-only zeros.
+- `composition_noise`: multinomial and Dirichlet-multinomial noise for
+  counts by category given totals (the delay counts).
+- `distributions`: a Dirichlet-multinomial scored on its non-zero cells.
+- `rt_observation`: external Rt estimates as a tempered
+  pseudo-observation (the BVDOutbreakSize term).
 - `model`: `ModelConfig`, the configurations, building, fitting and
   forecasting.
 - `inputs`: model inputs (`Vintage`) from the tidy hub tables.
@@ -16,11 +23,9 @@ The package imports without JAX until this subpackage is imported.
 
 from .delays import (
     FixedTimeVarying,
-    HazardDelay,
-    ParametricDelay,
     censored_pmf,
-    hazard_to_pmf,
 )
+from .hazard_delay import HazardDelay, hazard_to_pmf
 from .model import (
     BVD,
     MAIN,
@@ -32,32 +37,32 @@ from .model import (
     generation_interval,
     model_args,
 )
-from .observation import OnsetStreams, RtPseudoObservation, onset_expectations
+from .observation import (
+    MissingOnsetFraction,
+    OnsetStreams,
+    onset_expectations,
+)
+from .pooled import PooledInitialValue, pooled_walk
 from .renewal import (
-    LearntKernel,
+    Importation,
     MetapopulationInfections,
     coupled_renewal,
     mixing_matrix,
 )
-from .rt import (
-    MissingOnsetFraction,
-    NonCentredRandomWalk,
-    PooledInitialValue,
-    pooled_walk,
-)
+from .rt_observation import RtPseudoObservation
+from .temporal import NonCentredRandomWalk
 
 __all__ = [
     "BVD",
     "MAIN",
     "FixedTimeVarying",
     "HazardDelay",
-    "LearntKernel",
+    "Importation",
     "MetapopulationInfections",
     "MissingOnsetFraction",
     "ModelConfig",
     "NonCentredRandomWalk",
     "OnsetStreams",
-    "ParametricDelay",
     "PooledInitialValue",
     "RtPseudoObservation",
     "Vintage",

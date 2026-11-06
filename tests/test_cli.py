@@ -13,6 +13,7 @@ from bdbvhubrenewal.cli import main
 from bdbvhubrenewal.reporting import plots
 
 ROOT = Path(__file__).resolve().parents[1]
+FIXTURES = ROOT / "tests" / "reporting" / "fixtures"
 
 
 @pytest.fixture
@@ -88,7 +89,7 @@ def test_forecast_draws_trajectories_ribbons_and_median() -> None:
         }
     )
     fig, ax = plt.subplots()
-    plots._draw_forecast(ax, samples, "C0", "randomwalk")
+    plots._draw_forecast(ax, samples, "C0", "", "randomwalk")
     # One faint line per sample, plus the median.
     faint = [ln for ln in ax.lines if (ln.get_alpha() or 1) < 0.5]
     assert len(faint) == 100
@@ -99,7 +100,7 @@ def test_forecast_draws_trajectories_ribbons_and_median() -> None:
 
 
 def test_plot_scores_by_truth() -> None:
-    scores = pd.read_csv(ROOT / "results" / "nowcast-scores.csv")
+    scores = pd.read_csv(FIXTURES / "nowcast-scores.csv")
     scores = scores.rename(columns={"origin": "vintage"})
     fig = plots.plot_scores_by_truth(scores, models=["randomwalk"])
     assert len(fig.axes) == 1
@@ -168,3 +169,36 @@ def test_cli_fit_task_carries_the_delay_files_for_the_lag() -> None:
     assert task.target_history is not None
     assert task.target_history["vintage"].nunique() >= 3
     assert vintage_inputs(task, MAIN).publication_lag_pmf is not None
+
+
+@pytest.mark.usefixtures("in_root")
+def test_stored_samples_keep_numeric_values_without_our_forecasts() -> None:
+    # Guards the dtypes of a backtest with no development forecasts.
+    import argparse
+
+    import numpy as np
+
+    from bdbvhubrenewal.cli import _stored_samples
+    from bdbvhubrenewal.data import load_target
+    from bdbvhubrenewal.evaluation.backtest import run_forecasts
+    from bdbvhubrenewal.evaluation.scoring import energy_scores
+
+    args = argparse.Namespace(data="data")
+    stored = _stored_samples(args, load_target("data"), run_forecasts([], []))
+    assert stored["value"].dtype == np.float64
+    one = stored.loc[stored["vintage"] == stored["vintage"].max()]
+    truth = one[["location", "target_end_date"]].drop_duplicates()
+    energy = energy_scores(
+        one.assign(origin="o"), truth.assign(truth=1.0), unit=["origin"]
+    )
+    assert np.isfinite(energy["log_energy"]).all()
+
+
+@pytest.mark.usefixtures("in_root")
+def test_backtest_of_fitted_models_only_points_to_the_fit_store(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    args = ["backtest", "--models", "pprandomwalknowcast"]
+    out = ["--results", str(tmp_path), "--output", str(tmp_path)]
+    assert main([*args, *out]) == 1
+    assert "task fit-store" in capsys.readouterr().err

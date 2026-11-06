@@ -2,7 +2,7 @@
 
 Reads the repository's settings with `gh` and prints what is missing and
 how to fix it. Nothing is changed. It needs `gh` logged in as someone who
-can read the repository's settings (Sam, as admin): environments,
+can read the repository's settings (a repository admin): environments,
 secrets and workflow permissions are admin-only reads. A setting that
 cannot be read is reported as `unknown`, not as missing.
 

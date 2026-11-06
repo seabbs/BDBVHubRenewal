@@ -279,6 +279,7 @@ def test_fit_renewal_writes_the_ci_contract(
     assert set(delay["quantity"]) == {
         "reported_share",
         "median_delay",
+        "mean_delay",
         "share_within_7",
     }
     ppc = json.loads((tmp_path / "ppc.json").read_text())
@@ -451,6 +452,13 @@ def test_single_patch_fits_each_location_on_its_own(
     assert set(fit.samples["location"]) == set(task.locations)
     samples = model.forecast(task)
     assert NATIONAL not in set(samples["location"])
+    # A province with too few cases for its own fit never draws below the
+    # count it has already reported in a week.
+    reported = rows.set_index(["location", "target_end_date"])["total"]
+    idle = fit.samples.loc[fit.samples["location"].isin(few)]
+    floor = idle.set_index(["location", "target_end_date"]).index.map(reported)
+    assert (idle["value"].to_numpy() >= floor.fillna(0).to_numpy()).all()
+    assert floor.fillna(0).max() > 0
 
 
 def test_fit_records_the_posterior_draw_behind_each_trajectory(
@@ -562,11 +570,14 @@ def test_lag_source_warns_when_the_prior_stands_in(
 def test_report_cutoffs_are_days_from_the_model_start(
     task: ForecastTask,
 ) -> None:
-    task = replace(task, report_by=("2026-10-24", "2026-10-31"))
+    task = replace(task, report_by=("2026-10-24", "2026-11-01"))
     data = rn.vintage_inputs(task, rn.model_config(rn.VARIANTS["renewal"]))
     cuts = rn.report_cutoffs(task, data)
     start = pd.Timestamp(data.start_date)
-    assert cuts == {(pd.Timestamp(d) - start).days: d for d in task.report_by}
+    # Each later release is cut at its last report day: 10-24 for the
+    # label 10-24, published a day early, and 10-31 for 11-01 (hub #90).
+    last = {"2026-10-24": "2026-10-24", "2026-11-01": "2026-10-31"}
+    assert cuts == {(pd.Timestamp(last[d]) - start).days: d for d in last}
 
 
 @pytest.mark.parametrize("name", ["renewal", "renewalsp"])
@@ -627,6 +638,10 @@ def test_delay_summary_reads_shares_and_medians_by_onset_week() -> None:
     # With hazard h, P(delay <= d) = 1 - (1 - h)^(d + 1). For h = 0.5 the
     # median is day 0; for h = sigmoid(-2) it is day 5.
     assert list(weeks["q50"]) == [0.0, 0.0, 5.0]
+    # The mean of a geometric delay with h = 0.5 is (1 - h) / h = 1.
+    mean = out.loc[out["quantity"] == "mean_delay", "q50"].to_numpy()
+    assert mean[0] == pytest.approx(1.0, abs=1e-3)
+    assert mean[2] > mean[0]
     share = out.loc[out["quantity"] == "share_within_7", "q50"].to_numpy()
     assert share[0] == pytest.approx(1 - 0.5**8)
     assert share[2] < share[0]
@@ -634,3 +649,25 @@ def test_delay_summary_reads_shares_and_medians_by_onset_week() -> None:
     assert len(cum) == dmax + 1
     assert cum["q50"].iloc[-1] == pytest.approx(1.0)
     assert cum["q50"].is_monotonic_increasing
+
+
+def test_the_model_cut_off_is_the_release_s_last_report_day(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    import datetime as dt
+
+    config = rn.model_config(rn.VARIANTS["renewal"])
+    for label, last in (
+        ("2026-10-24", "2026-10-24"),
+        ("2026-11-01", "2026-10-31"),
+    ):
+        rows = target.loc[target["vintage"] == label]
+        task = make_tasks(rows, delays, BacktestConfig(n_samples=20, seed=3))[0]
+        data = rn.vintage_inputs(task, config)
+        # The cut-off and the last data week end on the last report day,
+        # so 11-01, extracted a day after its last report, adds no empty
+        # week (hub issue #90).
+        cut = data.start_date + dt.timedelta(days=data.cutoff)
+        end = data.start_date + dt.timedelta(days=7 * data.n_weeks - 1)
+        assert cut.isoformat() == last
+        assert end == rn._saturday(last)

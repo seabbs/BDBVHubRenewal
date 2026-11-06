@@ -7,14 +7,13 @@ returns a `DelayFit`.
 A `DelayFit` gives a daily pmf for any province and onset week, so a
 model can use delays that vary by place and time.
 
-`EmpiricalDelayModel` is implemented now.
-It takes the empirical pmf over a rolling window of onset weeks and
-shrinks each province towards the pooled pmf, so small provinces and
-recent weeks stay stable.
+`EmpiricalDelayModel` takes the empirical pmf over a rolling window of
+onset weeks and shrinks each province towards the pooled pmf, so small
+provinces and recent weeks stay stable.
 It ignores right truncation and the weekly censoring of onset, so recent
 delays are biased short.
 
-The model phase adds a parametric estimator that handles both.
+The renewal models fit a parametric delay that handles both.
 Each delay is in whole days from the onset day to the report day, so it
 is double interval censored at daily resolution, with pmf $p_\theta(d)$
 from `bdbvhubrenewal.model.delays.censored_pmf`.
@@ -34,6 +33,7 @@ provinces (see the Methods page).
 
 from __future__ import annotations
 
+import datetime as dt
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Final, Protocol
@@ -41,9 +41,14 @@ from typing import Final, Protocol
 import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
+from scipy import integrate, special
+
+from bdbvhubrenewal.data.dates import as_date
 
 __all__ = [
     "DEFAULT_MAX_DELAY",
+    "HUB_DOUBLE_CENSORED_FROM",
+    "HUB_GENGAMMA",
     "DelayFit",
     "DelayModel",
     "EmpiricalDelayFit",
@@ -55,6 +60,23 @@ __all__ = [
 
 DEFAULT_MAX_DELAY: Final = 60
 """Longest delay kept, in days. Longer delays are dropped (about 0.3%)."""
+
+HUB_DOUBLE_CENSORED_FROM: Final = dt.date(2026, 11, 1)
+"""First release whose imputation delay fit is double interval censored.
+
+The hub changed its fit with the 2026-11-01 release and left the earlier
+releases unchanged, so they keep the exact fit.
+"""
+
+HUB_GENGAMMA: Final = {
+    "exact": (5.12406648030701, 0.97184390713028, 1.07646963898928),
+    "double_censored": (4.99016267662049, 0.936895070027868, 0.715805359543864),
+}
+"""The hub's generalised gamma delay fits in hours, as `(mu, sigma, Q)`.
+
+flexsurv's parameterisation, refitted to the hub's 2026-10-17 delays by
+`scripts/hub_imputation_fit.R`.
+"""
 
 
 def empirical_pmf(
@@ -298,28 +320,55 @@ class EmpiricalDelayModel:
 
 
 def hub_delay_pmf(
-    delays: pd.DataFrame,
+    release: dt.date | str,
     max_delay: int = DEFAULT_MAX_DELAY,
 ) -> NDArray[np.float64]:
-    r"""Return the hub's back-sampling delay pmf for one vintage.
+    r"""Return the daily pmf of the hub's imputed onset delay at a release.
 
-    The hub draws from "the full delay distribution" of the published
-    delay data of a defined vintage (hub issue 61), so this pools over
-    provinces and onset weeks.
-    How the hub treats negative delays, very long delays and which
-    vintage it draws from are not published; here negative delays and
-    delays above `max_delay` are dropped.
+    The hub puts the onset of a case without one at report hour
+    $U \sim \mathrm{Unif}(0, 24)$ minus a delay $X$ in hours drawn from a
+    generalised gamma (`auxiliary-data/imputation-details.md`), so the
+    onset is $k = \lceil (X - U) / 24 \rceil$ days before the report.
+    With $F$ the cdf of $X / 24$,
+
+    $$\hat f(k) = \int_0^1 \{F(k + u) - F(k - 1 + u)\}\, du,$$
+
+    the double interval censored pmf, here by quadrature.
+    The generalised gamma is fitted to the delays published at 2026-10-17
+    as exact before `HUB_DOUBLE_CENSORED_FROM` and as double interval
+    censored from then on, with the parameters in
+    `HUB_GENGAMMA`. Truncated at `max_delay` and renormalised.
 
     Parameters
     ----------
-    delays : pandas.DataFrame
-        Delay line data of one vintage.
+    release : datetime.date or str
+        The release date.
     max_delay : int
         Longest delay kept.
 
     Returns
     -------
     numpy.ndarray
-        $\hat g_T$ on days 0 to `max_delay`.
+        $\hat f$ on days 0 to `max_delay`.
     """
-    return empirical_pmf(delays["delay"], max_delay)
+    fit = (
+        "double_censored"
+        if as_date(release) >= HUB_DOUBLE_CENSORED_FROM
+        else "exact"
+    )
+    mu, sigma, q = HUB_GENGAMMA[fit]
+
+    def cdf(days: float) -> float:
+        # flexsurv's pgengamma for Q > 0, which both fits have.
+        if days <= 0:
+            return 0.0
+        w = (np.log(24 * days) - mu) / sigma
+        return float(special.gammainc(q**-2, q**-2 * np.exp(q * w)))
+
+    def mass(k: int) -> float:
+        return float(
+            integrate.quad(lambda u: cdf(k + u) - cdf(k - 1 + u), 0, 1)[0]
+        )
+
+    pmf = np.array([mass(k) for k in range(max_delay + 1)], dtype=float)
+    return np.asarray(pmf / pmf.sum(), dtype=float)

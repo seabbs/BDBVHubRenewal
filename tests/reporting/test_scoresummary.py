@@ -14,7 +14,7 @@ from bdbvhubrenewal.reporting.scoresummary import summary_html, summary_rows
 
 SUMMARISE = Path(__file__).parents[2] / "docs" / "javascripts" / "summarise.js"
 MODELS = ["randomwalk", "a", "b"]
-COLOURS = dict.fromkeys(MODELS, ("#000000", "#ffffff"))
+COLOURS = dict.fromkeys(MODELS, ("#000000", "#ffffff", ""))
 
 
 def _scores() -> pd.DataFrame:

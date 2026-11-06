@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data.delays import hub_delay_pmf
@@ -36,8 +35,8 @@ def test_known_plus_missing_equals_reports() -> None:
     )
 
 
-def test_hub_imputation_conserves_cases(delays: pd.DataFrame) -> None:
-    pmf = hub_delay_pmf(delays.loc[delays["vintage"] == "2026-10-24"])
+def test_hub_imputation_conserves_cases() -> None:
+    pmf = hub_delay_pmf("2026-10-24")
     missing = np.zeros(200)
     missing[150:180] = 10
     imputed = expected_imputed_onsets(missing, pmf)

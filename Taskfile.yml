@@ -49,10 +49,36 @@ tasks:
     cmds:
       - uv run bdbvhubrenewal bvd {{.CLI_ARGS}}
 
-  backtest:
-    desc: Run the development backtest, the real-release evaluation and the recovery check (simulated)
+  fit-store:
+    desc: Load the fitted models' stored fits into results/ (fetches the fit-store branch)
+    run: once
     cmds:
+      - rm -rf output/fit-store
+      - scripts/fit-store.sh fetch output/fit-store
+      - uv run bdbvhubrenewal fit-store load --store output/fit-store
+
+  fit-store-plan:
+    desc: List the fits the store lacks for this code and data
+    cmds:
+      - rm -rf output/fit-store
+      - scripts/fit-store.sh fetch output/fit-store
+      - uv run bdbvhubrenewal fit-store plan --store output/fit-store
+
+  backtest:
+    desc: Run the development backtest, the real-release evaluation and the recovery check (simulated), with the fitted models from the fit store
+    cmds:
+      - task: fit-store
       - uv run bdbvhubrenewal backtest {{.CLI_ARGS}}
+
+  # The same commands as the Backtest step of .github/workflows/pages.yml;
+  # keep the two in step.
+  results:
+    desc: Make every derived file in results/ as the Pages build does (the backtest, held-out, zone and scenario runs)
+    cmds:
+      - task: backtest
+      - uv run bdbvhubrenewal backtest --evaluate-holdout
+      - uv run bdbvhubrenewal zone-backtest
+      - uv run bdbvhubrenewal backtest --scenarios-only
 
   backtest-lopo:
     desc: Leave one province out on the development vintages, for the variants that take a mask
@@ -65,13 +91,14 @@ tasks:
       - uv run bdbvhubrenewal backtest --scenarios-only {{.CLI_ARGS}}
 
   backtest-zones:
-    desc: Score randomwalk and randomwalknowcast at health-zone level (writes results/zone-scores.csv)
+    desc: Score randomwalk, randomwalknowcast and pprandomwalknowcast at health-zone level (writes results/zone-scores.csv)
     cmds:
       - uv run bdbvhubrenewal zone-backtest {{.CLI_ARGS}}
 
   backtest-heldout:
     desc: Score every held-out vintage under the model chosen at the time (needs results/model-choice.yml)
     cmds:
+      - task: fit-store
       - uv run bdbvhubrenewal backtest --evaluate-holdout
 
   nowcast:
@@ -157,12 +184,14 @@ tasks:
   plots:
     desc: Make the docs figures and tables from the backtest results
     cmds:
+      - task: fit-store
       - uv run bdbvhubrenewal compare-hub
       - uv run bdbvhubrenewal report
 
   getting-started:
     desc: Run the Getting started notebook again and save its outputs
     cmds:
+      - task: fit-store
       - >-
         uv run --group docs jupytext --to ipynb --execute --run-path .
         docs/getting-started.py
@@ -170,12 +199,13 @@ tasks:
   docs:
     desc: Build the docs site into _site/
     cmds:
+      - task: results
       - task: plots
       - task: getting-started
       - uv run mkdocs build --strict
 
   serve:
-    desc: Serve the docs locally
+    desc: Serve the docs locally (run `task results` once first)
     cmds:
       - task: plots
       - uv run mkdocs serve

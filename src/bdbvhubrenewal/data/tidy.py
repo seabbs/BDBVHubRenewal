@@ -45,6 +45,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import epiweek_end
+from bdbvhubrenewal.data.releases import release_id
 
 __all__ = [
     "COHERENCE_HANDLING",
@@ -78,6 +79,7 @@ __all__ = [
     "tidy_locations",
     "tidy_target",
     "vintages",
+    "write_csv",
 ]
 
 HUB_REPO: Final = "InsightNet-US/BDBV-Modeling-Hub"
@@ -159,6 +161,27 @@ POPULATION_SOURCE: Final = (
     " (accessed 2026-10-27)."
 )
 """Citation for `PROVINCE_POPULATIONS`."""
+
+
+_GZIP: Final = {"method": "gzip", "mtime": 0}
+"""Gzip settings with a fixed time, so a table always writes the same bytes."""
+
+
+def write_csv(frame: pd.DataFrame, path: Path | str) -> None:
+    """Write a table as CSV, gzipped when `path` ends in `.gz`.
+
+    The bytes depend on the table only, so an unchanged table leaves its
+    file, its git diff and any hash of it unchanged.
+
+    Parameters
+    ----------
+    frame : pandas.DataFrame
+        The table, written without its index.
+    path : pathlib.Path or str
+        Where to write it.
+    """
+    gz = Path(path).suffix == ".gz"
+    frame.to_csv(path, index=False, compression=_GZIP if gz else None)
 
 
 def load_province_centres() -> pd.DataFrame:
@@ -398,6 +421,7 @@ def tidy_daily(daily_csv: Path | str, level: str = "province") -> pd.DataFrame:
     wide = wide.rename(
         columns={"as_of": "vintage", "target_end_date": "onset_date"}
     )
+    wide["vintage"] = wide["vintage"].map(release_id)
     wide.columns.name = None
     out = wide[["vintage", "location", "onset_date", "observed", "imputed"]]
     out = out.astype({"observed": "int64", "imputed": "int64"})
@@ -440,6 +464,7 @@ def tidy_target(
         & ts["location_type"].isin(["country", "province"])
     ]
     ts = ts.rename(columns={"as_of": "vintage", "observation": "total"})
+    ts["vintage"] = ts["vintage"].map(release_id)
     split = _weekly_split(daily)
     out = ts.merge(
         split, on=["vintage", "location", "target_end_date"], how="left"
@@ -496,6 +521,7 @@ def tidy_health_zones(time_series_csv: Path | str) -> pd.DataFrame:
     ].copy()
     hz["province"] = hz["location"].str.slice(0, 5)
     hz = hz.rename(columns={"as_of": "vintage", "observation": "total"})
+    hz["vintage"] = hz["vintage"].map(release_id)
     cols = [
         "vintage",
         "location",
@@ -571,7 +597,7 @@ def tidy_delays(
         frames.append(
             pd.DataFrame(
                 {
-                    "vintage": vintage,
+                    "vintage": release_id(vintage),
                     "location": loc,
                     "location_name": loc.map(names),
                     "onset_week": df["week_ending"].astype(str),
@@ -625,15 +651,13 @@ def build_tidy_data(
         "delays": delays,
         "health_zones": zones,
     }
-    locations.to_csv(out / "locations.csv", index=False)
-    target.to_csv(out / "target.csv", index=False)
-    daily.to_csv(out / "daily.csv", index=False)
-    daily_zones.to_csv(out / "daily_zones.csv.gz", index=False)
-    delays.to_csv(out / "delays.csv.gz", index=False)
-    zones.to_csv(out / "health_zones.csv.gz", index=False)
-    national_coherence(target).to_csv(
-        out / "national-coherence.csv", index=False
-    )
+    write_csv(locations, out / "locations.csv")
+    write_csv(target, out / "target.csv")
+    write_csv(daily, out / "daily.csv")
+    write_csv(daily_zones, out / "daily_zones.csv.gz")
+    write_csv(delays, out / "delays.csv.gz")
+    write_csv(zones, out / "health_zones.csv.gz")
+    write_csv(national_coherence(target), out / "national-coherence.csv")
     config = out / "hub-config"
     config.mkdir(exist_ok=True)
     for path in (raw / "hub-config").glob("*.json"):

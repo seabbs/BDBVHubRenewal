@@ -123,19 +123,91 @@ def test_plot_imputed_by_release_one_line_per_place() -> None:
     plt.close(fig)
 
 
-def test_model_colours_are_fixed_by_name() -> None:
+def test_model_styles_are_fixed_by_name() -> None:
     from bdbvhubrenewal.forecasters import list_models
 
     registered = {s.name for s in list_models()}
-    assert registered <= set(plots.MODEL_INDEX)
-    assert len(set(plots.MODEL_INDEX.values())) == len(plots.MODEL_INDEX)
-    # The same colour whichever models are shown with it.
+    assert set(plots.MODEL_STYLE) == registered | {"as reported"}
+    # Each colour and dash pair belongs to one model.
+    pairs = list(plots.MODEL_STYLE.values())
+    assert len(set(pairs)) == len(pairs)
+    # Main models have a colour of their own; variants share it, dashed.
+    solid = [s for s, d in pairs if d == "solid"]
+    assert len(set(solid)) == len(solid)
+    assert {d for _, d in pairs} <= set(plots.DASHES)
+    # The same style whichever models are shown with it.
     for mode in ("light", "dark"):
         alone = plots.model_colour("renewal", ["renewal"], mode)
         among = plots.model_colour("renewal", sorted(registered), mode)
         assert alone == among == plots.MODEL_COLOURS[mode][2]
-    # A stand-in outside the registry takes the next free colour.
-    assert (
-        plots.model_colour("flat", ["flat"])
-        == plots.MODEL_COLOURS["light"][len(plots.MODEL_INDEX)]
+    # The as-reported floor is the data ink, dotted.
+    assert plots.model_style("as reported", []) == (
+        plots.THEMES["light"]["data"],
+        plots.THEMES["dark"]["data"],
+        plots.DASHES["dotted"],
     )
+    # A stand-in outside the table takes the first colour it leaves free.
+    used = {s for s, _ in pairs if s is not None}
+    flat = plots.model_colour("flat", ["flat"])
+    assert flat == plots.MODEL_COLOURS["light"][max(used) + 1]
+    assert plots.model_dash("flat") == ""
+
+
+def test_mpl_dash_reads_the_svg_dash() -> None:
+    assert plots.mpl_dash("") == "-"
+    assert plots.mpl_dash("6 3") == (0, (6.0, 3.0))
+
+
+def test_variants_are_hatched_and_hollow() -> None:
+    assert plots.bar_style("#123456", "") == {"color": "#123456"}
+    assert plots.bar_style("#123456", "6 3")["hatch"]
+    assert plots.bar_style("#123456", "6 3")["facecolor"] == "none"
+    assert plots.point_style("#123456", "")["mfc"] == "#123456"
+    assert plots.point_style("#123456", "6 3")["mfc"] == "none"
+
+
+def _learnt(model: str, vintage: str, location: str) -> pd.DataFrame:
+    days = [
+        {"x": str(d), "quantity": "reported_share", "q50": d / 10}
+        for d in range(11)
+    ]
+    weeks = [{"x": w, "quantity": "mean_delay", "q50": 6.0} for w in WEEKS]
+    rows = pd.DataFrame(days + weeks)
+    return rows.assign(
+        model=model,
+        vintage=vintage,
+        location=location,
+        q5=rows["q50"] * 0.9,
+        q95=rows["q50"] * 1.1,
+    )
+
+
+def test_renewal_delay_has_a_row_per_fit_at_its_latest_origin() -> None:
+    learnt = pd.concat(
+        [
+            _learnt("renewal", "2026-10-24", "pooled"),
+            _learnt("renewal", "2026-11-01", "pooled"),
+            _learnt("renewalbvd", "2026-11-01", "pooled"),
+            _learnt("renewalsp", "2026-11-01", "CD-NK"),
+            _learnt("renewalsp", "2026-11-01", "CD-IT"),
+        ],
+        ignore_index=True,
+    )
+    baseline = pd.DataFrame(
+        {"location": ["CD", "CD"], "age": [0, 1], "share": [0.1, 0.2]}
+    )
+    names = {"CD-IT": "Ituri", "CD-NK": "Nord Kivu"}
+    fig = plots.plot_renewal_delay(learnt, baseline, names)
+    left = fig.axes[0::2]
+    titles = [ax.get_title(loc="left") for ax in left]
+    assert titles == [
+        "All provinces: renewal, renewalbvd",
+        "Ituri: renewalsp",
+        "Nord Kivu: renewalsp",
+    ]
+    # The baseline and two models in the pooled row; the share stops the
+    # day before the longest delay.
+    assert len(left[0].lines) == 3
+    assert max(left[1].lines[-1].get_xdata()) == 9
+    assert fig.get_suptitle() == "Fits at 2026-11-01"
+    plt.close(fig)
