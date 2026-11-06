@@ -645,8 +645,14 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             pair_likelihood=ReleasePairLikelihood(
                 "release_pairs",
                 dist.Beta(1.0, 19.0),
-                DistributionalVariable(
-                    "release_pairs_overdispersion", dist.HalfNormal(0.5)
+                # At most 1000, the binomial limit for cells of 1 to 30
+                # rows (`capped_concentration`).
+                capped_concentration(
+                    "release_pairs_concentration",
+                    DistributionalVariable(
+                        "release_pairs_overdispersion", dist.HalfNormal(0.5)
+                    ),
+                    1e-3,
                 ),
             ),
         )
