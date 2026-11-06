@@ -682,14 +682,14 @@ def introductions(
     risk = np.zeros_like(pos)
     risk[:, k:] = before[:, k:-1] == before[:, : -k - 1]
     risk &= np.arange(pos.shape[1])[None, :] <= start[:, None]
-    new = (risk & pos).sum(axis=1)
+    first = (risk & pos).sum(axis=1)
     risk_n = risk.sum(axis=1)
     # The country has no siblings, so it is a group of its own.
     n = parent.size
     group = np.where(parent >= 0, parent, n + np.arange(n))
-    new_g = np.bincount(group, new, 2 * n)[group]
+    first_g = np.bincount(group, first, 2 * n)[group]
     risk_g = np.bincount(group, risk_n, 2 * n)[group]
-    return new_g / np.maximum(risk_g, 1)
+    return first_g / np.maximum(risk_g, 1)
 
 
 def walk_changes(
