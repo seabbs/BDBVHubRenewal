@@ -13,6 +13,7 @@ from bdbvhubrenewal.cli import main
 from bdbvhubrenewal.reporting import plots
 
 ROOT = Path(__file__).resolve().parents[1]
+FIXTURES = ROOT / "tests" / "reporting" / "fixtures"
 
 
 @pytest.fixture
@@ -99,7 +100,7 @@ def test_forecast_draws_trajectories_ribbons_and_median() -> None:
 
 
 def test_plot_scores_by_truth() -> None:
-    scores = pd.read_csv(ROOT / "results" / "nowcast-scores.csv")
+    scores = pd.read_csv(FIXTURES / "nowcast-scores.csv")
     scores = scores.rename(columns={"origin": "vintage"})
     fig = plots.plot_scores_by_truth(scores, models=["randomwalk"])
     assert len(fig.axes) == 1

@@ -77,21 +77,37 @@ jobs:
           scripts/fit-store.sh fetch output/fit-store
           uv run bdbvhubrenewal fit-store load --store output/fit-store
       # The backtest runs only the models with no fit, keeps the stored
-      # rows and scores them again against the latest vintage.
-      # It reads only these inputs, so an unchanged hash reuses its outputs.
+      # rows and scores them again against the latest vintage. The zone
+      # and scenario backtests run the random walks only. None of these
+      # results are committed. Only this step makes them.
+      # `task results` runs the same commands locally; keep the two in step.
+      # The key hashes the content of what it reads
+      # (scripts/backtest-key.sh), so unchanged inputs reuse its outputs.
+      # Only the files this step writes are cached, so a hit cannot replace
+      # the committed records or the fit store's own files in results/.
+      - name: Hash the backtest inputs
+        id: inputs
+        run: echo "key=$(scripts/backtest-key.sh)" >> "$GITHUB_OUTPUT"
       - name: Restore the backtest outputs
         id: backtest
         uses: actions/cache@v6
         with:
           path: |
-            results
-            output
-          key: backtest-${{ hashFiles('src/**', 'config/**', 'data/**', 'results/**', 'uv.lock') }}
+            results/backtest-fits.csv
+            results/forecasts.csv.gz
+            results/heldout-*
+            results/nowcast-*
+            results/recovery-*
+            results/scenario-*
+            results/zone-*
+          key: backtest-${{ steps.inputs.outputs.key }}
       - name: Backtest
         if: steps.backtest.outputs.cache-hit != 'true'
         run: |
           uv run bdbvhubrenewal backtest
           uv run bdbvhubrenewal backtest --evaluate-holdout
+          uv run bdbvhubrenewal zone-backtest
+          uv run bdbvhubrenewal backtest --scenarios-only
       - name: Compare with hub forecasts, then the docs figures and tables
         env:
           GITHUB_TOKEN: ${{ github.token }}

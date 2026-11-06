@@ -69,6 +69,16 @@ tasks:
       - task: fit-store
       - uv run bdbvhubrenewal backtest {{.CLI_ARGS}}
 
+  # The same commands as the Backtest step of .github/workflows/pages.yml;
+  # keep the two in step.
+  results:
+    desc: Make every derived file in results/ as the Pages build does (the backtest, held-out, zone and scenario runs)
+    cmds:
+      - task: backtest
+      - uv run bdbvhubrenewal backtest --evaluate-holdout
+      - uv run bdbvhubrenewal zone-backtest
+      - uv run bdbvhubrenewal backtest --scenarios-only
+
   backtest-lopo:
     desc: Leave one province out on the development vintages, for the variants that take a mask
     cmds:
@@ -80,7 +90,7 @@ tasks:
       - uv run bdbvhubrenewal backtest --scenarios-only {{.CLI_ARGS}}
 
   backtest-zones:
-    desc: Score randomwalk and randomwalknowcast at health-zone level (writes results/zone-scores.csv)
+    desc: Score randomwalk, randomwalknowcast and pprandomwalknowcast at health-zone level (writes results/zone-scores.csv)
     cmds:
       - uv run bdbvhubrenewal zone-backtest {{.CLI_ARGS}}
 
@@ -186,12 +196,13 @@ tasks:
   docs:
     desc: Build the docs site into _site/
     cmds:
+      - task: results
       - task: plots
       - task: getting-started
       - uv run mkdocs build --strict
 
   serve:
-    desc: Serve the docs locally
+    desc: Serve the docs locally (run `task results` once first)
     cmds:
       - task: plots
       - uv run mkdocs serve
