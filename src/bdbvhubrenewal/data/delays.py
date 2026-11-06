@@ -13,22 +13,8 @@ provinces and recent weeks stay stable.
 It ignores right truncation and the weekly censoring of onset, so recent
 delays are biased short.
 
-The renewal models fit a parametric delay that handles both.
-Each delay is in whole days from the onset day to the report day, so it
-is double interval censored at daily resolution, with pmf $p_\theta(d)$
-from `bdbvhubrenewal.model.delays.censored_pmf`.
-Only the onset week $W$ (days $W-6$ to $W$) is published, so right
-truncation at vintage $T$ is averaged over the onset day:
-
-$$
-P_\theta(\text{reported by } T \mid W) = \frac{1}{7}\sum_{u=0}^{6}
-\sum_{d=0}^{T - W + u} p_\theta(d).
-$$
-
-Each case contributes $p_\theta(d) / P_\theta(\text{reported by } T
-\mid W)$ to the likelihood.
-$\theta$ varies smoothly over onset weeks and is partially pooled over
-provinces (see the Methods page).
+The renewal models fit their own delay with the cases, as the Delays
+section of the Renewal models methods page describes.
 """
 
 from __future__ import annotations

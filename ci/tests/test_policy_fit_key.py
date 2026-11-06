@@ -12,17 +12,10 @@ from submission_ci.window import minutes_left
 
 POLICY_PATH = Path(__file__).parents[1] / "policy.toml"
 
-# Measured on archie (jax-review-1, 2026-10-24 vintage, vectorised chains
-# on 2 cores): main 130 minutes of sampling at 4 chains x 2000
-# iterations. Cost follows iterations (trees at maximum depth), so
-# 2 chains x 1000 take a quarter. Hosted runners are up to 1.5 times
-# slower, plus about 15 minutes of setup.
+# Minutes of a fit job: the slowest candidate's sampling on hosted
+# runners (renewalbvd, 29 minutes, ci/policy.toml [timing]) plus setup.
 SETUP, PREPARE = 15, 15
-MAIN = 130 / 4 * 1.5 + SETUP
-# The single-patch fallback at 2 x (500 + 500) on the same vintage: 21
-# minutes of sampling for all six streams (a laptop, about 1.8 cores in
-# use; submission agent, 2026-10-28).
-SINGLE_PATCH = 21 * 1.5 + SETUP
+SLOWEST = 29 + SETUP
 
 
 def repo(tmp_path: Path) -> Path:
@@ -196,12 +189,11 @@ def test_matrix_carries_the_fit_timeout(tmp_path: Path) -> None:
 
 
 def test_whole_chain_fits_from_the_last_tuesday_start() -> None:
-    # Every renewal candidate fits in parallel, and the single-patch
-    # model is ready before the main one.
-    assert SINGLE_PATCH < MAIN
+    # Every renewal candidate fits in parallel, so the slowest sets the
+    # time the chain needs.
     pol = load_policy(POLICY_PATH)
     window = 540  # the last Tuesday start, 14:00 UTC, to the close
     timeout = fit_timeout(pol, window - PREPARE)
-    assert timeout >= MAIN
+    assert timeout >= SLOWEST
     # A fit that runs to its timeout still leaves the gate its time.
     assert window - PREPARE - timeout >= pol.timing.reserve_minutes
