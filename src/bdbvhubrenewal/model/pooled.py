@@ -112,7 +112,7 @@ def split_initial_value(
 ) -> tuple[ArrayLike, ArrayLike]:
     """Split starting values into a national value and province deviations.
 
-    Mirrors `SubpopulationInfections._split_initial_log_rt`: a scalar gives
+    Mirrors `BaseSubpopulationInfections._split_initial_log_rt`: a scalar gives
     zero deviations, a vector gives its mean and the centred deviations.
 
     Parameters
