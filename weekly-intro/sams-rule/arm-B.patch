@@ -1,0 +1,112 @@
+diff --git a/src/bdbvhubrenewal/forecasters/chain.py b/src/bdbvhubrenewal/forecasters/chain.py
+index 1672fd60..b56b53b9 100644
+--- a/src/bdbvhubrenewal/forecasters/chain.py
++++ b/src/bdbvhubrenewal/forecasters/chain.py
+@@ -56,7 +56,6 @@ import jax.numpy as jnp
+ import numpy as np
+ 
+ from bdbvhubrenewal.baselinenowcast import (
+-    fill_row,
+     growth,
+     log_factors,
+     pair_sums,
+@@ -407,15 +406,11 @@ class Errors:
+ def week_nowcast(
+     snap: SnapshotArrays, r: int, g: np.ndarray, age: np.ndarray, gap: int
+ ) -> np.ndarray:
+-    """Return baselinenowcast's count of each hub week `gap` days after `r`.
++    """Return the count of each hub week nowcast `gap` days after `r`.
+ 
+-    Each hub week is a reference time of a weekly reporting triangle,
+-    with a column every 7 days from the cut-off of release `r` and a last
+-    one at `gap`.
+-    The share of the week reported by a column is the mean, over the
+-    week's days observed at `r`, of their growth from that column to
+-    `gap` inverted.
+-    R's `apply_delay` fills each row from these shares (`fill_row`).
++    The week's count reported at `r` is divided by the share of it
++    reported by then, the mean over the week's days observed at `r` of
++    their growth to `gap` inverted.
+ 
+     Parameters
+     ----------
+@@ -439,18 +434,8 @@ def week_nowcast(
+     seen = np.broadcast_to(snap.observed[r], snap.counts[:, r, :].shape)
+     x = week_sum(snap, np.where(seen, snap.counts[:, r, :], 0.0))
+     n = week_sum(snap, seen.astype(float))
+-    steps = np.r_[np.arange(0, gap, 7), gap]
+-    share = np.stack(
+-        [
+-            week_sum(
+-                snap, np.where(seen, 1.0 / growth(g, age + s, age + gap), 0)
+-            )
+-            for s in steps
+-        ],
+-        axis=-1,
+-    )
+-    cdf = np.where(n[..., None] > 0, share / np.maximum(n, 1)[..., None], 1.0)
+-    return np.where(n > 0, fill_row(x, cdf), 0.0)
++    share = week_sum(snap, np.where(seen, 1.0 / growth(g, age, age + gap), 0))
++    return np.where(n > 0, x * n / np.where(n > 0, share, 1.0), 0.0)
+ 
+ 
+ DelayFn = Callable[[SnapshotArrays, int, Settings], DelayFit | None]
+diff --git a/src/bdbvhubrenewal/forecasters/randomwalk.py b/src/bdbvhubrenewal/forecasters/randomwalk.py
+index 45d2094a..6a6256f4 100644
+--- a/src/bdbvhubrenewal/forecasters/randomwalk.py
++++ b/src/bdbvhubrenewal/forecasters/randomwalk.py
+@@ -111,7 +111,7 @@ def _walks(
+     """
+     k_walk, k_intro = jax.random.split(key)
+     x0 = np.where(origin.silent[:, None], 1.0, x0)
+-    sigma = np.where(origin.silent, 0.0, origin.sigma)
++    sigma = origin.sigma
+     keys = jax.random.split(k_walk, x0.shape[0])
+     lam, y = jax.vmap(lambda k, x, s: random_walk(k, x, s, h))(
+         keys,
+@@ -410,8 +410,16 @@ class RandomWalkNowcast(RandomWalk):
+             ),
+             np.float64,
+         )
+-        w0 = origin.start_nowcast
+-        lam, y = _walks(key_walk, nowcast[:, :, w0].T, origin, n_all)
++        # Each place walks from its latest full week with a report, so its
++        # empty weeks after that are walk draws, not nowcasts. A silent
++        # place has no recent report to walk from, so its introductions
++        # start after the latest full week.
++        full = origin.start_nowcast
++        seen = origin.reported[:, : full + 1] > 0
++        last = full - np.argmax(seen[:, ::-1], axis=1)
++        w0 = np.where(origin.silent, full, last)
++        x0 = nowcast[:, np.arange(n_loc), w0].T
++        lam, y = _walks(key_walk, x0, origin, n_all)
+         cut = int(snap.cut[origin.o])
+         c_week = int(snap.week[cut])
+         miss = int(np.flatnonzero(snap.week == c_week).max()) - cut
+@@ -422,18 +430,14 @@ class RandomWalkNowcast(RandomWalk):
+             ),
+             dtype=np.float64,
+         )  # [L, S]
+-        for u in range(n_all):
+-            if u <= w0:
+-                values[:, :, u] = nowcast[:, :, u]
+-            else:
+-                values[:, :, u] = y[:, :, u - w0 - 1].T
+-                if u == w0 + 1 and miss > 0 and u < n_data:
+-                    values[:, :, u] = nowcast[:, :, u] + part.T
+-        # A silent place follows its introductions from the week after its
+-        # start week, as in `randomwalk`, so its nowcast weeks too.
+-        for loc in np.flatnonzero(origin.silent):
+-            s = int(origin.start[loc])
+-            values[:, loc, s + 1 :] = y[loc, :, : n_all - s - 1]
++        for loc in range(n_loc):
++            s = int(w0[loc])
++            values[:, loc, : s + 1] = nowcast[:, loc, : s + 1]
++            for u in range(s + 1, n_all):
++                floor = origin.reported[loc, u] if u < n_data else 0.0
++                values[:, loc, u] = np.maximum(y[loc, :, u - s - 1], floor)
++            if s == full and miss > 0 and full + 1 < n_data:
++                values[:, loc, full + 1] = nowcast[:, loc, full + 1] + part[loc]
+         return values, weeks
+ 
+ 

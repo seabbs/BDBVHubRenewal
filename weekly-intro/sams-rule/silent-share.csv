@@ -1,0 +1,11 @@
+version,model,silent_zones,share_q95_above_3
+main,randomwalk,124,0.306
+main,randomwalknowcast,124,0.161
+A,randomwalk,124,0.0
+A,randomwalknowcast,124,0.0
+B,randomwalk,124,0.016
+B,randomwalknowcast,124,0.0
+B0,randomwalk,124,0.0
+B0,randomwalknowcast,124,0.0
+C,randomwalk,124,0.016
+C,randomwalknowcast,124,0.0

@@ -1,0 +1,101 @@
+version,model,place,week,median,q05,q95
+main,randomwalk,Haut-Uele,2026-11-07,25.0,11.95,39.099999999999994
+main,randomwalk,North Kivu,2026-11-07,200.5,90.9,479.84999999999985
+main,randomwalk,Rungu,2026-11-07,0.0,0.0,6.099999999999994
+main,randomwalk,Logo,2026-11-07,0.0,0.0,4.0
+main,randomwalk,Mutwanga,2026-11-07,8.5,0.0,76.49999999999997
+main,randomwalk,Isiro,2026-11-07,2.0,0.0,12.0
+main,randomwalk,Lubero,2026-11-07,4.0,0.0,45.249999999999986
+main,randomwalk,Bafwasende,2026-11-07,0.0,0.0,14.0
+main,randomwalk,Wamba,2026-11-07,4.0,1.0,16.049999999999997
+main,randomwalk,Pinga,2026-11-07,0.0,0.0,3.0
+main,randomwalknowcast,Haut-Uele,2026-11-07,58.5,13.850000000000001,167.94999999999993
+main,randomwalknowcast,North Kivu,2026-11-07,152.5,57.0,391.05
+main,randomwalknowcast,Rungu,2026-11-07,8.0,1.0,57.14999999999999
+main,randomwalknowcast,Logo,2026-11-07,2.0,0.0,77.24999999999999
+main,randomwalknowcast,Mutwanga,2026-11-07,1.0,0.0,18.34999999999998
+main,randomwalknowcast,Isiro,2026-11-07,0.0,0.0,3.0
+main,randomwalknowcast,Lubero,2026-11-07,0.0,0.0,3.0
+main,randomwalknowcast,Bafwasende,2026-11-07,0.0,0.0,1.0
+main,randomwalknowcast,Wamba,2026-11-07,0.0,0.0,1.0
+main,randomwalknowcast,Pinga,2026-11-07,0.0,0.0,2.049999999999997
+A,randomwalk,Haut-Uele,2026-11-07,25.0,14.95,43.05
+A,randomwalk,North Kivu,2026-11-07,218.0,79.60000000000001,498.0
+A,randomwalk,Rungu,2026-11-07,0.0,0.0,5.099999999999994
+A,randomwalk,Logo,2026-11-07,0.0,0.0,3.0
+A,randomwalk,Mutwanga,2026-11-07,5.0,0.0,43.19999999999999
+A,randomwalk,Isiro,2026-11-07,2.5,0.0,16.049999999999997
+A,randomwalk,Lubero,2026-11-07,5.5,0.0,52.0
+A,randomwalk,Bafwasende,2026-11-07,1.0,0.0,22.0
+A,randomwalk,Wamba,2026-11-07,5.0,0.0,21.0
+A,randomwalk,Pinga,2026-11-07,0.0,0.0,0.0
+A,randomwalknowcast,Haut-Uele,2026-11-07,22.0,8.0,50.05
+A,randomwalknowcast,North Kivu,2026-11-07,221.5,84.95,576.2
+A,randomwalknowcast,Rungu,2026-11-07,3.0,0.0,12.049999999999997
+A,randomwalknowcast,Logo,2026-11-07,2.0,0.0,16.14999999999999
+A,randomwalknowcast,Mutwanga,2026-11-07,3.5,0.0,39.099999999999994
+A,randomwalknowcast,Isiro,2026-11-07,1.0,0.0,6.099999999999994
+A,randomwalknowcast,Lubero,2026-11-07,1.0,0.0,13.049999999999997
+A,randomwalknowcast,Bafwasende,2026-11-07,1.0,0.0,3.049999999999997
+A,randomwalknowcast,Wamba,2026-11-07,0.0,0.0,5.049999999999997
+A,randomwalknowcast,Pinga,2026-11-07,0.0,0.0,2.0
+B,randomwalk,Haut-Uele,2026-11-07,25.0,14.95,43.05
+B,randomwalk,North Kivu,2026-11-07,218.0,79.60000000000001,498.0
+B,randomwalk,Rungu,2026-11-07,0.0,0.0,5.099999999999994
+B,randomwalk,Logo,2026-11-07,0.0,0.0,3.0
+B,randomwalk,Mutwanga,2026-11-07,5.0,0.0,44.19999999999999
+B,randomwalk,Isiro,2026-11-07,2.5,0.0,15.049999999999997
+B,randomwalk,Lubero,2026-11-07,5.5,0.0,50.05
+B,randomwalk,Bafwasende,2026-11-07,1.0,0.0,19.14999999999999
+B,randomwalk,Wamba,2026-11-07,5.0,0.0,21.0
+B,randomwalk,Pinga,2026-11-07,0.0,0.0,0.0
+B,randomwalknowcast,Haut-Uele,2026-11-07,21.0,7.0,47.0
+B,randomwalknowcast,North Kivu,2026-11-07,203.5,83.9,567.8999999999999
+B,randomwalknowcast,Rungu,2026-11-07,1.0,0.0,6.0
+B,randomwalknowcast,Logo,2026-11-07,2.0,0.0,15.049999999999997
+B,randomwalknowcast,Mutwanga,2026-11-07,4.0,0.0,22.19999999999999
+B,randomwalknowcast,Isiro,2026-11-07,1.0,0.0,7.0
+B,randomwalknowcast,Lubero,2026-11-07,6.0,0.0,32.14999999999999
+B,randomwalknowcast,Bafwasende,2026-11-07,1.0,0.0,10.0
+B,randomwalknowcast,Wamba,2026-11-07,3.5,0.9500000000000002,9.149999999999991
+B,randomwalknowcast,Pinga,2026-11-07,0.0,0.0,0.0
+B0,randomwalk,Haut-Uele,2026-11-07,25.0,14.95,43.05
+B0,randomwalk,North Kivu,2026-11-07,218.0,79.60000000000001,498.0
+B0,randomwalk,Rungu,2026-11-07,0.0,0.0,5.099999999999994
+B0,randomwalk,Logo,2026-11-07,0.0,0.0,3.0
+B0,randomwalk,Mutwanga,2026-11-07,5.0,0.0,43.19999999999999
+B0,randomwalk,Isiro,2026-11-07,2.5,0.0,16.049999999999997
+B0,randomwalk,Lubero,2026-11-07,5.5,0.0,52.0
+B0,randomwalk,Bafwasende,2026-11-07,1.0,0.0,22.0
+B0,randomwalk,Wamba,2026-11-07,5.0,0.0,21.0
+B0,randomwalk,Pinga,2026-11-07,0.0,0.0,0.0
+B0,randomwalknowcast,Haut-Uele,2026-11-07,21.0,7.0,47.0
+B0,randomwalknowcast,North Kivu,2026-11-07,203.5,83.9,567.8999999999999
+B0,randomwalknowcast,Rungu,2026-11-07,1.0,0.0,6.0
+B0,randomwalknowcast,Logo,2026-11-07,2.0,0.0,15.049999999999997
+B0,randomwalknowcast,Mutwanga,2026-11-07,4.0,0.0,22.19999999999999
+B0,randomwalknowcast,Isiro,2026-11-07,1.0,0.0,7.0
+B0,randomwalknowcast,Lubero,2026-11-07,6.0,0.0,32.14999999999999
+B0,randomwalknowcast,Bafwasende,2026-11-07,1.0,0.0,10.0
+B0,randomwalknowcast,Wamba,2026-11-07,3.5,0.9500000000000002,9.149999999999991
+B0,randomwalknowcast,Pinga,2026-11-07,0.0,0.0,0.0
+C,randomwalk,Haut-Uele,2026-11-07,25.0,14.95,43.05
+C,randomwalk,North Kivu,2026-11-07,218.0,79.60000000000001,498.0
+C,randomwalk,Rungu,2026-11-07,0.0,0.0,5.099999999999994
+C,randomwalk,Logo,2026-11-07,0.0,0.0,3.0
+C,randomwalk,Mutwanga,2026-11-07,5.0,0.0,44.19999999999999
+C,randomwalk,Isiro,2026-11-07,2.5,0.0,15.049999999999997
+C,randomwalk,Lubero,2026-11-07,5.5,0.0,50.05
+C,randomwalk,Bafwasende,2026-11-07,1.0,0.0,19.14999999999999
+C,randomwalk,Wamba,2026-11-07,5.0,0.0,21.0
+C,randomwalk,Pinga,2026-11-07,0.0,0.0,0.0
+C,randomwalknowcast,Haut-Uele,2026-11-07,22.0,8.0,50.05
+C,randomwalknowcast,North Kivu,2026-11-07,221.5,84.95,576.2
+C,randomwalknowcast,Rungu,2026-11-07,2.0,0.0,7.049999999999997
+C,randomwalknowcast,Logo,2026-11-07,2.0,0.0,16.0
+C,randomwalknowcast,Mutwanga,2026-11-07,3.5,0.0,39.05
+C,randomwalknowcast,Isiro,2026-11-07,1.0,0.0,7.049999999999997
+C,randomwalknowcast,Lubero,2026-11-07,5.0,0.0,35.05
+C,randomwalknowcast,Bafwasende,2026-11-07,1.0,0.0,10.0
+C,randomwalknowcast,Wamba,2026-11-07,4.0,1.0,11.099999999999994
+C,randomwalknowcast,Pinga,2026-11-07,0.0,0.0,0.0
