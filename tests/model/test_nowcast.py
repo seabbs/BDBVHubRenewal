@@ -228,3 +228,21 @@ def test_trajectories_name_their_posterior_draws(sim_vintage):
     draws = forecast_trajectories(model, sim_vintage, 5, posterior=latent)
     assert draws["draw"].shape == (5,)
     assert np.all((draws["draw"] >= 0) & (draws["draw"] < 8))
+
+
+def test_without_importation_provinces_with_no_cases_stay_at_zero(
+    sim_vintage,
+):
+    from bdbvhubrenewal.forecasters.renewal import VARIANTS, model_config
+
+    config = model_config(VARIANTS["renewalsp"])
+    model = build_model(sim_vintage, config)
+    assert model.observations["onsets"].import_scale_rv is None
+    prior = prior_latent(model, sim_vintage, n=5)
+    assert "importation" not in prior and "import_scale" not in prior
+    draws = forecast_trajectories(
+        model, sim_vintage, n_trajectories=5, posterior=prior
+    )
+    # No importation is the only source of cases there, so none arise.
+    assert sim_vintage.inactive_names
+    assert np.all(draws["inactive"] == 0)

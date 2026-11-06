@@ -66,7 +66,7 @@ from bdbvhubrenewal.evaluation.nowcast import (
 )
 from bdbvhubrenewal.evaluation.scoring import summarise_scores
 from bdbvhubrenewal.evaluation.store import samplers, stored_models
-from bdbvhubrenewal.evaluation.zones import SUMMED, zone_relative_skill
+from bdbvhubrenewal.evaluation.zones import SUMMED
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastTask,

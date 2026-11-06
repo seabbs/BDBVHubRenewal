@@ -831,12 +831,11 @@ def plot_renewal_delay(
     Returns
     -------
     matplotlib.figure.Figure
-        A row per fit: pooled over provinces, then each province a
-        single-patch model fits. Left: the share of onsets in the last week
-        reported by each day since onset, to the day before the longest
-        delay, with randomwalknowcast's share for the same place. Right:
-        the mean delay by onset week. Lines are medians and bands 90%
-        intervals.
+        A row per fit, pooled over provinces. Left: the share of onsets
+        in the last week reported by each day since onset, to the day
+        before the longest delay, with randomwalknowcast's share for the
+        same place. Right: the mean delay by onset week. Lines are medians
+        and bands 90% intervals.
     """
     names = dict(names or {})
     ink = THEMES[mode]

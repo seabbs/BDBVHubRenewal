@@ -42,8 +42,8 @@ How both are fitted is on the [Baseline models](methods/baselines.md#nowcast) pa
 ![Growth to final by age, and the dispersion of new reports and the removal rate by weeks back, at the latest release.](figures/delay-check-dark.svg#only-dark)
 
 The renewal models fit the onset-to-report delay with the cases ([delays](methods/model.md#delays)).
-Each row is one fit at its latest origin: `renewal` and `renewalbvd` fit one delay for all provinces, and `renewalsp` one per province it fits.
-`renewal` and `renewalbvd` give nearly the same delay, so their lines overlap.
+Each row is one fit at its latest origin, and each model fits one delay for all provinces.
+The three renewal models give nearly the same delay, so their lines overlap.
 The left panel gives the share of onsets in the last week reported by each day since onset, with 90% intervals.
 It stops the day before the longest delay, where the model puts all later reports.
 The dashed line is `randomwalknowcast`'s share reported by age at the same release.

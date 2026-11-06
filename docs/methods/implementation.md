@@ -96,7 +96,6 @@ Submission fits and the [fit store](../development/cli.md#fit-store)'s backtest 
 `renewal` and `renewalsp` use 2 chains of 500 warm-up and 500 draws at target acceptance 0.9.
 `renewalbvd` uses 1000 draws at 0.95.
 Leave-one-province-out fits take theirs from `[sampler]` in `config/backtest.toml` when `BDBV_RENEWAL_SAMPLER` is unset.
-A per-location model has one fit per location with enough cases.
 Each fit reports its largest R-hat over parameters and the share of draws at the maximum tree depth.
 
 The parameterisation is as follows.

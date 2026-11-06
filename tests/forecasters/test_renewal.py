@@ -39,10 +39,10 @@ def test_variants_are_registered_as_fitted_models() -> None:
         assert isinstance(model, ForecastModel)
         assert model.name == name
     assert set(rn.VARIANTS) == {"renewal", "renewalsp", "renewalbvd"}
-    # The single patch fits each province on its own data only, so it
-    # cannot forecast a province with its data held out.
-    assert get_model("renewal").supports_mask
-    assert not get_model("renewalsp").supports_mask
+    # Every variant fits the provinces together, so each can forecast a
+    # province with its data held out.
+    for name in rn.VARIANTS:
+        assert get_model(name).supports_mask
     assert not specs["randomwalk"].fitted
     # Hub model abbreviations: letters, digits and underscores, under 16.
     for name in specs:
@@ -50,9 +50,10 @@ def test_variants_are_registered_as_fitted_models() -> None:
 
 
 def test_model_config_applies_overrides() -> None:
-    single = rn.model_config(rn.VARIANTS["renewalsp"])
-    assert single.national
-    assert single.depletion is False
+    # renewalsp is renewal without importation, between provinces or into
+    # provinces with no cases.
+    plain = rn.model_config(rn.VARIANTS["renewalsp"])
+    assert plain == replace(rn.engine().MAIN, coupling="none", inactive="none")
     assert rn.model_config(rn.VARIANTS["renewal"]) == rn.engine().MAIN
 
 
@@ -148,13 +149,6 @@ def test_vintage_inputs_apply_the_mask(task: ForecastTask) -> None:
     assert masked.names == full.names
 
 
-def test_single_patch_inputs_are_national(task: ForecastTask) -> None:
-    config = rn.model_config(rn.VARIANTS["renewalsp"])
-    data = rn.vintage_inputs(task, config)
-    assert data.names == [NATIONAL]
-    assert data.known.shape[1] == 1
-
-
 def _fake_draws(data: Any, n: int, rng: np.random.Generator) -> dict[str, Any]:
     weeks = data.n_weeks + data.horizon_weeks
     province = rng.poisson(5.0, size=(n, weeks, len(data.names))).astype(float)
@@ -178,21 +172,9 @@ def test_samples_table_is_coherent(task: ForecastTask) -> None:
     config = rn.model_config(rn.VARIANTS["renewal"])
     data = rn.vintage_inputs(task, config)
     draws = _fake_draws(data, task.n_samples, np.random.default_rng(1))
-    samples, unassigned = rn.samples_table(task, data, draws, report_all=True)
-    assert unassigned is None
+    samples = rn.samples_table(task, data, draws)
     assert set(samples["location"]) == set(task.locations)
     assert set(samples["sample"]) == set(range(1, task.n_samples + 1))
-    # Report only the active provinces: the rest go to unassigned, so
-    # national sample k is unchanged.
-    some, extra = rn.samples_table(task, data, draws, report_all=False)
-    assert extra is not None
-    assert set(some["location"]) == set(data.names)
-    full = samples.groupby(["target_end_date", "sample"])["value"].sum()
-    part = some.groupby(["target_end_date", "sample"])["value"].sum()
-    back = part.add(
-        extra.set_index(["target_end_date", "sample"])["value"], fill_value=0
-    )
-    pd.testing.assert_series_equal(full, back, check_names=False)
 
 
 def test_ppc_rows_add_national(task: ForecastTask) -> None:
@@ -310,7 +292,7 @@ def test_unassigned_adds_the_national_data_gap(task: ForecastTask) -> None:
     config = rn.model_config(rn.VARIANTS["renewal"])
     data = rn.vintage_inputs(task, config)
     draws = _fake_draws(data, task.n_samples, np.random.default_rng(6))
-    samples, _ = rn.samples_table(task, data, draws, report_all=True)
+    samples = rn.samples_table(task, data, draws)
     assert rn.data_gap(task, samples) is None
     # Two national cases a week with no province, in the last data weeks.
     target = task.target.copy()
@@ -411,54 +393,6 @@ def test_bvd_fit_records_the_release_and_its_rhat(
         config_name="main",
     )
     assert "bvd" not in plain
-
-
-def test_single_patch_fits_each_location_on_its_own(
-    task: ForecastTask, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    seen: list[tuple[str, ...]] = []
-
-    def fake(self: rn.RenewalModel, t: ForecastTask) -> rn.RenewalRun:
-        seen.append(t.locations)
-        return _fake_run(t, self.variant)
-
-    monkeypatch.setattr(rn.RenewalModel, "run", fake)
-    model = get_model("renewalsp")
-    assert isinstance(model, rn.RenewalModel)
-    fit = model.forecast_fit(task)
-    # One fit per province with enough recent cases (an outbreak province,
-    # as the sporadic class), and none for the nation.
-    rows = task.target.loc[task.target["vintage"] == task.vintage]
-    recent = sorted(set(rows["target_end_date"]))[-rn.SINGLE_PATCH_WEEKS :]
-    cases = (
-        rows.loc[rows["target_end_date"].isin(recent)]
-        .groupby("location")["total"]
-        .sum()
-    )
-    enough = [
-        p
-        for p in task.locations
-        if cases.get(p, 0) >= rn.SINGLE_PATCH_MIN_CASES
-    ]
-    few = [p for p in task.locations if p not in enough]
-    # Bas-Uele has 13 cases to date but 7 in the last 6 weeks, too few for
-    # its own fit (R-hat 1.71 at 2026-10-24).
-    assert "CD-BU" in few
-    assert sorted(seen) == sorted([(p,) for p in enough])
-    assert set(fit.runs) == set(enough)
-    # National is the sum of the patches plus the unassigned cases, as in
-    # the main model.
-    assert not hasattr(fit, "national")
-    assert set(fit.samples["location"]) == set(task.locations)
-    samples = model.forecast(task)
-    assert NATIONAL not in set(samples["location"])
-    # A province with too few cases for its own fit never draws below the
-    # count it has already reported in a week.
-    reported = rows.set_index(["location", "target_end_date"])["total"]
-    idle = fit.samples.loc[fit.samples["location"].isin(few)]
-    floor = idle.set_index(["location", "target_end_date"]).index.map(reported)
-    assert (idle["value"].to_numpy() >= floor.fillna(0).to_numpy()).all()
-    assert floor.fillna(0).max() > 0
 
 
 def test_fit_records_the_posterior_draw_behind_each_trajectory(
