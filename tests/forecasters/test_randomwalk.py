@@ -223,7 +223,7 @@ def test_a_silent_place_waits_for_its_first_introduction() -> None:
     )
     x0 = np.full((3, 4000), 20.0)
     lam, y = _walks(jax.random.key(1), x0, origin, 4)
-    # A place with cases walks from its start as before.
+    # A place with cases walks from its start week.
     assert lam[0].mean() == pytest.approx(20.0)
     # No introduction can come with a probability of 0.
     assert (y[1] == 0).all()
