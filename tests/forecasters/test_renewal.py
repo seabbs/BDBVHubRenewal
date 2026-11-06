@@ -654,7 +654,7 @@ def test_the_model_cut_off_is_the_release_s_last_report_day(
         task = make_tasks(rows, delays, BacktestConfig(n_samples=20, seed=3))[0]
         data = rn.vintage_inputs(task, config)
         # The cut-off and the last data week end on the last report day
-        # the data prove, so no release adds empty days (hub issue #90).
+        # the data prove, so no release adds empty days.
         cut = data.start_date + dt.timedelta(days=data.cutoff)
         end = data.start_date + dt.timedelta(days=7 * data.n_weeks - 1)
         assert cut.isoformat() == last
