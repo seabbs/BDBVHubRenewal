@@ -22,7 +22,6 @@ The model diagrams are mermaid blocks in `docs/methods/model.md`.
 | Known and imputed onsets | `BaseObservationProcess` with `temporal_pmf_rv` for the infection-to-onset pmf (the incubation period, a `CensoredPMF` with a random mean and SD), `NegativeBinomialNoise`, `compute_prop_already_reported` for the publication lag | `OnsetStreams`. |
 | Delays of known-onset cases | None | `DirichletMultinomialNoise`, a noise model in the form of PyRenew's `CountNoise` for counts by delay given weekly totals. |
 | BVDOutbreakSize Rt | None | `RtPseudoObservation`, a `RandomVariable` the latent process calls, as it holds both $R$ and infections. |
-| Provinces with no cases | None | An importation-only component. |
 
 PyRenew pieces that give a different model, sample less well, or would only rename one line, are not used.
 

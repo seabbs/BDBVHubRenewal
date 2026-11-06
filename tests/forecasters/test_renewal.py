@@ -53,7 +53,7 @@ def test_model_config_applies_overrides() -> None:
     # renewalsp is renewal without importation, between provinces or into
     # provinces with no cases.
     plain = rn.model_config(rn.VARIANTS["renewalsp"])
-    assert plain == replace(rn.engine().MAIN, coupling="none", inactive="none")
+    assert plain == replace(rn.engine().MAIN, coupling="none")
     assert rn.model_config(rn.VARIANTS["renewal"]) == rn.engine().MAIN
 
 
@@ -128,7 +128,6 @@ def test_vintage_inputs_choose_the_active_set(task: ForecastTask) -> None:
         rows.groupby("location")["total"].sum().loc[lambda s: s > 0].index
     )
     assert set(data.names) == with_cases
-    assert set(data.inactive_names) == set(task.locations) - with_cases
     assert data.start_date.weekday() == 6
     assert data.known.shape == data.imputed.shape
     assert data.fit_mask is not None
@@ -152,28 +151,26 @@ def test_vintage_inputs_apply_the_mask(task: ForecastTask) -> None:
 def _fake_draws(data: Any, n: int, rng: np.random.Generator) -> dict[str, Any]:
     weeks = data.n_weeks + data.horizon_weeks
     province = rng.poisson(5.0, size=(n, weeks, len(data.names))).astype(float)
-    inactive = rng.poisson(0.2, size=(n, weeks, len(data.inactive_names)))
     insample = {
         "known": province * 0.7,
         "imputed": province * 0.3,
     }
     return {
         "province": province,
-        "inactive": inactive.astype(float),
-        "national": province.sum(2) + inactive.sum(2),
+        "national": province.sum(2),
         "insample": insample,
     }
 
 
 def test_samples_table_is_coherent(task: ForecastTask) -> None:
-    # Every province, so some have no cases and get importation draws.
+    # Every province of the release: only those with cases are forecast.
     rows = task.target.loc[task.target["location"] != NATIONAL]
     task = replace(task, locations=tuple(sorted(set(rows["location"]))))
     config = rn.model_config(rn.VARIANTS["renewal"])
     data = rn.vintage_inputs(task, config)
     draws = _fake_draws(data, task.n_samples, np.random.default_rng(1))
     samples = rn.samples_table(task, data, draws)
-    assert set(samples["location"]) == set(task.locations)
+    assert set(samples["location"]) == set(data.names)
     assert set(samples["sample"]) == set(range(1, task.n_samples + 1))
 
 
@@ -207,7 +204,6 @@ def _fake_run(task: ForecastTask, variant: rn.Variant) -> rn.RenewalRun:
     draws["as_reported"] = {
         cut: {
             "province": np.ones_like(draws["province"]),
-            "inactive": np.zeros_like(draws["inactive"]),
         }
         for cut in rn.report_cutoffs(task, data)
     }

@@ -165,8 +165,8 @@ VARIANTS: Final[dict[str, Variant]] = {
         Variant(
             "renewalsp",
             "Province renewal without spatial coupling: pooled Rt, no "
-            "importation between provinces or into provinces with no cases.",
-            overrides={"coupling": "none", "inactive": "none"},
+            "importation between provinces.",
+            overrides={"coupling": "none"},
         ),
         Variant(
             "renewalbvd",
@@ -488,11 +488,9 @@ def samples_table(
     data: Any,
     draws: Mapping[str, Any],
 ) -> pd.DataFrame:
-    """Province sample rows of every location of the task.
+    """Province sample rows of the modelled provinces.
 
-    Modelled provinces take their trajectories, provinces with no cases
-    take their importation draws, and weeks before the model grid take
-    the data in every sample.
+    Weeks before the model grid take the data in every sample.
 
     Parameters
     ----------
@@ -501,8 +499,8 @@ def samples_table(
     data : bdbvhubrenewal.model.Vintage
         The fitted inputs.
     draws : mapping
-        `forecast_trajectories` output: `province`, `inactive`,
-        `national`, each `(n, n_weeks + horizon, ...)`.
+        `forecast_trajectories` output, with `province`
+        `(n, n_weeks + horizon, P)`.
 
     Returns
     -------
@@ -514,24 +512,16 @@ def samples_table(
     observed = rows.pivot_table(
         index="target_end_date", columns="location", values="total"
     )
-    series = {
-        loc: np.asarray(draws["province"])[:, :, j]
-        for j, loc in enumerate(data.names)
-    }
-    for j, loc in enumerate(data.inactive_names):
-        series[loc] = np.asarray(draws["inactive"])[:, :, j]
     n = task.n_samples
     out: list[pd.DataFrame] = []
     for date in task.target_end_dates:
         i = (_saturday(date) - first).days // 7
-        for loc in task.locations:
+        for j, loc in enumerate(data.names):
             if i < 0:  # before the model grid: the data
                 value = observed[loc].get(date, 0) if loc in observed else 0
                 values = np.full(n, float(np.nan_to_num(value)))
-            elif loc in series:
-                values = series[loc][:n, i]
             else:
-                values = np.zeros(n)
+                values = np.asarray(draws["province"])[:n, i, j]
             frame = pd.DataFrame(
                 {
                     "location": loc,

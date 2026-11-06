@@ -306,8 +306,8 @@ def vintage_from_tables(
 ) -> Vintage:
     """Build a `Vintage` from the target and delay rows of one vintage.
 
-    The active set is the provinces in `locations` with any case in this
-    vintage (every province if `config.active == "all"`). The week grid
+    The modelled provinces are those in `locations` with any case in this
+    vintage; the rest get no forecast. The week grid
     starts one week before national weekly onsets first reach
     `START_COUNT` and ends with the week holding the vintage's last report
     day (`data.releases.last_report`), which is also the cut-off.
@@ -354,11 +354,7 @@ def vintage_from_tables(
     ).fillna(0)
     totals_wide = cast(pd.DataFrame, wide["total"])
     cases = totals_wide.sum(axis=0)
-    if config.active == "all":
-        active = tuple(locations)
-    else:
-        active = tuple(p for p in locations if cases.get(p, 0) > 0)
-    idle = tuple(p for p in locations if p not in active)
+    active = tuple(p for p in locations if cases.get(p, 0) > 0)
     national = totals_wide.reindex(columns=list(active)).fillna(0).sum(axis=1)
     counts_by_week = national.to_numpy()
     threshold = min(START_COUNT, counts_by_week.max())
@@ -411,12 +407,6 @@ def vintage_from_tables(
         pops = pd.Series([pops.sum()])
         names = [active[0] if len(active) == 1 else NATIONAL]
     kernel = None if len(names) == 1 else gravity_kernel(active, table)
-    import_kernel, inactive = None, None
-    if idle and not config.national:
-        import_kernel = gravity_kernel(active + idle, table)[
-            : len(active), len(active) :
-        ]
-        inactive = grid("total", idle)
     return Vintage(
         start_date=start,
         cutoff=cutoff,
@@ -428,9 +418,6 @@ def vintage_from_tables(
         kernel=kernel,
         horizon_weeks=horizon_weeks,
         names=names,
-        inactive=inactive,
-        inactive_names=[] if config.national else list(idle),
-        import_kernel=import_kernel,
         fit_mask=np.array([p not in masked for p in names]),
         bvd=None
         if bvd is None or config.national

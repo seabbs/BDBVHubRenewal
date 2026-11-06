@@ -30,10 +30,7 @@ def trace(model, data, forecast=False):
 def test_vintage_shapes(sim_vintage):
     v = sim_vintage
     assert v.names == ["CD-IT", "CD-NK", "CD-HU", "CD-TO"]
-    assert v.inactive_names == ["CD-BU", "CD-SK"]
     assert v.known.shape == v.imputed.shape == (v.n_weeks, 4)
-    assert v.inactive.shape == (v.n_weeks, 2)
-    assert v.import_kernel.shape == (4, 2)
     assert v.delay_counts.shape == (v.n_weeks, 61)
     assert v.start_date.weekday() == 6
     assert v.cutoff // 7 + 1 == v.n_weeks
@@ -47,7 +44,6 @@ def test_active_set_follows_the_data(outbreak, sim_tables, table):
         target, delays, vintage_date(outbreak, 41), SIM_LOCATIONS, table
     )
     assert set(v.names) < set(SIM_LOCATIONS)
-    assert set(v.names) | set(v.inactive_names) == set(SIM_LOCATIONS)
 
 
 @pytest.mark.parametrize(
@@ -70,7 +66,6 @@ def test_model_sites_and_shapes(outbreak, sim_tables, table, cfg):
     stream = "total" if cfg.streams == "total" else "known"
     assert tr[f"onsets_{stream}_obs"]["value"].shape == (2, n_weeks, p)
     assert tr["latent::rt_subpop"]["value"].shape == (7 * n_weeks, p)
-    assert ("onsets_inactive_obs" in tr) == (cfg.inactive == "imports")
     # The fit sees the data weeks only; the horizon is drawn separately.
     if not cfg.national:
         assert "log_rt_deviations_z_future" in tr
@@ -175,9 +170,7 @@ def test_real_data_kernels_are_finite(table):
             locations,
             table,
         )
-        assert len(data.names) + len(data.inactive_names) == 26
         assert np.all(np.isfinite(data.kernel))
-        assert np.all(np.isfinite(data.import_kernel))
 
 
 def test_late_provinces_are_seeded_at_their_first_cases(outbreak, table):

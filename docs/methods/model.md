@@ -185,7 +185,7 @@ The national trajectory is the sum of the provinces plus an unassigned component
 `renewal` fits every province with cases in one model, on the axis set by their summed onsets.
 The provinces share the trend $\log R(t)$, the deviation SD $\sigma_\delta$ and half-life $h$, the start spread $\sigma_v$, ascertainment $\alpha$, the delay $f_s$, the trend $b$ of the missing-onset share, the share at risk $\nu$ and the importation share $\varepsilon$.
 Each province has its own deviations $\delta_p$ and $\omega_p$ and its own seed.
-Provinces are linked by importation through $W$, and provinces with no cases by $\mu_q$.
+Provinces are linked by importation through $W$.
 Known-onset delays are pooled over provinces.
 Leaving a province out removes its known and imputed terms and its delays but keeps it in the latent process.
 
@@ -258,9 +258,7 @@ They start with province spread $\mathcal{N}^+(0, 0.5^2)$, sampled non-centred, 
 
 ### Provinces with no cases
 
-Provinces $q$ without cases have an importation-only component.
-Their weekly zeros are Poisson with mean $\mu_q(s) = \kappa \sum_p K_{pq}\, \lambda_p(s)$, $\kappa \sim \text{LogNormal}(\log 10^{-3}, 2^2)$.
-In the forecast they draw Poisson importations after the cut-off, which spread at the infection-weighted national Rt without depletion.
+A province enters the model at the release with its first case, and has no forecast before it.
 
 ## Without importation (`renewalsp`) { #without-importation }
 
