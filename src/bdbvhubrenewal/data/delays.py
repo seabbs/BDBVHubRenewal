@@ -13,9 +13,8 @@ provinces and recent weeks stay stable.
 It ignores right truncation and the weekly censoring of onset, so recent
 delays are biased short.
 
-The renewal models learn their delay in the model
-(`bdbvhubrenewal.model.hazard_delay.HazardDelay`) and handle right
-truncation there.
+The renewal models fit their own delay with the cases, as the Delays
+section of the Renewal models methods page describes.
 `hub_delay_pmf` gives the delay the hub draws from to impute missing
 onsets, in closed form.
 """

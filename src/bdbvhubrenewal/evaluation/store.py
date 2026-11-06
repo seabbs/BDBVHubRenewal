@@ -10,56 +10,75 @@ branch, one file per fit:
 <model>/<origin>/<key>.json.gz
 ```
 
-The key hashes everything the fit depends on (`fit_key`): the model and
-forecaster code and settings (`STORE_INPUTS`), the model's sampler table
-in `ci/policy.toml`, the model name and the task at the origin, which
-holds only the releases up to the origin.
-A new release therefore adds one fit per model and leaves the older ones
-valid, while a change to the code or sampler refits every origin.
+The key (`fit_key`) hashes only what reaches a fit: the task at the
+origin, which holds only the releases up to the origin; the built model,
+whose representation gives its variant and resolved sampler settings;
+the BVDOutbreakSize release a BVD model uses; the code of the packages
+the fit runs (`CODE_INPUTS`, without docstrings or comments, and
+`run_forecasts`); and the runtime dependencies locked in `uv.lock`.
+A new release adds one fit per model and leaves the older ones valid,
+while a change to the model code or settings refits every origin.
 
 `plan` lists the fits the store lacks, `fit` makes one, and `load`
 writes the stored forecasts where the backtest and the docs read them.
 Where the store has no fit for the current key, `load` uses the newest
-stored fit of that pair and says so (`StoreStatus`), so the docs show
-older fits, marked, while newer ones run.
+stored fit of that pair and says so (`StoreStatus`).
+`command` runs `bdbvhubrenewal fit-store`.
 """
 
 from __future__ import annotations
 
+import argparse
+import ast
 import datetime as dt
 import gzip
 import hashlib
+import inspect
 import io
 import json
 import os
 import subprocess
+import sys
+import textwrap
 import tomllib
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, is_dataclass
 from pathlib import Path
 from typing import Any, Final
 
 import pandas as pd
 
+from bdbvhubrenewal.data import load_daily, load_delays, load_target
 from bdbvhubrenewal.data.tidy import write_csv
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
+    _fit_rows,
+    load_config,
     make_tasks,
     merge_by_model,
     run_forecasts,
+    uses_lag_prior,
 )
 from bdbvhubrenewal.evaluation.heldout import (
     load_model_choices,
     model_for_vintage,
 )
-from bdbvhubrenewal.forecasters import ForecastTask, get_model, list_models
+from bdbvhubrenewal.forecasters import (
+    ForecastModel,
+    ForecastTask,
+    get_model,
+    list_models,
+)
 
 __all__ = [
+    "CODE_INPUTS",
     "STATUS_FILE",
-    "STORE_INPUTS",
     "StoreStatus",
     "StoredFit",
+    "build_model",
     "code_digest",
+    "command",
+    "current_keys",
     "failed",
     "fit",
     "fit_key",
@@ -73,17 +92,14 @@ __all__ = [
     "write_fit",
 ]
 
-STORE_INPUTS: Final = (
+CODE_INPUTS: Final = (
     "src/bdbvhubrenewal/baselinenowcast",
     "src/bdbvhubrenewal/data",
-    "src/bdbvhubrenewal/evaluation/backtest.py",
     "src/bdbvhubrenewal/evaluation/store.py",
     "src/bdbvhubrenewal/forecasters",
     "src/bdbvhubrenewal/model",
-    "config/backtest.toml",
-    "uv.lock",
 )
-"""Code and settings every stored fit depends on, relative to the repo."""
+"""Code every stored fit runs, relative to the repository root."""
 
 STATUS_FILE: Final = "fit-store.json"
 """What `load` used, written beside the results for the docs."""
@@ -125,8 +141,62 @@ def samplers(policy: Path | str = "ci/policy.toml") -> dict[str, Any]:
     }
 
 
+def build_model(name: str, sampler: Mapping[str, Any]) -> ForecastModel:
+    """Build a registered model with its sampler table.
+
+    Parameters
+    ----------
+    name : str
+        The model name.
+    sampler : mapping
+        `samplers`. A model absent from it keeps its own settings.
+
+    Returns
+    -------
+    ForecastModel
+        The model. The environment is left as it was.
+    """
+    from bdbvhubrenewal.forecasters.renewal import SAMPLER_ENV
+
+    old = os.environ.pop(SAMPLER_ENV, None)
+    try:
+        if name in sampler:
+            os.environ[SAMPLER_ENV] = json.dumps(dict(sampler[name]))
+        return get_model(name)
+    finally:
+        os.environ.pop(SAMPLER_ENV, None)
+        if old is not None:
+            os.environ[SAMPLER_ENV] = old
+
+
+def _strip(source: str) -> str:
+    """Dump Python source as its syntax tree, without docstrings."""
+    tree = ast.parse(textwrap.dedent(source))
+    for node in ast.walk(tree):
+        body = getattr(node, "body", None)
+        if not isinstance(body, list):
+            continue
+        kept = [
+            s
+            for s in body
+            if not (
+                isinstance(s, ast.Expr)
+                and isinstance(s.value, ast.Constant)
+                and isinstance(s.value.value, str)
+            )
+        ]
+        node.body = kept or [ast.Pass()]  # type: ignore[attr-defined]
+    return ast.dump(tree)
+
+
 def code_digest(root: Path | str = ".") -> str:
-    """Hash the files in `STORE_INPUTS`.
+    """Hash the code a stored fit runs and its runtime dependencies.
+
+    Python files in `CODE_INPUTS` are hashed as syntax trees without
+    docstrings, so comments and docstrings do not change the key; other
+    files by their bytes. `run_forecasts` and the backtest helpers it
+    calls are hashed the same way, with the Python minor version.
+    The dependencies are `uv export --no-dev --all-extras` of `uv.lock`.
 
     Parameters
     ----------
@@ -136,11 +206,11 @@ def code_digest(root: Path | str = ".") -> str:
     Returns
     -------
     str
-        SHA-256 hex digest of every file's path and bytes, in path order.
+        SHA-256 hex digest.
     """
     base = Path(root)
     files: list[Path] = []
-    for name in STORE_INPUTS:
+    for name in CODE_INPUTS:
         path = base / name
         files += sorted(path.rglob("*")) if path.is_dir() else [path]
     digest = hashlib.sha256()
@@ -148,7 +218,30 @@ def code_digest(root: Path | str = ".") -> str:
         if not path.is_file() or "__pycache__" in path.parts:
             continue
         digest.update(path.relative_to(base).as_posix().encode())
-        digest.update(path.read_bytes())
+        if path.suffix == ".py":
+            digest.update(_strip(path.read_text()).encode())
+        else:
+            digest.update(path.read_bytes())
+    for func in (run_forecasts, _fit_rows, uses_lag_prior):
+        digest.update(_strip(inspect.getsource(func)).encode())
+    digest.update(repr(sys.version_info[:2]).encode())
+    deps = subprocess.run(
+        [
+            "uv",
+            "export",
+            "--frozen",
+            "--no-dev",
+            "--all-extras",
+            "--no-hashes",
+            "--no-header",
+            "--no-emit-project",
+        ],
+        cwd=base,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    digest.update(deps.stdout.encode())
     return digest.hexdigest()
 
 
@@ -168,7 +261,7 @@ def origin_tasks(
     target, delays, daily : pandas.DataFrame
         The tidy tables.
     config : BacktestConfig
-        Horizons, samples and seed.
+        Horizons, samples and seed (`[forecast]`).
 
     Returns
     -------
@@ -180,21 +273,39 @@ def origin_tasks(
     return {t.vintage: t for t in tasks}
 
 
-def fit_key(
-    model: str, task: ForecastTask, code: str, sampler: Mapping[str, Any]
-) -> str:
+def _bvd_tag(model: ForecastModel, task: ForecastTask) -> str | None:
+    """Return the BVDOutbreakSize release a BVD model uses, else None."""
+    variant = getattr(model, "variant", None)
+    if variant is None:
+        return None
+    from bdbvhubrenewal.forecasters.renewal import (
+        bvd_record,
+        bvd_release,
+        model_config,
+    )
+
+    if not model_config(variant).bvd:
+        return None
+    tag = bvd_record(bvd_release(task))["tag"]
+    return None if tag is None else str(tag)
+
+
+def _settings(model: ForecastModel) -> str:
+    """Return a dataclass model's fields, else its class name."""
+    return repr(model) if is_dataclass(model) else type(model).__qualname__
+
+
+def fit_key(model: ForecastModel, task: ForecastTask, code: str) -> str:
     """Hash the inputs of one stored fit.
 
     Parameters
     ----------
-    model : str
-        The model name.
+    model : ForecastModel
+        The model, from `build_model`, before it fits anything.
     task : ForecastTask
         The task at the origin (`origin_tasks`).
     code : str
         `code_digest`.
-    sampler : mapping
-        The model's sampler table (`samplers`), empty if it has none.
 
     Returns
     -------
@@ -202,7 +313,11 @@ def fit_key(
         The first 16 hex digits of a SHA-256 hash.
     """
     digest = hashlib.sha256()
-    head = {"model": model, "code": code, "sampler": dict(sampler)}
+    head = {
+        "model": _settings(model),
+        "code": code,
+        "bvd": _bvd_tag(model, task),
+    }
     digest.update(json.dumps(head, sort_keys=True).encode())
     for f in fields(task):
         value = getattr(task, f.name)
@@ -212,6 +327,42 @@ def fit_key(
         else:
             digest.update(repr(value).encode())
     return digest.hexdigest()[:16]
+
+
+Keys = dict[tuple[str, str], str]
+"""Current key by (model, origin)."""
+
+
+def current_keys(
+    tasks: Mapping[str, ForecastTask],
+    models: Sequence[str],
+    sampler: Mapping[str, Any],
+    code: str,
+) -> Keys:
+    """Return the current key of every stored model at every origin.
+
+    Parameters
+    ----------
+    tasks : mapping
+        `origin_tasks`.
+    models : sequence of str
+        The stored models.
+    sampler : mapping
+        `samplers`.
+    code : str
+        `code_digest`.
+
+    Returns
+    -------
+    dict
+        Key by (model, origin).
+    """
+    built = {m: build_model(m, sampler) for m in models}
+    return {
+        (m, origin): fit_key(built[m], task, code)
+        for origin, task in tasks.items()
+        for m in models
+    }
 
 
 def store_path(store: Path | str, model: str, origin: str, key: str) -> Path:
@@ -240,8 +391,8 @@ class StoredFit:
     ----------
     meta : dict
         `model`, `origin`, `key`, `commit` (the code fitted), `fitted_at`
-        (ISO time), `sampler` and `status` (`"ok"`, or `"failed"` with
-        `error` and no tables).
+        (ISO time), `settings` (the model's representation) and `status`
+        (`"ok"`, or `"failed"` with `error` and no tables).
     forecasts : pandas.DataFrame
         `run_forecasts` output.
     fits : pandas.DataFrame
@@ -286,7 +437,7 @@ def write_fit(store: Path | str, stored: StoredFit) -> Path:
             for name in _TABLES
         },
     }
-    # mtime 0 keeps the bytes the same for the same fit.
+    # No timestamp in the gzip header, so the bytes depend on the content.
     with gzip.GzipFile(path, "wb", mtime=0) as fh:
         fh.write(json.dumps(body).encode())
     return path
@@ -328,86 +479,85 @@ def _commit() -> str:
     return out.stdout.strip() or "unknown"
 
 
+def _meta(model: ForecastModel, origin: str, key: str) -> dict[str, Any]:
+    return {
+        "model": model.name,
+        "origin": origin,
+        "key": key,
+        "commit": _commit(),
+        "fitted_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
+        "settings": _settings(model),
+        "status": "ok",
+    }
+
+
 def plan(
-    tasks: Mapping[str, ForecastTask],
-    models: Sequence[str],
-    code: str,
-    sampler: Mapping[str, Any],
-    store: Path | str,
+    keys: Keys, store: Path | str, retry_failed: bool = False
 ) -> list[dict[str, str]]:
     """List the fits the store lacks.
 
-    A fit that failed is stored as failed, so it is not retried until its
-    inputs change.
+    A fit that failed is stored as failed and is not planned again until
+    its inputs change, unless `retry_failed`.
 
     Parameters
     ----------
-    tasks : mapping
-        `origin_tasks`.
-    models : sequence of str
-        The models to store (`stored_models`).
-    code : str
-        `code_digest`.
-    sampler : mapping
-        `samplers`.
+    keys : dict
+        `current_keys`.
     store : pathlib.Path or str
         The store root.
+    retry_failed : bool
+        Plan the fits stored as failed again.
 
     Returns
     -------
     list of dict
-        `model`, `origin` and `key` of each missing fit, newest origin
+        `model`, `origin` and `key` of each fit to make, newest origin
         first, so the Nowcast page's fits come first.
     """
-    missing = []
-    for origin in sorted(tasks, reverse=True):
-        for model in models:
-            key = fit_key(model, tasks[origin], code, sampler.get(model, {}))
-            if not store_path(store, model, origin, key).exists():
-                missing.append({"model": model, "origin": origin, "key": key})
-    return missing
+    to_fit = []
+    for (model, origin), key in sorted(keys.items(), key=lambda x: x[0][1])[
+        ::-1
+    ]:
+        path = store_path(store, model, origin, key)
+        redo = retry_failed and path.exists()
+        if redo:
+            redo = read_fit(path).meta["status"] != "ok"
+        if not path.exists() or redo:
+            to_fit.append({"model": model, "origin": origin, "key": key})
+    return to_fit
 
 
 def fit(
-    model: str,
-    task: ForecastTask,
-    code: str,
-    sampler: Mapping[str, Any],
+    name: str, task: ForecastTask, sampler: Mapping[str, Any], code: str
 ) -> StoredFit:
     """Fit a model at an origin and return it for the store.
 
+    A fit that raises is returned as failed (`failed`).
+
     Parameters
     ----------
-    model : str
+    name : str
         The model name.
     task : ForecastTask
         The task at the origin (`origin_tasks`).
+    sampler : mapping
+        `samplers`.
     code : str
         `code_digest`.
-    sampler : mapping
-        The model's sampler table, empty to use the model's own settings.
 
     Returns
     -------
     StoredFit
         The forecasts, fit summaries and learnt delay.
     """
-    from bdbvhubrenewal.forecasters.renewal import SAMPLER_ENV
-
-    if sampler:
-        os.environ[SAMPLER_ENV] = json.dumps(dict(sampler))
+    model = build_model(name, sampler)
+    meta = _meta(model, task.vintage, fit_key(model, task, code))
     fits: list[pd.DataFrame] = []
     learnt: list[pd.DataFrame] = []
-    forecasts = run_forecasts([get_model(model)], [task], fits, learnt)
-    meta = {
-        "model": model,
-        "origin": task.vintage,
-        "key": fit_key(model, task, code, sampler),
-        "commit": _commit(),
-        "fitted_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
-        "sampler": dict(sampler),
-        "status": "ok",
-    }
+    try:
+        forecasts = run_forecasts([model], [task], fits, learnt)
+    except Exception as err:
+        return failed(meta, err)
     return StoredFit(
         meta,
         forecasts,
@@ -416,25 +566,13 @@ def fit(
     )
 
 
-def failed(
-    model: str,
-    task: ForecastTask,
-    code: str,
-    sampler: Mapping[str, Any],
-    error: BaseException,
-) -> StoredFit:
+def failed(meta: Mapping[str, Any], error: BaseException) -> StoredFit:
     """Record a fit that failed, so the store does not retry it.
 
     Parameters
     ----------
-    model : str
-        The model name.
-    task : ForecastTask
-        The task at the origin.
-    code : str
-        `code_digest`.
-    sampler : mapping
-        The model's sampler table.
+    meta : mapping
+        The fit's meta.
     error : BaseException
         Why it failed.
 
@@ -443,18 +581,9 @@ def failed(
     StoredFit
         Meta only, with `status` `"failed"` and `error`.
     """
-    meta = {
-        "model": model,
-        "origin": task.vintage,
-        "key": fit_key(model, task, code, sampler),
-        "commit": _commit(),
-        "fitted_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
-        "sampler": dict(sampler),
-        "status": "failed",
-        "error": repr(error),
-    }
     empty = pd.DataFrame()
-    return StoredFit(meta, empty, empty, empty)
+    record = {**meta, "status": "failed", "error": repr(error)}
+    return StoredFit(record, empty, empty, empty)
 
 
 @dataclass(frozen=True)
@@ -509,10 +638,7 @@ def _choose(
 
 def load(
     store: Path | str,
-    tasks: Mapping[str, ForecastTask],
-    models: Sequence[str],
-    code: str,
-    sampler: Mapping[str, Any],
+    keys: Keys,
     config: BacktestConfig,
     results: Path | str = "results",
 ) -> list[StoreStatus]:
@@ -528,14 +654,8 @@ def load(
     ----------
     store : pathlib.Path or str
         The store root.
-    tasks : mapping
-        `origin_tasks`.
-    models : sequence of str
-        The stored models.
-    code : str
-        `code_digest`.
-    sampler : mapping
-        `samplers`.
+    keys : dict
+        `current_keys`.
     config : BacktestConfig
         Gives the model choice record and the held-out split.
     results : pathlib.Path or str
@@ -553,23 +673,23 @@ def load(
     choices = load_model_choices(config.model_choice)
     status: list[StoreStatus] = []
     loaded: list[StoredFit] = []
-    for origin in sorted(tasks, reverse=True):
-        for model in models:
-            key = fit_key(model, tasks[origin], code, sampler.get(model, {}))
-            chosen, failed = _choose(Path(store), model, origin, key)
-            if chosen is not None:
-                loaded.append(chosen)
-            status.append(
-                StoreStatus(
-                    model,
-                    origin,
-                    key,
-                    None if chosen is None else chosen.meta["key"],
-                    None if chosen is None else chosen.meta["commit"],
-                    chosen is not None and chosen.meta["key"] == key,
-                    failed,
-                )
+    for (model, origin), key in sorted(keys.items(), key=lambda x: x[0][1])[
+        ::-1
+    ]:
+        chosen, failed = _choose(Path(store), model, origin, key)
+        if chosen is not None:
+            loaded.append(chosen)
+        status.append(
+            StoreStatus(
+                model,
+                origin,
+                key,
+                None if chosen is None else chosen.meta["key"],
+                None if chosen is None else chosen.meta["commit"],
+                chosen is not None and chosen.meta["key"] == key,
+                failed,
             )
+        )
     dev = [
         f.forecasts for f in loaded if not config.is_heldout(f.meta["origin"])
     ]
@@ -599,3 +719,72 @@ def _merge(path: Path, frames: Iterable[pd.DataFrame]) -> None:
     if rows:
         table = pd.concat(rows, ignore_index=True)
         write_csv(merge_by_model(path, table), path)
+
+
+def command(args: argparse.Namespace) -> int:
+    """Run `bdbvhubrenewal fit-store plan|fit|load`.
+
+    `plan` prints the fits to make and writes them as a GitHub Actions
+    matrix (`--out`), with every current key (`--keys`) for pruning.
+    `fit` fits one model at one origin and writes it to `--store`.
+    `load` writes the stored fits into `--results`.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        The parsed `fit-store` arguments.
+
+    Returns
+    -------
+    int
+        0 on success, 1 if the fit failed or the arguments are wrong.
+    """
+    config = load_config(args.config)
+    tasks = origin_tasks(
+        load_target(args.data),
+        load_delays(args.data),
+        config,
+        load_daily(args.data),
+    )
+    sampler, code = samplers(args.policy), code_digest()
+    models = args.models or stored_models()
+    if args.action == "fit":
+        if args.model not in stored_models() or args.origin not in tasks:
+            print(
+                f"ERROR: fit needs --model in {stored_models()} and "
+                f"--origin in {list(tasks)}.",
+                file=sys.stderr,
+            )
+            return 1
+        from bdbvhubrenewal.cli import host_devices
+
+        chains = sampler.get(args.model, {}).get("num_chains", 1)
+        host_devices(int(chains))
+        stored = fit(args.model, tasks[args.origin], sampler, code)
+        path = write_fit(args.store, stored)
+        print(f"Wrote {path} ({stored.meta['status']}).")
+        if stored.meta["status"] != "ok":
+            print(f"ERROR: {stored.meta['error']}", file=sys.stderr)
+            return 1
+        return 0
+    keys = current_keys(tasks, models, sampler, code)
+    if args.action == "plan":
+        to_fit = plan(keys, args.store, args.retry_failed)
+        for t in to_fit:
+            print(f"To fit: {t['model']} at {t['origin']} ({t['key']}).")
+        print(f"{len(to_fit)} of {len(keys)} fits to make.")
+        if args.out:
+            Path(args.out).write_text(json.dumps({"include": to_fit}))
+        if args.keys:
+            Path(args.keys).write_text(
+                json.dumps([f"{m}/{o}/{k}" for (m, o), k in keys.items()])
+            )
+        return 0
+    for s in load(args.store, keys, config, args.results):
+        state = "current" if s.current else "not fitted for this code"
+        if s.used and not s.current:
+            state += f", older fit {s.used} used"
+        if s.failed:
+            state += ", the fit for this code failed"
+        print(f"{s.model} at {s.origin}: {state}.")
+    return 0

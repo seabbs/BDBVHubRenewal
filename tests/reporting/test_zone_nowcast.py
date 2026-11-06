@@ -6,10 +6,8 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.reporting.zone_nowcast import (
-    ZONE_MODEL,
     place_chart_data,
     zone_counts,
-    zone_table,
 )
 
 V = "2026-11-01"
@@ -47,7 +45,7 @@ def _samples() -> pd.DataFrame:
                 "target_end_date": w,
                 "sample": s,
                 "value": float(rng.poisson(3)),
-                "model": ZONE_MODEL,
+                "model": "randomwalknowcast",
                 "vintage": V,
                 "reference_date": "2026-11-07",
                 "horizon": h,
@@ -74,16 +72,9 @@ def test_zone_counts_fill_quiet_weeks_with_zero() -> None:
     assert set(it["location_name"]) == {"Ituri 01"}
 
 
-def test_zone_table_has_the_newest_weeks_and_no_scores() -> None:
-    counts = zone_counts(_daily(), V, "2026-10-10", NAMES)
-    table = zone_table(_samples(), counts)
-    assert set(table["week ending"]) == {"2026-10-24", "2026-10-31"}
-    assert "relative WIS" not in table
-
-
 COLOURS = {
     "randomwalk": ("#111111", "#eeeeee", ""),
-    ZONE_MODEL: ("#222222", "#dddddd", ""),
+    "randomwalknowcast": ("#222222", "#dddddd", ""),
     "renewalbvd": ("#333333", "#cccccc", "6 3"),
 }
 
@@ -136,7 +127,11 @@ def test_place_chart_data_marks_models_without_samples() -> None:
     samples, counts = _all_scales()
     data = place_chart_data(samples, counts, NAMES, COLOURS, 2)
     fans = {m["name"]: m["fan"] for m in data["models"]}
-    assert fans == {"randomwalk": False, ZONE_MODEL: True, "renewalbvd": False}
+    assert fans == {
+        "randomwalk": False,
+        "randomwalknowcast": True,
+        "renewalbvd": False,
+    }
     assert data["models"][2]["dark"] == "#cccccc"
     assert data["models"][2]["dash"] == "6 3"
 

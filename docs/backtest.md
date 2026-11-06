@@ -26,8 +26,6 @@ Pick a place to narrow the table.
 
     --8<-- "scores-location.md"
 
---8<-- "zone-section.md"
-
 --8<-- "backtest-forecasts.md"
 
 --8<-- "release-nowcasts.md"

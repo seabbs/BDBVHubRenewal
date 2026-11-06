@@ -58,7 +58,7 @@ Settings → Environments → **New environment** `hub-submission`:
 - Required reviewers: **none**.
   The gate is the approval.
 - Environment secret: **`HUB_SUBMIT_TOKEN`**, the token above.
-  It is not a repository secret, so only the `submit` job on `main` can read it.
+  It is not a repository secret, so only jobs on `main` can read it: `submit`, and the `release` step that tags each round.
 
 Settings → Secrets and variables → Actions → **Variables**:
 
@@ -74,6 +74,7 @@ Settings → Secrets and variables → Actions → **Variables**:
 
 - Settings → Actions → General → Workflow permissions: **Read repository contents** is enough.
   Only the `record` job asks for `contents: write`, to push the `submission-ledger` branch.
+  The `release` job tags each round's commit with the bot's token, which has the `workflow` scope, as the workflow token is refused a tag on a commit whose workflow files differ from `main`'s.
   If a ruleset covers all branches, exclude `submission-ledger`.
 - "Allow GitHub Actions to create and approve pull requests" is not needed.
   PRs are opened with the bot's token on another repo.
@@ -83,7 +84,7 @@ Settings → Secrets and variables → Actions → **Variables**:
 The first PR from `seabbs-bot` is a first-time contribution from a fork.
 The hub's validation workflow will wait for a maintainer to click **Approve and run**.
 Ask Justin Lessler or Claire Smith to approve it, and say that weekly bot PRs will follow.
-The open questions for the organisers in `seabbs/EpidemicDates` also apply here.
+The [open questions for the organisers](https://github.com/seabbs/EpidemicDates/issues/3) also apply here.
 
 ## Switching off DRY_RUN
 
