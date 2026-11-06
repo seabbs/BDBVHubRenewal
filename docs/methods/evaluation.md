@@ -148,8 +148,9 @@ The flag is set from the forecast of the reference week $w + 1$, with median $q_
 The level is $\ell = \max\{(c(w - 3) + c(w - 2)) / 2,\ c(w - 1)\}$ and the recent maximum is $r = \max(1, \max_{w - 4 \le t \le w} c(t))$.
 A forecast collapses if $\ell \ge 3$ and $q_{50} \le \ell / 3$.
 It blows up if $q_{50} > 3r$ and $q_{50} - r \ge 5$, or $q_{95} > 10r$ and $q_{95} - r \ge 20$.
-These are the rules used to find the implausible zones of the 2026-11-07 round.
-Every scored week of a forecast takes the forecast's place type and flag.
+The thresholds pick out forecasts far from every recent count.
+A forecast with neither has no flag.
+Every scored week of a forecast takes the forecast's place type and flag, and the scores are averaged over scored weeks.
 
 ## Comparison with hub forecasts
 

@@ -1569,10 +1569,6 @@ def _backtest_page(
             ),
         )
         explorer_src = "../figures/explorer-backtest.json"
-        _write(
-            gen / "backtest-checks.md",
-            _checks_section(res, quantiles, target, data_dir, names),
-        )
     _write(
         gen / "backtest-forecasts.md",
         _forecast_tabs(
@@ -1583,6 +1579,12 @@ def _backtest_page(
             },
             explorer_src,
         ),
+    )
+    _write(
+        gen / "backtest-checks.md",
+        _checks_section(res, quantiles, target, data_dir, names)
+        if shown
+        else "",
     )
     _write(gen / "lopo-section.md", _lopo_section(res / "lopo-scores.csv"))
     _write(gen / "ladder.md", _ladder_page(res / "ladder.csv"))
@@ -1646,8 +1648,10 @@ def _checks_section(
     names: Sequence[str],
 ) -> str:
     """Score the forecasts by place type and flag (`checks`)."""
-    scores = _ours(_release_scores(res), names)
-    scores = scores.loc[scores["target"] == "reported"]
+    scores = _release_scores(res)
+    scores = scores.loc[
+        scores["model"].isin(names) & (scores["target"] == "reported")
+    ]
     national = scores["location"] == NATIONAL
     scores = scores.assign(
         scale=national.map({True: "national", False: "provinces"})
@@ -1655,7 +1659,9 @@ def _checks_section(
     zones = _as_submitted(
         pd.read_csv(res / "zone-scores.csv", low_memory=False)
     )
-    zones = _ours(zones.loc[zones["target"] == "reported"], names)
+    zones = zones.loc[
+        zones["model"].isin(names) & (zones["target"] == "reported")
+    ]
     scores = pd.concat([scores, zones.assign(scale="zones")])
     origins = sorted(set(scores["origin"].astype(str)))
     real = target.loc[target["kind"] == "real"]
@@ -1685,14 +1691,15 @@ def _checks_section(
     )
     return (
         "## Checks\n\n"
-        "Scores split by the type of place and by the plausibility flag of "
-        "each forecast ([checks](methods/evaluation.md#checks)).\n"
+        "Scores of the scored weeks, split by the type of place and by the "
+        "plausibility flag of their forecast "
+        "([checks](methods/evaluation.md#checks)).\n"
         "A place is silent with no case in the 9 weeks to the origin, small "
         f"with at most {SMALL_MAX} cases in any of those weeks, and larger "
         "otherwise.\n"
         "A forecast is flagged when its reference week drops to a third of "
         "the recent level (collapse) or rises far above every recent count "
-        "(blow-up).\n\n"
+        "(blow-up), and has no flag otherwise.\n\n"
         + filter_table(_table(summary), ["scale", "split", "model"])
     )
 

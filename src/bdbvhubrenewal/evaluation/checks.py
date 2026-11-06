@@ -2,8 +2,8 @@
 r"""Plausibility checks of the backtest forecasts, scored.
 
 Each forecast of a place from an origin $o$ gets a place type and a
-flag, both decided from the counts reported at $o$, and its scores are
-then averaged by each.
+flag, both decided from the counts reported at $o$, and the scores of
+its scored weeks are then averaged by each.
 Week $w$ is the latest week ending on or before $o$, and $c(t)$ the
 count reported at $o$ for the week ending $t$, 0 where none is.
 
@@ -22,13 +22,15 @@ The recent maximum is $r = \max(1, \max_{w - 4 \le t \le w} c(t))$.
 - Blow-up: $q_{50} > 3r$ and $q_{50} - r \ge 5$, or $q_{95} > 10r$ and
   $q_{95} - r \ge 20$.
 
-These are the rules of the 2026-11-07 review (issues #49 to #51), set
-so they pick out the zones found implausible by eye.
+The thresholds pick out forecasts far from every recent count.
 """
 
 from __future__ import annotations
 
 import pandas as pd
+
+from bdbvhubrenewal.evaluation.scoring import summarise_scores
+from bdbvhubrenewal.forecasters.chain import Settings
 
 __all__ = [
     "RECENT_WEEKS",
@@ -38,14 +40,14 @@ __all__ = [
     "place_types",
 ]
 
-RECENT_WEEKS = 9
-"""Weeks up to the origin whose counts set the place type."""
+RECENT_WEEKS = Settings().walk_weeks
+"""Weeks up to the origin whose counts set the place type, the walk's."""
 
 SMALL_MAX = 5
 """Largest recent weekly count of a small place."""
 
 _METRICS = {"wis": "WIS", "log_wis": "log WIS", "coverage_90": "90% coverage"}
-_ORDER = ("silent", "small", "larger", "none", "collapse", "blow-up")
+_ORDER = ("silent", "small", "larger", "no flag", "collapse", "blow-up")
 
 
 def _last_week(origin: pd.Series) -> pd.Series:
@@ -114,7 +116,7 @@ def flags(counts: pd.DataFrame, quantiles: pd.DataFrame) -> pd.DataFrame:
     -------
     pandas.DataFrame
         Columns `model`, `origin`, `location` and `flag`, one of
-        `collapse`, `blow-up` and `none`.
+        `collapse`, `blow-up` and `no flag`.
     """
     wide = _by_week(counts, quantiles)
     level = pd.concat([(wide[3] + wide[2]) / 2, wide[1]], axis=1).max(axis=1)
@@ -127,7 +129,7 @@ def flags(counts: pd.DataFrame, quantiles: pd.DataFrame) -> pd.DataFrame:
     r, lv = out["recent"], out["level"]
     blow = ((q50 > 3 * r) & (q50 - r >= 5)) | ((q95 > 10 * r) & (q95 - r >= 20))
     collapse = (lv >= 3) & (q50 <= lv / 3)
-    out["flag"] = "none"
+    out["flag"] = "no flag"
     out.loc[blow, "flag"] = "blow-up"
     out.loc[collapse, "flag"] = "collapse"
     return out[["model", "origin", "location", "flag"]]
@@ -141,8 +143,8 @@ def check_summary(
     Parameters
     ----------
     scores : pandas.DataFrame
-        One row per scored forecast, with `model`, `origin`, `location`,
-        `scale` and the `wis`, `log_wis` and `coverage_90` columns.
+        One row per scored week, `score_forecasts` output with `model`,
+        `origin`, `location` and `scale`.
     types : pandas.DataFrame
         From `place_types`.
     flagged : pandas.DataFrame
@@ -157,22 +159,17 @@ def check_summary(
     keyed = scores.merge(types, on=["origin", "location"], how="left").merge(
         flagged, on=["model", "origin", "location"], how="left"
     )
-    parts = []
-    for split, col in (("place type", "place_type"), ("flag", "flag")):
-        grp = keyed.groupby(["scale", col, "model"])
-        part = grp[list(_METRICS)].mean()
-        part.insert(0, "n", grp.size())
-        parts.append(
-            part.reset_index()
-            .rename(columns={col: "group"})
-            .assign(split=split)
-        )
+    parts = [
+        summarise_scores(keyed, by=("scale", col, "model"))
+        .rename(columns={col: "group"})
+        .assign(split=split)
+        for split, col in (("place type", "place_type"), ("flag", "flag"))
+    ]
     out = pd.concat(parts, ignore_index=True).rename(columns=_METRICS)
-    order = {g: i for i, g in enumerate(_ORDER)}
+    order = {g: i for i, g in enumerate(("place type", "flag", *_ORDER))}
     out = out.sort_values(
         ["scale", "split", "group", "model"],
-        key=lambda c: c.map(order) if c.name == "group" else c,
-        kind="stable",
+        key=lambda c: c.map(order) if c.name in ("split", "group") else c,
     )
     cols = ["scale", "split", "group", "model", "n", *_METRICS.values()]
     return out[cols].reset_index(drop=True)

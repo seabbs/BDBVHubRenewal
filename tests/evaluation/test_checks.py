@@ -3,6 +3,7 @@ from __future__ import annotations
 import pandas as pd
 
 from bdbvhubrenewal.evaluation.checks import check_summary, flags, place_types
+from bdbvhubrenewal.evaluation.scoring import SCORE_COLUMNS
 
 ORIGIN = "2026-11-01"  # a Sunday, so the last week ends 2026-10-31
 WEEKS = ["2026-10-03", "2026-10-10", "2026-10-17", "2026-10-24", "2026-10-31"]
@@ -63,9 +64,24 @@ def test_flags_catch_collapse_and_blow_up_only() -> None:
     assert got.to_dict() == {
         "wamba": "collapse",
         "rungu": "blow-up",
-        "steady": "none",
-        "quiet": "none",
+        "steady": "no flag",
+        "quiet": "no flag",
     }
+
+
+def test_flags_use_only_the_counts_reported_at_the_origin() -> None:
+    later = pd.DataFrame(
+        {
+            "vintage": "2026-11-08",
+            "location": "wamba",
+            "target_end_date": "2026-10-31",
+            "total": [20],
+        }
+    )
+    q = _quantiles({"wamba": (0.0, 1.0), "rungu": (8.0, 57.0)})
+    before = flags(COUNTS, q)
+    after = flags(pd.concat([COUNTS, later], ignore_index=True), q)
+    pd.testing.assert_frame_equal(before, after)
 
 
 def test_check_summary_averages_by_place_type_and_flag() -> None:
@@ -75,6 +91,7 @@ def test_check_summary_averages_by_place_type_and_flag() -> None:
             "origin": ORIGIN,
             "location": ["wamba", "wamba", "rungu"],
             "scale": "zones",
+            **dict.fromkeys(SCORE_COLUMNS, 0.0),
             "wis": [4.0, 2.0, 9.0],
             "log_wis": [1.0, 1.0, 2.0],
             "coverage_90": [0.0, 1.0, 0.0],
