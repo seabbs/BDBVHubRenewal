@@ -1,80 +1,75 @@
 #!/usr/bin/env bash
-# Results releases: every model's results with each hub release and each
-# code release, from what the Pages build made.
+# Attach every model's results to the round releases.
 #
-#   scripts/results-release.sh tag RESULTS
-#       print `tag=<name>` for the release to make, or `tag=` for none.
-#       A published code release vX.Y.Z gives results-vX.Y.Z. A build of
-#       main gives results-<hub release> once every stored fit at that
-#       release is of this code (RESULTS/fit-store.json). A tag whose
-#       release is already published gives none.
-#   scripts/results-release.sh collect BUILD DIR
-#       copy BUILD/results and a zip of BUILD/data into DIR
-#   scripts/results-release.sh publish TAG DIR SITE
-#       zip the built site SITE into DIR and publish DIR as release TAG,
-#       replacing a draft left by a failed attempt
+#   scripts/results-release.sh attach BUILD SITE
 #
-# Needs GH_TOKEN (and GITHUB_REPOSITORY, GITHUB_SHA) for `tag` and
-# `publish`. Uses git, gh, zip and Python's standard library only.
+# submit.yml's `release` job publishes `round-<reference date>` from the
+# commit the round was submitted from. This adds the Pages build's
+# results to each such release whose round used the build's latest hub
+# release, once every stored fit at that release is of this code
+# (BUILD/results/fit-store.json): the hub tables, the results tables, a
+# zip of BUILD/data and the built site SITE as site.zip. site.zip goes
+# last, so a release with it is complete; one without it is filled again
+# by the next build.
+#
+# Needs GH_TOKEN and GITHUB_SHA. Uses git, gh, zip and Python's
+# standard library only.
 set -euo pipefail
 
 repo=${GITHUB_REPOSITORY:-seabbs/BDBVHubRenewal}
 site_url="https://samabbott.co.uk/BDBVHubRenewal/"
 
-# Whether release $1 is published: true, false (a draft) or none.
-release_state() {
-  gh release view "$1" -R "$repo" --json isDraft \
-    -q 'if .isDraft then "false" else "true" end' 2> /dev/null || echo none
-}
-
 case "$1" in
-  tag)
-    results=$2
-    if [ "${GITHUB_EVENT_NAME:-}" = release ]; then
-      case "${GITHUB_REF_NAME:-}" in
-        v*) tag="results-$GITHUB_REF_NAME" ;;
-        *) tag="" ;;
-      esac
-    else
-      origin=$(python3 -I - "$results/fit-store.json" << 'EOF'
+  attach)
+    build=$2 site=$3
+    if ! git fetch -q --depth 1 origin submission-ledger 2> /dev/null; then
+      echo "No ledger: no round to attach results to."
+      exit 0
+    fi
+    state=$(mktemp "${TMPDIR:-/tmp}/state.XXXXXX")
+    git show FETCH_HEAD:state.json > "$state"
+    rounds=$(python3 -I - "$build/results/fit-store.json" "$state" << 'EOF'
 import json
 import sys
 
 status = json.load(open(sys.argv[1]))
 latest = max(s["origin"] for s in status)
-ready = all(s["current"] for s in status if s["origin"] == latest)
-print(latest if ready else "")
+if all(s["current"] for s in status if s["origin"] == latest):
+    for ref, entry in json.load(open(sys.argv[2]))["rounds"].items():
+        if entry.get("as_of") == latest:
+            print(ref)
 EOF
-      )
-      tag=${origin:+results-$origin}
-    fi
-    if [ -n "$tag" ] && [ "$(release_state "$tag")" = true ]; then
-      tag=""
-    fi
-    echo "tag=$tag"
-    ;;
-  collect)
-    build=$2 dir=$3
-    mkdir -p "$dir"
-    cp "$build"/results/*.csv "$build"/results/*.csv.gz \
-      "$build"/results/*.json "$dir"/
-    (cd "$build/results" && zip -qr - hub hub-comparison) > "$dir/hub.zip"
-    (cd "$build/data" && zip -qr - .) > "$dir/data.zip"
-    ;;
-  publish)
-    tag=$2 dir=$3 site=$4
-    stage=$(mktemp -d "${TMPDIR:-/tmp}/site.XXXXXX")
-    cp -R "$site" "$stage/BDBVHubRenewal"
-    printf '%s\n' \
-      "Run \`python3 -m http.server\` in this folder and open" \
-      "http://localhost:8000/BDBVHubRenewal/" > "$stage/README.txt"
-    (cd "$stage" && zip -qr - README.txt BDBVHubRenewal) > "$dir/site.zip"
-    hub_release=$(python3 -I -c "import json, sys; print(max(s['origin'] for s in json.load(open(sys.argv[1]))))" "$dir/fit-store.json")
-    notes="$stage/notes.md"
-    cat > "$notes" << EOF
-Results of every model at hub release $hub_release, built from commit $GITHUB_SHA.
+    )
+    for ref in $rounds; do
+      tag="round-$ref"
+      assets=$(gh release view "$tag" -R "$repo" --json isDraft,assets \
+        -q 'select(.isDraft | not) | [.assets[].name] | join(" ")' \
+        2> /dev/null) || continue
+      case " $assets " in
+        *" site.zip "*) continue ;;
+      esac
+      dir=$(mktemp -d "${TMPDIR:-/tmp}/round.XXXXXX")
+      cp "$build"/results/*.csv "$build"/results/*.csv.gz \
+        "$build"/results/*.json "$dir"/
+      (cd "$build/results" && zip -qr - hub hub-comparison) > "$dir/hub.zip"
+      (cd "$build/data" && zip -qr - .) > "$dir/data.zip"
+      stage=$(mktemp -d "${TMPDIR:-/tmp}/site.XXXXXX")
+      cp -R "$site" "$stage/BDBVHubRenewal"
+      printf '%s\n' \
+        "Run \`python3 -m http.server\` in this folder and open" \
+        "http://localhost:8000/BDBVHubRenewal/" > "$stage/README.txt"
+      (cd "$stage" && zip -qr - README.txt BDBVHubRenewal) > "$stage/site.zip"
+      gh release upload "$tag" "$dir"/* -R "$repo" --clobber
+      notes="$stage/notes.md"
+      gh release view "$tag" -R "$repo" --json body -q .body |
+        sed '/^## Results$/,$d' > "$notes"
+      cat >> "$notes" << EOF
 
-- \`hub.zip\`: each model's forecast at the latest release in the hub's format, samples and quantiles for the country, provinces and health zones (\`hub/<model>-samples.csv.gz\`, \`hub/<model>-quantiles.csv.gz\`), and the scored hub comparison (\`hub-comparison/\`).
+## Results
+
+Every model's results at this round's hub release, built from commit $GITHUB_SHA.
+
+- \`hub.zip\`: each model's forecast in the hub's format, samples and quantiles for the country, provinces and health zones (\`hub/<model>-samples.csv.gz\`, \`hub/<model>-quantiles.csv.gz\`), and the scored hub comparison (\`hub-comparison/\`).
 - \`forecasts.csv.gz\`, \`heldout-forecasts.csv.gz\`: every model's forecasts at each real origin.
 - \`*-scores.csv\`, \`*-energy.csv\`, \`nowcast-*.csv\`, \`zone-*.csv\`: the scores behind the Backtest, Nowcast and Comparison pages.
 - \`backtest-fits.csv\`, \`delay-summary.csv\`, \`fit-store.json\`: the stored fits' diagnostics and learnt delays, and the fit behind each model and origin.
@@ -83,17 +78,13 @@ Results of every model at hub release $hub_release, built from commit $GITHUB_SH
 
 Site: $site_url
 EOF
-    # A draft until every file is uploaded, so nobody sees half a release.
-    if [ "$(release_state "$tag")" = false ]; then
-      gh release delete "$tag" -R "$repo" --yes
-    fi
-    gh release create "$tag" "$dir"/* -R "$repo" --target "$GITHUB_SHA" \
-      --title "$tag ($(echo "$GITHUB_SHA" | cut -c1-7))" \
-      --notes-file "$notes" --latest=false --draft
-    gh release edit "$tag" -R "$repo" --draft=false --latest=false
+      gh release edit "$tag" -R "$repo" --notes-file "$notes"
+      gh release upload "$tag" "$stage/site.zip" -R "$repo" --clobber
+      echo "Attached results to $tag."
+    done
     ;;
   *)
-    echo "usage: $0 tag RESULTS | collect BUILD DIR | publish TAG DIR SITE" >&2
+    echo "usage: $0 attach BUILD SITE" >&2
     exit 2
     ;;
 esac

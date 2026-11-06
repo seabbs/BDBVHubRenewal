@@ -59,6 +59,8 @@ Settings → Environments → **New environment** `hub-submission`:
   The gate is the approval.
 - Environment secret: **`HUB_SUBMIT_TOKEN`**, the token above.
   It is not a repository secret, so only the `submit` job on `main` can read it.
+- Environment secret: **`RELEASE_TOKEN`**, a fine-grained token for `seabbs/BDBVHubRenewal` only, with **Contents: read and write** and **Workflows: read and write**.
+  The `release` job uses it to tag each round.
 
 Settings → Secrets and variables → Actions → **Variables**:
 
@@ -74,7 +76,7 @@ Settings → Secrets and variables → Actions → **Variables**:
 
 - Settings → Actions → General → Workflow permissions: **Read repository contents** is enough.
   Only the `record` job asks for `contents: write`, to push the `submission-ledger` branch.
-  The `release` job tags each round's commit with the bot's token, which needs the `workflow` scope: the workflow token is refused a tag on a commit whose workflow files differ from `main`'s.
+  The `release` job tags each round's commit with `RELEASE_TOKEN`, as the workflow token is refused a tag on a commit whose workflow files differ from `main`'s.
   If a ruleset covers all branches, exclude `submission-ledger`.
 - "Allow GitHub Actions to create and approve pull requests" is not needed.
   PRs are opened with the bot's token on another repo.

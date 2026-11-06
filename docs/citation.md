@@ -21,10 +21,9 @@ GitHub turns it into the "Cite this repository" button on the repository page.
 
 ## Archived results
 
-Each hub release we fit gets a [GitHub release](https://github.com/seabbs/BDBVHubRenewal/releases) named `results-<hub release>`, made once every stored fit at that release is of the current code.
-It holds every model's forecast at the release in the hub's format, for the country, provinces and health zones, with the scores, the fit summaries, the data and the rendered site.
-Each code release `vX.Y.Z` gets `results-vX.Y.Z` in the same form.
-Each submitted round's code is released as `round-<reference date>`, which Zenodo archives with a DOI.
+Each submitted round has a [GitHub release](https://github.com/seabbs/BDBVHubRenewal/releases), `round-<reference date>`, at the commit it was submitted from.
+Once every stored fit at the round's hub release is of the current code, the Pages build adds every model's results to it: each model's forecast in the hub's format for the country, provinces and health zones, the scores, the fit summaries, the data and the rendered site.
+Zenodo archives each release with a DOI.
 
 ## Citing the data
 

@@ -162,7 +162,7 @@ jobs:
     needs: detect
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # The bot's token tags the round's commit. The workflow token cannot:
+    # RELEASE_TOKEN tags the round's commit. The workflow token cannot:
     # GitHub refuses it a tag on a commit whose workflow files differ
     # from main's.
     environment: hub-submission
@@ -173,9 +173,14 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       - name: Release rounds whose window closed and PRs are done
         env:
-          GH_TOKEN: ${{ secrets.HUB_SUBMIT_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
           DRY_RUN: ${{ needs.detect.outputs.dry_run }}
-        run: ci/steps/release.sh
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::RELEASE_TOKEN is not set in the hub-submission environment"
+            exit 1
+          fi
+          ci/steps/release.sh
 
   prepare:
     name: Pin inputs and build the random walk candidate
