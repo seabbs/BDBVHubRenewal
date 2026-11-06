@@ -4,17 +4,42 @@ r"""Double interval censored daily pmfs of continuous delays.
 A delay $X$ from a primary event, uniform over a day, to a secondary
 event recorded to its day has the pmf of primarycensored
 (`dpcens(..., pwindow = 1, swindow = 1)`), here in closed form for the
-Gamma and log-normal. `CensoredPMF` gives that pmf as a PyRenew random
-variable with a random mean and SD.
+Gamma, log-normal and generalised gamma. `CensoredPMF` gives that pmf as
+a PyRenew random variable with a random mean and SD.
 """
 
 from __future__ import annotations
+
+from collections.abc import Callable
 
 import jax
 import jax.numpy as jnp
 from jax import Array
 from jax.typing import ArrayLike
 from pyrenew.metaclass import RandomVariable
+
+Cdfs = Callable[[Array], tuple[Array, Array, Array, Array]]
+"""Returns $F_1$, $F_2$ and their upper tails $S_1$, $S_2$ at delays."""
+
+
+def _from_cdfs(cdfs: Cdfs, mean: Array, dmax: int) -> Array:
+    """Pmf on 0..dmax from $F_1$, $F_2$ and the mean, as `censored_pmf`."""
+    x = jnp.arange(-1.0, dmax + 2.0)
+    pos = x > 0
+    xs = jnp.where(pos, x, 1.0)
+    f1, f2, s1, s2 = cdfs(xs)
+    g = jnp.where(pos, xs * f1 - mean * f2, 0.0)
+    # Q differs from G by x - m, which the second difference removes, but
+    # Q is only valid for x > 0.
+    q = jnp.where(pos, mean * s2 - xs * s1, mean - x)
+
+    def second(h: Array) -> Array:
+        return h[2:] - 2 * h[1:-1] + h[:-2]
+
+    right = jnp.arange(dmax + 1) >= mean
+    pmf = jnp.where(right, second(q), second(g))
+    pmf = jnp.maximum(pmf, 1e-12)
+    return pmf / pmf.sum()
 
 
 def censored_pmf(
@@ -81,22 +106,56 @@ def censored_pmf(
                 norm.cdf(sdlog - z),
             )
 
-    x = jnp.arange(-1.0, dmax + 2.0)
-    pos = x > 0
-    xs = jnp.where(pos, x, 1.0)
-    f1, f2, s1, s2 = cdfs(xs)
-    g = jnp.where(pos, xs * f1 - mean * f2, 0.0)
-    # Q differs from G by x - m, which the second difference removes, but
-    # Q is only valid for x > 0.
-    q = jnp.where(pos, mean * s2 - xs * s1, mean - x)
+    return _from_cdfs(cdfs, mean, dmax)
 
-    def second(h: Array) -> Array:
-        return h[2:] - 2 * h[1:-1] + h[:-2]
 
-    right = jnp.arange(dmax + 1) >= mean
-    pmf = jnp.where(right, second(q), second(g))
-    pmf = jnp.maximum(pmf, 1e-12)
-    return pmf / pmf.sum()
+def gengamma_censored_pmf(
+    mu: ArrayLike, sigma: ArrayLike, q: ArrayLike, dmax: int
+) -> Array:
+    r"""Daily double interval censored pmf of a generalised gamma delay.
+
+    The generalised gamma of flexsurv's `pgengamma` with $Q > 0$:
+    $Y = Q^{-2} e^{Q w} \sim \text{Gamma}(Q^{-2}, 1)$ with
+    $w = (\log x - \mu) / \sigma$. With $k = Q^{-2}$ and $s = \sigma / Q$,
+    $X = e^{\mu} (Y / k)^s$, so the partial first moment is
+    $E[X; X \le x] = m P(k + s, y)$ with mean
+    $m = e^{\mu} k^{-s} \Gamma(k + s) / \Gamma(k)$ and $P$ the
+    regularised lower incomplete gamma at $y = k e^{Q w}$. Hence
+    $F_1 = P(k, y)$ and $F_2 = P(k + s, y)$ in `censored_pmf`'s closed
+    form. Truncated at `dmax` and renormalised.
+
+    Parameters
+    ----------
+    mu, sigma, q : ArrayLike
+        Location (log days), scale and shape $Q > 0$.
+    dmax : int
+        Maximum delay.
+
+    Returns
+    -------
+    ArrayLike
+        Pmf on 0..dmax.
+
+    """
+    k = 1 / jnp.square(q)
+    s = sigma / q
+    mean = jnp.exp(
+        mu
+        - s * jnp.log(k)
+        + jax.scipy.special.gammaln(k + s)
+        - jax.scipy.special.gammaln(k)
+    )
+
+    def cdfs(x: Array) -> tuple[Array, Array, Array, Array]:
+        y = k * jnp.exp(q * (jnp.log(x) - mu) / sigma)
+        return (
+            jax.scipy.special.gammainc(k, y),
+            jax.scipy.special.gammainc(k + s, y),
+            jax.scipy.special.gammaincc(k, y),
+            jax.scipy.special.gammaincc(k + s, y),
+        )
+
+    return _from_cdfs(cdfs, mean, dmax)
 
 
 class CensoredPMF(RandomVariable):

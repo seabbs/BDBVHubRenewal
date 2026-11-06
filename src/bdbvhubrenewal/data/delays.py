@@ -41,7 +41,6 @@ from typing import Final, Protocol
 import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
-from scipy import integrate, special
 
 from bdbvhubrenewal.data.dates import as_date
 
@@ -329,11 +328,9 @@ def hub_delay_pmf(
     $U \sim \mathrm{Unif}(0, 24)$ minus a delay $X$ in hours drawn from a
     generalised gamma (`auxiliary-data/imputation-details.md`), so the
     onset is $k = \lceil (X - U) / 24 \rceil$ days before the report.
-    With $F$ the cdf of $X / 24$,
-
-    $$\hat f(k) = \int_0^1 \{F(k + u) - F(k - 1 + u)\}\, du,$$
-
-    the double interval censored pmf, here by quadrature.
+    That is the double interval censored pmf of $X / 24$ days,
+    primarycensored's `dpcens(k, pgengamma, pwindow = 1, swindow = 1)`,
+    in closed form from `model.censored.gengamma_censored_pmf`.
     The generalised gamma is fitted to the delays published at 2026-10-17
     as exact before `HUB_DOUBLE_CENSORED_FROM` and as double interval
     censored from then on, with the parameters in
@@ -351,24 +348,17 @@ def hub_delay_pmf(
     numpy.ndarray
         $\hat f$ on days 0 to `max_delay`.
     """
+    import jax
+
+    # The model package needs PyRenew, which the data layer does not.
+    from bdbvhubrenewal.model.censored import gengamma_censored_pmf
+
     fit = (
         "double_censored"
         if as_date(release) >= HUB_DOUBLE_CENSORED_FROM
         else "exact"
     )
     mu, sigma, q = HUB_GENGAMMA[fit]
-
-    def cdf(days: float) -> float:
-        # flexsurv's pgengamma for Q > 0, which both fits have.
-        if days <= 0:
-            return 0.0
-        w = (np.log(24 * days) - mu) / sigma
-        return float(special.gammainc(q**-2, q**-2 * np.exp(q * w)))
-
-    def mass(k: int) -> float:
-        return float(
-            integrate.quad(lambda u: cdf(k + u) - cdf(k - 1 + u), 0, 1)[0]
-        )
-
-    pmf = np.array([mass(k) for k in range(max_delay + 1)], dtype=float)
-    return np.asarray(pmf / pmf.sum(), dtype=float)
+    with jax.enable_x64():
+        pmf = gengamma_censored_pmf(mu - np.log(24), sigma, q, max_delay)
+    return np.asarray(pmf, dtype=float)
