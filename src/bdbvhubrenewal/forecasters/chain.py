@@ -89,6 +89,7 @@ __all__ = [
     "own_ages",
     "retro_errors",
     "walk_changes",
+    "walk_spreads",
     "week_nowcast",
     "weeks_back",
 ]
@@ -638,7 +639,7 @@ def build_origin(
     start = np.where(
         good.any(axis=1), snap.n_weeks - 1 - np.argmax(good[:, ::-1], axis=1), 0
     )
-    own, pooled = _walk_spreads(reported, start, snap, fit.level, settings)
+    own, pooled = walk_spreads(reported, start, snap, fit.level, settings)
     both = np.concatenate([own, pooled])
     sigma_source = fit.source
     sigma = both[sigma_source]
@@ -727,7 +728,7 @@ def walk_changes(
     return diffs
 
 
-def _walk_spreads(
+def walk_spreads(
     reported: np.ndarray,
     start: np.ndarray,
     snap: SnapshotArrays,

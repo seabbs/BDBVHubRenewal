@@ -69,7 +69,7 @@ from bdbvhubrenewal.forecasters.chain import (
 from bdbvhubrenewal.forecasters.obs import sample_count
 from bdbvhubrenewal.forecasters.walk import random_walk
 
-__all__ = ["RandomWalk", "RandomWalkNowcast"]
+__all__ = ["RandomWalk", "RandomWalkNowcast", "walks"]
 
 
 def _key(task: ForecastTask) -> jax.Array:
@@ -96,28 +96,33 @@ def _delay_label(origin: Origin, i: int) -> str:
     return f"own at {int(own.sum())} of {own.size} ages"
 
 
-def _walks(
-    key: jax.Array, x0: np.ndarray, origin: Origin, intro: np.ndarray
+def walks(
+    key: jax.Array,
+    x0: np.ndarray,
+    sigma: np.ndarray,
+    silent: np.ndarray,
+    intro: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Run the walk for every place, `x0` of shape `[L, S]`.
 
-    A silent place is 0 until its first introduction, drawn week by week
-    with probability `intro` `[L, H]`, and walks from 1 case from there.
-    The introduction week has at least that case.
+    Each place walks with spread `sigma` `[L]`. A `silent` `[L]` place is
+    0 until its first introduction, drawn week by week with probability
+    `intro` `[L, H]`, and walks from 1 case from there. The introduction
+    week has at least that case.
     """
     h = intro.shape[1]
     k_walk, k_intro = jax.random.split(key)
-    x0 = np.where(origin.silent[:, None], 1.0, x0)
+    x0 = np.where(silent[:, None], 1.0, x0)
     keys = jax.random.split(k_walk, x0.shape[0])
     lam, y = jax.vmap(lambda k, x, s: random_walk(k, x, s, h))(
         keys,
         jnp.asarray(x0, jnp.float32),
-        jnp.asarray(origin.sigma, jnp.float32),
+        jnp.asarray(sigma, jnp.float32),
     )
     u = np.asarray(jax.random.uniform(k_intro, (*x0.shape, h)), np.float64)
     hit = u < intro[:, None, :]
     first = np.where(hit.any(axis=2), np.argmax(hit, axis=2), np.inf)
-    first = np.where(origin.silent[:, None], first, 0.0)
+    first = np.where(silent[:, None], first, 0.0)
     lag = np.arange(h)[None, None, :] - first[:, :, None]
     at = np.clip(lag, 0, h - 1).astype(int)
 
@@ -125,7 +130,7 @@ def _walks(
         moved = np.take_along_axis(np.asarray(x, dtype=np.float64), at, axis=2)
         return np.where(lag >= 0, moved, 0.0)
 
-    first_case = origin.silent[:, None, None] & (lag == 0)
+    first_case = silent[:, None, None] & (lag == 0)
     return shift(lam), np.where(first_case, np.maximum(shift(y), 1.0), shift(y))
 
 
@@ -322,10 +327,11 @@ class RandomWalk:
             )
         start = origin.start
         x0 = origin.reported[np.arange(n_loc), start]
-        _, y = _walks(
+        _, y = walks(
             _key(task),
             np.repeat(x0[:, None], n, axis=1),
-            origin,
+            origin.sigma,
+            origin.silent,
             _intro_from(origin, start, n_all),
         )
         values = np.zeros((n, n_loc, n_all))
@@ -445,7 +451,13 @@ class RandomWalkNowcast(RandomWalk):
         x0 = nowcast[:, np.arange(n_loc), w0].T
         # A partial week's nowcast covers its observed days only.
         x0 = np.where((w0 == cw)[:, None], x0 * 7 / (7 - seen_days), x0)
-        _, y = _walks(key_walk, x0, origin, _intro_from(origin, w0, n_all))
+        _, y = walks(
+            key_walk,
+            x0,
+            origin.sigma,
+            origin.silent,
+            _intro_from(origin, w0, n_all),
+        )
         values = np.zeros((n, n_loc, n_all))
         for loc in range(n_loc):
             s = int(w0[loc])
