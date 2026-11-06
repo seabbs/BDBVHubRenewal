@@ -208,28 +208,20 @@ def test_sampler_section() -> None:
             "divergent_share": [0.0, 0.01, 0.0],
         }
     )
-    backtest = {
-        "num_chains": 2,
-        "num_warmup": 300,
-        "num_samples": 300,
-        "target_accept": 0.8,
+    base = {"num_chains": 2, "num_warmup": 300, "num_samples": 300}
+    settings = {
+        "renewal": {**base, "target_accept": 0.9},
+        "renewalbvd": {**base, "num_samples": 1000, "target_accept": 0.95},
     }
-    submission = {
-        "renewal": {**backtest, "target_accept": 0.9},
-        "renewalbvd": {**backtest, "num_samples": 1000, "target_accept": 0.95},
-    }
-    text = report._sampler_section(fits, backtest, submission)
-    assert (
-        "Backtest fits use 2 chains of 300 warm-up and 300 draws at a "
-        "target acceptance of 0.8." in text
-    )
+    text = report._sampler_section(fits, settings)
+    assert "Stored fits use these settings" in text
     assert (
         "- `renewalbvd`: 2 chains of 300 warm-up and 1000 draws at a "
         "target acceptance of 0.95" in text
     )
     assert "same as" not in text
     assert "renewalsp" in text
-    assert report._sampler_section(fits.iloc[:0], backtest, submission) == ""
+    assert report._sampler_section(fits.iloc[:0], settings) == ""
 
 
 def test_development_log(tmp_path: Path) -> None:

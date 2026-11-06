@@ -247,6 +247,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="With `plan`: write the missing fits as a matrix JSON here.",
     )
     fst.add_argument("--results", default="results")
+    fst.add_argument(
+        "--models",
+        nargs="*",
+        default=None,
+        help="With `plan` or `load`: only these models (default: all fitted).",
+    )
+    fst.add_argument(
+        "--retry-failed",
+        action="store_true",
+        help="With `plan`: plan the fits stored as failed again.",
+    )
+    fst.add_argument(
+        "--keys",
+        default=None,
+        help="With `plan`: write every current key here, for pruning.",
+    )
 
     plot = sub.add_parser("plot-submission", help="Plot a submitted hub file.")
     plot.add_argument("--submission", required=True)
@@ -459,7 +475,9 @@ def _backtest(args: argparse.Namespace) -> int:
     target, delays = load_target(args.data), load_delays(args.data)
     names = _models(args.models)
     if not args.lopo:
-        # The fitted models' real forecasts come from the fit store.
+        # Fitted models are never run here: their real forecasts come from
+        # the fit store. To fit one locally, run `fit-store fit --model M
+        # --origin D` for each origin, then `fit-store load`.
         stored = set(store.stored_models())
         names = [n for n in names if n not in stored]
         if not names:
@@ -563,59 +581,6 @@ def _backtest(args: argparse.Namespace) -> int:
         f"{len(rscores)}. Written to {results}."
     )
     return 0
-
-
-def _fit_store(args: argparse.Namespace) -> int:
-    """Plan, make or load stored fits (`bdbvhubrenewal.evaluation.store`)."""
-    config = bt.load_config(args.config)
-    tasks = store.origin_tasks(
-        load_target(args.data),
-        load_delays(args.data),
-        config,
-        load_daily(args.data),
-    )
-    code, sampler = store.code_digest(), store.samplers(args.policy)
-    models = store.stored_models()
-    if args.action == "plan":
-        missing = store.plan(tasks, models, code, sampler, args.store)
-        for m in missing:
-            print(f"Missing: {m['model']} at {m['origin']} ({m['key']}).")
-        print(f"{len(missing)} of {len(tasks) * len(models)} fits to make.")
-        if args.out:
-            Path(args.out).write_text(json.dumps({"include": missing}))
-        return 0
-    if args.action == "load":
-        status = store.load(
-            args.store, tasks, models, code, sampler, config, args.results
-        )
-        for s in status:
-            state = "current" if s.current else "missing"
-            if s.used and not s.current:
-                state = f"older fit {s.used}"
-            if s.failed:
-                state += ", current fit failed"
-            print(f"{s.model} at {s.origin}: {state}.")
-        return 0
-    if args.model not in models or args.origin not in tasks:
-        print(
-            f"ERROR: fit needs --model in {models} and --origin in "
-            f"{list(tasks)}.",
-            file=sys.stderr,
-        )
-        return 1
-    model_sampler = sampler.get(args.model, {})
-    host_devices(int(model_sampler.get("num_chains", 1)))
-    task = tasks[args.origin]
-    try:
-        stored = store.fit(args.model, task, code, model_sampler)
-    except Exception as err:
-        # Stored as failed, so the plan does not retry it until its
-        # inputs change.
-        stored = store.failed(args.model, task, code, model_sampler, err)
-        print(f"ERROR: {err!r}", file=sys.stderr)
-    path = store.write_fit(args.store, stored)
-    print(f"Wrote {path}.")
-    return 0 if stored.meta["status"] == "ok" else 1
 
 
 def _release_backtest(
@@ -1090,7 +1055,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "fit":
         return _fit(args)
     if args.command == "fit-store":
-        return _fit_store(args)
+        return store.command(args)
     if args.command == "plot-submission":
         return _plot_submission(args)
     if args.command == "coherence":

@@ -23,24 +23,22 @@ def test_current_fits_name_their_commit() -> None:
     assert "!!!" not in note
 
 
-def test_missing_and_older_fits_are_said_plainly() -> None:
-    note = store_note(
-        [
-            _row("2026-11-01", None, False),
-            _row("2026-10-24", "old", False),
-            _row("2026-10-17", "old", False, failed=True),
-        ],
-        "b" * 40,
-    )
-    assert '!!! note "Fits still running"' in note
+def test_fits_not_made_are_listed() -> None:
+    status = [
+        _row("2026-11-01", None, False),
+        _row("2026-10-24", "old", False),
+        _row("2026-10-17", "old", False, failed=True),
+    ]
+    note = store_note(status, "b" * 40)
+    assert '!!! note "Fits not made for this code"' in note
     assert "bbbbbbb" in note
-    assert "still [running]" in note
-    assert "Not shown until fitted: `renewal` at 2026-11-01." in note
-    assert "failed: `renewal` at 2026-10-17" in note
-    assert (
-        "older code are shown for `renewal` at 2026-10-17 and 2026-10-24"
-        in note
-    )
+    assert "`renewal` at 2026-10-24 and 2026-11-01." in note
+    assert "failed for `renewal` at 2026-10-17." in note
+    assert "older code are shown for `renewal` at 2026-10-17 and" in note
+    assert "Not shown: `renewal` at 2026-11-01." in note
+    assert "run" not in note
+    running = store_note(status, "b" * 40, "https://run")
+    assert "A [Fit store run](https://run) is fitting them." in running
 
 
 def test_no_record_says_no_fits(tmp_path: Path) -> None:

@@ -10,10 +10,10 @@ Backtest and Nowcast pages without changes here.
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import json
 import textwrap
-import tomllib
 from collections.abc import Callable, Mapping, Sequence
 from functools import partial
 from pathlib import Path
@@ -61,6 +61,7 @@ from bdbvhubrenewal.evaluation.nowcast import (
     relative_wis,
 )
 from bdbvhubrenewal.evaluation.scoring import summarise_scores
+from bdbvhubrenewal.evaluation.store import samplers, stored_models
 from bdbvhubrenewal.evaluation.zones import SUMMED, zone_relative_skill
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
@@ -1418,23 +1419,18 @@ def _scenario_section(
     )
 
 
-def _submission_samplers(
-    path: Path = Path("ci/policy.toml"),
-) -> dict[str, dict[str, Any]]:
-    """Return each fitted candidate's sampler settings from the CI policy."""
-    policy = tomllib.loads(path.read_text())
-    return {
-        c["model"]: dict(c["sampler"])
-        for c in policy["candidates"]
-        if "sampler" in c
-    }
+def _fit_settings() -> dict[str, dict[str, Any]]:
+    """Return each stored model's sampler settings.
 
-
-def _backtest_sampler(
-    path: Path = Path("config/backtest.toml"),
-) -> dict[str, Any]:
-    """Return the backtest's sampler settings."""
-    return dict(tomllib.loads(path.read_text())["sampler"])
+    The renewal variants use their table in `ci/policy.toml`; a model with
+    none (`pprandomwalknowcast`) uses its own.
+    """
+    settings = samplers()
+    for name in stored_models():
+        if name not in settings:
+            model: Any = get_model(name)
+            settings[name] = dataclasses.asdict(model.sampler)
+    return settings
 
 
 def _settings_text(sampler: Mapping[str, Any]) -> str:
@@ -1447,11 +1443,9 @@ def _settings_text(sampler: Mapping[str, Any]) -> str:
 
 
 def _sampler_section(
-    fits: pd.DataFrame,
-    backtest: Mapping[str, Any],
-    submission: Mapping[str, Mapping[str, Any]],
+    fits: pd.DataFrame, settings: Mapping[str, Mapping[str, Any]]
 ) -> str:
-    """Give the backtest and submission sampler settings and convergence."""
+    """Give each fitted model's sampler settings and convergence."""
     keys = ["num_chains", "num_warmup", "num_samples"]
     fits = (
         fits.dropna(subset=keys)
@@ -1461,7 +1455,7 @@ def _sampler_section(
     if fits.empty:
         return ""
     sub = "".join(
-        f"- `{m}`: {_settings_text(s)}\n" for m, s in submission.items()
+        f"- `{m}`: {_settings_text(s)}\n" for m, s in settings.items()
     )
     by = fits.groupby("model")
     table = pd.DataFrame(
@@ -1478,8 +1472,8 @@ def _sampler_section(
     ).reset_index()
     return (
         "## Sampler\n\n"
-        f"Backtest fits use {_settings_text(backtest)}.\n"
-        "Submission fits use\n\n"
+        "Stored fits use these settings. "
+        "The renewal variants use the submission's.\n\n"
         + sub
         + "\n"
         + _dropdown(
@@ -1639,9 +1633,7 @@ def _backtest_page(
     fits_path = res / "backtest-fits.csv"
     _write(
         gen / "backtest-sampler.md",
-        _sampler_section(
-            pd.read_csv(fits_path), _backtest_sampler(), _submission_samplers()
-        ),
+        _sampler_section(pd.read_csv(fits_path), _fit_settings()),
     )
     rec_path = res / "recovery-scores.csv"
     rscores = pd.read_csv(rec_path)

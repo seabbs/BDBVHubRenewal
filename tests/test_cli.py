@@ -202,3 +202,49 @@ def test_backtest_of_fitted_models_only_points_to_the_fit_store(
     out = ["--results", str(tmp_path), "--output", str(tmp_path)]
     assert main([*args, *out]) == 1
     assert "task fit-store" in capsys.readouterr().err
+
+
+@pytest.mark.usefixtures("in_root")
+def test_cli_fit_store_plans_fits_and_loads(
+    flat_model: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from bdbvhubrenewal.forecasters import base
+
+    factory = base._REGISTRY[flat_model].factory
+
+    class Broken:
+        name = "broken"
+
+        def forecast(self, task: object) -> pd.DataFrame:
+            del task
+            raise RuntimeError("no fit")
+
+    monkeypatch.setattr(
+        base,
+        "_REGISTRY",
+        {
+            "flat": base.ModelSpec("flat", factory, "Fitted.", fitted=True),
+            "broken": base.ModelSpec("broken", Broken, "Fails.", fitted=True),
+        },
+    )
+    store, matrix = tmp_path / "store", tmp_path / "matrix.json"
+    plan = ["fit-store", "plan", "--store", str(store), "--out", str(matrix)]
+    assert main(plan) == 0
+    missing = json.loads(matrix.read_text())["include"]
+    assert {m["model"] for m in missing} == {"flat", "broken"}
+    fit = ["fit-store", "fit", "--store", str(store), "--origin", "2026-10-24"]
+    assert main([*fit, "--model", "flat"]) == 0
+    assert main([*fit, "--model", "broken"]) == 1
+    assert main([*fit, "--model", "renewal"]) == 1
+    assert main(plan) == 0
+    assert len(json.loads(matrix.read_text())["include"]) == len(missing) - 2
+    res = tmp_path / "res"
+    load = ["fit-store", "load", "--store", str(store), "--results", str(res)]
+    assert main(load) == 0
+    # 2026-10-24 is a development origin.
+    dev = pd.read_csv(res / "forecasts.csv.gz")
+    assert set(dev["vintage"]) == {"2026-10-24"}
+    status = json.loads((res / "fit-store.json").read_text())
+    assert [s["failed"] for s in status if s["model"] == "broken"].count(
+        True
+    ) == 1
