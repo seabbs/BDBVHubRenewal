@@ -70,10 +70,12 @@ A province with cases but too few for its own fit, $y_w$ in each of its $n_w$ da
 $$
 \lambda_p \sim \text{Gamma}\Big(\tfrac{1}{2} + \sum_w y_w,\ n_w\Big),
 \qquad
-\tilde y_p(w) \sim \text{Poisson}(\lambda_p),
+\tilde y_p(w) = \max\{y_w, z_p(w)\},
+\qquad
+z_p(w) \sim \text{Poisson}(\lambda_p),
 $$
 
-with one $\lambda_p$ per trajectory.
+with one $\lambda_p$ per trajectory and $y_w$ the count reported at the origin (0 for weeks without data), as in `randomwalk`.
 Provinces with no cases get no forecast.
 
 ### Time axis
