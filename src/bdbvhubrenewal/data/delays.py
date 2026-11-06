@@ -26,6 +26,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Final, Protocol
 
+import jax
 import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
@@ -336,8 +337,6 @@ def hub_delay_pmf(
     numpy.ndarray
         $\hat f$ on days 0 to `max_delay`.
     """
-    import jax
-
     # The model package needs PyRenew, which the data layer does not.
     from bdbvhubrenewal.model.censored import gengamma_censored_pmf
 

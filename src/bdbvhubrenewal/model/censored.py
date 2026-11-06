@@ -77,7 +77,7 @@ def censored_pmf(
 
     Returns
     -------
-    ArrayLike
+    Array
         Pmf on 0..dmax.
     """
     mean = jnp.asarray(mean)
@@ -133,9 +133,8 @@ def gengamma_censored_pmf(
 
     Returns
     -------
-    ArrayLike
+    Array
         Pmf on 0..dmax.
-
     """
     k = 1 / jnp.square(q)
     s = sigma / q
