@@ -211,8 +211,8 @@ def release_pairs(
         )  # fmt: skip
 
         def age(release: str, report: np.ndarray = report) -> np.ndarray:
-            cut = np.datetime64(release_cutoff(delays, release), "D").astype(int)
-            return np.asarray(cut - report, dtype=int)
+            cut = np.datetime64(release_cutoff(delays, release), "D")
+            return np.asarray(cut.astype(int) - report, dtype=int)
 
         before = age(a)
         keep = (before.max(axis=1) >= 0) & (before.min(axis=1) <= max_age)
