@@ -14,21 +14,20 @@ permissions:
 
 jobs:
   cancel:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       actions: write
     steps:
-      # Every earlier commit's runs were cancelled by each workflow's
-      # concurrency group, so the head commit's runs are all that is left.
       - name: Cancel the pull request's running workflows
         env:
           GH_TOKEN: ${{ github.token }}
-          SHA: ${{ github.event.pull_request.head.sha }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
-          gh run list -R "$GITHUB_REPOSITORY" --commit "$SHA" \
+          gh run list -R "$GITHUB_REPOSITORY" --branch "$BRANCH" \
             --event pull_request -L 100 --json databaseId,status \
             -q '.[] | select(.status != "completed") | .databaseId' |
-            xargs -r -n 1 gh run cancel -R "$GITHUB_REPOSITORY"
+            xargs -r -n 1 gh run cancel -R "$GITHUB_REPOSITORY" || true
 
   remove:
     if: github.event.pull_request.head.repo.full_name == github.repository
