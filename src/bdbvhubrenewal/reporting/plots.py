@@ -39,6 +39,7 @@ from bdbvhubrenewal.data import (
     revision_table,
 )
 from bdbvhubrenewal.data.delays import delay_summary
+from bdbvhubrenewal.forecasters.base import NATIONAL
 
 __all__ = [
     "DASHES",
@@ -46,6 +47,7 @@ __all__ = [
     "MODEL_STYLE",
     "THEMES",
     "bar_style",
+    "baseline_share",
     "comparison_colours",
     "comparison_label",
     "hub_styles",
@@ -762,8 +764,52 @@ def plot_delays_over_time(
     return fig
 
 
+def baseline_share(
+    daily: pd.DataFrame, vintage: str, locations: Sequence[str]
+) -> pd.DataFrame:
+    """Return randomwalknowcast's share reported by age at one release.
+
+    The share is one over the growth to final of `plot_delay_check`.
+
+    Parameters
+    ----------
+    daily : pandas.DataFrame
+        Daily onsets by release, as for `make_tasks`.
+    vintage : str
+        The release.
+    locations : sequence of str
+        Places.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `location`, `age` (days since onset) and `share`.
+    """
+    from bdbvhubrenewal.data.snapshots import snapshot_arrays
+    from bdbvhubrenewal.forecasters.chain import Settings, build_origin
+
+    snap = snapshot_arrays(daily, vintage, tuple(locations))
+    origin = build_origin(snap, Settings(), errors=False)
+    age = int(snap.cut[origin.o]) - np.arange(snap.week.size)
+    seen = (age >= 0) & (age < origin.settings.max_delay)
+    return pd.concat(
+        [
+            pd.DataFrame(
+                {
+                    "location": loc,
+                    "age": age[seen],
+                    "share": 1 / origin.growth[j, seen],
+                }
+            ).sort_values("age")
+            for j, loc in enumerate(snap.locations)
+        ],
+        ignore_index=True,
+    )
+
+
 def plot_renewal_delay(
     summary: pd.DataFrame,
+    baseline: pd.DataFrame,
     names: Mapping[str, str] | None = None,
     mode: str = "light",
 ) -> Figure:
@@ -774,56 +820,90 @@ def plot_renewal_delay(
     summary : pandas.DataFrame
         `delay-summary.csv` rows (`bdbvhubrenewal.forecasters.renewal.
         delay_summary` with `model`, `vintage` and `location`).
+    baseline : pandas.DataFrame
+        `baseline_share` at the same release, with the country as
+        `NATIONAL` for the fits pooled over provinces.
     names : mapping, optional
-        Location names by code, for the single-patch fits' labels.
+        Location names by code.
     mode : str
         `"light"` or `"dark"`.
 
     Returns
     -------
     matplotlib.figure.Figure
-        Top: the share of onsets in the last week reported by each day
-        since onset. Bottom: the median delay by onset week. One line and
-        90% band per fit: pooled over provinces, or one per province for a
-        single-patch model.
+        A row per fit: pooled over provinces, then each province a
+        single-patch model fits. Left: the share of onsets in the last week
+        reported by each day since onset, to the day before the longest
+        delay, with randomwalknowcast's share for the same place. Right:
+        the mean delay by onset week. Lines are medians and bands 90%
+        intervals.
     """
     names = dict(names or {})
+    ink = THEMES[mode]
     latest = summary.groupby("model")["vintage"].transform("max")
     rows = summary.loc[summary["vintage"] == latest]
     models = list(dict.fromkeys(rows["model"]))
-    fig, (top, bottom) = plt.subplots(
-        2, 1, figsize=(7.2, 6), layout="constrained"
+    places = list(dict.fromkeys(rows["location"]))
+    places.sort(key=lambda p: (p != "pooled", names.get(p, p)))
+    fig, axes = plt.subplots(
+        len(places),
+        2,
+        figsize=(7.2, 2.1 * len(places)),
+        squeeze=False,
+        layout="constrained",
     )
-    for model in models:
-        fits = rows.loc[rows["model"] == model, "location"].unique()
-        colour = model_colour(model, models, mode)
-        for i, loc in enumerate(fits):
-            fit = rows.loc[(rows["model"] == model) & (rows["location"] == loc)]
-            dash = mpl_dash(list(DASHES.values())[i % len(DASHES)])
-            label = model
-            if loc != "pooled":
-                label = f"{model}, {names.get(loc, loc)}"
-            for ax, quantity, to_x in (
-                (top, "reported_share", pd.to_numeric),
-                (bottom, "median_delay", pd.to_datetime),
-            ):
-                q = fit.loc[fit["quantity"] == quantity]
-                xs = to_x(q["x"])
-                ax.fill_between(xs, q["q5"], q["q95"], color=colour, alpha=0.1)
-                ax.plot(xs, q["q50"], color=colour, linestyle=dash, label=label)
+    last_day = int(pd.to_numeric(rows["x"], errors="coerce").max())
+    for (left, right), place in zip(axes, places, strict=True):
+        here = rows.loc[rows["location"] == place]
+        fitted = list(dict.fromkeys(here["model"]))
+        where = NATIONAL if place == "pooled" else place
+        title = (
+            "All provinces" if place == "pooled" else names.get(place, place)
+        )
+        left.set_title(f"{title}: {', '.join(fitted)}", fontsize=8, loc="left")
+        base = baseline.loc[baseline["location"] == where]
+        left.plot(
+            base["age"],
+            base["share"],
+            color=ink["data"],
+            ls="--",
+            lw=1,
+            label="randomwalknowcast",
+        )
+        lines = []
+        for model in fitted:
+            fit = here.loc[here["model"] == model]
+            colour = model_colour(model, models, mode)
+            share = fit.loc[fit["quantity"] == "reported_share"]
+            day = pd.to_numeric(share["x"])
+            share = share.loc[day < last_day]
+            day = day.loc[share.index]
+            delay = fit.loc[fit["quantity"] == "mean_delay"]
+            week = pd.to_datetime(delay["x"])
+            for ax, x, q in ((left, day, share), (right, week, delay)):
+                ax.fill_between(x, q["q5"], q["q95"], color=colour, alpha=0.12)
+                lines.append((ax, x, q["q50"], colour, model))
+        # Later models are drawn first and wider, so a line that coincides
+        # with another stays visible under it.
+        width = {m: 1.2 + 1.2 * i for i, m in enumerate(fitted)}
+        for ax, x, y, colour, model in reversed(lines):
+            ax.plot(x, y, color=colour, lw=width[model], label=model)
+        left.set_ylim(0, 1)
+        left.set_ylabel("Share reported")
+        right.set_ylabel("Mean delay (days)")
+        _date_axis(right)
+    axes[-1][0].set_xlabel("Days since onset, last onset week")
     vintage = ", ".join(sorted(rows["vintage"].astype(str).unique()))
-    top.set_title(f"Fits at {vintage}")
-    top.set_xlabel("Days since onset")
-    top.set_ylabel("Share reported, last onset week")
-    top.set_ylim(0, 1)
-    bottom.set_ylabel("Median delay (days)")
-    _date_axis(bottom)
-    handles, labels = bottom.get_legend_handles_labels()
+    fig.suptitle(f"Fits at {vintage}", fontsize=9)
+    handles: dict[str, Any] = {}
+    for ax in axes[:, 0]:
+        for h, label in zip(*ax.get_legend_handles_labels(), strict=True):
+            handles.setdefault(label, h)
     fig.legend(
-        handles,
-        labels,
+        list(handles.values()),
+        list(handles),
         loc="outside lower center",
-        ncol=3,
+        ncol=len(handles),
         fontsize=7,
         frameon=False,
     )

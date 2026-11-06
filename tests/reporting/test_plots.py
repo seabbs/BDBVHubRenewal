@@ -171,7 +171,7 @@ def _learnt(model: str, vintage: str, location: str) -> pd.DataFrame:
         {"x": str(d), "quantity": "reported_share", "q50": d / 10}
         for d in range(11)
     ]
-    weeks = [{"x": w, "quantity": "median_delay", "q50": 6.0} for w in WEEKS]
+    weeks = [{"x": w, "quantity": "mean_delay", "q50": 6.0} for w in WEEKS]
     rows = pd.DataFrame(days + weeks)
     return rows.assign(
         model=model,
@@ -182,20 +182,32 @@ def _learnt(model: str, vintage: str, location: str) -> pd.DataFrame:
     )
 
 
-def test_renewal_delay_draws_each_fit_at_its_latest_origin() -> None:
+def test_renewal_delay_has_a_row_per_fit_at_its_latest_origin() -> None:
     learnt = pd.concat(
         [
             _learnt("renewal", "2026-10-24", "pooled"),
             _learnt("renewal", "2026-11-01", "pooled"),
-            _learnt("renewalsp", "2026-11-01", "CD-IT"),
+            _learnt("renewalbvd", "2026-11-01", "pooled"),
             _learnt("renewalsp", "2026-11-01", "CD-NK"),
+            _learnt("renewalsp", "2026-11-01", "CD-IT"),
         ],
         ignore_index=True,
     )
-    fig = plots.plot_renewal_delay(learnt, {"CD-IT": "Ituri"})
-    top, bottom = fig.axes
-    labels = [line.get_label() for line in bottom.lines]
-    assert labels == ["renewal", "renewalsp, Ituri", "renewalsp, CD-NK"]
-    assert len(top.lines) == 3
-    assert top.get_title() == "Fits at 2026-11-01"
+    baseline = pd.DataFrame(
+        {"location": ["CD", "CD"], "age": [0, 1], "share": [0.1, 0.2]}
+    )
+    names = {"CD-IT": "Ituri", "CD-NK": "Nord Kivu"}
+    fig = plots.plot_renewal_delay(learnt, baseline, names)
+    left = fig.axes[0::2]
+    titles = [ax.get_title(loc="left") for ax in left]
+    assert titles == [
+        "All provinces: renewal, renewalbvd",
+        "Ituri: renewalsp",
+        "Nord Kivu: renewalsp",
+    ]
+    # The baseline and two models in the pooled row; the share stops the
+    # day before the longest delay.
+    assert len(left[0].lines) == 3
+    assert max(left[1].lines[-1].get_xdata()) == 9
+    assert fig.get_suptitle() == "Fits at 2026-11-01"
     plt.close(fig)

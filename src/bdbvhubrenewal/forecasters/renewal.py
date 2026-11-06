@@ -812,8 +812,9 @@ def delay_summary(
         draws. `kind` `"cumulative"` has, by delay day `x`, the share
         reported by then (`reported_share`) for onsets in the last week.
         `kind` `"onset_week"` has, by onset week ending `x`, the median
-        delay in days (`median_delay`) and the share reported within 7
-        days (`share_within_7`).
+        delay in days (`median_delay`), the mean delay in days
+        (`mean_delay`) and the share reported within 7 days
+        (`share_within_7`).
     """
     import jax.numpy as jnp
 
@@ -860,6 +861,7 @@ def delay_summary(
                 "median_delay",
             ),
             rows(cdf[:, :, 7], weeks, "onset_week", "share_within_7"),
+            rows((1 - cdf).sum(axis=-1), weeks, "onset_week", "mean_delay"),
         ],
         ignore_index=True,
     )

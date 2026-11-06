@@ -78,6 +78,7 @@ from bdbvhubrenewal.reporting.nowcast_plots import (
     plot_truth_changes,
 )
 from bdbvhubrenewal.reporting.plots import (
+    baseline_share,
     comparison_colours,
     comparison_label,
     model_style,
@@ -276,12 +277,12 @@ def make_report(
     )
     # Written by `fit-store load` from the stored fits.
     learnt = pd.read_csv(res / DELAY_SUMMARY_FILE)
+    fitted = sorted(set(learnt["location"]) - {"pooled"})
+    baseline = baseline_share(
+        daily, str(learnt["vintage"].max()), [NATIONAL, *fitted]
+    )
     save_light_dark(
-        partial(
-            plot_renewal_delay,
-            learnt,
-            dict(zip(real["location"], real["location_name"], strict=True)),
-        ),
+        partial(plot_renewal_delay, learnt, baseline, _location_names(real)),
         fig / "renewal-delay.svg",
     )
 
