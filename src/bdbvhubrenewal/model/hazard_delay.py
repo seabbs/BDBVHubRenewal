@@ -161,7 +161,7 @@ class HazardDelay(RandomVariable):
             initial_value=beta0,
             name_prefix=f"{self.name}_shape",
         )[:, 0]
-        gamma, shift = pooled_walk(
+        gamma, shifts = pooled_walk(
             self.time_process,
             self.group_process,
             self.offset_rv(),
@@ -170,6 +170,7 @@ class HazardDelay(RandomVariable):
             f"{self.name}_time",
             first_day_dow,
         )
+        shift = jnp.asarray(shifts)
         # Recorded for the delay summaries written after a fit
         # (`delay_summary`); they change nothing in the model.
         numpyro.deterministic(f"{self.name}_beta", beta)
