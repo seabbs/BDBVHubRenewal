@@ -171,8 +171,8 @@ def test_cascade_model_named_with_why(tmp_path: Path) -> None:
     text = body(g, provenance=prov)
     assert visible(text)[2] == (
         "Model: province renewal model without importation (`renewalsp`), "
-        "because BVDOutbreakSize-informed renewal model was ruled out (convergence: "
-        "max R-hat is 1.4)."
+        "because BVDOutbreakSize-informed renewal model was ruled out "
+        "(convergence: max R-hat is 1.4)."
     )
 
 
