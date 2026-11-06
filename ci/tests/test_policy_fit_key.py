@@ -75,8 +75,8 @@ def test_matrix_has_distinct_keys(tmp_path: Path) -> None:
 
 
 def test_chain_runs_from_most_to_least_complex(tmp_path: Path) -> None:
-    # Sam (2026-11-03): renewalbvd, renewalsp, renewal, then the random
-    # walks, with no refit. Each fitted leg names the model it runs.
+    # renewalbvd, renewalsp, renewal, then the random walks, with no
+    # refit. Each fitted leg names the model it runs.
     pol = load_policy(POLICY_PATH)
     assert [(c.id, c.kind, c.model) for c in pol.chain()] == [
         ("bvd", "main", "renewalbvd"),

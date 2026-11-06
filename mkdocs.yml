@@ -117,6 +117,7 @@ extra_javascript:
   - javascripts/scorechart.js
   - javascripts/scoresummary.js
   - javascripts/nowcastchart.js
+  - javascripts/zonereview.js
   - https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js
 
 markdown_extensions:
@@ -149,6 +150,9 @@ markdown_extensions:
 plugins:
   - search
   - mkdocs-jupyter:
+      # Only the executed notebook. The .py source would also render to
+      # getting-started/ and replace it with a page without outputs.
+      include: ["*.ipynb"]
       execute: false
       include_source: true
       ignore_h1_titles: false

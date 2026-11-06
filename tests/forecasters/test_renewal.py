@@ -279,6 +279,7 @@ def test_fit_renewal_writes_the_ci_contract(
     assert set(delay["quantity"]) == {
         "reported_share",
         "median_delay",
+        "mean_delay",
         "share_within_7",
     }
     ppc = json.loads((tmp_path / "ppc.json").read_text())
@@ -451,6 +452,13 @@ def test_single_patch_fits_each_location_on_its_own(
     assert set(fit.samples["location"]) == set(task.locations)
     samples = model.forecast(task)
     assert NATIONAL not in set(samples["location"])
+    # A province with too few cases for its own fit never draws below the
+    # count it has already reported in a week.
+    reported = rows.set_index(["location", "target_end_date"])["total"]
+    idle = fit.samples.loc[fit.samples["location"].isin(few)]
+    floor = idle.set_index(["location", "target_end_date"]).index.map(reported)
+    assert (idle["value"].to_numpy() >= floor.fillna(0).to_numpy()).all()
+    assert floor.fillna(0).max() > 0
 
 
 def test_fit_records_the_posterior_draw_behind_each_trajectory(
@@ -630,6 +638,10 @@ def test_delay_summary_reads_shares_and_medians_by_onset_week() -> None:
     # With hazard h, P(delay <= d) = 1 - (1 - h)^(d + 1). For h = 0.5 the
     # median is day 0; for h = sigmoid(-2) it is day 5.
     assert list(weeks["q50"]) == [0.0, 0.0, 5.0]
+    # The mean of a geometric delay with h = 0.5 is (1 - h) / h = 1.
+    mean = out.loc[out["quantity"] == "mean_delay", "q50"].to_numpy()
+    assert mean[0] == pytest.approx(1.0, abs=1e-3)
+    assert mean[2] > mean[0]
     share = out.loc[out["quantity"] == "share_within_7", "q50"].to_numpy()
     assert share[0] == pytest.approx(1 - 0.5**8)
     assert share[2] < share[0]

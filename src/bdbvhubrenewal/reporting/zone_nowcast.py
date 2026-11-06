@@ -17,8 +17,6 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.zones import province_of, weekly_zone_counts
-from bdbvhubrenewal.evaluation.nowcast import relative_wis
-from bdbvhubrenewal.evaluation.zones import SUMMED, ZONE_BASELINE
 from bdbvhubrenewal.forecasters import ForecastTask, get_model
 from bdbvhubrenewal.forecasters.zones import zone_forecast
 from bdbvhubrenewal.reporting.explorer import compact, trajectories
@@ -149,10 +147,9 @@ def _quantiles(samples: pd.DataFrame) -> pd.DataFrame:
 def zone_table(
     samples: pd.DataFrame,
     counts: pd.DataFrame,
-    scores: pd.DataFrame,
     weeks: int = 2,
 ) -> pd.DataFrame:
-    """Tabulate the newest nowcast weeks and the release scores by zone.
+    """Tabulate the newest nowcast weeks by zone.
 
     Parameters
     ----------
@@ -160,18 +157,14 @@ def zone_table(
         `zone_nowcast` output.
     counts : pandas.DataFrame
         `zone_counts` output.
-    scores : pandas.DataFrame
-        The zone release scores (`zone_backtest`).
     weeks : int
         Newest weeks before the reference date shown.
 
     Returns
     -------
     pandas.DataFrame
-        One row per zone and week: the reported count, the median and 90%
-        interval, then `ZONE_MODEL`'s relative WIS against randomwalk over
-        every origin, both summed to provinces, its 90% coverage and `n`,
-        blank where unscored.
+        One row per zone and week: the reported count, and the median and
+        90% interval.
     """
     now = samples.loc[samples["horizon"] < 0]
     newest = sorted(set(now["target_end_date"]))[-weeks:]
@@ -179,17 +172,6 @@ def zone_table(
     rows = q.merge(
         counts[["location", "province", "target_end_date", "total"]],
         on=["location", "target_end_date"],
-    )
-    rel = relative_wis(
-        scores.loc[scores["target"] == "reported"],
-        by=("location",),
-        baseline=ZONE_BASELINE + SUMMED,
-    )
-    rel = rel.loc[rel["model"] == ZONE_MODEL + SUMMED]
-    rows = rows.merge(
-        rel[["location", "rel_wis", "coverage_90", "n"]],
-        on="location",
-        how="left",
     )
     interval = (
         rows["q5"].round().astype(int).astype(str)
@@ -204,9 +186,6 @@ def zone_table(
             "reported": rows["total"],
             "median": rows["q50"].round().astype(int),
             "90% interval": interval,
-            "relative WIS": rows["rel_wis"].round(2),
-            "90% coverage": rows["coverage_90"].round(2),
-            "n": rows["n"].astype("Int64"),
         }
     )
     return out.sort_values(["province", "zone", "week ending"]).reset_index(
@@ -219,6 +198,7 @@ def place_chart_data(
     counts: pd.DataFrame,
     names: Mapping[str, str],
     colours: Mapping[str, tuple[str, str, str]],
+    complete_after_weeks: int,
 ) -> dict[str, object]:
     """Return the data `docs/javascripts/nowcastchart.js` draws.
 
@@ -231,17 +211,20 @@ def place_chart_data(
         `value`.
     counts : pandas.DataFrame
         Weekly counts at the release, `location`, `target_end_date` and
-        `total`, for every place shown.
+        `total`. A place with samples but no counts is shown with no data.
     names : mapping of str to str
         Place names by id. Zones not named show their code.
     colours : mapping of str to (str, str, str)
         Every model we fit, in order, to its light colour, dark colour
         and dash.
+    complete_after_weeks : int
+        Weeks before the release after which a week is complete.
 
     Returns
     -------
     dict
-        `release`, `reference_date`, `models` (name, light and dark
+        `release`, `reference_date`, `complete_through` (the last week
+        end that is complete), `models` (name, light and dark
         colour, dash, shown at first, and whether it has samples at the
         release), `places` (id, name, `scale` and, for a zone, its
         `province`), each scale by recent cases, most first, and per place
@@ -250,7 +233,11 @@ def place_chart_data(
         values of a fixed subset of draws, the same in every place).
     """
     models = list(colours)
-    size = counts.groupby("location")["total"].sum()
+    # Places with forecasts but no cases are shown with no data.
+    places = sorted(set(counts["location"]) | set(samples["location"]))
+    size = (
+        counts.groupby("location")["total"].sum().reindex(places, fill_value=0)
+    )
     fans = set(samples["model"])
 
     def scale(loc: str) -> str:
@@ -266,9 +253,12 @@ def place_chart_data(
     def _num(v: float) -> float:
         return float(np.round(v, 3))
 
+    release = str(samples["vintage"].iloc[0])
+    cut = pd.Timestamp(release) - pd.Timedelta(weeks=complete_after_weeks)
     return {
-        "release": str(samples["vintage"].iloc[0]),
+        "release": release,
         "reference_date": str(samples["reference_date"].iloc[0]),
+        "complete_through": cut.date().isoformat(),
         "models": [
             {
                 "name": m,

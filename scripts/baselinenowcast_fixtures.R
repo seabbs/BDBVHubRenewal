@@ -259,6 +259,25 @@ for (case in names(triangles)) {
   run_case(case, triangles[[case]])
 }
 
+# ---- zero and one-case rows -------------------------------------------
+# apply_delay on young rows with 0 or 1 reports, for the +1 of R's
+# .calc_modified_expectation.
+
+zeros <- rbind(
+  c(5, 10, 15, 15, 10, 5),
+  c(0, 0, 0, 0, 0, 0),
+  c(0, 0, 0, NA, NA, NA),
+  c(3, 8, NA, NA, NA, NA),
+  c(0, NA, NA, NA, NA, NA),
+  c(1, NA, NA, NA, NA, NA)
+)
+zeros_pmf <- c(0.05, 0.15, 0.3, 0.3, 0.15, 0.05)
+dir <- file.path(root, "zeros")
+dir.create(dir, showWarnings = FALSE)
+wm(zeros, dir, "tri")
+wm(zeros_pmf, dir, "pmf")
+wm(quiet(apply_delay(as_rt(zeros), zeros_pmf)), dir, "apply")
+
 # ---- fit_nb and sample_nb ---------------------------------------------
 
 dir <- file.path(root, "nb")

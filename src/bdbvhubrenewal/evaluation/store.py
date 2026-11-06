@@ -49,6 +49,7 @@ from typing import Any, Final
 import pandas as pd
 
 from bdbvhubrenewal.data import load_daily, load_delays, load_target
+from bdbvhubrenewal.data.tidy import write_csv
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     _fit_rows,
@@ -717,7 +718,7 @@ def _merge(path: Path, frames: Iterable[pd.DataFrame]) -> None:
     rows = [f for f in frames if not f.empty]
     if rows:
         table = pd.concat(rows, ignore_index=True)
-        merge_by_model(path, table).to_csv(path, index=False)
+        write_csv(merge_by_model(path, table), path)
 
 
 def command(args: argparse.Namespace) -> int:

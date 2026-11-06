@@ -30,6 +30,12 @@ $\log(1 + y)$ in reported counts, over the weeks ending at the start of
 The delay, the observation model and the walk spread each use their own
 estimate where a place has at least 10 cases a week, and otherwise the
 pooled estimate of the nearest parent that does (`pooling`).
+A place with no case in the latest `walk_weeks` weeks is 0 until its first
+introduction, a geometric number of weeks in with its pooled weekly
+probability. A silent place's walk has spread 0, so from its
+introduction its rate stays at 1 case a week.
+In both models this runs from the week after the `randomwalk` start week,
+so a silent place's recent weeks are not nowcast.
 National is the sum of provinces by sample.
 Each model raises if the task has no snapshots or no pair of releases
 within the delay window.
@@ -91,14 +97,42 @@ def _delay_label(origin: Origin, i: int) -> str:
 
 
 def _walks(
-    key: jax.Array, x0: np.ndarray, sigma: np.ndarray, h: int
+    key: jax.Array, x0: np.ndarray, origin: Origin, h: int
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Run the walk for every place, `x0` of shape `[L, S]`."""
-    keys = jax.random.split(key, x0.shape[0])
+    """Run the walk for every place, `x0` of shape `[L, S]`.
+
+    A silent place starts its walk from 1 case at its first
+    introduction, a geometric number of weeks in with the place's
+    weekly probability, and is 0 before it.
+    The introduction week has at least that case, as `introductions`
+    counts a week with a case.
+    A silent place's walk has spread 0, so from its introduction its
+    rate stays at 1 case a week.
+    """
+    k_walk, k_intro = jax.random.split(key)
+    x0 = np.where(origin.silent[:, None], 1.0, x0)
+    sigma = np.where(origin.silent, 0.0, origin.sigma)
+    keys = jax.random.split(k_walk, x0.shape[0])
     lam, y = jax.vmap(lambda k, x, s: random_walk(k, x, s, h))(
-        keys, jnp.asarray(x0, jnp.float32), jnp.asarray(sigma, jnp.float32)
+        keys,
+        jnp.asarray(x0, jnp.float32),
+        jnp.asarray(sigma, jnp.float32),
     )
-    return np.asarray(lam, dtype=np.float64), np.asarray(y, dtype=np.float64)
+    u = np.asarray(jax.random.uniform(k_intro, x0.shape), dtype=np.float64)
+    q = origin.intro[:, None]
+    # A probability of 0 gives an introduction that never comes.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        first = np.where(q > 0, np.floor(np.log(u) / np.log1p(-q)), np.inf)
+    first = np.where(origin.silent[:, None], first, 0.0)
+    lag = np.arange(h)[None, None, :] - first[:, :, None]
+    at = np.clip(lag, 0, h - 1).astype(int)
+
+    def shift(x: jax.Array) -> np.ndarray:
+        moved = np.take_along_axis(np.asarray(x, dtype=np.float64), at, axis=2)
+        return np.where(lag >= 0, moved, 0.0)
+
+    first_case = origin.silent[:, None, None] & (lag == 0)
+    return shift(lam), np.where(first_case, np.maximum(shift(y), 1.0), shift(y))
 
 
 def frame(
@@ -270,7 +304,7 @@ class RandomWalk:
         start = origin.start
         x0 = origin.reported[np.arange(n_loc), start]
         _, y = _walks(
-            _key(task), np.repeat(x0[:, None], n, axis=1), origin.sigma, n_all
+            _key(task), np.repeat(x0[:, None], n, axis=1), origin, n_all
         )
         values = np.zeros((n, n_loc, n_all))
         for loc in range(n_loc):
@@ -377,7 +411,7 @@ class RandomWalkNowcast(RandomWalk):
             np.float64,
         )
         w0 = origin.start_nowcast
-        lam, y = _walks(key_walk, nowcast[:, :, w0].T, origin.sigma, n_all)
+        lam, y = _walks(key_walk, nowcast[:, :, w0].T, origin, n_all)
         cut = int(snap.cut[origin.o])
         c_week = int(snap.week[cut])
         miss = int(np.flatnonzero(snap.week == c_week).max()) - cut
@@ -395,6 +429,11 @@ class RandomWalkNowcast(RandomWalk):
                 values[:, :, u] = y[:, :, u - w0 - 1].T
                 if u == w0 + 1 and miss > 0 and u < n_data:
                     values[:, :, u] = nowcast[:, :, u] + part.T
+        # A silent place follows its introductions from the week after its
+        # start week, as in `randomwalk`, so its nowcast weeks too.
+        for loc in np.flatnonzero(origin.silent):
+            s = int(origin.start[loc])
+            values[:, loc, s + 1 :] = y[loc, :, : n_all - s - 1]
         return values, weeks
 
 

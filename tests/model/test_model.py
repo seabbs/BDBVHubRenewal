@@ -11,7 +11,7 @@ from bdbvhubrenewal.model import (
     model_args,
 )
 from bdbvhubrenewal.model.inputs import vintage_from_tables
-from bdbvhubrenewal.model.model import LADDER
+from bdbvhubrenewal.model.model import LADDER, incubation_period, seed_lead
 
 from .conftest import SIM_LOCATIONS, VINTAGE_DAYS, vintage_date
 
@@ -225,14 +225,16 @@ def test_late_provinces_are_seeded_at_their_first_cases(outbreak, table):
         target, delays, vintage_date(outbreak, 166), SIM_LOCATIONS, table
     )
     assert data.seed_days[0] == 0 and data.seed_days[1] > 0
+    # The seed leads the first case week by the incubation lead.
+    lead = seed_lead(incubation_period())
+    assert lead == 5
+    assert (data.seed_days[1] + lead) % 7 == 0
     # Without coupling, nothing reaches it before its seed.
     model = build_model(data, ModelConfig(coupling="none"))
     tr = trace(model, data)
     x = np.asarray(tr["latent_infections_by_subpop"]["value"])
     n_init = model.latent.n_initialization_points
     day = n_init + data.seed_days[1]
-    # Infections are dated by onset, so nothing comes before the first
-    # case week; the seed lands in it.
     assert x[:day, 1].sum() < 1e-3 * x[day : day + 7, 1].sum()
 
 

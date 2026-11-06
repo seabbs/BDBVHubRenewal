@@ -1,7 +1,7 @@
 // Nowcast chart: pick a scale and a place (for a zone, its province first)
-// to see each model's nowcast and forecast over the reported counts, as
-// bands or trajectories, with its scores (summarise.js) for the rounds
-// chosen. Model tick boxes come from toggles.js.
+// to see each model's latest nowcast and forecast over the reported counts,
+// as bands or trajectories. Model tick boxes come from toggles.js.
+// bdbvNowcastShow(id) picks a place and scrolls the chart into view.
 (function () {
   "use strict";
   var NS = "http://www.w3.org/2000/svg";
@@ -24,14 +24,11 @@
   function init(root) {
     fetch(root.dataset.src)
       .then(function (r) { return r.json(); })
-      .then(function (d) {
-        return fetch(root.dataset.summary).then(function (r) { return r.json(); })
-          .then(function (summary) { build(root, d, summary); });
-      })
+      .then(function (d) { build(root, d); })
       .catch(function () { root.textContent = "The nowcast data could not be loaded."; });
   }
 
-  function build(root, d, summary) {
+  function build(root, d) {
     root.textContent = "";
     var controls = h("div", { class: "explorer-controls" }, root);
     var scales = [["national", "National"], ["provinces", "Provinces"], ["zones", "Health zones"]]
@@ -46,15 +43,11 @@
       }
     });
     var selZone = h("select", {}, h("label", {}, controls, "Place "));
-    var selRound = h("select", {}, h("label", {}, controls, "Scores for "));
-    h("option", { value: "all" }, selRound, "All rounds");
-    summary.origins.forEach(function (o, i) { h("option", { value: i }, selRound, o); });
     var view = T.viewSelect(controls, true, function () { draw(); });
     var zoom = Z.create(controls, function () { draw(); });
     var keys = T.legend(root, d.models, function () { draw(); });
     var note = h("p", { class: "explorer-note" }, root);
     var figure = h("div", { class: "explorer-figure" }, root);
-    var table = h("div", { class: "explorer-table" }, root);
 
     function fillZones() {
       var zones = selScale.value === "zones";
@@ -69,7 +62,6 @@
     selScale.addEventListener("change", function () { fillZones(); draw(); });
     selProv.addEventListener("change", function () { fillZones(); draw(); });
     selZone.addEventListener("change", draw);
-    selRound.addEventListener("change", draw);
 
     function ticked() {
       return d.models.map(function (_, i) { return i; })
@@ -88,7 +80,8 @@
         "No forecast at the " + d.release + " release from " + none.join(", ") + "." : "";
       var q = all.filter(function (r) { return keys.on[r[0]]; });
       var ref = day(d.reference_date);
-      var x0 = day(data[0][0]) - 4 * DAY;
+      // A place with no cases has no data, so its axis starts 12 weeks back.
+      var x0 = (data.length ? day(data[0][0]) : ref - 84 * DAY) - 4 * DAY;
       var x1 = ref + 4 * DAY;
       q.forEach(function (r) { x1 = Math.max(x1, day(r[1]) + 4 * DAY); });
       var xr = Z.xRange(zoom, x0, x1);
@@ -178,30 +171,18 @@
       });
       el("line", { x1: X(ref), x2: X(ref), y1: Tp, y2: H - B, class: "explorer-ref" }, plot);
       Z.attach(zoom, svg, { L: L, R: R, T: Tp, B: B, W: W, H: H, x: [x0, x1], y: [y0, y1] });
-      drawTable(zone, on);
     }
 
-    function drawTable(zone, on) {
-      table.textContent = "";
-      var place = summary.places.map(function (p) { return p.id; }).indexOf(zone);
-      var round = selRound.value === "all" ? null : +selRound.value;
-      var res = window.bdbvSummarise(summary, function (r) {
-        return r[3] === place && (round === null || r[1] === round);
-      });
-      var names = d.models.map(function (m) { return m.name; });
-      var ticked = function (m) {
-        var i = names.indexOf(summary.models[m].name);
-        return i < 0 || on.indexOf(i) >= 0;
-      };
-      var scored = res.map(function (r) { return summary.models[r.model].name; });
-      var missing = on.map(function (i) { return names[i]; })
-        .filter(function (n) { return scored.indexOf(n) < 0; });
-      if (missing.length) {
-        h("p", { class: "explorer-note" }, table,
-          "No forecast scored here for: " + missing.join(", ") + ".");
-      }
-      window.bdbvSummaryTable(table, summary, res, ticked);
-    }
+    window.bdbvNowcastShow = function (id) {
+      var p = d.places.filter(function (x) { return x.id === id; })[0];
+      if (!p) return;
+      selScale.value = p.scale;
+      if (p.province) selProv.value = p.province;
+      fillZones();
+      selZone.value = id;
+      draw();
+      root.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
     fillZones();
     draw();
     T.onTheme(draw);

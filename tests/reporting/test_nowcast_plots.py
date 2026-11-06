@@ -81,3 +81,21 @@ def test_plot_place_summary_has_a_row_per_place_by_scale() -> None:
     labels = [t.get_text() for t in provinces.get_yticklabels()]
     assert labels == ["CD-NK", "Ituri"]
     assert zones.get_title() == "Health zones"
+
+
+def test_plot_place_summary_is_on_a_log_axis_without_zeros() -> None:
+    table = pd.DataFrame(
+        {
+            "pool": ["provinces"] * 3,
+            "location": ["CD-NK", "CD-IT", "CD-NU"],
+            "model": ["a"] * 3,
+            "rel_wis": [1.3, 0.0, 27.0],
+        }
+    )
+    fig = plot_place_summary(
+        table, ["a"], {"a": ("#000000", "#ffffff", "")}, {}
+    )
+    (ax,) = fig.axes
+    assert ax.get_xscale() == "log"
+    (dots,) = ax.get_lines()[:1]
+    assert list(dots.get_xdata()) == [1.3, 27.0]

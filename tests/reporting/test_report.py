@@ -8,6 +8,7 @@ import pandas as pd
 from bdbvhubrenewal.reporting import report
 
 ROOT = Path(__file__).resolve().parents[2]
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
@@ -93,8 +94,8 @@ def test_lopo_section_hidden_without_results(tmp_path: Path) -> None:
 
 def test_zone_section() -> None:
     text = report._zone_section(
-        ROOT / "results" / "zone-scores.csv",
-        ROOT / "results" / "zone-energy.csv",
+        FIXTURES / "zone-scores.csv",
+        FIXTURES / "zone-energy.csv",
     )
     assert text.startswith('??? note "Health zones')
     assert "rel_energy" in text
@@ -268,8 +269,10 @@ def test_recovery_section() -> None:
             "log_energy": [0.25, 0.75],
         }
     )
-    text = report._recovery_section(energy)
+    text = report._recovery_section("summary.json", energy)
     assert text.startswith("## Recovery on simulated vintages")
+    for view in ("overall", "horizon", "place"):
+        assert f'data-src="summary.json" data-view="{view}"' in text
     assert "recovery-wis-horizon.svg" in text
     assert "mean energy score" in text
     assert "| national | randomwalk |   2 |" in text
@@ -385,7 +388,7 @@ def test_release_scores_horizon_is_weeks_from_the_reference_date(
 
 
 def test_summary_covers_only_forecasts_randomwalk_made(tmp_path: Path) -> None:
-    scores = report._release_scores(ROOT / "results")
+    scores = report._release_scores(FIXTURES)
     reported = scores.loc[scores["target"] == "reported"]
     gen = tmp_path / "gen"
     gen.mkdir()
@@ -410,3 +413,98 @@ def test_missing_builds_name_submitted_rounds_without_a_main_build() -> None:
     assert len(lines) == 1
     assert "renewalbvd (main build)" in lines[0]
     assert "2026-11-07" in lines[0]
+
+
+def test_scored_on_counts_pairs_and_forecasts() -> None:
+    rows = pd.DataFrame(
+        {
+            "model": ["randomwalk"] * 3 + ["renewal"],
+            "origin": ["a", "a", "b", "a"],
+            "truth_vintage": ["b", "c", "c", "b"],
+            "pool": ["national", "provinces", "provinces", "national"],
+        }
+    )
+    assert report._scored_on(rows) == (
+        "Scored on 3 origin and release pairs.\n"
+        "randomwalk has 1 national and 2 province forecasts.\n"
+        "The renewal models are not scored at health zones.\n"
+    )
+
+
+def _scenario_results(res: Path) -> None:
+    """Write small scenario results for every scenario the page shows."""
+    scores, samples, energy = [], [], []
+    for scenario in report._SCENARIOS:
+        for loc in ("CD", "CD-IT"):
+            for model in ("randomwalk", "randomwalknowcast"):
+                for h, week in enumerate(("2026-10-17", "2026-10-24")):
+                    scores.append(
+                        {
+                            "scenario": scenario,
+                            "model": model,
+                            "reference_date": "2026-10-17",
+                            "truth_vintage": "2027-01-10",
+                            "location": loc,
+                            "target_end_date": week,
+                            "horizon": h,
+                            "truth": 5.0,
+                            "wis": 1.0 + h,
+                            "log_wis": 0.1,
+                            "coverage_50": 0.5,
+                            "coverage_90": 0.9,
+                            "bias": 0.0,
+                            "complete": True,
+                            "truth_view": "final",
+                        }
+                    )
+                    samples += [
+                        {
+                            "scenario": scenario,
+                            "model": model,
+                            "vintage": "2026-10-11",
+                            "reference_date": "2026-10-17",
+                            "location": loc,
+                            "target_end_date": week,
+                            "sample": k,
+                            "value": float(k),
+                            "as_of": None,
+                        }
+                        for k in range(3)
+                    ]
+        energy += [
+            {
+                "scenario": scenario,
+                "model": model,
+                "reference_date": "2026-10-17",
+                "truth_vintage": "2027-01-10",
+                "scale": scale,
+                "energy": 1.0,
+                "log_energy": 0.1,
+                "truth_view": "final",
+            }
+            for model in ("randomwalk", "randomwalknowcast")
+            for scale in ("national", "provinces")
+        ]
+    pd.DataFrame(scores).to_csv(res / "scenario-scores.csv.gz", index=False)
+    pd.DataFrame(samples).to_csv(res / "scenario-forecasts.csv.gz", index=False)
+    pd.DataFrame(energy).to_csv(res / "scenario-energy.csv", index=False)
+
+
+def test_scenario_section_has_the_shared_widgets_per_scenario(
+    tmp_path: Path,
+) -> None:
+    _scenario_results(tmp_path)
+    text = report._scenario_section(
+        tmp_path, tmp_path, ["randomwalk", "randomwalknowcast"], {}
+    )
+    for section in ("Overall", "By horizon", "By place", "Forecasts by place"):
+        assert f"### {section}" in text
+    for key, title in report._SCENARIOS.items():
+        assert text.count(f'=== "{title}"') == 4
+        summary = json.loads(
+            (tmp_path / f"scoresummary-scenario-{key}.json").read_text()
+        )
+        explorer = json.loads(
+            (tmp_path / f"explorer-scenario-{key}.json").read_text()
+        )
+        assert explorer["rounds"] == summary["origins"]

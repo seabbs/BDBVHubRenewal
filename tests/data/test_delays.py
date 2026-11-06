@@ -58,7 +58,7 @@ def test_hub_delay_pmf_matches_hub_sampling(release: str, fit: str) -> None:
 
 
 def test_hub_delay_pmf_switches_at_double_censored_fit() -> None:
-    # The double censored fit no longer counts day rounding twice, so
-    # fewer imputed onsets fall on the report day.
+    # The double censored fit counts day rounding once, so fewer imputed
+    # onsets fall on the report day than under the exact fit.
     assert hub_delay_pmf("2026-10-24")[0] == pytest.approx(0.0717, abs=1e-3)
     assert hub_delay_pmf("2026-11-01")[0] == pytest.approx(0.0408, abs=1e-3)

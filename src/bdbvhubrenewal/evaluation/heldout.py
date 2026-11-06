@@ -40,6 +40,7 @@ import pandas as pd
 import yaml
 
 from bdbvhubrenewal.data.dates import as_date
+from bdbvhubrenewal.data.tidy import write_csv
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     make_tasks,
@@ -277,7 +278,7 @@ def run_heldout(
             rows, delays, config, real_vintages(real), real, daily=daily
         )
         fc = run_forecasts([get_model(n) for n in names], task)
-        fc.insert(1, "chosen_model", row.model)
+        fc.insert(1, "chosen_model", str(row.model))
         frames.append(fc)
         tasks += task
     out = Path(out_dir)
@@ -299,8 +300,8 @@ def run_heldout(
     if not scores.empty:
         scores.insert(1, "chosen_model", scores["origin"].map(chosen))
     out.mkdir(parents=True, exist_ok=True)
-    forecasts.to_csv(out / "heldout-forecasts.csv.gz", index=False)
-    scores.to_csv(out / "heldout-scores.csv", index=False)
+    write_csv(forecasts, out / "heldout-forecasts.csv.gz")
+    write_csv(scores, out / "heldout-scores.csv")
     scored = set(scores["origin"]) if not scores.empty else set()
     record = {
         "run_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),

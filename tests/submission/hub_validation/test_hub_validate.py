@@ -73,7 +73,7 @@ def test_real_round2_submission_is_valid(hub: hv.Hub, tmp_path: Path) -> None:
         / "OHTJHU-BM"
         / "2026-10-31-OHTJHU-BM.csv"
     )
-    # The file predates `forecast_date`, so the hub would now reject it.
+    # The file predates `forecast_date`, so the hub rejects it.
     rep = hv.validate_submission(
         p, hub, metadata_dirs=METADATA_DIRS, skip_window=True
     )

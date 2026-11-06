@@ -43,7 +43,7 @@ Create a **classic** personal access token on `seabbs-bot` with the scopes **`pu
   It pushes to the fork and opens PRs into the hub.
 - `workflow` is needed when the hub's `main` has changed a file under `.github/workflows/` since the fork was made.
   The branch we push then carries that change, and GitHub refuses the push without this scope.
-  The hub changes its workflows often (for example #65).
+  The hub changes its workflows often.
 - A fine-grained token will not work.
   Fine-grained tokens cannot open pull requests on a repository the bot neither owns nor collaborates on.
 
@@ -83,7 +83,7 @@ Settings → Secrets and variables → Actions → **Variables**:
 The first PR from `seabbs-bot` is a first-time contribution from a fork.
 The hub's validation workflow will wait for a maintainer to click **Approve and run**.
 Ask Justin Lessler or Claire Smith to approve it, and say that weekly bot PRs will follow.
-The plan's open questions for the organisers also apply here (issue 3 in `seabbs/EpidemicDates`).
+The open questions for the organisers in `seabbs/EpidemicDates` also apply here.
 
 ## Switching off DRY_RUN
 

@@ -27,15 +27,23 @@ latest cut-off are summed, and downward revisions are first moved onto
 earlier releases of the day, as baselinenowcast does.
 
 **Nowcast.** At the latest release $o$, day $t$ of age $a$ grows to final
-by $G(a) = \exp \sum_{j=a}^{D-1} g(j)$, so $\mu(t) = N_o(t) G(a)$.
-Every day with data is nowcast.
-Daily nowcasts are summed to hub weeks.
+by $G(a) = \exp \sum_{j=a}^{D-1} g(j)$.
+Each hub week is a row of a weekly reporting triangle, with a column every
+7 days, and the mean over its observed days of $1 / G$ at each column is
+the share of the week reported by it.
+baselinenowcast's `apply_delay` fills the row from the week's reported
+count (`week_nowcast`), with its $+1$, so a week with nothing reported yet
+still expects some cases.
 
 **Uncertainty.** A release $r < o$ with an in-window pair at $r$ nowcasts
-the count expected at $o$ for days up to $c_r$, growing each day over the
-gap $c_o - c_r$ with the $g$ of $r$.
+the count expected at $o$ for days up to $c_r$, with the same weekly fill
+from $c_r$ to $c_o$ and the $g$ of $r$.
 Its new reports and removals by weeks back fit the observation model
 (`obs`).
+
+**Introductions.** A place with no case in the latest `walk_weeks` weeks
+is silent, and its weekly probability of a first case is pooled over its
+siblings (`introductions`).
 """
 
 from __future__ import annotations
@@ -48,6 +56,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from bdbvhubrenewal.baselinenowcast import (
+    fill_row,
     growth,
     log_factors,
     pair_sums,
@@ -75,10 +84,12 @@ __all__ = [
     "build_origin",
     "delay_sums",
     "final_growth",
+    "introductions",
     "levels",
     "own_ages",
     "retro_errors",
     "walk_changes",
+    "week_nowcast",
     "weeks_back",
 ]
 
@@ -393,6 +404,55 @@ class Errors:
     releases: list[str] = field(default_factory=list)
 
 
+def week_nowcast(
+    snap: SnapshotArrays, r: int, g: np.ndarray, age: np.ndarray, gap: int
+) -> np.ndarray:
+    """Return baselinenowcast's count of each hub week `gap` days after `r`.
+
+    Each hub week is a reference time of a weekly reporting triangle,
+    with a column every 7 days from the cut-off of release `r` and a last
+    one at `gap`.
+    The share of the week reported by a column is the mean, over the
+    week's days observed at `r`, of their growth from that column to
+    `gap` inverted.
+    R's `apply_delay` fills each row from these shares (`fill_row`).
+
+    Parameters
+    ----------
+    snap : SnapshotArrays
+        The arrays.
+    r : int
+        The release.
+    g : numpy.ndarray
+        Daily log factors at `r`, `[L, D]`.
+    age : numpy.ndarray
+        Age of each day at `r`, `[T]`.
+    gap : int
+        Days from the cut-off of `r` to the count nowcast. `max_delay`
+        or more gives the final count.
+
+    Returns
+    -------
+    numpy.ndarray
+        `[L, W]`, 0 for weeks with no day observed at `r`.
+    """
+    seen = np.broadcast_to(snap.observed[r], snap.counts[:, r, :].shape)
+    x = week_sum(snap, np.where(seen, snap.counts[:, r, :], 0.0))
+    n = week_sum(snap, seen.astype(float))
+    steps = np.r_[np.arange(0, gap, 7), gap]
+    share = np.stack(
+        [
+            week_sum(
+                snap, np.where(seen, 1.0 / growth(g, age + s, age + gap), 0)
+            )
+            for s in steps
+        ],
+        axis=-1,
+    )
+    cdf = np.where(n[..., None] > 0, share / np.maximum(n, 1)[..., None], 1.0)
+    return np.where(n > 0, fill_row(x, cdf), 0.0)
+
+
 DelayFn = Callable[[SnapshotArrays, int, Settings], DelayFit | None]
 """Fits the delay at a release, as `fit_delay`."""
 
@@ -426,15 +486,14 @@ def retro_errors(
         fit = delay(snap, r, settings)
         if fit is None:
             continue
-        counts = snap.counts[:, r, :]
         age = snap.cut[r] - np.arange(snap.week.size)
-        g = growth(fit.g, age, age + snap.cut[o] - snap.cut[r])
+        ahead = week_nowcast(snap, r, fit.g, age, snap.cut[o] - snap.cut[r])
         wa, k_r = snap.cut_week(r), weeks_back(snap, r, settings.max_delay)
         cols = wa - np.arange(k_n)
         take = (cols >= 0) & (np.arange(k_n) < k_r)
         safe = np.clip(cols, 0, None)
         obs = weekly_sums(snap, r)[:, safe]
-        pred = week_sum(snap, counts * g)[:, safe]
+        pred = ahead[:, safe]
         # The week's change to the origin, on days up to the cut-off of r.
         change = weekly_sums(snap, o, upto=int(snap.cut[r]))[:, safe] - obs
         added, removed = np.maximum(change, 0.0), np.maximum(-change, 0.0)
@@ -474,6 +533,12 @@ class Origin:
     sigma_source : numpy.ndarray
         Index of the estimate behind each spread, `[L]`, as for
         `source_index`.
+    silent : numpy.ndarray
+        Places with no case reported in the latest `walk_weeks` weeks,
+        `[L]`.
+    intro : numpy.ndarray
+        Weekly probability of a first case after `walk_weeks` silent
+        weeks, from the place's siblings (`introductions`), `[L]`.
     errors : Errors or None
         Retrospective errors, or None where they were not asked for.
     size : numpy.ndarray or None
@@ -498,6 +563,8 @@ class Origin:
     start: np.ndarray
     sigma: np.ndarray
     sigma_source: np.ndarray
+    silent: np.ndarray
+    intro: np.ndarray
     errors: Errors | None = None
     size: np.ndarray | None = None
     removal: np.ndarray | None = None
@@ -555,7 +622,8 @@ def build_origin(
         )
     g = final_growth(snap, o, fit, settings)
     reported = weekly_sums(snap, o)
-    point = week_sum(snap, snap.counts[:, o, :] * g)
+    age = snap.cut[o] - np.arange(snap.week.size) + settings.clock_shift
+    point = week_nowcast(snap, o, fit.g, age, settings.max_delay)
     inv = np.where(snap.observed[o][None, :], 1.0 / g, 0.0)
     complete = week_sum(snap, inv) / 7.0
     good = complete >= settings.completeness
@@ -566,13 +634,62 @@ def build_origin(
     both = np.concatenate([own, pooled])
     sigma_source = fit.source
     sigma = both[sigma_source]
+    k = settings.walk_weeks
+    silent = reported[:, snap.cut_week(o) - k + 1 : snap.cut_week(o) + 1]
+    silent = silent.sum(axis=1) == 0
+    intro = introductions(reported, start, snap.parent, k)
     origin = Origin(
         snap, o, settings, fit, g, reported, point, complete, start, sigma,
-        sigma_source,
+        sigma_source, silent, intro,
     )  # fmt: skip
     if errors:
         _add_spread(origin)
     return origin
+
+
+def introductions(
+    reported: np.ndarray, start: np.ndarray, parent: np.ndarray, k: int
+) -> np.ndarray:
+    """Return each place's weekly probability of a first case.
+
+    A week is at risk when its place reported no case in the `k` weeks
+    before it, and it is an introduction when the place reports a case
+    in it.
+    The probability is the introductions over the weeks at risk of the
+    place and its siblings, the children of its parent, so zones pool
+    within their province and provinces within the country.
+    Weeks up to each place's start week count, so only complete weeks
+    and data before the origin are used.
+
+    Parameters
+    ----------
+    reported : numpy.ndarray
+        Weekly reported counts, `[L, W]`.
+    start : numpy.ndarray
+        Start week of each place, `[L]`.
+    parent : numpy.ndarray
+        Index of each place's parent, or -1, `[L]`.
+    k : int
+        Silent weeks before a week at risk.
+
+    Returns
+    -------
+    numpy.ndarray
+        `[L]`, 0 where no week is at risk.
+    """
+    pos = reported > 0
+    before = np.cumsum(np.pad(pos, ((0, 0), (1, 0))), axis=1)
+    risk = np.zeros_like(pos)
+    risk[:, k:] = before[:, k:-1] == before[:, : -k - 1]
+    risk &= np.arange(pos.shape[1])[None, :] <= start[:, None]
+    first = (risk & pos).sum(axis=1)
+    risk_n = risk.sum(axis=1)
+    # The country has no siblings, so it is a group of its own.
+    n = parent.size
+    group = np.where(parent >= 0, parent, n + np.arange(n))
+    first_g = np.bincount(group, first, 2 * n)[group]
+    risk_g = np.bincount(group, risk_n, 2 * n)[group]
+    return first_g / np.maximum(risk_g, 1)
 
 
 def walk_changes(

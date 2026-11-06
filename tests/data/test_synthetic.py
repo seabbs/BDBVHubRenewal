@@ -116,7 +116,10 @@ def test_simulated_onsets_follow_the_model_renewal(outbreak) -> None:  # type: i
 
     from bdbvhubrenewal.data import PROVINCE_POPULATIONS
     from bdbvhubrenewal.model.inputs import gravity_kernel as model_kernel
-    from bdbvhubrenewal.model.model import generation_interval
+    from bdbvhubrenewal.model.model import (
+        generation_interval,
+        incubation_period,
+    )
     from bdbvhubrenewal.model.renewal import coupled_renewal, mixing_matrix
 
     s = outbreak.settings
@@ -148,7 +151,11 @@ def test_simulated_onsets_follow_the_model_renewal(outbreak) -> None:  # type: i
     onsets = p.pivot(index="date", columns="location", values="onsets")[
         list(s.locations)
     ].to_numpy()
-    np.testing.assert_allclose(onsets, np.asarray(x) * pop, rtol=1e-4)
+    eta = incubation_period()
+    expected = np.stack(
+        [np.convolve(col, eta)[: len(col)] for col in np.asarray(x).T], axis=1
+    )
+    np.testing.assert_allclose(onsets, expected * pop, rtol=1e-4)
 
 
 def _rows(
@@ -198,9 +205,9 @@ def test_unused_options_leave_the_default_outbreak_unchanged() -> None:
     # The model recovery tests are calibrated on this realisation, so
     # options that are off (removals, zones) must not draw random numbers.
     outbreak = simulate_outbreak()
-    assert len(outbreak.cases) == 1797
+    assert len(outbreak.cases) == 1828
     target, _ = outbreak.vintage("2026-10-28")
-    assert int(target["imputed"].sum()) == 488
+    assert int(target["imputed"].sum()) == 472
 
 
 def test_release_dates_are_the_real_weekdays() -> None:

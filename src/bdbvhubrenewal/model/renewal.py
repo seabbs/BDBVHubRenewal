@@ -1,8 +1,8 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 r"""Subpopulation renewal coupled by importation, with susceptible depletion.
 
-`MetapopulationInfections` is PyRenew's `SubpopulationInfections` with a
-coupled renewal step (`coupled_renewal`) and the mixing matrix from an
+`MetapopulationInfections` is a PyRenew `BaseSubpopulationInfections` with
+a coupled renewal step (`coupled_renewal`) and the mixing matrix from an
 `Importation` component.
 """
 
@@ -14,7 +14,7 @@ import numpy as np
 import numpyro
 from jax import Array
 from jax.typing import ArrayLike
-from pyrenew.latent import SubpopulationInfections
+from pyrenew.latent import BaseSubpopulationInfections
 from pyrenew.latent.base import LatentSample, PopulationStructure
 from pyrenew.math import r_approx_from_R
 from pyrenew.metaclass import RandomVariable
@@ -88,8 +88,8 @@ def coupled_renewal(
     (the NumPy reference in `tests/model/numpy_reference.py`). Without
     a pool there is no depletion and $x_p(t) = y_p(t)$.
 
-    PyRenew's renewal scans (`compute_infections_from_rt` and, after the
-    pinned commit, `compute_infections_from_rt_with_mobility`) carry no
+    PyRenew's renewal scans (`compute_infections_from_rt` and
+    `compute_infections_from_rt_with_mobility`) carry no
     transfer between provinces with depletion of a pool $\nu$. Hence
     this scan, written as theirs: a pure function of the seed, $R$ and
     the generation interval, called from the latent process.
@@ -228,10 +228,10 @@ class Importation(RandomVariable):
         return mixing_matrix(self.kernel_rv(), self.share_rv(), fractions)
 
 
-class MetapopulationInfections(SubpopulationInfections):
+class MetapopulationInfections(BaseSubpopulationInfections):
     r"""Province renewal with importation and susceptible depletion.
 
-    Rt follows `SubpopulationInfections`: a national temporal process
+    Rt follows `BaseSubpopulationInfections`: a national temporal process
     plus sum-to-zero province deviations,
     $\log R_p(t) = \log R(t) + \delta_p(t)$, here sampled on the
     sum-to-zero basis (`pooled_walk`).
@@ -241,8 +241,8 @@ class MetapopulationInfections(SubpopulationInfections):
     The renewal is `coupled_renewal`, which sends a share $\varepsilon$
     of transmission to other provinces through the mixing matrix of
     `mixing_rv` and depletes each province's effective susceptible pool.
-    `sample` runs the steps of PyRenew's `BaseSubpopulationInfections`
-    (after the pinned commit), with the renewal in `_infections_from_rt`.
+    `sample` runs the steps of `BaseSubpopulationInfections.sample`, with
+    the renewal in `_infections_from_rt`.
 
     Infections are per resident, so the population fractions passed at
     sample time set the transfer weights. Only a share $\nu$
@@ -274,16 +274,15 @@ class MetapopulationInfections(SubpopulationInfections):
             fractions, to add an observation of Rt
             (`RtPseudoObservation`). `None` adds none.
         seed_days
-            First day (from the first data day) of each province's first
-            case week. Provinces with a day after 0 start (almost) empty
-            and get their seed, the `I0_rv` level, as a constant daily
-            input over that week, plus whatever importation brings.
-            Infections are dated by onset, so seeding the week before
-            would put onsets where the data have none. `None` seeds every
-            province at the start.
+            Day (from the first data day) each province's seeding starts.
+            Provinces with a day after 0 start (almost) empty and get
+            their seed, the `I0_rv` level, as a constant daily input over
+            the 7 days from it, plus whatever importation brings. The
+            day leads the first case week by the incubation period
+            (`model.seed_lead`). `None` seeds every province at the
+            start.
         **kwargs
-            Passed to `SubpopulationInfections` (without infection
-            feedback).
+            Passed to `BaseSubpopulationInfections`.
         """
         super().__init__(**kwargs)
         self.mixing_rv = mixing_rv
@@ -301,7 +300,7 @@ class MetapopulationInfections(SubpopulationInfections):
         clipped so a steep early decline cannot project a seed larger
         than the pool. Late provinces start from 1e-6 of their seed
         level (PyRenew needs a positive start) and take the seed over
-        their first case week.
+        the 7 days from their seed day.
 
         Returns
         -------

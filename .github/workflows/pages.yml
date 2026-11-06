@@ -48,7 +48,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # uv and its cache, and JAX's persistent compilation cache.
       - uses: ./.github/actions/setup-forecast-env
         with:
@@ -79,21 +79,38 @@ jobs:
           scripts/fit-store.sh fetch output/fit-store
           uv run bdbvhubrenewal fit-store load --store output/fit-store
       # The backtest runs only the models with no fit, keeps the stored
-      # rows and scores them again against the latest vintage.
-      # It reads only these inputs, so an unchanged hash reuses its outputs.
+      # rows and scores them again against the latest vintage. The zone
+      # and scenario backtests run the random walks only. None of these
+      # results are committed. Only this step makes them.
+      # `task results` runs the same commands locally; keep the two in step.
+      # Tables are written with a fixed gzip time, so the key changes only
+      # when what it reads changes. It leaves out Python caches, the raw
+      # downloads and data/sources.json, which records when they were made.
+      # Only the files this step writes are cached, so a hit cannot replace
+      # the committed records or the fit store's own files in results/.
       - name: Restore the backtest outputs
         id: backtest
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
-            results
-            output
-          key: backtest-${{ hashFiles('src/**', 'config/**', 'data/**', 'results/**', 'uv.lock') }}
+            results/backtest-fits.csv
+            results/forecasts.csv.gz
+            results/heldout-*
+            results/nowcast-*
+            results/recovery-*
+            results/scenario-*
+            results/zone-*
+          key: >-
+            backtest-${{ hashFiles('src/**', '!**/__pycache__/**',
+            'config/**', 'data/**', '!data/raw/**', '!data/sources.json',
+            'results/**', 'uv.lock', '.github/workflows/pages.yml') }}
       - name: Backtest
         if: steps.backtest.outputs.cache-hit != 'true'
         run: |
           uv run bdbvhubrenewal backtest
           uv run bdbvhubrenewal backtest --evaluate-holdout
+          uv run bdbvhubrenewal zone-backtest
+          uv run bdbvhubrenewal backtest --scenarios-only
       - name: Compare with hub forecasts, then the docs figures and tables
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -126,7 +143,7 @@ jobs:
           docs/getting-started.py
       - name: Build the site into _site
         run: uv run mkdocs build --strict
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: site
           path: _site
@@ -139,8 +156,8 @@ jobs:
       contents: write
     concurrency: gh-pages
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v8
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: site
           path: _site
@@ -167,8 +184,8 @@ jobs:
       pull-requests: write
     concurrency: preview-${{ github.ref }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v8
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: site
           path: _site
