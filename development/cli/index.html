@@ -2072,26 +2072,44 @@
 The files in <code>results/</code> are not committed, apart from <code>development-log.csv</code>, <code>ladder.csv</code> and <code>model-choice.yml</code>.
 The Pages build makes the rest with the steps of <code>task results</code>, from the code, the data and the fit store.</p>
 <h2 id="fit-store">Fit store<a class="headerlink" href="#fit-store" title="Permanent link">&para;</a></h2>
-<p>Each forecast of a fitted model is a fit, so the backtest and the docs build never run them.
-The Fit store workflow (<code>.github/workflows/fit-store.yml</code>) fits each fitted model once at each real origin and commits the result to the <code>fit-store</code> branch, as <code>&lt;model&gt;/&lt;origin&gt;/&lt;key&gt;.json.gz</code>.
-The key hashes the model and forecaster code, <code>config/backtest.toml</code>, <code>uv.lock</code>, the model's sampler table in <code>ci/policy.toml</code> and the releases up to the origin.
-The renewal variants use the sampler of the submission candidate that runs them; <code>pprandomwalknowcast</code> uses its own.
-A code or sampler change refits every origin, and a new hub release adds one fit per model.
-The workflow runs on pushes to <code>main</code> that change these inputs, and every 6 hours for new hub releases.
-A push cancels a running refit, and fits already stored are kept.
-A fit that fails is stored as failed and is not retried until its inputs change.
-On a pull request it only lists the fits the change would need.
-When it stores fits it rebuilds the docs.</p>
+<p>The backtest and the docs build never fit a model.
+The Fit store workflow (<code>.github/workflows/fit-store.yml</code>) fits each fitted model once at each real origin.
+Each fit is one file on the <code>fit-store</code> branch, <code>&lt;model&gt;/&lt;origin&gt;/&lt;key&gt;.json.gz</code>.
+The key hashes:</p>
+<ul>
+<li>the task at the origin, which holds only the releases up to it;</li>
+<li>the model as built, including its variant and sampler settings;</li>
+<li>the BVDOutbreakSize release, for <code>renewalbvd</code>;</li>
+<li>the code of <code>forecasters</code>, <code>model</code>, <code>data</code>, <code>baselinenowcast</code>, <code>evaluation/store.py</code> and <code>run_forecasts</code>, without docstrings or comments;</li>
+<li>the runtime dependencies in <code>uv.lock</code>.</li>
+</ul>
+<p>The renewal variants use the sampler table of the submission candidate that runs them, in <code>ci/policy.toml</code>.
+<code>pprandomwalknowcast</code> uses its own.
+A model code or sampler change refits every origin.
+A new hub release adds one fit per model.</p>
+<p>The workflow runs on pushes to <code>main</code> that change these inputs, and every 6 hours for new hub releases.
+A push never cancels a running refit: the latest push waits and runs after it.
+The fit jobs are read-only, and one job with no project code pushes their files and prunes the branch.
+It keeps the current key's file and the newest good fit of older code for each model and origin.
+A fit that fails is stored as failed, and is fitted again only when its inputs change or a dispatch sets <code>retry_failed</code>.
+On a pull request the workflow only lists the fits the change needs.
+Only <code>main</code> writes to <code>fit-store</code>.
+To test a branch, dispatch the workflow on it with <code>store_branch</code> set to a name starting <code>fit-store-scratch</code>, and <code>models</code> to limit it. Any other <code>store_branch</code> stops the run.
+When fits are stored, the workflow rebuilds the docs.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>task<span class="w"> </span>fit-store-plan<span class="w">  </span><span class="c1"># the fits the store lacks for this code and data</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>task<span class="w"> </span>fit-store<span class="w">       </span><span class="c1"># load the stored fits into results/</span>
 </code></pre></div>
 <p><code>task backtest</code> loads the store first.
 Where the store has no fit for the current key, <code>load</code> uses the newest stored fit of that model and origin.
-Each page with fitted-model results says which commits its fits come from, and which fits for the current code are still running.
-A full refit is 20 fits (4 models at 5 origins), run in parallel: about 50 minutes of wall time and 8 runner-hours.
-A new release adds 4 fits, about 2 runner-hours.</p>
+Pages with fitted-model results list the commits of their fits and the fits not yet made.
+A full refit is 20 fits (4 models at 5 origins): 43 minutes and 5.3 runner-hours, with the slowest fit 39 minutes (<code>renewalbvd</code>).
+A new release adds 4 fits: about 40 minutes and 1.3 runner-hours.</p>
+<p>To fit a model locally, for example a new variant:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>uv<span class="w"> </span>run<span class="w"> </span>bdbvhubrenewal<span class="w"> </span>fit-store<span class="w"> </span>fit<span class="w"> </span>--model<span class="w"> </span>renewal<span class="w"> </span>--origin<span class="w"> </span><span class="m">2026</span>-10-24<span class="w"> </span>--store<span class="w"> </span>output/fit-store
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>uv<span class="w"> </span>run<span class="w"> </span>bdbvhubrenewal<span class="w"> </span>fit-store<span class="w"> </span>load<span class="w"> </span>--store<span class="w"> </span>output/fit-store
+</code></pre></div>
 <p>The comparison with hub forecasts downloads other teams' files, so it is run on its own:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>uv<span class="w"> </span>run<span class="w"> </span>bdbvhubrenewal<span class="w"> </span>compare-hub<span class="w"> </span>--fetch
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>uv<span class="w"> </span>run<span class="w"> </span>bdbvhubrenewal<span class="w"> </span>compare-hub<span class="w"> </span>--fetch
 </code></pre></div>
 <h2 id="hub-files">Hub files<a class="headerlink" href="#hub-files" title="Permanent link">&para;</a></h2>
 <p><code>bdbvhubrenewal nowcast</code> writes <code>model-output/&lt;model_id&gt;/&lt;reference_date&gt;-&lt;model_id&gt;.csv</code> under <code>output/submission/</code>.
