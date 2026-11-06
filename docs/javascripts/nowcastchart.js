@@ -131,8 +131,8 @@
       }
       var yr = Z.yRange(zoom, 0, ymax * 1.05, "");
       var y0 = yr[0], y1 = yr[1];
-      var W = 760, H = 300, L = 44, Rt = 10, Tp = 10, B = 28;
-      function X(t) { return L + (t - x0) / (x1 - x0) * (W - L - Rt); }
+      var W = 760, H = 300, L = 44, mRight = 10, Tp = 10, B = 28;
+      function X(t) { return L + (t - x0) / (x1 - x0) * (W - L - mRight); }
       function Y(v) { return Tp + (1 - (v - y0) / (y1 - y0)) * (H - Tp - B); }
       figure.textContent = "";
       var svg = el("svg", { viewBox: "0 0 " + W + " " + H, role: "img",
@@ -141,7 +141,7 @@
       // Whole counts, so the step is at least 1.
       var step = Math.max(1, Z.nice(span));
       for (var v = Math.ceil(y0 / step) * step; v <= y1; v += step) {
-        el("line", { x1: L, x2: W - Rt, y1: Y(v), y2: Y(v), class: "explorer-grid" }, svg);
+        el("line", { x1: L, x2: W - mRight, y1: Y(v), y2: Y(v), class: "explorer-grid" }, svg);
         el("text", { x: L - 6, y: Y(v) + 4, "text-anchor": "end",
           class: "explorer-tick" }, svg).textContent = v;
       }
@@ -152,7 +152,7 @@
         el("text", { x: X(t), y: H - 8, "text-anchor": "middle", class: "explorer-tick" },
           svg).textContent = dt.getUTCDate() + " " + MONTHS[dt.getUTCMonth()];
       }
-      var plot = Z.clip(svg, { L: L, R: Rt, T: Tp, B: B, W: W, H: H });
+      var plot = Z.clip(svg, { L: L, R: mRight, T: Tp, B: B, W: W, H: H });
       on.forEach(function (m) {
         var own = q.filter(function (r) { return r[0] === m; });
         if (!own.length) return;
@@ -191,7 +191,7 @@
         el("title", {}, c).textContent = p[0] + ": " + p[1] + " reported (" + d.release + ")";
       });
       el("line", { x1: X(ref), x2: X(ref), y1: Tp, y2: H - B, class: "explorer-ref" }, plot);
-      Z.attach(zoom, svg, { L: L, R: Rt, T: Tp, B: B, W: W, H: H, x: [x0, x1], y: [y0, y1] });
+      Z.attach(zoom, svg, { L: L, R: mRight, T: Tp, B: B, W: W, H: H, x: [x0, x1], y: [y0, y1] });
       drawMap(zone);
     }
 
