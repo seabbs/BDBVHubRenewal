@@ -168,3 +168,29 @@ def test_cli_fit_task_carries_the_delay_files_for_the_lag() -> None:
     assert task.target_history is not None
     assert task.target_history["vintage"].nunique() >= 3
     assert vintage_inputs(task, MAIN).publication_lag_pmf is not None
+
+
+@pytest.mark.usefixtures("in_root")
+def test_stored_samples_keep_numeric_values_without_our_forecasts() -> None:
+    # A backtest of fitted models only has no development forecasts of its
+    # own, so the stored samples are the hub teams' alone.
+    import argparse
+
+    import numpy as np
+
+    from bdbvhubrenewal.cli import _stored_samples
+    from bdbvhubrenewal.data import load_target
+    from bdbvhubrenewal.evaluation.backtest import FORECAST_COLUMNS
+    from bdbvhubrenewal.evaluation.scoring import energy_scores
+
+    args = argparse.Namespace(data="data")
+    stored = _stored_samples(
+        args, load_target("data"), pd.DataFrame(columns=FORECAST_COLUMNS)
+    )
+    assert stored["value"].dtype == np.float64
+    one = stored.loc[stored["vintage"] == stored["vintage"].max()]
+    truth = one[["location", "target_end_date"]].drop_duplicates()
+    energy = energy_scores(
+        one.assign(origin="o"), truth.assign(truth=1.0), unit=["origin"]
+    )
+    assert np.isfinite(energy["log_energy"]).all()
