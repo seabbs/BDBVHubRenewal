@@ -17,6 +17,7 @@ from .sample import (
     sample_prediction,
 )
 from .snapshots import (
+    fill_row,
     growth,
     hub_week_matrix,
     hub_weeks,
@@ -51,6 +52,7 @@ __all__ = [
     "estimate_delay",
     "estimate_uncertainty",
     "estimate_uncertainty_retro",
+    "fill_row",
     "fit_by_horizon",
     "fit_nb",
     "get_reporting_structure",

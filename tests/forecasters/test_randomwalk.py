@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -207,3 +208,42 @@ def test_places_with_no_falls_of_their_own_have_no_removals(
         i = locs.index(code)
         assert (origin.removal[i] == 0).all()
         assert (values[:, i, u] >= origin.reported[i, u]).all()
+
+
+def test_a_silent_place_waits_for_its_first_introduction() -> None:
+    import jax
+
+    from bdbvhubrenewal.forecasters.randomwalk import _walks
+
+    # Silent places keep their own spread of 0, whatever the pooled one.
+    origin = SimpleNamespace(
+        silent=np.array([False, True, True]),
+        intro=np.array([0.5, 0.0, 0.3]),
+        sigma=np.array([0.0, 0.2, 0.5]),
+    )
+    x0 = np.full((3, 4000), 20.0)
+    lam, y = _walks(jax.random.key(1), x0, origin, 4)
+    # A place with cases walks from its start week.
+    assert lam[0].mean() == pytest.approx(20.0)
+    # No introduction can come with a probability of 0.
+    assert (y[1] == 0).all()
+    # The rate is 1 from the first introduction, so the
+    # share of samples started by week h is 1 - 0.7^(h + 1).
+    started = (lam[2] > 0).mean(axis=0)
+    np.testing.assert_allclose(started, 1 - 0.7 ** np.arange(1, 5), atol=0.03)
+    assert set(np.unique(lam[2])) <= {0.0, 1.0}
+    # The introduction week carries a case, so the share of samples with a
+    # case by week 0 is the introduction probability.
+    assert (y[2, :, 0] > 0).mean() == pytest.approx(0.3, abs=0.03)
+
+
+def test_a_silent_place_is_not_nowcast(runs) -> None:
+    # Sud-Kivu has no case in the 9 weeks to 2026-10-24, so after its start
+    # week it follows its introductions, nowcast weeks included.
+    _, samples = runs["randomwalknowcast"]
+    sk = samples.loc[samples["location"] == "CD-SK"]
+    by_week = sk.groupby("target_end_date")["value"]
+    # The weekly introduction probability is about 0.06, so most samples
+    # stay at 0 in every week and none starts above a few cases.
+    assert (by_week.apply(lambda v: (v == 0).mean()) > 0.7).all()
+    assert by_week.median().max() == 0
