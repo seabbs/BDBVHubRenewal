@@ -2435,8 +2435,7 @@ A province with cases but too few for its own fit, <span class="arithmatex">\(y_
 \qquad
 z_p(w) \sim \text{Poisson}(\lambda_p),
 \]</div>
-<p>with one <span class="arithmatex">\(\lambda_p\)</span> per trajectory and <span class="arithmatex">\(y_w\)</span> the count reported at the origin (0 for weeks without data).
-A week's draws are never below the count already reported, as in <code>randomwalk</code>.
+<p>with one <span class="arithmatex">\(\lambda_p\)</span> per trajectory and <span class="arithmatex">\(y_w\)</span> the count reported at the origin (0 for weeks without data), as in <code>randomwalk</code>.
 Provinces with no cases get no forecast.</p>
 <h3 id="time-axis">Time axis<a class="headerlink" href="#time-axis" title="Permanent link">&para;</a></h3>
 <p>The data weeks start one week before weekly onsets, summed over the modelled provinces, first reach 5, or their peak if lower.
