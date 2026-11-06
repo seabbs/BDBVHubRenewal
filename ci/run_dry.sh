@@ -47,21 +47,19 @@ SCENARIOS=(
   "noppc|bvd=noppc|bvd||Posterior predictive checks"
   # A wildly high forecast is ruled out by the plausibility check, and
   # the chain moves on.
-  "implausible|bvd=implausible|renewalsp||was ruled out (plausible: "
-  "wild|bvd=implausible,renewalsp=implausible|main||Model: province renewal model"
+  "implausible|bvd=implausible|main||was ruled out (plausible: "
+  "wild|bvd=implausible,main=implausible|randomwalknowcast||Model: random walk on a nowcast"
   "latestream|bvd=latestream|bvd"
-  "fallback|bvd=fail|renewalsp||Model: single-patch renewal model"
+  "fallback|bvd=fail|main||Model: province renewal model"
   # Tuesday 21:00 UTC, two hours before the close: the fit timeouts are
   # cut so the gate still runs in time.
-  "late|bvd=fail|renewalsp|NOW=2026-11-03T21:00:00+00:00|Model: single-patch renewal model"
-  "randomwalknowcast|bvd=fail,renewalsp=fail,main=fail|randomwalknowcast||Model: random walk on a nowcast"
-  "randomwalk|bvd=fail,renewalsp=crash,main=fail,randomwalknowcast=negative|randomwalk"
-  "skip|bvd=fail,renewalsp=fail,main=fail,randomwalknowcast=negative,randomwalk=negative|skip"
+  "late|bvd=fail|main|NOW=2026-11-03T21:00:00+00:00|Model: province renewal model"
+  "randomwalknowcast|bvd=fail,main=fail|randomwalknowcast||Model: random walk on a nowcast"
+  "randomwalk|bvd=fail,main=crash,randomwalknowcast=negative|randomwalk"
+  "skip|bvd=fail,main=fail,randomwalknowcast=negative,randomwalk=negative|skip"
   # A chosen model further down the chain starts it there; the
   # candidates before it are shadows.
-  "singlepatch|bvd=pass|renewalsp|MODEL=renewalsp|Model: single-patch renewal model"
-  "singlepatchfallback|bvd=pass,renewalsp=fail|main|MODEL=renewalsp|Model: province renewal model"
-  "chosenrenewal|bvd=pass,renewalsp=pass|main|MODEL=renewal|Model: province renewal model"
+  "chosenrenewal|bvd=pass|main|MODEL=renewal|Model: province renewal model"
   "chosenrenewalfallback|main=fail|randomwalknowcast|MODEL=renewal|Model: random walk on a nowcast"
 )
 
@@ -288,9 +286,9 @@ ledger() {
   for run in 101 102; do
     (cd "$repo" && WORK="$ROOT/fallback" GITHUB_RUN_ID=$run \
       REFERENCE_DATE=2026-11-07 DATA_COMMIT=dddd AS_OF=2026-10-31 GITHUB_SHA=cccc \
-      ACTION=created PR_URL=https://example/pr/1 PRODUCED_BY="renewalsp" \
+      ACTION=created PR_URL=https://example/pr/1 PRODUCED_BY="renewal" \
       RENEWAL_ID=seabbs-renewal RENEWAL_ACTION=created \
-      RENEWAL_PR_URL=https://example/pr/1 RENEWAL_PRODUCED_BY="renewalsp" \
+      RENEWAL_PR_URL=https://example/pr/1 RENEWAL_PRODUCED_BY="renewal" \
       BASELINE_ID=seabbs-rwnowcast BASELINE_SKIPPED=true \
       "$CI_DIR/steps/record.sh" > /dev/null)
   done

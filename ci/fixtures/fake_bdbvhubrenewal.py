@@ -2,7 +2,7 @@
 
 It implements the interface in INTEGRATION.md on fixture data, so the
 step scripts run end to end without the model. Behaviour per candidate
-is set by `FAKE_SCENARIOS`, e.g. `bvd=fail,renewalsp=pass`, read with the
+is set by `FAKE_SCENARIOS`, e.g. `bvd=fail,main=pass`, read with the
 candidate id the step script exports as `CAND_ID`. Scenarios:
 
   pass         converged fit, plausible forecast

@@ -15,7 +15,7 @@ def write(path: Path, renewal: bool, baseline: bool) -> Path:
     path.write_text(
         "[submission]\n"
         'model_abbr = "renewal"\n'
-        'model = "renewalsp"\n'
+        'model = "renewal"\n'
         f"submit = {str(renewal).lower()}\n"
         "[models.randomwalknowcast]\n"
         'model_abbr = "rwnowcast"\n'

@@ -1,13 +1,13 @@
 # The hub model id of the renewal track: <team_abbr>-<model_abbr>.
-# It does not follow the internal model keys (renewal, renewalsp,
-# renewalbvd): whichever model the chain submits, the hub sees this id.
+# It does not follow the internal model keys (renewal, renewalbvd):
+# whichever model the chain submits, the hub sees this id.
 # Read by `bdbvhubrenewal.submission.hub.model_abbr_for` and
 # `submission_ci.tracks`.
 
 [submission]
 model_abbr = "renewal"
-# Where the chain in ci/policy.toml starts: renewalbvd, then renewalsp,
-# then renewal, then the random walks.
+# Where the chain in ci/policy.toml starts: renewalbvd, then renewal,
+# then the random walks.
 model = "renewalbvd"
 # Opt in: `true` submits this model each round (DRY_RUN still applies).
 submit = true

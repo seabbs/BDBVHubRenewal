@@ -96,7 +96,7 @@ def test_first_candidate_passes(tmp_path: Path) -> None:
     chain(
         c,
         bvd=("pass", "pass"),
-        renewalsp=("pass", "pass"),
+        main=("pass", "pass"),
         randomwalk=(None, "pass"),
     )
     prov = run_select(POLICY, c, tmp_path / "g", always("pass"))
@@ -104,7 +104,7 @@ def test_first_candidate_passes(tmp_path: Path) -> None:
     assert prov["reason"] == f"The {BVD} cleared every check."
     assert (tmp_path / "g" / "selected" / "submission").is_dir()
     states = {a["id"]: a["status"] for a in prov["attempts"]}
-    assert states["renewalsp"] == "not needed"
+    assert states["main"] == "not needed"
 
 
 def test_warnings_are_submitted_with_the_candidate(tmp_path: Path) -> None:
@@ -123,11 +123,11 @@ def test_a_failed_fit_moves_down_the_chain(tmp_path: Path) -> None:
     chain(
         c,
         bvd=("fail", "pass"),
-        renewalsp=("pass", "pass"),
+        main=("pass", "pass"),
         randomwalk=(None, "pass"),
     )
     prov = run_select(POLICY, c, tmp_path / "g", always("pass"))
-    assert prov["selected"] == "renewalsp" and prov["kind"] == "fallback"
+    assert prov["selected"] == "main" and prov["kind"] == "fallback"
     assert (
         f"{BVD} was ruled out (convergence: max R-hat is 1.4" in prov["reason"]
     )
@@ -158,17 +158,16 @@ def test_handled_notes_are_collected(tmp_path: Path) -> None:
 def test_a_crashed_fit_moves_down_the_chain(tmp_path: Path) -> None:
     c = tmp_path / "c"
     candidate(c, "bvd", fit="error", submission=False)
-    chain(c, renewalsp=("pass", "pass"))
+    chain(c, main=("pass", "pass"))
     prov = run_select(POLICY, c, tmp_path / "g", always("pass"))
-    assert prov["selected"] == "renewalsp"
+    assert prov["selected"] == "main"
 
 
 def test_each_renewal_model_in_turn(tmp_path: Path) -> None:
     c = tmp_path / "c"
     chain(
         c,
-        bvd=("fail", "pass"),
-        renewalsp=("pass", "fail"),
+        bvd=("pass", "fail"),
         main=("pass", "pass"),
         randomwalk=(None, "pass"),
     )
@@ -182,7 +181,6 @@ def test_randomwalknowcast_before_randomwalk(tmp_path: Path) -> None:
     chain(
         c,
         bvd=("fail", "pass"),
-        renewalsp=("pass", "fail"),
         main=("fail", "pass"),
         randomwalknowcast=(None, "pass"),
         randomwalk=(None, "pass"),
@@ -197,7 +195,6 @@ def test_randomwalk_is_the_last_resort(tmp_path: Path) -> None:
     chain(
         c,
         bvd=("fail", "pass"),
-        renewalsp=("pass", "fail"),
         main=("fail", "pass"),
         randomwalk=(None, "pass"),
     )
@@ -211,7 +208,6 @@ def test_everything_fails_round_skipped(tmp_path: Path) -> None:
     chain(
         c,
         bvd=("fail", "pass"),
-        renewalsp=("pass", "fail"),
         main=("fail", "pass"),
         randomwalk=(None, "fail"),
     )
@@ -227,7 +223,7 @@ def test_hub_validation_failure_moves_down_the_chain(tmp_path: Path) -> None:
     chain(
         c,
         bvd=("pass", "pass"),
-        renewalsp=("pass", "pass"),
+        main=("pass", "pass"),
         randomwalk=(None, "pass"),
     )
     seen: list[str] = []
@@ -238,8 +234,8 @@ def test_hub_validation_failure_moves_down_the_chain(tmp_path: Path) -> None:
         return "fail" if len(seen) == 1 else "pass"
 
     prov = run_select(POLICY, c, tmp_path / "g", validate)
-    assert seen == ["bvd", "renewalsp"]
-    assert prov["selected"] == "renewalsp"
+    assert seen == ["bvd", "main"]
+    assert prov["selected"] == "main"
     assert "hub validation failed" in prov["reason"]
 
 
@@ -280,7 +276,7 @@ def test_randomwalk_chosen_never_selects_a_shadow(tmp_path: Path) -> None:
     chain(
         c,
         bvd=("pass", "pass"),
-        renewalsp=("pass", "pass"),
+        main=("pass", "pass"),
         randomwalk=(None, "pass"),
     )
     prov = run_select(pol, c, tmp_path / "g", always("pass"))
@@ -293,7 +289,7 @@ def test_provenance_lists_the_shadow_candidates(tmp_path: Path) -> None:
     chain(c, bvd=("pass", "pass"), randomwalk=(None, "pass"))
     prov = run_select(pol, c, tmp_path / "g", always("pass"))
     shadows = {s["id"]: s for s in prov["shadows"]}
-    assert set(shadows) == {"bvd", "renewalsp", "main", "randomwalknowcast"}
+    assert set(shadows) == {"bvd", "main", "randomwalknowcast"}
     assert shadows["bvd"]["fit"] is not None
     assert shadows["main"]["fit"] is None
 
@@ -331,15 +327,14 @@ def test_baseline_track_skips_when_the_model_did_not_run(
 def test_a_chosen_model_starts_the_chain() -> None:
     # The chain runs on from the chosen model; those before it are
     # shadows.
-    pol = POLICY.for_model("renewalsp")
+    pol = POLICY.for_model("renewal")
     assert [c.id for c in pol.chain()] == [
-        "renewalsp",
         "main",
         "randomwalknowcast",
         "randomwalk",
     ]
     assert pol.get("bvd").kind == "shadow"
-    assert {c.id for c in pol.stage("primary")} == {"bvd", "renewalsp", "main"}
+    assert {c.id for c in pol.stage("primary")} == {"bvd", "main"}
 
 
 def test_a_chosen_variant_falls_back_to_the_random_walk(

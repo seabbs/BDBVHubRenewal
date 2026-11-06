@@ -147,11 +147,11 @@ def test_dry_run_note_and_no_relative_plot(tmp_path: Path) -> None:
 
 
 def test_cascade_model_named_with_why(tmp_path: Path) -> None:
-    g = gate(tmp_path, produced_by="single-patch renewal model")
+    g = gate(tmp_path, produced_by="province renewal model")
     prov = read_json(g / "provenance.json")
     prov.update(
         kind="fallback",
-        selected="renewalsp",
+        selected="main",
         attempts=[
             {
                 "id": "bvd",
@@ -160,17 +160,17 @@ def test_cascade_model_named_with_why(tmp_path: Path) -> None:
                 "reasons": ["convergence: max R-hat is 1.4"],
             },
             {
-                "id": "renewalsp",
-                "label": "single-patch renewal model",
+                "id": "main",
+                "label": "province renewal model",
                 "status": "pass",
                 "reasons": [],
             },
         ],
     )
-    prov["run"]["model"] = "renewalsp"
+    prov["run"]["model"] = "renewal"
     text = body(g, provenance=prov)
     assert visible(text)[2] == (
-        "Model: single-patch renewal model (`renewalsp`), because "
+        "Model: province renewal model (`renewal`), because "
         "BVDOutbreakSize-informed renewal model was ruled out (convergence: "
         "max R-hat is 1.4)."
     )
@@ -183,7 +183,7 @@ def test_first_model_in_the_chain(tmp_path: Path) -> None:
         selected="bvd",
         attempts=[
             {"id": "bvd", "label": "x", "status": "pass", "reasons": []},
-            {"id": "renewalsp", "label": "y", "status": "not needed"},
+            {"id": "main", "label": "y", "status": "not needed"},
         ],
     )
     prov["run"]["model"] = "renewalbvd"

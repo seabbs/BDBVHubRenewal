@@ -19,10 +19,6 @@ POLICY_PATH = Path(__file__).parents[1] / "policy.toml"
 # slower, plus about 15 minutes of setup.
 SETUP, PREPARE = 15, 15
 MAIN = 130 / 4 * 1.5 + SETUP
-# The single-patch fallback at 2 x (500 + 500) on the same vintage: 21
-# minutes of sampling for all six streams (a laptop, about 1.8 cores in
-# use; submission agent, 2026-10-28).
-SINGLE_PATCH = 21 * 1.5 + SETUP
 
 
 def repo(tmp_path: Path) -> Path:
@@ -70,17 +66,16 @@ def test_key_changes_with_data_and_settings() -> None:
 def test_matrix_has_distinct_keys(tmp_path: Path) -> None:
     pol = load_policy(POLICY_PATH)
     keys = [e["key"] for e in matrix(pol, "primary", repo(tmp_path), "hub")]
-    assert len(keys) == 3
+    assert len(keys) == 2
     assert len(set(keys)) == len(keys)
 
 
 def test_chain_runs_from_most_to_least_complex(tmp_path: Path) -> None:
-    # renewalbvd, renewalsp, renewal, then the random walks, with no
+    # renewalbvd, renewal, then the random walks, with no
     # refit. Each fitted leg names the model it runs.
     pol = load_policy(POLICY_PATH)
     assert [(c.id, c.kind, c.model) for c in pol.chain()] == [
         ("bvd", "main", "renewalbvd"),
-        ("renewalsp", "fallback", "renewalsp"),
         ("main", "fallback", "renewal"),
         ("randomwalknowcast", "randomwalk", "randomwalknowcast"),
         ("randomwalk", "randomwalk", ""),
@@ -95,7 +90,6 @@ def test_chain_runs_from_most_to_least_complex(tmp_path: Path) -> None:
     primary = {e["id"]: e for e in matrix(pol, "primary", root, "hub")}
     assert {k: e["model"] for k, e in primary.items()} == {
         "bvd": "renewalbvd",
-        "renewalsp": "renewalsp",
         "main": "renewal",
     }
 
@@ -123,17 +117,13 @@ def test_ci_sampler_settings(tmp_path: Path) -> None:
         e["id"]: json.loads(e["sampler"])
         for e in matrix(pol, "primary", root, "hub")
     }
-    assert set(samplers) == {"bvd", "renewalsp", "main"}
+    assert set(samplers) == {"bvd", "main"}
     for s in samplers.values():
         assert (s["num_chains"], s["num_warmup"]) == (2, 500)
         assert s["chain_method"] == "parallel"
     assert samplers["bvd"]["num_samples"] == 1000
     assert samplers["bvd"]["target_accept"] == 0.95
-    assert (
-        samplers["main"]["num_samples"]
-        == samplers["renewalsp"]["num_samples"]
-        == 500
-    )
+    assert samplers["main"]["num_samples"] == 500
 
 
 def test_policy_validation(tmp_path: Path) -> None:
@@ -154,7 +144,7 @@ def test_randomwalk_chosen_makes_the_renewal_candidates_shadows(
     assert [c.id for c in pol.chain()] == ["randomwalk"]
     root = repo(tmp_path)
     primary = [e["id"] for e in matrix(pol, "primary", root, "hub")]
-    assert primary == ["bvd", "renewalsp", "main"]
+    assert primary == ["bvd", "main"]
     assert all(c.kind == "shadow" for c in pol.candidates if c.id in primary)
 
 
@@ -196,9 +186,7 @@ def test_matrix_carries_the_fit_timeout(tmp_path: Path) -> None:
 
 
 def test_whole_chain_fits_from_the_last_tuesday_start() -> None:
-    # Every renewal candidate fits in parallel, and the single-patch
-    # model is ready before the main one.
-    assert SINGLE_PATCH < MAIN
+    # Every renewal candidate fits in parallel.
     pol = load_policy(POLICY_PATH)
     window = 540  # the last Tuesday start, 14:00 UTC, to the close
     timeout = fit_timeout(pol, window - PREPARE)
