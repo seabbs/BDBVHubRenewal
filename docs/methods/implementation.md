@@ -54,7 +54,9 @@ The table compares the two ways of sampling the walk steps on the recovery fit o
 ## Baseline models
 
 The baselines are in [`forecasters.randomwalk`][bdbvhubrenewal.forecasters.randomwalk] and [`forecasters.chain`][bdbvhubrenewal.forecasters.chain], on a JAX port of baselinenowcast 0.2.2 in [`bdbvhubrenewal.baselinenowcast`][bdbvhubrenewal.baselinenowcast].
-The port is checked against fixtures from the R package, and has one named extension, the chain ladder of release snapshots, which skips unobserved cells and fits one daily delay shared by pairs of any gap.
+The port is checked against fixtures from the R package, and has two named extensions for release snapshots.
+E1 is a chain ladder that skips unobserved cells and fits one daily delay shared by pairs of any gap.
+E2 fits ages in blocks of at least 10 cases that share one factor.
 The models use the port's chain ladder on snapshots.
 The observation model is in `forecasters.obs`, and fits and draws its new reports with the port's `fit_by_horizon`, `fit_nb` and `sample_nb`.
 

@@ -1,14 +1,15 @@
-"""Snapshot data extension (E1) and the hub week aggregator.
+"""Snapshot data extensions (E1, E2) and the hub week aggregator.
 
 R's ``estimate_delay`` needs a report in every delay cell of the
 triangle or a right truncation.
 Release snapshots are published on a few days only, so most cells of
 the triangle are unobserved.
-E1 is the one named extension of the port.
-It takes the chain ladder ratio of sums over the cells observed in
+E1 takes the chain ladder ratio of sums over the cells observed in
 both releases of a pair and skips the others, which are not filled.
 Pairs of any gap share one daily log development factor per age
 (``log_factors``), and ``growth`` sums it between two ages.
+E2 fits ages in blocks of at least ``min_count`` cases that share one
+factor (``age_blocks``).
 
 Axes.
 ``counts`` is ``(n_loc, n_release, n_day)``, the count of onset day t
@@ -135,7 +136,7 @@ def age_blocks(den: Any, min_count: float) -> np.ndarray:
 def log_factors(
     num: Any, den: Any, gaps: Any, min_count: float = 0.0
 ) -> np.ndarray:
-    r"""Daily log development factors shared by all pairs (extension E1).
+    r"""Daily log development factors shared by all pairs (E1 and E2).
 
     A day of age $a$ at release $r$ is age $a + s$ at release $r + 1$,
     with $s$ the pair's gap in days.

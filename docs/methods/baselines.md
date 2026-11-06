@@ -90,7 +90,7 @@ A model raises if the vintage has no snapshots or no in-window pair.
 
 ## Delay
 
-The delay follows baselinenowcast[^bnc-paper][^bnc-package] on the daily snapshots, with two extensions.
+The delay follows baselinenowcast[^bnc-paper][^bnc-package] on the daily snapshots, with two extensions: a chain ladder over release pairs that skips unobserved cells, and blocks of young ages that share one factor.
 Releases are batched reports of one daily delay.
 With $g_p(j) \ge 0$ the daily log development factor at age $j$, and $g_p(j) = 0$ for $j \ge D$, a day of age $x$ at release $r$ grows to release $r + 1$ by $\exp \sum_{j=x}^{x+s-1} g_p(j)$.
 For each gap $s$ and age $x = 0, \dots, D - 1$,
