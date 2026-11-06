@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import textwrap
 import tomllib
 from collections.abc import Callable, Mapping, Sequence
 from functools import partial
@@ -263,7 +264,7 @@ def make_report(
     forecasts_now = _nowcast_forecasts(tasks, latest, res)
     _nowcast_page(fig, gen, target, forecasts_now, names, config, latest)
     _zone_nowcast_section(
-        fig, gen, res, data_dir, target, tasks[0], forecasts_now, config, names
+        fig, gen, data_dir, target, tasks[0], forecasts_now, config, names
     )
     groups = _nowcast_groups(target, sorted(set(forecasts_now["location"])))
     save_light_dark(
@@ -453,7 +454,8 @@ def _release_section(
         "Scores against what each later release reported "
         "([how scoring works](methods/evaluation.md#real-releases), "
         "[metrics](methods/evaluation.md#scores)).\n"
-        "The [energy score](methods/evaluation.md#energy-score) scores each "
+        + _scored_on(rep)
+        + "The [energy score](methods/evaluation.md#energy-score) scores each "
         "scale's places and weeks as one forecast per origin and release, "
         "so its $n$ counts those.\n\n"
         + summary_html(
@@ -489,6 +491,24 @@ def _release_section(
             + _table(origins),
             "Tables",
         ),
+    )
+
+
+def _scored_on(reported: pd.DataFrame, baseline: str = "randomwalk") -> str:
+    """Say how many origin and release pairs and forecasts are scored."""
+    pairs = reported[["origin", "truth_vintage"]].drop_duplicates()
+    n = reported.loc[reported["model"] == baseline].groupby("pool").size()
+    scales = {
+        "national": "national",
+        "provinces": "province",
+        "zones": "health zone",
+    }
+    counts = [f"{n[p]} {label}" for p, label in scales.items() if p in n]
+    listed = ", ".join(counts[:-1]) + " and " if len(counts) > 1 else ""
+    return (
+        f"Scored on {len(pairs)} origin and release pairs.\n"
+        f"{baseline} has {listed}{counts[-1]} forecasts.\n"
+        "The renewal models are not scored at health zones.\n"
     )
 
 
@@ -591,10 +611,15 @@ def _nowcast_page(
     )
 
 
+def _zone_names(data_dir: Path | str) -> dict[str, str]:
+    """Each health zone's name, as the hub's time series gives it."""
+    zones = load_health_zones(data_dir)
+    return dict(zip(zones["location"], zones["location_name"], strict=True))
+
+
 def _zone_nowcast_section(
     fig: Path,
     gen: Path,
-    res: Path,
     data_dir: Path | str,
     target: pd.DataFrame,
     task: ForecastTask,
@@ -647,7 +672,6 @@ def _zone_nowcast_section(
     counts = zone_counts(
         daily_zones, task.vintage, start.strftime("%Y-%m-%d"), labels
     )
-    scores = pd.read_csv(res / "zone-scores.csv", low_memory=False)
     tabs = []
     by_prov = counts.groupby("province")["total"].sum()
     for key in by_prov.sort_values(ascending=False, kind="stable").index:
@@ -694,23 +718,37 @@ def _zone_nowcast_section(
                 [above, counts[["location", "target_end_date", "total"]]],
                 ignore_index=True,
             ),
-            labels,
+            {**labels, **_zone_names(data_dir)},
             _model_colours(names),
+            config.complete_after_weeks,
         ),
     )
     _write(
         gen / "nowcast-picker.md",
         "## By place\n\n"
         f"Each model's nowcast and forecast at the {task.vintage} release, "
-        "for the country, the provinces and the zones with cases in the 12 "
-        "weeks before the reference date "
+        "for the country and every province and health zone with a "
+        "forecast or with cases in the 12 weeks before the reference date "
         "([Health zones](methods/evaluation.md#health-zones)).\n"
-        "The table summarises each model's scores at the place over the "
-        "rounds chosen.\n\n"
+        "The latest nowcast has no score yet.\n"
+        "Scores by origin are on the [Backtest](backtest.md) page.\n\n"
         '<div class="nowcastchart" data-src="../figures/nowcastchart.json" '
-        'data-summary="../figures/scoresummary-backtest.json" '
         'role="group" aria-label="Nowcast and forecast by place">\n'
         "<noscript>The nowcast chart needs JavaScript.</noscript>\n"
+        "</div>\n",
+    )
+    _write(
+        gen / "zone-review.md",
+        "## Zone review\n\n"
+        "One row per place with a forecast from the chosen model.\n"
+        "Recent is the mean count of the last two complete weeks.\n"
+        "Each week column gives the median and 90% interval.\n"
+        "Ratio is log((median + 1) / (recent + 1)) for the chosen week.\n"
+        "A ratio of 0.69 is double the recent count and -0.69 is half.\n"
+        "Click a place to show it in the By place chart.\n\n"
+        '<div class="zonereview" data-src="../figures/nowcastchart.json" '
+        'role="group" aria-label="Zone review">\n'
+        "<noscript>The zone review needs JavaScript.</noscript>\n"
         "</div>\n",
     )
     _write(
@@ -722,17 +760,8 @@ def _zone_nowcast_section(
         )
         + "\n"
         + _dropdown(
-            _table(zone_table(samples, counts, scores)),
+            _table(zone_table(samples, counts)),
             "Newest weeks by zone",
-        )
-        + "\nThe [energy score](methods/evaluation.md#energy-score) scores "
-        "all zones together at each origin, relative to `randomwalk` over "
-        "the releases scored.\n\n"
-        + _table(
-            relative_energy(
-                _as_submitted(pd.read_csv(res / "zone-energy.csv")),
-                by=("origin",),
-            )
         ),
     )
 
@@ -1156,17 +1185,28 @@ def _energy_means(energy: pd.DataFrame, by: Sequence[str]) -> str:
     )
 
 
-def _recovery_section(energy: pd.DataFrame) -> str:
-    """Return the recovery section."""
+def _recovery_section(src: str, energy: pd.DataFrame) -> str:
+    """Return the recovery section, with the summaries of `src`."""
     alt = "Mean WIS by horizon on simulated vintages."
+    views = _summary_views(src, "(simulated vintages)")
     return (
         "## Recovery on simulated vintages\n\n"
         "Forecasts from vintages of a [simulated outbreak]"
         "(methods/data.md#simulated-vintages), scored against the known "
         "final counts.\n\n"
-        f"![{alt}](figures/recovery-wis-horizon.svg#only-light)\n"
-        f"![{alt}](figures/recovery-wis-horizon-dark.svg#only-dark)\n\n"
-        + _energy_means(energy, ["scale"])
+        + "### Overall\n\n"
+        + views["overall"]
+        + "\n### By horizon\n\n"
+        + views["horizon"]
+        + "\n### By place\n\n"
+        + views["place"]
+        + "\n"
+        + _dropdown(
+            f"![{alt}](figures/recovery-wis-horizon.svg#only-light)\n"
+            f"![{alt}](figures/recovery-wis-horizon-dark.svg#only-dark)\n\n"
+            + _energy_means(energy, ["scale"]),
+            "Static figure and energy scores",
+        )
     )
 
 
@@ -1226,6 +1266,126 @@ def _scenario_figure() -> str:
     """Return the scenario figure links."""
     alt = "Mean WIS by horizon on the simulated scenarios."
     return _metric_tabs("scenario-wis-horizon", alt)
+
+
+_SCENARIOS: Final = {
+    "calibrated_falling": "Rt falls",
+    "calibrated_flat": "Rt holds",
+    "calibrated_rising": "Rt rises",
+}
+"""Simulated scenarios, as their tabs are labelled."""
+
+
+def _simulated_summary(
+    fig: Path,
+    stem: str,
+    scores: pd.DataFrame,
+    energy: pd.DataFrame,
+    names: Sequence[str],
+    labels: Mapping[str, str],
+) -> str:
+    """Write the score summary of simulated forecasts and return its URL.
+
+    Rounds are named by their reference date, as on the other pages.
+    """
+    models = [m for m in names if m in set(scores["model"])]
+    write_score_chart(
+        fig / f"scoresummary-{stem}.json",
+        summary_rows(
+            scores.assign(origin=scores["reference_date"]),
+            models,
+            _model_colours(models),
+            labels,
+            default_on=[m for m in models if m != "randomwalk"],
+            energy=energy.assign(origin=energy["reference_date"]),
+        ),
+    )
+    return f"../figures/scoresummary-{stem}.json"
+
+
+def _summary_views(src: str, what: str) -> dict[str, str]:
+    """Return the Overall, By horizon and By place summaries of `src`."""
+    return {
+        view: summary_html(src, f"{label} {what}", view=view)
+        for view, label in (
+            ("overall", "Overall scores"),
+            ("horizon", "Scores by horizon"),
+            ("place", "Scores by place"),
+        )
+    }
+
+
+def _scenario_section(
+    fig: Path,
+    res: Path,
+    names: Sequence[str],
+    labels: Mapping[str, str],
+) -> str:
+    """Return the scenario summaries and explorer, a tab per scenario.
+
+    Forecasts are scored against the final simulated counts of complete
+    weeks, which are also the explorer's data, so every week is complete.
+    """
+    scores = pd.read_csv(res / "scenario-scores.csv.gz", low_memory=False)
+    scores = scores.loc[(scores["truth_view"] == "final") & scores["complete"]]
+    energy = pd.read_csv(res / "scenario-energy.csv")
+    energy = energy.loc[energy["truth_view"] == "final"]
+    samples = pd.read_csv(
+        res / "scenario-forecasts.csv.gz", dtype={"as_of": object}
+    )
+    sections: dict[str, list[str]] = {
+        "Overall": [],
+        "By horizon": [],
+        "By place": [],
+        "Forecasts by place": [],
+    }
+    for key, title in _SCENARIOS.items():
+        own = scores.loc[scores["scenario"] == key]
+        src = _simulated_summary(
+            fig,
+            f"scenario-{key}",
+            own,
+            energy.loc[energy["scenario"] == key],
+            names,
+            labels,
+        )
+        views = _summary_views(src, f"({title})")
+        drawn = samples.loc[samples["scenario"] == key]
+        shown = [m for m in names if m in set(drawn["model"])]
+        truth = own[["truth_vintage", "location", "target_end_date", "truth"]]
+        target = (
+            truth.drop_duplicates()
+            .rename(columns={"truth_vintage": "vintage", "truth": "total"})
+            .assign(kind="real")
+        )
+        write_explorer(
+            fig / f"explorer-scenario-{key}.json",
+            explorer_data(
+                forecast_quantiles(drawn.assign(source="ours")).assign(
+                    ours=True
+                ),
+                target,
+                labels,
+                0,
+                _model_colours(shown),
+                samples=drawn,
+            ),
+        )
+        explorer = explorer_html(
+            f"../figures/explorer-scenario-{key}.json",
+            f"Forecasts, {title}",
+            all_rounds=True,
+            summary=src,
+        )
+        for section, html in zip(
+            sections, (*views.values(), explorer), strict=True
+        ):
+            body = textwrap.indent(html, "    ")
+            sections[section].append(f'=== "{title}"\n\n{body}')
+    return "\n".join(
+        f"### {section}\n\n" + "\n".join(tabs)
+        for section, tabs in sections.items()
+    )
 
 
 def _submission_samplers(
@@ -1454,11 +1614,17 @@ def _backtest_page(
         ),
     )
     rec_path = res / "recovery-scores.csv"
+    rscores = pd.read_csv(rec_path)
+    renergy = pd.read_csv(res / "recovery-energy.csv")
     _write(
         gen / "recovery-section.md",
-        _recovery_section(pd.read_csv(res / "recovery-energy.csv")),
+        _recovery_section(
+            _simulated_summary(
+                fig, "recovery", rscores, renergy, names, labels
+            ),
+            renergy,
+        ),
     )
-    rscores = pd.read_csv(rec_path)
     save_light_dark(
         lambda mode: plot_scores(
             rscores, by="horizon", models=names, mode=mode
@@ -1471,6 +1637,10 @@ def _backtest_page(
         _scenario_scores(scen_path, res / "scenario-energy.csv"),
     )
     _write(gen / "scenario-figure.md", _scenario_figure())
+    _write(
+        gen / "scenario-summaries.md",
+        _scenario_section(fig, res, names, labels),
+    )
     sscores = pd.read_csv(scen_path, low_memory=False)
     _save_metric_figures(
         fig,

@@ -59,31 +59,6 @@ def _samples() -> pd.DataFrame:
     )
 
 
-def _scores() -> pd.DataFrame:
-    rows = []
-    for model, wis in (
-        ("randomwalk", 3.0),
-        ("randomwalk (summed to provinces)", 2.0),
-        (ZONE_MODEL + " (summed to provinces)", 1.0),
-    ):
-        rows.append(
-            {
-                "model": model,
-                "origin": "2026-10-24",
-                "target": "reported",
-                "truth_vintage": V,
-                "location": "CD-IT-01",
-                "target_end_date": "2026-10-24",
-                "wis": wis,
-                "log_wis": wis,
-                "bias": 0.0,
-                "coverage_50": 1.0,
-                "coverage_90": 1.0,
-            }
-        )
-    return pd.DataFrame(rows)
-
-
 def test_zone_counts_fill_quiet_weeks_with_zero() -> None:
     counts = zone_counts(_daily(), V, "2026-10-10", NAMES)
     # CD-NK-03 has no cases since the start, so it is left out.
@@ -99,13 +74,11 @@ def test_zone_counts_fill_quiet_weeks_with_zero() -> None:
     assert set(it["location_name"]) == {"Ituri 01"}
 
 
-def test_zone_table_has_the_newest_weeks_and_scores() -> None:
+def test_zone_table_has_the_newest_weeks_and_no_scores() -> None:
     counts = zone_counts(_daily(), V, "2026-10-10", NAMES)
-    table = zone_table(_samples(), counts, _scores())
+    table = zone_table(_samples(), counts)
     assert set(table["week ending"]) == {"2026-10-24", "2026-10-31"}
-    it = table.loc[table["zone"] == "CD-IT-01"]
-    assert it["relative WIS"].tolist() == [0.5, 0.5]
-    assert table.loc[table["zone"] == "CD-NK-02", "n"].isna().all()
+    assert "relative WIS" not in table
 
 
 COLOURS = {
@@ -138,7 +111,7 @@ def _all_scales() -> tuple[pd.DataFrame, pd.DataFrame]:
 
 def test_place_chart_data_orders_scales_then_cases() -> None:
     samples, counts = _all_scales()
-    data = place_chart_data(samples, counts, NAMES, COLOURS)
+    data = place_chart_data(samples, counts, NAMES, COLOURS, 2)
     json.dumps(data)
     places = [(p["id"], p["scale"]) for p in data["places"]]
     assert places == [
@@ -151,6 +124,7 @@ def test_place_chart_data_orders_scales_then_cases() -> None:
     assert data["places"][1]["name"] == "Nord Kivu"
     assert data["places"][3]["province"] == "CD-NK"
     assert data["data"]["CD-IT-01"][1] == ["2026-10-17", 2]
+    assert data["complete_through"] == "2026-10-18"
     assert len(data["q"]["CD"]) == 3
     # All 20 draws are kept (under 50), each over the three weeks.
     traj = data["traj"]["CD-NK-02"]
@@ -160,8 +134,23 @@ def test_place_chart_data_orders_scales_then_cases() -> None:
 
 def test_place_chart_data_marks_models_without_samples() -> None:
     samples, counts = _all_scales()
-    data = place_chart_data(samples, counts, NAMES, COLOURS)
+    data = place_chart_data(samples, counts, NAMES, COLOURS, 2)
     fans = {m["name"]: m["fan"] for m in data["models"]}
     assert fans == {"randomwalk": False, ZONE_MODEL: True, "renewalbvd": False}
     assert data["models"][2]["dark"] == "#cccccc"
     assert data["models"][2]["dash"] == "6 3"
+
+
+def test_place_chart_data_keeps_forecast_places_without_cases() -> None:
+    samples, counts = _all_scales()
+    quiet = samples.loc[samples["location"] == "CD-NK-02"]
+    samples = pd.concat([samples, quiet.assign(location="CD-NK-30")])
+    data = place_chart_data(samples, counts, NAMES, COLOURS, 2)
+    assert data["places"][-1] == {
+        "id": "CD-NK-30",
+        "name": "CD-NK-30",
+        "scale": "zones",
+        "province": "CD-NK",
+    }
+    assert "CD-NK-30" not in data["data"]
+    assert len(data["q"]["CD-NK-30"]) == 3
