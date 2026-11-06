@@ -29,6 +29,7 @@ import pandas as pd
 import yaml
 
 from bdbvhubrenewal.data.dates import as_date
+from bdbvhubrenewal.data.tidy import write_csv
 
 __all__ = [
     "HUB_COLUMNS",
@@ -347,7 +348,7 @@ def write_submission(
         raise ValueError("A submission must have one forecast date.")
     path = submission_path(root, str(refs[0]), mid)
     path.parent.mkdir(parents=True, exist_ok=True)
-    table.to_csv(path, index=False)
+    write_csv(table, path)
     return path
 
 

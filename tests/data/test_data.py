@@ -19,6 +19,7 @@ from bdbvhubrenewal.data import (
     tidy_locations,
     tidy_target,
     vintages,
+    write_csv,
 )
 
 DATA = Path(__file__).resolve().parents[2] / "data"
@@ -316,3 +317,17 @@ def test_imputed_by_release(target: pd.DataFrame) -> None:
     assert len(cd) == target["vintage"].nunique()
     assert cd["imputed_share"].between(0, 1).all()
     assert (out["total"] > 0).all()
+
+
+def test_write_csv_writes_the_same_bytes_for_the_same_table(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    table = pd.DataFrame({"location": ["CD", "CD-IT"], "value": [1, 2]})
+    path = tmp_path / "table.csv.gz"
+    write_csv(table, path)
+    first = path.read_bytes()
+    # A later clock must not change the file.
+    monkeypatch.setattr("time.time", lambda: 2e9)
+    write_csv(table, path)
+    assert path.read_bytes() == first
+    pd.testing.assert_frame_equal(pd.read_csv(path), table)

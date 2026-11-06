@@ -45,6 +45,7 @@ import pandas as pd
 from numpy.typing import NDArray
 
 from bdbvhubrenewal.data.releases import last_report
+from bdbvhubrenewal.data.tidy import write_csv
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -1420,10 +1421,10 @@ def fit_renewal(
     task = replace(task, seed=int(settings.get("seed", task.seed)))
     model = RenewalModel(VARIANTS[variant], settings, out / "progress.log")
     fit = model.forecast_fit(task)
-    fit.samples.to_csv(out / SAMPLES_FILE, index=False)
-    fit_delays(fit, task).to_csv(out / DELAY_SUMMARY_FILE, index=False)
+    write_csv(fit.samples, out / SAMPLES_FILE)
+    write_csv(fit_delays(fit, task), out / DELAY_SUMMARY_FILE)
     if fit.unassigned is not None:
-        fit.unassigned.to_csv(out / UNASSIGNED_FILE, index=False)
+        write_csv(fit.unassigned, out / UNASSIGNED_FILE)
     pairs = [
         pd.DataFrame(
             {
@@ -1436,8 +1437,8 @@ def fit_renewal(
         if "draw" in run.draws
     ]
     if pairs:
-        pd.concat(pairs, ignore_index=True).to_csv(
-            out / TRAJECTORY_DRAW_FILE, index=False
+        write_csv(
+            pd.concat(pairs, ignore_index=True), out / TRAJECTORY_DRAW_FILE
         )
     modelled = sorted(set(fit.samples["location"]))
     (out / TRAJECTORIES_FILE).write_text(

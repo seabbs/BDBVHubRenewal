@@ -55,6 +55,7 @@ from bdbvhubrenewal.data import (
 )
 from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.releases import cutoff_lags
+from bdbvhubrenewal.data.tidy import write_csv
 from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.evaluation import store
@@ -508,7 +509,7 @@ def _backtest(args: argparse.Namespace) -> int:
             (sscores, results / "scenario-scores.csv.gz"),
             (senergy, results / "scenario-energy.csv"),
         ):
-            bt.merge_by_model(path, table).to_csv(path, index=False)
+            write_csv(bt.merge_by_model(path, table), path)
         print(f"Scenarios: {len(sscores)} scored forecasts in {results}.")
         return 0
     if args.lopo:
@@ -519,8 +520,8 @@ def _backtest(args: argparse.Namespace) -> int:
             config,
             fits=fits,
         )
-        lopo_fc.to_csv(output / "lopo-forecasts.csv.gz", index=False)
-        lopo_scores.to_csv(results / "lopo-scores.csv", index=False)
+        write_csv(lopo_fc, output / "lopo-forecasts.csv.gz")
+        write_csv(lopo_scores, results / "lopo-scores.csv")
         _write_fits(fits, results / "lopo-fits.csv")
         print(f"Leave one province out: {len(lopo_scores)} scored forecasts.")
         return 0
@@ -540,7 +541,7 @@ def _backtest(args: argparse.Namespace) -> int:
     # run apart from the others, and every model is scored again.
     forecasts = bt.merge_by_model(output / "forecasts.csv.gz", forecasts)
     _release_backtest(args, config, target, delays, results, forecasts)
-    forecasts.to_csv(output / "forecasts.csv.gz", index=False)
+    write_csv(forecasts, output / "forecasts.csv.gz")
     rforecasts, rscores, renergy = bt.run_recovery(
         models, config, lags=cutoff_lags(load_daily(args.data))
     )
@@ -549,7 +550,7 @@ def _backtest(args: argparse.Namespace) -> int:
         (rscores, results / "recovery-scores.csv"),
         (renergy, results / "recovery-energy.csv"),
     ):
-        bt.merge_by_model(path, table).to_csv(path, index=False)
+        write_csv(bt.merge_by_model(path, table), path)
     print(
         f"Development: {len(forecasts)} forecast rows; recovery: "
         f"{len(rscores)}. Written to {results}."
@@ -645,7 +646,7 @@ def _release_backtest(
         ("origins", out.origins),
         ("fits", out.fits),
     ):
-        table.to_csv(results / f"nowcast-{name}.csv", index=False)
+        write_csv(table, results / f"nowcast-{name}.csv")
     print(f"Release backtest: {len(out.scores)} scored forecasts.")
 
 
@@ -691,7 +692,7 @@ def _write_fits(fits: list[pd.DataFrame], path: Path) -> None:
     """Merge the fit summaries of a run into a results file."""
     if fits:
         table = pd.concat(fits, ignore_index=True)
-        bt.merge_by_model(path, table).to_csv(path, index=False)
+        write_csv(bt.merge_by_model(path, table), path)
 
 
 def _zones(
@@ -796,16 +797,14 @@ def _zone_backtest(args: argparse.Namespace) -> int:
     )
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    scores.to_csv(out, index=False)
-    energy.to_csv(args.energy_out, index=False)
+    write_csv(scores, out)
+    write_csv(energy, args.energy_out)
     # The zone forecasts as submitted, for the Backtest explorer: their
     # plotted quantiles and a fixed subset of draws for the trajectories.
-    forecast_quantiles(forecasts.assign(source="ours")).to_csv(
-        args.quantiles_out, index=False
+    write_csv(
+        forecast_quantiles(forecasts.assign(source="ours")), args.quantiles_out
     )
-    draw_subset(forecasts).drop(columns="draw").to_csv(
-        args.draws_out, index=False
-    )
+    write_csv(draw_subset(forecasts).drop(columns="draw"), args.draws_out)
     rel = zone_relative_skill(scores, by=("horizon",))
     print(rel.round(3).to_string(index=False))
     print(f"Wrote {out} ({len(scores)} scores).")
@@ -1002,18 +1001,17 @@ def _compare_hub(args: argparse.Namespace) -> int:
     )
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    scores.to_csv(out / "scores.csv", index=False)
-    energy.to_csv(out / "energy.csv", index=False)
-    pending.to_csv(out / "pending.csv", index=False)
-    hc.forecast_quantiles(forecasts).to_csv(
-        out / "quantiles.csv.gz", index=False
-    )
+    write_csv(scores, out / "scores.csv")
+    write_csv(energy, out / "energy.csv")
+    write_csv(pending, out / "pending.csv")
+    write_csv(hc.forecast_quantiles(forecasts), out / "quantiles.csv.gz")
     teams = hc.load_team_metadata(hub_dir)
-    teams.loc[teams["model"].isin(set(hub["model"]))].to_csv(
-        out / "teams.csv", index=False
+    write_csv(
+        teams.loc[teams["model"].isin(set(hub["model"]))], out / "teams.csv"
     )
-    hc.trajectory_samples(forecasts, teams, TRAJECTORY_DRAWS).to_csv(
-        out / "samples.csv.gz", index=False
+    write_csv(
+        hc.trajectory_samples(forecasts, teams, TRAJECTORY_DRAWS),
+        out / "samples.csv.gz",
     )
     manifest = hub_dir / "manifest.json"
     accessed = dt.date.today().isoformat()

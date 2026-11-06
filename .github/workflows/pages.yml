@@ -81,13 +81,11 @@ jobs:
       # and scenario backtests run the random walks only. None of these
       # results are committed. Only this step makes them.
       # `task results` runs the same commands locally; keep the two in step.
-      # The key hashes the content of what it reads
-      # (scripts/backtest-key.sh), so unchanged inputs reuse its outputs.
+      # Tables are written with a fixed gzip time, so the key changes only
+      # when what it reads changes. It leaves out Python caches, the raw
+      # downloads and data/sources.json, which records when they were made.
       # Only the files this step writes are cached, so a hit cannot replace
       # the committed records or the fit store's own files in results/.
-      - name: Hash the backtest inputs
-        id: inputs
-        run: echo "key=$(scripts/backtest-key.sh)" >> "$GITHUB_OUTPUT"
       - name: Restore the backtest outputs
         id: backtest
         uses: actions/cache@v6
@@ -100,7 +98,10 @@ jobs:
             results/recovery-*
             results/scenario-*
             results/zone-*
-          key: backtest-${{ steps.inputs.outputs.key }}
+          key: >-
+            backtest-${{ hashFiles('src/**', '!**/__pycache__/**',
+            'config/**', 'data/**', '!data/raw/**', '!data/sources.json',
+            'results/**', 'uv.lock', '.github/workflows/pages.yml') }}
       - name: Backtest
         if: steps.backtest.outputs.cache-hit != 'true'
         run: |
