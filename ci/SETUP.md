@@ -74,6 +74,7 @@ Settings → Secrets and variables → Actions → **Variables**:
 
 - Settings → Actions → General → Workflow permissions: **Read repository contents** is enough.
   Only the `record` job asks for `contents: write`, to push the `submission-ledger` branch.
+  The `release` job tags each round's commit with the bot's token, which needs the `workflow` scope: the workflow token is refused a tag on a commit whose workflow files differ from `main`'s.
   If a ruleset covers all branches, exclude `submission-ledger`.
 - "Allow GitHub Actions to create and approve pull requests" is not needed.
   PRs are opened with the bot's token on another repo.
