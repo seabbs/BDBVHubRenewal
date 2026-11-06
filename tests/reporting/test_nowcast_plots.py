@@ -99,8 +99,3 @@ def test_plot_place_summary_is_on_a_log_axis_without_zeros() -> None:
     assert ax.get_xscale() == "log"
     (dots,) = ax.get_lines()[:1]
     assert list(dots.get_xdata()) == [1.3, 27.0]
-    linear = plot_place_summary(
-        table, ["a"], {"a": ("#000000", "#ffffff", "")}, {}, log=False
-    )
-    assert linear.axes[0].get_xscale() == "linear"
-    assert len(linear.axes[0].get_lines()[0].get_xdata()) == 3

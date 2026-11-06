@@ -320,13 +320,12 @@ def plot_place_summary(
     models: Sequence[str],
     colours: Mapping[str, tuple[str, str, str]],
     names: Mapping[str, str],
-    metric: str = "rel_wis",
-    label: str = "Relative WIS",
-    ref: float | None = 1.0,
-    log: bool = True,
     mode: str = "light",
 ) -> Figure:
-    """Plot one score per place and model, a row per place, by scale.
+    """Plot relative WIS per place and model, a row per place, by scale.
+
+    The axis is on the log scale, so places whose scores are near zero do
+    not set it. Scores of 0 are left out.
 
     Parameters
     ----------
@@ -338,16 +337,6 @@ def plot_place_summary(
         Model to its light colour, dark colour and dash.
     names : mapping of str to str
         Place names by id. Places not named show their code.
-    metric : str
-        The column plotted.
-    label : str
-        Its axis label.
-    ref : float, optional
-        A dotted line at this value.
-    log : bool
-        Put the axis on the log scale, for relative scores, so places
-        whose scores are near zero do not set it. Scores of 0 are then
-        left out.
     mode : str
         `"light"` or `"dark"`.
 
@@ -374,13 +363,11 @@ def plot_place_summary(
         places = sorted(set(sub["location"]), key=lambda x: names.get(x, x))
         y = {loc: i for i, loc in enumerate(places)}
         for m in models:
-            own = sub.loc[sub["model"] == m]
-            if log:
-                own = own.loc[own[metric] > 0]
+            own = sub.loc[(sub["model"] == m) & (sub["rel_wis"] > 0)]
             if own.empty:
                 continue
             ax.plot(
-                own[metric],
+                own["rel_wis"],
                 own["location"].map(y),
                 "o",
                 ms=4,
@@ -388,15 +375,13 @@ def plot_place_summary(
                 label=m,
                 **point_style(colours[m][pick], colours[m][2]),
             )
-        if ref is not None:
-            ax.axvline(ref, color=ink["muted"], lw=1, ls=":")
-        if log:
-            ax.set_xscale("log")
-            ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
+        ax.axvline(1.0, color=ink["muted"], lw=1, ls=":")
+        ax.set_xscale("log")
+        ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
         ax.set_yticks(range(len(places)), [names.get(p, p) for p in places])
         ax.set_ylim(len(places) - 0.5, -0.5)
         ax.set_title(titles[pool], fontsize=9)
-        ax.set_xlabel(label)
+        ax.set_xlabel("Relative WIS")
         ax.set_axisbelow(True)
     handles: dict[str, Artist] = {}
     for ax in axes[0]:
