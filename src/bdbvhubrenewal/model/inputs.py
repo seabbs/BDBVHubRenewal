@@ -447,7 +447,9 @@ RENEWALSP = ModelConfig(
 def idle_draws(
     counts: np.ndarray, n_weeks: int, n: int, rng: np.random.Generator
 ) -> np.ndarray:
-    r"""Standalone importation-only draws for a province with no cases.
+    r"""Draws for a province with too few cases for its own fit.
+
+    Callers floor them at the count reported (`renewalsp`).
 
     Weekly counts are Poisson with rate $\lambda \sim
     \text{Gamma}(1/2 + \sum y, w)$ over the $w$ weeks seen (Jeffreys
