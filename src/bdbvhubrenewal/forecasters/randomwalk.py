@@ -97,32 +97,26 @@ def _delay_label(origin: Origin, i: int) -> str:
 
 
 def _walks(
-    key: jax.Array, x0: np.ndarray, origin: Origin, h: int
+    key: jax.Array, x0: np.ndarray, origin: Origin, intro: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
     """Run the walk for every place, `x0` of shape `[L, S]`.
 
-    A silent place starts its walk from 1 case at its first
-    introduction, a geometric number of weeks in with the place's
-    weekly probability, and is 0 before it.
-    The introduction week has at least that case, as `introductions`
-    counts a week with a case.
-    A silent place's walk has spread 0, so from its introduction its
-    rate stays at 1 case a week.
+    A silent place is 0 until its first introduction, drawn week by week
+    with probability `intro` `[L, H]`, and walks from 1 case from there.
+    The introduction week has at least that case.
     """
+    h = intro.shape[1]
     k_walk, k_intro = jax.random.split(key)
     x0 = np.where(origin.silent[:, None], 1.0, x0)
-    sigma = np.where(origin.silent, 0.0, origin.sigma)
     keys = jax.random.split(k_walk, x0.shape[0])
     lam, y = jax.vmap(lambda k, x, s: random_walk(k, x, s, h))(
         keys,
         jnp.asarray(x0, jnp.float32),
-        jnp.asarray(sigma, jnp.float32),
+        jnp.asarray(origin.sigma, jnp.float32),
     )
-    u = np.asarray(jax.random.uniform(k_intro, x0.shape), dtype=np.float64)
-    q = origin.intro[:, None]
-    # A probability of 0 gives an introduction that never comes.
-    with np.errstate(divide="ignore", invalid="ignore"):
-        first = np.where(q > 0, np.floor(np.log(u) / np.log1p(-q)), np.inf)
+    u = np.asarray(jax.random.uniform(k_intro, (*x0.shape, h)), np.float64)
+    hit = u < intro[:, None, :]
+    first = np.where(hit.any(axis=2), np.argmax(hit, axis=2), np.inf)
     first = np.where(origin.silent[:, None], first, 0.0)
     lag = np.arange(h)[None, None, :] - first[:, :, None]
     at = np.clip(lag, 0, h - 1).astype(int)
@@ -133,6 +127,23 @@ def _walks(
 
     first_case = origin.silent[:, None, None] & (lag == 0)
     return shift(lam), np.where(first_case, np.maximum(shift(y), 1.0), shift(y))
+
+
+def _intro_from(origin: Origin, start: np.ndarray, h: int) -> np.ndarray:
+    """Return each place's weekly introduction probability after `start`.
+
+    Week `start + 1 + i` of a silent place has probability $q$ times the
+    share of the week not yet reported, so an introduction is likelier in
+    recent weeks, whose cases may still be reported, and has probability
+    $q$ in weeks without data.
+    """
+    n_data = origin.complete.shape[1]
+    u = start[:, None] + 1 + np.arange(h)[None, :]
+    seen = np.take_along_axis(
+        np.pad(origin.complete, ((0, 0), (0, h + 1))), u, axis=1
+    )
+    seen = np.where(u < n_data, np.clip(seen, 0.0, 1.0), 0.0)
+    return origin.intro[:, None] * (1.0 - seen)
 
 
 def frame(
@@ -304,7 +315,10 @@ class RandomWalk:
         start = origin.start
         x0 = origin.reported[np.arange(n_loc), start]
         _, y = _walks(
-            _key(task), np.repeat(x0[:, None], n, axis=1), origin, n_all
+            _key(task),
+            np.repeat(x0[:, None], n, axis=1),
+            origin,
+            _intro_from(origin, start, n_all),
         )
         values = np.zeros((n, n_loc, n_all))
         for loc in range(n_loc):
@@ -393,7 +407,7 @@ class RandomWalkNowcast(RandomWalk):
         k = np.clip(back, 0, k_n - 1)
         # Weeks older than the fitted ones are final, with no removals.
         b = np.where(back < k_n, origin.removal[:, k], 0.0)
-        key_x, key_walk, key_part = jax.random.split(_key(task), 3)
+        key_x, key_walk = jax.random.split(_key(task))
         shape = (n, *point.shape)
         reported = jnp.broadcast_to(
             jnp.asarray(origin.reported, jnp.float32), shape
@@ -410,30 +424,33 @@ class RandomWalkNowcast(RandomWalk):
             ),
             np.float64,
         )
-        w0 = origin.start_nowcast
-        lam, y = _walks(key_walk, nowcast[:, :, w0].T, origin, n_all)
+        # Each place walks from its latest week with enough of it reported
+        # and enough cases for its nowcast to be reliable, else from its
+        # `randomwalk` start week. A silent place has no such week.
+        settings = origin.settings
+        cw = snap.cut_week(origin.o)
         cut = int(snap.cut[origin.o])
-        c_week = int(snap.week[cut])
-        miss = int(np.flatnonzero(snap.week == c_week).max()) - cut
+        seen_days = np.flatnonzero(snap.week == cw).max() - cut
+        reliable = (
+            (origin.complete >= settings.start_share)
+            & (origin.reported >= settings.start_count)
+            & (np.arange(n_data) <= cw)
+        )
+        latest = n_data - 1 - np.argmax(reliable[:, ::-1], axis=1)
+        w0 = np.where(reliable.any(axis=1), latest, origin.start)
+        w0 = np.where(origin.silent, origin.start, w0)
+        x0 = nowcast[:, np.arange(n_loc), w0].T
+        # A partial week's nowcast covers its observed days only.
+        x0 = np.where((w0 == cw)[:, None], x0 * 7 / (7 - seen_days), x0)
+        _, y = _walks(key_walk, x0, origin, _intro_from(origin, w0, n_all))
         values = np.zeros((n, n_loc, n_all))
-        part = np.asarray(
-            jax.random.poisson(
-                key_part, jnp.asarray(lam[:, :, 0] * miss / 7, jnp.float32)
-            ),
-            dtype=np.float64,
-        )  # [L, S]
-        for u in range(n_all):
-            if u <= w0:
-                values[:, :, u] = nowcast[:, :, u]
-            else:
-                values[:, :, u] = y[:, :, u - w0 - 1].T
-                if u == w0 + 1 and miss > 0 and u < n_data:
-                    values[:, :, u] = nowcast[:, :, u] + part.T
-        # A silent place follows its introductions from the week after its
-        # start week, as in `randomwalk`, so its nowcast weeks too.
-        for loc in np.flatnonzero(origin.silent):
-            s = int(origin.start[loc])
-            values[:, loc, s + 1 :] = y[loc, :, : n_all - s - 1]
+        for loc in range(n_loc):
+            s = int(w0[loc])
+            values[:, loc, :s] = nowcast[:, loc, :s]
+            values[:, loc, s] = x0[loc]
+            for u in range(s + 1, n_all):
+                floor = origin.reported[loc, u] if u < n_data else 0.0
+                values[:, loc, u] = np.maximum(y[loc, :, u - s - 1], floor)
         return values, weeks
 
 
