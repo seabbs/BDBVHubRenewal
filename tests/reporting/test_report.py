@@ -366,7 +366,6 @@ def test_nowcast_groups() -> None:
     )
     assert groups["main"] == ["CD", "CD-B", "CD-C", "CD-D"]
     assert groups["other"] == ["CD-A"]
-    assert groups["zones"] == ["CD-D-01"]
 
 
 def test_release_scores_horizon_is_weeks_from_the_reference_date(

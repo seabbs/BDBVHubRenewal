@@ -379,7 +379,7 @@ def _release_section(
         pd.concat(
             [
                 pd.read_csv(res / "nowcast-energy.csv"),
-                pd.read_csv(res / "zone-energy.csv"),
+                _as_submitted(pd.read_csv(res / "zone-energy.csv")),
             ]
         ),
         names,
@@ -539,7 +539,7 @@ _NOWCAST_GROUPS: Final = (
 def _nowcast_groups(
     target: pd.DataFrame, locations: Sequence[str]
 ) -> dict[str, list[str]]:
-    """Group locations by level, with the main provinces by size."""
+    """Group the country and provinces, with the main provinces by size."""
     real = target.loc[target["kind"] == "real"]
     latest = real.loc[real["vintage"] == real["vintage"].max()]
     size = latest.groupby("location")["total"].sum()
@@ -552,7 +552,6 @@ def _nowcast_groups(
     return {
         "main": [loc for loc in (NATIONAL, *main) if loc in have],
         "other": [loc for loc in provinces[3:] if loc in have],
-        "zones": sorted(have - set(provinces) - {NATIONAL}),
     }
 
 
@@ -745,6 +744,8 @@ def _zone_nowcast_section(
         "A ratio of 0.69 is double the recent count and -0.69 is half.\n"
         "Click a place to show it in the chart above.\n"
         "The map colours each zone by the same ratio.\n"
+        "Katoyi (CD-NK-13) is not on the map: its code in the hub mapping "
+        "does not match the boundary file.\n"
         "Zone boundaries are from [BVDOutbreakSize]"
         f"(https://github.com/{BVD_REPO}/blob/{release.choice.tag}/"
         f"{BOUNDARIES_PATH}) at {release.choice.tag}, from the Ministry of "
