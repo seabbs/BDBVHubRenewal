@@ -75,7 +75,7 @@ def test_10_24_point_nowcasts_use_one_daily_delay(origin24) -> None:
     # Weeks 10-24, 10-17, 10-10, 10-03, from the 8 and 9 day pairs.
     # Downward revisions are moved onto earlier releases before the sums.
     assert _weeks(origin24, "CD") == pytest.approx(
-        [368.5, 373.4, 488.4, 515.9], abs=0.06
+        [369.0, 373.4, 488.3, 515.9], abs=0.06
     )
     # Tshopo has under 10 cases a week, so uses the national delay.
     assert _weeks(origin24, "CD-TO") == pytest.approx(
@@ -85,13 +85,13 @@ def test_10_24_point_nowcasts_use_one_daily_delay(origin24) -> None:
 
 def test_provinces_use_own_factors_where_they_have_10_cases(origin24) -> None:
     assert _weeks(origin24, "CD-IT") == pytest.approx(
-        [212.7, 181.3, 282.6, 253.1], abs=0.06
+        [215.3, 181.5, 282.9, 253.0], abs=0.06
     )
     assert _weeks(origin24, "CD-NK") == pytest.approx(
-        [118.5, 149.5, 154.6, 214.2], abs=0.06
+        [119.7, 149.2, 154.6, 214.4], abs=0.06
     )
     assert _weeks(origin24, "CD-HU") == pytest.approx(
-        [17.7, 30.7, 27.7, 29.9], abs=0.06
+        [17.6, 30.5, 27.6, 30.1], abs=0.06
     )
 
 
@@ -169,7 +169,7 @@ def test_a_factor_is_own_by_age_with_10_cases_else_the_parent(
         42,
     )
     gaps = snap.cut[fit.pairs[:, 1]] - snap.cut[fit.pairs[:, 0]]
-    own_g = log_factors(num, den, gaps)
+    own_g = log_factors(num, den, gaps, Settings().min_level)
     n_cases = np.asarray(den).sum(axis=1)
     seen = {"own": 0, "parent": 0}
     for i in range(len(snap.locations)):

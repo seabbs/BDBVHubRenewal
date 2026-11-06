@@ -1,14 +1,15 @@
-"""Snapshot data extension (E1) and the hub week aggregator.
+"""Snapshot data extensions (E1, E2) and the hub week aggregator.
 
 R's ``estimate_delay`` needs a report in every delay cell of the
 triangle or a right truncation.
 Release snapshots are published on a few days only, so most cells of
 the triangle are unobserved.
-E1 is the one named extension of the port.
-It takes the chain ladder ratio of sums over the cells observed in
+E1 takes the chain ladder ratio of sums over the cells observed in
 both releases of a pair and skips the others, which are not filled.
 Pairs of any gap share one daily log development factor per age
 (``log_factors``), and ``growth`` sums it between two ages.
+E2 fits ages in blocks of at least ``min_count`` cases that share one
+factor (``age_blocks``).
 
 Axes.
 ``counts`` is ``(n_loc, n_release, n_day)``, the count of onset day t
@@ -100,8 +101,42 @@ def pair_sums(
     )
 
 
-def log_factors(num: Any, den: Any, gaps: Any) -> np.ndarray:
-    r"""Daily log development factors shared by all pairs (extension E1).
+def age_blocks(den: Any, min_count: float) -> np.ndarray:
+    """Group ages from 0 into blocks of at least ``min_count`` cases.
+
+    Each block takes ages until their denominator, summed over the
+    pairs, reaches ``min_count``.
+    Ages left over at the end join the last block.
+
+    Parameters
+    ----------
+    den : array_like
+        Denominators of one place, ``(n_pair, max_delay)``.
+    min_count : float
+        Cases a block needs.
+
+    Returns
+    -------
+    numpy.ndarray
+        Block of each age, ``(max_delay,)``.
+    """
+    total = np.asarray(den, float).sum(axis=0)
+    block = np.zeros(total.size, dtype=int)
+    b, run = 0, 0.0
+    for a, x in enumerate(total):
+        block[a] = b
+        run += x
+        if run >= min_count:
+            b, run = b + 1, 0.0
+    if run < min_count and b > 0:
+        block[block == b] = b - 1
+    return block
+
+
+def log_factors(
+    num: Any, den: Any, gaps: Any, min_count: float = 0.0
+) -> np.ndarray:
+    r"""Daily log development factors shared by all pairs (E1 and E2).
 
     A day of age $a$ at release $r$ is age $a + s$ at release $r + 1$,
     with $s$ the pair's gap in days.
@@ -113,7 +148,11 @@ def log_factors(num: Any, den: Any, gaps: Any) -> np.ndarray:
     $\log(\sum \mathrm{num} / \sum \mathrm{den}) = \sum g$,
     weighted by $\sum \mathrm{den}$, and $g \ge 0$ is the
     non-negative least squares fit.
-    With a gap of 1 only, $g(a)$ is the log of the chain ladder factor.
+    Ages share one factor within each block of `age_blocks`, so each
+    factor is fitted to at least ``min_count`` cases.
+    With a gap of 1 only, a block's factor is the denominator-weighted
+    mean of its ages' log ratios, so $g(a)$ of an age in its own block is
+    the log of the chain ladder factor.
 
     Parameters
     ----------
@@ -121,6 +160,8 @@ def log_factors(num: Any, den: Any, gaps: Any) -> np.ndarray:
         ``(n_loc, n_pair, max_delay)``, from `pair_sums`.
     gaps : array_like of int
         Each pair's gap in days.
+    min_count : float, default 0
+        Cases each block of ages needs. 0 gives one factor per age.
 
     Returns
     -------
@@ -145,7 +186,10 @@ def log_factors(num: Any, den: Any, gaps: Any) -> np.ndarray:
         seen = w > 0
         y = np.log(np.where(seen, n_sum[n].ravel() / np.where(seen, w, 1), 1))
         root = np.sqrt(w)
-        g[n] = nnls(rows * root[:, None], y * root)[0]
+        block = age_blocks(den[n], min_count)
+        shared = (block[:, None] == np.arange(block.max() + 1)).astype(float)
+        theta = nnls(rows @ shared * root[:, None], y * root)[0]
+        g[n] = shared @ theta
     return g
 
 

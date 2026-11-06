@@ -16,7 +16,8 @@ and the days of age $a$ that both releases observe, gives one equation
 for $\sum_{j=a}^{a+s-1} g(j)$ on the log scale, weighted by the
 denominator.
 $g$ is the non-negative least squares fit of all of them
-(`log_factors`).
+(`log_factors`), with ages sharing a factor until their denominator
+reaches `Settings.min_level` cases (`age_blocks`).
 Cells a release does not observe are skipped, not filled.
 A place uses its own $g(a)$ when the denominator at age $a$, summed over
 the pairs, is at least 10 cases, and otherwise its parent's (zone,
@@ -118,8 +119,9 @@ class Settings:
         $D$, the days a count may still grow, baselinenowcast's
         `max_delay`.
     min_level : float
-        Cases a week for a place to use its own spreads, and cases in the
-        pooled denominator of an age for it to use its own delay factor.
+        Cases a week for a place to use its own spreads, cases in the
+        pooled denominator of an age for it to use its own delay factor,
+        and cases in each block of ages that share a delay factor.
     min_errors : int
         Errors at a horizon to fit the observation model.
     level_weeks : tuple of int
@@ -339,7 +341,7 @@ def fit_delay(
     if sums is None:
         return None
     pairs, num, den, gaps = sums
-    g = log_factors(num, den, gaps)
+    g = log_factors(num, den, gaps, settings.min_level)
     own = own_ages(den, snap.parent, settings)
     # Nodes are sorted by code length, so a parent precedes its children.
     for n in range(g.shape[0]):

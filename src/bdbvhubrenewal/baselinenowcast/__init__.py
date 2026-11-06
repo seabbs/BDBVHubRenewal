@@ -1,10 +1,12 @@
-"""JAX port of R baselinenowcast 0.2.2 with one extension.
+"""JAX port of R baselinenowcast 0.2.2 with two extensions.
 
 Reporting triangles are ``(triangle, mask)`` pairs.
 ``mask`` is True where R has an observed cell and False where R has
 NA.
-The extension (E1) skips unobserved cells in the chain ladder ratio
-of sums for release snapshots (``snapshots.py``).
+Both are for release snapshots (``snapshots.py``).
+E1 skips unobserved cells in the chain ladder ratio of sums.
+E2 fits ages in blocks of at least ``min_count`` cases that share one
+factor.
 """
 
 from .delay import apply_delay, estimate_and_apply_delay, estimate_delay
@@ -17,6 +19,7 @@ from .sample import (
     sample_prediction,
 )
 from .snapshots import (
+    age_blocks,
     fill_row,
     growth,
     hub_week_matrix,
@@ -43,6 +46,7 @@ from .uncertainty import (
 )
 
 __all__ = [
+    "age_blocks",
     "allocate_reference_times",
     "apply_delay",
     "apply_reporting_structure",
