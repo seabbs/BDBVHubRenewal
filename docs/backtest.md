@@ -47,4 +47,6 @@ Each origin's forecasts scored on the counts each later release reported.
 
     --8<-- "truth-changes.md"
 
+--8<-- "backtest-checks.md"
+
 --8<-- "lopo-section.md"

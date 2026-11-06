@@ -43,7 +43,7 @@ from bdbvhubrenewal.data.zone_map import (
     zone_boundaries,
     zone_names,
 )
-from bdbvhubrenewal.data.zones import hub_zones
+from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     check_distinct,
@@ -51,6 +51,12 @@ from bdbvhubrenewal.evaluation.backtest import (
     make_tasks,
     run_forecasts,
     truth_changes,
+)
+from bdbvhubrenewal.evaluation.checks import (
+    SMALL_MAX,
+    check_summary,
+    flags,
+    place_types,
 )
 from bdbvhubrenewal.evaluation.hubcompare import (
     attribution,
@@ -66,7 +72,7 @@ from bdbvhubrenewal.evaluation.nowcast import (
 )
 from bdbvhubrenewal.evaluation.scoring import summarise_scores
 from bdbvhubrenewal.evaluation.store import samplers, stored_models
-from bdbvhubrenewal.evaluation.zones import SUMMED, zone_relative_skill
+from bdbvhubrenewal.evaluation.zones import SUMMED
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastTask,
@@ -1574,6 +1580,12 @@ def _backtest_page(
             explorer_src,
         ),
     )
+    _write(
+        gen / "backtest-checks.md",
+        _checks_section(res, quantiles, target, data_dir, names)
+        if shown
+        else "",
+    )
     _write(gen / "lopo-section.md", _lopo_section(res / "lopo-scores.csv"))
     _write(gen / "ladder.md", _ladder_page(res / "ladder.csv"))
     _write(
@@ -1625,6 +1637,70 @@ def _backtest_page(
                 *(m for m in sscores["model"].unique() if m not in names),
             ],
         ),
+    )
+
+
+def _checks_section(
+    res: Path,
+    quantiles: pd.DataFrame,
+    target: pd.DataFrame,
+    data_dir: Path | str,
+    names: Sequence[str],
+) -> str:
+    """Score the forecasts by place type and flag (`checks`)."""
+    scores = _release_scores(res)
+    scores = scores.loc[
+        scores["model"].isin(names) & (scores["target"] == "reported")
+    ]
+    national = scores["location"] == NATIONAL
+    scores = scores.assign(
+        scale=national.map({True: "national", False: "provinces"})
+    )
+    zones = _as_submitted(
+        pd.read_csv(res / "zone-scores.csv", low_memory=False)
+    )
+    zones = zones.loc[
+        zones["model"].isin(names) & (zones["target"] == "reported")
+    ]
+    scores = pd.concat([scores, zones.assign(scale="zones")])
+    origins = sorted(set(scores["origin"].astype(str)))
+    real = target.loc[target["kind"] == "real"]
+    daily_zones = load_daily_zones(data_dir)
+    counts = pd.concat(
+        [
+            real[["vintage", "location", "target_end_date", "total"]],
+            *(
+                weekly_zone_counts(daily_zones, v).assign(vintage=v)
+                for v in origins
+            ),
+        ],
+        ignore_index=True,
+    ).astype({"vintage": str})
+    origin_of = {str(reference_date_for_vintage(v)): v for v in origins}
+    ref = quantiles.loc[
+        quantiles["target_end_date"].astype(str)
+        == quantiles["reference_date"].astype(str)
+    ]
+    ref = ref.assign(origin=ref["reference_date"].astype(str).map(origin_of))
+    ref = ref.dropna(subset=["origin"])
+    scores = scores.assign(origin=scores["origin"].astype(str))
+    summary = check_summary(
+        scores,
+        place_types(counts, scores),
+        flags(counts, ref[["model", "origin", "location", "q50", "q95"]]),
+    )
+    return (
+        "## Checks\n\n"
+        "Scores of the scored weeks, split by the type of place and by the "
+        "plausibility flag of their forecast "
+        "([checks](methods/evaluation.md#checks)).\n"
+        "A place is silent with no case in the 9 weeks to the origin, small "
+        f"with at most {SMALL_MAX} cases in any of those weeks, and larger "
+        "otherwise.\n"
+        "A forecast is flagged when its reference week drops to a third of "
+        "the recent level (collapse) or rises far above every recent count "
+        "(blow-up), and has no flag otherwise.\n\n"
+        + filter_table(_table(summary), ["scale", "split", "model"])
     )
 
 
