@@ -303,17 +303,15 @@ def test_randomwalknowcast_s_delay_gives_its_completeness(
     )[0]
     origin = RandomWalkNowcast().origin_at(task, errors=False)
     snap = origin.snap
-    curves = delay_curves(chain_delay_summary(origin, "m", task.vintage))
+    curves = delay_curves(
+        chain_delay_summary(origin, "m", task.vintage), snap.locations
+    )
     cut = snap.days[snap.cut[origin.o]].date()
-    grid = pd.MultiIndex.from_product(
-        [snap.locations, snap.week_ends],
-        names=["location", "target_end_date"],
-    ).to_frame(index=False)
-    share = week_shares(curves, cut, grid.assign(value=1.0)).set_index(
+    share = week_shares(curves, cut, snap.week_ends).set_index(
         ["location", "target_end_date"]
     )["share"]
-    got = share.reindex(pd.MultiIndex.from_frame(grid)).to_numpy()
-    got = got.reshape(len(snap.locations), -1)
+    grid = pd.MultiIndex.from_product([snap.locations, snap.week_ends])
+    got = share.reindex(grid).to_numpy().reshape(len(snap.locations), -1)
     # The first week holds fewer than seven onset days.
     np.testing.assert_allclose(got[:, 1:], origin.complete[:, 1:], rtol=1e-6)
 

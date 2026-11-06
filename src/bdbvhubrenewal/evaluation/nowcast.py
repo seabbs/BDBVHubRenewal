@@ -54,7 +54,8 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
-from bdbvhubrenewal.data.snapshots import parent_code, release_cutoff
+from bdbvhubrenewal.data.snapshots import NATIONAL, release_cutoff
+from bdbvhubrenewal.data.zones import province_of
 from bdbvhubrenewal.evaluation.scoring import (
     SCORE_COLUMNS,
     energy_scores,
@@ -137,29 +138,43 @@ class ReleaseBacktest:
     fits: pd.DataFrame
 
 
-def delay_curves(summary: pd.DataFrame) -> pd.DataFrame:
+def delay_curves(summary: pd.DataFrame, places: Sequence[str]) -> pd.DataFrame:
     """Return a model's share of a day's final count reported by age.
+
+    Each place takes the model's delay at that place, or for a zone with
+    none its province's. A model fitted once for every place (location
+    `"pooled"`) has that delay at every place.
 
     Parameters
     ----------
     summary : pandas.DataFrame
         The model's delay summary (`delay_summary`), with `location`,
         `x` (age in days), `quantity` and `q50`. The rows with quantity
-        `reported_share` are used. A location `"pooled"` holds one
-        delay for every place.
+        `reported_share` are used.
+    places : sequence of str
+        The places to map.
 
     Returns
     -------
     pandas.DataFrame
-        Columns `location`, `age` and `share`.
+        Columns `location`, `age` and `share`, for the places the model
+        has a delay for.
     """
     rows = summary.loc[summary["quantity"] == "reported_share"]
-    out = rows.rename(columns={"x": "age", "q50": "share"})
+    rows = rows.rename(columns={"x": "age", "q50": "share"})
+    by_place = {str(loc): grp for loc, grp in rows.groupby("location")}
+    frames = []
+    for place in places:
+        key = place if place in by_place else province_of(place)
+        delay = by_place.get("pooled", by_place.get(key))
+        if delay is not None:
+            frames.append(delay.assign(location=place))
+    out = pd.concat(frames, ignore_index=True) if frames else rows.iloc[:0]
     return out.astype({"age": int})[["location", "age", "share"]]
 
 
 def week_shares(
-    curves: pd.DataFrame, cutoff: dt.date, samples: pd.DataFrame
+    curves: pd.DataFrame, cutoff: dt.date, weeks: Sequence[str]
 ) -> pd.DataFrame:
     r"""Return the share of each week's final count reported by a cut-off.
 
@@ -167,10 +182,6 @@ def week_shares(
     from the place's curve, its last value past the curve's ages, and
     $\pi = 0$ for days after the cut-off.
     A week's share is the mean over its seven days.
-    A place takes its own curve, else the `"pooled"` one, else its
-    parent's. A place with none of these, such as the country of a model
-    fitted by province, takes the mean of its children's shares weighted
-    by the model's mean forecast for each.
 
     Parameters
     ----------
@@ -178,76 +189,35 @@ def week_shares(
         `delay_curves` output.
     cutoff : datetime.date
         The cut-off of the release.
-    samples : pandas.DataFrame
-        The model's samples, with `location`, `target_end_date` and
-        `value`.
+    weeks : sequence of str
+        Hub week ends.
 
     Returns
     -------
     pandas.DataFrame
-        Columns `location`, `target_end_date` and `share`.
+        Columns `location`, `target_end_date` and `share`, for every
+        place in `curves`.
     """
-    mean = samples.groupby(["location", "target_end_date"])["value"].mean()
-    weeks = sorted(set(samples["target_end_date"]))
     ends = [as_date(w) for w in weeks]
     age = np.array([[(cutoff - e).days + d for d in range(7)] for e in ends])
-    by_place = {
-        str(loc): grp.set_index("age")["share"].sort_index()
-        for loc, grp in curves.groupby("location")
-    }
-
-    def curve(loc: str | None) -> pd.Series | None:
-        while loc is not None:
-            if loc in by_place:
-                return by_place[loc]
-            if "pooled" in by_place:
-                return by_place["pooled"]
-            loc = parent_code(loc)
-        return None
-
-    frames, missing = [], []
-    for loc in sorted(set(samples["location"])):
-        c = curve(loc)
-        if c is None:
-            missing.append(loc)
-            continue
+    frames = []
+    for loc, grp in curves.groupby("location"):
+        c = grp.sort_values("age")
         pi = np.where(
             age >= 0,
-            np.interp(age, c.index.to_numpy(), c.to_numpy()),
+            np.interp(age, c["age"].to_numpy(), c["share"].to_numpy()),
             0.0,
         )
         frames.append(
             pd.DataFrame(
                 {
                     "location": loc,
-                    "target_end_date": weeks,
+                    "target_end_date": list(weeks),
                     "share": pi.mean(axis=1),
                 }
             )
         )
-    out = pd.concat(frames, ignore_index=True)
-    weights = mean.rename("weight").reset_index()
-    for loc in missing:
-        children = out.loc[out["location"].map(parent_code) == loc].merge(
-            weights, on=["location", "target_end_date"]
-        )
-        children["weighted"] = children["weight"] * children["share"]
-        sums = children.groupby("target_end_date")[["weighted", "weight"]].sum()
-        share = sums["weighted"] / sums["weight"].where(sums["weight"] > 0)
-        out = pd.concat(
-            [
-                out,
-                pd.DataFrame(
-                    {
-                        "location": loc,
-                        "target_end_date": share.index,
-                        "share": share.fillna(0.0).to_numpy(),
-                    }
-                ),
-            ],
-            ignore_index=True,
-        )
-    return out
+    return pd.concat(frames, ignore_index=True)
 
 
 def draw_reported(
@@ -390,27 +360,36 @@ def weeks_back_from_cutoff(
 
 def _reported_target(
     samples: pd.DataFrame,
-    curves: pd.DataFrame | None,
+    summary: pd.DataFrame | None,
     name: str,
     origin: str,
     later: Sequence[str],
     daily: pd.DataFrame,
     reported: pd.DataFrame,
     rng: np.random.Generator,
-    as_is: bool,
 ) -> list[pd.DataFrame]:
-    """Return a model's samples of what each later release shows."""
-    if as_is:
+    """Return a model's samples of what each later release shows.
+
+    `randomwalk` is returned as it is. Another model's places are mapped
+    by its delay (`delay_curves`), and the country, where the model has
+    no delay there, is the sum of its mapped provinces.
+    """
+    if name == RANDOM_WALK:
         return [
             _label(samples, name, origin, "reported", o2, daily) for o2 in later
         ]
-    if curves is None:
+    if summary is None:
         return []
-    now = week_shares(curves, _cutoff(daily, origin), samples)
+    curves = delay_curves(summary, sorted(set(samples["location"])))
+    weeks = sorted(set(samples["target_end_date"]))
+    summed = NATIONAL in set(samples["location"]) - set(curves["location"])
+    now = week_shares(curves, _cutoff(daily, origin), weeks)
     out = []
     for o2 in later:
-        then = week_shares(curves, _cutoff(daily, o2), samples)
+        then = week_shares(curves, _cutoff(daily, o2), weeks)
         mapped = draw_reported(samples, reported, now, then, rng)
+        if summed:
+            mapped = add_national(mapped)
         out.append(_label(mapped, name, origin, "reported", o2, daily))
     return out
 
@@ -527,7 +506,7 @@ def release_backtest(
             )
         here = kept.loc[kept["vintage"].astype(str) == task.vintage]
         forecasts: dict[str, pd.DataFrame] = {}
-        curves: dict[str, pd.DataFrame | None] = {}
+        summaries: dict[str, pd.DataFrame | None] = {}
         for model in built:
             try:
                 samples = model.forecast(task)
@@ -544,10 +523,7 @@ def release_backtest(
                 )
                 continue
             forecasts[model.name] = add_national(samples)
-            summary = getattr(model, "delay_summary", None)
-            curves[model.name] = (
-                None if summary is None else delay_curves(summary)
-            )
+            summaries[model.name] = getattr(model, "delay_summary", None)
             fits = pd.DataFrame(getattr(model, "fit_diagnostics", []))
             fits.insert(0, "model", model.name)
             fits.insert(1, "origin", task.vintage)
@@ -561,7 +537,7 @@ def release_backtest(
         for name, grp in here.groupby("model"):
             forecasts[str(name)] = grp[cols]
             mine = learnt.loc[learnt["model"] == name]
-            curves[str(name)] = None if mine.empty else delay_curves(mine)
+            summaries[str(name)] = None if mine.empty else mine
         reported = _truth(real, task.vintage).rename(
             columns={"truth": "reported"}
         )
@@ -570,8 +546,8 @@ def release_backtest(
         rngs = {name: task.rng(name) for name in forecasts}
         for name, samples in forecasts.items():
             frames += _reported_target(
-                samples, curves[name], name, task.vintage, later, daily,
-                reported, rngs[name], as_is=name == RANDOM_WALK,
+                samples, summaries[name], name, task.vintage, later, daily,
+                reported, rngs[name],
             )  # fmt: skip
             frames.append(
                 _label(samples, name, task.vintage, "complete", latest, daily)

@@ -155,7 +155,7 @@ def zone_backtest(
         active = tuple(z for z in zones if z in set(counts["location"]))
         zt = zone_task(task, counts, active, pd.concat([daily, daily_zones]))
         forecasts: dict[str, pd.DataFrame] = {}
-        curves: dict[str, pd.DataFrame | None] = {}
+        summaries: dict[str, pd.DataFrame | None] = {}
         for name in models:
             model = get_model(name)
             try:
@@ -170,8 +170,7 @@ def zone_backtest(
             forecasts[name + SUMMED] = reconcile_zones(
                 direct, prov, task, counts, active
             )
-            for key in (name, name + SUMMED):
-                curves[key] = None if summary is None else delay_curves(summary)
+            summaries[name] = summaries[name + SUMMED] = summary
             kept.append(
                 forecasts[name + SUMMED].assign(
                     model=name,
@@ -188,12 +187,16 @@ def zone_backtest(
         for later in (v for v in vintages if v > vintage):
             drawn = []
             for name, samples in forecasts.items():
-                curve = curves[name]
-                if curve is None:
+                summary = summaries[name]
+                if summary is None:
                     mapped = samples
                 else:
-                    now = week_shares(curve, cut, samples)
-                    then = week_shares(curve, _cutoff(daily, later), samples)
+                    curves = delay_curves(
+                        summary, sorted(set(samples["location"]))
+                    )
+                    weeks = sorted(set(samples["target_end_date"]))
+                    now = week_shares(curves, cut, weeks)
+                    then = week_shares(curves, _cutoff(daily, later), weeks)
                     mapped = draw_reported(
                         samples, reported, now, then, rngs[name]
                     )
