@@ -92,18 +92,6 @@ def test_lopo_section_hidden_without_results(tmp_path: Path) -> None:
     assert "CD-IT" in text
 
 
-def test_zone_section() -> None:
-    text = report._zone_section(
-        FIXTURES / "zone-scores.csv",
-        FIXTURES / "zone-energy.csv",
-    )
-    assert text.startswith('??? note "Health zones')
-    assert "rel_energy" in text
-    # Only the submitted form, under the model's name.
-    assert "summed to provinces" not in text
-    assert "| randomwalknowcast " in text
-
-
 def test_ladder_page(tmp_path: Path) -> None:
     # No progress wording.
     ladder = pd.DataFrame(

@@ -1,7 +1,8 @@
 // Nowcast chart: pick a scale and a place (for a zone, its province first)
 // to see each model's latest nowcast and forecast over the reported counts,
 // as bands or trajectories. Model tick boxes come from toggles.js.
-// bdbvNowcastShow(id) picks a place and scrolls the chart into view.
+// data-scale is the scale shown first. bdbvNowcastCharts[element id](place)
+// picks a place in that chart and scrolls it into view.
 (function () {
   "use strict";
   var NS = "http://www.w3.org/2000/svg";
@@ -35,6 +36,7 @@
       .filter(function (s) { return d.places.some(function (p) { return p.scale === s[0]; }); });
     var selScale = h("select", {}, h("label", {}, controls, "Scale "));
     scales.forEach(function (s) { h("option", { value: s[0] }, selScale, s[1]); });
+    if (root.dataset.scale) selScale.value = root.dataset.scale;
     var provLabel = h("label", {}, controls, "Province ");
     var selProv = h("select", {}, provLabel);
     d.places.filter(function (p) { return p.scale === "provinces"; }).forEach(function (p) {
@@ -56,7 +58,7 @@
       d.places.filter(function (p) {
         return p.scale === selScale.value && (!zones || p.province === selProv.value);
       }).forEach(function (p) {
-        h("option", { value: p.id }, selZone, zones ? p.id : p.name);
+        h("option", { value: p.id }, selZone, p.name);
       });
     }
     selScale.addEventListener("change", function () { fillZones(); draw(); });
@@ -173,7 +175,8 @@
       Z.attach(zoom, svg, { L: L, R: R, T: Tp, B: B, W: W, H: H, x: [x0, x1], y: [y0, y1] });
     }
 
-    window.bdbvNowcastShow = function (id) {
+    window.bdbvNowcastCharts = window.bdbvNowcastCharts || {};
+    window.bdbvNowcastCharts[root.id] = function (id) {
       var p = d.places.filter(function (x) { return x.id === id; })[0];
       if (!p) return;
       selScale.value = p.scale;

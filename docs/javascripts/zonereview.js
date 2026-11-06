@@ -3,7 +3,8 @@
 // implausible places are easy to find. The ratio is
 // log((median + 1) / (recent + 1)) for the week chosen, with recent the
 // mean of the last two complete weeks. Rows sort and filter with
-// tablefilter.js, and a place opens in the nowcast chart (nowcastchart.js).
+// tablefilter.js, and a place opens in the nowcast chart whose element id
+// is `data-chart` (nowcastchart.js).
 // A map of the zones in `data-map` (GeoJSON with `location`) is coloured by
 // the same ratio, blue for falls and red for rises, clamped at 2.
 (function () {
@@ -123,7 +124,7 @@
           (r ? ": median " + Math.round(r.median) + ", recent " + r.recent.toFixed(1) +
             ", ratio " + r.ratio.toFixed(2) : ": no forecast");
         path.addEventListener("click", function () {
-          if (window.bdbvNowcastShow) window.bdbvNowcastShow(s.id);
+          window.bdbvNowcastCharts[root.dataset.chart](s.id);
         });
       });
       // Key: the colour scale from -2 to 2.
@@ -183,7 +184,7 @@
         var b = h("button", { type: "button", class: "zonereview-link" },
           h("td", {}, tr), p.scale === "zones" ? p.name + " (" + p.id + ")" : p.name);
         b.addEventListener("click", function () {
-          if (window.bdbvNowcastShow) window.bdbvNowcastShow(p.id);
+          window.bdbvNowcastCharts[root.dataset.chart](p.id);
         });
         h("td", {}, tr, SCALES[p.scale]);
         h("td", {}, tr, p.province ? names[p.province] || p.province : "");
