@@ -278,12 +278,9 @@ def make_report(
     )
     # Written by `fit-store load` from the stored fits.
     learnt = pd.read_csv(res / DELAY_SUMMARY_FILE)
-    fitted = sorted(set(learnt["location"]) - {"pooled"})
-    baseline = baseline_share(
-        daily, str(learnt["vintage"].max()), [NATIONAL, *fitted]
-    )
+    baseline = baseline_share(daily, str(learnt["vintage"].max()), [NATIONAL])
     save_light_dark(
-        partial(plot_renewal_delay, learnt, baseline, _location_names(real)),
+        partial(plot_renewal_delay, learnt, baseline),
         fig / "renewal-delay.svg",
     )
 
@@ -293,7 +290,6 @@ _RELEASE_MODELS: Final = (
     "randomwalk",
     "randomwalknowcast",
     "renewal",
-    "renewalsp",
     "renewalbvd",
 )
 _TARGET_LABELS: Final = {

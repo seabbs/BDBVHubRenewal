@@ -278,7 +278,7 @@ def get_model(name: str) -> ForecastModel:
     --------
     >>> from bdbvhubrenewal.forecasters import get_model, list_models
     >>> [spec.name for spec in list_models()]
-    ['randomwalk', 'randomwalknowcast', 'renewal', 'renewalbvd', 'renewalsp']
+    ['randomwalk', 'randomwalknowcast', 'renewal', 'renewalbvd']
     >>> model = get_model("randomwalknowcast")
     >>> samples = model.forecast(task)  # a ForecastTask, see `make_tasks`
     """

@@ -133,7 +133,6 @@ MODEL_STYLE: Final[dict[str, tuple[int | None, str]]] = {
     "randomwalknowcast": (1, "solid"),
     "renewal": (2, "solid"),
     "renewalbvd": (3, "solid"),
-    "renewalsp": (4, "solid"),
     "pprandomwalknowcast": (5, "solid"),
     "as reported": (None, "dotted"),
 }
@@ -810,7 +809,6 @@ def baseline_share(
 def plot_renewal_delay(
     summary: pd.DataFrame,
     baseline: pd.DataFrame,
-    names: Mapping[str, str] | None = None,
     mode: str = "light",
 ) -> Figure:
     """Plot the renewal models' learnt delay at their latest origin.
@@ -819,89 +817,69 @@ def plot_renewal_delay(
     ----------
     summary : pandas.DataFrame
         `delay-summary.csv` rows (`bdbvhubrenewal.forecasters.renewal.
-        delay_summary` with `model`, `vintage` and `location`).
+        delay_summary` with `model` and `vintage`).
     baseline : pandas.DataFrame
-        `baseline_share` at the same release, with the country as
-        `NATIONAL` for the fits pooled over provinces.
-    names : mapping, optional
-        Location names by code.
+        `baseline_share` for the country at the same release.
     mode : str
         `"light"` or `"dark"`.
 
     Returns
     -------
     matplotlib.figure.Figure
-        A row per fit: pooled over provinces, then each province a
-        single-patch model fits. Left: the share of onsets in the last week
-        reported by each day since onset, to the day before the longest
-        delay, with randomwalknowcast's share for the same place. Right:
-        the mean delay by onset week. Lines are medians and bands 90%
-        intervals.
+        The delay pooled over provinces. Left: the share of onsets in the
+        last week reported by each day since onset, to the day before the
+        longest delay, with randomwalknowcast's share. Right: the mean
+        delay by onset week. Lines are medians and bands 90% intervals.
     """
-    names = dict(names or {})
     ink = THEMES[mode]
     latest = summary.groupby("model")["vintage"].transform("max")
     rows = summary.loc[summary["vintage"] == latest]
     models = list(dict.fromkeys(rows["model"]))
-    places = list(dict.fromkeys(rows["location"]))
-    places.sort(key=lambda p: (p != "pooled", names.get(p, p)))
-    fig, axes = plt.subplots(
-        len(places),
-        2,
-        figsize=(7.2, 2.1 * len(places)),
-        squeeze=False,
-        layout="constrained",
+    fig, (left, right) = plt.subplots(
+        1, 2, figsize=(7.2, 2.4), layout="constrained"
     )
     last_day = int(pd.to_numeric(rows["x"], errors="coerce").max())
-    for (left, right), place in zip(axes, places, strict=True):
-        here = rows.loc[rows["location"] == place]
-        fitted = list(dict.fromkeys(here["model"]))
-        where = NATIONAL if place == "pooled" else place
-        title = (
-            "All provinces" if place == "pooled" else names.get(place, place)
-        )
-        left.set_title(f"{title}: {', '.join(fitted)}", fontsize=8, loc="left")
-        base = baseline.loc[baseline["location"] == where]
-        left.plot(
-            base["age"],
-            base["share"],
-            color=ink["data"],
-            ls="--",
-            lw=1,
-            label="randomwalknowcast",
-        )
-        lines = []
-        for model in fitted:
-            fit = here.loc[here["model"] == model]
-            colour = model_colour(model, models, mode)
-            share = fit.loc[fit["quantity"] == "reported_share"]
-            day = pd.to_numeric(share["x"])
-            share = share.loc[day < last_day]
-            day = day.loc[share.index]
-            delay = fit.loc[fit["quantity"] == "mean_delay"]
-            week = pd.to_datetime(delay["x"])
-            for ax, x, q in ((left, day, share), (right, week, delay)):
-                ax.fill_between(x, q["q5"], q["q95"], color=colour, alpha=0.12)
-                lines.append((ax, x, q["q50"], colour, model))
-        # Later models are drawn first and wider, so a line that coincides
-        # with another stays visible under it.
-        width = {m: 1.2 + 1.2 * i for i, m in enumerate(fitted)}
-        for ax, x, y, colour, model in reversed(lines):
-            ax.plot(x, y, color=colour, lw=width[model], label=model)
-        left.set_ylim(0, 1)
-        left.set_ylabel("Share reported")
-        right.set_ylabel("Mean delay (days)")
-        _date_axis(right)
-    axes[-1][0].set_xlabel("Days since onset, last onset week")
+    left.set_title(
+        f"All provinces: {', '.join(models)}", fontsize=8, loc="left"
+    )
+    base = baseline.loc[baseline["location"] == NATIONAL]
+    left.plot(
+        base["age"],
+        base["share"],
+        color=ink["data"],
+        ls="--",
+        lw=1,
+        label="randomwalknowcast",
+    )
+    lines = []
+    for model in models:
+        fit = rows.loc[rows["model"] == model]
+        colour = model_colour(model, models, mode)
+        share = fit.loc[fit["quantity"] == "reported_share"]
+        day = pd.to_numeric(share["x"])
+        share = share.loc[day < last_day]
+        day = day.loc[share.index]
+        delay = fit.loc[fit["quantity"] == "mean_delay"]
+        week = pd.to_datetime(delay["x"])
+        for ax, x, q in ((left, day, share), (right, week, delay)):
+            ax.fill_between(x, q["q5"], q["q95"], color=colour, alpha=0.12)
+            lines.append((ax, x, q["q50"], colour, model))
+    # Later models are drawn first and wider, so a line that coincides
+    # with another stays visible under it.
+    width = {m: 1.2 + 1.2 * i for i, m in enumerate(models)}
+    for ax, x, y, colour, model in reversed(lines):
+        ax.plot(x, y, color=colour, lw=width[model], label=model)
+    left.set_ylim(0, 1)
+    left.set_ylabel("Share reported")
+    left.set_xlabel("Days since onset, last onset week")
+    right.set_ylabel("Mean delay (days)")
+    _date_axis(right)
     vintage = ", ".join(sorted(rows["vintage"].astype(str).unique()))
     fig.suptitle(f"Fits at {vintage}", fontsize=9)
-    handles: dict[str, Any] = {}
-    for ax in axes[:, 0]:
-        for h, label in zip(*ax.get_legend_handles_labels(), strict=True):
-            handles.setdefault(label, h)
+    handles, labels = left.get_legend_handles_labels()
     fig.legend(
-        list(handles.values()),
-        list(handles),
+        handles,
+        labels,
         loc="outside lower center",
         ncol=len(handles),
         fontsize=7,

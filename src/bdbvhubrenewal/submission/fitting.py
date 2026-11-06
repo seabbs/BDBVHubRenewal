@@ -6,8 +6,8 @@ its fallback chain with `bdbvhubrenewal fit --config <name>` and then
 forecasts from the saved fit with `bdbvhubrenewal nowcast --config <name>
 --fit <dir>`. A fit configuration says how to do both.
 
-The chain is `bvd` (the `renewalbvd` variant), `renewalsp` (single patch
-per location), `main` (the `renewal` variant), then the random walks.
+The chain is `bvd` (the `renewalbvd` variant), `main` (the `renewal`
+variant), then the random walks.
 The renewal configurations run the PyRenew model through
 `bdbvhubrenewal.forecasters.renewal.fit_renewal`, which samples, draws the
 trajectories and writes `ppc.json`. `randomwalk` needs no fit.
@@ -431,5 +431,5 @@ def _renewal_config(name: str) -> FitConfig:
     )
 
 
-for _name in ("main", "renewalsp", "bvd"):
+for _name in ("main", "bvd"):
     register_config(_renewal_config(_name))

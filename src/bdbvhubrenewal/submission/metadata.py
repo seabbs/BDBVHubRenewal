@@ -70,7 +70,7 @@ MODEL_METADATA = {
     # metadata of the model the chain submits (`metadata --model <variant>`).
     # The committed hub/model-metadata/seabbs-renewal.yml is that of
     # `[submission] model` in config/hub.toml: regenerate it with
-    #   bdbvhubrenewal metadata --model <renewal|renewalsp|renewalbvd>
+    #   bdbvhubrenewal metadata --model <renewal|renewalbvd>
     # when that changes (tests/submission/test_fitting.py checks it).
     "renewal": {
         "model_name": "Province renewal model (PyRenew)",
@@ -85,24 +85,6 @@ MODEL_METADATA = {
             "deviations, importation between provinces through a gravity "
             "kernel, and susceptible depletion. Provinces with no cases get "
             "importations that can seed local spread. " + _RENEWAL_OBSERVATION
-        ),
-        "data_inputs": _RENEWAL_INPUTS,
-    },
-    "renewalsp": {
-        "model_name": "Single-patch renewal model (PyRenew)",
-        "methods": (
-            "Independent renewal model in PyRenew for each province with "
-            "cases, with no pooling or coupling, fitted to known and "
-            "imputed onsets with modelled delays; national is the sum."
-        ),
-        "methods_long": (
-            "A renewal process fitted to each province alone, with a weekly "
-            "random walk on log Rt and no pooling, importation between "
-            "provinces or depletion. Provinces with at least 20 cases in "
-            "their last 6 data weeks are fitted this way. A province with "
-            "fewer cases has a constant Poisson rate, with a Gamma prior "
-            "updated by its weekly counts, drawn once per trajectory. "
-            + _RENEWAL_OBSERVATION
         ),
         "data_inputs": _RENEWAL_INPUTS,
     },

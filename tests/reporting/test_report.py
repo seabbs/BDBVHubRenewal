@@ -195,10 +195,10 @@ def test_teams_table_links_to_hub_metadata() -> None:
 def test_sampler_section() -> None:
     fits = pd.DataFrame(
         {
-            "model": ["renewal", "renewal", "renewalsp"],
+            "model": ["renewal", "renewal", "renewalbvd"],
             "kind": "real",
             "vintage": ["2026-08-18", "2026-10-09", "2026-10-09"],
-            "fit": ["all", "all", "CD-IT"],
+            "fit": "all",
             "num_chains": 2,
             "num_warmup": 300,
             "num_samples": 300,
@@ -228,7 +228,6 @@ def test_sampler_section() -> None:
         "target acceptance of 0.95" in text
     )
     assert "same as" not in text
-    assert "renewalsp" in text
     assert report._sampler_section(fits.iloc[:0], backtest, submission) == ""
 
 

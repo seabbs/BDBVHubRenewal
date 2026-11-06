@@ -52,7 +52,7 @@ def plain(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 def test_main_runs_the_renewal_model() -> None:
     names = {c.name for c in list_configs()}
-    assert {"main", "renewalsp", "randomwalk"} <= names
+    assert {"main", "bvd", "randomwalk"} <= names
     assert "fallback" not in names
 
 
@@ -240,7 +240,7 @@ def test_submission_id_is_one_config_value(tmp_path: Path) -> None:
     assert model_abbr_for("renewalbvd", hub_toml) == "renewal"
     cfg = tmp_path / "hub.toml"
     cfg.write_text('[submission]\nmodel_abbr = "other"\n')
-    assert model_abbr_for("renewalsp", cfg) == "other"
+    assert model_abbr_for("renewal", cfg) == "other"
 
 
 @pytest.mark.usefixtures("in_root")
@@ -277,7 +277,7 @@ def test_randomwalknowcast_has_its_own_hub_id(
     assert abbr.isalnum()
     assert len(abbr) < 16
     # Models without their own id submit under the renewal id.
-    assert model_abbr_for("renewalsp", ROOT / "config" / "hub.toml") == (
+    assert model_abbr_for("renewal", ROOT / "config" / "hub.toml") == (
         "renewal"
     )
     assert main(["hub-id", "--model", "randomwalknowcast"]) == 0
@@ -340,9 +340,9 @@ def test_committed_renewal_metadata_is_one_of_the_variants(
     # bdbvhubrenewal.submission.metadata).
     path = ROOT / "hub" / "model-metadata" / "seabbs-renewal.yml"
     rendered = {}
-    for variant in ("renewal", "renewalsp", "renewalbvd"):
+    for variant in ("renewal", "renewalbvd"):
         out = tmp_path / variant
         assert main(["metadata", "--model", variant, "--out", str(out)]) == 0
         rendered[variant] = (out / "seabbs-renewal.yml").read_text()
     assert path.read_text() in rendered.values()
-    assert len(set(rendered.values())) == 3
+    assert len(set(rendered.values())) == 2

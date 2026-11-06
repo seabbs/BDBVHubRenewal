@@ -180,43 +180,6 @@ def test_real_data_kernels_are_finite(table):
         assert np.all(np.isfinite(data.import_kernel))
 
 
-def test_single_patch_locations_are_independent(outbreak, sim_tables, table):
-    from bdbvhubrenewal.model.inputs import RENEWALSP
-
-    day = VINTAGE_DAYS[-1]
-    target, delays = sim_tables[day]
-    vintage = vintage_date(outbreak, day)
-
-    def one(target):
-        return vintage_from_tables(
-            target, delays, vintage, ("CD-IT",), table, RENEWALSP
-        )
-
-    changed = target.copy()
-    changed.loc[changed["location"] == "CD-NK", "observed"] *= 5
-    a, b = one(target), one(changed)
-    assert a.names == ["CD-IT"]
-    np.testing.assert_array_equal(a.known, b.known)
-    np.testing.assert_array_equal(a.imputed, b.imputed)
-    np.testing.assert_array_equal(a.delay_counts, b.delay_counts)
-    model_a, model_b = build_model(a, RENEWALSP), build_model(b, RENEWALSP)
-    tr = trace(model_a, a)
-    params = {
-        k: v["value"]
-        for k, v in tr.items()
-        if v["type"] == "sample" and not v["is_observed"]
-    }
-    lds = [
-        float(
-            numpyro.infer.util.log_density(
-                m.sample, (), model_args(m, d), params
-            )[0]
-        )
-        for m, d in ((model_a, a), (model_b, b))
-    ]
-    assert lds[0] == lds[1]
-
-
 def test_late_provinces_are_seeded_at_their_first_cases(outbreak, table):
     # At day 166 Nord-Kivu (seeded day 30 in the simulation) has its first
     # cases weeks after Ituri, so it starts near empty.

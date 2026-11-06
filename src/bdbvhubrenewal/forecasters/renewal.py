@@ -28,12 +28,11 @@ sampler table applies in full.
 
 from __future__ import annotations
 
-import dataclasses
 import datetime as dt
 import json
 import os
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from functools import partial
 from pathlib import Path
@@ -63,8 +62,6 @@ __all__ = [
     "FIT_VARIANTS",
     "HUB_MODEL",
     "SAMPLER_ENV",
-    "SINGLE_PATCH_MIN_CASES",
-    "SINGLE_PATCH_WEEKS",
     "TRAJECTORY_DRAW_FILE",
     "VARIANTS",
     "RenewalModel",
@@ -117,16 +114,6 @@ DEFAULT_SAMPLER: Final[Mapping[str, Any]] = {
 }
 """NUTS settings when neither the CI nor `SAMPLER_ENV` gives them."""
 
-SINGLE_PATCH_MIN_CASES: Final = 20
-"""Fewest cases in the last `SINGLE_PATCH_WEEKS` data weeks for a province
-to get its own single-patch fit: an outbreak province, as the main model's
-sporadic class. Below it the province gets Poisson draws at a
-Gamma-distributed weekly rate (`bdbvhubrenewal.model.inputs.idle_draws`).
-A few old cases alone (Bas-Uele, 13 to date and 7 in 6 weeks) did not
-converge (R-hat 1.71 at 2026-10-24)."""
-SINGLE_PATCH_WEEKS: Final = 6
-"""Weeks of recent cases the single-patch rule looks back over."""
-
 RECENT_WEEKS: Final = 4
 """Data weeks behind the share that carries the national data gap forward."""
 
@@ -146,7 +133,7 @@ def engine() -> ModuleType:
 
 @dataclass(frozen=True)
 class Variant:
-    """A model variant: a base configuration and what it changes.
+    """A model variant: a name and its configuration.
 
     Attributes
     ----------
@@ -156,18 +143,11 @@ class Variant:
         One line for tables and docs.
     base : str
         `MAIN` or `BVD`, the configuration in `bdbvhubrenewal.model`.
-    overrides : mapping
-        `ModelConfig` fields to change.
-    per_location : bool
-        Fit each province on its own series, with no pooling or coupling.
-        National is their sum plus the unassigned part.
     """
 
     name: str
     description: str
     base: str = "MAIN"
-    overrides: Mapping[str, Any] = field(default_factory=dict)
-    per_location: bool = False
 
 
 VARIANTS: Final[dict[str, Variant]] = {
@@ -177,20 +157,6 @@ VARIANTS: Final[dict[str, Variant]] = {
             "renewal",
             "Province renewal (PyRenew): pooled Rt, gravity importation, "
             "depletion, modelled delays and imputation.",
-        ),
-        Variant(
-            "renewalsp",
-            "Single patch: one renewal fitted to each province's series on "
-            "its own, with no pooling or coupling; national is their sum.",
-            overrides={
-                "national": True,
-                "coupling": "none",
-                "inactive": "none",
-                "report_inactive": True,
-                # One series cannot inform the share at risk.
-                "depletion": False,
-            },
-            per_location=True,
         ),
         Variant(
             "renewalbvd",
@@ -204,11 +170,10 @@ VARIANTS: Final[dict[str, Variant]] = {
 
 FIT_VARIANTS: Final[dict[str, str]] = {
     "main": "renewal",
-    "renewalsp": "renewalsp",
     "bvd": "renewalbvd",
 }
 """The variant each fit configuration of the CI runs. The chain is `bvd`,
-`renewalsp`, `main`, then the random walks (`ci/policy.toml`)."""
+`main`, then the random walks (`ci/policy.toml`)."""
 
 
 def model_config(variant: Variant) -> Any:
@@ -222,11 +187,9 @@ def model_config(variant: Variant) -> Any:
     Returns
     -------
     bdbvhubrenewal.model.ModelConfig
-        Its base configuration with the overrides applied.
+        Its base configuration.
     """
-    return dataclasses.replace(
-        getattr(engine(), variant.base), **dict(variant.overrides)
-    )
+    return getattr(engine(), variant.base)
 
 
 def sampler_settings(
@@ -672,37 +635,6 @@ def data_gap(task: ForecastTask, samples: pd.DataFrame) -> pd.DataFrame | None:
     return by.reset_index(drop=True)
 
 
-def _idle_samples(
-    task: ForecastTask, loc: str, rows: pd.DataFrame
-) -> pd.DataFrame:
-    """Draws for a location with too few cases for its own fit.
-
-    A week's draws are never below the count already reported for it.
-    """
-    from bdbvhubrenewal.model.inputs import idle_draws
-
-    own = rows.loc[rows["location"] == loc]
-    counts = own["total"].to_numpy(dtype=float)
-    n, weeks = task.n_samples, list(task.target_end_dates)
-    reported = (
-        own.groupby("target_end_date")["total"]
-        .sum()
-        .reindex(weeks, fill_value=0)
-        .to_numpy(dtype=float)
-    )
-    draws = np.maximum(
-        idle_draws(counts, len(weeks), n, task.rng()), reported[None, :]
-    )
-    return pd.DataFrame(
-        {
-            "location": loc,
-            "target_end_date": np.repeat(weeks, n),
-            "sample": np.tile(np.arange(1, n + 1), len(weeks)),
-            "value": draws.T.reshape(-1),
-        }
-    )
-
-
 def _add_unassigned(
     a: pd.DataFrame | None, b: pd.DataFrame | None
 ) -> pd.DataFrame | None:
@@ -715,7 +647,7 @@ def _add_unassigned(
 
 
 def ppc_rows(
-    data: Any, insample: Mapping[str, Any], *, add_national: bool = True
+    data: Any, insample: Mapping[str, Any]
 ) -> tuple[pd.DataFrame, NDArray[np.float64]]:
     """Observed rows and the matching in-sample predictive draws.
 
@@ -732,9 +664,6 @@ def ppc_rows(
     insample : mapping
         Draws of the vintage counts by stream (`known`, `imputed` or
         `total`), each `(n_draws, n_weeks + horizon, P)`.
-    add_national : bool
-        Add national rows as the sum of the province draws. A
-        single-location fit has none.
 
     Returns
     -------
@@ -759,7 +688,7 @@ def ppc_rows(
             for i, week in enumerate(weeks):
                 rows.append((loc, hub_name[stream], week, float(obs[i, j])))
                 cols.append(draws[:, i, j])
-        if add_national and list(data.names) != [NATIONAL]:
+        if list(data.names) != [NATIONAL]:
             for i, week in enumerate(weeks):
                 rows.append(
                     (NATIONAL, hub_name[stream], week, float(obs[i].sum()))
@@ -881,7 +810,7 @@ def delay_summary(
 
 
 def fit_delays(fit: RenewalFit, task: ForecastTask) -> pd.DataFrame:
-    """Return the delay summaries of a fit's runs, as one table.
+    """Return the delay summary of a fit, with its model and vintage.
 
     Parameters
     ----------
@@ -893,24 +822,13 @@ def fit_delays(fit: RenewalFit, task: ForecastTask) -> pd.DataFrame:
     Returns
     -------
     pandas.DataFrame
-        `delay_summary` rows with `model`, `vintage` and `location`:
-        `"pooled"` for a fit of every province, else the province.
+        `delay_summary` rows with `model` and `vintage`.
     """
-    return pd.concat(
-        [
-            run.delay.assign(
-                model=run.variant.name,
-                vintage=task.vintage,
-                location="pooled" if key == "all" else key,
-            )
-            for key, run in fit.runs.items()
-        ],
-        ignore_index=True,
-    )[
+    run = fit.run
+    return run.delay.assign(model=run.variant.name, vintage=task.vintage)[
         [
             "model",
             "vintage",
-            "location",
             "kind",
             "x",
             "quantity",
@@ -1125,13 +1043,12 @@ class RenewalRun:
 
 @dataclass(frozen=True)
 class RenewalFit:
-    """The fits of a variant to a task and the samples they give.
+    """The fit of a variant to a task and the samples it gives.
 
     Attributes
     ----------
-    runs : dict
-        `RenewalRun` by location for a per-location variant, or one run,
-        `"all"`.
+    run : RenewalRun
+        The fit.
     samples : pandas.DataFrame
         Province samples (`SAMPLE_COLUMNS`).
     unassigned : pandas.DataFrame or None
@@ -1141,7 +1058,7 @@ class RenewalFit:
         (`SAMPLE_COLUMNS` and `as_of`), for the weeks up to that date.
     """
 
-    runs: Mapping[str, RenewalRun]
+    run: RenewalRun
     samples: pd.DataFrame
     unassigned: pd.DataFrame | None = None
     as_reported: pd.DataFrame | None = None
@@ -1160,8 +1077,7 @@ class RenewalModel:
     progress : pathlib.Path or None
         File to append progress lines to.
     supports_mask : bool
-        The model honours `ForecastTask.mask`. A single-patch variant fits
-        the national sum, so it cannot.
+        The model honours `ForecastTask.mask`.
     name : str
         The variant name.
     delay_summary : pandas.DataFrame or None
@@ -1171,7 +1087,7 @@ class RenewalModel:
     variant: Variant
     sampler: dict[str, Any] = field(default_factory=sampler_settings)
     progress: Path | None = None
-    supports_mask: bool = field(init=False)
+    supports_mask: bool = field(init=False, default=True)
     name: str = field(init=False)
     fit_diagnostics: list[dict[str, Any]] = field(
         init=False, default_factory=list
@@ -1179,12 +1095,8 @@ class RenewalModel:
     delay_summary: pd.DataFrame | None = field(init=False, default=None)
 
     def __post_init__(self) -> None:
-        """Name the model after its variant and say if it takes a mask."""
+        """Name the model after its variant."""
         self.name = self.variant.name
-        self.supports_mask = not (
-            self.variant.per_location
-            or self.variant.overrides.get("national", False)
-        )
 
     def _log(self, line: str) -> None:
         if self.progress is not None:
@@ -1276,11 +1188,9 @@ class RenewalModel:
     def forecast_fit(self, task: ForecastTask) -> RenewalFit:
         """Fit the variant to a task and return its samples.
 
-        A per-location variant fits each province with cases on its own;
-        otherwise the provinces are fitted together. Either way national
-        is the sum of the provinces plus the unassigned part, which holds
-        the provinces not reported and the data's national gap
-        (`data_gap`).
+        The provinces are fitted together. National is the sum of the
+        provinces plus the unassigned part, which holds the provinces not
+        reported and the data's national gap (`data_gap`).
 
         Parameters
         ----------
@@ -1290,60 +1200,20 @@ class RenewalModel:
         Returns
         -------
         RenewalFit
-            The runs, province samples and national or unassigned parts.
+            The run, province samples and unassigned part.
         """
         report_all = bool(model_config(self.variant).report_inactive)
-        if not self.variant.per_location:
-            run = self.run(task)
-            samples, unassigned = samples_table(
-                task, run.data, run.draws, report_all=report_all
-            )
-            unassigned = _add_unassigned(unassigned, data_gap(task, samples))
-            later = _as_reported(task, run, report_all)
-            return RenewalFit(
-                {"all": run},
-                samples,
-                unassigned,
-                as_reported=pd.concat(later, ignore_index=True)
-                if later
-                else None,
-            )
-        rows = task.target.loc[task.target["vintage"] == task.vintage]
-        cases = rows.groupby("location")["total"].sum()
-        weeks = sorted(set(rows["target_end_date"]))[-SINGLE_PATCH_WEEKS:]
-        recent = (
-            rows.loc[rows["target_end_date"].isin(weeks)]
-            .groupby("location")["total"]
-            .sum()
+        run = self.run(task)
+        samples, unassigned = samples_table(
+            task, run.data, run.draws, report_all=report_all
         )
-        runs: dict[str, RenewalRun] = {}
-        frames: list[pd.DataFrame] = []
-        reported: list[pd.DataFrame] = []
-        for loc in task.locations:
-            if cases.get(loc, 0) <= 0:
-                continue
-            if recent.get(loc, 0) < SINGLE_PATCH_MIN_CASES:
-                idle = _idle_samples(task, loc, rows)
-                frames.append(idle)
-                # Too few cases to model reporting: the same draws.
-                reported.extend(
-                    idle.loc[idle["target_end_date"] <= d].assign(as_of=d)
-                    for d in task.report_by
-                )
-                continue
-            sub = replace(task, locations=(loc,), mask=())
-            runs[loc] = self.run(sub)
-            part, _ = samples_table(
-                sub, runs[loc].data, runs[loc].draws, report_all=True
-            )
-            frames.append(part)
-            reported.extend(_as_reported(sub, runs[loc], report_all=True))
-        samples = pd.concat(frames, ignore_index=True)
+        unassigned = _add_unassigned(unassigned, data_gap(task, samples))
+        later = _as_reported(task, run, report_all)
         return RenewalFit(
-            runs,
+            run,
             samples,
-            data_gap(task, samples),
-            pd.concat(reported, ignore_index=True) if reported else None,
+            unassigned,
+            as_reported=pd.concat(later, ignore_index=True) if later else None,
         )
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
@@ -1372,8 +1242,7 @@ class RenewalModel:
         fit = self.forecast_fit(task)
         self.delay_summary = fit_delays(fit, task)
         self.fit_diagnostics = [
-            {"fit": key, **fit_summary(run, self.sampler)}
-            for key, run in fit.runs.items()
+            {"fit": "all", **fit_summary(fit.run, self.sampler)}
         ]
         samples = fit.samples
         if not task.report_by:
@@ -1439,37 +1308,27 @@ def fit_renewal(
     write_csv(fit_delays(fit, task), out / DELAY_SUMMARY_FILE)
     if fit.unassigned is not None:
         write_csv(fit.unassigned, out / UNASSIGNED_FILE)
-    pairs = [
-        pd.DataFrame(
-            {
-                "location": loc,
-                "sample": np.arange(1, len(run.draws["draw"]) + 1),
-                "draw": np.asarray(run.draws["draw"], dtype=int),
-            }
-        )
-        for loc, run in fit.runs.items()
-        if "draw" in run.draws
-    ]
-    if pairs:
+    run = fit.run
+    if "draw" in run.draws:
         write_csv(
-            pd.concat(pairs, ignore_index=True), out / TRAJECTORY_DRAW_FILE
+            pd.DataFrame(
+                {
+                    "location": "all",
+                    "sample": np.arange(1, len(run.draws["draw"]) + 1),
+                    "draw": np.asarray(run.draws["draw"], dtype=int),
+                }
+            ),
+            out / TRAJECTORY_DRAW_FILE,
         )
     modelled = sorted(set(fit.samples["location"]))
     (out / TRAJECTORIES_FILE).write_text(
         json.dumps({"variant": variant, "modelled": modelled}, indent=1) + "\n"
     )
-    per_location = VARIANTS[variant].per_location
-    observed, draws = [], []
-    for run in fit.runs.values():
-        obs, dr = ppc_rows(
-            run.data, run.draws["insample"], add_national=not per_location
-        )
-        observed.append(obs)
-        draws.append(dr)
+    observed, draws = ppc_rows(run.data, run.draws["insample"])
     write_ppc(
         summarise_draws(
-            pd.concat(observed, ignore_index=True),
-            np.column_stack(draws),
+            observed,
+            draws,
             as_of=task.vintage,
             model=HUB_MODEL,
             config=config_name,
@@ -1477,15 +1336,8 @@ def fit_renewal(
         out / "ppc.json",
     )
     depth = int(settings["max_tree_depth"])
-    params: list[dict[str, Any]] = []
-    chains: list[dict[str, Any]] = []
-    for loc, run in fit.runs.items():
-        prefix = f"{loc}:" if per_location else ""
-        for row in parameter_diagnostics(run.trace):
-            params.append({**row, "name": prefix + row["name"]})
-        for row in chain_diagnostics(run.extra, depth):
-            extra = {"location": loc} if per_location else {}
-            chains.append({**row, **extra, "chain": len(chains)})
+    params = parameter_diagnostics(run.trace)
+    chains = chain_diagnostics(run.extra, depth)
     record: dict[str, Any] = {
         "schema_version": 1,
         "model": HUB_MODEL,
@@ -1495,32 +1347,26 @@ def fit_renewal(
         "num_chains": len(chains),
         "num_samples": chains[0]["draws"] if chains else 0,
         "max_tree_depth": depth,
-        "sampling_seconds": round(sum(r.seconds for r in fit.runs.values()), 1),
-        "sampling_cpu_seconds": round(
-            sum(r.cpu_seconds for r in fit.runs.values()), 1
-        ),
+        "sampling_seconds": round(run.seconds, 1),
+        "sampling_cpu_seconds": round(run.cpu_seconds, 1),
         "parameters": params,
         "chains": chains,
         "worst_rhat": worst_rhat(params),
-        "warnings": lag_warnings(
-            [run.data for run in fit.runs.values()],
-            model_config(VARIANTS[variant]),
-        ),
+        "warnings": lag_warnings(run.data, model_config(VARIANTS[variant])),
     }
     if model_config(VARIANTS[variant]).bvd:
         # The BVDOutbreakSize release behind the BVD term and its R-hat.
-        used = [r.bvd for r in fit.runs.values() if r.bvd is not None]
-        record["bvd"] = dict(used[0]) if used else bvd_record(None)
+        record["bvd"] = bvd_record(None) if run.bvd is None else dict(run.bvd)
     return record
 
 
-def lag_warnings(inputs: Sequence[Any], config: Any = None) -> list[str]:
+def lag_warnings(data: Any, config: Any = None) -> list[str]:
     """Warn when a fit used the prior publication lag, not an estimate.
 
     Parameters
     ----------
-    inputs : sequence of bdbvhubrenewal.model.Vintage
-        The model inputs of each run.
+    data : bdbvhubrenewal.model.Vintage
+        The model inputs.
     config : bdbvhubrenewal.model.ModelConfig, optional
         The configuration. Only `publication_lag="empirical"` can warn.
 
@@ -1531,7 +1377,7 @@ def lag_warnings(inputs: Sequence[Any], config: Any = None) -> list[str]:
     """
     if config is not None and config.publication_lag != "empirical":
         return []
-    if any(getattr(v, "publication_lag_pmf", None) is None for v in inputs):
+    if getattr(data, "publication_lag_pmf", None) is None:
         return [
             "publication_lag: no earlier pair of delay files, so the fit "
             "used PRIOR_PUBLICATION_LAG"

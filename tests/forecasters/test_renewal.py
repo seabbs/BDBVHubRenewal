@@ -33,27 +33,17 @@ def task(target: pd.DataFrame, delays: pd.DataFrame) -> ForecastTask:
 
 def test_variants_are_registered_as_fitted_models() -> None:
     specs = {s.name: s for s in list_models()}
-    for name in ("renewal", "renewalsp"):
+    for name in ("renewal", "renewalbvd"):
         assert specs[name].fitted
         model = get_model(name)
         assert isinstance(model, ForecastModel)
         assert model.name == name
-    assert set(rn.VARIANTS) == {"renewal", "renewalsp", "renewalbvd"}
-    # The single patch fits each province on its own data only, so it
-    # cannot forecast a province with its data held out.
+    assert set(rn.VARIANTS) == {"renewal", "renewalbvd"}
     assert get_model("renewal").supports_mask
-    assert not get_model("renewalsp").supports_mask
     assert not specs["randomwalk"].fitted
     # Hub model abbreviations: letters, digits and underscores, under 16.
     for name in specs:
         assert len(model_abbr_for(name)) < 16
-
-
-def test_model_config_applies_overrides() -> None:
-    single = rn.model_config(rn.VARIANTS["renewalsp"])
-    assert single.national
-    assert single.depletion is False
-    assert rn.model_config(rn.VARIANTS["renewal"]) == rn.engine().MAIN
 
 
 def test_sampler_settings_read_the_environment(
@@ -146,13 +136,6 @@ def test_vintage_inputs_apply_the_mask(task: ForecastTask) -> None:
     # Its delays leave the delay data; it stays in the latent process.
     assert masked.delay_counts.sum() < full.delay_counts.sum()
     assert masked.names == full.names
-
-
-def test_single_patch_inputs_are_national(task: ForecastTask) -> None:
-    config = rn.model_config(rn.VARIANTS["renewalsp"])
-    data = rn.vintage_inputs(task, config)
-    assert data.names == [NATIONAL]
-    assert data.known.shape[1] == 1
 
 
 def _fake_draws(data: Any, n: int, rng: np.random.Generator) -> dict[str, Any]:
@@ -274,7 +257,6 @@ def test_fit_renewal_writes_the_ci_contract(
     assert len(record["worst_rhat"]) <= 10
     assert {p["name"] for p in record["parameters"]} == {"sd", "z"}
     delay = pd.read_csv(tmp_path / rn.DELAY_SUMMARY_FILE)
-    assert set(delay["location"]) == {"pooled"}
     assert set(delay["model"]) == {"renewal"}
     assert set(delay["quantity"]) == {
         "reported_share",
@@ -413,54 +395,6 @@ def test_bvd_fit_records_the_release_and_its_rhat(
     assert "bvd" not in plain
 
 
-def test_single_patch_fits_each_location_on_its_own(
-    task: ForecastTask, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    seen: list[tuple[str, ...]] = []
-
-    def fake(self: rn.RenewalModel, t: ForecastTask) -> rn.RenewalRun:
-        seen.append(t.locations)
-        return _fake_run(t, self.variant)
-
-    monkeypatch.setattr(rn.RenewalModel, "run", fake)
-    model = get_model("renewalsp")
-    assert isinstance(model, rn.RenewalModel)
-    fit = model.forecast_fit(task)
-    # One fit per province with enough recent cases (an outbreak province,
-    # as the sporadic class), and none for the nation.
-    rows = task.target.loc[task.target["vintage"] == task.vintage]
-    recent = sorted(set(rows["target_end_date"]))[-rn.SINGLE_PATCH_WEEKS :]
-    cases = (
-        rows.loc[rows["target_end_date"].isin(recent)]
-        .groupby("location")["total"]
-        .sum()
-    )
-    enough = [
-        p
-        for p in task.locations
-        if cases.get(p, 0) >= rn.SINGLE_PATCH_MIN_CASES
-    ]
-    few = [p for p in task.locations if p not in enough]
-    # Bas-Uele has 13 cases to date but 7 in the last 6 weeks, too few for
-    # its own fit (R-hat 1.71 at 2026-10-24).
-    assert "CD-BU" in few
-    assert sorted(seen) == sorted([(p,) for p in enough])
-    assert set(fit.runs) == set(enough)
-    # National is the sum of the patches plus the unassigned cases, as in
-    # the main model.
-    assert not hasattr(fit, "national")
-    assert set(fit.samples["location"]) == set(task.locations)
-    samples = model.forecast(task)
-    assert NATIONAL not in set(samples["location"])
-    # A province with too few cases for its own fit never draws below the
-    # count it has already reported in a week.
-    reported = rows.set_index(["location", "target_end_date"])["total"]
-    idle = fit.samples.loc[fit.samples["location"].isin(few)]
-    floor = idle.set_index(["location", "target_end_date"]).index.map(reported)
-    assert (idle["value"].to_numpy() >= floor.fillna(0).to_numpy()).all()
-    assert floor.fillna(0).max() > 0
-
-
 def test_fit_records_the_posterior_draw_behind_each_trajectory(
     task: ForecastTask, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -560,11 +494,11 @@ def test_lag_source_warns_when_the_prior_stands_in(
     empirical = replace(MAIN, publication_lag="empirical")
     early = vintage_inputs(tasks["2026-10-09"], empirical)
     late = vintage_inputs(tasks["2026-10-17"], empirical)
-    (warning,) = lag_warnings([early], empirical)
+    (warning,) = lag_warnings(early, empirical)
     assert warning.startswith("publication_lag:")
-    assert lag_warnings([late], empirical) == []
+    assert lag_warnings(late, empirical) == []
     # The default fixed lag never warns.
-    assert lag_warnings([early], MAIN) == []
+    assert lag_warnings(early, MAIN) == []
 
 
 def test_report_cutoffs_are_days_from_the_model_start(
@@ -580,15 +514,14 @@ def test_report_cutoffs_are_days_from_the_model_start(
     assert cuts == {(pd.Timestamp(last[d]) - start).days: d for d in last}
 
 
-@pytest.mark.parametrize("name", ["renewal", "renewalsp"])
 def test_forecast_gives_counts_as_reported_later(
-    task: ForecastTask, monkeypatch: pytest.MonkeyPatch, name: str
+    task: ForecastTask, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
         rn.RenewalModel, "run", lambda self, t: _fake_run(t, self.variant)
     )
     task = replace(task, report_by=("2026-10-24",))
-    samples = get_model(name).forecast(task)
+    samples = get_model("renewal").forecast(task)
     check_samples(samples, task)
     later = samples.loc[samples["as_of"] == "2026-10-24"]
     assert later["target_end_date"].max() <= "2026-10-24"
@@ -596,7 +529,7 @@ def test_forecast_gives_counts_as_reported_later(
     final = samples.loc[samples["as_of"].isna()]
     assert set(final["target_end_date"]) == set(task.target_end_dates)
     # Without later vintages there is no as_of column.
-    plain = get_model(name).forecast(replace(task, report_by=()))
+    plain = get_model("renewal").forecast(replace(task, report_by=()))
     assert "as_of" not in plain
 
 
