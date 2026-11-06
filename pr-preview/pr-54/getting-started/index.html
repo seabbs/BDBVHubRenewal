@@ -15,6 +15,10 @@
         <link rel="canonical" href="https://samabbott.co.uk/BDBVHubRenewal/getting-started/">
       
       
+        <link rel="prev" href="../setup/">
+      
+      
+        <link rel="next" href="../methods/data/">
       
       
         
@@ -262,8 +266,10 @@
   
   
   
+    
   
-    <li class="md-tabs__item">
+  
+    <li class="md-tabs__item md-tabs__item--active">
       <a href="./" class="md-tabs__link">
         
   
@@ -479,10 +485,37 @@
       
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="./" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -498,6 +531,125 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#load-the-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Load the data
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#build-the-forecast-task" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Build the forecast task
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#forecast-with-the-baselines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forecast with the baselines
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fit-the-renewal-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fit the renewal model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#load-the-stored-renewal-fit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Load the stored renewal fit
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plot-the-nowcast" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plot the nowcast
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plot-the-forecast" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plot the forecast
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#score" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Score
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#next-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next steps
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1931,7 +2083,7 @@
 
 
   
-    <a href="https://github.com/seabbs/BDBVHubRenewal/edit/main/docs/getting-started.py" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/seabbs/BDBVHubRenewal/edit/main/docs/getting-started.ipynb" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
     </a>
@@ -2158,7 +2310,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </style>
 <div class="jupyter-wrapper">
 <div class="jp-Notebook" data-jp-theme-light="true" data-jp-theme-name="JupyterLab Light">
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1d310bbe">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=4f181f02">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2173,7 +2325,7 @@ This page is a notebook, and <code>task getting-started</code> runs it again.</p
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=cbd6e56d">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1f4f31a7">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2186,13 +2338,13 @@ This page is a notebook, and <code>task getting-started</code> runs it again.</p
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=ff0bb5d6">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=b20944b9">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [1]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
 <clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-1">
@@ -2205,8 +2357,7 @@ This page is a notebook, and <code>task getting-started</code> runs it again.</p
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">gzip</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
@@ -2225,8 +2376,7 @@ This page is a notebook, and <code>task getting-started</code> runs it again.</p
 <span class="n">real</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">target</span><span class="p">[</span><span class="s2">"kind"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"real"</span><span class="p">]</span>
 <span class="nb">sorted</span><span class="p">(</span><span class="n">real</span><span class="p">[</span><span class="s2">"vintage"</span><span class="p">]</span><span class="o">.</span><span class="n">unique</span><span class="p">())</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-1">import gzip
-import json
+<div class="clipboard-copy-txt" id="cell-1">import json
 from pathlib import Path
 
 import pandas as pd
@@ -2248,15 +2398,28 @@ sorted(real["vintage"].unique())</div>
 </div>
 </div>
 </div>
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+<div class="jp-OutputArea jp-Cell-outputArea">
+<div class="jp-OutputArea-child jp-OutputArea-executeResult">
+<div class="jp-OutputPrompt jp-OutputArea-prompt">Out[1]:</div>
+<div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain" tabindex="0">
+<pre>['2026-08-18', '2026-10-09', '2026-10-17', '2026-10-24', '2026-11-01']</pre>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=c3992fd9">
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=577ea8f9">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="build-the-forecast-task">Build the forecast task<a class="anchor-link" href="#build-the-forecast-task">¶</a></h2><p>The origin is the newest release that a later release can score, and the later release is the newest.
+<h2 id="build-the-forecast-task">Build the forecast task<a class="anchor-link" href="#build-the-forecast-task">¶</a></h2><p>The origin is the second newest release.
+The newest release scores it.
 The task holds what a model sees at the origin, including the daily onsets of every release up to it, and the weeks to forecast.
 Its reference date is the Saturday after the origin, and the forecast weeks run from four weeks before it to three weeks after it.
 <code>origin_tasks</code> builds the task of every real origin as the fit store fits it, so the baselines and the stored renewal fit see the same task.</p>
@@ -2264,13 +2427,13 @@ Its reference date is the Saturday after the origin, and the forecast weeks run 
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=92a9c0cb">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=eb37ae6a">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [2]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
 <clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-2">
@@ -2302,9 +2465,24 @@ print("scored on", LATER)</div>
 </div>
 </div>
 </div>
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+<div class="jp-OutputArea jp-Cell-outputArea">
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
+<pre>2026-10-24 2026-10-31 8 provinces
+2026-10-03 to 2026-11-21
+scored on 2026-11-01
+</pre>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=12c34ba9">
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1f832bd1">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2319,13 +2497,13 @@ print("scored on", LATER)</div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=baf08c08">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=2745f64e">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [3]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
 <clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-3">
@@ -2349,9 +2527,24 @@ baselines.groupby("model")["sample"].nunique()</div>
 </div>
 </div>
 </div>
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+<div class="jp-OutputArea jp-Cell-outputArea">
+<div class="jp-OutputArea-child jp-OutputArea-executeResult">
+<div class="jp-OutputPrompt jp-OutputArea-prompt">Out[3]:</div>
+<div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain" tabindex="0">
+<pre>model
+randomwalk           100
+randomwalknowcast    100
+Name: sample, dtype: int64</pre>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=78f8329c">
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=fcadb065">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2370,27 +2563,27 @@ This is how it is fitted, with the sampler settings of the submission:</p>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=6ccf9855">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=c09ec6fc">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="load-the-stored-renewal-fit">Load the stored renewal fit<a class="anchor-link" href="#load-the-stored-renewal-fit">¶</a></h2><p><code>bdbvhubrenewal fit-store load</code> (<code>task fit-store</code>) fetches the store and records the fit it uses for each model and origin in <code>results/fit-store.json</code>.
-That is the fit for this code and data, or, while that fit is still running, the newest fit of older code.
-Each stored fit is a gzipped JSON file, so plain Python reads it.
+That is the fit for this code and data, or, until that fit is made, the newest fit of older code.
+Each stored fit is a gzipped JSON file, which <code>read_fit</code> reads into tables.
 Its <code>forecasts</code> table has the same columns as the baselines' forecasts.</p>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=7bed1252">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=06c2398e">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [4]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
 <clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-4">
@@ -2407,12 +2600,11 @@ Its <code>forecasts</code> table has the same columns as the baselines' forecast
 <span class="n">entry</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span>
     <span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">status</span> <span class="k">if</span> <span class="n">s</span><span class="p">[</span><span class="s2">"model"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"renewal"</span> <span class="ow">and</span> <span class="n">s</span><span class="p">[</span><span class="s2">"origin"</span><span class="p">]</span> <span class="o">==</span> <span class="n">ORIGIN</span>
 <span class="p">)</span>
+<span class="k">assert</span> <span class="n">entry</span><span class="p">[</span><span class="s2">"used"</span><span class="p">],</span> <span class="sa">f</span><span class="s2">"The fit store has no renewal fit at </span><span class="si">{</span><span class="n">ORIGIN</span><span class="si">}</span><span class="s2">."</span>
 <span class="n">path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">"output/fit-store/renewal"</span><span class="p">)</span> <span class="o">/</span> <span class="n">ORIGIN</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">entry</span><span class="p">[</span><span class="s1">'used'</span><span class="p">]</span><span class="si">}</span><span class="s2">.json.gz"</span>
-<span class="n">stored</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">gzip</span><span class="o">.</span><span class="n">decompress</span><span class="p">(</span><span class="n">path</span><span class="o">.</span><span class="n">read_bytes</span><span class="p">()))</span>
-<span class="n">renewal</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span>
-    <span class="n">stored</span><span class="p">[</span><span class="s2">"forecasts"</span><span class="p">][</span><span class="s2">"data"</span><span class="p">],</span> <span class="n">columns</span><span class="o">=</span><span class="n">stored</span><span class="p">[</span><span class="s2">"forecasts"</span><span class="p">][</span><span class="s2">"columns"</span><span class="p">]</span>
-<span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="s2">"fitted at commit"</span><span class="p">,</span> <span class="n">stored</span><span class="p">[</span><span class="s2">"meta"</span><span class="p">][</span><span class="s2">"commit"</span><span class="p">][:</span><span class="mi">7</span><span class="p">])</span>
+<span class="n">stored</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">read_fit</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+<span class="n">renewal</span> <span class="o">=</span> <span class="n">stored</span><span class="o">.</span><span class="n">forecasts</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"fitted at commit"</span><span class="p">,</span> <span class="n">stored</span><span class="o">.</span><span class="n">meta</span><span class="p">[</span><span class="s2">"commit"</span><span class="p">][:</span><span class="mi">7</span><span class="p">])</span>
 <span class="nb">print</span><span class="p">(</span><span class="s2">"fit of this code"</span> <span class="k">if</span> <span class="n">entry</span><span class="p">[</span><span class="s2">"current"</span><span class="p">]</span> <span class="k">else</span> <span class="s2">"fit of older code"</span><span class="p">)</span>
 <span class="n">forecasts</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">baselines</span><span class="p">,</span> <span class="n">renewal</span><span class="p">],</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="n">forecasts</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s2">"model"</span><span class="p">)[</span><span class="s2">"sample"</span><span class="p">]</span><span class="o">.</span><span class="n">nunique</span><span class="p">()</span>
@@ -2421,12 +2613,11 @@ Its <code>forecasts</code> table has the same columns as the baselines' forecast
 entry = next(
     s for s in status if s["model"] == "renewal" and s["origin"] == ORIGIN
 )
+assert entry["used"], f"The fit store has no renewal fit at {ORIGIN}."
 path = Path("output/fit-store/renewal") / ORIGIN / f"{entry['used']}.json.gz"
-stored = json.loads(gzip.decompress(path.read_bytes()))
-renewal = pd.DataFrame(
-    stored["forecasts"]["data"], columns=stored["forecasts"]["columns"]
-)
-print("fitted at commit", stored["meta"]["commit"][:7])
+stored = store.read_fit(path)
+renewal = stored.forecasts
+print("fitted at commit", stored.meta["commit"][:7])
 print("fit of this code" if entry["current"] else "fit of older code")
 forecasts = pd.concat([baselines, renewal], ignore_index=True)
 forecasts.groupby("model")["sample"].nunique()</div>
@@ -2434,9 +2625,33 @@ forecasts.groupby("model")["sample"].nunique()</div>
 </div>
 </div>
 </div>
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+<div class="jp-OutputArea jp-Cell-outputArea">
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
+<pre>fitted at commit a5ad8b9
+fit of this code
+</pre>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=ed7c815a">
+<div class="jp-OutputArea-child jp-OutputArea-executeResult">
+<div class="jp-OutputPrompt jp-OutputArea-prompt">Out[4]:</div>
+<div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain" tabindex="0">
+<pre>model
+randomwalk           100
+randomwalknowcast    100
+renewal              100
+Name: sample, dtype: int64</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=b26b6019">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2451,13 +2666,13 @@ The panels are the national total and the three provinces with the most cases.
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=169e3f9d">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=7aeeb7c0">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [5]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
 <clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-5">
@@ -2535,9 +2750,21 @@ panels</div>
 </div>
 </div>
 </div>
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+<div class="jp-OutputArea jp-Cell-outputArea">
+<div class="jp-OutputArea-child jp-OutputArea-executeResult">
+<div class="jp-OutputPrompt jp-OutputArea-prompt">Out[5]:</div>
+<div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain" tabindex="0">
+<pre>['CD', 'CD-IT', 'CD-NK', 'CD-HU']</pre>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=18266025">
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=17ef6a0d">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2549,7 +2776,7 @@ panels</div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=ca8dea8f">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=b849ab12">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2562,7 +2789,7 @@ panels</div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=b82b4867">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=9779ffef">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2577,13 +2804,13 @@ The table gives each model's mean WIS relative to <code>randomwalk</code>, for t
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=2b04b61e">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=ed4e219a">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [6]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
 <clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-6">
@@ -2617,9 +2844,158 @@ relative_wis(scores, by=["level"]).round(2)</div>
 </div>
 </div>
 </div>
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+<div class="jp-OutputArea jp-Cell-outputArea">
+<div class="jp-OutputArea-child jp-OutputArea-executeResult">
+<div class="jp-OutputPrompt jp-OutputArea-prompt">Out[6]:</div>
+<div class="jp-RenderedHTMLCommon jp-RenderedHTML jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/html" tabindex="0">
+<div>
+<style scoped="">
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+<thead>
+<tr style="text-align: right;">
+<th></th>
+<th>level</th>
+<th>model</th>
+<th>n</th>
+<th>wis</th>
+<th>base_wis</th>
+<th>rel_wis</th>
+<th>rel_log_wis</th>
+<th>coverage_50</th>
+<th>coverage_90</th>
+<th>bias</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th>0</th>
+<td>National</td>
+<td>as reported</td>
+<td>5</td>
+<td>130.60</td>
+<td>16.15</td>
+<td>8.09</td>
+<td>25.34</td>
+<td>0.00</td>
+<td>0.00</td>
+<td>-1.00</td>
+</tr>
+<tr>
+<th>1</th>
+<td>National</td>
+<td>randomwalk</td>
+<td>5</td>
+<td>16.15</td>
+<td>16.15</td>
+<td>1.00</td>
+<td>1.00</td>
+<td>0.80</td>
+<td>1.00</td>
+<td>-0.28</td>
+</tr>
+<tr>
+<th>2</th>
+<td>National</td>
+<td>randomwalknowcast</td>
+<td>5</td>
+<td>43.24</td>
+<td>16.15</td>
+<td>2.68</td>
+<td>3.08</td>
+<td>0.20</td>
+<td>0.40</td>
+<td>-0.68</td>
+</tr>
+<tr>
+<th>3</th>
+<td>National</td>
+<td>renewal</td>
+<td>5</td>
+<td>45.74</td>
+<td>16.15</td>
+<td>2.83</td>
+<td>2.94</td>
+<td>0.20</td>
+<td>0.20</td>
+<td>-0.82</td>
+</tr>
+<tr>
+<th>4</th>
+<td>Province</td>
+<td>as reported</td>
+<td>40</td>
+<td>16.48</td>
+<td>3.53</td>
+<td>4.67</td>
+<td>4.25</td>
+<td>0.55</td>
+<td>0.55</td>
+<td>-0.40</td>
+</tr>
+<tr>
+<th>5</th>
+<td>Province</td>
+<td>randomwalk</td>
+<td>40</td>
+<td>3.53</td>
+<td>3.53</td>
+<td>1.00</td>
+<td>1.00</td>
+<td>0.72</td>
+<td>0.90</td>
+<td>0.03</td>
+</tr>
+<tr>
+<th>6</th>
+<td>Province</td>
+<td>randomwalknowcast</td>
+<td>40</td>
+<td>5.98</td>
+<td>3.53</td>
+<td>1.70</td>
+<td>0.77</td>
+<td>0.72</td>
+<td>0.88</td>
+<td>-0.18</td>
+</tr>
+<tr>
+<th>7</th>
+<td>Province</td>
+<td>renewal</td>
+<td>40</td>
+<td>6.06</td>
+<td>3.53</td>
+<td>1.72</td>
+<td>0.63</td>
+<td>0.72</td>
+<td>0.80</td>
+<td>-0.14</td>
+</tr>
+</tbody>
+</table>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=32113afc">
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=6875f51b">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2631,13 +3007,13 @@ The table gives it and its log version relative to <code>randomwalk</code>, with
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=32c071a2">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=4464a47e">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [7]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
 <clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-7">
@@ -2669,9 +3045,113 @@ relative_skill(
 </div>
 </div>
 </div>
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+<div class="jp-OutputArea jp-Cell-outputArea">
+<div class="jp-OutputArea-child jp-OutputArea-executeResult">
+<div class="jp-OutputPrompt jp-OutputArea-prompt">Out[7]:</div>
+<div class="jp-RenderedHTMLCommon jp-RenderedHTML jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/html" tabindex="0">
+<div>
+<style scoped="">
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+<thead>
+<tr style="text-align: right;">
+<th></th>
+<th>model</th>
+<th>scale</th>
+<th>n</th>
+<th>relative_energy</th>
+<th>relative_log_energy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th>0</th>
+<td>as reported</td>
+<td>national</td>
+<td>1</td>
+<td>7.31</td>
+<td>30.06</td>
+</tr>
+<tr>
+<th>1</th>
+<td>as reported</td>
+<td>provinces</td>
+<td>1</td>
+<td>4.85</td>
+<td>4.84</td>
+</tr>
+<tr>
+<th>2</th>
+<td>randomwalk</td>
+<td>national</td>
+<td>1</td>
+<td>1.00</td>
+<td>1.00</td>
+</tr>
+<tr>
+<th>3</th>
+<td>randomwalk</td>
+<td>provinces</td>
+<td>1</td>
+<td>1.00</td>
+<td>1.00</td>
+</tr>
+<tr>
+<th>4</th>
+<td>randomwalknowcast</td>
+<td>national</td>
+<td>1</td>
+<td>2.69</td>
+<td>3.15</td>
+</tr>
+<tr>
+<th>5</th>
+<td>randomwalknowcast</td>
+<td>provinces</td>
+<td>1</td>
+<td>1.83</td>
+<td>0.81</td>
+</tr>
+<tr>
+<th>6</th>
+<td>renewal</td>
+<td>national</td>
+<td>1</td>
+<td>2.62</td>
+<td>2.71</td>
+</tr>
+<tr>
+<th>7</th>
+<td>renewal</td>
+<td>provinces</td>
+<td>1</td>
+<td>1.83</td>
+<td>0.57</td>
+</tr>
+</tbody>
+</table>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=6b79c2db">
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=a2a4a96d">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2687,6 +3167,10 @@ They fetch the data, run the backtest, forecast from the latest vintage and writ
 </div> <!-- jp-Notebook -->
 </div> <!-- jupyter-wrapper -->
 
+        <style>
+        ['pre { line-height: 125%; }\ntd.linenos .normal { color: inherit; background-color: transparent; padding-left: 5px; padding-right: 5px; }\nspan.linenos { color: inherit; background-color: transparent; padding-left: 5px; padding-right: 5px; }\ntd.linenos .special { color: #000000; background-color: #ffffc0; padding-left: 5px; padding-right: 5px; }\nspan.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 5px; padding-right: 5px; }\n.highlight-ipynb .hll { background-color: var(--jp-cell-editor-active-background) }\n.highlight-ipynb { background: var(--jp-cell-editor-background); color: var(--jp-mirror-editor-variable-color) }\n.highlight-ipynb .c { color: var(--jp-mirror-editor-comment-color); font-style: italic } /* Comment */\n.highlight-ipynb .err { color: var(--jp-mirror-editor-error-color) } /* Error */\n.highlight-ipynb .k { color: var(--jp-mirror-editor-keyword-color); font-weight: bold } /* Keyword */\n.highlight-ipynb .o { color: var(--jp-mirror-editor-operator-color); font-weight: bold } /* Operator */\n.highlight-ipynb .p { color: var(--jp-mirror-editor-punctuation-color) } /* Punctuation */\n.highlight-ipynb .ch { color: var(--jp-mirror-editor-comment-color); font-style: italic } /* Comment.Hashbang */\n.highlight-ipynb .cm { color: var(--jp-mirror-editor-comment-color); font-style: italic } /* Comment.Multiline */\n.highlight-ipynb .cp { color: var(--jp-mirror-editor-comment-color); font-style: italic } /* Comment.Preproc */\n.highlight-ipynb .cpf { color: var(--jp-mirror-editor-comment-color); font-style: italic } /* Comment.PreprocFile */\n.highlight-ipynb .c1 { color: var(--jp-mirror-editor-comment-color); font-style: italic } /* Comment.Single */\n.highlight-ipynb .cs { color: var(--jp-mirror-editor-comment-color); font-style: italic } /* Comment.Special */\n.highlight-ipynb .kc { color: var(--jp-mirror-editor-keyword-color); font-weight: bold } /* Keyword.Constant */\n.highlight-ipynb .kd { color: var(--jp-mirror-editor-keyword-color); font-weight: bold } /* Keyword.Declaration */\n.highlight-ipynb .kn { color: var(--jp-mirror-editor-keyword-color); font-weight: bold } /* Keyword.Namespace */\n.highlight-ipynb .kp { color: var(--jp-mirror-editor-keyword-color); font-weight: bold } /* Keyword.Pseudo */\n.highlight-ipynb .kr { color: var(--jp-mirror-editor-keyword-color); font-weight: bold } /* Keyword.Reserved */\n.highlight-ipynb .kt { color: var(--jp-mirror-editor-keyword-color); font-weight: bold } /* Keyword.Type */\n.highlight-ipynb .m { color: var(--jp-mirror-editor-number-color) } /* Literal.Number */\n.highlight-ipynb .s { color: var(--jp-mirror-editor-string-color) } /* Literal.String */\n.highlight-ipynb .ow { color: var(--jp-mirror-editor-operator-color); font-weight: bold } /* Operator.Word */\n.highlight-ipynb .pm { color: var(--jp-mirror-editor-punctuation-color) } /* Punctuation.Marker */\n.highlight-ipynb .w { color: var(--jp-mirror-editor-variable-color) } /* Text.Whitespace */\n.highlight-ipynb .mb { color: var(--jp-mirror-editor-number-color) } /* Literal.Number.Bin */\n.highlight-ipynb .mf { color: var(--jp-mirror-editor-number-color) } /* Literal.Number.Float */\n.highlight-ipynb .mh { color: var(--jp-mirror-editor-number-color) } /* Literal.Number.Hex */\n.highlight-ipynb .mi { color: var(--jp-mirror-editor-number-color) } /* Literal.Number.Integer */\n.highlight-ipynb .mo { color: var(--jp-mirror-editor-number-color) } /* Literal.Number.Oct */\n.highlight-ipynb .sa { color: var(--jp-mirror-editor-string-color) } /* Literal.String.Affix */\n.highlight-ipynb .sb { color: var(--jp-mirror-editor-string-color) } /* Literal.String.Backtick */\n.highlight-ipynb .sc { color: var(--jp-mirror-editor-string-color) } /* Literal.String.Char */\n.highlight-ipynb .dl { color: var(--jp-mirror-editor-string-color) } /* Literal.String.Delimiter */\n.highlight-ipynb .sd { color: var(--jp-mirror-editor-string-color) } /* Literal.String.Doc */\n.highlight-ipynb .s2 { color: var(--jp-mirror-editor-string-color) } /* Literal.String.Double */\n.highlight-ipynb .se { color: var(--jp-mirror-editor-string-color) } /* Literal.String.Escape */\n.highlight-ipynb .sh { color: var(--jp-mirror-editor-string-color) } /* Literal.String.Heredoc */\n.highlight-ipynb .si { color: var(--jp-mirror-editor-string-color) } /* Literal.String.Interpol */\n.highlight-ipynb .sx { color: var(--jp-mirror-editor-string-color) } /* Literal.String.Other */\n.highlight-ipynb .sr { color: var(--jp-mirror-editor-string-color) } /* Literal.String.Regex */\n.highlight-ipynb .s1 { color: var(--jp-mirror-editor-string-color) } /* Literal.String.Single */\n.highlight-ipynb .ss { color: var(--jp-mirror-editor-string-color) } /* Literal.String.Symbol */\n.highlight-ipynb .il { color: var(--jp-mirror-editor-number-color) } /* Literal.Number.Integer.Long */']
+        </style>
+        
 
 
 
@@ -2719,6 +3203,44 @@ They fetch the data, run the backtest, forecast from the latest vintage and writ
       
         <footer class="md-footer">
   
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../setup/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Setup">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Setup
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../methods/data/" class="md-footer__link md-footer__link--next" aria-label="Next: Data">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Data
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
     
   
   <div class="md-footer-meta md-typeset">
