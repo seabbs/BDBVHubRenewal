@@ -2,7 +2,10 @@
 // to see each model's latest nowcast and forecast over the reported counts,
 // as bands or trajectories. Model tick boxes come from toggles.js.
 // data-scale is the scale shown first. bdbvNowcastCharts[element id](place)
-// picks a place in that chart and scrolls it into view.
+// picks a place in that chart and scrolls it into view. The map of
+// `data-map` (placemap.js), shown at first with data-map-on, colours places
+// by one model's nowcast against the recent count, and beside it a panel
+// gives the numbers for the place picked.
 (function () {
   "use strict";
   var NS = "http://www.w3.org/2000/svg";
@@ -11,6 +14,7 @@
     "Oct", "Nov", "Dec"];
   var T = window.bdbvToggles;
   var Z = window.bdbvZoom;
+  var PM = window.bdbvPlaceMap;
   var h = T.h;
 
   function el(tag, attrs, parent) {
@@ -23,13 +27,13 @@
   function fmt(v, d) { return v === null || isNaN(v) ? "" : v.toFixed(d); }
 
   function init(root) {
-    fetch(root.dataset.src)
-      .then(function (r) { return r.json(); })
-      .then(function (d) { build(root, d); })
+    var get = function (src) { return fetch(src).then(function (r) { return r.json(); }); };
+    Promise.all([get(root.dataset.src), get(root.dataset.map)])
+      .then(function (both) { build(root, both[0], both[1]); })
       .catch(function () { root.textContent = "The nowcast data could not be loaded."; });
   }
 
-  function build(root, d) {
+  function build(root, d, geo) {
     root.textContent = "";
     var controls = h("div", { class: "explorer-controls" }, root);
     var scales = [["national", "National"], ["provinces", "Provinces"], ["zones", "Health zones"]]
@@ -47,9 +51,32 @@
     var selZone = h("select", {}, h("label", {}, controls, "Place "));
     var view = T.viewSelect(controls, true, function () { draw(); });
     var zoom = Z.create(controls, function () { draw(); });
+    T.fullscreen(controls, root);
+    var mapOn = T.mapToggle(controls, root.dataset.mapOn === "true", function () { draw(); });
     var keys = T.legend(root, d.models, function () { draw(); });
     var note = h("p", { class: "explorer-note" }, root);
-    var figure = h("div", { class: "explorer-figure" }, root);
+    var panes = h("div", { class: "chart-map" }, root);
+    var figure = h("div", { class: "explorer-figure" }, panes);
+    var side = h("div", { class: "chart-map-side" }, panes);
+    var mapControls = h("div", { class: "explorer-controls" }, side);
+    var mapModel = h("select", {}, h("label", {}, mapControls, "Map "));
+    d.models.forEach(function (m, i) { if (m.fan) h("option", { value: i }, mapModel, m.name); });
+    var mapWeek = h("select", {}, h("label", {}, mapControls, "Week "));
+    var R = PM.ratios(d);
+    var map = PM.create(side, geo, function (zone) {
+      show(selScale.value === "zones" ? zone : PM.province(zone));
+    });
+    var info = h("dl", { class: "chart-map-info" }, side);
+    var names = {};
+    d.places.forEach(function (p) { names[p.id] = p; });
+    function fillWeeks() {
+      mapWeek.textContent = "";
+      R.weeks(+mapModel.value).forEach(function (w) {
+        h("option", { value: w }, mapWeek, (w < d.reference_date ? "nowcast, " : "") + w);
+      });
+    }
+    mapModel.addEventListener("change", function () { fillWeeks(); draw(); });
+    mapWeek.addEventListener("change", draw);
 
     function fillZones() {
       var zones = selScale.value === "zones";
@@ -173,10 +200,42 @@
       });
       el("line", { x1: X(ref), x2: X(ref), y1: Tp, y2: H - B, class: "explorer-ref" }, plot);
       Z.attach(zoom, svg, { L: L, R: R, T: Tp, B: B, W: W, H: H, x: [x0, x1], y: [y0, y1] });
+      drawMap(zone);
     }
 
-    window.bdbvNowcastCharts = window.bdbvNowcastCharts || {};
-    window.bdbvNowcastCharts[root.id] = function (id) {
+    // The map at zone level for zones, else at province level, and the
+    // numbers for the place picked.
+    function drawMap(place) {
+      side.hidden = !mapOn.checked;
+      if (!mapOn.checked) return;
+      var m = +mapModel.value, w = mapWeek.value;
+      var level = selScale.value === "zones" ? "zones" : "provinces";
+      var values = {};
+      d.places.forEach(function (p) {
+        var r = p.scale === level && R.at(p.id, m, w);
+        if (r) values[p.id] = r.ratio;
+      });
+      map.draw({ level: level, values: values, centre: 0, span: 2, log: false,
+        picked: place, key: "log((median + 1) / (recent + 1)), " + d.models[m].name + ", " + w,
+        label: function (id, v) {
+          return (names[id] ? names[id].name : id) + (v === undefined ? ": no forecast" :
+            ": ratio " + v.toFixed(2));
+        } });
+      info.textContent = "";
+      var p = names[place], r = R.at(place, m, w);
+      var rows = [["Place", p.name + (p.scale === "zones" ? " (" + p.id + ")" : "")]];
+      if (p.province) rows.push(["Province", names[p.province] ? names[p.province].name : p.province]);
+      rows.push(["Recent", R.recent(place).toFixed(1) + " (weeks ending " + R.last.join(" and ") + ")"]);
+      rows.push(r ? ["Median, " + w, Math.round(r.q[2]) + " (90% " + Math.round(r.q[0]) +
+        " to " + Math.round(r.q[4]) + ")"] : ["Median, " + w, "no forecast"]);
+      if (r) rows.push(["Ratio", r.ratio.toFixed(2)]);
+      rows.forEach(function (row) {
+        h("dt", {}, info, row[0]);
+        h("dd", {}, info, row[1]);
+      });
+    }
+
+    function show(id) {
       var p = d.places.filter(function (x) { return x.id === id; })[0];
       if (!p) return;
       selScale.value = p.scale;
@@ -184,9 +243,14 @@
       fillZones();
       selZone.value = id;
       draw();
+    }
+    window.bdbvNowcastCharts = window.bdbvNowcastCharts || {};
+    window.bdbvNowcastCharts[root.id] = function (id) {
+      show(id);
       root.scrollIntoView({ behavior: "smooth", block: "start" });
     };
     fillZones();
+    fillWeeks();
     draw();
     T.onTheme(draw);
   }

@@ -49,6 +49,7 @@
     var hasTraj = d.models.some(function (m) { return m.trajectories; });
     var view = T.viewSelect(controls, hasTraj, function () { draw(); });
     var zoom = window.bdbvZoom.create(controls, function () { draw(); });
+    T.fullscreen(controls, root);
     var Z = window.bdbvZoom;
     var legend = T.legend(root, d.models, draw);
     var note = h("p", { class: "explorer-note" }, root);

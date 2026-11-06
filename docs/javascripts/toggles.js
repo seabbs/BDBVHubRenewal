@@ -90,6 +90,28 @@
     return sel;
   }
 
+  // A Full screen button that shows target alone, and back.
+  function fullscreen(controls, target) {
+    var b = h("button", { type: "button", class: "zoom-reset fullscreen" }, controls, "Full screen");
+    b.addEventListener("click", function () {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else target.requestFullscreen();
+    });
+    document.addEventListener("fullscreenchange", function () {
+      b.textContent = document.fullscreenElement === target ? "Exit full screen" : "Full screen";
+    });
+  }
+
+  // A Map tick box, ticked when on. onChange(ticked) runs on a change.
+  function mapToggle(controls, on, onChange) {
+    var l = h("label", { class: "map-toggle" }, controls);
+    var cb = h("input", { type: "checkbox" }, l);
+    cb.checked = on;
+    h("span", {}, l, " Map");
+    cb.addEventListener("change", function () { onChange(cb.checked); });
+    return cb;
+  }
+
   window.bdbvToggles = { h: h, legend: legend, hatch: hatch, onTheme: onTheme,
-    viewSelect: viewSelect };
+    viewSelect: viewSelect, fullscreen: fullscreen, mapToggle: mapToggle };
 })();
