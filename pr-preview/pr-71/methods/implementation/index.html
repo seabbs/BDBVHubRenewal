@@ -2133,7 +2133,9 @@ The model diagrams are mermaid blocks in <code>docs/methods/model.md</code>.</p>
 </table>
 <h2 id="baseline-models">Baseline models<a class="headerlink" href="#baseline-models" title="Permanent link">&para;</a></h2>
 <p>The baselines are in <a class="autorefs autorefs-internal" title="            bdbvhubrenewal.forecasters.randomwalk" href="../../reference/forecasters/#bdbvhubrenewal.forecasters.randomwalk"><code>forecasters.randomwalk</code></a> and <a class="autorefs autorefs-internal" title="            bdbvhubrenewal.forecasters.chain" href="../../reference/forecasters/#bdbvhubrenewal.forecasters.chain"><code>forecasters.chain</code></a>, on a JAX port of baselinenowcast 0.2.2 in <a class="autorefs autorefs-internal" title="            bdbvhubrenewal.baselinenowcast" href="../../reference/baselinenowcast/#bdbvhubrenewal.baselinenowcast"><code>bdbvhubrenewal.baselinenowcast</code></a>.
-The port is checked against fixtures from the R package, and has one named extension, the chain ladder of release snapshots, which skips unobserved cells and fits one daily delay shared by pairs of any gap.
+The port is checked against fixtures from the R package, and has two named extensions for release snapshots.
+E1 is a chain ladder that skips unobserved cells and fits one daily delay shared by pairs of any gap.
+E2 fits ages in blocks of at least 10 cases that share one factor.
 The models use the port's chain ladder on snapshots.
 The observation model is in <code>forecasters.obs</code>, and fits and draws its new reports with the port's <code>fit_by_horizon</code>, <code>fit_nb</code> and <code>sample_nb</code>.</p>
 <table>

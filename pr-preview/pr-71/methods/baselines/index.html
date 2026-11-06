@@ -2215,7 +2215,7 @@ Only in-window pairs inform the delay.
 A pair outside the window keeps its counts in the data.
 A model raises if the vintage has no snapshots or no in-window pair.</p>
 <h2 id="delay">Delay<a class="headerlink" href="#delay" title="Permanent link">&para;</a></h2>
-<p>The delay follows baselinenowcast<sup id="fnref2:bnc-paper"><a class="footnote-ref" href="#fn:bnc-paper">1</a></sup><sup id="fnref2:bnc-package"><a class="footnote-ref" href="#fn:bnc-package">2</a></sup> on the daily snapshots, with two extensions.
+<p>The delay follows baselinenowcast<sup id="fnref2:bnc-paper"><a class="footnote-ref" href="#fn:bnc-paper">1</a></sup><sup id="fnref2:bnc-package"><a class="footnote-ref" href="#fn:bnc-package">2</a></sup> on the daily snapshots, with two extensions, a chain ladder over release pairs that skips unobserved cells and blocks of young ages that share one factor.
 Releases are batched reports of one daily delay.
 With <span class="arithmatex">\(g_p(j) \ge 0\)</span> the daily log development factor at age <span class="arithmatex">\(j\)</span>, and <span class="arithmatex">\(g_p(j) = 0\)</span> for <span class="arithmatex">\(j \ge D\)</span>, a day of age <span class="arithmatex">\(x\)</span> at release <span class="arithmatex">\(r\)</span> grows to release <span class="arithmatex">\(r + 1\)</span> by <span class="arithmatex">\(\exp \sum_{j=x}^{x+s-1} g_p(j)\)</span>.
 For each gap <span class="arithmatex">\(s\)</span> and age <span class="arithmatex">\(x = 0, \dots, D - 1\)</span>,</p>
