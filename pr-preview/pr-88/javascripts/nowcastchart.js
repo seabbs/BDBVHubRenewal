@@ -8,7 +8,6 @@
 // gives the numbers for the place picked.
 (function () {
   "use strict";
-  var NS = "http://www.w3.org/2000/svg";
   var DAY = 864e5;
   var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep",
     "Oct", "Nov", "Dec"];
@@ -16,24 +15,18 @@
   var Z = window.bdbvZoom;
   var PM = window.bdbvPlaceMap;
   var h = T.h;
+  var el = T.el;
 
-  function el(tag, attrs, parent) {
-    var n = document.createElementNS(NS, tag);
-    Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]); });
-    if (parent) parent.appendChild(n);
-    return n;
-  }
   function day(s) { return Date.parse(s + "T00:00:00Z"); }
   function fmt(v, d) { return v === null || isNaN(v) ? "" : v.toFixed(d); }
 
   function init(root) {
-    var get = function (src) { return fetch(src).then(function (r) { return r.json(); }); };
-    Promise.all([get(root.dataset.src), get(root.dataset.map)])
-      .then(function (both) { build(root, both[0], both[1]); })
+    T.getJSON(root.dataset.src)
+      .then(function (d) { build(root, d); })
       .catch(function () { root.textContent = "The nowcast data could not be loaded."; });
   }
 
-  function build(root, d, geo) {
+  function build(root, d) {
     root.textContent = "";
     var controls = h("div", { class: "explorer-controls" }, root);
     var scales = [["national", "National"], ["provinces", "Provinces"], ["zones", "Health zones"]]
@@ -53,6 +46,7 @@
     var zoom = Z.create(controls, function () { draw(); });
     T.fullscreen(controls, root);
     var mapOn = T.mapToggle(controls, root.dataset.mapOn === "true", function () { draw(); });
+    var map = null;
     var keys = T.legend(root, d.models, function () { draw(); });
     var note = h("p", { class: "explorer-note" }, root);
     var panes = h("div", { class: "chart-map" }, root);
@@ -63,9 +57,7 @@
     d.models.forEach(function (m, i) { if (m.fan) h("option", { value: i }, mapModel, m.name); });
     var mapWeek = h("select", {}, h("label", {}, mapControls, "Week "));
     var R = PM.ratios(d);
-    var map = PM.create(side, geo, function (zone) {
-      show(selScale.value === "zones" ? zone : PM.province(zone));
-    });
+    var mapHolder = h("div", {}, side);
     var info = h("dl", { class: "chart-map-info" }, side);
     var names = {};
     d.places.forEach(function (p) { names[p.id] = p; });
@@ -139,8 +131,8 @@
       }
       var yr = Z.yRange(zoom, 0, ymax * 1.05, "");
       var y0 = yr[0], y1 = yr[1];
-      var W = 760, H = 300, L = 44, R = 10, Tp = 10, B = 28;
-      function X(t) { return L + (t - x0) / (x1 - x0) * (W - L - R); }
+      var W = 760, H = 300, L = 44, mRight = 10, Tp = 10, B = 28;
+      function X(t) { return L + (t - x0) / (x1 - x0) * (W - L - mRight); }
       function Y(v) { return Tp + (1 - (v - y0) / (y1 - y0)) * (H - Tp - B); }
       figure.textContent = "";
       var svg = el("svg", { viewBox: "0 0 " + W + " " + H, role: "img",
@@ -149,7 +141,7 @@
       // Whole counts, so the step is at least 1.
       var step = Math.max(1, Z.nice(span));
       for (var v = Math.ceil(y0 / step) * step; v <= y1; v += step) {
-        el("line", { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: "explorer-grid" }, svg);
+        el("line", { x1: L, x2: W - mRight, y1: Y(v), y2: Y(v), class: "explorer-grid" }, svg);
         el("text", { x: L - 6, y: Y(v) + 4, "text-anchor": "end",
           class: "explorer-tick" }, svg).textContent = v;
       }
@@ -160,7 +152,7 @@
         el("text", { x: X(t), y: H - 8, "text-anchor": "middle", class: "explorer-tick" },
           svg).textContent = dt.getUTCDate() + " " + MONTHS[dt.getUTCMonth()];
       }
-      var plot = Z.clip(svg, { L: L, R: R, T: Tp, B: B, W: W, H: H });
+      var plot = Z.clip(svg, { L: L, R: mRight, T: Tp, B: B, W: W, H: H });
       on.forEach(function (m) {
         var own = q.filter(function (r) { return r[0] === m; });
         if (!own.length) return;
@@ -199,15 +191,15 @@
         el("title", {}, c).textContent = p[0] + ": " + p[1] + " reported (" + d.release + ")";
       });
       el("line", { x1: X(ref), x2: X(ref), y1: Tp, y2: H - B, class: "explorer-ref" }, plot);
-      Z.attach(zoom, svg, { L: L, R: R, T: Tp, B: B, W: W, H: H, x: [x0, x1], y: [y0, y1] });
+      Z.attach(zoom, svg, { L: L, R: mRight, T: Tp, B: B, W: W, H: H, x: [x0, x1], y: [y0, y1] });
       drawMap(zone);
     }
 
     // The map at zone level for zones, else at province level, and the
     // numbers for the place picked.
     function drawMap(place) {
-      side.hidden = !mapOn.checked;
-      if (!mapOn.checked) return;
+      side.hidden = !mapOn.checked || !map;
+      if (side.hidden) return;
       var m = +mapModel.value, w = mapWeek.value;
       var level = selScale.value === "zones" ? "zones" : "provinces";
       var values = {};
@@ -215,7 +207,7 @@
         var r = p.scale === level && R.at(p.id, m, w);
         if (r) values[p.id] = r.ratio;
       });
-      map.draw({ level: level, values: values, centre: 0, span: 2, log: false,
+      map.draw({ level: level, values: values, centre: 0, span: [2, 2], log: false,
         picked: place, key: "log((median + 1) / (recent + 1)), " + d.models[m].name + ", " + w,
         label: function (id, v) {
           return (names[id] ? names[id].name : id) + (v === undefined ? ": no forecast" :
@@ -252,6 +244,13 @@
     fillZones();
     fillWeeks();
     draw();
+    // The map loads on its own, so the chart works without it.
+    T.getJSON(root.dataset.map).then(function (geo) {
+      map = PM.create(mapHolder, geo, function (zone) {
+        show(selScale.value === "zones" ? zone : PM.province(zone));
+      });
+      draw();
+    }).catch(function () { mapOn.parentNode.hidden = true; });
     T.onTheme(draw);
   }
 

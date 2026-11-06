@@ -5,16 +5,10 @@
 // ratio of a nowcast to the recent count that the Nowcast page maps.
 (function () {
   "use strict";
-  var NS = "http://www.w3.org/2000/svg";
   var W = 600;
   var h = window.bdbvToggles.h;
+  var el = window.bdbvToggles.el;
 
-  function el(tag, attrs, parent) {
-    var n = document.createElementNS(NS, tag);
-    Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]); });
-    if (parent) parent.appendChild(n);
-    return n;
-  }
   function mode() {
     return document.body.getAttribute("data-md-color-scheme") === "slate" ? "dark" : "light";
   }
@@ -60,7 +54,8 @@
 
   // A map in parent. onPick(zone id) runs on a click. draw(o) colours it:
   // o.level ("zones" or "provinces"), o.values (by zone or province id),
-  // o.centre, o.span (the distance from the centre at full colour), o.log
+  // o.centre, o.span (the distances below and above the centre at full
+  // colour), o.log
   // (compare log values), o.label(id, value) for the tooltip, o.picked (a
   // zone or province id) and o.key (the scale's name).
   function create(parent, geo, onPick) {
@@ -72,25 +67,33 @@
         "aria-label": "Map of health zones coloured by " + o.key }, root);
       var tf = o.log ? Math.log : function (v) { return v; };
       function shade(v) {
-        return v === undefined || v === null || isNaN(v) || (o.log && v <= 0) ? "none" :
-          colour((tf(v) - tf(o.centre)) / o.span);
+        if (v === undefined || v === null || isNaN(v) || (o.log && v <= 0)) return "none";
+        var x = tf(v) - tf(o.centre);
+        return colour(x / (x < 0 ? o.span[0] : o.span[1]));
       }
-      var outline = [];
+      var picked = [];
       shapes.zones.forEach(function (z) {
         var id = o.level === "zones" ? z.id : province(z.id);
         var v = o.values[id];
         var path = el("path", { d: z.d, class: "placemap-zone", fill: shade(v) }, svg);
         el("title", {}, path).textContent = o.label(id, v);
         path.addEventListener("click", function () { onPick(z.id); });
-        if (id === o.picked) outline.push(z.d);
+        if (id === o.picked) picked.push({ d: z.d, fill: shade(v) });
       });
-      outline.forEach(function (d) { el("path", { d: d, class: "placemap-picked" }, svg); });
+      // The picked place's outer border: a wide stroke under its own fill,
+      // so the borders between its zones do not show.
+      picked.forEach(function (z) { el("path", { d: z.d, class: "placemap-picked" }, svg); });
+      picked.forEach(function (z) {
+        el("path", { d: z.d, fill: z.fill === "none" ? "var(--md-default-bg-color)" : z.fill,
+          "pointer-events": "none" }, svg);
+      });
       var y = shapes.H + 8, x0 = W / 2 - 120;
       for (var i = 0; i < 40; i++) {
         el("rect", { x: x0 + i * 6, y: y, width: 6, height: 8, fill: colour(-1 + i * 2 / 39) }, svg);
       }
       [-1, 0, 1].forEach(function (t) {
-        var v = o.log ? Math.exp(tf(o.centre) + t * o.span) : o.centre + t * o.span;
+        var x = t * (t < 0 ? o.span[0] : o.span[1]);
+        var v = o.log ? Math.exp(tf(o.centre) + x) : o.centre + x;
         el("text", { x: x0 + (t + 1) * 120, y: y + 22, "text-anchor": "middle",
           class: "explorer-tick" }, svg).textContent = (t < 0 ? "≤ " : t > 0 ? "≥ " : "") +
           +v.toPrecision(2);
@@ -98,7 +101,7 @@
       el("text", { x: W / 2, y: y + 34, "text-anchor": "middle", class: "explorer-tick" },
         svg).textContent = o.key;
     }
-    return { draw: draw, hidden: function (off) { root.hidden = off; } };
+    return { draw: draw };
   }
 
   // The nowcast against the recent count, from the nowcast chart's data:

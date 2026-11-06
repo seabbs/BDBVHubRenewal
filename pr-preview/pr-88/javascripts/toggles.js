@@ -5,6 +5,22 @@
   "use strict";
   var NS = "http://www.w3.org/2000/svg";
 
+  // An SVG element.
+  function el(tag, attrs, parent) {
+    var n = document.createElementNS(NS, tag);
+    Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]); });
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+
+  // The JSON at src, failing on an HTTP error.
+  function getJSON(src) {
+    return fetch(src).then(function (r) {
+      if (!r.ok) throw new Error(src + ": " + r.status);
+      return r.json();
+    });
+  }
+
   function h(tag, attrs, parent, text) {
     var n = document.createElement(tag);
     Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]); });
@@ -90,8 +106,10 @@
     return sel;
   }
 
-  // A Full screen button that shows target alone, and back.
+  // A Full screen button that shows target alone, and back, where the
+  // browser can show an element full screen.
   function fullscreen(controls, target) {
+    if (!document.fullscreenEnabled) return;
     var b = h("button", { type: "button", class: "zoom-reset fullscreen" }, controls, "Full screen");
     b.addEventListener("click", function () {
       if (document.fullscreenElement) document.exitFullscreen();
@@ -112,6 +130,6 @@
     return cb;
   }
 
-  window.bdbvToggles = { h: h, legend: legend, hatch: hatch, onTheme: onTheme,
+  window.bdbvToggles = { h: h, el: el, getJSON: getJSON, legend: legend, hatch: hatch, onTheme: onTheme,
     viewSelect: viewSelect, fullscreen: fullscreen, mapToggle: mapToggle };
 })();

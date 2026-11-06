@@ -5,17 +5,11 @@
 // with update, keeping the tab, ticks and zoom.
 (function () {
   "use strict";
-  var NS = "http://www.w3.org/2000/svg";
   var T = window.bdbvToggles;
   var Z = window.bdbvZoom;
   var h = T.h;
+  var el = T.el;
 
-  function el(tag, attrs, parent) {
-    var n = document.createElementNS(NS, tag);
-    Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]); });
-    if (parent) parent.appendChild(n);
-    return n;
-  }
   var nice = Z.nice;
 
   // Ticks of 1, 2 and 5 times a power of 10 between 10^lo and 10^hi, of
