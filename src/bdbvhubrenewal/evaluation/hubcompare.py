@@ -14,10 +14,11 @@ Fitted models are slow, so `stored_forecasts` takes theirs from backtest
 and held-out forecast files for the same round.
 The `source` column says which (`real` or `hub`).
 
-`score_comparison` scores every model on the count each later real
-vintage reports, from the vintage serving its round
-(`bdbvhubrenewal.evaluation.nowcast.release_backtest`), with the complete
-weeks of the latest vintage as a secondary check.
+`score_comparison` scores every model on the weeks the latest real
+vintage reports in full, from the vintage serving its round
+(`bdbvhubrenewal.evaluation.nowcast.release_backtest`). Hub teams have no
+modelled delay we can see, so no model is scored on the counts later
+vintages report.
 A round is pending until a real vintage later than its matching vintage
 exists.
 `summarise_comparison` gives WIS relative to a baseline on the weeks both
@@ -49,7 +50,6 @@ from bdbvhubrenewal.evaluation.backtest import (
     run_forecasts,
 )
 from bdbvhubrenewal.evaluation.nowcast import (
-    BASELINE,
     release_backtest,
 )
 from bdbvhubrenewal.evaluation.scoring import (
@@ -629,7 +629,7 @@ def score_comparison(
     daily: pd.DataFrame,
     zones: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Score every model on the count each later real vintage reports.
+    """Score every model on the weeks the latest real vintage completes.
 
     Parameters
     ----------
@@ -688,14 +688,15 @@ def score_comparison(
     )
     sources = samples[["model", "vintage", "source"]].drop_duplicates()
     sources = sources.rename(columns={"vintage": "origin"})
-    scores = result.scores.loc[result.scores["model"] != BASELINE]
-    scores = scores.merge(sources, on=["model", "origin"])
+    complete = result.scores.loc[result.scores["target"] == "complete"]
+    scores = complete.merge(sources, on=["model", "origin"])
     scores["reference_date"] = scores["origin"].map(rounds)
     scores["horizon"] = (
         pd.to_datetime(scores["target_end_date"])
         - pd.to_datetime(scores["reference_date"])
     ).dt.days // 7
-    energy = result.energy.merge(sources, on=["model", "origin"])
+    energy = result.energy.loc[result.energy["target"] == "complete"]
+    energy = energy.merge(sources, on=["model", "origin"])
     energy["reference_date"] = energy["origin"].map(rounds)
     return scores.reset_index(drop=True), energy, pending_rounds
 

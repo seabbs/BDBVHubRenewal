@@ -19,7 +19,6 @@ from bdbvhubrenewal.data.zones import province_of, weekly_zone_counts
 from bdbvhubrenewal.forecasters import ForecastTask, get_model
 from bdbvhubrenewal.forecasters.zones import zone_forecast
 from bdbvhubrenewal.reporting.explorer import compact, trajectories
-from bdbvhubrenewal.reporting.legend import starts_on
 
 __all__ = [
     "place_chart_data",
@@ -210,7 +209,7 @@ def place_chart_data(
                 "light": colours[m][0],
                 "dark": colours[m][1],
                 "dash": colours[m][2],
-                "on": starts_on(m, fans),
+                "on": m in fans,
                 "fan": m in fans,
             }
             for m in models

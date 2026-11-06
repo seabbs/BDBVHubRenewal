@@ -52,6 +52,7 @@ import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 
+from bdbvhubrenewal.baselinenowcast import growth
 from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.snapshots import snapshot_arrays
 from bdbvhubrenewal.forecasters.base import (
@@ -69,7 +70,7 @@ from bdbvhubrenewal.forecasters.chain import (
 from bdbvhubrenewal.forecasters.obs import sample_count
 from bdbvhubrenewal.forecasters.walk import random_walk
 
-__all__ = ["RandomWalk", "RandomWalkNowcast"]
+__all__ = ["RandomWalk", "RandomWalkNowcast", "chain_delay_summary"]
 
 
 def _key(task: ForecastTask) -> jax.Array:
@@ -319,6 +320,46 @@ class RandomWalk:
         return frame(task, weeks, values, self.rows(origin, task))
 
 
+def chain_delay_summary(
+    origin: Origin, model: str, vintage: str
+) -> pd.DataFrame:
+    """Return the share of a day's final count reported by each age.
+
+    The share at age $a$ is $1 / G(a)$, from the delay fitted at the
+    origin, for every place, in the form of the renewal models' delay
+    summaries (`bdbvhubrenewal.forecasters.renewal.fit_delays`).
+
+    Parameters
+    ----------
+    origin : Origin
+        The fit.
+    model : str
+        Model name.
+    vintage : str
+        The origin.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `model`, `vintage`, `location`, `kind` (`"cumulative"`),
+        `x` (age in days), `quantity` (`"reported_share"`) and `q50`.
+    """
+    ages = np.arange(origin.settings.max_delay + 1)
+    share = 1.0 / growth(origin.fit.g, ages, origin.settings.max_delay)
+    places = origin.snap.locations
+    return pd.DataFrame(
+        {
+            "model": model,
+            "vintage": vintage,
+            "location": np.repeat(places, ages.size),
+            "kind": "cumulative",
+            "x": np.tile(ages, len(places)),
+            "quantity": "reported_share",
+            "q50": share.ravel(),
+        }
+    )
+
+
 @dataclass
 class RandomWalkNowcast(RandomWalk):
     """The random walk run forward from a daily nowcast of the recent weeks.
@@ -327,9 +368,15 @@ class RandomWalkNowcast(RandomWalk):
     ----------
     name : str
         Model name.
+    delay_summary : pandas.DataFrame or None
+        The delay of the last forecast (`chain_delay_summary`), which maps its
+        final counts to what later releases show.
     """
 
     name: str = "randomwalknowcast"
+    delay_summary: pd.DataFrame | None = field(
+        init=False, default=None, repr=False
+    )
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return random walk trajectories from a nowcast for a task.
@@ -353,6 +400,9 @@ class RandomWalkNowcast(RandomWalk):
         """
         origin = self.origin_at(task, errors=True)
         values, weeks = self.trajectories(origin, task, origin.point)
+        self.delay_summary = chain_delay_summary(
+            origin, self.name, task.vintage
+        )
         self._diagnostics(
             origin,
             task,
