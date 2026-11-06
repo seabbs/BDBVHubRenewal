@@ -38,7 +38,11 @@ from bdbvhubrenewal.data.dates import reference_date_for_vintage
 from bdbvhubrenewal.data.delays import delay_summary
 from bdbvhubrenewal.data.simulate import simulate_outbreak
 from bdbvhubrenewal.data.tidy import COHERENCE_STREAMS
-from bdbvhubrenewal.data.zone_map import BOUNDARIES_PATH, zone_boundaries
+from bdbvhubrenewal.data.zone_map import (
+    BOUNDARIES_PATH,
+    zone_boundaries,
+    zone_names,
+)
 from bdbvhubrenewal.data.zones import hub_zones
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
@@ -115,11 +119,9 @@ from bdbvhubrenewal.reporting.scoresummary import summary_html, summary_rows
 from bdbvhubrenewal.reporting.store_note import write_store_note
 from bdbvhubrenewal.reporting.tables import filter_table
 from bdbvhubrenewal.reporting.zone_nowcast import (
-    ZONE_MODEL,
     place_chart_data,
     zone_counts,
     zone_nowcast,
-    zone_table,
 )
 
 __all__ = ["make_report"]
@@ -390,7 +392,7 @@ def _release_section(
         pd.concat(
             [
                 pd.read_csv(res / "nowcast-energy.csv"),
-                pd.read_csv(res / "zone-energy.csv"),
+                _as_submitted(pd.read_csv(res / "zone-energy.csv")),
             ]
         ),
         names,
@@ -543,7 +545,6 @@ def _scored_on(reported: pd.DataFrame, baseline: str = "randomwalk") -> str:
 _NOWCAST_GROUPS: Final = (
     ("main", "National and main provinces"),
     ("other", "Other provinces"),
-    ("zones", "Zones"),
 )
 """Location groups of the Nowcast page, as figure suffix and tab label."""
 
@@ -551,7 +552,7 @@ _NOWCAST_GROUPS: Final = (
 def _nowcast_groups(
     target: pd.DataFrame, locations: Sequence[str]
 ) -> dict[str, list[str]]:
-    """Group locations by level, with the main provinces by size."""
+    """Group the country and provinces, with the main provinces by size."""
     real = target.loc[target["kind"] == "real"]
     latest = real.loc[real["vintage"] == real["vintage"].max()]
     size = latest.groupby("location")["total"].sum()
@@ -564,7 +565,6 @@ def _nowcast_groups(
     return {
         "main": [loc for loc in (NATIONAL, *main) if loc in have],
         "other": [loc for loc in provinces[3:] if loc in have],
-        "zones": sorted(have - set(provinces) - {NATIONAL}),
     }
 
 
@@ -639,12 +639,6 @@ def _nowcast_page(
     )
 
 
-def _zone_names(data_dir: Path | str) -> dict[str, str]:
-    """Each health zone's name, as the hub's time series gives it."""
-    zones = load_health_zones(data_dir)
-    return dict(zip(zones["location"], zones["location_name"], strict=True))
-
-
 def _zone_nowcast_section(
     fig: Path,
     gen: Path,
@@ -693,42 +687,11 @@ def _zone_nowcast_section(
     every = pd.concat([national, at_release, *ran, stored], ignore_index=True)
     if "as_of" in every:
         every = every.loc[every["as_of"].isna()]
-    zone_rows = every["location"].isin(zones)
-    samples = every.loc[zone_rows & (every["model"] == ZONE_MODEL)]
     labels = _location_names(target)
     start = pd.Timestamp(task.reference_date) - pd.Timedelta(weeks=12)
     counts = zone_counts(
         daily_zones, task.vintage, start.strftime("%Y-%m-%d"), labels
     )
-    tabs = []
-    by_prov = counts.groupby("province")["total"].sum()
-    for key in by_prov.sort_values(ascending=False, kind="stable").index:
-        grp = counts.loc[counts["province"] == key]
-        prov_id = str(key)
-        locs = sorted(set(grp["location"]))
-        path = fig / f"zone-nowcast-{prov_id.lower()}.svg"
-        save_light_dark(
-            partial(
-                plot_location_grid,
-                samples,
-                counts,
-                locs,
-                models=[ZONE_MODEL],
-                truth_vintage=task.vintage,
-                max_horizon=-1,
-                weeks_before=12,
-                ncol=4,
-                complete_after_weeks=config.complete_after_weeks,
-            ),
-            path,
-        )
-        label = labels.get(prov_id, prov_id)
-        alt = f"Zone nowcasts in {label} at {task.vintage}."
-        tabs.append(
-            f'=== "{label}"\n\n'
-            f"    ![{alt}](figures/{path.name}#only-light)\n"
-            f"    ![{alt}](figures/{path.stem}-dark.svg#only-dark)\n"
-        )
     real = target.loc[
         (target["kind"] == "real") & (target["vintage"] == task.vintage)
     ]
@@ -738,6 +701,16 @@ def _zone_nowcast_section(
     ]
     cases = above.groupby("location")["total"].transform("sum")
     above = above.loc[(cases > 0) | (above["location"] == NATIONAL)]
+    release = bvd_for_vintage(task.vintage, Path(data_dir) / "bvd")
+    if release is None or release.choice is None:
+        raise ValueError(f"No BVDOutbreakSize release for {task.vintage}.")
+    hub_commit = json.loads((Path(data_dir) / "sources.json").read_text())[
+        "commit"
+    ]
+    write_explorer(
+        fig / "zone-map.geojson",
+        zone_boundaries(release.choice.tag, hub_commit),
+    )
     write_explorer(
         fig / "nowcastchart.json",
         place_chart_data(
@@ -746,7 +719,7 @@ def _zone_nowcast_section(
                 [above, counts[["location", "target_end_date", "total"]]],
                 ignore_index=True,
             ),
-            {**labels, **_zone_names(data_dir)},
+            {**labels, **zone_names(hub_commit)},
             _model_colours(names),
             config.complete_after_weeks,
         ),
@@ -760,52 +733,42 @@ def _zone_nowcast_section(
         "([Health zones](methods/evaluation.md#health-zones)).\n"
         "The latest nowcast has no score yet.\n"
         "Scores by origin are on the [Backtest](backtest.md) page.\n\n"
-        '<div class="nowcastchart" data-src="../figures/nowcastchart.json" '
+        '<div class="nowcastchart" id="nowcast-place" '
+        'data-src="../figures/nowcastchart.json" '
         'role="group" aria-label="Nowcast and forecast by place">\n'
         "<noscript>The nowcast chart needs JavaScript.</noscript>\n"
         "</div>\n",
     )
-    release = bvd_for_vintage(task.vintage, Path(data_dir) / "bvd")
-    if release is None or release.choice is None:
-        raise ValueError(f"No BVDOutbreakSize release for {task.vintage}.")
-    sources = json.loads((Path(data_dir) / "sources.json").read_text())
-    write_explorer(
-        fig / "zone-map.geojson",
-        zone_boundaries(release.choice.tag, sources["commit"]),
-    )
     _write(
-        gen / "zone-review.md",
-        "## Zone review\n\n"
+        gen / "zone-nowcast.md",
+        "## Health zones\n\n"
+        "Each model's nowcast and forecast in one health zone.\n"
+        "Pick the province, then the zone.\n\n"
+        '<div class="nowcastchart" id="nowcast-zones" data-scale="zones" '
+        'data-src="../figures/nowcastchart.json" '
+        'role="group" aria-label="Nowcast and forecast by health zone">\n'
+        "<noscript>The nowcast chart needs JavaScript.</noscript>\n"
+        "</div>\n\n"
+        "### Zone review\n\n"
         "One row per place with a forecast from the chosen model.\n"
         "Recent is the mean count of the last two complete weeks.\n"
         "Each week column gives the median and 90% interval.\n"
         "Ratio is log((median + 1) / (recent + 1)) for the chosen week.\n"
         "A ratio of 0.69 is double the recent count and -0.69 is half.\n"
-        "Click a place to show it in the By place chart.\n"
+        "Click a place to show it in the chart above.\n"
         "The map colours each zone by the same ratio.\n"
+        "Katoyi (CD-NK-13) is not on the map: its code in the hub mapping "
+        "does not match the boundary file.\n"
         "Zone boundaries are from [BVDOutbreakSize]"
         f"(https://github.com/{BVD_REPO}/blob/{release.choice.tag}/"
         f"{BOUNDARIES_PATH}) at {release.choice.tag}, from the Ministry of "
         "Health boundaries on the [Humanitarian Data Exchange]"
         "(https://data.humdata.org/dataset/drc-health-data).\n\n"
         '<div class="zonereview" data-src="../figures/nowcastchart.json" '
-        'data-map="../figures/zone-map.geojson" '
+        'data-map="../figures/zone-map.geojson" data-chart="nowcast-zones" '
         'role="group" aria-label="Zone review">\n'
         "<noscript>The zone review needs JavaScript.</noscript>\n"
         "</div>\n",
-    )
-    _write(
-        gen / "zone-nowcast.md",
-        "## Health zones\n\n"
-        + _dropdown(
-            f"`{ZONE_MODEL}` by province.\n\n" + "\n".join(tabs),
-            "Zone nowcasts by province",
-        )
-        + "\n"
-        + _dropdown(
-            _table(zone_table(samples, counts)),
-            "Newest weeks by zone",
-        ),
     )
 
 
@@ -1047,27 +1010,6 @@ def _as_submitted(zones: pd.DataFrame) -> pd.DataFrame:
     """
     summed = zones.loc[zones["model"].str.endswith(SUMMED)]
     return summed.assign(model=summed["model"].str.removesuffix(SUMMED))
-
-
-def _zone_section(path: Path, energy_path: Path) -> str:
-    """Return the health-zone table, closed, in the submitted form."""
-    scores = _as_submitted(pd.read_csv(path, low_memory=False))
-    joint = relative_energy(
-        _as_submitted(pd.read_csv(energy_path)), by=("scale",)
-    )
-    cols = ["n", "wis", "log_wis", "coverage_50", "coverage_90", "bias"]
-    energy = ["n_energy", "rel_energy", "rel_log_energy"]
-    table = (
-        summarise_scores(scores, by=("model",))
-        .merge(
-            zone_relative_skill(scores)[["model", "relative_wis"]], on="model"
-        )
-        .merge(joint[["model", *energy]], on="model")
-    )
-    return _dropdown(
-        _table(table[["model", *cols, "relative_wis", *energy]]),
-        "Health zones, over every origin",
-    )
 
 
 BACKTEST_LOCATIONS: tuple[str, ...] = (NATIONAL, "CD-IT", "CD-NK")
@@ -1633,10 +1575,6 @@ def _backtest_page(
         ),
     )
     _write(gen / "lopo-section.md", _lopo_section(res / "lopo-scores.csv"))
-    _write(
-        gen / "zone-section.md",
-        _zone_section(res / "zone-scores.csv", res / "zone-energy.csv"),
-    )
     _write(gen / "ladder.md", _ladder_page(res / "ladder.csv"))
     _write(
         gen / "development-log.md",

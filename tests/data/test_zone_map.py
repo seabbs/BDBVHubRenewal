@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from bdbvhubrenewal.data.zone_map import zone_boundaries
+from bdbvhubrenewal.data.zone_map import zone_boundaries, zone_names
 
 SQUARE = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]}
 
@@ -38,3 +38,7 @@ def test_zone_boundaries_key_features_by_hub_code() -> None:
             "geometry": SQUARE,
         }
     ]
+
+
+def test_zone_names_come_from_the_hub_mapping() -> None:
+    assert zone_names("deadbeef", _download) == {"CD-IT-01": "Adi"}

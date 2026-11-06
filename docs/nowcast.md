@@ -11,8 +11,6 @@ The current nowcast and forecast from the latest vintage.
 
 --8<-- "nowcast-picker.md"
 
---8<-- "zone-review.md"
-
 ## Nowcast
 
 The weeks before the reference date, estimated for reporting delays.

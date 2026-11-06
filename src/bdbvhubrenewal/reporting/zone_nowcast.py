@@ -2,10 +2,9 @@
 """Health-zone nowcasts at the latest release, for the Nowcast page.
 
 The random walk models are run on each zone and summed to its provinces
-(`zone_forecast`), as in the submitted file. The page shows the zones
-with cases in the recent weeks in the Nowcast page's picker, beside the
-country and provinces (`place_chart_data`), then static grids by
-province and a table of the newest weeks for `randomwalknowcast`.
+(`zone_forecast`), as in the submitted file. The page's interactive
+charts show every zone with a forecast or recent cases, beside the
+country and provinces (`place_chart_data`).
 A week with no onsets in a zone has a count of 0.
 """
 
@@ -23,15 +22,10 @@ from bdbvhubrenewal.reporting.explorer import compact, trajectories
 from bdbvhubrenewal.reporting.legend import starts_on
 
 __all__ = [
-    "ZONE_MODEL",
     "place_chart_data",
     "zone_counts",
     "zone_nowcast",
-    "zone_table",
 ]
-
-ZONE_MODEL = "randomwalknowcast"
-"""The model shown for the zones, as submitted."""
 
 _QUANTILES = (0.05, 0.25, 0.5, 0.75, 0.95)
 _QCOLS = ("q5", "q25", "q50", "q75", "q95")
@@ -142,55 +136,6 @@ def _quantiles(samples: pd.DataFrame) -> pd.DataFrame:
         axis=1,
     )
     return out.reset_index()
-
-
-def zone_table(
-    samples: pd.DataFrame,
-    counts: pd.DataFrame,
-    weeks: int = 2,
-) -> pd.DataFrame:
-    """Tabulate the newest nowcast weeks by zone.
-
-    Parameters
-    ----------
-    samples : pandas.DataFrame
-        `zone_nowcast` output.
-    counts : pandas.DataFrame
-        `zone_counts` output.
-    weeks : int
-        Newest weeks before the reference date shown.
-
-    Returns
-    -------
-    pandas.DataFrame
-        One row per zone and week: the reported count, and the median and
-        90% interval.
-    """
-    now = samples.loc[samples["horizon"] < 0]
-    newest = sorted(set(now["target_end_date"]))[-weeks:]
-    q = _quantiles(now.loc[now["target_end_date"].isin(newest)])
-    rows = q.merge(
-        counts[["location", "province", "target_end_date", "total"]],
-        on=["location", "target_end_date"],
-    )
-    interval = (
-        rows["q5"].round().astype(int).astype(str)
-        + " to "
-        + rows["q95"].round().astype(int).astype(str)
-    )
-    out = pd.DataFrame(
-        {
-            "province": rows["province"],
-            "zone": rows["location"],
-            "week ending": rows["target_end_date"],
-            "reported": rows["total"],
-            "median": rows["q50"].round().astype(int),
-            "90% interval": interval,
-        }
-    )
-    return out.sort_values(["province", "zone", "week ending"]).reset_index(
-        drop=True
-    )
 
 
 def place_chart_data(

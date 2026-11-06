@@ -92,18 +92,6 @@ def test_lopo_section_hidden_without_results(tmp_path: Path) -> None:
     assert "CD-IT" in text
 
 
-def test_zone_section() -> None:
-    text = report._zone_section(
-        FIXTURES / "zone-scores.csv",
-        FIXTURES / "zone-energy.csv",
-    )
-    assert text.startswith('??? note "Health zones')
-    assert "rel_energy" in text
-    # Only the submitted form, under the model's name.
-    assert "summed to provinces" not in text
-    assert "| randomwalknowcast " in text
-
-
 def test_ladder_page(tmp_path: Path) -> None:
     # No progress wording.
     ladder = pd.DataFrame(
@@ -370,7 +358,6 @@ def test_nowcast_groups() -> None:
     )
     assert groups["main"] == ["CD", "CD-B", "CD-C", "CD-D"]
     assert groups["other"] == ["CD-A"]
-    assert groups["zones"] == ["CD-D-01"]
 
 
 def test_release_scores_horizon_is_weeks_from_the_reference_date(
