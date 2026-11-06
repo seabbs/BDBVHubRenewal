@@ -148,3 +148,18 @@ if V == "skipzero":
         block[~has] = n + np.arange((~has).sum())
         return block
     _sn.age_blocks = age_blocks
+
+if V == "ownblk":
+    from bdbvhubrenewal.baselinenowcast.snapshots import age_blocks as _blocks
+    def own_ages(den, parent, settings):
+        """A place uses its own factor where its block has at least min_level cases."""
+        den = np.asarray(den, float)
+        own = np.zeros((den.shape[0], den.shape[2]), dtype=bool)
+        for n in range(den.shape[0]):
+            b = _blocks(den[n], settings.min_level)
+            tot = den[n].sum(axis=0)
+            per = np.bincount(b, tot)
+            own[n] = per[b] >= settings.min_level
+        own[np.asarray(parent) < 0] = True
+        return own
+    chain.own_ages = own_ages

@@ -10,3 +10,4 @@ Arms, all on top of #63 (63f0b209):
 
 Each folder holds the recovery and release scores and quantiles, and the zone scores where run.
 - `Cz`, `Dz`: C and D with ages that have no case left out of the blocks (`variants.py`, `skipzero`).
+- `Co`, `Do`: C and D with one rule, a place uses its own factor where its block has at least 10 cases (`variants.py`, `ownblk`).
