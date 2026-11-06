@@ -1,4 +1,4 @@
-"""The random walk baselines on release snapshots."""
+"""The random walk baselines."""
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ import pytest
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     make_tasks,
-    run_forecasts,
 )
 from bdbvhubrenewal.forecasters import (
     ForecastTask,
@@ -26,9 +25,7 @@ from bdbvhubrenewal.forecasters import (
 )
 from bdbvhubrenewal.forecasters.chain import (
     MissingSnapshots,
-    NoCompleteWeek,
     NoDelayPair,
-    Settings,
 )
 
 
@@ -96,7 +93,7 @@ def test_national_is_the_sum_of_provinces_by_sample(
     assert (summed == nat.reindex(summed.index)).all()
 
 
-def test_randomwalk_returns_complete_weeks_as_reported(
+def test_randomwalk_walks_from_the_latest_week_as_reported(
     task: ForecastTask,
 ) -> None:
     weeks = tuple(
@@ -108,14 +105,16 @@ def test_randomwalk_returns_complete_weeks_as_reported(
     out = model.forecast(task)
     info = pd.DataFrame(model.fit_diagnostics).set_index("location")
     seen = task.target.set_index(["location", "target_end_date"])["total"]
-    for loc in ("CD-IT", "CD-NK"):
-        start = info.loc[loc, "start_week"]
-        rows = out.loc[
-            (out["location"] == loc) & (out["target_end_date"] <= start)
-        ]
-        assert len(rows) > 0
-        for week, grp in rows.groupby("target_end_date"):
-            assert (grp["value"] == seen[(loc, week)]).all()
+    latest = task.target["target_end_date"].max()
+    assert (info["start_week"] == latest).all()
+    # Every week with data is the count as reported, the latest included.
+    data = out.loc[out["target_end_date"] <= latest]
+    for (loc, week), grp in data.groupby(["location", "target_end_date"]):
+        assert (grp["value"] == seen.get((loc, week), 0)).all()
+    # The spread is the SD of the latest 8 weekly changes of log(1 + y).
+    it = seen.loc["CD-IT"].sort_index().to_numpy(dtype=float)
+    sd = np.diff(np.log1p(it[-9:])).std(ddof=1)
+    assert info.loc["CD-IT", "sigma"] == pytest.approx(sd)
     # Later weeks are not flat: the walk adds noise that grows with horizon.
     late = out.loc[
         (out["location"] == "CD-IT") & (out["target_end_date"] == "2026-11-14")
@@ -140,7 +139,6 @@ def test_a_partial_week_adds_the_days_after_the_cutoff(
 ) -> None:
     task = _task(target, delays, daily, "2026-10-17")
     nowcast = RandomWalkNowcast().forecast(task)
-    plain = RandomWalk().forecast(task)
     wk = "2026-10-17"
     mine = nowcast.loc[
         (nowcast["location"] == "CD-IT") & (nowcast["target_end_date"] == wk)
@@ -148,7 +146,6 @@ def test_a_partial_week_adds_the_days_after_the_cutoff(
     # The week has 6 of 7 days, so no draw is below the nowcast of 6 days.
     assert mine.mean() > 100
     assert mine.nunique() > 10
-    assert plain["target_end_date"].min() <= wk
 
 
 def test_diagnostics_name_the_sources(
@@ -167,7 +164,7 @@ def test_diagnostics_name_the_sources(
     assert info.loc["CD-IT", "n_err"] == 3
 
 
-def test_models_raise_without_snapshots_or_a_delay_pair(
+def test_only_the_nowcast_needs_snapshots_and_a_delay_pair(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
     bare = make_tasks(
@@ -176,23 +173,13 @@ def test_models_raise_without_snapshots_or_a_delay_pair(
         BacktestConfig(seed=3),
     )[0]
     early = _task(target, delays, daily, "2026-10-09")
-    for name in ("randomwalk", "randomwalknowcast"):
-        with pytest.raises(MissingSnapshots):
-            get_model(name).forecast(bare)
-        with pytest.raises(NoDelayPair):
-            get_model(name).forecast(early)
+    with pytest.raises(MissingSnapshots):
+        RandomWalkNowcast().forecast(bare)
+    with pytest.raises(NoDelayPair):
+        RandomWalkNowcast().forecast(early)
     assert issubclass(NoDelayPair, ModelUnavailableError)
-
-
-def test_randomwalk_raises_when_no_week_is_complete_and_the_backtest_skips(
-    task: ForecastTask,
-) -> None:
-    strict = RandomWalk(settings=Settings(completeness=1.5))
-    with pytest.raises(NoCompleteWeek, match="no start week"):
-        strict.forecast(task)
-    assert issubclass(NoCompleteWeek, ModelUnavailableError)
-    out = run_forecasts([strict], [task])
-    assert out.empty
+    for t in (bare, early):
+        check_samples(RandomWalk().forecast(t), t)
 
 
 def test_places_with_no_falls_of_their_own_have_no_removals(

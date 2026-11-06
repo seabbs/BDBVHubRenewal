@@ -72,14 +72,16 @@ print("scored on", LATER)
 # ## Forecast with the baselines
 #
 # `get_model` returns a model from the registry by name.
-# `randomwalk` carries the last complete week forward with random walk noise on the log scale.
+# `randomwalk` carries the latest reported week forward with random walk noise on the log scale, with no nowcast.
 # `randomwalknowcast` nowcasts the recent weeks first ([Baseline models](../methods/baselines/)).
 # `randomwalknowcast` is the baseline we submit to the hub as `seabbs-rwnowcast`.
 # `run_forecasts` runs each model, checks the samples, adds the national total and returns 100 trajectories per location.
+# `learnt` collects each model's modelled delay, which scoring uses.
 
 # %%
 models = [get_model("randomwalk"), get_model("randomwalknowcast")]
-baselines = bt.run_forecasts(models, [task])
+learnt: list[pd.DataFrame] = []
+baselines = bt.run_forecasts(models, [task], learnt=learnt)
 baselines.groupby("model")["sample"].nunique()
 
 # %% [markdown]
@@ -104,7 +106,7 @@ baselines.groupby("model")["sample"].nunique()
 # `bdbvhubrenewal fit-store load` (`task fit-store`) fetches the store and records the fit it uses for each model and origin in `results/fit-store.json`.
 # That is the fit for this code and data, or, until that fit is made, the newest fit of older code.
 # Each stored fit is a gzipped JSON file, which `read_fit` reads into tables.
-# Its `forecasts` table has the same columns as the baselines' forecasts.
+# Its `forecasts` table has the same columns as the baselines' forecasts, and its `delays` table holds the fit's modelled delay.
 
 # %%
 status = json.loads(Path("results/fit-store.json").read_text())
@@ -177,13 +179,20 @@ panels
 # ## Score
 #
 # Each forecast is scored on what each later release reported ([how scoring works](../methods/evaluation/#real-releases)).
-# `release_backtest` maps the forecast of final counts to the counts a later release would report, using the reporting delays fitted at the origin.
-# It scores the mapped samples with the weighted interval score (WIS) and interval coverage.
+# `randomwalk` forecasts the counts as reported, so it is scored as it is.
+# `release_backtest` maps each other model's forecast of final counts to the counts a later release would report, using the model's own modelled delay.
+# It scores the samples with the weighted interval score (WIS) and interval coverage.
 # The table gives each model's mean WIS relative to `randomwalk`, for the national total and over the provinces.
-# `as reported` uses the data at the origin as the forecast.
 
 # %%
-result = release_backtest([task], daily, target, models=(), stored=forecasts)
+result = release_backtest(
+    [task],
+    daily,
+    target,
+    models=(),
+    stored=forecasts,
+    delays=pd.concat([*learnt, stored.delays], ignore_index=True),
+)
 scores = result.scores.loc[result.scores["target"] == "reported"]
 scores = scores.assign(
     level=scores["location"].map(

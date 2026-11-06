@@ -104,10 +104,6 @@ class NoDelayPair(ModelUnavailableError):  # noqa: N818
     """No pair of releases has a step within the delay window."""
 
 
-class NoCompleteWeek(ModelUnavailableError):  # noqa: N818
-    """No week of a place reaches the completeness that starts the walk."""
-
-
 @dataclass(frozen=True)
 class Settings:
     """Settings shared by the random walk models.
