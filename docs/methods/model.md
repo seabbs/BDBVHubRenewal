@@ -184,7 +184,7 @@ We refit both, so $F_T$ is the fit the hub used for release $T$.
   $$q = (1 - b_k) \frac{\sum_u F_\ell(T_k - t_u)}{\sum_u F_\ell(T_{k+1} - t_u)},$$
   averaged over the onset days $u$ of the row's week, with $t_u$ the report day for onset $u$ and $T_k$ release $k$'s last report day.
   $b_k \sim \text{Beta}(1, 19)$ is the share of rows that appear late whatever their age, such as onsets recorded later for cases first counted as imputed.
-  The kept rows of each cell are beta-binomial with mean $q$ and concentration $1/\phi^2$, $\phi \sim \mathcal{N}^+(0, 0.5^2)$.
+  The kept rows of each cell are beta-binomial with mean $q$ and concentration $1/(\phi^2 + 10^{-3})$, $\phi \sim \mathcal{N}^+(0, 0.5^2)$, capped at 1000 as the other concentrations are.
   Rows up to 60 days old at release $k$ enter.
   This term conditions on the later release, so it informs $F_\ell$ only.
 

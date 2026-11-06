@@ -63,15 +63,15 @@ class ReleasePairLikelihood:
     r"""Beta-binomial likelihood of the rows each release kept of the last.
 
     The backgrounds $b_k$ are `{name}_background`, one per pair from
-    `background`. The beta-binomial has concentration $1 / \phi^2$, with
-    $\phi$ from `overdispersion_rv`.
+    `background`. The beta-binomial's concentration comes from
+    `concentration_rv`.
     """
 
     def __init__(
         self,
         name: str,
         background: dist.Distribution,
-        overdispersion_rv: RandomVariable,
+        concentration_rv: RandomVariable,
     ) -> None:
         r"""Initialize the likelihood.
 
@@ -81,26 +81,26 @@ class ReleasePairLikelihood:
             Prefix for the sample sites.
         background
             Prior of each pair's background share $b_k$.
-        overdispersion_rv
-            $\phi$, the beta-binomial's overdispersion.
+        concentration_rv
+            The beta-binomial's concentration.
 
         Raises
         ------
         TypeError
-            If `overdispersion_rv` is not a `RandomVariable`.
+            If `concentration_rv` is not a `RandomVariable`.
         """
-        if not isinstance(overdispersion_rv, RandomVariable):
-            raise TypeError("overdispersion_rv must be a RandomVariable.")
+        if not isinstance(concentration_rv, RandomVariable):
+            raise TypeError("concentration_rv must be a RandomVariable.")
         self.name = name
         self.background = background
-        self.overdispersion_rv = overdispersion_rv
+        self.concentration_rv = concentration_rv
 
     def __repr__(self) -> str:
         """Return string representation."""
         return (
             f"ReleasePairLikelihood(name={self.name!r}, "
             f"background={self.background!r}, "
-            f"overdispersion_rv={self.overdispersion_rv!r})"
+            f"concentration_rv={self.concentration_rv!r})"
         )
 
     def score(self, pmf: ArrayLike, pairs: dict[str, Array]) -> None:
@@ -118,7 +118,7 @@ class ReleasePairLikelihood:
             f"{self.name}_background", self.background.expand([n_pairs])
         )
         q = jnp.clip(kept_share(pmf, background, pairs), 1e-6, 1 - 1e-6)
-        concentration = 1 / jnp.square(self.overdispersion_rv())
+        concentration = self.concentration_rv()
         numpyro.sample(
             f"{self.name}_kept",
             dist.BetaBinomial(
