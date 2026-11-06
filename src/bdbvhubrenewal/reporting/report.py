@@ -66,6 +66,7 @@ from bdbvhubrenewal.forecasters.base import (
     get_model,
     list_models,
 )
+from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 from bdbvhubrenewal.reporting.explorer import (
     explorer_data,
     explorer_html,
@@ -78,6 +79,7 @@ from bdbvhubrenewal.reporting.nowcast_plots import (
     plot_truth_changes,
 )
 from bdbvhubrenewal.reporting.plots import (
+    baseline_share,
     comparison_colours,
     comparison_label,
     model_style,
@@ -91,6 +93,7 @@ from bdbvhubrenewal.reporting.plots import (
     plot_imputed_share,
     plot_location_grid,
     plot_newly_missing,
+    plot_renewal_delay,
     plot_revisions,
     plot_scenarios,
     plot_scores,
@@ -272,6 +275,16 @@ def make_report(
             plot_delay_check, daily, latest, [*groups["main"], *groups["other"]]
         ),
         fig / "delay-check.svg",
+    )
+    # Written by `fit-store load` from the stored fits.
+    learnt = pd.read_csv(res / DELAY_SUMMARY_FILE)
+    fitted = sorted(set(learnt["location"]) - {"pooled"})
+    baseline = baseline_share(
+        daily, str(learnt["vintage"].max()), [NATIONAL, *fitted]
+    )
+    save_light_dark(
+        partial(plot_renewal_delay, learnt, baseline, _location_names(real)),
+        fig / "renewal-delay.svg",
     )
 
 

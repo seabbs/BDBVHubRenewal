@@ -164,3 +164,50 @@ def test_variants_are_hatched_and_hollow() -> None:
     assert plots.bar_style("#123456", "6 3")["facecolor"] == "none"
     assert plots.point_style("#123456", "")["mfc"] == "#123456"
     assert plots.point_style("#123456", "6 3")["mfc"] == "none"
+
+
+def _learnt(model: str, vintage: str, location: str) -> pd.DataFrame:
+    days = [
+        {"x": str(d), "quantity": "reported_share", "q50": d / 10}
+        for d in range(11)
+    ]
+    weeks = [{"x": w, "quantity": "mean_delay", "q50": 6.0} for w in WEEKS]
+    rows = pd.DataFrame(days + weeks)
+    return rows.assign(
+        model=model,
+        vintage=vintage,
+        location=location,
+        q5=rows["q50"] * 0.9,
+        q95=rows["q50"] * 1.1,
+    )
+
+
+def test_renewal_delay_has_a_row_per_fit_at_its_latest_origin() -> None:
+    learnt = pd.concat(
+        [
+            _learnt("renewal", "2026-10-24", "pooled"),
+            _learnt("renewal", "2026-11-01", "pooled"),
+            _learnt("renewalbvd", "2026-11-01", "pooled"),
+            _learnt("renewalsp", "2026-11-01", "CD-NK"),
+            _learnt("renewalsp", "2026-11-01", "CD-IT"),
+        ],
+        ignore_index=True,
+    )
+    baseline = pd.DataFrame(
+        {"location": ["CD", "CD"], "age": [0, 1], "share": [0.1, 0.2]}
+    )
+    names = {"CD-IT": "Ituri", "CD-NK": "Nord Kivu"}
+    fig = plots.plot_renewal_delay(learnt, baseline, names)
+    left = fig.axes[0::2]
+    titles = [ax.get_title(loc="left") for ax in left]
+    assert titles == [
+        "All provinces: renewal, renewalbvd",
+        "Ituri: renewalsp",
+        "Nord Kivu: renewalsp",
+    ]
+    # The baseline and two models in the pooled row; the share stops the
+    # day before the longest delay.
+    assert len(left[0].lines) == 3
+    assert max(left[1].lines[-1].get_xdata()) == 9
+    assert fig.get_suptitle() == "Fits at 2026-11-01"
+    plt.close(fig)
