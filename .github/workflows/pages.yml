@@ -16,6 +16,7 @@ on:
       - 'config/**'
       - 'results/**'
       - 'scripts/fit-store.sh'
+      - 'scripts/results-release.sh'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/pages.yml'
@@ -29,10 +30,14 @@ on:
       - 'config/**'
       - 'results/**'
       - 'scripts/fit-store.sh'
+      - 'scripts/results-release.sh'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
+  # A code release vX.Y.Z also archives the results built from it.
+  release:
+    types: [published]
 
 permissions:
   contents: read
@@ -45,6 +50,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.release.outputs.tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # uv and its cache, and JAX's persistent compilation cache.
@@ -140,10 +147,29 @@ jobs:
         with:
           name: site
           path: _site
+      # A results release holds every model's results, once per hub
+      # release (when every stored fit at it is of this code) and once per
+      # code release (scripts/results-release.sh).
+      - name: Decide the results release
+        id: release
+        if: >-
+          (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')
+          || github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/results-release.sh tag >> "$GITHUB_OUTPUT"
+      - name: Collect the release files
+        if: steps.release.outputs.tag != ''
+        run: scripts/results-release.sh collect output/release
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.release.outputs.tag != ''
+        with:
+          name: release
+          path: output/release
 
   deploy:
     needs: build
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.event_name != 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -187,3 +213,27 @@ jobs:
           source-dir: _site
           preview-branch: gh-pages
           umbrella-dir: pr-preview
+
+  # Runs no project code: it zips the site and publishes the build's
+  # files.
+  release:
+    needs: build
+    if: needs.build.outputs.release != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: output/release
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site
+          path: _site
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.build.outputs.release }}
+        run: scripts/results-release.sh publish "$TAG" output/release _site
