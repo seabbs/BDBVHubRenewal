@@ -16,6 +16,7 @@ on:
       - 'config/**'
       - 'results/**'
       - 'scripts/fit-store.sh'
+      - 'scripts/results-release.sh'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/pages.yml'
@@ -29,6 +30,7 @@ on:
       - 'config/**'
       - 'results/**'
       - 'scripts/fit-store.sh'
+      - 'scripts/results-release.sh'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/pages.yml'
@@ -147,6 +149,16 @@ jobs:
         with:
           name: site
           path: _site
+      # The results and data the `release` job may attach.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        with:
+          name: results
+          path: |
+            results
+            data
+            !data/raw
+          retention-days: 3
 
   deploy:
     needs: build
@@ -194,3 +206,29 @@ jobs:
           source-dir: _site
           preview-branch: gh-pages
           umbrella-dir: pr-preview
+
+  # Attaches every model's results to the round releases that used this
+  # build's hub release (scripts/results-release.sh). Apart from the
+  # deploy, so a failure here never holds the site back. Runs no project
+  # code. Adding files to an existing release needs no tag, so the
+  # workflow token can do it.
+  release:
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: results
+          path: build
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site
+          path: _site
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/results-release.sh attach build _site

@@ -72,9 +72,7 @@ from bdbvhubrenewal.forecasters.base import (
     get_model,
     list_models,
 )
-from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
 from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
-from bdbvhubrenewal.forecasters.zones import ZoneAllocator, zone_forecast
 from bdbvhubrenewal.submission.fitting import (
     Forecast,
     get_config,
@@ -90,6 +88,7 @@ from bdbvhubrenewal.submission.hub import (
     to_hub_table,
     write_model_metadata,
     write_submission,
+    zone_samples,
 )
 from bdbvhubrenewal.submission.metadata import MODEL_METADATA
 from bdbvhubrenewal.submission.validate import (
@@ -672,9 +671,7 @@ def _zones(
 ) -> tuple[pd.DataFrame | None, str]:
     """Forecast the zones to sum to the provinces, or say why not.
 
-    The random walk models run at zone level and are summed to the
-    province samples. Any other model's province samples are split across
-    the zones by the allocator.
+    The zones come from `zone_samples`.
     """
     try:
         daily = load_daily_zones(args.data)
@@ -683,12 +680,11 @@ def _zones(
     counts = weekly_zone_counts(daily, task.vintage)
     if counts.empty:
         return None, f"no zone data for {task.vintage}, so no health zones"
-    zones = hub_zones(hub_config)
     name = get_config(args.config).model if args.config else args.model
-    model = None if name is None else get_model(name)
-    if isinstance(model, RandomWalk):
-        return zone_forecast(model, task, samples, counts, zones, daily), ""
-    return ZoneAllocator().allocate(samples, task, counts, zones), ""
+    zones = zone_samples(
+        name, task, samples, counts, hub_zones(hub_config), daily
+    )
+    return zones, ""
 
 
 def _nowcast(args: argparse.Namespace) -> int:

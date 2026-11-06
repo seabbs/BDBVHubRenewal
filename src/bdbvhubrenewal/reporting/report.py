@@ -75,6 +75,7 @@ from bdbvhubrenewal.reporting.explorer import (
     explorer_html,
     write_explorer,
 )
+from bdbvhubrenewal.reporting.hubtables import hub_tables, write_hub_tables
 from bdbvhubrenewal.reporting.nowcast_plots import (
     plot_place_summary,
     plot_relative_overall,
@@ -271,6 +272,17 @@ def make_report(
     _nowcast_page(fig, gen, target, forecasts_now, names, config, latest)
     _zone_nowcast_section(
         fig, gen, data_dir, target, tasks[0], forecasts_now, config, names
+    )
+    # Every model's hub tables at the latest release, for the results
+    # release.
+    write_hub_tables(
+        hub_tables(
+            forecasts_now,
+            tasks[0],
+            load_daily_zones(data_dir),
+            hub_zones(Path(data_dir) / "hub-config" / "tasks.json"),
+        ),
+        res / "hub",
     )
     groups = _nowcast_groups(target, sorted(set(forecasts_now["location"])))
     save_light_dark(
