@@ -253,6 +253,7 @@ def test_provinces_below_their_published_zone_total_are_thinned() -> None:
         vintage="2026-10-17",
         reference_date=pd.Timestamp("2026-10-24").date(),
         kind="real",
+        cutoff="2026-10-16",
         target=pd.DataFrame(),
         delays=None,
         locations=("CD-XX",),

@@ -19,7 +19,7 @@ def test_cutoff_lags_follow_real_releases() -> None:
     daily = pd.DataFrame(
         {
             "vintage": ["2026-10-09", "2026-10-09", "2026-10-17"],
-            "onset_date": ["2026-10-06", "2026-10-07", "2026-10-16"],
+            "cutoff": ["2026-10-07", "2026-10-07", "2026-10-16"],
         }
     )
     lags = cutoff_lags(daily)
@@ -157,6 +157,7 @@ def _rows(
     return pd.DataFrame(
         {
             "vintage": vintage,
+            "cutoff": vintage,
             "location": "CD-IT",
             "location_name": "Ituri",
             "onset_week": onset_weeks,
@@ -171,7 +172,7 @@ def test_publication_lag_pmf_from_rows_new_in_later_vintages() -> None:
     # Two rows reported long ago appear late, three recent ones on time.
     new = pd.concat(
         [
-            old.assign(vintage="2026-10-17"),
+            old.assign(vintage="2026-10-17", cutoff="2026-10-17"),
             _rows("2026-10-17", ["2026-07-04", "2026-07-04"], [2, 2]),
             _rows("2026-10-17", ["2026-10-17"] * 3, [0, 0, 0]),
         ]
@@ -192,6 +193,18 @@ def test_publication_lag_pmf_from_rows_new_in_later_vintages() -> None:
     )
     # With no earlier pair there is no estimate.
     assert publication_lag_pmf(pd.concat([old, new]), "2026-10-10") is None
+    # Publication runs between the cut-offs, not the labels, so cut-offs
+    # a day earlier shorten the lags (less than a day, as lags below 0
+    # are not feasible).
+    early = pd.concat([old, new]).assign(
+        cutoff=lambda d: (
+            pd.to_datetime(d["vintage"]) - pd.Timedelta(days=1)
+        ).dt.strftime("%Y-%m-%d")
+    )
+    shifted = publication_lag_pmf(early, "2026-10-17")
+    assert shifted is not None
+    lags = np.arange(pmf.size)
+    assert 0.5 < lags @ pmf - lags @ shifted < 1
 
 
 def test_unused_options_leave_the_default_outbreak_unchanged() -> None:

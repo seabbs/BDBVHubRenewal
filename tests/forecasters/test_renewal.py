@@ -562,13 +562,12 @@ def test_lag_source_warns_when_the_prior_stands_in(
 def test_report_cutoffs_are_days_from_the_model_start(
     task: ForecastTask,
 ) -> None:
-    task = replace(task, report_by=("2026-10-24", "2026-11-01"))
+    last = {"2026-10-24": "2026-10-24", "2026-11-01": "2026-10-31"}
+    task = replace(task, report_by=last)
     data = rn.vintage_inputs(task, rn.model_config(rn.VARIANTS["renewal"]))
     cuts = rn.report_cutoffs(task, data)
     start = pd.Timestamp(data.start_date)
-    # Each later release is cut at its last report day: 10-24 for the
-    # label 10-24, published a day early, and 10-31 for 11-01 (hub #90).
-    last = {"2026-10-24": "2026-10-24", "2026-11-01": "2026-10-31"}
+    # Each later release is cut at its last report day.
     assert cuts == {(pd.Timestamp(last[d]) - start).days: d for d in last}
 
 
@@ -579,7 +578,7 @@ def test_forecast_gives_counts_as_reported_later(
     monkeypatch.setattr(
         rn.RenewalModel, "run", lambda self, t: _fake_run(t, self.variant)
     )
-    task = replace(task, report_by=("2026-10-24",))
+    task = replace(task, report_by={"2026-10-24": "2026-10-24"})
     samples = get_model(name).forecast(task)
     check_samples(samples, task)
     later = samples.loc[samples["as_of"] == "2026-10-24"]
@@ -588,7 +587,7 @@ def test_forecast_gives_counts_as_reported_later(
     final = samples.loc[samples["as_of"].isna()]
     assert set(final["target_end_date"]) == set(task.target_end_dates)
     # Without later vintages there is no as_of column.
-    plain = get_model(name).forecast(replace(task, report_by=()))
+    plain = get_model(name).forecast(replace(task, report_by={}))
     assert "as_of" not in plain
 
 
@@ -646,16 +645,34 @@ def test_the_model_cut_off_is_the_release_s_last_report_day(
 
     config = rn.model_config(rn.VARIANTS["renewal"])
     for label, last in (
+        ("2026-10-09", "2026-10-08"),
+        ("2026-10-17", "2026-10-16"),
         ("2026-10-24", "2026-10-24"),
         ("2026-11-01", "2026-10-31"),
     ):
         rows = target.loc[target["vintage"] == label]
         task = make_tasks(rows, delays, BacktestConfig(n_samples=20, seed=3))[0]
         data = rn.vintage_inputs(task, config)
-        # The cut-off and the last data week end on the last report day,
-        # so 11-01, extracted a day after its last report, adds no empty
-        # week (hub issue #90).
+        # The cut-off and the last data week end on the last report day
+        # the data prove, so no release adds empty days.
         cut = data.start_date + dt.timedelta(days=data.cutoff)
         end = data.start_date + dt.timedelta(days=7 * data.n_weeks - 1)
         assert cut.isoformat() == last
         assert end == rn._saturday(last)
+
+
+def test_a_simulated_release_is_cut_at_its_stored_cut_off() -> None:
+    import datetime as dt
+
+    from bdbvhubrenewal.data.simulate import simulate_outbreak
+
+    outbreak = simulate_outbreak()
+    # A Sunday release one day after its cut-off, as in the scenarios.
+    target, delays = outbreak.vintages(["2026-09-06"], {6: 1})
+    task = make_tasks(target, delays, BacktestConfig(n_samples=20, seed=3))[0]
+    assert task.cutoff == "2026-09-05"
+    data = rn.vintage_inputs(task, rn.model_config(rn.VARIANTS["renewal"]))
+    cut = data.start_date + dt.timedelta(days=data.cutoff)
+    end = data.start_date + dt.timedelta(days=7 * data.n_weeks - 1)
+    assert cut == dt.date(2026, 9, 5)
+    assert end == dt.date(2026, 9, 5)

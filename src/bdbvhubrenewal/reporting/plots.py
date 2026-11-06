@@ -543,7 +543,7 @@ def plot_downward_updates(
     target : pandas.DataFrame
         Real target rows.
     zones : pandas.DataFrame
-        Health zone counts, with columns `vintage`, `location`,
+        Health zone counts, with columns `vintage`, `cutoff`, `location`,
         `target_end_date` and `total`.
     mode : str
         `"light"` or `"dark"`.

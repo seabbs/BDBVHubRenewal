@@ -43,7 +43,7 @@ def _weeks(origin, loc: str) -> list[float]:
 
 def test_growth_to_final_sums_the_daily_delay(origin24) -> None:
     fit = origin24.fit
-    # The 8 and 9 day pairs are in window, the 50 day pair is not.
+    # The two 8 day pairs are in window, the 51 day pair is not.
     assert fit.pairs.tolist() == [[1, 2], [2, 3]]
     assert (fit.g >= 0).all()
     day = int(origin24.snap.cut[-1])
@@ -71,26 +71,28 @@ def test_the_start_week_is_the_latest_week_at_95_per_cent(
 
 
 def test_10_24_point_nowcasts_use_one_daily_delay(origin24) -> None:
-    # Weeks 10-24, 10-17, 10-10, 10-03, from the 8 and 9 day pairs.
+    # Weeks 10-24, 10-17, 10-10, 10-03, from the two 8 day pairs.
     # Downward revisions are moved onto earlier releases before the sums.
+    # The 10-09 release is cut at 10-08, the last report day its data
+    # prove, so 10-08 is an observed day with no onsets.
     assert _weeks(origin24, "CD") == pytest.approx(
-        [373.0, 369.3, 489.5, 515.6], abs=0.06
+        [528.1, 393.0, 497.9, 517.4], abs=0.06
     )
     # Tshopo has under 10 cases a week, so uses the national delay.
     assert _weeks(origin24, "CD-TO") == pytest.approx(
-        [19.6, 11.5, 21.4, 18.4], abs=0.06
+        [25.0, 12.4, 21.7, 18.5], abs=0.06
     )
 
 
 def test_provinces_use_own_factors_where_they_have_10_cases(origin24) -> None:
     assert _weeks(origin24, "CD-IT") == pytest.approx(
-        [239.8, 180.1, 282.7, 253.1], abs=0.06
+        [338.2, 190.5, 292.7, 256.7], abs=0.06
     )
     assert _weeks(origin24, "CD-NK") == pytest.approx(
-        [84.0, 146.2, 155.1, 213.7], abs=0.06
+        [111.5, 159.6, 159.4, 215.9], abs=0.06
     )
     assert _weeks(origin24, "CD-HU") == pytest.approx(
-        [10.5, 30.5, 27.6, 29.7], abs=0.06
+        [13.0, 33.7, 28.7, 30.5], abs=0.06
     )
 
 
@@ -195,7 +197,7 @@ def test_a_factor_is_own_by_age_with_10_cases_else_the_parent(
 def test_the_delay_uses_every_in_window_pair(snap24) -> None:
     fit = fit_delay(snap24, 3, Settings())
     assert fit is not None
-    # At 10-17 only the 9 day pair is in window.
+    # At 10-17 only the first 8 day pair is in window.
     early = fit_delay(snap24, 2, Settings())
     assert early is not None
     assert early.pairs.tolist() == [[1, 2]]
@@ -206,9 +208,10 @@ def test_weeks_back_count_from_the_cutoff_week(daily: pd.DataFrame) -> None:
     provinces = tuple(sorted(set(daily["location"]) - {"CD"}))
     snap = snapshot_arrays(daily, "2026-11-01", provinces)
     o = len(snap.releases) - 1
-    # The as-of day is a Sunday, one week after the cut-off Saturday.
-    assert snap.week[snap.asof[o]] == snap.week[snap.cut[o]] + 1
-    assert snap.cut_week(o) == snap.n_weeks - 2
+    # The as-of day is a Sunday, the day after the cut-off Saturday, and
+    # the grid ends with the cut-off's week.
+    assert snap.days[snap.cut[o]].date().isoformat() == "2026-10-31"
+    assert snap.cut_week(o) == snap.n_weeks - 1
     # The newest data week (ages 0-6) is k = 0, with no empty week at k = 0.
     assert weeks_back(snap, o, 42) == 6
     errors = retro_errors(snap, o, Settings())
