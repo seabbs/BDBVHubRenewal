@@ -193,7 +193,7 @@ jobs:
           retention-days: 3
 
   # The only job that writes. It runs no project code: it merges the
-  # fits' files into the store branch, prunes keys no longer needed and
+  # fits' files into the store branch, prunes keys not needed and
   # pushes once.
   store:
     name: Store the fits

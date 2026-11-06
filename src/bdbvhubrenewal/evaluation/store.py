@@ -513,7 +513,7 @@ def plan(
         `model`, `origin` and `key` of each fit to make, newest origin
         first, so the Nowcast page's fits come first.
     """
-    todo = []
+    to_fit = []
     for (model, origin), key in sorted(keys.items(), key=lambda x: x[0][1])[
         ::-1
     ]:
@@ -522,8 +522,8 @@ def plan(
         if redo:
             redo = read_fit(path).meta["status"] != "ok"
         if not path.exists() or redo:
-            todo.append({"model": model, "origin": origin, "key": key})
-    return todo
+            to_fit.append({"model": model, "origin": origin, "key": key})
+    return to_fit
 
 
 def fit(
@@ -768,12 +768,12 @@ def command(args: argparse.Namespace) -> int:
         return 0
     keys = current_keys(tasks, models, sampler, code)
     if args.action == "plan":
-        todo = plan(keys, args.store, args.retry_failed)
-        for t in todo:
+        to_fit = plan(keys, args.store, args.retry_failed)
+        for t in to_fit:
             print(f"To fit: {t['model']} at {t['origin']} ({t['key']}).")
-        print(f"{len(todo)} of {len(keys)} fits to make.")
+        print(f"{len(to_fit)} of {len(keys)} fits to make.")
         if args.out:
-            Path(args.out).write_text(json.dumps({"include": todo}))
+            Path(args.out).write_text(json.dumps({"include": to_fit}))
         if args.keys:
             Path(args.keys).write_text(
                 json.dumps([f"{m}/{o}/{k}" for (m, o), k in keys.items()])

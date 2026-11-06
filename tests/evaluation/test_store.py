@@ -119,8 +119,8 @@ def test_plan_fit_and_load(
     )
     root = tmp_path / "store"
     keys = store.current_keys(tasks, [fitted_flat], {}, "c")
-    todo = store.plan(keys, root)
-    assert [m["origin"] for m in todo] == sorted(tasks, reverse=True)
+    to_fit = store.plan(keys, root)
+    assert [m["origin"] for m in to_fit] == sorted(tasks, reverse=True)
     # The newest and oldest origins are fitted at the current key; one
     # origin only has a fit of older code, and one failed.
     origins = sorted(tasks)
