@@ -2010,11 +2010,11 @@
 
 <h1 id="nowcast">Nowcast<a class="headerlink" href="#nowcast" title="Permanent link">&para;</a></h1>
 <p class="page-subtitle">The current nowcast and forecast from the latest vintage.</p>
-<p>Fitted models' results come from the <a href="https://github.com/seabbs/BDBVHubRenewal/tree/fit-store">fit store</a>, fitted at <a href="https://github.com/seabbs/BDBVHubRenewal/commit/66f983b6d88316978b5062ab460407d089db290c"><code>66f983b</code></a>, <a href="https://github.com/seabbs/BDBVHubRenewal/commit/a5ad8b922b24da5e68f78f04aec6a167ec60eed6"><code>a5ad8b9</code></a>.</p>
+<p>Fitted models' results come from the <a href="https://github.com/seabbs/BDBVHubRenewal/tree/fit-store">fit store</a>, fitted at <a href="https://github.com/seabbs/BDBVHubRenewal/commit/a5ad8b922b24da5e68f78f04aec6a167ec60eed6"><code>a5ad8b9</code></a>.</p>
 <div class="admonition note">
 <p class="admonition-title">Fits still running</p>
-<p>Fits for this build's code (<a href="https://github.com/seabbs/BDBVHubRenewal/commit/249fe2088db1c7a51b18bac31bac60228109a44e"><code>249fe20</code></a>) are still <a href="https://github.com/seabbs/BDBVHubRenewal/actions/workflows/fit-store.yml">running</a>.
-Fits of older code are shown for <code>renewalbvd</code> at 2026-10-09.</p>
+<p>Fits for this build's code (<a href="https://github.com/seabbs/BDBVHubRenewal/commit/336648cac2fd78c6d7783bc23f84e646f60de933"><code>336648c</code></a>) are still <a href="https://github.com/seabbs/BDBVHubRenewal/actions/workflows/fit-store.yml">running</a>.
+Fits of older code are shown for <code>pprandomwalknowcast</code> at 2026-08-18 and 2026-10-09 and 2026-10-17 and 2026-10-24 and 2026-11-01; <code>renewal</code> at 2026-08-18 and 2026-10-09 and 2026-10-17 and 2026-10-24 and 2026-11-01; <code>renewalbvd</code> at 2026-08-18 and 2026-10-09 and 2026-10-17 and 2026-10-24 and 2026-11-01; <code>renewalsp</code> at 2026-08-18 and 2026-10-09 and 2026-10-17 and 2026-10-24 and 2026-11-01.</p>
 </div>
 <p>Latest vintage <strong>2026-11-01</strong>, models <code>randomwalk</code>, <code>pprandomwalknowcast</code>, <code>randomwalknowcast</code>, <code>renewal</code>, <code>renewalbvd</code>, <code>renewalsp</code>.</p>
 <p><strong>Latest submission:</strong> <a href="../submission/rounds/2026-11-07/">round 2026-11-07</a>: seabbs-renewal submitted (BVDOutbreakSize-informed renewal model), seabbs-rwnowcast submitted (random walk on a nowcast). <a href="../submission/rounds/">Submission log</a>.</p>
@@ -3630,11 +3630,15 @@ A place using its parent's estimate is labelled with the parent.
 How both are fitted is on the <a href="../methods/baselines/#nowcast">Baseline models</a> page.</p>
 <p><img alt="Growth to final by age, and the dispersion of new reports and the removal rate by weeks back, at the latest release." src="../figures/delay-check.svg#only-light" />
 <img alt="Growth to final by age, and the dispersion of new reports and the removal rate by weeks back, at the latest release." src="../figures/delay-check-dark.svg#only-dark" /></p>
-<p>The renewal models fit the onset-to-report delay with the cases.
-The figure gives each fit's delay at its latest origin, with 90% intervals: the share of onsets in the last week reported by each day since onset, and the median delay by onset week.
-<code>renewal</code> and <code>renewalbvd</code> fit one delay for all provinces, and <code>renewalsp</code> one per province it fits (<a href="../methods/model/">Renewal models</a>).</p>
-<p><img alt="Share of the last onset week reported by days since onset, and the median delay by onset week, for each renewal fit at its latest origin." src="../figures/renewal-delay.svg#only-light" />
-<img alt="Share of the last onset week reported by days since onset, and the median delay by onset week, for each renewal fit at its latest origin." src="../figures/renewal-delay-dark.svg#only-dark" /></p>
+<p>The renewal models fit the onset-to-report delay with the cases (<a href="../methods/model/#delays">delays</a>).
+Each row is one fit at its latest origin: <code>renewal</code> and <code>renewalbvd</code> fit one delay for all provinces, and <code>renewalsp</code> one per province it fits.
+<code>renewal</code> and <code>renewalbvd</code> give nearly the same delay, so their lines overlap.
+The left panel gives the share of onsets in the last week reported by each day since onset, with 90% intervals.
+It stops the day before the longest delay, where the model puts all later reports.
+The dashed line is <code>randomwalknowcast</code>'s share reported by age at the same release.
+The right panel gives the mean delay by onset week, with 90% intervals.</p>
+<p><img alt="Share of the last onset week reported by days since onset, beside randomwalknowcast's, and the mean delay by onset week, for each renewal fit at its latest origin." src="../figures/renewal-delay.svg#only-light" />
+<img alt="Share of the last onset week reported by days since onset, beside randomwalknowcast's, and the mean delay by onset week, for each renewal fit at its latest origin." src="../figures/renewal-delay-dark.svg#only-dark" /></p>
 
 
 
