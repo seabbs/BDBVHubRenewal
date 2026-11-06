@@ -155,10 +155,7 @@ If fits come close to the cap:
 
 1. Make each fit cheaper.
    Use fewer warm-up iterations or draws, start from last week's posterior, and keep the JAX compilation cache warm (`setup-forecast-env` restores it).
-2. Split the matrix further where the model allows.
-   The single-patch fallback fits each province on its own, so it can fit per province group as separate legs.
-   The coupled main model cannot.
-3. Start earlier.
+2. Start earlier.
    Data usually land on Friday or Saturday, and the window opens Sunday.
    The last scheduled start on Tuesday is 06:00 UTC, which leaves about 17 hours before the window closes for the fits and the gate.
 4. Use a bigger machine through `FIT_RUNNER`.

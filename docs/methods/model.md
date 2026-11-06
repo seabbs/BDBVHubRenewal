@@ -8,27 +8,28 @@ How the models are built in code and sampled is on the [Implementation](implemen
 
 ## Overview
 
-`renewalsp` fits a renewal model to each province on its own.
 `renewal` fits the provinces together, pools them and links them by importation.
+`renewalsp` is `renewal` without importation, so the provinces are pooled but not linked.
 `renewalbvd` is `renewal` with a down-weighted likelihood term on the Rt of BVDOutbreakSize.
 `seabbs-renewal` submits the first of `renewalbvd`, `renewalsp`, `renewal`, `randomwalknowcast` and `randomwalk`, in that order, to pass its checks ([Submission workflow](../submission/workflow.md#renewal-chain)).
-The sections below build up from `renewalsp`, and each gives only the maths it adds.
+The sections below build up from the model of one province, and each gives only the maths it adds.
 Every time-varying part is a weekly random walk or AR(1), so it stays near constant unless the data show change.
 
 ```mermaid
 flowchart TD
-    SP["<b>renewalsp</b><br/>each province on its own<br/>Rt walk<br/>generation interval<br/>onsets and delay<br/>missing onsets<br/>three data streams"]
+    PM["<b>Province model</b><br/>Rt walk<br/>generation interval<br/>onsets and delay<br/>missing onsets<br/>three data streams"]
     RN["<b>renewal</b><br/>provinces fitted together<br/>+ pooled log R walk<br/>+ sum-to-zero AR(1)<br/>province deviations<br/>+ importation<br/>+ share at risk<br/>+ shared delay<br/>+ shared ascertainment<br/>+ zeros in provinces<br/>with no cases"]
     BV["<b>renewalbvd</b><br/>+ BVDOutbreakSize Rt,<br/>down-weighted (ζ = 0.5)"]
+    SP["<b>renewalsp</b><br/>− importation"]
 
-    SP -- "pool the provinces" --> RN
+    PM -- "pool the provinces" --> RN
     RN -- "add external Rt" --> BV
+    RN -- "drop importation" --> SP
 ```
 
-## Single patch (`renewalsp`) { #single-patch }
+## Province model { #province-model }
 
-`renewalsp` runs the model once for each province $p$ with cases, on that province's known and imputed onsets and delays alone.
-Nothing is pooled across provinces.
+Each province $p$ with cases has the model below, which `renewal` pools across provinces.
 
 ```mermaid
 flowchart TD
@@ -66,24 +67,9 @@ flowchart TD
     LK --> FC
 ```
 
-A province with at least 20 cases in its last 6 data weeks, an outbreak province, gets this model.
-A province with cases but too few for its own fit, $y_w$ in each of its $n_w$ data weeks, has
-
-$$
-\lambda_p \sim \text{Gamma}\Big(\tfrac{1}{2} + \sum_w y_w,\ n_w\Big),
-\qquad
-\tilde y_p(w) = \max\{y_w, z_p(w)\},
-\qquad
-z_p(w) \sim \text{Poisson}(\lambda_p),
-$$
-
-with one $\lambda_p$ per trajectory and $y_w$ the count reported at the origin (0 for weeks without data), as in `randomwalk`.
-Provinces with no cases get no forecast.
-
 ### Time axis
 
 The data weeks start one week before weekly onsets, summed over the modelled provinces, first reach 5, or their peak if lower.
-In `renewalsp` the modelled province is $p$ alone, so each fit has its own axis.
 The data weeks end with the week that holds $T$, the release's last report day ([Data](data.md#vintages)).
 The model axis starts 42 days (6 weeks) earlier, the length of the generation interval, for seeding.
 Every weekly walk is held at its starting value over the 6 seeding weeks and the first data week.
@@ -225,7 +211,7 @@ $$
 \log R_p(t) = \log R(t) + \delta_p(t).
 $$
 
-The pooled trend $\log R(t)$ is the unweighted mean of $\log R_p(t)$, not the national Rt, and is the walk of `renewalsp`.
+The pooled trend $\log R(t)$ is the unweighted mean of $\log R_p(t)$, not the national Rt, and is the walk of the province model.
 The province deviations sum to zero.
 They are $\delta_p(t) = \sum_j Q_{pj}\, \eta_j(t)$, with $Q$ an orthonormal basis of the sum-to-zero subspace and $P - 1$ weekly AR(1) processes $\eta_j$ that decay towards 0, the pooled trend:
 
@@ -235,11 +221,11 @@ $$
 
 The shared $\sigma_\delta$ and $h$ pool the provinces.
 The starting offsets are $\eta_j(0) = u_j$, with $u_j \sim \mathcal{N}(0, \sigma_v^2)$ and $\sigma_v \sim \mathcal{N}^+(0, 0.3^2)$, so $\delta_p(0) = \sum_j Q_{pj} u_j$.
-Past the fit axis the pooled trend reverts as in `renewalsp`, and the deviations keep their AR(1).
+Past the fit axis the pooled trend reverts as in the province model, and the deviations keep their AR(1).
 
 ### Importation and depletion
 
-The renewal of `renewalsp` gains importation and a share at risk:
+The province model's renewal gains importation and a share at risk:
 
 $$
 y_p(t) = R_p(t) \sum_q W_{pq} \sum_{\tau \ge 1} x_q(t - \tau)\, g(\tau),
@@ -275,6 +261,13 @@ They start with province spread $\mathcal{N}^+(0, 0.5^2)$, sampled non-centred, 
 Provinces $q$ without cases have an importation-only component.
 Their weekly zeros are Poisson with mean $\mu_q(s) = \kappa \sum_p K_{pq}\, \lambda_p(s)$, $\kappa \sim \text{LogNormal}(\log 10^{-3}, 2^2)$.
 In the forecast they draw Poisson importations after the cut-off, which spread at the infection-weighted national Rt without depletion.
+
+## Without importation (`renewalsp`) { #without-importation }
+
+`renewalsp` is `renewal` with no importation between provinces and no importation component for provinces with no cases.
+So $W = I$, with no $\varepsilon$ and no gravity kernel, and no $\mu_q$ or $\kappa$.
+Provinces with no cases have no source of infection, so their forecasts are zero.
+The pooled reproduction number, missing-onset deviations, shared delay and ascertainment, share at risk and seeding are as in `renewal`.
 
 ## BVDOutbreakSize-informed (`renewalbvd`) { #bvdoutbreaksize-informed }
 

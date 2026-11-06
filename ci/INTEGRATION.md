@@ -35,7 +35,7 @@ bdbvhubrenewal fit --model renewal|renewalsp --config main|renewalsp --vintage <
   `epiforecasts-renewal` is already a different hub model.
 - `--config` selects the model configuration.
   `main` is the full model.
-  `renewalsp` is the single-patch model: an independent renewal fit for each province with cases and for the country, with no pooling or coupling.
+  `renewalsp` is the full model without importation between provinces.
   Each matrix leg passes its own config.
 - `--sampler-json` is the candidate's `sampler` table from `ci/policy.toml`.
 - `--vintage` is a real `as_of`, or `latest`.
