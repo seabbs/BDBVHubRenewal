@@ -1,7 +1,7 @@
 name: Pages
 
 # Builds the site on pull requests, publishes it as a preview at
-# pr-preview/pr-N/ and comments the link (pr-preview-cleanup.yml removes
+# pr-preview/pr-N/ and comments the link (pr-closed.yml removes
 # it when the pull request closes). Builds and deploys the site from main.
 # Both deploy to the gh-pages branch, which Pages serves.
 on:
