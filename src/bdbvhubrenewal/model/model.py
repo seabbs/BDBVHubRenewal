@@ -191,9 +191,6 @@ class ModelConfig:
     inactive : {"imports", "none"}
         Importation-only component for provinces with no cases, or none
         (their forecasts are zero).
-    report_inactive : bool
-        Return forecasts for provinces with no cases. If false their
-        draws go to the national `unassigned` component instead.
     effective_population : float or None
         Share $\nu$ of each province at risk, which depletion uses.
         `None` (default) estimates it with a log-normal prior; a number
@@ -230,7 +227,6 @@ class ModelConfig:
     depletion: bool = True
     active: Literal["cases", "all"] = "cases"
     inactive: Literal["imports", "none"] = "imports"
-    report_inactive: bool = True
     effective_population: float | None = None
     bvd: bool = False
     bvd_alpha: float = 0.5

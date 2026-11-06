@@ -268,6 +268,7 @@ In the forecast they draw Poisson importations after the cut-off, which spread a
 So $W = I$, with no $\varepsilon$ and no gravity kernel, and no $\mu_q$ or $\kappa$.
 Provinces with no cases have no source of infection, so their forecasts are zero.
 The pooled reproduction number, missing-onset deviations, shared delay and ascertainment, share at risk and seeding are as in `renewal`.
+Like `renewal`, it fits the provinces together, so leaving one province out works for it too.
 
 ## BVDOutbreakSize-informed (`renewalbvd`) { #bvdoutbreaksize-informed }
 

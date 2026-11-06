@@ -346,8 +346,7 @@ def as_reported_samples(task, run, as_of: str) -> pd.DataFrame:
     draws = run["draws"]["as_reported"][cut]
     if data.names == ["CD"]:
         return national_samples(task, run, draws["national"])
-    samples, _ = samples_table(task, data, draws)
-    return samples
+    return samples_table(task, data, draws)
 
 
 def fit_metrics(run) -> dict[str, float]:
@@ -565,7 +564,7 @@ def run_rung(name, config, outbreak, table, real) -> dict:
         task = task_for(target, delays, vintage, SIM_LOCATIONS, "simulated")
         bvd = synthetic_bvd(outbreak, vintage) if config.bvd else None
         run = fit_one(task, config, table, bvd)
-        samples, _ = samples_table(task, run["data"], run["draws"])
+        samples = samples_table(task, run["data"], run["draws"])
         if config.national:
             samples = national_samples(task, run)
         res = fit_metrics(run) | rt_metrics(run, outbreak)

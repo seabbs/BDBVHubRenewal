@@ -158,7 +158,7 @@ If fits come close to the cap:
 2. Start earlier.
    Data usually land on Friday or Saturday, and the window opens Sunday.
    The last scheduled start on Tuesday is 06:00 UTC, which leaves about 17 hours before the window closes for the fits and the gate.
-4. Use a bigger machine through `FIT_RUNNER`.
+3. Use a bigger machine through `FIT_RUNNER`.
    GitHub's larger runners need a paid Team or Enterprise organisation, for example if the repo moves to `epiforecasts`.
    A self-hosted runner works too.
    The workflow only runs on `schedule` and `workflow_dispatch`, never on fork pull requests, so a self-hosted runner on this public repo is not exposed to outside code.

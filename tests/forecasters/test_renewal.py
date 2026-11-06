@@ -172,21 +172,9 @@ def test_samples_table_is_coherent(task: ForecastTask) -> None:
     config = rn.model_config(rn.VARIANTS["renewal"])
     data = rn.vintage_inputs(task, config)
     draws = _fake_draws(data, task.n_samples, np.random.default_rng(1))
-    samples, unassigned = rn.samples_table(task, data, draws, report_all=True)
-    assert unassigned is None
+    samples = rn.samples_table(task, data, draws)
     assert set(samples["location"]) == set(task.locations)
     assert set(samples["sample"]) == set(range(1, task.n_samples + 1))
-    # Report only the active provinces: the rest go to unassigned, so
-    # national sample k is unchanged.
-    some, extra = rn.samples_table(task, data, draws, report_all=False)
-    assert extra is not None
-    assert set(some["location"]) == set(data.names)
-    full = samples.groupby(["target_end_date", "sample"])["value"].sum()
-    part = some.groupby(["target_end_date", "sample"])["value"].sum()
-    back = part.add(
-        extra.set_index(["target_end_date", "sample"])["value"], fill_value=0
-    )
-    pd.testing.assert_series_equal(full, back, check_names=False)
 
 
 def test_ppc_rows_add_national(task: ForecastTask) -> None:
@@ -304,7 +292,7 @@ def test_unassigned_adds_the_national_data_gap(task: ForecastTask) -> None:
     config = rn.model_config(rn.VARIANTS["renewal"])
     data = rn.vintage_inputs(task, config)
     draws = _fake_draws(data, task.n_samples, np.random.default_rng(6))
-    samples, _ = rn.samples_table(task, data, draws, report_all=True)
+    samples = rn.samples_table(task, data, draws)
     assert rn.data_gap(task, samples) is None
     # Two national cases a week with no province, in the last data weeks.
     target = task.target.copy()
