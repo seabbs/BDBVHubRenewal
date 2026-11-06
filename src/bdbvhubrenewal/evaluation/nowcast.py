@@ -54,7 +54,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
-from bdbvhubrenewal.data.snapshots import NATIONAL, parent_code, release_cutoff
+from bdbvhubrenewal.data.snapshots import parent_code, release_cutoff
 from bdbvhubrenewal.evaluation.scoring import (
     SCORE_COLUMNS,
     energy_scores,
@@ -169,8 +169,8 @@ def week_shares(
     A week's share is the mean over its seven days.
     A place takes its own curve, else the `"pooled"` one, else its
     parent's. A place with none of these, such as the country of a model
-    fitted by province, takes the mean of the other places' shares
-    weighted by the model's mean forecast for each.
+    fitted by province, takes the mean of its children's shares weighted
+    by the model's mean forecast for each.
 
     Parameters
     ----------
@@ -226,25 +226,24 @@ def week_shares(
             )
         )
     out = pd.concat(frames, ignore_index=True)
-    if missing:
-        own = out.loc[out["location"] != NATIONAL].merge(
-            mean.rename("weight").reset_index(),
-            on=["location", "target_end_date"],
+    weights = mean.rename("weight").reset_index()
+    for loc in missing:
+        children = out.loc[out["location"].map(parent_code) == loc].merge(
+            weights, on=["location", "target_end_date"]
         )
-        own["weighted"] = own["weight"] * own["share"]
-        sums = own.groupby("target_end_date")[["weighted", "weight"]].sum()
+        children["weighted"] = children["weight"] * children["share"]
+        sums = children.groupby("target_end_date")[["weighted", "weight"]].sum()
         share = sums["weighted"] / sums["weight"].where(sums["weight"] > 0)
         out = pd.concat(
-            [out]
-            + [
+            [
+                out,
                 pd.DataFrame(
                     {
                         "location": loc,
                         "target_end_date": share.index,
                         "share": share.fillna(0.0).to_numpy(),
                     }
-                )
-                for loc in missing
+                ),
             ],
             ignore_index=True,
         )
