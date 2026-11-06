@@ -1,7 +1,8 @@
 // Score chart: one summary table as lines or grouped bars, a tab per
 // metric and a checkbox per model (toggles.js), drawn as SVG in the site's
-// theme. Other scripts build one with bdbvScoreChart.build and give it new
-// rows with update, keeping the tab, ticks and zoom.
+// theme. A metric with `log` is drawn on a log axis, bars from its ref.
+// Other scripts build one with bdbvScoreChart.build and give it new rows
+// with update, keeping the tab, ticks and zoom.
 (function () {
   "use strict";
   var NS = "http://www.w3.org/2000/svg";
@@ -16,6 +17,25 @@
     return n;
   }
   var nice = Z.nice;
+
+  // Ticks of 1, 2 and 5 times a power of 10 between 10^lo and 10^hi, of
+  // powers of 10 alone past 3 decades, or round steps where the range is
+  // too narrow to hold two of them.
+  function logTicks(lo, hi) {
+    var out = [];
+    var steps = hi - lo > 3 ? [1] : [1, 2, 5];
+    for (var p = Math.floor(lo); p <= Math.ceil(hi); p++) {
+      steps.forEach(function (f) {
+        var v = f * Math.pow(10, p);
+        if (Math.log10(v) >= lo && Math.log10(v) <= hi) out.push(v);
+      });
+    }
+    if (out.length >= 2) return out;
+    var a = Math.pow(10, lo), b = Math.pow(10, hi), step = nice(b - a);
+    out = [];
+    for (var v = Math.ceil(a / step) * step; v <= b; v += step) out.push(v);
+    return out;
+  }
 
   // onDraw(metric index, ticks), if given, runs after each draw.
   function build(root, d, onDraw) {
@@ -39,22 +59,40 @@
       });
       var metric = d.metrics[state.metric];
       var col = 3 + state.metric;
-      var rows = d.rows.filter(function (r) { return state.on[r[0]] && r[col] !== null; });
+      // On a log axis, values are drawn as their log10 and non-positive
+      // ones are left out.
+      var log = !!metric.log;
+      var tf = log ? Math.log10 : function (v) { return v; };
+      var rows = d.rows.filter(function (r) {
+        return state.on[r[0]] && r[col] !== null && (!log || r[col] > 0);
+      });
       var nx = d.x.length;
       var xr = Z.xRange(zoom, -0.5, nx - 0.5);
       var vals = rows.filter(function (r) { return Z.visible(zoom, r[1]); })
-        .map(function (r) { return r[col]; });
-      if (metric.ref !== null) vals.push(metric.ref);
-      var lo = Math.min.apply(null, vals.concat([0]));
+        .map(function (r) { return tf(r[col]); });
+      if (metric.ref !== null) vals.push(tf(metric.ref));
+      var lo = Math.min.apply(null, vals.concat(log ? [] : [0]));
       var hi = Math.max.apply(null, vals.concat([lo + 1e-9]));
       var step = nice(hi - lo || 1);
-      lo = Math.floor(lo / step) * step;
-      hi = Math.ceil(hi * 1.02 / step) * step;
+      if (log) {
+        var pad = Math.max((hi - lo) * 0.05, 0.05);
+        lo -= pad;
+        hi += pad;
+      } else {
+        lo = Math.floor(lo / step) * step;
+        hi = Math.ceil(hi * 1.02 / step) * step;
+      }
       var yr = Z.yRange(zoom, lo, hi, metric.key);
       if (yr[0] !== lo || yr[1] !== hi) {
         lo = yr[0];
         hi = yr[1];
         step = nice(hi - lo);
+      }
+      var ticks = [];
+      if (log) {
+        ticks = logTicks(lo, hi);
+      } else {
+        for (var v = Math.ceil(lo / step) * step; v <= hi + step / 2; v += step) ticks.push(v);
       }
       var many = d.x.filter(function (_, i) { return Z.visible(zoom, i); }).length > 12;
       var W = 760, H = many ? 380 : 320, L = 52, R = 10, T = 10, B = many ? 100 : 40;
@@ -64,12 +102,12 @@
       figure.textContent = "";
       var svg = el("svg", { viewBox: "0 0 " + W + " " + H, role: "img",
         "aria-label": metric.label + " by " + d.x_label.toLowerCase() }, figure);
-      for (var v = Math.ceil(lo / step) * step; v <= hi + step / 2; v += step) {
-        el("line", { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: "scorechart-grid" }, svg);
-        var t = el("text", { x: L - 6, y: Y(v) + 4, "text-anchor": "end",
+      ticks.forEach(function (v) {
+        el("line", { x1: L, x2: W - R, y1: Y(tf(v)), y2: Y(tf(v)), class: "scorechart-grid" }, svg);
+        var t = el("text", { x: L - 6, y: Y(tf(v)) + 4, "text-anchor": "end",
           class: "scorechart-tick" }, svg);
         t.textContent = +v.toFixed(6);
-      }
+      });
       d.x.forEach(function (x, i) {
         if (!Z.visible(zoom, i)) return;
         var tx = many ?
@@ -84,7 +122,7 @@
       lab.textContent = d.x_label;
       var plot = Z.clip(svg, { L: L, R: R, T: T, B: B, W: W, H: H });
       if (metric.ref !== null) {
-        el("line", { x1: L, x2: W - R, y1: Y(metric.ref), y2: Y(metric.ref),
+        el("line", { x1: L, x2: W - R, y1: Y(tf(metric.ref)), y2: Y(tf(metric.ref)),
           class: "scorechart-ref" }, plot);
       }
       var shown = d.models.map(function (_, i) { return i; })
@@ -102,7 +140,8 @@
           var w = bw * 0.8 / shown.length;
           own.forEach(function (r) {
             var x = X(r[1]) - bw * 0.4 + k * w;
-            var y0 = Y(Math.max(lo, 0)), y1 = Y(r[col]);
+            var base = log ? tf(metric.ref) : 0;
+            var y0 = Y(Math.min(Math.max(lo, base), hi)), y1 = Y(tf(r[col]));
             var bar = el("rect", { x: x, y: Math.min(y0, y1), width: w,
               height: Math.abs(y0 - y1), fill: fill, stroke: c }, plot);
             el("title", {}, bar).textContent = tip(r);
@@ -110,9 +149,9 @@
         } else {
           el("polyline", { fill: "none", stroke: c, "stroke-width": 2,
             "stroke-dasharray": keys.dash(m),
-            points: own.map(function (r) { return X(r[1]) + "," + Y(r[col]); }).join(" ") }, plot);
+            points: own.map(function (r) { return X(r[1]) + "," + Y(tf(r[col])); }).join(" ") }, plot);
           own.forEach(function (r) {
-            var p = el("circle", { cx: X(r[1]), cy: Y(r[col]), r: 3.5, fill: c }, plot);
+            var p = el("circle", { cx: X(r[1]), cy: Y(tf(r[col])), r: 3.5, fill: c }, plot);
             el("title", {}, p).textContent = tip(r);
           });
         }

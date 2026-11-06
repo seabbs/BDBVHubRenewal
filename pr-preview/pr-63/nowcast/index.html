@@ -870,6 +870,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#zone-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zone review
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#nowcast_1" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1940,6 +1951,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#zone-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zone review
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#nowcast_1" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2010,19 +2032,31 @@
 
 <h1 id="nowcast">Nowcast<a class="headerlink" href="#nowcast" title="Permanent link">&para;</a></h1>
 <p class="page-subtitle">The current nowcast and forecast from the latest vintage.</p>
-<p>Fitted models' results come from the <a href="https://github.com/seabbs/BDBVHubRenewal/tree/fit-store">fit store</a>, fitted at <a href="https://github.com/seabbs/BDBVHubRenewal/commit/a5ad8b922b24da5e68f78f04aec6a167ec60eed6"><code>a5ad8b9</code></a>.</p>
+<p>Fitted models' results come from the <a href="https://github.com/seabbs/BDBVHubRenewal/tree/fit-store">fit store</a>, fitted at <a href="https://github.com/seabbs/BDBVHubRenewal/commit/023359135c1e4e2c3d098cfc5b32988c68c88725"><code>0233591</code></a>, <a href="https://github.com/seabbs/BDBVHubRenewal/commit/a5ad8b922b24da5e68f78f04aec6a167ec60eed6"><code>a5ad8b9</code></a>, <a href="https://github.com/seabbs/BDBVHubRenewal/commit/e9e628b38135c8b64b1f519310f47ed4b9bf9290"><code>e9e628b</code></a>.</p>
 <div class="admonition note">
 <p class="admonition-title">Fits still running</p>
-<p>Fits for this build's code (<a href="https://github.com/seabbs/BDBVHubRenewal/commit/dee0da40621e12612076ca995d2bbf8e55fea6ee"><code>dee0da4</code></a>) are still <a href="https://github.com/seabbs/BDBVHubRenewal/actions/workflows/fit-store.yml">running</a>.
+<p>Fits for this build's code (<a href="https://github.com/seabbs/BDBVHubRenewal/commit/233174f296aaf7e61549646d3aba5c133f4b264e"><code>233174f</code></a>) are still <a href="https://github.com/seabbs/BDBVHubRenewal/actions/workflows/fit-store.yml">running</a>.
 Fits of older code are shown for <code>pprandomwalknowcast</code> at 2026-08-18 and 2026-10-09 and 2026-10-17 and 2026-10-24 and 2026-11-01; <code>renewal</code> at 2026-08-18 and 2026-10-09 and 2026-10-17 and 2026-10-24 and 2026-11-01; <code>renewalbvd</code> at 2026-08-18 and 2026-10-09 and 2026-10-17 and 2026-10-24 and 2026-11-01; <code>renewalsp</code> at 2026-08-18 and 2026-10-09 and 2026-10-17 and 2026-10-24 and 2026-11-01.</p>
 </div>
 <p>Latest vintage <strong>2026-11-01</strong>, models <code>randomwalk</code>, <code>pprandomwalknowcast</code>, <code>randomwalknowcast</code>, <code>renewal</code>, <code>renewalbvd</code>, <code>renewalsp</code>.</p>
 <p><strong>Latest submission:</strong> <a href="../submission/rounds/2026-11-07/">round 2026-11-07</a>: seabbs-renewal submitted (BVDOutbreakSize-informed renewal model), seabbs-rwnowcast submitted (random walk on a nowcast). <a href="../submission/rounds/">Submission log</a>.</p>
 <h2 id="by-place">By place<a class="headerlink" href="#by-place" title="Permanent link">&para;</a></h2>
-<p>Each model's nowcast and forecast at the 2026-11-01 release, for the country, the provinces and the zones with cases in the 12 weeks before the reference date (<a href="../methods/evaluation/#health-zones">Health zones</a>).
-The table summarises each model's scores at the place over the rounds chosen.</p>
-<div class="nowcastchart" data-src="../figures/nowcastchart.json" data-summary="../figures/scoresummary-backtest.json" role="group" aria-label="Nowcast and forecast by place">
+<p>Each model's nowcast and forecast at the 2026-11-01 release, for the country and every province and health zone with a forecast or with cases in the 12 weeks before the reference date (<a href="../methods/evaluation/#health-zones">Health zones</a>).
+The latest nowcast has no score yet.
+Scores by origin are on the <a href="../backtest/">Backtest</a> page.</p>
+<div class="nowcastchart" data-src="../figures/nowcastchart.json" role="group" aria-label="Nowcast and forecast by place">
 <noscript>The nowcast chart needs JavaScript.</noscript>
+</div>
+
+<h2 id="zone-review">Zone review<a class="headerlink" href="#zone-review" title="Permanent link">&para;</a></h2>
+<p>One row per place with a forecast from the chosen model.
+Recent is the mean count of the last two complete weeks.
+Each week column gives the median and 90% interval.
+Ratio is log((median + 1) / (recent + 1)) for the chosen week.
+A ratio of 0.69 is double the recent count and -0.69 is half.
+Click a place to show it in the By place chart.</p>
+<div class="zonereview" data-src="../figures/nowcastchart.json" role="group" aria-label="Zone review">
+<noscript>The zone review needs JavaScript.</noscript>
 </div>
 
 <h2 id="nowcast_1">Nowcast<a class="headerlink" href="#nowcast_1" title="Permanent link">&para;</a></h2>
@@ -2261,9 +2295,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <th style="text-align: right;">reported</th>
 <th style="text-align: right;">median</th>
 <th style="text-align: left;">90% interval</th>
-<th style="text-align: right;">relative WIS</th>
-<th style="text-align: right;">90% coverage</th>
-<th style="text-align: right;">n</th>
 </tr>
 </thead>
 <tbody>
@@ -2274,9 +2305,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.25</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-BU</td>
@@ -2285,9 +2313,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 2</td>
-<td style="text-align: right;">0.25</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-BU</td>
@@ -2296,9 +2321,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.12</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-BU</td>
@@ -2307,9 +2329,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 2</td>
-<td style="text-align: right;">0.12</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-BU</td>
@@ -2318,9 +2337,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 1</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-BU</td>
@@ -2329,9 +2345,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 2</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-HU</td>
@@ -2340,9 +2353,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">2</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">1 to 7</td>
-<td style="text-align: right;">1.44</td>
-<td style="text-align: right;">0.69</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-HU</td>
@@ -2351,9 +2361,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">4</td>
 <td style="text-align: right;">10</td>
 <td style="text-align: left;">3 to 30</td>
-<td style="text-align: right;">1.44</td>
-<td style="text-align: right;">0.69</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-HU</td>
@@ -2362,9 +2369,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 1</td>
-<td style="text-align: right;">0.18</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-HU</td>
@@ -2373,9 +2377,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">0 to 5</td>
-<td style="text-align: right;">0.18</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-HU</td>
@@ -2384,9 +2385,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.08</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-HU</td>
@@ -2395,9 +2393,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 1</td>
-<td style="text-align: right;">0.08</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-HU</td>
@@ -2406,9 +2401,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">3</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">2 to 9</td>
-<td style="text-align: right;">1.01</td>
-<td style="text-align: right;">0.81</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-HU</td>
@@ -2417,9 +2409,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">0 to 4</td>
-<td style="text-align: right;">1.01</td>
-<td style="text-align: right;">0.81</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-HU</td>
@@ -2428,9 +2417,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 1</td>
-<td style="text-align: right;">0.11</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-HU</td>
@@ -2439,9 +2425,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">0 to 5</td>
-<td style="text-align: right;">0.11</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-HU</td>
@@ -2450,9 +2433,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">6</td>
 <td style="text-align: right;">9</td>
 <td style="text-align: left;">5 to 17</td>
-<td style="text-align: right;">0.61</td>
-<td style="text-align: right;">0.94</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-HU</td>
@@ -2461,9 +2441,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">0 to 7</td>
-<td style="text-align: right;">0.61</td>
-<td style="text-align: right;">0.94</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-HU</td>
@@ -2472,9 +2449,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 1</td>
-<td style="text-align: right;">1.13</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-HU</td>
@@ -2483,9 +2457,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">0 to 10</td>
-<td style="text-align: right;">1.13</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-HU</td>
@@ -2494,9 +2465,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">7</td>
 <td style="text-align: right;">10</td>
 <td style="text-align: left;">6 to 22</td>
-<td style="text-align: right;">0.84</td>
-<td style="text-align: right;">0.81</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-HU</td>
@@ -2505,9 +2473,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">0 to 5</td>
-<td style="text-align: right;">0.84</td>
-<td style="text-align: right;">0.81</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2516,9 +2481,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 1</td>
-<td style="text-align: right;">0.17</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2527,9 +2489,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 2</td>
-<td style="text-align: right;">0.17</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2538,9 +2497,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">12</td>
 <td style="text-align: right;">16</td>
 <td style="text-align: left;">7 to 32</td>
-<td style="text-align: right;">1.28</td>
-<td style="text-align: right;">0.69</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2549,9 +2505,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 12</td>
-<td style="text-align: right;">1.28</td>
-<td style="text-align: right;">0.69</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2560,9 +2513,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 1</td>
-<td style="text-align: right;">0.14</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2571,9 +2521,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 2</td>
-<td style="text-align: right;">0.14</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2582,9 +2529,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">2</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">1 to 8</td>
-<td style="text-align: right;">4.14</td>
-<td style="text-align: right;">0.81</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2593,9 +2537,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 11</td>
-<td style="text-align: right;">4.14</td>
-<td style="text-align: right;">0.81</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2604,9 +2545,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 2</td>
-<td style="text-align: right;">0.08</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2615,9 +2553,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 1</td>
-<td style="text-align: right;">0.08</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2626,9 +2561,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">49</td>
 <td style="text-align: right;">52</td>
 <td style="text-align: left;">32 to 112</td>
-<td style="text-align: right;">0.68</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2637,9 +2569,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">21</td>
 <td style="text-align: right;">38</td>
 <td style="text-align: left;">9 to 154</td>
-<td style="text-align: right;">0.68</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2648,9 +2577,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 1</td>
-<td style="text-align: right;">0.63</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2659,9 +2585,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 9</td>
-<td style="text-align: right;">0.63</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2670,9 +2593,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 0</td>
-<td style="text-align: right;">0.08</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2681,9 +2601,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 8</td>
-<td style="text-align: right;">0.08</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2692,9 +2609,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">4</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">3 to 13</td>
-<td style="text-align: right;">1.16</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2703,9 +2617,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">0 to 9</td>
-<td style="text-align: right;">1.16</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2714,9 +2625,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 1</td>
-<td style="text-align: right;">1.14</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2725,9 +2633,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 15</td>
-<td style="text-align: right;">1.14</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2736,9 +2641,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">1 to 4</td>
-<td style="text-align: right;">0.34</td>
-<td style="text-align: right;">0.81</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2747,9 +2649,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 11</td>
-<td style="text-align: right;">0.34</td>
-<td style="text-align: right;">0.81</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2758,9 +2657,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">1 to 3</td>
-<td style="text-align: right;">0.86</td>
-<td style="text-align: right;">0.81</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2769,9 +2665,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 9</td>
-<td style="text-align: right;">0.86</td>
-<td style="text-align: right;">0.81</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2780,9 +2673,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">5</td>
 <td style="text-align: right;">7</td>
 <td style="text-align: left;">3 to 19</td>
-<td style="text-align: right;">0.62</td>
-<td style="text-align: right;">0.94</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2791,9 +2681,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">4</td>
 <td style="text-align: right;">9</td>
 <td style="text-align: left;">2 to 55</td>
-<td style="text-align: right;">0.62</td>
-<td style="text-align: right;">0.94</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2802,9 +2689,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 1</td>
-<td style="text-align: right;">0.94</td>
-<td style="text-align: right;">0.94</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2813,9 +2697,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">0 to 22</td>
-<td style="text-align: right;">0.94</td>
-<td style="text-align: right;">0.94</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2824,9 +2705,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 1</td>
-<td style="text-align: right;">0.59</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2835,9 +2713,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">0 to 17</td>
-<td style="text-align: right;">0.59</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2846,9 +2721,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">11</td>
 <td style="text-align: right;">14</td>
 <td style="text-align: left;">7 to 35</td>
-<td style="text-align: right;">1.7</td>
-<td style="text-align: right;">0.81</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2857,9 +2729,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">9</td>
 <td style="text-align: right;">22</td>
 <td style="text-align: left;">4 to 127</td>
-<td style="text-align: right;">1.7</td>
-<td style="text-align: right;">0.81</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2868,9 +2737,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">53</td>
 <td style="text-align: right;">91</td>
 <td style="text-align: left;">53 to 170</td>
-<td style="text-align: right;">1.1</td>
-<td style="text-align: right;">0.38</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2879,9 +2745,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">31</td>
 <td style="text-align: right;">86</td>
 <td style="text-align: left;">27 to 336</td>
-<td style="text-align: right;">1.1</td>
-<td style="text-align: right;">0.38</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2890,9 +2753,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">9</td>
 <td style="text-align: right;">12</td>
 <td style="text-align: left;">6 to 23</td>
-<td style="text-align: right;">1.16</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2901,9 +2761,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">3</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">1 to 44</td>
-<td style="text-align: right;">1.16</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2912,9 +2769,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">2</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">1 to 5</td>
-<td style="text-align: right;">1.08</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2923,9 +2777,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 11</td>
-<td style="text-align: right;">1.08</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2934,9 +2785,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">3</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">2 to 8</td>
-<td style="text-align: right;">0.3</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2945,9 +2793,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 8</td>
-<td style="text-align: right;">0.3</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2956,9 +2801,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">14</td>
 <td style="text-align: right;">16</td>
 <td style="text-align: left;">9 to 33</td>
-<td style="text-align: right;">1.41</td>
-<td style="text-align: right;">0.69</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2967,9 +2809,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">10</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">5 to 88</td>
-<td style="text-align: right;">1.41</td>
-<td style="text-align: right;">0.69</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2978,9 +2817,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">4</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">3 to 14</td>
-<td style="text-align: right;">1.13</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -2989,9 +2825,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">2</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">1 to 33</td>
-<td style="text-align: right;">1.13</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -3000,9 +2833,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">1 to 4</td>
-<td style="text-align: right;">1.03</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -3011,9 +2841,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">3</td>
 <td style="text-align: right;">7</td>
 <td style="text-align: left;">2 to 79</td>
-<td style="text-align: right;">1.03</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -3022,9 +2849,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">38</td>
 <td style="text-align: right;">40</td>
 <td style="text-align: left;">24 to 77</td>
-<td style="text-align: right;">1.22</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -3033,9 +2857,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">8</td>
 <td style="text-align: right;">16</td>
 <td style="text-align: left;">4 to 68</td>
-<td style="text-align: right;">1.22</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -3044,9 +2865,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 1</td>
-<td style="text-align: right;">1.6</td>
-<td style="text-align: right;">0.75</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-IT</td>
@@ -3055,9 +2873,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">0 to 30</td>
-<td style="text-align: right;">1.6</td>
-<td style="text-align: right;">0.75</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3066,9 +2881,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">57</td>
 <td style="text-align: right;">70</td>
 <td style="text-align: left;">44 to 204</td>
-<td style="text-align: right;">1.43</td>
-<td style="text-align: right;">0.25</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3077,9 +2889,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">23</td>
 <td style="text-align: right;">79</td>
 <td style="text-align: left;">33 to 211</td>
-<td style="text-align: right;">1.43</td>
-<td style="text-align: right;">0.25</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3088,9 +2897,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 1</td>
-<td style="text-align: right;">1.25</td>
-<td style="text-align: right;">0.75</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3099,9 +2905,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">1 to 30</td>
-<td style="text-align: right;">1.25</td>
-<td style="text-align: right;">0.75</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3110,9 +2913,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">5</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">3 to 20</td>
-<td style="text-align: right;">0.78</td>
-<td style="text-align: right;">0.81</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3121,9 +2921,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">4</td>
 <td style="text-align: right;">14</td>
 <td style="text-align: left;">3 to 52</td>
-<td style="text-align: right;">0.78</td>
-<td style="text-align: right;">0.81</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3132,9 +2929,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">1 to 7</td>
-<td style="text-align: right;">0.05</td>
-<td style="text-align: right;">0.94</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3143,9 +2937,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">0 to 10</td>
-<td style="text-align: right;">0.05</td>
-<td style="text-align: right;">0.94</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3154,9 +2945,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">15</td>
 <td style="text-align: right;">16</td>
 <td style="text-align: left;">8 to 44</td>
-<td style="text-align: right;">0.59</td>
-<td style="text-align: right;">0.94</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3165,9 +2953,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">9</td>
 <td style="text-align: right;">26</td>
 <td style="text-align: left;">6 to 99</td>
-<td style="text-align: right;">0.59</td>
-<td style="text-align: right;">0.94</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3176,9 +2961,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 1</td>
-<td style="text-align: right;">0.22</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3187,9 +2969,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 1</td>
-<td style="text-align: right;">0.22</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3198,9 +2977,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">2</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">1 to 8</td>
-<td style="text-align: right;">1.19</td>
-<td style="text-align: right;">0.38</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3209,9 +2985,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">0 to 11</td>
-<td style="text-align: right;">1.19</td>
-<td style="text-align: right;">0.38</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3220,9 +2993,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">5</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">3 to 18</td>
-<td style="text-align: right;">0.76</td>
-<td style="text-align: right;">0.69</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3231,9 +3001,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">0 to 12</td>
-<td style="text-align: right;">0.76</td>
-<td style="text-align: right;">0.69</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3242,9 +3009,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">14</td>
 <td style="text-align: right;">16</td>
 <td style="text-align: left;">9 to 46</td>
-<td style="text-align: right;">1.53</td>
-<td style="text-align: right;">0.56</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3253,9 +3017,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">6</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">4 to 98</td>
-<td style="text-align: right;">1.53</td>
-<td style="text-align: right;">0.56</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3264,9 +3025,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 1</td>
-<td style="text-align: right;">0.08</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3275,9 +3033,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">0 to 13</td>
-<td style="text-align: right;">0.08</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3286,9 +3041,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">0 to 5</td>
-<td style="text-align: right;">1.73</td>
-<td style="text-align: right;">0.56</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3297,9 +3049,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">0 to 12</td>
-<td style="text-align: right;">1.73</td>
-<td style="text-align: right;">0.56</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3308,9 +3057,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">3</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">1 to 15</td>
-<td style="text-align: right;">0.83</td>
-<td style="text-align: right;">0.75</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3319,9 +3065,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">0 to 10</td>
-<td style="text-align: right;">0.83</td>
-<td style="text-align: right;">0.75</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3330,9 +3073,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">13</td>
 <td style="text-align: right;">15</td>
 <td style="text-align: left;">8 to 41</td>
-<td style="text-align: right;">0.81</td>
-<td style="text-align: right;">0.44</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3341,9 +3081,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">1 to 28</td>
-<td style="text-align: right;">0.81</td>
-<td style="text-align: right;">0.44</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3352,9 +3089,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">21</td>
 <td style="text-align: right;">24</td>
 <td style="text-align: left;">11 to 66</td>
-<td style="text-align: right;">0.77</td>
-<td style="text-align: right;">0.81</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3363,9 +3097,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">3</td>
 <td style="text-align: right;">10</td>
 <td style="text-align: left;">2 to 59</td>
-<td style="text-align: right;">0.77</td>
-<td style="text-align: right;">0.81</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3374,9 +3105,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">5</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">3 to 19</td>
-<td style="text-align: right;">1.75</td>
-<td style="text-align: right;">0.69</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NK</td>
@@ -3385,9 +3113,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">0 to 13</td>
-<td style="text-align: right;">1.75</td>
-<td style="text-align: right;">0.69</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NU</td>
@@ -3396,9 +3121,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 1</td>
-<td style="text-align: right;">0.08</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">5</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-NU</td>
@@ -3407,9 +3129,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">0 to 6</td>
-<td style="text-align: right;">0.08</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">5</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-SU</td>
@@ -3418,9 +3137,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 1</td>
-<td style="text-align: right;">0.02</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-SU</td>
@@ -3429,9 +3145,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">0 to 7</td>
-<td style="text-align: right;">0.02</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-TO</td>
@@ -3440,9 +3153,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 1</td>
-<td style="text-align: right;">3.05</td>
-<td style="text-align: right;">0.81</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-TO</td>
@@ -3451,9 +3161,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">0 to 4</td>
-<td style="text-align: right;">3.05</td>
-<td style="text-align: right;">0.81</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-TO</td>
@@ -3462,9 +3169,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">8</td>
 <td style="text-align: right;">10</td>
 <td style="text-align: left;">6 to 20</td>
-<td style="text-align: right;">0.58</td>
-<td style="text-align: right;">0.75</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-TO</td>
@@ -3473,9 +3177,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">1 to 9</td>
-<td style="text-align: right;">0.58</td>
-<td style="text-align: right;">0.75</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-TO</td>
@@ -3484,9 +3185,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">2</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">1 to 6</td>
-<td style="text-align: right;">1.86</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-TO</td>
@@ -3495,9 +3193,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">3</td>
 <td style="text-align: right;">7</td>
 <td style="text-align: left;">2 to 19</td>
-<td style="text-align: right;">1.86</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-TO</td>
@@ -3506,9 +3201,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 1</td>
-<td style="text-align: right;">1.2</td>
-<td style="text-align: right;">0.75</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-TO</td>
@@ -3517,9 +3209,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">0 to 4</td>
-<td style="text-align: right;">1.2</td>
-<td style="text-align: right;">0.75</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-TO</td>
@@ -3528,9 +3217,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">2</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">1 to 6</td>
-<td style="text-align: right;">0.73</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-TO</td>
@@ -3539,9 +3225,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">0 to 4</td>
-<td style="text-align: right;">0.73</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-TO</td>
@@ -3550,9 +3233,6 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: left;">0 to 2</td>
-<td style="text-align: right;">0.39</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 <tr>
 <td style="text-align: left;">CD-TO</td>
@@ -3561,75 +3241,25 @@ Each model is shown from its latest origin (<a href="../methods/evaluation/#read
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: left;">0 to 5</td>
-<td style="text-align: right;">0.39</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">16</td>
 </tr>
 </tbody>
 </table>
 </details>
-<p>The <a href="../methods/evaluation/#energy-score">energy score</a> scores all zones together at each origin, relative to <code>randomwalk</code> over the releases scored.</p>
-<table>
-<thead>
-<tr>
-<th style="text-align: left;">model</th>
-<th style="text-align: left;">origin</th>
-<th style="text-align: right;">n_energy</th>
-<th style="text-align: right;">rel_energy</th>
-<th style="text-align: right;">rel_log_energy</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align: left;">pprandomwalknowcast</td>
-<td style="text-align: left;">2026-10-17</td>
-<td style="text-align: right;">2</td>
-<td style="text-align: right;">0.97</td>
-<td style="text-align: right;">0.99</td>
-</tr>
-<tr>
-<td style="text-align: left;">pprandomwalknowcast</td>
-<td style="text-align: left;">2026-10-24</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1.34</td>
-<td style="text-align: right;">1.22</td>
-</tr>
-<tr>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: left;">2026-10-17</td>
-<td style="text-align: right;">2</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-</tr>
-<tr>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: left;">2026-10-24</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-</tr>
-<tr>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: left;">2026-10-17</td>
-<td style="text-align: right;">2</td>
-<td style="text-align: right;">1.1</td>
-<td style="text-align: right;">1.05</td>
-</tr>
-<tr>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: left;">2026-10-24</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1.32</td>
-<td style="text-align: right;">1.22</td>
-</tr>
-</tbody>
-</table>
 <h2 id="delay-and-spread">Delay and spread<a class="headerlink" href="#delay-and-spread" title="Permanent link">&para;</a></h2>
 <p>The growth to final of each onset day by its age at the latest release, and the observation model by weeks back.
 A place using its parent's estimate is labelled with the parent.
 How both are fitted is on the <a href="../methods/baselines/#nowcast">Baseline models</a> page.</p>
 <p><img alt="Growth to final by age, and the dispersion of new reports and the removal rate by weeks back, at the latest release." src="../figures/delay-check.svg#only-light" />
 <img alt="Growth to final by age, and the dispersion of new reports and the removal rate by weeks back, at the latest release." src="../figures/delay-check-dark.svg#only-dark" /></p>
+<p>The renewal models fit the onset-to-report delay with the cases (<a href="../methods/model/#delays">delays</a>).
+Each row is one fit at its latest origin: <code>renewal</code> and <code>renewalbvd</code> fit one delay for all provinces, and <code>renewalsp</code> one per province it fits.
+<code>renewal</code> and <code>renewalbvd</code> give nearly the same delay, so their lines overlap.
+The left panel gives the share of onsets in the last week reported by each day since onset, with 90% intervals.
+It stops the day before the longest delay, where the model puts all later reports.
+The dashed line is <code>randomwalknowcast</code>'s share reported by age at the same release.
+The right panel gives the mean delay by onset week, with 90% intervals.</p>
+<p><img alt="Share of the last onset week reported by days since onset, beside randomwalknowcast's, and the mean delay by onset week, for each renewal fit at its latest origin." src="../figures/renewal-delay.svg#only-light" />
+<img alt="Share of the last onset week reported by days since onset, beside randomwalknowcast's, and the mean delay by onset week, for each renewal fit at its latest origin." src="../figures/renewal-delay-dark.svg#only-dark" /></p>
 
 
 
@@ -3776,6 +3406,8 @@ How both are fitted is on the <a href="../methods/baselines/#nowcast">Baseline m
         <script src="../javascripts/scoresummary.js"></script>
       
         <script src="../javascripts/nowcastchart.js"></script>
+      
+        <script src="../javascripts/zonereview.js"></script>
       
         <script src="https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
       

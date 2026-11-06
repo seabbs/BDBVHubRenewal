@@ -2013,7 +2013,7 @@
 </tr>
 <tr>
 <td><code>zone-backtest</code></td>
-<td>Score <code>randomwalk</code> and <code>randomwalknowcast</code> run at zone level on the real vintages.</td>
+<td>Score <code>randomwalk</code>, <code>randomwalknowcast</code> and <code>pprandomwalknowcast</code> run at zone level on the real vintages.</td>
 </tr>
 <tr>
 <td><code>fit-store plan</code>, <code>fit</code>, <code>load</code></td>
@@ -2064,9 +2064,13 @@
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>task<span class="w"> </span>backtest-scenarios<span class="w"> </span><span class="c1"># simulated scenarios calibrated to the real data</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>task<span class="w"> </span>backtest-zones<span class="w">     </span><span class="c1"># random walk models at health-zone level</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>task<span class="w"> </span>backtest-heldout<span class="w">   </span><span class="c1"># score the held-out vintages</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>task<span class="w"> </span>docs<span class="w">               </span><span class="c1"># build the site into _site/</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>task<span class="w"> </span>results<span class="w">            </span><span class="c1"># every derived file in results/, as the Pages build makes them</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>task<span class="w"> </span>docs<span class="w">               </span><span class="c1"># build the site into _site/ (runs task results, about 25 min)</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>task<span class="w"> </span>serve<span class="w">              </span><span class="c1"># serve the site (run task results once first)</span>
 </code></pre></div>
-<p><code>--models</code> runs some models and keeps the others' rows in <code>results/</code>.</p>
+<p><code>--models</code> runs some models and keeps the others' rows in <code>results/</code>.
+The files in <code>results/</code> are not committed, apart from <code>development-log.csv</code>, <code>ladder.csv</code> and <code>model-choice.yml</code>.
+The Pages build makes the rest with the steps of <code>task results</code>, from the code, the data and the fit store.</p>
 <h2 id="fit-store">Fit store<a class="headerlink" href="#fit-store" title="Permanent link">&para;</a></h2>
 <p>Each forecast of a fitted model is a fit, so the backtest and the docs build never run them.
 The Fit store workflow (<code>.github/workflows/fit-store.yml</code>) fits each fitted model once at each real origin and commits the result to the <code>fit-store</code> branch, as <code>&lt;model&gt;/&lt;origin&gt;/&lt;key&gt;.json.gz</code>.
@@ -2256,6 +2260,8 @@ For any other reference date it prints a note and skips the checks.</p>
         <script src="../../javascripts/scoresummary.js"></script>
       
         <script src="../../javascripts/nowcastchart.js"></script>
+      
+        <script src="../../javascripts/zonereview.js"></script>
       
         <script src="https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
       
