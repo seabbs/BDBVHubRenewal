@@ -7,11 +7,12 @@ import numpyro
 import numpyro.distributions as dist
 import pandas as pd
 import pytest
-from pyrenew.deterministic import DeterministicVariable
+from pyrenew.deterministic import DeterministicPMF, DeterministicVariable
 from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
 from pyrenew.randomvariable import DistributionalVariable
 
 from bdbvhubrenewal.model import (
+    CensoredPMF,
     FixedTimeVarying,
     HazardDelay,
     MissingOnsetFraction,
@@ -21,6 +22,7 @@ from bdbvhubrenewal.model import (
     coupled_renewal,
     generation_interval,
     hazard_to_pmf,
+    incubation_period,
     mixing_matrix,
     onset_expectations,
     pooled_walk,
@@ -311,11 +313,18 @@ def test_generation_interval_matches_primarycensored():
     np.testing.assert_allclose(generation_interval(), ref["p"], atol=1e-8)
 
 
+def test_incubation_period_matches_primarycensored():
+    ref = DPCENS[DPCENS["case"] == "incubation"]
+    np.testing.assert_allclose(incubation_period(), ref["p"], atol=1e-8)
+
+
 @pytest.mark.parametrize(
     ("family", "mean", "cv"),
-    DPCENS.loc[DPCENS["case"] == "delay", ["family", "mean", "cv"]]
-    .drop_duplicates()
-    .itertuples(index=False),
+    list(
+        DPCENS.loc[DPCENS["case"] == "delay", ["family", "mean", "cv"]]
+        .drop_duplicates()
+        .itertuples(index=False)
+    ),
 )
 def test_censored_pmf_matches_primarycensored(family, mean, cv):
     ref = DPCENS[
@@ -331,6 +340,70 @@ def test_censored_pmf_matches_primarycensored(family, mean, cv):
     with jax.enable_x64(False):
         ours32 = np.asarray(censored_pmf(family, mean, cv, 60))
     np.testing.assert_allclose(ours32, ref["p"], atol=3e-5)
+
+
+def test_onsets_are_infections_convolved_with_the_incubation_period():
+    from bdbvhubrenewal.model.observation import OnsetStreams
+
+    eta = incubation_period()
+    streams = OnsetStreams(
+        "onsets",
+        DeterministicPMF("incubation", eta),
+        DeterministicVariable("alpha", 1.0),
+        None,
+        FixedTimeVarying("delay", np.ones((1, 1))),
+        None,
+    )
+    x = np.random.default_rng(3).gamma(2.0, 1.0, (80, 2))
+    expected = np.stack([np.convolve(c, eta)[:80] for c in x.T], axis=1)
+    np.testing.assert_allclose(
+        streams._predicted_obs(jnp.asarray(x)), expected, rtol=1e-5
+    )
+    assert streams.lookback_days() == len(eta) - 1
+
+
+def test_censored_pmf_rv_gives_the_closed_form_at_its_parameters():
+    rv = CensoredPMF(
+        "incubation",
+        "lognormal",
+        DeterministicVariable("incubation_mean", 6.3),
+        DeterministicVariable("incubation_sd", 3.5),
+        28,
+    )
+    with jax.enable_x64():
+        pmf = np.asarray(rv())
+    np.testing.assert_allclose(pmf, incubation_period(), atol=1e-12)
+
+
+def test_censored_pmf_rv_samples_its_mean_and_sd():
+    from bdbvhubrenewal.model.observation import OnsetStreams
+
+    rv = CensoredPMF(
+        "incubation",
+        "lognormal",
+        DistributionalVariable(
+            "incubation_mean", dist.TruncatedNormal(6.3, 0.54, low=1.0)
+        ),
+        DistributionalVariable(
+            "incubation_sd", dist.TruncatedNormal(3.5, 0.8, low=1.0)
+        ),
+        28,
+    )
+    with numpyro.handlers.trace() as tr, numpyro.handlers.seed(rng_seed=1):
+        pmf = rv()
+    assert {"incubation_mean", "incubation_sd"} <= set(tr)
+    assert pmf.shape == (29,)
+    assert float(pmf.sum()) == pytest.approx(1.0, abs=1e-5)
+    # The lookback comes from the pmf's length without sampling it.
+    streams = OnsetStreams(
+        "onsets",
+        rv,
+        DeterministicVariable("alpha", 1.0),
+        None,
+        FixedTimeVarying("delay", np.ones((1, 1))),
+        None,
+    )
+    assert streams.lookback_days() == 28
 
 
 def test_idle_provinces_are_zero_up_to_the_cutoff():

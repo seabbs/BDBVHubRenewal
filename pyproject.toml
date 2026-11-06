@@ -40,7 +40,7 @@ classifiers = [
 # The PyRenew renewal model (`bdbvhubrenewal.model`), pinned by SHA.
 # PyRenew brings JAX and NumPyro. The package imports without it.
 model = [
-  "pyrenew @ git+https://github.com/CDCgov/PyRenew@e16093b0d20c918f282032123c19691a568f114a",
+  "pyrenew @ git+https://github.com/CDCgov/PyRenew@2441cb327d6e563eab0495540cb7467a102c234f",
 ]
 
 [project.urls]

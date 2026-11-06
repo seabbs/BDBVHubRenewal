@@ -63,6 +63,10 @@ from bdbvhubrenewal.forecasters.renewal import (  # noqa: E402
     samples_table,
     vintage_inputs,
 )
+from bdbvhubrenewal.model.model import (  # noqa: E402
+    incubation_period,
+    seed_lead,
+)
 
 OUT = Path(__file__).parents[1] / "results"
 
@@ -532,13 +536,16 @@ def province_extras(run, locations, timing=()) -> dict:
     else:
         share = None
     cum = np.median(np.cumsum(x, axis=1), axis=0)
+    lead = seed_lead(incubation_period())
     for i, loc in enumerate(data.names):
         if loc in locations and share is not None:
             out[f"import_share_{loc}"] = float(np.median(share[:, i]))
         if loc in timing and data.seed_days is not None:
             hit = np.nonzero(cum[:, i] >= 1.0)[0]
             first = int(hit[0]) if hit.size else np.nan
-            out[f"first_case_lag_{loc}"] = float(first - data.seed_days[i])
+            # Late provinces are seeded `lead` days before that week.
+            week = data.seed_days[i] + (lead if data.seed_days[i] > 0 else 0)
+            out[f"first_case_lag_{loc}"] = float(first - week)
     return out
 
 

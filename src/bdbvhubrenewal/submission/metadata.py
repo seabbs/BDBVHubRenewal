@@ -10,6 +10,9 @@ from __future__ import annotations
 __all__ = ["MODEL_METADATA"]
 
 _RENEWAL_OBSERVATION = (
+    "Rt is dated by infection, and onsets are infections convolved with "
+    "a log-normal incubation period with uncertain mean and SD "
+    "(BVDOutbreakSize's priors). "
     "Confirmed onsets follow a time-varying ascertainment. The "
     "onset-to-report delay is nonparametric, a discrete hazard that is "
     "smooth over delay and shifts weekly with onset day, and known onsets "

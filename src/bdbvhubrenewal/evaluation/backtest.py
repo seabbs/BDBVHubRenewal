@@ -522,7 +522,7 @@ def run_forecasts(
                 fits.append(table)
             delay = getattr(model, "delay_summary", None)
             if learnt is not None and delay is not None:
-                learnt.append(delay.assign(kind=task.kind))
+                learnt.append(delay)
             check_samples(samples, task)
             if "as_of" not in samples:
                 samples["as_of"] = np.nan

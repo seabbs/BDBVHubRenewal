@@ -16,7 +16,7 @@ delays are biased short.
 The renewal models fit a parametric delay that handles both.
 Each delay is in whole days from the onset day to the report day, so it
 is double interval censored at daily resolution, with pmf $p_\theta(d)$
-from `bdbvhubrenewal.model.delays.censored_pmf`.
+from `bdbvhubrenewal.model.censored.censored_pmf`.
 Only the onset week $W$ (days $W-6$ to $W$) is published, so right
 truncation at vintage $T$ is averaged over the onset day:
 

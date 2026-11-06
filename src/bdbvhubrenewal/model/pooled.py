@@ -112,7 +112,7 @@ def split_initial_value(
 ) -> tuple[ArrayLike, ArrayLike]:
     """Split starting values into a national value and province deviations.
 
-    Mirrors `SubpopulationInfections._split_initial_log_rt`: a scalar gives
+    Mirrors `BaseSubpopulationInfections._split_initial_log_rt`: a scalar gives
     zero deviations, a vector gives its mean and the centred deviations.
 
     Parameters
@@ -168,7 +168,8 @@ def pooled_walk(
     the sum-to-zero subspace (`sum_to_zero_basis`) and the $P - 1$
     coordinates $\eta_j$ follow `deviation_process`, which shares one
     innovation SD (partial pooling). The deviations sum to zero exactly
-    with no redundant direction to sample (BVDOutbreakSize #855). Each
+    with no redundant direction to sample, as in BVDOutbreakSize
+    (https://github.com/epiforecasts/BVDOutbreakSize/issues/855). Each
     deviation has the prior of $P$ independent walks centred on their
     mean.
 
