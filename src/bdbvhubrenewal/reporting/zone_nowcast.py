@@ -233,7 +233,7 @@ def place_chart_data(
         values of a fixed subset of draws, the same in every place).
     """
     models = list(colours)
-    # Places with forecasts but no cases are shown too, with no data.
+    # Places with forecasts but no cases are shown with no data.
     places = sorted(set(counts["location"]) | set(samples["location"]))
     size = (
         counts.groupby("location")["total"].sum().reindex(places, fill_value=0)
