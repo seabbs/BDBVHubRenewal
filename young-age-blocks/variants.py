@@ -133,3 +133,18 @@ if V.startswith("blk"):
     _k = float(V[3:])
     _lf = chain.log_factors
     chain.log_factors = lambda num, den, gaps, min_count=0.0: _lf(num, den, gaps, _k)
+
+if V == "skipzero":
+    from bdbvhubrenewal.baselinenowcast import snapshots as _sn
+    _ab = _sn.age_blocks
+    def age_blocks(den, min_count):
+        """Blocks over the ages with cases; an age with no case is its own block."""
+        total = np.asarray(den, float).sum(axis=0)
+        has = total > 0
+        block = np.full(total.size, -1)
+        inner = _ab(np.asarray(den)[:, has], min_count)
+        block[has] = inner
+        n = inner.max() + 1 if inner.size else 0
+        block[~has] = n + np.arange((~has).sum())
+        return block
+    _sn.age_blocks = age_blocks

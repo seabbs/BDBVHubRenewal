@@ -9,3 +9,4 @@ Arms, all on top of #63 (63f0b209):
 - `C30`, `C100`: C with blocks of 30 and 100 cases (`variants.py`, `blk30`, `blk100`), randomwalknowcast only, no zone run.
 
 Each folder holds the recovery and release scores and quantiles, and the zone scores where run.
+- `Cz`, `Dz`: C and D with ages that have no case left out of the blocks (`variants.py`, `skipzero`).
