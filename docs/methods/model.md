@@ -75,8 +75,7 @@ $$
 z_p(w) \sim \text{Poisson}(\lambda_p),
 $$
 
-with one $\lambda_p$ per trajectory and $y_w$ the count reported at the origin (0 for weeks without data).
-A week's draws are never below the count already reported, as in `randomwalk`.
+with one $\lambda_p$ per trajectory and $y_w$ the count reported at the origin (0 for weeks without data), as in `randomwalk`.
 Provinces with no cases get no forecast.
 
 ### Time axis
