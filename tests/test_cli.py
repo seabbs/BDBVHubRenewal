@@ -173,21 +173,18 @@ def test_cli_fit_task_carries_the_delay_files_for_the_lag() -> None:
 
 @pytest.mark.usefixtures("in_root")
 def test_stored_samples_keep_numeric_values_without_our_forecasts() -> None:
-    # A backtest of fitted models only has no development forecasts of its
-    # own, so the stored samples are the hub teams' alone.
+    # Guards the dtypes of a backtest with no development forecasts.
     import argparse
 
     import numpy as np
 
     from bdbvhubrenewal.cli import _stored_samples
     from bdbvhubrenewal.data import load_target
-    from bdbvhubrenewal.evaluation.backtest import FORECAST_COLUMNS
+    from bdbvhubrenewal.evaluation.backtest import run_forecasts
     from bdbvhubrenewal.evaluation.scoring import energy_scores
 
     args = argparse.Namespace(data="data")
-    stored = _stored_samples(
-        args, load_target("data"), pd.DataFrame(columns=FORECAST_COLUMNS)
-    )
+    stored = _stored_samples(args, load_target("data"), run_forecasts([], []))
     assert stored["value"].dtype == np.float64
     one = stored.loc[stored["vintage"] == stored["vintage"].max()]
     truth = one[["location", "target_end_date"]].drop_duplicates()
@@ -195,3 +192,13 @@ def test_stored_samples_keep_numeric_values_without_our_forecasts() -> None:
         one.assign(origin="o"), truth.assign(truth=1.0), unit=["origin"]
     )
     assert np.isfinite(energy["log_energy"]).all()
+
+
+@pytest.mark.usefixtures("in_root")
+def test_backtest_of_fitted_models_only_points_to_the_fit_store(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    args = ["backtest", "--models", "pprandomwalknowcast"]
+    out = ["--results", str(tmp_path), "--output", str(tmp_path)]
+    assert main([*args, *out]) == 1
+    assert "task fit-store" in capsys.readouterr().err
