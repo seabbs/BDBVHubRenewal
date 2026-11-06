@@ -679,7 +679,10 @@ def _stored_samples(
     hub["vintage"] = [
         hc.match_vintage(r, vintages) for r in hub["reference_date"]
     ]
-    return pd.concat([ours[cols], hub.dropna(subset=["vintage"])[cols]])
+    stored = pd.concat([ours[cols], hub.dropna(subset=["vintage"])[cols]])
+    # With no development forecasts, `ours` is an empty table of object
+    # columns, which would make every column of the concatenation object.
+    return stored.astype({"sample": "int64", "value": "float64"})
 
 
 def _write_fits(fits: list[pd.DataFrame], path: Path) -> None:
