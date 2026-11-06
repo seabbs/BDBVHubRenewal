@@ -391,7 +391,7 @@ def test_scenarios_are_scored_final_and_as_of(
 
     data = Path(__file__).resolve().parents[2] / "data"
     zones = load_health_zones(data)
-    forecasts, scores, energy = run_scenarios(
+    forecasts, scores, energy, truth = run_scenarios(
         [get_model("flat")],
         config,
         target,
@@ -417,6 +417,9 @@ def test_scenarios_are_scored_final_and_as_of(
     assert set(scores["level"]) == {"national", "province", "zone"}
     assert set(energy["scale"]) == {"national", "provinces", "zones"}
     assert set(energy["truth_view"]) == {"final", "as of 2 weeks later"}
+    # The final counts cover the weeks before the first forecast date too.
+    assert set(truth["scenario"]) == {"calibrated_flat"}
+    assert truth["target_end_date"].min() < scores["target_end_date"].min()
 
 
 def test_tasks_carry_the_daily_releases_up_to_their_vintage(

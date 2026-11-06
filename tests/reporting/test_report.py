@@ -433,17 +433,86 @@ def test_scored_on_counts_pairs_and_forecasts() -> None:
         }
     )
     assert report._scored_on(rows) == (
-        "Scored on 3 origin and release pairs.\n"
-        "randomwalk has 1 national and 2 province forecasts.\n"
+        "The scores cover 3 origin and release pairs.\n"
+        "The randomwalk baseline has 1 national and 2 province forecasts.\n"
         "The renewal models are not scored at health zones.\n"
     )
 
 
-def test_scenario_section_has_the_shared_widgets_per_scenario(
-    tmp_path: Path,
-) -> None:
+def _scenario_results(res: Path) -> None:
+    """Write small scenario results for every scenario the page shows."""
+    weeks = ["2026-10-03", "2026-10-10", "2026-10-17", "2026-10-24"]
+    scores, samples, energy, truth = [], [], [], []
+    for scenario in report._SCENARIOS:
+        for loc in ("CD", "CD-IT"):
+            truth += [
+                {
+                    "scenario": scenario,
+                    "location": loc,
+                    "target_end_date": w,
+                    "truth": 5.0,
+                }
+                for w in weeks
+            ]
+            for model in ("randomwalk", "randomwalknowcast"):
+                for h, week in enumerate(weeks[2:]):
+                    scores.append(
+                        {
+                            "scenario": scenario,
+                            "model": model,
+                            "reference_date": "2026-10-17",
+                            "truth_vintage": "2027-01-10",
+                            "location": loc,
+                            "target_end_date": week,
+                            "horizon": h,
+                            "truth": 5.0,
+                            "wis": 1.0 + h,
+                            "log_wis": 0.1,
+                            "coverage_50": 0.5,
+                            "coverage_90": 0.9,
+                            "bias": 0.0,
+                            "complete": True,
+                            "truth_view": "final",
+                        }
+                    )
+                    samples += [
+                        {
+                            "scenario": scenario,
+                            "model": model,
+                            "vintage": "2026-10-11",
+                            "reference_date": "2026-10-17",
+                            "location": loc,
+                            "target_end_date": week,
+                            "sample": k,
+                            "value": float(k),
+                            "as_of": None,
+                        }
+                        for k in range(3)
+                    ]
+        energy += [
+            {
+                "scenario": scenario,
+                "model": model,
+                "reference_date": "2026-10-17",
+                "truth_vintage": "2027-01-10",
+                "scale": scale,
+                "energy": 1.0,
+                "log_energy": 0.1,
+                "truth_view": "final",
+            }
+            for model in ("randomwalk", "randomwalknowcast")
+            for scale in ("national", "provinces")
+        ]
+    pd.DataFrame(scores).to_csv(res / "scenario-scores.csv.gz", index=False)
+    pd.DataFrame(samples).to_csv(res / "scenario-forecasts.csv.gz", index=False)
+    pd.DataFrame(energy).to_csv(res / "scenario-energy.csv", index=False)
+    pd.DataFrame(truth).to_csv(res / "scenario-truth.csv", index=False)
+
+
+def test_scenario_section_draws_every_final_week(tmp_path: Path) -> None:
+    _scenario_results(tmp_path)
     text = report._scenario_section(
-        tmp_path, ROOT / "results", ["randomwalk", "randomwalknowcast"], {}
+        tmp_path, tmp_path, ["randomwalk", "randomwalknowcast"], {}
     )
     for section in ("Overall", "By horizon", "By place", "Forecasts by place"):
         assert f"### {section}" in text
@@ -456,3 +525,10 @@ def test_scenario_section_has_the_shared_widgets_per_scenario(
             (tmp_path / f"explorer-scenario-{key}.json").read_text()
         )
         assert explorer["rounds"] == summary["origins"]
+        # The weeks before the scored ones are drawn too.
+        assert [w for w, _ in explorer["data"]["CD-IT"]] == [
+            "2026-10-03",
+            "2026-10-10",
+            "2026-10-17",
+            "2026-10-24",
+        ]

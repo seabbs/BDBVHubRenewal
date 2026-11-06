@@ -39,7 +39,6 @@
       if (m.fan) h("option", { value: i }, selModel, m.name);
     });
     var selWeek = h("select", {}, h("label", {}, controls, "Ratio for "));
-    var note = h("p", { class: "explorer-note" }, root);
     var holder = h("div", {}, root);
 
     // The model's latest nowcast week and every week from the reference date.
@@ -68,8 +67,6 @@
       var old = holder.querySelector("input[type=search]");
       var query = old ? old.value : "";
       holder.textContent = "";
-      note.textContent = "Recent weeks: " + last.join(" and ") + ", as reported at the " +
-        d.release + " release.";
       var block = h("div", { class: "tablefilter zonereview-table", "data-filters": "Scale,Province" }, holder);
       var table = h("table", {}, block);
       var head = h("tr", {}, h("thead", {}, table));
