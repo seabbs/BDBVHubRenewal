@@ -134,12 +134,6 @@ class Settings:
         Days added to the ages of the origin's days, for the sensitivity
         of the nowcast to the onset clock. Ages below 0 count as 0. The
         delay and the retrospective errors are not moved.
-    start_share : float
-        Share of a week reported for `randomwalknowcast` to start
-        its walk from the week's nowcast.
-    start_count : float
-        Cases reported in a week for `randomwalknowcast` to start its walk
-        from the week's nowcast.
     """
 
     max_delay: int = 42
@@ -149,8 +143,6 @@ class Settings:
     completeness: float = 0.95
     walk_weeks: int = 9
     clock_shift: int = 0
-    start_share: float = 0.05
-    start_count: float = 5.0
 
     @property
     def history_delay(self) -> int:

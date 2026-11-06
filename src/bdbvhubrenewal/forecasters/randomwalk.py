@@ -134,14 +134,6 @@ def walks(
     return shift(lam), np.where(first_case, np.maximum(shift(y), 1.0), shift(y))
 
 
-def _reliable(origin: Origin) -> np.ndarray:
-    """Return the weeks whose nowcast can start the walk, `[L, W]`."""
-    settings = origin.settings
-    return (origin.complete >= settings.start_share) & (
-        origin.reported >= settings.start_count
-    )
-
-
 def _intro_from(origin: Origin, start: np.ndarray, h: int) -> np.ndarray:
     """Return each place's weekly introduction probability after `start`.
 
@@ -421,7 +413,7 @@ class RandomWalkNowcast(RandomWalk):
         k = np.clip(back, 0, k_n - 1)
         # Weeks older than the fitted ones are final, with no removals.
         b = np.where(back < k_n, origin.removal[:, k], 0.0)
-        key_x, key_walk = jax.random.split(_key(task))
+        key_x, key_walk, key_part = jax.random.split(_key(task), 3)
         shape = (n, *point.shape)
         reported = jnp.broadcast_to(
             jnp.asarray(origin.reported, jnp.float32), shape
@@ -438,34 +430,33 @@ class RandomWalkNowcast(RandomWalk):
             ),
             np.float64,
         )
-        # Each place walks from its latest week with enough of it reported
-        # and enough cases for its nowcast to be reliable, else from its
-        # `randomwalk` start week. A silent place has no such week.
-        cw = snap.cut_week(origin.o)
-        cut = int(snap.cut[origin.o])
-        seen_days = np.flatnonzero(snap.week == cw).max() - cut
-        reliable = _reliable(origin) & (np.arange(n_data) <= cw)
-        latest = n_data - 1 - np.argmax(reliable[:, ::-1], axis=1)
-        w0 = np.where(reliable.any(axis=1), latest, origin.start)
-        w0 = np.where(origin.silent, origin.start, w0)
-        x0 = nowcast[:, np.arange(n_loc), w0].T
-        # A partial week's nowcast covers its observed days only.
-        x0 = np.where((w0 == cw)[:, None], x0 * 7 / (7 - seen_days), x0)
-        _, y = walks(
+        # A place walks from the latest full week, and a silent place from
+        # its latest complete week, after which its introductions start.
+        w0 = np.where(origin.silent, origin.start, origin.start_nowcast)
+        lam, y = walks(
             key_walk,
-            x0,
+            nowcast[:, np.arange(n_loc), w0].T,
             origin.sigma,
             origin.silent,
             _intro_from(origin, w0, n_all),
         )
+        cut = int(snap.cut[origin.o])
+        miss = int(np.flatnonzero(snap.week == snap.week[cut]).max()) - cut
+        part = np.asarray(
+            jax.random.poisson(
+                key_part, jnp.asarray(lam[:, :, 0] * miss / 7, jnp.float32)
+            ),
+            dtype=np.float64,
+        )  # [L, S]
         values = np.zeros((n, n_loc, n_all))
         for loc in range(n_loc):
             s = int(w0[loc])
-            values[:, loc, :s] = nowcast[:, loc, :s]
-            values[:, loc, s] = x0[loc]
-            for u in range(s + 1, n_all):
-                floor = origin.reported[loc, u] if u < n_data else 0.0
-                values[:, loc, u] = np.maximum(y[loc, :, u - s - 1], floor)
+            values[:, loc, : s + 1] = nowcast[:, loc, : s + 1]
+            values[:, loc, s + 1 :] = y[loc, :, : n_all - s - 1]
+            # The week holding the cut-off keeps its nowcast for the days
+            # with data and adds walk draws for the days after.
+            if miss > 0 and s + 1 < n_data and not origin.silent[loc]:
+                values[:, loc, s + 1] = nowcast[:, loc, s + 1] + part[loc]
         return values, weeks
 
 
