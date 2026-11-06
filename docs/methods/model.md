@@ -1,6 +1,6 @@
 # Renewal models
 
-The three renewal models, with the maths of each.
+The three renewal models and the random walk model that shares their observation model, with the maths of each.
 { .page-subtitle }
 
 The data and notation are on the [Data methods page](data.md#target-and-notation).
@@ -11,6 +11,7 @@ How the models are built in code and sampled is on the [Implementation](implemen
 `renewalsp` fits a renewal model to each province on its own.
 `renewal` fits the provinces together, pools them and links them by importation.
 `renewalbvd` is `renewal` with a down-weighted likelihood term on the Rt of BVDOutbreakSize.
+`pprandomwalknowcast` replaces the renewal with a random walk on expected onsets of each health zone and keeps the observation model of `renewal`.
 `seabbs-renewal` submits the first of `renewalbvd`, `renewalsp`, `renewal`, `randomwalknowcast` and `randomwalk`, in that order, to pass its checks ([Submission workflow](../submission/workflow.md#renewal-chain)).
 The sections below build up from `renewalsp`, and each gives only the maths it adds.
 Every time-varying part is a weekly random walk or AR(1), so it stays near constant unless the data show change.
@@ -329,10 +330,36 @@ Leaving a province out drops the national term and the patch that holds it.
 The term adds no parameters, and $\zeta = 0$ gives `renewal`.
 It is down-weighted because BVDOutbreakSize is fitted to largely the same data, so at full weight those data would count twice.
 
+## Random walk on onsets (`pprandomwalknowcast`) { #random-walk-on-onsets }
+
+`pprandomwalknowcast` has no infections, generation interval or incubation period.
+It runs on health zones, and provinces and the country are sums of their zones.
+Expected onsets in zone $z$ on day $s$ of week $w$ are
+
+$$
+\lambda_z(s) = e^{x_z(w)} / 7,
+\qquad
+x_z(w) = x_z(w - 1) + \sigma_z \epsilon_{z,w},
+\qquad
+\epsilon_{z,w} \sim \mathcal{N}(0, 1),
+$$
+
+with $x_z$ at the first week $\mathcal{N}(\log 5, 2^2)$.
+The step SDs are pooled on the log scale, $\log \sigma_z = \mu_\sigma + \tau_1 \eta_{p(z)} + \tau_2 \eta_z$ for zone $z$ in province $p(z)$, with $\eta \sim \mathcal{N}(0, 1)$, $\mu_\sigma \sim \mathcal{N}(\log 0.2, 1)$ and $\tau \sim \mathcal{N}^+(0, 0.5^2)$.
+Ascertainment is 1, since $\lambda_z$ is on the scale of confirmed onsets.
+Every zone is walked, with or without cases, so there is no importation-only component.
+
+The observation model is that of `renewal`, with $\lambda_z$ in place of expected onsets from infections.
+Zones share the [delay](#delays) and take their province's [missing-onset share](#missing-onsets).
+Each zone's weekly known and imputed onsets are negative binomial, as a province's are.
+The delay counts are split over delays given each week's total, as in `renewal`, with the probabilities of all zones summed.
+The split conditions on the totals, so the reports in the zone totals are not counted twice.
+In the forecast the walk continues from the last data week with the posterior $\sigma_z$.
+
 ## Health zones
 
 Zone samples sum to their province's samples, sample by sample and week by week, and the national value stays the sum of the provinces.
-The random walk baselines run at zone level and their samples set the zone shares of the province samples ([Baseline models](baselines.md#health-zones)).
+The random walk models, `pprandomwalknowcast` included, run at zone level and their samples set the zone shares of the province samples ([Baseline models](baselines.md#health-zones)).
 Every other model's province forecast is split across the zones.
 
 ### Split of province samples

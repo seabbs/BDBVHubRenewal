@@ -61,7 +61,7 @@ The key hashes:
 - the runtime dependencies in `uv.lock`.
 
 The renewal variants use the sampler table of the submission candidate that runs them, in `ci/policy.toml`.
-`pprandomwalknowcast` uses its own.
+`pprandomwalknowcast`, which no candidate runs, uses the renewal default.
 A model code or sampler change refits every origin.
 A new hub release adds one fit per model.
 

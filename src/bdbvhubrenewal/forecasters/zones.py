@@ -494,10 +494,12 @@ def zone_task(
         [mine, weeks.date.astype(str)], names=["location", "target_end_date"]
     )
     target = (
-        counts.set_index(["location", "target_end_date"])["total"]
+        counts.set_index(["location", "target_end_date"])[
+            ["observed", "imputed", "total"]
+        ]
         .reindex(grid, fill_value=0)
         .reset_index()
-        .assign(vintage=task.vintage)
+        .assign(vintage=task.vintage, kind=task.kind)
     )
     history = None
     if daily is not None:

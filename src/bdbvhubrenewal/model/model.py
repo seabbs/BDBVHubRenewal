@@ -16,6 +16,7 @@ from jax import Array, random
 from numpyro.distributions.transforms import (
     AffineTransform,
     ComposeTransform,
+    ExpTransform,
     PowerTransform,
 )
 from numpyro.infer import MCMC, NUTS, Predictive, init_to_median
@@ -25,6 +26,7 @@ from pyrenew.latent.temporal_processes import (
     TemporalProcess,
     WeeklyTemporalProcess,
 )
+from pyrenew.metaclass import RandomVariable
 from pyrenew.model import MultiSignalModel, PyrenewBuilder
 from pyrenew.observation import NegativeBinomialNoise
 from pyrenew.randomvariable import DistributionalVariable, TransformedVariable
@@ -40,6 +42,7 @@ from .pooled import PooledInitialValue
 from .renewal import Importation, MetapopulationInfections
 from .rt_observation import RtPseudoObservation
 from .temporal import NonCentredRandomWalk
+from .walk import NestedPooledValue, RandomWalkOnsets
 
 SUNDAY = 6
 """Weekday number of Sunday (Monday is 0), the first day of a hub week."""
@@ -216,6 +219,11 @@ class ModelConfig:
         imputed, so it overstates late reporting of the total.
     max_publication_lag : int
         $L$, in days (the model default).
+    latent : {"renewal", "walk"}
+        Expected onsets from infections of the coupled renewal through the
+        incubation period, or a weekly random walk on log expected onsets
+        of every place (`RandomWalkOnsets`), with the same observation
+        model.
     delay_counts : {"multinomial", "dirichlet-multinomial"}
         Likelihood of the delay file's counts given the weekly totals.
         The Dirichlet-multinomial (default) has $1/\sqrt{\psi} \sim
@@ -239,6 +247,7 @@ class ModelConfig:
         "fixed"
     )
     max_publication_lag: int = 3
+    latent: Literal["renewal", "walk"] = "renewal"
     delay_counts: Literal["multinomial", "dirichlet-multinomial"] = (
         "dirichlet-multinomial"
     )
@@ -314,6 +323,10 @@ class Vintage:
     publication_lag_pmf : numpy.ndarray or None
         Empirical report to publication lag pmf on $0..180$ days
         (`data.releases.publication_lag_pmf`), or None.
+    groups : numpy.ndarray or None
+        Group of each place, `(P,)`: the province of each zone, whose
+        missing-onset share its zones take. None makes each place its own
+        group.
     """
 
     start_date: dt.date
@@ -333,6 +346,7 @@ class Vintage:
     bvd: dict[str, Any] | None = None
     seed_days: np.ndarray | None = None
     publication_lag_pmf: np.ndarray | None = None
+    groups: np.ndarray | None = None
 
     @property
     def n_weeks(self) -> int:
@@ -341,8 +355,15 @@ class Vintage:
 
     @property
     def n_provinces(self) -> int:
-        """Number of provinces."""
+        """Number of modelled places."""
         return int(self.known.shape[1])
+
+    @property
+    def n_groups(self) -> int:
+        """Number of groups that share a missing-onset share."""
+        if self.groups is None:
+            return self.n_provinces
+        return int(self.groups.max()) + 1
 
 
 def _pooled(
@@ -485,20 +506,16 @@ def _dm_noise() -> DirichletMultinomialNoise:
     )
 
 
-def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
-    """Build the province model for one vintage.
-
-    Parameters
-    ----------
-    data : Vintage
-        The vintage.
-    config : ModelConfig
-        Structural choices.
+def _renewal_latent(
+    builder: PyrenewBuilder, data: Vintage, config: ModelConfig
+) -> tuple[IndependentAscertainment, RandomVariable]:
+    """Configure the coupled renewal on infections.
 
     Returns
     -------
-    MultiSignalModel
-        Model with one observation, `onsets`.
+    tuple
+        The ascertainment and the infection-to-onset pmf (the incubation
+        period).
     """
     n_prov = data.n_provinces
     mixing = None
@@ -521,7 +538,6 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             )
         )
 
-    builder = PyrenewBuilder()
     builder.configure_latent(
         MetapopulationInfections,
         name="latent",
@@ -566,6 +582,96 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             "onsets": _named_walk("alpha_sd", 0.03, fit_weeks(data, config))
         },
     )
+    incubation = CensoredPMF(
+        "infection_to_onset",
+        "lognormal",
+        # BVDOutbreakSize's priors (onset_incidence_model).
+        DistributionalVariable(
+            "incubation_mean",
+            dist.TruncatedNormal(INCUBATION_MEAN, INCUBATION_MEAN_SD, low=1.0),
+        ),
+        DistributionalVariable(
+            "incubation_sd",
+            dist.TruncatedNormal(INCUBATION_SD, INCUBATION_SD_SD, low=1.0),
+        ),
+        INCUBATION_LENGTH,
+    )
+    return ascertainment, incubation
+
+
+def _walk_latent(
+    builder: PyrenewBuilder, data: Vintage, config: ModelConfig
+) -> tuple[IndependentAscertainment, RandomVariable]:
+    """Configure the random walk on log expected onsets.
+
+    The step SD of each place is pooled on the log scale towards its
+    group's, and the groups' towards a shared value. The walk is fixed
+    over the lead weeks.
+
+    Returns
+    -------
+    tuple
+        Ascertainment fixed at 1 and a pmf with all mass at lag 0, since
+        the walk is on onsets.
+    """
+    n_places = data.n_provinces
+    # Each place pools towards its group, and groups towards the country.
+    levels = [np.arange(n_places)]
+    if data.groups is not None:
+        levels.insert(0, data.groups)
+    log_sd = NestedPooledValue(
+        "log_walk_sd",
+        levels,
+        DistributionalVariable(
+            "log_walk_sd_mean", dist.Normal(np.log(0.2), 1.0)
+        ),
+        DistributionalVariable(
+            "log_walk_sd_sd", dist.HalfNormal(0.5).expand([len(levels)])
+        ),
+    )
+    frozen = GEN_INT_LENGTH // 7
+    walk = WeeklyTemporalProcess(
+        NonCentredRandomWalk(
+            TransformedVariable("walk_sd", log_sd, ExpTransform()),
+            frozen=frozen,
+            n_fit=frozen + fit_weeks(data, config),
+        ),
+        start_dow=SUNDAY,
+    )
+    builder.configure_latent(
+        RandomWalkOnsets,
+        name="latent",
+        gen_int_rv=DeterministicPMF("gen_int", generation_interval()),
+        initial_rv=DistributionalVariable(
+            "walk_start", dist.Normal(np.log(5.0), 2.0).expand([n_places])
+        ),
+        walk=walk,
+    )
+    ascertainment = IndependentAscertainment(
+        name="ascertainment",
+        rate_rvs={"onsets": DeterministicVariable("alpha0", 1.0)},
+    )
+    return ascertainment, DeterministicPMF("onset_lag", np.ones(1))
+
+
+def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
+    """Build the province model for one vintage.
+
+    Parameters
+    ----------
+    data : Vintage
+        The vintage.
+    config : ModelConfig
+        Structural choices.
+
+    Returns
+    -------
+    MultiSignalModel
+        Model with one observation, `onsets`.
+    """
+    builder = PyrenewBuilder()
+    latent = _walk_latent if config.latent == "walk" else _renewal_latent
+    ascertainment, onset_pmf = latent(builder, data, config)
     builder.add_ascertainment(ascertainment)
 
     pad = GEN_INT_LENGTH  # The model axis starts GEN_INT_LENGTH days early.
@@ -589,7 +695,7 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             "missing_fraction",
             # Non-centred: the imputed share pins these offsets only
             # weakly, and centred they form a funnel (R-hat 1.68).
-            _pooled("logit_pi0", n_prov, -2.0, 1.0, 0.5, centred=False),
+            _pooled("logit_pi0", data.n_groups, -2.0, 1.0, 0.5, centred=False),
             _named_walk("pi_sd", 0.3, fit_weeks(data, config)),
             _named_walk("pi_dev_sd", 0.1, fit_weeks(data, config)),
         )
@@ -631,24 +737,7 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     builder.add_observation(
         OnsetStreams(
             name="onsets",
-            temporal_pmf_rv=CensoredPMF(
-                "infection_to_onset",
-                "lognormal",
-                # BVDOutbreakSize's priors (onset_incidence_model).
-                DistributionalVariable(
-                    "incubation_mean",
-                    dist.TruncatedNormal(
-                        INCUBATION_MEAN, INCUBATION_MEAN_SD, low=1.0
-                    ),
-                ),
-                DistributionalVariable(
-                    "incubation_sd",
-                    dist.TruncatedNormal(
-                        INCUBATION_SD, INCUBATION_SD_SD, low=1.0
-                    ),
-                ),
-                INCUBATION_LENGTH,
-            ),
+            temporal_pmf_rv=onset_pmf,
             ascertainment_rate_rv=ascertainment.for_signal("onsets"),
             missing_fraction_rv=missing,
             delay_rv=delay,
@@ -742,6 +831,8 @@ def model_args(
         }
         if use_imports and data.inactive is not None:
             obs["inactive"] = pad(data.inactive)
+    if data.groups is not None:
+        obs["groups"] = data.groups
     pops = np.asarray(data.populations, dtype=float)
     return {
         "n_days_post_init": 7 * n_weeks,

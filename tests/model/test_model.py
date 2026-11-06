@@ -4,6 +4,7 @@ import pytest
 from jax import random
 from numpyro.infer import Predictive, init_to_median
 
+from bdbvhubrenewal.forecasters.renewal import VARIANTS, model_config
 from bdbvhubrenewal.model import (
     MAIN,
     ModelConfig,
@@ -284,3 +285,38 @@ def test_as_reported_draws_match_the_vintage_at_its_own_cutoff(sim_vintage):
         np.median(two_weeks, 0)[: n - 1]
         <= np.median(draws["national"], 0)[: n - 1] * 1.25 + 3
     )
+
+
+WALK = model_config(VARIANTS["pprandomwalknowcast"])
+
+
+def test_walk_latent_gives_onsets_from_the_walk(outbreak, sim_tables, table):
+    day = VINTAGE_DAYS[-1]
+    target, delays = sim_tables[day]
+    data = vintage_from_tables(
+        target, delays, vintage_date(outbreak, day), SIM_LOCATIONS, table, WALK
+    )
+    model = build_model(data, WALK)
+    tr = trace(model, data, forecast=True)
+    n_weeks = model.latent.n_initialization_points // 7 + data.n_weeks + 3
+    p = len(SIM_LOCATIONS)
+    assert tr["onsets_final_total"]["value"].shape == (n_weeks, p)
+    # Every province is walked, cases or not, and the horizon is drawn
+    # past the fit axis.
+    assert tr["latent_walk_z_future"]["value"].shape == (3, p)
+    weekly = np.exp(tr["latent_walk_weekly"]["value"])
+    onsets = tr["onsets_expected_daily"]["value"]
+    np.testing.assert_allclose(
+        onsets[::7][: weekly.shape[0]], weekly / 7, rtol=1e-5
+    )
+    assert "latent::rt_subpop" not in tr
+    tr = trace(model, data)
+    sampled = {
+        k: v["value"]
+        for k, v in tr.items()
+        if v["type"] == "sample" and not v["is_observed"]
+    }
+    log_density = numpyro.infer.util.log_density(
+        model.sample, (), model_args(model, data), sampled
+    )[0]
+    assert np.isfinite(float(log_density))

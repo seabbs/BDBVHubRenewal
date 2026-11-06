@@ -49,7 +49,6 @@ siblings (`introductions`).
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import jax.numpy as jnp
@@ -75,20 +74,15 @@ from bdbvhubrenewal.forecasters.pooling import (
 
 __all__ = [
     "DelayFit",
-    "DelayFn",
     "Errors",
     "MissingSnapshots",
     "NoDelayPair",
     "Origin",
     "Settings",
     "build_origin",
-    "delay_sums",
     "final_growth",
     "introductions",
-    "levels",
-    "own_ages",
     "retro_errors",
-    "walk_changes",
     "week_nowcast",
     "weeks_back",
 ]
@@ -453,13 +447,7 @@ def week_nowcast(
     return np.where(n > 0, fill_row(x, cdf), 0.0)
 
 
-DelayFn = Callable[[SnapshotArrays, int, Settings], DelayFit | None]
-"""Fits the delay at a release, as `fit_delay`."""
-
-
-def retro_errors(
-    snap: SnapshotArrays, o: int, settings: Settings, delay: DelayFn = fit_delay
-) -> Errors:
+def retro_errors(snap: SnapshotArrays, o: int, settings: Settings) -> Errors:
     """Collect the errors of nowcasts made at earlier releases.
 
     Parameters
@@ -470,8 +458,6 @@ def retro_errors(
         The origin release.
     settings : Settings
         Settings.
-    delay : callable
-        Fits the delay at each earlier release.
 
     Returns
     -------
@@ -483,7 +469,7 @@ def retro_errors(
     cells: list[tuple[np.ndarray, ...]] = []
     releases: list[str] = []
     for r in range(1, o):
-        fit = delay(snap, r, settings)
+        fit = fit_delay(snap, r, settings)
         if fit is None:
             continue
         age = snap.cut[r] - np.arange(snap.week.size)
@@ -588,7 +574,6 @@ def build_origin(
     snap: SnapshotArrays,
     settings: Settings,
     errors: bool,
-    delay: DelayFn = fit_delay,
 ) -> Origin:
     """Fit the delay and the walk spread at the latest release.
 
@@ -600,8 +585,6 @@ def build_origin(
         Settings.
     errors : bool
         Whether to fit the observation model.
-    delay : callable
-        Fits the delay at a release.
 
     Returns
     -------
@@ -614,7 +597,7 @@ def build_origin(
         If no pair of releases has a step within the delay window.
     """
     o = len(snap.releases) - 1
-    fit = delay(snap, o, settings)
+    fit = fit_delay(snap, o, settings)
     if fit is None:
         raise NoDelayPair(
             f"No pair of releases up to {snap.releases[o]} has a step of at "

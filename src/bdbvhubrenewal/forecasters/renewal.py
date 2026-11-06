@@ -198,6 +198,19 @@ VARIANTS: Final[dict[str, Variant]] = {
             "pseudo-observation.",
             base="BVD",
         ),
+        Variant(
+            "pprandomwalknowcast",
+            "Random walk on log expected onsets of every province, with the "
+            "renewal model's reporting, delay and imputation model.",
+            overrides={
+                "latent": "walk",
+                "coupling": "none",
+                "depletion": False,
+                "active": "all",
+                "inactive": "none",
+                "report_inactive": True,
+            },
+        ),
     )
 }
 """Model variants, by name."""

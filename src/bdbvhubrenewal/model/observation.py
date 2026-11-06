@@ -27,6 +27,7 @@ from typing import cast
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import numpyro
 import numpyro.distributions as dist
 from jax import Array
@@ -526,6 +527,7 @@ class OnsetStreams(BaseObservationProcess):
         forecast: bool = False,
         vintage: Array | None = None,
         as_of: int | None = None,
+        groups: ArrayLike | None = None,
     ) -> ObservationSample:
         """Score or sample the two onset streams.
 
@@ -561,6 +563,10 @@ class OnsetStreams(BaseObservationProcess):
             "final" draws are then the counts as reported by it (the
             vintage counts plus the cases reported between the two
             cut-offs), for scoring against a later vintage as reported.
+        groups : ArrayLike, optional
+            Group of each place, `(P,)`, such as the province of each
+            zone. Places of a group share its missing-onset share. By
+            default each place is its own group.
 
         Returns
         -------
@@ -574,12 +580,15 @@ class OnsetStreams(BaseObservationProcess):
         delay = self.delay_rv(n_timepoints=n, first_day_dow=first_day_dow)
         if self.weekly_axis and (n % 7 or first_day_dow != self.start_dow):
             raise ValueError("Week blocks need an axis of whole weeks.")
+        group = np.arange(n_prov) if groups is None else np.asarray(groups)
         if self.missing_fraction_rv is None:
             pi = jnp.zeros_like(onsets)
         else:
             pi = self.missing_fraction_rv(
-                n_timepoints=n, n_groups=n_prov, first_day_dow=first_day_dow
-            )
+                n_timepoints=n,
+                n_groups=int(group.max()) + 1,
+                first_day_dow=first_day_dow,
+            )[:, group]
         lag = self.publication_lag
         if isinstance(lag, RandomVariable):
             lag = lag()

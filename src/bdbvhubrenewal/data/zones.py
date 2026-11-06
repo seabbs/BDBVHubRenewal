@@ -72,7 +72,8 @@ def weekly_zone_counts(daily_zones: pd.DataFrame, vintage: str) -> pd.DataFrame:
     -------
     pandas.DataFrame
         Columns `location`, `target_end_date` (the Saturday ending the
-        onset week) and `total`, for weeks with at least one onset.
+        onset week), `observed`, `imputed` and `total`, for weeks with at
+        least one onset.
     """
     rows = daily_zones.loc[daily_zones["vintage"].astype(str) == vintage]
     onset = pd.to_datetime(rows["onset_date"])
@@ -82,7 +83,9 @@ def weekly_zone_counts(daily_zones: pd.DataFrame, vintage: str) -> pd.DataFrame:
             target_end_date=end.dt.date.astype(str),
             total=rows["observed"] + rows["imputed"],
         )
-        .groupby(["location", "target_end_date"], as_index=False)["total"]
+        .groupby(["location", "target_end_date"], as_index=False)[
+            ["observed", "imputed", "total"]
+        ]
         .sum()
     )
     kept: pd.DataFrame = out.loc[out["total"] > 0]

@@ -19,6 +19,7 @@ import pandas as pd
 
 from bdbvhubrenewal.data.delays import hub_delay_pmf
 from bdbvhubrenewal.data.releases import last_report
+from bdbvhubrenewal.data.zones import province_of
 
 from .model import (
     MAIN,
@@ -321,7 +322,7 @@ def vintage_from_tables(
     vintage : str
         The `as_of` date.
     locations : tuple of str
-        Provinces.
+        Provinces, or zones, which take their province's delay rows.
     table : pandas.DataFrame
         Locations table (`bdbvhubrenewal.data.load_locations`).
     config : ModelConfig
@@ -377,6 +378,8 @@ def vintage_from_tables(
         )
         return out.fillna(0).to_numpy(dtype=float)
 
+    # Zones take their province's delay rows.
+    provinces = list(dict.fromkeys(province_of(p) for p in active))
     counts = np.zeros((n_weeks, config.dmax + 1))
     if delays is not None and len(delays):
         # Known onsets count every case, so negative delays go to 0 and
@@ -384,7 +387,7 @@ def vintage_from_tables(
         # rather than leaving the delay counts short of the known stream.
         keep = delays.loc[
             (
-                delays["location"].isin(active)
+                delays["location"].isin(provinces)
                 if active != (NATIONAL,)
                 else delays["location"].ne("")
             )
@@ -403,14 +406,23 @@ def vintage_from_tables(
 
     known, imputed = grid("observed", active), grid("imputed", active)
     totals = known + imputed
-    pops = table.set_index("location").loc[list(active), "population"]
+    # The walk is on counts, with no per-resident scale.
+    pops = (
+        pd.Series(1.0, index=list(active))
+        if config.latent == "walk"
+        else table.set_index("location").loc[list(active), "population"]
+    )
     names = list(active)
     if config.national:
         known = known.sum(axis=1, keepdims=True)
         imputed = imputed.sum(axis=1, keepdims=True)
         pops = pd.Series([pops.sum()])
         names = [active[0] if len(active) == 1 else NATIONAL]
-    kernel = None if len(names) == 1 else gravity_kernel(active, table)
+    kernel = (
+        gravity_kernel(active, table)
+        if config.coupling == "gravity" and len(names) > 1
+        else None
+    )
     import_kernel, inactive = None, None
     if idle and not config.national:
         import_kernel = gravity_kernel(active + idle, table)[
@@ -437,6 +449,9 @@ def vintage_from_tables(
         else bvd_inputs(bvd, names, start, masked),
         seed_days=None if config.national else _seed_days(totals),
         publication_lag_pmf=publication_lag,
+        groups=None
+        if config.national or len(provinces) == len(active)
+        else np.array([provinces.index(province_of(p)) for p in active]),
     )
 
 

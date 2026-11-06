@@ -124,7 +124,14 @@ def test_weekly_zone_counts_match_the_hub_time_series(
             want, on=["location", "target_end_date"], how="outer"
         ).fillna(0)
         assert (both["total_x"] == both["total_y"]).all()
-        assert set(got.columns) == {"location", "target_end_date", "total"}
+        assert set(got.columns) == {
+            "location",
+            "target_end_date",
+            "observed",
+            "imputed",
+            "total",
+        }
+        assert (got["observed"] + got["imputed"] == got["total"]).all()
 
 
 def test_zone_samples_sum_to_the_province_samples(
