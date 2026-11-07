@@ -6,7 +6,7 @@
 # submit.yml's `release` job publishes `round-<reference date>` from the
 # commit the round was submitted from. This adds the Pages build's
 # results to each such release whose round's hub release has hub tables
-# in the build (BUILD/results/hub/<hub release>, the two newest) and
+# in the build (BUILD/results/hub/<hub release>) and
 # every stored fit at it of this code (BUILD/results/fit-store.json):
 # those hub tables, the results tables, a zip of BUILD/data and the
 # built site SITE as site.zip. site.zip goes last, so a release with it

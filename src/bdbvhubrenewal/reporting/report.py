@@ -275,12 +275,12 @@ def make_report(
     _zone_nowcast_section(
         fig, gen, data_dir, target, tasks[0], forecasts_now, config, names
     )
-    # Every model's hub tables at the two newest hub releases, for the
-    # round releases, so a round released after the next hub release still
-    # gets its own.
+    # Every model's hub tables at every real origin, for the round
+    # releases, so a round released after later hub releases still gets
+    # its own.
     daily_zones = load_daily_zones(data_dir)
     zone_codes = hub_zones(Path(data_dir) / "hub-config" / "tasks.json")
-    for vintage in sorted(set(real["vintage"]))[-2:]:
+    for vintage in sorted(set(real["vintage"])):
         if vintage == latest:
             task, at = tasks[0], forecasts_now
         else:
