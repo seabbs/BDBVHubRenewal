@@ -16,13 +16,17 @@ estimate of `chain`.
 Weeks up to the start are returned as reported.
 Later weeks are walk draws, floored at the count reported.
 
-`RandomWalkNowcast` (`randomwalknowcast`) nowcasts every day with data and
-sums to hub weeks, with negative binomial new reports on the remaining
-count minus Poisson removals of the count reported (`obs`).
-Each sample then starts the walk from its own nowcast of the latest week
-whose seven days are all on or before the cut-off.
-If the week holding the cut-off is partial, its days after the cut-off
-add Poisson draws from that week's walk rate.
+`RandomWalkNowcast` (`randomwalknowcast`) nowcasts each hub week, with
+negative binomial new reports on the remaining count minus Poisson
+removals of the count reported (`obs`).
+Its walk is a local level on $\log(1 + y)$. Each sample starts from its
+nowcast of the latest full week at least `Settings.start_share` reported
+with at least `Settings.start_count` cases (`_start_weeks`). Each later
+week up to the one holding the cut-off is not nowcast: its reported count
+updates the level as an observation weighted by how complete the week is
+(`_filter`), and its value is a Poisson draw from a level path drawn back
+from the cut-off week (`_draw_path`), floored at the count reported.
+The walk forecasts on from the cut-off week's level.
 
 The spread of the walk is the standard deviation of the weekly changes of
 $\log(1 + y)$ in reported counts, over the weeks ending at the start of
@@ -30,12 +34,11 @@ $\log(1 + y)$ in reported counts, over the weeks ending at the start of
 The delay, the observation model and the walk spread each use their own
 estimate where a place has at least 10 cases a week, and otherwise the
 pooled estimate of the nearest parent that does (`pooling`).
-A place with no case in the latest `walk_weeks` weeks is 0 until its first
-introduction, a geometric number of weeks in with its pooled weekly
-probability. A silent place's walk has spread 0, so from its
-introduction its rate stays at 1 case a week.
-In both models this runs from the week after the `randomwalk` start week,
-so a silent place's recent weeks are not nowcast.
+A place with no case in the latest `walk_weeks` weeks is silent. It is
+exactly 0 until its first introduction, which comes each week with its
+pooled probability times the share of the week not yet reported
+(`_intro_from`), and then walks from a count drawn from Poisson(1) given
+at least 1.
 National is the sum of provinces by sample.
 Each model raises if the task has no snapshots or no pair of releases
 within the delay window.
@@ -169,7 +172,7 @@ def _filter(
     -------
     tuple of numpy.ndarray
         The filtered level `[L, S, W]` and its variance `[L, W]`, held
-        from `w0` back and after `cw`.
+        at the start from `w0` back.
     """
     n_loc, n_data = origin.reported.shape
     level = np.repeat(start[:, :, None], n_data, axis=2)
@@ -185,8 +188,39 @@ def _filter(
         step = prev + gain[:, None] * (seen[:, None] - prev)
         level[:, :, u] = np.where(after[:, None], step, level[:, :, u])
         var[:, u] = np.where(after, (1.0 - gain) * prior, var[:, u])
-    level[:, :, cw + 1 :] = level[:, :, cw : cw + 1]
     return level, var
+
+
+def _draw_path(
+    key: jax.Array,
+    level: np.ndarray,
+    var: np.ndarray,
+    sigma: np.ndarray,
+    w0: np.ndarray,
+    cw: int,
+) -> np.ndarray:
+    """Draw one level path per sample from week `cw` back to week `w0`.
+
+    Each sample's level at `cw` is drawn from the filter, and each earlier
+    week given the week after it (backward sampling), so the weeks after
+    `w0` and the walk on from `cw` form one trajectory.
+    """
+    drawn = level.copy()
+    z = np.asarray(jax.random.normal(key, level.shape), np.float64)
+    drawn[:, :, cw] = (
+        level[:, :, cw] + np.sqrt(var[:, cw])[:, None] * z[:, :, cw]
+    )
+    for u in range(cw - 1, -1, -1):
+        inside = (u > w0)[:, None]
+        pull = var[:, u] / (var[:, u] + sigma**2)
+        mean = level[:, :, u] + pull[:, None] * (
+            drawn[:, :, u + 1] - level[:, :, u]
+        )
+        sd = np.sqrt(np.maximum(var[:, u] * (1.0 - pull), 0.0))[:, None]
+        drawn[:, :, u] = np.where(
+            inside, mean + sd * z[:, :, u], level[:, :, u]
+        )
+    return drawn
 
 
 def _intro_from(origin: Origin, start: np.ndarray, h: int) -> np.ndarray:
@@ -468,7 +502,7 @@ class RandomWalkNowcast(RandomWalk):
         k = np.clip(back, 0, k_n - 1)
         # Weeks older than the fitted ones are final, with no removals.
         b = np.where(back < k_n, origin.removal[:, k], 0.0)
-        key_x, key_walk, key_part = jax.random.split(_key(task), 3)
+        key_x, key_walk, key_filter = jax.random.split(_key(task), 3)
         shape = (n, *point.shape)
         reported = jnp.broadcast_to(
             jnp.asarray(origin.reported, jnp.float32), shape
@@ -497,9 +531,8 @@ class RandomWalkNowcast(RandomWalk):
             w0,
             cw,
         )
-        key_level, key_count = jax.random.split(key_part)
-        z = np.asarray(jax.random.normal(key_level, level.shape), np.float64)
-        drawn = level + np.sqrt(var)[:, None, :] * z
+        key_path, key_count = jax.random.split(key_filter)
+        drawn = _draw_path(key_path, level, var, origin.sigma, w0, cw)
         rate = np.expm1(np.maximum(drawn, 0.0))
         filled = np.asarray(
             jax.random.poisson(key_count, jnp.asarray(rate, jnp.float32)),
@@ -507,18 +540,20 @@ class RandomWalkNowcast(RandomWalk):
         )  # [L, S, W]
         y = _walks(
             key_walk,
-            np.expm1(np.maximum(drawn[:, :, cw], 0.0)),
+            rate[:, :, cw],
             origin.sigma,
             origin.silent,
-            _intro_from(origin, np.where(origin.silent, w0, cw), n_all),
+            _intro_from(origin, w0, n_all),
         )
         values = np.zeros((n, n_loc, n_all))
         for loc in range(n_loc):
             s = int(w0[loc])
-            values[:, loc, : s + 1] = nowcast[:, loc, : s + 1]
             if origin.silent[loc]:
+                # A silent place is its reported 0s, then its introductions.
+                values[:, loc, : s + 1] = origin.reported[loc, : s + 1]
                 values[:, loc, s + 1 :] = y[loc, :, : n_all - s - 1]
                 continue
+            values[:, loc, : s + 1] = nowcast[:, loc, : s + 1]
             for u in range(s + 1, cw + 1):
                 values[:, loc, u] = np.maximum(
                     filled[loc, :, u], origin.reported[loc, u]

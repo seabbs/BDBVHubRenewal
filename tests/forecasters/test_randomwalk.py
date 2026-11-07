@@ -139,20 +139,34 @@ def test_nowcast_starts_from_the_latest_full_week_with_enough_reported(
     assert start["CD-IT"] == "2026-10-10"
 
 
-def test_a_partial_week_adds_the_days_after_the_cutoff(
+def test_weeks_after_the_start_follow_the_filtered_level(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
     task = _task(target, delays, daily, "2026-10-17")
-    nowcast = RandomWalkNowcast().forecast(task)
-    plain = RandomWalk().forecast(task)
+    samples = RandomWalkNowcast().forecast(task)
     wk = "2026-10-17"
-    mine = nowcast.loc[
-        (nowcast["location"] == "CD-IT") & (nowcast["target_end_date"] == wk)
+    mine = samples.loc[
+        (samples["location"] == "CD-IT") & (samples["target_end_date"] == wk)
     ]["value"]
-    # The week has 6 of 7 days, so no draw is below the nowcast of 6 days.
-    assert mine.mean() > 100
+    reported = task.daily_history
+    # The week holding the cut-off is drawn from the filtered level, floored
+    # at the count reported, so every draw is at least that count and the
+    # draws vary.
+    seen = (
+        reported.loc[
+            (reported["location"] == "CD-IT")
+            & (reported["vintage"] == reported["vintage"].max())
+            & (
+                pd.to_datetime(reported["onset_date"])
+                > pd.Timestamp("2026-10-10")
+            )
+            & (pd.to_datetime(reported["onset_date"]) <= pd.Timestamp(wk))
+        ][["observed", "imputed"]]
+        .sum()
+        .sum()
+    )
+    assert mine.min() >= seen
     assert mine.nunique() > 10
-    assert plain["target_end_date"].min() <= wk
 
 
 def test_diagnostics_name_the_sources(

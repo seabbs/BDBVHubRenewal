@@ -26,7 +26,7 @@ flowchart TD
     OBS["Observation model<br/>by weeks back k<br/>size φ<sub>p,k</sub>, removal b<sub>p,k</sub>"]
     X["Nowcast draw X<sub>p,i</sub>(w)<br/>max(0, Y<sub>p,o</sub> + A − B)<br/>A ~ NB(μ<sub>p</sub> − Y<sub>p,o</sub>, φ<sub>p,k</sub>)<br/>B ~ Poisson(b<sub>p,k</sub> Y<sub>p,o</sub>)"]
     SIG["Walk spread σ<sub>p</sub><br/>changes in log(1 + Y<sub>p,o</sub>)"]
-    W["Walk on log(1 + λ<sub>i</sub>)<br/>from X<sub>p,i</sub>(w<sub>0</sub>) in sample i<br/>silent places 0<br/>until an introduction<br/>Poisson counts"]
+    W["Local level on log(1 + λ<sub>i</sub>)<br/>from X<sub>p,i</sub>(w<sub>0</sub>), updated by<br/>the reported counts after w<sub>0</sub><br/>silent places 0<br/>until an introduction<br/>Poisson counts"]
     NAT["National = sum of provinces<br/>sample by sample"]
 
     SNAP --> PAIR
@@ -207,6 +207,7 @@ $$
 $$
 
 Steps are summed within a sample, so each sample is one trajectory.
+In `randomwalknowcast` the level of the weeks after $w_0$ is drawn back from the cut-off week given the filter, so these weeks and the forecast join one trajectory.
 
 A place with no case reported in the 9 weeks up to the cut-off week is silent.
 A silent place is exactly 0 until its first introduction, with no walk noise around 0 and no nowcast of its zero weeks.
