@@ -108,7 +108,6 @@ _FORECAST_DTYPES = {
     "value": "float64",
     "as_of": "float64",
     "horizon": "int64",
-    "lag_prior": "bool",
 }
 
 

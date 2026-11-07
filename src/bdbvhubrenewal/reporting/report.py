@@ -66,7 +66,7 @@ from bdbvhubrenewal.evaluation.nowcast import (
 )
 from bdbvhubrenewal.evaluation.scoring import summarise_scores
 from bdbvhubrenewal.evaluation.store import samplers, stored_models
-from bdbvhubrenewal.evaluation.zones import SUMMED, zone_relative_skill
+from bdbvhubrenewal.evaluation.zones import SUMMED
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastTask,
@@ -109,9 +109,6 @@ from bdbvhubrenewal.reporting.plots import (
     plot_simulation,
     plot_target,
     save_light_dark,
-)
-from bdbvhubrenewal.reporting.reporting_comparison import (
-    make_reporting_comparison,
 )
 from bdbvhubrenewal.reporting.scorechart import (
     ENERGY_METRICS,
@@ -186,9 +183,6 @@ def make_report(
     latest = real["vintage"].max()
     latest_delays = delays.loc[delays["vintage"] == delays["vintage"].max()]
     write_store_note(res, gen)
-    make_reporting_comparison(
-        fig, gen, res / "reporting-comparison", target, _location_names(real)
-    )
 
     # Data page.
     save_light_dark(
