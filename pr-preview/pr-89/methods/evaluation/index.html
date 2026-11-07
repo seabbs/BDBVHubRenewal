@@ -2296,7 +2296,7 @@ On the Nowcast page the fitted models' zone samples at the latest release are th
 <h2 id="checks">Checks<a class="headerlink" href="#checks" title="Permanent link">&para;</a></h2>
 <p>The scores on the reported target are also averaged by the type of place and by a plausibility flag of each forecast, both decided from the counts reported at the origin.
 Week <span class="arithmatex">\(w\)</span> is the latest week ending on or before the origin, and <span class="arithmatex">\(c(t)\)</span> the count reported then for the week ending <span class="arithmatex">\(t\)</span>.
-A place is silent if no case is reported in the 9 weeks to <span class="arithmatex">\(w\)</span>, the random walk's walk window, small if no week has more than 5 cases, and larger otherwise.
+A place is silent if no case is reported in the <code>RECENT_WEEKS</code> weeks to <span class="arithmatex">\(w\)</span>, the random walk's walk window (<code>walk_weeks</code>), small if no week has more than 5 cases, and larger otherwise.
 The flag is set from the forecast of the reference week <span class="arithmatex">\(w + 1\)</span>, with median <span class="arithmatex">\(q_{50}\)</span> and 95% quantile <span class="arithmatex">\(q_{95}\)</span>.
 The level is <span class="arithmatex">\(\ell = \max\{(c(w - 3) + c(w - 2)) / 2,\ c(w - 1)\}\)</span> and the recent maximum is <span class="arithmatex">\(r = \max(1, \max_{w - 4 \le t \le w} c(t))\)</span>.
 A forecast collapses if <span class="arithmatex">\(\ell \ge 3\)</span> and <span class="arithmatex">\(q_{50} \le \ell / 3\)</span>.
