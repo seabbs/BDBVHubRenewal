@@ -38,11 +38,7 @@ from bdbvhubrenewal.evaluation.backtest import (
     real_vintages,
     score_tasks,
 )
-from bdbvhubrenewal.evaluation.nowcast import (
-    delay_curves,
-    draw_reported,
-    week_shares,
-)
+from bdbvhubrenewal.evaluation.nowcast import reported_samples
 from bdbvhubrenewal.evaluation.scoring import (
     energy_scores,
     relative_skill,
@@ -183,37 +179,35 @@ def zone_backtest(
         ]
         # Each model draws from its own stream, as in release_backtest.
         rngs = {name: task.rng(name) for name in forecasts}
-        cut = _cutoff(daily, vintage)
-        for later in (v for v in vintages if v > vintage):
-            drawn = []
-            for name, samples in forecasts.items():
-                summary = summaries[name]
-                if summary is None:
-                    mapped = samples
-                else:
-                    curves = delay_curves(
-                        summary, sorted(set(samples["location"]))
-                    )
-                    weeks = sorted(set(samples["target_end_date"]))
-                    now = week_shares(curves, cut, weeks)
-                    then = week_shares(curves, _cutoff(daily, later), weeks)
-                    mapped = draw_reported(
-                        samples, reported, now, then, rngs[name]
-                    )
-                drawn.append(
-                    mapped.assign(
-                        model=name,
-                        origin=vintage,
-                        target="reported",
-                        truth_vintage=later,
-                    )
+        later = [v for v in vintages if v > vintage]
+        by_model = {
+            key: reported_samples(
+                samples,
+                summaries[key],
+                key.removesuffix(SUMMED),
+                vintage,
+                later,
+                daily,
+                reported,
+                rngs[key],
+            )
+            for key, samples in forecasts.items()
+        }
+        for o2 in later:
+            drawn = [
+                draws[o2].assign(
+                    model=key,
+                    origin=vintage,
+                    target="reported",
+                    truth_vintage=o2,
                 )
+                for key, draws in by_model.items()
+                if o2 in draws
+            ]
             if not drawn:
                 continue
             both = pd.concat(drawn, ignore_index=True)
-            truth = _zone_truth(
-                weekly_zone_counts(daily_zones, later), both, later
-            )
+            truth = _zone_truth(weekly_zone_counts(daily_zones, o2), both, o2)
             both["horizon"] = _weeks(both, task)
             frames.append(score_forecasts(both, truth, keys=_KEYS))
             energy.append(energy_scores(both, truth, unit=_KEYS[1:4]))

@@ -82,6 +82,7 @@ __all__ = [
     "relative_energy",
     "relative_wis",
     "release_backtest",
+    "reported_samples",
     "summarise",
     "week_shares",
     "weeks_back_from_cutoff",
@@ -141,9 +142,9 @@ class ReleaseBacktest:
 def delay_curves(summary: pd.DataFrame, places: Sequence[str]) -> pd.DataFrame:
     """Return a model's share of a day's final count reported by age.
 
-    Each place takes the model's delay at that place, or for a zone with
-    none its province's. A model fitted once for every place (location
-    `"pooled"`) has that delay at every place.
+    A delay fitted once for every place (location `"pooled"`) is first
+    given to each place. Each place then takes the model's delay at that
+    place, and a zone with none its province's.
 
     Parameters
     ----------
@@ -162,13 +163,16 @@ def delay_curves(summary: pd.DataFrame, places: Sequence[str]) -> pd.DataFrame:
     """
     rows = summary.loc[summary["quantity"] == "reported_share"]
     rows = rows.rename(columns={"x": "age", "q50": "share"})
+    pooled = rows.loc[rows["location"] == "pooled"]
+    if not pooled.empty:
+        rows = pd.concat([pooled.assign(location=p) for p in places])
     by_place = {str(loc): grp for loc, grp in rows.groupby("location")}
-    frames = []
-    for place in places:
-        key = place if place in by_place else province_of(place)
-        delay = by_place.get("pooled", by_place.get(key))
-        if delay is not None:
-            frames.append(delay.assign(location=place))
+    frames = [
+        by_place[key].assign(location=place)
+        for place in places
+        if (key := place if place in by_place else province_of(place))
+        in by_place
+    ]
     out = pd.concat(frames, ignore_index=True) if frames else rows.iloc[:0]
     return out.astype({"age": int})[["location", "age", "share"]]
 
@@ -358,39 +362,66 @@ def weeks_back_from_cutoff(
     return back.astype(int).set_axis(weeks.index)
 
 
-def _reported_target(
+def reported_samples(
     samples: pd.DataFrame,
     summary: pd.DataFrame | None,
-    name: str,
+    model: str,
     origin: str,
     later: Sequence[str],
     daily: pd.DataFrame,
     reported: pd.DataFrame,
     rng: np.random.Generator,
-) -> list[pd.DataFrame]:
+) -> dict[str, pd.DataFrame]:
     """Return a model's samples of what each later release shows.
 
-    `randomwalk` is returned as it is. Another model's places are mapped
-    by its delay (`delay_curves`), and the country, where the model has
-    no delay there, is the sum of its mapped provinces.
+    `randomwalk` forecasts the counts as reported, so its samples are
+    returned as they are. Another model's places are mapped by its delay
+    (`delay_curves`, `draw_reported`), a place it has no delay for is
+    returned as it is, and the country is the sum of the provinces.
+    A model with no delay summary, such as a hub team, has none.
+
+    Parameters
+    ----------
+    samples : pandas.DataFrame
+        The model's final-count samples, with `location`,
+        `target_end_date`, `sample` and `value`.
+    summary : pandas.DataFrame or None
+        The model's delay summary at the origin.
+    model : str
+        The model's name.
+    origin : str
+        The origin release.
+    later : sequence of str
+        The later releases.
+    daily : pandas.DataFrame
+        Daily onsets by release, for the cut-offs.
+    reported : pandas.DataFrame
+        Columns `location`, `target_end_date` and `reported`, the counts
+        at the origin.
+    rng : numpy.random.Generator
+        Random numbers.
+
+    Returns
+    -------
+    dict of str to pandas.DataFrame
+        Samples by later release.
     """
-    if name == RANDOM_WALK:
-        return [
-            _label(samples, name, origin, "reported", o2, daily) for o2 in later
-        ]
+    if model == RANDOM_WALK:
+        return dict.fromkeys(later, samples)
     if summary is None:
-        return []
-    curves = delay_curves(summary, sorted(set(samples["location"])))
+        return {}
+    places = samples.loc[samples["location"] != NATIONAL]
+    curves = delay_curves(summary, sorted(set(places["location"])))
+    mapped = places["location"].isin(set(curves["location"]))
     weeks = sorted(set(samples["target_end_date"]))
-    summed = NATIONAL in set(samples["location"]) - set(curves["location"])
     now = week_shares(curves, _cutoff(daily, origin), weeks)
-    out = []
+    out = {}
     for o2 in later:
         then = week_shares(curves, _cutoff(daily, o2), weeks)
-        mapped = draw_reported(samples, reported, now, then, rng)
-        if summed:
-            mapped = add_national(mapped)
-        out.append(_label(mapped, name, origin, "reported", o2, daily))
+        drawn = draw_reported(places.loc[mapped], reported, now, then, rng)
+        both = pd.concat([drawn, places.loc[~mapped]], ignore_index=True)
+        whole = NATIONAL in set(samples["location"])
+        out[o2] = add_national(both) if whole else both
     return out
 
 
@@ -545,10 +576,13 @@ def release_backtest(
         # on which other models run.
         rngs = {name: task.rng(name) for name in forecasts}
         for name, samples in forecasts.items():
-            frames += _reported_target(
-                samples, summaries[name], name, task.vintage, later, daily,
-                reported, rngs[name],
-            )  # fmt: skip
+            frames += [
+                _label(drawn, name, task.vintage, "reported", o2, daily)
+                for o2, drawn in reported_samples(
+                    samples, summaries[name], name, task.vintage, later,
+                    daily, reported, rngs[name],
+                ).items()
+            ]  # fmt: skip
             frames.append(
                 _label(samples, name, task.vintage, "complete", latest, daily)
             )

@@ -9,8 +9,8 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.evaluation.nowcast import (
-    _reported_target,
     delay_curves,
+    reported_samples,
     week_shares,
 )
 
@@ -56,55 +56,50 @@ def test_a_place_takes_its_own_delay_and_a_zone_its_province_s() -> None:
     assert set(pooled["location"]) == {"CD", "CD-IT"}
 
 
-def test_the_country_is_the_sum_of_mapped_provinces_without_its_own(
-    daily: pd.DataFrame,
-) -> None:
-    weeks = ["2026-10-17"]
-    n = 50
-    rows = {"CD-IT": 100.0, "CD-NK": 50.0, "CD": 150.0}
-    samples = pd.DataFrame(
+def _samples(rows: dict[str, float], n: int = 50) -> pd.DataFrame:
+    return pd.DataFrame(
         {
             "location": np.repeat(list(rows), n),
-            "target_end_date": weeks[0],
+            "target_end_date": "2026-10-17",
             "sample": np.tile(np.arange(1, n + 1), len(rows)),
             "value": np.repeat(list(rows.values()), n),
         }
     )
-    summary = pd.concat(
-        [_summary("CD-IT", [0.5, 0.9]), _summary("CD-NK", [0.5, 0.9])]
-    )
-    reported = pd.DataFrame(columns=["location", "target_end_date", "reported"])
-    (out,) = _reported_target(
+
+
+def _reported(samples, summary, model, daily):  # type: ignore[no-untyped-def]
+    (out,) = reported_samples(
         samples,
         summary,
-        "m",
+        model,
         "2026-10-17",
         ["2026-10-24"],
         daily,
-        reported,
+        pd.DataFrame(columns=["location", "target_end_date", "reported"]),
         np.random.default_rng(1),
-    )
-    wide = out.pivot_table(index="sample", columns="location", values="value")
+    ).values()
+    return out.pivot_table(index="sample", columns="location", values="value")
+
+
+def test_a_place_with_no_delay_is_kept_and_the_country_sums_them(
+    daily: pd.DataFrame,
+) -> None:
+    samples = _samples({"CD-IT": 100.0, "CD-NK": 50.0, "CD": 999.0})
+    # The summary has no delay for CD-NK or the country.
+    wide = _reported(samples, _summary("CD-IT", [0.5, 0.9]), "m", daily)
+    assert (wide["CD-IT"] < 100).any()
+    assert (wide["CD-NK"] == 50).all()
     np.testing.assert_array_equal(wide["CD"], wide["CD-IT"] + wide["CD-NK"])
 
 
-def test_randomwalk_is_returned_as_it_is(daily: pd.DataFrame) -> None:
-    samples = pd.DataFrame(
-        {
-            "location": "CD-IT",
-            "target_end_date": "2026-10-17",
-            "sample": [1, 2],
-            "value": [3.0, 7.0],
-        }
-    )
-    (out,) = _reported_target(
-        samples,
-        None,
-        "randomwalk",
-        "2026-10-17",
-        ["2026-10-24"],
-        daily,
-        samples.iloc[:0],
-        np.random.default_rng(1),
-    )
-    assert out["value"].tolist() == [3.0, 7.0]
+def test_randomwalk_is_returned_as_it_is_and_a_hub_team_not_at_all(
+    daily: pd.DataFrame,
+) -> None:
+    samples = _samples({"CD-IT": 3.0})
+    wide = _reported(samples, None, "randomwalk", daily)
+    assert (wide["CD-IT"] == 3).all()
+    none = reported_samples(
+        samples, None, "team", "2026-10-17", ["2026-10-24"], daily,
+        samples.iloc[:0], np.random.default_rng(1),
+    )  # fmt: skip
+    assert none == {}

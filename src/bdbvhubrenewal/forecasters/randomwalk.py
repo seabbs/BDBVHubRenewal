@@ -167,17 +167,88 @@ class RandomWalk:
     name : str
         Model name.
     settings : Settings
-        Delay window, thresholds and the walk's window.
+        Settings; the walk's spread uses the latest `walk_weeks` weeks,
+        and `randomwalknowcast` its delay window and thresholds.
     fit_diagnostics : list of dict
-        One row per place from the last forecast: the start week and, for
-        `randomwalknowcast`, the errors behind the spread and the source
-        of the delay, spread and walk.
+        One row per place from the last forecast: the start week and the
+        spread, and for `randomwalknowcast` the errors behind the spread
+        and the source of the delay, spread and walk.
     """
 
     name: str = "randomwalk"
     settings: Settings = field(default_factory=Settings)
     fit_diagnostics: list[dict[str, object]] = field(default_factory=list)
     needs_snapshots: ClassVar[bool] = False
+
+    def forecast(self, task: ForecastTask) -> pd.DataFrame:
+        """Return random walk trajectories for a task.
+
+        Parameters
+        ----------
+        task : ForecastTask
+            The data and weeks to forecast.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Columns `location`, `target_end_date`, `sample`, `value`.
+
+        Examples
+        --------
+        >>> from bdbvhubrenewal.forecasters import get_model
+        >>> samples = get_model("randomwalk").forecast(task)
+        >>> samples.groupby(["location", "target_end_date"])["value"].median()
+        """
+        weekly = task.target.pivot_table(
+            index="location", columns="target_end_date", values="total"
+        )
+        weekly = weekly.reindex(list(task.locations)).fillna(0.0)
+        reported = weekly.to_numpy(dtype=float)
+        weeks = _timeline(list(weekly.columns), task)
+        n_loc, n_data = reported.shape
+        n_all, n = len(weeks), task.n_samples
+        start = np.full(n_loc, n_data - 1)
+        sigma = [
+            float(np.std(d, ddof=1)) if d.size >= 2 else 0.0
+            for d in walk_changes(reported, start, self.settings)
+        ]
+        keys = jax.random.split(_key(task), n_loc)
+        _, y = jax.vmap(lambda k, x, s: random_walk(k, x, s, n_all - n_data))(
+            keys,
+            jnp.asarray(np.repeat(reported[:, -1:], n, axis=1), jnp.float32),
+            jnp.asarray(sigma, jnp.float32),
+        )
+        values = np.zeros((n, n_loc, n_all))
+        for u in range(n_all):
+            if u < n_data:
+                values[:, :, u] = reported[:, u]
+            else:
+                values[:, :, u] = np.asarray(y)[:, :, u - n_data].T
+        self.fit_diagnostics = [
+            {"location": loc, "start_week": weeks[n_data - 1], "sigma": sd}
+            for loc, sd in zip(task.locations, sigma, strict=True)
+        ]
+        return frame(task, weeks, values, list(range(n_loc)))
+
+
+@dataclass
+class RandomWalkNowcast(RandomWalk):
+    """The random walk run forward from a daily nowcast of the recent weeks.
+
+    Attributes
+    ----------
+    name : str
+        Model name.
+    delay_summary : pandas.DataFrame or None
+        The delay of the last forecast (`chain.delay_summary`), which maps
+        its final counts to what later releases show.
+    """
+
+    name: str = "randomwalknowcast"
+    delay_summary: pd.DataFrame | None = field(
+        init=False, default=None, repr=False
+    )
+    needs_snapshots: ClassVar[bool] = True
 
     def origin_at(self, task: ForecastTask, errors: bool) -> Origin:
         """Fit the delays and the walk at the task's vintage.
@@ -251,76 +322,6 @@ class RandomWalk:
                 }
             )
         self.fit_diagnostics = rows
-
-    def forecast(self, task: ForecastTask) -> pd.DataFrame:
-        """Return random walk trajectories for a task.
-
-        Parameters
-        ----------
-        task : ForecastTask
-            The data and weeks to forecast.
-
-        Returns
-        -------
-        pandas.DataFrame
-            Columns `location`, `target_end_date`, `sample`, `value`.
-
-        Examples
-        --------
-        >>> from bdbvhubrenewal.forecasters import get_model
-        >>> samples = get_model("randomwalk").forecast(task)
-        >>> samples.groupby(["location", "target_end_date"])["value"].median()
-        """
-        weekly = task.target.pivot_table(
-            index="location", columns="target_end_date", values="total"
-        )
-        weekly = weekly.reindex(list(task.locations)).fillna(0.0)
-        reported = weekly.to_numpy(dtype=float)
-        weeks = _timeline(list(weekly.columns), task)
-        n_loc, n_data = reported.shape
-        n_all, n = len(weeks), task.n_samples
-        start = np.full(n_loc, n_data - 1)
-        sigma = [
-            float(np.std(d, ddof=1)) if d.size >= 2 else 0.0
-            for d in walk_changes(reported, start, self.settings)
-        ]
-        keys = jax.random.split(_key(task), n_loc)
-        _, y = jax.vmap(lambda k, x, s: random_walk(k, x, s, n_all - n_data))(
-            keys,
-            jnp.asarray(np.repeat(reported[:, -1:], n, axis=1), jnp.float32),
-            jnp.asarray(sigma, jnp.float32),
-        )
-        values = np.zeros((n, n_loc, n_all))
-        for u in range(n_all):
-            if u < n_data:
-                values[:, :, u] = reported[:, u]
-            else:
-                values[:, :, u] = np.asarray(y)[:, :, u - n_data].T
-        self.fit_diagnostics = [
-            {"location": loc, "start_week": weeks[n_data - 1], "sigma": sd}
-            for loc, sd in zip(task.locations, sigma, strict=True)
-        ]
-        return frame(task, weeks, values, list(range(n_loc)))
-
-
-@dataclass
-class RandomWalkNowcast(RandomWalk):
-    """The random walk run forward from a daily nowcast of the recent weeks.
-
-    Attributes
-    ----------
-    name : str
-        Model name.
-    delay_summary : pandas.DataFrame or None
-        The delay of the last forecast (`chain.delay_summary`), which maps
-        its final counts to what later releases show.
-    """
-
-    name: str = "randomwalknowcast"
-    delay_summary: pd.DataFrame | None = field(
-        init=False, default=None, repr=False
-    )
-    needs_snapshots: ClassVar[bool] = True
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return random walk trajectories from a nowcast for a task.

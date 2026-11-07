@@ -219,6 +219,7 @@ Both models use reported counts for $\sigma_p$.
 Its start week $w_0$ is the week holding the cut-off, for every place, and $x_i = Y_{p,o}(w_0)$ for every sample.
 Weeks with data are the reported counts.
 It needs no release snapshots, so it forecasts from every release.
+A place with no case in its latest weeks has spread 0, so `randomwalk` keeps it at 0.
 
 ## Random walk on a nowcast
 
