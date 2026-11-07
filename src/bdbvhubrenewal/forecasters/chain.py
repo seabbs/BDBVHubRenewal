@@ -54,6 +54,7 @@ from dataclasses import dataclass, field
 
 import jax.numpy as jnp
 import numpy as np
+import pandas as pd
 
 from bdbvhubrenewal.baselinenowcast import (
     fill_row,
@@ -82,6 +83,7 @@ __all__ = [
     "Origin",
     "Settings",
     "build_origin",
+    "delay_summary",
     "delay_sums",
     "final_growth",
     "introductions",
@@ -102,10 +104,6 @@ class MissingSnapshots(ModelUnavailableError):  # noqa: N818
 
 class NoDelayPair(ModelUnavailableError):  # noqa: N818
     """No pair of releases has a step within the delay window."""
-
-
-class NoCompleteWeek(ModelUnavailableError):  # noqa: N818
-    """No week of a place reaches the completeness that starts the walk."""
 
 
 @dataclass(frozen=True)
@@ -375,6 +373,44 @@ def final_growth(
     """
     age = snap.cut[o] - np.arange(snap.week.size) + settings.clock_shift
     return growth(fit.g, age, settings.max_delay)
+
+
+def delay_summary(origin: Origin, model: str, vintage: str) -> pd.DataFrame:
+    """Return the share of a day's final count reported by each age.
+
+    The share at age $a$ is $1 / G(a)$, from the delay fitted at the
+    origin, for every place, in the form of the renewal models' delay
+    summaries (`bdbvhubrenewal.forecasters.renewal.fit_delays`).
+
+    Parameters
+    ----------
+    origin : Origin
+        The fit.
+    model : str
+        Model name.
+    vintage : str
+        The origin.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `model`, `vintage`, `location`, `kind` (`"cumulative"`),
+        `x` (age in days), `quantity` (`"reported_share"`) and `q50`.
+    """
+    ages = np.arange(origin.settings.max_delay + 1)
+    share = 1.0 / growth(origin.fit.g, ages, origin.settings.max_delay)
+    places = origin.snap.locations
+    return pd.DataFrame(
+        {
+            "model": model,
+            "vintage": vintage,
+            "location": np.repeat(places, ages.size),
+            "kind": "cumulative",
+            "x": np.tile(ages, len(places)),
+            "quantity": "reported_share",
+            "q50": share.ravel(),
+        }
+    )
 
 
 @dataclass
