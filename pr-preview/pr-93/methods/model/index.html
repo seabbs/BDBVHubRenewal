@@ -2425,7 +2425,7 @@ Nothing is pooled across provinces.</p>
     end
     ONS["Expected cases&lt;br/&gt;by onset day&lt;br/&gt;λ&lt;sub&gt;p&lt;/sub&gt;(s) = α(s) N&lt;sub&gt;p&lt;/sub&gt; (x&lt;sub&gt;p&lt;/sub&gt; ∗ η)(s)"]
     INC["Incubation period η(u)&lt;br/&gt;log-normal, uncertain mean and SD,&lt;br/&gt;0 to 28 days"]
-    DEL["Onset-to-report delay&lt;br/&gt;f&lt;sub&gt;s&lt;/sub&gt;(d)&lt;br/&gt;hazard shifted by γ(s),&lt;br/&gt;a weekly walk on onset day&lt;br/&gt;&lt;i&gt;renewal: pooled by province&lt;/i&gt;"]
+    DEL["Onset-to-report delay&lt;br/&gt;f&lt;sub&gt;p,s&lt;/sub&gt;(d)&lt;br/&gt;hazard shifted by γ(s),&lt;br/&gt;a weekly walk on onset day&lt;br/&gt;&lt;i&gt;renewal: pooled by province&lt;/i&gt;"]
     MISS["Share reported&lt;br/&gt;without onset π&lt;sub&gt;p&lt;/sub&gt;(t)&lt;br/&gt;weekly walk"]
     subgraph OB["Data streams at vintage T"]
         KN["Known onsets&lt;br/&gt;onsets × delay to report&lt;br/&gt;× share with an onset&lt;br/&gt;× published by T"]
@@ -2536,7 +2536,7 @@ We refit both, so <span class="arithmatex">\(F_T\)</span> is the fit the hub use
 <h3 id="likelihood">Likelihood<a class="headerlink" href="#likelihood" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Weekly <span class="arithmatex">\(\mathrm{known}_{p,T}\)</span> and <span class="arithmatex">\(\mathrm{imputed}_{p,T}\)</span> are negative binomial, each stream with <span class="arithmatex">\(1/\sqrt{\phi} \sim \text{HalfNormal}(0.25)\)</span> and <span class="arithmatex">\(\phi\)</span> capped at 1000.</li>
-<li>Known-onset delays, by onset week and delay on 0 to 60 days, are Dirichlet-multinomial given each week's total.
+<li>Known-onset delays, by province, onset week and delay on 0 to 60 days, are Dirichlet-multinomial given each province and week's total.
   Their probabilities come from <span class="arithmatex">\(\lambda\)</span>, <span class="arithmatex">\(f\)</span>, <span class="arithmatex">\(\pi\)</span> and <span class="arithmatex">\(c\)</span>, with <span class="arithmatex">\(1/\sqrt{\psi} \sim \text{HalfNormal}(0.1)\)</span> and <span class="arithmatex">\(\psi\)</span> capped at <span class="arithmatex">\(10^4\)</span>.
   Delays below 0 count as 0 and delays above 60 as 60.</li>
 <li>Each delay-file row (location, onset week and delay) of release <span class="arithmatex">\(k + 1\)</span> was already in release <span class="arithmatex">\(k\)</span> with probability
@@ -2562,7 +2562,7 @@ The national trajectory is the sum of the provinces plus an unassigned component
 The provinces share the trend <span class="arithmatex">\(\log R(t)\)</span>, the deviation SD <span class="arithmatex">\(\sigma_\delta\)</span> and half-life <span class="arithmatex">\(h\)</span>, the start spread <span class="arithmatex">\(\sigma_v\)</span>, ascertainment <span class="arithmatex">\(\alpha\)</span>, the publication lag, the trend <span class="arithmatex">\(b\)</span> of the missing-onset share, the share at risk <span class="arithmatex">\(\nu\)</span> and the importation share <span class="arithmatex">\(\varepsilon\)</span>.
 Each province has its own deviations <span class="arithmatex">\(\delta_p\)</span> and <span class="arithmatex">\(\omega_p\)</span> and its own seed.
 Provinces are linked by importation through <span class="arithmatex">\(W\)</span>, and provinces with no cases by <span class="arithmatex">\(\mu_q\)</span>.
-Each province has its own delay, pooled towards the national delay.
+Each province has its own delay, pooled towards the shared delay.
 Leaving a province out removes its known and imputed terms and its delays but keeps it in the latent process.</p>
 <pre class="mermaid"><code>flowchart TD
     LR["Pooled log R(t)&lt;br/&gt;weekly random walk"]
@@ -2610,12 +2610,12 @@ Later provinces start at <span class="arithmatex">\(10^{-6}\)</span> of that lev
 These 7 days start 5 days before the province's first case week.
 That lead puts the most onsets of a week of seeded infections in the first case week (67%, with 9% before it) at the prior mean incubation period.</p>
 <h3 id="province-delays">Province delays<a class="headerlink" href="#province-delays" title="Permanent link">&para;</a></h3>
-<p>Each province's delay hazard adds a sum-to-zero offset <span class="arithmatex">\(u_p\)</span> and a sum-to-zero weekly walk <span class="arithmatex">\(\zeta_p(s)\)</span> to the national shift <span class="arithmatex">\(\gamma(s)\)</span>, on the basis <span class="arithmatex">\(Q\)</span>:</p>
+<p>Each province's delay hazard adds a sum-to-zero offset <span class="arithmatex">\(a_p\)</span> and a sum-to-zero weekly walk <span class="arithmatex">\(\xi_p(s)\)</span> to the shared shift <span class="arithmatex">\(\gamma(s)\)</span>, on the basis <span class="arithmatex">\(Q\)</span>:</p>
 <div class="arithmatex">\[
-\operatorname{logit} h_{p,s}(d) = \beta(d) + \gamma(s) + u_p + \zeta_p(s).
+\operatorname{logit} h_{p,s}(d) = \beta(d) + \gamma(s) + a_p + \xi_p(s).
 \]</div>
 <p>The offsets have spread <span class="arithmatex">\(\mathcal{N}^+(0, 0.5^2)\)</span> and the walks start at 0 with step SD <span class="arithmatex">\(\mathcal{N}^+(0, 0.1^2)\)</span>, both sampled non-centred.
-So each province's delay follows the national one over time, with its own level and its own drift, each shrunk towards the national delay by a learnt spread.
+So each province's delay follows the shared one over time, with its own level and its own drift, each shrunk towards the shared delay by a learnt spread.
 Known-onset delays are scored by province.
 Health zones take their province's delay, since the delay files list provinces only.</p>
 <h3 id="missing-onset-deviations">Missing-onset deviations<a class="headerlink" href="#missing-onset-deviations" title="Permanent link">&para;</a></h3>
