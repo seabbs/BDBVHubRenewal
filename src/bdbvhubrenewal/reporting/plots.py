@@ -128,23 +128,22 @@ DASHES: Final[dict[str, str]] = {
 }
 """Line dash patterns as SVG `stroke-dasharray` values, solid first."""
 
-MODEL_STYLE: Final[dict[str, tuple[int | None, str]]] = {
+MODEL_STYLE: Final[dict[str, tuple[int, str]]] = {
     "randomwalk": (0, "solid"),
     "randomwalknowcast": (1, "solid"),
     "renewal": (2, "solid"),
     "renewalbvd": (3, "solid"),
     "renewalsp": (4, "solid"),
     "pprandomwalknowcast": (5, "solid"),
-    "as reported": (None, "dotted"),
 }
 """Each model's place in `MODEL_COLOURS` and its dash in `DASHES`.
 
 A new main model takes the next free colour; a variant takes its parent's
 colour with the next dash, since past eight colours some pairs can no
-longer be told apart. `None` is the data ink, for the as-reported floor.
+longer be told apart.
 """
 
-_FREE_SLOT: Final = 1 + max(s for s, _ in MODEL_STYLE.values() if s is not None)
+_FREE_SLOT: Final = 1 + max(s for s, _ in MODEL_STYLE.values())
 
 HUB_GREYS: Final[dict[str, tuple[str, ...]]] = {
     "light": ("#5f5e5a", "#898781", "#b4b2a9"),
@@ -178,8 +177,7 @@ def model_colour(name: str, models: Sequence[str], mode: str = "light") -> str:
     """
     palette = MODEL_COLOURS[mode]
     if name in MODEL_STYLE:
-        slot = MODEL_STYLE[name][0]
-        return THEMES[mode]["data"] if slot is None else palette[slot]
+        return palette[MODEL_STYLE[name][0]]
     others = [m for m in models if m not in MODEL_STYLE]
     return palette[(_FREE_SLOT + others.index(name)) % len(palette)]
 
@@ -197,7 +195,7 @@ def model_dash(name: str) -> str:
     str
         A value of `DASHES`.
     """
-    return DASHES[MODEL_STYLE.get(name, (None, "solid"))[1]]
+    return DASHES[MODEL_STYLE.get(name, (0, "solid"))[1]]
 
 
 def model_style(name: str, models: Sequence[str]) -> tuple[str, str, str]:

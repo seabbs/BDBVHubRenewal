@@ -253,19 +253,16 @@ def test_score_comparison_scores_each_later_release(
         forecasts, target, delays, _CONFIG, daily, NO_ZONES
     )
     assert pending.empty
-    assert set(scores["model"]) == {"teamA-weekly", "teamB-late", "flat"}
-    # The 2026-10-24 round is made from the 2026-10-17 release and scored
-    # on what each later release reported.
+    # Hub teams have no modelled delay we can see, so every model is scored
+    # on complete weeks only. teamB-late forecast no complete week.
+    assert set(scores["target"]) == {"complete"}
+    assert set(scores["model"]) == {"teamA-weekly", "flat"}
+    # The 2026-10-24 round is made from the 2026-10-17 release.
     assert set(scores["origin"]) == {"2026-10-17"}
     assert set(scores["reference_date"]) == {"2026-10-24"}
-    reported = scores.loc[scores["target"] == "reported"]
-    assert set(reported["truth_vintage"]) == {"2026-10-24", "2026-11-01"}
-    # Each model is scored on the weeks it covered.
-    late = reported.loc[reported["model"] == "teamB-late"]
-    assert set(late["target_end_date"]) == set(WEEKS[2:])
     assert set(scores.loc[scores["model"] == "flat", "source"]) == {"real"}
     # The energy score compares every model of a round on shared cells.
-    assert set(energy["model"]) == {"teamA-weekly", "teamB-late", "flat"}
+    assert set(energy["target"]) == {"complete"}
     unit = ["reference_date", "target", "truth_vintage", "scale"]
     assert (energy.groupby(unit)["n_cells"].nunique() == 1).all()
 
@@ -338,11 +335,9 @@ def test_summarise_comparison(
         forecasts, target, delays, _CONFIG, daily, NO_ZONES
     )
     table = summarise_comparison(scores, "flat")
-    rows = table.loc[table["target"] == "reported"].set_index("model")
+    rows = table.set_index("model")
     assert rows.loc["flat", "relative_wis"] == pytest.approx(1)
-    # teamB-late forecast 2026-10-03 and 2026-10-10 in two locations,
-    # each scored against two later releases.
-    assert rows.loc["teamB-late", "n"] == 8
+    assert rows.loc["teamA-weekly", "n"] > 0
     assert {"coverage_50", "coverage_90", "bias", "wis"} <= set(table.columns)
 
 

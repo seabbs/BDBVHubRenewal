@@ -60,13 +60,12 @@ from bdbvhubrenewal.evaluation.hubcompare import (
     summarise_comparison,
 )
 from bdbvhubrenewal.evaluation.nowcast import (
-    BASELINE,
     relative_energy,
     relative_wis,
 )
 from bdbvhubrenewal.evaluation.scoring import summarise_scores
 from bdbvhubrenewal.evaluation.store import samplers, stored_models
-from bdbvhubrenewal.evaluation.zones import SUMMED, zone_relative_skill
+from bdbvhubrenewal.evaluation.zones import SUMMED
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastTask,
@@ -363,8 +362,8 @@ def _model_colours(models: Sequence[str]) -> dict[str, tuple[str, str, str]]:
 
 
 def _ours(frame: pd.DataFrame, names: Sequence[str]) -> pd.DataFrame:
-    """Keep our models and the as-reported floor, without the hub teams."""
-    return frame.loc[frame["model"].isin([*names, BASELINE])]
+    """Keep our models, without the hub teams."""
+    return frame.loc[frame["model"].isin(names)]
 
 
 def _release_section(
@@ -406,7 +405,7 @@ def _release_section(
     scores["target"] = scores["target"].map(_TARGET_LABELS)
     by_place = relative_wis(scores, ("target", "origin", "location"))
     reported = overall.loc[overall["target"] == _TARGET_LABELS["reported"]]
-    ours = [*names, BASELINE]
+    ours = list(names)
     colours = _model_colours(ours)
     rep = pooled.loc[pooled["target"] == _TARGET_LABELS["reported"]]
     # Rounds are named by their reference date, as in the explorer.
