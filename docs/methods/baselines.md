@@ -26,7 +26,7 @@ flowchart TD
     OBS["Observation model<br/>by weeks back k<br/>size φ<sub>p,k</sub>, removal b<sub>p,k</sub>"]
     X["Nowcast draw X<sub>p,i</sub>(w)<br/>max(0, Y<sub>p,o</sub> + A − B)<br/>A ~ NB(μ<sub>p</sub> − Y<sub>p,o</sub>, φ<sub>p,k</sub>)<br/>B ~ Poisson(b<sub>p,k</sub> Y<sub>p,o</sub>)"]
     SIG["Walk spread σ<sub>p</sub><br/>changes in log(1 + Y<sub>p,o</sub>)"]
-    W["Walk on log(1 + λ<sub>i</sub>)<br/>from X<sub>p,i</sub>(w<sub>0</sub>) in sample i<br/>silent places at 1 case a week<br/>from their first introduction<br/>Poisson counts"]
+    W["Walk on log(1 + λ<sub>i</sub>)<br/>from X<sub>p,i</sub>(w<sub>0</sub>) in sample i<br/>silent places 0<br/>until an introduction<br/>Poisson counts"]
     NAT["National = sum of provinces<br/>sample by sample"]
 
     SNAP --> PAIR
@@ -56,7 +56,7 @@ flowchart TD
     W0["Start week w<sub>0</sub><br/>latest with π<sub>p</sub>(w) ≥ 0.95"]
     Y["Reported Y<sub>p,o</sub>(w<sub>0</sub>)"]
     SIG["Walk spread σ<sub>p</sub><br/>changes in log(1 + Y<sub>p,o</sub>)"]
-    W["Walk on log(1 + λ<sub>i</sub>)<br/>from Y<sub>p,o</sub>(w<sub>0</sub>)<br/>silent places at 1 case a week<br/>from their first introduction<br/>Poisson counts<br/>floored at Y<sub>p,o</sub>(w)<br/>in weeks with data"]
+    W["Walk on log(1 + λ<sub>i</sub>)<br/>from Y<sub>p,o</sub>(w<sub>0</sub>)<br/>silent places 0<br/>until an introduction<br/>Poisson counts<br/>floored at Y<sub>p,o</sub>(w)<br/>in weeks with data"]
     NAT["National = sum of provinces<br/>sample by sample"]
 
     SNAP --> PAIR
@@ -209,10 +209,9 @@ $$
 Steps are summed within a sample, so each sample is one trajectory.
 
 A place with no case reported in the 9 weeks up to the cut-off week is silent.
-A silent place is 0 until its first introduction, which comes in each week with probability $q_p$.
-In both models this holds from the week after the start week of `randomwalk`, so `randomwalknowcast` does not nowcast a silent place's recent weeks.
-A silent place's walk has spread 0, so from its introduction its rate stays at 1 case a week.
-The introduction week has at least 1 case.
+A silent place is exactly 0 until its first introduction, with no walk noise around 0 and no nowcast of its zero weeks.
+After its latest complete week, an introduction comes in each week with probability $q_p$ times the share of the week not yet reported, and $q_p$ in weeks without data.
+The introduction brings a count drawn from Poisson(1) given at least 1, and the place walks from it with spread $\sigma_p$.
 $q_p$ is the share of weeks with a case among the weeks that follow 9 weeks with none, over the place and its siblings (the zones of its province, or the provinces of the country), in weeks up to the start week of `randomwalk`.
 It is estimated at each origin from the counts reported then.
 National is the sum of the provinces, sample by sample.
@@ -238,11 +237,13 @@ Later weeks with data are walk draws, floored at the reported count.
 
 ## Random walk on a nowcast
 
-`randomwalknowcast` starts each sample from its own nowcast $X_{p,i}$ of the latest week with all 7 days on or before $c_o$, so $x_i = X_{p,i}(w_0)$.
+`randomwalknowcast` runs the walk as a local level on $\log(1 + y)$.
+It starts from the nowcast $X_{p,i}(w_0)$ of the latest full week $w_0$ that is at least 5% reported and has at least 5 cases, else from the first week.
 Weeks up to $w_0$ are the nowcast draws.
-If the week after $w_0$ holds $c_o$ and is partial, $n$ days of it have no data.
-Its value is its nowcast draw plus Poisson$(n \lambda_i / 7)$, with $\lambda_i$ the walk rate of that week.
-Later weeks are walk draws.
+Each later week $u$ up to the week holding $c_o$ is not nowcast.
+Its reported count updates the level as an observation $\log(1 + Y_{p,o}(u) / \pi_p(u))$ with variance $1 / (1 + Y_{p,o}(u)) + (1 - \pi_p(u)) / \pi_p(u)$, the Poisson noise plus the share still to come, after a step of variance $\sigma_p^2$ (a scalar Kalman filter).
+The week's value is a Poisson draw from a level drawn from the filter, floored at the count reported.
+The walk forecasts from the level filtered at the week holding $c_o$.
 
 ## Health zones
 
