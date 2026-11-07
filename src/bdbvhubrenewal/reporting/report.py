@@ -53,6 +53,7 @@ from bdbvhubrenewal.evaluation.backtest import (
     truth_changes,
 )
 from bdbvhubrenewal.evaluation.checks import (
+    RECENT_WEEKS,
     SMALL_MAX,
     check_summary,
     flags,
@@ -1694,7 +1695,8 @@ def _checks_section(
         "Scores of the scored weeks, split by the type of place and by the "
         "plausibility flag of their forecast "
         "([checks](methods/evaluation.md#checks)).\n"
-        "A place is silent with no case in the 9 weeks to the origin, small "
+        f"A place is silent with no case in the {RECENT_WEEKS} weeks to the "
+        "origin, small "
         f"with at most {SMALL_MAX} cases in any of those weeks, and larger "
         "otherwise.\n"
         "A forecast is flagged when its reference week drops to a third of "
