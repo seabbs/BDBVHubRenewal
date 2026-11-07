@@ -39,7 +39,7 @@ flowchart TD
     end
     ONS["Expected cases<br/>by onset day<br/>λ<sub>p</sub>(s) = α(s) N<sub>p</sub> (x<sub>p</sub> ∗ η)(s)"]
     INC["Incubation period η(u)<br/>log-normal, uncertain mean and SD,<br/>0 to 28 days"]
-    DEL["Onset-to-report delay<br/>f<sub>s</sub>(d)<br/>hazard shifted by γ(s),<br/>a weekly walk on onset day<br/><i>renewal: pooled by province</i>"]
+    DEL["Onset-to-report delay<br/>f<sub>p,s</sub>(d)<br/>hazard shifted by γ(s),<br/>a weekly walk on onset day<br/><i>renewal: pooled by province</i>"]
     MISS["Share reported<br/>without onset π<sub>p</sub>(t)<br/>weekly walk"]
     subgraph OB["Data streams at vintage T"]
         KN["Known onsets<br/>onsets × delay to report<br/>× share with an onset<br/>× published by T"]
@@ -179,7 +179,7 @@ We refit both, so $F_T$ is the fit the hub used for release $T$.
 ### Likelihood
 
 - Weekly $\mathrm{known}_{p,T}$ and $\mathrm{imputed}_{p,T}$ are negative binomial, each stream with $1/\sqrt{\phi} \sim \text{HalfNormal}(0.25)$ and $\phi$ capped at 1000.
-- Known-onset delays, by onset week and delay on 0 to 60 days, are Dirichlet-multinomial given each week's total.
+- Known-onset delays, by province, onset week and delay on 0 to 60 days, are Dirichlet-multinomial given each province and week's total.
   Their probabilities come from $\lambda$, $f$, $\pi$ and $c$, with $1/\sqrt{\psi} \sim \text{HalfNormal}(0.1)$ and $\psi$ capped at $10^4$.
   Delays below 0 count as 0 and delays above 60 as 60.
 - Each delay-file row (location, onset week and delay) of release $k + 1$ was already in release $k$ with probability
@@ -208,7 +208,7 @@ The national trajectory is the sum of the provinces plus an unassigned component
 The provinces share the trend $\log R(t)$, the deviation SD $\sigma_\delta$ and half-life $h$, the start spread $\sigma_v$, ascertainment $\alpha$, the publication lag, the trend $b$ of the missing-onset share, the share at risk $\nu$ and the importation share $\varepsilon$.
 Each province has its own deviations $\delta_p$ and $\omega_p$ and its own seed.
 Provinces are linked by importation through $W$, and provinces with no cases by $\mu_q$.
-Each province has its own delay, pooled towards the national delay.
+Each province has its own delay, pooled towards the shared delay.
 Leaving a province out removes its known and imputed terms and its delays but keeps it in the latent process.
 
 ```mermaid
@@ -269,14 +269,14 @@ That lead puts the most onsets of a week of seeded infections in the first case 
 
 ### Province delays
 
-Each province's delay hazard adds a sum-to-zero offset $u_p$ and a sum-to-zero weekly walk $\zeta_p(s)$ to the national shift $\gamma(s)$, on the basis $Q$:
+Each province's delay hazard adds a sum-to-zero offset $a_p$ and a sum-to-zero weekly walk $\xi_p(s)$ to the shared shift $\gamma(s)$, on the basis $Q$:
 
 $$
-\operatorname{logit} h_{p,s}(d) = \beta(d) + \gamma(s) + u_p + \zeta_p(s).
+\operatorname{logit} h_{p,s}(d) = \beta(d) + \gamma(s) + a_p + \xi_p(s).
 $$
 
 The offsets have spread $\mathcal{N}^+(0, 0.5^2)$ and the walks start at 0 with step SD $\mathcal{N}^+(0, 0.1^2)$, both sampled non-centred.
-So each province's delay follows the national one over time, with its own level and its own drift, each shrunk towards the national delay by a learnt spread.
+So each province's delay follows the shared one over time, with its own level and its own drift, each shrunk towards the shared delay by a learnt spread.
 Known-onset delays are scored by province.
 Health zones take their province's delay, since the delay files list provinces only.
 

@@ -238,7 +238,7 @@ def test_missing_fraction_and_hazard_delay_shapes():
     np.testing.assert_allclose(pmf.sum(axis=-1), 1.0, rtol=1e-5)
 
 
-def test_province_delays_pool_around_the_national_delay():
+def test_province_delays_pool_around_the_shared_delay():
     weekly = WeeklyTemporalProcess(
         NonCentredRandomWalk(DeterministicVariable("sd", 0.1)), start_dow=6
     )
@@ -248,10 +248,11 @@ def test_province_delays_pool_around_the_national_delay():
     assert pmf.shape == (4, 35, 31)
     np.testing.assert_allclose(pmf.sum(axis=-1), 1.0, rtol=1e-5)
     shift = tr["delay_shift"]["value"]
-    national = tr["delay_national_shift"]["value"]
+    shared = tr["delay_shared_shift"]["value"]
     assert shift.shape == (35, 4)
-    # Offsets and drifts sum to zero, so the provinces average to national.
-    np.testing.assert_allclose(shift.mean(axis=1), national[:, 0], atol=1e-5)
+    # Offsets and drifts sum to zero, so the provinces average to the shared
+    # delay.
+    np.testing.assert_allclose(shift.mean(axis=1), shared[:, 0], atol=1e-5)
     # Each province drifts apart from the others over time.
     spread = shift - shift.mean(axis=1, keepdims=True)
     assert not np.allclose(spread[0], spread[-1])

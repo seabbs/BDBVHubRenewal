@@ -891,7 +891,7 @@ def fit_delays(fit: RenewalFit, task: ForecastTask) -> pd.DataFrame:
     -------
     pandas.DataFrame
         `delay_summary` rows with `model`, `vintage` and `location`:
-        each province's delay, and the national delay of a fit of
+        each province's delay, and the shared delay of a fit of
         several provinces.
     """
     return pd.concat(
@@ -1103,7 +1103,7 @@ class RenewalRun:
         `num_chains` times `seconds` when the chains run in parallel.
     delay : pandas.DataFrame
         `delay_summary` of each province of the fit (`place`), and the
-        national delay of a fit of several provinces.
+        shared delay of a fit of several provinces.
     bvd : dict or None
         The BVDOutbreakSize release used (`bvd_record`), for a variant
         with the BVD term.
@@ -1251,14 +1251,14 @@ class RenewalModel:
         posterior = model.mcmc.get_samples()
         n_init = model.latent.n_initialization_points
         beta = np.asarray(posterior["delay_beta"])
-        # Each province's delay, and the national one they pool towards
+        # Each province's delay, and the shared one they pool towards
         # when a fit has more than one.
         shifts = {
             name: np.asarray(posterior["delay_shift"])[..., p]
             for p, name in enumerate(data.names)
         }
         if len(shifts) > 1:
-            shifts[NATIONAL] = np.asarray(posterior["delay_national_shift"])[
+            shifts["shared"] = np.asarray(posterior["delay_shared_shift"])[
                 ..., 0
             ]
         delay = pd.concat(

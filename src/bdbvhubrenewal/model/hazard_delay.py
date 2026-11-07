@@ -59,17 +59,17 @@ class HazardDelay(RandomVariable):
     + \eta_p(s),$$
 
     where $\beta$ is a temporal process over delay $d$ starting at
-    $\beta(0)$ (a smoothness prior), $\gamma$ is the national temporal
+    $\beta(0)$ (a smoothness prior), $\gamma$ is the shared temporal
     process over the reference day $s$, starting at 0, $\delta_p$ is
     group $p$'s offset and $\eta_p$ its own walk around $\gamma$, starting
     at 0. The offsets and walks sum to zero over groups and share a
     learnt spread each (`pooled_walk`), so each group's delay is pooled
-    towards the national one and $\gamma$ stays identified. All hazards
+    towards the shared delay and $\gamma$ stays identified. All hazards
     of a group and day shift together (proportional odds). The pmf
     follows from `hazard_to_pmf`. With one group, $\delta$ and $\eta$
-    are zero. The shape $\beta$, the national shift $\gamma$, each
+    are zero. The shape $\beta$, the shared shift $\gamma$, each
     group's shift $\gamma + \delta_p + \eta_p$ and each group's mean
-    delay by day are recorded as `{name}_beta`, `{name}_national_shift`,
+    delay by day are recorded as `{name}_beta`, `{name}_shared_shift`,
     `{name}_shift` and `{name}_mean`.
     """
 
@@ -174,7 +174,7 @@ class HazardDelay(RandomVariable):
         # Recorded for the delay summaries written after a fit
         # (`delay_summary`); they change nothing in the model.
         numpyro.deterministic(f"{self.name}_beta", beta)
-        numpyro.deterministic(f"{self.name}_national_shift", gamma)
+        numpyro.deterministic(f"{self.name}_shared_shift", gamma)
         numpyro.deterministic(f"{self.name}_shift", shift)
         weekly = (
             isinstance(self.time_process, WeeklyTemporalProcess)

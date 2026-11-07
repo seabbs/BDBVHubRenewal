@@ -161,8 +161,7 @@ def seed_lead(incubation: np.ndarray) -> int:
 MAX_PUBLICATION_LAG: Final = 7
 """Longest report to publication lag, in days. Rows later than this at
 the earlier release of a pair count towards that pair's background share
-(`ReleasePairLikelihood`). A simplex on 0 to 14 days did not mix with one
-pair of delay files (R-hat 2.3 at 2026-10-17)."""
+(`ReleasePairLikelihood`)."""
 
 
 @dataclass(frozen=True)
@@ -589,7 +588,7 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             ),
             _named_walk("delay_sd", 0.15, fit_weeks(data, config)),
             # Partial pooling of each province's delay towards the
-            # national one, in level and in drift over time (#22).
+            # shared delay, in level and in drift over time.
             PooledInitialValue(
                 "delay_offset",
                 n_prov,
