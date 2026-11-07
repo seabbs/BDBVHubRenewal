@@ -666,13 +666,17 @@ def _write_fits(fits: list[pd.DataFrame], path: Path) -> None:
 def _zones(
     args: argparse.Namespace,
     task: ForecastTask,
-    samples: pd.DataFrame,
+    result: Forecast,
     hub_config: Path,
 ) -> tuple[pd.DataFrame | None, str]:
     """Forecast the zones to sum to the provinces, or say why not.
 
-    The zones come from `zone_samples`.
+    A zone-level fit gives its own zone samples. Otherwise they come from
+    `zone_samples`.
     """
+    if result.zones is not None:
+        return result.zones, ""
+    samples = result.samples
     try:
         daily = load_daily_zones(args.data)
     except OSError:
@@ -695,10 +699,13 @@ def _nowcast(args: argparse.Namespace) -> int:
             config = get_config(args.config)
             result = run_forecast(config, task, args.fit)
         else:
-            samples = get_model(args.model).forecast(task)
+            model = get_model(args.model)
+            samples = model.forecast(task)
             check_samples(samples, task)
-            result = Forecast(samples)
-        zones, zone_note = _zones(args, task, result.samples, hub_config)
+            result = Forecast(
+                samples, zones=getattr(model, "zone_samples", None)
+            )
+        zones, zone_note = _zones(args, task, result, hub_config)
         if zone_note:
             handled.append(zone_note)
         table = to_hub_table(

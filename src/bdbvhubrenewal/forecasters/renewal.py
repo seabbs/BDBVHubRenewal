@@ -161,6 +161,9 @@ class Variant:
     per_location : bool
         Fit each province on its own series, with no pooling or coupling.
         National is their sum plus the unassigned part.
+    zones : bool
+        Fit the health zones of the task's provinces, where the release has
+        zone data, and return each province as the sum of its zones.
     """
 
     name: str
@@ -168,6 +171,7 @@ class Variant:
     base: str = "MAIN"
     overrides: Mapping[str, Any] = field(default_factory=dict)
     per_location: bool = False
+    zones: bool = False
 
 
 VARIANTS: Final[dict[str, Variant]] = {
@@ -210,6 +214,7 @@ VARIANTS: Final[dict[str, Variant]] = {
                 "inactive": "none",
                 "report_inactive": True,
             },
+            zones=True,
         ),
     )
 }
@@ -638,6 +643,64 @@ def _as_reported(
         )
         out.append(part.assign(as_of=date))
     return out
+
+
+def zone_level(task: ForecastTask) -> ForecastTask | None:
+    """Return the task with the health zones of its provinces.
+
+    A task whose locations are zones is returned as it is. A real
+    province task takes every hub zone of its provinces, with their
+    release data (`data/daily_zones.csv.gz`). Simulated releases have no
+    zones, so they give None.
+
+    Parameters
+    ----------
+    task : ForecastTask
+        The task.
+
+    Returns
+    -------
+    ForecastTask or None
+        The zone task, or None.
+    """
+    from bdbvhubrenewal.data.tidy import load_daily_zones
+    from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
+    from bdbvhubrenewal.forecasters.zones import zone_task
+
+    if all(loc.count("-") == 2 for loc in task.locations):
+        return task
+    if task.kind != "real":
+        return None
+    daily = load_daily_zones()
+    zones = hub_zones(Path("data") / "hub-config" / "tasks.json")
+    counts = weekly_zone_counts(daily, task.vintage)
+    history = task.daily_history
+    both = daily if history is None else pd.concat([history, daily])
+    return zone_task(task, counts, zones, both)
+
+
+def by_province(zones: pd.DataFrame) -> pd.DataFrame:
+    """Sum zone samples to their provinces, sample by sample.
+
+    Parameters
+    ----------
+    zones : pandas.DataFrame
+        Zone samples (`SAMPLE_COLUMNS`, with `as_of` if present).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Province samples with the same columns.
+    """
+    from bdbvhubrenewal.data.zones import province_of
+
+    keys = [c for c in zones.columns if c not in ("location", "value")]
+    summed = (
+        zones.assign(location=zones["location"].map(province_of))
+        .groupby(["location", *keys], as_index=False, sort=False)
+        .agg(value=("value", "sum"))
+    )
+    return summed.loc[:, list(zones.columns)]
 
 
 def data_gap(task: ForecastTask, samples: pd.DataFrame) -> pd.DataFrame | None:
@@ -1152,12 +1215,15 @@ class RenewalFit:
     as_reported : pandas.DataFrame or None
         Samples of the counts reported by each date in `task.report_by`
         (`SAMPLE_COLUMNS` and `as_of`), for the weeks up to that date.
+    zones : pandas.DataFrame or None
+        Zone samples of a zone-level fit, which the province samples sum.
     """
 
     runs: Mapping[str, RenewalRun]
     samples: pd.DataFrame
     unassigned: pd.DataFrame | None = None
     as_reported: pd.DataFrame | None = None
+    zones: pd.DataFrame | None = None
 
 
 @dataclass
@@ -1179,6 +1245,9 @@ class RenewalModel:
         The variant name.
     delay_summary : pandas.DataFrame or None
         `fit_delays` of the last `forecast`.
+    zone_samples : pandas.DataFrame or None
+        Zone samples of the last `forecast` of a zone-level variant, which
+        its province samples sum.
     """
 
     variant: Variant
@@ -1190,6 +1259,7 @@ class RenewalModel:
         init=False, default_factory=list
     )
     delay_summary: pd.DataFrame | None = field(init=False, default=None)
+    zone_samples: pd.DataFrame | None = field(init=False, default=None)
 
     def __post_init__(self) -> None:
         """Name the model after its variant and say if it takes a mask."""
@@ -1306,6 +1376,21 @@ class RenewalModel:
             The runs, province samples and national or unassigned parts.
         """
         report_all = bool(model_config(self.variant).report_inactive)
+        zt = zone_level(task) if self.variant.zones else None
+        if zt is not None:
+            run = self.run(zt)
+            zones, _ = samples_table(zt, run.data, run.draws)
+            samples = by_province(zones)
+            later = [by_province(x) for x in _as_reported(zt, run, True)]
+            return RenewalFit(
+                {"all": run},
+                samples,
+                data_gap(task, samples),
+                as_reported=pd.concat(later, ignore_index=True)
+                if later
+                else None,
+                zones=zones,
+            )
         if not self.variant.per_location:
             run = self.run(task)
             samples, unassigned = samples_table(
@@ -1384,6 +1469,7 @@ class RenewalModel:
         """
         fit = self.forecast_fit(task)
         self.delay_summary = fit_delays(fit, task)
+        self.zone_samples = fit.zones
         self.fit_diagnostics = [
             {"fit": key, **fit_summary(run, self.sampler)}
             for key, run in fit.runs.items()

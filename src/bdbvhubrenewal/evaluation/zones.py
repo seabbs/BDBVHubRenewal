@@ -158,12 +158,16 @@ def zone_backtest(
         forecasts = {}
         for name in models:
             model = get_model(name)
-            direct = model.forecast(zt)
             prov = model.forecast(task)
+            fitted = getattr(model, "zone_samples", None)
+            if fitted is None:
+                direct = model.forecast(zt)
+                summed = reconcile_zones(direct, prov, task, counts, active)
+            else:
+                # A zone-level fit: its zones already sum to its provinces.
+                direct = summed = fitted.loc[fitted["location"].isin(active)]
             forecasts[name] = direct
-            forecasts[name + SUMMED] = reconcile_zones(
-                direct, prov, task, counts, active
-            )
+            forecasts[name + SUMMED] = summed
             kept.append(
                 forecasts[name + SUMMED].assign(
                     model=name,

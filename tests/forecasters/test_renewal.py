@@ -679,3 +679,29 @@ def test_the_model_cut_off_is_the_release_s_last_report_day(
         end = data.start_date + dt.timedelta(days=7 * data.n_weeks - 1)
         assert cut.isoformat() == last
         assert end == rn._saturday(last)
+
+
+def test_zone_level_takes_every_hub_zone_of_the_provinces(
+    task: ForecastTask,
+) -> None:
+    zones = rn.zone_level(task)
+    assert zones is not None
+    assert {z[:5] for z in zones.locations} <= set(task.locations)
+    assert all(z.count("-") == 2 for z in zones.locations)
+    assert rn.zone_level(zones) is zones
+    assert rn.zone_level(replace(task, kind="simulated")) is None
+
+
+def test_provinces_are_the_sum_of_their_zones() -> None:
+    zones = pd.DataFrame(
+        {
+            "location": ["CD-IT-01", "CD-IT-02", "CD-NK-01", "CD-IT-01"],
+            "target_end_date": ["2026-11-07"] * 3 + ["2026-11-14"],
+            "sample": [1, 1, 1, 1],
+            "value": [2.0, 3.0, 4.0, 1.0],
+        }
+    )
+    out = rn.by_province(zones).set_index(["location", "target_end_date"])
+    assert out.loc[("CD-IT", "2026-11-07"), "value"] == 5.0
+    assert out.loc[("CD-NK", "2026-11-07"), "value"] == 4.0
+    assert out.loc[("CD-IT", "2026-11-14"), "value"] == 1.0

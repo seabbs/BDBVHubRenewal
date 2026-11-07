@@ -75,11 +75,15 @@ class Forecast:
     modelled : tuple of str or None
         The provinces the model reports, for `national.json`. None means
         every province of the task.
+    zones : pandas.DataFrame or None
+        Zone samples from the same fit, which the province samples sum,
+        or None.
     """
 
     samples: pd.DataFrame
     unassigned: pd.DataFrame | None = None
     modelled: tuple[str, ...] | None = None
+    zones: pd.DataFrame | None = None
 
 
 FitFn = Callable[[ForecastTask, Mapping[str, Any], Path], dict[str, Any]]
