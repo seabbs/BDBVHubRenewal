@@ -14,7 +14,7 @@ It is the reference for the interface, and `ci/run_dry.sh` runs the whole workfl
 | `bdbvhubrenewal nowcast --model random walk --vintage <as_of> --out <dir>` | exists | `prepare` (random walk candidate and baseline) |
 | `bdbvhubrenewal metadata --model <model> --out <dir>` | exists | `gate` |
 | `scripts/validate-hub.R <hub> <csv> <yml>`, with `CHECK_WINDOW=true` | exists | `gate`, through `ci/steps/validate_hub.sh` |
-| `bdbvhubrenewal fit ...` | done (`bdbvhubrenewal.submission.fitting`; `main` runs the chosen renewal model and `renewalsp` the province model without importation, `bdbvhubrenewal.forecasters.renewal`) | `fit` |
+| `bdbvhubrenewal fit ...` | done (`bdbvhubrenewal.submission.fitting`; `main` runs the chosen renewal model and `renewalsp` the model fitted to each province on its own, `bdbvhubrenewal.forecasters.renewal`) | `fit` |
 | `nowcast --config <c> --fit <dir>` | done | `fit` |
 | `bdbvhubrenewal plot-submission ...` | done, `plots.plot_submission` | every candidate |
 | `bdbvhubrenewal plot-ppc --ppc <ppc.json> --out <png>` | done, a thin wrapper on `ppc.plot_ppc` | candidates whose `ppc.json` is available |
@@ -35,7 +35,7 @@ bdbvhubrenewal fit --model renewal|renewalsp --config main|renewalsp --vintage <
   `epiforecasts-renewal` is already a different hub model.
 - `--config` selects the model configuration.
   `main` is the full model.
-  `renewalsp` is the full model without importation between provinces.
+  `renewalsp` fits each province on its own.
   Each matrix leg passes its own config.
 - `--sampler-json` is the candidate's `sampler` table from `ci/policy.toml`.
 - `--vintage` is a real `as_of`, or `latest`.

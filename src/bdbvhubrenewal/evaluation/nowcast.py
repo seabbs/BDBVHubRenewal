@@ -419,6 +419,10 @@ def reported_samples(
     places = samples.loc[samples["location"] != NATIONAL]
     curves = delay_curves(summary, sorted(set(places["location"])))
     mapped = places["location"].isin(set(curves["location"]))
+    whole = NATIONAL in set(samples["location"])
+    if not mapped.any():
+        kept = add_national(places) if whole else places
+        return dict.fromkeys(later, kept)
     weeks = sorted(set(samples["target_end_date"]))
     now = week_shares(curves, _cutoff(daily, origin), weeks)
     out = {}
@@ -426,7 +430,6 @@ def reported_samples(
         then = week_shares(curves, _cutoff(daily, o2), weeks)
         drawn = draw_reported(places.loc[mapped], reported, now, then, rng)
         both = pd.concat([drawn, places.loc[~mapped]], ignore_index=True)
-        whole = NATIONAL in set(samples["location"])
         out[o2] = add_national(both) if whole else both
     return out
 

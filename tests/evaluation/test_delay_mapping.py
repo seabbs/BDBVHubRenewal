@@ -121,3 +121,14 @@ def test_randomwalk_is_returned_as_it_is_and_a_hub_team_not_at_all(
         samples.iloc[:0], np.random.default_rng(1),
     )  # fmt: skip
     assert none == {}
+
+
+def test_samples_are_kept_when_the_delay_maps_no_place(
+    daily: pd.DataFrame,
+) -> None:
+    samples = _samples({"CD-IT": 100.0, "CD-NK": 50.0, "CD": 999.0})
+    # Only a shared delay, which maps no place.
+    wide = _reported(samples, _summary("shared", [0.5, 0.9]), "m", daily)
+    assert (wide["CD-IT"] == 100).all()
+    assert (wide["CD-NK"] == 50).all()
+    assert (wide["CD"] == 150).all()
