@@ -14,22 +14,19 @@ from pyrenew.latent.temporal_processes import TemporalProcess
 from pyrenew.metaclass import RandomVariable
 
 
-class NestedPooledValue(RandomVariable):
-    r"""One value per place, pooled over nested levels.
+class GroupPooledValue(RandomVariable):
+    r"""One value per group, pooled, and taken by every place in the group.
 
-    $$v_z = \mu + \sum_\ell \tau_\ell\, \eta_{\ell, u_\ell(z)},
-    \qquad \eta_{\ell, u} \sim N(0, 1),$$
+    $$v_z = \mu + \tau\, \eta_{g(z)}, \qquad \eta_g \sim N(0, 1),$$
 
-    where $u_\ell(z)$ is the unit of place $z$ at level $\ell$, such as
-    its province and then the zone itself, and each level has its own
-    spread $\tau_\ell$. Non-centred: $\eta_\ell$ is the site
-    `{name}_z{l}`.
+    with $g(z)$ the group of place $z$, such as the province of a zone.
+    Non-centred: $\eta$ is the site `{name}_z`.
     """
 
     def __init__(
         self,
         name: str,
-        levels: list[np.ndarray],
+        groups: np.ndarray,
         mean_rv: RandomVariable,
         sd_rv: RandomVariable,
     ) -> None:
@@ -39,12 +36,12 @@ class NestedPooledValue(RandomVariable):
         ----------
         name
             Prefix for the sample sites.
-        levels
-            For each level, the unit index of every place, `(Z,)`.
+        groups
+            Group index of every place, `(Z,)`.
         mean_rv
             The shared value $\mu$.
         sd_rv
-            The spreads $\tau_\ell$, one per level.
+            The spread $\tau$ of the group values.
 
         Raises
         ------
@@ -55,16 +52,16 @@ class NestedPooledValue(RandomVariable):
             if not isinstance(rv, RandomVariable):
                 raise TypeError(f"{label} must be a RandomVariable.")
         super().__init__(name=name)
-        self.levels = [np.asarray(u, dtype=int) for u in levels]
+        self.groups = np.asarray(groups, dtype=int)
         self.mean_rv = mean_rv
         self.sd_rv = sd_rv
 
     def __repr__(self) -> str:
         """Return string representation."""
         return (
-            f"NestedPooledValue(name={self.name!r}, "
-            f"n_levels={len(self.levels)}, mean_rv={self.mean_rv!r}, "
-            f"sd_rv={self.sd_rv!r})"
+            f"GroupPooledValue(name={self.name!r}, "
+            f"n_groups={int(self.groups.max()) + 1}, "
+            f"mean_rv={self.mean_rv!r}, sd_rv={self.sd_rv!r})"
         )
 
     def sample(self, **kwargs: object) -> Array:
@@ -80,14 +77,11 @@ class NestedPooledValue(RandomVariable):
         Array
             Shape `(Z,)`.
         """
-        value = jnp.asarray(self.mean_rv())
-        tau = self.sd_rv()
-        for i, unit in enumerate(self.levels):
-            eta = numpyro.sample(
-                f"{self.name}_z{i}",
-                dist.Normal(0.0, 1.0).expand([int(unit.max()) + 1]),
-            )
-            value = value + tau[i] * eta[unit]
+        eta = numpyro.sample(
+            f"{self.name}_z",
+            dist.Normal(0.0, 1.0).expand([int(self.groups.max()) + 1]),
+        )
+        value: Array = self.mean_rv() + self.sd_rv() * eta[self.groups]
         return value
 
 

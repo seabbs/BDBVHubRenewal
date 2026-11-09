@@ -345,7 +345,8 @@ x_z(w) = x_z(w - 1) + \sigma_z \epsilon_{z,w},
 $$
 
 with $x_z$ at the first week $\mathcal{N}(\log 5, 2^2)$.
-The step SDs are pooled on the log scale, $\log \sigma_z = \mu_\sigma + \tau_1 \eta_{p(z)} + \tau_2 \eta_z$ for zone $z$ in province $p(z)$, with $\eta \sim \mathcal{N}(0, 1)$, $\mu_\sigma \sim \mathcal{N}(\log 0.2, 1)$ and $\tau \sim \mathcal{N}^+(0, 0.5^2)$.
+Zones take their province's step SD, pooled on the log scale over provinces, $\log \sigma_z = \mu_\sigma + \tau \eta_{p(z)}$ for zone $z$ in province $p(z)$, with $\eta \sim \mathcal{N}(0, 1)$, $\mu_\sigma \sim \mathcal{N}(\log 0.2, 1)$ and $\tau \sim \mathcal{N}^+(0, 0.5^2)$.
+A zone with no case can fall without limit, so a step SD of its own would be free to grow.
 Ascertainment is 1, since $\lambda_z$ is on the scale of confirmed onsets.
 Every zone is walked, with or without cases, so there is no importation-only component.
 
