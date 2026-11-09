@@ -32,12 +32,14 @@ counts on top, so the noise is not counted twice.
 
 from __future__ import annotations
 
+from functools import partial
+
 import jax
 import jax.numpy as jnp
 import numpy as np
 from jax import Array
 
-__all__ = ["random_walk", "walk_noise", "walk_variance"]
+__all__ = ["random_walk", "random_walks", "walk_noise", "walk_variance"]
 
 
 def walk_noise(y: np.ndarray) -> np.ndarray:
@@ -108,3 +110,28 @@ def random_walk(
     level = jnp.log1p(x0)[:, None] + jnp.cumsum(steps, axis=1)
     lam = jnp.expm1(jnp.maximum(level, 0.0))
     return lam, jax.random.poisson(k_count, lam).astype(x0.dtype)
+
+
+@partial(jax.jit, static_argnums=3)
+def random_walks(
+    keys: Array, x0: Array, sigma: Array, h: int
+) -> tuple[Array, Array]:
+    """Draw `random_walk` for each place, compiled as one program.
+
+    Parameters
+    ----------
+    keys : jax.Array
+        One random key per place, `[L]`.
+    x0 : jax.Array
+        Start values, `[L, S]`.
+    sigma : jax.Array
+        Step standard deviation of each place, `[L]`.
+    h : int
+        Weeks to draw.
+
+    Returns
+    -------
+    tuple of jax.Array
+        The rates and the Poisson counts, each `[L, S, h]`.
+    """
+    return jax.vmap(lambda k, x, s: random_walk(k, x, s, h))(keys, x0, sigma)

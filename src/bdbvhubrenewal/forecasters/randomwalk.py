@@ -51,7 +51,7 @@ from __future__ import annotations
 
 import datetime as dt
 from dataclasses import dataclass, field
-from typing import ClassVar
+from typing import ClassVar, Final
 
 import jax
 import jax.numpy as jnp
@@ -75,9 +75,39 @@ from bdbvhubrenewal.forecasters.chain import (
 )
 from bdbvhubrenewal.forecasters.introductions import silent_trajectories
 from bdbvhubrenewal.forecasters.obs import sample_count
-from bdbvhubrenewal.forecasters.walk import random_walk
+from bdbvhubrenewal.forecasters.walk import random_walks
 
 __all__ = ["RandomWalk", "RandomWalkNowcast"]
+
+
+_KEPT_ORIGINS: Final = 4
+"""Origins whose compiled programs are kept in memory at once."""
+
+_ORIGINS: set[tuple[object, ...]] = set()
+
+
+def _clear_caches(task: ForecastTask) -> None:
+    """Drop JAX's compiled programs when a task brings a new origin.
+
+    Each origin compiles its own shapes, and keeping every origin's
+    programs over a run fills `vm.max_map_count` (an LLVM "Cannot allocate
+    memory" error). The programs of the last `_KEPT_ORIGINS` origins are
+    kept, so the models forecasting one task, and the same task forecast
+    again (the release backtest after the development one), reuse them.
+    """
+    origin = (
+        task.kind,
+        task.vintage,
+        task.reference_date,
+        tuple(task.locations),
+        task.n_samples,
+    )
+    if origin in _ORIGINS:
+        return
+    if len(_ORIGINS) >= _KEPT_ORIGINS:
+        jax.clear_caches()  # type: ignore[no-untyped-call]
+        _ORIGINS.clear()
+    _ORIGINS.add(origin)
 
 
 def _key(task: ForecastTask) -> jax.Array:
@@ -116,10 +146,11 @@ def _walks(
     """
     k_walk, k_silent = jax.random.split(key)
     keys = jax.random.split(k_walk, x0.shape[0])
-    lam, drawn = jax.vmap(lambda k, x, s: random_walk(k, x, s, h))(
+    lam, drawn = random_walks(
         keys,
         jnp.asarray(x0, jnp.float32),
         jnp.asarray(origin.sigma, jnp.float32),
+        h,
     )
     silent = silent_trajectories(
         k_silent,
@@ -243,9 +274,7 @@ class RandomWalk:
         MissingSnapshots
             If the task has no release snapshots.
         """
-        # Each origin compiles its own triangle shapes, so cached executables
-        # from earlier origins never help and exhaust LLVM memory over a run.
-        jax.clear_caches()  # type: ignore[no-untyped-call]
+        _clear_caches(task)
         daily = task.daily_history
         if daily is None or daily.empty:
             raise MissingSnapshots(
