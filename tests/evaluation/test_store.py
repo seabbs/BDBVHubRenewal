@@ -210,3 +210,34 @@ def test_a_fit_s_reporting_curves_are_stored_and_loaded(
     got = store.stored_reporting(results)
     assert got == {("flatfit", "2026-10-17"): blocks}
     assert store.stored_reporting(tmp_path / "none") == {}
+
+
+def test_a_fallback_fit_with_no_curves_drops_the_older_curves(
+    tmp_path: Path,
+) -> None:
+    meta = {
+        "model": "flatfit",
+        "origin": "2026-10-17",
+        "key": "k",
+        "commit": "c",
+        "fitted_at": "2026-11-01T00:00:00",
+        "settings": "s",
+        "status": "ok",
+    }
+    table = pd.DataFrame({"model": ["flatfit"]})
+    other = {**meta, "model": "other"}
+    blocks = [{"places": ["CD-IT"]}]
+    store.write_reporting(
+        [
+            store.StoredFit(meta, table, table, table, blocks),
+            store.StoredFit(other, table, table, table, blocks),
+        ],
+        tmp_path,
+    )
+    # A later load of the same model uses a fit with no curves, so its
+    # samples must not be scored by the curves of the fit it replaced.
+    store.write_reporting(
+        [store.StoredFit(meta | {"key": "old"}, table, table, table)],
+        tmp_path,
+    )
+    assert store.stored_reporting(tmp_path) == {("other", "2026-10-17"): blocks}
