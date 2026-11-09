@@ -14,6 +14,7 @@ from bdbvhubrenewal.data.snapshots import snapshot_arrays, weekly_sums
 from bdbvhubrenewal.forecasters.chain import (
     Settings,
     _delay_counts,
+    _walk_spreads,
     build_origin,
     fit_delay,
     retro_errors,
@@ -21,6 +22,7 @@ from bdbvhubrenewal.forecasters.chain import (
 )
 from bdbvhubrenewal.forecasters.introductions import introduction_rates
 from bdbvhubrenewal.forecasters.obs import MAX_SIZE, PRIOR_SIZE
+from bdbvhubrenewal.forecasters.pooling import source_index
 
 PLACES = ("CD-HU", "CD-IT", "CD-NK", "CD-TO")
 
@@ -339,3 +341,38 @@ def test_introductions_pool_siblings_after_k_silent_weeks() -> None:
         reported, np.array([8, 8, 8, 2]), np.array([-1, 0, 0, 0]), 3
     )
     np.testing.assert_allclose(late[1:], 0.0)
+
+
+def test_the_walk_spread_is_net_of_poisson_noise(origin24) -> None:
+    settings = origin24.settings
+    n_loc = len(origin24.snap.locations)
+    own = np.flatnonzero(origin24.sigma_source < n_loc)
+    assert own.size
+    for i in own:
+        lo = max(int(origin24.start[i]) - settings.walk_weeks + 1, 0)
+        y = origin24.reported[i, lo : int(origin24.start[i]) + 1]
+        v = y / (1 + y) ** 2
+        net = np.diff(np.log1p(y)).var(ddof=1) - (v[1:] + v[:-1]).mean()
+        assert net > 0
+        assert origin24.sigma[i] == pytest.approx(np.sqrt(net))
+
+
+def test_a_place_with_no_walk_variance_takes_its_parents(origin24) -> None:
+    snap = origin24.snap
+    reported = origin24.reported.copy()
+    # Make one province with its own spread flat, so its changes are noise.
+    i = int(np.flatnonzero(origin24.sigma_source < len(snap.locations))[0])
+    reported[i] = np.where(reported[i] > 0, reported[i].mean(), 0.0)
+    own, pooled = _walk_spreads(
+        reported, origin24.start, snap, origin24.fit.level, origin24.settings
+    )
+    assert own[i] <= 0
+    source = source_index(
+        origin24.fit.level,
+        snap.parent,
+        (own > 0).astype(int)[:, None],
+        (pooled > 0).astype(int)[:, None],
+        origin24.settings.min_level,
+        1,
+    )[:, 0]
+    assert source[i] >= len(snap.locations)

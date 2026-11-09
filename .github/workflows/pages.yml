@@ -77,6 +77,7 @@ jobs:
         run: |
           scripts/fit-store.sh fetch output/fit-store
           uv run bdbvhubrenewal fit-store load --store output/fit-store
+      # The store too, as the Getting started notebook reads a stored fit.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: inputs
@@ -84,6 +85,7 @@ jobs:
             data
             !data/raw
             results
+            output/fit-store
           retention-days: 1
 
   # The backtests that fit no model, as 13 jobs. None of their results

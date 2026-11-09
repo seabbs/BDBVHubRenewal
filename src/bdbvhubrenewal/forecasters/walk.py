@@ -14,15 +14,72 @@ y_i(h) \sim \mathrm{Poisson}(\lambda_i(h)).
 $$
 
 Steps are cumulative within a sample, so each sample is one trajectory.
+
+The spread $\sigma$ comes from the weekly changes $\Delta_t$ of
+$\log(1 + y_t)$ in reported counts, net of their Poisson noise,
+
+$$
+\sigma^2 = \widehat{\mathrm{Var}}(\Delta_t)
+- \overline{v(y_{t-1}) + v(y_t)},
+\quad v(y) = \frac{y}{(1 + y)^2},
+$$
+
+where $v$ is the delta-method variance of $\log(1 + Y)$ for
+$Y \sim \mathrm{Poisson}(\lambda)$, $\lambda / (1 + \lambda)^2$, with the
+observed count for $\lambda$ (`walk_variance`). The walk draws its Poisson
+counts on top, so the noise is not counted twice.
 """
 
 from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax import Array
 
-__all__ = ["random_walk"]
+__all__ = ["random_walk", "walk_noise", "walk_variance"]
+
+
+def walk_noise(y: np.ndarray) -> np.ndarray:
+    r"""Return the Poisson noise variance of each change of log(1 + y).
+
+    Parameters
+    ----------
+    y : numpy.ndarray
+        Weekly counts, `[W]`.
+
+    Returns
+    -------
+    numpy.ndarray
+        $v(y_{t-1}) + v(y_t)$ for each change, `[W - 1]`, with
+        $v(y) = y / (1 + y)^2$ the delta-method variance of
+        $\log(1 + Y)$ for $Y \sim \mathrm{Poisson}(y)$.
+    """
+    y = np.asarray(y, dtype=float)
+    v = y / (1.0 + y) ** 2
+    return v[1:] + v[:-1]
+
+
+def walk_variance(changes: np.ndarray, noise: np.ndarray) -> float:
+    """Return the variance of the walk's steps net of Poisson noise.
+
+    Parameters
+    ----------
+    changes : numpy.ndarray
+        Weekly changes of log(1 + y), `[N]`.
+    noise : numpy.ndarray
+        Their Poisson noise variances (`walk_noise`), `[N]`.
+
+    Returns
+    -------
+    float
+        The sample variance of `changes` less the mean of `noise`. It
+        may be 0 or below, which says the changes hold no more than
+        Poisson noise. NaN with fewer than 2 changes.
+    """
+    if changes.size < 2:
+        return float("nan")
+    return float(np.var(changes, ddof=1)) - float(np.mean(noise))
 
 
 def random_walk(
