@@ -286,3 +286,25 @@ def test_a_silent_place_is_not_nowcast(runs) -> None:
     model, _ = runs["randomwalknowcast"]
     start = {r["location"]: r["start_week"] for r in model.fit_diagnostics}
     assert (sk.loc[sk["target_end_date"] <= start["CD-SK"], "value"] == 0).all()
+
+
+def test_the_walk_forecasts_on_from_each_samples_nowcast(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    # Cut-off 10-16 is a Friday, so the week of 10-17 is partial. Each
+    # sample walks on from its own nowcast of the start week, so the
+    # forecast is at least as spread as that nowcast and follows it.
+    task = _task(target, delays, daily, "2026-10-17")
+    model = RandomWalkNowcast()
+    out = model.forecast(task)
+    info = pd.DataFrame(model.fit_diagnostics).set_index("location")
+    for loc in ("CD-IT", "CD-NK"):
+        mine = out.loc[out["location"] == loc].pivot(
+            index="sample", columns="target_end_date", values="value"
+        )
+        start = info.loc[loc, "start_week"]
+        later = [w for w in mine.columns if w > "2026-10-17"]
+        x0 = np.log1p(mine[start].to_numpy())
+        x1 = np.log1p(mine[later[0]].to_numpy())
+        assert x1.std() >= x0.std()
+        assert np.corrcoef(x0, x1)[0, 1] > 0.2
