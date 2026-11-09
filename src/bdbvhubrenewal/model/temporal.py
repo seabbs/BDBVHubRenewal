@@ -49,6 +49,16 @@ class NonCentredRandomWalk(TemporalProcess):
     `forecast_half_life` $h_f$ makes the steps past the fit axis AR(1)
     with $\phi_f = 2^{-1/h_f}$, so a random walk reverts towards 0 there
     and the fit is unchanged.
+
+    With a normal prior $x_0 \sim N(\mu_0, s_0)$ as `initial_value`, the
+    start is sampled through its anchor $A = x_0 + m / c$, the mean of
+    $x$ over the fit points from point $k$ divided by $c$, at
+    `{prefix}_anchor`. Here $m$ is the mean of the steps' part and $c$
+    the mean of $\phi^{t - k}$, so $A \sim N(\mu_0 + m / c, s_0)$ and
+    $x_0 = A - m / c$. This is a change of variables with Jacobian 1, so
+    the model is unchanged. The data fix the level of the walk over
+    their period much more tightly than its start, and the anchor is
+    close to that level.
     """
 
     step_size: int = 1
@@ -119,7 +129,8 @@ class NonCentredRandomWalk(TemporalProcess):
         n_timepoints
             Number of time points.
         initial_value
-            Starting value of each process. Defaults to 0.
+            Starting value of each process, or a normal prior for it,
+            sampled through the anchor. Defaults to 0.
         n_processes
             Number of independent processes.
         name_prefix
@@ -137,10 +148,6 @@ class NonCentredRandomWalk(TemporalProcess):
             if self.n_fit is None
             else min(self.n_fit, n_timepoints)
         )
-        x0 = jnp.broadcast_to(
-            jnp.asarray(0.0 if initial_value is None else initial_value),
-            (n_processes,),
-        )
         frozen = min(self.frozen, n_past - 1)
         n_free = n_past - 1 - frozen
         sd = self.innovation_sd_rv()
@@ -155,6 +162,22 @@ class NonCentredRandomWalk(TemporalProcess):
         )
         free = _damped_sum(phi, sd * z)
         decay = phi ** jnp.arange(1, n_free + 1)[:, None]
+        if isinstance(initial_value, dist.Normal):
+            # Points k onwards are x0 * (1, decay) + (0, free), so m / c
+            # is the sum of free over the sum of (1, decay).
+            shift = free.sum(axis=0) / (1 + decay.sum())
+            anchor = numpyro.sample(
+                f"{name_prefix}_anchor",
+                dist.Normal(
+                    initial_value.loc + shift, initial_value.scale
+                ).expand([n_processes]),
+            )
+            x0 = anchor - shift
+        else:
+            x0 = jnp.broadcast_to(
+                jnp.asarray(0.0 if initial_value is None else initial_value),
+                (n_processes,),
+            )
         past = jnp.vstack(
             [jnp.repeat(x0[None, :], frozen + 1, axis=0), decay * x0 + free]
         )

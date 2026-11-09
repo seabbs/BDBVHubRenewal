@@ -109,6 +109,30 @@ class PooledInitialValue(RandomVariable):
         z = numpyro.sample(f"{self.name}_z", dist.Normal(0.0, 1.0).expand([k]))
         return jnp.asarray(mu + sd * (basis @ z))
 
+    def priors(self) -> tuple[dist.Normal, dist.Normal | None]:
+        r"""Return the priors of $\mu$ and of the coordinates $\eta_j$.
+
+        For a walk that samples its start through an anchor
+        (`NonCentredRandomWalk`). Samples $\sigma$ when there are offsets.
+
+        Returns
+        -------
+        tuple
+            The normal prior of $\mu$, and $N(0, \sigma)$ for each
+            $\eta_j$, or None when no group has an offset.
+
+        Raises
+        ------
+        TypeError
+            If the prior of $\mu$ is not normal.
+        """
+        mean = getattr(self.mean_rv, "distribution", None)
+        if not isinstance(mean, dist.Normal):
+            raise TypeError("mean_rv must hold a normal distribution.")
+        if sum_to_zero_basis(self.n_groups, self.active).shape[1] == 0:
+            return mean, None
+        return mean, dist.Normal(0.0, self.sd_rv())
+
 
 class ActiveValues(RandomVariable):
     """Values sampled for the active groups, a fixed value for the rest."""
@@ -226,7 +250,7 @@ def sum_to_zero_basis(n: int, active: np.ndarray | None = None) -> np.ndarray:
 def pooled_walk(
     baseline_process: TemporalProcess,
     deviation_process: TemporalProcess,
-    initial: ArrayLike,
+    initial: ArrayLike | PooledInitialValue,
     n_timepoints: int,
     n_groups: int,
     name_prefix: str,
@@ -252,7 +276,9 @@ def pooled_walk(
         PyRenew temporal processes, for example a `WeeklyTemporalProcess`
         wrapping a `RandomWalk`.
     initial
-        Starting value(s), scalar or shape `(n_groups,)`.
+        Starting value(s), scalar or shape `(n_groups,)`, or the pooled
+        starting values, whose priors the walks sample through their
+        anchors (`NonCentredRandomWalk`).
     n_timepoints, n_groups
         Output shape.
     name_prefix
@@ -269,20 +295,24 @@ def pooled_walk(
         National trajectory `(n_timepoints, 1)` and province trajectories
         `(n_timepoints, n_groups)`.
     """
-    base_start, dev_start = split_initial_value(initial, n_groups)
+    basis = jnp.asarray(sum_to_zero_basis(n_groups, active))
+    if isinstance(initial, PooledInitialValue):
+        base_start, dev_start = initial.priors()
+    else:
+        base_start, dev = split_initial_value(initial, n_groups)
+        dev_start = basis.T @ dev
     baseline = baseline_process.sample(
         n_timepoints=n_timepoints,
         initial_value=base_start,
         name_prefix=f"{name_prefix}_baseline",
         first_day_dow=first_day_dow,
     )
-    basis = jnp.asarray(sum_to_zero_basis(n_groups, active))
     if basis.shape[1] == 0:
         return baseline, jnp.broadcast_to(baseline, (n_timepoints, n_groups))
     coords = deviation_process.sample(
         n_timepoints=n_timepoints,
         n_processes=basis.shape[1],
-        initial_value=basis.T @ dev_start,
+        initial_value=dev_start,
         name_prefix=f"{name_prefix}_deviations",
         first_day_dow=first_day_dow,
     )

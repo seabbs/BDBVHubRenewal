@@ -399,7 +399,7 @@ class MetapopulationInfections(BaseSubpopulationInfections):
         log_rt_baseline, log_rt = pooled_walk(
             self.baseline_rt_process,
             self.subpop_rt_deviation_process,
-            self.log_rt_time_0_rv(),
+            self.log_rt_time_0_rv,
             n_init + n_days_post_init,
             pop.n_subpops,
             "log_rt",
