@@ -121,7 +121,11 @@ from bdbvhubrenewal.reporting.scorechart import (
     OVERALL_METRICS,
     write_score_chart,
 )
-from bdbvhubrenewal.reporting.scoresummary import summary_html, summary_rows
+from bdbvhubrenewal.reporting.scoresummary import (
+    summary_html,
+    summary_rows,
+    targets_attr,
+)
 from bdbvhubrenewal.reporting.store_note import write_store_note
 from bdbvhubrenewal.reporting.tables import filter_table
 from bdbvhubrenewal.reporting.zone_nowcast import (
@@ -1753,23 +1757,22 @@ def _checks_section(
     data_dir: Path | str,
     names: Sequence[str],
 ) -> str:
-    """Score the forecasts by place type and flag (`checks`)."""
-    scores = _release_scores(res)
-    scores = scores.loc[
-        scores["model"].isin(names) & (scores["target"] == "reported")
-    ]
-    national = scores["location"] == NATIONAL
-    scores = scores.assign(
+    """Score the forecasts by place type and flag (`checks`).
+
+    One summary per target: the latest release (the reported target) and
+    the complete weeks.
+    """
+    every = _release_scores(res)
+    national = every["location"] == NATIONAL
+    every = every.assign(
         scale=national.map({True: "national", False: "provinces"})
     )
     zones = _as_submitted(
         pd.read_csv(res / "zone-scores.csv", low_memory=False)
     )
-    zones = zones.loc[
-        zones["model"].isin(names) & (zones["target"] == "reported")
-    ]
-    scores = pd.concat([scores, zones.assign(scale="zones")])
-    origins = sorted(set(scores["origin"].astype(str)))
+    every = pd.concat([every, zones.assign(scale="zones")])
+    every = every.loc[every["model"].isin(names)]
+    origins = sorted(set(every["origin"].astype(str)))
     real = target.loc[target["kind"] == "real"]
     daily_zones = load_daily_zones(data_dir)
     counts = pd.concat(
@@ -1789,15 +1792,19 @@ def _checks_section(
     ]
     ref = ref.assign(origin=ref["reference_date"].astype(str).map(origin_of))
     ref = ref.dropna(subset=["origin"])
-    scores = scores.assign(origin=scores["origin"].astype(str))
-    summary = check_summary(
-        scores,
-        place_types(counts, scores),
-        flags(counts, ref[["model", "origin", "location", "q50", "q95"]]),
-    )
-    write_score_chart(
-        fig / "checks-backtest.json", _checks_chart(summary, names)
-    )
+    every = every.assign(origin=every["origin"].astype(str))
+    flagged = flags(counts, ref[["model", "origin", "location", "q50", "q95"]])
+    srcs = {}
+    for name, kind in (("latest", "reported"), ("complete", "complete")):
+        scores = every.loc[every["target"] == kind]
+        summary = check_summary(scores, place_types(counts, scores), flagged)
+        write_score_chart(
+            fig / f"checks-backtest-{name}.json",
+            _checks_chart(summary, names),
+        )
+        srcs[name] = f"../figures/checks-backtest-{name}.json"
+    latest = every.loc[every["target"] == "reported"]
+    summary = check_summary(latest, place_types(counts, latest), flagged)
     return (
         "## Checks\n\n"
         "Scores of the scored weeks, split by the type of place and by the "
@@ -1810,7 +1817,7 @@ def _checks_section(
         "A forecast is flagged when its reference week drops to a third of "
         "the recent level (collapse) or rises far above every recent count "
         "(blow-up), and has no flag otherwise.\n\n"
-        '<div class="checkschart" data-src="../figures/checks-backtest.json" '
+        f'<div class="checkschart"{targets_attr(srcs)} '
         'role="group" aria-label="Scores by place type and flag">\n'
         "<noscript>The checks chart needs JavaScript.</noscript>\n"
         "</div>\n\n"
