@@ -9,7 +9,7 @@ import pytest
 
 from bdbvhubrenewal.baselinenowcast import fit_nb
 from bdbvhubrenewal.forecasters.obs import (
-    MAX_SIZE,
+    PRIOR_SIZE,
     fit_sizes,
     rate,
     sample_count,
@@ -46,10 +46,13 @@ def test_overdispersed_reports_give_a_smaller_size() -> None:
     assert fit_sizes(wide, remaining, 2) < fit_sizes(narrow, remaining, 2)
 
 
-def test_too_few_errors_give_the_poisson_end() -> None:
+def test_too_few_errors_give_the_prior_median() -> None:
     added = np.array([[4.0, 0.0], [0.0, 0.0]])
     remaining = np.array([[3.0, 0.0], [0.0, 0.0]])
-    assert fit_sizes(added, remaining, 2).tolist() == [MAX_SIZE, MAX_SIZE]
+    np.testing.assert_allclose(
+        fit_sizes(added, remaining, 2), PRIOR_SIZE, rtol=1e-6
+    )
+    assert pytest.approx(2.2, abs=0.01) == PRIOR_SIZE
 
 
 def test_the_removal_rate_is_a_ratio_of_sums() -> None:
