@@ -231,13 +231,34 @@ def _model_modules() -> dict[str, str]:
     return out
 
 
+def _closure(
+    src: Path,
+    todo: list[Path],
+    stop: set[Path],
+    start: Path,
+    seen: set[Path] | None = None,
+) -> set[Path]:
+    """Return the modules `todo` import, not going into `stop`."""
+    seen = set() if seen is None else set(seen)
+    todo = list(todo)
+    while todo:
+        path = todo.pop()
+        if path in seen or path in stop:
+            continue
+        seen.add(path)
+        if _follows(path) or path == start:
+            todo += sorted(_imports(path, src) - seen)
+    return seen
+
+
 def model_code(model: str, root: Path | str = ".") -> list[str]:
     """List the source files a forecast-only run of one model reads.
 
-    The import closure, within the package, of the model's own module and
-    of `FORECAST_ENTRIES`, which stops at the modules that define other
-    models: the registry imports every model, but a model's forecasts do
-    not run the others' code. The CLI module is added as a file, without
+    The import closure, within the package, of the model's own module, with
+    any other model's module it builds on, and of `FORECAST_ENTRIES`,
+    which stops at the modules that define the other models: the registry
+    imports every model, but a model's forecasts do not run the others'
+    code. The CLI module is added as a file, without
     following its imports, which reach every command.
 
     Parameters
@@ -263,15 +284,14 @@ def model_code(model: str, root: Path | str = ".") -> list[str]:
     }
     start = _module_file(src, own)
     assert start is not None
-    todo = [start, *(base / e for e in FORECAST_ENTRIES)]
-    seen: set[Path] = set()
-    while todo:
-        path = todo.pop()
-        if path in seen or path in others:
-            continue
-        seen.add(path)
-        if _follows(path) or path == start:
-            todo += sorted(_imports(path, src) - seen)
+    # Everything the model's own module needs, another model's module
+    # included when it builds on it (pprandomwalknowcast on randomwalk.py).
+    seen = _closure(src, [start], set(), start)
+    # Then the shared forecasting code, which reaches every model through
+    # the registry: there the other models' modules are left out.
+    seen = _closure(
+        src, [base / e for e in FORECAST_ENTRIES], others - seen, start, seen
+    )
     seen.add(src / _PACKAGE / "cli.py")
     return sorted(p.relative_to(base).as_posix() for p in seen)
 

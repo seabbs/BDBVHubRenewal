@@ -155,3 +155,5 @@ def test_model_code_leaves_out_other_models() -> None:
     assert "src/bdbvhubrenewal/forecasters/randomwalk.py" in code
     pp = set(model_code("pprandomwalknowcast", ROOT))
     assert "src/bdbvhubrenewal/forecasters/renewal.py" not in pp
+    # It builds on the random walk module, so that is in its key.
+    assert "src/bdbvhubrenewal/forecasters/randomwalk.py" in pp
