@@ -64,7 +64,11 @@ from bdbvhubrenewal.evaluation.heldout import (
     load_model_choices,
     run_heldout,
 )
-from bdbvhubrenewal.evaluation.nowcast import release_backtest, stored_delays
+from bdbvhubrenewal.evaluation.nowcast import (
+    release_backtest,
+    stored_delays,
+    stored_reporting,
+)
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastTask,
@@ -635,6 +639,7 @@ def _release_backtest(
         stored=stored,
         delays=learnt,
         compare=[s.name for s in list_models()],
+        reporting=stored_reporting(args.results),
     )
     for name, table in (
         ("scores", out.scores),

@@ -436,3 +436,23 @@ def test_a_stored_model_with_reporting_curves_is_scored_by_them(
     # samples, as the model's own as-reported path does.
     assert (rep.loc[mine, "q50"] == 6).all()
     assert (rep.loc[~mine & (rep["location"] != "CD"), "q50"] == 100).all()
+
+
+def test_scoring_cut_offs_are_the_model_s_report_by_cut_offs(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    from bdbvhubrenewal.evaluation.nowcast import _cutoff
+
+    real = target.loc[target["kind"] == "real"]
+    releases = sorted(set(real["vintage"]))
+    (task,) = make_tasks(
+        real.loc[real["vintage"] == releases[0]],
+        delays.assign(kind="real"),
+        BacktestConfig(n_samples=5, seed=1),
+        history=real,
+        report_by=releases,
+        daily=daily,
+    )
+    assert task.report_by
+    for release, cut in task.report_by.items():
+        assert _cutoff(daily, release).isoformat() == cut

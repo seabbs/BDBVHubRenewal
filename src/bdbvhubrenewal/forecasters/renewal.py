@@ -85,6 +85,7 @@ __all__ = [
     "parameter_diagnostics",
     "ppc_rows",
     "report_cutoffs",
+    "report_weeks",
     "run_nuts",
     "sampler_settings",
     "samples_table",
@@ -552,6 +553,72 @@ def report_cutoffs(task: ForecastTask, data: Any) -> dict[int, str]:
     return {
         (dt.date.fromisoformat(cut) - data.start_date).days: d
         for d, cut in task.report_by.items()
+    }
+
+
+def report_weeks(
+    task: ForecastTask, data: Any
+) -> tuple[tuple[str, ...], NDArray[np.int64]]:
+    """Return the target weeks on the model grid and their rows.
+
+    Weeks before the grid take the data (`samples_table`), so they have
+    no reporting curves.
+
+    Parameters
+    ----------
+    task : ForecastTask
+        The task.
+    data : bdbvhubrenewal.model.Vintage
+        The fitted inputs.
+
+    Returns
+    -------
+    tuple
+        The hub week ends and the matching weeks from `data.start_date`.
+    """
+    first = data.start_date + dt.timedelta(days=6)
+    rows = {w: (_saturday(w) - first).days // 7 for w in task.target_end_dates}
+    kept = tuple(w for w, i in rows.items() if i >= 0)
+    return kept, np.array([rows[w] for w in kept], dtype=np.int64)
+
+
+def report_days(task: ForecastTask, data: Any, config: Any) -> int:
+    """Days after the cut-off by which every target week is reported.
+
+    The last target day plus the longest delay and publication lag.
+    """
+    from bdbvhubrenewal.model.model import MAX_PUBLICATION_LAG
+
+    last = max(_saturday(w) for w in task.target_end_dates)
+    cut = data.start_date + dt.timedelta(days=data.cutoff)
+    return int(
+        max((last - cut).days, 0) + config.dmax + MAX_PUBLICATION_LAG + 1
+    )
+
+
+def reporting_block(task: ForecastTask, run: RenewalRun) -> dict[str, Any]:
+    """Return a run's reporting curves as stored (`forecasters.reporting`).
+
+    Parameters
+    ----------
+    task : ForecastTask
+        The task of the run.
+    run : RenewalRun
+        The run.
+
+    Returns
+    -------
+    dict
+        `start_date`, `places`, `weeks` and `curves` (`reporting.encode`).
+    """
+    from bdbvhubrenewal.forecasters.reporting import encode
+
+    weeks, _ = report_weeks(task, run.data)
+    return {
+        "start_date": run.data.start_date.isoformat(),
+        "places": [str(p) for p in run.data.names],
+        "weeks": list(weeks),
+        "curves": encode(run.draws["reporting"]),
     }
 
 
@@ -1035,12 +1102,16 @@ class RenewalFit:
     as_reported : pandas.DataFrame or None
         Samples of the counts reported by each date in `task.report_by`
         (`SAMPLE_COLUMNS` and `as_of`), for the weeks up to that date.
+    reporting : list of dict
+        Each run's `reporting_block`, which gives the counts reported by
+        any later cut-off.
     """
 
     runs: Mapping[str, RenewalRun]
     samples: pd.DataFrame
     unassigned: pd.DataFrame | None = None
     as_reported: pd.DataFrame | None = None
+    reporting: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -1061,6 +1132,8 @@ class RenewalModel:
         The variant name.
     delay_summary : pandas.DataFrame or None
         `fit_delays` of the last `forecast`.
+    reporting : list of dict
+        `RenewalFit.reporting` of the last `forecast`.
     """
 
     variant: Variant
@@ -1072,6 +1145,9 @@ class RenewalModel:
         init=False, default_factory=list
     )
     delay_summary: pd.DataFrame | None = field(init=False, default=None)
+    reporting: list[dict[str, Any]] = field(
+        init=False, default_factory=list, repr=False
+    )
 
     def __post_init__(self) -> None:
         """Name the model after its variant and say if it takes a mask."""
@@ -1127,12 +1203,15 @@ class RenewalModel:
             f"variant={self.name} sampling done seconds={seconds:.0f} "
             f"cpu_seconds={cpu_seconds:.0f}"
         )
+        _, grid = report_weeks(task, data)
         draws = pr.forecast_trajectories(
             model,
             data,
             task.n_samples,
             seed=task.seed,
             as_of=tuple(report_cutoffs(task, data)),
+            report_weeks=tuple(int(r) for r in grid),
+            report_days=report_days(task, data, config),
         )
         by_chain = model.mcmc.get_samples(group_by_chain=True)
         trace = {
@@ -1227,6 +1306,11 @@ class RenewalModel:
             samples,
             data_gap(task, samples),
             as_reported=pd.concat(later, ignore_index=True) if later else None,
+            reporting=[
+                reporting_block(tasks[key], run)
+                for key, run in runs.items()
+                if "reporting" in run.draws
+            ],
         )
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
@@ -1254,6 +1338,7 @@ class RenewalModel:
         """
         fit = self.forecast_fit(task)
         self.delay_summary = fit_delays(fit, task)
+        self.reporting = fit.reporting
         self.fit_diagnostics = [
             {"fit": key, **fit_summary(run, self.sampler)}
             for key, run in fit.runs.items()

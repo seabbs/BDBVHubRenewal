@@ -669,8 +669,10 @@ def test_forecast_keeps_each_fit_s_reporting_curves(
         )
         dt.date.fromisoformat(block["start_date"])
         covered |= set(block["places"])
-    # The silent province takes the random walk, with no curves.
-    assert covered == set(task.locations) - {task.locations[-1]}
+    # A single-patch fit's silent province takes the random walk, with
+    # no curves.
+    silent = {task.locations[-1]} if name == "renewalsp" else set()
+    assert covered == set(task.locations) - silent
 
 
 def test_report_weeks_are_the_target_weeks_on_the_model_grid(

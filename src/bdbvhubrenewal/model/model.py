@@ -917,7 +917,7 @@ def reporting_curves(
     weeks: Sequence[int],
     n_days: int,
 ) -> dict[str, Any]:
-    """Per-draw quantities that give the counts reported by any cut-off.
+    """Return what gives each draw's counts reported by any cut-off.
 
     The counts as reported by cut-off $T + j$ of trajectory $k$ are, as in
     `OnsetStreams.sample` with `as_of`, the vintage counts (or the

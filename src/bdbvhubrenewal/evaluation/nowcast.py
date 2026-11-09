@@ -13,6 +13,10 @@ Two targets are scored.
 **Reported.** The count each later release $o'$ shows, for every week
 of the forecast that $o'$ reports.
 `randomwalk` is scored on its samples as they are, with no delay.
+A model that stores reporting curves with its fit, such as the renewal
+models, is scored on its own counts as reported by $o'$
+(`own_reported_samples`): its delay, publication lag and observation
+noise, draw by draw.
 Every other model forecasts the final count $X$ of a week and is mapped
 to what $o'$ shows through its own modelled delay, the share
 $\pi$ of a day's final count reported by each age (`delay_curves`,
@@ -45,10 +49,13 @@ release, target and scale.
 from __future__ import annotations
 
 import datetime as dt
+import gzip
+import json
 import logging
-from collections.abc import Collection, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -78,21 +85,28 @@ __all__ = [
     "COMPLETE_GROWTH",
     "COMPLETE_WEEKS",
     "RANDOM_WALK",
+    "REPORTING_FILE",
     "ReleaseBacktest",
     "complete_weeks",
     "delay_curves",
     "draw_reported",
+    "own_reported_samples",
     "relative_energy",
     "relative_wis",
     "release_backtest",
     "reported_samples",
     "stored_delays",
+    "stored_reporting",
     "summarise",
     "week_shares",
     "weeks_back_from_cutoff",
 ]
 
 log = logging.getLogger(__name__)
+
+REPORTING_FILE = "reporting.json.gz"
+"""The loaded fits' reporting curves, written beside the results by
+`fit-store load`."""
 
 RANDOM_WALK = "randomwalk"
 """The model scored on its samples as they are, with no delay."""
@@ -434,6 +448,60 @@ def reported_samples(
     return out
 
 
+def own_reported_samples(
+    samples: pd.DataFrame,
+    blocks: Sequence[Mapping[str, Any]],
+    later: Sequence[str],
+    daily: pd.DataFrame,
+    rng: np.random.Generator,
+) -> dict[str, pd.DataFrame]:
+    """Return a model's own samples of what each later release shows.
+
+    The places and weeks of the model's reporting curves are drawn from
+    them (`forecasters.reporting.as_reported_samples`); other rows, such
+    as weeks before the model's grid and places a single-patch fit gives
+    to the random walk, keep their samples, as the model's own `as_of`
+    rows do. The country is the sum of the provinces.
+
+    Parameters
+    ----------
+    samples : pandas.DataFrame
+        The model's final-count samples, with `location`,
+        `target_end_date`, `sample` and `value`.
+    blocks : sequence of dict
+        The fit's reporting curves (`renewal.reporting_block`).
+    later : sequence of str
+        The later releases.
+    daily : pandas.DataFrame
+        Daily onsets by release, for the cut-offs.
+    rng : numpy.random.Generator
+        Random numbers.
+
+    Returns
+    -------
+    dict of str to pandas.DataFrame
+        Samples by later release.
+    """
+    from bdbvhubrenewal.forecasters.reporting import as_reported_samples
+
+    keys = ["location", "target_end_date", "sample"]
+    places = samples.loc[samples["location"] != NATIONAL, [*keys, "value"]]
+    whole = NATIONAL in set(samples["location"])
+    out = {}
+    for o2 in later:
+        cut = _cutoff(daily, o2)
+        drawn = pd.concat(
+            [as_reported_samples(b, cut, rng) for b in blocks],
+            ignore_index=True,
+        )
+        drawn = drawn.merge(places[keys], on=keys)
+        kept = places.merge(drawn[keys], on=keys, how="left", indicator=True)
+        kept = kept.loc[kept.pop("_merge") == "left_only"]
+        both = pd.concat([drawn, kept], ignore_index=True)
+        out[o2] = add_national(both) if whole else both
+    return out
+
+
 def stored_delays(results: Path | str) -> pd.DataFrame:
     """Return the fitted models' stored delay summaries.
 
@@ -456,6 +524,31 @@ def stored_delays(results: Path | str) -> pd.DataFrame:
     learnt = pd.read_csv(path)
     fitted = [s.name for s in list_models() if s.fitted]
     return learnt.loc[learnt["model"].isin(fitted)]
+
+
+def stored_reporting(
+    results: Path | str,
+) -> dict[tuple[str, str], list[dict[str, Any]]]:
+    """Return the loaded fits' reporting curves by (model, origin).
+
+    `fit-store load` writes them to `results` (`store.write_reporting`).
+
+    Parameters
+    ----------
+    results : pathlib.Path or str
+        The results directory.
+
+    Returns
+    -------
+    dict
+        `renewal.reporting_block` blocks by (model, origin), empty if no
+        fit with curves was loaded.
+    """
+    path = Path(results) / REPORTING_FILE
+    if not path.exists():
+        return {}
+    body = json.loads(gzip.decompress(path.read_bytes()))
+    return {(r["model"], r["origin"]): r["blocks"] for r in body}
 
 
 def _label(
@@ -498,6 +591,8 @@ def release_backtest(
     complete_rule: str = "growth",
     complete_after: int = COMPLETE_WEEKS,
     compare: Collection[str] | None = None,
+    reporting: Mapping[tuple[str, str], Sequence[Mapping[str, Any]]]
+    | None = None,
 ) -> ReleaseBacktest:
     """Forecast from every real release and score every model.
 
@@ -523,6 +618,11 @@ def release_backtest(
     compare : collection of str, optional
         Models the energy score compares, on the cells they all forecast.
         All models if None. Other models get no energy score.
+    reporting : mapping, optional
+        The stored models' reporting curves by (model, origin)
+        (`store.stored_reporting`). A model with curves at an origin is
+        scored on the reported target by them (`own_reported_samples`),
+        not by its delay summary.
 
     Returns
     -------
@@ -571,6 +671,7 @@ def release_backtest(
         here = kept.loc[kept["vintage"].astype(str) == task.vintage]
         forecasts: dict[str, pd.DataFrame] = {}
         summaries: dict[str, pd.DataFrame | None] = {}
+        curves: dict[str, Sequence[Mapping[str, Any]]] = {}
         for model in built:
             try:
                 samples = model.forecast(task)
@@ -588,6 +689,8 @@ def release_backtest(
                 continue
             forecasts[model.name] = add_national(samples)
             summaries[model.name] = getattr(model, "delay_summary", None)
+            if own := getattr(model, "reporting", None):
+                curves[model.name] = own
             fits = pd.DataFrame(getattr(model, "fit_diagnostics", []))
             fits.insert(0, "model", model.name)
             fits.insert(1, "origin", task.vintage)
@@ -602,6 +705,8 @@ def release_backtest(
             forecasts[str(name)] = grp[cols]
             mine = learnt.loc[learnt["model"] == name]
             summaries[str(name)] = None if mine.empty else mine
+            if own := (reporting or {}).get((str(name), task.vintage)):
+                curves[str(name)] = own
         reported = _truth(real, task.vintage).rename(
             columns={"truth": "reported"}
         )
@@ -609,13 +714,26 @@ def release_backtest(
         # on which other models run.
         rngs = {name: task.rng(name) for name in forecasts}
         for name, samples in forecasts.items():
+            by_release = (
+                own_reported_samples(
+                    samples, curves[name], later, daily, rngs[name]
+                )
+                if name in curves
+                else reported_samples(
+                    samples,
+                    summaries[name],
+                    name,
+                    task.vintage,
+                    later,
+                    daily,
+                    reported,
+                    rngs[name],
+                )
+            )
             frames += [
                 _label(drawn, name, task.vintage, "reported", o2, daily)
-                for o2, drawn in reported_samples(
-                    samples, summaries[name], name, task.vintage, later,
-                    daily, reported, rngs[name],
-                ).items()
-            ]  # fmt: skip
+                for o2, drawn in by_release.items()
+            ]
             frames.append(
                 _label(samples, name, task.vintage, "complete", latest, daily)
             )

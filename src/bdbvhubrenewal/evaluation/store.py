@@ -62,6 +62,10 @@ from bdbvhubrenewal.evaluation.heldout import (
     load_model_choices,
     model_for_vintage,
 )
+from bdbvhubrenewal.evaluation.nowcast import (
+    REPORTING_FILE,
+    stored_reporting,
+)
 from bdbvhubrenewal.forecasters import (
     ForecastModel,
     ForecastTask,
@@ -71,6 +75,7 @@ from bdbvhubrenewal.forecasters import (
 
 __all__ = [
     "CODE_INPUTS",
+    "REPORTING_FILE",
     "STATUS_FILE",
     "StoreStatus",
     "StoredFit",
@@ -88,7 +93,9 @@ __all__ = [
     "samplers",
     "store_path",
     "stored_models",
+    "stored_reporting",
     "write_fit",
+    "write_reporting",
 ]
 
 CODE_INPUTS: Final = (
@@ -398,12 +405,17 @@ class StoredFit:
         The model's fit summaries (`fit_diagnostics`).
     delays : pandas.DataFrame
         The learnt delay (`delay_summary`), empty if the model has none.
+    reporting : list of dict or None
+        The model's reporting curves (`renewal.reporting_block`), which
+        give its counts as reported by any later release, or None if it
+        has none.
     """
 
     meta: dict[str, Any]
     forecasts: pd.DataFrame
     fits: pd.DataFrame
     delays: pd.DataFrame
+    reporting: list[dict[str, Any]] | None = None
 
 
 _TABLES: Final = ("forecasts", "fits", "delays")
@@ -436,6 +448,8 @@ def write_fit(store: Path | str, stored: StoredFit) -> Path:
             for name in _TABLES
         },
     }
+    if stored.reporting:
+        body["reporting"] = stored.reporting
     # No timestamp in the gzip header, so the bytes depend on the content.
     with gzip.GzipFile(path, "wb", mtime=0) as fh:
         fh.write(json.dumps(body).encode())
@@ -464,7 +478,10 @@ def read_fit(path: Path | str) -> StoredFit:
             dtype=False,
         )
 
-    return StoredFit(body["meta"], *(table(n) for n in _TABLES))
+    forecasts, fits, delays = (table(n) for n in _TABLES)
+    return StoredFit(
+        body["meta"], forecasts, fits, delays, body.get("reporting")
+    )
 
 
 def _commit() -> str:
@@ -562,6 +579,7 @@ def fit(
         forecasts,
         pd.concat(fits, ignore_index=True) if fits else pd.DataFrame(),
         pd.concat(learnt, ignore_index=True) if learnt else pd.DataFrame(),
+        getattr(model, "reporting", None) or None,
     )
 
 
@@ -706,10 +724,44 @@ def load(
         (DELAY_SUMMARY_FILE, [f.delays for f in loaded]),
     ):
         _merge(out / name, frames)
+    write_reporting(loaded, out)
     (out / STATUS_FILE).write_text(
         json.dumps([vars(s) for s in status], indent=1) + "\n"
     )
     return status
+
+
+def write_reporting(fits: Iterable[StoredFit], results: Path | str) -> Path:
+    """Merge the fits' reporting curves into `REPORTING_FILE`.
+
+    Curves of other (model, origin) pairs are kept, so a merge with no
+    fits leaves the file as it was.
+
+    Parameters
+    ----------
+    fits : iterable of StoredFit
+        Loaded fits. Those with no curves are skipped.
+    results : pathlib.Path or str
+        The results directory.
+
+    Returns
+    -------
+    pathlib.Path
+        The file.
+    """
+    path = Path(results) / REPORTING_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rows = dict(stored_reporting(results))
+    for f in fits:
+        if f.reporting:
+            rows[(f.meta["model"], f.meta["origin"])] = f.reporting
+    body = [
+        {"model": m, "origin": o, "blocks": b}
+        for (m, o), b in sorted(rows.items())
+    ]
+    with gzip.GzipFile(path, "wb", mtime=0) as fh:
+        fh.write(json.dumps(body).encode())
+    return path
 
 
 def _merge(path: Path, frames: Iterable[pd.DataFrame]) -> None:

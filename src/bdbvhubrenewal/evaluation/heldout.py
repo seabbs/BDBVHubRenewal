@@ -48,7 +48,11 @@ from bdbvhubrenewal.evaluation.backtest import (
     real_vintages,
     run_forecasts,
 )
-from bdbvhubrenewal.evaluation.nowcast import release_backtest, stored_delays
+from bdbvhubrenewal.evaluation.nowcast import (
+    release_backtest,
+    stored_delays,
+    stored_reporting,
+)
 from bdbvhubrenewal.forecasters import get_model, list_models
 
 __all__ = [
@@ -299,6 +303,7 @@ def run_heldout(
             models=(),
             stored=final,
             delays=pd.concat([*learnt, stored_delays(out)], ignore_index=True),
+            reporting=stored_reporting(out),
         ).scores
     else:
         # No vintage after the choice yet, so nothing is held out.
