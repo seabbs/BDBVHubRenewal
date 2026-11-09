@@ -107,7 +107,11 @@ def test_history_flags_changes_in_what_is_scored(sh) -> None:
     # Same origins and releases, but fewer of good's forecasts scored.
     fewer = _summary()
     fewer["origins"] = later["origins"]
-    fewer["rows"] = [r for r in fewer["rows"] if r[:2] != [1, 1]]
+    keep = [r[:2] != [1, 1] for r in fewer["rows"]]
+    fewer["rows"] = [r for r, k in zip(fewer["rows"], keep, strict=True) if k]
+    fewer["horizons"] = [
+        h for h, k in zip(fewer["horizons"], keep, strict=True) if k
+    ]
     deploys = [
         ("a" * 40, "2026-11-04T10:00:00+00:00", "p1", "latest", base),
         ("a" * 40, "2026-11-04T11:00:00+00:00", "p2", "latest", base),
@@ -284,3 +288,27 @@ def test_script_does_not_import_the_package() -> None:
         [sys.executable, "-c", code], capture_output=True, text=True, check=True
     )
     assert out.stdout.split() == ["False", "False"]
+
+
+def test_common_window_keeps_the_most_forecast_deploys(sh) -> None:
+    # B adds four national forecasts by both models: B alone has 7
+    # common forecasts (7 forecast-deploys) and A to B 3 (6), so the
+    # window is B alone.
+    more = _summary()
+    more["origins"] = [f"2026-1{i}-01" for i in range(6)]
+    more["origins"][:2] = ["2026-10-24", "2026-10-31"]
+    for o in (2, 3, 4, 5):
+        more["rows"].append([0, o, 0, 0, 0, 8.0, 1.0])
+        more["rows"].append([1, o, 0, 0, 0, 4.0, 1.0])
+        more["horizons"] += [0, 0]
+    out = _good_national(
+        sh.history(
+            [
+                ("a" * 40, "t1", "p1", "latest", _summary()),
+                ("b" * 40, "t2", "p2", "latest", more),
+            ]
+        )
+    )
+    common = out.loc[out["common"]]
+    assert list(common["source_sha"].str[:1]) == ["b"]
+    assert list(common["n"]) == [6]
