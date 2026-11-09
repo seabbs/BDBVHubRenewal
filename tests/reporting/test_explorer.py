@@ -106,8 +106,10 @@ def test_explorer_html_can_start_with_all_rounds() -> None:
 
 
 def test_explorer_html_names_the_summary_it_tabulates() -> None:
-    html = explorer.explorer_html("x.json", "Forecasts", summary="s.json")
-    assert 'data-summary="s.json"' in html
+    html = explorer.explorer_html(
+        "x.json", "Forecasts", summary={"latest": "s.json"}
+    )
+    assert """data-targets='{"latest": "s.json"}'""" in html
 
 
 def test_trajectories_keep_the_same_draws_in_every_place() -> None:

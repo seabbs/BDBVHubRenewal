@@ -120,6 +120,19 @@
     });
   }
 
+  // A "Scored on" select of a widget's targets (data-targets: target to
+  // summary URL), showing value. onChange(target) runs on a change. With
+  // one target there is nothing to pick and no select.
+  var TARGETS = { latest: "Latest release", complete: "Complete weeks" };
+  function targetSelect(controls, targets, value, onChange) {
+    var keys = Object.keys(targets);
+    if (keys.length < 2) return;
+    var sel = h("select", {}, h("label", {}, controls, "Scored on "));
+    keys.forEach(function (k) { h("option", { value: k }, sel, TARGETS[k]); });
+    sel.value = value;
+    sel.addEventListener("change", function () { onChange(sel.value); });
+  }
+
   // A Map tick box, ticked when on. onChange(ticked) runs on a change.
   function mapToggle(controls, on, onChange) {
     var l = h("label", { class: "map-toggle" }, controls);
@@ -131,5 +144,6 @@
   }
 
   window.bdbvToggles = { h: h, el: el, getJSON: getJSON, legend: legend, hatch: hatch, onTheme: onTheme,
-    viewSelect: viewSelect, fullscreen: fullscreen, mapToggle: mapToggle };
+    viewSelect: viewSelect, fullscreen: fullscreen, mapToggle: mapToggle,
+    targetSelect: targetSelect };
 })();

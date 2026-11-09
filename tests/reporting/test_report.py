@@ -63,13 +63,17 @@ def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
     assert (fig / "comparison-2026-10-24.svg").exists()
     # The Backtest summaries lead, with the static figure as the fallback,
     # and randomwalk starts off as the relative reference.
-    assert "scoresummary-comparison.json" in scores
+    # Complete weeks first, with the latest release to pick.
+    assert "scoresummary-comparison-complete.json" in scores
+    assert "scoresummary-comparison-latest.json" in scores
     assert "comparison-overall.svg" in scores
     assert 'data-view="place"' in (gen / "comparison-place.md").read_text()
     horizon = (gen / "comparison-horizon.md").read_text()
     assert 'data-view="horizon"' in horizon
     assert (fig / "comparison-place.svg").exists()
-    data = json.loads((fig / "scoresummary-comparison.json").read_text())
+    data = json.loads(
+        (fig / "scoresummary-comparison-complete.json").read_text()
+    )
     on = {m["name"]: m["on"] for m in data["models"]}
     assert on["randomwalk (main build)"] is False
     assert on["teamA-weekly"] is True
@@ -257,10 +261,13 @@ def test_recovery_section() -> None:
             "log_energy": [0.25, 0.75],
         }
     )
-    text = report._recovery_section("summary.json", energy)
+    text = report._recovery_section({"complete": "summary.json"}, energy)
     assert text.startswith("## Recovery on simulated vintages")
     for view in ("overall", "horizon", "place"):
-        assert f'data-src="summary.json" data-view="{view}"' in text
+        assert (
+            """data-targets='{"complete": "summary.json"}' """
+            f'data-view="{view}"'
+        ) in text
     assert "recovery-wis-horizon.svg" in text
     assert "mean energy score" in text
     assert "| national | randomwalk |   2 |" in text
@@ -436,7 +443,7 @@ def _scenario_results(res: Path) -> None:
             ]
             for model in ("randomwalk", "randomwalknowcast"):
                 for h, week in enumerate(weeks[2:]):
-                    scores.append(
+                    scores += [
                         {
                             "scenario": scenario,
                             "model": model,
@@ -452,9 +459,10 @@ def _scenario_results(res: Path) -> None:
                             "coverage_90": 0.9,
                             "bias": 0.0,
                             "complete": True,
-                            "truth_view": "final",
+                            "truth_view": view,
                         }
-                    )
+                        for view in ("final", "as of 2 weeks later")
+                    ]
                     samples += [
                         {
                             "scenario": scenario,
@@ -478,10 +486,11 @@ def _scenario_results(res: Path) -> None:
                 "scale": scale,
                 "energy": 1.0,
                 "log_energy": 0.1,
-                "truth_view": "final",
+                "truth_view": view,
             }
             for model in ("randomwalk", "randomwalknowcast")
             for scale in ("national", "provinces")
+            for view in ("final", "as of 2 weeks later")
         ]
     pd.DataFrame(scores).to_csv(res / "scenario-scores.csv.gz", index=False)
     pd.DataFrame(samples).to_csv(res / "scenario-forecasts.csv.gz", index=False)
@@ -499,7 +508,9 @@ def test_scenario_section_draws_every_final_week(tmp_path: Path) -> None:
     for key, title in report._SCENARIOS.items():
         assert text.count(f'=== "{title}"') == 4
         summary = json.loads(
-            (tmp_path / f"scoresummary-scenario-{key}.json").read_text()
+            (
+                tmp_path / f"scoresummary-scenario-{key}-complete.json"
+            ).read_text()
         )
         explorer = json.loads(
             (tmp_path / f"explorer-scenario-{key}.json").read_text()
