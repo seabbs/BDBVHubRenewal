@@ -550,7 +550,9 @@ def stored_forecasts(
     paths : sequence of pathlib.Path or str
         Outputs of `run_forecasts`, such as the backtest and held-out
         forecasts. Missing files are skipped, and so are the rows of counts
-        as reported by a later vintage (`as_of`).
+        as reported by a later vintage (`as_of`). A model's round is taken
+        from the first file that holds it, so a later file, such as
+        unsubmitted candidates, fills only the rounds the others lack.
     reference_dates : sequence of str
         Hub reference dates.
     exclude : sequence of str
@@ -562,9 +564,10 @@ def stored_forecasts(
         Columns `SAMPLE_COLUMNS`, with `source` the vintage kind.
     """
     frames = []
+    taken: set[tuple[str, str]] = set()
     for path in paths:
         try:
-            fc = pd.read_csv(path)
+            fc = pd.read_csv(path, low_memory=False)
         except (FileNotFoundError, pd.errors.EmptyDataError):
             continue
         fc = fc.loc[
@@ -573,11 +576,14 @@ def stored_forecasts(
             & (fc["kind"] == "real")
             & fc["as_of"].isna()
         ]
-        frames.append(fc)
+        fc = fc.rename(columns={"kind": "source"})[list(SAMPLE_COLUMNS)]
+        fc["reference_date"] = fc["reference_date"].astype(str)
+        rounds = list(zip(fc["model"], fc["reference_date"], strict=True))
+        frames.append(fc.loc[[r not in taken for r in rounds]])
+        taken.update(rounds)
     if not frames:
         return pd.DataFrame(columns=list(SAMPLE_COLUMNS))
-    fc = pd.concat(frames, ignore_index=True).drop_duplicates()
-    return fc.rename(columns={"kind": "source"})[list(SAMPLE_COLUMNS)]
+    return pd.concat(frames, ignore_index=True).drop_duplicates()
 
 
 def zone_truth(
