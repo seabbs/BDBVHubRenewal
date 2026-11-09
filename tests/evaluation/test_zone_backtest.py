@@ -56,9 +56,16 @@ def test_both_baselines_are_scored_at_zone_level(
     names = {"randomwalk", "randomwalknowcast"}
     assert set(scores["model"]) == names | {n + SUMMED for n in names}
     assert (scores["location"].str.count("-") == 2).all()
-    # Each origin is scored on what every later release reported.
-    assert set(scores["target"]) == {"reported"}
-    pairs = set(zip(scores["origin"], scores["truth_vintage"], strict=True))
+    # Each origin is scored on what every later release reported, and on
+    # the latest release's complete weeks.
+    assert set(scores["target"]) == {"reported", "complete"}
+    done = scores.loc[scores["target"] == "complete"]
+    assert set(done["truth_vintage"]) == {"2026-11-01"}
+    assert set(done["origin"]) == {"2026-10-17", "2026-10-24"}
+    # Complete weeks are at least four weeks old at the latest release.
+    assert (done["target_end_date"] <= "2026-10-10").all()
+    reported = scores.loc[scores["target"] == "reported"]
+    pairs = set(zip(reported["origin"], reported["truth_vintage"], strict=True))
     assert pairs == {
         ("2026-10-17", "2026-10-24"),
         ("2026-10-17", "2026-11-01"),
