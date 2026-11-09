@@ -182,3 +182,31 @@ def test_a_fit_that_raises_is_stored_as_failed(
     assert stored.meta["status"] == "failed"
     assert "no fit" in stored.meta["error"]
     assert stored.forecasts.empty
+
+
+def test_a_fit_s_reporting_curves_are_stored_and_loaded(
+    tmp_path: Path,
+) -> None:
+    meta = {
+        "model": "flatfit",
+        "origin": "2026-10-17",
+        "key": "k",
+        "commit": "c",
+        "fitted_at": "2026-11-01T00:00:00",
+        "settings": "s",
+        "status": "ok",
+    }
+    table = pd.DataFrame({"model": ["flatfit"], "vintage": ["2026-10-17"]})
+    blocks = [{"start_date": "2026-06-07", "places": ["CD-IT"], "x": 1}]
+    with_curves = store.StoredFit(meta, table, table, table, blocks)
+    back = store.read_fit(store.write_fit(tmp_path, with_curves))
+    assert back.reporting == blocks
+    # Fits stored before reporting curves read back with none.
+    plain = store.StoredFit(meta | {"key": "old"}, table, table, table)
+    assert store.read_fit(store.write_fit(tmp_path, plain)).reporting is None
+    results = tmp_path / "results"
+    store.write_reporting([back], results)
+    store.write_reporting([], results)
+    got = store.stored_reporting(results)
+    assert got == {("flatfit", "2026-10-17"): blocks}
+    assert store.stored_reporting(tmp_path / "none") == {}

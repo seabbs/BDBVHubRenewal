@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import json
 from dataclasses import replace
 from pathlib import Path
@@ -219,6 +220,21 @@ def _fake_run(task: ForecastTask, variant: rn.Variant) -> rn.RenewalRun:
             "province": np.ones_like(draws["province"]),
         }
         for cut in rn.report_cutoffs(task, data)
+    }
+    _, rows = rn.report_weeks(task, data)
+    shape = (task.n_samples, len(rows), len(data.names))
+    draws["reporting"] = {
+        "cutoff": data.cutoff,
+        **{
+            key: value
+            for s in ("known", "imputed")
+            for key, value in {
+                s: np.ones((shape[0], 4, *shape[1:])),
+                f"vintage_{s}": np.full(shape[1:], 2.0),
+                f"draw_{s}": np.zeros(shape),
+                f"phi_{s}": np.full(shape[0], 10.0),
+            }.items()
+        },
     }
     return rn.RenewalRun(
         variant=variant,
@@ -628,3 +644,43 @@ def test_a_simulated_release_is_cut_at_its_stored_cut_off() -> None:
     end = data.start_date + dt.timedelta(days=7 * data.n_weeks - 1)
     assert cut == dt.date(2026, 9, 5)
     assert end == dt.date(2026, 9, 5)
+
+
+@pytest.mark.usefixtures("quiet")
+@pytest.mark.parametrize("name", ["renewal", "renewalsp"])
+def test_forecast_keeps_each_fit_s_reporting_curves(
+    task: ForecastTask, monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    from bdbvhubrenewal.forecasters.reporting import decode
+
+    monkeypatch.setattr(
+        rn.RenewalModel, "run", lambda self, t: _fake_run(t, self.variant)
+    )
+    model = get_model(name)
+    model.forecast(task)
+    assert model.reporting
+    covered = set()
+    for block in model.reporting:
+        assert set(block["weeks"]) <= set(task.target_end_dates)
+        curves = decode(block["curves"])
+        assert curves["known"].shape[2:] == (
+            len(block["weeks"]),
+            len(block["places"]),
+        )
+        dt.date.fromisoformat(block["start_date"])
+        covered |= set(block["places"])
+    # The silent province takes the random walk, with no curves.
+    assert covered == set(task.locations) - {task.locations[-1]}
+
+
+def test_report_weeks_are_the_target_weeks_on_the_model_grid(
+    task: ForecastTask,
+) -> None:
+    data = rn.vintage_inputs(task, rn.model_config(rn.VARIANTS["renewal"]))
+    weeks, rows = rn.report_weeks(task, data)
+    assert list(weeks) == list(task.target_end_dates)
+    first = data.start_date + dt.timedelta(days=6)
+    for week, row in zip(weeks, rows, strict=True):
+        assert first + dt.timedelta(weeks=int(row)) == dt.date.fromisoformat(
+            week
+        )

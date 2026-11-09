@@ -377,3 +377,62 @@ def test_a_models_reported_scores_do_not_depend_on_other_models(
         tasks, daily, target, models=("randomwalk",), stored=stored
     )
     pd.testing.assert_frame_equal(reported(alone.scores), reported(both.scores))
+
+
+def test_a_stored_model_with_reporting_curves_is_scored_by_them(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    from bdbvhubrenewal.forecasters.reporting import encode
+
+    real = target.loc[target["kind"] == "real"]
+    tasks = make_tasks(
+        real.loc[real["vintage"] == "2026-10-17"],
+        delays.assign(kind="real"),
+        BacktestConfig(n_samples=20, seed=3),
+        daily=daily,
+    )
+    weeks = list(tasks[0].target_end_dates)
+    stored = pd.DataFrame(
+        {
+            "model": "flat",
+            "vintage": "2026-10-17",
+            "location": np.repeat(["CD-IT", "CD-NK"], len(weeks) * 20),
+            "target_end_date": np.tile(np.repeat(weeks, 20), 2),
+            "sample": np.tile(np.arange(1, 21), 2 * len(weeks)),
+            "value": 100.0,
+        }
+    )
+    # Curves of CD-IT's last two weeks: nothing more reported, unseen.
+    shape = (20, 2, 1)
+    curves = {"cutoff": 0}
+    for s in ("known", "imputed"):
+        curves |= {
+            s: np.zeros((20, 3, 2, 1)),
+            f"vintage_{s}": np.full(shape[1:], np.nan),
+            f"draw_{s}": np.full(shape, 3.0),
+            f"phi_{s}": np.full(20, 10.0),
+        }
+    block = {
+        "start_date": "2026-10-17",
+        "places": ["CD-IT"],
+        "weeks": weeks[-2:],
+        "curves": encode(curves),
+    }
+    out = release_backtest(
+        tasks,
+        daily,
+        target,
+        models=(),
+        stored=stored,
+        reporting={("flat", "2026-10-17"): [block]},
+    )
+    rep = out.quantiles.loc[
+        (out.quantiles["model"] == "flat")
+        & (out.quantiles["target"] == "reported")
+    ]
+    assert not rep.empty
+    mine = rep["location"].eq("CD-IT") & rep["target_end_date"].isin(weeks[-2:])
+    # The curves give 3 known and 3 imputed; other cells keep their
+    # samples, as the model's own as-reported path does.
+    assert (rep.loc[mine, "q50"] == 6).all()
+    assert (rep.loc[~mine & (rep["location"] != "CD"), "q50"] == 100).all()
