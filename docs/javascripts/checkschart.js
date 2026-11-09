@@ -19,10 +19,15 @@
     rel.fill(d, base);
     var note = h("p", { class: "explorer-note" }, root);
     var chartDiv = h("div", {}, root);
+    // Relative WIS is the first metric, missing where the baseline has no
+    // forecast at the scale.
     function pick() {
-      note.textContent = "Relative WIS divides by " + rel.name() + " on the same scored weeks.";
       var k = rel.name() + "|" + selScale.value + "|" + selSplit.value;
-      return d.sets[k] || { x: [], rows: [] };
+      var set = d.sets[k] || { x: [], rows: [] };
+      var none = !set.rows.some(function (r) { return r[3] !== null; });
+      note.textContent = "Relative WIS divides by " + rel.name() + " on the same scored weeks." +
+        (none ? " " + rel.name() + " has no forecasts at this scale, so there is none here." : "");
+      return set;
     }
     var first = pick();
     var chart = window.bdbvScoreChart.build(chartDiv, {
