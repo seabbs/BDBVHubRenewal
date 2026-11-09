@@ -132,3 +132,13 @@ def test_samples_are_kept_when_the_delay_maps_no_place(
     assert (wide["CD-IT"] == 100).all()
     assert (wide["CD-NK"] == 50).all()
     assert (wide["CD"] == 150).all()
+
+
+def test_a_pooled_delay_maps_every_place_but_the_country() -> None:
+    # Fits from before province delays store one delay for every place,
+    # labelled "pooled". It maps each place without its own, not the
+    # country, which is the sum of its provinces.
+    summary = pd.concat([_summary("pooled", [0.4]), _summary("CD-NK", [0.8])])
+    curves = delay_curves(summary, ["CD", "CD-IT", "CD-NK", "CD-IT-01"])
+    got = curves.groupby("location")["share"].first()
+    assert got.to_dict() == {"CD-IT": 0.4, "CD-IT-01": 0.4, "CD-NK": 0.8}
