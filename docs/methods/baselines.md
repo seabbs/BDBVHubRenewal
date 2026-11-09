@@ -230,18 +230,15 @@ Where no week reaches 0.95, `randomwalknowcast` takes the first week as the late
 
 ## Start from the nowcast
 
-`randomwalknowcast` runs the walk as a local level on $\log(1 + y)$, filtered on the reported counts by a scalar Kalman filter.
+`randomwalknowcast` walks on from each sample's own nowcast.
 
 1. The start week $w_0$ is the latest full week that is at least 5% reported and has at least 5 cases, else the first week.
    A place with no case in the 9 weeks to $c_o$ starts at the latest complete week instead.
-2. Weeks up to $w_0$ are the nowcast draws $X_{p,i}(w)$.
-   In sample $i$ the level at $w_0$ is $\log\{1 + X_{p,i}(w_0)\}$ with variance 0.
-3. Each later week $u$ up to the week holding $c_o$ is not nowcast.
-   The level takes a step of variance $\sigma_p^2$ and is updated by the observation $\log\{1 + Y_{p,o}(u) / \pi_p(u)\}$ with variance $1 / \{\pi_p(u) + Y_{p,o}(u)\}$, the delta-method variance of a Poisson final count thinned to the share reported.
-   A week with $\pi_p(u) = 0$ gives no update.
-4. The level at the week holding $c_o$ is drawn from the filter, and the levels of earlier weeks back to $w_0$ are drawn given it, so these weeks and the forecast are one trajectory.
-5. Each of these weeks is a Poisson draw from its level, floored at the count reported.
-6. The forecast starts from the drawn level at the week holding $c_o$.
+2. Weeks up to the week holding $c_o$ are the nowcast draws $X_{p,i}(w)$.
+3. In sample $i$ the walk starts from $X_{p,i}(w_0)$.
+4. If the week holding $c_o$ is partial, its nowcast covers only its days up to $c_o$.
+   Its later days add a Poisson draw with the walk's rate that week times the share of the week they make up.
+5. Weeks after the one holding $c_o$ are the walk's draws.
 
 ## Health zones
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import dataclasses
-from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -139,7 +138,7 @@ def test_nowcast_starts_from_the_latest_full_week_with_enough_reported(
     assert start["CD-IT"] == "2026-10-10"
 
 
-def test_weeks_after_the_start_follow_the_filtered_level(
+def test_the_partial_week_adds_walk_draws_to_its_nowcast(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
     task = _task(target, delays, daily, "2026-10-17")
@@ -149,9 +148,9 @@ def test_weeks_after_the_start_follow_the_filtered_level(
         (samples["location"] == "CD-IT") & (samples["target_end_date"] == wk)
     ]["value"]
     reported = task.daily_history
-    # The week holding the cut-off is drawn from the filtered level, floored
-    # at the count reported, so every draw is at least that count and the
-    # draws vary.
+    # The week holding the cut-off is its nowcast plus walk draws for its
+    # days after the cut-off, so every draw is at least the count reported
+    # and the draws vary.
     seen = (
         reported.loc[
             (reported["location"] == "CD-IT")
@@ -253,23 +252,6 @@ def test_a_silent_place_waits_for_its_first_introduction() -> None:
     assert (y[2, :, 0] > 0).mean() == pytest.approx(0.3, abs=0.03)
     # A week half reported halves the chance of an introduction in it.
     assert (y[3, :, 0] > 0).mean() == pytest.approx(0.15, abs=0.03)
-
-
-def test_the_filter_weights_a_week_by_how_complete_it_is() -> None:
-    from bdbvhubrenewal.forecasters.randomwalk import _filter
-
-    origin = SimpleNamespace(
-        reported=np.array([[10.0, 0.0, 0.0], [10.0, 0.0, 0.0]]),
-        complete=np.array([[1.0, 0.95, 0.05], [1.0, 0.95, 0.05]]),
-        sigma=np.array([0.5, 0.5]),
-    )
-    start = np.log1p(np.full((2, 1), 10.0))
-    level, var = _filter(start, origin, np.array([0, 1]), 2)
-    # Place 0 sees a near-complete week of 0 and drops; place 1 starts at
-    # week 1 and sees only a 5% reported week of 0, so it barely moves.
-    assert level[0, 0, 1] < level[1, 0, 2]
-    assert level[1, 0, 2] > 0.9 * start[1, 0]
-    assert var[1, 2] > 0
 
 
 def test_a_silent_place_is_not_nowcast(runs) -> None:
