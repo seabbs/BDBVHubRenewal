@@ -2481,17 +2481,18 @@ The seed is projected back over the seeding weeks at the growth rate implied by 
 \operatorname{logit} \alpha(s) = \operatorname{logit} \alpha_0 + a(s),
 \]</div>
 <p>with <span class="arithmatex">\(N_p\)</span> the province population, <span class="arithmatex">\(\alpha_0 = 0.6\)</span> fixed and <span class="arithmatex">\(a\)</span> a weekly random walk from zero with step SD <span class="arithmatex">\(\mathcal{N}^+(0, 0.03^2)\)</span>.
-<span class="arithmatex">\(\eta\)</span> is a log-normal incubation period for Bundibugyo virus disease with <a href="https://github.com/epiforecasts/BVDOutbreakSize/blob/main/src/models/priors.jl">BVDOutbreakSize's priors</a> (<code>onset_incidence_model</code>) on its mean <span class="arithmatex">\(\mu_\eta \sim \mathcal{N}(6.3, 0.54^2)\)</span> and SD <span class="arithmatex">\(\sigma_\eta \sim \mathcal{N}(3.5, 0.8^2)\)</span>, both truncated below at 1 day.
+<span class="arithmatex">\(\eta\)</span> is a log-normal incubation period for Bundibugyo virus disease.
+Its mean <span class="arithmatex">\(\mu_\eta \sim \mathcal{N}(6.3, 0.54^2)\)</span> and SD <span class="arithmatex">\(\sigma_\eta \sim \mathcal{N}(3.5, 0.8^2)\)</span>, both truncated below at 1 day, have <a href="https://github.com/epiforecasts/BVDOutbreakSize/blob/main/src/models/priors.jl">BVDOutbreakSize's priors</a> (<code>onset_incidence_model</code>).
 The mean prior reproduces the 95% CI of 5.2 to 7.3 days from the 2007 Uganda outbreak<sup id="fnref:macneil"><a class="footnote-ref" href="#fn:macneil">3</a></sup>.
 MacNeil et al. give no interval on the spread, so the SD prior is BVDOutbreakSize's weakly informative choice around 3.5 days.
 Each draw of <span class="arithmatex">\(\eta\)</span> is double interval censored in the same way on lags 0 to 28, the 99.9% quantile at the prior means, as <code>dpcens(0:28, plnorm, D = 29)</code>.</p>
 <h3 id="delays">Delays<a class="headerlink" href="#delays" title="Permanent link">&para;</a></h3>
 <p>The onset-to-report delay <span class="arithmatex">\(f_s(d)\)</span>, on days <span class="arithmatex">\(d\)</span> from 0 to 60, comes from a discrete hazard that varies with onset day:</p>
 <div class="arithmatex">\[
-\operatorname{logit} h_s(d) = \beta(d) + \gamma(s),
+\operatorname{logit} H_s(d) = \beta(d) + \gamma(s),
 \qquad
-f_s(d) = h_s(d) \prod_{j &lt; d}\{1 - h_s(j)\},
-\qquad h_s(60) = 1.
+f_s(d) = H_s(d) \prod_{j &lt; d}\{1 - H_s(j)\},
+\qquad H_s(60) = 1.
 \]</div>
 <ul>
 <li><span class="arithmatex">\(\beta\)</span> is a random walk over delay, <span class="arithmatex">\(\beta(0) \sim \mathcal{N}(-2, 1)\)</span> with step SD <span class="arithmatex">\(\mathcal{N}^+(0, 0.4^2)\)</span>, so the shape is smooth but not parametric.</li>
@@ -2501,11 +2502,11 @@ f_s(d) = h_s(d) \prod_{j &lt; d}\{1 - h_s(j)\},
 <p>Cases reported on day <span class="arithmatex">\(t\)</span> without an onset are a share <span class="arithmatex">\(m_p(t)\)</span> of reports, with <span class="arithmatex">\(\operatorname{logit} m_p(t) = \bar m(t)\)</span>.
 <span class="arithmatex">\(\bar m\)</span> is a weekly random walk with start <span class="arithmatex">\(\mathcal{N}(-2, 1)\)</span> and step SD <span class="arithmatex">\(\mathcal{N}^+(0, 0.3^2)\)</span>.</p>
 <h3 id="known-onsets">Known onsets<a class="headerlink" href="#known-onsets" title="Permanent link">&para;</a></h3>
-<p>A case reported on day <span class="arithmatex">\(t\)</span> is in the vintage published at <span class="arithmatex">\(T\)</span> with probability <span class="arithmatex">\(c(t) = F_\ell(T - t)\)</span>, with <span class="arithmatex">\(F_\ell\)</span> the cdf of the report-to-publication lag.
+<p>A case reported on day <span class="arithmatex">\(t\)</span> is in the vintage with probability <span class="arithmatex">\(\Pi(t) = F_\ell(T - t)\)</span>, with <span class="arithmatex">\(T\)</span> the vintage's last report day and <span class="arithmatex">\(F_\ell\)</span> the cdf of the report-to-publication lag.
 The lag is uniform on 0 to 3 days.
 Expected known onsets, right truncated by vintage, are</p>
 <div class="arithmatex">\[
-\mathrm{known}_{p,T}(s) = \lambda_p(s) \sum_{d} f_s(d)\, \{1 - m_p(s + d)\}\, c(s + d).
+\mathrm{known}_{p,T}(s) = \lambda_p(s) \sum_{d} f_s(d)\, \{1 - m_p(s + d)\}\, \Pi(s + d).
 \]</div>
 <h3 id="hub-imputation">Hub imputation<a class="headerlink" href="#hub-imputation" title="Permanent link">&para;</a></h3>
 <p>The hub gives each case reported without an onset one by subtracting a delay drawn from a fit to its published delays (<a href="https://github.com/InsightNet-US/BDBV-Modeling-Hub/blob/main/auxiliary-data/imputation-details.md">imputation details</a>).
@@ -2513,7 +2514,7 @@ We model that procedure, bias included:</p>
 <div class="arithmatex">\[
 M_p(t) = m_p(t) \sum_s \lambda_p(s)\, f_s(t - s),
 \qquad
-\mathrm{imputed}_{p,T}(s) = \sum_{t = s}^{T} \hat f_T(t - s)\, c(t)\, M_p(t).
+\mathrm{imputed}_{p,T}(s) = \sum_{t = s}^{T} \hat f_T(t - s)\, \Pi(t)\, M_p(t).
 \]</div>
 <p><span class="arithmatex">\(M_p(t)\)</span> are the cases reported on day <span class="arithmatex">\(t\)</span> without an onset.
 The hub draws a report hour from <span class="arithmatex">\(\mathrm{Unif}(0, 24)\)</span> and subtracts a generalised gamma delay in hours fitted to the non-negative delays published at 2026-10-17.
@@ -2522,9 +2523,9 @@ It is the double interval censored pmf, computed in closed form from the general
 The hub fits the delays as exact for releases up to 2026-10-24 and as double interval censored from 2026-11-01 (<a href="https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/75">hub issue 75</a>), and <span class="arithmatex">\(F_T\)</span> is the fit for release <span class="arithmatex">\(T\)</span>.</p>
 <h3 id="likelihood">Likelihood<a class="headerlink" href="#likelihood" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Weekly <span class="arithmatex">\(\mathrm{known}_{p,T}\)</span> and <span class="arithmatex">\(\mathrm{imputed}_{p,T}\)</span> are negative binomial, each stream with size <span class="arithmatex">\(\phi = 1/(x^2 + 10^{-3})\)</span> and <span class="arithmatex">\(x \sim \text{HalfNormal}(0.25)\)</span>, so <span class="arithmatex">\(\phi &lt; 1000\)</span>.</li>
+<li>Weekly <span class="arithmatex">\(\mathrm{known}_{p,T}\)</span> and <span class="arithmatex">\(\mathrm{imputed}_{p,T}\)</span> are negative binomial, each stream with size <span class="arithmatex">\(\phi\)</span>, <span class="arithmatex">\(1/\sqrt{\phi} \sim \text{HalfNormal}(0.25)\)</span> and <span class="arithmatex">\(\phi\)</span> kept below 1000.</li>
 <li>Known-onset delays, by onset week and delay on 0 to 60 days, are Dirichlet-multinomial given each week's total.
-  Their probabilities come from <span class="arithmatex">\(\lambda\)</span>, <span class="arithmatex">\(f\)</span>, <span class="arithmatex">\(m\)</span> and <span class="arithmatex">\(c\)</span>, with concentration <span class="arithmatex">\(\psi = 1/(x^2 + 10^{-4})\)</span> and <span class="arithmatex">\(x \sim \text{HalfNormal}(0.1)\)</span>, so <span class="arithmatex">\(\psi &lt; 10^4\)</span>.
+  Their probabilities come from <span class="arithmatex">\(\lambda\)</span>, <span class="arithmatex">\(f\)</span>, <span class="arithmatex">\(m\)</span> and <span class="arithmatex">\(\Pi\)</span>, with concentration <span class="arithmatex">\(\psi\)</span>, <span class="arithmatex">\(1/\sqrt{\psi} \sim \text{HalfNormal}(0.1)\)</span> and <span class="arithmatex">\(\psi\)</span> kept below <span class="arithmatex">\(10^4\)</span>.
   Delays below 0 count as 0 and delays above 60 as 60.</li>
 </ul>
 <h3 id="forecasts">Forecasts<a class="headerlink" href="#forecasts" title="Permanent link">&para;</a></h3>
@@ -2535,10 +2536,13 @@ The reversion leaves the fit unchanged.
 A trajectory is the final known plus final imputed counts.
 Final known counts are those reported by the cut-off plus a negative binomial draw of those reported later, as in epinowcast.
 Final imputed counts are a negative binomial draw centred on the current imputed count plus those expected later, since the hub re-imputes each vintage.
-The national trajectory is the sum of the provinces plus an unassigned component, <span class="arithmatex">\(\max\{0, Y_{CD}(w) - \sum_p Y_p(w)\}\)</span> in data weeks and <span class="arithmatex">\(\rho \sum_p \tilde y_{p,i}(w)\)</span> after, with <span class="arithmatex">\(\rho\)</span> its share over the last 4 data weeks and <span class="arithmatex">\(\tilde y_{p,i}\)</span> trajectory <span class="arithmatex">\(i\)</span> of province <span class="arithmatex">\(p\)</span>.</p>
+The national trajectory is the sum of the provinces plus an unassigned component.
+The component is <span class="arithmatex">\(\max\{0, Y_{CD}(w) - \sum_p Y_p(w)\}\)</span> in data weeks and <span class="arithmatex">\(\rho \sum_p \tilde y_{p,i}(w)\)</span> after, with <span class="arithmatex">\(\tilde y_{p,i}\)</span> trajectory <span class="arithmatex">\(i\)</span> of province <span class="arithmatex">\(p\)</span>.
+<span class="arithmatex">\(\rho\)</span> is the component's share of the provinces' total over the last 4 data weeks.</p>
 <h2 id="partially-pooled">Partially pooled (<code>renewal</code>)<a class="headerlink" href="#partially-pooled" title="Permanent link">&para;</a></h2>
 <p><code>renewal</code> fits every province the release lists in one model, on the axis set by their summed onsets.
-The provinces share the trend <span class="arithmatex">\(\log R(t)\)</span>, the deviation SD <span class="arithmatex">\(\sigma_\delta\)</span> and half-life <span class="arithmatex">\(t_{1/2}\)</span>, the start spread <span class="arithmatex">\(\sigma_v\)</span>, ascertainment <span class="arithmatex">\(\alpha\)</span>, the delay <span class="arithmatex">\(f_s\)</span>, the trend <span class="arithmatex">\(\bar m\)</span> of the missing-onset share, the share at risk <span class="arithmatex">\(\nu\)</span> and the importation share <span class="arithmatex">\(\varepsilon\)</span>.
+The provinces share the trend <span class="arithmatex">\(\log R(t)\)</span> and the deviation SD <span class="arithmatex">\(\sigma_\delta\)</span>, half-life <span class="arithmatex">\(t_{1/2}\)</span> and start spread <span class="arithmatex">\(\sigma_v\)</span>.
+They also share ascertainment <span class="arithmatex">\(\alpha\)</span>, the delay <span class="arithmatex">\(f_s\)</span>, the trend <span class="arithmatex">\(\bar m\)</span> of the missing-onset share, the share at risk <span class="arithmatex">\(\nu\)</span> and the importation share <span class="arithmatex">\(\varepsilon\)</span>.
 Each province has its own deviations <span class="arithmatex">\(\delta_p\)</span> and <span class="arithmatex">\(\omega_p\)</span> and its own seed.
 Provinces are linked by importation through <span class="arithmatex">\(W\)</span>.
 Leaving a province out removes its known and imputed counts and its delay counts.
@@ -2603,7 +2607,7 @@ Its forecasts follow from the model, so every province the release lists has one
 Provinces with no case have no source of infection, so their forecasts stay near zero.
 The pooled reproduction number, missing-onset deviations, shared delay and ascertainment, share at risk and seeding are as in <code>renewal</code>.</p>
 <h2 id="bvdoutbreaksize-informed">BVDOutbreakSize-informed (<code>renewalbvd</code>)<a class="headerlink" href="#bvdoutbreaksize-informed" title="Permanent link">&para;</a></h2>
-<p>Every renewal model takes from the BVDOutbreakSize main model its generation interval, the prior on the half-life of the province deviations and the sum-to-zero basis for them.
+<p>Every renewal model takes from the BVDOutbreakSize main model its generation interval, the priors of the incubation period, the prior on the half-life of the province deviations and the sum-to-zero basis for them.
 <code>renewalbvd</code> also takes the Rt estimates of one <a href="https://github.com/epiforecasts/BVDOutbreakSize">BVDOutbreakSize</a> release, chosen as on the <a href="../data/#bvdoutbreaksize-estimates">Data methods page</a>.
 Without such a release <code>renewalbvd</code> is <code>renewal</code>.</p>
 <pre class="mermaid"><code>flowchart TD
@@ -2663,9 +2667,7 @@ The floor <span class="arithmatex">\(\chi_0 = 1/2\)</span> gives a zone with no 
 Province samples are rounded.
 Each zone keeps its published count and the rest of the province sample <span class="arithmatex">\(Y^{(i)}(w)\)</span> is split,</p>
 <div class="arithmatex">\[
-y^{(i)}_z(w) = o_z(w) + \Delta_z,
-\qquad
-\Delta \sim \text{Multinomial}\big(Y^{(i)}(w) - O(w),\ \theta^{(i)}\big).
+\big(y^{(i)}_z(w)\big)_z = \big(o_z(w)\big)_z + \text{Multinomial}\big(Y^{(i)}(w) - O(w),\ \theta^{(i)}\big).
 \]</div>
 <p>A sample below the published total is drawn from the published zone counts without replacement instead.</p>
 <div class="footnote">

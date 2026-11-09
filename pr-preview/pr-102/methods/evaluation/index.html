@@ -2191,7 +2191,7 @@ Relative energy scores are ratios of means against <code>randomwalk</code> over 
 The score rewards a joint pattern across places only where draws are joint.
 The renewal models' draws are joint across provinces, one posterior draw per sample index.
 Zones split each province draw, so zones are joint within a province for every renewal model.
-<code>randomwalk</code> and <code>randomwalknowcast</code> draw each place independently.
+The random walk models draw each place independently.
 Hub teams' samples are joint across weeks within a place only, as the hub's sample format sets, so pairing their indices across places scores them as independent across places.</p>
 <h2 id="backtest-design">Backtest design<a class="headerlink" href="#backtest-design" title="Permanent link">&para;</a></h2>
 <p>Each vintage is a forecast task.
@@ -2238,6 +2238,7 @@ The other models forecast every task.</p>
 </tr>
 </tbody>
 </table>
+<p>In the simulated scenarios and leave-one-province-out, a week is complete when it ended at least 3 weeks before the truth vintage.</p>
 <h2 id="real-releases">Real releases<a class="headerlink" href="#real-releases" title="Permanent link">&para;</a></h2>
 <p>Each real release up to the latest model choice date with a later release is an origin.
 The random walk models forecast from the releases up to the origin only.
@@ -2249,7 +2250,7 @@ Two targets are scored.</p>
 <code>randomwalk</code> is scored on its samples as they are, with no delay.
 Every other model forecasts the final count <span class="arithmatex">\(X\)</span> of week <span class="arithmatex">\(w\)</span> and is mapped to what <span class="arithmatex">\(o'\)</span> shows by its own modelled delay.
 Day <span class="arithmatex">\(t\)</span> is <span class="arithmatex">\(a = c - t\)</span> days old at a cut-off <span class="arithmatex">\(c\)</span>, and <span class="arithmatex">\(\pi(a)\)</span> is the share of its final count the model expects reported by then.
-For <code>randomwalknowcast</code> and <code>pprandomwalknowcast</code>, <span class="arithmatex">\(\pi(a) = 1 / G(a)\)</span> under the daily delay each fits at the origin (<a href="../baselines/#delay">Baseline models</a>).
+For <code>randomwalknowcast</code> and <code>pprandomwalknowcast</code>, <span class="arithmatex">\(\pi(a) = 1 / \Gamma(a)\)</span> under the daily delay each fits at the origin (<a href="../baselines/#delay">Baseline models</a>).
 For the renewal models it is the posterior median of the cumulative onset-to-report delay of the latest onset week, which is pooled over provinces.
 Each place is mapped by the model's delay at that place, a zone with none by its province's, and a place with neither is scored as forecast.
 The country is the sum of the mapped provinces.
@@ -2282,7 +2283,7 @@ It is also forecast by <code>randomwalk</code> and <code>randomwalknowcast</code
 The run supplies the fitted models' forecasts to the <a href="../../nowcast/">Nowcast</a> and <a href="../../comparison/">Comparison</a> pages, and has no page of its own.</p>
 <h2 id="leave-one-province-out">Leave-one-province-out<a class="headerlink" href="#leave-one-province-out" title="Permanent link">&para;</a></h2>
 <p>One province's counts are left out of the likelihood while it stays in the model (<a href="../model/#partially-pooled">Renewal models</a>).
-Its onsets are scored on every week against the latest real vintage.
+Its onsets are scored against the latest real vintage on the complete weeks.
 It runs on development vintages for the three renewal models.</p>
 <h2 id="health-zones">Health zones<a class="headerlink" href="#health-zones" title="Permanent link">&para;</a></h2>
 <p><code>randomwalk</code>, <code>randomwalknowcast</code> and <code>pprandomwalknowcast</code> are scored at zone level, for every zone with cases at the vintage (<a href="../baselines/#health-zones">Baseline models</a>).
@@ -2295,11 +2296,11 @@ On the Nowcast page the fitted models' zone samples at the latest release are th
 <h2 id="checks">Checks<a class="headerlink" href="#checks" title="Permanent link">&para;</a></h2>
 <p>The scores on the reported target, at province and zone level, are also averaged by the type of place and by a plausibility flag of each forecast, both decided from the counts reported at the origin.
 Relative WIS in these averages is against <code>randomwalk</code>.
-Week <span class="arithmatex">\(w\)</span> is the latest week ending on or before the origin, and <span class="arithmatex">\(c(t)\)</span> the count reported then for the week ending <span class="arithmatex">\(t\)</span>, with 0 for a week with no row.
+Week <span class="arithmatex">\(w\)</span> is the latest week ending on or before the origin, and <span class="arithmatex">\(n(t)\)</span> the count reported then for the week ending <span class="arithmatex">\(t\)</span>, with 0 for a week with no row.
 A place is silent if no case is reported in the 9 weeks to <span class="arithmatex">\(w\)</span>, small if no week has more than 5 cases, and larger otherwise.
 The flag is set from the forecast of the round's reference week <span class="arithmatex">\(r_v\)</span>, with median <span class="arithmatex">\(q_{50}\)</span> and 95% quantile <span class="arithmatex">\(q_{95}\)</span>.
 Where several origins serve a round, only the latest is flagged.
-The level is <span class="arithmatex">\(L = \max\{(c(w - 3) + c(w - 2)) / 2,\ c(w - 1)\}\)</span> and the recent maximum is <span class="arithmatex">\(M = \max(1, \max_{w - 4 \le t \le w} c(t))\)</span>.
+The level is <span class="arithmatex">\(L = \max\{(n(w - 3) + n(w - 2)) / 2,\ n(w - 1)\}\)</span> and the recent maximum is <span class="arithmatex">\(M = \max(1, \max_{w - 4 \le t \le w} n(t))\)</span>.
 A forecast collapses if <span class="arithmatex">\(L \ge 3\)</span> and <span class="arithmatex">\(q_{50} \le L / 3\)</span>.
 Otherwise it blows up if <span class="arithmatex">\(q_{50} &gt; 3M\)</span> and <span class="arithmatex">\(q_{50} - M \ge 5\)</span>, or <span class="arithmatex">\(q_{95} &gt; 10M\)</span> and <span class="arithmatex">\(q_{95} - M \ge 20\)</span>.
 A forecast with neither has no flag.

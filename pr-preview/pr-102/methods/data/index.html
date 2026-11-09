@@ -2058,9 +2058,9 @@
 <h2 id="target-and-notation">Target and notation<a class="headerlink" href="#target-and-notation" title="Permanent link">&para;</a></h2>
 <p>The target is <span class="arithmatex">\(y_{p}(w)\)</span>, the final count of confirmed cases in province <span class="arithmatex">\(p\)</span> with symptom onset in epi week <span class="arithmatex">\(w\)</span> (Sunday to Saturday, labelled by its Saturday).
 It includes onsets the hub imputes for cases reported without one.
-A vintage <span class="arithmatex">\(v\)</span> is the data published on date <span class="arithmatex">\(T_v\)</span>.
-It gives, for each <span class="arithmatex">\(p\)</span> and <span class="arithmatex">\(w\)</span>, known onsets <span class="arithmatex">\(K_{p,v}(w)\)</span>, imputed onsets <span class="arithmatex">\(I_{p,v}(w)\)</span> and their total <span class="arithmatex">\(Y_{p,v}(w) = K_{p,v}(w) + I_{p,v}(w)\)</span>.
-A forecast made from vintage <span class="arithmatex">\(v\)</span> serves the round with reference date <span class="arithmatex">\(r_v\)</span>, the first Saturday whose submission window (Sunday to Tuesday, Kinshasa time) closes on or after <span class="arithmatex">\(T_v\)</span>.
+A vintage <span class="arithmatex">\(v\)</span> is the data of one hub release.
+It gives, for each <span class="arithmatex">\(p\)</span> and <span class="arithmatex">\(w\)</span>, known onsets, imputed onsets and their total <span class="arithmatex">\(Y_{p,v}(w)\)</span>.
+A forecast made from vintage <span class="arithmatex">\(v\)</span> serves the round with reference date <span class="arithmatex">\(r_v\)</span>, the first Saturday whose submission window (Sunday to Tuesday, Kinshasa time) closes on or after the vintage date.
 Horizon <span class="arithmatex">\(h\)</span> is the number of weeks from <span class="arithmatex">\(r_v\)</span> to <span class="arithmatex">\(w\)</span>.
 Backtest forecasts cover <span class="arithmatex">\(h = -4, \dots, 3\)</span>.</p>
 <h2 id="extraction">Extraction<a class="headerlink" href="#extraction" title="Permanent link">&para;</a></h2>
