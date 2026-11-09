@@ -231,13 +231,15 @@ def test_places_with_no_falls_of_their_own_have_no_removals(
 def test_a_silent_place_waits_for_its_first_introduction() -> None:
     import jax
 
-    from bdbvhubrenewal.forecasters.randomwalk import _walks
+    from bdbvhubrenewal.forecasters.introductions import (
+        walk_with_introductions,
+    )
 
     silent = np.array([False, True, True])
     intro = np.array([[0.5] * 4, [0.0] * 4, [0.3] * 4])
     x0 = np.full((3, 4000), 20.0)
     sigma = np.array([0.0, 0.2, 0.0])
-    y = _walks(jax.random.key(1), x0, sigma, silent, intro)
+    y = walk_with_introductions(jax.random.key(1), x0, sigma, silent, intro)
     # A place with cases walks from its start.
     assert y[0].mean() == pytest.approx(20.0, rel=0.05)
     # No introduction can come with a probability of 0, and the path is
