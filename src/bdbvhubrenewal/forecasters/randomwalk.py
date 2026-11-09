@@ -165,8 +165,8 @@ def _filter(
     The level starts at `start` `[L, S]` in week `w0` with no variance,
     and steps with variance $\sigma^2$ a week. Week $u$ after `w0` with
     share reported $F_u > 0$ observes it as $\log(1 + y_u / F_u)$ with
-    variance $1 / (1 + y_u) + (1 - F_u) / F_u$, Poisson noise plus the
-    share still to come.
+    variance $1 / (F_u + y_u)$, the delta-method variance of a Poisson
+    final count thinned to the share reported.
 
     Returns
     -------
@@ -181,7 +181,7 @@ def _filter(
         after = (u > w0) & (u <= cw)
         share, y = origin.complete[:, u], origin.reported[:, u]
         prior = var[:, u - 1] + origin.sigma**2 if u else var[:, 0]
-        noise = 1.0 / (1.0 + y) + (1.0 - share) / np.maximum(share, 1e-12)
+        noise = 1.0 / (share + y)
         gain = np.where(after & (share > 0), prior / (prior + noise), 0.0)
         seen = np.log1p(y / np.maximum(share, 1e-12))
         prev = level[:, :, u - 1] if u else level[:, :, 0]

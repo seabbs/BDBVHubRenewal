@@ -173,7 +173,7 @@ $\phi_{p,k}$ is fitted by maximum likelihood on $[0.1, 1000]$, one size per $k$,
 A week with $\widehat{\text{rem}} = 0$ says nothing about $\phi$, so it is left out of that fit.
 The weeks in the fit of $\phi_{p,k}$ are the errors at $k$.
 $b_{p,k}$ is the Poisson maximum likelihood estimate of the removals.
-Where the estimate chosen by the [pooling rule](#own-or-pooled-estimates) has fewer than 3 errors at $k$, $\phi_{p,k} = 1000$, the Poisson end of the range.
+Where the estimate chosen by the [pooling rule](#own-or-pooled-estimates) has fewer than 3 errors at $k$, $\phi_{p,k} \approx 2.2$, the median of epinowcast's prior $1 / \sqrt{\phi} \sim \mathcal{N}^+(0, 1)$.
 
 ## Own or pooled estimates
 
@@ -242,7 +242,7 @@ Later weeks with data are walk draws, floored at the reported count.
 It starts from the nowcast $X_{p,i}(w_0)$ of the latest full week $w_0$ that is at least 5% reported and has at least 5 cases, else from the first week.
 Weeks up to $w_0$ are the nowcast draws.
 Each later week $u$ up to the week holding $c_o$ is not nowcast.
-Its reported count updates the level as an observation $\log(1 + Y_{p,o}(u) / \pi_p(u))$ with variance $1 / (1 + Y_{p,o}(u)) + (1 - \pi_p(u)) / \pi_p(u)$, the Poisson noise plus the share still to come, after a step of variance $\sigma_p^2$ (a scalar Kalman filter).
+Its reported count updates the level as an observation $\log(1 + Y_{p,o}(u) / \pi_p(u))$ with variance $1 / (\pi_p(u) + Y_{p,o}(u))$, the delta-method variance of a Poisson final count thinned to the share reported, after a step of variance $\sigma_p^2$ (a scalar Kalman filter).
 The week's value is a Poisson draw from a level drawn from the filter, floored at the count reported.
 The walk forecasts from the level filtered at the week holding $c_o$.
 
