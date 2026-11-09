@@ -788,17 +788,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#rolling-held-out-evaluation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Rolling held-out evaluation
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#leave-one-province-out" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2101,17 +2090,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#rolling-held-out-evaluation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Rolling held-out evaluation
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#leave-one-province-out" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2238,7 +2216,7 @@ The other models forecast every task.</p>
 <tbody>
 <tr>
 <td>Development backtest</td>
-<td>Real up to the latest model choice date, except the latest real vintage</td>
+<td>Real, except the latest real vintage</td>
 <td>As for real releases</td>
 </tr>
 <tr>
@@ -2252,13 +2230,8 @@ The other models forecast every task.</p>
 <td>Complete weeks of the simulated final counts, and the counts as reported two weeks after each vintage</td>
 </tr>
 <tr>
-<td>Rolling held-out evaluation</td>
-<td>Real vintages after each model choice</td>
-<td>Complete weeks of the latest release, and for <code>randomwalk</code> also the count each later release shows</td>
-</tr>
-<tr>
 <td>Real releases</td>
-<td>Every real release up to the latest model choice date with a later release</td>
+<td>Every real release with a later release</td>
 <td>The count each later release shows, and the latest release's count for its complete weeks</td>
 </tr>
 <tr>
@@ -2270,7 +2243,7 @@ The other models forecast every task.</p>
 </table>
 <p>In the simulated scenarios and leave-one-province-out, a week is complete when it ended at least 3 weeks before the truth vintage.</p>
 <h2 id="real-releases">Real releases<a class="headerlink" href="#real-releases" title="Permanent link">&para;</a></h2>
-<p>Each real release up to the latest model choice date with a later release is an origin.
+<p>Each real release with a later release is an origin.
 The random walk models forecast from the releases up to the origin only.
 The renewal models' stored forecasts from the origin are scored with them.
 So are hub teams' forecasts for a round, at the latest release serving it.
@@ -2310,16 +2283,10 @@ The dotted vertical line is the reference date.
 Weeks still being reported are shaded, with hollow points.
 The vertical axis of a fan ends at the top of its 90% band.
 Horizon is weeks from the reference week, so negative horizons are nowcasts, 0 is the reference week and positive horizons are forecasts.</p>
-<h2 id="rolling-held-out-evaluation">Rolling held-out evaluation<a class="headerlink" href="#rolling-held-out-evaluation" title="Permanent link">&para;</a></h2>
-<p>Each model choice is logged with its date, and the development set rolls forward with them.
-Development runs use every vintage up to the latest choice date.
-Each real vintage after a choice is forecast by the model chosen then, the latest choice dated before it.
-It is also forecast by <code>randomwalk</code> and <code>randomwalknowcast</code>, and by every fitted model from its stored fit.
-The run supplies the fitted models' forecasts to the <a href="../../nowcast/">Nowcast</a> and <a href="../../comparison/">Comparison</a> pages, and has no page of its own.</p>
 <h2 id="leave-one-province-out">Leave-one-province-out<a class="headerlink" href="#leave-one-province-out" title="Permanent link">&para;</a></h2>
 <p>One province's counts are left out of the likelihood while it stays in the model (<a href="../model/#partially-pooled">Renewal models</a>).
 Its onsets are scored against the latest real vintage on the complete weeks.
-It runs on development vintages for the three renewal models.</p>
+It runs on every real vintage for the three renewal models.</p>
 <h2 id="health-zones">Health zones<a class="headerlink" href="#health-zones" title="Permanent link">&para;</a></h2>
 <p><code>randomwalk</code>, <code>randomwalknowcast</code> and <code>pprandomwalknowcast</code> are scored at zone level, for every zone with cases at the vintage (<a href="../baselines/#health-zones">Baseline models</a>).
 A week with no onsets in a zone has a count of 0.
@@ -2342,7 +2309,7 @@ A forecast with neither has no flag.
 Every scored week of a forecast takes the forecast's place type and flag, and the scores are averaged over scored weeks.</p>
 <h2 id="comparison-with-hub-forecasts">Comparison with hub forecasts<a class="headerlink" href="#comparison-with-hub-forecasts" title="Permanent link">&para;</a></h2>
 <p>For each hub reference date, our unfitted models forecast from the latest real vintage serving the round.
-Fitted models use their stored backtest or held-out forecasts for the same round.
+Fitted models use their stored backtest forecasts for the same round.
 Where we submitted to a round, our submitted file is a series of its own beside these main-build forecasts.
 Every model is scored on the complete weeks it forecast, as for <a href="#real-releases">real releases</a>, from the vintage serving the round, since hub teams have no modelled delay we can see.
 WIS is relative to <code>randomwalk</code> on the weeks both forecast, on the <a href="../../comparison/">comparison page</a>.

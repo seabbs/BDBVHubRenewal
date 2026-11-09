@@ -2016,16 +2016,12 @@
 <td>Run the development backtest, the evaluation on the real releases (<code>results/nowcast-*.csv</code>) and the recovery check. Fitted models are never run: their rows in <code>results/</code> come from the fit store and are kept. With <code>--models</code>, only those models run and the others' rows are kept.</td>
 </tr>
 <tr>
-<td><code>backtest --evaluate-holdout</code></td>
-<td>Score every held-out vintage under the model chosen at the time, with the other models alongside.</td>
-</tr>
-<tr>
 <td><code>backtest --lopo</code></td>
 <td>Leave one province out: forecast each province with its counts masked, for the variants that take a mask.</td>
 </tr>
 <tr>
 <td><code>backtest --scenarios-only</code></td>
-<td>Run only the scenarios calibrated to the real data, from <code>--scenario-as-of</code> and <code>--scenario-dates</code>.</td>
+<td>Run only the scenarios calibrated to the real data, from <code>--scenario-as-of</code> and <code>--scenario-dates</code>. <code>--scenarios</code> runs only the named scenarios.</td>
 </tr>
 <tr>
 <td><code>bvd</code></td>
@@ -2083,6 +2079,14 @@
 <td><code>report</code></td>
 <td>Make the docs figures and tables.</td>
 </tr>
+<tr>
+<td><code>digest [--with PATH...] [--text TEXT]</code></td>
+<td>Print a hash of what a backtest reads, which keys its cached outputs in the Pages workflow.</td>
+</tr>
+<tr>
+<td><code>concat-results --out DIR PART...</code></td>
+<td>Stack the results files of runs made apart, such as one scenario each, in the order given.</td>
+</tr>
 </tbody>
 </table>
 <p><code>--version</code> prints the package version.</p>
@@ -2091,10 +2095,9 @@
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>task<span class="w"> </span>backtest-lopo<span class="w">      </span><span class="c1"># leave one province out</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>task<span class="w"> </span>backtest-scenarios<span class="w"> </span><span class="c1"># simulated scenarios calibrated to the real data</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>task<span class="w"> </span>backtest-zones<span class="w">     </span><span class="c1"># random walk models at health-zone level</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>task<span class="w"> </span>backtest-heldout<span class="w">   </span><span class="c1"># score the held-out vintages</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>task<span class="w"> </span>results<span class="w">            </span><span class="c1"># every derived file in results/, as the Pages build makes them</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>task<span class="w"> </span>docs<span class="w">               </span><span class="c1"># build the site into _site/ (runs task results, about 25 min)</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>task<span class="w"> </span>serve<span class="w">              </span><span class="c1"># serve the site (run task results once first)</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>task<span class="w"> </span>results<span class="w">            </span><span class="c1"># every derived file in results/, as the Pages build makes them</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>task<span class="w"> </span>docs<span class="w">               </span><span class="c1"># build the site into _site/ (runs task results, about 25 min)</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>task<span class="w"> </span>serve<span class="w">              </span><span class="c1"># serve the site (run task results once first)</span>
 </code></pre></div>
 <p><code>--models</code> runs some models and keeps the others' rows in <code>results/</code>.
 The files in <code>results/</code> are not committed, apart from <code>development-log.csv</code>, <code>ladder.csv</code> and <code>model-choice.yml</code>.

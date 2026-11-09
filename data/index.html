@@ -842,6 +842,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#release-cut-offs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Release cut-offs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#national-coherence" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2001,6 +2012,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#release-cut-offs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Release cut-offs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#national-coherence" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2112,6 +2134,8 @@
 <thead>
 <tr>
 <th style="text-align: left;">vintage</th>
+<th style="text-align: left;">cutoff</th>
+<th style="text-align: right;">days_to_release</th>
 <th style="text-align: right;">weeks</th>
 <th style="text-align: left;">first_week</th>
 <th style="text-align: left;">last_week</th>
@@ -2125,6 +2149,8 @@
 <tbody>
 <tr>
 <td style="text-align: left;">2026-08-18</td>
+<td style="text-align: left;">2026-08-18</td>
+<td style="text-align: right;">0</td>
 <td style="text-align: right;">18</td>
 <td style="text-align: left;">2026-04-25</td>
 <td style="text-align: left;">2026-08-22</td>
@@ -2136,6 +2162,8 @@
 </tr>
 <tr>
 <td style="text-align: left;">2026-10-09</td>
+<td style="text-align: left;">2026-10-07</td>
+<td style="text-align: right;">2</td>
 <td style="text-align: right;">35</td>
 <td style="text-align: left;">2026-02-14</td>
 <td style="text-align: left;">2026-10-10</td>
@@ -2147,6 +2175,8 @@
 </tr>
 <tr>
 <td style="text-align: left;">2026-10-17</td>
+<td style="text-align: left;">2026-10-16</td>
+<td style="text-align: right;">1</td>
 <td style="text-align: right;">36</td>
 <td style="text-align: left;">2026-02-14</td>
 <td style="text-align: left;">2026-10-17</td>
@@ -2158,6 +2188,8 @@
 </tr>
 <tr>
 <td style="text-align: left;">2026-10-24</td>
+<td style="text-align: left;">2026-10-24</td>
+<td style="text-align: right;">0</td>
 <td style="text-align: right;">37</td>
 <td style="text-align: left;">2026-02-14</td>
 <td style="text-align: left;">2026-10-24</td>
@@ -2169,6 +2201,8 @@
 </tr>
 <tr>
 <td style="text-align: left;">2026-11-01</td>
+<td style="text-align: left;">2026-10-31</td>
+<td style="text-align: right;">1</td>
 <td style="text-align: right;">38</td>
 <td style="text-align: left;">2026-02-14</td>
 <td style="text-align: left;">2026-10-31</td>
@@ -2180,6 +2214,8 @@
 </tr>
 <tr>
 <td style="text-align: left;">2026-11-08</td>
+<td style="text-align: left;">2026-11-05</td>
+<td style="text-align: right;">3</td>
 <td style="text-align: right;">39</td>
 <td style="text-align: left;">2026-02-14</td>
 <td style="text-align: left;">2026-11-07</td>
@@ -2194,6 +2230,21 @@
 </details>
 <p>The 2026-08-18 vintage has no delay data.
 The 2026-10-09 delay file exists only in the hub's git history.</p>
+<h2 id="release-cut-offs">Release cut-offs<a class="headerlink" href="#release-cut-offs" title="Permanent link">&para;</a></h2>
+<p>Each release's cut-off is its latest onset day.
+It falls up to three days before the release date (<code>days_to_release</code> in the table above).
+The hub target is the sum of daily onsets over each epi week, Sunday to Saturday, so the week holding the cut-off is partial.</p>
+<figure class="doc-figure">
+  <img alt="National daily onsets by onset status for the four weeks up to each of the last four releases' cut-offs, with each epi week's total above it." src="../figures/cutoff-days.svg#only-light" />
+  <img alt="National daily onsets by onset status for the four weeks up to each of the last four releases' cut-offs, with each epi week's total above it." src="../figures/cutoff-days-dark.svg#only-dark" />
+<br />
+<figcaption>
+    National daily onsets up to each release's cut-off, with each epi week's total (the hub target) above it and the release date dotted.
+  </figcaption>
+</figure>
+<p>The last days before a cut-off hold few cases because most of their onsets are not yet reported.
+In the 2026-11-08 release, cut at 2026-11-05, the last five onset days hold 19, 19, 15, 10 and 5 cases.
+Its last week has five of seven days and 68 cases.</p>
 <h2 id="national-coherence">National coherence<a class="headerlink" href="#national-coherence" title="Permanent link">&para;</a></h2>
 <p>The national (<code>CD</code>) row should equal the sum of the provinces.
 The table counts the weeks where they differ, by vintage and stream.</p>
@@ -2261,6 +2312,18 @@ The renewal model forecasts it as an unassigned component (<a href="../methods/m
   </figcaption>
 </figure>
 <h2 id="revisions-of-recent-weeks">Revisions of recent weeks<a class="headerlink" href="#revisions-of-recent-weeks" title="Permanent link">&para;</a></h2>
+<p>Each release is a vintage that restates every onset week, so a week's count grows as later releases report more of its cases.</p>
+<figure class="doc-figure">
+  <img alt="Count for each of the latest six onset weeks in every release that reports it, for the country, Ituri and Nord Kivu." src="../figures/release-counts.svg#only-light" />
+  <img alt="Count for each of the latest six onset weeks in every release that reports it, for the country, Ituri and Nord Kivu." src="../figures/release-counts-dark.svg#only-dark" />
+<br />
+<figcaption>
+    Count for each recent onset week (labelled by the week's last day) in each release that reports it.
+  </figcaption>
+</figure>
+<p>Nationally the week ending 2026-10-24 had 91 cases at the 2026-10-24 release, 381 at 2026-11-01 and 482 at 2026-11-08.
+The week ending 2026-10-31 rose from 150 to 349 in one release.
+Delay-file rows are the known-onset part of these counts, so their backfill follows the same pattern.</p>
 <figure class="doc-figure">
   <img alt="Share of the latest national count reported in each earlier vintage, by weeks before the vintage." src="../figures/revisions.svg#only-light" />
   <img alt="Share of the latest national count reported in each earlier vintage, by weeks before the vintage." src="../figures/revisions-dark.svg#only-dark" />
