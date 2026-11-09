@@ -36,9 +36,9 @@ estimate where a place has at least 10 cases a week, and otherwise the
 pooled estimate of the nearest parent that does (`pooling`).
 A place with no case in the latest `walk_weeks` weeks is silent. It is
 exactly 0 until its first introduction, which comes each week with its
-pooled probability times the share of the week not yet reported
-(`_intro_from`), and then walks from a count drawn from Poisson(1) given
-at least 1.
+pooled probability times the share of the week not yet reported, and then
+walks from a count drawn from Poisson(1) given at least 1
+(`introductions.silent_trajectories`).
 National is the sum of provinces by sample.
 Each model raises if the task has no snapshots or no pair of releases
 within the delay window.
@@ -54,7 +54,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pandas as pd
-from scipy import stats
 
 from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.snapshots import snapshot_arrays
@@ -71,6 +70,7 @@ from bdbvhubrenewal.forecasters.chain import (
     build_origin,
     delay_summary,
 )
+from bdbvhubrenewal.forecasters.introductions import silent_trajectories
 from bdbvhubrenewal.forecasters.obs import sample_count
 from bdbvhubrenewal.forecasters.walk import random_walk
 
@@ -96,50 +96,39 @@ def _label(origin: Origin, i: int) -> str:
     return f"{kind}:{origin.snap.locations[i % n]}"
 
 
-def _delay_label(origin: Origin, i: int) -> str:
-    own = origin.fit.own[i]
-    return f"own at {int(own.sum())} of {own.size} ages"
-
-
 def _walks(
-    key: jax.Array,
-    x0: np.ndarray,
-    sigma: np.ndarray,
-    silent: np.ndarray,
-    intro: np.ndarray,
+    key: jax.Array, x0: np.ndarray, origin: Origin, start: np.ndarray, h: int
 ) -> np.ndarray:
-    """Return walk counts for every place from `x0` of shape `[L, S]`.
+    """Return `h` weeks of walk counts after `start` from `x0` `[L, S]`.
 
-    Each place walks with spread `sigma` `[L]`. A `silent` `[L]` place is
-    0 until its first introduction, drawn week by week with probability
-    `intro` `[L, H]`. The introduction brings a count drawn from
-    Poisson(1) given at least 1, and the place walks from it.
+    Silent places draw their introductions (`silent_trajectories`), and
+    the others walk from `x0`.
     """
-    h = intro.shape[1]
-    k_walk, k_intro, k_count = jax.random.split(key, 3)
-    u = np.asarray(jax.random.uniform(k_count, x0.shape), np.float64)
-    first_count = stats.poisson.ppf(np.exp(-1.0) + u * -np.expm1(-1.0), 1.0)
-    x0 = np.where(silent[:, None], first_count, x0)
+    k_walk, k_silent = jax.random.split(key)
     keys = jax.random.split(k_walk, x0.shape[0])
     _, drawn = jax.vmap(lambda k, x, s: random_walk(k, x, s, h))(
         keys,
         jnp.asarray(x0, jnp.float32),
-        jnp.asarray(sigma, jnp.float32),
+        jnp.asarray(origin.sigma, jnp.float32),
     )
-    y: np.ndarray = np.asarray(drawn, dtype=np.float64)
-    hit = (
-        np.asarray(jax.random.uniform(k_intro, (*x0.shape, h)))
-        < (intro[:, None, :])
+    silent = silent_trajectories(
+        k_silent,
+        origin.silent,
+        origin.intro,
+        1.0 - np.clip(origin.complete, 0.0, 1.0),
+        start,
+        origin.sigma,
+        h,
+        x0.shape[1],
     )
-    first = np.where(hit.any(axis=2), np.argmax(hit, axis=2), h)
-    first = np.where(silent[:, None], first, 0)
-    lag = np.arange(h)[None, None, :] - first[:, :, None]
-    # A silent place has its introduced count in its first week and walks
-    # from it after.
-    step = np.where(silent[:, None, None], lag - 1, lag)
-    walked = np.take_along_axis(y, np.clip(step, 0, h - 1), axis=2)
-    out = np.where(step >= 0, walked, 0.0)
-    return np.where(silent[:, None, None] & (lag == 0), x0[:, :, None], out)
+    return np.where(
+        origin.silent[:, None, None], silent, np.asarray(drawn, np.float64)
+    )
+
+
+def _delay_label(origin: Origin, i: int) -> str:
+    own = origin.fit.own[i]
+    return f"own at {int(own.sum())} of {own.size} ages"
 
 
 def _start_weeks(origin: Origin) -> np.ndarray:
@@ -223,23 +212,6 @@ def _draw_path(
             inside, mean + sd * z[:, :, u], level[:, :, u]
         )
     return drawn
-
-
-def _intro_from(origin: Origin, start: np.ndarray, h: int) -> np.ndarray:
-    """Return each place's weekly introduction probability after `start`.
-
-    Week `start + 1 + i` of a silent place has probability $q$ times the
-    share of the week not yet reported, so an introduction is likelier in
-    recent weeks, whose cases may still be reported, and has probability
-    $q$ in weeks without data.
-    """
-    n_data = origin.complete.shape[1]
-    u = start[:, None] + 1 + np.arange(h)[None, :]
-    seen = np.take_along_axis(
-        np.pad(origin.complete, ((0, 0), (0, h + 1))), u, axis=1
-    )
-    seen = np.where(u < n_data, np.clip(seen, 0.0, 1.0), 0.0)
-    return origin.intro[:, None] * (1.0 - seen)
 
 
 def frame(
@@ -411,11 +383,7 @@ class RandomWalk:
         start = origin.start
         x0 = origin.reported[np.arange(n_loc), start]
         y = _walks(
-            _key(task),
-            np.repeat(x0[:, None], n, axis=1),
-            origin.sigma,
-            origin.silent,
-            _intro_from(origin, start, n_all),
+            _key(task), np.repeat(x0[:, None], n, axis=1), origin, start, n_all
         )
         values = np.zeros((n, n_loc, n_all))
         for loc in range(n_loc):
@@ -547,13 +515,7 @@ class RandomWalkNowcast(RandomWalk):
             jax.random.poisson(key_count, jnp.asarray(rate, jnp.float32)),
             dtype=np.float64,
         )  # [L, S, W]
-        y = _walks(
-            key_walk,
-            rate[:, :, cw],
-            origin.sigma,
-            origin.silent,
-            _intro_from(origin, w0, n_all),
-        )
+        y = _walks(key_walk, rate[:, :, cw], origin, w0, n_all)
         values = np.zeros((n, n_loc, n_all))
         for loc in range(n_loc):
             s = int(w0[loc])

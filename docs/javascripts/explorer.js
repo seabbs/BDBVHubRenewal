@@ -1,6 +1,7 @@
 // Forecast explorer: draws SVG from a JSON file, in the site's theme. With
-// data-summary, the table summarises the page's per-forecast scores
-// (summarise.js) for the location, rounds and models chosen.
+// data-targets (target to summary URL), the table summarises the page's
+// per-forecast scores (summarise.js) for the target, location, rounds and
+// models chosen.
 (function () {
   "use strict";
   var DAY = 864e5;
@@ -11,14 +12,14 @@
   function day(s) { return Date.parse(s + "T00:00:00Z"); }
 
   function init(root) {
-    var get = function (src) { return fetch(src).then(function (r) { return r.json(); }); };
-    Promise.all([get(root.dataset.src),
-      root.dataset.summary ? get(root.dataset.summary) : null])
-      .then(function (both) { build(root, both[0], both[1]); })
+    var targets = root.dataset.targets ? JSON.parse(root.dataset.targets) : null;
+    Promise.all([T.getJSON(root.dataset.src),
+      targets ? T.getJSON(targets[Object.keys(targets)[0]]) : null])
+      .then(function (both) { build(root, both[0], both[1], targets); })
       .catch(function () { root.textContent = "The explorer data could not be loaded."; });
   }
 
-  function build(root, d, summary) {
+  function build(root, d, summary, targets) {
     root.textContent = "";
     var state = {
       loc: d.locations[0].id,
@@ -44,6 +45,14 @@
     var view = T.viewSelect(controls, hasTraj, function () { draw(); });
     var zoom = window.bdbvZoom.create(controls, function () { draw(); });
     T.fullscreen(controls, root);
+    if (targets) {
+      T.targetSelect(controls, targets, Object.keys(targets)[0], function (k) {
+        T.getJSON(targets[k]).then(function (s) {
+          summary = s;
+          draw();
+        });
+      });
+    }
     var Z = window.bdbvZoom;
     var legend = T.legend(root, d.models, draw);
     var note = h("p", { class: "explorer-note" }, root);
