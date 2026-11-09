@@ -90,7 +90,7 @@ PyRenew's `PyrenewBuilder` builds each model as a `MultiSignalModel`, and NumPyr
 Chains run vectorised unless a fit's settings say otherwise.
 Stored backtest fits and CI submission fits run their chains in parallel.
 Without other settings, NUTS runs 4 chains of 1000 warm-up and 1000 draws, with target acceptance 0.9 and maximum tree depth 10.
-Chains start from the median of 15 prior draws.
+Each chain starts from its own draw from the prior.
 Submission fits and the [fit store](../development/cli.md#fit-store)'s backtest fits take each model's settings from its candidate in `ci/policy.toml`.
 `renewal` and `renewalsp` use 2 chains of 500 warm-up and 500 draws at target acceptance 0.9.
 `renewalbvd` uses 1000 draws at 0.95.

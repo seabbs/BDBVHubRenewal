@@ -267,16 +267,11 @@ def test_fit_renewal_writes_the_ci_contract(
     assert result.modelled is not None
 
 
-def test_init_strategy_follows_the_sampler_table() -> None:
-    from numpyro.infer import NUTS
+def test_chains_start_from_their_own_prior_draws() -> None:
+    from numpyro.infer import init_to_sample
 
-    median = rn.init_strategy({})
-    assert median.func.__name__ == "init_to_median"
-    with pytest.raises(ValueError, match="init"):
-        rn.init_strategy({"init": "nope"})
     kernel = rn.nuts_kernel(lambda: None, rn.DEFAULT_SAMPLER)
-    assert isinstance(kernel, NUTS)
-    assert kernel._init_strategy.func is median.func
+    assert kernel._init_strategy is init_to_sample
 
 
 def test_unassigned_adds_the_national_data_gap(task: ForecastTask) -> None:
