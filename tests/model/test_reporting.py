@@ -3,7 +3,11 @@ import pytest
 from jax import random
 from numpyro.infer import Predictive
 
-from bdbvhubrenewal.model import build_model, model_args
+from bdbvhubrenewal.model import (
+    build_model,
+    forecast_trajectories,
+    model_args,
+)
 from bdbvhubrenewal.model.reporting import expected_reported_by
 
 
@@ -68,3 +72,45 @@ def test_expected_reported_by_matches_the_model(sim_vintage, fitted, later):
                 rtol=1e-4,
                 atol=1e-4,
             )
+
+
+@pytest.mark.parametrize("later", [4, 17])
+def test_post_hoc_draws_match_the_model_as_reported(sim_vintage, fitted, later):
+    from bdbvhubrenewal.forecasters.reporting import draw_reported
+
+    model, prior = fitted
+    n, n_weeks = 2000, sim_vintage.n_weeks
+    weeks = list(range(n_weeks - 4, n_weeks + 2))
+    cut = sim_vintage.cutoff + later
+    draws = forecast_trajectories(
+        model,
+        sim_vintage,
+        n,
+        posterior=prior,
+        as_of=(cut,),
+        report_weeks=weeks,
+        report_days=30,
+    )
+    model_view = draws["as_reported"][cut]["province"][:, weeks].sum(-1)
+    post_hoc = draw_reported(
+        draws["reporting"], later, np.random.default_rng(1)
+    ).sum(-1)
+    assert post_hoc.shape == model_view.shape
+    # The data weeks share their expectations across the two passes, so
+    # only the reporting noise differs; the forecast weeks also redraw
+    # the latent process, so they are compared in distribution only.
+    data_weeks = weeks.index(n_weeks - 1) + 1
+    for j in range(len(weeks)):
+        a, b = post_hoc[:, j], model_view[:, j]
+        se = np.sqrt((a.var() + b.var()) / n)
+        tol = 4 * se if j < data_weeks else 0.15 * max(b.mean(), 1.0)
+        assert abs(a.mean() - b.mean()) <= tol + 1e-6, (j, a.mean(), b.mean())
+        np.testing.assert_allclose(
+            np.quantile(a, [0.25, 0.5, 0.75]),
+            np.quantile(b, [0.25, 0.5, 0.75]),
+            rtol=0.15,
+            atol=2,
+        )
+    # Reported by the cut-off: never more than eventually, in expectation.
+    final = draws["province"][:, weeks].sum(-1).mean(0)
+    assert np.all(post_hoc.mean(0) <= final * 1.1 + 2)
