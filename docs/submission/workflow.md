@@ -34,7 +34,7 @@ The chain runs from the most to the least complex renewal model, then the random
 
 `[submission] model` in `config/hub.toml` says where the chain starts.
 Every fit is 2 chains of 500 warm-up, run in parallel, with no refit.
-`renewalbvd` takes 1000 draws at target acceptance 0.95, and the others 500 at 0.9.
+Each takes 750 draws, `renewalbvd` at target acceptance 0.95 and the others at 0.9.
 Fit timeouts are set against the window's close (`[timing]` in `ci/policy.toml`).
 
 ## Checks

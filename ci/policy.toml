@@ -9,14 +9,14 @@
 # ruled out and the chain moves on. The content-hash fit cache is reused
 # across re-runs.
 
-# Minutes the chain plans with. On hosted runners, at the 2026-11-01
-# vintage with the two chains of each fit in parallel, sampling takes
-# 29 min for renewalbvd (500 + 1000 draws), 27 min for renewalsp and
-# 25 min for renewal.
-# Nearly every renewalbvd and renewal draw reaches the maximum tree
-# depth, so cost follows iterations. Every renewal candidate fits in its
-# own job at the same time, and random walk is built in `prepare`, so
-# the fit stage takes about 30 minutes.
+# Minutes the chain plans with. On hosted runners (4 vCPU), at the
+# 2026-11-01 vintage with the two chains of each fit in parallel,
+# sampling took 250 min for renewalbvd (500 + 1000 draws), 170 min for
+# renewal and 63 min for renewalsp (500 + 500) after province delays
+# came in. Nearly every renewalbvd and renewal draw reaches the maximum
+# tree depth, so cost follows iterations times the cost of a gradient.
+# Every renewal candidate fits in its own job at the same time, and
+# random walk is built in `prepare`.
 [timing]
 # GitHub's 360-minute job cap, less a margin.
 fit_cap_minutes = 350
@@ -33,9 +33,9 @@ min_fit_minutes = 30
 # config and sampler settings.
 inputs = ["src", "config", "pyproject.toml", "uv.lock"]
 
-# Every fit: 2 chains of 500 warm-up, run in parallel. renewalbvd draws
-# 1000 at target acceptance 0.95 to clear its tail ESS and divergence
-# warnings; the others draw 500 at 0.9.
+# Every fit: 2 chains of 500 warm-up and 750 draws, run in parallel.
+# renewalbvd samples at target acceptance 0.95 to clear its divergence
+# warnings, the others at 0.9.
 [[candidates]]
 id = "bvd"
 kind = "main"
@@ -43,7 +43,7 @@ config = "bvd"
 model = "renewalbvd"
 stage = "primary"
 label = "BVDOutbreakSize-informed renewal model"
-sampler = { num_chains = 2, num_warmup = 500, num_samples = 1000, target_accept = 0.95, max_tree_depth = 10, seed = 1, chain_method = "parallel" }
+sampler = { num_chains = 2, num_warmup = 500, num_samples = 750, target_accept = 0.95, max_tree_depth = 10, seed = 1, chain_method = "parallel" }
 
 [[candidates]]
 id = "renewalsp"
@@ -52,7 +52,7 @@ config = "renewalsp"
 model = "renewalsp"
 stage = "primary"
 label = "single-patch province renewal models"
-sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.9, max_tree_depth = 10, seed = 1, chain_method = "parallel" }
+sampler = { num_chains = 2, num_warmup = 500, num_samples = 750, target_accept = 0.9, max_tree_depth = 10, seed = 1, chain_method = "parallel" }
 
 [[candidates]]
 id = "main"
@@ -61,7 +61,7 @@ config = "main"
 model = "renewal"
 stage = "primary"
 label = "province renewal model"
-sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.9, max_tree_depth = 10, seed = 1, chain_method = "parallel" }
+sampler = { num_chains = 2, num_warmup = 500, num_samples = 750, target_accept = 0.9, max_tree_depth = 10, seed = 1, chain_method = "parallel" }
 
 # Random walk on a nowcast (no MCMC). Like random walk it needs no fit and
 # is built in `prepare`.

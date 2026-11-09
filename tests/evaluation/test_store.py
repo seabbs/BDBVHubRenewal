@@ -62,7 +62,7 @@ def test_code_digest_ignores_docstrings_and_comments(tmp_path: Path) -> None:
 def test_samplers_come_from_the_policy() -> None:
     table = store.samplers(ROOT / "ci" / "policy.toml")
     assert set(table) == {"renewal", "renewalbvd", "renewalsp"}
-    assert table["renewalbvd"]["num_samples"] == 1000
+    assert table["renewalbvd"]["num_samples"] == 750
 
 
 @pytest.mark.usefixtures("in_root")

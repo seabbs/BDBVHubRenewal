@@ -135,8 +135,8 @@ Scheduled starts can be late by minutes, or dropped when GitHub is busy.
 If a morning check is dropped, the next morning's check runs the round, and a manual dispatch covers the Tuesday check.
 
 Every fit runs 2 chains of 500 warm-up in parallel (`ci/policy.toml`).
-`renewalbvd` takes 1000 draws at target acceptance 0.95, and the other candidates 500 at 0.9.
-On hosted runners with the 2026-11-01 vintage, sampling took 29 minutes for `renewalbvd`, 27 for `renewalsp` and 25 for `renewal`, against 37, 41 and 16 minutes with vectorised chains and 500 `renewalbvd` draws.
+Each candidate takes 750 draws, `renewalbvd` at target acceptance 0.95 and the others at 0.9.
+On hosted runners with the 2026-11-01 vintage and province delays, sampling took 250 minutes for `renewalbvd` (1000 draws), 170 for `renewal` and 63 for `renewalsp` (500 draws).
 Nearly every `renewalbvd` and `renewal` draw reaches the maximum tree depth, so cost follows the number of NUTS iterations.
 The candidates fit in separate jobs at the same time, so the fit stage takes about 30 minutes.
 Time a real fit with a dry run on a past vintage (see above), and read the `Fit took N s` line in the job summary.
