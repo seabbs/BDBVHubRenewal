@@ -1162,8 +1162,8 @@ class RenewalModel:
         """Fit the variant to a task and return its samples.
 
         The provinces are fitted together. National is the sum of the
-        provinces plus the unassigned part, which holds the provinces not
-        reported and the data's national gap (`data_gap`).
+        provinces plus the unassigned part, the national cases no province
+        has (`data_gap`).
 
         Parameters
         ----------

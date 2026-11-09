@@ -48,6 +48,7 @@ import datetime as dt
 import logging
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -67,8 +68,10 @@ from bdbvhubrenewal.forecasters.base import (
     ModelUnavailableError,
     add_national,
     get_model,
+    list_models,
 )
 from bdbvhubrenewal.forecasters.chain import MissingSnapshots
+from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 
 __all__ = [
     "COMPLETE_GROWTH",
@@ -82,6 +85,7 @@ __all__ = [
     "relative_wis",
     "release_backtest",
     "reported_samples",
+    "stored_delays",
     "summarise",
     "week_shares",
     "weeks_back_from_cutoff",
@@ -422,6 +426,30 @@ def reported_samples(
         whole = NATIONAL in set(samples["location"])
         out[o2] = add_national(both) if whole else both
     return out
+
+
+def stored_delays(results: Path | str) -> pd.DataFrame:
+    """Return the fitted models' stored delay summaries.
+
+    `fit-store load` writes them to `results`.
+
+    Parameters
+    ----------
+    results : pathlib.Path or str
+        The results directory.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The delay summaries of the fitted models, with `model` and
+        `vintage`, and no rows if no fits were loaded.
+    """
+    path = Path(results) / DELAY_SUMMARY_FILE
+    if not path.exists():
+        return pd.DataFrame(columns=["model", "vintage"])
+    learnt = pd.read_csv(path)
+    fitted = [s.name for s in list_models() if s.fitted]
+    return learnt.loc[learnt["model"].isin(fitted)]
 
 
 def _label(
