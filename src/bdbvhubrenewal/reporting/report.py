@@ -484,8 +484,8 @@ def _release_section(
                 energy.loc[energy["target"] == _TARGET_LABELS[kind]],
             )
             for target, kind in (
-                ("latest", "reported"),
                 ("complete", "complete"),
+                ("latest", "reported"),
             )
         },
         ours,
@@ -551,8 +551,8 @@ def _release_section(
     _write(
         gen / "release-headline.md",
         "## Overall\n\n"
-        "Scores against what each later release reported, or against the "
-        "complete weeks, as picked "
+        "Scores on the complete weeks of the latest release, or on what "
+        "each later release reported, as picked "
         "([how scoring works](methods/evaluation.md#real-releases), "
         "[metrics](methods/evaluation.md#scores)).\n"
         + _scored_on(rep)
@@ -610,7 +610,8 @@ def _scored_on(reported: pd.DataFrame, baseline: str = "randomwalk") -> str:
     counts = [f"{n[p]} {label}" for p, label in scales.items() if p in n]
     listed = ", ".join(counts[:-1]) + " and " if len(counts) > 1 else ""
     return (
-        f"The scores cover {len(pairs)} origin and release pairs.\n"
+        f"On later releases, the scores cover {len(pairs)} origin and "
+        "release pairs.\n"
         f"The {baseline} baseline has {listed}{counts[-1]} forecasts.\n"
         f"{zero} of them are of a place and week with no case, where every "
         "model's WIS is close to 0, so mean WIS is lower than over places "
@@ -1808,7 +1809,7 @@ def _checks_section(
     every = every.assign(origin=every["origin"].astype(str))
     flagged = flags(counts, ref[["model", "origin", "location", "q50", "q95"]])
     srcs = {}
-    for name, kind in (("latest", "reported"), ("complete", "complete")):
+    for name, kind in (("complete", "complete"), ("latest", "reported")):
         scores = every.loc[every["target"] == kind]
         summary = check_summary(scores, place_types(counts, scores), flagged)
         write_score_chart(
