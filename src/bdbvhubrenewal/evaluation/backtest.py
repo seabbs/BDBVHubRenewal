@@ -1087,8 +1087,8 @@ def run_scenarios(
         (`evaluation.zones.scenario_zone_scores`).
         Then the energy scores (`energy_tasks`) of every scale, with
         `scenario` and `truth_view`. Then the final simulated counts of
-        the country and provinces, `location`, `target_end_date`, `truth`
-        and `scenario`.
+        the country and provinces, `location`, `target_end_date`, `truth`,
+        `truth_vintage` and `scenario`.
     """
     k = config.complete_after_weeks
     lags = None if daily is None else cutoff_lags(daily)
@@ -1144,7 +1144,9 @@ def run_scenarios(
         )
         zone["level"] = "zone"
         all_forecasts.append(forecasts.assign(scenario=settings.name))
-        all_truth.append(final.assign(scenario=settings.name))
+        all_truth.append(
+            final.assign(truth_vintage=end, scenario=settings.name)
+        )
         all_scores.append(
             pd.concat([scored, zone], ignore_index=True).assign(
                 scenario=settings.name

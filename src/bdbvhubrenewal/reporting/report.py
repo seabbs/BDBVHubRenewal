@@ -17,7 +17,7 @@ import textwrap
 from collections.abc import Callable, Mapping, Sequence
 from functools import partial
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, cast
 
 import pandas as pd
 from matplotlib.figure import Figure
@@ -711,21 +711,18 @@ def _zone_nowcast_section(
         fig / "zone-map.geojson",
         zone_boundaries(release.choice.tag, hub_commit),
     )
-    weekly = pd.concat(
-        [above, counts[["location", "target_end_date", "total"]]],
-        ignore_index=True,
-    )
     chart = place_chart_data(
         every,
-        weekly,
+        pd.concat(
+            [above, counts[["location", "target_end_date", "total"]]],
+            ignore_index=True,
+        ),
         {**labels, **zone_names(hub_commit)},
         _model_colours(names),
         config.complete_after_weeks,
     )
     write_explorer(fig / "nowcastchart.json", chart)
-    # The two latest complete weeks, as the zone review takes them.
-    weeks = weekly["target_end_date"].astype(str)
-    recent = sorted(set(weeks[weeks <= str(chart["complete_through"])]))[-2:]
+    recent = cast("list[str]", chart["recent_weeks"])
     _write(
         gen / "nowcast-picker.md",
         "## By place\n\n"
@@ -1312,7 +1309,8 @@ def _scenario_section(
     """Return the scenario summaries and explorer, a tab per scenario.
 
     Forecasts are scored against the final simulated counts of complete
-    weeks. The explorer draws every week of those counts, all complete.
+    weeks. The explorer draws the weeks of those counts it shows, all
+    complete.
     """
     scores = pd.read_csv(res / "scenario-scores.csv.gz", low_memory=False)
     scores = scores.loc[(scores["truth_view"] == "final") & scores["complete"]]
@@ -1343,8 +1341,8 @@ def _scenario_section(
         shown = [m for m in names if m in set(drawn["model"])]
         target = (
             final.loc[final["scenario"] == key]
-            .rename(columns={"truth": "total"})
-            .assign(kind="real", vintage=own["truth_vintage"].iloc[0])
+            .rename(columns={"truth": "total", "truth_vintage": "vintage"})
+            .assign(kind="real")
         )
         write_explorer(
             fig / f"explorer-scenario-{key}.json",

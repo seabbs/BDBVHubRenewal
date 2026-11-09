@@ -430,6 +430,7 @@ def _scenario_results(res: Path) -> None:
                     "location": loc,
                     "target_end_date": w,
                     "truth": 5.0,
+                    "truth_vintage": "2027-01-10",
                 }
                 for w in weeks
             ]

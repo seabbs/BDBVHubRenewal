@@ -116,6 +116,7 @@ def test_place_chart_data_orders_scales_then_cases() -> None:
     assert data["places"][3]["province"] == "CD-NK"
     assert data["data"]["CD-IT-01"][1] == ["2026-10-17", 2]
     assert data["complete_through"] == "2026-10-18"
+    assert data["recent_weeks"] == ["2026-10-10", "2026-10-17"]
     assert len(data["q"]["CD"]) == 3
     # All 20 draws are kept (under 50), each over the three weeks.
     traj = data["traj"]["CD-NK-02"]
