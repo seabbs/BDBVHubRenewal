@@ -61,6 +61,7 @@ else
   export XLA_FLAGS
   note "XLA host devices: ${XLA_FLAGS##*=}, for $(sampler_chains "$CAND_SAMPLER") chains."
   if ! cli fit --model "$model" --config "$CAND_CONFIG" --vintage "$AS_OF" \
+      --reference-date "$REFERENCE_DATE" \
       --sampler-json "$CAND_SAMPLER" --out "$fit"; then
     fit_ok=false
     echo "::warning::fit for $CAND_ID exited non-zero"
@@ -71,10 +72,12 @@ fi
 
 if [ "$CAND_KIND" = "randomwalk" ]; then
   cli nowcast --model "$model" --vintage "$AS_OF" \
+    --reference-date "$REFERENCE_DATE" \
     --out "$out/submission" || echo "::warning::$model nowcast failed"
 elif $fit_ok; then
   cli nowcast --model "$model" --config "$CAND_CONFIG" --fit "$fit" \
-    --vintage "$AS_OF" --out "$out/submission" \
+    --vintage "$AS_OF" --reference-date "$REFERENCE_DATE" \
+    --out "$out/submission" \
     || echo "::warning::nowcast for $CAND_ID failed"
 fi
 sub=$(find "$out/submission" -name '*.csv' 2> /dev/null | sort | head -n 1)

@@ -162,6 +162,7 @@ def test_cli_fit_task_carries_the_delay_files_for_the_lag() -> None:
 
     args = argparse.Namespace(
         vintage="latest",
+        reference_date=None,
         data="data",
         backtest_config="config/backtest.toml",
     )
@@ -262,3 +263,17 @@ def test_cli_fit_store_plans_fits_and_loads(
     assert [s["failed"] for s in status if s["model"] == "broken"].count(
         True
     ) == 1
+
+
+@pytest.mark.usefixtures("in_root")
+def test_cli_nowcast_forecasts_a_later_round_from_an_older_vintage(
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "sub"
+    args = ["nowcast", "--vintage", "2026-10-24", "--out", str(out)]
+    assert main([*args, "--reference-date", "2026-11-07"]) == 0
+    table = _written(out)
+    assert set(table["reference_date"]) == {"2026-11-07"}
+    assert table["target_end_date"].max() == "2026-11-28"
+    handled = json.loads((out / "handled.json").read_text())
+    assert "round 2026-11-07 forecast from the 2026-10-24 release" in handled
