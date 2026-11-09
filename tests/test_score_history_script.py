@@ -71,7 +71,7 @@ def _summary() -> dict[str, object]:
 
 def _full(df):
     """Every forecast, over all horizons."""
-    return df.loc[(df["split"] == "all") & ~df["common"]]
+    return df.loc[(df["split"] == "week 2026-10-24") & ~df["common"]]
 
 
 def test_summary_scores_match_on_baseline_forecasts(sh) -> None:
@@ -145,13 +145,13 @@ def test_history_splits_by_target_week(sh) -> None:
         & (out["model"] == "good")
         & (out["pool"] == "national")
     ].set_index("split")
-    assert set(out.index) == {"all", "week 2026-10-24"}
+    assert set(out.index) == {"week 2026-10-24"}
     assert out.loc["week 2026-10-24", "rel_wis"] == pytest.approx(35 / 40)
 
 
 def _good_national(df):
     keep = (
-        (df["split"] == "all")
+        (df["split"] == "week 2026-10-24")
         & (df["baseline"] == "randomwalk")
         & (df["model"] == "good")
         & (df["pool"] == "national")
@@ -218,51 +218,82 @@ def _two_deploys(sh):
     )
 
 
-def test_chart_marks_breaks_and_names_commits(sh) -> None:
-    charts = sh.chart_data(_two_deploys(sh), {"good": ("#111", "#222", "")})
-    assert set(charts) == {"latest"}
-    d = charts["latest"]
+def test_by_model_view_marks_breaks_and_names_commits(sh) -> None:
+    charts = sh.chart_data(
+        _two_deploys(sh),
+        {"good": ("#111", "#222", "")},
+        {"b" * 40: "round-2026-11-07"},
+    )
+    assert set(charts) == {"model", "week"}
+    d = charts["model"]["latest"]
     assert d["kind"] == "line"
     assert [m["name"] for m in d["models"]] == ["randomwalk", "good"]
     assert d["models"][1]["light"] == "#111"
     assert d["scales"] == ["national", "provinces"]
-    assert d["baseline"] == 0
-    assert {
-        f"{b}|{p}|all"
-        for b in ("randomwalk", "good")
-        for p in ("national", "provinces")
-    } <= set(d["sets"])
-    assert d["common"] is True
     assert d["baselines"] == ["randomwalk", "good"]
-    assert d["splits"] == ["week 2026-10-24", "all"]
-    assert d["split"] == "week 2026-10-24"
-    assert "randomwalk|national|week 2026-10-24|common" in d["sets"]
-    nat = d["sets"]["randomwalk|national|all"]
-    assert nat["x"] == ["11-04 10:00 aaaaaaa *", "11-05 10:00 bbbbbbb *"]
+    assert d["common"] is True
+    assert d["splits"] == ["week 2026-10-24"]
+    assert "all" not in {k.split("|")[2] for k in d["sets"]}
+    nat = d["sets"]["randomwalk|national|week 2026-10-24"]
+    assert nat["x"] == [
+        "aaaaaaa 11-04 *",
+        "bbbbbbb 11-05 * round-2026-11-07",
+    ]
     assert nat["marks"] == [0, 1]
     good = [r for r in nat["rows"] if r[0] == 1]
     assert good[0][:3] == [1, 0, 2]
     keys = [m["key"] for m in d["metrics"]]
     assert good[0][3 + keys.index("rel_wis")] == pytest.approx(35 / 40)
-    rw = d["sets"]["good|national|all"]["rows"][0]
+    rw = d["sets"]["good|national|week 2026-10-24"]["rows"][0]
     assert rw[0] == 0
     assert rw[3 + keys.index("rel_wis")] == pytest.approx(40 / 35, rel=1e-3)
 
 
-def test_page_has_chart_table_and_commit_links(sh) -> None:
-    page = sh.page_markdown(_two_deploys(sh), "seabbs/BDBVHubRenewal")
-    assert 'class="checkschart"' in page
-    assert "../../figures/scorehistory-latest.json" in page
-    assert 'class="tablefilter"' in page
-    assert (
-        "[aaaaaaa](https://github.com/seabbs/BDBVHubRenewal/commit/"
-        + "a" * 40
-        + ")"
-    ) in page
+def test_by_week_view_draws_a_line_per_week_for_one_model(sh) -> None:
+    hist = sh.history(
+        [
+            ("a" * 40, "2026-11-04T10:00", "p1", "latest", _summary()),
+            ("b" * 40, "2026-11-05T10:00", "p2", "latest", _new_week()),
+        ]
+    )
+    d = sh.chart_data(hist, {})["week"]["latest"]
+    assert [m["name"] for m in d["models"]] == ["2026-10-31", "2026-10-24"]
+    assert d["splits"] == ["randomwalk", "good"]
+    assert d["split"] == "good"
+    assert d["baselines"] == ["randomwalk", "good"]
+    assert d["common"] is True
+    rows = d["sets"]["randomwalk|national|good|common"]["rows"]
+    keys = [m["key"] for m in d["metrics"]]
+    # Week 2026-10-24 (legend 1) at both deploys, 2026-10-31 at the last.
+    assert sorted((r[0], r[1]) for r in rows) == [(0, 1), (1, 0), (1, 1)]
+    new = next(r for r in rows if r[0] == 0)
+    assert new[3 + keys.index("rel_wis")] == pytest.approx(0.5)
+
+
+def test_repeated_deploys_of_a_commit_keep_the_latest(sh) -> None:
+    first = ("a" * 40, "t1", "p1", "latest", _summary())
+    again = ("a" * 40, "t2", "p2", "latest", _summary())
+    other = ("b" * 40, "t3", "p3", "latest", _summary())
+    kept = sh.latest_per_commit([first, again, other])
+    assert [d[2] for d in kept] == ["p2", "p3"]
+
+
+def test_round_keeps_four_significant_figures(sh) -> None:
+    assert sh._round(12345.678) == 12350.0
+    assert sh._round(0.123456) == 0.1235
+    assert sh._round(float("nan")) is None
+
+
+def test_page_has_a_chart_per_view(sh) -> None:
+    page = sh.page_markdown(_two_deploys(sh))
+    assert page.count('class="checkschart"') == 2
+    assert "../../figures/scorehistory-week-latest.json" in page
+    assert "../../figures/scorehistory-model-latest.json" in page
+    assert "tablefilter" not in page
 
 
 def test_page_says_when_history_is_unavailable(sh) -> None:
-    page = sh.page_markdown(None, "seabbs/BDBVHubRenewal")
+    page = sh.page_markdown(None)
     assert "unavailable" in page
     assert "checkschart" not in page
 
@@ -350,6 +381,6 @@ def test_chart_opens_on_the_newest_week_scored_at_most_deploys(sh) -> None:
             ("b" * 40, "t2", "p2", "latest", _new_week()),
         ]
     )
-    d = sh.chart_data(hist, {})["latest"]
-    assert d["splits"][:2] == ["week 2026-10-31", "week 2026-10-24"]
+    d = sh.chart_data(hist, {})["model"]["latest"]
+    assert d["splits"] == ["week 2026-10-31", "week 2026-10-24"]
     assert d["split"] == "week 2026-10-24"
