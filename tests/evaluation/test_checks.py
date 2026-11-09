@@ -89,7 +89,9 @@ def test_check_summary_averages_by_place_type_and_flag() -> None:
         {
             "model": "rw",
             "origin": ORIGIN,
+            "truth_vintage": "2026-11-08",
             "location": ["wamba", "wamba", "rungu"],
+            "target_end_date": ["2026-10-31", "2026-11-07", "2026-11-07"],
             "scale": "zones",
             **dict.fromkeys(SCORE_COLUMNS, 0.0),
             "wis": [4.0, 2.0, 9.0],
@@ -117,3 +119,46 @@ def test_check_summary_averages_by_place_type_and_flag() -> None:
     assert got.loc[("place type", "larger"), "n"] == 2
     assert got.loc[("flag", "blow-up"), "90% coverage"] == 0.0
     assert got.loc[("flag", "collapse"), "log WIS"] == 1.0
+
+
+def test_check_summary_divides_by_the_baseline_on_the_same_weeks() -> None:
+    week = {
+        "origin": ORIGIN,
+        "truth_vintage": "2026-11-08",
+        "location": "wamba",
+        "target_end_date": "2026-11-07",
+        "scale": "zones",
+    }
+    scores = pd.DataFrame(
+        [
+            {
+                **week,
+                **dict.fromkeys(SCORE_COLUMNS, 0.0),
+                "model": "rw",
+                "wis": 2.0,
+            },
+            {
+                **week,
+                **dict.fromkeys(SCORE_COLUMNS, 0.0),
+                "model": "rwn",
+                "wis": 6.0,
+            },
+        ]
+    )
+    types = pd.DataFrame(
+        {"origin": [ORIGIN], "location": ["wamba"], "place_type": ["larger"]}
+    )
+    # The baseline's forecast is not flagged, the model's is.
+    flagged = pd.DataFrame(
+        {
+            "model": ["rw", "rwn"],
+            "origin": ORIGIN,
+            "location": "wamba",
+            "flag": ["no flag", "collapse"],
+        }
+    )
+    got = check_summary(scores, types, flagged, baseline="rw").set_index(
+        ["split", "group", "model"]
+    )
+    assert got.loc[("flag", "collapse", "rwn"), "relative WIS"] == 3.0
+    assert got.loc[("place type", "larger", "rw"), "relative WIS"] == 1.0

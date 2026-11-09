@@ -1621,7 +1621,7 @@ def _backtest_page(
     )
     _write(
         gen / "backtest-checks.md",
-        _checks_section(res, quantiles, target, data_dir, names)
+        _checks_section(fig, res, quantiles, target, data_dir, names)
         if shown
         else "",
     )
@@ -1680,6 +1680,7 @@ def _backtest_page(
 
 
 def _checks_section(
+    fig: Path,
     res: Path,
     quantiles: pd.DataFrame,
     target: pd.DataFrame,
@@ -1728,6 +1729,9 @@ def _checks_section(
         place_types(counts, scores),
         flags(counts, ref[["model", "origin", "location", "q50", "q95"]]),
     )
+    write_score_chart(
+        fig / "checks-backtest.json", _checks_chart(summary, names)
+    )
     return (
         "## Checks\n\n"
         "Scores of the scored weeks, split by the type of place and by the "
@@ -1740,8 +1744,73 @@ def _checks_section(
         "A forecast is flagged when its reference week drops to a third of "
         "the recent level (collapse) or rises far above every recent count "
         "(blow-up), and has no flag otherwise.\n\n"
-        + filter_table(_table(summary), ["scale", "split", "model"])
+        '<div class="checkschart" data-src="../figures/checks-backtest.json" '
+        'role="group" aria-label="Scores by place type and flag">\n'
+        "<noscript>The checks chart needs JavaScript.</noscript>\n"
+        "</div>\n\n"
+        + _dropdown(
+            filter_table(_table(summary), ["scale", "split", "model"]),
+            "Table",
+        )
     )
+
+
+_CHECK_METRICS: Final = (
+    ("relative WIS", "Relative WIS", 1.0, True),
+    ("WIS", "WIS", None, False),
+    ("90% coverage", "90% coverage", 0.9, False),
+)
+"""Checks chart metrics: column, label, reference line and log axis."""
+
+
+def _checks_chart(
+    summary: pd.DataFrame, names: Sequence[str]
+) -> dict[str, object]:
+    """Return the checks summary as `scorechart.js` rows, by scale and split.
+
+    Models keep the colours of the other Backtest charts.
+    """
+    models = [m for m in names if m in set(summary["model"])]
+    colours = _model_colours([*names, BASELINE])
+    sets = {}
+    for (scale, split), g in summary.groupby(["scale", "split"], sort=False):
+        x = list(dict.fromkeys(g["group"]))
+        rows = [
+            [
+                models.index(r["model"]),
+                x.index(r["group"]),
+                int(r["n"]),
+                *(
+                    None if pd.isna(r[c]) else round(float(r[c]), 6)
+                    for c, *_ in _CHECK_METRICS
+                ),
+            ]
+            for _, r in g.iterrows()
+        ]
+        sets[f"{scale}|{split}"] = {"x": x, "rows": rows}
+    return {
+        "models": [
+            {
+                "name": m,
+                "light": colours[m][0],
+                "dark": colours[m][1],
+                "dash": colours[m][2],
+                "on": True,
+            }
+            for m in models
+        ],
+        "metrics": [
+            {"key": c, "label": label, "ref": ref, "log": log}
+            for c, label, ref, log in _CHECK_METRICS
+        ],
+        "scales": [
+            s
+            for s in ("zones", "provinces", "national")
+            if s in set(summary["scale"])
+        ],
+        "splits": ["place type", "flag"],
+        "sets": sets,
+    }
 
 
 def _location_names(target: pd.DataFrame) -> dict[str, str]:
