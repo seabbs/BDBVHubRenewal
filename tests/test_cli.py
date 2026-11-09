@@ -172,19 +172,28 @@ def test_cli_fit_task_carries_the_delay_files_for_the_lag() -> None:
 
 
 @pytest.mark.usefixtures("in_root")
-def test_stored_samples_keep_numeric_values_without_our_forecasts() -> None:
+def test_stored_samples_keep_numeric_values_without_our_forecasts(
+    tmp_path: Path,
+) -> None:
     # Guards the dtypes of a backtest with no development forecasts.
     import argparse
 
     import numpy as np
 
-    from bdbvhubrenewal.cli import _stored_samples
+    from bdbvhubrenewal.cli import _stored
     from bdbvhubrenewal.data import load_target
     from bdbvhubrenewal.evaluation.backtest import run_forecasts
     from bdbvhubrenewal.evaluation.scoring import energy_scores
+    from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 
-    args = argparse.Namespace(data="data")
-    stored = _stored_samples(args, load_target("data"), run_forecasts([], []))
+    learnt = pd.DataFrame(
+        {"model": ["renewal", "randomwalknowcast"], "vintage": "2026-10-24"}
+    )
+    learnt.to_csv(tmp_path / DELAY_SUMMARY_FILE, index=False)
+    args = argparse.Namespace(data="data", output=str(tmp_path))
+    stored, delays = _stored(args, load_target("data"), run_forecasts([], []))
+    # Only the fitted models' delays are stored ones.
+    assert set(delays["model"]) == {"renewal"}
     assert stored["value"].dtype == np.float64
     one = stored.loc[stored["vintage"] == stored["vintage"].max()]
     truth = one[["location", "target_end_date"]].drop_duplicates()
