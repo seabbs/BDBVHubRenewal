@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -62,3 +64,18 @@ def test_hub_delay_pmf_switches_at_double_censored_fit() -> None:
     # onsets fall on the report day than under the exact fit.
     assert hub_delay_pmf("2026-10-24")[0] == pytest.approx(0.0717, abs=1e-3)
     assert hub_delay_pmf("2026-11-01")[0] == pytest.approx(0.0408, abs=1e-3)
+
+
+DPCENS = pd.read_csv(
+    Path(__file__).parents[1] / "model" / "fixtures" / "dpcens.csv"
+)
+"""primarycensored `dpcens` pmfs, from `tests/model/fixtures/dpcens.R`."""
+
+
+@pytest.mark.parametrize(
+    ("release", "fit"),
+    [("2026-10-24", "exact"), ("2026-11-01", "double_censored")],
+)
+def test_hub_delay_pmf_matches_primarycensored(release: str, fit: str) -> None:
+    ref = DPCENS[(DPCENS["case"] == "hub") & (DPCENS["family"] == fit)]
+    np.testing.assert_allclose(hub_delay_pmf(release), ref["p"], atol=1e-8)
