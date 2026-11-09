@@ -53,8 +53,10 @@
   function legend(parent, models, onChange) {
     var root = h("div", { class: "scorechart-legend" }, parent);
     var on = models.map(function (m) { return m.on; });
+    var keys = [];
     var swatches = models.map(function (m, i) {
       var l = h("label", { class: "scorechart-key" }, root);
+      keys.push(l);
       var cb = h("input", { type: "checkbox" }, l);
       cb.checked = m.on;
       var sw = swatch(l, m.dash);
@@ -68,6 +70,10 @@
       dash: function (i) { return models[i].dash || ""; },
       paint: function () {
         swatches.forEach(function (sw, i) { sw.setAttribute("stroke", models[i][mode()]); });
+      },
+      // List only the models whose index has[i] is true.
+      only: function (has) {
+        keys.forEach(function (l, i) { l.hidden = !has[i]; });
       },
     };
   }
@@ -120,6 +126,19 @@
     });
   }
 
+  // A "Scored on" select of a widget's targets (data-targets: target to
+  // summary URL), showing value. onChange(target) runs on a change. With
+  // one target there is nothing to pick and no select.
+  var TARGETS = { latest: "Latest release", complete: "Complete weeks" };
+  function targetSelect(controls, targets, value, onChange) {
+    var keys = Object.keys(targets);
+    if (keys.length < 2) return;
+    var sel = h("select", {}, h("label", {}, controls, "Scored on "));
+    keys.forEach(function (k) { h("option", { value: k }, sel, TARGETS[k]); });
+    sel.value = value;
+    sel.addEventListener("change", function () { onChange(sel.value); });
+  }
+
   // A Map tick box, ticked when on. onChange(ticked) runs on a change.
   function mapToggle(controls, on, onChange) {
     var l = h("label", { class: "map-toggle" }, controls);
@@ -131,5 +150,6 @@
   }
 
   window.bdbvToggles = { h: h, el: el, getJSON: getJSON, legend: legend, hatch: hatch, onTheme: onTheme,
-    viewSelect: viewSelect, fullscreen: fullscreen, mapToggle: mapToggle };
+    viewSelect: viewSelect, fullscreen: fullscreen, mapToggle: mapToggle,
+    targetSelect: targetSelect };
 })();

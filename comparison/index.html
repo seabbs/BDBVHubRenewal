@@ -2036,8 +2036,8 @@
 <p>Scores on the weeks the latest release reports in full, from the release serving each round (<a href="../methods/evaluation/#comparison-with-hub-forecasts">how scoring works</a>).
 A series marked submitted is the file we sent to a round, and one marked main build is the current main branch's forecast for every round, so a round we did not submit to shows only the main build.</p>
 <h2 id="overall">Overall<a class="headerlink" href="#overall" title="Permanent link">&para;</a></h2>
-<p>Scores on the complete weeks (<a href="../methods/evaluation/#scores">metrics</a>).</p>
-<div class="scoresummary" data-src="../figures/scoresummary-comparison.json" data-view="overall" role="group" aria-label="Overall scores by scale">
+<p>Scores on the complete weeks, or on the latest release, as picked (<a href="../methods/evaluation/#scores">metrics</a>).</p>
+<div class="scoresummary" data-targets='{"complete": "../figures/scoresummary-comparison-complete.json"}' data-view="overall" role="group" aria-label="Overall scores by scale">
 <noscript><img src="../figures/comparison-overall.svg#only-light" alt="Overall scores by scale"><img src="../figures/comparison-overall-dark.svg#only-dark" alt="Overall scores by scale"></noscript>
 </div>
 
@@ -2294,14 +2294,14 @@ A series marked submitted is the file we sent to a round, and one marked main bu
 </details>
 <h2 id="by-horizon">By horizon<a class="headerlink" href="#by-horizon" title="Permanent link">&para;</a></h2>
 <p>By weeks from the reference week (<a href="../methods/evaluation/#reading-the-figures">horizon</a>), at the scale chosen.</p>
-<div class="scoresummary" data-src="../figures/scoresummary-comparison.json" data-view="horizon" role="group" aria-label="Scores by horizon">
+<div class="scoresummary" data-targets='{"complete": "../figures/scoresummary-comparison-complete.json"}' data-view="horizon" role="group" aria-label="Scores by horizon">
 <noscript><img src="../figures/comparison-horizon.svg#only-light" alt="Scores by horizon"><img src="../figures/comparison-horizon-dark.svg#only-dark" alt="Scores by horizon"></noscript>
 </div>
 
 <h2 id="by-place">By place<a class="headerlink" href="#by-place" title="Permanent link">&para;</a></h2>
 <p>Scores at each place, at the scale chosen.
 Pick a place to narrow the table.</p>
-<div class="scoresummary" data-src="../figures/scoresummary-comparison.json" data-view="place" data-map="../figures/zone-map.geojson" role="group" aria-label="Scores by place">
+<div class="scoresummary" data-targets='{"complete": "../figures/scoresummary-comparison-complete.json"}' data-view="place" data-map="../figures/zone-map.geojson" role="group" aria-label="Scores by place">
 <noscript><img src="../figures/comparison-place.svg#only-light" alt="Scores by place"><img src="../figures/comparison-place-dark.svg#only-dark" alt="Scores by place"></noscript>
 </div>
 
@@ -2310,7 +2310,7 @@ Pick a place to narrow the table.</p>
 Forecasts are against the counts in the latest release, named in the key (<a href="../methods/evaluation/#reading-the-figures">reading the figures</a>).
 The static figures show our submitted series, the main builds of the models we submit and randomwalk above the hub teams.
 randomwalk and our other main builds, such as the 2026-11-07 renewal and renewalsp candidates, start switched off and can be switched on in the key.</p>
-<div class="explorer" data-src="../figures/explorer-comparison.json" data-round="all" data-summary="../figures/scoresummary-comparison.json" role="group" aria-label="Hub forecasts">
+<div class="explorer" data-src="../figures/explorer-comparison.json" data-round="all" data-targets='{"complete": "../figures/scoresummary-comparison-complete.json"}' role="group" aria-label="Hub forecasts">
 <noscript>The explorer needs JavaScript.</noscript>
 </div>
 
@@ -2680,7 +2680,7 @@ The hub data credit is:</p>
       
         <script src="../javascripts/mathjax.js?v=bced49b5"></script>
       
-        <script src="../javascripts/toggles.js?v=1d345724"></script>
+        <script src="../javascripts/toggles.js?v=e5ef24ea"></script>
       
         <script src="../javascripts/placemap.js?v=03fe1366"></script>
       
@@ -2692,13 +2692,13 @@ The hub data credit is:</p>
       
         <script src="../javascripts/tablefilter.js?v=94394744"></script>
       
-        <script src="../javascripts/explorer.js?v=59bb502e"></script>
+        <script src="../javascripts/explorer.js?v=78179124"></script>
       
-        <script src="../javascripts/scorechart.js?v=67b20eb8"></script>
+        <script src="../javascripts/scorechart.js?v=0bc05770"></script>
       
-        <script src="../javascripts/scoresummary.js?v=24bebb78"></script>
+        <script src="../javascripts/scoresummary.js?v=a40380ed"></script>
       
-        <script src="../javascripts/checkschart.js?v=44dced10"></script>
+        <script src="../javascripts/checkschart.js?v=106bf7bb"></script>
       
         <script src="../javascripts/nowcastchart.js?v=e5f9eb42"></script>
       

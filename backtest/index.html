@@ -2078,12 +2078,13 @@
 <p class="page-subtitle">Forecasts made at past vintages, scored on what each later release reported.</p>
 <p>Fitted models' results come from the <a href="https://github.com/seabbs/BDBVHubRenewal/tree/fit-store">fit store</a>, fitted at <a href="https://github.com/seabbs/BDBVHubRenewal/commit/bfcbf348ffb3cac162f23635280a48ef8210e01f"><code>bfcbf34</code></a>.</p>
 <h2 id="overall">Overall<a class="headerlink" href="#overall" title="Permanent link">&para;</a></h2>
-<p>Scores against what each later release reported (<a href="../methods/evaluation/#real-releases">how scoring works</a>, <a href="../methods/evaluation/#scores">metrics</a>).
+<p>Scores against what each later release reported, or against the complete weeks, as picked (<a href="../methods/evaluation/#real-releases">how scoring works</a>, <a href="../methods/evaluation/#scores">metrics</a>).
 The scores cover 10 origin and release pairs.
 The randomwalk baseline has 16 national, 416 province and 1045 health zone forecasts.
+819 of them are of a place and week with no case, where every model's WIS is close to 0, so mean WIS is lower than over places with cases.
 The renewal models are not scored at health zones.
 The <a href="../methods/evaluation/#energy-score">energy score</a> scores each scale's places and weeks as one forecast per origin and release, so its <span class="arithmatex">\(n\)</span> counts those.</p>
-<div class="scoresummary" data-src="../figures/scoresummary-backtest.json" data-view="overall" role="group" aria-label="Overall scores by scale">
+<div class="scoresummary" data-targets='{"latest": "../figures/scoresummary-backtest-latest.json", "complete": "../figures/scoresummary-backtest-complete.json"}' data-view="overall" role="group" aria-label="Overall scores by scale">
 <noscript><img src="../figures/relative-overall.svg#only-light" alt="Overall scores by scale"><img src="../figures/relative-overall-dark.svg#only-dark" alt="Overall scores by scale"></noscript>
 </div>
 
@@ -2548,7 +2549,7 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 </details>
 <h2 id="by-horizon">By horizon<a class="headerlink" href="#by-horizon" title="Permanent link">&para;</a></h2>
 <p>By weeks from the reference week (<a href="../methods/evaluation/#reading-the-figures">horizon</a>), at the scale chosen.</p>
-<div class="scoresummary" data-src="../figures/scoresummary-backtest.json" data-view="horizon" role="group" aria-label="Scores by horizon">
+<div class="scoresummary" data-targets='{"latest": "../figures/scoresummary-backtest-latest.json", "complete": "../figures/scoresummary-backtest-complete.json"}' data-view="horizon" role="group" aria-label="Scores by horizon">
 <noscript><img src="../figures/scores-horizon.svg#only-light" alt="Scores by horizon"><img src="../figures/scores-horizon-dark.svg#only-dark" alt="Scores by horizon"></noscript>
 </div>
 
@@ -3010,7 +3011,7 @@ Horizons after the latest release have no score yet.</p>
 <h2 id="by-place">By place<a class="headerlink" href="#by-place" title="Permanent link">&para;</a></h2>
 <p>Scores at each place, at the scale chosen.
 Pick a place to narrow the table.</p>
-<div class="scoresummary" data-src="../figures/scoresummary-backtest.json" data-view="place" data-map="../figures/zone-map.geojson" role="group" aria-label="Scores by place">
+<div class="scoresummary" data-targets='{"latest": "../figures/scoresummary-backtest-latest.json", "complete": "../figures/scoresummary-backtest-complete.json"}' data-view="place" data-map="../figures/zone-map.geojson" role="group" aria-label="Scores by place">
 <noscript><img src="../figures/scores-place.svg#only-light" alt="Scores by place"><img src="../figures/scores-place-dark.svg#only-dark" alt="Scores by place"></noscript>
 </div>
 
@@ -10348,7 +10349,7 @@ Pick a place to narrow the table.</p>
 </div>
 </details>
 <h2 id="forecasts-by-place">Forecasts by place<a class="headerlink" href="#forecasts-by-place" title="Permanent link">&para;</a></h2>
-<div class="explorer" data-src="../figures/explorer-backtest.json" data-round="all" data-summary="../figures/scoresummary-backtest.json" role="group" aria-label="Backtest forecasts">
+<div class="explorer" data-src="../figures/explorer-backtest.json" data-round="all" data-targets='{"latest": "../figures/scoresummary-backtest-latest.json", "complete": "../figures/scoresummary-backtest-complete.json"}' role="group" aria-label="Backtest forecasts">
 <noscript>The explorer needs JavaScript.</noscript>
 </div>
 
@@ -20882,7 +20883,7 @@ Pick a place to narrow the table.</p>
 <p>Scores of the scored weeks, split by the type of place and by the plausibility flag of their forecast (<a href="../methods/evaluation/#checks">checks</a>).
 A place is silent with no case in the 9 weeks to the origin, small with at most 5 cases in any of those weeks, and larger otherwise.
 A forecast is flagged when its reference week drops to a third of the recent level (collapse) or rises far above every recent count (blow-up), and has no flag otherwise.</p>
-<div class="checkschart" data-src="../figures/checks-backtest.json" role="group" aria-label="Scores by place type and flag">
+<div class="checkschart" data-targets='{"latest": "../figures/checks-backtest-latest.json", "complete": "../figures/checks-backtest-complete.json"}' role="group" aria-label="Scores by place type and flag">
 <noscript>The checks chart needs JavaScript.</noscript>
 </div>
 
@@ -21642,7 +21643,7 @@ A forecast is flagged when its reference week drops to a third of the recent lev
       
         <script src="../javascripts/mathjax.js?v=bced49b5"></script>
       
-        <script src="../javascripts/toggles.js?v=1d345724"></script>
+        <script src="../javascripts/toggles.js?v=e5ef24ea"></script>
       
         <script src="../javascripts/placemap.js?v=03fe1366"></script>
       
@@ -21654,13 +21655,13 @@ A forecast is flagged when its reference week drops to a third of the recent lev
       
         <script src="../javascripts/tablefilter.js?v=94394744"></script>
       
-        <script src="../javascripts/explorer.js?v=59bb502e"></script>
+        <script src="../javascripts/explorer.js?v=78179124"></script>
       
-        <script src="../javascripts/scorechart.js?v=67b20eb8"></script>
+        <script src="../javascripts/scorechart.js?v=0bc05770"></script>
       
-        <script src="../javascripts/scoresummary.js?v=24bebb78"></script>
+        <script src="../javascripts/scoresummary.js?v=a40380ed"></script>
       
-        <script src="../javascripts/checkschart.js?v=44dced10"></script>
+        <script src="../javascripts/checkschart.js?v=106bf7bb"></script>
       
         <script src="../javascripts/nowcastchart.js?v=e5f9eb42"></script>
       

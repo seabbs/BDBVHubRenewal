@@ -53,19 +53,23 @@
   }
   window.bdbvSummaryTable = summaryTable;
 
-  function init(root) {
-    T.getJSON(root.dataset.src)
-      .then(function (d) { build(root, d, root.dataset.view || "overall"); })
+  // Load the summary of one target (data-targets) and draw it.
+  function load(root, target) {
+    var targets = JSON.parse(root.dataset.targets);
+    T.getJSON(targets[target])
+      .then(function (d) { build(root, d, root.dataset.view || "overall", targets, target); })
       .catch(function () { root.textContent = "The score data could not be loaded."; });
   }
+  function init(root) { load(root, Object.keys(JSON.parse(root.dataset.targets))[0]); }
 
   // With data-map, the place view adds a map of the metric shown for one
   // model.
-  function build(root, d, view) {
+  function build(root, d, view, targets, target) {
     root.textContent = "";
     var byPlace = view === "place";
     var byHorizon = view === "horizon";
     var controls = h("div", { class: "explorer-controls" }, root);
+    T.targetSelect(controls, targets, target, function (k) { load(root, k); });
     var selScale = h("select", {}, h("label", {}, controls, "Scale "));
     d.pools.forEach(function (p) {
       if (byPlace && p.id === "national") return;
@@ -255,7 +259,7 @@
   }
 
   function start() {
-    document.querySelectorAll(".scoresummary[data-src]").forEach(init);
+    document.querySelectorAll(".scoresummary[data-targets]").forEach(init);
   }
   if (typeof document$ !== "undefined") document$.subscribe(start);
   else document.addEventListener("DOMContentLoaded", start);
