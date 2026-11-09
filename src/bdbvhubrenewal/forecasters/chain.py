@@ -144,6 +144,12 @@ class Settings:
     start_count : float
         Cases reported in a week for `randomwalknowcast` to start its walk
         from the week's nowcast.
+    filter_noise : str
+        Variance of a week's observation of the walk's level in
+        `randomwalknowcast`'s filter. `"poisson"` is $1 / (F + y)$.
+        `"nowcast"` adds the variance of the nowcast's count still to
+        come, negative binomial with the fitted size, on the log scale,
+        so a week mostly still to come is a weak observation.
     """
 
     max_delay: int = 42
@@ -155,6 +161,7 @@ class Settings:
     clock_shift: int = 0
     start_share: float = 0.05
     start_count: float = 5.0
+    filter_noise: str = "nowcast"
 
     @property
     def history_delay(self) -> int:

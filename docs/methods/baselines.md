@@ -237,7 +237,13 @@ Where no week reaches 0.95, `randomwalknowcast` takes the first week as the late
 2. Weeks up to $w_0$ are the nowcast draws $X_{p,i}(w)$.
    In sample $i$ the level at $w_0$ is $\log\{1 + X_{p,i}(w_0)\}$ with variance 0.
 3. Each later week $u$ up to the week holding $c_o$ is not nowcast.
-   The level takes a step of variance $\sigma_p^2$ and is updated by the observation $\log\{1 + Y_{p,o}(u) / \pi_p(u)\}$ with variance $1 / \{\pi_p(u) + Y_{p,o}(u)\}$, the delta-method variance of a Poisson final count thinned to the share reported.
+   The level takes a step of variance $\sigma_p^2$ and is updated by the observation $\log\{1 + Y_{p,o}(u) / \pi_p(u)\}$ with variance
+   $$
+   \frac{1}{\pi_p(u) + Y_{p,o}(u)} + \frac{R_p(u) + R_p(u)^2 / \phi_{p,k}}{\{1 + m_p(u)\}^2}.
+   $$
+   The first term is the delta-method variance of a Poisson final count thinned to the share reported.
+   The second is the variance of the count still to come on the same scale, with $m_p(u)$ the nowcast mean, $R_p(u) = \max\{m_p(u) - Y_{p,o}(u), 0\}$ and $\phi_{p,k}$ the negative binomial size at $k$ weeks back from the week holding $c_o$.
+   So a week mostly still to come moves the level little.
    A week with $\pi_p(u) = 0$ gives no update.
 4. The level at the week holding $c_o$ is drawn from the filter, and the levels of earlier weeks back to $w_0$ are drawn given it, so these weeks and the forecast are one trajectory.
 5. Each of these weeks is a Poisson draw from its level, floored at the count reported.
