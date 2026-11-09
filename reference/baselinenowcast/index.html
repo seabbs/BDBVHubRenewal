@@ -8483,8 +8483,8 @@ Pairs of any gap share one daily log development factor per age
 <code>counts</code> is <code>(n_loc, n_release, n_day)</code>, the count of onset day t
 in release r.
 <code>observed</code> is <code>(n_release, n_day)</code>, True where day t has data in
-release r, and <code>cut[r]</code> is the index of the latest onset day of
-release r.
+release r, and <code>cut[r]</code> is the index of the cut-off of release r,
+its last report day (<code>bdbvhubrenewal.data.releases.release_cutoff</code>).
 The age of day t in release r is <code>cut[r] - t</code>.
 Pair p is releases <code>(pairs[p], pairs[p] + 1)</code> with step
 <code>cut[r + 1] - cut[r]</code>.</p>

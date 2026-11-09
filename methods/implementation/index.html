@@ -2013,8 +2013,7 @@
 <h2 id="code">Code<a class="headerlink" href="#code" title="Permanent link">&para;</a></h2>
 <p>The model extends <a href="https://github.com/CDCgov/PyRenew">PyRenew</a>, pinned to a commit, and runs in JAX with NumPyro.
 Its code is in <a class="autorefs autorefs-internal" title="            bdbvhubrenewal.model" href="../../reference/model/#bdbvhubrenewal.model"><code>bdbvhubrenewal.model</code></a> and the variants are in <a class="autorefs autorefs-internal" title="            bdbvhubrenewal.forecasters.renewal" href="../../reference/forecasters/#bdbvhubrenewal.forecasters.renewal"><code>forecasters.renewal</code></a>.
-The model is configured by <code>ModelConfig</code>.
-The model diagrams are mermaid blocks in <code>docs/methods/model.md</code>.</p>
+The model is configured by <code>ModelConfig</code>.</p>
 <h2 id="pyrenew-and-what-is-built-here">PyRenew and what is built here<a class="headerlink" href="#pyrenew-and-what-is-built-here" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2041,12 +2040,12 @@ The model diagrams are mermaid blocks in <code>docs/methods/model.md</code>.</p>
 <td>None.</td>
 </tr>
 <tr>
-<td>Onset-to-report delay <span class="arithmatex">\(f_s(d)\)</span></td>
+<td>Onset-to-report delay <span class="arithmatex">\(f_{p,s}(d)\)</span></td>
 <td>None</td>
-<td><code>HazardDelay</code>.</td>
+<td><code>HazardDelay</code>, with province offsets and drifts from <code>pooled_walk</code>, as the Rt deviations.</td>
 </tr>
 <tr>
-<td>Missing onsets <span class="arithmatex">\(\pi_p(t)\)</span></td>
+<td>Missing onsets <span class="arithmatex">\(m_p(t)\)</span></td>
 <td>None</td>
 <td><code>MissingOnsetFraction</code>, a pooled walk of the same form as <span class="arithmatex">\(R_p\)</span> with its own parameters.</td>
 </tr>
@@ -2054,6 +2053,11 @@ The model diagrams are mermaid blocks in <code>docs/methods/model.md</code>.</p>
 <td>Known and imputed onsets</td>
 <td><code>BaseObservationProcess</code> with <code>temporal_pmf_rv</code> for the infection-to-onset pmf (the incubation period, a <code>CensoredPMF</code> with a random mean and SD), <code>NegativeBinomialNoise</code>, <code>compute_prop_already_reported</code> for the publication lag</td>
 <td><code>OnsetStreams</code>.</td>
+</tr>
+<tr>
+<td>Publication lag</td>
+<td>None</td>
+<td>A Dirichlet simplex fitted to consecutive releases by <code>ReleasePairLikelihood</code>.</td>
 </tr>
 <tr>
 <td>Delays of known-onset cases</td>
@@ -2074,7 +2078,7 @@ The model diagrams are mermaid blocks in <code>docs/methods/model.md</code>.</p>
 <li><code>AR1</code> draws its first state from the stationary distribution, and <code>DifferencedAR1</code> is AR(1) on the differences.
   Here walks start at a fixed value and stay there over the seeding weeks.</li>
 <li><code>SubpopulationInfections</code> samples one deviation process per province and subtracts their mean, which leaves a direction the data do not identify.
-  Here the <span class="arithmatex">\(P - 1\)</span> coordinates on the sum-to-zero basis <span class="arithmatex">\(Q\)</span> are sampled.</li>
+  Here the <span class="arithmatex">\(P_s - 1\)</span> coordinates on the sum-to-zero basis <span class="arithmatex">\(Q\)</span> of the seeded provinces are sampled.</li>
 <li><code>HierarchicalNormalPrior</code> has no sum-to-zero constraint.
   On the basis coordinates it is the same prior, but it would replace one sample statement.</li>
 <li><code>GammaGroupSdPrior</code> gives each province its own SD with a floor, where here the provinces share one half-normal SD.</li>
@@ -2084,48 +2088,6 @@ The model diagrams are mermaid blocks in <code>docs/methods/model.md</code>.</p>
   Here a share of transmission is sent from each origin through a fixed gravity kernel, and depletion is exponential in the pool <span class="arithmatex">\(\nu\)</span>.</li>
 </ul>
 <p>PyRenew has no delay that varies with time, no Dirichlet-multinomial count and no pseudo-observation of <span class="arithmatex">\(R\)</span>.</p>
-<p>The table compares the two ways of sampling the walk steps on the recovery fit of the simulated outbreak, with 2 chains of 300 warm-up and 300 draws.</p>
-<table>
-<thead>
-<tr>
-<th>Walk steps</th>
-<th>Seed</th>
-<th>Time</th>
-<th>Mean tree steps</th>
-<th>Share at the depth cap</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>One vectorised site</td>
-<td>0</td>
-<td>668 s</td>
-<td>511</td>
-<td>0%</td>
-</tr>
-<tr>
-<td>One vectorised site</td>
-<td>1</td>
-<td>971 s</td>
-<td>761</td>
-<td>49%</td>
-</tr>
-<tr>
-<td><code>ARProcess</code></td>
-<td>0</td>
-<td>2198 s</td>
-<td>1017</td>
-<td>99%</td>
-</tr>
-<tr>
-<td><code>ARProcess</code></td>
-<td>1</td>
-<td>2364 s</td>
-<td>1008</td>
-<td>97%</td>
-</tr>
-</tbody>
-</table>
 <h2 id="baseline-models">Baseline models<a class="headerlink" href="#baseline-models" title="Permanent link">&para;</a></h2>
 <p>The baselines are in <a class="autorefs autorefs-internal" title="            bdbvhubrenewal.forecasters.randomwalk" href="../../reference/forecasters/#bdbvhubrenewal.forecasters.randomwalk"><code>forecasters.randomwalk</code></a> and <a class="autorefs autorefs-internal" title="            bdbvhubrenewal.forecasters.chain" href="../../reference/forecasters/#bdbvhubrenewal.forecasters.chain"><code>forecasters.chain</code></a>, on a JAX port of baselinenowcast 0.2.2 in <a class="autorefs autorefs-internal" title="            bdbvhubrenewal.baselinenowcast" href="../../reference/baselinenowcast/#bdbvhubrenewal.baselinenowcast"><code>bdbvhubrenewal.baselinenowcast</code></a>.
 The port is checked against fixtures from the R package, and has one named extension, the chain ladder of release snapshots, which skips unobserved cells and fits one daily delay shared by pairs of any gap.
@@ -2174,9 +2136,8 @@ Pandas only builds the inputs and the output frames.</p>
 <li>The generation interval, the incubation period and the hub's imputation delay are double interval censored in closed form, <span class="arithmatex">\(G(d + 1) - 2G(d) + G(d - 1)\)</span> with the integrated cdf (<code>model.censored</code>).
   The generation interval is computed once and the hub's delay once per release, both in float64, and the incubation period in float32 at each draw of its mean and SD (<code>CensoredPMF</code>); all match primarycensored.</li>
 <li>The simulator's delays use the same closed form, truncated at their maximum delay and renormalised as primarycensored's <span class="arithmatex">\(D\)</span>.
-  In float32 they are within <span class="arithmatex">\(3 \times 10^{-5}\)</span> of primarycensored, and within <span class="arithmatex">\(10^{-8}\)</span> in float64.</li>
-<li>The negative binomial concentration is capped at <span class="arithmatex">\(\phi \le 1000\)</span>, which is Poisson for these counts.
-  The Dirichlet-multinomial concentration is capped at <span class="arithmatex">\(\psi \le 10^4\)</span>.</li>
+  In float64 they are within <span class="arithmatex">\(10^{-8}\)</span> of primarycensored, and in float32 within <span class="arithmatex">\(4 \times 10^{-5}\)</span> of numerical integration.</li>
+<li>The negative binomial size is kept below 1000, which is Poisson for these counts, and the Dirichlet-multinomial concentration below <span class="arithmatex">\(10^4\)</span> (<a href="../model/#likelihood">Likelihood</a>).</li>
 <li>The hub imputation sums are products of banded <span class="arithmatex">\(7 \times 7k\)</span> blocks for each onset week, so the cost grows with the number of weeks and not its square.</li>
 </ul>
 <p>The tests check the renewal and the imputation against a NumPy reference, <code>tests/model/numpy_reference.py</code>.</p>
@@ -2188,13 +2149,14 @@ Without other settings, NUTS runs 4 chains of 1000 warm-up and 1000 draws, with 
 Each chain starts from its own draw from the prior.
 Submission fits and the <a href="../../development/cli/#fit-store">fit store</a>'s backtest fits take each model's settings from its candidate in <code>ci/policy.toml</code>.
 <code>renewal</code> and <code>renewalsp</code> use 2 chains of 500 warm-up and 500 draws at target acceptance 0.9.
-<code>renewalbvd</code> uses 1000 draws at 0.95.
+<code>renewalbvd</code> uses 2 chains of 500 warm-up and 1000 draws at target acceptance 0.95.
+<code>pprandomwalknowcast</code> has no candidate and uses its own settings (<a href="../baselines/#partially-pooled-variant">Baseline models</a>).
 Leave-one-province-out fits take theirs from <code>[sampler]</code> in <code>config/backtest.toml</code> when <code>BDBV_RENEWAL_SAMPLER</code> is unset.
 Each fit reports its largest R-hat over parameters and the share of draws at the maximum tree depth.</p>
 <p>The parameterisation is as follows.</p>
 <ul>
 <li>Every walk, the pooled <span class="arithmatex">\(\log R(t)\)</span> included, samples its steps non-centred, as standard normals scaled by the step SD.</li>
-<li>Province deviations sum to zero through an orthonormal basis <span class="arithmatex">\(Q\)</span> of the sum-to-zero subspace, so the <span class="arithmatex">\(P - 1\)</span> free processes are unconstrained.</li>
+<li>Province deviations sum to zero through an orthonormal basis <span class="arithmatex">\(Q\)</span> of the sum-to-zero subspace of the seeded provinces, so the <span class="arithmatex">\(P_s - 1\)</span> free processes are unconstrained.</li>
 <li>The starting offsets of the <span class="arithmatex">\(\log R\)</span> deviations are sampled centred, and those of the missing-onset fraction non-centred.</li>
 <li>Walk steps after the fit axis are not sampled by NUTS. They are drawn from the prior given each posterior draw when forecasting.</li>
 </ul>

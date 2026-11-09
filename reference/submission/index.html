@@ -5355,9 +5355,9 @@ zones do not sum to their provinces.</p>
 <a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>        <span class="s2">"data_inputs"</span><span class="p">:</span> <span class="n">_RENEWAL_INPUTS</span><span class="p">,</span>
 <a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="p">},</span>
 <a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="s2">"renewalsp"</span><span class="p">:</span> <span class="p">{</span>
-<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>        <span class="s2">"model_name"</span><span class="p">:</span> <span class="s2">"Province renewal model without importation (PyRenew)"</span><span class="p">,</span>
-<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>        <span class="s2">"methods"</span><span class="p">:</span> <span class="s2">"Province renewal model in PyRenew with pooled Rt and depletion but no importation between provinces, fitted to known and imputed onsets with modelled delays."</span><span class="p">,</span>
-<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>        <span class="s2">"methods_long"</span><span class="p">:</span> <span class="s2">"A renewal process for each province, with a national weekly random walk on log Rt plus partially pooled province deviations and susceptible depletion, and no importation between provinces, so provinces with no cases stay near zero. "</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>        <span class="s2">"model_name"</span><span class="p">:</span> <span class="s2">"Single-patch province renewal models (PyRenew)"</span><span class="p">,</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>        <span class="s2">"methods"</span><span class="p">:</span> <span class="s2">"A renewal model in PyRenew fitted to each province on its own, with no pooling or importation, to known and imputed onsets with modelled delays; silent provinces take a random walk introduction layer."</span><span class="p">,</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>        <span class="s2">"methods_long"</span><span class="p">:</span> <span class="s2">"A renewal process fitted to each province's series on its own, with its own weekly random walk on log Rt and no pooling, importation or depletion. Provinces with no case in the last nine weeks are zero until an introduction, then a random walk. "</span>
 <a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>        <span class="o">+</span> <span class="n">_RENEWAL_OBSERVATION</span><span class="p">,</span>
 <a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>        <span class="s2">"data_inputs"</span><span class="p">:</span> <span class="n">_RENEWAL_INPUTS</span><span class="p">,</span>
 <a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>    <span class="p">},</span>
@@ -8468,8 +8468,8 @@ is recent.</p>
 its fallback chain with <code>bdbvhubrenewal fit --config &lt;name&gt;</code> and then
 forecasts from the saved fit with <code>bdbvhubrenewal nowcast --config &lt;name&gt;
 --fit &lt;dir&gt;</code>. A fit configuration says how to do both.</p>
-<p>The chain is <code>bvd</code> (the <code>renewalbvd</code> variant), <code>renewalsp</code> (the <code>renewal</code>
-variant without importation), <code>main</code> (the <code>renewal</code> variant), then the
+<p>The chain is <code>bvd</code> (the <code>renewalbvd</code> variant), <code>renewalsp</code> (<code>renewal</code>
+fitted to each province on its own), <code>main</code> (the <code>renewal</code> variant), then the
 random walks.
 The renewal configurations run the PyRenew model through
 <code>bdbvhubrenewal.forecasters.renewal.fit_renewal</code>, which samples, draws the
