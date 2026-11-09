@@ -12,6 +12,8 @@ copyright: Copyright &copy; 2026 Sam Abbott. MIT licence.
 
 docs_dir: docs
 site_dir: _site
+hooks:
+  - scripts/cache_bust.py
 
 exclude_docs: |
   generated/*
@@ -109,6 +111,7 @@ extra_css:
 extra_javascript:
   - javascripts/mathjax.js
   - javascripts/toggles.js
+  - javascripts/placemap.js
   - javascripts/zoom.js
   - javascripts/summarise.js
   - javascripts/energy.js

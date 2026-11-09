@@ -5,15 +5,9 @@
 // for the chart and y for each metric (the `ykey` a chart passes).
 (function () {
   "use strict";
-  var NS = "http://www.w3.org/2000/svg";
   var count = 0;
+  var el = window.bdbvToggles.el;
 
-  function el(tag, attrs, parent) {
-    var n = document.createElementNS(NS, tag);
-    Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]); });
-    if (parent) parent.appendChild(n);
-    return n;
-  }
 
   // controls: where the Reset button goes. onChange redraws the chart.
   function create(controls, onChange) {
