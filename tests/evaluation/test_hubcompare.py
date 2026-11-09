@@ -239,6 +239,40 @@ def test_stored_forecasts_pick_matching_rounds(tmp_path: Path) -> None:
     assert list(out["source"]) == ["real"]
 
 
+def test_stored_forecasts_take_a_round_from_one_file(tmp_path: Path) -> None:
+    # The fit store and the candidate file both hold renewal's 2026-11-07
+    # round from different fits, as when that round first became scored.
+    def forecasts(model: str, value: float, lag: object) -> pd.DataFrame:
+        return pd.DataFrame(
+            {
+                "model": model,
+                "kind": "real",
+                "vintage": "2026-11-01",
+                "reference_date": "2026-11-07",
+                "as_of": None,
+                "location": "CD",
+                "target_end_date": ["2026-11-07", "2026-11-14"],
+                "sample": 1,
+                "value": value,
+                "lag_prior": lag,
+            }
+        )
+
+    first, second = tmp_path / "store.csv.gz", tmp_path / "cand.csv.gz"
+    forecasts("renewal", 1.0, "fixed").to_csv(first, index=False)
+    pd.concat(
+        [forecasts("renewal", 2.0, None), forecasts("renewalsp", 3.0, None)]
+    ).to_csv(second, index=False)
+    out = stored_forecasts([first, second], ["2026-11-07"])
+    keys = ["model", "location", "target_end_date", "sample"]
+    assert not out.duplicated(keys).any()
+    # The first file holding a model's round gives it; later files fill
+    # only the rounds it lacks.
+    values = out.groupby("model")["value"].unique().to_dict()
+    assert list(values["renewal"]) == [1.0]
+    assert list(values["renewalsp"]) == [3.0]
+
+
 def test_score_comparison_scores_each_later_release(
     tmp_path: Path,
     target: pd.DataFrame,
