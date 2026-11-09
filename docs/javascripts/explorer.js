@@ -1,7 +1,7 @@
 // Forecast explorer: draws SVG from a JSON file, in the site's theme. With
 // data-targets (target to summary URL), the table summarises the page's
 // per-forecast scores (summarise.js) for the target, location, rounds and
-// models chosen.
+// models chosen, relative to the baseline picked.
 (function () {
   "use strict";
   var DAY = 864e5;
@@ -45,13 +45,17 @@
     var view = T.viewSelect(controls, hasTraj, function () { draw(); });
     var zoom = window.bdbvZoom.create(controls, function () { draw(); });
     T.fullscreen(controls, root);
+    var rel = null;
     if (targets) {
       T.targetSelect(controls, targets, Object.keys(targets)[0], function (k) {
         T.getJSON(targets[k]).then(function (s) {
           summary = s;
+          rel.fill(summary, rel.name());
           draw();
         });
       });
+      rel = T.baselineSelect(controls, function () { draw(); });
+      rel.fill(summary);
     }
     var Z = window.bdbvZoom;
     var legend = T.legend(root, d.models, draw);
@@ -214,14 +218,13 @@
         var o = summary.origins.indexOf(d.rounds[ri]);
         if (o >= 0) origins[o] = true;
       });
-      var s = window.bdbvSummarise(summary, function (r) {
-        return r[3] === place && origins[r[1]];
-      });
+      var keep = function (r) { return r[3] === place && origins[r[1]]; };
+      var s = window.bdbvSummarise(summary, keep, rel.index());
       var names = d.models.map(function (m) { return m.name; });
       window.bdbvSummaryTable(table, summary, s, function (m) {
         var i = names.indexOf(summary.models[m].name);
         return i < 0 || legend.on[i];
-      });
+      }, [], null, window.bdbvEmptyNote(summary, rel.index(), keep));
     }
     draw();
     T.onTheme(draw);

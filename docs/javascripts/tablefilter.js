@@ -1,5 +1,6 @@
 // Table filter: a text search, a select per named column and sortable
-// headers for each table inside a `.tablefilter` block. A cell's
+// headers for each table inside a `.tablefilter` block. data-defaults
+// (column to value) sets the value a select opens on. A cell's
 // `data-sort` value, where given, is what it sorts by. Without JavaScript
 // the table is a plain table. Scripts that build a table call
 // bdbvTableFilter(block).
@@ -39,6 +40,12 @@
         sel.addEventListener("change", apply);
         return { col: col, sel: sel };
       });
+    var defaults = root.dataset.defaults ? JSON.parse(root.dataset.defaults) : {};
+    filters.forEach(function (f) {
+      var v = defaults[names[f.col]];
+      var has = Array.prototype.some.call(f.sel.options, function (o) { return o.value === v; });
+      if (has) f.sel.value = v;
+    });
     var count = h("span", { class: "tablefilter-count" }, controls);
     search.addEventListener("input", apply);
 
