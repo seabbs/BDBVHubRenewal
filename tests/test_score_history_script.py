@@ -137,7 +137,7 @@ def test_history_flags_changes_in_what_is_scored(sh) -> None:
     assert list(vs_good["break"]) == [True, False, True, True]
 
 
-def test_history_splits_by_horizon_and_week(sh) -> None:
+def test_history_splits_by_target_week(sh) -> None:
     out = sh.history([("a" * 40, "t", "p1", "latest", _summary())])
     out = out.loc[
         ~out["common"]
@@ -145,15 +145,7 @@ def test_history_splits_by_horizon_and_week(sh) -> None:
         & (out["model"] == "good")
         & (out["pool"] == "national")
     ].set_index("split")
-    assert set(out.index) == {
-        "all",
-        "horizon 0",
-        "horizon 1",
-        "week 2026-10-24",
-    }
-    assert out.loc["horizon 0", "rel_wis"] == pytest.approx(0.5)
-    assert out.loc["horizon 1", "rel_wis"] == pytest.approx(1.0)
-    assert out.loc["horizon 1", "n"] == 1
+    assert set(out.index) == {"all", "week 2026-10-24"}
     assert out.loc["week 2026-10-24", "rel_wis"] == pytest.approx(35 / 40)
 
 
@@ -242,14 +234,9 @@ def test_chart_marks_breaks_and_names_commits(sh) -> None:
     } <= set(d["sets"])
     assert d["common"] is True
     assert d["baselines"] == ["randomwalk", "good"]
-    assert d["splits"] == [
-        "week 2026-10-24",
-        "all",
-        "horizon 0",
-        "horizon 1",
-    ]
+    assert d["splits"] == ["week 2026-10-24", "all"]
     assert d["split"] == "week 2026-10-24"
-    assert "randomwalk|national|horizon 1|common" in d["sets"]
+    assert "randomwalk|national|week 2026-10-24|common" in d["sets"]
     nat = d["sets"]["randomwalk|national|all"]
     assert nat["x"] == ["11-04 10:00 aaaaaaa *", "11-05 10:00 bbbbbbb *"]
     assert nat["marks"] == [0, 1]
