@@ -156,18 +156,39 @@ jobs:
           READS: ${{ matrix.reads }}
           RUN: ${{ matrix.run }}
         run: |
+          set -euo pipefail
           # shellcheck disable=SC2086
           digest=$(uv run bdbvhubrenewal digest --with $READS --text "$RUN")
+          if [ -z "$digest" ]; then
+            echo "::error::digest printed nothing; refusing to key the cache"
+            exit 1
+          fi
           echo "key=backtest-$CELL-$digest" >> "$GITHUB_OUTPUT"
+      # Restore and save are separate steps, so outputs are saved as soon
+      # as the run ends and a hit saves nothing.
       - name: Restore the outputs
         id: cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ matrix.writes }}
           key: ${{ steps.key.outputs.key }}
       - name: Run
         if: steps.cache.outputs.cache-hit != 'true'
         run: ${{ matrix.run }}
+      - name: Save the outputs
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ matrix.writes }}
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+      # A hit runs nothing, so say so rather than leave the job blank.
+      - name: Note the cached outputs
+        if: steps.cache.outputs.cache-hit == 'true'
+        env:
+          CELL: ${{ matrix.cell }}
+        run: |
+          echo "### Backtest \`$CELL\`: cache hit, not rerun" \
+            >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: backtest-${{ matrix.cell }}
