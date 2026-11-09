@@ -2073,7 +2073,7 @@ The model is configured by <code>ModelConfig</code>.</p>
 <li><code>AR1</code> draws its first state from the stationary distribution, and <code>DifferencedAR1</code> is AR(1) on the differences.
   Here walks start at a fixed value and stay there over the seeding weeks.</li>
 <li><code>SubpopulationInfections</code> samples one deviation process per province and subtracts their mean, which leaves a direction the data do not identify.
-  Here the <span class="arithmatex">\(P - 1\)</span> coordinates on the sum-to-zero basis <span class="arithmatex">\(Q\)</span> are sampled.</li>
+  Here the <span class="arithmatex">\(P_s - 1\)</span> coordinates on the sum-to-zero basis <span class="arithmatex">\(Q\)</span> of the seeded provinces are sampled.</li>
 <li><code>HierarchicalNormalPrior</code> has no sum-to-zero constraint.
   On the basis coordinates it is the same prior, but it would replace one sample statement.</li>
 <li><code>GammaGroupSdPrior</code> gives each province its own SD with a floor, where here the provinces share one half-normal SD.</li>
@@ -2151,7 +2151,7 @@ Each fit reports its largest R-hat over parameters and the share of draws at the
 <p>The parameterisation is as follows.</p>
 <ul>
 <li>Every walk, the pooled <span class="arithmatex">\(\log R(t)\)</span> included, samples its steps non-centred, as standard normals scaled by the step SD.</li>
-<li>Province deviations sum to zero through an orthonormal basis <span class="arithmatex">\(Q\)</span> of the sum-to-zero subspace, so the <span class="arithmatex">\(P - 1\)</span> free processes are unconstrained.</li>
+<li>Province deviations sum to zero through an orthonormal basis <span class="arithmatex">\(Q\)</span> of the sum-to-zero subspace of the seeded provinces, so the <span class="arithmatex">\(P_s - 1\)</span> free processes are unconstrained.</li>
 <li>The starting offsets of the <span class="arithmatex">\(\log R\)</span> deviations are sampled centred, and those of the missing-onset fraction non-centred.</li>
 <li>Walk steps after the fit axis are not sampled by NUTS. They are drawn from the prior given each posterior draw when forecasting.</li>
 </ul>
@@ -2284,7 +2284,7 @@ Each fit reports its largest R-hat over parameters and the share of draws at the
       
         <script src="../../javascripts/mathjax.js?v=bced49b5"></script>
       
-        <script src="../../javascripts/toggles.js?v=1d345724"></script>
+        <script src="../../javascripts/toggles.js?v=e5ef24ea"></script>
       
         <script src="../../javascripts/placemap.js?v=03fe1366"></script>
       
@@ -2296,13 +2296,13 @@ Each fit reports its largest R-hat over parameters and the share of draws at the
       
         <script src="../../javascripts/tablefilter.js?v=94394744"></script>
       
-        <script src="../../javascripts/explorer.js?v=59bb502e"></script>
+        <script src="../../javascripts/explorer.js?v=78179124"></script>
       
-        <script src="../../javascripts/scorechart.js?v=67b20eb8"></script>
+        <script src="../../javascripts/scorechart.js?v=0bc05770"></script>
       
-        <script src="../../javascripts/scoresummary.js?v=24bebb78"></script>
+        <script src="../../javascripts/scoresummary.js?v=a40380ed"></script>
       
-        <script src="../../javascripts/checkschart.js?v=44dced10"></script>
+        <script src="../../javascripts/checkschart.js?v=106bf7bb"></script>
       
         <script src="../../javascripts/nowcastchart.js?v=e5f9eb42"></script>
       

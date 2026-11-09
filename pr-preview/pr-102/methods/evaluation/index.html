@@ -716,10 +716,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#scoring" class="md-nav__link">
+  <a href="#what-is-scored" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Scoring
+        What is scored
       
     </span>
   </a>
@@ -824,7 +824,7 @@
   <a href="#checks" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Checks
+        Scores by place type and plausibility
       
     </span>
   </a>
@@ -2001,10 +2001,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#scoring" class="md-nav__link">
+  <a href="#what-is-scored" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Scoring
+        What is scored
       
     </span>
   </a>
@@ -2109,7 +2109,7 @@
   <a href="#checks" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Checks
+        Scores by place type and plausibility
       
     </span>
   </a>
@@ -2154,7 +2154,7 @@
 
 <h1 id="evaluation">Evaluation<a class="headerlink" href="#evaluation" title="Permanent link">&para;</a></h1>
 <p class="page-subtitle">Scoring, and the evaluations.</p>
-<h2 id="scoring">Scoring<a class="headerlink" href="#scoring" title="Permanent link">&para;</a></h2>
+<h2 id="what-is-scored">What is scored<a class="headerlink" href="#what-is-scored" title="Permanent link">&para;</a></h2>
 <p>Forecasts from real releases are scored on the count each later release reports, and on the complete weeks of the latest release (<a href="#real-releases">Real releases</a>).
 Forecasts from simulated vintages are scored against the simulated final counts.</p>
 <h2 id="scores">Scores<a class="headerlink" href="#scores" title="Permanent link">&para;</a></h2>
@@ -2248,17 +2248,22 @@ A model that cannot forecast from an origin, such as a random walk model with no
 Two targets are scored.</p>
 <p><strong>Reported.</strong> The count each later release <span class="arithmatex">\(o'\)</span> shows for every forecast week it reports.
 <code>randomwalk</code> is scored on its samples as they are, with no delay.
-Every other model forecasts the final count <span class="arithmatex">\(X\)</span> of week <span class="arithmatex">\(w\)</span> and is mapped to what <span class="arithmatex">\(o'\)</span> shows by its own modelled delay.
-Day <span class="arithmatex">\(t\)</span> is <span class="arithmatex">\(a = c - t\)</span> days old at a cut-off <span class="arithmatex">\(c\)</span>, and <span class="arithmatex">\(\pi(a)\)</span> is the share of its final count the model expects reported by then.
-For <code>randomwalknowcast</code> and <code>pprandomwalknowcast</code>, <span class="arithmatex">\(\pi(a) = 1 / \Gamma(a)\)</span> under the daily delay each fits at the origin (<a href="../baselines/#delay">Baseline models</a>).
-For the renewal models it is the posterior median of the cumulative onset-to-report delay of the latest onset week, which is pooled over provinces.
-Each place is mapped by the model's delay at that place, a zone with none by its province's, and a place with neither is scored as forecast.
-The country is the sum of the mapped provinces.
-Ages past the end of the delay take its last value, days after the cut-off have <span class="arithmatex">\(\pi = 0\)</span>, and a week's share <span class="arithmatex">\(\pi_w\)</span> is the mean over its seven days.
-With <span class="arithmatex">\(R_o\)</span> the count reported at the origin, the count outstanding there, <span class="arithmatex">\(X - R_o\)</span>, is thinned binomially, so each sample becomes a draw of the count reported at <span class="arithmatex">\(o'\)</span>,</p>
+Every other model forecasts the final count <span class="arithmatex">\(X\)</span> of week <span class="arithmatex">\(w\)</span>, which is mapped to what <span class="arithmatex">\(o'\)</span> shows by the model's own delay.</p>
+<ol>
+<li>Day <span class="arithmatex">\(t\)</span> is <span class="arithmatex">\(a = c - t\)</span> days old at a cut-off <span class="arithmatex">\(c\)</span>, and <span class="arithmatex">\(\pi(a)\)</span> is the share of its final count the model expects reported by then.
+   For <code>randomwalknowcast</code> and <code>pprandomwalknowcast</code>, <span class="arithmatex">\(\pi(a) = 1 / \Gamma(a)\)</span> under the daily delay each fits at the origin (<a href="../baselines/#delay">Baseline models</a>).
+   For the renewal models it is the posterior median of the cumulative onset-to-report delay of the latest onset week, which is pooled over provinces.
+   Ages past the end of the delay take its last value, and days after the cut-off have <span class="arithmatex">\(\pi = 0\)</span>.</li>
+<li>A week's share <span class="arithmatex">\(\pi_w\)</span> is the mean of <span class="arithmatex">\(\pi\)</span> over its seven days.</li>
+<li>Each place is mapped by the model's delay at that place, a zone with none by its province's, and a place with neither is scored as forecast.
+   The country is the sum of the mapped provinces.</li>
+<li>
+<p>With <span class="arithmatex">\(R_o\)</span> the count reported at the origin, the count outstanding there, <span class="arithmatex">\(X - R_o\)</span>, is thinned binomially, so each sample becomes a draw of the count reported at <span class="arithmatex">\(o'\)</span>,</p>
 <div class="arithmatex">\[
 R_o + \text{Binomial}(X - R_o, q), \qquad q = \frac{\pi_w(c_{o'}) - \pi_w(c_o)}{1 - \pi_w(c_o)},
 \]</div>
+</li>
+</ol>
 <p>with the sign carried when <span class="arithmatex">\(X &lt; R_o\)</span>, <span class="arithmatex">\(q\)</span> kept in <span class="arithmatex">\([0, 1]\)</span>, and <span class="arithmatex">\(q = 1\)</span> for a week fully reported at the origin.
 A model with no modelled delay, such as a hub team, is scored on complete weeks only.</p>
 <p><strong>Complete weeks.</strong> The count the latest release shows for the weeks it reports in full.
@@ -2293,11 +2298,11 @@ Each real vintage before the latest is forecast, and origins with no pair of rel
 Zones are scored on the reported target as for <a href="#real-releases">real releases</a>, with the zone delays fitted at the origin, so a zone count is never scored against a count still being reported.
 Relative WIS is against <code>randomwalk</code> in the same form.
 On the Nowcast page the fitted models' zone samples at the latest release are those of their stored fits, where they have one.</p>
-<h2 id="checks">Checks<a class="headerlink" href="#checks" title="Permanent link">&para;</a></h2>
+<h2 id="checks">Scores by place type and plausibility<a class="headerlink" href="#checks" title="Permanent link">&para;</a></h2>
 <p>The scores on the reported target, at province and zone level, are also averaged by the type of place and by a plausibility flag of each forecast, both decided from the counts reported at the origin.
 Relative WIS in these averages is against <code>randomwalk</code>.
 Week <span class="arithmatex">\(w\)</span> is the latest week ending on or before the origin, and <span class="arithmatex">\(n(t)\)</span> the count reported then for the week ending <span class="arithmatex">\(t\)</span>, with 0 for a week with no row.
-A place is silent if no case is reported in the 9 weeks to <span class="arithmatex">\(w\)</span>, small if no week has more than 5 cases, and larger otherwise.
+A place with no case in the 9 weeks to <span class="arithmatex">\(w\)</span>, one with no week above 5 cases, and the rest form the three place types.
 The flag is set from the forecast of the round's reference week <span class="arithmatex">\(r_v\)</span>, with median <span class="arithmatex">\(q_{50}\)</span> and 95% quantile <span class="arithmatex">\(q_{95}\)</span>.
 Where several origins serve a round, only the latest is flagged.
 The level is <span class="arithmatex">\(L = \max\{(n(w - 3) + n(w - 2)) / 2,\ n(w - 1)\}\)</span> and the recent maximum is <span class="arithmatex">\(M = \max(1, \max_{w - 4 \le t \le w} n(t))\)</span>.
@@ -2449,7 +2454,7 @@ A round is pending until a later real release exists.</p>
       
         <script src="../../javascripts/mathjax.js?v=bced49b5"></script>
       
-        <script src="../../javascripts/toggles.js?v=1d345724"></script>
+        <script src="../../javascripts/toggles.js?v=e5ef24ea"></script>
       
         <script src="../../javascripts/placemap.js?v=03fe1366"></script>
       
@@ -2461,13 +2466,13 @@ A round is pending until a later real release exists.</p>
       
         <script src="../../javascripts/tablefilter.js?v=94394744"></script>
       
-        <script src="../../javascripts/explorer.js?v=59bb502e"></script>
+        <script src="../../javascripts/explorer.js?v=78179124"></script>
       
-        <script src="../../javascripts/scorechart.js?v=67b20eb8"></script>
+        <script src="../../javascripts/scorechart.js?v=0bc05770"></script>
       
-        <script src="../../javascripts/scoresummary.js?v=24bebb78"></script>
+        <script src="../../javascripts/scoresummary.js?v=a40380ed"></script>
       
-        <script src="../../javascripts/checkschart.js?v=44dced10"></script>
+        <script src="../../javascripts/checkschart.js?v=106bf7bb"></script>
       
         <script src="../../javascripts/nowcastchart.js?v=e5f9eb42"></script>
       

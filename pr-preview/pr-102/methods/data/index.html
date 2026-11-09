@@ -2153,8 +2153,8 @@ These are the national <span class="arithmatex">\(R_T\)</span> draws, the patch 
 Early releases give only the growth rate <span class="arithmatex">\(r\)</span>, which is turned into <span class="arithmatex">\(R_T = (1 + r\theta)^k\)</span> with BVDOutbreakSize's Gamma generation interval (mean 15.3 days, SD 9.3 days, shape <span class="arithmatex">\(k\)</span>, scale <span class="arithmatex">\(\theta\)</span>).
 Each forecast uses the newest release whose files were all last updated by the forecast's cut-off, whose data end by the forecast date and whose fit converged.
 The cut-off is the end of the Sunday that opens the round's submission window, Kinshasa time, or the end of the vintage date if that is later.
-The joint fit's worst R-hat must be at most 1.1 (<code>[bvd] max_rhat</code> in <code>config/backtest.toml</code>), and effective sample sizes are ignored.
-The R-hat is read from the fit diagnostics table in the release's rendered site (<code>site.zip</code>), and a release without a readable table is passed over for the next older one.
+The joint fit's worst R-hat must be at most 1.1, and effective sample sizes are ignored.
+The R-hat is read from the fit diagnostics table in the release's rendered site, and a release without a readable table is passed over for the next older one.
 Each fit records the release it used, its R-hat and why newer releases were skipped.
 Their use is on the <a href="../model/#bvdoutbreaksize-informed">Renewal models page</a>.</p>
 
@@ -2286,7 +2286,7 @@ Their use is on the <a href="../model/#bvdoutbreaksize-informed">Renewal models 
       
         <script src="../../javascripts/mathjax.js?v=bced49b5"></script>
       
-        <script src="../../javascripts/toggles.js?v=1d345724"></script>
+        <script src="../../javascripts/toggles.js?v=e5ef24ea"></script>
       
         <script src="../../javascripts/placemap.js?v=03fe1366"></script>
       
@@ -2298,13 +2298,13 @@ Their use is on the <a href="../model/#bvdoutbreaksize-informed">Renewal models 
       
         <script src="../../javascripts/tablefilter.js?v=94394744"></script>
       
-        <script src="../../javascripts/explorer.js?v=59bb502e"></script>
+        <script src="../../javascripts/explorer.js?v=78179124"></script>
       
-        <script src="../../javascripts/scorechart.js?v=67b20eb8"></script>
+        <script src="../../javascripts/scorechart.js?v=0bc05770"></script>
       
-        <script src="../../javascripts/scoresummary.js?v=24bebb78"></script>
+        <script src="../../javascripts/scoresummary.js?v=a40380ed"></script>
       
-        <script src="../../javascripts/checkschart.js?v=44dced10"></script>
+        <script src="../../javascripts/checkschart.js?v=106bf7bb"></script>
       
         <script src="../../javascripts/nowcastchart.js?v=e5f9eb42"></script>
       
