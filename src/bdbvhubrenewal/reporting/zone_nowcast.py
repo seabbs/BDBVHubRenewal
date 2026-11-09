@@ -168,14 +168,15 @@ def place_chart_data(
     Returns
     -------
     dict
-        `release`, `reference_date`, `complete_through` (the last week
-        end that is complete), `models` (name, light and dark
-        colour, dash, shown at first, and whether it has samples at the
-        release), `places` (id, name, `scale` and, for a zone, its
-        `province`), each scale by recent cases, most first, and per place
-        `data` (week, count), `q` (model index, week, q5, q25, q50, q75,
-        q95) and `traj` (model index, draw, first week, then the weekly
-        values of a fixed subset of draws, the same in every place).
+        `release`, `reference_date`, `complete_through` (the last week end
+        that is complete), `recent_weeks` (the two latest complete weeks
+        with counts, which recent levels average over), `models` (name,
+        light and dark colour, dash, shown at first, and whether it has
+        samples at the release), `places` (id, name, `scale` and, for a
+        zone, its `province`), each scale by recent cases, most first, and
+        per place `data` (week, count), `q` (model index, week, q5, q25,
+        q50, q75, q95) and `traj` (model index, draw, first week, then the
+        weekly values of a fixed subset of draws, the same in every place).
     """
     models = list(colours)
     # Places with forecasts but no cases are shown with no data.
@@ -199,11 +200,17 @@ def place_chart_data(
         return float(np.round(v, 3))
 
     release = str(samples["vintage"].iloc[0])
-    cut = pd.Timestamp(release) - pd.Timedelta(weeks=complete_after_weeks)
+    complete = (
+        (pd.Timestamp(release) - pd.Timedelta(weeks=complete_after_weeks))
+        .date()
+        .isoformat()
+    )
+    weeks = counts["target_end_date"].astype(str)
     return {
         "release": release,
         "reference_date": str(samples["reference_date"].iloc[0]),
-        "complete_through": cut.date().isoformat(),
+        "complete_through": complete,
+        "recent_weeks": sorted(set(weeks[weeks <= complete]))[-2:],
         "models": [
             {
                 "name": m,

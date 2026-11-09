@@ -518,7 +518,7 @@ def _backtest(args: argparse.Namespace) -> int:
             (as_date(as_of) - dt.timedelta(weeks=k)).isoformat()
             for k in (3, 2, 1, 0)
         ]
-        sforecasts, sscores, senergy = bt.run_scenarios(
+        sforecasts, sscores, senergy, struth = bt.run_scenarios(
             models,
             config,
             target,
@@ -534,6 +534,7 @@ def _backtest(args: argparse.Namespace) -> int:
             (senergy, results / "scenario-energy.csv"),
         ):
             write_csv(bt.merge_by_model(path, table), path)
+        write_csv(struth, results / "scenario-truth.csv")
         print(f"Scenarios: {len(sscores)} scored forecasts in {results}.")
         return 0
     if args.lopo:

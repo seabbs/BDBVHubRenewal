@@ -412,19 +412,30 @@ def test_scored_on_counts_pairs_and_forecasts() -> None:
         }
     )
     assert report._scored_on(rows) == (
-        "Scored on 3 origin and release pairs.\n"
-        "randomwalk has 1 national and 2 province forecasts.\n"
+        "The scores cover 3 origin and release pairs.\n"
+        "The randomwalk baseline has 1 national and 2 province forecasts.\n"
         "The renewal models are not scored at health zones.\n"
     )
 
 
 def _scenario_results(res: Path) -> None:
     """Write small scenario results for every scenario the page shows."""
-    scores, samples, energy = [], [], []
+    weeks = ["2026-10-03", "2026-10-10", "2026-10-17", "2026-10-24"]
+    scores, samples, energy, truth = [], [], [], []
     for scenario in report._SCENARIOS:
         for loc in ("CD", "CD-IT"):
+            truth += [
+                {
+                    "scenario": scenario,
+                    "location": loc,
+                    "target_end_date": w,
+                    "truth": 5.0,
+                    "truth_vintage": "2027-01-10",
+                }
+                for w in weeks
+            ]
             for model in ("randomwalk", "randomwalknowcast"):
-                for h, week in enumerate(("2026-10-17", "2026-10-24")):
+                for h, week in enumerate(weeks[2:]):
                     scores.append(
                         {
                             "scenario": scenario,
@@ -475,11 +486,10 @@ def _scenario_results(res: Path) -> None:
     pd.DataFrame(scores).to_csv(res / "scenario-scores.csv.gz", index=False)
     pd.DataFrame(samples).to_csv(res / "scenario-forecasts.csv.gz", index=False)
     pd.DataFrame(energy).to_csv(res / "scenario-energy.csv", index=False)
+    pd.DataFrame(truth).to_csv(res / "scenario-truth.csv", index=False)
 
 
-def test_scenario_section_has_the_shared_widgets_per_scenario(
-    tmp_path: Path,
-) -> None:
+def test_scenario_section_draws_every_final_week(tmp_path: Path) -> None:
     _scenario_results(tmp_path)
     text = report._scenario_section(
         tmp_path, tmp_path, ["randomwalk", "randomwalknowcast"], {}
@@ -495,3 +505,10 @@ def test_scenario_section_has_the_shared_widgets_per_scenario(
             (tmp_path / f"explorer-scenario-{key}.json").read_text()
         )
         assert explorer["rounds"] == summary["origins"]
+        # The weeks before the scored ones are drawn too.
+        assert [w for w, _ in explorer["data"]["CD-IT"]] == [
+            "2026-10-03",
+            "2026-10-10",
+            "2026-10-17",
+            "2026-10-24",
+        ]

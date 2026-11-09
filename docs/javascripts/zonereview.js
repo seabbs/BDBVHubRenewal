@@ -78,11 +78,7 @@
       if (charts[root.dataset.chart]) charts[root.dataset.chart](id);
     }
     root.textContent = "";
-    var complete = {};
-    Object.keys(d.data).forEach(function (k) {
-      d.data[k].forEach(function (p) { if (p[0] <= d.complete_through) complete[p[0]] = true; });
-    });
-    var last = Object.keys(complete).sort().slice(-2);
+    var last = d.recent_weeks;
     // Mean of the last two complete weeks, a missing week counting as 0.
     function level(id) {
       var weeks = {};
@@ -98,7 +94,6 @@
       if (m.fan) h("option", { value: i }, selModel, m.name);
     });
     var selWeek = h("select", {}, h("label", {}, controls, "Ratio for "));
-    var note = h("p", { class: "explorer-note" }, root);
     var mapDiv = geo ? h("div", { class: "zonereview-map" }, root) : null;
     var shapes = geo ? project(geo, 760) : null;
     var holder = h("div", {}, root);
@@ -170,8 +165,6 @@
       var old = holder.querySelector("input[type=search]");
       var query = old ? old.value : "";
       holder.textContent = "";
-      note.textContent = "Recent weeks: " + last.join(" and ") + ", as reported at the " +
-        d.release + " release.";
       var block = h("div", { class: "tablefilter zonereview-table", "data-filters": "Scale,Province" }, holder);
       var table = h("table", {}, block);
       var head = h("tr", {}, h("thead", {}, table));
