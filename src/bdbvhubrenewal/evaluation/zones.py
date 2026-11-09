@@ -246,6 +246,9 @@ def zone_backtest(
         final["horizon"] = _weeks(final, task)
         frames.append(score_forecasts(final, truth, keys=_KEYS))
         energy.append(energy_scores(final, truth, unit=_KEYS[1:4]))
+    if not frames:
+        # No origin forecast, as in a block of origins every model skips.
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
     return (
         pd.concat(frames, ignore_index=True),
         pd.concat(energy, ignore_index=True),

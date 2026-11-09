@@ -778,20 +778,35 @@ def _stored(
     return samples, stored_delays(args.results)
 
 
+def _read_or_empty(path: Path) -> pd.DataFrame:
+    """Read a results file, or an empty table if it has no columns."""
+    try:
+        return pd.read_csv(path)
+    except pd.errors.EmptyDataError:
+        return pd.DataFrame()
+
+
 def _concat_results(args: argparse.Namespace) -> int:
     """Stack each results file across the parts, in the order given.
 
-    A file in one part only is copied. The parts' rows are kept as they
-    are: unlike `merge_by_model`, rows of the same model in two parts are
-    both kept, as each scenario run has every model.
+    A file in one part only is copied, and empty parts (a block with no
+    forecast) are skipped. The parts' rows are kept as they are: unlike
+    `merge_by_model`, rows of the same model in two parts are both kept,
+    as each block has every model.
     """
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     parts = [Path(p) for p in args.parts]
     names = sorted({f.name for p in parts for f in p.glob("*.csv*")})
     for name in names:
-        tables = [pd.read_csv(p / name) for p in parts if (p / name).exists()]
-        table = pd.concat(tables, ignore_index=True)
+        tables = [
+            t
+            for p in parts
+            if (p / name).exists() and not (t := _read_or_empty(p / name)).empty
+        ]
+        table = (
+            pd.concat(tables, ignore_index=True) if tables else pd.DataFrame()
+        )
         if name in args.dedupe:
             table = table.drop_duplicates(ignore_index=True)
         write_csv(table, out / name)
@@ -917,6 +932,13 @@ def _zone_backtest(args: argparse.Namespace) -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     write_csv(scores, out)
     write_csv(energy, args.energy_out)
+    if scores.empty:
+        # A block of origins every model skips: empty files, which
+        # `concat-results` skips when the blocks are stacked.
+        for path in (args.quantiles_out, args.draws_out):
+            write_csv(pd.DataFrame(), path)
+        print(f"Wrote {out} (no origin forecast).")
+        return 0
     # The zone forecasts as submitted, for the Backtest explorer: their
     # plotted quantiles and a fixed subset of draws for the trajectories.
     write_csv(
