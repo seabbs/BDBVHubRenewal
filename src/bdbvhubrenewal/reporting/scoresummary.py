@@ -184,7 +184,11 @@ def _energy_rows(
 
 
 def summary_html(
-    src: str, title: str, view: str = "overall", static: str | None = None
+    src: str,
+    title: str,
+    view: str = "overall",
+    static: str | None = None,
+    map_src: str | None = None,
 ) -> str:
     """Return the page element `docs/javascripts/scoresummary.js` fills.
 
@@ -201,6 +205,9 @@ def summary_html(
     static : str, optional
         Path of a static SVG, relative to the page, shown without
         JavaScript. Its `-dark` twin is shown in the dark theme.
+    map_src : str, optional
+        URL of the health zone GeoJSON, relative to the page. The place
+        view then offers a map of the metric shown.
     """
     fallback = "The interactive summary needs JavaScript."
     if static is not None:
@@ -209,8 +216,9 @@ def summary_html(
             f'<img src="{static}#only-light" alt="{title}">'
             f'<img src="{dark}#only-dark" alt="{title}">'
         )
+    shown = "" if map_src is None else f' data-map="{map_src}"'
     return (
-        f'<div class="scoresummary" data-src="{src}" data-view="{view}" '
+        f'<div class="scoresummary" data-src="{src}" data-view="{view}"{shown} '
         f'role="group" aria-label="{title}">\n'
         f"<noscript>{fallback}</noscript>\n"
         "</div>\n"

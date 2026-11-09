@@ -6,7 +6,8 @@
 // horizon.
 (function () {
   "use strict";
-  var h = window.bdbvToggles.h;
+  var T = window.bdbvToggles;
+  var h = T.h;
   var summarise = window.bdbvSummarise;
   var summariseEnergy = window.bdbvSummariseEnergy;
 
@@ -53,12 +54,13 @@
   window.bdbvSummaryTable = summaryTable;
 
   function init(root) {
-    fetch(root.dataset.src)
-      .then(function (r) { return r.json(); })
+    T.getJSON(root.dataset.src)
       .then(function (d) { build(root, d, root.dataset.view || "overall"); })
       .catch(function () { root.textContent = "The score data could not be loaded."; });
   }
 
+  // With data-map, the place view adds a map of the metric shown for one
+  // model.
   function build(root, d, view) {
     root.textContent = "";
     var byPlace = view === "place";
@@ -74,9 +76,39 @@
     d.origins.forEach(function (o, i) { h("option", { value: i }, selRound, o); });
     var selPlace = null;
     if (byPlace) selPlace = h("select", {}, h("label", {}, controls, "Table for "));
+    T.fullscreen(controls, root);
+    var hasMap = !!root.dataset.map;
+    var mapOn = hasMap ? T.mapToggle(controls, false, function () { drawMap(); }) : null;
     h("p", { class: "explorer-note" }, root, "Relative scores divide by " +
       d.models[d.baseline].name + " on the same forecasts.");
-    var chartDiv = h("div", {}, root);
+    var panes = h("div", { class: "chart-map" }, root);
+    var chartDiv = h("div", {}, panes);
+    var side = h("div", { class: "chart-map-side" }, panes);
+    side.hidden = true;
+    var mapModel = null, map = null;
+    if (hasMap) {
+      mapModel = h("select", {}, h("label", {}, h("div", { class: "explorer-controls" }, side), "Map "));
+      d.models.forEach(function (m, i) {
+        if (i !== d.baseline) h("option", { value: i }, mapModel, m.name);
+      });
+      // The first model ticked at first.
+      var first = d.models.map(function (m, i) { return i; })
+        .filter(function (i) { return i !== d.baseline && d.models[i].on; })[0];
+      if (first !== undefined) mapModel.value = first;
+      mapModel.addEventListener("change", function () { drawMap(); });
+      var mapHolder = h("div", {}, side);
+      // The map loads on its own, so the chart works without it.
+      T.getJSON(root.dataset.map).then(function (geo) {
+        map = window.bdbvPlaceMap.create(mapHolder, geo, function (zone) {
+          var id = selScale.value === "zones" ? zone : window.bdbvPlaceMap.province(zone);
+          var x = places().filter(function (y) { return y.p.id === id; })[0];
+          if (!x) return;
+          selPlace.value = x.i;
+          update();
+        });
+        drawMap();
+      }).catch(function () { mapOn.parentNode.hidden = true; });
+    }
     var table = h("div", { class: "explorer-table" }, root);
 
     // Chart metrics: a relative metric shows the model over the baseline,
@@ -162,7 +194,38 @@
       jointCols.push({ label: m.label, dp: 3, get: function (e) { return e.mean[m.key]; } });
       jointCols.push({ label: "Relative " + lower(m.label), dp: 3, get: function (e) { return e.rel[m.key]; } });
     });
-    function drawTable(_, on) {
+    // The map of the metric shown, for the model chosen, at the scale chosen.
+    var shown = 0;
+    function drawMap() {
+      side.hidden = !map || !mapOn.checked;
+      if (side.hidden) return;
+      var metric = metrics[shown];
+      var m = +mapModel.value;
+      // Full colour at 4 times or a quarter of the reference for a relative
+      // score, 1 from 0 for bias, and for coverage at full coverage above
+      // and 0.4 below the target, so no one place sets the scale.
+      var span = metric.log ? [Math.log(4), Math.log(4)] : metric.ref === 0 ? [1, 1] :
+        [0.4, 1 - metric.ref];
+      var values = {};
+      places().forEach(function (x) {
+        var s = summarise(d, keep(set([x]))).filter(function (r) { return r.model === m; })[0];
+        var v = s ? value(s, d.metrics[shown]) : null;
+        if (v === null || v === undefined || isNaN(v) || (metric.log && v <= 0)) return;
+        values[x.p.id] = v;
+      });
+      var picked = selPlace.value === "all" ? null : d.places[+selPlace.value].id;
+      map.draw({ level: selScale.value === "zones" ? "zones" : "provinces", values: values,
+        centre: metric.ref, span: span, log: metric.log, picked: picked,
+        key: metric.label + ", " + d.models[m].name + ", red above " + metric.ref,
+        label: function (id, v) {
+          var p = d.places.filter(function (y) { return y.id === id; })[0];
+          return (p ? p.name : id) + (v === undefined ? ": no score" : ": " + (+v.toFixed(3)));
+        } });
+    }
+
+    function drawTable(k, on) {
+      shown = k;
+      drawMap();
       var chosen = byPlace && selPlace.value !== "all" ?
         [{ i: +selPlace.value }] : places();
       var j = energy.length ? joint() : null;
