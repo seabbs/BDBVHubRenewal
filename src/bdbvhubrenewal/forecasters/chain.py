@@ -144,6 +144,21 @@ class Settings:
     start_count : float
         Cases reported in a week for `randomwalknowcast` to start its walk
         from the week's nowcast.
+    age_bin : int
+        Days of age per bin of the delay fit (`log_factors`). 1 fits a
+        factor per day of age.
+    revisions : str
+        How the delay fit treats a day's count falling between releases.
+        `"shift"` moves the fall onto the day's earlier releases
+        (`_delay_counts`), as baselinenowcast does. `"raw"` keeps the
+        counts as released, so a case moved from one onset day to another
+        is a fall at one age and a rise at another.
+    filter_noise : str
+        Variance of a week's observation of the walk's level in
+        `randomwalknowcast`'s filter. `"poisson"` is $1 / (F + y)$.
+        `"nowcast"` adds the variance of the nowcast's count still to
+        come, negative binomial with the fitted size, on the log scale,
+        so a week mostly still to come is a weak observation.
     """
 
     max_delay: int = 42
@@ -155,6 +170,9 @@ class Settings:
     clock_shift: int = 0
     start_share: float = 0.05
     start_count: float = 5.0
+    age_bin: int = 1
+    revisions: str = "shift"
+    filter_noise: str = "poisson"
 
     @property
     def history_delay(self) -> int:
@@ -288,7 +306,11 @@ def delay_sums(
     pairs = _pairs_at(snap, r, settings.max_delay)
     if pairs.size == 0:
         return None
-    counts = _delay_counts(snap, r)
+    counts = (
+        _delay_counts(snap, r)
+        if settings.revisions == "shift"
+        else np.asarray(snap.counts, dtype=float)
+    )
     day = np.arange(snap.week.size)
     window = day > int(snap.cut[r]) - settings.history_delay
     observed = snap.observed & window[None, :]
@@ -352,7 +374,7 @@ def fit_delay(
     if sums is None:
         return None
     pairs, num, den, gaps = sums
-    g = log_factors(num, den, gaps)
+    g = log_factors(num, den, gaps, settings.age_bin)
     own = own_ages(den, snap.parent, settings)
     # Nodes are sorted by code length, so a parent precedes its children.
     for n in range(g.shape[0]):

@@ -172,6 +172,8 @@ def _filter(
         share, y = origin.complete[:, u], origin.reported[:, u]
         prior = var[:, u - 1] + origin.sigma**2 if u else var[:, 0]
         noise = 1.0 / np.maximum(share + y, 1e-12)
+        if origin.settings.filter_noise == "nowcast":
+            noise = noise + _nowcast_var(origin, u, cw)
         gain = np.where(after & (share > 0), prior / (prior + noise), 0.0)
         seen = np.log1p(y / np.maximum(share, 1e-12))
         prev = level[:, :, u - 1] if u else level[:, :, 0]
@@ -179,6 +181,22 @@ def _filter(
         level[:, :, u] = np.where(after[:, None], step, level[:, :, u])
         var[:, u] = np.where(after, (1.0 - gain) * prior, var[:, u])
     return level, var
+
+
+def _nowcast_var(origin: Origin, u: int, cw: int) -> np.ndarray:
+    r"""Return the log-scale variance of week `u`'s count still to come.
+
+    The count to come is negative binomial with mean $R$, the nowcast
+    less the count reported, and the fitted size $\phi_k$ at `cw - u`
+    weeks back, so its variance is $R + R^2 / \phi_k$. Divided by
+    $(1 + m)^2$, with $m$ the nowcast, it is on the log(1 + y) scale.
+    """
+    assert origin.size is not None
+    m = origin.point[:, u]
+    rest = np.maximum(m - origin.reported[:, u], 0.0)
+    k = int(np.clip(cw - u, 0, origin.size.shape[1] - 1))
+    size = np.maximum(origin.size[:, k], 1e-12)
+    return np.asarray((rest + rest**2 / size) / (1.0 + m) ** 2)
 
 
 def _draw_path(
