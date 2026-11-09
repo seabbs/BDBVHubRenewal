@@ -250,7 +250,8 @@ def test_lopo_masks_one_province_at_a_time(
     assert set(forecasts["masked"]) == {"CD-IT", "CD-NK"}
     assert set(forecasts["vintage"]) == {"2026-08-18", "2026-10-09"}
     assert set(scores["location"]) == {"CD-IT", "CD-NK"}
-    assert set(scores["truth_vintage"]) == {"2026-11-01"}
+    latest = target.loc[target["kind"] == "real", "vintage"].max()
+    assert set(scores["truth_vintage"]) == {latest}
 
 
 def test_lopo_without_mask_aware_models_is_empty(
