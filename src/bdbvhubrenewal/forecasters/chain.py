@@ -77,6 +77,7 @@ from bdbvhubrenewal.forecasters.pooling import (
     pool_matrix,
     source_index,
 )
+from bdbvhubrenewal.forecasters.walk import walk_noise, walk_spread
 
 __all__ = [
     "DelayFit",
@@ -99,6 +100,9 @@ __all__ = [
 ]
 
 log = logging.getLogger(__name__)
+
+MIN_SPREAD = 0.1
+"""Least weekly spread of the walk on log(1 + y)."""
 
 
 class MissingSnapshots(ModelUnavailableError):  # noqa: N818
@@ -134,6 +138,9 @@ class Settings:
         start the random walk.
     walk_weeks : int
         Weeks, ending at the start week, whose changes set the spread.
+    min_spread : float
+        Least spread of the walk, after its Poisson noise is taken out
+        (`walk.walk_spread`).
     clock_shift : int
         Days added to the ages of the origin's days, for the sensitivity
         of the nowcast to the onset clock. Ages below 0 count as 0. The
@@ -152,6 +159,7 @@ class Settings:
     level_weeks: tuple[int, int] = (3, 6)
     completeness: float = 0.95
     walk_weeks: int = 9
+    min_spread: float = MIN_SPREAD
     clock_shift: int = 0
     start_share: float = 0.05
     start_count: float = 5.0
@@ -732,21 +740,24 @@ def _walk_spreads(
     level: np.ndarray,
     settings: Settings,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Return each place's own and pooled spread of the weekly log changes."""
+    """Return each place's own and pooled walk spread, net of Poisson noise."""
     n_loc = reported.shape[0]
     diffs = walk_changes(reported, start, settings)
+    noise = []
+    for n in range(n_loc):
+        lo = max(int(start[n]) - settings.walk_weeks + 1, 0)
+        noise.append(walk_noise(reported[n, lo : int(start[n]) + 1]))
 
-    def sd(x: np.ndarray) -> float:
-        return float(np.std(x, ddof=1)) if x.size >= 2 else 0.0
+    def spread(members: np.ndarray) -> float:
+        return walk_spread(
+            np.concatenate([diffs[m] for m in members]),
+            np.concatenate([noise[m] for m in members]),
+            settings.min_spread,
+        )
 
-    own = np.array([sd(d) for d in diffs])
+    own = np.array([spread(np.array([n])) for n in range(n_loc)])
     pool = pool_matrix(level, snap.parent, settings.min_level)
-    pooled = np.array(
-        [
-            sd(np.concatenate([diffs[m] for m in np.flatnonzero(pool[n])]))
-            for n in range(n_loc)
-        ]
-    )
+    pooled = np.array([spread(np.flatnonzero(pool[n])) for n in range(n_loc)])
     return own, pooled
 
 
