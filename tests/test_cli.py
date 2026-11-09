@@ -277,3 +277,55 @@ def test_cli_nowcast_forecasts_a_later_round_from_an_older_vintage(
     assert table["target_end_date"].max() == "2026-11-28"
     handled = json.loads((out / "handled.json").read_text())
     assert "round 2026-11-07 forecast from the 2026-10-24 release" in handled
+
+
+@pytest.mark.usefixtures("in_root")
+def test_backtest_runs_only_the_named_scenarios(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    seen: dict[str, object] = {}
+
+    def run(*args: object, **kwargs: object) -> tuple[pd.DataFrame, ...]:
+        del args
+        seen.update(kwargs)
+        table = pd.DataFrame({"model": ["randomwalk"], "scenario": ["flat"]})
+        return table, table, table, table
+
+    monkeypatch.setattr("bdbvhubrenewal.evaluation.backtest.run_scenarios", run)
+    out = ["--results", str(tmp_path), "--output", str(tmp_path)]
+    args = ["backtest", "--scenarios-only", "--models", "randomwalk"]
+    assert main([*args, "--scenarios", "flat", *out]) == 0
+    assert seen["names"] == ["flat"]
+    with pytest.raises(SystemExit):
+        main([*args, "--scenarios", "sideways", *out])
+
+
+def test_concat_results_keeps_every_partial(tmp_path: Path) -> None:
+    from bdbvhubrenewal.data.tidy import write_csv
+
+    parts = [tmp_path / "falling", tmp_path / "flat"]
+    for part in parts:
+        part.mkdir()
+        write_csv(
+            pd.DataFrame({"model": ["randomwalk", "randomwalknowcast"]}).assign(
+                scenario=part.name
+            ),
+            part / "scenario-scores.csv.gz",
+        )
+    write_csv(pd.DataFrame({"truth": [1]}), parts[0] / "only.csv")
+    out = tmp_path / "results"
+    assert main(["concat-results", "--out", str(out), *map(str, parts)]) == 0
+    scores = pd.read_csv(out / "scenario-scores.csv.gz")
+    assert list(scores["scenario"]) == ["falling"] * 2 + ["flat"] * 2
+    assert len(pd.read_csv(out / "only.csv")) == 1
+
+
+def test_digest_prints_the_backtest_digest(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from bdbvhubrenewal.evaluation.digest import backtest_digest
+
+    args = ["digest", "--root", str(ROOT), "--text", "cell"]
+    assert main([*args, "--with", "results"]) == 0
+    key = capsys.readouterr().out.strip()
+    assert key == backtest_digest(ROOT, extra=["results"], text="cell")
