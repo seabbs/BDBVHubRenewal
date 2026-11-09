@@ -2409,7 +2409,7 @@ The sections below build up from the model of one province, and each gives only 
 Every time-varying part is a weekly random walk or AR(1), so it stays near constant unless the data show change.</p>
 <pre class="mermaid"><code>flowchart TD
     PM["&lt;b&gt;Province model&lt;/b&gt;&lt;br/&gt;Rt walk&lt;br/&gt;generation interval&lt;br/&gt;onsets and delay&lt;br/&gt;missing onsets&lt;br/&gt;three data streams"]
-    RN["&lt;b&gt;renewal&lt;/b&gt;&lt;br/&gt;provinces fitted together&lt;br/&gt;+ pooled log R walk&lt;br/&gt;+ sum-to-zero AR(1)&lt;br/&gt;province deviations&lt;br/&gt;+ importation&lt;br/&gt;+ share at risk&lt;br/&gt;+ shared delay&lt;br/&gt;+ shared ascertainment&lt;br/&gt;+ zeros in provinces&lt;br/&gt;with no cases"]
+    RN["&lt;b&gt;renewal&lt;/b&gt;&lt;br/&gt;provinces fitted together&lt;br/&gt;+ pooled log R walk&lt;br/&gt;+ sum-to-zero AR(1)&lt;br/&gt;province deviations&lt;br/&gt;+ importation&lt;br/&gt;+ share at risk&lt;br/&gt;+ shared delay&lt;br/&gt;+ shared ascertainment"]
     BV["&lt;b&gt;renewalbvd&lt;/b&gt;&lt;br/&gt;+ BVDOutbreakSize Rt,&lt;br/&gt;down-weighted (ζ = 0.5)"]
     SP["&lt;b&gt;renewalsp&lt;/b&gt;&lt;br/&gt;− importation"]
 
@@ -2600,9 +2600,7 @@ They start with province spread <span class="arithmatex">\(\mathcal{N}^+(0, 0.5^
 <h3 id="provinces-with-no-cases">Provinces with no cases<a class="headerlink" href="#provinces-with-no-cases" title="Permanent link">&para;</a></h3>
 <p>A province enters the model at the release with its first case, and has no forecast before it.</p>
 <h2 id="without-importation">Without importation (<code>renewalsp</code>)<a class="headerlink" href="#without-importation" title="Permanent link">&para;</a></h2>
-<p><code>renewalsp</code> is <code>renewal</code> with no importation between provinces and no importation component for provinces with no cases.
-So <span class="arithmatex">\(W = I\)</span>, with no <span class="arithmatex">\(\varepsilon\)</span> and no gravity kernel, and no <span class="arithmatex">\(\mu_q\)</span> or <span class="arithmatex">\(\kappa\)</span>.
-Provinces with no cases have no source of infection, so their forecasts are zero.
+<p><code>renewalsp</code> is <code>renewal</code> with no importation between provinces, so <span class="arithmatex">\(W = I\)</span>, with no <span class="arithmatex">\(\varepsilon\)</span> and no gravity kernel.
 The pooled reproduction number, missing-onset deviations, shared delay and ascertainment, share at risk and seeding are as in <code>renewal</code>.
 Like <code>renewal</code>, it fits the provinces together, so leaving one province out works for it too.</p>
 <h2 id="bvdoutbreaksize-informed">BVDOutbreakSize-informed (<code>renewalbvd</code>)<a class="headerlink" href="#bvdoutbreaksize-informed" title="Permanent link">&para;</a></h2>
