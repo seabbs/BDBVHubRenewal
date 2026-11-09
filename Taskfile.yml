@@ -68,6 +68,12 @@ tasks:
       - task: fit-store
       - uv run bdbvhubrenewal backtest {{.CLI_ARGS}}
 
+  score-history:
+    desc: Write results/score-history.csv, the backtest scores of each deploy from main, and print relative WIS by deploy
+    cmds:
+      - git fetch -q origin gh-pages
+      - uv run python scripts/score_history.py {{.CLI_ARGS}}
+
   # The same commands as the Backtest step of .github/workflows/pages.yml;
   # keep the two in step.
   results:
