@@ -206,8 +206,19 @@ Steps are summed within a sample, so each sample is one trajectory.
 `randomwalk` starts from the latest complete week ([below](#start-from-the-latest-complete-week)).
 `randomwalknowcast` starts from the week holding $c_o$ ([below](#start-from-the-nowcast)).
 
-$\sigma_p$ is the sample standard deviation of the weekly changes of $\log\{1 + Y_{p,o}(w)\}$ over the 9 weeks ending at the latest complete week, so up to 8 changes.
-With fewer than 2 changes it is 0.
+$\sigma_p$ comes from the weekly changes $\Delta_w = \log\{1 + Y_{p,o}(w)\} - \log\{1 + Y_{p,o}(w - 1)\}$ over the 9 weeks ending at the latest complete week, so up to 8 changes.
+Each change carries Poisson noise, and the walk draws Poisson counts on top, so the noise is taken out of the spread:
+
+$$
+\sigma_p^2 = \max\Big(s^2_\Delta - \overline{2 v(m_w)},\ 0.1^2\Big),
+\qquad
+m_w = \tfrac{1}{2}\{Y_{p,o}(w - 1) + Y_{p,o}(w)\},
+$$
+
+where $s^2_\Delta$ is the sample variance of the changes, $v(\lambda)$ the variance of $\log(1 + Y)$ for $Y \sim \text{Poisson}(\lambda)$, and the bar a mean over the changes.
+The noise matters only for small places: at 10 cases a week $2v \approx 0.19$, and at 250 it is under 0.01.
+With fewer than 2 changes $\sigma_p$ is 0.1.
+A pooled $\sigma_p$ uses the changes and noise of all the places in the pool together.
 
 A place with no case in the 9 weeks to $c_o$ stays at 0 until a new introduction, which starts its walk from a Poisson(1) count given at least 1.
 An introduction occurs each week after the latest complete week with probability $q_p$, times the share of the week not yet reported, where $q_p$ is the share of weeks with a case after 9 weeks without one in the place and its siblings.
@@ -307,7 +318,7 @@ The chain ladder treats reporting speed as fixed by age and step, but speed and 
 The observation model is learnt from the earlier releases, which may be few.
 Counts include the hub's imputed onsets, which are re-drawn as cases gain onsets, so changes between releases mix reporting with imputation.
 Places are sampled independently, so a shock to a whole release is not shared, and the national band is a sum of independent provincial bands.
-The walk has no drift, and its spread comes from 8 weekly changes, which for small places include Poisson noise.
+The walk has no drift, and its spread comes from 8 weekly changes, net of a Poisson noise term that assumes no extra dispersion in the reported counts.
 `pprandomwalknowcast` plugs in posterior medians, so the uncertainty in its pooled estimates does not widen its forecasts.
 
 [^bnc-paper]: Johnson KE, Tang M, Tyszka E, Nemcova B, Wolffram D, Ergas R, Reich NG, Funk S, Mellor J, Bracher J, Abbott S (2025). Baseline nowcasting methods for handling delays in epidemiological data. Wellcome Open Research. [doi:10.12688/wellcomeopenres.25027.2](https://doi.org/10.12688/wellcomeopenres.25027.2).
