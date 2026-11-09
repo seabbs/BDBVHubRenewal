@@ -44,9 +44,17 @@ def _weekly_sum(x):
 
 @pytest.mark.parametrize("final", [True, False])
 @pytest.mark.parametrize("cutoff_back", [1, 10, 30])
-def test_weekly_expectations_match_the_daily_blocks(final, cutoff_back):
+@pytest.mark.parametrize(
+    "shared", [None, [False, True, True], [True, True, True]]
+)
+def test_weekly_expectations_match_the_daily_blocks(final, cutoff_back, shared):
     rng = np.random.default_rng(11)
     onsets, delay_w, missing, hub, lag = _inputs(rng)
+    # Shared provinces have the same delay and missing fraction, so the
+    # gradient is taken with respect to the distinct rows.
+    rows = np.arange(3)
+    if shared is not None:
+        rows = np.where(shared, int(np.argmax(shared)), rows)
     n = onsets.shape[0]
     cutoff = n - cutoff_back
     weights = {
@@ -61,13 +69,17 @@ def test_weekly_expectations_match_the_daily_blocks(final, cutoff_back):
     }
 
     def daily(on, f, pi, lg):
+        f, pi = f[rows], pi[:, rows]
         out = onset_expectations_by_place(
             on, jnp.repeat(f, 7, axis=1), pi, hub, cutoff, final, lg, True
         )
         return {k: _weekly_sum(v) for k, v in out.items()}
 
     def weekly(on, f, pi, lg):
-        return weekly_onset_expectations(on, f, pi, hub, cutoff, final, lg)
+        f, pi = f[rows], pi[:, rows]
+        return weekly_onset_expectations(
+            on, f, pi, hub, cutoff, final, lg, shared
+        )
 
     def loss(fn):
         def total(*args):
@@ -132,7 +144,7 @@ def test_full_model_density_and_gradient_are_unchanged(
     calls = []
 
     def spy(*args, **kwargs):
-        calls.append(1)
+        calls.append(args[7])
         return weekly_onset_expectations(*args, **kwargs)
 
     monkeypatch.setattr(ob, "weekly_onset_expectations", spy)
@@ -162,6 +174,8 @@ def test_full_model_density_and_gradient_are_unchanged(
 
         fast = [density_and_grad(v) for v in draws]
         assert calls, "the weekly delay path was not used"
+        # Unseeded provinces share the pooled delay and missing fraction.
+        assert calls[0].any() and not calls[0].all()
         n_fast = len(calls)
         obs.weekly_delay = False
         monkeypatch.setattr(pl, "kept_share", kept_share_reference)

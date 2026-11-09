@@ -40,7 +40,7 @@ from pyrenew.observation.types import ObservationSample
 from pyrenew.time import daily_to_weekly
 
 from .composition_noise import CompositionNoise, MultinomialNoise
-from .pooled import pooled_walk
+from .pooled import pooled_groups, pooled_walk
 from .publication_lag import ReleasePairLikelihood
 
 _FLOOR = 1e-6
@@ -314,6 +314,7 @@ def weekly_onset_expectations(
     cutoff: int,
     final: bool = True,
     publication_lag: ArrayLike = NO_LAG,
+    shared: np.ndarray | None = None,
 ) -> dict[str, Array]:
     r"""Weekly sums of `onset_expectations_by_place` for a weekly delay.
 
@@ -341,6 +342,13 @@ def weekly_onset_expectations(
         $\pi_p(t)$ by report day, shape `(n, P)`.
     hub_delay, cutoff, final, publication_lag
         As `onset_expectations`.
+    shared : numpy.ndarray, optional
+        Boolean `(P,)`, static: provinces whose delay and missing
+        fraction are the same, such as those that follow the pooled
+        values (`HazardDelay.shared_groups`). Their terms are one product
+        with the shared delay for all of them, rather than one per
+        province. Only the first shared province's delay and missing
+        fraction are read.
 
     Returns
     -------
@@ -349,23 +357,91 @@ def weekly_onset_expectations(
         `imputed`, `known_final` and `imputed_final` of shape
         `(n // 7, P)`, and `triangle` of shape `(n // 7, P, D + 1)`.
     """
-    n, n_p = onsets.shape
-    n_w, n_d = delay.shape[1], delay.shape[2]
-    width = n + n_d - 1
-    span = 7 * -(-(n_d + 6) // 7)
-    lam = onsets.T.reshape(n_p, n_w, 7)
-    pi = missing.T
-    pi_ext = jnp.concatenate(
-        [pi, jnp.broadcast_to(pi[:, -1:], (n_p, width - n))], axis=1
+    if shared is None or not np.any(shared):
+        return _weekly_by_place(
+            onsets, delay, missing, hub_delay, cutoff, final, publication_lag
+        )
+    shared = np.asarray(shared, dtype=bool)
+    own, same = np.flatnonzero(~shared), np.flatnonzero(shared)
+    parts = []
+    if own.size:
+        parts.append(
+            _weekly_by_place(
+                onsets[:, own],
+                delay[own],
+                missing[:, own],
+                hub_delay,
+                cutoff,
+                final,
+                publication_lag,
+            )
+        )
+    parts.append(
+        _weekly_shared(
+            onsets[:, same],
+            delay[same[0]],
+            missing[:, same[0]],
+            hub_delay,
+            cutoff,
+            final,
+            publication_lag,
+        )
     )
-    keep = 1 - pi_ext
+    order = np.argsort(np.concatenate([own, same]))
+    return {
+        k: jnp.concatenate([part[k] for part in parts], axis=1)[:, order]
+        for k in parts[0]
+    }
+
+
+def _publication_share(
+    publication_lag: ArrayLike, cutoff: int, width: int
+) -> Array:
+    """Share published by the cut-off, by report day, zero past it."""
     t1 = cutoff + 1
-    c = jnp.concatenate(
+    return jnp.concatenate(
         [
             compute_prop_already_reported(jnp.asarray(publication_lag), t1, 0),
             jnp.zeros(width - t1),
         ]
     )
+
+
+def _hub_by_week(hub_delay: Array, span: int) -> Array:
+    r"""Hub back-sampling of a week, $\sum_j \hat f(m - j)$, $m <$ `span`."""
+    n_d = hub_delay.shape[0]
+    return reduce(
+        jnp.add,
+        [jnp.pad(hub_delay, (j, span - n_d - j)) for j in range(7)],
+    )
+
+
+def _extend(pi: Array, width: int) -> Array:
+    """Repeat the last report day of `pi` (`(..., n)`) up to `width` days."""
+    n = pi.shape[-1]
+    tail = jnp.broadcast_to(pi[..., -1:], (*pi.shape[:-1], width - n))
+    return jnp.concatenate([pi, tail], axis=-1)
+
+
+def _weekly_by_place(
+    onsets: Array,
+    delay: Array,
+    missing: Array,
+    hub_delay: Array,
+    cutoff: int,
+    final: bool,
+    publication_lag: ArrayLike,
+) -> dict[str, Array]:
+    """`weekly_onset_expectations` with a delay for each province."""
+    n, n_p = onsets.shape
+    n_w, n_d = delay.shape[1], delay.shape[2]
+    width = n + n_d - 1
+    span = 7 * -(-(n_d + 6) // 7)
+    lam = onsets.T.reshape(n_p, n_w, 7)
+    pi_ext = _extend(missing.T, width)
+    keep = 1 - pi_ext
+    c = _publication_share(publication_lag, cutoff, width)
+    hub = _hub_by_week(hub_delay, span)
 
     def by_onset_week(x: Array) -> Array:
         # sum_j lambda(7w + j) x(7w + j + d), shape (P, n_w, D + 1).
@@ -374,12 +450,6 @@ def weekly_onset_expectations(
             jnp.add,
             [lam[:, :, j : j + 1] * win[:, :, j : j + n_d] for j in range(7)],
         )
-
-    # Hub back-sampling of a week: sum_j fhat(m - j), m < span.
-    hub = reduce(
-        jnp.add,
-        [jnp.pad(hub_delay, (j, span - n_d - j)) for j in range(7)],
-    )
 
     def imputed_by_week(x: Array) -> Array:
         return jnp.sum(_week_windows(x, n_w, span) * hub, axis=-1).T
@@ -400,6 +470,63 @@ def weekly_onset_expectations(
     imputed = imputed_by_week(c * miss)
     if final:
         known_final = (delay * by_onset_week(keep)).sum(-1).T
+        imputed_final = imputed_by_week(miss)
+    else:
+        known_final, imputed_final = known, imputed
+    return {
+        "known": known,
+        "imputed": imputed,
+        "known_final": known_final,
+        "imputed_final": imputed_final,
+        "triangle": jnp.moveaxis(triangle, 0, 1),
+    }
+
+
+def _weekly_shared(
+    onsets: Array,
+    delay: Array,
+    missing: Array,
+    hub_delay: Array,
+    cutoff: int,
+    final: bool,
+    publication_lag: ArrayLike,
+) -> dict[str, Array]:
+    """`weekly_onset_expectations` for provinces with one delay.
+
+    `delay` is `(n_w, D + 1)` and `missing` `(n,)`, the same for every
+    province, so each term is one product over the provinces.
+    """
+    n, n_p = onsets.shape
+    n_w, n_d = delay.shape
+    width = n + n_d - 1
+    span = 7 * -(-(n_d + 6) // 7)
+    lam = onsets.T.reshape(n_p, n_w, 7)
+    pi_ext = _extend(missing, width)
+    keep = 1 - pi_ext
+    c = _publication_share(publication_lag, cutoff, width)
+    hub = _hub_by_week(hub_delay, span)
+
+    def hankel(x: Array) -> Array:
+        # x(7w + j + d), shape (n_w, 7, D + 1).
+        win = _week_windows(x[None], n_w, span)[0]
+        return jnp.stack([win[:, j : j + n_d] for j in range(7)], axis=1)
+
+    def imputed_by_week(x: Array) -> Array:
+        return jnp.sum(_week_windows(x, n_w, span) * hub, axis=-1).T
+
+    # f_w(m - j), shape (n_w, 7, span).
+    shifted = jnp.stack(
+        [jnp.pad(delay, ((0, 0), (j, span - n_d - j))) for j in range(7)],
+        axis=1,
+    )
+    by_report = jnp.einsum("pwj,wjm->pwm", lam, shifted)
+    miss = pi_ext * _week_overlap_add(by_report, width)
+    triangle = delay * jnp.einsum("pwj,wjd->pwd", lam, hankel(c * keep))
+    known = triangle.sum(-1).T
+    imputed = imputed_by_week(c * miss)
+    if final:
+        per_day = jnp.sum(delay[:, None, :] * hankel(keep), axis=-1)
+        known_final = jnp.einsum("pwj,wj->wp", lam, per_day)
         imputed_final = imputed_by_week(miss)
     else:
         known_final, imputed_final = known, imputed
@@ -704,6 +831,18 @@ class OnsetStreams(BaseObservationProcess):
                     f"{(n_total // 7, n_subpops)}."
                 )
 
+    def _shared_groups(self, n_prov: int) -> np.ndarray | None:
+        """Provinces with the same delay and missing fraction, if known."""
+        sources = [self.delay_rv]
+        if self.missing_fraction_rv is not None:
+            sources.append(self.missing_fraction_rv)
+        if not all(hasattr(rv, "shared_groups") for rv in sources):
+            return None
+        shared = np.ones(n_prov, dtype=bool)
+        for rv in sources:
+            shared &= np.asarray(rv.shared_groups(n_prov), dtype=bool)
+        return shared
+
     def _weekly(self, x: Array, first_day_dow: int) -> Array:
         flat = x.reshape(x.shape[0], -1)
         weekly = jnp.asarray(
@@ -791,11 +930,13 @@ class OnsetStreams(BaseObservationProcess):
             lag = lag()
         hub = jnp.asarray(hub_delay_pmf)
 
+        shared = self._shared_groups(n_prov) if by_week else None
+
         def expect(cut: int, final: bool) -> dict[str, Array]:
             # Expectations summed to the weeks of the model axis.
             if by_week:
                 return weekly_onset_expectations(
-                    onsets, delay, pi, hub, cut, final, lag
+                    onsets, delay, pi, hub, cut, final, lag, shared
                 )
             exp = onset_expectations_by_place(
                 onsets,
@@ -943,6 +1084,22 @@ class MissingOnsetFraction(RandomVariable):
         self.baseline_process = baseline_process
         self.deviation_process = deviation_process
         self.active = active
+
+    def shared_groups(self, n_groups: int) -> np.ndarray:
+        """Return the provinces whose missing fraction is the pooled one.
+
+        Parameters
+        ----------
+        n_groups : int
+            Number of provinces.
+
+        Returns
+        -------
+        numpy.ndarray
+            Boolean `(n_groups,)`: the provinces outside `active`
+            (`pooled_groups`).
+        """
+        return pooled_groups(self.active, n_groups)
 
     def sample(
         self,
