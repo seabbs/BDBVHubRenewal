@@ -827,6 +827,8 @@ def forecast_trajectories(
     seed: int = 1,
     posterior: dict[str, Any] | None = None,
     as_of: Sequence[int] = (),
+    report_weeks: Sequence[int] = (),
+    report_days: int = 0,
 ) -> dict[str, Any]:
     """Draw joint trajectories of final weekly onsets (known plus imputed).
 
@@ -848,6 +850,10 @@ def forecast_trajectories(
     as_of : sequence of int
         Later cut-offs, in days from `start_date`, to draw counts as
         reported by.
+    report_weeks : sequence of int
+        Weeks (rows of `province`) to give `reporting` for.
+    report_days : int
+        Days after the cut-off that `reporting` covers.
 
     Returns
     -------
@@ -860,6 +866,8 @@ def forecast_trajectories(
         `start_date`), the counts as reported by it, with the same
         posterior draws, as `{"province", "national"}`. These score
         forecasts against a later vintage as reported, like for like.
+        With `report_weeks`, also `reporting` (`reporting_curves`), what
+        gives the same counts for any later cut-off without the model.
     """
     if posterior is None:
         posterior = model.mcmc.get_samples()
@@ -887,10 +895,105 @@ def forecast_trajectories(
         )
         prov = np.asarray(later["onsets_final_total"])[:, n_lead:]
         as_reported[cut] = {"province": prov, "national": prov.sum(axis=2)}
-    return {
+    out = {
         "province": province,
         "national": province.sum(axis=2),
         "insample": insample,
         "draw": keep,
         "as_reported": as_reported,
     }
+    if report_weeks:
+        out["reporting"] = reporting_curves(
+            pred, thinned, data, n_init, report_weeks, report_days
+        )
+    return out
+
+
+def reporting_curves(
+    pred: dict[str, Any],
+    posterior: dict[str, Any],
+    data: Vintage,
+    n_init: int,
+    weeks: Sequence[int],
+    n_days: int,
+) -> dict[str, Any]:
+    """Per-draw quantities that give the counts reported by any cut-off.
+
+    The counts as reported by cut-off $T + j$ of trajectory $k$ are, as in
+    `OnsetStreams.sample` with `as_of`, the vintage counts (or the
+    trajectory's draw of them where the vintage has none) plus negative
+    binomial draws of the cases expected between $T$ and $T + j$.
+    These are those expected cases for $j = 1..$`n_days` and once all
+    reports are in, from the same draws as the final counts
+    (`reporting.expected_reported_by`).
+
+    Parameters
+    ----------
+    pred : dict
+        The forecast pass's `Predictive` output.
+    posterior : dict
+        The posterior draws behind it.
+    data : Vintage
+        The model inputs.
+    n_init : int
+        Days before `start_date` on the model axis.
+    weeks : sequence of int
+        Weeks from `start_date` to give.
+    n_days : int
+        Days after the cut-off to give.
+
+    Returns
+    -------
+    dict
+        `cutoff` (days from `start_date`); `known` and `imputed`, the
+        expected cases reported after the cut-off,
+        `(n, n_days + 1, len(weeks), P)`, the last row once all reports
+        are in; `vintage_known` and `vintage_imputed` `(len(weeks), P)`,
+        NaN where unobserved or held out; `draw_known` and `draw_imputed`,
+        the trajectories' draws of the counts by the cut-off
+        `(n, len(weeks), P)`; and `phi_known` and `phi_imputed`, the
+        negative binomial concentrations `(n,)`.
+    """
+    from .reporting import expected_reported_by
+
+    if "onsets_imputed_obs" not in pred:
+        raise ValueError("Reporting curves need the split onset streams.")
+    w = np.asarray(weeks, dtype=int)
+    days = (n_init + 7 * w[:, None] + np.arange(7)).ravel()
+    t = n_init + data.cutoff
+    cuts = np.concatenate([t + np.arange(n_days + 1), [np.inf]])
+    hub = np.asarray(data.hub_delay_pmf, dtype=float)
+    rest: dict[str, list[np.ndarray]] = {"known": [], "imputed": []}
+    for k in range(np.shape(pred["onsets_expected_daily"])[0]):
+        by = expected_reported_by(
+            np.asarray(pred["onsets_expected_daily"][k]),
+            np.asarray(pred["onsets_delay_pmf"][k]),
+            np.asarray(pred["missing_fraction"][k]),
+            np.asarray(pred["onsets_publication_lag"][k]),
+            hub,
+            cuts,
+            days,
+        )
+        for s, v in by.items():
+            weekly = v.reshape(len(cuts), len(w), 7, -1).sum(axis=2)
+            rest[s].append(weekly[1:] - weekly[:1])
+    n_lead = n_init // 7
+
+    def vintage(x: np.ndarray) -> np.ndarray:
+        x = np.asarray(x, dtype=float).copy()
+        if data.fit_mask is not None:
+            x[:, ~data.fit_mask] = np.nan
+        pad = np.full((max(w.max() + 1 - len(x), 0), x.shape[1]), np.nan)
+        out: np.ndarray = np.vstack([x, pad])[w]
+        return out
+
+    out: dict[str, Any] = {"cutoff": data.cutoff}
+    for s in ("known", "imputed"):
+        phi = np.asarray(posterior[f"inv_sqrt_phi_{s}"], dtype=float)
+        out |= {
+            s: np.stack(rest[s]).clip(min=0.0),
+            f"vintage_{s}": vintage(getattr(data, s)),
+            f"draw_{s}": np.asarray(pred[f"onsets_{s}_obs"])[:, 0, n_lead + w],
+            f"phi_{s}": 1.0 / (phi**2 + PHI_FLOOR),
+        }
+    return out
