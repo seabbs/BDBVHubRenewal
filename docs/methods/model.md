@@ -244,7 +244,6 @@ $$
 Provinces with cases in the first data week are seeded at the start.
 Later provinces start at $10^{-6}$ of that level and add $I_{0,p}$ to $\Phi_p(t)$ each day for 7 days.
 These 7 days start 5 days before the province's first case week.
-That lead puts the most onsets of a week of seeded infections in the first case week (67%, with 9% before it) at the prior mean incubation period.
 
 ### Missing-onset deviations
 
@@ -322,7 +321,6 @@ $\tilde\mu_k$ and $\tilde\sigma_k$ are each patch's log median and SD, the SD fr
 $\tilde\mu_{\text{CD}}$ and $\tilde\sigma_{\text{CD}}$ are the same summaries of the national estimate the patches are relative to, or $\mu_{\text{CD}}$ and $\sigma_{\text{CD}}$ if the release has none.
 Leaving a province out drops the national term and the patch that holds it.
 The term adds no parameters, and $\zeta = 0$ gives `renewal`.
-It is down-weighted because BVDOutbreakSize is fitted to largely the same data, so at full weight those data would count twice.
 
 ## Health zones
 

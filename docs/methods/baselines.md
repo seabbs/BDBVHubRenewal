@@ -136,8 +136,6 @@ x_j = x_{j-1} + \frac{x_{j-1} + 1 - F_{p,j-1}(w)}{F_{p,j-1}(w)} \big(F_{p,j}(w) 
 $$
 
 and the last column is the nowcast mean $\mu_p(w)$.
-The $+1$ is baselinenowcast's.
-It gives a week with 0 reported the mean $1 / F_{p,0}(w) - 1 - \sum_{j \ge 1} (F_{p,j}(w) - F_{p,j-1}(w)) / F_{p,j}(w)$, about 2 to 3 cases at $F_{p,0}(w) = 0.22$, and it adds less to a week the more complete it is.
 With $\text{rem} = \mu_p(w) - Y_{p,o}(w) \ge 0$ the count still to come, the final count is new reports minus removals, as in epinowcast,
 
 $$
@@ -154,18 +152,20 @@ Before the floor the mean is $\mu_p(w) - b_{p,k} Y_{p,o}(w)$.
 Weeks with no day younger than $D$ at $o$ have $\text{rem} = 0$ and $b_{p,k} = 0$, so they keep their reported count.
 Sample $i$ is one draw of $X_{p,i}(w)$ per week.
 
-**Fit.**
-For each earlier release $r < o$ with an in-window pair among the releases up to $r$, a nowcast $\hat y_p(w)$ is made from the data up to $r$, with the delay of $r$.
-It is the same weekly fill from $c_r$, with the $\Delta_p$ of $r$ and the shares taken relative to the count at $c_o$, so its last column is at $c_o$.
-For weeks back $k$ with a day younger than $D$ at $r$, and where $Y_{p,r}(w) > 0$ or $\hat y_p(w) > 0$, the count of $w$ on days up to $c_r$ is compared between releases $r$ and $o$.
-A rise is the new reports $A_{p,r}(w)$ and a fall the removals $B_{p,r}(w)$, so both are weekly, as the forecast is.
-With $\widehat{\text{rem}} = \hat y_p(w) - Y_{p,r}(w)$,
+$\phi_{p,k}$ and $b_{p,k}$ are fitted as follows.
 
-$$
-\phi_{p,k} = \arg\max_\phi \sum \log \text{NB}\big(A_{p,r}(w);\ \widehat{\text{rem}},\ \phi\big),
-\qquad
-b_{p,k} = \frac{\sum B_{p,r}(w)}{\sum Y_{p,r}(w)},
-$$
+1. Take each earlier release $r < o$ with an in-window pair among the releases up to $r$.
+2. Nowcast from the data up to $r$ with the delay of $r$, $\hat y_p(w)$.
+   It is the same weekly fill from $c_r$, with the shares taken relative to the count at $c_o$, so its last column is at $c_o$.
+3. For weeks back $k$ with a day younger than $D$ at $r$, and where $Y_{p,r}(w) > 0$ or $\hat y_p(w) > 0$, compare the count of $w$ on days up to $c_r$ between releases $r$ and $o$.
+   A rise is the new reports $A_{p,r}(w)$ and a fall the removals $B_{p,r}(w)$.
+4. With $\widehat{\text{rem}} = \hat y_p(w) - Y_{p,r}(w)$, fit
+
+    $$
+    \phi_{p,k} = \arg\max_\phi \sum \log \text{NB}\big(A_{p,r}(w);\ \widehat{\text{rem}},\ \phi\big),
+    \qquad
+    b_{p,k} = \frac{\sum B_{p,r}(w)}{\sum Y_{p,r}(w)},
+    $$
 
 summed over the kept releases.
 $\phi_{p,k}$ is fitted by maximum likelihood on $[0.1, 1000]$, one size per $k$, as baselinenowcast does.
@@ -231,22 +231,21 @@ Where no week reaches 0.95, `randomwalknowcast` takes the first week as the late
 ## Start from the nowcast
 
 `randomwalknowcast` runs the walk as a local level on $\log(1 + y)$, filtered on the reported counts by a scalar Kalman filter.
-Its start week $w_0$ is the latest full week that is at least 5% reported and has at least 5 cases, else the first week.
-A place with no case in the 9 weeks to $c_o$ starts at the latest complete week instead.
-Weeks up to $w_0$ are the nowcast draws $X_{p,i}(w)$.
-In sample $i$ the level at $w_0$ is $\log\{1 + X_{p,i}(w_0)\}$ with variance 0.
-Each later week $u$ up to the week holding $c_o$ is not nowcast.
-In it the level takes a step of variance $\sigma_p^2$ and is then updated by the observation $\log\{1 + Y_{p,o}(u) / \pi_p(u)\}$ with variance $1 / \{\pi_p(u) + Y_{p,o}(u)\}$.
-This is the delta-method variance of a Poisson final count thinned to the share reported.
-A week with $\pi_p(u) = 0$ gives no update.
-The level at the week holding $c_o$ is drawn from the filter, and the levels of earlier weeks back to $w_0$ are drawn given it.
-So the weeks after $w_0$ and the forecast are one trajectory.
-Each of these weeks is a Poisson draw from its level, floored at the count reported.
-The forecast starts from the drawn level at the week holding $c_o$.
+
+1. The start week $w_0$ is the latest full week that is at least 5% reported and has at least 5 cases, else the first week.
+   A place with no case in the 9 weeks to $c_o$ starts at the latest complete week instead.
+2. Weeks up to $w_0$ are the nowcast draws $X_{p,i}(w)$.
+   In sample $i$ the level at $w_0$ is $\log\{1 + X_{p,i}(w_0)\}$ with variance 0.
+3. Each later week $u$ up to the week holding $c_o$ is not nowcast.
+   The level takes a step of variance $\sigma_p^2$ and is updated by the observation $\log\{1 + Y_{p,o}(u) / \pi_p(u)\}$ with variance $1 / \{\pi_p(u) + Y_{p,o}(u)\}$, the delta-method variance of a Poisson final count thinned to the share reported.
+   A week with $\pi_p(u) = 0$ gives no update.
+4. The level at the week holding $c_o$ is drawn from the filter, and the levels of earlier weeks back to $w_0$ are drawn given it, so these weeks and the forecast are one trajectory.
+5. Each of these weeks is a Poisson draw from its level, floored at the count reported.
+6. The forecast starts from the drawn level at the week holding $c_o$.
 
 ## Health zones
 
-`randomwalk` and `randomwalknowcast` run on each zone's own release snapshots with the same code as for provinces.
+`randomwalk` and `randomwalknowcast` run on each zone's own release snapshots in the same way as for provinces.
 Each zone takes its delay, size and walk spread by the rules [above](#own-or-pooled-estimates).
 Province sample $Y^{(i)}(w)$ is apportioned over the zones in proportion to the zone model's own sample $x^{(i)}_z(w)$ of the same id and week:
 

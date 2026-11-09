@@ -3,7 +3,7 @@
 Scoring, and the evaluations.
 { .page-subtitle }
 
-## Scoring
+## What is scored
 
 Forecasts from real releases are scored on the count each later release reports, and on the complete weeks of the latest release ([Real releases](#real-releases)).
 Forecasts from simulated vintages are scored against the simulated final counts.
@@ -82,18 +82,20 @@ Two targets are scored.
 
 **Reported.** The count each later release $o'$ shows for every forecast week it reports.
 `randomwalk` is scored on its samples as they are, with no delay.
-Every other model forecasts the final count $X$ of week $w$ and is mapped to what $o'$ shows by its own modelled delay.
-Day $t$ is $a = c - t$ days old at a cut-off $c$, and $\pi(a)$ is the share of its final count the model expects reported by then.
-For `randomwalknowcast` and `pprandomwalknowcast`, $\pi(a) = 1 / \Gamma(a)$ under the daily delay each fits at the origin ([Baseline models](baselines.md#delay)).
-For the renewal models it is the posterior median of the cumulative onset-to-report delay of the latest onset week, which is pooled over provinces.
-Each place is mapped by the model's delay at that place, a zone with none by its province's, and a place with neither is scored as forecast.
-The country is the sum of the mapped provinces.
-Ages past the end of the delay take its last value, days after the cut-off have $\pi = 0$, and a week's share $\pi_w$ is the mean over its seven days.
-With $R_o$ the count reported at the origin, the count outstanding there, $X - R_o$, is thinned binomially, so each sample becomes a draw of the count reported at $o'$,
+Every other model forecasts the final count $X$ of week $w$, which is mapped to what $o'$ shows by the model's own delay.
 
-$$
-R_o + \text{Binomial}(X - R_o, q), \qquad q = \frac{\pi_w(c_{o'}) - \pi_w(c_o)}{1 - \pi_w(c_o)},
-$$
+1. Day $t$ is $a = c - t$ days old at a cut-off $c$, and $\pi(a)$ is the share of its final count the model expects reported by then.
+   For `randomwalknowcast` and `pprandomwalknowcast`, $\pi(a) = 1 / \Gamma(a)$ under the daily delay each fits at the origin ([Baseline models](baselines.md#delay)).
+   For the renewal models it is the posterior median of the cumulative onset-to-report delay of the latest onset week, which is pooled over provinces.
+   Ages past the end of the delay take its last value, and days after the cut-off have $\pi = 0$.
+2. A week's share $\pi_w$ is the mean of $\pi$ over its seven days.
+3. Each place is mapped by the model's delay at that place, a zone with none by its province's, and a place with neither is scored as forecast.
+   The country is the sum of the mapped provinces.
+4. With $R_o$ the count reported at the origin, the count outstanding there, $X - R_o$, is thinned binomially, so each sample becomes a draw of the count reported at $o'$,
+
+    $$
+    R_o + \text{Binomial}(X - R_o, q), \qquad q = \frac{\pi_w(c_{o'}) - \pi_w(c_o)}{1 - \pi_w(c_o)},
+    $$
 
 with the sign carried when $X < R_o$, $q$ kept in $[0, 1]$, and $q = 1$ for a week fully reported at the origin.
 A model with no modelled delay, such as a hub team, is scored on complete weeks only.
@@ -140,12 +142,12 @@ Zones are scored on the reported target as for [real releases](#real-releases), 
 Relative WIS is against `randomwalk` in the same form.
 On the Nowcast page the fitted models' zone samples at the latest release are those of their stored fits, where they have one.
 
-## Checks
+## Scores by place type and plausibility { #checks }
 
 The scores on the reported target, at province and zone level, are also averaged by the type of place and by a plausibility flag of each forecast, both decided from the counts reported at the origin.
 Relative WIS in these averages is against `randomwalk`.
 Week $w$ is the latest week ending on or before the origin, and $n(t)$ the count reported then for the week ending $t$, with 0 for a week with no row.
-A place is silent if no case is reported in the 9 weeks to $w$, small if no week has more than 5 cases, and larger otherwise.
+A place with no case in the 9 weeks to $w$, one with no week above 5 cases, and the rest form the three place types.
 The flag is set from the forecast of the round's reference week $r_v$, with median $q_{50}$ and 95% quantile $q_{95}$.
 Where several origins serve a round, only the latest is flagged.
 The level is $L = \max\{(n(w - 3) + n(w - 2)) / 2,\ n(w - 1)\}$ and the recent maximum is $M = \max(1, \max_{w - 4 \le t \le w} n(t))$.
