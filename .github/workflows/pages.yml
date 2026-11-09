@@ -17,6 +17,7 @@ on:
       - 'results/**'
       - 'scripts/fit-store.sh'
       - 'scripts/results-release.sh'
+      - 'scripts/score_history.py'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/pages.yml'
@@ -31,6 +32,7 @@ on:
       - 'results/**'
       - 'scripts/fit-store.sh'
       - 'scripts/results-release.sh'
+      - 'scripts/score_history.py'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/pages.yml'
@@ -124,6 +126,21 @@ jobs:
           export FIT_STORE_RUN
           uv run bdbvhubrenewal compare-hub --fetch
           uv run bdbvhubrenewal report --ledger output/ledger
+      # Scores at each deploy from main, read from the gh-pages branch,
+      # with this build's scores last. Only the trees are fetched, and the
+      # few distinct summaries as they are read. Without the branch the
+      # page says the history is unavailable.
+      - name: Score history
+        env:
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          git fetch -q --filter=blob:none --no-tags origin \
+            +gh-pages:refs/remotes/origin/gh-pages \
+            || echo "::warning::gh-pages could not be fetched"
+          uv run python scripts/score_history.py --ref origin/gh-pages \
+            --docs docs/generated --figures docs/figures \
+            --current docs/figures --current-sha "$SHA" \
+            --repo "$GITHUB_REPOSITORY" --out output/score-history.csv
       - name: Check hub teams are shown on the comparison page only
         run: |
           bad=0

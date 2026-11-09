@@ -47,6 +47,7 @@ nav:
       - Model development:
           - Model building: model-development/model-building.md
           - Development log: model-development/log.md
+          - Score history: model-development/score-history.md
       - Citation and licence: citation.md
   - API reference:
       - reference/index.md

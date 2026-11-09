@@ -7,14 +7,17 @@
   "use strict";
 
   // d.energy.rows: [model, origin, release, pool, ...one value per metric]
-  // keep(row) selects the rows; returns one entry per model with rows.
-  function summariseEnergy(d, keep) {
+  // keep(row) selects the rows; baseline, a model index, is the model to
+  // divide by (d.baseline if not given). Returns one entry per model with
+  // rows.
+  function summariseEnergy(d, keep, baseline) {
+    if (baseline === undefined) baseline = d.baseline;
     var e = d.energy;
     var nm = e.metrics.length;
     var base = {};
     function key(r) { return r[1] + "|" + r[2] + "|" + r[3]; }
     e.rows.forEach(function (r) {
-      if (r[0] === d.baseline && keep(r)) base[key(r)] = r;
+      if (r[0] === baseline && keep(r)) base[key(r)] = r;
     });
     var acc = {};
     e.rows.forEach(function (r) {
@@ -37,7 +40,8 @@
       var s = { n: a.n, mean: {}, rel: {} };
       e.metrics.forEach(function (met, i) {
         s.mean[met.key] = a.sum[i] / a.n;
-        s.rel[met.key] = a.sum[i] / a.bsum[i];
+        // A zero baseline gives no relative score, as in Python.
+        s.rel[met.key] = a.bsum[i] > 0 ? a.sum[i] / a.bsum[i] : null;
       });
       out[m] = s;
     });

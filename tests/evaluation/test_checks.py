@@ -191,3 +191,32 @@ def test_check_summary_divides_by_the_baseline_on_the_same_weeks() -> None:
     )
     assert got.loc[("flag", "collapse", "rwn"), "relative WIS"] == 3.0
     assert got.loc[("place type", "larger", "rw"), "relative WIS"] == 1.0
+
+
+def test_check_summary_gives_no_relative_wis_for_a_zero_baseline() -> None:
+    week = {
+        "origin": ORIGIN,
+        "truth_vintage": "2026-11-08",
+        "location": "wamba",
+        "target_end_date": "2026-11-07",
+        "scale": "zones",
+    }
+    scores = pd.DataFrame(
+        [
+            {**week, **dict.fromkeys(SCORE_COLUMNS, 0.0), "model": m, "wis": w}
+            for m, w in (("rw", 0.0), ("rwn", 6.0))
+        ]
+    )
+    types = pd.DataFrame(
+        {"origin": [ORIGIN], "location": ["wamba"], "place_type": ["silent"]}
+    )
+    flagged = pd.DataFrame(
+        {
+            "model": ["rw", "rwn"],
+            "origin": ORIGIN,
+            "location": "wamba",
+            "flag": "no flag",
+        }
+    )
+    got = check_summary(scores, types, flagged, baseline="rw")
+    assert got["relative WIS"].isna().all()
