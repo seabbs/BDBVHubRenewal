@@ -191,6 +191,10 @@ tasks:
       - task: fit-store
       - uv run bdbvhubrenewal compare-hub
       - uv run bdbvhubrenewal report
+      - >-
+        uv run python scripts/score_history.py --docs docs/generated
+        --figures docs/figures --current docs/figures
+        --out output/score-history.csv
 
   getting-started:
     desc: Run the Getting started notebook again and save its outputs
