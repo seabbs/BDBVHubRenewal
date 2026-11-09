@@ -216,7 +216,7 @@ m_w = \tfrac{1}{2}\{Y_{p,o}(w - 1) + Y_{p,o}(w)\},
 $$
 
 where $s^2_\Delta$ is the sample variance of the changes, $v(\lambda)$ the variance of $\log(1 + Y)$ for $Y \sim \text{Poisson}(\lambda)$, and the bar a mean over the changes.
-The noise matters only for small places: at 10 cases a week $2v \approx 0.19$, and at 250 it is under 0.01.
+The noise matters only for small places. At 10 cases a week $2v \approx 0.19$, and at 250 it is under 0.01.
 With fewer than 2 changes $\sigma_p$ is 0.1.
 A pooled $\sigma_p$ uses the changes and noise of all the places in the pool together.
 
