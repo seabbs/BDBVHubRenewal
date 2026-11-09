@@ -193,9 +193,9 @@ The national trajectory is the sum of the provinces plus an unassigned component
 
 `renewal` fits every province the release lists in one model, on the axis set by their summed onsets.
 The provinces share the trend $\log R(t)$, the deviation SD $\sigma_\delta$ and half-life $h$, the start spread $\sigma_v$, ascertainment $\alpha$, the publication lag, the trend $b$ of the missing-onset share, the share at risk $\nu$ and the importation share $\varepsilon$.
-Each province has its own deviations $\delta_p$ and $\omega_p$ and its own seed.
+Each seeded province has its own deviations $\delta_p$ and $\omega_p$ and its own seed.
 Provinces are linked by importation through $W$.
-Each province has its own delay, pooled towards the shared delay.
+Each seeded province has its own delay, pooled towards the shared delay.
 Leaving a province out removes its known and imputed terms and its delays but keeps it in the latent process.
 
 ```mermaid
@@ -222,7 +222,7 @@ $$
 
 The pooled trend $\log R(t)$ is the unweighted mean of $\log R_p(t)$, not the national Rt, and is the walk of the province model.
 The province deviations sum to zero.
-They are $\delta_p(t) = \sum_j Q_{pj}\, \eta_j(t)$, with $Q$ an orthonormal basis of the sum-to-zero subspace and $P - 1$ weekly AR(1) processes $\eta_j$ that decay towards 0, the pooled trend:
+They are $\delta_p(t) = \sum_j Q_{pj}\, \eta_j(t)$, with $Q$ an orthonormal basis of the deviations that sum to zero over the $P_s$ seeded provinces and are 0 for the rest, and $P_s - 1$ weekly AR(1) processes $\eta_j$ that decay towards 0, the pooled trend:
 
 $$
 \eta_j(t) = \phi\, \eta_j(t - 1) + \sigma_\delta z_j(t), \qquad \phi = 2^{-1/h}, \qquad h \sim \text{LogNormal}(\log 6, 0.6^2)\ \text{weeks}, \qquad \sigma_\delta \sim \mathcal{N}^+(0, 0.1^2).
@@ -264,6 +264,7 @@ $$
 
 The offsets have spread $\mathcal{N}^+(0, 0.5^2)$ and the walks start at 0 with step SD $\mathcal{N}^+(0, 0.1^2)$, both sampled non-centred.
 So each province's delay follows the shared one over time, with its own level and its own drift, each shrunk towards the shared delay by a learnt spread.
+As for $\delta_p$, $Q$ spans the seeded provinces, so a province never seeded has no delay data and takes the shared delay.
 Known-onset delays are scored by province.
 Health zones take their province's delay, since the delay files list provinces only.
 
@@ -281,6 +282,8 @@ They start with province spread $\mathcal{N}^+(0, 0.5^2)$, sampled non-centred, 
 ### Provinces with no cases
 
 A province with no case yet starts at $10^{-6}$ of its seed level and is never seeded.
+Its deviations $\delta_p$ and $\omega_p$ are 0, so it follows the pooled trends, and its seed is fixed at the prior median, 1, since only that near-zero start uses it.
+Nothing is sampled for it.
 Its infections come only from importation through $W$, and its zero counts are scored like any other province's.
 Its forecasts follow from the model, so every province the release lists has one.
 

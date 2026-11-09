@@ -420,7 +420,11 @@ def test_zone_values_follow_the_zone_model_not_the_shares(
 def test_reconcile_falls_back_to_the_allocator_shares(
     task: ForecastTask, counts: pd.DataFrame, zones: tuple[str, ...]
 ) -> None:
-    sub = dataclasses.replace(task, locations=task.locations[:1])
+    # A province with cases, so its random walk draws are not all zero.
+    rows = task.target.loc[task.target["location"].isin(task.locations)]
+    cases = rows.groupby("location")["total"].sum()
+    first = str(cases.index[cases > 0][0])
+    sub = dataclasses.replace(task, locations=(first,))
     prov = RandomWalk().forecast(sub)
     empty = pd.DataFrame(columns=list(prov.columns))
     got = reconcile_zones(empty, prov, sub, counts, zones)

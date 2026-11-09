@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import numpyro
 from jax import Array
 from pyrenew.latent.temporal_processes import (
@@ -82,6 +83,7 @@ class HazardDelay(RandomVariable):
         time_process: TemporalProcess,
         offset_rv: RandomVariable,
         group_process: TemporalProcess,
+        active: np.ndarray | None = None,
     ) -> None:
         r"""Initialize the delay.
 
@@ -102,6 +104,9 @@ class HazardDelay(RandomVariable):
             (`PooledInitialValue` with mean 0).
         group_process
             Process for the sum-to-zero coordinates of $\eta_p(s)$.
+        active
+            Boolean `(n_groups,)`: groups with their own drift, the rest
+            following $\gamma(s)$. `None` is all.
 
         Raises
         ------
@@ -118,6 +123,7 @@ class HazardDelay(RandomVariable):
         self.time_process = time_process
         self.offset_rv = offset_rv
         self.group_process = group_process
+        self.active = active
 
     def __repr__(self) -> str:
         """Return string representation."""
@@ -127,7 +133,7 @@ class HazardDelay(RandomVariable):
             f"shape_process={self.shape_process!r}, "
             f"time_process={self.time_process!r}, "
             f"offset_rv={self.offset_rv!r}, "
-            f"group_process={self.group_process!r})"
+            f"group_process={self.group_process!r}, active={self.active!r})"
         )
 
     def sample(
@@ -169,6 +175,7 @@ class HazardDelay(RandomVariable):
             n_groups,
             f"{self.name}_time",
             first_day_dow,
+            self.active,
         )
         shift = jnp.asarray(shifts)
         # Recorded for the delay summaries written after a fit

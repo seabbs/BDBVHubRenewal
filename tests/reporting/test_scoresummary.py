@@ -111,7 +111,9 @@ def test_summary_rows_index_every_key() -> None:
 
 
 def test_summary_html_names_the_view_and_fallback() -> None:
-    html = summary_html("x.json", "Scores", view="place", static="a.svg")
+    html = summary_html(
+        {"latest": "x.json"}, "Scores", view="place", static="a.svg"
+    )
     assert 'data-view="place"' in html
     assert "a-dark.svg#only-dark" in html
 
@@ -228,7 +230,15 @@ def test_browser_relative_scores_are_mean_over_mean_like_relative_skill() -> (
 
 
 def test_summary_html_offers_a_map_only_when_given_one() -> None:
+    srcs = {"latest": "x.json"}
     assert 'data-map="m.geojson"' in summary_html(
-        "x.json", "Scores", view="place", map_src="m.geojson"
+        srcs, "Scores", view="place", map_src="m.geojson"
     )
-    assert "data-map" not in summary_html("x.json", "Scores", view="place")
+    assert "data-map" not in summary_html(srcs, "Scores", view="place")
+
+
+def test_summary_html_lists_each_target_in_order() -> None:
+    html = summary_html({"complete": "c.json", "latest": "l.json"}, "Scores")
+    assert (
+        """data-targets='{"complete": "c.json", "latest": "l.json"}'""" in html
+    )

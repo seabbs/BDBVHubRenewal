@@ -5,6 +5,8 @@ The offsets of $P$ groups are sampled as $P - 1$ coordinates on an
 orthonormal basis of the sum-to-zero subspace, so they sum to zero with
 no direction the data cannot identify. PyRenew's
 `SubpopulationInfections` instead subtracts the mean of $P$ processes.
+Groups outside an `active` set take the shared value with no offset, so
+nothing is sampled for groups no data can inform.
 """
 
 from __future__ import annotations
@@ -25,9 +27,9 @@ class PooledInitialValue(RandomVariable):
     $$v_p = \mu + \sum_j Q_{pj} \eta_j, \qquad \eta_j \sim N(0, \sigma),$$
 
     with $Q$ from `sum_to_zero_basis`, so the offsets sum to zero and
-    $\mu$ is their mean. Centred, the $P - 1$ coordinates $\eta_j$ are
-    the site `{name}_offsets`; non-centred, $\eta_j = \sigma z_j$ with
-    $z_j \sim N(0, 1)$ at `{name}_z`.
+    $\mu$ is their mean. Centred, the coordinates $\eta_j$ are the site
+    `{name}_offsets`; non-centred, $\eta_j = \sigma z_j$ with
+    $z_j \sim N(0, 1)$ at `{name}_z`. Groups outside `active` take $\mu$.
     """
 
     def __init__(
@@ -37,6 +39,7 @@ class PooledInitialValue(RandomVariable):
         mean_rv: RandomVariable,
         sd_rv: RandomVariable,
         centred: bool = True,
+        active: np.ndarray | None = None,
     ) -> None:
         r"""Initialize the pooled values.
 
@@ -53,6 +56,8 @@ class PooledInitialValue(RandomVariable):
         centred
             Sample the offsets on the basis directly (centred), rather
             than standardised.
+        active
+            Boolean `(n_groups,)`: groups with an offset. `None` is all.
 
         Raises
         ------
@@ -67,13 +72,14 @@ class PooledInitialValue(RandomVariable):
         self.mean_rv = mean_rv
         self.sd_rv = sd_rv
         self.centred = centred
+        self.active = active
 
     def __repr__(self) -> str:
         """Return string representation."""
         return (
             f"PooledInitialValue(name={self.name!r}, n_groups={self.n_groups},"
             f" mean_rv={self.mean_rv!r}, sd_rv={self.sd_rv!r}, "
-            f"centred={self.centred})"
+            f"centred={self.centred}, active={self.active!r})"
         )
 
     def sample(self, **kwargs: object) -> Array:
@@ -90,21 +96,77 @@ class PooledInitialValue(RandomVariable):
             Shape `(n_groups,)`.
         """
         mu = self.mean_rv()
-        if self.n_groups == 1:
-            return jnp.full((1,), mu)
+        basis = jnp.asarray(sum_to_zero_basis(self.n_groups, self.active))
+        k = basis.shape[1]
+        if k == 0:
+            return jnp.full((self.n_groups,), mu)
         sd = self.sd_rv()
-        basis = jnp.asarray(sum_to_zero_basis(self.n_groups))
         if self.centred:
             offsets = numpyro.sample(
-                f"{self.name}_offsets",
-                dist.Normal(0.0, sd).expand([self.n_groups - 1]),
+                f"{self.name}_offsets", dist.Normal(0.0, sd).expand([k])
             )
             return jnp.asarray(mu + basis @ offsets)
-        z = numpyro.sample(
-            f"{self.name}_z",
-            dist.Normal(0.0, 1.0).expand([self.n_groups - 1]),
-        )
+        z = numpyro.sample(f"{self.name}_z", dist.Normal(0.0, 1.0).expand([k]))
         return jnp.asarray(mu + sd * (basis @ z))
+
+
+class ActiveValues(RandomVariable):
+    """Values sampled for the active groups, a fixed value for the rest."""
+
+    def __init__(
+        self,
+        name: str,
+        base_rv: RandomVariable,
+        active: np.ndarray,
+        fill: float,
+    ) -> None:
+        """Initialize the values.
+
+        Parameters
+        ----------
+        name
+            Name of the values.
+        base_rv
+            Returns one value per active group.
+        active
+            Boolean, one per group.
+        fill
+            Value of the inactive groups.
+
+        Raises
+        ------
+        TypeError
+            If `base_rv` is not a `RandomVariable`.
+        """
+        if not isinstance(base_rv, RandomVariable):
+            raise TypeError("base_rv must be a RandomVariable.")
+        super().__init__(name=name)
+        self.base_rv = base_rv
+        self.active = np.asarray(active)
+        self.fill = fill
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return (
+            f"ActiveValues(name={self.name!r}, base_rv={self.base_rv!r}, "
+            f"active={self.active!r}, fill={self.fill})"
+        )
+
+    def sample(self, **kwargs: object) -> Array:
+        """Sample the active values and fill the rest.
+
+        Parameters
+        ----------
+        **kwargs
+            Ignored, for the PyRenew interface.
+
+        Returns
+        -------
+        Array
+            One value per group.
+        """
+        out = jnp.full(self.active.shape, self.fill)
+        return out.at[np.flatnonzero(self.active)].set(self.base_rv())
 
 
 def split_initial_value(
@@ -134,21 +196,31 @@ def split_initial_value(
     return start, initial - start
 
 
-def sum_to_zero_basis(n: int) -> np.ndarray:
+def sum_to_zero_basis(n: int, active: np.ndarray | None = None) -> np.ndarray:
     r"""Orthonormal basis of $\{\delta \in R^n : \sum_p \delta_p = 0\}$.
+
+    With `active`, the basis spans the deviations that sum to zero over
+    the active groups and are zero elsewhere.
 
     Parameters
     ----------
     n
         Dimension.
+    active
+        Boolean `(n,)`, or `None` for every group.
 
     Returns
     -------
     numpy.ndarray
-        Shape `(n, n - 1)`, orthonormal columns that each sum to zero.
+        Shape `(n, k - 1)` with `k` the active groups, orthonormal
+        columns that each sum to zero.
     """
-    _, _, vt = np.linalg.svd(np.ones((1, n)))
-    return np.asarray(vt[1:].T)
+    keep = np.ones(n, dtype=bool) if active is None else np.asarray(active)
+    k = int(keep.sum())
+    _, _, vt = np.linalg.svd(np.ones((1, k)))
+    basis = np.zeros((n, max(k - 1, 0)))
+    basis[keep] = vt[1:].T
+    return basis
 
 
 def pooled_walk(
@@ -159,6 +231,7 @@ def pooled_walk(
     n_groups: int,
     name_prefix: str,
     first_day_dow: int | None = None,
+    active: np.ndarray | None = None,
 ) -> tuple[ArrayLike, ArrayLike]:
     r"""Sample a national process plus sum-to-zero province deviations.
 
@@ -186,6 +259,9 @@ def pooled_walk(
         Prefix for the sample sites.
     first_day_dow
         Day of week of element 0, needed by calendar-aligned processes.
+    active
+        Boolean `(n_groups,)`: provinces with a deviation, the rest
+        following the pooled trend. `None` is all.
 
     Returns
     -------
@@ -200,12 +276,12 @@ def pooled_walk(
         name_prefix=f"{name_prefix}_baseline",
         first_day_dow=first_day_dow,
     )
-    if n_groups == 1:
-        return baseline, baseline
-    basis = jnp.asarray(sum_to_zero_basis(n_groups))
+    basis = jnp.asarray(sum_to_zero_basis(n_groups, active))
+    if basis.shape[1] == 0:
+        return baseline, jnp.broadcast_to(baseline, (n_timepoints, n_groups))
     coords = deviation_process.sample(
         n_timepoints=n_timepoints,
-        n_processes=n_groups - 1,
+        n_processes=basis.shape[1],
         initial_value=basis.T @ dev_start,
         name_prefix=f"{name_prefix}_deviations",
         first_day_dow=first_day_dow,
