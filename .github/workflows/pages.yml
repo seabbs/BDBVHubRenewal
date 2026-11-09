@@ -163,7 +163,7 @@ jobs:
             echo "::error::digest printed nothing; refusing to key the cache"
             exit 1
           fi
-          echo "key=backtest-$CELL-$digest" >> "$GITHUB_OUTPUT"
+          echo "key=backtest-prof-$CELL-$digest" >> "$GITHUB_OUTPUT"
       # Restore and save are separate steps, so outputs are saved as soon
       # as the run ends and a hit saves nothing.
       - name: Restore the outputs
@@ -235,6 +235,8 @@ jobs:
 
   build:
     needs: [prep, backtest]
+    # TEMPORARY: the profiling run builds and deploys nothing.
+    if: github.event_name == 'never'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
