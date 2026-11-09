@@ -22,7 +22,6 @@ The model diagrams are mermaid blocks in `docs/methods/model.md`.
 | Known and imputed onsets | `BaseObservationProcess` with `temporal_pmf_rv` for the infection-to-onset pmf (the incubation period, a `CensoredPMF` with a random mean and SD), `NegativeBinomialNoise`, `compute_prop_already_reported` for the publication lag | `OnsetStreams`. |
 | Delays of known-onset cases | None | `DirichletMultinomialNoise`, a noise model in the form of PyRenew's `CountNoise` for counts by delay given weekly totals. |
 | BVDOutbreakSize Rt | None | `RtPseudoObservation`, a `RandomVariable` the latent process calls, as it holds both $R$ and infections. |
-| Provinces with no cases | None | An importation-only component. |
 
 PyRenew pieces that give a different model, sample less well, or would only rename one line, are not used.
 
@@ -96,7 +95,6 @@ Submission fits and the [fit store](../development/cli.md#fit-store)'s backtest 
 `renewal` and `renewalsp` use 2 chains of 500 warm-up and 500 draws at target acceptance 0.9.
 `renewalbvd` uses 1000 draws at 0.95.
 Leave-one-province-out fits take theirs from `[sampler]` in `config/backtest.toml` when `BDBV_RENEWAL_SAMPLER` is unset.
-A per-location model has one fit per location with enough cases.
 Each fit reports its largest R-hat over parameters and the share of draws at the maximum tree depth.
 
 The parameterisation is as follows.

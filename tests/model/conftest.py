@@ -24,7 +24,7 @@ MAIN_REPO_DATA = Path(
         str(Path(__file__).resolve().parents[2] / "data"),
     )
 )
-# Two provinces with no cases, to exercise the importation component.
+# Two provinces with no cases, which the model leaves out.
 SIM_LOCATIONS = ("CD-IT", "CD-NK", "CD-HU", "CD-TO", "CD-BU", "CD-SK")
 
 

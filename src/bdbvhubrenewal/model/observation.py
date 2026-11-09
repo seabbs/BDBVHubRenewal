@@ -28,7 +28,6 @@ from typing import cast
 import jax
 import jax.numpy as jnp
 import numpyro
-import numpyro.distributions as dist
 from jax import Array
 from jax.typing import ArrayLike
 from pyrenew.convolve import compute_prop_already_reported
@@ -375,10 +374,6 @@ class OnsetStreams(BaseObservationProcess):
     known_noise, imputed_noise : CountNoise
         PyRenew noise models for the two streams (`known_noise` for the
         single stream).
-    import_scale_rv : RandomVariable, optional
-        Scale $\kappa$ of importations into provinces with no cases,
-        $\mu_q(s) = \kappa \sum_p K_{pq} \lambda_p(s)$, scored with a
-        Poisson likelihood on their weekly counts (`inactive`).
     start_dow : int, optional
         First day of the reporting week (6 is Sunday).
     publication_lag : RandomVariable or array_like, optional
@@ -403,7 +398,6 @@ class OnsetStreams(BaseObservationProcess):
         delay_rv: RandomVariable,
         known_noise: CountNoise,
         imputed_noise: CountNoise | None = None,
-        import_scale_rv: RandomVariable | None = None,
         start_dow: int = 6,
         publication_lag: RandomVariable | ArrayLike = NO_LAG,
         delay_noise: CompositionNoise | None = None,
@@ -415,7 +409,6 @@ class OnsetStreams(BaseObservationProcess):
         self.delay_rv = delay_rv
         self.known_noise = known_noise
         self.imputed_noise = imputed_noise
-        self.import_scale_rv = import_scale_rv
         self.start_dow = start_dow
         self.publication_lag = publication_lag
         self.delay_noise = (
@@ -521,8 +514,6 @@ class OnsetStreams(BaseObservationProcess):
         known: Array | None = None,
         imputed: Array | None = None,
         delay_counts: Array | None = None,
-        inactive: Array | None = None,
-        import_kernel: Array | None = None,
         forecast: bool = False,
         vintage: Array | None = None,
         as_of: int | None = None,
@@ -545,11 +536,6 @@ class OnsetStreams(BaseObservationProcess):
         delay_counts : Array, optional
             Known-onset cases by onset week and delay, pooled over
             provinces, `(n_weeks, D + 1)`.
-        inactive : Array, optional
-            Weekly total counts in provinces with no cases, `(n_weeks, Q)`.
-        import_kernel : Array, optional
-            Kernel rows from the modelled provinces to those with no
-            cases, `(P, Q)`. Needed with `import_scale_rv`.
         forecast : bool, optional
             Record the sum of the final draws of both streams.
         vintage : Array, optional
@@ -649,39 +635,9 @@ class OnsetStreams(BaseObservationProcess):
                 self._score_delays(
                     weekly["triangle"], jnp.asarray(delay_counts)
                 )
-        if self.import_scale_rv is not None and import_kernel is not None:
-            self._score_imports(
-                onsets, jnp.asarray(import_kernel), inactive, first_day_dow
-            )
         if forecast:
             self._deterministic("final_total", final)
         return ObservationSample(observed=draws[0], predicted=weekly["known"])
-
-    def _score_imports(
-        self,
-        onsets: Array,
-        kernel: Array,
-        counts: Array | None,
-        first_day_dow: int,
-    ) -> None:
-        """Importation-only expectation and likelihood for idle provinces."""
-        if self.import_scale_rv is None:
-            raise ValueError("Importations need `import_scale_rv`.")
-        daily = self.import_scale_rv() * onsets @ kernel
-        self._deterministic("expected_imports_daily", daily)
-        weekly = jnp.maximum(self._weekly(daily, first_day_dow), _FLOOR)
-        if counts is None:
-            numpyro.sample(
-                self._sample_site_name("inactive_obs"), dist.Poisson(weekly)
-            )
-            return
-        mask = ~jnp.isnan(counts)
-        with numpyro.handlers.mask(mask=mask):
-            numpyro.sample(
-                self._sample_site_name("inactive_obs"),
-                dist.Poisson(weekly),
-                obs=jnp.where(mask, counts, 0.0),
-            )
 
     def _score(
         self,

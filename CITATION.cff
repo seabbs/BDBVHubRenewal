@@ -16,8 +16,8 @@ abstract: >-
   submitted. seabbs-rwnowcast is baselinenowcast with a random walk on top.
   seabbs-renewal carries one of three renewal models of daily onsets with a
   learnt reporting delay and the hub's imputation of missing onsets:
-  renewalsp, fitted to each province on its own; renewal, with pooled Rt and
-  gravity importation between provinces; and renewalbvd, which adds the Rt
+  renewal, with pooled Rt and gravity importation between provinces;
+  renewalsp, renewal without importation; and renewalbvd, which adds the Rt
   estimates of BVDOutbreakSize.
 keywords:
   - epidemiology

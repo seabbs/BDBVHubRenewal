@@ -306,8 +306,8 @@ def vintage_from_tables(
 ) -> Vintage:
     """Build a `Vintage` from the target and delay rows of one vintage.
 
-    The active set is the provinces in `locations` with any case in this
-    vintage (every province if `config.active == "all"`). The week grid
+    Every province in `locations` is modelled, those with no case yet
+    from a near-zero start with importation only. The week grid
     starts one week before national weekly onsets first reach
     `START_COUNT` and ends with the week holding the vintage's last report
     day (`data.releases.last_report`), which is also the cut-off.
@@ -353,12 +353,7 @@ def vintage_from_tables(
         aggfunc="sum",
     ).fillna(0)
     totals_wide = cast(pd.DataFrame, wide["total"])
-    cases = totals_wide.sum(axis=0)
-    if config.active == "all":
-        active = tuple(locations)
-    else:
-        active = tuple(p for p in locations if cases.get(p, 0) > 0)
-    idle = tuple(p for p in locations if p not in active)
+    active = tuple(locations)
     national = totals_wide.reindex(columns=list(active)).fillna(0).sum(axis=1)
     counts_by_week = national.to_numpy()
     threshold = min(START_COUNT, counts_by_week.max())
@@ -411,12 +406,6 @@ def vintage_from_tables(
         pops = pd.Series([pops.sum()])
         names = [active[0] if len(active) == 1 else NATIONAL]
     kernel = None if len(names) == 1 else gravity_kernel(active, table)
-    import_kernel, inactive = None, None
-    if idle and not config.national:
-        import_kernel = gravity_kernel(active + idle, table)[
-            : len(active), len(active) :
-        ]
-        inactive = grid("total", idle)
     return Vintage(
         start_date=start,
         cutoff=cutoff,
@@ -428,9 +417,6 @@ def vintage_from_tables(
         kernel=kernel,
         horizon_weeks=horizon_weeks,
         names=names,
-        inactive=inactive,
-        inactive_names=[] if config.national else list(idle),
-        import_kernel=import_kernel,
         fit_mask=np.array([p not in masked for p in names]),
         bvd=None
         if bvd is None or config.national
@@ -445,45 +431,10 @@ def _seed_days(totals: np.ndarray) -> np.ndarray:
 
     Provinces with cases in the first data week start at day 0. Later
     provinces start `seed_lead` days before their first case week, since
-    infections precede onsets by the incubation period.
+    infections precede onsets by the incubation period. Provinces with no
+    case are never seeded (`inf`), so their infections come only from
+    importation.
     """
-    first = 7 * np.argmax(totals > 0, axis=0)
-    return np.where(first > 0, first - seed_lead(incubation_period()), 0)
-
-
-RENEWALSP = ModelConfig(
-    national=True, coupling="none", inactive="none", report_inactive=True
-)
-"""Single patch: the renewal model fitted to one location's series."""
-
-
-def idle_draws(
-    counts: np.ndarray, n_weeks: int, n: int, rng: np.random.Generator
-) -> np.ndarray:
-    r"""Draws for a province with too few cases for its own fit.
-
-    Callers floor them at the count reported (`renewalsp`).
-
-    Weekly counts are Poisson with rate $\lambda \sim
-    \text{Gamma}(1/2 + \sum y, w)$ over the $w$ weeks seen (Jeffreys
-    prior), so each trajectory has one rate.
-
-    Parameters
-    ----------
-    counts : numpy.ndarray
-        Weekly counts seen so far.
-    n_weeks : int
-        Weeks to draw.
-    n : int
-        Number of draws.
-    rng : numpy.random.Generator
-        Random number generator.
-
-    Returns
-    -------
-    numpy.ndarray
-        Draws, `(n, n_weeks)`.
-    """
-    shape = 0.5 + np.nansum(counts)
-    rate = rng.gamma(shape, 1.0 / max(len(counts), 1), size=n)
-    return rng.poisson(rate[:, None] * np.ones((1, n_weeks))).astype(float)
+    first = 7.0 * np.argmax(totals > 0, axis=0)
+    first[~(totals > 0).any(axis=0)] = np.inf
+    return np.where(first > 0, first - seed_lead(incubation_period()), 0.0)

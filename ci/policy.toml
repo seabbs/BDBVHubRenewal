@@ -51,7 +51,7 @@ kind = "fallback"
 config = "renewalsp"
 model = "renewalsp"
 stage = "primary"
-label = "single-patch renewal model (independent fits, no pooling or coupling)"
+label = "province renewal model without importation"
 sampler = { num_chains = 2, num_warmup = 500, num_samples = 500, target_accept = 0.9, max_tree_depth = 10, seed = 1, chain_method = "parallel" }
 
 [[candidates]]
