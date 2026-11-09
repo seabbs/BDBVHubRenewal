@@ -405,3 +405,20 @@ def test_backtest_without_recovery_never_runs_it(
     out = ["--results", str(tmp_path), "--output", str(tmp_path)]
     args = ["backtest", "--no-recovery", "--models", "randomwalk", *out]
     assert main(args) == 0
+
+
+def test_concat_results_keeps_one_copy_of_shared_tables(
+    tmp_path: Path,
+) -> None:
+    from bdbvhubrenewal.data.tidy import write_csv
+
+    parts = [tmp_path / "a", tmp_path / "b"]
+    for part in parts:
+        part.mkdir()
+        write_csv(pd.DataFrame({"truth": [1, 2]}), part / "truth.csv")
+        write_csv(pd.DataFrame({"x": [1]}), part / "scores.csv")
+    out = tmp_path / "results"
+    args = ["concat-results", "--out", str(out), "--dedupe", "truth.csv"]
+    assert main([*args, "--", *map(str, parts)]) == 0
+    assert len(pd.read_csv(out / "truth.csv")) == 2
+    assert len(pd.read_csv(out / "scores.csv")) == 2

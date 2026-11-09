@@ -64,6 +64,7 @@ from bdbvhubrenewal.evaluation import store
 from bdbvhubrenewal.evaluation.nowcast import release_backtest, stored_delays
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
+    ForecastModel,
     ForecastTask,
     check_samples,
     get_model,
@@ -96,7 +97,7 @@ from bdbvhubrenewal.submission.validate import (
 )
 from bdbvhubrenewal.submission.validate import main as validate_main
 
-__all__ = ["build_parser", "host_devices", "main"]
+__all__ = ["build_parser", "chunk", "host_devices", "main"]
 
 MIN_HORIZON = -6
 """First week forecast, in weeks from the reference date: 7 weeks up to
@@ -106,6 +107,46 @@ _ABBR_HELP = (
     "Hub model abbreviation. Defaults to `randomwalk` for random walk and "
     "otherwise to the submission abbreviation in config/hub.toml."
 )
+
+
+_CHUNK_HELP = (
+    "Run only block K of N (`K/N`, from 0) of the {what}, in order, so the "
+    "blocks can run apart and their results be stacked (`concat-results`)."
+)
+
+
+def chunk(items: Sequence[str], spec: str) -> list[str]:
+    """Return block K of N of `items`, with `spec` as `K/N` (K from 0).
+
+    The blocks are contiguous and in order, sizes differing by at most
+    one, so stacking blocks 0 to N - 1 gives `items` again.
+
+    Parameters
+    ----------
+    items : sequence of str
+        Such as forecast dates or origins.
+    spec : str
+        `K/N`.
+
+    Returns
+    -------
+    list of str
+        The block, empty if N exceeds the number of items.
+
+    Raises
+    ------
+    ValueError
+        If `spec` is not `K/N` with 0 <= K < N.
+    """
+    try:
+        k, n = (int(x) for x in spec.split("/"))
+    except ValueError:
+        raise ValueError(f"chunk must be K/N, got {spec!r}") from None
+    if not 0 <= k < n:
+        raise ValueError(f"chunk {spec!r} needs 0 <= K < N")
+    size, extra = divmod(len(items), n)
+    start = k * size + min(k, extra)
+    return list(items[start : start + size + (k < extra)])
 
 
 def _abbr(args: argparse.Namespace) -> str:
@@ -179,6 +220,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Scenarios to run, so each can run apart. Defaults to all.",
     )
     back.add_argument(
+        "--recovery-only",
+        action="store_true",
+        help="Run only the recovery check on the simulated outbreak.",
+    )
+    back.add_argument(
+        "--no-recovery",
+        action="store_true",
+        help="Leave out the recovery check, to run it apart.",
+    )
+    back.add_argument(
+        "--chunk",
+        default=None,
+        help=_CHUNK_HELP.format(
+            what="recovery check's dates (with --recovery-only) or the "
+            "scenario dates (with --scenarios-only)"
+        ),
+    )
+    back.add_argument(
         "--lopo",
         action="store_true",
         help="Run the leave-one-province-out check instead.",
@@ -217,6 +276,9 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="*",
         default=["randomwalk", "randomwalknowcast", "pprandomwalknowcast"],
     )
+    zb.add_argument(
+        "--chunk", default=None, help=_CHUNK_HELP.format(what="origins")
+    )
     zb.add_argument("--out", default="results/zone-scores.csv")
     zb.add_argument("--energy-out", default="results/zone-energy.csv")
     zb.add_argument("--quantiles-out", default="results/zone-quantiles.csv")
@@ -242,6 +304,13 @@ def build_parser() -> argparse.ArgumentParser:
         "scenarios, in the order given.",
     )
     cat.add_argument("--out", default="results")
+    cat.add_argument(
+        "--dedupe",
+        nargs="*",
+        default=[],
+        help="Files every part writes in full, such as a scenario's truth "
+        "when its dates run apart: one copy of each row is kept.",
+    )
     cat.add_argument("parts", nargs="+", help="Each run's results directory.")
 
     fit = sub.add_parser(
@@ -533,6 +602,12 @@ def _backtest(args: argparse.Namespace) -> int:
     results, output = Path(args.results), Path(args.output)
     results.mkdir(parents=True, exist_ok=True)
     output.mkdir(parents=True, exist_ok=True)
+    if args.chunk and not (args.scenarios_only or args.recovery_only):
+        print(
+            "ERROR: --chunk needs --scenarios-only or --recovery-only.",
+            file=sys.stderr,
+        )
+        return 1
     models = [get_model(n) for n in names]
     fits: list[pd.DataFrame] = []
     if args.scenarios_only:
@@ -541,6 +616,8 @@ def _backtest(args: argparse.Namespace) -> int:
             (as_date(as_of) - dt.timedelta(weeks=k)).isoformat()
             for k in (3, 2, 1, 0)
         ]
+        if args.chunk:
+            dates = chunk(dates, args.chunk)
         sforecasts, sscores, senergy, struth = bt.run_scenarios(
             models,
             config,
@@ -574,6 +651,13 @@ def _backtest(args: argparse.Namespace) -> int:
         _write_fits(fits, results / "lopo-fits.csv")
         print(f"Leave one province out: {len(lopo_scores)} scored forecasts.")
         return 0
+    if args.recovery_only:
+        if args.chunk:
+            dates = chunk(config.simulated_dates, args.chunk)
+            config = dataclasses.replace(config, simulated_dates=tuple(dates))
+        rscores = _recovery(args, config, models, results, output)
+        print(f"Recovery: {len(rscores)} scored forecasts in {results}.")
+        return 0
     learnt: list[pd.DataFrame] = []
     forecasts = bt.run_development(
         models,
@@ -591,6 +675,24 @@ def _backtest(args: argparse.Namespace) -> int:
     forecasts = bt.merge_by_model(output / "forecasts.csv.gz", forecasts)
     _release_backtest(args, config, target, delays, results, forecasts)
     write_csv(forecasts, output / "forecasts.csv.gz")
+    n_recovery = "not run"
+    if not args.no_recovery:
+        n_recovery = str(len(_recovery(args, config, models, results, output)))
+    print(
+        f"Development: {len(forecasts)} forecast rows; recovery: "
+        f"{n_recovery}. Written to {results}."
+    )
+    return 0
+
+
+def _recovery(
+    args: argparse.Namespace,
+    config: bt.BacktestConfig,
+    models: Sequence[ForecastModel],
+    results: Path,
+    output: Path,
+) -> pd.DataFrame:
+    """Run the recovery check, write its files and return its scores."""
     rforecasts, rscores, renergy = bt.run_recovery(
         models, config, lags=cutoff_lags(load_daily(args.data))
     )
@@ -600,11 +702,7 @@ def _backtest(args: argparse.Namespace) -> int:
         (renergy, results / "recovery-energy.csv"),
     ):
         write_csv(bt.merge_by_model(path, table), path)
-    print(
-        f"Development: {len(forecasts)} forecast rows; recovery: "
-        f"{len(rscores)}. Written to {results}."
-    )
-    return 0
+    return rscores
 
 
 def _release_backtest(
@@ -693,7 +791,10 @@ def _concat_results(args: argparse.Namespace) -> int:
     names = sorted({f.name for p in parts for f in p.glob("*.csv*")})
     for name in names:
         tables = [pd.read_csv(p / name) for p in parts if (p / name).exists()]
-        write_csv(pd.concat(tables, ignore_index=True), out / name)
+        table = pd.concat(tables, ignore_index=True)
+        if name in args.dedupe:
+            table = table.drop_duplicates(ignore_index=True)
+        write_csv(table, out / name)
         print(f"{out / name}: {len(tables)} parts.")
     return 0
 
@@ -786,6 +887,14 @@ def _print_failed(failed: list[Check]) -> int:
     return 1 if failed else 0
 
 
+def _zone_origins(args: argparse.Namespace) -> list[str] | None:
+    """Return the origins of `--chunk`, or None for all."""
+    if not args.chunk:
+        return None
+    real = load_target(args.data).query("kind == 'real'")
+    return chunk(bt.real_vintages(real)[:-1], args.chunk)
+
+
 def _zone_backtest(args: argparse.Namespace) -> int:
     from bdbvhubrenewal.evaluation.hubcompare import forecast_quantiles
     from bdbvhubrenewal.evaluation.zones import (
@@ -802,6 +911,7 @@ def _zone_backtest(args: argparse.Namespace) -> int:
         load_daily_zones(args.data),
         hub_zones(hub_config),
         models=args.models,
+        origins=_zone_origins(args),
     )
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)

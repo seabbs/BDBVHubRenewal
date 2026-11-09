@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 
 import pandas as pd
 
@@ -104,6 +104,7 @@ def zone_backtest(
     zones: tuple[str, ...],
     models: Sequence[str] = ("randomwalk", "randomwalknowcast"),
     config: BacktestConfig | None = None,
+    origins: Collection[str] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Score the random walk models run at zone level on later releases.
 
@@ -129,6 +130,10 @@ def zone_backtest(
         Registered models that read release snapshots.
     config : BacktestConfig, optional
         Horizons, samples and seed. Defaults to `BacktestConfig()`.
+    origins : collection of str, optional
+        Forecast only from these vintages, so blocks of origins can run
+        apart and their outputs be stacked. Every release is still read
+        for the truth and the complete weeks. All but the latest if None.
 
     Returns
     -------
@@ -153,6 +158,8 @@ def zone_backtest(
     latest_counts = weekly_zone_counts(daily_zones, latest)
     frames, energy, kept = [], [], []
     for vintage in vintages[:-1]:
+        if origins is not None and vintage not in origins:
+            continue
         task = make_tasks(
             real.loc[real["vintage"] == vintage], delays, config, daily=daily
         )[0]
