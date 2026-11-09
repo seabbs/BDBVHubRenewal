@@ -72,6 +72,7 @@ def test_summary_scores_match_on_baseline_forecasts(sh) -> None:
     assert nat["n"] == 2
     assert nat["wis"] == pytest.approx(10.0)
     assert nat["rel_wis"] == pytest.approx(0.5)
+    assert nat["base_wis"] == pytest.approx(20.0)
     assert nat["coverage_50"] == pytest.approx(1.0)
     prov = out.loc[("provinces", "good")]
     assert prov["n"] == 1
@@ -84,14 +85,22 @@ def test_history_flags_changes_in_what_is_scored(sh) -> None:
     base = _summary()
     later = _summary()
     later["origins"] = ["2026-10-31", "2026-11-07"]
+    # Same origins and releases, but fewer of good's forecasts scored.
+    fewer = _summary()
+    fewer["origins"] = later["origins"]
+    fewer["rows"] = [r for r in fewer["rows"] if r[:2] != [1, 1]]
     deploys = [
         ("a" * 40, "2026-11-04T10:00:00+00:00", "p1", "latest", base),
         ("a" * 40, "2026-11-04T11:00:00+00:00", "p2", "latest", base),
         ("b" * 40, "2026-11-05T10:00:00+00:00", "p3", "latest", later),
+        ("c" * 40, "2026-11-06T10:00:00+00:00", "p4", "latest", fewer),
     ]
     out = sh.history(deploys)
     first = out.loc[(out["model"] == "good") & (out["pool"] == "national")]
-    assert list(first["source_sha"].str[:1]) == ["a", "a", "b"]
-    assert list(first["origins"])[-1] == "2026-10-31;2026-11-07"
-    assert list(first["break"]) == [True, False, True]
-    assert list(first["releases"]) == ["2026-11-01"] * 3
+    assert list(first["source_sha"].str[:1]) == ["a", "a", "b", "c"]
+    assert list(first["origins"])[2] == "2026-10-31;2026-11-07"
+    assert list(first["break"]) == [True, False, True, True]
+    assert list(first["releases"]) == ["2026-11-01"] * 4
+    # The baseline's forecasts are unchanged at the last deploy.
+    rw = out.loc[(out["model"] == "randomwalk") & (out["pool"] == "national")]
+    assert list(rw["break"]) == [True, False, True, False]
