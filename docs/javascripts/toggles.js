@@ -140,9 +140,10 @@
   }
 
   // A "Relative to" select of the model relative scores divide by.
-  // fill(d, name) lists d.models and picks the one called name, or
-  // d.baseline without one; index() is the model picked and name() its
-  // name. onChange runs on a change.
+  // fill(d, name) lists d.models, or d.baselines where given, and picks
+  // the one called name, or else d.baseline (the first of d.baselines);
+  // index() is the one picked and name() its name. onChange runs on a
+  // change.
   function baselineSelect(controls, onChange) {
     var sel = h("select", {}, h("label", {}, controls, "Relative to "));
     var names = [];
@@ -150,14 +151,10 @@
     return {
       fill: function (d, name) {
         sel.textContent = "";
-        names = d.models.map(function (m) { return m.name; });
-        // `d.baselines`, if given, limits the choice to those models.
-        names.forEach(function (n, i) {
-          if (!d.baselines || d.baselines.indexOf(n) >= 0) h("option", { value: i }, sel, n);
-        });
+        names = d.baselines || d.models.map(function (m) { return m.name; });
+        names.forEach(function (n, i) { h("option", { value: i }, sel, n); });
         var i = names.indexOf(name);
-        if (d.baselines && d.baselines.indexOf(name) < 0) i = -1;
-        sel.value = String(i < 0 ? d.baseline : i);
+        sel.value = String(i >= 0 ? i : d.baselines ? 0 : d.baseline);
       },
       index: function () { return +sel.value; },
       name: function () { return names[+sel.value]; },

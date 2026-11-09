@@ -140,7 +140,7 @@ jobs:
           uv run python scripts/score_history.py --ref origin/gh-pages \
             --docs docs/generated --figures docs/figures \
             --current docs/figures --current-sha "$SHA" \
-            --repo "$GITHUB_REPOSITORY" --out output/score-history.csv
+            --out output/score-history.csv
       - name: Check hub teams are shown on the comparison page only
         run: |
           bad=0

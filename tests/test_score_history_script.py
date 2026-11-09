@@ -384,3 +384,14 @@ def test_chart_opens_on_the_newest_week_scored_at_most_deploys(sh) -> None:
     d = sh.chart_data(hist, {})["model"]["latest"]
     assert d["splits"] == ["week 2026-10-31", "week 2026-10-24"]
     assert d["split"] == "week 2026-10-24"
+
+
+def test_common_sets_are_found_per_target(sh) -> None:
+    out = sh.history(
+        [
+            ("a" * 40, "t1", "p1", "latest", _summary()),
+            ("a" * 40, "t1", "p1", "complete", _summary()),
+        ]
+    )
+    common = out.loc[out["common"]]
+    assert set(common["target"]) == {"latest", "complete"}
