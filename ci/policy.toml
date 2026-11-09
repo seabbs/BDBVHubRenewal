@@ -35,7 +35,9 @@ inputs = ["src", "config", "pyproject.toml", "uv.lock"]
 
 # Every fit: 2 chains of 500 warm-up and 750 draws, run in parallel.
 # renewalbvd samples at target acceptance 0.95 to clear its divergence
-# warnings, the others at 0.9.
+# warnings, the others at 0.9. renewalbvd drew 1000 to clear its tail
+# ESS warnings; at 750 they may return (min bulk ESS was 227 at 1000 on
+# 2026-11-01).
 [[candidates]]
 id = "bvd"
 kind = "main"
