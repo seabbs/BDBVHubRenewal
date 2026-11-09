@@ -1654,7 +1654,7 @@ def _backtest_page(
         quantiles = pd.concat(
             [
                 forecast_quantiles(real_fc.assign(source="ours")),
-                zone_q.loc[zone_q["model"].isin(shown)],
+                zone_q.loc[zone_q["model"].isin(shown)].drop(columns="origin"),
             ],
             ignore_index=True,
         ).assign(ours=True)

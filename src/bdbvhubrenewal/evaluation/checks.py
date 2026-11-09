@@ -55,7 +55,7 @@ _ORDER = ("silent", "small", "larger", "no flag", "collapse", "blow-up")
 def _last_week(origin: pd.Series) -> pd.Series:
     """Return the Saturday on or before each origin."""
     day = pd.to_datetime(origin)
-    return day - pd.to_timedelta((day.dt.day_of_week - 5) % 7, unit="D")
+    return day - pd.to_timedelta((day.dt.weekday - 5) % 7, unit="D")
 
 
 def _by_week(counts: pd.DataFrame, origins: pd.DataFrame) -> pd.DataFrame:
