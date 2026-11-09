@@ -329,3 +329,140 @@ def test_digest_prints_the_backtest_digest(
     assert main([*args, "--with", "results"]) == 0
     key = capsys.readouterr().out.strip()
     assert key == backtest_digest(ROOT, extra=["results"], text="cell")
+
+
+def test_chunk_splits_in_order_into_contiguous_blocks() -> None:
+    from bdbvhubrenewal.cli import chunk
+
+    items = list("abcdefg")
+    parts = [chunk(items, f"{k}/3") for k in range(3)]
+    assert parts == [list("abc"), list("de"), list("fg")]
+    assert chunk(items, "0/1") == items
+    assert chunk(items[:2], "2/3") == []
+    for bad in ("3/3", "x", "1/0"):
+        with pytest.raises(ValueError, match="chunk"):
+            chunk(items, bad)
+
+
+@pytest.mark.usefixtures("in_root")
+def test_backtest_runs_recovery_apart_by_chunk(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from bdbvhubrenewal.evaluation import backtest as bt
+
+    dates: list[tuple[str, ...]] = []
+
+    def recovery(
+        models: object, config: bt.BacktestConfig, **kw: object
+    ) -> tuple[pd.DataFrame, ...]:
+        del models, kw
+        dates.append(config.simulated_dates)
+        table = pd.DataFrame({"model": ["randomwalk"]})
+        return table, table, table
+
+    def development(*args: object, **kwargs: object) -> pd.DataFrame:
+        del args, kwargs
+        raise AssertionError("ran the development backtest")
+
+    monkeypatch.setattr(bt, "run_recovery", recovery)
+    monkeypatch.setattr(bt, "run_development", development)
+    out = ["--results", str(tmp_path), "--output", str(tmp_path)]
+    args = ["backtest", "--recovery-only", "--models", "randomwalk", *out]
+    assert main([*args, "--chunk", "1/2"]) == 0
+    everything = bt.load_config("config/backtest.toml").simulated_dates
+    assert dates == [tuple(chunk_of(everything, 1, 2))]
+    assert (tmp_path / "recovery-scores.csv").exists()
+
+
+def chunk_of(items: tuple[str, ...], k: int, n: int) -> list[str]:
+    from bdbvhubrenewal.cli import chunk
+
+    return chunk(items, f"{k}/{n}")
+
+
+@pytest.mark.usefixtures("in_root")
+def test_backtest_without_recovery_never_runs_it(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from bdbvhubrenewal import cli
+    from bdbvhubrenewal.evaluation import backtest as bt
+
+    def recovery(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        raise AssertionError("ran the recovery check")
+
+    monkeypatch.setattr(bt, "run_recovery", recovery)
+
+    def development(*args: object, **kwargs: object) -> pd.DataFrame:
+        del args, kwargs
+        return pd.DataFrame({"model": []})
+
+    def release(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+
+    monkeypatch.setattr(bt, "run_development", development)
+    monkeypatch.setattr(cli, "_release_backtest", release)
+    out = ["--results", str(tmp_path), "--output", str(tmp_path)]
+    args = ["backtest", "--no-recovery", "--models", "randomwalk", *out]
+    assert main(args) == 0
+
+
+def test_concat_results_keeps_one_copy_of_shared_tables(
+    tmp_path: Path,
+) -> None:
+    from bdbvhubrenewal.data.tidy import write_csv
+
+    parts = [tmp_path / "a", tmp_path / "b"]
+    for part in parts:
+        part.mkdir()
+        write_csv(pd.DataFrame({"truth": [1, 2]}), part / "truth.csv")
+        write_csv(pd.DataFrame({"x": [1]}), part / "scores.csv")
+    out = tmp_path / "results"
+    args = ["concat-results", "--out", str(out), "--dedupe", "truth.csv"]
+    assert main([*args, "--", *map(str, parts)]) == 0
+    assert len(pd.read_csv(out / "truth.csv")) == 2
+    assert len(pd.read_csv(out / "scores.csv")) == 2
+
+
+@pytest.mark.usefixtures("in_root")
+def test_zone_backtest_of_a_skipped_block_writes_empty_files(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    def nothing(*args: object, **kwargs: object) -> tuple[pd.DataFrame, ...]:
+        del args, kwargs
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
+    monkeypatch.setattr(
+        "bdbvhubrenewal.evaluation.zones.zone_backtest", nothing
+    )
+    names = ["zone-scores.csv", "zone-energy.csv", "zone-quantiles.csv"]
+    outs = [
+        "--out", str(tmp_path / names[0]),
+        "--energy-out", str(tmp_path / names[1]),
+        "--quantiles-out", str(tmp_path / names[2]),
+        "--draws-out", str(tmp_path / "zone-draws.csv.gz"),
+    ]  # fmt: skip
+    assert main(["zone-backtest", "--chunk", "0/3", *outs]) == 0
+    assert all((tmp_path / n).exists() for n in names)
+
+
+def test_concat_results_skips_empty_parts(tmp_path: Path) -> None:
+    from bdbvhubrenewal.data.tidy import write_csv
+
+    parts = [tmp_path / "a", tmp_path / "b"]
+    for part in parts:
+        part.mkdir()
+    write_csv(pd.DataFrame(), parts[0] / "zone-scores.csv")
+    write_csv(pd.DataFrame({"x": [1]}), parts[1] / "zone-scores.csv")
+    out = tmp_path / "results"
+    assert main(["concat-results", "--out", str(out), *map(str, parts)]) == 0
+    assert len(pd.read_csv(out / "zone-scores.csv")) == 1
+
+
+def test_digest_of_one_model(capsys: pytest.CaptureFixture[str]) -> None:
+    from bdbvhubrenewal.evaluation.digest import model_digest
+
+    assert main(["digest", "--root", str(ROOT), "--model", "randomwalk"]) == 0
+    key = capsys.readouterr().out.strip()
+    assert key == model_digest("randomwalk", ROOT)
+    assert key != model_digest("pprandomwalknowcast", ROOT)

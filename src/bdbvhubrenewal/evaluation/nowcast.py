@@ -79,13 +79,16 @@ __all__ = [
     "COMPLETE_WEEKS",
     "RANDOM_WALK",
     "ReleaseBacktest",
+    "ReleaseForecasts",
     "complete_weeks",
     "delay_curves",
     "draw_reported",
+    "forecast_releases",
     "relative_energy",
     "relative_wis",
     "release_backtest",
     "reported_samples",
+    "score_releases",
     "stored_delays",
     "summarise",
     "week_shares",
@@ -553,16 +556,118 @@ def release_backtest(
     >>> scores = result.scores.query("target == 'reported'")
     >>> relative_wis(scores)
     """
+    run = forecast_releases(tasks, target, models)
+    return score_releases(
+        tasks,
+        daily,
+        target,
+        run,
+        stored=stored,
+        delays=delays,
+        complete_rule=complete_rule,
+        complete_after=complete_after,
+        compare=compare,
+    )
+
+
+@dataclass(frozen=True)
+class ReleaseForecasts:
+    """The forecasts `release_backtest` scores, made apart from scoring.
+
+    Each table has `model` and `origin`, so the forecasts of models run
+    apart can be stacked (`read`) and scored together
+    (`score_releases`).
+
+    Attributes
+    ----------
+    runs : pandas.DataFrame
+        One row per origin and model run, in the order run: `status`
+        (`"forecast"` or `"no forecast"`) and `reason`.
+    samples : pandas.DataFrame
+        Final-count samples with the national total: `location`,
+        `target_end_date`, `sample` and `value`.
+    delays : pandas.DataFrame
+        Each model's delay summary at each origin, if it has one.
+    fits : pandas.DataFrame
+        Each model's fit summaries (`ForecastModel.fit_diagnostics`).
+    """
+
+    runs: pd.DataFrame
+    samples: pd.DataFrame
+    delays: pd.DataFrame
+    fits: pd.DataFrame
+
+    _NAMES = ("runs", "samples", "delays", "fits")
+
+    def write(self, out: Path | str) -> None:
+        """Write the tables to `out` as `release-<table>.csv.gz`."""
+        from bdbvhubrenewal.data.tidy import write_csv
+
+        Path(out).mkdir(parents=True, exist_ok=True)
+        for name in self._NAMES:
+            write_csv(getattr(self, name), Path(out) / f"release-{name}.csv.gz")
+
+    @classmethod
+    def read(cls, parts: Sequence[Path | str]) -> ReleaseForecasts:
+        """Stack the tables `write` wrote to each part, in order."""
+        tables = {}
+        for name in cls._NAMES:
+            frames = []
+            for part in parts:
+                try:
+                    frame = pd.read_csv(
+                        Path(part) / f"release-{name}.csv.gz",
+                        dtype={"origin": str, "vintage": str},
+                        keep_default_na=False,
+                        na_values=[""],
+                    )
+                except pd.errors.EmptyDataError:
+                    continue
+                frames.append(frame)
+            # A part with no rows (a block every model skips) adds none.
+            frames = [f for f in frames if len(f)] or frames[:1]
+            tables[name] = (
+                pd.concat(frames, ignore_index=True)
+                if frames
+                else pd.DataFrame(columns=["model", "origin"])
+            )
+        return cls(**tables)
+
+
+def forecast_releases(
+    tasks: Sequence[ForecastTask],
+    target: pd.DataFrame,
+    models: Sequence[str | ForecastModel] = ("randomwalk", "randomwalknowcast"),
+) -> ReleaseForecasts:
+    """Forecast from every real release with a later one, without scoring.
+
+    The forecasting half of `release_backtest`: `score_releases` scores
+    the result, alone or stacked with other models' (`ReleaseForecasts`).
+
+    Parameters
+    ----------
+    tasks : sequence of ForecastTask
+        One real task per release, with its release snapshots.
+    target : pandas.DataFrame
+        The tidy target table, for the releases.
+    models : sequence of str or ForecastModel
+        Registered model names, or models, to run.
+
+    Returns
+    -------
+    ReleaseForecasts
+        The forecasts, delay summaries and fit summaries.
+
+    Raises
+    ------
+    MissingSnapshots
+        If a task has no release snapshots.
+    """
     real = target.loc[target["kind"] == "real"]
     releases = sorted(str(v) for v in real["vintage"].unique())
-    latest = releases[-1]
     built = [get_model(m) if isinstance(m, str) else m for m in models]
-    cols = ["location", "target_end_date", "sample", "value"]
-    kept = pd.DataFrame(columns=["model", "vintage", *cols])
-    kept = kept if stored is None else stored
-    frames: list[pd.DataFrame] = []
-    origin_rows: list[dict[str, object]] = []
-    fit_rows: list[pd.DataFrame] = []
+    runs: list[dict[str, object]] = []
+    samples, delays, fit_rows = [], [], []
     for task in sorted(tasks, key=lambda t: t.vintage):
         later = [v for v in releases if v > task.vintage]
         if task.kind != "real" or not later:
@@ -572,16 +677,13 @@ def release_backtest(
                 f"Release backtest needs daily release snapshots, and the "
                 f"task for {task.vintage} has none."
             )
-        here = kept.loc[kept["vintage"].astype(str) == task.vintage]
-        forecasts: dict[str, pd.DataFrame] = {}
-        summaries: dict[str, pd.DataFrame | None] = {}
         for model in built:
             try:
-                samples = model.forecast(task)
+                drawn = model.forecast(task)
             except ModelUnavailableError as err:
                 log.warning("%s has no forecast at %s: %s", model.name,
                             task.vintage, err)  # fmt: skip
-                origin_rows.append(
+                runs.append(
                     {
                         "origin": task.vintage,
                         "model": model.name,
@@ -590,38 +692,147 @@ def release_backtest(
                     }
                 )
                 continue
-            forecasts[model.name] = add_national(samples)
-            summaries[model.name] = getattr(model, "delay_summary", None)
+            runs.append(
+                {
+                    "origin": task.vintage,
+                    "model": model.name,
+                    "status": "forecast",
+                    "reason": "",
+                }
+            )
+            samples.append(
+                add_national(drawn).assign(
+                    model=model.name, origin=task.vintage
+                )
+            )
+            summary = getattr(model, "delay_summary", None)
+            if summary is not None:
+                delays.append(summary.assign(origin=task.vintage))
             fits = pd.DataFrame(getattr(model, "fit_diagnostics", []))
             fits.insert(0, "model", model.name)
             fits.insert(1, "origin", task.vintage)
             fit_rows.append(fits)
+
+    def stack(frames: list[pd.DataFrame]) -> pd.DataFrame:
+        if not frames:
+            return pd.DataFrame(columns=["model", "origin"])
+        return pd.concat(frames, ignore_index=True)
+
+    return ReleaseForecasts(
+        pd.DataFrame(runs, columns=["origin", "model", "status", "reason"]),
+        stack(samples),
+        stack(delays),
+        stack(fit_rows),
+    )
+
+
+def score_releases(
+    tasks: Sequence[ForecastTask],
+    daily: pd.DataFrame,
+    target: pd.DataFrame,
+    run: ReleaseForecasts,
+    stored: pd.DataFrame | None = None,
+    delays: pd.DataFrame | None = None,
+    complete_rule: str = "growth",
+    complete_after: int = COMPLETE_WEEKS,
+    compare: Collection[str] | None = None,
+) -> ReleaseBacktest:
+    """Score the forecasts of `forecast_releases` and of stored models.
+
+    The scoring half of `release_backtest`, which it equals given the
+    same tasks and models. Models are taken at each origin in the order
+    they were run, then the stored models.
+
+    Parameters
+    ----------
+    tasks : sequence of ForecastTask
+        As for `release_backtest`.
+    daily, target : pandas.DataFrame
+        As for `release_backtest`.
+    run : ReleaseForecasts
+        The run models' forecasts.
+    stored, delays : pandas.DataFrame, optional
+        As for `release_backtest`.
+    complete_rule, complete_after : str, int
+        As for `release_backtest`.
+    compare : collection of str, optional
+        As for `release_backtest`.
+
+    Returns
+    -------
+    ReleaseBacktest
+        As `release_backtest`.
+    """
+    real = target.loc[target["kind"] == "real"]
+    releases = sorted(str(v) for v in real["vintage"].unique())
+    latest = releases[-1]
+    cols = ["location", "target_end_date", "sample", "value"]
+    kept = pd.DataFrame(columns=["model", "vintage", *cols])
+    kept = kept if stored is None else stored
+    runs = run.runs.astype({"origin": str})
+    samples = (
+        run.samples.astype({"origin": str})
+        if len(run.samples)
+        else (run.samples)
+    )
+    frames: list[pd.DataFrame] = []
+    origin_rows: list[dict[str, object]] = []
+    fit_rows: list[pd.DataFrame] = []
+    for task in sorted(tasks, key=lambda t: t.vintage):
+        later = [v for v in releases if v > task.vintage]
+        if task.kind != "real" or not later:
+            continue
+        here = kept.loc[kept["vintage"].astype(str) == task.vintage]
+        forecasts: dict[str, pd.DataFrame] = {}
+        summaries: dict[str, pd.DataFrame | None] = {}
+        for row in runs.loc[runs["origin"] == task.vintage].itertuples():
+            name: str = str(row.model)
+            if row.status == "no forecast":
+                origin_rows.append(
+                    {
+                        "origin": task.vintage,
+                        "model": name,
+                        "status": "no forecast",
+                        "reason": str(row.reason),
+                    }
+                )
+                continue
+            mine = (samples["model"] == name) & (
+                samples["origin"] == task.vintage
+            )
+            forecasts[name] = (
+                samples.loc[mine]
+                .drop(columns=["model", "origin"])
+                .reset_index(drop=True)
+            )
+            summaries[name] = _rows(run.delays, name, task.vintage)
+            fit_rows.append(_fit_part(run.fits, name, task.vintage))
         _check_distinct(forecasts, task.vintage)
         learnt = (
             pd.DataFrame(columns=["model", "vintage"])
             if delays is None
             else delays.loc[delays["vintage"].astype(str) == task.vintage]
         )
-        for name, grp in here.groupby("model"):
-            forecasts[str(name)] = grp[cols]
-            mine = learnt.loc[learnt["model"] == name]
-            summaries[str(name)] = None if mine.empty else mine
+        for key, grp in here.groupby("model"):
+            forecasts[str(key)] = grp[cols]
+            have = learnt.loc[learnt["model"] == key]
+            summaries[str(key)] = None if have.empty else have
         reported = _truth(real, task.vintage).rename(
             columns={"truth": "reported"}
         )
         # Each model draws from its own stream, so its scores do not depend
         # on which other models run.
         rngs = {name: task.rng(name) for name in forecasts}
-        for name, samples in forecasts.items():
+        for name, drawn in forecasts.items():
             frames += [
-                _label(drawn, name, task.vintage, "reported", o2, daily)
-                for o2, drawn in reported_samples(
-                    samples, summaries[name], name, task.vintage, later,
+                _label(by, name, task.vintage, "reported", o2, daily)
+                for o2, by in reported_samples(
+                    drawn, summaries[name], name, task.vintage, later,
                     daily, reported, rngs[name],
                 ).items()
             ]  # fmt: skip
             frames.append(
-                _label(samples, name, task.vintage, "complete", latest, daily)
+                _label(drawn, name, task.vintage, "complete", latest, daily)
             )
         origin_rows += [
             {
@@ -636,6 +847,26 @@ def release_backtest(
         target, daily, latest, rule=complete_rule, weeks=complete_after
     )
     return _score(frames, origin_rows, fit_rows, real, done, compare)
+
+
+def _rows(table: pd.DataFrame, model: str, origin: str) -> pd.DataFrame | None:
+    """Return a run model's delay summary at an origin, or None."""
+    if table.empty or "origin" not in table:
+        return None
+    mine = table.loc[
+        (table["model"] == model) & (table["origin"].astype(str) == origin)
+    ]
+    if mine.empty:
+        return None
+    return mine.drop(columns="origin").reset_index(drop=True)
+
+
+def _fit_part(table: pd.DataFrame, model: str, origin: str) -> pd.DataFrame:
+    """Return a run model's fit summaries at an origin."""
+    if table.empty:
+        return pd.DataFrame(columns=["model", "origin"])
+    mine = (table["model"] == model) & (table["origin"].astype(str) == origin)
+    return table.loc[mine].dropna(axis=1, how="all").reset_index(drop=True)
 
 
 def _check_distinct(forecasts: dict[str, pd.DataFrame], vintage: str) -> None:
