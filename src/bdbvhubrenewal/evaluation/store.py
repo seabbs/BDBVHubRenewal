@@ -737,8 +737,9 @@ def load(
 def write_reporting(fits: Iterable[StoredFit], results: Path | str) -> Path:
     """Merge the fits' reporting curves into `REPORTING_FILE`.
 
-    Curves of other (model, origin) pairs are kept, so a merge with no
-    fits leaves the file as it was.
+    The curves of every model loaded are replaced, as `merge_by_model`
+    replaces its rows, so a fit with none leaves none behind. Other
+    models' curves are kept.
 
     Parameters
     ----------
@@ -754,7 +755,15 @@ def write_reporting(fits: Iterable[StoredFit], results: Path | str) -> Path:
     """
     path = Path(results) / REPORTING_FILE
     path.parent.mkdir(parents=True, exist_ok=True)
-    rows = dict(stored_reporting(results))
+    fits = list(fits)
+    loaded = {f.meta["model"] for f in fits}
+    # As `merge_by_model`: a loaded model's curves are all replaced, so a
+    # fit with none leaves none behind.
+    rows = {
+        key: blocks
+        for key, blocks in stored_reporting(results).items()
+        if key[0] not in loaded
+    }
     for f in fits:
         if f.reporting:
             rows[(f.meta["model"], f.meta["origin"])] = f.reporting
