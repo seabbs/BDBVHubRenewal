@@ -82,8 +82,7 @@ Stored backtest fits and CI submission fits run their chains in parallel.
 Without other settings, NUTS runs 4 chains of 1000 warm-up and 1000 draws, with target acceptance 0.9 and maximum tree depth 10.
 Each chain starts from its own draw from the prior.
 Submission fits and the [fit store](../development/cli.md#fit-store)'s backtest fits take each model's settings from its candidate in `ci/policy.toml`.
-`renewal` and `renewalsp` use 2 chains of 500 warm-up and 500 draws at target acceptance 0.9.
-`renewalbvd` uses 2 chains of 500 warm-up and 1000 draws at target acceptance 0.95.
+`renewal`, `renewalsp` and `renewalbvd` use 2 chains of 500 warm-up and 750 draws, at target acceptance 0.9 (0.95 for `renewalbvd`).
 `pprandomwalknowcast` has no candidate and uses its own settings ([Baseline models](baselines.md#partially-pooled-variant)).
 Leave-one-province-out fits take theirs from `[sampler]` in `config/backtest.toml` when `BDBV_RENEWAL_SAMPLER` is unset.
 Each fit reports its largest R-hat over parameters and the share of draws at the maximum tree depth.

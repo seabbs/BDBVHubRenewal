@@ -380,7 +380,7 @@ def test_backtest_sampler_comes_from_the_config(
     assert cfg.sampler == {
         "num_chains": 2,
         "num_warmup": 500,
-        "num_samples": 500,
+        "num_samples": 750,
         "target_accept": 0.8,
         "max_tree_depth": 10,
         "chain_method": "parallel",

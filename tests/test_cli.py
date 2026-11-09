@@ -3,6 +3,8 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import subprocess
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -148,6 +150,27 @@ def test_host_devices_cover_the_chains(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("XLA_FLAGS", "--xla_force_host_platform_device_count=8")
     host_devices(4)
     assert os.environ["XLA_FLAGS"] == "--xla_force_host_platform_device_count=8"
+
+
+def test_host_devices_takes_effect_after_importing_the_package() -> None:
+    # Importing the package must not start JAX, or the device count set
+    # by `host_devices` before a fit comes too late and chains run one
+    # after another.
+    code = (
+        "from bdbvhubrenewal.cli import host_devices\n"
+        "host_devices(3)\n"
+        "import jax\n"
+        "print(jax.local_device_count())\n"
+    )
+    env = {k: v for k, v in os.environ.items() if k != "XLA_FLAGS"}
+    out = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        check=True,
+        env=env,
+    )
+    assert out.stdout.strip().splitlines()[-1] == "3"
 
 
 @pytest.mark.usefixtures("in_root")

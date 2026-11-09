@@ -287,3 +287,27 @@ def pooled_walk(
         first_day_dow=first_day_dow,
     )
     return baseline, baseline + coords @ basis.T
+
+
+def pooled_groups(active: np.ndarray | None, n_groups: int) -> np.ndarray:
+    """Return the groups that `pooled_walk` gives the baseline exactly.
+
+    Groups outside `active` have zero rows in the sum-to-zero basis, so
+    their trajectory is the baseline plus zero, whatever the starting
+    values, and the same for all of them.
+
+    Parameters
+    ----------
+    active
+        As `pooled_walk`.
+    n_groups
+        Number of groups.
+
+    Returns
+    -------
+    numpy.ndarray
+        Boolean `(n_groups,)`.
+    """
+    if active is None:
+        return np.zeros(n_groups, dtype=bool)
+    return ~np.asarray(active, dtype=bool)
