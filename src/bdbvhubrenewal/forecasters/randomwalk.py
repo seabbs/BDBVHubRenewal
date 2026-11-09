@@ -39,6 +39,9 @@ exactly 0 until its first introduction, which comes each week with its
 pooled probability times the share of the week not yet reported, and then
 walks from a count drawn from Poisson(1) given at least 1
 (`introductions.silent_trajectories`).
+In `randomwalknowcast` a place with no week to start from is quiet like
+a silent one: after its latest complete week it draws introductions,
+floored at the counts reported (`_quiet`).
 National is the sum of provinces by sample.
 Each model raises if the task has no snapshots or no pair of releases
 within the delay window.
@@ -97,13 +100,19 @@ def _label(origin: Origin, i: int) -> str:
 
 
 def _walks(
-    key: jax.Array, x0: np.ndarray, origin: Origin, start: np.ndarray, h: int
+    key: jax.Array,
+    x0: np.ndarray,
+    origin: Origin,
+    start: np.ndarray,
+    h: int,
+    quiet: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Return `h` weeks of walk rates and counts after `start` from `x0`.
 
-    Silent places draw their introductions (`silent_trajectories`), and
-    the others walk from `x0` `[L, S]`. The rates `[L, S, h]` are the
-    walk's, also for silent places, whose counts do not use them.
+    Places in `quiet` `[L]` draw their introductions
+    (`silent_trajectories`), and the others walk from `x0` `[L, S]`. The
+    rates `[L, S, h]` are the walk's, also for quiet places, whose counts
+    do not use them.
     """
     k_walk, k_silent = jax.random.split(key)
     keys = jax.random.split(k_walk, x0.shape[0])
@@ -114,7 +123,7 @@ def _walks(
     )
     silent = silent_trajectories(
         k_silent,
-        origin.silent,
+        quiet,
         origin.intro,
         1.0 - np.clip(origin.complete, 0.0, 1.0),
         start,
@@ -123,7 +132,7 @@ def _walks(
         x0.shape[1],
     )
     counts = np.where(
-        origin.silent[:, None, None], silent, np.asarray(drawn, np.float64)
+        quiet[:, None, None], silent, np.asarray(drawn, np.float64)
     )
     return np.asarray(lam, np.float64), counts
 
@@ -133,20 +142,36 @@ def _delay_label(origin: Origin, i: int) -> str:
     return f"own at {int(own.sum())} of {own.size} ages"
 
 
+def _start_ok(origin: Origin) -> np.ndarray:
+    """Return the full weeks a walk can start from, `[L, W]`.
+
+    A week can when its share reported is at least `Settings.start_share`
+    and its reported count is at least `Settings.start_count`.
+    """
+    settings, full = origin.settings, origin.start_nowcast
+    return (origin.complete[:, : full + 1] >= settings.start_share) & (
+        origin.reported[:, : full + 1] >= settings.start_count
+    )
+
+
+def _quiet(origin: Origin) -> np.ndarray:
+    """Return the places that draw introductions instead of a walk, `[L]`.
+
+    These are the silent places and those with no week to start from.
+    """
+    return origin.silent | ~_start_ok(origin).any(axis=1)
+
+
 def _start_weeks(origin: Origin) -> np.ndarray:
     """Return the week each place's walk starts from, `[L]`.
 
-    It is the latest full week whose share reported is at least
-    `Settings.start_share` and whose reported count is at least
-    `Settings.start_count`, else the first week. A silent place starts at
-    its latest complete week, after which its introductions are drawn.
+    It is the latest week a walk can start from (`_start_ok`). A quiet
+    place (`_quiet`) starts at its latest complete week, after which its
+    introductions are drawn.
     """
-    settings, full = origin.settings, origin.start_nowcast
-    ok = (origin.complete[:, : full + 1] >= settings.start_share) & (
-        origin.reported[:, : full + 1] >= settings.start_count
-    )
-    latest = np.where(ok.any(axis=1), full - np.argmax(ok[:, ::-1], 1), 0)
-    return np.where(origin.silent, origin.start, latest)
+    ok = _start_ok(origin)
+    latest = origin.start_nowcast - np.argmax(ok[:, ::-1], 1)
+    return np.where(_quiet(origin), origin.start, latest)
 
 
 def frame(
@@ -318,7 +343,12 @@ class RandomWalk:
         start = origin.start
         x0 = origin.reported[np.arange(n_loc), start]
         _, y = _walks(
-            _key(task), np.repeat(x0[:, None], n, axis=1), origin, start, n_all
+            _key(task),
+            np.repeat(x0[:, None], n, axis=1),
+            origin,
+            start,
+            n_all,
+            origin.silent,
         )
         values = np.zeros((n, n_loc, n_all))
         for loc in range(n_loc):
@@ -434,8 +464,11 @@ class RandomWalkNowcast(RandomWalk):
         # Each sample walks on from its own nowcast of the start week.
         cw = snap.cut_week(origin.o)
         w0 = _start_weeks(origin)
+        quiet = _quiet(origin)
         rows = np.arange(n_loc)
-        lam, y = _walks(key_walk, nowcast[:, rows, w0].T, origin, w0, n_all)
+        lam, y = _walks(
+            key_walk, nowcast[:, rows, w0].T, origin, w0, n_all, quiet
+        )
         # Days of the cut-off week after the cut-off are drawn from the
         # walk's rate that week.
         cut = int(snap.cut[origin.o])
@@ -451,10 +484,14 @@ class RandomWalkNowcast(RandomWalk):
         values = np.zeros((n, n_loc, n_all))
         for loc in range(n_loc):
             s = int(w0[loc])
-            if origin.silent[loc]:
-                # A silent place is its reported 0s, then its introductions.
+            if quiet[loc]:
+                # A quiet place is its reported counts, then its
+                # introductions, floored at the counts reported.
                 values[:, loc, : s + 1] = origin.reported[loc, : s + 1]
                 values[:, loc, s + 1 :] = y[loc, :, : n_all - s - 1]
+                values[:, loc, :n_data] = np.maximum(
+                    values[:, loc, :n_data], origin.reported[loc]
+                )
                 continue
             values[:, loc, : cw + 1] = nowcast[:, loc, : cw + 1]
             if miss > 0 and cw > s:
