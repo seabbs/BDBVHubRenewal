@@ -58,10 +58,6 @@ from bdbvhubrenewal.evaluation.backtest import (
     merge_by_model,
     run_forecasts,
 )
-from bdbvhubrenewal.evaluation.heldout import (
-    load_model_choices,
-    model_for_vintage,
-)
 from bdbvhubrenewal.forecasters import (
     ForecastModel,
     ForecastTask,
@@ -638,13 +634,11 @@ def _choose(
 def load(
     store: Path | str,
     keys: Keys,
-    config: BacktestConfig,
     results: Path | str = "results",
 ) -> list[StoreStatus]:
     """Write the stored fits where the backtest and the docs read them.
 
-    Development origins go to `forecasts.csv.gz` and held-out ones to
-    `heldout-forecasts.csv.gz`, with the model chosen then.
+    Every origin goes to `forecasts.csv.gz`.
     Fit summaries go to `backtest-fits.csv` and learnt delays to
     `delay-summary.csv`. Each file keeps the rows of models not stored.
     What was used is written to `STATUS_FILE`.
@@ -655,8 +649,6 @@ def load(
         The store root.
     keys : dict
         `current_keys`.
-    config : BacktestConfig
-        Gives the model choice record and the held-out split.
     results : pathlib.Path or str
         The results directory.
 
@@ -669,7 +661,6 @@ def load(
 
     out = Path(results)
     out.mkdir(parents=True, exist_ok=True)
-    choices = load_model_choices(config.model_choice)
     status: list[StoreStatus] = []
     loaded: list[StoredFit] = []
     for (model, origin), key in sorted(keys.items(), key=lambda x: x[0][1])[
@@ -689,19 +680,8 @@ def load(
                 failed,
             )
         )
-    dev = [
-        f.forecasts for f in loaded if not config.is_heldout(f.meta["origin"])
-    ]
-    held = [
-        f.forecasts.assign(
-            chosen_model=model_for_vintage(choices, f.meta["origin"])
-        )
-        for f in loaded
-        if config.is_heldout(f.meta["origin"])
-    ]
     for name, frames in (
-        ("forecasts.csv.gz", dev),
-        ("heldout-forecasts.csv.gz", held),
+        ("forecasts.csv.gz", [f.forecasts for f in loaded]),
         ("backtest-fits.csv", [f.fits for f in loaded]),
         (DELAY_SUMMARY_FILE, [f.delays for f in loaded]),
     ):
@@ -779,7 +759,7 @@ def command(args: argparse.Namespace) -> int:
                 json.dumps([f"{m}/{o}/{k}" for (m, o), k in keys.items()])
             )
         return 0
-    for s in load(args.store, keys, config, args.results):
+    for s in load(args.store, keys, args.results):
         state = "current" if s.current else "not fitted for this code"
         if s.used and not s.current:
             state += f", older fit {s.used} used"

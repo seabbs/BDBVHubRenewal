@@ -111,12 +111,8 @@ def in_root(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_plan_fit_and_load(
     fitted_flat: str,
     tasks: dict[str, ForecastTask],
-    config: BacktestConfig,
     tmp_path: Path,
 ) -> None:
-    config.model_choice.write_text(
-        "choices:\n  - {date: 2026-10-10, model: flatfit}\n"
-    )
     root = tmp_path / "store"
     keys = store.current_keys(tasks, [fitted_flat], {}, "c")
     to_fit = store.plan(keys, root)
@@ -151,7 +147,7 @@ def test_plan_fit_and_load(
     assert again == left | {broken}
 
     results = tmp_path / "results"
-    status = store.load(root, keys, config, results)
+    status = store.load(root, keys, results)
     by_origin = {s.origin: s for s in status}
     assert by_origin[newest].current
     assert by_origin[oldest].current
@@ -161,11 +157,8 @@ def test_plan_fit_and_load(
     assert by_origin[broken].used is not None
     assert by_origin[origins[3]].used is None
     dev = pd.read_csv(results / "forecasts.csv.gz")
-    held = pd.read_csv(results / "heldout-forecasts.csv.gz")
-    # Every loaded origin is backtested, held out or not.
+    # Every loaded origin is backtested.
     assert set(dev["vintage"]) == {oldest, stale, newest}
-    assert newest in set(held["vintage"])
-    assert set(held["chosen_model"]) == {fitted_flat}
     recorded = json.loads((results / store.STATUS_FILE).read_text())
     assert len(recorded) == len(tasks)
 

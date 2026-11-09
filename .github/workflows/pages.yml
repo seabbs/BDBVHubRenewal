@@ -99,7 +99,6 @@ jobs:
           path: |
             results/backtest-fits.csv
             results/forecasts.csv.gz
-            results/heldout-*
             results/nowcast-*
             results/recovery-*
             results/scenario-*
@@ -112,7 +111,6 @@ jobs:
         if: steps.backtest.outputs.cache-hit != 'true'
         run: |
           uv run bdbvhubrenewal backtest
-          uv run bdbvhubrenewal backtest --evaluate-holdout
           uv run bdbvhubrenewal zone-backtest
           uv run bdbvhubrenewal backtest --scenarios-only
       - name: Compare with hub forecasts, then the docs figures and tables

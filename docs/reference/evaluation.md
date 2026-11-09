@@ -13,8 +13,6 @@ Score forecasts, run the backtest and compare models with each other and with th
 
 ::: bdbvhubrenewal.evaluation.nowcast
 
-::: bdbvhubrenewal.evaluation.heldout
-
 ::: bdbvhubrenewal.evaluation.ppc
 
 ::: bdbvhubrenewal.evaluation.hubcompare

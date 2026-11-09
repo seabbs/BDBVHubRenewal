@@ -1,10 +1,6 @@
-# Model choice record. Read by `bdbvhubrenewal.evaluation.heldout`.
+# Model choice record.
 # Each entry is the model chosen for submission from its date on, with
 # the reason. Add an entry, never edit an old one, when the choice changes.
-# The development set rolls forward with the choices: development runs use
-# every vintage up to the latest choice date, and each real vintage after
-# a choice is held out and scored under the model chosen then
-# (`task backtest-heldout`).
 choices:
   - date: 2026-10-28
     model: randomwalknowcast
