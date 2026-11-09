@@ -111,3 +111,89 @@ def test_zone_forecasts_are_the_summed_forms_by_origin(
     # The summed forms are the ones scored under the SUMMED names.
     summed = scores.loc[scores["model"].str.endswith(SUMMED)]
     assert set(forecasts["location"]) == set(summed["location"])
+
+
+def test_zone_backtest_by_origin_chunk_matches_one_run(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    result: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
+) -> None:
+    from bdbvhubrenewal.cli import chunk
+    from bdbvhubrenewal.evaluation.backtest import real_vintages
+
+    real = target.loc[target["kind"] == "real"]
+    origins = real_vintages(real)[:-1]
+    parts = [
+        zone_backtest(
+            target,
+            delays,
+            load_daily(DATA),
+            load_daily_zones(DATA),
+            hub_zones(DATA / "hub-config" / "tasks.json"),
+            origins=chunk(origins, f"{k}/2"),
+        )
+        for k in range(2)
+    ]
+    for i in range(3):
+        pd.testing.assert_frame_equal(
+            pd.concat([p[i] for p in parts], ignore_index=True), result[i]
+        )
+
+
+def test_zone_backtest_of_no_origin_is_empty(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    # A block whose origins every model skips forecasts nothing.
+    out = zone_backtest(
+        target,
+        delays,
+        load_daily(DATA),
+        load_daily_zones(DATA),
+        hub_zones(DATA / "hub-config" / "tasks.json"),
+        origins=[],
+    )
+    assert all(t.empty for t in out)
+
+
+def test_zone_forecasts_made_apart_by_model_score_as_one_run(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    result: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
+    tmp_path: Path,
+) -> None:
+    from bdbvhubrenewal.evaluation.zones import (
+        ZoneForecasts,
+        score_zones,
+        zone_forecasts,
+    )
+
+    args = (
+        target,
+        delays,
+        load_daily(DATA),
+        load_daily_zones(DATA),
+        hub_zones(DATA / "hub-config" / "tasks.json"),
+    )
+    parts = []
+    for name in ("randomwalk", "randomwalknowcast"):
+        zone_forecasts(*args, models=[name]).write(tmp_path / name)
+        parts.append(tmp_path / name)
+    run = ZoneForecasts.read(parts)
+    out = score_zones(target, delays, args[2], args[3], run)
+    for got, want in zip(out, result, strict=True):
+        pd.testing.assert_frame_equal(got, want, check_dtype=False)
+
+
+def test_zone_forecasts_read_skips_an_empty_part(tmp_path: Path) -> None:
+    from bdbvhubrenewal.evaluation.zones import ZoneForecasts
+
+    empty = pd.DataFrame(columns=["origin", "model"])
+    ZoneForecasts(empty, empty, empty).write(tmp_path / "a")
+    samples = pd.DataFrame(
+        {"key": ["randomwalk"], "origin": ["2026-10-24"], "value": [1.0]}
+    )
+    runs = pd.DataFrame({"origin": ["2026-10-24"], "model": ["randomwalk"]})
+    ZoneForecasts(runs, samples, empty).write(tmp_path / "b")
+    run = ZoneForecasts.read([tmp_path / "a", tmp_path / "b"])
+    assert list(run.samples.columns) == ["key", "origin", "value"]
+    assert len(run.runs) == 1
