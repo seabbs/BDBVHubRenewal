@@ -172,9 +172,46 @@ jobs:
         with:
           path: ${{ matrix.writes }}
           key: ${{ steps.key.outputs.key }}
+      # TEMPORARY: profile each command, to choose the finer split.
       - name: Run
         if: steps.cache.outputs.cache-hit != 'true'
-        run: ${{ matrix.run }}
+        env:
+          CELL: ${{ matrix.cell }}
+          RUN: ${{ matrix.run }}
+          PYTHONUNBUFFERED: '1'
+        run: |
+          mkdir -p "$RUNNER_TEMP/prof"
+          n=0
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            n=$((n + 1))
+            args=${line#uv run bdbvhubrenewal }
+            start=$SECONDS
+            # shellcheck disable=SC2086
+            uv run python -m cProfile -o "$RUNNER_TEMP/prof/$CELL-$n.prof" \
+              -m bdbvhubrenewal.cli $args
+            echo "$CELL command $n ($args): $((SECONDS - start)) s" \
+              | tee -a "$RUNNER_TEMP/prof/times.txt"
+          done <<< "$RUN"
+      - name: Profile summary (TEMPORARY)
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        run: |
+          {
+            echo '```'
+            cat "$RUNNER_TEMP/prof/times.txt" || true
+            for f in "$RUNNER_TEMP"/prof/*.prof; do
+              echo "== $f"
+              uv run python -c "import pstats,sys; s=pstats.Stats(sys.argv[1]); s.sort_stats('cumtime').print_stats(45)" "$f" \
+                | sed -n '/ncalls/,$p' | cut -c1-200
+            done
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        with:
+          name: profile-${{ matrix.cell }}
+          path: ${{ runner.temp }}/prof
+          retention-days: 3
       - name: Save the outputs
         if: steps.cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
