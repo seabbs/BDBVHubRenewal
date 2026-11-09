@@ -341,7 +341,6 @@ def _pooled(
     loc: float,
     scale: float,
     pooling_sd: float,
-    centred: bool = True,
     active: np.ndarray | None = None,
 ) -> PooledInitialValue:
     r"""Group values around $\mu \sim N(m, s)$, spread $N^+(0, \tau)$."""
@@ -350,7 +349,6 @@ def _pooled(
         n_groups,
         DistributionalVariable(f"{name}_mean", dist.Normal(loc, scale)),
         DistributionalVariable(f"{name}_sd", dist.HalfNormal(pooling_sd)),
-        centred=centred,
         active=active,
     )
 
@@ -593,17 +591,7 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     else:
         missing = MissingOnsetFraction(
             "missing_fraction",
-            # Non-centred: the imputed share pins these offsets only
-            # weakly, and centred they form a funnel (R-hat 1.68).
-            _pooled(
-                "logit_pi0",
-                n_prov,
-                -2.0,
-                1.0,
-                0.5,
-                centred=False,
-                active=active,
-            ),
+            _pooled("logit_pi0", n_prov, -2.0, 1.0, 0.5, active=active),
             _named_walk("pi_sd", 0.3, fit_weeks(data, config)),
             _named_walk("pi_dev_sd", 0.1, fit_weeks(data, config)),
             active=active,

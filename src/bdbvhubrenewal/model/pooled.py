@@ -27,9 +27,9 @@ class PooledInitialValue(RandomVariable):
     $$v_p = \mu + \sum_j Q_{pj} \eta_j, \qquad \eta_j \sim N(0, \sigma),$$
 
     with $Q$ from `sum_to_zero_basis`, so the offsets sum to zero and
-    $\mu$ is their mean. Centred, the coordinates $\eta_j$ are the site
-    `{name}_offsets`; non-centred, $\eta_j = \sigma z_j$ with
-    $z_j \sim N(0, 1)$ at `{name}_z`. Groups outside `active` take $\mu$.
+    $\mu$ is their mean. The coordinates are sampled non-centred,
+    $\eta_j = \sigma z_j$ with $z_j \sim N(0, 1)$ at `{name}_z`. Groups
+    outside `active` take $\mu$.
     """
 
     def __init__(
@@ -38,7 +38,6 @@ class PooledInitialValue(RandomVariable):
         n_groups: int,
         mean_rv: RandomVariable,
         sd_rv: RandomVariable,
-        centred: bool = True,
         active: np.ndarray | None = None,
     ) -> None:
         r"""Initialize the pooled values.
@@ -53,9 +52,6 @@ class PooledInitialValue(RandomVariable):
             Shared value $\mu$.
         sd_rv
             Spread $\sigma$ of the offsets. Not sampled for one group.
-        centred
-            Sample the offsets on the basis directly (centred), rather
-            than standardised.
         active
             Boolean `(n_groups,)`: groups with an offset. `None` is all.
 
@@ -71,7 +67,6 @@ class PooledInitialValue(RandomVariable):
         self.n_groups = n_groups
         self.mean_rv = mean_rv
         self.sd_rv = sd_rv
-        self.centred = centred
         self.active = active
 
     def __repr__(self) -> str:
@@ -79,7 +74,7 @@ class PooledInitialValue(RandomVariable):
         return (
             f"PooledInitialValue(name={self.name!r}, n_groups={self.n_groups},"
             f" mean_rv={self.mean_rv!r}, sd_rv={self.sd_rv!r}, "
-            f"centred={self.centred}, active={self.active!r})"
+            f"active={self.active!r})"
         )
 
     def sample(self, **kwargs: object) -> Array:
@@ -101,11 +96,6 @@ class PooledInitialValue(RandomVariable):
         if k == 0:
             return jnp.full((self.n_groups,), mu)
         sd = self.sd_rv()
-        if self.centred:
-            offsets = numpyro.sample(
-                f"{self.name}_offsets", dist.Normal(0.0, sd).expand([k])
-            )
-            return jnp.asarray(mu + basis @ offsets)
         z = numpyro.sample(f"{self.name}_z", dist.Normal(0.0, 1.0).expand([k]))
         return jnp.asarray(mu + sd * (basis @ z))
 

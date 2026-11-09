@@ -218,11 +218,11 @@ def test_unseeded_provinces_get_infections_only_by_importation(sim_vintage):
     assert share(ModelConfig()) > 100 * alone
 
 
-def test_missingness_offsets_are_non_centred(sim_vintage):
+def test_rt_walks_sample_their_starts_through_anchors(sim_vintage):
     model = build_model(sim_vintage)
     tr = trace(model, sim_vintage)
-    assert "logit_pi0_z" in tr and "logit_pi0_offsets" not in tr
-    assert "log_rt0_offsets" in tr
+    assert "log_rt_baseline_anchor" in tr and "log_rt0_mean" not in tr
+    assert "log_rt_deviations_anchor" in tr and "logit_pi0_z" in tr
 
 
 def test_as_reported_draws_match_the_vintage_at_its_own_cutoff(sim_vintage):
@@ -275,7 +275,7 @@ def test_unseeded_provinces_sample_no_seed_or_deviation(sim_vintage):
     model = build_model(sim_vintage)
     tr = trace(model, sim_vintage)
     assert tr["initial_infections"]["value"].shape == (k,)
-    assert tr["log_rt0_offsets"]["value"].shape == (k - 1,)
+    assert tr["log_rt_deviations_anchor"]["value"].shape == (k - 1,)
     rt = np.asarray(tr["latent::rt_subpop"]["value"])
     base = np.asarray(tr["latent::rt_baseline"]["value"])
     np.testing.assert_allclose(

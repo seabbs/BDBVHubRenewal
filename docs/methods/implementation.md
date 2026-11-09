@@ -101,5 +101,8 @@ The parameterisation is as follows.
 
 - Every walk, the pooled $\log R(t)$ included, samples its steps non-centred, as standard normals scaled by the step SD.
 - Province deviations sum to zero through an orthonormal basis $Q$ of the sum-to-zero subspace, so the $P - 1$ free processes are unconstrained.
-- The starting offsets of the $\log R$ deviations are sampled centred, and those of the missing-onset fraction non-centred.
+- The start of each $\log R$ walk, national and each province coordinate, is sampled through its anchor: the start plus the mean of the walk's steps over the data weeks, divided by the mean decay of the start over them (1 for the national random walk).
+- This is a change of variables with Jacobian 1, so the priors are unchanged.
+- The data fix the level of $\log R$ over their period much more tightly than its start, so sampling the start directly needs a small NUTS step size.
+- The starting offsets of the missing-onset fraction are sampled non-centred.
 - Walk steps after the fit axis are not sampled by NUTS. They are drawn from the prior given each posterior draw when forecasting.

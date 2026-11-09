@@ -11,25 +11,30 @@ from bdbvhubrenewal.model import PooledInitialValue
 from bdbvhubrenewal.model.pooled import sum_to_zero_basis
 
 
-def _pooled(centred: bool = True) -> PooledInitialValue:
+def _pooled() -> PooledInitialValue:
     return PooledInitialValue(
         "v",
         4,
         DistributionalVariable("v_mean", dist.Normal(1.0, 0.5)),
         DistributionalVariable("v_sd", dist.HalfNormal(0.3)),
-        centred=centred,
     )
 
 
-@pytest.mark.parametrize("centred", [True, False])
-def test_offsets_sum_to_zero_around_the_mean(centred):
+def test_offsets_sum_to_zero_around_the_mean():
     with trace() as tr:
-        v = seed(_pooled(centred), rng_seed=1)()
+        v = seed(_pooled(), rng_seed=1)()
     assert v.shape == (4,)
     np.testing.assert_allclose(
         float(v.mean()), float(tr["v_mean"]["value"]), atol=1e-6
     )
-    assert ("v_offsets" if centred else "v_z") in tr
+    assert "v_z" in tr
+
+
+def test_priors_are_the_mean_prior_and_the_offset_spread():
+    with trace() as tr:
+        mean, offsets = seed(_pooled().priors, rng_seed=1)()
+    assert (float(mean.loc), float(mean.scale)) == (1.0, 0.5)
+    assert float(offsets.scale) == float(tr["v_sd"]["value"])
 
 
 def test_one_group_has_no_spread():
