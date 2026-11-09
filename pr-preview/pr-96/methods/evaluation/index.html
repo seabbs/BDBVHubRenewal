@@ -2222,10 +2222,10 @@ Hub teams' samples are joint across weeks within a place only, as the hub's samp
 The random walk models forecast from the releases up to the origin only.
 The renewal models' stored forecasts from the origin are scored with them.
 So are hub teams' forecasts for a round, at the latest release serving it.
-A model that cannot forecast from an origin, such as <code>randomwalknowcast</code> with no pair of releases within the delay window, <span class="arithmatex">\(D = 42\)</span> days, is listed with no forecasts there.
+A model that cannot forecast from an origin, such as a random walk model with no pair of releases within the delay window, <span class="arithmatex">\(D = 42\)</span> days, is listed with no forecasts there.
 Two targets are scored.</p>
 <p><strong>Reported.</strong> The count each later release <span class="arithmatex">\(o'\)</span> shows for every forecast week it reports.
-<code>randomwalk</code> forecasts the counts as reported, so its samples are scored as they are.
+<code>randomwalk</code> is scored on its samples as they are, with no delay.
 Every other model forecasts the final count <span class="arithmatex">\(X\)</span> of week <span class="arithmatex">\(w\)</span> and is mapped to what <span class="arithmatex">\(o'\)</span> shows by its own modelled delay.
 Day <span class="arithmatex">\(t\)</span> is <span class="arithmatex">\(a = c - t\)</span> days old at a cut-off <span class="arithmatex">\(c\)</span>, and <span class="arithmatex">\(\pi(a)\)</span> is the share of its final count the model expects reported by then.
 For <code>randomwalknowcast</code> and <code>pprandomwalknowcast</code>, <span class="arithmatex">\(\pi(a) = 1 / G(a)\)</span> under the daily delay each fits at the origin (<a href="../baselines/#delay">Baseline models</a>).

@@ -72,7 +72,7 @@ print("scored on", LATER)
 # ## Forecast with the baselines
 #
 # `get_model` returns a model from the registry by name.
-# `randomwalk` carries the latest reported week forward with random walk noise on the log scale, with no nowcast.
+# `randomwalk` carries the last complete week forward with random walk noise on the log scale.
 # `randomwalknowcast` nowcasts the recent weeks first ([Baseline models](../methods/baselines/)).
 # `randomwalknowcast` is the baseline we submit to the hub as `seabbs-rwnowcast`.
 # `run_forecasts` runs each model, checks the samples, adds the national total and returns 100 trajectories per location.
@@ -179,7 +179,7 @@ panels
 # ## Score
 #
 # Each forecast is scored on what each later release reported ([how scoring works](../methods/evaluation/#real-releases)).
-# `randomwalk` forecasts the counts as reported, so it is scored as it is.
+# `randomwalk` is scored on its samples as they are, with no delay.
 # `release_backtest` maps each other model's forecast of final counts to the counts a later release would report, using the model's own modelled delay.
 # It scores the samples with the weighted interval score (WIS) and interval coverage.
 # The table gives each model's mean WIS relative to `randomwalk`, for the national total and over the provinces.

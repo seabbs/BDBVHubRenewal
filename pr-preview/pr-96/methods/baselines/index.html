@@ -2145,7 +2145,7 @@
 <p>The data and notation are on the <a href="../data/#target-and-notation">Data methods page</a>.
 The renewal models are on the <a href="../model/">Renewal models</a> page.
 <code>randomwalknowcast</code> is baselinenowcast<sup id="fnref:bnc-paper"><a class="footnote-ref" href="#fn:bnc-paper">1</a></sup><sup id="fnref:bnc-package"><a class="footnote-ref" href="#fn:bnc-package">2</a></sup> with a random walk on top.
-<code>randomwalk</code> is the same walk on the counts as reported, with no nowcast.
+<code>randomwalk</code> is the same walk with no nowcast.
 Both run at province and zone level (<a href="#health-zones">Health zones</a>), and national is the sum of the provinces.</p>
 <h2 id="structure">Structure<a class="headerlink" href="#structure" title="Permanent link">&para;</a></h2>
 <p><code>randomwalknowcast</code> nowcasts each recent week and walks forward from each nowcast draw.</p>
@@ -2176,21 +2176,31 @@ Both run at province and zone level (<a href="#health-zones">Health zones</a>), 
     X --&gt; W
     SIG --&gt; W
     W --&gt; NAT</code></pre>
-<p><code>randomwalk</code> uses no delay.</p>
+<p><code>randomwalk</code> uses the same delay only to find its start week.</p>
 <pre class="mermaid"><code>flowchart TD
-    Y["Reported Y&lt;sub&gt;p,o&lt;/sub&gt;(w)&lt;br/&gt;hub weekly counts at origin o"]
-    W0["Start week w&lt;sub&gt;0&lt;/sub&gt;&lt;br/&gt;the week holding the cut-off"]
-    SIG["Walk spread σ&lt;sub&gt;p&lt;/sub&gt;&lt;br/&gt;changes in log(1 + Y&lt;sub&gt;p,o&lt;/sub&gt;)&lt;br/&gt;over the latest 9 weeks"]
-    W["Walk on log(1 + λ&lt;sub&gt;i&lt;/sub&gt;)&lt;br/&gt;from Y&lt;sub&gt;p,o&lt;/sub&gt;(w&lt;sub&gt;0&lt;/sub&gt;)&lt;br/&gt;Poisson counts"]
+    subgraph TRI["Reporting triangle, per place p"]
+        SNAP["Daily onsets N&lt;sub&gt;p,r&lt;/sub&gt;(t)&lt;br/&gt;by onset day and release r"]
+        PAIR["Release pairs (r, r + 1)&lt;br/&gt;gap s ≤ D = 42 days"]
+    end
+    DEL["Daily delay g&lt;sub&gt;p&lt;/sub&gt;(j)&lt;br/&gt;and growth to final G&lt;sub&gt;p&lt;/sub&gt;(a)"]
+    PI["Share reported π&lt;sub&gt;p&lt;/sub&gt;(w)&lt;br/&gt;mean of 1 / G&lt;sub&gt;p&lt;/sub&gt;(c&lt;sub&gt;o&lt;/sub&gt; − t)"]
+    W0["Start week w&lt;sub&gt;0&lt;/sub&gt;&lt;br/&gt;latest with π&lt;sub&gt;p&lt;/sub&gt;(w) ≥ 0.95"]
+    Y["Reported Y&lt;sub&gt;p,o&lt;/sub&gt;(w&lt;sub&gt;0&lt;/sub&gt;)"]
+    SIG["Walk spread σ&lt;sub&gt;p&lt;/sub&gt;&lt;br/&gt;changes in log(1 + Y&lt;sub&gt;p,o&lt;/sub&gt;)"]
+    W["Walk on log(1 + λ&lt;sub&gt;i&lt;/sub&gt;)&lt;br/&gt;from Y&lt;sub&gt;p,o&lt;/sub&gt;(w&lt;sub&gt;0&lt;/sub&gt;)&lt;br/&gt;silent places at 1 case a week&lt;br/&gt;from their first introduction&lt;br/&gt;Poisson counts&lt;br/&gt;floored at Y&lt;sub&gt;p,o&lt;/sub&gt;(w)&lt;br/&gt;in weeks with data"]
     NAT["National = sum of provinces&lt;br/&gt;sample by sample"]
 
-    Y --&gt; W0
-    W0 --&gt; W
-    Y --&gt; SIG
+    SNAP --&gt; PAIR
+    PAIR --&gt; DEL
+    DEL --&gt; PI
+    PI --&gt; W0
+    W0 --&gt; Y
+    SNAP --&gt; Y
+    Y --&gt; W
     SIG --&gt; W
     W --&gt; NAT</code></pre>
 <h2 id="daily-release-snapshots">Daily release snapshots<a class="headerlink" href="#daily-release-snapshots" title="Permanent link">&para;</a></h2>
-<p><code>randomwalknowcast</code> and <code>pprandomwalknowcast</code> use the daily onsets of each hub release.
+<p>Both models use the daily onsets of each hub release.
 <span class="arithmatex">\(N_{p,r}(t)\)</span> is the known plus imputed onsets in province <span class="arithmatex">\(p\)</span> on day <span class="arithmatex">\(t\)</span> at release <span class="arithmatex">\(r\)</span>, which sum over a hub week to the weekly target.
 A forecast is made from the vintage of its date, whose latest release is <span class="arithmatex">\(o\)</span>.
 Release <span class="arithmatex">\(r\)</span> has a cut-off <span class="arithmatex">\(c_r\)</span>, the cut-off the release states where it gives one and otherwise its latest onset day over all places.
@@ -2278,8 +2288,7 @@ Where the estimate chosen by the <a href="#own-or-pooled-estimates">pooling rule
 A place uses its own <span class="arithmatex">\(g_p(x)\)</span> when its denominator <span class="arithmatex">\(\sum N_{p,r}(t)\)</span> at age <span class="arithmatex">\(x\)</span>, summed over the pairs, is at least 10 cases.
 Otherwise it uses its parent's at that age (zone, province, country).
 The country uses its own.
-In <code>randomwalknowcast</code> the size <span class="arithmatex">\(\phi_{p,k}\)</span> and the spread of the walk <span class="arithmatex">\(\sigma_p\)</span> use one rule with a threshold of 10 cases a week and 3 errors.
-<code>randomwalk</code> uses each place's own <span class="arithmatex">\(\sigma_p\)</span>.
+The size <span class="arithmatex">\(\phi_{p,k}\)</span> and the spread of the walk <span class="arithmatex">\(\sigma_p\)</span> use one rule with a threshold of 10 cases a week and 3 errors.
 The removal rate <span class="arithmatex">\(b_{p,k}\)</span> is each place's own, so a place with no falls has none.
 <span class="arithmatex">\(\ell_p\)</span> is the mean of <span class="arithmatex">\(Y_{p,o}(w)\)</span> over weeks 3 to 6 back, in cases a week.
 A place with <span class="arithmatex">\(\ell_p \ge 10\)</span> uses its own estimate.
@@ -2300,24 +2309,28 @@ For <span class="arithmatex">\(h \ge 1\)</span>,</p>
 \tilde y_i(w_0 + h) \sim \text{Poisson}\big(\lambda_i(w_0 + h)\big).
 \]</div>
 <p>Steps are summed within a sample, so each sample is one trajectory.</p>
-<p>In <code>randomwalknowcast</code>, a place with no case reported in the 9 weeks up to the cut-off week is silent.
+<p>A place with no case reported in the 9 weeks up to the cut-off week is silent.
 A silent place is 0 until its first introduction, which comes in each week with probability <span class="arithmatex">\(q_p\)</span>.
-This holds from the week after the latest week at least 95% reported under the delay, so <code>randomwalknowcast</code> does not nowcast a silent place's recent weeks.
+In both models this holds from the week after the start week of <code>randomwalk</code>, so <code>randomwalknowcast</code> does not nowcast a silent place's recent weeks.
 A silent place's walk has spread 0, so from its introduction its rate stays at 1 case a week.
 The introduction week has at least 1 case.
-<span class="arithmatex">\(q_p\)</span> is the share of weeks with a case among the weeks that follow 9 weeks with none, over the place and its siblings (the zones of its province, or the provinces of the country), in weeks up to that 95%-reported week.
+<span class="arithmatex">\(q_p\)</span> is the share of weeks with a case among the weeks that follow 9 weeks with none, over the place and its siblings (the zones of its province, or the provinces of the country), in weeks up to the start week of <code>randomwalk</code>.
 It is estimated at each origin from the counts reported then.
 National is the sum of the provinces, sample by sample.</p>
-<p><span class="arithmatex">\(\sigma_p\)</span> is the sample standard deviation of the weekly changes of <span class="arithmatex">\(\log\{1 + Y_{p,o}(w)\}\)</span> over 9 weeks, so up to 8 changes.
-For <code>randomwalk</code> they end at the week holding the cut-off, and for <code>randomwalknowcast</code> at the latest week at least 95% reported under the delay.
+<p><span class="arithmatex">\(\sigma_p\)</span> is the sample standard deviation of the weekly changes of <span class="arithmatex">\(\log\{1 + Y_{p,o}(w)\}\)</span> over the 9 weeks ending at the start week of <code>randomwalk</code>, so up to 8 changes.
 With fewer than 2 changes it is 0.
 Both models use reported counts for <span class="arithmatex">\(\sigma_p\)</span>.</p>
 <h2 id="random-walk">Random walk<a class="headerlink" href="#random-walk" title="Permanent link">&para;</a></h2>
-<p><code>randomwalk</code> makes no nowcast and uses no delay, so it forecasts the counts as reported.
-Its start week <span class="arithmatex">\(w_0\)</span> is the week holding the cut-off, for every place, and <span class="arithmatex">\(x_i = Y_{p,o}(w_0)\)</span> for every sample.
-Weeks with data are the reported counts.
-It needs no release snapshots, so it forecasts from every release.
-A place with no case in its latest weeks has spread 0, so <code>randomwalk</code> keeps it at 0.</p>
+<p><code>randomwalk</code> makes no nowcast.
+Its start week <span class="arithmatex">\(w_0\)</span> is the latest week with</p>
+<div class="arithmatex">\[
+\pi_p(w) = \frac{1}{7} \sum_{t \in w,\ t \le c_o} \frac{1}{G_p(c_o - t)} \ge 0.95,
+\]</div>
+<p>the estimated share of the week's final count reported, under the delay above.
+If any place has no week with <span class="arithmatex">\(\pi_p(w) \ge 0.95\)</span>, <code>randomwalk</code> raises (<code>NoCompleteWeek</code>) and gives no forecast for the vintage, with nothing in its place.
+<span class="arithmatex">\(x_i = Y_{p,o}(w_0)\)</span> for every sample.
+Weeks up to <span class="arithmatex">\(w_0\)</span> are the reported counts.
+Later weeks with data are walk draws, floored at the reported count.</p>
 <h2 id="random-walk-on-a-nowcast">Random walk on a nowcast<a class="headerlink" href="#random-walk-on-a-nowcast" title="Permanent link">&para;</a></h2>
 <p><code>randomwalknowcast</code> starts each sample from its own nowcast <span class="arithmatex">\(X_{p,i}\)</span> of the latest week with all 7 days on or before <span class="arithmatex">\(c_o\)</span>, so <span class="arithmatex">\(x_i = X_{p,i}(w_0)\)</span>.
 Weeks up to <span class="arithmatex">\(w_0\)</span> are the nowcast draws.
@@ -2325,7 +2338,7 @@ If the week after <span class="arithmatex">\(w_0\)</span> holds <span class="ari
 Its value is its nowcast draw plus Poisson<span class="arithmatex">\((n \lambda_i / 7)\)</span>, with <span class="arithmatex">\(\lambda_i\)</span> the walk rate of that week.
 Later weeks are walk draws.</p>
 <h2 id="health-zones">Health zones<a class="headerlink" href="#health-zones" title="Permanent link">&para;</a></h2>
-<p><code>randomwalk</code> runs on each zone's reported counts, and <code>randomwalknowcast</code> on each zone's own release snapshots, with the same code as for provinces.
+<p><code>randomwalk</code> and <code>randomwalknowcast</code> run on each zone's own release snapshots with the same code as for provinces.
 The hierarchy is zone, province, country, and each zone takes its delay, size and walk spread by the rules <a href="#own-or-pooled-estimates">above</a>.
 Zone samples sum to their province's samples, sample by sample and week by week.
 Province sample <span class="arithmatex">\(Y^{(k)}(w)\)</span> is apportioned over the zones in proportion to the zone model's own sample <span class="arithmatex">\(x^{(k)}_z(w)\)</span> of the same id and week:</p>
