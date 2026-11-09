@@ -21,6 +21,9 @@ while a change to the model code or settings refits every origin.
 
 `plan` lists the fits the store lacks, `fit` makes one, and `load`
 writes the stored forecasts where the backtest and the docs read them.
+A fit with reporting curves (the renewal models) stores them too, so it
+is scored on its own counts as reported by releases after its origin
+without depending on them (`forecasters.reporting`).
 Where the store has no fit for the current key, `load` uses the newest
 stored fit of that pair and says so (`StoreStatus`).
 `command` runs `bdbvhubrenewal fit-store`.
