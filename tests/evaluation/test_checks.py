@@ -89,7 +89,9 @@ def test_check_summary_averages_by_place_type_and_flag() -> None:
         {
             "model": "rw",
             "origin": ORIGIN,
+            "truth_vintage": "2026-11-08",
             "location": ["wamba", "wamba", "rungu"],
+            "target_end_date": ["2026-10-31", "2026-11-07", "2026-11-07"],
             "scale": "zones",
             **dict.fromkeys(SCORE_COLUMNS, 0.0),
             "wis": [4.0, 2.0, 9.0],

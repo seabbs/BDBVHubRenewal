@@ -136,7 +136,10 @@ def flags(counts: pd.DataFrame, quantiles: pd.DataFrame) -> pd.DataFrame:
 
 
 def check_summary(
-    scores: pd.DataFrame, types: pd.DataFrame, flagged: pd.DataFrame
+    scores: pd.DataFrame,
+    types: pd.DataFrame,
+    flagged: pd.DataFrame,
+    baseline: str = "randomwalk",
 ) -> pd.DataFrame:
     """Average the scores by scale, model and place type, and by flag.
 
@@ -149,27 +152,48 @@ def check_summary(
         From `place_types`.
     flagged : pandas.DataFrame
         From `flags`.
+    baseline : str
+        The model relative WIS divides by. Its WIS is taken on the same
+        scored weeks, whatever its own flag there.
 
     Returns
     -------
     pandas.DataFrame
         Columns `scale`, `split` (`place type` or `flag`), `group`,
-        `model`, `n` and the mean of each metric.
+        `model`, `n`, the mean of each metric and `relative WIS`.
     """
     keyed = scores.merge(types, on=["origin", "location"], how="left").merge(
         flagged, on=["model", "origin", "location"], how="left"
     )
-    parts = [
-        summarise_scores(keyed, by=("scale", col, "model"))
-        .rename(columns={col: "group"})
-        .assign(split=split)
-        for split, col in (("place type", "place_type"), ("flag", "flag"))
-    ]
+    week = ["origin", "truth_vintage", "location", "target_end_date"]
+    base = scores.loc[scores["model"] == baseline, [*week, "wis"]]
+    keyed = keyed.merge(
+        base.rename(columns={"wis": "base_wis"}), on=week, how="left"
+    )
+    parts = []
+    for split, col in (("place type", "place_type"), ("flag", "flag")):
+        by = ["scale", col, "model"]
+        sums = keyed.groupby(by)[["wis", "base_wis"]].sum()
+        rel = (sums["wis"] / sums["base_wis"]).rename("relative WIS")
+        parts.append(
+            summarise_scores(keyed, by=by)
+            .join(rel, on=by)
+            .rename(columns={col: "group"})
+            .assign(split=split)
+        )
     out = pd.concat(parts, ignore_index=True).rename(columns=_METRICS)
     order = {g: i for i, g in enumerate(("place type", "flag", *_ORDER))}
     out = out.sort_values(
         ["scale", "split", "group", "model"],
         key=lambda c: c.map(order) if c.name in ("split", "group") else c,
     )
-    cols = ["scale", "split", "group", "model", "n", *_METRICS.values()]
+    cols = [
+        "scale",
+        "split",
+        "group",
+        "model",
+        "n",
+        "relative WIS",
+        *_METRICS.values(),
+    ]
     return out[cols].reset_index(drop=True)
