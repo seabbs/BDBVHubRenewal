@@ -163,7 +163,7 @@ jobs:
             echo "::error::digest printed nothing; refusing to key the cache"
             exit 1
           fi
-          echo "key=backtest-prof-$CELL-$digest" >> "$GITHUB_OUTPUT"
+          echo "key=backtest-prof2-$CELL-$digest" >> "$GITHUB_OUTPUT"
       # Restore and save are separate steps, so outputs are saved as soon
       # as the run ends and a hit saves nothing.
       - name: Restore the outputs
