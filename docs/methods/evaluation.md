@@ -139,6 +139,19 @@ Zones are scored on the reported target as for [real releases](#real-releases), 
 Relative WIS is against `randomwalk` in the same form.
 On the Nowcast page the fitted models' zone samples at the latest release are those of their stored fits, where they have one.
 
+## Checks
+
+The scores on the reported target are also averaged by the type of place and by a plausibility flag of each forecast, both decided from the counts reported at the origin.
+Week $w$ is the latest week ending on or before the origin, and $c(t)$ the count reported then for the week ending $t$.
+A place is silent if no case is reported in the `RECENT_WEEKS` weeks to $w$, the random walk's walk window (`walk_weeks`), small if no week has more than 5 cases, and larger otherwise.
+The flag is set from the forecast of the reference week $w + 1$, with median $q_{50}$ and 95% quantile $q_{95}$.
+The level is $\ell = \max\{(c(w - 3) + c(w - 2)) / 2,\ c(w - 1)\}$ and the recent maximum is $r = \max(1, \max_{w - 4 \le t \le w} c(t))$.
+A forecast collapses if $\ell \ge 3$ and $q_{50} \le \ell / 3$.
+It blows up if $q_{50} > 3r$ and $q_{50} - r \ge 5$, or $q_{95} > 10r$ and $q_{95} - r \ge 20$.
+The thresholds pick out forecasts far from every recent count.
+A forecast with neither has no flag.
+Every scored week of a forecast takes the forecast's place type and flag, and the scores are averaged over scored weeks.
+
 ## Comparison with hub forecasts
 
 For each hub reference date, our unfitted models forecast from the latest real vintage serving the round.
