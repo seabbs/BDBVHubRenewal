@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 import yaml
 
+from bdbvhubrenewal.data.zones import province_of
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, merge_by_model
 from bdbvhubrenewal.evaluation.heldout import (
     HeldOutError,
@@ -222,16 +223,24 @@ def test_heldout_without_fits_reads_committed_forecasts(
         seeded.assign(model="slowfit", chosen_model="slowfit").to_csv(
             out / "heldout-forecasts.csv.gz", index=False
         )
-        # Its stored delay, which reports every case on its onset day.
+        # Its stored delay, which reports every case on its onset day: a
+        # row per province and the shared one, as the renewal fits write.
+        places = set(seeded["location"]) - {"CD"}
+        provinces = [*sorted({province_of(p) for p in places}), "shared"]
         pd.DataFrame(
-            {
-                "model": "slowfit",
-                "vintage": ["2026-10-17"] * 2 + ["2026-10-24"] * 2,
-                "location": "pooled",
-                "x": [0, 1] * 2,
-                "quantity": "reported_share",
-                "q50": 1.0,
-            }
+            [
+                {
+                    "model": "slowfit",
+                    "vintage": vintage,
+                    "location": loc,
+                    "x": x,
+                    "quantity": "reported_share",
+                    "q50": 1.0,
+                }
+                for vintage in ("2026-10-17", "2026-10-24")
+                for loc in provinces
+                for x in (0, 1)
+            ]
         ).to_csv(out / DELAY_SUMMARY_FILE, index=False)
         scores = run_heldout(
             target,
