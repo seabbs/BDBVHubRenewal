@@ -36,9 +36,9 @@ estimate where a place has at least 10 cases a week, and otherwise the
 pooled estimate of the nearest parent that does (`pooling`).
 A place with no case in the latest `walk_weeks` weeks is silent. It is
 exactly 0 until its first introduction, which comes each week with its
-pooled probability times the share of the week not yet reported
-(`introductions`), and then walks from a count drawn from Poisson(1) given
-at least 1.
+pooled probability times the share of the week not yet reported, and then
+walks from a count drawn from Poisson(1) given at least 1
+(`introductions.silent_trajectories`).
 National is the sum of provinces by sample.
 Each model raises if the task has no snapshots or no pair of releases
 within the delay window.
@@ -70,11 +70,9 @@ from bdbvhubrenewal.forecasters.chain import (
     build_origin,
     delay_summary,
 )
-from bdbvhubrenewal.forecasters.introductions import (
-    introduction_probability,
-    walk_with_introductions,
-)
+from bdbvhubrenewal.forecasters.introductions import silent_trajectories
 from bdbvhubrenewal.forecasters.obs import sample_count
+from bdbvhubrenewal.forecasters.walk import random_walk
 
 __all__ = ["RandomWalk", "RandomWalkNowcast"]
 
@@ -96,6 +94,36 @@ def _label(origin: Origin, i: int) -> str:
     n = len(origin.snap.locations)
     kind = "own" if i < n else "pooled"
     return f"{kind}:{origin.snap.locations[i % n]}"
+
+
+def _walks(
+    key: jax.Array, x0: np.ndarray, origin: Origin, start: np.ndarray, h: int
+) -> np.ndarray:
+    """Return `h` weeks of walk counts after `start` from `x0` `[L, S]`.
+
+    Silent places draw their introductions (`silent_trajectories`), and
+    the others walk from `x0`.
+    """
+    k_walk, k_silent = jax.random.split(key)
+    keys = jax.random.split(k_walk, x0.shape[0])
+    _, drawn = jax.vmap(lambda k, x, s: random_walk(k, x, s, h))(
+        keys,
+        jnp.asarray(x0, jnp.float32),
+        jnp.asarray(origin.sigma, jnp.float32),
+    )
+    silent = silent_trajectories(
+        k_silent,
+        origin.silent,
+        origin.intro,
+        1.0 - np.clip(origin.complete, 0.0, 1.0),
+        start,
+        origin.sigma,
+        h,
+        x0.shape[1],
+    )
+    return np.where(
+        origin.silent[:, None, None], silent, np.asarray(drawn, np.float64)
+    )
 
 
 def _delay_label(origin: Origin, i: int) -> str:
@@ -354,14 +382,8 @@ class RandomWalk:
             )
         start = origin.start
         x0 = origin.reported[np.arange(n_loc), start]
-        y = walk_with_introductions(
-            _key(task),
-            np.repeat(x0[:, None], n, axis=1),
-            origin.sigma,
-            origin.silent,
-            introduction_probability(
-                origin.intro, origin.complete, start, n_all
-            ),
+        y = _walks(
+            _key(task), np.repeat(x0[:, None], n, axis=1), origin, start, n_all
         )
         values = np.zeros((n, n_loc, n_all))
         for loc in range(n_loc):
@@ -493,13 +515,7 @@ class RandomWalkNowcast(RandomWalk):
             jax.random.poisson(key_count, jnp.asarray(rate, jnp.float32)),
             dtype=np.float64,
         )  # [L, S, W]
-        y = walk_with_introductions(
-            key_walk,
-            rate[:, :, cw],
-            origin.sigma,
-            origin.silent,
-            introduction_probability(origin.intro, origin.complete, w0, n_all),
-        )
+        y = _walks(key_walk, rate[:, :, cw], origin, w0, n_all)
         values = np.zeros((n, n_loc, n_all))
         for loc in range(n_loc):
             s = int(w0[loc])

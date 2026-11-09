@@ -231,17 +231,18 @@ def test_places_with_no_falls_of_their_own_have_no_removals(
 def test_a_silent_place_waits_for_its_first_introduction() -> None:
     import jax
 
-    from bdbvhubrenewal.forecasters.introductions import (
-        walk_with_introductions,
-    )
+    from bdbvhubrenewal.forecasters.introductions import silent_trajectories
 
-    silent = np.array([False, True, True])
-    intro = np.array([[0.5] * 4, [0.0] * 4, [0.3] * 4])
-    x0 = np.full((3, 4000), 20.0)
-    sigma = np.array([0.0, 0.2, 0.0])
-    y = walk_with_introductions(jax.random.key(1), x0, sigma, silent, intro)
-    # A place with cases walks from its start.
-    assert y[0].mean() == pytest.approx(20.0, rel=0.05)
+    silent = np.array([False, True, True, True])
+    q = np.array([0.5, 0.0, 0.3, 0.3])
+    unreported = np.array([[0.0, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.5]])
+    start = np.array([1, 1, 1, 0])
+    sigma = np.array([0.0, 0.2, 0.0, 0.0])
+    y = silent_trajectories(
+        jax.random.key(1), silent, q, unreported, start, sigma, 4, 4000
+    )
+    # A place that is not silent has no draws.
+    assert (y[0] == 0).all()
     # No introduction can come with a probability of 0, and the path is
     # exactly 0 without one.
     assert (y[1] == 0).all()
@@ -250,6 +251,8 @@ def test_a_silent_place_waits_for_its_first_introduction() -> None:
     started = (np.cumsum(y[2] > 0, axis=1) > 0).mean(axis=0)
     np.testing.assert_allclose(started, 1 - 0.7 ** np.arange(1, 5), atol=0.03)
     assert (y[2, :, 0] > 0).mean() == pytest.approx(0.3, abs=0.03)
+    # A week half reported halves the chance of an introduction in it.
+    assert (y[3, :, 0] > 0).mean() == pytest.approx(0.15, abs=0.03)
 
 
 def test_the_filter_weights_a_week_by_how_complete_it_is() -> None:
