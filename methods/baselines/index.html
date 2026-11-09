@@ -57,7 +57,7 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css">
+      <link rel="stylesheet" href="../../stylesheets/extra.css?v=1c6923d2">
     
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
@@ -2161,7 +2161,7 @@ Both run at province and zone level (<a href="#health-zones">Health zones</a>), 
     OBS["Observation model&lt;br/&gt;by weeks back k&lt;br/&gt;size φ&lt;sub&gt;p,k&lt;/sub&gt;, removal b&lt;sub&gt;p,k&lt;/sub&gt;"]
     X["Nowcast draw X&lt;sub&gt;p,i&lt;/sub&gt;(w)&lt;br/&gt;max(0, Y&lt;sub&gt;p,o&lt;/sub&gt; + A − B)&lt;br/&gt;A ~ NB(μ&lt;sub&gt;p&lt;/sub&gt; − Y&lt;sub&gt;p,o&lt;/sub&gt;, φ&lt;sub&gt;p,k&lt;/sub&gt;)&lt;br/&gt;B ~ Poisson(b&lt;sub&gt;p,k&lt;/sub&gt; Y&lt;sub&gt;p,o&lt;/sub&gt;)"]
     SIG["Walk spread σ&lt;sub&gt;p&lt;/sub&gt;&lt;br/&gt;changes in log(1 + Y&lt;sub&gt;p,o&lt;/sub&gt;)"]
-    W["Walk on log(1 + λ&lt;sub&gt;i&lt;/sub&gt;)&lt;br/&gt;from X&lt;sub&gt;p,i&lt;/sub&gt;(w&lt;sub&gt;0&lt;/sub&gt;) in sample i&lt;br/&gt;silent places at 1 case a week&lt;br/&gt;from their first introduction&lt;br/&gt;Poisson counts"]
+    W["Local level on log(1 + λ&lt;sub&gt;i&lt;/sub&gt;)&lt;br/&gt;from X&lt;sub&gt;p,i&lt;/sub&gt;(w&lt;sub&gt;0&lt;/sub&gt;), updated by&lt;br/&gt;the reported counts after w&lt;sub&gt;0&lt;/sub&gt;&lt;br/&gt;silent places 0&lt;br/&gt;until an introduction&lt;br/&gt;Poisson counts"]
     NAT["National = sum of provinces&lt;br/&gt;sample by sample"]
 
     SNAP --&gt; PAIR
@@ -2187,7 +2187,7 @@ Both run at province and zone level (<a href="#health-zones">Health zones</a>), 
     W0["Start week w&lt;sub&gt;0&lt;/sub&gt;&lt;br/&gt;latest with π&lt;sub&gt;p&lt;/sub&gt;(w) ≥ 0.95"]
     Y["Reported Y&lt;sub&gt;p,o&lt;/sub&gt;(w&lt;sub&gt;0&lt;/sub&gt;)"]
     SIG["Walk spread σ&lt;sub&gt;p&lt;/sub&gt;&lt;br/&gt;changes in log(1 + Y&lt;sub&gt;p,o&lt;/sub&gt;)"]
-    W["Walk on log(1 + λ&lt;sub&gt;i&lt;/sub&gt;)&lt;br/&gt;from Y&lt;sub&gt;p,o&lt;/sub&gt;(w&lt;sub&gt;0&lt;/sub&gt;)&lt;br/&gt;silent places at 1 case a week&lt;br/&gt;from their first introduction&lt;br/&gt;Poisson counts&lt;br/&gt;floored at Y&lt;sub&gt;p,o&lt;/sub&gt;(w)&lt;br/&gt;in weeks with data"]
+    W["Walk on log(1 + λ&lt;sub&gt;i&lt;/sub&gt;)&lt;br/&gt;from Y&lt;sub&gt;p,o&lt;/sub&gt;(w&lt;sub&gt;0&lt;/sub&gt;)&lt;br/&gt;silent places 0&lt;br/&gt;until an introduction&lt;br/&gt;Poisson counts&lt;br/&gt;floored at Y&lt;sub&gt;p,o&lt;/sub&gt;(w)&lt;br/&gt;in weeks with data"]
     NAT["National = sum of provinces&lt;br/&gt;sample by sample"]
 
     SNAP --&gt; PAIR
@@ -2282,7 +2282,7 @@ b_{p,k} = \frac{\sum B_{p,r}(w)}{\sum Y_{p,r}(w)},
 A week with <span class="arithmatex">\(\widehat{\text{rem}} = 0\)</span> says nothing about <span class="arithmatex">\(\phi\)</span>, so it is left out of that fit.
 The weeks in the fit of <span class="arithmatex">\(\phi_{p,k}\)</span> are the errors at <span class="arithmatex">\(k\)</span>.
 <span class="arithmatex">\(b_{p,k}\)</span> is the Poisson maximum likelihood estimate of the removals.
-Where the estimate chosen by the <a href="#own-or-pooled-estimates">pooling rule</a> has fewer than 3 errors at <span class="arithmatex">\(k\)</span>, <span class="arithmatex">\(\phi_{p,k} = 1000\)</span>, the Poisson end of the range.</p>
+Where the estimate chosen by the <a href="#own-or-pooled-estimates">pooling rule</a> has fewer than 3 errors at <span class="arithmatex">\(k\)</span>, <span class="arithmatex">\(\phi_{p,k} \approx 2.2\)</span>, the median of epinowcast's prior <span class="arithmatex">\(1 / \sqrt{\phi} \sim \mathcal{N}^+(0, 1)\)</span>.</p>
 <h2 id="own-or-pooled-estimates">Own or pooled estimates<a class="headerlink" href="#own-or-pooled-estimates" title="Permanent link">&para;</a></h2>
 <p>The delay <span class="arithmatex">\(g_p(x)\)</span> is own or parent by age.
 A place uses its own <span class="arithmatex">\(g_p(x)\)</span> when its denominator <span class="arithmatex">\(\sum N_{p,r}(t)\)</span> at age <span class="arithmatex">\(x\)</span>, summed over the pairs, is at least 10 cases.
@@ -2308,12 +2308,12 @@ For <span class="arithmatex">\(h \ge 1\)</span>,</p>
 <div class="arithmatex">\[
 \tilde y_i(w_0 + h) \sim \text{Poisson}\big(\lambda_i(w_0 + h)\big).
 \]</div>
-<p>Steps are summed within a sample, so each sample is one trajectory.</p>
+<p>Steps are summed within a sample, so each sample is one trajectory.
+In <code>randomwalknowcast</code> the level of the weeks after <span class="arithmatex">\(w_0\)</span> is drawn back from the cut-off week given the filter, so these weeks and the forecast join one trajectory.</p>
 <p>A place with no case reported in the 9 weeks up to the cut-off week is silent.
-A silent place is 0 until its first introduction, which comes in each week with probability <span class="arithmatex">\(q_p\)</span>.
-In both models this holds from the week after the start week of <code>randomwalk</code>, so <code>randomwalknowcast</code> does not nowcast a silent place's recent weeks.
-A silent place's walk has spread 0, so from its introduction its rate stays at 1 case a week.
-The introduction week has at least 1 case.
+A silent place is exactly 0 until its first introduction, with no walk noise around 0 and no nowcast of its zero weeks.
+After its latest complete week, an introduction comes in each week with probability <span class="arithmatex">\(q_p\)</span> times the share of the week not yet reported, and <span class="arithmatex">\(q_p\)</span> in weeks without data.
+The introduction brings a count drawn from Poisson(1) given at least 1, and the place walks from it with spread <span class="arithmatex">\(\sigma_p\)</span>.
 <span class="arithmatex">\(q_p\)</span> is the share of weeks with a case among the weeks that follow 9 weeks with none, over the place and its siblings (the zones of its province, or the provinces of the country), in weeks up to the start week of <code>randomwalk</code>.
 It is estimated at each origin from the counts reported then.
 National is the sum of the provinces, sample by sample.</p>
@@ -2332,11 +2332,13 @@ If any place has no week with <span class="arithmatex">\(\pi_p(w) \ge 0.95\)</sp
 Weeks up to <span class="arithmatex">\(w_0\)</span> are the reported counts.
 Later weeks with data are walk draws, floored at the reported count.</p>
 <h2 id="random-walk-on-a-nowcast">Random walk on a nowcast<a class="headerlink" href="#random-walk-on-a-nowcast" title="Permanent link">&para;</a></h2>
-<p><code>randomwalknowcast</code> starts each sample from its own nowcast <span class="arithmatex">\(X_{p,i}\)</span> of the latest week with all 7 days on or before <span class="arithmatex">\(c_o\)</span>, so <span class="arithmatex">\(x_i = X_{p,i}(w_0)\)</span>.
+<p><code>randomwalknowcast</code> runs the walk as a local level on <span class="arithmatex">\(\log(1 + y)\)</span>.
+It starts from the nowcast <span class="arithmatex">\(X_{p,i}(w_0)\)</span> of the latest full week <span class="arithmatex">\(w_0\)</span> that is at least 5% reported and has at least 5 cases, else from the first week.
 Weeks up to <span class="arithmatex">\(w_0\)</span> are the nowcast draws.
-If the week after <span class="arithmatex">\(w_0\)</span> holds <span class="arithmatex">\(c_o\)</span> and is partial, <span class="arithmatex">\(n\)</span> days of it have no data.
-Its value is its nowcast draw plus Poisson<span class="arithmatex">\((n \lambda_i / 7)\)</span>, with <span class="arithmatex">\(\lambda_i\)</span> the walk rate of that week.
-Later weeks are walk draws.</p>
+Each later week <span class="arithmatex">\(u\)</span> up to the week holding <span class="arithmatex">\(c_o\)</span> is not nowcast.
+Its reported count updates the level as an observation <span class="arithmatex">\(\log(1 + Y_{p,o}(u) / \pi_p(u))\)</span> with variance <span class="arithmatex">\(1 / (\pi_p(u) + Y_{p,o}(u))\)</span>, the delta-method variance of a Poisson final count thinned to the share reported, after a step of variance <span class="arithmatex">\(\sigma_p^2\)</span> (a scalar Kalman filter).
+The week's value is a Poisson draw from a level drawn from the filter, floored at the count reported.
+The walk forecasts from the level filtered at the week holding <span class="arithmatex">\(c_o\)</span>.</p>
 <h2 id="health-zones">Health zones<a class="headerlink" href="#health-zones" title="Permanent link">&para;</a></h2>
 <p><code>randomwalk</code> and <code>randomwalknowcast</code> run on each zone's own release snapshots with the same code as for provinces.
 The hierarchy is zone, province, country, and each zone takes its delay, size and walk spread by the rules <a href="#own-or-pooled-estimates">above</a>.
@@ -2531,27 +2533,31 @@ The walk has no drift, and its spread comes from 8 weekly changes, which for sma
     
       <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
-        <script src="../../javascripts/mathjax.js"></script>
+        <script src="../../javascripts/mathjax.js?v=bced49b5"></script>
       
-        <script src="../../javascripts/toggles.js"></script>
+        <script src="../../javascripts/toggles.js?v=1d345724"></script>
       
-        <script src="../../javascripts/zoom.js"></script>
+        <script src="../../javascripts/placemap.js?v=03fe1366"></script>
       
-        <script src="../../javascripts/summarise.js"></script>
+        <script src="../../javascripts/zoom.js?v=4e0c610c"></script>
       
-        <script src="../../javascripts/energy.js"></script>
+        <script src="../../javascripts/summarise.js?v=ee637051"></script>
       
-        <script src="../../javascripts/tablefilter.js"></script>
+        <script src="../../javascripts/energy.js?v=11968274"></script>
       
-        <script src="../../javascripts/explorer.js"></script>
+        <script src="../../javascripts/tablefilter.js?v=94394744"></script>
       
-        <script src="../../javascripts/scorechart.js"></script>
+        <script src="../../javascripts/explorer.js?v=59bb502e"></script>
       
-        <script src="../../javascripts/scoresummary.js"></script>
+        <script src="../../javascripts/scorechart.js?v=67b20eb8"></script>
       
-        <script src="../../javascripts/nowcastchart.js"></script>
+        <script src="../../javascripts/scoresummary.js?v=24bebb78"></script>
       
-        <script src="../../javascripts/zonereview.js"></script>
+        <script src="../../javascripts/checkschart.js?v=44dced10"></script>
+      
+        <script src="../../javascripts/nowcastchart.js?v=e5f9eb42"></script>
+      
+        <script src="../../javascripts/zonereview.js?v=bdf9bd28"></script>
       
         <script src="https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
       

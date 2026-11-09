@@ -57,7 +57,7 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css">
+      <link rel="stylesheet" href="../../stylesheets/extra.css?v=1c6923d2">
     
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
@@ -814,6 +814,17 @@
     <span class="md-ellipsis">
       
         Health zones
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Checks
       
     </span>
   </a>
@@ -2095,6 +2106,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Checks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#comparison-with-hub-forecasts" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2169,8 +2191,7 @@ We use the fair form over <span class="arithmatex">\(m\)</span> samples,</p>
 <p>The energy score on the log scale is the energy score of <span class="arithmatex">\(\log(1 + \mathbf{y})\)</span> against <span class="arithmatex">\(\log(1 + \mathbf{X}_i)\)</span>, never the log of the score.
 Relative energy scores are ratios of means against <code>randomwalk</code> over the origins and releases both have, and <span class="arithmatex">\(n\)</span> counts those.
 The score rewards a joint pattern across places only where draws are joint.
-<code>renewal</code> and <code>renewalbvd</code> draws are joint across provinces, one posterior draw per sample index.
-<code>renewalsp</code> fits each province on its own, so its draws are independent across provinces.
+The renewal models' draws are joint across provinces, one posterior draw per sample index.
 Zones split each province draw, so zones are joint within a province for every renewal model.
 <code>randomwalk</code> and <code>randomwalknowcast</code> draw each place independently.
 Hub teams' samples are joint across weeks within a place only, as the hub's sample format sets, so pairing their indices across places scores them as independent across places.</p>
@@ -2222,24 +2243,26 @@ Hub teams' samples are joint across weeks within a place only, as the hub's samp
 The random walk models forecast from the releases up to the origin only.
 The renewal models' stored forecasts from the origin are scored with them.
 So are hub teams' forecasts for a round, at the latest release serving it.
-An origin with no pair of releases whose gap is within the delay window, <span class="arithmatex">\(D = 42\)</span> days, has no delay factor and no forecast.
-It is listed with no forecasts and nothing replaces it.
+A model that cannot forecast from an origin, such as a random walk model with no pair of releases within the delay window, <span class="arithmatex">\(D = 42\)</span> days, is listed with no forecasts there.
 Two targets are scored.</p>
 <p><strong>Reported.</strong> The count each later release <span class="arithmatex">\(o'\)</span> shows for every forecast week it reports.
-Every model forecasts the final count <span class="arithmatex">\(X\)</span> of week <span class="arithmatex">\(w\)</span>.
-Day <span class="arithmatex">\(t\)</span> is <span class="arithmatex">\(a = c - t\)</span> days old at a cut-off <span class="arithmatex">\(c\)</span>, and the share of its final count reported then is <span class="arithmatex">\(\pi(a) = 1 / G(a)\)</span>, with <span class="arithmatex">\(G(a)\)</span> the growth from age <span class="arithmatex">\(a\)</span> to <span class="arithmatex">\(D\)</span> under the daily delay of the origin (<a href="../baselines/#delay">Baseline models</a>).
+<code>randomwalk</code> is scored on its samples as they are, with no delay.
+Every other model forecasts the final count <span class="arithmatex">\(X\)</span> of week <span class="arithmatex">\(w\)</span> and is mapped to what <span class="arithmatex">\(o'\)</span> shows by its own modelled delay.
+Day <span class="arithmatex">\(t\)</span> is <span class="arithmatex">\(a = c - t\)</span> days old at a cut-off <span class="arithmatex">\(c\)</span>, and <span class="arithmatex">\(\pi(a)\)</span> is the share of its final count the model expects reported by then.
+For <code>randomwalknowcast</code> and <code>pprandomwalknowcast</code>, <span class="arithmatex">\(\pi(a) = 1 / G(a)\)</span> under the daily delay each fits at the origin (<a href="../baselines/#delay">Baseline models</a>).
+For the renewal models it is the posterior median of the onset-to-report delay each fit stores, the pooled one for every place or each province's own.
+Each place is mapped by the model's delay at that place, and a zone with none by its province's.
+Where a model has no delay for the country, as <code>renewalsp</code>, the country is the sum of its mapped provinces.
 Days after the cut-off have <span class="arithmatex">\(\pi = 0\)</span>, and a week's share <span class="arithmatex">\(\pi_w\)</span> is the mean over its seven days.
 With <span class="arithmatex">\(R_o\)</span> the count reported at the origin, the count outstanding there, <span class="arithmatex">\(X - R_o\)</span>, is thinned binomially, so each sample becomes a draw of the count reported at <span class="arithmatex">\(o'\)</span>,</p>
 <div class="arithmatex">\[
 R_o + \text{Binomial}(X - R_o, q), \qquad q = \frac{\pi_w(c_{o'}) - \pi_w(c_o)}{1 - \pi_w(c_o)},
 \]</div>
 <p>with the sign carried when <span class="arithmatex">\(X &lt; R_o\)</span>, and a week fully reported at the origin has <span class="arithmatex">\(q = 1\)</span>.
-Only the delay fitted at the origin is used.
-Its mean is the growth over the gap to <span class="arithmatex">\(o'\)</span> for <code>randomwalknowcast</code>, and the floor maps to itself.</p>
+A model with no modelled delay, such as a hub team, is scored on complete weeks only.</p>
 <p><strong>Complete weeks.</strong> The count the latest release shows for the weeks it reports in full.
 A week is complete when it is at least 4 weeks back from the week holding the latest release's cut-off and grew by less than 2% since the release before.</p>
-<p>The floor is the count reported at the origin, scored on both targets as a forecast with no spread.
-Scores are WIS, 50% and 90% coverage and bias, by model, origin, weeks back from the origin's week and place.
+<p>Scores are WIS, 50% and 90% coverage and bias, by model, origin, weeks back from the origin's week and place.
 Relative WIS is against <code>randomwalk</code> on the forecasts both made, for national and the provinces pooled, over all origins and by origin, and by origin and place.
 Every table counts its forecasts, <span class="arithmatex">\(n\)</span>, so a model with fewer forecasts was scored on fewer weeks or places.
 The run stops if an origin has no release snapshots or two models run here give identical samples.</p>
@@ -2271,11 +2294,22 @@ Each real vintage before the latest is forecast, and origins with no pair of rel
 Zones are scored on the reported target as for <a href="#real-releases">real releases</a>, with the zone delays fitted at the origin, so a zone count is never scored against a count still being reported.
 Relative WIS is against <code>randomwalk</code> in the same form.
 On the Nowcast page the fitted models' zone samples at the latest release are those of their stored fits, where they have one.</p>
+<h2 id="checks">Checks<a class="headerlink" href="#checks" title="Permanent link">&para;</a></h2>
+<p>The scores on the reported target are also averaged by the type of place and by a plausibility flag of each forecast, both decided from the counts reported at the origin.
+Week <span class="arithmatex">\(w\)</span> is the latest week ending on or before the origin, and <span class="arithmatex">\(c(t)\)</span> the count reported then for the week ending <span class="arithmatex">\(t\)</span>.
+A place is silent if no case is reported in the <code>RECENT_WEEKS</code> weeks to <span class="arithmatex">\(w\)</span>, the random walk's walk window (<code>walk_weeks</code>), small if no week has more than 5 cases, and larger otherwise.
+The flag is set from the forecast of the reference week <span class="arithmatex">\(w + 1\)</span>, with median <span class="arithmatex">\(q_{50}\)</span> and 95% quantile <span class="arithmatex">\(q_{95}\)</span>.
+The level is <span class="arithmatex">\(\ell = \max\{(c(w - 3) + c(w - 2)) / 2,\ c(w - 1)\}\)</span> and the recent maximum is <span class="arithmatex">\(r = \max(1, \max_{w - 4 \le t \le w} c(t))\)</span>.
+A forecast collapses if <span class="arithmatex">\(\ell \ge 3\)</span> and <span class="arithmatex">\(q_{50} \le \ell / 3\)</span>.
+It blows up if <span class="arithmatex">\(q_{50} &gt; 3r\)</span> and <span class="arithmatex">\(q_{50} - r \ge 5\)</span>, or <span class="arithmatex">\(q_{95} &gt; 10r\)</span> and <span class="arithmatex">\(q_{95} - r \ge 20\)</span>.
+The thresholds pick out forecasts far from every recent count.
+A forecast with neither has no flag.
+Every scored week of a forecast takes the forecast's place type and flag, and the scores are averaged over scored weeks.</p>
 <h2 id="comparison-with-hub-forecasts">Comparison with hub forecasts<a class="headerlink" href="#comparison-with-hub-forecasts" title="Permanent link">&para;</a></h2>
 <p>For each hub reference date, our unfitted models forecast from the latest real vintage serving the round.
 Fitted models use their stored backtest or held-out forecasts for the same round.
 Where we submitted to a round, our submitted file is a series of its own beside these main-build forecasts.
-Every model is scored on the weeks it forecast as for <a href="#real-releases">real releases</a>, from the vintage serving the round.
+Every model is scored on the complete weeks it forecast, as for <a href="#real-releases">real releases</a>, from the vintage serving the round, since hub teams have no modelled delay we can see.
 WIS is relative to <code>randomwalk</code> on the weeks both forecast, on the <a href="../../comparison/">comparison page</a>.
 A round is pending until a later real release exists.</p>
 <div class="footnote">
@@ -2413,27 +2447,31 @@ A round is pending until a later real release exists.</p>
     
       <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
-        <script src="../../javascripts/mathjax.js"></script>
+        <script src="../../javascripts/mathjax.js?v=bced49b5"></script>
       
-        <script src="../../javascripts/toggles.js"></script>
+        <script src="../../javascripts/toggles.js?v=1d345724"></script>
       
-        <script src="../../javascripts/zoom.js"></script>
+        <script src="../../javascripts/placemap.js?v=03fe1366"></script>
       
-        <script src="../../javascripts/summarise.js"></script>
+        <script src="../../javascripts/zoom.js?v=4e0c610c"></script>
       
-        <script src="../../javascripts/energy.js"></script>
+        <script src="../../javascripts/summarise.js?v=ee637051"></script>
       
-        <script src="../../javascripts/tablefilter.js"></script>
+        <script src="../../javascripts/energy.js?v=11968274"></script>
       
-        <script src="../../javascripts/explorer.js"></script>
+        <script src="../../javascripts/tablefilter.js?v=94394744"></script>
       
-        <script src="../../javascripts/scorechart.js"></script>
+        <script src="../../javascripts/explorer.js?v=59bb502e"></script>
       
-        <script src="../../javascripts/scoresummary.js"></script>
+        <script src="../../javascripts/scorechart.js?v=67b20eb8"></script>
       
-        <script src="../../javascripts/nowcastchart.js"></script>
+        <script src="../../javascripts/scoresummary.js?v=24bebb78"></script>
       
-        <script src="../../javascripts/zonereview.js"></script>
+        <script src="../../javascripts/checkschart.js?v=44dced10"></script>
+      
+        <script src="../../javascripts/nowcastchart.js?v=e5f9eb42"></script>
+      
+        <script src="../../javascripts/zonereview.js?v=bdf9bd28"></script>
       
         <script src="https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
       

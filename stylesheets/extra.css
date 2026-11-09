@@ -253,21 +253,6 @@
   text-align: left;
 }
 
-.zonereview-map {
-  margin: 1em 0;
-}
-
-.zonereview-zone {
-  stroke: var(--md-default-fg-color--lighter);
-  stroke-width: 0.5;
-  cursor: pointer;
-}
-
-.zonereview-zone:hover {
-  stroke: var(--md-default-fg-color);
-  stroke-width: 1.5;
-}
-
 .zonereview-up {
   background: rgba(214, 69, 65, 0.2);
 }
@@ -308,4 +293,70 @@ svg.zoomable {
   border: 1px solid var(--md-default-fg-color--lighter);
   border-radius: 4px;
   padding: 0.15em 0.6em;
+}
+
+/* Chart and place map, side by side where both fit, else stacked. */
+.chart-map {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(26rem, 100%), 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.chart-map > * {
+  min-width: 0;
+}
+
+.placemap svg {
+  width: 100%;
+  height: auto;
+}
+
+.placemap-zone {
+  stroke: var(--md-default-fg-color--lighter);
+  stroke-width: 0.5;
+  cursor: pointer;
+}
+
+.placemap-zone:hover {
+  stroke: var(--md-default-fg-color);
+  stroke-width: 1.5;
+}
+
+.placemap-picked {
+  fill: none;
+  stroke: var(--md-default-fg-color);
+  stroke-width: 4;
+  pointer-events: none;
+}
+
+.chart-map-info {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.2rem 0.8rem;
+  margin: 0.5rem 0;
+  font-size: 0.75rem;
+}
+
+.chart-map-info dt {
+  font-weight: 700;
+}
+
+.chart-map-info dd {
+  margin: 0;
+}
+
+/* Full screen: the chart alone on the page background. */
+.nowcastchart:fullscreen,
+.explorer:fullscreen,
+.scoresummary:fullscreen {
+  background: var(--md-default-bg-color);
+  overflow: auto;
+  padding: 1rem 2rem;
+}
+
+.map-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
 }
