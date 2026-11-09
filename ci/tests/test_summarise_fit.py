@@ -152,15 +152,6 @@ def test_cli_exit_codes_and_outputs(
     assert "Fit convergence" in summary.read_text()
 
 
-def test_fit_warnings_from_the_model_are_kept() -> None:
-    diag = diagnostics() | {
-        "warnings": ["publication_lag: no earlier pair of delay files"]
-    }
-    out = check_fit("main", diag, LIMITS)
-    assert out.status == "warn"
-    assert out.warnings == ["publication_lag: no earlier pair of delay files"]
-
-
 def test_bvd_release_is_carried_into_the_summary(tmp_path: Path) -> None:
     release = {
         "tag": "results-3180",

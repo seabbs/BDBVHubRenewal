@@ -544,7 +544,7 @@ def plot_downward_updates(
     target : pandas.DataFrame
         Real target rows.
     zones : pandas.DataFrame
-        Health zone counts, with columns `vintage`, `location`,
+        Health zone counts, with columns `vintage`, `cutoff`, `location`,
         `target_end_date` and `total`.
     mode : str
         `"light"` or `"dark"`.
@@ -841,7 +841,7 @@ def plot_renewal_delay(
     rows = summary.loc[summary["vintage"] == latest]
     models = list(dict.fromkeys(rows["model"]))
     places = list(dict.fromkeys(rows["location"]))
-    places.sort(key=lambda p: (p != "pooled", names.get(p, p)))
+    places.sort(key=lambda p: (p != "shared", names.get(p, p)))
     fig, axes = plt.subplots(
         len(places),
         2,
@@ -853,10 +853,8 @@ def plot_renewal_delay(
     for (left, right), place in zip(axes, places, strict=True):
         here = rows.loc[rows["location"] == place]
         fitted = list(dict.fromkeys(here["model"]))
-        where = NATIONAL if place == "pooled" else place
-        title = (
-            "All provinces" if place == "pooled" else names.get(place, place)
-        )
+        where = NATIONAL if place == "shared" else place
+        title = "Shared delay" if place == "shared" else names.get(place, place)
         left.set_title(f"{title}: {', '.join(fitted)}", fontsize=8, loc="left")
         base = baseline.loc[baseline["location"] == where]
         left.plot(

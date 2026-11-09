@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import datetime as dt
 import zlib
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
 import numpy as np
@@ -60,6 +60,9 @@ class ForecastTask:
         The round's reference date.
     kind : str
         `"real"` or `"simulated"`.
+    cutoff : str
+        The vintage's data cut-off, its last report day, ISO format
+        (`bdbvhubrenewal.data.releases.release_cutoff`).
     target : pandas.DataFrame
         The target table rows of this vintage only (columns as in
         `bdbvhubrenewal.data.tidy_target`), for the country and
@@ -82,15 +85,17 @@ class ForecastTask:
         its latent process (for spatial coupling) while dropping them from
         its likelihood. Only models with `supports_mask = True` are given
         a non-empty mask.
-    report_by : tuple of str
-        Later vintage dates, ISO format. A model may also return, for each
-        date $T$ here, the counts it predicts will be reported by $T$ for
-        the weeks ending on or before $T$, in rows with `as_of` $= T$.
-        Scoring compares them with vintage $T$ as reported.
+    report_by : mapping of str to str
+        Later vintage dates to their cut-offs, ISO format. A model may also
+        return, for each date $T$ here, the counts it predicts will be
+        reported by $T$'s cut-off for the weeks ending on or before $T$,
+        in rows with `as_of` $= T$. Scoring compares them with vintage
+        $T$ as reported.
     delay_history : pandas.DataFrame or None
         Delay rows of every vintage of this kind on or before `vintage`,
-        from which `data.releases.publication_lag_pmf` estimates the
-        report to publication lag. None if there are none.
+        from which `data.releases.release_pairs` gives the rows each file
+        kept of the last, which the renewal models learn their report to
+        publication lag from. None if there are none.
     target_history : pandas.DataFrame or None
         Target rows of every vintage of this kind on or before `vintage`,
         from which a model can learn how totals are revised. None if there
@@ -99,13 +104,14 @@ class ForecastTask:
         Daily onsets of every release of this kind on or before `vintage`:
         one row per release, place and onset day with any cases, with
         columns `vintage` (release date), `location`, `onset_date`,
-        `observed` and `imputed`. A release's data cut-off is its latest
-        onset day. None if there are none.
+        `observed`, `imputed` and `cutoff` (the release's cut-off). None
+        if there are none.
     """
 
     vintage: str
     reference_date: dt.date
     kind: str
+    cutoff: str
     target: pd.DataFrame
     delays: pd.DataFrame | None
     locations: tuple[str, ...]
@@ -113,7 +119,7 @@ class ForecastTask:
     n_samples: int = 100
     seed: int = 0
     mask: tuple[str, ...] = ()
-    report_by: tuple[str, ...] = ()
+    report_by: Mapping[str, str] = field(default_factory=dict)
     delay_history: pd.DataFrame | None = None
     target_history: pd.DataFrame | None = None
     daily_history: pd.DataFrame | None = None

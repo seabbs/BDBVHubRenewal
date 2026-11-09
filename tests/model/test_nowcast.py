@@ -12,8 +12,14 @@ from jax import random
 from numpyro.infer import Predictive
 
 from bdbvhubrenewal.model import MAIN, build_model, model_args
-from bdbvhubrenewal.model.model import forecast_trajectories
-from bdbvhubrenewal.model.observation import onset_expectations
+from bdbvhubrenewal.model.model import (
+    MAX_PUBLICATION_LAG,
+    forecast_trajectories,
+)
+from bdbvhubrenewal.model.observation import (
+    onset_expectations,
+    onset_expectations_by_place,
+)
 
 
 def prior_latent(model, data, n=20):
@@ -82,41 +88,56 @@ def test_publication_lag_mixes_cut_offs():
     )
 
 
-def test_publication_lag_is_fixed_by_default(sim_vintage):
-    # Delay-file lags mix late reports with onsets recorded later, so the
-    # default stays a fixed uniform lag on 0..3 days.
-    for cfg in (MAIN,):
-        assert cfg.publication_lag == "fixed"
-        model = build_model(sim_vintage, cfg)
-        np.testing.assert_allclose(
-            model.observations["onsets"].publication_lag, np.full(4, 0.25)
-        )
+def _pairs(kept):
+    """Two release pairs of three rows, ages over the seven onset days."""
+    before = np.array([np.arange(-2, 5), np.arange(3, 10), np.arange(20, 27)])
+    return {
+        "before": jnp.asarray(np.vstack([before, before])),
+        "after": jnp.asarray(np.vstack([before + 7, before + 8])),
+        "kept": jnp.asarray(kept, dtype=float),
+        "total": jnp.full(6, 10.0),
+        "pair": jnp.asarray(np.repeat(np.eye(2), 3, axis=0)),
+    }
 
 
-def test_model_takes_the_empirical_publication_lag(sim_vintage):
-    lag = np.r_[np.full(10, 0.08), np.zeros(50), 0.2]
-    data = dataclasses.replace(sim_vintage, publication_lag_pmf=lag)
-    for base in (MAIN,):
-        cfg = dataclasses.replace(base, publication_lag="empirical")
-        model = build_model(data, cfg)
-        obs = model.observations["onsets"]
-        np.testing.assert_allclose(obs.publication_lag, lag)
-        assert "onsets_publication_lag" not in prior_latent(model, data, 2)
-    # With no estimate, a fixed long-tail prior pmf stands in: 85% on
-    # 0..3 days and 15% spread over 4..60.
-    model = build_model(
-        dataclasses.replace(sim_vintage, publication_lag_pmf=None),
-        dataclasses.replace(MAIN, publication_lag="empirical"),
-    )
-    prior = np.asarray(model.observations["onsets"].publication_lag)
-    assert prior.shape == (61,)
-    assert prior[:4].sum() == pytest.approx(0.85)
-    assert prior[4:].sum() == pytest.approx(0.15)
-    est = build_model(
-        sim_vintage, dataclasses.replace(MAIN, publication_lag="estimated")
-    )
-    prior = prior_latent(est, sim_vintage, n=5)
-    assert prior["onsets_publication_lag"].shape == (5, 4)
+def test_kept_share_is_the_published_share_at_each_release():
+    from bdbvhubrenewal.model.publication_lag import kept_share
+
+    pmf = jnp.asarray([0.5, 0.2, 0.1, 0.1, 0.1])
+    background = jnp.asarray([0.1, 0.0])
+    share = kept_share(pmf, background, _pairs(np.zeros(6)))
+    cdf = np.cumsum(pmf)
+
+    def published(ages):
+        return np.where(ages < 0, 0.0, cdf[np.clip(ages, 0, 4)]).sum()
+
+    first = np.arange(-2, 5)
+    expected = 0.9 * published(first) / published(first + 7)
+    assert float(share[0]) == pytest.approx(expected, rel=1e-6)
+    # Rows old at both releases were all published by the earlier one.
+    assert float(share[2]) == pytest.approx(0.9)
+    assert float(share[5]) == pytest.approx(1.0)
+
+
+def test_publication_lag_is_learnt_from_the_release_pairs(sim_vintage):
+    from numpyro.infer.util import log_density
+
+    data = dataclasses.replace(sim_vintage, release_pairs=_pairs(np.full(6, 9)))
+    model = build_model(data, MAIN)
+    latent = prior_latent(model, data, 1)
+    assert latent["publication_lag"].shape == (1, MAX_PUBLICATION_LAG + 1)
+    assert "release_pairs_background" in latent
+    args = model_args(model, data)
+    values = {k: v[0] for k, v in latent.items() if k != "release_pairs_kept"}
+
+    def density(kept):
+        args["onsets"]["release_pairs"] = _pairs(kept)
+        return float(log_density(model.sample, (), args, values)[0])
+
+    assert density(np.full(6, 9)) != pytest.approx(density(np.full(6, 2)))
+    # With no earlier pair of delay files the lag has its prior only.
+    plain = model_args(model, sim_vintage)
+    assert "release_pairs" not in plain["onsets"]
 
 
 def test_dirichlet_multinomial_delays(sim_vintage):
@@ -175,6 +196,35 @@ def test_weekly_blocks_match_the_dense_expectations(final, daily):
         np.testing.assert_allclose(blocks[key], value, rtol=1e-5, atol=1e-6)
 
 
+@pytest.mark.parametrize("weekly", [False, True])
+def test_by_place_with_one_delay_matches_the_shared_delay(weekly):
+    rng = np.random.default_rng(6)
+    n_w, dmax, n_prov = 10, 20, 3
+    n = 7 * n_w
+    delay = np.repeat(rng.dirichlet(np.ones(dmax + 1), n_w), 7, axis=0)
+    onsets = jnp.asarray(rng.gamma(5, 4, (n, n_prov)))
+    missing = jnp.asarray(rng.uniform(0.05, 0.3, (n, n_prov)))
+    rest = (jnp.asarray(rng.dirichlet(np.ones(dmax + 1))), n - 10, True)
+    lag = jnp.asarray([0.4, 0.3, 0.2, 0.1])
+    shared = onset_expectations(
+        onsets, jnp.asarray(delay), missing, *rest, lag, weekly
+    )
+    places = onset_expectations_by_place(
+        onsets,
+        jnp.asarray(np.broadcast_to(delay, (n_prov, *delay.shape))),
+        missing,
+        *rest,
+        lag,
+        weekly,
+    )
+    assert places["triangle"].shape == (n, n_prov, dmax + 1)
+    np.testing.assert_allclose(
+        places["triangle"].sum(axis=1), shared["triangle"], rtol=1e-5
+    )
+    for key in ("known", "imputed", "known_final", "imputed_final"):
+        np.testing.assert_allclose(places[key], shared[key], rtol=1e-5)
+
+
 def test_model_log_density_is_the_same_with_weekly_blocks(sim_vintage, config):
     from numpyro.infer.util import log_density
 
@@ -218,8 +268,8 @@ def test_negative_and_long_delays_are_clipped_not_dropped(
     )
     extra = both.delay_counts - base.delay_counts
     assert extra.sum() == 2
-    assert extra[:, 0].sum() == 1
-    assert extra[:, -1].sum() == 1
+    assert extra[..., 0].sum() == 1
+    assert extra[..., -1].sum() == 1
 
 
 def test_trajectories_name_their_posterior_draws(sim_vintage):

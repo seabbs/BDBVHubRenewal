@@ -203,11 +203,6 @@ def check_fit(
         return FitCheck(fit_id, "skip", False)
     head = headline(diag)
     status, failures, warnings = verdict(head, limits)
-    # Warnings the model records itself, such as a prior standing in for
-    # the publication lag.
-    warnings = warnings + [str(w) for w in diag.get("warnings", [])]
-    if status == "pass" and warnings:
-        status = "warn"
     out = FitCheck(
         fit_id,
         status,

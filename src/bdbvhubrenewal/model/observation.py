@@ -41,6 +41,7 @@ from pyrenew.time import daily_to_weekly
 
 from .composition_noise import CompositionNoise, MultinomialNoise
 from .pooled import pooled_walk
+from .publication_lag import ReleasePairLikelihood
 
 _FLOOR = 1e-6
 
@@ -226,6 +227,51 @@ def onset_expectations(
     }
 
 
+def onset_expectations_by_place(
+    onsets: Array,
+    delay: Array,
+    missing: Array,
+    hub_delay: Array,
+    cutoff: int,
+    final: bool = True,
+    publication_lag: ArrayLike = NO_LAG,
+    weekly: bool = False,
+) -> dict[str, Array]:
+    r"""`onset_expectations` with a delay for each province.
+
+    Each province is computed with its own delay $f_{p,s}$, so the
+    triangle stays by province.
+
+    Parameters
+    ----------
+    onsets : Array
+        $\lambda_p(s)$, shape `(n, P)`.
+    delay : Array
+        $f_{p,s}(d)$, shape `(P, n, D + 1)`.
+    missing : Array
+        $\pi_p(t)$ by report day, shape `(n, P)`.
+    hub_delay, cutoff, final, publication_lag, weekly
+        As `onset_expectations`.
+
+    Returns
+    -------
+    dict
+        As `onset_expectations`, with `triangle` of shape `(n, P, D + 1)`.
+    """
+
+    def one(lam: Array, f: Array, pi: Array) -> dict[str, Array]:
+        return onset_expectations(
+            lam[:, None], f, pi[:, None], hub_delay, cutoff, final,
+            publication_lag, weekly,
+        )  # fmt: skip
+
+    out = jax.vmap(one, in_axes=(1, 0, 1))(onsets, delay, missing)
+    streams = ("known", "imputed", "known_final", "imputed_final")
+    return {k: out[k][..., 0].T for k in streams} | {
+        "triangle": jnp.moveaxis(out["triangle"], 0, 1)
+    }
+
+
 def _windows(x: Array, n_w: int, k: int) -> Array:
     """`out[w, i] = x[7w + i]` for `i < 7k`, from stacked reshapes.
 
@@ -334,14 +380,15 @@ class OnsetStreams(BaseObservationProcess):
     with $I_p$ the latent infections, $h$ the infection-to-onset pmf
     (`temporal_pmf_rv`, the incubation period) and $\alpha$ the
     time-varying ascertainment.
-    `onset_expectations` gives the two streams.
+    `onset_expectations_by_place` gives the two streams, with each
+    province's own delay $f_{p,s}$.
     Each is summed to weeks and scored with its own negative binomial.
-    The delays of known-onset cases, pooled over provinces and tabulated
-    by onset week and delay, are scored given the weekly totals
+    The delays of known-onset cases, tabulated by province, onset week
+    and delay, are scored given each province's weekly totals
     (`delay_noise`) with probabilities
 
-    $$P(d \mid w) = \frac{\sum_{s \in w} \sum_p \kappa_p(s, d)
-    c(s + d)}{\sum_{s \in w} \sum_{d'} \sum_p \kappa_p(s, d') c(s + d')},$$
+    $$P(d \mid p, w) = \frac{\sum_{s \in w} \kappa_p(s, d)
+    c(s + d)}{\sum_{s \in w} \sum_{d'} \kappa_p(s, d') c(s + d')},$$
 
     with the same publication weights $c$ as the known stream, so the
     two truncate alike. This is the conditional part of the Poisson
@@ -371,7 +418,9 @@ class OnsetStreams(BaseObservationProcess):
         `total`, of known plus imputed onsets truncated by `delay_rv`
         (the simpler steps of the model ladder).
     delay_rv : RandomVariable
-        Returns $f_s(d)$, shape `(n, D + 1)`.
+        Returns $f_{p,s}(d)$, shape `(P, n, D + 1)`, given `n_timepoints`
+        and `n_groups`, or one delay shared by every province,
+        `(n, D + 1)`.
     known_noise, imputed_noise : CountNoise
         PyRenew noise models for the two streams (`known_noise` for the
         single stream).
@@ -388,6 +437,9 @@ class OnsetStreams(BaseObservationProcess):
         The model axis starts on `start_dow` with whole weeks, so the
         expectations can use per-week blocks (`onset_expectations` with
         `weekly`).
+    pair_likelihood : ReleasePairLikelihood, optional
+        Fit `publication_lag` to which rows each delay file kept of the
+        last (`release_pairs`).
     """
 
     def __init__(
@@ -403,6 +455,7 @@ class OnsetStreams(BaseObservationProcess):
         publication_lag: RandomVariable | ArrayLike = NO_LAG,
         delay_noise: CompositionNoise | None = None,
         weekly_axis: bool = False,
+        pair_likelihood: ReleasePairLikelihood | None = None,
     ) -> None:
         super().__init__(name, temporal_pmf_rv)
         self.ascertainment_rate_rv = ascertainment_rate_rv
@@ -416,6 +469,7 @@ class OnsetStreams(BaseObservationProcess):
             MultinomialNoise() if delay_noise is None else delay_noise
         )
         self.weekly_axis = weekly_axis
+        self.pair_likelihood = pair_likelihood
 
     def lookback_days(self) -> int:
         """Return the days of infections before an onset that it needs.
@@ -504,7 +558,11 @@ class OnsetStreams(BaseObservationProcess):
                 )
 
     def _weekly(self, x: Array, first_day_dow: int) -> Array:
-        return jnp.asarray(daily_to_weekly(x, first_day_dow, self.start_dow))
+        flat = x.reshape(x.shape[0], -1)
+        weekly = jnp.asarray(
+            daily_to_weekly(flat, first_day_dow, self.start_dow)
+        )
+        return weekly.reshape(weekly.shape[0], *x.shape[1:])
 
     def sample(
         self,
@@ -518,6 +576,7 @@ class OnsetStreams(BaseObservationProcess):
         forecast: bool = False,
         vintage: Array | None = None,
         as_of: int | None = None,
+        release_pairs: dict[str, Array] | None = None,
     ) -> ObservationSample:
         """Score or sample the two onset streams.
 
@@ -535,8 +594,8 @@ class OnsetStreams(BaseObservationProcess):
             Weekly counts on the model's week grid, `(n_weeks, P)`, NaN
             where unobserved.
         delay_counts : Array, optional
-            Known-onset cases by onset week and delay, pooled over
-            provinces, `(n_weeks, D + 1)`.
+            Known-onset cases by onset week, province and delay,
+            `(n_weeks, P, D + 1)`.
         forecast : bool, optional
             Record the sum of the final draws of both streams.
         vintage : Array, optional
@@ -548,6 +607,9 @@ class OnsetStreams(BaseObservationProcess):
             "final" draws are then the counts as reported by it (the
             vintage counts plus the cases reported between the two
             cut-offs), for scoring against a later vintage as reported.
+        release_pairs : dict, optional
+            Rows of each delay file and how many the previous file had
+            (`data.releases.release_pairs`), scored by `pair_likelihood`.
 
         Returns
         -------
@@ -558,7 +620,11 @@ class OnsetStreams(BaseObservationProcess):
         alpha = jnp.asarray(self.ascertainment_rate_rv())
         alpha = alpha[:, None] if alpha.ndim == 1 else alpha
         onsets = alpha * self._predicted_obs(infections)
-        delay = self.delay_rv(n_timepoints=n, first_day_dow=first_day_dow)
+        delay = self.delay_rv(
+            n_timepoints=n, n_groups=n_prov, first_day_dow=first_day_dow
+        )
+        # A delay shared by every province (the ladder's fixed delay).
+        delay = jnp.broadcast_to(delay, (n_prov, *delay.shape[-2:]))
         if self.weekly_axis and (n % 7 or first_day_dow != self.start_dow):
             raise ValueError("Week blocks need an axis of whole weeks.")
         if self.missing_fraction_rv is None:
@@ -570,7 +636,7 @@ class OnsetStreams(BaseObservationProcess):
         lag = self.publication_lag
         if isinstance(lag, RandomVariable):
             lag = lag()
-        exp = onset_expectations(
+        exp = onset_expectations_by_place(
             onsets,
             delay,
             pi,
@@ -582,7 +648,7 @@ class OnsetStreams(BaseObservationProcess):
         )
         weekly = {k: self._weekly(v, first_day_dow) for k, v in exp.items()}
         if as_of is not None:
-            later = onset_expectations(
+            later = onset_expectations_by_place(
                 onsets,
                 delay,
                 pi,
@@ -636,6 +702,8 @@ class OnsetStreams(BaseObservationProcess):
                 self._score_delays(
                     weekly["triangle"], jnp.asarray(delay_counts)
                 )
+        if self.pair_likelihood is not None and release_pairs is not None:
+            self.pair_likelihood.score(lag, release_pairs)
         if forecast:
             self._deterministic("final_total", final)
         return ObservationSample(observed=draws[0], predicted=weekly["known"])
@@ -676,12 +744,12 @@ class OnsetStreams(BaseObservationProcess):
         return jnp.stack([seen, jnp.zeros_like(seen)])
 
     def _score_delays(self, triangle: Array, counts: Array) -> None:
-        totals = counts.sum(axis=1)
+        totals = counts.sum(axis=-1)
         probs = triangle / jnp.maximum(
-            triangle.sum(axis=1, keepdims=True), 1e-12
+            triangle.sum(axis=-1, keepdims=True), 1e-12
         )
         probs = jnp.maximum(probs, 1e-12)
-        probs = probs / probs.sum(axis=1, keepdims=True)
+        probs = probs / probs.sum(axis=-1, keepdims=True)
         # A week with no counts adds exactly 0, so no mask is needed.
         self.delay_noise.sample(
             self._sample_site_name("delays"), probs, totals, obs=counts

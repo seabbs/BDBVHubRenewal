@@ -33,7 +33,7 @@ import datetime as dt
 import json
 import os
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from functools import partial
 from pathlib import Path
@@ -44,7 +44,6 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from bdbvhubrenewal.data.releases import last_report
 from bdbvhubrenewal.data.tidy import write_csv
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
@@ -318,8 +317,7 @@ def horizon_weeks(task: ForecastTask) -> int:
         At least one.
     """
     last = max(_saturday(d) for d in task.target_end_dates)
-    cut = last_report(task.vintage, task.kind)
-    return max(1, (last - _saturday(cut)).days // 7)
+    return max(1, (last - _saturday(task.cutoff)).days // 7)
 
 
 def _weeks(first: dt.date, n: int) -> list[str]:
@@ -437,12 +435,12 @@ def vintage_inputs(
         The model inputs.
     """
     from bdbvhubrenewal.data import load_locations
-    from bdbvhubrenewal.data.releases import publication_lag_pmf
+    from bdbvhubrenewal.data.releases import release_pairs
     from bdbvhubrenewal.model.inputs import vintage_from_tables
 
-    lag = None
+    pairs = None
     if task.delay_history is not None:
-        lag = publication_lag_pmf(task.delay_history, task.vintage)
+        pairs = release_pairs(task.delay_history, task.vintage)
     return vintage_from_tables(
         task.target,
         task.delays,
@@ -453,7 +451,7 @@ def vintage_inputs(
         horizon_weeks(task),
         tuple(task.mask),
         bvd=bvd,
-        publication_lag=lag,
+        release_pairs=pairs,
     )
 
 
@@ -521,13 +519,12 @@ def report_cutoffs(task: ForecastTask, data: Any) -> dict[int, str]:
     Returns
     -------
     dict
-        The vintage date (ISO) by its last report day on the model axis
-        (`data.releases.last_report`), the `as_of` cut-offs of
-        `forecast_trajectories`.
+        The vintage date (ISO) by its cut-off on the model axis, the
+        `as_of` cut-offs of `forecast_trajectories`.
     """
     return {
-        (last_report(d, task.kind) - data.start_date).days: d
-        for d in task.report_by
+        (dt.date.fromisoformat(cut) - data.start_date).days: d
+        for d, cut in task.report_by.items()
     }
 
 
@@ -765,12 +762,13 @@ def fit_delays(fit: RenewalFit, task: ForecastTask) -> pd.DataFrame:
     Returns
     -------
     pandas.DataFrame
-        `delay_summary` rows with `model`, `vintage` and `location`
-        `"pooled"`, as the delay is shared by every province.
+        `delay_summary` rows with `model`, `vintage` and `location`:
+        each province's delay, and the shared delay of a fit of
+        several provinces.
     """
     run = fit.run
-    return run.delay.assign(
-        model=run.variant.name, vintage=task.vintage, location="pooled"
+    return run.delay.rename(columns={"place": "location"}).assign(
+        model=run.variant.name, vintage=task.vintage
     )[
         [
             "model",
@@ -971,7 +969,8 @@ class RenewalRun:
         Process CPU time over the same span, across all threads. Near
         `num_chains` times `seconds` when the chains run in parallel.
     delay : pandas.DataFrame
-        `delay_summary` of the fit.
+        `delay_summary` of each province of the fit (`place`), and the
+        shared delay of a fit of several provinces.
     bvd : dict or None
         The BVDOutbreakSize release used (`bvd_record`), for a variant
         with the BVD term.
@@ -1113,12 +1112,27 @@ class RenewalModel:
         posterior = model.mcmc.get_samples()
         n_init = model.latent.n_initialization_points
         beta = np.asarray(posterior["delay_beta"])
-        delay = delay_summary(
-            beta,
-            # The shift is one column, as the model adds it to every delay.
-            np.asarray(posterior["delay_shift"]).reshape(len(beta), -1),
-            data.start_date - dt.timedelta(days=n_init),
-            n_init + data.cutoff,
+        # Each province's delay, and the shared one they pool towards
+        # when a fit has more than one.
+        shifts = {
+            name: np.asarray(posterior["delay_shift"])[..., p]
+            for p, name in enumerate(data.names)
+        }
+        if len(shifts) > 1:
+            shifts["shared"] = np.asarray(posterior["delay_shared_shift"])[
+                ..., 0
+            ]
+        delay = pd.concat(
+            [
+                delay_summary(
+                    beta,
+                    shift,
+                    data.start_date - dt.timedelta(days=n_init),
+                    n_init + data.cutoff,
+                ).assign(place=place)
+                for place, shift in shifts.items()
+            ],
+            ignore_index=True,
         )
         return RenewalRun(
             self.variant,
@@ -1298,40 +1312,11 @@ def fit_renewal(
         "parameters": params,
         "chains": chains,
         "worst_rhat": worst_rhat(params),
-        "warnings": lag_warnings(
-            [run.data],
-            model_config(VARIANTS[variant]),
-        ),
     }
     if model_config(VARIANTS[variant]).bvd:
         # The BVDOutbreakSize release behind the BVD term and its R-hat.
         record["bvd"] = bvd_record(None) if run.bvd is None else dict(run.bvd)
     return record
-
-
-def lag_warnings(inputs: Sequence[Any], config: Any = None) -> list[str]:
-    """Warn when a fit used the prior publication lag, not an estimate.
-
-    Parameters
-    ----------
-    inputs : sequence of bdbvhubrenewal.model.Vintage
-        The model inputs of each run.
-    config : bdbvhubrenewal.model.ModelConfig, optional
-        The configuration. Only `publication_lag="empirical"` can warn.
-
-    Returns
-    -------
-    list of str
-        One `name: message` warning, or none.
-    """
-    if config is not None and config.publication_lag != "empirical":
-        return []
-    if any(getattr(v, "publication_lag_pmf", None) is None for v in inputs):
-        return [
-            "publication_lag: no earlier pair of delay files, so the fit "
-            "used PRIOR_PUBLICATION_LAG"
-        ]
-    return []
 
 
 def forecast_renewal(task: ForecastTask, fit_dir: Path | str) -> Forecast:
