@@ -12,7 +12,8 @@ How the models are built in code and sampled is on the [Implementation](implemen
 `renewalsp` is `renewal` without importation, so the provinces are pooled but not linked.
 `renewalbvd` is `renewal` with a down-weighted likelihood term on the Rt of BVDOutbreakSize.
 `seabbs-renewal` submits the first of `renewalbvd`, `renewalsp`, `renewal`, `randomwalknowcast` and `randomwalk`, in that order, to pass its checks ([Submission workflow](../submission/workflow.md#renewal-chain)).
-The sections below build up from the model of one province, and each gives only the maths it adds.
+The sections below give the model of each province, then what `renewal` adds to pool and link the provinces, then how `renewalsp` and `renewalbvd` differ.
+Each gives only the maths it adds.
 Every time-varying part is a weekly random walk or AR(1), so it stays near constant unless the data show change.
 
 ```mermaid
@@ -29,19 +30,19 @@ flowchart TD
 
 ## Province model { #province-model }
 
-Each province $p$ with cases has the model below, which `renewal` pools across provinces.
+Each province $p$ the release lists has the model below.
 
 ```mermaid
 flowchart TD
     subgraph TR["Transmission"]
         RT["log R<sub>p</sub>(t)<br/>weekly random walk"]
-        GI["Generation interval g(τ)"]
+        GI["Generation interval g"]
         INF["Infections per resident x<sub>p</sub>(t)"]
     end
     ONS["Expected cases<br/>by onset day<br/>λ<sub>p</sub>(s) = α(s) N<sub>p</sub> (x<sub>p</sub> ∗ η)(s)"]
     INC["Incubation period η(u)<br/>log-normal, uncertain mean and SD,<br/>0 to 28 days"]
-    DEL["Onset-to-report delay<br/>f<sub>s</sub>(d)<br/>hazard shifted by γ(s),<br/>a weekly walk on onset day<br/><i>renewal: shared</i>"]
-    MISS["Share reported<br/>without onset π<sub>p</sub>(t)<br/>weekly walk"]
+    DEL["Onset-to-report delay<br/>f<sub>s</sub>(d)<br/>hazard shifted by γ(s),<br/>a weekly walk on onset day<br/><i>shared by provinces</i>"]
+    MISS["Share reported<br/>without onset m<sub>p</sub>(t)<br/>weekly walk"]
     subgraph OB["Data streams at vintage T"]
         KN["Known onsets<br/>onsets × delay to report<br/>× share with an onset<br/>× published by T"]
         IM["Hub-imputed onsets<br/>reports without an onset,<br/>spread back by the hub's<br/>published delays"]
@@ -52,7 +53,7 @@ flowchart TD
         LKI["Negative binomial<br/>by week"]
         LKD["Dirichlet-multinomial<br/>by onset week"]
     end
-    FC["Forecast<br/>log R reverts to 0<br/>final known plus imputed onsets"]
+    FC["Forecast<br/>log R reverts towards 0<br/>final known plus imputed onsets"]
 
     RT --> INF
     GI --> INF
@@ -73,7 +74,7 @@ The data weeks start one week before weekly onsets, summed over the modelled pro
 The data weeks end with the week that holds $T$, the release's last report day ([Data](data.md#vintages)).
 The model axis starts 42 days (6 weeks) earlier, the length of the generation interval, for seeding.
 Every weekly walk is held at its starting value over the 6 seeding weeks and the first data week.
-The fit axis is the data weeks.
+The fit axis is the data weeks, extended for `renewalbvd` as [below](#bvdoutbreaksize-informed).
 
 ### Reproduction number
 
@@ -90,7 +91,7 @@ with standard normal steps $z(t)$, sampled non-centred, and a start $\mathcal{N}
 The renewal runs on infections per resident, dated by infection:
 
 $$
-x_p(t) = R_p(t) \sum_{\tau \ge 1} x_p(t - \tau)\, g(\tau).
+x_p(t) = R_p(t) \sum_{j \ge 1} x_p(t - j)\, g(j).
 $$
 
 $g$ is BVDOutbreakSize's Gamma generation interval (mean 15.3, SD 9.3 days), double interval censored as $G(d + 1) - 2G(d) + G(d - 1)$ with $G$ the integrated cdf, on lags 1 to 42 and renormalised (mean 14.8, SD 8.4 days), as primarycensored's `dpcens(1:42, L = 1, D = 43)`[^pcens][^park].
@@ -112,8 +113,6 @@ $\eta$ is a log-normal incubation period for Bundibugyo virus disease with [BVDO
 The mean prior reproduces the 95% CI of 5.2 to 7.3 days from the 2007 Uganda outbreak[^macneil].
 MacNeil et al. give no interval on the spread, so the SD prior is BVDOutbreakSize's weakly informative choice around 3.5 days.
 Each draw of $\eta$ is double interval censored in the same way on lags 0 to 28, the 99.9% quantile at the prior means, as `dpcens(0:28, plnorm, D = 29)`.
-BVDOutbreakSize keeps lags 0 to 15 of its incubation period, up to its 98% quantile.
-We keep lags 0 to 28.
 
 ### Delays
 
@@ -131,8 +130,8 @@ $$
 
 ### Missing onsets
 
-Cases reported on day $t$ without an onset are a share $\pi_p(t)$ of reports, with $\operatorname{logit} \pi_p(t) = b(t)$.
-$b$ is a weekly random walk with start $\mathcal{N}(-2, 1)$ and step SD $\mathcal{N}^+(0, 0.3^2)$.
+Cases reported on day $t$ without an onset are a share $m_p(t)$ of reports, with $\operatorname{logit} m_p(t) = \bar m(t)$.
+$\bar m$ is a weekly random walk with start $\mathcal{N}(-2, 1)$ and step SD $\mathcal{N}^+(0, 0.3^2)$.
 
 ### Known onsets
 
@@ -141,7 +140,7 @@ The lag is uniform on 0 to 3 days.
 Expected known onsets, right truncated by vintage, are
 
 $$
-\mathrm{known}_{p,T}(s) = \lambda_p(s) \sum_{d} f_s(d)\, \{1 - \pi_p(s + d)\}\, c(s + d).
+\mathrm{known}_{p,T}(s) = \lambda_p(s) \sum_{d} f_s(d)\, \{1 - m_p(s + d)\}\, c(s + d).
 $$
 
 ### Hub imputation
@@ -150,7 +149,7 @@ The hub gives each case reported without an onset one by subtracting a delay dra
 We model that procedure, bias included:
 
 $$
-M_p(t) = \pi_p(t) \sum_s \lambda_p(s)\, f_s(t - s),
+M_p(t) = m_p(t) \sum_s \lambda_p(s)\, f_s(t - s),
 \qquad
 \mathrm{imputed}_{p,T}(s) = \sum_{t = s}^{T} \hat f_T(t - s)\, c(t)\, M_p(t).
 $$
@@ -159,36 +158,34 @@ $M_p(t)$ are the cases reported on day $t$ without an onset.
 The hub draws a report hour from $\mathrm{Unif}(0, 24)$ and subtracts a generalised gamma delay in hours fitted to the non-negative delays published at 2026-10-17.
 $\hat f_T$ is the daily pmf this implies, $\hat f_T(k) = \int_0^1 \{F_T(k + u) - F_T(k - 1 + u)\}\, du$ with $F_T$ the delay cdf in days, on 0 to 60 days, and is data.
 It is the double interval censored pmf, computed in closed form from the generalised gamma's partial first moment.
-Up to the 2026-10-24 release the hub fitted the delays as exact, and from 2026-11-01 as double interval censored ([hub issue 75](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/75)).
-We refit both, so $F_T$ is the fit the hub used for release $T$.
+The hub fits the delays as exact for releases up to 2026-10-24 and as double interval censored from 2026-11-01 ([hub issue 75](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/75)), and $F_T$ is the fit for release $T$.
 
 ### Likelihood
 
-- Weekly $\mathrm{known}_{p,T}$ and $\mathrm{imputed}_{p,T}$ are negative binomial, each stream with $1/\sqrt{\phi} \sim \text{HalfNormal}(0.25)$ and $\phi$ capped at 1000.
+- Weekly $\mathrm{known}_{p,T}$ and $\mathrm{imputed}_{p,T}$ are negative binomial, each stream with size $\phi = 1/(x^2 + 10^{-3})$ and $x \sim \text{HalfNormal}(0.25)$, so $\phi < 1000$.
 - Known-onset delays, by onset week and delay on 0 to 60 days, are Dirichlet-multinomial given each week's total.
-  Their probabilities come from $\lambda$, $f$, $\pi$ and $c$, with $1/\sqrt{\psi} \sim \text{HalfNormal}(0.1)$ and $\psi$ capped at $10^4$.
+  Their probabilities come from $\lambda$, $f$, $m$ and $c$, with concentration $\psi = 1/(x^2 + 10^{-4})$ and $x \sim \text{HalfNormal}(0.1)$, so $\psi < 10^4$.
   Delays below 0 count as 0 and delays above 60 as 60.
 
 ### Forecasts
 
-The random walks carry $\alpha$, $f$ and $\pi$ to the forecast horizon, and each of 100 trajectories is one posterior draw.
-Past the fit axis $\log R_p$ reverts towards 0 with a half-life of 2 weeks, $\log R_p(t) = 2^{-1/2} \log R_p(t - 1) + \sigma_R z(t)$.
-This stops the unanchored walk from compounding growth over the horizon.
-The half-life is fixed, not fitted, since no data inform the forecast weeks.
+The random walks carry $\alpha$ and $f$ to the forecast horizon, $m$ keeps its last value, and each of 100 trajectories is one posterior draw.
+Past the fit axis the walk of $\log R$ reverts towards 0 with a fixed half-life of 2 weeks, $\log R(t) = 2^{-1/2} \log R(t - 1) + \sigma_R z(t)$, so it does not compound growth over the horizon.
+In `renewal` this is the pooled trend, and the province deviations keep their AR(1) ([below](#pooled-reproduction-number)).
 The reversion leaves the fit unchanged.
 A trajectory is the final known plus final imputed counts.
 Final known counts are those reported by the cut-off plus a negative binomial draw of those reported later, as in epinowcast.
 Final imputed counts are a negative binomial draw centred on the current imputed count plus those expected later, since the hub re-imputes each vintage.
-The national trajectory is the sum of the provinces plus an unassigned component, $\max\{0, Y_{CD}(w) - \sum_p Y_p(w)\}$ in data weeks and $\rho \sum_p \tilde y_{p,k}(w)$ after, with $\rho$ its share over the last 4 data weeks and $\tilde y_{p,k}$ trajectory $k$ of province $p$.
+The national trajectory is the sum of the provinces plus an unassigned component, $\max\{0, Y_{CD}(w) - \sum_p Y_p(w)\}$ in data weeks and $\rho \sum_p \tilde y_{p,i}(w)$ after, with $\rho$ its share over the last 4 data weeks and $\tilde y_{p,i}$ trajectory $i$ of province $p$.
 
 ## Partially pooled (`renewal`) { #partially-pooled }
 
 `renewal` fits every province the release lists in one model, on the axis set by their summed onsets.
-The provinces share the trend $\log R(t)$, the deviation SD $\sigma_\delta$ and half-life $h$, the start spread $\sigma_v$, ascertainment $\alpha$, the delay $f_s$, the trend $b$ of the missing-onset share, the share at risk $\nu$ and the importation share $\varepsilon$.
+The provinces share the trend $\log R(t)$, the deviation SD $\sigma_\delta$ and half-life $t_{1/2}$, the start spread $\sigma_v$, ascertainment $\alpha$, the delay $f_s$, the trend $\bar m$ of the missing-onset share, the share at risk $\nu$ and the importation share $\varepsilon$.
 Each province has its own deviations $\delta_p$ and $\omega_p$ and its own seed.
 Provinces are linked by importation through $W$.
-Known-onset delays are pooled over provinces.
-Leaving a province out removes its known and imputed terms and its delays but keeps it in the latent process.
+Leaving a province out removes its known and imputed counts and its delay counts.
+It stays in the latent process and in the expected shares of the pooled delay counts.
 
 ```mermaid
 flowchart TD
@@ -214,26 +211,25 @@ $$
 
 The pooled trend $\log R(t)$ is the unweighted mean of $\log R_p(t)$, not the national Rt, and is the walk of the province model.
 The province deviations sum to zero.
-They are $\delta_p(t) = \sum_j Q_{pj}\, \eta_j(t)$, with $Q$ an orthonormal basis of the sum-to-zero subspace and $P - 1$ weekly AR(1) processes $\eta_j$ that decay towards 0, the pooled trend:
+They are $\delta_p(t) = \sum_j Q_{pj}\, \xi_j(t)$, with $Q$ an orthonormal basis of the sum-to-zero subspace and $P - 1$ weekly AR(1) processes $\xi_j$ that decay towards 0, the pooled trend,
 
 $$
-\eta_j(t) = \phi\, \eta_j(t - 1) + \sigma_\delta z_j(t), \qquad \phi = 2^{-1/h}, \qquad h \sim \text{LogNormal}(\log 6, 0.6^2)\ \text{weeks}, \qquad \sigma_\delta \sim \mathcal{N}^+(0, 0.1^2).
+\xi_j(t) = \kappa\, \xi_j(t - 1) + \sigma_\delta z_j(t), \qquad \kappa = 2^{-1/t_{1/2}}, \qquad t_{1/2} \sim \text{LogNormal}(\log 6, 0.6^2)\ \text{weeks}, \qquad \sigma_\delta \sim \mathcal{N}^+(0, 0.1^2).
 $$
 
-The shared $\sigma_\delta$ and $h$ pool the provinces.
-The starting offsets are $\eta_j(0) = u_j$, with $u_j \sim \mathcal{N}(0, \sigma_v^2)$ and $\sigma_v \sim \mathcal{N}^+(0, 0.3^2)$, so $\delta_p(0) = \sum_j Q_{pj} u_j$.
-Past the fit axis the pooled trend reverts as in the province model, and the deviations keep their AR(1).
+The shared $\sigma_\delta$ and $t_{1/2}$ pool the provinces.
+The starting offsets are $\xi_j(0) = v_j$, with $v_j \sim \mathcal{N}(0, \sigma_v^2)$ and $\sigma_v \sim \mathcal{N}^+(0, 0.3^2)$, so $\delta_p(0) = \sum_j Q_{pj} v_j$.
 
 ### Importation and depletion
 
 The province model's renewal gains importation and a share at risk:
 
 $$
-y_p(t) = R_p(t) \sum_q W_{pq} \sum_{\tau \ge 1} x_q(t - \tau)\, g(\tau),
+\Phi_p(t) = R_p(t) \sum_q W_{pq} \sum_{j \ge 1} x_q(t - j)\, g(j),
 \qquad
-x_p(t) = S_p(t)\big\{1 - e^{-y_p(t)/\nu}\big\},
+x_p(t) = S_p(t)\big\{1 - e^{-\Phi_p(t)/\nu}\big\},
 \qquad
-S_p(t + 1) = S_p(t)\, e^{-y_p(t)/\nu}.
+S_p(t + 1) = S_p(t)\, e^{-\Phi_p(t)/\nu}.
 $$
 
 - $W = (1 - \varepsilon) I + \varepsilon\, \mathrm{diag}(1/N) K^\top \mathrm{diag}(N)$ mixes transmission between provinces, with $\varepsilon \sim \text{Beta}(1, 100)$.
@@ -242,7 +238,7 @@ $$
   $S_p$ starts at $\nu$ less the seed, so infections never exceed $\nu N_p$.
 
 Provinces with cases in the first data week are seeded at the start.
-Later provinces start at $10^{-6}$ of that level and add $I_{0,p}$ to $y_p(t)$ each day for 7 days.
+Later provinces start at $10^{-6}$ of that level and add $I_{0,p}$ to $\Phi_p(t)$ each day for 7 days.
 These 7 days start 5 days before the province's first case week.
 That lead puts the most onsets of a week of seeded infections in the first case week (67%, with 9% before it) at the prior mean incubation period.
 
@@ -251,7 +247,7 @@ That lead puts the most onsets of a week of seeded infections in the first case 
 The missing-onset share gains sum-to-zero province deviations $\omega_p$ on the same basis $Q$:
 
 $$
-\operatorname{logit} \pi_p(t) = b(t) + \omega_p(t).
+\operatorname{logit} m_p(t) = \bar m(t) + \omega_p(t).
 $$
 
 The deviations are random walks, not AR(1).
@@ -268,7 +264,6 @@ Its forecasts follow from the model, so every province the release lists has one
 `renewalsp` is `renewal` with no importation between provinces, so $W = I$, with no $\varepsilon$ and no gravity kernel.
 Provinces with no case have no source of infection, so their forecasts stay near zero.
 The pooled reproduction number, missing-onset deviations, shared delay and ascertainment, share at risk and seeding are as in `renewal`.
-Like `renewal`, it fits the provinces together, so leaving one province out works for it too.
 
 ## BVDOutbreakSize-informed (`renewalbvd`) { #bvdoutbreaksize-informed }
 
@@ -278,11 +273,11 @@ Without such a release `renewalbvd` is `renewal`.
 
 ```mermaid
 flowchart TD
-    REL["BVDOutbreakSize release<br/>data cut-off a<sub>b</sub>"]
-    NAT["National log Rt draws<br/>mean μ<sub>N</sub>, SD σ<sub>N</sub>"]
+    REL["BVDOutbreakSize release<br/>data cut-off t<sub>b</sub>"]
+    NAT["National log Rt draws<br/>mean μ<sub>CD</sub>, SD σ<sub>CD</sub>"]
     PAT["Patch medians and<br/>90% intervals"]
-    AL["Aligned to infection day<br/>s<sub>b</sub> = a<sub>b</sub>"]
-    CORE["<b>Renewal core, pooled</b><br/>see above<br/>infection-weighted R<sub>N</sub>(s<sub>b</sub>), R<sub>k</sub>(s<sub>b</sub>)"]
+    AL["Aligned to infection day t<sub>b</sub>"]
+    CORE["<b>Renewal core, pooled</b><br/>see above<br/>infection-weighted R<sub>CD</sub>(t<sub>b</sub>), R<sub>k</sub>(t<sub>b</sub>)"]
     LK["Normal terms<br/>down-weighted, ζ = 0.5"]
 
     REL --> NAT
@@ -294,62 +289,62 @@ flowchart TD
 ```
 
 From the release it takes the posterior draws of the national $\log R$ and, where the release has province estimates, each patch's median and 90% interval with the hub provinces the patch covers.
-With $a_b$ the release's data cut-off, the estimates are aligned to $s_b = a_b$, as both models date Rt by infection.
-The fit axis extends to the end of the week of $s_b$ when that week is after the data.
-For the nation $N$ and each patch $k$ with a modelled province, the model's Rt is weighted by infections over the data week that holds $s_b$,
+Both models date Rt by infection, so the estimates are aligned to the release's data cut-off $t_b$.
+The fit axis extends to the end of the week of $t_b$ when that week is after the data.
+For the nation CD and each patch $k$ with a modelled province, the model's Rt before depletion, $R_p$, is weighted by infections over the data week that holds $t_b$,
 
 $$
-R_G(s_b) = \frac{\sum_{p \in G} O_p\, R_p(s_b)}{\sum_{p \in G} O_p},
+R_{\mathcal{G}}(t_b) = \frac{\sum_{p \in \mathcal{G}} \Omega_p\, R_p(t_b)}{\sum_{p \in \mathcal{G}} \Omega_p},
 \qquad
-O_p = N_p \sum_{t \in \text{week}(s_b)} x_p(t),
+\Omega_p = N_p \sum_{t \in \text{week}(t_b)} x_p(t),
 \qquad
-G \in \{N, k\}.
+\mathcal{G} \in \{\text{CD}, k\}.
 $$
 
 With the term down-weighted by $\zeta = 0.5$, the likelihood gains
 
 $$
-\mu_N \sim \mathcal{N}\big(\log R_N(s_b),\, \sigma_N^2/\zeta\big),
+\mu_{\text{CD}} \sim \mathcal{N}\big(\log R_{\text{CD}}(t_b),\, \sigma_{\text{CD}}^2/\zeta\big),
 \qquad
-m_k - m_N \sim \mathcal{N}\big(\log R_k(s_b) - \log R_N(s_b),\, \tau_k^2/\zeta\big),
+\tilde\mu_k - \tilde\mu_{\text{CD}} \sim \mathcal{N}\big(\log R_k(t_b) - \log R_{\text{CD}}(t_b),\, \sigma_{\Delta,k}^2/\zeta\big),
 \qquad
-\tau_k^2 = \max(\sigma_k^2 - \sigma_N'^2,\, 0.05^2).
+\sigma_{\Delta,k}^2 = \max(\tilde\sigma_k^2 - \tilde\sigma_{\text{CD}}^2,\, 0.05^2).
 $$
 
-$\mu_N$ and $\sigma_N$ are the mean and SD of the release's national log Rt draws.
-$m_k$ and $\sigma_k$ are each patch's log median and SD, the SD from the 90% interval.
-$m_N$ and $\sigma_N'$ are the same summaries of the national row in the patch table, or $\mu_N$ and $\sigma_N$ if it has none.
+$\mu_{\text{CD}}$ and $\sigma_{\text{CD}}$ are the mean and SD of the release's national log Rt draws, converted from growth rates for early releases ([Data](data.md#bvdoutbreaksize-estimates)).
+$\tilde\mu_k$ and $\tilde\sigma_k$ are each patch's log median and SD, the SD from the 90% interval.
+$\tilde\mu_{\text{CD}}$ and $\tilde\sigma_{\text{CD}}$ are the same summaries of the national estimate the patches are relative to, or $\mu_{\text{CD}}$ and $\sigma_{\text{CD}}$ if the release has none.
 Leaving a province out drops the national term and the patch that holds it.
 The term adds no parameters, and $\zeta = 0$ gives `renewal`.
 It is down-weighted because BVDOutbreakSize is fitted to largely the same data, so at full weight those data would count twice.
 
 ## Health zones
 
-Zone samples sum to their province's samples, sample by sample and week by week, and the national value stays the sum of the provinces.
+Zone samples sum to their province's samples, sample by sample and week by week, and zones do not enter the national value.
 The random walk baselines run at zone level and their samples set the zone shares of the province samples ([Baseline models](baselines.md#health-zones)).
 Every other model's province forecast is split across the zones.
 
 ### Split of province samples
 
 For province $p$ with zones $z$, let $o_z(w)$ be zone $z$'s published count for week $w$ and $O(w) = \sum_z o_z(w)$.
-Each province sample $k$ draws its zone shares once, for all weeks:
+Each province sample $i$ draws its zone shares once, for all weeks,
 
 $$
-\theta^{(k)} \sim \text{Dirichlet}(a),
+\theta^{(i)} \sim \text{Dirichlet}(\chi),
 \qquad
-a_z = r_z + n_0\, \frac{l_z + a_0}{\sum_{z'} (l_{z'} + a_0)}.
+\chi_z = r_z + n_0\, \frac{l_z + \chi_0}{\sum_{z'} (l_{z'} + \chi_0)}.
 $$
 
 $r_z$ is the zone's onsets over the 2 weeks before the vintage and $l_z$ those over the 16 weeks before it.
 Recent shares are shrunk towards longer-run shares by $n_0 = 100$ pseudo-cases.
-The floor $a_0 = 1/2$ gives a zone with no cases a small share.
+The floor $\chi_0 = 1/2$ gives a zone with no cases a small share.
 Province samples are rounded.
-Each zone keeps its published count and the rest of the province sample $Y^{(k)}(w)$ is split:
+Each zone keeps its published count and the rest of the province sample $Y^{(i)}(w)$ is split,
 
 $$
-y^{(k)}_z(w) = o_z(w) + m_z,
+y^{(i)}_z(w) = o_z(w) + \Delta_z,
 \qquad
-m \sim \text{Multinomial}\big(Y^{(k)}(w) - O(w),\ \theta^{(k)}\big).
+\Delta \sim \text{Multinomial}\big(Y^{(i)}(w) - O(w),\ \theta^{(i)}\big).
 $$
 
 A sample below the published total is drawn from the published zone counts without replacement instead.

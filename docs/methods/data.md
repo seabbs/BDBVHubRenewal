@@ -27,12 +27,12 @@ Backtest forecasts cover $h = -4, \dots, 3$.
 | `hub-config/*.json` | Rounds, tasks, output types, hub settings and the metadata schema. | Copied at download |
 
 The hub does not publish deaths, suspected cases, counts by report date or populations.
-Province populations are the Institut National de la Statistique's 2019 figures (*Annuaire statistique RDC 2020*), and province centres the WorldPop-weighted centres of BVDOutbreakSize.
+Province populations are the Institut National de la Statistique's 2019 figures (*Annuaire statistique RDC 2020*), and province centres the means of health zone centroids weighted by WorldPop 2025 counts, as in BVDOutbreakSize.
 
 ## Vintages
 
 Each hub release is a vintage, labelled by its `as_of` date and of kind `real` or `simulated`.
-From the 2026-11-01 release on, `as_of` is the extraction date, a day after the last reported case, while earlier releases were labelled by the last reported case ([hub issue 90](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/90)).
+Releases from 2026-11-01 are labelled by the extraction date, a day after the last reported case, and earlier releases by the last reported case ([hub issue 90](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/90)).
 We keep each release's published label, map a rewritten label back to it, and take its last report day as the extraction date less a day.
 Recent weeks are revised in later releases, so each forecast is made from one vintage and scored on the counts later releases report.
 
@@ -42,14 +42,11 @@ Recent weeks are revised in later releases, so each forecast is made from one vi
 The count of a day is its known plus imputed onsets, and the counts of a week sum to the hub's weekly target.
 A release has an `as_of` date and a data cut-off, its latest onset day over all places, or the cut-off a simulated release states.
 A release observes the days up to its cut-off, and a day in range with no row counts 0.
-The age of day $t$ at release $r$ is the cut-off minus $t$, the onset clock.
-Counts of a day are compared across releases on this clock.
-A release and the next release give one pair of releases.
-Its step is the difference of the two cut-offs in days.
+The [Baseline models](baselines.md#daily-release-snapshots) page compares the counts of a day across releases by its age at each cut-off.
 
 ## Delay and missingness data
 
-The hub imputes an onset for each case reported without one by subtracting a delay drawn from the pooled published delays ([hub issue 61](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/61)).
+The hub imputes an onset for each case reported without one by subtracting a delay drawn from a fit to its published delays ([hub issue 61](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/61), [Renewal models](model.md#hub-imputation)).
 So the share of cases without an onset is measured at every vintage.
 
 ## Simulated vintages
@@ -64,15 +61,15 @@ The default scenario uses:
 - a lag from report to publication, 85% uniform on 0 to 3 days and 15% uniform on 4 to 60 days, as late entries in the real delay files;
 - 30% of cases reported with no onset get one 7 to 42 days after publication, so imputed counts of past weeks fall and known counts rise, as between real vintages.
 
-Vintages are published as the hub does, with missing onsets imputed from the known delays reported so far.
+Vintages are published as the hub does, with missing onsets imputed from the hub's delay fit.
 Daily releases are published on Tuesdays, Wednesdays, Fridays and Saturdays.
 Their weekly sums are the weekly target.
 Each is cut off by the lag of the latest real release on that weekday, or the median lag of the real releases where none fell on that weekday.
 The truth is every confirmed case by its true onset week.
 
 The calibrated scenarios copy one real vintage.
-Each province's expected onsets follow its real weekly totals, spread over the days and smoothed over 7 days, up to 4 weeks before the vintage.
-Rt is the ratio of onsets to the force of infection, capped at 3, and onsets above what it explains are seeds.
+Each province with cases has expected infections that follow its real weekly onset totals, spread over the days, smoothed over 7 days and moved earlier by the mean incubation period, up to 4 weeks before the vintage.
+Rt is the ratio of infections to the force of infection, capped at 3, and infections above what it explains are seeds.
 From 4 weeks before the vintage, Rt is the mean of its last 3 weeks times 0.75, 1 or 1.25 (falling, flat or rising), for 10 weeks past the vintage.
 Ascertainment is 1, there is no importation and the whole population is at risk.
 The delay is the real delay by onset week, completed for right truncation from weeks with full follow-up.
@@ -84,7 +81,7 @@ Their truth is the last simulated vintage.
 ## BVDOutbreakSize estimates
 
 `renewalbvd` uses the Rt estimates in the public `results-<run>` releases of [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) (MIT licence, [Zenodo 10.5281/zenodo.20312758](https://doi.org/10.5281/zenodo.20312758)).
-These are the national $R_T$ draws, the patch summaries from 23 October with the national $R_T$ row they are relative to, and the release's data cut-off.
+These are the national $R_T$ draws, the patch summaries with the national $R_T$ they are relative to where the release has them, and the release's data cut-off.
 Early releases give only the growth rate $r$, which is turned into $R_T = (1 + r\theta)^k$ with BVDOutbreakSize's Gamma generation interval (mean 15.3 days, SD 9.3 days, shape $k$, scale $\theta$).
 Each forecast uses the newest release whose files were all last updated by the forecast's cut-off, whose data end by the forecast date and whose fit converged.
 The cut-off is the end of the Sunday that opens the round's submission window, Kinshasa time, or the end of the vintage date if that is later.

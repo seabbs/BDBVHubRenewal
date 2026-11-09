@@ -8,7 +8,6 @@ How the [models](model.md) are built in code, computed and sampled.
 The model extends [PyRenew](https://github.com/CDCgov/PyRenew), pinned to a commit, and runs in JAX with NumPyro.
 Its code is in [`bdbvhubrenewal.model`][bdbvhubrenewal.model] and the variants are in [`forecasters.renewal`][bdbvhubrenewal.forecasters.renewal].
 The model is configured by `ModelConfig`.
-The model diagrams are mermaid blocks in `docs/methods/model.md`.
 
 ## PyRenew and what is built here
 
@@ -18,7 +17,7 @@ The model diagrams are mermaid blocks in `docs/methods/model.md`.
 | Renewal with importation and depletion | `BaseSubpopulationInfections`, subclassed | `coupled_renewal`, called from `_infections_from_rt`, and `Importation`, which gives the mixing matrix as PyRenew's `mobility_matrix_rv` does. |
 | Ascertainment $\alpha(s)$ | `IndependentAscertainment` with a temporal process | None. |
 | Onset-to-report delay $f_s(d)$ | None | `HazardDelay`. |
-| Missing onsets $\pi_p(t)$ | None | `MissingOnsetFraction`, a pooled walk of the same form as $R_p$ with its own parameters. |
+| Missing onsets $m_p(t)$ | None | `MissingOnsetFraction`, a pooled walk of the same form as $R_p$ with its own parameters. |
 | Known and imputed onsets | `BaseObservationProcess` with `temporal_pmf_rv` for the infection-to-onset pmf (the incubation period, a `CensoredPMF` with a random mean and SD), `NegativeBinomialNoise`, `compute_prop_already_reported` for the publication lag | `OnsetStreams`. |
 | Delays of known-onset cases | None | `DirichletMultinomialNoise`, a noise model in the form of PyRenew's `CountNoise` for counts by delay given weekly totals. |
 | BVDOutbreakSize Rt | None | `RtPseudoObservation`, a `RandomVariable` the latent process calls, as it holds both $R$ and infections. |
@@ -40,15 +39,6 @@ PyRenew pieces that give a different model, sample less well, or would only rena
   Here a share of transmission is sent from each origin through a fixed gravity kernel, and depletion is exponential in the pool $\nu$.
 
 PyRenew has no delay that varies with time, no Dirichlet-multinomial count and no pseudo-observation of $R$.
-
-The table compares the two ways of sampling the walk steps on the recovery fit of the simulated outbreak, with 2 chains of 300 warm-up and 300 draws.
-
-| Walk steps | Seed | Time | Mean tree steps | Share at the depth cap |
-|---|---|---|---|---|
-| One vectorised site | 0 | 668 s | 511 | 0% |
-| One vectorised site | 1 | 971 s | 761 | 49% |
-| `ARProcess` | 0 | 2198 s | 1017 | 99% |
-| `ARProcess` | 1 | 2364 s | 1008 | 97% |
 
 ## Baseline models
 
@@ -77,9 +67,8 @@ The model runs in single precision (float32), JAX's default.
 - The generation interval, the incubation period and the hub's imputation delay are double interval censored in closed form, $G(d + 1) - 2G(d) + G(d - 1)$ with the integrated cdf (`model.censored`).
   The generation interval is computed once and the hub's delay once per release, both in float64, and the incubation period in float32 at each draw of its mean and SD (`CensoredPMF`); all match primarycensored.
 - The simulator's delays use the same closed form, truncated at their maximum delay and renormalised as primarycensored's $D$.
-  In float32 they are within $3 \times 10^{-5}$ of primarycensored, and within $10^{-8}$ in float64.
-- The negative binomial concentration is capped at $\phi \le 1000$, which is Poisson for these counts.
-  The Dirichlet-multinomial concentration is capped at $\psi \le 10^4$.
+  In float64 they are within $10^{-8}$ of primarycensored, and in float32 within $4 \times 10^{-5}$ of numerical integration.
+- The negative binomial size is kept below 1000, which is Poisson for these counts, and the Dirichlet-multinomial concentration below $10^4$ ([Likelihood](model.md#likelihood)).
 - The hub imputation sums are products of banded $7 \times 7k$ blocks for each onset week, so the cost grows with the number of weeks and not its square.
 
 The tests check the renewal and the imputation against a NumPy reference, `tests/model/numpy_reference.py`.
@@ -93,7 +82,8 @@ Without other settings, NUTS runs 4 chains of 1000 warm-up and 1000 draws, with 
 Chains start from the median of 15 prior draws.
 Submission fits and the [fit store](../development/cli.md#fit-store)'s backtest fits take each model's settings from its candidate in `ci/policy.toml`.
 `renewal` and `renewalsp` use 2 chains of 500 warm-up and 500 draws at target acceptance 0.9.
-`renewalbvd` uses 1000 draws at 0.95.
+`renewalbvd` uses 2 chains of 500 warm-up and 1000 draws at target acceptance 0.95.
+`pprandomwalknowcast` has no candidate and uses its own settings ([Baseline models](baselines.md#partially-pooled-variant)).
 Leave-one-province-out fits take theirs from `[sampler]` in `config/backtest.toml` when `BDBV_RENEWAL_SAMPLER` is unset.
 Each fit reports its largest R-hat over parameters and the share of draws at the maximum tree depth.
 
