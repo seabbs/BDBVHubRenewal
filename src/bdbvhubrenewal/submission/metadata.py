@@ -93,17 +93,18 @@ MODEL_METADATA = {
         "data_inputs": _RENEWAL_INPUTS,
     },
     "renewalsp": {
-        "model_name": "Province renewal model without importation (PyRenew)",
+        "model_name": "Single-patch province renewal models (PyRenew)",
         "methods": (
-            "Province renewal model in PyRenew with pooled Rt and depletion "
-            "but no importation between provinces, fitted to known and "
-            "imputed onsets with modelled delays."
+            "A renewal model in PyRenew fitted to each province on its own, "
+            "with no pooling or importation, to known and imputed onsets "
+            "with modelled delays; silent provinces take a random walk "
+            "introduction layer."
         ),
         "methods_long": (
-            "A renewal process for each province, with a national "
-            "weekly random walk on log Rt plus partially pooled province "
-            "deviations and susceptible depletion, and no importation "
-            "between provinces, so provinces with no cases stay near zero. "
+            "A renewal process fitted to each province's series on its own, "
+            "with its own weekly random walk on log Rt and no pooling, "
+            "importation or depletion. Provinces with no case in the last "
+            "nine weeks are zero until an introduction, then a random walk. "
             + _RENEWAL_OBSERVATION
         ),
         "data_inputs": _RENEWAL_INPUTS,

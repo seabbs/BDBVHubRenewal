@@ -85,7 +85,7 @@ Day $t$ is $a = c - t$ days old at a cut-off $c$, and $\pi(a)$ is the share of i
 For `randomwalknowcast` and `pprandomwalknowcast`, $\pi(a) = 1 / G(a)$ under the daily delay each fits at the origin ([Baseline models](baselines.md#delay)).
 For the renewal models it is the posterior median of the onset-to-report delay each fit stores, the pooled one for every place or each province's own.
 Each place is mapped by the model's delay at that place, and a zone with none by its province's.
-Where a model has no delay for the country, as `renewalsp`, the country is the sum of its mapped provinces.
+Where a model has no delay for the country, as `renewalsp`, whose delays are each province's own, the country is the sum of its mapped provinces.
 Days after the cut-off have $\pi = 0$, and a week's share $\pi_w$ is the mean over its seven days.
 With $R_o$ the count reported at the origin, the count outstanding there, $X - R_o$, is thinned binomially, so each sample becomes a draw of the count reported at $o'$,
 
