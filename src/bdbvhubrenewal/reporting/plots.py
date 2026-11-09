@@ -135,6 +135,7 @@ MODEL_STYLE: Final[dict[str, tuple[int, str]]] = {
     "renewalbvd": (3, "solid"),
     "renewalsp": (4, "solid"),
     "pprandomwalknowcast": (5, "solid"),
+    "rwnc_known": (1, "dashed"),
 }
 """Each model's place in `MODEL_COLOURS` and its dash in `DASHES`.
 

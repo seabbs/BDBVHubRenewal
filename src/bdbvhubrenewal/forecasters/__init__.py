@@ -4,6 +4,8 @@
 - `base`: `ForecastTask`, the `ForecastModel` protocol and the registry.
 - `randomwalk`: the random walk baseline, and random walk on a nowcast,
   with `chain` (the daily chain ladder), `pooling`, `obs` and `walk`.
+- `knownonset`: random walk on a nowcast of known onsets, scaled up for
+  cases without an onset (experimental).
 - `pprandomwalk`: random walk on a nowcast with partially pooled
   estimates (numpyro).
 - `renewal`: the renewal variants, the adapter from a `ForecastTask` to
@@ -28,6 +30,7 @@ from bdbvhubrenewal.forecasters.base import (
     list_models,
     register_model,
 )
+from bdbvhubrenewal.forecasters.knownonset import RandomWalkNowcastKnown
 from bdbvhubrenewal.forecasters.pprandomwalk import PPRandomWalkNowcast
 from bdbvhubrenewal.forecasters.randomwalk import (
     RandomWalk,
@@ -46,6 +49,7 @@ __all__ = [
     "PPRandomWalkNowcast",
     "RandomWalk",
     "RandomWalkNowcast",
+    "RandomWalkNowcastKnown",
     "RenewalModel",
     "add_national",
     "check_samples",

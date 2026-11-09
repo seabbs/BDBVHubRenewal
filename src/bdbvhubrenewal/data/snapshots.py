@@ -76,7 +76,8 @@ class SnapshotArrays:
         The $T$ onset days, from the first onset to the Saturday of the
         week holding the latest release's cut-off.
     counts : numpy.ndarray
-        Observed plus imputed onsets, `[L, R, T]`. Cells a release does
+        Observed plus imputed onsets by default, or the columns asked
+        for (`snapshot_arrays`), `[L, R, T]`. Cells a release does
         not observe are 0.
     observed : numpy.ndarray
         Whether a release observes an onset day (`t <= cut`), `[R, T]`.
@@ -126,7 +127,10 @@ def _saturday(day: dt.date) -> dt.date:
 
 
 def snapshot_arrays(
-    daily: pd.DataFrame, vintage: str, locations: tuple[str, ...]
+    daily: pd.DataFrame,
+    vintage: str,
+    locations: tuple[str, ...],
+    columns: tuple[str, ...] = ("observed", "imputed"),
 ) -> SnapshotArrays:
     """Build the arrays of the releases on or before a vintage.
 
@@ -140,6 +144,10 @@ def snapshot_arrays(
     locations : tuple of str
         Locations to include. Each location's ancestors are added, so
         the country is always the first node.
+    columns : tuple of str
+        The columns summed into the counts. The default, observed plus
+        imputed onsets, is the hub's target. `("observed",)` gives the
+        onsets known at each release.
 
     Returns
     -------
@@ -176,7 +184,7 @@ def snapshot_arrays(
     li = take["location"].map({c: i for i, c in enumerate(nodes_t)})
     ri = take["vintage"].astype(str).map({r: i for i, r in enumerate(releases)})
     ti = pd.to_datetime(take["onset_date"]).dt.date.map(index)
-    values = (take["observed"] + take["imputed"]).to_numpy(dtype=float)
+    values = take[list(columns)].sum(axis=1).to_numpy(dtype=float)
     np.add.at(
         counts,
         (

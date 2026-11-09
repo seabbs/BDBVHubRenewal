@@ -262,6 +262,8 @@ class RandomWalk:
     settings: Settings = field(default_factory=Settings)
     fit_diagnostics: list[dict[str, object]] = field(default_factory=list)
     needs_snapshots: ClassVar[bool] = True
+    onsets: ClassVar[tuple[str, ...]] = ("observed", "imputed")
+    """Columns of the daily table summed into the counts the model fits."""
 
     def origin_at(self, task: ForecastTask, errors: bool) -> Origin:
         """Fit the delays and the walk at the task's vintage.
@@ -292,7 +294,7 @@ class RandomWalk:
                 f"{self.name} needs daily release snapshots, and the task "
                 f"for {task.vintage} has none."
             )
-        snap = snapshot_arrays(daily, task.vintage, task.locations)
+        snap = snapshot_arrays(daily, task.vintage, task.locations, self.onsets)
         return build_origin(snap, self.settings, errors)
 
     def rows(self, origin: Origin, task: ForecastTask) -> list[int]:
