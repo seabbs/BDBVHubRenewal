@@ -10,10 +10,11 @@ national (`pooling`).
 Each model is scored as it runs, and again with its zone samples made to
 sum to its province samples (`reconcile_zones`), which is the form
 submitted.
-Zones are scored on the zone count each later real vintage reports, with
-the final-count samples drawn as for provinces
-(`bdbvhubrenewal.evaluation.nowcast.draw_reported`) under the zone delays
-fitted at the origin.
+Zones are scored on the zone count each later real vintage reports.
+`randomwalk` is scored on its samples as they are, with no delay.
+`randomwalknowcast`'s final-count samples are drawn as for provinces
+(`bdbvhubrenewal.evaluation.nowcast.draw_reported`) under its own zone
+delay at the origin.
 The energy score takes every zone and week of an origin and release as
 one vector, from the same drawn samples.
 """
@@ -37,7 +38,7 @@ from bdbvhubrenewal.evaluation.backtest import (
     real_vintages,
     score_tasks,
 )
-from bdbvhubrenewal.evaluation.nowcast import draw_reported, reported_share
+from bdbvhubrenewal.evaluation.nowcast import reported_samples
 from bdbvhubrenewal.evaluation.scoring import (
     energy_scores,
     relative_skill,
@@ -48,7 +49,6 @@ from bdbvhubrenewal.forecasters.base import (
     ModelUnavailableError,
     get_model,
 )
-from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
 from bdbvhubrenewal.forecasters.zones import (
     ZoneAllocator,
     reconcile_zones,
@@ -150,20 +150,23 @@ def zone_backtest(
         counts = weekly_zone_counts(daily_zones, vintage)
         active = tuple(z for z in zones if z in set(counts["location"]))
         zt = zone_task(task, counts, active, pd.concat([daily, daily_zones]))
-        try:
-            origin = RandomWalk().origin_at(zt, errors=False)
-        except ModelUnavailableError as err:
-            log.warning("No zone delay fit at %s: %s", vintage, err)
-            continue
-        forecasts = {}
+        forecasts: dict[str, pd.DataFrame] = {}
+        summaries: dict[str, pd.DataFrame | None] = {}
         for name in models:
             model = get_model(name)
-            direct = model.forecast(zt)
-            prov = model.forecast(task)
+            try:
+                direct = model.forecast(zt)
+                summary = getattr(model, "delay_summary", None)
+                prov = model.forecast(task)
+            except ModelUnavailableError as err:
+                log.warning("%s has no zone forecast at %s: %s", name,
+                            vintage, err)  # fmt: skip
+                continue
             forecasts[name] = direct
             forecasts[name + SUMMED] = reconcile_zones(
                 direct, prov, task, counts, active
             )
+            summaries[name] = summaries[name + SUMMED] = summary
             kept.append(
                 forecasts[name + SUMMED].assign(
                     model=name,
@@ -171,35 +174,43 @@ def zone_backtest(
                     reference_date=task.reference_date.isoformat(),
                 )
             )
-        weeks = sorted(set(direct["target_end_date"]))
-        now = reported_share(origin, _cutoff(daily, vintage), weeks)
         reported = counts.rename(columns={"total": "reported"})[
             ["location", "target_end_date", "reported"]
         ]
         # Each model draws from its own stream, as in release_backtest.
         rngs = {name: task.rng(name) for name in forecasts}
-        for later in (v for v in vintages if v > vintage):
-            then = reported_share(origin, _cutoff(daily, later), weeks)
-            truth = _zone_truth(
-                weekly_zone_counts(daily_zones, later), direct, later
+        later = [v for v in vintages if v > vintage]
+        by_model = {
+            key: reported_samples(
+                samples,
+                summaries[key],
+                key.removesuffix(SUMMED),
+                vintage,
+                later,
+                daily,
+                reported,
+                rngs[key],
             )
-            drawn = pd.concat(
-                [
-                    draw_reported(
-                        samples, reported, now, then, rngs[name]
-                    ).assign(
-                        model=name,
-                        origin=vintage,
-                        target="reported",
-                        truth_vintage=later,
-                    )
-                    for name, samples in forecasts.items()
-                ],
-                ignore_index=True,
-            )
-            drawn["horizon"] = _weeks(drawn, task)
-            frames.append(score_forecasts(drawn, truth, keys=_KEYS))
-            energy.append(energy_scores(drawn, truth, unit=_KEYS[1:4]))
+            for key, samples in forecasts.items()
+        }
+        for o2 in later:
+            drawn = [
+                draws[o2].assign(
+                    model=key,
+                    origin=vintage,
+                    target="reported",
+                    truth_vintage=o2,
+                )
+                for key, draws in by_model.items()
+                if o2 in draws
+            ]
+            if not drawn:
+                continue
+            both = pd.concat(drawn, ignore_index=True)
+            truth = _zone_truth(weekly_zone_counts(daily_zones, o2), both, o2)
+            both["horizon"] = _weeks(both, task)
+            frames.append(score_forecasts(both, truth, keys=_KEYS))
+            energy.append(energy_scores(both, truth, unit=_KEYS[1:4]))
     return (
         pd.concat(frames, ignore_index=True),
         pd.concat(energy, ignore_index=True),

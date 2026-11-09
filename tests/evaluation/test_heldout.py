@@ -133,11 +133,9 @@ def test_heldout_scores_each_forecast_under_its_model(
     assert set(scores["truth_vintage"]) == {"2026-10-24", "2026-11-01"}
     # Each score records the model chosen at the time.
     assert set(scores["chosen_model"]) == {"randomwalk"}
-    # Both baselines, the floor and the other variants asked for are
-    # scored on every held-out vintage, on the count each later vintage
-    # reports.
+    # Both baselines and the other variants asked for are scored on every
+    # held-out vintage.
     assert set(scores["model"]) == {
-        "as reported",
         "randomwalk",
         "randomwalknowcast",
         "shadow",
@@ -179,7 +177,6 @@ def test_heldout_keeps_and_rescores_other_models_forecasts(
         daily=daily,
     )
     assert set(scores["model"]) == {
-        "as reported",
         "randomwalk",
         "randomwalknowcast",
         "other",
@@ -233,7 +230,6 @@ def test_heldout_without_fits_reads_committed_forecasts(
     finally:
         _REGISTRY.pop("slowfit")
     assert set(scores["model"]) == {
-        "as reported",
         "randomwalk",
         "randomwalknowcast",
         "slowfit",

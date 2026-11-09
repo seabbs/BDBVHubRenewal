@@ -12,15 +12,17 @@ Two targets are scored.
 
 **Reported.** The count each later release $o'$ shows, for every week
 of the forecast that $o'$ reports.
-Every model forecasts the final count $X$ of a week.
+`randomwalk` is scored on its samples as they are, with no delay.
+Every other model forecasts the final count $X$ of a week and is mapped
+to what $o'$ shows through its own modelled delay, the share
+$\pi$ of a day's final count reported by each age (`delay_curves`,
+`week_shares`).
 Of the count $X - R_o$ outstanding at the origin, with $R_o$ the count
 reported there, $o'$ reports a draw from
 $\text{Binomial}(X - R_o, q)$, with
-$q = (\pi_{o'} - \pi_o) / (1 - \pi_o)$, where $\pi$ is the share of the
-week's final count reported by a cut-off under the delay fitted at the
-origin (`reported_share`, `draw_reported`).
-Its mean is the chain over the gap to $o'$ for the chain nowcast, and
-the floor maps to itself.
+$q = (\pi_{o'} - \pi_o) / (1 - \pi_o)$ (`draw_reported`).
+A model with no modelled delay, such as a hub team, is scored on
+complete weeks only.
 
 **Complete weeks.** The count the latest release shows for the weeks it
 reports in full, decided from the releases alone and never from a
@@ -29,9 +31,9 @@ By default a week is complete when it is at least `COMPLETE_WEEKS` weeks
 old at the latest release and grew by less than `COMPLETE_GROWTH`
 between the last two releases.
 
-A floor, the count as reported at the origin, is scored on both targets.
-An origin that has no pair of releases within the delay window has no
-delay fit, so it is listed with no forecasts.
+A model that cannot forecast from an origin, such as a nowcast with no
+pair of releases within the delay window, is listed with no forecasts
+there.
 A model with no snapshots stops the run.
 
 Scores are WIS, coverage and bias (`bdbvhubrenewal.evaluation.scoring`)
@@ -50,9 +52,9 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.baselinenowcast import growth
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
-from bdbvhubrenewal.data.snapshots import release_cutoff
+from bdbvhubrenewal.data.snapshots import NATIONAL, release_cutoff
+from bdbvhubrenewal.data.zones import province_of
 from bdbvhubrenewal.evaluation.scoring import (
     SCORE_COLUMNS,
     energy_scores,
@@ -66,33 +68,29 @@ from bdbvhubrenewal.forecasters.base import (
     add_national,
     get_model,
 )
-from bdbvhubrenewal.forecasters.chain import (
-    MissingSnapshots,
-    Origin,
-)
-from bdbvhubrenewal.forecasters.randomwalk import (
-    RandomWalk,
-)
+from bdbvhubrenewal.forecasters.chain import MissingSnapshots
 
 __all__ = [
-    "BASELINE",
     "COMPLETE_GROWTH",
     "COMPLETE_WEEKS",
+    "RANDOM_WALK",
     "ReleaseBacktest",
     "complete_weeks",
+    "delay_curves",
     "draw_reported",
     "relative_energy",
     "relative_wis",
     "release_backtest",
-    "reported_share",
+    "reported_samples",
     "summarise",
+    "week_shares",
     "weeks_back_from_cutoff",
 ]
 
 log = logging.getLogger(__name__)
 
-BASELINE = "as reported"
-"""Name of the floor: the count reported at the origin, as a forecast."""
+RANDOM_WALK = "randomwalk"
+"""The model scored on its samples as they are, with no delay."""
 
 COMPLETE_WEEKS = 4
 """Weeks a week must be old at the latest release to count as complete."""
@@ -140,46 +138,89 @@ class ReleaseBacktest:
     fits: pd.DataFrame
 
 
-def reported_share(
-    origin: Origin, cutoff: dt.date, weeks: Sequence[str]
-) -> pd.DataFrame:
-    r"""Return the share of each week's final count reported by a cut-off.
+def delay_curves(summary: pd.DataFrame, places: Sequence[str]) -> pd.DataFrame:
+    """Return a model's share of a day's final count reported by age.
 
-    Day $t$ is $a = c - t$ days old at cut-off $c$.
-    The share of its final count reported then is $\pi(a) = 1 / G(a)$,
-    with $G(a) = \exp \sum_{j=a}^{D-1} g(j)$ from the origin's daily
-    delay, as in the nowcast (`bdbvhubrenewal.forecasters.chain`), and
-    $\pi = 0$ for days after the cut-off.
-    A week's share is the mean over its seven days,
-    $\pi_w = \frac{1}{7} \sum_{t \in w} \pi(c - t)$.
+    A delay fitted once for every place (location `"pooled"`) is first
+    given to each place. Each place then takes the model's delay at that
+    place, and a zone with none its province's.
 
     Parameters
     ----------
-    origin : Origin
-        The fit at the origin, which gives the delay.
+    summary : pandas.DataFrame
+        The model's delay summary (`delay_summary`), with `location`,
+        `x` (age in days), `quantity` and `q50`. The rows with quantity
+        `reported_share` are used.
+    places : sequence of str
+        The places to map.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `location`, `age` and `share`, for the places the model
+        has a delay for.
+    """
+    rows = summary.loc[summary["quantity"] == "reported_share"]
+    rows = rows.rename(columns={"x": "age", "q50": "share"})
+    pooled = rows.loc[rows["location"] == "pooled"]
+    if not pooled.empty:
+        rows = pd.concat([pooled.assign(location=p) for p in places])
+    by_place = {str(loc): grp for loc, grp in rows.groupby("location")}
+    frames = [
+        by_place[key].assign(location=place)
+        for place in places
+        if (key := place if place in by_place else province_of(place))
+        in by_place
+    ]
+    out = pd.concat(frames, ignore_index=True) if frames else rows.iloc[:0]
+    return out.astype({"age": int})[["location", "age", "share"]]
+
+
+def week_shares(
+    curves: pd.DataFrame, cutoff: dt.date, weeks: Sequence[str]
+) -> pd.DataFrame:
+    r"""Return the share of each week's final count reported by a cut-off.
+
+    Day $t$ is $a = c - t$ days old at cut-off $c$, with share $\pi(a)$
+    from the place's curve, its last value past the curve's ages, and
+    $\pi = 0$ for days after the cut-off.
+    A week's share is the mean over its seven days.
+
+    Parameters
+    ----------
+    curves : pandas.DataFrame
+        `delay_curves` output.
     cutoff : datetime.date
-        The cut-off of the later release.
+        The cut-off of the release.
     weeks : sequence of str
         Hub week ends.
 
     Returns
     -------
     pandas.DataFrame
-        Columns `location`, `target_end_date` and `share`, for every place
-        of the origin.
+        Columns `location`, `target_end_date` and `share`, for every
+        place in `curves`.
     """
     ends = [as_date(w) for w in weeks]
     age = np.array([[(cutoff - e).days + d for d in range(7)] for e in ends])
-    g = growth(origin.fit.g, age, origin.settings.max_delay)
-    pi = np.where(age >= 0, 1.0 / g, 0.0)
-    places = origin.snap.locations
-    return pd.DataFrame(
-        {
-            "location": np.repeat(places, len(ends)),
-            "target_end_date": np.tile(list(weeks), len(places)),
-            "share": pi.mean(axis=2).ravel(),
-        }
-    )
+    frames = []
+    for loc, grp in curves.groupby("location"):
+        c = grp.sort_values("age")
+        pi = np.where(
+            age >= 0,
+            np.interp(age, c["age"].to_numpy(), c["share"].to_numpy()),
+            0.0,
+        )
+        frames.append(
+            pd.DataFrame(
+                {
+                    "location": loc,
+                    "target_end_date": list(weeks),
+                    "share": pi.mean(axis=1),
+                }
+            )
+        )
+    return pd.concat(frames, ignore_index=True)
 
 
 def draw_reported(
@@ -206,7 +247,7 @@ def draw_reported(
         Columns `location`, `target_end_date` and `reported`, the counts
         at the origin. Weeks not in it have 0 reported.
     now, then : pandas.DataFrame
-        `reported_share` at the origin's cut-off and the later one's.
+        `week_shares` at the origin's cut-off and the later one's.
     rng : numpy.random.Generator
         Random numbers.
 
@@ -320,32 +361,67 @@ def weeks_back_from_cutoff(
     return back.astype(int).set_axis(weeks.index)
 
 
-def _reported(
-    real: pd.DataFrame, vintage: str, task: ForecastTask
-) -> pd.DataFrame:
-    """Return the floor's samples: the count reported at the origin."""
-    rows = real.loc[real["vintage"] == vintage]
-    have = rows.set_index(["location", "target_end_date"])["total"]
-    locs = [*task.locations]
-    out = []
-    for loc in locs:
-        value = [float(have.get((loc, w), 0.0)) for w in task.target_end_dates]
-        out.append(
-            pd.DataFrame(
-                {
-                    "location": loc,
-                    "target_end_date": np.tile(
-                        task.target_end_dates, task.n_samples
-                    ),
-                    "sample": np.repeat(
-                        np.arange(1, task.n_samples + 1),
-                        len(task.target_end_dates),
-                    ),
-                    "value": np.tile(value, task.n_samples),
-                }
-            )
-        )
-    return add_national(pd.concat(out, ignore_index=True))
+def reported_samples(
+    samples: pd.DataFrame,
+    summary: pd.DataFrame | None,
+    model: str,
+    origin: str,
+    later: Sequence[str],
+    daily: pd.DataFrame,
+    reported: pd.DataFrame,
+    rng: np.random.Generator,
+) -> dict[str, pd.DataFrame]:
+    """Return a model's samples of what each later release shows.
+
+    `randomwalk`'s samples are returned as they are, with no delay.
+    Another model's places are mapped by its delay (`delay_curves`,
+    `draw_reported`), a place it has no delay for is returned as it is,
+    and the country is the sum of the provinces.
+    A model with no delay summary, such as a hub team, has none.
+
+    Parameters
+    ----------
+    samples : pandas.DataFrame
+        The model's final-count samples, with `location`,
+        `target_end_date`, `sample` and `value`.
+    summary : pandas.DataFrame or None
+        The model's delay summary at the origin.
+    model : str
+        The model's name.
+    origin : str
+        The origin release.
+    later : sequence of str
+        The later releases.
+    daily : pandas.DataFrame
+        Daily onsets by release, for the cut-offs.
+    reported : pandas.DataFrame
+        Columns `location`, `target_end_date` and `reported`, the counts
+        at the origin.
+    rng : numpy.random.Generator
+        Random numbers.
+
+    Returns
+    -------
+    dict of str to pandas.DataFrame
+        Samples by later release.
+    """
+    if model == RANDOM_WALK:
+        return dict.fromkeys(later, samples)
+    if summary is None:
+        return {}
+    places = samples.loc[samples["location"] != NATIONAL]
+    curves = delay_curves(summary, sorted(set(places["location"])))
+    mapped = places["location"].isin(set(curves["location"]))
+    weeks = sorted(set(samples["target_end_date"]))
+    now = week_shares(curves, _cutoff(daily, origin), weeks)
+    out = {}
+    for o2 in later:
+        then = week_shares(curves, _cutoff(daily, o2), weeks)
+        drawn = draw_reported(places.loc[mapped], reported, now, then, rng)
+        both = pd.concat([drawn, places.loc[~mapped]], ignore_index=True)
+        whole = NATIONAL in set(samples["location"])
+        out[o2] = add_national(both) if whole else both
+    return out
 
 
 def _label(
@@ -384,6 +460,7 @@ def release_backtest(
     target: pd.DataFrame,
     models: Sequence[str | ForecastModel] = ("randomwalk", "randomwalknowcast"),
     stored: pd.DataFrame | None = None,
+    delays: pd.DataFrame | None = None,
     complete_rule: str = "growth",
     complete_after: int = COMPLETE_WEEKS,
     compare: Collection[str] | None = None,
@@ -403,6 +480,10 @@ def release_backtest(
     stored : pandas.DataFrame, optional
         Final-count samples of other models with columns `model`,
         `vintage`, `location`, `target_end_date`, `sample` and `value`.
+    delays : pandas.DataFrame, optional
+        The stored models' delay summaries, with `model` and `vintage`
+        (`delay_summary`). A stored model with none is scored on complete
+        weeks only.
     complete_rule, complete_after : str, int
         The `rule` and `weeks` of `complete_weeks`.
     compare : collection of str, optional
@@ -454,53 +535,56 @@ def release_backtest(
                 f"task for {task.vintage} has none."
             )
         here = kept.loc[kept["vintage"].astype(str) == task.vintage]
-        names = [m.name for m in built] + sorted(set(here["model"]))
-        try:
-            origin = RandomWalk().origin_at(task, errors=False)
-        except ModelUnavailableError as err:
-            log.warning("No delay fit at %s: %s", task.vintage, err)
-            origin_rows += [
-                {
-                    "origin": task.vintage,
-                    "model": name,
-                    "status": "no forecast",
-                    "reason": str(err),
-                }
-                for name in names
-            ]
-            continue
         forecasts: dict[str, pd.DataFrame] = {}
+        summaries: dict[str, pd.DataFrame | None] = {}
         for model in built:
-            forecasts[model.name] = add_national(model.forecast(task))
+            try:
+                samples = model.forecast(task)
+            except ModelUnavailableError as err:
+                log.warning("%s has no forecast at %s: %s", model.name,
+                            task.vintage, err)  # fmt: skip
+                origin_rows.append(
+                    {
+                        "origin": task.vintage,
+                        "model": model.name,
+                        "status": "no forecast",
+                        "reason": str(err),
+                    }
+                )
+                continue
+            forecasts[model.name] = add_national(samples)
+            summaries[model.name] = getattr(model, "delay_summary", None)
             fits = pd.DataFrame(getattr(model, "fit_diagnostics", []))
             fits.insert(0, "model", model.name)
             fits.insert(1, "origin", task.vintage)
             fit_rows.append(fits)
         _check_distinct(forecasts, task.vintage)
+        learnt = (
+            pd.DataFrame(columns=["model", "vintage"])
+            if delays is None
+            else delays.loc[delays["vintage"].astype(str) == task.vintage]
+        )
         for name, grp in here.groupby("model"):
             forecasts[str(name)] = grp[cols]
-        forecasts[BASELINE] = _reported(real, task.vintage, task)
-        weeks = sorted(
-            {w for s in forecasts.values() for w in s["target_end_date"]}
-        )
-        now = reported_share(origin, _cutoff(daily, task.vintage), weeks)
+            mine = learnt.loc[learnt["model"] == name]
+            summaries[str(name)] = None if mine.empty else mine
         reported = _truth(real, task.vintage).rename(
             columns={"truth": "reported"}
         )
         # Each model draws from its own stream, so its scores do not depend
         # on which other models run.
         rngs = {name: task.rng(name) for name in forecasts}
-        for o2 in later:
-            then = reported_share(origin, _cutoff(daily, o2), weeks)
-            for name, samples in forecasts.items():
-                mapped = draw_reported(samples, reported, now, then, rngs[name])
-                frames.append(
-                    _label(mapped, name, task.vintage, "reported", o2, daily)
-                )
-        frames += [
-            _label(s, name, task.vintage, "complete", latest, daily)
-            for name, s in forecasts.items()
-        ]
+        for name, samples in forecasts.items():
+            frames += [
+                _label(drawn, name, task.vintage, "reported", o2, daily)
+                for o2, drawn in reported_samples(
+                    samples, summaries[name], name, task.vintage, later,
+                    daily, reported, rngs[name],
+                ).items()
+            ]  # fmt: skip
+            frames.append(
+                _label(samples, name, task.vintage, "complete", latest, daily)
+            )
         origin_rows += [
             {
                 "origin": task.vintage,

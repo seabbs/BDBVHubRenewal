@@ -12,8 +12,6 @@ from pathlib import Path
 
 import pandas as pd
 
-from bdbvhubrenewal.reporting.legend import starts_on
-
 __all__ = [
     "TRAJECTORY_DRAWS",
     "compact",
@@ -218,7 +216,7 @@ def explorer_data(
             {
                 "name": m,
                 "ours": m in ours,
-                "on": starts_on(m, on),
+                "on": m in on,
                 "light": colours[m][0],
                 "dark": colours[m][1],
                 "dash": colours[m][2],

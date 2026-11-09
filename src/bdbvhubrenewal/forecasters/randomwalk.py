@@ -65,6 +65,7 @@ from bdbvhubrenewal.forecasters.chain import (
     Origin,
     Settings,
     build_origin,
+    delay_summary,
 )
 from bdbvhubrenewal.forecasters.obs import sample_count
 from bdbvhubrenewal.forecasters.walk import random_walk
@@ -327,9 +328,15 @@ class RandomWalkNowcast(RandomWalk):
     ----------
     name : str
         Model name.
+    delay_summary : pandas.DataFrame or None
+        The delay of the last forecast (`chain.delay_summary`), which maps
+        its final counts to what later releases show.
     """
 
     name: str = "randomwalknowcast"
+    delay_summary: pd.DataFrame | None = field(
+        init=False, default=None, repr=False
+    )
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return random walk trajectories from a nowcast for a task.
@@ -353,6 +360,7 @@ class RandomWalkNowcast(RandomWalk):
         """
         origin = self.origin_at(task, errors=True)
         values, weeks = self.trajectories(origin, task, origin.point)
+        self.delay_summary = delay_summary(origin, self.name, task.vintage)
         self._diagnostics(
             origin,
             task,

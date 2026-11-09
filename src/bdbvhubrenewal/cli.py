@@ -64,7 +64,7 @@ from bdbvhubrenewal.evaluation.heldout import (
     load_model_choices,
     run_heldout,
 )
-from bdbvhubrenewal.evaluation.nowcast import BASELINE, release_backtest
+from bdbvhubrenewal.evaluation.nowcast import release_backtest
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastTask,
@@ -604,12 +604,14 @@ def _release_backtest(
         )
         if not config.is_heldout(t.vintage)
     ]
+    stored, learnt = _stored(args, target, forecasts)
     out = release_backtest(
         tasks,
         daily,
         target,
-        stored=_stored_samples(args, target, forecasts),
-        compare=[*(s.name for s in list_models()), BASELINE],
+        stored=stored,
+        delays=learnt,
+        compare=[s.name for s in list_models()],
     )
     for name, table in (
         ("scores", out.scores),
@@ -622,13 +624,15 @@ def _release_backtest(
     print(f"Release backtest: {len(out.scores)} scored forecasts.")
 
 
-def _stored_samples(
+def _stored(
     args: argparse.Namespace, target: pd.DataFrame, forecasts: pd.DataFrame
-) -> pd.DataFrame:
-    """Final-count samples of the models not run here, by vintage.
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Final-count samples and delays of the models not run here.
 
-    The fitted models' come from the backtest forecasts. Hub teams'
-    forecasts are matched to the real vintage serving their round.
+    The fitted models' samples come from the backtest forecasts and their
+    delays from the delay summaries `fit-store load` writes to the
+    results, none if it loaded no fits. Hub teams' forecasts are matched
+    to the real vintage serving their round, and have no delay.
     """
     from bdbvhubrenewal.evaluation import hubcompare as hc
 
@@ -654,7 +658,12 @@ def _stored_samples(
     hub["vintage"] = [
         hc.match_vintage(r, vintages) for r in hub["reference_date"]
     ]
-    return pd.concat([ours[cols], hub.dropna(subset=["vintage"])[cols]])
+    samples = pd.concat([ours[cols], hub.dropna(subset=["vintage"])[cols]])
+    path = Path(args.results) / DELAY_SUMMARY_FILE
+    if not path.exists():
+        return samples, pd.DataFrame(columns=["model", "vintage"])
+    learnt = pd.read_csv(path)
+    return samples, learnt.loc[learnt["model"].isin(fitted)]
 
 
 def _write_fits(fits: list[pd.DataFrame], path: Path) -> None:
