@@ -97,6 +97,7 @@ from bdbvhubrenewal.reporting.plots import (
     comparison_colours,
     comparison_label,
     model_style,
+    plot_cutoff_days,
     plot_delay_check,
     plot_delay_distribution,
     plot_delays_over_time,
@@ -107,6 +108,7 @@ from bdbvhubrenewal.reporting.plots import (
     plot_imputed_share,
     plot_location_grid,
     plot_newly_missing,
+    plot_release_counts,
     plot_renewal_delay,
     plot_revisions,
     plot_scenarios,
@@ -202,6 +204,16 @@ def make_report(
         lambda mode: plot_revisions(real, mode=mode), fig / "revisions.svg"
     )
     save_light_dark(
+        lambda mode: plot_release_counts(real, mode=mode),
+        fig / "release-counts.svg",
+    )
+    daily = load_daily(data_dir)
+    recent = sorted(real["vintage"].unique())[-4:]
+    save_light_dark(
+        lambda mode: plot_cutoff_days(daily, recent, mode=mode),
+        fig / "cutoff-days.svg",
+    )
+    save_light_dark(
         lambda mode: plot_imputed_share(real, mode=mode),
         fig / "imputed-share.svg",
     )
@@ -228,6 +240,7 @@ def make_report(
         fig / "delays-time.svg",
     )
     summary = real.groupby("vintage").agg(
+        cutoff=("cutoff", "first"),
         weeks=("target_end_date", "nunique"),
         first_week=("target_end_date", "min"),
         last_week=("target_end_date", "max"),
@@ -242,6 +255,14 @@ def make_report(
         "location"
     ].nunique()
     summary = summary.join(nat).reset_index()
+    summary.insert(
+        2,
+        "days_to_release",
+        (
+            pd.to_datetime(summary["vintage"])
+            - pd.to_datetime(summary["cutoff"])
+        ).dt.days,
+    )
     summary["delay_rows"] = summary["vintage"].map(
         delays.groupby("vintage").size()
     )
@@ -280,7 +301,6 @@ def make_report(
 
     # Nowcast page: latest real vintage, every registered model.
     rows = real.loc[real["vintage"] == latest]
-    daily = load_daily(data_dir)
     tasks = make_tasks(rows, delays, config, history=real, daily=daily)
     forecasts_now = _nowcast_forecasts(tasks, latest, res)
     _nowcast_page(fig, gen, target, forecasts_now, names, config, latest)
