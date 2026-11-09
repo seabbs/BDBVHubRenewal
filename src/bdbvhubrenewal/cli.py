@@ -730,6 +730,10 @@ def _zones(
 
 
 def _nowcast(args: argparse.Namespace) -> int:
+    from bdbvhubrenewal.forecasters.renewal import sampler_settings
+
+    # A renewal model given by --model is fitted here.
+    host_devices(int(sampler_settings()["num_chains"]))
     hub_config = Path(args.data) / "hub-config" / "tasks.json"
     try:
         task, handled = _task(args)
