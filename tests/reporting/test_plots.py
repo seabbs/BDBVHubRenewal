@@ -180,9 +180,9 @@ def _learnt(model: str, vintage: str, location: str) -> pd.DataFrame:
 def test_renewal_delay_has_a_row_per_fit_at_its_latest_origin() -> None:
     learnt = pd.concat(
         [
-            _learnt("renewal", "2026-10-24", "pooled"),
-            _learnt("renewal", "2026-11-01", "pooled"),
-            _learnt("renewalbvd", "2026-11-01", "pooled"),
+            _learnt("renewal", "2026-10-24", "shared"),
+            _learnt("renewal", "2026-11-01", "shared"),
+            _learnt("renewalbvd", "2026-11-01", "shared"),
             _learnt("renewalsp", "2026-11-01", "CD-NK"),
             _learnt("renewalsp", "2026-11-01", "CD-IT"),
         ],
@@ -196,11 +196,11 @@ def test_renewal_delay_has_a_row_per_fit_at_its_latest_origin() -> None:
     left = fig.axes[0::2]
     titles = [ax.get_title(loc="left") for ax in left]
     assert titles == [
-        "All provinces: renewal, renewalbvd",
+        "Shared delay: renewal, renewalbvd",
         "Ituri: renewalsp",
         "Nord Kivu: renewalsp",
     ]
-    # The baseline and two models in the pooled row; the share stops the
+    # The baseline and two models in the shared row; the share stops the
     # day before the longest delay.
     assert len(left[0].lines) == 3
     assert max(left[1].lines[-1].get_xdata()) == 9

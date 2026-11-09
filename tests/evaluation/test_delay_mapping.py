@@ -51,8 +51,9 @@ def test_a_place_takes_its_own_delay_and_a_zone_its_province_s() -> None:
     curves = delay_curves(summary, ["CD", "CD-IT", "CD-NK", "CD-IT-01"])
     got = curves.groupby("location")["share"].first()
     assert got.to_dict() == {"CD-IT": 0.2, "CD-IT-01": 0.2, "CD-NK": 0.8}
-    # A delay fitted once for every place holds at every place.
-    pooled = delay_curves(_summary("pooled", [0.5]), ["CD", "CD-IT"])
+    # The shared delay holds where a place has neither its own delay nor
+    # its province's.
+    pooled = delay_curves(_summary("shared", [0.5]), ["CD", "CD-IT"])
     assert set(pooled["location"]) == {"CD", "CD-IT"}
 
 

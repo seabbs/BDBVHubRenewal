@@ -311,7 +311,7 @@ def make_report(
     )
     # Written by `fit-store load` from the stored fits.
     learnt = pd.read_csv(res / DELAY_SUMMARY_FILE)
-    fitted = sorted(set(learnt["location"]) - {"pooled"})
+    fitted = sorted(set(learnt["location"]) - {"shared"})
     baseline = baseline_share(
         daily, str(learnt["vintage"].max()), [NATIONAL, *fitted]
     )
