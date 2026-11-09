@@ -1,7 +1,9 @@
 // Checks chart: the backtest scores by place type or flag (the report's
 // checks JSON), drawn with scorechart.js, with a target (data-targets), a
 // scale, a split and a baseline picker. The JSON has a set per baseline,
-// scale and split.
+// scale and split. The score history (scripts/score_history.py) reuses it
+// with `kind`, `x_label`, one split, whose picker is hidden, and `marks`,
+// the x positions scorechart.js draws a vertical line at.
 (function () {
   "use strict";
   var T = window.bdbvToggles;
@@ -13,7 +15,9 @@
     T.targetSelect(controls, targets, target, function (k) { load(root, k, rel.name()); });
     var selScale = h("select", {}, h("label", {}, controls, "Scale "));
     d.scales.forEach(function (s) { h("option", { value: s }, selScale, s); });
-    var selSplit = h("select", {}, h("label", {}, controls, "Split by "));
+    var splitLabel = h("label", {}, controls, "Split by ");
+    var selSplit = h("select", {}, splitLabel);
+    if (d.splits.length < 2) splitLabel.hidden = true;
     d.splits.forEach(function (s) { h("option", { value: s }, selSplit, s); });
     var rel = T.baselineSelect(controls, function () { update(); });
     rel.fill(d, base);
@@ -31,12 +35,12 @@
     }
     var first = pick();
     var chart = window.bdbvScoreChart.build(chartDiv, {
-      kind: "bar", x_label: "Group", x: first.x, models: d.models,
-      metrics: d.metrics, rows: first.rows,
+      kind: d.kind || "bar", x_label: d.x_label || "Group", x: first.x,
+      models: d.models, metrics: d.metrics, rows: first.rows, marks: first.marks,
     });
     function update() {
       var s = pick();
-      chart.update(s.rows, s.x);
+      chart.update(s.rows, s.x, s.marks);
     }
     selScale.addEventListener("change", update);
     selSplit.addEventListener("change", update);
