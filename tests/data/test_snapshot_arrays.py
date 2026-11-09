@@ -99,3 +99,19 @@ def test_weeks_run_sunday_to_saturday(snap) -> None:
     assert (
         weekly[0, snap.week_ends.index("2026-10-17")] == rows["total"].iloc[0]
     )
+
+
+def test_counts_can_be_known_onsets_only(daily: pd.DataFrame) -> None:
+    known = snapshot_arrays(daily, "2026-10-24", ("CD-NK",), ("observed",))
+    total = snapshot_arrays(daily, "2026-10-24", ("CD-NK",))
+    assert (known.cut == total.cut).all()
+    assert known.week_ends == total.week_ends
+    rows = daily.loc[
+        (daily["vintage"] == "2026-10-24") & (daily["location"] == "CD-NK")
+    ]
+    r = known.releases.index("2026-10-24")
+    i = known.locations.index("CD-NK")
+    assert known.counts[i, r].sum() == rows["observed"].sum()
+    assert (
+        total.counts[i, r].sum() == (rows["observed"] + rows["imputed"]).sum()
+    )
