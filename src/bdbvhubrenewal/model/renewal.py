@@ -411,16 +411,17 @@ class MetapopulationInfections(BaseSubpopulationInfections):
         )
         infections = jnp.vstack([I0_all, post])
         aggregate = infections @ pop.fractions
+        adjusted = jnp.vstack([rt[:n_init], r_eff])
 
         with numpyro.handlers.scope(prefix=self.name, divider="::"):
             numpyro.deterministic("rt_baseline", jnp.exp(log_rt_baseline))
             numpyro.deterministic("rt_subpop", rt)
-            numpyro.deterministic(
-                "rt_subpop_adjusted", jnp.vstack([rt[:n_init], r_eff])
-            )
+            numpyro.deterministic("rt_subpop_adjusted", adjusted)
         if self.rt_observation is not None:
+            # BVDOutbreakSize's R_T is net of depletion, so it is compared
+            # with the depletion-adjusted R_p.
             self.rt_observation(
-                rt=rt,
+                rt=adjusted,
                 infections=infections,
                 n_init=n_init,
                 fractions=pop.fractions,

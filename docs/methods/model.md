@@ -296,10 +296,11 @@ flowchart TD
 From the release it takes the posterior draws of the national $\log R$ and, where the release has province estimates, each patch's median and 90% interval with the hub provinces the patch covers.
 With $a_b$ the release's data cut-off, the estimates are aligned to $s_b = a_b$, as both models date Rt by infection.
 The fit axis extends to the end of the week of $s_b$ when that week is after the data.
-For the nation $N$ and each patch $k$ with a modelled province, the model's Rt is weighted by infections over the data week that holds $s_b$,
+BVDOutbreakSize's Rt is net of depletion, so it is compared with the model's Rt net of depletion, $R^e_p(t) = R_p(t)\, S_p(t)/\nu$.
+For the nation $N$ and each patch $k$ with a modelled province, it is weighted by infections over the data week that holds $s_b$,
 
 $$
-R_G(s_b) = \frac{\sum_{p \in G} O_p\, R_p(s_b)}{\sum_{p \in G} O_p},
+R_G(s_b) = \frac{\sum_{p \in G} O_p\, R^e_p(s_b)}{\sum_{p \in G} O_p},
 \qquad
 O_p = N_p \sum_{t \in \text{week}(s_b)} x_p(t),
 \qquad

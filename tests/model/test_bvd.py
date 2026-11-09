@@ -164,3 +164,27 @@ def test_fit_axis_reaches_the_bvd_day(outbreak, sim_tables, table, release):
         },
     )[0]
     assert np.isfinite(float(ld))
+
+
+def test_bvd_term_reads_rt_net_of_depletion(
+    outbreak, sim_tables, table, release
+):
+    # BVDOutbreakSize's R_T is net of depletion, so the model's side of
+    # the term is R_p S_p / nu, not R_p.
+    data = sim_with_bvd(outbreak, sim_tables, table, release, BVD)
+    model = build_model(data, BVD)
+    tr = trace(model, data)
+    counts = tr["latent_infections_by_subpop"]["value"]
+    n_init = model.latent.n_initialization_points
+    obs = model.latent.rt_observation
+    adjusted = tr["latent::rt_subpop_adjusted"]["value"]
+    raw = tr["latent::rt_subpop"]["value"]
+
+    def model_side(rt):
+        group, national = obs.log_group_rt(rt, counts, n_init)
+        return np.where(obs.kinds == 0, group, group - national)
+
+    want, other = model_side(adjusted), model_side(raw)
+    got = tr["bvd_log_rt_model"]["value"]
+    np.testing.assert_allclose(got, want, rtol=1e-5, atol=1e-6)
+    assert not np.allclose(got, other, rtol=1e-5)
