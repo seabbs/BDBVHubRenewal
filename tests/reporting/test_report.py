@@ -558,3 +558,14 @@ def test_checks_chart_has_a_set_per_baseline() -> None:
     assert got["sets"]["randomwalk|zones|flag"]["rows"][1][3] == 2.0
     assert got["sets"]["renewal|zones|flag"]["rows"][0][3] == 0.5
     json.dumps(got)
+
+
+def test_by_baseline_stacks_a_table_per_baseline() -> None:
+    def make(base: str) -> pd.DataFrame:
+        rel = [1.0, 2.0] if base == "a" else [0.5, 1.0]
+        return pd.DataFrame({"model": ["a", "b"], "rel_wis": rel})
+
+    got = report._by_baseline(make, ["b", "a"])
+    assert list(got.columns) == ["baseline", "model", "rel_wis"]
+    assert list(got["baseline"]) == ["b", "b", "a", "a"]
+    assert list(got["rel_wis"]) == [0.5, 1.0, 1.0, 2.0]
