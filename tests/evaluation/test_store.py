@@ -162,7 +162,8 @@ def test_plan_fit_and_load(
     assert by_origin[origins[3]].used is None
     dev = pd.read_csv(results / "forecasts.csv.gz")
     held = pd.read_csv(results / "heldout-forecasts.csv.gz")
-    assert set(dev["vintage"]) == {oldest, stale}
+    # Every loaded origin is backtested, held out or not.
+    assert set(dev["vintage"]) == {oldest, stale, newest}
     assert newest in set(held["vintage"])
     assert set(held["chosen_model"]) == {fitted_flat}
     recorded = json.loads((results / store.STATUS_FILE).read_text())
