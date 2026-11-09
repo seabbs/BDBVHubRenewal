@@ -15,6 +15,7 @@ from bdbvhubrenewal.evaluation.backtest import (
     load_config,
     lopo_tasks,
     make_tasks,
+    real_vintages,
     recovery_tasks,
     run_development,
     run_forecasts,
@@ -34,10 +35,6 @@ pytestmark = pytest.mark.usefixtures("flat_model")
 def test_load_config() -> None:
     cfg = load_config(ROOT / "config" / "backtest.toml")
     assert cfg.n_samples == 100
-    # The development set ends at the latest model choice date.
-    assert cfg.development_until == "2026-10-28"
-    assert not cfg.is_heldout("2026-10-24")
-    assert cfg.is_heldout("2026-10-31")
     assert all(pd.Timestamp(d).dayofweek == 5 for d in cfg.simulated_dates)
     # A generous convergence gate on BVDOutbreakSize releases.
     assert cfg.bvd_max_rhat == 1.1
@@ -59,14 +56,15 @@ def test_saturdays() -> None:
     )
 
 
-def test_development_never_uses_heldout_vintages(
+def test_development_uses_every_real_vintage_but_the_latest(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
     forecasts = run_development([get_model("flat")], target, delays, config)
-    # Vintages after the model choice date are held out.
-    assert (forecasts["vintage"] <= "2026-10-10").all()
+    # Vintages after the model choice date are backtested too.
     real = forecasts.loc[forecasts["kind"] == "real"]
-    assert set(real["vintage"]) == {"2026-08-18", "2026-10-09"}
+    vintages = real_vintages(target.loc[target["kind"] == "real"])
+    assert set(real["vintage"]) == set(vintages[:-1])
+    assert max(real["vintage"]) > "2026-10-10"
 
 
 def _forecast_rows(as_of: str | None) -> pd.DataFrame:
@@ -248,7 +246,12 @@ def test_lopo_masks_one_province_at_a_time(
     # Only the masked province is kept, from development vintages only.
     assert (forecasts["location"] == forecasts["masked"]).all()
     assert set(forecasts["masked"]) == {"CD-IT", "CD-NK"}
-    assert set(forecasts["vintage"]) == {"2026-08-18", "2026-10-09"}
+    assert set(forecasts["vintage"]) == {
+        "2026-08-18",
+        "2026-10-09",
+        "2026-10-17",
+        "2026-10-24",
+    }
     assert set(scores["location"]) == {"CD-IT", "CD-NK"}
     assert set(scores["truth_vintage"]) == {"2026-11-01"}
 

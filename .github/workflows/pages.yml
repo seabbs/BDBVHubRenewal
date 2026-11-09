@@ -112,12 +112,10 @@ jobs:
             reads: results
             run: |
               uv run bdbvhubrenewal backtest
-              uv run bdbvhubrenewal backtest --evaluate-holdout
             writes: |
               results/backtest-fits.csv
               results/delay-summary.csv
               results/forecasts.csv.gz
-              results/heldout-*
               results/nowcast-*
               results/recovery-*
           - cell: zones

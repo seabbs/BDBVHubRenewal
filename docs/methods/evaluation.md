@@ -64,18 +64,17 @@ The other models forecast every task.
 
 | Run | Vintages | Truth |
 |---|---|---|
-| Development backtest | Real up to the latest model choice date, except the latest real vintage | As for real releases |
+| Development backtest | Real, except the latest real vintage | As for real releases |
 | Recovery check | Simulated | Simulated final counts |
 | Simulated scenarios | The four weekly simulated vintages up to the latest real vintage, from outbreaks calibrated to it with Rt after the data scaled by 0.75, 1 or 1.25 | Complete weeks of the simulated final counts, and the counts as reported two weeks after each vintage |
-| Rolling held-out evaluation | Real vintages after each model choice | Complete weeks of the latest release, and for `randomwalk` also the count each later release shows |
-| Real releases | Every real release up to the latest model choice date with a later release | The count each later release shows, and the latest release's count for its complete weeks |
+| Real releases | Every real release with a later release | The count each later release shows, and the latest release's count for its complete weeks |
 | Comparison with hub forecasts | Real where one serves the round | As for real releases |
 
 In the simulated scenarios and leave-one-province-out, a week is complete when it ended at least 3 weeks before the truth vintage.
 
 ## Real releases
 
-Each real release up to the latest model choice date with a later release is an origin.
+Each real release with a later release is an origin.
 The random walk models forecast from the releases up to the origin only.
 The renewal models' stored forecasts from the origin are scored with them.
 So are hub teams' forecasts for a round, at the latest release serving it.
@@ -120,19 +119,11 @@ Weeks still being reported are shaded, with hollow points.
 The vertical axis of a fan ends at the top of its 90% band.
 Horizon is weeks from the reference week, so negative horizons are nowcasts, 0 is the reference week and positive horizons are forecasts.
 
-## Rolling held-out evaluation
-
-Each model choice is logged with its date, and the development set rolls forward with them.
-Development runs use every vintage up to the latest choice date.
-Each real vintage after a choice is forecast by the model chosen then, the latest choice dated before it.
-It is also forecast by `randomwalk` and `randomwalknowcast`, and by every fitted model from its stored fit.
-The run supplies the fitted models' forecasts to the [Nowcast](../nowcast.md) and [Comparison](../comparison.md) pages, and has no page of its own.
-
 ## Leave-one-province-out
 
 One province's counts are left out of the likelihood while it stays in the model ([Renewal models](model.md#partially-pooled)).
 Its onsets are scored against the latest real vintage on the complete weeks.
-It runs on development vintages for the three renewal models.
+It runs on every real vintage for the three renewal models.
 
 ## Health zones
 
@@ -161,7 +152,7 @@ Every scored week of a forecast takes the forecast's place type and flag, and th
 ## Comparison with hub forecasts
 
 For each hub reference date, our unfitted models forecast from the latest real vintage serving the round.
-Fitted models use their stored backtest or held-out forecasts for the same round.
+Fitted models use their stored backtest forecasts for the same round.
 Where we submitted to a round, our submitted file is a series of its own beside these main-build forecasts.
 Every model is scored on the complete weeks it forecast, as for [real releases](#real-releases), from the vintage serving the round, since hub teams have no modelled delay we can see.
 WIS is relative to `randomwalk` on the weeks both forecast, on the [comparison page](../comparison.md).

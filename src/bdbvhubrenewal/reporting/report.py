@@ -896,21 +896,10 @@ def _zone_nowcast_section(
 
 
 def _stored_at(res: Path, vintage: str) -> pd.DataFrame:
-    """Every model's final-count forecasts from one origin in the results.
-
-    Development origins are in `forecasts.csv.gz` and held-out ones in
-    `heldout-forecasts.csv.gz`.
-    """
-    frames = []
-    for name in ("forecasts.csv.gz", "heldout-forecasts.csv.gz"):
-        rows = pd.read_csv(res / name, dtype={"as_of": object})
-        rows = rows.loc[(rows["vintage"] == vintage) & rows["as_of"].isna()]
-        frames.append(rows.drop(columns="chosen_model", errors="ignore"))
-    dev, held = frames
-    return pd.concat(
-        [dev, held.loc[~held["model"].isin(set(dev["model"]))]],
-        ignore_index=True,
-    )
+    """Every model's final-count forecasts from one origin in the results."""
+    rows = pd.read_csv(res / "forecasts.csv.gz", dtype={"as_of": object})
+    rows = rows.loc[(rows["vintage"] == vintage) & rows["as_of"].isna()]
+    return rows.reset_index(drop=True)
 
 
 def _nowcast_forecasts(
@@ -919,9 +908,8 @@ def _nowcast_forecasts(
     """Forecasts for the Nowcast page, from every source that has them.
 
     Models that need no fit are run on the latest vintage here. Fitted
-    models are slow, so they are taken from the held-out run when it
-    forecast the latest vintage, and otherwise from the backtest, at the
-    latest real origin it has.
+    models are slow, so they are taken from the backtest, at the latest
+    real origin it has.
     """
     specs = list_models()
     quick = [get_model(s.name) for s in specs if not s.fitted]
@@ -935,18 +923,6 @@ def _nowcast_forecasts(
     check_distinct(ran)
     frames = [ran]
     have = {s.name for s in specs if not s.fitted}
-    path = res / "heldout-forecasts.csv.gz"
-    try:
-        held = pd.read_csv(path)
-    except (FileNotFoundError, pd.errors.EmptyDataError):
-        held = pd.DataFrame()
-    if not held.empty:
-        fitted = {s.name for s in specs if s.fitted}
-        keep = held.loc[
-            (held["vintage"] == latest) & held["model"].isin(fitted)
-        ].drop(columns="chosen_model", errors="ignore")
-        frames.append(keep)
-        have |= set(keep["model"])
     backtest = res / "forecasts.csv.gz"
     rows = pd.read_csv(backtest, dtype={"as_of": object})
     if "as_of" in rows:
@@ -2348,7 +2324,7 @@ def _missing_builds(
             lines.append(
                 f"`{comparison_label(name, 'real')}` has no forecast for the "
                 f"{ref} round yet, so its n leaves that round out until a "
-                "backtest or held-out run covers it.\n"
+                "backtest covers it.\n"
             )
     return lines
 

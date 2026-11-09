@@ -10,8 +10,8 @@ Files from the archived cumulative outbreak size round are skipped.
 For each hub round, `our_forecasts` runs our unfitted models from the
 latest real vintage that serves the round.
 Rounds with no such vintage are skipped.
-Fitted models are slow, so `stored_forecasts` takes theirs from backtest
-and held-out forecast files for the same round.
+Fitted models are slow, so `stored_forecasts` takes theirs from the
+backtest forecast files for the same round.
 The `source` column says which (`real` or `hub`).
 
 `score_comparison` scores every model on the weeks the latest real
@@ -548,9 +548,9 @@ def stored_forecasts(
     Parameters
     ----------
     paths : sequence of pathlib.Path or str
-        Outputs of `run_forecasts`, such as the backtest and held-out
-        forecasts. Missing files are skipped, and so are the rows of counts
-        as reported by a later vintage (`as_of`). A model's round is taken
+        Outputs of `run_forecasts`, such as the backtest forecasts.
+        Missing files are skipped, and so are the rows of counts as
+        reported by a later vintage (`as_of`). A model's round is taken
         from the first file that holds it, so a later file, such as
         unsubmitted candidates, fills only the rounds the others lack.
     reference_dates : sequence of str

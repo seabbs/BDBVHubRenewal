@@ -10,7 +10,6 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 |---|---|
 | `data` | Download the hub data and write the tidy tables to `data/`. |
 | `backtest` | Run the development backtest, the evaluation on the real releases (`results/nowcast-*.csv`) and the recovery check. Fitted models are never run: their rows in `results/` come from the fit store and are kept. With `--models`, only those models run and the others' rows are kept. |
-| `backtest --evaluate-holdout` | Score every held-out vintage under the model chosen at the time, with the other models alongside. |
 | `backtest --lopo` | Leave one province out: forecast each province with its counts masked, for the variants that take a mask. |
 | `backtest --scenarios-only` | Run only the scenarios calibrated to the real data, from `--scenario-as-of` and `--scenario-dates`. `--scenarios` runs only the named scenarios. |
 | `bvd` | Cache the BVDOutbreakSize releases each vintage may use. |
@@ -39,7 +38,6 @@ task backtest           # development backtest, real releases and recovery check
 task backtest-lopo      # leave one province out
 task backtest-scenarios # simulated scenarios calibrated to the real data
 task backtest-zones     # random walk models at health-zone level
-task backtest-heldout   # score the held-out vintages
 task results            # every derived file in results/, as the Pages build makes them
 task docs               # build the site into _site/ (runs task results, about 25 min)
 task serve              # serve the site (run task results once first)

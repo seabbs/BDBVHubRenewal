@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""Rolling-origin backtest with a development set and a held-out set.
+"""Rolling-origin backtest over every real and simulated vintage.
 
 Each vintage becomes a `ForecastTask`: the data as of that vintage, the
 reference date it serves (`reference_date_for_vintage`) and the weeks
@@ -14,11 +14,7 @@ There are two kinds of vintage:
 - **simulated**: from a simulated outbreak with known parameters
   (`bdbvhubrenewal.data.simulate`). Truth is the final simulated count.
 
-Vintages are split by the model choice record (`results/model-choice.yml`,
-see `bdbvhubrenewal.evaluation.heldout`).
-Development runs use vintages up to the latest choice date only.
-Every later vintage is held out and scored by
-`bdbvhubrenewal.evaluation.heldout`.
+Every real vintage but the latest is backtested.
 `truth_changes` shows how much the truth moved between vintages.
 """
 
@@ -36,7 +32,6 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-import yaml
 
 from bdbvhubrenewal.data.bvd import MAX_RHAT
 from bdbvhubrenewal.data.dates import (
@@ -123,11 +118,6 @@ class BacktestConfig:
         Samples per forecast.
     seed : int
         Random seed shared by all tasks.
-    development_until : str or None
-        The latest model choice date. Vintages after it are held out.
-        None if no model has been chosen, so every vintage is development.
-    model_choice : pathlib.Path
-        The model choice record (`bdbvhubrenewal.evaluation.heldout`).
     simulated_dates : tuple of str
         Vintage dates to publish from the simulated outbreak.
     complete_after_weeks : int
@@ -145,29 +135,10 @@ class BacktestConfig:
     max_horizon: int = 3
     n_samples: int = 100
     seed: int = 0
-    development_until: str | None = None
-    model_choice: Path = Path("results/model-choice.yml")
     simulated_dates: tuple[str, ...] = ()
     complete_after_weeks: int = 0
     sampler: dict[str, Any] = field(default_factory=dict)
     bvd_max_rhat: float = MAX_RHAT
-
-    def is_heldout(self, vintage: dt.date | str) -> bool:
-        """Whether a vintage is held out from development.
-
-        Parameters
-        ----------
-        vintage : datetime.date or str
-            The vintage date.
-
-        Returns
-        -------
-        bool
-            True if it is after `development_until`.
-        """
-        if self.development_until is None:
-            return False
-        return as_date(vintage) > as_date(self.development_until)
 
 
 def apply_sampler(config: BacktestConfig) -> None:
@@ -208,8 +179,6 @@ def saturdays(first: str, last: str) -> tuple[str, ...]:
 def load_config(path: Path | str = "config/backtest.toml") -> BacktestConfig:
     """Read the backtest settings.
 
-    `development_until` is the latest date in the model choice record.
-
     Parameters
     ----------
     path : pathlib.Path or str
@@ -222,15 +191,11 @@ def load_config(path: Path | str = "config/backtest.toml") -> BacktestConfig:
     """
     raw = tomllib.loads(Path(path).read_text())
     fc, sp, sim = raw["forecast"], raw["split"], raw["simulated"]
-    choice = Path(sp["model_choice"])
-    record = yaml.safe_load(choice.read_text())
     return BacktestConfig(
         min_horizon=int(fc["min_horizon"]),
         max_horizon=int(fc["max_horizon"]),
         n_samples=int(fc["n_samples"]),
         seed=int(fc["seed"]),
-        development_until=max(str(c["date"]) for c in record["choices"]),
-        model_choice=choice,
         complete_after_weeks=int(sp["complete_after_weeks"]),
         sampler=dict(raw["sampler"]),
         bvd_max_rhat=float(raw["bvd"]["max_rhat"]),
@@ -747,7 +712,7 @@ def development_tasks(
     *,
     daily: pd.DataFrame | None = None,
 ) -> list[ForecastTask]:
-    """Build the development tasks: the real vintages not held out.
+    """Build the development tasks: every real vintage but the latest.
 
     Parameters
     ----------
@@ -766,8 +731,7 @@ def development_tasks(
     Returns
     -------
     list of ForecastTask
-        Tasks for vintages up to `config.development_until` and before the
-        latest real vintage.
+        Tasks for every real vintage before the latest.
     """
     real = target.loc[target["kind"] == "real"]
     latest = real_vintages(real)[-1]
@@ -780,7 +744,7 @@ def development_tasks(
             real_vintages(real),
             daily=daily,
         )
-        if not config.is_heldout(t.vintage) and t.vintage < latest
+        if t.vintage < latest
     ]
 
 
@@ -794,10 +758,8 @@ def run_development(
     learnt: list[pd.DataFrame] | None = None,
     daily: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    """Forecast from the development vintages.
+    """Forecast from every real vintage before the latest.
 
-    Vintages after `config.development_until` are held out: they are not
-    forecast from.
     The forecasts are scored by
     `bdbvhubrenewal.evaluation.nowcast.release_backtest`.
 

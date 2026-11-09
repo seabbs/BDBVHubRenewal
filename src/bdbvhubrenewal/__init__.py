@@ -10,8 +10,8 @@ The package has these parts:
 - `model`: the PyRenew renewal model (JAX), imported lazily.
 - `submission`: the hub file writer and checks, model metadata, the CI
   fit configurations and the submitted rounds.
-- `evaluation`: scoring, the backtest, held-out evaluation, posterior
-  predictive checks and the comparison with hub forecasts.
+- `evaluation`: scoring, the backtest, posterior predictive checks and
+  the comparison with hub forecasts.
 - `reporting`: figures and docs tables.
 - `cli`: the `bdbvhubrenewal` command.
 

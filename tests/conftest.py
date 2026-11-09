@@ -40,12 +40,10 @@ def schema_json() -> Path:
 
 
 @pytest.fixture
-def config(tmp_path: Path) -> BacktestConfig:
+def config() -> BacktestConfig:
     return BacktestConfig(
         n_samples=100,
         seed=1,
-        development_until="2026-10-10",
-        model_choice=tmp_path / "model-choice.yml",
         simulated_dates=("2026-08-01", "2026-09-05"),
     )
 
