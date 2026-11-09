@@ -7,6 +7,7 @@ import pytest
 
 from bdbvhubrenewal.data import load_daily, load_daily_zones
 from bdbvhubrenewal.data.zones import hub_zones
+from bdbvhubrenewal.evaluation.backtest import real_vintages
 from bdbvhubrenewal.evaluation.zones import (
     SUMMED,
     ZONE_BASELINE,
@@ -51,26 +52,27 @@ def test_energy_scores_every_zone_and_week_as_one_vector(
 
 
 def test_both_baselines_are_scored_at_zone_level(
-    scores: pd.DataFrame,
+    scores: pd.DataFrame, target: pd.DataFrame
 ) -> None:
     names = {"randomwalk", "randomwalknowcast"}
     assert set(scores["model"]) == names | {n + SUMMED for n in names}
     assert (scores["location"].str.count("-") == 2).all()
     # Each origin is scored on what every later release reported, and on
     # the latest release's complete weeks.
+    vintages = real_vintages(target.loc[target["kind"] == "real"])
+    later = vintages[vintages.index("2026-10-17") :]
+    latest = pd.Timestamp(later[-1])
     assert set(scores["target"]) == {"reported", "complete"}
     done = scores.loc[scores["target"] == "complete"]
-    assert set(done["truth_vintage"]) == {"2026-11-01"}
-    assert set(done["origin"]) == {"2026-10-17", "2026-10-24"}
-    # Complete weeks are at least four weeks old at the latest release.
-    assert (done["target_end_date"] <= "2026-10-10").all()
+    assert set(done["truth_vintage"]) == {later[-1]}
+    assert set(done["origin"]) == set(later[:-1])
+    # Complete weeks end at least three weeks before the latest cut-off.
+    cutoff = latest - pd.Timedelta(days=(latest.day_of_week - 5) % 7)
+    oldest = (cutoff - pd.Timedelta(weeks=3)).strftime("%Y-%m-%d")
+    assert (done["target_end_date"] <= oldest).all()
     reported = scores.loc[scores["target"] == "reported"]
     pairs = set(zip(reported["origin"], reported["truth_vintage"], strict=True))
-    assert pairs == {
-        ("2026-10-17", "2026-10-24"),
-        ("2026-10-17", "2026-11-01"),
-        ("2026-10-24", "2026-11-01"),
-    }
+    assert pairs == {(o, t) for o in later for t in later if o < t}
     # Only zones with cases at the origin are forecast.
     per = scores.groupby(["model", "origin"])["location"].nunique()
     assert (per.groupby("origin").nunique() == 1).all()

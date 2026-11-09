@@ -172,12 +172,11 @@ def test_make_tasks_asks_for_later_vintages(
 def test_truth_changes(target: pd.DataFrame) -> None:
     changes = truth_changes(target, locations=("CD",))
     week = changes.loc[changes["target_end_date"] == "2026-10-10"]
-    assert list(week["truth_vintage"]) == [
-        "2026-10-09",
-        "2026-10-17",
-        "2026-10-24",
-        "2026-11-01",
-    ]
+    # Every real release from the one that first reports the week.
+    vintages = real_vintages(target.loc[target["kind"] == "real"])
+    assert (
+        list(week["truth_vintage"]) == vintages[vintages.index("2026-10-09") :]
+    )
     last = week.iloc[-1]
     assert last["change"] == 0
     assert (week["change"] == week["truth"] - last["truth"]).all()
@@ -246,14 +245,10 @@ def test_lopo_masks_one_province_at_a_time(
     # Only the masked province is kept, from development vintages only.
     assert (forecasts["location"] == forecasts["masked"]).all()
     assert set(forecasts["masked"]) == {"CD-IT", "CD-NK"}
-    assert set(forecasts["vintage"]) == {
-        "2026-08-18",
-        "2026-10-09",
-        "2026-10-17",
-        "2026-10-24",
-    }
+    vintages = real_vintages(target.loc[target["kind"] == "real"])
+    assert set(forecasts["vintage"]) == set(vintages[:-1])
     assert set(scores["location"]) == {"CD-IT", "CD-NK"}
-    assert set(scores["truth_vintage"]) == {"2026-11-01"}
+    assert set(scores["truth_vintage"]) == {vintages[-1]}
 
 
 def test_lopo_without_mask_aware_models_is_empty(
