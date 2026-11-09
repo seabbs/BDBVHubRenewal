@@ -27,6 +27,7 @@ from typing import cast
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import numpyro
 from jax import Array
 from jax.typing import ArrayLike
@@ -704,6 +705,9 @@ class MissingOnsetFraction(RandomVariable):
         Starting logit values, scalar or one per province.
     baseline_process, deviation_process : TemporalProcess
         Temporal processes for the national and province parts.
+    active : numpy.ndarray, optional
+        Boolean, one per province: provinces with a deviation, the rest
+        following the national part (`pooled_walk`). `None` is all.
     """
 
     def __init__(
@@ -712,11 +716,13 @@ class MissingOnsetFraction(RandomVariable):
         initial_rv: RandomVariable,
         baseline_process: TemporalProcess,
         deviation_process: TemporalProcess,
+        active: np.ndarray | None = None,
     ) -> None:
         super().__init__(name=name)
         self.initial_rv = initial_rv
         self.baseline_process = baseline_process
         self.deviation_process = deviation_process
+        self.active = active
 
     def sample(
         self,
@@ -751,6 +757,7 @@ class MissingOnsetFraction(RandomVariable):
             n_groups,
             self.name,
             first_day_dow,
+            active=self.active,
         )
         pi = jax.nn.sigmoid(logit_pi)
         numpyro.deterministic(self.name, pi)

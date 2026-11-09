@@ -399,6 +399,9 @@ class MetapopulationInfections(BaseSubpopulationInfections):
             pop.n_subpops,
             "log_rt",
             first_day_dow,
+            active=None
+            if self.seed_days is None
+            else np.isfinite(self.seed_days),
         )
         rt = jnp.exp(log_rt)
         gen_int = self.gen_int_rv()

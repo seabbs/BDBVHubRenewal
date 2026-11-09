@@ -264,3 +264,20 @@ def test_as_reported_draws_match_the_vintage_at_its_own_cutoff(sim_vintage):
         np.median(two_weeks, 0)[: n - 1]
         <= np.median(draws["national"], 0)[: n - 1] * 1.25 + 3
     )
+
+
+def test_unseeded_provinces_sample_no_seed_or_deviation(sim_vintage):
+    # No data inform them, so they follow the national Rt and missing-onset
+    # share and take a fixed seed.
+    unseeded = ~np.isfinite(sim_vintage.seed_days)
+    k = int((~unseeded).sum())
+    assert unseeded.any()
+    model = build_model(sim_vintage)
+    tr = trace(model, sim_vintage)
+    assert tr["initial_infections"]["value"].shape == (k,)
+    assert tr["log_rt0_offsets"]["value"].shape == (k - 1,)
+    rt = np.asarray(tr["latent::rt_subpop"]["value"])
+    base = np.asarray(tr["latent::rt_baseline"]["value"])
+    np.testing.assert_allclose(
+        rt[:, unseeded], base[:, :1].repeat(unseeded.sum(), 1), rtol=1e-6
+    )

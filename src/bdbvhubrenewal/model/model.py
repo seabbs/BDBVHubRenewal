@@ -36,7 +36,7 @@ from .delays import (
 )
 from .hazard_delay import HazardDelay
 from .observation import MissingOnsetFraction, OnsetStreams
-from .pooled import PooledInitialValue
+from .pooled import ActiveValues, PooledInitialValue
 from .renewal import Importation, MetapopulationInfections
 from .rt_observation import RtPseudoObservation
 from .temporal import NonCentredRandomWalk
@@ -332,6 +332,7 @@ def _pooled(
     scale: float,
     pooling_sd: float,
     centred: bool = True,
+    active: np.ndarray | None = None,
 ) -> PooledInitialValue:
     r"""Group values around $\mu \sim N(m, s)$, spread $N^+(0, \tau)$."""
     return PooledInitialValue(
@@ -340,6 +341,7 @@ def _pooled(
         DistributionalVariable(f"{name}_mean", dist.Normal(loc, scale)),
         DistributionalVariable(f"{name}_sd", dist.HalfNormal(pooling_sd)),
         centred=centred,
+        active=active,
     )
 
 
@@ -481,6 +483,13 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         Model with one observation, `onsets`.
     """
     n_prov = data.n_provinces
+    # Provinces with no case are never seeded, and no data inform their
+    # seed or their deviations, so those are not sampled.
+    active = (
+        np.ones(n_prov, dtype=bool)
+        if data.seed_days is None
+        else np.isfinite(data.seed_days)
+    )
     mixing = None
     if config.coupling == "gravity" and data.kernel is not None:
         mixing = Importation(
@@ -508,15 +517,24 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         gen_int_rv=DeterministicPMF("gen_int", generation_interval()),
         # The seed is the infections per day that will be confirmed, on
         # the first data day, turned into infections per resident.
+        # Never-seeded provinces take the prior median, 1, as only their
+        # near-zero start uses it.
         I0_rv=TransformedVariable(
             "I0",
-            DistributionalVariable(
-                "initial_infections",
-                dist.LogNormal(0.0, 1.5).expand([n_prov]),
+            ActiveValues(
+                "initial_infections_all",
+                DistributionalVariable(
+                    "initial_infections",
+                    dist.LogNormal(0.0, 1.5).expand([int(active.sum())]),
+                ),
+                active,
+                1.0,
             ),
             AffineTransform(0.0, 1 / (ALPHA0 * data.populations)),
         ),
-        log_rt_time_0_rv=_pooled("log_rt0", n_prov, 0.0, 0.5, 0.3),
+        log_rt_time_0_rv=_pooled(
+            "log_rt0", n_prov, 0.0, 0.5, 0.3, active=active
+        ),
         baseline_rt_process=_named_walk(
             "rt_sd",
             0.2,
@@ -569,9 +587,18 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             "missing_fraction",
             # Non-centred: the imputed share pins these offsets only
             # weakly, and centred they form a funnel (R-hat 1.68).
-            _pooled("logit_pi0", n_prov, -2.0, 1.0, 0.5, centred=False),
+            _pooled(
+                "logit_pi0",
+                n_prov,
+                -2.0,
+                1.0,
+                0.5,
+                centred=False,
+                active=active,
+            ),
             _named_walk("pi_sd", 0.3, fit_weeks(data, config)),
             _named_walk("pi_dev_sd", 0.1, fit_weeks(data, config)),
+            active=active,
         )
 
     if missing is not None:
