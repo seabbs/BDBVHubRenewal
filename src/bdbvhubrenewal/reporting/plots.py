@@ -31,6 +31,7 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
 from bdbvhubrenewal.data import (
+    cutoff_window,
     downward_summary,
     imputed_by_release,
     imputed_share,
@@ -54,6 +55,7 @@ __all__ = [
     "model_colour",
     "model_dash",
     "model_style",
+    "plot_cutoff_days",
     "plot_delay_check",
     "plot_delay_distribution",
     "plot_delays_over_time",
@@ -65,6 +67,7 @@ __all__ = [
     "plot_location_grid",
     "plot_newly_missing",
     "plot_nowcast",
+    "plot_release_counts",
     "plot_renewal_delay",
     "plot_revisions",
     "plot_scores",
@@ -440,6 +443,156 @@ def plot_revisions(target: pd.DataFrame, mode: str = "light") -> Figure:
     ax.set_ylabel(f"Share of the {latest} count")
     ax.invert_xaxis()
     ax.legend(title="Vintage", title_fontsize=8)
+    return fig
+
+
+def plot_release_counts(
+    target: pd.DataFrame,
+    locations: Sequence[str] = ("CD", "CD-IT", "CD-NK"),
+    weeks: int = 6,
+    mode: str = "light",
+) -> Figure:
+    """Plot each recent onset week's count in every release that has it.
+
+    Parameters
+    ----------
+    target : pandas.DataFrame
+        Real target rows.
+    locations : sequence of str
+        Places to show, one panel each.
+    weeks : int
+        How many of the latest release's onset weeks to follow.
+    mode : str
+        `"light"` or `"dark"`.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Releases on the x axis, one line per onset week, labelled at its
+        end.
+    """
+    locs = list(locations)
+    rev = revision_table(target.loc[target["location"].isin(locs)])
+    latest = rev["vintage"].max()
+    recent = sorted(
+        rev.loc[rev["vintage"] == latest, "target_end_date"].unique()
+    )[-weeks:]
+    rev = rev.loc[rev["target_end_date"].isin(recent)]
+    releases = sorted(rev["vintage"].unique())
+    at = {v: i for i, v in enumerate(releases)}
+    names = _names(target)
+    palette = MODEL_COLOURS[mode]
+    fig, axes = _grid(len(locs), 3, width=3.6, height=3.0)
+    for ax, loc in zip(axes, locs, strict=True):
+        rows = rev.loc[rev["location"] == loc]
+        ends = rows.loc[rows["vintage"] == latest].set_index("target_end_date")
+        ys = _spread(ends["total"].reindex(recent).to_numpy(float), 0.06)
+        for i, week in enumerate(recent):
+            r = rows.loc[rows["target_end_date"] == week].sort_values("vintage")
+            x = r["vintage"].map(at)
+            colour = palette[i % len(palette)]
+            ax.plot(x, r["total"], marker="o", ms=3.5, lw=1.5, color=colour)
+            ax.annotate(
+                pd.Timestamp(week).strftime("%d %b"),
+                (x.iloc[-1] + 0.12, ys[i]),
+                va="center",
+                fontsize=7,
+                color=colour,
+            )
+        ax.set_xticks(
+            range(len(releases)),
+            [pd.Timestamp(v).strftime("%d %b") for v in releases],
+        )
+        ax.set_xlim(-0.3, len(releases) - 0.2)
+        ax.set_ylim(bottom=0)
+        ax.set_title(f"{names.get(loc, loc)} ({loc})")
+        ax.set_xlabel("Release")
+    axes[0].set_ylabel("Confirmed cases in the onset week")
+    return fig
+
+
+def _spread(values: np.ndarray, gap: float) -> np.ndarray:
+    """Move label heights apart by at least `gap` of their range."""
+    order = np.argsort(values)
+    out = values.astype(float).copy()
+    step = gap * max(float(np.nanmax(values)), 1.0)
+    for a, b in pairwise(order):
+        out[b] = max(out[b], out[a] + step)
+    return out
+
+
+def plot_cutoff_days(
+    daily: pd.DataFrame,
+    vintages: Sequence[str],
+    location: str = NATIONAL,
+    weeks: int = 4,
+    mode: str = "light",
+) -> Figure:
+    """Plot daily onsets up to each release's cut-off, with weekly totals.
+
+    Parameters
+    ----------
+    daily : pandas.DataFrame
+        Daily onsets, as from `load_daily`.
+    vintages : sequence of str
+        Releases to show, one panel each.
+    location : str
+        The place.
+    weeks : int
+        Epi weeks to show before each cut-off, including its own.
+    mode : str
+        `"light"` or `"dark"`.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Stacked bars of known and imputed onsets by day, alternate epi
+        weeks shaded and labelled with the week's total (the hub target),
+        and a dotted line at the release date.
+    """
+    ink = THEMES[mode]
+    palette = MODEL_COLOURS[mode]
+    fig, axes = _grid(len(vintages), 2, width=4.8, height=2.8)
+    for ax, vin in zip(axes, vintages, strict=True):
+        win = cutoff_window(daily, vin, location, weeks)
+        x = mdates.datestr2num(win["onset_date"].tolist())
+        ax.bar(x, win["observed"], 0.85, color=palette[0], label="Known onset")
+        ax.bar(
+            x,
+            win["imputed"],
+            0.85,
+            bottom=win["observed"],
+            color=palette[1],
+            label="Imputed onset",
+        )
+        top = float(win["total"].max())
+        ax.set_ylim(0, top * 1.3)
+        for i, (week, r) in enumerate(win.groupby("target_end_date")):
+            start = float(mdates.datestr2num(str(week))) - 6.5
+            if i % 2 == 0:
+                ax.axvspan(start, start + 7, color=ink["grid"], lw=0, zorder=0)
+            days = int(r["week_days"].iloc[0])
+            note = "" if days == 7 else f"\n{days} of 7 days"
+            ax.text(
+                start + 3.5,
+                top * 1.27,
+                f"{int(r['week_total'].iloc[0])}{note}",
+                ha="center",
+                va="top",
+                fontsize=7,
+                color=ink["text"],
+            )
+        cutoff = str(win["onset_date"].iloc[-1])
+        release = float(mdates.datestr2num(vin))
+        ax.axvline(release, color=ink["muted"], lw=1, ls=":")
+        ax.set_xlim(float(x[0]) - 1, max(float(x[-1]), release) + 1)
+        ax.grid(axis="x", visible=False)
+        ax.set_axisbelow(True)
+        ax.xaxis.set_major_locator(mdates.WeekdayLocator(byweekday=mdates.SU))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
+        ax.set_title(f"Release {vin}, cut-off {cutoff}", fontsize=9)
+    axes[0].set_ylabel("Onsets per day")
+    _legend_below(fig, axes[0])
     return fig
 
 
