@@ -31,10 +31,17 @@ from jax import Array
 
 from bdbvhubrenewal.baselinenowcast import fit_by_horizon, sample_nb
 
-__all__ = ["MAX_SIZE", "fit_sizes", "rate", "sample_count"]
+__all__ = ["MAX_SIZE", "PRIOR_SIZE", "fit_sizes", "rate", "sample_count"]
 
 MAX_SIZE = 1000.0
 """Upper bound of `fit_nb`'s size, the Poisson end of its range."""
+
+PRIOR_SIZE = 1.0 / 0.6745**2
+r"""Size with too few errors to fit one, about 2.2.
+
+It is the median of epinowcast's prior $1 / \sqrt{\phi} \sim
+\mathcal{N}^+(0, 1)$.
+"""
 
 
 def fit_sizes(
@@ -50,8 +57,8 @@ def fit_sizes(
         Nowcast of the count still to come, `[N, K]`. A cell with 0 and
         no new reports adds nothing to the likelihood, so it pads.
     min_errors : int
-        Cells with something to come a fit needs. With fewer, as before
-        any earlier release chains to the origin, the size is `MAX_SIZE`.
+        Cells with something to come a fit needs. With fewer, the size is
+        `PRIOR_SIZE`.
 
     Returns
     -------
@@ -59,7 +66,9 @@ def fit_sizes(
         $\phi_k$, `[K]`.
     """
     fitted = np.asarray(fit_by_horizon(added, remaining))
-    return np.where((remaining > 0).sum(axis=0) >= min_errors, fitted, MAX_SIZE)
+    return np.where(
+        (remaining > 0).sum(axis=0) >= min_errors, fitted, PRIOR_SIZE
+    )
 
 
 def rate(num: np.ndarray, den: np.ndarray) -> np.ndarray:

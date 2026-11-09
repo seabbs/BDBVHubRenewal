@@ -123,32 +123,50 @@ def test_randomwalk_returns_complete_weeks_as_reported(
     assert late["value"].nunique() > 5
 
 
-def test_nowcast_starts_from_the_latest_full_week(
+def test_nowcast_starts_from_the_latest_full_week_with_enough_reported(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
-    # Cut-off 10-24 is a Saturday, so its week is full.
     model = RandomWalkNowcast()
     model.forecast(_task(target, delays, daily, "2026-10-24"))
-    assert {r["start_week"] for r in model.fit_diagnostics} == {"2026-10-24"}
+    start = {r["location"]: r["start_week"] for r in model.fit_diagnostics}
+    # Cut-off 10-24 is a Saturday, so its week is full, and Ituri has more
+    # than 5 cases in it.
+    assert start["CD-IT"] == "2026-10-24"
+    assert max(start.values()) == "2026-10-24"
     # Cut-off 10-16 is a Friday, so the week of 10-17 is partial.
     model.forecast(_task(target, delays, daily, "2026-10-17"))
-    assert {r["start_week"] for r in model.fit_diagnostics} == {"2026-10-10"}
+    start = {r["location"]: r["start_week"] for r in model.fit_diagnostics}
+    assert start["CD-IT"] == "2026-10-10"
 
 
-def test_a_partial_week_adds_the_days_after_the_cutoff(
+def test_weeks_after_the_start_follow_the_filtered_level(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
     task = _task(target, delays, daily, "2026-10-17")
-    nowcast = RandomWalkNowcast().forecast(task)
-    plain = RandomWalk().forecast(task)
+    samples = RandomWalkNowcast().forecast(task)
     wk = "2026-10-17"
-    mine = nowcast.loc[
-        (nowcast["location"] == "CD-IT") & (nowcast["target_end_date"] == wk)
+    mine = samples.loc[
+        (samples["location"] == "CD-IT") & (samples["target_end_date"] == wk)
     ]["value"]
-    # The week has 6 of 7 days, so no draw is below the nowcast of 6 days.
-    assert mine.mean() > 100
+    reported = task.daily_history
+    # The week holding the cut-off is drawn from the filtered level, floored
+    # at the count reported, so every draw is at least that count and the
+    # draws vary.
+    seen = (
+        reported.loc[
+            (reported["location"] == "CD-IT")
+            & (reported["vintage"] == reported["vintage"].max())
+            & (
+                pd.to_datetime(reported["onset_date"])
+                > pd.Timestamp("2026-10-10")
+            )
+            & (pd.to_datetime(reported["onset_date"]) <= pd.Timestamp(wk))
+        ][["observed", "imputed"]]
+        .sum()
+        .sum()
+    )
+    assert mine.min() >= seen
     assert mine.nunique() > 10
-    assert plain["target_end_date"].min() <= wk
 
 
 def test_diagnostics_name_the_sources(
@@ -215,26 +233,38 @@ def test_a_silent_place_waits_for_its_first_introduction() -> None:
 
     from bdbvhubrenewal.forecasters.randomwalk import _walks
 
-    # Silent places keep their own spread of 0, whatever the pooled one.
-    origin = SimpleNamespace(
-        silent=np.array([False, True, True]),
-        intro=np.array([0.5, 0.0, 0.3]),
-        sigma=np.array([0.0, 0.2, 0.5]),
-    )
+    silent = np.array([False, True, True])
+    intro = np.array([[0.5] * 4, [0.0] * 4, [0.3] * 4])
     x0 = np.full((3, 4000), 20.0)
-    lam, y = _walks(jax.random.key(1), x0, origin, 4)
-    # A place with cases walks from its start week.
-    assert lam[0].mean() == pytest.approx(20.0)
-    # No introduction can come with a probability of 0.
+    sigma = np.array([0.0, 0.2, 0.0])
+    y = _walks(jax.random.key(1), x0, sigma, silent, intro)
+    # A place with cases walks from its start.
+    assert y[0].mean() == pytest.approx(20.0, rel=0.05)
+    # No introduction can come with a probability of 0, and the path is
+    # exactly 0 without one.
     assert (y[1] == 0).all()
-    # The rate is 1 from the first introduction, so the
-    # share of samples started by week h is 1 - 0.7^(h + 1).
-    started = (lam[2] > 0).mean(axis=0)
+    # The share of samples with a first case by week h is 1 - 0.7^(h + 1),
+    # and the introduction week has at least 1 case.
+    started = (np.cumsum(y[2] > 0, axis=1) > 0).mean(axis=0)
     np.testing.assert_allclose(started, 1 - 0.7 ** np.arange(1, 5), atol=0.03)
-    assert set(np.unique(lam[2])) <= {0.0, 1.0}
-    # The introduction week carries a case, so the share of samples with a
-    # case by week 0 is the introduction probability.
     assert (y[2, :, 0] > 0).mean() == pytest.approx(0.3, abs=0.03)
+
+
+def test_the_filter_weights_a_week_by_how_complete_it_is() -> None:
+    from bdbvhubrenewal.forecasters.randomwalk import _filter
+
+    origin = SimpleNamespace(
+        reported=np.array([[10.0, 0.0, 0.0], [10.0, 0.0, 0.0]]),
+        complete=np.array([[1.0, 0.95, 0.05], [1.0, 0.95, 0.05]]),
+        sigma=np.array([0.5, 0.5]),
+    )
+    start = np.log1p(np.full((2, 1), 10.0))
+    level, var = _filter(start, origin, np.array([0, 1]), 2)
+    # Place 0 sees a near-complete week of 0 and drops; place 1 starts at
+    # week 1 and sees only a 5% reported week of 0, so it barely moves.
+    assert level[0, 0, 1] < level[1, 0, 2]
+    assert level[1, 0, 2] > 0.9 * start[1, 0]
+    assert var[1, 2] > 0
 
 
 def test_a_silent_place_is_not_nowcast(runs) -> None:
@@ -247,3 +277,7 @@ def test_a_silent_place_is_not_nowcast(runs) -> None:
     # stay at 0 in every week and none starts above a few cases.
     assert (by_week.apply(lambda v: (v == 0).mean()) > 0.7).all()
     assert by_week.median().max() == 0
+    # Up to its start week it keeps its reported 0s exactly.
+    model, _ = runs["randomwalknowcast"]
+    start = {r["location"]: r["start_week"] for r in model.fit_diagnostics}
+    assert (sk.loc[sk["target_end_date"] <= start["CD-SK"], "value"] == 0).all()
