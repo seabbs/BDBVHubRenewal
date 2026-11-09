@@ -599,7 +599,9 @@ def _release_section(
 def _scored_on(reported: pd.DataFrame, baseline: str = "randomwalk") -> str:
     """Say how many origin and release pairs and forecasts are scored."""
     pairs = reported[["origin", "truth_vintage"]].drop_duplicates()
-    n = reported.loc[reported["model"] == baseline].groupby("pool").size()
+    own = reported.loc[reported["model"] == baseline]
+    n = own.groupby("pool").size()
+    zero = int((own["truth"] == 0).sum())
     scales = {
         "national": "national",
         "provinces": "province",
@@ -610,6 +612,9 @@ def _scored_on(reported: pd.DataFrame, baseline: str = "randomwalk") -> str:
     return (
         f"The scores cover {len(pairs)} origin and release pairs.\n"
         f"The {baseline} baseline has {listed}{counts[-1]} forecasts.\n"
+        f"{zero} of them are of a place and week with no case, where every "
+        "model's WIS is close to 0, so mean WIS is lower than over places "
+        "with cases.\n"
         "The renewal models are not scored at health zones.\n"
     )
 

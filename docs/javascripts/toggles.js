@@ -53,8 +53,10 @@
   function legend(parent, models, onChange) {
     var root = h("div", { class: "scorechart-legend" }, parent);
     var on = models.map(function (m) { return m.on; });
+    var keys = [];
     var swatches = models.map(function (m, i) {
       var l = h("label", { class: "scorechart-key" }, root);
+      keys.push(l);
       var cb = h("input", { type: "checkbox" }, l);
       cb.checked = m.on;
       var sw = swatch(l, m.dash);
@@ -68,6 +70,10 @@
       dash: function (i) { return models[i].dash || ""; },
       paint: function () {
         swatches.forEach(function (sw, i) { sw.setAttribute("stroke", models[i][mode()]); });
+      },
+      // List only the models whose index has[i] is true.
+      only: function (has) {
+        keys.forEach(function (l, i) { l.hidden = !has[i]; });
       },
     };
   }
