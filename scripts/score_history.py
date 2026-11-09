@@ -7,7 +7,8 @@ main commit it was built from. Pull request previews are left out. Each
 deploy's `figures/scoresummary-backtest-<target>.json` holds the
 per-forecast scores the Backtest page summarises. This script summarises
 them as the page's overall view does (as `relative_skill`, over the
-forecasts the baseline also made), by baseline, horizon, pool and model,
+forecasts the baseline also made), by baseline, target week, pool and
+model,
 over all forecasts and over the common forecasts only (`_common`), and
 writes one row per deploy and each of those.
 
@@ -77,9 +78,7 @@ def forecasts(summary: Mapping[str, Any]) -> pd.DataFrame:
     """Return a summary's per-forecast scores with their labels.
 
     Origins, releases, places and weeks are named, not indexed, so
-    forecasts match across deploys. `horizon` is the row's horizon in
-    weeks from the reference date, as on the Backtest page, or empty
-    where the summary has none.
+    forecasts match across deploys.
     """
     models = [m["name"] for m in summary["models"]]
     keys = [m["key"] for m in summary["metrics"]]
@@ -99,8 +98,6 @@ def forecasts(summary: Mapping[str, Any]) -> pd.DataFrame:
     rows["pool"] = [pools[i] for i in rows["place"]]
     for col, labels in names.items():
         rows[col] = [labels[i] for i in rows[col]]
-    horizons = summary.get("horizons")
-    rows["horizon"] = [str(h) for h in horizons] if horizons is not None else ""
     return rows.loc[~rows["model"].isin(SKIP_MODELS)]
 
 
@@ -123,8 +120,11 @@ def _pairs(
     return pd.concat(frames, ignore_index=True)
 
 
-def _common(pairs: pd.DataFrame) -> pd.Series:
+def _common(pairs: pd.DataFrame, by: Sequence[str] = ()) -> pd.Series:
     """Flag the pairs in each model and baseline's common set.
+
+    With `by`, such as `("week",)`, each of its values has its own window
+    and set.
 
     The window runs back from the newest deploy, as far as keeps the most
     forecast-deploys: the forecasts in every deploy of the window times
@@ -142,7 +142,7 @@ def _common(pairs: pd.DataFrame) -> pd.Series:
         + pairs["week"]
     )
     flag = pd.Series(False, index=pairs.index)
-    for _, g in pairs.groupby(["baseline", "model"], sort=False):
+    for _, g in pairs.groupby(["baseline", "model", *by], sort=False):
         sets = key[g.index].groupby(g["deploy"]).agg(set)
         shared: set[str] | None = None
         best: tuple[int, list[int], set[str]] = (0, [], set())
@@ -189,7 +189,7 @@ def _metrics(summaries: Iterable[Mapping[str, Any]]) -> tuple[list[str], ...]:
 def summary_scores(summary: Mapping[str, Any]) -> pd.DataFrame:
     """Summarise one score summary by baseline, pool and model.
 
-    Every model is a baseline, over all horizons and forecasts. Returns
+    Every model is a baseline, over all forecasts. Returns
     `baseline`, `pool`, `model`, `n` (forecasts the baseline also made),
     the mean of each metric and, for relative metrics, the baseline's mean
     on the same forecasts `base_<metric>` and `rel_<metric>`.
@@ -216,9 +216,10 @@ def history(
     Returns
     -------
     pandas.DataFrame
-        One row per deploy, target, baseline, `horizon` (`"all"` or one
-        horizon), `common` (only the forecasts in the common set, see
-        `_common`, or all), pool and model: `deploy_time`, `source_sha`,
+        One row per deploy, target, baseline, `split` (`"all"` or
+        `"week <target week>"`), `common` (only the
+        forecasts in the common set, see `_common`, per target week for a
+        week, or all), pool and model: `deploy_time`, `source_sha`,
         `pages_sha`, the `summary_scores` columns, `origins` and
         `releases` (`;`-joined) and `break`. `break` is true where the
         number of forecasts scored against the baseline differs from the
@@ -254,14 +255,20 @@ def history(
     parts = []
     for _, g in pairs.groupby("target", sort=False):
         g = g.assign(common=False)
-        g = pd.concat([g, g.loc[_common(g)].assign(common=True)])
-        each = g.loc[g["horizon"] != ""]
-        g = pd.concat([g.assign(horizon="all"), each], ignore_index=True)
-        by = ["deploy", "baseline", "horizon", "common"]
+        overall = pd.concat([g, g.loc[_common(g)].assign(common=True)])
+        weekly = pd.concat([g, g.loc[_common(g, ["week"])].assign(common=True)])
+        g = pd.concat(
+            [
+                overall.assign(split="all"),
+                weekly.assign(split="week " + weekly["week"]),
+            ],
+            ignore_index=True,
+        )
+        by = ["deploy", "baseline", "split", "common"]
         parts.append(_summarise(g, by, keys, relative))
     out = pd.concat(parts, ignore_index=True).merge(meta, on="deploy")
     out = out.sort_values("deploy", kind="stable").reset_index(drop=True)
-    series = ["target", "baseline", "horizon", "common", "pool", "model"]
+    series = ["target", "baseline", "split", "common", "pool", "model"]
     prev = out.groupby(series)[["origins", "releases", "n"]].shift()
     scope = (prev[["origins", "releases"]] != out[["origins", "releases"]]).any(
         axis=1
@@ -330,11 +337,9 @@ POOLS = ("national", "provinces", "zones")
 DEFAULT_BASELINE = "randomwalk"
 """The baseline the chart opens with and the table and summary show."""
 
-DEFAULT_SPLIT = "horizon 0"
-"""The horizon the chart opens with: the reference week."""
 
 BASELINES = ("randomwalk", "randomwalknowcast")
-"""Baselines the page offers. Each one adds a set per pool, horizon and
+"""Baselines the page offers. Each one adds a set per pool, split and
 forecast set to the chart data."""
 
 
@@ -362,10 +367,9 @@ def chart_data(
     for target, cell in hist.groupby("target", sort=False):
         sets = {}
         pools = [p for p in POOLS if p in set(cell["pool"])]
-        horizons = sorted({h for h in cell["horizon"] if h != "all"}, key=int)
-        splits = ["all horizons", *(f"horizon {h}" for h in horizons)]
-        series = ["baseline", "pool", "horizon", "common"]
-        for (base, pool, hz, common), g in cell.groupby(series, sort=False):
+        splits, first = _splits(cell)
+        series = ["baseline", "pool", "split", "common"]
+        for (base, pool, split, common), g in cell.groupby(series, sort=False):
             key = (
                 g["deploy_time"] + "|" + g["source_sha"] + "|" + g["pages_sha"]
             )
@@ -387,7 +391,6 @@ def chart_data(
                 ]
                 for k, r in zip(key, g.to_dict("records"), strict=True)
             ]
-            split = "all horizons" if hz == "all" else f"horizon {hz}"
             name = f"{base}|{pool}|{split}" + ("|common" if common else "")
             sets[name] = {
                 "x": x,
@@ -416,20 +419,35 @@ def chart_data(
             ],
             "scales": pools,
             "splits": splits,
-            "split": DEFAULT_SPLIT if DEFAULT_SPLIT in splits else splits[0],
+            "split": first,
             "sets": sets,
         }
     return out
 
 
+def _splits(cell: pd.DataFrame) -> tuple[list[str], str]:
+    """Order the splits and pick the one the chart opens with.
+
+    Target weeks come first, newest first, then all forecasts. The chart
+    opens on the newest week scored at the most deploys.
+    """
+    names = set(cell["split"])
+    weeks = sorted((n for n in names if n.startswith("week ")), reverse=True)
+    full = cell.loc[~cell["common"]]
+    deploys = full.groupby("split")["deploy_time"].nunique()
+    most = max((deploys[w] for w in weeks), default=0)
+    first = next((w for w in weeks if deploys[w] == most), "all")
+    return [*weeks, "all"], first
+
+
 def _default(hist: pd.DataFrame) -> pd.DataFrame:
-    """Keep the rows relative to the default baseline, over all horizons.
+    """Keep the rows relative to the default baseline, over all forecasts.
 
     The table shows these only. The chart has the rest.
     """
     keep = (
         (hist["baseline"] == DEFAULT_BASELINE)
-        & (hist["horizon"] == "all")
+        & (hist["split"] == "all")
         & ~hist["common"]
     )
     return hist.loc[keep]
