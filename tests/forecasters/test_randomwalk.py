@@ -277,3 +277,7 @@ def test_a_silent_place_is_not_nowcast(runs) -> None:
     # stay at 0 in every week and none starts above a few cases.
     assert (by_week.apply(lambda v: (v == 0).mean()) > 0.7).all()
     assert by_week.median().max() == 0
+    # Up to its start week it keeps its reported 0s exactly.
+    model, _ = runs["randomwalknowcast"]
+    start = {r["location"]: r["start_week"] for r in model.fit_diagnostics}
+    assert (sk.loc[sk["target_end_date"] <= start["CD-SK"], "value"] == 0).all()

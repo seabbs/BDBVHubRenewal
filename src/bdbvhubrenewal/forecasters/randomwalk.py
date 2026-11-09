@@ -181,7 +181,7 @@ def _filter(
         after = (u > w0) & (u <= cw)
         share, y = origin.complete[:, u], origin.reported[:, u]
         prior = var[:, u - 1] + origin.sigma**2 if u else var[:, 0]
-        noise = 1.0 / (share + y)
+        noise = 1.0 / np.maximum(share + y, 1e-12)
         gain = np.where(after & (share > 0), prior / (prior + noise), 0.0)
         seen = np.log1p(y / np.maximum(share, 1e-12))
         prev = level[:, :, u - 1] if u else level[:, :, 0]
@@ -212,7 +212,8 @@ def _draw_path(
     )
     for u in range(cw - 1, -1, -1):
         inside = (u > w0)[:, None]
-        pull = var[:, u] / (var[:, u] + sigma**2)
+        total = var[:, u] + sigma**2
+        pull = np.where(total > 0, var[:, u] / np.maximum(total, 1e-12), 0.0)
         mean = level[:, :, u] + pull[:, None] * (
             drawn[:, :, u + 1] - level[:, :, u]
         )
