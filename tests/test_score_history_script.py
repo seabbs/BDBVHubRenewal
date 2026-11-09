@@ -68,7 +68,10 @@ def _summary() -> dict[str, object]:
 
 
 def test_summary_scores_match_on_baseline_forecasts(sh) -> None:
-    out = sh.summary_scores(_summary()).set_index(["pool", "model"])
+    every = sh.summary_scores(_summary())
+    assert set(every["baseline"]) == {"randomwalk", "good"}
+    out = every.loc[every["baseline"] == "randomwalk"]
+    out = out.set_index(["pool", "model"])
     assert set(out.index.get_level_values("model")) == {"randomwalk", "good"}
     nat = out.loc[("national", "good")]
     assert nat["n"] == 2
@@ -81,6 +84,13 @@ def test_summary_scores_match_on_baseline_forecasts(sh) -> None:
     assert prov["rel_wis"] == pytest.approx(0.5)
     assert out.loc[("national", "randomwalk"), "rel_wis"] == 1.0
     assert "rel_coverage_50" not in out.columns
+    # Relative to good, randomwalk is twice as bad nationally.
+    vs_good = every.loc[every["baseline"] == "good"].set_index(
+        ["pool", "model"]
+    )
+    assert vs_good.loc[("national", "randomwalk"), "rel_wis"] == pytest.approx(
+        2
+    )
 
 
 def test_history_flags_changes_in_what_is_scored(sh) -> None:
@@ -97,7 +107,8 @@ def test_history_flags_changes_in_what_is_scored(sh) -> None:
         ("b" * 40, "2026-11-05T10:00:00+00:00", "p3", "latest", later),
         ("c" * 40, "2026-11-06T10:00:00+00:00", "p4", "latest", fewer),
     ]
-    out = sh.history(deploys)
+    every = sh.history(deploys)
+    out = every.loc[every["baseline"] == "randomwalk"]
     first = out.loc[(out["model"] == "good") & (out["pool"] == "national")]
     assert list(first["source_sha"].str[:1]) == ["a", "a", "b", "c"]
     assert list(first["origins"])[2] == "2026-10-31;2026-11-07"
@@ -106,6 +117,13 @@ def test_history_flags_changes_in_what_is_scored(sh) -> None:
     # The baseline's forecasts are unchanged at the last deploy.
     rw = out.loc[(out["model"] == "randomwalk") & (out["pool"] == "national")]
     assert list(rw["break"]) == [True, False, True, False]
+    # Relative to good, whose forecasts changed, randomwalk breaks too.
+    vs_good = every.loc[
+        (every["baseline"] == "good")
+        & (every["model"] == "randomwalk")
+        & (every["pool"] == "national")
+    ]
+    assert list(vs_good["break"]) == [True, False, True, True]
 
 
 def _two_deploys(sh):
@@ -127,13 +145,22 @@ def test_chart_marks_breaks_and_names_commits(sh) -> None:
     assert [m["name"] for m in d["models"]] == ["randomwalk", "good"]
     assert d["models"][1]["light"] == "#111"
     assert d["scales"] == ["national", "provinces"]
-    nat = d["sets"]["national|deploy"]
+    assert d["baseline"] == 0
+    assert set(d["sets"]) == {
+        f"{b}|{p}|deploy"
+        for b in ("randomwalk", "good")
+        for p in ("national", "provinces")
+    }
+    nat = d["sets"]["randomwalk|national|deploy"]
     assert nat["x"] == ["11-04 10:00 aaaaaaa *", "11-05 10:00 bbbbbbb *"]
     assert nat["marks"] == [0, 1]
     good = [r for r in nat["rows"] if r[0] == 1]
     assert good[0][:3] == [1, 0, 2]
     keys = [m["key"] for m in d["metrics"]]
     assert good[0][3 + keys.index("rel_wis")] == pytest.approx(0.5)
+    rw = d["sets"]["good|national|deploy"]["rows"][0]
+    assert rw[0] == 0
+    assert rw[3 + keys.index("rel_wis")] == pytest.approx(2)
 
 
 def test_page_has_chart_table_and_commit_links(sh) -> None:
