@@ -33,7 +33,8 @@ def test_source_sha_is_read_from_main_deploys_only(sh) -> None:
 def _summary() -> dict[str, object]:
     # Models: randomwalk (baseline), good, "as reported".
     # Places: CD (national), CD-IT and CD-NK (provinces).
-    # Rows: model, origin, release, place, week, wis, cov50.
+    # Rows: model, origin, release, place, week, wis, cov50; `horizons`
+    # gives each row's horizon.
     return {
         "models": [
             {"name": "randomwalk"},
@@ -57,14 +58,20 @@ def _summary() -> dict[str, object]:
             [0, 0, 0, 0, 0, 10.0, 1.0],
             [0, 1, 0, 0, 0, 30.0, 0.0],
             [1, 0, 0, 0, 0, 5.0, 1.0],
-            [1, 1, 0, 0, 0, 15.0, 1.0],
+            [1, 1, 0, 0, 0, 30.0, 1.0],
             [0, 0, 0, 1, 0, 4.0, 1.0],
             [1, 0, 0, 1, 0, 2.0, 0.0],
             # No baseline forecast for CD-NK: left out.
             [1, 0, 0, 2, 0, 100.0, 0.0],
             [2, 0, 0, 0, 0, 1.0, 1.0],
         ],
+        "horizons": [0, 1, 0, 1, 0, 0, 0, 0],
     }
+
+
+def _full(df):
+    """Every forecast, over all horizons."""
+    return df.loc[(df["horizon"] == "all") & ~df["common"]]
 
 
 def test_summary_scores_match_on_baseline_forecasts(sh) -> None:
@@ -75,8 +82,8 @@ def test_summary_scores_match_on_baseline_forecasts(sh) -> None:
     assert set(out.index.get_level_values("model")) == {"randomwalk", "good"}
     nat = out.loc[("national", "good")]
     assert nat["n"] == 2
-    assert nat["wis"] == pytest.approx(10.0)
-    assert nat["rel_wis"] == pytest.approx(0.5)
+    assert nat["wis"] == pytest.approx(17.5)
+    assert nat["rel_wis"] == pytest.approx(35 / 40)
     assert nat["base_wis"] == pytest.approx(20.0)
     assert nat["coverage_50"] == pytest.approx(1.0)
     prov = out.loc[("provinces", "good")]
@@ -89,7 +96,7 @@ def test_summary_scores_match_on_baseline_forecasts(sh) -> None:
         ["pool", "model"]
     )
     assert vs_good.loc[("national", "randomwalk"), "rel_wis"] == pytest.approx(
-        2
+        40 / 35
     )
 
 
@@ -107,7 +114,7 @@ def test_history_flags_changes_in_what_is_scored(sh) -> None:
         ("b" * 40, "2026-11-05T10:00:00+00:00", "p3", "latest", later),
         ("c" * 40, "2026-11-06T10:00:00+00:00", "p4", "latest", fewer),
     ]
-    every = sh.history(deploys)
+    every = _full(sh.history(deploys))
     out = every.loc[every["baseline"] == "randomwalk"]
     first = out.loc[(out["model"] == "good") & (out["pool"] == "national")]
     assert list(first["source_sha"].str[:1]) == ["a", "a", "b", "c"]
@@ -124,6 +131,78 @@ def test_history_flags_changes_in_what_is_scored(sh) -> None:
         & (every["pool"] == "national")
     ]
     assert list(vs_good["break"]) == [True, False, True, True]
+
+
+def test_history_splits_by_horizon(sh) -> None:
+    out = sh.history([("a" * 40, "t", "p1", "latest", _summary())])
+    out = out.loc[
+        ~out["common"]
+        & (out["baseline"] == "randomwalk")
+        & (out["model"] == "good")
+        & (out["pool"] == "national")
+    ].set_index("horizon")
+    assert set(out.index) == {"all", "0", "1"}
+    assert out.loc["0", "rel_wis"] == pytest.approx(0.5)
+    assert out.loc["1", "rel_wis"] == pytest.approx(1.0)
+    assert out.loc["1", "n"] == 1
+
+
+def _good_national(df):
+    keep = (
+        (df["horizon"] == "all")
+        & (df["baseline"] == "randomwalk")
+        & (df["model"] == "good")
+        & (df["pool"] == "national")
+    )
+    return df.loc[keep]
+
+
+def test_common_forecasts_keep_the_scored_set_fixed(sh) -> None:
+    more = _summary()
+    # A third origin, scored by both, and good's first forecast refitted.
+    more["origins"] = ["2026-10-24", "2026-10-31", "2026-11-07"]
+    more["rows"] = [*more["rows"], [0, 2, 0, 0, 0, 8.0, 1.0]]
+    more["rows"].append([1, 2, 0, 0, 0, 2.0, 1.0])
+    more["rows"][2] = [1, 0, 0, 0, 0, 7.0, 1.0]
+    more["horizons"] = [*more["horizons"], 0, 0]
+    out = _good_national(
+        sh.history(
+            [
+                ("a" * 40, "t1", "p1", "latest", _summary()),
+                ("b" * 40, "t2", "p2", "latest", more),
+            ]
+        )
+    )
+    full = out.loc[~out["common"]]
+    common = out.loc[out["common"]]
+    assert list(full["n"]) == [2, 3]
+    assert list(common["n"]) == [2, 2]
+    assert list(common["wis"]) == pytest.approx([17.5, 18.5])
+    assert list(common["break"]) == [True, False]
+
+
+def test_common_window_starts_after_the_last_disjoint_deploy(sh) -> None:
+    moved = _summary()
+    moved["origins"] = ["2026-11-14", "2026-11-21"]
+    out = _good_national(
+        sh.history(
+            [
+                ("a" * 40, "t1", "p1", "latest", _summary()),
+                ("b" * 40, "t2", "p2", "latest", _summary()),
+                ("c" * 40, "t3", "p3", "latest", moved),
+            ]
+        )
+    )
+    common = out.loc[out["common"]]
+    assert list(common["source_sha"].str[:1]) == ["c"]
+    assert list(common["n"]) == [2]
+
+
+def test_baselines_can_be_restricted(sh) -> None:
+    out = sh.history(
+        [("a" * 40, "t", "p1", "latest", _summary())], baselines=["randomwalk"]
+    )
+    assert set(out["baseline"]) == {"randomwalk"}
 
 
 def _two_deploys(sh):
@@ -146,21 +225,26 @@ def test_chart_marks_breaks_and_names_commits(sh) -> None:
     assert d["models"][1]["light"] == "#111"
     assert d["scales"] == ["national", "provinces"]
     assert d["baseline"] == 0
-    assert set(d["sets"]) == {
-        f"{b}|{p}|deploy"
+    assert {
+        f"{b}|{p}|all horizons"
         for b in ("randomwalk", "good")
         for p in ("national", "provinces")
-    }
-    nat = d["sets"]["randomwalk|national|deploy"]
+    } <= set(d["sets"])
+    assert d["common"] is True
+    assert d["baselines"] == ["randomwalk", "good"]
+    assert d["splits"] == ["all horizons", "horizon 0", "horizon 1"]
+    assert d["split"] == "horizon 0"
+    assert "randomwalk|national|horizon 1|common" in d["sets"]
+    nat = d["sets"]["randomwalk|national|all horizons"]
     assert nat["x"] == ["11-04 10:00 aaaaaaa *", "11-05 10:00 bbbbbbb *"]
     assert nat["marks"] == [0, 1]
     good = [r for r in nat["rows"] if r[0] == 1]
     assert good[0][:3] == [1, 0, 2]
     keys = [m["key"] for m in d["metrics"]]
-    assert good[0][3 + keys.index("rel_wis")] == pytest.approx(0.5)
-    rw = d["sets"]["good|national|deploy"]["rows"][0]
+    assert good[0][3 + keys.index("rel_wis")] == pytest.approx(35 / 40)
+    rw = d["sets"]["good|national|all horizons"]["rows"][0]
     assert rw[0] == 0
-    assert rw[3 + keys.index("rel_wis")] == pytest.approx(2)
+    assert rw[3 + keys.index("rel_wis")] == pytest.approx(40 / 35)
 
 
 def test_page_has_chart_table_and_commit_links(sh) -> None:
