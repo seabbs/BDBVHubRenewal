@@ -245,8 +245,9 @@ Where no week reaches 0.95, `randomwalknowcast` takes the first week as the late
 
 `randomwalknowcast` walks on from each sample's own nowcast.
 
-1. The start week $w_0$ is the latest full week that is at least 5% reported and has at least 5 cases, else the first week.
-   A place with no case in the 9 weeks to $c_o$ starts at the latest complete week instead.
+1. The start week $w_0$ is the latest full week that is at least 5% reported and has at least 5 cases.
+   A place with no case in the 9 weeks to $c_o$, or with no such week, starts at the latest complete week instead.
+   After it the place stays at 0 until an introduction, as above, floored at the counts reported.
 2. Weeks up to the week holding $c_o$ are the nowcast draws $X_{p,i}(w)$.
 3. In sample $i$ the walk starts from $X_{p,i}(w_0)$.
 4. If the week holding $c_o$ is partial, its nowcast covers only its days up to $c_o$.
