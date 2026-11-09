@@ -74,26 +74,25 @@ def test_the_start_week_is_the_latest_week_at_95_per_cent(
 def test_10_24_point_nowcasts_use_one_daily_delay(origin24) -> None:
     # Weeks 10-24, 10-17, 10-10, 10-03, from the two 8 day pairs.
     # Downward revisions are moved onto earlier releases before the sums.
-    # The 10-09 release is cut at 10-08, the last report day its data
-    # prove, so 10-08 is an observed day with no onsets.
+    # The 10-09 release is cut at 10-07, its latest onset day.
     assert _weeks(origin24, "CD") == pytest.approx(
-        [438.9, 396.8, 497.2, 517.8], abs=0.06
+        [368.5, 373.4, 488.4, 515.9], abs=0.06
     )
     # Tshopo has under 10 cases a week, so uses the national delay.
     assert _weeks(origin24, "CD-TO") == pytest.approx(
-        [12.3, 12.2, 21.7, 18.4], abs=0.06
+        [10.1, 11.5, 21.3, 18.4], abs=0.06
     )
 
 
 def test_provinces_use_own_factors_where_they_have_10_cases(origin24) -> None:
     assert _weeks(origin24, "CD-IT") == pytest.approx(
-        [251.9, 192.4, 292.7, 256.6], abs=0.06
+        [212.7, 181.3, 282.6, 253.1], abs=0.06
     )
     assert _weeks(origin24, "CD-NK") == pytest.approx(
-        [152.1, 162.5, 159.1, 216.4], abs=0.06
+        [118.5, 149.5, 154.6, 214.2], abs=0.06
     )
     assert _weeks(origin24, "CD-HU") == pytest.approx(
-        [22.0, 33.7, 28.8, 30.7], abs=0.06
+        [17.7, 30.7, 27.7, 29.9], abs=0.06
     )
 
 

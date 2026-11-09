@@ -71,7 +71,7 @@ flowchart TD
 ### Time axis
 
 The data weeks start one week before weekly onsets, summed over the modelled provinces, first reach 5, or their peak if lower.
-The data weeks end with the week that holds $T$, the release's last report day ([Data](data.md#vintages)).
+The data weeks end with the week that holds $T$, the release's cut-off ([Data](data.md#vintages)).
 The model axis starts 42 days (6 weeks) earlier, the length of the generation interval, for seeding.
 Every weekly walk is held at its starting value over the 6 seeding weeks and the first data week.
 The fit axis is the data weeks, extended for `renewalbvd` as [below](#bvdoutbreaksize-informed).
@@ -136,7 +136,7 @@ $\bar m$ is a weekly random walk with start $\mathcal{N}(-2, 1)$ and step SD $\m
 
 ### Known onsets
 
-A case reported on day $t$ is in the vintage with probability $\Pi(t) = F_\ell(T - t)$, with $T$ the vintage's last report day and $F_\ell$ the cdf of the report-to-publication lag.
+A case reported on day $t$ is in the vintage with probability $\Pi(t) = F_\ell(T - t)$, with $T$ the vintage's cut-off and $F_\ell$ the cdf of the report-to-publication lag.
 The lag is the gap between a case's report and its first appearance in a release.
 Its pmf on 0 to 7 days has a Dirichlet(1, ..., 1) prior and is learnt from consecutive releases (see Likelihood).
 Expected known onsets, right truncated by vintage, are
@@ -170,7 +170,7 @@ The hub fits the delays as exact for releases up to 2026-10-24 and as double int
   Delays below 0 count as 0 and delays above 60 as 60.
 - Each delay-file row (location, onset week and delay) of release $k + 1$ was already in release $k$ with probability
   $$q = (1 - b_k) \frac{\sum_u F_\ell(T_k - t_u)}{\sum_u F_\ell(T_{k+1} - t_u)},$$
-  averaged over the onset days $u$ of the row's week, with $t_u$ the report day for onset $u$ and $T_k$ release $k$'s last report day.
+  averaged over the onset days $u$ of the row's week, with $t_u$ the report day for onset $u$ and $T_k$ release $k$'s cut-off.
   $b_k \sim \text{Beta}(1, 19)$ is the share of rows that appear late whatever their age, such as onsets recorded later for cases first counted as imputed.
   The kept rows of each cell are beta-binomial with mean $q$ and concentration $1/(\tau^2 + 10^{-3})$, $\tau \sim \mathcal{N}^+(0, 0.5^2)$, kept below 1000 as the other concentrations are.
   Rows up to 60 days old at release $k$ enter.

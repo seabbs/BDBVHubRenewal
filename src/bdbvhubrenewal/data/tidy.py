@@ -45,7 +45,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import epiweek_end
-from bdbvhubrenewal.data.releases import last_report_days, release_id
+from bdbvhubrenewal.data.releases import latest_onset_days, release_id
 
 __all__ = [
     "COHERENCE_HANDLING",
@@ -640,8 +640,8 @@ def build_tidy_data(
     daily_csv = raw / "auxiliary-data" / "daily-confirmed-case.csv"
     daily = tidy_daily(daily_csv)
     delays = tidy_delays(raw / "delays", locations)
-    # Every table keyed by release carries the release's last report day.
-    cutoffs = last_report_days(daily, delays)
+    # Every table keyed by release carries the release's latest onset day.
+    cutoffs = latest_onset_days(daily)
     series = raw / "target-data" / "time-series.csv"
     by_release = {
         "target": tidy_target(series, daily),
@@ -862,8 +862,8 @@ def load_target(data_dir: Path | str | None = None) -> pd.DataFrame:
         Columns `kind`, `vintage` (the release's as-of date),
         `location`, `location_name`, `target_end_date` (the Saturday
         ending the week), `observed`, `imputed` and `total`, as in
-        `tidy_target`, and `cutoff`, the release's last report day
-        (`bdbvhubrenewal.data.releases.last_report_days`).
+        `tidy_target`, and `cutoff`, the release's latest onset day
+        (`bdbvhubrenewal.data.releases.latest_onset_days`).
 
     Examples
     --------

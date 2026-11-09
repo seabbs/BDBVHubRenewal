@@ -223,7 +223,7 @@ def test_imputed_share_and_newly_missing(target: pd.DataFrame) -> None:
     # Every vintage after the first has a change from the one before.
     assert list(nat["vintage"]) == vintages(target)[1:]
     assert (nat["new_observed"] + nat["new_imputed"] == nat["new_total"]).all()
-    # Days between the releases' last report days, 10-24 to 10-31.
+    # Days between the releases' cut-offs, 10-24 to 10-31.
     assert nat.set_index("vintage").loc["2026-11-01", "days"] == 7
 
 
