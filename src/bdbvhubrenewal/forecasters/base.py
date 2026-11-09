@@ -61,7 +61,7 @@ class ForecastTask:
     kind : str
         `"real"` or `"simulated"`.
     cutoff : str
-        The vintage's data cut-off, its last report day, ISO format
+        The vintage's data cut-off, its latest onset day, ISO format
         (`bdbvhubrenewal.data.releases.release_cutoff`).
     target : pandas.DataFrame
         The target table rows of this vintage only (columns as in
