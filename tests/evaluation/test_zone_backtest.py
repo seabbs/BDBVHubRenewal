@@ -58,27 +58,22 @@ def test_both_baselines_are_scored_at_zone_level(
     assert (scores["location"].str.count("-") == 2).all()
     # Each origin is scored on what every later release reported.
     assert set(scores["target"]) == {"reported"}
-    nowcast = scores.loc[scores["model"] == "randomwalknowcast"]
-    pairs = set(zip(nowcast["origin"], nowcast["truth_vintage"], strict=True))
+    pairs = set(zip(scores["origin"], scores["truth_vintage"], strict=True))
     assert pairs == {
         ("2026-10-17", "2026-10-24"),
         ("2026-10-17", "2026-11-01"),
         ("2026-10-24", "2026-11-01"),
     }
-    # The walk on the counts as reported needs no delay, so it is also
-    # scored from the releases with no pair in the delay window.
-    walk = scores.loc[scores["model"] == "randomwalk", "origin"]
-    assert set(walk) == {"2026-08-18", "2026-10-09", "2026-10-17", "2026-10-24"}
     # Only zones with cases at the origin are forecast.
     per = scores.groupby(["model", "origin"])["location"].nunique()
     assert (per.groupby("origin").nunique() == 1).all()
+    assert per.between(20, 300).all()
 
 
-def test_every_model_scores_the_same_zones_and_weeks_where_all_forecast(
+def test_every_model_scores_the_same_zones_and_weeks(
     scores: pd.DataFrame,
 ) -> None:
-    both = scores.loc[scores["origin"] >= "2026-10-17"]
-    keys = both.groupby("model")[["location", "target_end_date"]].apply(
+    keys = scores.groupby("model")[["location", "target_end_date"]].apply(
         lambda d: set(map(tuple, d.to_numpy()))
     )
     assert keys.map(len).nunique() == 1

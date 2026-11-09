@@ -45,22 +45,28 @@ MODEL_METADATA = {
     "randomwalk": {
         "model_name": "RandomWalk baseline",
         "methods": (
-            "Latest reported onset week carried forward per place, with "
-            "log-scale random walk noise and Poisson draws and no nowcast. "
-            "Health zones and provinces, with national the sum of provinces."
+            "Latest complete onset week carried forward per place, with "
+            "log-scale random walk noise and Poisson draws. Health zones "
+            "and provinces, with national the sum of provinces."
         ),
         "methods_long": (
-            "For each place, the count reported for the latest onset week, "
-            "the one holding the data cut-off, is carried forward as "
-            "reported, with no adjustment for reporting delays. Later weeks "
-            "are drawn on the log scale as a random walk whose weekly SD is "
-            "the SD of the last 8 weekly changes of log(1 + cases), with "
-            "Poisson noise. Each sample is a joint trajectory and the "
-            "national value is the sum of province samples. See "
+            "For each place, the latest onset week with at least 95% of its "
+            "final count reported is carried forward. The share reported "
+            "comes from a baselinenowcast chain ladder on the daily release "
+            "snapshots. Later weeks are drawn on the log scale as a random "
+            "walk whose weekly SD is the SD of the last 8 weekly changes of "
+            "log(1 + cases), with Poisson noise and a floor at the count "
+            "already reported. A place uses its own delay factor at an age "
+            "if that factor rests on at least 10 cases, and otherwise its "
+            "parent's (zone, then province, then national). A place under "
+            "10 cases a week uses the walk spread of its parent. Each sample "
+            "is a joint trajectory and the national value is the sum of "
+            "province samples. See "
             "https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."
         ),
         "data_inputs": (
-            "The hub's weekly target data for provinces and health zones."
+            "Hub daily onsets by release (observed plus imputed) for "
+            "provinces and health zones, and the hub's weekly target data."
         ),
     },
     # The PyRenew models, submitted as seabbs-renewal. The gate writes the

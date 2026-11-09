@@ -1,13 +1,20 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 r"""The random walk baselines.
 
-Both models run at province and zone level from one random walk
-(`walk.random_walk`).
+Both models run on the hub's daily release snapshots (`chain`), at
+province and zone level, from one random walk (`walk.random_walk`).
 
-`RandomWalk` (`randomwalk`) is the baseline with no nowcast. It starts
-from the count reported for the latest week, the one holding the
-cut-off, with the spread of its own reported changes, and returns weeks
-with data as reported.
+`RandomWalk` (`randomwalk`) starts from the reported count of the latest
+week judged complete, $\pi \ge 0.95$, where
+
+$$
+\pi(w) = \frac{1}{7} \sum_{t \in w} \frac{\mathbb{1}\{t \le c\}}{G(a(t))}
+$$
+
+is the share of the week's final count reported, under the delay
+estimate of `chain`.
+Weeks up to the start are returned as reported.
+Later weeks are walk draws, floored at the count reported.
 
 `RandomWalkNowcast` (`randomwalknowcast`) nowcasts every day with data and
 sums to hub weeks, with negative binomial new reports on the remaining
@@ -18,21 +25,20 @@ If the week holding the cut-off is partial, its days after the cut-off
 add Poisson draws from that week's walk rate.
 
 The spread of the walk is the standard deviation of the weekly changes of
-$\log(1 + y)$ in reported counts, over the weeks ending at the start.
-In `randomwalknowcast`, which runs on the hub's daily release snapshots
-(`chain`), the delay, the observation model and the walk spread each use
-their own estimate where a place has at least 10 cases a week, and
-otherwise the pooled estimate of the nearest parent that does
-(`pooling`).
+$\log(1 + y)$ in reported counts, over the weeks ending at the start of
+`randomwalk`.
+The delay, the observation model and the walk spread each use their own
+estimate where a place has at least 10 cases a week, and otherwise the
+pooled estimate of the nearest parent that does (`pooling`).
 A place with no case in the latest `walk_weeks` weeks is 0 until its first
 introduction, a geometric number of weeks in with its pooled weekly
 probability. A silent place's walk has spread 0, so from its
 introduction its rate stays at 1 case a week.
-In `randomwalknowcast` this runs from the week after the latest week at
-least 95% reported, so a silent place's recent weeks are not nowcast.
+In both models this runs from the week after the `randomwalk` start week,
+so a silent place's recent weeks are not nowcast.
 National is the sum of provinces by sample.
-`randomwalknowcast` raises if the task has no snapshots or no pair of
-releases within the delay window.
+Each model raises if the task has no snapshots or no pair of releases
+within the delay window.
 """
 
 from __future__ import annotations
@@ -55,11 +61,11 @@ from bdbvhubrenewal.forecasters.base import (
 )
 from bdbvhubrenewal.forecasters.chain import (
     MissingSnapshots,
+    NoCompleteWeek,
     Origin,
     Settings,
     build_origin,
     delay_summary,
-    walk_changes,
 )
 from bdbvhubrenewal.forecasters.obs import sample_count
 from bdbvhubrenewal.forecasters.walk import random_walk
@@ -71,9 +77,9 @@ def _key(task: ForecastTask) -> jax.Array:
     return jax.random.key(int(task.rng().integers(0, 2**31 - 1)))
 
 
-def _timeline(data: list[str], task: ForecastTask) -> list[str]:
+def _timeline(origin: Origin, task: ForecastTask) -> list[str]:
     """Return every hub week from the first data week to the last target."""
-    weeks = list(data)
+    weeks = list(origin.snap.week_ends)
     last = as_date(max(task.target_end_dates))
     while as_date(weeks[-1]) < last:
         weeks.append((as_date(weeks[-1]) + dt.timedelta(days=7)).isoformat())
@@ -160,94 +166,23 @@ def frame(
 
 @dataclass
 class RandomWalk:
-    """Carry the latest reported week forward with growing noise.
+    """Carry the latest complete week forward with growing noise.
 
     Attributes
     ----------
     name : str
         Model name.
     settings : Settings
-        Settings; the walk's spread uses the latest `walk_weeks` weeks,
-        and `randomwalknowcast` its delay window and thresholds.
+        Delay window, thresholds and the walk's window.
     fit_diagnostics : list of dict
-        One row per place from the last forecast: the start week and the
-        spread, and for `randomwalknowcast` the errors behind the spread
-        and the source of the delay, spread and walk.
+        One row per place from the last forecast: the start week, the
+        errors behind the spread and the source of the delay, spread and
+        walk.
     """
 
     name: str = "randomwalk"
     settings: Settings = field(default_factory=Settings)
     fit_diagnostics: list[dict[str, object]] = field(default_factory=list)
-    needs_snapshots: ClassVar[bool] = False
-
-    def forecast(self, task: ForecastTask) -> pd.DataFrame:
-        """Return random walk trajectories for a task.
-
-        Parameters
-        ----------
-        task : ForecastTask
-            The data and weeks to forecast.
-
-        Returns
-        -------
-        pandas.DataFrame
-            Columns `location`, `target_end_date`, `sample`, `value`.
-
-        Examples
-        --------
-        >>> from bdbvhubrenewal.forecasters import get_model
-        >>> samples = get_model("randomwalk").forecast(task)
-        >>> samples.groupby(["location", "target_end_date"])["value"].median()
-        """
-        weekly = task.target.pivot_table(
-            index="location", columns="target_end_date", values="total"
-        )
-        weekly = weekly.reindex(list(task.locations)).fillna(0.0)
-        reported = weekly.to_numpy(dtype=float)
-        weeks = _timeline(list(weekly.columns), task)
-        n_loc, n_data = reported.shape
-        n_all, n = len(weeks), task.n_samples
-        start = np.full(n_loc, n_data - 1)
-        sigma = [
-            float(np.std(d, ddof=1)) if d.size >= 2 else 0.0
-            for d in walk_changes(reported, start, self.settings)
-        ]
-        keys = jax.random.split(_key(task), n_loc)
-        _, y = jax.vmap(lambda k, x, s: random_walk(k, x, s, n_all - n_data))(
-            keys,
-            jnp.asarray(np.repeat(reported[:, -1:], n, axis=1), jnp.float32),
-            jnp.asarray(sigma, jnp.float32),
-        )
-        values = np.zeros((n, n_loc, n_all))
-        for u in range(n_all):
-            if u < n_data:
-                values[:, :, u] = reported[:, u]
-            else:
-                values[:, :, u] = np.asarray(y)[:, :, u - n_data].T
-        self.fit_diagnostics = [
-            {"location": loc, "start_week": weeks[n_data - 1], "sigma": sd}
-            for loc, sd in zip(task.locations, sigma, strict=True)
-        ]
-        return frame(task, weeks, values, list(range(n_loc)))
-
-
-@dataclass
-class RandomWalkNowcast(RandomWalk):
-    """The random walk run forward from a daily nowcast of the recent weeks.
-
-    Attributes
-    ----------
-    name : str
-        Model name.
-    delay_summary : pandas.DataFrame or None
-        The delay of the last forecast (`chain.delay_summary`), which maps
-        its final counts to what later releases show.
-    """
-
-    name: str = "randomwalknowcast"
-    delay_summary: pd.DataFrame | None = field(
-        init=False, default=None, repr=False
-    )
     needs_snapshots: ClassVar[bool] = True
 
     def origin_at(self, task: ForecastTask, errors: bool) -> Origin:
@@ -324,6 +259,86 @@ class RandomWalkNowcast(RandomWalk):
         self.fit_diagnostics = rows
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
+        """Return random walk trajectories for a task.
+
+        Parameters
+        ----------
+        task : ForecastTask
+            The data and weeks to forecast. Its `daily_history` holds the
+            release snapshots.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Columns `location`, `target_end_date`, `sample`, `value`.
+
+        Raises
+        ------
+        ModelUnavailableError
+            If the task has no snapshots, no pair of releases within
+            the delay window, or a place with no week that is 95 per cent
+            complete (`NoCompleteWeek`).
+
+        Examples
+        --------
+        >>> from bdbvhubrenewal.forecasters import get_model
+        >>> samples = get_model("randomwalk").forecast(task)
+        >>> samples.groupby(["location", "target_end_date"])["value"].median()
+        """
+        origin = self.origin_at(task, errors=False)
+        weeks = _timeline(origin, task)
+        n_data, n_all, n = origin.snap.n_weeks, len(weeks), task.n_samples
+        n_loc = len(origin.snap.locations)
+        good = origin.complete >= origin.settings.completeness
+        if not good.any(axis=1).all():
+            has = good.any(axis=1)
+            none = [
+                x
+                for x, ok in zip(origin.snap.locations, has, strict=True)
+                if not ok
+            ]
+            raise NoCompleteWeek(
+                f"No week reaches {origin.settings.completeness:.0%} "
+                f"complete at {origin.snap.releases[origin.o]} for "
+                f"{', '.join(none)}, so the walk has no start week."
+            )
+        start = origin.start
+        x0 = origin.reported[np.arange(n_loc), start]
+        _, y = _walks(
+            _key(task), np.repeat(x0[:, None], n, axis=1), origin, n_all
+        )
+        values = np.zeros((n, n_loc, n_all))
+        for loc in range(n_loc):
+            for u in range(n_all):
+                if u <= start[loc]:
+                    values[:, loc, u] = origin.reported[loc, u]
+                else:
+                    draw = y[loc, :, u - start[loc] - 1]
+                    floor = origin.reported[loc, u] if u < n_data else 0.0
+                    values[:, loc, u] = np.maximum(draw, floor)
+        self._diagnostics(origin, task, start)
+        return frame(task, weeks, values, self.rows(origin, task))
+
+
+@dataclass
+class RandomWalkNowcast(RandomWalk):
+    """The random walk run forward from a daily nowcast of the recent weeks.
+
+    Attributes
+    ----------
+    name : str
+        Model name.
+    delay_summary : pandas.DataFrame or None
+        The delay of the last forecast (`chain.delay_summary`), which maps
+        its final counts to what later releases show.
+    """
+
+    name: str = "randomwalknowcast"
+    delay_summary: pd.DataFrame | None = field(
+        init=False, default=None, repr=False
+    )
+
+    def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return random walk trajectories from a nowcast for a task.
 
         Parameters
@@ -378,7 +393,7 @@ class RandomWalkNowcast(RandomWalk):
         snap = origin.snap
         assert origin.size is not None
         assert origin.removal is not None
-        weeks = _timeline(list(origin.snap.week_ends), task)
+        weeks = _timeline(origin, task)
         n_data, n_all, n = snap.n_weeks, len(weeks), task.n_samples
         n_loc = len(snap.locations)
         k_n = origin.size.shape[1]
@@ -433,7 +448,7 @@ class RandomWalkNowcast(RandomWalk):
 register_model(
     "randomwalk",
     RandomWalk,
-    "Latest reported week carried forward, with log-scale random walk noise.",
+    "Latest complete week carried forward, with log-scale random walk noise.",
     baseline=True,
 )
 register_model(

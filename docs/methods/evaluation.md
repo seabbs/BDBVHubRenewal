@@ -76,11 +76,11 @@ Each real release up to the latest model choice date with a later release is an 
 The random walk models forecast from the releases up to the origin only.
 The renewal models' stored forecasts from the origin are scored with them.
 So are hub teams' forecasts for a round, at the latest release serving it.
-A model that cannot forecast from an origin, such as `randomwalknowcast` with no pair of releases within the delay window, $D = 42$ days, is listed with no forecasts there.
+A model that cannot forecast from an origin, such as a random walk model with no pair of releases within the delay window, $D = 42$ days, is listed with no forecasts there.
 Two targets are scored.
 
 **Reported.** The count each later release $o'$ shows for every forecast week it reports.
-`randomwalk` forecasts the counts as reported, so its samples are scored as they are.
+`randomwalk` is scored on its samples as they are, with no delay.
 Every other model forecasts the final count $X$ of week $w$ and is mapped to what $o'$ shows by its own modelled delay.
 Day $t$ is $a = c - t$ days old at a cut-off $c$, and $\pi(a)$ is the share of its final count the model expects reported by then.
 For `randomwalknowcast` and `pprandomwalknowcast`, $\pi(a) = 1 / G(a)$ under the daily delay each fits at the origin ([Baseline models](baselines.md#delay)).

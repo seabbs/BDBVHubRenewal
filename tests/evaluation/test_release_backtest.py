@@ -42,16 +42,14 @@ def result(target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame):  # 
 def test_a_model_that_cannot_forecast_is_listed_with_no_forecasts(
     result,  # type: ignore[no-untyped-def]
 ) -> None:
-    o = result.origins.set_index(["origin", "model"])
-    for early in ("2026-08-18", "2026-10-09"):
-        # No pair of releases is in the delay window, so no nowcast.
-        assert o.loc[(early, "randomwalknowcast"), "status"] == "no forecast"
-        assert o.loc[(early, "randomwalknowcast"), "n_reported"] == 0
-        # The walk on the counts as reported needs no delay.
-        assert o.loc[(early, "randomwalk"), "status"] == "scored"
-        assert o.loc[(early, "randomwalk"), "n_reported"] > 0
-    ran = o.loc["2026-10-17"]
-    assert set(ran.index) == {"randomwalk", "randomwalknowcast"}
+    o = result.origins
+    # No pair of releases is in the delay window, so neither walk runs.
+    early = o.loc[o["origin"].isin(["2026-08-18", "2026-10-09"])]
+    assert set(early["status"]) == {"no forecast"}
+    assert (early["n_reported"] == 0).all()
+    assert (early["n_complete"] == 0).all()
+    ran = o.loc[o["origin"] == "2026-10-17"]
+    assert set(ran["model"]) == {"randomwalk", "randomwalknowcast"}
     assert (ran["n_complete"] > 0).all()
     assert (ran["n_reported"] > 0).all()
 
@@ -62,12 +60,11 @@ def test_every_model_is_scored_on_each_later_release(
     s = result.scores
     assert set(s["target"]) == {"reported", "complete"}
     assert set(s["model"]) == {"randomwalk", "randomwalknowcast"}
-    both = s.loc[s["origin"].isin(["2026-10-17", "2026-10-24"])]
-    rep = both.loc[(both["target"] == "reported")]
-    rep = rep.loc[rep["origin"] == "2026-10-17"]
+    assert set(s["origin"]) == {"2026-10-17", "2026-10-24"}
+    rep = s.loc[(s["target"] == "reported") & (s["origin"] == "2026-10-17")]
     assert set(rep["truth_vintage"]) == {"2026-10-24", "2026-11-01"}
-    # Where both forecast, both are scored on the same forecasts.
-    for _, g in summarise(both).groupby("target"):
+    # Every model is scored on the same forecasts of a target.
+    for _, g in summarise(s).groupby("target"):
         assert g["n"].nunique() == 1
     # Forecast weeks are scored once a later release reports them.
     assert (rep["weeks_back"] < 0).any()
@@ -89,7 +86,7 @@ def test_randomwalk_is_scored_on_its_samples_as_they_are(
 def test_energy_scores_each_scale_on_the_same_samples(
     result,  # type: ignore[no-untyped-def]
 ) -> None:
-    e = result.energy.loc[result.energy["origin"] >= "2026-10-17"]
+    e = result.energy
     unit = ["origin", "target", "truth_vintage", "scale"]
     assert set(e["scale"]) == {"national", "provinces"}
     assert set(e["model"]) == {"randomwalk", "randomwalknowcast"}
@@ -97,10 +94,7 @@ def test_energy_scores_each_scale_on_the_same_samples(
     assert (e.groupby(unit)["n_cells"].nunique() == 1).all()
     assert (e.groupby(unit)["model"].nunique() == 2).all()
     # The vector holds every scored cell of the scale.
-    s = result.scores.loc[
-        (result.scores["model"] == "randomwalk")
-        & (result.scores["origin"] >= "2026-10-17")
-    ]
+    s = result.scores.loc[result.scores["model"] == "randomwalk"]
     nat = s.loc[s["location"] == "CD"].groupby(unit[:3]).size()
     got = e.loc[(e["model"] == "randomwalk") & (e["scale"] == "national")]
     assert got.set_index(unit[:3])["n_cells"].equals(nat.rename("n_cells"))

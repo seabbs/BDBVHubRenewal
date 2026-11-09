@@ -226,10 +226,9 @@ def test_delays_for_vintage_uses_the_latest_available(
 @pytest.mark.usefixtures("in_root")
 def test_nowcast_notes_what_it_handled(tmp_path: Path, plain: Path) -> None:
     assert json.loads((plain / "handled.json").read_text()) == []
-    # The first release has no pair of releases, so the nowcast raises.
+    # The first release has no pair of releases, so the model raises.
     old = tmp_path / "old"
-    assert main(["nowcast", "--model", "randomwalknowcast", "--vintage",
-                 "2026-08-18", "--out", str(old)]) == 1  # fmt: skip
+    assert main(["nowcast", "--vintage", "2026-08-18", "--out", str(old)]) == 1
     assert not old.exists()
 
 

@@ -12,8 +12,7 @@ Two targets are scored.
 
 **Reported.** The count each later release $o'$ shows, for every week
 of the forecast that $o'$ reports.
-`randomwalk` forecasts the counts as reported, so its samples are scored
-as they are.
+`randomwalk` is scored on its samples as they are, with no delay.
 Every other model forecasts the final count $X$ of a week and is mapped
 to what $o'$ shows through its own modelled delay, the share
 $\pi$ of a day's final count reported by each age (`delay_curves`,
@@ -91,7 +90,7 @@ __all__ = [
 log = logging.getLogger(__name__)
 
 RANDOM_WALK = "randomwalk"
-"""The model that forecasts the counts as reported, scored as they are."""
+"""The model scored on its samples as they are, with no delay."""
 
 COMPLETE_WEEKS = 4
 """Weeks a week must be old at the latest release to count as complete."""
@@ -374,10 +373,10 @@ def reported_samples(
 ) -> dict[str, pd.DataFrame]:
     """Return a model's samples of what each later release shows.
 
-    `randomwalk` forecasts the counts as reported, so its samples are
-    returned as they are. Another model's places are mapped by its delay
-    (`delay_curves`, `draw_reported`), a place it has no delay for is
-    returned as it is, and the country is the sum of the provinces.
+    `randomwalk`'s samples are returned as they are, with no delay.
+    Another model's places are mapped by its delay (`delay_curves`,
+    `draw_reported`), a place it has no delay for is returned as it is,
+    and the country is the sum of the provinces.
     A model with no delay summary, such as a hub team, has none.
 
     Parameters

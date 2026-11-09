@@ -11,7 +11,7 @@ Each model is scored as it runs, and again with its zone samples made to
 sum to its province samples (`reconcile_zones`), which is the form
 submitted.
 Zones are scored on the zone count each later real vintage reports.
-`randomwalk` forecasts the counts as reported and is scored as it is.
+`randomwalk` is scored on its samples as they are, with no delay.
 `randomwalknowcast`'s final-count samples are drawn as for provinces
 (`bdbvhubrenewal.evaluation.nowcast.draw_reported`) under its own zone
 delay at the origin.

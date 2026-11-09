@@ -6,7 +6,7 @@
 The data and notation are on the [Data methods page](data.md#target-and-notation).
 The renewal models are on the [Renewal models](model.md) page.
 `randomwalknowcast` is baselinenowcast[^bnc-paper][^bnc-package] with a random walk on top.
-`randomwalk` is the same walk on the counts as reported, with no nowcast.
+`randomwalk` is the same walk with no nowcast.
 Both run at province and zone level ([Health zones](#health-zones)), and national is the sum of the provinces.
 
 ## Structure
@@ -43,26 +43,36 @@ flowchart TD
     W --> NAT
 ```
 
-`randomwalk` uses no delay.
+`randomwalk` uses the same delay only to find its start week.
 
 ```mermaid
 flowchart TD
-    Y["Reported Y<sub>p,o</sub>(w)<br/>hub weekly counts at origin o"]
-    W0["Start week w<sub>0</sub><br/>the week holding the cut-off"]
-    SIG["Walk spread σ<sub>p</sub><br/>changes in log(1 + Y<sub>p,o</sub>)<br/>over the latest 9 weeks"]
-    W["Walk on log(1 + λ<sub>i</sub>)<br/>from Y<sub>p,o</sub>(w<sub>0</sub>)<br/>Poisson counts"]
+    subgraph TRI["Reporting triangle, per place p"]
+        SNAP["Daily onsets N<sub>p,r</sub>(t)<br/>by onset day and release r"]
+        PAIR["Release pairs (r, r + 1)<br/>gap s ≤ D = 42 days"]
+    end
+    DEL["Daily delay g<sub>p</sub>(j)<br/>and growth to final G<sub>p</sub>(a)"]
+    PI["Share reported π<sub>p</sub>(w)<br/>mean of 1 / G<sub>p</sub>(c<sub>o</sub> − t)"]
+    W0["Start week w<sub>0</sub><br/>latest with π<sub>p</sub>(w) ≥ 0.95"]
+    Y["Reported Y<sub>p,o</sub>(w<sub>0</sub>)"]
+    SIG["Walk spread σ<sub>p</sub><br/>changes in log(1 + Y<sub>p,o</sub>)"]
+    W["Walk on log(1 + λ<sub>i</sub>)<br/>from Y<sub>p,o</sub>(w<sub>0</sub>)<br/>silent places at 1 case a week<br/>from their first introduction<br/>Poisson counts<br/>floored at Y<sub>p,o</sub>(w)<br/>in weeks with data"]
     NAT["National = sum of provinces<br/>sample by sample"]
 
-    Y --> W0
-    W0 --> W
-    Y --> SIG
+    SNAP --> PAIR
+    PAIR --> DEL
+    DEL --> PI
+    PI --> W0
+    W0 --> Y
+    SNAP --> Y
+    Y --> W
     SIG --> W
     W --> NAT
 ```
 
 ## Daily release snapshots
 
-`randomwalknowcast` and `pprandomwalknowcast` use the daily onsets of each hub release.
+Both models use the daily onsets of each hub release.
 $N_{p,r}(t)$ is the known plus imputed onsets in province $p$ on day $t$ at release $r$, which sum over a hub week to the weekly target.
 A forecast is made from the vintage of its date, whose latest release is $o$.
 Release $r$ has a cut-off $c_r$, the cut-off the release states where it gives one and otherwise its latest onset day over all places.
@@ -171,8 +181,7 @@ The delay $g_p(x)$ is own or parent by age.
 A place uses its own $g_p(x)$ when its denominator $\sum N_{p,r}(t)$ at age $x$, summed over the pairs, is at least 10 cases.
 Otherwise it uses its parent's at that age (zone, province, country).
 The country uses its own.
-In `randomwalknowcast` the size $\phi_{p,k}$ and the spread of the walk $\sigma_p$ use one rule with a threshold of 10 cases a week and 3 errors.
-`randomwalk` uses each place's own $\sigma_p$.
+The size $\phi_{p,k}$ and the spread of the walk $\sigma_p$ use one rule with a threshold of 10 cases a week and 3 errors.
 The removal rate $b_{p,k}$ is each place's own, so a place with no falls has none.
 $\ell_p$ is the mean of $Y_{p,o}(w)$ over weeks 3 to 6 back, in cases a week.
 A place with $\ell_p \ge 10$ uses its own estimate.
@@ -199,27 +208,33 @@ $$
 
 Steps are summed within a sample, so each sample is one trajectory.
 
-In `randomwalknowcast`, a place with no case reported in the 9 weeks up to the cut-off week is silent.
+A place with no case reported in the 9 weeks up to the cut-off week is silent.
 A silent place is 0 until its first introduction, which comes in each week with probability $q_p$.
-This holds from the week after the latest week at least 95% reported under the delay, so `randomwalknowcast` does not nowcast a silent place's recent weeks.
+In both models this holds from the week after the start week of `randomwalk`, so `randomwalknowcast` does not nowcast a silent place's recent weeks.
 A silent place's walk has spread 0, so from its introduction its rate stays at 1 case a week.
 The introduction week has at least 1 case.
-$q_p$ is the share of weeks with a case among the weeks that follow 9 weeks with none, over the place and its siblings (the zones of its province, or the provinces of the country), in weeks up to that 95%-reported week.
+$q_p$ is the share of weeks with a case among the weeks that follow 9 weeks with none, over the place and its siblings (the zones of its province, or the provinces of the country), in weeks up to the start week of `randomwalk`.
 It is estimated at each origin from the counts reported then.
 National is the sum of the provinces, sample by sample.
 
-$\sigma_p$ is the sample standard deviation of the weekly changes of $\log\{1 + Y_{p,o}(w)\}$ over 9 weeks, so up to 8 changes.
-For `randomwalk` they end at the week holding the cut-off, and for `randomwalknowcast` at the latest week at least 95% reported under the delay.
+$\sigma_p$ is the sample standard deviation of the weekly changes of $\log\{1 + Y_{p,o}(w)\}$ over the 9 weeks ending at the start week of `randomwalk`, so up to 8 changes.
 With fewer than 2 changes it is 0.
 Both models use reported counts for $\sigma_p$.
 
 ## Random walk
 
-`randomwalk` makes no nowcast and uses no delay, so it forecasts the counts as reported.
-Its start week $w_0$ is the week holding the cut-off, for every place, and $x_i = Y_{p,o}(w_0)$ for every sample.
-Weeks with data are the reported counts.
-It needs no release snapshots, so it forecasts from every release.
-A place with no case in its latest weeks has spread 0, so `randomwalk` keeps it at 0.
+`randomwalk` makes no nowcast.
+Its start week $w_0$ is the latest week with
+
+$$
+\pi_p(w) = \frac{1}{7} \sum_{t \in w,\ t \le c_o} \frac{1}{G_p(c_o - t)} \ge 0.95,
+$$
+
+the estimated share of the week's final count reported, under the delay above.
+If any place has no week with $\pi_p(w) \ge 0.95$, `randomwalk` raises (`NoCompleteWeek`) and gives no forecast for the vintage, with nothing in its place.
+$x_i = Y_{p,o}(w_0)$ for every sample.
+Weeks up to $w_0$ are the reported counts.
+Later weeks with data are walk draws, floored at the reported count.
 
 ## Random walk on a nowcast
 
@@ -231,7 +246,7 @@ Later weeks are walk draws.
 
 ## Health zones
 
-`randomwalk` runs on each zone's reported counts, and `randomwalknowcast` on each zone's own release snapshots, with the same code as for provinces.
+`randomwalk` and `randomwalknowcast` run on each zone's own release snapshots with the same code as for provinces.
 The hierarchy is zone, province, country, and each zone takes its delay, size and walk spread by the rules [above](#own-or-pooled-estimates).
 Zone samples sum to their province's samples, sample by sample and week by week.
 Province sample $Y^{(k)}(w)$ is apportioned over the zones in proportion to the zone model's own sample $x^{(k)}_z(w)$ of the same id and week:
