@@ -10,13 +10,20 @@ baseline's. A new metric is a score column and a label.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping, Sequence
 
 import pandas as pd
 
 from bdbvhubrenewal.forecasters import NATIONAL
 
-__all__ = ["ENERGY_SUMMARY", "SUMMARY_METRICS", "summary_html", "summary_rows"]
+__all__ = [
+    "ENERGY_SUMMARY",
+    "SUMMARY_METRICS",
+    "summary_html",
+    "summary_rows",
+    "targets_attr",
+]
 
 SUMMARY_METRICS: tuple[tuple[str, str, float | None, bool], ...] = (
     ("wis", "WIS", None, True),
@@ -183,8 +190,18 @@ def _energy_rows(
     }
 
 
+def targets_attr(srcs: Mapping[str, str]) -> str:
+    """Return the `data-targets` attribute: each target's summary URL.
+
+    The targets are `"latest"` (scored on the latest release) and
+    `"complete"` (scored on complete weeks), in the order given; the first
+    is shown first and `toggles.js` offers a picker when there are two.
+    """
+    return f" data-targets='{json.dumps(dict(srcs))}'"
+
+
 def summary_html(
-    src: str,
+    srcs: Mapping[str, str],
     title: str,
     view: str = "overall",
     static: str | None = None,
@@ -194,8 +211,9 @@ def summary_html(
 
     Parameters
     ----------
-    src : str
-        URL of the `summary_rows` JSON, relative to the page.
+    srcs : mapping of str to str
+        URL of each target's `summary_rows` JSON, relative to the page
+        (`targets_attr`).
     title : str
         Accessible name of the summary.
     view : str
@@ -218,7 +236,8 @@ def summary_html(
         )
     shown = "" if map_src is None else f' data-map="{map_src}"'
     return (
-        f'<div class="scoresummary" data-src="{src}" data-view="{view}"{shown} '
+        f'<div class="scoresummary"{targets_attr(srcs)} data-view="{view}"'
+        f"{shown} "
         f'role="group" aria-label="{title}">\n'
         f"<noscript>{fallback}</noscript>\n"
         "</div>\n"

@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from bdbvhubrenewal.reporting.scoresummary import targets_attr
+
 __all__ = [
     "TRAJECTORY_DRAWS",
     "compact",
@@ -237,7 +239,10 @@ def write_explorer(path: Path, data: Mapping[str, object]) -> None:
 
 
 def explorer_html(
-    src: str, title: str, all_rounds: bool = False, summary: str | None = None
+    src: str,
+    title: str,
+    all_rounds: bool = False,
+    summary: Mapping[str, str] | None = None,
 ) -> str:
     """Return the page element the explorer script fills.
 
@@ -249,13 +254,14 @@ def explorer_html(
         Accessible name of the explorer.
     all_rounds : bool
         Start with all rounds pooled, rather than the latest round.
-    summary : str, optional
-        URL of the page's `summary_rows` JSON, whose rounds are the
-        explorer's. The table summarises it for the selection.
+    summary : mapping of str to str, optional
+        URL of each target's `summary_rows` JSON (`targets_attr`), whose
+        rounds are the explorer's. The table summarises it for the
+        selection.
     """
     start = ' data-round="all"' if all_rounds else ""
     if summary is not None:
-        start += f' data-summary="{summary}"'
+        start += targets_attr(summary)
     return (
         f'<div class="explorer" data-src="{src}"{start} role="group" '
         f'aria-label="{title}">\n'

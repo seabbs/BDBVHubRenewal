@@ -1,12 +1,15 @@
 // Checks chart: the backtest scores by place type or flag (the report's
-// checks JSON), drawn with scorechart.js, with a scale and a split picker.
+// checks JSON), drawn with scorechart.js, with a target (data-targets), a
+// scale and a split picker.
 (function () {
   "use strict";
-  var h = window.bdbvToggles.h;
+  var T = window.bdbvToggles;
+  var h = T.h;
 
-  function build(root, d) {
+  function build(root, d, targets, target) {
     root.textContent = "";
     var controls = h("div", { class: "explorer-controls" }, root);
+    T.targetSelect(controls, targets, target, function (k) { load(root, k); });
     var selScale = h("select", {}, h("label", {}, controls, "Scale "));
     d.scales.forEach(function (s) { h("option", { value: s }, selScale, s); });
     var selSplit = h("select", {}, h("label", {}, controls, "Split by "));
@@ -30,15 +33,17 @@
     selSplit.addEventListener("change", update);
   }
 
-  function init(root) {
-    fetch(root.dataset.src)
-      .then(function (r) { return r.json(); })
-      .then(function (d) { build(root, d); })
+  // Load the checks of one target (data-targets) and draw them.
+  function load(root, target) {
+    var targets = JSON.parse(root.dataset.targets);
+    T.getJSON(targets[target])
+      .then(function (d) { build(root, d, targets, target); })
       .catch(function () { root.textContent = "The checks data could not be loaded."; });
   }
+  function init(root) { load(root, Object.keys(JSON.parse(root.dataset.targets))[0]); }
 
   function start() {
-    document.querySelectorAll(".checkschart[data-src]").forEach(init);
+    document.querySelectorAll(".checkschart[data-targets]").forEach(init);
   }
   if (typeof document$ !== "undefined") document$.subscribe(start);
   else document.addEventListener("DOMContentLoaded", start);
