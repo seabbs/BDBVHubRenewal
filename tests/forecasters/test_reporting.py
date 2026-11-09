@@ -45,8 +45,9 @@ def test_encoding_keeps_the_curves_to_1_255_of_the_final_count() -> None:
     back = decode(encode(c))
     for s in ("known", "imputed"):
         final = c[s][:, -1:]
-        assert np.all(np.abs(back[s] - c[s]) <= final / 255 / 2 + 1e-4)
-        np.testing.assert_allclose(back[s][:, -1], c[s][:, -1], rtol=1e-6)
+        # Shares to 1/255, eventual counts to 0.01 cases.
+        assert np.all(np.abs(back[s] - c[s]) <= final / 255 / 2 + 0.005)
+        np.testing.assert_allclose(back[s][:, -1], c[s][:, -1], atol=0.005)
         np.testing.assert_array_equal(back[f"draw_{s}"], c[f"draw_{s}"])
 
 

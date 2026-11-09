@@ -49,8 +49,9 @@ FLOOR: Final = 1e-6
 """Smallest negative binomial mean, as the observation process."""
 
 _STEPS: Final = 255
+_CENTS: Final = 100
 
-NEGLIGIBLE: Final = 0.01
+NEGLIGIBLE: Final = 0.1
 """Expected cases still to come below which a cell is stored as reported
 in full at once: its share curve would cost as much as any other."""
 _STREAMS: Final = ("known", "imputed")
@@ -123,7 +124,8 @@ def encode(curves: Mapping[str, Any]) -> dict[str, Any]:
     share of it reported by each day, rounded to 1/255 and differenced
     over days, up to the last day any share is below 1. A cell expecting
     fewer than `NEGLIGIBLE` more cases is reported in full on the first
-    day. The counts and concentrations are stored as float32.
+    day. The eventual counts are rounded to 0.01 cases, and the vintage
+    and drawn counts and the concentrations are stored as float32.
 
     Parameters
     ----------
@@ -156,7 +158,8 @@ def encode(curves: Mapping[str, Any]) -> dict[str, Any]:
         below = np.nonzero((q < _STEPS).any(axis=(0, 2, 3)))[0]
         last = max(last, int(below[-1]) + 1 if below.size else 0)
         shares[s] = q
-        out[f"final_{s}"] = _pack(final.astype(np.float32))
+        cents = np.rint(np.clip(final, 0, None) * _CENTS).astype(np.uint32)
+        out[f"final_{s}"] = _pack(cents)
         for key in (f"vintage_{s}", f"draw_{s}", f"phi_{s}"):
             out[key] = _pack(np.asarray(curves[key], dtype=np.float32))
     out["days"] = last
@@ -186,7 +189,8 @@ def decode(block: Mapping[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {"cutoff": block["cutoff"]}
     for s in _STREAMS:
         f32 = np.float32
-        final = _unpack(block[f"final_{s}"], f32, (n, n_w, n_p))
+        final = _unpack(block[f"final_{s}"], np.uint32, (n, n_w, n_p))
+        final = final / _CENTS
         step = _unpack(block[f"share_{s}"], np.uint8, (n, last, n_w, n_p))
         share = np.ones((n, n_days + 1, n_w, n_p))
         share[:, :last] = np.cumsum(step, axis=1, dtype=float) / _STEPS
