@@ -272,8 +272,10 @@ def make_report(
 
     # Backtest and comparison pages.
     names = [s.name for s in list_models()]
-    _release_section(fig, gen, res, real, names)
-    _backtest_page(fig, gen, res, out, config, target, names, data_dir)
+    summaries = _release_section(fig, gen, res, real, names)
+    _backtest_page(
+        fig, gen, res, out, config, target, names, data_dir, summaries
+    )
     _comparison_page(fig, gen, Path(hub_comparison), target)
 
     # Nowcast page: latest real vintage, every registered model.
@@ -339,11 +341,6 @@ _TARGET_LABELS: Final = {
 }
 
 
-def _summary_srcs(stem: str, targets: Sequence[str]) -> dict[str, str]:
-    """Each target's score summary URL, from a page."""
-    return {t: f"../figures/scoresummary-{stem}-{t}.json" for t in targets}
-
-
 def _summaries(
     fig: Path,
     stem: str,
@@ -357,9 +354,16 @@ def _summaries(
     """Write the score summary of each target and return their URLs.
 
     `frames` maps `"latest"` or `"complete"` to its scores and energy
-    scores, in the order the page offers them.
+    scores, in the order the page offers them. A target with no score for
+    the baseline yet, such as the latest release before a round has a
+    later one, is not offered.
     """
-    for target, (scores, energy) in frames.items():
+    shown = {
+        target: frame
+        for target, frame in frames.items()
+        if baseline in set(frame[0]["model"])
+    }
+    for target, (scores, energy) in shown.items():
         write_score_chart(
             fig / f"scoresummary-{stem}-{target}.json",
             summary_rows(
@@ -372,7 +376,7 @@ def _summaries(
                 energy=energy,
             ),
         )
-    return _summary_srcs(stem, list(frames))
+    return {t: f"../figures/scoresummary-{stem}-{t}.json" for t in shown}
 
 
 def _downward_table(real: pd.DataFrame, zones: pd.DataFrame) -> str:
@@ -425,11 +429,11 @@ def _ours(frame: pd.DataFrame, names: Sequence[str]) -> pd.DataFrame:
 
 def _release_section(
     fig: Path, gen: Path, res: Path, real: pd.DataFrame, names: Sequence[str]
-) -> None:
+) -> dict[str, str]:
     """Write the real-release evaluation tables and figure.
 
     The tables hold the number of forecasts, $n$, in every row, for our
-    models only.
+    models only. Returns each target's score summary URL.
     """
     paths = {
         n: res / f"nowcast-{n}.csv" for n in ("scores", "quantiles", "origins")
@@ -589,6 +593,7 @@ def _release_section(
             "Tables",
         ),
     )
+    return srcs
 
 
 def _scored_on(reported: pd.DataFrame, baseline: str = "randomwalk") -> str:
@@ -1204,6 +1209,7 @@ def _forecast_tabs(
     names: Sequence[str],
     labels: Mapping[str, str],
     explorer_src: str | None = None,
+    summaries: Mapping[str, str] | None = None,
 ) -> str:
     """Forecasts from the real origins, as an explorer and static tabs."""
     if not names:
@@ -1233,7 +1239,7 @@ def _forecast_tabs(
             explorer_src,
             "Backtest forecasts",
             all_rounds=True,
-            summary=_summary_srcs("backtest", ("latest", "complete")),
+            summary=summaries,
         )
         + "\n"
         + static
@@ -1563,6 +1569,7 @@ def _backtest_page(
     target: pd.DataFrame,
     names: list[str],
     data_dir: Path | str,
+    summaries: Mapping[str, str],
 ) -> None:
     k = config.complete_after_weeks
     scores = _ours(_release_scores(res), names)
@@ -1687,6 +1694,7 @@ def _backtest_page(
                 for loc in BACKTEST_LOCATIONS
             },
             explorer_src,
+            summaries,
         ),
     )
     _write(
@@ -1994,7 +2002,7 @@ def _comparison_page(
         else pd.DataFrame()
     )
     pending = pd.read_csv(cmp_dir / "pending.csv")
-    _comparison_summary(
+    summaries = _comparison_summary(
         fig,
         gen,
         scores,
@@ -2077,7 +2085,7 @@ def _comparison_page(
             "../figures/explorer-comparison.json",
             "Hub forecasts",
             all_rounds=True,
-            summary=_summary_srcs("comparison", ("complete", "latest")),
+            summary=summaries or None,
         )
         + "\n"
         + _dropdown("\n".join(tabs), "Static figures by round"),
@@ -2093,13 +2101,13 @@ def _comparison_summary(
     on: Sequence[str],
     colours: Mapping[str, tuple[str, str, str]],
     names: Mapping[str, str],
-) -> None:
+) -> dict[str, str]:
     """Write the Overall, By horizon and By place summaries.
 
     They are the Backtest page's summaries, on the complete weeks of the
     hub rounds. The hub teams and our series in `on` are ticked at first,
     and randomwalk is the reference for relative scores. Our series come
-    in the order of `colours`.
+    in the order of `colours`. Returns each target's score summary URL.
     """
     if scores.empty:
         for name in (
@@ -2108,7 +2116,7 @@ def _comparison_summary(
             "comparison-place.md",
         ):
             _write(gen / name, "No round has a score yet.\n")
-        return
+        return {}
 
     def by_target(target: str) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Rows and energy scores of one target, named by round."""
@@ -2210,6 +2218,7 @@ def _comparison_summary(
             map_src=ZONE_MAP,
         ),
     )
+    return srcs
 
 
 def _label_comparison(frame: pd.DataFrame) -> pd.DataFrame:

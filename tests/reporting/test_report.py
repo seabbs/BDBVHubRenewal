@@ -63,9 +63,10 @@ def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
     assert (fig / "comparison-2026-10-24.svg").exists()
     # The Backtest summaries lead, with the static figure as the fallback,
     # and randomwalk starts off as the relative reference.
-    # Complete weeks first, with the latest release to pick.
+    # Complete weeks first. The latest release is not offered: these
+    # rounds have no score of the baseline against a later release.
     assert "scoresummary-comparison-complete.json" in scores
-    assert "scoresummary-comparison-latest.json" in scores
+    assert "scoresummary-comparison-latest.json" not in scores
     assert "comparison-overall.svg" in scores
     assert 'data-view="place"' in (gen / "comparison-place.md").read_text()
     horizon = (gen / "comparison-horizon.md").read_text()
