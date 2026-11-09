@@ -139,6 +139,27 @@
     sel.addEventListener("change", function () { onChange(sel.value); });
   }
 
+  // A "Relative to" select of the model relative scores divide by.
+  // fill(d, name) lists d.models and picks the one called name, or
+  // d.baseline without one; index() is the model picked and name() its
+  // name. onChange runs on a change.
+  function baselineSelect(controls, onChange) {
+    var sel = h("select", {}, h("label", {}, controls, "Relative to "));
+    var names = [];
+    sel.addEventListener("change", onChange);
+    return {
+      fill: function (d, name) {
+        sel.textContent = "";
+        names = d.models.map(function (m) { return m.name; });
+        names.forEach(function (n, i) { h("option", { value: i }, sel, n); });
+        var i = names.indexOf(name);
+        sel.value = String(i < 0 ? d.baseline : i);
+      },
+      index: function () { return +sel.value; },
+      name: function () { return names[+sel.value]; },
+    };
+  }
+
   // A Map tick box, ticked when on. onChange(ticked) runs on a change.
   function mapToggle(controls, on, onChange) {
     var l = h("label", { class: "map-toggle" }, controls);
@@ -151,5 +172,5 @@
 
   window.bdbvToggles = { h: h, el: el, getJSON: getJSON, legend: legend, hatch: hatch, onTheme: onTheme,
     viewSelect: viewSelect, fullscreen: fullscreen, mapToggle: mapToggle,
-    targetSelect: targetSelect };
+    targetSelect: targetSelect, baselineSelect: baselineSelect };
 })();

@@ -160,7 +160,8 @@ def check_summary(
         From `flags`.
     baseline : str
         The model relative WIS divides by. Its WIS is taken on the same
-        scored weeks, whatever its own flag there.
+        scored weeks, whatever its own flag there. Relative WIS is
+        missing where the baseline's WIS sums to 0.
 
     Returns
     -------
@@ -180,7 +181,9 @@ def check_summary(
     for split, col in (("place type", "place_type"), ("flag", "flag")):
         by = ["scale", col, "model"]
         sums = keyed.groupby(by)[["wis", "base_wis"]].sum()
-        rel = (sums["wis"] / sums["base_wis"]).rename("relative WIS")
+        # A zero baseline gives no relative WIS, as in `relative_skill`.
+        base_sum = sums["base_wis"].where(sums["base_wis"] > 0)
+        rel = (sums["wis"] / base_sum).rename("relative WIS")
         parts.append(
             summarise_scores(keyed, by=by)
             .join(rel, on=by)

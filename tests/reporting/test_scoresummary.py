@@ -242,3 +242,82 @@ def test_summary_html_lists_each_target_in_order() -> None:
     assert (
         """data-targets='{"complete": "c.json", "latest": "l.json"}'""" in html
     )
+
+
+def _node_with(
+    js: Path, data: dict[str, object], keep: str, baseline: int
+) -> object:
+    script = (
+        f"const s = require({json.dumps(str(js))});"
+        "const d = JSON.parse(require('fs').readFileSync(0, 'utf8'));"
+        f"const keep = {keep};"
+        f"process.stdout.write(JSON.stringify(s(d, keep, {baseline})));"
+    )
+    out = subprocess.run(
+        ["node", "-e", script],
+        input=json.dumps(data),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return json.loads(out.stdout)
+
+
+@pytest.mark.parametrize("pool", ["national", "provinces", "zones"])
+def test_browser_summary_takes_any_model_as_the_baseline(pool: str) -> None:
+    # "a" has no forecast for one place and week, so the matched set, n
+    # and the means move with the baseline, not only the relative scores.
+    scores = _scores()
+    drop = (scores["model"] == "a") & (scores["location"] == "CD-IT")
+    drop &= scores["target_end_date"] == "2026-10-10"
+    scores = scores.loc[~drop]
+    depth = scores["location"].str.count("-")
+    scores["pool"] = depth.map({0: "national", 1: "provinces", 2: "zones"})
+    data = summary_rows(scores, MODELS, COLOURS, {})
+    places = [i for i, p in enumerate(data["places"]) if p["pool"] == pool]
+    keep = f"function (r) {{ return {places}.includes(r[3]); }}"
+    got = _node_with(SUMMARISE, data, keep, MODELS.index("a"))
+    assert isinstance(got, list)
+    want = relative_wis(scores, by=("pool",), baseline="a").set_index(
+        ["pool", "model"]
+    )
+    assert len(got) == len(MODELS)
+    for row in got:
+        exp = want.loc[(pool, MODELS[row["model"]])]
+        assert row["n"] == exp["n"]
+        assert row["rel"]["wis"] == pytest.approx(exp["rel_wis"], abs=1e-3)
+        assert row["rel"]["log_wis"] == pytest.approx(
+            exp["rel_log_wis"], abs=1e-3
+        )
+        for col in ("wis", "coverage_50", "coverage_90", "bias"):
+            assert row["mean"][col] == pytest.approx(exp[col], abs=1e-3)
+
+
+@pytest.mark.parametrize("pool", ["national", "provinces", "zones"])
+def test_browser_energy_takes_any_model_as_the_baseline(pool: str) -> None:
+    energy = _energy()
+    data = summary_rows(_scores(), MODELS, COLOURS, {}, energy=energy)
+    ids = [p["id"] for p in data["pools"]]
+    keep = f"function (r) {{ return r[3] === {ids.index(pool)}; }}"
+    got = _node_with(ENERGY_JS, data, keep, MODELS.index("b"))
+    assert isinstance(got, dict)
+    want = relative_energy(energy, by=("scale",), baseline="b").set_index(
+        ["scale", "model"]
+    )
+    assert len(got) == len(MODELS)
+    for m, row in got.items():
+        exp = want.loc[(pool, MODELS[int(m)])]
+        assert row["n"] == exp["n_energy"]
+        for col in ("energy", "log_energy"):
+            assert row["rel"][col] == pytest.approx(exp[f"rel_{col}"], abs=1e-3)
+
+
+def test_a_zero_energy_baseline_gives_no_relative_score() -> None:
+    energy = _energy()
+    energy.loc[energy["model"] == "a", ["energy", "log_energy"]] = 0.0
+    data = summary_rows(_scores(), MODELS, COLOURS, {}, energy=energy)
+    got = _node_with(ENERGY_JS, data, "function () { return true; }", 1)
+    assert isinstance(got, dict)
+    assert all(r["rel"]["energy"] is None for r in got.values())
+    rel = relative_energy(energy, by=(), baseline="a")
+    assert rel["rel_energy"].isna().all()

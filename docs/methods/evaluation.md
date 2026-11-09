@@ -32,6 +32,8 @@ Positive bias is overprediction.
 Relative WIS is a ratio of means against a baseline $b$ over the forecasts both made, and below 1 beats it.
 Relative WIS on the log scale is the same ratio of mean WIS on the log scale.
 The baseline is `randomwalk`.
+The interactive summaries and the checks chart have a Relative to picker that makes any model the baseline, and the overall score tables a baseline filter.
+In the summaries a new baseline changes which forecasts are matched, so $n$ and the means change too.
 Coverage is whether $y$ falls in the central 50% and 90% sample intervals.
 
 ### Energy score

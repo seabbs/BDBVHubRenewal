@@ -528,3 +528,44 @@ def test_scenario_section_draws_every_final_week(tmp_path: Path) -> None:
             "2026-10-17",
             "2026-10-24",
         ]
+
+
+def test_checks_chart_has_a_set_per_baseline() -> None:
+    def summary(rel: dict[str, float]) -> pd.DataFrame:
+        return pd.DataFrame(
+            {
+                "scale": "zones",
+                "split": "flag",
+                "group": "none",
+                "model": list(rel),
+                "n": 4,
+                "relative WIS": list(rel.values()),
+                "WIS": [2.0, 4.0],
+                "90% coverage": [0.9, 0.8],
+            }
+        )
+
+    names = ["randomwalk", "renewal"]
+    got = report._checks_chart(
+        {
+            "randomwalk": summary({"randomwalk": 1.0, "renewal": 2.0}),
+            "renewal": summary({"randomwalk": 0.5, "renewal": 1.0}),
+        },
+        names,
+    )
+    assert got["baseline"] == 0
+    assert [m["name"] for m in got["models"]] == names
+    assert got["sets"]["randomwalk|zones|flag"]["rows"][1][3] == 2.0
+    assert got["sets"]["renewal|zones|flag"]["rows"][0][3] == 0.5
+    json.dumps(got)
+
+
+def test_by_baseline_stacks_a_table_per_baseline() -> None:
+    def make(base: str) -> pd.DataFrame:
+        rel = [1.0, 2.0] if base == "a" else [0.5, 1.0]
+        return pd.DataFrame({"model": ["a", "b"], "rel_wis": rel})
+
+    got = report._by_baseline(make, ["b", "a"])
+    assert list(got.columns) == ["baseline", "model", "rel_wis"]
+    assert list(got["baseline"]) == ["b", "b", "a", "a"]
+    assert list(got["rel_wis"]) == [0.5, 1.0, 1.0, 2.0]

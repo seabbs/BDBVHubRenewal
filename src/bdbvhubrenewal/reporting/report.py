@@ -458,10 +458,17 @@ def _release_section(
         names,
     )
     energy["target"] = energy["target"].map(_TARGET_LABELS)
-    joint = relative_energy(energy).rename(columns={"scale": "pool"})
-    overall = relative_wis(pooled, ("target", "pool")).merge(
-        joint, on=["target", "pool", "model"], how="left"
-    )
+
+    def overall_for(base: str) -> pd.DataFrame:
+        """Overall scores by target and pool, relative to `base`."""
+        joint = relative_energy(energy, baseline=base).rename(
+            columns={"scale": "pool"}
+        )
+        return relative_wis(pooled, ("target", "pool"), baseline=base).merge(
+            joint, on=["target", "pool", "model"], how="left"
+        )
+
+    overall = overall_for("randomwalk")
     by_pool = relative_wis(pooled, ("target", "pool", "origin"))
     scores["target"] = scores["target"].map(_TARGET_LABELS)
     by_place = relative_wis(scores, ("target", "origin", "location"))
@@ -566,7 +573,16 @@ def _release_section(
         )
         + "\n"
         + _dropdown(
-            filter_table(_table(overall), ["target", "pool", "model"]),
+            filter_table(
+                _table(
+                    _by_baseline(
+                        overall_for,
+                        [m for m in names if m in set(pooled["model"])],
+                    )
+                ),
+                ["baseline", "target", "pool", "model"],
+                {"baseline": "randomwalk"},
+            ),
             "Scores by target and pool, over every origin",
         ),
     )
@@ -1301,6 +1317,19 @@ def _recovery_section(srcs: Mapping[str, str], energy: pd.DataFrame) -> str:
     )
 
 
+def _by_baseline(
+    make: Callable[[str], pd.DataFrame], baselines: Sequence[str]
+) -> pd.DataFrame:
+    """Stack `make(baseline)` for each baseline, with a `baseline` column.
+
+    The stacked table gives `filter_table` a baseline to filter by, so a
+    relative score table can be read against any model.
+    """
+    return pd.concat(
+        [make(b).assign(baseline=b) for b in baselines], ignore_index=True
+    ).pipe(lambda t: t[["baseline", *t.columns.drop("baseline")]])
+
+
 def _without_baseline(
     rel: pd.DataFrame, baseline: str = "randomwalk"
 ) -> pd.DataFrame:
@@ -1823,16 +1852,22 @@ def _checks_section(
     cols = ["model", "origin", "location", "target_end_date", "q50", "q95"]
     flagged = flags(counts, quantiles[cols].astype({"origin": str}))
     srcs = {}
+    summaries = {}
     for name, kind in (("complete", "complete"), ("latest", "reported")):
         scores = every.loc[every["target"] == kind]
-        summary = check_summary(scores, place_types(counts, scores), flagged)
+        types = place_types(counts, scores)
+        summaries[name] = {
+            base: check_summary(scores, types, flagged, baseline=base)
+            for base in names
+            if base in set(scores["model"])
+        }
         write_score_chart(
             fig / f"checks-backtest-{name}.json",
-            _checks_chart(summary, names),
+            _checks_chart(summaries[name], names),
         )
         srcs[name] = f"../figures/checks-backtest-{name}.json"
-    latest = every.loc[every["target"] == "reported"]
-    summary = check_summary(latest, place_types(counts, latest), flagged)
+    latest = summaries["latest"]
+    summary = _by_baseline(latest.__getitem__, list(latest))
     return (
         "## Checks\n\n"
         "Scores of the scored weeks, split by the type of place and by the "
@@ -1851,7 +1886,11 @@ def _checks_section(
         "<noscript>The checks chart needs JavaScript.</noscript>\n"
         "</div>\n\n"
         + _dropdown(
-            filter_table(_table(summary), ["scale", "split", "model"]),
+            filter_table(
+                _table(summary),
+                ["baseline", "scale", "split", "model"],
+                {"baseline": "randomwalk"},
+            ),
             "Table",
         )
     )
@@ -1866,30 +1905,39 @@ _CHECK_METRICS: Final = (
 
 
 def _checks_chart(
-    summary: pd.DataFrame, names: Sequence[str]
+    summaries: Mapping[str, pd.DataFrame],
+    names: Sequence[str],
+    baseline: str = "randomwalk",
 ) -> dict[str, object]:
-    """Return the checks summary as `scorechart.js` rows, by scale and split.
+    """Return the checks summaries as `scorechart.js` rows.
 
-    Models keep the colours of the other Backtest charts.
+    `summaries` maps each baseline model to its `check_summary`. The sets
+    are keyed by baseline, scale and split, and `baseline` is the index of
+    the one shown first. Models keep the colours of the other Backtest
+    charts.
     """
-    models = [m for m in names if m in set(summary["model"])]
+    first = summaries[baseline]
+    models = [m for m in names if m in set(first["model"])]
     colours = _model_colours(names)
     sets = {}
-    for (scale, split), g in summary.groupby(["scale", "split"], sort=False):
-        x = list(dict.fromkeys(g["group"]))
-        rows = [
-            [
-                models.index(r["model"]),
-                x.index(r["group"]),
-                int(r["n"]),
-                *(
-                    None if pd.isna(r[c]) else round(float(r[c]), 6)
-                    for c, *_ in _CHECK_METRICS
-                ),
+    for base, summary in summaries.items():
+        groups = summary.groupby(["scale", "split"], sort=False)
+        for (scale, split), g in groups:
+            x = list(dict.fromkeys(g["group"]))
+            rows = [
+                [
+                    models.index(r["model"]),
+                    x.index(r["group"]),
+                    int(r["n"]),
+                    *(
+                        None if pd.isna(r[c]) else round(float(r[c]), 6)
+                        for c, *_ in _CHECK_METRICS
+                    ),
+                ]
+                for _, r in g.iterrows()
+                if r["model"] in models
             ]
-            for _, r in g.iterrows()
-        ]
-        sets[f"{scale}|{split}"] = {"x": x, "rows": rows}
+            sets[f"{base}|{scale}|{split}"] = {"x": x, "rows": rows}
     return {
         "models": [
             {
@@ -1908,9 +1956,10 @@ def _checks_chart(
         "scales": [
             s
             for s in ("zones", "provinces", "national")
-            if s in set(summary["scale"])
+            if s in set(first["scale"])
         ],
         "splits": ["place type", "flag"],
+        "baseline": models.index(baseline),
         "sets": sets,
     }
 
@@ -2195,7 +2244,16 @@ def _comparison_summary(
         )
         + "\n"
         + _dropdown(
-            filter_table(_table(overall), ["pool", "model"]),
+            filter_table(
+                _table(
+                    _by_baseline(
+                        lambda b: relative_wis(rows, ("pool",), baseline=b),
+                        models,
+                    )
+                ),
+                ["baseline", "pool", "model"],
+                {"baseline": base},
+            ),
             "Scores by scale, over every round",
         ),
     )

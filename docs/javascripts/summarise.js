@@ -8,14 +8,16 @@
 
   // d.rows: [model, origin, release, place, week, ...one value per metric]
   // d.metrics: [{key, label, ref, relative}]
-  // keep(row, index) selects the rows; returns one entry per model with
-  // rows.
-  function summarise(d, keep) {
+  // keep(row, index) selects the rows; baseline, a model index, is the
+  // model relative metrics divide by (d.baseline if not given). Returns one
+  // entry per model with rows.
+  function summarise(d, keep, baseline) {
+    if (baseline === undefined) baseline = d.baseline;
     var nm = d.metrics.length;
     var base = {};
     function key(r) { return r[1] + "|" + r[2] + "|" + r[3] + "|" + r[4]; }
     d.rows.forEach(function (r, i) {
-      if (r[0] === d.baseline && keep(r, i)) base[key(r)] = r;
+      if (r[0] === baseline && keep(r, i)) base[key(r)] = r;
     });
     var acc = {};
     d.rows.forEach(function (r, i) {
