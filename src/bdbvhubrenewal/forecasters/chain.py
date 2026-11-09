@@ -43,7 +43,7 @@ Its new reports and removals by weeks back fit the observation model
 
 **Introductions.** A place with no case in the latest `walk_weeks` weeks
 is silent, and its weekly probability of a first case is pooled over its
-siblings (`introductions`).
+siblings (`introductions.introduction_rates`).
 """
 
 from __future__ import annotations
@@ -65,6 +65,10 @@ from bdbvhubrenewal.baselinenowcast import (
 )
 from bdbvhubrenewal.data.snapshots import SnapshotArrays, week_sum, weekly_sums
 from bdbvhubrenewal.forecasters.base import ModelUnavailableError
+from bdbvhubrenewal.forecasters.introductions import (
+    introduction_rates,
+    silent_places,
+)
 from bdbvhubrenewal.forecasters.obs import fit_sizes, rate
 from bdbvhubrenewal.forecasters.pooling import (
     MIN_ERRORS,
@@ -84,7 +88,6 @@ __all__ = [
     "build_origin",
     "delay_sums",
     "final_growth",
-    "introductions",
     "levels",
     "own_ages",
     "retro_errors",
@@ -546,7 +549,8 @@ class Origin:
         `[L]`.
     intro : numpy.ndarray
         Weekly probability of a first case after `walk_weeks` silent
-        weeks, from the place's siblings (`introductions`), `[L]`.
+        weeks, pooled over the place's siblings
+        (`introduction_rates`), `[L]`.
     errors : Errors or None
         Retrospective errors, or None where they were not asked for.
     size : numpy.ndarray or None
@@ -643,9 +647,8 @@ def build_origin(
     sigma_source = fit.source
     sigma = both[sigma_source]
     k = settings.walk_weeks
-    silent = reported[:, snap.cut_week(o) - k + 1 : snap.cut_week(o) + 1]
-    silent = silent.sum(axis=1) == 0
-    intro = introductions(reported, start, snap.parent, k)
+    silent = silent_places(reported, snap.cut_week(o), k)
+    intro = introduction_rates(reported, start, snap.parent, k)
     origin = Origin(
         snap, o, settings, fit, g, reported, point, complete, start, sigma,
         sigma_source, silent, intro,
@@ -653,51 +656,6 @@ def build_origin(
     if errors:
         _add_spread(origin)
     return origin
-
-
-def introductions(
-    reported: np.ndarray, start: np.ndarray, parent: np.ndarray, k: int
-) -> np.ndarray:
-    """Return each place's weekly probability of a first case.
-
-    A week is at risk when its place reported no case in the `k` weeks
-    before it, and it is an introduction when the place reports a case
-    in it.
-    The probability is the introductions over the weeks at risk of the
-    place and its siblings, the children of its parent, so zones pool
-    within their province and provinces within the country.
-    Weeks up to each place's start week count, so only complete weeks
-    and data before the origin are used.
-
-    Parameters
-    ----------
-    reported : numpy.ndarray
-        Weekly reported counts, `[L, W]`.
-    start : numpy.ndarray
-        Start week of each place, `[L]`.
-    parent : numpy.ndarray
-        Index of each place's parent, or -1, `[L]`.
-    k : int
-        Silent weeks before a week at risk.
-
-    Returns
-    -------
-    numpy.ndarray
-        `[L]`, 0 where no week is at risk.
-    """
-    pos = reported > 0
-    before = np.cumsum(np.pad(pos, ((0, 0), (1, 0))), axis=1)
-    risk = np.zeros_like(pos)
-    risk[:, k:] = before[:, k:-1] == before[:, : -k - 1]
-    risk &= np.arange(pos.shape[1])[None, :] <= start[:, None]
-    first = (risk & pos).sum(axis=1)
-    risk_n = risk.sum(axis=1)
-    # The country has no siblings, so it is a group of its own.
-    n = parent.size
-    group = np.where(parent >= 0, parent, n + np.arange(n))
-    first_g = np.bincount(group, first, 2 * n)[group]
-    risk_g = np.bincount(group, risk_n, 2 * n)[group]
-    return first_g / np.maximum(risk_g, 1)
 
 
 def walk_changes(
