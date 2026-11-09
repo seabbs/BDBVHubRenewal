@@ -387,3 +387,37 @@ def test_a_models_reported_scores_do_not_depend_on_other_models(
         tasks, daily, target, models=("randomwalk",), stored=stored
     )
     pd.testing.assert_frame_equal(reported(alone.scores), reported(both.scores))
+
+
+def test_release_forecasts_made_apart_by_model_score_as_one_run(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    tmp_path,  # type: ignore[no-untyped-def]
+    result,  # type: ignore[no-untyped-def]
+) -> None:
+    from bdbvhubrenewal.evaluation.nowcast import (
+        ReleaseForecasts,
+        forecast_releases,
+        score_releases,
+    )
+
+    real = target.loc[target["kind"] == "real"]
+    tasks = make_tasks(
+        real,
+        delays.assign(kind="real"),
+        BacktestConfig(n_samples=50, seed=2),
+        daily=daily,
+    )
+    parts = []
+    for name in ("randomwalk", "randomwalknowcast"):
+        forecast_releases(tasks, target, [name]).write(tmp_path / name)
+        parts.append(tmp_path / name)
+    out = score_releases(tasks, daily, target, ReleaseForecasts.read(parts))
+    for field in ("scores", "quantiles", "energy", "origins", "fits"):
+        pd.testing.assert_frame_equal(
+            getattr(out, field),
+            getattr(result, field),
+            check_dtype=False,
+            obj=field,
+        )
