@@ -1494,6 +1494,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../model-development/score-history/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Score history
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -2204,7 +2232,7 @@ Both run at province and zone level (<a href="#health-zones">Health zones</a>), 
 <span class="arithmatex">\(C_{p,r}(t)\)</span> is the known plus imputed onsets in place <span class="arithmatex">\(p\)</span> on day <span class="arithmatex">\(t\)</span> at release <span class="arithmatex">\(r\)</span>.
 <span class="arithmatex">\(Y_{p,r}(w)\)</span> is their sum over the days of week <span class="arithmatex">\(w\)</span>.
 A forecast is made from the vintage of its date, whose latest release is <span class="arithmatex">\(o\)</span>.
-Release <span class="arithmatex">\(r\)</span> has cut-off <span class="arithmatex">\(c_r\)</span>, its last report day (<a href="../data/#vintages">Data</a>).
+Release <span class="arithmatex">\(r\)</span> has cut-off <span class="arithmatex">\(c_r\)</span>, its latest onset day (<a href="../data/#vintages">Data</a>).
 Day <span class="arithmatex">\(t \le c_r\)</span> is observed at <span class="arithmatex">\(r\)</span> and is <span class="arithmatex">\(a = c_r - t\)</span> days old.
 Days after the cut-off are not observed.
 <span class="arithmatex">\(w\)</span> is <span class="arithmatex">\(k\)</span> weeks back when it is <span class="arithmatex">\(k\)</span> weeks before the week holding the release cut-off.</p>
@@ -2391,7 +2419,7 @@ It is scored on the real releases at province and zone level.</p>
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
 <p>While the release history in the delay window is shorter than <span class="arithmatex">\(D\)</span>, no chain to the final count can be checked against a final count.
 Each delay factor rests on one onset day per age per pair, and the youngest ages rest on few cases even nationally.
-The cut-off is the latest report day the data prove, which can be earlier than the true last report day.
+The cut-off is the latest onset day, which can be earlier than the true last report day.
 The chain ladder treats reporting speed as fixed by age and step, but speed and backlogs vary between releases.
 The observation model is learnt from the earlier releases, which may be few.
 Counts include the hub's imputed onsets, which are re-drawn as cases gain onsets, so changes between releases mix reporting with imputation.
@@ -2538,25 +2566,25 @@ The walk has no drift, and its spread comes from 8 weekly changes, which for sma
       
         <script src="../../javascripts/mathjax.js?v=bced49b5"></script>
       
-        <script src="../../javascripts/toggles.js?v=e5ef24ea"></script>
+        <script src="../../javascripts/toggles.js?v=b6055b59"></script>
       
         <script src="../../javascripts/placemap.js?v=03fe1366"></script>
       
         <script src="../../javascripts/zoom.js?v=4e0c610c"></script>
       
-        <script src="../../javascripts/summarise.js?v=ee637051"></script>
+        <script src="../../javascripts/summarise.js?v=896d340e"></script>
       
-        <script src="../../javascripts/energy.js?v=11968274"></script>
+        <script src="../../javascripts/energy.js?v=36005f6a"></script>
       
-        <script src="../../javascripts/tablefilter.js?v=94394744"></script>
+        <script src="../../javascripts/tablefilter.js?v=774f66a6"></script>
       
-        <script src="../../javascripts/explorer.js?v=78179124"></script>
+        <script src="../../javascripts/explorer.js?v=84b4d7fb"></script>
       
-        <script src="../../javascripts/scorechart.js?v=0bc05770"></script>
+        <script src="../../javascripts/scorechart.js?v=1c27a70d"></script>
       
-        <script src="../../javascripts/scoresummary.js?v=a40380ed"></script>
+        <script src="../../javascripts/scoresummary.js?v=34222cf0"></script>
       
-        <script src="../../javascripts/checkschart.js?v=106bf7bb"></script>
+        <script src="../../javascripts/checkschart.js?v=1ee222fe"></script>
       
         <script src="../../javascripts/nowcastchart.js?v=e5f9eb42"></script>
       

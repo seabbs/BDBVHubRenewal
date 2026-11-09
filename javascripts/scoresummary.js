@@ -20,10 +20,11 @@
   // Tabulate summaries s of data d in container, for the models isOn(m):
   // n, the mean of each metric and, for relative metrics, the relative one.
   // extra columns ({label, dp, get(e)}) read extraFor(model), if given.
-  function summaryTable(container, d, s, isOn, extra, extraFor) {
+  // empty, if given, is the note shown when s is empty.
+  function summaryTable(container, d, s, isOn, extra, extraFor, empty) {
     extra = extra || [];
     if (!s.length) {
-      h("p", { class: "explorer-note" }, container,
+      h("p", { class: "explorer-note" }, container, empty ||
         "No scores yet for this selection. Rounds are scored once later data are published.");
       return;
     }
@@ -53,23 +54,38 @@
   }
   window.bdbvSummaryTable = summaryTable;
 
-  // Load the summary of one target (data-targets) and draw it.
-  function load(root, target) {
+  // The note when a selection has no scores: either none yet, or none of
+  // the chosen baseline's, whose model index is baseline.
+  function emptyNote(d, baseline, keep) {
+    if (baseline === d.baseline || !summarise(d, keep).length) return undefined;
+    return d.models[baseline].name + " has no forecasts for this selection, " +
+      "so no scores here are relative to it.";
+  }
+  window.bdbvEmptyNote = emptyNote;
+
+  // Load the summary of one target (data-targets) and draw it, relative to
+  // the model called base, if it has one.
+  function load(root, target, base) {
     var targets = JSON.parse(root.dataset.targets);
     T.getJSON(targets[target])
-      .then(function (d) { build(root, d, root.dataset.view || "overall", targets, target); })
+      .then(function (d) {
+        build(root, d, root.dataset.view || "overall", targets, target, base);
+      })
       .catch(function () { root.textContent = "The score data could not be loaded."; });
   }
   function init(root) { load(root, Object.keys(JSON.parse(root.dataset.targets))[0]); }
 
   // With data-map, the place view adds a map of the metric shown for one
   // model.
-  function build(root, d, view, targets, target) {
+  function build(root, d, view, targets, target, base) {
     root.textContent = "";
     var byPlace = view === "place";
     var byHorizon = view === "horizon";
     var controls = h("div", { class: "explorer-controls" }, root);
-    T.targetSelect(controls, targets, target, function (k) { load(root, k); });
+    T.targetSelect(controls, targets, target, function (k) { load(root, k, rel.name()); });
+    var rel = T.baselineSelect(controls, function () { rebase(); });
+    rel.fill(d, base);
+    var baseline = rel.index();
     var selScale = h("select", {}, h("label", {}, controls, "Scale "));
     d.pools.forEach(function (p) {
       if (byPlace && p.id === "national") return;
@@ -83,8 +99,12 @@
     T.fullscreen(controls, root);
     var hasMap = !!root.dataset.map;
     var mapOn = hasMap ? T.mapToggle(controls, false, function () { drawMap(); }) : null;
-    h("p", { class: "explorer-note" }, root, "Relative scores divide by " +
-      d.models[d.baseline].name + " on the same forecasts.");
+    var note = h("p", { class: "explorer-note" }, root);
+    function sayBaseline() {
+      note.textContent = "Relative scores divide by " + d.models[baseline].name +
+        " on the same forecasts, and n counts those.";
+    }
+    sayBaseline();
     var panes = h("div", { class: "chart-map" }, root);
     var chartDiv = h("div", {}, panes);
     var side = h("div", { class: "chart-map-side" }, panes);
@@ -92,13 +112,7 @@
     var mapModel = null, map = null;
     if (hasMap) {
       mapModel = h("select", {}, h("label", {}, h("div", { class: "explorer-controls" }, side), "Map "));
-      d.models.forEach(function (m, i) {
-        if (i !== d.baseline) h("option", { value: i }, mapModel, m.name);
-      });
-      // The first model ticked at first.
-      var first = d.models.map(function (m, i) { return i; })
-        .filter(function (i) { return i !== d.baseline && d.models[i].on; })[0];
-      if (first !== undefined) mapModel.value = first;
+      fillMapModels();
       mapModel.addEventListener("change", function () { drawMap(); });
       var mapHolder = h("div", {}, side);
       // The map loads on its own, so the chart works without it.
@@ -114,6 +128,20 @@
       }).catch(function () { mapOn.parentNode.hidden = true; });
     }
     var table = h("div", { class: "explorer-table" }, root);
+
+    // The map lists every model but the baseline, keeping the model picked
+    // where it is still listed, else the first model ticked at first.
+    function fillMapModels() {
+      var was = mapModel.value === "" ? null : +mapModel.value;
+      mapModel.textContent = "";
+      d.models.forEach(function (m, i) {
+        if (i !== baseline) h("option", { value: i }, mapModel, m.name);
+      });
+      var first = d.models.map(function (m, i) { return i; })
+        .filter(function (i) { return i !== baseline && d.models[i].on; })[0];
+      var pick = was !== null && was !== baseline ? was : first;
+      if (pick !== undefined) mapModel.value = pick;
+    }
 
     // Chart metrics: a relative metric shows the model over the baseline,
     // on a log axis so that places with near-zero scores do not set it.
@@ -134,7 +162,7 @@
       var round = selRound.value === "all" ? null : +selRound.value;
       return summariseEnergy(d, function (r) {
         return r[3] === pool && (round === null || r[1] === round);
-      });
+      }, baseline);
     }
 
     function places() {
@@ -168,7 +196,7 @@
         var all = set(places());
         var hrows = [];
         horizons.forEach(function (hz, xi) {
-          summarise(d, keep(all, hz)).forEach(function (s) {
+          summarise(d, keep(all, hz), baseline).forEach(function (s) {
             hrows.push([s.model, xi, s.n].concat(d.metrics.map(function (m) {
               return value(s, m);
             })));
@@ -182,7 +210,7 @@
       var rows = [];
       var j = energy.length ? joint() : {};
       groups.forEach(function (g, xi) {
-        summarise(d, keep(set(g))).forEach(function (s) {
+        summarise(d, keep(set(g)), baseline).forEach(function (s) {
           rows.push([s.model, xi, s.n].concat(d.metrics.map(function (m) {
             return value(s, m);
           }), energy.map(function (m) {
@@ -212,7 +240,7 @@
         [0.4, 1 - metric.ref];
       var values = {};
       places().forEach(function (x) {
-        var s = summarise(d, keep(set([x]))).filter(function (r) { return r.model === m; })[0];
+        var s = summarise(d, keep(set([x])), baseline).filter(function (r) { return r.model === m; })[0];
         var v = s ? value(s, d.metrics[shown]) : null;
         if (v === null || v === undefined || isNaN(v) || (metric.log && v <= 0)) return;
         values[x.p.id] = v;
@@ -233,10 +261,12 @@
       var chosen = byPlace && selPlace.value !== "all" ?
         [{ i: +selPlace.value }] : places();
       var j = energy.length ? joint() : null;
+      var k2 = keep(set(chosen));
       table.textContent = "";
-      summaryTable(table, d, summarise(d, keep(set(chosen))),
+      summaryTable(table, d, summarise(d, k2, baseline),
         function (m) { return on[m]; },
-        j ? jointCols : [], function (m) { return j && j[m]; });
+        j ? jointCols : [], function (m) { return j && j[m]; },
+        emptyNote(d, baseline, k2));
     }
 
     fillPlaces();
@@ -252,6 +282,13 @@
     function update() {
       var c = chartRows();
       chart.update(c.rows, c.x);
+    }
+    // A new baseline redraws the chart, and with it the table and map.
+    function rebase() {
+      baseline = rel.index();
+      sayBaseline();
+      if (mapModel) fillMapModels();
+      update();
     }
     selScale.addEventListener("change", function () { fillPlaces(); update(); });
     selRound.addEventListener("change", update);

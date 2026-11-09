@@ -2,7 +2,8 @@
 // metric and a checkbox per model (toggles.js), drawn as SVG in the site's
 // theme. A metric with `log` is drawn on a log axis, bars from its ref.
 // Other scripts build one with bdbvScoreChart.build and give it new rows
-// with update, keeping the tab, ticks and zoom.
+// with update, keeping the tab, ticks and zoom. `marks`, if given, are x
+// positions marked with a vertical line, such as breaks in a series.
 (function () {
   "use strict";
   var T = window.bdbvToggles;
@@ -93,10 +94,13 @@
         for (var v = Math.ceil(lo / step) * step; v <= hi + step / 2; v += step) ticks.push(v);
       }
       var many = d.x.filter(function (_, i) { return Z.visible(zoom, i); }).length > 12;
-      var W = 760, H = many ? 380 : 320, L = 52, R = 10, T = 10, B = many ? 100 : 40;
+      // Rotated labels get room for the longest of them.
+      var longest = Math.max.apply(null, d.x.map(function (x) { return String(x).length; }));
+      var B = many ? Math.max(100, 24 + 5.5 * longest) : 40;
+      var W = 760, H = many ? 280 + B : 320, L = 52, R = 10, Tm = 10;
       var bw = (W - L - R) / (xr[1] - xr[0]);
       function X(i) { return L + (i - xr[0]) * bw; }
-      function Y(v) { return T + (1 - (v - lo) / (hi - lo)) * (H - T - B); }
+      function Y(v) { return Tm + (1 - (v - lo) / (hi - lo)) * (H - Tm - B); }
       figure.textContent = "";
       var svg = el("svg", { viewBox: "0 0 " + W + " " + H, role: "img",
         "aria-label": metric.label + " by " + d.x_label.toLowerCase() }, figure);
@@ -118,11 +122,15 @@
       var lab = el("text", { x: L + (W - L - R) / 2, y: H - 4, "text-anchor": "middle",
         class: "scorechart-tick" }, svg);
       lab.textContent = d.x_label;
-      var plot = Z.clip(svg, { L: L, R: R, T: T, B: B, W: W, H: H });
+      var plot = Z.clip(svg, { L: L, R: R, T: Tm, B: B, W: W, H: H });
       if (metric.ref !== null) {
         el("line", { x1: L, x2: W - R, y1: Y(tf(metric.ref)), y2: Y(tf(metric.ref)),
           class: "scorechart-ref" }, plot);
       }
+      (d.marks || []).forEach(function (i) {
+        if (!Z.visible(zoom, i)) return;
+        el("line", { x1: X(i), x2: X(i), y1: Tm, y2: H - B, class: "scorechart-ref" }, plot);
+      });
       var shown = d.models.map(function (_, i) { return i; })
         .filter(function (i) { return state.on[i]; });
       function tip(r) {
@@ -154,16 +162,17 @@
           });
         }
       });
-      Z.attach(zoom, svg, { L: L, R: R, T: T, B: B, W: W, H: H, x: xr, y: [lo, hi] },
+      Z.attach(zoom, svg, { L: L, R: R, T: Tm, B: B, W: W, H: H, x: xr, y: [lo, hi] },
         metric.key);
       if (onDraw) onDraw(state.metric, state.on);
     }
     draw();
     T.onTheme(draw);
     return {
-      update: function (rows, x) {
+      update: function (rows, x, marks) {
         d.rows = rows;
         d.x = x;
+        d.marks = marks;
         draw();
       },
     };

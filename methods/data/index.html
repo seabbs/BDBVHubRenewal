@@ -1450,6 +1450,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../model-development/score-history/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Score history
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -2112,11 +2140,11 @@ Province populations are the Institut National de la Statistique's 2019 figures 
 From the 2026-11-01 release on, <code>as_of</code> is the extraction date, a day after the last reported case.
 The hub states that earlier releases were labelled by the last reported case (<a href="https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/90">hub issue 90</a>).
 We keep each release's published label and map a rewritten label back to it.
-A release's data cut-off is its last report day, as its data prove it.
-A case with onset on day <span class="arithmatex">\(t\)</span> was reported on or after <span class="arithmatex">\(t\)</span>, and a delay row with onset week ending <span class="arithmatex">\(W\)</span> and delay <span class="arithmatex">\(d\)</span> was reported on or after <span class="arithmatex">\(W - 6 + d\)</span>.
-The cut-off of a real release is the latest of these days over its daily onsets and delay rows.
-This gives 2026-10-08 for the release labelled 2026-10-09 and 2026-10-16 for the release labelled 2026-10-17, so the data do not bear out the hub's description of those labels.
-Between releases 66 to 83 cases with a known onset were added per day, so a day with no report is unlikely, and a cut-off on the label would add a day with no reports to each of these releases.
+The data cut-off of a real release is its latest onset day over all places, one date per release.
+This gives 2026-10-07 for the release labelled 2026-10-09, 2026-10-16 for 2026-10-17 and 2026-10-31 for 2026-11-01.
+The last day or two before extraction are thin, as new reports take time to reach the line list.
+The latest onset day is a cut-off taken from the data that every model can share.
+The renewal models learn the publication lag from consecutive releases relative to this cut-off, so the lag adjusts to it and is not counted twice.
 A simulated release states its cut-off.
 The models, the scoring and the zone stage all use this cut-off.
 Recent weeks are revised in later releases, so each forecast is made from one vintage and scored on the counts later releases report.</p>
@@ -2294,25 +2322,25 @@ Their use is on the <a href="../model/#bvdoutbreaksize-informed">Renewal models 
       
         <script src="../../javascripts/mathjax.js?v=bced49b5"></script>
       
-        <script src="../../javascripts/toggles.js?v=e5ef24ea"></script>
+        <script src="../../javascripts/toggles.js?v=b6055b59"></script>
       
         <script src="../../javascripts/placemap.js?v=03fe1366"></script>
       
         <script src="../../javascripts/zoom.js?v=4e0c610c"></script>
       
-        <script src="../../javascripts/summarise.js?v=ee637051"></script>
+        <script src="../../javascripts/summarise.js?v=896d340e"></script>
       
-        <script src="../../javascripts/energy.js?v=11968274"></script>
+        <script src="../../javascripts/energy.js?v=36005f6a"></script>
       
-        <script src="../../javascripts/tablefilter.js?v=94394744"></script>
+        <script src="../../javascripts/tablefilter.js?v=774f66a6"></script>
       
-        <script src="../../javascripts/explorer.js?v=78179124"></script>
+        <script src="../../javascripts/explorer.js?v=84b4d7fb"></script>
       
-        <script src="../../javascripts/scorechart.js?v=0bc05770"></script>
+        <script src="../../javascripts/scorechart.js?v=1c27a70d"></script>
       
-        <script src="../../javascripts/scoresummary.js?v=a40380ed"></script>
+        <script src="../../javascripts/scoresummary.js?v=34222cf0"></script>
       
-        <script src="../../javascripts/checkschart.js?v=106bf7bb"></script>
+        <script src="../../javascripts/checkschart.js?v=1ee222fe"></script>
       
         <script src="../../javascripts/nowcastchart.js?v=e5f9eb42"></script>
       

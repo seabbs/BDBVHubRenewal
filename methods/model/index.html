@@ -1633,6 +1633,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../model-development/score-history/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Score history
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -2476,7 +2504,7 @@ Every time-varying part is a weekly random walk or AR(1), so it stays near const
     LK --&gt; FC</code></pre>
 <h3 id="time-axis">Time axis<a class="headerlink" href="#time-axis" title="Permanent link">&para;</a></h3>
 <p>The data weeks start one week before weekly onsets, summed over the modelled provinces, first reach 5, or their peak if lower.
-The data weeks end with the week that holds <span class="arithmatex">\(T\)</span>, the release's last report day (<a href="../data/#vintages">Data</a>).
+The data weeks end with the week that holds <span class="arithmatex">\(T\)</span>, the release's cut-off (<a href="../data/#vintages">Data</a>).
 The model axis starts 42 days (6 weeks) earlier, the length of the generation interval, for seeding.
 Every weekly walk is held at its starting value over the 6 seeding weeks and the first data week.
 The fit axis is the data weeks, extended for <code>renewalbvd</code> as <a href="#bvdoutbreaksize-informed">below</a>.</p>
@@ -2524,7 +2552,7 @@ f_s(d) = H_s(d) \prod_{j &lt; d}\{1 - H_s(j)\},
 <p>Cases reported on day <span class="arithmatex">\(t\)</span> without an onset are a share <span class="arithmatex">\(m_p(t)\)</span> of reports, with <span class="arithmatex">\(\operatorname{logit} m_p(t) = \bar m(t)\)</span>.
 <span class="arithmatex">\(\bar m\)</span> is a weekly random walk with start <span class="arithmatex">\(\mathcal{N}(-2, 1)\)</span> and step SD <span class="arithmatex">\(\mathcal{N}^+(0, 0.3^2)\)</span>.</p>
 <h3 id="known-onsets">Known onsets<a class="headerlink" href="#known-onsets" title="Permanent link">&para;</a></h3>
-<p>A case reported on day <span class="arithmatex">\(t\)</span> is in the vintage with probability <span class="arithmatex">\(\Pi(t) = F_\ell(T - t)\)</span>, with <span class="arithmatex">\(T\)</span> the vintage's last report day and <span class="arithmatex">\(F_\ell\)</span> the cdf of the report-to-publication lag.
+<p>A case reported on day <span class="arithmatex">\(t\)</span> is in the vintage with probability <span class="arithmatex">\(\Pi(t) = F_\ell(T - t)\)</span>, with <span class="arithmatex">\(T\)</span> the vintage's cut-off and <span class="arithmatex">\(F_\ell\)</span> the cdf of the report-to-publication lag.
 The lag is the gap between a case's report and its first appearance in a release.
 Its pmf on 0 to 7 days has a Dirichlet(1, ..., 1) prior and is learnt from consecutive releases (see Likelihood).
 Expected known onsets, right truncated by vintage, are</p>
@@ -2552,7 +2580,7 @@ The hub fits the delays as exact for releases up to 2026-10-24 and as double int
   Delays below 0 count as 0 and delays above 60 as 60.</li>
 <li>Each delay-file row (location, onset week and delay) of release <span class="arithmatex">\(k + 1\)</span> was already in release <span class="arithmatex">\(k\)</span> with probability
   $<span class="arithmatex">\(q = (1 - b_k) \frac{\sum_u F_\ell(T_k - t_u)}{\sum_u F_\ell(T_{k+1} - t_u)},\)</span>$
-  averaged over the onset days <span class="arithmatex">\(u\)</span> of the row's week, with <span class="arithmatex">\(t_u\)</span> the report day for onset <span class="arithmatex">\(u\)</span> and <span class="arithmatex">\(T_k\)</span> release <span class="arithmatex">\(k\)</span>'s last report day.
+  averaged over the onset days <span class="arithmatex">\(u\)</span> of the row's week, with <span class="arithmatex">\(t_u\)</span> the report day for onset <span class="arithmatex">\(u\)</span> and <span class="arithmatex">\(T_k\)</span> release <span class="arithmatex">\(k\)</span>'s cut-off.
   <span class="arithmatex">\(b_k \sim \text{Beta}(1, 19)\)</span> is the share of rows that appear late whatever their age, such as onsets recorded later for cases first counted as imputed.
   The kept rows of each cell are beta-binomial with mean <span class="arithmatex">\(q\)</span> and concentration <span class="arithmatex">\(1/(\tau^2 + 10^{-3})\)</span>, <span class="arithmatex">\(\tau \sim \mathcal{N}^+(0, 0.5^2)\)</span>, kept below 1000 as the other concentrations are.
   Rows up to 60 days old at release <span class="arithmatex">\(k\)</span> enter.
@@ -2857,25 +2885,25 @@ Each zone keeps its published count and the rest of the province sample <span cl
       
         <script src="../../javascripts/mathjax.js?v=bced49b5"></script>
       
-        <script src="../../javascripts/toggles.js?v=e5ef24ea"></script>
+        <script src="../../javascripts/toggles.js?v=b6055b59"></script>
       
         <script src="../../javascripts/placemap.js?v=03fe1366"></script>
       
         <script src="../../javascripts/zoom.js?v=4e0c610c"></script>
       
-        <script src="../../javascripts/summarise.js?v=ee637051"></script>
+        <script src="../../javascripts/summarise.js?v=896d340e"></script>
       
-        <script src="../../javascripts/energy.js?v=11968274"></script>
+        <script src="../../javascripts/energy.js?v=36005f6a"></script>
       
-        <script src="../../javascripts/tablefilter.js?v=94394744"></script>
+        <script src="../../javascripts/tablefilter.js?v=774f66a6"></script>
       
-        <script src="../../javascripts/explorer.js?v=78179124"></script>
+        <script src="../../javascripts/explorer.js?v=84b4d7fb"></script>
       
-        <script src="../../javascripts/scorechart.js?v=0bc05770"></script>
+        <script src="../../javascripts/scorechart.js?v=1c27a70d"></script>
       
-        <script src="../../javascripts/scoresummary.js?v=a40380ed"></script>
+        <script src="../../javascripts/scoresummary.js?v=34222cf0"></script>
       
-        <script src="../../javascripts/checkschart.js?v=106bf7bb"></script>
+        <script src="../../javascripts/checkschart.js?v=1ee222fe"></script>
       
         <script src="../../javascripts/nowcastchart.js?v=e5f9eb42"></script>
       
