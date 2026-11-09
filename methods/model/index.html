@@ -2542,7 +2542,7 @@ The national trajectory is the sum of the provinces plus an unassigned component
 <h2 id="partially-pooled">Partially pooled (<code>renewal</code>)<a class="headerlink" href="#partially-pooled" title="Permanent link">&para;</a></h2>
 <p><code>renewal</code> fits every province the release lists in one model, on the axis set by their summed onsets.
 The provinces share the trend <span class="arithmatex">\(\log R(t)\)</span>, the deviation SD <span class="arithmatex">\(\sigma_\delta\)</span> and half-life <span class="arithmatex">\(h\)</span>, the start spread <span class="arithmatex">\(\sigma_v\)</span>, ascertainment <span class="arithmatex">\(\alpha\)</span>, the delay <span class="arithmatex">\(f_s\)</span>, the trend <span class="arithmatex">\(b\)</span> of the missing-onset share, the share at risk <span class="arithmatex">\(\nu\)</span> and the importation share <span class="arithmatex">\(\varepsilon\)</span>.
-Each province has its own deviations <span class="arithmatex">\(\delta_p\)</span> and <span class="arithmatex">\(\omega_p\)</span> and its own seed.
+Each seeded province has its own deviations <span class="arithmatex">\(\delta_p\)</span> and <span class="arithmatex">\(\omega_p\)</span> and its own seed.
 Provinces are linked by importation through <span class="arithmatex">\(W\)</span>.
 Known-onset delays are pooled over provinces.
 Leaving a province out removes its known and imputed terms and its delays but keeps it in the latent process.</p>
@@ -2565,7 +2565,7 @@ Leaving a province out removes its known and imputed terms and its delays but ke
 \]</div>
 <p>The pooled trend <span class="arithmatex">\(\log R(t)\)</span> is the unweighted mean of <span class="arithmatex">\(\log R_p(t)\)</span>, not the national Rt, and is the walk of the province model.
 The province deviations sum to zero.
-They are <span class="arithmatex">\(\delta_p(t) = \sum_j Q_{pj}\, \eta_j(t)\)</span>, with <span class="arithmatex">\(Q\)</span> an orthonormal basis of the sum-to-zero subspace and <span class="arithmatex">\(P - 1\)</span> weekly AR(1) processes <span class="arithmatex">\(\eta_j\)</span> that decay towards 0, the pooled trend:</p>
+They are <span class="arithmatex">\(\delta_p(t) = \sum_j Q_{pj}\, \eta_j(t)\)</span>, with <span class="arithmatex">\(Q\)</span> an orthonormal basis of the deviations that sum to zero over the <span class="arithmatex">\(P_s\)</span> seeded provinces and are 0 for the rest, and <span class="arithmatex">\(P_s - 1\)</span> weekly AR(1) processes <span class="arithmatex">\(\eta_j\)</span> that decay towards 0, the pooled trend:</p>
 <div class="arithmatex">\[
 \eta_j(t) = \phi\, \eta_j(t - 1) + \sigma_\delta z_j(t), \qquad \phi = 2^{-1/h}, \qquad h \sim \text{LogNormal}(\log 6, 0.6^2)\ \text{weeks}, \qquad \sigma_\delta \sim \mathcal{N}^+(0, 0.1^2).
 \]</div>
@@ -2600,6 +2600,8 @@ That lead puts the most onsets of a week of seeded infections in the first case 
 They start with province spread <span class="arithmatex">\(\mathcal{N}^+(0, 0.5^2)\)</span>, sampled non-centred, and have step SD <span class="arithmatex">\(\mathcal{N}^+(0, 0.1^2)\)</span>.</p>
 <h3 id="provinces-with-no-cases">Provinces with no cases<a class="headerlink" href="#provinces-with-no-cases" title="Permanent link">&para;</a></h3>
 <p>A province with no case yet starts at <span class="arithmatex">\(10^{-6}\)</span> of its seed level and is never seeded.
+Its deviations <span class="arithmatex">\(\delta_p\)</span> and <span class="arithmatex">\(\omega_p\)</span> are 0, so it follows the pooled trends, and its seed is fixed at the prior median, 1, since only that near-zero start uses it.
+Nothing is sampled for it.
 Its infections come only from importation through <span class="arithmatex">\(W\)</span>, and its zero counts are scored like any other province's.
 Its forecasts follow from the model, so every province the release lists has one.</p>
 <h2 id="without-importation">Without importation (<code>renewalsp</code>)<a class="headerlink" href="#without-importation" title="Permanent link">&para;</a></h2>
