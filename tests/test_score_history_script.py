@@ -71,7 +71,7 @@ def _summary() -> dict[str, object]:
 
 def _full(df):
     """Every forecast, over all horizons."""
-    return df.loc[(df["horizon"] == "all") & ~df["common"]]
+    return df.loc[(df["split"] == "all") & ~df["common"]]
 
 
 def test_summary_scores_match_on_baseline_forecasts(sh) -> None:
@@ -137,23 +137,29 @@ def test_history_flags_changes_in_what_is_scored(sh) -> None:
     assert list(vs_good["break"]) == [True, False, True, True]
 
 
-def test_history_splits_by_horizon(sh) -> None:
+def test_history_splits_by_horizon_and_week(sh) -> None:
     out = sh.history([("a" * 40, "t", "p1", "latest", _summary())])
     out = out.loc[
         ~out["common"]
         & (out["baseline"] == "randomwalk")
         & (out["model"] == "good")
         & (out["pool"] == "national")
-    ].set_index("horizon")
-    assert set(out.index) == {"all", "0", "1"}
-    assert out.loc["0", "rel_wis"] == pytest.approx(0.5)
-    assert out.loc["1", "rel_wis"] == pytest.approx(1.0)
-    assert out.loc["1", "n"] == 1
+    ].set_index("split")
+    assert set(out.index) == {
+        "all",
+        "horizon 0",
+        "horizon 1",
+        "week 2026-10-24",
+    }
+    assert out.loc["horizon 0", "rel_wis"] == pytest.approx(0.5)
+    assert out.loc["horizon 1", "rel_wis"] == pytest.approx(1.0)
+    assert out.loc["horizon 1", "n"] == 1
+    assert out.loc["week 2026-10-24", "rel_wis"] == pytest.approx(35 / 40)
 
 
 def _good_national(df):
     keep = (
-        (df["horizon"] == "all")
+        (df["split"] == "all")
         & (df["baseline"] == "randomwalk")
         & (df["model"] == "good")
         & (df["pool"] == "national")
@@ -230,23 +236,28 @@ def test_chart_marks_breaks_and_names_commits(sh) -> None:
     assert d["scales"] == ["national", "provinces"]
     assert d["baseline"] == 0
     assert {
-        f"{b}|{p}|all horizons"
+        f"{b}|{p}|all"
         for b in ("randomwalk", "good")
         for p in ("national", "provinces")
     } <= set(d["sets"])
     assert d["common"] is True
     assert d["baselines"] == ["randomwalk", "good"]
-    assert d["splits"] == ["all horizons", "horizon 0", "horizon 1"]
-    assert d["split"] == "horizon 0"
+    assert d["splits"] == [
+        "week 2026-10-24",
+        "all",
+        "horizon 0",
+        "horizon 1",
+    ]
+    assert d["split"] == "week 2026-10-24"
     assert "randomwalk|national|horizon 1|common" in d["sets"]
-    nat = d["sets"]["randomwalk|national|all horizons"]
+    nat = d["sets"]["randomwalk|national|all"]
     assert nat["x"] == ["11-04 10:00 aaaaaaa *", "11-05 10:00 bbbbbbb *"]
     assert nat["marks"] == [0, 1]
     good = [r for r in nat["rows"] if r[0] == 1]
     assert good[0][:3] == [1, 0, 2]
     keys = [m["key"] for m in d["metrics"]]
     assert good[0][3 + keys.index("rel_wis")] == pytest.approx(35 / 40)
-    rw = d["sets"]["good|national|all horizons"]["rows"][0]
+    rw = d["sets"]["good|national|all"]["rows"][0]
     assert rw[0] == 0
     assert rw[3 + keys.index("rel_wis")] == pytest.approx(40 / 35, rel=1e-3)
 
@@ -312,3 +323,46 @@ def test_common_window_keeps_the_most_forecast_deploys(sh) -> None:
     common = out.loc[out["common"]]
     assert list(common["source_sha"].str[:1]) == ["b"]
     assert list(common["n"]) == [6]
+
+
+def _new_week():
+    """A deploy that adds week 2026-10-31, forecast by both models."""
+    later = _summary()
+    later["weeks"] = ["2026-10-24", "2026-10-31"]
+    later["rows"].append([0, 1, 0, 0, 1, 6.0, 1.0])
+    later["rows"].append([1, 1, 0, 0, 1, 3.0, 1.0])
+    later["horizons"] += [2, 2]
+    return later
+
+
+def test_each_target_week_has_its_own_common_window(sh) -> None:
+    out = sh.history(
+        [
+            ("a" * 40, "t1", "p1", "latest", _summary()),
+            ("b" * 40, "t2", "p2", "latest", _new_week()),
+        ]
+    )
+    good = out.loc[
+        out["common"]
+        & (out["baseline"] == "randomwalk")
+        & (out["model"] == "good")
+        & (out["pool"] == "national")
+    ]
+    old = good.loc[good["split"] == "week 2026-10-24"]
+    new = good.loc[good["split"] == "week 2026-10-31"]
+    assert list(old["source_sha"].str[:1]) == ["a", "b"]
+    assert list(old["n"]) == [2, 2]
+    assert list(new["source_sha"].str[:1]) == ["b"]
+    assert list(new["rel_wis"]) == pytest.approx([0.5])
+
+
+def test_chart_opens_on_the_newest_week_scored_at_most_deploys(sh) -> None:
+    hist = sh.history(
+        [
+            ("a" * 40, "t1", "p1", "latest", _summary()),
+            ("b" * 40, "t2", "p2", "latest", _new_week()),
+        ]
+    )
+    d = sh.chart_data(hist, {})["latest"]
+    assert d["splits"][:2] == ["week 2026-10-31", "week 2026-10-24"]
+    assert d["split"] == "week 2026-10-24"
