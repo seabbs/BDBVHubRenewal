@@ -14,6 +14,24 @@ Extraction and synthetic vintages are on the [Data methods page](methods/data.md
 The 2026-08-18 vintage has no delay data.
 The 2026-10-09 delay file exists only in the hub's git history.
 
+## Release cut-offs
+
+Each release's cut-off is its latest onset day.
+It falls up to three days before the release date (`days_to_release` in the table above).
+The hub target is the sum of daily onsets over each epi week, Sunday to Saturday, so the week holding the cut-off is partial.
+
+<figure class="doc-figure" markdown="span">
+  ![National daily onsets by onset status for the four weeks up to each of the last four releases' cut-offs, with each epi week's total above it.](figures/cutoff-days.svg#only-light)
+  ![National daily onsets by onset status for the four weeks up to each of the last four releases' cut-offs, with each epi week's total above it.](figures/cutoff-days-dark.svg#only-dark)
+  <figcaption markdown="1">
+    National daily onsets up to each release's cut-off, with each epi week's total (the hub target) above it and the release date dotted.
+  </figcaption>
+</figure>
+
+The last days before a cut-off hold few cases because most of their onsets are not yet reported.
+In the 2026-11-08 release, cut at 2026-11-05, the last five onset days hold 19, 19, 15, 10 and 5 cases.
+Its last week has five of seven days and 68 cases.
+
 ## National coherence
 
 The national (`CD`) row should equal the sum of the provinces.
@@ -38,6 +56,20 @@ The renewal model forecasts it as an unassigned component ([Forecasts](methods/m
 </figure>
 
 ## Revisions of recent weeks
+
+Each release is a vintage that restates every onset week, so a week's count grows as later releases report more of its cases.
+
+<figure class="doc-figure" markdown="span">
+  ![Count for each of the latest six onset weeks in every release that reports it, for the country, Ituri and Nord Kivu.](figures/release-counts.svg#only-light)
+  ![Count for each of the latest six onset weeks in every release that reports it, for the country, Ituri and Nord Kivu.](figures/release-counts-dark.svg#only-dark)
+  <figcaption markdown="1">
+    Count for each recent onset week (labelled by the week's last day) in each release that reports it.
+  </figcaption>
+</figure>
+
+Nationally the week ending 2026-10-24 had 91 cases at the 2026-10-24 release, 381 at 2026-11-01 and 482 at 2026-11-08.
+The week ending 2026-10-31 rose from 150 to 349 in one release.
+Delay-file rows are the known-onset part of these counts, so their backfill follows the same pattern.
 
 <figure class="doc-figure" markdown="span">
   ![Share of the latest national count reported in each earlier vintage, by weeks before the vintage.](figures/revisions.svg#only-light)
