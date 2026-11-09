@@ -126,17 +126,30 @@ def test_randomwalk_returns_complete_weeks_as_reported(
 def test_nowcast_starts_from_the_latest_full_week_with_enough_reported(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
+    from bdbvhubrenewal.forecasters.randomwalk import _start_weeks
+
     model = RandomWalkNowcast()
-    model.forecast(_task(target, delays, daily, "2026-10-24"))
-    start = {r["location"]: r["start_week"] for r in model.fit_diagnostics}
-    # Cut-off 10-24 is a Saturday, so its week is full, and Ituri has more
-    # than 5 cases in it.
-    assert start["CD-IT"] == "2026-10-24"
-    assert max(start.values()) == "2026-10-24"
-    # Cut-off 10-16 is a Friday, so the week of 10-17 is partial.
-    model.forecast(_task(target, delays, daily, "2026-10-17"))
-    start = {r["location"]: r["start_week"] for r in model.fit_diagnostics}
-    assert start["CD-IT"] == "2026-10-10"
+    task = _task(target, delays, daily, "2026-10-24")
+    origin = model.origin_at(task, errors=False)
+    w0 = _start_weeks(origin)
+    i = origin.snap.locations.index("CD-IT")
+    settings = origin.settings
+    # Ituri starts at a full week at least half reported with enough
+    # cases, and every later full week is less than half reported.
+    assert origin.complete[i, w0[i]] >= settings.start_share
+    assert origin.reported[i, w0[i]] >= settings.start_count
+    later = origin.complete[i, w0[i] + 1 : origin.start_nowcast + 1]
+    assert (later < settings.start_share).all()
+    # Cut-off 10-24 is a Saturday, so its week is full, but most of it is
+    # still to come, so the walk does not start from it.
+    assert origin.snap.week_ends[origin.start_nowcast] == "2026-10-24"
+    assert origin.snap.week_ends[w0[i]] < "2026-10-24"
+    # A start share as low as 5% starts from the cut-off week.
+    low = RandomWalkNowcast(settings=Settings(start_share=0.05))
+    low_origin = low.origin_at(task, errors=False)
+    assert low_origin.snap.week_ends[_start_weeks(low_origin)[i]] == (
+        "2026-10-24"
+    )
 
 
 def test_weeks_after_the_start_follow_the_filtered_level(
@@ -262,6 +275,7 @@ def test_the_filter_weights_a_week_by_how_complete_it_is() -> None:
         reported=np.array([[10.0, 0.0, 0.0], [10.0, 0.0, 0.0]]),
         complete=np.array([[1.0, 0.95, 0.05], [1.0, 0.95, 0.05]]),
         sigma=np.array([0.5, 0.5]),
+        settings=Settings(filter_noise="poisson"),
     )
     start = np.log1p(np.full((2, 1), 10.0))
     level, var = _filter(start, origin, np.array([0, 1]), 2)
@@ -286,3 +300,29 @@ def test_a_silent_place_is_not_nowcast(runs) -> None:
     model, _ = runs["randomwalknowcast"]
     start = {r["location"]: r["start_week"] for r in model.fit_diagnostics}
     assert (sk.loc[sk["target_end_date"] <= start["CD-SK"], "value"] == 0).all()
+
+
+def test_a_week_mostly_still_to_come_moves_the_level_little() -> None:
+    from bdbvhubrenewal.forecasters.randomwalk import _filter
+
+    # Week 1 is 20% reported with 150 cases, so its nowcast is 750 against
+    # a level of 300. With only the Poisson variance it pulls the level more
+    # than half way; with the variance of the 600 still to come it barely
+    # moves it.
+    def origin(noise: str) -> SimpleNamespace:
+        return SimpleNamespace(
+            reported=np.array([[300.0, 150.0]]),
+            complete=np.array([[1.0, 0.2]]),
+            point=np.array([[300.0, 750.0]]),
+            size=np.array([[2.0, 2.0]]),
+            sigma=np.array([0.1]),
+            settings=Settings(filter_noise=noise),
+        )
+
+    start = np.log1p(np.full((1, 1), 300.0))
+    poisson, _ = _filter(start, origin("poisson"), np.array([0]), 1)
+    nowcast, var = _filter(start, origin("nowcast"), np.array([0]), 1)
+    seen = np.log1p(750.0)
+    assert poisson[0, 0, 1] - start[0, 0] > 0.5 * (seen - start[0, 0])
+    assert nowcast[0, 0, 1] - start[0, 0] < 0.1 * (seen - start[0, 0])
+    assert var[0, 1] > 0

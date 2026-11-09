@@ -156,7 +156,9 @@ def _filter(
     and steps with variance $\sigma^2$ a week. Week $u$ after `w0` with
     share reported $F_u > 0$ observes it as $\log(1 + y_u / F_u)$ with
     variance $1 / (F_u + y_u)$, the delta-method variance of a Poisson
-    final count thinned to the share reported.
+    final count thinned to the share reported, plus with
+    `Settings.filter_noise` `"nowcast"` the variance of the count still to
+    come (`_nowcast_var`).
 
     Returns
     -------

@@ -100,7 +100,7 @@ def pair_sums(
     )
 
 
-def log_factors(num: Any, den: Any, gaps: Any, age_bin: int = 1) -> np.ndarray:
+def log_factors(num: Any, den: Any, gaps: Any) -> np.ndarray:
     r"""Daily log development factors shared by all pairs (extension E1).
 
     A day of age $a$ at release $r$ is age $a + s$ at release $r + 1$,
@@ -121,12 +121,6 @@ def log_factors(num: Any, den: Any, gaps: Any, age_bin: int = 1) -> np.ndarray:
         ``(n_loc, n_pair, max_delay)``, from `pair_sums`.
     gaps : array_like of int
         Each pair's gap in days.
-    age_bin : int
-        Days of age per bin. With more than 1, $g$ is constant within
-        each bin of ages, and the pairs of each gap are summed over the
-        ages of a bin before the ratio, its equation the mean of theirs.
-        So a count that moves between onset days of one bin is no
-        growth. 1 is the daily fit.
 
     Returns
     -------
@@ -143,15 +137,7 @@ def log_factors(num: Any, den: Any, gaps: Any, age_bin: int = 1) -> np.ndarray:
     age = np.arange(d)
     j = np.arange(d)[None, None, :]
     lo = age[None, :, None]
-    rows = ((j >= lo) & (j < lo + uniq[:, None, None])).astype(float)
-    # bins[a, k] is 1 when age a is in bin k.
-    bins = (age[:, None] // age_bin == np.arange(-(-d // age_bin))).astype(
-        float
-    )
-    rows = np.einsum("sad,ak->skd", rows, bins / bins.sum(axis=0))
-    rows = (rows.reshape(-1, d) @ bins).reshape(-1, bins.shape[1])
-    n_sum = np.einsum("lsa,ak->lsk", n_sum, bins)
-    d_sum = np.einsum("lsa,ak->lsk", d_sum, bins)
+    rows = ((j >= lo) & (j < lo + uniq[:, None, None])).reshape(-1, d)
     g = np.zeros((n_loc, d))
     for n in range(n_loc):
         w = d_sum[n].ravel()
@@ -159,7 +145,7 @@ def log_factors(num: Any, den: Any, gaps: Any, age_bin: int = 1) -> np.ndarray:
         seen = w > 0
         y = np.log(np.where(seen, n_sum[n].ravel() / np.where(seen, w, 1), 1))
         root = np.sqrt(w)
-        g[n] = bins @ nnls(rows * root[:, None], y * root)[0]
+        g[n] = nnls(rows * root[:, None], y * root)[0]
     return g
 
 
