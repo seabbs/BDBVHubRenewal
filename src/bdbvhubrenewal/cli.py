@@ -797,7 +797,8 @@ def _zone_backtest(args: argparse.Namespace) -> int:
     # The zone forecasts as submitted, for the Backtest explorer: their
     # plotted quantiles and a fixed subset of draws for the trajectories.
     write_csv(
-        forecast_quantiles(forecasts.assign(source="ours")), args.quantiles_out
+        forecast_quantiles(forecasts.assign(source="ours"), by=("origin",)),
+        args.quantiles_out,
     )
     write_csv(draw_subset(forecasts).drop(columns="draw"), args.draws_out)
     rel = zone_relative_skill(scores, by=("horizon",))
