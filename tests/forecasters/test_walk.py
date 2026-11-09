@@ -7,10 +7,9 @@ import numpy as np
 import pytest
 
 from bdbvhubrenewal.forecasters.walk import (
-    log1p_poisson_var,
     random_walk,
     walk_noise,
-    walk_spread,
+    walk_variance,
 )
 
 
@@ -53,23 +52,30 @@ def test_one_key_gives_one_draw() -> None:
     assert np.array_equal(np.asarray(a[1]), np.asarray(b[1]))
 
 
-def test_log1p_poisson_var_matches_simulation() -> None:
+def test_the_noise_is_the_delta_method_poisson_variance() -> None:
+    y = np.array([0.0, 1.0, 4.0, 9.0])
+    v = y / (1 + y) ** 2
+    np.testing.assert_allclose(walk_noise(y), v[1:] + v[:-1])
+    # It matches the simulated variance once the counts are not small.
     rng = np.random.default_rng(0)
-    for lam in (0.0, 1.0, 4.0, 12.0, 300.0):
-        y = rng.poisson(lam, 200_000)
-        assert log1p_poisson_var(np.array([lam]))[0] == pytest.approx(
-            np.log1p(y).var(), abs=2e-3
+    for lam in (30.0, 300.0):
+        sim = np.log1p(rng.poisson(lam, 200_000)).var()
+        assert walk_noise(np.array([lam, lam]))[0] / 2 == pytest.approx(
+            sim, rel=0.05
         )
 
 
-def test_poisson_noise_alone_gives_the_floor() -> None:
+def test_poisson_noise_alone_leaves_little_or_no_walk_variance() -> None:
     rng = np.random.default_rng(1)
-    for lam in (8.0, 20.0):
+    for lam in (8.0, 20.0, 100.0):
         y = rng.poisson(lam, 5000).astype(float)
         d = np.diff(np.log1p(y))
-        # Noise alone looks like a walk with a spread of about 0.5 to 0.3.
-        assert d.std() > 0.3
-        assert walk_spread(d, walk_noise(y), 0.1) == 0.1
+        raw = d.var(ddof=1)
+        net = walk_variance(d, walk_noise(y))
+        # The delta method leaves a little at small counts, under a fifth
+        # of the raw variance, and none at large ones.
+        assert net < 0.2 * raw
+    assert walk_variance(d, walk_noise(y)) <= 0.001
 
 
 def test_a_random_walk_on_large_counts_is_recovered() -> None:
@@ -78,19 +84,18 @@ def test_a_random_walk_on_large_counts_is_recovered() -> None:
     y = rng.poisson(np.expm1(level)).astype(float)
     d = np.concatenate([np.diff(np.log1p(row)) for row in y])
     noise = np.concatenate([walk_noise(row) for row in y])
-    assert walk_spread(d, noise, 0.1) == pytest.approx(0.3, rel=0.05)
+    assert np.sqrt(walk_variance(d, noise)) == pytest.approx(0.3, rel=0.05)
 
 
-def test_a_walk_on_small_counts_loses_only_the_poisson_noise() -> None:
+def test_a_walk_on_small_counts_loses_most_of_the_poisson_noise() -> None:
     rng = np.random.default_rng(3)
     level = np.log(10.0) + np.cumsum(rng.normal(0, 0.3, (2000, 9)), axis=1)
     y = rng.poisson(np.expm1(np.clip(level, 0, None))).astype(float)
     d = np.concatenate([np.diff(np.log1p(row)) for row in y])
     noise = np.concatenate([walk_noise(row) for row in y])
     assert d.std() > 0.45
-    assert walk_spread(d, noise, 0.1) == pytest.approx(0.3, abs=0.06)
+    assert np.sqrt(walk_variance(d, noise)) == pytest.approx(0.3, abs=0.08)
 
 
-def test_fewer_than_two_changes_give_the_floor() -> None:
-    assert walk_spread(np.array([0.7]), np.array([0.1]), 0.1) == 0.1
-    assert walk_spread(np.array([]), np.array([]), 0.05) == 0.05
+def test_fewer_than_two_changes_give_no_variance() -> None:
+    assert np.isnan(walk_variance(np.array([0.7]), np.array([0.1])))

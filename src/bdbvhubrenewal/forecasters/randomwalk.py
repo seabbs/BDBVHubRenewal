@@ -30,8 +30,9 @@ The walk forecasts on from the cut-off week's level.
 
 The spread of the walk is the standard deviation of the weekly changes of
 $\log(1 + y)$ in reported counts, over the weeks ending at the start of
-`randomwalk`, net of their Poisson noise and at least 0.1
-(`walk.walk_spread`).
+`randomwalk`, net of their delta-method Poisson noise
+(`walk.walk_variance`).
+A place whose net variance is 0 or below has no own estimate.
 The delay, the observation model and the walk spread each use their own
 estimate where a place has at least 10 cases a week, and otherwise the
 pooled estimate of the nearest parent that does (`pooling`).
