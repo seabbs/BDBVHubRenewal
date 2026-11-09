@@ -97,10 +97,10 @@
       // Rotated labels get room for the longest of them.
       var longest = Math.max.apply(null, d.x.map(function (x) { return String(x).length; }));
       var B = many ? Math.max(100, 24 + 5.5 * longest) : 40;
-      var W = 760, H = many ? 280 + B : 320, L = 52, R = 10, T = 10;
+      var W = 760, H = many ? 280 + B : 320, L = 52, R = 10, Tm = 10;
       var bw = (W - L - R) / (xr[1] - xr[0]);
       function X(i) { return L + (i - xr[0]) * bw; }
-      function Y(v) { return T + (1 - (v - lo) / (hi - lo)) * (H - T - B); }
+      function Y(v) { return Tm + (1 - (v - lo) / (hi - lo)) * (H - Tm - B); }
       figure.textContent = "";
       var svg = el("svg", { viewBox: "0 0 " + W + " " + H, role: "img",
         "aria-label": metric.label + " by " + d.x_label.toLowerCase() }, figure);
@@ -122,14 +122,14 @@
       var lab = el("text", { x: L + (W - L - R) / 2, y: H - 4, "text-anchor": "middle",
         class: "scorechart-tick" }, svg);
       lab.textContent = d.x_label;
-      var plot = Z.clip(svg, { L: L, R: R, T: T, B: B, W: W, H: H });
+      var plot = Z.clip(svg, { L: L, R: R, T: Tm, B: B, W: W, H: H });
       if (metric.ref !== null) {
         el("line", { x1: L, x2: W - R, y1: Y(tf(metric.ref)), y2: Y(tf(metric.ref)),
           class: "scorechart-ref" }, plot);
       }
       (d.marks || []).forEach(function (i) {
         if (!Z.visible(zoom, i)) return;
-        el("line", { x1: X(i), x2: X(i), y1: T, y2: H - B, class: "scorechart-ref" }, plot);
+        el("line", { x1: X(i), x2: X(i), y1: Tm, y2: H - B, class: "scorechart-ref" }, plot);
       });
       var shown = d.models.map(function (_, i) { return i; })
         .filter(function (i) { return state.on[i]; });
@@ -162,7 +162,7 @@
           });
         }
       });
-      Z.attach(zoom, svg, { L: L, R: R, T: T, B: B, W: W, H: H, x: xr, y: [lo, hi] },
+      Z.attach(zoom, svg, { L: L, R: R, T: Tm, B: B, W: W, H: H, x: xr, y: [lo, hi] },
         metric.key);
       if (onDraw) onDraw(state.metric, state.on);
     }
