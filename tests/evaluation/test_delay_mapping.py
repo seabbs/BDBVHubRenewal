@@ -51,9 +51,11 @@ def test_a_place_takes_its_own_delay_and_a_zone_its_province_s() -> None:
     curves = delay_curves(summary, ["CD", "CD-IT", "CD-NK", "CD-IT-01"])
     got = curves.groupby("location")["share"].first()
     assert got.to_dict() == {"CD-IT": 0.2, "CD-IT-01": 0.2, "CD-NK": 0.8}
-    # A delay fitted once for every place holds at every place.
-    pooled = delay_curves(_summary("pooled", [0.5]), ["CD", "CD-IT"])
-    assert set(pooled["location"]) == {"CD", "CD-IT"}
+    # The shared delay is the centre of the province delays, not a
+    # national delay, so it maps no place.
+    shared = pd.concat([summary, _summary("shared", [0.5])])
+    got = delay_curves(shared, ["CD", "CD-IT", "CD-SU"])
+    assert set(got["location"]) == {"CD-IT"}
 
 
 def _samples(rows: dict[str, float], n: int = 50) -> pd.DataFrame:
@@ -89,6 +91,22 @@ def test_a_place_with_no_delay_is_kept_and_the_country_sums_them(
     wide = _reported(samples, _summary("CD-IT", [0.5, 0.9]), "m", daily)
     assert (wide["CD-IT"] < 100).any()
     assert (wide["CD-NK"] == 50).all()
+    np.testing.assert_array_equal(wide["CD"], wide["CD-IT"] + wide["CD-NK"])
+
+
+def test_the_country_sums_its_provinces_beside_a_shared_delay(
+    daily: pd.DataFrame,
+) -> None:
+    samples = _samples({"CD-IT": 100.0, "CD-NK": 50.0, "CD": 999.0})
+    summary = pd.concat(
+        [
+            _summary("CD-IT", [0.5, 0.9]),
+            _summary("CD-NK", [0.3, 0.6]),
+            _summary("shared", [0.01, 0.02]),
+        ]
+    )
+    wide = _reported(samples, summary, "m", daily)
+    assert (wide["CD-NK"] < 50).any()
     np.testing.assert_array_equal(wide["CD"], wide["CD-IT"] + wide["CD-NK"])
 
 

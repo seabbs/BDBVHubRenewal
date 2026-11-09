@@ -210,11 +210,14 @@ def _fake_run(task: ForecastTask, variant: rn.Variant) -> rn.RenewalRun:
         extra=extra,
         seconds=1.5,
         cpu_seconds=2.9,
-        delay=rn.delay_summary(
-            rng.normal(-1, 0.1, size=(n, 20)),
-            rng.normal(0, 0.1, size=(n, 14)),
-            data.start_date,
-            13,
+        delay=pd.concat(
+            rn.delay_summary(
+                rng.normal(-1, 0.1, size=(n, 20)),
+                rng.normal(0, 0.1, size=(n, 14)),
+                data.start_date,
+                13,
+            ).assign(place=place)
+            for place in data.names
         ),
     )
 
@@ -247,7 +250,8 @@ def test_fit_renewal_writes_the_ci_contract(
     assert len(record["worst_rhat"]) <= 10
     assert {p["name"] for p in record["parameters"]} == {"sd", "z"}
     delay = pd.read_csv(tmp_path / rn.DELAY_SUMMARY_FILE)
-    assert set(delay["location"]) == {"pooled"}
+    # One delay for each modelled province.
+    assert set(delay["location"]) <= set(task.locations)
     assert set(delay["model"]) == {"renewal"}
     assert set(delay["quantity"]) == {
         "reported_share",
@@ -267,16 +271,11 @@ def test_fit_renewal_writes_the_ci_contract(
     assert result.modelled is not None
 
 
-def test_init_strategy_follows_the_sampler_table() -> None:
-    from numpyro.infer import NUTS
+def test_chains_start_from_their_own_prior_draws() -> None:
+    from numpyro.infer import init_to_sample
 
-    median = rn.init_strategy({})
-    assert median.func.__name__ == "init_to_median"
-    with pytest.raises(ValueError, match="init"):
-        rn.init_strategy({"init": "nope"})
     kernel = rn.nuts_kernel(lambda: None, rn.DEFAULT_SAMPLER)
-    assert isinstance(kernel, NUTS)
-    assert kernel._init_strategy.func is median.func
+    assert kernel._init_strategy is init_to_sample
 
 
 def test_unassigned_adds_the_national_data_gap(task: ForecastTask) -> None:
@@ -443,7 +442,7 @@ def test_chain_method_defaults_to_vectorized(
     assert seen["chain_method"] == "sequential"
 
 
-def test_inputs_carry_the_publication_lag_from_earlier_files(
+def test_inputs_carry_the_release_pairs_of_earlier_files(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
     from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
@@ -459,49 +458,21 @@ def test_inputs_carry_the_publication_lag_from_earlier_files(
         )
     }
     late = vintage_inputs(tasks["2026-10-17"], MAIN)
-    assert late.publication_lag_pmf is not None
-    assert late.publication_lag_pmf.sum() == pytest.approx(1.0)
-    assert vintage_inputs(tasks["2026-10-09"], MAIN).publication_lag_pmf is None
-
-
-def test_lag_source_warns_when_the_prior_stands_in(
-    target: pd.DataFrame, delays: pd.DataFrame
-) -> None:
-    from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
-    from bdbvhubrenewal.forecasters.renewal import (
-        lag_warnings,
-        vintage_inputs,
-    )
-    from bdbvhubrenewal.model import MAIN
-
-    tasks = {
-        t.vintage: t
-        for t in make_tasks(
-            target.loc[target["kind"] == "real"],
-            delays.assign(kind="real"),
-            BacktestConfig(seed=3),
-        )
-    }
-    empirical = replace(MAIN, publication_lag="empirical")
-    early = vintage_inputs(tasks["2026-10-09"], empirical)
-    late = vintage_inputs(tasks["2026-10-17"], empirical)
-    (warning,) = lag_warnings([early], empirical)
-    assert warning.startswith("publication_lag:")
-    assert lag_warnings([late], empirical) == []
-    # The default fixed lag never warns.
-    assert lag_warnings([early], MAIN) == []
+    assert late.release_pairs is not None
+    # One pair of delay files, 10-09 and 10-17.
+    assert late.release_pairs["pair"].shape[1] == 1
+    assert vintage_inputs(tasks["2026-10-09"], MAIN).release_pairs is None
 
 
 def test_report_cutoffs_are_days_from_the_model_start(
     task: ForecastTask,
 ) -> None:
-    task = replace(task, report_by=("2026-10-24", "2026-11-01"))
+    last = {"2026-10-24": "2026-10-24", "2026-11-01": "2026-10-31"}
+    task = replace(task, report_by=last)
     data = rn.vintage_inputs(task, rn.model_config(rn.VARIANTS["renewal"]))
     cuts = rn.report_cutoffs(task, data)
     start = pd.Timestamp(data.start_date)
-    # Each later release is cut at its last report day: 10-24 for the
-    # label 10-24, published a day early, and 10-31 for 11-01 (hub #90).
-    last = {"2026-10-24": "2026-10-24", "2026-11-01": "2026-10-31"}
+    # Each later release is cut at its last report day.
     assert cuts == {(pd.Timestamp(last[d]) - start).days: d for d in last}
 
 
@@ -512,7 +483,7 @@ def test_forecast_gives_counts_as_reported_later(
     monkeypatch.setattr(
         rn.RenewalModel, "run", lambda self, t: _fake_run(t, self.variant)
     )
-    task = replace(task, report_by=("2026-10-24",))
+    task = replace(task, report_by={"2026-10-24": "2026-10-24"})
     samples = get_model(name).forecast(task)
     check_samples(samples, task)
     later = samples.loc[samples["as_of"] == "2026-10-24"]
@@ -521,7 +492,7 @@ def test_forecast_gives_counts_as_reported_later(
     final = samples.loc[samples["as_of"].isna()]
     assert set(final["target_end_date"]) == set(task.target_end_dates)
     # Without later vintages there is no as_of column.
-    plain = get_model(name).forecast(replace(task, report_by=()))
+    plain = get_model(name).forecast(replace(task, report_by={}))
     assert "as_of" not in plain
 
 
@@ -583,16 +554,34 @@ def test_the_model_cut_off_is_the_release_s_last_report_day(
 
     config = rn.model_config(rn.VARIANTS["renewal"])
     for label, last in (
+        ("2026-10-09", "2026-10-08"),
+        ("2026-10-17", "2026-10-16"),
         ("2026-10-24", "2026-10-24"),
         ("2026-11-01", "2026-10-31"),
     ):
         rows = target.loc[target["vintage"] == label]
         task = make_tasks(rows, delays, BacktestConfig(n_samples=20, seed=3))[0]
         data = rn.vintage_inputs(task, config)
-        # The cut-off and the last data week end on the last report day,
-        # so 11-01, extracted a day after its last report, adds no empty
-        # week (hub issue #90).
+        # The cut-off and the last data week end on the last report day
+        # the data prove, so no release adds empty days.
         cut = data.start_date + dt.timedelta(days=data.cutoff)
         end = data.start_date + dt.timedelta(days=7 * data.n_weeks - 1)
         assert cut.isoformat() == last
         assert end == rn._saturday(last)
+
+
+def test_a_simulated_release_is_cut_at_its_stored_cut_off() -> None:
+    import datetime as dt
+
+    from bdbvhubrenewal.data.simulate import simulate_outbreak
+
+    outbreak = simulate_outbreak()
+    # A Sunday release one day after its cut-off, as in the scenarios.
+    target, delays = outbreak.vintages(["2026-09-06"], {6: 1})
+    task = make_tasks(target, delays, BacktestConfig(n_samples=20, seed=3))[0]
+    assert task.cutoff == "2026-09-05"
+    data = rn.vintage_inputs(task, rn.model_config(rn.VARIANTS["renewal"]))
+    cut = data.start_date + dt.timedelta(days=data.cutoff)
+    end = data.start_date + dt.timedelta(days=7 * data.n_weeks - 1)
+    assert cut == dt.date(2026, 9, 5)
+    assert end == dt.date(2026, 9, 5)

@@ -48,12 +48,14 @@ import datetime as dt
 import logging
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
-from bdbvhubrenewal.data.snapshots import NATIONAL, release_cutoff
+from bdbvhubrenewal.data.releases import release_cutoff
+from bdbvhubrenewal.data.snapshots import NATIONAL
 from bdbvhubrenewal.data.zones import province_of
 from bdbvhubrenewal.evaluation.scoring import (
     SCORE_COLUMNS,
@@ -67,8 +69,10 @@ from bdbvhubrenewal.forecasters.base import (
     ModelUnavailableError,
     add_national,
     get_model,
+    list_models,
 )
 from bdbvhubrenewal.forecasters.chain import MissingSnapshots
+from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 
 __all__ = [
     "COMPLETE_GROWTH",
@@ -82,6 +86,7 @@ __all__ = [
     "relative_wis",
     "release_backtest",
     "reported_samples",
+    "stored_delays",
     "summarise",
     "week_shares",
     "weeks_back_from_cutoff",
@@ -141,9 +146,10 @@ class ReleaseBacktest:
 def delay_curves(summary: pd.DataFrame, places: Sequence[str]) -> pd.DataFrame:
     """Return a model's share of a day's final count reported by age.
 
-    A delay fitted once for every place (location `"pooled"`) is first
-    given to each place. Each place then takes the model's delay at that
-    place, and a zone with none its province's.
+    Each place takes the model's delay at that place, and a zone with none
+    its province's. A model's shared delay (location `"shared"`) is the
+    unweighted centre of its province delays, not a national delay, so it
+    maps no place; the country is the sum of its provinces instead.
 
     Parameters
     ----------
@@ -162,10 +168,11 @@ def delay_curves(summary: pd.DataFrame, places: Sequence[str]) -> pd.DataFrame:
     """
     rows = summary.loc[summary["quantity"] == "reported_share"]
     rows = rows.rename(columns={"x": "age", "q50": "share"})
-    pooled = rows.loc[rows["location"] == "pooled"]
-    if not pooled.empty:
-        rows = pd.concat([pooled.assign(location=p) for p in places])
-    by_place = {str(loc): grp for loc, grp in rows.groupby("location")}
+    by_place = {
+        str(loc): grp
+        for loc, grp in rows.groupby("location")
+        if loc != "shared"
+    }
     frames = [
         by_place[key].assign(location=place)
         for place in places
@@ -422,6 +429,30 @@ def reported_samples(
         whole = NATIONAL in set(samples["location"])
         out[o2] = add_national(both) if whole else both
     return out
+
+
+def stored_delays(results: Path | str) -> pd.DataFrame:
+    """Return the fitted models' stored delay summaries.
+
+    `fit-store load` writes them to `results`.
+
+    Parameters
+    ----------
+    results : pathlib.Path or str
+        The results directory.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The delay summaries of the fitted models, with `model` and
+        `vintage`, and no rows if no fits were loaded.
+    """
+    path = Path(results) / DELAY_SUMMARY_FILE
+    if not path.exists():
+        return pd.DataFrame(columns=["model", "vintage"])
+    learnt = pd.read_csv(path)
+    fitted = [s.name for s in list_models() if s.fitted]
+    return learnt.loc[learnt["model"].isin(fitted)]
 
 
 def _label(

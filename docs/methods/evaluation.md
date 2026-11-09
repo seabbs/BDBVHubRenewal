@@ -86,11 +86,11 @@ Every other model forecasts the final count $X$ of week $w$, which is mapped to 
 
 1. Day $t$ is $a = c - t$ days old at a cut-off $c$, and $\pi(a)$ is the share of its final count the model expects reported by then.
    For `randomwalknowcast` and `pprandomwalknowcast`, $\pi(a) = 1 / \Gamma(a)$ under the daily delay each fits at the origin ([Baseline models](baselines.md#delay)).
-   For the renewal models it is the posterior median of the cumulative onset-to-report delay of the latest onset week, which is pooled over provinces.
+   For the renewal models it is the posterior median of each province's cumulative onset-to-report delay of the latest onset week, as the fit stores it.
    Ages past the end of the delay take its last value, and days after the cut-off have $\pi = 0$.
 2. A week's share $\pi_w$ is the mean of $\pi$ over its seven days.
 3. Each place is mapped by the model's delay at that place, a zone with none by its province's, and a place with neither is scored as forecast.
-   The country is the sum of the mapped provinces.
+   The renewal models' shared delay is the unweighted centre of the province delays, not a national delay, so the country is the sum of the mapped provinces.
 4. With $R_o$ the count reported at the origin, the count outstanding there, $X - R_o$, is thinned binomially, so each sample becomes a draw of the count reported at $o'$,
 
     $$
@@ -148,8 +148,8 @@ The scores on the reported target, at province and zone level, are also averaged
 Relative WIS in these averages is against `randomwalk`.
 Week $w$ is the latest week ending on or before the origin, and $n(t)$ the count reported then for the week ending $t$, with 0 for a week with no row.
 A place with no case in the 9 weeks to $w$, one with no week above 5 cases, and the rest form the three place types.
-The flag is set from the forecast of the round's reference week $r_v$, with median $q_{50}$ and 95% quantile $q_{95}$.
-Where several origins serve a round, only the latest is flagged.
+The flag is set from each origin's forecast of week $w + 1$, with median $q_{50}$ and 95% quantile $q_{95}$.
+This is the round's reference week for an origin from Saturday to Tuesday, and the week before it for an origin from Wednesday to Friday.
 The level is $L = \max\{(n(w - 3) + n(w - 2)) / 2,\ n(w - 1)\}$ and the recent maximum is $M = \max(1, \max_{w - 4 \le t \le w} n(t))$.
 A forecast collapses if $L \ge 3$ and $q_{50} \le L / 3$.
 Otherwise it blows up if $q_{50} > 3M$ and $q_{50} - M \ge 5$, or $q_{95} > 10M$ and $q_{95} - M \ge 20$.

@@ -64,7 +64,7 @@ from bdbvhubrenewal.evaluation.heldout import (
     load_model_choices,
     run_heldout,
 )
-from bdbvhubrenewal.evaluation.nowcast import release_backtest
+from bdbvhubrenewal.evaluation.nowcast import release_backtest, stored_delays
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastTask,
@@ -682,11 +682,7 @@ def _stored(
         hc.match_vintage(r, vintages) for r in hub["reference_date"]
     ]
     samples = pd.concat([ours[cols], hub.dropna(subset=["vintage"])[cols]])
-    path = Path(args.results) / DELAY_SUMMARY_FILE
-    if not path.exists():
-        return samples, pd.DataFrame(columns=["model", "vintage"])
-    learnt = pd.read_csv(path)
-    return samples, learnt.loc[learnt["model"].isin(fitted)]
+    return samples, stored_delays(args.results)
 
 
 def _write_fits(fits: list[pd.DataFrame], path: Path) -> None:
@@ -801,7 +797,8 @@ def _zone_backtest(args: argparse.Namespace) -> int:
     # The zone forecasts as submitted, for the Backtest explorer: their
     # plotted quantiles and a fixed subset of draws for the trajectories.
     write_csv(
-        forecast_quantiles(forecasts.assign(source="ours")), args.quantiles_out
+        forecast_quantiles(forecasts.assign(source="ours"), by=("origin",)),
+        args.quantiles_out,
     )
     write_csv(draw_subset(forecasts).drop(columns="draw"), args.draws_out)
     rel = zone_relative_skill(scores, by=("horizon",))

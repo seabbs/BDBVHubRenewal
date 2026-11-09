@@ -28,8 +28,8 @@ from collections.abc import Sequence
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date
+from bdbvhubrenewal.data.releases import release_cutoff
 from bdbvhubrenewal.data.simulate import SimulatedOutbreak
-from bdbvhubrenewal.data.snapshots import release_cutoff
 from bdbvhubrenewal.data.zones import weekly_zone_counts
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
@@ -38,7 +38,7 @@ from bdbvhubrenewal.evaluation.backtest import (
     real_vintages,
     score_tasks,
 )
-from bdbvhubrenewal.evaluation.nowcast import reported_samples
+from bdbvhubrenewal.evaluation.nowcast import complete_weeks, reported_samples
 from bdbvhubrenewal.evaluation.scoring import (
     energy_scores,
     relative_skill,
@@ -107,6 +107,11 @@ def zone_backtest(
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Score the random walk models run at zone level on later releases.
 
+    Two targets are scored, as for the provinces (`release_backtest`): what
+    each later release reported, and the complete weeks of the latest
+    release, decided by `complete_weeks` from the zone counts of every
+    release, a week with no onset counting as 0.
+
     Parameters
     ----------
     target : pandas.DataFrame
@@ -129,7 +134,8 @@ def zone_backtest(
     -------
     tuple of pandas.DataFrame
         The scores, `score_forecasts` output with `model`, `origin`,
-        `target` (`"reported"`), `truth_vintage` and `horizon` in weeks
+        `target` (`"reported"` or `"complete"`), `truth_vintage` and
+        `horizon` in weeks
         from the reference date, one row per model, origin, later
         vintage, zone and week. Each model appears under its name and
         again under its name with `SUMMED`.
@@ -142,6 +148,9 @@ def zone_backtest(
     config = config or BacktestConfig()
     real = target.loc[target["kind"] == "real"]
     vintages = real_vintages(real)
+    latest = vintages[-1]
+    done = _complete_zone_weeks(daily_zones, daily, vintages)
+    latest_counts = weekly_zone_counts(daily_zones, latest)
     frames, energy, kept = [], [], []
     for vintage in vintages[:-1]:
         task = make_tasks(
@@ -174,6 +183,8 @@ def zone_backtest(
                     reference_date=task.reference_date.isoformat(),
                 )
             )
+        if not forecasts:
+            continue
         reported = counts.rename(columns={"total": "reported"})[
             ["location", "target_end_date", "reported"]
         ]
@@ -211,6 +222,23 @@ def zone_backtest(
             both["horizon"] = _weeks(both, task)
             frames.append(score_forecasts(both, truth, keys=_KEYS))
             energy.append(energy_scores(both, truth, unit=_KEYS[1:4]))
+        # The final-count samples on the latest release's complete weeks.
+        final = pd.concat(
+            [
+                samples.assign(
+                    model=key,
+                    origin=vintage,
+                    target="complete",
+                    truth_vintage=latest,
+                )
+                for key, samples in forecasts.items()
+            ],
+            ignore_index=True,
+        )
+        truth = _zone_truth(latest_counts, final, latest).merge(done)
+        final["horizon"] = _weeks(final, task)
+        frames.append(score_forecasts(final, truth, keys=_KEYS))
+        energy.append(energy_scores(final, truth, unit=_KEYS[1:4]))
     return (
         pd.concat(frames, ignore_index=True),
         pd.concat(energy, ignore_index=True),
@@ -259,6 +287,34 @@ def zone_relative_skill(
     return relative_skill(
         scores, baseline=ZONE_BASELINE, by=by, match_on=_KEYS[1:]
     )
+
+
+def _complete_zone_weeks(
+    daily_zones: pd.DataFrame, daily: pd.DataFrame, vintages: Sequence[str]
+) -> pd.DataFrame:
+    """Return the zones and weeks the latest release reports in full.
+
+    `complete_weeks` on the zone counts of every release, over every zone
+    and week with an onset in any release, a missing week counting as 0.
+    """
+    counts = {v: weekly_zone_counts(daily_zones, v) for v in vintages}
+    every = pd.concat(counts.values())
+    grid = pd.MultiIndex.from_product(
+        [sorted(set(every["location"])), sorted(set(every["target_end_date"]))],
+        names=["location", "target_end_date"],
+    )
+    target = pd.concat(
+        [
+            c.set_index(["location", "target_end_date"])["total"]
+            .reindex(grid, fill_value=0)
+            .reset_index()
+            .assign(kind="real", vintage=v)
+            for v, c in counts.items()
+        ],
+        ignore_index=True,
+    )
+    weeks = complete_weeks(target, daily, vintages[-1])
+    return weeks.loc[weeks["complete"], ["location", "target_end_date"]]
 
 
 def _zone_truth(
@@ -324,7 +380,8 @@ def scenario_zone_scores(
     zones = tuple(sorted({z for _, z, _ in outbreak.settings.zone_shares}))
     frames = []
     for task in tasks:
-        counts = outbreak.zone_vintage(task.vintage)
+        lag = (as_date(task.vintage) - as_date(task.cutoff)).days
+        counts = outbreak.zone_vintage(task.vintage, cutoff_lag=lag)
         for name in models:
             try:
                 prov = get_model(name).forecast(task)

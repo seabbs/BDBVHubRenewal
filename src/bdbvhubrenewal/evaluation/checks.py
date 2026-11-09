@@ -11,8 +11,10 @@ count reported at $o$ for the week ending $t$, 0 where none is.
 to $w$, the random walk's walk window: silent if $m = 0$, small if
 $m \le$ `SMALL_MAX`, larger otherwise.
 
-**Flag.** From the forecast of the reference week $w + 1$, with median
-$q_{50}$ and 95% quantile $q_{95}$.
+**Flag.** From the forecast of week $w + 1$, the first week after the
+origin's latest full week, with median $q_{50}$ and 95% quantile $q_{95}$.
+This is not always the round's reference week, which is $w + 2$ for an
+origin from Wednesday to Friday.
 The level is $\ell = \max\{(c(w - 3) + c(w - 2)) / 2,\ c(w - 1)\}$, the
 mean of the two latest weeks at least two weeks old, or the last full
 week's count where that is higher, as reported counts only grow.
@@ -102,15 +104,15 @@ def place_types(counts: pd.DataFrame, origins: pd.DataFrame) -> pd.DataFrame:
 
 
 def flags(counts: pd.DataFrame, quantiles: pd.DataFrame) -> pd.DataFrame:
-    """Return the flag of each forecast of the reference week.
+    """Return the flag of each forecast, from its week $w + 1$.
 
     Parameters
     ----------
     counts : pandas.DataFrame
         As for `place_types`.
     quantiles : pandas.DataFrame
-        `model`, `origin`, `location`, `q50` and `q95` of each forecast
-        of the reference week.
+        `model`, `origin`, `location`, `target_end_date`, `q50` and `q95`
+        of each forecast's weeks.
 
     Returns
     -------
@@ -118,6 +120,10 @@ def flags(counts: pd.DataFrame, quantiles: pd.DataFrame) -> pd.DataFrame:
         Columns `model`, `origin`, `location` and `flag`, one of
         `collapse`, `blow-up` and `no flag`.
     """
+    after = _last_week(quantiles["origin"]) + pd.Timedelta(days=7)
+    quantiles = quantiles.loc[
+        pd.to_datetime(quantiles["target_end_date"]) == after
+    ]
     wide = _by_week(counts, quantiles)
     level = pd.concat([(wide[3] + wide[2]) / 2, wide[1]], axis=1).max(axis=1)
     recent = wide[[0, 1, 2, 3, 4]].max(axis=1).clip(lower=1.0)

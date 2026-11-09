@@ -421,7 +421,7 @@ def test_scored_on_counts_pairs_and_forecasts() -> None:
         }
     )
     assert report._scored_on(rows) == (
-        "The scores cover 3 origin and release pairs.\n"
+        "On later releases, the scores cover 3 origin and release pairs.\n"
         "The randomwalk baseline has 1 national and 2 province forecasts.\n"
         "1 of them are of a place and week with no case, where every model's "
         "WIS is close to 0, so mean WIS is lower than over places with "
