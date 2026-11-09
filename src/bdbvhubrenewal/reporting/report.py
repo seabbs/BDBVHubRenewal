@@ -1825,10 +1825,17 @@ def _checks_section(
     srcs = {}
     for name, kind in (("complete", "complete"), ("latest", "reported")):
         scores = every.loc[every["target"] == kind]
-        summary = check_summary(scores, place_types(counts, scores), flagged)
+        types = place_types(counts, scores)
         write_score_chart(
             fig / f"checks-backtest-{name}.json",
-            _checks_chart(summary, names),
+            _checks_chart(
+                {
+                    base: check_summary(scores, types, flagged, baseline=base)
+                    for base in names
+                    if base in set(scores["model"])
+                },
+                names,
+            ),
         )
         srcs[name] = f"../figures/checks-backtest-{name}.json"
     latest = every.loc[every["target"] == "reported"]
@@ -1866,30 +1873,39 @@ _CHECK_METRICS: Final = (
 
 
 def _checks_chart(
-    summary: pd.DataFrame, names: Sequence[str]
+    summaries: Mapping[str, pd.DataFrame],
+    names: Sequence[str],
+    baseline: str = "randomwalk",
 ) -> dict[str, object]:
-    """Return the checks summary as `scorechart.js` rows, by scale and split.
+    """Return the checks summaries as `scorechart.js` rows.
 
-    Models keep the colours of the other Backtest charts.
+    `summaries` maps each baseline model to its `check_summary`. The sets
+    are keyed by baseline, scale and split, and `baseline` is the index of
+    the one shown first. Models keep the colours of the other Backtest
+    charts.
     """
-    models = [m for m in names if m in set(summary["model"])]
+    first = summaries[baseline]
+    models = [m for m in names if m in set(first["model"])]
     colours = _model_colours(names)
     sets = {}
-    for (scale, split), g in summary.groupby(["scale", "split"], sort=False):
-        x = list(dict.fromkeys(g["group"]))
-        rows = [
-            [
-                models.index(r["model"]),
-                x.index(r["group"]),
-                int(r["n"]),
-                *(
-                    None if pd.isna(r[c]) else round(float(r[c]), 6)
-                    for c, *_ in _CHECK_METRICS
-                ),
+    for base, summary in summaries.items():
+        groups = summary.groupby(["scale", "split"], sort=False)
+        for (scale, split), g in groups:
+            x = list(dict.fromkeys(g["group"]))
+            rows = [
+                [
+                    models.index(r["model"]),
+                    x.index(r["group"]),
+                    int(r["n"]),
+                    *(
+                        None if pd.isna(r[c]) else round(float(r[c]), 6)
+                        for c, *_ in _CHECK_METRICS
+                    ),
+                ]
+                for _, r in g.iterrows()
+                if r["model"] in models
             ]
-            for _, r in g.iterrows()
-        ]
-        sets[f"{scale}|{split}"] = {"x": x, "rows": rows}
+            sets[f"{base}|{scale}|{split}"] = {"x": x, "rows": rows}
     return {
         "models": [
             {
@@ -1908,9 +1924,10 @@ def _checks_chart(
         "scales": [
             s
             for s in ("zones", "provinces", "national")
-            if s in set(summary["scale"])
+            if s in set(first["scale"])
         ],
         "splits": ["place type", "flag"],
+        "baseline": models.index(baseline),
         "sets": sets,
     }
 
