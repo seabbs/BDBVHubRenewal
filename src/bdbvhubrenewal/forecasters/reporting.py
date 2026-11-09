@@ -38,6 +38,7 @@ from numpy.typing import NDArray
 
 __all__ = [
     "FLOOR",
+    "NEGLIGIBLE",
     "as_reported_samples",
     "decode",
     "draw_reported",
@@ -48,6 +49,10 @@ FLOOR: Final = 1e-6
 """Smallest negative binomial mean, as the observation process."""
 
 _STEPS: Final = 255
+
+NEGLIGIBLE: Final = 0.01
+"""Expected cases still to come below which a cell is stored as reported
+in full at once: its share curve would cost as much as any other."""
 _STREAMS: Final = ("known", "imputed")
 
 
@@ -116,8 +121,9 @@ def encode(curves: Mapping[str, Any]) -> dict[str, Any]:
 
     Each stream's expected cases are stored as the eventual count and the
     share of it reported by each day, rounded to 1/255 and differenced
-    over days, up to the last day any share is below 1. The counts and
-    concentrations are stored as float32.
+    over days, up to the last day any share is below 1. A cell expecting
+    fewer than `NEGLIGIBLE` more cases is reported in full on the first
+    day. The counts and concentrations are stored as float32.
 
     Parameters
     ----------
@@ -143,7 +149,7 @@ def encode(curves: Mapping[str, Any]) -> dict[str, Any]:
             x[:, :-1],
             final[:, None],
             out=np.ones_like(x[:, :-1]),
-            where=final[:, None] > 0,
+            where=final[:, None] > NEGLIGIBLE,
         )
         q = np.rint(np.clip(share, 0, 1) * _STEPS).astype(np.uint8)
         q = np.maximum.accumulate(q, axis=1)
