@@ -629,8 +629,9 @@ def _stored(
     """Final-count samples and delays of the models not run here.
 
     The fitted models' samples come from the backtest forecasts and their
-    delays from the stored delay summaries. Hub teams' forecasts are
-    matched to the real vintage serving their round, and have no delay.
+    delays from the delay summaries `fit-store load` writes to the
+    results, none if it loaded no fits. Hub teams' forecasts are matched
+    to the real vintage serving their round, and have no delay.
     """
     from bdbvhubrenewal.evaluation import hubcompare as hc
 
@@ -657,7 +658,10 @@ def _stored(
         hc.match_vintage(r, vintages) for r in hub["reference_date"]
     ]
     samples = pd.concat([ours[cols], hub.dropna(subset=["vintage"])[cols]])
-    learnt = pd.read_csv(Path(args.output) / DELAY_SUMMARY_FILE)
+    path = Path(args.results) / DELAY_SUMMARY_FILE
+    if not path.exists():
+        return samples, pd.DataFrame(columns=["model", "vintage"])
+    learnt = pd.read_csv(path)
     return samples, learnt.loc[learnt["model"].isin(fitted)]
 
 

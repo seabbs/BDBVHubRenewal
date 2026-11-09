@@ -186,11 +186,14 @@ def test_stored_samples_keep_numeric_values_without_our_forecasts(
     from bdbvhubrenewal.evaluation.scoring import energy_scores
     from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 
+    args = argparse.Namespace(data="data", results=str(tmp_path))
+    # With no fits loaded there are no stored delays.
+    _, none = _stored(args, load_target("data"), run_forecasts([], []))
+    assert none.empty
     learnt = pd.DataFrame(
         {"model": ["renewal", "randomwalknowcast"], "vintage": "2026-10-24"}
     )
     learnt.to_csv(tmp_path / DELAY_SUMMARY_FILE, index=False)
-    args = argparse.Namespace(data="data", output=str(tmp_path))
     stored, delays = _stored(args, load_target("data"), run_forecasts([], []))
     # Only the fitted models' delays are stored ones.
     assert set(delays["model"]) == {"renewal"}
