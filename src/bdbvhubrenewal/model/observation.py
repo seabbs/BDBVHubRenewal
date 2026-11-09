@@ -665,6 +665,13 @@ class OnsetStreams(BaseObservationProcess):
         for key, value in weekly.items():
             self._deterministic(f"expected_{key}", value)
         self._deterministic("expected_daily", onsets)
+        if forecast:
+            # What `reporting.expected_reported_by` needs to give the
+            # counts reported by any later cut-off without the model.
+            self._deterministic("delay_pmf", delay)
+            self._deterministic(
+                "publication_lag", jnp.atleast_1d(jnp.asarray(lag))
+            )
 
         if self.missing_fraction_rv is None:
             total = None

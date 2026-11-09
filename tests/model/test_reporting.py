@@ -1,10 +1,17 @@
 import numpy as np
 import pytest
-from bdbvhubrenewal.model.reporting import expected_reported_by
 from jax import random
 from numpyro.infer import Predictive
 
 from bdbvhubrenewal.model import build_model, model_args
+from bdbvhubrenewal.model.reporting import expected_reported_by
+
+
+@pytest.fixture(scope="module")
+def fitted(sim_vintage):
+    """The model and prior draws standing in for a posterior."""
+    model = build_model(sim_vintage)
+    return model, _prior(model, sim_vintage)
 
 
 def _prior(model, data, n=4):
@@ -18,20 +25,18 @@ def _prior(model, data, n=4):
     }
 
 
-def _weekly(daily, n_init):
+def _weekly(daily):
     n = daily.shape[-2] // 7 * 7
     w = daily[..., :n, :].reshape(*daily.shape[:-2], n // 7, 7, -1)
-    return w.sum(-2)[..., n_init // 7 :, :]
+    return w.sum(-2)
 
 
 @pytest.mark.parametrize("later", [0, 3, 11, 40, None])
-def test_expected_reported_by_matches_the_model(sim_vintage, later):
-    model = build_model(sim_vintage)
+def test_expected_reported_by_matches_the_model(sim_vintage, fitted, later):
+    model, prior = fitted
     n_init = model.latent.n_initialization_points
     as_of = None if later is None else sim_vintage.cutoff + later
-    pred = Predictive(
-        model.sample, posterior_samples=_prior(model, sim_vintage)
-    )(
+    pred = Predictive(model.sample, posterior_samples=prior)(
         random.key(3),
         **model_args(model, sim_vintage, forecast=True, as_of=as_of),
     )
@@ -50,7 +55,7 @@ def test_expected_reported_by_matches_the_model(sim_vintage, later):
             days,
         )
         for stream in ("known", "imputed"):
-            by_cut = _weekly(out[stream], n_init)
+            by_cut = _weekly(out[stream])
             np.testing.assert_allclose(
                 by_cut[0],
                 pred[f"onsets_expected_{stream}"][k],
