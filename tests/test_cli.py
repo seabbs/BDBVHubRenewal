@@ -457,3 +457,12 @@ def test_concat_results_skips_empty_parts(tmp_path: Path) -> None:
     out = tmp_path / "results"
     assert main(["concat-results", "--out", str(out), *map(str, parts)]) == 0
     assert len(pd.read_csv(out / "zone-scores.csv")) == 1
+
+
+def test_digest_of_one_model(capsys: pytest.CaptureFixture[str]) -> None:
+    from bdbvhubrenewal.evaluation.digest import model_digest
+
+    assert main(["digest", "--root", str(ROOT), "--model", "randomwalk"]) == 0
+    key = capsys.readouterr().out.strip()
+    assert key == model_digest("randomwalk", ROOT)
+    assert key != model_digest("pprandomwalknowcast", ROOT)

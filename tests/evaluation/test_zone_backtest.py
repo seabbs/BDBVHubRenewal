@@ -153,3 +153,47 @@ def test_zone_backtest_of_no_origin_is_empty(
         origins=[],
     )
     assert all(t.empty for t in out)
+
+
+def test_zone_forecasts_made_apart_by_model_score_as_one_run(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    result: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
+    tmp_path: Path,
+) -> None:
+    from bdbvhubrenewal.evaluation.zones import (
+        ZoneForecasts,
+        score_zones,
+        zone_forecasts,
+    )
+
+    args = (
+        target,
+        delays,
+        load_daily(DATA),
+        load_daily_zones(DATA),
+        hub_zones(DATA / "hub-config" / "tasks.json"),
+    )
+    parts = []
+    for name in ("randomwalk", "randomwalknowcast"):
+        zone_forecasts(*args, models=[name]).write(tmp_path / name)
+        parts.append(tmp_path / name)
+    run = ZoneForecasts.read(parts)
+    out = score_zones(target, delays, args[2], args[3], run)
+    for got, want in zip(out, result, strict=True):
+        pd.testing.assert_frame_equal(got, want, check_dtype=False)
+
+
+def test_zone_forecasts_read_skips_an_empty_part(tmp_path: Path) -> None:
+    from bdbvhubrenewal.evaluation.zones import ZoneForecasts
+
+    empty = pd.DataFrame(columns=["origin", "model"])
+    ZoneForecasts(empty, empty, empty).write(tmp_path / "a")
+    samples = pd.DataFrame(
+        {"key": ["randomwalk"], "origin": ["2026-10-24"], "value": [1.0]}
+    )
+    runs = pd.DataFrame({"origin": ["2026-10-24"], "model": ["randomwalk"]})
+    ZoneForecasts(runs, samples, empty).write(tmp_path / "b")
+    run = ZoneForecasts.read([tmp_path / "a", tmp_path / "b"])
+    assert list(run.samples.columns) == ["key", "origin", "value"]
+    assert len(run.runs) == 1

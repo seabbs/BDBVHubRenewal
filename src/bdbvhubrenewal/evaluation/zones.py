@@ -24,12 +24,15 @@ from __future__ import annotations
 import datetime as dt
 import logging
 from collections.abc import Collection, Sequence
+from dataclasses import dataclass
+from pathlib import Path
 
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.releases import release_cutoff
 from bdbvhubrenewal.data.simulate import SimulatedOutbreak
+from bdbvhubrenewal.data.tidy import write_csv
 from bdbvhubrenewal.data.zones import weekly_zone_counts
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
@@ -60,8 +63,13 @@ log = logging.getLogger(__name__)
 __all__ = [
     "SUMMED",
     "ZONE_BASELINE",
+    "ZoneForecasts",
     "scenario_zone_scores",
+    "score_zone_allocations",
+    "score_zones",
+    "zone_allocations",
     "zone_backtest",
+    "zone_forecasts",
     "zone_relative_skill",
 ]
 
@@ -150,24 +158,122 @@ def zone_backtest(
         model's name: `model`, `origin`, `reference_date`, `location`,
         `target_end_date`, `sample` and `value`.
     """
+    run = zone_forecasts(
+        target, delays, daily, daily_zones, zones, models, config, origins
+    )
+    return score_zones(target, delays, daily, daily_zones, run, config)
+
+
+@dataclass(frozen=True)
+class ZoneForecasts:
+    """The forecasts `zone_backtest` scores, made apart from scoring.
+
+    Every table has `origin`, so the forecasts of models run apart can be
+    stacked (`read`) and scored together (`score_zones`).
+
+    Attributes
+    ----------
+    runs : pandas.DataFrame
+        One row per origin and model that forecast there, in the order
+        run: `origin` and `model`.
+    samples : pandas.DataFrame
+        Zone samples under `key`, the model's name for its direct zone
+        forecast and the name with `SUMMED` for it made to sum to the
+        provinces: `key`, `origin`, `location`, `target_end_date`,
+        `sample` and `value`.
+    delays : pandas.DataFrame
+        Each model's delay summary at each origin, if it has one.
+    """
+
+    runs: pd.DataFrame
+    samples: pd.DataFrame
+    delays: pd.DataFrame
+
+    _NAMES = ("runs", "samples", "delays")
+
+    def write(self, out: Path | str) -> None:
+        """Write the tables to `out` as `zone-forecast-<table>.csv.gz`."""
+        Path(out).mkdir(parents=True, exist_ok=True)
+        for name in self._NAMES:
+            write_csv(
+                getattr(self, name), Path(out) / f"zone-forecast-{name}.csv.gz"
+            )
+
+    @classmethod
+    def read(cls, parts: Sequence[Path | str]) -> ZoneForecasts:
+        """Stack the tables `write` wrote to each part, in order."""
+        tables = {}
+        for name in cls._NAMES:
+            frames = []
+            for part in parts:
+                try:
+                    frames.append(
+                        pd.read_csv(
+                            Path(part) / f"zone-forecast-{name}.csv.gz",
+                            dtype={"origin": str, "vintage": str},
+                        )
+                    )
+                except pd.errors.EmptyDataError:
+                    continue
+            # A part with no rows (a block every model skips) adds none.
+            frames = [f for f in frames if len(f)] or frames[:1]
+            tables[name] = (
+                pd.concat(frames, ignore_index=True)
+                if frames
+                else pd.DataFrame(columns=["origin", "model"])
+            )
+        return cls(**tables)
+
+
+def _zone_task(
+    real: pd.DataFrame,
+    delays: pd.DataFrame | None,
+    daily: pd.DataFrame,
+    config: BacktestConfig,
+    vintage: str,
+) -> ForecastTask:
+    """Return the province task at an origin."""
+    return make_tasks(
+        real.loc[real["vintage"] == vintage], delays, config, daily=daily
+    )[0]
+
+
+def zone_forecasts(
+    target: pd.DataFrame,
+    delays: pd.DataFrame | None,
+    daily: pd.DataFrame,
+    daily_zones: pd.DataFrame,
+    zones: tuple[str, ...],
+    models: Sequence[str] = ("randomwalk", "randomwalknowcast"),
+    config: BacktestConfig | None = None,
+    origins: Collection[str] | None = None,
+) -> ZoneForecasts:
+    """Forecast the zones from every origin, without scoring.
+
+    The forecasting half of `zone_backtest`.
+
+    Parameters
+    ----------
+    target, delays, daily, daily_zones, zones, models, config, origins
+        As for `zone_backtest`.
+
+    Returns
+    -------
+    ZoneForecasts
+        The direct and summed zone samples and the delay summaries.
+    """
     config = config or BacktestConfig()
     real = target.loc[target["kind"] == "real"]
     vintages = real_vintages(real)
-    latest = vintages[-1]
-    done = _complete_zone_weeks(daily_zones, daily, vintages)
-    latest_counts = weekly_zone_counts(daily_zones, latest)
-    frames, energy, kept = [], [], []
+    runs: list[dict[str, str]] = []
+    samples, summaries = [], []
     for vintage in vintages[:-1]:
         if origins is not None and vintage not in origins:
             continue
-        task = make_tasks(
-            real.loc[real["vintage"] == vintage], delays, config, daily=daily
-        )[0]
+        task = _zone_task(real, delays, daily, config, vintage)
         counts = weekly_zone_counts(daily_zones, vintage)
         active = tuple(z for z in zones if z in set(counts["location"]))
         zt = zone_task(task, counts, active, pd.concat([daily, daily_zones]))
-        forecasts: dict[str, pd.DataFrame] = {}
-        summaries: dict[str, pd.DataFrame | None] = {}
         for name in models:
             model = get_model(name)
             try:
@@ -178,10 +284,77 @@ def zone_backtest(
                 log.warning("%s has no zone forecast at %s: %s", name,
                             vintage, err)  # fmt: skip
                 continue
-            forecasts[name] = direct
-            forecasts[name + SUMMED] = reconcile_zones(
-                direct, prov, task, counts, active
-            )
+            runs.append({"origin": vintage, "model": name})
+            summed = reconcile_zones(direct, prov, task, counts, active)
+            for key, table in ((name, direct), (name + SUMMED, summed)):
+                samples.append(table.assign(key=key, origin=vintage))
+            if summary is not None:
+                summaries.append(summary.assign(origin=vintage))
+
+    def stack(frames: list[pd.DataFrame]) -> pd.DataFrame:
+        if not frames:
+            return pd.DataFrame(columns=["origin", "model"])
+        return pd.concat(frames, ignore_index=True)
+
+    return ZoneForecasts(
+        pd.DataFrame(runs, columns=["origin", "model"]),
+        stack(samples),
+        stack(summaries),
+    )
+
+
+def score_zones(
+    target: pd.DataFrame,
+    delays: pd.DataFrame | None,
+    daily: pd.DataFrame,
+    daily_zones: pd.DataFrame,
+    run: ZoneForecasts,
+    config: BacktestConfig | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Score the forecasts of `zone_forecasts`.
+
+    The scoring half of `zone_backtest`, which it equals given the same
+    models and origins.
+
+    Parameters
+    ----------
+    target, delays, daily, daily_zones, config
+        As for `zone_backtest`.
+    run : ZoneForecasts
+        The forecasts, of models run together or stacked.
+
+    Returns
+    -------
+    tuple of pandas.DataFrame
+        As `zone_backtest`.
+    """
+    config = config or BacktestConfig()
+    real = target.loc[target["kind"] == "real"]
+    vintages = real_vintages(real)
+    latest = vintages[-1]
+    done = _complete_zone_weeks(daily_zones, daily, vintages)
+    latest_counts = weekly_zone_counts(daily_zones, latest)
+    runs = run.runs.astype({"origin": str})
+    frames, energy, kept = [], [], []
+    for vintage in vintages[:-1]:
+        here = runs.loc[runs["origin"] == vintage, "model"].astype(str)
+        if here.empty:
+            continue
+        task = _zone_task(real, delays, daily, config, vintage)
+        counts = weekly_zone_counts(daily_zones, vintage)
+        forecasts: dict[str, pd.DataFrame] = {}
+        summaries: dict[str, pd.DataFrame | None] = {}
+        for name in here:
+            for key in (name, name + SUMMED):
+                mine = (run.samples["key"] == key) & (
+                    run.samples["origin"].astype(str) == vintage
+                )
+                forecasts[key] = (
+                    run.samples.loc[mine]
+                    .drop(columns=["key", "origin"])
+                    .reset_index(drop=True)
+                )
+            summary = _summary(run.delays, name, vintage)
             summaries[name] = summaries[name + SUMMED] = summary
             kept.append(
                 forecasts[name + SUMMED].assign(
@@ -264,6 +437,20 @@ def zone_backtest(
             ]
         ],
     )
+
+
+def _summary(
+    table: pd.DataFrame, model: str, origin: str
+) -> pd.DataFrame | None:
+    """Return a model's delay summary at an origin, or None."""
+    if table.empty or "origin" not in table:
+        return None
+    mine = table.loc[
+        (table["model"] == model) & (table["origin"].astype(str) == origin)
+    ]
+    if mine.empty:
+        return None
+    return mine.drop(columns="origin").reset_index(drop=True)
 
 
 def _weeks(samples: pd.DataFrame, task: ForecastTask) -> pd.Series:
@@ -386,6 +573,32 @@ def scenario_zone_scores(
         `score_tasks` output with `truth_view`, and `energy_tasks` output
         with `truth_view`.
     """
+    forecasts = zone_allocations(outbreak, tasks, models, allocator)
+    return score_zone_allocations(
+        outbreak,
+        [t.vintage for t in tasks],
+        forecasts,
+        end,
+        later_weeks,
+        complete_after_weeks,
+    )
+
+
+def zone_allocations(
+    outbreak: SimulatedOutbreak,
+    tasks: Sequence[ForecastTask],
+    models: Sequence[str],
+    allocator: ZoneAllocator | None = None,
+) -> pd.DataFrame:
+    """Split each model's province forecasts of a scenario across zones.
+
+    The forecasting half of `scenario_zone_scores`, with its parameters.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The zone samples, with the columns `score_tasks` matches on.
+    """
     allocator = allocator or ZoneAllocator()
     zones = tuple(sorted({z for _, z, _ in outbreak.settings.zone_shares}))
     frames = []
@@ -403,7 +616,37 @@ def scenario_zone_scores(
                     allocator.allocate(prov, task, counts, zones), task, name
                 )
             )
-    forecasts = pd.concat(frames, ignore_index=True)
+    return pd.concat(frames, ignore_index=True)
+
+
+def score_zone_allocations(
+    outbreak: SimulatedOutbreak,
+    dates: Sequence[str],
+    forecasts: pd.DataFrame,
+    end: str,
+    later_weeks: int,
+    complete_after_weeks: int = 0,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Score zone forecasts of a scenario.
+
+    The scoring half of `scenario_zone_scores`.
+
+    Parameters
+    ----------
+    outbreak : SimulatedOutbreak
+        The scenario.
+    dates : sequence of str
+        Its forecast dates, in order.
+    forecasts : pandas.DataFrame
+        Output of `zone_allocations`.
+    end, later_weeks, complete_after_weeks
+        As for `scenario_zone_scores`.
+
+    Returns
+    -------
+    tuple of pandas.DataFrame
+        As `scenario_zone_scores`.
+    """
     final = _zone_truth(outbreak.zone_vintage(end), forecasts, end)
     scores = [
         score_tasks(forecasts, final, end, complete_after_weeks).assign(
@@ -416,11 +659,9 @@ def scenario_zone_scores(
         )
     ]
     view = f"as of {later_weeks} weeks later"
-    for task in tasks:
-        later = (
-            as_date(task.vintage) + dt.timedelta(weeks=later_weeks)
-        ).isoformat()
-        rows = forecasts.loc[forecasts["vintage"] == task.vintage]
+    for date in dates:
+        later = (as_date(date) + dt.timedelta(weeks=later_weeks)).isoformat()
+        rows = forecasts.loc[forecasts["vintage"] == date]
         truth = _zone_truth(outbreak.zone_vintage(later), rows, later)
         scores.append(
             score_tasks(rows, truth, later, complete_after_weeks).assign(

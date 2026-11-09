@@ -551,3 +551,66 @@ def test_scenarios_run_by_date_match_one_run(
     # The final truth is the same for every date.
     for p in parts:
         pd.testing.assert_frame_equal(p[3], whole[3])
+
+
+def test_recovery_forecast_apart_by_model_scores_as_one_run(
+    config: BacktestConfig, tmp_path: Path
+) -> None:
+    from bdbvhubrenewal.data.tidy import write_csv
+    from bdbvhubrenewal.evaluation.backtest import (
+        joint_order,
+        recovery_forecasts,
+        score_recovery,
+    )
+
+    names = ["randomwalk", "randomwalknowcast"]
+    whole = run_recovery([get_model(n) for n in names], config)
+    parts = []
+    for name in names:
+        path = tmp_path / f"{name}.csv.gz"
+        write_csv(recovery_forecasts([get_model(name)], config), path)
+        parts.append(pd.read_csv(path))
+    forecasts = joint_order(pd.concat(parts, ignore_index=True), names)
+    scores, energy = score_recovery(forecasts)
+    pd.testing.assert_frame_equal(forecasts, whole[0], check_dtype=False)
+    pd.testing.assert_frame_equal(scores, whole[1], check_dtype=False)
+    pd.testing.assert_frame_equal(energy, whole[2], check_dtype=False)
+
+
+@pytest.mark.usefixtures("flat_model")
+def test_scenarios_forecast_apart_by_model_score_as_one_run(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    config: BacktestConfig,
+    tmp_path: Path,
+) -> None:
+    from bdbvhubrenewal.data import load_health_zones
+    from bdbvhubrenewal.data.tidy import write_csv
+    from bdbvhubrenewal.evaluation.backtest import (
+        run_scenarios,
+        scenario_forecasts,
+        score_scenarios,
+    )
+
+    zones = load_health_zones(Path(__file__).resolve().parents[2] / "data")
+    names = ["flat", "randomwalk"]
+    args = (config, target, delays, zones, "2026-10-24")
+    dates = ("2026-10-10", "2026-10-17")
+    whole = run_scenarios(
+        [get_model(n) for n in names], *args, dates=dates, names=("flat",)
+    )
+    stacked: list[list[pd.DataFrame]] = [[], []]
+    for name in names:
+        parts = scenario_forecasts(
+            [get_model(name)], *args, dates=dates, names=("flat",)
+        )
+        for i, table in enumerate(parts):
+            path = tmp_path / f"{name}-{i}.csv.gz"
+            write_csv(table, path)
+            stacked[i].append(pd.read_csv(path))
+    forecasts, zone = (pd.concat(s, ignore_index=True) for s in stacked)
+    out = score_scenarios(
+        forecasts, zone, names, *args, dates=dates, names=("flat",)
+    )
+    for got, want in zip(out, whole[1:], strict=True):
+        pd.testing.assert_frame_equal(got, want, check_dtype=False)
