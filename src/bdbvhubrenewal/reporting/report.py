@@ -121,7 +121,11 @@ from bdbvhubrenewal.reporting.scorechart import (
     OVERALL_METRICS,
     write_score_chart,
 )
-from bdbvhubrenewal.reporting.scoresummary import summary_html, summary_rows
+from bdbvhubrenewal.reporting.scoresummary import (
+    summary_html,
+    summary_rows,
+    targets_attr,
+)
 from bdbvhubrenewal.reporting.store_note import write_store_note
 from bdbvhubrenewal.reporting.tables import filter_table
 from bdbvhubrenewal.reporting.zone_nowcast import (
@@ -268,8 +272,10 @@ def make_report(
 
     # Backtest and comparison pages.
     names = [s.name for s in list_models()]
-    _release_section(fig, gen, res, real, names)
-    _backtest_page(fig, gen, res, out, config, target, names, data_dir)
+    summaries = _release_section(fig, gen, res, real, names)
+    _backtest_page(
+        fig, gen, res, out, config, target, names, data_dir, summaries
+    )
     _comparison_page(fig, gen, Path(hub_comparison), target)
 
     # Nowcast page: latest real vintage, every registered model.
@@ -335,6 +341,44 @@ _TARGET_LABELS: Final = {
 }
 
 
+def _summaries(
+    fig: Path,
+    stem: str,
+    frames: Mapping[str, tuple[pd.DataFrame, pd.DataFrame]],
+    models: Sequence[str],
+    colours: Mapping[str, tuple[str, str, str]],
+    names: Mapping[str, str],
+    default_on: Sequence[str],
+    baseline: str = "randomwalk",
+) -> dict[str, str]:
+    """Write the score summary of each target and return their URLs.
+
+    `frames` maps `"latest"` or `"complete"` to its scores and energy
+    scores, in the order the page offers them. A target with no score for
+    the baseline yet, such as the latest release before a round has a
+    later one, is not offered.
+    """
+    shown = {
+        target: frame
+        for target, frame in frames.items()
+        if baseline in set(frame[0]["model"])
+    }
+    for target, (scores, energy) in shown.items():
+        write_score_chart(
+            fig / f"scoresummary-{stem}-{target}.json",
+            summary_rows(
+                scores,
+                models,
+                colours,
+                names,
+                baseline=baseline,
+                default_on=default_on,
+                energy=energy,
+            ),
+        )
+    return {t: f"../figures/scoresummary-{stem}-{t}.json" for t in shown}
+
+
 def _downward_table(real: pd.DataFrame, zones: pd.DataFrame) -> str:
     """Tabulate falls between consecutive releases, by place."""
     nat = real["location"] == NATIONAL
@@ -385,11 +429,11 @@ def _ours(frame: pd.DataFrame, names: Sequence[str]) -> pd.DataFrame:
 
 def _release_section(
     fig: Path, gen: Path, res: Path, real: pd.DataFrame, names: Sequence[str]
-) -> None:
+) -> dict[str, str]:
     """Write the real-release evaluation tables and figure.
 
     The tables hold the number of forecasts, $n$, in every row, for our
-    models only.
+    models only. Returns each target's score summary URL.
     """
     paths = {
         n: res / f"nowcast-{n}.csv" for n in ("scores", "quantiles", "origins")
@@ -424,21 +468,30 @@ def _release_section(
     reported = overall.loc[overall["target"] == _TARGET_LABELS["reported"]]
     ours = list(names)
     colours = _model_colours(ours)
-    rep = pooled.loc[pooled["target"] == _TARGET_LABELS["reported"]]
     # Rounds are named by their reference date, as in the explorer.
-    rep = rep.assign(
-        origin=rep["origin"].map(lambda v: str(reference_date_for_vintage(v)))
+    pooled = pooled.assign(
+        origin=pooled["origin"].map(
+            lambda v: str(reference_date_for_vintage(v))
+        )
     )
-    write_score_chart(
-        fig / "scoresummary-backtest.json",
-        summary_rows(
-            rep,
-            ours,
-            colours,
-            _location_names(real),
-            default_on=[m for m in ours if m != "randomwalk"],
-            energy=energy.loc[energy["target"] == _TARGET_LABELS["reported"]],
-        ),
+    rep = pooled.loc[pooled["target"] == _TARGET_LABELS["reported"]]
+    srcs = _summaries(
+        fig,
+        "backtest",
+        {
+            target: (
+                pooled.loc[pooled["target"] == _TARGET_LABELS[kind]],
+                energy.loc[energy["target"] == _TARGET_LABELS[kind]],
+            )
+            for target, kind in (
+                ("latest", "reported"),
+                ("complete", "complete"),
+            )
+        },
+        ours,
+        colours,
+        _location_names(real),
+        default_on=[m for m in ours if m != "randomwalk"],
     )
     save_light_dark(
         partial(
@@ -453,7 +506,7 @@ def _release_section(
     _write(
         gen / "scoresummary-horizon.md",
         summary_html(
-            "../figures/scoresummary-backtest.json",
+            srcs,
             "Scores by horizon",
             view="horizon",
             static="../figures/scores-horizon.svg",
@@ -469,7 +522,7 @@ def _release_section(
     _write(
         gen / "scoresummary-place.md",
         summary_html(
-            "../figures/scoresummary-backtest.json",
+            srcs,
             "Scores by place",
             view="place",
             static="../figures/scores-place.svg",
@@ -498,7 +551,8 @@ def _release_section(
     _write(
         gen / "release-headline.md",
         "## Overall\n\n"
-        "Scores against what each later release reported "
+        "Scores against what each later release reported, or against the "
+        "complete weeks, as picked "
         "([how scoring works](methods/evaluation.md#real-releases), "
         "[metrics](methods/evaluation.md#scores)).\n"
         + _scored_on(rep)
@@ -506,7 +560,7 @@ def _release_section(
         "scale's places and weeks as one forecast per origin and release, "
         "so its $n$ counts those.\n\n"
         + summary_html(
-            "../figures/scoresummary-backtest.json",
+            srcs,
             "Overall scores by scale",
             static="../figures/relative-overall.svg",
         )
@@ -539,12 +593,15 @@ def _release_section(
             "Tables",
         ),
     )
+    return srcs
 
 
 def _scored_on(reported: pd.DataFrame, baseline: str = "randomwalk") -> str:
     """Say how many origin and release pairs and forecasts are scored."""
     pairs = reported[["origin", "truth_vintage"]].drop_duplicates()
-    n = reported.loc[reported["model"] == baseline].groupby("pool").size()
+    own = reported.loc[reported["model"] == baseline]
+    n = own.groupby("pool").size()
+    zero = int((own["truth"] == 0).sum())
     scales = {
         "national": "national",
         "provinces": "province",
@@ -555,6 +612,9 @@ def _scored_on(reported: pd.DataFrame, baseline: str = "randomwalk") -> str:
     return (
         f"The scores cover {len(pairs)} origin and release pairs.\n"
         f"The {baseline} baseline has {listed}{counts[-1]} forecasts.\n"
+        f"{zero} of them are of a place and week with no case, where every "
+        "model's WIS is close to 0, so mean WIS is lower than over places "
+        "with cases.\n"
         "The renewal models are not scored at health zones.\n"
     )
 
@@ -1154,6 +1214,7 @@ def _forecast_tabs(
     names: Sequence[str],
     labels: Mapping[str, str],
     explorer_src: str | None = None,
+    summaries: Mapping[str, str] | None = None,
 ) -> str:
     """Forecasts from the real origins, as an explorer and static tabs."""
     if not names:
@@ -1183,7 +1244,7 @@ def _forecast_tabs(
             explorer_src,
             "Backtest forecasts",
             all_rounds=True,
-            summary="../figures/scoresummary-backtest.json",
+            summary=summaries,
         )
         + "\n"
         + static
@@ -1214,10 +1275,10 @@ def _energy_means(energy: pd.DataFrame, by: Sequence[str]) -> str:
     )
 
 
-def _recovery_section(src: str, energy: pd.DataFrame) -> str:
-    """Return the recovery section, with the summaries of `src`."""
+def _recovery_section(srcs: Mapping[str, str], energy: pd.DataFrame) -> str:
+    """Return the recovery section, with the summaries of `srcs`."""
     alt = "Mean WIS by horizon on simulated vintages."
-    views = _summary_views(src, "(simulated vintages)")
+    views = _summary_views(srcs, "(simulated vintages)")
     return (
         "## Recovery on simulated vintages\n\n"
         "Forecasts from vintages of a [simulated outbreak]"
@@ -1308,34 +1369,40 @@ _SCENARIOS: Final = {
 def _simulated_summary(
     fig: Path,
     stem: str,
-    scores: pd.DataFrame,
-    energy: pd.DataFrame,
+    frames: Mapping[str, tuple[pd.DataFrame, pd.DataFrame]],
     names: Sequence[str],
     labels: Mapping[str, str],
-) -> str:
-    """Write the score summary of simulated forecasts and return its URL.
+) -> dict[str, str]:
+    """Write the score summaries of simulated forecasts, by target.
 
     Rounds are named by their reference date, as on the other pages.
     """
-    models = [m for m in names if m in set(scores["model"])]
-    write_score_chart(
-        fig / f"scoresummary-{stem}.json",
-        summary_rows(
-            scores.assign(origin=scores["reference_date"]),
-            models,
-            _model_colours(models),
-            labels,
-            default_on=[m for m in models if m != "randomwalk"],
-            energy=energy.assign(origin=energy["reference_date"]),
-        ),
+    models = [
+        m
+        for m in names
+        if any(m in set(s["model"]) for s, _ in frames.values())
+    ]
+    return _summaries(
+        fig,
+        stem,
+        {
+            target: (
+                scores.assign(origin=scores["reference_date"]),
+                energy.assign(origin=energy["reference_date"]),
+            )
+            for target, (scores, energy) in frames.items()
+        },
+        models,
+        _model_colours(models),
+        labels,
+        default_on=[m for m in models if m != "randomwalk"],
     )
-    return f"../figures/scoresummary-{stem}.json"
 
 
-def _summary_views(src: str, what: str) -> dict[str, str]:
-    """Return the Overall, By horizon and By place summaries of `src`."""
+def _summary_views(srcs: Mapping[str, str], what: str) -> dict[str, str]:
+    """Return the Overall, By horizon and By place summaries of `srcs`."""
     return {
-        view: summary_html(src, f"{label} {what}", view=view)
+        view: summary_html(srcs, f"{label} {what}", view=view)
         for view, label in (
             ("overall", "Overall scores"),
             ("horizon", "Scores by horizon"),
@@ -1353,17 +1420,27 @@ def _scenario_section(
     """Return the scenario summaries and explorer, a tab per scenario.
 
     Forecasts are scored against the final simulated counts of complete
-    weeks. The explorer draws the weeks of those counts it shows, all
+    weeks, or against the data as of 2 weeks later as the latest release.
+    The explorer draws the weeks of the final counts it shows, all
     complete.
     """
     scores = pd.read_csv(res / "scenario-scores.csv.gz", low_memory=False)
-    scores = scores.loc[(scores["truth_view"] == "final") & scores["complete"]]
     energy = pd.read_csv(res / "scenario-energy.csv")
-    energy = energy.loc[energy["truth_view"] == "final"]
+    final = scores["truth_view"] == "final"
+    views = {
+        "complete": (
+            scores.loc[final & scores["complete"]],
+            energy.loc[energy["truth_view"] == "final"],
+        ),
+        "latest": (
+            scores.loc[~final],
+            energy.loc[energy["truth_view"] != "final"],
+        ),
+    }
     samples = pd.read_csv(
         res / "scenario-forecasts.csv.gz", dtype={"as_of": object}
     )
-    final = pd.read_csv(res / "scenario-truth.csv")
+    truth = pd.read_csv(res / "scenario-truth.csv")
     sections: dict[str, list[str]] = {
         "Overall": [],
         "By horizon": [],
@@ -1371,20 +1448,24 @@ def _scenario_section(
         "Forecasts by place": [],
     }
     for key, title in _SCENARIOS.items():
-        own = scores.loc[scores["scenario"] == key]
-        src = _simulated_summary(
+        srcs = _simulated_summary(
             fig,
             f"scenario-{key}",
-            own,
-            energy.loc[energy["scenario"] == key],
+            {
+                target: (
+                    s.loc[s["scenario"] == key],
+                    e.loc[e["scenario"] == key],
+                )
+                for target, (s, e) in views.items()
+            },
             names,
             labels,
         )
-        views = _summary_views(src, f"({title})")
+        shown_views = _summary_views(srcs, f"({title})")
         drawn = samples.loc[samples["scenario"] == key]
         shown = [m for m in names if m in set(drawn["model"])]
         target = (
-            final.loc[final["scenario"] == key]
+            truth.loc[truth["scenario"] == key]
             .rename(columns={"truth": "total", "truth_vintage": "vintage"})
             .assign(kind="real")
         )
@@ -1405,10 +1486,10 @@ def _scenario_section(
             f"../figures/explorer-scenario-{key}.json",
             f"Forecasts, {title}",
             all_rounds=True,
-            summary=src,
+            summary=srcs,
         )
         for section, html in zip(
-            sections, (*views.values(), explorer), strict=True
+            sections, (*shown_views.values(), explorer), strict=True
         ):
             body = textwrap.indent(html, "    ")
             sections[section].append(f'=== "{title}"\n\n{body}')
@@ -1493,6 +1574,7 @@ def _backtest_page(
     target: pd.DataFrame,
     names: list[str],
     data_dir: Path | str,
+    summaries: Mapping[str, str],
 ) -> None:
     k = config.complete_after_weeks
     scores = _ours(_release_scores(res), names)
@@ -1617,6 +1699,7 @@ def _backtest_page(
                 for loc in BACKTEST_LOCATIONS
             },
             explorer_src,
+            summaries,
         ),
     )
     _write(
@@ -1643,7 +1726,7 @@ def _backtest_page(
         gen / "recovery-section.md",
         _recovery_section(
             _simulated_summary(
-                fig, "recovery", rscores, renergy, names, labels
+                fig, "recovery", {"complete": (rscores, renergy)}, names, labels
             ),
             renergy,
         ),
@@ -1687,23 +1770,22 @@ def _checks_section(
     data_dir: Path | str,
     names: Sequence[str],
 ) -> str:
-    """Score the forecasts by place type and flag (`checks`)."""
-    scores = _release_scores(res)
-    scores = scores.loc[
-        scores["model"].isin(names) & (scores["target"] == "reported")
-    ]
-    national = scores["location"] == NATIONAL
-    scores = scores.assign(
+    """Score the forecasts by place type and flag (`checks`).
+
+    One summary per target: the latest release (the reported target) and
+    the complete weeks.
+    """
+    every = _release_scores(res)
+    national = every["location"] == NATIONAL
+    every = every.assign(
         scale=national.map({True: "national", False: "provinces"})
     )
     zones = _as_submitted(
         pd.read_csv(res / "zone-scores.csv", low_memory=False)
     )
-    zones = zones.loc[
-        zones["model"].isin(names) & (zones["target"] == "reported")
-    ]
-    scores = pd.concat([scores, zones.assign(scale="zones")])
-    origins = sorted(set(scores["origin"].astype(str)))
+    every = pd.concat([every, zones.assign(scale="zones")])
+    every = every.loc[every["model"].isin(names)]
+    origins = sorted(set(every["origin"].astype(str)))
     real = target.loc[target["kind"] == "real"]
     daily_zones = load_daily_zones(data_dir)
     counts = pd.concat(
@@ -1723,15 +1805,19 @@ def _checks_section(
     ]
     ref = ref.assign(origin=ref["reference_date"].astype(str).map(origin_of))
     ref = ref.dropna(subset=["origin"])
-    scores = scores.assign(origin=scores["origin"].astype(str))
-    summary = check_summary(
-        scores,
-        place_types(counts, scores),
-        flags(counts, ref[["model", "origin", "location", "q50", "q95"]]),
-    )
-    write_score_chart(
-        fig / "checks-backtest.json", _checks_chart(summary, names)
-    )
+    every = every.assign(origin=every["origin"].astype(str))
+    flagged = flags(counts, ref[["model", "origin", "location", "q50", "q95"]])
+    srcs = {}
+    for name, kind in (("latest", "reported"), ("complete", "complete")):
+        scores = every.loc[every["target"] == kind]
+        summary = check_summary(scores, place_types(counts, scores), flagged)
+        write_score_chart(
+            fig / f"checks-backtest-{name}.json",
+            _checks_chart(summary, names),
+        )
+        srcs[name] = f"../figures/checks-backtest-{name}.json"
+    latest = every.loc[every["target"] == "reported"]
+    summary = check_summary(latest, place_types(counts, latest), flagged)
     return (
         "## Checks\n\n"
         "Scores of the scored weeks, split by the type of place and by the "
@@ -1744,7 +1830,7 @@ def _checks_section(
         "A forecast is flagged when its reference week drops to a third of "
         "the recent level (collapse) or rises far above every recent count "
         "(blow-up), and has no flag otherwise.\n\n"
-        '<div class="checkschart" data-src="../figures/checks-backtest.json" '
+        f'<div class="checkschart"{targets_attr(srcs)} '
         'role="group" aria-label="Scores by place type and flag">\n'
         "<noscript>The checks chart needs JavaScript.</noscript>\n"
         "</div>\n\n"
@@ -1771,7 +1857,7 @@ def _checks_chart(
     Models keep the colours of the other Backtest charts.
     """
     models = [m for m in names if m in set(summary["model"])]
-    colours = _model_colours([*names, BASELINE])
+    colours = _model_colours(names)
     sets = {}
     for (scale, split), g in summary.groupby(["scale", "split"], sort=False):
         x = list(dict.fromkeys(g["group"]))
@@ -1921,7 +2007,7 @@ def _comparison_page(
         else pd.DataFrame()
     )
     pending = pd.read_csv(cmp_dir / "pending.csv")
-    _comparison_summary(
+    summaries = _comparison_summary(
         fig,
         gen,
         scores,
@@ -2004,7 +2090,7 @@ def _comparison_page(
             "../figures/explorer-comparison.json",
             "Hub forecasts",
             all_rounds=True,
-            summary="../figures/scoresummary-comparison.json",
+            summary=summaries or None,
         )
         + "\n"
         + _dropdown("\n".join(tabs), "Static figures by round"),
@@ -2020,13 +2106,13 @@ def _comparison_summary(
     on: Sequence[str],
     colours: Mapping[str, tuple[str, str, str]],
     names: Mapping[str, str],
-) -> None:
+) -> dict[str, str]:
     """Write the Overall, By horizon and By place summaries.
 
     They are the Backtest page's summaries, on the complete weeks of the
     hub rounds. The hub teams and our series in `on` are ticked at first,
     and randomwalk is the reference for relative scores. Our series come
-    in the order of `colours`.
+    in the order of `colours`. Returns each target's score summary URL.
     """
     if scores.empty:
         for name in (
@@ -2035,34 +2121,41 @@ def _comparison_summary(
             "comparison-place.md",
         ):
             _write(gen / name, "No round has a score yet.\n")
-        return
-    done = _label_comparison(scores.loc[scores["target"] == "complete"])
-    rows = done.assign(
-        kind="real",
-        vintage=done["origin"],
-        origin=done["reference_date"],
-        pool=done["location"]
-        .str.count("-")
-        .map({0: "national", 1: "provinces", 2: "zones"}),
-    )
+        return {}
+
+    def by_target(target: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Rows and energy scores of one target, named by round."""
+        done = _label_comparison(scores.loc[scores["target"] == target])
+        rows = done.assign(
+            kind="real",
+            vintage=done["origin"],
+            origin=done["reference_date"],
+            pool=done["location"]
+            .str.count("-")
+            .map({0: "national", 1: "provinces", 2: "zones"}),
+        )
+        joint = _label_comparison(energy.loc[energy["target"] == target])
+        return rows, joint.assign(origin=joint["reference_date"])
+
+    frames = {
+        "complete": by_target("complete"),
+        "latest": by_target("reported"),
+    }
+    rows = frames["complete"][0]
     base = _baseline_label(baseline, rows)
     hub = sorted(set(rows.loc[rows["source"] == "hub", "model"]))
     have = set(rows.loc[rows["source"] != "hub", "model"])
     ours = [label for label in colours if label in have]
     models = [*ours, *hub]
-    write_score_chart(
-        fig / "scoresummary-comparison.json",
-        summary_rows(
-            rows,
-            models,
-            colours,
-            names,
-            baseline=base,
-            default_on=[*hub, *(m for m in ours if m in on)],
-            energy=_label_comparison(
-                energy.loc[energy["target"] == "complete"]
-            ).assign(origin=lambda e: e["reference_date"]),
-        ),
+    srcs = _summaries(
+        fig,
+        "comparison",
+        frames,
+        models,
+        colours,
+        names,
+        default_on=[*hub, *(m for m in ours if m in on)],
+        baseline=base,
     )
     overall = relative_wis(rows, ("pool",), baseline=base)
     save_light_dark(
@@ -2077,10 +2170,10 @@ def _comparison_summary(
     )
     _write(
         gen / "comparison-scores.md",
-        "Scores on the complete weeks "
+        "Scores on the complete weeks, or on the latest release, as picked "
         "([metrics](methods/evaluation.md#scores)).\n\n"
         + summary_html(
-            "../figures/scoresummary-comparison.json",
+            srcs,
             "Overall scores by scale",
             static="../figures/comparison-overall.svg",
         )
@@ -2104,7 +2197,7 @@ def _comparison_summary(
     _write(
         gen / "comparison-horizon.md",
         summary_html(
-            "../figures/scoresummary-comparison.json",
+            srcs,
             "Scores by horizon",
             view="horizon",
             static="../figures/comparison-horizon.svg",
@@ -2123,13 +2216,14 @@ def _comparison_summary(
     _write(
         gen / "comparison-place.md",
         summary_html(
-            "../figures/scoresummary-comparison.json",
+            srcs,
             "Scores by place",
             view="place",
             static="../figures/comparison-place.svg",
             map_src=ZONE_MAP,
         ),
     )
+    return srcs
 
 
 def _label_comparison(frame: pd.DataFrame) -> pd.DataFrame:

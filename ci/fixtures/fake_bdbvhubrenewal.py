@@ -221,7 +221,11 @@ def cmd_nowcast(args: argparse.Namespace) -> int:
     sc = scenario()
     as_of = args.vintage
     obs = observed(as_of)
-    ref = reference_date(as_of)
+    ref = (
+        dt.date.fromisoformat(args.reference_date)
+        if args.reference_date
+        else reference_date(as_of)
+    )
     weeks = [
         (ref + dt.timedelta(days=7 * k)).isoformat()
         for k in range(-BACK_WEEKS, HORIZON + 1)
@@ -422,6 +426,7 @@ def main() -> int:
     f.add_argument("--model", required=True)
     f.add_argument("--config", default="main")
     f.add_argument("--vintage", required=True)
+    f.add_argument("--reference-date", default=None)
     f.add_argument("--sampler-json", default="{}")
     f.add_argument("--out", required=True)
     n = sub.add_parser("nowcast")
@@ -429,6 +434,7 @@ def main() -> int:
     n.add_argument("--config", default="main")
     n.add_argument("--fit", default=None)
     n.add_argument("--vintage", required=True)
+    n.add_argument("--reference-date", default=None)
     n.add_argument("--out", required=True)
     pl = sub.add_parser("plot-submission")
     pl.add_argument("--submission", required=True)

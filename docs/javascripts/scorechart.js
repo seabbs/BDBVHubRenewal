@@ -48,6 +48,10 @@
 
     function draw() {
       keys.paint();
+      // The legend lists only the models with a score in these rows.
+      var has = {};
+      d.rows.forEach(function (r) { has[r[0]] = true; });
+      keys.only(has);
       buttons.forEach(function (b, i) {
         b.setAttribute("aria-selected", i === state.metric ? "true" : "false");
       });

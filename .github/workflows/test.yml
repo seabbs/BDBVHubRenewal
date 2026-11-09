@@ -68,6 +68,13 @@ jobs:
           github.event_name == 'schedule' ||
           github.event_name == 'workflow_dispatch'
         run: uv run pytest -q -m slow --durations=0
+      # The nowcasts below forecast from the data's latest vintage and date
+      # their files by it, so the hub's check that the forecast date is on
+      # or before the reference date holds whatever the day.
+      - name: Read the data's latest vintage
+        run: |
+          echo "VINTAGE=$(awk -F, '$1 == "real" {print $2}' data/target.csv \
+            | sort | tail -n 1)" >> "$GITHUB_ENV"
       - name: Backtest and nowcast smoke test
         timeout-minutes: 15
         # The backtest never fits the fitted models (their forecasts come
@@ -75,7 +82,8 @@ jobs:
         run: |
           uv run bdbvhubrenewal backtest --models randomwalk \
             --output output/backtest --results output/results
-          uv run bdbvhubrenewal nowcast
+          uv run bdbvhubrenewal nowcast --vintage "$VINTAGE" \
+            --forecast-date "$VINTAGE"
           uv run bdbvhubrenewal metadata --out output/metadata
       - name: Fit and forecast as the submission CI does (a tiny fit)
         run: |
@@ -86,6 +94,7 @@ jobs:
           uv run bdbvhubrenewal plot-ppc --ppc output/fits/main/ppc.json \
             --out output/fits/main/ppc.png
           uv run bdbvhubrenewal nowcast --config main --fit output/fits/main \
+            --vintage "$VINTAGE" --forecast-date "$VINTAGE" \
             --out output/candidates/main
           uv run bdbvhubrenewal plot-submission --out output/candidates/main.png \
             --submission "$(ls output/candidates/main/model-output/*/*.csv)"

@@ -258,6 +258,7 @@ class MetapopulationInfections(BaseSubpopulationInfections):
         effective_population_rv: RandomVariable | None = None,
         rt_observation: RandomVariable | None = None,
         seed_days: ArrayLike | None = None,
+        seeded: ArrayLike | None = None,
         **kwargs: object,
     ) -> None:
         r"""Initialize the coupled infections process.
@@ -282,6 +283,9 @@ class MetapopulationInfections(BaseSubpopulationInfections):
             (`model.seed_lead`). A province with day `inf` is never
             seeded and gains infections only by importation. `None`
             seeds every province at the start.
+        seeded
+            Boolean, one per province: provinces with an Rt deviation.
+            The rest follow the pooled trend. `None` is all.
         **kwargs
             Passed to `BaseSubpopulationInfections`.
         """
@@ -290,6 +294,7 @@ class MetapopulationInfections(BaseSubpopulationInfections):
         self.effective_population_rv = effective_population_rv
         self.rt_observation = rt_observation
         self.seed_days = None if seed_days is None else np.asarray(seed_days)
+        self.seeded = None if seeded is None else np.asarray(seeded)
 
     def _initial_infections(
         self, I0: Array, rt0: Array, gen_int: Array, n_days: int
@@ -399,6 +404,7 @@ class MetapopulationInfections(BaseSubpopulationInfections):
             pop.n_subpops,
             "log_rt",
             first_day_dow,
+            active=self.seeded,
         )
         rt = jnp.exp(log_rt)
         gen_int = self.gen_int_rv()

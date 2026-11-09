@@ -29,7 +29,7 @@ PyRenew pieces that give a different model, sample less well, or would only rena
 - `AR1` draws its first state from the stationary distribution, and `DifferencedAR1` is AR(1) on the differences.
   Here walks start at a fixed value and stay there over the seeding weeks.
 - `SubpopulationInfections` samples one deviation process per province and subtracts their mean, which leaves a direction the data do not identify.
-  Here the $P - 1$ coordinates on the sum-to-zero basis $Q$ are sampled.
+  Here the $P_s - 1$ coordinates on the sum-to-zero basis $Q$ of the seeded provinces are sampled.
 - `HierarchicalNormalPrior` has no sum-to-zero constraint.
   On the basis coordinates it is the same prior, but it would replace one sample statement.
 - `GammaGroupSdPrior` gives each province its own SD with a floor, where here the provinces share one half-normal SD.
@@ -90,6 +90,6 @@ Each fit reports its largest R-hat over parameters and the share of draws at the
 The parameterisation is as follows.
 
 - Every walk, the pooled $\log R(t)$ included, samples its steps non-centred, as standard normals scaled by the step SD.
-- Province deviations sum to zero through an orthonormal basis $Q$ of the sum-to-zero subspace, so the $P - 1$ free processes are unconstrained.
+- Province deviations sum to zero through an orthonormal basis $Q$ of the sum-to-zero subspace of the seeded provinces, so the $P_s - 1$ free processes are unconstrained.
 - The starting offsets of the $\log R$ deviations are sampled centred, and those of the missing-onset fraction non-centred.
 - Walk steps after the fit axis are not sampled by NUTS. They are drawn from the prior given each posterior draw when forecasting.

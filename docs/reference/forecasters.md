@@ -13,6 +13,8 @@ Build a model from the registry and forecast a task with it. See [Getting starte
 
 ::: bdbvhubrenewal.forecasters.chain
 
+::: bdbvhubrenewal.forecasters.introductions
+
 ::: bdbvhubrenewal.forecasters.pooling
 
 ::: bdbvhubrenewal.forecasters.obs
