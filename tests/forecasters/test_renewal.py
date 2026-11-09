@@ -31,6 +31,22 @@ def task(target: pd.DataFrame, delays: pd.DataFrame) -> ForecastTask:
     return make_tasks(rows, delays, BacktestConfig(n_samples=20, seed=3))[0]
 
 
+@pytest.fixture
+def quiet(task: ForecastTask, monkeypatch: pytest.MonkeyPatch) -> str:
+    """Make the task's last province silent, with zero random walk draws."""
+    place = task.locations[-1]
+    rows = pd.DataFrame(
+        [
+            (place, date, k, 0)
+            for date in task.target_end_dates
+            for k in range(1, task.n_samples + 1)
+        ],
+        columns=["location", "target_end_date", "sample", "value"],
+    )
+    monkeypatch.setattr(rn, "_silent_walk", lambda _: (rows, {place}))
+    return place
+
+
 def test_variants_are_registered_as_fitted_models() -> None:
     specs = {s.name: s for s in list_models()}
     for name in ("renewal", "renewalsp"):
@@ -39,10 +55,11 @@ def test_variants_are_registered_as_fitted_models() -> None:
         assert isinstance(model, ForecastModel)
         assert model.name == name
     assert set(rn.VARIANTS) == {"renewal", "renewalsp", "renewalbvd"}
-    # Every variant fits the provinces together, so each can forecast a
-    # province with its data held out.
-    for name in rn.VARIANTS:
-        assert get_model(name).supports_mask
+    # The pooled variants can forecast a province with its data held out;
+    # renewalsp fits each province on its own data only, so it cannot.
+    assert get_model("renewal").supports_mask
+    assert get_model("renewalbvd").supports_mask
+    assert not get_model("renewalsp").supports_mask
     assert not specs["randomwalk"].fitted
     # Hub model abbreviations: letters, digits and underscores, under 16.
     for name in specs:
@@ -50,9 +67,10 @@ def test_variants_are_registered_as_fitted_models() -> None:
 
 
 def test_model_config_applies_overrides() -> None:
-    # renewalsp is renewal without importation between provinces.
-    plain = rn.model_config(rn.VARIANTS["renewalsp"])
-    assert plain == replace(rn.engine().MAIN, coupling="none")
+    # renewalsp fits one province's series, so the share at risk is fixed.
+    single = rn.model_config(rn.VARIANTS["renewalsp"])
+    assert single == replace(rn.engine().MAIN, national=True, depletion=False)
+    assert rn.VARIANTS["renewalsp"].per_province
     assert rn.model_config(rn.VARIANTS["renewal"]) == rn.engine().MAIN
 
 
@@ -509,6 +527,7 @@ def test_report_cutoffs_are_days_from_the_model_start(
     assert cuts == {(pd.Timestamp(last[d]) - start).days: d for d in last}
 
 
+@pytest.mark.usefixtures("quiet")
 @pytest.mark.parametrize("name", ["renewal", "renewalsp"])
 def test_forecast_gives_counts_as_reported_later(
     task: ForecastTask, monkeypatch: pytest.MonkeyPatch, name: str
@@ -600,3 +619,27 @@ def test_the_model_cut_off_is_the_release_s_last_report_day(
         end = data.start_date + dt.timedelta(days=7 * data.n_weeks - 1)
         assert cut.isoformat() == last
         assert end == rn._saturday(last)
+
+
+def test_single_patch_fits_each_province_on_its_own(
+    task: ForecastTask, monkeypatch: pytest.MonkeyPatch, quiet: str
+) -> None:
+    seen: list[tuple[str, ...]] = []
+
+    def fake(self: rn.RenewalModel, t: ForecastTask) -> rn.RenewalRun:
+        seen.append(t.locations)
+        return _fake_run(t, self.variant)
+
+    monkeypatch.setattr(rn.RenewalModel, "run", fake)
+    fit = get_model("renewalsp").forecast_fit(task)
+    # One fit per province the random walks do not find silent, however
+    # few its cases, and none for the nation.
+    fitted = [p for p in task.locations if p != quiet]
+    assert sorted(seen) == sorted([(p,) for p in fitted])
+    assert set(fit.runs) == set(fitted)
+    # Silent provinces take the random walk's draws, so every province of
+    # the task is forecast.
+    assert set(fit.samples["location"]) == set(task.locations)
+    walk = fit.samples.loc[fit.samples["location"] == quiet]
+    assert len(walk) == len(task.target_end_dates) * task.n_samples
+    assert (walk["value"] == 0).all()
