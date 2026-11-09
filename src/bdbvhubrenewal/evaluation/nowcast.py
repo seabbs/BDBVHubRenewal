@@ -142,9 +142,10 @@ class ReleaseBacktest:
 def delay_curves(summary: pd.DataFrame, places: Sequence[str]) -> pd.DataFrame:
     """Return a model's share of a day's final count reported by age.
 
-    Each place takes the model's delay at that place, a zone with none
-    its province's, and a place with neither, such as the nation, the
-    model's shared delay (location `"shared"`).
+    Each place takes the model's delay at that place, and a zone with none
+    its province's. A model's shared delay (location `"shared"`) is the
+    unweighted centre of its province delays, not a national delay, so it
+    maps no place; the country is the sum of its provinces instead.
 
     Parameters
     ----------
@@ -163,18 +164,16 @@ def delay_curves(summary: pd.DataFrame, places: Sequence[str]) -> pd.DataFrame:
     """
     rows = summary.loc[summary["quantity"] == "reported_share"]
     rows = rows.rename(columns={"x": "age", "q50": "share"})
-    by_place = {str(loc): grp for loc, grp in rows.groupby("location")}
-
-    def source(place: str) -> str:
-        for key in (place, province_of(place)):
-            if key in by_place:
-                return key
-        return "shared"
-
+    by_place = {
+        str(loc): grp
+        for loc, grp in rows.groupby("location")
+        if loc != "shared"
+    }
     frames = [
         by_place[key].assign(location=place)
         for place in places
-        if (key := source(place)) in by_place
+        if (key := place if place in by_place else province_of(place))
+        in by_place
     ]
     out = pd.concat(frames, ignore_index=True) if frames else rows.iloc[:0]
     return out.astype({"age": int})[["location", "age", "share"]]

@@ -213,10 +213,10 @@ def test_a_stored_model_is_mapped_by_its_own_delay_or_scored_complete(
         {
             "model": "flat",
             "vintage": "2026-10-17",
-            "location": "shared",
-            "x": [0, 1],
+            "location": np.repeat(["CD-IT", "CD-NK"], 2),
+            "x": [0, 1, 0, 1],
             "quantity": "reported_share",
-            "q50": [1.0, 1.0],
+            "q50": 1.0,
         }
     )
     out = release_backtest(
