@@ -246,7 +246,12 @@ def test_lopo_masks_one_province_at_a_time(
     # Only the masked province is kept, from development vintages only.
     assert (forecasts["location"] == forecasts["masked"]).all()
     assert set(forecasts["masked"]) == {"CD-IT", "CD-NK"}
-    assert set(forecasts["vintage"]) == {"2026-08-18", "2026-10-09"}
+    assert set(forecasts["vintage"]) == {
+        "2026-08-18",
+        "2026-10-09",
+        "2026-10-17",
+        "2026-10-24",
+    }
     assert set(scores["location"]) == {"CD-IT", "CD-NK"}
     assert set(scores["truth_vintage"]) == {"2026-11-01"}
 

@@ -158,7 +158,7 @@ def test_plan_fit_and_load(
     assert by_origin[origins[3]].used is None
     dev = pd.read_csv(results / "forecasts.csv.gz")
     # Every loaded origin is backtested.
-    assert set(dev["vintage"]) == {oldest, stale, newest}
+    assert set(dev["vintage"]) == {oldest, stale, broken, newest}
     recorded = json.loads((results / store.STATUS_FILE).read_text())
     assert len(recorded) == len(tasks)
 
