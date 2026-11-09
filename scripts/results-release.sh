@@ -5,12 +5,12 @@
 #
 # submit.yml's `release` job publishes `round-<reference date>` from the
 # commit the round was submitted from. This adds the Pages build's
-# results to each such release whose round used the build's latest hub
-# release, once every stored fit at that release is of this code
-# (BUILD/results/fit-store.json): the hub tables, the results tables, a
-# zip of BUILD/data and the built site SITE as site.zip. site.zip goes
-# last, so a release with it is complete; one without it is filled again
-# by the next build.
+# results to each such release whose round's hub release has hub tables
+# in the build (BUILD/results/hub/<hub release>) and
+# every stored fit at it of this code (BUILD/results/fit-store.json):
+# those hub tables, the results tables, a zip of BUILD/data and the
+# built site SITE as site.zip. site.zip goes last, so a release with it
+# is complete; one without it is filled again by the next build.
 #
 # Needs GH_TOKEN and GITHUB_SHA. Uses git, gh, zip and Python's
 # standard library only.
@@ -28,30 +28,36 @@ case "$1" in
     fi
     state=$(mktemp "${TMPDIR:-/tmp}/state.XXXXXX")
     git show FETCH_HEAD:state.json > "$state"
-    rounds=$(python3 -I - "$build/results/fit-store.json" "$state" << 'EOF'
+    rounds=$(python3 -I - "$build/results" "$state" << 'EOF'
 import json
 import sys
+from pathlib import Path
 
-status = json.load(open(sys.argv[1]))
-latest = max(s["origin"] for s in status)
-if all(s["current"] for s in status if s["origin"] == latest):
-    for ref, entry in json.load(open(sys.argv[2]))["rounds"].items():
-        if entry.get("as_of") == latest:
-            print(ref)
+results = Path(sys.argv[1])
+status = json.load(open(results / "fit-store.json"))
+for ref, entry in json.load(open(sys.argv[2]))["rounds"].items():
+    origin = entry.get("as_of")
+    fits = [s for s in status if s["origin"] == origin]
+    if (results / "hub" / str(origin)).is_dir() and fits and all(
+        s["current"] for s in fits
+    ):
+        print(ref, origin)
 EOF
     )
-    for ref in $rounds; do
+    # On fd 3, so gh never reads the list.
+    while read -r ref origin <&3; do
+      [ -n "$ref" ] || continue
       tag="round-$ref"
-      assets=$(gh release view "$tag" -R "$repo" --json isDraft,assets \
-        -q 'select(.isDraft | not) | [.assets[].name] | join(" ")' \
-        2> /dev/null) || continue
+      assets=$(gh release view "$tag" -R "$repo" --json assets \
+        -q '[.assets[].name] | join(" ")' 2> /dev/null) || continue
       case " $assets " in
         *" site.zip "*) continue ;;
       esac
       dir=$(mktemp -d "${TMPDIR:-/tmp}/round.XXXXXX")
       cp "$build"/results/*.csv "$build"/results/*.csv.gz \
         "$build"/results/*.json "$dir"/
-      (cd "$build/results" && zip -qr - hub hub-comparison) > "$dir/hub.zip"
+      (cd "$build/results" && zip -qr - "hub/$origin" hub-comparison) \
+        > "$dir/hub.zip"
       (cd "$build/data" && zip -qr - .) > "$dir/data.zip"
       stage=$(mktemp -d "${TMPDIR:-/tmp}/site.XXXXXX")
       cp -R "$site" "$stage/BDBVHubRenewal"
@@ -67,9 +73,9 @@ EOF
 
 ## Results
 
-Every model's results at this round's hub release, built from commit $GITHUB_SHA.
+Every model's results at this round's hub release, $origin, built from commit $GITHUB_SHA.
 
-- \`hub.zip\`: each model's forecast in the hub's format, samples and quantiles for the country, provinces and health zones (\`hub/<model>-samples.csv.gz\`, \`hub/<model>-quantiles.csv.gz\`), and the scored hub comparison (\`hub-comparison/\`).
+- \`hub.zip\`: each model's forecast in the hub's format, samples and quantiles for the country, provinces and health zones (\`hub/$origin/<model>-samples.csv.gz\`, \`hub/$origin/<model>-quantiles.csv.gz\`), and the scored hub comparison (\`hub-comparison/\`).
 - \`forecasts.csv.gz\`, \`heldout-forecasts.csv.gz\`: every model's forecasts at each real origin.
 - \`*-scores.csv\`, \`*-energy.csv\`, \`nowcast-*.csv\`, \`zone-*.csv\`: the scores behind the Backtest, Nowcast and Comparison pages.
 - \`backtest-fits.csv\`, \`delay-summary.csv\`, \`fit-store.json\`: the stored fits' diagnostics and learnt delays, and the fit behind each model and origin.
@@ -81,7 +87,7 @@ EOF
       gh release edit "$tag" -R "$repo" --notes-file "$notes"
       gh release upload "$tag" "$stage/site.zip" -R "$repo" --clobber
       echo "Attached results to $tag."
-    done
+    done 3<<< "$rounds"
     ;;
   *)
     echo "usage: $0 attach BUILD SITE" >&2

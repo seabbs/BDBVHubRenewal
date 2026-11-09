@@ -275,17 +275,27 @@ def make_report(
     _zone_nowcast_section(
         fig, gen, data_dir, target, tasks[0], forecasts_now, config, names
     )
-    # Every model's hub tables at the latest release, for the results
-    # release.
-    write_hub_tables(
-        hub_tables(
-            forecasts_now,
-            tasks[0],
-            load_daily_zones(data_dir),
-            hub_zones(Path(data_dir) / "hub-config" / "tasks.json"),
-        ),
-        res / "hub",
-    )
+    # Every model's hub tables at every real origin, for the round
+    # releases, so a round released after later hub releases still gets
+    # its own.
+    daily_zones = load_daily_zones(data_dir)
+    zone_codes = hub_zones(Path(data_dir) / "hub-config" / "tasks.json")
+    for vintage in sorted(set(real["vintage"])):
+        if vintage == latest:
+            task, at = tasks[0], forecasts_now
+        else:
+            task = make_tasks(
+                real.loc[real["vintage"] == vintage],
+                delays,
+                config,
+                history=real,
+                daily=daily,
+            )[0]
+            at = _stored_at(res, vintage)
+        write_hub_tables(
+            hub_tables(at, task, daily_zones, zone_codes),
+            res / "hub" / str(vintage),
+        )
     groups = _nowcast_groups(target, sorted(set(forecasts_now["location"])))
     save_light_dark(
         partial(
@@ -769,6 +779,24 @@ def _zone_nowcast_section(
         'role="group" aria-label="Zone review">\n'
         "<noscript>The zone review needs JavaScript.</noscript>\n"
         "</div>\n",
+    )
+
+
+def _stored_at(res: Path, vintage: str) -> pd.DataFrame:
+    """Every model's final-count forecasts from one origin in the results.
+
+    Development origins are in `forecasts.csv.gz` and held-out ones in
+    `heldout-forecasts.csv.gz`.
+    """
+    frames = []
+    for name in ("forecasts.csv.gz", "heldout-forecasts.csv.gz"):
+        rows = pd.read_csv(res / name, dtype={"as_of": object})
+        rows = rows.loc[(rows["vintage"] == vintage) & rows["as_of"].isna()]
+        frames.append(rows.drop(columns="chosen_model", errors="ignore"))
+    dev, held = frames
+    return pd.concat(
+        [dev, held.loc[~held["model"].isin(set(dev["model"]))]],
+        ignore_index=True,
     )
 
 

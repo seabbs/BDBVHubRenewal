@@ -9,14 +9,14 @@ import pytest
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "results-release.sh"
 
-# A stand-in gh. `release view --json isDraft,assets` prints $ASSETS, or
-# fails when $ASSETS is `none` (no published release); every call is
+# A stand-in gh. `release view --json assets` prints $ASSETS, or fails
+# when $ASSETS is `none` (no release); every call is
 # logged to $GH_LOG.
 GH = """#!/bin/sh
 echo "$*" >> "$GH_LOG"
 if [ "$1 $2" = "release view" ]; then
   case "$*" in
-    *isDraft,assets*)
+    *assets*)
       [ "$ASSETS" = none ] && exit 1
       echo "$ASSETS" ;;
     *body*) echo "Forecasts submitted for the round." ;;
@@ -49,18 +49,26 @@ def _repo(tmp_path: Path, as_of: str) -> Path:
 
 
 def _build(tmp_path: Path, current: bool) -> Path:
+    """A build with hub tables at its two newest hub releases.
+
+    Every stored fit at 2026-11-01 is current or not as `current` says,
+    at 2026-10-24 they all are, and 2026-10-17 has no hub tables.
+    """
     build = tmp_path / "build"
     results = build / "results"
-    for d in (results / "hub", results / "hub-comparison", build / "data"):
-        d.mkdir(parents=True)
+    for origin in ("2026-11-01", "2026-10-24"):
+        (results / "hub" / origin).mkdir(parents=True)
+        (results / "hub" / origin / "renewal-samples.csv.gz").write_bytes(b"")
+    (results / "hub-comparison").mkdir()
+    (build / "data").mkdir()
     status = [
         {"model": "renewal", "origin": "2026-11-01", "current": current},
-        {"model": "renewal", "origin": "2026-10-24", "current": False},
+        {"model": "renewal", "origin": "2026-10-24", "current": True},
+        {"model": "renewal", "origin": "2026-10-17", "current": True},
     ]
     (results / "fit-store.json").write_text(json.dumps(status))
     (results / "nowcast-scores.csv").write_text("a\n1\n")
     (results / "forecasts.csv.gz").write_bytes(b"")
-    (results / "hub" / "renewal-samples.csv.gz").write_bytes(b"")
     (build / "data" / "target.csv").write_text("a\n1\n")
     (tmp_path / "site").mkdir()
     (tmp_path / "site" / "index.html").write_text("site")
@@ -94,10 +102,11 @@ def _attach(
     return log.read_text().splitlines()
 
 
+@pytest.mark.parametrize("as_of", ["2026-11-01", "2026-10-24"])
 def test_results_go_on_the_round_release_with_the_site_last(
-    tmp_path: Path,
+    tmp_path: Path, as_of: str
 ) -> None:
-    calls = _attach(tmp_path, "2026-11-01", True, "")
+    calls = _attach(tmp_path, as_of, True, "")
     verbs = [" ".join(c.split()[:2]) for c in calls]
     assert verbs == [
         "release view",
@@ -118,12 +127,12 @@ def test_results_go_on_the_round_release_with_the_site_last(
     [
         # Already complete.
         ("2026-11-01", True, "hub.zip site.zip", 1),
-        # No published round release yet.
+        # No round release yet.
         ("2026-11-01", True, "none", 1),
         # The fits at the round's hub release are not all of this code.
         ("2026-11-01", False, "", 0),
-        # The round used an earlier hub release than this build.
-        ("2026-10-24", True, "", 0),
+        # The build has no hub tables at the round's hub release.
+        ("2026-10-17", True, "", 0),
     ],
 )
 def test_nothing_is_attached_otherwise(
