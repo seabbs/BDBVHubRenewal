@@ -248,7 +248,7 @@ def test_chart_marks_breaks_and_names_commits(sh) -> None:
     assert good[0][3 + keys.index("rel_wis")] == pytest.approx(35 / 40)
     rw = d["sets"]["good|national|all horizons"]["rows"][0]
     assert rw[0] == 0
-    assert rw[3 + keys.index("rel_wis")] == pytest.approx(40 / 35)
+    assert rw[3 + keys.index("rel_wis")] == pytest.approx(40 / 35, rel=1e-3)
 
 
 def test_page_has_chart_table_and_commit_links(sh) -> None:

@@ -151,8 +151,12 @@
       fill: function (d, name) {
         sel.textContent = "";
         names = d.models.map(function (m) { return m.name; });
-        names.forEach(function (n, i) { h("option", { value: i }, sel, n); });
+        // `d.baselines`, if given, limits the choice to those models.
+        names.forEach(function (n, i) {
+          if (!d.baselines || d.baselines.indexOf(n) >= 0) h("option", { value: i }, sel, n);
+        });
         var i = names.indexOf(name);
+        if (d.baselines && d.baselines.indexOf(name) < 0) i = -1;
         sel.value = String(i < 0 ? d.baseline : i);
       },
       index: function () { return +sel.value; },

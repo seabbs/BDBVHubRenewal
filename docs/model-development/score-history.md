@@ -8,10 +8,16 @@ A commit can deploy more than once, as the fit store reruns the build when it st
 Scores can therefore move without a code change.
 Relative WIS, as on the [Backtest](../backtest.md) page, also moves when the baseline changes.
 Read it beside WIS, where randomwalk's own line shows the baseline.
-"Relative to" picks another model as the baseline, such as one whose forecasts did not change at a deploy where randomwalk's did.
-The table is relative to randomwalk.
+"Relative to" picks randomwalknowcast instead, whose forecasts did not change at deploys where randomwalk's did.
+The table is relative to randomwalk, over all horizons and forecasts.
+
+Deploys score different forecasts as origins and releases are added, so a mean over all of them mixes horizons and places.
+The chart opens on one horizon, in weeks from the reference week as on the Backtest page, and "Split by" picks another or all horizons.
+"Common forecasts only" keeps, for each model and baseline, the forecasts (origin, release, place and week) scored at every deploy of a window that runs back from the newest deploy.
+The window is as long as keeps the most common forecasts times deploys, so it ends before a deploy that would drop most of them.
 
 A star and a vertical line mark a deploy where what a model is scored on changed: the origins, the releases or the number of forecasts.
+On common forecasts only the first deploy of the window is marked.
 Points either side of one are not comparable.
 Deploys before 2026-11-09 have one summary, scored on each later release as reported, shown as the latest release target.
 The last point of a preview build is that build's own scores.
