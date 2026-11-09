@@ -266,7 +266,7 @@ def forecast_weeks(
 
 
 def forecast_locations(vintage_rows: pd.DataFrame) -> tuple[str, ...]:
-    """Return the provinces with at least one case in a vintage.
+    """Return the provinces a vintage lists, with or without cases.
 
     Parameters
     ----------
@@ -279,8 +279,7 @@ def forecast_locations(vintage_rows: pd.DataFrame) -> tuple[str, ...]:
         Province codes, sorted.
     """
     prov = vintage_rows.loc[vintage_rows["location"] != NATIONAL]
-    totals = prov.groupby("location")["total"].sum()
-    return tuple(sorted(totals.index[totals > 0]))
+    return tuple(sorted(set(prov["location"])))
 
 
 def make_tasks(
