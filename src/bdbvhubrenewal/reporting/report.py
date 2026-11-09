@@ -317,7 +317,7 @@ def make_report(
     )
     # Written by `fit-store load` from the stored fits.
     learnt = pd.read_csv(res / DELAY_SUMMARY_FILE)
-    fitted = sorted(set(learnt["location"]) - {"pooled"})
+    fitted = sorted(set(learnt["location"]) - {"shared"})
     baseline = baseline_share(
         daily, str(learnt["vintage"].max()), [NATIONAL, *fitted]
     )
@@ -484,8 +484,8 @@ def _release_section(
                 energy.loc[energy["target"] == _TARGET_LABELS[kind]],
             )
             for target, kind in (
-                ("latest", "reported"),
                 ("complete", "complete"),
+                ("latest", "reported"),
             )
         },
         ours,
@@ -551,8 +551,8 @@ def _release_section(
     _write(
         gen / "release-headline.md",
         "## Overall\n\n"
-        "Scores against what each later release reported, or against the "
-        "complete weeks, as picked "
+        "Scores on the complete weeks of the latest release, or on what "
+        "each later release reported, as picked "
         "([how scoring works](methods/evaluation.md#real-releases), "
         "[metrics](methods/evaluation.md#scores)).\n"
         + _scored_on(rep)
@@ -610,7 +610,8 @@ def _scored_on(reported: pd.DataFrame, baseline: str = "randomwalk") -> str:
     counts = [f"{n[p]} {label}" for p, label in scales.items() if p in n]
     listed = ", ".join(counts[:-1]) + " and " if len(counts) > 1 else ""
     return (
-        f"The scores cover {len(pairs)} origin and release pairs.\n"
+        f"On later releases, the scores cover {len(pairs)} origin and "
+        "release pairs.\n"
         f"The {baseline} baseline has {listed}{counts[-1]} forecasts.\n"
         f"{zero} of them are of a place and week with no case, where every "
         "model's WIS is close to 0, so mean WIS is lower than over places "
@@ -1654,7 +1655,7 @@ def _backtest_page(
         quantiles = pd.concat(
             [
                 forecast_quantiles(real_fc.assign(source="ours")),
-                zone_q.loc[zone_q["model"].isin(shown)],
+                zone_q.loc[zone_q["model"].isin(shown)].drop(columns="origin"),
             ],
             ignore_index=True,
         ).assign(ours=True)
@@ -1704,7 +1705,25 @@ def _backtest_page(
     )
     _write(
         gen / "backtest-checks.md",
-        _checks_section(fig, res, quantiles, target, data_dir, names)
+        _checks_section(
+            fig,
+            res,
+            pd.concat(
+                [
+                    forecast_quantiles(
+                        real_fc.rename(columns={"vintage": "origin"}).assign(
+                            source="ours"
+                        ),
+                        by=("origin",),
+                    ),
+                    zone_q,
+                ],
+                ignore_index=True,
+            ),
+            target,
+            data_dir,
+            names,
+        )
         if shown
         else "",
     )
@@ -1772,6 +1791,8 @@ def _checks_section(
 ) -> str:
     """Score the forecasts by place type and flag (`checks`).
 
+    `quantiles` holds every forecast's weeks, keyed by `origin`.
+
     One summary per target: the latest release (the reported target) and
     the complete weeks.
     """
@@ -1798,17 +1819,11 @@ def _checks_section(
         ],
         ignore_index=True,
     ).astype({"vintage": str})
-    origin_of = {str(reference_date_for_vintage(v)): v for v in origins}
-    ref = quantiles.loc[
-        quantiles["target_end_date"].astype(str)
-        == quantiles["reference_date"].astype(str)
-    ]
-    ref = ref.assign(origin=ref["reference_date"].astype(str).map(origin_of))
-    ref = ref.dropna(subset=["origin"])
     every = every.assign(origin=every["origin"].astype(str))
-    flagged = flags(counts, ref[["model", "origin", "location", "q50", "q95"]])
+    cols = ["model", "origin", "location", "target_end_date", "q50", "q95"]
+    flagged = flags(counts, quantiles[cols].astype({"origin": str}))
     srcs = {}
-    for name, kind in (("latest", "reported"), ("complete", "complete")):
+    for name, kind in (("complete", "complete"), ("latest", "reported")):
         scores = every.loc[every["target"] == kind]
         summary = check_summary(scores, place_types(counts, scores), flagged)
         write_score_chart(
@@ -1827,7 +1842,8 @@ def _checks_section(
         "origin, small "
         f"with at most {SMALL_MAX} cases in any of those weeks, and larger "
         "otherwise.\n"
-        "A forecast is flagged when its reference week drops to a third of "
+        "A forecast is flagged when its first week after the origin's "
+        "latest full week drops to a third of "
         "the recent level (collapse) or rises far above every recent count "
         "(blow-up), and has no flag otherwise.\n\n"
         f'<div class="checkschart"{targets_attr(srcs)} '

@@ -33,7 +33,7 @@ import datetime as dt
 import json
 import os
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from functools import partial
 from pathlib import Path
@@ -44,7 +44,6 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from bdbvhubrenewal.data.releases import last_report
 from bdbvhubrenewal.data.tidy import write_csv
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
@@ -81,7 +80,6 @@ __all__ = [
     "fit_summary",
     "forecast_renewal",
     "horizon_weeks",
-    "init_strategy",
     "model_config",
     "nuts_kernel",
     "parameter_diagnostics",
@@ -233,56 +231,31 @@ def sampler_settings(
     return {**DEFAULT_SAMPLER, **env, **dict(overrides or {})}
 
 
-def init_strategy(sampler: Mapping[str, Any]) -> Any:
-    """Return NumPyro's init strategy for a sampler table.
-
-    Chains start at the prior median, as in BVDOutbreakSize.
-
-    Parameters
-    ----------
-    sampler : mapping
-        The sampler table.
-
-    Returns
-    -------
-    callable
-        A NumPyro init strategy.
-
-    Raises
-    ------
-    ValueError
-        On an unknown `init`.
-    """
-    from numpyro.infer import init_to_median
-
-    init = sampler.get("init", "median")
-    if init == "median":
-        return init_to_median(num_samples=15)
-    raise ValueError(f"Unknown init {init!r}: use 'median'.")
-
-
 def nuts_kernel(model_fn: Any, sampler: Mapping[str, Any]) -> Any:
     """Build the NUTS kernel for a sampler table.
+
+    Each chain starts from its own prior draw, so chains start apart and
+    R-hat can show a chain that stays in another mode.
 
     Parameters
     ----------
     model_fn : callable
         The NumPyro model.
     sampler : mapping
-        `target_accept`, `max_tree_depth` and optionally `init`.
+        `target_accept` and `max_tree_depth`.
 
     Returns
     -------
     numpyro.infer.NUTS
         The kernel.
     """
-    from numpyro.infer import NUTS
+    from numpyro.infer import NUTS, init_to_sample
 
     return NUTS(
         model_fn,
         target_accept_prob=float(sampler["target_accept"]),
         max_tree_depth=int(sampler["max_tree_depth"]),
-        init_strategy=init_strategy(sampler),
+        init_strategy=init_to_sample,
     )
 
 
@@ -350,8 +323,7 @@ def horizon_weeks(task: ForecastTask) -> int:
         At least one.
     """
     last = max(_saturday(d) for d in task.target_end_dates)
-    cut = last_report(task.vintage, task.kind)
-    return max(1, (last - _saturday(cut)).days // 7)
+    return max(1, (last - _saturday(task.cutoff)).days // 7)
 
 
 def _weeks(first: dt.date, n: int) -> list[str]:
@@ -469,12 +441,12 @@ def vintage_inputs(
         The model inputs.
     """
     from bdbvhubrenewal.data import load_locations
-    from bdbvhubrenewal.data.releases import publication_lag_pmf
+    from bdbvhubrenewal.data.releases import release_pairs
     from bdbvhubrenewal.model.inputs import vintage_from_tables
 
-    lag = None
+    pairs = None
     if task.delay_history is not None:
-        lag = publication_lag_pmf(task.delay_history, task.vintage)
+        pairs = release_pairs(task.delay_history, task.vintage)
     return vintage_from_tables(
         task.target,
         task.delays,
@@ -485,7 +457,7 @@ def vintage_inputs(
         horizon_weeks(task),
         tuple(task.mask),
         bvd=bvd,
-        publication_lag=lag,
+        release_pairs=pairs,
     )
 
 
@@ -555,7 +527,7 @@ def _silent_walk(task: ForecastTask) -> tuple[pd.DataFrame, set[str]]:
         for loc, quiet in zip(origin.snap.locations, origin.silent, strict=True)
         if quiet and loc in task.locations
     }
-    draws = walk.forecast(replace(task, report_by=()))
+    draws = walk.forecast(replace(task, report_by={}))
     return draws.loc[
         draws["location"].isin(silent), list(SAMPLE_COLUMNS)
     ], silent
@@ -574,13 +546,12 @@ def report_cutoffs(task: ForecastTask, data: Any) -> dict[int, str]:
     Returns
     -------
     dict
-        The vintage date (ISO) by its last report day on the model axis
-        (`data.releases.last_report`), the `as_of` cut-offs of
-        `forecast_trajectories`.
+        The vintage date (ISO) by its cut-off on the model axis, the
+        `as_of` cut-offs of `forecast_trajectories`.
     """
     return {
-        (last_report(d, task.kind) - data.start_date).days: d
-        for d in task.report_by
+        (dt.date.fromisoformat(cut) - data.start_date).days: d
+        for d, cut in task.report_by.items()
     }
 
 
@@ -819,16 +790,15 @@ def fit_delays(fit: RenewalFit, task: ForecastTask) -> pd.DataFrame:
     -------
     pandas.DataFrame
         `delay_summary` rows with `model`, `vintage` and `location`:
-        `"pooled"` for a fit of every province, else the province.
+        each province's delay, and the shared delay of a fit of
+        several provinces.
     """
     return pd.concat(
         [
-            run.delay.assign(
-                model=run.variant.name,
-                vintage=task.vintage,
-                location="pooled" if key == "all" else key,
+            run.delay.rename(columns={"place": "location"}).assign(
+                model=run.variant.name, vintage=task.vintage
             )
-            for key, run in fit.runs.items()
+            for run in fit.runs.values()
         ],
         ignore_index=True,
     )[
@@ -1031,7 +1001,8 @@ class RenewalRun:
         Process CPU time over the same span, across all threads. Near
         `num_chains` times `seconds` when the chains run in parallel.
     delay : pandas.DataFrame
-        `delay_summary` of the fit.
+        `delay_summary` of each province of the fit (`place`), and the
+        shared delay of a fit of several provinces.
     bvd : dict or None
         The BVDOutbreakSize release used (`bvd_record`), for a variant
         with the BVD term.
@@ -1176,12 +1147,27 @@ class RenewalModel:
         posterior = model.mcmc.get_samples()
         n_init = model.latent.n_initialization_points
         beta = np.asarray(posterior["delay_beta"])
-        delay = delay_summary(
-            beta,
-            # The shift is one column, as the model adds it to every delay.
-            np.asarray(posterior["delay_shift"]).reshape(len(beta), -1),
-            data.start_date - dt.timedelta(days=n_init),
-            n_init + data.cutoff,
+        # Each province's delay, and the shared one they pool towards
+        # when a fit has more than one.
+        shifts = {
+            name: np.asarray(posterior["delay_shift"])[..., p]
+            for p, name in enumerate(data.names)
+        }
+        if len(shifts) > 1:
+            shifts["shared"] = np.asarray(posterior["delay_shared_shift"])[
+                ..., 0
+            ]
+        delay = pd.concat(
+            [
+                delay_summary(
+                    beta,
+                    shift,
+                    data.start_date - dt.timedelta(days=n_init),
+                    n_init + data.cutoff,
+                ).assign(place=place)
+                for place, shift in shifts.items()
+            ],
+            ignore_index=True,
         )
         return RenewalRun(
             self.variant,
@@ -1203,7 +1189,8 @@ class RenewalModel:
         walk window), which take `randomwalknowcast`'s draws: exactly 0
         until an introduction, then its walk. Otherwise the provinces are
         fitted together. National is the sum of the provinces plus the
-        unassigned part, the data's national gap (`data_gap`).
+        unassigned part, the national cases no province has
+        (`data_gap`).
 
         Parameters
         ----------
@@ -1394,41 +1381,12 @@ def fit_renewal(
         "parameters": params,
         "chains": chains,
         "worst_rhat": worst_rhat(params),
-        "warnings": lag_warnings(
-            [run.data for run in fit.runs.values()],
-            model_config(VARIANTS[variant]),
-        ),
     }
     if model_config(VARIANTS[variant]).bvd:
         # The BVDOutbreakSize release behind the BVD term and its R-hat.
         used = [r.bvd for r in fit.runs.values() if r.bvd is not None]
         record["bvd"] = dict(used[0]) if used else bvd_record(None)
     return record
-
-
-def lag_warnings(inputs: Sequence[Any], config: Any = None) -> list[str]:
-    """Warn when a fit used the prior publication lag, not an estimate.
-
-    Parameters
-    ----------
-    inputs : sequence of bdbvhubrenewal.model.Vintage
-        The model inputs of each run.
-    config : bdbvhubrenewal.model.ModelConfig, optional
-        The configuration. Only `publication_lag="empirical"` can warn.
-
-    Returns
-    -------
-    list of str
-        One `name: message` warning, or none.
-    """
-    if config is not None and config.publication_lag != "empirical":
-        return []
-    if any(getattr(v, "publication_lag_pmf", None) is None for v in inputs):
-        return [
-            "publication_lag: no earlier pair of delay files, so the fit "
-            "used PRIOR_PUBLICATION_LAG"
-        ]
-    return []
 
 
 def forecast_renewal(task: ForecastTask, fit_dir: Path | str) -> Forecast:

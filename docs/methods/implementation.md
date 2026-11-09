@@ -17,9 +17,10 @@ The model diagrams are mermaid blocks in `docs/methods/model.md`.
 | Pooled $R_p(t)$ | `BaseSubpopulationInfections`, `WeeklyTemporalProcess` | `NonCentredRandomWalk`, for the frozen seeding weeks, the separate forecast steps and their reversion. |
 | Renewal with importation and depletion | `BaseSubpopulationInfections`, subclassed | `coupled_renewal`, called from `_infections_from_rt`, and `Importation`, which gives the mixing matrix as PyRenew's `mobility_matrix_rv` does. |
 | Ascertainment $\alpha(s)$ | `IndependentAscertainment` with a temporal process | None. |
-| Onset-to-report delay $f_s(d)$ | None | `HazardDelay`. |
+| Onset-to-report delay $f_{p,s}(d)$ | None | `HazardDelay`, with province offsets and drifts from `pooled_walk`, as the Rt deviations. |
 | Missing onsets $\pi_p(t)$ | None | `MissingOnsetFraction`, a pooled walk of the same form as $R_p$ with its own parameters. |
 | Known and imputed onsets | `BaseObservationProcess` with `temporal_pmf_rv` for the infection-to-onset pmf (the incubation period, a `CensoredPMF` with a random mean and SD), `NegativeBinomialNoise`, `compute_prop_already_reported` for the publication lag | `OnsetStreams`. |
+| Publication lag | None | A Dirichlet simplex fitted to consecutive releases by `ReleasePairLikelihood`. |
 | Delays of known-onset cases | None | `DirichletMultinomialNoise`, a noise model in the form of PyRenew's `CountNoise` for counts by delay given weekly totals. |
 | BVDOutbreakSize Rt | None | `RtPseudoObservation`, a `RandomVariable` the latent process calls, as it holds both $R$ and infections. |
 
@@ -90,7 +91,7 @@ PyRenew's `PyrenewBuilder` builds each model as a `MultiSignalModel`, and NumPyr
 Chains run vectorised unless a fit's settings say otherwise.
 Stored backtest fits and CI submission fits run their chains in parallel.
 Without other settings, NUTS runs 4 chains of 1000 warm-up and 1000 draws, with target acceptance 0.9 and maximum tree depth 10.
-Chains start from the median of 15 prior draws.
+Each chain starts from its own draw from the prior.
 Submission fits and the [fit store](../development/cli.md#fit-store)'s backtest fits take each model's settings from its candidate in `ci/policy.toml`.
 `renewal` and `renewalsp` use 2 chains of 500 warm-up and 500 draws at target acceptance 0.9.
 `renewalbvd` uses 1000 draws at 0.95.

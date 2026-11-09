@@ -48,7 +48,7 @@ from bdbvhubrenewal.evaluation.backtest import (
     real_vintages,
     run_forecasts,
 )
-from bdbvhubrenewal.evaluation.nowcast import release_backtest
+from bdbvhubrenewal.evaluation.nowcast import release_backtest, stored_delays
 from bdbvhubrenewal.forecasters import get_model, list_models
 
 __all__ = [
@@ -268,6 +268,7 @@ def run_heldout(
     fitted = {s.name for s in list_models() if s.fitted}
     frames = []
     tasks = []
+    learnt: list[pd.DataFrame] = []
     for row in pairs.itertuples(index=False):
         names = list(dict.fromkeys([str(row.model), *_baselines(), *models]))
         # Fitted models are never run here, even when chosen: their
@@ -277,7 +278,7 @@ def run_heldout(
         task = make_tasks(
             rows, delays, config, real_vintages(real), real, daily=daily
         )
-        fc = run_forecasts([get_model(n) for n in names], task)
+        fc = run_forecasts([get_model(n) for n in names], task, learnt=learnt)
         fc.insert(1, "chosen_model", str(row.model))
         frames.append(fc)
         tasks += task
@@ -292,7 +293,12 @@ def run_heldout(
         )
         final = forecasts.loc[forecasts["as_of"].isna(), _STORED]
         scores = release_backtest(
-            tasks, daily, target, models=(), stored=final
+            tasks,
+            daily,
+            target,
+            models=(),
+            stored=final,
+            delays=pd.concat([*learnt, stored_delays(out)], ignore_index=True),
         ).scores
     else:
         # No vintage after the choice yet, so nothing is held out.

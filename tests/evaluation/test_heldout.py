@@ -15,6 +15,7 @@ from bdbvhubrenewal.evaluation.heldout import (
     model_for_vintage,
     run_heldout,
 )
+from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 
 CHOICES = (
     ModelChoice(date="2026-10-10", model="randomwalk"),
@@ -140,7 +141,9 @@ def test_heldout_scores_each_forecast_under_its_model(
         "randomwalknowcast",
         "shadow",
     }
-    assert "reported" in set(scores["target"])
+    # The nowcast is scored on the reported target through its own delay.
+    reported = scores.loc[scores["target"] == "reported", "model"]
+    assert "randomwalknowcast" in set(reported)
     record = yaml.safe_load((out / "heldout-run.yml").read_text())
     assert len(record["model_choice_sha256"]) == 64
     assert record["pending"] == [
@@ -219,6 +222,17 @@ def test_heldout_without_fits_reads_committed_forecasts(
         seeded.assign(model="slowfit", chosen_model="slowfit").to_csv(
             out / "heldout-forecasts.csv.gz", index=False
         )
+        # Its stored delay, which reports every case on its onset day.
+        pd.DataFrame(
+            {
+                "model": "slowfit",
+                "vintage": ["2026-10-17"] * 2 + ["2026-10-24"] * 2,
+                "location": "pooled",
+                "x": [0, 1] * 2,
+                "quantity": "reported_share",
+                "q50": 1.0,
+            }
+        ).to_csv(out / DELAY_SUMMARY_FILE, index=False)
         scores = run_heldout(
             target,
             delays,
@@ -235,6 +249,8 @@ def test_heldout_without_fits_reads_committed_forecasts(
         "slowfit",
     }
     assert set(scores["chosen_model"]) == {"slowfit"}
+    reported = scores.loc[scores["target"] == "reported", "model"]
+    assert "slowfit" in set(reported)
 
 
 def _randomwalk_choice(tmp_path: Path) -> Path:

@@ -3,8 +3,8 @@ r"""Daily release snapshots as arrays on the onset clock.
 
 The hub's `data/daily.csv` holds one table of daily onsets for each
 release.
-A release $r$ has an as-of date $A_r$ and a cut-off $c_r$, the latest
-onset day in the release over all locations.
+A release $r$ has an as-of date $A_r$ and a cut-off $c_r$, its last
+report day (`bdbvhubrenewal.data.releases.release_cutoff`).
 Its cell for onset day $t$ is observed when $t \le c_r$.
 An observed day with no row counts 0.
 The age of day $t$ at release $r$ is $c_r - t$, the onset clock.
@@ -22,12 +22,12 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date
+from bdbvhubrenewal.data.releases import release_cutoff
 
 __all__ = [
     "NATIONAL",
     "SnapshotArrays",
     "parent_code",
-    "release_cutoff",
     "snapshot_arrays",
     "week_sum",
     "weekly_sums",
@@ -37,30 +37,6 @@ NATIONAL = "CD"
 """Location code of the whole country."""
 
 _PROVINCE_LENGTH = 5
-
-
-def release_cutoff(daily: pd.DataFrame, release: str) -> dt.date:
-    """Return a release's data cut-off.
-
-    The `cutoff` column where the data state it, else the release's latest
-    onset day over all its locations.
-
-    Parameters
-    ----------
-    daily : pandas.DataFrame
-        Daily onsets by release.
-    release : str
-        The release date.
-
-    Returns
-    -------
-    datetime.date
-        The cut-off.
-    """
-    rows = daily.loc[daily["vintage"] == release]
-    if "cutoff" in rows.columns and rows["cutoff"].notna().any():
-        return as_date(str(rows["cutoff"].dropna().iloc[0]))
-    return as_date(str(rows["onset_date"].max()))
 
 
 def parent_code(code: str) -> str | None:
@@ -98,7 +74,7 @@ class SnapshotArrays:
         The $R$ release dates, oldest first.
     days : pandas.DatetimeIndex
         The $T$ onset days, from the first onset to the Saturday of the
-        week holding the latest release.
+        week holding the latest release's cut-off.
     counts : numpy.ndarray
         Observed plus imputed onsets, `[L, R, T]`. Cells a release does
         not observe are 0.
@@ -106,8 +82,6 @@ class SnapshotArrays:
         Whether a release observes an onset day (`t <= cut`), `[R, T]`.
     cut : numpy.ndarray
         Day index of each release's cut-off, `[R]`.
-    asof : numpy.ndarray
-        Day index of each release's as-of date, `[R]`.
     week : numpy.ndarray
         Hub week index of each day, `[T]`.
     week_ends : tuple of str
@@ -122,7 +96,6 @@ class SnapshotArrays:
     counts: np.ndarray
     observed: np.ndarray
     cut: np.ndarray
-    asof: np.ndarray
     week: np.ndarray
     week_ends: tuple[str, ...]
     parent: np.ndarray
@@ -131,21 +104,6 @@ class SnapshotArrays:
     def n_weeks(self) -> int:
         """Number of hub weeks."""
         return len(self.week_ends)
-
-    def asof_week(self, r: int) -> int:
-        """Return the hub week index holding release `r`'s as-of date.
-
-        Parameters
-        ----------
-        r : int
-            Release index.
-
-        Returns
-        -------
-        int
-            Index into the hub weeks.
-        """
-        return int(self.week[self.asof[r]])
 
     def cut_week(self, r: int) -> int:
         """Return the hub week index holding release `r`'s cut-off.
@@ -208,13 +166,10 @@ def snapshot_arrays(
             nodes[c] = None
     nodes_t = tuple(sorted(nodes, key=lambda c: (len(c), c)))
     first = as_date(str(rows["onset_date"].min()))
-    last = _saturday(as_date(releases[-1]))
-    days = pd.date_range(first, last, freq="D")
+    cutoffs = [release_cutoff(rows, r) for r in releases]
+    days = pd.date_range(first, _saturday(max(cutoffs)), freq="D")
     index = {d: i for i, d in enumerate(days.date)}
-    cut = np.array(
-        [index[release_cutoff(rows, r)] for r in releases], dtype=np.int64
-    )
-    asof = np.array([index[as_date(r)] for r in releases], dtype=np.int64)
+    cut = np.array([index[c] for c in cutoffs], dtype=np.int64)
     observed = np.arange(len(days))[None, :] <= cut[:, None]
     counts = np.zeros((len(nodes_t), len(releases), len(days)))
     take = rows.loc[rows["location"].isin(nodes_t)]
@@ -245,7 +200,7 @@ def snapshot_arrays(
         dtype=np.int64,
     )
     return SnapshotArrays(
-        nodes_t, releases, days, counts, observed, cut, asof, week,
+        nodes_t, releases, days, counts, observed, cut, week,
         week_ends, parent,
     )  # fmt: skip
 

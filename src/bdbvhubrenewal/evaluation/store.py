@@ -57,7 +57,6 @@ from bdbvhubrenewal.evaluation.backtest import (
     make_tasks,
     merge_by_model,
     run_forecasts,
-    uses_lag_prior,
 )
 from bdbvhubrenewal.evaluation.heldout import (
     load_model_choices,
@@ -222,7 +221,7 @@ def code_digest(root: Path | str = ".") -> str:
             digest.update(_strip(path.read_text()).encode())
         else:
             digest.update(path.read_bytes())
-    for func in (run_forecasts, _fit_rows, uses_lag_prior):
+    for func in (run_forecasts, _fit_rows):
         digest.update(_strip(inspect.getsource(func)).encode())
     digest.update(repr(sys.version_info[:2]).encode())
     deps = subprocess.run(

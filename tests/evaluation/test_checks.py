@@ -33,8 +33,18 @@ COUNTS = _counts(
 
 def _quantiles(rows: dict[str, tuple[float, float]]) -> pd.DataFrame:
     return pd.DataFrame(
-        [("rw", ORIGIN, loc, q50, q95) for loc, (q50, q95) in rows.items()],
-        columns=["model", "origin", "location", "q50", "q95"],
+        [
+            ("rw", ORIGIN, loc, "2026-11-07", q50, q95)
+            for loc, (q50, q95) in rows.items()
+        ],
+        columns=[
+            "model",
+            "origin",
+            "location",
+            "target_end_date",
+            "q50",
+            "q95",
+        ],
     )
 
 
@@ -67,6 +77,25 @@ def test_flags_catch_collapse_and_blow_up_only() -> None:
         "steady": "no flag",
         "quiet": "no flag",
     }
+
+
+def test_flags_use_the_week_after_the_origin_week() -> None:
+    # A Wednesday origin: week w ends on the Saturday before it, and its
+    # round's reference week is w + 2, so w + 1 is not the reference week.
+    wednesday = "2026-11-04"
+    counts = COUNTS.assign(vintage=wednesday)
+    q = pd.DataFrame(
+        {
+            "model": "rw",
+            "origin": wednesday,
+            "location": "wamba",
+            "target_end_date": ["2026-11-07", "2026-11-14"],
+            "q50": [0.0, 13.0],
+            "q95": [1.0, 30.0],
+        }
+    )
+    got = flags(counts, q)
+    assert got["flag"].tolist() == ["collapse"]
 
 
 def test_flags_use_only_the_counts_reported_at_the_origin() -> None:

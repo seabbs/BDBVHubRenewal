@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.delays import hub_delay_pmf
-from bdbvhubrenewal.data.releases import last_report
+from bdbvhubrenewal.data.releases import release_cutoff
 
 from .model import (
     MAIN,
@@ -302,20 +302,20 @@ def vintage_from_tables(
     horizon_weeks: int = 3,
     masked: tuple[str, ...] = (),
     bvd: pd.DataFrame | None = None,
-    publication_lag: np.ndarray | None = None,
+    release_pairs: dict[str, np.ndarray] | None = None,
 ) -> Vintage:
     """Build a `Vintage` from the target and delay rows of one vintage.
 
     Every province in `locations` is modelled, those with no case yet
     from a near-zero start with importation only. The week grid
     starts one week before national weekly onsets first reach
-    `START_COUNT` and ends with the week holding the vintage's last report
-    day (`data.releases.last_report`), which is also the cut-off.
+    `START_COUNT` and ends with the week holding the vintage's cut-off,
+    its last report day (`data.releases.release_cutoff`).
 
     Parameters
     ----------
     target : pandas.DataFrame
-        Rows as in `bdbvhubrenewal.data.tidy_target`.
+        Rows as in `bdbvhubrenewal.data.load_target`, with `cutoff`.
     delays : pandas.DataFrame or None
         Delay rows (`location`, `onset_week`, `delay`) at this vintage.
     vintage : str
@@ -334,9 +334,9 @@ def vintage_from_tables(
     bvd : pandas.DataFrame, optional
         BVDOutbreakSize rows from `bvd_rows` for the release chosen for
         this vintage (`ForecastTask.auxiliary["bvd"]`).
-    publication_lag : numpy.ndarray, optional
-        Empirical report to publication lag pmf
-        (`data.releases.publication_lag_pmf`).
+    release_pairs : dict, optional
+        Rows of each earlier delay file and how many the file before it
+        had (`data.releases.release_pairs`).
 
     Returns
     -------
@@ -360,7 +360,7 @@ def vintage_from_tables(
     big = int(np.argmax(counts_by_week >= threshold))
     first = _saturday(str(national.index[max(0, big - 1)]))
     start = first - dt.timedelta(days=6)
-    cutoff = (last_report(vintage, str(rows["kind"].iloc[0])) - start).days
+    cutoff = (release_cutoff(target, vintage) - start).days
     n_weeks = cutoff // 7 + 1
     weeks = [
         (first + dt.timedelta(weeks=i)).isoformat() for i in range(n_weeks)
@@ -372,7 +372,9 @@ def vintage_from_tables(
         )
         return out.fillna(0).to_numpy(dtype=float)
 
-    counts = np.zeros((n_weeks, config.dmax + 1))
+    # One delay table per modelled province, or one for a national fit.
+    n_places = 1 if config.national else len(active)
+    counts = np.zeros((n_weeks, n_places, config.dmax + 1))
     if delays is not None and len(delays):
         # Known onsets count every case, so negative delays go to 0 and
         # delays past dmax to dmax, the last cell of the hazard pmf,
@@ -394,7 +396,12 @@ def vintage_from_tables(
         )
         ok = (week >= 0) & (week < n_weeks)
         delay = np.clip(keep["delay"].to_numpy(), 0, config.dmax)
-        np.add.at(counts, (week[ok], delay[ok]), 1)
+        place = (
+            np.zeros(len(keep), dtype=int)
+            if config.national
+            else keep["location"].map(active.index).to_numpy(dtype=int)
+        )
+        np.add.at(counts, (week[ok], place[ok], delay[ok]), 1)
 
     known, imputed = grid("observed", active), grid("imputed", active)
     totals = known + imputed
@@ -422,7 +429,7 @@ def vintage_from_tables(
         if bvd is None or config.national
         else bvd_inputs(bvd, names, start, masked),
         seed_days=None if config.national else _seed_days(totals),
-        publication_lag_pmf=publication_lag,
+        release_pairs=release_pairs,
     )
 
 

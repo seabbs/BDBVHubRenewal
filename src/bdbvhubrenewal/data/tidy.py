@@ -45,7 +45,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import epiweek_end
-from bdbvhubrenewal.data.releases import release_id
+from bdbvhubrenewal.data.releases import last_report_days, release_id
 
 __all__ = [
     "COHERENCE_HANDLING",
@@ -639,25 +639,35 @@ def build_tidy_data(
     locations = tidy_locations(raw / "auxiliary-data" / "locations.csv")
     daily_csv = raw / "auxiliary-data" / "daily-confirmed-case.csv"
     daily = tidy_daily(daily_csv)
-    daily_zones = tidy_daily(daily_csv, level="zone")
-    target = tidy_target(raw / "target-data" / "time-series.csv", daily)
     delays = tidy_delays(raw / "delays", locations)
-    zones = tidy_health_zones(raw / "target-data" / "time-series.csv")
-    tables = {
-        "locations": locations,
-        "target": target,
+    # Every table keyed by release carries the release's last report day.
+    cutoffs = last_report_days(daily, delays)
+    series = raw / "target-data" / "time-series.csv"
+    by_release = {
+        "target": tidy_target(series, daily),
         "daily": daily,
-        "daily_zones": daily_zones,
+        "daily_zones": tidy_daily(daily_csv, level="zone"),
         "delays": delays,
-        "health_zones": zones,
+        "health_zones": tidy_health_zones(series),
     }
-    write_csv(locations, out / "locations.csv")
-    write_csv(target, out / "target.csv")
-    write_csv(daily, out / "daily.csv")
-    write_csv(daily_zones, out / "daily_zones.csv.gz")
-    write_csv(delays, out / "delays.csv.gz")
-    write_csv(zones, out / "health_zones.csv.gz")
-    write_csv(national_coherence(target), out / "national-coherence.csv")
+    tables = {"locations": locations} | {
+        name: table.assign(cutoff=table["vintage"].map(cutoffs))
+        for name, table in by_release.items()
+    }
+    files = {
+        "locations": "locations.csv",
+        "target": "target.csv",
+        "daily": "daily.csv",
+        "daily_zones": "daily_zones.csv.gz",
+        "delays": "delays.csv.gz",
+        "health_zones": "health_zones.csv.gz",
+    }
+    for name, file in files.items():
+        write_csv(tables[name], out / file)
+    write_csv(
+        national_coherence(tables["target"]),
+        out / "national-coherence.csv",
+    )
     config = out / "hub-config"
     config.mkdir(exist_ok=True)
     for path in (raw / "hub-config").glob("*.json"):
@@ -852,7 +862,8 @@ def load_target(data_dir: Path | str | None = None) -> pd.DataFrame:
         Columns `kind`, `vintage` (the release's as-of date),
         `location`, `location_name`, `target_end_date` (the Saturday
         ending the week), `observed`, `imputed` and `total`, as in
-        `tidy_target`.
+        `tidy_target`, and `cutoff`, the release's last report day
+        (`bdbvhubrenewal.data.releases.last_report_days`).
 
     Examples
     --------
@@ -876,7 +887,8 @@ def load_daily(data_dir: Path | str | None = None) -> pd.DataFrame:
     -------
     pandas.DataFrame
         Columns `vintage`, `location`, `onset_date`, `observed` and
-        `imputed`, as in `tidy_daily`. Only days with a case are present.
+        `imputed`, as in `tidy_daily`, and `cutoff`, as in `load_target`.
+        Only days with a case are present.
 
     Examples
     --------
@@ -917,8 +929,9 @@ def load_delays(data_dir: Path | str | None = None) -> pd.DataFrame:
     pandas.DataFrame
         One row per case with a known onset: `vintage`, `location`,
         `location_name`, `onset_week` and `delay` in days, as in
-        `tidy_delays`. Use `delays_for_vintage` to pick the rows a
-        forecast at one release may see.
+        `tidy_delays`, and `cutoff`, as in `load_target`. Use
+        `delays_for_vintage` to pick the rows a forecast at one release
+        may see.
 
     Examples
     --------
@@ -956,7 +969,8 @@ def load_health_zones(data_dir: Path | str | None = None) -> pd.DataFrame:
     Returns
     -------
     pandas.DataFrame
-        One row per release, zone and week, as in `tidy_health_zones`.
+        One row per release, zone and week, as in `tidy_health_zones`,
+        and `cutoff`, as in `load_target`.
     """
     return pd.read_csv(_data_dir(data_dir) / "health_zones.csv.gz")
 
@@ -1027,20 +1041,21 @@ def newly_missing(target: pd.DataFrame) -> pd.DataFrame:
     -------
     pandas.DataFrame
         Columns `kind`, `location`, `vintage`, `previous_vintage`,
-        `days`, `new_observed`, `new_imputed`, `new_total` and
-        `new_imputed_share`.
+        `days` (between the two releases' cut-offs), `new_observed`,
+        `new_imputed`, `new_total` and `new_imputed_share`.
     """
-    sums = target.groupby(["kind", "location", "vintage"], as_index=False)[
-        ["observed", "imputed", "total"]
-    ].sum()
+    sums = target.groupby(
+        ["kind", "location", "vintage", "cutoff"], as_index=False
+    )[["observed", "imputed", "total"]].sum()
     sums = sums.sort_values(["kind", "location", "vintage"])
     grp = sums.groupby(["kind", "location"])
     sums["previous_vintage"] = grp["vintage"].shift(1)
+    sums["previous_cutoff"] = grp["cutoff"].shift(1)
     for col in ("observed", "imputed", "total"):
         sums[f"new_{col}"] = sums[col] - grp[col].shift(1)
     out = sums.dropna(subset=["previous_vintage"]).copy()
     out["days"] = (
-        pd.to_datetime(out["vintage"]) - pd.to_datetime(out["previous_vintage"])
+        pd.to_datetime(out["cutoff"]) - pd.to_datetime(out["previous_cutoff"])
     ).dt.days
     new_total = out["new_total"].where(out["new_total"] > 0)
     out["new_imputed_share"] = out["new_imputed"] / new_total
@@ -1061,6 +1076,13 @@ def newly_missing(target: pd.DataFrame) -> pd.DataFrame:
     return out.reset_index(drop=True)
 
 
+def _weeks_before(cutoff: pd.Series, week: pd.Series) -> np.ndarray:
+    """Whole weeks from each week to the epi week of its release's cut-off."""
+    end = pd.to_datetime(pd.Series([epiweek_end(c) for c in cutoff]))
+    gap = end - pd.to_datetime(week.reset_index(drop=True))
+    return (gap.dt.days // 7).to_numpy()
+
+
 def revision_table(
     target: pd.DataFrame, reference_vintage: str | None = None
 ) -> pd.DataFrame:
@@ -1079,8 +1101,9 @@ def revision_table(
     Returns
     -------
     pandas.DataFrame
-        Columns `vintage`, `location`, `target_end_date`, `weeks_before`
-        (whole weeks from the target week to the vintage's epi week),
+        Columns `vintage`, `cutoff`, `location`, `target_end_date`,
+        `weeks_before` (whole weeks from the target week to the epi week
+        of the vintage's cut-off),
         `total`, `reference_total` and `fraction` (`total` over
         `reference_total`, missing where the latter is zero).
     """
@@ -1090,14 +1113,10 @@ def revision_table(
     ].rename(columns={"total": "reference_total"})
     out = target.loc[
         target["vintage"] <= ref,
-        ["vintage", "location", "target_end_date", "total"],
+        ["vintage", "cutoff", "location", "target_end_date", "total"],
     ].merge(latest, on=["location", "target_end_date"], how="left")
     out["reference_total"] = out["reference_total"].fillna(0)
-    vintage_week = pd.to_datetime(
-        pd.Series([epiweek_end(v).isoformat() for v in out["vintage"]])
-    )
-    gap = vintage_week - pd.to_datetime(out["target_end_date"])
-    out["weeks_before"] = (gap.dt.days // 7).to_numpy()
+    out["weeks_before"] = _weeks_before(out["cutoff"], out["target_end_date"])
     out["fraction"] = out["total"] / out["reference_total"].where(
         out["reference_total"] > 0
     )
@@ -1132,9 +1151,9 @@ def release_updates(counts: pd.DataFrame) -> pd.DataFrame:
     Parameters
     ----------
     counts : pandas.DataFrame
-        Columns `vintage`, `location`, `target_end_date` and `total`.
-        A place and week missing from a release has no cases in it, as in
-        the health zone table.
+        Columns `vintage`, `cutoff`, `location`, `target_end_date` and
+        `total`. A place and week missing from a release has no cases in
+        it, as in the health zone table.
 
     Returns
     -------
@@ -1142,11 +1161,12 @@ def release_updates(counts: pd.DataFrame) -> pd.DataFrame:
         One row per release after the first, place and week of the earlier
         release that has cases in either, with `vintage` (the later
         release), `previous`, `location`, `target_end_date`,
-        `weeks_before` (whole weeks from the week to the earlier release's
-        epi week), `previous_total`, `total` and `change`.
+        `weeks_before` (whole weeks from the week to the epi week of the
+        earlier release's cut-off), `previous_total`, `total` and `change`.
     """
     keys = ["location", "target_end_date"]
     releases = sorted(counts["vintage"].unique())
+    cutoffs = counts.groupby("vintage")["cutoff"].first()
     frames: list[pd.DataFrame] = []
     for prev, vin in pairwise(releases):
         old = counts.loc[counts["vintage"] == prev, [*keys, "total"]]
@@ -1171,11 +1191,9 @@ def release_updates(counts: pd.DataFrame) -> pd.DataFrame:
         "int64"
     )
     out["change"] = out["total"] - out["previous_total"]
-    release_week = pd.to_datetime(
-        pd.Series([epiweek_end(v).isoformat() for v in out["previous"]])
+    out["weeks_before"] = _weeks_before(
+        out["previous"].map(cutoffs), out["target_end_date"]
     )
-    gap = release_week - pd.to_datetime(out["target_end_date"])
-    out["weeks_before"] = (gap.dt.days // 7).to_numpy()
     cols = [
         "vintage",
         "previous",
