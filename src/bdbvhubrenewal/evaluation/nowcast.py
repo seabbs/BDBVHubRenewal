@@ -147,11 +147,11 @@ def delay_curves(summary: pd.DataFrame, places: Sequence[str]) -> pd.DataFrame:
     """Return a model's share of a day's final count reported by age.
 
     Each place takes the model's delay at that place, and a zone with none
-    its province's. A place with neither takes a pooled delay (location
-    `"pooled"`), the one delay fits from before province delays store for
-    every place. A model's shared delay (location `"shared"`) is the
-    unweighted centre of its province delays, not a national delay, so it
-    maps no place; the country is the sum of its provinces instead.
+    its province's. A place with neither, such as a province never seeded,
+    takes the model's common delay: its shared delay (location `"shared"`),
+    as in the renewal model, or the pooled delay (`"pooled"`) that fits
+    from before province delays store for every place. The country takes
+    none and is the sum of its provinces.
 
     Parameters
     ----------
@@ -170,19 +170,16 @@ def delay_curves(summary: pd.DataFrame, places: Sequence[str]) -> pd.DataFrame:
     """
     rows = summary.loc[summary["quantity"] == "reported_share"]
     rows = rows.rename(columns={"x": "age", "q50": "share"})
-    by_place = {
-        str(loc): grp
-        for loc, grp in rows.groupby("location")
-        if loc != "shared"
-    }
+    by_place = {str(loc): grp for loc, grp in rows.groupby("location")}
+    common = next((k for k in ("pooled", "shared") if k in by_place), None)
     frames = []
     for place in places:
         if place in by_place:
             key = place
         elif province_of(place) in by_place:
             key = province_of(place)
-        elif place != NATIONAL and "pooled" in by_place:
-            key = "pooled"
+        elif place != NATIONAL and common is not None:
+            key = common
         else:
             continue
         frames.append(by_place[key].assign(location=place))

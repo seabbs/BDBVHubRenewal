@@ -129,8 +129,8 @@ def test_samples_are_kept_when_the_delay_maps_no_place(
     daily: pd.DataFrame,
 ) -> None:
     samples = _samples({"CD-IT": 100.0, "CD-NK": 50.0, "CD": 999.0})
-    # Only a shared delay, which maps no place.
-    wide = _reported(samples, _summary("shared", [0.5, 0.9]), "m", daily)
+    # Only a delay for a place not forecast, which maps no place.
+    wide = _reported(samples, _summary("CD-SU", [0.5, 0.9]), "m", daily)
     assert (wide["CD-IT"] == 100).all()
     assert (wide["CD-NK"] == 50).all()
     assert (wide["CD"] == 150).all()
