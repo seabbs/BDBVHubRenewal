@@ -202,6 +202,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--fit", default=None, help="Fit directory written by `fit`."
     )
     now.add_argument("--out", default="output/submission")
+    now.add_argument(
+        "--forecast-date",
+        default=None,
+        help="The file's forecast_date. Defaults to today (UTC), the day a "
+        "submission's PR is opened.",
+    )
 
     zb = sub.add_parser(
         "zone-backtest", help="Score the random walk models at zone level."
@@ -716,6 +722,7 @@ def _nowcast(args: argparse.Namespace) -> int:
             task.reference_date,
             unassigned=result.unassigned,
             zones=zones,
+            forecast_date=args.forecast_date,
         )
         path = write_submission(table, args.out, model_id(_abbr(args)))
     except (KeyError, ValueError, OSError) as err:
