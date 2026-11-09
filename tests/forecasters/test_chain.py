@@ -339,3 +339,15 @@ def test_introductions_pool_siblings_after_k_silent_weeks() -> None:
         reported, np.array([8, 8, 8, 2]), np.array([-1, 0, 0, 0]), 3
     )
     np.testing.assert_allclose(late[1:], 0.0)
+
+
+def test_the_walk_spread_is_net_of_poisson_noise(origin24) -> None:
+    settings = origin24.settings
+    own = origin24.sigma_source < len(origin24.snap.locations)
+    assert own.any()
+    assert (origin24.sigma >= settings.min_spread).all()
+    for i in np.flatnonzero(own):
+        lo = max(int(origin24.start[i]) - settings.walk_weeks + 1, 0)
+        y = origin24.reported[i, lo : int(origin24.start[i]) + 1]
+        raw = np.diff(np.log1p(y)).std(ddof=1)
+        assert origin24.sigma[i] <= max(raw, settings.min_spread) + 1e-12

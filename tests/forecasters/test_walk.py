@@ -6,7 +6,12 @@ import jax
 import numpy as np
 import pytest
 
-from bdbvhubrenewal.forecasters.walk import random_walk
+from bdbvhubrenewal.forecasters.walk import (
+    log1p_poisson_var,
+    random_walk,
+    walk_noise,
+    walk_spread,
+)
 
 
 def test_steps_are_cumulative_within_a_sample() -> None:
@@ -46,3 +51,46 @@ def test_one_key_gives_one_draw() -> None:
     a = random_walk(jax.random.key(3), np.full(5, 3.0, np.float32), 0.2, 2)
     b = random_walk(jax.random.key(3), np.full(5, 3.0, np.float32), 0.2, 2)
     assert np.array_equal(np.asarray(a[1]), np.asarray(b[1]))
+
+
+def test_log1p_poisson_var_matches_simulation() -> None:
+    rng = np.random.default_rng(0)
+    for lam in (0.0, 1.0, 4.0, 12.0, 300.0):
+        y = rng.poisson(lam, 200_000)
+        assert log1p_poisson_var(np.array([lam]))[0] == pytest.approx(
+            np.log1p(y).var(), abs=2e-3
+        )
+
+
+def test_poisson_noise_alone_gives_the_floor() -> None:
+    rng = np.random.default_rng(1)
+    for lam in (8.0, 20.0):
+        y = rng.poisson(lam, 5000).astype(float)
+        d = np.diff(np.log1p(y))
+        # Noise alone looks like a walk with a spread of about 0.5 to 0.3.
+        assert d.std() > 0.3
+        assert walk_spread(d, walk_noise(y), 0.1) == 0.1
+
+
+def test_a_random_walk_on_large_counts_is_recovered() -> None:
+    rng = np.random.default_rng(2)
+    level = np.log(500.0) + np.cumsum(rng.normal(0, 0.3, (300, 9)), axis=1)
+    y = rng.poisson(np.expm1(level)).astype(float)
+    d = np.concatenate([np.diff(np.log1p(row)) for row in y])
+    noise = np.concatenate([walk_noise(row) for row in y])
+    assert walk_spread(d, noise, 0.1) == pytest.approx(0.3, rel=0.05)
+
+
+def test_a_walk_on_small_counts_loses_only_the_poisson_noise() -> None:
+    rng = np.random.default_rng(3)
+    level = np.log(10.0) + np.cumsum(rng.normal(0, 0.3, (2000, 9)), axis=1)
+    y = rng.poisson(np.expm1(np.clip(level, 0, None))).astype(float)
+    d = np.concatenate([np.diff(np.log1p(row)) for row in y])
+    noise = np.concatenate([walk_noise(row) for row in y])
+    assert d.std() > 0.45
+    assert walk_spread(d, noise, 0.1) == pytest.approx(0.3, abs=0.06)
+
+
+def test_fewer_than_two_changes_give_the_floor() -> None:
+    assert walk_spread(np.array([0.7]), np.array([0.1]), 0.1) == 0.1
+    assert walk_spread(np.array([]), np.array([]), 0.05) == 0.05
