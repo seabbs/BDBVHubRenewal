@@ -15,6 +15,7 @@ from jax.flatten_util import ravel_pytree
 from numpyro.infer.util import log_density
 
 from bdbvhubrenewal.model import MAIN, build_model, model_args
+from bdbvhubrenewal.model import observation as ob
 from bdbvhubrenewal.model import publication_lag as pl
 from bdbvhubrenewal.model.observation import (
     onset_expectations_by_place,
@@ -128,6 +129,13 @@ def test_full_model_density_and_gradient_are_unchanged(
     """Fast paths against the daily blocks and direct lookup, 4 draws."""
     rng = np.random.default_rng(8)
     data = dataclasses.replace(sim_vintage, release_pairs=_pairs(rng, 30))
+    calls = []
+
+    def spy(*args, **kwargs):
+        calls.append(1)
+        return weekly_onset_expectations(*args, **kwargs)
+
+    monkeypatch.setattr(ob, "weekly_onset_expectations", spy)
     with jax.enable_x64(True):
         model = build_model(data, MAIN)
         args = model_args(model, data)
@@ -153,12 +161,15 @@ def test_full_model_density_and_gradient_are_unchanged(
             return jax.value_and_grad(ld)(flat)
 
         fast = [density_and_grad(v) for v in draws]
-        assert obs.weekly_delay
+        assert calls, "the weekly delay path was not used"
+        n_fast = len(calls)
         obs.weekly_delay = False
         monkeypatch.setattr(pl, "kept_share", kept_share_reference)
         slow = [density_and_grad(v) for v in draws]
+        assert len(calls) == n_fast
     for (v1, g1), (v0, g0) in zip(fast, slow, strict=True):
         np.testing.assert_allclose(v1, v0, rtol=1e-10)
+        g0 = np.asarray(g0)
         np.testing.assert_allclose(
-            g1, g0, rtol=1e-8, atol=1e-10 * float(jnp.max(jnp.abs(g0)))
+            g1, g0, rtol=1e-8, atol=1e-10 * np.abs(g0).max()
         )
