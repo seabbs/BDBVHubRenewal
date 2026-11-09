@@ -12,9 +12,10 @@ deploy, target, pool and model.
 
 A commit can deploy more than once: the fit store reruns the build when it
 stores new fits, and every build refreshes the hub data. Scores can
-therefore move without a code change. `break` is true where the origins or
-releases scored differ from the previous deploy of that target, so a jump
-there is not a model effect. Deploys before 2026-11-09 have one summary,
+therefore move without a code change. `break` is true where the origins,
+releases or number of forecasts scored for a model differ from its
+previous deploy, so a jump there is not a model effect. A change in the
+baseline itself shows in `base_wis`. Deploys before 2026-11-09 have one summary,
 `scoresummary-backtest.json`, scored on each later release as reported,
 which is read as the `latest` target.
 
@@ -78,7 +79,8 @@ def summary_scores(summary: Mapping[str, Any]) -> pd.DataFrame:
     -------
     pandas.DataFrame
         `pool`, `model`, `n` (forecasts the baseline also made), the mean
-        of each metric and `rel_<metric>` for relative metrics.
+        of each metric and, for relative metrics, the baseline's mean on
+        the same forecasts `base_<metric>` and `rel_<metric>`.
     """
     models = [m["name"] for m in summary["models"]]
     keys = [m["key"] for m in summary["metrics"]]
@@ -101,7 +103,9 @@ def summary_scores(summary: Mapping[str, Any]) -> pd.DataFrame:
         means=keys,
     )
     out = out.rename(columns={f"relative_{k}": f"rel_{k}" for k in relative})
-    return out[["pool", "model", "n", *keys, *(f"rel_{k}" for k in relative)]]
+    rel = [f"rel_{k}" for k in relative]
+    base = [f"base_{k}" for k in relative]
+    return out[["pool", "model", "n", *keys, *base, *rel]]
 
 
 def history(deploys: Iterable[Deploy]) -> pd.DataFrame:
@@ -119,23 +123,25 @@ def history(deploys: Iterable[Deploy]) -> pd.DataFrame:
         One row per deploy, target, pool and model: `deploy_time`,
         `source_sha`, `pages_sha`, `target`, `pool`, `model`, the
         `summary_scores` columns, `origins` and `releases` (`;`-joined)
-        and `break`, true where the origins or releases differ from the
-        previous deploy of that target.
+        and `break`, true where the origins or releases, or the number of
+        forecasts scored, differ from the model's previous deploy of that
+        target and pool, or where the model first appears.
     """
     frames = []
-    last: dict[str, tuple[str, str]] = {}
     for sha, time, pages, target, summary in deploys:
-        scored = (";".join(summary["origins"]), ";".join(summary["releases"]))
         frame = summary_scores(summary)
         frame.insert(0, "target", target)
         frame.insert(0, "pages_sha", pages)
         frame.insert(0, "source_sha", sha)
         frame.insert(0, "deploy_time", time)
-        frame["origins"], frame["releases"] = scored
-        frame["break"] = last.get(target) != scored
-        last[target] = scored
+        frame["origins"] = ";".join(summary["origins"])
+        frame["releases"] = ";".join(summary["releases"])
         frames.append(frame)
-    return pd.concat(frames, ignore_index=True)
+    out = pd.concat(frames, ignore_index=True)
+    scored = ["origins", "releases", "n"]
+    prev = out.groupby(["target", "pool", "model"])[scored].shift()
+    out["break"] = (prev != out[scored]).any(axis=1)
+    return out
 
 
 def _git(*args: str) -> str:
@@ -175,7 +181,9 @@ def _overview(hist: pd.DataFrame, targets: Sequence[str]) -> str:
             deploy=cell["deploy_time"].str[:16]
             + " "
             + cell["source_sha"].str[:8]
-            + cell["break"].map({True: " *", False: ""})
+            + cell.groupby("pages_sha")["break"]
+            .transform("any")
+            .map({True: " *", False: ""})
         )
         wide = cell.pivot_table(
             index="deploy", columns="model", values="rel_wis", sort=False
@@ -195,7 +203,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     hist = history(walk(args.ref))
     hist.to_csv(Path(args.out), index=False, float_format="%.6g")
     print(_overview(hist, ("latest", "complete")))
-    print("\n* origins or releases scored changed at this deploy")
+    print("\n* what a model is scored on changed at this deploy")
     print(f"Wrote {len(hist)} rows to {args.out}", file=sys.stderr)
 
 
