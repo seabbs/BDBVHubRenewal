@@ -51,7 +51,7 @@ Relative energy scores are ratios of means against `randomwalk` over the origins
 The score rewards a joint pattern across places only where draws are joint.
 The renewal models' draws are joint across provinces, one posterior draw per sample index.
 Zones split each province draw, so zones are joint within a province for every renewal model.
-`randomwalk` and `randomwalknowcast` draw each place independently.
+The random walk models draw each place independently.
 Hub teams' samples are joint across weeks within a place only, as the hub's sample format sets, so pairing their indices across places scores them as independent across places.
 
 ## Backtest design
@@ -69,6 +69,8 @@ The other models forecast every task.
 | Real releases | Every real release up to the latest model choice date with a later release | The count each later release shows, and the latest release's count for its complete weeks |
 | Comparison with hub forecasts | Real where one serves the round | As for real releases |
 
+In the simulated scenarios and leave-one-province-out, a week is complete when it ended at least 3 weeks before the truth vintage.
+
 ## Real releases
 
 Each real release up to the latest model choice date with a later release is an origin.
@@ -82,7 +84,7 @@ Two targets are scored.
 `randomwalk` is scored on its samples as they are, with no delay.
 Every other model forecasts the final count $X$ of week $w$ and is mapped to what $o'$ shows by its own modelled delay.
 Day $t$ is $a = c - t$ days old at a cut-off $c$, and $\pi(a)$ is the share of its final count the model expects reported by then.
-For `randomwalknowcast` and `pprandomwalknowcast`, $\pi(a) = 1 / G(a)$ under the daily delay each fits at the origin ([Baseline models](baselines.md#delay)).
+For `randomwalknowcast` and `pprandomwalknowcast`, $\pi(a) = 1 / \Gamma(a)$ under the daily delay each fits at the origin ([Baseline models](baselines.md#delay)).
 For the renewal models it is the posterior median of the cumulative onset-to-report delay of the latest onset week, which is pooled over provinces.
 Each place is mapped by the model's delay at that place, a zone with none by its province's, and a place with neither is scored as forecast.
 The country is the sum of the mapped provinces.
@@ -125,7 +127,7 @@ The run supplies the fitted models' forecasts to the [Nowcast](../nowcast.md) an
 ## Leave-one-province-out
 
 One province's counts are left out of the likelihood while it stays in the model ([Renewal models](model.md#partially-pooled)).
-Its onsets are scored on every week against the latest real vintage.
+Its onsets are scored against the latest real vintage on the complete weeks.
 It runs on development vintages for the three renewal models.
 
 ## Health zones
@@ -142,11 +144,11 @@ On the Nowcast page the fitted models' zone samples at the latest release are th
 
 The scores on the reported target, at province and zone level, are also averaged by the type of place and by a plausibility flag of each forecast, both decided from the counts reported at the origin.
 Relative WIS in these averages is against `randomwalk`.
-Week $w$ is the latest week ending on or before the origin, and $c(t)$ the count reported then for the week ending $t$, with 0 for a week with no row.
+Week $w$ is the latest week ending on or before the origin, and $n(t)$ the count reported then for the week ending $t$, with 0 for a week with no row.
 A place is silent if no case is reported in the 9 weeks to $w$, small if no week has more than 5 cases, and larger otherwise.
 The flag is set from the forecast of the round's reference week $r_v$, with median $q_{50}$ and 95% quantile $q_{95}$.
 Where several origins serve a round, only the latest is flagged.
-The level is $L = \max\{(c(w - 3) + c(w - 2)) / 2,\ c(w - 1)\}$ and the recent maximum is $M = \max(1, \max_{w - 4 \le t \le w} c(t))$.
+The level is $L = \max\{(n(w - 3) + n(w - 2)) / 2,\ n(w - 1)\}$ and the recent maximum is $M = \max(1, \max_{w - 4 \le t \le w} n(t))$.
 A forecast collapses if $L \ge 3$ and $q_{50} \le L / 3$.
 Otherwise it blows up if $q_{50} > 3M$ and $q_{50} - M \ge 5$, or $q_{95} > 10M$ and $q_{95} - M \ge 20$.
 A forecast with neither has no flag.

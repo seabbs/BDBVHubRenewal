@@ -9,9 +9,9 @@ What the data show is on the [Data results page](../data.md).
 
 The target is $y_{p}(w)$, the final count of confirmed cases in province $p$ with symptom onset in epi week $w$ (Sunday to Saturday, labelled by its Saturday).
 It includes onsets the hub imputes for cases reported without one.
-A vintage $v$ is the data published on date $T_v$.
-It gives, for each $p$ and $w$, known onsets $K_{p,v}(w)$, imputed onsets $I_{p,v}(w)$ and their total $Y_{p,v}(w) = K_{p,v}(w) + I_{p,v}(w)$.
-A forecast made from vintage $v$ serves the round with reference date $r_v$, the first Saturday whose submission window (Sunday to Tuesday, Kinshasa time) closes on or after $T_v$.
+A vintage $v$ is the data of one hub release.
+It gives, for each $p$ and $w$, known onsets, imputed onsets and their total $Y_{p,v}(w)$.
+A forecast made from vintage $v$ serves the round with reference date $r_v$, the first Saturday whose submission window (Sunday to Tuesday, Kinshasa time) closes on or after the vintage date.
 Horizon $h$ is the number of weeks from $r_v$ to $w$.
 Backtest forecasts cover $h = -4, \dots, 3$.
 

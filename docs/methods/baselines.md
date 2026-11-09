@@ -19,9 +19,9 @@ flowchart TD
         SNAP["Daily onsets C<sub>p,r</sub>(t)<br/>by onset day and release r"]
         PAIR["Release pairs (r, r + 1)<br/>gap s ≤ D = 42 days"]
     end
-    DEL["Daily delay g<sub>p</sub>(j) ≥ 0<br/>weighted non-negative<br/>least squares<br/><i>own or parent by age</i>"]
-    G["Growth to final G<sub>p</sub>(a)<br/>share reported 1 / G<sub>p</sub>(a)"]
-    MU["Nowcast mean μ<sub>p</sub>(w)<br/>apply_delay on weekly rows<br/>shares F<sub>p,j</sub>(w) from G<sub>p</sub>"]
+    DEL["Daily delay Δ<sub>p</sub>(j) ≥ 0<br/>weighted non-negative<br/>least squares<br/><i>own or parent by age</i>"]
+    G["Growth to final Γ<sub>p</sub>(a)<br/>share reported 1 / Γ<sub>p</sub>(a)"]
+    MU["Nowcast mean μ<sub>p</sub>(w)<br/>apply_delay on weekly rows<br/>shares F<sub>p,j</sub>(w) from Γ<sub>p</sub>"]
     RETRO["Earlier releases r &lt; o<br/>nowcast to release o"]
     OBS["Observation model<br/>by weeks back k<br/>size φ<sub>p,k</sub>, removal b<sub>p,k</sub>"]
     X["Nowcast draw X<sub>p,i</sub>(w)<br/>max(0, Y<sub>p,o</sub> + A − B)<br/>A ~ NB(μ<sub>p</sub> − Y<sub>p,o</sub>, φ<sub>p,k</sub>)<br/>B ~ Poisson(b<sub>p,k</sub> Y<sub>p,o</sub>)"]
@@ -51,8 +51,8 @@ flowchart TD
         SNAP["Daily onsets C<sub>p,r</sub>(t)<br/>by onset day and release r"]
         PAIR["Release pairs (r, r + 1)<br/>gap s ≤ D = 42 days"]
     end
-    DEL["Daily delay g<sub>p</sub>(j)<br/>and growth to final G<sub>p</sub>(a)"]
-    PI["Share reported π<sub>p</sub>(w)<br/>mean of 1 / G<sub>p</sub>(c<sub>o</sub> − t)"]
+    DEL["Daily delay Δ<sub>p</sub>(j)<br/>and growth to final Γ<sub>p</sub>(a)"]
+    PI["Share reported π<sub>p</sub>(w)<br/>mean of 1 / Γ<sub>p</sub>(c<sub>o</sub> − t)"]
     W0["Start week w<sub>0</sub><br/>latest with π<sub>p</sub>(w) ≥ 0.95"]
     Y["Reported Y<sub>p,o</sub>(w<sub>0</sub>)"]
     SIG["Walk spread σ<sub>p</sub><br/>changes in log(1 + Y<sub>p,o</sub>)"]
@@ -91,16 +91,16 @@ A model raises if the vintage has no snapshots or no in-window pair.
 
 The delay follows baselinenowcast[^bnc-paper][^bnc-package] on the daily snapshots, with one extension.
 Releases are batched reports of one daily delay.
-With $g_p(j) \ge 0$ the daily log development factor at age $j$, and $g_p(j) = 0$ for $j \ge D$, a day of age $x$ at release $r$ grows to release $r + 1$ by $\exp \sum_{j=x}^{x+s-1} g_p(j)$.
+With $\Delta_p(j) \ge 0$ the daily log development factor at age $j$, and $\Delta_p(j) = 0$ for $j \ge D$, a day of age $x$ at release $r$ grows to release $r + 1$ by $\exp \sum_{j=x}^{x+s-1} \Delta_p(j)$.
 For each gap $s$ and age $x = 0, \dots, D - 1$,
 
 $$
-\log \frac{\sum C_{p,r+1}(t)}{\sum C_{p,r}(t)} = \sum_{j=x}^{x+s-1} g_p(j),
+\log \frac{\sum C_{p,r+1}(t)}{\sum C_{p,r}(t)} = \sum_{j=x}^{x+s-1} \Delta_p(j),
 $$
 
 summed over the in-window pairs of gap $s$ and over days $t$ of age $x$ at $r$ that both releases observe.
-$g_p$ is the non-negative least squares fit of all these equations, each weighted by its denominator $\sum C_{p,r}(t)$, with no smoothing over age.
-With a gap of 1 only, $\exp g_p(x)$ is baselinenowcast's chain ladder factor.
+$\Delta_p$ is the non-negative least squares fit of all these equations, each weighted by its denominator $\sum C_{p,r}(t)$, with no smoothing over age.
+With a gap of 1 only, $\exp \Delta_p(x)$ is baselinenowcast's chain ladder factor.
 Cells a release does not observe are skipped, not filled, and a gap and age with a zero denominator give no equation.
 The parent of a province is the country, whose counts are the sum of its provinces.
 Only onset days less than $1.5 D = 63$ days before the cut-off of the latest release used contribute to the sums, as baselinenowcast's default `n_history_delay`, and a retrospective fit uses the cut-off of its own release.
@@ -111,12 +111,12 @@ The preprocessing runs along releases for each onset day, where baselinenowcast 
 The growth of a day's count from age $a$ to final is
 
 $$
-G_p(a) = \exp \sum_{j=a}^{D-1} g_p(j),
+\Gamma_p(a) = \exp \sum_{j=a}^{D-1} \Delta_p(j),
 \qquad
-G_p(a) = 1 \text{ for } a \ge D,
+\Gamma_p(a) = 1 \text{ for } a \ge D,
 $$
 
-and $1 / G_p(a)$ is the share of it reported.
+and $1 / \Gamma_p(a)$ is the share of it reported.
 There is no growth past $D$, so an equation whose ages run past $D$ puts that growth on its ages below $D$.
 
 ## Nowcast
@@ -125,7 +125,7 @@ Each hub week is a reference time of a weekly reporting triangle, with a column 
 The share of week $w$ reported by column $j$ is
 
 $$
-F_{p,j}(w) = \frac{1}{n_w} \sum_{t \in w,\ t \le c_o} \frac{1}{G_p(c_o - t + 7j)},
+F_{p,j}(w) = \frac{1}{n_w} \sum_{t \in w,\ t \le c_o} \frac{1}{\Gamma_p(c_o - t + 7j)},
 $$
 
 with $n_w$ the days of $w$ observed at $o$.
@@ -156,7 +156,7 @@ Sample $i$ is one draw of $X_{p,i}(w)$ per week.
 
 **Fit.**
 For each earlier release $r < o$ with an in-window pair among the releases up to $r$, a nowcast $\hat y_p(w)$ is made from the data up to $r$, with the delay of $r$.
-It is the same weekly fill from $c_r$, with the $g_p$ of $r$ and the shares taken relative to the count at $c_o$, so its last column is at $c_o$.
+It is the same weekly fill from $c_r$, with the $\Delta_p$ of $r$ and the shares taken relative to the count at $c_o$, so its last column is at $c_o$.
 For weeks back $k$ with a day younger than $D$ at $r$, and where $Y_{p,r}(w) > 0$ or $\hat y_p(w) > 0$, the count of $w$ on days up to $c_r$ is compared between releases $r$ and $o$.
 A rise is the new reports $A_{p,r}(w)$ and a fall the removals $B_{p,r}(w)$, so both are weekly, as the forecast is.
 With $\widehat{\text{rem}} = \hat y_p(w) - Y_{p,r}(w)$,
@@ -178,7 +178,7 @@ Where the estimate chosen by the [pooling rule](#own-or-pooled-estimates) has fe
 
 The places form a hierarchy of zone, province and country.
 The delay is chosen by age.
-A place uses its own $g_p(x)$ when its denominator $\sum C_{p,r}(t)$ at age $x$, summed over the pairs, is at least 10 cases.
+A place uses its own $\Delta_p(x)$ when its denominator $\sum C_{p,r}(t)$ at age $x$, summed over the pairs, is at least 10 cases.
 Otherwise it uses its parent's at that age.
 The country uses its own.
 
@@ -223,7 +223,7 @@ It is estimated at each origin from the counts reported then.
 Its start week $w_0$ is the latest week with
 
 $$
-\pi_p(w) = \frac{1}{7} \sum_{t \in w,\ t \le c_o} \frac{1}{G_p(c_o - t)} \ge 0.95,
+\pi_p(w) = \frac{1}{7} \sum_{t \in w,\ t \le c_o} \frac{1}{\Gamma_p(c_o - t)} \ge 0.95,
 $$
 
 the estimated share of the week's final count reported, under the delay above.
@@ -253,19 +253,19 @@ The walk starts from the drawn level at the week holding $c_o$.
 
 `randomwalk` and `randomwalknowcast` run on each zone's own release snapshots with the same code as for provinces.
 Each zone takes its delay, size and walk spread by the rules [above](#own-or-pooled-estimates).
-Zone samples sum to their province's samples, sample by sample and week by week.
 Province sample $Y^{(i)}(w)$ is apportioned over the zones in proportion to the zone model's own sample $x^{(i)}_z(w)$ of the same id and week:
 
 $$
 y^{(i)}_z(w) \approx Y^{(i)}(w)\, \frac{x^{(i)}_z(w)}{\sum_{z'} x^{(i)}_{z'}(w)}.
 $$
 
-Largest remainders make the values whole numbers that sum to $Y^{(i)}(w)$.
+Largest remainders make the values whole numbers that sum to $Y^{(i)}(w)$, so zone samples sum to their province's samples ([Renewal models](model.md#health-zones)).
 Where every $x^{(i)}_z(w)$ is 0 the split uses the Dirichlet mean shares of the [Renewal models](model.md#split-of-province-samples) page.
 
 ## Partially pooled variant
 
-`pprandomwalknowcast` is `randomwalknowcast` with the delay $g_p$, the walk spread $\sigma_p$, the size $\phi_{p,k}$ and the removal rate $b_{p,k}$ partially pooled over zones, provinces and the country, in place of the [own-or-pooled rule](#own-or-pooled-estimates).
+`pprandomwalknowcast` is `randomwalknowcast` with partial pooling over zones, provinces and the country in place of the [own-or-pooled rule](#own-or-pooled-estimates).
+The pooled estimates are the delay $\Delta_p$, the walk spread $\sigma_p$, the size $\phi_{p,k}$ and the removal rate $b_{p,k}$.
 The nowcast draws, the walk and the zone reconciliation are the same.
 Each is fitted in numpyro with NUTS, with 2 chains of 500 warm-up and 500 draws run in sequence from the prior medians, at target acceptance 0.9.
 
@@ -280,27 +280,27 @@ z_p \sim \mathcal{N}(0, 1),
 $$
 
 with $v(p)$ the tier of $p$ (province or zone) and one $\tau_v$ for each tier and parameter.
-$\theta$ is $\log g_p(j)$ for each age $j$, $\log \sigma_p$, and $\log \phi_{p,k}$ and $\log b_{p,k}$ for each week back $k$.
+$\theta$ is $\log \Delta_p(j)$ for each age $j$, $\log \sigma_p$, and $\log \phi_{p,k}$ and $\log b_{p,k}$ for each week back $k$.
 The country's values have priors $\mathcal{N}(-3, 2^2)$, $\mathcal{N}(\log 0.2, 1)$, $\mathcal{N}(0, 1.5^2)$ and $\mathcal{N}(\log 0.005, 1.5^2)$.
 A place's counts are the sum of its children's, so for the walk spread and the nowcast uncertainty only the places forecast (the provinces, or the zones at zone level) enter the likelihood, and their parents are latent centres.
 
 - **Delay.** For each gap $s$ and age $x$ with $\sum C_{p,r}(t) > 0$, the increment is Poisson,
 
-  $$
-  \sum C_{p,r+1}(t) - \sum C_{p,r}(t) \sim \text{Poisson}\Big(\sum C_{p,r}(t)\, \big(e^{\sum_{j=x}^{x+s-1} g_p(j)} - 1\big)\Big),
-  $$
+    $$
+    \sum C_{p,r+1}(t) - \sum C_{p,r}(t) \sim \text{Poisson}\Big(\sum C_{p,r}(t)\, \big(e^{\sum_{j=x}^{x+s-1} \Delta_p(j)} - 1\big)\Big),
+    $$
 
   with the sums, window and preprocessing of the [delay](#delay).
   With one place and a gap of 1 its maximum likelihood estimate is baselinenowcast's chain ladder factor.
   A place's increments at age $x$ enter only where its denominator there, summed over the pairs, is at least 10 cases, as in the [own-or-pooled rule](#own-or-pooled-estimates), and the country's always do.
   Other ages are informed only through the pooling.
-  A parent's increments are its children's summed, so a case at an age where both fit their own enters the likelihood once for each level.
+  A parent's increments are its children's summed, so a case at an age where both fit their own enters the likelihood once for each tier.
   It is fitted at the origin and at each earlier release that gives errors.
 - **Walk spread.** The weekly changes of $\log\{1 + Y_{p,o}(w)\}$ over the [walk](#walk) window are $\mathcal{N}(0, \sigma_p^2)$.
   Changes between two weeks with no cases are left out.
 - **Nowcast uncertainty.** The new reports $A_{p,r}(w)$ are $\text{NB}(\widehat{\text{rem}}, \phi_{p,k})$ and the removals $B_{p,r}(w)$ are $\text{Poisson}(b_{p,k} Y_{p,r}(w))$, on the errors of [the fit](#nowcast), made with the pooled delay of each earlier release.
 
-The posterior medians of $g_p$, $\sigma_p$, $\phi_{p,k}$ (kept in $[0.1, 1000]$) and $b_{p,k}$ replace the estimates of `randomwalknowcast`.
+The posterior medians of $\Delta_p$, $\sigma_p$, $\phi_{p,k}$ (kept in $[0.1, 1000]$) and $b_{p,k}$ replace the estimates of `randomwalknowcast`.
 So the forecasts carry the pooled point estimates, not their posterior spread.
 It is scored on the real releases at province and zone level.
 

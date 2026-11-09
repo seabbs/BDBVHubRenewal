@@ -109,7 +109,8 @@ $$
 $$
 
 with $N_p$ the province population, $\alpha_0 = 0.6$ fixed and $a$ a weekly random walk from zero with step SD $\mathcal{N}^+(0, 0.03^2)$.
-$\eta$ is a log-normal incubation period for Bundibugyo virus disease with [BVDOutbreakSize's priors](https://github.com/epiforecasts/BVDOutbreakSize/blob/main/src/models/priors.jl) (`onset_incidence_model`) on its mean $\mu_\eta \sim \mathcal{N}(6.3, 0.54^2)$ and SD $\sigma_\eta \sim \mathcal{N}(3.5, 0.8^2)$, both truncated below at 1 day.
+$\eta$ is a log-normal incubation period for Bundibugyo virus disease.
+Its mean $\mu_\eta \sim \mathcal{N}(6.3, 0.54^2)$ and SD $\sigma_\eta \sim \mathcal{N}(3.5, 0.8^2)$, both truncated below at 1 day, have [BVDOutbreakSize's priors](https://github.com/epiforecasts/BVDOutbreakSize/blob/main/src/models/priors.jl) (`onset_incidence_model`).
 The mean prior reproduces the 95% CI of 5.2 to 7.3 days from the 2007 Uganda outbreak[^macneil].
 MacNeil et al. give no interval on the spread, so the SD prior is BVDOutbreakSize's weakly informative choice around 3.5 days.
 Each draw of $\eta$ is double interval censored in the same way on lags 0 to 28, the 99.9% quantile at the prior means, as `dpcens(0:28, plnorm, D = 29)`.
@@ -119,10 +120,10 @@ Each draw of $\eta$ is double interval censored in the same way on lags 0 to 28,
 The onset-to-report delay $f_s(d)$, on days $d$ from 0 to 60, comes from a discrete hazard that varies with onset day:
 
 $$
-\operatorname{logit} h_s(d) = \beta(d) + \gamma(s),
+\operatorname{logit} H_s(d) = \beta(d) + \gamma(s),
 \qquad
-f_s(d) = h_s(d) \prod_{j < d}\{1 - h_s(j)\},
-\qquad h_s(60) = 1.
+f_s(d) = H_s(d) \prod_{j < d}\{1 - H_s(j)\},
+\qquad H_s(60) = 1.
 $$
 
 - $\beta$ is a random walk over delay, $\beta(0) \sim \mathcal{N}(-2, 1)$ with step SD $\mathcal{N}^+(0, 0.4^2)$, so the shape is smooth but not parametric.
@@ -135,12 +136,12 @@ $\bar m$ is a weekly random walk with start $\mathcal{N}(-2, 1)$ and step SD $\m
 
 ### Known onsets
 
-A case reported on day $t$ is in the vintage published at $T$ with probability $c(t) = F_\ell(T - t)$, with $F_\ell$ the cdf of the report-to-publication lag.
+A case reported on day $t$ is in the vintage with probability $\Pi(t) = F_\ell(T - t)$, with $T$ the vintage's last report day and $F_\ell$ the cdf of the report-to-publication lag.
 The lag is uniform on 0 to 3 days.
 Expected known onsets, right truncated by vintage, are
 
 $$
-\mathrm{known}_{p,T}(s) = \lambda_p(s) \sum_{d} f_s(d)\, \{1 - m_p(s + d)\}\, c(s + d).
+\mathrm{known}_{p,T}(s) = \lambda_p(s) \sum_{d} f_s(d)\, \{1 - m_p(s + d)\}\, \Pi(s + d).
 $$
 
 ### Hub imputation
@@ -151,7 +152,7 @@ We model that procedure, bias included:
 $$
 M_p(t) = m_p(t) \sum_s \lambda_p(s)\, f_s(t - s),
 \qquad
-\mathrm{imputed}_{p,T}(s) = \sum_{t = s}^{T} \hat f_T(t - s)\, c(t)\, M_p(t).
+\mathrm{imputed}_{p,T}(s) = \sum_{t = s}^{T} \hat f_T(t - s)\, \Pi(t)\, M_p(t).
 $$
 
 $M_p(t)$ are the cases reported on day $t$ without an onset.
@@ -162,9 +163,9 @@ The hub fits the delays as exact for releases up to 2026-10-24 and as double int
 
 ### Likelihood
 
-- Weekly $\mathrm{known}_{p,T}$ and $\mathrm{imputed}_{p,T}$ are negative binomial, each stream with size $\phi = 1/(x^2 + 10^{-3})$ and $x \sim \text{HalfNormal}(0.25)$, so $\phi < 1000$.
+- Weekly $\mathrm{known}_{p,T}$ and $\mathrm{imputed}_{p,T}$ are negative binomial, each stream with size $\phi$, $1/\sqrt{\phi} \sim \text{HalfNormal}(0.25)$ and $\phi$ kept below 1000.
 - Known-onset delays, by onset week and delay on 0 to 60 days, are Dirichlet-multinomial given each week's total.
-  Their probabilities come from $\lambda$, $f$, $m$ and $c$, with concentration $\psi = 1/(x^2 + 10^{-4})$ and $x \sim \text{HalfNormal}(0.1)$, so $\psi < 10^4$.
+  Their probabilities come from $\lambda$, $f$, $m$ and $\Pi$, with concentration $\psi$, $1/\sqrt{\psi} \sim \text{HalfNormal}(0.1)$ and $\psi$ kept below $10^4$.
   Delays below 0 count as 0 and delays above 60 as 60.
 
 ### Forecasts
@@ -176,12 +177,15 @@ The reversion leaves the fit unchanged.
 A trajectory is the final known plus final imputed counts.
 Final known counts are those reported by the cut-off plus a negative binomial draw of those reported later, as in epinowcast.
 Final imputed counts are a negative binomial draw centred on the current imputed count plus those expected later, since the hub re-imputes each vintage.
-The national trajectory is the sum of the provinces plus an unassigned component, $\max\{0, Y_{CD}(w) - \sum_p Y_p(w)\}$ in data weeks and $\rho \sum_p \tilde y_{p,i}(w)$ after, with $\rho$ its share over the last 4 data weeks and $\tilde y_{p,i}$ trajectory $i$ of province $p$.
+The national trajectory is the sum of the provinces plus an unassigned component.
+The component is $\max\{0, Y_{CD}(w) - \sum_p Y_p(w)\}$ in data weeks and $\rho \sum_p \tilde y_{p,i}(w)$ after, with $\tilde y_{p,i}$ trajectory $i$ of province $p$.
+$\rho$ is the component's share of the provinces' total over the last 4 data weeks.
 
 ## Partially pooled (`renewal`) { #partially-pooled }
 
 `renewal` fits every province the release lists in one model, on the axis set by their summed onsets.
-The provinces share the trend $\log R(t)$, the deviation SD $\sigma_\delta$ and half-life $t_{1/2}$, the start spread $\sigma_v$, ascertainment $\alpha$, the delay $f_s$, the trend $\bar m$ of the missing-onset share, the share at risk $\nu$ and the importation share $\varepsilon$.
+The provinces share the trend $\log R(t)$ and the deviation SD $\sigma_\delta$, half-life $t_{1/2}$ and start spread $\sigma_v$.
+They also share ascertainment $\alpha$, the delay $f_s$, the trend $\bar m$ of the missing-onset share, the share at risk $\nu$ and the importation share $\varepsilon$.
 Each province has its own deviations $\delta_p$ and $\omega_p$ and its own seed.
 Provinces are linked by importation through $W$.
 Leaving a province out removes its known and imputed counts and its delay counts.
@@ -267,7 +271,7 @@ The pooled reproduction number, missing-onset deviations, shared delay and ascer
 
 ## BVDOutbreakSize-informed (`renewalbvd`) { #bvdoutbreaksize-informed }
 
-Every renewal model takes from the BVDOutbreakSize main model its generation interval, the prior on the half-life of the province deviations and the sum-to-zero basis for them.
+Every renewal model takes from the BVDOutbreakSize main model its generation interval, the priors of the incubation period, the prior on the half-life of the province deviations and the sum-to-zero basis for them.
 `renewalbvd` also takes the Rt estimates of one [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) release, chosen as on the [Data methods page](data.md#bvdoutbreaksize-estimates).
 Without such a release `renewalbvd` is `renewal`.
 
@@ -342,9 +346,7 @@ Province samples are rounded.
 Each zone keeps its published count and the rest of the province sample $Y^{(i)}(w)$ is split,
 
 $$
-y^{(i)}_z(w) = o_z(w) + \Delta_z,
-\qquad
-\Delta \sim \text{Multinomial}\big(Y^{(i)}(w) - O(w),\ \theta^{(i)}\big).
+\big(y^{(i)}_z(w)\big)_z = \big(o_z(w)\big)_z + \text{Multinomial}\big(Y^{(i)}(w) - O(w),\ \theta^{(i)}\big).
 $$
 
 A sample below the published total is drawn from the published zone counts without replacement instead.
