@@ -422,3 +422,38 @@ def test_concat_results_keeps_one_copy_of_shared_tables(
     assert main([*args, "--", *map(str, parts)]) == 0
     assert len(pd.read_csv(out / "truth.csv")) == 2
     assert len(pd.read_csv(out / "scores.csv")) == 2
+
+
+@pytest.mark.usefixtures("in_root")
+def test_zone_backtest_of_a_skipped_block_writes_empty_files(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    def nothing(*args: object, **kwargs: object) -> tuple[pd.DataFrame, ...]:
+        del args, kwargs
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
+    monkeypatch.setattr(
+        "bdbvhubrenewal.evaluation.zones.zone_backtest", nothing
+    )
+    names = ["zone-scores.csv", "zone-energy.csv", "zone-quantiles.csv"]
+    outs = [
+        "--out", str(tmp_path / names[0]),
+        "--energy-out", str(tmp_path / names[1]),
+        "--quantiles-out", str(tmp_path / names[2]),
+        "--draws-out", str(tmp_path / "zone-draws.csv.gz"),
+    ]  # fmt: skip
+    assert main(["zone-backtest", "--chunk", "0/3", *outs]) == 0
+    assert all((tmp_path / n).exists() for n in names)
+
+
+def test_concat_results_skips_empty_parts(tmp_path: Path) -> None:
+    from bdbvhubrenewal.data.tidy import write_csv
+
+    parts = [tmp_path / "a", tmp_path / "b"]
+    for part in parts:
+        part.mkdir()
+    write_csv(pd.DataFrame(), parts[0] / "zone-scores.csv")
+    write_csv(pd.DataFrame({"x": [1]}), parts[1] / "zone-scores.csv")
+    out = tmp_path / "results"
+    assert main(["concat-results", "--out", str(out), *map(str, parts)]) == 0
+    assert len(pd.read_csv(out / "zone-scores.csv")) == 1

@@ -136,3 +136,18 @@ def test_zone_backtest_by_origin_chunk_matches_one_run(
         pd.testing.assert_frame_equal(
             pd.concat([p[i] for p in parts], ignore_index=True), result[i]
         )
+
+
+def test_zone_backtest_of_no_origin_is_empty(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    # A block whose origins every model skips forecasts nothing.
+    out = zone_backtest(
+        target,
+        delays,
+        load_daily(DATA),
+        load_daily_zones(DATA),
+        hub_zones(DATA / "hub-config" / "tasks.json"),
+        origins=[],
+    )
+    assert all(t.empty for t in out)
