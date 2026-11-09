@@ -183,7 +183,7 @@ Each estimate is chosen as follows.
    Otherwise it uses its parent's.
    The country always uses its own.
 2. **Level.** The place's level $\ell_p$ is the mean of $Y_{p,o}(w)$ over weeks 3 to 6 back.
-3. **Walk spread.** A place with $\ell_p \ge 10$ cases a week uses its own $\sigma_p$.
+3. **Walk spread.** A place with $\ell_p \ge 10$ cases a week and an own $\sigma_p^2 > 0$ ([below](#forecast)) uses its own $\sigma_p$.
 4. **Size.** A place with $\ell_p \ge 10$ and at least 3 errors at $k$ uses its own $\phi_{p,k}$.
 5. **Fallback.** A place that fails step 3 or 4 uses the pooled estimate of its nearest parent that meets the same rule, and otherwise the country's.
    A pooled estimate uses together the errors and weekly changes of the parent's children with $\ell \ge 10$, or the parent's own where none has.
@@ -206,8 +206,21 @@ Steps are summed within a sample, so each sample is one trajectory.
 `randomwalk` starts from the latest complete week ([below](#start-from-the-latest-complete-week)).
 `randomwalknowcast` starts from the week holding $c_o$ ([below](#start-from-the-nowcast)).
 
-$\sigma_p$ is the sample standard deviation of the weekly changes of $\log\{1 + Y_{p,o}(w)\}$ over the 9 weeks ending at the latest complete week, so up to 8 changes.
-With fewer than 2 changes it is 0.
+$\sigma_p$ comes from the weekly changes $\Delta_w = \log\{1 + Y_{p,o}(w)\} - \log\{1 + Y_{p,o}(w - 1)\}$ over the 9 weeks ending at the latest complete week, so up to 8 changes.
+Each change carries Poisson noise, and the walk draws Poisson counts on top, so the noise is taken out of the spread:
+
+$$
+\sigma_p^2 = s^2_\Delta - \overline{v\{Y_{p,o}(w - 1)\} + v\{Y_{p,o}(w)\}},
+\qquad
+v(y) = \frac{y}{(1 + y)^2},
+$$
+
+where $s^2_\Delta$ is the sample variance of the changes and the bar a mean over the changes.
+$v$ is the delta-method variance of $\log(1 + Y)$ for $Y \sim \text{Poisson}(\lambda)$, $\lambda / (1 + \lambda)^2$, with the reported count for $\lambda$.
+The noise matters only for small places. At 10 cases a week the term for a change is about 0.17, and at 250 it is under 0.01.
+At a few cases a week the delta method understates the noise, so some of it stays in $\sigma_p$.
+A place whose $\sigma_p^2$ is 0 or below, or which has fewer than 2 changes, has no own estimate, and takes its parent's by the [own-or-pooled rule](#own-or-pooled-estimates).
+A pooled $\sigma_p$ uses the changes and noise of all the places in the pool together.
 
 A place with no case in the 9 weeks to $c_o$ stays at 0 until a new introduction, which starts its walk from a Poisson(1) count given at least 1.
 An introduction occurs each week after the latest complete week with probability $q_p$, times the share of the week not yet reported, where $q_p$ is the share of weeks with a case after 9 weeks without one in the place and its siblings.
@@ -304,7 +317,7 @@ The chain ladder treats reporting speed as fixed by age and step, but speed and 
 The observation model is learnt from the earlier releases, which may be few.
 Counts include the hub's imputed onsets, which are re-drawn as cases gain onsets, so changes between releases mix reporting with imputation.
 Places are sampled independently, so a shock to a whole release is not shared, and the national band is a sum of independent provincial bands.
-The walk has no drift, and its spread comes from 8 weekly changes, which for small places include Poisson noise.
+The walk has no drift, and its spread comes from 8 weekly changes, net of a delta-method Poisson noise term that assumes no extra dispersion in the reported counts.
 `pprandomwalknowcast` plugs in posterior medians, so the uncertainty in its pooled estimates does not widen its forecasts.
 
 [^bnc-paper]: Johnson KE, Tang M, Tyszka E, Nemcova B, Wolffram D, Ergas R, Reich NG, Funk S, Mellor J, Bracher J, Abbott S (2025). Baseline nowcasting methods for handling delays in epidemiological data. Wellcome Open Research. [doi:10.12688/wellcomeopenres.25027.2](https://doi.org/10.12688/wellcomeopenres.25027.2).
