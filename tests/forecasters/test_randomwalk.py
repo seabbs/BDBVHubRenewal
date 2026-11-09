@@ -262,6 +262,7 @@ def test_the_filter_weights_a_week_by_how_complete_it_is() -> None:
         reported=np.array([[10.0, 0.0, 0.0], [10.0, 0.0, 0.0]]),
         complete=np.array([[1.0, 0.95, 0.05], [1.0, 0.95, 0.05]]),
         sigma=np.array([0.5, 0.5]),
+        settings=Settings(filter_noise="poisson"),
     )
     start = np.log1p(np.full((2, 1), 10.0))
     level, var = _filter(start, origin, np.array([0, 1]), 2)
@@ -286,3 +287,29 @@ def test_a_silent_place_is_not_nowcast(runs) -> None:
     model, _ = runs["randomwalknowcast"]
     start = {r["location"]: r["start_week"] for r in model.fit_diagnostics}
     assert (sk.loc[sk["target_end_date"] <= start["CD-SK"], "value"] == 0).all()
+
+
+def test_a_week_mostly_still_to_come_moves_the_level_little() -> None:
+    from bdbvhubrenewal.forecasters.randomwalk import _filter
+
+    # Week 1 is 20% reported with 150 cases, so its nowcast is 750 against
+    # a level of 300. With only the Poisson variance it pulls the level more
+    # than half way; with the variance of the 600 still to come it barely
+    # moves it.
+    def origin(noise: str) -> SimpleNamespace:
+        return SimpleNamespace(
+            reported=np.array([[300.0, 150.0]]),
+            complete=np.array([[1.0, 0.2]]),
+            point=np.array([[300.0, 750.0]]),
+            size=np.array([[2.0, 2.0]]),
+            sigma=np.array([0.1]),
+            settings=Settings(filter_noise=noise),
+        )
+
+    start = np.log1p(np.full((1, 1), 300.0))
+    poisson, _ = _filter(start, origin("poisson"), np.array([0]), 1)
+    nowcast, var = _filter(start, origin("nowcast"), np.array([0]), 1)
+    seen = np.log1p(750.0)
+    assert poisson[0, 0, 1] - start[0, 0] > 0.5 * (seen - start[0, 0])
+    assert nowcast[0, 0, 1] - start[0, 0] < 0.1 * (seen - start[0, 0])
+    assert var[0, 1] > 0
