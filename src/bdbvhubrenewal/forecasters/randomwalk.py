@@ -16,13 +16,17 @@ estimate of `chain`.
 Weeks up to the start are returned as reported.
 Later weeks are walk draws, floored at the count reported.
 
-`RandomWalkNowcast` (`randomwalknowcast`) nowcasts every day with data and
-sums to hub weeks, with negative binomial new reports on the remaining
-count minus Poisson removals of the count reported (`obs`).
-Each sample then starts the walk from its own nowcast of the latest week
-whose seven days are all on or before the cut-off.
-If the week holding the cut-off is partial, its days after the cut-off
-add Poisson draws from that week's walk rate.
+`RandomWalkNowcast` (`randomwalknowcast`) nowcasts each hub week, with
+negative binomial new reports on the remaining count minus Poisson
+removals of the count reported (`obs`).
+Its walk is a local level on $\log(1 + y)$. Each sample starts from its
+nowcast of the latest full week at least `Settings.start_share` reported
+with at least `Settings.start_count` cases (`_start_weeks`). Each later
+week up to the one holding the cut-off is not nowcast: its reported count
+updates the level as an observation weighted by how complete the week is
+(`_filter`), and its value is a Poisson draw from a level path drawn back
+from the cut-off week (`_draw_path`), floored at the count reported.
+The walk forecasts on from the cut-off week's level.
 
 The spread of the walk is the standard deviation of the weekly changes of
 $\log(1 + y)$ in reported counts, over the weeks ending at the start of
@@ -30,12 +34,11 @@ $\log(1 + y)$ in reported counts, over the weeks ending at the start of
 The delay, the observation model and the walk spread each use their own
 estimate where a place has at least 10 cases a week, and otherwise the
 pooled estimate of the nearest parent that does (`pooling`).
-A place with no case in the latest `walk_weeks` weeks is 0 until its first
-introduction, a geometric number of weeks in with its pooled weekly
-probability. A silent place's walk has spread 0, so from its
-introduction its rate stays at 1 case a week.
-In both models this runs from the week after the `randomwalk` start week,
-so a silent place's recent weeks are not nowcast.
+A place with no case in the latest `walk_weeks` weeks is silent. It is
+exactly 0 until its first introduction, which comes each week with its
+pooled probability times the share of the week not yet reported
+(`_intro_from`), and then walks from a count drawn from Poisson(1) given
+at least 1.
 National is the sum of provinces by sample.
 Each model raises if the task has no snapshots or no pair of releases
 within the delay window.
@@ -51,6 +54,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pandas as pd
+from scipy import stats
 
 from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.snapshots import snapshot_arrays
@@ -65,6 +69,7 @@ from bdbvhubrenewal.forecasters.chain import (
     Origin,
     Settings,
     build_origin,
+    delay_summary,
 )
 from bdbvhubrenewal.forecasters.obs import sample_count
 from bdbvhubrenewal.forecasters.walk import random_walk
@@ -97,42 +102,144 @@ def _delay_label(origin: Origin, i: int) -> str:
 
 
 def _walks(
-    key: jax.Array, x0: np.ndarray, origin: Origin, h: int
-) -> tuple[np.ndarray, np.ndarray]:
-    """Run the walk for every place, `x0` of shape `[L, S]`.
+    key: jax.Array,
+    x0: np.ndarray,
+    sigma: np.ndarray,
+    silent: np.ndarray,
+    intro: np.ndarray,
+) -> np.ndarray:
+    """Return walk counts for every place from `x0` of shape `[L, S]`.
 
-    A silent place starts its walk from 1 case at its first
-    introduction, a geometric number of weeks in with the place's
-    weekly probability, and is 0 before it.
-    The introduction week has at least that case, as `introductions`
-    counts a week with a case.
-    A silent place's walk has spread 0, so from its introduction its
-    rate stays at 1 case a week.
+    Each place walks with spread `sigma` `[L]`. A `silent` `[L]` place is
+    0 until its first introduction, drawn week by week with probability
+    `intro` `[L, H]`. The introduction brings a count drawn from
+    Poisson(1) given at least 1, and the place walks from it.
     """
-    k_walk, k_intro = jax.random.split(key)
-    x0 = np.where(origin.silent[:, None], 1.0, x0)
-    sigma = np.where(origin.silent, 0.0, origin.sigma)
+    h = intro.shape[1]
+    k_walk, k_intro, k_count = jax.random.split(key, 3)
+    u = np.asarray(jax.random.uniform(k_count, x0.shape), np.float64)
+    first_count = stats.poisson.ppf(np.exp(-1.0) + u * -np.expm1(-1.0), 1.0)
+    x0 = np.where(silent[:, None], first_count, x0)
     keys = jax.random.split(k_walk, x0.shape[0])
-    lam, y = jax.vmap(lambda k, x, s: random_walk(k, x, s, h))(
+    _, drawn = jax.vmap(lambda k, x, s: random_walk(k, x, s, h))(
         keys,
         jnp.asarray(x0, jnp.float32),
         jnp.asarray(sigma, jnp.float32),
     )
-    u = np.asarray(jax.random.uniform(k_intro, x0.shape), dtype=np.float64)
-    q = origin.intro[:, None]
-    # A probability of 0 gives an introduction that never comes.
-    with np.errstate(divide="ignore", invalid="ignore"):
-        first = np.where(q > 0, np.floor(np.log(u) / np.log1p(-q)), np.inf)
-    first = np.where(origin.silent[:, None], first, 0.0)
+    y: np.ndarray = np.asarray(drawn, dtype=np.float64)
+    hit = (
+        np.asarray(jax.random.uniform(k_intro, (*x0.shape, h)))
+        < (intro[:, None, :])
+    )
+    first = np.where(hit.any(axis=2), np.argmax(hit, axis=2), h)
+    first = np.where(silent[:, None], first, 0)
     lag = np.arange(h)[None, None, :] - first[:, :, None]
-    at = np.clip(lag, 0, h - 1).astype(int)
+    # A silent place has its introduced count in its first week and walks
+    # from it after.
+    step = np.where(silent[:, None, None], lag - 1, lag)
+    walked = np.take_along_axis(y, np.clip(step, 0, h - 1), axis=2)
+    out = np.where(step >= 0, walked, 0.0)
+    return np.where(silent[:, None, None] & (lag == 0), x0[:, :, None], out)
 
-    def shift(x: jax.Array) -> np.ndarray:
-        moved = np.take_along_axis(np.asarray(x, dtype=np.float64), at, axis=2)
-        return np.where(lag >= 0, moved, 0.0)
 
-    first_case = origin.silent[:, None, None] & (lag == 0)
-    return shift(lam), np.where(first_case, np.maximum(shift(y), 1.0), shift(y))
+def _start_weeks(origin: Origin) -> np.ndarray:
+    """Return the week each place's walk starts from, `[L]`.
+
+    It is the latest full week whose share reported is at least
+    `Settings.start_share` and whose reported count is at least
+    `Settings.start_count`, else the first week. A silent place starts at
+    its latest complete week, after which its introductions are drawn.
+    """
+    settings, full = origin.settings, origin.start_nowcast
+    ok = (origin.complete[:, : full + 1] >= settings.start_share) & (
+        origin.reported[:, : full + 1] >= settings.start_count
+    )
+    latest = np.where(ok.any(axis=1), full - np.argmax(ok[:, ::-1], 1), 0)
+    return np.where(origin.silent, origin.start, latest)
+
+
+def _filter(
+    start: np.ndarray, origin: Origin, w0: np.ndarray, cw: int
+) -> tuple[np.ndarray, np.ndarray]:
+    r"""Filter the walk's level on log(1 + y) from week `w0` to week `cw`.
+
+    The level starts at `start` `[L, S]` in week `w0` with no variance,
+    and steps with variance $\sigma^2$ a week. Week $u$ after `w0` with
+    share reported $F_u > 0$ observes it as $\log(1 + y_u / F_u)$ with
+    variance $1 / (F_u + y_u)$, the delta-method variance of a Poisson
+    final count thinned to the share reported.
+
+    Returns
+    -------
+    tuple of numpy.ndarray
+        The filtered level `[L, S, W]` and its variance `[L, W]`, held
+        at the start from `w0` back.
+    """
+    n_loc, n_data = origin.reported.shape
+    level = np.repeat(start[:, :, None], n_data, axis=2)
+    var = np.zeros((n_loc, n_data))
+    for u in range(n_data):
+        after = (u > w0) & (u <= cw)
+        share, y = origin.complete[:, u], origin.reported[:, u]
+        prior = var[:, u - 1] + origin.sigma**2 if u else var[:, 0]
+        noise = 1.0 / np.maximum(share + y, 1e-12)
+        gain = np.where(after & (share > 0), prior / (prior + noise), 0.0)
+        seen = np.log1p(y / np.maximum(share, 1e-12))
+        prev = level[:, :, u - 1] if u else level[:, :, 0]
+        step = prev + gain[:, None] * (seen[:, None] - prev)
+        level[:, :, u] = np.where(after[:, None], step, level[:, :, u])
+        var[:, u] = np.where(after, (1.0 - gain) * prior, var[:, u])
+    return level, var
+
+
+def _draw_path(
+    key: jax.Array,
+    level: np.ndarray,
+    var: np.ndarray,
+    sigma: np.ndarray,
+    w0: np.ndarray,
+    cw: int,
+) -> np.ndarray:
+    """Draw one level path per sample from week `cw` back to week `w0`.
+
+    Each sample's level at `cw` is drawn from the filter, and each earlier
+    week given the week after it (backward sampling), so the weeks after
+    `w0` and the walk on from `cw` form one trajectory.
+    """
+    drawn = level.copy()
+    z = np.asarray(jax.random.normal(key, level.shape), np.float64)
+    drawn[:, :, cw] = (
+        level[:, :, cw] + np.sqrt(var[:, cw])[:, None] * z[:, :, cw]
+    )
+    for u in range(cw - 1, -1, -1):
+        inside = (u > w0)[:, None]
+        total = var[:, u] + sigma**2
+        pull = np.where(total > 0, var[:, u] / np.maximum(total, 1e-12), 0.0)
+        mean = level[:, :, u] + pull[:, None] * (
+            drawn[:, :, u + 1] - level[:, :, u]
+        )
+        sd = np.sqrt(np.maximum(var[:, u] * (1.0 - pull), 0.0))[:, None]
+        drawn[:, :, u] = np.where(
+            inside, mean + sd * z[:, :, u], level[:, :, u]
+        )
+    return drawn
+
+
+def _intro_from(origin: Origin, start: np.ndarray, h: int) -> np.ndarray:
+    """Return each place's weekly introduction probability after `start`.
+
+    Week `start + 1 + i` of a silent place has probability $q$ times the
+    share of the week not yet reported, so an introduction is likelier in
+    recent weeks, whose cases may still be reported, and has probability
+    $q$ in weeks without data.
+    """
+    n_data = origin.complete.shape[1]
+    u = start[:, None] + 1 + np.arange(h)[None, :]
+    seen = np.take_along_axis(
+        np.pad(origin.complete, ((0, 0), (0, h + 1))), u, axis=1
+    )
+    seen = np.where(u < n_data, np.clip(seen, 0.0, 1.0), 0.0)
+    return origin.intro[:, None] * (1.0 - seen)
 
 
 def frame(
@@ -303,8 +410,12 @@ class RandomWalk:
             )
         start = origin.start
         x0 = origin.reported[np.arange(n_loc), start]
-        _, y = _walks(
-            _key(task), np.repeat(x0[:, None], n, axis=1), origin, n_all
+        y = _walks(
+            _key(task),
+            np.repeat(x0[:, None], n, axis=1),
+            origin.sigma,
+            origin.silent,
+            _intro_from(origin, start, n_all),
         )
         values = np.zeros((n, n_loc, n_all))
         for loc in range(n_loc):
@@ -327,9 +438,15 @@ class RandomWalkNowcast(RandomWalk):
     ----------
     name : str
         Model name.
+    delay_summary : pandas.DataFrame or None
+        The delay of the last forecast (`chain.delay_summary`), which maps
+        its final counts to what later releases show.
     """
 
     name: str = "randomwalknowcast"
+    delay_summary: pd.DataFrame | None = field(
+        init=False, default=None, repr=False
+    )
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return random walk trajectories from a nowcast for a task.
@@ -353,10 +470,11 @@ class RandomWalkNowcast(RandomWalk):
         """
         origin = self.origin_at(task, errors=True)
         values, weeks = self.trajectories(origin, task, origin.point)
+        self.delay_summary = delay_summary(origin, self.name, task.vintage)
         self._diagnostics(
             origin,
             task,
-            np.full(len(origin.snap.locations), origin.start_nowcast),
+            _start_weeks(origin),
         )
         return frame(task, weeks, values, self.rows(origin, task))
 
@@ -393,7 +511,7 @@ class RandomWalkNowcast(RandomWalk):
         k = np.clip(back, 0, k_n - 1)
         # Weeks older than the fitted ones are final, with no removals.
         b = np.where(back < k_n, origin.removal[:, k], 0.0)
-        key_x, key_walk, key_part = jax.random.split(_key(task), 3)
+        key_x, key_walk, key_filter = jax.random.split(_key(task), 3)
         shape = (n, *point.shape)
         reported = jnp.broadcast_to(
             jnp.asarray(origin.reported, jnp.float32), shape
@@ -410,30 +528,46 @@ class RandomWalkNowcast(RandomWalk):
             ),
             np.float64,
         )
-        w0 = origin.start_nowcast
-        lam, y = _walks(key_walk, nowcast[:, :, w0].T, origin, n_all)
-        cut = int(snap.cut[origin.o])
-        c_week = int(snap.week[cut])
-        miss = int(np.flatnonzero(snap.week == c_week).max()) - cut
-        values = np.zeros((n, n_loc, n_all))
-        part = np.asarray(
-            jax.random.poisson(
-                key_part, jnp.asarray(lam[:, :, 0] * miss / 7, jnp.float32)
-            ),
+        # The walk is a local level on log(1 + y). It starts from the
+        # nowcast of the latest full week with enough reported, and each
+        # later week updates it with its reported count, weighted by how
+        # complete the week is. The walk forecasts from the last update.
+        cw = snap.cut_week(origin.o)
+        w0 = _start_weeks(origin)
+        level, var = _filter(
+            np.log1p(nowcast[:, np.arange(n_loc), w0]).T,
+            origin,
+            w0,
+            cw,
+        )
+        key_path, key_count = jax.random.split(key_filter)
+        drawn = _draw_path(key_path, level, var, origin.sigma, w0, cw)
+        rate = np.expm1(np.maximum(drawn, 0.0))
+        filled = np.asarray(
+            jax.random.poisson(key_count, jnp.asarray(rate, jnp.float32)),
             dtype=np.float64,
-        )  # [L, S]
-        for u in range(n_all):
-            if u <= w0:
-                values[:, :, u] = nowcast[:, :, u]
-            else:
-                values[:, :, u] = y[:, :, u - w0 - 1].T
-                if u == w0 + 1 and miss > 0 and u < n_data:
-                    values[:, :, u] = nowcast[:, :, u] + part.T
-        # A silent place follows its introductions from the week after its
-        # start week, as in `randomwalk`, so its nowcast weeks too.
-        for loc in np.flatnonzero(origin.silent):
-            s = int(origin.start[loc])
-            values[:, loc, s + 1 :] = y[loc, :, : n_all - s - 1]
+        )  # [L, S, W]
+        y = _walks(
+            key_walk,
+            rate[:, :, cw],
+            origin.sigma,
+            origin.silent,
+            _intro_from(origin, w0, n_all),
+        )
+        values = np.zeros((n, n_loc, n_all))
+        for loc in range(n_loc):
+            s = int(w0[loc])
+            if origin.silent[loc]:
+                # A silent place is its reported 0s, then its introductions.
+                values[:, loc, : s + 1] = origin.reported[loc, : s + 1]
+                values[:, loc, s + 1 :] = y[loc, :, : n_all - s - 1]
+                continue
+            values[:, loc, : s + 1] = nowcast[:, loc, : s + 1]
+            for u in range(s + 1, cw + 1):
+                values[:, loc, u] = np.maximum(
+                    filled[loc, :, u], origin.reported[loc, u]
+                )
+            values[:, loc, cw + 1 :] = y[loc, :, : n_all - cw - 1]
         return values, weeks
 
 

@@ -263,7 +263,7 @@ def forecast_weeks(
 
 
 def forecast_locations(vintage_rows: pd.DataFrame) -> tuple[str, ...]:
-    """Return the provinces with at least one case in a vintage.
+    """Return the provinces a vintage lists, with or without cases.
 
     Parameters
     ----------
@@ -276,8 +276,7 @@ def forecast_locations(vintage_rows: pd.DataFrame) -> tuple[str, ...]:
         Province codes, sorted.
     """
     prov = vintage_rows.loc[vintage_rows["location"] != NATIONAL]
-    totals = prov.groupby("location")["total"].sum()
-    return tuple(sorted(totals.index[totals > 0]))
+    return tuple(sorted(set(prov["location"])))
 
 
 def make_tasks(
@@ -1015,7 +1014,7 @@ def run_scenarios(
     names: Sequence[str] = tuple(SCENARIO_RT_SCALE),
     later_weeks: int = 2,
     daily: pd.DataFrame | None = None,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Run models on scenarios calibrated to the real data and score them.
 
     For each scenario (`calibrated_settings` at `as_of`), the simulated
@@ -1055,11 +1054,13 @@ def run_scenarios(
         (`ZoneAllocator`) and add zone random walk
         (`evaluation.zones.scenario_zone_scores`).
         Then the energy scores (`energy_tasks`) of every scale, with
-        `scenario` and `truth_view`.
+        `scenario` and `truth_view`. Then the final simulated counts of
+        the country and provinces, `location`, `target_end_date`, `truth`,
+        `truth_vintage` and `scenario`.
     """
     k = config.complete_after_weeks
     lags = None if daily is None else cutoff_lags(daily)
-    all_forecasts, all_scores, all_energy = [], [], []
+    all_forecasts, all_scores, all_energy, all_truth = [], [], [], []
     for name in names:
         settings = calibrated_settings(
             target, delays, zones, as_of, name=name, seed=config.seed
@@ -1111,6 +1112,9 @@ def run_scenarios(
         )
         zone["level"] = "zone"
         all_forecasts.append(forecasts.assign(scenario=settings.name))
+        all_truth.append(
+            final.assign(truth_vintage=end, scenario=settings.name)
+        )
         all_scores.append(
             pd.concat([scored, zone], ignore_index=True).assign(
                 scenario=settings.name
@@ -1125,4 +1129,5 @@ def run_scenarios(
         pd.concat(all_forecasts, ignore_index=True),
         pd.concat(all_scores, ignore_index=True),
         pd.concat(all_energy, ignore_index=True),
+        pd.concat(all_truth, ignore_index=True),
     )

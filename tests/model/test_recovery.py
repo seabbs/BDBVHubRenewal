@@ -147,12 +147,11 @@ def test_forecast_trajectories(fitted, outbreak, sim_vintage):
     seconds = time.perf_counter() - start
     n_weeks = sim_vintage.n_weeks + sim_vintage.horizon_weeks
     assert draws["province"].shape == (100, n_weeks, 4)
-    assert draws["inactive"].shape == (100, n_weeks, 2)
-    assert np.all(draws["province"] >= 0) and np.all(draws["inactive"] >= 0)
+    assert np.all(draws["province"] >= 0)
     # Coherence: national sample k is the sum of the provinces' sample k.
     np.testing.assert_array_equal(
         draws["national"],
-        draws["province"].sum(axis=2) + draws["inactive"].sum(axis=2),
+        draws["province"].sum(axis=2),
     )
     # Final truth for the last data week and the 3 forecast weeks, for the
     # nation and each modelled province: 20 intervals, so the check does

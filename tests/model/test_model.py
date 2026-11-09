@@ -29,25 +29,26 @@ def trace(model, data, forecast=False):
 
 def test_vintage_shapes(sim_vintage):
     v = sim_vintage
-    assert v.names == ["CD-IT", "CD-NK", "CD-HU", "CD-TO"]
-    assert v.inactive_names == ["CD-BU", "CD-SK"]
-    assert v.known.shape == v.imputed.shape == (v.n_weeks, 4)
-    assert v.inactive.shape == (v.n_weeks, 2)
-    assert v.import_kernel.shape == (4, 2)
-    assert v.delay_counts.shape == (v.n_weeks, 4, 61)
+    assert v.names == list(SIM_LOCATIONS)
+    assert v.known.shape == v.imputed.shape == (v.n_weeks, 6)
+    assert v.delay_counts.shape == (v.n_weeks, 6, 61)
     assert v.start_date.weekday() == 6
     assert v.cutoff // 7 + 1 == v.n_weeks
     np.testing.assert_allclose(v.hub_delay_pmf.sum(), 1.0)
 
 
-def test_active_set_follows_the_data(outbreak, sim_tables, table):
-    # At day 30 only the provinces with cases so far are active.
+def test_provinces_with_no_case_are_never_seeded(outbreak, sim_tables, table):
+    # At day 41 some provinces have no case yet: they are modelled, but
+    # never seeded, so their infections come from importation only.
     target, delays = outbreak.vintage(vintage_date(outbreak, 41))
     v = vintage_from_tables(
         target, delays, vintage_date(outbreak, 41), SIM_LOCATIONS, table
     )
-    assert set(v.names) < set(SIM_LOCATIONS)
-    assert set(v.names) | set(v.inactive_names) == set(SIM_LOCATIONS)
+    assert v.names == list(SIM_LOCATIONS)
+    none = (v.known + v.imputed).sum(axis=0) == 0
+    assert none.any()
+    assert np.all(np.isinf(v.seed_days[none]))
+    assert np.all(np.isfinite(v.seed_days[~none]))
 
 
 @pytest.mark.parametrize(
@@ -65,12 +66,11 @@ def test_model_sites_and_shapes(outbreak, sim_tables, table, cfg):
     model = build_model(data, cfg)
     tr = trace(model, data, forecast=True)
     n_weeks = model.latent.n_initialization_points // 7 + data.n_weeks + 3
-    p = 1 if cfg.national else 4
+    p = 1 if cfg.national else 6
     assert tr["onsets_final_total"]["value"].shape == (n_weeks, p)
     stream = "total" if cfg.streams == "total" else "known"
     assert tr[f"onsets_{stream}_obs"]["value"].shape == (2, n_weeks, p)
     assert tr["latent::rt_subpop"]["value"].shape == (7 * n_weeks, p)
-    assert ("onsets_inactive_obs" in tr) == (cfg.inactive == "imports")
     # The fit sees the data weeks only; the horizon is drawn separately.
     if not cfg.national:
         assert "log_rt_deviations_z_future" in tr
@@ -93,7 +93,7 @@ def test_masked_province_has_no_likelihood(outbreak, sim_tables, table):
     data = vintage_from_tables(
         target, delays, vintage, SIM_LOCATIONS, table, masked=("CD-NK",)
     )
-    assert data.fit_mask.tolist() == [True, False, True, True]
+    assert data.fit_mask.tolist() == [True, False, True, True, True, True]
     model = build_model(data)
     tr = trace(model, data)
     params = {
@@ -175,46 +175,7 @@ def test_real_data_kernels_are_finite(table):
             locations,
             table,
         )
-        assert len(data.names) + len(data.inactive_names) == 26
         assert np.all(np.isfinite(data.kernel))
-        assert np.all(np.isfinite(data.import_kernel))
-
-
-def test_single_patch_locations_are_independent(outbreak, sim_tables, table):
-    from bdbvhubrenewal.model.inputs import RENEWALSP
-
-    day = VINTAGE_DAYS[-1]
-    target, delays = sim_tables[day]
-    vintage = vintage_date(outbreak, day)
-
-    def one(target):
-        return vintage_from_tables(
-            target, delays, vintage, ("CD-IT",), table, RENEWALSP
-        )
-
-    changed = target.copy()
-    changed.loc[changed["location"] == "CD-NK", "observed"] *= 5
-    a, b = one(target), one(changed)
-    assert a.names == ["CD-IT"]
-    np.testing.assert_array_equal(a.known, b.known)
-    np.testing.assert_array_equal(a.imputed, b.imputed)
-    np.testing.assert_array_equal(a.delay_counts, b.delay_counts)
-    model_a, model_b = build_model(a, RENEWALSP), build_model(b, RENEWALSP)
-    tr = trace(model_a, a)
-    params = {
-        k: v["value"]
-        for k, v in tr.items()
-        if v["type"] == "sample" and not v["is_observed"]
-    }
-    lds = [
-        float(
-            numpyro.infer.util.log_density(
-                m.sample, (), model_args(m, d), params
-            )[0]
-        )
-        for m, d in ((model_a, a), (model_b, b))
-    ]
-    assert lds[0] == lds[1]
 
 
 def test_late_provinces_are_seeded_at_their_first_cases(outbreak, table):
@@ -234,8 +195,27 @@ def test_late_provinces_are_seeded_at_their_first_cases(outbreak, table):
     tr = trace(model, data)
     x = np.asarray(tr["latent_infections_by_subpop"]["value"])
     n_init = model.latent.n_initialization_points
-    day = n_init + data.seed_days[1]
+    day = n_init + int(data.seed_days[1])
     assert x[:day, 1].sum() < 1e-3 * x[day : day + 7, 1].sum()
+
+
+def test_unseeded_provinces_get_infections_only_by_importation(sim_vintage):
+    # CD-BU and CD-SK have no case: with coupling they gain infections
+    # from the other provinces, without it they stay near zero.
+    j = [sim_vintage.names.index(p) for p in ("CD-BU", "CD-SK")]
+    other = [i for i in range(len(sim_vintage.names)) if i not in j]
+
+    def share(config):
+        model = build_model(sim_vintage, config)
+        tr = trace(model, sim_vintage)
+        x = np.asarray(tr["latent_infections_by_subpop"]["value"])
+        pops = np.asarray(sim_vintage.populations)
+        cases = x * pops
+        return cases[:, j].sum() / cases[:, other].sum()
+
+    alone = share(ModelConfig(coupling="none"))
+    assert alone < 1e-4
+    assert share(ModelConfig()) > 100 * alone
 
 
 def test_missingness_offsets_are_non_centred(sim_vintage):

@@ -279,8 +279,9 @@ class MetapopulationInfections(BaseSubpopulationInfections):
             their seed, the `I0_rv` level, as a constant daily input over
             the 7 days from it, plus whatever importation brings. The
             day leads the first case week by the incubation period
-            (`model.seed_lead`). `None` seeds every province at the
-            start.
+            (`model.seed_lead`). A province with day `inf` is never
+            seeded and gains infections only by importation. `None`
+            seeds every province at the start.
         **kwargs
             Passed to `BaseSubpopulationInfections`.
         """

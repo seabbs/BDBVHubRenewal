@@ -54,6 +54,7 @@ from dataclasses import dataclass, field
 
 import jax.numpy as jnp
 import numpy as np
+import pandas as pd
 
 from bdbvhubrenewal.baselinenowcast import (
     fill_row,
@@ -82,6 +83,7 @@ __all__ = [
     "Origin",
     "Settings",
     "build_origin",
+    "delay_summary",
     "delay_sums",
     "final_growth",
     "introductions",
@@ -133,6 +135,12 @@ class Settings:
         Days added to the ages of the origin's days, for the sensitivity
         of the nowcast to the onset clock. Ages below 0 count as 0. The
         delay and the retrospective errors are not moved.
+    start_share : float
+        Share of a week reported for `randomwalknowcast` to start
+        its walk from the week's nowcast.
+    start_count : float
+        Cases reported in a week for `randomwalknowcast` to start its walk
+        from the week's nowcast.
     """
 
     max_delay: int = 42
@@ -142,6 +150,8 @@ class Settings:
     completeness: float = 0.95
     walk_weeks: int = 9
     clock_shift: int = 0
+    start_share: float = 0.05
+    start_count: float = 5.0
 
     @property
     def history_delay(self) -> int:
@@ -375,6 +385,44 @@ def final_growth(
     """
     age = snap.cut[o] - np.arange(snap.week.size) + settings.clock_shift
     return growth(fit.g, age, settings.max_delay)
+
+
+def delay_summary(origin: Origin, model: str, vintage: str) -> pd.DataFrame:
+    """Return the share of a day's final count reported by each age.
+
+    The share at age $a$ is $1 / G(a)$, from the delay fitted at the
+    origin, for every place, in the form of the renewal models' delay
+    summaries (`bdbvhubrenewal.forecasters.renewal.fit_delays`).
+
+    Parameters
+    ----------
+    origin : Origin
+        The fit.
+    model : str
+        Model name.
+    vintage : str
+        The origin.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `model`, `vintage`, `location`, `kind` (`"cumulative"`),
+        `x` (age in days), `quantity` (`"reported_share"`) and `q50`.
+    """
+    ages = np.arange(origin.settings.max_delay + 1)
+    share = 1.0 / growth(origin.fit.g, ages, origin.settings.max_delay)
+    places = origin.snap.locations
+    return pd.DataFrame(
+        {
+            "model": model,
+            "vintage": vintage,
+            "location": np.repeat(places, ages.size),
+            "kind": "cumulative",
+            "x": np.tile(ages, len(places)),
+            "quantity": "reported_share",
+            "q50": share.ravel(),
+        }
+    )
 
 
 @dataclass

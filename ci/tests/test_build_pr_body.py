@@ -147,7 +147,7 @@ def test_dry_run_note_and_no_relative_plot(tmp_path: Path) -> None:
 
 
 def test_cascade_model_named_with_why(tmp_path: Path) -> None:
-    g = gate(tmp_path, produced_by="single-patch renewal model")
+    g = gate(tmp_path, produced_by="province renewal model without importation")
     prov = read_json(g / "provenance.json")
     prov.update(
         kind="fallback",
@@ -161,7 +161,7 @@ def test_cascade_model_named_with_why(tmp_path: Path) -> None:
             },
             {
                 "id": "renewalsp",
-                "label": "single-patch renewal model",
+                "label": "province renewal model without importation",
                 "status": "pass",
                 "reasons": [],
             },
@@ -170,9 +170,9 @@ def test_cascade_model_named_with_why(tmp_path: Path) -> None:
     prov["run"]["model"] = "renewalsp"
     text = body(g, provenance=prov)
     assert visible(text)[2] == (
-        "Model: single-patch renewal model (`renewalsp`), because "
-        "BVDOutbreakSize-informed renewal model was ruled out (convergence: "
-        "max R-hat is 1.4)."
+        "Model: province renewal model without importation (`renewalsp`), "
+        "because BVDOutbreakSize-informed renewal model was ruled out "
+        "(convergence: max R-hat is 1.4)."
     )
 
 

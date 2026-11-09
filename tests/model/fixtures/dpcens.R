@@ -3,6 +3,7 @@
 # Uniform primary over one day, daily secondary censoring.
 # Generated with primarycensored 1.6.0.
 library(primarycensored)
+library(flexsurv)
 out <- list()
 run <- function(case, family, mean, cv, x, L, D) {
   sd <- mean * cv
@@ -27,6 +28,20 @@ for (family in c("gamma", "lognormal")) {
       run("delay", family, mean, cv, 0:60, L = -Inf, D = 61)
     }
   }
+}
+# The hub's imputation delays: generalised gamma fits in hours
+# (HUB_GENGAMMA in src/bdbvhubrenewal/data/delays.py), on days 0..60.
+hub <- list(
+  exact = c(5.12406648030701, 0.97184390713028, 1.07646963898928),
+  double_censored = c(4.99016267662049, 0.936895070027868, 0.715805359543864)
+)
+for (fit in names(hub)) {
+  par <- hub[[fit]]
+  p <- dpcens(0:60, function(q, ...) pgengamma(24 * q, par[1], par[2], par[3]),
+              pwindow = 1, swindow = 1, L = -Inf, D = 61)
+  out[[length(out) + 1]] <- data.frame(
+    case = "hub", family = fit, mean = NA, cv = NA, delay = 0:60, p
+  )
 }
 out <- do.call(rbind, out)
 out$p <- sprintf("%.17g", out$p)

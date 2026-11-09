@@ -128,7 +128,7 @@ def test_model_styles_are_fixed_by_name() -> None:
     from bdbvhubrenewal.forecasters import list_models
 
     registered = {s.name for s in list_models()}
-    assert set(plots.MODEL_STYLE) == registered | {"as reported"}
+    assert set(plots.MODEL_STYLE) == registered
     # Each colour and dash pair belongs to one model.
     pairs = list(plots.MODEL_STYLE.values())
     assert len(set(pairs)) == len(pairs)
@@ -141,14 +141,8 @@ def test_model_styles_are_fixed_by_name() -> None:
         alone = plots.model_colour("renewal", ["renewal"], mode)
         among = plots.model_colour("renewal", sorted(registered), mode)
         assert alone == among == plots.MODEL_COLOURS[mode][2]
-    # The as-reported floor is the data ink, dotted.
-    assert plots.model_style("as reported", []) == (
-        plots.THEMES["light"]["data"],
-        plots.THEMES["dark"]["data"],
-        plots.DASHES["dotted"],
-    )
     # A stand-in outside the table takes the first colour it leaves free.
-    used = {s for s, _ in pairs if s is not None}
+    used = {s for s, _ in pairs}
     flat = plots.model_colour("flat", ["flat"])
     assert flat == plots.MODEL_COLOURS["light"][max(used) + 1]
     assert plots.model_dash("flat") == ""

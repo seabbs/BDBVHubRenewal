@@ -183,14 +183,6 @@ class ModelConfig:
         kernel, or none.
     depletion : bool
         Susceptible depletion in the renewal.
-    active : {"cases", "all"}
-        Full renewal for provinces with cases only, or for every province.
-    inactive : {"imports", "none"}
-        Importation-only component for provinces with no cases, or none
-        (their forecasts are zero).
-    report_inactive : bool
-        Return forecasts for provinces with no cases. If false their
-        draws go to the national `unassigned` component instead.
     effective_population : float or None
         Share $\nu$ of each province at risk, which depletion uses.
         `None` (default) estimates it with a log-normal prior; a number
@@ -214,9 +206,6 @@ class ModelConfig:
     truncation: bool = True
     coupling: Literal["gravity", "none"] = "gravity"
     depletion: bool = True
-    active: Literal["cases", "all"] = "cases"
-    inactive: Literal["imports", "none"] = "imports"
-    report_inactive: bool = True
     effective_population: float | None = None
     bvd: bool = False
     bvd_alpha: float = 0.5
@@ -235,7 +224,6 @@ _SIMPLE: dict[str, Any] = {
     "truncation": False,
     "coupling": "none",
     "depletion": False,
-    "inactive": "none",
 }
 LADDER: dict[str, ModelConfig] = {
     "S0 national renewal": ModelConfig(national=True, **_SIMPLE),
@@ -244,7 +232,7 @@ LADDER: dict[str, ModelConfig] = {
         **_SIMPLE | {"truncation": True}
     ),
     "S3 + delays, missingness, imputation": ModelConfig(
-        coupling="none", depletion=False, inactive="none"
+        coupling="none", depletion=False
     ),
     "S4 + coupling and importation": ModelConfig(depletion=False),
     "S5 + depletion (main)": MAIN,
@@ -277,19 +265,14 @@ class Vintage:
         Forecast horizon in weeks.
     names : list of str
         Modelled province names.
-    inactive : numpy.ndarray or None
-        Weekly totals in provinces with no cases, `(n_weeks, Q)`.
-    inactive_names : list of str
-        Their names.
-    import_kernel : numpy.ndarray or None
-        Kernel rows from modelled to inactive provinces, `(P, Q)`.
     fit_mask : numpy.ndarray or None
         Boolean `(P,)`. False switches a province's likelihood off (it
         stays in the latent process and is still predicted).
     seed_days : numpy.ndarray or None
         Day (from `start_date`) each province's seeding starts: 0 for
-        provinces with cases in the first data week, else `seed_lead` days
-        before the first case week.
+        provinces with cases in the first data week, `seed_lead` days
+        before the first case week for later ones, and `inf` (never) for
+        provinces with no case.
     bvd : dict or None
         External Rt summaries: `day` (index of $s_b$ from the first data
         day), `groups` `(G, P)`, `values`, `scales` and `kinds` `(G,)`.
@@ -308,9 +291,6 @@ class Vintage:
     kernel: np.ndarray | None = None
     horizon_weeks: int = 3
     names: list[str] = field(default_factory=list)
-    inactive: np.ndarray | None = None
-    inactive_names: list[str] = field(default_factory=list)
-    import_kernel: np.ndarray | None = None
     fit_mask: np.ndarray | None = None
     bvd: dict[str, Any] | None = None
     seed_days: np.ndarray | None = None
@@ -598,12 +578,6 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             ),
             _named_walk("delay_dev_sd", 0.1, fit_weeks(data, config)),
         )
-    imports = None
-    if config.inactive == "imports" and data.import_kernel is not None:
-        imports = DistributionalVariable(
-            "import_scale", dist.LogNormal(np.log(1e-3), 2.0)
-        )
-
     builder.add_observation(
         OnsetStreams(
             name="onsets",
@@ -630,7 +604,6 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             delay_rv=delay,
             known_noise=_nb_noise("known"),
             imputed_noise=None if missing is None else _nb_noise("imputed"),
-            import_scale_rv=imports,
             start_dow=SUNDAY,
             publication_lag=DistributionalVariable(
                 "publication_lag",
@@ -715,11 +688,6 @@ def model_args(
         "forecast": forecast,
         **({"as_of": n_init + as_of} if forecast and as_of is not None else {}),
     }
-    use_imports = data.import_kernel is not None and (
-        model.observations["onsets"].import_scale_rv is not None
-    )
-    if use_imports:
-        obs["import_kernel"] = jnp.asarray(data.import_kernel)
     known, imputed = data.known.copy(), data.imputed.copy()
     if data.fit_mask is not None:
         known[:, ~data.fit_mask] = np.nan
@@ -732,8 +700,6 @@ def model_args(
             "imputed": pad(imputed),
             "delay_counts": jnp.nan_to_num(pad(data.delay_counts)),
         }
-        if use_imports and data.inactive is not None:
-            obs["inactive"] = pad(data.inactive)
         if data.release_pairs is not None:
             obs["release_pairs"] = {
                 k: jnp.asarray(v) for k, v in data.release_pairs.items()
@@ -816,55 +782,6 @@ def fit(
     return model
 
 
-def seed_from_imports(
-    imports: np.ndarray,
-    rt: np.ndarray,
-    gen_int: np.ndarray,
-    start: int,
-    rng: np.random.Generator,
-) -> np.ndarray:
-    r"""Draw onsets in idle provinces: importations that may spread.
-
-    For one posterior draw, importations are
-    $m_q(t) \sim \text{Poisson}(\mu_q(t))$ from day `start` (the day
-    after the cut-off; before it these provinces are observed with no
-    cases). Each also seeds local transmission at the national
-    reproduction number, weighted by infections,
-    $\ell_q(t) \sim \text{Poisson}\big(R(t) \sum_\tau g(\tau)
-    y_q(t - \tau)\big)$ with $y = m + \ell$. Susceptible depletion is
-    ignored because these provinces have had no cases.
-    $R(t)$ is dated by infection and $y$ by onset, so local spread here
-    runs about an incubation period early. Their counts are near zero.
-
-    Parameters
-    ----------
-    imports : numpy.ndarray
-        Expected importations $\mu$, `(n, Q)`.
-    rt : numpy.ndarray
-        National $R(t)$, `(n,)`.
-    gen_int : numpy.ndarray
-        Generation interval, element 0 at lag 1.
-    start : int
-        First day of local spread (the day after the cut-off).
-    rng : numpy.random.Generator
-        Random numbers.
-
-    Returns
-    -------
-    numpy.ndarray
-        Onsets $y$, `(n, Q)`.
-    """
-    # Up to the cut-off these provinces are observed with no cases.
-    y = rng.poisson(np.maximum(imports, 0.0)).astype(float)
-    y[:start] = 0.0
-    g = np.asarray(gen_int)
-    for t in range(start, y.shape[0]):
-        lags = y[max(0, t - g.size) : t][::-1]
-        force = g[: lags.shape[0]] @ lags
-        y[t] += rng.poisson(rt[t] * force)
-    return np.asarray(y, dtype=float)
-
-
 def forecast_trajectories(
     model: MultiSignalModel,
     data: Vintage,
@@ -877,10 +794,6 @@ def forecast_trajectories(
 
     Each trajectory uses one posterior draw for every province and week,
     so national counts are the sum over provinces within a trajectory.
-    Provinces with no cases get `seed_from_imports` draws when the model
-    has the importation component.
-    Those draws use the national Rt, dated by infection, on an onset-dated
-    import series.
 
     Parameters
     ----------
@@ -902,8 +815,7 @@ def forecast_trajectories(
     -------
     dict
         `province`: `(n_trajectories, n_weeks + horizon, P)`,
-        `inactive`: `(n_trajectories, n_weeks + horizon, Q)` (Q may be 0),
-        `national`: the sum over both, `insample`, the predictive
+        `national`: their sum, `insample`, the predictive
         draws of the fitted streams at the vintage (see `ppc_draws`),
         `draw`, the index of the posterior draw behind each trajectory,
         and `as_reported`: for each later cut-off in `as_of` (days from
@@ -923,19 +835,6 @@ def forecast_trajectories(
     n_init = model.latent.n_initialization_points
     n_lead = n_init // 7
     province = np.asarray(pred["onsets_final_total"])[:, n_lead:]
-    n_weeks = province.shape[1]
-    inactive = np.zeros((n_trajectories, n_weeks, len(data.inactive_names)))
-    if "onsets_expected_imports_daily" in pred:
-        mu = np.asarray(pred["onsets_expected_imports_daily"])[:, n_init:]
-        # National Rt weighted by infections (counts), not the geometric
-        # mean of the province values.
-        rt_p = np.asarray(pred["latent::rt_subpop"])[:, n_init:]
-        w = np.asarray(pred["latent_infections_by_subpop"])[:, n_init:]
-        rt = (rt_p * w).sum(-1) / np.maximum(w.sum(-1), 1e-12)
-        g = np.asarray(model.latent.gen_int_rv())
-        for k in range(n_trajectories):
-            y = seed_from_imports(mu[k], rt[k], g, data.cutoff + 1, rng)
-            inactive[k] = y[: 7 * n_weeks].reshape(n_weeks, 7, -1).sum(1)
     sites = [
         s for s in ("known", "imputed", "total") if f"onsets_{s}_obs" in pred
     ]
@@ -949,19 +848,10 @@ def forecast_trajectories(
             **model_args(model, data, forecast=True, as_of=cut),
         )
         prov = np.asarray(later["onsets_final_total"])[:, n_lead:]
-        # Provinces with no cases: their draws up to the later cut-off.
-        idle = inactive.copy()
-        first = (cut // 7) + 1
-        idle[:, first:] = 0.0
-        as_reported[cut] = {
-            "province": prov,
-            "inactive": idle,
-            "national": prov.sum(axis=2) + idle.sum(axis=2),
-        }
+        as_reported[cut] = {"province": prov, "national": prov.sum(axis=2)}
     return {
         "province": province,
-        "inactive": inactive,
-        "national": province.sum(axis=2) + inactive.sum(axis=2),
+        "national": province.sum(axis=2),
         "insample": insample,
         "draw": keep,
         "as_reported": as_reported,

@@ -443,17 +443,6 @@ def test_censored_pmf_rv_samples_its_mean_and_sd():
     assert streams.lookback_days() == 28
 
 
-def test_idle_provinces_are_zero_up_to_the_cutoff():
-    from bdbvhubrenewal.model.model import seed_from_imports
-
-    rng = np.random.default_rng(0)
-    y = seed_from_imports(
-        np.full((60, 2), 0.5), np.full(60, 1.5), generation_interval(), 40, rng
-    )
-    assert np.all(y[:40] == 0)
-    assert y[40:].sum() > 0
-
-
 class _Daily:
     """A weekly process seen as a daily one, to force the daily path."""
 

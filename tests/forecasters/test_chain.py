@@ -20,7 +20,7 @@ from bdbvhubrenewal.forecasters.chain import (
     retro_errors,
     weeks_back,
 )
-from bdbvhubrenewal.forecasters.obs import MAX_SIZE
+from bdbvhubrenewal.forecasters.obs import MAX_SIZE, PRIOR_SIZE
 
 PLACES = ("CD-HU", "CD-IT", "CD-NK", "CD-TO")
 
@@ -143,12 +143,12 @@ def test_the_fit_pools_three_errors_at_10_24(origin24) -> None:
     assert (origin24.removal >= 0).all()
 
 
-def test_no_errors_is_poisson(daily: pd.DataFrame) -> None:
+def test_no_errors_take_the_prior_size(daily: pd.DataFrame) -> None:
     snap = snapshot_arrays(daily, "2026-10-17", ("CD-IT", "CD-NK"))
     origin = build_origin(snap, Settings(), errors=True)
     assert origin.obs_n is not None
     assert (origin.obs_n == 0).all()
-    assert (origin.size == MAX_SIZE).all()
+    np.testing.assert_allclose(origin.size, PRIOR_SIZE, rtol=1e-6)
     assert (origin.removal == 0).all()
 
 

@@ -17,7 +17,7 @@ import textwrap
 from collections.abc import Callable, Mapping, Sequence
 from functools import partial
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, cast
 
 import pandas as pd
 from matplotlib.figure import Figure
@@ -43,7 +43,7 @@ from bdbvhubrenewal.data.zone_map import (
     zone_boundaries,
     zone_names,
 )
-from bdbvhubrenewal.data.zones import hub_zones
+from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     check_distinct,
@@ -51,6 +51,13 @@ from bdbvhubrenewal.evaluation.backtest import (
     make_tasks,
     run_forecasts,
     truth_changes,
+)
+from bdbvhubrenewal.evaluation.checks import (
+    RECENT_WEEKS,
+    SMALL_MAX,
+    check_summary,
+    flags,
+    place_types,
 )
 from bdbvhubrenewal.evaluation.hubcompare import (
     attribution,
@@ -60,7 +67,6 @@ from bdbvhubrenewal.evaluation.hubcompare import (
     summarise_comparison,
 )
 from bdbvhubrenewal.evaluation.nowcast import (
-    BASELINE,
     relative_energy,
     relative_wis,
 )
@@ -275,17 +281,27 @@ def make_report(
     _zone_nowcast_section(
         fig, gen, data_dir, target, tasks[0], forecasts_now, config, names
     )
-    # Every model's hub tables at the latest release, for the results
-    # release.
-    write_hub_tables(
-        hub_tables(
-            forecasts_now,
-            tasks[0],
-            load_daily_zones(data_dir),
-            hub_zones(Path(data_dir) / "hub-config" / "tasks.json"),
-        ),
-        res / "hub",
-    )
+    # Every model's hub tables at every real origin, for the round
+    # releases, so a round released after later hub releases still gets
+    # its own.
+    daily_zones = load_daily_zones(data_dir)
+    zone_codes = hub_zones(Path(data_dir) / "hub-config" / "tasks.json")
+    for vintage in sorted(set(real["vintage"])):
+        if vintage == latest:
+            task, at = tasks[0], forecasts_now
+        else:
+            task = make_tasks(
+                real.loc[real["vintage"] == vintage],
+                delays,
+                config,
+                history=real,
+                daily=daily,
+            )[0]
+            at = _stored_at(res, vintage)
+        write_hub_tables(
+            hub_tables(at, task, daily_zones, zone_codes),
+            res / "hub" / str(vintage),
+        )
     groups = _nowcast_groups(target, sorted(set(forecasts_now["location"])))
     save_light_dark(
         partial(
@@ -363,8 +379,8 @@ def _model_colours(models: Sequence[str]) -> dict[str, tuple[str, str, str]]:
 
 
 def _ours(frame: pd.DataFrame, names: Sequence[str]) -> pd.DataFrame:
-    """Keep our models and the as-reported floor, without the hub teams."""
-    return frame.loc[frame["model"].isin([*names, BASELINE])]
+    """Keep our models, without the hub teams."""
+    return frame.loc[frame["model"].isin(names)]
 
 
 def _release_section(
@@ -406,7 +422,7 @@ def _release_section(
     scores["target"] = scores["target"].map(_TARGET_LABELS)
     by_place = relative_wis(scores, ("target", "origin", "location"))
     reported = overall.loc[overall["target"] == _TARGET_LABELS["reported"]]
-    ours = [*names, BASELINE]
+    ours = list(names)
     colours = _model_colours(ours)
     rep = pooled.loc[pooled["target"] == _TARGET_LABELS["reported"]]
     # Rounds are named by their reference date, as in the explorer.
@@ -457,6 +473,7 @@ def _release_section(
             "Scores by place",
             view="place",
             static="../figures/scores-place.svg",
+            map_src=ZONE_MAP,
         ),
     )
     save_light_dark(
@@ -536,10 +553,14 @@ def _scored_on(reported: pd.DataFrame, baseline: str = "randomwalk") -> str:
     counts = [f"{n[p]} {label}" for p, label in scales.items() if p in n]
     listed = ", ".join(counts[:-1]) + " and " if len(counts) > 1 else ""
     return (
-        f"Scored on {len(pairs)} origin and release pairs.\n"
-        f"{baseline} has {listed}{counts[-1]} forecasts.\n"
+        f"The scores cover {len(pairs)} origin and release pairs.\n"
+        f"The {baseline} baseline has {listed}{counts[-1]} forecasts.\n"
         "The renewal models are not scored at health zones.\n"
     )
+
+
+ZONE_MAP: Final = "../figures/zone-map.geojson"
+"""The health zone boundaries the interactive maps draw, from a page."""
 
 
 _NOWCAST_GROUPS: Final = (
@@ -711,19 +732,18 @@ def _zone_nowcast_section(
         fig / "zone-map.geojson",
         zone_boundaries(release.choice.tag, hub_commit),
     )
-    write_explorer(
-        fig / "nowcastchart.json",
-        place_chart_data(
-            every,
-            pd.concat(
-                [above, counts[["location", "target_end_date", "total"]]],
-                ignore_index=True,
-            ),
-            {**labels, **zone_names(hub_commit)},
-            _model_colours(names),
-            config.complete_after_weeks,
+    chart = place_chart_data(
+        every,
+        pd.concat(
+            [above, counts[["location", "target_end_date", "total"]]],
+            ignore_index=True,
         ),
+        {**labels, **zone_names(hub_commit)},
+        _model_colours(names),
+        config.complete_after_weeks,
     )
+    write_explorer(fig / "nowcastchart.json", chart)
+    recent = cast("list[str]", chart["recent_weeks"])
     _write(
         gen / "nowcast-picker.md",
         "## By place\n\n"
@@ -735,6 +755,7 @@ def _zone_nowcast_section(
         "Scores by origin are on the [Backtest](backtest.md) page.\n\n"
         '<div class="nowcastchart" id="nowcast-place" '
         'data-src="../figures/nowcastchart.json" '
+        f'data-map="{ZONE_MAP}" '
         'role="group" aria-label="Nowcast and forecast by place">\n'
         "<noscript>The nowcast chart needs JavaScript.</noscript>\n"
         "</div>\n",
@@ -743,20 +764,13 @@ def _zone_nowcast_section(
         gen / "zone-nowcast.md",
         "## Health zones\n\n"
         "Each model's nowcast and forecast in one health zone.\n"
-        "Pick the province, then the zone.\n\n"
-        '<div class="nowcastchart" id="nowcast-zones" data-scale="zones" '
-        'data-src="../figures/nowcastchart.json" '
-        'role="group" aria-label="Nowcast and forecast by health zone">\n'
-        "<noscript>The nowcast chart needs JavaScript.</noscript>\n"
-        "</div>\n\n"
-        "### Zone review\n\n"
-        "One row per place with a forecast from the chosen model.\n"
-        "Recent is the mean count of the last two complete weeks.\n"
-        "Each week column gives the median and 90% interval.\n"
-        "Ratio is log((median + 1) / (recent + 1)) for the chosen week.\n"
-        "A ratio of 0.69 is double the recent count and -0.69 is half.\n"
-        "Click a place to show it in the chart above.\n"
-        "The map colours each zone by the same ratio.\n"
+        "Pick the province and the zone, or click a zone on the map.\n"
+        "The map colours each zone by log((median + 1) / (recent + 1)) for "
+        "the model and week chosen above the map.\n"
+        "The zone review below has its own model and week.\n"
+        f"Recent is the mean count of the weeks ending {recent[0]} and "
+        f"{recent[1]}, as reported at the {task.vintage} release.\n"
+        "The panel under the map gives the numbers for the zone picked.\n"
         "Katoyi (CD-NK-13) is not on the map: its code in the hub mapping "
         "does not match the boundary file.\n"
         "Zone boundaries are from [BVDOutbreakSize]"
@@ -764,11 +778,41 @@ def _zone_nowcast_section(
         f"{BOUNDARIES_PATH}) at {release.choice.tag}, from the Ministry of "
         "Health boundaries on the [Humanitarian Data Exchange]"
         "(https://data.humdata.org/dataset/drc-health-data).\n\n"
+        '<div class="nowcastchart" id="nowcast-zones" data-scale="zones" '
+        'data-src="../figures/nowcastchart.json" '
+        f'data-map="{ZONE_MAP}" data-map-on="true" '
+        'role="group" aria-label="Nowcast and forecast by health zone">\n'
+        "<noscript>The nowcast chart needs JavaScript.</noscript>\n"
+        "</div>\n\n"
+        "### Zone review\n\n"
+        "One row per place with a forecast from the chosen model.\n"
+        "Each week column gives the median and 90% interval.\n"
+        "Ratio is log((median + 1) / (recent + 1)) for the chosen week.\n"
+        "A ratio of 0.69 is double the recent count and -0.69 is half.\n"
+        "Click a place to show it in the chart above.\n\n"
         '<div class="zonereview" data-src="../figures/nowcastchart.json" '
-        'data-map="../figures/zone-map.geojson" data-chart="nowcast-zones" '
+        'data-chart="nowcast-zones" '
         'role="group" aria-label="Zone review">\n'
         "<noscript>The zone review needs JavaScript.</noscript>\n"
         "</div>\n",
+    )
+
+
+def _stored_at(res: Path, vintage: str) -> pd.DataFrame:
+    """Every model's final-count forecasts from one origin in the results.
+
+    Development origins are in `forecasts.csv.gz` and held-out ones in
+    `heldout-forecasts.csv.gz`.
+    """
+    frames = []
+    for name in ("forecasts.csv.gz", "heldout-forecasts.csv.gz"):
+        rows = pd.read_csv(res / name, dtype={"as_of": object})
+        rows = rows.loc[(rows["vintage"] == vintage) & rows["as_of"].isna()]
+        frames.append(rows.drop(columns="chosen_model", errors="ignore"))
+    dev, held = frames
+    return pd.concat(
+        [dev, held.loc[~held["model"].isin(set(dev["model"]))]],
+        ignore_index=True,
     )
 
 
@@ -1309,7 +1353,8 @@ def _scenario_section(
     """Return the scenario summaries and explorer, a tab per scenario.
 
     Forecasts are scored against the final simulated counts of complete
-    weeks, which are also the explorer's data, so every week is complete.
+    weeks. The explorer draws the weeks of those counts it shows, all
+    complete.
     """
     scores = pd.read_csv(res / "scenario-scores.csv.gz", low_memory=False)
     scores = scores.loc[(scores["truth_view"] == "final") & scores["complete"]]
@@ -1318,6 +1363,7 @@ def _scenario_section(
     samples = pd.read_csv(
         res / "scenario-forecasts.csv.gz", dtype={"as_of": object}
     )
+    final = pd.read_csv(res / "scenario-truth.csv")
     sections: dict[str, list[str]] = {
         "Overall": [],
         "By horizon": [],
@@ -1337,10 +1383,9 @@ def _scenario_section(
         views = _summary_views(src, f"({title})")
         drawn = samples.loc[samples["scenario"] == key]
         shown = [m for m in names if m in set(drawn["model"])]
-        truth = own[["truth_vintage", "location", "target_end_date", "truth"]]
         target = (
-            truth.drop_duplicates()
-            .rename(columns={"truth_vintage": "vintage", "truth": "total"})
+            final.loc[final["scenario"] == key]
+            .rename(columns={"truth": "total", "truth_vintage": "vintage"})
             .assign(kind="real")
         )
         write_explorer(
@@ -1574,6 +1619,12 @@ def _backtest_page(
             explorer_src,
         ),
     )
+    _write(
+        gen / "backtest-checks.md",
+        _checks_section(fig, res, quantiles, target, data_dir, names)
+        if shown
+        else "",
+    )
     _write(gen / "lopo-section.md", _lopo_section(res / "lopo-scores.csv"))
     _write(gen / "ladder.md", _ladder_page(res / "ladder.csv"))
     _write(
@@ -1626,6 +1677,140 @@ def _backtest_page(
             ],
         ),
     )
+
+
+def _checks_section(
+    fig: Path,
+    res: Path,
+    quantiles: pd.DataFrame,
+    target: pd.DataFrame,
+    data_dir: Path | str,
+    names: Sequence[str],
+) -> str:
+    """Score the forecasts by place type and flag (`checks`)."""
+    scores = _release_scores(res)
+    scores = scores.loc[
+        scores["model"].isin(names) & (scores["target"] == "reported")
+    ]
+    national = scores["location"] == NATIONAL
+    scores = scores.assign(
+        scale=national.map({True: "national", False: "provinces"})
+    )
+    zones = _as_submitted(
+        pd.read_csv(res / "zone-scores.csv", low_memory=False)
+    )
+    zones = zones.loc[
+        zones["model"].isin(names) & (zones["target"] == "reported")
+    ]
+    scores = pd.concat([scores, zones.assign(scale="zones")])
+    origins = sorted(set(scores["origin"].astype(str)))
+    real = target.loc[target["kind"] == "real"]
+    daily_zones = load_daily_zones(data_dir)
+    counts = pd.concat(
+        [
+            real[["vintage", "location", "target_end_date", "total"]],
+            *(
+                weekly_zone_counts(daily_zones, v).assign(vintage=v)
+                for v in origins
+            ),
+        ],
+        ignore_index=True,
+    ).astype({"vintage": str})
+    origin_of = {str(reference_date_for_vintage(v)): v for v in origins}
+    ref = quantiles.loc[
+        quantiles["target_end_date"].astype(str)
+        == quantiles["reference_date"].astype(str)
+    ]
+    ref = ref.assign(origin=ref["reference_date"].astype(str).map(origin_of))
+    ref = ref.dropna(subset=["origin"])
+    scores = scores.assign(origin=scores["origin"].astype(str))
+    summary = check_summary(
+        scores,
+        place_types(counts, scores),
+        flags(counts, ref[["model", "origin", "location", "q50", "q95"]]),
+    )
+    write_score_chart(
+        fig / "checks-backtest.json", _checks_chart(summary, names)
+    )
+    return (
+        "## Checks\n\n"
+        "Scores of the scored weeks, split by the type of place and by the "
+        "plausibility flag of their forecast "
+        "([checks](methods/evaluation.md#checks)).\n"
+        f"A place is silent with no case in the {RECENT_WEEKS} weeks to the "
+        "origin, small "
+        f"with at most {SMALL_MAX} cases in any of those weeks, and larger "
+        "otherwise.\n"
+        "A forecast is flagged when its reference week drops to a third of "
+        "the recent level (collapse) or rises far above every recent count "
+        "(blow-up), and has no flag otherwise.\n\n"
+        '<div class="checkschart" data-src="../figures/checks-backtest.json" '
+        'role="group" aria-label="Scores by place type and flag">\n'
+        "<noscript>The checks chart needs JavaScript.</noscript>\n"
+        "</div>\n\n"
+        + _dropdown(
+            filter_table(_table(summary), ["scale", "split", "model"]),
+            "Table",
+        )
+    )
+
+
+_CHECK_METRICS: Final = (
+    ("relative WIS", "Relative WIS", 1.0, True),
+    ("WIS", "WIS", None, False),
+    ("90% coverage", "90% coverage", 0.9, False),
+)
+"""Checks chart metrics: column, label, reference line and log axis."""
+
+
+def _checks_chart(
+    summary: pd.DataFrame, names: Sequence[str]
+) -> dict[str, object]:
+    """Return the checks summary as `scorechart.js` rows, by scale and split.
+
+    Models keep the colours of the other Backtest charts.
+    """
+    models = [m for m in names if m in set(summary["model"])]
+    colours = _model_colours(names)
+    sets = {}
+    for (scale, split), g in summary.groupby(["scale", "split"], sort=False):
+        x = list(dict.fromkeys(g["group"]))
+        rows = [
+            [
+                models.index(r["model"]),
+                x.index(r["group"]),
+                int(r["n"]),
+                *(
+                    None if pd.isna(r[c]) else round(float(r[c]), 6)
+                    for c, *_ in _CHECK_METRICS
+                ),
+            ]
+            for _, r in g.iterrows()
+        ]
+        sets[f"{scale}|{split}"] = {"x": x, "rows": rows}
+    return {
+        "models": [
+            {
+                "name": m,
+                "light": colours[m][0],
+                "dark": colours[m][1],
+                "dash": colours[m][2],
+                "on": True,
+            }
+            for m in models
+        ],
+        "metrics": [
+            {"key": c, "label": label, "ref": ref, "log": log}
+            for c, label, ref, log in _CHECK_METRICS
+        ],
+        "scales": [
+            s
+            for s in ("zones", "provinces", "national")
+            if s in set(summary["scale"])
+        ],
+        "splits": ["place type", "flag"],
+        "sets": sets,
+    }
 
 
 def _location_names(target: pd.DataFrame) -> dict[str, str]:
@@ -1942,6 +2127,7 @@ def _comparison_summary(
             "Scores by place",
             view="place",
             static="../figures/comparison-place.svg",
+            map_src=ZONE_MAP,
         ),
     )
 

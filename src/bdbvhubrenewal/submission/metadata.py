@@ -85,28 +85,27 @@ MODEL_METADATA = {
             "with modelled delays; national is the sum of provinces."
         ),
         "methods_long": (
-            "A renewal process for each province with cases, with a national "
+            "A renewal process for each province, with a national "
             "weekly random walk on log Rt plus partially pooled province "
             "deviations, importation between provinces through a gravity "
-            "kernel, and susceptible depletion. Provinces with no cases get "
-            "importations that can seed local spread. " + _RENEWAL_OBSERVATION
+            "kernel, and susceptible depletion. Provinces with no cases yet "
+            "are never seeded and gain infections only by importation. "
+            + _RENEWAL_OBSERVATION
         ),
         "data_inputs": _RENEWAL_INPUTS,
     },
     "renewalsp": {
-        "model_name": "Single-patch renewal model (PyRenew)",
+        "model_name": "Province renewal model without importation (PyRenew)",
         "methods": (
-            "Independent renewal model in PyRenew for each province with "
-            "cases, with no pooling or coupling, fitted to known and "
-            "imputed onsets with modelled delays; national is the sum."
+            "Province renewal model in PyRenew with pooled Rt and depletion "
+            "but no importation between provinces, fitted to known and "
+            "imputed onsets with modelled delays."
         ),
         "methods_long": (
-            "A renewal process fitted to each province alone, with a weekly "
-            "random walk on log Rt and no pooling, importation between "
-            "provinces or depletion. Provinces with at least 20 cases in "
-            "their last 6 data weeks are fitted this way. A province with "
-            "fewer cases has a constant Poisson rate, with a Gamma prior "
-            "updated by its weekly counts, drawn once per trajectory. "
+            "A renewal process for each province, with a national "
+            "weekly random walk on log Rt plus partially pooled province "
+            "deviations and susceptible depletion, and no importation "
+            "between provinces, so provinces with no cases stay near zero. "
             + _RENEWAL_OBSERVATION
         ),
         "data_inputs": _RENEWAL_INPUTS,
@@ -119,11 +118,12 @@ MODEL_METADATA = {
             "BVDOutbreakSize Rt, fitted to known and imputed onsets."
         ),
         "methods_long": (
-            "A renewal process for each province with cases, with a national "
+            "A renewal process for each province, with a national "
             "weekly random walk on log Rt plus partially pooled province "
             "deviations, importation between provinces through a gravity "
-            "kernel, and susceptible depletion. Provinces with no cases get "
-            "importations that can seed local spread. The model's national "
+            "kernel, and susceptible depletion. Provinces with no cases yet "
+            "are never seeded and gain infections only by importation. "
+            "The model's national "
             "and patch Rt in the week of the newest BVDOutbreakSize release "
             "available at the cut-off are tied to that release's Rt "
             "estimates, as a likelihood term tempered by 0.5. "

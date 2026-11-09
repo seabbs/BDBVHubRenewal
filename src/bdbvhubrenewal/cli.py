@@ -64,7 +64,7 @@ from bdbvhubrenewal.evaluation.heldout import (
     load_model_choices,
     run_heldout,
 )
-from bdbvhubrenewal.evaluation.nowcast import BASELINE, release_backtest
+from bdbvhubrenewal.evaluation.nowcast import release_backtest
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastTask,
@@ -73,6 +73,7 @@ from bdbvhubrenewal.forecasters.base import (
     list_models,
 )
 from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
+from bdbvhubrenewal.forecasters.zones import zones_for_model
 from bdbvhubrenewal.submission.fitting import (
     Forecast,
     get_config,
@@ -88,7 +89,6 @@ from bdbvhubrenewal.submission.hub import (
     to_hub_table,
     write_model_metadata,
     write_submission,
-    zone_samples,
 )
 from bdbvhubrenewal.submission.metadata import MODEL_METADATA
 from bdbvhubrenewal.submission.validate import (
@@ -202,6 +202,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--fit", default=None, help="Fit directory written by `fit`."
     )
     now.add_argument("--out", default="output/submission")
+    now.add_argument(
+        "--forecast-date",
+        default=None,
+        help="The file's forecast_date. Defaults to today (UTC), the day a "
+        "submission's PR is opened.",
+    )
 
     zb = sub.add_parser(
         "zone-backtest", help="Score the random walk models at zone level."
@@ -518,7 +524,7 @@ def _backtest(args: argparse.Namespace) -> int:
             (as_date(as_of) - dt.timedelta(weeks=k)).isoformat()
             for k in (3, 2, 1, 0)
         ]
-        sforecasts, sscores, senergy = bt.run_scenarios(
+        sforecasts, sscores, senergy, struth = bt.run_scenarios(
             models,
             config,
             target,
@@ -534,6 +540,7 @@ def _backtest(args: argparse.Namespace) -> int:
             (senergy, results / "scenario-energy.csv"),
         ):
             write_csv(bt.merge_by_model(path, table), path)
+        write_csv(struth, results / "scenario-truth.csv")
         print(f"Scenarios: {len(sscores)} scored forecasts in {results}.")
         return 0
     if args.lopo:
@@ -603,12 +610,14 @@ def _release_backtest(
         )
         if not config.is_heldout(t.vintage)
     ]
+    stored, learnt = _stored(args, target, forecasts)
     out = release_backtest(
         tasks,
         daily,
         target,
-        stored=_stored_samples(args, target, forecasts),
-        compare=[*(s.name for s in list_models()), BASELINE],
+        stored=stored,
+        delays=learnt,
+        compare=[s.name for s in list_models()],
     )
     for name, table in (
         ("scores", out.scores),
@@ -621,13 +630,15 @@ def _release_backtest(
     print(f"Release backtest: {len(out.scores)} scored forecasts.")
 
 
-def _stored_samples(
+def _stored(
     args: argparse.Namespace, target: pd.DataFrame, forecasts: pd.DataFrame
-) -> pd.DataFrame:
-    """Final-count samples of the models not run here, by vintage.
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Final-count samples and delays of the models not run here.
 
-    The fitted models' come from the backtest forecasts. Hub teams'
-    forecasts are matched to the real vintage serving their round.
+    The fitted models' samples come from the backtest forecasts and their
+    delays from the delay summaries `fit-store load` writes to the
+    results, none if it loaded no fits. Hub teams' forecasts are matched
+    to the real vintage serving their round, and have no delay.
     """
     from bdbvhubrenewal.evaluation import hubcompare as hc
 
@@ -653,7 +664,12 @@ def _stored_samples(
     hub["vintage"] = [
         hc.match_vintage(r, vintages) for r in hub["reference_date"]
     ]
-    return pd.concat([ours[cols], hub.dropna(subset=["vintage"])[cols]])
+    samples = pd.concat([ours[cols], hub.dropna(subset=["vintage"])[cols]])
+    path = Path(args.results) / DELAY_SUMMARY_FILE
+    if not path.exists():
+        return samples, pd.DataFrame(columns=["model", "vintage"])
+    learnt = pd.read_csv(path)
+    return samples, learnt.loc[learnt["model"].isin(fitted)]
 
 
 def _write_fits(fits: list[pd.DataFrame], path: Path) -> None:
@@ -671,7 +687,7 @@ def _zones(
 ) -> tuple[pd.DataFrame | None, str]:
     """Forecast the zones to sum to the provinces, or say why not.
 
-    The zones come from `zone_samples`.
+    The zones come from `zones_for_model`.
     """
     try:
         daily = load_daily_zones(args.data)
@@ -681,7 +697,7 @@ def _zones(
     if counts.empty:
         return None, f"no zone data for {task.vintage}, so no health zones"
     name = get_config(args.config).model if args.config else args.model
-    zones = zone_samples(
+    zones = zones_for_model(
         name, task, samples, counts, hub_zones(hub_config), daily
     )
     return zones, ""
@@ -706,6 +722,7 @@ def _nowcast(args: argparse.Namespace) -> int:
             task.reference_date,
             unassigned=result.unassigned,
             zones=zones,
+            forecast_date=args.forecast_date,
         )
         path = write_submission(table, args.out, model_id(_abbr(args)))
     except (KeyError, ValueError, OSError) as err:

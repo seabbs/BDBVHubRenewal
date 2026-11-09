@@ -14,8 +14,8 @@ source "$(dirname "$0")/lib.sh"
 : "${CAND_ID:?}" "${CAND_KIND:?}" "${CAND_CONFIG:?}"
 CAND_SAMPLER=${CAND_SAMPLER:-'{}'}
 CAND_LABEL=${CAND_LABEL:-$CAND_ID}
-# The model this leg runs: its own (the single-patch fallback, a shadow)
-# or the chosen one.
+# The model this leg runs: its own (a fallback or a shadow) or the chosen
+# one.
 model=${CAND_MODEL:-$MODEL}
 [ "$CAND_KIND" = randomwalk ] && model=${CAND_MODEL:-randomwalk}
 inputs="$WORK/inputs"

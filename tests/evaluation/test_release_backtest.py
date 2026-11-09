@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import dataclasses
-import datetime as dt
 
 import numpy as np
 import pandas as pd
@@ -14,18 +13,18 @@ from bdbvhubrenewal.evaluation.backtest import (
     run_forecasts,
 )
 from bdbvhubrenewal.evaluation.nowcast import (
-    BASELINE,
     complete_weeks,
+    delay_curves,
     draw_reported,
     relative_wis,
     release_backtest,
-    reported_share,
     summarise,
+    week_shares,
     weeks_back_from_cutoff,
 )
 from bdbvhubrenewal.forecasters import get_model
-from bdbvhubrenewal.forecasters.chain import MissingSnapshots
-from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
+from bdbvhubrenewal.forecasters.chain import MissingSnapshots, delay_summary
+from bdbvhubrenewal.forecasters.randomwalk import RandomWalkNowcast
 
 
 @pytest.fixture(scope="module")
@@ -40,16 +39,17 @@ def result(target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame):  # 
     return release_backtest(tasks, daily, target)
 
 
-def test_origins_without_a_delay_pair_are_listed_with_no_forecasts(
+def test_a_model_that_cannot_forecast_is_listed_with_no_forecasts(
     result,  # type: ignore[no-untyped-def]
 ) -> None:
     o = result.origins
+    # No pair of releases is in the delay window, so neither walk runs.
     early = o.loc[o["origin"].isin(["2026-08-18", "2026-10-09"])]
     assert set(early["status"]) == {"no forecast"}
     assert (early["n_reported"] == 0).all()
     assert (early["n_complete"] == 0).all()
     ran = o.loc[o["origin"] == "2026-10-17"]
-    assert set(ran["model"]) == {"randomwalk", "randomwalknowcast", BASELINE}
+    assert set(ran["model"]) == {"randomwalk", "randomwalknowcast"}
     assert (ran["n_complete"] > 0).all()
     assert (ran["n_reported"] > 0).all()
 
@@ -59,7 +59,7 @@ def test_every_model_is_scored_on_each_later_release(
 ) -> None:
     s = result.scores
     assert set(s["target"]) == {"reported", "complete"}
-    assert set(s["model"]) == {"randomwalk", "randomwalknowcast", BASELINE}
+    assert set(s["model"]) == {"randomwalk", "randomwalknowcast"}
     assert set(s["origin"]) == {"2026-10-17", "2026-10-24"}
     rep = s.loc[(s["target"] == "reported") & (s["origin"] == "2026-10-17")]
     assert set(rep["truth_vintage"]) == {"2026-10-24", "2026-11-01"}
@@ -70,16 +70,29 @@ def test_every_model_is_scored_on_each_later_release(
     assert (rep["weeks_back"] < 0).any()
 
 
+def test_randomwalk_is_scored_on_its_samples_as_they_are(
+    result,  # type: ignore[no-untyped-def]
+) -> None:
+    q = result.quantiles
+    rw = q.loc[(q["model"] == "randomwalk") & (q["origin"] == "2026-10-17")]
+    cols = ["location", "target_end_date", "q5", "q50", "q95"]
+    rep = rw.loc[rw["target"] == "reported"]
+    by_release = [
+        g[cols].reset_index(drop=True) for _, g in rep.groupby("truth_vintage")
+    ]
+    pd.testing.assert_frame_equal(by_release[0], by_release[1])
+
+
 def test_energy_scores_each_scale_on_the_same_samples(
     result,  # type: ignore[no-untyped-def]
 ) -> None:
     e = result.energy
     unit = ["origin", "target", "truth_vintage", "scale"]
     assert set(e["scale"]) == {"national", "provinces"}
-    assert set(e["model"]) == {"randomwalk", "randomwalknowcast", BASELINE}
+    assert set(e["model"]) == {"randomwalk", "randomwalknowcast"}
     # One vector per unit, the same cells for every model.
     assert (e.groupby(unit)["n_cells"].nunique() == 1).all()
-    assert (e.groupby(unit)["model"].nunique() == 3).all()
+    assert (e.groupby(unit)["model"].nunique() == 2).all()
     # The vector holds every scored cell of the scale.
     s = result.scores.loc[result.scores["model"] == "randomwalk"]
     nat = s.loc[s["location"] == "CD"].groupby(unit[:3]).size()
@@ -174,7 +187,7 @@ def test_relative_wis_uses_only_matched_baseline_forecasts() -> None:
     assert rel.loc["a", "bias"] == pytest.approx(0.5)
 
 
-def test_stored_forecasts_are_scored_on_both_targets(
+def test_a_stored_model_is_mapped_by_its_own_delay_or_scored_complete(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
     real = target.loc[target["kind"] == "real"]
@@ -184,8 +197,7 @@ def test_stored_forecasts_are_scored_on_both_targets(
         BacktestConfig(n_samples=20, seed=3),
         daily=daily,
     )
-    task = tasks[0]
-    weeks = list(task.target_end_dates)
+    weeks = list(tasks[0].target_end_dates)
     stored = pd.DataFrame(
         {
             "model": "flat",
@@ -196,8 +208,24 @@ def test_stored_forecasts_are_scored_on_both_targets(
             "value": 100.0,
         }
     )
+    # A delay that reports every case on its onset day.
+    learnt = pd.DataFrame(
+        {
+            "model": "flat",
+            "vintage": "2026-10-17",
+            "location": "pooled",
+            "x": [0, 1],
+            "quantity": "reported_share",
+            "q50": [1.0, 1.0],
+        }
+    )
     out = release_backtest(
-        tasks, daily, target, models=("randomwalk",), stored=stored
+        tasks,
+        daily,
+        target,
+        models=("randomwalk",),
+        stored=stored,
+        delays=learnt,
     )
     flat = out.scores.loc[out.scores["model"] == "flat"]
     assert set(flat["target"]) == {"reported", "complete"}
@@ -208,22 +236,12 @@ def test_stored_forecasts_are_scored_on_both_targets(
         & (out.quantiles["target"] == "reported")
     ]
     assert (rep.loc[rep["weeks_back"] >= 6, "q50"] == 100).all()
-    # flat covers two provinces, so the energy score's shared cells do too,
-    # unless it is left out of the compared models.
-    prov = out.energy.loc[out.energy["scale"] == "provinces"]
-    assert set(prov["model"]) == {"flat", "randomwalk", BASELINE}
-    cells = prov.groupby("truth_vintage")["n_cells"].max()
-    ours = release_backtest(
-        tasks,
-        daily,
-        target,
-        models=("randomwalk",),
-        stored=stored,
-        compare=("randomwalk", BASELINE),
-    ).energy
-    ours = ours.loc[ours["scale"] == "provinces"]
-    assert "flat" not in set(ours["model"])
-    assert (ours.groupby("truth_vintage")["n_cells"].max() > cells).all()
+    # Without a modelled delay, only complete weeks are scored.
+    bare = release_backtest(
+        tasks, daily, target, models=("randomwalk",), stored=stored
+    )
+    flat = bare.scores.loc[bare.scores["model"] == "flat"]
+    assert set(flat["target"]) == {"complete"}
 
 
 def test_quantiles_carry_the_reported_count_and_truth(
@@ -242,7 +260,7 @@ def test_missing_snapshots_stop_the_backtest(
     with pytest.raises(MissingSnapshots):
         release_backtest(tasks, daily, target)
     with pytest.raises(MissingSnapshots):
-        run_forecasts([get_model("randomwalk")], tasks)
+        run_forecasts([get_model("randomwalknowcast")], tasks)
 
 
 def test_identical_samples_from_two_models_stop_the_run() -> None:
@@ -264,8 +282,9 @@ def test_identical_samples_from_two_models_stop_the_run() -> None:
     )
 
 
-@pytest.fixture(scope="module")
-def origin(target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame):  # type: ignore[no-untyped-def]
+def test_randomwalknowcast_s_delay_gives_its_completeness(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
     real = target.loc[target["kind"] == "real"]
     task = make_tasks(
         real.loc[real["vintage"] == "2026-10-24"],
@@ -273,32 +292,19 @@ def origin(target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame):  # 
         BacktestConfig(n_samples=20, seed=3),
         daily=daily,
     )[0]
-    return RandomWalk().origin_at(task, errors=False)
-
-
-def test_share_reported_at_the_origin_is_its_completeness(
-    origin,  # type: ignore[no-untyped-def]
-) -> None:
+    origin = RandomWalkNowcast().origin_at(task, errors=False)
     snap = origin.snap
+    curves = delay_curves(
+        delay_summary(origin, "m", task.vintage), snap.locations
+    )
     cut = snap.days[snap.cut[origin.o]].date()
-    share = reported_share(origin, cut, snap.week_ends)
-    got = share["share"].to_numpy().reshape(len(snap.locations), -1)
-    # The first week holds fewer than seven onset days.
-    np.testing.assert_allclose(got[:, 1:], origin.complete[:, 1:], rtol=1e-6)
-
-
-def test_share_is_zero_after_the_cutoff_and_one_when_old(
-    origin,  # type: ignore[no-untyped-def]
-) -> None:
-    cut = dt.date(2026, 10, 31)
-    weeks = ["2026-08-29", "2026-10-31", "2026-11-07"]
-    share = reported_share(origin, cut, weeks).set_index(
+    share = week_shares(curves, cut, snap.week_ends).set_index(
         ["location", "target_end_date"]
     )["share"]
-    assert share.between(0, 1).all()
-    assert (share.xs("2026-08-29", level=1) == 1).all()
-    assert (share.xs("2026-11-07", level=1) == 0).all()
-    assert (share.xs("2026-10-31", level=1) < 1).all()
+    grid = pd.MultiIndex.from_product([snap.locations, snap.week_ends])
+    got = share.reindex(grid).to_numpy().reshape(len(snap.locations), -1)
+    # The first week holds fewer than seven onset days.
+    np.testing.assert_allclose(got[:, 1:], origin.complete[:, 1:], rtol=1e-6)
 
 
 def test_draw_keeps_the_reported_count_and_thins_the_outstanding_count() -> (
@@ -362,8 +368,7 @@ def test_a_models_reported_scores_do_not_depend_on_other_models(
 
     def reported(out: pd.DataFrame) -> pd.DataFrame:
         keep = out.loc[
-            out["model"].isin(["randomwalk", BASELINE])
-            & (out["target"] == "reported")
+            (out["model"] == "randomwalk") & (out["target"] == "reported")
         ]
         return keep.sort_values(list(keep.columns)).reset_index(drop=True)
 

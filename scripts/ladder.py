@@ -77,13 +77,13 @@ def run_nuts(model, data, sampler):
     Parallel (pmap) chains leak memory on Linux CPU (about 0.7 GB per
     30 s on archie), so the ladder runs chains vectorised until the
     adapter does. It also replaces the adapter's own function, so the
-    per-location rung runs the same way.
+    rungs run the same way.
     """
     from jax import random as jrandom
     from numpyro.infer import MCMC
 
     # Each fit compiles new executables; clearing them first stops a run
-    # of many fits (the per-location rung) exhausting LLVM's memory.
+    # of many fits exhausting LLVM's memory.
     jax.clear_caches()
     args = pr.model_args(model, data)
     model.validate_data(
@@ -114,9 +114,6 @@ COMPLETE_K = 3
 """Weeks ending at least this many weeks before the truth vintage count as
 complete, as the hub comparison does (`complete_after_weeks`);
 the complete-weeks scores use only those."""
-SP_MIN_CASES = adapter.SINGLE_PATCH_MIN_CASES
-SP_WEEKS = adapter.SINGLE_PATCH_WEEKS
-"""renewalsp fits only locations with at least this many cases."""
 SAMPLER = {
     "num_warmup": 500,
     "num_samples": 500,
@@ -124,10 +121,10 @@ SAMPLER = {
     "max_tree_depth": 10,
     "target_accept": 0.9,
 }
-RUNGS: dict[str, pr.ModelConfig | str] = {
+RUNGS: dict[str, pr.ModelConfig] = {
     **pr.model.LADDER,
     "renewalbvd": pr.BVD,
-    "renewalsp": "renewalsp",
+    "renewalsp": adapter.model_config(VARIANTS["renewalsp"]),
 }
 """Rungs in order: the build steps (S5 is `renewal`), then the variants."""
 
@@ -141,12 +138,10 @@ DESCRIPTIONS = {
     "S3 + delays, missingness, imputation": "Known and imputed onsets as two "
     "streams, with time-varying delays and missingness and the hub's "
     "imputation modelled.",
-    "S4 + coupling and importation": "Gravity importation between provinces "
-    "and an importation-only part for provinces with no cases.",
+    "S4 + coupling and importation": "Gravity importation between provinces.",
     "S5 + depletion (main)": "Susceptible depletion; this is `renewal`.",
     "renewalbvd": "BVDOutbreakSize Rt as a tempered pseudo-observation.",
-    "renewalsp": "An independent single-patch renewal per location, the "
-    "nation included.",
+    "renewalsp": "`renewal` without importation between provinces.",
 }
 """One sentence per rung: what it adds."""
 
@@ -350,8 +345,7 @@ def as_reported_samples(task, run, as_of: str) -> pd.DataFrame:
     draws = run["draws"]["as_reported"][cut]
     if data.names == ["CD"]:
         return national_samples(task, run, draws["national"])
-    samples, _ = samples_table(task, data, draws)
-    return samples
+    return samples_table(task, data, draws)
 
 
 def fit_metrics(run) -> dict[str, float]:
@@ -439,57 +433,6 @@ def prior_wild(config, outbreak, table) -> float:
     return float(np.mean(~np.isfinite(ahead) | (ahead > 10 * peak)))
 
 
-def per_location(
-    task, table, as_of: str | None = None
-) -> tuple[pd.DataFrame, dict]:
-    """Fit `renewalsp`: one single-patch fit per province.
-
-    Provinces with at least `SP_MIN_CASES` cases in the last `SP_WEEKS`
-    data weeks are fitted, as `renewalsp`; the rest get
-    zeros (their reported counts are below the threshold). National is
-    the sum of the provinces. With `as_of`, samples are the counts as
-    reported by it.
-    """
-    config = adapter.model_config(VARIANTS["renewalsp"])
-    rows = task.target.loc[task.target["vintage"] == task.vintage]
-    weeks_ = sorted(set(rows["target_end_date"]))[-SP_WEEKS:]
-    cases = (
-        rows.loc[rows["target_end_date"].isin(weeks_)]
-        .groupby("location")["total"]
-        .sum()
-    )
-    frames, fits = [], []
-    for loc in task.locations:
-        if cases.get(loc, 0) < SP_MIN_CASES:
-            continue
-        sub = dataclasses.replace(task, locations=(loc,))
-        run = fit_one(sub, config, table, as_of=as_of)
-        nat = (
-            run["draws"]["as_reported"][
-                next(iter(run["draws"]["as_reported"]))
-            ]["national"]
-            if as_of is not None
-            else run["draws"]["national"]
-        )
-        part = national_samples(sub, run, nat).assign(location=loc)
-        frames.append(part)
-        fits.append((loc, fit_metrics(run)))
-    samples = pd.concat(frames, ignore_index=True)
-    seconds = sum(f["seconds"] for _, f in fits)
-    worst = max(fits, key=lambda f: f[1]["max_rhat"])
-    summary = {
-        "seconds": seconds,
-        "max_rhat": worst[1]["max_rhat"],
-        "worst_rhat_param": f"{worst[0]}:{worst[1]['worst_rhat_param']}",
-        "min_ess": min(f["min_ess"] for _, f in fits),
-        "min_ess_per_s": min(f["min_ess"] for _, f in fits) / seconds,
-        "divergent": float(np.mean([f["divergent"] for _, f in fits])),
-        "depth_hits": float(np.mean([f["depth_hits"] for _, f in fits])),
-        "n_fits": len(fits),
-    }
-    return samples, summary
-
-
 def province_crps(samples, truth, locations) -> dict[str, float]:
     """Mean CRPS per province over the truth weeks, a missing forecast 0."""
     in_truth = {w for (_, w) in truth.index}
@@ -562,19 +505,16 @@ def real_scores(name, config, table, real, out) -> dict:
             target, delays.loc[delays["vintage"] == origin], origin,
             locations, "real",
         )  # fmt: skip
-        if config == "renewalsp":
-            samples, res = per_location(task, table, as_of=REAL_TRUTH)
-        else:
-            bvd = bvd_rows(task) if config.bvd else None
-            if config.bvd:
-                out[f"real_bvd_as_of_{origin}"] = (
-                    None if bvd is None else bvd["as_of"].iloc[0]
-                )
-            run = fit_one(task, config, table, bvd, as_of=REAL_TRUTH)
-            samples = as_reported_samples(task, run, REAL_TRUTH)
-            res = fit_metrics(run) | {"n_active": len(run["data"].names)}
-            if not config.national:
-                res |= province_extras(run, FOCUS, TIMING)
+        bvd = bvd_rows(task) if config.bvd else None
+        if config.bvd:
+            out[f"real_bvd_as_of_{origin}"] = (
+                None if bvd is None else bvd["as_of"].iloc[0]
+            )
+        run = fit_one(task, config, table, bvd, as_of=REAL_TRUTH)
+        samples = as_reported_samples(task, run, REAL_TRUTH)
+        res = fit_metrics(run) | {"n_active": len(run["data"].names)}
+        if not config.national:
+            res |= province_extras(run, FOCUS, TIMING)
         res |= scores(samples, later, REAL_TRUTH)
         res |= province_crps(samples, later, FOCUS)
         print(name, "real", origin, res, flush=True)
@@ -611,29 +551,24 @@ def summarise_origins(results) -> dict:
 def run_rung(name, config, outbreak, table, real) -> dict:
     """Fit a rung on the simulated and real tasks and score it."""
     out: dict = {"rung": name}
-    single = config == "renewalsp"
-    if not single:
-        out["prior_wild"] = prior_wild(config, outbreak, table)
+    out["prior_wild"] = prior_wild(config, outbreak, table)
     truth = outbreak.truth().set_index(["location", "target_end_date"])["truth"]
     sims = []
     for day in SIM_DAYS:
-        # Each fit compiles new executables; without clearing, the
-        # per-location rung runs out of mappable memory in LLVM.
+        # Each fit compiles new executables; without clearing, a run of
+        # many fits runs out of mappable memory in LLVM.
         jax.clear_caches()
         vintage = (outbreak.settings.start + dt.timedelta(days=day)).isoformat()
         target, delays = outbreak.vintage(vintage)
         task = task_for(target, delays, vintage, SIM_LOCATIONS, "simulated")
-        if single:
-            samples, res = per_location(task, table)
-        else:
-            bvd = synthetic_bvd(outbreak, vintage) if config.bvd else None
-            run = fit_one(task, config, table, bvd)
-            samples, _ = samples_table(task, run["data"], run["draws"])
-            if config.national:
-                samples = national_samples(task, run)
-            res = fit_metrics(run) | rt_metrics(run, outbreak)
-            if not config.national:
-                res |= province_extras(run, SIM_LOCATIONS, TIMING)
+        bvd = synthetic_bvd(outbreak, vintage) if config.bvd else None
+        run = fit_one(task, config, table, bvd)
+        samples = samples_table(task, run["data"], run["draws"])
+        if config.national:
+            samples = national_samples(task, run)
+        res = fit_metrics(run) | rt_metrics(run, outbreak)
+        if not config.national:
+            res |= province_extras(run, SIM_LOCATIONS, TIMING)
         res |= scores(samples, truth)
         sims.append((str(day), res))
         print(

@@ -51,8 +51,7 @@ $$
 The energy score on the log scale is the energy score of $\log(1 + \mathbf{y})$ against $\log(1 + \mathbf{X}_i)$, never the log of the score.
 Relative energy scores are ratios of means against `randomwalk` over the origins and releases both have, and $n$ counts those.
 The score rewards a joint pattern across places only where draws are joint.
-`renewal` and `renewalbvd` draws are joint across provinces, one posterior draw per sample index.
-`renewalsp` fits each province on its own, so its draws are independent across provinces.
+The renewal models' draws are joint across provinces, one posterior draw per sample index.
 Zones split each province draw, so zones are joint within a province for every renewal model.
 `randomwalk` and `randomwalknowcast` draw each place independently.
 Hub teams' samples are joint across weeks within a place only, as the hub's sample format sets, so pairing their indices across places scores them as independent across places.
@@ -76,13 +75,17 @@ Each real release up to the latest model choice date with a later release is an 
 The random walk models forecast from the releases up to the origin only.
 The renewal models' stored forecasts from the origin are scored with them.
 So are hub teams' forecasts for a round, at the latest release serving it.
-An origin with no pair of releases whose gap is within the delay window, $D = 42$ days, has no delay factor and no forecast.
-It is listed with no forecasts and nothing replaces it.
+A model that cannot forecast from an origin, such as a random walk model with no pair of releases within the delay window, $D = 42$ days, is listed with no forecasts there.
 Two targets are scored.
 
 **Reported.** The count each later release $o'$ shows for every forecast week it reports.
-Every model forecasts the final count $X$ of week $w$.
-Day $t$ is $a = c - t$ days old at a cut-off $c$, and the share of its final count reported then is $\pi(a) = 1 / G(a)$, with $G(a)$ the growth from age $a$ to $D$ under the daily delay of the origin ([Baseline models](baselines.md#delay)).
+`randomwalk` is scored on its samples as they are, with no delay.
+Every other model forecasts the final count $X$ of week $w$ and is mapped to what $o'$ shows by its own modelled delay.
+Day $t$ is $a = c - t$ days old at a cut-off $c$, and $\pi(a)$ is the share of its final count the model expects reported by then.
+For `randomwalknowcast` and `pprandomwalknowcast`, $\pi(a) = 1 / G(a)$ under the daily delay each fits at the origin ([Baseline models](baselines.md#delay)).
+For the renewal models it is the posterior median of the onset-to-report delay each fit stores, the pooled one for every place or each province's own.
+Each place is mapped by the model's delay at that place, and a zone with none by its province's.
+Where a model has no delay for the country, as `renewalsp`, the country is the sum of its mapped provinces.
 Days after the cut-off have $\pi = 0$, and a week's share $\pi_w$ is the mean over its seven days.
 With $R_o$ the count reported at the origin, the count outstanding there, $X - R_o$, is thinned binomially, so each sample becomes a draw of the count reported at $o'$,
 
@@ -91,13 +94,11 @@ R_o + \text{Binomial}(X - R_o, q), \qquad q = \frac{\pi_w(c_{o'}) - \pi_w(c_o)}{
 $$
 
 with the sign carried when $X < R_o$, and a week fully reported at the origin has $q = 1$.
-Only the delay fitted at the origin is used.
-Its mean is the growth over the gap to $o'$ for `randomwalknowcast`, and the floor maps to itself.
+A model with no modelled delay, such as a hub team, is scored on complete weeks only.
 
 **Complete weeks.** The count the latest release shows for the weeks it reports in full.
 A week is complete when it is at least 4 weeks back from the week holding the latest release's cut-off and grew by less than 2% since the release before.
 
-The floor is the count reported at the origin, scored on both targets as a forecast with no spread.
 Scores are WIS, 50% and 90% coverage and bias, by model, origin, weeks back from the origin's week and place.
 Relative WIS is against `randomwalk` on the forecasts both made, for national and the provinces pooled, over all origins and by origin, and by origin and place.
 Every table counts its forecasts, $n$, so a model with fewer forecasts was scored on fewer weeks or places.
@@ -139,12 +140,25 @@ Zones are scored on the reported target as for [real releases](#real-releases), 
 Relative WIS is against `randomwalk` in the same form.
 On the Nowcast page the fitted models' zone samples at the latest release are those of their stored fits, where they have one.
 
+## Checks
+
+The scores on the reported target are also averaged by the type of place and by a plausibility flag of each forecast, both decided from the counts reported at the origin.
+Week $w$ is the latest week ending on or before the origin, and $c(t)$ the count reported then for the week ending $t$.
+A place is silent if no case is reported in the `RECENT_WEEKS` weeks to $w$, the random walk's walk window (`walk_weeks`), small if no week has more than 5 cases, and larger otherwise.
+The flag is set from the forecast of the reference week $w + 1$, with median $q_{50}$ and 95% quantile $q_{95}$.
+The level is $\ell = \max\{(c(w - 3) + c(w - 2)) / 2,\ c(w - 1)\}$ and the recent maximum is $r = \max(1, \max_{w - 4 \le t \le w} c(t))$.
+A forecast collapses if $\ell \ge 3$ and $q_{50} \le \ell / 3$.
+It blows up if $q_{50} > 3r$ and $q_{50} - r \ge 5$, or $q_{95} > 10r$ and $q_{95} - r \ge 20$.
+The thresholds pick out forecasts far from every recent count.
+A forecast with neither has no flag.
+Every scored week of a forecast takes the forecast's place type and flag, and the scores are averaged over scored weeks.
+
 ## Comparison with hub forecasts
 
 For each hub reference date, our unfitted models forecast from the latest real vintage serving the round.
 Fitted models use their stored backtest or held-out forecasts for the same round.
 Where we submitted to a round, our submitted file is a series of its own beside these main-build forecasts.
-Every model is scored on the weeks it forecast as for [real releases](#real-releases), from the vintage serving the round.
+Every model is scored on the complete weeks it forecast, as for [real releases](#real-releases), from the vintage serving the round, since hub teams have no modelled delay we can see.
 WIS is relative to `randomwalk` on the weeks both forecast, on the [comparison page](../comparison.md).
 A round is pending until a later real release exists.
 
