@@ -20,11 +20,41 @@ information on $F_\ell$ and does not count the latest release twice.
 from __future__ import annotations
 
 import jax.numpy as jnp
+import numpy as np
 import numpyro
 import numpyro.distributions as dist
 from jax import Array
 from jax.typing import ArrayLike
 from pyrenew.metaclass import RandomVariable
+
+
+def published_weights(ages: ArrayLike, n_lag: int) -> np.ndarray:
+    r"""Weights that give the published share of each row from the lag pmf.
+
+    A row's onset days $u$ have report ages $a_u$ at a release, and
+
+    $$\sum_u F_\ell(a_u) = \sum_{l=0}^{L} p_\ell(l)
+    \,\#\{u : a_u \ge l\},$$
+
+    with $F_\ell(a) = 0$ for $a < 0$ and $F_\ell(a) = 1$ for $a \ge L$,
+    so the published share is a fixed matrix times the pmf. The ages are
+    data, so the matrix is built once in NumPy.
+
+    Parameters
+    ----------
+    ages : ArrayLike
+        Report ages, `(n, 7)`. Must be concrete, not traced.
+    n_lag : int
+        Length of the lag pmf, $L + 1$.
+
+    Returns
+    -------
+    numpy.ndarray
+        `(n, L + 1)`, the number of onset days of each row at least
+        `l` days old.
+    """
+    a = np.asarray(ages)
+    return (a[..., None] >= np.arange(n_lag)).sum(axis=-2).astype(float)
 
 
 def kept_share(
@@ -41,18 +71,19 @@ def kept_share(
     pairs : dict
         `before` and `after` report ages, `(n, 7)`, and the one-hot
         `pair` of each cell, `(n, K)` (`data.releases.release_pairs`).
+        The ages must be concrete (`published_weights`).
 
     Returns
     -------
     Array
         $q$ for each cell, `(n,)`.
     """
-    cdf = jnp.cumsum(jnp.asarray(pmf))
-    last = cdf.shape[0] - 1
+    pmf = jnp.asarray(pmf)
+    n_lag = pmf.shape[0]
 
-    def published(ages: Array) -> Array:
-        ages = jnp.asarray(ages)
-        return jnp.where(ages < 0, 0.0, cdf[jnp.clip(ages, 0, last)]).sum(-1)
+    def published(ages: ArrayLike) -> Array:
+        weights = published_weights(ages, n_lag)
+        return jnp.asarray(weights, dtype=pmf.dtype) @ pmf
 
     b = jnp.asarray(pairs["pair"]) @ jnp.asarray(background)
     later = jnp.maximum(published(pairs["after"]), 1e-12)

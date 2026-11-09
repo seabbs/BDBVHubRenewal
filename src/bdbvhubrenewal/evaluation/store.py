@@ -718,6 +718,13 @@ def command(args: argparse.Namespace) -> int:
     int
         0 on success, 1 if the fit failed or the arguments are wrong.
     """
+    sampler, code = samplers(args.policy), code_digest()
+    if args.action == "fit":
+        from bdbvhubrenewal.cli import host_devices
+
+        # Before anything starts JAX, so the chains run in parallel.
+        chains = sampler.get(args.model, {}).get("num_chains", 1)
+        host_devices(int(chains))
     config = load_config(args.config)
     tasks = origin_tasks(
         load_target(args.data),
@@ -725,7 +732,6 @@ def command(args: argparse.Namespace) -> int:
         config,
         load_daily(args.data),
     )
-    sampler, code = samplers(args.policy), code_digest()
     models = args.models or stored_models()
     if args.action == "fit":
         if args.model not in stored_models() or args.origin not in tasks:
@@ -735,10 +741,6 @@ def command(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 1
-        from bdbvhubrenewal.cli import host_devices
-
-        chains = sampler.get(args.model, {}).get("num_chains", 1)
-        host_devices(int(chains))
         stored = fit(args.model, tasks[args.origin], sampler, code)
         path = write_fit(args.store, stored)
         print(f"Wrote {path} ({stored.meta['status']}).")

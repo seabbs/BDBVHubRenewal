@@ -11,6 +11,7 @@ Commands:
 - `zone-backtest`: score the random walk models run at zone level.
 - `digest`: hash what a backtest reads, to key its cached outputs.
 - `concat-results`: stack the results files of runs made apart.
+- `score`: score the forecasts of `--forecast-only` runs together.
 - `fit`: fit a configuration and write the fit directory and its
   `diagnostics.json`, for the submission CI.
 - `fit-store`: list the fitted models' fits the store lacks, make one, or
@@ -61,9 +62,17 @@ from bdbvhubrenewal.data.tidy import write_csv
 from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.evaluation import store
-from bdbvhubrenewal.evaluation.nowcast import release_backtest, stored_delays
+from bdbvhubrenewal.evaluation.nowcast import (
+    ReleaseBacktest,
+    ReleaseForecasts,
+    forecast_releases,
+    release_backtest,
+    score_releases,
+    stored_delays,
+)
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
+    ForecastModel,
     ForecastTask,
     check_samples,
     get_model,
@@ -96,7 +105,7 @@ from bdbvhubrenewal.submission.validate import (
 )
 from bdbvhubrenewal.submission.validate import main as validate_main
 
-__all__ = ["build_parser", "host_devices", "main"]
+__all__ = ["build_parser", "chunk", "host_devices", "main"]
 
 MIN_HORIZON = -6
 """First week forecast, in weeks from the reference date: 7 weeks up to
@@ -106,6 +115,46 @@ _ABBR_HELP = (
     "Hub model abbreviation. Defaults to `randomwalk` for random walk and "
     "otherwise to the submission abbreviation in config/hub.toml."
 )
+
+
+_CHUNK_HELP = (
+    "Run only block K of N (`K/N`, from 0) of the {what}, in order, so the "
+    "blocks can run apart and their results be stacked (`concat-results`)."
+)
+
+
+def chunk(items: Sequence[str], spec: str) -> list[str]:
+    """Return block K of N of `items`, with `spec` as `K/N` (K from 0).
+
+    The blocks are contiguous and in order, sizes differing by at most
+    one, so stacking blocks 0 to N - 1 gives `items` again.
+
+    Parameters
+    ----------
+    items : sequence of str
+        Such as forecast dates or origins.
+    spec : str
+        `K/N`.
+
+    Returns
+    -------
+    list of str
+        The block, empty if N exceeds the number of items.
+
+    Raises
+    ------
+    ValueError
+        If `spec` is not `K/N` with 0 <= K < N.
+    """
+    try:
+        k, n = (int(x) for x in spec.split("/"))
+    except ValueError:
+        raise ValueError(f"chunk must be K/N, got {spec!r}") from None
+    if not 0 <= k < n:
+        raise ValueError(f"chunk {spec!r} needs 0 <= K < N")
+    size, extra = divmod(len(items), n)
+    start = k * size + min(k, extra)
+    return list(items[start : start + size + (k < extra)])
 
 
 def _abbr(args: argparse.Namespace) -> str:
@@ -179,6 +228,35 @@ def build_parser() -> argparse.ArgumentParser:
         help="Scenarios to run, so each can run apart. Defaults to all.",
     )
     back.add_argument(
+        "--recovery-only",
+        action="store_true",
+        help="Run only the recovery check on the simulated outbreak.",
+    )
+    back.add_argument(
+        "--no-recovery",
+        action="store_true",
+        help="Leave out the recovery check, to run it apart.",
+    )
+    back.add_argument(
+        "--forecast-only",
+        action="store_true",
+        help="Forecast without scoring, writing the forecasts to --parts, "
+        "so each model can run apart; `score` scores them together.",
+    )
+    back.add_argument(
+        "--parts",
+        default="output/parts",
+        help="Where --forecast-only writes the forecasts.",
+    )
+    back.add_argument(
+        "--chunk",
+        default=None,
+        help=_CHUNK_HELP.format(
+            what="recovery check's dates (with --recovery-only) or the "
+            "scenario dates (with --scenarios-only)"
+        ),
+    )
+    back.add_argument(
         "--lopo",
         action="store_true",
         help="Run the leave-one-province-out check instead.",
@@ -217,6 +295,15 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="*",
         default=["randomwalk", "randomwalknowcast", "pprandomwalknowcast"],
     )
+    zb.add_argument(
+        "--chunk", default=None, help=_CHUNK_HELP.format(what="origins")
+    )
+    zb.add_argument(
+        "--forecast-only",
+        action="store_true",
+        help="Forecast without scoring, writing to --parts.",
+    )
+    zb.add_argument("--parts", default="output/parts")
     zb.add_argument("--out", default="results/zone-scores.csv")
     zb.add_argument("--energy-out", default="results/zone-energy.csv")
     zb.add_argument("--quantiles-out", default="results/zone-quantiles.csv")
@@ -235,6 +322,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="Further files or directories the run reads.",
     )
     dig.add_argument("--text", default="", help="Such as the commands run.")
+    dig.add_argument(
+        "--model",
+        default=None,
+        help="Hash only this model's code (its import closure) with the "
+        "data, for a --forecast-only run of it.",
+    )
+
+    sc = sub.add_parser(
+        "score",
+        help="Score the forecasts written by --forecast-only runs, every "
+        "model together, and write the results as one run would.",
+    )
+    sc.add_argument("--config", default="config/backtest.toml")
+    sc.add_argument("--data", default=data_dir)
+    sc.add_argument("--results", default="results")
+    sc.add_argument("--output", default="results")
+    sc.add_argument(
+        "parts",
+        nargs="+",
+        help="The runs' --parts directories, in the order one run takes "
+        "the models.",
+    )
 
     cat = sub.add_parser(
         "concat-results",
@@ -242,6 +351,13 @@ def build_parser() -> argparse.ArgumentParser:
         "scenarios, in the order given.",
     )
     cat.add_argument("--out", default="results")
+    cat.add_argument(
+        "--dedupe",
+        nargs="*",
+        default=[],
+        help="Files every part writes in full, such as a scenario's truth "
+        "when its dates run apart: one copy of each row is kept.",
+    )
     cat.add_argument("parts", nargs="+", help="Each run's results directory.")
 
     fit = sub.add_parser(
@@ -533,14 +649,18 @@ def _backtest(args: argparse.Namespace) -> int:
     results, output = Path(args.results), Path(args.output)
     results.mkdir(parents=True, exist_ok=True)
     output.mkdir(parents=True, exist_ok=True)
+    if args.chunk and not (args.scenarios_only or args.recovery_only):
+        print(
+            "ERROR: --chunk needs --scenarios-only or --recovery-only.",
+            file=sys.stderr,
+        )
+        return 1
     models = [get_model(n) for n in names]
+    if args.forecast_only:
+        return _forecast_parts(args, config, target, delays, models)
     fits: list[pd.DataFrame] = []
     if args.scenarios_only:
-        as_of = args.scenario_as_of or bt.real_vintages(target)[-1]
-        dates = args.scenario_dates or [
-            (as_date(as_of) - dt.timedelta(weeks=k)).isoformat()
-            for k in (3, 2, 1, 0)
-        ]
+        as_of, dates = _scenario_dates(args, target)
         sforecasts, sscores, senergy, struth = bt.run_scenarios(
             models,
             config,
@@ -574,6 +694,13 @@ def _backtest(args: argparse.Namespace) -> int:
         _write_fits(fits, results / "lopo-fits.csv")
         print(f"Leave one province out: {len(lopo_scores)} scored forecasts.")
         return 0
+    if args.recovery_only:
+        if args.chunk:
+            dates = chunk(config.simulated_dates, args.chunk)
+            config = dataclasses.replace(config, simulated_dates=tuple(dates))
+        rscores = _recovery(args, config, models, results, output)
+        print(f"Recovery: {len(rscores)} scored forecasts in {results}.")
+        return 0
     learnt: list[pd.DataFrame] = []
     forecasts = bt.run_development(
         models,
@@ -591,6 +718,218 @@ def _backtest(args: argparse.Namespace) -> int:
     forecasts = bt.merge_by_model(output / "forecasts.csv.gz", forecasts)
     _release_backtest(args, config, target, delays, results, forecasts)
     write_csv(forecasts, output / "forecasts.csv.gz")
+    n_recovery = "not run"
+    if not args.no_recovery:
+        n_recovery = str(len(_recovery(args, config, models, results, output)))
+    print(
+        f"Development: {len(forecasts)} forecast rows; recovery: "
+        f"{n_recovery}. Written to {results}."
+    )
+    return 0
+
+
+def _scenario_dates(
+    args: argparse.Namespace, target: pd.DataFrame
+) -> tuple[str, list[str]]:
+    """Return the scenarios' real vintage and their forecast dates."""
+    as_of = args.scenario_as_of or bt.real_vintages(target)[-1]
+    dates = args.scenario_dates or [
+        (as_date(as_of) - dt.timedelta(weeks=k)).isoformat()
+        for k in (3, 2, 1, 0)
+    ]
+    if args.chunk:
+        dates = chunk(dates, args.chunk)
+    return as_of, dates
+
+
+def _forecast_parts(
+    args: argparse.Namespace,
+    config: bt.BacktestConfig,
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    models: Sequence[ForecastModel],
+) -> int:
+    """Forecast without scoring and write the forecasts to `args.parts`.
+
+    The forecasting half of each backtest, so each model can run apart
+    and be cached on its own code; `score` scores the parts together.
+    """
+    parts = Path(args.parts)
+    parts.mkdir(parents=True, exist_ok=True)
+    daily = load_daily(args.data)
+    if args.scenarios_only:
+        as_of, dates = _scenario_dates(args, target)
+        forecasts, zones = bt.scenario_forecasts(
+            models,
+            config,
+            target,
+            delays,
+            load_health_zones(args.data),
+            as_of,
+            dates,
+            names=args.scenarios or list(SCENARIO_RT_SCALE),
+            daily=daily,
+        )
+        write_csv(forecasts, parts / "scenario-forecasts.csv.gz")
+        write_csv(zones, parts / "scenario-zone-forecasts.csv.gz")
+    elif args.recovery_only:
+        if args.chunk:
+            dates = chunk(config.simulated_dates, args.chunk)
+            config = dataclasses.replace(config, simulated_dates=tuple(dates))
+        forecasts = bt.recovery_forecasts(
+            models, config, lags=cutoff_lags(daily)
+        )
+        write_csv(forecasts, parts / "recovery-forecasts.csv.gz")
+    else:
+        fits: list[pd.DataFrame] = []
+        learnt: list[pd.DataFrame] = []
+        forecasts = bt.run_development(
+            models, target, delays, config, fits=fits, learnt=learnt,
+            daily=daily,
+        )  # fmt: skip
+        write_csv(forecasts, parts / "forecasts.csv.gz")
+        for name, frames in (
+            ("backtest-fits.csv", fits),
+            (DELAY_SUMMARY_FILE, learnt),
+        ):
+            table = pd.concat(frames, ignore_index=True) if frames else None
+            write_csv(pd.DataFrame() if table is None else table, parts / name)
+        real = target.loc[target["kind"] == "real"]
+        tasks = bt.make_tasks(
+            real, delays.assign(kind="real"), config, daily=daily
+        )
+        forecast_releases(tasks, target, models).write(parts)
+    print(f"Forecasts of {[m.name for m in models]} written to {parts}.")
+    return 0
+
+
+def _stack(parts: Sequence[Path], name: str) -> pd.DataFrame | None:
+    """Stack one file across the parts that have it, or None if none do."""
+    tables = [
+        t
+        for p in parts
+        if (p / name).exists() and not (t := _read_or_empty(p / name)).empty
+    ]
+    return pd.concat(tables, ignore_index=True) if tables else None
+
+
+def _order(table: pd.DataFrame) -> list[str]:
+    """Return the models of a stacked table in the order they appear."""
+    return [str(m) for m in pd.unique(table["model"])]
+
+
+def _score(args: argparse.Namespace) -> int:
+    """Score every model's forecasts from --forecast-only runs together.
+
+    Writes the files the backtest, recovery check, scenarios and zone
+    backtest write when they run every model at once.
+    """
+    from bdbvhubrenewal.evaluation.zones import ZoneForecasts, score_zones
+
+    parts = [Path(p) for p in args.parts]
+    results, output = Path(args.results), Path(args.output)
+    results.mkdir(parents=True, exist_ok=True)
+    output.mkdir(parents=True, exist_ok=True)
+    config = bt.load_config(args.config)
+    target, delays = load_target(args.data), load_delays(args.data)
+    daily = load_daily(args.data)
+    dev = _stack(parts, "forecasts.csv.gz")
+    if dev is not None:
+        order = _order(dev)
+        forecasts = bt.merge_by_model(
+            output / "forecasts.csv.gz", bt.joint_order(dev, order)
+        )
+        for name, path in (
+            ("backtest-fits.csv", results / "backtest-fits.csv"),
+            (DELAY_SUMMARY_FILE, output / DELAY_SUMMARY_FILE),
+        ):
+            table = _stack(parts, name)
+            if table is not None:
+                write_csv(
+                    bt.merge_by_model(path, bt.joint_order(table, order)),
+                    path,
+                )
+        release = [p for p in parts if (p / "release-runs.csv.gz").exists()]
+        _release_scores(
+            args, config, target, delays, results, forecasts,
+            ReleaseForecasts.read(release),
+        )  # fmt: skip
+        write_csv(forecasts, output / "forecasts.csv.gz")
+    recovery = _stack(parts, "recovery-forecasts.csv.gz")
+    if recovery is not None:
+        recovery = bt.joint_order(recovery, _order(recovery))
+        rscores, renergy = bt.score_recovery(recovery)
+        for table, path in (
+            (recovery, output / "recovery-forecasts.csv.gz"),
+            (rscores, results / "recovery-scores.csv"),
+            (renergy, results / "recovery-energy.csv"),
+        ):
+            write_csv(bt.merge_by_model(path, table), path)
+    scenario = _stack(parts, "scenario-forecasts.csv.gz")
+    if scenario is not None:
+        zone = _stack(parts, "scenario-zone-forecasts.csv.gz")
+        assert zone is not None
+        present = set(scenario["scenario"])
+        names = [n for n in SCENARIO_RT_SCALE if f"calibrated_{n}" in present]
+        sscores, senergy, struth = bt.score_scenarios(
+            scenario,
+            zone,
+            _order(scenario),
+            config,
+            target,
+            delays,
+            load_health_zones(args.data),
+            bt.real_vintages(target)[-1],
+            sorted(set(scenario["vintage"].astype(str))),
+            names,
+        )
+        # In the order one run makes them: by scenario, then task, then
+        # model.
+        models = _order(scenario)
+        scenario = pd.concat(
+            [
+                bt.joint_order(
+                    scenario.loc[scenario["scenario"] == f"calibrated_{n}"],
+                    models,
+                )
+                for n in names
+            ],
+            ignore_index=True,
+        )
+        for table, path in (
+            (scenario, output / "scenario-forecasts.csv.gz"),
+            (sscores, results / "scenario-scores.csv.gz"),
+            (senergy, results / "scenario-energy.csv"),
+        ):
+            write_csv(bt.merge_by_model(path, table), path)
+        write_csv(struth, results / "scenario-truth.csv")
+    zoned = [p for p in parts if (p / "zone-forecast-runs.csv.gz").exists()]
+    if zoned:
+        run = ZoneForecasts.read(zoned)
+        scores, energy, kept = score_zones(
+            target, delays, daily, load_daily_zones(args.data), run
+        )
+        _write_zone_results(
+            scores,
+            energy,
+            kept,
+            results / "zone-scores.csv",
+            results / "zone-energy.csv",
+            results / "zone-quantiles.csv",
+            results / "zone-draws.csv.gz",
+        )
+    print(f"Scored the forecasts of {len(parts)} parts into {results}.")
+    return 0
+
+
+def _recovery(
+    args: argparse.Namespace,
+    config: bt.BacktestConfig,
+    models: Sequence[ForecastModel],
+    results: Path,
+    output: Path,
+) -> pd.DataFrame:
+    """Run the recovery check, write its files and return its scores."""
     rforecasts, rscores, renergy = bt.run_recovery(
         models, config, lags=cutoff_lags(load_daily(args.data))
     )
@@ -600,11 +939,7 @@ def _backtest(args: argparse.Namespace) -> int:
         (renergy, results / "recovery-energy.csv"),
     ):
         write_csv(bt.merge_by_model(path, table), path)
-    print(
-        f"Development: {len(forecasts)} forecast rows; recovery: "
-        f"{len(rscores)}. Written to {results}."
-    )
-    return 0
+    return rscores
 
 
 def _release_backtest(
@@ -631,6 +966,37 @@ def _release_backtest(
         delays=learnt,
         compare=[s.name for s in list_models()],
     )
+    _write_release(out, results)
+
+
+def _release_scores(
+    args: argparse.Namespace,
+    config: bt.BacktestConfig,
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    results: Path,
+    forecasts: pd.DataFrame,
+    run: ReleaseForecasts,
+) -> None:
+    """Score stacked release forecasts with the stored models'."""
+    daily = load_daily(args.data)
+    real = target.loc[target["kind"] == "real"]
+    tasks = bt.make_tasks(real, delays.assign(kind="real"), config, daily=daily)
+    stored, learnt = _stored(args, target, forecasts)
+    out = score_releases(
+        tasks,
+        daily,
+        target,
+        run,
+        stored=stored,
+        delays=learnt,
+        compare=[s.name for s in list_models()],
+    )
+    _write_release(out, results)
+
+
+def _write_release(out: ReleaseBacktest, results: Path) -> None:
+    """Write the release backtest's tables to `results`."""
     for name, table in (
         ("scores", out.scores),
         ("quantiles", out.quantiles),
@@ -680,20 +1046,38 @@ def _stored(
     return samples, stored_delays(args.results)
 
 
+def _read_or_empty(path: Path) -> pd.DataFrame:
+    """Read a results file, or an empty table if it has no columns."""
+    try:
+        return pd.read_csv(path)
+    except pd.errors.EmptyDataError:
+        return pd.DataFrame()
+
+
 def _concat_results(args: argparse.Namespace) -> int:
     """Stack each results file across the parts, in the order given.
 
-    A file in one part only is copied. The parts' rows are kept as they
-    are: unlike `merge_by_model`, rows of the same model in two parts are
-    both kept, as each scenario run has every model.
+    A file in one part only is copied, and empty parts (a block with no
+    forecast) are skipped. The parts' rows are kept as they are: unlike
+    `merge_by_model`, rows of the same model in two parts are both kept,
+    as each block has every model.
     """
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     parts = [Path(p) for p in args.parts]
     names = sorted({f.name for p in parts for f in p.glob("*.csv*")})
     for name in names:
-        tables = [pd.read_csv(p / name) for p in parts if (p / name).exists()]
-        write_csv(pd.concat(tables, ignore_index=True), out / name)
+        tables = [
+            t
+            for p in parts
+            if (p / name).exists() and not (t := _read_or_empty(p / name)).empty
+        ]
+        table = (
+            pd.concat(tables, ignore_index=True) if tables else pd.DataFrame()
+        )
+        if name in args.dedupe:
+            table = table.drop_duplicates(ignore_index=True)
+        write_csv(table, out / name)
         print(f"{out / name}: {len(tables)} parts.")
     return 0
 
@@ -730,6 +1114,10 @@ def _zones(
 
 
 def _nowcast(args: argparse.Namespace) -> int:
+    from bdbvhubrenewal.forecasters.renewal import sampler_settings
+
+    # A renewal model given by --model is fitted here.
+    host_devices(int(sampler_settings()["num_chains"]))
     hub_config = Path(args.data) / "hub-config" / "tasks.json"
     try:
         task, handled = _task(args)
@@ -786,15 +1174,32 @@ def _print_failed(failed: list[Check]) -> int:
     return 1 if failed else 0
 
 
+def _zone_origins(args: argparse.Namespace) -> list[str] | None:
+    """Return the origins of `--chunk`, or None for all."""
+    if not args.chunk:
+        return None
+    real = load_target(args.data).query("kind == 'real'")
+    return chunk(bt.real_vintages(real)[:-1], args.chunk)
+
+
 def _zone_backtest(args: argparse.Namespace) -> int:
-    from bdbvhubrenewal.evaluation.hubcompare import forecast_quantiles
-    from bdbvhubrenewal.evaluation.zones import (
-        zone_backtest,
-        zone_relative_skill,
-    )
-    from bdbvhubrenewal.reporting.explorer import draw_subset
+    from bdbvhubrenewal.evaluation.zones import zone_backtest
 
     hub_config = Path(args.data) / "hub-config" / "tasks.json"
+    if args.forecast_only:
+        from bdbvhubrenewal.evaluation.zones import zone_forecasts
+
+        zone_forecasts(
+            load_target(args.data),
+            load_delays(args.data),
+            load_daily(args.data),
+            load_daily_zones(args.data),
+            hub_zones(hub_config),
+            models=args.models,
+            origins=_zone_origins(args),
+        ).write(args.parts)
+        print(f"Zone forecasts of {args.models} written to {args.parts}.")
+        return 0
     scores, energy, forecasts = zone_backtest(
         load_target(args.data),
         load_delays(args.data),
@@ -802,22 +1207,54 @@ def _zone_backtest(args: argparse.Namespace) -> int:
         load_daily_zones(args.data),
         hub_zones(hub_config),
         models=args.models,
+        origins=_zone_origins(args),
     )
-    out = Path(args.out)
+    _write_zone_results(
+        scores,
+        energy,
+        forecasts,
+        Path(args.out),
+        Path(args.energy_out),
+        Path(args.quantiles_out),
+        Path(args.draws_out),
+    )
+    return 0
+
+
+def _write_zone_results(
+    scores: pd.DataFrame,
+    energy: pd.DataFrame,
+    forecasts: pd.DataFrame,
+    out: Path,
+    energy_out: Path,
+    quantiles_out: Path,
+    draws_out: Path,
+) -> None:
+    """Write the zone backtest's tables."""
+    from bdbvhubrenewal.evaluation.hubcompare import forecast_quantiles
+    from bdbvhubrenewal.evaluation.zones import zone_relative_skill
+    from bdbvhubrenewal.reporting.explorer import draw_subset
+
     out.parent.mkdir(parents=True, exist_ok=True)
     write_csv(scores, out)
-    write_csv(energy, args.energy_out)
+    write_csv(energy, energy_out)
+    if scores.empty:
+        # A block of origins every model skips: empty files, which
+        # `concat-results` skips when the blocks are stacked.
+        for path in (quantiles_out, draws_out):
+            write_csv(pd.DataFrame(), path)
+        print(f"Wrote {out} (no origin forecast).")
+        return
     # The zone forecasts as submitted, for the Backtest explorer: their
     # plotted quantiles and a fixed subset of draws for the trajectories.
     write_csv(
         forecast_quantiles(forecasts.assign(source="ours"), by=("origin",)),
-        args.quantiles_out,
+        quantiles_out,
     )
-    write_csv(draw_subset(forecasts).drop(columns="draw"), args.draws_out)
+    write_csv(draw_subset(forecasts).drop(columns="draw"), draws_out)
     rel = zone_relative_skill(scores, by=("horizon",))
     print(rel.round(3).to_string(index=False))
     print(f"Wrote {out} ({len(scores)} scores).")
-    return 0
 
 
 def _write_national_sidecar(
@@ -1109,12 +1546,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "zone-backtest":
         return _zone_backtest(args)
     if args.command == "digest":
-        from bdbvhubrenewal.evaluation.digest import backtest_digest
+        from bdbvhubrenewal.evaluation.digest import (
+            backtest_digest,
+            model_digest,
+        )
 
-        print(backtest_digest(args.root, args.extra, args.text))
+        if args.model:
+            print(model_digest(args.model, args.root, args.extra, args.text))
+        else:
+            print(backtest_digest(args.root, args.extra, args.text))
         return 0
     if args.command == "concat-results":
         return _concat_results(args)
+    if args.command == "score":
+        return _score(args)
     if args.command == "metadata":
         return _metadata(args)
     if args.command == "bvd":  # pragma: no cover - network

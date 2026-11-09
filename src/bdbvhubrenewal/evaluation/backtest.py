@@ -68,11 +68,13 @@ __all__ = [
     "energy_tasks",
     "forecast_locations",
     "forecast_weeks",
+    "joint_order",
     "load_config",
     "lopo_tasks",
     "make_tasks",
     "merge_by_model",
     "real_vintages",
+    "recovery_forecasts",
     "recovery_tasks",
     "run_development",
     "run_forecasts",
@@ -80,6 +82,9 @@ __all__ = [
     "run_recovery",
     "run_scenarios",
     "saturdays",
+    "scenario_forecasts",
+    "score_recovery",
+    "score_scenarios",
     "score_tasks",
     "truth_changes",
     "truth_from_vintage",
@@ -947,16 +952,85 @@ def run_recovery(
     tuple of pandas.DataFrame
         The forecasts, the scores and the energy scores (`energy_tasks`).
     """
+    forecasts = recovery_forecasts(models, config, settings, fits, lags)
+    scores, energy = score_recovery(forecasts, settings)
+    return forecasts, scores, energy
+
+
+def recovery_forecasts(
+    models: Sequence[ForecastModel],
+    config: BacktestConfig,
+    settings: SimulationSettings | None = None,
+    fits: list[pd.DataFrame] | None = None,
+    lags: Mapping[int, int] | None = None,
+) -> pd.DataFrame:
+    """Forecast the simulated vintages, the forecasting half of `run_recovery`.
+
+    Parameters
+    ----------
+    models, config, settings, fits, lags
+        As for `run_recovery`.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Output of `run_forecasts`.
+    """
+    return run_forecasts(models, recovery_tasks(config, settings, lags), fits)
+
+
+def joint_order(forecasts: pd.DataFrame, models: Sequence[str]) -> pd.DataFrame:
+    """Put forecasts stacked by model in the order one run makes them.
+
+    `run_forecasts` runs every model on a task before the next task. Rows
+    are sorted by vintage, then by model in the order of `models`, and
+    otherwise kept in order.
+
+    Parameters
+    ----------
+    forecasts : pandas.DataFrame
+        Forecasts with `vintage` and `model`.
+    models : sequence of str
+        The models in the order one run takes them.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The rows reordered, with a fresh index.
+    """
+    if forecasts.empty:
+        return forecasts.reset_index(drop=True)
+    rank = forecasts["model"].map({m: i for i, m in enumerate(models)})
+    order = np.lexsort((rank.to_numpy(), forecasts["vintage"].astype(str)))
+    return forecasts.iloc[order].reset_index(drop=True)
+
+
+def score_recovery(
+    forecasts: pd.DataFrame, settings: SimulationSettings | None = None
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Score recovery forecasts, the scoring half of `run_recovery`.
+
+    Parameters
+    ----------
+    forecasts : pandas.DataFrame
+        Output of `recovery_forecasts`, or of several stacked in
+        `joint_order`.
+    settings : SimulationSettings, optional
+        As for `run_recovery`.
+
+    Returns
+    -------
+    tuple of pandas.DataFrame
+        The scores and the energy scores, as `run_recovery`.
+    """
     outbreak = simulate_outbreak(settings)
-    tasks = recovery_tasks(config, settings, lags)
-    forecasts = run_forecasts(models, tasks, fits)
     end = outbreak.settings.start + dt.timedelta(days=outbreak.settings.n_days)
     truth = outbreak.truth()
     scores = score_tasks(forecasts, truth, end.isoformat())
     scores["truth_vintage"] = "simulated"
     energy = energy_tasks(forecasts, truth, end.isoformat())
     energy["truth_vintage"] = "simulated"
-    return forecasts, scores, energy
+    return scores, energy
 
 
 def _truth(rows: pd.DataFrame) -> pd.DataFrame:
@@ -1020,36 +1094,144 @@ def run_scenarios(
         the country and provinces, `location`, `target_end_date`, `truth`,
         `truth_vintage` and `scenario`.
     """
-    k = config.complete_after_weeks
+    forecasts, zone_forecasts = scenario_forecasts(
+        models, config, target, delays, zones, as_of, dates, names, daily
+    )
+    scores, energy, truth = score_scenarios(
+        forecasts,
+        zone_forecasts,
+        [m.name for m in models],
+        config,
+        target,
+        delays,
+        zones,
+        as_of,
+        dates,
+        names,
+        later_weeks,
+        daily,
+    )
+    return forecasts, scores, energy, truth
+
+
+def _scenario(
+    config: BacktestConfig,
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    zones: pd.DataFrame,
+    as_of: str,
+    name: str,
+) -> tuple[SimulationSettings, SimulatedOutbreak]:
+    """Return a calibrated scenario's settings and its outbreak."""
+    settings = calibrated_settings(
+        target, delays, zones, as_of, name=name, seed=config.seed
+    )
+    return settings, simulate_outbreak(settings)
+
+
+def scenario_forecasts(
+    models: Sequence[ForecastModel],
+    config: BacktestConfig,
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    zones: pd.DataFrame,
+    as_of: str,
+    dates: Sequence[str],
+    names: Sequence[str] = tuple(SCENARIO_RT_SCALE),
+    daily: pd.DataFrame | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Forecast the calibrated scenarios, without scoring.
+
+    The forecasting half of `run_scenarios`, with the same parameters.
+
+    Returns
+    -------
+    tuple of pandas.DataFrame
+        The province forecasts and the zone forecasts allocated from
+        them (`evaluation.zones.zone_allocations`), each with `scenario`.
+    """
+    # Local import: the zone backtest builds on this module.
+    from bdbvhubrenewal.evaluation.zones import zone_allocations
+
     lags = None if daily is None else cutoff_lags(daily)
-    all_forecasts, all_scores, all_energy, all_truth = [], [], [], []
+    all_forecasts, all_zones = [], []
     for name in names:
-        settings = calibrated_settings(
-            target, delays, zones, as_of, name=name, seed=config.seed
+        settings, outbreak = _scenario(
+            config, target, delays, zones, as_of, name
         )
-        outbreak = simulate_outbreak(settings)
         sim_target, sim_delays = outbreak.vintages(list(dates), lags)
         sim_daily = outbreak.daily_vintages(
             _release_days(outbreak, list(dates)), lags
         )
         tasks = make_tasks(sim_target, sim_delays, config, daily=sim_daily)
         forecasts = run_forecasts(models, tasks)
+        allocated = zone_allocations(outbreak, tasks, [m.name for m in models])
+        all_forecasts.append(forecasts.assign(scenario=settings.name))
+        all_zones.append(allocated.assign(scenario=settings.name))
+    return (
+        pd.concat(all_forecasts, ignore_index=True),
+        pd.concat(all_zones, ignore_index=True),
+    )
+
+
+def score_scenarios(
+    forecasts: pd.DataFrame,
+    zone_forecasts: pd.DataFrame,
+    models: Sequence[str],
+    config: BacktestConfig,
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    zones: pd.DataFrame,
+    as_of: str,
+    dates: Sequence[str],
+    names: Sequence[str] = tuple(SCENARIO_RT_SCALE),
+    later_weeks: int = 2,
+    daily: pd.DataFrame | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Score the forecasts of `scenario_forecasts`.
+
+    The scoring half of `run_scenarios`, which it equals given the same
+    arguments. Forecasts of models run apart are stacked in the order of
+    `models` (`joint_order`).
+
+    Parameters
+    ----------
+    forecasts, zone_forecasts : pandas.DataFrame
+        Output of `scenario_forecasts`, of models run together or stacked.
+    models : sequence of str
+        The models, in the order one run takes them.
+    config, target, delays, zones, as_of, dates, names, later_weeks, daily
+        As for `run_scenarios`. The scenarios are simulated again for
+        the truth, which takes seconds.
+
+    Returns
+    -------
+    tuple of pandas.DataFrame
+        The scores, the energy scores and the truth, as `run_scenarios`.
+    """
+    from bdbvhubrenewal.evaluation.zones import score_zone_allocations
+
+    del daily
+    k = config.complete_after_weeks
+    all_scores, all_energy, all_truth = [], [], []
+    for name in names:
+        settings, outbreak = _scenario(
+            config, target, delays, zones, as_of, name
+        )
+        mine = forecasts["scenario"] == settings.name
+        own = joint_order(forecasts.loc[mine].drop(columns="scenario"), models)
         end = (
             settings.start + dt.timedelta(days=settings.n_days - 1)
         ).isoformat()
         final = _truth(outbreak.vintage(end)[0])
-        scores = [
-            score_tasks(forecasts, final, end, k).assign(truth_view="final")
-        ]
-        energy = [
-            energy_tasks(forecasts, final, end, k).assign(truth_view="final")
-        ]
+        scores = [score_tasks(own, final, end, k).assign(truth_view="final")]
+        energy = [energy_tasks(own, final, end, k).assign(truth_view="final")]
         for date in dates:
             later = (
                 as_date(date) + dt.timedelta(weeks=later_weeks)
             ).isoformat()
             truth = _truth(outbreak.vintage(later)[0])
-            rows = forecasts.loc[forecasts["vintage"] == date]
+            rows = own.loc[own["vintage"] == date]
             view = f"as of {later_weeks} weeks later"
             scores.append(
                 score_tasks(rows, truth, later, k).assign(truth_view=view)
@@ -1061,19 +1243,18 @@ def run_scenarios(
         scored["level"] = np.where(
             scored["location"] == NATIONAL, "national", "province"
         )
-        # Local import: the zone backtest builds on this module.
-        from bdbvhubrenewal.evaluation.zones import scenario_zone_scores
-
-        zone, zone_energy = scenario_zone_scores(
+        zmine = zone_forecasts["scenario"] == settings.name
+        zone, zone_energy = score_zone_allocations(
             outbreak,
-            tasks,
-            [m.name for m in models],
+            dates,
+            joint_order(
+                zone_forecasts.loc[zmine].drop(columns="scenario"), models
+            ),
             end,
             later_weeks,
             k,
         )
         zone["level"] = "zone"
-        all_forecasts.append(forecasts.assign(scenario=settings.name))
         all_truth.append(
             final.assign(truth_vintage=end, scenario=settings.name)
         )
@@ -1088,7 +1269,6 @@ def run_scenarios(
             )
         )
     return (
-        pd.concat(all_forecasts, ignore_index=True),
         pd.concat(all_scores, ignore_index=True),
         pd.concat(all_energy, ignore_index=True),
         pd.concat(all_truth, ignore_index=True),
