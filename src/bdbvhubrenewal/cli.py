@@ -4,12 +4,13 @@
 Commands:
 
 - `data`: download the hub data and write the tidy tables.
-- `backtest`: run the development backtest and the recovery check, with
-  `--evaluate-holdout` the rolling held-out evaluation, or with `--lopo`
-  the leave-one-province-out check.
+- `backtest`: run the development backtest and the recovery check, or
+  with `--lopo` the leave-one-province-out check.
 - `nowcast`: forecast from a real vintage, write the hub file and check it.
   With `--config` (and `--fit`), forecast from a fit configuration.
 - `zone-backtest`: score the random walk models run at zone level.
+- `digest`: hash what a backtest reads, to key its cached outputs.
+- `concat-results`: stack the results files of runs made apart.
 - `fit`: fit a configuration and write the fit directory and its
   `diagnostics.json`, for the submission CI.
 - `fit-store`: list the fitted models' fits the store lacks, make one, or
@@ -55,15 +56,11 @@ from bdbvhubrenewal.data import (
 )
 from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.releases import cutoff_lags
+from bdbvhubrenewal.data.simulate import SCENARIO_RT_SCALE
 from bdbvhubrenewal.data.tidy import write_csv
 from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.evaluation import store
-from bdbvhubrenewal.evaluation.heldout import (
-    HeldOutError,
-    load_model_choices,
-    run_heldout,
-)
 from bdbvhubrenewal.evaluation.nowcast import release_backtest, stored_delays
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
@@ -175,14 +172,16 @@ def build_parser() -> argparse.ArgumentParser:
         "weeks up to the scenario vintage.",
     )
     back.add_argument(
+        "--scenarios",
+        nargs="*",
+        choices=list(SCENARIO_RT_SCALE),
+        default=None,
+        help="Scenarios to run, so each can run apart. Defaults to all.",
+    )
+    back.add_argument(
         "--lopo",
         action="store_true",
         help="Run the leave-one-province-out check instead.",
-    )
-    back.add_argument(
-        "--evaluate-holdout",
-        action="store_true",
-        help="Run the rolling held-out evaluation instead.",
     )
 
     now = sub.add_parser("nowcast", help="Forecast and write a hub file.")
@@ -222,6 +221,28 @@ def build_parser() -> argparse.ArgumentParser:
     zb.add_argument("--energy-out", default="results/zone-energy.csv")
     zb.add_argument("--quantiles-out", default="results/zone-quantiles.csv")
     zb.add_argument("--draws-out", default="results/zone-draws.csv.gz")
+
+    dig = sub.add_parser(
+        "digest",
+        help="Print a hash of what a backtest reads, to key its outputs.",
+    )
+    dig.add_argument("--root", default=".")
+    dig.add_argument(
+        "--with",
+        dest="extra",
+        nargs="*",
+        default=[],
+        help="Further files or directories the run reads.",
+    )
+    dig.add_argument("--text", default="", help="Such as the commands run.")
+
+    cat = sub.add_parser(
+        "concat-results",
+        help="Stack the results files of runs made apart, such as the "
+        "scenarios, in the order given.",
+    )
+    cat.add_argument("--out", default="results")
+    cat.add_argument("parts", nargs="+", help="Each run's results directory.")
 
     fit = sub.add_parser(
         "fit", help="Fit a configuration and write its diagnostics."
@@ -512,27 +533,6 @@ def _backtest(args: argparse.Namespace) -> int:
     results, output = Path(args.results), Path(args.output)
     results.mkdir(parents=True, exist_ok=True)
     output.mkdir(parents=True, exist_ok=True)
-    if args.evaluate_holdout:
-        # The held-out run uses the models in the model choice record.
-        record = Path(config.model_choice)
-        if record.exists() and not load_model_choices(record):
-            print("No model choice recorded, so no vintage is held out.")
-            return 0
-        try:
-            scores = run_heldout(
-                target,
-                delays,
-                config,
-                evaluate_holdout=True,
-                out_dir=results,
-                models=names,
-                daily=load_daily(args.data),
-            )
-        except HeldOutError as err:
-            print(f"ERROR: {err}", file=sys.stderr)
-            return 1
-        print(f"Held-out scores: {len(scores)} rows in {results}.")
-        return 0
     models = [get_model(n) for n in names]
     fits: list[pd.DataFrame] = []
     if args.scenarios_only:
@@ -549,6 +549,7 @@ def _backtest(args: argparse.Namespace) -> int:
             load_health_zones(args.data),
             as_of,
             dates,
+            names=args.scenarios or list(SCENARIO_RT_SCALE),
             daily=load_daily(args.data),
         )
         for table, path in (
@@ -620,13 +621,7 @@ def _release_backtest(
     """
     daily = load_daily(args.data)
     real = target.loc[target["kind"] == "real"]
-    tasks = [
-        t
-        for t in bt.make_tasks(
-            real, delays.assign(kind="real"), config, daily=daily
-        )
-        if not config.is_heldout(t.vintage)
-    ]
+    tasks = bt.make_tasks(real, delays.assign(kind="real"), config, daily=daily)
     stored, learnt = _stored(args, target, forecasts)
     out = release_backtest(
         tasks,
@@ -683,6 +678,24 @@ def _stored(
     ]
     samples = pd.concat([ours[cols], hub.dropna(subset=["vintage"])[cols]])
     return samples, stored_delays(args.results)
+
+
+def _concat_results(args: argparse.Namespace) -> int:
+    """Stack each results file across the parts, in the order given.
+
+    A file in one part only is copied. The parts' rows are kept as they
+    are: unlike `merge_by_model`, rows of the same model in two parts are
+    both kept, as each scenario run has every model.
+    """
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    parts = [Path(p) for p in args.parts]
+    names = sorted({f.name for p in parts for f in p.glob("*.csv*")})
+    for name in names:
+        tables = [pd.read_csv(p / name) for p in parts if (p / name).exists()]
+        write_csv(pd.concat(tables, ignore_index=True), out / name)
+        print(f"{out / name}: {len(tables)} parts.")
+    return 0
 
 
 def _write_fits(fits: list[pd.DataFrame], path: Path) -> None:
@@ -1095,6 +1108,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _nowcast(args)
     if args.command == "zone-backtest":
         return _zone_backtest(args)
+    if args.command == "digest":
+        from bdbvhubrenewal.evaluation.digest import backtest_digest
+
+        print(backtest_digest(args.root, args.extra, args.text))
+        return 0
+    if args.command == "concat-results":
+        return _concat_results(args)
     if args.command == "metadata":
         return _metadata(args)
     if args.command == "bvd":  # pragma: no cover - network

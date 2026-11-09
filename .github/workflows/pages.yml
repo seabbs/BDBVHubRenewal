@@ -21,6 +21,7 @@ on:
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/pages.yml'
+      - '.github/actions/setup-forecast-env/**'
   pull_request:
     paths:
       - 'docs/**'
@@ -36,6 +37,7 @@ on:
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/pages.yml'
+      - '.github/actions/setup-forecast-env/**'
   workflow_dispatch:
 
 permissions:
@@ -49,24 +51,17 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build:
+  # The latest hub releases and the stored fits, once, so every job below
+  # reads the same data even if a release lands while they run.
+  prep:
+    name: Hub data and stored fits
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # uv and its cache, and JAX's persistent compilation cache.
       - uses: ./.github/actions/setup-forecast-env
         with:
-          sync: 'false'
-      - run: uv sync --frozen --all-groups
-      # Pages for the submitted rounds come from the ledger branch that
-      # the submission workflow writes. A merged round's page is frozen in
-      # its `pages/` and copied as it is.
-      - name: Fetch the submission ledger
-        run: |
-          mkdir -p output/ledger
-          if git fetch -q --depth 1 origin submission-ledger; then
-            git archive FETCH_HEAD | tar -x -C output/ledger
-          fi
+          save-jax: 'false'
       # The latest hub releases, as the Fit store workflow fits them.
       - name: Refresh the hub data
         env:
@@ -82,39 +77,159 @@ jobs:
         run: |
           scripts/fit-store.sh fetch output/fit-store
           uv run bdbvhubrenewal fit-store load --store output/fit-store
-      # The backtest runs only the models with no fit, keeps the stored
-      # rows and scores them again against the latest vintage. The zone
-      # and scenario backtests run the random walks only. None of these
-      # results are committed. Only this step makes them.
-      # `task results` runs the same commands locally; keep the two in step.
-      # Tables are written with a fixed gzip time, so the key changes only
-      # when what it reads changes. It leaves out Python caches, the raw
-      # downloads and data/sources.json, which records when they were made.
-      # Only the files this step writes are cached, so a hit cannot replace
-      # the committed records or the fit store's own files in results/.
-      - name: Restore the backtest outputs
-        id: backtest
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
+          name: inputs
           path: |
-            results/backtest-fits.csv
-            results/forecasts.csv.gz
-            results/heldout-*
-            results/nowcast-*
-            results/recovery-*
-            results/scenario-*
-            results/zone-*
-          key: >-
-            backtest-${{ hashFiles('src/**', '!**/__pycache__/**',
-            'config/**', 'data/**', '!data/raw/**', '!data/sources.json',
-            'results/**', 'uv.lock', '.github/workflows/pages.yml') }}
-      - name: Backtest
-        if: steps.backtest.outputs.cache-hit != 'true'
+            data
+            !data/raw
+            results
+          retention-days: 1
+
+  # The backtests that fit no model, one job each. None of their results
+  # are committed. The backtest runs only the models with no fit, keeps
+  # the stored rows and scores them again against the latest vintage. The
+  # zone and scenario backtests run the random walks only, a scenario per
+  # job. Each job's outputs are cached under a hash of what it reads
+  # (`bdbvhubrenewal digest`: the package without report-only modules or
+  # docstrings, config/, data/ less the raw downloads, the locked
+  # dependencies and its commands, and for the backtest the loaded fits
+  # in results/), so a job whose inputs did not change only restores.
+  # `task results` runs the same commands locally; keep the two in step.
+  backtest:
+    name: Backtest (${{ matrix.cell }})
+    needs: prep
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      # Every job at once: at most five of the 20 runners, briefly when
+      # cached, so other workflows still get runners.
+      max-parallel: 5
+      matrix:
+        include:
+          - cell: backtest
+            reads: results
+            run: |
+              uv run bdbvhubrenewal backtest
+            writes: |
+              results/backtest-fits.csv
+              results/delay-summary.csv
+              results/forecasts.csv.gz
+              results/nowcast-*
+              results/recovery-*
+          - cell: zones
+            run: uv run bdbvhubrenewal zone-backtest
+            writes: results/zone-*
+          - cell: scenario-falling
+            run: >-
+              uv run bdbvhubrenewal backtest --scenarios-only
+              --scenarios falling
+            writes: results/scenario-*
+          - cell: scenario-flat
+            run: >-
+              uv run bdbvhubrenewal backtest --scenarios-only
+              --scenarios flat
+            writes: results/scenario-*
+          - cell: scenario-rising
+            run: >-
+              uv run bdbvhubrenewal backtest --scenarios-only
+              --scenarios rising
+            writes: results/scenario-*
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Each job keeps its own JAX cache: the programs differ by job.
+      - uses: ./.github/actions/setup-forecast-env
+        with:
+          jax-scope: pages-${{ matrix.cell }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: inputs
+      - name: Hash what this job reads
+        id: key
+        env:
+          CELL: ${{ matrix.cell }}
+          READS: ${{ matrix.reads }}
+          RUN: ${{ matrix.run }}
         run: |
-          uv run bdbvhubrenewal backtest
-          uv run bdbvhubrenewal backtest --evaluate-holdout
-          uv run bdbvhubrenewal zone-backtest
-          uv run bdbvhubrenewal backtest --scenarios-only
+          set -euo pipefail
+          # shellcheck disable=SC2086
+          digest=$(uv run bdbvhubrenewal digest --with $READS --text "$RUN")
+          if [ -z "$digest" ]; then
+            echo "::error::digest printed nothing; refusing to key the cache"
+            exit 1
+          fi
+          echo "key=backtest-$CELL-$digest" >> "$GITHUB_OUTPUT"
+      # Restore and save are separate steps, so outputs are saved as soon
+      # as the run ends and a hit saves nothing.
+      - name: Restore the outputs
+        id: cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ matrix.writes }}
+          key: ${{ steps.key.outputs.key }}
+      - name: Run
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: ${{ matrix.run }}
+      - name: Save the outputs
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ matrix.writes }}
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+      # A hit runs nothing, so say so rather than leave the job blank.
+      - name: Note the cached outputs
+        if: steps.cache.outputs.cache-hit == 'true'
+        env:
+          CELL: ${{ matrix.cell }}
+        run: |
+          echo "### Backtest \`$CELL\`: cache hit, not rerun" \
+            >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: backtest-${{ matrix.cell }}
+          path: ${{ matrix.writes }}
+          if-no-files-found: error
+          retention-days: 1
+
+  build:
+    needs: [prep, backtest]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # uv and its cache, and JAX's persistent compilation cache.
+      - uses: ./.github/actions/setup-forecast-env
+        with:
+          sync: 'false'
+          jax-scope: pages-report
+      - run: uv sync --frozen --all-groups
+      # Pages for the submitted rounds come from the ledger branch that
+      # the submission workflow writes. A merged round's page is frozen in
+      # its `pages/` and copied as it is.
+      - name: Fetch the submission ledger
+        run: |
+          mkdir -p output/ledger
+          if git fetch -q --depth 1 origin submission-ledger; then
+            git archive FETCH_HEAD | tar -x -C output/ledger
+          fi
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: inputs
+      # The backtest and zone jobs write their own files, so they are
+      # copied in. Every scenario job writes every scenario file, so those
+      # are stacked in the order the scenarios ran in one run.
+      - name: Gather the backtest outputs
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: backtest-*
+          path: output/backtest
+      - run: |
+          cp output/backtest/backtest-backtest/* output/backtest/backtest-zones/* \
+            results/
+          uv run bdbvhubrenewal concat-results --out results \
+            output/backtest/backtest-scenario-{falling,flat,rising}
       - name: Compare with hub forecasts, then the docs figures and tables
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -166,9 +281,9 @@ jobs:
         with:
           name: site
           path: _site
-      # The results and data the `release` job may attach.
+      # The results and data the `release` job may attach, and on a pull
+      # request for comparing its results with main's.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         with:
           name: results
           path: |

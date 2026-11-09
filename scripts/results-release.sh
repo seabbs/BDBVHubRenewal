@@ -76,7 +76,7 @@ EOF
 Every model's results at this round's hub release, $origin, built from commit $GITHUB_SHA.
 
 - \`hub.zip\`: each model's forecast in the hub's format, samples and quantiles for the country, provinces and health zones (\`hub/$origin/<model>-samples.csv.gz\`, \`hub/$origin/<model>-quantiles.csv.gz\`), and the scored hub comparison (\`hub-comparison/\`).
-- \`forecasts.csv.gz\`, \`heldout-forecasts.csv.gz\`: every model's forecasts at each real origin.
+- \`forecasts.csv.gz\`: every model's forecasts at each real origin.
 - \`*-scores.csv\`, \`*-energy.csv\`, \`nowcast-*.csv\`, \`zone-*.csv\`: the scores behind the Backtest, Nowcast and Comparison pages.
 - \`backtest-fits.csv\`, \`delay-summary.csv\`, \`fit-store.json\`: the stored fits' diagnostics and learnt delays, and the fit behind each model and origin.
 - \`data.zip\`: the tidy hub data the build used.

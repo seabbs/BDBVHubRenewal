@@ -74,13 +74,12 @@ tasks:
       - git fetch -q origin gh-pages
       - uv run python scripts/score_history.py {{.CLI_ARGS}}
 
-  # The same commands as the Backtest step of .github/workflows/pages.yml;
+  # The same commands as the backtest jobs of .github/workflows/pages.yml;
   # keep the two in step.
   results:
-    desc: Make every derived file in results/ as the Pages build does (the backtest, held-out, zone and scenario runs)
+    desc: Make every derived file in results/ as the Pages build does (the backtest, zone and scenario runs)
     cmds:
       - task: backtest
-      - uv run bdbvhubrenewal backtest --evaluate-holdout
       - uv run bdbvhubrenewal zone-backtest
       - uv run bdbvhubrenewal backtest --scenarios-only
 
@@ -98,12 +97,6 @@ tasks:
     desc: Score randomwalk, randomwalknowcast and pprandomwalknowcast at health-zone level (writes results/zone-scores.csv)
     cmds:
       - uv run bdbvhubrenewal zone-backtest {{.CLI_ARGS}}
-
-  backtest-heldout:
-    desc: Score every held-out vintage under the model chosen at the time (needs results/model-choice.yml)
-    cmds:
-      - task: fit-store
-      - uv run bdbvhubrenewal backtest --evaluate-holdout
 
   nowcast:
     desc: Forecast from the latest vintage and write a checked hub file to output/submission/
