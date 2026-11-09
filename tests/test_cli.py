@@ -323,9 +323,9 @@ def test_concat_results_keeps_every_partial(tmp_path: Path) -> None:
 def test_digest_prints_the_backtest_digest(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    from bdbvhubrenewal.evaluation import store
+    from bdbvhubrenewal.evaluation.digest import backtest_digest
 
     args = ["digest", "--root", str(ROOT), "--text", "cell"]
     assert main([*args, "--with", "results"]) == 0
     key = capsys.readouterr().out.strip()
-    assert key == store.backtest_digest(ROOT, extra=["results"], text="cell")
+    assert key == backtest_digest(ROOT, extra=["results"], text="cell")
