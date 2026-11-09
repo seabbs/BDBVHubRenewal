@@ -81,7 +81,6 @@ __all__ = [
     "fit_summary",
     "forecast_renewal",
     "horizon_weeks",
-    "init_strategy",
     "model_config",
     "nuts_kernel",
     "parameter_diagnostics",
@@ -227,56 +226,31 @@ def sampler_settings(
     return {**DEFAULT_SAMPLER, **env, **dict(overrides or {})}
 
 
-def init_strategy(sampler: Mapping[str, Any]) -> Any:
-    """Return NumPyro's init strategy for a sampler table.
-
-    Chains start at the prior median, as in BVDOutbreakSize.
-
-    Parameters
-    ----------
-    sampler : mapping
-        The sampler table.
-
-    Returns
-    -------
-    callable
-        A NumPyro init strategy.
-
-    Raises
-    ------
-    ValueError
-        On an unknown `init`.
-    """
-    from numpyro.infer import init_to_median
-
-    init = sampler.get("init", "median")
-    if init == "median":
-        return init_to_median(num_samples=15)
-    raise ValueError(f"Unknown init {init!r}: use 'median'.")
-
-
 def nuts_kernel(model_fn: Any, sampler: Mapping[str, Any]) -> Any:
     """Build the NUTS kernel for a sampler table.
+
+    Each chain starts from its own prior draw, so chains start apart and
+    R-hat can show a chain that stays in another mode.
 
     Parameters
     ----------
     model_fn : callable
         The NumPyro model.
     sampler : mapping
-        `target_accept`, `max_tree_depth` and optionally `init`.
+        `target_accept` and `max_tree_depth`.
 
     Returns
     -------
     numpyro.infer.NUTS
         The kernel.
     """
-    from numpyro.infer import NUTS
+    from numpyro.infer import NUTS, init_to_sample
 
     return NUTS(
         model_fn,
         target_accept_prob=float(sampler["target_accept"]),
         max_tree_depth=int(sampler["max_tree_depth"]),
-        init_strategy=init_strategy(sampler),
+        init_strategy=init_to_sample,
     )
 
 

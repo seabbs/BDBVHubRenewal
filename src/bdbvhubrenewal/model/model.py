@@ -18,7 +18,7 @@ from numpyro.distributions.transforms import (
     ComposeTransform,
     PowerTransform,
 )
-from numpyro.infer import MCMC, NUTS, Predictive, init_to_median
+from numpyro.infer import MCMC, NUTS, Predictive, init_to_sample
 from pyrenew.ascertainment import IndependentAscertainment
 from pyrenew.deterministic import DeterministicPMF, DeterministicVariable
 from pyrenew.latent.temporal_processes import (
@@ -808,7 +808,7 @@ def fit(
         model.sample,
         target_accept_prob=target_accept,
         max_tree_depth=max_tree_depth,
-        init_strategy=init_to_median(num_samples=15),
+        init_strategy=init_to_sample,
     )
     model.mcmc = MCMC(
         kernel,
