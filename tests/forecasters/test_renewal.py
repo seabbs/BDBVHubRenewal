@@ -119,14 +119,10 @@ def test_parameter_diagnostics_and_worst_rhat() -> None:
     assert all(set(p) >= {"rhat", "ess_bulk", "ess_tail"} for p in params)
 
 
-def test_vintage_inputs_choose_the_active_set(task: ForecastTask) -> None:
+def test_vintage_inputs_model_every_task_province(task: ForecastTask) -> None:
     config = rn.model_config(rn.VARIANTS["renewal"])
     data = rn.vintage_inputs(task, config)
-    rows = task.target.loc[task.target["location"].isin(task.locations)]
-    with_cases = set(
-        rows.groupby("location")["total"].sum().loc[lambda s: s > 0].index
-    )
-    assert set(data.names) == with_cases
+    assert data.names == list(task.locations)
     assert data.start_date.weekday() == 6
     assert data.known.shape == data.imputed.shape
     assert data.fit_mask is not None
