@@ -109,3 +109,30 @@ def test_zone_forecasts_are_the_summed_forms_by_origin(
     # The summed forms are the ones scored under the SUMMED names.
     summed = scores.loc[scores["model"].str.endswith(SUMMED)]
     assert set(forecasts["location"]) == set(summed["location"])
+
+
+def test_zone_backtest_by_origin_chunk_matches_one_run(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    result: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
+) -> None:
+    from bdbvhubrenewal.cli import chunk
+    from bdbvhubrenewal.evaluation.backtest import real_vintages
+
+    real = target.loc[target["kind"] == "real"]
+    origins = real_vintages(real)[:-1]
+    parts = [
+        zone_backtest(
+            target,
+            delays,
+            load_daily(DATA),
+            load_daily_zones(DATA),
+            hub_zones(DATA / "hub-config" / "tasks.json"),
+            origins=chunk(origins, f"{k}/2"),
+        )
+        for k in range(2)
+    ]
+    for i in range(3):
+        pd.testing.assert_frame_equal(
+            pd.concat([p[i] for p in parts], ignore_index=True), result[i]
+        )

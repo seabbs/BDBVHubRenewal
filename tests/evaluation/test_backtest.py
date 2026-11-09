@@ -493,3 +493,66 @@ def test_simulated_tasks_carry_daily_releases(config: BacktestConfig) -> None:
         last = hist.loc[hist["vintage"] == task.vintage]
         # The vintage's weekly target is cut at the same day.
         assert last["onset_date"].max() <= last["cutoff"].iloc[0]
+
+
+def _stack(parts: list[pd.DataFrame]) -> pd.DataFrame:
+    return pd.concat(parts, ignore_index=True)
+
+
+@pytest.mark.usefixtures("flat_model")
+def test_recovery_run_by_date_chunk_matches_one_run(
+    config: BacktestConfig,
+) -> None:
+    from dataclasses import replace
+
+    from bdbvhubrenewal.cli import chunk
+
+    models = [get_model("flat")]
+    whole = run_recovery(models, config)
+    parts = [
+        run_recovery(
+            models,
+            replace(
+                config,
+                simulated_dates=tuple(chunk(config.simulated_dates, f"{k}/2")),
+            ),
+        )
+        for k in range(2)
+    ]
+    for i in range(3):
+        pd.testing.assert_frame_equal(
+            _stack([p[i] for p in parts]), whole[i], check_dtype=False
+        )
+
+
+@pytest.mark.usefixtures("flat_model")
+def test_scenarios_run_by_date_match_one_run(
+    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
+) -> None:
+    from bdbvhubrenewal.data import load_health_zones
+    from bdbvhubrenewal.evaluation.backtest import run_scenarios
+
+    zones = load_health_zones(Path(__file__).resolve().parents[2] / "data")
+    dates = ("2026-10-10", "2026-10-17")
+
+    def run(on: tuple[str, ...]) -> tuple[pd.DataFrame, ...]:
+        return run_scenarios(
+            [get_model("flat")], config, target, delays, zones,
+            as_of="2026-10-24", dates=on, names=("flat",),
+        )  # fmt: skip
+
+    whole = run(dates)
+    parts = [run((d,)) for d in dates]
+    keys = ["truth_view", "level", "location", "target_end_date"]
+    for i in range(3):
+        cols = [c for c in ["vintage", *keys] if c in whole[i]]
+        got = _stack([p[i] for p in parts]).sort_values(cols)
+        want = whole[i].sort_values(cols)
+        pd.testing.assert_frame_equal(
+            got.reset_index(drop=True),
+            want.reset_index(drop=True),
+            check_dtype=False,
+        )
+    # The final truth is the same for every date.
+    for p in parts:
+        pd.testing.assert_frame_equal(p[3], whole[3])
