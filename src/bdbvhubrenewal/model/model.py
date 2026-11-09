@@ -288,8 +288,9 @@ class Vintage:
         stays in the latent process and is still predicted).
     seed_days : numpy.ndarray or None
         Day (from `start_date`) each province's seeding starts: 0 for
-        provinces with cases in the first data week, else `seed_lead` days
-        before the first case week.
+        provinces with cases in the first data week, `seed_lead` days
+        before the first case week for later ones, and `inf` (never) for
+        provinces with no case.
     bvd : dict or None
         External Rt summaries: `day` (index of $s_b$ from the first data
         day), `groups` `(G, P)`, `values`, `scales` and `kinds` `(G,)`.

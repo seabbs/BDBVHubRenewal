@@ -306,8 +306,8 @@ def vintage_from_tables(
 ) -> Vintage:
     """Build a `Vintage` from the target and delay rows of one vintage.
 
-    The modelled provinces are those in `locations` with any case in this
-    vintage; the rest get no forecast. The week grid
+    Every province in `locations` is modelled, those with no case yet
+    from a near-zero start with importation only. The week grid
     starts one week before national weekly onsets first reach
     `START_COUNT` and ends with the week holding the vintage's last report
     day (`data.releases.last_report`), which is also the cut-off.
@@ -353,8 +353,7 @@ def vintage_from_tables(
         aggfunc="sum",
     ).fillna(0)
     totals_wide = cast(pd.DataFrame, wide["total"])
-    cases = totals_wide.sum(axis=0)
-    active = tuple(p for p in locations if cases.get(p, 0) > 0)
+    active = tuple(locations)
     national = totals_wide.reindex(columns=list(active)).fillna(0).sum(axis=1)
     counts_by_week = national.to_numpy()
     threshold = min(START_COUNT, counts_by_week.max())
@@ -432,7 +431,10 @@ def _seed_days(totals: np.ndarray) -> np.ndarray:
 
     Provinces with cases in the first data week start at day 0. Later
     provinces start `seed_lead` days before their first case week, since
-    infections precede onsets by the incubation period.
+    infections precede onsets by the incubation period. Provinces with no
+    case are never seeded (`inf`), so their infections come only from
+    importation.
     """
-    first = 7 * np.argmax(totals > 0, axis=0)
-    return np.where(first > 0, first - seed_lead(incubation_period()), 0)
+    first = 7.0 * np.argmax(totals > 0, axis=0)
+    first[~(totals > 0).any(axis=0)] = np.inf
+    return np.where(first > 0, first - seed_lead(incubation_period()), 0.0)

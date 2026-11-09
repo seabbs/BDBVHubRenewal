@@ -182,7 +182,7 @@ The national trajectory is the sum of the provinces plus an unassigned component
 
 ## Partially pooled (`renewal`) { #partially-pooled }
 
-`renewal` fits every province with cases in one model, on the axis set by their summed onsets.
+`renewal` fits every province the release lists in one model, on the axis set by their summed onsets.
 The provinces share the trend $\log R(t)$, the deviation SD $\sigma_\delta$ and half-life $h$, the start spread $\sigma_v$, ascertainment $\alpha$, the delay $f_s$, the trend $b$ of the missing-onset share, the share at risk $\nu$ and the importation share $\varepsilon$.
 Each province has its own deviations $\delta_p$ and $\omega_p$ and its own seed.
 Provinces are linked by importation through $W$.
@@ -258,11 +258,14 @@ They start with province spread $\mathcal{N}^+(0, 0.5^2)$, sampled non-centred, 
 
 ### Provinces with no cases
 
-A province enters the model at the release with its first case, and has no forecast before it.
+A province with no case yet starts at $10^{-6}$ of its seed level and is never seeded.
+Its infections come only from importation through $W$, and its zero counts are scored like any other province's.
+Its forecasts follow from the model, so every province the release lists has one.
 
 ## Without importation (`renewalsp`) { #without-importation }
 
 `renewalsp` is `renewal` with no importation between provinces, so $W = I$, with no $\varepsilon$ and no gravity kernel.
+Provinces with no case have no source of infection, so their forecasts stay near zero.
 The pooled reproduction number, missing-onset deviations, shared delay and ascertainment, share at risk and seeding are as in `renewal`.
 Like `renewal`, it fits the provinces together, so leaving one province out works for it too.
 

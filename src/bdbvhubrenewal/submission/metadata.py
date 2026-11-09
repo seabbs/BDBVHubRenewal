@@ -83,10 +83,12 @@ MODEL_METADATA = {
             "with modelled delays; national is the sum of provinces."
         ),
         "methods_long": (
-            "A renewal process for each province with cases, with a national "
+            "A renewal process for each province, with a national "
             "weekly random walk on log Rt plus partially pooled province "
             "deviations, importation between provinces through a gravity "
-            "kernel, and susceptible depletion. " + _RENEWAL_OBSERVATION
+            "kernel, and susceptible depletion. Provinces with no cases yet "
+            "are never seeded and gain infections only by importation. "
+            + _RENEWAL_OBSERVATION
         ),
         "data_inputs": _RENEWAL_INPUTS,
     },
@@ -98,10 +100,11 @@ MODEL_METADATA = {
             "imputed onsets with modelled delays."
         ),
         "methods_long": (
-            "A renewal process for each province with cases, with a national "
+            "A renewal process for each province, with a national "
             "weekly random walk on log Rt plus partially pooled province "
             "deviations and susceptible depletion, and no importation "
-            "between provinces. " + _RENEWAL_OBSERVATION
+            "between provinces, so provinces with no cases stay near zero. "
+            + _RENEWAL_OBSERVATION
         ),
         "data_inputs": _RENEWAL_INPUTS,
     },
@@ -113,10 +116,12 @@ MODEL_METADATA = {
             "BVDOutbreakSize Rt, fitted to known and imputed onsets."
         ),
         "methods_long": (
-            "A renewal process for each province with cases, with a national "
+            "A renewal process for each province, with a national "
             "weekly random walk on log Rt plus partially pooled province "
             "deviations, importation between provinces through a gravity "
-            "kernel, and susceptible depletion. The model's national "
+            "kernel, and susceptible depletion. Provinces with no cases yet "
+            "are never seeded and gain infections only by importation. "
+            "The model's national "
             "and patch Rt in the week of the newest BVDOutbreakSize release "
             "available at the cut-off are tied to that release's Rt "
             "estimates, as a likelihood term tempered by 0.5. "
