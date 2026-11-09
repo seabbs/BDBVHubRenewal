@@ -38,8 +38,10 @@ def _written(out: Path) -> pd.DataFrame:
 
 @pytest.mark.usefixtures("in_root")
 def test_cli_nowcast_writes_coherent_zones(tmp_path: Path) -> None:
-    assert main(["nowcast", "--out", str(tmp_path / "sub")]) == 0
+    args = ["nowcast", "--out", str(tmp_path / "sub")]
+    assert main([*args, "--forecast-date", "2026-07-31"]) == 0
     table = _written(tmp_path / "sub")
+    assert set(table["forecast_date"]) == {"2026-07-31"}
     level = table["location"].str.count("-")
     zones = table.loc[level == 2]
     provs = table.loc[level == 1]

@@ -71,11 +71,15 @@ jobs:
       - name: Backtest and nowcast smoke test
         timeout-minutes: 15
         # The backtest never fits the fitted models (their forecasts come
-        # from the fit store), so this runs random walk only.
+        # from the fit store), so this runs random walk only. The nowcast's
+        # forecast date is the latest vintage, so the hub's check that it
+        # is on or before the reference date holds whatever the day.
         run: |
           uv run bdbvhubrenewal backtest --models randomwalk \
             --output output/backtest --results output/results
-          uv run bdbvhubrenewal nowcast
+          vintage=$(uv run python -c 'from bdbvhubrenewal.data import load_target; t = load_target(); print(t.loc[t["kind"] == "real", "vintage"].max())')
+          uv run bdbvhubrenewal nowcast --vintage "$vintage" \
+            --forecast-date "$vintage"
           uv run bdbvhubrenewal metadata --out output/metadata
       - name: Fit and forecast as the submission CI does (a tiny fit)
         run: |
