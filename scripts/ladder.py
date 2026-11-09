@@ -55,7 +55,6 @@ from bdbvhubrenewal.forecasters.base import (  # noqa: E402
 )
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalk  # noqa: E402
 from bdbvhubrenewal.forecasters.renewal import (  # noqa: E402
-    VARIANTS,
     bvd_rows,
     chain_diagnostics,
     parameter_diagnostics,
@@ -124,7 +123,6 @@ SAMPLER = {
 RUNGS: dict[str, pr.ModelConfig] = {
     **pr.model.LADDER,
     "renewalbvd": pr.BVD,
-    "renewalsp": adapter.model_config(VARIANTS["renewalsp"]),
 }
 """Rungs in order: the build steps (S5 is `renewal`), then the variants."""
 
@@ -141,7 +139,6 @@ DESCRIPTIONS = {
     "S4 + coupling and importation": "Gravity importation between provinces.",
     "S5 + depletion (main)": "Susceptible depletion; this is `renewal`.",
     "renewalbvd": "BVDOutbreakSize Rt as a tempered pseudo-observation.",
-    "renewalsp": "`renewal` without importation between provinces.",
 }
 """One sentence per rung: what it adds."""
 
@@ -163,7 +160,6 @@ DECISIONS: dict[str, str] = {
     "behind S2.",
     "renewalbvd": "Heads the submission chain: best on simulated data with a "
     "truth-based BVD summary, worse on the one real vintage.",
-    "renewalsp": "Second in the submission chain, after renewalbvd.",
 }
 """One sentence per rung: kept, dropped or an option, and why. Filled in
 from the results."""

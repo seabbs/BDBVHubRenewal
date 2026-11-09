@@ -50,16 +50,16 @@ SCENARIOS=(
   "implausible|bvd=implausible|renewalsp||was ruled out (plausible: "
   "wild|bvd=implausible,renewalsp=implausible|main||Model: province renewal model"
   "latestream|bvd=latestream|bvd"
-  "fallback|bvd=fail|renewalsp||Model: province renewal model without importation"
+  "fallback|bvd=fail|renewalsp||Model: single-patch province renewal models"
   # Tuesday 21:00 UTC, two hours before the close: the fit timeouts are
   # cut so the gate still runs in time.
-  "late|bvd=fail|renewalsp|NOW=2026-11-03T21:00:00+00:00|Model: province renewal model without importation"
+  "late|bvd=fail|renewalsp|NOW=2026-11-03T21:00:00+00:00|Model: single-patch province renewal models"
   "randomwalknowcast|bvd=fail,renewalsp=fail,main=fail|randomwalknowcast||Model: random walk on a nowcast"
   "randomwalk|bvd=fail,renewalsp=crash,main=fail,randomwalknowcast=negative|randomwalk"
   "skip|bvd=fail,renewalsp=fail,main=fail,randomwalknowcast=negative,randomwalk=negative|skip"
   # A chosen model further down the chain starts it there; the
   # candidates before it are shadows.
-  "nospatial|bvd=pass|renewalsp|MODEL=renewalsp|Model: province renewal model without importation"
+  "nospatial|bvd=pass|renewalsp|MODEL=renewalsp|Model: single-patch province renewal models"
   "nospatialfallback|bvd=pass,renewalsp=fail|main|MODEL=renewalsp|Model: province renewal model"
   "chosenrenewal|bvd=pass,renewalsp=pass|main|MODEL=renewal|Model: province renewal model"
   "chosenrenewalfallback|main=fail|randomwalknowcast|MODEL=renewal|Model: random walk on a nowcast"
