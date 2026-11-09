@@ -52,6 +52,7 @@ from bdbvhubrenewal.forecasters.base import (
     ForecastTask,
     register_model,
 )
+from bdbvhubrenewal.forecasters.zones import sum_to_provinces, zone_task
 
 if TYPE_CHECKING:
     from bdbvhubrenewal.data.bvd import BvdRelease
@@ -665,7 +666,6 @@ def zone_level(task: ForecastTask) -> ForecastTask | None:
     """
     from bdbvhubrenewal.data.tidy import load_daily_zones
     from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
-    from bdbvhubrenewal.forecasters.zones import zone_task
 
     if all(loc.count("-") == 2 for loc in task.locations):
         return task
@@ -677,30 +677,6 @@ def zone_level(task: ForecastTask) -> ForecastTask | None:
     history = task.daily_history
     both = daily if history is None else pd.concat([history, daily])
     return zone_task(task, counts, zones, both)
-
-
-def by_province(zones: pd.DataFrame) -> pd.DataFrame:
-    """Sum zone samples to their provinces, sample by sample.
-
-    Parameters
-    ----------
-    zones : pandas.DataFrame
-        Zone samples (`SAMPLE_COLUMNS`, with `as_of` if present).
-
-    Returns
-    -------
-    pandas.DataFrame
-        Province samples with the same columns.
-    """
-    from bdbvhubrenewal.data.zones import province_of
-
-    keys = [c for c in zones.columns if c not in ("location", "value")]
-    summed = (
-        zones.assign(location=zones["location"].map(province_of))
-        .groupby(["location", *keys], as_index=False, sort=False)
-        .agg(value=("value", "sum"))
-    )
-    return summed.loc[:, list(zones.columns)]
 
 
 def data_gap(task: ForecastTask, samples: pd.DataFrame) -> pd.DataFrame | None:
@@ -1380,8 +1356,8 @@ class RenewalModel:
         if zt is not None:
             run = self.run(zt)
             zones, _ = samples_table(zt, run.data, run.draws)
-            samples = by_province(zones)
-            later = [by_province(x) for x in _as_reported(zt, run, True)]
+            samples = sum_to_provinces(zones)
+            later = [sum_to_provinces(x) for x in _as_reported(zt, run, True)]
             return RenewalFit(
                 {"all": run},
                 samples,

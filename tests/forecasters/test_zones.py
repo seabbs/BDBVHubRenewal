@@ -24,6 +24,7 @@ from bdbvhubrenewal.forecasters.zones import (
     _apportion,
     check_zone_coherence,
     reconcile_zones,
+    sum_to_provinces,
     zone_forecast,
     zone_task,
 )
@@ -459,3 +460,18 @@ def test_zone_hub_table_validates_and_sums_up_the_hierarchy(
     assert (by_prov == want["value"].reindex(by_prov.index)).all()
     path = write_submission(table, tmp_path, "seabbs-rwnowcast")
     assert _hub_failures(path) == []
+
+
+def test_provinces_are_the_sum_of_their_zones() -> None:
+    zones = pd.DataFrame(
+        {
+            "location": ["CD-IT-01", "CD-IT-02", "CD-NK-01", "CD-IT-01"],
+            "target_end_date": ["2026-11-07"] * 3 + ["2026-11-14"],
+            "sample": [1, 1, 1, 1],
+            "value": [2.0, 3.0, 4.0, 1.0],
+        }
+    )
+    out = sum_to_provinces(zones).set_index(["location", "target_end_date"])
+    assert out.loc[("CD-IT", "2026-11-07"), "value"] == 5.0
+    assert out.loc[("CD-NK", "2026-11-07"), "value"] == 4.0
+    assert out.loc[("CD-IT", "2026-11-14"), "value"] == 1.0

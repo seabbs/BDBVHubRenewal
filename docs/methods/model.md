@@ -332,30 +332,26 @@ It is down-weighted because BVDOutbreakSize is fitted to largely the same data, 
 
 ## Random walk on onsets (`pprandomwalknowcast`) { #random-walk-on-onsets }
 
-`pprandomwalknowcast` has no infections, generation interval or incubation period.
+`pprandomwalknowcast` is `renewal` with a random walk in place of the renewal.
+It has no infections, generation interval, incubation period or importation, and its ascertainment is 1.
 It runs on health zones, and provinces and the country are sums of their zones.
 Expected onsets in zone $z$ on day $s$ of week $w$ are
 
 $$
 \lambda_z(s) = e^{x_z(w)} / 7,
 \qquad
-x_z(w) = x_z(w - 1) + \sigma_z \epsilon_{z,w},
+x_z(w) = x_z(w - 1) + \sigma_{p(z)} \epsilon_{z,w},
 \qquad
 \epsilon_{z,w} \sim \mathcal{N}(0, 1),
 $$
 
-with $x_z$ at the first week $\mathcal{N}(\log 5, 2^2)$.
-Zones take their province's step SD, pooled on the log scale over provinces, $\log \sigma_z = \mu_\sigma + \tau \eta_{p(z)}$ for zone $z$ in province $p(z)$, with $\eta \sim \mathcal{N}(0, 1)$, $\mu_\sigma \sim \mathcal{N}(\log 0.2, 1)$ and $\tau \sim \mathcal{N}^+(0, 0.5^2)$.
-A zone with no case can fall without limit, so a step SD of its own would be free to grow.
-Ascertainment is 1, since $\lambda_z$ is on the scale of confirmed onsets.
-Every zone is walked, with or without cases, so there is no importation-only component.
+with $x_z$ at the first week $\mathcal{N}(\log 5, 2^2)$ and $p(z)$ the zone's province.
+$\log \sigma_p$ is pooled over provinces as the start of $\log R_p$ is in `renewal`, around $\mathcal{N}(\log 0.2, 1)$ with spread $\mathcal{N}^+(0, 0.5^2)$.
+A zone has no step SD of its own: where every count is zero its level can fall without limit, so its own SD would be free to grow.
 
-The observation model is that of `renewal`, with $\lambda_z$ in place of expected onsets from infections.
-Zones share the [delay](#delays) and take their province's [missing-onset share](#missing-onsets).
-Each zone's weekly known and imputed onsets are negative binomial, as a province's are.
-The delay counts are split over delays given each week's total, as in `renewal`, with the probabilities of all zones summed.
-The split conditions on the totals, so the reports in the zone totals are not counted twice.
-In the forecast the walk continues from the last data week with the posterior $\sigma_z$.
+The [delay](#delays), [hub imputation](#hub-imputation), [likelihood](#likelihood) and [forecasts](#forecasts) are those of `renewal`, with $\lambda_z$ in place of expected onsets from infections and zones in place of provinces.
+Zones take their province's [missing-onset share](#missing-onsets).
+The delay counts are split given each week's total, so the zone totals and the delay counts do not count the same reports twice.
 
 ## Health zones
 

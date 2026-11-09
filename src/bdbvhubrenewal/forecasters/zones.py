@@ -73,6 +73,7 @@ __all__ = [
     "ZoneAllocator",
     "check_zone_coherence",
     "reconcile_zones",
+    "sum_to_provinces",
     "zone_forecast",
     "zone_task",
 ]
@@ -414,6 +415,28 @@ def zone_forecast(
     )
 
 
+def sum_to_provinces(zones: pd.DataFrame) -> pd.DataFrame:
+    """Sum zone samples to their provinces, sample by sample.
+
+    Parameters
+    ----------
+    zones : pandas.DataFrame
+        Zone samples (`SAMPLE_COLUMNS`, with `as_of` if present).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Province samples with the same columns.
+    """
+    keys = [c for c in zones.columns if c not in ("location", "value")]
+    summed = (
+        zones.assign(location=zones["location"].map(province_of))
+        .groupby(["location", *keys], as_index=False, sort=False)
+        .agg(value=("value", "sum"))
+    )
+    return summed.loc[:, list(zones.columns)]
+
+
 def check_zone_coherence(
     provinces: pd.DataFrame, zones: pd.DataFrame
 ) -> list[str]:
@@ -434,11 +457,7 @@ def check_zone_coherence(
         in every sample. Empty when coherent.
     """
     keys = ["location", "target_end_date", "sample"]
-    summed = (
-        zones.assign(location=zones["location"].map(province_of))
-        .groupby(keys)["value"]
-        .sum()
-    )
+    summed = sum_to_provinces(zones).set_index(keys)["value"]
     prov = _final(provinces)
     want = (
         prov.loc[prov["location"].isin(summed.index.unique("location"))]

@@ -5,99 +5,27 @@ from __future__ import annotations
 
 import jax.numpy as jnp
 import numpy as np
-import numpyro
-import numpyro.distributions as dist
 from jax import Array
+from jax.typing import ArrayLike
 from pyrenew.latent import LatentSample
 from pyrenew.latent.base import BaseLatentInfectionProcess
 from pyrenew.latent.temporal_processes import TemporalProcess
 from pyrenew.metaclass import RandomVariable
 
 
-class GroupPooledValue(RandomVariable):
-    r"""One value per group, pooled, and taken by every place in the group.
-
-    $$v_z = \mu + \tau\, \eta_{g(z)}, \qquad \eta_g \sim N(0, 1),$$
-
-    with $g(z)$ the group of place $z$, such as the province of a zone.
-    Non-centred: $\eta$ is the site `{name}_z`.
-    """
-
-    def __init__(
-        self,
-        name: str,
-        groups: np.ndarray,
-        mean_rv: RandomVariable,
-        sd_rv: RandomVariable,
-    ) -> None:
-        r"""Initialize the pooled values.
-
-        Parameters
-        ----------
-        name
-            Prefix for the sample sites.
-        groups
-            Group index of every place, `(Z,)`.
-        mean_rv
-            The shared value $\mu$.
-        sd_rv
-            The spread $\tau$ of the group values.
-
-        Raises
-        ------
-        TypeError
-            If `mean_rv` or `sd_rv` is not a `RandomVariable`.
-        """
-        for label, rv in (("mean_rv", mean_rv), ("sd_rv", sd_rv)):
-            if not isinstance(rv, RandomVariable):
-                raise TypeError(f"{label} must be a RandomVariable.")
-        super().__init__(name=name)
-        self.groups = np.asarray(groups, dtype=int)
-        self.mean_rv = mean_rv
-        self.sd_rv = sd_rv
-
-    def __repr__(self) -> str:
-        """Return string representation."""
-        return (
-            f"GroupPooledValue(name={self.name!r}, "
-            f"n_groups={int(self.groups.max()) + 1}, "
-            f"mean_rv={self.mean_rv!r}, sd_rv={self.sd_rv!r})"
-        )
-
-    def sample(self, **kwargs: object) -> Array:
-        """Sample the value of each place.
-
-        Parameters
-        ----------
-        **kwargs
-            Ignored, for the PyRenew interface.
-
-        Returns
-        -------
-        Array
-            Shape `(Z,)`.
-        """
-        eta = numpyro.sample(
-            f"{self.name}_z",
-            dist.Normal(0.0, 1.0).expand([int(self.groups.max()) + 1]),
-        )
-        value: Array = self.mean_rv() + self.sd_rv() * eta[self.groups]
-        return value
-
-
 class RandomWalkOnsets(BaseLatentInfectionProcess):
     r"""Expected onsets of each place as a random walk, with no renewal.
 
-    $$\lambda_p(t) = e^{x_p(w)} / 7, \qquad
-    x_p(w) = x_p(w - 1) + \sigma_p z_{p,w},$$
+    $$\lambda_z(t) = e^{x_z(w)} / 7, \qquad
+    x_z(w) = x_z(0) + \sigma_{g(z)} W_z(w),$$
 
-    for day $t$ in week $w$, with $x_p$ from `walk` (one process per
-    place, its step SD $\sigma_p$ from the process's innovation SD)
-    and $x_p$ at the first week from `initial_rv`. The latent axis is
-    PyRenew's: it starts `n_initialization_points` days before the data,
-    a lead PyRenew's builder sets from `gen_int_rv`, which the walk does
-    not otherwise use. PyRenew multiplies latent values by each place's
-    population, so a walk model gives every place a population of 1.
+    for day $t$ in week $w$, with $W_z$ a walk with unit steps from `walk`,
+    $x_z(0)$ from `initial_rv` and the step SD $\sigma_g$ of group $g(z)$
+    from `step_sd_rv`. The latent axis is PyRenew's: it starts
+    `n_initialization_points` days before the data, a lead PyRenew's
+    builder sets from `gen_int_rv`, which the walk does not otherwise use.
+    PyRenew multiplies latent values by each place's population, so a
+    walk model gives every place a population of 1.
     """
 
     def __init__(
@@ -107,7 +35,9 @@ class RandomWalkOnsets(BaseLatentInfectionProcess):
         gen_int_rv: RandomVariable,
         n_initialization_points: int,
         initial_rv: RandomVariable,
+        step_sd_rv: RandomVariable,
         walk: TemporalProcess,
+        groups: ArrayLike | None = None,
     ) -> None:
         r"""Initialize the walk.
 
@@ -120,31 +50,43 @@ class RandomWalkOnsets(BaseLatentInfectionProcess):
         n_initialization_points
             Days of the latent axis before the data.
         initial_rv
-            $x_p$ at the start, shape `(n_places,)`.
+            $x_z(0)$, shape `(n_places,)`.
+        step_sd_rv
+            $\sigma_g$, shape `(n_groups,)`.
         walk
-            Weekly process for $x_p$, such as `WeeklyTemporalProcess`
-            around `NonCentredRandomWalk`.
+            Weekly process with unit step SD for $W_z$, such as
+            `WeeklyTemporalProcess` around `NonCentredRandomWalk`.
+        groups
+            Group of each place, `(n_places,)`. By default each place is
+            its own group.
 
         Raises
         ------
         TypeError
-            If `initial_rv` is not a `RandomVariable`.
+            If `initial_rv` or `step_sd_rv` is not a `RandomVariable`.
         """
-        if not isinstance(initial_rv, RandomVariable):
-            raise TypeError("initial_rv must be a RandomVariable.")
+        for label, rv in (
+            ("initial_rv", initial_rv),
+            ("step_sd_rv", step_sd_rv),
+        ):
+            if not isinstance(rv, RandomVariable):
+                raise TypeError(f"{label} must be a RandomVariable.")
         super().__init__(
             name=name,
             gen_int_rv=gen_int_rv,
             n_initialization_points=n_initialization_points,
         )
         self.initial_rv = initial_rv
+        self.step_sd_rv = step_sd_rv
         self.walk = walk
+        self.groups = None if groups is None else np.asarray(groups)
 
     def __repr__(self) -> str:
         """Return string representation."""
         return (
             f"RandomWalkOnsets(name={self.name!r}, "
-            f"initial_rv={self.initial_rv!r}, walk={self.walk!r})"
+            f"initial_rv={self.initial_rv!r}, step_sd_rv={self.step_sd_rv!r}, "
+            f"walk={self.walk!r})"
         )
 
     def sample(
@@ -174,13 +116,16 @@ class RandomWalkOnsets(BaseLatentInfectionProcess):
             `(n_total, n_places)`.
         """
         pop = self._parse_and_validate_fractions(subpop_fractions)
-        log_weekly = self.walk.sample(
+        group = np.arange(pop.n_subpops) if self.groups is None else self.groups
+        steps = self.walk.sample(
             n_timepoints=self.n_initialization_points + n_days_post_init,
-            initial_value=self.initial_rv(),
+            initial_value=0.0,
             n_processes=pop.n_subpops,
             name_prefix=f"{self.name}_walk",
             first_day_dow=first_day_dow,
         )
+        sigma = jnp.asarray(self.step_sd_rv())
+        log_weekly = self.initial_rv() + sigma[group] * steps
         onsets = jnp.exp(log_weekly) / 7.0
         return LatentSample(
             aggregate=onsets @ pop.fractions, all_subpops=onsets

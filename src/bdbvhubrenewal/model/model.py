@@ -42,7 +42,7 @@ from .pooled import PooledInitialValue
 from .renewal import Importation, MetapopulationInfections
 from .rt_observation import RtPseudoObservation
 from .temporal import NonCentredRandomWalk
-from .walk import GroupPooledValue, RandomWalkOnsets
+from .walk import RandomWalkOnsets
 
 SUNDAY = 6
 """Weekday number of Sunday (Monday is 0), the first day of a hub week."""
@@ -386,7 +386,7 @@ def _pooled(
 
 def _named_walk(
     name: str,
-    sd: float,
+    sd: float | RandomVariable,
     n_weeks: int,
     ar: bool = False,
     forecast_half_life: float | None = None,
@@ -397,9 +397,14 @@ def _named_walk(
     forecast pass. With `ar`, the walk is AR(1) with a half-life of
     LogNormal(log 6 weeks, 0.6) (BVDOutbreakSize deviations: 42 days).
     With `forecast_half_life`, the forecast steps revert towards 0
-    (`NonCentredRandomWalk`).
+    (`NonCentredRandomWalk`). `sd` is the HalfNormal scale of the step
+    SD, or the step SD's random variable.
     """
-    sd_rv = DistributionalVariable(name, dist.HalfNormal(sd))
+    sd_rv = (
+        sd
+        if isinstance(sd, RandomVariable)
+        else DistributionalVariable(name, dist.HalfNormal(sd))
+    )
     frozen = GEN_INT_LENGTH // 7
     half_life = None
     if ar:
@@ -605,8 +610,7 @@ def _walk_latent(
     """Configure the random walk on log expected onsets.
 
     The step SD is one per province, pooled on the log scale towards a
-    shared value, and zones take their province's. The walk is fixed over
-    the lead weeks.
+    shared value, and zones take their province's.
 
     Returns
     -------
@@ -615,26 +619,6 @@ def _walk_latent(
         the walk is on onsets.
     """
     n_places = data.n_provinces
-    # Zones take their province's step SD, and provinces pool towards the
-    # country. A zone's own SD would be free to grow where every count is
-    # zero, since its level can fall without limit there.
-    log_sd = GroupPooledValue(
-        "log_walk_sd",
-        np.arange(n_places) if data.groups is None else data.groups,
-        DistributionalVariable(
-            "log_walk_sd_mean", dist.Normal(np.log(0.2), 1.0)
-        ),
-        DistributionalVariable("log_walk_sd_sd", dist.HalfNormal(0.5)),
-    )
-    frozen = GEN_INT_LENGTH // 7
-    walk = WeeklyTemporalProcess(
-        NonCentredRandomWalk(
-            TransformedVariable("walk_sd", log_sd, ExpTransform()),
-            frozen=frozen,
-            n_fit=frozen + fit_weeks(data, config),
-        ),
-        start_dow=SUNDAY,
-    )
     builder.configure_latent(
         RandomWalkOnsets,
         name="latent",
@@ -642,7 +626,27 @@ def _walk_latent(
         initial_rv=DistributionalVariable(
             "walk_start", dist.Normal(np.log(5.0), 2.0).expand([n_places])
         ),
-        walk=walk,
+        # Zones take their province's step SD, and provinces pool towards
+        # the country. A zone's own SD would be free to grow where every
+        # count is zero, since its level can fall without limit there.
+        step_sd_rv=TransformedVariable(
+            "walk_sd",
+            _pooled(
+                "log_walk_sd",
+                data.n_groups,
+                np.log(0.2),
+                1.0,
+                0.5,
+                centred=False,
+            ),
+            ExpTransform(),
+        ),
+        walk=_named_walk(
+            "walk_unit_sd",
+            DeterministicVariable("walk_unit_sd", 1.0),
+            fit_weeks(data, config),
+        ),
+        groups=data.groups,
     )
     ascertainment = IndependentAscertainment(
         name="ascertainment",

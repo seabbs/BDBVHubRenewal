@@ -304,11 +304,18 @@ def test_walk_latent_gives_onsets_from_the_walk(outbreak, sim_tables, table):
     # Every province is walked, cases or not, and the horizon is drawn
     # past the fit axis.
     assert tr["latent_walk_z_future"]["value"].shape == (3, p)
-    weekly = np.exp(tr["latent_walk_weekly"]["value"])
-    onsets = tr["onsets_expected_daily"]["value"]
+    # Log onsets start at the walk start and move by the place's step SD
+    # times the unit walk.
+    steps = tr["latent_walk_weekly"]["value"]
+    log_onsets = np.log(7 * tr["onsets_expected_daily"]["value"][::7])
     np.testing.assert_allclose(
-        onsets[::7][: weekly.shape[0]], weekly / 7, rtol=1e-5
+        log_onsets[0], tr["walk_start"]["value"], rtol=1e-5
     )
+    sigma = (log_onsets[-1] - log_onsets[0]) / steps[-1]
+    np.testing.assert_allclose(
+        log_onsets, log_onsets[0] + sigma * steps, rtol=1e-4, atol=1e-4
+    )
+    assert (sigma > 0).all()
     assert "latent::rt_subpop" not in tr
     tr = trace(model, data)
     sampled = {
