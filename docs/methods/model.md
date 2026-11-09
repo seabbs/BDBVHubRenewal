@@ -18,7 +18,7 @@ Every time-varying part is a weekly random walk or AR(1), so it stays near const
 ```mermaid
 flowchart TD
     PM["<b>Province model</b><br/>Rt walk<br/>generation interval<br/>onsets and delay<br/>missing onsets<br/>three data streams"]
-    RN["<b>renewal</b><br/>provinces fitted together<br/>+ pooled log R walk<br/>+ sum-to-zero AR(1)<br/>province deviations<br/>+ importation<br/>+ share at risk<br/>+ shared delay<br/>+ shared ascertainment<br/>+ zeros in provinces<br/>with no cases"]
+    RN["<b>renewal</b><br/>provinces fitted together<br/>+ pooled log R walk<br/>+ sum-to-zero AR(1)<br/>province deviations<br/>+ importation<br/>+ share at risk<br/>+ shared delay<br/>+ shared ascertainment"]
     BV["<b>renewalbvd</b><br/>+ BVDOutbreakSize Rt,<br/>down-weighted (ζ = 0.5)"]
     SP["<b>renewalsp</b><br/>− importation"]
 
@@ -262,9 +262,7 @@ A province enters the model at the release with its first case, and has no forec
 
 ## Without importation (`renewalsp`) { #without-importation }
 
-`renewalsp` is `renewal` with no importation between provinces and no importation component for provinces with no cases.
-So $W = I$, with no $\varepsilon$ and no gravity kernel, and no $\mu_q$ or $\kappa$.
-Provinces with no cases have no source of infection, so their forecasts are zero.
+`renewalsp` is `renewal` with no importation between provinces, so $W = I$, with no $\varepsilon$ and no gravity kernel.
 The pooled reproduction number, missing-onset deviations, shared delay and ascertainment, share at risk and seeding are as in `renewal`.
 Like `renewal`, it fits the provinces together, so leaving one province out works for it too.
 

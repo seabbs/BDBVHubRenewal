@@ -86,8 +86,7 @@ MODEL_METADATA = {
             "A renewal process for each province with cases, with a national "
             "weekly random walk on log Rt plus partially pooled province "
             "deviations, importation between provinces through a gravity "
-            "kernel, and susceptible depletion. Provinces with no cases get "
-            "importations that can seed local spread. " + _RENEWAL_OBSERVATION
+            "kernel, and susceptible depletion. " + _RENEWAL_OBSERVATION
         ),
         "data_inputs": _RENEWAL_INPUTS,
     },
@@ -102,8 +101,7 @@ MODEL_METADATA = {
             "A renewal process for each province with cases, with a national "
             "weekly random walk on log Rt plus partially pooled province "
             "deviations and susceptible depletion, and no importation "
-            "between provinces or into provinces with no cases, which are "
-            "forecast as zero. " + _RENEWAL_OBSERVATION
+            "between provinces. " + _RENEWAL_OBSERVATION
         ),
         "data_inputs": _RENEWAL_INPUTS,
     },
@@ -118,8 +116,7 @@ MODEL_METADATA = {
             "A renewal process for each province with cases, with a national "
             "weekly random walk on log Rt plus partially pooled province "
             "deviations, importation between provinces through a gravity "
-            "kernel, and susceptible depletion. Provinces with no cases get "
-            "importations that can seed local spread. The model's national "
+            "kernel, and susceptible depletion. The model's national "
             "and patch Rt in the week of the newest BVDOutbreakSize release "
             "available at the cut-off are tied to that release's Rt "
             "estimates, as a likelihood term tempered by 0.5. "

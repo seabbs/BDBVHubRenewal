@@ -50,8 +50,7 @@ def test_variants_are_registered_as_fitted_models() -> None:
 
 
 def test_model_config_applies_overrides() -> None:
-    # renewalsp is renewal without importation, between provinces or into
-    # provinces with no cases.
+    # renewalsp is renewal without importation between provinces.
     plain = rn.model_config(rn.VARIANTS["renewalsp"])
     assert plain == replace(rn.engine().MAIN, coupling="none")
     assert rn.model_config(rn.VARIANTS["renewal"]) == rn.engine().MAIN

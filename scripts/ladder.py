@@ -138,8 +138,7 @@ DESCRIPTIONS = {
     "S3 + delays, missingness, imputation": "Known and imputed onsets as two "
     "streams, with time-varying delays and missingness and the hub's "
     "imputation modelled.",
-    "S4 + coupling and importation": "Gravity importation between provinces "
-    "and an importation-only part for provinces with no cases.",
+    "S4 + coupling and importation": "Gravity importation between provinces.",
     "S5 + depletion (main)": "Susceptible depletion; this is `renewal`.",
     "renewalbvd": "BVDOutbreakSize Rt as a tempered pseudo-observation.",
     "renewalsp": "`renewal` without importation between provinces.",
