@@ -51,11 +51,13 @@ def test_a_place_takes_its_own_delay_and_a_zone_its_province_s() -> None:
     curves = delay_curves(summary, ["CD", "CD-IT", "CD-NK", "CD-IT-01"])
     got = curves.groupby("location")["share"].first()
     assert got.to_dict() == {"CD-IT": 0.2, "CD-IT-01": 0.2, "CD-NK": 0.8}
-    # The shared delay is the centre of the province delays, not a
-    # national delay, so it maps no place.
+    # A place with no delay of its own, such as a province never seeded,
+    # takes the shared delay, as in the renewal model. The country does
+    # not: it is the sum of its provinces.
     shared = pd.concat([summary, _summary("shared", [0.5])])
-    got = delay_curves(shared, ["CD", "CD-IT", "CD-SU"])
-    assert set(got["location"]) == {"CD-IT"}
+    got = delay_curves(shared, ["CD", "CD-IT", "CD-SU", "CD-SU-01"])
+    got = got.groupby("location")["share"].first()
+    assert got.to_dict() == {"CD-IT": 0.2, "CD-SU": 0.5, "CD-SU-01": 0.5}
 
 
 def _samples(rows: dict[str, float], n: int = 50) -> pd.DataFrame:
