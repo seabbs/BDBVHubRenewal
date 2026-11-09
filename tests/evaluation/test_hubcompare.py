@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import gzip
 import tomllib
 from pathlib import Path
@@ -9,6 +10,7 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data import load_daily_zones
+from bdbvhubrenewal.data.dates import reference_date_for_vintage
 from bdbvhubrenewal.data.zones import hub_zones
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig
 from bdbvhubrenewal.evaluation.hubcompare import (
@@ -171,8 +173,10 @@ def test_match_vintage(target: pd.DataFrame) -> None:
     vintages = sorted(set(real["vintage"]))
     assert match_vintage("2026-10-31", vintages) == "2026-10-24"
     assert match_vintage("2026-10-03", vintages) is None
-    assert match_vintage("2026-11-07", vintages) == "2026-11-01"
-    assert match_vintage("2026-11-14", vintages) is None
+    # The latest release serves its round, and no release the next one.
+    latest = reference_date_for_vintage(vintages[-1])
+    assert match_vintage(latest, vintages) == vintages[-1]
+    assert match_vintage(latest + dt.timedelta(days=7), vintages) is None
 
 
 def test_our_forecasts_cover_the_hub_weeks(
@@ -288,9 +292,15 @@ def test_score_comparison_scores_each_later_release(
     )
     assert pending.empty
     # Hub teams have no modelled delay we can see, so every model is scored
-    # on complete weeks only. teamB-late forecast no complete week.
+    # on complete weeks only. teamB-late forecast only the last two weeks,
+    # so it is scored only once the latest release completes one of them,
+    # as teamA-weekly's scores for those weeks show.
     assert set(scores["target"]) == {"complete"}
-    assert set(scores["model"]) == {"teamA-weekly", "flat"}
+    teama = scores.loc[scores["model"] == "teamA-weekly"]
+    late = teama["target_end_date"].astype(str).isin(WEEKS[2:]).any()
+    assert set(scores["model"]) == {"teamA-weekly", "flat"} | (
+        {"teamB-late"} if late else set()
+    )
     # The 2026-10-24 round is made from the 2026-10-17 release.
     assert set(scores["origin"]) == {"2026-10-17"}
     assert set(scores["reference_date"]) == {"2026-10-24"}
@@ -345,14 +355,18 @@ def test_score_comparison_scores_hub_zones(
 def test_score_comparison_waits_for_later_data(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
-    hub = _hub_rows(ref="2026-11-07").assign(model="teamA-weekly")
+    # The round the latest release serves has no later release to score it.
+    real = target.loc[target["kind"] == "real"]
+    latest = max(real["vintage"].astype(str))
+    ref = reference_date_for_vintage(latest).isoformat()
+    hub = _hub_rows(ref=ref).assign(model="teamA-weekly")
     hub = hub.rename(columns={"output_type_id": "sample"}).assign(source="hub")
     scores, _, pending = score_comparison(
         hub, target, delays, _CONFIG, daily, NO_ZONES
     )
     assert scores.empty
-    assert list(pending["reference_date"]) == ["2026-11-07"]
-    assert pending["vintage"].iloc[0] == "2026-11-01"
+    assert list(pending["reference_date"]) == [ref]
+    assert pending["vintage"].iloc[0] == latest
 
 
 def test_summarise_comparison(
