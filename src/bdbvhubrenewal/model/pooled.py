@@ -261,7 +261,7 @@ def pooled_walk(
         Day of week of element 0, needed by calendar-aligned processes.
     active
         Boolean `(n_groups,)`: provinces with a deviation, the rest
-        following the national process. `None` is all.
+        following the pooled trend. `None` is all.
 
     Returns
     -------

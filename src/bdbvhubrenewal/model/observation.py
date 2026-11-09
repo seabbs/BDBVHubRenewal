@@ -707,7 +707,7 @@ class MissingOnsetFraction(RandomVariable):
         Temporal processes for the national and province parts.
     active : numpy.ndarray, optional
         Boolean, one per province: provinces with a deviation, the rest
-        following the national part (`pooled_walk`). `None` is all.
+        following the pooled trend (`pooled_walk`). `None` is all.
     """
 
     def __init__(

@@ -267,9 +267,9 @@ def test_as_reported_draws_match_the_vintage_at_its_own_cutoff(sim_vintage):
 
 
 def test_unseeded_provinces_sample_no_seed_or_deviation(sim_vintage):
-    # No data inform them, so they follow the national Rt and missing-onset
+    # Barely informed, they follow the pooled Rt trend and missing-onset
     # share and take a fixed seed.
-    unseeded = ~np.isfinite(sim_vintage.seed_days)
+    unseeded = ~sim_vintage.seeded
     k = int((~unseeded).sum())
     assert unseeded.any()
     model = build_model(sim_vintage)

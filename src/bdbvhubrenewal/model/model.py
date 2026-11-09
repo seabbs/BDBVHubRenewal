@@ -324,6 +324,16 @@ class Vintage:
         """Number of provinces."""
         return int(self.known.shape[1])
 
+    @property
+    def seeded(self) -> np.ndarray:
+        """Boolean, one per province: seeded, with a sampled seed.
+
+        Provinces never seeded follow the pooled trends.
+        """
+        if self.seed_days is None:
+            return np.ones(self.n_provinces, dtype=bool)
+        return np.isfinite(self.seed_days)
+
 
 def _pooled(
     name: str,
@@ -483,13 +493,10 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         Model with one observation, `onsets`.
     """
     n_prov = data.n_provinces
-    # Provinces with no case are never seeded, and no data inform their
-    # seed or their deviations, so those are not sampled.
-    active = (
-        np.ones(n_prov, dtype=bool)
-        if data.seed_days is None
-        else np.isfinite(data.seed_days)
-    )
+    # Provinces with no case are never seeded. Their seed and deviations
+    # are barely informed (only their zero counts, through importation),
+    # so they are not sampled.
+    active = data.seeded
     mixing = None
     if config.coupling == "gravity" and data.kernel is not None:
         mixing = Importation(
@@ -547,6 +554,7 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         mixing_rv=mixing,
         effective_population_rv=effective_population,
         seed_days=data.seed_days,
+        seeded=active,
         rt_observation=RtPseudoObservation(
             "bvd", alpha=config.bvd_alpha, **data.bvd
         )
