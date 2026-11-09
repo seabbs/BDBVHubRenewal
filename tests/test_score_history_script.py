@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -104,3 +106,70 @@ def test_history_flags_changes_in_what_is_scored(sh) -> None:
     # The baseline's forecasts are unchanged at the last deploy.
     rw = out.loc[(out["model"] == "randomwalk") & (out["pool"] == "national")]
     assert list(rw["break"]) == [True, False, True, False]
+
+
+def _two_deploys(sh):
+    later = _summary()
+    later["origins"] = ["2026-10-31", "2026-11-07"]
+    return sh.history(
+        [
+            ("a" * 40, "2026-11-04T10:00:00+00:00", "p1", "latest", _summary()),
+            ("b" * 40, "2026-11-05T10:00:00+00:00", "p2", "latest", later),
+        ]
+    )
+
+
+def test_chart_marks_breaks_and_names_commits(sh) -> None:
+    charts = sh.chart_data(_two_deploys(sh), {"good": ("#111", "#222", "")})
+    assert set(charts) == {"latest"}
+    d = charts["latest"]
+    assert d["kind"] == "line"
+    assert [m["name"] for m in d["models"]] == ["randomwalk", "good"]
+    assert d["models"][1]["light"] == "#111"
+    assert d["scales"] == ["national", "provinces"]
+    nat = d["sets"]["national|deploy"]
+    assert nat["x"] == ["11-04 10:00 aaaaaaa *", "11-05 10:00 bbbbbbb *"]
+    assert nat["marks"] == [0, 1]
+    good = [r for r in nat["rows"] if r[0] == 1]
+    assert good[0][:3] == [1, 0, 2]
+    keys = [m["key"] for m in d["metrics"]]
+    assert good[0][3 + keys.index("rel_wis")] == pytest.approx(0.5)
+
+
+def test_page_has_chart_table_and_commit_links(sh) -> None:
+    page = sh.page_markdown(_two_deploys(sh), "seabbs/BDBVHubRenewal")
+    assert 'class="checkschart"' in page
+    assert "../../figures/scorehistory-latest.json" in page
+    assert 'class="tablefilter"' in page
+    assert (
+        "[aaaaaaa](https://github.com/seabbs/BDBVHubRenewal/commit/"
+        + "a" * 40
+        + ")"
+    ) in page
+
+
+def test_page_says_when_history_is_unavailable(sh) -> None:
+    page = sh.page_markdown(None, "seabbs/BDBVHubRenewal")
+    assert "unavailable" in page
+    assert "checkschart" not in page
+
+
+def test_current_build_is_read_from_its_figures(sh, tmp_path: Path) -> None:
+    (tmp_path / "scoresummary-backtest-complete.json").write_text(
+        json.dumps(_summary())
+    )
+    out = list(sh.current_deploys(tmp_path, "c" * 40, "2026-11-09T16:00"))
+    assert [(d[0], d[2], d[3]) for d in out] == [("c" * 40, "", "complete")]
+
+
+def test_script_does_not_import_the_package() -> None:
+    code = (
+        "import importlib.util, sys\n"
+        f"spec = importlib.util.spec_from_file_location('s', {str(SCRIPT)!r})\n"
+        "spec.loader.exec_module(importlib.util.module_from_spec(spec))\n"
+        "print('bdbvhubrenewal' in sys.modules, 'jax' in sys.modules)\n"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert out.stdout.split() == ["False", "False"]
