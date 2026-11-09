@@ -147,7 +147,9 @@ def delay_curves(summary: pd.DataFrame, places: Sequence[str]) -> pd.DataFrame:
     """Return a model's share of a day's final count reported by age.
 
     Each place takes the model's delay at that place, and a zone with none
-    its province's. A model's shared delay (location `"shared"`) is the
+    its province's. A place with neither takes a pooled delay (location
+    `"pooled"`), the one delay fits from before province delays store for
+    every place. A model's shared delay (location `"shared"`) is the
     unweighted centre of its province delays, not a national delay, so it
     maps no place; the country is the sum of its provinces instead.
 
@@ -173,12 +175,17 @@ def delay_curves(summary: pd.DataFrame, places: Sequence[str]) -> pd.DataFrame:
         for loc, grp in rows.groupby("location")
         if loc != "shared"
     }
-    frames = [
-        by_place[key].assign(location=place)
-        for place in places
-        if (key := place if place in by_place else province_of(place))
-        in by_place
-    ]
+    frames = []
+    for place in places:
+        if place in by_place:
+            key = place
+        elif province_of(place) in by_place:
+            key = province_of(place)
+        elif place != NATIONAL and "pooled" in by_place:
+            key = "pooled"
+        else:
+            continue
+        frames.append(by_place[key].assign(location=place))
     out = pd.concat(frames, ignore_index=True) if frames else rows.iloc[:0]
     return out.astype({"age": int})[["location", "age", "share"]]
 
