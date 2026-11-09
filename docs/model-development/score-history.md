@@ -8,6 +8,8 @@ A commit can deploy more than once, as the fit store reruns the build when it st
 Scores can therefore move without a code change.
 Relative WIS, as on the [Backtest](../backtest.md) page, also moves when the baseline changes.
 Read it beside WIS, where randomwalk's own line shows the baseline.
+"Relative to" picks another model as the baseline, such as one whose forecasts did not change at a deploy where randomwalk's did.
+The table is relative to randomwalk.
 
 A star and a vertical line mark a deploy where what a model is scored on changed: the origins, the releases or the number of forecasts.
 Points either side of one are not comparable.

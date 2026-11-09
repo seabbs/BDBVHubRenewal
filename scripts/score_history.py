@@ -84,6 +84,7 @@ def summary_scores(summary: Mapping[str, Any]) -> pd.DataFrame:
     Returns
     -------
     pandas.DataFrame
+        One row per baseline (every model), pool and model: `baseline`,
         `pool`, `model`, `n` (forecasts the baseline also made), the mean
         of each metric and, for relative metrics, the baseline's mean on
         the same forecasts `base_<metric>` and `rel_<metric>`.
@@ -101,23 +102,28 @@ def summary_scores(summary: Mapping[str, Any]) -> pd.DataFrame:
     rows["model"] = [models[i] for i in rows["model"]]
     rows = rows.loc[~rows["model"].isin(SKIP_MODELS)]
     # As `relative_skill`, without importing the package (and JAX): each
-    # model over the forecasts the baseline also made.
-    base_rows = rows.loc[rows["model"] == models[summary["baseline"]]]
-    merged = rows.merge(
-        base_rows[["pool", *MATCH, *relative]],
-        on=["pool", *MATCH],
-        suffixes=("", "_b"),
-    )
-    grp = merged.groupby(["pool", "model"], sort=False)
-    out = grp[keys].mean()
-    out.insert(0, "n", grp.size())
-    for k in relative:
-        out[f"base_{k}"] = grp[f"{k}_b"].mean()
-        out[f"rel_{k}"] = out[k] / out[f"base_{k}"].where(out[f"base_{k}"] > 0)
-    out = out.reset_index()
+    # model over the forecasts the baseline also made, for every model as
+    # the baseline.
+    frames = []
+    for baseline in dict.fromkeys(rows["model"]):
+        base_rows = rows.loc[rows["model"] == baseline]
+        merged = rows.merge(
+            base_rows[["pool", *MATCH, *relative]],
+            on=["pool", *MATCH],
+            suffixes=("", "_b"),
+        )
+        grp = merged.groupby(["pool", "model"], sort=False)
+        out = grp[keys].mean()
+        out.insert(0, "n", grp.size())
+        for k in relative:
+            b = grp[f"{k}_b"].mean()
+            out[f"base_{k}"] = b
+            out[f"rel_{k}"] = out[k] / b.where(b > 0)
+        frames.append(out.reset_index().assign(baseline=baseline))
     rel = [f"rel_{k}" for k in relative]
     base = [f"base_{k}" for k in relative]
-    return out[["pool", "model", "n", *keys, *base, *rel]]
+    cols = ["baseline", "pool", "model", "n", *keys, *base, *rel]
+    return pd.concat(frames, ignore_index=True)[cols]
 
 
 def history(deploys: Iterable[Deploy]) -> pd.DataFrame:
@@ -132,12 +138,14 @@ def history(deploys: Iterable[Deploy]) -> pd.DataFrame:
     Returns
     -------
     pandas.DataFrame
-        One row per deploy, target, pool and model: `deploy_time`,
-        `source_sha`, `pages_sha`, `target`, `pool`, `model`, the
+        One row per deploy, target, baseline, pool and model:
+        `deploy_time`, `source_sha`, `pages_sha`, `target`, the
         `summary_scores` columns, `origins` and `releases` (`;`-joined)
         and `break`, true where the origins or releases, or the number of
-        forecasts scored, differ from the model's previous deploy of that
-        target and pool, or where the model first appears.
+        forecasts scored against the baseline, differ from the model's
+        previous deploy of that target, baseline and pool, or where the
+        model first appears. A change in the model's or the baseline's
+        forecasts changes that number.
     """
     frames = []
     for sha, time, pages, target, summary in deploys:
@@ -151,7 +159,8 @@ def history(deploys: Iterable[Deploy]) -> pd.DataFrame:
         frames.append(frame)
     out = pd.concat(frames, ignore_index=True)
     scored = ["origins", "releases", "n"]
-    prev = out.groupby(["target", "pool", "model"])[scored].shift()
+    cell = ["target", "baseline", "pool", "model"]
+    prev = out.groupby(cell)[scored].shift()
     out["break"] = (prev != out[scored]).any(axis=1)
     return out
 
@@ -211,6 +220,9 @@ CHART_METRICS: tuple[tuple[str, str, float | None, bool], ...] = (
 
 POOLS = ("national", "provinces", "zones")
 
+DEFAULT_BASELINE = "randomwalk"
+"""The baseline the chart opens with and the table and summary show."""
+
 
 def _label(time: str, sha: str, pages: str) -> str:
     when = f"{time[5:10]} {time[11:16]}"
@@ -222,19 +234,21 @@ def chart_data(
 ) -> dict[str, dict[str, object]]:
     """Return each target's `checkschart.js` data, by pool, over deploys.
 
-    Deploys are the x axis, named by time and source commit. A deploy
-    where any model's scored forecasts changed (`break`) is starred and
-    listed in `marks`, which the chart draws as a vertical line.
+    One set per baseline and pool, keyed `<baseline>|<pool>|deploy`, for
+    the chart's baseline picker. Deploys are the x axis, named by time and
+    source commit. A deploy where any model's scored forecasts against
+    that baseline changed (`break`) is starred and listed in `marks`,
+    which the chart draws as a vertical line.
     """
     hist = _with_metrics(hist)
     models = list(dict.fromkeys(hist["model"]))
+    default = DEFAULT_BASELINE if DEFAULT_BASELINE in models else models[0]
     grey = ("#888888", "#888888", "")
     out: dict[str, dict[str, object]] = {}
     for target, cell in hist.groupby("target", sort=False):
         sets = {}
         pools = [p for p in POOLS if p in set(cell["pool"])]
-        for pool in pools:
-            g = cell.loc[cell["pool"] == pool]
+        for (base, pool), g in cell.groupby(["baseline", "pool"], sort=False):
             key = (
                 g["deploy_time"] + "|" + g["source_sha"] + "|" + g["pages_sha"]
             )
@@ -256,10 +270,15 @@ def chart_data(
                 ]
                 for k, r in zip(key, g.to_dict("records"), strict=True)
             ]
-            sets[f"{pool}|deploy"] = {"x": x, "rows": rows, "marks": marks}
+            sets[f"{base}|{pool}|deploy"] = {
+                "x": x,
+                "rows": rows,
+                "marks": marks,
+            }
         out[str(target)] = {
             "kind": "line",
             "x_label": "Deploy",
+            "baseline": models.index(default),
             "models": [
                 {
                     "name": m,
@@ -281,6 +300,15 @@ def chart_data(
     return out
 
 
+def _default(hist: pd.DataFrame) -> pd.DataFrame:
+    """Keep the rows relative to the default baseline.
+
+    The table shows these only, at a sixth of the size. The chart has
+    every baseline.
+    """
+    return hist.loc[hist["baseline"] == DEFAULT_BASELINE]
+
+
 def _with_metrics(hist: pd.DataFrame) -> pd.DataFrame:
     """Add any chart metric a summary lacked, as missing."""
     lacking = {c: float("nan") for c, *_ in CHART_METRICS if c not in hist}
@@ -294,7 +322,8 @@ def _round(v: Any) -> float | None:
 def _table(hist: pd.DataFrame, repo: str) -> str:
     head = (
         "| Deployed | Commit | Target | Pool | Model | n | WIS "
-        "| Relative WIS | 50% coverage | 90% coverage | Break |\n"
+        f"| Relative WIS ({DEFAULT_BASELINE}) "
+        "| 50% coverage | 90% coverage | Break |\n"
         "|---|---|---|---|---|---:|---:|---:|---:|---:|---|\n"
     )
 
@@ -329,7 +358,7 @@ def page_markdown(hist: pd.DataFrame | None, repo: str) -> str:
         f"    {line}" if line else ""
         for line in (
             '<div class="tablefilter" data-filters="Target,Pool,Model" '
-            'markdown="1">\n\n' + _table(hist, repo) + "\n\n</div>"
+            'markdown="1">\n\n' + _table(_default(hist), repo) + "\n\n</div>"
         ).splitlines()
     )
     return (
@@ -418,7 +447,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         hist.to_csv(out, index=False, float_format="%.6g")
         print(f"Wrote {len(hist)} rows to {out}", file=sys.stderr)
     if not args.docs:
-        print(_overview(hist, ("latest", "complete")))
+        print(_overview(_default(hist), ("latest", "complete")))
         print("\n* what a model is scored on changed at this deploy")
 
 
