@@ -27,7 +27,7 @@ The first candidate that clears the checks is submitted, under `seabbs-renewal`.
 The chain runs from the most to the least complex renewal model, then the random walks.
 
 1. `bvd`: `renewalbvd`, the renewal model informed by BVDOutbreakSize Rt.
-2. `renewalsp`: the province renewal model without importation.
+2. `renewalsp`: the renewal model fitted to each province on its own.
 3. `main`: `renewal`, the province renewal model.
 4. `randomwalknowcast`: random walk on a nowcast.
 5. `randomwalk`.

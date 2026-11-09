@@ -9,7 +9,7 @@ How the models are built in code and sampled is on the [Implementation](implemen
 ## Overview
 
 `renewal` fits the provinces together, pools them and links them by importation.
-`renewalsp` is `renewal` without importation, so the provinces are pooled but not linked.
+`renewalsp` fits the province model to each province on its own, with no pooling or importation.
 `renewalbvd` is `renewal` with a down-weighted likelihood term on the Rt of BVDOutbreakSize.
 `seabbs-renewal` submits the first of `renewalbvd`, `renewalsp`, `renewal`, `randomwalknowcast` and `randomwalk`, in that order, to pass its checks ([Submission workflow](../submission/workflow.md#renewal-chain)).
 The sections below give the model of each province, then what `renewal` adds to pool and link the provinces, then how `renewalsp` and `renewalbvd` differ.
@@ -21,11 +21,11 @@ flowchart TD
     PM["<b>Province model</b><br/>Rt walk<br/>generation interval<br/>onsets and delay<br/>missing onsets<br/>three data streams"]
     RN["<b>renewal</b><br/>provinces fitted together<br/>+ pooled log R walk<br/>+ sum-to-zero AR(1)<br/>province deviations<br/>+ importation<br/>+ share at risk<br/>+ delay pooled<br/>by province<br/>+ shared ascertainment"]
     BV["<b>renewalbvd</b><br/>+ BVDOutbreakSize Rt,<br/>down-weighted (ζ = 0.5)"]
-    SP["<b>renewalsp</b><br/>− importation"]
+    SP["<b>renewalsp</b><br/>each province fitted alone<br/>no pooling or importation<br/>no share at risk"]
 
     PM -- "pool the provinces" --> RN
     RN -- "add external Rt" --> BV
-    RN -- "drop importation" --> SP
+    PM -- "fit each province alone" --> SP
 ```
 
 ## Province model { #province-model }
@@ -286,11 +286,15 @@ Its seed is fixed at the prior median, 1, and nothing is sampled for it.
 Its infections come only from importation through $W$, and its zero counts are scored like any other province's.
 Its forecasts follow from the model, so every province the release lists has one.
 
-## Without importation (`renewalsp`) { #without-importation }
+## Single patch (`renewalsp`) { #single-patch }
 
-`renewalsp` is `renewal` with no importation between provinces, so $W = I$, with no $\varepsilon$ and no gravity kernel.
-Provinces with no case have no source of infection, so their forecasts stay near zero.
-The pooled reproduction number, missing-onset deviations, shared delay and ascertainment, share at risk and seeding are as in `renewal`.
+`renewalsp` fits the [province model](#province-model) to each province's series on its own, one fit after another with the same code.
+Nothing is pooled or shared between provinces: each has its own Rt walk, delay, missing-onset share and ascertainment.
+One series cannot inform the share at risk, so there is no depletion.
+Every province with a case in the random walks' walk window is fitted, however few its cases.
+A province with none takes the introduction layer of `randomwalknowcast` ([Baseline models](baselines.md)): exactly 0 until an introduction, then its walk.
+National is the sum of the provinces plus the data's national gap, as for `renewal`.
+A province is fitted only on its own data, so `renewalsp` cannot forecast a province left out.
 
 ## BVDOutbreakSize-informed (`renewalbvd`) { #bvdoutbreaksize-informed }
 
