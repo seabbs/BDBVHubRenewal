@@ -779,21 +779,33 @@ def trajectory_samples(
     return keep.loc[rank <= n, list(SAMPLE_COLUMNS)].reset_index(drop=True)
 
 
-def forecast_quantiles(forecasts: pd.DataFrame) -> pd.DataFrame:
+def forecast_quantiles(
+    forecasts: pd.DataFrame, by: Sequence[str] = ()
+) -> pd.DataFrame:
     """Return the plotted quantiles of each forecast.
 
     Parameters
     ----------
     forecasts : pandas.DataFrame
         Samples with `SAMPLE_COLUMNS`.
+    by : sequence of str
+        Further columns that tell forecasts apart, such as `origin` where
+        two origins serve one round.
 
     Returns
     -------
     pandas.DataFrame
-        One row per model, source, round, location and week, with the
-        `QUANTILES` columns.
+        One row per model, source, round, `by`, location and week, with
+        the `QUANTILES` columns.
     """
-    keys = ["model", "source", "reference_date", "location", "target_end_date"]
+    keys = [
+        "model",
+        "source",
+        "reference_date",
+        *by,
+        "location",
+        "target_end_date",
+    ]
     grp = forecasts.groupby(keys)["value"]
     out = grp.quantile(np.array(list(QUANTILES.values()))).unstack()
     out.columns = list(QUANTILES)
