@@ -1771,7 +1771,7 @@ def _checks_chart(
     Models keep the colours of the other Backtest charts.
     """
     models = [m for m in names if m in set(summary["model"])]
-    colours = _model_colours([*names, BASELINE])
+    colours = _model_colours(names)
     sets = {}
     for (scale, split), g in summary.groupby(["scale", "split"], sort=False):
         x = list(dict.fromkeys(g["group"]))
