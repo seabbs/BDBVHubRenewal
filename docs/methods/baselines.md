@@ -21,12 +21,12 @@ flowchart TD
     end
     DEL["Daily delay Δ<sub>p</sub>(j) ≥ 0<br/>weighted non-negative<br/>least squares<br/><i>own or parent by age</i>"]
     G["Growth to final Γ<sub>p</sub>(a)<br/>share reported 1 / Γ<sub>p</sub>(a)"]
-    MU["Nowcast mean μ<sub>p</sub>(w)<br/>apply_delay on weekly rows<br/>shares F<sub>p,j</sub>(w) from Γ<sub>p</sub>"]
+    MU["Nowcast mean μ<sub>p</sub>(w)<br/>weekly fill<br/>shares F<sub>p,j</sub>(w) from Γ<sub>p</sub>"]
     RETRO["Earlier releases r &lt; o<br/>nowcast to release o"]
     OBS["Observation model<br/>by weeks back k<br/>size φ<sub>p,k</sub>, removal b<sub>p,k</sub>"]
     X["Nowcast draw X<sub>p,i</sub>(w)<br/>max(0, Y<sub>p,o</sub> + A − B)<br/>A ~ NB(μ<sub>p</sub> − Y<sub>p,o</sub>, φ<sub>p,k</sub>)<br/>B ~ Poisson(b<sub>p,k</sub> Y<sub>p,o</sub>)"]
     SIG["Walk spread σ<sub>p</sub><br/>changes in log(1 + Y<sub>p,o</sub>)"]
-    W["Local level on log(1 + λ<sub>i</sub>)<br/>from X<sub>p,i</sub>(w<sub>0</sub>), updated by<br/>the reported counts after w<sub>0</sub><br/>silent places 0<br/>until an introduction<br/>Poisson counts"]
+    W["Local level on log(1 + λ<sub>i</sub>)<br/>from X<sub>p,i</sub>(w<sub>0</sub>), updated by<br/>the reported counts after w<sub>0</sub><br/>places with no recent case 0<br/>until an introduction<br/>Poisson counts"]
     NAT["National = sum of provinces<br/>sample by sample"]
 
     SNAP --> PAIR
@@ -56,7 +56,7 @@ flowchart TD
     W0["Start week w<sub>0</sub><br/>latest with π<sub>p</sub>(w) ≥ 0.95"]
     Y["Reported Y<sub>p,o</sub>(w<sub>0</sub>)"]
     SIG["Walk spread σ<sub>p</sub><br/>changes in log(1 + Y<sub>p,o</sub>)"]
-    W["Walk on log(1 + λ<sub>i</sub>)<br/>from Y<sub>p,o</sub>(w<sub>0</sub>)<br/>silent places 0<br/>until an introduction<br/>Poisson counts<br/>floored at Y<sub>p,o</sub>(w)<br/>in weeks with data"]
+    W["Walk on log(1 + λ<sub>i</sub>)<br/>from Y<sub>p,o</sub>(w<sub>0</sub>)<br/>places with no recent case 0<br/>until an introduction<br/>Poisson counts<br/>floored at Y<sub>p,o</sub>(w)<br/>in weeks with data"]
     NAT["National = sum of provinces<br/>sample by sample"]
 
     SNAP --> PAIR
@@ -82,7 +82,7 @@ Days after the cut-off are not observed.
 $w$ is $k$ weeks back when it is $k$ weeks before the week holding the release cut-off.
 
 A pair of consecutive releases $(r, r + 1)$ has gap $s = c_{r+1} - c_r$ days.
-$D = 42$ days is baselinenowcast's `max_delay`, and a pair is in window when $1 \le s \le D$.
+$D = 42$ days is baselinenowcast's maximum delay, and a pair is in window when $1 \le s \le D$.
 Only in-window pairs inform the delay.
 A pair outside the window keeps its counts in the data.
 A model raises if the vintage has no snapshots or no in-window pair.
@@ -103,8 +103,8 @@ $\Delta_p$ is the non-negative least squares fit of all these equations, each we
 With a gap of 1 only, $\exp \Delta_p(x)$ is baselinenowcast's chain ladder factor.
 Cells a release does not observe are skipped, not filled, and a gap and age with a zero denominator give no equation.
 The parent of a province is the country, whose counts are the sum of its provinces.
-Only onset days less than $1.5 D = 63$ days before the cut-off of the latest release used contribute to the sums, as baselinenowcast's default `n_history_delay`, and a retrospective fit uses the cut-off of its own release.
-Before the sums, each day's increments between its releases go through baselinenowcast's `preprocess_negative_values`, so a downward revision is set to zero and taken from the earlier increments of that day and no ratio falls below 1.
+Only onset days less than $1.5 D = 63$ days before the cut-off of the latest release used contribute to the sums, as in baselinenowcast's default, and a retrospective fit uses the cut-off of its own release.
+Before the sums, each day's increments between its releases go through baselinenowcast's handling of negative values, so a downward revision is set to zero and taken from the earlier increments of that day and no ratio falls below 1.
 This applies to the delay only, because the removals below still allow negative revisions.
 The preprocessing runs along releases for each onset day, where baselinenowcast runs it along the delay columns of a reporting triangle.
 
@@ -129,7 +129,7 @@ F_{p,j}(w) = \frac{1}{n_w} \sum_{t \in w,\ t \le c_o} \frac{1}{\Gamma_p(c_o - t 
 $$
 
 with $n_w$ the days of $w$ observed at $o$.
-baselinenowcast's `apply_delay` fills the row from $x_0 = Y_{p,o}(w)$, adding at each column
+baselinenowcast fills the row from $x_0 = Y_{p,o}(w)$, adding at each column
 
 $$
 x_j = x_{j-1} + \frac{x_{j-1} + 1 - F_{p,j-1}(w)}{F_{p,j-1}(w)} \big(F_{p,j}(w) - F_{p,j-1}(w)\big),
@@ -177,22 +177,22 @@ Where the estimate chosen by the [pooling rule](#own-or-pooled-estimates) has fe
 ## Own or pooled estimates
 
 The places form a hierarchy of zone, province and country.
-The delay is chosen by age.
-A place uses its own $\Delta_p(x)$ when its denominator $\sum C_{p,r}(t)$ at age $x$, summed over the pairs, is at least 10 cases.
-Otherwise it uses its parent's at that age.
-The country uses its own.
+Each estimate is chosen as follows.
 
-The size $\phi_{p,k}$ and the walk spread $\sigma_p$ are chosen by the place's level $\ell_p$, the mean of $Y_{p,o}(w)$ over weeks 3 to 6 back.
-A place with $\ell_p \ge 10$ cases a week uses its own $\sigma_p$.
-It uses its own $\phi_{p,k}$ when it also has at least 3 errors at $k$.
-Otherwise it uses the pooled estimate of its nearest parent that meets the same rule, and otherwise the country's.
-A pooled estimate uses the errors and weekly changes of the parent's children with $\ell \ge 10$ together, or the parent's own where none has.
-The removal rate $b_{p,k}$ is always the place's own, so a place with no falls has none.
+1. **Delay.** At each age $x$, a place uses its own $\Delta_p(x)$ if its denominator $\sum C_{p,r}(t)$ at that age, summed over the pairs, is at least 10 cases.
+   Otherwise it uses its parent's.
+   The country always uses its own.
+2. **Level.** The place's level $\ell_p$ is the mean of $Y_{p,o}(w)$ over weeks 3 to 6 back.
+3. **Walk spread.** A place with $\ell_p \ge 10$ cases a week uses its own $\sigma_p$.
+4. **Size.** A place with $\ell_p \ge 10$ and at least 3 errors at $k$ uses its own $\phi_{p,k}$.
+5. **Fallback.** A place that fails step 3 or 4 uses the pooled estimate of its nearest parent that meets the same rule, and otherwise the country's.
+   A pooled estimate uses together the errors and weekly changes of the parent's children with $\ell \ge 10$, or the parent's own where none has.
+6. **Removals.** The removal rate $b_{p,k}$ is always the place's own.
 
-## Walk
+## Forecast
 
-Both models walk forward on $\log(1 + \lambda)$ from a start value $x_i$ in sample $i$.
-For $h \ge 1$ weeks after the start,
+Both models forecast with a random walk on $\log(1 + \lambda)$ and Poisson counts.
+From a start value $x_i$ in sample $i$, for $h \ge 1$ weeks after the start,
 
 $$
 \log\{1 + \lambda_i(h)\} = \max\Big(0,\ \log\{1 + x_i\} + \sigma_p \sum_{j=1}^{h} z_{i,j}\Big),
@@ -203,21 +203,16 @@ z_{i,j} \sim \mathcal{N}(0, 1),
 $$
 
 Steps are summed within a sample, so each sample is one trajectory.
-`randomwalk` starts from its start week ([Random walk](#random-walk)).
-`randomwalknowcast` starts from the week holding $c_o$ ([Random walk on a nowcast](#random-walk-on-a-nowcast)).
+`randomwalk` starts from the latest complete week ([below](#start-from-the-latest-complete-week)).
+`randomwalknowcast` starts from the week holding $c_o$ ([below](#start-from-the-nowcast)).
 
-$\sigma_p$ is the sample standard deviation of the weekly changes of $\log\{1 + Y_{p,o}(w)\}$ over the 9 weeks ending at the start week of `randomwalk`, so up to 8 changes.
+$\sigma_p$ is the sample standard deviation of the weekly changes of $\log\{1 + Y_{p,o}(w)\}$ over the 9 weeks ending at the latest complete week, so up to 8 changes.
 With fewer than 2 changes it is 0.
 
-A place with no case reported in the 9 weeks up to the week holding $c_o$ is silent.
-A silent place is exactly 0 until its first introduction, with no walk noise around 0 and no nowcast of its zero weeks.
-After the start week of `randomwalk`, an introduction comes in each week with probability $q_p$ times the share of the week not yet reported, and $q_p$ in weeks without data.
-The introduction brings a count drawn from Poisson(1) given at least 1, and the place walks from it.
-$q_p$ is the share of weeks with a case among the weeks that follow 9 weeks with none.
-It pools the place and its siblings (the zones of its province, or the provinces of the country), in weeks up to the start week of `randomwalk`, and the country uses its own weeks.
-It is estimated at each origin from the counts reported then.
+A place with no case in the 9 weeks to $c_o$ stays at 0 until a new introduction, which starts its walk from a Poisson(1) count given at least 1.
+An introduction occurs each week after the latest complete week with probability $q_p$, times the share of the week not yet reported, where $q_p$ is the share of weeks with a case after 9 weeks without one in the place and its siblings.
 
-## Random walk
+## Start from the latest complete week
 
 `randomwalk` makes no nowcast.
 Its start week $w_0$ is the latest week with
@@ -227,17 +222,17 @@ $$
 $$
 
 the estimated share of the week's final count reported, under the delay above.
-If any place, parents included, has no such week, `randomwalk` raises (`NoCompleteWeek`) and gives no forecast for the vintage.
-For the spread and introductions of `randomwalknowcast`, a place with no such week starts at the first week.
+If any place has no such week, `randomwalk` gives no forecast for the vintage.
 $x_i = Y_{p,o}(w_0)$ for every sample.
 Weeks up to $w_0$ are the reported counts.
 Later weeks with data are walk draws, floored at the reported count.
+Where no week reaches 0.95, `randomwalknowcast` takes the first week as the latest complete week.
 
-## Random walk on a nowcast
+## Start from the nowcast
 
 `randomwalknowcast` runs the walk as a local level on $\log(1 + y)$, filtered on the reported counts by a scalar Kalman filter.
 Its start week $w_0$ is the latest full week that is at least 5% reported and has at least 5 cases, else the first week.
-A silent place starts at the start week of `randomwalk` instead.
+A place with no case in the 9 weeks to $c_o$ starts at the latest complete week instead.
 Weeks up to $w_0$ are the nowcast draws $X_{p,i}(w)$.
 In sample $i$ the level at $w_0$ is $\log\{1 + X_{p,i}(w_0)\}$ with variance 0.
 Each later week $u$ up to the week holding $c_o$ is not nowcast.
@@ -247,7 +242,7 @@ A week with $\pi_p(u) = 0$ gives no update.
 The level at the week holding $c_o$ is drawn from the filter, and the levels of earlier weeks back to $w_0$ are drawn given it.
 So the weeks after $w_0$ and the forecast are one trajectory.
 Each of these weeks is a Poisson draw from its level, floored at the count reported.
-The walk starts from the drawn level at the week holding $c_o$.
+The forecast starts from the drawn level at the week holding $c_o$.
 
 ## Health zones
 
@@ -296,7 +291,7 @@ A place's counts are the sum of its children's, so for the walk spread and the n
   Other ages are informed only through the pooling.
   A parent's increments are its children's summed, so a case at an age where both fit their own enters the likelihood once for each tier.
   It is fitted at the origin and at each earlier release that gives errors.
-- **Walk spread.** The weekly changes of $\log\{1 + Y_{p,o}(w)\}$ over the [walk](#walk) window are $\mathcal{N}(0, \sigma_p^2)$.
+- **Walk spread.** The weekly changes of $\log\{1 + Y_{p,o}(w)\}$ over the [forecast](#forecast) window are $\mathcal{N}(0, \sigma_p^2)$.
   Changes between two weeks with no cases are left out.
 - **Nowcast uncertainty.** The new reports $A_{p,r}(w)$ are $\text{NB}(\widehat{\text{rem}}, \phi_{p,k})$ and the removals $B_{p,r}(w)$ are $\text{Poisson}(b_{p,k} Y_{p,r}(w))$, on the errors of [the fit](#nowcast), made with the pooled delay of each earlier release.
 

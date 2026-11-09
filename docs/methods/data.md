@@ -85,7 +85,7 @@ These are the national $R_T$ draws, the patch summaries with the national $R_T$ 
 Early releases give only the growth rate $r$, which is turned into $R_T = (1 + r\theta)^k$ with BVDOutbreakSize's Gamma generation interval (mean 15.3 days, SD 9.3 days, shape $k$, scale $\theta$).
 Each forecast uses the newest release whose files were all last updated by the forecast's cut-off, whose data end by the forecast date and whose fit converged.
 The cut-off is the end of the Sunday that opens the round's submission window, Kinshasa time, or the end of the vintage date if that is later.
-The joint fit's worst R-hat must be at most 1.1 (`[bvd] max_rhat` in `config/backtest.toml`), and effective sample sizes are ignored.
-The R-hat is read from the fit diagnostics table in the release's rendered site (`site.zip`), and a release without a readable table is passed over for the next older one.
+The joint fit's worst R-hat must be at most 1.1, and effective sample sizes are ignored.
+The R-hat is read from the fit diagnostics table in the release's rendered site, and a release without a readable table is passed over for the next older one.
 Each fit records the release it used, its R-hat and why newer releases were skipped.
 Their use is on the [Renewal models page](model.md#bvdoutbreaksize-informed).
