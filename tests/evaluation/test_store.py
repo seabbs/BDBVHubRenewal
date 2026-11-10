@@ -163,7 +163,10 @@ def in_root(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.usefixtures("in_root")
 def test_the_submission_task_has_the_stored_key(
-    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    tasks_json: Path,
 ) -> None:
     """Same code and data give the submission the stored fit's key."""
     import argparse
@@ -181,7 +184,7 @@ def test_the_submission_task_has_the_stored_key(
         args = argparse.Namespace(
             vintage=vintage,
             reference_date=None,
-            data=str(ROOT / "data"),
+            data=str(tasks_json.parents[1]),
             backtest_config="config/backtest.toml",
         )
         task, _ = cli._task(args)
