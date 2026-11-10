@@ -13,7 +13,7 @@ In brief, `randomwalknowcast`:
 
 1. follows baselinenowcast, through a JAX port of the R package with one named extension for release snapshots ([Delay](#delay));
 2. has an observation model for the nowcast as in baselinenowcast, negative binomial new reports on the count still to come, fitted from retrospective nowcasts ([Nowcast](#nowcast));
-3. nowcasts every week up to the cut-off and completes a partial cut-off week from a walk that starts at the latest full week in the 9 weeks to the cut-off at least 5% reported with at least 5 cases ([Start from the nowcast](#start-from-the-nowcast));
+3. nowcasts every week up to the cut-off and completes a partial cut-off week from a walk that starts at the latest full week in the 9 weeks to the cut-off at least 5% reported with at least 5 cases, updating the walk's state in the cut-off week from the week's nowcast weighted by its precision ([Start from the nowcast](#start-from-the-nowcast));
 4. continues each nowcast trajectory with a random walk on $\log(1 + y)$ ([Forecast](#forecast));
 5. takes the walk's variance net of Poisson noise ([Forecast](#forecast));
 6. shares the delay, size and walk variance with a parent where a place has fewer than 10 cases a week ([Own or pooled estimates](#own-or-pooled-estimates)).
@@ -37,7 +37,7 @@ flowchart TD
     OBS["Observation model<br/>by weeks back k<br/>size φ<sub>p,k</sub>"]
     X["Nowcast draw X<sub>p,i</sub>(w)<br/>Y<sub>p,o</sub> + A<br/>A ~ NB(μ<sub>p</sub> − Y<sub>p,o</sub>, φ<sub>p,k</sub>)"]
     SIG["Walk spread σ<sub>p</sub><br/>changes in log(1 + Y<sub>p,o</sub>)"]
-    W["Walk on log(1 + λ<sub>i</sub>)<br/>from each sample's completed<br/>cut-off week<br/>places with no recent case 0<br/>until an introduction<br/>Poisson counts"]
+    W["Walk on log(1 + λ<sub>i</sub>)<br/>from each sample's state in the<br/>cut-off week, updated by its nowcast<br/>places with no recent case 0<br/>until an introduction<br/>Poisson counts"]
     NAT["National = sum of provinces<br/>sample by sample"]
 
     SNAP --> PAIR
@@ -254,15 +254,21 @@ Where no week reaches 0.95, `randomwalknowcast` takes the first week as the late
 
 ## Start from the nowcast
 
-`randomwalknowcast` walks on from each sample's own completed week holding $c_o$.
+`randomwalknowcast` walks on from each sample's own state in the week holding $c_o$.
 
 1. Weeks before the one holding $c_o$ are the nowcast draws $X_{p,i}(w)$.
-2. If the week holding $c_o$ is full, its value in sample $i$ is its nowcast draw.
-3. If it is partial, its nowcast covers its days up to $c_o$, and its later days add $\text{Poisson}(\lambda_i \cdot m / 7)$, with $m$ the missing days.
-   $\lambda_i$ is the walk's rate for that week, walked by sample $i$ from its nowcast $X_{p,i}(w_0)$ of the start week $w_0$, the latest full week that is at least 5% reported and has at least 5 cases.
+2. Sample $i$ walks from its nowcast $X_{p,i}(w_0)$ of the start week $w_0$, the latest full week that is at least 5% reported and has at least 5 cases.
    The start week is looked for only in the 9 weeks to $c_o$, $1.5 D$ and the nowcast's own window, counting the week holding $c_o$.
-4. The weeks after it are the walk's draws from the sample's completed value of that week, $\log(1 + y)$ plus the walk's steps.
-5. A place with no case in the 9 weeks to $c_o$, or with no start week in those 9 weeks, starts at the latest complete week instead.
+3. If the start week is the week holding $c_o$, the walk goes on from its nowcast draw.
+4. Otherwise the walk's state in that week, $\log(1 + \lambda_i)$, is updated from the week's nowcast by one Kalman step.
+   The walk's prior from $w_0$, $n$ weeks back, is $\mathcal{N}(x_0, n \sigma_p^2)$ with $x_0 = \log(1 + X_{p,i}(w_0))$.
+   The week's nowcast mean $\mu$ of its $d$ days seen, scaled to seven days, $m = \log(1 + 7\mu / d)$, measures it with variance $\tau^2 = (\rho + \rho^2 / \phi_{p,0}) / \mu^2 + 1 / (1 + \mu)$, with $\rho = \mu - Y_{p,o}$ still to come: the delta-method variance of the observation model's error and the count's Poisson noise.
+   The state is drawn from $\mathcal{N}(x_0 + K(m - x_0), (1 - K) n \sigma_p^2)$ with gain $K = n\sigma_p^2 / (n\sigma_p^2 + \tau^2)$.
+   A week little reported or with a noisy observation model has little weight, and a well reported one moves the walk to it.
+   The update handles the nowcast's variance, not a bias in its mean, and weeks between $w_0$ and the week holding $c_o$ do not update the state.
+5. The week's value is its nowcast draw, plus $\text{Poisson}(\lambda_i \cdot m' / 7)$ for its $m'$ days after $c_o$ if it is partial.
+6. The weeks after it are the walk's draws from the state, $\log(1 + \lambda_i)$ plus the walk's steps.
+7. A place with no case in the 9 weeks to $c_o$, or with no start week in those 9 weeks, starts at the latest complete week instead.
    After it the place stays at 0 until an introduction, as above, floored at the counts reported.
 
 ## Health zones
