@@ -7,8 +7,13 @@ import pytest
 from numpyro.infer import init_to_median
 
 from bdbvhubrenewal.model import MAIN, build_model, model_args
-from bdbvhubrenewal.model.inputs import vintage_from_tables, zone_table
-from bdbvhubrenewal.model.pooled import nested_basis
+from bdbvhubrenewal.model.inputs import vintage_from_tables
+from bdbvhubrenewal.model.zones import (
+    build_zone_model,
+    nested_basis,
+    zone_table,
+    zone_vintage_from_tables,
+)
 
 from .conftest import SIM_LOCATIONS, VINTAGE_DAYS, vintage_date
 
@@ -120,7 +125,7 @@ def test_one_zone_per_province_is_the_province_model(
     province = vintage_from_tables(
         target, delays, vintage, SIM_LOCATIONS, table
     )
-    zoned = vintage_from_tables(
+    zoned = zone_vintage_from_tables(
         target,
         delays,
         vintage,
@@ -129,7 +134,7 @@ def test_one_zone_per_province_is_the_province_model(
         parents={p: p for p in SIM_LOCATIONS},
     )
     assert zoned.parent_names == list(SIM_LOCATIONS)
-    p_model, z_model = build_model(province), build_model(zoned)
+    p_model, z_model = build_model(province), build_zone_model(zoned)
     _, params = _params(p_model, province)
     assert _density(z_model, zoned, params) == pytest.approx(
         _density(p_model, province, params), rel=1e-5
@@ -141,7 +146,7 @@ def zone_vintage(outbreak, sim_tables):
     day = VINTAGE_DAYS[-1]
     target, delays = sim_tables[day]
     zones = tuple(z for p in SIM_LOCATIONS for z in ZONES[p])
-    return vintage_from_tables(
+    return zone_vintage_from_tables(
         _split(target),
         delays,
         vintage_date(outbreak, day),
@@ -165,7 +170,7 @@ def test_zone_vintage_scores_delays_by_province(zone_vintage):
 
 def test_zone_model_shares_province_parts(zone_vintage):
     v = zone_vintage
-    model = build_model(v)
+    model = build_zone_model(v)
     tr, params = _params(model, v)
     # Delay offsets and missing-onset deviations are by province.
     seeded_provinces = np.unique(v.parents[v.seeded]).size
@@ -195,11 +200,11 @@ def test_zone_bvd_groups_map_by_province(outbreak, sim_tables):
         }
     )
     names = ["CD-IT-10", "CD-IT-35", "CD-NK-03"]
+    # Zones enter by their province, so a patch holds its zones.
     out = bvd_inputs(
         rows,
-        names,
+        [z[:5] for z in names],
         pd.Timestamp("2026-08-01").date(),
-        groups_of=["CD-IT", "CD-IT", "CD-NK"],
     )
     assert out["groups"].tolist() == [[True, True, True], [True, True, False]]
     assert MAIN.bvd is False

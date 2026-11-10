@@ -104,9 +104,9 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
 
 
 def test_the_zone_split_does_not_key_a_fit(tmp_path: Path) -> None:
-    # Zones are split from a stored fit's provinces at load
-    # (`zones_for_model`), so the zone backtest is not fit code. The zone
-    # renewal variants run `zone_task` in the fit, so it keys theirs.
+    # A stored fit holds national and province samples only. Zones are
+    # split from them at load (`zones_for_model`), so the zone code is not
+    # fit code.
     root = _copy_repo(tmp_path)
     models = ("renewal", "pprandomwalknowcast")
 
@@ -118,13 +118,9 @@ def test_the_zone_split_does_not_key_a_fit(tmp_path: Path) -> None:
         path.write_text(path.read_text() + "\n_EDITED = 1\n")
 
     before = digests()
-    edit("evaluation/zones.py")
-    assert digests() == before
-    edit("forecasters/zones.py")
-    zoned = digests()
-    assert zoned["renewal"] != before["renewal"]
-    assert zoned["pprandomwalknowcast"] == before["pprandomwalknowcast"]
-    before = zoned
+    for rel in ("forecasters/zones.py", "evaluation/zones.py"):
+        edit(rel)
+        assert digests() == before, rel
     # Introductions are drawn in the fit, for provinces with no recent case.
     edit("forecasters/introductions.py")
     after = digests()
@@ -344,48 +340,6 @@ def test_a_fit_that_raises_is_stored_as_failed(
     assert stored.meta["status"] == "failed"
     assert "no fit" in stored.meta["error"]
     assert stored.forecasts.empty
-
-
-def test_zone_samples_a_model_forecasts_are_stored_and_loaded(
-    fitted_flat: str,
-    tasks: dict[str, ForecastTask],
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from bdbvhubrenewal.forecasters import base
-
-    factory = base._REGISTRY[fitted_flat].factory
-
-    def make() -> object:
-        model = factory()
-        inner = model.forecast
-
-        def forecast(task: ForecastTask) -> pd.DataFrame:
-            out = inner(task)
-            zones = out.loc[out["location"] == task.locations[0]].copy()
-            zones["location"] = task.locations[0] + "-01"
-            model.zone_samples = zones
-            return out
-
-        model.forecast = forecast
-        return model
-
-    monkeypatch.setitem(
-        base._REGISTRY,
-        fitted_flat,
-        base.ModelSpec(fitted_flat, make, "Fitted.", fitted=True),
-    )
-    origin = sorted(tasks)[-1]
-    stored = store.fit(fitted_flat, tasks[origin], {}, "c")
-    assert set(stored.zones["location"]) == {tasks[origin].locations[0] + "-01"}
-    assert set(stored.zones["model"]) == {"flatfit"}
-    root = tmp_path / "store"
-    back = store.read_fit(store.write_fit(root, stored))
-    pd.testing.assert_frame_equal(back.zones, stored.zones, check_dtype=False)
-    keys = {(fitted_flat, origin): stored.meta["key"]}
-    store.load(root, keys, tmp_path / "results")
-    zones = pd.read_csv(tmp_path / "results" / store.ZONE_FORECASTS_FILE)
-    assert set(zones["vintage"]) == {origin}
 
 
 @pytest.fixture

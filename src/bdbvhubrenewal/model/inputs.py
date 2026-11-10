@@ -11,7 +11,6 @@
 from __future__ import annotations
 
 import datetime as dt
-from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, cast
 
@@ -38,9 +37,6 @@ reach this count. Earlier weeks are returned as observed."""
 
 CENTRES = Path(__file__).parent.parent / "data" / "province_centres.csv"
 """Population-weighted centres of all 26 provinces (see the file header)."""
-ZONE_CENTRES = Path(__file__).parent.parent / "data" / "zone_centres.csv"
-"""Centroids and WorldPop counts of the hub's health zones (see the file
-header)."""
 
 
 def province_centres() -> pd.DataFrame:
@@ -52,90 +48,6 @@ def province_centres() -> pd.DataFrame:
         Columns `location`, `latitude`, `longitude`, `worldpop`, `zones`.
     """
     return pd.read_csv(CENTRES, comment="#")
-
-
-def zone_table(locations: tuple[str, ...] | None = None) -> pd.DataFrame:
-    """Health zone populations and centres, as a locations table.
-
-    The hub zones the map lacks (19 of 519, none with a case so far) take
-    their province's centre and the mean WorldPop count of its mapped
-    zones, or the median zone's where none of its zones are mapped.
-
-    Parameters
-    ----------
-    locations : tuple of str, optional
-        Zones to return, in order. Defaults to every zone in the file.
-
-    Returns
-    -------
-    pandas.DataFrame
-        Columns `location`, `population`, `latitude` and `longitude`.
-    """
-    zones = pd.read_csv(ZONE_CENTRES, comment="#").rename(
-        columns={"worldpop": "population"}
-    )
-    zones = zones.loc[:, ["location", "population", "latitude", "longitude"]]
-    if locations is None:
-        return zones
-    return _zone_rows(tuple(locations), zones.set_index("location"))
-
-
-def _zone_rows(
-    locations: tuple[str, ...], zones: pd.DataFrame | None = None
-) -> pd.DataFrame:
-    """Zone table rows for some zones, with the province fallback."""
-    if zones is None:
-        zones = zone_table().set_index("location")
-    missing = [z for z in locations if z not in zones.index]
-    if missing:
-        provinces = province_centres().set_index("location")
-        by_province = zones.groupby(zones.index.str[:5])["population"].mean()
-        extra = pd.DataFrame(
-            {
-                "population": [
-                    by_province.get(z[:5], zones["population"].median())
-                    for z in missing
-                ],
-                "latitude": [provinces.loc[z[:5], "latitude"] for z in missing],
-                "longitude": [
-                    provinces.loc[z[:5], "longitude"] for z in missing
-                ],
-            },
-            index=pd.Index(missing, name="location"),
-        )
-        zones = pd.concat([zones, extra])
-    return zones.reindex(list(locations)).reset_index()
-
-
-def place_distances(centres: pd.DataFrame) -> np.ndarray:
-    """Great-circle distances in km between place centres.
-
-    Parameters
-    ----------
-    centres : pandas.DataFrame
-        Columns `latitude` and `longitude`, one row per place.
-
-    Returns
-    -------
-    numpy.ndarray
-        Symmetric, zero diagonal.
-
-    Raises
-    ------
-    ValueError
-        If a place has no centre.
-    """
-    if centres[["latitude", "longitude"]].isna().any().any():
-        raise ValueError("Missing place centre.")
-    lat = np.radians(centres["latitude"].to_numpy(float))
-    lon = np.radians(centres["longitude"].to_numpy(float))
-    a = (
-        np.sin((lat[:, None] - lat[None, :]) / 2) ** 2
-        + np.cos(lat[:, None])
-        * np.cos(lat[None, :])
-        * np.sin((lon[:, None] - lon[None, :]) / 2) ** 2
-    )
-    return np.asarray(2 * 6371 * np.arcsin(np.sqrt(a)), dtype=float)
 
 
 def province_distances(locations: tuple[str, ...]) -> np.ndarray:
@@ -159,14 +71,19 @@ def province_distances(locations: tuple[str, ...]) -> np.ndarray:
     centres = province_centres().set_index("location").reindex(list(locations))
     if centres[["latitude", "longitude"]].isna().any().any():
         raise ValueError("Missing province centre.")
-    return place_distances(centres)
+    lat = np.radians(centres["latitude"].to_numpy(float))
+    lon = np.radians(centres["longitude"].to_numpy(float))
+    a = (
+        np.sin((lat[:, None] - lat[None, :]) / 2) ** 2
+        + np.cos(lat[:, None])
+        * np.cos(lat[None, :])
+        * np.sin((lon[:, None] - lon[None, :]) / 2) ** 2
+    )
+    return np.asarray(2 * 6371 * np.arcsin(np.sqrt(a)), dtype=float)
 
 
 def gravity_kernel(
-    locations: tuple[str, ...],
-    table: pd.DataFrame,
-    decay_km: float = 300.0,
-    zones: bool = False,
+    locations: tuple[str, ...], table: pd.DataFrame, decay_km: float = 300.0
 ) -> np.ndarray:
     r"""Row-normalised gravity kernel between provinces.
 
@@ -183,8 +100,6 @@ def gravity_kernel(
         Locations with a population column, as from `load_locations`.
     decay_km : float, default 300.0
         Distance scale of the decay.
-    zones : bool, default False
-        The places are health zones, with centres from `zone_table`.
 
     Returns
     -------
@@ -200,11 +115,7 @@ def gravity_kernel(
     pops = table.set_index("location")["population"].reindex(list(locations))
     if pops.isna().any():
         raise ValueError("Missing province population.")
-    dist = (
-        place_distances(_zone_rows(locations))
-        if zones
-        else province_distances(locations)
-    )
+    dist = province_distances(locations)
     k = pops.to_numpy(float)[None, :] * np.exp(-dist / decay_km)
     np.fill_diagonal(k, 0.0)
     k = k / k.sum(axis=1, keepdims=True)
@@ -316,7 +227,6 @@ def bvd_inputs(
     names: list[str],
     start: dt.date,
     masked: tuple[str, ...] = (),
-    groups_of: list[str] | None = None,
 ) -> dict[str, Any] | None:
     """Map tidy BVD rows onto the modelled provinces.
 
@@ -333,9 +243,6 @@ def bvd_inputs(
         First day of the model axis.
     masked : tuple of str
         Provinces left out of the fit.
-    groups_of : list of str, optional
-        The province of each place in `names`, when the places are
-        zones. A patch then holds every zone of its provinces.
 
     Returns
     -------
@@ -360,7 +267,7 @@ def bvd_inputs(
                 float(row["ref_log_mean"]),
                 float(row["ref_log_sd"]),
             )
-            member = np.array([p in codes for p in groups_of or names])
+            member = np.array([p in codes for p in names])
             value = log_mean - ref_mean
             scale = float(np.sqrt(max(log_sd**2 - ref_sd**2, BVD_TAU_MIN**2)))
             kind = 1
@@ -396,7 +303,6 @@ def vintage_from_tables(
     masked: tuple[str, ...] = (),
     bvd: pd.DataFrame | None = None,
     release_pairs: dict[str, np.ndarray] | None = None,
-    parents: Mapping[str, str] | None = None,
 ) -> Vintage:
     """Build a `Vintage` from the target and delay rows of one vintage.
 
@@ -431,11 +337,6 @@ def vintage_from_tables(
     release_pairs : dict, optional
         Rows of each earlier delay file and how many the file before it
         had (`data.releases.release_pairs`).
-    parents : mapping, optional
-        The province of each place, when the places are health zones
-        (`zone_table` then gives `table`). The delay counts are then by
-        province, `masked` names provinces, and a BVD patch holds the
-        zones of its provinces.
 
     Returns
     -------
@@ -471,12 +372,8 @@ def vintage_from_tables(
         )
         return out.fillna(0).to_numpy(dtype=float)
 
-    # The province of each place, and the delay tables: one per modelled
-    # province, one per province of the zones, or one for a national fit.
-    parent_of = {p: p for p in active} if parents is None else dict(parents)
-    parent_names = list(dict.fromkeys(parent_of[p] for p in active))
-    delay_places = parent_names if parents is not None else list(active)
-    n_places = 1 if config.national else len(delay_places)
+    # One delay table per modelled province, or one for a national fit.
+    n_places = 1 if config.national else len(active)
     counts = np.zeros((n_weeks, n_places, config.dmax + 1))
     if delays is not None and len(delays):
         # Known onsets count every case, so negative delays go to 0 and
@@ -484,7 +381,7 @@ def vintage_from_tables(
         # rather than leaving the delay counts short of the known stream.
         keep = delays.loc[
             (
-                delays["location"].isin(delay_places)
+                delays["location"].isin(active)
                 if active != (NATIONAL,)
                 else delays["location"].ne("")
             )
@@ -502,7 +399,7 @@ def vintage_from_tables(
         place = (
             np.zeros(len(keep), dtype=int)
             if config.national
-            else keep["location"].map(delay_places.index).to_numpy(dtype=int)
+            else keep["location"].map(active.index).to_numpy(dtype=int)
         )
         np.add.at(counts, (week[ok], place[ok], delay[ok]), 1)
 
@@ -515,11 +412,7 @@ def vintage_from_tables(
         imputed = imputed.sum(axis=1, keepdims=True)
         pops = pd.Series([pops.sum()])
         names = [active[0] if len(active) == 1 else NATIONAL]
-    zoned = any(parent_of[p] != p for p in active)
-    kernel = (
-        None if len(names) == 1 else gravity_kernel(active, table, zones=zoned)
-    )
-    off = [p in masked or parent_of.get(p, p) in masked for p in names]
+    kernel = None if len(names) == 1 else gravity_kernel(active, table)
     return Vintage(
         start_date=start,
         cutoff=cutoff,
@@ -531,26 +424,12 @@ def vintage_from_tables(
         kernel=kernel,
         horizon_weeks=horizon_weeks,
         names=names,
-        fit_mask=~np.array(off, dtype=bool),
+        fit_mask=np.array([p not in masked for p in names]),
         bvd=None
         if bvd is None or config.national
-        else bvd_inputs(
-            bvd,
-            names,
-            start,
-            masked,
-            groups_of=None
-            if parents is None
-            else [parent_of[p] for p in names],
-        ),
+        else bvd_inputs(bvd, names, start, masked),
         seed_days=None if config.national else _seed_days(totals),
         release_pairs=release_pairs,
-        parents=None
-        if parents is None or config.national
-        else np.array([parent_names.index(parent_of[p]) for p in names]),
-        parent_names=None
-        if parents is None or config.national
-        else parent_names,
     )
 
 

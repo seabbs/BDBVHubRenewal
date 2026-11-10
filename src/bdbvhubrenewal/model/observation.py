@@ -712,10 +712,6 @@ class OnsetStreams(BaseObservationProcess):
     pair_likelihood : ReleasePairLikelihood, optional
         Fit `publication_lag` to which rows each delay file kept of the
         last (`release_pairs`).
-    delay_groups : numpy.ndarray, optional
-        The province of each place, `(P,)`, when the delay counts are by
-        province and the places are zones. Each province's expected
-        delay cells are the sum of its zones'.
     """
 
     def __init__(
@@ -733,7 +729,6 @@ class OnsetStreams(BaseObservationProcess):
         weekly_axis: bool = False,
         pair_likelihood: ReleasePairLikelihood | None = None,
         weekly_delay: bool = True,
-        delay_groups: np.ndarray | None = None,
     ) -> None:
         super().__init__(name, temporal_pmf_rv)
         self.ascertainment_rate_rv = ascertainment_rate_rv
@@ -749,9 +744,6 @@ class OnsetStreams(BaseObservationProcess):
         self.weekly_axis = weekly_axis
         self.pair_likelihood = pair_likelihood
         self.weekly_delay = weekly_delay
-        self.delay_groups = (
-            None if delay_groups is None else np.asarray(delay_groups, int)
-        )
 
     def lookback_days(self) -> int:
         """Return the days of infections before an onset that it needs.
@@ -1045,11 +1037,6 @@ class OnsetStreams(BaseObservationProcess):
         return jnp.stack([seen, jnp.zeros_like(seen)])
 
     def _score_delays(self, triangle: Array, counts: Array) -> None:
-        if self.delay_groups is not None:
-            n_groups = int(self.delay_groups.max()) + 1
-            triangle = jax.ops.segment_sum(
-                jnp.swapaxes(triangle, 0, 1), self.delay_groups, n_groups
-            ).swapaxes(0, 1)
         totals = counts.sum(axis=-1)
         probs = triangle / jnp.maximum(
             triangle.sum(axis=-1, keepdims=True), 1e-12

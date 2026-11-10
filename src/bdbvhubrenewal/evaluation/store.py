@@ -80,7 +80,6 @@ __all__ = [
     "STORE_ENTRIES",
     "STORE_SKIP",
     "UNPACKED_FILE",
-    "ZONE_FORECASTS_FILE",
     "StoreStatus",
     "StoredFit",
     "build_model",
@@ -109,17 +108,15 @@ STORE_ENTRIES: Final = (
 )
 """The shared modules a stored fit calls: `fit` and `run_forecasts`."""
 
-STORE_SKIP: Final = ("src/bdbvhubrenewal/evaluation/zones.py",)
-"""The zone backtest, which `STORE_ENTRIES` import but a fit does not call.
+STORE_SKIP: Final = (
+    "src/bdbvhubrenewal/evaluation/zones.py",
+    "src/bdbvhubrenewal/forecasters/zones.py",
+)
+"""The zone split, which `STORE_ENTRIES` import but a fit does not call.
 
-A stored fit holds national and province samples, and the zone samples of
-a model that forecasts zones itself (the zone renewal variants, which run
-`forecasters.zones.zone_task` in the fit). Other models' zones are split
-from their provinces at load (`forecasters.zones.zones_for_model`).
+A stored fit holds national and province samples only, and its zones are
+split from them at load (`forecasters.zones.zones_for_model`).
 """
-
-ZONE_FORECASTS_FILE: Final = "zone-forecasts.csv.gz"
-"""The stored zone samples, written by `load` beside `forecasts.csv.gz`."""
 
 STATUS_FILE: Final = "fit-store.json"
 """What `load` used, written beside the results for the docs."""
@@ -473,9 +470,6 @@ class StoredFit:
         The model's fit summaries (`fit_diagnostics`).
     delays : pandas.DataFrame
         The learnt delay (`delay_summary`), empty if the model has none.
-    zones : pandas.DataFrame
-        The model's own zone samples (`run_forecasts`' `zones`), empty if
-        its zones are split from its provinces.
     files : dict
         A submission candidate's fit directory (`fit_files`): file name
         to base64 contents. Empty for other models.
@@ -485,11 +479,10 @@ class StoredFit:
     forecasts: pd.DataFrame
     fits: pd.DataFrame
     delays: pd.DataFrame
-    zones: pd.DataFrame = field(default_factory=pd.DataFrame)
     files: dict[str, str] = field(default_factory=dict)
 
 
-_TABLES: Final = ("forecasts", "fits", "delays", "zones")
+_TABLES: Final = ("forecasts", "fits", "delays")
 
 
 def write_fit(store: Path | str, stored: StoredFit) -> Path:
@@ -542,18 +535,15 @@ def read_fit(path: Path | str) -> StoredFit:
     body = json.loads(gzip.decompress(Path(path).read_bytes()))
 
     def table(name: str) -> pd.DataFrame:
-        # Fits stored before zone samples were kept have none.
-        if name not in body:
-            return pd.DataFrame()
         return pd.read_json(
             io.StringIO(json.dumps(body[name])),
             orient="split",
             dtype=False,
         )
 
-    forecasts, fits, delays, zones = (table(n) for n in _TABLES)
+    forecasts, fits, delays = (table(n) for n in _TABLES)
     return StoredFit(
-        body["meta"], forecasts, fits, delays, zones, body.get("files", {})
+        body["meta"], forecasts, fits, delays, body.get("files", {})
     )
 
 
@@ -643,10 +633,9 @@ def fit(
     meta = _meta(model, task.vintage, fit_key(model, task, code))
     fits: list[pd.DataFrame] = []
     learnt: list[pd.DataFrame] = []
-    zones: list[pd.DataFrame] = []
     start = time.monotonic()
     try:
-        forecasts = run_forecasts([model], [task], fits, learnt, zones)
+        forecasts = run_forecasts([model], [task], fits, learnt)
         files = fit_files(model, task, sampler, time.monotonic() - start)
     except Exception as err:
         return failed(meta, err)
@@ -655,7 +644,6 @@ def fit(
         forecasts,
         pd.concat(fits, ignore_index=True) if fits else pd.DataFrame(),
         pd.concat(learnt, ignore_index=True) if learnt else pd.DataFrame(),
-        pd.concat(zones, ignore_index=True) if zones else pd.DataFrame(),
         files,
     )
 
@@ -856,9 +844,8 @@ def load(
     Every origin goes to `forecasts.csv.gz`, from `min_horizon` to
     `max_horizon`: a stored fit holds the submission's weeks, which start
     earlier and end later.
-    Fit summaries go to `backtest-fits.csv`, learnt delays to
-    `delay-summary.csv` and a model's own zone samples to
-    `ZONE_FORECASTS_FILE`. Each file keeps the rows of models not stored.
+    Fit summaries go to `backtest-fits.csv` and learnt delays to
+    `delay-summary.csv`. Each file keeps the rows of models not stored.
     What was used is written to `STATUS_FILE`.
 
     Parameters
@@ -911,7 +898,6 @@ def load(
         ("forecasts.csv.gz", forecasts),
         ("backtest-fits.csv", [f.fits for f in loaded]),
         (DELAY_SUMMARY_FILE, [f.delays for f in loaded]),
-        (ZONE_FORECASTS_FILE, [f.zones for f in loaded]),
     ):
         _merge(out / name, frames)
     (out / STATUS_FILE).write_text(

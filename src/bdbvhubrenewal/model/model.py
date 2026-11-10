@@ -36,7 +36,7 @@ from .delays import (
 )
 from .hazard_delay import HazardDelay
 from .observation import MissingOnsetFraction, OnsetStreams
-from .pooled import ActiveValues, ByParent, PooledInitialValue, parent_active
+from .pooled import ActiveValues, PooledInitialValue
 from .publication_lag import ReleasePairLikelihood
 from .renewal import Importation, MetapopulationInfections
 from .rt_observation import RtPseudoObservation
@@ -279,15 +279,6 @@ class Vintage:
     release_pairs : dict or None
         Rows of each earlier delay file and how many the file before it
         had (`data.releases.release_pairs`), or None.
-    parents : numpy.ndarray or None
-        For places nested in provinces (health zones), the index of each
-        place's province in `parent_names`, `(P,)`. Rt then pools zones
-        within provinces and provinces within the country, the delay and
-        the missing-onset share are by province, and `delay_counts` are
-        by province, `(n_weeks, len(parent_names), dmax + 1)`. None for
-        one level.
-    parent_names : list of str or None
-        The provinces of `parents`.
     """
 
     start_date: dt.date
@@ -304,8 +295,6 @@ class Vintage:
     bvd: dict[str, Any] | None = None
     seed_days: np.ndarray | None = None
     release_pairs: dict[str, np.ndarray] | None = None
-    parents: np.ndarray | None = None
-    parent_names: list[str] | None = None
 
     @property
     def n_weeks(self) -> int:
@@ -490,18 +479,6 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
     # are barely informed (only their zero counts, through importation),
     # so they are not sampled.
     active = data.seeded
-    # With zones as places, the delay and the missing-onset share are by
-    # province (the delay files list provinces only) and each zone takes
-    # its province's; with provinces as places they are by place.
-    parents = data.parents
-    n_groups = n_prov if parents is None else int(parents.max()) + 1
-    group_active = active if parents is None else parent_active(parents, active)
-
-    def by_place(rv: Any, axis: int) -> Any:
-        if parents is None:
-            return rv
-        return ByParent(f"{rv.name}_by_zone", rv, parents, axis)
-
     mixing = None
     if config.coupling == "gravity" and data.kernel is not None:
         mixing = Importation(
@@ -560,12 +537,6 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
         effective_population_rv=effective_population,
         seed_days=data.seed_days,
         seeded=active,
-        parents=parents,
-        place_deviation_process=None
-        if parents is None
-        else _named_walk(
-            "rt_zone_dev_sd", 0.1, fit_weeks(data, config), ar=True
-        ),
         rt_observation=RtPseudoObservation(
             "bvd", alpha=config.bvd_alpha, **data.bvd
         )
@@ -608,16 +579,16 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             # weakly, and centred they form a funnel (R-hat 1.68).
             _pooled(
                 "logit_pi0",
-                n_groups,
+                n_prov,
                 -2.0,
                 1.0,
                 0.5,
                 centred=False,
-                active=group_active,
+                active=active,
             ),
             _named_walk("pi_sd", 0.3, fit_weeks(data, config)),
             _named_walk("pi_dev_sd", 0.1, fit_weeks(data, config)),
-            active=group_active,
+            active=active,
         )
 
     if missing is not None:
@@ -636,14 +607,14 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             # provinces have no delay data, so they take the shared delay.
             PooledInitialValue(
                 "delay_offset",
-                n_groups,
+                n_prov,
                 DeterministicVariable("delay_offset_mean", 0.0),
                 DistributionalVariable("delay_offset_sd", dist.HalfNormal(0.5)),
                 centred=False,
-                active=group_active,
+                active=active,
             ),
             _named_walk("delay_dev_sd", 0.1, fit_weeks(data, config)),
-            active=group_active,
+            active=active,
         )
     builder.add_observation(
         OnsetStreams(
@@ -667,11 +638,8 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
                 INCUBATION_LENGTH,
             ),
             ascertainment_rate_rv=ascertainment.for_signal("onsets"),
-            missing_fraction_rv=None
-            if missing is None
-            else by_place(missing, 1),
-            delay_rv=by_place(delay, 0),
-            delay_groups=parents,
+            missing_fraction_rv=missing,
+            delay_rv=delay,
             known_noise=_nb_noise("known"),
             imputed_noise=None if missing is None else _nb_noise("imputed"),
             start_dow=SUNDAY,

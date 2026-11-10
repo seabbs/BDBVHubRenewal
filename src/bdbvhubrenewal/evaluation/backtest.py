@@ -462,7 +462,6 @@ def run_forecasts(
     tasks: Iterable[ForecastTask],
     fits: list[pd.DataFrame] | None = None,
     learnt: list[pd.DataFrame] | None = None,
-    zones: list[pd.DataFrame] | None = None,
 ) -> pd.DataFrame:
     """Run every model on every task, adding the national total.
 
@@ -484,10 +483,6 @@ def run_forecasts(
     learnt : list, optional
         Collects each fit's learnt delay per task, for models that set
         `delay_summary`.
-    zones : list, optional
-        Collects each model's own zone samples per task, with `model`,
-        `kind` and `vintage`, for models that set `zone_samples` (the
-        zone renewal variants).
 
     Returns
     -------
@@ -530,13 +525,6 @@ def run_forecasts(
             delay = getattr(model, "delay_summary", None)
             if learnt is not None and delay is not None:
                 learnt.append(delay)
-            own = getattr(model, "zone_samples", None)
-            if zones is not None and own is not None:
-                zones.append(
-                    own.assign(
-                        model=model.name, kind=task.kind, vintage=task.vintage
-                    )
-                )
             check_samples(samples, task)
             if "as_of" not in samples:
                 samples["as_of"] = np.nan

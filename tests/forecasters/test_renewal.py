@@ -24,8 +24,6 @@ from bdbvhubrenewal.submission.hub import model_abbr_for
 
 pytest.importorskip("pyrenew")
 
-DATA = Path(__file__).resolve().parents[1] / "fixtures" / "data"
-
 
 @pytest.fixture
 def task(target: pd.DataFrame, delays: pd.DataFrame) -> ForecastTask:
@@ -237,16 +235,13 @@ def _fake_run(task: ForecastTask, variant: rn.Variant) -> rn.RenewalRun:
                 data.start_date,
                 13,
             ).assign(place=place)
-            for place in data.parent_names or data.names
+            for place in data.names
         ),
     )
 
 
-@pytest.mark.usefixtures("quiet_zones")
 def test_fit_renewal_writes_the_ci_contract(
-    task: ForecastTask,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    task: ForecastTask, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     calls: list[dict[str, Any]] = []
 
@@ -357,11 +352,8 @@ def test_bvd_variant_reads_the_release_for_its_vintage(
     assert "renewalbvd" in {s.name for s in list_models()}
 
 
-@pytest.mark.usefixtures("quiet_zones")
 def test_bvd_fit_records_the_release_and_its_rhat(
-    task: ForecastTask,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    task: ForecastTask, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import shutil
 
@@ -378,9 +370,6 @@ def test_bvd_fit_records_the_release_and_its_rhat(
     )
     for tag in ("results-3151", "results-3086"):
         shutil.copytree(fixtures / tag, cache / tag)
-    # The zone variants read the zone counts and zone codes there too.
-    for name in ("daily_zones.csv.gz", "hub-config"):
-        (tmp_path / name).symlink_to(DATA / name)
     monkeypatch.setenv("BDBV_DATA_DIR", str(tmp_path))
     release = rn.bvd_release(task)
     assert release is not None
@@ -414,11 +403,8 @@ def test_bvd_fit_records_the_release_and_its_rhat(
     assert "bvd" not in plain
 
 
-@pytest.mark.usefixtures("quiet_zones")
 def test_fit_records_the_posterior_draw_behind_each_trajectory(
-    task: ForecastTask,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    task: ForecastTask, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def fake(self: rn.RenewalModel, t: ForecastTask) -> rn.RenewalRun:
         run = _fake_run(t, self.variant)
@@ -508,12 +494,10 @@ def test_report_cutoffs_are_days_from_the_model_start(
     assert cuts == {(pd.Timestamp(last[d]) - start).days: d for d in last}
 
 
-@pytest.mark.usefixtures("quiet", "quiet_zones")
+@pytest.mark.usefixtures("quiet")
 @pytest.mark.parametrize("name", ["renewal", "renewalsp"])
 def test_forecast_gives_counts_as_reported_later(
-    task: ForecastTask,
-    monkeypatch: pytest.MonkeyPatch,
-    name: str,
+    task: ForecastTask, monkeypatch: pytest.MonkeyPatch, name: str
 ) -> None:
     monkeypatch.setattr(
         rn.RenewalModel, "run", lambda self, t: _fake_run(t, self.variant)
@@ -531,10 +515,8 @@ def test_forecast_gives_counts_as_reported_later(
     assert "as_of" not in plain
 
 
-@pytest.mark.usefixtures("quiet_zones")
 def test_forecast_records_a_summary_of_each_fit(
-    task: ForecastTask,
-    monkeypatch: pytest.MonkeyPatch,
+    task: ForecastTask, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
         rn.RenewalModel, "run", lambda self, t: _fake_run(t, self.variant)
@@ -710,135 +692,3 @@ def test_provinces_in_parallel_match_one_after_another(
     parallel = model.forecast_fit(sub)
     pd.testing.assert_frame_equal(parallel.samples, serial.samples)
     assert list(parallel.runs) == list(serial.runs)
-
-
-@pytest.fixture
-def quiet_zones(
-    task: ForecastTask, monkeypatch: pytest.MonkeyPatch
-) -> set[str]:
-    """Make every zone silent but the four with most cases, with zero draws."""
-    from bdbvhubrenewal.data.zones import province_of
-
-    zones = rn.task_zones(task)
-    counts = rn.zone_target(task).groupby("location")["total"].sum()
-    busy = set(counts.sort_values().index[-4:])
-    silent = {z for z in zones if z not in busy}
-    rows = pd.DataFrame(
-        [
-            (z, date, k, 0)
-            for z in sorted(silent)
-            for date in task.target_end_dates
-            for k in range(1, task.n_samples + 1)
-        ],
-        columns=["location", "target_end_date", "sample", "value"],
-    )
-    walk = rn._silent_walk
-
-    def fake(t: ForecastTask) -> tuple[pd.DataFrame, set[str]]:
-        if any(len(loc.split("-")) == 3 for loc in t.locations):
-            return rows, silent
-        return walk(t)
-
-    monkeypatch.setattr(rn, "_silent_walk", fake)
-    monkeypatch.setenv(rn.ZONES_ENV, "1")
-    assert {province_of(z) for z in busy} <= set(task.locations)
-    return silent
-
-
-def test_zone_variants_fit_zones_and_sum_them_to_provinces(
-    task: ForecastTask, monkeypatch: pytest.MonkeyPatch, quiet_zones: set[str]
-) -> None:
-    from bdbvhubrenewal.data.zones import province_of
-
-    seen: list[tuple[str, ...]] = []
-
-    def fake(self: rn.RenewalModel, t: ForecastTask) -> rn.RenewalRun:
-        seen.append(t.locations)
-        return _fake_run(t, self.variant)
-
-    monkeypatch.setattr(rn.RenewalModel, "run", fake)
-    fit = get_model("renewal").forecast_fit(task)
-    # One joint fit of the zones the random walks do not find silent.
-    (fitted,) = seen
-    assert len(fitted) == 4
-    assert all(len(z.split("-")) == 3 for z in fitted)
-    assert not set(fitted) & quiet_zones
-    run = fit.runs["all"]
-    assert run.data.parent_names == list(
-        dict.fromkeys(province_of(z) for z in fitted)
-    )
-    # Every zone of the task's provinces is forecast, and the provinces
-    # are the sums of their zones, sample by sample.
-    assert fit.zones is not None
-    assert set(fit.zones["location"]) == set(fitted) | quiet_zones
-    assert set(fit.samples["location"]) == set(task.locations)
-    # National is the sum of the provinces: the hub's national target has
-    # no case without a province (data/national-coherence.csv).
-    assert fit.unassigned is None
-    summed = (
-        fit.zones.assign(location=fit.zones["location"].map(province_of))
-        .groupby(["location", "target_end_date", "sample"])["value"]
-        .sum()
-    )
-    prov = fit.samples.set_index(["location", "target_end_date", "sample"])
-    pd.testing.assert_series_equal(
-        prov["value"].sort_index(), summed.sort_index(), check_names=False
-    )
-
-
-def test_zone_inputs_take_the_zone_counts_and_province_delays(
-    task: ForecastTask,
-) -> None:
-    from bdbvhubrenewal.data.zones import province_of
-
-    rows = rn.zone_target(task)
-    assert {"observed", "imputed", "total", "cutoff"} <= set(rows.columns)
-    zones = tuple(rows.groupby("location")["total"].sum().nlargest(6).index)
-    zt = replace(task, target=rows, locations=zones)
-    data = rn.vintage_inputs(zt, rn.model_config(rn.VARIANTS["renewal"]))
-    assert data.names == list(zones)
-    assert data.parent_names is not None
-    assert [data.parent_names[i] for i in data.parents] == [
-        province_of(z) for z in zones
-    ]
-    assert data.delay_counts.shape[1] == len(data.parent_names)
-    # Zone weekly counts sum to the province counts of the release.
-    prov = task.target.loc[task.target["location"].isin(data.parent_names)]
-    wide = prov.pivot_table(
-        index="target_end_date", columns="location", values="total"
-    )
-    zone_totals = rows.assign(p=rows["location"].map(province_of)).pivot_table(
-        index="target_end_date", columns="p", values="total", aggfunc="sum"
-    )[data.parent_names]
-    pd.testing.assert_frame_equal(
-        wide.reindex_like(zone_totals).fillna(0),
-        zone_totals.fillna(0),
-        check_names=False,
-        check_dtype=False,
-    )
-
-
-def test_zone_fits_are_opt_in(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.delenv(rn.ZONES_ENV, raising=False)
-    # The shipped config keeps the province fits.
-    root = Path(__file__).resolve().parents[2]
-    assert rn.zone_fits(root / "config" / "hub.toml") is False
-    assert rn.zone_fits(tmp_path / "missing.toml") is False
-    on = tmp_path / "hub.toml"
-    on.write_text("[renewal]\nzones = true\n")
-    assert rn.zone_fits(on) is True
-    monkeypatch.setenv(rn.ZONES_ENV, "0")
-    assert rn.zone_fits(on) is False
-    monkeypatch.setenv(rn.ZONES_ENV, "1")
-    model = get_model("renewalbvd")
-    assert isinstance(model, rn.RenewalModel)
-    assert model.variant.zones
-    assert not get_model("renewalsp").variant.zones
-    monkeypatch.setenv(rn.ZONES_ENV, "0")
-    plain = get_model("renewal")
-    assert isinstance(plain, rn.RenewalModel)
-    assert not plain.variant.zones
-    # The setting is in the representation, so it keys a stored fit.
-    assert repr(plain) != repr(model)

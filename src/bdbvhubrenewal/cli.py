@@ -79,6 +79,11 @@ from bdbvhubrenewal.forecasters.base import (
     list_models,
 )
 from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
+from bdbvhubrenewal.forecasters.zonerenewal import (
+    ZONES_FILE,
+    enable_zones,
+    zone_fits,
+)
 from bdbvhubrenewal.forecasters.zones import zones_for_model
 from bdbvhubrenewal.submission.fitting import (
     Forecast,
@@ -1079,13 +1084,17 @@ def _zones(
 ) -> tuple[pd.DataFrame | None, str]:
     """Forecast the zones to sum to the provinces, or say why not.
 
-    A model that forecast the zones itself (`own`, the zone renewal
-    variants) gives its zone samples, for the hub's zones. Otherwise the
-    zones come from `zones_for_model`.
+    A model that forecast the zones itself (`own`: the zone renewal fits,
+    from the fit directory or the model) gives its zone samples, for the
+    hub's zones. Otherwise the zones come from `zones_for_model`.
     """
     if own is not None:
         codes = set(hub_zones(hub_config))
-        return own.loc[own["location"].isin(codes)].reset_index(drop=True), ""
+        own = own.loc[
+            own["location"].isin(codes)
+            & own["target_end_date"].astype(str).isin(task.target_end_dates)
+        ]
+        return own.reset_index(drop=True), ""
     try:
         daily = load_daily_zones(args.data)
     except OSError:
@@ -1108,19 +1117,20 @@ def _nowcast(args: argparse.Namespace) -> int:
     hub_config = Path(args.data) / "hub-config" / "tasks.json"
     try:
         task, handled = _task(args)
+        own = None
         if args.config:
             config = get_config(args.config)
             result = run_forecast(config, task, args.fit)
+            own_file = Path(args.fit) / ZONES_FILE
+            if own_file.exists():
+                own = pd.read_csv(own_file, dtype={"target_end_date": str})
         else:
             model = get_model(args.model)
             samples = model.forecast(task)
             check_samples(samples, task)
-            result = Forecast(
-                samples, zones=getattr(model, "zone_samples", None)
-            )
-        zones, zone_note = _zones(
-            args, task, result.samples, hub_config, result.zones
-        )
+            result = Forecast(samples)
+            own = getattr(model, "zone_samples", None)
+        zones, zone_note = _zones(args, task, result.samples, hub_config, own)
         if zone_note:
             handled.append(zone_note)
         table = to_hub_table(
@@ -1508,6 +1518,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return validate_main(argv[1:])
     parser = build_parser()
     args = parser.parse_args(argv)
+    # Zone renewal fits are opt-in (`[renewal] zones` in config/hub.toml).
+    if zone_fits():
+        enable_zones()
     if args.version:
         print(_version())
         return 0

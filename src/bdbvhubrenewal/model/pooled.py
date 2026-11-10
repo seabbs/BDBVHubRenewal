@@ -223,75 +223,6 @@ def sum_to_zero_basis(n: int, active: np.ndarray | None = None) -> np.ndarray:
     return basis
 
 
-def parent_active(parents: np.ndarray, active: np.ndarray) -> np.ndarray:
-    """Return the parents with at least one active child.
-
-    Parameters
-    ----------
-    parents
-        Index of each place's parent, `(n,)`.
-    active
-        Boolean `(n,)`.
-
-    Returns
-    -------
-    numpy.ndarray
-        Boolean, one per parent.
-    """
-    parents = np.asarray(parents, dtype=int)
-    out = np.zeros(int(parents.max()) + 1, dtype=bool)
-    np.logical_or.at(out, parents, np.asarray(active, dtype=bool))
-    return out
-
-
-def nested_basis(
-    parents: np.ndarray, active: np.ndarray | None = None
-) -> tuple[np.ndarray, np.ndarray]:
-    r"""Bases of parent and within-parent deviations of nested places.
-
-    For places $z$ in parents $p(z)$ (zones in provinces), a deviation is
-    $\delta_z = \sum_j B_{zj} \xi_j + \sum_k Q_{zk} \eta_k$.
-    `between` $B$ lifts `sum_to_zero_basis` over the parents with an
-    active place to their places, so a parent's places share its
-    deviation and the parent deviations sum to zero. `within` $Q$ is
-    block diagonal: each parent's block is `sum_to_zero_basis` over its
-    active places, so the place deviations sum to zero within each
-    parent. A parent with one active place has no block. An inactive
-    place takes its parent's deviation and has no own. The columns of
-    $B$ and $Q$ are orthogonal, and with one place per parent $B$ is
-    `sum_to_zero_basis` and $Q$ is empty.
-
-    Parameters
-    ----------
-    parents
-        Index of each place's parent, `(n,)`.
-    active
-        Boolean `(n,)`, or `None` for every place.
-
-    Returns
-    -------
-    tuple of numpy.ndarray
-        `between`, `(n, k_p - 1)` with `k_p` the parents with an active
-        place, and `within`, `(n, sum_p (k_z(p) - 1))` with `k_z(p)` the
-        active places of parent `p`.
-    """
-    parents = np.asarray(parents, dtype=int)
-    n = parents.size
-    keep = np.ones(n, dtype=bool) if active is None else np.asarray(active)
-    par = parent_active(parents, keep)
-    between = sum_to_zero_basis(par.size, par)[parents]
-    blocks = []
-    for p in range(par.size):
-        mine = keep & (parents == p)
-        if mine.sum() < 2:
-            continue
-        block = np.zeros((n, int(mine.sum()) - 1))
-        block[mine] = sum_to_zero_basis(int(mine.sum()))
-        blocks.append(block)
-    within = np.hstack(blocks) if blocks else np.zeros((n, 0))
-    return between, within
-
-
 def pooled_walk(
     baseline_process: TemporalProcess,
     deviation_process: TemporalProcess,
@@ -301,8 +232,6 @@ def pooled_walk(
     name_prefix: str,
     first_day_dow: int | None = None,
     active: np.ndarray | None = None,
-    parents: np.ndarray | None = None,
-    place_process: TemporalProcess | None = None,
 ) -> tuple[ArrayLike, ArrayLike]:
     r"""Sample a national process plus sum-to-zero province deviations.
 
@@ -333,15 +262,6 @@ def pooled_walk(
     active
         Boolean `(n_groups,)`: provinces with a deviation, the rest
         following the pooled trend. `None` is all.
-    parents
-        Index of each group's parent, `(n_groups,)`, for nested groups
-        (zones in provinces). The deviations are then a parent deviation
-        that follows `deviation_process`, on the `between` basis of
-        `nested_basis`, plus a deviation within the parent that follows
-        `place_process`, on its `within` basis. `None` is one level.
-    place_process
-        Temporal process of the deviations within parents. Needed with
-        `parents`.
 
     Returns
     -------
@@ -350,18 +270,6 @@ def pooled_walk(
         `(n_timepoints, n_groups)`.
     """
     base_start, dev_start = split_initial_value(initial, n_groups)
-    if parents is not None:
-        return _nested_walk(
-            baseline_process,
-            deviation_process,
-            place_process,
-            base_start,
-            dev_start,
-            n_timepoints,
-            name_prefix,
-            first_day_dow,
-            nested_basis(parents, active),
-        )
     baseline = baseline_process.sample(
         n_timepoints=n_timepoints,
         initial_value=base_start,
@@ -379,48 +287,6 @@ def pooled_walk(
         first_day_dow=first_day_dow,
     )
     return baseline, baseline + coords @ basis.T
-
-
-def _nested_walk(
-    baseline_process: TemporalProcess,
-    parent_process: TemporalProcess,
-    place_process: TemporalProcess | None,
-    base_start: ArrayLike,
-    dev_start: ArrayLike,
-    n_timepoints: int,
-    name_prefix: str,
-    first_day_dow: int | None,
-    bases: tuple[np.ndarray, np.ndarray],
-) -> tuple[ArrayLike, ArrayLike]:
-    """`pooled_walk` with parent and within-parent deviations.
-
-    The starting deviations are projected onto each basis by least
-    squares, which for an orthonormal basis is `basis.T @ start`.
-    """
-    baseline = baseline_process.sample(
-        n_timepoints=n_timepoints,
-        initial_value=base_start,
-        name_prefix=f"{name_prefix}_baseline",
-        first_day_dow=first_day_dow,
-    )
-    out = baseline
-    for basis, process, label in (
-        (bases[0], parent_process, "deviations"),
-        (bases[1], place_process, "zone_deviations"),
-    ):
-        if basis.shape[1] == 0:
-            continue
-        if process is None:
-            raise ValueError("Nested deviations need a place process.")
-        coords = process.sample(
-            n_timepoints=n_timepoints,
-            n_processes=basis.shape[1],
-            initial_value=jnp.asarray(np.linalg.pinv(basis)) @ dev_start,
-            name_prefix=f"{name_prefix}_{label}",
-            first_day_dow=first_day_dow,
-        )
-        out = out + coords @ jnp.asarray(basis).T
-    return baseline, jnp.broadcast_to(out, (n_timepoints, bases[0].shape[0]))
 
 
 def pooled_groups(active: np.ndarray | None, n_groups: int) -> np.ndarray:
@@ -445,95 +311,3 @@ def pooled_groups(active: np.ndarray | None, n_groups: int) -> np.ndarray:
     if active is None:
         return np.zeros(n_groups, dtype=bool)
     return ~np.asarray(active, dtype=bool)
-
-
-class ByParent(RandomVariable):
-    """A per-group random variable sampled for parents, given to places.
-
-    Wraps a random variable that takes `n_groups` (such as `HazardDelay`
-    or `MissingOnsetFraction`): it is sampled once per parent (province)
-    and each place (zone) takes its parent's value along `axis`.
-    """
-
-    def __init__(
-        self, name: str, inner: RandomVariable, parents: np.ndarray, axis: int
-    ) -> None:
-        """Initialize the wrapper.
-
-        Parameters
-        ----------
-        name
-            Name of the variable.
-        inner
-            Takes `n_groups` and returns one value per group on `axis`.
-        parents
-            Index of each place's parent, `(n_places,)`.
-        axis
-            Group axis of `inner`'s value.
-
-        Raises
-        ------
-        TypeError
-            If `inner` is not a `RandomVariable`.
-        """
-        if not isinstance(inner, RandomVariable):
-            raise TypeError("inner must be a RandomVariable.")
-        super().__init__(name=name)
-        self.inner = inner
-        self.parents = np.asarray(parents, dtype=int)
-        self.n_parents = int(self.parents.max()) + 1
-        self.axis = axis
-
-    def __repr__(self) -> str:
-        """Return string representation."""
-        return (
-            f"ByParent(name={self.name!r}, inner={self.inner!r}, "
-            f"parents={self.parents.tolist()!r}, axis={self.axis})"
-        )
-
-    def shared_groups(self, n_groups: int) -> np.ndarray:
-        """Return the places whose parent takes the shared value.
-
-        Parameters
-        ----------
-        n_groups
-            Number of places.
-
-        Returns
-        -------
-        numpy.ndarray
-            Boolean `(n_groups,)`.
-        """
-        inner = getattr(self.inner, "shared_groups", None)
-        if inner is None:
-            return np.zeros(n_groups, dtype=bool)
-        shared = np.asarray(inner(self.n_parents), dtype=bool)
-        out: np.ndarray = shared[self.parents]
-        return out
-
-    def sample(self, n_groups: int | None = None, **kwargs: object) -> Array:
-        """Sample the parents' values and give each place its parent's.
-
-        Parameters
-        ----------
-        n_groups
-            Number of places. Ignored beyond a check.
-        **kwargs
-            Passed to `inner`.
-
-        Returns
-        -------
-        Array
-            `inner`'s value with the group axis indexed by place.
-
-        Raises
-        ------
-        ValueError
-            If `n_groups` is not the number of places.
-        """
-        if n_groups is not None and n_groups != self.parents.size:
-            raise ValueError(
-                f"Expected {self.parents.size} places, got {n_groups}."
-            )
-        value = self.inner(n_groups=self.n_parents, **kwargs)
-        return jnp.take(jnp.asarray(value), self.parents, axis=self.axis)

@@ -6,9 +6,8 @@ not, is archived with each hub release. For each model `hub_tables`
 gives the hub sample table, with the country, the provinces and the
 health zones, as `bdbvhubrenewal nowcast` writes it for a submission,
 and the same forecast as hub quantiles.
-The zones are a model's own zone samples where it forecast them (the
-zone renewal variants, from the fit store), else they come from
-`zones_for_model`, as in a submission, which fits no model.
+The zones come from `zones_for_model`, as in a submission, which fits
+no model.
 """
 
 from __future__ import annotations
@@ -87,7 +86,6 @@ def hub_tables(
     task: ForecastTask,
     daily_zones: pd.DataFrame,
     zones: tuple[str, ...],
-    own_zones: pd.DataFrame | None = None,
 ) -> dict[str, pd.DataFrame]:
     """Return each model's hub sample table at one task.
 
@@ -102,10 +100,6 @@ def hub_tables(
         The daily zone table (`load_daily_zones`).
     zones : tuple of str
         The hub's zone codes.
-    own_zones : pandas.DataFrame, optional
-        Zone samples models forecast themselves, with `model` and
-        `vintage` (`store.ZONE_FORECASTS_FILE`). A model with rows at the
-        task's vintage takes them, for the hub's zones.
 
     Returns
     -------
@@ -119,19 +113,9 @@ def hub_tables(
     out = {}
     for name, own in rows.groupby("model"):
         provinces = own.loc[own["location"] != NATIONAL, list(SAMPLE_COLUMNS)]
-        mine = None
-        if own_zones is not None and not own_zones.empty:
-            mine = own_zones.loc[
-                (own_zones["model"] == name)
-                & (own_zones["vintage"] == task.vintage)
-                & own_zones["location"].isin(set(zones))
-            ]
-        if mine is not None and not mine.empty:
-            split = mine.loc[:, list(SAMPLE_COLUMNS)].reset_index(drop=True)
-        else:
-            split = zones_for_model(
-                str(name), task, provinces, counts, zones, daily_zones
-            )
+        split = zones_for_model(
+            str(name), task, provinces, counts, zones, daily_zones
+        )
         out[str(name)] = to_hub_table(
             provinces,
             task.reference_date,

@@ -71,11 +71,7 @@ from bdbvhubrenewal.evaluation.nowcast import (
     relative_wis,
 )
 from bdbvhubrenewal.evaluation.scoring import summarise_scores
-from bdbvhubrenewal.evaluation.store import (
-    ZONE_FORECASTS_FILE,
-    samplers,
-    stored_models,
-)
+from bdbvhubrenewal.evaluation.store import samplers, stored_models
 from bdbvhubrenewal.evaluation.zones import SUMMED
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
@@ -316,12 +312,6 @@ def make_report(
     # its own.
     daily_zones = load_daily_zones(data_dir)
     zone_codes = hub_zones(Path(data_dir) / "hub-config" / "tasks.json")
-    # Zone samples the zone renewal variants forecast, from the fit store.
-    own_zones = None
-    if (res / ZONE_FORECASTS_FILE).exists():
-        own_zones = pd.read_csv(
-            res / ZONE_FORECASTS_FILE, dtype={"target_end_date": str}
-        )
     for vintage in sorted(set(real["vintage"]) - set(config.skip_origins)):
         if vintage == latest:
             task, at = tasks[0], forecasts_now
@@ -335,7 +325,7 @@ def make_report(
             )[0]
             at = _stored_at(res, vintage)
         write_hub_tables(
-            hub_tables(at, task, daily_zones, zone_codes, own_zones),
+            hub_tables(at, task, daily_zones, zone_codes),
             res / "hub" / str(vintage),
         )
     groups = _nowcast_groups(target, sorted(set(forecasts_now["location"])))

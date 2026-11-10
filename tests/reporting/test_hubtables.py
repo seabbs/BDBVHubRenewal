@@ -80,27 +80,3 @@ def test_hub_tables_cover_country_provinces_and_zones(
         "randomwalk-quantiles.csv.gz",
         "randomwalk-samples.csv.gz",
     ]
-
-
-def test_hub_tables_take_a_models_own_zone_samples(
-    target: pd.DataFrame,
-    delays: pd.DataFrame,
-    daily: pd.DataFrame,
-) -> None:
-    real = target.loc[target["kind"] == "real"]
-    latest = real["vintage"].max()
-    task = bt.make_tasks(
-        real.loc[real["vintage"] == latest],
-        delays,
-        bt.load_config(ROOT / "config" / "backtest.toml"),
-        history=real,
-        daily=daily,
-    )[0]
-    forecasts = bt.run_forecasts([get_model("randomwalk")], [task])
-    zones = hub_zones(DATA / "hub-config" / "tasks.json")
-    rows = forecasts.loc[forecasts["location"] == "CD-IT"]
-    own = rows.assign(location="CD-IT-10").drop(columns="horizon")
-    tables = hub_tables(forecasts, task, load_daily_zones(DATA), zones, own)
-    table = tables["randomwalk"]
-    zone_rows = table.loc[table["location"].isin(set(zones))]
-    assert set(zone_rows["location"]) == {"CD-IT-10"}
