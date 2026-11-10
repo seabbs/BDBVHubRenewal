@@ -236,12 +236,13 @@ def test_diagnostics_name_the_sources(
     assert {
         "start_week", "n_err", "delay_source", "obs_source", "sigma_source"
     } <= set(info.columns)  # fmt: skip
-    assert info.loc["CD-IT", "delay_source"].startswith("own at ")
-    n_it = int(info.loc["CD-IT", "delay_source"].split()[2])
-    n_to = int(info.loc["CD-TO", "delay_source"].split()[2])
-    assert n_to < n_it <= 42
-    assert info.loc["CD-IT", "obs_source"] == "pooled:CD"
-    assert info.loc["CD-IT", "n_err"] == 3
+    # Ituri has 10 cases a week and uses its own estimates. Tshopo has
+    # fewer and uses the country's pooled ones.
+    for col in ("delay_source", "obs_source", "sigma_source"):
+        assert info.loc["CD-IT", col] == "own:CD-IT"
+    assert info.loc["CD-TO", "delay_source"] == "pooled:CD"
+    assert info.loc["CD-TO", "obs_source"] == "pooled:CD"
+    assert info.loc["CD-IT", "n_err"] == 1
 
 
 def test_models_raise_without_snapshots_or_a_delay_pair(
@@ -339,14 +340,15 @@ def test_a_place_with_no_week_to_start_from_draws_introductions(
     # Sud Ubangi has 2 cases ever, in the week of 10-03, so no week has
     # enough cases to start a walk from. It takes the silent places' path
     # from its latest complete week, so even a wide walk spread, as
-    # pprandomwalknowcast fits it, keeps its draws small.
+    # pprandomwalknowcast fits it, keeps its draws small: hundreds at most,
+    # where a walk from week 0 reached millions (#138).
     model = RandomWalkNowcast()
     origin = model.origin_at(task, errors=True)
     i = list(origin.snap.locations).index("CD-SU")
     origin.sigma[i] = 0.9
     values, _ = model.trajectories(origin, task, origin.point)
     su = values[:, i, :]
-    assert su.max() < 100
+    assert su.max() < 1000
     # Weeks with data keep at least the count reported.
     n_data = origin.reported.shape[1]
     assert (su[:, :n_data] >= origin.reported[i]).all()
