@@ -181,6 +181,15 @@ Where the estimate chosen by the [pooling rule](#own-or-pooled-estimates) has fe
 The release backtest in [#152](https://github.com/seabbs/BDBVHubRenewal/pull/152) compared this default with Poisson removals of the reported count, new reports clipped at 0 with no preprocessing, a delay fitted without preprocessing, and baselinenowcast's proposed rounded normal and Skellam models of the signed change.
 The negative binomial options scored the same within sampling noise, and the signed models were too narrow, so the default is kept.
 
+**Correlated errors.**
+$\phi_{p,k}$ is fitted to weekly sums of new reports, so the correlation of daily errors within a week is in the weekly size.
+This is what baselinenowcast's 7-day rolling sums do, on hub weeks instead of rolling windows.
+No step sums independent daily draws.
+The retrospective daily errors are strongly correlated within a week: the variance of a week's error is about 3.4 times the sum of its daily variances (within-week correlation about 0.4).
+Draws for different weeks of one place are independent, as in baselinenowcast, although new reports across the weeks of one release are positively correlated where counts are large.
+[#164](https://github.com/seabbs/BDBVHubRenewal/pull/164) compared independent weeks with a shared gamma factor per release and place, with and without the sizes adjusted to keep each week's variance, and a Gaussian copula reordering of the draws (Iman-Conover).
+None scored better on the release backtest, also on the sum of the last 3 nowcast weeks, so the weeks stay independent.
+
 ## Own or pooled estimates
 
 The places form a hierarchy of zone, province and country.
@@ -348,6 +357,7 @@ The chain ladder treats reporting speed as fixed by age and step, but speed and 
 The observation model is learnt from the earlier releases, which may be few.
 Counts include the hub's imputed onsets, which are re-drawn as cases gain onsets, so changes between releases mix reporting with imputation.
 Places are sampled independently, so a shock to a whole release is not shared, and the national band is a sum of independent provincial bands.
+The weeks of one place are also sampled independently, so a whole release running late is not shared across its weeks.
 The walk has no drift, and its spread comes from 8 weekly changes, net of a delta-method Poisson noise term that assumes no extra dispersion in the reported counts.
 `pprandomwalknowcast` plugs in posterior medians, so the uncertainty in its pooled estimates does not widen its forecasts.
 
