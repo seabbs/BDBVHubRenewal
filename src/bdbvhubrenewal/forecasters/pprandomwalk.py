@@ -46,6 +46,8 @@ the likelihood and their ancestors are latent centres.
   $\sigma_n^2 + v(y_{t-1}) + v(y_t)$, the walk's step plus the
   delta-method Poisson noise of `walk.walk_noise`, as in
   `randomwalknowcast`, whose walk draws Poisson counts on top.
+  A change between two weeks with no cases has no noise, so its density
+  is unbounded as the spread falls to 0, and it is left out.
 - **Nowcast uncertainty.** $\log \phi_{n,k}$ and $\log b_{n,k}$ pooled by
   weeks back $k$, with the new reports negative binomial on the count
   nowcast to come and the removals Poisson on the count reported, as
@@ -343,7 +345,9 @@ def walk_data(origin: Origin) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     tuple of numpy.ndarray
         The weekly changes of log(1 + y) (`chain.walk_changes`), their
         Poisson noise variances (`walk.walk_noise`) and where each place
-        has a change, each `[L, N]`.
+        has a change that enters the fit, each `[L, N]`. A change between
+        two weeks with no cases has no Poisson noise, so its density is
+        unbounded as the spread falls to 0, and it is left out.
     """
     settings = origin.settings
     diffs = walk_changes(origin.reported, origin.start, settings)
@@ -356,7 +360,9 @@ def walk_data(origin: Origin) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         y = origin.reported[n, lo : int(origin.start[n]) + 1]
         changes[n, : d.size] = d
         noise[n, : d.size] = walk_noise(y)
-        seen[n, : d.size] = True
+        # A change from 0 to 0 has no Poisson noise, so its normal density
+        # is unbounded as the spread falls to 0. It is left out.
+        seen[n, : d.size] = (y[1:] > 0) | (y[:-1] > 0)
     return changes, noise, seen
 
 
