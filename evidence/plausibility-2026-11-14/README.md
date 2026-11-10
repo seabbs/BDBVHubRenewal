@@ -19,3 +19,5 @@ Scripts (each takes the scratch dir `S` first):
 - `then_now.py` writes `then_now.csv` and `then_now.md`; `figs_then_now.py` draws `then-now.png`.
 - `figs3.py` draws one grid per model (`<model>.png`); `table.py` prints the flagged places of a model.
 - `*_fa04ff08.*`: the renewal models rechecked on the newer stored 11-08 fits (`fit-store` b12df214, fitted at fa04ff08).
+- `audit1107.py` audits the 2026-11-07 round (origin 11-01): the files we had then against main's code now, both scored on the reported target of the 2026-11-08 release through the model's delay (`score_releases`); `audit_report.py` writes `then_now_1107.md`, `audit1107_cells.csv` and `audit1107_summary.csv`. The renewal models now are the 11-01 fits at fa04ff08 on `fit-store`.
+- `falls.py` measures how often and how far reported week counts fall in later releases (`falls.csv.gz`); `below_vs_data.py` compares each model's draws below the reported count with those falls (`below_vs_data.csv`).
