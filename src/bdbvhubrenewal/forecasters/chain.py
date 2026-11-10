@@ -39,9 +39,11 @@ still expects some cases.
 cut-off at most `Settings.retro_delay` (63) days before $c_o$, nowcasts
 the count expected at $o$ for days up to $c_r$, with the same weekly fill
 from $c_r$ to $c_o$ and the $g$ of $r$.
-Its new reports by weeks back fit the observation model (`obs`), on
-counts whose downward revisions are moved onto earlier releases, as for
+Its new reports by weeks back fit the observation model's size (`obs`),
+on counts whose downward revisions are moved onto earlier releases, as for
 the delay.
+The net falls of each week's raw count give its removal rate, pooled over
+the places of each level.
 
 **Introductions.** A place with no case in the latest `walk_weeks` weeks
 is silent.
@@ -75,7 +77,7 @@ from bdbvhubrenewal.forecasters.introductions import (
     introduction_rates,
     silent_places,
 )
-from bdbvhubrenewal.forecasters.obs import fit_sizes
+from bdbvhubrenewal.forecasters.obs import fit_sizes, removal_rates
 from bdbvhubrenewal.forecasters.pooling import (
     MIN_LEVEL,
     pool_matrix,
@@ -452,9 +454,14 @@ class Errors:
     remaining : numpy.ndarray
         Nowcast of the count still to come, `[R, L, K]`.
     reported : numpy.ndarray
-        Count reported at each release, `[R, L, K]`.
+        Count reported at each release, `[R, L, K]`, preprocessed.
     valid : numpy.ndarray
         Whether each cell is an error, `[R, L, K]`.
+    fell : numpy.ndarray
+        Net fall of each week's raw count between each release and the
+        origin, `[R, L, K]`, 0 where it rose.
+    raw_reported : numpy.ndarray
+        Raw count reported at each release, `[R, L, K]`.
     releases : list of str
         Releases that gave errors.
     """
@@ -463,6 +470,8 @@ class Errors:
     remaining: np.ndarray
     reported: np.ndarray
     valid: np.ndarray
+    fell: np.ndarray
+    raw_reported: np.ndarray
     releases: list[str] = field(default_factory=list)
 
 
@@ -564,10 +573,17 @@ def retro_errors(
         # The week's change to the origin, on days up to the cut-off of r.
         added = weekly_sums(pre, o, upto=int(snap.cut[r]))[:, safe] - obs
         valid = take[None, :] & ((obs > 0) | (pred > 0))
-        cells.append((added, pred - obs, obs, valid))
+        # The removals come from the raw counts, which can fall.
+        raw = weekly_sums(snap, r)[:, safe]
+        fell = raw - weekly_sums(snap, o, upto=int(snap.cut[r]))[:, safe]
+        cells.append(
+            (added, pred - obs, obs, valid, np.maximum(fell, 0.0), raw)
+        )
         releases.append(snap.releases[r])
-    c = np.array(cells, dtype=float).reshape(-1, 4, n_loc, k_n)
-    return Errors(c[:, 0], c[:, 1], c[:, 2], c[:, 3] > 0, releases)
+    c = np.array(cells, dtype=float).reshape(-1, 6, n_loc, k_n)
+    return Errors(
+        c[:, 0], c[:, 1], c[:, 2], c[:, 3] > 0, c[:, 4], c[:, 5], releases
+    )
 
 
 @dataclass
@@ -611,6 +627,8 @@ class Origin:
     size : numpy.ndarray or None
         Negative binomial size $\phi_k$ of the new reports of each place
         by weeks back from the cut-off week, `[L, K]`.
+    removal : numpy.ndarray or None
+        Removal rate $p_k$ of each place, pooled over its level, `[L, K]`.
     obs_n : numpy.ndarray or None
         Errors behind each fit, `[L, K]`.
     obs_source : numpy.ndarray or None
@@ -632,6 +650,7 @@ class Origin:
     intro: np.ndarray
     errors: Errors | None = None
     size: np.ndarray | None = None
+    removal: np.ndarray | None = None
     obs_n: np.ndarray | None = None
     obs_source: np.ndarray | None = None
 
@@ -790,6 +809,8 @@ def _add_spread(origin: Origin) -> None:
     The size follows the one rule. Each place's own estimate uses its
     errors, and its pooled estimate the errors of the places in its
     pool. The size is fitted only for the estimates some place uses.
+    The removal rate is pooled over the places of each level, and never
+    enters the size.
     """
     snap, settings = origin.snap, origin.settings
     errors = retro_errors(snap, origin.o, settings)
@@ -817,4 +838,7 @@ def _add_spread(origin: Origin) -> None:
     k = np.arange(n.shape[1])[None, :]
     origin.errors = errors
     origin.size = size[source, k]
+    origin.removal = removal_rates(
+        errors.fell, errors.raw_reported, errors.valid, snap.parent
+    )
     origin.obs_n, origin.obs_source = n[source, k], source

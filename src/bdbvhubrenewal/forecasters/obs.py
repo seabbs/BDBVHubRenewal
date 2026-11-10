@@ -1,31 +1,44 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-r"""Observation model: new reports on the count still to come.
+r"""Observation model: new reports on the count still to come, less removals.
 
 For a week with count $Y$ reported so far and a nowcast mean $\mu$, the
 count still to come is $\mathrm{rem} = \mu - Y \ge 0$.
 The count at a later release is
 
 $$
-X = Y + A,
+X = Y + A - B,
 \qquad
 A \sim \mathrm{NB}(\mathrm{rem}, \phi_k),
+\qquad
+B \sim \mathrm{Binomial}(Y, p_k).
 $$
 
-baselinenowcast's negative binomial on the remaining count, fitted and
-drawn with the port's `fit_nb` and `sample_nb` through `fit_by_horizon`,
-one size $\phi_k$ for each week back $k$.
+$A$ is baselinenowcast's negative binomial on the remaining count, fitted
+and drawn with the port's `fit_nb` and `sample_nb` through
+`fit_by_horizon`, one size $\phi_k$ for each week back $k$.
 As in baselinenowcast, downward revisions are moved onto earlier releases
-before the fit (`chain._delay_counts`), so new reports only add.
+before the size is fitted (`chain._delay_counts`), so the removals never
+enter it.
+$B$ thins the count reported at $p_k$, the share of the reported count
+that fell in the retrospective nowcasts at $k$, pooled over the places of
+one level (`removal_rates`).
 """
 
 from __future__ import annotations
 
+import jax
 import numpy as np
 from jax import Array
 
 from bdbvhubrenewal.baselinenowcast import fit_by_horizon, sample_nb
 
-__all__ = ["MAX_SIZE", "PRIOR_SIZE", "fit_sizes", "sample_count"]
+__all__ = [
+    "MAX_SIZE",
+    "PRIOR_SIZE",
+    "fit_sizes",
+    "removal_rates",
+    "sample_count",
+]
 
 MAX_SIZE = 1000.0
 """Upper bound of `fit_nb`'s size, the Poisson end of its range."""
@@ -58,8 +71,73 @@ def fit_sizes(added: np.ndarray, remaining: np.ndarray) -> np.ndarray:
     return np.where((remaining > 0).any(axis=0), fitted, PRIOR_SIZE)
 
 
+def levels_of(parent: np.ndarray) -> np.ndarray:
+    """Return each node's depth in the tree, 0 for a root.
+
+    Parameters
+    ----------
+    parent : numpy.ndarray
+        Parent of each node, -1 for a root, `[L]`.
+
+    Returns
+    -------
+    numpy.ndarray
+        Depth of each node, `[L]`.
+    """
+    depth = np.zeros(parent.size, dtype=int)
+    for n, p in enumerate(parent):
+        while p >= 0:
+            depth[n] += 1
+            p = parent[p]
+    return depth
+
+
+def removal_rates(
+    fell: np.ndarray,
+    reported: np.ndarray,
+    valid: np.ndarray,
+    parent: np.ndarray,
+) -> np.ndarray:
+    r"""Return the removal rate $p_k$ of each place, pooled by level.
+
+    $p_k = \sum B / \sum Y$ over the errors at $k$ of every place at the
+    place's depth in the tree (country, province, zone), the Binomial
+    maximum likelihood estimate.
+
+    Parameters
+    ----------
+    fell : numpy.ndarray
+        Net fall of each week's count between each release and the
+        origin, `[R, L, K]`.
+    reported : numpy.ndarray
+        Count reported at each release, `[R, L, K]`.
+    valid : numpy.ndarray
+        Whether each cell is an error, `[R, L, K]`.
+    parent : numpy.ndarray
+        Parent of each place, -1 for the country, `[L]`.
+
+    Returns
+    -------
+    numpy.ndarray
+        $p_k$, `[L, K]`, 0 where a level has nothing reported.
+    """
+    fell_sum = np.where(valid, fell, 0.0).sum(axis=0)
+    rep_sum = np.where(valid, reported, 0.0).sum(axis=0)
+    depth = levels_of(np.asarray(parent))
+    rate = np.zeros(fell_sum.shape)
+    for d in np.unique(depth):
+        m = depth == d
+        num, den = fell_sum[m].sum(axis=0), rep_sum[m].sum(axis=0)
+        rate[m] = np.where(den > 0, num / np.where(den > 0, den, 1.0), 0.0)
+    return rate
+
+
 def sample_count(
-    key: Array, reported: Array, remaining: Array, size: Array
+    key: Array,
+    reported: Array,
+    remaining: Array,
+    size: Array,
+    removal: Array,
 ) -> Array:
     r"""Draw the count at the later release.
 
@@ -73,10 +151,17 @@ def sample_count(
         $\mathrm{rem}$, the shape of `reported`.
     size : jax.Array
         $\phi_k$, the shape of `reported`.
+    removal : jax.Array
+        $p_k$, the shape of `reported`.
 
     Returns
     -------
     jax.Array
-        $X$, the shape of `reported`.
+        $X$, the shape of `reported`, never below 0. The new reports are
+        drawn from `key` as with no removals, and the removals from a key
+        folded from it.
     """
-    return reported + sample_nb(key, remaining, size)
+    removed = jax.random.binomial(
+        jax.random.fold_in(key, 1), reported, removal, reported.shape
+    )
+    return reported + sample_nb(key, remaining, size) - removed
