@@ -4777,8 +4777,8 @@
 <li><code>base</code>: <code>ForecastTask</code>, the <code>ForecastModel</code> protocol and the registry.</li>
 <li><code>randomwalk</code>: the random walk baseline, and random walk on a nowcast,
   with <code>chain</code> (the daily chain ladder), <code>pooling</code>, <code>obs</code> and <code>walk</code>.</li>
-<li><code>pprandomwalk</code>: random walk on a nowcast with partially pooled
-  estimates (numpyro).</li>
+<li><code>pprandomwalk</code>: a generative random walk nowcast, the walk and the
+  delay fitted jointly with partial pooling (numpyro).</li>
 <li><code>renewal</code>: the renewal variants, the adapter from a <code>ForecastTask</code> to
   the PyRenew model in <code>bdbvhubrenewal.model</code>.</li>
 <li><code>zones</code>: health-zone forecasts split from any model's province samples.</li>

@@ -2257,7 +2257,8 @@ Two targets are scored.</p>
 Every other model forecasts the final count <span class="arithmatex">\(X\)</span> of week <span class="arithmatex">\(w\)</span>, which is mapped to what <span class="arithmatex">\(o'\)</span> shows by the model's own delay.</p>
 <ol>
 <li>Day <span class="arithmatex">\(t\)</span> is <span class="arithmatex">\(a = c - t\)</span> days old at a cut-off <span class="arithmatex">\(c\)</span>, and <span class="arithmatex">\(\pi(a)\)</span> is the share of its final count the model expects reported by then.
-   For <code>randomwalknowcast</code> and <code>pprandomwalknowcast</code>, <span class="arithmatex">\(\pi(a) = 1 / \Gamma(a)\)</span> under the daily delay each fits at the origin (<a href="../baselines/#delay">Baseline models</a>).
+   For <code>randomwalknowcast</code>, <span class="arithmatex">\(\pi(a) = 1 / \Gamma(a)\)</span> under the daily delay it fits at the origin (<a href="../baselines/#delay">Baseline models</a>).
+   For <code>pprandomwalknowcast</code> it is the posterior median of each place's <span class="arithmatex">\(\pi_p(a)\)</span> from its own fit (<a href="../baselines/#partially-pooled-variant">Baseline models</a>).
    For the renewal models it is the posterior median of each province's cumulative onset-to-report delay of the latest onset week, as the fit stores it.
    Ages past the end of the delay take its last value, and days after the cut-off have <span class="arithmatex">\(\pi = 0\)</span>.</li>
 <li>A week's share <span class="arithmatex">\(\pi_w\)</span> is the mean of <span class="arithmatex">\(\pi\)</span> over its seven days.</li>
