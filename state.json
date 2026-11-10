@@ -39,6 +39,48 @@
       "run": "https://github.com/seabbs/BDBVHubRenewal/actions/runs/41691221605",
       "status": "submitted",
       "updated": "2026-11-03T18:59:47.418775+00:00"
+    },
+    "2026-11-14": {
+      "as_of": "2026-11-08",
+      "code_commit": "8a023a7d6ba84e52c0e45d584bae54ea19ef4f22",
+      "data_commit": "ce74d67d0422969dc88385c60bcae7a51277a56a",
+      "history": [
+        {
+          "as_of": "2026-11-08",
+          "code_commit": "8a023a7d6ba84e52c0e45d584bae54ea19ef4f22",
+          "data_commit": "ce74d67d0422969dc88385c60bcae7a51277a56a",
+          "pr_url": "https://github.com/InsightNet-US/BDBV-Modeling-Hub/pull/120",
+          "produced_by": "BVDOutbreakSize-informed renewal model",
+          "run": "",
+          "status": "submitted",
+          "updated": "2026-11-10T23:01:34.370279+00:00"
+        }
+      ],
+      "models": {
+        "seabbs-renewal": {
+          "archive": "archive/2026-11-14/manual-20261110",
+          "code_commit": "8a023a7d6ba84e52c0e45d584bae54ea19ef4f22",
+          "pr_url": "https://github.com/InsightNet-US/BDBV-Modeling-Hub/pull/120",
+          "produced_by": "BVDOutbreakSize-informed renewal model",
+          "run": "",
+          "status": "submitted",
+          "updated": "2026-11-10T23:01:34.587979+00:00"
+        },
+        "seabbs-rwnowcast": {
+          "archive": "archive/2026-11-14/manual-20261110/baseline",
+          "code_commit": "8a023a7d6ba84e52c0e45d584bae54ea19ef4f22",
+          "pr_url": "https://github.com/InsightNet-US/BDBV-Modeling-Hub/pull/121",
+          "produced_by": "random walk on a nowcast",
+          "run": "",
+          "status": "submitted",
+          "updated": "2026-11-10T23:01:34.688121+00:00"
+        }
+      },
+      "pr_url": "https://github.com/InsightNet-US/BDBV-Modeling-Hub/pull/120",
+      "produced_by": "BVDOutbreakSize-informed renewal model",
+      "run": "",
+      "status": "submitted",
+      "updated": "2026-11-10T23:01:34.370279+00:00"
     }
   },
   "schema_version": 1
