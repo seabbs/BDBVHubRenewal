@@ -1,0 +1,13 @@
+zone,rwnc_start,rwnc_steps,rw_start,quiet,silent,sigma,sigma_source,level,reported
+CD-IT-11,2026-09-12,8,2026-10-10,False,False,0.26,pooled:CD-IT,1.0,3 7 0 2 1 0 1 0 0 0
+CD-IT-13,2026-09-12,8,2026-10-10,False,False,0.26,pooled:CD-IT,0.5,4 11 4 0 2 0 0 4 0 0
+CD-IT-17,2026-07-11,17,2026-10-10,False,False,0.26,pooled:CD-IT,1.0,0 1 1 3 0 1 0 1 0 0
+CD-IT-18,2026-10-10,4,2026-10-10,False,False,0.26,pooled:CD-IT,6.2,20 14 14 9 7 5 4 1 0 0
+CD-IT-36,2026-09-12,8,2026-10-10,False,False,0.26,pooled:CD-IT,1.2,3 5 4 1 0 1 3 0 1 0
+CD-NK-04,2026-09-05,9,2026-10-03,False,False,0.33,pooled:CD-NK,1.2,6 3 0 1 1 3 0 0 1 1
+CD-NK-10,2026-09-26,6,2026-10-03,False,False,0.33,pooled:CD-NK,1.5,8 9 12 5 1 0 0 1 0 0
+CD-NK-19,2026-10-03,5,2026-10-03,False,False,0.33,pooled:CD-NK,2.2,6 2 1 0 5 1 3 2 0 1
+CD-NK-23,2026-09-12,8,2026-10-03,False,False,0.33,pooled:CD-NK,2.0,4 5 2 2 3 1 2 1 0 0
+CD-NK-25,2026-10-10,4,2026-10-03,False,False,0.33,pooled:CD-NK,8.5,29 14 5 10 15 7 2 4 1 1
+CD-TO-02,2026-10-10,4,2026-10-03,False,False,0.29,pooled:CD-TO,4.0,2 2 1 0 2 11 3 0 0 0
+CD-TO-11,2026-10-03,5,2026-10-03,False,False,0.29,pooled:CD-TO,3.5,3 3 4 3 6 3 2 2 3 0
