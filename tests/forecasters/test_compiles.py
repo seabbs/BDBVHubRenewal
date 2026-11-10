@@ -18,7 +18,7 @@ from bdbvhubrenewal.forecasters import ForecastTask, get_model
 
 PINNED = {
     "randomwalk": "b5aecfce6d5f7a9e",
-    "randomwalknowcast": "27a28f485e793ee5",
+    "randomwalknowcast": "e974711fc102b6e4",
     "pprandomwalknowcast": "b00ac5713c9803fb",
 }
 
