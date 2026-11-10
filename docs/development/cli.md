@@ -62,6 +62,7 @@ The key hashes:
 - the model as built, including its variant and sampler settings;
 - the BVDOutbreakSize release, for `renewalbvd`;
 - the code the model's fit can run (its import closure with `evaluation/store.py` and `evaluation/backtest.py`), without docstrings or comments;
+  the zone split (`forecasters/zones.py`, `evaluation/zones.py`) is left out, as a stored fit holds national and province samples only and its zones are split from them at load;
 - the runtime dependencies in `uv.lock`.
 
 The renewal variants use the sampler table of the submission candidate that runs them, in `ci/policy.toml`.

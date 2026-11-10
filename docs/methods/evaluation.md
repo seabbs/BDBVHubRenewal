@@ -74,7 +74,10 @@ In the simulated scenarios and leave-one-province-out, a week is complete when i
 
 ## Real releases
 
-Each real release with a later release is an origin.
+Each real release with a later release is an origin, except the first, 2026-08-18 (`skip_origins` in `config/backtest.toml`).
+That release has no delay file, so the renewal models fell back on their prior delay there.
+It is also 50 days before the next release, and its weeks three or more weeks old hold 88% to 97% of the counts the 2026-11-08 release gives them, against 93% to 102% in the releases between.
+It stays in the data of later origins.
 The random walk models forecast from the releases up to the origin only.
 The renewal models' stored forecasts from the origin are scored with them.
 So are hub teams' forecasts for a round, at the latest release serving it.
@@ -86,7 +89,8 @@ Two targets are scored.
 Every other model forecasts the final count $X$ of week $w$, which is mapped to what $o'$ shows by the model's own delay.
 
 1. Day $t$ is $a = c - t$ days old at a cut-off $c$, and $\pi(a)$ is the share of its final count the model expects reported by then.
-   For `randomwalknowcast` and `pprandomwalknowcast`, $\pi(a) = 1 / \Gamma(a)$ under the daily delay each fits at the origin ([Baseline models](baselines.md#delay)).
+   For `randomwalknowcast`, $\pi(a) = 1 / \Gamma(a)$ under the daily delay it fits at the origin ([Baseline models](baselines.md#delay)).
+   For `pprandomwalknowcast` it is the posterior median of each place's $\pi_p(a)$ from its own fit ([Baseline models](baselines.md#partially-pooled-variant)).
    For the renewal models it is the posterior median of each province's cumulative onset-to-report delay of the latest onset week, as the fit stores it.
    Ages past the end of the delay take its last value, and days after the cut-off have $\pi = 0$.
 2. A week's share $\pi_w$ is the mean of $\pi$ over its seven days.

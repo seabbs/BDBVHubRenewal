@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import json
 import shutil
 from pathlib import Path
@@ -102,6 +103,30 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
     assert all(after[m] != before[m] for m in models)
 
 
+def test_the_zone_split_does_not_key_a_fit(tmp_path: Path) -> None:
+    # A stored fit holds national and province samples only. Zones are
+    # split from them at load (`zones_for_model`), so the zone code is not
+    # fit code.
+    root = _copy_repo(tmp_path)
+    models = ("renewal", "pprandomwalknowcast")
+
+    def digests() -> dict[str, str]:
+        return {m: store.code_digest(m, root) for m in models}
+
+    def edit(rel: str) -> None:
+        path = root / "src/bdbvhubrenewal" / rel
+        path.write_text(path.read_text() + "\n_EDITED = 1\n")
+
+    before = digests()
+    for rel in ("forecasters/zones.py", "evaluation/zones.py"):
+        edit(rel)
+        assert digests() == before, rel
+    # Introductions are drawn in the fit, for provinces with no recent case.
+    edit("forecasters/introductions.py")
+    after = digests()
+    assert all(after[m] != before[m] for m in models)
+
+
 def test_fit_code_has_the_store_and_no_other_model() -> None:
     renewal = set(store.fit_code("renewal", ROOT))
     assert "src/bdbvhubrenewal/evaluation/store.py" in renewal
@@ -154,6 +179,25 @@ def test_keys_follow_the_task_settings_and_bvd_release(
     moved = store.current_keys(tasks, models, sampler, "c")
     assert moved[("renewal", latest)] == keys[("renewal", latest)]
     assert moved[("renewalbvd", latest)] != keys[("renewalbvd", latest)]
+
+
+@pytest.mark.usefixtures("in_root")
+def test_skipped_origins_leave_the_other_keys_alone(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    config: BacktestConfig,
+    tasks: dict[str, ForecastTask],
+) -> None:
+    sampler = store.samplers()
+    models = ["renewal"]
+    keys = store.current_keys(tasks, models, sampler, "c")
+    skip = dataclasses.replace(config, skip_origins=("2026-08-18",))
+    kept = store.origin_tasks(target, delays, skip, daily)
+    assert "2026-08-18" not in kept
+    assert store.current_keys(kept, models, sampler, "c") == {
+        k: v for k, v in keys.items() if k[1] != "2026-08-18"
+    }
 
 
 @pytest.fixture

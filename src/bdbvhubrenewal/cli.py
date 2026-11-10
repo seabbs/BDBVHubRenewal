@@ -778,10 +778,7 @@ def _forecast_parts(
         ):
             table = pd.concat(frames, ignore_index=True) if frames else None
             write_csv(pd.DataFrame() if table is None else table, parts / name)
-        real = target.loc[target["kind"] == "real"]
-        tasks = bt.make_tasks(
-            real, delays.assign(kind="real"), config, daily=daily
-        )
+        tasks = list(store.origin_tasks(target, delays, config, daily).values())
         forecast_releases(tasks, target, models).write(parts)
     print(f"Forecasts of {[m.name for m in models]} written to {parts}.")
     return 0
@@ -939,8 +936,7 @@ def _release_backtest(
     The fitted models' final-count forecasts are taken from `forecasts`.
     """
     daily = load_daily(args.data)
-    real = target.loc[target["kind"] == "real"]
-    tasks = bt.make_tasks(real, delays.assign(kind="real"), config, daily=daily)
+    tasks = list(store.origin_tasks(target, delays, config, daily).values())
     stored, learnt = _stored(args, target, forecasts)
     out = release_backtest(
         tasks,
@@ -964,8 +960,7 @@ def _release_scores(
 ) -> None:
     """Score stacked release forecasts with the stored models'."""
     daily = load_daily(args.data)
-    real = target.loc[target["kind"] == "real"]
-    tasks = bt.make_tasks(real, delays.assign(kind="real"), config, daily=daily)
+    tasks = list(store.origin_tasks(target, delays, config, daily).values())
     stored, learnt = _stored(args, target, forecasts)
     out = score_releases(
         tasks,

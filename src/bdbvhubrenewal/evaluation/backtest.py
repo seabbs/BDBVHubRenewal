@@ -136,6 +136,9 @@ class BacktestConfig:
         The limit on the joint fit's worst R-hat of a BVDOutbreakSize
         release the BVD variant may use
         (`bdbvhubrenewal.data.bvd.select_release`).
+    skip_origins : tuple of str
+        Real releases that are not backtest origins. They stay in the
+        histories of later origins.
     """
 
     min_horizon: int = -4
@@ -146,6 +149,7 @@ class BacktestConfig:
     complete_after_weeks: int = 0
     sampler: dict[str, Any] = field(default_factory=dict)
     bvd_max_rhat: float = MAX_RHAT
+    skip_origins: tuple[str, ...] = ()
 
 
 def apply_sampler(config: BacktestConfig) -> None:
@@ -207,6 +211,7 @@ def load_config(path: Path | str = "config/backtest.toml") -> BacktestConfig:
         sampler=dict(raw["sampler"]),
         bvd_max_rhat=float(raw["bvd"]["max_rhat"]),
         simulated_dates=saturdays(sim["first_vintage"], sim["last_vintage"]),
+        skip_origins=tuple(str(d) for d in sp.get("skip_origins", ())),
     )
 
 
@@ -765,6 +770,9 @@ def development_tasks(
 ) -> list[ForecastTask]:
     """Build the development tasks: every real vintage but the latest.
 
+    Vintages in `config.skip_origins` are left out as origins but stay in
+    the later tasks' histories.
+
     Parameters
     ----------
     target : pandas.DataFrame
@@ -782,7 +790,7 @@ def development_tasks(
     Returns
     -------
     list of ForecastTask
-        Tasks for every real vintage before the latest.
+        Tasks for every real vintage before the latest but the skipped.
     """
     real = target.loc[target["kind"] == "real"]
     latest = real_vintages(real)[-1]
@@ -795,7 +803,7 @@ def development_tasks(
             real_vintages(real),
             daily=daily,
         )
-        if t.vintage < latest
+        if t.vintage < latest and t.vintage not in config.skip_origins
     ]
 
 
