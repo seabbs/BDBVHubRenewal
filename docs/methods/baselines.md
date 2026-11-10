@@ -178,6 +178,8 @@ $\phi_{p,k}$ is fitted by maximum likelihood on $[0.1, 1000]$, one size per $k$,
 A week with $\widehat{\text{rem}} = 0$ says nothing about $\phi$, so it is left out of that fit.
 The weeks in the fit of $\phi_{p,k}$ are the errors at $k$.
 Where the estimate chosen by the [pooling rule](#own-or-pooled-estimates) has fewer than 3 errors at $k$, $\phi_{p,k} \approx 2.2$, the median of epinowcast's prior $1 / \sqrt{\phi} \sim \mathcal{N}^+(0, 1)$.
+The release backtest in [#152](https://github.com/seabbs/BDBVHubRenewal/pull/152) compared this default with Poisson removals of the reported count, new reports clipped at 0 with no preprocessing, a delay fitted without preprocessing, and baselinenowcast's proposed rounded normal and Skellam models of the signed change.
+The negative binomial options scored the same within sampling noise, and the signed models were too narrow, so the default is kept.
 
 ## Own or pooled estimates
 
