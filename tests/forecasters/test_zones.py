@@ -432,6 +432,62 @@ def test_reconcile_falls_back_to_the_allocator_shares(
     assert got["value"].sum() > 0
 
 
+def _two_zone_case(
+    zone_values: list[list[float]], prov_values: list[float]
+) -> tuple[pd.DataFrame, pd.DataFrame, ForecastTask, pd.DataFrame]:
+    """One province, two zones that published 6 and 4 in week 10-10."""
+    counts = pd.DataFrame(
+        {
+            "location": ["CD-XX-01", "CD-XX-02"],
+            "target_end_date": ["2026-10-10", "2026-10-10"],
+            "total": [6, 4],
+        }
+    )
+    n = len(prov_values)
+    zone = pd.DataFrame(
+        {
+            "location": np.repeat(["CD-XX-01", "CD-XX-02"], n),
+            "target_end_date": "2026-10-10",
+            "sample": np.tile(np.arange(1, n + 1), 2),
+            "value": np.asarray(zone_values, dtype=float).T.reshape(-1),
+        }
+    )
+    prov = pd.DataFrame(
+        {
+            "location": "CD-XX",
+            "target_end_date": "2026-10-10",
+            "sample": np.arange(1, n + 1),
+            "value": prov_values,
+        }
+    )
+    task = ForecastTask(
+        vintage="2026-10-17",
+        reference_date=pd.Timestamp("2026-10-24").date(),
+        kind="real",
+        cutoff="2026-10-16",
+        target=pd.DataFrame(),
+        delays=None,
+        locations=("CD-XX",),
+        target_end_dates=("2026-10-10",),
+        n_samples=n,
+    )
+    return zone, prov, task, counts
+
+
+def test_reconcile_keeps_published_zone_counts() -> None:
+    # Sample 1: the zone walks give 10 and 2, the province 12. Zone 2 has
+    # published 4, so it keeps 4 and zone 1 takes the other 8.
+    # Sample 2: the province draw (8) is below the published total (10),
+    # so no zone gets more than it has published.
+    zone, prov, task, counts = _two_zone_case([[10, 2], [7, 5]], [12, 8])
+    got = reconcile_zones(zone, prov, task, counts, ("CD-XX-01", "CD-XX-02"))
+    by = got.set_index(["sample", "location"])["value"]
+    assert by.loc[1].tolist() == [8, 4]
+    assert by.loc[2].sum() == 8
+    assert (by.loc[2] <= [6, 4]).all()
+    assert check_zone_coherence(prov, got) == []
+
+
 def test_zone_hub_table_validates_and_sums_up_the_hierarchy(
     open_task: ForecastTask,
     open_counts: pd.DataFrame,
