@@ -2316,7 +2316,9 @@ Sample <span class="arithmatex">\(i\)</span> is one draw of <span class="arithma
 <span class="arithmatex">\(\phi_{p,k}\)</span> is fitted by maximum likelihood on <span class="arithmatex">\([0.1, 1000]\)</span>, one size per <span class="arithmatex">\(k\)</span>, as baselinenowcast does.
 A week with <span class="arithmatex">\(\widehat{\text{rem}} = 0\)</span> says nothing about <span class="arithmatex">\(\phi\)</span>, so it is left out of that fit.
 The weeks in the fit of <span class="arithmatex">\(\phi_{p,k}\)</span> are the errors at <span class="arithmatex">\(k\)</span>.
-Where the estimate chosen by the <a href="#own-or-pooled-estimates">pooling rule</a> has fewer than 3 errors at <span class="arithmatex">\(k\)</span>, <span class="arithmatex">\(\phi_{p,k} \approx 2.2\)</span>, the median of epinowcast's prior <span class="arithmatex">\(1 / \sqrt{\phi} \sim \mathcal{N}^+(0, 1)\)</span>.</p>
+Where the estimate chosen by the <a href="#own-or-pooled-estimates">pooling rule</a> has fewer than 3 errors at <span class="arithmatex">\(k\)</span>, <span class="arithmatex">\(\phi_{p,k} \approx 2.2\)</span>, the median of epinowcast's prior <span class="arithmatex">\(1 / \sqrt{\phi} \sim \mathcal{N}^+(0, 1)\)</span>.
+The release backtest in <a href="https://github.com/seabbs/BDBVHubRenewal/pull/152">#152</a> compared this default with Poisson removals of the reported count, new reports clipped at 0 with no preprocessing, a delay fitted without preprocessing, and baselinenowcast's proposed rounded normal and Skellam models of the signed change.
+The negative binomial options scored the same within sampling noise, and the signed models were too narrow, so the default is kept.</p>
 <h2 id="own-or-pooled-estimates">Own or pooled estimates<a class="headerlink" href="#own-or-pooled-estimates" title="Permanent link">&para;</a></h2>
 <p>The places form a hierarchy of zone, province and country.
 Each estimate is chosen as follows.</p>
