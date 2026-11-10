@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import jax
+import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 import pytest
@@ -18,7 +20,13 @@ from bdbvhubrenewal.forecasters import (
 from bdbvhubrenewal.forecasters.chain import Origin
 from bdbvhubrenewal.forecasters.pprandomwalk import Sampler, Tree
 
-SMALL = Sampler(num_warmup=40, num_samples=40, num_chains=1)
+SMALL = Sampler(
+    num_warmup=40,
+    num_samples=40,
+    num_chains=1,
+    max_rhat=np.inf,
+    max_divergent=1.0,
+)
 
 
 def _task(
@@ -132,3 +140,26 @@ def test_diagnostics_hold_each_fit(
     tau = {str(r["fit"])[:5]: r for r in fits}
     assert "delay_tau_1" in tau["delay"]
     assert "sigma_tau_1" in tau["sprea"]
+
+
+def test_a_fit_that_does_not_converge_raises() -> None:
+    # Two chains of 5 draws from a wide funnel cannot mix.
+    import numpyro
+    import numpyro.distributions as dist
+
+    from bdbvhubrenewal.forecasters import ModelUnavailableError
+    from bdbvhubrenewal.forecasters.pprandomwalk import _run
+
+    def funnel() -> None:
+        v = numpyro.sample("v", dist.Normal(0.0, 3.0))
+        numpyro.sample("x", dist.Normal(0.0, jnp.exp(v / 2)).expand((10,)))
+
+    strict = Sampler(num_warmup=5, num_samples=20, num_chains=2)
+    with pytest.raises(ModelUnavailableError, match="converge"):
+        _run(funnel, jax.random.key(0), strict)
+
+
+def test_the_sampler_checks_r_hat_and_divergences() -> None:
+    sampler = Sampler()
+    assert sampler.max_rhat == 1.05
+    assert sampler.max_divergent == 0.01
