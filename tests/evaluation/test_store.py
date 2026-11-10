@@ -264,3 +264,100 @@ def test_a_fit_that_raises_is_stored_as_failed(
     assert stored.meta["status"] == "failed"
     assert "no fit" in stored.meta["error"]
     assert stored.forecasts.empty
+
+
+@pytest.fixture
+def candidate_flat(fitted_flat: str, monkeypatch: pytest.MonkeyPatch) -> str:
+    """Make the stand-in a submission candidate, config `flatcfg`."""
+    from bdbvhubrenewal.forecasters import base, renewal
+    from bdbvhubrenewal.submission import fitting
+
+    spec = base._REGISTRY[fitted_flat]
+    make = spec.factory
+
+    def write_fit_dir(
+        task: ForecastTask, fit_dir: Path, config_name: str
+    ) -> dict[str, object]:
+        del task
+        (Path(fit_dir) / "samples.csv.gz").write_bytes(b"draws")
+        return {"sampler": "nuts", "config": config_name, "worst_rhat": 1.0}
+
+    def candidate() -> object:
+        model = make()
+        model.write_fit_dir = write_fit_dir
+        return model
+
+    monkeypatch.setitem(
+        base._REGISTRY,
+        fitted_flat,
+        base.ModelSpec(fitted_flat, candidate, "Fitted.", fitted=True),
+    )
+    monkeypatch.setitem(renewal.FIT_VARIANTS, "flatcfg", fitted_flat)
+    monkeypatch.setitem(
+        fitting._CONFIGS,
+        "flatcfg",
+        fitting.FitConfig(
+            "flatcfg", "Stand-in.", lambda *_: {}, lambda *_: None
+        ),
+    )
+    return fitted_flat
+
+
+def test_a_candidate_fit_carries_what_the_submission_reads(
+    candidate_flat: str,
+    tasks: dict[str, ForecastTask],
+    tmp_path: Path,
+) -> None:
+    from bdbvhubrenewal.submission.fitting import read_fit as read_record
+
+    root = tmp_path / "store"
+    keys = store.current_keys(tasks, [candidate_flat], {}, "c")
+    newest, older, broken = (
+        sorted(tasks)[-1],
+        sorted(tasks)[-2],
+        sorted(tasks)[0],
+    )
+    stored = store.fit(candidate_flat, tasks[newest], {}, "c")
+    assert set(stored.files) == {
+        "diagnostics.json",
+        "fit.json",
+        "samples.csv.gz",
+    }
+    store.write_fit(root, stored)
+    meta = {
+        **stored.meta,
+        "origin": broken,
+        "key": keys[(candidate_flat, broken)],
+    }
+    store.write_fit(root, store.failed(meta, RuntimeError("x")))
+    (root / ".commit").write_text("abc123\n")
+
+    out = tmp_path / "fit"
+    state, found = store.unpack(root, keys, candidate_flat, newest, out)
+    assert state == "ok"
+    assert found is not None
+    assert found.meta["key"] == keys[(candidate_flat, newest)]
+    assert (out / "samples.csv.gz").read_bytes() == b"draws"
+    record = read_record(out)
+    assert record["config"] == "flatcfg"
+    assert record["vintage"] == newest
+    diag = json.loads((out / "diagnostics.json").read_text())
+    assert diag["worst_rhat"] == 1.0
+    where = json.loads((out / store.UNPACKED_FILE).read_text())
+    assert where["key"] == keys[(candidate_flat, newest)]
+    assert where["store_commit"] == "abc123"
+    assert where["commit"] == stored.meta["commit"]
+    # No fit at the current key, or one that failed.
+    assert store.unpack(root, keys, candidate_flat, older, tmp_path / "a")[
+        0
+    ] == ("missing")
+    assert store.unpack(root, keys, candidate_flat, broken, tmp_path / "b")[
+        0
+    ] == ("failed")
+
+
+def test_a_model_with_no_config_stores_no_files(
+    fitted_flat: str, tasks: dict[str, ForecastTask]
+) -> None:
+    stored = store.fit(fitted_flat, tasks[sorted(tasks)[-1]], {}, "c")
+    assert stored.files == {}

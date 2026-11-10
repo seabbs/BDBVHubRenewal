@@ -489,3 +489,33 @@ def test_digest_of_one_model(capsys: pytest.CaptureFixture[str]) -> None:
     key = capsys.readouterr().out.strip()
     assert key == model_digest("randomwalk", ROOT)
     assert key != model_digest("pprandomwalknowcast", ROOT)
+
+
+def test_fit_store_plan_takes_origins(tmp_path: Path) -> None:
+    from bdbvhubrenewal.cli import main
+
+    out, keys = tmp_path / "matrix.json", tmp_path / "keys.json"
+    rc = main(
+        [
+            "fit-store",
+            "plan",
+            "--store",
+            str(tmp_path / "store"),
+            "--models",
+            "renewal",
+            "--origins",
+            "2026-11-08",
+            "--out",
+            str(out),
+            "--keys",
+            str(keys),
+        ]
+    )
+    assert rc == 0
+    planned = json.loads(out.read_text())["include"]
+    assert [(p["model"], p["origin"]) for p in planned] == [
+        ("renewal", "2026-11-08")
+    ]
+    assert [k.rsplit("/", 1)[0] for k in json.loads(keys.read_text())] == [
+        "renewal/2026-11-08"
+    ]
