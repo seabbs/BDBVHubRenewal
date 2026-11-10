@@ -179,14 +179,55 @@ def test_pooled_walk_spread_is_net_of_poisson_noise() -> None:
     assert sigma < 0.5 * raw
 
 
-def test_pooled_walk_spread_keeps_changes_between_weeks_with_no_cases(
+def test_pooled_walk_spread_leaves_out_changes_between_weeks_with_no_cases(
     task: ForecastTask,
 ) -> None:
     model = RandomWalkNowcast()
     origin = model.origin_at(task, errors=False)
     changes, noise, seen = walk_data(origin)
     diffs = walk_changes(origin.reported, origin.start, origin.settings)
-    assert seen.sum(axis=1).tolist() == [d.size for d in diffs]
-    # 0 to 0 changes are 0 with no Poisson noise, and they enter.
-    zero = seen & (changes == 0) & (noise == 0)
-    assert zero.any()
+    # A change from 0 to 0 is 0 with no Poisson noise, so its normal
+    # density grows without bound as the spread falls to 0. It is left out.
+    zero = (changes == 0) & (noise == 0)
+    assert not (seen & zero).any()
+    assert seen.sum() < sum(d.size for d in diffs)
+
+
+def test_a_silent_leaf_does_not_collapse_the_pooled_spread() -> None:
+    # One leaf has only 0 to 0 changes, the other Poisson counts around a
+    # walk with spread 0.3.
+    rng = np.random.default_rng(4)
+    level = np.exp(np.log(40.0) + np.cumsum(rng.normal(0, 0.3, 60)))
+    y = rng.poisson(level).astype(float)
+    tree = Tree.of(np.array([-1, 0, 0]))
+    n = y.size - 1
+    changes = np.vstack([np.zeros(n), np.zeros(n), np.diff(np.log1p(y))])
+    noise = np.vstack([np.zeros(n), np.zeros(n), walk_noise(y)])
+    zeros = np.zeros(n, bool)
+    seen = np.vstack([zeros, zeros, ~zeros])
+    seen[1] = True  # As the leaf would be with its 0 to 0 changes kept.
+    empty = np.zeros((0, 3, 1))
+    fits = {}
+    for name, mask in (("kept", seen), ("left out", seen & (changes != 0))):
+        draws, info = _run(
+            spread_model,
+            jax.random.key(0),
+            Sampler(num_warmup=300, num_samples=300, num_chains=2),
+            tree=tree,
+            changes=changes,
+            noise=noise,
+            seen=mask,
+            added=empty,
+            remaining=empty,
+            removed=empty,
+            reported=empty,
+            valid=empty > 0,
+        )
+        fits[name] = (np.exp(_median_of(tree, draws, "sigma")), info)
+    sigma, info = fits["left out"]
+    assert info["divergences"] == 0
+    assert info["worst_rhat"] < 1.05
+    assert 0.15 < sigma[2] < 0.5
+    # Kept, the silent leaf's changes pull its spread towards 0.
+    kept, info_kept = fits["kept"]
+    assert kept[1] < 0.1 * sigma[1] or info_kept["divergences"] > 0
