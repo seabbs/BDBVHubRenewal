@@ -292,7 +292,7 @@ It keeps the random walk of `randomwalknowcast`, but makes the nowcast from the 
 **Places.**
 The places forecast are the leaves of the hierarchy: the provinces, or the zones at zone level.
 A leaf with no case in the 9 weeks to $c_o$ is silent, as in `randomwalknowcast`.
-Silent leaves are not fitted and draw introductions ([below](#silent-places)).
+Silent leaves are not fitted and draw introductions (below).
 Every other leaf $p$ enters the likelihood.
 A parent's counts are the sum of its children's, so the parents enter only as the centres the leaves are pooled towards, and each case enters once.
 
@@ -371,7 +371,7 @@ Later weeks continue the walk from the draw's last $\lambda$ with its $\sigma_p$
 Weeks before the 16 fitted weeks are the counts reported.
 National is the sum of the provinces by sample, and zones are reconciled to provinces as for `randomwalknowcast` ([Health zones](#health-zones)).
 
-**Silent places.** { #silent-places }
+**Silent places.**
 A silent leaf has no case to fit, and a walk from a $\lambda$ near 0 gave divergent draws.
 It is its reported counts, then 0 until an introduction, as in `randomwalknowcast` ([Forecast](#forecast)).
 Its start week, and the share of each week not yet reported, come from this model's posterior median $\pi_p$.
@@ -385,7 +385,8 @@ On the reported target, the backtest maps its final counts to what a later relea
 NUTS runs 2 chains of 500 warm-up and 750 draws, in sequence, from the prior medians, at target acceptance 0.9.
 Each walk step is sampled as $\delta^*_{p,w} \sim \mathcal{N}(0, \sigma_p)$ and set to $\delta_{p,w} = \sqrt{\sigma_p}\, \delta^*_{p,w}$, numpyro's location-scale reparameterisation with centring $\tfrac{1}{2}$, halfway between centred and non-centred steps.
 A large place's counts pin its walk, which suits centred steps, and a place with few cases leaves it to the prior, which suits non-centred ones.
-At 11-08 half-centred steps gave 1 divergent draw in 1500, against 12 for non-centred steps.
+In a trial at 11-08, with $\phi$ then pooled, half-centred steps gave 1 divergent draw in 1500, against 12 for non-centred steps, in half the leapfrog steps.
+With $\phi$ shared, the fits at 10-17, 10-24, 11-01 and 11-08 have at most 1 divergent draw and a worst $\hat R$ of 1.013.
 A fit whose worst split $\hat R$ is above 1.05, or with more than 1% of its draws divergent, raises, and the model gives no forecast for that origin.
 
 **How it differs from `randomwalknowcast`.**
@@ -412,5 +413,5 @@ The walk has no drift, and its spread comes from 8 weekly changes, net of a delt
 `pprandomwalknowcast`'s delay is log-normal, so it cannot take the shape of an irregular delay as the chain ladder can.
 
 [^bnc-paper]: Johnson KE, Tang M, Tyszka E, Nemcova B, Wolffram D, Ergas R, Reich NG, Funk S, Mellor J, Bracher J, Abbott S (2025). Baseline nowcasting methods for handling delays in epidemiological data. Wellcome Open Research. [doi:10.12688/wellcomeopenres.25027.2](https://doi.org/10.12688/wellcomeopenres.25027.2).
-[^enw]: Abbott S, Lison A, Funk S, Pearson C, Gruson H, Guenther F, Höhle M (2023). epinowcast: Flexible hierarchical nowcasting. <https://github.com/epinowcast/epinowcast/>.
+[^enw]: Abbott S, Lison A, Funk S, Pearson C, Gruson H, Guenther F, et al. epinowcast: A Bayesian Framework for Real-Time Infectious Disease Surveillance. R package. [doi:10.5281/zenodo.5637165](https://doi.org/10.5281/zenodo.5637165). <https://github.com/epinowcast/epinowcast/>.
 [^bnc-package]: Johnson KE, Tyszka E, Bracher J, Funk S, Abbott S (2025). baselinenowcast: Methods for baseline nowcasting right-truncated epidemiological data. <https://github.com/epinowcast/baselinenowcast/>.

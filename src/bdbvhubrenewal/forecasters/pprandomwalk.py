@@ -157,8 +157,8 @@ CENTRING = 0.5
 A large place's weekly counts pin its walk, which suits centred steps,
 and a place with few cases leaves it to the prior, which suits
 non-centred ones.
-Halfway gave 1 divergence in 1500 draws at 11-08 where non-centred
-steps gave 12.
+In a trial at 11-08, with the dispersion then pooled, halfway gave 1
+divergent draw in 1500 where non-centred steps gave 12.
 """
 
 
