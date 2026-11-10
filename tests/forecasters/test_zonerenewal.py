@@ -229,3 +229,55 @@ def test_zone_code_does_not_key_the_province_fits(tmp_path: Path) -> None:
         path = tmp_path / "src/bdbvhubrenewal" / rel
         path.write_text(path.read_text() + "\n_EDITED = 1\n")
     assert {m: store.code_digest(m, tmp_path) for m in models} == before
+
+
+def test_bvd_zone_rt_becomes_one_term_per_fitted_zone(tmp_path: Path) -> None:
+    from bdbvhubrenewal.data import bvd
+    from bdbvhubrenewal.model.zones import zone_bvd_inputs
+
+    fixtures = Path(__file__).resolve().parents[1] / "data" / "bvd"
+    release = bvd.load_release(fixtures / "results-3086")
+    folder = tmp_path / release.tag
+    folder.mkdir()
+    pd.DataFrame(
+        {
+            "zone": ["mambasa", "gety"],
+            "label": ["Mambasa", "Gety"],
+            "province": ["ituri", "ituri"],
+            "R_T_median": [1.2, 0.9],
+            "R_T_lower": [0.8, 0.5],
+            "R_T_upper": [1.8, 1.6],
+        }
+    ).to_csv(folder / zr.ZONE_ESTIMATES, index=False)
+    names = pd.DataFrame(
+        {
+            "location": ["CD-IT-25", "CD-IT-10"],
+            "location_name": ["Mambasa", "Bunia"],
+        }
+    )
+    rows = zr.zone_bvd_rows(release, tmp_path, names)
+    assert rows is not None
+    # Gety has no hub case, so it has no term.
+    assert rows["group"].tolist() == ["zone:CD-IT-25"]
+    assert rows["members"].tolist() == ["CD-IT-25"]
+    assert rows["log_mean"].iloc[0] == pytest.approx(np.log(1.2))
+    both = pd.concat([bvd.model_rows(release), rows], ignore_index=True)
+    zones = ["CD-IT-10", "CD-IT-25", "CD-NK-03"]
+    out = zone_bvd_inputs(
+        both,
+        zones,
+        {z: z[:5] for z in zones},
+        release.as_of - pd.Timedelta(days=60),
+    )
+    assert out is not None
+    groups = out["groups"].tolist()
+    # National holds every zone; the zone term holds Mambasa alone.
+    assert groups[0] == [True, True, True]
+    assert groups[-1] == [False, True, False]
+    assert out["kinds"][-1] == 1
+
+    # No file and no download: no zone terms.
+    def fail(_: str) -> bytes:
+        raise OSError("offline")
+
+    assert zr.zone_bvd_rows(release, tmp_path / "none", names, fail) is None

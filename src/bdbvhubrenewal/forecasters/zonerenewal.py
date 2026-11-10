@@ -226,6 +226,103 @@ def sum_zones(samples: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(out).loc[:, list(samples.columns)]
 
 
+ZONE_ESTIMATES: Final = "zone_estimates.csv"
+"""BVDOutbreakSize's zone Rt summaries in a release (its zone model)."""
+
+ZONE_PREFIX: Final = "zone:"
+"""Prefix of the BVD term groups of single zones (`zone_bvd_rows`)."""
+
+
+def _norm(name: object) -> str:
+    import unicodedata
+
+    text = unicodedata.normalize("NFKD", str(name))
+    return "".join(c for c in text if c.isalnum()).lower()
+
+
+def zone_bvd_rows(
+    release: Any,
+    cache_dir: Path | str | None = None,
+    names: pd.DataFrame | None = None,
+    download: Any = None,
+) -> pd.DataFrame | None:
+    """BVDOutbreakSize's zone Rt of a release, as rows of the BVD term.
+
+    Each zone in the release's `zone_estimates.csv` becomes a row like a
+    patch row of `data.bvd.model_rows`: its log median and the log-scale
+    SD of its 90% interval, relative to the release's national
+    reference. Its group is `ZONE_PREFIX` and its hub code, and its member
+    is that code. Zones are matched to hub codes by province and name
+    (`health_zones.csv`); zones with no hub case yet are not matched and
+    are dropped, as they are not fitted.
+
+    Parameters
+    ----------
+    release : bdbvhubrenewal.data.bvd.BvdRelease
+        The release chosen for the vintage.
+    cache_dir : pathlib.Path or str, optional
+        The release cache. Defaults to `bvd/` in the data directory. The
+        file is downloaded into the release's folder if missing.
+    names : pandas.DataFrame, optional
+        Hub zone codes and names (`load_health_zones`).
+    download : callable, optional
+        Returns the bytes at a URL.
+
+    Returns
+    -------
+    pandas.DataFrame or None
+        Columns of `data.bvd.MODEL_ROW_COLUMNS`, or None if the release
+        has no zone estimates.
+    """
+    from bdbvhubrenewal.data import bvd
+
+    cache = Path(cache_dir) if cache_dir is not None else _data_dir() / "bvd"
+    path = cache / release.tag / ZONE_ESTIMATES
+    if not path.exists():
+        url = (
+            f"https://github.com/{bvd.BVD_REPO}/releases/download/"
+            f"{release.tag}/{ZONE_ESTIMATES}"
+        )
+        try:
+            body = (download or bvd._download)(url)
+        except Exception:
+            return None
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(body)
+    est = pd.read_csv(path)
+    if names is None:
+        from bdbvhubrenewal.data import load_health_zones
+
+        names = load_health_zones(_data_dir())
+    hub = names.drop_duplicates("location")
+    key = hub["location"].str[:5] + "|" + hub["location_name"].map(_norm)
+    code = dict(zip(key, hub["location"], strict=True))
+    est = est.assign(
+        location=(
+            est["province"].map(bvd.BVD_PROVINCES)
+            + "|"
+            + est["label"].map(_norm)
+        ).map(code)
+    ).dropna(subset=["location", "R_T_median", "R_T_lower", "R_T_upper"])
+    est = est.loc[(est["R_T_lower"] > 0) & (est["R_T_median"] > 0)]
+    nat = bvd.model_rows(release).iloc[0]
+    ref = (float(nat["ref_log_mean"]), float(nat["ref_log_sd"]))
+    rows = [
+        (
+            ZONE_PREFIX + str(r["location"]),
+            str(r["location"]),
+            release.as_of.isoformat(),
+            float(np.log(r["R_T_median"])),
+            float(np.log(r["R_T_upper"] / r["R_T_lower"]) / (2 * bvd.Z90)),
+            *ref,
+        )
+        for _, r in est.iterrows()
+    ]
+    if not rows:
+        return None
+    return pd.DataFrame(rows, columns=list(bvd.MODEL_ROW_COLUMNS))
+
+
 def zone_vintage_inputs(
     task: ForecastTask, config: Any, bvd: pd.DataFrame | None = None
 ) -> Any:
@@ -317,6 +414,10 @@ class ZoneRenewalModel(RenewalModel):
             used = bvd_record(release)
             if release is not None:
                 rows = bvd.model_rows(release)
+                zone_rows = zone_bvd_rows(release)
+                if zone_rows is not None:
+                    rows = pd.concat([rows, zone_rows], ignore_index=True)
+                    used = {**used, "zones": len(zone_rows)}
             self._log(f"variant={self.name} bvd={used['tag'] or 'none'}")
         data = zone_vintage_inputs(task, config, bvd=rows)
         model = build_zone_model(data, config)

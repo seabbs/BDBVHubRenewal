@@ -666,6 +666,44 @@ def place_distances(centres: pd.DataFrame) -> np.ndarray:
     return np.asarray(2 * 6371 * np.arcsin(np.sqrt(a)), dtype=float)
 
 
+def zone_bvd_inputs(
+    rows: pd.DataFrame,
+    names: list[str],
+    parent_of: Mapping[str, str],
+    start: dt.date,
+    masked: tuple[str, ...] = (),
+) -> dict[str, Any] | None:
+    """Map BVD rows onto the zones, as `inputs.bvd_inputs`.
+
+    The national row and the patch rows hold every zone of their
+    provinces. Rows whose group starts with `zone:` (BVDOutbreakSize's
+    zone Rt) hold the one zone they name, as a deviation from national.
+
+    Returns
+    -------
+    dict or None
+        As `inputs.bvd_inputs`.
+    """
+    single = rows["group"].astype(str).str.startswith("zone:")
+    parts = [
+        bvd_inputs(
+            rows.loc[~single], [parent_of[p] for p in names], start, masked
+        )
+    ]
+    if single.any():
+        # A masked province's zones carry its data, so they are left out.
+        keep = rows.loc[single & ~rows["members"].str[:5].isin(masked)]
+        parts.append(bvd_inputs(keep, names, start, masked))
+    found = [p for p in parts if p is not None]
+    if not found:
+        return None
+    out = dict(found[0])
+    for part in found[1:]:
+        for key in ("groups", "values", "scales", "kinds"):
+            out[key] = np.concatenate([out[key], part[key]])
+    return out
+
+
 def zone_kernel(
     zones: tuple[str, ...], table: pd.DataFrame, decay_km: float = DECAY_KM
 ) -> np.ndarray:
@@ -836,9 +874,7 @@ def zone_vintage_from_tables(
         fit_mask=~np.array(off, dtype=bool),
         bvd=None
         if bvd is None or config.national
-        # Patch membership is by province, so each zone counts as its
-        # province.
-        else bvd_inputs(bvd, [parent_of[p] for p in names], start, masked),
+        else zone_bvd_inputs(bvd, names, parent_of, start, masked),
         seed_days=None if config.national else _seed_days(totals),
         release_pairs=release_pairs,
         parents=np.array([parent_names.index(parent_of[p]) for p in names]),
