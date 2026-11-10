@@ -30,6 +30,7 @@ The package, `bdbvhubrenewal`, fits the models, scores them and writes the hub s
 `seabbs-rwnowcast` is `randomwalknowcast`, baselinenowcast ([Johnson et al. 2025](https://doi.org/10.12688/wellcomeopenres.25027.2)) ported to JAX, with a random walk on top.
 It runs by province and health zone, and the national value is the sum of the provinces.
 `randomwalk` is the same walk with no nowcast.
+`pprandomwalknowcast` is a generative variant in the style of epinowcast, with the delay and the walk fitted jointly and partially pooled over places, and is not submitted.
 The renewal models are built on [PyRenew](https://github.com/CDCgov/PyRenew) and model daily symptom onsets, with a learnt onset-to-report delay and the hub's imputation of missing onsets.
 `renewal` fits the provinces together, with a pooled Rt and importation between provinces through a gravity kernel.
 `renewalsp` fits the same model to each province on its own, with no pooling or importation.
@@ -49,7 +50,7 @@ uv sync
 
 ## Usage
 
-The [Getting started](https://samabbott.co.uk/BDBVHubRenewal/getting-started/) page forecasts, plots and scores both baselines, `randomwalknowcast` and `randomwalk`, in Python.
+The [Getting started](https://samabbott.co.uk/BDBVHubRenewal/getting-started/) page forecasts with both baselines, `randomwalknowcast` and `randomwalk`, loads the stored `renewal` fit at the same origin, and plots and scores all three in Python.
 
 ## Data
 
