@@ -8,7 +8,8 @@ An introduction comes each week with probability $q$ times the share of
 the week not yet reported (`introduction_rates`).
 $q$ is the rate of a first case for a place with none yet, and of a
 re-introduction for a place seen before, over the `k` weeks to the
-place's start week, pooled over the place and its siblings.
+place's start week, or all weeks to it where the pool has no
+introduction in them, pooled over the place and its siblings.
 It brings a count drawn from Poisson(1) given at least 1, and the place
 then walks on $\log(1 + y)$ with its walk spread (`silent_trajectories`).
 """
@@ -55,9 +56,6 @@ def introduction_rates(
 ) -> np.ndarray:
     """Return each place's weekly probability of an introduction.
 
-    Only the `k` weeks to each place's start week count, the weeks that
-    set the spread of the walk, so only complete weeks before the origin
-    are used.
     A place with no case yet takes the rate of a first case: the weeks
     with a case over the weeks with none before them.
     A place seen before takes the rate of a re-introduction: the weeks
@@ -65,10 +63,12 @@ def introduction_rates(
     weeks before them.
     Each rate pools the place and its siblings, the children of its
     parent, so zones pool within their province.
-    Where the siblings have no introduction in the window, there is no
-    estimate, and the place takes the pool of its parent's level: all
-    zones of the country for a zone.
     The country has no siblings, so it is a group of its own.
+    Each rate counts the `k` weeks to each place's start week, the weeks
+    that set the spread of the walk.
+    Where the pool has no introduction of that kind in them, all weeks to
+    the start week count instead.
+    Only complete weeks before the origin are used.
 
     Parameters
     ----------
@@ -84,58 +84,40 @@ def introduction_rates(
     Returns
     -------
     numpy.ndarray
-        `[L]`, 0 where neither the place's pool nor any above it has an
-        introduction.
+        `[L]`, 0 where the pool has no week at risk.
     """
     pos = reported > 0
     before = np.cumsum(np.pad(pos, ((0, 0), (1, 0))), axis=1)[:, :-1]
     week = np.arange(pos.shape[1])[None, :]
-    window = (week <= start[:, None]) & (week > start[:, None] - k)
+    upto = week <= start[:, None]
+    window = upto & (week > start[:, None] - k)
     quiet = np.zeros_like(pos)
     quiet[:, k:] = before[:, k:] == before[:, :-k]
-    first = _pooled(window & (before == 0), pos, parent)
-    again = _pooled(window & quiet & (before > 0), pos, parent)
+    fresh, seen = upto & (before == 0), upto & quiet & (before > 0)
+    first = _pooled(fresh & window, fresh, pos, parent)
+    again = _pooled(seen & window, seen, pos, parent)
     return np.where(pos.any(axis=1), again, first)
 
 
 def _pooled(
-    risk: np.ndarray, pos: np.ndarray, parent: np.ndarray
+    recent: np.ndarray, every: np.ndarray, pos: np.ndarray, parent: np.ndarray
 ) -> np.ndarray:
-    """Pool the introductions over the weeks at risk, as `introduction_rates`.
+    """Pool the introductions over the weeks at risk of siblings.
 
-    The pool of a place at level `j` above it is every place at its depth
-    with the same ancestor `j` levels up, its siblings at `j = 1`. The
-    nearest pool with an introduction gives the rate.
+    The rate over the weeks at risk in `recent`, or over those in `every`
+    where the pool has no introduction in `recent`.
     """
-    hits = (risk & pos).sum(axis=1).astype(float)
-    weeks = risk.sum(axis=1).astype(float)
     n = parent.size
-    depth = np.zeros(n, dtype=int)
-    up = parent.copy()
-    while (up >= 0).any():
-        depth += up >= 0
-        up = np.where(up >= 0, parent[np.maximum(up, 0)], -1)
-    # A root is a pool of its own.
-    root = parent < 0
-    out = np.where(root, hits / np.maximum(weeks, 1), 0.0)
-    todo = ~root
-    anc = parent.copy()
-    while todo.any():
-        live = anc >= 0
-        _, pool = np.unique(
-            depth[live] * (n + 1) + anc[live], return_inverse=True
-        )
-        pool_hits = np.bincount(pool, hits[live])[pool]
-        pool_weeks = np.bincount(pool, weeks[live])[pool]
-        take = np.zeros(n, dtype=bool)
-        take[live] = pool_hits > 0
-        take &= todo
-        rate = np.zeros(n)
-        rate[live] = pool_hits / np.maximum(pool_weeks, 1)
-        out[take] = rate[take]
-        todo &= ~take & live
-        anc = np.where(live, parent[np.maximum(anc, 0)], -1)
-        todo &= anc >= 0
+    group = np.where(parent >= 0, parent, n + np.arange(n))
+
+    def rate(risk: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        hits = np.bincount(group, (risk & pos).sum(axis=1), 2 * n)[group]
+        weeks = np.bincount(group, risk.sum(axis=1), 2 * n)[group]
+        return hits, hits / np.maximum(weeks, 1)
+
+    hits, short = rate(recent)
+    _, long = rate(every)
+    out: np.ndarray = np.where(hits > 0, short, long)
     return out
 
 

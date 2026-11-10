@@ -239,7 +239,7 @@ An introduction occurs each week after the latest complete week with probability
 $q_p$ is estimated over the 9 weeks to the place's start week, the weeks that set its walk spread, from the place and its siblings.
 A place with no case yet takes the rate of a first case: the share of weeks with a case among the weeks with no case before them.
 A place seen before takes the rate of a re-introduction: the share of weeks with a case among the weeks with an earlier case but none in the 9 weeks before.
-If the siblings have no introduction of that kind in the 9 weeks, there is no estimate, and the place takes the pool of its parent's level, all zones of the country for a zone.
+If the siblings have no introduction of that kind in the 9 weeks, all weeks to the start week count instead.
 Without this rule a silent place would walk from a nowcast near 0, with baselinenowcast's $+1$ and a pooled spread, and so forecast a few cases every week.
 Most zones and several provinces are silent at any origin, and their truth is almost always 0, so the rule keeps them at exactly 0 unless a case is likely from what their siblings show.
 

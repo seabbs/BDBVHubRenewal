@@ -46,8 +46,8 @@ Its new reports and removals by weeks back fit the observation model
 is silent.
 Its weekly probability of an introduction is the rate of a first case,
 or of a re-introduction if it was seen before, over the `walk_weeks`
-weeks to its start week, pooled over its siblings
-(`introductions.introduction_rates`).
+weeks to its start week, or all weeks to it if those have none, pooled
+over its siblings (`introductions.introduction_rates`).
 """
 
 from __future__ import annotations
