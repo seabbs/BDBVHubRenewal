@@ -162,6 +162,7 @@ The two schemes then behave differently.
 
 **Recommended layout:** reuse ids `1..100` in every location, use the same set of weeks for every location, and make sample `k` of `CD` the sum of sample `k` of the provinces.
 This passes under either reading and matches the joint meaning hubValidations gives reused ids.
+Nothing in `tasks.json` or hubValidations requires `CD` to equal the sum of the provinces: `compound_taskid_set` includes `location`, so sample ids are joint only within a location. Accepted 2026-10-31 files from other teams have a national that is not the province sum.
 
 ## 5. Submission window
 

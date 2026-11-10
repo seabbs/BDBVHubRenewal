@@ -40,6 +40,7 @@ __all__ = [
     "TEAM_ABBR",
     "model_abbr_for",
     "model_id",
+    "national_method",
     "render_model_metadata",
     "run_date",
     "submission_path",
@@ -135,6 +136,31 @@ def model_id(model_abbr: str, team_abbr: str = TEAM_ABBR) -> str:
     return f"{team_abbr}-{model_abbr}"
 
 
+def national_method(model: object) -> str:
+    """Return how a model makes its national value, `"sum"` or `"direct"`.
+
+    Parameters
+    ----------
+    model : ForecastModel, str or None
+        A model, or the name of a registered one. A name that is not
+        registered, or None, is `"sum"`.
+
+    Returns
+    -------
+    str
+        `Settings.national` of a random walk model, otherwise `"sum"`.
+    """
+    if model is None or isinstance(model, str):
+        from bdbvhubrenewal.forecasters import get_model
+
+        try:
+            model = get_model(str(model))
+        except KeyError:
+            return "sum"
+    settings = getattr(model, "settings", None)
+    return str(getattr(settings, "national", "sum"))
+
+
 def to_hub_table(
     samples: pd.DataFrame,
     reference_date: dt.date | str,
@@ -144,6 +170,7 @@ def to_hub_table(
     zones: pd.DataFrame | None = None,
     n_samples: int = 100,
     forecast_date: dt.date | str | None = None,
+    national: str = "sum",
 ) -> pd.DataFrame:
     """Turn forecast samples into the hub's submission table.
 
@@ -151,7 +178,8 @@ def to_hub_table(
     sample ids `1..n_samples` reused in every location, one row per id for every
     week, the same weeks for every location, whole non-negative counts
     and the national value as the sum of the provinces for each sample.
-    Any national rows in `samples` are replaced.
+    Any national rows in `samples` are replaced, unless `national` is
+    `"direct"`.
 
     Parameters
     ----------
@@ -177,20 +205,27 @@ def to_hub_table(
         The day the PR is opened. The default is today (UTC), see
         `run_date`. The hub requires it to be on or before the
         reference date and within a day of the validation date.
+    national : str
+        `"sum"` makes national the sum of the provinces (and
+        `unassigned`). `"direct"` keeps the national rows of `samples`, a
+        model's own national fit, which the hub allows to differ from
+        the sum.
 
     Returns
     -------
     pandas.DataFrame
         Columns `HUB_COLUMNS`, sorted by location, sample and week.
-        Values are rounded to whole cases before the national sum, so the
-        national value is exactly the sum of the written province values.
+        Values are rounded to whole cases before the national sum, so a
+        summed national value is exactly the sum of the written province
+        values.
 
     Raises
     ------
     ValueError
         If a province or zone does not have sample ids `1..n_samples`, a
-        sample lacks a week, locations cover different weeks, or the
-        zones do not sum to their provinces.
+        sample lacks a week, locations cover different weeks, the zones
+        do not sum to their provinces, or a direct national has no
+        national rows or is given an unassigned component.
 
     Examples
     --------
@@ -203,17 +238,22 @@ def to_hub_table(
     """
     ref = as_date(reference_date).isoformat()
     fdate = as_date(forecast_date or run_date()).isoformat()
-    prov = samples.loc[samples["location"] != NATIONAL].copy()
+    if national not in ("sum", "direct"):
+        raise ValueError(f"national must be sum or direct, not {national!r}.")
+    prov = _tidy(samples.loc[samples["location"] != NATIONAL])
     if prov.empty:
         raise ValueError("No province samples to write.")
-    prov["target_end_date"] = prov["target_end_date"].astype(str)
-    prov["location"] = prov["location"].astype(str)
-    prov["sample"] = prov["sample"].astype("int64")
-    prov["value"] = prov["value"].clip(lower=0).round()
     zone = _zone_rows(prov, zones)
+    direct = prov.iloc[:0]
+    if national == "direct":
+        direct = _tidy(samples.loc[samples["location"] == NATIONAL])
+        if direct.empty:
+            raise ValueError("A direct national needs national samples.")
+        if unassigned is not None and not unassigned.empty:
+            raise ValueError("A direct national has no unassigned part.")
     ids = set(range(1, n_samples + 1))
     weeks = sorted(set(prov["target_end_date"]))
-    for loc, rows in pd.concat([prov, zone]).groupby("location"):
+    for loc, rows in pd.concat([prov, zone, direct]).groupby("location"):
         if set(rows["sample"]) != ids:
             raise ValueError(
                 f"{loc}: sample ids must be 1 to {n_samples}, the same in "
@@ -228,7 +268,10 @@ def to_hub_table(
             raise ValueError(
                 f"{loc}: every sample needs exactly one row for each week."
             )
-    national = (
+    if national == "direct":
+        both = pd.concat([prov, direct, zone], ignore_index=True)
+        return _hub_rows(both, ref, fdate, target)
+    summed = (
         prov.groupby(["target_end_date", "sample"])["value"].sum().reset_index()
     )
     if unassigned is not None and not unassigned.empty:
@@ -241,11 +284,28 @@ def to_hub_table(
             .groupby(["target_end_date", "sample"])["value"]
             .sum()
         )
-        national = national.set_index(["target_end_date", "sample"])
-        national["value"] = national["value"].add(extra, fill_value=0)
-        national = national.reset_index()
-    national["location"] = NATIONAL
-    both = pd.concat([prov, national, zone], ignore_index=True)
+        summed = summed.set_index(["target_end_date", "sample"])
+        summed["value"] = summed["value"].add(extra, fill_value=0)
+        summed = summed.reset_index()
+    summed["location"] = NATIONAL
+    both = pd.concat([prov, summed, zone], ignore_index=True)
+    return _hub_rows(both, ref, fdate, target)
+
+
+def _tidy(rows: pd.DataFrame) -> pd.DataFrame:
+    """Type sample rows and round them to whole non-negative cases."""
+    out = rows.copy()
+    out["target_end_date"] = out["target_end_date"].astype(str)
+    out["location"] = out["location"].astype(str)
+    out["sample"] = out["sample"].astype("int64")
+    out["value"] = out["value"].clip(lower=0).round()
+    return out
+
+
+def _hub_rows(
+    both: pd.DataFrame, ref: str, fdate: str, target: str
+) -> pd.DataFrame:
+    """Return sample rows as the sorted hub table."""
     out = pd.DataFrame(
         {
             "reference_date": ref,

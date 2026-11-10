@@ -42,7 +42,10 @@ walks from a count drawn from Poisson(1) given at least 1
 In `randomwalknowcast` a place with no week to start from is quiet like
 a silent one: after its latest complete week it draws introductions,
 floored at the counts reported (`_quiet`).
-National is the sum of provinces by sample.
+National is the sum of provinces by sample, or with `Settings.national`
+set to `"direct"` the country's own nowcast and walk: the national series
+is fitted by the same rules as a province, with its own delay, nowcast
+size and walk spread, and the provinces are unchanged.
 Each model raises if the task has no snapshots or no pair of releases
 within the delay window.
 """
@@ -61,6 +64,7 @@ import pandas as pd
 from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.snapshots import snapshot_arrays
 from bdbvhubrenewal.forecasters.base import (
+    NATIONAL,
     SAMPLE_COLUMNS,
     ForecastTask,
     register_model,
@@ -201,14 +205,22 @@ def _start_weeks(origin: Origin) -> np.ndarray:
 
 
 def frame(
-    task: ForecastTask, weeks: list[str], values: np.ndarray, rows: list[int]
+    task: ForecastTask,
+    weeks: list[str],
+    values: np.ndarray,
+    rows: list[int],
+    locations: tuple[str, ...] | None = None,
 ) -> pd.DataFrame:
-    """Return sample rows from `values` of shape `[S, L, H]`."""
+    """Return sample rows from `values` of shape `[S, L, H]`.
+
+    `rows` are the rows of `locations`, by default `task.locations`.
+    """
     col = {w: i for i, w in enumerate(weeks)}
     targets = list(task.target_end_dates)
     n = values.shape[0]
     frames = []
-    for loc, row in zip(task.locations, rows, strict=True):
+    places = task.locations if locations is None else locations
+    for loc, row in zip(places, rows, strict=True):
         picked = np.column_stack(
             [
                 values[:, row, col[w]] if w in col else np.zeros(n)
@@ -297,11 +309,35 @@ class RandomWalk:
         pos = {c: i for i, c in enumerate(origin.snap.locations)}
         return [pos[c] for c in task.locations]
 
+    def places(self, task: ForecastTask) -> tuple[str, ...]:
+        """Return the places the model writes: the task's, then national.
+
+        National is written only when `Settings.national` is `"direct"`.
+        """
+        direct = self.settings.national == "direct"
+        if not direct or NATIONAL in task.locations:
+            return tuple(task.locations)
+        return (*task.locations, NATIONAL)
+
+    def _frame(
+        self,
+        origin: Origin,
+        task: ForecastTask,
+        weeks: list[str],
+        values: np.ndarray,
+    ) -> pd.DataFrame:
+        """Return the sample rows of `places` from `values` `[S, L, H]`."""
+        places = self.places(task)
+        pos = {c: i for i, c in enumerate(origin.snap.locations)}
+        return frame(task, weeks, values, [pos[c] for c in places], places)
+
     def _diagnostics(
         self, origin: Origin, task: ForecastTask, start: np.ndarray
     ) -> None:
         rows: list[dict[str, object]] = []
-        for loc, i in zip(task.locations, self.rows(origin, task), strict=True):
+        pos = {c: i for i, c in enumerate(origin.snap.locations)}
+        for loc in self.places(task):
+            i = pos[loc]
             n_err = None if origin.obs_n is None else int(origin.obs_n[i, 0])
             obs_src = (
                 None
@@ -384,7 +420,7 @@ class RandomWalk:
                     floor = origin.reported[loc, u] if u < n_data else 0.0
                     values[:, loc, u] = np.maximum(draw, floor)
         self._diagnostics(origin, task, start)
-        return frame(task, weeks, values, self.rows(origin, task))
+        return self._frame(origin, task, weeks, values)
 
 
 @dataclass
@@ -433,7 +469,7 @@ class RandomWalkNowcast(RandomWalk):
             task,
             _start_weeks(origin),
         )
-        return frame(task, weeks, values, self.rows(origin, task))
+        return self._frame(origin, task, weeks, values)
 
     def trajectories(
         self, origin: Origin, task: ForecastTask, point: np.ndarray

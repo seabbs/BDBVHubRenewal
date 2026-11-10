@@ -24,7 +24,7 @@ from bdbvhubrenewal.data.zones import weekly_zone_counts
 from bdbvhubrenewal.forecasters import ForecastTask
 from bdbvhubrenewal.forecasters.base import NATIONAL, SAMPLE_COLUMNS
 from bdbvhubrenewal.forecasters.zones import zones_for_model
-from bdbvhubrenewal.submission.hub import to_hub_table
+from bdbvhubrenewal.submission.hub import national_method, to_hub_table
 
 __all__ = [
     "HUB_QUANTILE_LEVELS",
@@ -116,6 +116,15 @@ def hub_tables(
         split = zones_for_model(
             str(name), task, provinces, counts, zones, daily_zones
         )
+        if national_method(str(name)) == "direct":
+            out[str(name)] = to_hub_table(
+                own[list(SAMPLE_COLUMNS)],
+                task.reference_date,
+                zones=split,
+                forecast_date=task.vintage,
+                national="direct",
+            )
+            continue
         out[str(name)] = to_hub_table(
             provinces,
             task.reference_date,

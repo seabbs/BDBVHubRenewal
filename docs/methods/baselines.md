@@ -8,6 +8,7 @@ The renewal models are on the [Renewal models](model.md) page.
 `randomwalknowcast` nowcasts the recent weeks with baselinenowcast[^bnc-paper][^bnc-package] and forecasts with a random walk from the nowcast.
 `randomwalk` is the same walk from the latest complete week, with no nowcast.
 Both run at province and zone level ([Health zones](#health-zones)), and national is the sum of the provinces.
+With `Settings.national = "direct"` the country is instead fitted on its own series, by the same rules as a province, with its own delay, nowcast size and walk spread, so national need not equal the sum of the provinces.
 
 In brief, `randomwalknowcast`:
 

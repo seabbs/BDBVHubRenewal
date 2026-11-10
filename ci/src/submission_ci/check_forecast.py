@@ -20,7 +20,8 @@ Handled (warn or pass):
   `national_sum` national equals the sum of the provinces plus the
                  unassigned cases in `national.json`, per sample and
                  week (fails otherwise). A modelled province missing
-                 from the file warns.
+                 from the file warns. A national fitted directly
+                 (`national_method` "direct") is not summed.
 
 Plausibility (`plausible` fails; the others warn):
   `plausible`    each location's forecast near its recent data: median
@@ -270,9 +271,18 @@ def check_national_sum(
     National sample k must equal the sum of province sample k plus the
     sample's modelled unassigned component (`national.json`), for every
     week, up to float noise (`tol` absolute, or 1e-12 relative). Every
-    modelled province must be in the file.
+    modelled province must be in the file. A national the model fits
+    directly (`national_method` "direct"), which the hub allows, only
+    needs to be in the file.
     """
     national = str(sidecar["national"])
+    if sidecar.get("national_method", "sum") == "direct":
+        missing_national = [("fail", f"{national} is not in the file")]
+        return _result(
+            "national_sum",
+            [] if national in s.values else missing_national,
+            f"{national} is fitted directly, not summed from the provinces",
+        )
     provs = [loc for loc in s.locations if is_province(loc)]
     modelled = sorted(sidecar["modelled_provinces"])
     unassigned = _unassigned(sidecar)

@@ -92,6 +92,7 @@ from bdbvhubrenewal.submission.hub import (
     SUBMISSION_CONFIG,
     model_abbr_for,
     model_id,
+    national_method,
     render_model_metadata,
     to_hub_table,
     write_model_metadata,
@@ -1099,8 +1100,11 @@ def _nowcast(args: argparse.Namespace) -> int:
         if args.config:
             config = get_config(args.config)
             result = run_forecast(config, task, args.fit)
+            method = national_method(config.model)
         else:
-            samples = get_model(args.model).forecast(task)
+            model = get_model(args.model)
+            method = national_method(model)
+            samples = model.forecast(task)
             check_samples(samples, task)
             result = Forecast(samples)
         zones, zone_note = _zones(args, task, result.samples, hub_config)
@@ -1112,12 +1116,13 @@ def _nowcast(args: argparse.Namespace) -> int:
             unassigned=result.unassigned,
             zones=zones,
             forecast_date=args.forecast_date,
+            national=method,
         )
         path = write_submission(table, args.out, model_id(_abbr(args)))
     except (KeyError, ValueError, OSError) as err:
         print(f"ERROR: {err}", file=sys.stderr)
         return 1
-    _write_national_sidecar(Path(args.out), task, result)
+    _write_national_sidecar(Path(args.out), task, result, method)
     # Problems handled on the way, for the PR's `Handled:` line.
     (Path(args.out) / "handled.json").write_text(json.dumps(handled) + "\n")
     # Whether the file has health zones, for the CI's zone check.
@@ -1233,9 +1238,17 @@ def _write_zone_results(
 
 
 def _write_national_sidecar(
-    out: Path, task: ForecastTask, result: Forecast
+    out: Path,
+    task: ForecastTask,
+    result: Forecast,
+    national_method: str = "sum",
 ) -> Path:
-    """Write `national.json`, which the CI's national check reads."""
+    """Write `national.json`, which the CI's national check reads.
+
+    `national_method` is `"sum"` when national is the province sum plus
+    the unassigned cases, and `"direct"` for a model's own national fit,
+    which the check does not sum.
+    """
     unassigned = []
     if result.unassigned is not None:
         unassigned = [
@@ -1251,6 +1264,7 @@ def _write_national_sidecar(
     record = {
         "schema_version": 1,
         "national": NATIONAL,
+        "national_method": national_method,
         "modelled_provinces": list(
             task.locations if result.modelled is None else result.modelled
         ),

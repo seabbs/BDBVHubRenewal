@@ -431,6 +431,9 @@ def zone_forecast(
     )
     zt = zone_task(task, counts, zones, daily)
     raw = model.forecast(zt)
+    # A model with a direct national also writes the country, which the
+    # zones do not use.
+    raw = raw.loc[raw["location"] != NATIONAL]
     return reconcile_zones(
         raw, province_samples, task, counts, zones, allocator
     )

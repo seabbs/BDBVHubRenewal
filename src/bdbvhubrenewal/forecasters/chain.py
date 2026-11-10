@@ -55,6 +55,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Final
 
 import jax.numpy as jnp
 import numpy as np
@@ -83,6 +84,7 @@ from bdbvhubrenewal.forecasters.pooling import (
 from bdbvhubrenewal.forecasters.walk import walk_noise, walk_variance
 
 __all__ = [
+    "NATIONAL_METHODS",
     "DelayFit",
     "DelayFn",
     "Errors",
@@ -104,6 +106,9 @@ __all__ = [
 ]
 
 log = logging.getLogger(__name__)
+
+NATIONAL_METHODS: Final = ("sum", "direct")
+"""The ways the random walk models make the national value."""
 
 
 class MissingSnapshots(ModelUnavailableError):  # noqa: N818
@@ -147,6 +152,10 @@ class Settings:
     start_count : float
         Cases reported in a week for `randomwalknowcast` to start its walk
         from the week's nowcast.
+    national : str
+        How the national value is made: `"sum"`, the sum of the province
+        samples, or `"direct"`, the country's own nowcast and walk, fitted
+        on the national series by the same rules as a province.
     """
 
     max_delay: int = 42
@@ -156,6 +165,15 @@ class Settings:
     walk_weeks: int = 9
     start_share: float = 0.05
     start_count: float = 5.0
+    national: str = "sum"
+
+    def __post_init__(self) -> None:
+        """Check `national` is one of `NATIONAL_METHODS`."""
+        if self.national not in NATIONAL_METHODS:
+            raise ValueError(
+                f"national must be one of {NATIONAL_METHODS}, "
+                f"not {self.national!r}."
+            )
 
     @property
     def history_delay(self) -> int:
