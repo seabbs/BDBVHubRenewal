@@ -18,7 +18,7 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 | `compare-hub [--fetch]` | Score our retrospective forecasts and the hub's submitted ones on the same truth and weeks. |
 | `nowcast` | Forecast from a real vintage, write the hub file and check it. With `--config` and `--fit`, forecast from a fit configuration. |
 | `zone-backtest` | Score `randomwalk`, `randomwalknowcast` and `pprandomwalknowcast` run at zone level on the real vintages. `--chunk K/N` runs only block K of N of the origins. |
-| `fit-store plan`, `fit`, `load` | List the fits the fit store lacks, make one, or load the stored fits into `results/`. |
+| `fit-store plan`, `fit`, `load`, `unpack` | List the fits the fit store lacks (`--origins` for some origins), make one, load the stored fits into `results/`, or write a submission candidate's stored fit directory for the submission. |
 | `fit` | Fit a configuration and write the fit directory and its diagnostics, for the submission CI. |
 | `plot-submission` | Plot a submitted hub file. |
 | `plot-ppc` | Plot a fit's posterior predictive checks (`ppc.json`). |
@@ -61,7 +61,7 @@ The key hashes:
 - the task at the origin, which holds only the releases up to it;
 - the model as built, including its variant and sampler settings;
 - the BVDOutbreakSize release, for `renewalbvd`;
-- the code of `forecasters`, `model`, `data`, `baselinenowcast`, `evaluation/store.py` and `run_forecasts`, without docstrings or comments;
+- the code the model's fit can run (its import closure with `evaluation/store.py` and `evaluation/backtest.py`), without docstrings or comments;
   the zone split (`forecasters/zones.py`, `evaluation/zones.py`) is left out, as a stored fit holds national and province samples only and its zones are split from them at load;
 - the runtime dependencies in `uv.lock`.
 
@@ -69,8 +69,12 @@ The renewal variants use the sampler table of the submission candidate that runs
 `pprandomwalknowcast` uses its own.
 A model code or sampler change refits every origin.
 A new hub release adds one fit per model.
+The task at each origin is the submission's (`backtest.vintage_task`): weeks from 6 before the reference date to one week past `[forecast] max_horizon`, so the next round can be forecast from the same fit when no new release comes, and the latest earlier delays for a release with none of its own.
+The backtest loads the weeks from `[forecast] min_horizon` to `max_horizon`.
+A submission candidate's fit also holds the fit directory the submission reads (samples, the unassigned national part, `ppc.json` and `diagnostics.json`), and the submission forecasts from it (`fit-store unpack`).
 
-The workflow runs on pushes to `main` that change these inputs, and every 6 hours for new hub releases.
+The workflow runs on pushes to `main` that change these inputs, every 6 hours for new hub releases, and when the submission finds a round's fits missing.
+It fits and stores the newest origin first, then the other origins, so a backfill never holds up a round.
 A push never cancels a running refit: the latest push waits and runs after it.
 The fit jobs are read-only, and one job with no project code pushes their files and prunes the branch.
 It keeps the current key's file and the newest good fit of older code for each model and origin.

@@ -1,12 +1,19 @@
 name: Submit to the BDBV hub
 
-# Fit, check and submit the week's forecast to the BDBV Modeling Hub as
-# an automated pull request from the bot's fork. Nobody approves it in
-# CI: the gate below decides, and the PR body says what was submitted
-# and why. See ci/SETUP.md and ci/INTEGRATION.md.
+# Check and submit the week's forecast to the BDBV Modeling Hub as an
+# automated pull request from the bot's fork. Nobody approves it in CI:
+# the gate below decides, and the PR body says what was submitted and
+# why. See ci/SETUP.md and ci/INTEGRATION.md.
 #
-#   detect -> prepare -> fit (bvd, renewalsp, main) ->
+#   detect -> prepare -> await-fits -> fit (bvd, renewalsp, main) ->
 #   gate (select + hubValidations) -> submit -> record -> outcome
+#
+# The fitted candidates come from the fit store (fit-store.yml), keyed on
+# the same code and data, so the submission is the fit the docs show.
+# `await-fits` starts Fit store when the round's fits are missing and
+# waits for them, at most the [timing] fit timeout. Only Fit store fits,
+# so a release is fitted once. A stored fit forecasts one week past its
+# own round, so a round with no new release reads last week's fit.
 #
 # DRY_RUN is true unless the repo variable DRY_RUN is `false` or a manual
 # run says so. A dry run does everything except push and open the PR,
@@ -48,6 +55,12 @@ on:
         description: Ignore the submission window (dry runs only)
         type: boolean
         default: false
+      store_branch:
+        description: >-
+          Fit store branch (blank for fit-store; a fit-store-scratch*
+          branch to test a branch, which Fit store fits on that branch)
+        type: string
+        default: ''
 
 # One submission at a time, never cancelled part way: a second trigger
 # queues behind the first and then finds the data already used.
@@ -71,6 +84,7 @@ env:
   FORK: ${{ vars.HUB_FORK || 'seabbs-bot/BDBV-Modeling-Hub' }}
   HUB: InsightNet-US/BDBV-Modeling-Hub
   LEDGER_BRANCH: submission-ledger
+  FIT_STORE_BRANCH: ${{ inputs.store_branch || 'fit-store' }}
 
 jobs:
   detect:
@@ -200,6 +214,8 @@ jobs:
       matrix: ${{ steps.matrix.outputs.matrix }}
       renewal: ${{ steps.tracks.outputs.renewal }}
       baseline: ${{ steps.tracks.outputs.baseline }}
+      models: ${{ steps.source.outputs.models }}
+      wait: ${{ steps.source.outputs.wait }}
     env:
       HUB_REF: ${{ needs.detect.outputs.hub_ref }}
       AS_OF: ${{ needs.detect.outputs.as_of }}
@@ -232,8 +248,22 @@ jobs:
           source ci/steps/lib.sh
           # shellcheck disable=SC2046
           uv run --project "$CI_DIR" python -m submission_ci.policy \
-            --policy "$CI_DIR/policy.toml" --stage primary --hub-ref "$HUB_REF" \
+            --policy "$CI_DIR/policy.toml" --stage primary \
             --model "$MODEL" $(deadline_args)
+      # The fitted candidates' models and how long to wait for them.
+      - name: List the stored fits to read
+        id: source
+        if: steps.tracks.outputs.renewal == 'true'
+        env:
+          MATRIX: ${{ steps.matrix.outputs.matrix }}
+        run: |
+          models=$(jq -r '[.include[].model | select(. != "")] | unique
+            | join(" ")' <<< "$MATRIX")
+          wait=$(jq -r '.include[0].timeout // "350"' <<< "$MATRIX")
+          {
+            echo "models=$models"
+            echo "wait=$wait"
+          } >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: inputs
@@ -242,15 +272,59 @@ jobs:
             ${{ env.WORK }}/candidates
           retention-days: 7
 
-  fit:
-    name: Fit primary
+  # Fit store fits; this waits for the round's fits there. On main it
+  # starts Fit store, which runs one at a time, so a fit it is already
+  # making is not made twice. A branch run starts Fit store only for a
+  # scratch store (`store_branch`), on that branch.
+  await-fits:
+    name: Wait for the fit store
     needs: [detect, prepare]
     if: needs.prepare.outputs.renewal == 'true'
+    runs-on: ubuntu-latest
+    # The wait itself stops at the [timing] fit timeout (WAIT_MINUTES).
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-forecast-env
+        with:
+          save-jax: 'false'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: inputs
+          path: ${{ env.WORK }}
+      - name: Wait for the round's fits
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODELS: ${{ needs.prepare.outputs.models }}
+          AS_OF: ${{ needs.detect.outputs.as_of }}
+          WAIT_MINUTES: ${{ needs.prepare.outputs.wait }}
+          FIT_REF: ${{ github.ref_name }}
+          DISPATCH: >-
+            ${{ (github.ref == 'refs/heads/main' && inputs.store_branch == '')
+            || startsWith(inputs.store_branch, 'fit-store-scratch') }}
+        run: ci/steps/await_fits.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: await
+          path: ${{ env.WORK }}/await
+          retention-days: 7
+
+  fit:
+    name: Primary candidates
+    needs: [detect, prepare, await-fits]
+    if: >-
+      ${{ !cancelled() && needs.prepare.result == 'success'
+      && needs.prepare.outputs.renewal == 'true' }}
     uses: ./.github/workflows/fit-candidates.yml
     with:
       matrix: ${{ needs.prepare.outputs.matrix }}
       reference_date: ${{ needs.detect.outputs.reference_date }}
       expected_locations: ${{ vars.EXPECTED_LOCATIONS }}
+      store_branch: ${{ inputs.store_branch || 'fit-store' }}
 
   gate:
     name: Select and validate
@@ -553,7 +627,7 @@ jobs:
 
   outcome:
     name: Submission outcome
-    needs: [detect, prepare, fit, gate, submit, baseline, record]
+    needs: [detect, prepare, await-fits, fit, gate, submit, baseline, record]
     if: ${{ always() && needs.detect.outputs.should_run == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5

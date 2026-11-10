@@ -53,6 +53,7 @@ __all__ = [
     "register_config",
     "run_fit",
     "run_forecast",
+    "write_records",
 ]
 
 DIAGNOSTICS_SCHEMA_VERSION: Final = 1
@@ -321,12 +322,64 @@ def run_fit(
         fh.write(f"config={config.name} vintage={task.vintage} start\n")
     start = time.monotonic()
     diag = config.fit(task, sampler, out)
+    diag = write_records(
+        config,
+        task,
+        sampler,
+        out,
+        model=model,
+        diagnostics=diag,
+        seconds=time.monotonic() - start,
+    )
+    with progress.open("a") as fh:
+        fh.write(f"config={config.name} done\n")
+    return FitResult(out, diag)
+
+
+def write_records(
+    config: FitConfig,
+    task: ForecastTask,
+    sampler: Mapping[str, Any],
+    fit_dir: Path,
+    *,
+    model: str,
+    diagnostics: dict[str, Any],
+    seconds: float,
+) -> dict[str, Any]:
+    """Write a fit's `diagnostics.json` and `fit.json`.
+
+    `run_fit` and the fit store (`store.fit_files`) both record a fit
+    this way, so `run_forecast` reads either.
+
+    Parameters
+    ----------
+    config : FitConfig
+        The configuration.
+    task : ForecastTask
+        The task fitted.
+    sampler : mapping
+        The sampler settings.
+    fit_dir : pathlib.Path
+        The fit directory.
+    model : str
+        The model name, recorded as is.
+    diagnostics : dict
+        The record the fit returned.
+    seconds : float
+        How long the fit took.
+
+    Returns
+    -------
+    dict
+        The diagnostics as written.
+    """
+    diag = dict(diagnostics)
     diag.setdefault("schema_version", DIAGNOSTICS_SCHEMA_VERSION)
     diag.setdefault("config", config.name)
-    diag.setdefault("runtime_seconds", round(time.monotonic() - start, 3))
-    _write_json(out / "diagnostics.json", diag)
+    diag.setdefault("runtime_seconds", round(seconds, 3))
+    _write_json(fit_dir / "diagnostics.json", diag)
     _write_json(
-        out / FIT_RECORD,
+        fit_dir / FIT_RECORD,
         {
             "model": model,
             "config": config.name,
@@ -336,9 +389,7 @@ def run_fit(
             "sampler": dict(sampler),
         },
     )
-    with progress.open("a") as fh:
-        fh.write(f"config={config.name} done\n")
-    return FitResult(out, diag)
+    return diag
 
 
 def read_fit(fit_dir: Path | str) -> dict[str, Any]:

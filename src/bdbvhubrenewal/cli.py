@@ -47,7 +47,6 @@ import pandas as pd
 from bdbvhubrenewal.data import (
     build_tidy_data,
     coherence_summary,
-    delays_for_vintage,
     fetch_hub_data,
     load_daily,
     load_daily_zones,
@@ -107,10 +106,6 @@ from bdbvhubrenewal.submission.validate import (
 from bdbvhubrenewal.submission.validate import main as validate_main
 
 __all__ = ["build_parser", "chunk", "host_devices", "main"]
-
-MIN_HORIZON = -6
-"""First week forecast, in weeks from the reference date: 7 weeks up to
-it, which the CI's `observed` and `coverage` checks need."""
 
 _ABBR_HELP = (
     "Hub model abbreviation. Defaults to `randomwalk` for random walk and "
@@ -377,17 +372,28 @@ def build_parser() -> argparse.ArgumentParser:
     fst = sub.add_parser(
         "fit-store", help="Plan, make or load the fitted models' stored fits."
     )
-    fst.add_argument("action", choices=["plan", "fit", "load"])
+    fst.add_argument("action", choices=["plan", "fit", "load", "unpack"])
     fst.add_argument("--store", default="output/fit-store")
     fst.add_argument("--data", default=data_dir)
     fst.add_argument("--config", default="config/backtest.toml")
     fst.add_argument("--policy", default="ci/policy.toml")
-    fst.add_argument("--model", help="With `fit`: the model to fit.")
-    fst.add_argument("--origin", help="With `fit`: the real origin.")
+    fst.add_argument(
+        "--model", help="With `fit` or `unpack`: the model to fit or read."
+    )
+    fst.add_argument(
+        "--origin", help="With `fit` or `unpack`: the real origin."
+    )
     fst.add_argument(
         "--out",
         default=None,
-        help="With `plan`: write the missing fits as a matrix JSON here.",
+        help="With `plan`: write the missing fits as a matrix JSON here. "
+        "With `unpack`: the fit directory to write.",
+    )
+    fst.add_argument(
+        "--origins",
+        nargs="*",
+        default=None,
+        help="With `plan` or `load`: only these origins (default: all).",
     )
     fst.add_argument("--results", default="results")
     fst.add_argument(
@@ -557,25 +563,23 @@ def _vintage(target_vintages: Sequence[str], vintage: str | None) -> str:
 
 def _task(args: argparse.Namespace) -> tuple[ForecastTask, list[str]]:
     """Build the forecast task, and notes on any stream that stood in."""
-    config = dataclasses.replace(
-        bt.load_config(args.backtest_config), min_horizon=MIN_HORIZON
-    )
+    config = bt.load_config(args.backtest_config)
     target, delays = load_target(args.data), load_delays(args.data)
     real = target.loc[target["kind"] == "real"]
     vintage = _vintage([str(v) for v in real["vintage"].unique()], args.vintage)
-    rows = real.loc[real["vintage"] == vintage]
-    delays, note = delays_for_vintage(delays, vintage)
-    daily = load_daily(args.data)
-    task = bt.make_tasks(rows, delays, config, history=real, daily=daily)[0]
+    task, note = bt.vintage_task(
+        target, delays, config, vintage, load_daily(args.data)
+    )
     notes = [note] if note else []
     if args.reference_date and as_date(args.reference_date) != (
         task.reference_date
     ):
         ref = as_date(args.reference_date)
+        weeks = dataclasses.replace(config, min_horizon=bt.TASK_MIN_HORIZON)
         task = dataclasses.replace(
             task,
             reference_date=ref,
-            target_end_dates=bt.forecast_weeks(ref, config),
+            target_end_dates=bt.forecast_weeks(ref, weeks),
         )
         notes.append(f"round {ref} forecast from the {vintage} release")
     return task, notes

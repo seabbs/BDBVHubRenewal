@@ -97,3 +97,12 @@ def test_push_copies_planned_fits_and_prunes(tmp_path: Path) -> None:
     files = sorted(p.relative_to(got).as_posix() for p in got.rglob("*.gz"))
     # The current key, the newest good older fit and another model's fit.
     assert files == ["m/o/cur.json.gz", "m/o/old2.json.gz", "n/o/other.json.gz"]
+    # The commit fetched, which `fit-store unpack` reports.
+    tip = subprocess.run(
+        ["git", "rev-parse", "FETCH_HEAD"],
+        cwd=clone,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert (got / ".commit").read_text().strip() == tip

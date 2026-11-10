@@ -6,10 +6,11 @@ most to the least complex, then `randomwalknowcast` (random walk on a
 nowcast) and `randomwalk` (the random walk baseline, built from the data
 alone). There are no refits.
 
-Stage `primary` candidates fit in parallel straight away. Stage
-`baseline` candidates need no fit.
+Stage `primary` candidates are fitted models, read from the fit store
+(`bdbvhubrenewal fit-store unpack`). Stage `baseline` candidates need no
+fit.
 
-Every fit job's timeout leaves `reserve_minutes` before the window
+The wait for the store's fits stops `reserve_minutes` before the window
 closes for the gate and the pull request, so the chain can always reach
 the fallback or random walk in time.
 """
@@ -25,7 +26,6 @@ from pathlib import Path
 from typing import Any
 
 from .common import set_outputs
-from .fit_key import fit_key, source_hash
 from .window import minutes_left, parse_now
 
 KINDS = ("main", "fallback", "randomwalk", "shadow")
@@ -48,10 +48,6 @@ class Candidate:
     model: str = ""
     """The model the leg runs; empty for the chosen model."""
 
-    def spec(self) -> dict[str, Any]:
-        """What the fit depends on besides source and data."""
-        return {"config": self.config, "sampler": self.sampler}
-
 
 @dataclass(frozen=True)
 class Timing:
@@ -67,7 +63,6 @@ class Policy:
     """The parsed policy file."""
 
     candidates: list[Candidate]
-    cache_inputs: list[str]
     convergence: dict[str, dict[str, float]]
     checks: dict[str, Any]
     ppc: dict[str, Any]
@@ -142,7 +137,6 @@ def load_policy(path: Path | str) -> Policy:
         raise ValueError("the first candidate must be the main model")
     return Policy(
         candidates=cands,
-        cache_inputs=list(raw["cache"]["inputs"]),
         convergence=raw["convergence"],
         checks=raw["checks"],
         ppc=raw["ppc"],
@@ -151,7 +145,7 @@ def load_policy(path: Path | str) -> Policy:
 
 
 def fit_timeout(policy: Policy, minutes_left: float | None) -> int:
-    """A fit job's timeout: the cap, less whatever the gate needs.
+    """How long to wait for, or make, a fit: the cap, less the gate's time.
 
     `minutes_left` is the time to the window's close (None for no
     limit). The timeout never drops below `min_fit_minutes`; a fit that
@@ -167,13 +161,10 @@ def fit_timeout(policy: Policy, minutes_left: float | None) -> int:
 def matrix(
     policy: Policy,
     stage: str,
-    root: Path,
-    hub_ref: str,
     minutes_left: float | None = None,
 ) -> list[dict[str, str]]:
-    """Matrix `include` entries for one stage, each with its cache key
-    and its job timeout in minutes."""
-    src = source_hash(root, policy.cache_inputs) if policy.cache_inputs else ""
+    """Matrix `include` entries for one stage, each with its timeout in
+    minutes (`fit_timeout`)."""
     timeout = str(fit_timeout(policy, minutes_left))
     return [
         {
@@ -183,7 +174,6 @@ def matrix(
             "label": c.label,
             "model": c.model,
             "sampler": json.dumps(c.sampler, sort_keys=True),
-            "key": fit_key(src, hub_ref, c.spec()),
             "timeout": timeout,
         }
         for c in policy.stage(stage)
@@ -211,8 +201,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--policy", type=Path, required=True)
     p.add_argument("--stage", choices=STAGES, required=True)
-    p.add_argument("--root", type=Path, default=Path())
-    p.add_argument("--hub-ref", required=True)
     p.add_argument("--only", nargs="*", default=None)
     p.add_argument(
         "--model",
@@ -229,8 +217,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     entries = matrix(
         load_policy(args.policy).for_model(args.model, args.only_model),
         args.stage,
-        args.root,
-        args.hub_ref,
         deadline_minutes(args),
     )
     if args.only is not None:
