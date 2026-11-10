@@ -2264,6 +2264,7 @@ For each gap <span class="arithmatex">\(s\)</span> and age <span class="arithmat
 With a gap of 1 only, <span class="arithmatex">\(\exp \Delta_p(x)\)</span> is baselinenowcast's chain ladder factor.
 Cells a release does not observe are skipped, not filled, and a gap and age with a zero denominator give no equation.
 The parent of a province is the country, whose counts are the sum of its provinces.
+A place takes its own or a pooled <span class="arithmatex">\(\Delta_p\)</span> by the <a href="#own-or-pooled-estimates">own-or-pooled rule</a>.
 Only onset days less than <span class="arithmatex">\(1.5 D = 63\)</span> days before the cut-off of the latest release used contribute to the sums, as in baselinenowcast's default, and a retrospective fit uses the cut-off of its own release.
 Before the sums, each day's increments between its releases go through baselinenowcast's handling of negative values, so a downward revision is set to zero and taken from the earlier increments of that day and no ratio falls below 1.
 The <a href="#nowcast">observation model</a> is fitted on the same preprocessed counts.
@@ -2316,21 +2317,18 @@ Sample <span class="arithmatex">\(i\)</span> is one draw of <span class="arithma
 <span class="arithmatex">\(\phi_{p,k}\)</span> is fitted by maximum likelihood on <span class="arithmatex">\([0.1, 1000]\)</span>, one size per <span class="arithmatex">\(k\)</span>, as baselinenowcast does.
 A week with <span class="arithmatex">\(\widehat{\text{rem}} = 0\)</span> says nothing about <span class="arithmatex">\(\phi\)</span>, so it is left out of that fit.
 The weeks in the fit of <span class="arithmatex">\(\phi_{p,k}\)</span> are the errors at <span class="arithmatex">\(k\)</span>.
-Where the estimate chosen by the <a href="#own-or-pooled-estimates">pooling rule</a> has fewer than 3 errors at <span class="arithmatex">\(k\)</span>, <span class="arithmatex">\(\phi_{p,k} \approx 2.2\)</span>, the median of epinowcast's prior <span class="arithmatex">\(1 / \sqrt{\phi} \sim \mathcal{N}^+(0, 1)\)</span>.
+Where the estimate chosen by the <a href="#own-or-pooled-estimates">pooling rule</a> has no errors at <span class="arithmatex">\(k\)</span>, <span class="arithmatex">\(\phi_{p,k} \approx 2.2\)</span>, the median of epinowcast's prior <span class="arithmatex">\(1 / \sqrt{\phi} \sim \mathcal{N}^+(0, 1)\)</span>.
 The release backtest in <a href="https://github.com/seabbs/BDBVHubRenewal/pull/152">#152</a> compared this default with Poisson removals of the reported count, new reports clipped at 0 with no preprocessing, a delay fitted without preprocessing, and baselinenowcast's proposed rounded normal and Skellam models of the signed change.
 The negative binomial options scored the same within sampling noise, and the signed models were too narrow, so the default is kept.</p>
 <h2 id="own-or-pooled-estimates">Own or pooled estimates<a class="headerlink" href="#own-or-pooled-estimates" title="Permanent link">&para;</a></h2>
 <p>The places form a hierarchy of zone, province and country.
-Each estimate is chosen as follows.</p>
+Each estimate is chosen by one rule.</p>
 <ol>
-<li><strong>Delay.</strong> At each age <span class="arithmatex">\(x\)</span>, a place uses its own <span class="arithmatex">\(\Delta_p(x)\)</span> if its denominator <span class="arithmatex">\(\sum C_{p,r}(t)\)</span> at that age, summed over the pairs, is at least 10 cases.
-   Otherwise it uses its parent's.
-   The country always uses its own.</li>
 <li><strong>Level.</strong> The place's level <span class="arithmatex">\(\ell_p\)</span> is the mean of <span class="arithmatex">\(Y_{p,o}(w)\)</span> over weeks 3 to 6 back.</li>
-<li><strong>Walk spread.</strong> A place with <span class="arithmatex">\(\ell_p \ge 10\)</span> cases a week and an own <span class="arithmatex">\(\sigma_p^2 &gt; 0\)</span> (<a href="#forecast">below</a>) uses its own <span class="arithmatex">\(\sigma_p\)</span>.</li>
-<li><strong>Size.</strong> A place with <span class="arithmatex">\(\ell_p \ge 10\)</span> and at least 3 errors at <span class="arithmatex">\(k\)</span> uses its own <span class="arithmatex">\(\phi_{p,k}\)</span>.</li>
-<li><strong>Fallback.</strong> A place that fails step 3 or 4 uses the pooled estimate of its nearest parent that meets the same rule, and otherwise the country's.
-   A pooled estimate uses together the errors and weekly changes of the parent's children with <span class="arithmatex">\(\ell \ge 10\)</span>, or the parent's own where none has.</li>
+<li><strong>Own.</strong> A place with <span class="arithmatex">\(\ell_p \ge 10\)</span> cases a week uses its own delay <span class="arithmatex">\(\Delta_p\)</span>, size <span class="arithmatex">\(\phi_{p,k}\)</span> and walk spread <span class="arithmatex">\(\sigma_p\)</span>.
+   The walk spread also needs an own <span class="arithmatex">\(\sigma_p^2 &gt; 0\)</span> (<a href="#forecast">below</a>).</li>
+<li><strong>Fallback.</strong> Otherwise it uses the pooled estimate of its nearest parent that meets the same rule, and otherwise the country's.
+   A pooled estimate uses together the pair sums, errors and weekly changes of the parent's children with <span class="arithmatex">\(\ell \ge 10\)</span>, or the parent's own where none has.</li>
 </ol>
 <h2 id="forecast">Forecast<a class="headerlink" href="#forecast" title="Permanent link">&para;</a></h2>
 <p>Both models forecast with a random walk on <span class="arithmatex">\(\log(1 + \lambda)\)</span> and Poisson counts.
@@ -2360,7 +2358,11 @@ A place whose <span class="arithmatex">\(\sigma_p^2\)</span> is 0 or below, or w
 If no parent nor the country has a variance above 0, the model gives no forecast for that origin.
 A pooled <span class="arithmatex">\(\sigma_p\)</span> uses the changes and noise of all the places in the pool together.</p>
 <p>A place with no case in the 9 weeks to <span class="arithmatex">\(c_o\)</span> stays at 0 until a new introduction, which starts its walk from a Poisson(1) count given at least 1.
-An introduction occurs each week after the latest complete week with probability <span class="arithmatex">\(q_p\)</span>, times the share of the week not yet reported, where <span class="arithmatex">\(q_p\)</span> is the share of weeks with a case after 9 weeks without one in the place and its siblings.
+An introduction occurs each week after the latest complete week with probability <span class="arithmatex">\(q_p\)</span>, times the share of the week not yet reported.
+<span class="arithmatex">\(q_p\)</span> is estimated over the 9 weeks to the place's start week, the weeks that set its walk spread, from the place and its siblings.
+A place with no case yet takes the rate of a first case: the share of weeks with a case among the weeks with no case before them.
+A place seen before takes the rate of a re-introduction: the share of weeks with a case among the weeks with an earlier case but none in the 9 weeks before.
+If the siblings have no introduction of that kind in the 9 weeks, all weeks to the start week count instead.
 Without this rule a silent place would walk from a nowcast near 0, with baselinenowcast's <span class="arithmatex">\(+1\)</span> and a pooled spread, and so forecast a few cases every week.
 Most zones and several provinces are silent at any origin, and their truth is almost always 0, so the rule keeps them at exactly 0 unless a case is likely from what their siblings show.</p>
 <h2 id="start-from-the-latest-complete-week">Start from the latest complete week<a class="headerlink" href="#start-from-the-latest-complete-week" title="Permanent link">&para;</a></h2>
