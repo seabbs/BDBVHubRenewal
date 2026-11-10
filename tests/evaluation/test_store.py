@@ -59,6 +59,58 @@ def test_code_digest_ignores_docstrings_and_comments(tmp_path: Path) -> None:
     assert store.code_digest(tmp_path) != before
 
 
+def _copy_repo(tmp_path: Path) -> Path:
+    for name in ("pyproject.toml", "uv.lock"):
+        shutil.copy(ROOT / name, tmp_path / name)
+    shutil.copytree(
+        ROOT / "src",
+        tmp_path / "src",
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )
+    return tmp_path
+
+
+def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
+    root = _copy_repo(tmp_path)
+    models = ("renewal", "renewalsp", "pprandomwalknowcast")
+
+    def digests() -> dict[str, str]:
+        return {m: store.code_digest(root, m) for m in models}
+
+    def edit(rel: str) -> None:
+        path = root / rel
+        path.write_text(path.read_text() + "\n_EDITED = 1\n")
+
+    src = "src/bdbvhubrenewal"
+    before = digests()
+    # The three renewal variants share a module, so share a key.
+    assert before["renewal"] == before["renewalsp"]
+    assert before["renewal"] != before["pprandomwalknowcast"]
+    edit(f"{src}/forecasters/pprandomwalk.py")
+    after = digests()
+    assert after["renewal"] == before["renewal"]
+    assert after["pprandomwalknowcast"] != before["pprandomwalknowcast"]
+    before = after
+    edit(f"{src}/model/observation.py")
+    after = digests()
+    assert after["renewal"] != before["renewal"]
+    before = after
+    # The store's own code refits every model.
+    edit(f"{src}/evaluation/store.py")
+    after = digests()
+    assert all(after[m] != before[m] for m in models)
+
+
+def test_fit_code_has_the_store_and_no_other_model() -> None:
+    renewal = set(store.fit_code("renewal", ROOT))
+    assert "src/bdbvhubrenewal/evaluation/store.py" in renewal
+    assert "src/bdbvhubrenewal/model/observation.py" in renewal
+    assert "src/bdbvhubrenewal/forecasters/pprandomwalk.py" not in renewal
+    pp = set(store.fit_code("pprandomwalknowcast", ROOT))
+    assert "src/bdbvhubrenewal/forecasters/renewal.py" not in pp
+    assert "src/bdbvhubrenewal/evaluation/store.py" in pp
+
+
 def test_samplers_come_from_the_policy() -> None:
     table = store.samplers(ROOT / "ci" / "policy.toml")
     assert set(table) == {"renewal", "renewalbvd", "renewalsp"}

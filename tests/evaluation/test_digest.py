@@ -157,3 +157,35 @@ def test_model_code_leaves_out_other_models() -> None:
     assert "src/bdbvhubrenewal/forecasters/renewal.py" not in pp
     # It builds on the random walk module, so that is in its key.
     assert "src/bdbvhubrenewal/forecasters/randomwalk.py" in pp
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("model", ["renewal", "renewalsp", "renewalbvd"])
+def test_fit_code_covers_what_a_stored_fit_runs(
+    model: str,
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    config: BacktestConfig,
+) -> None:
+    from bdbvhubrenewal.evaluation import store
+
+    tasks = store.origin_tasks(target, delays, config, daily)
+    task = tasks[sorted(tasks)[-1]]
+    if model == "renewalsp":
+        task = dataclasses.replace(task, locations=task.locations[:2])
+    tiny = {
+        model: {
+            "num_chains": 1,
+            "num_warmup": 4,
+            "num_samples": 4,
+            "target_accept": 0.8,
+            "max_tree_depth": 2,
+            "seed": 1,
+        }
+    }
+    out: list[store.StoredFit] = []
+    ran = _ran(lambda: out.append(store.fit(model, task, tiny, "c")))
+    assert out[0].meta["status"] == "ok", out[0].meta.get("error")
+    missing = ran - set(store.fit_code(model, ROOT))
+    assert not missing, f"{model} runs code its key leaves out: {missing}"
