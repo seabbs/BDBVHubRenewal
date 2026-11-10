@@ -113,6 +113,50 @@ DEFAULT_SAMPLER: Final[Mapping[str, Any]] = {
 }
 """NUTS settings when neither the CI nor `SAMPLER_ENV` gives them."""
 
+PROVINCE_WORKERS_ENV: Final = "BDBV_PROVINCE_WORKERS"
+"""Environment variable with the number of provinces a per-province
+variant fits at once (`province_workers`)."""
+
+MAX_PROVINCE_WORKERS: Final = 4
+"""Most provinces fitted at once by default, so a large shared host is
+not filled by one fit."""
+
+
+def _cores() -> int:
+    """Return the CPUs this process may run on."""
+    try:
+        return len(os.sched_getaffinity(0))
+    except AttributeError:  # pragma: no cover - not Linux
+        return os.cpu_count() or 1
+
+
+def province_workers(num_chains: int, n_provinces: int) -> int:
+    """Return how many provinces a per-province variant fits at once.
+
+    `PROVINCE_WORKERS_ENV` if set, else one fit per `num_chains` cores,
+    at most `MAX_PROVINCE_WORKERS`, so each chain keeps its own core.
+    Never more than the provinces.
+
+    Parameters
+    ----------
+    num_chains : int
+        Chains of each fit, run in parallel.
+    n_provinces : int
+        Provinces to fit.
+
+    Returns
+    -------
+    int
+        At least 1.
+    """
+    env = os.environ.get(PROVINCE_WORKERS_ENV)
+    if env:
+        workers = int(env)
+    else:
+        workers = min(MAX_PROVINCE_WORKERS, _cores() // max(1, num_chains))
+    return max(1, min(workers, n_provinces))
+
+
 RECENT_WEEKS: Final = 4
 """Data weeks behind the share that carries the national data gap forward."""
 
@@ -1217,7 +1261,7 @@ class RenewalModel:
                 for loc in task.locations
                 if loc not in silent
             }
-        runs = {key: self.run(sub) for key, sub in tasks.items()}
+        runs = self._run_all(tasks)
         for key, run in runs.items():
             frames.append(samples_table(tasks[key], run.data, run.draws))
             later.extend(_as_reported(tasks[key], run))
@@ -1228,6 +1272,43 @@ class RenewalModel:
             data_gap(task, samples),
             as_reported=pd.concat(later, ignore_index=True) if later else None,
         )
+
+    def _run_all(self, tasks: Mapping[str, ForecastTask]) -> dict[str, Any]:
+        """Run every task, largest first, several at once if there are cores.
+
+        Each province of a per-province variant is a separate fit, so up
+        to `province_workers` of them run at once, each in its own
+        process (spawned, so each starts JAX with its own devices). A fit
+        gives the same draws in a worker as in this process. The largest
+        provinces (most cases) start first, as they take longest.
+
+        Returns
+        -------
+        dict
+            `RenewalRun` by key, in the order of `tasks`.
+        """
+
+        def size(key: str) -> float:
+            target = tasks[key].target
+            own = target["location"].isin(tasks[key].locations)
+            return float(target.loc[own, "total"].sum())
+
+        order = sorted(tasks, key=size, reverse=True)
+        chains = int(self.sampler.get("num_chains", 1))
+        workers = province_workers(chains, len(tasks))
+        if not self.variant.per_province or workers == 1:
+            done = {key: self.run(tasks[key]) for key in order}
+        else:
+            import multiprocessing
+            from concurrent.futures import ProcessPoolExecutor
+
+            context = multiprocessing.get_context("spawn")
+            with ProcessPoolExecutor(workers, mp_context=context) as pool:
+                futures = {
+                    key: pool.submit(self.run, tasks[key]) for key in order
+                }
+                done = {key: f.result() for key, f in futures.items()}
+        return {key: done[key] for key in tasks}
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return joint sample trajectories for a task.
