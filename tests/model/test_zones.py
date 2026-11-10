@@ -134,7 +134,8 @@ def test_one_zone_per_province_is_the_province_model(
         parents={p: p for p in SIM_LOCATIONS},
     )
     assert zoned.parent_names == list(SIM_LOCATIONS)
-    p_model, z_model = build_model(province), build_zone_model(zoned)
+    p_model = build_model(province)
+    z_model = build_zone_model(zoned, anchor=False)
     _, params = _params(p_model, province)
     assert _density(z_model, zoned, params) == pytest.approx(
         _density(p_model, province, params), rel=1e-5
@@ -178,7 +179,7 @@ def test_zone_model_shares_province_parts(zone_vintage):
     assert params["logit_pi0_z"].shape[-1] == seeded_provinces - 1
     assert tr["delay_shift"]["value"].shape[-1] == 6
     # Rt has province deviations and zone deviations within provinces.
-    _, within = nested_basis(v.parents, v.seeded)
+    _, within = nested_basis(v.parents, v.seeded, v.own)
     assert params["log_rt_deviations_z"].shape[-1] == seeded_provinces - 1
     assert params["log_rt_zone_deviations_z"].shape[-1] == within.shape[1]
     assert tr["onsets_delays"]["value"].shape[-2:] == (6, 61)
@@ -208,3 +209,23 @@ def test_zone_bvd_groups_map_by_province(outbreak, sim_tables):
     )
     assert out["groups"].tolist() == [[True, True, True], [True, True, False]]
     assert MAIN.bvd is False
+
+
+def test_mean_anchored_walk_starts_at_its_mean_level():
+    from pyrenew.randomvariable import DistributionalVariable
+
+    from bdbvhubrenewal.model.zones import MeanAnchoredWalk
+
+    walk = MeanAnchoredWalk(
+        DistributionalVariable("sd", numpyro.distributions.HalfNormal(0.3)),
+        frozen=2,
+        n_fit=10,
+    )
+    with numpyro.handlers.seed(rng_seed=1):
+        x = walk.sample(14, initial_value=np.array([0.5, -1.0]), n_processes=2)
+    assert x.shape == (14, 2)
+    np.testing.assert_allclose(
+        np.asarray(x[:10]).mean(axis=0), [0.5, -1.0], atol=1e-5
+    )
+    # The fitted part still moves.
+    assert np.ptp(np.asarray(x[:10]), axis=0).min() > 0

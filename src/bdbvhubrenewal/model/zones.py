@@ -94,6 +94,15 @@ header)."""
 DECAY_KM = 300.0
 """Distance scale of the zone gravity kernel."""
 
+MIN_OWN_CASES = 30
+"""Cases a zone needs by the cut-off for an Rt deviation of its own, as
+BVDOutbreakSize's zone model gives week-to-week changes only to zones
+with at least 30 cases. Fewer cases cannot inform a zone's own Rt path."""
+
+ANCHORED = ("rt_sd", "rt_dev_sd", "rt_zone_dev_sd", "pi_sd", "pi_dev_sd")
+"""Walks anchored at their mean level over the fit axis
+(`MeanAnchoredWalk`)."""
+
 
 @dataclass
 class ZoneVintage(Vintage):
@@ -106,10 +115,15 @@ class ZoneVintage(Vintage):
     parent_names : list of str
         The provinces. `delay_counts` are by province,
         `(n_weeks, len(parent_names), dmax + 1)`.
+    own : numpy.ndarray or None
+        Boolean `(P,)`: zones with at least `MIN_OWN_CASES` cases by the
+        cut-off, which have an Rt deviation of their own within their
+        province. The rest follow their province's Rt.
     """
 
     parents: np.ndarray | None = None
     parent_names: list[str] | None = None
+    own: np.ndarray | None = None
 
 
 def parent_active(parents: np.ndarray, active: np.ndarray) -> np.ndarray:
@@ -134,7 +148,9 @@ def parent_active(parents: np.ndarray, active: np.ndarray) -> np.ndarray:
 
 
 def nested_basis(
-    parents: np.ndarray, active: np.ndarray | None = None
+    parents: np.ndarray,
+    active: np.ndarray | None = None,
+    own: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     r"""Bases of parent and within-parent deviations of nested places.
 
@@ -156,6 +172,10 @@ def nested_basis(
         Index of each place's parent, `(n,)`.
     active
         Boolean `(n,)`, or `None` for every place.
+    own
+        Boolean `(n,)`: the active places with a deviation of their own
+        within their parent. `None` is every active place. The others
+        take their parent's deviation.
 
     Returns
     -------
@@ -169,6 +189,8 @@ def nested_basis(
     keep = np.ones(n, dtype=bool) if active is None else np.asarray(active)
     par = parent_active(parents, keep)
     between = sum_to_zero_basis(par.size, par)[parents]
+    if own is not None:
+        keep = keep & np.asarray(own, dtype=bool)
     blocks = []
     for p in range(par.size):
         mine = keep & (parents == p)
@@ -223,6 +245,95 @@ def _nested_walk(
     return baseline, jnp.broadcast_to(out, (n_timepoints, bases[0].shape[0]))
 
 
+class MeanAnchoredWalk(NonCentredRandomWalk):
+    """`NonCentredRandomWalk` whose start is its mean over the fit axis.
+
+    The walk's fitted part is shifted so its mean is the starting value.
+    The data fix a walk's level, so with the start at the first knot the
+    start and the steps trade off along a ridge that NUTS crosses only
+    with very long trajectories (renewal-speed's Laplace analysis of
+    `renewal` at 2026-11-01: condition number 1.9e7, about 4300
+    leapfrog steps). Anchoring at the mean removes that ridge.
+    """
+
+    def sample(
+        self,
+        n_timepoints: int,
+        initial_value: float | ArrayLike | None = None,
+        n_processes: int = 1,
+        name_prefix: str = "rw",
+        *,
+        first_day_dow: int | None = None,
+    ) -> Array:
+        """Sample trajectories, as `NonCentredRandomWalk.sample`."""
+        from .temporal import _damped_sum
+
+        n_past = (
+            n_timepoints
+            if self.n_fit is None
+            else min(self.n_fit, n_timepoints)
+        )
+        x0 = jnp.broadcast_to(
+            jnp.asarray(0.0 if initial_value is None else initial_value),
+            (n_processes,),
+        )
+        frozen = min(self.frozen, n_past - 1)
+        n_free = n_past - 1 - frozen
+        sd = self.innovation_sd_rv()
+        phi = (
+            1.0
+            if self.half_life_rv is None
+            else 0.5 ** (1.0 / self.half_life_rv())
+        )
+        z = numpyro.sample(
+            f"{name_prefix}_z",
+            dist.Normal(0.0, 1.0).expand([n_free, n_processes]),
+        )
+        free = _damped_sum(phi, sd * z)
+        decay = phi ** jnp.arange(1, n_free + 1)[:, None]
+        past = jnp.vstack(
+            [jnp.repeat(x0[None, :], frozen + 1, axis=0), decay * x0 + free]
+        )
+        past = past - past.mean(axis=0) + x0
+        n_future = n_timepoints - n_past
+        if n_future == 0:
+            return past
+        z_future = numpyro.sample(
+            f"{name_prefix}_z_future",
+            dist.Normal(0.0, 1.0).expand([n_future, n_processes]),
+        )
+        if self.forecast_half_life is not None:
+            phi = 0.5 ** (1.0 / self.forecast_half_life)
+        decay = phi ** jnp.arange(1, n_future + 1)[:, None]
+        future = decay * past[-1] + _damped_sum(phi, sd * z_future)
+        return jnp.vstack([past, future])
+
+
+def _zone_walk(
+    name: str,
+    sd: float,
+    n_weeks: int,
+    ar: bool = False,
+    forecast_half_life: float | None = None,
+    anchor: bool = True,
+) -> TemporalProcess:
+    """`model._named_walk`, anchored at the mean for `ANCHORED` walks."""
+    from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
+
+    process = _named_walk(name, sd, n_weeks, ar, forecast_half_life)
+    if not anchor or name not in ANCHORED:
+        return process
+    inner = process.inner
+    anchored = MeanAnchoredWalk(
+        inner.innovation_sd_rv,
+        frozen=inner.frozen,
+        n_fit=inner.n_fit,
+        half_life_rv=inner.half_life_rv,
+        forecast_half_life=inner.forecast_half_life,
+    )
+    return WeeklyTemporalProcess(anchored, start_dow=SUNDAY)
+
+
 def zone_pooled_walk(
     baseline_process: TemporalProcess,
     deviation_process: TemporalProcess,
@@ -233,8 +344,11 @@ def zone_pooled_walk(
     name_prefix: str,
     first_day_dow: int | None = None,
     active: np.ndarray | None = None,
+    own: np.ndarray | None = None,
 ) -> tuple[ArrayLike, ArrayLike]:
     """`pooled.pooled_walk` with province and zone deviations.
+
+    Zones outside `own` have no deviation of their own (`nested_basis`).
 
     Returns
     -------
@@ -252,7 +366,7 @@ def zone_pooled_walk(
         n_timepoints,
         name_prefix,
         first_day_dow,
-        nested_basis(parents, active),
+        nested_basis(parents, active, own),
     )
 
 
@@ -362,6 +476,7 @@ class ZoneInfections(MetapopulationInfections):
         *,
         parents: ArrayLike,
         place_deviation_process: TemporalProcess,
+        own: ArrayLike | None = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the zone infections process.
@@ -372,12 +487,16 @@ class ZoneInfections(MetapopulationInfections):
             Index of each zone's province.
         place_deviation_process
             Temporal process of the zone deviations.
+        own
+            Boolean, one per zone: zones with an Rt deviation of their own
+            within their province. `None` is every seeded zone.
         **kwargs
             Passed to `MetapopulationInfections`.
         """
         super().__init__(**kwargs)
         self.parents = np.asarray(parents, dtype=int)
         self.place_deviation_process = place_deviation_process
+        self.own = None if own is None else np.asarray(own, dtype=bool)
 
     def sample(
         self,
@@ -405,6 +524,7 @@ class ZoneInfections(MetapopulationInfections):
             "log_rt",
             first_day_dow,
             active=self.seeded,
+            own=self.own,
         )
         rt = jnp.exp(log_rt)
         gen_int = self.gen_int_rv()
@@ -723,11 +843,12 @@ def zone_vintage_from_tables(
         release_pairs=release_pairs,
         parents=np.array([parent_names.index(parent_of[p]) for p in names]),
         parent_names=parent_names,
+        own=totals.sum(axis=0) >= MIN_OWN_CASES,
     )
 
 
 def build_zone_model(
-    data: ZoneVintage, config: ModelConfig = MAIN
+    data: ZoneVintage, config: ModelConfig = MAIN, anchor: bool = True
 ) -> MultiSignalModel:
     """Build the zone model for one vintage, as `model.build_model`.
 
@@ -737,6 +858,10 @@ def build_zone_model(
         The vintage.
     config : ModelConfig
         Structural choices.
+    anchor : bool
+        Anchor the `ANCHORED` walks at their mean (`MeanAnchoredWalk`).
+        Without it, and with one zone per province, this is the province
+        model.
 
     Returns
     -------
@@ -748,9 +873,19 @@ def build_zone_model(
     # are barely informed (only their zero counts, through importation),
     # so they are not sampled.
     active = data.seeded
+
     # With zones as places, the delay and the missing-onset share are by
     # province (the delay files list provinces only) and each zone takes
     # its province's; with provinces as places they are by place.
+    def _zone_walk_a(
+        name: str,
+        sd: float,
+        n_weeks: int,
+        ar: bool = False,
+        forecast_half_life: float | None = None,
+    ) -> TemporalProcess:
+        return _zone_walk(name, sd, n_weeks, ar, forecast_half_life, anchor)
+
     if data.parents is None:
         raise ValueError("A zone model needs each zone's province.")
     parents = data.parents
@@ -805,13 +940,13 @@ def build_zone_model(
         log_rt_time_0_rv=_pooled(
             "log_rt0", n_prov, 0.0, 0.5, 0.3, active=active
         ),
-        baseline_rt_process=_named_walk(
+        baseline_rt_process=_zone_walk_a(
             "rt_sd",
             0.2,
             fit_weeks(data, config),
             forecast_half_life=FORECAST_RT_HALF_LIFE,
         ),
-        subpop_rt_deviation_process=_named_walk(
+        subpop_rt_deviation_process=_zone_walk_a(
             "rt_dev_sd", 0.1, fit_weeks(data, config), ar=True
         ),
         mixing_rv=mixing,
@@ -819,9 +954,10 @@ def build_zone_model(
         seed_days=data.seed_days,
         seeded=active,
         parents=parents,
-        place_deviation_process=_named_walk(
+        place_deviation_process=_zone_walk_a(
             "rt_zone_dev_sd", 0.1, fit_weeks(data, config), ar=True
         ),
+        own=data.own,
         rt_observation=RtPseudoObservation(
             "bvd", alpha=config.bvd_alpha, **data.bvd
         )
@@ -836,7 +972,7 @@ def build_zone_model(
         name="ascertainment",
         rate_rvs={"onsets": DeterministicVariable("alpha0", ALPHA0)},
         temporal_processes={
-            "onsets": _named_walk("alpha_sd", 0.03, fit_weeks(data, config))
+            "onsets": _zone_walk_a("alpha_sd", 0.03, fit_weeks(data, config))
         },
     )
     builder.add_ascertainment(ascertainment)
@@ -871,8 +1007,8 @@ def build_zone_model(
                 centred=False,
                 active=group_active,
             ),
-            _named_walk("pi_sd", 0.3, fit_weeks(data, config)),
-            _named_walk("pi_dev_sd", 0.1, fit_weeks(data, config)),
+            _zone_walk_a("pi_sd", 0.3, fit_weeks(data, config)),
+            _zone_walk_a("pi_dev_sd", 0.1, fit_weeks(data, config)),
             active=group_active,
         )
 
@@ -886,7 +1022,7 @@ def build_zone_model(
             NonCentredRandomWalk(
                 DistributionalVariable("delay_smooth_sd", dist.HalfNormal(0.4))
             ),
-            _named_walk("delay_sd", 0.15, fit_weeks(data, config)),
+            _zone_walk_a("delay_sd", 0.15, fit_weeks(data, config)),
             # Partial pooling of each seeded province's delay towards the
             # shared delay, in level and in drift over time. Never-seeded
             # provinces have no delay data, so they take the shared delay.
@@ -898,7 +1034,7 @@ def build_zone_model(
                 centred=False,
                 active=group_active,
             ),
-            _named_walk("delay_dev_sd", 0.1, fit_weeks(data, config)),
+            _zone_walk_a("delay_dev_sd", 0.1, fit_weeks(data, config)),
             active=group_active,
         )
     builder.add_observation(
