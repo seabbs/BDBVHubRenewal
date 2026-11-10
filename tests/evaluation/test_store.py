@@ -222,9 +222,9 @@ def test_the_submission_task_has_the_stored_key(
     tasks = store.origin_tasks(target, delays, config, daily)
     sampler = store.samplers()
     models = {m: store.build_model(m, sampler) for m in sampler}
-    # Every real vintage, including 2026-08-18, which has no delays of
-    # its own.
-    for vintage in real_vintages(target):
+    # Every origin the store fits.
+    assert tasks
+    for vintage in tasks:
         args = argparse.Namespace(
             vintage=vintage,
             reference_date=None,
