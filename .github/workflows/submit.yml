@@ -12,8 +12,8 @@ name: Submit to the BDBV hub
 # the same code and data, so the submission is the fit the docs show.
 # `await-fits` starts Fit store when the round's fits are missing and
 # waits for them, at most the [timing] fit timeout. Only Fit store fits,
-# so a release is fitted once. A round forecast from an earlier release
-# has weeks no stored fit holds, so only then does `fit` fit here.
+# so a release is fitted once. A stored fit forecasts one week past its
+# own round, so a round with no new release reads last week's fit.
 #
 # DRY_RUN is true unless the repo variable DRY_RUN is `false` or a manual
 # run says so. A dry run does everything except push and open the PR,
@@ -214,7 +214,6 @@ jobs:
       matrix: ${{ steps.matrix.outputs.matrix }}
       renewal: ${{ steps.tracks.outputs.renewal }}
       baseline: ${{ steps.tracks.outputs.baseline }}
-      fit_source: ${{ steps.source.outputs.fit_source }}
       models: ${{ steps.source.outputs.models }}
       wait: ${{ steps.source.outputs.wait }}
     env:
@@ -251,34 +250,20 @@ jobs:
           uv run --project "$CI_DIR" python -m submission_ci.policy \
             --policy "$CI_DIR/policy.toml" --stage primary \
             --model "$MODEL" $(deadline_args)
-      # The fit store fits each origin's own round. A round forecast from
-      # an earlier release (the stale fallback) has weeks no stored fit
-      # holds, so it is fitted in this run.
-      - name: Decide where the fits come from
+      # The fitted candidates' models and how long to wait for them.
+      - name: List the stored fits to read
         id: source
         if: steps.tracks.outputs.renewal == 'true'
         env:
           MATRIX: ${{ steps.matrix.outputs.matrix }}
         run: |
-          own=$(uv run python -c 'import sys
-          from bdbvhubrenewal.data.dates import reference_date_for_vintage
-          print(reference_date_for_vintage(sys.argv[1]))' "$AS_OF")
-          from=store
-          [ "$own" = "$REFERENCE_DATE" ] || from=fit
           models=$(jq -r '[.include[].model | select(. != "")] | unique
             | join(" ")' <<< "$MATRIX")
           wait=$(jq -r '.include[0].timeout // "350"' <<< "$MATRIX")
           {
-            echo "fit_source=$from"
             echo "models=$models"
             echo "wait=$wait"
           } >> "$GITHUB_OUTPUT"
-          if [ "$from" = store ]; then
-            echo "Fitted candidates: read from $FIT_STORE_BRANCH."
-          else
-            echo "Fitted candidates: fitted in this run, as round" \
-              "$REFERENCE_DATE is forecast from the $AS_OF release."
-          fi >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: inputs
@@ -294,9 +279,7 @@ jobs:
   await-fits:
     name: Wait for the fit store
     needs: [detect, prepare]
-    if: >-
-      needs.prepare.outputs.renewal == 'true'
-      && needs.prepare.outputs.fit_source == 'store'
+    if: needs.prepare.outputs.renewal == 'true'
     runs-on: ubuntu-latest
     # The wait itself stops at the [timing] fit timeout (WAIT_MINUTES).
     timeout-minutes: 360
@@ -341,7 +324,6 @@ jobs:
       matrix: ${{ needs.prepare.outputs.matrix }}
       reference_date: ${{ needs.detect.outputs.reference_date }}
       expected_locations: ${{ vars.EXPECTED_LOCATIONS }}
-      fit_source: ${{ needs.prepare.outputs.fit_source }}
       store_branch: ${{ inputs.store_branch || 'fit-store' }}
 
   gate:

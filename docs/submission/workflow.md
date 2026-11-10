@@ -38,10 +38,10 @@ The submission does not fit a round the fit store can hold.
 Each fitted candidate reads the stored fit of the same code and data (`fit-store unpack`), so the submitted forecast is the one the docs and the backtest show.
 The Fit store workflow fits a new release's origin first, and runs one at a time, so a release is fitted once.
 A candidate the store lacks when the wait ends, or whose stored fit failed, is ruled out.
-Only a round forecast from an earlier release, which no stored fit covers, is fitted in the submission.
+A stored fit forecasts one week past its own round, so a round with no new release is forecast from last week's stored fit.
 Every fit is 2 chains of 500 warm-up, run in parallel, with no refit.
 Each takes 750 draws, `renewalbvd` at target acceptance 0.95 and the others at 0.9.
-The wait for the store, and any fit in the submission, stop against the window's close (`[timing]` in `ci/policy.toml`).
+The wait for the store stops against the window's close (`[timing]` in `ci/policy.toml`).
 
 ## Checks
 

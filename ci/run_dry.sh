@@ -64,8 +64,6 @@ SCENARIOS=(
   # A candidate the fit store lacks, or holds as failed, is ruled out.
   "storemissing|bvd=missing|renewalsp||Fit: read from the fit store, the \`renewalsp\` fit"
   "storefailed|bvd=storefailed,renewalsp=missing|main"
-  # A round the store cannot hold (an earlier release) is fitted here.
-  "stale|bvd=pass|bvd|FIT_SOURCE=fit|Fit: made in this run"
   # A chosen model further down the chain starts it there; the
   # candidates before it are shadows.
   "nospatial|bvd=pass|renewalsp|MODEL=renewalsp|Model: single-patch province renewal models"

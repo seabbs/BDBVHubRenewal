@@ -10,8 +10,7 @@ Stage `primary` candidates are fitted models, read from the fit store
 (`bdbvhubrenewal fit-store unpack`). Stage `baseline` candidates need no
 fit.
 
-The wait for the store's fits, and a fit made in the submission when the
-store cannot hold the round, stop `reserve_minutes` before the window
+The wait for the store's fits stops `reserve_minutes` before the window
 closes for the gate and the pull request, so the chain can always reach
 the fallback or random walk in time.
 """

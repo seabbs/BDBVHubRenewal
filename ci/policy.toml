@@ -8,7 +8,7 @@
 # There are no refits: a candidate past the convergence thresholds is
 # ruled out and the chain moves on. Each fitted candidate reads the fit
 # store's fit of the same code and data (fit-store.yml); the submission
-# fits only a round the store cannot hold.
+# never fits.
 
 # Minutes the chain plans with. On hosted runners (4 vCPU), at the
 # 2026-11-01 vintage with the two chains of each fit in parallel,

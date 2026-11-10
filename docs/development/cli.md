@@ -69,8 +69,8 @@ The renewal variants use the sampler table of the submission candidate that runs
 `pprandomwalknowcast` uses its own.
 A model code or sampler change refits every origin.
 A new hub release adds one fit per model.
-The task at each origin is the submission's (`backtest.vintage_task`): weeks from 6 before the reference date, and the latest earlier delays for a release with none of its own.
-The backtest loads the weeks from `[forecast] min_horizon`.
+The task at each origin is the submission's (`backtest.vintage_task`): weeks from 6 before the reference date to one week past `[forecast] max_horizon`, so the next round can be forecast from the same fit when no new release comes, and the latest earlier delays for a release with none of its own.
+The backtest loads the weeks from `[forecast] min_horizon` to `max_horizon`.
 A submission candidate's fit also holds the fit directory the submission reads (samples, the unassigned national part, `ppc.json` and `diagnostics.json`), and the submission forecasts from it (`fit-store unpack`).
 
 The workflow runs on pushes to `main` that change these inputs, every 6 hours for new hub releases, and when the submission finds a round's fits missing.

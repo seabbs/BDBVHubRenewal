@@ -4,8 +4,8 @@
 #   CAND_ID, CAND_KIND, CAND_CONFIG, CAND_LABEL, CAND_SAMPLER (JSON)
 #   CAND_MODEL          the model to run (default $MODEL, the chosen one)
 #   FIT_SOURCE=store    read the fit from the fit store (`fit-store
-#                       unpack`), never fit; `fit` (the default) fits here,
-#                       for a round the store cannot hold (stale fallback)
+#                       unpack`), never fit, as the workflow does; `fit`
+#                       (the default) fits here, for a local run
 #   STORE               the fit store checkout (default output/fit-store)
 #
 # A bad fit or a failed check does not fail this step: the verdicts are

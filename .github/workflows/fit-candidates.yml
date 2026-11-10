@@ -7,9 +7,7 @@ name: Fit candidates
 # Each leg reads the fit store's fit of the same code and data
 # (`bdbvhubrenewal fit-store unpack`, keyed as fit-store.yml stores it),
 # so the submitted forecast is the fit the docs and the backtest show.
-# A candidate the store lacks is ruled out. Only a round the store
-# cannot hold (`fit_source: fit`, a round forecast from an earlier
-# release) is fitted here.
+# A candidate the store lacks is ruled out. Nothing is fitted here.
 
 on:
   workflow_call:
@@ -24,11 +22,6 @@ on:
       expected_locations:
         type: string
         default: ''
-      fit_source:
-        description: >-
-          `store` to read each fit from the fit store, `fit` to fit here
-        type: string
-        default: store
       store_branch:
         description: The fit store branch to read
         type: string
@@ -51,13 +44,9 @@ jobs:
   fit:
     name: Candidate ${{ matrix.id }}
     # Reading a stored fit needs no fitting runner.
-    runs-on: >-
-      ${{ inputs.fit_source == 'store' && 'ubuntu-latest'
-      || vars.FIT_RUNNER || 'ubuntu-latest' }}
-    # From the matrix: under GitHub's 360-minute cap for a hosted job, and
-    # short enough to leave the gate time before the window closes
-    # (ci/policy.toml [timing]). A fit that needs longer belongs on a
-    # larger or self-hosted runner (FIT_RUNNER); see SETUP.md.
+    runs-on: ubuntu-latest
+    # From the matrix: leaves the gate time before the window closes
+    # (ci/policy.toml [timing]).
     timeout-minutes: ${{ fromJSON(matrix.timeout || '350') }}
     strategy:
       fail-fast: false
@@ -71,7 +60,6 @@ jobs:
           name: inputs
           path: ${{ env.WORK }}
       - name: Fetch the fit store
-        if: inputs.fit_source == 'store'
         env:
           FIT_STORE_BRANCH: ${{ inputs.store_branch }}
         run: scripts/fit-store.sh fetch output/fit-store
@@ -83,7 +71,7 @@ jobs:
           CAND_LABEL: ${{ matrix.label }}
           CAND_MODEL: ${{ matrix.model }}
           CAND_SAMPLER: ${{ matrix.sampler }}
-          FIT_SOURCE: ${{ inputs.fit_source }}
+          FIT_SOURCE: store
           STORE: output/fit-store
           EXPECTED_LOCATIONS: ${{ inputs.expected_locations }}
         run: ci/steps/candidate.sh

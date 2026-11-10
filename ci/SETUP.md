@@ -12,7 +12,7 @@ It is safe to install as is, because `DRY_RUN` is on until you turn it off.
 | `detect` | Runs on schedule from Saturday 23:00 UTC (Sunday 00:00 Kinshasa) to Tuesday. It compares the hub's newest data commit and `as_of` with the ledger and stops unless there is new data for the open round. |
 | `prepare` | Pins the hub data at one commit and builds the random walk candidate, which is also the baseline for the checks. |
 | `await-fits` | Waits for the fit store (`fit-store` branch) to hold the renewal candidates' fits at the round's origin, keyed on the code and data as Fit store keys them. If any is missing it starts the Fit store workflow and waits, at most the `[timing]` fit timeout. |
-| `fit` | A matrix over the renewal candidates (`bvd`, `renewalsp` and `main`), in parallel. Each reads its stored fit (`fit-store unpack`); one the store lacks is ruled out. Only a round forecast from an earlier release is fitted here. |
+| `fit` | A matrix over the renewal candidates (`bvd`, `renewalsp` and `main`), in parallel. Each reads its stored fit (`fit-store unpack`); one the store lacks is ruled out. A stored fit forecasts one week past its own round, so a round with no new release reads last week's fit. |
 | `gate` | Walks the chain `bvd` → `renewalsp` → `main` → `randomwalknowcast` → `randomwalk`. A candidate is ruled out if its fit is past the convergence failure thresholds, its forecast is far from the recent data, or its file is invalid (format checks or hubValidations). |
 | `submit` | Publishes the plot, builds the PR body, and opens or updates the PR. A dry run prints the body instead. |
 | `record` | Live runs only. Writes the outcome to `state.json` on the `submission-ledger` branch and archives the round's files there. |

@@ -303,8 +303,8 @@ def fit_line(provenance: Mapping[str, Any]) -> str:
     """Where the submitted model's fit came from, or "" for no fit.
 
     A fitted candidate reads the fit store's fit of the same code and
-    data (`run.json` `store`, from `fit-store unpack`); it is fitted in
-    the run only for a round the store cannot hold.
+    data (`run.json` `store`, from `fit-store unpack`). A fit made in the
+    run (`candidate.sh` with `FIT_SOURCE=fit`, a local run) says so.
     """
     run = provenance.get("run") or {}
     if "store" not in run or run.get("kind") == "randomwalk":
