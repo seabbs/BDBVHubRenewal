@@ -8,29 +8,29 @@ How the models are built in code and sampled is on the [Implementation](implemen
 
 ## Overview
 
-`renewal` fits the provinces together, pools them and links them by importation.
-`renewalsp` fits the province model to each province on its own, with no pooling or importation.
+`renewal` fits the health zones with recent cases together, nests them in their provinces, pools them and links them by importation.
+`renewalsp` fits the place model to each province on its own, with no pooling or importation.
 `renewalbvd` is `renewal` with a down-weighted likelihood term on the Rt of BVDOutbreakSize.
 `seabbs-renewal` submits the first of `renewalbvd`, `renewalsp`, `renewal`, `randomwalknowcast` and `randomwalk`, in that order, to pass its checks ([Submission workflow](../submission/workflow.md#renewal-chain)).
-The sections below give the model of each province, then what `renewal` adds to pool and link the provinces, then how `renewalsp` and `renewalbvd` differ.
+The sections below give the model of each place, then what `renewal` adds to pool and link the zones, then how `renewalsp` and `renewalbvd` differ.
 Each gives only the maths it adds.
 Every time-varying part is a weekly random walk or AR(1), so it stays near constant unless the data show change.
 
 ```mermaid
 flowchart TD
-    PM["<b>Province model</b><br/>Rt walk<br/>generation interval<br/>onsets and delay<br/>missing onsets<br/>three data streams"]
-    RN["<b>renewal</b><br/>provinces fitted together<br/>+ pooled log R walk<br/>+ sum-to-zero AR(1)<br/>province deviations<br/>+ importation<br/>+ share at risk<br/>+ delay pooled<br/>by province<br/>+ shared ascertainment"]
+    PM["<b>Place model</b><br/>Rt walk<br/>generation interval<br/>onsets and delay<br/>missing onsets<br/>three data streams"]
+    RN["<b>renewal</b><br/>zones with recent cases<br/>fitted together<br/>+ pooled log R walk<br/>+ province and zone<br/>sum-to-zero AR(1) deviations<br/>+ importation between zones<br/>+ share at risk<br/>+ delay pooled by province<br/>+ silent zones by introductions<br/>provinces are zone sums"]
     BV["<b>renewalbvd</b><br/>+ BVDOutbreakSize Rt,<br/>down-weighted (ζ = 0.5)"]
     SP["<b>renewalsp</b><br/>each province fitted alone<br/>no pooling or importation<br/>no share at risk"]
 
-    PM -- "pool the provinces" --> RN
+    PM -- "nest zones in provinces" --> RN
     RN -- "add external Rt" --> BV
     PM -- "fit each province alone" --> SP
 ```
 
-## Province model { #province-model }
+## Place model { #province-model }
 
-Each province $p$ the release lists has the model below.
+Each place $p$ has the model below: a province in `renewalsp`, a health zone in `renewal` and `renewalbvd`.
 
 ```mermaid
 flowchart TD
@@ -70,7 +70,7 @@ flowchart TD
 
 ### Time axis
 
-The data weeks start one week before weekly onsets, summed over the modelled provinces, first reach 5, or their peak if lower.
+The data weeks start one week before weekly onsets, summed over the modelled places, first reach 5, or their peak if lower.
 The data weeks end with the week that holds $T$, the release's cut-off ([Data](data.md#vintages)).
 The model axis starts 42 days (6 weeks) earlier, the length of the generation interval, for seeding.
 Every weekly walk is held at its starting value over the 6 seeding weeks and the first data week.
@@ -108,7 +108,7 @@ $$
 \operatorname{logit} \alpha(s) = \operatorname{logit} \alpha_0 + a(s),
 $$
 
-with $N_p$ the province population, $\alpha_0 = 0.6$ fixed and $a$ a weekly random walk from zero with step SD $\mathcal{N}^+(0, 0.03^2)$.
+with $N_p$ the place population, $\alpha_0 = 0.6$ fixed and $a$ a weekly random walk from zero with step SD $\mathcal{N}^+(0, 0.03^2)$.
 $\eta$ is a log-normal incubation period for Bundibugyo virus disease.
 Its mean $\mu_\eta \sim \mathcal{N}(6.3, 0.54^2)$ and SD $\sigma_\eta \sim \mathcal{N}(3.5, 0.8^2)$, both truncated below at 1 day, have [BVDOutbreakSize's priors](https://github.com/epiforecasts/BVDOutbreakSize/blob/main/src/models/priors.jl).
 The mean prior reproduces the 95% CI of 5.2 to 7.3 days from the 2007 Uganda outbreak[^macneil].
@@ -180,81 +180,110 @@ The hub fits the delays as exact for releases up to 2026-10-24 and as double int
 
 The random walks carry $\alpha$ and $f$ to the forecast horizon, $m$ keeps its last value, and each of 100 trajectories is one posterior draw.
 Past the fit axis the walk of $\log R$ reverts towards 0 with a fixed half-life of 2 weeks, $\log R(t) = 2^{-1/2} \log R(t - 1) + \sigma_R z(t)$, so it does not compound growth over the horizon.
-In `renewal` this is the pooled trend, and the province deviations keep their AR(1) ([below](#pooled-reproduction-number)).
+In `renewal` this is the pooled trend, and the province and zone deviations keep their AR(1) ([below](#pooled-reproduction-number)).
 The reversion leaves the fit unchanged.
 A trajectory is the final known plus final imputed counts.
 Final known counts are those reported by the cut-off plus a negative binomial draw of those reported later, as in epinowcast.
 Final imputed counts are a negative binomial draw centred on the current imputed count plus those expected later, since the hub re-imputes each vintage.
+In `renewal` a province's trajectory is the sum of its zones' trajectories of the same draw ([below](#provinces-and-the-country)).
 The national trajectory is the sum of the provinces plus an unassigned component.
 The component is $\max\{0, Y_{CD}(w) - \sum_p Y_p(w)\}$ in data weeks and $\rho \sum_p \tilde y_{p,i}(w)$ after, with $\tilde y_{p,i}$ trajectory $i$ of province $p$.
 $\rho$ is the component's share of the provinces' total over the last 4 data weeks.
 
-## Partially pooled (`renewal`) { #partially-pooled }
+## Zone model (`renewal`) { #partially-pooled }
 
-`renewal` fits every province the release lists in one model, on the axis set by their summed onsets.
-The provinces share the trend $\log R(t)$ and the deviation SD $\sigma_\delta$, half-life $t_{1/2}$ and start spread $\sigma_v$.
-They also share ascertainment $\alpha$, the publication lag, the trend $\bar m$ of the missing-onset share, the share at risk $\nu$ and the importation share $\varepsilon$.
-Each seeded province has its own deviations $\delta_p$ and $\omega_p$ and its own seed.
-Provinces are linked by importation through $W$.
-Each seeded province has its own delay, pooled towards the shared delay.
-Leaving a province out removes its known and imputed counts and its delay counts but keeps it in the latent process.
+`renewal` fits the health zones in one model, with each zone a place, on the axis set by their summed onsets.
+It fits the zones with a case in the random walks' walk window, about 55 of the hub's 519 zones at 2026-11-08.
+The rest are silent and take the introduction layer of `randomwalknowcast` ([below](#silent-zones)).
+The fitted zones share the trend $\log R(t)$, ascertainment $\alpha$, the publication lag, the trend $\bar m$ of the missing-onset share, the share at risk $\nu$ and the importation share $\varepsilon$.
+Each province has its own Rt deviation $\delta_p$, delay and missing-onset deviation $\omega_p$, which its zones share.
+Each zone has its own Rt deviation $\epsilon_z$ within its province and its own seed.
+Zones are linked by importation through $W$.
+Leaving a province out removes the known and imputed counts of its zones and its delay counts but keeps its zones in the latent process.
 
 ```mermaid
 flowchart TD
     LR["Pooled log R(t)<br/>weekly random walk"]
     DV["Province deviations δ<sub>p</sub>(t)<br/>sum-to-zero AR(1)"]
-    RP["log R<sub>p</sub>(t) = log R(t) + δ<sub>p</sub>(t)"]
-    K["Gravity kernel<br/>K<sub>qp</sub> ∝ N<sub>p</sub> exp(−D<sub>qp</sub> / 300 km)"]
+    ZV["Zone deviations ε<sub>z</sub>(t)<br/>sum-to-zero AR(1)<br/>within each province"]
+    RP["log R<sub>z</sub>(t) = log R(t) + δ<sub>p(z)</sub>(t) + ε<sub>z</sub>(t)"]
+    K["Gravity kernel<br/>K<sub>qz</sub> ∝ N<sub>z</sub> exp(−D<sub>qz</sub> / 300 km)"]
     W["Importation<br/>W = (1 − ε) I + ε diag(1/N) K<sup>T</sup> diag(N)"]
     CORE["<b>Renewal core</b><br/>see above<br/>with a share at risk ν"]
+    SUM["Province = sum of its zones<br/>country = provinces + unassigned"]
 
     LR --> RP
     DV --> RP
+    ZV --> RP
     K --> W
     RP --> CORE
     W --> CORE
+    CORE --> SUM
 ```
 
 ### Pooled reproduction number
 
 $$
-\log R_p(t) = \log R(t) + \delta_p(t).
+\log R_z(t) = \log R(t) + \delta_{p(z)}(t) + \epsilon_z(t),
 $$
 
-The pooled trend $\log R(t)$ is the unweighted mean of $\log R_p(t)$, not the national Rt, and is the walk of the province model.
-The province deviations sum to zero.
-They are $\delta_p(t) = \sum_j Q_{pj}\, \xi_j(t)$, with $Q$ an orthonormal basis of the deviations that sum to zero over the $P_s$ seeded provinces and are 0 for the rest, and $P_s - 1$ weekly AR(1) processes $\xi_j$ that decay towards 0, the pooled trend,
+with $p(z)$ the province of zone $z$.
+The pooled trend $\log R(t)$ is the unweighted mean of $\log R_z(t)$, not the national Rt, and is the walk of the place model.
+The province deviations sum to zero over the provinces and the zone deviations sum to zero within each province, so $\delta_p$ is the mean deviation of province $p$'s zones.
+They are
 
 $$
-\xi_j(t) = \kappa\, \xi_j(t - 1) + \sigma_\delta z_j(t), \qquad \kappa = 2^{-1/t_{1/2}}, \qquad t_{1/2} \sim \text{LogNormal}(\log 6, 0.6^2)\ \text{weeks}, \qquad \sigma_\delta \sim \mathcal{N}^+(0, 0.1^2).
+\delta_p(t) = \sum_j Q_{pj}\, \xi_j(t),
+\qquad
+\epsilon_z(t) = \sum_k B_{zk}\, \eta_k(t).
 $$
 
-The shared $\sigma_\delta$ and $t_{1/2}$ pool the provinces.
-The starting offsets are $\xi_j(0) = v_j$, with $v_j \sim \mathcal{N}(0, \sigma_v^2)$ and $\sigma_v \sim \mathcal{N}^+(0, 0.3^2)$, so $\delta_p(0) = \sum_j Q_{pj} v_j$.
+$Q$ is an orthonormal basis of the deviations that sum to zero over the $P_s$ provinces with a fitted zone.
+$B$ is block diagonal, one block per province, each an orthonormal basis of the deviations that sum to zero over that province's fitted zones.
+A province with one fitted zone has no block, and its zone takes the province deviation.
+The $P_s - 1$ coordinates $\xi_j$ and the $\sum_p (Z_p - 1)$ coordinates $\eta_k$ are weekly AR(1) processes that decay towards 0,
+
+$$
+\xi_j(t) = \kappa\, \xi_j(t - 1) + \sigma_\delta z_j(t),
+\qquad
+\eta_k(t) = \kappa_\epsilon\, \eta_k(t - 1) + \sigma_\epsilon z_k(t),
+$$
+
+with $\kappa = 2^{-1/t_{1/2}}$, $t_{1/2} \sim \text{LogNormal}(\log 6, 0.6^2)$ weeks and $\sigma_\delta \sim \mathcal{N}^+(0, 0.1^2)$, and the same priors for the zone level's own $\kappa_\epsilon$ and $\sigma_\epsilon$.
+The shared spreads and half-lives pool the zones within provinces and the provinces within the country.
+The starting values are $\log R_z(0) = \log R(0) + v_z$, with $v$ summing to zero over the zones, $v \sim \mathcal{N}(0, \sigma_v^2)$ on its basis and $\sigma_v \sim \mathcal{N}^+(0, 0.3^2)$.
+The province part of $v$ starts $\xi$ and the rest starts $\eta$.
+With one zone per province the model is the province model, which a test checks.
+
+Because zones share $\log R(t)$, $\delta_p(t)$, the delay, ascertainment and the publication lag within each draw, their trajectories move together where the data say they do.
+Summing zone trajectories within a draw keeps that correlation, so province intervals are not the narrow sum of independent zone noise.
 
 ### Importation and depletion
 
-The province model's renewal gains importation and a share at risk:
+The place model's renewal gains importation and a share at risk:
 
 $$
-\Phi_p(t) = R_p(t) \sum_q W_{pq} \sum_{j \ge 1} x_q(t - j)\, g(j),
+\Phi_z(t) = R_z(t) \sum_q W_{zq} \sum_{j \ge 1} x_q(t - j)\, g(j),
 \qquad
-x_p(t) = S_p(t)\big\{1 - e^{-\Phi_p(t)/\nu}\big\},
+x_z(t) = S_z(t)\big\{1 - e^{-\Phi_z(t)/\nu}\big\},
 \qquad
-S_p(t + 1) = S_p(t)\, e^{-\Phi_p(t)/\nu}.
+S_z(t + 1) = S_z(t)\, e^{-\Phi_z(t)/\nu}.
 $$
 
-- $W = (1 - \varepsilon) I + \varepsilon\, \mathrm{diag}(1/N) K^\top \mathrm{diag}(N)$ mixes transmission between provinces, with $\varepsilon \sim \text{Beta}(1, 100)$.
-- $K$ is a row-normalised gravity kernel, $K_{qp} \propto N_p e^{-D_{qp}/300\,\text{km}}$ for $q \ne p$, with $D$ the great-circle distance between population-weighted province centres.
+- $W = (1 - \varepsilon) I + \varepsilon\, \mathrm{diag}(1/N) K^\top \mathrm{diag}(N)$ mixes transmission between zones, with $\varepsilon \sim \text{Beta}(1, 100)$.
+- $K$ is a row-normalised gravity kernel, $K_{qz} \propto N_z e^{-D_{qz}/300\,\text{km}}$ for $q \ne z$, with $D$ the great-circle distance between zone centroids.
+- $N_z$ is the zone's WorldPop 2025 count and its centroid is that of its largest polygon, both from the map behind the province centres ([`zone_centres.csv`](https://github.com/seabbs/BDBVHubRenewal/blob/main/src/bdbvhubrenewal/data/zone_centres.csv)).
+  The 19 hub zones the map lacks, none with a case, take their province's centre and mean zone population.
 - $\nu \sim \text{LogNormal}(\log 0.05, 0.75^2)$ is the share at risk.
-  $S_p$ starts at $\nu$ less the seed, so infections never exceed $\nu N_p$.
+  $S_z$ starts at $\nu$ less the seed, so infections never exceed $\nu N_z$.
 
-Provinces with cases in the first data week are seeded at the start.
-Later provinces start at $10^{-6}$ of that level and add $I_{0,p}$ to $\Phi_p(t)$ each day for 7 days.
-These 7 days start 5 days before the province's first case week.
+Zones with cases in the first data week are seeded at the start.
+Later zones start at $10^{-6}$ of that level and add $I_{0,z}$ to $\Phi_z(t)$ each day for 7 days.
+These 7 days start 5 days before the zone's first case week.
 
 ### Province delays
 
+The delay files list provinces only, so the delay is by province and each zone takes its province's.
 Each province's delay hazard adds a sum-to-zero offset $a_p$ and a sum-to-zero weekly walk $g_p(s)$ to the shared shift $\gamma(s)$, on the basis $Q$:
 
 $$
@@ -263,38 +292,44 @@ $$
 
 The offsets have spread $\mathcal{N}^+(0, 0.5^2)$ and the walks start at 0 with step SD $\mathcal{N}^+(0, 0.1^2)$, both sampled non-centred.
 So each province's delay follows the shared one over time, with its own level and its own drift, each shrunk towards the shared delay by a learnt spread.
-As for $\delta_p$, $Q$ spans the seeded provinces, so a province never seeded has no delay data and takes the shared delay.
-Known-onset delays are scored by province.
-Health zones take their province's delay, since the delay files list provinces only.
+Known-onset delays are scored by province: each province's expected cells are the sum of its zones', which is exact as its zones share its delay, missing-onset share and publication lag.
+The delay used to score a zone's forecasts is its province's.
 
 ### Missing-onset deviations
 
-The missing-onset share gains sum-to-zero province deviations $\omega_p$ on the same basis $Q$:
+The missing-onset share gains sum-to-zero province deviations $\omega_p$ on the same basis $Q$, which a province's zones share:
 
 $$
-\operatorname{logit} m_p(t) = \bar m(t) + \omega_p(t).
+\operatorname{logit} m_z(t) = \bar m(t) + \omega_{p(z)}(t).
 $$
 
 The deviations are random walks, not AR(1).
 They start with province spread $\mathcal{N}^+(0, 0.5^2)$, sampled non-centred, and have step SD $\mathcal{N}^+(0, 0.1^2)$.
 
-### Provinces with no cases
+### Silent zones
 
-A province with no case yet starts at $10^{-6}$ of its seed level and is never seeded.
-Its deviations $\delta_p$ and $\omega_p$ are 0, so it follows the pooled trends.
-Its seed is fixed at the prior median, 1, and nothing is sampled for it.
-Its infections come only from importation through $W$, and its zero counts are scored like any other province's.
-Its forecasts follow from the model, so every province the release lists has one.
+A zone with no case in the random walks' walk window is silent and is not fitted.
+It takes the introduction layer of `randomwalknowcast` ([Baseline models](baselines.md)): exactly 0 until an introduction, then its walk.
+The introduction rate pools the zone with the other zones of its province, so a province with no case in any zone is forecast by its zones' introductions alone.
+These draws are independent of the fit.
+The ZoneAllocator floor of the other models does not apply.
+
+### Provinces and the country
+
+A province's trajectory is the sum of the trajectories of all its zones, fitted and silent, draw by draw and week by week.
+So zones sum to their province exactly, and the hub file takes the zone trajectories as they are.
+The national trajectory is the sum of the provinces plus the unassigned component ([Forecasts](#forecasts)).
 
 ## Single patch (`renewalsp`) { #single-patch }
 
-`renewalsp` fits the [province model](#province-model) to each province's series on its own, one fit after another with the same code.
+`renewalsp` fits the [place model](#province-model) to each province's series on its own, one fit after another with the same code.
 Nothing is pooled or shared between provinces: each has its own Rt walk, delay, missing-onset share and ascertainment.
 One series cannot inform the share at risk, so there is no depletion.
 Every province with a case in the random walks' walk window is fitted, however few its cases.
 A province with none takes the introduction layer of `randomwalknowcast` ([Baseline models](baselines.md)): exactly 0 until an introduction, then its walk.
 National is the sum of the provinces plus the data's national gap, as for `renewal`.
 A province is fitted only on its own data, so `renewalsp` cannot forecast a province left out.
+Its zones are split from its provinces ([Health zones](#health-zones)).
 
 ## BVDOutbreakSize-informed (`renewalbvd`) { #bvdoutbreaksize-informed }
 
@@ -322,12 +357,12 @@ flowchart TD
 From the release it takes the posterior draws of the national $\log R$ and, where the release has province estimates, each patch's median and 90% interval with the hub provinces the patch covers.
 Both models date Rt by infection, so the estimates are aligned to the release's data cut-off $t_b$.
 The fit axis extends to the end of the week of $t_b$ when that week is after the data.
-For the nation CD and each patch $k$ with a modelled province, the model's Rt before depletion, $R_p$, is weighted by infections over the data week that holds $t_b$,
+For the nation CD and each patch $k$ with a modelled zone, the model's Rt before depletion, $R_z$, is weighted by infections over the data week that holds $t_b$, over the fitted zones of the patch's provinces,
 
 $$
-R_{\mathcal{G}}(t_b) = \frac{\sum_{p \in \mathcal{G}} \Omega_p\, R_p(t_b)}{\sum_{p \in \mathcal{G}} \Omega_p},
+R_{\mathcal{G}}(t_b) = \frac{\sum_{z \in \mathcal{G}} \Omega_z\, R_z(t_b)}{\sum_{z \in \mathcal{G}} \Omega_z},
 \qquad
-\Omega_p = N_p \sum_{t \in \text{week}(t_b)} x_p(t),
+\Omega_z = N_z \sum_{t \in \text{week}(t_b)} x_z(t),
 \qquad
 \mathcal{G} \in \{\text{CD}, k\}.
 $$
@@ -351,8 +386,9 @@ The term adds no parameters, and $\zeta = 0$ gives `renewal`.
 ## Health zones
 
 Zone samples sum to their province's samples, sample by sample and week by week, and zones do not enter the national value.
+`renewal` and `renewalbvd` forecast the zones themselves, and their provinces are the zone sums ([above](#provinces-and-the-country)).
 The random walk baselines run at zone level and their samples set the zone shares of the province samples ([Baseline models](baselines.md#health-zones)).
-Every other model's province forecast is split across the zones.
+Every other model's province forecast (`renewalsp`, `pprandomwalknowcast`) is split across the zones.
 
 ### Split of province samples
 
@@ -369,8 +405,7 @@ $r_z$ is the zone's onsets over the 2 weeks before the vintage and $l_z$ those o
 Recent shares are shrunk towards longer-run shares by $n_0 = 100$ pseudo-cases.
 The floor $\chi_0 = 1/2$ gives a zone with no recent cases a small share, if the zone has had a case.
 A zone with no case at the vintage has a tenth of the floor, $\chi_0 = 1/20$.
-The models have no zone-level transmission: importation through $W$ and the introduction layer act between provinces.
-So a province sample holds no information on which new zones its cases reach.
+These models have no zone-level transmission, so a province sample holds no information on which new zones its cases reach.
 New zones in a province with cases are still reached, 6 in the 8 weeks to 10-03, and the small floor lets a province's cases reach them at about that rate.
 In a province with no case in any zone, every zone has $\chi_0 = 1/2$ and the zones share equally.
 Province samples are rounded.
