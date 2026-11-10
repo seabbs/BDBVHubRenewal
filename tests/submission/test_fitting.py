@@ -19,6 +19,7 @@ from bdbvhubrenewal.submission.fitting import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
+DATA = ROOT / "tests" / "fixtures" / "data"
 
 
 @pytest.fixture
@@ -137,7 +138,7 @@ def test_plot_submission_and_validate(tmp_path: Path) -> None:
     shown = [ax.get_title().split("(")[1].split(")")[0] for ax in fig.axes]
     assert all(loc.count("-") <= 1 for loc in shown)
     # The committed hub config follows the hub, so it lists the round.
-    code = main(["validate", "--hub", str(ROOT / "data"), "--skip-window",
+    code = main(["validate", "--hub", str(DATA), "--skip-window",
                  "--metadata-dir", "hub/model-metadata", str(csv)])  # fmt: skip
     assert code == 0
 

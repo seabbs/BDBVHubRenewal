@@ -482,7 +482,7 @@ def build_parser() -> argparse.ArgumentParser:
     cmp.add_argument(
         "--hub-dir",
         default="data/hub-submissions",
-        help="Committed hub files: metadata and openly licensed forecasts.",
+        help="Hub metadata and openly licensed forecasts.",
     )
     cmp.add_argument(
         "--cache-dir",

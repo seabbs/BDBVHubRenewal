@@ -19,6 +19,7 @@ from bdbvhubrenewal.reporting.hubtables import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
+DATA = ROOT / "tests" / "fixtures" / "data"
 
 
 def test_hub_quantiles_give_the_23_levels() -> None:
@@ -58,8 +59,8 @@ def test_hub_tables_cover_country_provinces_and_zones(
         daily=daily,
     )[0]
     forecasts = bt.run_forecasts([get_model("randomwalk")], [task])
-    zones = hub_zones(ROOT / "data" / "hub-config" / "tasks.json")
-    tables = hub_tables(forecasts, task, load_daily_zones(ROOT / "data"), zones)
+    zones = hub_zones(DATA / "hub-config" / "tasks.json")
+    tables = hub_tables(forecasts, task, load_daily_zones(DATA), zones)
     table = tables["randomwalk"]
     locations = set(table["location"])
     assert NATIONAL in locations
