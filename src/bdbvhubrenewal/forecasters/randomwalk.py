@@ -18,13 +18,14 @@ Later weeks are walk draws, floored at the count reported.
 
 `RandomWalkNowcast` (`randomwalknowcast`) nowcasts each hub week, with
 negative binomial new reports on the remaining count (`obs`).
-Weeks with data keep their nowcast draws. If the week holding the cut-off
-is partial, its days after the cut-off add a Poisson draw from that week's
-walk rate, walked by each sample from its own nowcast of the latest full
-week at least `Settings.start_share` reported with at least
-`Settings.start_count` cases (`_start_weeks`). Each sample's completed
-cut-off week, its nowcast plus that draw, is the base the walk goes on
-from for the weeks after the cut-off.
+Weeks with data keep their nowcast draws. Each sample walks from its own
+nowcast of the latest full week at least `Settings.start_share` reported
+with at least `Settings.start_count` cases (`_start_weeks`). Where that is
+before the week holding the cut-off, the walk's state in the cut-off week
+is updated from the week's nowcast, weighted by its precision
+(`cutoff_state`). If the cut-off week is partial, its days after the
+cut-off add a Poisson draw from that state's rate. The walk goes on from
+the state for the weeks after the cut-off.
 
 The spread of the walk is the standard deviation of the weekly changes of
 $\log(1 + y)$ in reported counts, over the weeks ending at the start of
@@ -77,7 +78,7 @@ from bdbvhubrenewal.forecasters.introductions import silent_trajectories
 from bdbvhubrenewal.forecasters.obs import sample_count
 from bdbvhubrenewal.forecasters.walk import random_walks
 
-__all__ = ["RandomWalk", "RandomWalkNowcast"]
+__all__ = ["RandomWalk", "RandomWalkNowcast", "cutoff_state"]
 
 
 _KEPT_ORIGINS: Final = 4
@@ -222,6 +223,82 @@ def _start_weeks(origin: Origin) -> np.ndarray:
     ok = _start_ok(origin)
     latest = origin.start_nowcast - np.argmax(ok[:, ::-1], 1)
     return np.where(_quiet(origin), origin.start, latest)
+
+
+def cutoff_state(
+    x0: np.ndarray,
+    steps: np.ndarray,
+    sigma: np.ndarray,
+    mu: np.ndarray,
+    reported: np.ndarray,
+    size: np.ndarray,
+    seen: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    r"""Return the walk's log state in the cut-off week given its nowcast.
+
+    A one-step Kalman update on the scale of $\log(1 + \lambda)$. The
+    walk's prior from each sample's start week $x_0$, $n$ steps back, is
+    $\mathcal{N}(x_0, n \sigma^2)$. The cut-off week's nowcast, scaled to
+    seven days, is a noisy measurement of it,
+
+    $$
+    m = \log\Big(1 + \frac{7 \mu}{d}\Big),
+    \qquad
+    \tau^2 = \frac{r + r^2 / \phi_0}{\mu^2} + \frac{1}{1 + \mu},
+    $$
+
+    with $\mu$ the nowcast mean of the $d$ days seen, $r = \mu - Y$ the
+    count still to come and $\phi_0$ the observation model's size for the
+    cut-off week (`obs`): the delta-method variance of the nowcast's
+    error, plus the count's Poisson noise. The state is
+
+    $$
+    \mathcal{N}\big(x_0 + K (m - x_0),\ (1 - K) n \sigma^2\big),
+    \qquad
+    K = \frac{n \sigma^2}{n \sigma^2 + \tau^2}.
+    $$
+
+    $K = 0$ walks on from the start week, ignoring the cut-off week, and
+    $K = 1$ takes the cut-off week's nowcast as exact. The update handles
+    the nowcast's variance, not a bias in its mean. Only the cut-off week
+    updates the state; weeks between the start week and it do not.
+
+    Parameters
+    ----------
+    x0 : numpy.ndarray
+        $\log(1 + y)$ of each sample's start week nowcast, `[L, S]`.
+    steps : numpy.ndarray
+        Weeks from each start week to the cut-off week, $n$, `[L]`.
+    sigma : numpy.ndarray
+        The walk spread, `[L]`.
+    mu : numpy.ndarray
+        Nowcast mean of the cut-off week's days seen, `[L]`.
+    reported : numpy.ndarray
+        Count reported in the cut-off week, `[L]`.
+    size : numpy.ndarray
+        $\phi_0$, `[L]`.
+    seen : int
+        Days of the cut-off week on or before the cut-off, $d$.
+
+    Returns
+    -------
+    tuple of numpy.ndarray
+        The mean `[L, S]` and standard deviation `[L, 1]` of the state.
+    """
+    prior = np.asarray(steps, float) * np.asarray(sigma, float) ** 2
+    rem = np.maximum(mu - reported, 0.0)
+    safe = np.where(mu > 0, mu, 1.0)
+    tau2 = (rem + rem**2 / size) / safe**2 + 1.0 / (1.0 + mu)
+    # A week with nothing nowcast says nothing about the state.
+    gain = np.where(
+        (mu > 0) & (prior > 0),
+        prior / np.where(prior > 0, prior + tau2, 1.0),
+        0.0,
+    )
+    m = np.log1p(7.0 * mu / seen)
+    mean = x0 + gain[:, None] * (m[:, None] - x0)
+    sd = np.sqrt(prior * (1.0 - gain))[:, None]
+    return mean, sd
 
 
 def frame(
@@ -506,36 +583,43 @@ class RandomWalkNowcast(RandomWalk):
             ),
             np.float64,
         )
-        # Each sample walks on from its own nowcast of the start week.
+        # Quiet places draw their introductions from the start week.
         cw = snap.cut_week(origin.o)
         w0 = _start_weeks(origin)
         quiet = _quiet(origin)
         rows = np.arange(n_loc)
-        lam, y = _walks(
+        _, y = _walks(
             key_walk, nowcast[:, rows, w0].T, origin, w0, n_all, quiet
         )
-        # Days of the cut-off week after the cut-off are drawn from the
-        # walk's rate that week. A partial cut-off week's start week is the
-        # week before it when that week meets the start rule, so the rate
-        # is one step from each sample's nowcast of the week before, and
-        # otherwise steps on from the latest earlier week that meets it.
+        # The walk's state in the cut-off week, from each sample's start
+        # week and the cut-off week's nowcast, weighted by its precision.
         cut = int(snap.cut[origin.o])
         miss = int(np.flatnonzero(snap.week == cw).max()) - cut
-        at_cw = np.clip(cw - w0 - 1, 0, n_all - 1)
+        mean, sd = cutoff_state(
+            np.log1p(nowcast[:, rows, w0].T),
+            cw - w0,
+            origin.sigma,
+            point[:, cw],
+            origin.reported[:, cw],
+            origin.size[:, 0],
+            7 - miss,
+        )
+        key_state, key_part = jax.random.split(key_part)
+        z = np.asarray(jax.random.normal(key_state, mean.shape), np.float64)
+        rate = np.expm1(np.maximum(mean + sd * z, 0.0))  # [L, S]
+        # Days of the cut-off week after the cut-off are drawn from it.
         part = np.asarray(
             jax.random.poisson(
-                key_part,
-                jnp.asarray(lam[rows, :, at_cw] * miss / 7, jnp.float32),
+                key_part, jnp.asarray(rate * miss / 7, jnp.float32)
             ),
             dtype=np.float64,
-        )  # [L, S]
-        # Each sample's completed cut-off week is the base for the weeks
-        # after it, from which the walk goes on.
-        done = nowcast[:, rows, cw].T + np.where(miss > 0, part, 0.0)
+        )
+        done = nowcast[:, rows, cw].T + np.where((cw > w0)[:, None], part, 0.0)
+        # The walk goes on from the state's rate, not from a count.
         h = n_all - cw - 1
         _, ahead = random_walks(
             jax.random.split(key_ahead, n_loc),
-            jnp.asarray(done, jnp.float32),
+            jnp.asarray(rate, jnp.float32),
             jnp.asarray(origin.sigma, jnp.float32),
             max(h, 1),
         )

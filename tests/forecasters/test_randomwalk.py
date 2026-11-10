@@ -408,9 +408,9 @@ def test_a_place_with_no_week_to_start_from_draws_introductions(
 def test_the_walk_forecasts_on_from_each_samples_nowcast(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
-    # Cut-off 10-16 is a Friday, so the week of 10-17 is partial. Each
-    # sample walks on from its own completed 10-17 week, so the forecast is
-    # at least as spread as that week and follows it.
+    # Cut-off 10-16 is a Friday, so the week of 10-17 is partial and the
+    # walk starts from 10-10. Each sample walks on from its own state, so
+    # its forecast follows its own 10-10 nowcast and spreads out with time.
     task = _task(target, delays, daily, "2026-10-17")
     model = RandomWalkNowcast()
     out = model.forecast(task)
@@ -419,9 +419,10 @@ def test_the_walk_forecasts_on_from_each_samples_nowcast(
             index="sample", columns="target_end_date", values="value"
         )
         later = [w for w in mine.columns if w > "2026-10-17"]
-        x0 = np.log1p(mine["2026-10-17"].to_numpy())
+        x0 = np.log1p(mine["2026-10-10"].to_numpy())
         x1 = np.log1p(mine[later[0]].to_numpy())
-        assert x1.std() >= x0.std()
+        x2 = np.log1p(mine[later[1]].to_numpy())
+        assert x2.std() >= x1.std()
         assert np.corrcoef(x0, x1)[0, 1] > 0.2
 
 
