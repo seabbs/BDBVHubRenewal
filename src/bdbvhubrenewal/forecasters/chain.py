@@ -143,7 +143,10 @@ class Settings:
         Weeks, ending at the start week, whose changes set the spread.
     start_share : float
         Share of a week reported, $\pi$, for `randomwalknowcast` to
-        nowcast it. The walk forecasts on from the latest such week.
+        start its walk from the week's nowcast.
+    start_count : float
+        Cases reported in a week for `randomwalknowcast` to start its walk
+        from the week's nowcast.
     """
 
     max_delay: int = 42
@@ -153,6 +156,7 @@ class Settings:
     completeness: float = 0.95
     walk_weeks: int = 9
     start_share: float = 0.05
+    start_count: float = 5.0
 
     @property
     def history_delay(self) -> int:

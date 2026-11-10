@@ -19,10 +19,11 @@ Later weeks are walk draws, floored at the count reported.
 `RandomWalkNowcast` (`randomwalknowcast`) nowcasts each hub week, with
 negative binomial new reports on the remaining count minus Poisson
 removals of the count reported (`obs`).
-Every week at least `Settings.start_share` reported, $\pi \ge 0.05$,
-counting days not yet observed as unreported, is its nowcast draws.
-Each sample walks on from its own nowcast of the latest such week
-(`_start_weeks`), and later weeks are the walk's draws.
+The start week is the latest week at least `Settings.start_share`
+reported, $\pi \ge 0.05$, counting days not yet observed as unreported,
+with at least `Settings.start_count` (5) cases reported (`_start_weeks`).
+Weeks up to it are their nowcast draws, each sample walks on from its own
+nowcast of it, and later weeks are the walk's draws.
 
 The spread of the walk is the standard deviation of the weekly changes of
 $\log(1 + y)$ in reported counts, over the weeks ending at the start of
@@ -37,7 +38,7 @@ exactly 0 until its first introduction, which comes each week with its
 pooled probability times the share of the week not yet reported, and then
 walks from a count drawn from Poisson(1) given at least 1
 (`introductions.silent_trajectories`).
-In `randomwalknowcast` a place with no week at least 5% reported is
+In `randomwalknowcast` a place with no week to start from is
 quiet like a silent one: after its latest complete week it draws
 introductions, floored at the counts reported (`_quiet`).
 National is the sum of provinces by sample.
@@ -172,12 +173,16 @@ def _delay_label(origin: Origin, i: int) -> str:
 
 
 def _start_ok(origin: Origin) -> np.ndarray:
-    r"""Return the weeks that are nowcast, `[L, W]`.
+    r"""Return the weeks a walk can start from, `[L, W]`.
 
-    These are the weeks whose share reported $\pi$ is at least
-    `Settings.start_share`.
+    A week can when its share reported $\pi$ is at least
+    `Settings.start_share` and its reported count is at least
+    `Settings.start_count`.
     """
-    return origin.complete >= origin.settings.start_share
+    settings = origin.settings
+    return (origin.complete >= settings.start_share) & (
+        origin.reported >= settings.start_count
+    )
 
 
 def _quiet(origin: Origin) -> np.ndarray:
