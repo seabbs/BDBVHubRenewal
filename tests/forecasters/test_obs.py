@@ -45,12 +45,13 @@ def test_overdispersed_reports_give_a_smaller_size() -> None:
     assert fit_sizes(wide, remaining) < fit_sizes(narrow, remaining)
 
 
-def test_too_few_errors_give_the_prior_median() -> None:
+def test_no_errors_give_the_prior_median() -> None:
     added = np.array([[4.0, 0.0], [0.0, 0.0]])
     remaining = np.array([[3.0, 0.0], [0.0, 0.0]])
-    np.testing.assert_allclose(
-        fit_sizes(added, remaining), PRIOR_SIZE, rtol=1e-6
-    )
+    size = fit_sizes(added, remaining)
+    # One error is enough for a fit, and none gives the prior median.
+    assert size[0] != pytest.approx(PRIOR_SIZE)
+    np.testing.assert_allclose(size[1], PRIOR_SIZE, rtol=1e-6)
     assert pytest.approx(2.2, abs=0.01) == PRIOR_SIZE
 
 
