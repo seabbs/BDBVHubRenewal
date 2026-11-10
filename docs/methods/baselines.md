@@ -272,14 +272,17 @@ Where no week reaches 0.95, `randomwalknowcast` takes the first week as the late
 
 `randomwalk` and `randomwalknowcast` run on each zone's own release snapshots in the same way as for provinces.
 Each zone takes its delay, size and walk spread by the rules [above](#own-or-pooled-estimates).
-Province sample $Y^{(i)}(w)$ is apportioned over the zones in proportion to the zone model's own sample $x^{(i)}_z(w)$ of the same id and week:
+Each zone keeps its published count $o_z(w)$, as in the [Renewal models](model.md#split-of-province-samples) split, with $O(w) = \sum_z o_z(w)$.
+The rest of province sample $Y^{(i)}(w)$ is apportioned over the zones in proportion to the zone model's own sample $x^{(i)}_z(w)$ of the same id and week beyond the zone's published count:
 
 $$
-y^{(i)}_z(w) \approx Y^{(i)}(w)\, \frac{x^{(i)}_z(w)}{\sum_{z'} x^{(i)}_{z'}(w)}.
+y^{(i)}_z(w) \approx o_z(w) + \big(Y^{(i)}(w) - O(w)\big)\, \frac{(x^{(i)}_z(w) - o_z(w))^+}{\sum_{z'} (x^{(i)}_{z'}(w) - o_{z'}(w))^+}.
 $$
 
 Largest remainders make the values whole numbers that sum to $Y^{(i)}(w)$, so zone samples sum to their province's samples ([Renewal models](model.md#health-zones)).
-Where every $x^{(i)}_z(w)$ is 0 the split uses the Dirichlet mean shares of the [Renewal models](model.md#split-of-province-samples) page.
+Where no zone sample is above its published count the rest follows $x^{(i)}_z(w)$, and where every $x^{(i)}_z(w)$ is 0 it uses the Dirichlet mean shares of the [Renewal models](model.md#split-of-province-samples) page.
+A sample below $O(w)$ is apportioned in proportion to the published counts, so no zone gets more than it has published.
+After the data weeks $o_z(w) = 0$, so the forecast weeks follow the zone samples as before.
 Zones are reconciled because their own walks are noisy and do not sum to their province's, which pools more data.
 The split keeps each zone's share from its own sample, and the province sets the total, so the zone, province and national forecasts describe one set of trajectories.
 

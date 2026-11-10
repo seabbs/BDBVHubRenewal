@@ -39,17 +39,23 @@ release snapshots (`zone_task`), with the zone, then province, then
 national pooling of `pooling`.
 Their zone samples are then made to sum to the province samples
 (`reconcile_zones`).
-Province sample $Y^{(k)}(w)$ is apportioned over the zones in proportion
-to the zone model's own sample $x^{(k)}_z(w)$, by largest remainders, so
-the values are whole numbers that sum exactly to $Y^{(k)}(w)$:
+As in the allocator, each zone keeps what it has published, and province
+sample $Y^{(k)}(w)$ above the published total is apportioned over the
+zones in proportion to the zone model's own sample beyond what the zone
+has published, $(x^{(k)}_z(w) - o_z(w))^+$, by largest remainders, so the
+values are whole numbers that sum exactly to $Y^{(k)}(w)$:
 
 $$
-y^{(k)}_z(w) \approx
-  Y^{(k)}(w)\, \frac{x^{(k)}_z(w)}{\sum_{z'} x^{(k)}_{z'}(w)}.
+y^{(k)}_z(w) \approx o_z(w) + \big(Y^{(k)}(w) - O(w)\big)\,
+  \frac{(x^{(k)}_z(w) - o_z(w))^+}{\sum_{z'} (x^{(k)}_{z'}(w) - o_{z'}(w))^+}.
 $$
 
-Where every zone sample is 0 the split uses the Dirichlet mean shares of
-the allocator above.
+Where no zone sample is above its published count the rest follows the
+zone samples themselves, and where every zone sample is 0 it uses the
+Dirichlet mean shares of the allocator above.
+If a sample is below the published total, it is apportioned in proportion
+to the published counts, so no zone gets more than it has published.
+After the data weeks $o_z(w) = 0$, so the forecast weeks are unchanged.
 """
 
 from __future__ import annotations
@@ -290,6 +296,33 @@ def _apportion(total: np.ndarray, weights: np.ndarray) -> np.ndarray:
     return out
 
 
+def _keep_published(
+    totals: np.ndarray,
+    weight: np.ndarray,
+    published: np.ndarray,
+    fallback: np.ndarray,
+) -> np.ndarray:
+    """Split `totals` `[S, W]` over zones, keeping the `published` counts.
+
+    The part of a total above the published total `[W, Z]` goes by the
+    zone weights `[S, W, Z]` beyond each zone's count, then by the weights
+    themselves, then by `fallback` `[Z]`. A total below the published
+    total is split by the published counts.
+    """
+    pub = np.broadcast_to(published, weight.shape)
+    floor = pub.sum(axis=-1)
+    extra = np.clip(weight - pub, 0.0, None)
+    plain = extra.sum(axis=-1) <= 0
+    extra[plain] = weight[plain]
+    extra[extra.sum(axis=-1) <= 0] = fallback
+    over = totals >= floor
+    above = pub + _apportion(np.where(over, totals - floor, 0), extra)
+    under = np.where(pub.sum(axis=-1, keepdims=True) > 0, pub, 1.0)
+    below = _apportion(np.where(over, 0, totals), under)
+    out: np.ndarray = np.where(over[..., None], above, below).astype(np.int64)
+    return out
+
+
 def reconcile_zones(
     zone_samples: pd.DataFrame,
     province_samples: pd.DataFrame,
@@ -300,8 +333,11 @@ def reconcile_zones(
 ) -> pd.DataFrame:
     """Make zone samples sum to their province samples.
 
-    Each province sample is apportioned over the province's zones in
-    proportion to the zone model's own sample of the same id and week.
+    Each zone keeps its published count, and the rest of each province
+    sample is apportioned over the province's zones in proportion to the
+    zone model's own sample of the same id and week beyond that count.
+    A province sample below the published total is apportioned by the
+    published counts.
 
     Parameters
     ----------
@@ -334,6 +370,7 @@ def reconcile_zones(
     weeks = list(task.target_end_dates)
     ids = np.arange(1, task.n_samples + 1)
     shape = {"index": "sample", "columns": "target_end_date", "values": "value"}
+    seen = counts.set_index(["location", "target_end_date"])["total"]
     frames = []
     for prov in sorted(set(final["location"])):
         mine = tuple(z for z in zones if province_of(z) == prov)
@@ -358,10 +395,13 @@ def reconcile_zones(
                     .fillna(0.0)
                     .to_numpy()
                 )
-        fallback = allocator.alpha(counts, mine, task.vintage)
-        empty = weight.sum(axis=-1) <= 0
-        weight[empty] = fallback
-        values = _apportion(totals, weight)
+        published = np.array(
+            [[float(seen.get((z, w), 0)) for z in mine] for w in weeks]
+        )  # [W, Z]
+        values = _keep_published(
+            totals, weight, published,
+            allocator.alpha(counts, mine, task.vintage),
+        )  # fmt: skip
         frames.append(_zone_frame(mine, weeks, ids, values))
     if not frames:
         return pd.DataFrame(columns=list(SAMPLE_COLUMNS))
