@@ -158,7 +158,7 @@ def encode(curves: Mapping[str, Any]) -> dict[str, Any]:
         below = np.nonzero((q < _STEPS).any(axis=(0, 2, 3)))[0]
         last = max(last, int(below[-1]) + 1 if below.size else 0)
         shares[s] = q
-        cents = np.rint(np.clip(final, 0, None) * _CENTS).astype(np.uint32)
+        cents = np.rint(np.clip(final, 0, None) * _CENTS).astype(np.uint64)
         out[f"final_{s}"] = _pack(cents)
         for key in (f"vintage_{s}", f"draw_{s}", f"phi_{s}"):
             out[key] = _pack(np.asarray(curves[key], dtype=np.float32))
@@ -189,7 +189,7 @@ def decode(block: Mapping[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {"cutoff": block["cutoff"]}
     for s in _STREAMS:
         f32 = np.float32
-        final = _unpack(block[f"final_{s}"], np.uint32, (n, n_w, n_p))
+        final = _unpack(block[f"final_{s}"], np.uint64, (n, n_w, n_p))
         final = final / _CENTS
         step = _unpack(block[f"share_{s}"], np.uint8, (n, last, n_w, n_p))
         share = np.ones((n, n_days + 1, n_w, n_p))

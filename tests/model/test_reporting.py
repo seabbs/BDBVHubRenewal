@@ -79,7 +79,9 @@ def test_expected_reported_by_matches_the_model(sim_vintage, fitted, later):
 @pytest.mark.parametrize("later", [4, 17])
 def test_post_hoc_draws_match_the_model_as_reported(sim_vintage, fitted, later):
     from bdbvhubrenewal.forecasters.reporting import (
+        NEGLIGIBLE,
         as_reported_samples,
+        draw_reported,
         encode,
     )
 
@@ -96,22 +98,9 @@ def test_post_hoc_draws_match_the_model_as_reported(sim_vintage, fitted, later):
         report_weeks=weeks,
         report_days=30,
     )
+    curves = draws["reporting"]
     model_view = draws["as_reported"][cut]["province"][:, weeks].sum(-1)
-    # Through the stored path: encoded, then drawn for a release date.
-    block = {
-        "start_date": sim_vintage.start_date.isoformat(),
-        "places": list(sim_vintage.names),
-        "weeks": [f"w{w:03d}" for w in weeks],
-        "curves": encode(draws["reporting"]),
-    }
-    release = sim_vintage.start_date + dt.timedelta(days=cut)
-    rows = as_reported_samples(block, release, np.random.default_rng(1))
-    post_hoc = (
-        rows.groupby(["sample", "target_end_date"])["value"]
-        .sum()
-        .unstack()
-        .to_numpy()
-    )
+    post_hoc = draw_reported(curves, later, np.random.default_rng(1)).sum(-1)
     assert post_hoc.shape == model_view.shape
     # The data weeks share their expectations across the two passes, so
     # only the reporting noise differs; the forecast weeks also redraw
@@ -128,6 +117,29 @@ def test_post_hoc_draws_match_the_model_as_reported(sim_vintage, fitted, later):
             rtol=0.15,
             atol=2,
         )
+    # The stored path (encoded, then drawn for a release date) differs
+    # from the curves only by their rounding: shares to 1/255 of the
+    # eventual count, and cells under `NEGLIGIBLE` reported at once.
+    block = {
+        "start_date": sim_vintage.start_date.isoformat(),
+        "places": list(sim_vintage.names),
+        "weeks": [f"w{w:03d}" for w in weeks],
+        "curves": encode(curves),
+    }
+    release = sim_vintage.start_date + dt.timedelta(days=cut)
+    rows = as_reported_samples(block, release, np.random.default_rng(1))
+    stored = (
+        rows.groupby(["sample", "target_end_date"])["value"]
+        .sum()
+        .unstack()
+        .to_numpy()
+    )
+    final = curves["known"][:, -1] + curves["imputed"][:, -1]
+    bound = (final / 255 / 2 + 2 * NEGLIGIBLE + 0.01).sum(-1).mean(0)
+    for j in range(len(weeks)):
+        a, b = stored[:, j], post_hoc[:, j]
+        se = np.sqrt((a.var() + b.var()) / n)
+        assert abs(a.mean() - b.mean()) <= 4 * se + bound[j], j
     # Reported by the cut-off: never more than eventually, in expectation.
-    final = draws["province"][:, weeks].sum(-1).mean(0)
-    assert np.all(post_hoc.mean(0) <= final * 1.1 + 2)
+    eventual = draws["province"][:, weeks].sum(-1).mean(0)
+    assert np.all(post_hoc.mean(0) <= eventual * 1.1 + 2)

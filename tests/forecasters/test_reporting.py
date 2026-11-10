@@ -98,3 +98,11 @@ def test_samples_keep_each_trajectory_s_place_and_week() -> None:
                 c["draw_known"][k - 1, -1, p] + c["draw_imputed"][k - 1, -1, p]
             )
             assert row[(k, w, place)] == want
+
+
+def test_large_eventual_counts_survive_encoding() -> None:
+    c = curves(n=3)
+    for s in ("known", "imputed"):
+        c[s] = c[s] * 1e7
+    back = decode(encode(c))
+    np.testing.assert_allclose(back["known"][:, -1], c["known"][:, -1])

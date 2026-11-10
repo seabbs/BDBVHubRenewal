@@ -56,7 +56,8 @@ def expected_reported_by(
     onsets : array_like
         $\lambda_p(s)$, `(n, P)` (`onsets_expected_daily`).
     delay : array_like
-        $f_{p,s}(d)$, `(P, n, D + 1)` (`onsets_delay_pmf`).
+        $f_{p,s}(d)$, `(P, n, D + 1)`, or by week `(P, n // 7, D + 1)`
+        (`onsets_delay_pmf`).
     missing : array_like
         $\pi_p(t)$, `(n, P)` (`missing_fraction`).
     lag : array_like
@@ -75,7 +76,11 @@ def expected_reported_by(
         `known` and `imputed`, each `(len(cutoffs), len(days), P)`.
     """
     lam = np.asarray(onsets, dtype=float)
-    f = np.moveaxis(np.asarray(delay, dtype=float), 0, -1)  # (n, D + 1, P)
+    f = np.asarray(delay, dtype=float)
+    if f.shape[1] != lam.shape[0]:
+        # A weekly delay: every day of week w takes f_{p,w}.
+        f = np.repeat(f, 7, axis=1)[:, : lam.shape[0]]
+    f = np.moveaxis(f, 0, -1)  # (n, D + 1, P)
     pi = np.asarray(missing, dtype=float)
     hub_pmf = np.asarray(hub, dtype=float)
     n, n_d, n_p = f.shape
