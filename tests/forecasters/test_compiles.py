@@ -20,8 +20,8 @@ from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import ForecastTask, get_model
 
 PINNED = {
-    "randomwalk": "b5aecfce6d5f7a9e",
-    "randomwalknowcast": "8ac351f1d9ac8546",
+    "randomwalk": "9b1d7b419e80550d",
+    "randomwalknowcast": "f38151908e6e3de5",
 }
 
 _COMPILES: list[float] = []
