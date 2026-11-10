@@ -85,6 +85,7 @@ __all__ = [
     "Errors",
     "MissingSnapshots",
     "NoDelayPair",
+    "NoWalkSpread",
     "Origin",
     "Settings",
     "build_origin",
@@ -114,6 +115,10 @@ class NoCompleteWeek(ModelUnavailableError):  # noqa: N818
     """No week of a place reaches the completeness that starts the walk."""
 
 
+class NoWalkSpread(ModelUnavailableError):  # noqa: N818
+    """A place has no walk spread of its own or from any parent."""
+
+
 @dataclass(frozen=True)
 class Settings:
     """Settings shared by the random walk models.
@@ -135,10 +140,6 @@ class Settings:
         start the random walk.
     walk_weeks : int
         Weeks, ending at the start week, whose changes set the spread.
-    clock_shift : int
-        Days added to the ages of the origin's days, for the sensitivity
-        of the nowcast to the onset clock. Ages below 0 count as 0. The
-        delay and the retrospective errors are not moved.
     start_share : float
         Share of a week reported for `randomwalknowcast` to start
         its walk from the week's nowcast.
@@ -153,7 +154,6 @@ class Settings:
     level_weeks: tuple[int, int] = (3, 6)
     completeness: float = 0.95
     walk_weeks: int = 9
-    clock_shift: int = 0
     start_share: float = 0.05
     start_count: float = 5.0
 
@@ -384,10 +384,9 @@ def final_growth(
     Returns
     -------
     numpy.ndarray
-        $G(a)$ at each day's age, shifted by `Settings.clock_shift`,
-        `[L, T]`.
+        $G(a)$ at each day's age, `[L, T]`.
     """
-    age = snap.cut[o] - np.arange(snap.week.size) + settings.clock_shift
+    age = snap.cut[o] - np.arange(snap.week.size)
     return growth(fit.g, age, settings.max_delay)
 
 
@@ -675,7 +674,7 @@ def build_origin(
         )
     g = final_growth(snap, o, fit, settings)
     reported = weekly_sums(snap, o)
-    age = snap.cut[o] - np.arange(snap.week.size) + settings.clock_shift
+    age = snap.cut[o] - np.arange(snap.week.size)
     point = week_nowcast(snap, o, fit.g, age, settings.max_delay)
     inv = np.where(snap.observed[o][None, :], 1.0 / g, 0.0)
     complete = week_sum(snap, inv) / 7.0
@@ -694,8 +693,16 @@ def build_origin(
         settings.min_level,
         1,
     )[:, 0]
-    both = np.concatenate([own, pooled])
-    sigma = np.sqrt(np.nan_to_num(both[sigma_source]).clip(min=0.0))
+    var = np.concatenate([own, pooled])[sigma_source]
+    if not (var > 0).all():
+        none = [
+            c for c, v in zip(snap.locations, var, strict=True) if not v > 0
+        ]
+        raise NoWalkSpread(
+            f"No walk spread above 0 at {snap.releases[o]} for "
+            f"{', '.join(none)}, of its own or from any parent."
+        )
+    sigma = np.sqrt(var)
     k = settings.walk_weeks
     silent = silent_places(reported, snap.cut_week(o), k)
     intro = introduction_rates(reported, start, snap.parent, k)
