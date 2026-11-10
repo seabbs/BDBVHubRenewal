@@ -3,7 +3,10 @@
 #
 #   CAND_ID, CAND_KIND, CAND_CONFIG, CAND_LABEL, CAND_SAMPLER (JSON)
 #   CAND_MODEL          the model to run (default $MODEL, the chosen one)
-#   FIT_CACHE_HIT=true  the fit directory was restored from the cache
+#   FIT_SOURCE=store    read the fit from the fit store (`fit-store
+#                       unpack`), never fit; `fit` (the default) fits here,
+#                       for a round the store cannot hold (stale fallback)
+#   STORE               the fit store checkout (default output/fit-store)
 #
 # A bad fit or a failed check does not fail this step: the verdicts are
 # written to the candidate's directory and the select step walks the
@@ -37,8 +40,27 @@ note "### Candidate \`$CAND_ID\`: $CAND_LABEL"
 fit_ok=true
 if [ "$CAND_KIND" = "randomwalk" ]; then
   : # no fit
-elif [ "${FIT_CACHE_HIT:-false}" = "true" ] && [ -f "$fit/diagnostics.json" ]; then
-  note "Fit restored from the cache, not refitted."
+elif [ "${FIT_SOURCE:-fit}" = "store" ]; then
+  # The stored fit of the same code and data: the fit the docs and the
+  # backtest show. A candidate the store lacks, or whose fit failed, has
+  # no diagnostics, so the gate rules it out and the chain moves on.
+  unpacked=0
+  cli fit-store unpack --store "${STORE:-output/fit-store}" --model "$model" \
+    --origin "$AS_OF" --out "$fit" || unpacked=$?
+  case "$unpacked" in
+    0)
+      where=$(python3 -c 'import json, sys
+r = json.load(open(sys.argv[1]))
+print(r["key"], r["commit"][:7], (r["store_commit"] or "unknown")[:7])' \
+        "$fit/store.json")
+      read -r skey scommit sstore <<< "$where"
+      note "Fit read from the fit store: key \`$skey\`, fitted at \`$scommit\`, store commit \`$sstore\`."
+      cp "$fit/store.json" "$out/"
+      ;;
+    3) fit_ok=false; note "Not in the fit store for this code and data, so ruled out." ;;
+    4) fit_ok=false; note "The stored fit for this code and data failed, so ruled out." ;;
+    *) fit_ok=false; echo "::warning::fit-store unpack for $CAND_ID exited $unpacked" ;;
+  esac
 else
   start=$SECONDS
   # Heartbeat, as in BVDOutbreakSize's docs.yml: lift the newest
@@ -135,8 +157,11 @@ if [ -n "$sub" ]; then
     --out "$out/nowcast.png" || echo "::warning::plot for $CAND_ID failed"
 fi
 
+store="null"
+[ -f "$out/store.json" ] && store=$(cat "$out/store.json")
 cat > "$out/run.json" << EOF
 {"candidate": "$CAND_ID", "kind": "$CAND_KIND", "label": "$CAND_LABEL",
+ "store": $store,
  "model": "$model",
  "config": "$CAND_CONFIG", "sampler": $CAND_SAMPLER,
  "package_version": "$(cli --version 2> /dev/null || echo unknown)",

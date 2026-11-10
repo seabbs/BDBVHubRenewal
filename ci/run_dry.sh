@@ -5,8 +5,9 @@
 #   ci/run_dry.sh fallback     one scenario, printing its PR body
 #
 # It runs the same step scripts as .github/workflows/submit.yml, in the
-# same order: detect -> prepare (random walk) -> primary candidates ->
-# select -> submit (DRY_RUN=true). The model is the
+# same order: detect -> prepare (random walk) -> await the fit store ->
+# primary candidates, read from the store -> select -> submit
+# (DRY_RUN=true). The model is the
 # fixture CLI (fixtures/fake_bdbvhubrenewal.py) and `gh`/`git` are never
 # called for writing. Outputs go to a new $TMPDIR/submission-ci-dry.XXXXXX/
 # <scenario>/ for each run, so concurrent dry runs never share files.
@@ -24,6 +25,9 @@ export FORECAST_CLI="python3 $FIX/fake_bdbvhubrenewal.py"
 # config/hub.toml and the fixture CLI (`hub-id`) as the workflow does.
 unset MODEL MODEL_ID
 export HEARTBEAT_SECONDS=1
+# Fitted candidates read the fit store, as in the workflow; a scenario
+# may set FIT_SOURCE=fit. The fixture CLI stands in for the store.
+export FIT_SOURCE=store SKIP_FETCH=true
 # A GitHub-hosted runner's 4 vCPUs. The fixture fit fails, as a
 # sequential run would be too slow, when there are fewer XLA devices
 # than chains.
@@ -57,6 +61,11 @@ SCENARIOS=(
   "randomwalknowcast|bvd=fail,renewalsp=fail,main=fail|randomwalknowcast||Model: random walk on a nowcast"
   "randomwalk|bvd=fail,renewalsp=crash,main=fail,randomwalknowcast=negative|randomwalk"
   "skip|bvd=fail,renewalsp=fail,main=fail,randomwalknowcast=negative,randomwalk=negative|skip"
+  # A candidate the fit store lacks, or holds as failed, is ruled out.
+  "storemissing|bvd=missing|renewalsp||Fit: read from the fit store, the \`renewalsp\` fit"
+  "storefailed|bvd=storefailed,renewalsp=missing|main"
+  # A round the store cannot hold (an earlier release) is fitted here.
+  "stale|bvd=pass|bvd|FIT_SOURCE=fit|Fit: made in this run"
   # A chosen model further down the chain starts it there; the
   # candidates before it are shadows.
   "nospatial|bvd=pass|renewalsp|MODEL=renewalsp|Model: single-patch province renewal models"
@@ -79,7 +88,7 @@ export PATH="$ROOT/bin:$PATH"
 run_scenario() {
   local name=$1 scenarios=$2 expect=$3 extra=${4:-} want=${5:-}
   # A scenario may move the clock; the next one gets it back.
-  local NOW=$NOW
+  local NOW=$NOW FIT_SOURCE=$FIT_SOURCE
   export WORK="$ROOT/$name"
   export FAKE_SCENARIOS=$scenarios
   export FAKE_COHERENCE_GAP=""
@@ -113,7 +122,10 @@ run_scenario() {
   model=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1]))['model'])" \
     "$WORK/inputs/context.json")
 
-  # 3. Primary matrix legs (`fit` job), one after another here.
+  # 3. The fit store's fits (`await-fits` job), then the primary matrix
+  # legs (`fit` job), one after another here.
+  MODELS="renewalbvd renewalsp renewal" "$CI_DIR/steps/await_fits.sh" \
+    > "$WORK/await.log"
   run_stage() {
     sci python -m submission_ci.policy --policy "$CI_DIR/policy.toml" \
       --stage "$1" --model "$model" \

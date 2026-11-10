@@ -16,6 +16,12 @@ candidate id the step script exports as `CAND_ID`. Scenarios:
                of the observations (PPC warns)
   ppcfail      converged, but they cover about 30% (PPC fails)
   noppc        converged, but the fit writes no ppc.json (PPC error)
+  missing      the fit store has no fit at the current key (unpack
+               exits 3)
+  storefailed  the fit store holds a failed fit (unpack exits 4)
+
+`fit-store unpack` writes what `fit` would, as the stored fit's
+directory, with `store.json`. `fit-store plan` lists nothing to fit.
 
 Unknown candidates default to `pass`. `randomwalk=implausible` breaks
 the random walk baseline too, which is how the dry run reaches a skip.
@@ -133,7 +139,7 @@ def fake_ppc(as_of: str, sc: str, config: str) -> dict:
     }
 
 
-def cmd_fit(args: argparse.Namespace) -> int:
+def cmd_fit(args: argparse.Namespace, stored: bool = False) -> int:
     sc = scenario()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -146,13 +152,13 @@ def cmd_fit(args: argparse.Namespace) -> int:
     chains = int(sampler.get("num_chains", 4))
     # As NumPyro: with fewer XLA host devices than chains, the chains run
     # one after another, which the CI must never do. JAX on CPU has one
-    # device unless XLA_FLAGS says otherwise.
+    # device unless XLA_FLAGS says otherwise. A stored fit ran elsewhere.
     flag = re.search(
         r"--xla_force_host_platform_device_count=(\d+)",
         os.environ.get("XLA_FLAGS", ""),
     )
     devices = int(flag.group(1)) if flag else 1
-    if devices < chains:
+    if devices < chains and not stored:
         print(
             f"fake fit: {chains} chains on {devices} XLA devices would run "
             "sequentially",
@@ -215,6 +221,40 @@ def cmd_fit(args: argparse.Namespace) -> int:
         ppc = fake_ppc(args.vintage, sc, args.config)
         (out / "ppc.json").write_text(json.dumps(ppc, indent=1))
     return 0
+
+
+def cmd_fit_store(args: argparse.Namespace) -> int:
+    """`fit-store plan` lists nothing; `unpack` writes a stored fit."""
+    if args.action == "plan":
+        if args.out:
+            Path(args.out).write_text(json.dumps({"include": []}))
+        print("0 of 0 fits to make.")
+        return 0
+    sc = scenario()
+    if sc == "missing":
+        print(f"{args.model} at {args.origin}: missing.")
+        return 3
+    if sc == "storefailed":
+        print(f"{args.model} at {args.origin}: failed.")
+        return 4
+    fit = argparse.Namespace(
+        out=args.out,
+        sampler_json=os.environ.get("CAND_SAMPLER", "{}"),
+        config=os.environ.get("CAND_CONFIG", "main"),
+        vintage=args.origin,
+    )
+    status = cmd_fit(fit, stored=True)
+    if status == 0:
+        record = {
+            "model": args.model,
+            "origin": args.origin,
+            "key": "0123456789abcdef",
+            "commit": "c0ffee0" * 5 + "c",
+            "fitted_at": "2026-11-02T08:00:00+00:00",
+            "store_commit": "5707e00" * 5 + "5",
+        }
+        (Path(args.out) / "store.json").write_text(json.dumps(record))
+    return status
 
 
 def cmd_nowcast(args: argparse.Namespace) -> int:
@@ -454,6 +494,15 @@ def main() -> int:
     fr = sub.add_parser("freeze-round")
     fr.add_argument("--ledger", required=True)
     fr.add_argument("--round", required=True)
+    fs = sub.add_parser("fit-store")
+    fs.add_argument("action", choices=["plan", "unpack"])
+    fs.add_argument("--store", default="output/fit-store")
+    fs.add_argument("--model", default=None)
+    fs.add_argument("--models", nargs="*", default=None)
+    fs.add_argument("--origin", default=None)
+    fs.add_argument("--origins", nargs="*", default=None)
+    fs.add_argument("--out", default=None)
+    fs.add_argument("--keys", default=None)
     co = sub.add_parser("coherence")
     co.add_argument("--vintage", required=True)
     co.add_argument("--out", required=True)
@@ -464,6 +513,7 @@ def main() -> int:
     return {
         "data": lambda _a: 0,
         "fit": cmd_fit,
+        "fit-store": cmd_fit_store,
         "nowcast": cmd_nowcast,
         "plot-submission": cmd_plot,
         "plot-ppc": cmd_plot,
