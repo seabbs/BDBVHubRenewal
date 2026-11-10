@@ -160,7 +160,7 @@ MODEL_METADATA = {
             "the remaining count minus Poisson removals of the count "
             "reported, both fitted per horizon from retrospective nowcasts, "
             "so counts can be revised down. "
-            "Each nowcast draw is carried forward from its latest week as a "
+            "Each sample's completed latest week is carried forward as a "
             "random walk on the log scale with Poisson noise. A place under "
             "10 cases a week uses the delay, nowcast size and walk spread "
             "pooled over its parent (zone, then province, then national), "

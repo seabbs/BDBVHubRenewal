@@ -21,7 +21,7 @@ from bdbvhubrenewal.forecasters import ForecastTask, get_model
 
 PINNED = {
     "randomwalk": "9b1d7b419e80550d",
-    "randomwalknowcast": "09bc5017c022b20e",
+    "randomwalknowcast": "d55a7af146bf166b",
 }
 
 _COMPILES: list[float] = []

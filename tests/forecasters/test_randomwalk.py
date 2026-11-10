@@ -169,6 +169,65 @@ def test_the_partial_week_adds_walk_draws_to_its_nowcast(
     assert mine.nunique() > 10
 
 
+def test_the_walk_goes_on_from_the_completed_cut_off_week(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    # Cut-off 10-16 is a Friday, so the week of 10-17 misses a day. With no
+    # walk spread, each sample's next week is Poisson of its own completed
+    # 10-17 value: the nowcast of the observed days plus the walk's draw
+    # for the missing day.
+    task = dataclasses.replace(
+        _task(target, delays, daily, "2026-10-17"), n_samples=4000
+    )
+    model = RandomWalkNowcast()
+    origin = model.origin_at(task, errors=True)
+    origin.sigma[:] = 0.0
+    values, weeks = model.trajectories(origin, task, origin.point)
+    i = origin.snap.locations.index("CD-IT")
+    cw = weeks.index("2026-10-17")
+    week, after = values[:, i, cw], values[:, i, cw + 1]
+    assert after.mean() == pytest.approx(week.mean(), rel=0.03)
+    assert np.corrcoef(week, after)[0, 1] > 0.9
+
+
+def test_the_missing_days_step_from_the_week_before(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    # Cut-off 10-16 is a Friday, so the week of 10-17 misses a day. The
+    # week before, 10-10, meets the start rule, so with no walk spread each
+    # sample's missing day is Poisson(its 10-10 nowcast / 7).
+    task = dataclasses.replace(
+        _task(target, delays, daily, "2026-10-17"), n_samples=4000
+    )
+    model = RandomWalkNowcast()
+    origin = model.origin_at(task, errors=True)
+    origin.sigma[:] = 0.0
+    values, weeks = model.trajectories(origin, task, origin.point)
+    i = origin.snap.locations.index("CD-IT")
+    cw = weeks.index("2026-10-17")
+    want = origin.point[i, cw] + origin.point[i, cw - 1] / 7
+    assert values[:, i, cw].mean() == pytest.approx(want, rel=0.03)
+
+
+def test_a_full_cut_off_week_is_the_walks_base(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    # Cut-off 10-24 is a Saturday, so the week of 10-24 is full and the
+    # walk goes on from each sample's nowcast of it.
+    task = dataclasses.replace(
+        _task(target, delays, daily, "2026-10-24"), n_samples=4000
+    )
+    model = RandomWalkNowcast()
+    origin = model.origin_at(task, errors=True)
+    origin.sigma[:] = 0.0
+    values, weeks = model.trajectories(origin, task, origin.point)
+    i = origin.snap.locations.index("CD-NK")
+    cw = weeks.index("2026-10-24")
+    week, after = values[:, i, cw], values[:, i, cw + 1]
+    assert after.mean() == pytest.approx(week.mean(), rel=0.03)
+    assert np.corrcoef(week, after)[0, 1] > 0.9
+
+
 def test_diagnostics_name_the_sources(
     runs: dict[str, tuple[RandomWalk, pd.DataFrame]],
 ) -> None:
@@ -299,19 +358,67 @@ def test_the_walk_forecasts_on_from_each_samples_nowcast(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
     # Cut-off 10-16 is a Friday, so the week of 10-17 is partial. Each
-    # sample walks on from its own nowcast of the start week, so the
-    # forecast is at least as spread as that nowcast and follows it.
+    # sample walks on from its own completed 10-17 week, so the forecast is
+    # at least as spread as that week and follows it.
     task = _task(target, delays, daily, "2026-10-17")
     model = RandomWalkNowcast()
     out = model.forecast(task)
-    info = pd.DataFrame(model.fit_diagnostics).set_index("location")
     for loc in ("CD-IT", "CD-NK"):
         mine = out.loc[out["location"] == loc].pivot(
             index="sample", columns="target_end_date", values="value"
         )
-        start = info.loc[loc, "start_week"]
         later = [w for w in mine.columns if w > "2026-10-17"]
-        x0 = np.log1p(mine[start].to_numpy())
+        x0 = np.log1p(mine["2026-10-17"].to_numpy())
         x1 = np.log1p(mine[later[0]].to_numpy())
         assert x1.std() >= x0.std()
         assert np.corrcoef(x0, x1)[0, 1] > 0.2
+
+
+def test_the_start_week_search_reaches_back_over_the_nowcast_window(
+    daily: pd.DataFrame, daily_zones: pd.DataFrame
+) -> None:
+    from bdbvhubrenewal.data.snapshots import snapshot_arrays
+    from bdbvhubrenewal.forecasters.chain import build_origin
+    from bdbvhubrenewal.forecasters.randomwalk import (
+        _quiet,
+        _start_weeks,
+        start_window,
+    )
+
+    # 1.5 D days, the nowcast's own training window, is 9 weeks for D = 42.
+    assert start_window(Settings()) == 9
+    # Kilo's last week with 5 cases is 07-11, 17 weeks before the 11-07
+    # cut-off week, so it has no start week in the window and draws
+    # introductions after its latest complete week.
+    snap = snapshot_arrays(
+        pd.concat([daily, daily_zones]), "2026-11-08", ("CD-IT-17",)
+    )
+    origin = build_origin(snap, Settings(), errors=False)
+    i = snap.locations.index("CD-IT-17")
+    assert _quiet(origin)[i]
+    assert not origin.silent[i]
+    assert _start_weeks(origin)[i] == origin.start[i]
+
+
+def test_a_quiet_place_with_recent_cases_draws_introductions(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    daily_zones: pd.DataFrame,
+) -> None:
+    task = dataclasses.replace(
+        _task(target, delays, daily, "2026-11-08"),
+        locations=("CD-IT-17",),
+        daily_history=pd.concat([daily, daily_zones]),
+        n_samples=400,
+    )
+    model = RandomWalkNowcast()
+    origin = model.origin_at(task, errors=True)
+    values, _ = model.trajectories(origin, task, origin.point)
+    i = origin.snap.locations.index("CD-IT-17")
+    cw = origin.snap.cut_week(origin.o)
+    # Kilo is quiet but not silent. Weeks with data keep at least what is
+    # reported, and most samples have no introduction yet the week after.
+    seen = values[:, i, : cw + 1]
+    assert (seen >= origin.reported[i, : cw + 1] - 1e-9).all()
+    assert (values[:, i, cw + 1] == 0).mean() > 0.5
