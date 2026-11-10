@@ -169,22 +169,46 @@ def _walks(
     return np.asarray(lam, np.float64), counts
 
 
+def start_window(settings: Settings) -> int:
+    """Return the weeks back from the cut-off week a start week may be.
+
+    It is `Settings.history_delay`, the onset days the nowcast's delay is
+    fitted on (1.5 D), in whole weeks.
+
+    Parameters
+    ----------
+    settings : Settings
+        Settings.
+
+    Returns
+    -------
+    int
+        Weeks, counting the cut-off week.
+    """
+    return -(-settings.history_delay // 7)
+
+
 def _start_ok(origin: Origin) -> np.ndarray:
     """Return the full weeks a walk can start from, `[L, W]`.
 
-    A week can when its share reported is at least `Settings.start_share`
-    and its reported count is at least `Settings.start_count`.
+    A week can when its share reported is at least `Settings.start_share`,
+    its reported count is at least `Settings.start_count`, and it is within
+    `start_window` weeks of the cut-off week.
     """
     settings, full = origin.settings, origin.start_nowcast
-    return (origin.complete[:, : full + 1] >= settings.start_share) & (
+    ok = (origin.complete[:, : full + 1] >= settings.start_share) & (
         origin.reported[:, : full + 1] >= settings.start_count
     )
+    first = origin.snap.cut_week(origin.o) - start_window(settings) + 1
+    ok[:, : max(first, 0)] = False
+    return ok
 
 
 def _quiet(origin: Origin) -> np.ndarray:
     """Return the places that draw introductions instead of a walk, `[L]`.
 
-    These are the silent places and those with no week to start from.
+    These are the silent places and those with no week to start from in
+    the `start_window`.
     """
     return origin.silent | ~_start_ok(origin).any(axis=1)
 
