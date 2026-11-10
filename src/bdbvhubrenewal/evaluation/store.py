@@ -675,10 +675,12 @@ def load(
     store: Path | str,
     keys: Keys,
     results: Path | str = "results",
+    min_horizon: int | None = None,
 ) -> list[StoreStatus]:
     """Write the stored fits where the backtest and the docs read them.
 
-    Every origin goes to `forecasts.csv.gz`.
+    Every origin goes to `forecasts.csv.gz`, from `min_horizon` on: a
+    stored fit holds the submission's weeks, which start earlier.
     Fit summaries go to `backtest-fits.csv` and learnt delays to
     `delay-summary.csv`. Each file keeps the rows of models not stored.
     What was used is written to `STATUS_FILE`.
@@ -691,6 +693,9 @@ def load(
         `current_keys`.
     results : pathlib.Path or str
         The results directory.
+    min_horizon : int, optional
+        The backtest's first week (`[forecast] min_horizon`). None keeps
+        every week.
 
     Returns
     -------
@@ -720,8 +725,14 @@ def load(
                 failed,
             )
         )
+    forecasts = [f.forecasts for f in loaded]
+    if min_horizon is not None:
+        forecasts = [
+            f.loc[f["horizon"] >= min_horizon] if "horizon" in f else f
+            for f in forecasts
+        ]
     for name, frames in (
-        ("forecasts.csv.gz", [f.forecasts for f in loaded]),
+        ("forecasts.csv.gz", forecasts),
         ("backtest-fits.csv", [f.fits for f in loaded]),
         (DELAY_SUMMARY_FILE, [f.delays for f in loaded]),
     ):
@@ -809,7 +820,7 @@ def command(args: argparse.Namespace) -> int:
                 json.dumps([f"{m}/{o}/{k}" for (m, o), k in keys.items()])
             )
         return 0
-    for s in load(args.store, keys, args.results):
+    for s in load(args.store, keys, args.results, config.min_horizon):
         state = "current" if s.current else "not fitted for this code"
         if s.used and not s.current:
             state += f", older fit {s.used} used"
