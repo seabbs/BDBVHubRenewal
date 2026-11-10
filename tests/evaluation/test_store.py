@@ -196,6 +196,7 @@ def test_the_submission_task_has_the_stored_key(
 def test_plan_fit_and_load(
     fitted_flat: str,
     tasks: dict[str, ForecastTask],
+    config: BacktestConfig,
     tmp_path: Path,
 ) -> None:
     root = tmp_path / "store"
@@ -232,7 +233,7 @@ def test_plan_fit_and_load(
     assert again == left | {broken}
 
     results = tmp_path / "results"
-    status = store.load(root, keys, results)
+    status = store.load(root, keys, results, config.min_horizon)
     by_origin = {s.origin: s for s in status}
     assert by_origin[newest].current
     assert by_origin[oldest].current
@@ -242,8 +243,10 @@ def test_plan_fit_and_load(
     assert by_origin[broken].used is not None
     assert by_origin[origins[3]].used is None
     dev = pd.read_csv(results / "forecasts.csv.gz")
-    # Every loaded origin is backtested.
+    # Every loaded origin is backtested, from the backtest's first week.
     assert set(dev["vintage"]) == {oldest, stale, broken, newest}
+    assert stored.forecasts["horizon"].min() < config.min_horizon
+    assert dev["horizon"].min() == config.min_horizon
     recorded = json.loads((results / store.STATUS_FILE).read_text())
     assert len(recorded) == len(tasks)
 
