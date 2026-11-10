@@ -51,7 +51,7 @@ NO_LAG = np.ones(1)
 
 Every report is published on its report day. A NumPy array, so that
 importing the package does not start JAX before the host device count
-is set (`cli.host_devices`).
+is set (`devices.host_devices`).
 """
 
 

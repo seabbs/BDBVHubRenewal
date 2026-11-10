@@ -35,7 +35,8 @@ baselinenowcast's `apply_delay` fills the row from the week's reported
 count (`week_nowcast`), with its $+1$, so a week with nothing reported yet
 still expects some cases.
 
-**Uncertainty.** A release $r < o$ with an in-window pair at $r$ nowcasts
+**Uncertainty.** A release $r < o$ with an in-window pair at $r$, and a
+cut-off at most `Settings.retro_delay` (63) days before $c_o$, nowcasts
 the count expected at $o$ for days up to $c_r$, with the same weekly fill
 from $c_r$ to $c_o$ and the $g$ of $r$.
 Its new reports and removals by weeks back fit the observation model
@@ -85,6 +86,7 @@ __all__ = [
     "Errors",
     "MissingSnapshots",
     "NoDelayPair",
+    "NoWalkSpread",
     "Origin",
     "Settings",
     "build_origin",
@@ -114,6 +116,10 @@ class NoCompleteWeek(ModelUnavailableError):  # noqa: N818
     """No week of a place reaches the completeness that starts the walk."""
 
 
+class NoWalkSpread(ModelUnavailableError):  # noqa: N818
+    """A place has no walk spread of its own or from any parent."""
+
+
 @dataclass(frozen=True)
 class Settings:
     """Settings shared by the random walk models.
@@ -135,10 +141,6 @@ class Settings:
         start the random walk.
     walk_weeks : int
         Weeks, ending at the start week, whose changes set the spread.
-    clock_shift : int
-        Days added to the ages of the origin's days, for the sensitivity
-        of the nowcast to the onset clock. Ages below 0 count as 0. The
-        delay and the retrospective errors are not moved.
     start_share : float
         Share of a week reported for `randomwalknowcast` to start
         its walk from the week's nowcast.
@@ -153,7 +155,6 @@ class Settings:
     level_weeks: tuple[int, int] = (3, 6)
     completeness: float = 0.95
     walk_weeks: int = 9
-    clock_shift: int = 0
     start_share: float = 0.05
     start_count: float = 5.0
 
@@ -166,6 +167,17 @@ class Settings:
         """
         n_used = round(3 * self.max_delay)
         return max(n_used // 2, self.max_delay + 1)
+
+    @property
+    def retro_delay(self) -> int:
+        """Days back from the origin's cut-off for retrospective nowcasts.
+
+        R gives the `round(3 * D)` reference times left after
+        `history_delay` to its retrospective nowcasts, so a release whose
+        cut-off is more than this many days before the origin's gives
+        none.
+        """
+        return round(3 * self.max_delay) - self.history_delay
 
 
 @dataclass
@@ -384,10 +396,9 @@ def final_growth(
     Returns
     -------
     numpy.ndarray
-        $G(a)$ at each day's age, shifted by `Settings.clock_shift`,
-        `[L, T]`.
+        $G(a)$ at each day's age, `[L, T]`.
     """
-    age = snap.cut[o] - np.arange(snap.week.size) + settings.clock_shift
+    age = snap.cut[o] - np.arange(snap.week.size)
     return growth(fit.g, age, settings.max_delay)
 
 
@@ -535,6 +546,8 @@ def retro_errors(
     cells: list[tuple[np.ndarray, ...]] = []
     releases: list[str] = []
     for r in range(1, o):
+        if snap.cut[o] - snap.cut[r] > settings.retro_delay:
+            continue
         fit = delay(snap, r, settings)
         if fit is None:
             continue
@@ -675,7 +688,7 @@ def build_origin(
         )
     g = final_growth(snap, o, fit, settings)
     reported = weekly_sums(snap, o)
-    age = snap.cut[o] - np.arange(snap.week.size) + settings.clock_shift
+    age = snap.cut[o] - np.arange(snap.week.size)
     point = week_nowcast(snap, o, fit.g, age, settings.max_delay)
     inv = np.where(snap.observed[o][None, :], 1.0 / g, 0.0)
     complete = week_sum(snap, inv) / 7.0
@@ -694,8 +707,16 @@ def build_origin(
         settings.min_level,
         1,
     )[:, 0]
-    both = np.concatenate([own, pooled])
-    sigma = np.sqrt(np.nan_to_num(both[sigma_source]).clip(min=0.0))
+    var = np.concatenate([own, pooled])[sigma_source]
+    if not (var > 0).all():
+        none = [
+            c for c, v in zip(snap.locations, var, strict=True) if not v > 0
+        ]
+        raise NoWalkSpread(
+            f"No walk spread above 0 at {snap.releases[o]} for "
+            f"{', '.join(none)}, of its own or from any parent."
+        )
+    sigma = np.sqrt(var)
     k = settings.walk_weeks
     silent = silent_places(reported, snap.cut_week(o), k)
     intro = introduction_rates(reported, start, snap.parent, k)

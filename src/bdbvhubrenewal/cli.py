@@ -60,6 +60,7 @@ from bdbvhubrenewal.data.releases import cutoff_lags
 from bdbvhubrenewal.data.simulate import SCENARIO_RT_SCALE
 from bdbvhubrenewal.data.tidy import write_csv
 from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
+from bdbvhubrenewal.devices import host_devices
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.evaluation import store
 from bdbvhubrenewal.evaluation.nowcast import (
@@ -578,27 +579,6 @@ def _task(args: argparse.Namespace) -> tuple[ForecastTask, list[str]]:
         )
         notes.append(f"round {ref} forecast from the {vintage} release")
     return task, notes
-
-
-def host_devices(n: int) -> None:
-    """Give XLA at least `n` host devices, so `n` chains run in parallel.
-
-    NumPyro runs chains in parallel only with as many devices as chains.
-    This must run before JAX starts, so the CLI calls it before any fit.
-    Other flags in `XLA_FLAGS` are kept, and a larger count is kept.
-
-    Parameters
-    ----------
-    n : int
-        The number of chains.
-    """
-    key = "--xla_force_host_platform_device_count="
-    flags = os.environ.get("XLA_FLAGS", "").split()
-    have = [int(f[len(key) :]) for f in flags if f.startswith(key)]
-    if have and max(have) >= n:
-        return
-    rest = [f for f in flags if not f.startswith(key)]
-    os.environ["XLA_FLAGS"] = " ".join([*rest, f"{key}{n}"])
 
 
 def _fit(args: argparse.Namespace) -> int:
