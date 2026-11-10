@@ -5,7 +5,8 @@
 #       print `true` if the run may write a store, `false` if it only
 #       plans, and fail if SCRATCH is not a scratch branch name
 #   scripts/fit-store.sh fetch DIR
-#       copy the branch's files into DIR (empty if there is no branch)
+#       copy the branch's files into DIR (empty if there is no branch),
+#       with the commit fetched in DIR/.commit
 #   scripts/fit-store.sh push DIR KEYS PLAN
 #       add DIR's planned fits to the branch, prune it and push
 #
@@ -45,6 +46,7 @@ case "$action" in
     mkdir -p "$dir"
     if fetch_tip; then
       git archive FETCH_HEAD | tar -x -C "$dir"
+      git rev-parse FETCH_HEAD > "$dir/.commit"
     fi
     ;;
   push)
