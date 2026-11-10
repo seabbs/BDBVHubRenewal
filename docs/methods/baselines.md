@@ -9,6 +9,17 @@ The renewal models are on the [Renewal models](model.md) page.
 `randomwalk` is the same walk from the latest complete week, with no nowcast.
 Both run at province and zone level ([Health zones](#health-zones)), and national is the sum of the provinces.
 
+In brief, `randomwalknowcast`:
+
+1. follows baselinenowcast, through a JAX port of the R package with one named extension for release snapshots ([Delay](#delay));
+2. has an observation model for the nowcast as in baselinenowcast, negative binomial new reports on the count still to come, fitted from retrospective nowcasts ([Nowcast](#nowcast));
+3. nowcasts every week at least 5% reported, and forecasts the later weeks ([Start from the nowcast](#start-from-the-nowcast));
+4. continues each nowcast trajectory with a random walk on $\log(1 + y)$ ([Forecast](#forecast));
+5. takes the walk's variance net of Poisson noise ([Forecast](#forecast));
+6. shares the delay, size and walk variance with a parent where a place has fewer than 10 cases a week ([Own or pooled estimates](#own-or-pooled-estimates)).
+
+Two further rules keep places with few or no cases sensible: introductions for places with no recent case ([Forecast](#forecast)), and zone samples that sum to their province's ([Health zones](#health-zones)).
+
 ## Structure
 
 `randomwalknowcast` nowcasts each recent week and walks forward from each nowcast draw.
@@ -155,7 +166,7 @@ Sample $i$ is one draw of $X_{p,i}(w)$ per week.
 
 $\phi_{p,k}$ and $b_{p,k}$ are fitted as follows.
 
-1. Take each earlier release $r < o$ with an in-window pair among the releases up to $r$.
+1. Take each earlier release $r < o$ with an in-window pair among the releases up to $r$, and a cut-off at most $3D - 1.5D = 63$ days before $c_o$, the reference times baselinenowcast leaves for its retrospective nowcasts.
 2. Nowcast from the data up to $r$ with the delay of $r$, $\hat y_p(w)$.
    It is the same weekly fill from $c_r$, with the shares taken relative to the count at $c_o$, so its last column is at $c_o$.
 3. For weeks back $k$ with a day younger than $D$ at $r$, and where $Y_{p,r}(w) > 0$ or $\hat y_p(w) > 0$, compare the count of $w$ on days up to $c_r$ between releases $r$ and $o$.
@@ -218,10 +229,13 @@ $v$ is the delta-method variance of $\log(1 + Y)$ for $Y \sim \text{Poisson}(\la
 The noise matters only for small places. At 10 cases a week the term for a change is about 0.17, and at 250 it is under 0.01.
 At a few cases a week the delta method understates the noise, so some of it stays in $\sigma_p$.
 A place whose $\sigma_p^2$ is 0 or below, or which has fewer than 2 changes, has no own estimate, and takes its parent's by the [own-or-pooled rule](#own-or-pooled-estimates).
+If no parent nor the country has a variance above 0, the model gives no forecast for that origin.
 A pooled $\sigma_p$ uses the changes and noise of all the places in the pool together.
 
 A place with no case in the 9 weeks to $c_o$ stays at 0 until a new introduction, which starts its walk from a Poisson(1) count given at least 1.
 An introduction occurs each week after the latest complete week with probability $q_p$, times the share of the week not yet reported, where $q_p$ is the share of weeks with a case after 9 weeks without one in the place and its siblings.
+Without this rule a silent place would walk from a nowcast near 0, with baselinenowcast's $+1$ and a pooled spread, and so forecast a few cases every week.
+Most zones and several provinces are silent at any origin, and their truth is almost always 0, so the rule keeps them at exactly 0 unless a case is likely from what their siblings show.
 
 ## Start from the latest complete week
 
@@ -264,13 +278,27 @@ $$
 
 Largest remainders make the values whole numbers that sum to $Y^{(i)}(w)$, so zone samples sum to their province's samples ([Renewal models](model.md#health-zones)).
 Where every $x^{(i)}_z(w)$ is 0 the split uses the Dirichlet mean shares of the [Renewal models](model.md#split-of-province-samples) page.
+Zones are reconciled because their own walks are noisy and do not sum to their province's, which pools more data.
+The split keeps each zone's share from its own sample, and the province sets the total, so the zone, province and national forecasts describe one set of trajectories.
 
 ## Partially pooled variant
 
-`pprandomwalknowcast` is `randomwalknowcast` with partial pooling over zones, provinces and the country in place of the [own-or-pooled rule](#own-or-pooled-estimates).
-The pooled estimates are the delay $\Delta_p$, the walk spread $\sigma_p$, the size $\phi_{p,k}$ and the removal rate $b_{p,k}$.
-The nowcast draws, the walk and the zone reconciliation are the same.
-Each is fitted in numpyro with NUTS, with 2 chains of 500 warm-up and 500 draws run in sequence from the prior medians, at target acceptance 0.9.
+`pprandomwalknowcast` is `randomwalknowcast` with partially pooled point estimates.
+Its delay $\Delta_p$, walk spread $\sigma_p$ and nowcast size $\phi_{p,k}$ come from one hierarchical numpyro model, which pools each place towards its parent, in place of the [own-or-pooled rule](#own-or-pooled-estimates).
+The model only estimates them.
+Their posterior medians are plugged into `randomwalknowcast`'s nowcast and walk, so the forecasts do not carry their posterior uncertainty.
+
+**The same as `randomwalknowcast`.**
+The release snapshots, delay window and preprocessing, the weekly nowcast fill, the retrospective errors, the start rule, the nowcast draws, the walk, the introductions and the zone reconciliation.
+
+**Different.**
+
+| Estimate | `randomwalknowcast` | `pprandomwalknowcast` |
+|---|---|---|
+| Delay $\Delta_p$ | Least squares on the log ratios of sums, own or pooled parent's | Poisson increments, below, pooled over the hierarchy |
+| Walk spread $\sigma_p$ | Variance of the changes net of Poisson noise, own or pooled parent's | Normal changes with variance $\sigma_p^2$ plus the Poisson noise, pooled |
+| Size $\phi_{p,k}$ | Maximum likelihood per $k$, own or pooled parent's | Negative binomial new reports, pooled |
+| Which places enter | Each place's own data, or its pool's | Only the places forecast; their parents are latent centres |
 
 Each parameter $\theta$ of place $p$ is its parent's plus an offset for the place's tier,
 
@@ -278,14 +306,11 @@ $$
 \theta_p = \theta_{\mathrm{pa}(p)} + \tau_{v(p)}\, z_p,
 \qquad
 z_p \sim \mathcal{N}(0, 1),
-\qquad
-\tau_v \sim \mathcal{N}^+(0, 0.5^2),
 $$
 
 with $v(p)$ the tier of $p$ (province or zone) and one $\tau_v$ for each tier and parameter.
-$\theta$ is $\log \Delta_p(j)$ for each age $j$, $\log \sigma_p$, and $\log \phi_{p,k}$ and $\log b_{p,k}$ for each week back $k$.
-The country's values have priors $\mathcal{N}(-3, 2^2)$, $\mathcal{N}(\log 0.2, 1)$, $\mathcal{N}(0, 1.5^2)$ and $\mathcal{N}(\log 0.005, 1.5^2)$.
-A place's counts are the sum of its children's, so for the walk spread and the nowcast uncertainty only the places forecast (the provinces, or the zones at zone level) enter the likelihood, and their parents are latent centres.
+$\theta$ is $\log \Delta_p(j)$ for each age $j$, $\log \sigma_p$, and $\log \phi_{p,k}$ for each week back $k$.
+A place's counts are the sum of its children's, so only the places forecast (the provinces, or the zones at zone level) enter the likelihood, and each case enters once.
 
 - **Delay.** For each gap $s$ and age $x$ with $\sum C_{p,r}(t) > 0$, the increment is Poisson,
 
@@ -295,17 +320,27 @@ A place's counts are the sum of its children's, so for the walk spread and the n
 
   with the sums, window and preprocessing of the [delay](#delay).
   With one place and a gap of 1 its maximum likelihood estimate is baselinenowcast's chain ladder factor.
-  A place's increments at age $x$ enter only where its denominator there, summed over the pairs, is at least 10 cases, as in the [own-or-pooled rule](#own-or-pooled-estimates), and the country's always do.
-  Other ages are informed only through the pooling.
-  A parent's increments are its children's summed, so a case at an age where both fit their own enters the likelihood once for each tier.
   It is fitted at the origin and at each earlier release that gives errors.
-- **Walk spread.** The weekly changes of $\log\{1 + Y_{p,o}(w)\}$ over the [forecast](#forecast) window are $\mathcal{N}(0, \sigma_p^2)$.
-  Changes between two weeks with no cases are left out.
-- **Nowcast uncertainty.** The new reports $A_{p,r}(w)$ are $\text{NB}(\widehat{\text{rem}}, \phi_{p,k})$ and the removals $B_{p,r}(w)$ are $\text{Poisson}(b_{p,k} Y_{p,r}(w))$, on the errors of [the fit](#nowcast), made with the pooled delay of each earlier release.
+- **Walk spread.** The weekly changes $\Delta_w$ of $\log\{1 + Y_{p,o}(w)\}$ over the [forecast](#forecast) window are $\mathcal{N}\big(0, \sigma_p^2 + v\{Y_{p,o}(w - 1)\} + v\{Y_{p,o}(w)\}\big)$.
+  A change between two weeks with no cases has no noise, so its density grows without bound as $\sigma_p$ falls to 0, and it is left out.
+- **Nowcast uncertainty.** The new reports $A_{p,r}(w)$ are $\text{NB}(\widehat{\text{rem}}, \phi_{p,k})$ on the errors of [the fit](#nowcast), made with the pooled delay of each earlier release.
 
-The posterior medians of $\Delta_p$, $\sigma_p$, $\phi_{p,k}$ (kept in $[0.1, 1000]$) and $b_{p,k}$ replace the estimates of `randomwalknowcast`.
-So the forecasts carry the pooled point estimates, not their posterior spread.
+**Priors and sampler.**
+
+| Parameter | Prior of the country's value | Why |
+|---|---|---|
+| $\log \Delta(j)$ | $\mathcal{N}(-3, 2^2)$ | Daily log growth about 0.05, 0.007 to 0.37 within one sd |
+| $\log \sigma$ | $\mathcal{N}(\log 0.2, 1)$ | Weekly log changes of about 0.2, 0.07 to 0.54 within one sd |
+| $\log \phi_k$ | $\mathcal{N}(0, 1.5^2)$ | Sizes about 1, 0.2 to 4.5 within one sd |
+| $\tau_v$ | $\mathcal{N}^+(0, 0.5^2)$ | Median offset sd 0.34, a place within a factor of about 1.4 of its parent |
+
+Each fit runs NUTS with 2 chains of 500 warm-up and 500 draws, in sequence, from the prior medians, at target acceptance 0.9.
+A fit whose worst split $\hat R$ is above 1.05, or with more than 1% of its draws divergent, raises, and the model gives no forecast for that origin.
+The posterior medians of $\phi_{p,k}$ are kept in $[0.1, 1000]$, the range of baselinenowcast's fit.
 It is scored on the real releases at province and zone level.
+
+**Open.** Each forecast sample could instead take its own posterior draw of $(\Delta, \sigma, \phi)$, which would make the forecast carry the uncertainty of the estimates.
+That choice is not made yet.
 
 ## Limitations
 

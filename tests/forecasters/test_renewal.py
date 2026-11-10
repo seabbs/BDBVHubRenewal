@@ -628,3 +628,67 @@ def test_a_simulated_release_is_cut_at_its_stored_cut_off() -> None:
     end = data.start_date + dt.timedelta(days=7 * data.n_weeks - 1)
     assert cut == dt.date(2026, 9, 5)
     assert end == dt.date(2026, 9, 5)
+
+
+def test_province_workers_fill_the_cores_with_chains(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(rn.PROVINCE_WORKERS_ENV, raising=False)
+    monkeypatch.setattr(rn, "_cores", lambda: 4)
+    assert rn.province_workers(2, 5) == 2
+    assert rn.province_workers(4, 5) == 1
+    # No more workers than provinces, and a cap on a large host.
+    assert rn.province_workers(2, 1) == 1
+    monkeypatch.setattr(rn, "_cores", lambda: 64)
+    assert rn.province_workers(2, 20) == rn.MAX_PROVINCE_WORKERS
+    monkeypatch.setenv(rn.PROVINCE_WORKERS_ENV, "1")
+    assert rn.province_workers(2, 5) == 1
+    for bad in ("0", "auto"):
+        monkeypatch.setenv(rn.PROVINCE_WORKERS_ENV, bad)
+        with pytest.raises(ValueError, match=rn.PROVINCE_WORKERS_ENV):
+            rn.province_workers(2, 5)
+
+
+@pytest.mark.usefixtures("quiet")
+def test_provinces_are_fitted_largest_first(
+    task: ForecastTask, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[tuple[str, ...]] = []
+
+    def fake(self: rn.RenewalModel, t: ForecastTask) -> rn.RenewalRun:
+        seen.append(t.locations)
+        return _fake_run(t, self.variant)
+
+    monkeypatch.setattr(rn.RenewalModel, "run", fake)
+    fit = get_model("renewalsp").forecast_fit(task)
+    counts = task.target.groupby("location")["total"].sum()
+    sizes = [counts.get(p[0], 0) for p in seen]
+    assert sizes == sorted(sizes, reverse=True)
+    # The runs keep the task's province order.
+    assert list(fit.runs) == [p for p in task.locations if p in fit.runs]
+
+
+@pytest.mark.slow
+@pytest.mark.usefixtures("quiet")
+def test_provinces_in_parallel_match_one_after_another(
+    task: ForecastTask, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tiny = {
+        "num_chains": 1,
+        "num_warmup": 4,
+        "num_samples": 4,
+        "target_accept": 0.8,
+        "max_tree_depth": 2,
+        "seed": 1,
+    }
+    counts = task.target.groupby("location")["total"].sum()
+    counts = counts.drop(["CD", task.locations[-1]], errors="ignore")
+    two = tuple(counts.sort_values().index[-2:])
+    # The last province stays in, silent, as the random walk stand-in.
+    sub = replace(task, locations=(*two, task.locations[-1]))
+    model = rn.RenewalModel(rn.VARIANTS["renewalsp"], sampler=tiny)
+    serial = model.forecast_fit(sub)
+    monkeypatch.setenv(rn.PROVINCE_WORKERS_ENV, "2")
+    parallel = model.forecast_fit(sub)
+    pd.testing.assert_frame_equal(parallel.samples, serial.samples)
+    assert list(parallel.runs) == list(serial.runs)
