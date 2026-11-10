@@ -114,6 +114,7 @@ $\Delta_p$ is the non-negative least squares fit of all these equations, each we
 With a gap of 1 only, $\exp \Delta_p(x)$ is baselinenowcast's chain ladder factor.
 Cells a release does not observe are skipped, not filled, and a gap and age with a zero denominator give no equation.
 The parent of a province is the country, whose counts are the sum of its provinces.
+A place takes its own or a pooled $\Delta_p$ by the [own-or-pooled rule](#own-or-pooled-estimates).
 Only onset days less than $1.5 D = 63$ days before the cut-off of the latest release used contribute to the sums, as in baselinenowcast's default, and a retrospective fit uses the cut-off of its own release.
 Before the sums, each day's increments between its releases go through baselinenowcast's handling of negative values, so a downward revision is set to zero and taken from the earlier increments of that day and no ratio falls below 1.
 The [observation model](#nowcast) is fitted on the same preprocessed counts.
@@ -177,23 +178,20 @@ summed over the kept releases.
 $\phi_{p,k}$ is fitted by maximum likelihood on $[0.1, 1000]$, one size per $k$, as baselinenowcast does.
 A week with $\widehat{\text{rem}} = 0$ says nothing about $\phi$, so it is left out of that fit.
 The weeks in the fit of $\phi_{p,k}$ are the errors at $k$.
-Where the estimate chosen by the [pooling rule](#own-or-pooled-estimates) has fewer than 3 errors at $k$, $\phi_{p,k} \approx 2.2$, the median of epinowcast's prior $1 / \sqrt{\phi} \sim \mathcal{N}^+(0, 1)$.
+Where the estimate chosen by the [pooling rule](#own-or-pooled-estimates) has no errors at $k$, $\phi_{p,k} \approx 2.2$, the median of epinowcast's prior $1 / \sqrt{\phi} \sim \mathcal{N}^+(0, 1)$.
 The release backtest in [#152](https://github.com/seabbs/BDBVHubRenewal/pull/152) compared this default with Poisson removals of the reported count, new reports clipped at 0 with no preprocessing, a delay fitted without preprocessing, and baselinenowcast's proposed rounded normal and Skellam models of the signed change.
 The negative binomial options scored the same within sampling noise, and the signed models were too narrow, so the default is kept.
 
 ## Own or pooled estimates
 
 The places form a hierarchy of zone, province and country.
-Each estimate is chosen as follows.
+Each estimate is chosen by one rule.
 
-1. **Delay.** At each age $x$, a place uses its own $\Delta_p(x)$ if its denominator $\sum C_{p,r}(t)$ at that age, summed over the pairs, is at least 10 cases.
-   Otherwise it uses its parent's.
-   The country always uses its own.
-2. **Level.** The place's level $\ell_p$ is the mean of $Y_{p,o}(w)$ over weeks 3 to 6 back.
-3. **Walk spread.** A place with $\ell_p \ge 10$ cases a week and an own $\sigma_p^2 > 0$ ([below](#forecast)) uses its own $\sigma_p$.
-4. **Size.** A place with $\ell_p \ge 10$ and at least 3 errors at $k$ uses its own $\phi_{p,k}$.
-5. **Fallback.** A place that fails step 3 or 4 uses the pooled estimate of its nearest parent that meets the same rule, and otherwise the country's.
-   A pooled estimate uses together the errors and weekly changes of the parent's children with $\ell \ge 10$, or the parent's own where none has.
+1. **Level.** The place's level $\ell_p$ is the mean of $Y_{p,o}(w)$ over weeks 3 to 6 back.
+2. **Own.** A place with $\ell_p \ge 10$ cases a week uses its own delay $\Delta_p$, size $\phi_{p,k}$ and walk spread $\sigma_p$.
+   The walk spread also needs an own $\sigma_p^2 > 0$ ([below](#forecast)).
+3. **Fallback.** Otherwise it uses the pooled estimate of its nearest parent that meets the same rule, and otherwise the country's.
+   A pooled estimate uses together the pair sums, errors and weekly changes of the parent's children with $\ell \ge 10$, or the parent's own where none has.
 
 ## Forecast
 
@@ -230,7 +228,11 @@ If no parent nor the country has a variance above 0, the model gives no forecast
 A pooled $\sigma_p$ uses the changes and noise of all the places in the pool together.
 
 A place with no case in the 9 weeks to $c_o$ stays at 0 until a new introduction, which starts its walk from a Poisson(1) count given at least 1.
-An introduction occurs each week after the latest complete week with probability $q_p$, times the share of the week not yet reported, where $q_p$ is the share of weeks with a case after 9 weeks without one in the place and its siblings.
+An introduction occurs each week after the latest complete week with probability $q_p$, times the share of the week not yet reported.
+$q_p$ is estimated over the 9 weeks to the place's start week, the weeks that set its walk spread, from the place and its siblings.
+A place with no case yet takes the rate of a first case: the share of weeks with a case among the weeks with no case before them.
+A place seen before takes the rate of a re-introduction: the share of weeks with a case among the weeks with an earlier case but none in the 9 weeks before.
+If the siblings have no introduction of that kind in the 9 weeks, all weeks to the start week count instead.
 Without this rule a silent place would walk from a nowcast near 0, with baselinenowcast's $+1$ and a pooled spread, and so forecast a few cases every week.
 Most zones and several provinces are silent at any origin, and their truth is almost always 0, so the rule keeps them at exactly 0 unless a case is likely from what their siblings show.
 

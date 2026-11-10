@@ -31,16 +31,14 @@ MAX_SIZE = 1000.0
 """Upper bound of `fit_nb`'s size, the Poisson end of its range."""
 
 PRIOR_SIZE = 1.0 / 0.6745**2
-r"""Size with too few errors to fit one, about 2.2.
+r"""Size with no errors to fit one, about 2.2.
 
 It is the median of epinowcast's prior $1 / \sqrt{\phi} \sim
 \mathcal{N}^+(0, 1)$.
 """
 
 
-def fit_sizes(
-    added: np.ndarray, remaining: np.ndarray, min_errors: int
-) -> np.ndarray:
+def fit_sizes(added: np.ndarray, remaining: np.ndarray) -> np.ndarray:
     r"""Fit the size $\phi_k$ of each week back by maximum likelihood.
 
     Parameters
@@ -50,9 +48,6 @@ def fit_sizes(
     remaining : numpy.ndarray
         Nowcast of the count still to come, `[N, K]`. A cell with 0 and
         no new reports adds nothing to the likelihood, so it pads.
-    min_errors : int
-        Cells with something to come a fit needs. With fewer, the size is
-        `PRIOR_SIZE`.
 
     Returns
     -------
@@ -60,9 +55,7 @@ def fit_sizes(
         $\phi_k$, `[K]`.
     """
     fitted = np.asarray(fit_by_horizon(added, remaining))
-    return np.where(
-        (remaining > 0).sum(axis=0) >= min_errors, fitted, PRIOR_SIZE
-    )
+    return np.where((remaining > 0).any(axis=0), fitted, PRIOR_SIZE)
 
 
 def sample_count(

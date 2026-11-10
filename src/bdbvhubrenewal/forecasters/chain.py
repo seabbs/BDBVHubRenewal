@@ -18,10 +18,10 @@ denominator.
 $g$ is the non-negative least squares fit of all of them
 (`log_factors`).
 Cells a release does not observe are skipped, not filled.
-A place uses its own $g(a)$ when the denominator at age $a$, summed over
-the pairs, is at least 10 cases, and otherwise its parent's (zone,
-province, country).
-The country uses its own.
+A place with at least 10 cases a week uses its own $g$, and otherwise
+the pooled $g$ of its nearest parent with them, fitted to the summed
+pair sums of that parent's places with 10 cases a week (`pooling`), as
+for the walk spread and the nowcast size.
 Only onset days within `Settings.history_delay` (63 for $D = 42$) of the
 latest cut-off are summed, and downward revisions are first moved onto
 earlier releases of the day, as baselinenowcast does.
@@ -44,8 +44,11 @@ counts whose downward revisions are moved onto earlier releases, as for
 the delay.
 
 **Introductions.** A place with no case in the latest `walk_weeks` weeks
-is silent, and its weekly probability of a first case is pooled over its
-siblings (`introductions.introduction_rates`).
+is silent.
+Its weekly probability of an introduction is the rate of a first case,
+or of a re-introduction if it was seen before, over the `walk_weeks`
+weeks to its start week, or all weeks to it if those have none, pooled
+over its siblings (`introductions.introduction_rates`).
 """
 
 from __future__ import annotations
@@ -74,7 +77,6 @@ from bdbvhubrenewal.forecasters.introductions import (
 )
 from bdbvhubrenewal.forecasters.obs import fit_sizes
 from bdbvhubrenewal.forecasters.pooling import (
-    MIN_ERRORS,
     MIN_LEVEL,
     pool_matrix,
     source_index,
@@ -131,10 +133,8 @@ class Settings:
         $D$, the days a count may still grow, baselinenowcast's
         `max_delay`.
     min_level : float
-        Cases a week for a place to use its own spreads, and cases in the
-        pooled denominator of an age for it to use its own delay factor.
-    min_errors : int
-        Errors at a horizon to fit the observation model.
+        Cases a week for a place to use its own delay, walk spread and
+        nowcast size (`pooling`).
     level_weeks : tuple of int
         First and last weeks back averaged for a place's level.
     completeness : float
@@ -152,7 +152,6 @@ class Settings:
 
     max_delay: int = 42
     min_level: float = MIN_LEVEL
-    min_errors: int = MIN_ERRORS
     level_weeks: tuple[int, int] = (3, 6)
     completeness: float = 0.95
     walk_weeks: int = 9
@@ -190,18 +189,15 @@ class DelayFit:
     pairs : numpy.ndarray
         Earlier and later release of each in-window pair, `[P, 2]`.
     g : numpy.ndarray
-        Daily log development factor $g(a)$ of each place, `[L, D]`. A
-        place uses its own at an age when the denominator there, summed
-        over the pairs, is at least `Settings.min_level` cases, and
-        otherwise its parent's.
+        Daily log development factor $g(a)$ of each place, `[L, D]`, the
+        own or pooled estimate of `source`.
     level : numpy.ndarray
         Cases a week of each place, `[L]`.
     source : numpy.ndarray
-        Index of the estimate each place uses for its walk spread, `[L]`,
-        as for `source_index`.
+        Index of the delay each place uses, `[L]`, as for
+        `source_index`.
     own : numpy.ndarray
-        Whether each place uses its own factor at each age, `[L, D]`. The
-        country always does.
+        Whether each place uses its own factor at each age, `[L, D]`.
     """
 
     pairs: np.ndarray
@@ -366,16 +362,18 @@ def fit_delay(
     if sums is None:
         return None
     pairs, num, den, gaps = sums
-    g = log_factors(num, den, gaps)
-    own = own_ages(den, snap.parent, settings)
-    # Nodes are sorted by code length, so a parent precedes its children.
-    for n in range(g.shape[0]):
-        p = snap.parent[n]
-        if p >= 0:
-            g[n] = np.where(own[n], g[n], g[p])
     level = levels(snap, r, settings)
+    pool = pool_matrix(level, snap.parent, settings.min_level)
+    own_g = log_factors(num, den, gaps)
+    pooled_g = log_factors(
+        np.einsum("nm,mpa->npa", pool, num),
+        np.einsum("nm,mpa->npa", pool, den),
+        gaps,
+    )
     source = source_index(level, snap.parent, min_level=settings.min_level)
-    return DelayFit(pairs, g, level, source, own)
+    g = np.concatenate([own_g, pooled_g])[source]
+    own = np.broadcast_to((source == np.arange(level.size))[:, None], g.shape)
+    return DelayFit(pairs, g, level, source, np.array(own))
 
 
 def final_growth(
@@ -605,8 +603,8 @@ class Origin:
         Places with no case reported in the latest `walk_weeks` weeks,
         `[L]`.
     intro : numpy.ndarray
-        Weekly probability of a first case after `walk_weeks` silent
-        weeks, pooled over the place's siblings
+        Weekly probability of an introduction, a first case or a
+        re-introduction, pooled over the place's siblings
         (`introduction_rates`), `[L]`.
     errors : Errors or None
         Retrospective errors, or None where they were not asked for.
@@ -801,13 +799,12 @@ def _add_spread(origin: Origin) -> None:
     # A cell with nothing nowcast to come says nothing about the size.
     fit = errors.valid & (errors.remaining > 0)
     n = np.einsum("el,rlk->ek", member, fit, dtype=int)
-    source = source_index(
-        origin.fit.level,
-        snap.parent,
-        n[:n_loc],
-        n[n_loc:],
-        settings.min_level,
-        settings.min_errors,
+    source = np.repeat(
+        source_index(
+            origin.fit.level, snap.parent, min_level=settings.min_level
+        )[:, None],
+        n.shape[1],
+        axis=1,
     )
     size = np.zeros(n.shape)
     for e in np.unique(source):
@@ -816,7 +813,6 @@ def _add_spread(origin: Origin) -> None:
         size[e] = fit_sizes(
             np.where(keep, errors.added, 0.0).reshape(-1, k_n),
             np.where(keep, errors.remaining, 0.0).reshape(-1, k_n),
-            settings.min_errors,
         )
     k = np.arange(n.shape[1])[None, :]
     origin.errors = errors
