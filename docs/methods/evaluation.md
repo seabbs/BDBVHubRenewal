@@ -51,15 +51,18 @@ $$
 The energy score on the log scale is the energy score of $\log(1 + \mathbf{y})$ against $\log(1 + \mathbf{X}_i)$, never the log of the score.
 Relative energy scores are ratios of means against `randomwalk` over the origins and releases both have, and $n$ counts those.
 The score rewards a joint pattern across places only where draws are joint.
-The renewal models' draws are joint across provinces, one posterior draw per sample index.
+The draws of `renewal` and `renewalbvd` are joint across provinces, one posterior draw per sample index.
+`renewalsp` fits each province on its own, so its provinces are independent.
 Zones split each province draw, so zones are joint within a province for every renewal model.
-The random walk models draw each place independently.
+`pprandomwalknowcast` takes one posterior draw of its pooled parameters per sample index, so its places share that draw.
+`randomwalk` and `randomwalknowcast` draw each place independently.
 Hub teams' samples are joint across weeks within a place only, as the hub's sample format sets, so pairing their indices across places scores them as independent across places.
 
 ## Backtest design
 
 Each vintage is a forecast task.
 The fitted models (the renewal models and `pprandomwalknowcast`) forecast real vintages only, from their stored fits ([fit store](../development/cli.md#fit-store)).
+The one exception is the [zone backtest](#health-zones), which fits `pprandomwalknowcast` at each origin.
 The other models forecast every task.
 
 | Run | Vintages | Truth |
@@ -137,7 +140,9 @@ Each model's zone samples are made to sum to its province samples, as in the sub
 Each real vintage before the latest is forecast, and origins with no pair of releases within the delay window are skipped, as for provinces.
 Zones are scored on the reported target as for [real releases](#real-releases), with the zone delays fitted at the origin, so a zone count is never scored against a count still being reported.
 Relative WIS is against `randomwalk` in the same form.
-On the Nowcast page the fitted models' zone samples at the latest release are those of their stored fits, where they have one.
+`pprandomwalknowcast` is fitted here on the zones and on the provinces.
+On the Nowcast page only `randomwalk` and `randomwalknowcast` are shown at zone level.
+The fitted models are shown at the country and provinces, from their stored forecasts.
 
 ## Scores by place type and plausibility { #checks }
 
