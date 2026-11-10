@@ -177,12 +177,13 @@ def test_diagnostics_name_the_sources(
     assert {
         "start_week", "n_err", "delay_source", "obs_source", "sigma_source"
     } <= set(info.columns)  # fmt: skip
-    assert info.loc["CD-IT", "delay_source"].startswith("own at ")
-    n_it = int(info.loc["CD-IT", "delay_source"].split()[2])
-    n_to = int(info.loc["CD-TO", "delay_source"].split()[2])
-    assert n_to < n_it <= 42
-    assert info.loc["CD-IT", "obs_source"] == "pooled:CD"
-    assert info.loc["CD-IT", "n_err"] == 3
+    # Ituri has 10 cases a week and uses its own estimates. Tshopo has
+    # fewer and uses the country's pooled ones.
+    for col in ("delay_source", "obs_source", "sigma_source"):
+        assert info.loc["CD-IT", col] == "own:CD-IT"
+    assert info.loc["CD-TO", "delay_source"] == "pooled:CD"
+    assert info.loc["CD-TO", "obs_source"] == "pooled:CD"
+    assert info.loc["CD-IT", "n_err"] == 1
 
 
 def test_models_raise_without_snapshots_or_a_delay_pair(

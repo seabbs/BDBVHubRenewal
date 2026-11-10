@@ -8,8 +8,8 @@ least `min_level` cases a week.
 A parent's counts are the sum of its children's, so the parent is not
 in its own pool unless no child qualifies.
 A node counts as qualifying when its level is at least `min_level`, and
-for the observation model also when its own estimate has at least `min_err`
-errors.
+for the walk spread also when its estimate exists (a net variance above
+0).
 A qualifying node uses its own estimate.
 Otherwise it uses the pooled estimate of its nearest ancestor that
 qualifies, else the country's pooled estimate.
@@ -21,13 +21,10 @@ from __future__ import annotations
 
 import numpy as np
 
-__all__ = ["MIN_ERRORS", "MIN_LEVEL", "pool_matrix", "source_index"]
+__all__ = ["MIN_LEVEL", "pool_matrix", "source_index"]
 
 MIN_LEVEL = 10.0
 """Cases a week at which a node uses its own estimates."""
-
-MIN_ERRORS = 3
-"""Errors at a horizon needed for a spread."""
 
 
 def pool_matrix(
@@ -67,7 +64,7 @@ def source_index(
     n_own: np.ndarray | None = None,
     n_pooled: np.ndarray | None = None,
     min_level: float = MIN_LEVEL,
-    min_err: int = MIN_ERRORS,
+    min_err: int = 1,
 ) -> np.ndarray:
     """Return the node whose estimate each node uses.
 
