@@ -1,14 +1,15 @@
 name: Fit candidates
 
-# Reusable: fit and check the fitted candidates of the fallback chain,
-# one matrix leg per candidate, as BVDOutbreakSize's docs.yml fits one
-# model per matrix job. Called by submit.yml for the primary stage, with
-# every renewal candidate and shadow in parallel.
+# Reusable: forecast from and check the fitted candidates of the fallback
+# chain, one matrix leg per candidate. Called by submit.yml for the
+# primary stage, with every renewal candidate and shadow in parallel.
 #
-# Each fit is content-addressed: the cache key hashes the model source,
-# the hub data commit and the candidate's config and sampler settings
-# (ci/policy.toml, `[cache] inputs`), so a re-run in the same window
-# with nothing changed loads the fit rather than refitting.
+# Each leg reads the fit store's fit of the same code and data
+# (`bdbvhubrenewal fit-store unpack`, keyed as fit-store.yml stores it),
+# so the submitted forecast is the fit the docs and the backtest show.
+# A candidate the store lacks is ruled out. Only a round the store
+# cannot hold (`fit_source: fit`, a round forecast from an earlier
+# release) is fitted here.
 
 on:
   workflow_call:
@@ -23,6 +24,15 @@ on:
       expected_locations:
         type: string
         default: ''
+      fit_source:
+        description: >-
+          `store` to read each fit from the fit store, `fit` to fit here
+        type: string
+        default: store
+      store_branch:
+        description: The fit store branch to read
+        type: string
+        default: fit-store
 
 permissions:
   contents: read
@@ -39,8 +49,11 @@ env:
 
 jobs:
   fit:
-    name: Fit ${{ matrix.id }}
-    runs-on: ${{ vars.FIT_RUNNER || 'ubuntu-latest' }}
+    name: Candidate ${{ matrix.id }}
+    # Reading a stored fit needs no fitting runner.
+    runs-on: >-
+      ${{ inputs.fit_source == 'store' && 'ubuntu-latest'
+      || vars.FIT_RUNNER || 'ubuntu-latest' }}
     # From the matrix: under GitHub's 360-minute cap for a hosted job, and
     # short enough to leave the gate time before the window closes
     # (ci/policy.toml [timing]). A fit that needs longer belongs on a
@@ -57,15 +70,12 @@ jobs:
         with:
           name: inputs
           path: ${{ env.WORK }}
-      # Restore and save are separate, as in BVDOutbreakSize, so the fit
-      # is saved as soon as it ends even if a later step fails.
-      - name: Restore the fit cache
-        id: cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ env.WORK }}/fits/${{ matrix.id }}
-          key: fit-${{ matrix.id }}-${{ matrix.key }}
-      - name: Fit, forecast and check ${{ matrix.id }}
+      - name: Fetch the fit store
+        if: inputs.fit_source == 'store'
+        env:
+          FIT_STORE_BRANCH: ${{ inputs.store_branch }}
+        run: scripts/fit-store.sh fetch output/fit-store
+      - name: Forecast and check ${{ matrix.id }}
         env:
           CAND_ID: ${{ matrix.id }}
           CAND_KIND: ${{ matrix.kind }}
@@ -73,17 +83,10 @@ jobs:
           CAND_LABEL: ${{ matrix.label }}
           CAND_MODEL: ${{ matrix.model }}
           CAND_SAMPLER: ${{ matrix.sampler }}
-          FIT_CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+          FIT_SOURCE: ${{ inputs.fit_source }}
+          STORE: output/fit-store
           EXPECTED_LOCATIONS: ${{ inputs.expected_locations }}
         run: ci/steps/candidate.sh
-      - name: Save the fit cache
-        if: >-
-          ${{ always() && steps.cache.outputs.cache-hit != 'true' &&
-          hashFiles(format('{0}/fits/{1}/diagnostics.json', env.WORK, matrix.id)) != '' }}
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ env.WORK }}/fits/${{ matrix.id }}
-          key: fit-${{ matrix.id }}-${{ matrix.key }}
       # The candidate's verdicts, file and plot: small, read by the gate.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
@@ -92,9 +95,9 @@ jobs:
           path: ${{ env.WORK }}/candidates/${{ matrix.id }}
           if-no-files-found: warn
           retention-days: 7
-      # The posterior itself, kept a few days for diagnosis, as
+      # The fit directory, kept a few days for diagnosis, as
       # BVDOutbreakSize keeps its fit artefacts for three days. The
-      # durable copy is the content-addressed cache above.
+      # durable copy of a stored fit is on the fit-store branch.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
