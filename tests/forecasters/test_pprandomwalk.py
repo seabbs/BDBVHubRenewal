@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import jax
 import numpy as np
 import pandas as pd
 import pytest
@@ -15,8 +16,16 @@ from bdbvhubrenewal.forecasters import (
     get_model,
     list_models,
 )
-from bdbvhubrenewal.forecasters.chain import Origin
-from bdbvhubrenewal.forecasters.pprandomwalk import Sampler, Tree
+from bdbvhubrenewal.forecasters.chain import Origin, walk_changes
+from bdbvhubrenewal.forecasters.pprandomwalk import (
+    Sampler,
+    Tree,
+    _median_of,
+    _run,
+    spread_model,
+    walk_data,
+)
+from bdbvhubrenewal.forecasters.walk import walk_noise
 
 SMALL = Sampler(num_warmup=40, num_samples=40, num_chains=1)
 
@@ -132,3 +141,51 @@ def test_diagnostics_hold_each_fit(
     tau = {str(r["fit"])[:5]: r for r in fits}
     assert "delay_tau_1" in tau["delay"]
     assert "sigma_tau_1" in tau["sprea"]
+
+
+def _spread_fit(
+    changes: np.ndarray, noise: np.ndarray, seen: np.ndarray
+) -> float:
+    """Fit the pooled walk spread alone for one place and return sigma."""
+    tree = Tree.of(np.array([-1, 0]))
+    empty = np.zeros((0, 2, 1))
+    draws, _ = _run(
+        spread_model,
+        jax.random.key(0),
+        Sampler(num_warmup=300, num_samples=300, num_chains=1),
+        tree=tree,
+        changes=np.vstack([np.zeros_like(changes), changes]),
+        noise=np.vstack([np.zeros_like(noise), noise]),
+        seen=np.vstack([np.zeros_like(seen), seen]),
+        added=empty,
+        remaining=empty,
+        reported=empty,
+        valid=empty > 0,
+    )
+    return float(np.exp(_median_of(tree, draws, "sigma"))[1])
+
+
+def test_pooled_walk_spread_is_net_of_poisson_noise() -> None:
+    # Weekly counts that are Poisson noise around a flat level of 5: the
+    # changes of log(1 + y) are all noise, so the walk spread is small.
+    y = np.random.default_rng(1).poisson(5.0, size=200).astype(float)
+    changes = np.diff(np.log1p(y))[None, :]
+    noise = walk_noise(y)[None, :]
+    seen = np.ones_like(changes, dtype=bool)
+    raw = float(np.std(changes))
+    sigma = _spread_fit(changes, noise, seen)
+    assert raw > 0.4
+    assert sigma < 0.5 * raw
+
+
+def test_pooled_walk_spread_keeps_changes_between_weeks_with_no_cases(
+    task: ForecastTask,
+) -> None:
+    model = RandomWalkNowcast()
+    origin = model.origin_at(task, errors=False)
+    changes, noise, seen = walk_data(origin)
+    diffs = walk_changes(origin.reported, origin.start, origin.settings)
+    assert seen.sum(axis=1).tolist() == [d.size for d in diffs]
+    # 0 to 0 changes are 0 with no Poisson noise, and they enter.
+    zero = seen & (changes == 0) & (noise == 0)
+    assert zero.any()
