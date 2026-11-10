@@ -56,9 +56,10 @@ from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     _fit_rows,
     load_config,
-    make_tasks,
     merge_by_model,
+    real_vintages,
     run_forecasts,
+    vintage_task,
 )
 from bdbvhubrenewal.forecasters import (
     ForecastModel,
@@ -283,7 +284,9 @@ def origin_tasks(
 ) -> dict[str, ForecastTask]:
     """Build the task of every real origin, as the store fits it.
 
-    A stored task is asked for final counts only (no `report_by`), so it
+    Each is the task the submission fits at that vintage
+    (`vintage_task`), so a submission finds the stored fit by its key. A
+    stored task is asked for final counts only (no `report_by`), so it
     holds no release after its origin.
 
     Parameters
@@ -298,9 +301,10 @@ def origin_tasks(
     dict
         Task by origin (the vintage date), in date order.
     """
-    real = target.loc[target["kind"] == "real"]
-    tasks = make_tasks(real, delays.assign(kind="real"), config, daily=daily)
-    return {t.vintage: t for t in tasks}
+    return {
+        v: vintage_task(target, delays, config, v, daily)[0]
+        for v in real_vintages(target)
+    }
 
 
 def _bvd_tag(model: ForecastModel, task: ForecastTask) -> str | None:
