@@ -475,17 +475,26 @@ def _two_zone_case(
 
 
 def test_reconcile_keeps_published_zone_counts() -> None:
-    # Sample 1: the zone walks give 10 and 2, the province 12. Zone 2 has
+    # Sample 1: the zone walks give 10 and 4, the province 12. Zone 2 has
     # published 4, so it keeps 4 and zone 1 takes the other 8.
     # Sample 2: the province draw (8) is below the published total (10),
     # so no zone gets more than it has published.
-    zone, prov, task, counts = _two_zone_case([[10, 2], [7, 5]], [12, 8])
+    zone, prov, task, counts = _two_zone_case([[10, 4], [7, 5]], [12, 8])
     got = reconcile_zones(zone, prov, task, counts, ("CD-XX-01", "CD-XX-02"))
     by = got.set_index(["sample", "location"])["value"]
     assert by.loc[1].tolist() == [8, 4]
     assert by.loc[2].sum() == 8
     assert (by.loc[2] <= [6, 4]).all()
     assert check_zone_coherence(prov, got) == []
+
+
+def test_reconcile_keeps_a_zone_s_own_fall() -> None:
+    # Reported counts can fall. Zone 2 published 4 but its own draw is 2,
+    # so the split keeps that fall: zone 2 stays at 2, not 4.
+    zone, prov, task, counts = _two_zone_case([[10, 2]], [12])
+    got = reconcile_zones(zone, prov, task, counts, ("CD-XX-01", "CD-XX-02"))
+    by = got.set_index(["sample", "location"])["value"]
+    assert by.loc[1].tolist() == [10, 2]
 
 
 def test_zone_hub_table_validates_and_sums_up_the_hierarchy(
