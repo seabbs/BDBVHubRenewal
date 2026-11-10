@@ -2179,7 +2179,7 @@ Both run at province and zone level (<a href="#health-zones">Health zones</a>), 
 <ol>
 <li>follows baselinenowcast, through a JAX port of the R package with one named extension for release snapshots (<a href="#delay">Delay</a>);</li>
 <li>has an observation model for the nowcast as in baselinenowcast, negative binomial new reports on the count still to come, fitted from retrospective nowcasts (<a href="#nowcast">Nowcast</a>);</li>
-<li>nowcasts up to the latest week at least 5% reported with at least 5 cases, and forecasts the later weeks (<a href="#start-from-the-nowcast">Start from the nowcast</a>);</li>
+<li>nowcasts every week up to the cut-off, and walks on from the latest week at least 5% reported with at least 5 cases (<a href="#start-from-the-nowcast">Start from the nowcast</a>);</li>
 <li>continues each nowcast trajectory with a random walk on <span class="arithmatex">\(\log(1 + y)\)</span> (<a href="#forecast">Forecast</a>);</li>
 <li>takes the walk's variance net of Poisson noise (<a href="#forecast">Forecast</a>);</li>
 <li>shares the delay, size and walk variance with a parent where a place has fewer than 10 cases a week (<a href="#own-or-pooled-estimates">Own or pooled estimates</a>).</li>
@@ -2349,7 +2349,7 @@ z_{i,j} \sim \mathcal{N}(0, 1),
 \]</div>
 <p>Steps are summed within a sample, so each sample is one trajectory.
 <code>randomwalk</code> starts from the latest complete week (<a href="#start-from-the-latest-complete-week">below</a>).
-<code>randomwalknowcast</code> starts from its latest nowcast week (<a href="#start-from-the-nowcast">below</a>).</p>
+<code>randomwalknowcast</code> starts from its nowcast of a recent week (<a href="#start-from-the-nowcast">below</a>).</p>
 <p><span class="arithmatex">\(\sigma_p\)</span> comes from the weekly changes <span class="arithmatex">\(\Delta_w = \log\{1 + Y_{p,o}(w)\} - \log\{1 + Y_{p,o}(w - 1)\}\)</span> over the 9 weeks ending at the latest complete week, so up to 8 changes.
 Each change carries Poisson noise, and the walk draws Poisson counts on top, so the noise is taken out of the spread:</p>
 <div class="arithmatex">\[
@@ -2383,11 +2383,15 @@ Where no week reaches 0.95, <code>randomwalknowcast</code> takes the first week 
 <h2 id="start-from-the-nowcast">Start from the nowcast<a class="headerlink" href="#start-from-the-nowcast" title="Permanent link">&para;</a></h2>
 <p><code>randomwalknowcast</code> walks on from each sample's own nowcast.</p>
 <ol>
-<li>The start week <span class="arithmatex">\(w_0\)</span> is the latest week whose share reported <span class="arithmatex">\(\pi_p(w)\)</span> (<a href="#start-from-the-latest-complete-week">above</a>) is at least 5% and with at least 5 cases reported.
-   Days of the week not yet observed count as unreported, so a partial week is nowcast whole.</li>
-<li>Weeks up to <span class="arithmatex">\(w_0\)</span> are the nowcast draws <span class="arithmatex">\(X_{p,i}(w)\)</span>.</li>
-<li>In sample <span class="arithmatex">\(i\)</span> the walk starts from <span class="arithmatex">\(X_{p,i}(w_0)\)</span>, and later weeks are the walk's draws.</li>
-<li>A place with no case in the 9 weeks to <span class="arithmatex">\(c_o\)</span>, or with no such week, starts at the latest complete week instead and draws introductions.</li>
+<li>The start week <span class="arithmatex">\(w_0\)</span> is the latest week, up to the one holding <span class="arithmatex">\(c_o\)</span>, whose observed days are at least 5% reported and hold at least 5 cases.
+   A place with no case in the 9 weeks to <span class="arithmatex">\(c_o\)</span>, or with no such week, starts at the latest complete week instead.
+   After it the place stays at 0 until an introduction, as above, floored at the counts reported.</li>
+<li>Weeks up to the week holding <span class="arithmatex">\(c_o\)</span> are the nowcast draws <span class="arithmatex">\(X_{p,i}(w)\)</span>.</li>
+<li>In sample <span class="arithmatex">\(i\)</span> the walk starts from <span class="arithmatex">\(X_{p,i}(w_0)\)</span>.</li>
+<li>If the week holding <span class="arithmatex">\(c_o\)</span> is partial, its nowcast covers only its days up to <span class="arithmatex">\(c_o\)</span>.
+   Its later days add a Poisson draw with the walk's rate that week times the share of the week they make up.
+   If that week is <span class="arithmatex">\(w_0\)</span>, the walk's level is its nowcast scaled to a full week, <span class="arithmatex">\(X_{p,i}(w_0) \times 7 / n\)</span> with <span class="arithmatex">\(n\)</span> its observed days, and its later days add a Poisson draw with that level times <span class="arithmatex">\((7 - n) / 7\)</span>.</li>
+<li>Weeks after the one holding <span class="arithmatex">\(c_o\)</span> are the walk's draws.</li>
 </ol>
 <h2 id="health-zones">Health zones<a class="headerlink" href="#health-zones" title="Permanent link">&para;</a></h2>
 <p><code>randomwalk</code> and <code>randomwalknowcast</code> run on each zone's own release snapshots in the same way as for provinces.
