@@ -224,13 +224,64 @@ def test_shares_shrink_recent_towards_longer_run() -> None:
     split = ZoneAllocator(recent_weeks=4, prior_strength=20)
     shares = split.shares(counts, zones, "2026-10-17")
     a, b, c = (shares[z] for z in zones)
-    assert b > a > c > 0
+    assert b > a > 0
+    # A zone with no case at the vintage has a tenth of the floor.
+    assert 0 < c < a
+    seen = ZoneAllocator(recent_weeks=4, prior_strength=20, unseen_floor=0.5)
+    assert c < seen.shares(counts, zones, "2026-10-17")["CD-XX-03"] / 5
     assert sum(shares.values()) == pytest.approx(1)
     # Stronger shrinkage moves the split towards the longer run.
     strong = ZoneAllocator(recent_weeks=4, prior_strength=1e4).shares(
         counts, zones, "2026-10-17"
     )
     assert strong["CD-XX-01"] > a
+
+
+def test_a_zone_with_no_case_gets_a_small_floor() -> None:
+    counts = pd.DataFrame(
+        {
+            "location": ["CD-XX-01"],
+            "target_end_date": ["2026-10-10"],
+            "total": [3],
+        }
+    )
+    zones = ("CD-XX-01", "CD-XX-02", "CD-YY-01", "CD-YY-02")
+    split = ZoneAllocator()
+    # 3 longer-run cases, the floor 0.5 and the zone's own floor 0.05.
+    assert split.alpha(counts, zones[:2], "2026-10-17")[1] == pytest.approx(
+        100 * 0.05 / 3.55
+    )
+    # A province with no case in any zone has nothing to split on, so its
+    # zones share equally.
+    np.testing.assert_allclose(
+        split.alpha(counts, zones[2:], "2026-10-17"), [50.0, 50.0]
+    )
+    weeks = ("2026-10-24", "2026-10-31")
+    prov = pd.DataFrame(
+        {
+            "location": np.repeat(["CD-XX", "CD-YY"], 2 * 50),
+            "target_end_date": np.tile(np.repeat(weeks, 50), 2),
+            "sample": np.tile(np.arange(1, 51), 4),
+            "value": 40.0,
+        }
+    )
+    task = ForecastTask(
+        vintage="2026-10-17",
+        reference_date=pd.Timestamp("2026-10-24").date(),
+        kind="real",
+        cutoff="2026-10-16",
+        target=pd.DataFrame(),
+        delays=None,
+        locations=("CD-XX", "CD-YY"),
+        target_end_dates=weeks,
+        n_samples=50,
+    )
+    none = ZoneAllocator(unseen_floor=0.0)
+    alloc = none.allocate(prov, task, counts, zones).set_index("location")
+    assert (alloc.loc["CD-XX-02", "value"] == 0).all()
+    assert alloc.loc["CD-XX-01", "value"].sum() == 40 * 2 * 50
+    assert alloc.loc["CD-YY-01", "value"].sum() > 0
+    assert alloc.loc["CD-YY-02", "value"].sum() > 0
 
 
 def test_provinces_below_their_published_zone_total_are_thinned() -> None:
