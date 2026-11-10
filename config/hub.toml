@@ -25,3 +25,17 @@ submit = true
 [models.randomwalk]
 model_abbr = "randomwalk"
 submit = false
+
+# How samples are paired across places before national is summed and
+# zones are split (`bdbvhubrenewal.submission.reconcile`). Every option
+# gives zones that sum to provinces and provinces that sum to national.
+# method: "sum" (the default) sums samples as the model gave them;
+# "copula" reorders each province's whole trajectories to a Gaussian
+# copula with correlation rho, which widens national and leaves each
+# province's forecast as it was.
+# zone_pairing: "sample" pairs the random walks' zone and province runs
+# by sample id; "rank" pairs whole trajectories by rank of their total.
+[reconciliation]
+method = "sum"
+rho = 0.2
+zone_pairing = "sample"

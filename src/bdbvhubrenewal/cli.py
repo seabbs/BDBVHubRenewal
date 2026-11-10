@@ -97,6 +97,10 @@ from bdbvhubrenewal.submission.hub import (
     write_submission,
 )
 from bdbvhubrenewal.submission.metadata import MODEL_METADATA
+from bdbvhubrenewal.submission.reconcile import (
+    reconcile,
+    reconciliation_settings,
+)
 from bdbvhubrenewal.submission.validate import (
     Check,
     Hub,
@@ -1088,8 +1092,9 @@ def _zones(
     if counts.empty:
         return None, f"no zone data for {task.vintage}, so no health zones"
     name = get_config(args.config).model if args.config else args.model
+    pairing = reconciliation_settings().zone_pairing
     zones = zones_for_model(
-        name, task, samples, counts, hub_zones(hub_config), daily
+        name, task, samples, counts, hub_zones(hub_config), daily, pairing
     )
     return zones, ""
 
@@ -1112,8 +1117,16 @@ def _nowcast(args: argparse.Namespace) -> int:
         zones, zone_note = _zones(args, task, result.samples, hub_config)
         if zone_note:
             handled.append(zone_note)
-        table = to_hub_table(
+        # Opt-in pairing of province samples; "sum" leaves them as they
+        # are (`[reconciliation]` in config/hub.toml).
+        samples, zones = reconcile(
             result.samples,
+            zones,
+            reconciliation_settings(),
+            task.rng("reconcile"),
+        )
+        table = to_hub_table(
+            samples,
             task.reference_date,
             unassigned=result.unassigned,
             zones=zones,

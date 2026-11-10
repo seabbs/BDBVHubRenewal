@@ -308,6 +308,20 @@ def _apportion(total: np.ndarray, weights: np.ndarray) -> np.ndarray:
     return out
 
 
+def _pair_by_rank(total: np.ndarray, weights: np.ndarray) -> np.ndarray:
+    """Reorder each zone's trajectories to the ranks of the province's.
+
+    `total` is `[S, W]` and `weights` `[S, W, Z]`. Trajectories are ranked
+    by their sum over the weeks, and each zone keeps its own, whole: its
+    k-th largest goes with the k-th largest province trajectory, as in
+    the Schaake shuffle.
+    """
+    rank = np.argsort(np.argsort(total.sum(axis=1), kind="stable"))
+    order = np.argsort(weights.sum(axis=1), axis=0, kind="stable")
+    out: np.ndarray = np.take_along_axis(weights, order[:, None, :], 0)[rank]
+    return out
+
+
 def reconcile_zones(
     zone_samples: pd.DataFrame,
     province_samples: pd.DataFrame,
@@ -315,11 +329,15 @@ def reconcile_zones(
     counts: pd.DataFrame,
     zones: tuple[str, ...],
     allocator: ZoneAllocator | None = None,
+    pairing: str = "sample",
 ) -> pd.DataFrame:
     """Make zone samples sum to their province samples.
 
     Each province sample is apportioned over the province's zones in
-    proportion to the zone model's own sample of the same id and week.
+    proportion to the zone model's own sample of the same id and week
+    (`pairing="sample"`), or to the zone trajectories paired with the
+    province's by rank of their totals (`pairing="rank"`,
+    `_pair_by_rank`).
 
     Parameters
     ----------
@@ -339,6 +357,8 @@ def reconcile_zones(
         of its zones here.
     allocator : ZoneAllocator, optional
         The fallback split. Defaults to `ZoneAllocator()`.
+    pairing : str
+        `"sample"` (the default) or `"rank"`.
 
     Returns
     -------
@@ -346,6 +366,8 @@ def reconcile_zones(
         Columns `SAMPLE_COLUMNS`, one row per zone, week and sample, with
         zones summing to their province (`check_zone_coherence`).
     """
+    if pairing not in ("sample", "rank"):
+        raise ValueError("pairing must be 'sample' or 'rank'.")
     allocator = allocator or ZoneAllocator()
     final = _final(province_samples)
     final = final.loc[final["location"] != NATIONAL]
@@ -376,6 +398,8 @@ def reconcile_zones(
                     .fillna(0.0)
                     .to_numpy()
                 )
+        if pairing == "rank":
+            weight = _pair_by_rank(totals, weight)
         fallback = allocator.alpha(counts, mine, task.vintage)
         empty = weight.sum(axis=-1) <= 0
         weight[empty] = fallback
@@ -394,6 +418,7 @@ def zone_forecast(
     zones: tuple[str, ...],
     daily_zones: pd.DataFrame,
     allocator: ZoneAllocator | None = None,
+    pairing: str = "sample",
 ) -> pd.DataFrame:
     """Run a snapshot model at zone level and sum it to the provinces.
 
@@ -414,6 +439,8 @@ def zone_forecast(
         The daily zone table (`load_daily_zones`).
     allocator : ZoneAllocator, optional
         The fallback split of `reconcile_zones`.
+    pairing : str
+        As for `reconcile_zones`.
 
     Returns
     -------
@@ -432,7 +459,7 @@ def zone_forecast(
     zt = zone_task(task, counts, zones, daily)
     raw = model.forecast(zt)
     return reconcile_zones(
-        raw, province_samples, task, counts, zones, allocator
+        raw, province_samples, task, counts, zones, allocator, pairing
     )
 
 
@@ -544,6 +571,7 @@ def zones_for_model(
     counts: pd.DataFrame,
     zones: tuple[str, ...],
     daily_zones: pd.DataFrame,
+    pairing: str = "sample",
 ) -> pd.DataFrame:
     """Return health-zone samples that sum to a model's province samples.
 
@@ -566,6 +594,9 @@ def zones_for_model(
         The hub's zone codes.
     daily_zones : pandas.DataFrame
         The daily zone table (`load_daily_zones`).
+    pairing : str
+        How a random walk's zone run is paired with its province run, as
+        for `reconcile_zones`.
 
     Returns
     -------
@@ -575,5 +606,7 @@ def zones_for_model(
     fitted = {s.name for s in list_models() if s.fitted}
     model = None if name is None else get_model(name)
     if isinstance(model, RandomWalk) and name not in fitted:
-        return zone_forecast(model, task, samples, counts, zones, daily_zones)
+        return zone_forecast(
+            model, task, samples, counts, zones, daily_zones, pairing=pairing
+        )
     return ZoneAllocator().allocate(samples, task, counts, zones)
