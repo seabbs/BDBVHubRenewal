@@ -14,7 +14,8 @@
 # 2026-11-01 vintage with the two chains of each fit in parallel,
 # sampling took 250 min for renewalbvd (500 + 1000 draws), 170 min for
 # renewal and 63 min for renewalsp (500 + 500) after province delays
-# came in. Nearly every renewalbvd and renewal draw reaches the maximum
+# came in, before #139 sped up the gradient and set every candidate to
+# 500 + 750. Nearly every renewalbvd and renewal draw reaches the maximum
 # tree depth, so cost follows iterations times the cost of a gradient.
 # Every renewal candidate fits in its own job at the same time, and
 # random walk is built in `prepare`.

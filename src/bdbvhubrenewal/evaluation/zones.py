@@ -114,7 +114,7 @@ def zone_backtest(
     config: BacktestConfig | None = None,
     origins: Collection[str] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Score the random walk models run at zone level on later releases.
+    """Score models run at zone level on later releases.
 
     Two targets are scored, as for the provinces (`release_backtest`): what
     each later release reported, and the complete weeks of the latest
@@ -135,7 +135,9 @@ def zone_backtest(
         The hub's zone codes (`hub_zones`). Those with cases at a vintage
         are forecast from it.
     models : sequence of str
-        Registered models that read release snapshots.
+        Registered models that read release snapshots. Defaults to the two
+        random walks. The CLI's `zone-backtest` adds
+        `pprandomwalknowcast`, which is fitted here at each origin.
     config : BacktestConfig, optional
         Horizons, samples and seed. Defaults to `BacktestConfig()`.
     origins : collection of str, optional

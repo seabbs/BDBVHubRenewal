@@ -197,7 +197,8 @@ class DelayFit:
         Index of the delay each place uses, `[L]`, as for
         `source_index`.
     own : numpy.ndarray
-        Whether each place uses its own factor at each age, `[L, D]`.
+        Whether each place uses its own factor, `[L, D]`. The choice is
+        made per place (`source`), so it is the same at every age.
     """
 
     pairs: np.ndarray
@@ -317,6 +318,10 @@ def own_ages(
     den: np.ndarray, parent: np.ndarray, settings: Settings
 ) -> np.ndarray:
     """Return where each place's own data fit its delay, by age.
+
+    Deprecated: unused since the one sharing rule (#153), which picks the
+    own or pooled delay per place (`fit_delay`). It is kept because
+    removing it would change every stored fit's key and refit them all.
 
     Parameters
     ----------
