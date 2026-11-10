@@ -122,7 +122,7 @@ class NoWalkSpread(ModelUnavailableError):  # noqa: N818
 
 @dataclass(frozen=True)
 class Settings:
-    r"""Settings shared by the random walk models.
+    """Settings shared by the random walk models.
 
     Attributes
     ----------
@@ -142,8 +142,8 @@ class Settings:
     walk_weeks : int
         Weeks, ending at the start week, whose changes set the spread.
     start_share : float
-        Share of a week reported, $\pi$, for `randomwalknowcast` to
-        start its walk from the week's nowcast.
+        Share of a week reported for `randomwalknowcast` to start
+        its walk from the week's nowcast.
     start_count : float
         Cases reported in a week for `randomwalknowcast` to start its walk
         from the week's nowcast.
@@ -155,7 +155,7 @@ class Settings:
     level_weeks: tuple[int, int] = (3, 6)
     completeness: float = 0.95
     walk_weeks: int = 9
-    start_share: float = 0.03
+    start_share: float = 0.05
     start_count: float = 5.0
 
     @property
@@ -470,16 +470,14 @@ class Errors:
 def week_nowcast(
     snap: SnapshotArrays, r: int, g: np.ndarray, age: np.ndarray, gap: int
 ) -> np.ndarray:
-    r"""Return baselinenowcast's count of each hub week `gap` days after `r`.
+    """Return baselinenowcast's count of each hub week `gap` days after `r`.
 
     Each hub week is a reference time of a weekly reporting triangle,
     with a column every 7 days from the cut-off of release `r` and a last
     one at `gap`.
     The share of the week reported by a column is the mean, over the
-    week's seven days, of their growth from that column to `gap`
-    inverted, with a day not yet observed at a column 0 reported, so a
-    partial week is nowcast whole.
-    At the first column and `max_delay` it is the share reported $\pi$.
+    week's days observed at `r`, of their growth from that column to
+    `gap` inverted.
     R's `apply_delay` fills each row from these shares (`fill_row`).
 
     Parameters
@@ -500,32 +498,22 @@ def week_nowcast(
     -------
     numpy.ndarray
         `[L, W]`, 0 for weeks with no day observed at `r`.
-        Days after the cut-off of `r + gap` are not counted.
     """
     seen = np.broadcast_to(snap.observed[r], snap.counts[:, r, :].shape)
     x = week_sum(snap, np.where(seen, snap.counts[:, r, :], 0.0))
-    # Days of a week past the count nowcast are not in it.
-    exists = np.broadcast_to(age + gap >= 0, seen.shape)
-    n = week_sum(snap, exists.astype(float))
+    n = week_sum(snap, seen.astype(float))
     steps = np.r_[np.arange(0, gap, 7), gap]
     share = np.stack(
         [
             week_sum(
-                snap,
-                np.where(
-                    exists & (age + s >= 0),
-                    1.0 / growth(g, age + s, age + gap),
-                    0.0,
-                ),
+                snap, np.where(seen, 1.0 / growth(g, age + s, age + gap), 0)
             )
             for s in steps
         ],
         axis=-1,
     )
-    cdf = share / np.maximum(n, 1)[..., None]
-    has = cdf[..., 0] > 0
-    safe = np.where(has[..., None], cdf, 1.0)
-    return np.where(has, fill_row(x, safe), 0.0)
+    cdf = np.where(n[..., None] > 0, share / np.maximum(n, 1)[..., None], 1.0)
+    return np.where(n > 0, fill_row(x, cdf), 0.0)
 
 
 DelayFn = Callable[[SnapshotArrays, int, Settings], DelayFit | None]
@@ -571,9 +559,8 @@ def retro_errors(
         safe = np.clip(cols, 0, None)
         obs = weekly_sums(snap, r)[:, safe]
         pred = ahead[:, safe]
-        # The week's change to the origin, its days after the cut-off of
-        # r included, as the nowcast covers the whole week.
-        change = weekly_sums(snap, o)[:, safe] - obs
+        # The week's change to the origin, on days up to the cut-off of r.
+        change = weekly_sums(snap, o, upto=int(snap.cut[r]))[:, safe] - obs
         added, removed = np.maximum(change, 0.0), np.maximum(-change, 0.0)
         valid = take[None, :] & ((obs > 0) | (pred > 0))
         cells.append((added, removed, pred - obs, obs, valid))
@@ -649,6 +636,18 @@ class Origin:
     removal: np.ndarray | None = None
     obs_n: np.ndarray | None = None
     obs_source: np.ndarray | None = None
+
+    @property
+    def start_nowcast(self) -> int:
+        """Latest week whose seven days are all on or before the cut-off."""
+        sat = np.array(
+            [
+                np.flatnonzero(self.snap.week == w).max()
+                for w in range(self.snap.n_weeks)
+            ]
+        )
+        full = np.flatnonzero(sat <= self.snap.cut[self.o])
+        return int(full.max()) if full.size else 0
 
 
 def build_origin(
