@@ -44,19 +44,72 @@ def tasks(
     return store.origin_tasks(target, delays, config, daily)
 
 
-def test_code_digest_ignores_docstrings_and_comments(tmp_path: Path) -> None:
+def _copy_repo(tmp_path: Path) -> Path:
     for name in ("pyproject.toml", "uv.lock"):
         shutil.copy(ROOT / name, tmp_path / name)
-    code = tmp_path / "src/bdbvhubrenewal/model/a.py"
-    code.parent.mkdir(parents=True)
-    code.write_text('"""Doc."""\n\n\ndef f():\n    """Doc."""\n    return 1\n')
-    before = store.code_digest(tmp_path)
-    code.write_text('"""Other."""\n\n\ndef f():\n    # A note.\n    return 1\n')
-    (code.parent / "__pycache__").mkdir()
-    (code.parent / "__pycache__" / "a.pyc").write_text("y")
-    assert store.code_digest(tmp_path) == before
-    code.write_text("def f():\n    return 2\n")
-    assert store.code_digest(tmp_path) != before
+    shutil.copytree(
+        ROOT / "src",
+        tmp_path / "src",
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )
+    return tmp_path
+
+
+def test_code_digest_ignores_docstrings_and_comments(tmp_path: Path) -> None:
+    root = _copy_repo(tmp_path)
+    code = root / "src/bdbvhubrenewal/model/delays.py"
+    text = code.read_text()
+    before = store.code_digest("renewal", root)
+    code.write_text(text + '\n\ndef _f():\n    """Doc."""\n    return 1\n')
+    after = store.code_digest("renewal", root)
+    code.write_text(text + "\n\ndef _f():\n    # A note.\n    return 1\n")
+    assert store.code_digest("renewal", root) == after != before
+    code.write_text(text + "\n\ndef _f():\n    return 2\n")
+    assert store.code_digest("renewal", root) != after
+
+
+def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
+    root = _copy_repo(tmp_path)
+    models = ("renewal", "renewalsp", "pprandomwalknowcast")
+
+    def digests() -> dict[str, str]:
+        return {m: store.code_digest(m, root) for m in models}
+
+    def edit(rel: str) -> None:
+        path = root / rel
+        path.write_text(path.read_text() + "\n_EDITED = 1\n")
+
+    src = "src/bdbvhubrenewal"
+    before = digests()
+    # The three renewal variants share a module, so share a key.
+    assert before["renewal"] == before["renewalsp"]
+    assert before["renewal"] != before["pprandomwalknowcast"]
+    edit(f"{src}/forecasters/pprandomwalk.py")
+    after = digests()
+    assert after["renewal"] == before["renewal"]
+    assert after["pprandomwalknowcast"] != before["pprandomwalknowcast"]
+    before = after
+    edit(f"{src}/model/observation.py")
+    after = digests()
+    assert after["renewal"] != before["renewal"]
+    before = after
+    # The CLI is not fit code.
+    edit(f"{src}/cli.py")
+    assert digests() == before
+    # The store's own code refits every model.
+    edit(f"{src}/evaluation/store.py")
+    after = digests()
+    assert all(after[m] != before[m] for m in models)
+
+
+def test_fit_code_has_the_store_and_no_other_model() -> None:
+    renewal = set(store.fit_code("renewal", ROOT))
+    assert "src/bdbvhubrenewal/evaluation/store.py" in renewal
+    assert "src/bdbvhubrenewal/model/observation.py" in renewal
+    assert "src/bdbvhubrenewal/forecasters/pprandomwalk.py" not in renewal
+    pp = set(store.fit_code("pprandomwalknowcast", ROOT))
+    assert "src/bdbvhubrenewal/forecasters/renewal.py" not in pp
+    assert "src/bdbvhubrenewal/evaluation/store.py" in pp
 
 
 def test_samplers_come_from_the_policy() -> None:

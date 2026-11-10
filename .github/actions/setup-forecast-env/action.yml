@@ -25,30 +25,41 @@ runs:
     - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       with:
         enable-cache: true
-    # JAX caches compiled XLA programs on disk. Keyed on the lock file
-    # and model source, so a change to either compiles afresh, while a
-    # re-run in the same week reuses the compiled model. A scoped job
-    # starts from its own last cache, else any.
+    # XLA compiles for the runner's CPU, and hosted runners differ in
+    # CPU. A program compiled on one CPU and loaded on another can give
+    # other numbers (or fail), so each CPU keeps its own JAX cache.
+    - name: Identify the CPU
+      id: cpu
+      shell: bash
+      run: |
+        id=$({ grep -m1 '^model name' /proc/cpuinfo
+               grep -m1 '^flags' /proc/cpuinfo; } | sha256sum | cut -c1-12)
+        echo "id=$id" >> "$GITHUB_OUTPUT"
+        echo "JAX cache CPU: $(grep -m1 '^model name' /proc/cpuinfo) ($id)"
+    # JAX caches compiled XLA programs on disk. Keyed on the CPU, the lock
+    # file and model source, so a change to either compiles afresh, while
+    # a re-run reuses the compiled model. A scoped job starts from its
+    # own last cache, else any, on the same CPU only.
     - name: Restore the JAX compilation cache
       if: inputs.save-jax == 'true'
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/jax
         key: >-
-          jax-${{ runner.os }}-${{ inputs.jax-scope && format('{0}-', inputs.jax-scope) || '' }}${{ hashFiles('uv.lock', 'src/**') }}
+          jax-${{ runner.os }}-${{ steps.cpu.outputs.id }}-${{ inputs.jax-scope && format('{0}-', inputs.jax-scope) || '' }}${{ hashFiles('uv.lock', 'src/**') }}
         restore-keys: |
-          jax-${{ runner.os }}-${{ inputs.jax-scope && format('{0}-', inputs.jax-scope) || '' }}
-          jax-${{ runner.os }}-
+          jax-${{ runner.os }}-${{ steps.cpu.outputs.id }}-${{ inputs.jax-scope && format('{0}-', inputs.jax-scope) || '' }}
+          jax-${{ runner.os }}-${{ steps.cpu.outputs.id }}-
     - name: Restore the JAX compilation cache without saving it
       if: inputs.save-jax != 'true'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/jax
         key: >-
-          jax-${{ runner.os }}-${{ inputs.jax-scope && format('{0}-', inputs.jax-scope) || '' }}${{ hashFiles('uv.lock', 'src/**') }}
+          jax-${{ runner.os }}-${{ steps.cpu.outputs.id }}-${{ inputs.jax-scope && format('{0}-', inputs.jax-scope) || '' }}${{ hashFiles('uv.lock', 'src/**') }}
         restore-keys: |
-          jax-${{ runner.os }}-${{ inputs.jax-scope && format('{0}-', inputs.jax-scope) || '' }}
-          jax-${{ runner.os }}-
+          jax-${{ runner.os }}-${{ steps.cpu.outputs.id }}-${{ inputs.jax-scope && format('{0}-', inputs.jax-scope) || '' }}
+          jax-${{ runner.os }}-${{ steps.cpu.outputs.id }}-
     - name: Configure JAX and matplotlib
       shell: bash
       run: |
