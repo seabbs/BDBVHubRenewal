@@ -263,20 +263,22 @@ jobs:
           own=$(uv run python -c 'import sys
           from bdbvhubrenewal.data.dates import reference_date_for_vintage
           print(reference_date_for_vintage(sys.argv[1]))' "$AS_OF")
-          source=store
-          [ "$own" = "$REFERENCE_DATE" ] || source=fit
+          from=store
+          [ "$own" = "$REFERENCE_DATE" ] || from=fit
           models=$(jq -r '[.include[].model | select(. != "")] | unique
             | join(" ")' <<< "$MATRIX")
           wait=$(jq -r '.include[0].timeout // "350"' <<< "$MATRIX")
           {
-            echo "fit_source=$source"
+            echo "fit_source=$from"
             echo "models=$models"
             echo "wait=$wait"
           } >> "$GITHUB_OUTPUT"
-          echo "Fitted candidates: from the $([ "$source" = store ] \
-            && echo "fit store ($FIT_STORE_BRANCH)" \
-            || echo "fits in this run, for a round of $own data")." \
-            >> "$GITHUB_STEP_SUMMARY"
+          if [ "$from" = store ]; then
+            echo "Fitted candidates: read from $FIT_STORE_BRANCH."
+          else
+            echo "Fitted candidates: fitted in this run, as round" \
+              "$REFERENCE_DATE is forecast from the $AS_OF release."
+          fi >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: inputs
