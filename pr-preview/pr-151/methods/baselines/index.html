@@ -2462,6 +2462,7 @@ A place's counts are the sum of its children's, so only the places forecast (the
   With one place and a gap of 1 its maximum likelihood estimate is baselinenowcast's chain ladder factor.
   It is fitted at the origin and at each earlier release that gives errors.
 - <strong>Walk spread.</strong> The weekly changes <span class="arithmatex">\(\Delta_w\)</span> of <span class="arithmatex">\(\log\{1 + Y_{p,o}(w)\}\)</span> over the <a href="#forecast">forecast</a> window are <span class="arithmatex">\(\mathcal{N}\big(0, \sigma_p^2 + v\{Y_{p,o}(w - 1)\} + v\{Y_{p,o}(w)\}\big)\)</span>.
+  A change between two weeks with no cases has no noise, so its density grows without bound as <span class="arithmatex">\(\sigma_p\)</span> falls to 0, and it is left out.
 - <strong>Nowcast uncertainty.</strong> The new reports <span class="arithmatex">\(A_{p,r}(w)\)</span> are <span class="arithmatex">\(\text{NB}(\widehat{\text{rem}}, \phi_{p,k})\)</span> on the errors of <a href="#nowcast">the fit</a>, made with the pooled delay of each earlier release.</p>
 <p><strong>Priors and sampler.</strong></p>
 <table>
