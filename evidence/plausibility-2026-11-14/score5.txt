@@ -1,0 +1,97 @@
+                                  model  fell      run    n    wis  log_wis  cov50  cov90
+       randomwalk (summed to provinces) False     #163 2181 1.6852   0.2315 0.7075 0.8537
+       randomwalk (summed to provinces) False     main 2181 1.8645   0.2551 0.6914 0.8675
+       randomwalk (summed to provinces) False  matched 2181 1.8959   0.2572 0.6818 0.8528
+       randomwalk (summed to provinces) False      zpd 2181 1.8251   0.2461 0.7066 0.8982
+       randomwalk (summed to provinces) False zpd+#163 2181 1.6077   0.2207 0.7258 0.8826
+       randomwalk (summed to provinces)  True     #163   45 1.6476   0.2724 0.0000 0.0000
+       randomwalk (summed to provinces)  True     main   45 1.6082   0.2575 0.4889 0.6000
+       randomwalk (summed to provinces)  True  matched   45 1.5698   0.2552 0.4889 0.6000
+       randomwalk (summed to provinces)  True      zpd   45 1.3772   0.2133 0.4444 0.5111
+       randomwalk (summed to provinces)  True zpd+#163   45 1.4721   0.2599 0.0000 0.0000
+randomwalknowcast (summed to provinces) False     #163 2181 1.4842   0.1983 0.7345 0.8647
+randomwalknowcast (summed to provinces) False     main 2181 1.5375   0.1988 0.7437 0.8684
+randomwalknowcast (summed to provinces) False  matched 2181 1.5354   0.2011 0.7304 0.8574
+randomwalknowcast (summed to provinces) False      zpd 2181 1.3805   0.1861 0.7657 0.8867
+randomwalknowcast (summed to provinces) False zpd+#163 2181 1.4016   0.1892 0.7524 0.8849
+randomwalknowcast (summed to provinces)  True     #163   45 1.5865   0.2715 0.0000 0.0000
+randomwalknowcast (summed to provinces)  True     main   45 1.4377   0.2428 0.1111 0.4889
+randomwalknowcast (summed to provinces)  True  matched   45 1.4743   0.2561 0.0889 0.3556
+randomwalknowcast (summed to provinces)  True      zpd   45 1.4228   0.2446 0.0444 0.4000
+randomwalknowcast (summed to provinces)  True zpd+#163   45 1.5388   0.2676 0.0000 0.0000
+
+                                  model  zone_has_falls      run    n    wis  log_wis  cov50  cov90
+       randomwalk (summed to provinces)           False     #163 1546 0.9029   0.1959 0.7710 0.8972
+       randomwalk (summed to provinces)           False     main 1546 0.9825   0.2136 0.7561 0.9140
+       randomwalk (summed to provinces)           False  matched 1546 0.9957   0.2155 0.7426 0.9023
+       randomwalk (summed to provinces)           False      zpd 1546 0.9778   0.2111 0.7652 0.9269
+       randomwalk (summed to provinces)           False zpd+#163 1546 0.8787   0.1911 0.7885 0.9094
+       randomwalk (summed to provinces)            True     #163  680 3.4613   0.3152 0.5162 0.6985
+       randomwalk (summed to provinces)            True     main  680 3.8526   0.3495 0.5309 0.7441
+       randomwalk (summed to provinces)            True  matched  680 3.9208   0.3518 0.5309 0.7235
+       randomwalk (summed to provinces)            True      zpd  680 3.7218   0.3236 0.5559 0.8074
+       randomwalk (summed to provinces)            True zpd+#163  680 3.2562   0.2905 0.5353 0.7632
+randomwalknowcast (summed to provinces)           False     #163 1546 0.7268   0.1793 0.7846 0.8823
+randomwalknowcast (summed to provinces)           False     main 1546 0.7273   0.1802 0.7904 0.8803
+randomwalknowcast (summed to provinces)           False  matched 1546 0.7382   0.1821 0.7865 0.8726
+randomwalknowcast (summed to provinces)           False      zpd 1546 0.6738   0.1662 0.8047 0.8991
+randomwalknowcast (summed to provinces)           False zpd+#163 1546 0.6834   0.1681 0.7943 0.8991
+randomwalknowcast (summed to provinces)            True     #163  680 3.2131   0.2463 0.5721 0.7676
+randomwalknowcast (summed to provinces)            True     main  680 3.3732   0.2441 0.5956 0.8162
+randomwalknowcast (summed to provinces)            True  matched  680 3.3438   0.2480 0.5603 0.7897
+randomwalknowcast (summed to provinces)            True      zpd  680 2.9901   0.2353 0.6294 0.8265
+randomwalknowcast (summed to provinces)            True zpd+#163  680 3.0435   0.2424 0.6074 0.7941
+
+                                  model      run    n    wis  log_wis  cov50  cov90
+       randomwalk (summed to provinces)     #163 2226 1.6845   0.2324 0.6932 0.8365
+       randomwalk (summed to provinces)     main 2226 1.8593   0.2551 0.6873 0.8621
+       randomwalk (summed to provinces)  matched 2226 1.8893   0.2571 0.6779 0.8477
+       randomwalk (summed to provinces)      zpd 2226 1.8161   0.2455 0.7013 0.8904
+       randomwalk (summed to provinces) zpd+#163 2226 1.6050   0.2215 0.7111 0.8648
+randomwalknowcast (summed to provinces)     #163 2226 1.4863   0.1998 0.7197 0.8473
+randomwalknowcast (summed to provinces)     main 2226 1.5355   0.1997 0.7309 0.8607
+randomwalknowcast (summed to provinces)  matched 2226 1.5341   0.2022 0.7174 0.8473
+randomwalknowcast (summed to provinces)      zpd 2226 1.3814   0.1873 0.7511 0.8769
+randomwalknowcast (summed to provinces) zpd+#163 2226 1.4044   0.1908 0.7372 0.8670
+
+                                  model  age      run   n   fell    wis  cov90
+       randomwalk (summed to provinces)    0     #163 393 0.0000 2.1250 0.8601
+       randomwalk (summed to provinces)    0     main 393 0.0000 2.1553 0.8728
+       randomwalk (summed to provinces)    0  matched 393 0.0000 2.1999 0.8575
+       randomwalk (summed to provinces)    0      zpd 393 0.0000 2.0667 0.9033
+       randomwalk (summed to provinces)    0 zpd+#163 393 0.0000 2.0135 0.8855
+       randomwalk (summed to provinces)    1     #163 393 0.0254 1.3946 0.8448
+       randomwalk (summed to provinces)    1     main 393 0.0254 1.6782 0.8830
+       randomwalk (summed to provinces)    1  matched 393 0.0254 1.7360 0.8779
+       randomwalk (summed to provinces)    1      zpd 393 0.0254 1.6477 0.9211
+       randomwalk (summed to provinces)    1 zpd+#163 393 0.0254 1.3610 0.8626
+       randomwalk (summed to provinces)    2     #163 393 0.0356 0.9534 0.7964
+       randomwalk (summed to provinces)    2     main 393 0.0356 1.3577 0.8422
+       randomwalk (summed to provinces)    2  matched 393 0.0356 1.3978 0.8142
+       randomwalk (summed to provinces)    2      zpd 393 0.0356 1.4041 0.9059
+       randomwalk (summed to provinces)    2 zpd+#163 393 0.0356 0.8923 0.8575
+       randomwalk (summed to provinces)    3     #163 393 0.0534 0.6953 0.7939
+       randomwalk (summed to provinces)    3     main 393 0.0534 0.9674 0.8422
+       randomwalk (summed to provinces)    3  matched 393 0.0534 0.9599 0.8397
+       randomwalk (summed to provinces)    3      zpd 393 0.0534 1.0330 0.8244
+       randomwalk (summed to provinces)    3 zpd+#163 393 0.0534 0.6891 0.8041
+randomwalknowcast (summed to provinces)    0     #163 393 0.0000 2.6391 0.8092
+randomwalknowcast (summed to provinces)    0     main 393 0.0000 2.5860 0.8066
+randomwalknowcast (summed to provinces)    0  matched 393 0.0000 2.5988 0.7939
+randomwalknowcast (summed to provinces)    0      zpd 393 0.0000 2.3827 0.8448
+randomwalknowcast (summed to provinces)    0 zpd+#163 393 0.0000 2.4314 0.8422
+randomwalknowcast (summed to provinces)    1     #163 393 0.0254 1.6425 0.8372
+randomwalknowcast (summed to provinces)    1     main 393 0.0254 1.8811 0.8448
+randomwalknowcast (summed to provinces)    1  matched 393 0.0254 1.8718 0.8397
+randomwalknowcast (summed to provinces)    1      zpd 393 0.0254 1.3340 0.8957
+randomwalknowcast (summed to provinces)    1 zpd+#163 393 0.0254 1.3988 0.8804
+randomwalknowcast (summed to provinces)    2     #163 393 0.0356 0.6156 0.8499
+randomwalknowcast (summed to provinces)    2     main 393 0.0356 0.6543 0.8906
+randomwalknowcast (summed to provinces)    2  matched 393 0.0356 0.6551 0.8702
+randomwalknowcast (summed to provinces)    2      zpd 393 0.0356 0.5666 0.8982
+randomwalknowcast (summed to provinces)    2 zpd+#163 393 0.0356 0.5866 0.8830
+randomwalknowcast (summed to provinces)    3     #163 393 0.0534 0.5548 0.8422
+randomwalknowcast (summed to provinces)    3     main 393 0.0534 0.6021 0.8677
+randomwalknowcast (summed to provinces)    3  matched 393 0.0534 0.5969 0.8499
+randomwalknowcast (summed to provinces)    3      zpd 393 0.0534 0.5851 0.8779
+randomwalknowcast (summed to provinces)    3 zpd+#163 393 0.0534 0.5816 0.8651
