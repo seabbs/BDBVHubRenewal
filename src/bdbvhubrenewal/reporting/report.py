@@ -312,7 +312,7 @@ def make_report(
     # its own.
     daily_zones = load_daily_zones(data_dir)
     zone_codes = hub_zones(Path(data_dir) / "hub-config" / "tasks.json")
-    for vintage in sorted(set(real["vintage"])):
+    for vintage in sorted(set(real["vintage"]) - set(config.skip_origins)):
         if vintage == latest:
             task, at = tasks[0], forecasts_now
         else:

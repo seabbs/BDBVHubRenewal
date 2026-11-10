@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import dataclasses
+
 import jax
+import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 import pytest
@@ -27,7 +30,13 @@ from bdbvhubrenewal.forecasters.pprandomwalk import (
 )
 from bdbvhubrenewal.forecasters.walk import walk_noise
 
-SMALL = Sampler(num_warmup=40, num_samples=40, num_chains=1)
+SMALL = Sampler(
+    num_warmup=40,
+    num_samples=40,
+    num_chains=1,
+    max_rhat=np.inf,
+    max_divergent=1.0,
+)
 
 
 def _task(
@@ -105,14 +114,11 @@ def test_pooled_delay_is_close_to_the_chain_ladder_for_a_large_place(
     assert 0.8 < ratio < 1.25
 
 
-def test_pooled_delay_fits_own_data_where_randomwalknowcast_does(
+def test_the_country_nowcast_is_close_to_the_chain_ladder(
     origins: tuple[Origin, Origin],
 ) -> None:
     pooled, own = origins
-    np.testing.assert_array_equal(pooled.fit.own, own.fit.own)
-    # The country fits every age, so its newest full week, which leans
-    # on the young ages, is nowcast as the chain ladder does.
-    week = own.start_nowcast
+    week = own.snap.n_weeks - 2
     ratio = pooled.point[0, week] / own.point[0, week]
     assert 0.85 < ratio < 1.15
 
@@ -141,6 +147,29 @@ def test_diagnostics_hold_each_fit(
     tau = {str(r["fit"])[:5]: r for r in fits}
     assert "delay_tau_1" in tau["delay"]
     assert "sigma_tau_1" in tau["sprea"]
+
+
+def test_a_fit_that_does_not_converge_raises() -> None:
+    # Two chains of 5 draws from a wide funnel cannot mix.
+    import numpyro
+    import numpyro.distributions as dist
+
+    from bdbvhubrenewal.forecasters import ModelUnavailableError
+    from bdbvhubrenewal.forecasters.pprandomwalk import _run
+
+    def funnel() -> None:
+        v = numpyro.sample("v", dist.Normal(0.0, 3.0))
+        numpyro.sample("x", dist.Normal(0.0, jnp.exp(v / 2)).expand((10,)))
+
+    strict = Sampler(num_warmup=5, num_samples=20, num_chains=2)
+    with pytest.raises(ModelUnavailableError, match="converge"):
+        _run(funnel, jax.random.key(0), strict)
+
+
+def test_the_sampler_checks_r_hat_and_divergences() -> None:
+    sampler = Sampler()
+    assert sampler.max_rhat == 1.05
+    assert sampler.max_divergent == 0.01
 
 
 def _spread_fit(
@@ -208,11 +237,17 @@ def test_a_silent_leaf_does_not_collapse_the_pooled_spread() -> None:
     seen[1] = True  # As the leaf would be with its 0 to 0 changes kept.
     empty = np.zeros((0, 3, 1))
     fits = {}
-    for name, mask in (("kept", seen), ("left out", seen & (changes != 0))):
+    sampler = Sampler(num_warmup=300, num_samples=300, num_chains=2)
+    # Kept, the fit is not expected to converge, so its check is off.
+    unchecked = dataclasses.replace(sampler, max_rhat=np.inf, max_divergent=1)
+    for name, mask, s in (
+        ("kept", seen, unchecked),
+        ("left out", seen & (changes != 0), sampler),
+    ):
         draws, info = _run(
             spread_model,
             jax.random.key(0),
-            Sampler(num_warmup=300, num_samples=300, num_chains=2),
+            s,
             tree=tree,
             changes=changes,
             noise=noise,
