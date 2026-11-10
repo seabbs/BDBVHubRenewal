@@ -2024,6 +2024,14 @@
 <td>Run only the scenarios calibrated to the real data, from <code>--scenario-as-of</code> and <code>--scenario-dates</code>. <code>--scenarios</code> runs only the named scenarios.</td>
 </tr>
 <tr>
+<td><code>backtest --recovery-only</code>, <code>--no-recovery</code></td>
+<td>Run only the recovery check on the simulated outbreak, or leave it out, so it can run apart.</td>
+</tr>
+<tr>
+<td><code>backtest --chunk K/N</code></td>
+<td>With <code>--recovery-only</code> or <code>--scenarios-only</code>, run only block K of N (from 0) of the dates. Stacking the blocks' results (<code>concat-results</code>) gives one run's.</td>
+</tr>
+<tr>
 <td><code>bvd</code></td>
 <td>Cache the BVDOutbreakSize releases each vintage may use.</td>
 </tr>
@@ -2037,7 +2045,7 @@
 </tr>
 <tr>
 <td><code>zone-backtest</code></td>
-<td>Score <code>randomwalk</code>, <code>randomwalknowcast</code> and <code>pprandomwalknowcast</code> run at zone level on the real vintages.</td>
+<td>Score <code>randomwalk</code>, <code>randomwalknowcast</code> and <code>pprandomwalknowcast</code> run at zone level on the real vintages. <code>--chunk K/N</code> runs only block K of N of the origins.</td>
 </tr>
 <tr>
 <td><code>fit-store plan</code>, <code>fit</code>, <code>load</code></td>
@@ -2080,12 +2088,20 @@
 <td>Make the docs figures and tables.</td>
 </tr>
 <tr>
-<td><code>digest [--with PATH...] [--text TEXT]</code></td>
-<td>Print a hash of what a backtest reads, which keys its cached outputs in the Pages workflow.</td>
+<td><code>digest [--with PATH...] [--text TEXT] [--model M]</code></td>
+<td>Print a hash of what a backtest reads, which keys its cached outputs in the Pages workflow. With <code>--model</code>, only that model's code (its import closure, less the other models' modules) with the data.</td>
 </tr>
 <tr>
-<td><code>concat-results --out DIR PART...</code></td>
-<td>Stack the results files of runs made apart, such as one scenario each, in the order given.</td>
+<td><code>backtest --forecast-only</code>, <code>zone-backtest --forecast-only</code></td>
+<td>Forecast without scoring and write the forecasts to <code>--parts</code>, so each model can run apart.</td>
+</tr>
+<tr>
+<td><code>score PART...</code></td>
+<td>Score the forecasts of <code>--forecast-only</code> runs, every model together, and write the results files one run of each backtest writes.</td>
+</tr>
+<tr>
+<td><code>concat-results --out DIR [--dedupe FILE...] PART...</code></td>
+<td>Stack the results files of runs made apart, such as blocks of dates, in the order given. <code>--dedupe</code> keeps one copy of rows every part writes in full.</td>
 </tr>
 </tbody>
 </table>
