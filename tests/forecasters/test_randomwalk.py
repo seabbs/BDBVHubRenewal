@@ -96,6 +96,42 @@ def test_national_is_the_sum_of_provinces_by_sample(
     assert (summed == nat.reindex(summed.index)).all()
 
 
+@pytest.mark.parametrize("name", ["randomwalk", "randomwalknowcast"])
+def test_a_direct_national_is_fitted_on_the_national_series(
+    task: ForecastTask,
+    runs: dict[str, tuple[RandomWalk, pd.DataFrame]],
+    name: str,
+) -> None:
+    summed = runs[name][1]
+    model = type(runs[name][0])(settings=Settings(national="direct"))
+    direct = model.forecast(task)
+    check_samples(direct, task)
+    assert set(direct["location"]) == {*task.locations, "CD"}
+    # The provinces are the same draws as with a summed national.
+    prov = direct.loc[direct["location"] != "CD"].reset_index(drop=True)
+    pd.testing.assert_frame_equal(prov, summed)
+    # National is its own walk, not the sum of the provinces.
+    keys = ["target_end_date", "sample"]
+    nat = direct.loc[direct["location"] == "CD"].set_index(keys)["value"]
+    total = prov.groupby(keys)["value"].sum()
+    assert not (nat.reindex(total.index) == total).all()
+    # It keeps its own national rows when the harness adds national.
+    pd.testing.assert_frame_equal(
+        add_national(direct), direct.reset_index(drop=True)
+    )
+    info = pd.DataFrame(model.fit_diagnostics).set_index("location")
+    for col in ("delay_source", "sigma_source"):
+        assert info.loc["CD", col] == "own:CD"
+    if name == "randomwalknowcast":
+        assert info.loc["CD", "obs_source"] == "own:CD"
+
+
+def test_national_defaults_to_the_sum_of_provinces() -> None:
+    assert Settings().national == "sum"
+    with pytest.raises(ValueError, match="national"):
+        Settings(national="both")
+
+
 def test_randomwalk_returns_complete_weeks_as_reported(
     task: ForecastTask,
 ) -> None:

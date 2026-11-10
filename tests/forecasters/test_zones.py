@@ -19,6 +19,7 @@ from bdbvhubrenewal.forecasters import (
     RandomWalk,
     RandomWalkNowcast,
 )
+from bdbvhubrenewal.forecasters.chain import Settings
 from bdbvhubrenewal.forecasters.zones import (
     ZoneAllocator,
     _apportion,
@@ -451,6 +452,19 @@ def test_zone_walk_models_sum_to_their_provinces(
     assert set(got["location"]) == want
     assert (got["value"] == got["value"].round()).all()
     assert (got["value"] >= 0).all()
+
+
+def test_zone_walks_of_a_direct_national_model_give_no_national(
+    task: ForecastTask,
+    counts: pd.DataFrame,
+    zones: tuple[str, ...],
+    daily_zones: pd.DataFrame,
+) -> None:
+    model = RandomWalkNowcast(settings=Settings(national="direct"))
+    _, prov, got = _zone_model_inputs(task, counts, zones, daily_zones, model)
+    assert "CD" in set(prov["location"])
+    assert "CD" not in set(got["location"])
+    assert check_zone_coherence(prov.loc[prov["location"] != "CD"], got) == []
 
 
 def test_zone_values_follow_the_zone_model_not_the_shares(

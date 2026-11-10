@@ -181,6 +181,14 @@ def test_national_unassigned_component_adds_up(tmp_path: Path) -> None:
     )
 
 
+def test_a_direct_national_is_not_summed(tmp_path: Path) -> None:
+    path = sub(tmp_path, mutate=_bump_national(weeks()[0], 7, 5.0))
+    side = _sidecar(national_method="direct")
+    c = _checks(path, national_sidecar=side)["national_sum"]
+    assert c.status == "pass"
+    assert "fitted directly" in c.summary
+
+
 def test_cli_reads_national_sidecar(tmp_path: Path) -> None:
     w = weeks()[-1]
     path = sub(tmp_path, mutate=_bump_national(w, 3, 4.0))

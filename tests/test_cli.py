@@ -489,3 +489,22 @@ def test_digest_of_one_model(capsys: pytest.CaptureFixture[str]) -> None:
     key = capsys.readouterr().out.strip()
     assert key == model_digest("randomwalk", ROOT)
     assert key != model_digest("pprandomwalknowcast", ROOT)
+
+
+def test_national_sidecar_records_the_national_method(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+
+    from bdbvhubrenewal.cli import _write_national_sidecar
+    from bdbvhubrenewal.submission.fitting import Forecast
+
+    task = SimpleNamespace(locations=("CD-IT", "CD-NK"))
+    result = Forecast(pd.DataFrame())
+    path = _write_national_sidecar(tmp_path, task, result)  # type: ignore[arg-type]
+    assert json.loads(path.read_text())["national_method"] == "sum"
+    path = _write_national_sidecar(
+        tmp_path,
+        task,  # type: ignore[arg-type]
+        result,
+        national_method="direct",
+    )
+    assert json.loads(path.read_text())["national_method"] == "direct"

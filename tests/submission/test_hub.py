@@ -10,6 +10,7 @@ import yaml
 from bdbvhubrenewal.submission.hub import (
     HUB_COLUMNS,
     model_id,
+    national_method,
     render_model_metadata,
     run_date,
     to_hub_table,
@@ -154,6 +155,41 @@ def test_writer_adds_an_unassigned_component() -> None:
     )["value"]
     assert (cd.xs("2026-10-31", level=1) == 22).all()
     assert (cd.xs("2026-10-24", level=1) == 20).all()
+
+
+def test_national_method_follows_the_model() -> None:
+    from bdbvhubrenewal.forecasters import RandomWalkNowcast
+    from bdbvhubrenewal.forecasters.chain import Settings
+
+    assert national_method(None) == "sum"
+    assert national_method("not-a-model") == "sum"
+    assert national_method("renewal") == "sum"
+    assert national_method("randomwalknowcast") == "sum"
+    direct = RandomWalkNowcast(settings=Settings(national="direct"))
+    assert national_method(direct) == "direct"
+
+
+def test_writer_keeps_a_direct_national() -> None:
+    samples = _provinces(value=10.4)
+    national = samples.loc[samples["location"] == "CD-IT"].assign(
+        location="CD", value=7.6
+    )
+    table = _table(
+        pd.concat([samples, national]), "2026-10-31", national="direct"
+    )
+    cd = table.loc[table["location"] == "CD", "value"]
+    assert len(cd) == 300
+    assert (cd == 8).all()
+
+
+def test_writer_needs_national_rows_for_a_direct_national() -> None:
+    with pytest.raises(ValueError, match="national"):
+        _table(_provinces(), "2026-10-31", national="direct")
+    short = _provinces().assign(location="CD").head(10)
+    with pytest.raises(ValueError, match="CD"):
+        _table(
+            pd.concat([_provinces(), short]), "2026-10-31", national="direct"
+        )
 
 
 @pytest.mark.parametrize(
