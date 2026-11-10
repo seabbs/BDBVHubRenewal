@@ -1,0 +1,3028 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Nowcasts and forecasts of confirmed Bundibugyo virus disease cases for the BDBV Modeling Hub, from baselinenowcast with a random walk, with renewal model candidates, data tools and a backtest.">
+      
+      
+        <meta name="author" content="Sam Abbott">
+      
+      
+        <link rel="canonical" href="https://samabbott.co.uk/BDBVHubRenewal/methods/model/">
+      
+      
+        <link rel="prev" href="../baselines/">
+      
+      
+        <link rel="next" href="../evaluation/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>Renewal models - BDBVHubRenewal</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css?v=1c6923d2">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="white" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#renewal-models" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="BDBVHubRenewal" class="md-header__button md-logo" aria-label="BDBVHubRenewal" data-md-component="logo">
+      
+  <img src="../../assets/logo-mark.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            BDBVHubRenewal
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Renewal models
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="white" data-md-color-accent="blue"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="blue"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/seabbs/BDBVHubRenewal" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    seabbs/BDBVHubRenewal
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../setup/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Setup
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../data/" class="md-tabs__link">
+          
+  
+  
+  Methods
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../data/" class="md-tabs__link">
+          
+  
+  
+  Results
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../submission/rounds/" class="md-tabs__link">
+          
+  
+  
+  Submission
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../development/contributing/" class="md-tabs__link">
+          
+  
+  
+  Development
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+  API reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="BDBVHubRenewal" class="md-nav__button md-logo" aria-label="BDBVHubRenewal" data-md-component="logo">
+      
+  <img src="../../assets/logo-mark.svg" alt="logo">
+
+    </a>
+    BDBVHubRenewal
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/seabbs/BDBVHubRenewal" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    seabbs/BDBVHubRenewal
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Methods
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Methods
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../baselines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Baseline models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Renewal models
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Renewal models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#province-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Province model
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Province model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#time-axis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Time axis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reproduction-number" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reproduction number
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#renewal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Renewal
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ascertainment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ascertainment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#delays" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Delays
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#missing-onsets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Missing onsets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#known-onsets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known onsets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hub-imputation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hub imputation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#likelihood" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Likelihood
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#forecasts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forecasts
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#partially-pooled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Partially pooled (renewal)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Partially pooled (renewal)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pooled-reproduction-number" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pooled reproduction number
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#importation-and-depletion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Importation and depletion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#province-delays" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Province delays
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#missing-onset-deviations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Missing-onset deviations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#provinces-with-no-cases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Provinces with no cases
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#single-patch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Single patch (renewalsp)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bvdoutbreaksize-informed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BVDOutbreakSize-informed (renewalbvd)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#health-zones" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Health zones
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Health zones">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#split-of-province-samples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Split of province samples
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Results
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Results
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../nowcast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nowcast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backtest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backtest
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../simulation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulation checks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparison with hub forecasts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Submission
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Submission
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../submission/rounds/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Submission log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../submission/opting-in/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Opting in
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../submission/workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../submission/hub-spec/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hub specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/adding-a-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adding a model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_4" id="__nav_7_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Model development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../model-development/model-building/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model building
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../model-development/log/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../model-development/score-history/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Score history
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../citation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Citation and licence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_8_3" id="__nav_8_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Models
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Models
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/forecasters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Forecasters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Renewal model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/baselinenowcast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Baselinenowcast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_8_5" id="__nav_8_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reporting
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reporting
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/reporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Figures and tables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/submission/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Submission
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#province-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Province model
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Province model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#time-axis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Time axis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reproduction-number" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reproduction number
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#renewal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Renewal
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ascertainment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ascertainment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#delays" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Delays
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#missing-onsets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Missing onsets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#known-onsets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known onsets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hub-imputation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hub imputation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#likelihood" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Likelihood
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#forecasts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forecasts
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#partially-pooled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Partially pooled (renewal)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Partially pooled (renewal)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pooled-reproduction-number" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pooled reproduction number
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#importation-and-depletion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Importation and depletion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#province-delays" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Province delays
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#missing-onset-deviations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Missing-onset deviations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#provinces-with-no-cases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Provinces with no cases
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#single-patch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Single patch (renewalsp)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bvdoutbreaksize-informed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BVDOutbreakSize-informed (renewalbvd)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#health-zones" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Health zones
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Health zones">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#split-of-province-samples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Split of province samples
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/seabbs/BDBVHubRenewal/edit/main/docs/methods/model.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="renewal-models">Renewal models<a class="headerlink" href="#renewal-models" title="Permanent link">&para;</a></h1>
+<p class="page-subtitle">The three renewal models, with the maths of each.</p>
+<p>The data and notation are on the <a href="../data/#target-and-notation">Data methods page</a>.
+How the models are built in code and sampled is on the <a href="../implementation/">Implementation</a> page.</p>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p><code>renewal</code> fits the provinces together, pools them and links them by importation.
+<code>renewalsp</code> fits the province model to each province on its own, with no pooling or importation.
+<code>renewalbvd</code> is <code>renewal</code> with a down-weighted likelihood term on the Rt of BVDOutbreakSize.
+<code>seabbs-renewal</code> submits the first of <code>renewalbvd</code>, <code>renewalsp</code>, <code>renewal</code>, <code>randomwalknowcast</code> and <code>randomwalk</code>, in that order, to pass its checks (<a href="../../submission/workflow/#renewal-chain">Submission workflow</a>).
+The sections below give the model of each province, then what <code>renewal</code> adds to pool and link the provinces, then how <code>renewalsp</code> and <code>renewalbvd</code> differ.
+Each gives only the maths it adds.
+Every time-varying part is a weekly random walk or AR(1), so it stays near constant unless the data show change.</p>
+<pre class="mermaid"><code>flowchart TD
+    PM["&lt;b&gt;Province model&lt;/b&gt;&lt;br/&gt;Rt walk&lt;br/&gt;generation interval&lt;br/&gt;onsets and delay&lt;br/&gt;missing onsets&lt;br/&gt;three data streams"]
+    RN["&lt;b&gt;renewal&lt;/b&gt;&lt;br/&gt;provinces fitted together&lt;br/&gt;+ pooled log R walk&lt;br/&gt;+ sum-to-zero AR(1)&lt;br/&gt;province deviations&lt;br/&gt;+ importation&lt;br/&gt;+ share at risk&lt;br/&gt;+ delay pooled&lt;br/&gt;by province&lt;br/&gt;+ shared ascertainment"]
+    BV["&lt;b&gt;renewalbvd&lt;/b&gt;&lt;br/&gt;+ BVDOutbreakSize Rt,&lt;br/&gt;down-weighted (ζ = 0.5)"]
+    SP["&lt;b&gt;renewalsp&lt;/b&gt;&lt;br/&gt;each province fitted alone&lt;br/&gt;no pooling or importation&lt;br/&gt;no share at risk"]
+
+    PM -- "pool the provinces" --&gt; RN
+    RN -- "add external Rt" --&gt; BV
+    PM -- "fit each province alone" --&gt; SP</code></pre>
+<h2 id="province-model">Province model<a class="headerlink" href="#province-model" title="Permanent link">&para;</a></h2>
+<p>Each province <span class="arithmatex">\(p\)</span> the release lists has the model below.</p>
+<pre class="mermaid"><code>flowchart TD
+    subgraph TR["Transmission"]
+        RT["log R&lt;sub&gt;p&lt;/sub&gt;(t)&lt;br/&gt;weekly random walk"]
+        GI["Generation interval g"]
+        INF["Infections per resident x&lt;sub&gt;p&lt;/sub&gt;(t)"]
+    end
+    ONS["Expected cases&lt;br/&gt;by onset day&lt;br/&gt;λ&lt;sub&gt;p&lt;/sub&gt;(s) = α(s) N&lt;sub&gt;p&lt;/sub&gt; (x&lt;sub&gt;p&lt;/sub&gt; ∗ η)(s)"]
+    INC["Incubation period η(u)&lt;br/&gt;log-normal, uncertain mean and SD,&lt;br/&gt;0 to 28 days"]
+    DEL["Onset-to-report delay&lt;br/&gt;f&lt;sub&gt;p,s&lt;/sub&gt;(d)&lt;br/&gt;hazard shifted by γ(s),&lt;br/&gt;a weekly walk on onset day&lt;br/&gt;&lt;i&gt;renewal: pooled by province&lt;/i&gt;"]
+    MISS["Share reported&lt;br/&gt;without onset m&lt;sub&gt;p&lt;/sub&gt;(t)&lt;br/&gt;weekly walk"]
+    subgraph OB["Data streams at vintage T"]
+        KN["Known onsets&lt;br/&gt;onsets × delay to report&lt;br/&gt;× share with an onset&lt;br/&gt;× published by T"]
+        IM["Hub-imputed onsets&lt;br/&gt;reports without an onset,&lt;br/&gt;spread back by the hub's&lt;br/&gt;published delays"]
+        DC["Known-onset delays&lt;br/&gt;by onset week and delay"]
+    end
+    subgraph LK["Likelihood"]
+        LKN["Negative binomial&lt;br/&gt;by week"]
+        LKI["Negative binomial&lt;br/&gt;by week"]
+        LKD["Dirichlet-multinomial&lt;br/&gt;by onset week"]
+    end
+    FC["Forecast&lt;br/&gt;log R reverts towards 0&lt;br/&gt;final known plus imputed onsets"]
+
+    RT --&gt; INF
+    GI --&gt; INF
+    INF --&gt; ONS
+    INC --&gt; ONS
+    ONS --&gt; OB
+    DEL --&gt; OB
+    MISS --&gt; OB
+    KN --&gt; LKN
+    IM --&gt; LKI
+    DC --&gt; LKD
+    LK --&gt; FC</code></pre>
+<h3 id="time-axis">Time axis<a class="headerlink" href="#time-axis" title="Permanent link">&para;</a></h3>
+<p>The data weeks start one week before weekly onsets, summed over the modelled provinces, first reach 5, or their peak if lower.
+The data weeks end with the week that holds <span class="arithmatex">\(T\)</span>, the release's cut-off (<a href="../data/#vintages">Data</a>).
+The model axis starts 42 days (6 weeks) earlier, the length of the generation interval, for seeding.
+Every weekly walk is held at its starting value over the 6 seeding weeks and the first data week.
+The fit axis is the data weeks, extended for <code>renewalbvd</code> as <a href="#bvdoutbreaksize-informed">below</a>.</p>
+<h3 id="reproduction-number">Reproduction number<a class="headerlink" href="#reproduction-number" title="Permanent link">&para;</a></h3>
+<div class="arithmatex">\[
+\log R_p(t) = \log R_p(t - 1) + \sigma_R z(t),
+\qquad
+\sigma_R \sim \mathcal{N}^+(0, 0.2^2),
+\]</div>
+<p>with standard normal steps <span class="arithmatex">\(z(t)\)</span>, sampled non-centred, and a start <span class="arithmatex">\(\mathcal{N}(0, 0.5^2)\)</span>.</p>
+<h3 id="renewal">Renewal<a class="headerlink" href="#renewal" title="Permanent link">&para;</a></h3>
+<p>The renewal runs on infections per resident, dated by infection:</p>
+<div class="arithmatex">\[
+x_p(t) = R_p(t) \sum_{j \ge 1} x_p(t - j)\, g(j).
+\]</div>
+<p><span class="arithmatex">\(g\)</span> is BVDOutbreakSize's Gamma generation interval (mean 15.3, SD 9.3 days), double interval censored as <span class="arithmatex">\(G(d + 1) - 2G(d) + G(d - 1)\)</span> with <span class="arithmatex">\(G\)</span> the integrated cdf, on lags 1 to 42 and renormalised (mean 14.8, SD 8.4 days), as in primarycensored<sup id="fnref:pcens"><a class="footnote-ref" href="#fn:pcens">1</a></sup><sup id="fnref:park"><a class="footnote-ref" href="#fn:park">2</a></sup>.
+Seeds are <span class="arithmatex">\(e_p \sim \text{LogNormal}(0, 1.5^2)\)</span> infections per day that will be confirmed, or <span class="arithmatex">\(I_{0,p} = e_p / (\alpha_0 N_p)\)</span> infections per resident, on the first data day.
+The seed is projected back over the seeding weeks at the growth rate implied by <span class="arithmatex">\(R_p\)</span> and <span class="arithmatex">\(g\)</span>, clipped to <span class="arithmatex">\([-0.05, 0.3]\)</span> per day.</p>
+<h3 id="ascertainment">Ascertainment<a class="headerlink" href="#ascertainment" title="Permanent link">&para;</a></h3>
+<p>Onsets follow infections after the incubation period <span class="arithmatex">\(\eta\)</span>, and expected confirmed onsets are</p>
+<div class="arithmatex">\[
+\lambda_p(s) = \alpha(s)\, N_p \sum_{u = 0}^{28} x_p(s - u)\, \eta(u),
+\qquad
+\operatorname{logit} \alpha(s) = \operatorname{logit} \alpha_0 + a(s),
+\]</div>
+<p>with <span class="arithmatex">\(N_p\)</span> the province population, <span class="arithmatex">\(\alpha_0 = 0.6\)</span> fixed and <span class="arithmatex">\(a\)</span> a weekly random walk from zero with step SD <span class="arithmatex">\(\mathcal{N}^+(0, 0.03^2)\)</span>.
+<span class="arithmatex">\(\eta\)</span> is a log-normal incubation period for Bundibugyo virus disease.
+Its mean <span class="arithmatex">\(\mu_\eta \sim \mathcal{N}(6.3, 0.54^2)\)</span> and SD <span class="arithmatex">\(\sigma_\eta \sim \mathcal{N}(3.5, 0.8^2)\)</span>, both truncated below at 1 day, have <a href="https://github.com/epiforecasts/BVDOutbreakSize/blob/main/src/models/priors.jl">BVDOutbreakSize's priors</a>.
+The mean prior reproduces the 95% CI of 5.2 to 7.3 days from the 2007 Uganda outbreak<sup id="fnref:macneil"><a class="footnote-ref" href="#fn:macneil">3</a></sup>.
+MacNeil et al. give no interval on the spread, so the SD prior is BVDOutbreakSize's weakly informative choice around 3.5 days.
+Each draw of <span class="arithmatex">\(\eta\)</span> is double interval censored in the same way on lags 0 to 28, the 99.9% quantile at the prior means.</p>
+<h3 id="delays">Delays<a class="headerlink" href="#delays" title="Permanent link">&para;</a></h3>
+<p>The onset-to-report delay <span class="arithmatex">\(f_s(d)\)</span>, on days <span class="arithmatex">\(d\)</span> from 0 to 60, comes from a discrete hazard that varies with onset day:</p>
+<div class="arithmatex">\[
+\operatorname{logit} H_s(d) = \beta(d) + \gamma(s),
+\qquad
+f_s(d) = H_s(d) \prod_{j &lt; d}\{1 - H_s(j)\},
+\qquad H_s(60) = 1.
+\]</div>
+<ul>
+<li><span class="arithmatex">\(\beta\)</span> is a random walk over delay, <span class="arithmatex">\(\beta(0) \sim \mathcal{N}(-2, 1)\)</span> with step SD <span class="arithmatex">\(\mathcal{N}^+(0, 0.4^2)\)</span>, so the shape is smooth but not parametric.</li>
+<li><span class="arithmatex">\(\gamma\)</span> is a weekly random walk over onset day from zero, with step SD <span class="arithmatex">\(\mathcal{N}^+(0, 0.15^2)\)</span>, shifting all hazards together.</li>
+</ul>
+<h3 id="missing-onsets">Missing onsets<a class="headerlink" href="#missing-onsets" title="Permanent link">&para;</a></h3>
+<p>Cases reported on day <span class="arithmatex">\(t\)</span> without an onset are a share <span class="arithmatex">\(m_p(t)\)</span> of reports, with <span class="arithmatex">\(\operatorname{logit} m_p(t) = \bar m(t)\)</span>.
+<span class="arithmatex">\(\bar m\)</span> is a weekly random walk with start <span class="arithmatex">\(\mathcal{N}(-2, 1)\)</span> and step SD <span class="arithmatex">\(\mathcal{N}^+(0, 0.3^2)\)</span>.</p>
+<h3 id="known-onsets">Known onsets<a class="headerlink" href="#known-onsets" title="Permanent link">&para;</a></h3>
+<p>A case reported on day <span class="arithmatex">\(t\)</span> is in the vintage with probability <span class="arithmatex">\(\Pi(t) = F_\ell(T - t)\)</span>, with <span class="arithmatex">\(T\)</span> the vintage's cut-off and <span class="arithmatex">\(F_\ell\)</span> the cdf of the report-to-publication lag.
+The lag is the gap between a case's report and its first appearance in a release.
+Its pmf on 0 to 7 days has a Dirichlet(1, ..., 1) prior and is learnt from consecutive releases (see Likelihood).
+Expected known onsets, right truncated by vintage, are</p>
+<div class="arithmatex">\[
+\mathrm{known}_{p,T}(s) = \lambda_p(s) \sum_{d} f_s(d)\, \{1 - m_p(s + d)\}\, \Pi(s + d).
+\]</div>
+<h3 id="hub-imputation">Hub imputation<a class="headerlink" href="#hub-imputation" title="Permanent link">&para;</a></h3>
+<p>The hub gives each case reported without an onset one by subtracting a delay drawn from a fit to its published delays (<a href="https://github.com/InsightNet-US/BDBV-Modeling-Hub/blob/main/auxiliary-data/imputation-details.md">imputation details</a>).
+We model that procedure, bias included:</p>
+<div class="arithmatex">\[
+M_p(t) = m_p(t) \sum_s \lambda_p(s)\, f_s(t - s),
+\qquad
+\mathrm{imputed}_{p,T}(s) = \sum_{t = s}^{T} \hat f_T(t - s)\, \Pi(t)\, M_p(t).
+\]</div>
+<p><span class="arithmatex">\(M_p(t)\)</span> are the cases reported on day <span class="arithmatex">\(t\)</span> without an onset.
+The hub draws a report hour from <span class="arithmatex">\(\mathrm{Unif}(0, 24)\)</span> and subtracts a generalised gamma delay in hours fitted to the non-negative delays published at 2026-10-17.
+<span class="arithmatex">\(\hat f_T\)</span> is the daily pmf this implies, <span class="arithmatex">\(\hat f_T(k) = \int_0^1 \{F_T(k + u) - F_T(k - 1 + u)\}\, du\)</span> with <span class="arithmatex">\(F_T\)</span> the delay cdf in days, on 0 to 60 days, and is data.
+It is the double interval censored pmf, computed in closed form from the generalised gamma's partial first moment.
+The hub fits the delays as exact for releases up to 2026-10-24 and as double interval censored from 2026-11-01 (<a href="https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/75">hub issue 75</a>), and <span class="arithmatex">\(F_T\)</span> is the fit for release <span class="arithmatex">\(T\)</span>.</p>
+<h3 id="likelihood">Likelihood<a class="headerlink" href="#likelihood" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Weekly <span class="arithmatex">\(\mathrm{known}_{p,T}\)</span> and <span class="arithmatex">\(\mathrm{imputed}_{p,T}\)</span> are negative binomial, each stream with size <span class="arithmatex">\(\phi\)</span>, <span class="arithmatex">\(1/\sqrt{\phi} \sim \text{HalfNormal}(0.25)\)</span> and <span class="arithmatex">\(\phi\)</span> kept below 1000.</li>
+<li>Known-onset delays, by province, onset week and delay on 0 to 60 days, are Dirichlet-multinomial given each province and week's total.
+  Their probabilities come from <span class="arithmatex">\(\lambda\)</span>, <span class="arithmatex">\(f\)</span>, <span class="arithmatex">\(m\)</span> and <span class="arithmatex">\(\Pi\)</span>, with concentration <span class="arithmatex">\(\psi\)</span>, <span class="arithmatex">\(1/\sqrt{\psi} \sim \text{HalfNormal}(0.1)\)</span> and <span class="arithmatex">\(\psi\)</span> kept below <span class="arithmatex">\(10^4\)</span>.
+  Delays below 0 count as 0 and delays above 60 as 60.</li>
+<li>Each delay-file row (location, onset week and delay) of release <span class="arithmatex">\(k + 1\)</span> was already in release <span class="arithmatex">\(k\)</span> with probability
+  $<span class="arithmatex">\(q = (1 - b_k) \frac{\sum_u F_\ell(T_k - t_u)}{\sum_u F_\ell(T_{k+1} - t_u)},\)</span>$
+  averaged over the onset days <span class="arithmatex">\(u\)</span> of the row's week, with <span class="arithmatex">\(t_u\)</span> the report day for onset <span class="arithmatex">\(u\)</span> and <span class="arithmatex">\(T_k\)</span> release <span class="arithmatex">\(k\)</span>'s cut-off.
+  <span class="arithmatex">\(b_k \sim \text{Beta}(1, 19)\)</span> is the share of rows that appear late whatever their age, such as onsets recorded later for cases first counted as imputed.
+  The kept rows of each cell are beta-binomial with mean <span class="arithmatex">\(q\)</span> and concentration <span class="arithmatex">\(1/(\tau^2 + 10^{-3})\)</span>, <span class="arithmatex">\(\tau \sim \mathcal{N}^+(0, 0.5^2)\)</span>, kept below 1000 as the other concentrations are.
+  Rows up to 60 days old at release <span class="arithmatex">\(k\)</span> enter.
+  This term conditions on the later release, so it informs <span class="arithmatex">\(F_\ell\)</span> only.</li>
+</ul>
+<h3 id="forecasts">Forecasts<a class="headerlink" href="#forecasts" title="Permanent link">&para;</a></h3>
+<p>The random walks carry <span class="arithmatex">\(\alpha\)</span> and <span class="arithmatex">\(f\)</span> to the forecast horizon, <span class="arithmatex">\(m\)</span> keeps its last value, and each of 100 trajectories is one posterior draw.
+Past the fit axis the walk of <span class="arithmatex">\(\log R\)</span> reverts towards 0 with a fixed half-life of 2 weeks, <span class="arithmatex">\(\log R(t) = 2^{-1/2} \log R(t - 1) + \sigma_R z(t)\)</span>, so it does not compound growth over the horizon.
+In <code>renewal</code> this is the pooled trend, and the province deviations keep their AR(1) (<a href="#pooled-reproduction-number">below</a>).
+The reversion leaves the fit unchanged.
+A trajectory is the final known plus final imputed counts.
+Final known counts are those reported by the cut-off plus a negative binomial draw of those reported later, as in epinowcast.
+Final imputed counts are a negative binomial draw centred on the current imputed count plus those expected later, since the hub re-imputes each vintage.
+The national trajectory is the sum of the provinces plus an unassigned component.
+The component is <span class="arithmatex">\(\max\{0, Y_{CD}(w) - \sum_p Y_p(w)\}\)</span> in data weeks and <span class="arithmatex">\(\rho \sum_p \tilde y_{p,i}(w)\)</span> after, with <span class="arithmatex">\(\tilde y_{p,i}\)</span> trajectory <span class="arithmatex">\(i\)</span> of province <span class="arithmatex">\(p\)</span>.
+<span class="arithmatex">\(\rho\)</span> is the component's share of the provinces' total over the last 4 data weeks.</p>
+<h2 id="partially-pooled">Partially pooled (<code>renewal</code>)<a class="headerlink" href="#partially-pooled" title="Permanent link">&para;</a></h2>
+<p><code>renewal</code> fits every province the release lists in one model, on the axis set by their summed onsets.
+The provinces share the trend <span class="arithmatex">\(\log R(t)\)</span> and the deviation SD <span class="arithmatex">\(\sigma_\delta\)</span>, half-life <span class="arithmatex">\(t_{1/2}\)</span> and start spread <span class="arithmatex">\(\sigma_v\)</span>.
+They also share ascertainment <span class="arithmatex">\(\alpha\)</span>, the publication lag, the trend <span class="arithmatex">\(\bar m\)</span> of the missing-onset share, the share at risk <span class="arithmatex">\(\nu\)</span> and the importation share <span class="arithmatex">\(\varepsilon\)</span>.
+Each seeded province has its own deviations <span class="arithmatex">\(\delta_p\)</span> and <span class="arithmatex">\(\omega_p\)</span> and its own seed.
+Provinces are linked by importation through <span class="arithmatex">\(W\)</span>.
+Each seeded province has its own delay, pooled towards the shared delay.
+Leaving a province out removes its known and imputed counts and its delay counts but keeps it in the latent process.</p>
+<pre class="mermaid"><code>flowchart TD
+    LR["Pooled log R(t)&lt;br/&gt;weekly random walk"]
+    DV["Province deviations δ&lt;sub&gt;p&lt;/sub&gt;(t)&lt;br/&gt;sum-to-zero AR(1)"]
+    RP["log R&lt;sub&gt;p&lt;/sub&gt;(t) = log R(t) + δ&lt;sub&gt;p&lt;/sub&gt;(t)"]
+    K["Gravity kernel&lt;br/&gt;K&lt;sub&gt;qp&lt;/sub&gt; ∝ N&lt;sub&gt;p&lt;/sub&gt; exp(−D&lt;sub&gt;qp&lt;/sub&gt; / 300 km)"]
+    W["Importation&lt;br/&gt;W = (1 − ε) I + ε diag(1/N) K&lt;sup&gt;T&lt;/sup&gt; diag(N)"]
+    CORE["&lt;b&gt;Renewal core&lt;/b&gt;&lt;br/&gt;see above&lt;br/&gt;with a share at risk ν"]
+
+    LR --&gt; RP
+    DV --&gt; RP
+    K --&gt; W
+    RP --&gt; CORE
+    W --&gt; CORE</code></pre>
+<h3 id="pooled-reproduction-number">Pooled reproduction number<a class="headerlink" href="#pooled-reproduction-number" title="Permanent link">&para;</a></h3>
+<div class="arithmatex">\[
+\log R_p(t) = \log R(t) + \delta_p(t).
+\]</div>
+<p>The pooled trend <span class="arithmatex">\(\log R(t)\)</span> is the unweighted mean of <span class="arithmatex">\(\log R_p(t)\)</span>, not the national Rt, and is the walk of the province model.
+The province deviations sum to zero.
+They are <span class="arithmatex">\(\delta_p(t) = \sum_j Q_{pj}\, \xi_j(t)\)</span>, with <span class="arithmatex">\(Q\)</span> an orthonormal basis of the deviations that sum to zero over the <span class="arithmatex">\(P_s\)</span> seeded provinces and are 0 for the rest, and <span class="arithmatex">\(P_s - 1\)</span> weekly AR(1) processes <span class="arithmatex">\(\xi_j\)</span> that decay towards 0, the pooled trend,</p>
+<div class="arithmatex">\[
+\xi_j(t) = \kappa\, \xi_j(t - 1) + \sigma_\delta z_j(t), \qquad \kappa = 2^{-1/t_{1/2}}, \qquad t_{1/2} \sim \text{LogNormal}(\log 6, 0.6^2)\ \text{weeks}, \qquad \sigma_\delta \sim \mathcal{N}^+(0, 0.1^2).
+\]</div>
+<p>The shared <span class="arithmatex">\(\sigma_\delta\)</span> and <span class="arithmatex">\(t_{1/2}\)</span> pool the provinces.
+The starting offsets are <span class="arithmatex">\(\xi_j(0) = v_j\)</span>, with <span class="arithmatex">\(v_j \sim \mathcal{N}(0, \sigma_v^2)\)</span> and <span class="arithmatex">\(\sigma_v \sim \mathcal{N}^+(0, 0.3^2)\)</span>, so <span class="arithmatex">\(\delta_p(0) = \sum_j Q_{pj} v_j\)</span>.</p>
+<h3 id="importation-and-depletion">Importation and depletion<a class="headerlink" href="#importation-and-depletion" title="Permanent link">&para;</a></h3>
+<p>The province model's renewal gains importation and a share at risk:</p>
+<div class="arithmatex">\[
+\Phi_p(t) = R_p(t) \sum_q W_{pq} \sum_{j \ge 1} x_q(t - j)\, g(j),
+\qquad
+x_p(t) = S_p(t)\big\{1 - e^{-\Phi_p(t)/\nu}\big\},
+\qquad
+S_p(t + 1) = S_p(t)\, e^{-\Phi_p(t)/\nu}.
+\]</div>
+<ul>
+<li><span class="arithmatex">\(W = (1 - \varepsilon) I + \varepsilon\, \mathrm{diag}(1/N) K^\top \mathrm{diag}(N)\)</span> mixes transmission between provinces, with <span class="arithmatex">\(\varepsilon \sim \text{Beta}(1, 100)\)</span>.</li>
+<li><span class="arithmatex">\(K\)</span> is a row-normalised gravity kernel, <span class="arithmatex">\(K_{qp} \propto N_p e^{-D_{qp}/300\,\text{km}}\)</span> for <span class="arithmatex">\(q \ne p\)</span>, with <span class="arithmatex">\(D\)</span> the great-circle distance between population-weighted province centres.</li>
+<li><span class="arithmatex">\(\nu \sim \text{LogNormal}(\log 0.05, 0.75^2)\)</span> is the share at risk.
+  <span class="arithmatex">\(S_p\)</span> starts at <span class="arithmatex">\(\nu\)</span> less the seed, so infections never exceed <span class="arithmatex">\(\nu N_p\)</span>.</li>
+</ul>
+<p>Provinces with cases in the first data week are seeded at the start.
+Later provinces start at <span class="arithmatex">\(10^{-6}\)</span> of that level and add <span class="arithmatex">\(I_{0,p}\)</span> to <span class="arithmatex">\(\Phi_p(t)\)</span> each day for 7 days.
+These 7 days start 5 days before the province's first case week.</p>
+<h3 id="province-delays">Province delays<a class="headerlink" href="#province-delays" title="Permanent link">&para;</a></h3>
+<p>Each province's delay hazard adds a sum-to-zero offset <span class="arithmatex">\(a_p\)</span> and a sum-to-zero weekly walk <span class="arithmatex">\(g_p(s)\)</span> to the shared shift <span class="arithmatex">\(\gamma(s)\)</span>, on the basis <span class="arithmatex">\(Q\)</span>:</p>
+<div class="arithmatex">\[
+\operatorname{logit} h_{p,s}(d) = \beta(d) + \gamma(s) + a_p + g_p(s).
+\]</div>
+<p>The offsets have spread <span class="arithmatex">\(\mathcal{N}^+(0, 0.5^2)\)</span> and the walks start at 0 with step SD <span class="arithmatex">\(\mathcal{N}^+(0, 0.1^2)\)</span>, both sampled non-centred.
+So each province's delay follows the shared one over time, with its own level and its own drift, each shrunk towards the shared delay by a learnt spread.
+As for <span class="arithmatex">\(\delta_p\)</span>, <span class="arithmatex">\(Q\)</span> spans the seeded provinces, so a province never seeded has no delay data and takes the shared delay.
+Known-onset delays are scored by province.
+Health zones take their province's delay, since the delay files list provinces only.</p>
+<h3 id="missing-onset-deviations">Missing-onset deviations<a class="headerlink" href="#missing-onset-deviations" title="Permanent link">&para;</a></h3>
+<p>The missing-onset share gains sum-to-zero province deviations <span class="arithmatex">\(\omega_p\)</span> on the same basis <span class="arithmatex">\(Q\)</span>:</p>
+<div class="arithmatex">\[
+\operatorname{logit} m_p(t) = \bar m(t) + \omega_p(t).
+\]</div>
+<p>The deviations are random walks, not AR(1).
+They start with province spread <span class="arithmatex">\(\mathcal{N}^+(0, 0.5^2)\)</span>, sampled non-centred, and have step SD <span class="arithmatex">\(\mathcal{N}^+(0, 0.1^2)\)</span>.</p>
+<h3 id="provinces-with-no-cases">Provinces with no cases<a class="headerlink" href="#provinces-with-no-cases" title="Permanent link">&para;</a></h3>
+<p>A province with no case yet starts at <span class="arithmatex">\(10^{-6}\)</span> of its seed level and is never seeded.
+Its deviations <span class="arithmatex">\(\delta_p\)</span> and <span class="arithmatex">\(\omega_p\)</span> are 0, so it follows the pooled trends.
+Its seed is fixed at the prior median, 1, and nothing is sampled for it.
+Its infections come only from importation through <span class="arithmatex">\(W\)</span>, and its zero counts are scored like any other province's.
+Its forecasts follow from the model, so every province the release lists has one.</p>
+<h2 id="single-patch">Single patch (<code>renewalsp</code>)<a class="headerlink" href="#single-patch" title="Permanent link">&para;</a></h2>
+<p><code>renewalsp</code> fits the <a href="#province-model">province model</a> to each province's series on its own, one fit after another with the same code.
+Nothing is pooled or shared between provinces: each has its own Rt walk, delay, missing-onset share and ascertainment.
+One series cannot inform the share at risk, so there is no depletion.
+Every province with a case in the random walks' walk window is fitted, however few its cases.
+A province with none takes the introduction layer of <code>randomwalknowcast</code> (<a href="../baselines/">Baseline models</a>): exactly 0 until an introduction, then its walk.
+National is the sum of the provinces plus the data's national gap, as for <code>renewal</code>.
+A province is fitted only on its own data, so <code>renewalsp</code> cannot forecast a province left out.</p>
+<h2 id="bvdoutbreaksize-informed">BVDOutbreakSize-informed (<code>renewalbvd</code>)<a class="headerlink" href="#bvdoutbreaksize-informed" title="Permanent link">&para;</a></h2>
+<p>Every renewal model takes from the BVDOutbreakSize main model its generation interval, the priors of the incubation period, the prior on the half-life of the province deviations and the sum-to-zero basis for them.
+<code>renewalbvd</code> also takes the Rt estimates of one <a href="https://github.com/epiforecasts/BVDOutbreakSize">BVDOutbreakSize</a> release, chosen as on the <a href="../data/#bvdoutbreaksize-estimates">Data methods page</a>.
+Without such a release <code>renewalbvd</code> is <code>renewal</code>.</p>
+<pre class="mermaid"><code>flowchart TD
+    REL["BVDOutbreakSize release&lt;br/&gt;data cut-off t&lt;sub&gt;b&lt;/sub&gt;"]
+    NAT["National log Rt draws&lt;br/&gt;mean μ&lt;sub&gt;CD&lt;/sub&gt;, SD σ&lt;sub&gt;CD&lt;/sub&gt;"]
+    PAT["Patch medians and&lt;br/&gt;90% intervals"]
+    AL["Aligned to infection day t&lt;sub&gt;b&lt;/sub&gt;"]
+    CORE["&lt;b&gt;Renewal core, pooled&lt;/b&gt;&lt;br/&gt;see above&lt;br/&gt;infection-weighted R&lt;sub&gt;CD&lt;/sub&gt;(t&lt;sub&gt;b&lt;/sub&gt;), R&lt;sub&gt;k&lt;/sub&gt;(t&lt;sub&gt;b&lt;/sub&gt;)"]
+    LK["Normal terms&lt;br/&gt;down-weighted, ζ = 0.5"]
+
+    REL --&gt; NAT
+    REL --&gt; PAT
+    NAT --&gt; AL
+    PAT --&gt; AL
+    AL --&gt; LK
+    CORE --&gt; LK</code></pre>
+<p>From the release it takes the posterior draws of the national <span class="arithmatex">\(\log R\)</span> and, where the release has province estimates, each patch's median and 90% interval with the hub provinces the patch covers.
+Both models date Rt by infection, so the estimates are aligned to the release's data cut-off <span class="arithmatex">\(t_b\)</span>.
+The fit axis extends to the end of the week of <span class="arithmatex">\(t_b\)</span> when that week is after the data.
+For the nation CD and each patch <span class="arithmatex">\(k\)</span> with a modelled province, the model's Rt before depletion, <span class="arithmatex">\(R_p\)</span>, is weighted by infections over the data week that holds <span class="arithmatex">\(t_b\)</span>,</p>
+<div class="arithmatex">\[
+R_{\mathcal{G}}(t_b) = \frac{\sum_{p \in \mathcal{G}} \Omega_p\, R_p(t_b)}{\sum_{p \in \mathcal{G}} \Omega_p},
+\qquad
+\Omega_p = N_p \sum_{t \in \text{week}(t_b)} x_p(t),
+\qquad
+\mathcal{G} \in \{\text{CD}, k\}.
+\]</div>
+<p>With the term down-weighted by <span class="arithmatex">\(\zeta = 0.5\)</span>, the likelihood gains</p>
+<div class="arithmatex">\[
+\mu_{\text{CD}} \sim \mathcal{N}\big(\log R_{\text{CD}}(t_b),\, \sigma_{\text{CD}}^2/\zeta\big),
+\qquad
+\tilde\mu_k - \tilde\mu_{\text{CD}} \sim \mathcal{N}\big(\log R_k(t_b) - \log R_{\text{CD}}(t_b),\, \sigma_{\Delta,k}^2/\zeta\big),
+\qquad
+\sigma_{\Delta,k}^2 = \max(\tilde\sigma_k^2 - \tilde\sigma_{\text{CD}}^2,\, 0.05^2).
+\]</div>
+<p><span class="arithmatex">\(\mu_{\text{CD}}\)</span> and <span class="arithmatex">\(\sigma_{\text{CD}}\)</span> are the mean and SD of the release's national log Rt draws, converted from growth rates for early releases (<a href="../data/#bvdoutbreaksize-estimates">Data</a>).
+<span class="arithmatex">\(\tilde\mu_k\)</span> and <span class="arithmatex">\(\tilde\sigma_k\)</span> are each patch's log median and SD, the SD from the 90% interval.
+<span class="arithmatex">\(\tilde\mu_{\text{CD}}\)</span> and <span class="arithmatex">\(\tilde\sigma_{\text{CD}}\)</span> are the same summaries of the national estimate the patches are relative to, or <span class="arithmatex">\(\mu_{\text{CD}}\)</span> and <span class="arithmatex">\(\sigma_{\text{CD}}\)</span> if the release has none.
+Leaving a province out drops the national term and the patch that holds it.
+The term adds no parameters, and <span class="arithmatex">\(\zeta = 0\)</span> gives <code>renewal</code>.</p>
+<h2 id="health-zones">Health zones<a class="headerlink" href="#health-zones" title="Permanent link">&para;</a></h2>
+<p>Zone samples sum to their province's samples, sample by sample and week by week, and zones do not enter the national value.
+The random walk baselines run at zone level and their samples set the zone shares of the province samples (<a href="../baselines/#health-zones">Baseline models</a>).
+Every other model's province forecast is split across the zones.</p>
+<h3 id="split-of-province-samples">Split of province samples<a class="headerlink" href="#split-of-province-samples" title="Permanent link">&para;</a></h3>
+<p>For province <span class="arithmatex">\(p\)</span> with zones <span class="arithmatex">\(z\)</span>, let <span class="arithmatex">\(o_z(w)\)</span> be zone <span class="arithmatex">\(z\)</span>'s published count for week <span class="arithmatex">\(w\)</span> and <span class="arithmatex">\(O(w) = \sum_z o_z(w)\)</span>.
+Each province sample <span class="arithmatex">\(i\)</span> draws its zone shares once, for all weeks,</p>
+<div class="arithmatex">\[
+\theta^{(i)} \sim \text{Dirichlet}(\chi),
+\qquad
+\chi_z = r_z + n_0\, \frac{l_z + \chi_0}{\sum_{z'} (l_{z'} + \chi_0)}.
+\]</div>
+<p><span class="arithmatex">\(r_z\)</span> is the zone's onsets over the 2 weeks before the vintage and <span class="arithmatex">\(l_z\)</span> those over the 16 weeks before it.
+Recent shares are shrunk towards longer-run shares by <span class="arithmatex">\(n_0 = 100\)</span> pseudo-cases.
+The floor <span class="arithmatex">\(\chi_0 = 1/2\)</span> gives a zone with no recent cases a small share, if the zone has had a case.
+A zone with no case at the vintage has a tenth of the floor, <span class="arithmatex">\(\chi_0 = 1/20\)</span>.
+The models have no zone-level transmission: importation through <span class="arithmatex">\(W\)</span> and the introduction layer act between provinces.
+So a province sample holds no information on which new zones its cases reach.
+New zones in a province with cases are still reached, 6 in the 8 weeks to 10-03, and the small floor lets a province's cases reach them at about that rate.
+In a province with no case in any zone, every zone has <span class="arithmatex">\(\chi_0 = 1/2\)</span> and the zones share equally.
+Province samples are rounded.
+Each zone keeps its published count and the rest of the province sample <span class="arithmatex">\(Y^{(i)}(w)\)</span> is split,</p>
+<div class="arithmatex">\[
+\big(y^{(i)}_z(w)\big)_z = \big(o_z(w)\big)_z + \text{Multinomial}\big(Y^{(i)}(w) - O(w),\ \theta^{(i)}\big).
+\]</div>
+<p>A sample below the published total is drawn from the published zone counts without replacement instead.</p>
+<div class="footnote">
+<hr />
+<ol>
+<li id="fn:pcens">
+<p>Abbott S, Brand S, Azam J, Pearson C, Funk S, Charniga K. primarycensored: Primary Event Censored Distributions. <a href="https://doi.org/10.5281/zenodo.13632838">doi:10.5281/zenodo.13632838</a>.&#160;<a class="footnote-backref" href="#fnref:pcens" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+</li>
+<li id="fn:park">
+<p>Park SW, Akhmetzhanov AR, Charniga K, Cori A, Davies NG, Dushoff J, Funk S, Gostic K, Grenfell B, Linton NM, Lipsitch M, Lison A, Overton CE, Ward T, Abbott S (2024). Estimating epidemiological delay distributions for infectious diseases. <a href="https://doi.org/10.1101/2024.01.12.24301247">doi:10.1101/2024.01.12.24301247</a>.&#160;<a class="footnote-backref" href="#fnref:park" title="Jump back to footnote 2 in the text">&#8617;</a></p>
+</li>
+<li id="fn:macneil">
+<p>MacNeil A, Farnon EC, Wamala J, Okware S, Cannon DL, Reed Z, Towner JS, Tappero JW, Lutwama J, Downing R, Nichol ST, Ksiazek TG, Rollin PE (2010). Proportion of deaths and clinical features in Bundibugyo Ebola virus infection, Uganda. Emerging Infectious Diseases 16(12):1969-1972. <a href="https://doi.org/10.3201/eid1612.100627">doi:10.3201/eid1612.100627</a>.&#160;<a class="footnote-backref" href="#fnref:macneil" title="Jump back to footnote 3 in the text">&#8617;</a></p>
+</li>
+</ol>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../baselines/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Baseline models">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Baseline models
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../evaluation/" class="md-footer__link md-footer__link--next" aria-label="Next: Evaluation">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Evaluation
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2026 Sam Abbott. MIT licence.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/seabbs/BDBVHubRenewal" target="_blank" rel="noopener" title="Source on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/seabbs/BDBVHubRenewal/issues" target="_blank" rel="noopener" title="Issue tracker" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 8h-2.81c-.45-.8-1.07-1.5-1.82-2L17 4.41 15.59 3l-2.17 2.17a6 6 0 0 0-2.83 0L8.41 3 7 4.41 8.62 6c-.75.5-1.36 1.21-1.81 2H4v2h2.09c-.06.33-.09.66-.09 1v1H4v2h2v1c0 .34.03.67.09 1H4v2h2.81A5.99 5.99 0 0 0 15 20.18c.91-.52 1.67-1.28 2.19-2.18H20v-2h-2.09c.06-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.03-.67-.09-1H20zm-4 7a4 4 0 0 1-4 4 4 4 0 0 1-4-4v-4a4 4 0 0 1 4-4 4 4 0 0 1 4 4zm-2-5v2h-4v-2zm-4 4h4v2h-4z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit", "content.tabs.link", "toc.follow"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+        <script src="../../javascripts/mathjax.js?v=bced49b5"></script>
+      
+        <script src="../../javascripts/toggles.js?v=b6055b59"></script>
+      
+        <script src="../../javascripts/placemap.js?v=03fe1366"></script>
+      
+        <script src="../../javascripts/zoom.js?v=4e0c610c"></script>
+      
+        <script src="../../javascripts/summarise.js?v=896d340e"></script>
+      
+        <script src="../../javascripts/energy.js?v=36005f6a"></script>
+      
+        <script src="../../javascripts/tablefilter.js?v=774f66a6"></script>
+      
+        <script src="../../javascripts/explorer.js?v=84b4d7fb"></script>
+      
+        <script src="../../javascripts/scorechart.js?v=1c27a70d"></script>
+      
+        <script src="../../javascripts/scoresummary.js?v=34222cf0"></script>
+      
+        <script src="../../javascripts/checkschart.js?v=1ee222fe"></script>
+      
+        <script src="../../javascripts/nowcastchart.js?v=e5f9eb42"></script>
+      
+        <script src="../../javascripts/zonereview.js?v=bdf9bd28"></script>
+      
+        <script src="https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
+      
+    
+  <script data-mkdocs-jupyter-mathjax="{&quot;url&quot;: &quot;https://cdn.jsdelivr.net/npm/mathjax@4.1.3/tex-mml-chtml.js&quot;, &quot;version&quot;: 4}">
+/* Shared by full pages and Material's instant navigation. */
+(() => {
+  const config = JSON.parse(document.currentScript.dataset.mkdocsJupyterMathjax);
+  if (window.mkdocsJupyterMathJax) return;
+
+  let loading;
+  let queue = Promise.resolve();
+  let previous = [];
+
+  const ready = async () => {
+    if (!loading) {
+      loading = (async () => {
+        let math = window.MathJax;
+        if (!math?.typesetPromise) {
+          const url = new URL(config.url, document.baseURI).href;
+          const existing = Array.from(document.scripts).find(script =>
+            script.src && (script.src === url || script.id === 'MathJax-script' ||
+              (/mathjax/i.test(script.src) &&
+               /\/(?:MathJax|latest|(?:tex|mml)(?:-mml)?-(?:chtml|svg))\.js(?:[?#]|$)/i.test(script.src))));
+          if (existing) {
+            if (!math?.startup?.promise) {
+              await new Promise((resolve, reject) => {
+                existing.addEventListener('load', resolve, { once: true });
+                existing.addEventListener('error', reject, { once: true });
+              });
+            }
+          } else {
+            // Keep site macros, delimiters and startup hooks when supplied.
+            const options = math || {};
+            window.MathJax = {
+              ...options,
+              loader: {
+                ...options.loader,
+                load: Array.from(new Set(['ui/safe', ...(options.loader?.load || [])]))
+              },
+              startup: { typeset: false, ...options.startup },
+              tex: {
+                tags: 'ams',
+                useLabelIds: true,
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true,
+                processEnvironments: true,
+                ...options.tex
+              }
+            };
+            await new Promise((resolve, reject) => {
+              const script = document.createElement('script');
+              script.src = config.url;
+              script.id = 'MathJax-script';
+              script.async = true;
+              script.onload = resolve;
+              script.onerror = reject;
+              document.head.appendChild(script);
+            });
+          }
+        }
+        math = window.MathJax;
+        await math.startup.promise;
+        return math;
+      })();
+    }
+    const math = await loading;
+    // A site owner can extend the v3 queue again on each navigation.
+    await math.startup.promise;
+    return math;
+  };
+
+  const unrendered = node => {
+    if (node.matches('mjx-container')) return [];
+    if (!node.querySelector('mjx-container')) return [node];
+    // In v3, scanning generated assistive MathML again produces nested output.
+    return Array.from(node.children).flatMap(unrendered);
+  };
+
+  const refresh = () => {
+    // A separate chain also serializes v3, without changing v4's startup promise.
+    queue = queue.then(async () => {
+      const notebooks = Array.from(document.querySelectorAll('.jupyter-wrapper'));
+      if (!notebooks.length && !previous.length) return;
+      if (notebooks.length === previous.length &&
+          notebooks.every((node, index) => node === previous[index])) return;
+      const math = await ready();
+      if (previous.length) {
+        math.typesetClear(previous);
+        math.texReset();
+      }
+      previous = notebooks.filter(node => node.isConnected);
+      const pending = previous.flatMap(unrendered);
+      if (pending.length) await math.typesetPromise(pending);
+    }).catch(error => console.error('mkdocs-jupyter: MathJax rendering failed', error));
+    return queue;
+  };
+
+  window.mkdocsJupyterMathJax = { refresh };
+  const start = () => {
+    if (typeof document$ !== 'undefined') document$.subscribe(refresh);
+    else refresh();
+  };
+  // Theme bundles and user-provided MathJax scripts can follow notebook content.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start, { once: true });
+  } else start();
+})();
+
+</script>
+</body>
+</html>
