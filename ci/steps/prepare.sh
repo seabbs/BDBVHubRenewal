@@ -77,7 +77,7 @@ fi
 sci check-coherence --coherence "$inputs/coherence.json" --out "$inputs"
 
 sci python -m submission_ci.policy --policy "$POLICY" --stage baseline \
-  --hub-ref "$HUB_REF" --model "$MODEL" --root "${SRC_ROOT:-.}" \
+  --model "$MODEL" \
   > "$WORK/matrix-baseline.json"
 python3 - "$WORK/matrix-baseline.json" << 'EOF' > "$WORK/legs-baseline.txt"
 import json, sys

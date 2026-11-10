@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 
-from submission_ci.fit_key import fit_key, source_hash
 from submission_ci.policy import fit_timeout, load_policy, matrix
 from submission_ci.window import minutes_left
 
@@ -18,56 +17,7 @@ SETUP, PREPARE = 15, 15
 SLOWEST = 29 + SETUP
 
 
-def repo(tmp_path: Path) -> Path:
-    (tmp_path / "src").mkdir()
-    (tmp_path / "src" / "m.py").write_text("a = 1\n")
-    (tmp_path / "src" / "__pycache__").mkdir()
-    (tmp_path / "src" / "__pycache__" / "m.pyc").write_text("junk")
-    (tmp_path / "config").mkdir()
-    (tmp_path / "pyproject.toml").write_text("")
-    (tmp_path / "uv.lock").write_text("")
-    return tmp_path
-
-
-def test_source_hash_tracks_content_not_caches(tmp_path: Path) -> None:
-    root = repo(tmp_path)
-    inputs = ["src", "config", "pyproject.toml", "uv.lock"]
-    h1 = source_hash(root, inputs)
-    (root / "src" / "__pycache__" / "m.pyc").write_text("other")
-    assert source_hash(root, inputs) == h1
-    (root / "src" / "m.py").write_text("a = 2\n")
-    assert source_hash(root, inputs) != h1
-
-
-def test_missing_input_is_an_error(tmp_path: Path) -> None:
-    with pytest.raises(FileNotFoundError):
-        source_hash(tmp_path, ["src"])
-
-
-def test_key_changes_with_data_and_settings() -> None:
-    base = fit_key("s", "hub1", {"config": "main", "sampler": {"seed": 1}})
-    assert base == fit_key(
-        "s", "hub1", {"sampler": {"seed": 1}, "config": "main"}
-    )
-    assert base != fit_key(
-        "s", "hub2", {"config": "main", "sampler": {"seed": 1}}
-    )
-    assert base != fit_key(
-        "s", "hub1", {"config": "main", "sampler": {"seed": 2}}
-    )
-    assert base != fit_key(
-        "t", "hub1", {"config": "main", "sampler": {"seed": 1}}
-    )
-
-
-def test_matrix_has_distinct_keys(tmp_path: Path) -> None:
-    pol = load_policy(POLICY_PATH)
-    keys = [e["key"] for e in matrix(pol, "primary", repo(tmp_path), "hub")]
-    assert len(keys) == 3
-    assert len(set(keys)) == len(keys)
-
-
-def test_chain_runs_from_most_to_least_complex(tmp_path: Path) -> None:
+def test_chain_runs_from_most_to_least_complex() -> None:
     # renewalbvd, renewalsp, renewal, then the random walks, with no
     # refit. Each fitted leg names the model it runs.
     pol = load_policy(POLICY_PATH)
@@ -84,8 +34,7 @@ def test_chain_runs_from_most_to_least_complex(tmp_path: Path) -> None:
         "randomwalknowcast",
         "randomwalk",
     ]
-    root = repo(tmp_path)
-    primary = {e["id"]: e for e in matrix(pol, "primary", root, "hub")}
+    primary = {e["id"]: e for e in matrix(pol, "primary")}
     assert {k: e["model"] for k, e in primary.items()} == {
         "bvd": "renewalbvd",
         "renewalsp": "renewalsp",
@@ -106,14 +55,12 @@ def test_baseline_choices_keep_the_chain_from_that_baseline() -> None:
     assert only.get("randomwalk").kind == "shadow"
 
 
-def test_ci_sampler_settings(tmp_path: Path) -> None:
+def test_ci_sampler_settings() -> None:
     # 2 chains of 500 warm-up and 750 draws, run in parallel. renewalbvd
     # samples at target acceptance 0.95, the others at 0.9.
     pol = load_policy(POLICY_PATH)
-    root = repo(tmp_path)
     samplers = {
-        e["id"]: json.loads(e["sampler"])
-        for e in matrix(pol, "primary", root, "hub")
+        e["id"]: json.loads(e["sampler"]) for e in matrix(pol, "primary")
     }
     assert set(samplers) == {"bvd", "renewalsp", "main"}
     for s in samplers.values():
@@ -134,13 +81,10 @@ def test_policy_validation(tmp_path: Path) -> None:
         load_policy(bad)
 
 
-def test_randomwalk_chosen_makes_the_renewal_candidates_shadows(
-    tmp_path: Path,
-) -> None:
+def test_randomwalk_chosen_makes_the_renewal_candidates_shadows() -> None:
     pol = load_policy(POLICY_PATH).for_model("randomwalk")
     assert [c.id for c in pol.chain()] == ["randomwalk"]
-    root = repo(tmp_path)
-    primary = [e["id"] for e in matrix(pol, "primary", root, "hub")]
+    primary = [e["id"] for e in matrix(pol, "primary")]
     assert primary == ["bvd", "renewalsp", "main"]
     assert all(c.kind == "shadow" for c in pol.candidates if c.id in primary)
 
@@ -170,13 +114,10 @@ def test_fit_timeout_leaves_room_for_the_gate() -> None:
     assert fit_timeout(pol, 10) == 30
 
 
-def test_matrix_carries_the_fit_timeout(tmp_path: Path) -> None:
+def test_matrix_carries_the_fit_timeout() -> None:
     pol = load_policy(POLICY_PATH)
-    root = repo(tmp_path)
-    assert {e["timeout"] for e in matrix(pol, "primary", root, "hub")} == {
-        "350"
-    }
-    late = matrix(pol, "primary", root, "hub", minutes_left=240)
+    assert {e["timeout"] for e in matrix(pol, "primary")} == {"350"}
+    late = matrix(pol, "primary", minutes_left=240)
     assert {e["timeout"] for e in late} == {
         str(240 - pol.timing.reserve_minutes)
     }

@@ -32,7 +32,7 @@ def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
                 "--out",
                 str(out),
                 "--data",
-                str(ROOT / "data"),
+                str(ROOT / "tests" / "fixtures" / "data"),
                 "--backtest-config",
                 str(ROOT / "config" / "backtest.toml"),
                 "--stored",

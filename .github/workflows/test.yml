@@ -10,7 +10,6 @@ on:
     paths:
       - 'src/**'
       - 'tests/**'
-      - 'data/**'
       - 'config/**'
       - 'results/**'
       - 'hub/**'
@@ -23,7 +22,6 @@ on:
     paths:
       - 'src/**'
       - 'tests/**'
-      - 'data/**'
       - 'config/**'
       - 'results/**'
       - 'hub/**'
@@ -45,6 +43,14 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # The tests and the smoke runs below read the frozen data in
+    # tests/fixtures/data, never the live hub data.
+    env:
+      BDBV_DATA_DIR: tests/fixtures/data
+      # The fixture's latest vintage. The nowcasts below forecast from it
+      # and date their files by it, so the hub's check that the forecast
+      # date is on or before the reference date holds whatever the day.
+      VINTAGE: '2026-11-08'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # uv, the locked environment and the tests' own JAX cache.
@@ -70,19 +76,13 @@ jobs:
           github.event_name == 'schedule' ||
           github.event_name == 'workflow_dispatch'
         run: uv run pytest -q -m slow --durations=0
-      # The nowcasts below forecast from the data's latest vintage and date
-      # their files by it, so the hub's check that the forecast date is on
-      # or before the reference date holds whatever the day.
-      - name: Read the data's latest vintage
-        run: |
-          echo "VINTAGE=$(awk -F, '$1 == "real" {print $2}' data/target.csv \
-            | sort | tail -n 1)" >> "$GITHUB_ENV"
       - name: Backtest and nowcast smoke test
         timeout-minutes: 15
         # The backtest never fits the fitted models (their forecasts come
         # from the fit store), so this runs random walk only.
         run: |
           uv run bdbvhubrenewal backtest --models randomwalk \
+            --data "$BDBV_DATA_DIR" \
             --output output/backtest --results output/results
           uv run bdbvhubrenewal nowcast --vintage "$VINTAGE" \
             --forecast-date "$VINTAGE"

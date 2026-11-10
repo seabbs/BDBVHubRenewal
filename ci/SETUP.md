@@ -11,7 +11,8 @@ It is safe to install as is, because `DRY_RUN` is on until you turn it off.
 | --- | --- |
 | `detect` | Runs on schedule from Saturday 23:00 UTC (Sunday 00:00 Kinshasa) to Tuesday. It compares the hub's newest data commit and `as_of` with the ledger and stops unless there is new data for the open round. |
 | `prepare` | Pins the hub data at one commit and builds the random walk candidate, which is also the baseline for the checks. |
-| `fit` | A matrix over the renewal candidates (`bvd`, `renewalsp` and `main`), fitted in parallel. Each fit is cached under a content hash of the model source, the hub commit and its sampler settings. |
+| `await-fits` | Waits for the fit store (`fit-store` branch) to hold the renewal candidates' fits at the round's origin, keyed on the code and data as Fit store keys them. If any is missing it starts the Fit store workflow and waits, at most the `[timing]` fit timeout. |
+| `fit` | A matrix over the renewal candidates (`bvd`, `renewalsp` and `main`), in parallel. Each reads its stored fit (`fit-store unpack`); one the store lacks is ruled out. A stored fit forecasts one week past its own round, so a round with no new release reads last week's fit. |
 | `gate` | Walks the chain `bvd` → `renewalsp` → `main` → `randomwalknowcast` → `randomwalk`. A candidate is ruled out if its fit is past the convergence failure thresholds, its forecast is far from the recent data, or its file is invalid (format checks or hubValidations). |
 | `submit` | Publishes the plot, builds the PR body, and opens or updates the PR. A dry run prints the body instead. |
 | `record` | Live runs only. Writes the outcome to `state.json` on the `submission-ledger` branch and archives the round's files there. |
@@ -128,8 +129,7 @@ Ledger commits are on a side branch, so an occasional commit to `main` keeps the
 ## Runtimes and limits
 
 GitHub-hosted `ubuntu-latest` on a public repository: 4 vCPUs, 16 GB RAM, 14 GB disk, and a **6-hour cap per job**.
-Each fit job's timeout is at most 350 minutes, and stops 45 minutes before the window closes (`ci/policy.toml` `[timing]`).
-The Actions cache holds 10 GB per repository and evicts entries unused for 7 days.
+The wait for the fit store, and each fit job's timeout, is at most 350 minutes, and stops 45 minutes before the window closes (`ci/policy.toml` `[timing]`).
 Artefacts are kept for 90 days at most, so the ledger branch is the durable archive.
 Scheduled starts can be late by minutes, or dropped when GitHub is busy.
 If a morning check is dropped, the next morning's check runs the round, and a manual dispatch covers the Tuesday check.
@@ -182,7 +182,7 @@ A suggested general line for the model metadata's `methods_long`:
 
 - **Fit monitoring and the matrix.** These follow `epiforecasts/BVDOutbreakSize`: `docs.yml`, `docs/fits/convergence.jl`, `docs/fits/check_convergence.jl` and `scripts/fetch_fits.sh`.
   That means the same fail and warn thresholds, two levels, and treating a fit that cannot be judged as a failure.
-  It also means one matrix job per fit, content-hash fit caches with separate restore and save, a once-a-minute progress heartbeat, short-lived fit artefacts, and a report in the job summary.
+  It also means one matrix job per fit, content-addressed fits (now the fit store), a once-a-minute progress heartbeat, short-lived fit artefacts, and a report in the job summary.
 - **Fork and PR mechanics.** These follow `epiforecasts/cityforecasts` (`bin/submit_to_hub.sh` and `.github/workflows/submit-to-hub.yaml`).
   That means a classic PAT, a branch per round cut from the hub's `main`, a force push, finding the open PR by head branch and fork owner, and `gh pr create --head owner:branch`.
 - **Scheduled fits on hosted runners with artefacts.** `seabbs/ecdc-weekly-growth-forecasts` (`.github/workflows/forecast.yaml`) shows this works.

@@ -31,7 +31,7 @@ from bdbvhubrenewal.submission.hub import to_hub_table, write_submission
 from bdbvhubrenewal.submission.validate import Hub, validate_submission
 
 ROOT = Path(__file__).resolve().parents[2]
-DATA = ROOT / "data"
+DATA = ROOT / "tests" / "fixtures" / "data"
 SNAPSHOT = ROOT / "tests/submission/hub_validation/fixtures/hub-snapshot"
 HUB = Hub.load(SNAPSHOT)
 """The pinned hub config."""

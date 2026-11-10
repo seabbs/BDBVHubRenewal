@@ -14,7 +14,7 @@ from bdbvhubrenewal.data.simulate import (
     simulate_outbreak,
 )
 
-DATA = Path(__file__).resolve().parents[2] / "data"
+DATA = Path(__file__).resolve().parents[1] / "fixtures" / "data"
 LATEST = "2026-10-24"
 
 

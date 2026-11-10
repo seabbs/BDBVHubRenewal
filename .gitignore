@@ -6,8 +6,13 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 _site/
-# Raw hub downloads: re-created by `task data`.
-data/raw/
+# Hub data: fetched by `task data` and `task data-bvd`, and by each
+# workflow before use. Tests read the frozen copy in tests/fixtures/data/.
+# Only our own records are committed: what we submitted to the hub and
+# the unsubmitted candidates, which nothing can fetch again.
+data/*
+!data/our-submissions/
+!data/candidate-forecasts.csv.gz
 # Backtest forecasts and other run output: re-created by `task backtest`.
 output/
 # Derived results: made by the Pages build (`task results` locally) from
