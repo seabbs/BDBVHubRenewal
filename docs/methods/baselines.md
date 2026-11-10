@@ -268,6 +268,7 @@ Where no week reaches 0.95, `randomwalknowcast` takes the first week as the late
    The update handles the nowcast's variance, not a bias in its mean, and weeks between $w_0$ and the week holding $c_o$ do not update the state.
 5. The week's value is its nowcast draw, plus $\text{Poisson}(\lambda_i \cdot m' / 7)$ for its $m'$ days after $c_o$ if it is partial.
 6. The weeks after it are the walk's draws from the state, $\log(1 + \lambda_i)$ plus the walk's steps.
+   With `cutoff="walk-on"` the walk instead goes on from each sample's completed week, its nowcast draw plus the missing days' draw, taken as exact.
 7. A place with no case in the 9 weeks to $c_o$, or with no start week in those 9 weeks, starts at the latest complete week instead.
    After it the place stays at 0 until an introduction, as above, floored at the counts reported.
 
