@@ -376,3 +376,28 @@ def test_a_place_with_no_walk_variance_takes_its_parents(origin24) -> None:
         1,
     )[:, 0]
     assert source[i] >= len(snap.locations)
+
+
+def test_retrospective_nowcasts_reach_back_as_far_as_baselinenowcasts(
+    daily: pd.DataFrame,
+) -> None:
+    # baselinenowcast uses round(3 D) reference times, half for the delay
+    # and the rest for its retrospective nowcasts, so 63 days for D = 42.
+    assert Settings().retro_delay == 63
+    assert Settings(max_delay=10).retro_delay == 15
+    provinces = tuple(sorted(set(daily["location"]) - {"CD"}))
+    snap = snapshot_arrays(daily, "2026-11-08", provinces)
+    o = len(snap.releases) - 1
+    settings = Settings(max_delay=10)
+    errors = retro_errors(snap, o, settings)
+    for r, release in enumerate(snap.releases[:o]):
+        near = snap.cut[o] - snap.cut[r] <= settings.retro_delay
+        if not near:
+            assert release not in errors.releases
+    assert errors.releases
+    # With D = 42 every earlier release with a pair is within 63 days.
+    assert retro_errors(snap, o, Settings()).releases == [
+        "2026-10-17",
+        "2026-10-24",
+        "2026-11-01",
+    ]
