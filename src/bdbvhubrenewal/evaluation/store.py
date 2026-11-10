@@ -284,7 +284,8 @@ def origin_tasks(
     """Build the task of every real origin, as the store fits it.
 
     A stored task is asked for final counts only (no `report_by`), so it
-    holds no release after its origin.
+    holds no release after its origin. Releases in `config.skip_origins`
+    are not origins, but stay in the later tasks' histories.
 
     Parameters
     ----------
@@ -300,7 +301,7 @@ def origin_tasks(
     """
     real = target.loc[target["kind"] == "real"]
     tasks = make_tasks(real, delays.assign(kind="real"), config, daily=daily)
-    return {t.vintage: t for t in tasks}
+    return {t.vintage: t for t in tasks if t.vintage not in config.skip_origins}
 
 
 def _bvd_tag(model: ForecastModel, task: ForecastTask) -> str | None:
