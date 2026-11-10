@@ -524,7 +524,10 @@ class RandomWalkNowcast(RandomWalk):
             key_walk, nowcast[:, rows, w0].T, origin, w0, n_all, quiet
         )
         # Days of the cut-off week after the cut-off are drawn from the
-        # walk's rate that week.
+        # walk's rate that week. A partial cut-off week's start week is the
+        # week before it when that week meets the start rule, so the rate
+        # is one step from each sample's nowcast of the week before, and
+        # otherwise steps on from the latest earlier week that meets it.
         cut = int(snap.cut[origin.o])
         miss = int(np.flatnonzero(snap.week == cw).max()) - cut
         at_cw = np.clip(cw - w0 - 1, 0, n_all - 1)

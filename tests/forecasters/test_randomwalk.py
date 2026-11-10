@@ -190,6 +190,25 @@ def test_the_walk_goes_on_from_the_completed_cut_off_week(
     assert np.corrcoef(week, after)[0, 1] > 0.9
 
 
+def test_the_missing_days_step_from_the_week_before(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    # Cut-off 10-16 is a Friday, so the week of 10-17 misses a day. The
+    # week before, 10-10, meets the start rule, so with no walk spread each
+    # sample's missing day is Poisson(its 10-10 nowcast / 7).
+    task = dataclasses.replace(
+        _task(target, delays, daily, "2026-10-17"), n_samples=4000
+    )
+    model = RandomWalkNowcast()
+    origin = model.origin_at(task, errors=True)
+    origin.sigma[:] = 0.0
+    values, weeks = model.trajectories(origin, task, origin.point)
+    i = origin.snap.locations.index("CD-IT")
+    cw = weeks.index("2026-10-17")
+    want = origin.point[i, cw] + origin.point[i, cw - 1] / 7
+    assert values[:, i, cw].mean() == pytest.approx(want, rel=0.03)
+
+
 def test_a_full_cut_off_week_is_the_walks_base(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
