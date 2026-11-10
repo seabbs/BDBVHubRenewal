@@ -372,17 +372,28 @@ def build_parser() -> argparse.ArgumentParser:
     fst = sub.add_parser(
         "fit-store", help="Plan, make or load the fitted models' stored fits."
     )
-    fst.add_argument("action", choices=["plan", "fit", "load"])
+    fst.add_argument("action", choices=["plan", "fit", "load", "unpack"])
     fst.add_argument("--store", default="output/fit-store")
     fst.add_argument("--data", default=data_dir)
     fst.add_argument("--config", default="config/backtest.toml")
     fst.add_argument("--policy", default="ci/policy.toml")
-    fst.add_argument("--model", help="With `fit`: the model to fit.")
-    fst.add_argument("--origin", help="With `fit`: the real origin.")
+    fst.add_argument(
+        "--model", help="With `fit` or `unpack`: the model to fit or read."
+    )
+    fst.add_argument(
+        "--origin", help="With `fit` or `unpack`: the real origin."
+    )
     fst.add_argument(
         "--out",
         default=None,
-        help="With `plan`: write the missing fits as a matrix JSON here.",
+        help="With `plan`: write the missing fits as a matrix JSON here. "
+        "With `unpack`: the fit directory to write.",
+    )
+    fst.add_argument(
+        "--origins",
+        nargs="*",
+        default=None,
+        help="With `plan` or `load`: only these origins (default: all).",
     )
     fst.add_argument("--results", default="results")
     fst.add_argument(

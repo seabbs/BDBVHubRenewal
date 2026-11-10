@@ -519,3 +519,14 @@ def test_fit_store_plan_takes_origins(tmp_path: Path) -> None:
     assert [k.rsplit("/", 1)[0] for k in json.loads(keys.read_text())] == [
         "renewal/2026-11-08"
     ]
+
+
+def test_fit_store_unpack_says_when_the_store_has_no_fit(
+    tmp_path: Path,
+) -> None:
+    from bdbvhubrenewal.cli import main
+
+    args = ["fit-store", "unpack", "--store", str(tmp_path / "store")]
+    args += ["--model", "renewal", "--origin", "2026-11-08"]
+    assert main([*args, "--out", str(tmp_path / "fit")]) == 3
+    assert not (tmp_path / "fit").exists()
