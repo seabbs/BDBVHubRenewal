@@ -16,6 +16,7 @@ from jax import Array
 from jax.typing import ArrayLike
 from pyrenew.latent import BaseSubpopulationInfections
 from pyrenew.latent.base import LatentSample, PopulationStructure
+from pyrenew.latent.temporal_processes import TemporalProcess
 from pyrenew.math import r_approx_from_R
 from pyrenew.metaclass import RandomVariable
 
@@ -259,6 +260,8 @@ class MetapopulationInfections(BaseSubpopulationInfections):
         rt_observation: RandomVariable | None = None,
         seed_days: ArrayLike | None = None,
         seeded: ArrayLike | None = None,
+        parents: ArrayLike | None = None,
+        place_deviation_process: TemporalProcess | None = None,
         **kwargs: object,
     ) -> None:
         r"""Initialize the coupled infections process.
@@ -286,6 +289,15 @@ class MetapopulationInfections(BaseSubpopulationInfections):
         seeded
             Boolean, one per province: provinces with an Rt deviation.
             The rest follow the pooled trend. `None` is all.
+        parents
+            For places nested in provinces (health zones), the index of
+            each place's province. Rt deviations are then a province
+            deviation (`subpop_rt_deviation_process`) plus a zone
+            deviation within the province (`place_deviation_process`),
+            each sum-to-zero (`pooled.nested_basis`). `None` is one
+            level.
+        place_deviation_process
+            Temporal process of the zone deviations, with `parents`.
         **kwargs
             Passed to `BaseSubpopulationInfections`.
         """
@@ -295,6 +307,8 @@ class MetapopulationInfections(BaseSubpopulationInfections):
         self.rt_observation = rt_observation
         self.seed_days = None if seed_days is None else np.asarray(seed_days)
         self.seeded = None if seeded is None else np.asarray(seeded)
+        self.parents = None if parents is None else np.asarray(parents)
+        self.place_deviation_process = place_deviation_process
 
     def _initial_infections(
         self, I0: Array, rt0: Array, gen_int: Array, n_days: int
@@ -405,6 +419,8 @@ class MetapopulationInfections(BaseSubpopulationInfections):
             "log_rt",
             first_day_dow,
             active=self.seeded,
+            parents=self.parents,
+            place_process=self.place_deviation_process,
         )
         rt = jnp.exp(log_rt)
         gen_int = self.gen_int_rv()

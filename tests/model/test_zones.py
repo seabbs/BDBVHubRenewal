@@ -55,9 +55,10 @@ def _split(target):
             obs = np.floor(r["observed"] * share)
             imp = np.floor(r["imputed"] * share)
             if zone == b:
-                obs, imp = r["observed"] - np.floor(
-                    r["observed"] * 0.7
-                ), r["imputed"] - np.floor(r["imputed"] * 0.7)
+                obs, imp = (
+                    r["observed"] - np.floor(r["observed"] * 0.7),
+                    r["imputed"] - np.floor(r["imputed"] * 0.7),
+                )
             rows.append(
                 {
                     **r.to_dict(),
@@ -170,16 +171,13 @@ def test_zone_model_shares_province_parts(zone_vintage):
     seeded_provinces = np.unique(v.parents[v.seeded]).size
     assert params["delay_offset_z"].shape == (seeded_provinces - 1,)
     assert params["logit_pi0_z"].shape[-1] == seeded_provinces - 1
-    # Rt has province and zone deviations.
-    assert "log_rt_deviations_z" in params or any(
-        k.startswith("log_rt_deviations") for k in params
-    )
-    assert any(k.startswith("log_rt_zone_deviations") for k in params)
+    assert tr["delay_shift"]["value"].shape[-1] == 6
+    # Rt has province deviations and zone deviations within provinces.
+    _, within = nested_basis(v.parents, v.seeded)
+    assert params["log_rt_deviations_z"].shape[-1] == seeded_provinces - 1
+    assert params["log_rt_zone_deviations_z"].shape[-1] == within.shape[1]
     assert tr["onsets_delays"]["value"].shape[-2:] == (6, 61)
     assert np.isfinite(_density(model, v, params))
-    delay = np.asarray(tr["delay"]["value"]) if "delay" in tr else None
-    if delay is not None:
-        np.testing.assert_allclose(delay[0], delay[1])
 
 
 def test_zone_bvd_groups_map_by_province(outbreak, sim_tables):
