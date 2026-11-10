@@ -17,11 +17,12 @@ from bdbvhubrenewal.forecasters.chain import (
     _walk_spreads,
     build_origin,
     fit_delay,
+    levels,
     retro_errors,
     weeks_back,
 )
 from bdbvhubrenewal.forecasters.obs import MAX_SIZE, PRIOR_SIZE
-from bdbvhubrenewal.forecasters.pooling import source_index
+from bdbvhubrenewal.forecasters.pooling import pool_matrix, source_index
 
 PLACES = ("CD-HU", "CD-IT", "CD-NK", "CD-TO")
 
@@ -79,21 +80,22 @@ def test_10_24_point_nowcasts_use_one_daily_delay(origin24) -> None:
     assert _weeks(origin24, "CD") == pytest.approx(
         [368.5, 373.4, 488.4, 515.9], abs=0.06
     )
-    # Tshopo has under 10 cases a week, so uses the national delay.
+    # Tshopo has under 10 cases a week, so uses the delay pooled over the
+    # provinces that have them.
     assert _weeks(origin24, "CD-TO") == pytest.approx(
-        [10.1, 11.5, 21.3, 18.4], abs=0.06
+        [9.9, 11.5, 21.3, 18.5], abs=0.06
     )
 
 
-def test_provinces_use_own_factors_where_they_have_10_cases(origin24) -> None:
+def test_provinces_use_own_delay_with_10_cases_a_week(origin24) -> None:
     assert _weeks(origin24, "CD-IT") == pytest.approx(
-        [212.7, 181.3, 282.6, 253.1], abs=0.06
+        [206.7, 181.3, 282.6, 253.1], abs=0.06
     )
     assert _weeks(origin24, "CD-NK") == pytest.approx(
-        [118.5, 149.5, 154.6, 214.2], abs=0.06
+        [105.7, 149.5, 154.6, 214.2], abs=0.06
     )
     assert _weeks(origin24, "CD-HU") == pytest.approx(
-        [17.7, 30.7, 27.7, 29.9], abs=0.06
+        [10.3, 33.0, 26.5, 29.7], abs=0.06
     )
 
 
@@ -129,15 +131,14 @@ def test_new_reports_minus_removals_is_the_realised_change(snap24) -> None:
     assert (errors.removed >= 0).all()
 
 
-def test_the_fit_pools_three_errors_at_10_24(origin24) -> None:
+def test_a_place_with_10_cases_fits_its_own_errors_at_10_24(origin24) -> None:
     loc = origin24.snap.locations.index("CD")
     assert origin24.size is not None
     assert origin24.removal is not None
     assert origin24.obs_n is not None
-    # Haut-Uele, Ituri and North Kivu give an error each. CD is their sum,
-    # so it is not in its own pool.
-    assert origin24.obs_n[loc, :4].tolist() == [3, 3, 3, 3]
-    # Three errors are enough for a fit.
+    # 10-17 is the one earlier release, so the country has one error at
+    # each week back, and it is enough for its own fit.
+    assert origin24.obs_n[loc, :4].tolist() == [1, 1, 1, 1]
     assert (origin24.size[loc, :4] >= 0.1).all()
     assert (origin24.size[loc, :4] < MAX_SIZE).all()
     assert (origin24.removal >= 0).all()
@@ -152,7 +153,7 @@ def test_no_errors_take_the_prior_size(daily: pd.DataFrame) -> None:
     assert (origin.removal == 0).all()
 
 
-def test_a_factor_is_own_by_age_with_10_cases_else_the_parent(
+def test_a_delay_is_own_with_10_cases_a_week_else_the_pooled_parents(
     daily: pd.DataFrame, daily_zones: pd.DataFrame
 ) -> None:
     both = pd.concat([daily, daily_zones])
@@ -160,7 +161,8 @@ def test_a_factor_is_own_by_age_with_10_cases_else_the_parent(
         sorted({z for z in daily_zones["location"] if z.startswith("CD-")})
     )
     snap = snapshot_arrays(both, "2026-10-24", zones)
-    fit = fit_delay(snap, 3, Settings())
+    settings = Settings()
+    fit = fit_delay(snap, 3, settings)
     assert fit is not None
     window = np.arange(snap.week.size) > int(snap.cut[3]) - 63
     num, den = pair_sums(
@@ -170,29 +172,30 @@ def test_a_factor_is_own_by_age_with_10_cases_else_the_parent(
         fit.pairs[:, 0],
         42,
     )
+    num, den = np.asarray(num), np.asarray(den)
     gaps = snap.cut[fit.pairs[:, 1]] - snap.cut[fit.pairs[:, 0]]
+    level = levels(snap, 3, settings)
+    pool = pool_matrix(level, snap.parent)
     own_g = log_factors(num, den, gaps)
-    n_cases = np.asarray(den).sum(axis=1)
-    seen = {"own": 0, "parent": 0}
-    for i in range(len(snap.locations)):
-        p = int(snap.parent[i])
-        if p < 0:
-            # The country has no parent, so it uses its own factor.
-            np.testing.assert_allclose(fit.g[i], own_g[i])
-            continue
-        use = n_cases[i] >= 10
-        seen["own"] += int(use.sum())
-        seen["parent"] += int((~use).sum())
-        np.testing.assert_allclose(
-            fit.g[i][use], own_g[i][use], err_msg=snap.locations[i]
-        )
-        np.testing.assert_allclose(
-            fit.g[i][~use],
-            fit.g[p][~use],
-            err_msg=snap.locations[i],
-        )
-    assert seen["own"] > 0
-    assert seen["parent"] > 0
+    pooled_g = log_factors(
+        np.einsum("nm,mpa->npa", pool, num),
+        np.einsum("nm,mpa->npa", pool, den),
+        gaps,
+    )
+    # The same rule as the walk spread: own with 10 cases a week, else
+    # the pooled estimate of the nearest parent that has them.
+    src = source_index(level, snap.parent)
+    np.testing.assert_allclose(fit.g, np.concatenate([own_g, pooled_g])[src])
+    assert (src < len(level)).any()
+    assert (src >= len(level)).any()
+
+
+def test_one_rule_shares_the_size_by_level_only(origin24) -> None:
+    assert not hasattr(Settings(), "min_errors")
+    assert origin24.obs_source is not None
+    src = source_index(origin24.fit.level, origin24.snap.parent)
+    for k in range(origin24.obs_source.shape[1]):
+        np.testing.assert_array_equal(origin24.obs_source[:, k], src)
 
 
 def test_the_delay_uses_every_in_window_pair(snap24) -> None:
@@ -244,7 +247,9 @@ def test_the_delay_uses_the_baselinenowcast_window_of_onset_days(
 ) -> None:
     assert Settings().history_delay == 63
     assert Settings(max_delay=10).history_delay == 15
-    settings = Settings(max_delay=10)
+    # Every place fits its own delay, so the level, which reads older
+    # weeks, does not change which delay a place uses.
+    settings = Settings(max_delay=10, min_level=0.0)
     r = 3
     base = fit_delay(snap24, r, settings)
     assert base is not None
@@ -254,7 +259,9 @@ def test_the_delay_uses_the_baselinenowcast_window_of_onset_days(
     def scaled(old: bool):
         sel = day <= cut - 15 if old else (day > cut - 15) & (day <= cut)
         counts = snap24.counts.copy()
-        counts[:, 1:, sel] *= 3.0
+        # Tripling the latest release only changes its ratios to the one
+        # before.
+        counts[:, r, sel] *= 3.0
         return dataclasses.replace(snap24, counts=counts)
 
     outside = fit_delay(scaled(True), r, settings)
@@ -268,7 +275,9 @@ def test_the_delay_uses_the_baselinenowcast_window_of_onset_days(
 def test_a_retrospective_fit_uses_its_own_cutoff_for_the_window(
     snap24,
 ) -> None:
-    settings = Settings(max_delay=10)
+    # Every place fits its own delay, so the level, which reads older
+    # weeks, does not change which delay a place uses.
+    settings = Settings(max_delay=10, min_level=0.0)
     r = 2
     cut = int(snap24.cut[r])
     base = fit_delay(snap24, r, settings)
