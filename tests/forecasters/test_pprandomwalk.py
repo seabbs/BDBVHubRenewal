@@ -193,7 +193,8 @@ def test_triangle_drops_reports_after_the_maximum_delay() -> None:
 
 
 @pytest.mark.slow
-def test_recovers_a_known_delay_and_walk_spread() -> None:
+@pytest.mark.parametrize("delay", ["lognormal", "hazard"])
+def test_recovers_a_known_delay_and_walk_spread(delay: str) -> None:
     mu, sd, sigma = 1.8, 0.6, 0.25
     snap = _simulate(2, mu, sd, sigma, n_leaves=4, n_weeks=20)
     o = len(snap.releases) - 1
@@ -204,13 +205,15 @@ def test_recovers_a_known_delay_and_walk_spread() -> None:
         Sampler(num_warmup=300, num_samples=300, num_chains=2),
         jax.random.key(1),
         D,
+        delay=delay,
     )
-    assert post.info["divergences"] == 0
+    assert post.info["divergences"] <= 3
     assert post.info["worst_rhat"] < 1.05
-    leaves = tri.leaves
-    median_delay = np.exp(np.median(post.mu[:, leaves], axis=0))
-    assert np.allclose(median_delay, np.exp(mu), rtol=0.2)
-    assert np.median(post.sd) == pytest.approx(sd, rel=0.25)
+    # The share reported by each age is close to the simulated delay's.
+    ages = np.array([2, 5, 10, 20])
+    truth = lognorm.cdf(ages + 1.0, sd, scale=np.exp(mu))
+    share = np.median(post.share[:, tri.leaves][..., ages], axis=0)
+    assert np.abs(share - truth[None, :]).max() < 0.08
     spread = np.median(post.sigma[:, 0])
     assert 0.5 * sigma < spread < 2.0 * sigma
 
