@@ -103,6 +103,30 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
     assert all(after[m] != before[m] for m in models)
 
 
+def test_the_zone_split_does_not_key_a_fit(tmp_path: Path) -> None:
+    # A stored fit holds national and province samples only. Zones are
+    # split from them at load (`zones_for_model`), so the zone code is not
+    # fit code.
+    root = _copy_repo(tmp_path)
+    models = ("renewal", "pprandomwalknowcast")
+
+    def digests() -> dict[str, str]:
+        return {m: store.code_digest(m, root) for m in models}
+
+    def edit(rel: str) -> None:
+        path = root / "src/bdbvhubrenewal" / rel
+        path.write_text(path.read_text() + "\n_EDITED = 1\n")
+
+    before = digests()
+    for rel in ("forecasters/zones.py", "evaluation/zones.py"):
+        edit(rel)
+        assert digests() == before, rel
+    # Introductions are drawn in the fit, for provinces with no recent case.
+    edit("forecasters/introductions.py")
+    after = digests()
+    assert all(after[m] != before[m] for m in models)
+
+
 def test_fit_code_has_the_store_and_no_other_model() -> None:
     renewal = set(store.fit_code("renewal", ROOT))
     assert "src/bdbvhubrenewal/evaluation/store.py" in renewal
