@@ -276,15 +276,24 @@ def test_randomwalk_raises_when_no_week_is_complete_and_the_backtest_skips(
     assert out.empty
 
 
-def test_no_nowcast_draw_is_below_the_count_reported(
+def test_a_draw_falls_below_the_count_reported_only_with_removals(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
     task = _task(target, delays, daily, "2026-11-01")
     model = RandomWalkNowcast()
     origin = model.origin_at(task, errors=True)
     values, _ = model.trajectories(origin, task, origin.point)
+    snap = origin.snap
     n_data = origin.reported.shape[1]
-    assert (values[:, :, :n_data] >= origin.reported[None] - 1e-9).all()
+    assert origin.removal is not None
+    k_n = origin.removal.shape[1]
+    back = snap.cut_week(origin.o) - np.arange(n_data)
+    k = np.clip(back, 0, k_n - 1)
+    rate = np.where(back < k_n, origin.removal[:, k], 0.0)
+    below = (values[:, :, :n_data] < origin.reported[None] - 1e-9).any(0)
+    assert (rate[below] > 0).all()
+    assert below.any()
+    assert (values >= 0).all()
 
 
 def test_a_silent_place_waits_for_its_first_introduction() -> None:

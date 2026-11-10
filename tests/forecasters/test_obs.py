@@ -1,4 +1,4 @@
-"""Observation model: negative binomial new reports on the count to come."""
+"""Observation model: new reports on the count to come, less removals."""
 
 from __future__ import annotations
 
@@ -7,10 +7,11 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from bdbvhubrenewal.baselinenowcast import fit_nb
+from bdbvhubrenewal.baselinenowcast import fit_nb, sample_nb
 from bdbvhubrenewal.forecasters.obs import (
     PRIOR_SIZE,
     fit_sizes,
+    removal_rates,
     sample_count,
 )
 
@@ -61,9 +62,10 @@ def test_the_mean_is_reported_plus_remaining() -> None:
         jnp.full(n, 200.0),
         jnp.full(n, 50.0),
         jnp.full(n, 2.0),
+        jnp.zeros(n),
     )
     assert float(x.mean()) == pytest.approx(250, rel=0.01)
-    # New reports only add, as in baselinenowcast.
+    # With no removals new reports only add, as in baselinenowcast.
     assert float(x.min()) >= 200
 
 
@@ -73,5 +75,51 @@ def test_a_finished_week_is_its_count() -> None:
         jnp.full(100, 12.0),
         jnp.zeros(100),
         jnp.full(100, 2.0),
+        jnp.zeros(100),
     )
     assert (np.asarray(x) == 12).all()
+
+
+def test_removals_thin_the_count_reported() -> None:
+    n = 100_000
+    x = sample_count(
+        jax.random.key(0),
+        jnp.full(n, 200.0),
+        jnp.full(n, 50.0),
+        jnp.full(n, 2.0),
+        jnp.full(n, 0.1),
+    )
+    # 200 + 50 new reports less a tenth of the 200 reported.
+    assert float(x.mean()) == pytest.approx(230, rel=0.01)
+    assert float((x < 200).mean()) > 0
+    assert float(x.min()) >= 0
+
+
+def test_removals_leave_the_new_reports_as_they_were() -> None:
+    key = jax.random.key(3)
+    y, rem, size = (
+        jnp.full(1000, 40.0),
+        jnp.full(1000, 10.0),
+        jnp.full(1000, 1.5),
+    )
+    x = sample_count(key, y, rem, size, jnp.zeros(1000))
+    np.testing.assert_array_equal(
+        np.asarray(x), np.asarray(y + sample_nb(key, rem, size))
+    )
+
+
+def test_the_removal_rate_is_pooled_over_each_level() -> None:
+    # The country, two provinces and two zones of the first province.
+    parent = np.array([-1, 0, 0, 1, 1])
+    reported = np.array(
+        [[[100.0, 50.0], [60, 30], [40, 20], [50, 25], [10, 5]]]
+    )
+    fell = np.array([[[0.0, 0.0], [3, 0], [1, 2], [2, 1], [0, 0]]])
+    valid = np.ones_like(reported, dtype=bool)
+    valid[0, 4, 1] = False  # Not an error, so not counted.
+    rate = removal_rates(fell, reported, valid, parent)
+    np.testing.assert_allclose(rate[0], [0.0, 0.0])
+    np.testing.assert_allclose(rate[1], [4 / 100, 2 / 50])
+    np.testing.assert_allclose(rate[2], rate[1])
+    np.testing.assert_allclose(rate[3], [2 / 60, 1 / 25])
+    np.testing.assert_allclose(rate[4], rate[3])

@@ -139,10 +139,30 @@ def test_new_reports_are_the_change_after_downward_revisions_move(
     assert (errors.added >= 0).all()
 
 
+def test_falls_are_each_weeks_net_fall_on_the_raw_counts(snap24) -> None:
+    errors = retro_errors(snap24, 3, Settings())
+    cols = snap24.cut_week(2) - np.arange(errors.valid.shape[2])
+    before = weekly_sums(snap24, 2)[:, cols]
+    later = weekly_sums(snap24, 3, upto=int(snap24.cut[2]))[:, cols]
+    ok = errors.valid[0]
+    assert errors.fell[0][ok] == pytest.approx(
+        np.maximum(before - later, 0.0)[ok]
+    )
+    assert errors.raw_reported[0][ok] == pytest.approx(before[ok])
+
+
+def test_places_of_a_level_share_a_removal_rate(origin24) -> None:
+    removal = origin24.removal
+    assert removal is not None
+    assert removal.shape == origin24.size.shape
+    provinces = [i for i, c in enumerate(origin24.snap.locations) if c != "CD"]
+    assert (removal[provinces] == removal[provinces[0]]).all()
+    assert ((removal >= 0) & (removal < 1)).all()
+
+
 def test_a_place_with_10_cases_fits_its_own_errors_at_10_24(origin24) -> None:
     loc = origin24.snap.locations.index("CD")
     assert origin24.size is not None
-    assert not hasattr(origin24, "removal")
     assert origin24.obs_n is not None
     # 10-17 is the one earlier release, so the country has one error at
     # each week back, and it is enough for its own fit.
