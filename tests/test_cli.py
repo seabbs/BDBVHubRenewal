@@ -216,9 +216,23 @@ def test_stored_samples_keep_numeric_values_without_our_forecasts(
     from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 
     args = argparse.Namespace(data=str(DATA), results=str(tmp_path))
-    # With no fits loaded there are no stored delays.
-    _, none = _stored(args, load_target(DATA), run_forecasts([], []))
+    # With no fits loaded and no hub files there are no stored samples or
+    # delays, and the empty samples are still numeric.
+    empty, none = _stored(args, load_target(DATA), run_forecasts([], []))
     assert none.empty
+    assert empty.empty
+    assert empty["value"].dtype == np.float64
+    # Hub files in the data directory: our 2026-11-07 submission.
+    data = tmp_path / "data"
+    data.mkdir()
+    for f in DATA.iterdir():
+        (data / f.name).symlink_to(f)
+    sub = ROOT / "data" / "our-submissions" / "model-output" / "seabbs-renewal"
+    hub = data / "hub-submissions" / "model-output" / "seabbs-renewal"
+    hub.mkdir(parents=True)
+    for f in sub.iterdir():
+        (hub / f.name).symlink_to(f)
+    args.data = str(data)
     learnt = pd.DataFrame(
         {"model": ["renewal", "randomwalknowcast"], "vintage": "2026-10-24"}
     )
@@ -226,6 +240,7 @@ def test_stored_samples_keep_numeric_values_without_our_forecasts(
     stored, delays = _stored(args, load_target(DATA), run_forecasts([], []))
     # Only the fitted models' delays are stored ones.
     assert set(delays["model"]) == {"renewal"}
+    assert not stored.empty
     assert stored["value"].dtype == np.float64
     one = stored.loc[stored["vintage"] == stored["vintage"].max()]
     truth = one[["location", "target_end_date"]].drop_duplicates()
