@@ -20,7 +20,7 @@ Later weeks are walk draws, floored at the count reported.
 negative binomial new reports on the remaining count minus Poisson
 removals of the count reported (`obs`).
 The start week is the latest week at least `Settings.start_share`
-reported, $\pi \ge 0.05$, counting days not yet observed as unreported,
+reported, $\pi \ge 0.03$, counting days not yet observed as unreported,
 with at least `Settings.start_count` (5) cases reported (`_start_weeks`).
 Weeks up to it are their nowcast draws, each sample walks on from its own
 nowcast of it, and later weeks are the walk's draws.

@@ -155,7 +155,7 @@ class Settings:
     level_weeks: tuple[int, int] = (3, 6)
     completeness: float = 0.95
     walk_weeks: int = 9
-    start_share: float = 0.05
+    start_share: float = 0.03
     start_count: float = 5.0
 
     @property

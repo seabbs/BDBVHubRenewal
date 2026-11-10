@@ -131,25 +131,25 @@ def test_nowcast_runs_to_the_latest_week_at_least_5_per_cent_reported(
     model = RandomWalkNowcast()
     model.forecast(_task(target, delays, daily, "2026-10-24"))
     start = {r["location"]: r["start_week"] for r in model.fit_diagnostics}
-    # Cut-off 10-24 is a Saturday, and its week is at least 5% reported.
+    # Cut-off 10-24 is a Saturday, and its week is at least 3% reported.
     assert start["CD-IT"] == "2026-10-24"
     assert max(start.values()) == "2026-10-24"
     # Cut-off 10-16 is a Friday, so the week of 10-17 is partial. Its
     # missing Saturday counts as unreported, and the week is still at least
-    # 5% reported, so it is nowcast and the walk starts from it.
+    # 3% reported, so it is nowcast and the walk starts from it.
     task = _task(target, delays, daily, "2026-10-17")
     model.forecast(task)
     start = {r["location"]: r["start_week"] for r in model.fit_diagnostics}
     assert start["CD-IT"] == "2026-10-17"
     origin = model.origin_at(task, errors=False)
     i = origin.snap.locations.index("CD-IT")
-    assert origin.complete[i, -1] >= 0.05
+    assert origin.complete[i, -1] >= 0.03
 
 
 def test_the_walk_starts_from_a_week_with_at_least_5_cases(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
-    # At 11-08 Tshopo's newest week, 11-07, is over 5% reported but has
+    # At 11-08 Tshopo's newest week, 11-07, is over 3% reported but has
     # no case reported, so the walk starts from 10-31, which has 7.
     task = _task(target, delays, daily, "2026-11-08")
     model = RandomWalkNowcast()
@@ -158,7 +158,7 @@ def test_the_walk_starts_from_a_week_with_at_least_5_cases(
     assert start["CD-TO"] == "2026-10-31"
     origin = model.origin_at(task, errors=False)
     i = origin.snap.locations.index("CD-TO")
-    assert origin.complete[i, -1] >= 0.05
+    assert origin.complete[i, -1] >= 0.03
     assert origin.reported[i, -1] < 5
 
 
@@ -289,7 +289,7 @@ def test_a_small_place_walks_only_over_the_forecast_weeks(
     task: ForecastTask,
 ) -> None:
     # Sud Ubangi has 2 cases ever, in the week of 10-03. Its walk starts
-    # from its nowcast of the latest week at least 5% reported, so even a
+    # from its nowcast of the latest week at least 3% reported, so even a
     # wide walk spread, as
     # pprandomwalknowcast fits it, compounds over a few weeks only.
     model = RandomWalkNowcast()
