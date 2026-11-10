@@ -91,7 +91,11 @@ The conditioning step is about 100 lines of numpy, and `bayesreconpy` is a refer
 
 ## Recommendation
 
-**1. Trajectory BUIS per province (main recommendation).**
+The prototype below qualifies this.
+Use method 1 when the zone model's own sum is competitive with the province model.
+For randomwalknowcast, keep the direct province forecast with `reconcile_zones`, where method 2's ranked pairing is the improvement worth testing.
+
+**1. Trajectory BUIS per province.**
 This combines bottom-up zone draws with the province's own direct forecast, and both stay informative.
 
 1. For province $p$ and zone draw $k$, sum the zone trajectories to $u_p^{(k)}(w)$ over all nowcast and forecast weeks.
@@ -145,7 +149,8 @@ The direct province forecast has 100 draws.
 The zone forecast runs on the zone task with a pool of 2000 draws, and 100 zone blocks are resampled per province.
 Only 8 provinces have zones with cases (BU, HU, IT, NK, NU, SK, SU, TO).
 The other 18 keep their direct forecast in every method.
-In this model zones are independent across provinces, as are the direct provinces, so per-province weighting is the exact joint weighting.
+The random walks appear to draw each place independently (from the model description, not checked in the code), in which case per-province weighting is the exact joint weighting.
+BU, NU, SK and SU have only zero zone draws, so `zonesum` and BUIS give 0 there where `direct` gives small introduction draws.
 National is the sum.
 
 Methods compared:
@@ -161,15 +166,16 @@ Weighting on the summary or at τ = 0.5 roughly doubles ESS (`results/ess.csv`).
 
 **Scores**, reported target, mean over the 3 scored origins (n = 884 province and 34 national cells):
 
-| Model | Province WIS | Province log WIS | Province 90% | National WIS | National log WIS | National 50% / 90% |
+| Model | Province WIS | Province log WIS | Province 50% / 90% | National WIS | National log WIS | National 50% / 90% |
 |---|---|---|---|---|---|---|
-| direct | 1.93 | 0.033 | 0.96 (90%) | 30.2 | 0.098 | 0.41 / 0.74 |
-| zonesum | 3.18 | 0.042 | 0.94 (90%) | 46.7 | 0.153 | 0.32 / 0.62 |
-| buis_joint_t1 | 2.49 | 0.039 | 0.93 (90%) | 37.4 | 0.123 | 0.24 / 0.50 |
-| buis_joint_t0.5 | 2.47 | 0.038 | 0.93 (90%) | 34.8 | 0.117 | 0.35 / 0.62 |
-| buis_summary | 2.59 | 0.038 | 0.93 (90%) | 33.4 | 0.115 | 0.44 / 0.68 |
-| buis_ess | 2.57 | 0.039 | 0.93 (90%) | 35.1 | 0.117 | 0.32 / 0.65 |
+| direct | 1.93 | 0.033 | 0.91 / 0.96 | 30.2 | 0.098 | 0.41 / 0.74 |
+| zonesum | 3.18 | 0.042 | 0.89 / 0.94 | 46.7 | 0.153 | 0.32 / 0.62 |
+| buis_joint_t1 | 2.49 | 0.039 | 0.89 / 0.93 | 37.4 | 0.123 | 0.24 / 0.50 |
+| buis_joint_t0.5 | 2.47 | 0.038 | 0.90 / 0.93 | 34.8 | 0.117 | 0.35 / 0.62 |
+| buis_summary | 2.59 | 0.038 | 0.89 / 0.93 | 33.4 | 0.115 | 0.44 / 0.68 |
+| buis_ess | 2.57 | 0.039 | 0.89 / 0.93 | 35.1 | 0.117 | 0.32 / 0.65 |
 
+Province coverage is high at both levels because most provinces are exactly 0.
 Log energy and log variogram scores (provinces by weeks, reported target) follow the same order: direct 1.46 / 412, BUIS 1.63–1.71 / 418–437, zonesum 1.84 / 474.
 On the complete-week target BUIS and direct are within 2% of each other on both.
 
@@ -187,7 +193,11 @@ It does not beat the direct province forecast here.
 The zone sums run well above the direct forecasts in the forecast weeks, so the two densities overlap only in the zone sums' lower tail.
 Conditioning then gives intervals narrower than either input, and national 90% coverage falls to 0.50 at τ = 1.
 Tempering and summary weighting recover some width and coverage but not the direct forecast's.
+Width is not the whole story: at τ = 0.25 national 90% coverage matches `direct` (0.74), yet WIS is still 34.9 against 30.2, and 2.58 against 1.93 for provinces.
+The loss comes from the upward shift of the zone sums.
 So conditioning cannot fix a biased bottom level.
+Part of the narrowing comes from the density, not from conditioning itself.
+The weekly NB product treats 8 strongly correlated walk weeks as independent and so overstates what the direct forecast knows, which is why the summary variant does best at national level.
 It is worth using only when the zone model is about as good as the province model on its own.
 For randomwalknowcast, keeping the province forecast and allocating down (`reconcile_zones`) is the better choice.
 The test to rerun is the same comparison with the zone-level renewal or generative models once they exist.
