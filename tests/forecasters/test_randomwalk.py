@@ -245,6 +245,31 @@ def test_a_precise_cut_off_week_is_the_walks_base(
     assert np.median(after) == pytest.approx(want, abs=0.15)
 
 
+def test_walk_on_goes_on_from_the_completed_cut_off_week(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    # With `cutoff="walk-on"` and no walk spread, each sample's next week
+    # is Poisson of its own completed 10-17 value: the nowcast of the
+    # observed days plus the walk's draw for the missing day.
+    task = dataclasses.replace(
+        _task(target, delays, daily, "2026-10-17"), n_samples=4000
+    )
+    model = RandomWalkNowcast(cutoff="walk-on")
+    origin = model.origin_at(task, errors=True)
+    origin.sigma[:] = 0.0
+    values, weeks = model.trajectories(origin, task, origin.point)
+    i = origin.snap.locations.index("CD-IT")
+    cw = weeks.index("2026-10-17")
+    week, after = values[:, i, cw], values[:, i, cw + 1]
+    assert after.mean() == pytest.approx(week.mean(), rel=0.03)
+    assert np.corrcoef(week, after)[0, 1] > 0.9
+
+
+def test_an_unknown_cutoff_raises(task: ForecastTask) -> None:
+    with pytest.raises(ValueError, match="Unknown cutoff"):
+        RandomWalkNowcast(cutoff="other").forecast(task)
+
+
 def test_the_missing_days_step_from_the_week_before(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:

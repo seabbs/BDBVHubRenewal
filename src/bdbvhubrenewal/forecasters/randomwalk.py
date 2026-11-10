@@ -499,9 +499,15 @@ class RandomWalkNowcast(RandomWalk):
     delay_summary : pandas.DataFrame or None
         The delay of the last forecast (`chain.delay_summary`), which maps
         its final counts to what later releases show.
+    cutoff : str
+        How the walk goes on past the cut-off week. `"update"` updates the
+        walk's state in it from its nowcast, weighted by its precision
+        (`cutoff_state`). `"walk-on"` walks on from each sample's completed
+        cut-off week, its nowcast plus the missing days' draw, as exact.
     """
 
     name: str = "randomwalknowcast"
+    cutoff: str = "update"
     delay_summary: pd.DataFrame | None = field(
         init=False, default=None, repr=False
     )
@@ -588,38 +594,59 @@ class RandomWalkNowcast(RandomWalk):
         w0 = _start_weeks(origin)
         quiet = _quiet(origin)
         rows = np.arange(n_loc)
-        _, y = _walks(
+        lam, y = _walks(
             key_walk, nowcast[:, rows, w0].T, origin, w0, n_all, quiet
         )
-        # The walk's state in the cut-off week, from each sample's start
-        # week and the cut-off week's nowcast, weighted by its precision.
         cut = int(snap.cut[origin.o])
         miss = int(np.flatnonzero(snap.week == cw).max()) - cut
-        mean, sd = cutoff_state(
-            np.log1p(nowcast[:, rows, w0].T),
-            cw - w0,
-            origin.sigma,
-            point[:, cw],
-            origin.reported[:, cw],
-            origin.size[:, 0],
-            7 - miss,
-        )
-        key_state, key_part = jax.random.split(key_part)
-        z = np.asarray(jax.random.normal(key_state, mean.shape), np.float64)
-        rate = np.expm1(np.maximum(mean + sd * z, 0.0))  # [L, S]
-        # Days of the cut-off week after the cut-off are drawn from it.
-        part = np.asarray(
-            jax.random.poisson(
-                key_part, jnp.asarray(rate * miss / 7, jnp.float32)
-            ),
-            dtype=np.float64,
-        )
-        done = nowcast[:, rows, cw].T + np.where((cw > w0)[:, None], part, 0.0)
-        # The walk goes on from the state's rate, not from a count.
+        if self.cutoff == "walk-on":
+            # Days of the cut-off week after the cut-off are drawn from the
+            # walk's rate that week, and each sample's completed cut-off
+            # week is the base the walk goes on from.
+            at_cw = np.clip(cw - w0 - 1, 0, n_all - 1)
+            part = np.asarray(
+                jax.random.poisson(
+                    key_part,
+                    jnp.asarray(lam[rows, :, at_cw] * miss / 7, jnp.float32),
+                ),
+                dtype=np.float64,
+            )  # [L, S]
+            done = nowcast[:, rows, cw].T + np.where(miss > 0, part, 0.0)
+            base = done
+        elif self.cutoff == "update":
+            # The walk's state in the cut-off week, from each sample's start
+            # week and the cut-off week's nowcast, weighted by its
+            # precision.
+            mean, sd = cutoff_state(
+                np.log1p(nowcast[:, rows, w0].T),
+                cw - w0,
+                origin.sigma,
+                point[:, cw],
+                origin.reported[:, cw],
+                origin.size[:, 0],
+                7 - miss,
+            )
+            key_state, key_part = jax.random.split(key_part)
+            z = np.asarray(jax.random.normal(key_state, mean.shape), np.float64)
+            base = np.expm1(np.maximum(mean + sd * z, 0.0))  # [L, S]
+            # Days of the cut-off week after the cut-off are drawn from it.
+            part = np.asarray(
+                jax.random.poisson(
+                    key_part, jnp.asarray(base * miss / 7, jnp.float32)
+                ),
+                dtype=np.float64,
+            )
+            done = nowcast[:, rows, cw].T + np.where(
+                (cw > w0)[:, None], part, 0.0
+            )
+        else:
+            raise ValueError(f"Unknown cutoff {self.cutoff!r}.")
+        # The walk goes on from the base: the state's rate, or the
+        # completed count with `"walk-on"`.
         h = n_all - cw - 1
         _, ahead = random_walks(
             jax.random.split(key_ahead, n_loc),
-            jnp.asarray(rate, jnp.float32),
+            jnp.asarray(base, jnp.float32),
             jnp.asarray(origin.sigma, jnp.float32),
             max(h, 1),
         )
