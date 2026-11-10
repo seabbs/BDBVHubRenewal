@@ -236,7 +236,13 @@ class Tree:
         leaf = ~np.isin(np.arange(n), parent)
         return cls(parent, level, path, leaf)
 
-    def sample(self, name: str, loc: float, scale: float | None) -> jax.Array:
+    def sample(
+        self,
+        name: str,
+        loc: float,
+        scale: float | None,
+        tier_scale: float = 0.5,
+    ) -> jax.Array:
         r"""Sample a pooled parameter for every place, non-centred.
 
         Parameters
@@ -246,6 +252,8 @@ class Tree:
         loc, scale : float
             Normal prior of the country's value. With `scale` None the
             country's value is `loc`, for an offset from a baseline.
+        tier_scale : float
+            Scale of the half-normal prior of each tier's spread $\tau$.
 
         Returns
         -------
@@ -259,14 +267,21 @@ class Tree:
         )
         n_lvl = max(int(self.level.max()), 1)
         tau = numpyro.sample(
-            f"{name}_tau", dist.HalfNormal(0.5).expand((n_lvl,)).to_event()
+            f"{name}_tau",
+            dist.HalfNormal(tier_scale).expand((n_lvl,)).to_event(),
         )
-        z = numpyro.sample(
-            f"{name}_z",
-            dist.Normal(0.0, 1.0).expand((self.level.size,)).to_event(),
-        )
-        step = tau[jnp.maximum(self.level - 1, 0)] * (self.level > 0) * z
-        out: jax.Array = root + jnp.asarray(self.path) @ step
+        # Each tier's places are normal about their parents, with sd the
+        # tier's spread. `fit_posterior` sets how centred each tier is.
+        out = jnp.zeros(self.level.size) + root
+        for k in range(1, int(self.level.max()) + 1):
+            at = np.flatnonzero(self.level == k)
+            value = numpyro.sample(
+                f"{name}_l{k}",
+                dist.Normal(
+                    out[self.parent[at]], tau[k - 1] * jnp.ones(at.size)
+                ).to_event(),
+            )
+            out = out.at[at].set(value)  # noqa: PD008
         return out
 
     def rebuild(self, draws: dict[str, np.ndarray], name: str) -> np.ndarray:
@@ -284,11 +299,12 @@ class Tree:
         numpy.ndarray
             `[N, L]`, one row per draw.
         """
-        tau, z = draws[f"{name}_tau"], draws[f"{name}_z"]
-        root = draws.get(f"{name}_root", np.zeros(z.shape[0]))
-        lvl = np.maximum(self.level - 1, 0)
-        step = tau[:, lvl] * (self.level > 0) * z
-        return np.asarray(root[:, None] + step @ self.path.T)
+        n = draws[f"{name}_tau"].shape[0]
+        out = np.zeros((n, self.level.size))
+        out += draws.get(f"{name}_root", np.zeros(n))[:, None]
+        for k in range(1, int(self.level.max()) + 1):
+            out[:, self.level == k] = draws[f"{name}_l{k}"]
+        return out
 
 
 @dataclass(frozen=True)
@@ -421,20 +437,41 @@ def _interval(
     return out / ndtr(z_d)
 
 
-AGE_BANDS = (7, 21)
-"""Upper ages of the dispersion bands of `dispersion="age"`."""
+TIER_SCALE = {
+    "delay_mu": 0.5,
+    "delay_sd": 0.25,
+    "hazard_level": 0.5,
+    "hazard_slope": 0.5,
+    "sigma": 0.5,
+    "phi": 0.25,
+    "init": 1.5,
+}
+"""Scale of the half-normal prior of each pooled parameter's tier spreads.
+
+The delay scale and the dispersion have tighter tier spreads, as only a
+few large places inform them. The walk's initial level has a wide one,
+as places range from a few cases a week to hundreds.
+"""
 
 
-def age_band(age: Any) -> Any:
-    """Return the dispersion band of each age, 0 for ages below 0."""
-    return sum((age > b) * 1 for b in AGE_BANDS)
+OFFSET_CENTRING = {"init": 1.0, "delay_sd": 0.5}
+"""Centring of each pooled parameter's tiers, 0 (non-centred) by default.
+
+Each live place's counts pin its initial level, which suits centred
+tiers. The delay scale is half centred: at 11-08, non-centred it gave 7
+divergent draws in 400 on one chain, half centred 1 and centred 2.
+"""
+
+
+def _pooled(tree: Tree, name: str, loc: float, scale: float | None) -> Any:
+    return tree.sample(name, loc, scale, TIER_SCALE[name])
 
 
 def _hazard_logits(tree: Tree, max_delay: int) -> jax.Array:
     r"""Sample the logit hazard of every place by delay day, `[L, D]`.
 
-    A random walk over delay days for the country, plus a pooled shift
-    for each place.
+    A random walk over delay days for the country, plus a level and a
+    slope over delay days for each place, both pooled.
     """
     first = numpyro.sample("hazard_first", dist.Normal(-2.0, 1.0))
     rw_sd = numpyro.sample("hazard_rw_sd", dist.HalfNormal(0.3))
@@ -442,8 +479,12 @@ def _hazard_logits(tree: Tree, max_delay: int) -> jax.Array:
         "hazard_eps", dist.Normal(0.0, 1.0).expand((max_delay - 1,)).to_event()
     )
     base = first + jnp.concatenate([jnp.zeros(1), jnp.cumsum(rw_sd * eps)])
-    shift = tree.sample("hazard_place", 0.0, None)
-    out: jax.Array = base[None, :] + shift[:, None]
+    level = _pooled(tree, "hazard_level", 0.0, None)
+    slope = _pooled(tree, "hazard_slope", 0.0, None)
+    x = jnp.arange(max_delay) / max_delay - 0.5
+    out: jax.Array = (
+        base[None, :] + level[:, None] + slope[:, None] * x[None, :]
+    )
     return out
 
 
@@ -460,32 +501,17 @@ def _survival(logit_h: Any) -> Any:
 
 
 def model(
-    tree: Tree,
-    tri: Triangle,
-    max_delay: int,
-    dispersion: str = "shared",
-    delay: str = "lognormal",
+    tree: Tree, tri: Triangle, max_delay: int, delay: str = "lognormal"
 ) -> None:
-    """Sample the walk, the delay and the new reports of the leaves."""
+    """Sample the walk, the delay and the new reports of the leaves.
+
+    Every place-level parameter is pooled over the hierarchy.
+    """
     leaves = tri.leaves
-    sigma = jnp.exp(tree.sample("sigma", np.log(0.2), 1.0))[leaves]
-    if dispersion == "place":
-        phi_l = jnp.exp(tree.sample("phi", np.log(10.0), 1.5))[leaves]
-    elif dispersion == "age":
-        phi_k = jnp.exp(
-            numpyro.sample(
-                "phi",
-                dist.Normal(np.log(10.0), 1.5)
-                .expand((len(AGE_BANDS) + 1,))
-                .to_event(),
-            )
-        )
-    else:
-        phi_s = jnp.exp(numpyro.sample("phi", dist.Normal(np.log(10.0), 1.5)))
+    sigma = jnp.exp(_pooled(tree, "sigma", np.log(0.2), 1.0))[leaves]
+    phi = jnp.exp(_pooled(tree, "phi", np.log(10.0), 1.5))[leaves]
+    init = _pooled(tree, "init", 2.0, 3.0)[leaves]
     n_p = leaves.size
-    init = numpyro.sample(
-        "init", dist.Normal(2.0, 3.0).expand((n_p,)).to_event()
-    )
     # Partly centred steps (`fit_posterior`), as the leaves range from
     # silent to thousands of cases.
     steps = jnp.cumsum(
@@ -504,19 +530,13 @@ def model(
     p = tri.place
     if delay == "hazard":
         surv = _survival(_hazard_logits(tree, max_delay)[leaves])
-        mass = surv[p, tri.lo + 1] - surv[p, jnp.minimum(tri.hi, max_delay) + 1]
+        mass = surv[p, tri.lo + 1] - surv[p, tri.hi + 1]
     else:
-        mu = tree.sample("delay_mu", 1.6, 1.0)[leaves]
-        sd = jnp.exp(numpyro.sample("delay_sd", dist.Normal(np.log(0.7), 0.5)))
-        mass = _interval(mu[p], sd, tri.lo, tri.hi, max_delay)
+        mu = _pooled(tree, "delay_mu", 1.6, 1.0)[leaves]
+        sd = jnp.exp(_pooled(tree, "delay_sd", np.log(0.7), 0.5))[leaves]
+        mass = _interval(mu[p], sd[p], tri.lo, tri.hi, max_delay)
     mean = jnp.exp(log_lam[p, tri.week]) / 7.0 * mass
-    if dispersion == "place":
-        phi = phi_l[p]
-    elif dispersion == "age":
-        phi = phi_k[age_band(tri.hi)]
-    else:
-        phi = phi_s
-    numpyro.sample("obs", dist.NegativeBinomial2(mean, phi), obs=tri.count)
+    numpyro.sample("obs", dist.NegativeBinomial2(mean, phi[p]), obs=tri.count)
 
 
 @dataclass(frozen=True)
@@ -531,7 +551,7 @@ class Posterior:
     sigma : numpy.ndarray
         Walk spread of every place, `[N, L]`.
     phi : numpy.ndarray
-        Dispersion of every place by age band, `[N, L, K]`.
+        Dispersion of every place, `[N, L]`.
     log_lam : numpy.ndarray
         Log expected final count of each leaf and fitted week,
         `[N, P, W]`.
@@ -552,7 +572,6 @@ def fit_posterior(
     sampler: Sampler,
     key: jax.Array,
     max_delay: int,
-    dispersion: str = "shared",
     delay: str = "lognormal",
 ) -> Posterior:
     """Fit the joint model with NUTS and check that it converged.
@@ -583,7 +602,19 @@ def fit_posterior(
     """
     mcmc = MCMC(
         NUTS(
-            reparam(model, config={"step": LocScaleReparam(CENTRING)}),
+            reparam(
+                model,
+                config={
+                    "step": LocScaleReparam(CENTRING),
+                    **{
+                        f"{name}_l{k}": LocScaleReparam(
+                            OFFSET_CENTRING.get(name, 0.0)
+                        )
+                        for name in TIER_SCALE
+                        for k in range(1, int(tree.level.max()) + 1)
+                    },
+                },
+            ),
             target_accept_prob=sampler.target_accept,
             init_strategy=init_to_median(),
         ),
@@ -599,7 +630,6 @@ def fit_posterior(
         tree=tree,
         tri=tri,
         max_delay=max_delay,
-        dispersion=dispersion,
         delay=delay,
         extra_fields=("diverging", "num_steps", "adapt_state.step_size"),
     )
@@ -632,7 +662,7 @@ def fit_posterior(
     return Posterior(
         share=_shares(tree, draws, delay, max_delay),
         sigma=np.exp(tree.rebuild(draws, "sigma")),
-        phi=_dispersion(tree, draws, dispersion),
+        phi=np.exp(tree.rebuild(draws, "phi")),
         log_lam=draws["log_lam"],
         info=info,
     )
@@ -649,28 +679,46 @@ def _shares(
         base = first[:, None] + np.concatenate(
             [np.zeros((first.size, 1)), steps], axis=1
         )
-        logit_h = (
-            base[:, None, :] + tree.rebuild(draws, "hazard_place")[..., None]
-        )
+        x = np.arange(max_delay) / max_delay - 0.5
+        level = tree.rebuild(draws, "hazard_level")[..., None]
+        slope = tree.rebuild(draws, "hazard_slope")[..., None]
+        logit_h = base[:, None, :] + level + slope * x
         return np.asarray(1.0 - _survival(logit_h)[..., 1:])
     mu = tree.rebuild(draws, "delay_mu")[..., None]
-    sd = np.exp(draws["delay_sd"])[:, None, None]
+    sd = np.exp(tree.rebuild(draws, "delay_sd"))[..., None]
     return np.asarray(reported_share(mu, sd, ages, max_delay))
 
 
-def _dispersion(
-    tree: Tree, draws: dict[str, np.ndarray], dispersion: str
-) -> np.ndarray:
-    """Return the dispersion draws as `[N, L, K]`, K age bands."""
-    n, n_loc = draws["log_lam"].shape[0], tree.level.size
-    if dispersion == "place":
-        return np.exp(tree.rebuild(draws, "phi"))[:, :, None]
-    if dispersion == "age":
-        phi = np.exp(draws["phi"])[:, None, :]
-        return np.broadcast_to(phi, (n, n_loc, phi.shape[-1])).copy()
-    return np.broadcast_to(
-        np.exp(draws["phi"])[:, None, None], (n, n_loc, 1)
-    ).copy()
+def _live_tree(
+    parent: np.ndarray, live: np.ndarray
+) -> tuple[Tree, np.ndarray, np.ndarray]:
+    """Return the tree of the live leaves and their ancestors.
+
+    Returns
+    -------
+    tuple
+        The tree, each place's index in it (-1 for none), and the index
+        in it of each place or, for one not in it, its nearest ancestor
+        that is.
+    """
+    keep = np.zeros(parent.size, bool)
+    for n in live:
+        m = int(n)
+        while m >= 0:
+            keep[m] = True
+            m = int(parent[m])
+    pos = np.full(parent.size, -1)
+    pos[keep] = np.arange(keep.sum())
+    sub = np.array(
+        [pos[parent[n]] if parent[n] >= 0 else -1 for n in np.flatnonzero(keep)]
+    )
+    src = np.empty(parent.size, dtype=int)
+    for n in range(parent.size):
+        m = n
+        while pos[m] < 0:
+            m = int(parent[m])
+        src[n] = pos[m]
+    return Tree.of(sub), pos, src
 
 
 def _neg_binomial(
@@ -707,7 +755,6 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
     name: str = "pprandomwalknowcast"
     sampler: Sampler = field(default_factory=Sampler)
     fit_weeks: int = FIT_WEEKS
-    dispersion: str = "shared"
     delay: str = "lognormal"
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
@@ -760,8 +807,22 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
             )
         tri = triangle(snap, o, self.settings, self.fit_weeks, live)
         key = jax.random.key(int(task.rng().integers(0, 2**31 - 1)))
+        # The fit's tree holds the live leaves and their ancestors only, so
+        # no place without data has offsets left to the prior alone.
+        sub, pos, src = _live_tree(snap.parent, live)
         post = fit_posterior(
-            tri, tree, self.sampler, key, d, self.dispersion, self.delay
+            replace(tri, leaves=pos[live]),
+            sub,
+            self.sampler,
+            key,
+            d,
+            self.delay,
+        )
+        post = replace(
+            post,
+            share=post.share[:, src],
+            sigma=post.sigma[:, src],
+            phi=post.phi[:, src],
         )
         share = np.median(post.share, axis=0)  # [L, D + 1]
         values, weeks = self.predict(post, tri, snap, task)
@@ -825,7 +886,7 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
         # any is used again.
         pick = np.resize(rng.permutation(post.share.shape[0]), n)
         share = post.share[pick][:, live]  # [S, P, D + 1]
-        phi = post.phi[pick][:, live]  # [S, P, K]
+        phi = post.phi[pick][:, live, None]  # [S, P, 1]
         sigma = post.sigma[pick][:, live, None]
         log_lam = post.log_lam[pick]  # [S, P, W]
         # Days of the fitted weeks: reported count plus the rest to come.
@@ -836,10 +897,7 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
         wk = snap.week[day] - tri.first
         # The clip only undoes float32 rounding of a share at 1.
         mean = np.exp(log_lam[:, :, wk]) / 7.0 * np.clip(rest, 0.0, 1.0)
-        band = np.minimum(age_band(np.maximum(age, 0)), phi.shape[-1] - 1)
-        draw = _neg_binomial(
-            rng, mean, np.broadcast_to(phi[..., band], mean.shape)
-        )
+        draw = _neg_binomial(rng, mean, np.broadcast_to(phi, mean.shape))
         known = np.where(seen, snap.counts[live][:, o, day], 0.0)
         onehot = np.zeros((day.size, tri.n_weeks))
         onehot[np.arange(day.size), wk] = 1.0
@@ -850,7 +908,7 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
         values[:, live, : tri.first] = reported[live, : tri.first][None]
         values[:, live, tri.first : n_data] = (draw + known[None]) @ onehot
         values[:, live, n_data:] = _neg_binomial(
-            rng, ahead, np.broadcast_to(7.0 * phi[..., :1], ahead.shape)
+            rng, ahead, np.broadcast_to(7.0 * phi, ahead.shape)
         )
         return values, weeks
 
@@ -895,12 +953,10 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
                     "delay_median": int(
                         np.argmax(np.median(post.share[:, i], axis=0) >= 0.5)
                     ),
+                    "phi": float(np.median(post.phi[:, i])),
                 }
             )
-        shared = {
-            "phi": float(np.median(post.phi)),
-        }
-        self.fit_diagnostics = [*rows, {"fit": "joint", **shared, **post.info}]
+        self.fit_diagnostics = [*rows, {"fit": "joint", **post.info}]
 
 
 register_model(
