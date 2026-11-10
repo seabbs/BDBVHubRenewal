@@ -43,8 +43,11 @@ Its new reports and removals by weeks back fit the observation model
 (`obs`).
 
 **Introductions.** A place with no case in the latest `walk_weeks` weeks
-is silent, and its weekly probability of a first case is pooled over its
-siblings (`introductions.introduction_rates`).
+is silent.
+Its weekly probability of an introduction is the rate of a first case,
+or of a re-introduction if it was seen before, over the `walk_weeks`
+weeks to its start week, or all weeks to it if those have none, pooled
+over its siblings (`introductions.introduction_rates`).
 """
 
 from __future__ import annotations
@@ -597,8 +600,8 @@ class Origin:
         Places with no case reported in the latest `walk_weeks` weeks,
         `[L]`.
     intro : numpy.ndarray
-        Weekly probability of a first case after `walk_weeks` silent
-        weeks, pooled over the place's siblings
+        Weekly probability of an introduction, a first case or a
+        re-introduction, pooled over the place's siblings
         (`introduction_rates`), `[L]`.
     errors : Errors or None
         Retrospective errors, or None where they were not asked for.
