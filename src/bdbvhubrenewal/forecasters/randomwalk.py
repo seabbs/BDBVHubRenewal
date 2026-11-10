@@ -174,22 +174,46 @@ def _delay_label(origin: Origin, i: int) -> str:
     return f"own at {int(own.sum())} of {own.size} ages"
 
 
+def start_window(settings: Settings) -> int:
+    """Return the weeks back from the cut-off week a start week may be.
+
+    It is `Settings.history_delay`, the onset days the nowcast's delay is
+    fitted on (1.5 D), in whole weeks.
+
+    Parameters
+    ----------
+    settings : Settings
+        Settings.
+
+    Returns
+    -------
+    int
+        Weeks, counting the cut-off week.
+    """
+    return -(-settings.history_delay // 7)
+
+
 def _start_ok(origin: Origin) -> np.ndarray:
     """Return the full weeks a walk can start from, `[L, W]`.
 
-    A week can when its share reported is at least `Settings.start_share`
-    and its reported count is at least `Settings.start_count`.
+    A week can when its share reported is at least `Settings.start_share`,
+    its reported count is at least `Settings.start_count`, and it is within
+    `start_window` weeks of the cut-off week.
     """
     settings, full = origin.settings, origin.start_nowcast
-    return (origin.complete[:, : full + 1] >= settings.start_share) & (
+    ok = (origin.complete[:, : full + 1] >= settings.start_share) & (
         origin.reported[:, : full + 1] >= settings.start_count
     )
+    first = origin.snap.cut_week(origin.o) - start_window(settings) + 1
+    ok[:, : max(first, 0)] = False
+    return ok
 
 
 def _quiet(origin: Origin) -> np.ndarray:
     """Return the places that draw introductions instead of a walk, `[L]`.
 
-    These are the silent places and those with no week to start from.
+    These are the silent places and those with no week to start from in
+    the `start_window`.
     """
     return origin.silent | ~_start_ok(origin).any(axis=1)
 
@@ -197,13 +221,16 @@ def _quiet(origin: Origin) -> np.ndarray:
 def _start_weeks(origin: Origin) -> np.ndarray:
     """Return the week each place's walk starts from, `[L]`.
 
-    It is the latest week a walk can start from (`_start_ok`). A quiet
-    place (`_quiet`) starts at its latest complete week, after which its
-    introductions are drawn.
+    It is the latest week a walk can start from (`_start_ok`). A silent
+    place starts at its latest complete week, after which its
+    introductions are drawn. A quiet place with recent cases keeps its
+    nowcast to the cut-off week and draws introductions after it.
     """
     ok = _start_ok(origin)
     latest = origin.start_nowcast - np.argmax(ok[:, ::-1], 1)
-    return np.where(_quiet(origin), origin.start, latest)
+    cw = origin.snap.cut_week(origin.o)
+    out = np.where(_quiet(origin), cw, latest)
+    return np.where(origin.silent, origin.start, out)
 
 
 def frame(
@@ -525,14 +552,20 @@ class RandomWalkNowcast(RandomWalk):
         values = np.zeros((n, n_loc, n_all))
         for loc in range(n_loc):
             s = int(w0[loc])
-            if quiet[loc]:
-                # A quiet place is its reported counts, then its
+            if origin.silent[loc]:
+                # A silent place is its reported counts, then its
                 # introductions, floored at the counts reported.
                 values[:, loc, : s + 1] = origin.reported[loc, : s + 1]
                 values[:, loc, s + 1 :] = y[loc, :, : n_all - s - 1]
                 values[:, loc, :n_data] = np.maximum(
                     values[:, loc, :n_data], origin.reported[loc]
                 )
+                continue
+            if quiet[loc]:
+                # A quiet place with recent cases keeps its nowcast to the
+                # cut-off week and draws introductions after it.
+                values[:, loc, : cw + 1] = nowcast[:, loc, : cw + 1]
+                values[:, loc, cw + 1 :] = y[loc, :, : n_all - cw - 1]
                 continue
             values[:, loc, :cw] = nowcast[:, loc, :cw]
             values[:, loc, cw] = done[loc]
