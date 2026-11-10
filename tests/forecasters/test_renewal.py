@@ -692,3 +692,98 @@ def test_provinces_in_parallel_match_one_after_another(
     parallel = model.forecast_fit(sub)
     pd.testing.assert_frame_equal(parallel.samples, serial.samples)
     assert list(parallel.runs) == list(serial.runs)
+
+
+@pytest.fixture
+def quiet_zones(
+    task: ForecastTask, monkeypatch: pytest.MonkeyPatch
+) -> set[str]:
+    """Make every zone silent but the four with most cases, with zero draws."""
+    from bdbvhubrenewal.data.zones import province_of
+
+    zones = rn.task_zones(task)
+    counts = rn.zone_target(task).groupby("location")["total"].sum()
+    busy = set(counts.sort_values().index[-4:])
+    silent = {z for z in zones if z not in busy}
+    rows = pd.DataFrame(
+        [
+            (z, date, k, 0)
+            for z in sorted(silent)
+            for date in task.target_end_dates
+            for k in range(1, task.n_samples + 1)
+        ],
+        columns=["location", "target_end_date", "sample", "value"],
+    )
+    monkeypatch.setattr(rn, "_silent_walk", lambda _: (rows, silent))
+    assert {province_of(z) for z in busy} <= set(task.locations)
+    return silent
+
+
+def test_zone_variants_fit_zones_and_sum_them_to_provinces(
+    task: ForecastTask, monkeypatch: pytest.MonkeyPatch, quiet_zones: set[str]
+) -> None:
+    from bdbvhubrenewal.data.zones import province_of
+
+    seen: list[tuple[str, ...]] = []
+
+    def fake(self: rn.RenewalModel, t: ForecastTask) -> rn.RenewalRun:
+        seen.append(t.locations)
+        return _fake_run(t, self.variant)
+
+    monkeypatch.setattr(rn.RenewalModel, "run", fake)
+    fit = get_model("renewal").forecast_fit(task)
+    # One joint fit of the zones the random walks do not find silent.
+    (fitted,) = seen
+    assert len(fitted) == 4
+    assert all(len(z.split("-")) == 3 for z in fitted)
+    assert not set(fitted) & quiet_zones
+    run = fit.runs["all"]
+    assert run.data.parent_names == sorted(
+        {province_of(z) for z in fitted}, key=[province_of(z) for z in fitted].index
+    )
+    # Every zone of the task's provinces is forecast, and the provinces
+    # are the sums of their zones, sample by sample.
+    assert fit.zones is not None
+    assert set(fit.zones["location"]) == set(fitted) | quiet_zones
+    assert set(fit.samples["location"]) == set(task.locations)
+    summed = (
+        fit.zones.assign(location=fit.zones["location"].map(province_of))
+        .groupby(["location", "target_end_date", "sample"])["value"]
+        .sum()
+    )
+    prov = fit.samples.set_index(["location", "target_end_date", "sample"])
+    pd.testing.assert_series_equal(
+        prov["value"].sort_index(), summed.sort_index(), check_names=False
+    )
+
+
+def test_zone_inputs_take_the_zone_counts_and_province_delays(
+    task: ForecastTask,
+) -> None:
+    from bdbvhubrenewal.data.zones import province_of
+
+    rows = rn.zone_target(task)
+    assert {"observed", "imputed", "total", "cutoff"} <= set(rows.columns)
+    zones = tuple(rows.groupby("location")["total"].sum().nlargest(6).index)
+    zt = replace(task, target=rows, locations=zones)
+    data = rn.vintage_inputs(zt, rn.model_config(rn.VARIANTS["renewal"]))
+    assert data.names == list(zones)
+    assert data.parent_names is not None
+    assert [data.parent_names[i] for i in data.parents] == [
+        province_of(z) for z in zones
+    ]
+    assert data.delay_counts.shape[1] == len(data.parent_names)
+    # Zone weekly counts sum to the province counts of the release.
+    prov = task.target.loc[task.target["location"].isin(data.parent_names)]
+    wide = prov.pivot_table(
+        index="target_end_date", columns="location", values="total"
+    )
+    zone_totals = rows.assign(p=rows["location"].map(province_of)).pivot_table(
+        index="target_end_date", columns="p", values="total", aggfunc="sum"
+    )
+    pd.testing.assert_frame_equal(
+        wide.reindex_like(zone_totals).fillna(0),
+        zone_totals.fillna(0),
+        check_names=False,
+        check_dtype=False,
+    )
