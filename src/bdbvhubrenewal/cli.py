@@ -1022,6 +1022,8 @@ def _stored(
         hc.match_vintage(r, vintages) for r in hub["reference_date"]
     ]
     samples = pd.concat([ours[cols], hub.dropna(subset=["vintage"])[cols]])
+    # Empty when no fits are loaded and no hub files fetched.
+    samples = samples.astype({"value": float})
     return samples, stored_delays(args.results)
 
 
