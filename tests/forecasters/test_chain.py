@@ -183,11 +183,40 @@ def test_a_delay_is_own_with_10_cases_a_week_else_the_pooled_parents(
         gaps,
     )
     # The same rule as the walk spread: own with 10 cases a week, else
-    # the pooled estimate of the nearest parent that has them.
+    # the pooled estimate of the nearest parent that has them. Zones then
+    # take their province's delay (`test_a_zone_takes_its_provinces_delay`).
     src = source_index(level, snap.parent)
+    zone = np.array([c.count("-") == 2 for c in snap.locations])
+    src = np.where(zone, src[snap.parent], src)
     np.testing.assert_allclose(fit.g, np.concatenate([own_g, pooled_g])[src])
     assert (src < len(level)).any()
     assert (src >= len(level)).any()
+
+
+def test_a_zone_takes_its_provinces_delay(
+    daily: pd.DataFrame, daily_zones: pd.DataFrame
+) -> None:
+    # A zone's own delay rests on few cases, and the nowcast divides by
+    # its share reported, so its noise inflates the zones' nowcasts.
+    both = pd.concat([daily, daily_zones])
+    zones = tuple(
+        sorted({z for z in daily_zones["location"] if z.startswith("CD-")})
+    )
+    snap = snapshot_arrays(both, "2026-10-24", zones)
+    fit = fit_delay(snap, 3, Settings())
+    assert fit is not None
+    level = levels(snap, 3, Settings())
+    zone = np.array([c.count("-") == 2 for c in snap.locations])
+    # Some zones have 10 cases a week, so would have had their own delay.
+    assert (zone & (level >= 10)).any()
+    par = snap.parent[zone]
+    np.testing.assert_array_equal(fit.source[zone], fit.source[par])
+    np.testing.assert_array_equal(fit.g[zone], fit.g[par])
+    assert not fit.own[zone].any()
+    # Provinces keep the rule.
+    prov = np.array([c.count("-") == 1 for c in snap.locations])
+    src = source_index(level, snap.parent)
+    np.testing.assert_array_equal(fit.source[prov], src[prov])
 
 
 def test_one_rule_shares_the_size_by_level_only(origin24) -> None:
