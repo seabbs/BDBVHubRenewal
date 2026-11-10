@@ -148,7 +148,9 @@ def test_a_partial_start_week_walks_on_at_a_full_week_level(
     # 10-17 has 6 of 7 days observed, so each sample's level is its nowcast
     # of the 6 days times 7 / 6. That week adds Poisson(level / 7) for its
     # missing day, and the next week is Poisson(level).
-    task = _task(target, delays, daily, "2026-10-17")
+    task = dataclasses.replace(
+        _task(target, delays, daily, "2026-10-17"), n_samples=4000
+    )
     model = RandomWalkNowcast()
     origin = model.origin_at(task, errors=True)
     origin.sigma[:] = 0.0

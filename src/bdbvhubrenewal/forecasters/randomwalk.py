@@ -19,12 +19,15 @@ Later weeks are walk draws, floored at the count reported.
 `RandomWalkNowcast` (`randomwalknowcast`) nowcasts each hub week, with
 negative binomial new reports on the remaining count minus Poisson
 removals of the count reported (`obs`).
-Each sample starts the walk from its own nowcast of the latest full week
-at least `Settings.start_share` reported with at least
-`Settings.start_count` cases (`_start_weeks`). Later weeks with data keep
-their nowcast draws. If the week holding the cut-off is partial, its days
-after the cut-off add Poisson draws from that week's walk rate. Weeks
-after the cut-off are the walk's draws.
+Each sample starts the walk from its own nowcast of the latest week, up to
+the one holding the cut-off, whose observed days are at least
+`Settings.start_share` reported with at least `Settings.start_count`
+cases (`_start_weeks`). Weeks with data keep their nowcast draws. If the
+week holding the cut-off is partial, its nowcast covers its days up to the
+cut-off, and its later days add a Poisson draw from that week's walk rate.
+If that week is the start, the walk's level is its nowcast scaled to a full
+week, times 7 over its observed days. Weeks after the cut-off are the
+walk's draws.
 
 The spread of the walk is the standard deviation of the weekly changes of
 $\log(1 + y)$ in reported counts, over the weeks ending at the start of
@@ -59,7 +62,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date
-from bdbvhubrenewal.data.snapshots import snapshot_arrays
+from bdbvhubrenewal.data.snapshots import snapshot_arrays, week_sum
 from bdbvhubrenewal.forecasters.base import (
     SAMPLE_COLUMNS,
     ForecastTask,
@@ -174,15 +177,21 @@ def _delay_label(origin: Origin, i: int) -> str:
 
 
 def _start_ok(origin: Origin) -> np.ndarray:
-    """Return the full weeks a walk can start from, `[L, W]`.
+    """Return the weeks up to the cut-off week a walk can start from.
 
-    A week can when its share reported is at least `Settings.start_share`
-    and its reported count is at least `Settings.start_count`.
+    A week can when the share reported of its observed days is at least
+    `Settings.start_share` and its reported count is at least
+    `Settings.start_count`. The cut-off week can start the walk when its
+    days up to the cut-off meet both. `[L, W']`, up to the cut-off week.
     """
-    settings, full = origin.settings, origin.start_nowcast
-    return (origin.complete[:, : full + 1] >= settings.start_share) & (
-        origin.reported[:, : full + 1] >= settings.start_count
+    snap, settings = origin.snap, origin.settings
+    cw = snap.cut_week(origin.o)
+    seen = week_sum(snap, snap.observed[origin.o][None, :].astype(float))
+    share = origin.complete * 7.0 / np.maximum(seen, 1.0)
+    ok = (share >= settings.start_share) & (
+        origin.reported >= settings.start_count
     )
+    return np.asarray(ok[:, : cw + 1])
 
 
 def _quiet(origin: Origin) -> np.ndarray:
@@ -201,7 +210,7 @@ def _start_weeks(origin: Origin) -> np.ndarray:
     introductions are drawn.
     """
     ok = _start_ok(origin)
-    latest = origin.start_nowcast - np.argmax(ok[:, ::-1], 1)
+    latest = ok.shape[1] - 1 - np.argmax(ok[:, ::-1], 1)
     return np.where(_quiet(origin), origin.start, latest)
 
 
@@ -490,23 +499,26 @@ class RandomWalkNowcast(RandomWalk):
             ),
             np.float64,
         )
-        # Each sample walks on from its own nowcast of the start week.
+        # Each sample walks on from its own nowcast of the start week. A
+        # partial cut-off week's nowcast covers its observed days, so as a
+        # start it is scaled to a full week's level.
         cw = snap.cut_week(origin.o)
+        cut = int(snap.cut[origin.o])
+        miss = int(np.flatnonzero(snap.week == cw).max()) - cut
         w0 = _start_weeks(origin)
         quiet = _quiet(origin)
         rows = np.arange(n_loc)
-        lam, y = _walks(
-            key_walk, nowcast[:, rows, w0].T, origin, w0, n_all, quiet
-        )
+        at_start = (w0 == cw)[:, None]
+        x0 = nowcast[:, rows, w0].T * np.where(at_start, 7 / (7 - miss), 1.0)
+        lam, y = _walks(key_walk, x0, origin, w0, n_all, quiet)
         # Days of the cut-off week after the cut-off are drawn from the
-        # walk's rate that week.
-        cut = int(snap.cut[origin.o])
-        miss = int(np.flatnonzero(snap.week == cw).max()) - cut
+        # walk's rate that week, or the start level if the walk starts in
+        # that week.
         at_cw = np.clip(cw - w0 - 1, 0, n_all - 1)
+        rate = np.where(at_start, x0, lam[rows, :, at_cw])
         part = np.asarray(
             jax.random.poisson(
-                key_part,
-                jnp.asarray(lam[rows, :, at_cw] * miss / 7, jnp.float32),
+                key_part, jnp.asarray(rate * miss / 7, jnp.float32)
             ),
             dtype=np.float64,
         )  # [L, S]
@@ -523,7 +535,7 @@ class RandomWalkNowcast(RandomWalk):
                 )
                 continue
             values[:, loc, : cw + 1] = nowcast[:, loc, : cw + 1]
-            if miss > 0 and cw > s:
+            if miss > 0:
                 values[:, loc, cw] += part[loc]
             values[:, loc, cw + 1 :] = y[loc, :, cw - s : n_all - s - 1]
         return values, weeks

@@ -13,7 +13,7 @@ In brief, `randomwalknowcast`:
 
 1. follows baselinenowcast, through a JAX port of the R package with one named extension for release snapshots ([Delay](#delay));
 2. has an observation model for the nowcast as in baselinenowcast, negative binomial new reports on the count still to come, fitted from retrospective nowcasts ([Nowcast](#nowcast));
-3. nowcasts every week at least 5% reported, and forecasts the later weeks ([Start from the nowcast](#start-from-the-nowcast));
+3. nowcasts every week up to the cut-off, and walks on from the latest week at least 5% reported with at least 5 cases ([Start from the nowcast](#start-from-the-nowcast));
 4. continues each nowcast trajectory with a random walk on $\log(1 + y)$ ([Forecast](#forecast));
 5. takes the walk's variance net of Poisson noise ([Forecast](#forecast));
 6. shares the delay, size and walk variance with a parent where a place has fewer than 10 cases a week ([Own or pooled estimates](#own-or-pooled-estimates)).
@@ -37,7 +37,7 @@ flowchart TD
     OBS["Observation model<br/>by weeks back k<br/>size φ<sub>p,k</sub>, removal b<sub>p,k</sub>"]
     X["Nowcast draw X<sub>p,i</sub>(w)<br/>max(0, Y<sub>p,o</sub> + A − B)<br/>A ~ NB(μ<sub>p</sub> − Y<sub>p,o</sub>, φ<sub>p,k</sub>)<br/>B ~ Poisson(b<sub>p,k</sub> Y<sub>p,o</sub>)"]
     SIG["Walk spread σ<sub>p</sub><br/>changes in log(1 + Y<sub>p,o</sub>)"]
-    W["Local level on log(1 + λ<sub>i</sub>)<br/>from X<sub>p,i</sub>(w<sub>0</sub>), updated by<br/>the reported counts after w<sub>0</sub><br/>places with no recent case 0<br/>until an introduction<br/>Poisson counts"]
+    W["Walk on log(1 + λ<sub>i</sub>)<br/>from X<sub>p,i</sub>(w<sub>0</sub>), the latest week<br/>at least 5% reported with 5 cases<br/>places with no recent case 0<br/>until an introduction<br/>Poisson counts"]
     NAT["National = sum of provinces<br/>sample by sample"]
 
     SNAP --> PAIR
@@ -215,7 +215,7 @@ $$
 
 Steps are summed within a sample, so each sample is one trajectory.
 `randomwalk` starts from the latest complete week ([below](#start-from-the-latest-complete-week)).
-`randomwalknowcast` starts from the week holding $c_o$ ([below](#start-from-the-nowcast)).
+`randomwalknowcast` starts from its nowcast of a recent week ([below](#start-from-the-nowcast)).
 
 $\sigma_p$ comes from the weekly changes $\Delta_w = \log\{1 + Y_{p,o}(w)\} - \log\{1 + Y_{p,o}(w - 1)\}$ over the 9 weeks ending at the latest complete week, so up to 8 changes.
 Each change carries Poisson noise, and the walk draws Poisson counts on top, so the noise is taken out of the spread:
@@ -259,13 +259,14 @@ Where no week reaches 0.95, `randomwalknowcast` takes the first week as the late
 
 `randomwalknowcast` walks on from each sample's own nowcast.
 
-1. The start week $w_0$ is the latest full week that is at least 5% reported and has at least 5 cases.
+1. The start week $w_0$ is the latest week, up to the one holding $c_o$, whose observed days are at least 5% reported and hold at least 5 cases.
    A place with no case in the 9 weeks to $c_o$, or with no such week, starts at the latest complete week instead.
    After it the place stays at 0 until an introduction, as above, floored at the counts reported.
 2. Weeks up to the week holding $c_o$ are the nowcast draws $X_{p,i}(w)$.
 3. In sample $i$ the walk starts from $X_{p,i}(w_0)$.
 4. If the week holding $c_o$ is partial, its nowcast covers only its days up to $c_o$.
    Its later days add a Poisson draw with the walk's rate that week times the share of the week they make up.
+   If that week is $w_0$, the walk's level is its nowcast scaled to a full week, $X_{p,i}(w_0) \times 7 / n$ with $n$ its observed days, and its later days add a Poisson draw with that level times $(7 - n) / 7$.
 5. Weeks after the one holding $c_o$ are the walk's draws.
 
 ## Health zones
