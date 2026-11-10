@@ -64,6 +64,7 @@ __all__ = [
     "sum_zones",
     "task_zones",
     "zone_fits",
+    "zone_mode",
     "zone_target",
     "zone_vintage_inputs",
 ]
@@ -82,12 +83,67 @@ ZONES_FILE: Final = "zones.csv.gz"
 """Zone samples in a zone fit's directory, summing to its provinces."""
 
 
-def zone_fits(path: Path | str = HUB_CONFIG) -> bool:
-    """Return whether `renewal` and `renewalbvd` fit health zones.
+ZONE_MODES: Final = ("province", "conditional", "joint")
+"""How `renewal` and `renewalbvd` forecast health zones:
 
-    `ZONES_ENV` if set, else `[renewal] zones` in `config/hub.toml`,
-    else False: the province fits stay the default until the setting is
-    flipped.
+- `province`: province fits, their samples split by `ZoneAllocator`
+  (the default);
+- `conditional`: the same province fits, their samples split by a share
+  model fitted to the zone counts (`zonesplit.ZoneShares`), a second
+  stage as in BVDOutbreakSize's zone model;
+- `joint`: zone fits (`ZoneRenewalModel`), provinces the zone sums.
+"""
+
+
+def zone_mode(path: Path | str = HUB_CONFIG) -> str:
+    """Return how `renewal` and `renewalbvd` forecast zones (`ZONE_MODES`).
+
+    `ZONES_ENV` if set, else `[renewal] zones` in `config/hub.toml`, else
+    `province`. False is `province` and true is `joint`.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        The hub config.
+
+    Returns
+    -------
+    str
+        One of `ZONE_MODES`.
+
+    Raises
+    ------
+    ValueError
+        If the setting is not a mode or a boolean.
+    """
+    words = {
+        "1": "joint",
+        "true": "joint",
+        "0": "province",
+        "false": "province",
+    }
+    env = os.environ.get(ZONES_ENV)
+    if env:
+        value: object = env.lower()
+    else:
+        config = Path(path)
+        raw = tomllib.loads(config.read_text()) if config.exists() else {}
+        value = raw.get("renewal", {}).get("zones", False)
+        if isinstance(value, bool):
+            value = "joint" if value else "province"
+    mode = words.get(str(value), str(value))
+    if mode not in ZONE_MODES:
+        raise ValueError(
+            f"{ZONES_ENV} or [renewal] zones must be one of {ZONE_MODES} "
+            f"or a boolean, got {value!r}."
+        )
+    return mode
+
+
+def zone_fits(path: Path | str = HUB_CONFIG) -> bool:
+    """Return whether `renewal` and `renewalbvd` are fitted on zones.
+
+    True for the `joint` mode of `zone_mode`.
 
     Parameters
     ----------
@@ -98,23 +154,8 @@ def zone_fits(path: Path | str = HUB_CONFIG) -> bool:
     -------
     bool
         True for zone fits.
-
-    Raises
-    ------
-    ValueError
-        If `ZONES_ENV` is not a boolean word.
     """
-    env = os.environ.get(ZONES_ENV)
-    if env:
-        words = {"1": True, "true": True, "0": False, "false": False}
-        if env.lower() not in words:
-            raise ValueError(f"{ZONES_ENV} must be 1, 0, true or false.")
-        return words[env.lower()]
-    config = Path(path)
-    if not config.exists():
-        return False
-    raw = tomllib.loads(config.read_text())
-    return bool(raw.get("renewal", {}).get("zones"))
+    return zone_mode(path) == "joint"
 
 
 def _data_dir() -> Path:

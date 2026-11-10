@@ -548,9 +548,11 @@ def zones_for_model(
     """Return health-zone samples that sum to a model's province samples.
 
     A random walk model with no fit is run on the zones and summed to the
-    provinces. Any other model's province samples, a fitted model's
-    included, are split across the zones by `ZoneAllocator`, so no model
-    is fitted here.
+    provinces. With `[renewal] zones = "conditional"`, `renewal` and
+    `renewalbvd` samples are split by a share model fitted to the zone
+    counts (`zonesplit.ZoneShares`). Any other model's province samples,
+    a fitted model's included, are split across the zones by
+    `ZoneAllocator`.
 
     Parameters
     ----------
@@ -576,4 +578,12 @@ def zones_for_model(
     model = None if name is None else get_model(name)
     if isinstance(model, RandomWalk) and name not in fitted:
         return zone_forecast(model, task, samples, counts, zones, daily_zones)
+    from bdbvhubrenewal.forecasters import zonerenewal
+
+    if name in zonerenewal.ZONE_VARIANTS and zonerenewal.zone_mode() == (
+        "conditional"
+    ):
+        from bdbvhubrenewal.forecasters.zonesplit import ZoneShares
+
+        return ZoneShares().allocate(samples, task, counts, zones)[0]
     return ZoneAllocator().allocate(samples, task, counts, zones)
