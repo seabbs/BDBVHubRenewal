@@ -2735,7 +2735,12 @@ Each province sample <span class="arithmatex">\(i\)</span> draws its zone shares
 \]</div>
 <p><span class="arithmatex">\(r_z\)</span> is the zone's onsets over the 2 weeks before the vintage and <span class="arithmatex">\(l_z\)</span> those over the 16 weeks before it.
 Recent shares are shrunk towards longer-run shares by <span class="arithmatex">\(n_0 = 100\)</span> pseudo-cases.
-The floor <span class="arithmatex">\(\chi_0 = 1/2\)</span> gives a zone with no cases a small share.
+The floor <span class="arithmatex">\(\chi_0 = 1/2\)</span> gives a zone with no recent cases a small share, if the zone has had a case.
+A zone with no case at the vintage has a tenth of the floor, <span class="arithmatex">\(\chi_0 = 1/20\)</span>.
+The models have no zone-level transmission: importation through <span class="arithmatex">\(W\)</span> and the introduction layer act between provinces.
+So a province sample holds no information on which new zones its cases reach.
+New zones in a province with cases are still reached, 6 in the 8 weeks to 10-03, and the small floor lets a province's cases reach them at about that rate.
+In a province with no case in any zone, every zone has <span class="arithmatex">\(\chi_0 = 1/2\)</span> and the zones share equally.
 Province samples are rounded.
 Each zone keeps its published count and the rest of the province sample <span class="arithmatex">\(Y^{(i)}(w)\)</span> is split,</p>
 <div class="arithmatex">\[
