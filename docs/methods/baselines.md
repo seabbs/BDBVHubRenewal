@@ -35,7 +35,7 @@ flowchart TD
     MU["Nowcast mean μ<sub>p</sub>(w)<br/>weekly fill<br/>shares F<sub>p,j</sub>(w) from Γ<sub>p</sub>"]
     RETRO["Earlier releases r &lt; o<br/>nowcast to release o"]
     OBS["Observation model<br/>by weeks back k<br/>size φ<sub>p,k</sub>"]
-    X["Nowcast draw X<sub>p,i</sub>(w)<br/>Y<sub>p,o</sub> + A<br/>A ~ NB(μ<sub>p</sub> − Y<sub>p,o</sub>, φ<sub>p,k</sub>)"]
+    X["Nowcast draw X<sub>p,i</sub>(w)<br/>Y<sub>p,o</sub> + A − B<br/>A ~ NB(μ<sub>p</sub> − Y<sub>p,o</sub>, φ<sub>p,k</sub>)<br/>B ~ Binomial(Y<sub>p,o</sub>, p<sub>ℓ,k</sub>)"]
     SIG["Walk spread σ<sub>p</sub><br/>changes in log(1 + Y<sub>p,o</sub>)"]
     W["Walk on log(1 + λ<sub>i</sub>)<br/>from each sample's completed<br/>cut-off week<br/>places with no recent case 0<br/>until an introduction<br/>Poisson counts"]
     NAT["National = sum of provinces<br/>sample by sample"]
@@ -148,16 +148,18 @@ x_j = x_{j-1} + \frac{x_{j-1} + 1 - F_{p,j-1}(w)}{F_{p,j-1}(w)} \big(F_{p,j}(w) 
 $$
 
 and the last column is the nowcast mean $\mu_p(w)$.
-With $\text{rem} = \mu_p(w) - Y_{p,o}(w) \ge 0$ the count still to come, the final count is the count reported plus new reports, as in baselinenowcast,
+With $\text{rem} = \mu_p(w) - Y_{p,o}(w) \ge 0$ the count still to come, the final count is the count reported plus new reports, as in baselinenowcast, less removals,
 
 $$
-X_{p,i}(w) = Y_{p,o}(w) + A,
+X_{p,i}(w) = Y_{p,o}(w) + A - B,
 \qquad
 A \sim \text{NB}\big(\text{rem},\ \phi_{p,k}\big),
+\qquad
+B \sim \text{Binomial}\big(Y_{p,o}(w),\ p_{\ell,k}\big),
 $$
 
-with mean $\text{rem}$ and size $\phi_{p,k}$.
-Weeks with no day younger than $D$ at $o$ have $\text{rem} = 0$, so they keep their reported count.
+with $A$ of mean $\text{rem}$ and size $\phi_{p,k}$, and $p_{\ell,k}$ the removal rate of the place's level $\ell$ (country, province or zone).
+Weeks with no day younger than $D$ at $o$ have $\text{rem} = 0$ and no removals, so they keep their reported count.
 Sample $i$ is one draw of $X_{p,i}(w)$ per week.
 
 $\phi_{p,k}$ is fitted as follows.
@@ -181,6 +183,12 @@ The weeks in the fit of $\phi_{p,k}$ are the errors at $k$.
 Where the estimate chosen by the [pooling rule](#own-or-pooled-estimates) has no errors at $k$, $\phi_{p,k} \approx 2.2$, the median of epinowcast's prior $1 / \sqrt{\phi} \sim \mathcal{N}^+(0, 1)$.
 The release backtest in [#152](https://github.com/seabbs/BDBVHubRenewal/pull/152) compared this default with Poisson removals of the reported count, new reports clipped at 0 with no preprocessing, a delay fitted without preprocessing, and baselinenowcast's proposed rounded normal and Skellam models of the signed change.
 The negative binomial options scored the same within sampling noise, and the signed models were too narrow, so the default is kept.
+
+$p_{\ell,k}$ is fitted on the same retrospective nowcasts, on the raw counts, which can fall.
+For each error, the net fall $B_{p,r}(w)$ is how far the raw count of $w$ on days up to $c_r$ fell from release $r$ to $o$, and 0 if it rose.
+$p_{\ell,k} = \sum B_{p,r}(w) / \sum Y_{p,r}(w)$, summed over the errors at $k$ of every place at level $\ell$, the Binomial maximum likelihood estimate.
+It never enters $\phi_{p,k}$, so the removals do not widen the new reports.
+[#PRNUM](https://github.com/seabbs/BDBVHubRenewal/pull/PRNUM) compares this with removals at the gross rate preprocessing takes back, per place, and with the size fitted on raw counts.
 
 ## Own or pooled estimates
 
@@ -391,7 +399,7 @@ A fit whose worst split $\hat R$ is above 1.05, or with more than 1% of its draw
 | Nowcast | Chain-ladder fill, with NB new reports fitted to retrospective nowcasts | NB new reports of the same model that fits the delay and the walk |
 | Walk | On $\log(1 + y)$ from a nowcast draw, spread from 8 changes net of Poisson noise | On $\log \lambda$ over all 16 weeks, spread pooled, fitted jointly |
 | Uncertainty in the estimates | None, point estimates | Each sample is a posterior draw |
-| Removals | None, falls are preprocessed out, so a draw is at least the count reported | None, the forecast is at least the count reported |
+| Removals | Binomial at the net fall rate of the place's level by weeks back | None, the forecast is at least the count reported |
 | Silent places | Introductions | `randomwalknowcast`'s draws, as in `renewalsp` |
 
 ## Limitations

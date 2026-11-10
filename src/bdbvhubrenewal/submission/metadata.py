@@ -140,7 +140,7 @@ MODEL_METADATA = {
         "model_name": "RandomWalk on a nowcast",
         "methods": (
             "Baselinenowcast chain ladder on daily release snapshots, "
-            "negative binomial new reports on the count to come, then a "
+            "negative binomial new reports less Binomial removals, then a "
             "log-scale random walk. Health zones and provinces, national "
             "the sum of provinces."
         ),
@@ -158,7 +158,9 @@ MODEL_METADATA = {
             # The uncertainty. Edit here if the observation model changes.
             "The observation model is baselinenowcast's negative binomial on "
             "the remaining count, fitted per horizon from retrospective "
-            "nowcasts with downward revisions moved onto earlier releases. "
+            "nowcasts with downward revisions moved onto earlier releases, "
+            "less Binomial removals of the count reported at the net fall "
+            "rate by horizon, pooled over each level. "
             "Each sample's completed latest week is carried forward as a "
             "random walk on the log scale with Poisson noise. A place under "
             "10 cases a week uses the delay, nowcast size and walk spread "
