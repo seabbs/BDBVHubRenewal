@@ -299,6 +299,30 @@ def model_line(provenance: Mapping[str, Any]) -> str:
     return f"Model: {name}, because {_first_reason(provenance)}."
 
 
+def fit_line(provenance: Mapping[str, Any]) -> str:
+    """Where the submitted model's fit came from, or "" for no fit.
+
+    A fitted candidate reads the fit store's fit of the same code and
+    data (`run.json` `store`, from `fit-store unpack`); it is fitted in
+    the run only for a round the store cannot hold.
+    """
+    run = provenance.get("run") or {}
+    if "store" not in run or run.get("kind") == "randomwalk":
+        return ""
+    store = run["store"]
+    if not store:
+        return (
+            "Fit: made in this run, as the fit store holds no fit for this "
+            "round."
+        )
+    where = (store.get("store_commit") or "unknown")[:7]
+    return (
+        f"Fit: read from the fit store, the `{store['model']}` fit at "
+        f"{store['origin']} (key `{store['key']}`, fitted at "
+        f"`{store['commit'][:7]}`, fit-store commit `{where}`)."
+    )
+
+
 def checks_table(
     fit: Mapping[str, Any] | None,
     ppc: Mapping[str, Any] | None,
@@ -376,6 +400,8 @@ def build(
     )
     out.append(SIGN_OFF + "\n")
     out.append(model_line(provenance) + "\n")
+    if fit_line(provenance):
+        out.append(fit_line(provenance) + "\n")
     if dry_run:
         out.append("Dry run: nothing was pushed.\n")
     if plot_url.startswith("http"):
