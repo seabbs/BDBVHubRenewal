@@ -7,7 +7,7 @@ core=$1; shift
 export WARM=${WARM:-250} DRAWS=${DRAWS:-150}
 for job in "$@"; do
   anchor=${job%%:*}; step=${job#*:}
-  log="$here/out/log_${anchor}_${step//,/_}.txt"
+  log="$here/out/log_${anchor}_${step//,/_}_${INIT:-median}.txt"
   echo "$(date -Is) start $job" >> "$here/out/progress.txt"
   if [ "$step" = geom ]; then
     BDBV_WALK_ANCHOR=$anchor taskset -c "$core" uv run python "$here/geom.py" renewal > "$log" 2>&1

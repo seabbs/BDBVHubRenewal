@@ -28,6 +28,9 @@ z0 = info.param_info.z
 _, unravel = ravel_pytree(z0)
 kw = dict(target_accept_prob=0.9, max_tree_depth=int(os.environ.get("DEPTH", 10)))
 init = z0
+if os.environ.get("INIT") == "map":
+    g = np.load(os.path.join(here, f"geom_renewal_{anchor}.npz"))
+    init = unravel(jnp.asarray(g["x"], jnp.float32))
 if metric == "laplace":
     g = np.load(os.path.join(here, f"geom_renewal_{anchor}.npz"))
     H = (g["H"] + g["H"].T) / 2
@@ -63,6 +66,9 @@ out["ess_per_s"] = lowest[0][1] / secs
 out["depth_hist"] = {int(k): int(v) for k, v in zip(*np.unique(np.floor(np.log2(steps + 1)).astype(int), return_counts=True))}
 out["ess_per_1k_grads"] = lowest[0][1] / max(1, out["grads"]) * 1000
 tag = f"{anchor}_{metric}_d{out['depth']}_s{out['seed']}"
+if os.environ.get("INIT") == "map":
+    tag += "_map"
+out["init"] = os.environ.get("INIT", "median")
 keep = {k: np.asarray(v) for k, v in samples.items()
         if k in z0 or k in ("onsets_expected_known", "onsets_expected_imputed")}
 np.savez(os.path.join(here, f"draws_{tag}.npz"), **keep)
