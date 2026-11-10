@@ -2175,6 +2175,16 @@ The renewal models are on the <a href="../model/">Renewal models</a> page.
 <code>randomwalknowcast</code> nowcasts the recent weeks with baselinenowcast<sup id="fnref:bnc-paper"><a class="footnote-ref" href="#fn:bnc-paper">1</a></sup><sup id="fnref:bnc-package"><a class="footnote-ref" href="#fn:bnc-package">2</a></sup> and forecasts with a random walk from the nowcast.
 <code>randomwalk</code> is the same walk from the latest complete week, with no nowcast.
 Both run at province and zone level (<a href="#health-zones">Health zones</a>), and national is the sum of the provinces.</p>
+<p>In brief, <code>randomwalknowcast</code>:</p>
+<ol>
+<li>follows baselinenowcast, through a JAX port of the R package with one named extension for release snapshots (<a href="#delay">Delay</a>);</li>
+<li>has an observation model for the nowcast as in baselinenowcast, negative binomial new reports on the count still to come, fitted from retrospective nowcasts (<a href="#nowcast">Nowcast</a>);</li>
+<li>nowcasts every week at least 5% reported, and forecasts the later weeks (<a href="#start-from-the-nowcast">Start from the nowcast</a>);</li>
+<li>continues each nowcast trajectory with a random walk on <span class="arithmatex">\(\log(1 + y)\)</span> (<a href="#forecast">Forecast</a>);</li>
+<li>takes the walk's variance net of Poisson noise (<a href="#forecast">Forecast</a>);</li>
+<li>shares the delay, size and walk variance with a parent where a place has fewer than 10 cases a week (<a href="#own-or-pooled-estimates">Own or pooled estimates</a>).</li>
+</ol>
+<p>Two further rules keep places with few or no cases sensible: introductions for places with no recent case (<a href="#forecast">Forecast</a>), and zone samples that sum to their province's (<a href="#health-zones">Health zones</a>).</p>
 <h2 id="structure">Structure<a class="headerlink" href="#structure" title="Permanent link">&para;</a></h2>
 <p><code>randomwalknowcast</code> nowcasts each recent week and walks forward from each nowcast draw.</p>
 <pre class="mermaid"><code>flowchart TD
@@ -2293,7 +2303,7 @@ Weeks with no day younger than <span class="arithmatex">\(D\)</span> at <span cl
 Sample <span class="arithmatex">\(i\)</span> is one draw of <span class="arithmatex">\(X_{p,i}(w)\)</span> per week.</p>
 <p><span class="arithmatex">\(\phi_{p,k}\)</span> and <span class="arithmatex">\(b_{p,k}\)</span> are fitted as follows.</p>
 <ol>
-<li>Take each earlier release <span class="arithmatex">\(r &lt; o\)</span> with an in-window pair among the releases up to <span class="arithmatex">\(r\)</span>.</li>
+<li>Take each earlier release <span class="arithmatex">\(r &lt; o\)</span> with an in-window pair among the releases up to <span class="arithmatex">\(r\)</span>, and a cut-off at most <span class="arithmatex">\(3D - 1.5D = 63\)</span> days before <span class="arithmatex">\(c_o\)</span>, the reference times baselinenowcast leaves for its retrospective nowcasts.</li>
 <li>Nowcast from the data up to <span class="arithmatex">\(r\)</span> with the delay of <span class="arithmatex">\(r\)</span>, <span class="arithmatex">\(\hat y_p(w)\)</span>.
    It is the same weekly fill from <span class="arithmatex">\(c_r\)</span>, with the shares taken relative to the count at <span class="arithmatex">\(c_o\)</span>, so its last column is at <span class="arithmatex">\(c_o\)</span>.</li>
 <li>For weeks back <span class="arithmatex">\(k\)</span> with a day younger than <span class="arithmatex">\(D\)</span> at <span class="arithmatex">\(r\)</span>, and where <span class="arithmatex">\(Y_{p,r}(w) &gt; 0\)</span> or <span class="arithmatex">\(\hat y_p(w) &gt; 0\)</span>, compare the count of <span class="arithmatex">\(w\)</span> on days up to <span class="arithmatex">\(c_r\)</span> between releases <span class="arithmatex">\(r\)</span> and <span class="arithmatex">\(o\)</span>.
@@ -2352,9 +2362,12 @@ v(y) = \frac{y}{(1 + y)^2},
 The noise matters only for small places. At 10 cases a week the term for a change is about 0.17, and at 250 it is under 0.01.
 At a few cases a week the delta method understates the noise, so some of it stays in <span class="arithmatex">\(\sigma_p\)</span>.
 A place whose <span class="arithmatex">\(\sigma_p^2\)</span> is 0 or below, or which has fewer than 2 changes, has no own estimate, and takes its parent's by the <a href="#own-or-pooled-estimates">own-or-pooled rule</a>.
+If no parent nor the country has a variance above 0, the model gives no forecast for that origin.
 A pooled <span class="arithmatex">\(\sigma_p\)</span> uses the changes and noise of all the places in the pool together.</p>
 <p>A place with no case in the 9 weeks to <span class="arithmatex">\(c_o\)</span> stays at 0 until a new introduction, which starts its walk from a Poisson(1) count given at least 1.
-An introduction occurs each week after the latest complete week with probability <span class="arithmatex">\(q_p\)</span>, times the share of the week not yet reported, where <span class="arithmatex">\(q_p\)</span> is the share of weeks with a case after 9 weeks without one in the place and its siblings.</p>
+An introduction occurs each week after the latest complete week with probability <span class="arithmatex">\(q_p\)</span>, times the share of the week not yet reported, where <span class="arithmatex">\(q_p\)</span> is the share of weeks with a case after 9 weeks without one in the place and its siblings.
+Without this rule a silent place would walk from a nowcast near 0, with baselinenowcast's <span class="arithmatex">\(+1\)</span> and a pooled spread, and so forecast a few cases every week.
+Most zones and several provinces are silent at any origin, and their truth is almost always 0, so the rule keeps them at exactly 0 unless a case is likely from what their siblings show.</p>
 <h2 id="start-from-the-latest-complete-week">Start from the latest complete week<a class="headerlink" href="#start-from-the-latest-complete-week" title="Permanent link">&para;</a></h2>
 <p><code>randomwalk</code> makes no nowcast.
 Its start week <span class="arithmatex">\(w_0\)</span> is the latest week with</p>
@@ -2387,25 +2400,57 @@ Province sample <span class="arithmatex">\(Y^{(i)}(w)\)</span> is apportioned ov
 y^{(i)}_z(w) \approx Y^{(i)}(w)\, \frac{x^{(i)}_z(w)}{\sum_{z'} x^{(i)}_{z'}(w)}.
 \]</div>
 <p>Largest remainders make the values whole numbers that sum to <span class="arithmatex">\(Y^{(i)}(w)\)</span>, so zone samples sum to their province's samples (<a href="../model/#health-zones">Renewal models</a>).
-Where every <span class="arithmatex">\(x^{(i)}_z(w)\)</span> is 0 the split uses the Dirichlet mean shares of the <a href="../model/#split-of-province-samples">Renewal models</a> page.</p>
+Where every <span class="arithmatex">\(x^{(i)}_z(w)\)</span> is 0 the split uses the Dirichlet mean shares of the <a href="../model/#split-of-province-samples">Renewal models</a> page.
+Zones are reconciled because their own walks are noisy and do not sum to their province's, which pools more data.
+The split keeps each zone's share from its own sample, and the province sets the total, so the zone, province and national forecasts describe one set of trajectories.</p>
 <h2 id="partially-pooled-variant">Partially pooled variant<a class="headerlink" href="#partially-pooled-variant" title="Permanent link">&para;</a></h2>
-<p><code>pprandomwalknowcast</code> is <code>randomwalknowcast</code> with partial pooling over zones, provinces and the country in place of the <a href="#own-or-pooled-estimates">own-or-pooled rule</a>.
-The pooled estimates are the delay <span class="arithmatex">\(\Delta_p\)</span>, the walk spread <span class="arithmatex">\(\sigma_p\)</span>, the size <span class="arithmatex">\(\phi_{p,k}\)</span> and the removal rate <span class="arithmatex">\(b_{p,k}\)</span>.
-The nowcast draws, the walk and the zone reconciliation are the same.
-Each is fitted in numpyro with NUTS, with 2 chains of 500 warm-up and 500 draws run in sequence from the prior medians, at target acceptance 0.9.
-A fit whose worst split <span class="arithmatex">\(\hat R\)</span> is above 1.05, or with more than 1% of its draws divergent, raises, and the model gives no forecast for that origin.</p>
+<p><code>pprandomwalknowcast</code> is <code>randomwalknowcast</code> with partially pooled point estimates.
+Its delay <span class="arithmatex">\(\Delta_p\)</span>, walk spread <span class="arithmatex">\(\sigma_p\)</span> and nowcast size <span class="arithmatex">\(\phi_{p,k}\)</span> come from one hierarchical numpyro model, which pools each place towards its parent, in place of the <a href="#own-or-pooled-estimates">own-or-pooled rule</a>.
+The model only estimates them.
+Their posterior medians are plugged into <code>randomwalknowcast</code>'s nowcast and walk, so the forecasts do not carry their posterior uncertainty.</p>
+<p><strong>The same as <code>randomwalknowcast</code>.</strong>
+The release snapshots, delay window and preprocessing, the weekly nowcast fill, the retrospective errors, the start rule, the nowcast draws, the walk, the introductions and the zone reconciliation.</p>
+<p><strong>Different.</strong></p>
+<table>
+<thead>
+<tr>
+<th>Estimate</th>
+<th><code>randomwalknowcast</code></th>
+<th><code>pprandomwalknowcast</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Delay <span class="arithmatex">\(\Delta_p\)</span></td>
+<td>Least squares on the log ratios of sums, own or pooled parent's</td>
+<td>Poisson increments, below, pooled over the hierarchy</td>
+</tr>
+<tr>
+<td>Walk spread <span class="arithmatex">\(\sigma_p\)</span></td>
+<td>Variance of the changes net of Poisson noise, own or pooled parent's</td>
+<td>Normal changes with variance <span class="arithmatex">\(\sigma_p^2\)</span> plus the Poisson noise, pooled</td>
+</tr>
+<tr>
+<td>Size <span class="arithmatex">\(\phi_{p,k}\)</span></td>
+<td>Maximum likelihood per <span class="arithmatex">\(k\)</span>, own or pooled parent's</td>
+<td>Negative binomial new reports, pooled</td>
+</tr>
+<tr>
+<td>Which places enter</td>
+<td>Each place's own data, or its pool's</td>
+<td>Only the places forecast; their parents are latent centres</td>
+</tr>
+</tbody>
+</table>
 <p>Each parameter <span class="arithmatex">\(\theta\)</span> of place <span class="arithmatex">\(p\)</span> is its parent's plus an offset for the place's tier,</p>
 <div class="arithmatex">\[
 \theta_p = \theta_{\mathrm{pa}(p)} + \tau_{v(p)}\, z_p,
 \qquad
 z_p \sim \mathcal{N}(0, 1),
-\qquad
-\tau_v \sim \mathcal{N}^+(0, 0.5^2),
 \]</div>
 <p>with <span class="arithmatex">\(v(p)\)</span> the tier of <span class="arithmatex">\(p\)</span> (province or zone) and one <span class="arithmatex">\(\tau_v\)</span> for each tier and parameter.
-<span class="arithmatex">\(\theta\)</span> is <span class="arithmatex">\(\log \Delta_p(j)\)</span> for each age <span class="arithmatex">\(j\)</span>, <span class="arithmatex">\(\log \sigma_p\)</span>, and <span class="arithmatex">\(\log \phi_{p,k}\)</span> and <span class="arithmatex">\(\log b_{p,k}\)</span> for each week back <span class="arithmatex">\(k\)</span>.
-The country's values have priors <span class="arithmatex">\(\mathcal{N}(-3, 2^2)\)</span>, <span class="arithmatex">\(\mathcal{N}(\log 0.2, 1)\)</span>, <span class="arithmatex">\(\mathcal{N}(0, 1.5^2)\)</span> and <span class="arithmatex">\(\mathcal{N}(\log 0.005, 1.5^2)\)</span>.
-A place's counts are the sum of its children's, so for the walk spread and the nowcast uncertainty only the places forecast (the provinces, or the zones at zone level) enter the likelihood, and their parents are latent centres.</p>
+<span class="arithmatex">\(\theta\)</span> is <span class="arithmatex">\(\log \Delta_p(j)\)</span> for each age <span class="arithmatex">\(j\)</span>, <span class="arithmatex">\(\log \sigma_p\)</span>, and <span class="arithmatex">\(\log \phi_{p,k}\)</span> for each week back <span class="arithmatex">\(k\)</span>.
+A place's counts are the sum of its children's, so only the places forecast (the provinces, or the zones at zone level) enter the likelihood, and each case enters once.</p>
 <ul>
 <li>
 <p><strong>Delay.</strong> For each gap <span class="arithmatex">\(s\)</span> and age <span class="arithmatex">\(x\)</span> with <span class="arithmatex">\(\sum C_{p,r}(t) &gt; 0\)</span>, the increment is Poisson,</p>
@@ -2416,16 +2461,48 @@ A place's counts are the sum of its children's, so for the walk spread and the n
 </ul>
 <p>with the sums, window and preprocessing of the <a href="#delay">delay</a>.
   With one place and a gap of 1 its maximum likelihood estimate is baselinenowcast's chain ladder factor.
-  A place's increments at age <span class="arithmatex">\(x\)</span> enter only where its denominator there, summed over the pairs, is at least 10 cases, as in the <a href="#own-or-pooled-estimates">own-or-pooled rule</a>, and the country's always do.
-  Other ages are informed only through the pooling.
-  A parent's increments are its children's summed, so a case at an age where both fit their own enters the likelihood once for each tier.
   It is fitted at the origin and at each earlier release that gives errors.
-- <strong>Walk spread.</strong> The weekly changes of <span class="arithmatex">\(\log\{1 + Y_{p,o}(w)\}\)</span> over the <a href="#forecast">forecast</a> window are <span class="arithmatex">\(\mathcal{N}(0, \sigma_p^2)\)</span>.
-  Changes between two weeks with no cases are left out.
-- <strong>Nowcast uncertainty.</strong> The new reports <span class="arithmatex">\(A_{p,r}(w)\)</span> are <span class="arithmatex">\(\text{NB}(\widehat{\text{rem}}, \phi_{p,k})\)</span> and the removals <span class="arithmatex">\(B_{p,r}(w)\)</span> are <span class="arithmatex">\(\text{Poisson}(b_{p,k} Y_{p,r}(w))\)</span>, on the errors of <a href="#nowcast">the fit</a>, made with the pooled delay of each earlier release.</p>
-<p>The posterior medians of <span class="arithmatex">\(\Delta_p\)</span>, <span class="arithmatex">\(\sigma_p\)</span>, <span class="arithmatex">\(\phi_{p,k}\)</span> (kept in <span class="arithmatex">\([0.1, 1000]\)</span>) and <span class="arithmatex">\(b_{p,k}\)</span> replace the estimates of <code>randomwalknowcast</code>.
-So the forecasts carry the pooled point estimates, not their posterior spread.
+- <strong>Walk spread.</strong> The weekly changes <span class="arithmatex">\(\Delta_w\)</span> of <span class="arithmatex">\(\log\{1 + Y_{p,o}(w)\}\)</span> over the <a href="#forecast">forecast</a> window are <span class="arithmatex">\(\mathcal{N}\big(0, \sigma_p^2 + v\{Y_{p,o}(w - 1)\} + v\{Y_{p,o}(w)\}\big)\)</span>.
+  A change between two weeks with no cases has no noise, so its density grows without bound as <span class="arithmatex">\(\sigma_p\)</span> falls to 0, and it is left out.
+- <strong>Nowcast uncertainty.</strong> The new reports <span class="arithmatex">\(A_{p,r}(w)\)</span> are <span class="arithmatex">\(\text{NB}(\widehat{\text{rem}}, \phi_{p,k})\)</span> on the errors of <a href="#nowcast">the fit</a>, made with the pooled delay of each earlier release.</p>
+<p><strong>Priors and sampler.</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Prior of the country's value</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><span class="arithmatex">\(\log \Delta(j)\)</span></td>
+<td><span class="arithmatex">\(\mathcal{N}(-3, 2^2)\)</span></td>
+<td>Daily log growth about 0.05, 0.007 to 0.37 within one sd</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(\log \sigma\)</span></td>
+<td><span class="arithmatex">\(\mathcal{N}(\log 0.2, 1)\)</span></td>
+<td>Weekly log changes of about 0.2, 0.07 to 0.54 within one sd</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(\log \phi_k\)</span></td>
+<td><span class="arithmatex">\(\mathcal{N}(0, 1.5^2)\)</span></td>
+<td>Sizes about 1, 0.2 to 4.5 within one sd</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(\tau_v\)</span></td>
+<td><span class="arithmatex">\(\mathcal{N}^+(0, 0.5^2)\)</span></td>
+<td>Median offset sd 0.34, a place within a factor of about 1.4 of its parent</td>
+</tr>
+</tbody>
+</table>
+<p>Each fit runs NUTS with 2 chains of 500 warm-up and 500 draws, in sequence, from the prior medians, at target acceptance 0.9.
+A fit whose worst split <span class="arithmatex">\(\hat R\)</span> is above 1.05, or with more than 1% of its draws divergent, raises, and the model gives no forecast for that origin.
+The posterior medians of <span class="arithmatex">\(\phi_{p,k}\)</span> are kept in <span class="arithmatex">\([0.1, 1000]\)</span>, the range of baselinenowcast's fit.
 It is scored on the real releases at province and zone level.</p>
+<p><strong>Open.</strong> Each forecast sample could instead take its own posterior draw of <span class="arithmatex">\((\Delta, \sigma, \phi)\)</span>, which would make the forecast carry the uncertainty of the estimates.
+That choice is not made yet.</p>
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
 <p>While the release history in the delay window is shorter than <span class="arithmatex">\(D\)</span>, no chain to the final count can be checked against a final count.
 Each delay factor rests on one onset day per age per pair, and the youngest ages rest on few cases even nationally.
