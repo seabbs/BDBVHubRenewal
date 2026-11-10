@@ -439,7 +439,7 @@ def _interval(
 
 TIER_SCALE = {
     "delay_mu": 0.5,
-    "delay_sd": 0.25,
+    "delay_sd": 0.1,
     "hazard_level": 0.5,
     "hazard_slope": 0.5,
     "sigma": 0.5,
