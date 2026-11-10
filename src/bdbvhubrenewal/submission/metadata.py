@@ -202,8 +202,9 @@ MODEL_METADATA = {
             "one posterior draw: reported counts plus negative binomial "
             "draws of the cases still to come, and the walk continued over "
             "the forecast weeks. Places with no case in nine weeks are not "
-            "fitted and stay at 0 until an introduction, as in "
-            "randomwalknowcast. The national value is the sum of provinces. "
+            "fitted and take randomwalknowcast's draws, 0 until an "
+            "introduction, as renewalsp does. The national value is the "
+            "sum of provinces. "
             "See https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."
         ),
         "data_inputs": (

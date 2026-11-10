@@ -11,10 +11,8 @@ the country.
 
 Each place $p$ the task forecasts is a leaf of the place hierarchy.
 A leaf with no case in the latest `walk_weeks` weeks is silent: it is
-not fitted, and draws introductions as in `randomwalknowcast`
-(`introductions.silent_trajectories`), with its start week and the share
-of each week unreported from this model's posterior median delay and its
-walk spread the posterior median.
+not fitted and, as in `renewalsp`, takes `randomwalknowcast`'s draws,
+exactly 0 until an introduction and then its walk.
 Every other leaf is fitted.
 Its expected final count in hub week $w$ is $\lambda_{p,w}$, a random
 walk on the log scale from the first fitted week,
@@ -85,7 +83,7 @@ from __future__ import annotations
 
 import datetime as dt
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import jax
@@ -104,7 +102,6 @@ from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.snapshots import (
     SnapshotArrays,
     snapshot_arrays,
-    week_sum,
     weekly_sums,
 )
 from bdbvhubrenewal.forecasters.base import (
@@ -119,11 +116,7 @@ from bdbvhubrenewal.forecasters.chain import (
     _delay_counts,
     _pairs_at,
 )
-from bdbvhubrenewal.forecasters.introductions import (
-    introduction_rates,
-    silent_places,
-    silent_trajectories,
-)
+from bdbvhubrenewal.forecasters.introductions import silent_places
 from bdbvhubrenewal.forecasters.randomwalk import (
     RandomWalkNowcast,
     _clear_caches,
@@ -663,11 +656,26 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
             ),
             axis=0,
         )  # [L, D + 1]
-        values, weeks = self.predict(post, tri, snap, task, share, silent)
+        values, weeks = self.predict(post, tri, snap, task)
         self.delay_summary = self._delay_summary(share, snap, task.vintage)
         self._describe(post, snap, task, silent)
         rows = [snap.locations.index(c) for c in task.locations]
-        return frame(task, weeks, values, rows)
+        out = frame(task, weeks, values, rows)
+        quiet = [c for c in task.locations if silent[snap.locations.index(c)]]
+        if not quiet:
+            return out
+        # As renewalsp does, a silent place takes randomwalknowcast's
+        # draws: exactly 0 until an introduction, then its walk.
+        walk = RandomWalkNowcast(settings=self.settings).forecast(
+            replace(task, report_by={})
+        )
+        return pd.concat(
+            [
+                out.loc[~out["location"].isin(quiet)],
+                walk.loc[walk["location"].isin(quiet), list(out.columns)],
+            ],
+            ignore_index=True,
+        )
 
     def predict(
         self,
@@ -675,8 +683,6 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
         tri: Triangle,
         snap: SnapshotArrays,
         task: ForecastTask,
-        share: np.ndarray,
-        silent: np.ndarray,
     ) -> tuple[np.ndarray, list[str]]:
         """Draw final counts for every place and week from the posterior.
 
@@ -690,19 +696,13 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
             The arrays.
         task : ForecastTask
             The task, for the number of samples, the weeks and the seed.
-        share : numpy.ndarray
-            Posterior median share reported by age of each place,
-            `[L, D + 1]`, for the introductions.
-        silent : numpy.ndarray
-            Places with no recent case, `[L]`. A silent leaf is not
-            fitted and draws introductions.
 
         Returns
         -------
         tuple
             Samples `[S, L, H]` for every hub week from the first data
-            week to the last target, and those weeks. A parent is the
-            sum of its leaves.
+            week to the last target, and those weeks. Places that are
+            not fitted are 0.
         """
         rng = task.rng("pprandomwalknowcast")
         o = len(snap.releases) - 1
@@ -744,68 +744,7 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
         values[:, live, n_data:] = _neg_binomial(
             rng, ahead, np.broadcast_to(7.0 * phi, ahead.shape)
         )
-        self._introductions(values, snap, share, silent, post, rng)
-        # A parent is the sum of the leaves below it.
-        leaves = np.flatnonzero(Tree.of(snap.parent).leaf)
-        below = Tree.of(snap.parent).path[leaves].T.copy()  # [L, leaves]
-        below[snap.parent < 0] = 1.0
-        values = np.einsum("lp,sph->slh", below, values[:, leaves])
         return values, weeks
-
-    def _introductions(
-        self,
-        values: np.ndarray,
-        snap: SnapshotArrays,
-        share: np.ndarray,
-        silent: np.ndarray,
-        post: Posterior,
-        rng: np.random.Generator,
-    ) -> None:
-        """Fill the silent leaves of `values` with their introductions.
-
-        As `randomwalknowcast` does for a silent place
-        (`introductions.silent_trajectories`), with the week's share
-        reported and the start week from this model's delay, and the walk
-        spread its posterior median.
-        """
-        quiet = silent & Tree.of(snap.parent).leaf
-        if not quiet.any():
-            return
-        o = len(snap.releases) - 1
-        settings = self.settings
-        reported = weekly_sums(snap, o)
-        age = snap.cut[o] - np.arange(snap.week.size)
-        pi = np.where(
-            age >= 0, share[:, np.clip(age, 0, settings.max_delay)], 0.0
-        )
-        complete = week_sum(snap, pi) / 7.0
-        good = complete >= settings.completeness
-        start = np.where(
-            good.any(axis=1),
-            snap.n_weeks - 1 - np.argmax(good[:, ::-1], axis=1),
-            0,
-        )
-        q = introduction_rates(
-            reported, start, snap.parent, settings.walk_weeks
-        )
-        n, _, n_all = values.shape
-        y = silent_trajectories(
-            jax.random.key(int(rng.integers(0, 2**31 - 1))),
-            quiet,
-            q,
-            1.0 - np.clip(complete, 0.0, 1.0),
-            start,
-            np.median(post.sigma, axis=0),
-            n_all,
-            n,
-        )
-        for loc in np.flatnonzero(quiet):
-            s = int(start[loc])
-            values[:, loc, : s + 1] = reported[loc, : s + 1]
-            values[:, loc, s + 1 :] = y[loc, :, : n_all - s - 1]
-            values[:, loc, : snap.n_weeks] = np.maximum(
-                values[:, loc, : snap.n_weeks], reported[loc]
-            )
 
     def _delay_summary(
         self, share: np.ndarray, snap: SnapshotArrays, vintage: str

@@ -373,10 +373,8 @@ National is the sum of the provinces by sample, and zones are reconciled to prov
 
 **Silent places.**
 A silent leaf has no case to fit, and a walk from a $\lambda$ near 0 gave divergent draws.
-It is its reported counts, then 0 until an introduction, as in `randomwalknowcast` ([Forecast](#forecast)).
-Its start week, and the share of each week not yet reported, come from this model's posterior median $\pi_p$.
-After an introduction it walks with its posterior median $\sigma_p$.
-This is the one part of the model that is not drawn from the posterior.
+As in `renewalsp` ([Renewal models](model.md)), it takes `randomwalknowcast`'s draws: its reported counts, then exactly 0 until an introduction, then a walk ([Forecast](#forecast)).
+This is the one part of the model that is not drawn from its posterior.
 
 **Scoring.**
 On the reported target, the backtest maps its final counts to what a later release shows by the posterior median $\pi_p(a)$ of each place ([Evaluation](evaluation.md#real-releases)).
@@ -398,7 +396,7 @@ A fit whose worst split $\hat R$ is above 1.05, or with more than 1% of its draw
 | Walk | On $\log(1 + y)$ from a nowcast draw, spread from 8 changes net of Poisson noise | On $\log \lambda$ over all 16 weeks, spread pooled, fitted jointly |
 | Uncertainty in the estimates | None, point estimates | Each sample is a posterior draw |
 | Removals | Poisson, counts can fall | None, the forecast is at least the count reported |
-| Silent places | Introductions | Introductions, from its own delay |
+| Silent places | Introductions | `randomwalknowcast`'s draws, as in `renewalsp` |
 
 ## Limitations
 
