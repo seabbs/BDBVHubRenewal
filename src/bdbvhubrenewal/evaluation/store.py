@@ -15,7 +15,8 @@ origin, which holds only the releases up to the origin; the built model,
 whose representation gives its variant and resolved sampler settings;
 the BVDOutbreakSize release a BVD model uses; the code the model's fit
 can run (`fit_code`, without docstrings or comments, and
-`run_forecasts`); and the runtime dependencies locked in `uv.lock`.
+`run_forecasts`), less the zone split, which runs at load; and the
+runtime dependencies locked in `uv.lock`.
 A new release adds one fit per model and leaves the older ones valid,
 while a change to a model's code or settings refits every origin of the
 models that run it, and no other.
@@ -70,6 +71,7 @@ from bdbvhubrenewal.forecasters import (
 __all__ = [
     "STATUS_FILE",
     "STORE_ENTRIES",
+    "STORE_SKIP",
     "StoreStatus",
     "StoredFit",
     "build_model",
@@ -95,6 +97,16 @@ STORE_ENTRIES: Final = (
     "src/bdbvhubrenewal/evaluation/store.py",
 )
 """The shared modules a stored fit calls: `fit` and `run_forecasts`."""
+
+STORE_SKIP: Final = (
+    "src/bdbvhubrenewal/evaluation/zones.py",
+    "src/bdbvhubrenewal/forecasters/zones.py",
+)
+"""The zone split, which `STORE_ENTRIES` import but a fit does not call.
+
+A stored fit holds national and province samples only, and its zones are
+split from them at load (`forecasters.zones.zones_for_model`).
+"""
 
 STATUS_FILE: Final = "fit-store.json"
 """What `load` used, written beside the results for the docs."""
@@ -188,7 +200,8 @@ def fit_code(model: str, root: Path | str = ".") -> list[str]:
     """List the source files a stored fit of one model can run.
 
     The import closure of the model's module and `STORE_ENTRIES`
-    (`evaluation.digest.model_code`), without the other models' modules.
+    (`evaluation.digest.model_code`), without the other models' modules
+    and the zone split (`STORE_SKIP`).
 
     Parameters
     ----------
@@ -204,7 +217,7 @@ def fit_code(model: str, root: Path | str = ".") -> list[str]:
     """
     from bdbvhubrenewal.evaluation.digest import model_code
 
-    return model_code(model, root, STORE_ENTRIES, cli=False)
+    return model_code(model, root, STORE_ENTRIES, cli=False, skip=STORE_SKIP)
 
 
 @functools.cache
