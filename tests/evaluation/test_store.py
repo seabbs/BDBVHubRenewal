@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import json
 import shutil
 from pathlib import Path
@@ -154,6 +155,25 @@ def test_keys_follow_the_task_settings_and_bvd_release(
     moved = store.current_keys(tasks, models, sampler, "c")
     assert moved[("renewal", latest)] == keys[("renewal", latest)]
     assert moved[("renewalbvd", latest)] != keys[("renewalbvd", latest)]
+
+
+@pytest.mark.usefixtures("in_root")
+def test_skipped_origins_leave_the_other_keys_alone(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    config: BacktestConfig,
+    tasks: dict[str, ForecastTask],
+) -> None:
+    sampler = store.samplers()
+    models = ["renewal"]
+    keys = store.current_keys(tasks, models, sampler, "c")
+    skip = dataclasses.replace(config, skip_origins=("2026-08-18",))
+    kept = store.origin_tasks(target, delays, skip, daily)
+    assert "2026-08-18" not in kept
+    assert store.current_keys(kept, models, sampler, "c") == {
+        k: v for k, v in keys.items() if k[1] != "2026-08-18"
+    }
 
 
 @pytest.fixture
