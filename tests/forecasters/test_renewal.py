@@ -668,6 +668,7 @@ def test_provinces_are_fitted_largest_first(
 
 
 @pytest.mark.slow
+@pytest.mark.usefixtures("quiet")
 def test_provinces_in_parallel_match_one_after_another(
     task: ForecastTask, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -680,9 +681,10 @@ def test_provinces_in_parallel_match_one_after_another(
         "seed": 1,
     }
     counts = task.target.groupby("location")["total"].sum()
-    counts = counts.drop("CD", errors="ignore")
+    counts = counts.drop(["CD", task.locations[-1]], errors="ignore")
     two = tuple(counts.sort_values().index[-2:])
-    sub = replace(task, locations=two)
+    # The last province stays in, silent, as the random walk stand-in.
+    sub = replace(task, locations=(*two, task.locations[-1]))
     model = rn.RenewalModel(rn.VARIANTS["renewalsp"], sampler=tiny)
     monkeypatch.setenv(rn.PROVINCE_WORKERS_ENV, "1")
     serial = model.forecast_fit(sub)
