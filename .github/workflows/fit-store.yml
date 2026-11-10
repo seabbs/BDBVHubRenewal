@@ -6,9 +6,12 @@ name: Fit store
 # keys the store lacks, so only those are fitted: a model code change
 # refits every origin, and a new hub release adds one fit per model.
 # Pages reads the store and never fits; this workflow rebuilds it when
-# fits are stored.
+# fits are stored. The submission (submit.yml) reads the same keys and
+# starts this workflow when a round's fits are missing, so the newest
+# origin is fitted and stored first, before any backfill.
 #
-#   plan -> fit (read-only, one job per missing fit) -> store -> pages
+#   plan -> fit-current -> store-current (the newest origin)
+#        -> fit-rest -> store-rest (every other origin) -> pages
 #
 # Only `store` can write, and it runs no project code. Fits are written
 # to fit-store from main only. A dispatch from another branch must name
@@ -21,7 +24,9 @@ on:
       - 'src/bdbvhubrenewal/baselinenowcast/**'
       - 'src/bdbvhubrenewal/data/**'
       - 'src/bdbvhubrenewal/evaluation/backtest.py'
+      - 'src/bdbvhubrenewal/evaluation/ppc.py'
       - 'src/bdbvhubrenewal/evaluation/store.py'
+      - 'src/bdbvhubrenewal/submission/fitting.py'
       - 'src/bdbvhubrenewal/forecasters/**'
       - 'src/bdbvhubrenewal/model/**'
       - 'config/backtest.toml'
@@ -37,7 +42,9 @@ on:
       - 'src/bdbvhubrenewal/baselinenowcast/**'
       - 'src/bdbvhubrenewal/data/**'
       - 'src/bdbvhubrenewal/evaluation/backtest.py'
+      - 'src/bdbvhubrenewal/evaluation/ppc.py'
       - 'src/bdbvhubrenewal/evaluation/store.py'
+      - 'src/bdbvhubrenewal/submission/fitting.py'
       - 'src/bdbvhubrenewal/forecasters/**'
       - 'src/bdbvhubrenewal/model/**'
       - 'config/backtest.toml'
@@ -59,6 +66,10 @@ on:
         default: ''
       models:
         description: Fit only these models (space-separated; blank for all)
+        type: string
+        default: ''
+      origins:
+        description: Fit only these origins (space-separated; blank for all)
         type: string
         default: ''
       retry_failed:
@@ -87,8 +98,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
-      matrix: ${{ steps.plan.outputs.matrix }}
       count: ${{ steps.plan.outputs.count }}
+      current: ${{ steps.plan.outputs.current }}
+      current_count: ${{ steps.plan.outputs.current_count }}
+      rest: ${{ steps.plan.outputs.rest }}
+      rest_count: ${{ steps.plan.outputs.rest_count }}
       write: ${{ steps.guard.outputs.write }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -125,11 +139,14 @@ jobs:
         id: plan
         env:
           MODELS: ${{ inputs.models }}
+          ORIGINS: ${{ inputs.origins }}
           RETRY: ${{ inputs.retry_failed }}
         run: |
           args=(--store "$STORE" --out matrix.json --keys keys.json)
           # shellcheck disable=SC2206
           [ -n "$MODELS" ] && args+=(--models $MODELS)
+          # shellcheck disable=SC2206
+          [ -n "$ORIGINS" ] && args+=(--origins $ORIGINS)
           [ "$RETRY" = true ] && args+=(--retry-failed)
           uv run bdbvhubrenewal fit-store plan "${args[@]}" \
             | tee -a "$GITHUB_STEP_SUMMARY"
@@ -140,7 +157,20 @@ jobs:
             ({"renewalbvd": 0, "renewal": 1, "renewalsp": 2}[.model] // 3),
             (.origin | explode | map(-.)))' matrix.json > sorted.json
           mv sorted.json matrix.json
-          echo "matrix=$(cat matrix.json)" >> "$GITHUB_OUTPUT"
+          # The newest origin's fits are fitted and stored first: they are
+          # the submission's, and a backfill can take hours.
+          newest=$(jq -r '[.include[].origin] | max // ""' matrix.json)
+          for part in current rest; do
+            op='=='
+            [ "$part" = rest ] && op='!='
+            jq -c --arg o "$newest" \
+              ".include |= map(select(.origin $op \$o))" matrix.json \
+              > "$part.json"
+            {
+              echo "$part=$(cat "$part.json")"
+              echo "${part}_count=$(jq '.include | length' "$part.json")"
+            } >> "$GITHUB_OUTPUT"
+          done
           echo "count=$(jq '.include | length' matrix.json)" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: steps.guard.outputs.write == 'true' && steps.plan.outputs.count != '0'
@@ -156,26 +186,24 @@ jobs:
           name: plan
           path: |
             keys.json
-            matrix.json
+            current.json
+            rest.json
           retention-days: 3
 
-  # As fit-candidates.yml: one job per fit, chains in parallel
-  # (`chain_method` in each sampler table). Read-only: the fit is handed
-  # to `store` as an artefact.
-  fit:
+  # One job per fit, chains in parallel (`chain_method` in each sampler
+  # table). Read-only: the fit is handed to `store-current` as an
+  # artefact. The newest origin's fits come first.
+  fit-current:
     name: Fit ${{ matrix.model }} at ${{ matrix.origin }}
     needs: plan
-    if: needs.plan.outputs.write == 'true' && needs.plan.outputs.count != '0'
+    if: needs.plan.outputs.write == 'true' && needs.plan.outputs.current_count != '0'
     runs-on: ${{ vars.FIT_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 350
     strategy:
       fail-fast: false
-      # With the longest fits first, 8 runners finish a full refit as soon
-      # as 12 (the longest fit, about 4 h). The rest of the 20 are left
-      # for the submission and Pages workflows.
       max-parallel: 8
-      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
-    steps:
+      matrix: ${{ fromJSON(needs.plan.outputs.current) }}
+    steps: &fit-steps
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -208,15 +236,15 @@ jobs:
           path: new
           retention-days: 3
 
-  # The only job that writes. It runs no project code: it merges the
-  # fits' files into the store branch, prunes keys not needed and
-  # pushes once.
-  store:
-    name: Store the fits
-    needs: [plan, fit]
+  # The only jobs that write. They run no project code: each merges its
+  # fits' files into the store branch, prunes keys not needed and pushes
+  # once.
+  store-current:
+    name: Store the newest origin's fits
+    needs: [plan, fit-current]
     if: >-
       always() && needs.plan.outputs.write == 'true'
-      && needs.plan.outputs.count != '0'
+      && needs.plan.outputs.current_count != '0'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -231,14 +259,54 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: plan
-      - run: scripts/fit-store.sh push new keys.json matrix.json
+      - run: scripts/fit-store.sh push new keys.json current.json
+
+  # With the longest fits first, 8 runners finish a full refit as soon
+  # as 12 (the longest fit, about 4 h). The rest of the 20 are left for
+  # the submission and Pages workflows.
+  fit-rest:
+    name: Fit ${{ matrix.model }} at ${{ matrix.origin }}
+    needs: [plan, store-current]
+    if: >-
+      always() && needs.plan.outputs.write == 'true'
+      && needs.plan.outputs.rest_count != '0'
+    runs-on: ${{ vars.FIT_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix: ${{ fromJSON(needs.plan.outputs.rest) }}
+    steps: *fit-steps
+
+  store-rest:
+    name: Store the other origins' fits
+    needs: [plan, fit-rest]
+    if: >-
+      always() && needs.plan.outputs.write == 'true'
+      && needs.plan.outputs.rest_count != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: fit-*
+          path: new
+          merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: plan
+      - run: scripts/fit-store.sh push new keys.json rest.json
 
   pages:
     name: Rebuild the docs from the store
-    needs: [plan, store]
+    needs: [plan, store-current, store-rest]
     if: >-
       always() && needs.plan.result == 'success'
-      && needs.store.result == 'success'
+      && (needs.store-current.result == 'success'
+      || needs.store-rest.result == 'success')
       && github.ref == 'refs/heads/main' && inputs.store_branch == ''
     runs-on: ubuntu-latest
     timeout-minutes: 5

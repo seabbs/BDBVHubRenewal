@@ -45,7 +45,7 @@ bdbvhubrenewal fit --model renewal|renewalsp --config main|renewalsp --vintage <
 - Append progress lines to `<fit dir>/progress.log` as you go, for example `iteration=500 divergences=0` every few hundred iterations.
   The job prints the newest line once a minute, as BVDOutbreakSize does, so a stalled fit is visible.
 - Everything the forecast needs from the fit stays in `<fit dir>`, for example posterior draws as NetCDF or `.npz`.
-  That directory is what is cached under the content-hash key, and uploaded for 3 days.
+  That directory is uploaded for 3 days. A fitted candidate's directory is normally the fit store's (`fit-store unpack`), not a fit made in the run.
 - Set the device count before importing JAX: `numpyro.set_host_device_count(4)`.
   The setup action also sets `XLA_FLAGS` to the runner's CPU count, and sets `JAX_COMPILATION_CACHE_DIR`.
 
@@ -259,7 +259,8 @@ Everything goes under `$WORK` (`output/ci`):
 output/ci/
   inputs/            time-series.csv, tasks.json, previous.csv, context.json,
                      coherence.json, coherence-summary.{md,json}
-  fits/<id>/         diagnostics.json, ppc.json, progress.log, draws (cached)
+  fits/<id>/         diagnostics.json, ppc.json, draws, store.json (the
+                     stored fit it came from)
   candidates/<id>/   submission/…csv, submission/national.json, nowcast.png,
                      run.json, fit-summary.{md,json}, ppc.json, ppc.png,
                      ppc-summary.{md,json}, coherence-summary.json,
@@ -271,12 +272,11 @@ output/ci/
 
 Add `output/` to `.gitignore` if it is not already there.
 
-## Fit cache key
+## Fit key
 
-`ci/policy.toml` → `[cache] inputs` lists what a fit depends on: `src`, `config`, `pyproject.toml` and `uv.lock`.
-The key hashes those files with the hub commit and the candidate's config and sampler settings.
-If the model reads another path, add it there.
-That list is the only place it is defined, which is the lesson from BVDOutbreakSize's cache-key drift.
+A fitted candidate's key is the fit store's (`bdbvhubrenewal.evaluation.store.fit_key`): the task at the round's origin, the model and its sampler settings, the BVDOutbreakSize release, the code the fit runs and the locked dependencies.
+It is defined in that one place, which is the lesson from BVDOutbreakSize's cache-key drift.
+The submission's task at a vintage is the store's (`backtest.vintage_task`), so the same code and data give the same key.
 
 ## Taskfile
 

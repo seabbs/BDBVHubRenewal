@@ -6,8 +6,9 @@
 # (ci/steps/track.sh).
 
 # There are no refits: a candidate past the convergence thresholds is
-# ruled out and the chain moves on. The content-hash fit cache is reused
-# across re-runs.
+# ruled out and the chain moves on. Each fitted candidate reads the fit
+# store's fit of the same code and data (fit-store.yml); the submission
+# never fits.
 
 # Minutes the chain plans with. On hosted runners (4 vCPU), at the
 # 2026-11-01 vintage with the two chains of each fit in parallel,
@@ -27,17 +28,6 @@ reserve_minutes = 45
 # The shortest timeout a fit job gets, however late it starts.
 min_fit_minutes = 30
 
-[cache]
-# Everything a fit depends on in the main repo, listed once. The fit
-# cache key hashes these with the hub data commit and the candidate's
-# config and sampler settings.
-inputs = ["src", "config", "pyproject.toml", "uv.lock"]
-
-# Every fit: 2 chains of 500 warm-up and 750 draws, run in parallel.
-# renewalbvd samples at target acceptance 0.95 to clear its divergence
-# warnings, the others at 0.9. renewalbvd drew 1000 to clear its tail
-# ESS warnings; at 750 they may return (min bulk ESS was 227 at 1000 on
-# 2026-11-01).
 [[candidates]]
 id = "bvd"
 kind = "main"

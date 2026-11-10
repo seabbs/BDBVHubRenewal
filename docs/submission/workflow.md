@@ -15,7 +15,8 @@ It submits only the hub models opted in ([Opting in](opting-in.md)), and pushes 
 | `release` | Makes a GitHub release `round-<reference date>` of every round whose window has closed and whose hub pull requests are all merged or closed, at the commit it was submitted from. The Pages build then adds every model's results to it. Zenodo archives each release with a DOI. |
 | `prepare` | Pins the data, builds `randomwalk` and `randomwalknowcast`, and decides which hub models run. |
 | `baseline` | The baseline hub model: checks and submits `randomwalknowcast`, or skips the round if it is ruled out. |
-| `fit` | The renewal hub model: fits `bvd`, `renewalsp` and `main` in parallel. |
+| `await-fits` | Waits for the fit store to hold `bvd`, `renewalsp` and `main` at the round's origin, starting the Fit store workflow if it does not. |
+| `fit` | The renewal hub model: forecasts from the stored fits of `bvd`, `renewalsp` and `main` in parallel. |
 | `gate`, `submit` | Walks the chain, validates, and opens or updates the pull request. |
 | `record` | Live runs only: writes the round, and each hub model's submission under its id, to the `submission-ledger` branch. |
 | `outcome` | Fails the run if a round was skipped or a job broke. |
@@ -33,9 +34,14 @@ The chain runs from the most to the least complex renewal model, then the random
 5. `randomwalk`.
 
 `[submission] model` in `config/hub.toml` says where the chain starts.
+The submission does not fit a round the fit store can hold.
+Each fitted candidate reads the stored fit of the same code and data (`fit-store unpack`), so the submitted forecast is the one the docs and the backtest show.
+The Fit store workflow fits a new release's origin first, and runs one at a time, so a release is fitted once.
+A candidate the store lacks when the wait ends, or whose stored fit failed, is ruled out.
+A stored fit forecasts one week past its own round, so a round with no new release is forecast from last week's stored fit.
 Every fit is 2 chains of 500 warm-up, run in parallel, with no refit.
 Each takes 750 draws, `renewalbvd` at target acceptance 0.95 and the others at 0.9.
-Fit timeouts are set against the window's close (`[timing]` in `ci/policy.toml`).
+The wait for the store stops against the window's close (`[timing]` in `ci/policy.toml`).
 
 ## Checks
 
