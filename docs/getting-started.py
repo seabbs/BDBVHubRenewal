@@ -20,7 +20,7 @@
 #
 # Every figure and table below comes from the Python code shown above it, which calls the package's functions directly.
 # [Setup](../setup/) installs the package and shows how to run this code in a REPL, a notebook or a script.
-# The tidy data in `data/` are committed, and `task fit-store` fetches the stored renewal fit.
+# `task data` fetches the tidy data into `data/`, and `task fit-store` fetches the stored renewal fit.
 # This page is a notebook, and `task getting-started` runs it again.
 
 # %% [markdown]

@@ -20,8 +20,9 @@ uv sync
 ```
 
 Run every command below from the `BDBVHubRenewal` folder.
-The hub data are committed in `data/`, so nothing needs downloading.
-`uv run bdbvhubrenewal data` fetches the latest hub data when you want it.
+The hub data are not committed.
+`task data` (or `uv run bdbvhubrenewal data`) fetches the latest hub data into `data/`, and `task data-bvd` caches the BVDOutbreakSize releases that renewalbvd reads.
+The tests read a frozen copy in `tests/fixtures/data/`, so they need no download.
 
 ## Work interactively
 
