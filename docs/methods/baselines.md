@@ -187,7 +187,7 @@ This is what baselinenowcast's 7-day rolling sums do, on hub weeks instead of ro
 No step sums independent daily draws.
 The retrospective daily errors are strongly correlated within a week: the variance of a week's error is about 3.4 times the sum of its daily variances (within-week correlation about 0.4).
 Draws for different weeks of one place are independent, as in baselinenowcast, although new reports across the weeks of one release are positively correlated where counts are large.
-[#164](https://github.com/seabbs/BDBVHubRenewal/pull/164) compared independent weeks with a shared gamma factor per release and place, with and without the sizes adjusted to keep each week's variance, and a Gaussian copula reordering of the draws (Iman-Conover).
+[#165](https://github.com/seabbs/BDBVHubRenewal/pull/165) compared independent weeks with a shared gamma factor per release and place, with and without the sizes adjusted to keep each week's variance, and a Gaussian copula reordering of the draws (Iman-Conover).
 None scored better on the release backtest, also on the sum of the last 3 nowcast weeks, so the weeks stay independent.
 
 ## Own or pooled estimates
