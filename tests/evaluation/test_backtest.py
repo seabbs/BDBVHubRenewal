@@ -15,7 +15,6 @@ from bdbvhubrenewal.evaluation.backtest import (
     load_config,
     lopo_tasks,
     make_tasks,
-    real_vintages,
     recovery_tasks,
     run_development,
     run_forecasts,
@@ -28,6 +27,7 @@ from bdbvhubrenewal.evaluation.backtest import (
 from bdbvhubrenewal.forecasters import get_model
 
 ROOT = Path(__file__).resolve().parents[2]
+DATA = ROOT / "tests" / "fixtures" / "data"
 
 pytestmark = pytest.mark.usefixtures("flat_model")
 
@@ -57,12 +57,14 @@ def test_saturdays() -> None:
 
 
 def test_development_uses_every_real_vintage_but_the_latest(
-    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    config: BacktestConfig,
+    vintages: list[str],
 ) -> None:
     forecasts = run_development([get_model("flat")], target, delays, config)
     # Vintages after the model choice date are backtested too.
     real = forecasts.loc[forecasts["kind"] == "real"]
-    vintages = real_vintages(target.loc[target["kind"] == "real"])
     assert set(real["vintage"]) == set(vintages[:-1])
     assert max(real["vintage"]) > "2026-10-10"
 
@@ -169,11 +171,10 @@ def test_make_tasks_asks_for_later_vintages(
     assert by["2026-10-24"] == {}
 
 
-def test_truth_changes(target: pd.DataFrame) -> None:
+def test_truth_changes(target: pd.DataFrame, vintages: list[str]) -> None:
     changes = truth_changes(target, locations=("CD",))
     week = changes.loc[changes["target_end_date"] == "2026-10-10"]
     # Every real release from the one that first reports the week.
-    vintages = real_vintages(target.loc[target["kind"] == "real"])
     assert (
         list(week["truth_vintage"]) == vintages[vintages.index("2026-10-09") :]
     )
@@ -234,7 +235,10 @@ def test_tasks_carry_an_empty_mask(
 
 
 def test_lopo_masks_one_province_at_a_time(
-    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    config: BacktestConfig,
+    vintages: list[str],
 ) -> None:
     models = [get_model("flat"), _MaskAware()]
     forecasts, scores = run_lopo(
@@ -245,7 +249,6 @@ def test_lopo_masks_one_province_at_a_time(
     # Only the masked province is kept, from development vintages only.
     assert (forecasts["location"] == forecasts["masked"]).all()
     assert set(forecasts["masked"]) == {"CD-IT", "CD-NK"}
-    vintages = real_vintages(target.loc[target["kind"] == "real"])
     assert set(forecasts["vintage"]) == set(vintages[:-1])
     assert set(scores["location"]) == {"CD-IT", "CD-NK"}
     assert set(scores["truth_vintage"]) == {vintages[-1]}
@@ -401,7 +404,7 @@ def test_scenarios_are_scored_final_and_as_of(
     from bdbvhubrenewal.data import load_health_zones
     from bdbvhubrenewal.evaluation.backtest import run_scenarios
 
-    data = Path(__file__).resolve().parents[2] / "data"
+    data = DATA
     zones = load_health_zones(data)
     forecasts, scores, energy, truth = run_scenarios(
         [get_model("flat")],
@@ -527,7 +530,7 @@ def test_scenarios_run_by_date_match_one_run(
     from bdbvhubrenewal.data import load_health_zones
     from bdbvhubrenewal.evaluation.backtest import run_scenarios
 
-    zones = load_health_zones(Path(__file__).resolve().parents[2] / "data")
+    zones = load_health_zones(DATA)
     dates = ("2026-10-10", "2026-10-17")
 
     def run(on: tuple[str, ...]) -> tuple[pd.DataFrame, ...]:
@@ -592,7 +595,7 @@ def test_scenarios_forecast_apart_by_model_score_as_one_run(
         score_scenarios,
     )
 
-    zones = load_health_zones(Path(__file__).resolve().parents[2] / "data")
+    zones = load_health_zones(DATA)
     names = ["flat", "randomwalk"]
     args = (config, target, delays, zones, "2026-10-24")
     dates = ("2026-10-10", "2026-10-17")

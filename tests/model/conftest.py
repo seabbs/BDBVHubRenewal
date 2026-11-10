@@ -18,12 +18,8 @@ from bdbvhubrenewal.model.inputs import vintage_from_tables  # noqa: E402
 
 # Vintage dates as days after the simulation start (each a Saturday).
 VINTAGE_DAYS = (166, 206)
-MAIN_REPO_DATA = Path(
-    os.environ.get(
-        "BDBV_DATA",
-        str(Path(__file__).resolve().parents[2] / "data"),
-    )
-)
+FIXTURE_DATA = Path(__file__).resolve().parents[1] / "fixtures" / "data"
+MAIN_REPO_DATA = Path(os.environ.get("BDBV_DATA", str(FIXTURE_DATA)))
 # Two provinces with no cases, which the model leaves out.
 SIM_LOCATIONS = ("CD-IT", "CD-NK", "CD-HU", "CD-TO", "CD-BU", "CD-SK")
 

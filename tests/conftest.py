@@ -1,17 +1,35 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data import load_daily, load_delays, load_target
+from bdbvhubrenewal.data import load_daily, load_delays, load_target, tidy
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig
 from bdbvhubrenewal.forecasters import ForecastTask
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA = ROOT / "data"
+DATA = ROOT / "tests" / "fixtures" / "data"
+"""A frozen copy of the tidy hub data. It is never refreshed: the
+workflows fetch the live data, and the tests read only this copy."""
+
+FIXTURE_VINTAGES = (
+    "2026-08-18",
+    "2026-10-09",
+    "2026-10-17",
+    "2026-10-24",
+    "2026-11-01",
+    "2026-11-08",
+)
+"""The real vintages in the fixture, oldest first."""
+
+# The loaders and the CLI read `data/` by default. Point both at the
+# fixture before any test builds a parser or loads a table.
+os.environ["BDBV_DATA_DIR"] = str(DATA)
+tidy._DEFAULT_DATA_DIR = DATA
 
 
 @pytest.fixture(autouse=True)
@@ -26,6 +44,12 @@ def _one_province_at_a_time(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture(scope="session")
 def target() -> pd.DataFrame:
     return load_target(DATA)
+
+
+@pytest.fixture(scope="session")
+def vintages() -> list[str]:
+    """`FIXTURE_VINTAGES`, for tests that pin expectations to them."""
+    return list(FIXTURE_VINTAGES)
 
 
 @pytest.fixture(scope="session")

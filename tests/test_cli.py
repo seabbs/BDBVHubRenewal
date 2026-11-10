@@ -16,6 +16,7 @@ from bdbvhubrenewal.reporting import plots
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "reporting" / "fixtures"
+DATA = ROOT / "tests" / "fixtures" / "data"
 
 
 @pytest.fixture
@@ -68,7 +69,7 @@ def test_cli_nowcast_writes_coherent_zones(tmp_path: Path) -> None:
 def test_cli_nowcast_without_zone_data_skips_zones(tmp_path: Path) -> None:
     data = tmp_path / "data"
     data.mkdir()
-    for f in (ROOT / "data").iterdir():
+    for f in DATA.iterdir():
         if f.name != "daily_zones.csv.gz":
             (data / f.name).symlink_to(f)
     out = tmp_path / "sub"
@@ -186,7 +187,7 @@ def test_cli_fit_task_carries_the_delay_files_for_the_lag() -> None:
     args = argparse.Namespace(
         vintage="latest",
         reference_date=None,
-        data="data",
+        data=str(DATA),
         backtest_config="config/backtest.toml",
     )
     task, _ = _task(args)
@@ -212,15 +213,15 @@ def test_stored_samples_keep_numeric_values_without_our_forecasts(
     from bdbvhubrenewal.evaluation.scoring import energy_scores
     from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 
-    args = argparse.Namespace(data="data", results=str(tmp_path))
+    args = argparse.Namespace(data=str(DATA), results=str(tmp_path))
     # With no fits loaded there are no stored delays.
-    _, none = _stored(args, load_target("data"), run_forecasts([], []))
+    _, none = _stored(args, load_target(DATA), run_forecasts([], []))
     assert none.empty
     learnt = pd.DataFrame(
         {"model": ["renewal", "randomwalknowcast"], "vintage": "2026-10-24"}
     )
     learnt.to_csv(tmp_path / DELAY_SUMMARY_FILE, index=False)
-    stored, delays = _stored(args, load_target("data"), run_forecasts([], []))
+    stored, delays = _stored(args, load_target(DATA), run_forecasts([], []))
     # Only the fitted models' delays are stored ones.
     assert set(delays["model"]) == {"renewal"}
     assert stored["value"].dtype == np.float64
