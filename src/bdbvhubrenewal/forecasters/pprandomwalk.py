@@ -68,7 +68,11 @@ from numpyro.diagnostics import summary
 from numpyro.infer import MCMC, NUTS, init_to_median
 
 from bdbvhubrenewal.data.snapshots import SnapshotArrays, snapshot_arrays
-from bdbvhubrenewal.forecasters.base import ForecastTask, register_model
+from bdbvhubrenewal.forecasters.base import (
+    ForecastTask,
+    ModelUnavailableError,
+    register_model,
+)
 from bdbvhubrenewal.forecasters.chain import (
     DelayFit,
     DelayFn,
@@ -87,7 +91,12 @@ from bdbvhubrenewal.forecasters.chain import (
 from bdbvhubrenewal.forecasters.obs import MAX_SIZE
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalkNowcast
 
-__all__ = ["PPRandomWalkNowcast", "Sampler", "Tree"]
+__all__ = ["NotConverged", "PPRandomWalkNowcast", "Sampler", "Tree"]
+
+
+class NotConverged(ModelUnavailableError):  # noqa: N818
+    """A pooled NUTS fit did not converge."""
+
 
 MIN_SIZE = 0.1
 """Lower bound of `fit_nb`'s size, kept for the plugged-in sizes."""
@@ -103,12 +112,18 @@ class Sampler:
         Warm-up and kept draws per chain, and chains.
     target_accept : float
         Target acceptance.
+    max_rhat : float
+        Largest split R-hat of any parameter a fit may have.
+    max_divergent : float
+        Largest share of divergent draws a fit may have.
     """
 
     num_warmup: int = 500
     num_samples: int = 500
     num_chains: int = 2
     target_accept: float = 0.9
+    max_rhat: float = 1.05
+    max_divergent: float = 0.01
 
 
 @dataclass(frozen=True)
@@ -287,7 +302,15 @@ def spread_model(
 def _run(
     model: Any, key: jax.Array, sampler: Sampler, **data: Any
 ) -> tuple[dict[str, np.ndarray], dict[str, float]]:
-    """Run NUTS and return posterior medians and a diagnostics summary."""
+    """Run NUTS and return the draws and a diagnostics summary.
+
+    Raises
+    ------
+    NotConverged
+        If the worst R-hat is above `Sampler.max_rhat` or the share of
+        divergent draws above `Sampler.max_divergent`, as the medians of
+        such a fit are not estimates.
+    """
     mcmc = MCMC(
         # From the prior medians: uniform starts put the delay factors
         # where their growth over a gap overflows.
@@ -319,6 +342,17 @@ def _run(
         "median_steps": float(np.median(extra["num_steps"])),
         "step_size": float(np.median(extra["adapt_state.step_size"])),
     }
+    n_draws = sampler.num_samples * sampler.num_chains
+    if not (
+        rhat <= sampler.max_rhat
+        and info["divergences"] <= sampler.max_divergent * n_draws
+    ):
+        raise NotConverged(
+            f"The pooled fit did not converge: worst R-hat {rhat:.3g} "
+            f"(at most {sampler.max_rhat}), {info['divergences']} of "
+            f"{n_draws} draws divergent (at most "
+            f"{sampler.max_divergent:.0%})."
+        )
     flat = mcmc.get_samples()
     for name, value in flat.items():
         if name.endswith("_tau"):

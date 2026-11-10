@@ -273,6 +273,7 @@ Where every $x^{(i)}_z(w)$ is 0 the split uses the Dirichlet mean shares of the 
 The pooled estimates are the delay $\Delta_p$, the walk spread $\sigma_p$, the size $\phi_{p,k}$ and the removal rate $b_{p,k}$.
 The nowcast draws, the walk and the zone reconciliation are the same.
 Each is fitted in numpyro with NUTS, with 2 chains of 500 warm-up and 500 draws run in sequence from the prior medians, at target acceptance 0.9.
+A fit whose worst split $\hat R$ is above 1.05, or with more than 1% of its draws divergent, raises, and the model gives no forecast for that origin.
 
 Each parameter $\theta$ of place $p$ is its parent's plus an offset for the place's tier,
 
