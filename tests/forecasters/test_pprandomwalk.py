@@ -159,6 +159,7 @@ def _spread_fit(
         seen=np.vstack([np.zeros_like(seen), seen]),
         added=empty,
         remaining=empty,
+        removed=empty,
         reported=empty,
         valid=empty > 0,
     )
