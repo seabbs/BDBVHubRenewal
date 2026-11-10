@@ -87,12 +87,15 @@ import numpyro.distributions as dist
 import pandas as pd
 from jax.scipy.special import ndtr
 from numpyro.diagnostics import summary
+from numpyro.handlers import reparam
 from numpyro.infer import MCMC, NUTS, init_to_median
+from numpyro.infer.reparam import LocScaleReparam
 
 from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.snapshots import (
     SnapshotArrays,
     snapshot_arrays,
+    week_sum,
     weekly_sums,
 )
 from bdbvhubrenewal.forecasters.base import (
@@ -107,6 +110,11 @@ from bdbvhubrenewal.forecasters.chain import (
     _delay_counts,
     _pairs_at,
 )
+from bdbvhubrenewal.forecasters.introductions import (
+    introduction_rates,
+    silent_places,
+    silent_trajectories,
+)
 from bdbvhubrenewal.forecasters.randomwalk import (
     RandomWalkNowcast,
     _clear_caches,
@@ -114,6 +122,7 @@ from bdbvhubrenewal.forecasters.randomwalk import (
 )
 
 __all__ = [
+    "NoRecentCases",
     "NotConverged",
     "PPRandomWalkNowcast",
     "Posterior",
@@ -133,8 +142,23 @@ weeks a delay of 42 days reaches back.
 """
 
 
+CENTRING = 0.5
+"""Centring of the walk steps, between 0 (non-centred) and 1 (centred).
+
+A large place's weekly counts pin its walk, which suits centred steps,
+and a place with few cases leaves it to the prior, which suits
+non-centred ones.
+Halfway gave 1 divergence in 1500 draws at 11-08 where non-centred
+steps gave 12.
+"""
+
+
 class NotConverged(ModelUnavailableError):  # noqa: N818
     """The NUTS fit did not converge."""
+
+
+class NoRecentCases(ModelUnavailableError):  # noqa: N818
+    """No place has a case in the latest `walk_weeks` weeks."""
 
 
 @dataclass(frozen=True)
@@ -291,7 +315,11 @@ class Triangle:
 
 
 def triangle(
-    snap: SnapshotArrays, o: int, settings: Settings, fit_weeks: int
+    snap: SnapshotArrays,
+    o: int,
+    settings: Settings,
+    fit_weeks: int,
+    leaves: np.ndarray | None = None,
 ) -> Triangle:
     """Return the new reports of each leaf, day and release up to `o`.
 
@@ -305,6 +333,8 @@ def triangle(
         Settings, for $D$ (`max_delay`).
     fit_weeks : int
         Hub weeks fitted, ending at the cut-off week of `o`.
+    leaves : numpy.ndarray, optional
+        Snapshot index of each place fitted. Defaults to every leaf.
 
     Returns
     -------
@@ -325,7 +355,9 @@ def triangle(
     inc = counts - prev * before[None]
     first = max(snap.cut_week(o) - fit_weeks + 1, 0)
     keep = seen & (lo < d) & (lo < hi) & (snap.week >= first)[None, :]
-    leaves = np.flatnonzero(Tree.of(snap.parent).leaf)
+    if leaves is None:
+        leaves = np.flatnonzero(Tree.of(snap.parent).leaf)
+    leaves = np.asarray(leaves, dtype=int)
     r_i, t_i = np.nonzero(keep)
     n_cell = r_i.size
     place = np.repeat(np.arange(leaves.size), n_cell)
@@ -385,25 +417,32 @@ def model(tree: Tree, tri: Triangle, max_delay: int) -> None:
     """Sample the walk, the delay and the new reports of the leaves."""
     leaves = tri.leaves
     mu = tree.sample("delay_mu", 1.6, 1.0)[leaves]
-    sd = jnp.exp(tree.sample("delay_sd", np.log(0.7), 0.5))[leaves]
+    sd = jnp.exp(numpyro.sample("delay_sd", dist.Normal(np.log(0.7), 0.5)))
     sigma = jnp.exp(tree.sample("sigma", np.log(0.2), 1.0))[leaves]
-    phi = jnp.exp(tree.sample("phi", np.log(10.0), 1.5))[leaves]
+    phi = jnp.exp(numpyro.sample("phi", dist.Normal(np.log(10.0), 1.5)))
     n_p = leaves.size
     init = numpyro.sample(
         "init", dist.Normal(2.0, 3.0).expand((n_p,)).to_event()
     )
-    eps = numpyro.sample(
-        "eps", dist.Normal(0.0, 1.0).expand((n_p, tri.n_weeks - 1)).to_event()
+    # Partly centred steps (`fit_posterior`), as the leaves range from
+    # silent to thousands of cases.
+    steps = jnp.cumsum(
+        numpyro.sample(
+            "step",
+            dist.Normal(
+                jnp.zeros((n_p, tri.n_weeks - 1)), sigma[:, None]
+            ).to_event(),
+        ),
+        axis=1,
     )
-    steps = jnp.cumsum(sigma[:, None] * eps, axis=1)
     log_lam = init[:, None] + jnp.concatenate(
         [jnp.zeros((n_p, 1)), steps], axis=1
     )
     numpyro.deterministic("log_lam", log_lam)
     p = tri.place
-    mass = _interval(mu[p], sd[p], tri.lo, tri.hi, max_delay)
+    mass = _interval(mu[p], sd, tri.lo, tri.hi, max_delay)
     mean = jnp.exp(log_lam[p, tri.week]) / 7.0 * mass
-    numpyro.sample("obs", dist.NegativeBinomial2(mean, phi[p]), obs=tri.count)
+    numpyro.sample("obs", dist.NegativeBinomial2(mean, phi), obs=tri.count)
 
 
 @dataclass(frozen=True)
@@ -412,9 +451,10 @@ class Posterior:
 
     Attributes
     ----------
-    mu, sd, sigma, phi : numpy.ndarray
-        Delay location and scale, walk spread and dispersion of every
-        place, `[N, L]`.
+    mu, sigma : numpy.ndarray
+        Delay location and walk spread of every place, `[N, L]`.
+    sd, phi : numpy.ndarray
+        Delay scale and dispersion, shared by the places, `[N]`.
     log_lam : numpy.ndarray
         Log expected final count of each leaf and fitted week,
         `[N, P, W]`.
@@ -465,7 +505,7 @@ def fit_posterior(
     """
     mcmc = MCMC(
         NUTS(
-            model,
+            reparam(model, config={"step": LocScaleReparam(CENTRING)}),
             target_accept_prob=sampler.target_accept,
             init_strategy=init_to_median(),
         ),
@@ -511,9 +551,9 @@ def fit_posterior(
         )
     return Posterior(
         mu=tree.rebuild(draws, "delay_mu"),
-        sd=np.exp(tree.rebuild(draws, "delay_sd")),
+        sd=np.exp(draws["delay_sd"]),
         sigma=np.exp(tree.rebuild(draws, "sigma")),
-        phi=np.exp(tree.rebuild(draws, "phi")),
+        phi=np.exp(draws["phi"]),
         log_lam=draws["log_lam"],
         info=info,
     )
@@ -572,8 +612,9 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
         ------
         ModelUnavailableError
             If the task has no snapshots (`MissingSnapshots`), no pair of
-            releases within the delay window (`NoDelayPair`), or the fit
-            did not converge (`NotConverged`).
+            releases within the delay window (`NoDelayPair`), no place
+            with a recent case (`NoRecentCases`), or the fit did not
+            converge (`NotConverged`).
         """
         _clear_caches(task)
         daily = task.daily_history
@@ -590,13 +631,32 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
                 f"No pair of releases up to {snap.releases[o]} has a step "
                 f"of at most {d} days."
             )
-        tri = triangle(snap, o, self.settings, self.fit_weeks)
         tree = Tree.of(snap.parent)
+        leaves = np.flatnonzero(tree.leaf)
+        silent = silent_places(
+            weekly_sums(snap, o), snap.cut_week(o), self.settings.walk_weeks
+        )
+        live = leaves[~silent[leaves]]
+        if live.size == 0:
+            raise NoRecentCases(
+                f"No place has a case in the {self.settings.walk_weeks} "
+                f"weeks to {snap.releases[o]}."
+            )
+        tri = triangle(snap, o, self.settings, self.fit_weeks, live)
         key = jax.random.key(int(task.rng().integers(0, 2**31 - 1)))
         post = fit_posterior(tri, tree, self.sampler, key, d)
-        values, weeks = self.predict(post, tri, snap, task)
-        self.delay_summary = self._delay_summary(post, snap, task.vintage)
-        self._describe(post, snap, task)
+        ages = np.arange(d + 1)
+        share = np.median(
+            np.asarray(
+                reported_share(
+                    post.mu[..., None], post.sd[:, None, None], ages, d
+                )
+            ),
+            axis=0,
+        )  # [L, D + 1]
+        values, weeks = self.predict(post, tri, snap, task, share, silent)
+        self.delay_summary = self._delay_summary(share, snap, task.vintage)
+        self._describe(post, snap, task, silent)
         rows = [snap.locations.index(c) for c in task.locations]
         return frame(task, weeks, values, rows)
 
@@ -606,6 +666,8 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
         tri: Triangle,
         snap: SnapshotArrays,
         task: ForecastTask,
+        share: np.ndarray,
+        silent: np.ndarray,
     ) -> tuple[np.ndarray, list[str]]:
         """Draw final counts for every place and week from the posterior.
 
@@ -619,6 +681,12 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
             The arrays.
         task : ForecastTask
             The task, for the number of samples, the weeks and the seed.
+        share : numpy.ndarray
+            Posterior median share reported by age of each place,
+            `[L, D + 1]`, for the introductions.
+        silent : numpy.ndarray
+            Places with no recent case, `[L]`. A silent leaf is not
+            fitted and draws introductions.
 
         Returns
         -------
@@ -630,18 +698,20 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
         rng = task.rng("pprandomwalknowcast")
         o = len(snap.releases) - 1
         d = self.settings.max_delay
-        leaves = tri.leaves
+        live = tri.leaves
         n = task.n_samples
+        weeks = _weeks(snap, task)
+        n_data, n_all = snap.n_weeks, len(weeks)
+        reported = weekly_sums(snap, o)
+        values = np.zeros((n, len(snap.locations), n_all))
         # Each sample takes a posterior draw, every draw used once before
         # any is used again.
         pick = np.resize(rng.permutation(post.mu.shape[0]), n)
-        mu = post.mu[pick][:, leaves, None]
-        sd = post.sd[pick][:, leaves, None]
-        phi = post.phi[pick][:, leaves, None]
-        sigma = post.sigma[pick][:, leaves, None]
+        mu = post.mu[pick][:, live, None]
+        sd = post.sd[pick][:, None, None]
+        phi = post.phi[pick][:, None, None]
+        sigma = post.sigma[pick][:, live, None]
         log_lam = post.log_lam[pick]  # [S, P, W]
-        weeks = _weeks(snap, task)
-        n_data, n_all = snap.n_weeks, len(weeks)
         # Days of the fitted weeks: reported count plus the rest to come.
         day = np.flatnonzero(snap.week >= tri.first)
         age = snap.cut[o] - day
@@ -653,45 +723,90 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
         # The clip only undoes float32 rounding of a share at 1.
         mean = np.exp(log_lam[:, :, wk]) / 7.0 * np.clip(rest, 0.0, 1.0)
         draw = _neg_binomial(rng, mean, np.broadcast_to(phi, mean.shape))
-        reported = np.where(seen, snap.counts[leaves][:, o, day], 0.0)
+        known = np.where(seen, snap.counts[live][:, o, day], 0.0)
         onehot = np.zeros((day.size, tri.n_weeks))
         onehot[np.arange(day.size), wk] = 1.0
-        fitted = (draw + reported[None]) @ onehot  # [S, P, W]
         # Weeks after the data continue the walk.
         h = n_all - n_data
-        steps = np.cumsum(sigma * rng.standard_normal((n, leaves.size, h)), 2)
+        steps = np.cumsum(sigma * rng.standard_normal((n, live.size, h)), 2)
         ahead = np.exp(log_lam[:, :, -1:] + steps)
-        future = _neg_binomial(
+        values[:, live, : tri.first] = reported[live, : tri.first][None]
+        values[:, live, tri.first : n_data] = (draw + known[None]) @ onehot
+        values[:, live, n_data:] = _neg_binomial(
             rng, ahead, np.broadcast_to(7.0 * phi, ahead.shape)
         )
-        leaf_values = np.zeros((n, leaves.size, n_all))
-        old = weekly_sums(snap, o)[leaves, : tri.first]
-        leaf_values[:, :, : tri.first] = old[None]
-        leaf_values[:, :, tri.first : n_data] = fitted
-        leaf_values[:, :, n_data:] = future
+        self._introductions(values, snap, share, silent, post, rng)
         # A parent is the sum of the leaves below it.
-        tree = Tree.of(snap.parent)
-        below = tree.path[leaves].T.copy()  # [L, P]
+        leaves = np.flatnonzero(Tree.of(snap.parent).leaf)
+        below = Tree.of(snap.parent).path[leaves].T.copy()  # [L, leaves]
         below[snap.parent < 0] = 1.0
-        values = np.einsum("lp,sph->slh", below, leaf_values)
+        values = np.einsum("lp,sph->slh", below, values[:, leaves])
         return values, weeks
 
+    def _introductions(
+        self,
+        values: np.ndarray,
+        snap: SnapshotArrays,
+        share: np.ndarray,
+        silent: np.ndarray,
+        post: Posterior,
+        rng: np.random.Generator,
+    ) -> None:
+        """Fill the silent leaves of `values` with their introductions.
+
+        As `randomwalknowcast` does for a silent place
+        (`introductions.silent_trajectories`), with the week's share
+        reported and the start week from this model's delay, and the walk
+        spread its posterior median.
+        """
+        quiet = silent & Tree.of(snap.parent).leaf
+        if not quiet.any():
+            return
+        o = len(snap.releases) - 1
+        settings = self.settings
+        reported = weekly_sums(snap, o)
+        age = snap.cut[o] - np.arange(snap.week.size)
+        pi = np.where(
+            age >= 0, share[:, np.clip(age, 0, settings.max_delay)], 0.0
+        )
+        complete = week_sum(snap, pi) / 7.0
+        good = complete >= settings.completeness
+        start = np.where(
+            good.any(axis=1),
+            snap.n_weeks - 1 - np.argmax(good[:, ::-1], axis=1),
+            0,
+        )
+        q = introduction_rates(
+            reported, start, snap.parent, settings.walk_weeks
+        )
+        n, _, n_all = values.shape
+        y = silent_trajectories(
+            jax.random.key(int(rng.integers(0, 2**31 - 1))),
+            quiet,
+            q,
+            1.0 - np.clip(complete, 0.0, 1.0),
+            start,
+            np.median(post.sigma, axis=0),
+            n_all,
+            n,
+        )
+        for loc in np.flatnonzero(quiet):
+            s = int(start[loc])
+            values[:, loc, : s + 1] = reported[loc, : s + 1]
+            values[:, loc, s + 1 :] = y[loc, :, : n_all - s - 1]
+            values[:, loc, : snap.n_weeks] = np.maximum(
+                values[:, loc, : snap.n_weeks], reported[loc]
+            )
+
     def _delay_summary(
-        self, post: Posterior, snap: SnapshotArrays, vintage: str
+        self, share: np.ndarray, snap: SnapshotArrays, vintage: str
     ) -> pd.DataFrame:
         """Return the posterior median share reported by age of each place.
 
         In the form of `chain.delay_summary`, so the backtest maps this
         model's final counts through its own delay.
         """
-        d = self.settings.max_delay
-        ages = np.arange(d + 1)
-        share = np.median(
-            np.asarray(
-                reported_share(post.mu[..., None], post.sd[..., None], ages, d)
-            ),
-            axis=0,
-        )
+        ages = np.arange(share.shape[1])
         places = snap.locations
         return pd.DataFrame(
             {
@@ -706,7 +821,11 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
         )
 
     def _describe(
-        self, post: Posterior, snap: SnapshotArrays, task: ForecastTask
+        self,
+        post: Posterior,
+        snap: SnapshotArrays,
+        task: ForecastTask,
+        silent: np.ndarray,
     ) -> None:
         """Record each place's posterior medians and the fit's summary."""
         rows: list[dict[str, object]] = []
@@ -715,13 +834,16 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
             rows.append(
                 {
                     "location": loc,
+                    "silent": bool(silent[i]),
                     "sigma": float(np.median(post.sigma[:, i])),
                     "delay_median": float(np.median(np.exp(post.mu[:, i]))),
-                    "delay_sd": float(np.median(post.sd[:, i])),
-                    "phi": float(np.median(post.phi[:, i])),
                 }
             )
-        self.fit_diagnostics = [*rows, {"fit": "joint", **post.info}]
+        shared = {
+            "delay_sd": float(np.median(post.sd)),
+            "phi": float(np.median(post.phi)),
+        }
+        self.fit_diagnostics = [*rows, {"fit": "joint", **shared, **post.info}]
 
 
 register_model(

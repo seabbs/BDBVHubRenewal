@@ -354,7 +354,7 @@ The observation model is learnt from the earlier releases, which may be few.
 Counts include the hub's imputed onsets, which are re-drawn as cases gain onsets, so changes between releases mix reporting with imputation.
 Places are sampled independently, so a shock to a whole release is not shared, and the national band is a sum of independent provincial bands.
 The walk has no drift, and its spread comes from 8 weekly changes, net of a delta-method Poisson noise term that assumes no extra dispersion in the reported counts.
-`pprandomwalknowcast` plugs in posterior medians, so the uncertainty in its pooled estimates does not widen its forecasts.
+`pprandomwalknowcast`'s delay is log-normal, so it cannot take the shape of an irregular delay as the chain ladder can.
 
 [^bnc-paper]: Johnson KE, Tang M, Tyszka E, Nemcova B, Wolffram D, Ergas R, Reich NG, Funk S, Mellor J, Bracher J, Abbott S (2025). Baseline nowcasting methods for handling delays in epidemiological data. Wellcome Open Research. [doi:10.12688/wellcomeopenres.25027.2](https://doi.org/10.12688/wellcomeopenres.25027.2).
 [^bnc-package]: Johnson KE, Tyszka E, Bracher J, Funk S, Abbott S (2025). baselinenowcast: Methods for baseline nowcasting right-truncated epidemiological data. <https://github.com/epinowcast/baselinenowcast/>.

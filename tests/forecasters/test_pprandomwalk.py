@@ -210,7 +210,7 @@ def test_recovers_a_known_delay_and_walk_spread() -> None:
     leaves = tri.leaves
     median_delay = np.exp(np.median(post.mu[:, leaves], axis=0))
     assert np.allclose(median_delay, np.exp(mu), rtol=0.2)
-    assert np.allclose(np.median(post.sd[:, leaves], axis=0), sd, rtol=0.25)
+    assert np.median(post.sd) == pytest.approx(sd, rel=0.25)
     spread = np.median(post.sigma[:, 0])
     assert 0.5 * sigma < spread < 2.0 * sigma
 
@@ -284,3 +284,26 @@ def test_diagnostics_hold_the_fit_and_each_place(
     places = [r for r in model.fit_diagnostics if "location" in r]
     assert [r["location"] for r in places] == list(task.locations)
     assert all("sigma" in r and "delay_median" in r for r in places)
+
+
+def test_triangle_fits_only_the_leaves_asked_for() -> None:
+    snap = _simulate(4, 1.5, 0.6, 0.1, n_leaves=3, n_weeks=12)
+    o = len(snap.releases) - 1
+    tri = triangle(snap, o, Settings(), fit_weeks=8, leaves=np.array([3]))
+    assert tri.leaves.tolist() == [3]
+    assert set(tri.place.tolist()) == {0}
+    full = triangle(snap, o, Settings(), fit_weeks=8)
+    assert tri.count.sum() == full.count[full.place == 2].sum()
+
+
+def test_silent_places_are_not_fitted_and_draw_introductions(
+    fitted: tuple[PPRandomWalkNowcast, pd.DataFrame],
+) -> None:
+    model, out = fitted
+    places = {
+        r["location"]: r for r in model.fit_diagnostics if "location" in r
+    }
+    assert places["CD-KN"]["silent"]
+    assert not places["CD-IT"]["silent"]
+    kn = out.loc[out["location"] == "CD-KN", "value"]
+    assert kn.median() == 0
