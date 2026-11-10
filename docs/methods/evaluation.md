@@ -74,7 +74,10 @@ In the simulated scenarios and leave-one-province-out, a week is complete when i
 
 ## Real releases
 
-Each real release with a later release is an origin.
+Each real release with a later release is an origin, except the first, 2026-08-18 (`skip_origins` in `config/backtest.toml`).
+That release has no delay file, so the renewal models fell back on their prior delay there.
+It is also 50 days before the next release, and its weeks three or more weeks old hold 88% to 97% of the counts the 2026-11-08 release gives them, against 93% to 102% in the releases between.
+It stays in the data of later origins.
 The random walk models forecast from the releases up to the origin only.
 The renewal models' stored forecasts from the origin are scored with them.
 So are hub teams' forecasts for a round, at the latest release serving it.
