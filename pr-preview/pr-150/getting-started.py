@@ -93,7 +93,7 @@ baselines.groupby("model")["sample"].nunique()
 #
 # ```python
 # fitted = store.fit(
-#     "renewal", task, store.code_digest(), store.samplers()["renewal"]
+#     "renewal", task, store.samplers(), store.code_digest("renewal")
 # )
 # store.write_fit("output/fit-store", fitted)
 # ```
