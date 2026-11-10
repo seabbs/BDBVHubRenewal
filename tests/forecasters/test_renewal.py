@@ -599,8 +599,6 @@ def test_single_patch_fits_each_province_on_its_own(
         return _fake_run(t, self.variant)
 
     monkeypatch.setattr(rn.RenewalModel, "run", fake)
-    # The stand-in run cannot reach a worker process.
-    monkeypatch.setenv(rn.PROVINCE_WORKERS_ENV, "1")
     fit = get_model("renewalsp").forecast_fit(task)
     # One fit per province the random walks do not find silent, however
     # few its cases, and none for the nation.
@@ -645,6 +643,10 @@ def test_province_workers_fill_the_cores_with_chains(
     assert rn.province_workers(2, 20) == rn.MAX_PROVINCE_WORKERS
     monkeypatch.setenv(rn.PROVINCE_WORKERS_ENV, "1")
     assert rn.province_workers(2, 5) == 1
+    for bad in ("0", "auto"):
+        monkeypatch.setenv(rn.PROVINCE_WORKERS_ENV, bad)
+        with pytest.raises(ValueError, match=rn.PROVINCE_WORKERS_ENV):
+            rn.province_workers(2, 5)
 
 
 @pytest.mark.usefixtures("quiet")
@@ -658,7 +660,6 @@ def test_provinces_are_fitted_largest_first(
         return _fake_run(t, self.variant)
 
     monkeypatch.setattr(rn.RenewalModel, "run", fake)
-    monkeypatch.setenv(rn.PROVINCE_WORKERS_ENV, "1")
     fit = get_model("renewalsp").forecast_fit(task)
     counts = task.target.groupby("location")["total"].sum()
     sizes = [counts.get(p[0], 0) for p in seen]
@@ -686,7 +687,6 @@ def test_provinces_in_parallel_match_one_after_another(
     # The last province stays in, silent, as the random walk stand-in.
     sub = replace(task, locations=(*two, task.locations[-1]))
     model = rn.RenewalModel(rn.VARIANTS["renewalsp"], sampler=tiny)
-    monkeypatch.setenv(rn.PROVINCE_WORKERS_ENV, "1")
     serial = model.forecast_fit(sub)
     monkeypatch.setenv(rn.PROVINCE_WORKERS_ENV, "2")
     parallel = model.forecast_fit(sub)

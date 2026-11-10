@@ -31,9 +31,11 @@ from __future__ import annotations
 import dataclasses
 import datetime as dt
 import json
+import multiprocessing
 import os
 import time
 from collections.abc import Mapping
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field, replace
 from functools import partial
 from pathlib import Path
@@ -134,8 +136,8 @@ def province_workers(num_chains: int, n_provinces: int) -> int:
     """Return how many provinces a per-province variant fits at once.
 
     `PROVINCE_WORKERS_ENV` if set, else one fit per `num_chains` cores,
-    at most `MAX_PROVINCE_WORKERS`, so each chain keeps its own core.
-    Never more than the provinces.
+    at most `MAX_PROVINCE_WORKERS`: with parallel chains (the policy's
+    setting) each chain then has a core. Never more than the provinces.
 
     Parameters
     ----------
@@ -148,9 +150,19 @@ def province_workers(num_chains: int, n_provinces: int) -> int:
     -------
     int
         At least 1.
+
+    Raises
+    ------
+    ValueError
+        If `PROVINCE_WORKERS_ENV` is not a positive integer.
     """
     env = os.environ.get(PROVINCE_WORKERS_ENV)
     if env:
+        if not env.isdigit() or int(env) < 1:
+            raise ValueError(
+                f"{PROVINCE_WORKERS_ENV} must be a positive integer, "
+                f"got {env!r}."
+            )
         workers = int(env)
     else:
         workers = min(MAX_PROVINCE_WORKERS, _cores() // max(1, num_chains))
@@ -1274,13 +1286,7 @@ class RenewalModel:
         )
 
     def _run_all(self, tasks: Mapping[str, ForecastTask]) -> dict[str, Any]:
-        """Run every task, largest first, several at once if there are cores.
-
-        Each province of a per-province variant is a separate fit, so up
-        to `province_workers` of them run at once, each in its own
-        process (spawned, so each starts JAX with its own devices). A fit
-        gives the same draws in a worker as in this process. The largest
-        provinces (most cases) start first, as they take longest.
+        """Run every task, largest first, `province_workers` at a time.
 
         Returns
         -------
@@ -1296,18 +1302,20 @@ class RenewalModel:
         order = sorted(tasks, key=size, reverse=True)
         chains = int(self.sampler.get("num_chains", 1))
         workers = province_workers(chains, len(tasks))
-        if not self.variant.per_province or workers == 1:
+        if workers == 1:
             done = {key: self.run(tasks[key]) for key in order}
         else:
-            import multiprocessing
-            from concurrent.futures import ProcessPoolExecutor
-
             context = multiprocessing.get_context("spawn")
             with ProcessPoolExecutor(workers, mp_context=context) as pool:
                 futures = {
                     key: pool.submit(self.run, tasks[key]) for key in order
                 }
-                done = {key: f.result() for key, f in futures.items()}
+                try:
+                    done = {key: f.result() for key, f in futures.items()}
+                except BaseException:
+                    # Fail now, not after the queued fits have run.
+                    pool.shutdown(wait=False, cancel_futures=True)
+                    raise
         return {key: done[key] for key in tasks}
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
