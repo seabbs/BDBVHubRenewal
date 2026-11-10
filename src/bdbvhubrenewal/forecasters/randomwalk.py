@@ -169,11 +169,6 @@ def _walks(
     return np.asarray(lam, np.float64), counts
 
 
-def _delay_label(origin: Origin, i: int) -> str:
-    own = origin.fit.own[i]
-    return f"own at {int(own.sum())} of {own.size} ages"
-
-
 def start_window(settings: Settings) -> int:
     """Return the weeks back from the cut-off week a start week may be.
 
@@ -343,7 +338,7 @@ class RandomWalk:
                     "location": loc,
                     "start_week": origin.snap.week_ends[int(start[i])],
                     "n_err": n_err,
-                    "delay_source": _delay_label(origin, i),
+                    "delay_source": _label(origin, int(origin.fit.source[i])),
                     "obs_source": obs_src,
                     "sigma_source": _label(origin, int(origin.sigma_source[i])),
                 }
