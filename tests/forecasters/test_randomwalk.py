@@ -125,7 +125,7 @@ def test_randomwalk_returns_complete_weeks_as_reported(
 def test_nowcast_runs_to_the_latest_week_at_least_5_per_cent_reported(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
-    assert not hasattr(Settings(), "start_count")
+    assert Settings().start_count == 5
     model = RandomWalkNowcast()
     model.forecast(_task(target, delays, daily, "2026-10-24"))
     start = {r["location"]: r["start_week"] for r in model.fit_diagnostics}
@@ -142,6 +142,22 @@ def test_nowcast_runs_to_the_latest_week_at_least_5_per_cent_reported(
     origin = model.origin_at(task, errors=False)
     i = origin.snap.locations.index("CD-IT")
     assert origin.complete[i, -1] >= 0.05
+
+
+def test_the_walk_starts_from_a_week_with_at_least_5_cases(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    # At 11-08 Tshopo's newest week, 11-07, is over 5% reported but has
+    # no case reported, so the walk starts from 10-31, which has 7.
+    task = _task(target, delays, daily, "2026-11-08")
+    model = RandomWalkNowcast()
+    model.forecast(task)
+    start = {r["location"]: r["start_week"] for r in model.fit_diagnostics}
+    assert start["CD-TO"] == "2026-10-31"
+    origin = model.origin_at(task, errors=False)
+    i = origin.snap.locations.index("CD-TO")
+    assert origin.complete[i, -1] >= 0.05
+    assert origin.reported[i, -1] < 5
 
 
 def test_the_partial_week_is_nowcast_whole(
