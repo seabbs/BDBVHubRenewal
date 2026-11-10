@@ -556,9 +556,16 @@ def retro_errors(
         take = (cols >= 0) & (np.arange(k_n) < k_r)
         safe = np.clip(cols, 0, None)
         obs = weekly_sums(snap, r)[:, safe]
-        pred = ahead[:, safe]
-        # The week's change to the origin, on days up to the cut-off of r.
-        change = weekly_sums(snap, o, upto=int(snap.cut[r]))[:, safe] - obs
+        pred = ahead[:, safe].copy()
+        later = weekly_sums(snap, o, upto=int(snap.cut[r]))[:, safe]
+        # A partial cut-off week at r is completed to a full week with the
+        # walk's rate, the nowcast of the week before, as the forecast does,
+        # and its error taken on the whole week at the origin.
+        miss_r = int(np.flatnonzero(snap.week == wa).max()) - int(snap.cut[r])
+        if miss_r > 0 and wa >= 1:
+            pred[:, 0] += ahead[:, wa - 1] * miss_r / 7
+            later[:, 0] = weekly_sums(snap, o)[:, wa]
+        change = later - obs
         added, removed = np.maximum(change, 0.0), np.maximum(-change, 0.0)
         valid = take[None, :] & ((obs > 0) | (pred > 0))
         cells.append((added, removed, pred - obs, obs, valid))

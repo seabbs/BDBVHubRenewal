@@ -494,6 +494,18 @@ class RandomWalkNowcast(RandomWalk):
         # Weeks older than the fitted ones are final, with no removals.
         b = np.where(back < k_n, origin.removal[:, k], 0.0)
         key_x, key_walk, key_part, key_ahead = jax.random.split(_key(task), 4)
+        # A partial cut-off week is completed to a full week before its
+        # observation model: its point nowcast plus the walk's expected
+        # rate, the start week's nowcast, for its missing days.
+        cw = snap.cut_week(origin.o)
+        w0 = _start_weeks(origin)
+        quiet = _quiet(origin)
+        rows = np.arange(n_loc)
+        cut = int(snap.cut[origin.o])
+        miss = int(np.flatnonzero(snap.week == cw).max()) - cut
+        point = np.array(point, dtype=float)
+        if miss > 0:
+            point[:, cw] += np.where(quiet, 0.0, point[rows, w0] * miss / 7)
         shape = (n, *point.shape)
         reported = jnp.broadcast_to(
             jnp.asarray(origin.reported, jnp.float32), shape
@@ -511,31 +523,12 @@ class RandomWalkNowcast(RandomWalk):
             np.float64,
         )
         # Each sample walks on from its own nowcast of the start week.
-        cw = snap.cut_week(origin.o)
-        w0 = _start_weeks(origin)
-        quiet = _quiet(origin)
-        rows = np.arange(n_loc)
         lam, y = _walks(
             key_walk, nowcast[:, rows, w0].T, origin, w0, n_all, quiet
         )
-        # Days of the cut-off week after the cut-off are drawn from the
-        # walk's rate that week. A partial cut-off week's start week is the
-        # week before it when that week meets the start rule, so the rate
-        # is one step from each sample's nowcast of the week before, and
-        # otherwise steps on from the latest earlier week that meets it.
-        cut = int(snap.cut[origin.o])
-        miss = int(np.flatnonzero(snap.week == cw).max()) - cut
-        at_cw = np.clip(cw - w0 - 1, 0, n_all - 1)
-        part = np.asarray(
-            jax.random.poisson(
-                key_part,
-                jnp.asarray(lam[rows, :, at_cw] * miss / 7, jnp.float32),
-            ),
-            dtype=np.float64,
-        )  # [L, S]
         # Each sample's completed cut-off week is the base for the weeks
         # after it, from which the walk goes on.
-        done = nowcast[:, rows, cw].T + np.where(miss > 0, part, 0.0)
+        done = nowcast[:, rows, cw].T
         h = n_all - cw - 1
         _, ahead = random_walks(
             jax.random.split(key_ahead, n_loc),
