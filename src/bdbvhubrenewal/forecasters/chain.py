@@ -142,8 +142,8 @@ class Settings:
     walk_weeks : int
         Weeks, ending at the start week, whose changes set the spread.
     start_share : float
-        Share of a week's observed days reported for `randomwalknowcast`
-        to start its walk from the week's nowcast.
+        Share of a week reported for `randomwalknowcast` to start
+        its walk from the week's nowcast.
     start_count : float
         Cases reported in a week for `randomwalknowcast` to start its walk
         from the week's nowcast.
@@ -636,6 +636,18 @@ class Origin:
     removal: np.ndarray | None = None
     obs_n: np.ndarray | None = None
     obs_source: np.ndarray | None = None
+
+    @property
+    def start_nowcast(self) -> int:
+        """Latest week whose seven days are all on or before the cut-off."""
+        sat = np.array(
+            [
+                np.flatnonzero(self.snap.week == w).max()
+                for w in range(self.snap.n_weeks)
+            ]
+        )
+        full = np.flatnonzero(sat <= self.snap.cut[self.o])
+        return int(full.max()) if full.size else 0
 
 
 def build_origin(

@@ -123,7 +123,7 @@ def test_randomwalk_returns_complete_weeks_as_reported(
     assert late["value"].nunique() > 5
 
 
-def test_nowcast_starts_from_the_latest_week_with_enough_reported(
+def test_nowcast_starts_from_the_latest_full_week_with_enough_reported(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
     model = RandomWalkNowcast()
@@ -133,35 +133,10 @@ def test_nowcast_starts_from_the_latest_week_with_enough_reported(
     # than 5 cases in it.
     assert start["CD-IT"] == "2026-10-24"
     assert max(start.values()) == "2026-10-24"
-    # Cut-off 10-16 is a Friday, so the week of 10-17 is partial. Its six
-    # observed days are over 5% reported with more than 5 cases, so the
-    # walk starts from it.
+    # Cut-off 10-16 is a Friday, so the week of 10-17 is partial.
     model.forecast(_task(target, delays, daily, "2026-10-17"))
     start = {r["location"]: r["start_week"] for r in model.fit_diagnostics}
-    assert start["CD-IT"] == "2026-10-17"
-
-
-def test_a_partial_start_week_walks_on_at_a_full_week_level(
-    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
-) -> None:
-    # With no walk spread the level stays where it starts. The week of
-    # 10-17 has 6 of 7 days observed, so each sample's level is its nowcast
-    # of the 6 days times 7 / 6. That week adds Poisson(level / 7) for its
-    # missing day, and the next week is Poisson(level).
-    task = dataclasses.replace(
-        _task(target, delays, daily, "2026-10-17"), n_samples=4000
-    )
-    model = RandomWalkNowcast()
-    origin = model.origin_at(task, errors=True)
-    origin.sigma[:] = 0.0
-    values, weeks = model.trajectories(origin, task, origin.point)
-    i = origin.snap.locations.index("CD-IT")
-    cw = weeks.index("2026-10-17")
-    nowcast = origin.point[i, cw]
-    assert values[:, i, cw].mean() == pytest.approx(nowcast * 7 / 6, rel=0.05)
-    assert values[:, i, cw + 1].mean() == pytest.approx(
-        values[:, i, cw].mean(), rel=0.05
-    )
+    assert start["CD-IT"] == "2026-10-10"
 
 
 def test_the_partial_week_adds_walk_draws_to_its_nowcast(
@@ -192,6 +167,46 @@ def test_the_partial_week_adds_walk_draws_to_its_nowcast(
     )
     assert mine.min() >= seen
     assert mine.nunique() > 10
+
+
+def test_the_walk_goes_on_from_the_completed_cut_off_week(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    # Cut-off 10-16 is a Friday, so the week of 10-17 misses a day. With no
+    # walk spread, each sample's next week is Poisson of its own completed
+    # 10-17 value: the nowcast of the observed days plus the walk's draw
+    # for the missing day.
+    task = dataclasses.replace(
+        _task(target, delays, daily, "2026-10-17"), n_samples=4000
+    )
+    model = RandomWalkNowcast()
+    origin = model.origin_at(task, errors=True)
+    origin.sigma[:] = 0.0
+    values, weeks = model.trajectories(origin, task, origin.point)
+    i = origin.snap.locations.index("CD-IT")
+    cw = weeks.index("2026-10-17")
+    week, after = values[:, i, cw], values[:, i, cw + 1]
+    assert after.mean() == pytest.approx(week.mean(), rel=0.03)
+    assert np.corrcoef(week, after)[0, 1] > 0.9
+
+
+def test_a_full_cut_off_week_is_the_walks_base(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    # Cut-off 10-24 is a Saturday, so the week of 10-24 is full and the
+    # walk goes on from each sample's nowcast of it.
+    task = dataclasses.replace(
+        _task(target, delays, daily, "2026-10-24"), n_samples=4000
+    )
+    model = RandomWalkNowcast()
+    origin = model.origin_at(task, errors=True)
+    origin.sigma[:] = 0.0
+    values, weeks = model.trajectories(origin, task, origin.point)
+    i = origin.snap.locations.index("CD-NK")
+    cw = weeks.index("2026-10-24")
+    week, after = values[:, i, cw], values[:, i, cw + 1]
+    assert after.mean() == pytest.approx(week.mean(), rel=0.03)
+    assert np.corrcoef(week, after)[0, 1] > 0.9
 
 
 def test_diagnostics_name_the_sources(

@@ -121,7 +121,7 @@ def test_pooled_delay_fits_own_data_where_randomwalknowcast_does(
     np.testing.assert_array_equal(pooled.fit.own, own.fit.own)
     # The country fits every age, so its newest full week, which leans
     # on the young ages, is nowcast as the chain ladder does.
-    week = own.snap.n_weeks - 2
+    week = own.start_nowcast
     ratio = pooled.point[0, week] / own.point[0, week]
     assert 0.85 < ratio < 1.15
 
