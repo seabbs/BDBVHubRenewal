@@ -222,23 +222,22 @@ def test_weeks_back_count_from_the_cutoff_week(daily: pd.DataFrame) -> None:
     assert origin.size[:, 0].min() < MAX_SIZE
 
 
-def test_a_later_clock_ages_the_origin_days_and_lowers_the_nowcast(
-    snap24,
-) -> None:
-    base = build_origin(snap24, Settings(), errors=False)
-    late = build_origin(snap24, Settings(clock_shift=1), errors=False)
-    early = build_origin(snap24, Settings(clock_shift=-1), errors=False)
-    cd, day = 0, int(snap24.cut[-1])
-    g = base.fit.g[cd]
-    # One day later the newest day is age 1.
-    assert late.growth[cd, day] == pytest.approx(np.exp(g[1:].sum()))
-    # One day earlier no age is below 0, so the newest day stays at 0.
-    assert early.growth[cd, day] == pytest.approx(np.exp(g.sum()))
-    assert early.growth[cd, day - 1] == pytest.approx(np.exp(g.sum()))
-    newest = base.point[cd, -1]
-    assert late.point[cd, -1] < newest < early.point[cd, -1]
-    # The delay comes from the release pairs and does not move.
-    np.testing.assert_allclose(late.fit.g, base.fit.g)
+def test_there_is_no_clock_shift() -> None:
+    assert not hasattr(Settings(), "clock_shift")
+
+
+def test_no_walk_spread_anywhere_raises(snap24, monkeypatch) -> None:
+    # If no place, pool or country has a walk variance above 0, there is
+    # no spread to fall back on, so the model gives no forecast.
+    from bdbvhubrenewal.forecasters import ModelUnavailableError, chain
+
+    def flat(reported, *_):
+        n = reported.shape[0]
+        return np.zeros(n), np.full(n, np.nan)
+
+    monkeypatch.setattr(chain, "_walk_spreads", flat)
+    with pytest.raises(ModelUnavailableError, match="walk spread"):
+        build_origin(snap24, Settings(), errors=False)
 
 
 def test_the_delay_uses_the_baselinenowcast_window_of_onset_days(

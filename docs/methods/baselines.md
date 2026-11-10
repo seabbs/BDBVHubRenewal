@@ -231,6 +231,7 @@ $v$ is the delta-method variance of $\log(1 + Y)$ for $Y \sim \text{Poisson}(\la
 The noise matters only for small places. At 10 cases a week the term for a change is about 0.17, and at 250 it is under 0.01.
 At a few cases a week the delta method understates the noise, so some of it stays in $\sigma_p$.
 A place whose $\sigma_p^2$ is 0 or below, or which has fewer than 2 changes, has no own estimate, and takes its parent's by the [own-or-pooled rule](#own-or-pooled-estimates).
+If no parent nor the country has a variance above 0, the model gives no forecast for that origin.
 A pooled $\sigma_p$ uses the changes and noise of all the places in the pool together.
 
 A place with no case in the 9 weeks to $c_o$ stays at 0 until a new introduction, which starts its walk from a Poisson(1) count given at least 1.
