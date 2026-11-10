@@ -421,3 +421,35 @@ def test_release_forecasts_made_apart_by_model_score_as_one_run(
             check_dtype=False,
             obj=field,
         )
+
+
+def test_a_direct_national_is_scored_on_its_own_walk(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    from bdbvhubrenewal.evaluation.nowcast import forecast_releases
+    from bdbvhubrenewal.forecasters.chain import Settings
+
+    real = target.loc[target["kind"] == "real"]
+    tasks = make_tasks(
+        real.loc[real["vintage"] == "2026-10-17"],
+        delays.assign(kind="real"),
+        BacktestConfig(n_samples=20, seed=3),
+        daily=daily,
+    )
+    direct = RandomWalkNowcast(settings=Settings(national="direct"))
+    run = forecast_releases(tasks, target, [direct])
+    assert set(run.runs["national"]) == {"direct"}
+    out = release_backtest(tasks, daily, target, models=[direct])
+    summed = release_backtest(
+        tasks, daily, target, models=("randomwalknowcast",)
+    )
+
+    def national(res) -> pd.DataFrame:  # type: ignore[no-untyped-def]
+        keep = res.scores.loc[res.scores["location"] == "CD"]
+        return keep.sort_values(list(keep.columns)).reset_index(drop=True)
+
+    for name in ("reported", "complete"):
+        a = national(out).loc[lambda d, n=name: d["target"] == n]
+        b = national(summed).loc[lambda d, n=name: d["target"] == n]
+        assert len(a) == len(b) > 0
+        assert not np.allclose(a["wis"], b["wis"])

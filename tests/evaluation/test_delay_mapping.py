@@ -125,6 +125,23 @@ def test_randomwalk_is_returned_as_it_is_and_a_hub_team_not_at_all(
     assert none == {}
 
 
+def test_a_direct_national_is_mapped_by_its_own_delay(
+    daily: pd.DataFrame,
+) -> None:
+    samples = _samples({"CD-IT": 100.0, "CD-NK": 50.0, "CD": 400.0})
+    summary = pd.concat(
+        [_summary("CD-IT", [0.5, 0.9]), _summary("CD", [0.5, 0.9])]
+    )
+    (out,) = reported_samples(
+        samples, summary, "m", "2026-10-17", ["2026-10-24"], daily,
+        pd.DataFrame(columns=["location", "target_end_date", "reported"]),
+        np.random.default_rng(1), national="direct",
+    ).values()  # fmt: skip
+    wide = out.pivot_table(index="sample", columns="location", values="value")
+    assert (wide["CD"] < 400).any()
+    assert (wide["CD"] > wide["CD-IT"] + wide["CD-NK"]).all()
+
+
 def test_samples_are_kept_when_the_delay_maps_no_place(
     daily: pd.DataFrame,
 ) -> None:
