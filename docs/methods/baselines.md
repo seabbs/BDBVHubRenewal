@@ -197,6 +197,8 @@ Each estimate is chosen by one rule.
 3. **Fallback.** Otherwise it uses the pooled estimate of its nearest parent that meets the same rule, and otherwise the country's.
    A pooled estimate uses together the pair sums, errors and weekly changes of the parent's children with $\ell \ge 10$, or the parent's own where none has.
 6. **Removals.** The removal rate $b_{p,k}$ is always the place's own.
+7. **Zone delays.** A zone takes its province's delay, whatever its level.
+   A zone's own delay rests on few cases, and the nowcast divides by the share reported, so noise in it inflates the zones' nowcasts.
 
 ## Forecast
 
@@ -272,7 +274,7 @@ Where no week reaches 0.95, `randomwalknowcast` takes the first week as the late
 ## Health zones
 
 `randomwalk` and `randomwalknowcast` run on each zone's own release snapshots in the same way as for provinces.
-Each zone takes its delay, size and walk spread by the rules [above](#own-or-pooled-estimates).
+Each zone takes its size and walk spread by the rules [above](#own-or-pooled-estimates), and its province's delay.
 Province sample $Y^{(i)}(w)$ is apportioned over the zones in proportion to the zone model's own sample $x^{(i)}_z(w)$ of the same id and week:
 
 $$
