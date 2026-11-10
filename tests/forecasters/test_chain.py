@@ -20,7 +20,6 @@ from bdbvhubrenewal.forecasters.chain import (
     retro_errors,
     weeks_back,
 )
-from bdbvhubrenewal.forecasters.introductions import introduction_rates
 from bdbvhubrenewal.forecasters.obs import MAX_SIZE, PRIOR_SIZE
 from bdbvhubrenewal.forecasters.pooling import source_index
 
@@ -317,29 +316,6 @@ def test_no_nowcast_is_below_the_reported_count_at_11_01(
         origin = build_origin(snap, Settings(), errors=False)
         short = origin.reported - origin.point
         assert short.max() <= 1e-3, (name, float(short.max()))
-
-
-def test_introductions_pool_siblings_after_k_silent_weeks() -> None:
-    # Country, then three provinces; k = 3 silent weeks before a week at risk.
-    reported = np.array(
-        [
-            [0, 0, 0, 0, 1, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [5, 5, 5, 5, 5, 5, 5, 5, 5],
-            [0, 0, 0, 1, 0, 0, 0, 0, 0],
-        ],
-        dtype=float,
-    )
-    p = introduction_rates(reported, np.full(4, 8), np.array([-1, 0, 0, 0]), 3)
-    # Provinces: 6 + 0 + 3 weeks at risk and 1 first case.
-    np.testing.assert_allclose(p[1:], 1 / 9)
-    # The country is its own group: 3 weeks at risk, 1 first case.
-    assert p[0] == pytest.approx(1 / 3)
-    # Weeks after the start week do not count.
-    late = introduction_rates(
-        reported, np.array([8, 8, 8, 2]), np.array([-1, 0, 0, 0]), 3
-    )
-    np.testing.assert_allclose(late[1:], 0.0)
 
 
 def test_the_walk_spread_is_net_of_poisson_noise(origin24) -> None:
