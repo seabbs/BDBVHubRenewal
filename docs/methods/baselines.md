@@ -253,6 +253,7 @@ If any place has no such week, `randomwalk` gives no forecast for the vintage.
 $x_i = Y_{p,o}(w_0)$ for every sample.
 Weeks up to $w_0$ are the reported counts.
 Later weeks with data are walk draws, floored at the reported count.
+Where no week reaches 0.95, `randomwalknowcast` takes the first week as the latest complete week.
 
 ## Start from the nowcast
 
