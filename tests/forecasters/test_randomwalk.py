@@ -30,6 +30,7 @@ from bdbvhubrenewal.forecasters.chain import (
     NoWalkSpread,
     Settings,
 )
+from bdbvhubrenewal.forecasters.randomwalk import cutoff_state
 
 
 def _task(
@@ -169,13 +170,43 @@ def test_the_partial_week_adds_walk_draws_to_its_nowcast(
     assert mine.nunique() > 10
 
 
-def test_the_walk_goes_on_from_the_completed_cut_off_week(
+def test_the_cut_off_state_weights_the_nowcast_by_its_precision() -> None:
+    x0 = np.log1p(np.array([[100.0, 120.0]]))
+    one = np.ones(1)
+    # No step to the cut-off week: the state is the start week's.
+    mean, sd = cutoff_state(
+        x0, 0 * one, 0.3 * one, 200 * one, 200 * one, 1e6 * one, 7
+    )
+    np.testing.assert_allclose(mean, x0)
+    np.testing.assert_allclose(sd, 0.0)
+    # No walk spread: the walk's prior is exact, so the nowcast adds nothing.
+    mean, sd = cutoff_state(x0, one, 0 * one, 200 * one, 50 * one, one, 7)
+    np.testing.assert_allclose(mean, x0)
+    # A precise nowcast (all reported, Poisson end) against a wide walk: the
+    # state is near the nowcast, scaled to the whole week.
+    mean, sd = cutoff_state(x0, one, 2.0 * one, 600 * one, 600 * one,
+                            1e6 * one, 6)  # fmt: skip
+    np.testing.assert_allclose(mean, np.log1p(700.0), atol=0.01)
+    assert (sd < 0.05).all()
+    # In between, the gain is the walk's variance over the sum of the walk's
+    # and the nowcast's, the NB variance of the count still to come and the
+    # count's Poisson noise on the log scale.
+    mu, rep, size, sigma = 200.0, 50.0, 2.0, 0.3
+    tau2 = (150.0 + 150.0**2 / size) / mu**2 + 1.0 / (1.0 + mu)
+    gain = sigma**2 / (sigma**2 + tau2)
+    mean, sd = cutoff_state(x0, one, sigma * one, mu * one, rep * one,
+                            size * one, 7)  # fmt: skip
+    np.testing.assert_allclose(mean, x0 + gain * (np.log1p(mu) - x0))
+    np.testing.assert_allclose(sd, sigma * np.sqrt(1.0 - gain))
+
+
+def test_with_no_walk_spread_the_walk_goes_on_from_the_start_week(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
-    # Cut-off 10-16 is a Friday, so the week of 10-17 misses a day. With no
-    # walk spread, each sample's next week is Poisson of its own completed
-    # 10-17 value: the nowcast of the observed days plus the walk's draw
-    # for the missing day.
+    # Cut-off 10-16 is a Friday, so the week of 10-17 misses a day and the
+    # walk starts from 10-10. With no walk spread the walk's prior is exact,
+    # so the partial week's nowcast has no weight and each sample's next
+    # week is Poisson of its own 10-10 nowcast.
     task = dataclasses.replace(
         _task(target, delays, daily, "2026-10-17"), n_samples=4000
     )
@@ -185,9 +216,33 @@ def test_the_walk_goes_on_from_the_completed_cut_off_week(
     values, weeks = model.trajectories(origin, task, origin.point)
     i = origin.snap.locations.index("CD-IT")
     cw = weeks.index("2026-10-17")
-    week, after = values[:, i, cw], values[:, i, cw + 1]
-    assert after.mean() == pytest.approx(week.mean(), rel=0.03)
-    assert np.corrcoef(week, after)[0, 1] > 0.9
+    start, after = values[:, i, cw - 1], values[:, i, cw + 1]
+    assert after.mean() == pytest.approx(start.mean(), rel=0.03)
+    assert np.corrcoef(start, after)[0, 1] > 0.9
+
+
+def test_a_precise_cut_off_week_is_the_walks_base(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    # With the partial 10-17 week fully reported, a Poisson-end size and a
+    # wide walk, the walk's state at 10-17 is the week's count scaled to
+    # seven days, and the next week's median follows it.
+    task = dataclasses.replace(
+        _task(target, delays, daily, "2026-10-17"), n_samples=4000
+    )
+    model = RandomWalkNowcast()
+    origin = model.origin_at(task, errors=True)
+    origin.sigma[:] = 1.0
+    origin.size[:, 0] = 1e6
+    i = origin.snap.locations.index("CD-IT")
+    weeks = origin.snap.week_ends
+    cw = list(weeks).index("2026-10-17")
+    point = origin.point.copy()
+    point[:, cw] = origin.reported[:, cw]
+    values, _ = model.trajectories(origin, task, point)
+    want = np.log1p(origin.reported[i, cw] * 7 / 6)
+    after = np.log1p(values[:, i, cw + 1])
+    assert np.median(after) == pytest.approx(want, abs=0.15)
 
 
 def test_the_missing_days_step_from_the_week_before(
