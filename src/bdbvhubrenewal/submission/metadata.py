@@ -174,5 +174,42 @@ MODEL_METADATA = {
             "provinces and health zones, and the hub's weekly target data."
         ),
     },
+    # Not submitted. Kept so `metadata --model pprandomwalknowcast` can
+    # describe it.
+    "pprandomwalknowcast": {
+        "model_name": "Generative random walk nowcast, partially pooled",
+        "methods": (
+            "Epinowcast-style joint model of weekly expected counts, a log "
+            "random walk, and a log-normal reporting delay, fitted by NUTS "
+            "to the daily release snapshots with partial pooling over "
+            "zones, provinces and country; national the sum of provinces."
+        ),
+        "methods_long": (
+            "One generative model in the style of epinowcast (Abbott et al., "
+            "https://github.com/epinowcast/epinowcast/), fitted with NUTS "
+            "(NumPyro) to each vintage. Each place's weekly expected final "
+            "count is a random walk on the log scale over the last 16 "
+            "weeks, with each onset day expecting a seventh of it. Cases are "
+            "reported after a log-normal delay cut to whole days and capped "
+            "at 42 days. The new reports of each onset day between "
+            "consecutive releases are negative binomial on the expected "
+            "count times the share of the delay between the two ages, so "
+            "the data are right truncated by construction. Downward "
+            "revisions are first moved onto earlier releases, as "
+            "baselinenowcast does. The walk spread and the delay location "
+            "are partially pooled over zones, provinces and the country, "
+            "and the delay scale and dispersion are shared. Each sample is "
+            "one posterior draw: reported counts plus negative binomial "
+            "draws of the cases still to come, and the walk continued over "
+            "the forecast weeks. Places with no case in nine weeks are not "
+            "fitted and stay at 0 until an introduction, as in "
+            "randomwalknowcast. The national value is the sum of provinces. "
+            "See https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."
+        ),
+        "data_inputs": (
+            "Hub daily onsets by release (observed plus imputed) for "
+            "provinces and health zones, and the hub's weekly target data."
+        ),
+    },
 }
 """Metadata text for each model that may be submitted."""

@@ -1,6 +1,6 @@
 # Baseline models
 
-`randomwalknowcast`, its partially pooled variant `pprandomwalknowcast`, and `randomwalk`, their comparison model.
+`randomwalknowcast`, its generative partially pooled variant `pprandomwalknowcast`, and `randomwalk`, their comparison model.
 { .page-subtitle }
 
 The data and notation are on the [Data methods page](data.md#target-and-notation).
@@ -285,24 +285,61 @@ The split keeps each zone's share from its own sample, and the province sets the
 
 ## Partially pooled variant
 
-`pprandomwalknowcast` is `randomwalknowcast` with partially pooled point estimates.
-Its delay $\Delta_p$, walk spread $\sigma_p$ and nowcast size $\phi_{p,k}$ come from one hierarchical numpyro model, which pools each place towards its parent, in place of the [own-or-pooled rule](#own-or-pooled-estimates).
-The model only estimates them.
-Their posterior medians are plugged into `randomwalknowcast`'s nowcast and walk, so the forecasts do not carry their posterior uncertainty.
+`pprandomwalknowcast` is one generative model of the expected final counts and the reporting delay, in the style of epinowcast[^enw].
+It is fitted with NUTS to the release snapshots, and its forecast samples are posterior predictive draws.
+It keeps the random walk of `randomwalknowcast`, but makes the nowcast from the same model in place of a chain ladder, and partially pools over zones, provinces and the country in place of the [own-or-pooled rule](#own-or-pooled-estimates).
 
-**The same as `randomwalknowcast`.**
-The release snapshots, delay window and preprocessing, the weekly nowcast fill, the retrospective errors, the start rule, the nowcast draws, the walk, the introductions and the zone reconciliation.
+**Places.**
+The places forecast are the leaves of the hierarchy: the provinces, or the zones at zone level.
+A leaf with no case in the 9 weeks to $c_o$ is silent, as in `randomwalknowcast`.
+Silent leaves are not fitted and draw introductions ([below](#silent-places)).
+Every other leaf $p$ enters the likelihood.
+A parent's counts are the sum of its children's, so the parents enter only as the centres the leaves are pooled towards, and each case enters once.
 
-**Different.**
+**Expected final counts.**
+The expected final count of leaf $p$ in hub week $w$ is $\lambda_{p,w}$.
+It is a random walk on the log scale over the 16 weeks to the week holding $c_o$,
 
-| Estimate | `randomwalknowcast` | `pprandomwalknowcast` |
-|---|---|---|
-| Delay $\Delta_p$ | Least squares on the log ratios of sums, own or pooled parent's | Poisson increments, below, pooled over the hierarchy |
-| Walk spread $\sigma_p$ | Variance of the changes net of Poisson noise, own or pooled parent's | Normal changes with variance $\sigma_p^2$ plus the Poisson noise, pooled |
-| Size $\phi_{p,k}$ | Maximum likelihood per $k$, own or pooled parent's | Negative binomial new reports, pooled |
-| Which places enter | Each place's own data, or its pool's | Only the places forecast; their parents are latent centres |
+$$
+\log \lambda_{p,w} = \log \lambda_{p,w-1} + \delta_{p,w},
+\qquad
+\delta_{p,w} \sim \mathcal{N}(0, \sigma_p^2).
+$$
 
-Each parameter $\theta$ of place $p$ is its parent's plus an offset for the place's tier,
+Each onset day $t$ in week $w(t)$ expects $\lambda_{p,w(t)} / 7$ cases.
+
+**Delay.**
+A case is reported $d$ days after onset, with $d$ log-normal with location $\mu_p$ and scale $s$, cut to whole days and capped at $D = 42$.
+The share of a day's final count reported by age $a$ is
+
+$$
+\pi_p(a) = \frac{F(a + 1;\ \mu_p, s)}{F(D + 1;\ \mu_p, s)}, \quad 0 \le a < D,
+\qquad
+\pi_p(a) = 1 \text{ for } a \ge D,
+\qquad
+\pi_p(-1) = 0,
+$$
+
+with $F$ the log-normal CDF.
+
+**Observations.**
+Day $t$ is $a_r(t) = c_r - t$ days old at release $r$.
+Let $r'$ be the release before $r$, with $a_{r'}(t) = -1$ and $C_{p,r'}(t) = 0$ when $r$ is the first release that observes $t$.
+The new reports between the two are
+
+$$
+C_{p,r}(t) - C_{p,r'}(t) \sim \text{NB}\Big(\frac{\lambda_{p,w(t)}}{7}\,\big\{\pi_p(a_r(t)) - \pi_p(a_{r'}(t))\big\},\ \phi\Big),
+$$
+
+for every onset day in the 16 weeks and every release up to $o$ that observes it.
+This is epinowcast's reporting triangle, with each release a batch of report days.
+It is right truncated by construction: a young day has seen only the start of its delay.
+The counts first go through the [delay](#delay)'s handling of negative values, baselinenowcast's, so a downward revision is taken from earlier increments of the day and no increment is negative.
+New reports of a day that was already $D$ days old at $r'$ have no probability under the model and are left out, as the chain ladder leaves out growth past $D$.
+At 11-08 these are 412 of 10,878 national cases, 220 of them added by the 11-08 release.
+
+**Pooling.**
+$\mu_p$ and $\log \sigma_p$ of a place are its parent's plus an offset for its tier,
 
 $$
 \theta_p = \theta_{\mathrm{pa}(p)} + \tau_{v(p)}\, z_p,
@@ -311,38 +348,56 @@ z_p \sim \mathcal{N}(0, 1),
 $$
 
 with $v(p)$ the tier of $p$ (province or zone) and one $\tau_v$ for each tier and parameter.
-$\theta$ is $\log \Delta_p(j)$ for each age $j$, $\log \sigma_p$, and $\log \phi_{p,k}$ for each week back $k$.
-A place's counts are the sum of its children's, so only the places forecast (the provinces, or the zones at zone level) enter the likelihood, and each case enters once.
+The delay scale $s$ and the dispersion $\phi$ are shared by all places.
+With $s$ pooled as well, its $\tau$ fell towards 0 where a few large provinces pinned it, and 17% of the draws at 11-08 were divergent.
 
-- **Delay.** For each gap $s$ and age $x$ with $\sum C_{p,r}(t) > 0$, the increment is Poisson,
+**Priors.**
 
-    $$
-    \sum C_{p,r+1}(t) - \sum C_{p,r}(t) \sim \text{Poisson}\Big(\sum C_{p,r}(t)\, \big(e^{\sum_{j=x}^{x+s-1} \Delta_p(j)} - 1\big)\Big),
-    $$
-
-  with the sums, window and preprocessing of the [delay](#delay).
-  With one place and a gap of 1 its maximum likelihood estimate is baselinenowcast's chain ladder factor.
-  It is fitted at the origin and at each earlier release that gives errors.
-- **Walk spread.** The weekly changes $\Delta_w$ of $\log\{1 + Y_{p,o}(w)\}$ over the [forecast](#forecast) window are $\mathcal{N}\big(0, \sigma_p^2 + v\{Y_{p,o}(w - 1)\} + v\{Y_{p,o}(w)\}\big)$.
-  A change between two weeks with no cases has no noise, so its density grows without bound as $\sigma_p$ falls to 0, and it is left out.
-- **Nowcast uncertainty.** The new reports $A_{p,r}(w)$ are $\text{NB}(\widehat{\text{rem}}, \phi_{p,k})$ on the errors of [the fit](#nowcast), made with the pooled delay of each earlier release.
-
-**Priors and sampler.**
-
-| Parameter | Prior of the country's value | Why |
+| Parameter | Prior | Why |
 |---|---|---|
-| $\log \Delta(j)$ | $\mathcal{N}(-3, 2^2)$ | Daily log growth about 0.05, 0.007 to 0.37 within one sd |
-| $\log \sigma$ | $\mathcal{N}(\log 0.2, 1)$ | Weekly log changes of about 0.2, 0.07 to 0.54 within one sd |
-| $\log \phi_k$ | $\mathcal{N}(0, 1.5^2)$ | Sizes about 1, 0.2 to 4.5 within one sd |
-| $\tau_v$ | $\mathcal{N}^+(0, 0.5^2)$ | Median offset sd 0.34, a place within a factor of about 1.4 of its parent |
+| $\mu$ of the country | $\mathcal{N}(1.6, 1)$ | Median delay about 5 days, 2 to 13 within one sd |
+| $\log s$ | $\mathcal{N}(\log 0.7, 0.5^2)$ | |
+| $\log \sigma$ of the country | $\mathcal{N}(\log 0.2, 1)$ | Weekly log changes of about 0.2, 0.07 to 0.54 within one sd |
+| $\log \phi$ | $\mathcal{N}(\log 10, 1.5^2)$ | |
+| $\tau_v$ | $\mathcal{N}^+(0, 0.5^2)$ | A place within a factor of about 1.4 of its parent at the median |
+| $\log \lambda_{p,w}$ in the first week | $\mathcal{N}(2, 3^2)$ | 0.02 to 3000 cases a week within two sd |
 
-Each fit runs NUTS with 2 chains of 500 warm-up and 500 draws, in sequence, from the prior medians, at target acceptance 0.9.
+**Forecast.**
+Each sample takes one posterior draw, and every draw is used once before any is used again.
+A week's final count is the sum over its days.
+A day up to $c_o$ is its count reported plus an NB draw of the rest, with mean $\lambda_{p,w(t)} / 7 \cdot \{1 - \pi_p(a_o(t))\}$ and size $\phi$.
+A later day of the week holding $c_o$ is an NB draw with mean $\lambda_{p,w(t)} / 7$.
+Later weeks continue the walk from the draw's last $\lambda$ with its $\sigma_p$, and their counts are NB with mean $\lambda$ and size $7 \phi$, the sum of seven days.
+Weeks before the 16 fitted weeks are the counts reported.
+National is the sum of the provinces by sample, and zones are reconciled to provinces as for `randomwalknowcast` ([Health zones](#health-zones)).
+
+**Silent places.** { #silent-places }
+A silent leaf has no case to fit, and a walk from a $\lambda$ near 0 gave divergent draws.
+It is its reported counts, then 0 until an introduction, as in `randomwalknowcast` ([Forecast](#forecast)).
+Its start week, and the share of each week not yet reported, come from this model's posterior median $\pi_p$.
+After an introduction it walks with its posterior median $\sigma_p$.
+This is the one part of the model that is not drawn from the posterior.
+
+**Scoring.**
+On the reported target, the backtest maps its final counts to what a later release shows by the posterior median $\pi_p(a)$ of each place ([Evaluation](evaluation.md#real-releases)).
+
+**Sampler.**
+NUTS runs 2 chains of 500 warm-up and 750 draws, in sequence, from the prior medians, at target acceptance 0.9.
+Each walk step is sampled as $\delta^*_{p,w} \sim \mathcal{N}(0, \sigma_p)$ and set to $\delta_{p,w} = \sqrt{\sigma_p}\, \delta^*_{p,w}$, numpyro's location-scale reparameterisation with centring $\tfrac{1}{2}$, halfway between centred and non-centred steps.
+A large place's counts pin its walk, which suits centred steps, and a place with few cases leaves it to the prior, which suits non-centred ones.
+At 11-08 half-centred steps gave 1 divergent draw in 1500, against 12 for non-centred steps.
 A fit whose worst split $\hat R$ is above 1.05, or with more than 1% of its draws divergent, raises, and the model gives no forecast for that origin.
-The posterior medians of $\phi_{p,k}$ are kept in $[0.1, 1000]$, the range of baselinenowcast's fit.
-It is scored on the real releases at province and zone level.
 
-**Open.** Each forecast sample could instead take its own posterior draw of $(\Delta, \sigma, \phi)$, which would make the forecast carry the uncertainty of the estimates.
-That choice is not made yet.
+**How it differs from `randomwalknowcast`.**
+
+| | `randomwalknowcast` | `pprandomwalknowcast` |
+|---|---|---|
+| Delay | Chain ladder, non-parametric by age, own or parent's | Log-normal, $\mu_p$ pooled, $s$ shared |
+| Nowcast | Chain-ladder fill, with NB new reports and Poisson removals fitted to retrospective nowcasts | NB new reports of the same model that fits the delay and the walk |
+| Walk | On $\log(1 + y)$ from a nowcast draw, spread from 8 changes net of Poisson noise | On $\log \lambda$ over all 16 weeks, spread pooled, fitted jointly |
+| Uncertainty in the estimates | None, point estimates | Each sample is a posterior draw |
+| Removals | Poisson, counts can fall | None, the forecast is at least the count reported |
+| Silent places | Introductions | Introductions, from its own delay |
 
 ## Limitations
 
@@ -357,4 +412,5 @@ The walk has no drift, and its spread comes from 8 weekly changes, net of a delt
 `pprandomwalknowcast`'s delay is log-normal, so it cannot take the shape of an irregular delay as the chain ladder can.
 
 [^bnc-paper]: Johnson KE, Tang M, Tyszka E, Nemcova B, Wolffram D, Ergas R, Reich NG, Funk S, Mellor J, Bracher J, Abbott S (2025). Baseline nowcasting methods for handling delays in epidemiological data. Wellcome Open Research. [doi:10.12688/wellcomeopenres.25027.2](https://doi.org/10.12688/wellcomeopenres.25027.2).
+[^enw]: Abbott S, Lison A, Funk S, Pearson C, Gruson H, Guenther F, Höhle M (2023). epinowcast: Flexible hierarchical nowcasting. <https://github.com/epinowcast/epinowcast/>.
 [^bnc-package]: Johnson KE, Tyszka E, Bracher J, Funk S, Abbott S (2025). baselinenowcast: Methods for baseline nowcasting right-truncated epidemiological data. <https://github.com/epinowcast/baselinenowcast/>.
