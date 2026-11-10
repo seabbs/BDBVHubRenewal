@@ -18,8 +18,8 @@ from bdbvhubrenewal.forecasters import ForecastTask, get_model
 
 PINNED = {
     "randomwalk": "b5aecfce6d5f7a9e",
-    "randomwalknowcast": "fd27dcc20c098a1d",
-    "pprandomwalknowcast": "07c4c900cf9695d3",
+    "randomwalknowcast": "e974711fc102b6e4",
+    "pprandomwalknowcast": "7f0843fe8a9fc7ba",
 }
 
 _COMPILES: list[float] = []

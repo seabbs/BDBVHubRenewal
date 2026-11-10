@@ -20,7 +20,7 @@ def test_each_week_back_gets_the_ports_nb_fit() -> None:
     rng = np.random.default_rng(1)
     remaining = rng.uniform(5, 50, size=(40, 2))
     added = rng.poisson(remaining).astype(float)
-    got = fit_sizes(added, remaining, 2)
+    got = fit_sizes(added, remaining)
     want = [float(fit_nb(added[:, i], remaining[:, i])) for i in range(2)]
     assert got == pytest.approx(want)
 
@@ -32,10 +32,9 @@ def test_empty_cells_pad_without_changing_the_fit() -> None:
     padded = fit_sizes(
         np.vstack([added, np.zeros((10, 1))]),
         np.vstack([remaining, np.zeros((10, 1))]),
-        2,
     )
     # Equal up to Brent's float32 tolerance.
-    assert padded == pytest.approx(fit_sizes(added, remaining, 2), rel=1e-2)
+    assert padded == pytest.approx(fit_sizes(added, remaining), rel=1e-2)
 
 
 def test_overdispersed_reports_give_a_smaller_size() -> None:
@@ -43,14 +42,14 @@ def test_overdispersed_reports_give_a_smaller_size() -> None:
     remaining = np.full((200, 1), 30.0)
     wide = rng.negative_binomial(2, 2 / 32, size=(200, 1)).astype(float)
     narrow = rng.poisson(30, size=(200, 1)).astype(float)
-    assert fit_sizes(wide, remaining, 2) < fit_sizes(narrow, remaining, 2)
+    assert fit_sizes(wide, remaining) < fit_sizes(narrow, remaining)
 
 
 def test_too_few_errors_give_the_prior_median() -> None:
     added = np.array([[4.0, 0.0], [0.0, 0.0]])
     remaining = np.array([[3.0, 0.0], [0.0, 0.0]])
     np.testing.assert_allclose(
-        fit_sizes(added, remaining, 2), PRIOR_SIZE, rtol=1e-6
+        fit_sizes(added, remaining), PRIOR_SIZE, rtol=1e-6
     )
     assert pytest.approx(2.2, abs=0.01) == PRIOR_SIZE
 

@@ -65,7 +65,11 @@ def test_the_spread_moves_up_alone_when_errors_are_short() -> None:
     level = np.array([60.0, 30.0, 40.0, 0.0, 0.0])
     own = source_index(level, PARENT)
     short = source_index(
-        level, PARENT, np.array([[9], [1], [9], [0], [0]]), np.full((5, 1), 9)
+        level,
+        PARENT,
+        np.array([[9], [1], [9], [0], [0]]),
+        np.full((5, 1), 9),
+        min_err=2,
     )
     assert own[1] == 1
     assert short[1, 0] == 5 + 0
