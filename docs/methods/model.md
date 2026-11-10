@@ -318,7 +318,7 @@ The ZoneAllocator floor of the other models does not apply.
 
 A province's trajectory is the sum of the trajectories of all its zones, fitted and silent, draw by draw and week by week.
 So zones sum to their province exactly, and the hub file takes the zone trajectories as they are.
-The national trajectory is the sum of the provinces plus the unassigned component ([Forecasts](#forecasts)).
+The national trajectory is the sum of the provinces, with no unassigned component: the hub's national target has had no case without a province in any release (`data/national-coherence.csv`).
 
 ## Single patch (`renewalsp`) { #single-patch }
 

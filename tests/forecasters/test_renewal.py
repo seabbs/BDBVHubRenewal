@@ -771,6 +771,9 @@ def test_zone_variants_fit_zones_and_sum_them_to_provinces(
     assert fit.zones is not None
     assert set(fit.zones["location"]) == set(fitted) | quiet_zones
     assert set(fit.samples["location"]) == set(task.locations)
+    # National is the sum of the provinces: the hub's national target has
+    # no case without a province (data/national-coherence.csv).
+    assert fit.unassigned is None
     summed = (
         fit.zones.assign(location=fit.zones["location"].map(province_of))
         .groupby(["location", "target_end_date", "sample"])["value"]

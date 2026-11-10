@@ -1431,7 +1431,9 @@ class RenewalModel:
         `randomwalknowcast`'s introduction layer (`_silent_walk`), so a
         zone with no recent case is exactly 0 until an introduction.
         Each province sample is the sum of its zones' samples of the same
-        id, and national adds the data gap (`data_gap`).
+        id, and national is the sum of the provinces, with no unassigned
+        part: the hub's national target has no case without a province
+        in any release (`data/national-coherence.csv`).
         """
         walk, silent = _silent_walk(_zone_walk_task(task))
         fitted = tuple(z for z in task_zones(task) if z not in silent)
@@ -1451,7 +1453,7 @@ class RenewalModel:
         return RenewalFit(
             runs,
             samples,
-            data_gap(task, samples),
+            None,
             as_reported=sum_zones(pd.concat(later, ignore_index=True))
             if later
             else None,
