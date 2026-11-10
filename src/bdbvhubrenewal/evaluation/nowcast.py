@@ -70,6 +70,7 @@ from bdbvhubrenewal.forecasters.base import (
     add_national,
     get_model,
     list_models,
+    national_method,
 )
 from bdbvhubrenewal.forecasters.chain import MissingSnapshots
 from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
@@ -384,13 +385,15 @@ def reported_samples(
     daily: pd.DataFrame,
     reported: pd.DataFrame,
     rng: np.random.Generator,
+    national: str = "sum",
 ) -> dict[str, pd.DataFrame]:
     """Return a model's samples of what each later release shows.
 
     `randomwalk`'s samples are returned as they are, with no delay.
     Another model's places are mapped by its delay (`delay_curves`,
     `draw_reported`), a place it has no delay for is returned as it is,
-    and the country is the sum of the provinces.
+    and the country is the sum of the provinces, or with `national`
+    `"direct"` a place mapped by its own delay.
     A model with no delay summary, such as a hub team, has none.
 
     Parameters
@@ -413,6 +416,9 @@ def reported_samples(
         at the origin.
     rng : numpy.random.Generator
         Random numbers.
+    national : str
+        `"sum"` or `"direct"`, how the model makes its national value
+        (`Settings.national`).
 
     Returns
     -------
@@ -423,10 +429,14 @@ def reported_samples(
         return dict.fromkeys(later, samples)
     if summary is None:
         return {}
-    places = samples.loc[samples["location"] != NATIONAL]
+    whole = NATIONAL in set(samples["location"])
+    if national == "direct":
+        # The country is a place of its own, and never summed.
+        places, whole = samples, False
+    else:
+        places = samples.loc[samples["location"] != NATIONAL]
     curves = delay_curves(summary, sorted(set(places["location"])))
     mapped = places["location"].isin(set(curves["location"]))
-    whole = NATIONAL in set(samples["location"])
     if not mapped.any():
         kept = add_national(places) if whole else places
         return dict.fromkeys(later, kept)
@@ -582,7 +592,8 @@ class ReleaseForecasts:
     ----------
     runs : pandas.DataFrame
         One row per origin and model run, in the order run: `status`
-        (`"forecast"` or `"no forecast"`) and `reason`.
+        (`"forecast"` or `"no forecast"`), `reason` and `national`
+        (`Settings.national`, `"sum"` for other models).
     samples : pandas.DataFrame
         Final-count samples with the national total: `location`,
         `target_end_date`, `sample` and `value`.
@@ -689,6 +700,7 @@ def forecast_releases(
                         "model": model.name,
                         "status": "no forecast",
                         "reason": str(err),
+                        "national": national_method(model),
                     }
                 )
                 continue
@@ -698,6 +710,7 @@ def forecast_releases(
                     "model": model.name,
                     "status": "forecast",
                     "reason": "",
+                    "national": national_method(model),
                 }
             )
             samples.append(
@@ -719,7 +732,9 @@ def forecast_releases(
         return pd.concat(frames, ignore_index=True)
 
     return ReleaseForecasts(
-        pd.DataFrame(runs, columns=["origin", "model", "status", "reason"]),
+        pd.DataFrame(
+            runs, columns=["origin", "model", "status", "reason", "national"]
+        ),
         stack(samples),
         stack(delays),
         stack(fit_rows),
@@ -784,9 +799,13 @@ def score_releases(
             continue
         here = kept.loc[kept["vintage"].astype(str) == task.vintage]
         forecasts: dict[str, pd.DataFrame] = {}
+        methods: dict[str, str] = {}
         summaries: dict[str, pd.DataFrame | None] = {}
         for row in runs.loc[runs["origin"] == task.vintage].itertuples():
             name: str = str(row.model)
+            # Parts written before the column have only summed nationals.
+            method = getattr(row, "national", "sum")
+            methods[name] = method if isinstance(method, str) else "sum"
             if row.status == "no forecast":
                 origin_rows.append(
                     {
@@ -829,6 +848,7 @@ def score_releases(
                 for o2, by in reported_samples(
                     drawn, summaries[name], name, task.vintage, later,
                     daily, reported, rngs[name],
+                    national=methods.get(name, "sum"),
                 ).items()
             ]  # fmt: skip
             frames.append(

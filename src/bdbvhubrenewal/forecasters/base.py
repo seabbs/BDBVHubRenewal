@@ -31,6 +31,7 @@ __all__ = [
     "check_samples",
     "get_model",
     "list_models",
+    "national_method",
     "register_model",
 ]
 
@@ -364,6 +365,29 @@ def check_samples(samples: pd.DataFrame, task: ForecastTask) -> None:
             raise ValueError(f"as_of {date} is not in the task's report_by.")
         due = {w for w in weeks if w <= date}
         _check_block(rows, task, due, f" for as_of {date}")
+
+
+def national_method(model: object) -> str:
+    """Return how a model makes its national value, `"sum"` or `"direct"`.
+
+    Parameters
+    ----------
+    model : ForecastModel, str or None
+        A model, or the name of a registered one. A name that is not
+        registered, or None, is `"sum"`.
+
+    Returns
+    -------
+    str
+        `Settings.national` of a random walk model, otherwise `"sum"`.
+    """
+    if model is None or isinstance(model, str):
+        try:
+            model = get_model(str(model))
+        except KeyError:
+            return "sum"
+    settings = getattr(model, "settings", None)
+    return str(getattr(settings, "national", "sum"))
 
 
 def add_national(samples: pd.DataFrame) -> pd.DataFrame:

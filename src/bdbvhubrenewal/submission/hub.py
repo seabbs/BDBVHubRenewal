@@ -30,6 +30,7 @@ import yaml
 
 from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.tidy import write_csv
+from bdbvhubrenewal.forecasters.base import national_method
 
 __all__ = [
     "HUB_COLUMNS",
@@ -134,31 +135,6 @@ def model_id(model_abbr: str, team_abbr: str = TEAM_ABBR) -> str:
                 f"{part!r} must be 1 to 14 letters, digits or underscores."
             )
     return f"{team_abbr}-{model_abbr}"
-
-
-def national_method(model: object) -> str:
-    """Return how a model makes its national value, `"sum"` or `"direct"`.
-
-    Parameters
-    ----------
-    model : ForecastModel, str or None
-        A model, or the name of a registered one. A name that is not
-        registered, or None, is `"sum"`.
-
-    Returns
-    -------
-    str
-        `Settings.national` of a random walk model, otherwise `"sum"`.
-    """
-    if model is None or isinstance(model, str):
-        from bdbvhubrenewal.forecasters import get_model
-
-        try:
-            model = get_model(str(model))
-        except KeyError:
-            return "sum"
-    settings = getattr(model, "settings", None)
-    return str(getattr(settings, "national", "sum"))
 
 
 def to_hub_table(
