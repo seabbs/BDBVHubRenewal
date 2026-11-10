@@ -19,7 +19,12 @@ with $r_z$ the zone's onsets in the `recent_weeks` weeks before the
 vintage and $l_z$ those in the `longer_weeks` weeks before it.
 So recent shares are shrunk towards the longer run with strength
 $\kappa$ (`prior_strength`), and the floor $a$ (`floor`) gives a zone
-with no cases a small share, so it gets near-zero draws.
+with no recent cases a small share, so it gets near-zero draws.
+The floor is $a$ for a zone with a case at the vintage and 0 for one
+with none, which so gets no cases: the province samples hold no
+information on which new zones a case may reach.
+In a province with no case in any zone, every zone has the floor $a$,
+so the zones share equally.
 A province sample $Y^{(k)}(w)$ keeps what each zone has published and
 splits the rest:
 
@@ -115,7 +120,8 @@ class ZoneAllocator:
     prior_strength : float
         Pseudo-cases $\kappa$ placed on the longer-run shares.
     floor : float
-        Pseudo-cases $a$ added to every zone's longer-run count.
+        Pseudo-cases $a$ added to the longer-run count of every zone with
+        a case at the vintage, or of every zone in a province with none.
     """
 
     recent_weeks: int = 2
@@ -146,7 +152,11 @@ class ZoneAllocator:
         longer = _window(counts, vintage, self.longer_weeks)
         r = recent.reindex(list(zones), fill_value=0).to_numpy(dtype=float)
         lw = longer.reindex(list(zones), fill_value=0).to_numpy(dtype=float)
-        prior = (lw + self.floor) / (lw + self.floor).sum()
+        end = pd.Timestamp(as_date(vintage))
+        past = counts.loc[pd.to_datetime(counts["target_end_date"]) <= end]
+        seen = np.isin(zones, past.loc[past["total"] > 0, "location"])
+        floor = self.floor * (seen if seen.any() else np.ones_like(seen))
+        prior = (lw + floor) / (lw + floor).sum()
         return np.asarray(r + self.prior_strength * prior)
 
     def shares(
