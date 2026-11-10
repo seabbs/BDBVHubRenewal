@@ -13,11 +13,12 @@ branch, one file per fit:
 The key (`fit_key`) hashes only what reaches a fit: the task at the
 origin, which holds only the releases up to the origin; the built model,
 whose representation gives its variant and resolved sampler settings;
-the BVDOutbreakSize release a BVD model uses; the code of the packages
-the fit runs (`CODE_INPUTS`, without docstrings or comments, and
+the BVDOutbreakSize release a BVD model uses; the code the model's fit
+can run (`fit_code`, without docstrings or comments, and
 `run_forecasts`); and the runtime dependencies locked in `uv.lock`.
 A new release adds one fit per model and leaves the older ones valid,
-while a change to the model code or settings refits every origin.
+while a change to a model's code or settings refits every origin of the
+models that run it, and no other.
 
 `plan` lists the fits the store lacks, `fit` makes one, and `load`
 writes the stored forecasts where the backtest and the docs read them.
@@ -68,6 +69,7 @@ from bdbvhubrenewal.forecasters import (
 __all__ = [
     "CODE_INPUTS",
     "STATUS_FILE",
+    "STORE_ENTRIES",
     "StoreStatus",
     "StoredFit",
     "build_model",
@@ -76,6 +78,7 @@ __all__ = [
     "current_keys",
     "failed",
     "fit",
+    "fit_code",
     "fit_key",
     "load",
     "origin_tasks",
@@ -94,7 +97,14 @@ CODE_INPUTS: Final = (
     "src/bdbvhubrenewal/forecasters",
     "src/bdbvhubrenewal/model",
 )
-"""Code every stored fit runs, relative to the repository root."""
+"""Code a stored fit may run, relative to the repository root: the key of
+a model that is not registered (`code_digest` without a model)."""
+
+STORE_ENTRIES: Final = (
+    "src/bdbvhubrenewal/evaluation/backtest.py",
+    "src/bdbvhubrenewal/evaluation/store.py",
+)
+"""The shared modules a stored fit calls: `fit` and `run_forecasts`."""
 
 STATUS_FILE: Final = "fit-store.json"
 """What `load` used, written beside the results for the docs."""
@@ -184,19 +194,47 @@ def _strip(source: str) -> str:
     return ast.dump(tree)
 
 
-def code_digest(root: Path | str = ".") -> str:
+def fit_code(model: str, root: Path | str = ".") -> list[str]:
+    """List the source files a stored fit of one model can run.
+
+    The import closure of the model's own module and of `STORE_ENTRIES`
+    (`evaluation.digest.model_code`), which leaves out the modules of
+    the other models, so a change to one model refits only the models
+    that run it.
+
+    Parameters
+    ----------
+    model : str
+        A registered model.
+    root : pathlib.Path or str
+        The repository root.
+
+    Returns
+    -------
+    list of str
+        Paths relative to `root`, sorted.
+    """
+    from bdbvhubrenewal.evaluation.digest import model_code
+
+    return model_code(model, root, STORE_ENTRIES)
+
+
+def code_digest(root: Path | str = ".", model: str | None = None) -> str:
     """Hash the code a stored fit runs and its runtime dependencies.
 
-    Python files in `CODE_INPUTS` are hashed as syntax trees without
-    docstrings, so comments and docstrings do not change the key; other
-    files by their bytes. `run_forecasts` and the backtest helpers it
-    calls are hashed the same way, with the Python minor version.
+    Python files in `fit_code` of the model (`CODE_INPUTS` without one)
+    are hashed as syntax trees without docstrings, so comments and
+    docstrings do not change the key; other files by their bytes.
+    `run_forecasts` and the backtest helpers it calls are hashed the same
+    way, with the Python minor version.
     The dependencies are `uv export --no-dev --all-extras` of `uv.lock`.
 
     Parameters
     ----------
     root : pathlib.Path or str
         The repository root.
+    model : str, optional
+        A registered model, whose own code is hashed.
 
     Returns
     -------
@@ -204,8 +242,9 @@ def code_digest(root: Path | str = ".") -> str:
         SHA-256 hex digest.
     """
     base = Path(root)
+    names = CODE_INPUTS if model is None else fit_code(model, base)
     files: list[Path] = []
-    for name in CODE_INPUTS:
+    for name in names:
         path = base / name
         files += sorted(path.rglob("*")) if path.is_dir() else [path]
     digest = hashlib.sha256()
@@ -332,7 +371,7 @@ def current_keys(
     tasks: Mapping[str, ForecastTask],
     models: Sequence[str],
     sampler: Mapping[str, Any],
-    code: str,
+    code: str | Mapping[str, str],
 ) -> Keys:
     """Return the current key of every stored model at every origin.
 
@@ -344,8 +383,8 @@ def current_keys(
         The stored models.
     sampler : mapping
         `samplers`.
-    code : str
-        `code_digest`.
+    code : str or mapping
+        `code_digest`, or each model's `code_digest` by name.
 
     Returns
     -------
@@ -353,8 +392,9 @@ def current_keys(
         Key by (model, origin).
     """
     built = {m: build_model(m, sampler) for m in models}
+    codes = {m: code if isinstance(code, str) else code[m] for m in models}
     return {
-        (m, origin): fit_key(built[m], task, code)
+        (m, origin): fit_key(built[m], task, codes[m])
         for origin, task in tasks.items()
         for m in models
     }
@@ -718,7 +758,7 @@ def command(args: argparse.Namespace) -> int:
     int
         0 on success, 1 if the fit failed or the arguments are wrong.
     """
-    sampler, code = samplers(args.policy), code_digest()
+    sampler = samplers(args.policy)
     if args.action == "fit":
         from bdbvhubrenewal.cli import host_devices
 
@@ -733,6 +773,9 @@ def command(args: argparse.Namespace) -> int:
         load_daily(args.data),
     )
     models = args.models or stored_models()
+    # Each model's key hashes only the code its fit can run (`fit_code`).
+    names = [args.model] if args.action == "fit" else models
+    code = {m: code_digest(".", m) for m in names if m in stored_models()}
     if args.action == "fit":
         if args.model not in stored_models() or args.origin not in tasks:
             print(
@@ -741,7 +784,7 @@ def command(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 1
-        stored = fit(args.model, tasks[args.origin], sampler, code)
+        stored = fit(args.model, tasks[args.origin], sampler, code[args.model])
         path = write_fit(args.store, stored)
         print(f"Wrote {path} ({stored.meta['status']}).")
         if stored.meta["status"] != "ok":

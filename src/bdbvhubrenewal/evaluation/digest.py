@@ -251,11 +251,15 @@ def _closure(
     return seen
 
 
-def model_code(model: str, root: Path | str = ".") -> list[str]:
+def model_code(
+    model: str,
+    root: Path | str = ".",
+    entries: Sequence[str] = FORECAST_ENTRIES,
+) -> list[str]:
     """List the source files a forecast-only run of one model reads.
 
     The import closure, within the package, of the model's own module, with
-    any other model's module it builds on, and of `FORECAST_ENTRIES`,
+    any other model's module it builds on, and of `entries`,
     which stops at the modules that define the other models: the registry
     imports every model, but a model's forecasts do not run the others'
     code. The CLI module is added as a file, without
@@ -267,6 +271,9 @@ def model_code(model: str, root: Path | str = ".") -> list[str]:
         A registered model.
     root : pathlib.Path or str
         The repository root.
+    entries : sequence of str
+        The shared modules the run calls, relative to `root`
+        (`FORECAST_ENTRIES`).
 
     Returns
     -------
@@ -290,7 +297,7 @@ def model_code(model: str, root: Path | str = ".") -> list[str]:
     # Then the shared forecasting code, which reaches every model through
     # the registry: there the other models' modules are left out.
     seen = _closure(
-        src, [base / e for e in FORECAST_ENTRIES], others - seen, start, seen
+        src, [base / e for e in entries], others - seen, start, seen
     )
     seen.add(src / _PACKAGE / "cli.py")
     return sorted(p.relative_to(base).as_posix() for p in seen)
