@@ -1494,7 +1494,9 @@ def write_fit_dir(
 
     out = Path(fit_dir)
     out.mkdir(parents=True, exist_ok=True)
-    write_csv(fit.samples, out / SAMPLES_FILE)
+    # Only the sample columns: the backtest adds `as_of` to the samples
+    # a forecast returns.
+    write_csv(fit.samples.loc[:, list(SAMPLE_COLUMNS)], out / SAMPLES_FILE)
     write_csv(fit_delays(fit, task), out / DELAY_SUMMARY_FILE)
     if fit.unassigned is not None:
         write_csv(fit.unassigned, out / UNASSIGNED_FILE)
