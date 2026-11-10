@@ -206,14 +206,22 @@ def in_root(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.usefixtures("in_root")
-def test_the_submission_task_has_the_stored_key(
+def test_the_stored_task_covers_the_submissions_rounds(
     target: pd.DataFrame,
     delays: pd.DataFrame,
     daily: pd.DataFrame,
     tasks_json: Path,
 ) -> None:
-    """Same code and data give the submission the stored fit's key."""
+    """The submission forecasts from the stored fit at its vintage.
+
+    Its task, for the vintage's own round or the next one (a round with
+    no new release), is the stored task but for the weeks, which the
+    stored task covers. So the stored fit of the same code and data is
+    the submission's fit.
+    """
     import argparse
+    import dataclasses
+    import datetime as dt
 
     from bdbvhubrenewal import cli
     from bdbvhubrenewal.evaluation.backtest import load_config
@@ -222,22 +230,27 @@ def test_the_submission_task_has_the_stored_key(
     tasks = store.origin_tasks(target, delays, config, daily)
     sampler = store.samplers()
     models = {m: store.build_model(m, sampler) for m in sampler}
-    # Every origin the store fits.
     assert tasks
-    for vintage in tasks:
-        args = argparse.Namespace(
-            vintage=vintage,
-            reference_date=None,
-            data=str(tasks_json.parents[1]),
-            backtest_config="config/backtest.toml",
-        )
-        task, _ = cli._task(args)
-        stored = tasks[vintage]
-        assert task.target_end_dates == stored.target_end_dates
-        for name, model in models.items():
-            assert store.fit_key(model, task, "c") == store.fit_key(
-                model, tasks[vintage], "c"
-            ), (name, vintage)
+    for vintage, stored in tasks.items():
+        for later in (0, 1):
+            ref = stored.reference_date + dt.timedelta(weeks=later)
+            args = argparse.Namespace(
+                vintage=vintage,
+                reference_date=ref.isoformat(),
+                data=str(tasks_json.parents[1]),
+                backtest_config="config/backtest.toml",
+            )
+            task, _ = cli._task(args)
+            assert set(task.target_end_dates) <= set(stored.target_end_dates)
+            same = dataclasses.replace(
+                task,
+                reference_date=stored.reference_date,
+                target_end_dates=stored.target_end_dates,
+            )
+            for name, model in models.items():
+                assert store.fit_key(model, same, "c") == store.fit_key(
+                    model, stored, "c"
+                ), (name, vintage, later)
 
 
 def test_plan_fit_and_load(
@@ -293,7 +306,9 @@ def test_plan_fit_and_load(
     # Every loaded origin is backtested, from the backtest's first week.
     assert set(dev["vintage"]) == {oldest, stale, broken, newest}
     assert stored.forecasts["horizon"].min() < config.min_horizon
+    assert stored.forecasts["horizon"].max() > config.max_horizon
     assert dev["horizon"].min() == config.min_horizon
+    assert dev["horizon"].max() == config.max_horizon
     recorded = json.loads((results / store.STATUS_FILE).read_text())
     assert len(recorded) == len(tasks)
 
