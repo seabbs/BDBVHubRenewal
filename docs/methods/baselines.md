@@ -297,9 +297,7 @@ A place's counts are the sum of its children's, so for the walk spread and the n
 
   with the sums, window and preprocessing of the [delay](#delay).
   With one place and a gap of 1 its maximum likelihood estimate is baselinenowcast's chain ladder factor.
-  A place's increments at age $x$ enter only where its denominator there, summed over the pairs, is at least 10 cases, as in the [own-or-pooled rule](#own-or-pooled-estimates), and the country's always do.
-  Other ages are informed only through the pooling.
-  A parent's increments are its children's summed, so a case at an age where both fit their own enters the likelihood once for each tier.
+  As for the walk spread and the nowcast uncertainty, only the places forecast enter, at every age with a denominator, and their parents are latent centres, so each case enters once.
   It is fitted at the origin and at each earlier release that gives errors.
 - **Walk spread.** The weekly changes of $\log\{1 + Y_{p,o}(w)\}$ over the [forecast](#forecast) window are $\mathcal{N}(0, \sigma_p^2)$.
   Changes between two weeks with no cases are left out.

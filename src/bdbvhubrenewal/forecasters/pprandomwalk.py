@@ -29,16 +29,9 @@ the likelihood and their ancestors are latent centres.
   as `chain.delay_sums` gives it, is Poisson with mean
   $\mathrm{den} \cdot (\exp \sum_{j \in \text{span}} g_n(j) - 1)$, the
   model whose maximum likelihood estimate is the chain ladder.
-  As in `randomwalknowcast` (`chain.own_ages`), a place's own increments
-  at an age enter only where its denominator there, summed over the
-  pairs, is at least `Settings.min_level` cases, and the country's
-  always do.
-  Below that a day often has no cases at one release and some at the
-  next, which a factor cannot give, so the place's few days with cases
-  would speak for all of them and give too fast a delay.
-  Those ages take their parent's value, through the pooling.
-  A parent's increments are its children's summed, so a case at an age
-  where both fit their own enters the likelihood once for each level.
+  As for the walk spread and the nowcast uncertainty, only the task's
+  places enter, at every age with a denominator, and the pooling alone
+  shares information between them, so each case enters once.
   It is fitted at the origin and at each earlier release, whose nowcasts
   give the errors of the observation model.
 - **Walk spread.** $\log \sigma_n$ pooled, with the weekly changes of
@@ -79,7 +72,6 @@ from bdbvhubrenewal.forecasters.chain import (
     build_origin,
     delay_sums,
     levels,
-    own_ages,
     retro_errors,
     walk_changes,
     weeks_back,
@@ -87,7 +79,7 @@ from bdbvhubrenewal.forecasters.chain import (
 from bdbvhubrenewal.forecasters.obs import MAX_SIZE
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalkNowcast
 
-__all__ = ["PPRandomWalkNowcast", "Sampler", "Tree"]
+__all__ = ["PPRandomWalkNowcast", "Sampler", "Tree", "delay_keep"]
 
 MIN_SIZE = 0.1
 """Lower bound of `fit_nb`'s size, kept for the plugged-in sizes."""
@@ -227,6 +219,26 @@ def _gap_sums(
 
 def _nb(mean: jax.Array, size: jax.Array) -> dist.Distribution:
     return dist.NegativeBinomial2(jnp.maximum(mean, 1e-8), size)
+
+
+def delay_keep(tree: Tree, den: np.ndarray) -> np.ndarray:
+    """Return the delay increments that enter the likelihood.
+
+    Parameters
+    ----------
+    tree : Tree
+        The place hierarchy.
+    den : numpy.ndarray
+        Denominators of each place and row, `[L, N]`.
+
+    Returns
+    -------
+    numpy.ndarray
+        `[L, N]`, true for the places forecast, the leaves, where the
+        denominator is above 0. A parent's counts are its children's
+        summed, so it enters only through the pooling.
+    """
+    return tree.leaf[:, None] & (den > 0)
 
 
 def delay_model(
@@ -393,8 +405,6 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
                 return None
             pairs, num, den, gaps = sums
             inc, d_sum, span = _gap_sums(num, den, gaps)
-            own = own_ages(den, s.parent, st)
-            rows = np.tile(own, (1, d_sum.shape[1] // own.shape[1]))
             draws, info = _run(
                 delay_model,
                 jax.random.fold_in(key, r),
@@ -403,11 +413,12 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
                 inc=inc,
                 den=d_sum,
                 span=span,
-                keep=rows & (d_sum > 0),
+                keep=delay_keep(tree, d_sum),
             )
             self.fits.append({"fit": f"delay at {s.releases[r]}", **info})
             g = np.exp(_median_of(tree, draws, "delay"))
             n = len(s.locations)
+            own = np.ones(g.shape, bool)
             return DelayFit(pairs, g, levels(s, r, st), np.arange(n), own)
 
         origin = build_origin(snap, self.settings, False, delay)
