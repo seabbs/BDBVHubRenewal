@@ -27,6 +27,7 @@ from bdbvhubrenewal.forecasters.chain import (
     MissingSnapshots,
     NoCompleteWeek,
     NoDelayPair,
+    NoWalkSpread,
     Settings,
 )
 
@@ -204,10 +205,13 @@ def test_models_raise_without_snapshots_or_a_delay_pair(
 def test_randomwalk_raises_when_no_week_is_complete_and_the_backtest_skips(
     task: ForecastTask,
 ) -> None:
+    # With no complete week every place starts at the first week, so it
+    # has no walk changes either, and the walk spread raises first.
     strict = RandomWalk(settings=Settings(completeness=1.5))
-    with pytest.raises(NoCompleteWeek, match="no start week"):
+    with pytest.raises(NoWalkSpread):
         strict.forecast(task)
     assert issubclass(NoCompleteWeek, ModelUnavailableError)
+    assert issubclass(NoWalkSpread, ModelUnavailableError)
     out = run_forecasts([strict], [task])
     assert out.empty
 
