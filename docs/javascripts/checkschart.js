@@ -2,8 +2,10 @@
 // checks JSON), drawn with scorechart.js, with a target (data-targets), a
 // scale, a split and a baseline picker. The JSON has a set per baseline,
 // scale and split. The score history (scripts/score_history.py) reuses it
-// with `kind`, `x_label`, one split, whose picker is hidden, and `marks`,
-// the x positions scorechart.js draws a vertical line at.
+// with `kind`, `x_label`, `split_label` and `split` (the split's name and
+// the one shown first), `marks` (the x positions scorechart.js draws a
+// vertical line at) and `common`, which adds a tick box, ticked at first,
+// for the sets keyed with a `|common` suffix.
 (function () {
   "use strict";
   var T = window.bdbvToggles;
@@ -15,10 +17,19 @@
     T.targetSelect(controls, targets, target, function (k) { load(root, k, rel.name()); });
     var selScale = h("select", {}, h("label", {}, controls, "Scale "));
     d.scales.forEach(function (s) { h("option", { value: s }, selScale, s); });
-    var splitLabel = h("label", {}, controls, "Split by ");
+    var splitLabel = h("label", {}, controls, (d.split_label || "Split by") + " ");
     var selSplit = h("select", {}, splitLabel);
     if (d.splits.length < 2) splitLabel.hidden = true;
     d.splits.forEach(function (s) { h("option", { value: s }, selSplit, s); });
+    if (d.split) selSplit.value = d.split;
+    var common = null;
+    if (d.common) {
+      var cl = h("label", {}, controls);
+      common = h("input", { type: "checkbox" }, cl);
+      common.checked = true;
+      h("span", {}, cl, " Common forecasts only");
+      common.addEventListener("change", function () { update(); });
+    }
     var rel = T.baselineSelect(controls, function () { update(); });
     rel.fill(d, base);
     var note = h("p", { class: "explorer-note" }, root);
@@ -26,7 +37,8 @@
     // Relative WIS is the first metric, missing where the baseline has no
     // forecast at the scale.
     function pick() {
-      var k = rel.name() + "|" + selScale.value + "|" + selSplit.value;
+      var k = rel.name() + "|" + selScale.value + "|" + selSplit.value +
+        (common && common.checked ? "|common" : "");
       var set = d.sets[k] || { x: [], rows: [] };
       var none = !set.rows.some(function (r) { return r[3] !== null; });
       note.textContent = "Relative WIS divides by " + rel.name() + " on the same scored weeks." +

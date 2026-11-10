@@ -14,6 +14,7 @@ from bdbvhubrenewal.data.snapshots import snapshot_arrays, weekly_sums
 from bdbvhubrenewal.forecasters.chain import (
     Settings,
     _delay_counts,
+    _walk_spreads,
     build_origin,
     fit_delay,
     retro_errors,
@@ -21,6 +22,7 @@ from bdbvhubrenewal.forecasters.chain import (
 )
 from bdbvhubrenewal.forecasters.introductions import introduction_rates
 from bdbvhubrenewal.forecasters.obs import MAX_SIZE, PRIOR_SIZE
+from bdbvhubrenewal.forecasters.pooling import source_index
 
 PLACES = ("CD-HU", "CD-IT", "CD-NK", "CD-TO")
 
@@ -74,26 +76,25 @@ def test_the_start_week_is_the_latest_week_at_95_per_cent(
 def test_10_24_point_nowcasts_use_one_daily_delay(origin24) -> None:
     # Weeks 10-24, 10-17, 10-10, 10-03, from the two 8 day pairs.
     # Downward revisions are moved onto earlier releases before the sums.
-    # The 10-09 release is cut at 10-08, the last report day its data
-    # prove, so 10-08 is an observed day with no onsets.
+    # The 10-09 release is cut at 10-07, its latest onset day.
     assert _weeks(origin24, "CD") == pytest.approx(
-        [438.9, 396.8, 497.2, 517.8], abs=0.06
+        [368.5, 373.4, 488.4, 515.9], abs=0.06
     )
     # Tshopo has under 10 cases a week, so uses the national delay.
     assert _weeks(origin24, "CD-TO") == pytest.approx(
-        [12.3, 12.2, 21.7, 18.4], abs=0.06
+        [10.1, 11.5, 21.3, 18.4], abs=0.06
     )
 
 
 def test_provinces_use_own_factors_where_they_have_10_cases(origin24) -> None:
     assert _weeks(origin24, "CD-IT") == pytest.approx(
-        [251.9, 192.4, 292.7, 256.6], abs=0.06
+        [212.7, 181.3, 282.6, 253.1], abs=0.06
     )
     assert _weeks(origin24, "CD-NK") == pytest.approx(
-        [152.1, 162.5, 159.1, 216.4], abs=0.06
+        [118.5, 149.5, 154.6, 214.2], abs=0.06
     )
     assert _weeks(origin24, "CD-HU") == pytest.approx(
-        [22.0, 33.7, 28.8, 30.7], abs=0.06
+        [17.7, 30.7, 27.7, 29.9], abs=0.06
     )
 
 
@@ -340,3 +341,38 @@ def test_introductions_pool_siblings_after_k_silent_weeks() -> None:
         reported, np.array([8, 8, 8, 2]), np.array([-1, 0, 0, 0]), 3
     )
     np.testing.assert_allclose(late[1:], 0.0)
+
+
+def test_the_walk_spread_is_net_of_poisson_noise(origin24) -> None:
+    settings = origin24.settings
+    n_loc = len(origin24.snap.locations)
+    own = np.flatnonzero(origin24.sigma_source < n_loc)
+    assert own.size
+    for i in own:
+        lo = max(int(origin24.start[i]) - settings.walk_weeks + 1, 0)
+        y = origin24.reported[i, lo : int(origin24.start[i]) + 1]
+        v = y / (1 + y) ** 2
+        net = np.diff(np.log1p(y)).var(ddof=1) - (v[1:] + v[:-1]).mean()
+        assert net > 0
+        assert origin24.sigma[i] == pytest.approx(np.sqrt(net))
+
+
+def test_a_place_with_no_walk_variance_takes_its_parents(origin24) -> None:
+    snap = origin24.snap
+    reported = origin24.reported.copy()
+    # Make one province with its own spread flat, so its changes are noise.
+    i = int(np.flatnonzero(origin24.sigma_source < len(snap.locations))[0])
+    reported[i] = np.where(reported[i] > 0, reported[i].mean(), 0.0)
+    own, pooled = _walk_spreads(
+        reported, origin24.start, snap, origin24.fit.level, origin24.settings
+    )
+    assert own[i] <= 0
+    source = source_index(
+        origin24.fit.level,
+        snap.parent,
+        (own > 0).astype(int)[:, None],
+        (pooled > 0).astype(int)[:, None],
+        origin24.settings.min_level,
+        1,
+    )[:, 0]
+    assert source[i] >= len(snap.locations)

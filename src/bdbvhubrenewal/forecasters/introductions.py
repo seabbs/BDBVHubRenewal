@@ -18,7 +18,7 @@ import jax.numpy as jnp
 import numpy as np
 from scipy import stats
 
-from bdbvhubrenewal.forecasters.walk import random_walk
+from bdbvhubrenewal.forecasters.walk import random_walks
 
 __all__ = [
     "introduction_rates",
@@ -153,10 +153,11 @@ def silent_trajectories(
     v = np.asarray(jax.random.uniform(k_count, (idx.size, n)), np.float64)
     x0 = stats.poisson.ppf(np.exp(-1.0) + v * -np.expm1(-1.0), 1.0)
     keys = jax.random.split(k_walk, idx.size)
-    _, drawn = jax.vmap(lambda k, x, s: random_walk(k, x, s, h))(
+    _, drawn = random_walks(
         keys,
         jnp.asarray(x0, jnp.float32),
         jnp.asarray(sigma[idx], jnp.float32),
+        h,
     )
     y = np.asarray(drawn, dtype=np.float64)
     hit = np.asarray(jax.random.uniform(k_intro, (idx.size, n, h))) < (

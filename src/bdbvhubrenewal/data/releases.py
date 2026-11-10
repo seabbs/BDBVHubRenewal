@@ -7,9 +7,11 @@ reported case. The hub states that earlier releases were labelled by the
 last reported case. `release_id` maps a label, as published or
 as the hub may rewrite it, to the label we key releases by, so results,
 the submission ledger and rounds keep their keys.
-A release's data cut-off is its last report day. `last_report_days`
-derives it from the data, whatever the label, and every tidy table
-carries it as a `cutoff` column, which `release_cutoff` reads.
+A release's data cut-off is its latest onset day over all places.
+The last day or two before extraction are thin, as new reports take time
+to reach the line list. `latest_onset_days` derives the cut-off from the
+data, whatever the label, and every tidy table carries it as a `cutoff`
+column, which `release_cutoff` reads.
 `cutoff_lags` gives the days from a release to its cut-off by weekday,
 for simulated releases.
 `release_pairs` tabulates, for each pair of consecutive delay files, which
@@ -31,7 +33,7 @@ __all__ = [
     "MAX_PAIR_AGE",
     "ORIGINAL_AS_OF",
     "cutoff_lags",
-    "last_report_days",
+    "latest_onset_days",
     "release_cutoff",
     "release_id",
     "release_pairs",
@@ -71,42 +73,29 @@ def release_id(as_of: dt.date | str) -> str:
     return before if before in ORIGINAL_AS_OF else day.isoformat()
 
 
-def last_report_days(daily: pd.DataFrame, delays: pd.DataFrame) -> pd.Series:
-    r"""Return each release's last report day, as its data prove it.
+def latest_onset_days(daily: pd.DataFrame) -> pd.Series:
+    """Return each release's data cut-off, its latest onset day.
 
-    A case with onset on day $t$ was reported on or after $t$. A delay row
-    with onset week ending $W$ and delay $d$ was reported on or after
-    $W - 6 + d$. A release's last report day is the latest of these
-    over its daily onsets and its delay rows.
+    The cut-off is the latest onset day over all places in the release's
+    daily onsets, one date per release.
 
     Parameters
     ----------
     daily : pandas.DataFrame
         Daily onsets by release, with `vintage` and `onset_date`.
-    delays : pandas.DataFrame
-        Delay rows by release, with `vintage`, `onset_week` and `delay`.
-        A release may have none.
 
     Returns
     -------
     pandas.Series
-        The last report day (ISO) by release label, for every release in
-        `daily`.
+        The cut-off (ISO) by release label, for every release in `daily`.
     """
     onset = pd.to_datetime(daily["onset_date"]).groupby(daily["vintage"]).max()
-    report = (
-        pd.to_datetime(delays["onset_week"])
-        - pd.Timedelta(days=6)
-        + pd.to_timedelta(delays["delay"], unit="D")
-    )
-    report = report.groupby(delays["vintage"]).max()
-    last = pd.concat([onset, report.reindex(onset.index)], axis=1).max(axis=1)
-    out: pd.Series = last.dt.strftime("%Y-%m-%d").rename("cutoff")
+    out: pd.Series = onset.dt.strftime("%Y-%m-%d").rename("cutoff")
     return out
 
 
 def release_cutoff(rows: pd.DataFrame, release: str) -> dt.date:
-    """Return a release's data cut-off, its last report day.
+    """Return a release's data cut-off, its latest onset day.
 
     Parameters
     ----------
@@ -164,7 +153,7 @@ def release_pairs(
     is counted with how many of its rows file $k$ already had. A row with
     onset week ending $W$ and delay $d$ was reported on $W - u + d$ for
     an onset $u = 0..6$ days before $W$, so its report age at a release
-    with last report day $T$ is $T - W + u - d$. Cells that no onset day
+    with cut-off $T$ is $T - W + u - d$. Cells that no onset day
     could have reported by $T_k$, or that are older than `max_age` at
     $T_k$ for every onset day, are left out.
 

@@ -15,6 +15,7 @@ from bdbvhubrenewal.evaluation.backtest import (
     load_config,
     lopo_tasks,
     make_tasks,
+    real_vintages,
     recovery_tasks,
     run_development,
     run_forecasts,
@@ -34,10 +35,6 @@ pytestmark = pytest.mark.usefixtures("flat_model")
 def test_load_config() -> None:
     cfg = load_config(ROOT / "config" / "backtest.toml")
     assert cfg.n_samples == 100
-    # The development set ends at the latest model choice date.
-    assert cfg.development_until == "2026-10-28"
-    assert not cfg.is_heldout("2026-10-24")
-    assert cfg.is_heldout("2026-10-31")
     assert all(pd.Timestamp(d).dayofweek == 5 for d in cfg.simulated_dates)
     # A generous convergence gate on BVDOutbreakSize releases.
     assert cfg.bvd_max_rhat == 1.1
@@ -59,14 +56,15 @@ def test_saturdays() -> None:
     )
 
 
-def test_development_never_uses_heldout_vintages(
+def test_development_uses_every_real_vintage_but_the_latest(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
     forecasts = run_development([get_model("flat")], target, delays, config)
-    # Vintages after the model choice date are held out.
-    assert (forecasts["vintage"] <= "2026-10-10").all()
+    # Vintages after the model choice date are backtested too.
     real = forecasts.loc[forecasts["kind"] == "real"]
-    assert set(real["vintage"]) == {"2026-08-18", "2026-10-09"}
+    vintages = real_vintages(target.loc[target["kind"] == "real"])
+    assert set(real["vintage"]) == set(vintages[:-1])
+    assert max(real["vintage"]) > "2026-10-10"
 
 
 def _forecast_rows(as_of: str | None) -> pd.DataFrame:
@@ -162,9 +160,9 @@ def test_make_tasks_asks_for_later_vintages(
     vintages = ("2026-08-18", "2026-10-09", "2026-10-17", "2026-10-24")
     tasks = make_tasks(target, delays, config, report_by=vintages)
     by = {t.vintage: t.report_by for t in tasks}
-    # Each later release with its cut-off, its last report day.
+    # Each later release with its cut-off, its latest onset day.
     assert by["2026-08-18"] == {
-        "2026-10-09": "2026-10-08",
+        "2026-10-09": "2026-10-07",
         "2026-10-17": "2026-10-16",
         "2026-10-24": "2026-10-24",
     }
@@ -174,12 +172,11 @@ def test_make_tasks_asks_for_later_vintages(
 def test_truth_changes(target: pd.DataFrame) -> None:
     changes = truth_changes(target, locations=("CD",))
     week = changes.loc[changes["target_end_date"] == "2026-10-10"]
-    assert list(week["truth_vintage"]) == [
-        "2026-10-09",
-        "2026-10-17",
-        "2026-10-24",
-        "2026-11-01",
-    ]
+    # Every real release from the one that first reports the week.
+    vintages = real_vintages(target.loc[target["kind"] == "real"])
+    assert (
+        list(week["truth_vintage"]) == vintages[vintages.index("2026-10-09") :]
+    )
     last = week.iloc[-1]
     assert last["change"] == 0
     assert (week["change"] == week["truth"] - last["truth"]).all()
@@ -248,9 +245,10 @@ def test_lopo_masks_one_province_at_a_time(
     # Only the masked province is kept, from development vintages only.
     assert (forecasts["location"] == forecasts["masked"]).all()
     assert set(forecasts["masked"]) == {"CD-IT", "CD-NK"}
-    assert set(forecasts["vintage"]) == {"2026-08-18", "2026-10-09"}
+    vintages = real_vintages(target.loc[target["kind"] == "real"])
+    assert set(forecasts["vintage"]) == set(vintages[:-1])
     assert set(scores["location"]) == {"CD-IT", "CD-NK"}
-    assert set(scores["truth_vintage"]) == {"2026-11-01"}
+    assert set(scores["truth_vintage"]) == {vintages[-1]}
 
 
 def test_lopo_without_mask_aware_models_is_empty(
@@ -382,7 +380,7 @@ def test_backtest_sampler_comes_from_the_config(
     assert cfg.sampler == {
         "num_chains": 2,
         "num_warmup": 500,
-        "num_samples": 500,
+        "num_samples": 750,
         "target_accept": 0.8,
         "max_tree_depth": 10,
         "chain_method": "parallel",
@@ -490,3 +488,129 @@ def test_simulated_tasks_carry_daily_releases(config: BacktestConfig) -> None:
         last = hist.loc[hist["vintage"] == task.vintage]
         # The vintage's weekly target is cut at the same day.
         assert last["onset_date"].max() <= last["cutoff"].iloc[0]
+
+
+def _stack(parts: list[pd.DataFrame]) -> pd.DataFrame:
+    return pd.concat(parts, ignore_index=True)
+
+
+@pytest.mark.usefixtures("flat_model")
+def test_recovery_run_by_date_chunk_matches_one_run(
+    config: BacktestConfig,
+) -> None:
+    from dataclasses import replace
+
+    from bdbvhubrenewal.cli import chunk
+
+    models = [get_model("flat")]
+    whole = run_recovery(models, config)
+    parts = [
+        run_recovery(
+            models,
+            replace(
+                config,
+                simulated_dates=tuple(chunk(config.simulated_dates, f"{k}/2")),
+            ),
+        )
+        for k in range(2)
+    ]
+    for i in range(3):
+        pd.testing.assert_frame_equal(
+            _stack([p[i] for p in parts]), whole[i], check_dtype=False
+        )
+
+
+@pytest.mark.usefixtures("flat_model")
+def test_scenarios_run_by_date_match_one_run(
+    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
+) -> None:
+    from bdbvhubrenewal.data import load_health_zones
+    from bdbvhubrenewal.evaluation.backtest import run_scenarios
+
+    zones = load_health_zones(Path(__file__).resolve().parents[2] / "data")
+    dates = ("2026-10-10", "2026-10-17")
+
+    def run(on: tuple[str, ...]) -> tuple[pd.DataFrame, ...]:
+        return run_scenarios(
+            [get_model("flat")], config, target, delays, zones,
+            as_of="2026-10-24", dates=on, names=("flat",),
+        )  # fmt: skip
+
+    whole = run(dates)
+    parts = [run((d,)) for d in dates]
+    keys = ["truth_view", "level", "location", "target_end_date"]
+    for i in range(3):
+        cols = [c for c in ["vintage", *keys] if c in whole[i]]
+        got = _stack([p[i] for p in parts]).sort_values(cols)
+        want = whole[i].sort_values(cols)
+        pd.testing.assert_frame_equal(
+            got.reset_index(drop=True),
+            want.reset_index(drop=True),
+            check_dtype=False,
+        )
+    # The final truth is the same for every date.
+    for p in parts:
+        pd.testing.assert_frame_equal(p[3], whole[3])
+
+
+def test_recovery_forecast_apart_by_model_scores_as_one_run(
+    config: BacktestConfig, tmp_path: Path
+) -> None:
+    from bdbvhubrenewal.data.tidy import write_csv
+    from bdbvhubrenewal.evaluation.backtest import (
+        joint_order,
+        recovery_forecasts,
+        score_recovery,
+    )
+
+    names = ["randomwalk", "randomwalknowcast"]
+    whole = run_recovery([get_model(n) for n in names], config)
+    parts = []
+    for name in names:
+        path = tmp_path / f"{name}.csv.gz"
+        write_csv(recovery_forecasts([get_model(name)], config), path)
+        parts.append(pd.read_csv(path))
+    forecasts = joint_order(pd.concat(parts, ignore_index=True), names)
+    scores, energy = score_recovery(forecasts)
+    pd.testing.assert_frame_equal(forecasts, whole[0], check_dtype=False)
+    pd.testing.assert_frame_equal(scores, whole[1], check_dtype=False)
+    pd.testing.assert_frame_equal(energy, whole[2], check_dtype=False)
+
+
+@pytest.mark.usefixtures("flat_model")
+def test_scenarios_forecast_apart_by_model_score_as_one_run(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    config: BacktestConfig,
+    tmp_path: Path,
+) -> None:
+    from bdbvhubrenewal.data import load_health_zones
+    from bdbvhubrenewal.data.tidy import write_csv
+    from bdbvhubrenewal.evaluation.backtest import (
+        run_scenarios,
+        scenario_forecasts,
+        score_scenarios,
+    )
+
+    zones = load_health_zones(Path(__file__).resolve().parents[2] / "data")
+    names = ["flat", "randomwalk"]
+    args = (config, target, delays, zones, "2026-10-24")
+    dates = ("2026-10-10", "2026-10-17")
+    whole = run_scenarios(
+        [get_model(n) for n in names], *args, dates=dates, names=("flat",)
+    )
+    stacked: list[list[pd.DataFrame]] = [[], []]
+    for name in names:
+        parts = scenario_forecasts(
+            [get_model(name)], *args, dates=dates, names=("flat",)
+        )
+        for i, table in enumerate(parts):
+            path = tmp_path / f"{name}-{i}.csv.gz"
+            write_csv(table, path)
+            stacked[i].append(pd.read_csv(path))
+    forecasts, zone = (pd.concat(s, ignore_index=True) for s in stacked)
+    out = score_scenarios(
+        forecasts, zone, names, *args, dates=dates, names=("flat",)
+    )
+    for got, want in zip(out, whole[1:], strict=True):
+        pd.testing.assert_frame_equal(got, want, check_dtype=False)

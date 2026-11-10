@@ -32,17 +32,17 @@ def snap(daily: pd.DataFrame):
     return snapshot_arrays(daily, "2026-10-24", ("CD-IT", "CD-NK"))
 
 
-def test_cutoff_is_the_release_s_last_report_day(daily: pd.DataFrame) -> None:
+def test_cutoff_is_the_release_s_latest_onset_day(daily: pd.DataFrame) -> None:
     cuts = [release_cutoff(daily, v).isoformat() for v in VINTAGES]
-    assert cuts == ["2026-08-18", "2026-10-08", "2026-10-16", "2026-10-24"]
+    assert cuts == ["2026-08-18", "2026-10-07", "2026-10-16", "2026-10-24"]
 
 
 def test_ages_count_from_the_cutoff_not_the_release_date(snap) -> None:
     days = snap.days
     second = snap.releases.index("2026-10-09")
-    assert days[snap.cut[second]].date() == dt.date(2026, 10, 8)
-    # Age 0 at the second release is 10-08, not 10-09.
-    assert snap.cut[second] - np.flatnonzero(days == "2026-10-08")[0] == 0
+    assert days[snap.cut[second]].date() == dt.date(2026, 10, 7)
+    # Age 0 at the second release is 10-07, not 10-09.
+    assert snap.cut[second] - np.flatnonzero(days == "2026-10-07")[0] == 0
 
 
 def test_cells_after_the_cutoff_are_unobserved(snap) -> None:

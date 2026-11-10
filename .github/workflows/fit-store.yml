@@ -106,7 +106,11 @@ jobs:
           write=$(scripts/fit-store.sh guard "$EVENT" "$REF" "$SCRATCH")
           echo "write=$write" >> "$GITHUB_OUTPUT"
           echo "Writes $FIT_STORE_BRANCH: $write" >> "$GITHUB_STEP_SUMMARY"
+      # Restores only: plan compiles nothing, so saving here would take
+      # the key before the fit jobs could save what they compile.
       - uses: ./.github/actions/setup-forecast-env
+        with:
+          save-jax: 'false'
       # The latest hub releases, and the BVDOutbreakSize release each
       # may use. Every fit job reads these files, so all fit the same data.
       - name: Refresh the hub data
@@ -129,6 +133,13 @@ jobs:
           [ "$RETRY" = true ] && args+=(--retry-failed)
           uv run bdbvhubrenewal fit-store plan "${args[@]}" \
             | tee -a "$GITHUB_STEP_SUMMARY"
+          # Longest fits first, so the short ones fill in behind them and
+          # the run takes as long as its longest fit: by model (slowest
+          # first, from the last full refit), then newest origin first.
+          jq -c '.include |= sort_by(
+            ({"renewalbvd": 0, "renewal": 1, "renewalsp": 2}[.model] // 3),
+            (.origin | explode | map(-.)))' matrix.json > sorted.json
+          mv sorted.json matrix.json
           echo "matrix=$(cat matrix.json)" >> "$GITHUB_OUTPUT"
           echo "count=$(jq '.include | length' matrix.json)" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -159,14 +170,19 @@ jobs:
     timeout-minutes: 350
     strategy:
       fail-fast: false
-      # Leaves runners for the submission workflow.
-      max-parallel: 12
+      # With the longest fits first, 8 runners finish a full refit as soon
+      # as 12 (the longest fit, about 4 h). The rest of the 20 are left
+      # for the submission and Pages workflows.
+      max-parallel: 8
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # One JAX cache per model: the first fit of each to finish saves it.
       - uses: ./.github/actions/setup-forecast-env
+        with:
+          jax-scope: fit-${{ matrix.model }}
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: data

@@ -89,3 +89,37 @@ def hazard_to_pmf_reference(logit_hazard: ArrayLike) -> ArrayLike:
     log_surv_before = jnp.concatenate([zero, log_surv], axis=-1)
     log_h = jnp.concatenate([log_h, zero], axis=-1)
     return jnp.exp(log_h + log_surv_before)
+
+
+def kept_share_reference(
+    pmf: ArrayLike, background: ArrayLike, pairs: dict[str, ArrayLike]
+) -> ArrayLike:
+    """Share of each release-pair cell already in the earlier release.
+
+    The direct version of `kept_share`: look up the lag cdf at each
+    onset day's report age and sum over the onset days.
+
+    Parameters
+    ----------
+    pmf : ArrayLike
+        Publication lag pmf on $0..L$.
+    background : ArrayLike
+        Background share of each pair, `(K,)`.
+    pairs : dict
+        `before` and `after` ages `(n, 7)` and the one-hot `pair`.
+
+    Returns
+    -------
+    ArrayLike
+        The share for each cell, `(n,)`.
+    """
+    cdf = jnp.cumsum(jnp.asarray(pmf))
+    last = cdf.shape[0] - 1
+
+    def published(ages: ArrayLike) -> ArrayLike:
+        ages = jnp.asarray(ages)
+        return jnp.where(ages < 0, 0.0, cdf[jnp.clip(ages, 0, last)]).sum(-1)
+
+    b = jnp.asarray(pairs["pair"]) @ jnp.asarray(background)
+    later = jnp.maximum(published(pairs["after"]), 1e-12)
+    return (1 - b) * published(pairs["before"]) / later

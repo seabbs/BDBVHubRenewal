@@ -7,8 +7,10 @@ main commit it was built from. Pull request previews are left out. Each
 deploy's `figures/scoresummary-backtest-<target>.json` holds the
 per-forecast scores the Backtest page summarises. This script summarises
 them as the page's overall view does (as `relative_skill`, over the
-forecasts the baseline also made), by pool and model, and writes one row per
-deploy, target, pool and model.
+forecasts the baseline also made), by baseline, target week, pool and
+model,
+over all forecasts and over the common forecasts only (`_common`), and
+writes one row per deploy and each of those.
 
 A commit can deploy more than once: the fit store reruns the build when it
 stores new fits, and every build refreshes the hub data. Scores can
@@ -72,61 +74,123 @@ def source_sha(message: str) -> str | None:
     return None if m is None else m.group(1)
 
 
-def summary_scores(summary: Mapping[str, Any]) -> pd.DataFrame:
-    """Summarise one score summary by pool and model.
+def forecasts(summary: Mapping[str, Any]) -> pd.DataFrame:
+    """Return a summary's per-forecast scores with their labels.
 
-    Parameters
-    ----------
-    summary : mapping
-        A `summary_rows` JSON: `models`, `baseline`, `metrics`,
-        `origins`, `releases`, `places` (with `pool`), `weeks` and `rows`.
-
-    Returns
-    -------
-    pandas.DataFrame
-        One row per baseline (every model), pool and model: `baseline`,
-        `pool`, `model`, `n` (forecasts the baseline also made), the mean
-        of each metric and, for relative metrics, the baseline's mean on
-        the same forecasts `base_<metric>` and `rel_<metric>`.
+    Origins, releases, places and weeks are named, not indexed, so
+    forecasts match across deploys.
     """
     models = [m["name"] for m in summary["models"]]
     keys = [m["key"] for m in summary["metrics"]]
-    relative = [m["key"] for m in summary["metrics"] if m["relative"]]
-    pools = [p["pool"] for p in summary["places"]]
     width = len(MATCH) + 1 + len(keys)
     rows = pd.DataFrame(
         [r[:width] for r in summary["rows"]],
         columns=["model", *MATCH, *keys],
     )
+    names = {
+        "model": models,
+        "origin": summary["origins"],
+        "release": summary["releases"],
+        "place": [p["id"] for p in summary["places"]],
+        "week": summary["weeks"],
+    }
+    pools = [p["pool"] for p in summary["places"]]
     rows["pool"] = [pools[i] for i in rows["place"]]
-    rows["model"] = [models[i] for i in rows["model"]]
-    rows = rows.loc[~rows["model"].isin(SKIP_MODELS)]
-    # As `relative_skill`, without importing the package (and JAX): each
-    # model over the forecasts the baseline also made, for every model as
-    # the baseline.
+    for col, labels in names.items():
+        rows[col] = [labels[i] for i in rows[col]]
+    return rows.loc[~rows["model"].isin(SKIP_MODELS)]
+
+
+def _pairs(
+    rows: pd.DataFrame, relative: Sequence[str], baselines: Sequence[str]
+) -> pd.DataFrame:
+    """Pair each forecast with the baseline's same forecast, per baseline.
+
+    As `relative_skill`, without importing the package (and JAX).
+    """
+    on = ["deploy", "pool", *MATCH]
     frames = []
-    for baseline in dict.fromkeys(rows["model"]):
-        base_rows = rows.loc[rows["model"] == baseline]
-        merged = rows.merge(
-            base_rows[["pool", *MATCH, *relative]],
-            on=["pool", *MATCH],
-            suffixes=("", "_b"),
+    for baseline in baselines:
+        base = rows.loc[rows["model"] == baseline, [*on, *relative]]
+        frames.append(
+            rows.merge(base, on=on, suffixes=("", "_b")).assign(
+                baseline=baseline
+            )
         )
-        grp = merged.groupby(["pool", "model"], sort=False)
-        out = grp[keys].mean()
-        out.insert(0, "n", grp.size())
-        for k in relative:
-            b = grp[f"{k}_b"].mean()
-            out[f"base_{k}"] = b
-            out[f"rel_{k}"] = out[k] / b.where(b > 0)
-        frames.append(out.reset_index().assign(baseline=baseline))
+    return pd.concat(frames, ignore_index=True)
+
+
+def _common(pairs: pd.DataFrame) -> pd.Series:
+    """Flag each pair in its model, baseline and target week's common set.
+
+    The window runs back from the newest deploy and keeps the length that
+    maximises common forecasts times deploys.
+    """
+    key = pairs["origin"] + "|" + pairs["release"] + "|" + pairs["place"]
+    flag = pd.Series(False, index=pairs.index)
+    for _, g in pairs.groupby(["baseline", "model", "week"], sort=False):
+        sets = key[g.index].groupby(g["deploy"]).agg(set).sort_index()
+        shared: set[str] | None = None
+        best: tuple[int, list[int], set[str]] = (0, [], set())
+        window: list[int] = []
+        for deploy, keys in zip(
+            reversed(sets.index.tolist()), reversed(sets.tolist()), strict=True
+        ):
+            shared = keys if shared is None else shared & keys
+            if not shared:
+                break
+            window = [*window, deploy]
+            if len(shared) * len(window) > best[0]:
+                best = (len(shared) * len(window), window, shared)
+        inside = g["deploy"].isin(best[1]) & key[g.index].isin(best[2])
+        flag[g.index[inside.to_numpy()]] = True
+    return flag
+
+
+def _summarise(
+    pairs: pd.DataFrame,
+    by: Sequence[str],
+    keys: Sequence[str],
+    relative: Sequence[str],
+) -> pd.DataFrame:
+    """Mean of each metric and, for relative ones, over the baseline's."""
+    grp = pairs.groupby([*by, "pool", "model"], sort=False)
+    out = grp[list(keys)].mean()
+    out.insert(0, "n", grp.size())
+    for k in relative:
+        b = grp[f"{k}_b"].mean()
+        out[f"base_{k}"] = b
+        out[f"rel_{k}"] = out[k] / b.where(b > 0)
     rel = [f"rel_{k}" for k in relative]
     base = [f"base_{k}" for k in relative]
-    cols = ["baseline", "pool", "model", "n", *keys, *base, *rel]
-    return pd.concat(frames, ignore_index=True)[cols]
+    return out.reset_index()[[*by, "pool", "model", "n", *keys, *base, *rel]]
 
 
-def history(deploys: Iterable[Deploy]) -> pd.DataFrame:
+def _metrics(summaries: Iterable[Mapping[str, Any]]) -> tuple[list[str], ...]:
+    keys: dict[str, bool] = {}
+    for s in summaries:
+        for m in s["metrics"]:
+            keys[m["key"]] = keys.get(m["key"], False) or m["relative"]
+    return list(keys), [k for k, r in keys.items() if r]
+
+
+def summary_scores(summary: Mapping[str, Any]) -> pd.DataFrame:
+    """Summarise one score summary by baseline, pool and model.
+
+    Every model is a baseline, over all forecasts. Returns
+    `baseline`, `pool`, `model`, `n` (forecasts the baseline also made),
+    the mean of each metric and, for relative metrics, the baseline's mean
+    on the same forecasts `base_<metric>` and `rel_<metric>`.
+    """
+    keys, relative = _metrics([summary])
+    rows = forecasts(summary).assign(deploy=0)
+    pairs = _pairs(rows, relative, list(dict.fromkeys(rows["model"])))
+    return _summarise(pairs, ["baseline"], keys, relative)
+
+
+def history(
+    deploys: Iterable[Deploy], baselines: Sequence[str] | None = None
+) -> pd.DataFrame:
     """Summarise each deploy's scores, oldest first, and flag breaks.
 
     Parameters
@@ -134,35 +198,63 @@ def history(deploys: Iterable[Deploy]) -> pd.DataFrame:
     deploys : iterable of (str, str, str, str, mapping)
         Source commit, deploy time, gh-pages commit, target and summary,
         oldest first.
+    baselines : sequence of str, optional
+        Models to divide by. Defaults to every model.
 
     Returns
     -------
     pandas.DataFrame
-        One row per deploy, target, baseline, pool and model:
-        `deploy_time`, `source_sha`, `pages_sha`, `target`, the
-        `summary_scores` columns, `origins` and `releases` (`;`-joined)
-        and `break`, true where the origins or releases, or the number of
-        forecasts scored against the baseline, differ from the model's
-        previous deploy of that target, baseline and pool, or where the
-        model first appears. A change in the model's or the baseline's
-        forecasts changes that number.
+        One row per deploy, target, baseline, `split` (`"week <target
+        week>"`), `common` (only the week's common set, see `_common`),
+        pool and model: `deploy_time`, `source_sha`, `pages_sha`, the
+        `summary_scores` columns, `origins`, `releases` and `break`.
+        `break` is true where `n` changes, where a model first appears
+        or, over all forecasts, where the origins or releases change.
     """
-    frames = []
-    for sha, time, pages, target, summary in deploys:
-        frame = summary_scores(summary)
-        frame.insert(0, "target", target)
-        frame.insert(0, "pages_sha", pages)
-        frame.insert(0, "source_sha", sha)
-        frame.insert(0, "deploy_time", time)
-        frame["origins"] = ";".join(summary["origins"])
-        frame["releases"] = ";".join(summary["releases"])
-        frames.append(frame)
-    out = pd.concat(frames, ignore_index=True)
-    scored = ["origins", "releases", "n"]
-    cell = ["target", "baseline", "pool", "model"]
-    prev = out.groupby(cell)[scored].shift()
-    out["break"] = (prev != out[scored]).any(axis=1)
-    return out
+    deploys = list(deploys)
+    keys, relative = _metrics(d[4] for d in deploys)
+    meta = pd.DataFrame(
+        [
+            {
+                "deploy": i,
+                "deploy_time": time,
+                "source_sha": sha,
+                "pages_sha": pages,
+                "target": target,
+                "origins": ";".join(summary["origins"]),
+                "releases": ";".join(summary["releases"]),
+            }
+            for i, (sha, time, pages, target, summary) in enumerate(deploys)
+        ]
+    )
+    rows = pd.concat(
+        [forecasts(d[4]).assign(deploy=i) for i, d in enumerate(deploys)],
+        ignore_index=True,
+    )
+    rows = rows.merge(meta[["deploy", "target"]], on="deploy")
+    seen = list(dict.fromkeys(rows["model"]))
+    chosen = seen if baselines is None else [b for b in baselines if b in seen]
+    pairs = _pairs(rows, relative, chosen)
+    pairs = pairs.assign(split="week " + pairs["week"], common=False)
+    common = pd.concat(
+        [
+            target.loc[_common(target)].assign(common=True)
+            for _, target in pairs.groupby("target", sort=False)
+        ]
+    )
+    by = ["deploy", "baseline", "split", "common"]
+    out = _summarise(pd.concat([pairs, common]), by, keys, relative)
+    out = out.merge(meta, on="deploy")
+    out = out.sort_values("deploy", kind="stable").reset_index(drop=True)
+    series = ["target", "baseline", "split", "common", "pool", "model"]
+    prev = out.groupby(series)[["origins", "releases", "n"]].shift()
+    scope = (prev[["origins", "releases"]] != out[["origins", "releases"]]).any(
+        axis=1
+    )
+    out["break"] = (prev["n"] != out["n"]) | (scope & ~out["common"])
+    first = ["deploy_time", "source_sha", "pages_sha", "target"]
+    rest = [c for c in out.columns if c not in {*first, "deploy"}]
+    return out[[*first, *rest]]
 
 
 def _git(*args: str) -> str:
@@ -221,64 +313,128 @@ CHART_METRICS: tuple[tuple[str, str, float | None, bool], ...] = (
 POOLS = ("national", "provinces", "zones")
 
 DEFAULT_BASELINE = "randomwalk"
-"""The baseline the chart opens with and the table and summary show."""
+"""The baseline listed first, which the charts open with."""
+
+
+BASELINES = ("randomwalk", "randomwalknowcast")
+"""Baselines the page offers. Each one adds a set per pool, split and
+forecast set to the chart data."""
+
+
+DEFAULT_MODEL = "renewalbvd"
+"""The model the by target week view opens with."""
+
+WEEK_COLOURS = (
+    "#2a78d6",
+    "#eb6834",
+    "#1baf7a",
+    "#eda100",
+    "#e87ba4",
+    "#7a5bd6",
+    "#008300",
+    "#8a6d3b",
+)
+"""Line colours of the target weeks, newest first, repeating."""
+
+
+def latest_per_commit(deploys: Iterable[Deploy]) -> list[Deploy]:
+    """Keep each commit and target's latest deploy, in deploy order."""
+    deploys = list(deploys)
+    last = {(d[0], d[3]): i for i, d in enumerate(deploys)}
+    return [d for i, d in enumerate(deploys) if last[(d[0], d[3])] == i]
+
+
+def rounds(ref: str = "origin") -> dict[str, str]:
+    """Return the commit of each `round-*` tag (a submission) by its sha."""
+    out: dict[str, str] = {}
+    for line in _git("ls-remote", "--tags", ref, "round-*").splitlines():
+        sha, name = line.split("\t")
+        out[sha] = name.removeprefix("refs/tags/").removesuffix("^{}")
+    return out
 
 
 def _label(time: str, sha: str, pages: str) -> str:
-    when = f"{time[5:10]} {time[11:16]}"
-    return f"{when} {sha[:7]}" if pages else f"{when} {sha[:7]} (this build)"
+    label = f"{sha[:7]} {time[5:10]}"
+    return label if pages else f"{label} (this build)"
+
+
+def _series(
+    g: pd.DataFrame, legend: Sequence[str], line: str, rounds: Mapping[str, str]
+) -> dict[str, object]:
+    """One chart set: commits on x, a line per value of `line`."""
+    key = g["deploy_time"] + "|" + g["source_sha"] + "|" + g["pages_sha"]
+    brk = g.groupby(key, sort=False)["break"].any()
+    x: list[str] = []
+    marks: list[int] = []
+    for i, (k, b) in enumerate(brk.items()):
+        time, sha, pages = str(k).split("|")
+        tag = f" {rounds[sha]}" if sha in rounds else ""
+        x.append(_label(time, sha, pages) + (" *" if b else "") + tag)
+        if b:
+            marks.append(i)
+    index = {k: i for i, k in enumerate(brk.index)}
+    rows = [
+        [
+            legend.index(r[line]),
+            index[k],
+            int(r["n"]),
+            *(_round(r[c]) for c, *_ in CHART_METRICS),
+        ]
+        for k, r in zip(key, g.to_dict("records"), strict=True)
+    ]
+    return {"x": x, "rows": rows, "marks": marks}
 
 
 def chart_data(
-    hist: pd.DataFrame, colours: Mapping[str, tuple[str, str, str]]
-) -> dict[str, dict[str, object]]:
-    """Return each target's `checkschart.js` data, by pool, over deploys.
+    hist: pd.DataFrame,
+    colours: Mapping[str, tuple[str, str, str]],
+    rounds: Mapping[str, str] | None = None,
+) -> dict[str, dict[str, dict[str, object]]]:
+    """Return the `checkschart.js` data of each view and target.
 
-    One set per baseline and pool, keyed `<baseline>|<pool>|deploy`, for
-    the chart's baseline picker. Deploys are the x axis, named by time and
-    source commit. A deploy where any model's scored forecasts against
-    that baseline changed (`break`) is starred and listed in `marks`,
-    which the chart draws as a vertical line.
+    Main commits are the x axis, named by short sha and date, with the
+    round they were submitted for. The `model` view draws a line per
+    model for the target week picked. The `week` view draws a line per
+    target week, newest first, for the model picked. Sets are keyed
+    `<baseline>|<pool>|<week or model>`, with `|common` for the common
+    forecasts. A deploy where what a line is scored on changed (`break`)
+    is starred and listed in `marks`, drawn as a vertical line.
     """
     hist = _with_metrics(hist)
+    rounds = rounds or {}
     models = list(dict.fromkeys(hist["model"]))
-    default = DEFAULT_BASELINE if DEFAULT_BASELINE in models else models[0]
+    baselines = list(dict.fromkeys(hist["baseline"]))
     grey = ("#888888", "#888888", "")
-    out: dict[str, dict[str, object]] = {}
+    views: dict[str, dict[str, dict[str, object]]] = {"model": {}, "week": {}}
     for target, cell in hist.groupby("target", sort=False):
-        sets = {}
         pools = [p for p in POOLS if p in set(cell["pool"])]
-        for (base, pool), g in cell.groupby(["baseline", "pool"], sort=False):
-            key = (
-                g["deploy_time"] + "|" + g["source_sha"] + "|" + g["pages_sha"]
-            )
-            brk = g.groupby(key, sort=False)["break"].any()
-            x: list[str] = []
-            marks: list[int] = []
-            for i, (k, b) in enumerate(brk.items()):
-                time, sha, pages = str(k).split("|")
-                x.append(_label(time, sha, pages) + (" *" if b else ""))
-                if b:
-                    marks.append(i)
-            index = {k: i for i, k in enumerate(brk.index)}
-            rows = [
-                [
-                    models.index(r["model"]),
-                    index[k],
-                    int(r["n"]),
-                    *(_round(r[c]) for c, *_ in CHART_METRICS),
-                ]
-                for k, r in zip(key, g.to_dict("records"), strict=True)
-            ]
-            sets[f"{base}|{pool}|deploy"] = {
-                "x": x,
-                "rows": rows,
-                "marks": marks,
-            }
-        out[str(target)] = {
+        weeks, first = _splits(cell)
+        shared = {
             "kind": "line",
-            "x_label": "Deploy",
-            "baseline": models.index(default),
+            "x_label": "Main commit",
+            "baseline": 0,
+            "baselines": baselines,
+            "common": bool(cell["common"].any()),
+            "metrics": [
+                {"key": c, "label": label, "ref": ref, "log": log}
+                for c, label, ref, log in CHART_METRICS
+            ],
+            "scales": pools,
+        }
+        by_model = {}
+        for (base, pool, split, common), g in cell.groupby(
+            ["baseline", "pool", "split", "common"], sort=False
+        ):
+            name = f"{base}|{pool}|{split}" + ("|common" if common else "")
+            by_model[name] = _series(g, models, "model", rounds)
+        by_week = {}
+        for (base, pool, model, common), g in cell.groupby(
+            ["baseline", "pool", "model", "common"], sort=False
+        ):
+            name = f"{base}|{pool}|{model}" + ("|common" if common else "")
+            by_week[name] = _series(g, weeks, "split", rounds)
+        views["model"][str(target)] = {
+            **shared,
             "models": [
                 {
                     "name": m,
@@ -289,24 +445,46 @@ def chart_data(
                 }
                 for m in models
             ],
-            "metrics": [
-                {"key": c, "label": label, "ref": ref, "log": log}
-                for c, label, ref, log in CHART_METRICS
-            ],
-            "scales": pools,
-            "splits": ["deploy"],
-            "sets": sets,
+            "split_label": "Target week",
+            "splits": weeks,
+            "split": first,
+            "sets": by_model,
         }
-    return out
+        others = [m for m in models if m != DEFAULT_BASELINE]
+        views["week"][str(target)] = {
+            **shared,
+            "models": [
+                {
+                    "name": w.removeprefix("week "),
+                    "light": WEEK_COLOURS[i % len(WEEK_COLOURS)],
+                    "dark": WEEK_COLOURS[i % len(WEEK_COLOURS)],
+                    "dash": "",
+                    "on": True,
+                }
+                for i, w in enumerate(weeks)
+            ],
+            "split_label": "Model",
+            "splits": models,
+            "split": DEFAULT_MODEL
+            if DEFAULT_MODEL in models
+            else (others or models)[0],
+            "sets": by_week,
+        }
+    return views
 
 
-def _default(hist: pd.DataFrame) -> pd.DataFrame:
-    """Keep the rows relative to the default baseline.
+def _splits(cell: pd.DataFrame) -> tuple[list[str], str]:
+    """Order the target weeks and pick the one the chart opens with.
 
-    The table shows these only, at a sixth of the size. The chart has
-    every baseline.
+    Weeks are newest first. The chart opens on the newest week scored at
+    the most deploys.
     """
-    return hist.loc[hist["baseline"] == DEFAULT_BASELINE]
+    weeks = sorted(set(cell["split"]), reverse=True)
+    full = cell.loc[~cell["common"]]
+    deploys = full.groupby("split")["deploy_time"].nunique()
+    most = max((deploys.get(w, 0) for w in weeks), default=0)
+    first = next((w for w in weeks if deploys.get(w, 0) == most), weeks[0])
+    return weeks, first
 
 
 def _with_metrics(hist: pd.DataFrame) -> pd.DataFrame:
@@ -316,86 +494,40 @@ def _with_metrics(hist: pd.DataFrame) -> pd.DataFrame:
 
 
 def _round(v: Any) -> float | None:
-    return None if pd.isna(v) else round(float(v), 6)
+    """Keep four significant figures, which halves the chart data."""
+    return None if pd.isna(v) else float(f"{float(v):.4g}")
 
 
-def _table(hist: pd.DataFrame, repo: str) -> str:
-    head = (
-        "| Deployed | Commit | Target | Pool | Model | n | WIS "
-        f"| Relative WIS ({DEFAULT_BASELINE}) "
-        "| 50% coverage | 90% coverage | Break |\n"
-        "|---|---|---|---|---|---:|---:|---:|---:|---:|---|\n"
-    )
-
-    def num(v: Any) -> str:
-        return "" if pd.isna(v) else f"{v:.3g}"
-
-    lines = [
-        f"| {str(r['deploy_time'])[:16].replace('T', ' ')} "
-        f"| [{str(r['source_sha'])[:7]}](https://github.com/{repo}/commit/"
-        f"{r['source_sha']}) | {r['target']} | {r['pool']} | {r['model']} "
-        f"| {r['n']} | {num(r['wis'])} | {num(r['rel_wis'])} "
-        f"| {num(r['coverage_50'])} | {num(r['coverage_90'])} "
-        f"| {'yes' if r['break'] else ''} |"
-        for r in _with_metrics(hist).iloc[::-1].to_dict("records")
-    ]
-    return head + "\n".join(lines)
+VIEWS = (
+    ("week", "By target week", "one line per target week for the model picked"),
+    ("model", "By model", "one line per model for the target week picked"),
+)
+"""Chart views: data name, heading and what it draws."""
 
 
-def page_markdown(hist: pd.DataFrame | None, repo: str) -> str:
-    """Return the Score history page's chart and table, or a notice."""
+def page_markdown(hist: pd.DataFrame | None) -> str:
+    """Return the Score history page's charts, or a notice."""
     if hist is None or hist.empty:
         return (
             '!!! warning "Score history unavailable"\n\n'
             "    The deploy history (the gh-pages branch) could not be "
             "read for this build.\n"
         )
-    srcs = {
-        t: f"../../figures/scorehistory-{t}.json"
-        for t in dict.fromkeys(hist["target"])
-    }
-    table = "\n".join(
-        f"    {line}" if line else ""
-        for line in (
-            '<div class="tablefilter" data-filters="Target,Pool,Model" '
-            'markdown="1">\n\n' + _table(_default(hist), repo) + "\n\n</div>"
-        ).splitlines()
-    )
-    return (
-        f"<div class=\"checkschart\" data-targets='{json.dumps(srcs)}' "
-        'role="group" aria-label="Backtest scores by deploy">\n'
-        "<noscript>The score history chart needs JavaScript.</noscript>\n"
-        "</div>\n\n"
-        '??? note "Table"\n\n'
-        f"{table}\n"
-    )
-
-
-def _overview(hist: pd.DataFrame, targets: Sequence[str]) -> str:
-    """Relative WIS by deploy and model, for each target and pool."""
     parts = []
-    for (target, pool), cell in hist.groupby(["target", "pool"]):
-        if target not in targets or pool == "zones":
-            continue
-        cell = cell.assign(
-            deploy=[
-                _label(t, s, p)
-                for t, s, p in zip(
-                    cell["deploy_time"],
-                    cell["source_sha"],
-                    cell["pages_sha"],
-                    strict=True,
-                )
-            ]
-            + cell.groupby("pages_sha")["break"]
-            .transform("any")
-            .map({True: " *", False: ""})
+    for view, heading, what in VIEWS:
+        srcs = {
+            t: f"../../figures/scorehistory-{view}-{t}.json"
+            for t in dict.fromkeys(hist["target"])
+        }
+        parts.append(
+            f"## {heading}\n\n"
+            f"Scores at each main commit, {what}.\n\n"
+            f"<div class=\"checkschart\" data-targets='{json.dumps(srcs)}' "
+            f'role="group" aria-label="Scores {heading.lower()}">\n'
+            "<noscript>The score history chart needs JavaScript.</noscript>\n"
+            "</div>\n"
         )
-        wide = cell.pivot_table(
-            index="deploy", columns="model", values="rel_wis", sort=False
-        )
-        parts.append(f"Relative WIS, {target}, {pool}\n{wide.round(3)}")
-    return "\n\n".join(parts)
+    return "\n".join(parts)
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -407,7 +539,6 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--figures", help="Write the chart JSON here")
     parser.add_argument("--current", help="This build's figures directory")
     parser.add_argument("--current-sha", default="HEAD")
-    parser.add_argument("--repo", default="seabbs/BDBVHubRenewal")
     args = parser.parse_args(argv)
     try:
         deploys = walk(args.ref)
@@ -421,11 +552,12 @@ def main(argv: Sequence[str] | None = None) -> None:
             with contextlib.suppress(subprocess.CalledProcessError):
                 sha = _git("rev-parse", "HEAD").strip()
         deploys += current_deploys(Path(args.current), sha, now)
-    hist = history(deploys) if deploys else None
+    deploys = latest_per_commit(deploys)
+    hist = history(deploys, BASELINES) if deploys else None
     if args.docs:
         docs = Path(args.docs)
         docs.mkdir(parents=True, exist_ok=True)
-        page = page_markdown(hist, args.repo)
+        page = page_markdown(hist)
         (docs / "score-history.md").write_text(page)
     if hist is None:
         return
@@ -438,17 +570,18 @@ def main(argv: Sequence[str] | None = None) -> None:
         }
         figures = Path(args.figures)
         figures.mkdir(parents=True, exist_ok=True)
-        for target, data in chart_data(hist, colours).items():
-            path = figures / f"scorehistory-{target}.json"
-            path.write_text(json.dumps(data, separators=(",", ":")))
+        tags: dict[str, str] = {}
+        with contextlib.suppress(subprocess.CalledProcessError):
+            tags = rounds()
+        for view, charts in chart_data(hist, colours, tags).items():
+            for target, data in charts.items():
+                path = figures / f"scorehistory-{view}-{target}.json"
+                path.write_text(json.dumps(data, separators=(",", ":")))
     if args.out:
         out = Path(args.out)
         out.parent.mkdir(parents=True, exist_ok=True)
         hist.to_csv(out, index=False, float_format="%.6g")
         print(f"Wrote {len(hist)} rows to {out}", file=sys.stderr)
-    if not args.docs:
-        print(_overview(_default(hist), ("latest", "complete")))
-        print("\n* what a model is scored on changed at this deploy")
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     check_distinct,
     make_tasks,
+    real_vintages,
     run_forecasts,
 )
 from bdbvhubrenewal.evaluation.nowcast import (
@@ -39,6 +40,10 @@ def result(target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame):  # 
     return release_backtest(tasks, daily, target)
 
 
+def _vintages(target: pd.DataFrame) -> list[str]:
+    return real_vintages(target.loc[target["kind"] == "real"])
+
+
 def test_a_model_that_cannot_forecast_is_listed_with_no_forecasts(
     result,  # type: ignore[no-untyped-def]
 ) -> None:
@@ -56,13 +61,17 @@ def test_a_model_that_cannot_forecast_is_listed_with_no_forecasts(
 
 def test_every_model_is_scored_on_each_later_release(
     result,  # type: ignore[no-untyped-def]
+    target: pd.DataFrame,
 ) -> None:
     s = result.scores
+    vintages = _vintages(target)
+    # Every release from the first forecast up to the latest is scored.
+    later = vintages[vintages.index("2026-10-17") :]
     assert set(s["target"]) == {"reported", "complete"}
     assert set(s["model"]) == {"randomwalk", "randomwalknowcast"}
-    assert set(s["origin"]) == {"2026-10-17", "2026-10-24"}
+    assert set(s["origin"]) == set(later[:-1])
     rep = s.loc[(s["target"] == "reported") & (s["origin"] == "2026-10-17")]
-    assert set(rep["truth_vintage"]) == {"2026-10-24", "2026-11-01"}
+    assert set(rep["truth_vintage"]) == set(later[1:])
     # Every model is scored on the same forecasts of a target.
     for _, g in summarise(s).groupby("target"):
         assert g["n"].nunique() == 1
@@ -97,7 +106,8 @@ def test_energy_scores_each_scale_on_the_same_samples(
     s = result.scores.loc[result.scores["model"] == "randomwalk"]
     nat = s.loc[s["location"] == "CD"].groupby(unit[:3]).size()
     got = e.loc[(e["model"] == "randomwalk") & (e["scale"] == "national")]
-    assert got.set_index(unit[:3])["n_cells"].equals(nat.rename("n_cells"))
+    got = got.set_index(unit[:3])["n_cells"].sort_index()
+    assert got.equals(nat.rename("n_cells").sort_index())
 
 
 def test_complete_weeks_come_from_later_releases_only(
@@ -125,7 +135,7 @@ def test_complete_target_only_has_complete_weeks(
     daily: pd.DataFrame,
 ) -> None:
     s = result.scores.loc[result.scores["target"] == "complete"]
-    done = complete_weeks(target, daily, "2026-11-01")
+    done = complete_weeks(target, daily, _vintages(target)[-1])
     ok = set(
         zip(
             done.loc[done["complete"], "location"],
@@ -456,3 +466,37 @@ def test_scoring_cut_offs_are_the_model_s_report_by_cut_offs(
     assert task.report_by
     for release, cut in task.report_by.items():
         assert _cutoff(daily, release).isoformat() == cut
+
+
+def test_release_forecasts_made_apart_by_model_score_as_one_run(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    tmp_path,  # type: ignore[no-untyped-def]
+    result,  # type: ignore[no-untyped-def]
+) -> None:
+    from bdbvhubrenewal.evaluation.nowcast import (
+        ReleaseForecasts,
+        forecast_releases,
+        score_releases,
+    )
+
+    real = target.loc[target["kind"] == "real"]
+    tasks = make_tasks(
+        real,
+        delays.assign(kind="real"),
+        BacktestConfig(n_samples=50, seed=2),
+        daily=daily,
+    )
+    parts = []
+    for name in ("randomwalk", "randomwalknowcast"):
+        forecast_releases(tasks, target, [name]).write(tmp_path / name)
+        parts.append(tmp_path / name)
+    out = score_releases(tasks, daily, target, ReleaseForecasts.read(parts))
+    for field in ("scores", "quantiles", "energy", "origins", "fits"):
+        pd.testing.assert_frame_equal(
+            getattr(out, field),
+            getattr(result, field),
+            check_dtype=False,
+            obj=field,
+        )

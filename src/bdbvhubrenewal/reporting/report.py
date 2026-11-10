@@ -97,6 +97,7 @@ from bdbvhubrenewal.reporting.plots import (
     comparison_colours,
     comparison_label,
     model_style,
+    plot_cutoff_days,
     plot_delay_check,
     plot_delay_distribution,
     plot_delays_over_time,
@@ -107,6 +108,7 @@ from bdbvhubrenewal.reporting.plots import (
     plot_imputed_share,
     plot_location_grid,
     plot_newly_missing,
+    plot_release_counts,
     plot_renewal_delay,
     plot_revisions,
     plot_scenarios,
@@ -202,6 +204,16 @@ def make_report(
         lambda mode: plot_revisions(real, mode=mode), fig / "revisions.svg"
     )
     save_light_dark(
+        lambda mode: plot_release_counts(real, mode=mode),
+        fig / "release-counts.svg",
+    )
+    daily = load_daily(data_dir)
+    recent = sorted(real["vintage"].unique())[-4:]
+    save_light_dark(
+        lambda mode: plot_cutoff_days(daily, recent, mode=mode),
+        fig / "cutoff-days.svg",
+    )
+    save_light_dark(
         lambda mode: plot_imputed_share(real, mode=mode),
         fig / "imputed-share.svg",
     )
@@ -228,6 +240,7 @@ def make_report(
         fig / "delays-time.svg",
     )
     summary = real.groupby("vintage").agg(
+        cutoff=("cutoff", "first"),
         weeks=("target_end_date", "nunique"),
         first_week=("target_end_date", "min"),
         last_week=("target_end_date", "max"),
@@ -242,6 +255,14 @@ def make_report(
         "location"
     ].nunique()
     summary = summary.join(nat).reset_index()
+    summary.insert(
+        2,
+        "days_to_release",
+        (
+            pd.to_datetime(summary["vintage"])
+            - pd.to_datetime(summary["cutoff"])
+        ).dt.days,
+    )
     summary["delay_rows"] = summary["vintage"].map(
         delays.groupby("vintage").size()
     )
@@ -280,7 +301,6 @@ def make_report(
 
     # Nowcast page: latest real vintage, every registered model.
     rows = real.loc[real["vintage"] == latest]
-    daily = load_daily(data_dir)
     tasks = make_tasks(rows, delays, config, history=real, daily=daily)
     forecasts_now = _nowcast_forecasts(tasks, latest, res)
     _nowcast_page(fig, gen, target, forecasts_now, names, config, latest)
@@ -876,21 +896,10 @@ def _zone_nowcast_section(
 
 
 def _stored_at(res: Path, vintage: str) -> pd.DataFrame:
-    """Every model's final-count forecasts from one origin in the results.
-
-    Development origins are in `forecasts.csv.gz` and held-out ones in
-    `heldout-forecasts.csv.gz`.
-    """
-    frames = []
-    for name in ("forecasts.csv.gz", "heldout-forecasts.csv.gz"):
-        rows = pd.read_csv(res / name, dtype={"as_of": object})
-        rows = rows.loc[(rows["vintage"] == vintage) & rows["as_of"].isna()]
-        frames.append(rows.drop(columns="chosen_model", errors="ignore"))
-    dev, held = frames
-    return pd.concat(
-        [dev, held.loc[~held["model"].isin(set(dev["model"]))]],
-        ignore_index=True,
-    )
+    """Every model's final-count forecasts from one origin in the results."""
+    rows = pd.read_csv(res / "forecasts.csv.gz", dtype={"as_of": object})
+    rows = rows.loc[(rows["vintage"] == vintage) & rows["as_of"].isna()]
+    return rows.reset_index(drop=True)
 
 
 def _nowcast_forecasts(
@@ -899,9 +908,8 @@ def _nowcast_forecasts(
     """Forecasts for the Nowcast page, from every source that has them.
 
     Models that need no fit are run on the latest vintage here. Fitted
-    models are slow, so they are taken from the held-out run when it
-    forecast the latest vintage, and otherwise from the backtest, at the
-    latest real origin it has.
+    models are slow, so they are taken from the backtest, at the latest
+    real origin it has.
     """
     specs = list_models()
     quick = [get_model(s.name) for s in specs if not s.fitted]
@@ -915,18 +923,6 @@ def _nowcast_forecasts(
     check_distinct(ran)
     frames = [ran]
     have = {s.name for s in specs if not s.fitted}
-    path = res / "heldout-forecasts.csv.gz"
-    try:
-        held = pd.read_csv(path)
-    except (FileNotFoundError, pd.errors.EmptyDataError):
-        held = pd.DataFrame()
-    if not held.empty:
-        fitted = {s.name for s in specs if s.fitted}
-        keep = held.loc[
-            (held["vintage"] == latest) & held["model"].isin(fitted)
-        ].drop(columns="chosen_model", errors="ignore")
-        frames.append(keep)
-        have |= set(keep["model"])
     backtest = res / "forecasts.csv.gz"
     rows = pd.read_csv(backtest, dtype={"as_of": object})
     if "as_of" in rows:
@@ -2328,7 +2324,7 @@ def _missing_builds(
             lines.append(
                 f"`{comparison_label(name, 'real')}` has no forecast for the "
                 f"{ref} round yet, so its n leaves that round out until a "
-                "backtest or held-out run covers it.\n"
+                "backtest covers it.\n"
             )
     return lines
 

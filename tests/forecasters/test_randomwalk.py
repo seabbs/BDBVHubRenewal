@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import dataclasses
-from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -139,7 +138,7 @@ def test_nowcast_starts_from_the_latest_full_week_with_enough_reported(
     assert start["CD-IT"] == "2026-10-10"
 
 
-def test_weeks_after_the_start_follow_the_filtered_level(
+def test_the_partial_week_adds_walk_draws_to_its_nowcast(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
     task = _task(target, delays, daily, "2026-10-17")
@@ -149,9 +148,9 @@ def test_weeks_after_the_start_follow_the_filtered_level(
         (samples["location"] == "CD-IT") & (samples["target_end_date"] == wk)
     ]["value"]
     reported = task.daily_history
-    # The week holding the cut-off is drawn from the filtered level, floored
-    # at the count reported, so every draw is at least that count and the
-    # draws vary.
+    # The week holding the cut-off is its nowcast plus walk draws for its
+    # days after the cut-off, so every draw is at least the count reported
+    # and the draws vary.
     seen = (
         reported.loc[
             (reported["location"] == "CD-IT")
@@ -255,23 +254,6 @@ def test_a_silent_place_waits_for_its_first_introduction() -> None:
     assert (y[3, :, 0] > 0).mean() == pytest.approx(0.15, abs=0.03)
 
 
-def test_the_filter_weights_a_week_by_how_complete_it_is() -> None:
-    from bdbvhubrenewal.forecasters.randomwalk import _filter
-
-    origin = SimpleNamespace(
-        reported=np.array([[10.0, 0.0, 0.0], [10.0, 0.0, 0.0]]),
-        complete=np.array([[1.0, 0.95, 0.05], [1.0, 0.95, 0.05]]),
-        sigma=np.array([0.5, 0.5]),
-    )
-    start = np.log1p(np.full((2, 1), 10.0))
-    level, var = _filter(start, origin, np.array([0, 1]), 2)
-    # Place 0 sees a near-complete week of 0 and drops; place 1 starts at
-    # week 1 and sees only a 5% reported week of 0, so it barely moves.
-    assert level[0, 0, 1] < level[1, 0, 2]
-    assert level[1, 0, 2] > 0.9 * start[1, 0]
-    assert var[1, 2] > 0
-
-
 def test_a_silent_place_is_not_nowcast(runs) -> None:
     # Sud-Kivu has no case in the 9 weeks to 2026-10-24, so after its start
     # week it follows its introductions, nowcast weeks included.
@@ -286,3 +268,44 @@ def test_a_silent_place_is_not_nowcast(runs) -> None:
     model, _ = runs["randomwalknowcast"]
     start = {r["location"]: r["start_week"] for r in model.fit_diagnostics}
     assert (sk.loc[sk["target_end_date"] <= start["CD-SK"], "value"] == 0).all()
+
+
+def test_a_place_with_no_week_to_start_from_draws_introductions(
+    task: ForecastTask,
+) -> None:
+    # Sud Ubangi has 2 cases ever, in the week of 10-03, so no week has
+    # enough cases to start a walk from. It takes the silent places' path
+    # from its latest complete week, so even a wide walk spread, as
+    # pprandomwalknowcast fits it, keeps its draws small.
+    model = RandomWalkNowcast()
+    origin = model.origin_at(task, errors=True)
+    i = list(origin.snap.locations).index("CD-SU")
+    origin.sigma[i] = 0.9
+    values, _ = model.trajectories(origin, task, origin.point)
+    su = values[:, i, :]
+    assert su.max() < 100
+    # Weeks with data keep at least the count reported.
+    n_data = origin.reported.shape[1]
+    assert (su[:, :n_data] >= origin.reported[i]).all()
+
+
+def test_the_walk_forecasts_on_from_each_samples_nowcast(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    # Cut-off 10-16 is a Friday, so the week of 10-17 is partial. Each
+    # sample walks on from its own nowcast of the start week, so the
+    # forecast is at least as spread as that nowcast and follows it.
+    task = _task(target, delays, daily, "2026-10-17")
+    model = RandomWalkNowcast()
+    out = model.forecast(task)
+    info = pd.DataFrame(model.fit_diagnostics).set_index("location")
+    for loc in ("CD-IT", "CD-NK"):
+        mine = out.loc[out["location"] == loc].pivot(
+            index="sample", columns="target_end_date", values="value"
+        )
+        start = info.loc[loc, "start_week"]
+        later = [w for w in mine.columns if w > "2026-10-17"]
+        x0 = np.log1p(mine[start].to_numpy())
+        x1 = np.log1p(mine[later[0]].to_numpy())
+        assert x1.std() >= x0.std()
+        assert np.corrcoef(x0, x1)[0, 1] > 0.2

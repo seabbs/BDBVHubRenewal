@@ -7,6 +7,17 @@ inputs:
   sync:
     description: Run `uv sync --frozen` for the main repo
     default: 'true'
+  jax-scope:
+    description: >-
+      Names this job's JAX cache, so jobs that compile different programs
+      each save their own (a cache key is written once). Blank keeps the
+      shared cache.
+    default: ''
+  save-jax:
+    description: >-
+      Save the JAX cache at the end of the job ('false' only restores, for
+      a job that runs before others that compile more)
+    default: 'true'
 
 runs:
   using: composite
@@ -16,18 +27,38 @@ runs:
         enable-cache: true
     # JAX caches compiled XLA programs on disk. Keyed on the lock file
     # and model source, so a change to either compiles afresh, while a
-    # re-run in the same week reuses the compiled model.
+    # re-run in the same week reuses the compiled model. A scoped job
+    # starts from its own last cache, else any.
     - name: Restore the JAX compilation cache
+      if: inputs.save-jax == 'true'
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/jax
-        key: jax-${{ runner.os }}-${{ hashFiles('uv.lock', 'src/**') }}
-        restore-keys: jax-${{ runner.os }}-
+        key: >-
+          jax-${{ runner.os }}-${{ inputs.jax-scope && format('{0}-', inputs.jax-scope) || '' }}${{ hashFiles('uv.lock', 'src/**') }}
+        restore-keys: |
+          jax-${{ runner.os }}-${{ inputs.jax-scope && format('{0}-', inputs.jax-scope) || '' }}
+          jax-${{ runner.os }}-
+    - name: Restore the JAX compilation cache without saving it
+      if: inputs.save-jax != 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/jax
+        key: >-
+          jax-${{ runner.os }}-${{ inputs.jax-scope && format('{0}-', inputs.jax-scope) || '' }}${{ hashFiles('uv.lock', 'src/**') }}
+        restore-keys: |
+          jax-${{ runner.os }}-${{ inputs.jax-scope && format('{0}-', inputs.jax-scope) || '' }}
+          jax-${{ runner.os }}-
     - name: Configure JAX and matplotlib
       shell: bash
       run: |
         {
           echo "JAX_COMPILATION_CACHE_DIR=$HOME/.cache/jax"
+          # Cache every compiled program. By default JAX skips those that
+          # compile in under a second, which are most of the random
+          # walks' many small programs.
+          echo "JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS=0"
+          echo "JAX_PERSISTENT_CACHE_MIN_ENTRY_SIZE_BYTES=-1"
           # One XLA host device per vCPU, so NumPyro can run chains in
           # parallel. candidate.sh raises it per fit to the number of
           # chains when that is larger.

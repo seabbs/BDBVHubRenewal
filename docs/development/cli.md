@@ -10,13 +10,14 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 |---|---|
 | `data` | Download the hub data and write the tidy tables to `data/`. |
 | `backtest` | Run the development backtest, the evaluation on the real releases (`results/nowcast-*.csv`) and the recovery check. Fitted models are never run: their rows in `results/` come from the fit store and are kept. With `--models`, only those models run and the others' rows are kept. |
-| `backtest --evaluate-holdout` | Score every held-out vintage under the model chosen at the time, with the other models alongside. |
 | `backtest --lopo` | Leave one province out: forecast each province with its counts masked, for the variants that take a mask. |
-| `backtest --scenarios-only` | Run only the scenarios calibrated to the real data, from `--scenario-as-of` and `--scenario-dates`. |
+| `backtest --scenarios-only` | Run only the scenarios calibrated to the real data, from `--scenario-as-of` and `--scenario-dates`. `--scenarios` runs only the named scenarios. |
+| `backtest --recovery-only`, `--no-recovery` | Run only the recovery check on the simulated outbreak, or leave it out, so it can run apart. |
+| `backtest --chunk K/N` | With `--recovery-only` or `--scenarios-only`, run only block K of N (from 0) of the dates. Stacking the blocks' results (`concat-results`) gives one run's. |
 | `bvd` | Cache the BVDOutbreakSize releases each vintage may use. |
 | `compare-hub [--fetch]` | Score our retrospective forecasts and the hub's submitted ones on the same truth and weeks. |
 | `nowcast` | Forecast from a real vintage, write the hub file and check it. With `--config` and `--fit`, forecast from a fit configuration. |
-| `zone-backtest` | Score `randomwalk`, `randomwalknowcast` and `pprandomwalknowcast` run at zone level on the real vintages. |
+| `zone-backtest` | Score `randomwalk`, `randomwalknowcast` and `pprandomwalknowcast` run at zone level on the real vintages. `--chunk K/N` runs only block K of N of the origins. |
 | `fit-store plan`, `fit`, `load` | List the fits the fit store lacks, make one, or load the stored fits into `results/`. |
 | `fit` | Fit a configuration and write the fit directory and its diagnostics, for the submission CI. |
 | `plot-submission` | Plot a submitted hub file. |
@@ -27,6 +28,10 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 | `hub-id` | Print the hub model id that submissions use. |
 | `freeze-round` | Write a round's docs page to the ledger once its pull request has merged. |
 | `report` | Make the docs figures and tables. |
+| `digest [--with PATH...] [--text TEXT] [--model M]` | Print a hash of what a backtest reads, which keys its cached outputs in the Pages workflow. With `--model`, only that model's code (its import closure, less the other models' modules) with the data. |
+| `backtest --forecast-only`, `zone-backtest --forecast-only` | Forecast without scoring and write the forecasts to `--parts`, so each model can run apart. |
+| `score PART...` | Score the forecasts of `--forecast-only` runs, every model together, and write the results files one run of each backtest writes. |
+| `concat-results --out DIR [--dedupe FILE...] PART...` | Stack the results files of runs made apart, such as blocks of dates, in the order given. `--dedupe` keeps one copy of rows every part writes in full. |
 
 `--version` prints the package version.
 
@@ -37,7 +42,6 @@ task backtest           # development backtest, real releases and recovery check
 task backtest-lopo      # leave one province out
 task backtest-scenarios # simulated scenarios calibrated to the real data
 task backtest-zones     # random walk models at health-zone level
-task backtest-heldout   # score the held-out vintages
 task results            # every derived file in results/, as the Pages build makes them
 task docs               # build the site into _site/ (runs task results, about 25 min)
 task serve              # serve the site (run task results once first)

@@ -19,7 +19,7 @@ from pyrenew.latent.temporal_processes import (
 )
 from pyrenew.metaclass import RandomVariable
 
-from .pooled import pooled_walk
+from .pooled import pooled_groups, pooled_walk
 
 
 def hazard_to_pmf(logit_hazard: Array) -> Array:
@@ -136,14 +136,31 @@ class HazardDelay(RandomVariable):
             f"group_process={self.group_process!r}, active={self.active!r})"
         )
 
+    def shared_groups(self, n_groups: int) -> np.ndarray:
+        """Return the groups whose delay is exactly the shared delay.
+
+        Parameters
+        ----------
+        n_groups
+            Number of groups.
+
+        Returns
+        -------
+        numpy.ndarray
+            Boolean `(n_groups,)`: the groups outside `active`
+            (`pooled_groups`).
+        """
+        return pooled_groups(self.active, n_groups)
+
     def sample(
         self,
         n_timepoints: int,
         n_groups: int = 1,
         first_day_dow: int | None = None,
+        by_week: bool = False,
         **kwargs: object,
     ) -> Array:
-        """Sample the delay of each group by day.
+        """Sample the delay of each group by day, or by week.
 
         Parameters
         ----------
@@ -153,13 +170,18 @@ class HazardDelay(RandomVariable):
             Number of groups, such as provinces.
         first_day_dow
             Weekday of the first day, passed by PyRenew.
+        by_week
+            Return one row per week when the delay is constant within
+            weeks (a `WeeklyTemporalProcess` starting on `first_day_dow`),
+            rather than repeating it for each day.
         **kwargs
             Ignored, for the PyRenew interface.
 
         Returns
         -------
         Array
-            Shape `(n_groups, n_timepoints, dmax + 1)`.
+            Shape `(n_groups, n_timepoints, dmax + 1)`, or
+            `(n_groups, ceil(n_timepoints / 7), dmax + 1)` by week.
         """
         beta0 = self.hazard0_rv()
         beta = self.shape_process.sample(
@@ -191,11 +213,23 @@ class HazardDelay(RandomVariable):
             # The shifts are constant within weeks, so compute one row
             # per week and repeat it.
             shift = shift[::7]
+        # Groups that share the pooled delay have the same pmf, so it is
+        # computed once for them (row `rows[p]` is group p's pmf).
+        shared = self.shared_groups(n_groups)
+        groups = np.arange(n_groups)
+        first = int(np.argmax(shared))
+        distinct = np.flatnonzero(~shared | (groups == first))
+        rows = np.searchsorted(distinct, np.where(shared, first, groups))
+        if distinct.size < n_groups:
+            shift = shift[:, distinct]
         logit = beta[None, None, :] + shift.T[:, :, None]
         pmf = hazard_to_pmf(logit)
         mean = pmf @ jnp.arange(self.dmax + 1)
+        if distinct.size < n_groups:
+            pmf, mean = pmf[rows], mean[rows]
         if weekly:
-            pmf = jnp.repeat(pmf, 7, axis=1)[:, :n_timepoints]
             mean = jnp.repeat(mean, 7, axis=1)[:, :n_timepoints]
         numpyro.deterministic(f"{self.name}_mean", mean)
+        if weekly and not by_week:
+            pmf = jnp.repeat(pmf, 7, axis=1)[:, :n_timepoints]
         return pmf

@@ -45,7 +45,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import epiweek_end
-from bdbvhubrenewal.data.releases import last_report_days, release_id
+from bdbvhubrenewal.data.releases import latest_onset_days, release_id
 
 __all__ = [
     "COHERENCE_HANDLING",
@@ -57,6 +57,7 @@ __all__ = [
     "TARGET",
     "build_tidy_data",
     "coherence_summary",
+    "cutoff_window",
     "delays_for_vintage",
     "downward_summary",
     "fetch_hub_data",
@@ -640,8 +641,8 @@ def build_tidy_data(
     daily_csv = raw / "auxiliary-data" / "daily-confirmed-case.csv"
     daily = tidy_daily(daily_csv)
     delays = tidy_delays(raw / "delays", locations)
-    # Every table keyed by release carries the release's last report day.
-    cutoffs = last_report_days(daily, delays)
+    # Every table keyed by release carries the release's latest onset day.
+    cutoffs = latest_onset_days(daily)
     series = raw / "target-data" / "time-series.csv"
     by_release = {
         "target": tidy_target(series, daily),
@@ -862,8 +863,8 @@ def load_target(data_dir: Path | str | None = None) -> pd.DataFrame:
         Columns `kind`, `vintage` (the release's as-of date),
         `location`, `location_name`, `target_end_date` (the Saturday
         ending the week), `observed`, `imputed` and `total`, as in
-        `tidy_target`, and `cutoff`, the release's last report day
-        (`bdbvhubrenewal.data.releases.last_report_days`).
+        `tidy_target`, and `cutoff`, the release's latest onset day
+        (`bdbvhubrenewal.data.releases.latest_onset_days`).
 
     Examples
     --------
@@ -1121,6 +1122,70 @@ def revision_table(
         out["reference_total"] > 0
     )
     return out.reset_index(drop=True)
+
+
+def cutoff_window(
+    daily: pd.DataFrame, vintage: str, location: str, weeks: int = 4
+) -> pd.DataFrame:
+    """Return one release's daily onsets for the weeks up to its cut-off.
+
+    This shows how the hub's weekly target forms from daily onsets,
+    including the partial week that holds the cut-off.
+
+    Parameters
+    ----------
+    daily : pandas.DataFrame
+        Daily onsets, as from `load_daily`.
+    vintage : str
+        The release.
+    location : str
+        The place.
+    weeks : int
+        Epi weeks to keep, ending with the cut-off's week.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per day from the first kept week's Sunday to the
+        cut-off, with days without onsets filled with zero. Columns
+        `onset_date`, `target_end_date`, `observed`, `imputed`, `total`,
+        `week_days` (days of the week up to the cut-off), `partial`
+        (fewer than seven) and `week_total` (the week's total).
+    """
+    rows = daily.loc[
+        (daily["vintage"] == vintage) & (daily["location"] == location)
+    ]
+    cutoff = pd.Timestamp(rows["cutoff"].iloc[0])
+    end = pd.Timestamp(epiweek_end(cutoff.date()))
+    days = pd.date_range(end - pd.Timedelta(days=7 * weeks - 1), cutoff)
+    out = (
+        rows.assign(onset_date=pd.to_datetime(rows["onset_date"]))
+        .set_index("onset_date")[["observed", "imputed"]]
+        .reindex(days, fill_value=0)
+        .rename_axis("onset_date")
+        .reset_index()
+    )
+    out["total"] = out["observed"] + out["imputed"]
+    out["target_end_date"] = [
+        epiweek_end(d.date()).isoformat() for d in out["onset_date"]
+    ]
+    out["onset_date"] = out["onset_date"].dt.strftime("%Y-%m-%d")
+    week = out.groupby("target_end_date")
+    out["week_days"] = week["total"].transform("size")
+    out["partial"] = out["week_days"] < 7
+    out["week_total"] = week["total"].transform("sum")
+    return out[
+        [
+            "onset_date",
+            "target_end_date",
+            "observed",
+            "imputed",
+            "total",
+            "week_days",
+            "partial",
+            "week_total",
+        ]
+    ]
 
 
 def imputed_by_release(target: pd.DataFrame) -> pd.DataFrame:

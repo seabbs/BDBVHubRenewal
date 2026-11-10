@@ -506,7 +506,7 @@ def test_report_cutoffs_are_days_from_the_model_start(
     data = rn.vintage_inputs(task, rn.model_config(rn.VARIANTS["renewal"]))
     cuts = rn.report_cutoffs(task, data)
     start = pd.Timestamp(data.start_date)
-    # Each later release is cut at its last report day.
+    # Each later release is cut at its latest onset day.
     assert cuts == {(pd.Timestamp(last[d]) - start).days: d for d in last}
 
 
@@ -582,14 +582,14 @@ def test_delay_summary_reads_shares_and_medians_by_onset_week() -> None:
     assert cum["q50"].is_monotonic_increasing
 
 
-def test_the_model_cut_off_is_the_release_s_last_report_day(
+def test_the_model_cut_off_is_the_release_s_latest_onset_day(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
     import datetime as dt
 
     config = rn.model_config(rn.VARIANTS["renewal"])
     for label, last in (
-        ("2026-10-09", "2026-10-08"),
+        ("2026-10-09", "2026-10-07"),
         ("2026-10-17", "2026-10-16"),
         ("2026-10-24", "2026-10-24"),
         ("2026-11-01", "2026-10-31"),
@@ -597,8 +597,8 @@ def test_the_model_cut_off_is_the_release_s_last_report_day(
         rows = target.loc[target["vintage"] == label]
         task = make_tasks(rows, delays, BacktestConfig(n_samples=20, seed=3))[0]
         data = rn.vintage_inputs(task, config)
-        # The cut-off and the last data week end on the last report day
-        # the data prove, so no release adds empty days.
+        # The cut-off is the latest onset day and the last data week is
+        # the week that holds it.
         cut = data.start_date + dt.timedelta(days=data.cutoff)
         end = data.start_date + dt.timedelta(days=7 * data.n_weeks - 1)
         assert cut.isoformat() == last

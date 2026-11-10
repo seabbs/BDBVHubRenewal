@@ -8,6 +8,7 @@ import pytest
 from bdbvhubrenewal.data import (
     PROVINCE_CENTRES,
     PROVINCE_POPULATIONS,
+    cutoff_window,
     imputed_share,
     load_health_zones,
     load_locations,
@@ -223,7 +224,7 @@ def test_imputed_share_and_newly_missing(target: pd.DataFrame) -> None:
     # Every vintage after the first has a change from the one before.
     assert list(nat["vintage"]) == vintages(target)[1:]
     assert (nat["new_observed"] + nat["new_imputed"] == nat["new_total"]).all()
-    # Days between the releases' last report days, 10-24 to 10-31.
+    # Days between the releases' cut-offs, 10-24 to 10-31.
     assert nat.set_index("vintage").loc["2026-11-01", "days"] == 7
 
 
@@ -238,6 +239,55 @@ def test_revision_table_latest_is_one(target: pd.DataFrame) -> None:
         newest.set_index("target_end_date").loc["2026-10-31"]["weeks_before"]
         == 0
     )
+
+
+def test_cutoff_window_fills_days_and_flags_partial_week() -> None:
+    # Cut-off on Wednesday 2026-11-04; 10-27 and 11-01 have no onsets.
+    days = pd.date_range("2026-10-25", "2026-11-04").strftime("%Y-%m-%d")
+    daily = pd.DataFrame(
+        {
+            "vintage": "2026-11-08",
+            "location": "CD",
+            "onset_date": days,
+            "observed": range(1, 12),
+            "imputed": 1,
+            "cutoff": "2026-11-04",
+        }
+    )
+    daily = daily.loc[~daily["onset_date"].isin(["2026-10-27", "2026-11-01"])]
+    other = daily.assign(location="CD-IT")
+    win = cutoff_window(pd.concat([daily, other]), "2026-11-08", "CD", 2)
+    assert list(win["onset_date"]) == list(days)
+    assert win.set_index("onset_date").loc["2026-10-27", "total"] == 0
+    weeks = win.groupby("target_end_date").agg(
+        total=("total", "sum"),
+        days=("week_days", "first"),
+        partial=("partial", "first"),
+    )
+    assert list(weeks.index) == ["2026-10-31", "2026-11-07"]
+    assert weeks["days"].tolist() == [7, 4]
+    assert weeks["partial"].tolist() == [False, True]
+    # Observed 1..11 less the dropped days 3 and 8, plus one imputed each.
+    assert weeks["total"].tolist() == [
+        1 + 2 + 4 + 5 + 6 + 7 + 6,
+        9 + 10 + 11 + 3,
+    ]
+    assert (
+        win["week_total"] == win["target_end_date"].map(weeks["total"])
+    ).all()
+
+
+def test_cutoff_window_matches_target_on_real_data(
+    target: pd.DataFrame,
+) -> None:
+    daily = pd.read_csv(DATA / "daily.csv")
+    win = cutoff_window(daily, "2026-11-08", "CD", 4)
+    weeks = win.groupby("target_end_date")["total"].sum()
+    real = target.loc[
+        (target["vintage"] == "2026-11-08") & (target["location"] == "CD")
+    ].set_index("target_end_date")["total"]
+    assert weeks.loc["2026-11-07"] == 68
+    assert (weeks == real.loc[weeks.index]).all()
 
 
 def test_province_centres_cover_every_province() -> None:
