@@ -19,12 +19,13 @@ Later weeks are walk draws, floored at the count reported.
 `RandomWalkNowcast` (`randomwalknowcast`) nowcasts each hub week, with
 negative binomial new reports on the remaining count minus Poisson
 removals of the count reported (`obs`).
-Each sample starts the walk from its own nowcast of the latest full week
-at least `Settings.start_share` reported with at least
-`Settings.start_count` cases (`_start_weeks`). Later weeks with data keep
-their nowcast draws. If the week holding the cut-off is partial, its days
-after the cut-off add Poisson draws from that week's walk rate. Weeks
-after the cut-off are the walk's draws.
+Weeks with data keep their nowcast draws. If the week holding the cut-off
+is partial, its days after the cut-off add a Poisson draw from that week's
+walk rate, walked by each sample from its own nowcast of the latest full
+week at least `Settings.start_share` reported with at least
+`Settings.start_count` cases (`_start_weeks`). Each sample's completed
+cut-off week, its nowcast plus that draw, is the base the walk goes on
+from for the weeks after the cut-off.
 
 The spread of the walk is the standard deviation of the weekly changes of
 $\log(1 + y)$ in reported counts, over the weeks ending at the start of
@@ -473,7 +474,7 @@ class RandomWalkNowcast(RandomWalk):
         k = np.clip(back, 0, k_n - 1)
         # Weeks older than the fitted ones are final, with no removals.
         b = np.where(back < k_n, origin.removal[:, k], 0.0)
-        key_x, key_walk, key_part = jax.random.split(_key(task), 3)
+        key_x, key_walk, key_part, key_ahead = jax.random.split(_key(task), 4)
         shape = (n, *point.shape)
         reported = jnp.broadcast_to(
             jnp.asarray(origin.reported, jnp.float32), shape
@@ -510,6 +511,17 @@ class RandomWalkNowcast(RandomWalk):
             ),
             dtype=np.float64,
         )  # [L, S]
+        # Each sample's completed cut-off week is the base for the weeks
+        # after it, from which the walk goes on.
+        done = nowcast[:, rows, cw].T + np.where(miss > 0, part, 0.0)
+        h = n_all - cw - 1
+        _, ahead = random_walks(
+            jax.random.split(key_ahead, n_loc),
+            jnp.asarray(done, jnp.float32),
+            jnp.asarray(origin.sigma, jnp.float32),
+            max(h, 1),
+        )
+        ahead = np.asarray(ahead, np.float64)[:, :, :h]
         values = np.zeros((n, n_loc, n_all))
         for loc in range(n_loc):
             s = int(w0[loc])
@@ -522,10 +534,9 @@ class RandomWalkNowcast(RandomWalk):
                     values[:, loc, :n_data], origin.reported[loc]
                 )
                 continue
-            values[:, loc, : cw + 1] = nowcast[:, loc, : cw + 1]
-            if miss > 0 and cw > s:
-                values[:, loc, cw] += part[loc]
-            values[:, loc, cw + 1 :] = y[loc, :, cw - s : n_all - s - 1]
+            values[:, loc, :cw] = nowcast[:, loc, :cw]
+            values[:, loc, cw] = done[loc]
+            values[:, loc, cw + 1 :] = ahead[loc]
         return values, weeks
 
 
