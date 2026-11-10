@@ -1,4 +1,4 @@
-"""Observation model: new reports minus removals."""
+"""Observation model: negative binomial new reports on the count to come."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from bdbvhubrenewal.baselinenowcast import fit_nb
 from bdbvhubrenewal.forecasters.obs import (
     PRIOR_SIZE,
     fit_sizes,
-    rate,
     sample_count,
 )
 
@@ -55,33 +54,24 @@ def test_too_few_errors_give_the_prior_median() -> None:
     assert pytest.approx(2.2, abs=0.01) == PRIOR_SIZE
 
 
-def test_the_removal_rate_is_a_ratio_of_sums() -> None:
-    assert rate(np.array([3.0, 0.0]), np.array([300.0, 0.0])).tolist() == [
-        0.01,
-        0.0,
-    ]
-
-
-def test_the_mean_is_reported_plus_remaining_minus_removals() -> None:
+def test_the_mean_is_reported_plus_remaining() -> None:
     n = 100_000
     x = sample_count(
         jax.random.key(0),
         jnp.full(n, 200.0),
         jnp.full(n, 50.0),
         jnp.full(n, 2.0),
-        jnp.full(n, 0.05),
     )
-    assert float(x.mean()) == pytest.approx(200 + 50 - 10, rel=0.01)
-    # Removals can take a count below the count reported.
-    assert float((x < 200).mean()) > 0
+    assert float(x.mean()) == pytest.approx(250, rel=0.01)
+    # New reports only add, as in baselinenowcast.
+    assert float(x.min()) >= 200
 
 
-def test_a_finished_week_with_no_removals_is_its_count() -> None:
+def test_a_finished_week_is_its_count() -> None:
     x = sample_count(
         jax.random.key(0),
         jnp.full(100, 12.0),
         jnp.zeros(100),
         jnp.full(100, 2.0),
-        jnp.zeros(100),
     )
     assert (np.asarray(x) == 12).all()

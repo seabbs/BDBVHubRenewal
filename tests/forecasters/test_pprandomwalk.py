@@ -108,16 +108,11 @@ def test_pooled_delay_fits_own_data_where_randomwalknowcast_does(
     assert 0.85 < ratio < 1.15
 
 
-def test_pooling_shrinks_a_removal_rate_from_one_revision(
+def test_the_pooled_fit_has_no_removals(
     origins: tuple[Origin, Origin],
 ) -> None:
-    pooled, own = origins
-    to = own.snap.locations.index("CD-TO")
-    assert own.removal is not None
-    assert pooled.removal is not None
-    k = int(np.argmax(own.removal[to]))
-    assert own.removal[to, k] > 0.1
-    assert pooled.removal[to, k] < own.removal[to, k]
+    pooled, _ = origins
+    assert not hasattr(pooled, "removal")
 
 
 def test_diagnostics_hold_each_fit(

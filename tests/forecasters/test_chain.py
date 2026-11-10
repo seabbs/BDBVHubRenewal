@@ -119,21 +119,29 @@ def test_every_release_with_a_pair_gives_a_retrospective(
     assert errors.releases == ["2026-10-17", "2026-10-24"]
 
 
-def test_new_reports_minus_removals_is_the_realised_change(snap24) -> None:
+def test_new_reports_are_the_change_after_downward_revisions_move(
+    snap24,
+) -> None:
     errors = retro_errors(snap24, 3, Settings())
-    later = weekly_sums(snap24, 3, upto=int(snap24.cut[2]))
+    assert not hasattr(errors, "removed")
+    # As baselinenowcast preprocesses its triangle, a fall is taken from
+    # the earlier releases' counts, so each change is a rise.
+    pre = dataclasses.replace(snap24, counts=_delay_counts(snap24, 3))
+    later = weekly_sums(pre, 3, upto=int(snap24.cut[2]))
     cols = snap24.cut_week(2) - np.arange(errors.valid.shape[2])
-    net = errors.added[0] - errors.removed[0]
     want = later[:, cols] - errors.reported[0]
-    assert net[errors.valid[0]] == pytest.approx(want[errors.valid[0]])
+    ok = errors.valid[0]
+    assert errors.added[0][ok] == pytest.approx(want[ok])
+    assert errors.reported[0][ok] == pytest.approx(
+        weekly_sums(pre, 2)[:, cols][ok]
+    )
     assert (errors.added >= 0).all()
-    assert (errors.removed >= 0).all()
 
 
 def test_the_fit_pools_three_errors_at_10_24(origin24) -> None:
     loc = origin24.snap.locations.index("CD")
     assert origin24.size is not None
-    assert origin24.removal is not None
+    assert not hasattr(origin24, "removal")
     assert origin24.obs_n is not None
     # Haut-Uele, Ituri and North Kivu give an error each. CD is their sum,
     # so it is not in its own pool.
@@ -141,7 +149,6 @@ def test_the_fit_pools_three_errors_at_10_24(origin24) -> None:
     # Three errors are enough for a fit.
     assert (origin24.size[loc, :4] >= 0.1).all()
     assert (origin24.size[loc, :4] < MAX_SIZE).all()
-    assert (origin24.removal >= 0).all()
 
 
 def test_no_errors_take_the_prior_size(daily: pd.DataFrame) -> None:
@@ -150,7 +157,6 @@ def test_no_errors_take_the_prior_size(daily: pd.DataFrame) -> None:
     assert origin.obs_n is not None
     assert (origin.obs_n == 0).all()
     np.testing.assert_allclose(origin.size, PRIOR_SIZE, rtol=1e-6)
-    assert (origin.removal == 0).all()
 
 
 def test_a_factor_is_own_by_age_with_10_cases_else_the_parent(
