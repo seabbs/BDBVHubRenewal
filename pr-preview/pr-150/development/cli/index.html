@@ -2127,7 +2127,8 @@ The key hashes:</p>
 <li>the task at the origin, which holds only the releases up to it;</li>
 <li>the model as built, including its variant and sampler settings;</li>
 <li>the BVDOutbreakSize release, for <code>renewalbvd</code>;</li>
-<li>the code of <code>forecasters</code>, <code>model</code>, <code>data</code>, <code>baselinenowcast</code>, <code>evaluation/store.py</code> and <code>run_forecasts</code>, without docstrings or comments;</li>
+<li>the code of <code>forecasters</code>, <code>model</code>, <code>data</code>, <code>baselinenowcast</code>, <code>evaluation/store.py</code> and <code>run_forecasts</code>, without docstrings or comments;
+  the zone split (<code>forecasters/zones.py</code>, <code>evaluation/zones.py</code>) is left out, as a stored fit holds national and province samples only and its zones are split from them at load;</li>
 <li>the runtime dependencies in <code>uv.lock</code>.</li>
 </ul>
 <p>The renewal variants use the sampler table of the submission candidate that runs them, in <code>ci/policy.toml</code>.
