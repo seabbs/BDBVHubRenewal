@@ -1117,6 +1117,9 @@ class RenewalModel:
         The variant name.
     delay_summary : pandas.DataFrame or None
         `fit_delays` of the last `forecast`.
+    last_fit : RenewalFit or None
+        The fit of the last `forecast`, for `write_fit_dir`. Left out of
+        the representation, which keys a stored fit.
     """
 
     variant: Variant
@@ -1128,6 +1131,9 @@ class RenewalModel:
         init=False, default_factory=list
     )
     delay_summary: pd.DataFrame | None = field(init=False, default=None)
+    last_fit: RenewalFit | None = field(
+        init=False, default=None, repr=False, compare=False
+    )
 
     def __post_init__(self) -> None:
         """Name the model after its variant and say if it takes a mask."""
@@ -1342,6 +1348,7 @@ class RenewalModel:
         >>> model.fit_diagnostics  # divergences and R-hat of the fit
         """
         fit = self.forecast_fit(task)
+        self.last_fit = fit
         self.delay_summary = fit_delays(fit, task)
         self.fit_diagnostics = [
             {"fit": key, **fit_summary(run, self.sampler)}
@@ -1353,6 +1360,41 @@ class RenewalModel:
         later = [] if fit.as_reported is None else [fit.as_reported]
         return pd.concat(
             [samples.assign(as_of=np.nan), *later], ignore_index=True
+        )
+
+    def write_fit_dir(
+        self, task: ForecastTask, fit_dir: Path | str, config_name: str
+    ) -> dict[str, Any]:
+        """Write the last `forecast`'s fit as the submission reads it.
+
+        Parameters
+        ----------
+        task : ForecastTask
+            The task the last `forecast` ran.
+        fit_dir : pathlib.Path or str
+            The fit directory.
+        config_name : str
+            The fit configuration (`FIT_VARIANTS`), for the records.
+
+        Returns
+        -------
+        dict
+            The `diagnostics.json` record (`write_fit_dir`).
+
+        Raises
+        ------
+        ValueError
+            If the model has not forecast yet.
+        """
+        if self.last_fit is None:
+            raise ValueError(f"{self.name} has no fit to write.")
+        return write_fit_dir(
+            self.last_fit,
+            task,
+            self.sampler,
+            fit_dir,
+            variant=self.variant.name,
+            config_name=config_name,
         )
 
 
@@ -1399,14 +1441,59 @@ def fit_renewal(
         `bvd`, the BVDOutbreakSize release used, for a variant with the
         BVD term).
     """
-    from bdbvhubrenewal.evaluation.ppc import summarise_draws, write_ppc
-
     out = Path(fit_dir)
     out.mkdir(parents=True, exist_ok=True)
     settings = sampler_settings(sampler)
     task = replace(task, seed=int(settings.get("seed", task.seed)))
     model = RenewalModel(VARIANTS[variant], settings, out / "progress.log")
     fit = model.forecast_fit(task)
+    return write_fit_dir(
+        fit, task, settings, out, variant=variant, config_name=config_name
+    )
+
+
+def write_fit_dir(
+    fit: RenewalFit,
+    task: ForecastTask,
+    settings: Mapping[str, Any],
+    fit_dir: Path | str,
+    *,
+    variant: str,
+    config_name: str,
+) -> dict[str, Any]:
+    """Write a fit's directory, as `forecast_renewal` reads it.
+
+    Writes `samples.csv.gz`, `delay-summary.csv`, `unassigned.csv.gz`
+    (if any), `trajectory_draw.csv`, `trajectories.json` and `ppc.json`.
+    `fit_renewal` and the fit store (`RenewalModel.write_fit_dir`) both
+    write a fit this way.
+
+    Parameters
+    ----------
+    fit : RenewalFit
+        The fit.
+    task : ForecastTask
+        The task it was fitted to.
+    settings : mapping
+        The NUTS settings it ran with (`sampler_settings`).
+    fit_dir : pathlib.Path or str
+        The fit directory.
+    variant : str
+        Key in `VARIANTS`.
+    config_name : str
+        The fit configuration, for the records.
+
+    Returns
+    -------
+    dict
+        The `diagnostics.json` record (schema 1, with `worst_rhat`, and
+        `bvd`, the BVDOutbreakSize release used, for a variant with the
+        BVD term).
+    """
+    from bdbvhubrenewal.evaluation.ppc import summarise_draws, write_ppc
+
+    out = Path(fit_dir)
+    out.mkdir(parents=True, exist_ok=True)
     write_csv(fit.samples, out / SAMPLES_FILE)
     write_csv(fit_delays(fit, task), out / DELAY_SUMMARY_FILE)
     if fit.unassigned is not None:
