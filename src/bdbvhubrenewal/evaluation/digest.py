@@ -255,6 +255,7 @@ def model_code(
     model: str,
     root: Path | str = ".",
     entries: Sequence[str] = FORECAST_ENTRIES,
+    cli: bool = True,
 ) -> list[str]:
     """List the source files a forecast-only run of one model reads.
 
@@ -262,7 +263,7 @@ def model_code(
     any other model's module it builds on, and of `entries`,
     which stops at the modules that define the other models: the registry
     imports every model, but a model's forecasts do not run the others'
-    code. The CLI module is added as a file, without
+    code. With `cli`, the CLI module is added as a file, without
     following its imports, which reach every command.
 
     Parameters
@@ -272,8 +273,9 @@ def model_code(
     root : pathlib.Path or str
         The repository root.
     entries : sequence of str
-        The shared modules the run calls, relative to `root`
-        (`FORECAST_ENTRIES`).
+        The shared modules the run calls.
+    cli : bool
+        Add the CLI module.
 
     Returns
     -------
@@ -299,7 +301,8 @@ def model_code(
     seen = _closure(
         src, [base / e for e in entries], others - seen, start, seen
     )
-    seen.add(src / _PACKAGE / "cli.py")
+    if cli:
+        seen.add(src / _PACKAGE / "cli.py")
     return sorted(p.relative_to(base).as_posix() for p in seen)
 
 

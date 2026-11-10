@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import ast
 import datetime as dt
+import functools
 import gzip
 import hashlib
 import inspect
@@ -67,7 +68,6 @@ from bdbvhubrenewal.forecasters import (
 )
 
 __all__ = [
-    "CODE_INPUTS",
     "STATUS_FILE",
     "STORE_ENTRIES",
     "StoreStatus",
@@ -89,16 +89,6 @@ __all__ = [
     "stored_models",
     "write_fit",
 ]
-
-CODE_INPUTS: Final = (
-    "src/bdbvhubrenewal/baselinenowcast",
-    "src/bdbvhubrenewal/data",
-    "src/bdbvhubrenewal/evaluation/store.py",
-    "src/bdbvhubrenewal/forecasters",
-    "src/bdbvhubrenewal/model",
-)
-"""Code a stored fit may run, relative to the repository root: the key of
-a model that is not registered (`code_digest` without a model)."""
 
 STORE_ENTRIES: Final = (
     "src/bdbvhubrenewal/evaluation/backtest.py",
@@ -197,10 +187,8 @@ def _strip(source: str) -> str:
 def fit_code(model: str, root: Path | str = ".") -> list[str]:
     """List the source files a stored fit of one model can run.
 
-    The import closure of the model's own module and of `STORE_ENTRIES`
-    (`evaluation.digest.model_code`), which leaves out the modules of
-    the other models, so a change to one model refits only the models
-    that run it.
+    The import closure of the model's module and `STORE_ENTRIES`
+    (`evaluation.digest.model_code`), without the other models' modules.
 
     Parameters
     ----------
@@ -216,25 +204,46 @@ def fit_code(model: str, root: Path | str = ".") -> list[str]:
     """
     from bdbvhubrenewal.evaluation.digest import model_code
 
-    return model_code(model, root, STORE_ENTRIES)
+    return model_code(model, root, STORE_ENTRIES, cli=False)
 
 
-def code_digest(root: Path | str = ".", model: str | None = None) -> str:
-    """Hash the code a stored fit runs and its runtime dependencies.
+@functools.cache
+def _export(root: str, lock: str) -> str:
+    """Return `uv export` of the runtime dependencies; `lock` keys the cache."""
+    del lock
+    return subprocess.run(
+        [
+            "uv",
+            "export",
+            "--frozen",
+            "--no-dev",
+            "--all-extras",
+            "--no-hashes",
+            "--no-header",
+            "--no-emit-project",
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
 
-    Python files in `fit_code` of the model (`CODE_INPUTS` without one)
-    are hashed as syntax trees without docstrings, so comments and
-    docstrings do not change the key; other files by their bytes.
-    `run_forecasts` and the backtest helpers it calls are hashed the same
-    way, with the Python minor version.
+
+def code_digest(model: str, root: Path | str = ".") -> str:
+    """Hash the code a stored fit of a model runs and its dependencies.
+
+    Python files in `fit_code` are hashed as syntax trees without
+    docstrings, so comments and docstrings do not change the key; other
+    files by their bytes. `run_forecasts` and the backtest helpers it
+    calls are hashed the same way, with the Python minor version.
     The dependencies are `uv export --no-dev --all-extras` of `uv.lock`.
 
     Parameters
     ----------
+    model : str
+        A registered model.
     root : pathlib.Path or str
         The repository root.
-    model : str, optional
-        A registered model, whose own code is hashed.
 
     Returns
     -------
@@ -242,7 +251,7 @@ def code_digest(root: Path | str = ".", model: str | None = None) -> str:
         SHA-256 hex digest.
     """
     base = Path(root)
-    names = CODE_INPUTS if model is None else fit_code(model, base)
+    names = fit_code(model, base)
     files: list[Path] = []
     for name in names:
         path = base / name
@@ -259,23 +268,10 @@ def code_digest(root: Path | str = ".", model: str | None = None) -> str:
     for func in (run_forecasts, _fit_rows):
         digest.update(_strip(inspect.getsource(func)).encode())
     digest.update(repr(sys.version_info[:2]).encode())
-    deps = subprocess.run(
-        [
-            "uv",
-            "export",
-            "--frozen",
-            "--no-dev",
-            "--all-extras",
-            "--no-hashes",
-            "--no-header",
-            "--no-emit-project",
-        ],
-        cwd=base,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    digest.update(deps.stdout.encode())
+    lock = hashlib.sha256()
+    for name in ("pyproject.toml", "uv.lock"):
+        lock.update((base / name).read_bytes())
+    digest.update(_export(str(base.resolve()), lock.hexdigest()).encode())
     return digest.hexdigest()
 
 
@@ -384,7 +380,7 @@ def current_keys(
     sampler : mapping
         `samplers`.
     code : str or mapping
-        `code_digest`, or each model's `code_digest` by name.
+        `code_digest`, or each model's by name.
 
     Returns
     -------
@@ -760,7 +756,7 @@ def command(args: argparse.Namespace) -> int:
     """
     sampler = samplers(args.policy)
     if args.action == "fit":
-        from bdbvhubrenewal.cli import host_devices
+        from bdbvhubrenewal.devices import host_devices
 
         # Before anything starts JAX, so the chains run in parallel.
         chains = sampler.get(args.model, {}).get("num_chains", 1)
@@ -773,14 +769,19 @@ def command(args: argparse.Namespace) -> int:
         load_daily(args.data),
     )
     models = args.models or stored_models()
-    # Each model's key hashes only the code its fit can run (`fit_code`).
     names = [args.model] if args.action == "fit" else models
-    code = {m: code_digest(".", m) for m in names if m in stored_models()}
+    unknown = sorted(set(names) - set(stored_models()))
+    if unknown:
+        print(
+            f"ERROR: {unknown} not in the stored models {stored_models()}.",
+            file=sys.stderr,
+        )
+        return 1
+    code = {m: code_digest(m) for m in names}
     if args.action == "fit":
-        if args.model not in stored_models() or args.origin not in tasks:
+        if args.origin not in tasks:
             print(
-                f"ERROR: fit needs --model in {stored_models()} and "
-                f"--origin in {list(tasks)}.",
+                f"ERROR: fit needs --origin in {list(tasks)}.",
                 file=sys.stderr,
             )
             return 1
