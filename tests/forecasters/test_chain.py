@@ -17,12 +17,13 @@ from bdbvhubrenewal.forecasters.chain import (
     _walk_spreads,
     build_origin,
     fit_delay,
+    levels,
     retro_errors,
     weeks_back,
 )
 from bdbvhubrenewal.forecasters.introductions import introduction_rates
 from bdbvhubrenewal.forecasters.obs import MAX_SIZE, PRIOR_SIZE
-from bdbvhubrenewal.forecasters.pooling import source_index
+from bdbvhubrenewal.forecasters.pooling import pool_matrix, source_index
 
 PLACES = ("CD-HU", "CD-IT", "CD-NK", "CD-TO")
 
@@ -153,7 +154,7 @@ def test_no_errors_take_the_prior_size(daily: pd.DataFrame) -> None:
     assert (origin.removal == 0).all()
 
 
-def test_a_factor_is_own_by_age_with_10_cases_else_the_parent(
+def test_a_delay_is_own_with_10_cases_a_week_else_the_pooled_parents(
     daily: pd.DataFrame, daily_zones: pd.DataFrame
 ) -> None:
     both = pd.concat([daily, daily_zones])
@@ -161,7 +162,8 @@ def test_a_factor_is_own_by_age_with_10_cases_else_the_parent(
         sorted({z for z in daily_zones["location"] if z.startswith("CD-")})
     )
     snap = snapshot_arrays(both, "2026-10-24", zones)
-    fit = fit_delay(snap, 3, Settings())
+    settings = Settings()
+    fit = fit_delay(snap, 3, settings)
     assert fit is not None
     window = np.arange(snap.week.size) > int(snap.cut[3]) - 63
     num, den = pair_sums(
@@ -171,29 +173,30 @@ def test_a_factor_is_own_by_age_with_10_cases_else_the_parent(
         fit.pairs[:, 0],
         42,
     )
+    num, den = np.asarray(num), np.asarray(den)
     gaps = snap.cut[fit.pairs[:, 1]] - snap.cut[fit.pairs[:, 0]]
+    level = levels(snap, 3, settings)
+    pool = pool_matrix(level, snap.parent)
     own_g = log_factors(num, den, gaps)
-    n_cases = np.asarray(den).sum(axis=1)
-    seen = {"own": 0, "parent": 0}
-    for i in range(len(snap.locations)):
-        p = int(snap.parent[i])
-        if p < 0:
-            # The country has no parent, so it uses its own factor.
-            np.testing.assert_allclose(fit.g[i], own_g[i])
-            continue
-        use = n_cases[i] >= 10
-        seen["own"] += int(use.sum())
-        seen["parent"] += int((~use).sum())
-        np.testing.assert_allclose(
-            fit.g[i][use], own_g[i][use], err_msg=snap.locations[i]
-        )
-        np.testing.assert_allclose(
-            fit.g[i][~use],
-            fit.g[p][~use],
-            err_msg=snap.locations[i],
-        )
-    assert seen["own"] > 0
-    assert seen["parent"] > 0
+    pooled_g = log_factors(
+        np.einsum("nm,mpa->npa", pool, num),
+        np.einsum("nm,mpa->npa", pool, den),
+        gaps,
+    )
+    # The same rule as the walk spread: own with 10 cases a week, else
+    # the pooled estimate of the nearest parent that has them.
+    src = source_index(level, snap.parent)
+    np.testing.assert_allclose(fit.g, np.concatenate([own_g, pooled_g])[src])
+    assert (src < len(level)).any()
+    assert (src >= len(level)).any()
+
+
+def test_one_rule_shares_the_size_by_level_only(origin24) -> None:
+    assert not hasattr(Settings(), "min_errors")
+    assert origin24.obs_source is not None
+    src = source_index(origin24.fit.level, origin24.snap.parent)
+    for k in range(origin24.obs_source.shape[1]):
+        np.testing.assert_array_equal(origin24.obs_source[:, k], src)
 
 
 def test_the_delay_uses_every_in_window_pair(snap24) -> None:
